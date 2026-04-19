@@ -1,0 +1,80 @@
+.root {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+.root > :first-child {
+  margin-top: 0;
+}
+
+.root > :last-child {
+  margin-bottom: 0;
+}
+
+.root p {
+  margin: 0.5em 0;
+}
+
+.root ul,
+.root ol {
+  margin: 0.5em 0;
+  padding-left: 1.35em;
+}
+
+.root li {
+  margin: 0.35em 0;
+}
+
+.root li > p {
+  margin: 0.15em 0;
+}
+
+.root strong {
+  font-weight: 600;
+}
+
+.root hr {
+  margin: 0.75em 0;
+  border: none;
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.root a {
+  color: #2c6ecb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.root a:hover {
+  color: #1f4f96;
+}
+
+.root code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.root pre {
+  margin: 0.5em 0;
+  padding: 0.65em 0.75em;
+  overflow-x: auto;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.06);
+  font-size: 0.85em;
+}
+
+.root pre code {
+  padding: 0;
+  background: none;
+}
+
+.root blockquote {
+  margin: 0.5em 0;
+  padding-left: 0.85em;
+  border-left: 3px solid rgba(0, 0, 0, 0.15);
+  color: rgba(0, 0, 0, 0.72);
+}
