@@ -3,6 +3,8 @@
 
 generator client {
   provider = "prisma-client-js"
+  // 生成到 node_modules 外，避免 Windows 上 query_engine 重命名 EPERM（Defender/进程占用 .prisma 目录）
+  output   = "../app/generated/prisma"
 }
 
 // Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long

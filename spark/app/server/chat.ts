@@ -1,4 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
+import { authenticate } from "../shopify.server";
+import { createShopifyShopInfoTool } from "./ai/tools";
 import { invokeChatAgent } from "./ai/agent";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -13,7 +15,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const userMessage = body.message?.trim() || "（空消息）";
 
   try {
-    const reply = await invokeChatAgent(userMessage);
+    const { admin } = await authenticate.admin(request);
+    const shopInfoTool = createShopifyShopInfoTool(admin);
+    const reply = await invokeChatAgent(userMessage, {
+      extraTools: [shopInfoTool],
+    });
     return Response.json({ reply });
   } catch (error) {
     console.error("Chat agent error:", error);

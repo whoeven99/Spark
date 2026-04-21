@@ -48,16 +48,18 @@ export function ChatInput({ onMessageSend, isSending }: ChatInputProps) {
       }}
     >
       <s-stack direction="inline" gap="base">
-        <s-text-field
-          id={CHAT_INPUT_ID}
-          label="输入内容"
-          value={input}
-          onInput={(event) => {
-            const target = event.target as HTMLInputElement;
-            setInput(target.value);
-          }}
-          placeholder="请输入你想问的问题..."
-        />
+        <div style={{ flex: 1 }}>
+          <s-text-field
+            id={CHAT_INPUT_ID}
+            label="输入内容"
+            value={input}
+            onInput={(event) => {
+              const target = event.target as HTMLInputElement;
+              setInput(target.value);
+            }}
+            placeholder="请输入你想问的问题..."
+          />
+        </div>
         <s-button
           type="submit"
           {...(isSending ? { loading: true } : {})}

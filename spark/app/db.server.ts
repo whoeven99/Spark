@@ -1,8 +1,14 @@
-import { PrismaClient } from "@prisma/client";
+import { createRequire } from "node:module";
+import type { PrismaClient as PrismaClientType } from "./generated/prisma";
+
+const require = createRequire(import.meta.url);
+const { PrismaClient } = require("./generated/prisma") as {
+  PrismaClient: typeof PrismaClientType;
+};
 
 declare global {
   // eslint-disable-next-line no-var
-  var prismaGlobal: PrismaClient;
+  var prismaGlobal: PrismaClientType;
 }
 
 if (process.env.NODE_ENV !== "production") {

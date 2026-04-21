@@ -1,7 +1,8 @@
+import type { DynamicStructuredTool } from "@langchain/core/tools";
 import { AIMessage, BaseMessage, HumanMessage } from "@langchain/core/messages";
 import { createAgent } from "langchain";
 import { ChatOpenAI } from "@langchain/openai";
-import { agentTools } from "./tools";
+import { baseAgentTools } from "./tools";
 
 function extractMessageText(message: BaseMessage): string {
   const { content } = message;
@@ -22,43 +23,45 @@ function extractMessageText(message: BaseMessage): string {
   return "";
 }
 
-type LangChainAgent = Awaited<ReturnType<typeof createAgent>>;
+let chatModel: ChatOpenAI | null = null;
 
-let agentPromise: Promise<LangChainAgent> | null = null;
-
-async function buildAgent() {
-  const apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY;
-  const model = new ChatOpenAI({
-    model: process.env.DEEPSEEK_MODEL ?? process.env.OPENAI_MODEL ?? "deepseek-chat",
-    temperature: 0.2,
-    apiKey,
-    configuration: {
-      baseURL: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1",
-    },
-  });
-
-  return createAgent({
-    tools: agentTools,
-    model,
-    systemPrompt:
-      "你是一个店铺 AI 助手，请始终使用简体中文回复。对于时间和天气相关问题，优先调用工具获取信息；如果工具失败，明确说明。",
-  });
-}
-
-function getAgent() {
+function getChatModel() {
   if (!process.env.DEEPSEEK_API_KEY && !process.env.OPENAI_API_KEY) {
     throw new Error("DEEPSEEK_API_KEY is missing");
   }
 
-  if (!agentPromise) {
-    agentPromise = buildAgent();
+  if (!chatModel) {
+    const apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY;
+    chatModel = new ChatOpenAI({
+      model: process.env.DEEPSEEK_MODEL ?? process.env.OPENAI_MODEL ?? "deepseek-chat",
+      temperature: 0.2,
+      apiKey,
+      configuration: {
+        baseURL: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1",
+      },
+    });
   }
 
-  return agentPromise;
+  return chatModel;
 }
 
-export async function invokeChatAgent(input: string) {
-  const agent = await getAgent();
+async function buildAgent(extraTools: DynamicStructuredTool[] = []) {
+  const model = getChatModel();
+  const tools = [...baseAgentTools, ...extraTools];
+
+  return createAgent({
+    tools,
+    model,
+    systemPrompt:
+      "你是一个店铺 AI 助手，请始终使用简体中文回复。对于时间、天气、当前 Shopify 商店基础信息等问题，优先调用对应工具获取信息；如果工具失败，明确说明。",
+  });
+}
+
+export async function invokeChatAgent(
+  input: string,
+  options?: { extraTools?: DynamicStructuredTool[] },
+) {
+  const agent = await buildAgent(options?.extraTools ?? []);
   const result = await agent.invoke({
     messages: [new HumanMessage(input)],
   });

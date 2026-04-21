@@ -30,7 +30,7 @@ export function ChatPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, isSending]);
 
   const sendMessage = async (content: string) => {
     setMessages((prev) => [...prev, { role: "user", content }]);
@@ -66,20 +66,30 @@ export function ChatPage() {
 
   return (
     <s-page heading="AI 对话机器人">
-      <s-section heading="对话窗口">
-        <div ref={messagesContainerRef} style={{ minHeight: "420px", maxHeight: "420px", overflowY: "auto" }}>
-          <s-box padding="base" borderWidth="base" borderRadius="base">
-            <ChatMessages messages={messages} />
-          </s-box>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          height: "calc(100vh - 220px)",
+          minHeight: "460px",
+          gap: 0,
+        }}
+      >
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <div
+            ref={messagesContainerRef}
+            style={{ height: "100%", overflowY: "auto" }}
+          >
+            <s-box padding="base" borderWidth="base" borderRadius="base">
+              <ChatMessages messages={messages} />
+            </s-box>
+          </div>
         </div>
-      </s-section>
 
-      <s-section>
-        <ChatInput
-          onMessageSend={sendMessage}
-          isSending={isSending}
-        />
-      </s-section>
+        <div style={{ marginTop: 0 }}>
+          <ChatInput onMessageSend={sendMessage} isSending={isSending} />
+        </div>
+      </div>
     </s-page>
   );
 }

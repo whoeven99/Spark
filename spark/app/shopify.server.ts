@@ -1,4 +1,5 @@
 import "@shopify/shopify-app-react-router/adapters/node";
+import type { PrismaClient } from "@prisma/client";
 import {
   ApiVersion,
   AppDistribution,
@@ -14,7 +15,8 @@ const shopify = shopifyApp({
   scopes: process.env.SCOPES?.split(","),
   appUrl: process.env.SHOPIFY_APP_URL || "",
   authPathPrefix: "/auth",
-  sessionStorage: new PrismaSessionStorage(prisma),
+  // Prisma Client 使用自定义 output（见 prisma/schema.prisma）；与 @shopify/...-prisma 的类型声明路径不同，运行时兼容。
+  sessionStorage: new PrismaSessionStorage(prisma as unknown as PrismaClient),
   distribution: AppDistribution.AppStore,
   future: {
     expiringOfflineAccessTokens: true,
