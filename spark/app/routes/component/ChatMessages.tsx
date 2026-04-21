@@ -26,8 +26,29 @@ export function ChatMessages({ messages }: ChatMessagesProps) {
               padding="base"
               borderRadius="base"
               background={item.role === "assistant" ? "subdued" : "base"}
+              borderWidth="base"
+              style={{
+                borderColor:
+                  item.role === "assistant" ? "rgba(44, 110, 203, 0.35)" : "rgba(0, 128, 96, 0.35)",
+                background:
+                  item.role === "assistant"
+                    ? "linear-gradient(180deg, rgba(44, 110, 203, 0.08), rgba(44, 110, 203, 0.02))"
+                    : "linear-gradient(180deg, rgba(0, 128, 96, 0.08), rgba(0, 128, 96, 0.02))",
+              }}
             >
-              <strong>{item.role === "assistant" ? "机器人" : "你"}</strong>
+              <div style={{ marginBottom: "0.25rem" }}>
+                <s-badge
+                  tone={
+                    item.role === "assistant"
+                      ? index % 3 === 0
+                        ? "info"
+                        : "caution"
+                      : "success"
+                  }
+                >
+                  {item.role === "assistant" ? "机器人" : "你"}
+                </s-badge>
+              </div>
               <div style={{ marginTop: "0.35rem" }}>
                 {item.role === "assistant" ? (
                   <ChatMessageContent content={item.content} />

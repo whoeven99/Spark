@@ -62,6 +62,7 @@ export function ChatInput({ onMessageSend, isSending }: ChatInputProps) {
         </div>
         <s-button
           type="submit"
+          variant="primary"
           {...(isSending ? { loading: true } : {})}
         >
           发送
