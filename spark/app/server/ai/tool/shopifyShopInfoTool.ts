@@ -452,6 +452,13 @@ function formatPercent(value: number): string {
   return `${value.toFixed(2)}%`;
 }
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+  return "未知错误";
+}
+
 function createShopBasicInfoTool(admin: ShopifyAdminGraphqlClient) {
   return new DynamicStructuredTool({
     name: "get_shopify_shop_info",
@@ -486,8 +493,8 @@ function createShopTodaySalesTool(admin: ShopifyAdminGraphqlClient) {
         const safeDays = normalizeDays(days);
         const stats = await queryOrderStatsByDays(admin, safeDays);
         return `${formatDaysLabel(safeDays)}销售额：${stats.salesAmount} ${stats.currencyCode}（基于订单金额汇总，订单数 ${stats.orderCount}）。`;
-      } catch {
-        return "查询销售额失败：网络或接口异常，请稍后重试。";
+      } catch (error) {
+        return `查询销售额失败：${getErrorMessage(error)}。请确认商店 API 权限与连接状态。`;
       }
     },
   });
@@ -504,8 +511,8 @@ function createShopTodayOrderCountTool(admin: ShopifyAdminGraphqlClient) {
         const safeDays = normalizeDays(days);
         const stats = await queryOrderStatsByDays(admin, safeDays);
         return `${formatDaysLabel(safeDays)}订单数：${stats.orderCount} 单。`;
-      } catch {
-        return "查询订单数失败：网络或接口异常，请稍后重试。";
+      } catch (error) {
+        return `查询订单数失败：${getErrorMessage(error)}。请确认商店 API 权限与连接状态。`;
       }
     },
   });
@@ -518,17 +525,27 @@ function createShopTodayConversionRateTool(admin: ShopifyAdminGraphqlClient) {
       "查询 Shopify 商店转化率（checkout 完成率近似：订单数 / (订单数 + 弃购数)）。可传 days 指定最近几天，默认 1。",
     schema: metricRangeSchema,
     func: async ({ days }) => {
+      const safeDays = normalizeDays(days);
       try {
-        const safeDays = normalizeDays(days);
-        const [orderStats, abandonedCount] = await Promise.all([
-          queryOrderStatsByDays(admin, safeDays),
-          queryAbandonedCheckoutCountByDays(admin, safeDays),
-        ]);
-        const denominator = orderStats.orderCount + abandonedCount;
-        const rate = denominator > 0 ? (orderStats.orderCount / denominator) * 100 : 0;
-        return `${formatDaysLabel(safeDays)}转化率（checkout 口径）：${formatPercent(rate)}（订单 ${orderStats.orderCount}，弃购 ${abandonedCount}）。`;
-      } catch {
-        return "查询转化率失败：网络或接口异常，请稍后重试。";
+        const orderStats = await queryOrderStatsByDays(admin, safeDays);
+        try {
+          const abandonedCount = await queryAbandonedCheckoutCountByDays(
+            admin,
+            safeDays,
+          );
+          const denominator = orderStats.orderCount + abandonedCount;
+          const rate =
+            denominator > 0 ? (orderStats.orderCount / denominator) * 100 : 0;
+          return `${formatDaysLabel(safeDays)}转化率（checkout 口径）：${formatPercent(rate)}（订单 ${orderStats.orderCount}，弃购 ${abandonedCount}）。`;
+        } catch (abandonedError) {
+          return [
+            `${formatDaysLabel(safeDays)}订单数：${orderStats.orderCount} 单，销售额：${orderStats.salesAmount} ${orderStats.currencyCode}。`,
+            `转化率暂无法计算：${getErrorMessage(abandonedError)}。`,
+            "请确认应用具备读取 checkout/abandoned checkout 的权限。",
+          ].join("\n");
+        }
+      } catch (error) {
+        return `查询转化率失败：${getErrorMessage(error)}。请确认商店 API 权限与连接状态。`;
       }
     },
   });
@@ -546,8 +563,8 @@ function createShopTodayAovTool(admin: ShopifyAdminGraphqlClient) {
         const stats = await queryOrderStatsByDays(admin, safeDays);
         const aov = stats.orderCount > 0 ? stats.salesAmount / stats.orderCount : 0;
         return `${formatDaysLabel(safeDays)}客单价 AOV：${aov.toFixed(2)} ${stats.currencyCode}（销售额 ${stats.salesAmount}，订单 ${stats.orderCount}）。`;
-      } catch {
-        return "查询客单价失败：网络或接口异常，请稍后重试。";
+      } catch (error) {
+        return `查询客单价失败：${getErrorMessage(error)}。请确认商店 API 权限与连接状态。`;
       }
     },
   });
@@ -579,8 +596,8 @@ function createShopTodaySourcePerformanceTool(admin: ShopifyAdminGraphqlClient) 
           "注：ROAS 需结合广告花费数据计算，当前结果仅展示来源成交贡献。",
         ];
         return lines.join("\n");
-      } catch {
-        return "查询来源表现失败：网络或接口异常，请稍后重试。";
+      } catch (error) {
+        return `查询来源表现失败：${getErrorMessage(error)}。请确认商店 API 权限与连接状态。`;
       }
     },
   });
@@ -593,17 +610,18 @@ function createShopTodayAbandonmentRateTool(admin: ShopifyAdminGraphqlClient) {
       "查询 Shopify 商店弃购率（checkout 口径）。可传 days 指定最近几天，默认 1（最近一天）。",
     schema: metricRangeSchema,
     func: async ({ days }) => {
+      const safeDays = normalizeDays(days);
       try {
-        const safeDays = normalizeDays(days);
-        const [orderStats, abandonedCount] = await Promise.all([
-          queryOrderStatsByDays(admin, safeDays),
-          queryAbandonedCheckoutCountByDays(admin, safeDays),
-        ]);
+        const orderStats = await queryOrderStatsByDays(admin, safeDays);
+        const abandonedCount = await queryAbandonedCheckoutCountByDays(
+          admin,
+          safeDays,
+        );
         const denominator = orderStats.orderCount + abandonedCount;
         const rate = denominator > 0 ? (abandonedCount / denominator) * 100 : 0;
         return `${formatDaysLabel(safeDays)}弃购率（checkout 口径）：${formatPercent(rate)}（弃购 ${abandonedCount}，订单 ${orderStats.orderCount}）。`;
-      } catch {
-        return "查询弃购率失败：网络或接口异常，请稍后重试。";
+      } catch (error) {
+        return `查询弃购率失败：${getErrorMessage(error)}。请确认应用具备读取 checkout/abandoned checkout 的权限。`;
       }
     },
   });
@@ -626,8 +644,8 @@ function createShopTodayRefundRateTool(admin: ShopifyAdminGraphqlClient) {
           `${formatDaysLabel(safeDays)}退款金额：${stats.refundAmount.toFixed(2)} ${stats.currencyCode}（占销售额 ${formatPercent(amountRate)}）。`,
           "注：退货率通常需结合履约/物流退货单据口径，当前以退款数据近似。",
         ].join("\n");
-      } catch {
-        return "查询退款/退货率失败：网络或接口异常，请稍后重试。";
+      } catch (error) {
+        return `查询退款/退货率失败：${getErrorMessage(error)}。请确认商店 API 权限与连接状态。`;
       }
     },
   });
@@ -661,8 +679,8 @@ function createShopInventoryHealthTool(admin: ShopifyAdminGraphqlClient) {
         }
         lines.push("注：库存周转率需要结合周期内销量与平均库存，当前提供缺货风险预警。");
         return lines.join("\n");
-      } catch {
-        return "查询库存健康失败：网络或接口异常，请稍后重试。";
+      } catch (error) {
+        return `查询库存健康失败：${getErrorMessage(error)}。请确认商店 API 权限与连接状态。`;
       }
     },
   });
