@@ -99,6 +99,16 @@ const INVENTORY_VARIANTS_QUERY = `#graphql
   }
 `;
 
+const CURRENT_APP_SCOPES_QUERY = `#graphql
+  query CurrentAppScopes {
+    currentAppInstallation {
+      accessScopes {
+        handle
+      }
+    }
+  }
+`;
+
 type ShopBasicInfoResponse = {
   data?: {
     shop?: {
@@ -203,6 +213,15 @@ type InventoryHealthStats = {
   lowStockCount: number;
   outOfStockCount: number;
   lowStockItems: Array<{ name: string; sku: string; quantity: number }>;
+};
+
+type CurrentAppScopesResponse = {
+  data?: {
+    currentAppInstallation?: {
+      accessScopes?: Array<{ handle?: string }>;
+    };
+  };
+  errors?: Array<{ message?: string }>;
 };
 
 const metricRangeSchema = z.object({
@@ -686,9 +705,48 @@ function createShopInventoryHealthTool(admin: ShopifyAdminGraphqlClient) {
   });
 }
 
+function createShopAppScopesTool(admin: ShopifyAdminGraphqlClient) {
+  return new DynamicStructuredTool({
+    name: "get_shopify_app_scopes",
+    description:
+      "查询当前应用在当前店铺已授权的 Shopify Admin API scopes。用户询问权限、scope、授权范围时使用。",
+    schema: z.object({}),
+    func: async () => {
+      try {
+        const response = await admin.graphql(CURRENT_APP_SCOPES_QUERY);
+        const payload = (await response.json()) as CurrentAppScopesResponse;
+        if (!response.ok) {
+          return `查询应用权限 scopes 失败：HTTP ${response.status}`;
+        }
+
+        const gqlErrors = payload.errors?.map((e) => e.message).filter(Boolean);
+        if (gqlErrors?.length) {
+          return `查询应用权限 scopes 失败：${gqlErrors.join("；")}`;
+        }
+
+        const scopes =
+          payload.data?.currentAppInstallation?.accessScopes
+            ?.map((scope) => scope.handle?.trim())
+            .filter((scope): scope is string => Boolean(scope)) ?? [];
+
+        if (!scopes.length) {
+          return "当前应用未返回任何已授权 scope。请确认应用已正确安装并完成授权。";
+        }
+
+        return ["当前应用已授权 scopes：", ...scopes.map((scope) => `- ${scope}`)].join(
+          "\n",
+        );
+      } catch (error) {
+        return `查询应用权限 scopes 失败：${getErrorMessage(error)}。`;
+      }
+    },
+  });
+}
+
 export function createShopifyShopInfoTools(admin: ShopifyAdminGraphqlClient) {
   return [
     createShopBasicInfoTool(admin),
+    createShopAppScopesTool(admin),
     createShopTodaySalesTool(admin),
     createShopTodayOrderCountTool(admin),
     createShopTodayConversionRateTool(admin),
