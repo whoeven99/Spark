@@ -1,5 +1,6 @@
 export {
   baseAgentTools,
+  createShopifyShopInfoTools,
   createShopifyShopInfoTool,
   timeTool,
   type ShopifyAdminGraphqlClient,

@@ -1,4 +1,5 @@
 export {
+  createShopifyShopInfoTools,
   createShopifyShopInfoTool,
   type ShopifyAdminGraphqlClient,
 } from "./tool/shopifyShopInfoTool";
