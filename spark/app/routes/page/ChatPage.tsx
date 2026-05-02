@@ -76,9 +76,9 @@ export function ChatPage() {
   ]);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const quickPrompts = [
-    "请问你有什么功能",
-    "帮我查看下今天商店数据和广告数据",
-    "今天适合什么促销活动",
+    "你有哪些功能",
+    "看今天店铺+广告数据",
+    "今天适合做什么活动",
   ];
   const quickPromptTones: Array<"info" | "success" | "caution"> = [
     "info",
@@ -557,16 +557,17 @@ export function ChatPage() {
             gap: "0.75rem",
           }}
         >
-          <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
-            <s-stack direction="block" gap="small">
+          <s-box padding="small" borderWidth="base" borderRadius="base" background="base">
+            <s-stack direction="block" gap="none">
               <s-paragraph>快捷问题</s-paragraph>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.25rem" }}>
               {quickPrompts.map((prompt, index) => (
                 <s-button
                   key={prompt}
                   type="button"
                   tone={quickPromptTones[index]}
                   variant="secondary"
+                  size="slim"
                   onClick={() => sendMessage(prompt)}
                   {...(isSending ? { disabled: true } : {})}
                 >
@@ -577,6 +578,7 @@ export function ChatPage() {
                 type="button"
                 tone="critical"
                 variant="secondary"
+                size="slim"
                 onClick={() =>
                   setMessages([{ role: "assistant", content: initialAssistantMessage }])
                 }
@@ -1061,7 +1063,7 @@ export function ChatPage() {
             <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
               <s-stack direction="block" gap="base">
                 <strong>提交建议</strong>
-                <s-paragraph>请输入你希望 assistant 新增的功能描述（一个字符串）。</s-paragraph>
+                <s-paragraph>请输入你希望 assistant 新增的功能描述。</s-paragraph>
                 <s-text-field
                   label="建议描述"
                   value={suggestionText}

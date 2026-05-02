@@ -1,0 +1,76 @@
+name: spark - Shopify App Deploy (Test)
+
+on:
+  push:
+    branches:
+      - allen
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: spark
+
+jobs:
+  deploy_shopify:
+    name: Shopify app deploy (test.toml)
+    runs-on: ubuntu-latest
+    environment: CommonShopifyRenderConfig
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: spark/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Shopify CLI
+        run: npm install -g @shopify/cli@latest
+
+      - name: Deploy
+        env:
+          SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
+          # 与 spark/shopify.app.test.toml 中 client_id 一致
+          SHOPIFY_API_KEY: 940b967eda872dd81f9ffc283e29a013
+        run: shopify app deploy -c shopify.app.test.toml -f
+
+  deploy_render:
+    name: Trigger Render deploy (Test)
+    runs-on: ubuntu-latest
+    environment: CommonShopifyRenderConfig
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # 与本次要部署的代码一致；Render Create Deploy 对 branch 支持不可靠，下面用 commitId 触发
+          ref: ${{ github.ref }}
+
+      - name: Deploy to Render Test
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_APIKEY }}
+          RENDER_SERVICE_ID: srv-d7j6ogaqqhas739in900
+        run: |
+          COMMIT="$(git rev-parse HEAD)"
+          echo "Triggering Render deploy for commit: $COMMIT ($(git log -1 --oneline))"
+          RESPONSE=$(curl -s -o response.json -w "%{http_code}" -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"commitId\": \"$COMMIT\"}")
+          if [ "$RESPONSE" -eq 200 ] || [ "$RESPONSE" -eq 201 ]; then
+            echo "Deploy to test Render triggered successfully. HTTP status: $RESPONSE"
+          else
+            echo "Failed to trigger deployment. HTTP status: $RESPONSE"
+            cat response.json
+            exit 1
+          fi
