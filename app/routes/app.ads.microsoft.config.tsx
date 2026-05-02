@@ -2,6 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import {
   getMicrosoftCredential,
+  maskSecretKeepLast3,
   maskToken,
   setMicrosoftCredential,
 } from "../server/adAuthCredentialStore.server";
@@ -12,6 +13,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return Response.json({
     configured: Boolean(config),
     clientIdMasked: config ? maskToken(config.clientId) : "",
+    clientSecretMasked: config ? maskSecretKeepLast3(config.clientSecret) : "",
     updatedAt: config?.updatedAt ?? "",
   });
 };
@@ -46,6 +48,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     ok: true,
     configured: true,
     clientIdMasked: maskToken(clientId),
+    clientSecretMasked: maskSecretKeepLast3(clientSecret),
   });
 };
 

@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { spawnSync } = require("child_process");
 const { createClient } = require("@libsql/client");
 
 function loadDotEnv(dotenvPath) {
@@ -27,6 +28,47 @@ function loadDotEnv(dotenvPath) {
   return result;
 }
 
+function rebuildBaselineFromMigrations(root) {
+  const baselinePath = path.join(root, "prisma", "turso-baseline.sql");
+  const prismaArgs = [
+    "prisma",
+    "migrate",
+    "diff",
+    "--from-empty",
+    "--to-migrations",
+    "prisma/migrations",
+    "--script",
+  ];
+
+  const result = spawnSync("npx", prismaArgs, {
+    cwd: root,
+    encoding: "utf8",
+    shell: process.platform === "win32",
+  });
+
+  if (result.status !== 0) {
+    throw new Error(
+      `基于 migrations 生成 baseline 失败：${(result.stderr || result.stdout || "").trim()}`,
+    );
+  }
+
+  const generatedSql = (result.stdout || "").trim();
+  if (!generatedSql) {
+    throw new Error("生成 baseline 失败：Prisma 未输出 SQL");
+  }
+
+  // 让 baseline 可重复执行，避免重复同步时报“已存在”
+  const idempotentSql = generatedSql
+    .replace(/CREATE TABLE /g, "CREATE TABLE IF NOT EXISTS ")
+    .replace(/CREATE UNIQUE INDEX /g, "CREATE UNIQUE INDEX IF NOT EXISTS ")
+    .replace(/CREATE INDEX /g, "CREATE INDEX IF NOT EXISTS ");
+
+  const content = `-- Auto-generated from prisma/migrations by scripts/turso-sync.cjs\n-- Do not edit manually unless necessary.\n\n${idempotentSql}\n`;
+  fs.writeFileSync(baselinePath, content, "utf8");
+
+  return baselinePath;
+}
+
 async function main() {
   const root = process.cwd();
   const envFromFile = loadDotEnv(path.join(root, ".env"));
@@ -52,10 +94,7 @@ async function main() {
     throw new Error(`缺少或无效 ${tokenKey}`);
   }
 
-  const sqlPath = path.join(root, "prisma", "turso-baseline.sql");
-  if (!fs.existsSync(sqlPath)) {
-    throw new Error(`未找到基线 SQL 文件: ${sqlPath}`);
-  }
+  const sqlPath = rebuildBaselineFromMigrations(root);
   const sql = fs.readFileSync(sqlPath, "utf8");
   const statements = sql
     .split(/;\s*(?:\r?\n|$)/g)
@@ -91,6 +130,7 @@ async function main() {
 
   console.log(`[turso:sync:${target}] 已执行 ${statements.length} 条 SQL`);
   console.log(`[turso:sync:${target}] 当前表: ${tableNames.join(", ") || "(none)"}`);
+  console.log(`[turso:sync:${target}] baseline 已刷新: prisma/turso-baseline.sql`);
 }
 
 main().catch((error) => {

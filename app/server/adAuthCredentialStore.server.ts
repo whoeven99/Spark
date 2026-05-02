@@ -151,3 +151,9 @@ export function maskToken(value: string) {
   return `${value.slice(0, 3)}***${value.slice(-3)}`;
 }
 
+export function maskSecretKeepLast3(value: string) {
+  if (!value) return "";
+  const tail = value.slice(-3);
+  return `xxxx${tail}`;
+}
+

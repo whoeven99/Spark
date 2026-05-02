@@ -22,6 +22,7 @@ export function ChatPage() {
   const [googleCustomerId, setGoogleCustomerId] = useState("");
   const [googleConfigured, setGoogleConfigured] = useState(false);
   const [googleClientIdMasked, setGoogleClientIdMasked] = useState("");
+  const [googleClientSecretMasked, setGoogleClientSecretMasked] = useState("");
   const [isSavingGoogleConfig, setIsSavingGoogleConfig] = useState(false);
   const [isGoogleAuthModalOpen, setIsGoogleAuthModalOpen] = useState(false);
   const [tiktokAppId, setTiktokAppId] = useState("");
@@ -37,6 +38,7 @@ export function ChatPage() {
   const [microsoftCustomerId, setMicrosoftCustomerId] = useState("");
   const [microsoftConfigured, setMicrosoftConfigured] = useState(false);
   const [microsoftClientIdMasked, setMicrosoftClientIdMasked] = useState("");
+  const [microsoftClientSecretMasked, setMicrosoftClientSecretMasked] = useState("");
   const [isSavingMicrosoftConfig, setIsSavingMicrosoftConfig] = useState(false);
   const [isMicrosoftAuthModalOpen, setIsMicrosoftAuthModalOpen] = useState(false);
   const [sfCustomerCode, setSfCustomerCode] = useState("");
@@ -134,9 +136,11 @@ export function ChatPage() {
     const query = window.location.search;
     fetch(`/app/ads/google/config${query}`)
       .then((res) => res.json())
-      .then((data: { configured?: boolean; clientIdMasked?: string }) => {
+      .then((data: { configured?: boolean; clientIdMasked?: string; clientSecretMasked?: string }) => {
         setGoogleConfigured(Boolean(data.configured));
         setGoogleClientIdMasked(data.clientIdMasked ?? "");
+        setGoogleClientSecretMasked(data.clientSecretMasked ?? "");
+        setGoogleClientId(data.clientIdMasked ?? "");
       })
       .catch(() => {
         // noop
@@ -152,9 +156,11 @@ export function ChatPage() {
       });
     fetch(`/app/ads/microsoft/config${query}`)
       .then((res) => res.json())
-      .then((data: { configured?: boolean; clientIdMasked?: string }) => {
+      .then((data: { configured?: boolean; clientIdMasked?: string; clientSecretMasked?: string }) => {
         setMicrosoftConfigured(Boolean(data.configured));
         setMicrosoftClientIdMasked(data.clientIdMasked ?? "");
+        setMicrosoftClientSecretMasked(data.clientSecretMasked ?? "");
+        setMicrosoftClientId(data.clientIdMasked ?? "");
       })
       .catch(() => {
         // noop
@@ -260,6 +266,7 @@ export function ChatPage() {
         error?: string;
         configured?: boolean;
         clientIdMasked?: string;
+        clientSecretMasked?: string;
       };
       if (!response.ok || !data.ok) {
         shopify.toast.show(data.error || `保存失败（${response.status}）`);
@@ -268,6 +275,8 @@ export function ChatPage() {
 
       setGoogleConfigured(Boolean(data.configured));
       setGoogleClientIdMasked(data.clientIdMasked ?? "");
+      setGoogleClientSecretMasked(data.clientSecretMasked ?? "");
+      setGoogleClientId(data.clientIdMasked ?? "");
       setGoogleClientSecret("");
       setIsGoogleAuthModalOpen(false);
       shopify.toast.show("Google Ads 授权信息已保存");
@@ -341,6 +350,7 @@ export function ChatPage() {
         error?: string;
         configured?: boolean;
         clientIdMasked?: string;
+        clientSecretMasked?: string;
       };
       if (!response.ok || !data.ok) {
         shopify.toast.show(data.error || `保存失败（${response.status}）`);
@@ -349,6 +359,8 @@ export function ChatPage() {
 
       setMicrosoftConfigured(Boolean(data.configured));
       setMicrosoftClientIdMasked(data.clientIdMasked ?? "");
+      setMicrosoftClientSecretMasked(data.clientSecretMasked ?? "");
+      setMicrosoftClientId(data.clientIdMasked ?? "");
       setMicrosoftClientSecret("");
       setIsMicrosoftAuthModalOpen(false);
       shopify.toast.show("Microsoft Ads 授权信息已保存");
@@ -682,6 +694,9 @@ export function ChatPage() {
                   </s-badge>
                 </div>
                 {googleClientIdMasked ? <s-paragraph>当前 Client ID：{googleClientIdMasked}</s-paragraph> : null}
+                {googleClientSecretMasked ? (
+                  <s-paragraph>当前 Client Secret：{googleClientSecretMasked}</s-paragraph>
+                ) : null}
                 <s-box padding="small" borderWidth="base" borderRadius="base" background="subdued">
                   <s-stack direction="block" gap="small">
                     <s-unordered-list>
@@ -830,6 +845,9 @@ export function ChatPage() {
                 </div>
                 {microsoftClientIdMasked ? (
                   <s-paragraph>当前 Client ID：{microsoftClientIdMasked}</s-paragraph>
+                ) : null}
+                {microsoftClientSecretMasked ? (
+                  <s-paragraph>当前 Client Secret：{microsoftClientSecretMasked}</s-paragraph>
                 ) : null}
                 <s-box padding="small" borderWidth="base" borderRadius="base" background="subdued">
                   <s-stack direction="block" gap="small">
