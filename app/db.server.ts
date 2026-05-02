@@ -1,3 +1,4 @@
+import { PrismaLibSQL } from "@prisma/adapter-libsql";
 import { createRequire } from "node:module";
 import path from "node:path";
 import type { PrismaClient as PrismaClientType } from "./generated/prisma";
@@ -19,15 +20,31 @@ const { PrismaClient } = (() => {
 
 declare global {
   // eslint-disable-next-line no-var
-  var prismaGlobal: PrismaClientType;
+  var prismaGlobal: PrismaClientType | undefined;
 }
 
-if (process.env.NODE_ENV !== "production") {
-  if (!global.prismaGlobal) {
-    global.prismaGlobal = new PrismaClient();
+function createTursoPrismaClient(): PrismaClientType {
+  const url = process.env.TURSO_DATABASE_URL?.trim() || "";
+  const authToken = process.env.TURSO_AUTH_TOKEN?.trim() || "";
+
+  if (!url.startsWith("libsql://")) {
+    throw new Error(
+      '请设置有效的 TURSO_DATABASE_URL，例如 "libsql://xxx.turso.io"',
+    );
   }
+
+  if (!authToken) {
+    throw new Error("请设置 TURSO_AUTH_TOKEN");
+  }
+
+  const adapter = new PrismaLibSQL({ url, authToken });
+  return new PrismaClient({ adapter });
 }
 
-const prisma = global.prismaGlobal ?? new PrismaClient();
+if (!global.prismaGlobal) {
+  global.prismaGlobal = createTursoPrismaClient();
+}
+
+const prisma = global.prismaGlobal;
 
 export default prisma;
