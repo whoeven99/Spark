@@ -44,3 +44,14 @@ model Suggestion {
 
   @@index([shop, createdAt])
 }
+
+model AdPlatformCredential {
+  id          String   @id @default(cuid())
+  shop        String
+  platform    String
+  credentials Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([shop, platform])
+}

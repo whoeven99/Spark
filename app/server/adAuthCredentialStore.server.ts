@@ -1,50 +1,82 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import prisma from "../db.server";
 
-export type AdAuthProvider = "google" | "tiktok" | "microsoft";
+export type AdAuthProvider = "meta" | "google" | "tiktok" | "microsoft";
 
-type GoogleCredential = {
-  clientId: string;
-  clientSecret: string;
-  developerToken: string;
-  customerId: string;
-  updatedAt: string;
+type CredentialPayloadByProvider = {
+  meta: {
+    clientId: string;
+    clientSecret: string;
+  };
+  google: {
+    clientId: string;
+    clientSecret: string;
+    developerToken: string;
+    customerId: string;
+  };
+  tiktok: {
+    appId: string;
+    appSecret: string;
+    advertiserId: string;
+  };
+  microsoft: {
+    clientId: string;
+    clientSecret: string;
+    developerToken: string;
+    customerId: string;
+  };
 };
 
-type TikTokCredential = {
-  appId: string;
-  appSecret: string;
-  advertiserId: string;
-  updatedAt: string;
-};
+type WithUpdatedAt<T extends Record<string, unknown>> = T & { updatedAt: string };
+type MetaCredential = WithUpdatedAt<CredentialPayloadByProvider["meta"]>;
+type GoogleCredential = WithUpdatedAt<CredentialPayloadByProvider["google"]>;
+type TikTokCredential = WithUpdatedAt<CredentialPayloadByProvider["tiktok"]>;
+type MicrosoftCredential = WithUpdatedAt<CredentialPayloadByProvider["microsoft"]>;
 
-type MicrosoftCredential = {
-  clientId: string;
-  clientSecret: string;
-  developerToken: string;
-  customerId: string;
-  updatedAt: string;
-};
-
-type ProviderCredential = GoogleCredential | TikTokCredential | MicrosoftCredential;
-type CredentialStore = Record<string, Partial<Record<AdAuthProvider, ProviderCredential>>>;
-
-const STORE_DIR = path.resolve(process.cwd(), ".data");
-const STORE_FILE = path.join(STORE_DIR, "ad-auth-credentials.json");
-
-async function readStore(): Promise<CredentialStore> {
-  try {
-    const content = await readFile(STORE_FILE, "utf8");
-    const parsed = JSON.parse(content) as CredentialStore;
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-async function writeStore(store: CredentialStore) {
-  await mkdir(STORE_DIR, { recursive: true });
-  await writeFile(STORE_FILE, JSON.stringify(store, null, 2), "utf8");
+async function setProviderCredential<K extends AdAuthProvider>(
+  shop: string,
+  provider: K,
+  payload: CredentialPayloadByProvider[K],
+) {
+  await prisma.adPlatformCredential.upsert({
+    where: {
+      shop_platform: {
+        shop,
+        platform: provider,
+      },
+    },
+    update: {
+      credentials: payload,
+    },
+    create: {
+      shop,
+      platform: provider,
+      credentials: payload,
+    },
+  });
+}
+
+async function getProviderCredential<K extends AdAuthProvider>(
+  shop: string,
+  provider: K,
+): Promise<WithUpdatedAt<CredentialPayloadByProvider[K]> | null> {
+  const record = await prisma.adPlatformCredential.findUnique({
+    where: {
+      shop_platform: {
+        shop,
+        platform: provider,
+      },
+    },
+  });
+  if (!record || !isJsonObject(record.credentials)) return null;
+
+  return {
+    ...(record.credentials as CredentialPayloadByProvider[K]),
+    updatedAt: record.updatedAt.toISOString(),
+  };
 }
 
 export async function setGoogleCredential(
@@ -54,21 +86,16 @@ export async function setGoogleCredential(
   developerToken: string,
   customerId: string,
 ) {
-  const store = await readStore();
-  if (!store[shop]) store[shop] = {};
-  store[shop].google = {
+  await setProviderCredential(shop, "google", {
     clientId,
     clientSecret,
     developerToken,
     customerId,
-    updatedAt: new Date().toISOString(),
-  };
-  await writeStore(store);
+  });
 }
 
 export async function getGoogleCredential(shop: string) {
-  const store = await readStore();
-  return (store[shop]?.google as GoogleCredential | undefined) ?? null;
+  return getProviderCredential(shop, "google") as Promise<GoogleCredential | null>;
 }
 
 export async function setTikTokCredential(
@@ -77,20 +104,15 @@ export async function setTikTokCredential(
   appSecret: string,
   advertiserId: string,
 ) {
-  const store = await readStore();
-  if (!store[shop]) store[shop] = {};
-  store[shop].tiktok = {
+  await setProviderCredential(shop, "tiktok", {
     appId,
     appSecret,
     advertiserId,
-    updatedAt: new Date().toISOString(),
-  };
-  await writeStore(store);
+  });
 }
 
 export async function getTikTokCredential(shop: string) {
-  const store = await readStore();
-  return (store[shop]?.tiktok as TikTokCredential | undefined) ?? null;
+  return getProviderCredential(shop, "tiktok") as Promise<TikTokCredential | null>;
 }
 
 export async function setMicrosoftCredential(
@@ -100,21 +122,27 @@ export async function setMicrosoftCredential(
   developerToken: string,
   customerId: string,
 ) {
-  const store = await readStore();
-  if (!store[shop]) store[shop] = {};
-  store[shop].microsoft = {
+  await setProviderCredential(shop, "microsoft", {
     clientId,
     clientSecret,
     developerToken,
     customerId,
-    updatedAt: new Date().toISOString(),
-  };
-  await writeStore(store);
+  });
 }
 
 export async function getMicrosoftCredential(shop: string) {
-  const store = await readStore();
-  return (store[shop]?.microsoft as MicrosoftCredential | undefined) ?? null;
+  return getProviderCredential(shop, "microsoft") as Promise<MicrosoftCredential | null>;
+}
+
+export async function setMetaCredential(shop: string, clientId: string, clientSecret: string) {
+  await setProviderCredential(shop, "meta", {
+    clientId,
+    clientSecret,
+  });
+}
+
+export async function getMetaCredential(shop: string) {
+  return getProviderCredential(shop, "meta") as Promise<MetaCredential | null>;
 }
 
 export function maskToken(value: string) {
