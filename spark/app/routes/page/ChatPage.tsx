@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type CSSProperties } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { ChatMessages } from "../component/ChatMessages";
 import { ChatInput } from "../component/ChatInput";
@@ -49,7 +49,7 @@ export function ChatPage() {
     { id: "dhl", name: "DHL Express" },
   ];
   const initialAssistantMessage =
-    "你好，我是你的店铺助手。你可以问我业务问题，或让我查当前时间、某城市天气等。";
+    "你好，我是你的店铺助手。我目前支持：1）店铺经营分析与诊断建议；2）广告与物流授权相关引导；3）运营文案和促销活动建议；4）常见业务问题问答。你可以直接告诉我你的目标。";
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -67,6 +67,36 @@ export function ChatPage() {
     "success",
     "caution",
   ];
+  const modalOverlayStyle: CSSProperties = {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0, 0, 0, 0.45)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000,
+    padding: "1rem",
+  };
+  const modalCardStyle: CSSProperties = {
+    width: "100%",
+    maxWidth: "560px",
+    backgroundColor: "#ffffff",
+    borderRadius: "12px",
+    boxShadow: "0 12px 30px rgba(0, 0, 0, 0.2)",
+  };
+  const asideCardStyle: CSSProperties = {
+    border: "1px solid #e3e3e3",
+    borderRadius: "12px",
+    backgroundColor: "#fafafa",
+    padding: "0.75rem",
+  };
+  const summaryStyle: CSSProperties = {
+    cursor: "pointer",
+    fontWeight: 600,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+  };
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -297,7 +327,7 @@ export function ChatPage() {
   const renderProviderRows = (providers: ProviderItem[], category: string) => {
     return (
       <s-stack direction="block" gap="small">
-        {providers.map((provider) => (
+        {providers.map((provider, index) => (
           <div
             key={provider.id}
             style={{
@@ -305,7 +335,8 @@ export function ChatPage() {
               alignItems: "center",
               justifyContent: "space-between",
               gap: "0.75rem",
-              padding: "0.15rem 0",
+              padding: "0.5rem 0",
+              borderBottom: index < providers.length - 1 ? "1px solid #ececec" : "none",
             }}
           >
             <div
@@ -353,9 +384,9 @@ export function ChatPage() {
       <s-section heading="智能问答">
         <s-stack direction="inline" gap="base" alignItems="center">
           <s-paragraph>
-            使用 Shopify 管理后台内置风格组件，快速获得运营建议、文案草稿和常见业务分析。
+            你可以在这里直接提问，获取店铺经营分析、广告/物流授权引导和运营建议。
           </s-paragraph>
-          <s-badge tone="success">助手在线</s-badge>
+          <s-badge tone="success">AI 助手在线</s-badge>
         </s-stack>
 
         <div
@@ -367,13 +398,10 @@ export function ChatPage() {
             gap: "0.75rem",
           }}
         >
-          <s-box
-            padding="base"
-            borderWidth="base"
-            borderRadius="base"
-            background="subdued"
-          >
-            <s-stack direction="inline" gap="base">
+          <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
+            <s-stack direction="block" gap="small">
+              <s-paragraph>快捷问题</s-paragraph>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
               {quickPrompts.map((prompt, index) => (
                 <s-button
                   key={prompt}
@@ -397,6 +425,7 @@ export function ChatPage() {
               >
                 清空会话
               </s-button>
+              </div>
             </s-stack>
           </s-box>
 
@@ -405,12 +434,7 @@ export function ChatPage() {
               ref={messagesContainerRef}
               style={{ height: "100%", overflowY: "auto" }}
             >
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
+              <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
                 <ChatMessages messages={messages} />
               </s-box>
             </div>
@@ -423,27 +447,34 @@ export function ChatPage() {
       </s-section>
 
       <s-section slot="aside" heading="使用建议">
-        <s-unordered-list>
-          <s-list-item>尽量一次只提一个问题，回答会更准确。</s-list-item>
-          <s-list-item>可直接说明场景，例如“新客拉新”“复购提升”。</s-list-item>
-          <s-list-item>需要执行动作时，请明确给出目标和限制条件。</s-list-item>
-        </s-unordered-list>
+        <div style={asideCardStyle}>
+          <s-unordered-list>
+            <s-list-item>尽量一次只提一个问题，回答会更准确。</s-list-item>
+            <s-list-item>可直接说明场景，例如“新客拉新”“复购提升”。</s-list-item>
+            <s-list-item>需要执行动作时，请明确给出目标和限制条件。</s-list-item>
+          </s-unordered-list>
+        </div>
       </s-section>
 
       <s-section slot="aside" heading="提交建议">
-        <s-stack direction="block" gap="small">
-          <s-paragraph>在此输入你想要 assistant 添加的功能。</s-paragraph>
-          <s-button type="button" variant="secondary" onClick={() => setIsSuggestionModalOpen(true)}>
-            点击提交建议
-          </s-button>
-        </s-stack>
+        <div style={asideCardStyle}>
+          <s-stack direction="block" gap="small">
+            <s-paragraph>在此输入你想要 assistant 添加的功能。</s-paragraph>
+            <s-button type="button" variant="secondary" onClick={() => setIsSuggestionModalOpen(true)}>
+              点击提交建议
+            </s-button>
+          </s-stack>
+        </div>
       </s-section>
 
       <s-section slot="aside">
         <s-stack direction="block" gap="base">
-          <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+          <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
             <details>
-              <summary style={{ cursor: "pointer", fontWeight: 600 }}>广告数据授权</summary>
+              <summary style={summaryStyle}>
+                <span>广告数据授权</span>
+                <span>点击展开</span>
+              </summary>
               <div style={{ marginTop: "0.75rem" }}>
                 <s-stack direction="block" gap="base">
                   <s-paragraph>
@@ -457,9 +488,12 @@ export function ChatPage() {
             </details>
           </s-box>
 
-          <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+          <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
             <details>
-              <summary style={{ cursor: "pointer", fontWeight: 600 }}>物流数据授权</summary>
+              <summary style={summaryStyle}>
+                <span>物流数据授权</span>
+                <span>点击展开</span>
+              </summary>
               <div style={{ marginTop: "0.75rem" }}>
                 <s-stack direction="block" gap="base">
                   <s-paragraph>
@@ -476,29 +510,8 @@ export function ChatPage() {
       </s-section>
 
       {isMetaAuthModalOpen ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0, 0, 0, 0.45)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-            padding: "1rem",
-          }}
-          onClick={() => setIsMetaAuthModalOpen(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: "100%",
-              maxWidth: "520px",
-              backgroundColor: "#ffffff",
-              borderRadius: "12px",
-              boxShadow: "0 12px 30px rgba(0, 0, 0, 0.2)",
-            }}
-          >
+        <div style={modalOverlayStyle} onClick={() => setIsMetaAuthModalOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ ...modalCardStyle, maxWidth: "520px" }}>
             <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
               <s-stack direction="block" gap="base">
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -547,29 +560,8 @@ export function ChatPage() {
       ) : null}
 
       {isSfAuthModalOpen ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0, 0, 0, 0.45)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-            padding: "1rem",
-          }}
-          onClick={() => setIsSfAuthModalOpen(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: "100%",
-              maxWidth: "560px",
-              backgroundColor: "#ffffff",
-              borderRadius: "12px",
-              boxShadow: "0 12px 30px rgba(0, 0, 0, 0.2)",
-            }}
-          >
+        <div style={modalOverlayStyle} onClick={() => setIsSfAuthModalOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={modalCardStyle}>
             <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
               <s-stack direction="block" gap="base">
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -627,29 +619,8 @@ export function ChatPage() {
       ) : null}
 
       {isSuggestionModalOpen ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0, 0, 0, 0.45)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-            padding: "1rem",
-          }}
-          onClick={() => setIsSuggestionModalOpen(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: "100%",
-              maxWidth: "560px",
-              backgroundColor: "#ffffff",
-              borderRadius: "12px",
-              boxShadow: "0 12px 30px rgba(0, 0, 0, 0.2)",
-            }}
-          >
+        <div style={modalOverlayStyle} onClick={() => setIsSuggestionModalOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={modalCardStyle}>
             <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
               <s-stack direction="block" gap="base">
                 <strong>提交建议</strong>
