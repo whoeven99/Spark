@@ -24,17 +24,23 @@ declare global {
 }
 
 function createTursoPrismaClient(): PrismaClientType {
-  const url = process.env.TURSO_DATABASE_URL?.trim() || "";
-  const authToken = process.env.TURSO_AUTH_TOKEN?.trim() || "";
+  const target =
+    process.env.TURSO_TARGET?.trim().toLowerCase() ||
+    (process.env.NODE_ENV === "production" ? "prod" : "test");
+  const isProd = target === "prod";
+
+  const urlKey = isProd ? "TURSO_PROD_DATABASE_URL" : "TURSO_TEST_DATABASE_URL";
+  const tokenKey = isProd ? "TURSO_PROD_AUTH_TOKEN" : "TURSO_TEST_AUTH_TOKEN";
+
+  const url = process.env[urlKey]?.trim() || "";
+  const authToken = process.env[tokenKey]?.trim() || "";
 
   if (!url.startsWith("libsql://")) {
-    throw new Error(
-      '请设置有效的 TURSO_DATABASE_URL，例如 "libsql://xxx.turso.io"',
-    );
+    throw new Error(`请设置有效的 ${urlKey}，例如 "libsql://xxx.turso.io"`);
   }
 
   if (!authToken) {
-    throw new Error("请设置 TURSO_AUTH_TOKEN");
+    throw new Error(`请设置 ${tokenKey}`);
   }
 
   const adapter = new PrismaLibSQL({ url, authToken });

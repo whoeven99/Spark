@@ -40,17 +40,8 @@ async function main() {
   const tokenKey =
     target === "prod" ? "TURSO_PROD_AUTH_TOKEN" : "TURSO_TEST_AUTH_TOKEN";
 
-  const fallbackUrl =
-    target === "test"
-      ? process.env.TURSO_DATABASE_URL || envFromFile.TURSO_DATABASE_URL
-      : undefined;
-  const fallbackToken =
-    target === "test"
-      ? process.env.TURSO_AUTH_TOKEN || envFromFile.TURSO_AUTH_TOKEN
-      : undefined;
-
-  const url = process.env[urlKey] || envFromFile[urlKey] || fallbackUrl;
-  const authToken = process.env[tokenKey] || envFromFile[tokenKey] || fallbackToken;
+  const url = process.env[urlKey] || envFromFile[urlKey];
+  const authToken = process.env[tokenKey] || envFromFile[tokenKey];
 
   if (!url || !url.startsWith("libsql://")) {
     throw new Error(
