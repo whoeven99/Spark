@@ -18,7 +18,10 @@
     "graphql-codegen": "graphql-codegen",
     "vite": "vite",
     "typecheck": "react-router typegen && tsc --noEmit",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "turso:sync": "npm run turso:sync:test",
+    "turso:sync:test": "node scripts/turso-sync.cjs test",
+    "turso:sync:prod": "node scripts/turso-sync.cjs prod"
   },
   "type": "module",
   "engines": {

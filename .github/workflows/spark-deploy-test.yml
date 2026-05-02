@@ -11,49 +11,10 @@ defaults:
     working-directory: .
 
 jobs:
-  sync_turso_schema:
-    name: Sync Turso schema baseline
-    runs-on: ubuntu-latest
-    environment: CommonShopifyRenderConfig
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.ref }}
-
-      - name: Install Turso CLI
-        run: |
-          curl -sSfL https://get.tur.so/install.sh | bash
-          echo "$HOME/.turso/bin" >> "$GITHUB_PATH"
-
-      - name: Login Turso CLI
-        env:
-          TURSO_API_TOKEN: ${{ secrets.TURSO_API_TOKEN }}
-        run: turso auth login --token "$TURSO_API_TOKEN"
-
-      - name: Apply baseline schema to Turso
-        env:
-          TURSO_DATABASE_NAME: ${{ secrets.TURSO_DATABASE_NAME }}
-          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
-        run: |
-          DB_NAME="$TURSO_DATABASE_NAME"
-          if [ -z "$DB_NAME" ] && [ -n "$TURSO_DATABASE_URL" ]; then
-            DB_NAME="$(echo "$TURSO_DATABASE_URL" | sed -E 's#^libsql://([^.]+)\..*$#\1#')"
-          fi
-          if [ -z "$DB_NAME" ]; then
-            echo "Missing secret: TURSO_DATABASE_NAME (or TURSO_DATABASE_URL)"
-            exit 1
-          fi
-          turso db shell "$DB_NAME" < prisma/turso-baseline.sql
-          turso db shell "$DB_NAME" "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
-
   deploy_shopify:
     name: Shopify app deploy (test.toml)
     runs-on: ubuntu-latest
     environment: CommonShopifyRenderConfig
-    needs: sync_turso_schema
 
     steps:
       - name: Checkout
