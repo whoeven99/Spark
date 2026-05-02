@@ -1,5 +1,5 @@
-FROM node:20-alpine
-RUN apk add --no-cache openssl
+FROM node:20-slim
+RUN apt-get update -y && apt-get install -y openssl
 
 EXPOSE 3000
 
