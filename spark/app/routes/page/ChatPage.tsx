@@ -55,9 +55,9 @@ export function ChatPage() {
   ]);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const quickPrompts = [
-    "给我 3 个提升转化率的建议",
-    "帮我写一段新品上架文案",
-    "今天适合做什么促销活动？",
+    "请问你有什么功能",
+    "帮我查看下今天商店数据和广告数据",
+    "今天适合什么促销活动",
   ];
   const quickPromptTones: Array<"info" | "success" | "caution"> = [
     "info",
@@ -393,45 +393,55 @@ export function ChatPage() {
         </s-unordered-list>
       </s-section>
 
-      <s-section slot="aside" heading="广告数据授权">
+      <s-section slot="aside" heading="数据授权">
         <s-stack direction="block" gap="base">
-          <s-paragraph>
-            授权广告平台后，AI 可结合渠道来源分析投放表现（如 ROAS、转化、渠道贡献）。
-          </s-paragraph>
-          <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
-            <s-stack direction="block" gap="small">
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <strong>Meta 开发者配置</strong>
-                <s-badge tone={metaConfigured ? "success" : "critical"}>
-                  {metaConfigured ? "已配置" : "未配置"}
-                </s-badge>
-              </div>
-              {metaClientIdMasked ? (
-                <s-paragraph>当前 App ID：{metaClientIdMasked}</s-paragraph>
-              ) : null}
-              <s-button
-                type="button"
-                variant="secondary"
-                onClick={() => setIsMetaAuthModalOpen(true)}
-              >
-                点击去授权
-              </s-button>
-            </s-stack>
-          </s-box>
-          <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
-            {renderProviderRows(adProviders, "广告")}
-          </s-box>
-        </s-stack>
-      </s-section>
+          <details>
+            <summary style={{ cursor: "pointer", fontWeight: 600 }}>广告数据授权</summary>
+            <div style={{ marginTop: "0.75rem" }}>
+              <s-stack direction="block" gap="base">
+                <s-paragraph>
+                  授权广告平台后，AI 可结合渠道来源分析投放表现（如 ROAS、转化、渠道贡献）。
+                </s-paragraph>
+                <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+                  <s-stack direction="block" gap="small">
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <strong>Meta 开发者配置</strong>
+                      <s-badge tone={metaConfigured ? "success" : "critical"}>
+                        {metaConfigured ? "已配置" : "未配置"}
+                      </s-badge>
+                    </div>
+                    {metaClientIdMasked ? (
+                      <s-paragraph>当前 App ID：{metaClientIdMasked}</s-paragraph>
+                    ) : null}
+                    <s-button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setIsMetaAuthModalOpen(true)}
+                    >
+                      点击去授权
+                    </s-button>
+                  </s-stack>
+                </s-box>
+                <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+                  {renderProviderRows(adProviders, "广告")}
+                </s-box>
+              </s-stack>
+            </div>
+          </details>
 
-      <s-section slot="aside" heading="物流数据授权">
-        <s-stack direction="block" gap="base">
-          <s-paragraph>
-            授权物流平台后，AI 可结合妥投时效、运输异常、签收率等指标做履约分析。
-          </s-paragraph>
-          <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
-            {renderProviderRows(logisticsProviders, "物流")}
-          </s-box>
+          <details>
+            <summary style={{ cursor: "pointer", fontWeight: 600 }}>物流数据授权</summary>
+            <div style={{ marginTop: "0.75rem" }}>
+              <s-stack direction="block" gap="base">
+                <s-paragraph>
+                  授权物流平台后，AI 可结合妥投时效、运输异常、签收率等指标做履约分析。
+                </s-paragraph>
+                <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+                  {renderProviderRows(logisticsProviders, "物流")}
+                </s-box>
+              </s-stack>
+            </div>
+          </details>
         </s-stack>
       </s-section>
 
@@ -449,8 +459,17 @@ export function ChatPage() {
           }}
           onClick={() => setIsMetaAuthModalOpen(false)}
         >
-          <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: "520px" }}>
-            <s-box padding="base" borderWidth="base" borderRadius="base" background="surface">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: "520px",
+              backgroundColor: "#ffffff",
+              borderRadius: "12px",
+              boxShadow: "0 12px 30px rgba(0, 0, 0, 0.2)",
+            }}
+          >
+            <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
               <s-stack direction="block" gap="base">
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <strong>Meta 授权信息</strong>
@@ -511,8 +530,17 @@ export function ChatPage() {
           }}
           onClick={() => setIsSfAuthModalOpen(false)}
         >
-          <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: "560px" }}>
-            <s-box padding="base" borderWidth="base" borderRadius="base" background="surface">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: "560px",
+              backgroundColor: "#ffffff",
+              borderRadius: "12px",
+              boxShadow: "0 12px 30px rgba(0, 0, 0, 0.2)",
+            }}
+          >
+            <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
               <s-stack direction="block" gap="base">
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <strong>顺丰速运接口授权</strong>
