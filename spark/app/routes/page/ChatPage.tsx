@@ -16,12 +16,29 @@ type ProviderItem = {
 export function ChatPage() {
   const shopify = useAppBridge();
   const [isSending, setIsSending] = useState(false);
-  const [metaClientId, setMetaClientId] = useState("");
-  const [metaClientSecret, setMetaClientSecret] = useState("");
-  const [metaConfigured, setMetaConfigured] = useState(false);
-  const [metaClientIdMasked, setMetaClientIdMasked] = useState("");
-  const [isSavingMetaConfig, setIsSavingMetaConfig] = useState(false);
-  const [isMetaAuthModalOpen, setIsMetaAuthModalOpen] = useState(false);
+  const [googleClientId, setGoogleClientId] = useState("");
+  const [googleClientSecret, setGoogleClientSecret] = useState("");
+  const [googleDeveloperToken, setGoogleDeveloperToken] = useState("");
+  const [googleCustomerId, setGoogleCustomerId] = useState("");
+  const [googleConfigured, setGoogleConfigured] = useState(false);
+  const [googleClientIdMasked, setGoogleClientIdMasked] = useState("");
+  const [isSavingGoogleConfig, setIsSavingGoogleConfig] = useState(false);
+  const [isGoogleAuthModalOpen, setIsGoogleAuthModalOpen] = useState(false);
+  const [tiktokAppId, setTiktokAppId] = useState("");
+  const [tiktokAppSecret, setTiktokAppSecret] = useState("");
+  const [tiktokAdvertiserId, setTiktokAdvertiserId] = useState("");
+  const [tiktokConfigured, setTiktokConfigured] = useState(false);
+  const [tiktokAppIdMasked, setTiktokAppIdMasked] = useState("");
+  const [isSavingTiktokConfig, setIsSavingTiktokConfig] = useState(false);
+  const [isTiktokAuthModalOpen, setIsTiktokAuthModalOpen] = useState(false);
+  const [microsoftClientId, setMicrosoftClientId] = useState("");
+  const [microsoftClientSecret, setMicrosoftClientSecret] = useState("");
+  const [microsoftDeveloperToken, setMicrosoftDeveloperToken] = useState("");
+  const [microsoftCustomerId, setMicrosoftCustomerId] = useState("");
+  const [microsoftConfigured, setMicrosoftConfigured] = useState(false);
+  const [microsoftClientIdMasked, setMicrosoftClientIdMasked] = useState("");
+  const [isSavingMicrosoftConfig, setIsSavingMicrosoftConfig] = useState(false);
+  const [isMicrosoftAuthModalOpen, setIsMicrosoftAuthModalOpen] = useState(false);
   const [sfCustomerCode, setSfCustomerCode] = useState("");
   const [sfCheckWord, setSfCheckWord] = useState("");
   const [sfMonthlyAccount, setSfMonthlyAccount] = useState("");
@@ -29,24 +46,25 @@ export function ChatPage() {
   const [sfCustomerCodeMasked, setSfCustomerCodeMasked] = useState("");
   const [isSavingSfConfig, setIsSavingSfConfig] = useState(false);
   const [isSfAuthModalOpen, setIsSfAuthModalOpen] = useState(false);
+  const [fedexApiKey, setFedexApiKey] = useState("");
+  const [fedexSecretKey, setFedexSecretKey] = useState("");
+  const [fedexAccountNumber, setFedexAccountNumber] = useState("");
+  const [fedexMeterNumber, setFedexMeterNumber] = useState("");
+  const [fedexConfigured, setFedexConfigured] = useState(false);
+  const [fedexAccountNumberMasked, setFedexAccountNumberMasked] = useState("");
+  const [isSavingFedexConfig, setIsSavingFedexConfig] = useState(false);
+  const [isFedexAuthModalOpen, setIsFedexAuthModalOpen] = useState(false);
   const [isSuggestionModalOpen, setIsSuggestionModalOpen] = useState(false);
   const [suggestionText, setSuggestionText] = useState("");
   const [isSubmittingSuggestion, setIsSubmittingSuggestion] = useState(false);
   const adProviders: ProviderItem[] = [
-    { id: "meta", name: "Meta Ads（Facebook/Instagram）" },
     { id: "google", name: "Google Ads" },
     { id: "tiktok", name: "TikTok Ads" },
-    { id: "pinterest", name: "Pinterest Ads" },
-    { id: "snap", name: "Snapchat Ads" },
     { id: "microsoft", name: "Microsoft Ads（Bing）" },
   ];
   const logisticsProviders: ProviderItem[] = [
     { id: "sf", name: "顺丰速运（SF Express）" },
-    { id: "jd", name: "京东物流（JD Logistics）" },
-    { id: "yto", name: "圆通速递（YTO）" },
-    { id: "zto", name: "中通快递（ZTO）" },
     { id: "fedex", name: "FedEx" },
-    { id: "dhl", name: "DHL Express" },
   ];
   const initialAssistantMessage =
     "你好，我是你的店铺助手。我目前支持：1）店铺经营分析与诊断建议；2）广告与物流授权相关引导；3）运营文案和促销活动建议；4）常见业务问题问答。你可以直接告诉我你的目标。";
@@ -114,11 +132,29 @@ export function ChatPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const query = window.location.search;
-    fetch(`/app/ads/meta/config${query}`)
+    fetch(`/app/ads/google/config${query}`)
       .then((res) => res.json())
       .then((data: { configured?: boolean; clientIdMasked?: string }) => {
-        setMetaConfigured(Boolean(data.configured));
-        setMetaClientIdMasked(data.clientIdMasked ?? "");
+        setGoogleConfigured(Boolean(data.configured));
+        setGoogleClientIdMasked(data.clientIdMasked ?? "");
+      })
+      .catch(() => {
+        // noop
+      });
+    fetch(`/app/ads/tiktok/config${query}`)
+      .then((res) => res.json())
+      .then((data: { configured?: boolean; appIdMasked?: string }) => {
+        setTiktokConfigured(Boolean(data.configured));
+        setTiktokAppIdMasked(data.appIdMasked ?? "");
+      })
+      .catch(() => {
+        // noop
+      });
+    fetch(`/app/ads/microsoft/config${query}`)
+      .then((res) => res.json())
+      .then((data: { configured?: boolean; clientIdMasked?: string }) => {
+        setMicrosoftConfigured(Boolean(data.configured));
+        setMicrosoftClientIdMasked(data.clientIdMasked ?? "");
       })
       .catch(() => {
         // noop
@@ -132,32 +168,16 @@ export function ChatPage() {
       .catch(() => {
         // noop
       });
+    fetch(`/app/logistics/fedex/config${query}`)
+      .then((res) => res.json())
+      .then((data: { configured?: boolean; accountNumberMasked?: string }) => {
+        setFedexConfigured(Boolean(data.configured));
+        setFedexAccountNumberMasked(data.accountNumberMasked ?? "");
+      })
+      .catch(() => {
+        // noop
+      });
   }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const adAuth = params.get("adAuth");
-    if (!adAuth) return;
-
-    if (adAuth === "meta_success") {
-      shopify.toast.show("Meta Ads 授权成功");
-    } else if (adAuth === "meta_cancelled") {
-      shopify.toast.show("你已取消 Meta Ads 授权");
-    } else if (adAuth === "meta_error") {
-      const reason = params.get("reason") || "未知原因";
-      shopify.toast.show(`Meta Ads 授权失败：${reason}`);
-    }
-
-    params.delete("adAuth");
-    params.delete("reason");
-    const nextSearch = params.toString();
-    window.history.replaceState(
-      {},
-      "",
-      `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`,
-    );
-  }, [shopify]);
 
   const sendMessage = async (content: string) => {
     if (isSending) return;
@@ -194,37 +214,46 @@ export function ChatPage() {
   };
 
   const handleAuthorizeProvider = (provider: ProviderItem, category: string) => {
-    if (provider.id === "meta") {
-      if (!metaConfigured) {
-        shopify.toast.show("请先填写并保存 Meta App ID / Secret");
-        return;
-      }
-      const query = typeof window !== "undefined" ? window.location.search : "";
-      window.location.assign(`/app/ads/meta/start${query}`);
+    if (category === "广告" && provider.id === "google") {
+      setIsGoogleAuthModalOpen(true);
+      return;
+    }
+    if (category === "广告" && provider.id === "tiktok") {
+      setIsTiktokAuthModalOpen(true);
+      return;
+    }
+    if (category === "广告" && provider.id === "microsoft") {
+      setIsMicrosoftAuthModalOpen(true);
       return;
     }
     if (provider.id === "sf" && category === "物流") {
       setIsSfAuthModalOpen(true);
       return;
     }
+    if (provider.id === "fedex" && category === "物流") {
+      setIsFedexAuthModalOpen(true);
+      return;
+    }
     shopify.toast.show(`${provider.name} ${category}授权流程待接入（OAuth）`);
   };
 
-  const handleSaveMetaConfig = async () => {
-    const clientId = metaClientId.trim();
-    const clientSecret = metaClientSecret.trim();
-    if (!clientId || !clientSecret) {
-      shopify.toast.show("请填写完整的 Meta App ID 和 Meta App Secret");
+  const handleSaveGoogleConfig = async () => {
+    const clientId = googleClientId.trim();
+    const clientSecret = googleClientSecret.trim();
+    const developerToken = googleDeveloperToken.trim();
+    const customerId = googleCustomerId.trim();
+    if (!clientId || !clientSecret || !developerToken || !customerId) {
+      shopify.toast.show("请完整填写 Google Ads 授权信息");
       return;
     }
 
-    setIsSavingMetaConfig(true);
+    setIsSavingGoogleConfig(true);
     try {
       const query = typeof window !== "undefined" ? window.location.search : "";
-      const response = await fetch(`/app/ads/meta/config${query}`, {
+      const response = await fetch(`/app/ads/google/config${query}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientId, clientSecret }),
+        body: JSON.stringify({ clientId, clientSecret, developerToken, customerId }),
       });
       const data = (await response.json().catch(() => ({}))) as {
         ok?: boolean;
@@ -237,15 +266,96 @@ export function ChatPage() {
         return;
       }
 
-      setMetaConfigured(Boolean(data.configured));
-      setMetaClientIdMasked(data.clientIdMasked ?? "");
-      setMetaClientSecret("");
-      setIsMetaAuthModalOpen(false);
-      shopify.toast.show("Meta 配置已保存");
+      setGoogleConfigured(Boolean(data.configured));
+      setGoogleClientIdMasked(data.clientIdMasked ?? "");
+      setGoogleClientSecret("");
+      setIsGoogleAuthModalOpen(false);
+      shopify.toast.show("Google Ads 授权信息已保存");
     } catch {
-      shopify.toast.show("保存 Meta 配置失败，请稍后重试");
+      shopify.toast.show("保存 Google Ads 授权信息失败，请稍后重试");
     } finally {
-      setIsSavingMetaConfig(false);
+      setIsSavingGoogleConfig(false);
+    }
+  };
+
+  const handleSaveTiktokConfig = async () => {
+    const appId = tiktokAppId.trim();
+    const appSecret = tiktokAppSecret.trim();
+    const advertiserId = tiktokAdvertiserId.trim();
+    if (!appId || !appSecret || !advertiserId) {
+      shopify.toast.show("请完整填写 TikTok Ads 授权信息");
+      return;
+    }
+
+    setIsSavingTiktokConfig(true);
+    try {
+      const query = typeof window !== "undefined" ? window.location.search : "";
+      const response = await fetch(`/app/ads/tiktok/config${query}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appId, appSecret, advertiserId }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        configured?: boolean;
+        appIdMasked?: string;
+      };
+      if (!response.ok || !data.ok) {
+        shopify.toast.show(data.error || `保存失败（${response.status}）`);
+        return;
+      }
+
+      setTiktokConfigured(Boolean(data.configured));
+      setTiktokAppIdMasked(data.appIdMasked ?? "");
+      setTiktokAppSecret("");
+      setIsTiktokAuthModalOpen(false);
+      shopify.toast.show("TikTok Ads 授权信息已保存");
+    } catch {
+      shopify.toast.show("保存 TikTok Ads 授权信息失败，请稍后重试");
+    } finally {
+      setIsSavingTiktokConfig(false);
+    }
+  };
+
+  const handleSaveMicrosoftConfig = async () => {
+    const clientId = microsoftClientId.trim();
+    const clientSecret = microsoftClientSecret.trim();
+    const developerToken = microsoftDeveloperToken.trim();
+    const customerId = microsoftCustomerId.trim();
+    if (!clientId || !clientSecret || !developerToken || !customerId) {
+      shopify.toast.show("请完整填写 Microsoft Ads 授权信息");
+      return;
+    }
+
+    setIsSavingMicrosoftConfig(true);
+    try {
+      const query = typeof window !== "undefined" ? window.location.search : "";
+      const response = await fetch(`/app/ads/microsoft/config${query}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId, clientSecret, developerToken, customerId }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        configured?: boolean;
+        clientIdMasked?: string;
+      };
+      if (!response.ok || !data.ok) {
+        shopify.toast.show(data.error || `保存失败（${response.status}）`);
+        return;
+      }
+
+      setMicrosoftConfigured(Boolean(data.configured));
+      setMicrosoftClientIdMasked(data.clientIdMasked ?? "");
+      setMicrosoftClientSecret("");
+      setIsMicrosoftAuthModalOpen(false);
+      shopify.toast.show("Microsoft Ads 授权信息已保存");
+    } catch {
+      shopify.toast.show("保存 Microsoft Ads 授权信息失败，请稍后重试");
+    } finally {
+      setIsSavingMicrosoftConfig(false);
     }
   };
 
@@ -290,6 +400,48 @@ export function ChatPage() {
     }
   };
 
+  const handleSaveFedexConfig = async () => {
+    const apiKey = fedexApiKey.trim();
+    const secretKey = fedexSecretKey.trim();
+    const accountNumber = fedexAccountNumber.trim();
+    const meterNumber = fedexMeterNumber.trim();
+
+    if (!apiKey || !secretKey || !accountNumber) {
+      shopify.toast.show("请填写 FedEx 的 API Key、Secret Key、Account Number");
+      return;
+    }
+
+    setIsSavingFedexConfig(true);
+    try {
+      const query = typeof window !== "undefined" ? window.location.search : "";
+      const response = await fetch(`/app/logistics/fedex/config${query}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey, secretKey, accountNumber, meterNumber }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        configured?: boolean;
+        accountNumberMasked?: string;
+      };
+      if (!response.ok || !data.ok) {
+        shopify.toast.show(data.error || `保存失败（${response.status}）`);
+        return;
+      }
+
+      setFedexConfigured(Boolean(data.configured));
+      setFedexAccountNumberMasked(data.accountNumberMasked ?? "");
+      setFedexSecretKey("");
+      setIsFedexAuthModalOpen(false);
+      shopify.toast.show("FedEx 授权信息已保存");
+    } catch {
+      shopify.toast.show("保存 FedEx 授权信息失败，请稍后重试");
+    } finally {
+      setIsSavingFedexConfig(false);
+    }
+  };
+
   const handleSubmitSuggestion = async () => {
     const content = suggestionText.trim();
     if (!content) {
@@ -325,6 +477,15 @@ export function ChatPage() {
   };
 
   const renderProviderRows = (providers: ProviderItem[], category: string) => {
+    const isConfigured = (providerId: string) => {
+      if (category === "物流" && providerId === "sf") return sfConfigured;
+      if (category === "物流" && providerId === "fedex") return fedexConfigured;
+      if (category === "广告" && providerId === "google") return googleConfigured;
+      if (category === "广告" && providerId === "tiktok") return tiktokConfigured;
+      if (category === "广告" && providerId === "microsoft") return microsoftConfigured;
+      return false;
+    };
+
     return (
       <s-stack direction="block" gap="small">
         {providers.map((provider, index) => (
@@ -358,10 +519,8 @@ export function ChatPage() {
               }}
             >
               <span style={{ whiteSpace: "nowrap" }}>
-                <s-badge
-                  tone={category === "物流" && provider.id === "sf" && sfConfigured ? "success" : "critical"}
-                >
-                  {category === "物流" && provider.id === "sf" && sfConfigured ? "已配置" : "未授权"}
+                <s-badge tone={isConfigured(provider.id) ? "success" : "critical"}>
+                  {isConfigured(provider.id) ? "已配置" : "未授权"}
                 </s-badge>
               </span>
               <s-button
@@ -509,48 +668,225 @@ export function ChatPage() {
         </s-stack>
       </s-section>
 
-      {isMetaAuthModalOpen ? (
-        <div style={modalOverlayStyle} onClick={() => setIsMetaAuthModalOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ ...modalCardStyle, maxWidth: "520px" }}>
+      {isGoogleAuthModalOpen ? (
+        <div style={modalOverlayStyle} onClick={() => setIsGoogleAuthModalOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={modalCardStyle}>
             <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
               <s-stack direction="block" gap="base">
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <strong>Meta 授权信息</strong>
-                  <s-badge tone={metaConfigured ? "success" : "critical"}>
-                    {metaConfigured ? "已配置" : "未配置"}
+                  <strong>Google Ads 授权信息</strong>
+                  <s-badge tone={googleConfigured ? "success" : "critical"}>
+                    {googleConfigured ? "已配置" : "未配置"}
                   </s-badge>
                 </div>
-                <s-paragraph>
-                  请输入广告平台开发者信息（例如 App ID、App Secret），保存后即可继续 OAuth 授权流程。
-                </s-paragraph>
+                {googleClientIdMasked ? <s-paragraph>当前 Client ID：{googleClientIdMasked}</s-paragraph> : null}
+                <s-box padding="small" borderWidth="base" borderRadius="base" background="subdued">
+                  <s-stack direction="block" gap="small">
+                    <s-unordered-list>
+                      <s-list-item>
+                        OAuth Client ID：在 Google Cloud Console 的 OAuth 凭据页面获取。
+                      </s-list-item>
+                      <s-list-item>
+                        OAuth Client Secret：与 Client ID 在同一凭据项中获取。
+                      </s-list-item>
+                      <s-list-item>
+                        Developer Token：在 Google Ads 后台的 API Center 申请/查看。
+                      </s-list-item>
+                      <s-list-item>
+                        Customer ID：Google Ads 账户 ID，建议填写纯数字（去掉中划线）。
+                      </s-list-item>
+                    </s-unordered-list>
+                  </s-stack>
+                </s-box>
                 <s-text-field
-                  label="Meta App ID"
-                  value={metaClientId}
-                  onChange={(e) => setMetaClientId(e.currentTarget.value)}
+                  label="OAuth Client ID"
+                  value={googleClientId}
+                  onChange={(e) => setGoogleClientId(e.currentTarget.value)}
                   autocomplete="off"
                 />
                 <s-text-field
-                  label="Meta App Secret"
-                  value={metaClientSecret}
-                  onChange={(e) => setMetaClientSecret(e.currentTarget.value)}
+                  label="OAuth Client Secret"
+                  value={googleClientSecret}
+                  onChange={(e) => setGoogleClientSecret(e.currentTarget.value)}
+                  autocomplete="off"
+                />
+                <s-text-field
+                  label="Developer Token"
+                  value={googleDeveloperToken}
+                  onChange={(e) => setGoogleDeveloperToken(e.currentTarget.value)}
+                  autocomplete="off"
+                />
+                <s-text-field
+                  label="Customer ID"
+                  value={googleCustomerId}
+                  onChange={(e) => setGoogleCustomerId(e.currentTarget.value)}
                   autocomplete="off"
                 />
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
                   <s-button
                     type="button"
                     variant="secondary"
-                    onClick={() => setIsMetaAuthModalOpen(false)}
-                    {...(isSavingMetaConfig ? { disabled: true } : {})}
+                    onClick={() => setIsGoogleAuthModalOpen(false)}
+                    {...(isSavingGoogleConfig ? { disabled: true } : {})}
                   >
                     取消
                   </s-button>
                   <s-button
                     type="button"
                     variant="primary"
-                    onClick={handleSaveMetaConfig}
-                    {...(isSavingMetaConfig ? { disabled: true } : {})}
+                    onClick={handleSaveGoogleConfig}
+                    {...(isSavingGoogleConfig ? { disabled: true } : {})}
                   >
-                    {isSavingMetaConfig ? "保存中..." : "保存并继续"}
+                    {isSavingGoogleConfig ? "保存中..." : "保存授权信息"}
+                  </s-button>
+                </div>
+              </s-stack>
+            </s-box>
+          </div>
+        </div>
+      ) : null}
+
+      {isTiktokAuthModalOpen ? (
+        <div style={modalOverlayStyle} onClick={() => setIsTiktokAuthModalOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={modalCardStyle}>
+            <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
+              <s-stack direction="block" gap="base">
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <strong>TikTok Ads 授权信息</strong>
+                  <s-badge tone={tiktokConfigured ? "success" : "critical"}>
+                    {tiktokConfigured ? "已配置" : "未配置"}
+                  </s-badge>
+                </div>
+                {tiktokAppIdMasked ? <s-paragraph>当前 App ID：{tiktokAppIdMasked}</s-paragraph> : null}
+                <s-box padding="small" borderWidth="base" borderRadius="base" background="subdued">
+                  <s-stack direction="block" gap="small">
+                    <s-unordered-list>
+                      <s-list-item>
+                        App ID：在 TikTok for Business 开发者后台创建应用后获取。
+                      </s-list-item>
+                      <s-list-item>
+                        App Secret：与 App ID 同一应用配置页获取。
+                      </s-list-item>
+                      <s-list-item>
+                        Advertiser ID：在 TikTok Ads 广告主账户信息页查看（通常为纯数字字符串）。
+                      </s-list-item>
+                    </s-unordered-list>
+                  </s-stack>
+                </s-box>
+                <s-text-field
+                  label="App ID"
+                  value={tiktokAppId}
+                  onChange={(e) => setTiktokAppId(e.currentTarget.value)}
+                  autocomplete="off"
+                />
+                <s-text-field
+                  label="App Secret"
+                  value={tiktokAppSecret}
+                  onChange={(e) => setTiktokAppSecret(e.currentTarget.value)}
+                  autocomplete="off"
+                />
+                <s-text-field
+                  label="Advertiser ID"
+                  value={tiktokAdvertiserId}
+                  onChange={(e) => setTiktokAdvertiserId(e.currentTarget.value)}
+                  autocomplete="off"
+                />
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                  <s-button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setIsTiktokAuthModalOpen(false)}
+                    {...(isSavingTiktokConfig ? { disabled: true } : {})}
+                  >
+                    取消
+                  </s-button>
+                  <s-button
+                    type="button"
+                    variant="primary"
+                    onClick={handleSaveTiktokConfig}
+                    {...(isSavingTiktokConfig ? { disabled: true } : {})}
+                  >
+                    {isSavingTiktokConfig ? "保存中..." : "保存授权信息"}
+                  </s-button>
+                </div>
+              </s-stack>
+            </s-box>
+          </div>
+        </div>
+      ) : null}
+
+      {isMicrosoftAuthModalOpen ? (
+        <div style={modalOverlayStyle} onClick={() => setIsMicrosoftAuthModalOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={modalCardStyle}>
+            <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
+              <s-stack direction="block" gap="base">
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <strong>Microsoft Ads 授权信息</strong>
+                  <s-badge tone={microsoftConfigured ? "success" : "critical"}>
+                    {microsoftConfigured ? "已配置" : "未配置"}
+                  </s-badge>
+                </div>
+                {microsoftClientIdMasked ? (
+                  <s-paragraph>当前 Client ID：{microsoftClientIdMasked}</s-paragraph>
+                ) : null}
+                <s-box padding="small" borderWidth="base" borderRadius="base" background="subdued">
+                  <s-stack direction="block" gap="small">
+                    <s-unordered-list>
+                      <s-list-item>
+                        Client ID：在 Azure Portal 的应用注册（App registrations）中获取。
+                      </s-list-item>
+                      <s-list-item>
+                        Client Secret：在同一应用的 Certificates & secrets 中创建并获取。
+                      </s-list-item>
+                      <s-list-item>
+                        Developer Token：在 Microsoft Advertising 后台/API 管理页获取。
+                      </s-list-item>
+                      <s-list-item>
+                        Customer ID：Microsoft Advertising 账户 ID（常见为数字字符串）。
+                      </s-list-item>
+                    </s-unordered-list>
+                  </s-stack>
+                </s-box>
+                <s-text-field
+                  label="Client ID"
+                  value={microsoftClientId}
+                  onChange={(e) => setMicrosoftClientId(e.currentTarget.value)}
+                  autocomplete="off"
+                />
+                <s-text-field
+                  label="Client Secret"
+                  value={microsoftClientSecret}
+                  onChange={(e) => setMicrosoftClientSecret(e.currentTarget.value)}
+                  autocomplete="off"
+                />
+                <s-text-field
+                  label="Developer Token"
+                  value={microsoftDeveloperToken}
+                  onChange={(e) => setMicrosoftDeveloperToken(e.currentTarget.value)}
+                  autocomplete="off"
+                />
+                <s-text-field
+                  label="Customer ID"
+                  value={microsoftCustomerId}
+                  onChange={(e) => setMicrosoftCustomerId(e.currentTarget.value)}
+                  autocomplete="off"
+                />
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                  <s-button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setIsMicrosoftAuthModalOpen(false)}
+                    {...(isSavingMicrosoftConfig ? { disabled: true } : {})}
+                  >
+                    取消
+                  </s-button>
+                  <s-button
+                    type="button"
+                    variant="primary"
+                    onClick={handleSaveMicrosoftConfig}
+                    {...(isSavingMicrosoftConfig ? { disabled: true } : {})}
+                  >
+                    {isSavingMicrosoftConfig ? "保存中..." : "保存授权信息"}
                   </s-button>
                 </div>
               </s-stack>
@@ -573,6 +909,24 @@ export function ChatPage() {
                 <s-paragraph>
                   顺丰开放平台通常不是 OAuth 跳转授权，而是通过接口凭证接入。请填写顺丰顾客编码和校验码，月结账号可选。
                 </s-paragraph>
+                <s-box padding="small" borderWidth="base" borderRadius="base" background="subdued">
+                  <s-stack direction="block" gap="small">
+                    <s-unordered-list>
+                      <s-list-item>
+                        顾客编码（Customer Code）：在顺丰开放平台或电子运单 API 对接资料中获取。
+                      </s-list-item>
+                      <s-list-item>
+                        校验码（Check Word）：由顺丰开放平台提供，通常与顾客编码配套下发。
+                      </s-list-item>
+                      <s-list-item>
+                        月结账号：来自顺丰月结客户资料（无月结可先留空）。
+                      </s-list-item>
+                      <s-list-item>
+                        如果不确定字段值，可联系顺丰商务/技术支持按企业信息协助开通并提供参数。
+                      </s-list-item>
+                    </s-unordered-list>
+                  </s-stack>
+                </s-box>
                 {sfCustomerCodeMasked ? (
                   <s-paragraph>当前顾客编码：{sfCustomerCodeMasked}</s-paragraph>
                 ) : null}
@@ -610,6 +964,89 @@ export function ChatPage() {
                     {...(isSavingSfConfig ? { disabled: true } : {})}
                   >
                     {isSavingSfConfig ? "保存中..." : "保存授权信息"}
+                  </s-button>
+                </div>
+              </s-stack>
+            </s-box>
+          </div>
+        </div>
+      ) : null}
+
+      {isFedexAuthModalOpen ? (
+        <div style={modalOverlayStyle} onClick={() => setIsFedexAuthModalOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={modalCardStyle}>
+            <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
+              <s-stack direction="block" gap="base">
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <strong>FedEx 接口授权</strong>
+                  <s-badge tone={fedexConfigured ? "success" : "critical"}>
+                    {fedexConfigured ? "已配置" : "未配置"}
+                  </s-badge>
+                </div>
+                <s-paragraph>
+                  FedEx 为 API 凭证接入模式。请填写 API Key、Secret Key 和 Account Number；Meter Number 按你的账户情况选填。
+                </s-paragraph>
+                <s-box padding="small" borderWidth="base" borderRadius="base" background="subdued">
+                  <s-stack direction="block" gap="small">
+                    <s-unordered-list>
+                      <s-list-item>
+                        API Key：在 FedEx Developer Portal 创建项目后生成。
+                      </s-list-item>
+                      <s-list-item>
+                        Secret Key：与 API Key 同一页面生成并配套使用。
+                      </s-list-item>
+                      <s-list-item>
+                        Account Number：来自 FedEx 账号资料页面（通常为数字字符串）。
+                      </s-list-item>
+                      <s-list-item>
+                        Meter Number：可在 FedEx Web Services 历史接入资料中查询（没有可先留空）。
+                      </s-list-item>
+                    </s-unordered-list>
+                  </s-stack>
+                </s-box>
+                {fedexAccountNumberMasked ? (
+                  <s-paragraph>当前账号：{fedexAccountNumberMasked}</s-paragraph>
+                ) : null}
+                <s-text-field
+                  label="API Key"
+                  value={fedexApiKey}
+                  onChange={(e) => setFedexApiKey(e.currentTarget.value)}
+                  autocomplete="off"
+                />
+                <s-text-field
+                  label="Secret Key"
+                  value={fedexSecretKey}
+                  onChange={(e) => setFedexSecretKey(e.currentTarget.value)}
+                  autocomplete="off"
+                />
+                <s-text-field
+                  label="Account Number"
+                  value={fedexAccountNumber}
+                  onChange={(e) => setFedexAccountNumber(e.currentTarget.value)}
+                  autocomplete="off"
+                />
+                <s-text-field
+                  label="Meter Number（可选）"
+                  value={fedexMeterNumber}
+                  onChange={(e) => setFedexMeterNumber(e.currentTarget.value)}
+                  autocomplete="off"
+                />
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                  <s-button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setIsFedexAuthModalOpen(false)}
+                    {...(isSavingFedexConfig ? { disabled: true } : {})}
+                  >
+                    取消
+                  </s-button>
+                  <s-button
+                    type="button"
+                    variant="primary"
+                    onClick={handleSaveFedexConfig}
+                    {...(isSavingFedexConfig ? { disabled: true } : {})}
+                  >
+                    {isSavingFedexConfig ? "保存中..." : "保存授权信息"}
                   </s-button>
                 </div>
               </s-stack>
