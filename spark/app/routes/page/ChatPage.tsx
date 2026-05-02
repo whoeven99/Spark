@@ -29,6 +29,9 @@ export function ChatPage() {
   const [sfCustomerCodeMasked, setSfCustomerCodeMasked] = useState("");
   const [isSavingSfConfig, setIsSavingSfConfig] = useState(false);
   const [isSfAuthModalOpen, setIsSfAuthModalOpen] = useState(false);
+  const [isSuggestionModalOpen, setIsSuggestionModalOpen] = useState(false);
+  const [suggestionText, setSuggestionText] = useState("");
+  const [isSubmittingSuggestion, setIsSubmittingSuggestion] = useState(false);
   const adProviders: ProviderItem[] = [
     { id: "meta", name: "Meta Ads（Facebook/Instagram）" },
     { id: "google", name: "Google Ads" },
@@ -257,6 +260,40 @@ export function ChatPage() {
     }
   };
 
+  const handleSubmitSuggestion = async () => {
+    const content = suggestionText.trim();
+    if (!content) {
+      shopify.toast.show("内容不能为空");
+      return;
+    }
+
+    setIsSubmittingSuggestion(true);
+    try {
+      const query = typeof window !== "undefined" ? window.location.search : "";
+      const response = await fetch(`/app/feedback/suggestion${query}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ suggestion: content }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+        error?: string;
+      };
+      if (!response.ok || !data.ok) {
+        shopify.toast.show(data.error || `提交失败（${response.status}）`);
+        return;
+      }
+      setSuggestionText("");
+      setIsSuggestionModalOpen(false);
+      shopify.toast.show(data.message || "提交成功，感谢您的建议");
+    } catch {
+      shopify.toast.show("提交建议失败，请稍后重试");
+    } finally {
+      setIsSubmittingSuggestion(false);
+    }
+  };
+
   const renderProviderRows = (providers: ProviderItem[], category: string) => {
     return (
       <s-stack direction="block" gap="small">
@@ -391,6 +428,15 @@ export function ChatPage() {
           <s-list-item>可直接说明场景，例如“新客拉新”“复购提升”。</s-list-item>
           <s-list-item>需要执行动作时，请明确给出目标和限制条件。</s-list-item>
         </s-unordered-list>
+      </s-section>
+
+      <s-section slot="aside" heading="提交建议">
+        <s-stack direction="block" gap="small">
+          <s-paragraph>在此输入你想要 assistant 添加的功能。</s-paragraph>
+          <s-button type="button" variant="secondary" onClick={() => setIsSuggestionModalOpen(true)}>
+            点击提交建议
+          </s-button>
+        </s-stack>
       </s-section>
 
       <s-section slot="aside">
@@ -572,6 +618,66 @@ export function ChatPage() {
                     {...(isSavingSfConfig ? { disabled: true } : {})}
                   >
                     {isSavingSfConfig ? "保存中..." : "保存授权信息"}
+                  </s-button>
+                </div>
+              </s-stack>
+            </s-box>
+          </div>
+        </div>
+      ) : null}
+
+      {isSuggestionModalOpen ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "1rem",
+          }}
+          onClick={() => setIsSuggestionModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: "560px",
+              backgroundColor: "#ffffff",
+              borderRadius: "12px",
+              boxShadow: "0 12px 30px rgba(0, 0, 0, 0.2)",
+            }}
+          >
+            <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
+              <s-stack direction="block" gap="base">
+                <strong>提交建议</strong>
+                <s-paragraph>请输入你希望 assistant 新增的功能描述（一个字符串）。</s-paragraph>
+                <s-text-field
+                  label="建议描述"
+                  value={suggestionText}
+                  onChange={(e) => setSuggestionText(e.currentTarget.value)}
+                  autocomplete="off"
+                />
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                  <s-button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setIsSuggestionModalOpen(false)}
+                    {...(isSubmittingSuggestion ? { disabled: true } : {})}
+                  >
+                    取消
+                  </s-button>
+                  <s-button
+                    type="button"
+                    variant="primary"
+                    onClick={handleSubmitSuggestion}
+                    {...(isSubmittingSuggestion || !suggestionText.trim()
+                      ? { disabled: true }
+                      : {})}
+                  >
+                    {isSubmittingSuggestion ? "提交中..." : "提交"}
                   </s-button>
                 </div>
               </s-stack>
