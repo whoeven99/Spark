@@ -8,7 +8,7 @@ on:
 
 defaults:
   run:
-    working-directory: spark
+    working-directory: .
 
 jobs:
   deploy_shopify:
@@ -28,7 +28,7 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: spark/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -39,7 +39,7 @@ jobs:
       - name: Deploy
         env:
           SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
-          # 与 spark/shopify.app.test.toml 中 client_id 一致
+          # 与 shopify.app.test.toml 中 client_id 一致
           SHOPIFY_API_KEY: 940b967eda872dd81f9ffc283e29a013
         run: shopify app deploy -c shopify.app.test.toml -f
 

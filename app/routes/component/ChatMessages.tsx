@@ -46,7 +46,7 @@ export function ChatMessages({ messages }: ChatMessagesProps) {
                       : "success"
                   }
                 >
-                  {item.role === "assistant" ? "机器人" : "你"}
+                  {item.role === "assistant" ? "AI Assistant" : "你"}
                 </s-badge>
               </div>
               <div style={{ marginTop: "0.35rem" }}>

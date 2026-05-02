@@ -18,7 +18,7 @@ export default function App() {
   return (
     <AppProvider embedded apiKey={apiKey}>
       <s-app-nav>
-        <s-link href="/app">聊天机器人</s-link>
+        <s-link href="/app">AI Assistant</s-link>
         <s-link href="/app/additional">诊断报告</s-link>
       </s-app-nav>
       <Outlet />

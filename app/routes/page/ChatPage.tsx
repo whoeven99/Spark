@@ -67,7 +67,7 @@ export function ChatPage() {
     { id: "fedex", name: "FedEx" },
   ];
   const initialAssistantMessage =
-    "你好，我是你的店铺助手。我目前支持：1）店铺经营分析与诊断建议；2）广告与物流授权相关引导；3）运营文案和促销活动建议；4）常见业务问题问答。你可以直接告诉我你的目标。";
+    "你好，我是 AI Assistant。\n\n我目前支持：\n1. 店铺经营分析与诊断建议\n2. 广告与物流授权相关引导\n3. 运营文案和促销活动建议\n4. 常见业务问题问答\n\n你可以直接告诉我你的目标。";
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
