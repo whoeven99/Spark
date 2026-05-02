@@ -42,6 +42,7 @@ export function ChatInput({ onMessageSend, isSending }: ChatInputProps) {
 
   return (
     <form
+      autoComplete="off"
       onSubmit={(event) => {
         event.preventDefault();
         handleSend();
@@ -58,6 +59,7 @@ export function ChatInput({ onMessageSend, isSending }: ChatInputProps) {
               setInput(target.value);
             }}
             placeholder="请输入你想问的问题..."
+            autocomplete="off"
           />
         </div>
         <s-button
