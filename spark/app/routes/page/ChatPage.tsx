@@ -21,6 +21,14 @@ export function ChatPage() {
   const [metaConfigured, setMetaConfigured] = useState(false);
   const [metaClientIdMasked, setMetaClientIdMasked] = useState("");
   const [isSavingMetaConfig, setIsSavingMetaConfig] = useState(false);
+  const [isMetaAuthModalOpen, setIsMetaAuthModalOpen] = useState(false);
+  const [sfCustomerCode, setSfCustomerCode] = useState("");
+  const [sfCheckWord, setSfCheckWord] = useState("");
+  const [sfMonthlyAccount, setSfMonthlyAccount] = useState("");
+  const [sfConfigured, setSfConfigured] = useState(false);
+  const [sfCustomerCodeMasked, setSfCustomerCodeMasked] = useState("");
+  const [isSavingSfConfig, setIsSavingSfConfig] = useState(false);
+  const [isSfAuthModalOpen, setIsSfAuthModalOpen] = useState(false);
   const adProviders: ProviderItem[] = [
     { id: "meta", name: "Meta Ads（Facebook/Instagram）" },
     { id: "google", name: "Google Ads" },
@@ -78,6 +86,15 @@ export function ChatPage() {
       .then((data: { configured?: boolean; clientIdMasked?: string }) => {
         setMetaConfigured(Boolean(data.configured));
         setMetaClientIdMasked(data.clientIdMasked ?? "");
+      })
+      .catch(() => {
+        // noop
+      });
+    fetch(`/app/logistics/sf/config${query}`)
+      .then((res) => res.json())
+      .then((data: { configured?: boolean; customerCodeMasked?: string }) => {
+        setSfConfigured(Boolean(data.configured));
+        setSfCustomerCodeMasked(data.customerCodeMasked ?? "");
       })
       .catch(() => {
         // noop
@@ -143,8 +160,8 @@ export function ChatPage() {
     }
   };
 
-  const handleAuthorizeProvider = (providerName: string, category: string) => {
-    if (providerName.includes("Meta Ads")) {
+  const handleAuthorizeProvider = (provider: ProviderItem, category: string) => {
+    if (provider.id === "meta") {
       if (!metaConfigured) {
         shopify.toast.show("请先填写并保存 Meta App ID / Secret");
         return;
@@ -153,7 +170,11 @@ export function ChatPage() {
       window.location.assign(`/app/ads/meta/start${query}`);
       return;
     }
-    shopify.toast.show(`${providerName} ${category}授权流程待接入（OAuth）`);
+    if (provider.id === "sf" && category === "物流") {
+      setIsSfAuthModalOpen(true);
+      return;
+    }
+    shopify.toast.show(`${provider.name} ${category}授权流程待接入（OAuth）`);
   };
 
   const handleSaveMetaConfig = async () => {
@@ -186,11 +207,53 @@ export function ChatPage() {
       setMetaConfigured(Boolean(data.configured));
       setMetaClientIdMasked(data.clientIdMasked ?? "");
       setMetaClientSecret("");
+      setIsMetaAuthModalOpen(false);
       shopify.toast.show("Meta 配置已保存");
     } catch {
       shopify.toast.show("保存 Meta 配置失败，请稍后重试");
     } finally {
       setIsSavingMetaConfig(false);
+    }
+  };
+
+  const handleSaveSfConfig = async () => {
+    const customerCode = sfCustomerCode.trim();
+    const checkWord = sfCheckWord.trim();
+    const monthlyAccount = sfMonthlyAccount.trim();
+
+    if (!customerCode || !checkWord) {
+      shopify.toast.show("请填写顺丰顾客编码和校验码");
+      return;
+    }
+
+    setIsSavingSfConfig(true);
+    try {
+      const query = typeof window !== "undefined" ? window.location.search : "";
+      const response = await fetch(`/app/logistics/sf/config${query}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerCode, checkWord, monthlyAccount }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        configured?: boolean;
+        customerCodeMasked?: string;
+      };
+      if (!response.ok || !data.ok) {
+        shopify.toast.show(data.error || `保存失败（${response.status}）`);
+        return;
+      }
+
+      setSfConfigured(Boolean(data.configured));
+      setSfCustomerCodeMasked(data.customerCodeMasked ?? "");
+      setSfCheckWord("");
+      setIsSfAuthModalOpen(false);
+      shopify.toast.show("顺丰接口配置已保存");
+    } catch {
+      shopify.toast.show("保存顺丰接口配置失败，请稍后重试");
+    } finally {
+      setIsSavingSfConfig(false);
     }
   };
 
@@ -227,13 +290,17 @@ export function ChatPage() {
               }}
             >
               <span style={{ whiteSpace: "nowrap" }}>
-                <s-badge tone="critical">未授权</s-badge>
+                <s-badge
+                  tone={category === "物流" && provider.id === "sf" && sfConfigured ? "success" : "critical"}
+                >
+                  {category === "物流" && provider.id === "sf" && sfConfigured ? "已配置" : "未授权"}
+                </s-badge>
               </span>
               <s-button
                 type="button"
                 variant="secondary"
                 size="slim"
-                onClick={() => handleAuthorizeProvider(provider.name, category)}
+                onClick={() => handleAuthorizeProvider(provider, category)}
               >
                 去授权
               </s-button>
@@ -342,25 +409,12 @@ export function ChatPage() {
               {metaClientIdMasked ? (
                 <s-paragraph>当前 App ID：{metaClientIdMasked}</s-paragraph>
               ) : null}
-              <s-text-field
-                label="Meta App ID"
-                value={metaClientId}
-                onChange={(e) => setMetaClientId(e.currentTarget.value)}
-                autocomplete="off"
-              />
-              <s-text-field
-                label="Meta App Secret"
-                value={metaClientSecret}
-                onChange={(e) => setMetaClientSecret(e.currentTarget.value)}
-                autocomplete="off"
-              />
               <s-button
                 type="button"
                 variant="secondary"
-                onClick={handleSaveMetaConfig}
-                {...(isSavingMetaConfig ? { disabled: true } : {})}
+                onClick={() => setIsMetaAuthModalOpen(true)}
               >
-                {isSavingMetaConfig ? "保存中..." : "保存 Meta 配置"}
+                点击去授权
               </s-button>
             </s-stack>
           </s-box>
@@ -380,6 +434,139 @@ export function ChatPage() {
           </s-box>
         </s-stack>
       </s-section>
+
+      {isMetaAuthModalOpen ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "1rem",
+          }}
+          onClick={() => setIsMetaAuthModalOpen(false)}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: "520px" }}>
+            <s-box padding="base" borderWidth="base" borderRadius="base" background="surface">
+              <s-stack direction="block" gap="base">
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <strong>Meta 授权信息</strong>
+                  <s-badge tone={metaConfigured ? "success" : "critical"}>
+                    {metaConfigured ? "已配置" : "未配置"}
+                  </s-badge>
+                </div>
+                <s-paragraph>
+                  请输入广告平台开发者信息（例如 App ID、App Secret），保存后即可继续 OAuth 授权流程。
+                </s-paragraph>
+                <s-text-field
+                  label="Meta App ID"
+                  value={metaClientId}
+                  onChange={(e) => setMetaClientId(e.currentTarget.value)}
+                  autocomplete="off"
+                />
+                <s-text-field
+                  label="Meta App Secret"
+                  value={metaClientSecret}
+                  onChange={(e) => setMetaClientSecret(e.currentTarget.value)}
+                  autocomplete="off"
+                />
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                  <s-button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setIsMetaAuthModalOpen(false)}
+                    {...(isSavingMetaConfig ? { disabled: true } : {})}
+                  >
+                    取消
+                  </s-button>
+                  <s-button
+                    type="button"
+                    variant="primary"
+                    onClick={handleSaveMetaConfig}
+                    {...(isSavingMetaConfig ? { disabled: true } : {})}
+                  >
+                    {isSavingMetaConfig ? "保存中..." : "保存并继续"}
+                  </s-button>
+                </div>
+              </s-stack>
+            </s-box>
+          </div>
+        </div>
+      ) : null}
+
+      {isSfAuthModalOpen ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "1rem",
+          }}
+          onClick={() => setIsSfAuthModalOpen(false)}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: "560px" }}>
+            <s-box padding="base" borderWidth="base" borderRadius="base" background="surface">
+              <s-stack direction="block" gap="base">
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <strong>顺丰速运接口授权</strong>
+                  <s-badge tone={sfConfigured ? "success" : "critical"}>
+                    {sfConfigured ? "已配置" : "未配置"}
+                  </s-badge>
+                </div>
+                <s-paragraph>
+                  顺丰开放平台通常不是 OAuth 跳转授权，而是通过接口凭证接入。请填写顺丰顾客编码和校验码，月结账号可选。
+                </s-paragraph>
+                {sfCustomerCodeMasked ? (
+                  <s-paragraph>当前顾客编码：{sfCustomerCodeMasked}</s-paragraph>
+                ) : null}
+                <s-text-field
+                  label="顺丰顾客编码（Customer Code）"
+                  value={sfCustomerCode}
+                  onChange={(e) => setSfCustomerCode(e.currentTarget.value)}
+                  autocomplete="off"
+                />
+                <s-text-field
+                  label="顺丰校验码（Check Word）"
+                  value={sfCheckWord}
+                  onChange={(e) => setSfCheckWord(e.currentTarget.value)}
+                  autocomplete="off"
+                />
+                <s-text-field
+                  label="顺丰月结账号（可选）"
+                  value={sfMonthlyAccount}
+                  onChange={(e) => setSfMonthlyAccount(e.currentTarget.value)}
+                  autocomplete="off"
+                />
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                  <s-button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setIsSfAuthModalOpen(false)}
+                    {...(isSavingSfConfig ? { disabled: true } : {})}
+                  >
+                    取消
+                  </s-button>
+                  <s-button
+                    type="button"
+                    variant="primary"
+                    onClick={handleSaveSfConfig}
+                    {...(isSavingSfConfig ? { disabled: true } : {})}
+                  >
+                    {isSavingSfConfig ? "保存中..." : "保存授权信息"}
+                  </s-button>
+                </div>
+              </s-stack>
+            </s-box>
+          </div>
+        </div>
+      ) : null}
     </s-page>
   );
 }
