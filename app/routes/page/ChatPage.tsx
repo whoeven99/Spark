@@ -18,6 +18,7 @@ export function ChatPage() {
   const [isSending, setIsSending] = useState(false);
   const [googleClientId, setGoogleClientId] = useState("");
   const [googleClientSecret, setGoogleClientSecret] = useState("");
+  const [googleDeveloperTokenMasked, setGoogleDeveloperTokenMasked] = useState("");
   const [googleDeveloperToken, setGoogleDeveloperToken] = useState("");
   const [googleCustomerId, setGoogleCustomerId] = useState("");
   const [googleConfigured, setGoogleConfigured] = useState(false);
@@ -34,6 +35,7 @@ export function ChatPage() {
   const [isTiktokAuthModalOpen, setIsTiktokAuthModalOpen] = useState(false);
   const [microsoftClientId, setMicrosoftClientId] = useState("");
   const [microsoftClientSecret, setMicrosoftClientSecret] = useState("");
+  const [microsoftDeveloperTokenMasked, setMicrosoftDeveloperTokenMasked] = useState("");
   const [microsoftDeveloperToken, setMicrosoftDeveloperToken] = useState("");
   const [microsoftCustomerId, setMicrosoftCustomerId] = useState("");
   const [microsoftConfigured, setMicrosoftConfigured] = useState(false);
@@ -136,11 +138,22 @@ export function ChatPage() {
     const query = window.location.search;
     fetch(`/app/ads/google/config${query}`)
       .then((res) => res.json())
-      .then((data: { configured?: boolean; clientIdMasked?: string; clientSecretMasked?: string }) => {
+      .then(
+        (data: {
+          configured?: boolean;
+          clientIdMasked?: string;
+          clientSecretMasked?: string;
+          developerTokenMasked?: string;
+          customerId?: string;
+        }) => {
         setGoogleConfigured(Boolean(data.configured));
         setGoogleClientIdMasked(data.clientIdMasked ?? "");
         setGoogleClientSecretMasked(data.clientSecretMasked ?? "");
+        setGoogleDeveloperTokenMasked(data.developerTokenMasked ?? "");
         setGoogleClientId(data.clientIdMasked ?? "");
+        setGoogleClientSecret(data.clientSecretMasked ?? "");
+        setGoogleDeveloperToken(data.developerTokenMasked ?? "");
+        setGoogleCustomerId(data.customerId ?? "");
       })
       .catch(() => {
         // noop
@@ -156,11 +169,22 @@ export function ChatPage() {
       });
     fetch(`/app/ads/microsoft/config${query}`)
       .then((res) => res.json())
-      .then((data: { configured?: boolean; clientIdMasked?: string; clientSecretMasked?: string }) => {
+      .then(
+        (data: {
+          configured?: boolean;
+          clientIdMasked?: string;
+          clientSecretMasked?: string;
+          developerTokenMasked?: string;
+          customerId?: string;
+        }) => {
         setMicrosoftConfigured(Boolean(data.configured));
         setMicrosoftClientIdMasked(data.clientIdMasked ?? "");
         setMicrosoftClientSecretMasked(data.clientSecretMasked ?? "");
+        setMicrosoftDeveloperTokenMasked(data.developerTokenMasked ?? "");
         setMicrosoftClientId(data.clientIdMasked ?? "");
+        setMicrosoftClientSecret(data.clientSecretMasked ?? "");
+        setMicrosoftDeveloperToken(data.developerTokenMasked ?? "");
+        setMicrosoftCustomerId(data.customerId ?? "");
       })
       .catch(() => {
         // noop
@@ -267,6 +291,8 @@ export function ChatPage() {
         configured?: boolean;
         clientIdMasked?: string;
         clientSecretMasked?: string;
+        developerTokenMasked?: string;
+        customerId?: string;
       };
       if (!response.ok || !data.ok) {
         shopify.toast.show(data.error || `保存失败（${response.status}）`);
@@ -276,8 +302,11 @@ export function ChatPage() {
       setGoogleConfigured(Boolean(data.configured));
       setGoogleClientIdMasked(data.clientIdMasked ?? "");
       setGoogleClientSecretMasked(data.clientSecretMasked ?? "");
+      setGoogleDeveloperTokenMasked(data.developerTokenMasked ?? "");
       setGoogleClientId(data.clientIdMasked ?? "");
-      setGoogleClientSecret("");
+      setGoogleClientSecret(data.clientSecretMasked ?? "");
+      setGoogleDeveloperToken(data.developerTokenMasked ?? "");
+      setGoogleCustomerId(data.customerId ?? customerId);
       setIsGoogleAuthModalOpen(false);
       shopify.toast.show("Google Ads 授权信息已保存");
     } catch {
@@ -351,6 +380,8 @@ export function ChatPage() {
         configured?: boolean;
         clientIdMasked?: string;
         clientSecretMasked?: string;
+        developerTokenMasked?: string;
+        customerId?: string;
       };
       if (!response.ok || !data.ok) {
         shopify.toast.show(data.error || `保存失败（${response.status}）`);
@@ -360,8 +391,11 @@ export function ChatPage() {
       setMicrosoftConfigured(Boolean(data.configured));
       setMicrosoftClientIdMasked(data.clientIdMasked ?? "");
       setMicrosoftClientSecretMasked(data.clientSecretMasked ?? "");
+      setMicrosoftDeveloperTokenMasked(data.developerTokenMasked ?? "");
       setMicrosoftClientId(data.clientIdMasked ?? "");
-      setMicrosoftClientSecret("");
+      setMicrosoftClientSecret(data.clientSecretMasked ?? "");
+      setMicrosoftDeveloperToken(data.developerTokenMasked ?? "");
+      setMicrosoftCustomerId(data.customerId ?? customerId);
       setIsMicrosoftAuthModalOpen(false);
       shopify.toast.show("Microsoft Ads 授权信息已保存");
     } catch {
@@ -697,6 +731,9 @@ export function ChatPage() {
                 {googleClientSecretMasked ? (
                   <s-paragraph>当前 Client Secret：{googleClientSecretMasked}</s-paragraph>
                 ) : null}
+                {googleDeveloperTokenMasked ? (
+                  <s-paragraph>当前 Developer Token：{googleDeveloperTokenMasked}</s-paragraph>
+                ) : null}
                 <s-box padding="small" borderWidth="base" borderRadius="base" background="subdued">
                   <s-stack direction="block" gap="small">
                     <s-unordered-list>
@@ -848,6 +885,9 @@ export function ChatPage() {
                 ) : null}
                 {microsoftClientSecretMasked ? (
                   <s-paragraph>当前 Client Secret：{microsoftClientSecretMasked}</s-paragraph>
+                ) : null}
+                {microsoftDeveloperTokenMasked ? (
+                  <s-paragraph>当前 Developer Token：{microsoftDeveloperTokenMasked}</s-paragraph>
                 ) : null}
                 <s-box padding="small" borderWidth="base" borderRadius="base" background="subdued">
                   <s-stack direction="block" gap="small">

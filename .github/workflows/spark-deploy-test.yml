@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - allen
+      - master
   workflow_dispatch:
 
 defaults:

@@ -14,6 +14,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     configured: Boolean(config),
     clientIdMasked: config ? maskToken(config.clientId) : "",
     clientSecretMasked: config ? maskSecretKeepLast3(config.clientSecret) : "",
+    developerTokenMasked: config ? maskSecretKeepLast3(config.developerToken) : "",
+    customerId: config?.customerId ?? "",
     updatedAt: config?.updatedAt ?? "",
   });
 };
@@ -32,7 +34,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const developerToken = body.developerToken?.trim() ?? "";
   const customerId = body.customerId?.trim() ?? "";
 
-  if (!clientId || !clientSecret || !developerToken || !customerId) {
+  const current = await getMicrosoftCredential(session.shop);
+  const resolvedClientId =
+    (clientId.includes("*") ? current?.clientId : clientId) ?? "";
+  const resolvedClientSecret =
+    (clientSecret.startsWith("xxxx") ? current?.clientSecret : clientSecret) ?? "";
+  const resolvedDeveloperToken =
+    (developerToken.startsWith("xxxx") ? current?.developerToken : developerToken) ?? "";
+  const resolvedCustomerId = customerId || current?.customerId || "";
+
+  if (
+    !resolvedClientId ||
+    !resolvedClientSecret ||
+    !resolvedDeveloperToken ||
+    !resolvedCustomerId
+  ) {
     return Response.json(
       {
         ok: false,
@@ -43,12 +59,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
   }
 
-  await setMicrosoftCredential(session.shop, clientId, clientSecret, developerToken, customerId);
+  await setMicrosoftCredential(
+    session.shop,
+    resolvedClientId,
+    resolvedClientSecret,
+    resolvedDeveloperToken,
+    resolvedCustomerId,
+  );
   return Response.json({
     ok: true,
     configured: true,
-    clientIdMasked: maskToken(clientId),
-    clientSecretMasked: maskSecretKeepLast3(clientSecret),
+    clientIdMasked: maskToken(resolvedClientId),
+    clientSecretMasked: maskSecretKeepLast3(resolvedClientSecret),
+    developerTokenMasked: maskSecretKeepLast3(resolvedDeveloperToken),
+    customerId: resolvedCustomerId,
   });
 };
 
