@@ -9,6 +9,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 // @ts-expect-error IDE 对该模块存在暂时性解析延迟，运行时路径有效
 import { TranslationPage } from "./page/TranslationPage";
 import { createTranslationJob } from "../server/translation/translationPipelineCore.server";
+import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../server/translation/types";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -19,15 +20,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       targetLocale: "fr",
       sourceLocale: "zh-CN",
       limitPerType: 20,
-      resourceTypes: [
-        "PRODUCT",
-        "COLLECTION",
-        "PAGE",
-        "ARTICLE",
-        "METAOBJECT",
-        "METAFIELD",
-        "ONLINE_STORE_THEME",
-      ],
+      resourceTypes: [...ALLOWED_TRANSLATABLE_RESOURCE_TYPES],
     },
   });
 };

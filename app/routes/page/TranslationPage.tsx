@@ -3,16 +3,9 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useLoaderData } from "react-router";
 import type { loader } from "../app.translation";
 import { JsonRuntimeTaskStatusPanel } from "../component/JsonRuntimeTaskStatusPanel";
+import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../../server/translation/types";
 
-const RESOURCE_TYPE_OPTIONS = [
-  "PRODUCT",
-  "COLLECTION",
-  "PAGE",
-  "ARTICLE",
-  "METAOBJECT",
-  "METAFIELD",
-  "ONLINE_STORE_THEME",
-] as const;
+const RESOURCE_TYPE_OPTIONS = ALLOWED_TRANSLATABLE_RESOURCE_TYPES;
 
 export function TranslationPage() {
   const shopify = useAppBridge();

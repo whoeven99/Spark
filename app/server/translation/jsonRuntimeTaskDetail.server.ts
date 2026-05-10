@@ -227,8 +227,7 @@ async function enrichJsonRuntimeDetailWithChunksFailedJson(
   const blobRel = `tasks/${shop}/${tid}/chunks/failed.json`;
   if (!(await translateV3BlobExists(blobRel))) return;
   const sz = await translateV3BlobSizeBytes(blobRel);
-  const maxBytes = 512 * 1024;
-  if (sz != null && sz > maxBytes) {
+  if (sz != null && sz > REPORT_FAILURES_MAX_BYTES) {
     body.runtimeFailedJsonTruncated = true;
     return;
   }

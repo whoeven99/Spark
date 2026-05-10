@@ -1,32 +1,24 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { listJsonRuntimeTasksForShop } from "../server/translation/cosmosJobStore.server";
-
-function normalizeShop(value: string) {
-  return value.trim().toLowerCase();
-}
+import {
+  effectiveShopFromQuery,
+  forbiddenIfShopMismatch,
+} from "../server/translation/translateRouteHelpers.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
     const { session } = await authenticate.admin(request);
     const url = new URL(request.url);
     const shopNameParam = url.searchParams.get("shopName")?.trim();
-    const effectiveShop = shopNameParam || session.shop;
-    if (
-      shopNameParam &&
-      normalizeShop(shopNameParam) !== normalizeShop(session.shop)
-    ) {
-      return Response.json(
-        {
-          success: false,
-          errorCode: 403,
-          errorMsg: "只能查询当前店铺的 JSON Runtime 任务列表",
-          response: null,
-        },
-        { status: 403 },
-      );
-    }
+    const forbidden = forbiddenIfShopMismatch(
+      shopNameParam,
+      session.shop,
+      "只能查询当前店铺的 JSON Runtime 任务列表",
+    );
+    if (forbidden) return forbidden;
 
+    const effectiveShop = effectiveShopFromQuery(shopNameParam, session.shop);
     const tasks = await listJsonRuntimeTasksForShop(effectiveShop);
     return Response.json({
       success: true,

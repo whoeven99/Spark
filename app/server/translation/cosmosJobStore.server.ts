@@ -340,35 +340,37 @@ export async function listTranslationJobs(shop: string) {
   return resources.map(mapJob);
 }
 
-/** 与 Spark 创建任务同一容器；仅 taskType 为 json-runtime 的文档（忽略大小写）。按 updatedAt 降序。 */
+/** 与 Spark 创建任务同一容器；仅 taskType 为 json-runtime 的文档（忽略大小写）。按 updatedAt 降序，最多 50 条。 */
 export async function listJsonRuntimeTasksForShop(shop: string) {
   const shopTrim = shop.trim();
   if (!shopTrim) return [];
   const jobs = await getJobsContainer();
   const query = jobs.items.query<TranslationJobDoc>(
     {
-      query: "SELECT * FROM c WHERE c.shopName = @shop ORDER BY c.updatedAt DESC",
-      parameters: [{ name: "@shop", value: shopTrim }],
+      query:
+        "SELECT TOP 50 * FROM c WHERE c.shopName = @shop AND LOWER(c.taskType) = @taskType ORDER BY c.updatedAt DESC",
+      parameters: [
+        { name: "@shop", value: shopTrim },
+        { name: "@taskType", value: "json-runtime" },
+      ],
     },
     { partitionKey: shopTrim },
   );
   const { resources } = await query.fetchAll();
-  return resources
-    .filter((doc) => (doc.taskType ?? "").trim().toLowerCase() === "json-runtime")
-    .map((doc) => ({
-      id: doc.id,
-      shopName: doc.shopName,
-      source: doc.source,
-      target: doc.target,
-      status: doc.status,
-      statusText: doc.statusText,
-      taskType: doc.taskType ?? "json-runtime",
-      aiModel: doc.aiModel ?? "",
-      createdAt: doc.createdAt,
-      updatedAt: doc.updatedAt,
-      sessionId: doc.sessionId ?? "",
-      moduleList: doc.moduleList ?? "",
-    }));
+  return resources.map((doc) => ({
+    id: doc.id,
+    shopName: doc.shopName,
+    source: doc.source,
+    target: doc.target,
+    status: doc.status,
+    statusText: doc.statusText,
+    taskType: doc.taskType ?? "json-runtime",
+    aiModel: doc.aiModel ?? "",
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+    sessionId: doc.sessionId ?? "",
+    moduleList: doc.moduleList ?? "",
+  }));
 }
 
 export async function getTranslationJobRecord(shop: string, jobId: string) {

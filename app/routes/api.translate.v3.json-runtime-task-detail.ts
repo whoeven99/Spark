@@ -4,12 +4,12 @@ import {
   BASE_RESPONSE_FAILED_CODE,
   buildSparkJsonRuntimeTaskDetailEnvelope,
 } from "../server/translation/jsonRuntimeTaskDetail.server";
+import {
+  effectiveShopFromQuery,
+  forbiddenIfShopMismatch,
+} from "../server/translation/translateRouteHelpers.server";
 
 const DEFAULT_AGENT_BASE = "https://agent-task-0qi3.onrender.com";
-
-function normalizeShop(value: string) {
-  return value.trim().toLowerCase();
-}
 
 /** 兼容 Jackson / 少数网关对布尔字段的序列化差异 */
 function coerceEnvelopeSuccess(value: unknown): boolean | undefined {
@@ -130,21 +130,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
 
     const shopNameParam = url.searchParams.get("shopName")?.trim();
-    const effectiveShop = shopNameParam || session.shop;
-    if (
-      shopNameParam &&
-      normalizeShop(shopNameParam) !== normalizeShop(session.shop)
-    ) {
-      return Response.json(
-        {
-          success: false,
-          errorCode: 403,
-          errorMsg: "只能查询当前店铺的 JSON Runtime 任务",
-          response: null,
-        },
-        { status: 403 },
-      );
-    }
+    const forbidden = forbiddenIfShopMismatch(
+      shopNameParam,
+      session.shop,
+      "只能查询当前店铺的 JSON Runtime 任务",
+    );
+    if (forbidden) return forbidden;
+
+    const effectiveShop = effectiveShopFromQuery(shopNameParam, session.shop);
 
     const includeBlobPreview = url.searchParams.get("includeBlobPreview") === "true";
     const maxPreviewBytesRaw = url.searchParams.get("maxPreviewBytes")?.trim();
