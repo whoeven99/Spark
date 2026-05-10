@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "43f9452ac887b48d104087235ee798d7"
-name = "spark-local-yw"
+client_id = "8191fdd554fc1ea1b10152aa6f7a0060"
+name = "Spark-local"
 application_url = "https://example.com"
 embedded = true
 
@@ -14,7 +14,7 @@ api_version = "2026-07"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_orders,write_products"
+scopes = "read_orders,write_products,read_translations,write_translations"
 
 [auth]
 redirect_urls = [ "https://example.com/api/auth" ]

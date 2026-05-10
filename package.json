@@ -19,6 +19,8 @@
     "graphql-codegen": "graphql-codegen",
     "vite": "vite",
     "typecheck": "react-router typegen && tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prisma:studio": "prisma studio",
     "turso:sync": "npm run turso:sync:test",
     "turso:sync:test": "node scripts/turso-sync.cjs test",
@@ -29,6 +31,8 @@
     "node": ">=20.19 <22 || >=22.12"
   },
   "dependencies": {
+    "@azure/cosmos": "^4.9.3",
+    "@azure/storage-blob": "^12.31.0",
     "@langchain/core": "^1.1.40",
     "@langchain/openai": "^1.4.4",
     "@libsql/client": "^0.17.3",
@@ -41,6 +45,7 @@
     "@shopify/app-bridge-react": "^4.2.4",
     "@shopify/shopify-app-react-router": "^1.1.0",
     "@shopify/shopify-app-session-storage-prisma": "^9.0.0",
+    "ioredis": "^5.10.1",
     "isbot": "^5.1.31",
     "langchain": "^1.3.3",
     "prisma": "^6.16.3",
@@ -61,6 +66,7 @@
     "@types/react-dom": "^18.3.7",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
+    "@vitest/coverage-v8": "^4.1.5",
     "eslint": "^8.57.1",
     "eslint-import-resolver-typescript": "^3.10.1",
     "eslint-plugin-import": "^2.32.0",
@@ -70,7 +76,8 @@
     "graphql-config": "^5.1.1",
     "prettier": "^3.6.2",
     "typescript": "^5.9.3",
-    "vite": "^6.3.6"
+    "vite": "^6.3.6",
+    "vitest": "^4.1.5"
   },
   "workspaces": [
     "extensions/*"

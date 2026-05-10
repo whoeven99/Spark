@@ -1,0 +1,1300 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
+
+export type JsonRuntimeTaskDetailEnvelope = {
+  success: boolean;
+  errorCode?: number;
+  errorMsg?: string;
+  response?: JsonRuntimeTaskDetailPayload | null;
+};
+
+export type BlobSnapshot = {
+  uri?: string;
+  blobPath?: string;
+  exists?: boolean;
+  note?: string;
+  sizeBytes?: number;
+  preview?: string;
+  previewTruncated?: boolean;
+};
+
+export type JsonRuntimeTaskListRow = {
+  id?: string;
+  shopName?: string;
+  source?: string;
+  target?: string;
+  status?: number;
+  statusText?: string;
+  taskType?: string;
+  aiModel?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  sessionId?: string;
+  moduleList?: string;
+};
+
+export type JsonRuntimeTaskListPayload = {
+  shopName?: string;
+  total?: number;
+  tasks?: JsonRuntimeTaskListRow[];
+};
+
+export type JsonRuntimeTaskListEnvelope = {
+  success: boolean;
+  errorCode?: number;
+  errorMsg?: string;
+  response?: JsonRuntimeTaskListPayload | null;
+};
+
+export type JsonRuntimeTaskDetailPayload = {
+  cosmos?: Record<string, unknown>;
+  resolvedRedisPrefix?: string;
+  /** 由后端从当前 report Blob 解析，弥补 Redis failMap 跨 chunk 覆盖问题 */
+  runtimeReportFailures?: Array<{ path?: string; reason?: string }>;
+  runtimeReportFailuresTruncated?: boolean;
+  /** tasks/{shop}/{taskId}/chunks/failed.json，含每条 sourceValue（与 Java mergeWriteChunksFailedJson 一致） */
+  runtimeFailedJson?: Record<string, unknown>;
+  runtimeFailedJsonTruncated?: boolean;
+  redisRuntime?: {
+    taskId?: string;
+    redisPrefix?: string;
+    meta?: Record<string, string>;
+    doneSize?: number;
+    chunkDoneSize?: number;
+    resultSize?: number;
+    failMap?: Record<string, string>;
+  };
+  blobs?: {
+    input?: BlobSnapshot;
+    output?: BlobSnapshot;
+    report?: BlobSnapshot;
+  };
+  reportParsed?: Record<string, unknown>;
+};
+
+type Props = {
+  /** 默认填入店铺域名（当前登录店铺） */
+  defaultShopName: string;
+};
+
+function readString(record: Record<string, unknown> | undefined, key: string) {
+  const v = record?.[key];
+  return typeof v === "string" ? v : v != null ? String(v) : "";
+}
+
+function readNumber(raw: string | undefined) {
+  if (raw === undefined || raw === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Cosmos metrics / checkpoint 可能是 number 或字符串 */
+function readMetricNumber(raw: unknown): number | null {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string") return readNumber(raw);
+  return null;
+}
+
+function formatBytes(n: number | undefined) {
+  if (n === undefined || !Number.isFinite(n)) return "-";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function sortedEntries(map: Record<string, string> | undefined) {
+  if (!map) return [];
+  return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+}
+
+/** Redis 键形如 chunk-0.json::/2/sourceValue，取 JSON Pointer 段用于匹配 failed.json */
+function pointerFromFailStoragePath(fullPath: string): string {
+  const sep = fullPath.indexOf("::");
+  return sep > 0 ? fullPath.slice(sep + 2) : fullPath;
+}
+
+/** 从 runtimeFailedJson.items 匹配 sourceValue（与后端 failed.json 结构一致） */
+function lookupSourceValueFromRuntimeFailedJson(
+  runtimeFailedJson: unknown,
+  fullPath: string,
+  reason: string,
+): string | undefined {
+  const doc = runtimeFailedJson as { items?: unknown[] } | undefined;
+  if (!doc?.items || !Array.isArray(doc.items)) return undefined;
+  const pointer = pointerFromFailStoragePath(fullPath);
+  for (const raw of doc.items) {
+    if (!raw || typeof raw !== "object") continue;
+    const row = raw as Record<string, unknown>;
+    const sk = typeof row.storageKey === "string" ? row.storageKey : "";
+    const p = typeof row.path === "string" ? row.path : "";
+    const r = typeof row.reason === "string" ? row.reason : "";
+    const sv = row.sourceValue;
+    if (typeof sv !== "string" || sv.length === 0) continue;
+    const reasonOk = r === reason || reason === "(无 reason)";
+    const pathOk =
+      sk === fullPath ||
+      p === pointer ||
+      (pointer.length > 0 && fullPath.endsWith(p)) ||
+      pointerFromFailStoragePath(sk) === pointer;
+    if (reasonOk && pathOk) return sv;
+  }
+  return undefined;
+}
+
+/** 列表行 statusText（Spark Cosmos）粗略映射到徽章色调 */
+function listRowBadgeTone(statusText?: string): "success" | "warning" | "critical" | "info" {
+  const s = (statusText ?? "").toUpperCase();
+  if (s.includes("DONE") || s.includes("COMPLETE") || s.includes("SAVE_DONE")) return "success";
+  if (s.includes("FAIL") || s.includes("STOPPED") || s.includes("ERROR")) return "critical";
+  if (s.includes("RUNNING") || s.includes("PENDING") || s.includes("FETCH") || s.includes("TRANSLATE"))
+    return "warning";
+  return "info";
+}
+
+function cosmosBadgeTone(statusText?: string): "success" | "warning" | "critical" | "info" {
+  const s = (statusText ?? "").toUpperCase();
+  if (s.includes("STOPPED") && !s.includes("TOKEN")) return "critical";
+  if (s.includes("PENDING") || s.includes("RUNNING")) return "warning";
+  if (s.includes("SAVE_PENDING") || s.includes("VERIFY")) return "info";
+  return "success";
+}
+
+function ProgressBarRow(props: {
+  title: string;
+  detail?: ReactNode;
+  percent: number;
+  barGradient: string;
+  trackHeight?: number;
+}) {
+  const { title, detail, percent, barGradient, trackHeight = 12 } = props;
+  const pct = Math.min(100, Math.max(0, Math.round(percent)));
+  return (
+    <div style={{ marginTop: 4 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          gap: 12,
+          marginBottom: 8,
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <span style={{ fontWeight: 600, fontSize: "13px", color: "#202223" }}>{title}</span>
+          {detail ? (
+            <span style={{ display: "block", color: "#6d7175", fontSize: "12px", marginTop: 2 }}>
+              {detail}
+            </span>
+          ) : null}
+        </div>
+        <span
+          style={{
+            fontWeight: 700,
+            fontSize: "15px",
+            color: "#202223",
+            fontVariantNumeric: "tabular-nums",
+            flexShrink: 0,
+          }}
+        >
+          {pct}%
+        </span>
+      </div>
+      <div
+        style={{
+          width: "100%",
+          height: trackHeight,
+          background: "linear-gradient(180deg, #e7e9ec 0%, #dfe3e8 100%)",
+          borderRadius: 999,
+          overflow: "hidden",
+          boxShadow: "inset 0 1px 2px rgba(32,34,35,0.12)",
+        }}
+      >
+        <div
+          style={{
+            width: `${pct}%`,
+            height: "100%",
+            background: barGradient,
+            borderRadius: 999,
+            transition: "width 0.4s cubic-bezier(0.33, 1, 0.68, 1)",
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.35)",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function MetricTile(props: { label: string; value: string }) {
+  return (
+    <div
+      style={{
+        padding: "10px 12px",
+        borderRadius: 10,
+        background: "#fff",
+        border: "1px solid #e3e5e8",
+        minWidth: 0,
+      }}
+    >
+      <div style={{ fontSize: "11px", color: "#6d7175", marginBottom: 4, letterSpacing: "0.02em" }}>
+        {props.label}
+      </div>
+      <div
+        style={{
+          fontSize: "14px",
+          fontWeight: 600,
+          color: "#202223",
+          wordBreak: "break-all",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {props.value}
+      </div>
+    </div>
+  );
+}
+
+const BLOB_LABELS: Record<"input" | "output" | "report", string> = {
+  input: "输入（input）",
+  output: "输出（output）",
+  report: "报告（report）",
+};
+
+/** 与下方自动刷新定时器一致（秒） */
+const DETAIL_POLL_INTERVAL_SEC = 4;
+
+export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
+  const [taskId, setTaskId] = useState("");
+  const [includeBlobPreview, setIncludeBlobPreview] = useState(false);
+  const [maxPreviewBytes, setMaxPreviewBytes] = useState(8192);
+  /** 默认开启：选中任务后周期性静默拉取详情 */
+  const [pollEnabled, setPollEnabled] = useState(true);
+  /** 距离下次自动刷新剩余秒数；未开启轮询或未选任务时为 null */
+  const [pollCountdownSec, setPollCountdownSec] = useState<number | null>(null);
+
+  const [listLoading, setListLoading] = useState(false);
+  const [listErrorText, setListErrorText] = useState("");
+  const [taskList, setTaskList] = useState<JsonRuntimeTaskListRow[]>([]);
+
+  const [loading, setLoading] = useState(false);
+  const [errorText, setErrorText] = useState("");
+  const [payload, setPayload] = useState<JsonRuntimeTaskDetailPayload | null>(null);
+
+  const shopName = defaultShopName.trim();
+
+  const fetchTaskList = useCallback(async () => {
+    if (!shopName) {
+      setTaskList([]);
+      setListErrorText("");
+      return;
+    }
+    setListLoading(true);
+    setListErrorText("");
+    try {
+      const params = new URLSearchParams();
+      params.set("shopName", shopName);
+      const response = await fetch(
+        `/api/translate/v3/json-runtime-tasks?${params.toString()}`,
+      );
+      const envelope = (await response.json().catch(() => ({}))) as JsonRuntimeTaskListEnvelope;
+      if (!response.ok || envelope.success === false) {
+        setTaskList([]);
+        setListErrorText(envelope.errorMsg || `加载列表失败（HTTP ${response.status}）`);
+        return;
+      }
+      const tasks = envelope.response?.tasks;
+      setTaskList(Array.isArray(tasks) ? tasks : []);
+      setListErrorText("");
+    } catch {
+      setTaskList([]);
+      setListErrorText("加载任务列表失败，请稍后重试");
+    } finally {
+      setListLoading(false);
+    }
+  }, [shopName]);
+
+  useEffect(() => {
+    void fetchTaskList();
+  }, [fetchTaskList]);
+
+  const fetchDetail = useCallback(
+    async (options?: { silent?: boolean; overrideTaskId?: string }) => {
+      const tid = (options?.overrideTaskId ?? taskId).trim();
+      if (!tid) {
+        setErrorText("");
+        setPayload(null);
+        return;
+      }
+
+      const silent = options?.silent === true;
+      if (!silent) {
+        setLoading(true);
+        setErrorText("");
+      }
+
+      try {
+        const params = new URLSearchParams();
+        params.set("taskId", tid);
+        if (shopName) params.set("shopName", shopName);
+        if (includeBlobPreview) params.set("includeBlobPreview", "true");
+        params.set("maxPreviewBytes", String(maxPreviewBytes));
+
+        const response = await fetch(
+          `/api/translate/v3/json-runtime-task-detail?${params.toString()}`,
+        );
+        const envelope = (await response.json().catch(() => ({}))) as JsonRuntimeTaskDetailEnvelope;
+
+        if (!response.ok || envelope.success === false) {
+          if (!silent) setPayload(null);
+          setErrorText(envelope.errorMsg || `请求失败（HTTP ${response.status}）`);
+          return;
+        }
+
+        setPayload(envelope.response ?? null);
+        setErrorText("");
+      } catch {
+        if (!silent) setPayload(null);
+        setErrorText("网络或服务异常，请稍后重试");
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [taskId, shopName, includeBlobPreview, maxPreviewBytes],
+  );
+
+  useEffect(() => {
+    if (!pollEnabled || !taskId.trim()) {
+      setPollCountdownSec(null);
+      return;
+    }
+
+    setPollCountdownSec(DETAIL_POLL_INTERVAL_SEC);
+    const timer = window.setInterval(() => {
+      setPollCountdownSec((prev) => {
+        if (document.visibilityState !== "visible") {
+          return prev;
+        }
+        const cur = prev ?? DETAIL_POLL_INTERVAL_SEC;
+        if (cur <= 1) {
+          void fetchDetail({ silent: true });
+          return DETAIL_POLL_INTERVAL_SEC;
+        }
+        return cur - 1;
+      });
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [pollEnabled, taskId, fetchDetail]);
+
+  const handleSelectTask = (id: string) => {
+    const clean = id.trim();
+    if (!clean) return;
+    setTaskId(clean);
+    void fetchDetail({ overrideTaskId: clean });
+  };
+
+  const progressView = useMemo(() => {
+    if (!payload?.redisRuntime) {
+      return {
+        meta: undefined as Record<string, string> | undefined,
+        entryTotal: null as number | null,
+        entryDone: null as number | null,
+        entryPercent: null as number | null,
+        entryDetail: "" as ReactNode,
+        chunkTotal: null as number | null,
+        chunkDone: null as number | null,
+        chunkPercent: null as number | null,
+        chunkDetail: "" as ReactNode,
+        doneSize: null as number | null,
+        failMapKeyCount: 0,
+        hasAnyBar: false,
+        noBarHint: "" as ReactNode,
+      };
+    }
+
+    const meta = payload.redisRuntime.meta;
+    const rt = payload.redisRuntime;
+    const cosmos = payload.cosmos;
+    const cm = cosmos?.metrics as Record<string, unknown> | undefined;
+    const ck = cosmos?.checkpoint as Record<string, unknown> | undefined;
+
+    const doneSize =
+      typeof rt.doneSize === "number" && Number.isFinite(rt.doneSize) ? rt.doneSize : null;
+    const failMap = rt.failMap;
+    const failMapKeyCount = failMap ? Object.keys(failMap).length : 0;
+
+    const translatedM = readMetricNumber(cm?.translatedCount);
+    const failedM = readMetricNumber(cm?.failedCount);
+    /** Java 完成后 metrics 常有 totalCount；若 Redis meta 缺总数，可用 成功+失败 推断（与 partial failed 场景一致） */
+    const inferredEntryTotal =
+      translatedM !== null && failedM !== null && translatedM + failedM > 0
+        ? translatedM + failedM
+        : null;
+
+    const entryTotal =
+      readMetricNumber(meta?.totalCountThisBlob) ??
+      readMetricNumber(cm?.totalCount) ??
+      inferredEntryTotal;
+
+    const entryDone =
+      readMetricNumber(meta?.currentDoneThisBlob) ??
+      translatedM ??
+      doneSize;
+
+    const entryPercent =
+      entryTotal !== null && entryTotal > 0 && entryDone !== null
+        ? Math.min(
+            100,
+            Math.round((Math.min(entryDone, entryTotal) / entryTotal) * 100),
+          )
+        : null;
+
+    const failForDetail =
+      readMetricNumber(meta?.failCountThisBlob) ??
+      readMetricNumber(meta?.currentFailThisBlob) ??
+      readMetricNumber(cm?.failedCount);
+
+    const entryDetail: ReactNode =
+      entryTotal !== null ? (
+        <>
+          已完成 {entryDone ?? 0} / {entryTotal} 条
+          {failForDetail !== null && failForDetail > 0 ? ` · 失败 ${failForDetail}` : ""}
+          <span style={{ color: "#8c9196", fontSize: "12px", display: "block", marginTop: 4 }}>
+            来源：Redis meta（totalCountThisBlob / currentDoneThisBlob）· Cosmos metrics（totalCount /
+            translatedCount）· 若无 meta 可用 translated+failed 推断总数 · 否则使用 Redis :done 集合大小
+          </span>
+        </>
+      ) : (
+        ""
+      );
+
+    const chunkTotal =
+      readMetricNumber(meta?.runtimeChunksTotal) ??
+      readMetricNumber(cm?.runtimeChunksTotal) ??
+      readMetricNumber(ck?.runtimeChunksTotal);
+
+    const chunkDoneRaw = rt.chunkDoneSize;
+    const chunkDoneFromRedis =
+      typeof chunkDoneRaw === "number" && Number.isFinite(chunkDoneRaw) ? chunkDoneRaw : null;
+
+    const chunkDone =
+      chunkDoneFromRedis ??
+      readMetricNumber(meta?.runtimeChunkDoneSize) ??
+      readMetricNumber(cm?.runtimeChunksDone);
+
+    const chunkPercent =
+      chunkTotal !== null && chunkTotal > 0 && chunkDone !== null
+        ? Math.min(100, Math.round((Math.min(chunkDone, chunkTotal) / chunkTotal) * 100))
+        : null;
+
+    const chunkDetail: ReactNode =
+      chunkTotal !== null ? (
+        <>
+          {chunkDone ?? 0} / {chunkTotal} 块
+          <span style={{ color: "#8c9196", fontSize: "12px", display: "block", marginTop: 4 }}>
+            来源：Redis :chunkDone 集合大小 · meta.runtimeChunksTotal · Cosmos checkpoint.metrics
+          </span>
+        </>
+      ) : (
+        ""
+      );
+
+    const hasAnyBar = entryPercent !== null || chunkPercent !== null;
+
+    let noBarHint: ReactNode = "";
+    if (!hasAnyBar) {
+      noBarHint = (
+        <span style={{ color: "#6d7175", fontSize: "13px", lineHeight: 1.5 }}>
+          当前无法计算百分比：Redis meta 与 Cosmos metrics 中均无条目总数（totalCountThisBlob /
+          totalCount），且也无分块总数（runtimeChunksTotal）。
+          {doneSize !== null ? (
+            <>
+              {" "}
+              实测 Redis <strong>:done</strong> 集合含 <strong>{doneSize}</strong> 条路径键；
+            </>
+          ) : null}
+          {failMapKeyCount > 0 ? (
+            <>
+              {" "}
+              <strong>:fail</strong> Hash 含 <strong>{failMapKeyCount}</strong> 个字段。
+            </>
+          ) : null}
+        </span>
+      );
+    }
+
+    return {
+      meta,
+      entryTotal,
+      entryDone,
+      entryPercent,
+      entryDetail,
+      chunkTotal,
+      chunkDone,
+      chunkPercent,
+      chunkDetail,
+      doneSize,
+      failMapKeyCount,
+      hasAnyBar,
+      noBarHint,
+    };
+  }, [payload]);
+
+  const meta = progressView.meta ?? payload?.redisRuntime?.meta;
+  const metaEntries = useMemo(() => sortedEntries(meta), [meta]);
+
+  const progressPercent = progressView.entryPercent;
+  const chunkPercent = progressView.chunkPercent;
+
+  const failEntries = useMemo(
+    () => sortedEntries(payload?.redisRuntime?.failMap),
+    [payload?.redisRuntime?.failMap],
+  );
+
+  /** Redis failMap + report Blob 解析出的 failures；原文优先匹配 runtimeFailedJson.items[].sourceValue */
+  const mergedFailRows = useMemo(() => {
+    const rows: {
+      source: string;
+      path: string;
+      reason: string;
+      sourceText?: string;
+    }[] = [];
+    const seen = new Set<string>();
+    const fd = payload?.runtimeFailedJson;
+    for (const [path, reason] of failEntries) {
+      const key = `r:${path}\t${reason}`;
+      seen.add(key);
+      const sourceText = lookupSourceValueFromRuntimeFailedJson(fd, path, reason);
+      rows.push({ source: "Redis failMap", path, reason, sourceText });
+    }
+    const rep = payload?.runtimeReportFailures;
+    if (Array.isArray(rep)) {
+      for (const item of rep) {
+        const path =
+          typeof item?.path === "string" ? item.path : "(无 path)";
+        const reason =
+          typeof item?.reason === "string" ? item.reason : "(无 reason)";
+        const key = `p:${path}\t${reason}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const sourceText = lookupSourceValueFromRuntimeFailedJson(fd, path, reason);
+        rows.push({ source: "Report failures[]", path, reason, sourceText });
+      }
+    }
+    return rows;
+  }, [failEntries, payload?.runtimeReportFailures, payload?.runtimeFailedJson]);
+
+  const effectiveFailCount = useMemo(() => {
+    const m =
+      readNumber(meta?.failCountThisBlob) ?? readNumber(meta?.currentFailThisBlob);
+    const n = mergedFailRows.length;
+    if (m !== null && m > 0) {
+      return Math.max(m, n);
+    }
+    if (n > 0) {
+      return n;
+    }
+    return m;
+  }, [meta?.failCountThisBlob, meta?.currentFailThisBlob, mergedFailRows.length]);
+
+  const cosmos = payload?.cosmos;
+
+  const emptyInput = !taskId.trim();
+
+  return (
+    <s-stack direction="block" gap="base">
+      <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+        <s-stack direction="block" gap="small">
+          <s-paragraph>
+            <span style={{ color: "#42474c", lineHeight: 1.5 }}>
+              任务列表来自本应用 Cosmos（与创建任务同一表）。任务详情<strong>默认由服务端转发至 Java AgentTask</strong>
+              （路径 translate/v3/jsonRuntimeTaskDetail）；部署环境若设置变量 JSON_RUNTIME_TASK_DETAIL_SOURCE=local 则改为 Spark 本机聚合 Cosmos/Redis/Blob。选中任务后默认开启自动刷新（约每{" "}
+              {DETAIL_POLL_INTERVAL_SEC}
+              秒），按钮显示倒计时；页面不可见时暂停倒计时与请求。
+            </span>
+          </s-paragraph>
+        </s-stack>
+      </s-box>
+
+      <s-section heading="当前店铺的 JSON Runtime 任务">
+        <s-stack direction="inline" gap="small" alignItems="center">
+          <s-button
+            type="button"
+            variant="secondary"
+            onClick={() => void fetchTaskList()}
+            {...(listLoading ? { disabled: true } : {})}
+          >
+            {listLoading ? "刷新列表…" : "刷新列表"}
+          </s-button>
+          {!listLoading && taskList.length > 0 ? (
+            <span style={{ fontSize: "13px", color: "#6d7175" }}>共 {taskList.length} 条</span>
+          ) : null}
+        </s-stack>
+        {listErrorText ? (
+          <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+            <s-paragraph>
+              <span style={{ color: "#bf0711" }}>列表错误：{listErrorText}</span>
+            </s-paragraph>
+          </s-box>
+        ) : null}
+        {!listLoading && !listErrorText && taskList.length === 0 ? (
+          <s-box padding="large" borderWidth="base" borderRadius="base" background="subdued">
+            <s-paragraph>
+              <span style={{ color: "#6d7175" }}>
+                该店铺在 Cosmos（translation_jobs）中暂无 taskType 为 json-runtime 的任务记录。
+              </span>
+            </s-paragraph>
+          </s-box>
+        ) : null}
+        {taskList.length > 0 ? (
+          <s-stack direction="block" gap="small">
+            {taskList.map((row) => {
+              const rid = row.id?.trim() ?? "";
+              const active = rid !== "" && taskId.trim() === rid;
+              return (
+                <s-box
+                  key={rid || `${row.updatedAt}-${row.sessionId}`}
+                  padding="base"
+                  borderWidth="base"
+                  borderRadius="base"
+                  background={active ? "base" : "subdued"}
+                >
+                  <s-stack direction="block" gap="small">
+                    <s-stack direction="inline" gap="small" alignItems="center">
+                      <s-badge tone={listRowBadgeTone(row.statusText)}>
+                        {row.statusText ?? "—"}
+                      </s-badge>
+                      <span
+                        style={{
+                          fontFamily:
+                            'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                          fontSize: "13px",
+                          color: "#202223",
+                          wordBreak: "break-all",
+                          flex: 1,
+                          minWidth: 0,
+                        }}
+                        title={rid || undefined}
+                      >
+                        {rid || "（无 id）"}
+                      </span>
+                      <s-button
+                        type="button"
+                        variant={active ? "primary" : "secondary"}
+                        onClick={() => handleSelectTask(rid)}
+                        disabled={!rid}
+                      >
+                        {active ? "查看中" : "查看详情"}
+                      </s-button>
+                    </s-stack>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "8px 16px",
+                        fontSize: "12px",
+                        color: "#6d7175",
+                      }}
+                    >
+                      <span>
+                        <span style={{ color: "#8c9196" }}>语言</span>{" "}
+                        <strong style={{ color: "#42474c" }}>
+                          {row.source ?? "—"} → {row.target ?? "—"}
+                        </strong>
+                      </span>
+                      <span>
+                        <span style={{ color: "#8c9196" }}>更新</span>{" "}
+                        <strong style={{ color: "#42474c" }}>{row.updatedAt ?? "—"}</strong>
+                      </span>
+                      {row.aiModel ? (
+                        <span>
+                          <span style={{ color: "#8c9196" }}>模型</span>{" "}
+                          <strong style={{ color: "#42474c" }}>{row.aiModel}</strong>
+                        </span>
+                      ) : null}
+                    </div>
+                  </s-stack>
+                </s-box>
+              );
+            })}
+          </s-stack>
+        ) : null}
+      </s-section>
+
+      <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+        <s-stack direction="block" gap="small">
+          <s-stack direction="inline" gap="small" alignItems="end">
+            <div style={{ flex: "1 1 180px", minWidth: 140 }}>
+              <s-text-field
+                label="Blob 预览最大字节（maxPreviewBytes）"
+                value={String(maxPreviewBytes)}
+                onChange={(e) =>
+                  setMaxPreviewBytes(Number(e.currentTarget.value) || 8192)
+                }
+                autocomplete="off"
+              />
+            </div>
+            <s-button
+              type="button"
+              variant="primary"
+              onClick={() => void fetchDetail()}
+              {...(loading || emptyInput ? { disabled: true } : {})}
+            >
+              {loading ? "刷新中…" : "刷新详情"}
+            </s-button>
+            <s-button
+              type="button"
+              variant={pollEnabled ? "primary" : "secondary"}
+              onClick={() => setPollEnabled((v) => !v)}
+            >
+              {pollEnabled
+                ? pollCountdownSec != null
+                  ? `自动刷新 · 开（${pollCountdownSec}s）`
+                  : "自动刷新 · 开"
+                : "自动刷新 · 关"}
+            </s-button>
+            <s-button
+              type="button"
+              variant={includeBlobPreview ? "primary" : "secondary"}
+              onClick={() => setIncludeBlobPreview((v) => !v)}
+            >
+              {includeBlobPreview ? "Blob 预览 · 开" : "Blob 预览 · 关"}
+            </s-button>
+          </s-stack>
+        </s-stack>
+      </s-box>
+
+      {emptyInput ? (
+        <s-box padding="large" borderWidth="base" borderRadius="base" background="subdued">
+          <s-paragraph>
+            <span style={{ color: "#6d7175" }}>
+              在上方列表中选择一条任务即可查看<strong>运行进度</strong>与 Blob 信息。
+            </span>
+          </s-paragraph>
+        </s-box>
+      ) : null}
+
+      {!emptyInput && loading && !payload ? (
+        <s-box padding="large" borderWidth="base" borderRadius="base" background="subdued">
+          <s-paragraph>
+            <span style={{ color: "#6d7175" }}>正在加载任务详情…</span>
+          </s-paragraph>
+        </s-box>
+      ) : null}
+
+      {errorText ? (
+        <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+          <s-paragraph>
+            <span style={{ color: "#bf0711" }}>错误：{errorText}</span>
+          </s-paragraph>
+        </s-box>
+      ) : null}
+
+      {!emptyInput && !loading && !errorText && !payload ? (
+        <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+          <s-paragraph>
+            <span style={{ color: "#6d7175" }}>暂无数据（接口成功但 response 为空）。</span>
+          </s-paragraph>
+        </s-box>
+      ) : null}
+
+      {payload ? (
+        <s-stack direction="block" gap="base">
+          <s-section heading="Cosmos 摘要">
+            <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+              <s-stack direction="block" gap="base">
+                <s-stack direction="inline" gap="small" alignItems="center">
+                  <s-badge tone="info">{readString(cosmos, "taskType") || "—"}</s-badge>
+                  <s-badge tone={cosmosBadgeTone(readString(cosmos, "statusText"))}>
+                    {readString(cosmos, "statusText") || "—"}
+                  </s-badge>
+                  <span style={{ fontSize: "12px", color: "#6d7175" }}>
+                    status 码 {String(cosmos?.status ?? "—")}
+                  </span>
+                </s-stack>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+                    gap: "12px 20px",
+                    fontSize: "13px",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>任务 ID</div>
+                    <div
+                      style={{
+                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                        wordBreak: "break-all",
+                        color: "#202223",
+                      }}
+                    >
+                      {readString(cosmos, "id") || "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>店铺</div>
+                    <div style={{ color: "#202223" }}>{readString(cosmos, "shopName") || "—"}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>语言</div>
+                    <div style={{ color: "#202223" }}>
+                      {readString(cosmos, "source") || "—"} → {readString(cosmos, "target") || "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>模型</div>
+                    <div style={{ color: "#202223" }}>{readString(cosmos, "aiModel") || "—"}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>创建</div>
+                    <div style={{ color: "#42474c" }}>{readString(cosmos, "createdAt") || "—"}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>更新</div>
+                    <div style={{ color: "#42474c" }}>{readString(cosmos, "updatedAt") || "—"}</div>
+                  </div>
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>会话 sessionId</div>
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#42474c",
+                        wordBreak: "break-all",
+                      }}
+                    >
+                      {readString(cosmos, "sessionId") || "—"}
+                    </div>
+                  </div>
+                </div>
+                {cosmos?.checkpoint !== undefined ? (
+                  <details>
+                    <summary style={{ cursor: "pointer", fontSize: "13px", color: "#2c6ecb" }}>
+                      查看 checkpoint（JSON）
+                    </summary>
+                    <pre
+                      style={{
+                        marginTop: 10,
+                        maxHeight: 280,
+                        overflow: "auto",
+                        fontSize: 12,
+                        background: "#fff",
+                        padding: 12,
+                        borderRadius: 8,
+                        border: "1px solid #e3e5e8",
+                      }}
+                    >
+                      {JSON.stringify(cosmos.checkpoint, null, 2)}
+                    </pre>
+                  </details>
+                ) : null}
+              </s-stack>
+            </s-box>
+          </s-section>
+
+          <s-section heading="任务进度（Redis）">
+            <s-stack direction="block" gap="small">
+                <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+                  <s-stack direction="inline" gap="small" alignItems="center">
+                    <span style={{ fontSize: "12px", color: "#6d7175" }}>前缀</span>
+                    <s-badge tone="info">{payload.resolvedRedisPrefix ?? "—"}</s-badge>
+                    {payload.redisRuntime?.redisPrefix &&
+                    payload.redisRuntime.redisPrefix !== payload.resolvedRedisPrefix ? (
+                      <s-badge tone="info">{payload.redisRuntime.redisPrefix}</s-badge>
+                    ) : null}
+                    {meta?.status ? <s-badge tone="warning">{meta.status}</s-badge> : null}
+                    {meta?.updatedAt ? (
+                      <span style={{ fontSize: "12px", color: "#8c9196", marginLeft: "auto" }}>
+                        更新 {meta.updatedAt}
+                      </span>
+                    ) : null}
+                  </s-stack>
+                </s-box>
+
+                <s-box padding="large" borderWidth="base" borderRadius="base" background="base">
+                  <s-stack direction="block" gap="large">
+                    {!progressView.hasAnyBar ? (
+                      <s-paragraph>{progressView.noBarHint}</s-paragraph>
+                    ) : null}
+                    {progressPercent !== null ? (
+                      <>
+                        <ProgressBarRow
+                          title="条目进度（Redis meta / Cosmos metrics / :done）"
+                          detail={progressView.entryDetail}
+                          percent={progressPercent}
+                          barGradient="linear-gradient(90deg, #006fbb 0%, #2c6ecb 55%, #5c9ecf 100%)"
+                        />
+                        {effectiveFailCount !== null && effectiveFailCount > 0 ? (
+                          <div style={{ marginTop: 6 }}>
+                            <button
+                              type="button"
+                              style={{
+                                border: "none",
+                                background: "none",
+                                color: "#2c6ecb",
+                                cursor: "pointer",
+                                padding: 0,
+                                fontSize: "13px",
+                                textDecoration: "underline",
+                                fontWeight: 600,
+                              }}
+                              onClick={() =>
+                                document
+                                  .getElementById("json-runtime-failure-panel")
+                                  ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                              }
+                            >
+                              查看失败路径与错误原因（共 {effectiveFailCount} 条）
+                            </button>
+                          </div>
+                        ) : null}
+                      </>
+                    ) : null}
+                    {chunkPercent !== null ? (
+                      <ProgressBarRow
+                        title="分块（chunk）进度"
+                        detail={progressView.chunkDetail}
+                        percent={chunkPercent}
+                        barGradient="linear-gradient(90deg, #007146 0%, #008060 45%, #36ba8f 100%)"
+                        trackHeight={10}
+                      />
+                    ) : null}
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                        gap: 12,
+                      }}
+                    >
+                      <MetricTile
+                        label="doneSize"
+                        value={String(payload.redisRuntime?.doneSize ?? "—")}
+                      />
+                      <MetricTile
+                        label="resultSize"
+                        value={String(payload.redisRuntime?.resultSize ?? "—")}
+                      />
+                      <MetricTile
+                        label="chunkDoneSize"
+                        value={String(payload.redisRuntime?.chunkDoneSize ?? "—")}
+                      />
+                    </div>
+
+                    <details>
+                      <summary
+                        style={{
+                          cursor: "pointer",
+                          fontSize: "13px",
+                          color: "#2c6ecb",
+                          fontWeight: 500,
+                        }}
+                      >
+                        Redis meta 全部键值
+                      </summary>
+                      <div
+                        style={{
+                          marginTop: 12,
+                          border: "1px solid #e3e5e8",
+                          borderRadius: 8,
+                          overflow: "hidden",
+                          background: "#fff",
+                        }}
+                      >
+                        {metaEntries.length ? (
+                          metaEntries.map(([k, v], i) => (
+                            <div
+                              key={k}
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: "minmax(100px, 32%) 1fr",
+                                gap: 12,
+                                padding: "10px 12px",
+                                fontSize: 12,
+                                borderTop: i === 0 ? "none" : "1px solid #f1f2f4",
+                                background: i % 2 === 0 ? "#fafbfb" : "#fff",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  color: "#6d7175",
+                                  wordBreak: "break-all",
+                                  fontFamily: "ui-monospace, monospace",
+                                }}
+                              >
+                                {k}
+                              </span>
+                              <span style={{ wordBreak: "break-word", color: "#202223" }}>{v}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <div style={{ padding: 12, color: "#6d7175", fontSize: 13 }}>（无 meta）</div>
+                        )}
+                      </div>
+                    </details>
+                  </s-stack>
+                </s-box>
+            </s-stack>
+          </s-section>
+
+          <div id="json-runtime-failure-panel">
+          <s-section heading="失败明细（Redis failMap · Report · Blob chunks/failed.json）">
+            {payload.runtimeReportFailuresTruncated ? (
+              <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+                <s-paragraph>
+                  <span style={{ color: "#6d7175", fontSize: "13px" }}>
+                    当前关联的 report Blob 较大（&gt;512KB），未内联解析 failures；请在下方「报告」Blob 中下载或开启预览查看完整 JSON。
+                  </span>
+                </s-paragraph>
+              </s-box>
+            ) : null}
+            {payload.runtimeFailedJsonTruncated ? (
+              <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+                <s-paragraph>
+                  <span style={{ color: "#6d7175", fontSize: "13px" }}>
+                    chunks/failed.json 超过 512KB，未内联返回；请在 Blob「输入」同目录下查看 tasks/…/chunks/failed.json。
+                  </span>
+                </s-paragraph>
+              </s-box>
+            ) : null}
+            {mergedFailRows.length ? (
+              <s-stack direction="block" gap="small">
+                {mergedFailRows.map((row, idx) => (
+                  <div
+                    key={`${row.source}-${idx}-${row.path}`}
+                    style={{
+                      borderLeft: "4px solid #d82c0d",
+                      borderRadius: "0 8px 8px 0",
+                      background: "#fff4f4",
+                      padding: "12px 14px",
+                      border: "1px solid #fec6c3",
+                      borderLeftWidth: 4,
+                    }}
+                  >
+                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 6 }}>
+                      来源：{row.source}
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: "ui-monospace, monospace",
+                        fontSize: 12,
+                        color: "#202223",
+                        wordBreak: "break-all",
+                        marginBottom: 6,
+                      }}
+                    >
+                      {row.path}
+                    </div>
+                    {row.sourceText ? (
+                      <div
+                        style={{
+                          marginBottom: 10,
+                          padding: "10px 12px",
+                          background: "#fff",
+                          borderRadius: 8,
+                          border: "1px solid #e3e5e8",
+                          fontSize: 14,
+                          color: "#202223",
+                          lineHeight: 1.45,
+                          wordBreak: "break-word",
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 6 }}>
+                          待译原文（sourceValue）
+                        </div>
+                        {row.sourceText}
+                      </div>
+                    ) : null}
+                    <div style={{ fontSize: 13, color: "#6d7175" }}>{row.reason}</div>
+                  </div>
+                ))}
+              </s-stack>
+            ) : Array.isArray((payload.runtimeFailedJson as { items?: unknown[] } | undefined)?.items) &&
+              ((payload.runtimeFailedJson as { items: unknown[] }).items?.length ?? 0) > 0 ? null : (
+              <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+                <s-paragraph>
+                  <span style={{ color: "#6d7175" }}>
+                    暂无失败明细。若任务曾失败且已生成 Blob，请刷新详情并部署含 chunks/failed.json 附加字段的后端版本。
+                  </span>
+                </s-paragraph>
+              </s-box>
+            )}
+            {Array.isArray((payload.runtimeFailedJson as { items?: unknown[] } | undefined)?.items) &&
+            ((payload.runtimeFailedJson as { items: unknown[] }).items?.length ?? 0) > 0 ? (
+              <details style={{ marginTop: 12 }}>
+                <summary
+                  style={{
+                    cursor: "pointer",
+                    fontSize: "13px",
+                    color: "#2c6ecb",
+                    fontWeight: 600,
+                  }}
+                >
+                  展开查看 Blob chunks/failed.json 全量条目（
+                  {(payload.runtimeFailedJson as { items: unknown[] }).items.length} 条，含原文）
+                </summary>
+                <div style={{ marginTop: 12 }}>
+                  {(payload.runtimeFailedJson as { items: unknown[] }).items.map((it, i) => {
+                    const row = it as Record<string, unknown>;
+                    const sv =
+                      typeof row.sourceValue === "string" ? row.sourceValue : "";
+                    const mod = typeof row.module === "string" ? row.module : "—";
+                    const cf = typeof row.chunkFile === "string" ? row.chunkFile : "—";
+                    const p = typeof row.path === "string" ? row.path : "—";
+                    const r = typeof row.reason === "string" ? row.reason : "—";
+                    const sk = typeof row.storageKey === "string" ? row.storageKey : "";
+                    return (
+                      <div
+                        key={`fj-${i}-${sk || p}`}
+                        style={{
+                          marginBottom: 12,
+                          padding: "12px 14px",
+                          background: "#fafbfb",
+                          borderRadius: 8,
+                          border: "1px solid #e3e5e8",
+                        }}
+                      >
+                        <div style={{ fontSize: "12px", color: "#6d7175", marginBottom: 8 }}>
+                          模块 {mod} · 分片文件 {cf}
+                        </div>
+                        <div
+                          style={{
+                            fontFamily: "ui-monospace, monospace",
+                            fontSize: 12,
+                            wordBreak: "break-all",
+                            color: "#42474c",
+                            marginBottom: 8,
+                          }}
+                        >
+                          {sk || p}
+                        </div>
+                        {sv ? (
+                          <div
+                            style={{
+                              padding: "10px 12px",
+                              background: "#fff",
+                              borderRadius: 6,
+                              border: "1px solid #dfe3e8",
+                              fontSize: 14,
+                              lineHeight: 1.45,
+                              wordBreak: "break-word",
+                              whiteSpace: "pre-wrap",
+                              marginBottom: 8,
+                            }}
+                          >
+                            <span style={{ fontSize: "11px", color: "#8c9196" }}>待译原文 · </span>
+                            {sv}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: "12px", color: "#8c9196", marginBottom: 8 }}>
+                            （无 sourceValue，可能为非文本节点）
+                          </div>
+                        )}
+                        <div style={{ fontSize: 13, color: "#6d7175" }}>{r}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </details>
+            ) : null}
+          </s-section>
+          </div>
+
+          <s-section heading="Blob 产物">
+            <s-stack direction="block" gap="small">
+              {(["input", "output", "report"] as const).map((key) => {
+                const b = payload.blobs?.[key];
+                const existsOk = b?.exists === true;
+                return (
+                  <s-box
+                    key={key}
+                    padding="base"
+                    borderWidth="base"
+                    borderRadius="base"
+                    background="subdued"
+                  >
+                    <s-stack direction="block" gap="small">
+                      <s-stack direction="inline" gap="small" alignItems="center">
+                        <span style={{ fontWeight: 600, fontSize: "14px", color: "#202223" }}>
+                          {BLOB_LABELS[key]}
+                        </span>
+                        <s-badge tone={existsOk ? "success" : b?.exists === false ? "critical" : "info"}>
+                          {existsOk ? "已存在" : b?.exists === false ? "不存在" : "未知"}
+                        </s-badge>
+                        <span style={{ fontSize: "13px", color: "#6d7175" }}>
+                          {formatBytes(b?.sizeBytes)}
+                          {b?.previewTruncated ? " · 预览已截断" : ""}
+                        </span>
+                      </s-stack>
+                      {b?.note ? (
+                        <s-paragraph>
+                          <span style={{ color: "#6d7175", fontSize: "13px" }}>{b.note}</span>
+                        </s-paragraph>
+                      ) : null}
+                      {b?.uri ? (
+                        <div
+                          style={{
+                            wordBreak: "break-all",
+                            color: "#6d7175",
+                            fontSize: "12px",
+                            lineHeight: 1.45,
+                          }}
+                        >
+                          {b.uri}
+                        </div>
+                      ) : null}
+                      {b?.preview ? (
+                        <pre
+                          style={{
+                            maxHeight: 200,
+                            overflow: "auto",
+                            fontSize: 11,
+                            margin: 0,
+                            background: "#fff",
+                            padding: 10,
+                            borderRadius: 8,
+                            border: "1px solid #e3e5e8",
+                          }}
+                        >
+                          {b.preview}
+                        </pre>
+                      ) : includeBlobPreview ? (
+                        <s-paragraph>
+                          <span style={{ color: "#8c9196", fontSize: "13px" }}>（无预览内容）</span>
+                        </s-paragraph>
+                      ) : null}
+                    </s-stack>
+                  </s-box>
+                );
+              })}
+            </s-stack>
+          </s-section>
+
+          {payload.reportParsed && Object.keys(payload.reportParsed).length ? (
+            <s-section heading="解析后的报告（reportParsed）">
+              <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+                <pre
+                  style={{
+                    maxHeight: 320,
+                    overflow: "auto",
+                    fontSize: 12,
+                    margin: 0,
+                    background: "#fff",
+                    padding: 14,
+                    borderRadius: 8,
+                    border: "1px solid #e3e5e8",
+                  }}
+                >
+                  {JSON.stringify(payload.reportParsed, null, 2)}
+                </pre>
+              </s-box>
+            </s-section>
+          ) : null}
+        </s-stack>
+      ) : null}
+    </s-stack>
+  );
+}
