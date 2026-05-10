@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export type JsonRuntimeTaskDetailEnvelope = {
   success: boolean;
@@ -68,6 +70,8 @@ export type JsonRuntimeTaskDetailPayload = {
     input?: BlobSnapshot;
     output?: BlobSnapshot;
     report?: BlobSnapshot;
+    /** tasks/{shop}/{taskId}/chunks/translation-report.md（LLM 整包报告） */
+    translationReportMd?: BlobSnapshot;
   };
   reportParsed?: Record<string, unknown>;
 };
@@ -260,6 +264,29 @@ const BLOB_LABELS: Record<"input" | "output" | "report", string> = {
   report: "报告（report）",
 };
 
+const MD_PREVIEW_MODAL_OVERLAY_STYLE: CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0, 0, 0, 0.45)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 1000,
+  padding: "1rem",
+};
+
+const MD_PREVIEW_MODAL_CARD_STYLE: CSSProperties = {
+  width: "100%",
+  maxWidth: "720px",
+  maxHeight: "90vh",
+  backgroundColor: "#ffffff",
+  borderRadius: "12px",
+  boxShadow: "0 12px 30px rgba(0, 0, 0, 0.2)",
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+};
+
 /** 与下方自动刷新定时器一致（秒） */
 const DETAIL_POLL_INTERVAL_SEC = 4;
 
@@ -279,6 +306,11 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
   const [payload, setPayload] = useState<JsonRuntimeTaskDetailPayload | null>(null);
+
+  const [mdPreviewOpen, setMdPreviewOpen] = useState(false);
+  const [mdPreviewLoading, setMdPreviewLoading] = useState(false);
+  const [mdPreviewText, setMdPreviewText] = useState("");
+  const [mdPreviewTruncated, setMdPreviewTruncated] = useState(false);
 
   const shopName = defaultShopName.trim();
 
@@ -361,6 +393,42 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
     },
     [taskId, shopName, includeBlobPreview, maxPreviewBytes],
   );
+
+  const fetchTranslationReportMdPreview = useCallback(async () => {
+    const tid = taskId.trim();
+    if (!tid) return;
+    setMdPreviewLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("taskId", tid);
+      if (shopName) params.set("shopName", shopName);
+      params.set("includeBlobPreview", "true");
+      params.set("maxPreviewBytes", String(512 * 1024));
+      const rp = payload?.resolvedRedisPrefix?.trim();
+      if (rp) params.set("redisPrefix", rp);
+      const response = await fetch(
+        `/api/translate/v3/json-runtime-task-detail?${params.toString()}`,
+      );
+      const envelope = (await response.json().catch(() => ({}))) as JsonRuntimeTaskDetailEnvelope;
+      if (!response.ok || envelope.success === false) {
+        setMdPreviewText(envelope.errorMsg || `加载失败（HTTP ${response.status}）`);
+        setMdPreviewTruncated(false);
+        setMdPreviewOpen(true);
+        return;
+      }
+      const snap = envelope.response?.blobs?.translationReportMd;
+      const text = typeof snap?.preview === "string" ? snap.preview : "";
+      setMdPreviewText(text.length > 0 ? text : "（文件为空或 Blob 中尚无内容）");
+      setMdPreviewTruncated(snap?.previewTruncated === true);
+      setMdPreviewOpen(true);
+    } catch {
+      setMdPreviewText("加载失败，请稍后重试");
+      setMdPreviewTruncated(false);
+      setMdPreviewOpen(true);
+    } finally {
+      setMdPreviewLoading(false);
+    }
+  }, [taskId, shopName, payload?.resolvedRedisPrefix]);
 
   useEffect(() => {
     if (!pollEnabled || !taskId.trim()) {
@@ -603,7 +671,10 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
 
   const emptyInput = !taskId.trim();
 
+  const trBlob = payload?.blobs?.translationReportMd;
+
   return (
+    <>
     <s-stack direction="block" gap="base">
       <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
         <s-stack direction="block" gap="small">
@@ -1270,6 +1341,64 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                   </s-box>
                 );
               })}
+              <s-box
+                padding="base"
+                borderWidth="base"
+                borderRadius="base"
+                background="subdued"
+              >
+                <s-stack direction="block" gap="small">
+                  <s-stack direction="inline" gap="small" alignItems="center">
+                    <span style={{ fontWeight: 600, fontSize: "14px", color: "#202223" }}>
+                      整包翻译报告（translation-report.md）
+                    </span>
+                    <s-badge
+                      tone={
+                        trBlob?.exists === true
+                          ? "success"
+                          : trBlob?.exists === false
+                            ? "critical"
+                            : "info"
+                      }
+                    >
+                      {trBlob?.exists === true
+                        ? "已存在"
+                        : trBlob?.exists === false
+                          ? "不存在"
+                          : "未知"}
+                    </s-badge>
+                    <span style={{ fontSize: "13px", color: "#6d7175" }}>
+                      {formatBytes(trBlob?.sizeBytes)}
+                    </span>
+                  </s-stack>
+                  <s-paragraph>
+                    <span style={{ color: "#6d7175", fontSize: "13px" }}>
+                      由翻译完成后 LLM 生成的 Markdown 总报告，与各 chunk 同级存放在{" "}
+                      <code style={{ fontSize: "12px" }}>chunks/</code> 下。点击下方按钮可拉取 Blob 预览并在弹窗中渲染。
+                    </span>
+                  </s-paragraph>
+                  {trBlob?.blobPath ? (
+                    <div
+                      style={{
+                        wordBreak: "break-all",
+                        color: "#6d7175",
+                        fontSize: "12px",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {trBlob.blobPath}
+                    </div>
+                  ) : null}
+                  <s-button
+                    type="button"
+                    variant="primary"
+                    onClick={() => void fetchTranslationReportMdPreview()}
+                    {...(mdPreviewLoading || emptyInput ? { disabled: true } : {})}
+                  >
+                    {mdPreviewLoading ? "加载中…" : "弹窗预览 Markdown"}
+                  </s-button>
+                </s-stack>
+              </s-box>
             </s-stack>
           </s-section>
 
@@ -1296,5 +1425,124 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
         </s-stack>
       ) : null}
     </s-stack>
+
+    {mdPreviewOpen ? (
+      <div
+        role="presentation"
+        style={MD_PREVIEW_MODAL_OVERLAY_STYLE}
+        onClick={() => setMdPreviewOpen(false)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setMdPreviewOpen(false);
+        }}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="翻译报告 Markdown 预览"
+          style={MD_PREVIEW_MODAL_CARD_STYLE}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "12px 16px",
+              borderBottom: "1px solid #e3e5e8",
+              flexShrink: 0,
+            }}
+          >
+            <strong style={{ fontSize: "15px", color: "#202223" }}>翻译报告（Markdown）</strong>
+            <s-button type="button" variant="secondary" onClick={() => setMdPreviewOpen(false)}>
+              关闭
+            </s-button>
+          </div>
+          {mdPreviewTruncated ? (
+            <div
+              style={{
+                padding: "8px 16px",
+                fontSize: "12px",
+                color: "#6d7175",
+                background: "#fff5ea",
+                borderBottom: "1px solid #ffd79c",
+                flexShrink: 0,
+              }}
+            >
+              预览已按服务端长度上限截断；完整内容请在存储控制台下载 Blob。
+            </div>
+          ) : null}
+          <div
+            style={{
+              padding: "16px 20px 20px",
+              overflow: "auto",
+              flex: 1,
+              minHeight: 0,
+              fontSize: "14px",
+              lineHeight: 1.55,
+              color: "#202223",
+            }}
+            className="json-runtime-md-preview"
+          >
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                h1: ({ children }) => (
+                  <h1 style={{ fontSize: "1.35rem", margin: "0.75em 0 0.4em" }}>{children}</h1>
+                ),
+                h2: ({ children }) => (
+                  <h2 style={{ fontSize: "1.2rem", margin: "0.65em 0 0.35em" }}>{children}</h2>
+                ),
+                h3: ({ children }) => (
+                  <h3 style={{ fontSize: "1.05rem", margin: "0.55em 0 0.3em" }}>{children}</h3>
+                ),
+                p: ({ children }) => <p style={{ margin: "0.45em 0" }}>{children}</p>,
+                ul: ({ children }) => (
+                  <ul style={{ margin: "0.4em 0", paddingLeft: "1.25rem" }}>{children}</ul>
+                ),
+                ol: ({ children }) => (
+                  <ol style={{ margin: "0.4em 0", paddingLeft: "1.25rem" }}>{children}</ol>
+                ),
+                code: ({ className, children, ...props }) => {
+                  const isBlock = className?.includes("language-");
+                  if (isBlock) {
+                    return (
+                      <pre
+                        style={{
+                          background: "#f6f6f7",
+                          padding: "10px 12px",
+                          borderRadius: 8,
+                          overflow: "auto",
+                          fontSize: "12px",
+                        }}
+                      >
+                        <code className={className} {...props}>
+                          {children}
+                        </code>
+                      </pre>
+                    );
+                  }
+                  return (
+                    <code
+                      style={{
+                        background: "#f1f2f4",
+                        padding: "1px 5px",
+                        borderRadius: 4,
+                        fontSize: "0.9em",
+                      }}
+                      {...props}
+                    >
+                      {children}
+                    </code>
+                  );
+                },
+              }}
+            >
+              {mdPreviewText}
+            </ReactMarkdown>
+          </div>
+        </div>
+      </div>
+    ) : null}
+    </>
   );
 }

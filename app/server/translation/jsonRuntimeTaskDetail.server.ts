@@ -310,10 +310,16 @@ export async function buildSparkJsonRuntimeTaskDetailEnvelope(options: {
   const outputUri = firstNonEmptyRuntimeBlobUri(checkpoint, redisMeta, "outputBlobUri");
   const reportUri = firstNonEmptyRuntimeBlobUri(checkpoint, redisMeta, "reportBlobUri");
 
+  const translationReportRel = `tasks/${shop}/${cleanId}/chunks/translation-report.md`;
   const blobs: Record<string, unknown> = {
     input: await buildRuntimeBlobSnapshot(inputUri, options.includeBlobPreview, cap),
     output: await buildRuntimeBlobSnapshot(outputUri, options.includeBlobPreview, cap),
     report: await buildRuntimeBlobSnapshot(reportUri, options.includeBlobPreview, cap),
+    translationReportMd: await buildRuntimeBlobSnapshot(
+      translationReportRel,
+      options.includeBlobPreview,
+      cap,
+    ),
   };
   body.blobs = blobs;
 
