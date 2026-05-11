@@ -244,6 +244,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
 
   const [mdOpen, setMdOpen] = useState(false);
   const [mdLoading, setMdLoading] = useState(false);
+  const [mdTitle, setMdTitle] = useState("整包翻译报告");
   const [mdText, setMdText] = useState("");
   const [mdTruncated, setMdTruncated] = useState(false);
 
@@ -352,6 +353,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
     const tid = selectedId.trim();
     if (!tid) return;
     setMdLoading(true);
+    setMdTitle("整包翻译报告");
     try {
       const params = new URLSearchParams();
       params.set("taskId", tid);
@@ -382,9 +384,45 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
     }
   }, [selectedId, shopName, detail?.resolvedRedisPrefix]);
 
+  const openQualityReportPreview = useCallback(async () => {
+    const tid = selectedId.trim();
+    if (!tid) return;
+    setMdLoading(true);
+    setMdTitle("翻译质量检测（translation-quality-report.md）");
+    try {
+      const params = new URLSearchParams();
+      params.set("taskId", tid);
+      if (shopName) params.set("shopName", shopName);
+      params.set("includeBlobPreview", "true");
+      params.set("maxPreviewBytes", String(512 * 1024));
+      const rp = detail?.resolvedRedisPrefix?.trim();
+      if (rp) params.set("redisPrefix", rp);
+      const res = await fetch(`/api/translate/v3/json-runtime-task-detail?${params.toString()}`);
+      const env = (await res.json().catch(() => ({}))) as JsonRuntimeTaskDetailEnvelope;
+      if (!res.ok || env.success === false) {
+        setMdText(env.errorMsg || "加载失败");
+        setMdTruncated(false);
+        setMdOpen(true);
+        return;
+      }
+      const snap = env.response?.blobs?.qualityReportMd;
+      const text = typeof snap?.preview === "string" ? snap.preview : "";
+      setMdText(text.length > 0 ? text : "（暂无报告内容）");
+      setMdTruncated(snap?.previewTruncated === true);
+      setMdOpen(true);
+    } catch {
+      setMdText("加载失败，请稍后重试");
+      setMdTruncated(false);
+      setMdOpen(true);
+    } finally {
+      setMdLoading(false);
+    }
+  }, [selectedId, shopName, detail?.resolvedRedisPrefix]);
+
   const tm = detail?.translateMonitor;
   const cosmos = detail?.cosmos as Record<string, unknown> | undefined;
   const trBlob = detail?.blobs?.translationReportMd;
+  const qrBlob = detail?.blobs?.qualityReportMd;
 
   /** 初始化阶段：阶段徽章 + 模块进度文案 + 醒目展示「已拉取条数」+ 分块文件总数 */
   const initDisplay = useMemo(() => {
@@ -631,6 +669,38 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                       </s-button>
                     </div>
                   </div>
+
+                  <div style={{ marginTop: 16 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: "#202223" }}>
+                        翻译质量检测（translation-quality-report.md）
+                      </span>
+                      <s-badge tone={qrBlob?.exists === true ? "success" : "info"}>
+                        {qrBlob?.exists === true
+                          ? "已生成"
+                          : qrBlob?.exists === false
+                            ? "未生成"
+                            : "未知"}
+                      </s-badge>
+                    </div>
+                    <div style={{ marginTop: 8 }}>
+                      <s-button
+                        type="button"
+                        variant="primary"
+                        onClick={() => void openQualityReportPreview()}
+                        {...(mdLoading ? { disabled: true } : {})}
+                      >
+                        {mdLoading ? "打开中…" : "弹窗预览"}
+                      </s-button>
+                    </div>
+                  </div>
                 </s-stack>
               ) : null}
             </div>
@@ -649,7 +719,13 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
             if (e.key === "Escape") setMdOpen(false);
           }}
         >
-          <div role="dialog" aria-modal="true" aria-label="翻译报告" style={MD_CARD} onClick={(e) => e.stopPropagation()}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={mdTitle}
+            style={MD_CARD}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div
               style={{
                 display: "flex",
@@ -660,7 +736,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                 flexShrink: 0,
               }}
             >
-              <strong style={{ fontSize: "15px", color: "#202223" }}>整包翻译报告</strong>
+              <strong style={{ fontSize: "15px", color: "#202223" }}>{mdTitle}</strong>
               <s-button type="button" variant="secondary" onClick={() => setMdOpen(false)}>
                 关闭
               </s-button>
