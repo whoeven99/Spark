@@ -208,10 +208,19 @@ function useRuntimeProgress(payload: JsonRuntimeTaskDetailPayload | null) {
   }, [payload]);
 }
 
-function shortTaskId(id: string) {
-  const t = id.trim();
-  if (t.length <= 14) return t;
-  return `${t.slice(0, 8)}…${t.slice(-4)}`;
+/** 列表中的更新时间：只展示到秒（兼容带纳秒的 ISO 字符串） */
+function formatTaskUpdatedAt(raw: string | undefined): string {
+  if (!raw?.trim()) return "";
+  const s = raw.trim();
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/);
+  if (m) return `${m[1]} ${m[2]}`;
+  const t = Date.parse(s);
+  if (!Number.isNaN(t)) {
+    const d = new Date(t);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+  return s;
 }
 
 type Props = { defaultShopName: string };
@@ -372,16 +381,15 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
   const cosmos = detail?.cosmos as Record<string, unknown> | undefined;
   const trBlob = detail?.blobs?.translationReportMd;
 
-  const initLine = useMemo(() => {
+  /** 初始化阶段：阶段徽章 + 模块进度文案 + 醒目展示「已拉取条数」 */
+  const initDisplay = useMemo(() => {
     if (!tm || Object.keys(tm).length === 0) return null;
     const phase = tm.phase?.trim() || "—";
     const md = readMetricNumber(tm.initModuleDone);
     const mt = readMetricNumber(tm.initModuleTotal);
     const acc = readMetricNumber(tm.initAccumulatedCount);
-    const parts: string[] = [];
-    if (md !== null && mt !== null) parts.push(`模块 ${md}/${mt}`);
-    if (acc !== null) parts.push(`已拉取 ${acc} 条`);
-    return { phase, extra: parts.length ? parts.join(" · ") : null };
+    const modulePart = md !== null && mt !== null ? `模块 ${md}/${mt}` : null;
+    return { phase, modulePart, accumulatedCount: acc };
   }, [tm]);
 
   return (
@@ -397,7 +405,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
               flexWrap: "wrap",
             }}
           >
-            <span style={{ fontWeight: 600, fontSize: "15px", color: "#202223" }}>翻译任务</span>
+            <span style={{ fontWeight: 600, fontSize: "15px", color: "#202223" }}>翻译任务列表</span>
             <s-button
               type="button"
               variant="secondary"
@@ -407,12 +415,6 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
               {listLoading ? "刷新中…" : "刷新"}
             </s-button>
           </div>
-          <s-paragraph>
-            <span style={{ color: "#6d7175", fontSize: "13px", lineHeight: 1.45 }}>
-              当前店铺的 JSON Runtime 任务。点击一条查看进度与报告；任务列表约每 {LIST_POLL_SEC} 秒、详情约每 {POLL_SEC}{" "}
-              秒自动刷新（仅页面可见时）。
-            </span>
-          </s-paragraph>
 
           {listError ? (
             <span style={{ color: "#bf0711", fontSize: "13px" }}>{listError}</span>
@@ -442,24 +444,32 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                     opacity: id ? 1 : 0.6,
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <s-badge tone={listBadgeTone(row.statusText)}>{row.statusText ?? "—"}</s-badge>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 10,
+                      flexWrap: "wrap",
+                    }}
+                  >
                     <span
                       style={{
-                        fontFamily: "ui-monospace, monospace",
-                        fontSize: "12px",
+                        fontSize: "15px",
+                        fontWeight: 700,
                         color: "#202223",
-                        wordBreak: "break-all",
+                        letterSpacing: "0.02em",
                       }}
-                      title={id}
                     >
-                      {id ? shortTaskId(id) : "—"}
+                      {(row.source ?? "—").trim()} → {(row.target ?? "—").trim()}
                     </span>
+                    <s-badge tone={listBadgeTone(row.statusText)}>{row.statusText ?? "—"}</s-badge>
                   </div>
-                  <div style={{ fontSize: "12px", color: "#6d7175", marginTop: 6 }}>
-                    {(row.source ?? "—") + " → " + (row.target ?? "—")}
-                    {row.updatedAt ? ` · ${row.updatedAt}` : ""}
-                  </div>
+                  {row.updatedAt ? (
+                    <div style={{ fontSize: "12px", color: "#8c9196", marginTop: 8 }}>
+                      更新 {formatTaskUpdatedAt(row.updatedAt)}
+                    </div>
+                  ) : null}
                 </button>
               );
             })}
@@ -502,20 +512,49 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                     </span>
                   </div>
 
-                  {initLine ? (
+                  {initDisplay ? (
                     <div>
-                      <div style={{ fontSize: "12px", color: "#8c9196", marginBottom: 4 }}>初始化</div>
+                      <div style={{ fontSize: "12px", color: "#8c9196", marginBottom: 6 }}>初始化</div>
                       <div
                         style={{
                           display: "flex",
                           flexWrap: "wrap",
                           alignItems: "center",
-                          gap: "8px",
+                          gap: "10px",
                         }}
                       >
-                        <s-badge tone="info">{initLine.phase}</s-badge>
-                        {initLine.extra ? (
-                          <span style={{ fontSize: "13px", color: "#42474c" }}>{initLine.extra}</span>
+                        <s-badge tone="info">{initDisplay.phase}</s-badge>
+                        {initDisplay.modulePart ? (
+                          <span style={{ fontSize: "13px", color: "#42474c" }}>{initDisplay.modulePart}</span>
+                        ) : null}
+                        {initDisplay.accumulatedCount !== null ? (
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "baseline",
+                              gap: 6,
+                              padding: "8px 14px",
+                              borderRadius: 10,
+                              background: "linear-gradient(145deg, #e8f6f1 0%, #dff3ea 100%)",
+                              border: "1px solid #84c8a8",
+                              boxShadow: "0 1px 2px rgba(0, 82, 54, 0.08)",
+                            }}
+                          >
+                            <span style={{ fontSize: "12px", fontWeight: 700, color: "#244235" }}>已拉取</span>
+                            <span
+                              style={{
+                                fontSize: "22px",
+                                fontWeight: 800,
+                                color: "#008060",
+                                fontVariantNumeric: "tabular-nums",
+                                lineHeight: 1,
+                                letterSpacing: "-0.02em",
+                              }}
+                            >
+                              {initDisplay.accumulatedCount}
+                            </span>
+                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#244235" }}>条</span>
+                          </span>
                         ) : null}
                       </div>
                     </div>

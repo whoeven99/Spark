@@ -72,6 +72,8 @@ export type JsonRuntimeTaskDetailPayload = {
     report?: BlobSnapshot;
     /** tasks/{shop}/{taskId}/chunks/translation-report.md（LLM 整包报告） */
     translationReportMd?: BlobSnapshot;
+    /** tasks/{shop}/{taskId}/chunks/translation-quality-report.md（LLM 对照原文/译文抽检质量报告） */
+    qualityReportMd?: BlobSnapshot;
   };
   reportParsed?: Record<string, unknown>;
   /** V3 任务监控 Hash（translate_monitor_v3:{taskId}）：初始化拉取阶段的 phase、totalCount、initAccumulatedCount 等 */
@@ -327,6 +329,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
   const [mdPreviewLoading, setMdPreviewLoading] = useState(false);
   const [mdPreviewText, setMdPreviewText] = useState("");
   const [mdPreviewTruncated, setMdPreviewTruncated] = useState(false);
+  const [mdPreviewTitle, setMdPreviewTitle] = useState("Markdown 预览");
 
   const shopName = defaultShopName.trim();
 
@@ -432,6 +435,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
     if (!tid) return;
     setMdPreviewLoading(true);
     try {
+      setMdPreviewTitle("整包翻译报告");
       const params = new URLSearchParams();
       params.set("taskId", tid);
       if (shopName) params.set("shopName", shopName);
@@ -450,6 +454,43 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
         return;
       }
       const snap = envelope.response?.blobs?.translationReportMd;
+      const text = typeof snap?.preview === "string" ? snap.preview : "";
+      setMdPreviewText(text.length > 0 ? text : "（文件为空或 Blob 中尚无内容）");
+      setMdPreviewTruncated(snap?.previewTruncated === true);
+      setMdPreviewOpen(true);
+    } catch {
+      setMdPreviewText("加载失败，请稍后重试");
+      setMdPreviewTruncated(false);
+      setMdPreviewOpen(true);
+    } finally {
+      setMdPreviewLoading(false);
+    }
+  }, [taskId, shopName, payload?.resolvedRedisPrefix]);
+
+  const fetchQualityReportMdPreview = useCallback(async () => {
+    const tid = taskId.trim();
+    if (!tid) return;
+    setMdPreviewLoading(true);
+    try {
+      setMdPreviewTitle("翻译质量检测报告");
+      const params = new URLSearchParams();
+      params.set("taskId", tid);
+      if (shopName) params.set("shopName", shopName);
+      params.set("includeBlobPreview", "true");
+      params.set("maxPreviewBytes", String(512 * 1024));
+      const rp = payload?.resolvedRedisPrefix?.trim();
+      if (rp) params.set("redisPrefix", rp);
+      const response = await fetch(
+        `/api/translate/v3/json-runtime-task-detail?${params.toString()}`,
+      );
+      const envelope = (await response.json().catch(() => ({}))) as JsonRuntimeTaskDetailEnvelope;
+      if (!response.ok || envelope.success === false) {
+        setMdPreviewText(envelope.errorMsg || `加载失败（HTTP ${response.status}）`);
+        setMdPreviewTruncated(false);
+        setMdPreviewOpen(true);
+        return;
+      }
+      const snap = envelope.response?.blobs?.qualityReportMd;
       const text = typeof snap?.preview === "string" ? snap.preview : "";
       setMdPreviewText(text.length > 0 ? text : "（文件为空或 Blob 中尚无内容）");
       setMdPreviewTruncated(snap?.previewTruncated === true);
@@ -708,6 +749,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
   const emptyInput = !taskId.trim();
 
   const trBlob = payload?.blobs?.translationReportMd;
+  const qrBlob = payload?.blobs?.qualityReportMd;
 
   return (
     <>
@@ -1022,6 +1064,36 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                       <strong>{payload.translateMonitor.initCurrentModule}</strong>
                     </div>
                   ) : null}
+                  {readMetricNumber(payload.translateMonitor.initAccumulatedCount) !== null ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        gap: 12,
+                        padding: "12px 14px",
+                        borderRadius: 12,
+                        background: "linear-gradient(145deg, #e8f6f1 0%, #dff3ea 100%)",
+                        border: "1px solid #84c8a8",
+                        boxShadow: "0 1px 2px rgba(0, 82, 54, 0.08)",
+                      }}
+                    >
+                      <span style={{ fontSize: "13px", fontWeight: 700, color: "#244235" }}>累计已拉取</span>
+                      <span
+                        style={{
+                          fontSize: "26px",
+                          fontWeight: 800,
+                          color: "#008060",
+                          fontVariantNumeric: "tabular-nums",
+                          lineHeight: 1,
+                          letterSpacing: "-0.02em",
+                        }}
+                      >
+                        {readMetricNumber(payload.translateMonitor.initAccumulatedCount)}
+                      </span>
+                      <span style={{ fontSize: "15px", fontWeight: 700, color: "#244235" }}>条</span>
+                    </div>
+                  ) : null}
                   <div
                     style={{
                       display: "grid",
@@ -1037,12 +1109,6 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                           ? `${readMetricNumber(payload.translateMonitor.initModuleDone) ?? 0} / ${readMetricNumber(payload.translateMonitor.initModuleTotal) ?? 0}`
                           : "—"
                       }
-                    />
-                    <MetricTile
-                      label="累计已拉取条目"
-                      value={String(
-                        readMetricNumber(payload.translateMonitor.initAccumulatedCount) ?? "—",
-                      )}
                     />
                     <MetricTile
                       label="初始化汇总条数（≠运行时路径数）"
@@ -1503,6 +1569,55 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                   </s-button>
                 </s-stack>
               </s-box>
+              <s-box
+                padding="base"
+                borderWidth="base"
+                borderRadius="base"
+                background="subdued"
+              >
+                <s-stack direction="block" gap="small">
+                  <s-stack direction="inline" gap="small" alignItems="center">
+                    <span style={{ fontWeight: 600, fontSize: "14px", color: "#202223" }}>
+                      翻译质量检测（translation-quality-report.md）
+                    </span>
+                    <s-badge tone={qrBlob?.exists === true ? "success" : "info"}>
+                      {qrBlob?.exists === true
+                        ? "已存在"
+                        : qrBlob?.exists === false
+                          ? "不存在"
+                          : "未知"}
+                    </s-badge>
+                    <span style={{ fontSize: "13px", color: "#6d7175" }}>
+                      {formatBytes(qrBlob?.sizeBytes)}
+                    </span>
+                  </s-stack>
+                  <s-paragraph>
+                    <span style={{ color: "#6d7175", fontSize: "13px" }}>
+                      对照已成功翻译的原文/译文路径抽样，由 LLM 给出总体分数与较差译例说明（与 translation-report.md 相互独立）。
+                    </span>
+                  </s-paragraph>
+                  {qrBlob?.blobPath ? (
+                    <div
+                      style={{
+                        wordBreak: "break-all",
+                        color: "#6d7175",
+                        fontSize: "12px",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {qrBlob.blobPath}
+                    </div>
+                  ) : null}
+                  <s-button
+                    type="button"
+                    variant="primary"
+                    onClick={() => void fetchQualityReportMdPreview()}
+                    {...(mdPreviewLoading || emptyInput ? { disabled: true } : {})}
+                  >
+                    {mdPreviewLoading ? "加载中…" : "弹窗预览质检报告"}
+                  </s-button>
+                </s-stack>
+              </s-box>
             </s-stack>
           </s-section>
 
@@ -1542,7 +1657,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="翻译报告 Markdown 预览"
+          aria-label={mdPreviewTitle}
           style={MD_PREVIEW_MODAL_CARD_STYLE}
           onClick={(e) => e.stopPropagation()}
         >
@@ -1556,7 +1671,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
               flexShrink: 0,
             }}
           >
-            <strong style={{ fontSize: "15px", color: "#202223" }}>翻译报告（Markdown）</strong>
+            <strong style={{ fontSize: "15px", color: "#202223" }}>{mdPreviewTitle}</strong>
             <s-button type="button" variant="secondary" onClick={() => setMdPreviewOpen(false)}>
               关闭
             </s-button>
