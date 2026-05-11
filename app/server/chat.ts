@@ -1,8 +1,10 @@
 import type { ActionFunctionArgs } from "react-router";
+import { HumanMessage } from "@langchain/core/messages";
 import { authenticate } from "../shopify.server";
 import { createShopifyShopInfoTools } from "./ai/tools";
 import { translationTaskFormTool } from "./ai/tool/translationTaskFormTool";
 import { invokeChatAgent } from "./ai/agent";
+import { parseClientChatMessages } from "./chatPayload.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
@@ -12,13 +14,37 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
   }
 
-  const body = (await request.json().catch(() => ({}))) as { message?: string };
-  const userMessage = body.message?.trim() || "（空消息）";
+  const body = (await request.json().catch(() => ({}))) as {
+    message?: string;
+    messages?: unknown;
+  };
+
+  let agentMessages;
+
+  if (body.messages !== undefined && body.messages !== null) {
+    const parsed = parseClientChatMessages(body.messages);
+    if (!parsed) {
+      return Response.json(
+        {
+          error:
+            "无效的 messages：须为非空数组，元素为 { role: user|assistant, content }，且最后一条须为用户消息。",
+        },
+        { status: 400 },
+      );
+    }
+    agentMessages = parsed;
+  } else {
+    const legacyText = body.message?.trim();
+    agentMessages = legacyText
+      ? [new HumanMessage(legacyText)]
+      : [new HumanMessage("（空消息）")];
+  }
 
   try {
     const { admin } = await authenticate.admin(request);
     const shopInfoTools = createShopifyShopInfoTools(admin);
-    const { reply, translationTaskForm } = await invokeChatAgent(userMessage, {
+    const { reply, translationTaskForm } = await invokeChatAgent({
+      messages: agentMessages,
       extraTools: [...shopInfoTools, translationTaskFormTool],
     });
     return Response.json({

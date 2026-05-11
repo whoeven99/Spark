@@ -82,11 +82,11 @@ export function ChatPage() {
     "今天适合做什么活动",
     "创建翻译任务",
   ];
-  const quickPromptTones: Array<"info" | "success" | "caution"> = [
-    "info",
-    "success",
-    "caution",
-    "success",
+  const quickPromptTones: Array<"neutral" | "auto" | "critical"> = [
+    "neutral",
+    "auto",
+    "critical",
+    "auto",
   ];
   const modalOverlayStyle: CSSProperties = {
     position: "fixed",
@@ -215,10 +215,13 @@ export function ChatPage() {
 
     try {
       const authQuery = typeof window !== "undefined" ? window.location.search : "";
+      const apiMessages = [...messages, { role: "user" as const, content }].map(
+        (m) => ({ role: m.role, content: m.content }),
+      );
       const response = await fetch(`/chat${authQuery}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: content }),
+        body: JSON.stringify({ messages: apiMessages }),
       });
 
       const data = (await response.json().catch(() => ({}))) as {
@@ -599,7 +602,6 @@ export function ChatPage() {
               <s-button
                 type="button"
                 variant="secondary"
-                size="slim"
                 onClick={() => handleAuthorizeProvider(provider, category)}
               >
                 去授权
@@ -614,11 +616,24 @@ export function ChatPage() {
   return (
     <s-page heading="Shopify Ai Assistant">
       <s-section heading="智能问答">
-        <s-stack direction="inline" gap="base" alignItems="center">
-          <s-paragraph>
-            你可以在这里直接提问，获取店铺经营分析、广告/物流授权引导和运营建议。
-          </s-paragraph>
-          <s-badge tone="success">AI 助手在线</s-badge>
+        <s-stack direction="inline" gap="base" alignItems="center" justifyContent="space-between">
+          <s-stack direction="inline" gap="base" alignItems="center">
+            <s-paragraph>
+              你可以在这里直接提问，获取店铺经营分析、广告/物流授权引导和运营建议。
+            </s-paragraph>
+            <s-badge tone="success">AI 助手在线</s-badge>
+          </s-stack>
+          <s-button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              setMessages([{ role: "assistant", content: initialAssistantMessage }]);
+              shopify.toast.show("已开始新对话");
+            }}
+            {...(isSending ? { disabled: true } : {})}
+          >
+            新对话
+          </s-button>
         </s-stack>
 
         <div
@@ -640,25 +655,12 @@ export function ChatPage() {
                   type="button"
                   tone={quickPromptTones[index]}
                   variant="secondary"
-                  size="slim"
                   onClick={() => sendMessage(prompt)}
                   {...(isSending ? { disabled: true } : {})}
                 >
                   {prompt}
                 </s-button>
               ))}
-              <s-button
-                type="button"
-                tone="critical"
-                variant="secondary"
-                size="slim"
-                onClick={() => {
-                  setMessages([{ role: "assistant", content: initialAssistantMessage }]);
-                }}
-                {...(isSending ? { disabled: true } : {})}
-              >
-                清空会话
-              </s-button>
               </div>
             </s-stack>
           </s-box>
@@ -689,6 +691,9 @@ export function ChatPage() {
             <s-list-item>尽量一次只提一个问题，回答会更准确。</s-list-item>
             <s-list-item>可直接说明场景，例如“新客拉新”“复购提升”。</s-list-item>
             <s-list-item>需要执行动作时，请明确给出目标和限制条件。</s-list-item>
+            <s-list-item>
+              模型会记住当前页这段对话；点「新对话」可清空上下文重新开始。
+            </s-list-item>
           </s-unordered-list>
         </div>
       </s-section>

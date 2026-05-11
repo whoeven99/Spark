@@ -3,6 +3,7 @@ import {
   AIMessage,
   HumanMessage,
   SystemMessage,
+  type BaseMessage,
 } from "@langchain/core/messages";
 import { createAgent } from "langchain";
 import { ChatOpenAI } from "@langchain/openai";
@@ -54,6 +55,16 @@ async function buildAgent(extraTools: DynamicStructuredTool[] = []) {
   });
 }
 
+function lastHumanUtterance(messages: BaseMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const msg = messages[i];
+    if (HumanMessage.isInstance(msg)) {
+      return extractMessageText(msg).trim();
+    }
+  }
+  return "";
+}
+
 async function generateFallbackReply(input: string, contextText: string) {
   const model = getChatModel();
   const result = await model.invoke([
@@ -67,13 +78,19 @@ async function generateFallbackReply(input: string, contextText: string) {
   return extractMessageText(result).trim();
 }
 
+export type InvokeChatAgentParams = {
+  /** 完整对话上下文；最后一条须为用户消息（HumanMessage）。 */
+  messages: BaseMessage[];
+  extraTools?: DynamicStructuredTool[];
+};
+
 export async function invokeChatAgent(
-  input: string,
-  options?: { extraTools?: DynamicStructuredTool[] },
+  params: InvokeChatAgentParams,
 ): Promise<InvokeChatAgentResult> {
-  const agent = await buildAgent(options?.extraTools ?? []);
+  const { messages: agentInputMessages, extraTools } = params;
+  const agent = await buildAgent(extraTools ?? []);
   const result = await agent.invoke({
-    messages: [new HumanMessage(input)],
+    messages: agentInputMessages,
   });
 
   const { messages } = result;
@@ -94,7 +111,9 @@ export async function invokeChatAgent(
 
   try {
     const fallbackText = await generateFallbackReply(
-      input,
+      lastHumanUtterance(agentInputMessages) ||
+        lastHumanUtterance(messages) ||
+        "",
       extractMessagesContext(messages),
     );
     if (fallbackText) {
