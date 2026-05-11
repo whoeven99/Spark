@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { createShopifyShopInfoTools } from "./ai/tools";
+import { translationTaskFormTool } from "./ai/tool/translationTaskFormTool";
 import { invokeChatAgent } from "./ai/agent";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -17,10 +18,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     const { admin } = await authenticate.admin(request);
     const shopInfoTools = createShopifyShopInfoTools(admin);
-    const reply = await invokeChatAgent(userMessage, {
-      extraTools: shopInfoTools,
+    const { reply, translationTaskForm } = await invokeChatAgent(userMessage, {
+      extraTools: [...shopInfoTools, translationTaskFormTool],
     });
-    return Response.json({ reply });
+    return Response.json({
+      reply,
+      ...(translationTaskForm ? { translationTaskForm } : {}),
+    });
   } catch (error) {
     console.error("Chat agent error:", error);
     const hint =

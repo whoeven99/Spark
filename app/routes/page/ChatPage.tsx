@@ -1,12 +1,9 @@
 import { useState, useRef, useEffect, type CSSProperties } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
+import type { ChatMessage } from "../../lib/chatMessage";
+import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { ChatMessages } from "../component/ChatMessages";
 import { ChatInput } from "../component/ChatInput";
-
-type Message = {
-  role: "user" | "assistant";
-  content: string;
-};
 
 type ProviderItem = {
   id: string;
@@ -71,8 +68,8 @@ export function ChatPage() {
     { id: "fedex", name: "FedEx" },
   ];
   const initialAssistantMessage =
-    "你好，我是 AI Assistant。\n\n我目前支持：\n1. 店铺经营分析与诊断建议\n2. 广告与物流授权相关引导\n3. 运营文案和促销活动建议\n4. 常见业务问题问答\n\n你可以直接告诉我你的目标。";
-  const [messages, setMessages] = useState<Message[]>([
+    "你好，我是 AI Assistant。\n\n我目前支持：\n1. 店铺经营分析与诊断建议\n2. 广告与物流授权相关引导\n3. 运营文案和促销活动建议\n4. 常见业务问题问答\n5. 创建翻译任务（对我说「创建翻译任务」等，我会在同一条回复里附上表单卡片）\n\n你可以直接告诉我你的目标。";
+  const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
       content: initialAssistantMessage,
@@ -83,11 +80,13 @@ export function ChatPage() {
     "你有哪些功能",
     "看今天店铺+广告数据",
     "今天适合做什么活动",
+    "创建翻译任务",
   ];
   const quickPromptTones: Array<"info" | "success" | "caution"> = [
     "info",
     "success",
     "caution",
+    "success",
   ];
   const modalOverlayStyle: CSSProperties = {
     position: "fixed",
@@ -222,7 +221,11 @@ export function ChatPage() {
         body: JSON.stringify({ message: content }),
       });
 
-      const data: { reply?: string; error?: string } = await response.json().catch(() => ({}));
+      const data = (await response.json().catch(() => ({}))) as {
+        reply?: string;
+        error?: string;
+        translationTaskForm?: TranslationTaskFormPayload;
+      };
       const assistantText =
         data.reply?.trim() ||
         data.error?.trim() ||
@@ -234,6 +237,9 @@ export function ChatPage() {
         {
           role: "assistant",
           content: assistantText,
+          ...(data.translationTaskForm
+            ? { translationTaskForm: data.translationTaskForm }
+            : {}),
         },
       ]);
     } catch {
@@ -241,6 +247,27 @@ export function ChatPage() {
     } finally {
       setIsSending(false);
     }
+  };
+
+  const succeedTranslationCard = (
+    messageIndex: number,
+    detail: { jobId?: string; message: string },
+  ) => {
+    shopify.toast.show(detail.message || "翻译任务创建成功");
+    setMessages((prev) => {
+      const next = prev.map((m, i): ChatMessage =>
+        i === messageIndex && m.role === "assistant"
+          ? { role: "assistant", content: m.content }
+          : m,
+      );
+      next.push({
+        role: "assistant",
+        content: detail.jobId
+          ? `翻译任务已提交（任务 ID：${detail.jobId}）。请到应用「翻译任务」页查看 JSON Runtime 进度。`
+          : "翻译任务已提交。请到「翻译任务」页查看进度。",
+      });
+      return next;
+    });
   };
 
   const handleAuthorizeProvider = (provider: ProviderItem, category: string) => {
@@ -625,9 +652,9 @@ export function ChatPage() {
                 tone="critical"
                 variant="secondary"
                 size="slim"
-                onClick={() =>
-                  setMessages([{ role: "assistant", content: initialAssistantMessage }])
-                }
+                onClick={() => {
+                  setMessages([{ role: "assistant", content: initialAssistantMessage }]);
+                }}
                 {...(isSending ? { disabled: true } : {})}
               >
                 清空会话
@@ -642,7 +669,10 @@ export function ChatPage() {
               style={{ height: "100%", overflowY: "auto" }}
             >
               <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
-                <ChatMessages messages={messages} />
+                <ChatMessages
+                  messages={messages}
+                  onTranslationCardSuccess={succeedTranslationCard}
+                />
               </s-box>
             </div>
           </div>
