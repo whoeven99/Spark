@@ -303,6 +303,8 @@ const MD_PREVIEW_MODAL_CARD_STYLE: CSSProperties = {
 
 /** 与下方自动刷新定时器一致（秒） */
 const DETAIL_POLL_INTERVAL_SEC = 4;
+/** 任务列表静默刷新间隔（秒），低于详情频率 */
+const LIST_POLL_INTERVAL_SEC = 25;
 
 export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
   const [taskId, setTaskId] = useState("");
@@ -328,14 +330,17 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
 
   const shopName = defaultShopName.trim();
 
-  const fetchTaskList = useCallback(async () => {
+  const fetchTaskList = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent === true;
     if (!shopName) {
       setTaskList([]);
       setListErrorText("");
       return;
     }
-    setListLoading(true);
-    setListErrorText("");
+    if (!silent) {
+      setListLoading(true);
+      setListErrorText("");
+    }
     try {
       const params = new URLSearchParams();
       params.set("shopName", shopName);
@@ -344,24 +349,38 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
       );
       const envelope = (await response.json().catch(() => ({}))) as JsonRuntimeTaskListEnvelope;
       if (!response.ok || envelope.success === false) {
-        setTaskList([]);
-        setListErrorText(envelope.errorMsg || `加载列表失败（HTTP ${response.status}）`);
+        if (!silent) {
+          setTaskList([]);
+          setListErrorText(envelope.errorMsg || `加载列表失败（HTTP ${response.status}）`);
+        }
         return;
       }
       const tasks = envelope.response?.tasks;
       setTaskList(Array.isArray(tasks) ? tasks : []);
-      setListErrorText("");
+      if (!silent) setListErrorText("");
     } catch {
-      setTaskList([]);
-      setListErrorText("加载任务列表失败，请稍后重试");
+      if (!silent) {
+        setTaskList([]);
+        setListErrorText("加载任务列表失败，请稍后重试");
+      }
     } finally {
-      setListLoading(false);
+      if (!silent) setListLoading(false);
     }
   }, [shopName]);
 
   useEffect(() => {
     void fetchTaskList();
   }, [fetchTaskList]);
+
+  useEffect(() => {
+    if (!shopName) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void fetchTaskList({ silent: true });
+      }
+    }, LIST_POLL_INTERVAL_SEC * 1000);
+    return () => window.clearInterval(timer);
+  }, [shopName, fetchTaskList]);
 
   const fetchDetail = useCallback(
     async (options?: { silent?: boolean; overrideTaskId?: string }) => {
@@ -697,7 +716,8 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
         <s-stack direction="block" gap="small">
           <s-paragraph>
             <span style={{ color: "#42474c", lineHeight: 1.5 }}>
-              任务列表来自本应用 Cosmos（与创建任务同一表）。任务详情<strong>默认由服务端转发至 Java AgentTask</strong>
+              任务列表来自本应用 Cosmos（与创建任务同一表），约每 {LIST_POLL_INTERVAL_SEC}{" "}
+              秒静默刷新列表状态（页面可见时）。任务详情<strong>默认由服务端转发至 Java AgentTask</strong>
               （路径 translate/v3/jsonRuntimeTaskDetail）；部署环境若设置变量 JSON_RUNTIME_TASK_DETAIL_SOURCE=local 则改为 Spark 本机聚合 Cosmos/Redis/Blob。选中任务后默认开启自动刷新（约每{" "}
               {DETAIL_POLL_INTERVAL_SEC}
               秒），按钮显示倒计时；页面不可见时暂停倒计时与请求。
@@ -1444,15 +1464,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                     <span style={{ fontWeight: 600, fontSize: "14px", color: "#202223" }}>
                       整包翻译报告（translation-report.md）
                     </span>
-                    <s-badge
-                      tone={
-                        trBlob?.exists === true
-                          ? "success"
-                          : trBlob?.exists === false
-                            ? "critical"
-                            : "info"
-                      }
-                    >
+                    <s-badge tone={trBlob?.exists === true ? "success" : "info"}>
                       {trBlob?.exists === true
                         ? "已存在"
                         : trBlob?.exists === false

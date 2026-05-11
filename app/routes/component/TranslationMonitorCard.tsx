@@ -10,6 +10,8 @@ import type {
 } from "./JsonRuntimeTaskStatusPanel";
 
 const POLL_SEC = 4;
+/** 任务列表刷新间隔（秒），低于详情轮询频率，避免多余请求 */
+const LIST_POLL_SEC = 25;
 
 const MD_OVERLAY: CSSProperties = {
   position: "fixed",
@@ -233,36 +235,54 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
 
   const progress = useRuntimeProgress(detail);
 
-  const fetchList = useCallback(async () => {
+  const fetchList = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent === true;
     if (!shopName) {
       setTasks([]);
       return;
     }
-    setListLoading(true);
-    setListError("");
+    if (!silent) {
+      setListLoading(true);
+      setListError("");
+    }
     try {
       const params = new URLSearchParams();
       params.set("shopName", shopName);
       const res = await fetch(`/api/translate/v3/json-runtime-tasks?${params.toString()}`);
       const env = (await res.json().catch(() => ({}))) as JsonRuntimeTaskListEnvelope;
       if (!res.ok || env.success === false) {
-        setTasks([]);
-        setListError(env.errorMsg || `加载失败（${res.status}）`);
+        if (!silent) {
+          setTasks([]);
+          setListError(env.errorMsg || `加载失败（${res.status}）`);
+        }
         return;
       }
       const list = env.response?.tasks;
       setTasks(Array.isArray(list) ? list : []);
+      if (!silent) setListError("");
     } catch {
-      setTasks([]);
-      setListError("加载失败，请稍后重试");
+      if (!silent) {
+        setTasks([]);
+        setListError("加载失败，请稍后重试");
+      }
     } finally {
-      setListLoading(false);
+      if (!silent) setListLoading(false);
     }
   }, [shopName]);
 
   useEffect(() => {
     void fetchList();
   }, [fetchList]);
+
+  useEffect(() => {
+    if (!shopName) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void fetchList({ silent: true });
+      }
+    }, LIST_POLL_SEC * 1000);
+    return () => window.clearInterval(timer);
+  }, [shopName, fetchList]);
 
   const fetchDetail = useCallback(
     async (taskId: string, silent?: boolean) => {
@@ -389,7 +409,8 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
           </div>
           <s-paragraph>
             <span style={{ color: "#6d7175", fontSize: "13px", lineHeight: 1.45 }}>
-              当前店铺的 JSON Runtime 任务。点击一条查看进度与报告；详情约每 {POLL_SEC} 秒自动更新。
+              当前店铺的 JSON Runtime 任务。点击一条查看进度与报告；任务列表约每 {LIST_POLL_SEC} 秒、详情约每 {POLL_SEC}{" "}
+              秒自动刷新（仅页面可见时）。
             </span>
           </s-paragraph>
 
@@ -533,15 +554,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                       <span style={{ fontSize: "13px", fontWeight: 600, color: "#202223" }}>
                         整包翻译报告
                       </span>
-                      <s-badge
-                        tone={
-                          trBlob?.exists === true
-                            ? "success"
-                            : trBlob?.exists === false
-                              ? "critical"
-                              : "info"
-                        }
-                      >
+                      <s-badge tone={trBlob?.exists === true ? "success" : "info"}>
                         {trBlob?.exists === true
                           ? "已生成"
                           : trBlob?.exists === false
