@@ -74,6 +74,8 @@ export type JsonRuntimeTaskDetailPayload = {
     translationReportMd?: BlobSnapshot;
   };
   reportParsed?: Record<string, unknown>;
+  /** V3 任务监控 Hash（translate_monitor_v3:{taskId}）：初始化拉取阶段的 phase、totalCount、initAccumulatedCount 等 */
+  translateMonitor?: Record<string, string>;
 };
 
 type Props = {
@@ -98,6 +100,18 @@ function readMetricNumber(raw: unknown): number | null {
   if (typeof raw === "number" && Number.isFinite(raw)) return raw;
   if (typeof raw === "string") return readNumber(raw);
   return null;
+}
+
+/** translate_monitor_v3 Hash 的 updatedAt 多为毫秒时间戳字符串 */
+function formatMonitorUpdatedAt(raw: string | undefined): string {
+  if (raw === undefined || raw === "") return "—";
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return raw;
+  try {
+    return new Date(n).toLocaleString();
+  } catch {
+    return raw;
+  }
 }
 
 function formatBytes(n: number | undefined) {
@@ -964,6 +978,80 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
               </s-stack>
             </s-box>
           </s-section>
+
+          {payload.translateMonitor && Object.keys(payload.translateMonitor).length > 0 ? (
+            <s-section heading="初始化拉取（translate_monitor_v3）">
+              <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+                <s-stack direction="block" gap="small">
+                  <s-stack direction="inline" gap="small" alignItems="center">
+                    <s-badge tone="info">
+                      {payload.translateMonitor.phase?.trim() || "—"}
+                    </s-badge>
+                    <span style={{ fontSize: "12px", color: "#6d7175" }}>
+                      初始化阶段会写入累计条目数；全部模块扫描完成后写入条目总数。下方数据约每 {DETAIL_POLL_INTERVAL_SEC}{" "}
+                      秒随详情自动刷新。
+                    </span>
+                  </s-stack>
+                  {payload.translateMonitor.initCurrentModule?.trim() ? (
+                    <div style={{ fontSize: "13px", color: "#42474c" }}>
+                      <span style={{ color: "#8c9196" }}>当前模块 </span>
+                      <strong>{payload.translateMonitor.initCurrentModule}</strong>
+                    </div>
+                  ) : null}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                      gap: 12,
+                    }}
+                  >
+                    <MetricTile
+                      label="模块进度"
+                      value={
+                        readMetricNumber(payload.translateMonitor.initModuleDone) !== null &&
+                        readMetricNumber(payload.translateMonitor.initModuleTotal) !== null
+                          ? `${readMetricNumber(payload.translateMonitor.initModuleDone) ?? 0} / ${readMetricNumber(payload.translateMonitor.initModuleTotal) ?? 0}`
+                          : "—"
+                      }
+                    />
+                    <MetricTile
+                      label="累计已拉取条目"
+                      value={String(
+                        readMetricNumber(payload.translateMonitor.initAccumulatedCount) ?? "—",
+                      )}
+                    />
+                    <MetricTile
+                      label="条目总数（监控）"
+                      value={String(readMetricNumber(payload.translateMonitor.totalCount) ?? "—")}
+                    />
+                    <MetricTile
+                      label="监控更新时间"
+                      value={formatMonitorUpdatedAt(payload.translateMonitor.updatedAt)}
+                    />
+                  </div>
+                  <details>
+                    <summary style={{ cursor: "pointer", fontSize: "13px", color: "#2c6ecb" }}>
+                      查看完整监控字段
+                    </summary>
+                    <pre
+                      style={{
+                        marginTop: 10,
+                        maxHeight: 240,
+                        overflow: "auto",
+                        fontSize: 12,
+                        background: "#fff",
+                        padding: 12,
+                        borderRadius: 8,
+                        border: "1px solid #e3e5e8",
+                      }}
+                    >
+                      {JSON.stringify(payload.translateMonitor, null, 2)}
+                    </pre>
+                  </details>
+                </s-stack>
+              </s-box>
+            </s-section>
+          ) : null}
 
           <s-section heading="任务进度（Redis）">
             <s-stack direction="block" gap="small">

@@ -1,6 +1,9 @@
 import type { TranslationTaskCheckpoint } from "./types";
 import { readTranslationJobDocument, type TranslationJobDoc } from "./cosmosJobStore.server";
 import { getTranslateRedisClient } from "./translateRedis.server";
+
+/** 与 TranslateTaskMonitorV3RedisService.MONITOR_KEY_PREFIX 一致 */
+const TRANSLATE_MONITOR_V3_KEY_PREFIX = "translate_monitor_v3:";
 import {
   translateV3BlobExists,
   translateV3BlobSizeBytes,
@@ -337,6 +340,16 @@ export async function buildSparkJsonRuntimeTaskDetailEnvelope(options: {
 
   await enrichJsonRuntimeDetailWithReportFailures(body, reportUri);
   await enrichJsonRuntimeDetailWithChunksFailedJson(body, doc.shopName, cleanId);
+
+  try {
+    const redis = getTranslateRedisClient();
+    const monitor = await redis.hgetall(`${TRANSLATE_MONITOR_V3_KEY_PREFIX}${cleanId}`);
+    if (monitor && Object.keys(monitor).length > 0) {
+      body.translateMonitor = monitor;
+    }
+  } catch (err) {
+    console.warn("[json-runtime-task-detail] translate_monitor_v3 read failed", err);
+  }
 
   return {
     success: true,
