@@ -8,6 +8,7 @@ import type {
   JsonRuntimeTaskListEnvelope,
   JsonRuntimeTaskListRow,
 } from "./JsonRuntimeTaskStatusPanel";
+import { formatTranslateTaskV3CosmosStatusText } from "../../lib/translateTaskV3CosmosStatusLabel";
 
 const POLL_SEC = 4;
 /** 任务列表刷新间隔（秒），低于详情轮询频率，避免多余请求 */
@@ -172,13 +173,6 @@ function useRuntimeProgress(payload: JsonRuntimeTaskDetailPayload | null) {
         ? Math.min(100, Math.round((Math.min(entryDone, entryTotal) / entryTotal) * 100))
         : null;
 
-    const entrySub =
-      entryTotal !== null ? (
-        <>
-          {entryDone ?? 0} / {entryTotal} 条
-        </>
-      ) : null;
-
     const chunkTotal =
       readMetricNumber(meta?.runtimeChunksTotal) ??
       readMetricNumber(cm?.runtimeChunksTotal) ??
@@ -197,14 +191,54 @@ function useRuntimeProgress(payload: JsonRuntimeTaskDetailPayload | null) {
         ? Math.min(100, Math.round((Math.min(chunkDone, chunkTotal) / chunkTotal) * 100))
         : null;
 
+    const hasChunkBar = chunkPct !== null;
+
+    /** 与 tasks/…/chunks/ 下分片文件数量一致，通常比「节点数」更直观 */
     const chunkSub =
       chunkTotal !== null ? (
         <>
-          {chunkDone ?? 0} / {chunkTotal} 块
+          <span>
+            已完成 <strong>{chunkDone ?? 0}</strong> / <strong>{chunkTotal}</strong> 个<strong>分块文件</strong>
+          </span>
+          <span
+            style={{
+              display: "block",
+              fontSize: "11px",
+              color: "#8c9196",
+              marginTop: 6,
+              lineHeight: 1.45,
+            }}
+          >
+            对应 Blob 中 <code style={{ fontSize: "10px" }}>chunks/</code>{" "}
+            目录的分片，推荐用它衡量「还剩多少文件要跑」。
+          </span>
         </>
       ) : null;
 
-    return { entryPct, chunkPct, entrySub, chunkSub };
+    const entrySubResolved =
+      entryTotal !== null ? (
+        <>
+          <span>
+            已完成 <strong>{entryDone ?? 0}</strong> / <strong>{entryTotal}</strong> 个
+            <strong>文本节点</strong>
+          </span>
+          <span
+            style={{
+              display: "block",
+              fontSize: "11px",
+              color: "#8c9196",
+              marginTop: 6,
+              lineHeight: 1.45,
+            }}
+          >
+            {hasChunkBar
+              ? "节点由 JSON/HTML 解析得到（含嵌套字段）；整体进度也可对照上方的「分块文件」。"
+              : "节点由 JSON/HTML 解析得到，数值通常大于商品或字段「条数」，属正常现象。"}
+          </span>
+        </>
+      ) : null;
+
+    return { entryPct, chunkPct, entrySub: entrySubResolved, chunkSub };
   }, [payload]);
 }
 
@@ -463,7 +497,9 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                     >
                       {(row.source ?? "—").trim()} → {(row.target ?? "—").trim()}
                     </span>
-                    <s-badge tone={listBadgeTone(row.statusText)}>{row.statusText ?? "—"}</s-badge>
+                    <s-badge tone={listBadgeTone(row.statusText)}>
+                      {formatTranslateTaskV3CosmosStatusText(row.statusText)}
+                    </s-badge>
                   </div>
                   {row.updatedAt ? (
                     <div style={{ fontSize: "12px", color: "#8c9196", marginTop: 8 }}>
@@ -503,7 +539,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                     }}
                   >
                     <s-badge tone={cosmosTone(readString(cosmos, "statusText"))}>
-                      {readString(cosmos, "statusText") || "—"}
+                      {formatTranslateTaskV3CosmosStatusText(readString(cosmos, "statusText"))}
                     </s-badge>
                     <span style={{ fontSize: "13px", color: "#42474c" }}>
                       <strong>{readString(cosmos, "source") || "—"}</strong>
@@ -560,26 +596,31 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                     </div>
                   ) : null}
 
-                  {progress.entryPct !== null ? (
-                    <ProgressBar
-                      label="翻译条目"
-                      sub={progress.entrySub}
-                      percent={progress.entryPct}
-                      gradient="linear-gradient(90deg, #006fbb 0%, #2c6ecb 70%)"
-                    />
-                  ) : (
-                    <span style={{ fontSize: "12px", color: "#8c9196" }}>条目进度：暂无可用数据</span>
-                  )}
-
                   {progress.chunkPct !== null ? (
                     <ProgressBar
-                      label="分块进度"
+                      label="翻译分块（chunks 文件）"
                       sub={progress.chunkSub}
                       percent={progress.chunkPct}
                       gradient="linear-gradient(90deg, #007146 0%, #008060 65%)"
-                      height={8}
+                      height={12}
                     />
                   ) : null}
+
+                  {progress.entryPct !== null ? (
+                    <ProgressBar
+                      label="文本节点（解析明细）"
+                      sub={progress.entrySub}
+                      percent={progress.entryPct}
+                      gradient="linear-gradient(90deg, #006fbb 0%, #2c6ecb 70%)"
+                      height={10}
+                    />
+                  ) : (
+                    <span style={{ fontSize: "12px", color: "#8c9196" }}>
+                      {progress.chunkPct !== null
+                        ? "暂无文本节点级进度数据"
+                        : "翻译进度：暂无可用数据"}
+                    </span>
+                  )}
 
                   <div style={{ marginTop: 8 }}>
                     <div

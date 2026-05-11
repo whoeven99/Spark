@@ -7,7 +7,7 @@
 ## 代码范围
 - 路由入口：`app/routes/app.translation.tsx`
 - 页面组件：`app/routes/page/TranslationPage.tsx`
-- 创建任务：`app/server/translation/translationPipelineCore.server.ts`（仅 `createTranslationJob`）
+- 创建任务：`app/server/translation/translationPipelineCore.server.ts`（仅 `createTranslationJob`；同店同源同目标 Cosmos 已有一条任务则拒绝并返回「任务已存在」）
 - 类型：`app/routes/page/TranslationPage.tsx` 使用的 resource 类型见 `app/server/translation/types.ts`
 - 持久化：`app/server/translation/cosmosJobStore.server.ts`
 - AgentTask 代理：`app/routes/api.translate.v3.json-runtime-task-detail.ts`

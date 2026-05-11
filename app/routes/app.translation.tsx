@@ -58,7 +58,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : "翻译任务创建失败";
-        if (message.includes("已存在进行中的同语种任务")) {
+        if (message.includes("任务已存在")) {
           return data({ ok: false, error: message }, { status: 409 });
         }
         throw error;
@@ -69,7 +69,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return data({
         ok: true,
         jobId: created.id,
-        message: "翻译任务已创建（同语种历史任务已覆盖）",
+        message: "翻译任务已创建",
       });
     }
 

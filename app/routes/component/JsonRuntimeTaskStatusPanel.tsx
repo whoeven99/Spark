@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { formatTranslateTaskV3CosmosStatusText } from "../../lib/translateTaskV3CosmosStatusLabel";
 
 export type JsonRuntimeTaskDetailEnvelope = {
   success: boolean;
@@ -601,14 +602,12 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
     const entryDetail: ReactNode =
       entryTotal !== null ? (
         <>
-          已完成 {entryDone ?? 0} / {entryTotal} 条
+          已完成 <strong>{entryDone ?? 0}</strong> / <strong>{entryTotal}</strong> 个<strong>文本节点</strong>
+          （解析 JSON/HTML 后的待译文案条数，不等于商品/字段「条数」）
           {failForDetail !== null && failForDetail > 0 ? ` · 失败 ${failForDetail}` : ""}
           <span style={{ color: "#8c9196", fontSize: "12px", display: "block", marginTop: 4 }}>
-            分母 totalCountThisBlob / metrics.totalCount：运行时对当前 Blob 执行路径收集后的<strong>待译 JSON 路径条数</strong>（可与初始化阶段 translate_monitor_v3.totalCount 数量级不同，并非计算错误）。
-          </span>
-          <span style={{ color: "#8c9196", fontSize: "12px", display: "block", marginTop: 4 }}>
-            数据来源：Redis meta（totalCountThisBlob / currentDoneThisBlob）· Cosmos metrics（totalCount /
-            translatedCount）· 若无 meta 可用 translated+failed 推断总数 · 否则使用 Redis :done 集合大小
+            技术口径：Redis meta（totalCountThisBlob）/ Cosmos metrics（totalCount）；亦可用 translated+failed 推断。
+            若存在「分块进度」，优先用分块衡量 chunks 目录文件级剩余工作量。
           </span>
         </>
       ) : (
@@ -637,9 +636,10 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
     const chunkDetail: ReactNode =
       chunkTotal !== null ? (
         <>
-          {chunkDone ?? 0} / {chunkTotal} 块
+          <strong>{chunkDone ?? 0}</strong> / <strong>{chunkTotal}</strong> 个<strong>分块文件</strong>（与{" "}
+          <code style={{ fontSize: "11px" }}>tasks/…/chunks/</code> 分片一致，通常比「文本节点」更直观）
           <span style={{ color: "#8c9196", fontSize: "12px", display: "block", marginTop: 4 }}>
-            来源：Redis :chunkDone 集合大小 · meta.runtimeChunksTotal · Cosmos checkpoint.metrics
+            来源：Redis :chunkDone · meta.runtimeChunksTotal · Cosmos checkpoint.metrics
           </span>
         </>
       ) : (
@@ -814,7 +814,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                   <s-stack direction="block" gap="small">
                     <s-stack direction="inline" gap="small" alignItems="center">
                       <s-badge tone={listRowBadgeTone(row.statusText)}>
-                        {row.statusText ?? "—"}
+                        {formatTranslateTaskV3CosmosStatusText(row.statusText)}
                       </s-badge>
                       <span
                         style={{
@@ -958,7 +958,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                 <s-stack direction="inline" gap="small" alignItems="center">
                   <s-badge tone="info">{readString(cosmos, "taskType") || "—"}</s-badge>
                   <s-badge tone={cosmosBadgeTone(readString(cosmos, "statusText"))}>
-                    {readString(cosmos, "statusText") || "—"}
+                    {formatTranslateTaskV3CosmosStatusText(readString(cosmos, "statusText"))}
                   </s-badge>
                   <span style={{ fontSize: "12px", color: "#6d7175" }}>
                     status 码 {String(cosmos?.status ?? "—")}
@@ -1167,13 +1167,23 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                     {!progressView.hasAnyBar ? (
                       <s-paragraph>{progressView.noBarHint}</s-paragraph>
                     ) : null}
+                    {chunkPercent !== null ? (
+                      <ProgressBarRow
+                        title="翻译分块（chunks 文件）"
+                        detail={progressView.chunkDetail}
+                        percent={chunkPercent}
+                        barGradient="linear-gradient(90deg, #007146 0%, #008060 45%, #36ba8f 100%)"
+                        trackHeight={12}
+                      />
+                    ) : null}
                     {progressPercent !== null ? (
                       <>
                         <ProgressBarRow
-                          title="条目进度（运行时待译路径）"
+                          title="文本节点（JSON/HTML 解析明细）"
                           detail={progressView.entryDetail}
                           percent={progressPercent}
                           barGradient="linear-gradient(90deg, #006fbb 0%, #2c6ecb 55%, #5c9ecf 100%)"
+                          trackHeight={10}
                         />
                         {effectiveFailCount !== null && effectiveFailCount > 0 ? (
                           <div style={{ marginTop: 6 }}>
@@ -1200,15 +1210,6 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                           </div>
                         ) : null}
                       </>
-                    ) : null}
-                    {chunkPercent !== null ? (
-                      <ProgressBarRow
-                        title="分块（chunk）进度"
-                        detail={progressView.chunkDetail}
-                        percent={chunkPercent}
-                        barGradient="linear-gradient(90deg, #007146 0%, #008060 45%, #36ba8f 100%)"
-                        trackHeight={10}
-                      />
                     ) : null}
 
                     <div

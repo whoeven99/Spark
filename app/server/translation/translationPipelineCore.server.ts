@@ -2,7 +2,6 @@ import {
   createTranslationJobRecord,
   getTranslationJobRecord,
   listTranslationJobs,
-  resetTranslationJobRecord,
 } from "./cosmosJobStore.server";
 import {
   ALLOWED_TRANSLATABLE_RESOURCE_TYPES,
@@ -22,7 +21,6 @@ type CreateTranslationJobInput = {
 };
 
 const DEFAULT_RESOURCE_TYPES: TranslatableResourceType[] = ["PRODUCT", "COLLECTION", "PAGE", "ARTICLE"];
-const ACTIVE_DUPLICATE_STATUSES = ["FETCHING", "TRANSLATING", "WRITING_BACK"] as const;
 
 function normalizeLocale(locale: string) {
   return locale.trim().toLowerCase();
@@ -42,7 +40,7 @@ function normalizeLimit(limitPerType: number) {
   return Math.min(Math.floor(limit), 200);
 }
 
-/** Spark 侧仅负责在 Cosmos 中创建/复用翻译任务记录；后续执行由其他服务（如 AgentTask）完成。 */
+/** Spark 侧仅在 Cosmos 中新建翻译任务记录；同店同源同目标已有一条记录则拒绝创建。执行由其他服务（如 AgentTask）完成。 */
 export async function createTranslationJob(input: CreateTranslationJobInput) {
   const sourceLocale = normalizeLocale(input.sourceLocale || "zh-CN");
   const targetLocale = normalizeLocale(input.targetLocale);
@@ -55,24 +53,8 @@ export async function createTranslationJob(input: CreateTranslationJobInput) {
   const samePairJobs = existingJobs.filter(
     (job) => job.sourceLocale === sourceLocale && job.targetLocale === targetLocale,
   );
-  const activeJob = samePairJobs.find((job) =>
-    ACTIVE_DUPLICATE_STATUSES.includes(job.status as (typeof ACTIVE_DUPLICATE_STATUSES)[number]),
-  );
-  if (activeJob) throw new Error(`已存在进行中的同语种任务（${activeJob.id.slice(0, 8)}），请先完成后再创建`);
-
-  const reusableJob = samePairJobs[0];
-  if (reusableJob) {
-    await resetTranslationJobRecord(input.shop, reusableJob.id, {
-      sourceLocale,
-      targetLocale,
-      resourceTypes,
-      limitPerType,
-      createdBy: input.createdBy,
-      taskType: SPARK_TRANSLATION_TASK_TYPE,
-      checkpoint: { phase: "INIT_CREATED", updatedAt: new Date().toISOString() },
-      metrics: {},
-    });
-    return getTranslationJobRecord(input.shop, reusableJob.id);
+  if (samePairJobs.length > 0) {
+    throw new Error("任务已存在");
   }
 
   const jobId = crypto.randomUUID();

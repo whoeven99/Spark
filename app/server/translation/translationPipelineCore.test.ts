@@ -4,14 +4,12 @@ const mocks = vi.hoisted(() => ({
   createTranslationJobRecord: vi.fn(),
   getTranslationJobRecord: vi.fn(),
   listTranslationJobs: vi.fn(),
-  resetTranslationJobRecord: vi.fn(),
 }));
 
 vi.mock("./cosmosJobStore.server", () => ({
   createTranslationJobRecord: mocks.createTranslationJobRecord,
   getTranslationJobRecord: mocks.getTranslationJobRecord,
   listTranslationJobs: mocks.listTranslationJobs,
-  resetTranslationJobRecord: mocks.resetTranslationJobRecord,
 }));
 
 import { createTranslationJob } from "./translationPipelineCore.server";
@@ -22,33 +20,23 @@ describe("createTranslationJob", () => {
     mocks.listTranslationJobs.mockResolvedValue([]);
   });
 
-  it("同语种旧任务复用时 reset，不落库新 job", async () => {
+  it("同店同源同目标在 Cosmos 已存在时拒绝创建", async () => {
     mocks.listTranslationJobs.mockResolvedValue([
       { id: "job-old", sourceLocale: "en", targetLocale: "fr", status: "FAILED" },
     ]);
-    mocks.getTranslationJobRecord.mockResolvedValue({ id: "job-old", status: "PENDING" });
 
-    const result = await createTranslationJob({
-      shop: "demo-shop",
-      sourceLocale: "en",
-      targetLocale: "fr",
-      resourceTypes: ["product"],
-      createdBy: "tester",
-      limitPerType: 30,
-    });
-
-    expect(mocks.resetTranslationJobRecord).toHaveBeenCalledWith(
-      "demo-shop",
-      "job-old",
-      expect.objectContaining({
+    await expect(
+      createTranslationJob({
+        shop: "demo-shop",
         sourceLocale: "en",
         targetLocale: "fr",
+        resourceTypes: ["product"],
+        createdBy: "tester",
         limitPerType: 30,
-        taskType: "json-runtime",
       }),
-    );
+    ).rejects.toThrow("任务已存在");
+
     expect(mocks.createTranslationJobRecord).not.toHaveBeenCalled();
-    expect(result).toEqual(expect.objectContaining({ id: "job-old" }));
   });
 
   it("无历史任务时新建 Cosmos 记录", async () => {
@@ -77,7 +65,6 @@ describe("createTranslationJob", () => {
         taskType: "json-runtime",
       }),
     );
-    expect(mocks.resetTranslationJobRecord).not.toHaveBeenCalled();
     expect(result?.id).toBeDefined();
     expect(result?.status).toBe("PENDING");
   });
