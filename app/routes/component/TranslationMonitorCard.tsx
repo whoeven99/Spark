@@ -8,6 +8,10 @@ import type {
   JsonRuntimeTaskListEnvelope,
   JsonRuntimeTaskListRow,
 } from "./JsonRuntimeTaskStatusPanel";
+import {
+  formatRedisTranslatePhaseLabel,
+  readRuntimeChunksFileTotal,
+} from "../../lib/redisTranslatePhaseLabel";
 import { formatTranslateTaskV3CosmosStatusText } from "../../lib/translateTaskV3CosmosStatusLabel";
 
 const POLL_SEC = 4;
@@ -191,51 +195,18 @@ function useRuntimeProgress(payload: JsonRuntimeTaskDetailPayload | null) {
         ? Math.min(100, Math.round((Math.min(chunkDone, chunkTotal) / chunkTotal) * 100))
         : null;
 
-    const hasChunkBar = chunkPct !== null;
-
-    /** 与 tasks/…/chunks/ 下分片文件数量一致，通常比「节点数」更直观 */
     const chunkSub =
       chunkTotal !== null ? (
-        <>
-          <span>
-            已完成 <strong>{chunkDone ?? 0}</strong> / <strong>{chunkTotal}</strong> 个<strong>分块文件</strong>
-          </span>
-          <span
-            style={{
-              display: "block",
-              fontSize: "11px",
-              color: "#8c9196",
-              marginTop: 6,
-              lineHeight: 1.45,
-            }}
-          >
-            对应 Blob 中 <code style={{ fontSize: "10px" }}>chunks/</code>{" "}
-            目录的分片，推荐用它衡量「还剩多少文件要跑」。
-          </span>
-        </>
+        <span>
+          已完成 <strong>{chunkDone ?? 0}</strong> / <strong>{chunkTotal}</strong> 个<strong>分块文件</strong>
+        </span>
       ) : null;
 
     const entrySubResolved =
       entryTotal !== null ? (
-        <>
-          <span>
-            已完成 <strong>{entryDone ?? 0}</strong> / <strong>{entryTotal}</strong> 个
-            <strong>文本节点</strong>
-          </span>
-          <span
-            style={{
-              display: "block",
-              fontSize: "11px",
-              color: "#8c9196",
-              marginTop: 6,
-              lineHeight: 1.45,
-            }}
-          >
-            {hasChunkBar
-              ? "节点由 JSON/HTML 解析得到（含嵌套字段）；整体进度也可对照上方的「分块文件」。"
-              : "节点由 JSON/HTML 解析得到，数值通常大于商品或字段「条数」，属正常现象。"}
-          </span>
-        </>
+        <span>
+          已完成 <strong>{entryDone ?? 0}</strong> / <strong>{entryTotal}</strong> 个<strong>文本节点</strong>
+        </span>
       ) : null;
 
     return { entryPct, chunkPct, entrySub: entrySubResolved, chunkSub };
@@ -415,16 +386,18 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
   const cosmos = detail?.cosmos as Record<string, unknown> | undefined;
   const trBlob = detail?.blobs?.translationReportMd;
 
-  /** 初始化阶段：阶段徽章 + 模块进度文案 + 醒目展示「已拉取条数」 */
+  /** 初始化阶段：阶段徽章 + 模块进度文案 + 醒目展示「已拉取条数」+ 分块文件总数 */
   const initDisplay = useMemo(() => {
     if (!tm || Object.keys(tm).length === 0) return null;
     const phase = tm.phase?.trim() || "—";
+    const phaseLabel = formatRedisTranslatePhaseLabel(phase);
     const md = readMetricNumber(tm.initModuleDone);
     const mt = readMetricNumber(tm.initModuleTotal);
     const acc = readMetricNumber(tm.initAccumulatedCount);
     const modulePart = md !== null && mt !== null ? `模块 ${md}/${mt}` : null;
-    return { phase, modulePart, accumulatedCount: acc };
-  }, [tm]);
+    const chunksFileTotal = readRuntimeChunksFileTotal(detail);
+    return { phase, phaseLabel, modulePart, accumulatedCount: acc, chunksFileTotal };
+  }, [tm, detail]);
 
   return (
     <>
@@ -559,7 +532,12 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                           gap: "10px",
                         }}
                       >
-                        <s-badge tone="info">{initDisplay.phase}</s-badge>
+                        <s-badge tone="info">{initDisplay.phaseLabel}</s-badge>
+                        {initDisplay.chunksFileTotal !== null ? (
+                          <span style={{ fontSize: "13px", color: "#42474c" }}>
+                            分块文件 <strong>{initDisplay.chunksFileTotal}</strong> 个
+                          </span>
+                        ) : null}
                         {initDisplay.modulePart ? (
                           <span style={{ fontSize: "13px", color: "#42474c" }}>{initDisplay.modulePart}</span>
                         ) : null}
@@ -596,16 +574,6 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                     </div>
                   ) : null}
 
-                  {progress.chunkPct !== null ? (
-                    <ProgressBar
-                      label="翻译分块（chunks 文件）"
-                      sub={progress.chunkSub}
-                      percent={progress.chunkPct}
-                      gradient="linear-gradient(90deg, #007146 0%, #008060 65%)"
-                      height={12}
-                    />
-                  ) : null}
-
                   {progress.entryPct !== null ? (
                     <ProgressBar
                       label="文本节点（解析明细）"
@@ -621,6 +589,16 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                         : "翻译进度：暂无可用数据"}
                     </span>
                   )}
+
+                  {progress.chunkPct !== null ? (
+                    <ProgressBar
+                      label="翻译分块（chunks 文件）"
+                      sub={progress.chunkSub}
+                      percent={progress.chunkPct}
+                      gradient="linear-gradient(90deg, #007146 0%, #008060 65%)"
+                      height={12}
+                    />
+                  ) : null}
 
                   <div style={{ marginTop: 8 }}>
                     <div
