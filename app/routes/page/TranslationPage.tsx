@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useLoaderData } from "react-router";
 import type { loader } from "../app.translation";
-import { JsonRuntimeTaskStatusPanel } from "../component/JsonRuntimeTaskStatusPanel";
+import { TranslationMonitorCard } from "../component/TranslationMonitorCard";
 import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../../server/translation/types";
 
 const RESOURCE_TYPE_OPTIONS = ALLOWED_TRANSLATABLE_RESOURCE_TYPES;
@@ -78,54 +78,75 @@ export function TranslationPage() {
 
 
   return (
-    <s-page heading="创建翻译任务">
-      <s-stack direction="block" gap="base">
-        <s-text-field
-          label="目标语言（target locale）"
-          value={targetLocale}
-          onChange={(event) => setTargetLocale(event.currentTarget.value)}
-          autocomplete="off"
-        />
-        <s-text-field
-          label="源语言（source locale）"
-          value={sourceLocale}
-          onChange={(event) => setSourceLocale(event.currentTarget.value)}
-          autocomplete="off"
-        />
-        <s-text-field
-          label="每种资源最多抓取条目数"
-          value={String(limitPerType)}
-          onChange={(event) => setLimitPerType(Number(event.currentTarget.value) || 20)}
-          autocomplete="off"
-        />
-        <s-stack direction="inline" gap="small">
-          {RESOURCE_TYPE_OPTIONS.map((type) => (
-            <s-button
-              key={type}
-              type="button"
-              variant={resourceTypes.includes(type) ? "primary" : "secondary"}
-              onClick={() => handleToggleResourceType(type)}
-            >
-              {type}
-            </s-button>
-          ))}
-        </s-stack>
-        <div>
-          <s-button
-            type="button"
-            variant="primary"
-            onClick={handleCreateJob}
-            {...(isSubmitting ? { disabled: true } : {})}
-          >
-            {isSubmitting ? "创建中..." : "创建翻译任务"}
-          </s-button>
+    <s-page heading="翻译任务">
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "1.5rem",
+          alignItems: "flex-start",
+        }}
+      >
+        <div style={{ flex: "1 1 360px", minWidth: 0 }}>
+          <s-section heading="创建翻译任务">
+            <s-stack direction="block" gap="base">
+              <s-text-field
+                label="目标语言（target locale）"
+                value={targetLocale}
+                onChange={(event) => setTargetLocale(event.currentTarget.value)}
+                autocomplete="off"
+              />
+              <s-text-field
+                label="源语言（source locale）"
+                value={sourceLocale}
+                onChange={(event) => setSourceLocale(event.currentTarget.value)}
+                autocomplete="off"
+              />
+              <s-text-field
+                label="每种资源最多抓取条目数"
+                value={String(limitPerType)}
+                onChange={(event) => setLimitPerType(Number(event.currentTarget.value) || 20)}
+                autocomplete="off"
+              />
+              <s-stack direction="inline" gap="small">
+                {RESOURCE_TYPE_OPTIONS.map((type) => (
+                  <s-button
+                    key={type}
+                    type="button"
+                    variant={resourceTypes.includes(type) ? "primary" : "secondary"}
+                    onClick={() => handleToggleResourceType(type)}
+                  >
+                    {type}
+                  </s-button>
+                ))}
+              </s-stack>
+              <div>
+                <s-button
+                  type="button"
+                  variant="primary"
+                  onClick={handleCreateJob}
+                  {...(isSubmitting ? { disabled: true } : {})}
+                >
+                  {isSubmitting ? "创建中..." : "创建翻译任务"}
+                </s-button>
+              </div>
+            </s-stack>
+          </s-section>
         </div>
-      </s-stack>
 
-      <s-section heading="JSON Runtime 翻译任务（AgentTask）">
-        <JsonRuntimeTaskStatusPanel defaultShopName={loaderData.shop} />
-      </s-section>
-
+        <div
+          style={{
+            flex: "0 1 400px",
+            width: "100%",
+            maxWidth: 440,
+            position: "sticky",
+            top: "1rem",
+            alignSelf: "flex-start",
+          }}
+        >
+          <TranslationMonitorCard defaultShopName={loaderData.shop} />
+        </div>
+      </div>
     </s-page>
   );
 }

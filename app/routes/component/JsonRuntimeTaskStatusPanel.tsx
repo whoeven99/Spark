@@ -544,7 +544,10 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
           已完成 {entryDone ?? 0} / {entryTotal} 条
           {failForDetail !== null && failForDetail > 0 ? ` · 失败 ${failForDetail}` : ""}
           <span style={{ color: "#8c9196", fontSize: "12px", display: "block", marginTop: 4 }}>
-            来源：Redis meta（totalCountThisBlob / currentDoneThisBlob）· Cosmos metrics（totalCount /
+            分母 totalCountThisBlob / metrics.totalCount：运行时对当前 Blob 执行路径收集后的<strong>待译 JSON 路径条数</strong>（可与初始化阶段 translate_monitor_v3.totalCount 数量级不同，并非计算错误）。
+          </span>
+          <span style={{ color: "#8c9196", fontSize: "12px", display: "block", marginTop: 4 }}>
+            数据来源：Redis meta（totalCountThisBlob / currentDoneThisBlob）· Cosmos metrics（totalCount /
             translatedCount）· 若无 meta 可用 translated+failed 推断总数 · 否则使用 Redis :done 集合大小
           </span>
         </>
@@ -987,8 +990,9 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                     <s-badge tone="info">
                       {payload.translateMonitor.phase?.trim() || "—"}
                     </s-badge>
-                    <span style={{ fontSize: "12px", color: "#6d7175" }}>
-                      初始化阶段会写入累计条目数；全部模块扫描完成后写入条目总数。下方数据约每 {DETAIL_POLL_INTERVAL_SEC}{" "}
+                    <span style={{ fontSize: "12px", color: "#6d7175", lineHeight: 1.5 }}>
+                      此处为<strong>初始化拉取 Shopify</strong>阶段的监控：累计条数按模块递增；「初始化汇总条数」为各模块抓取的可译字段行数之和（受模块上限等约束）。
+                      它与下方「条目进度」的分母<strong>不是同一指标</strong>——后者是运行时对合并 JSON 解析出的<strong>待译路径条数</strong>（含嵌套 JSON 展开），通常会大于前者。约每 {DETAIL_POLL_INTERVAL_SEC}{" "}
                       秒随详情自动刷新。
                     </span>
                   </s-stack>
@@ -1021,7 +1025,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                       )}
                     />
                     <MetricTile
-                      label="条目总数（监控）"
+                      label="初始化汇总条数（≠运行时路径数）"
                       value={String(readMetricNumber(payload.translateMonitor.totalCount) ?? "—")}
                     />
                     <MetricTile
@@ -1080,7 +1084,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                     {progressPercent !== null ? (
                       <>
                         <ProgressBarRow
-                          title="条目进度（Redis meta / Cosmos metrics / :done）"
+                          title="条目进度（运行时待译路径）"
                           detail={progressView.entryDetail}
                           percent={progressPercent}
                           barGradient="linear-gradient(90deg, #006fbb 0%, #2c6ecb 55%, #5c9ecf 100%)"
