@@ -11,8 +11,8 @@ import type {
 import {
   formatRedisTranslatePhaseLabel,
   readRuntimeChunksFileTotal,
-} from "../../lib/redisTranslatePhaseLabel";
-import { formatTranslateTaskV3CosmosStatusText } from "../../lib/translateTaskV3CosmosStatusLabel";
+} from "../../../lib/redisTranslatePhaseLabel";
+import { formatTranslateTaskV3CosmosStatusText } from "../../../lib/translateTaskV3CosmosStatusLabel";
 
 const POLL_SEC = 4;
 /** 任务列表刷新间隔（秒），低于详情轮询频率，避免多余请求 */

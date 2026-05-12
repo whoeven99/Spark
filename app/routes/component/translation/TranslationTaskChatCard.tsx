@@ -1,8 +1,8 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { Link } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
-import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
-import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../../server/translation/types";
+import type { TranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
+import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../../../server/translation/types";
 
 const MODULE_LABELS: Record<string, string> = {
   PRODUCT: "商品",

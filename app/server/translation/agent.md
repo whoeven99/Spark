@@ -12,7 +12,7 @@
 - 类型：`app/routes/page/TranslationPage.tsx` 使用的 resource 类型见 `app/server/translation/types.ts`
 - 持久化：`app/server/translation/cosmosJobStore.server.ts`
 - AgentTask 代理：`app/routes/api.translate.v3.json-runtime-task-detail.ts`
-- 运行时详情 UI：`app/routes/component/JsonRuntimeTaskStatusPanel.tsx`
+- 运行时详情 UI：`app/routes/component/translation/JsonRuntimeTaskStatusPanel.tsx`
 
 ## 处理原则
 1. 先确认影响范围，再修改对应最小文件集合。

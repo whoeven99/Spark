@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
-import type { ChatMessage } from "../../lib/chatMessage";
+import type { ChatMessage } from "../../../lib/chatMessage";
 import { ChatMessageContent } from "./ChatMessageContent";
-import { TranslationTaskChatCard } from "./TranslationTaskChatCard";
+import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard";
 
 type ChatMessagesProps = {
   messages: ChatMessage[];

@@ -5,8 +5,8 @@ import remarkGfm from "remark-gfm";
 import {
   formatRedisTranslatePhaseLabel,
   readRuntimeChunksFileTotal,
-} from "../../lib/redisTranslatePhaseLabel";
-import { formatTranslateTaskV3CosmosStatusText } from "../../lib/translateTaskV3CosmosStatusLabel";
+} from "../../../lib/redisTranslatePhaseLabel";
+import { formatTranslateTaskV3CosmosStatusText } from "../../../lib/translateTaskV3CosmosStatusLabel";
 
 export type JsonRuntimeTaskDetailEnvelope = {
   success: boolean;

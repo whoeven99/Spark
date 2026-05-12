@@ -23,8 +23,8 @@
 
 ## 3. 目录结构（迁移后，根目录即应用目录）
 - `app/routes/`：页面路由与 API action/loader。
-- `app/routes/page/`：聊天页、翻译页等页面级组件。
-- `app/routes/component/`：聊天消息与输入、翻译监控等组件。
+- `app/routes/page/`：聊天页、翻译页等页面级组件；`chat/` 子目录为 `ChatPage` 拆分模块。
+- `app/routes/component/`：按域分子目录（`chat/`、`translation/` 等）。
 - `app/server/`：AI Agent、工具、授权凭证存储、`translation/` 流水线与外部存储客户端。
 - `prisma/`：数据库 schema 与迁移文件。
 - `.github/workflows/`：CI/CD（Shopify deploy + Render deploy）。
@@ -133,13 +133,13 @@
 - 涉及指标输出时，优先列表与短段落，避免大段堆叠。
 
 ## 12. 改动落点指南（按需求类型）
-- 改欢迎语/聊天 UI：`app/routes/page/ChatPage.tsx`、`app/routes/component/ChatMessages.tsx`。
+- 改欢迎语/聊天 UI：`app/routes/page/ChatPage.tsx`、`app/routes/component/chat/*`（页面旁路与凭证弹层逻辑见 `app/routes/page/chat/`）。
 - 改聊天行为/工具调用：`app/server/chat.ts`、`app/server/ai/agent.ts`。
 - 改 AI 回复抽取、Markdown 表格规整或最终润色：`app/server/ai/langchainMessageText.ts`、`markdownTableNormalize.ts`、`polishFinalReply.ts`（单测同目录 `*.test.ts`）。
 - 加新 AI 工具：`app/server/ai/tool/*`，并在 `shopifyShopInfoTool.ts` 或工具聚合处注册。
 - 改诊断指标：`app/routes/app.additional.tsx`（含查询、阈值、文案）。
 - 改广告 OAuth 配置字段：`app/routes/app.ads.*.config.tsx` + `app/server/adAuthCredentialStore.server.ts`（及 Meta 的 `adsCredentialStore.server.ts`）；改物流：`app/routes/app.logistics.*.config.tsx` + `app/server/logisticsCredentialStore.server.ts`。
-- 改翻译创建/流水线/Cosmos 文档：`app/server/translation/*`（先读 `agent.md`）；改翻译 UI：`app/routes/page/TranslationPage.tsx`、`app/routes/component/TranslationMonitorCard.tsx`、`JsonRuntimeTaskStatusPanel.tsx`；改 API：`app/routes/api.translate.v3.*.ts`。
+- 改翻译创建/流水线/Cosmos 文档：`app/server/translation/*`（先读 `agent.md`）；改翻译 UI：`app/routes/page/TranslationPage.tsx`、`app/routes/component/translation/*`；改 API：`app/routes/api.translate.v3.*.ts`。
 
 ## 13. 改动边界与风险提示
 - 未明确要求时，不改以下区域：

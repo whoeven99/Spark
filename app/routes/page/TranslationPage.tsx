@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useLoaderData } from "react-router";
 import type { loader } from "../app.translation";
-import { JsonRuntimeTaskStatusPanel } from "../component/JsonRuntimeTaskStatusPanel";
-import { TranslationMonitorCard } from "../component/TranslationMonitorCard";
+import { JsonRuntimeTaskStatusPanel } from "../component/translation/JsonRuntimeTaskStatusPanel";
+import { TranslationMonitorCard } from "../component/translation/TranslationMonitorCard";
 import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../../server/translation/types";
 
 const RESOURCE_TYPE_OPTIONS = ALLOWED_TRANSLATABLE_RESOURCE_TYPES;
