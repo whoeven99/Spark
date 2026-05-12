@@ -46,30 +46,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     if (actionType === "create_job") {
-      let created;
-      try {
-        created = await createTranslationJob({
-          shop: session.shop,
-          targetLocale: body.targetLocale ?? "",
-          sourceLocale: body.sourceLocale ?? "zh-CN",
-          resourceTypes: body.resourceTypes ?? [],
-          createdBy: session.shop,
-          limitPerType: body.limitPerType ?? 20,
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "翻译任务创建失败";
-        if (message.includes("任务已存在")) {
-          return data({ ok: false, error: message }, { status: 409 });
-        }
-        throw error;
-      }
-      if (!created) {
+      const created = await createTranslationJob({
+        shop: session.shop,
+        targetLocale: body.targetLocale ?? "",
+        sourceLocale: body.sourceLocale ?? "zh-CN",
+        resourceTypes: body.resourceTypes ?? [],
+        createdBy: session.shop,
+        limitPerType: body.limitPerType ?? 20,
+      });
+      if (!created?.job?.id) {
         return data({ ok: false, error: "翻译任务创建失败" }, { status: 500 });
       }
+      const message = created.reusedExisting
+        ? "该源语言与目标语言已存在翻译任务，已关联到现有任务。可在下方查看进度。"
+        : "翻译任务已创建";
       return data({
         ok: true,
-        jobId: created.id,
-        message: "翻译任务已创建",
+        jobId: created.job.id,
+        message,
+        reusedExisting: created.reusedExisting,
       });
     }
 

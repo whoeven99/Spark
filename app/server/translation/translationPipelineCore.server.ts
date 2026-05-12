@@ -2,10 +2,17 @@ import { createTranslationJobRecord, listTranslationJobs } from "./cosmosJobStor
 import {
   ALLOWED_TRANSLATABLE_RESOURCE_TYPES,
   type TranslatableResourceType,
+  type TranslationJobRecord,
 } from "./types";
 
 /** 与 SpringBackend `TranslateV3Service.isRuntimeJsonTask` 一致，供 AgentTask 调度 Spark 翻译任务 */
 const SPARK_TRANSLATION_TASK_TYPE = "spark";
+
+export type CreateTranslationJobResult = {
+  job: TranslationJobRecord;
+  /** 为 true 时表示未新建文档，返回了同店同源同目标下已有的一条任务（幂等） */
+  reusedExisting: boolean;
+};
 
 type CreateTranslationJobInput = {
   shop: string;
@@ -36,8 +43,10 @@ function normalizeLimit(limitPerType: number) {
   return Math.min(Math.floor(limit), 200);
 }
 
-/** Spark 侧仅在 Cosmos 中新建翻译任务记录；同店同源同目标已有一条记录则拒绝创建。执行由其他服务（如 AgentTask）完成。 */
-export async function createTranslationJob(input: CreateTranslationJobInput) {
+/** Spark 侧仅在 Cosmos 中新建翻译任务记录。同店同源同目标已存在任务时幂等返回其中最近更新的一条，避免重复提交被误判为失败。 */
+export async function createTranslationJob(
+  input: CreateTranslationJobInput,
+): Promise<CreateTranslationJobResult> {
   const sourceLocale = normalizeLocale(input.sourceLocale || "zh-CN");
   const targetLocale = normalizeLocale(input.targetLocale);
   const resourceTypes = normalizeResourceTypes(input.resourceTypes);
@@ -47,16 +56,24 @@ export async function createTranslationJob(input: CreateTranslationJobInput) {
 
   const existingJobs = await listTranslationJobs(input.shop);
   const samePairJobs = existingJobs.filter(
-    (job) => job.sourceLocale === sourceLocale && job.targetLocale === targetLocale,
+    (job) =>
+      normalizeLocale(job.sourceLocale) === sourceLocale &&
+      normalizeLocale(job.targetLocale) === targetLocale,
   );
   if (samePairJobs.length > 0) {
-    throw new Error("任务已存在");
+    const sorted = [...samePairJobs].sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
+    const job = sorted[0];
+    if (job) {
+      return { job, reusedExisting: true };
+    }
   }
 
   const jobId = crypto.randomUUID();
   // 直接返回 upsert 后的映射结果，避免紧接点读因 Cosmos 一致性/延迟返回 null，
   // 导致路由误判 500 而任务实际已写入（列表刷新可见）。
-  return createTranslationJobRecord({
+  const job = await createTranslationJobRecord({
     id: jobId,
     shop: input.shop,
     sourceLocale,
@@ -73,4 +90,5 @@ export async function createTranslationJob(input: CreateTranslationJobInput) {
     limitPerType,
     createdBy: input.createdBy,
   });
+  return { job, reusedExisting: false };
 }
