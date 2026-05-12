@@ -245,7 +245,7 @@ export async function createTranslationJobRecord(input: CreateJobInput) {
     status: "PENDING",
     sourceLocale: input.sourceLocale,
     targetLocale: input.targetLocale,
-    taskType: input.taskType ?? "json-runtime",
+    taskType: input.taskType ?? "spark",
     aiModel: input.aiModel ?? "gpt-4.1-nano",
     isCover: input.isCover ?? false,
     isHandle: input.isHandle ?? false,
@@ -340,7 +340,7 @@ export async function listTranslationJobs(shop: string) {
   return resources.map(mapJob);
 }
 
-/** 与 Spark 创建任务同一容器；仅 taskType 为 json-runtime 的文档（忽略大小写）。按 updatedAt 降序，最多 50 条。 */
+/** 与 Spark 创建任务同一容器；taskType 为 spark（忽略大小写），并兼容历史 json-runtime。按 updatedAt 降序，最多 50 条。 */
 export async function listJsonRuntimeTasksForShop(shop: string) {
   const shopTrim = shop.trim();
   if (!shopTrim) return [];
@@ -348,11 +348,8 @@ export async function listJsonRuntimeTasksForShop(shop: string) {
   const query = jobs.items.query<TranslationJobDoc>(
     {
       query:
-        "SELECT TOP 50 * FROM c WHERE c.shopName = @shop AND LOWER(c.taskType) = @taskType ORDER BY c.updatedAt DESC",
-      parameters: [
-        { name: "@shop", value: shopTrim },
-        { name: "@taskType", value: "json-runtime" },
-      ],
+        "SELECT TOP 50 * FROM c WHERE c.shopName = @shop AND (LOWER(c.taskType) = 'spark' OR LOWER(c.taskType) = 'json-runtime') ORDER BY c.updatedAt DESC",
+      parameters: [{ name: "@shop", value: shopTrim }],
     },
     { partitionKey: shopTrim },
   );
@@ -364,7 +361,7 @@ export async function listJsonRuntimeTasksForShop(shop: string) {
     target: doc.target,
     status: doc.status,
     statusText: doc.statusText,
-    taskType: doc.taskType ?? "json-runtime",
+    taskType: doc.taskType ?? "spark",
     aiModel: doc.aiModel ?? "",
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,

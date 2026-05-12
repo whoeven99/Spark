@@ -136,7 +136,7 @@ async function buildRuntimeBlobSnapshot(
   const snap: Record<string, unknown> = { uri };
   if (!uri) {
     snap.exists = false;
-    snap.note = "checkpoint 中无此 URI（非 json-runtime 或字段未写入）";
+    snap.note = "checkpoint 中无此 URI（非 spark/json-runtime 运行时任务或字段未写入）";
     return snap;
   }
   const path = toBlobPath(uri);

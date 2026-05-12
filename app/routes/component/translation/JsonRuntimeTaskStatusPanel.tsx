@@ -793,7 +793,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
           <s-box padding="large" borderWidth="base" borderRadius="base" background="subdued">
             <s-paragraph>
               <span style={{ color: "#6d7175" }}>
-                该店铺在 Cosmos（translation_jobs）中暂无 taskType 为 json-runtime 的任务记录。
+                该店铺在 Cosmos（translation_jobs）中暂无 taskType 为 spark（或历史 json-runtime）的任务记录。
               </span>
             </s-paragraph>
           </s-box>

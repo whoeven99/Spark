@@ -62,7 +62,7 @@ describe("createTranslationJob", () => {
         sourceLocale: "en",
         targetLocale: "de",
         limitPerType: 20,
-        taskType: "json-runtime",
+        taskType: "spark",
       }),
     );
     expect(result?.id).toBeDefined();

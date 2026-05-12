@@ -8,8 +8,8 @@ import {
   type TranslatableResourceType,
 } from "./types";
 
-/** 与 SpringBackend `TranslateV3Service.isRuntimeJsonTask` 一致，供 AgentTask json-runtime 调度 */
-const SPARK_TRANSLATION_TASK_TYPE = "json-runtime";
+/** 与 SpringBackend `TranslateV3Service.isRuntimeJsonTask` 一致，供 AgentTask 调度 Spark 翻译任务 */
+const SPARK_TRANSLATION_TASK_TYPE = "spark";
 
 type CreateTranslationJobInput = {
   shop: string;
