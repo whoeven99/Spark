@@ -2,13 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   createTranslationJobRecord: vi.fn(),
-  getTranslationJobRecord: vi.fn(),
   listTranslationJobs: vi.fn(),
 }));
 
 vi.mock("./cosmosJobStore.server", () => ({
   createTranslationJobRecord: mocks.createTranslationJobRecord,
-  getTranslationJobRecord: mocks.getTranslationJobRecord,
   listTranslationJobs: mocks.listTranslationJobs,
 }));
 
@@ -41,10 +39,28 @@ describe("createTranslationJob", () => {
 
   it("无历史任务时新建 Cosmos 记录", async () => {
     mocks.listTranslationJobs.mockResolvedValue([]);
-    mocks.createTranslationJobRecord.mockResolvedValue(undefined);
-    mocks.getTranslationJobRecord.mockImplementation(async (_shop: string, jobId: string) => ({
-      id: jobId,
+    mocks.createTranslationJobRecord.mockImplementation(async (input) => ({
+      id: input.id,
+      shop: input.shop,
       status: "PENDING",
+      sourceLocale: input.sourceLocale,
+      targetLocale: input.targetLocale,
+      taskType: input.taskType ?? "spark",
+      aiModel: input.aiModel ?? "gpt-4o-mini",
+      isCover: false,
+      isHandle: false,
+      moduleList: input.resourceTypes,
+      sessionId: input.sessionId ?? `${input.shop}:${input.id}`,
+      checkpoint: input.checkpoint ?? {},
+      metrics: input.metrics ?? {},
+      resourceTypes: input.resourceTypes,
+      limitPerType: input.limitPerType,
+      totalItems: 0,
+      fetchedItems: 0,
+      errorMessage: null,
+      createdBy: input.createdBy,
+      createdAt: "2020-01-01T00:00:00.000Z",
+      updatedAt: "2020-01-01T00:00:00.000Z",
     }));
 
     const result = await createTranslationJob({

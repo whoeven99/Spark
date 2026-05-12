@@ -1,8 +1,4 @@
-import {
-  createTranslationJobRecord,
-  getTranslationJobRecord,
-  listTranslationJobs,
-} from "./cosmosJobStore.server";
+import { createTranslationJobRecord, listTranslationJobs } from "./cosmosJobStore.server";
 import {
   ALLOWED_TRANSLATABLE_RESOURCE_TYPES,
   type TranslatableResourceType,
@@ -58,7 +54,9 @@ export async function createTranslationJob(input: CreateTranslationJobInput) {
   }
 
   const jobId = crypto.randomUUID();
-  await createTranslationJobRecord({
+  // 直接返回 upsert 后的映射结果，避免紧接点读因 Cosmos 一致性/延迟返回 null，
+  // 导致路由误判 500 而任务实际已写入（列表刷新可见）。
+  return createTranslationJobRecord({
     id: jobId,
     shop: input.shop,
     sourceLocale,
@@ -75,5 +73,4 @@ export async function createTranslationJob(input: CreateTranslationJobInput) {
     limitPerType,
     createdBy: input.createdBy,
   });
-  return getTranslationJobRecord(input.shop, jobId);
 }
