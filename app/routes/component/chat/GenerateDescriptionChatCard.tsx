@@ -13,6 +13,7 @@ export function GenerateDescriptionChatCard({ embedded = false }: Props) {
   const [targetLanguage, setTargetLanguage] = useState("zh-CN");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [productTitle, setProductTitle] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
 
   const search = typeof window !== "undefined" ? window.location.search : "";
@@ -31,6 +32,7 @@ export function GenerateDescriptionChatCard({ embedded = false }: Props) {
 
     setIsSubmitting(true);
     setErrorText(null);
+    setProductTitle(null);
     setResult(null);
 
     try {
@@ -50,7 +52,13 @@ export function GenerateDescriptionChatCard({ embedded = false }: Props) {
         return;
       }
 
-      if (payload.success && payload.response) {
+      if (
+        payload.success &&
+        payload.response &&
+        typeof payload.response.title === "string" &&
+        typeof payload.response.description === "string"
+      ) {
+        setProductTitle(payload.response.title);
         setResult(payload.response.description);
         shopify.toast.show("描述生成成功");
       } else {
@@ -176,6 +184,17 @@ export function GenerateDescriptionChatCard({ embedded = false }: Props) {
                   border: "1px solid rgba(44, 110, 203, 0.2)",
                 }}
               >
+                <div
+                  style={{
+                    fontSize: "0.8125rem",
+                    color: "#303030",
+                    lineHeight: 1.5,
+                    marginBottom: "0.5rem",
+                  }}
+                >
+                  商品名：
+                  {productTitle?.trim() ? productTitle : "Unknown Product"}
+                </div>
                 <div
                   style={{
                     fontSize: "0.8125rem",

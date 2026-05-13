@@ -1,9 +1,6 @@
 import type { ShopifyAdminGraphqlClient } from "../../ai/tool/shopifyShopInfoTool";
 import { invokeDescriptionModels } from "../descriptionAiClient.server";
-import {
-  parseAndValidateProductDescriptionJson,
-  type ProductDescriptionJsonPayload,
-} from "../generatedDescriptionJson.server";
+import { parseAndValidateProductDescriptionJson } from "../generatedDescriptionJson.server";
 import { logDetailedError } from "../generateDescriptionLog.server";
 import {
   buildDescriptionSystemPrompt,
@@ -19,10 +16,16 @@ import {
 
 const LOG = "[GenerateDescription][Service]";
 
+/** 成功路径下返回给 HTTP / Tool 的载荷：description 来自模型 JSON，title 来自 Shopify 商品。 */
+export type GenerateDescriptionOkPayload = {
+  title: string;
+  description: string;
+};
+
 export type GenerateDescriptionServiceResult =
   | {
       ok: true;
-      data: ProductDescriptionJsonPayload;
+      data: GenerateDescriptionOkPayload;
       modelLabel: string;
       usageMeta?: unknown;
     }
@@ -102,6 +105,8 @@ export async function runProductDescriptionGeneration(params: {
     };
   }
 
+  console.log("[GenerateDescription] product title:", context.title);
+
   console.info(
     `${LOG} [Prompt Build] requestId=${requestId} context.id=${context.id} titleLen=${context.title.length}`,
   );
@@ -143,7 +148,11 @@ export async function runProductDescriptionGeneration(params: {
   }
 
   try {
-    const data = parseAndValidateProductDescriptionJson(raw.rawText);
+    const aiPayload = parseAndValidateProductDescriptionJson(raw.rawText);
+    const data: GenerateDescriptionOkPayload = {
+      title: context.title,
+      description: aiPayload.description,
+    };
     console.info(
       `${LOG} [Tool Success] requestId=${requestId} descriptionLen=${data.description.length} totalMs=${Date.now() - serviceStart}`,
     );

@@ -13,6 +13,7 @@ export function GenerateDescriptionPage() {
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [productTitle, setProductTitle] = useState<string | null>(null);
   const [description, setDescription] = useState<string | null>(null);
 
   const handleGenerate = async () => {
@@ -29,6 +30,7 @@ export function GenerateDescriptionPage() {
 
     setIsSubmitting(true);
     setErrorText(null);
+    setProductTitle(null);
     setDescription(null);
 
     const query = typeof window !== "undefined" ? window.location.search : "";
@@ -56,8 +58,10 @@ export function GenerateDescriptionPage() {
       if (
         payload.success === true &&
         payload.response &&
-        typeof payload.response.description === "string"
+        typeof payload.response.description === "string" &&
+        typeof payload.response.title === "string"
       ) {
+        setProductTitle(payload.response.title);
         setDescription(payload.response.description);
         shopify.toast.show("描述生成成功");
       } else {
@@ -127,20 +131,34 @@ export function GenerateDescriptionPage() {
 
                 {description ? (
                   <s-section heading="生成结果">
-                    <div
-                      style={{
-                        padding: "0.75rem 0.85rem",
-                        borderRadius: "10px",
-                        background: "rgba(44, 110, 203, 0.06)",
-                        border: "1px solid rgba(44, 110, 203, 0.2)",
-                        fontSize: "0.875rem",
-                        color: "#303030",
-                        whiteSpace: "pre-wrap",
-                        lineHeight: 1.55,
-                      }}
-                    >
-                      {description}
-                    </div>
+                    <s-stack direction="block" gap="small">
+                      <div
+                        style={{
+                          fontSize: "0.875rem",
+                          color: "#303030",
+                          lineHeight: 1.55,
+                        }}
+                      >
+                        商品名：
+                        {productTitle?.trim()
+                          ? productTitle
+                          : "Unknown Product"}
+                      </div>
+                      <div
+                        style={{
+                          padding: "0.75rem 0.85rem",
+                          borderRadius: "10px",
+                          background: "rgba(44, 110, 203, 0.06)",
+                          border: "1px solid rgba(44, 110, 203, 0.2)",
+                          fontSize: "0.875rem",
+                          color: "#303030",
+                          whiteSpace: "pre-wrap",
+                          lineHeight: 1.55,
+                        }}
+                      >
+                        {description}
+                      </div>
+                    </s-stack>
                   </s-section>
                 ) : null}
 
@@ -157,6 +175,7 @@ export function GenerateDescriptionPage() {
                     type="button"
                     variant="secondary"
                     onClick={() => {
+                      setProductTitle(null);
                       setDescription(null);
                       setErrorText(null);
                     }}

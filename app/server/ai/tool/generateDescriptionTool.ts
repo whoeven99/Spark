@@ -58,6 +58,7 @@ export function createGenerateProductDescriptionTool(
         );
         return JSON.stringify({
           ok: true,
+          title: result.data.title,
           description: result.data.description,
         });
       } catch (e) {

@@ -135,12 +135,17 @@ export async function executeGenerateDescriptionRequest(params: {
       }),
     );
 
+    console.log("[GenerateDescription] product title:", result.data.title);
+
     return jsonBody(
       {
         success: true,
         errorCode: 0,
         errorMsg: "",
-        response: { description: result.data.description },
+        response: {
+          title: result.data.title,
+          description: result.data.description,
+        },
       },
       200,
     );

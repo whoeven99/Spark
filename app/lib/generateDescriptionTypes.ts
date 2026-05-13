@@ -4,6 +4,8 @@ export type GenerateDescriptionApiSuccessBody = {
   errorCode: number;
   errorMsg: string;
   response: {
+    /** 商品在 Shopify 中的 title（来自 Admin GraphQL，非模型生成）。 */
+    title: string;
     description: string;
   };
 };
