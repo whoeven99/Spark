@@ -7,4 +7,6 @@ export type ChatMessage =
       role: "assistant";
       content: string;
       translationTaskForm?: TranslationTaskFormPayload;
+      /** 为 true 时在气泡内渲染「商品描述生成」交互卡片（走 /api/generate-description）。 */
+      generateDescriptionCard?: boolean;
     };

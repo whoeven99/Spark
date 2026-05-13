@@ -1,0 +1,20 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "17fa704a57a5ac567f6a938bfaad9110"
+application_url = "https://example.com"
+embedded = true
+name = "spark_zz"
+
+[build]
+automatically_update_urls_on_dev = true
+include_config_on_deploy = true
+
+[webhooks] 
+api_version = "2026-07"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_orders,write_products,read_translations,write_translations"
+
+[auth]
+redirect_urls = [ "https://example.com/api/auth" ]

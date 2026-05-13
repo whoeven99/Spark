@@ -5,7 +5,12 @@ import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPa
 import { ChatMessages } from "../component/chat/ChatMessages";
 import { ChatInput } from "../component/chat/ChatInput";
 import { ChatPageCredentialsChrome } from "./chat/ChatPageCredentialsChrome";
-import { INITIAL_ASSISTANT_MESSAGE, quickPrompts, quickPromptTones } from "./chat/chatPageConstants";
+import {
+  GENERATE_DESCRIPTION_QUICK_PROMPT,
+  INITIAL_ASSISTANT_MESSAGE,
+  quickPrompts,
+  quickPromptTones,
+} from "./chat/chatPageConstants";
 import { asideCardStyle } from "./chat/chatPageStyles";
 
 export function ChatPage() {
@@ -18,6 +23,20 @@ export function ChatPage() {
     },
   ]);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  const openGenerateDescriptionCard = () => {
+    if (isSending) return;
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: GENERATE_DESCRIPTION_QUICK_PROMPT },
+      {
+        role: "assistant",
+        content:
+          "已为你打开「商品描述生成」表单。请填写商品 ID（数字或 gid://shopify/Product/…）与目标语言（如 zh-CN、en），系统将基于 Shopify 商品数据生成结构化营销描述。",
+        generateDescriptionCard: true,
+      },
+    ]);
+  };
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -138,7 +157,11 @@ export function ChatPage() {
                     type="button"
                     tone={quickPromptTones[index]}
                     variant="secondary"
-                    onClick={() => sendMessage(prompt)}
+                    onClick={() =>
+                      prompt === GENERATE_DESCRIPTION_QUICK_PROMPT
+                        ? openGenerateDescriptionCard()
+                        : sendMessage(prompt)
+                    }
                     {...(isSending ? { disabled: true } : {})}
                   >
                     {prompt}

@@ -1,8 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { HumanMessage } from "@langchain/core/messages";
 import { authenticate } from "../shopify.server";
-import { createShopifyShopInfoTools } from "./ai/tools";
-import { translationTaskFormTool } from "./ai/tool/translationTaskFormTool";
+import { buildChatAgentExtraTools } from "./ai/chatAgentTools.server";
 import { invokeChatAgent } from "./ai/agent";
 import { parseClientChatMessages } from "./chatPayload.server";
 
@@ -42,10 +41,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     const { admin } = await authenticate.admin(request);
-    const shopInfoTools = createShopifyShopInfoTools(admin);
     const { reply, translationTaskForm } = await invokeChatAgent({
       messages: agentMessages,
-      extraTools: [...shopInfoTools, translationTaskFormTool],
+      extraTools: buildChatAgentExtraTools(admin),
     });
     return Response.json({
       reply,
