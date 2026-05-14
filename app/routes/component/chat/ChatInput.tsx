@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 type ChatInputProps = {
   onMessageSend: (message: string) => void;
@@ -8,6 +9,7 @@ type ChatInputProps = {
 const CHAT_INPUT_ID = "spark-chat-input";
 
 export function ChatInput({ onMessageSend, isSending }: ChatInputProps) {
+  const { t } = useTranslation();
   const [input, setInput] = useState("");
   const handleSend = useCallback(() => {
     const content = input.trim();
@@ -52,13 +54,13 @@ export function ChatInput({ onMessageSend, isSending }: ChatInputProps) {
         <div style={{ flex: 1 }}>
           <s-text-field
             id={CHAT_INPUT_ID}
-            label="输入内容"
+            label={t("chat.inputLabel")}
             value={input}
             onInput={(event) => {
               const target = event.target as HTMLInputElement;
               setInput(target.value);
             }}
-            placeholder="请输入你想问的问题..."
+            placeholder={t("chat.inputPlaceholder")}
             autocomplete="off"
           />
         </div>
@@ -67,7 +69,7 @@ export function ChatInput({ onMessageSend, isSending }: ChatInputProps) {
           variant="primary"
           {...(isSending ? { loading: true } : {})}
         >
-          发送
+          {t("common.send")}
         </s-button>
       </s-stack>
     </form>

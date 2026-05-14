@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
+import { useTranslation } from "react-i18next";
 import { useGenerateDescription } from "../../../hooks/useGenerateDescription";
 import type { GenerateDescriptionCardPayload } from "../../../lib/chatMessage";
 import type { ProductSelectorSelection } from "../../../lib/productSearchTypes";
@@ -17,6 +18,7 @@ export function GenerateDescriptionChatCard({
   initialResult,
 }: Props) {
   const shopify = useAppBridge();
+  const { t } = useTranslation();
   const [selectedProduct, setSelectedProduct] =
     useState<ProductSelectorSelection | null>(null);
   const [productId, setProductId] = useState(initialResult?.productId ?? "");
@@ -115,7 +117,7 @@ export function GenerateDescriptionChatCard({
                 color: "#111213",
               }}
             >
-              商品描述生成
+              {t("generate.sectionTitle")}
             </div>
             <div
               style={{
@@ -125,7 +127,7 @@ export function GenerateDescriptionChatCard({
                 lineHeight: 1.45,
               }}
             >
-              基于当前店铺在 Shopify 中的商品数据生成营销描述。请搜索并选择商品；语言默认与店铺主语言一致，可在下拉中切换。
+              {t("generate.intro")}
             </div>
           </div>
 
@@ -153,11 +155,11 @@ export function GenerateDescriptionChatCard({
                       userSelect: "none",
                     }}
                   >
-                    高级：手动输入商品 ID
+                    {t("generate.advancedManualProductId")}
                   </summary>
                   <div style={{ marginTop: "0.5rem" }}>
                     <s-text-field
-                      label="商品 ID"
+                      label={t("generate.productIdLabel")}
                       value={productId}
                       onChange={(e) => setProductId(e.currentTarget.value)}
                       autocomplete="off"
@@ -177,7 +179,7 @@ export function GenerateDescriptionChatCard({
                       color: "#444",
                     }}
                   >
-                    目标语言
+                    {t("generate.targetLanguage")}
                   </label>
                   <select
                     id="generate-description-lang-card"
@@ -198,7 +200,7 @@ export function GenerateDescriptionChatCard({
                     }}
                   >
                     {localesLoading && localeOptions.length === 0 ? (
-                      <option value="">加载语言列表…</option>
+                      <option value="">{t("common.loadingLanguage")}</option>
                     ) : null}
                     {localeOptions.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -215,7 +217,7 @@ export function GenerateDescriptionChatCard({
                         lineHeight: 1.4,
                       }}
                     >
-                      使用内置语言列表；授权 read_locales 并重新安装后可同步店铺语言。
+                      {t("generate.fallbackLocalesHint")}
                     </div>
                   ) : null}
                 </div>
@@ -275,10 +277,10 @@ export function GenerateDescriptionChatCard({
                   {...(isSubmitting || isSaving || localesLoading || saveConfirmOpen ? { disabled: true } : {})}
                 >
                   {isSubmitting
-                    ? "正在生成…"
+                    ? t("generate.generating")
                     : localesLoading
-                      ? "加载语言…"
-                      : "生成描述"}
+                      ? t("common.loadingLanguage")
+                      : t("generate.generateAction")}
                 </s-button>
               </div>
             </s-stack>

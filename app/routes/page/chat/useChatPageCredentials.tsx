@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   adProviders,
   logisticsProviders,
@@ -10,6 +11,7 @@ type ShopifyToast = {
 };
 
 export function useChatPageCredentials(shopify: ShopifyToast) {
+  const { t } = useTranslation();
   const [googleClientId, setGoogleClientId] = useState("");
   const [googleClientSecret, setGoogleClientSecret] = useState("");
   const [googleDeveloperTokenMasked, setGoogleDeveloperTokenMasked] = useState("");
@@ -136,28 +138,33 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
       });
   }, []);
 
-  const handleAuthorizeProvider = (provider: ProviderItem, category: string) => {
-    if (category === "广告" && provider.id === "google") {
+  const handleAuthorizeProvider = (provider: ProviderItem, category: "ads" | "logistics") => {
+    if (category === "ads" && provider.id === "google") {
       setIsGoogleAuthModalOpen(true);
       return;
     }
-    if (category === "广告" && provider.id === "tiktok") {
+    if (category === "ads" && provider.id === "tiktok") {
       setIsTiktokAuthModalOpen(true);
       return;
     }
-    if (category === "广告" && provider.id === "microsoft") {
+    if (category === "ads" && provider.id === "microsoft") {
       setIsMicrosoftAuthModalOpen(true);
       return;
     }
-    if (provider.id === "sf" && category === "物流") {
+    if (provider.id === "sf" && category === "logistics") {
       setIsSfAuthModalOpen(true);
       return;
     }
-    if (provider.id === "fedex" && category === "物流") {
+    if (provider.id === "fedex" && category === "logistics") {
       setIsFedexAuthModalOpen(true);
       return;
     }
-    shopify.toast.show(`${provider.name} ${category}授权流程待接入（OAuth）`);
+    shopify.toast.show(
+      t("credentials.oauthPending", {
+        provider: t(provider.name),
+        category: category === "ads" ? t("credentials.categoryAds") : t("credentials.categoryLogistics"),
+      }),
+    );
   };
 
   const handleSaveGoogleConfig = async () => {
@@ -166,7 +173,7 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
     const developerToken = googleDeveloperToken.trim();
     const customerId = googleCustomerId.trim();
     if (!clientId || !clientSecret || !developerToken || !customerId) {
-      shopify.toast.show("请完整填写 Google Ads 授权信息");
+      shopify.toast.show(t("credentials.googleRequireAll"));
       return;
     }
 
@@ -188,7 +195,7 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
         customerId?: string;
       };
       if (!response.ok || !data.ok) {
-        shopify.toast.show(data.error || `保存失败（${response.status}）`);
+        shopify.toast.show(data.error || t("credentials.saveFailed", { status: response.status }));
         return;
       }
 
@@ -201,9 +208,9 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
       setGoogleDeveloperToken(data.developerTokenMasked ?? "");
       setGoogleCustomerId(data.customerId ?? customerId);
       setIsGoogleAuthModalOpen(false);
-      shopify.toast.show("Google Ads 授权信息已保存");
+      shopify.toast.show(t("credentials.googleSaveOk"));
     } catch {
-      shopify.toast.show("保存 Google Ads 授权信息失败，请稍后重试");
+      shopify.toast.show(t("credentials.googleSaveFail"));
     } finally {
       setIsSavingGoogleConfig(false);
     }
@@ -214,7 +221,7 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
     const appSecret = tiktokAppSecret.trim();
     const advertiserId = tiktokAdvertiserId.trim();
     if (!appId || !appSecret || !advertiserId) {
-      shopify.toast.show("请完整填写 TikTok Ads 授权信息");
+      shopify.toast.show(t("credentials.tiktokRequireAll"));
       return;
     }
 
@@ -233,7 +240,7 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
         appIdMasked?: string;
       };
       if (!response.ok || !data.ok) {
-        shopify.toast.show(data.error || `保存失败（${response.status}）`);
+        shopify.toast.show(data.error || t("credentials.saveFailed", { status: response.status }));
         return;
       }
 
@@ -241,9 +248,9 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
       setTiktokAppIdMasked(data.appIdMasked ?? "");
       setTiktokAppSecret("");
       setIsTiktokAuthModalOpen(false);
-      shopify.toast.show("TikTok Ads 授权信息已保存");
+      shopify.toast.show(t("credentials.tiktokSaveOk"));
     } catch {
-      shopify.toast.show("保存 TikTok Ads 授权信息失败，请稍后重试");
+      shopify.toast.show(t("credentials.tiktokSaveFail"));
     } finally {
       setIsSavingTiktokConfig(false);
     }
@@ -255,7 +262,7 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
     const developerToken = microsoftDeveloperToken.trim();
     const customerId = microsoftCustomerId.trim();
     if (!clientId || !clientSecret || !developerToken || !customerId) {
-      shopify.toast.show("请完整填写 Microsoft Ads 授权信息");
+      shopify.toast.show(t("credentials.microsoftRequireAll"));
       return;
     }
 
@@ -277,7 +284,7 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
         customerId?: string;
       };
       if (!response.ok || !data.ok) {
-        shopify.toast.show(data.error || `保存失败（${response.status}）`);
+        shopify.toast.show(data.error || t("credentials.saveFailed", { status: response.status }));
         return;
       }
 
@@ -290,9 +297,9 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
       setMicrosoftDeveloperToken(data.developerTokenMasked ?? "");
       setMicrosoftCustomerId(data.customerId ?? customerId);
       setIsMicrosoftAuthModalOpen(false);
-      shopify.toast.show("Microsoft Ads 授权信息已保存");
+      shopify.toast.show(t("credentials.microsoftSaveOk"));
     } catch {
-      shopify.toast.show("保存 Microsoft Ads 授权信息失败，请稍后重试");
+      shopify.toast.show(t("credentials.microsoftSaveFail"));
     } finally {
       setIsSavingMicrosoftConfig(false);
     }
@@ -304,7 +311,7 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
     const monthlyAccount = sfMonthlyAccount.trim();
 
     if (!customerCode || !checkWord) {
-      shopify.toast.show("请填写顺丰顾客编码和校验码");
+      shopify.toast.show(t("credentials.sfRequireAll"));
       return;
     }
 
@@ -323,7 +330,7 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
         customerCodeMasked?: string;
       };
       if (!response.ok || !data.ok) {
-        shopify.toast.show(data.error || `保存失败（${response.status}）`);
+        shopify.toast.show(data.error || t("credentials.saveFailed", { status: response.status }));
         return;
       }
 
@@ -331,9 +338,9 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
       setSfCustomerCodeMasked(data.customerCodeMasked ?? "");
       setSfCheckWord("");
       setIsSfAuthModalOpen(false);
-      shopify.toast.show("顺丰接口配置已保存");
+      shopify.toast.show(t("credentials.sfSaveOk"));
     } catch {
-      shopify.toast.show("保存顺丰接口配置失败，请稍后重试");
+      shopify.toast.show(t("credentials.sfSaveFail"));
     } finally {
       setIsSavingSfConfig(false);
     }
@@ -346,7 +353,7 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
     const meterNumber = fedexMeterNumber.trim();
 
     if (!apiKey || !secretKey || !accountNumber) {
-      shopify.toast.show("请填写 FedEx 的 API Key、Secret Key、Account Number");
+      shopify.toast.show(t("credentials.fedexRequireAll"));
       return;
     }
 
@@ -365,7 +372,7 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
         accountNumberMasked?: string;
       };
       if (!response.ok || !data.ok) {
-        shopify.toast.show(data.error || `保存失败（${response.status}）`);
+        shopify.toast.show(data.error || t("credentials.saveFailed", { status: response.status }));
         return;
       }
 
@@ -373,9 +380,9 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
       setFedexAccountNumberMasked(data.accountNumberMasked ?? "");
       setFedexSecretKey("");
       setIsFedexAuthModalOpen(false);
-      shopify.toast.show("FedEx 授权信息已保存");
+      shopify.toast.show(t("credentials.fedexSaveOk"));
     } catch {
-      shopify.toast.show("保存 FedEx 授权信息失败，请稍后重试");
+      shopify.toast.show(t("credentials.fedexSaveFail"));
     } finally {
       setIsSavingFedexConfig(false);
     }
@@ -384,7 +391,7 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
   const handleSubmitSuggestion = async () => {
     const content = suggestionText.trim();
     if (!content) {
-      shopify.toast.show("内容不能为空");
+      shopify.toast.show(t("credentials.suggestionEmpty"));
       return;
     }
 
@@ -402,26 +409,26 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
         error?: string;
       };
       if (!response.ok || !data.ok) {
-        shopify.toast.show(data.error || `提交失败（${response.status}）`);
+        shopify.toast.show(data.error || t("credentials.suggestionSubmitFail", { status: response.status }));
         return;
       }
       setSuggestionText("");
       setIsSuggestionModalOpen(false);
-      shopify.toast.show(data.message || "提交成功，感谢您的建议");
+      shopify.toast.show(data.message || t("credentials.suggestionSubmitOk"));
     } catch {
-      shopify.toast.show("提交建议失败，请稍后重试");
+      shopify.toast.show(t("credentials.suggestionSubmitCatch"));
     } finally {
       setIsSubmittingSuggestion(false);
     }
   };
 
-  const renderProviderRows = (providers: ProviderItem[], category: string) => {
+  const renderProviderRows = (providers: ProviderItem[], category: "ads" | "logistics") => {
     const isConfigured = (providerId: string) => {
-      if (category === "物流" && providerId === "sf") return sfConfigured;
-      if (category === "物流" && providerId === "fedex") return fedexConfigured;
-      if (category === "广告" && providerId === "google") return googleConfigured;
-      if (category === "广告" && providerId === "tiktok") return tiktokConfigured;
-      if (category === "广告" && providerId === "microsoft") return microsoftConfigured;
+      if (category === "logistics" && providerId === "sf") return sfConfigured;
+      if (category === "logistics" && providerId === "fedex") return fedexConfigured;
+      if (category === "ads" && providerId === "google") return googleConfigured;
+      if (category === "ads" && providerId === "tiktok") return tiktokConfigured;
+      if (category === "ads" && providerId === "microsoft") return microsoftConfigured;
       return false;
     };
 
@@ -447,7 +454,7 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
                 wordBreak: "break-word",
               }}
             >
-              {provider.name}
+              {t(provider.name)}
             </div>
             <div
               style={{
@@ -459,7 +466,7 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
             >
               <span style={{ whiteSpace: "nowrap" }}>
                 <s-badge tone={isConfigured(provider.id) ? "success" : "critical"}>
-                  {isConfigured(provider.id) ? "已配置" : "未授权"}
+                  {isConfigured(provider.id) ? t("credentials.configured") : t("credentials.unauthorized")}
                 </s-badge>
               </span>
               <s-button
@@ -467,7 +474,7 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
                 variant="secondary"
                 onClick={() => handleAuthorizeProvider(provider, category)}
               >
-                去授权
+                {t("credentials.authorizeNow")}
               </s-button>
             </div>
           </div>

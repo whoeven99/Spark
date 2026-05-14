@@ -1,4 +1,5 @@
 import { useMemo, useState, type CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import type { ProductSelectorSelection } from "../../../lib/productSearchTypes";
 import { useProductSearch } from "../../../hooks/useProductSearch";
 
@@ -48,6 +49,7 @@ const emptyBoxStyle: CSSProperties = {
 };
 
 export function ProductSelector(props: ProductSelectorProps) {
+  const { t } = useTranslation();
   const { locationSearch, embedded = false } = props;
   const [keyword, setKeyword] = useState("");
   const { items, isLoading, errorText: searchError } = useProductSearch({
@@ -92,11 +94,11 @@ export function ProductSelector(props: ProductSelectorProps) {
   return (
     <s-stack direction="block" gap="small">
       <s-text-field
-        label="搜索商品（标题）"
+        label={t("productSelector.searchLabel")}
         value={keyword}
         onChange={(e) => setKeyword(e.currentTarget.value)}
         autocomplete="off"
-        placeholder="输入关键词，例如 shoe"
+        placeholder={t("productSelector.searchPlaceholder")}
       />
 
       {isLoading ? (
@@ -107,14 +109,14 @@ export function ProductSelector(props: ProductSelectorProps) {
             padding: "0.25rem 0",
           }}
         >
-          搜索中…
+          {t("productSelector.searching")}
         </div>
       ) : null}
 
       {searchError ? <div style={errorBoxStyle}>{searchError}</div> : null}
 
       {!isLoading && !searchError && kw && items.length === 0 ? (
-        <div style={emptyBoxStyle}>未找到匹配商品，请调整关键词</div>
+        <div style={emptyBoxStyle}>{t("productSelector.empty")}</div>
       ) : null}
 
       {items.length > 0 ? (
@@ -169,7 +171,7 @@ export function ProductSelector(props: ProductSelectorProps) {
                     checked={active}
                     onClick={(e) => e.stopPropagation()}
                     onChange={() => toggleMultiple(row)}
-                    aria-label={`选择 ${row.title}`}
+                    aria-label={t("productSelector.selectAria", { title: row.title })}
                   />
                 ) : (
                   <input
@@ -177,7 +179,7 @@ export function ProductSelector(props: ProductSelectorProps) {
                     checked={active}
                     readOnly
                     tabIndex={-1}
-                    aria-label={`选择 ${row.title}`}
+                    aria-label={t("productSelector.selectAria", { title: row.title })}
                     style={{ pointerEvents: "none" }}
                   />
                 )}

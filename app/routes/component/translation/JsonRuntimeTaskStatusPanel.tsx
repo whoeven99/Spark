@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -156,7 +157,7 @@ function lookupSourceValueFromRuntimeFailedJson(
     const r = typeof row.reason === "string" ? row.reason : "";
     const sv = row.sourceValue;
     if (typeof sv !== "string" || sv.length === 0) continue;
-    const reasonOk = r === reason || reason === "(无 reason)";
+    const reasonOk = r === reason || reason === "(no reason)";
     const pathOk =
       sk === fullPath ||
       p === pointer ||
@@ -279,12 +280,6 @@ function MetricTile(props: { label: string; value: string }) {
   );
 }
 
-const BLOB_LABELS: Record<"input" | "output" | "report", string> = {
-  input: "输入（input）",
-  output: "输出（output）",
-  report: "报告（report）",
-};
-
 const MD_PREVIEW_MODAL_OVERLAY_STYLE: CSSProperties = {
   position: "fixed",
   inset: 0,
@@ -314,6 +309,7 @@ const DETAIL_POLL_INTERVAL_SEC = 4;
 const LIST_POLL_INTERVAL_SEC = 25;
 
 export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
+  const { t, i18n } = useTranslation();
   const [taskId, setTaskId] = useState("");
   const [includeBlobPreview, setIncludeBlobPreview] = useState(false);
   const [maxPreviewBytes, setMaxPreviewBytes] = useState(8192);
@@ -334,7 +330,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
   const [mdPreviewLoading, setMdPreviewLoading] = useState(false);
   const [mdPreviewText, setMdPreviewText] = useState("");
   const [mdPreviewTruncated, setMdPreviewTruncated] = useState(false);
-  const [mdPreviewTitle, setMdPreviewTitle] = useState("Markdown 预览");
+  const [mdPreviewTitle, setMdPreviewTitle] = useState("");
 
   const shopName = defaultShopName.trim();
 
@@ -359,7 +355,10 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
       if (!response.ok || envelope.success === false) {
         if (!silent) {
           setTaskList([]);
-          setListErrorText(envelope.errorMsg || `加载列表失败（HTTP ${response.status}）`);
+          setListErrorText(
+            envelope.errorMsg ||
+              t("translationRuntime.listLoadFailed", { status: response.status }),
+          );
         }
         return;
       }
@@ -369,7 +368,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
     } catch {
       if (!silent) {
         setTaskList([]);
-        setListErrorText("加载任务列表失败，请稍后重试");
+        setListErrorText(t("translationRuntime.listLoadFailedRetry"));
       }
     } finally {
       if (!silent) setListLoading(false);
@@ -419,7 +418,9 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
 
         if (!response.ok || envelope.success === false) {
           if (!silent) setPayload(null);
-          setErrorText(envelope.errorMsg || `请求失败（HTTP ${response.status}）`);
+          setErrorText(
+            envelope.errorMsg || t("translationRuntime.requestFailed", { status: response.status }),
+          );
           return;
         }
 
@@ -427,7 +428,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
         setErrorText("");
       } catch {
         if (!silent) setPayload(null);
-        setErrorText("网络或服务异常，请稍后重试");
+        setErrorText(t("translationRuntime.serviceErrorRetry"));
       } finally {
         if (!silent) setLoading(false);
       }
@@ -440,7 +441,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
     if (!tid) return;
     setMdPreviewLoading(true);
     try {
-      setMdPreviewTitle("整包翻译报告");
+      setMdPreviewTitle(t("translationRuntime.reportTitle"));
       const params = new URLSearchParams();
       params.set("taskId", tid);
       if (shopName) params.set("shopName", shopName);
@@ -453,18 +454,20 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
       );
       const envelope = (await response.json().catch(() => ({}))) as JsonRuntimeTaskDetailEnvelope;
       if (!response.ok || envelope.success === false) {
-        setMdPreviewText(envelope.errorMsg || `加载失败（HTTP ${response.status}）`);
+        setMdPreviewText(
+          envelope.errorMsg || t("translationRuntime.loadFailedStatus", { status: response.status }),
+        );
         setMdPreviewTruncated(false);
         setMdPreviewOpen(true);
         return;
       }
       const snap = envelope.response?.blobs?.translationReportMd;
       const text = typeof snap?.preview === "string" ? snap.preview : "";
-      setMdPreviewText(text.length > 0 ? text : "（文件为空或 Blob 中尚无内容）");
+      setMdPreviewText(text.length > 0 ? text : t("translationRuntime.fileEmptyOrNoBlobContent"));
       setMdPreviewTruncated(snap?.previewTruncated === true);
       setMdPreviewOpen(true);
     } catch {
-      setMdPreviewText("加载失败，请稍后重试");
+      setMdPreviewText(t("translationRuntime.loadFailedRetry"));
       setMdPreviewTruncated(false);
       setMdPreviewOpen(true);
     } finally {
@@ -477,7 +480,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
     if (!tid) return;
     setMdPreviewLoading(true);
     try {
-      setMdPreviewTitle("翻译质量检测报告");
+      setMdPreviewTitle(t("translationRuntime.qualityReportTitle"));
       const params = new URLSearchParams();
       params.set("taskId", tid);
       if (shopName) params.set("shopName", shopName);
@@ -490,18 +493,20 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
       );
       const envelope = (await response.json().catch(() => ({}))) as JsonRuntimeTaskDetailEnvelope;
       if (!response.ok || envelope.success === false) {
-        setMdPreviewText(envelope.errorMsg || `加载失败（HTTP ${response.status}）`);
+        setMdPreviewText(
+          envelope.errorMsg || t("translationRuntime.loadFailedStatus", { status: response.status }),
+        );
         setMdPreviewTruncated(false);
         setMdPreviewOpen(true);
         return;
       }
       const snap = envelope.response?.blobs?.qualityReportMd;
       const text = typeof snap?.preview === "string" ? snap.preview : "";
-      setMdPreviewText(text.length > 0 ? text : "（文件为空或 Blob 中尚无内容）");
+      setMdPreviewText(text.length > 0 ? text : t("translationRuntime.fileEmptyOrNoBlobContent"));
       setMdPreviewTruncated(snap?.previewTruncated === true);
       setMdPreviewOpen(true);
     } catch {
-      setMdPreviewText("加载失败，请稍后重试");
+      setMdPreviewText(t("translationRuntime.loadFailedRetry"));
       setMdPreviewTruncated(false);
       setMdPreviewOpen(true);
     } finally {
@@ -606,8 +611,13 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
     const entryDetail: ReactNode =
       entryTotal !== null ? (
         <>
-          已完成 <strong>{entryDone ?? 0}</strong> / <strong>{entryTotal}</strong> 个<strong>文本节点</strong>
-          {failForDetail !== null && failForDetail > 0 ? ` · 失败 ${failForDetail}` : ""}
+          {t("translationRuntime.completedTextNodes", {
+            done: entryDone ?? 0,
+            total: entryTotal,
+          })}
+          {failForDetail !== null && failForDetail > 0
+            ? ` · ${t("translationRuntime.failCountShort", { count: failForDetail })}`
+            : ""}
         </>
       ) : (
         ""
@@ -634,9 +644,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
 
     const chunkDetail: ReactNode =
       chunkTotal !== null ? (
-        <>
-          已完成 <strong>{chunkDone ?? 0}</strong> / <strong>{chunkTotal}</strong> 个<strong>分块文件</strong>
-        </>
+        <>{t("translationRuntime.completedChunkFiles", { done: chunkDone ?? 0, total: chunkTotal })}</>
       ) : (
         ""
       );
@@ -647,18 +655,17 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
     if (!hasAnyBar) {
       noBarHint = (
         <span style={{ color: "#6d7175", fontSize: "13px", lineHeight: 1.5 }}>
-          当前无法计算百分比：Redis meta 与 Cosmos metrics 中均无条目总数（totalCountThisBlob /
-          totalCount），且也无分块总数（runtimeChunksTotal）。
+          {t("translationRuntime.noPercentReason")}
           {doneSize !== null ? (
             <>
               {" "}
-              实测 Redis <strong>:done</strong> 集合含 <strong>{doneSize}</strong> 条路径键；
+              {t("translationRuntime.redisDoneContains", { count: doneSize })}
             </>
           ) : null}
           {failMapKeyCount > 0 ? (
             <>
               {" "}
-              <strong>:fail</strong> Hash 含 <strong>{failMapKeyCount}</strong> 个字段。
+              {t("translationRuntime.redisFailContains", { count: failMapKeyCount })}
             </>
           ) : null}
         </span>
@@ -680,7 +687,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
       hasAnyBar,
       noBarHint,
     };
-  }, [payload]);
+  }, [payload, t]);
 
   const meta = progressView.meta ?? payload?.redisRuntime?.meta;
   const metaEntries = useMemo(() => sortedEntries(meta), [meta]);
@@ -707,24 +714,24 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
       const key = `r:${path}\t${reason}`;
       seen.add(key);
       const sourceText = lookupSourceValueFromRuntimeFailedJson(fd, path, reason);
-      rows.push({ source: "Redis failMap", path, reason, sourceText });
+      rows.push({ source: t("translationRuntime.sourceRedisFailMap"), path, reason, sourceText });
     }
     const rep = payload?.runtimeReportFailures;
     if (Array.isArray(rep)) {
       for (const item of rep) {
         const path =
-          typeof item?.path === "string" ? item.path : "(无 path)";
+          typeof item?.path === "string" ? item.path : "(no path)";
         const reason =
-          typeof item?.reason === "string" ? item.reason : "(无 reason)";
+          typeof item?.reason === "string" ? item.reason : "(no reason)";
         const key = `p:${path}\t${reason}`;
         if (seen.has(key)) continue;
         seen.add(key);
         const sourceText = lookupSourceValueFromRuntimeFailedJson(fd, path, reason);
-        rows.push({ source: "Report failures[]", path, reason, sourceText });
+        rows.push({ source: t("translationRuntime.sourceReportFailures"), path, reason, sourceText });
       }
     }
     return rows;
-  }, [failEntries, payload?.runtimeReportFailures, payload?.runtimeFailedJson]);
+  }, [failEntries, payload?.runtimeReportFailures, payload?.runtimeFailedJson, t]);
 
   const effectiveFailCount = useMemo(() => {
     const m =
@@ -750,6 +757,14 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
 
   const trBlob = payload?.blobs?.translationReportMd;
   const qrBlob = payload?.blobs?.qualityReportMd;
+  const blobLabels = useMemo(
+    () => ({
+      input: t("translationRuntime.blobInput"),
+      output: t("translationRuntime.blobOutput"),
+      report: t("translationRuntime.blobReport"),
+    }),
+    [t],
+  );
 
   return (
     <>
@@ -758,17 +773,16 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
         <s-stack direction="block" gap="small">
           <s-paragraph>
             <span style={{ color: "#42474c", lineHeight: 1.5 }}>
-              任务列表来自本应用 Cosmos（与创建任务同一表），约每 {LIST_POLL_INTERVAL_SEC}{" "}
-              秒静默刷新列表状态（页面可见时）。任务详情<strong>默认由服务端转发至 Java AgentTask</strong>
-              （路径 translate/v3/jsonRuntimeTaskDetail）；部署环境若设置变量 JSON_RUNTIME_TASK_DETAIL_SOURCE=local 则改为 Spark 本机聚合 Cosmos/Redis/Blob。选中任务后默认开启自动刷新（约每{" "}
-              {DETAIL_POLL_INTERVAL_SEC}
-              秒），按钮显示倒计时；页面不可见时暂停倒计时与请求。
+              {t("translationRuntime.panelIntro", {
+                listSec: LIST_POLL_INTERVAL_SEC,
+                detailSec: DETAIL_POLL_INTERVAL_SEC,
+              })}
             </span>
           </s-paragraph>
         </s-stack>
       </s-box>
 
-      <s-section heading="当前店铺的 JSON Runtime 任务">
+      <s-section heading={t("translationRuntime.currentShopTasksHeading")}>
         <s-stack direction="inline" gap="small" alignItems="center">
           <s-button
             type="button"
@@ -776,16 +790,18 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
             onClick={() => void fetchTaskList()}
             {...(listLoading ? { disabled: true } : {})}
           >
-            {listLoading ? "刷新列表…" : "刷新列表"}
+            {listLoading ? t("translationRuntime.refreshListLoading") : t("translationRuntime.refreshList")}
           </s-button>
           {!listLoading && taskList.length > 0 ? (
-            <span style={{ fontSize: "13px", color: "#6d7175" }}>共 {taskList.length} 条</span>
+            <span style={{ fontSize: "13px", color: "#6d7175" }}>
+              {t("translationRuntime.totalTasks", { count: taskList.length })}
+            </span>
           ) : null}
         </s-stack>
         {listErrorText ? (
           <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
             <s-paragraph>
-              <span style={{ color: "#bf0711" }}>列表错误：{listErrorText}</span>
+              <span style={{ color: "#bf0711" }}>{t("translationRuntime.listErrorPrefix")}：{listErrorText}</span>
             </s-paragraph>
           </s-box>
         ) : null}
@@ -793,7 +809,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
           <s-box padding="large" borderWidth="base" borderRadius="base" background="subdued">
             <s-paragraph>
               <span style={{ color: "#6d7175" }}>
-                该店铺在 Cosmos（translation_jobs）中暂无 taskType 为 spark（或历史 json-runtime）的任务记录。
+                {t("translationRuntime.noTaskRecords")}
               </span>
             </s-paragraph>
           </s-box>
@@ -814,7 +830,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                   <s-stack direction="block" gap="small">
                     <s-stack direction="inline" gap="small" alignItems="center">
                       <s-badge tone={listRowBadgeTone(row.statusText)}>
-                        {formatTranslateTaskV3CosmosStatusText(row.statusText)}
+                        {formatTranslateTaskV3CosmosStatusText(row.statusText, t, i18n)}
                       </s-badge>
                       <span
                         style={{
@@ -828,7 +844,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                         }}
                         title={rid || undefined}
                       >
-                        {rid || "（无 id）"}
+                        {rid || t("translationRuntime.noId")}
                       </span>
                       <s-button
                         type="button"
@@ -836,7 +852,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                         onClick={() => handleSelectTask(rid)}
                         disabled={!rid}
                       >
-                        {active ? "查看中" : "查看详情"}
+                        {active ? t("translationRuntime.viewing") : t("translationRuntime.viewDetail")}
                       </s-button>
                     </s-stack>
                     <div
@@ -849,18 +865,18 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                       }}
                     >
                       <span>
-                        <span style={{ color: "#8c9196" }}>语言</span>{" "}
+                        <span style={{ color: "#8c9196" }}>{t("translationRuntime.langLabel")}</span>{" "}
                         <strong style={{ color: "#42474c" }}>
                           {row.source ?? "—"} → {row.target ?? "—"}
                         </strong>
                       </span>
                       <span>
-                        <span style={{ color: "#8c9196" }}>更新</span>{" "}
+                        <span style={{ color: "#8c9196" }}>{t("translationRuntime.updatedAt")}</span>{" "}
                         <strong style={{ color: "#42474c" }}>{row.updatedAt ?? "—"}</strong>
                       </span>
                       {row.aiModel ? (
                         <span>
-                          <span style={{ color: "#8c9196" }}>模型</span>{" "}
+                          <span style={{ color: "#8c9196" }}>{t("translationRuntime.modelLabel")}</span>{" "}
                           <strong style={{ color: "#42474c" }}>{row.aiModel}</strong>
                         </span>
                       ) : null}
@@ -878,7 +894,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
           <s-stack direction="inline" gap="small" alignItems="end">
             <div style={{ flex: "1 1 180px", minWidth: 140 }}>
               <s-text-field
-                label="Blob 预览最大字节（maxPreviewBytes）"
+                label={t("translationRuntime.maxPreviewBytes")}
                 value={String(maxPreviewBytes)}
                 onChange={(e) =>
                   setMaxPreviewBytes(Number(e.currentTarget.value) || 8192)
@@ -892,7 +908,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
               onClick={() => void fetchDetail()}
               {...(loading || emptyInput ? { disabled: true } : {})}
             >
-              {loading ? "刷新中…" : "刷新详情"}
+              {loading ? t("translationRuntime.refreshing") : t("translationRuntime.refreshDetail")}
             </s-button>
             <s-button
               type="button"
@@ -901,16 +917,18 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
             >
               {pollEnabled
                 ? pollCountdownSec != null
-                  ? `自动刷新 · 开（${pollCountdownSec}s）`
-                  : "自动刷新 · 开"
-                : "自动刷新 · 关"}
+                  ? t("translationRuntime.autoRefreshOnWithCountdown", { sec: pollCountdownSec })
+                  : t("translationRuntime.autoRefreshOn")
+                : t("translationRuntime.autoRefreshOff")}
             </s-button>
             <s-button
               type="button"
               variant={includeBlobPreview ? "primary" : "secondary"}
               onClick={() => setIncludeBlobPreview((v) => !v)}
             >
-              {includeBlobPreview ? "Blob 预览 · 开" : "Blob 预览 · 关"}
+              {includeBlobPreview
+                ? t("translationRuntime.blobPreviewOn")
+                : t("translationRuntime.blobPreviewOff")}
             </s-button>
           </s-stack>
         </s-stack>
@@ -920,7 +938,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
         <s-box padding="large" borderWidth="base" borderRadius="base" background="subdued">
           <s-paragraph>
             <span style={{ color: "#6d7175" }}>
-              在上方列表中选择一条任务即可查看<strong>运行进度</strong>与 Blob 信息。
+              {t("translationRuntime.selectTaskToView")}
             </span>
           </s-paragraph>
         </s-box>
@@ -929,7 +947,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
       {!emptyInput && loading && !payload ? (
         <s-box padding="large" borderWidth="base" borderRadius="base" background="subdued">
           <s-paragraph>
-            <span style={{ color: "#6d7175" }}>正在加载任务详情…</span>
+            <span style={{ color: "#6d7175" }}>{t("translationRuntime.loadingTaskDetail")}</span>
           </s-paragraph>
         </s-box>
       ) : null}
@@ -937,7 +955,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
       {errorText ? (
         <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
           <s-paragraph>
-            <span style={{ color: "#bf0711" }}>错误：{errorText}</span>
+            <span style={{ color: "#bf0711" }}>{t("translationRuntime.errorPrefix")}：{errorText}</span>
           </s-paragraph>
         </s-box>
       ) : null}
@@ -945,23 +963,23 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
       {!emptyInput && !loading && !errorText && !payload ? (
         <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
           <s-paragraph>
-            <span style={{ color: "#6d7175" }}>暂无数据（接口成功但 response 为空）。</span>
+            <span style={{ color: "#6d7175" }}>{t("translationRuntime.noDataEmptyResponse")}</span>
           </s-paragraph>
         </s-box>
       ) : null}
 
       {payload ? (
         <s-stack direction="block" gap="base">
-          <s-section heading="Cosmos 摘要">
+          <s-section heading={t("translationRuntime.cosmosSummary")}>
             <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
               <s-stack direction="block" gap="base">
                 <s-stack direction="inline" gap="small" alignItems="center">
                   <s-badge tone="info">{readString(cosmos, "taskType") || "—"}</s-badge>
                   <s-badge tone={cosmosBadgeTone(readString(cosmos, "statusText"))}>
-                    {formatTranslateTaskV3CosmosStatusText(readString(cosmos, "statusText"))}
+                    {formatTranslateTaskV3CosmosStatusText(readString(cosmos, "statusText"), t, i18n)}
                   </s-badge>
                   <span style={{ fontSize: "12px", color: "#6d7175" }}>
-                    status 码 {String(cosmos?.status ?? "—")}
+                    {t("translationRuntime.statusCode")} {String(cosmos?.status ?? "—")}
                   </span>
                 </s-stack>
                 <div
@@ -973,7 +991,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>任务 ID</div>
+                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>{t("translationRuntime.taskIdLabel")}</div>
                     <div
                       style={{
                         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
@@ -985,29 +1003,29 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>店铺</div>
+                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>{t("translationRuntime.shopLabel")}</div>
                     <div style={{ color: "#202223" }}>{readString(cosmos, "shopName") || "—"}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>语言</div>
+                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>{t("translationRuntime.langLabel")}</div>
                     <div style={{ color: "#202223" }}>
                       {readString(cosmos, "source") || "—"} → {readString(cosmos, "target") || "—"}
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>模型</div>
+                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>{t("translationRuntime.modelLabel")}</div>
                     <div style={{ color: "#202223" }}>{readString(cosmos, "aiModel") || "—"}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>创建</div>
+                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>{t("translationRuntime.createdAt")}</div>
                     <div style={{ color: "#42474c" }}>{readString(cosmos, "createdAt") || "—"}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>更新</div>
+                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>{t("translationRuntime.updatedAt")}</div>
                     <div style={{ color: "#42474c" }}>{readString(cosmos, "updatedAt") || "—"}</div>
                   </div>
                   <div style={{ gridColumn: "1 / -1" }}>
-                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>会话 sessionId</div>
+                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>{t("translationRuntime.sessionIdLabel")}</div>
                     <div
                       style={{
                         fontSize: "12px",
@@ -1022,7 +1040,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                 {cosmos?.checkpoint !== undefined ? (
                   <details>
                     <summary style={{ cursor: "pointer", fontSize: "13px", color: "#2c6ecb" }}>
-                      查看 checkpoint（JSON）
+                      {t("translationRuntime.viewCheckpoint")}
                     </summary>
                     <pre
                       style={{
@@ -1045,7 +1063,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
           </s-section>
 
           {payload.translateMonitor && Object.keys(payload.translateMonitor).length > 0 ? (
-            <s-section heading="初始化拉取（translate_monitor_v3）">
+            <s-section heading={t("translationRuntime.initFetchHeading")}>
               <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
                 <s-stack direction="block" gap="small">
                   <s-stack direction="inline" gap="small" alignItems="center">
@@ -1054,18 +1072,16 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                     </s-badge>
                     {runtimeChunksFileTotal !== null ? (
                       <span style={{ fontSize: "13px", color: "#42474c" }}>
-                        分块文件 <strong>{runtimeChunksFileTotal}</strong> 个
+                        {t("translationRuntime.chunkFileCount", { count: runtimeChunksFileTotal })}
                       </span>
                     ) : null}
                     <span style={{ fontSize: "12px", color: "#6d7175", lineHeight: 1.5 }}>
-                      此处为<strong>初始化拉取 Shopify</strong>阶段的监控：累计条数按模块递增；「初始化汇总条数」为各模块抓取的可译字段行数之和（受模块上限等约束）。
-                      它与下方「条目进度」的分母<strong>不是同一指标</strong>——后者是运行时对合并 JSON 解析出的<strong>待译路径条数</strong>（含嵌套 JSON 展开），通常会大于前者。约每 {DETAIL_POLL_INTERVAL_SEC}{" "}
-                      秒随详情自动刷新。
+                      {t("translationRuntime.initFetchExplain", { sec: DETAIL_POLL_INTERVAL_SEC })}
                     </span>
                   </s-stack>
                   {payload.translateMonitor.initCurrentModule?.trim() ? (
                     <div style={{ fontSize: "13px", color: "#42474c" }}>
-                      <span style={{ color: "#8c9196" }}>当前模块 </span>
+                      <span style={{ color: "#8c9196" }}>{t("translationRuntime.currentModule")} </span>
                       <strong>{payload.translateMonitor.initCurrentModule}</strong>
                     </div>
                   ) : null}
@@ -1083,7 +1099,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                         boxShadow: "0 1px 2px rgba(0, 82, 54, 0.08)",
                       }}
                     >
-                      <span style={{ fontSize: "13px", fontWeight: 700, color: "#244235" }}>累计已拉取</span>
+                      <span style={{ fontSize: "13px", fontWeight: 700, color: "#244235" }}>{t("translationRuntime.accumFetched")}</span>
                       <span
                         style={{
                           fontSize: "26px",
@@ -1096,7 +1112,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                       >
                         {readMetricNumber(payload.translateMonitor.initAccumulatedCount)}
                       </span>
-                      <span style={{ fontSize: "15px", fontWeight: 700, color: "#244235" }}>条</span>
+                      <span style={{ fontSize: "15px", fontWeight: 700, color: "#244235" }}>{t("translationRuntime.itemsUnit")}</span>
                     </div>
                   ) : null}
                   <div
@@ -1107,7 +1123,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                     }}
                   >
                     <MetricTile
-                      label="模块进度"
+                      label={t("translationRuntime.moduleProgressShort")}
                       value={
                         readMetricNumber(payload.translateMonitor.initModuleDone) !== null &&
                         readMetricNumber(payload.translateMonitor.initModuleTotal) !== null
@@ -1116,17 +1132,17 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                       }
                     />
                     <MetricTile
-                      label="初始化汇总条数（≠运行时路径数）"
+                      label={t("translationRuntime.initTotalCountLabel")}
                       value={String(readMetricNumber(payload.translateMonitor.totalCount) ?? "—")}
                     />
                     <MetricTile
-                      label="监控更新时间"
+                      label={t("translationRuntime.monitorUpdatedAt")}
                       value={formatMonitorUpdatedAt(payload.translateMonitor.updatedAt)}
                     />
                   </div>
                   <details>
                     <summary style={{ cursor: "pointer", fontSize: "13px", color: "#2c6ecb" }}>
-                      查看完整监控字段
+                      {t("translationRuntime.viewFullMonitorFields")}
                     </summary>
                     <pre
                       style={{
@@ -1148,11 +1164,11 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
             </s-section>
           ) : null}
 
-          <s-section heading="任务进度（Redis）">
+          <s-section heading={t("translationRuntime.redisProgressHeading")}>
             <s-stack direction="block" gap="small">
                 <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
                   <s-stack direction="inline" gap="small" alignItems="center">
-                    <span style={{ fontSize: "12px", color: "#6d7175" }}>前缀</span>
+                    <span style={{ fontSize: "12px", color: "#6d7175" }}>{t("translationRuntime.prefixLabel")}</span>
                     <s-badge tone="info">{payload.resolvedRedisPrefix ?? "—"}</s-badge>
                     {payload.redisRuntime?.redisPrefix &&
                     payload.redisRuntime.redisPrefix !== payload.resolvedRedisPrefix ? (
@@ -1161,7 +1177,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                     {meta?.status ? <s-badge tone="warning">{meta.status}</s-badge> : null}
                     {meta?.updatedAt ? (
                       <span style={{ fontSize: "12px", color: "#8c9196", marginLeft: "auto" }}>
-                        更新 {meta.updatedAt}
+                        {t("translationRuntime.updatedAt")} {meta.updatedAt}
                       </span>
                     ) : null}
                   </s-stack>
@@ -1175,7 +1191,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                     {progressPercent !== null ? (
                       <>
                         <ProgressBarRow
-                          title="文本节点（JSON/HTML 解析明细）"
+                          title={t("translationRuntime.entryProgressDetailTitle")}
                           detail={progressView.entryDetail}
                           percent={progressPercent}
                           barGradient="linear-gradient(90deg, #006fbb 0%, #2c6ecb 55%, #5c9ecf 100%)"
@@ -1201,7 +1217,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                                   ?.scrollIntoView({ behavior: "smooth", block: "start" })
                               }
                             >
-                              查看失败路径与错误原因（共 {effectiveFailCount} 条）
+                              {t("translationRuntime.viewFailuresWithCount", { count: effectiveFailCount })}
                             </button>
                           </div>
                         ) : null}
@@ -1209,7 +1225,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                     ) : null}
                     {chunkPercent !== null ? (
                       <ProgressBarRow
-                        title="翻译分块（chunks 文件）"
+                        title={t("translationRuntime.chunkProgressLabel")}
                         detail={progressView.chunkDetail}
                         percent={chunkPercent}
                         barGradient="linear-gradient(90deg, #007146 0%, #008060 45%, #36ba8f 100%)"
@@ -1247,7 +1263,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                           fontWeight: 500,
                         }}
                       >
-                        Redis meta 全部键值
+                        {t("translationRuntime.redisMetaAll")}
                       </summary>
                       <div
                         style={{
@@ -1285,7 +1301,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                             </div>
                           ))
                         ) : (
-                          <div style={{ padding: 12, color: "#6d7175", fontSize: 13 }}>（无 meta）</div>
+                          <div style={{ padding: 12, color: "#6d7175", fontSize: 13 }}>{t("translationRuntime.noMeta")}</div>
                         )}
                       </div>
                     </details>
@@ -1295,12 +1311,12 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
           </s-section>
 
           <div id="json-runtime-failure-panel">
-          <s-section heading="失败明细（Redis failMap · Report · Blob chunks/failed.json）">
+          <s-section heading={t("translationRuntime.failuresHeading")}>
             {payload.runtimeReportFailuresTruncated ? (
               <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
                 <s-paragraph>
                   <span style={{ color: "#6d7175", fontSize: "13px" }}>
-                    当前关联的 report Blob 较大（&gt;512KB），未内联解析 failures；请在下方「报告」Blob 中下载或开启预览查看完整 JSON。
+                    {t("translationRuntime.largeReportBlobHint")}
                   </span>
                 </s-paragraph>
               </s-box>
@@ -1309,7 +1325,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
               <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
                 <s-paragraph>
                   <span style={{ color: "#6d7175", fontSize: "13px" }}>
-                    chunks/failed.json 超过 512KB，未内联返回；请在 Blob「输入」同目录下查看 tasks/…/chunks/failed.json。
+                    {t("translationRuntime.failedJsonLargeHint")}
                   </span>
                 </s-paragraph>
               </s-box>
@@ -1329,7 +1345,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                     }}
                   >
                     <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 6 }}>
-                      来源：{row.source}
+                      {t("translationRuntime.sourceLabel")}：{row.source}
                     </div>
                     <div
                       style={{
@@ -1358,7 +1374,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                         }}
                       >
                         <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 6 }}>
-                          待译原文（sourceValue）
+                          {t("translationRuntime.sourceValueLabel")}
                         </div>
                         {row.sourceText}
                       </div>
@@ -1372,7 +1388,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
               <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
                 <s-paragraph>
                   <span style={{ color: "#6d7175" }}>
-                    暂无失败明细。若任务曾失败且已生成 Blob，请刷新详情并部署含 chunks/failed.json 附加字段的后端版本。
+                    {t("translationRuntime.noFailureDetailHint")}
                   </span>
                 </s-paragraph>
               </s-box>
@@ -1388,8 +1404,9 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                     fontWeight: 600,
                   }}
                 >
-                  展开查看 Blob chunks/failed.json 全量条目（
-                  {(payload.runtimeFailedJson as { items: unknown[] }).items.length} 条，含原文）
+                  {t("translationRuntime.expandFailedJsonAll", {
+                    count: (payload.runtimeFailedJson as { items: unknown[] }).items.length,
+                  })}
                 </summary>
                 <div style={{ marginTop: 12 }}>
                   {(payload.runtimeFailedJson as { items: unknown[] }).items.map((it, i) => {
@@ -1413,7 +1430,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                         }}
                       >
                         <div style={{ fontSize: "12px", color: "#6d7175", marginBottom: 8 }}>
-                          模块 {mod} · 分片文件 {cf}
+                          {t("translationRuntime.moduleChunkFile", { module: mod, chunkFile: cf })}
                         </div>
                         <div
                           style={{
@@ -1440,12 +1457,12 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                               marginBottom: 8,
                             }}
                           >
-                            <span style={{ fontSize: "11px", color: "#8c9196" }}>待译原文 · </span>
+                            <span style={{ fontSize: "11px", color: "#8c9196" }}>{t("translationRuntime.sourceTextPrefix")} · </span>
                             {sv}
                           </div>
                         ) : (
                           <div style={{ fontSize: "12px", color: "#8c9196", marginBottom: 8 }}>
-                            （无 sourceValue，可能为非文本节点）
+                            {t("translationRuntime.noSourceValueHint")}
                           </div>
                         )}
                         <div style={{ fontSize: 13, color: "#6d7175" }}>{r}</div>
@@ -1458,7 +1475,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
           </s-section>
           </div>
 
-          <s-section heading="Blob 产物">
+          <s-section heading={t("translationRuntime.blobArtifactsHeading")}>
             <s-stack direction="block" gap="small">
               {(["input", "output", "report"] as const).map((key) => {
                 const b = payload.blobs?.[key];
@@ -1474,14 +1491,18 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                     <s-stack direction="block" gap="small">
                       <s-stack direction="inline" gap="small" alignItems="center">
                         <span style={{ fontWeight: 600, fontSize: "14px", color: "#202223" }}>
-                          {BLOB_LABELS[key]}
+                          {blobLabels[key]}
                         </span>
                         <s-badge tone={existsOk ? "success" : b?.exists === false ? "critical" : "info"}>
-                          {existsOk ? "已存在" : b?.exists === false ? "不存在" : "未知"}
+                          {existsOk
+                            ? t("translationRuntime.exists")
+                            : b?.exists === false
+                              ? t("translationRuntime.notExists")
+                              : t("translationRuntime.unknown")}
                         </s-badge>
                         <span style={{ fontSize: "13px", color: "#6d7175" }}>
                           {formatBytes(b?.sizeBytes)}
-                          {b?.previewTruncated ? " · 预览已截断" : ""}
+                          {b?.previewTruncated ? ` · ${t("translationRuntime.previewTruncatedShort")}` : ""}
                         </span>
                       </s-stack>
                       {b?.note ? (
@@ -1518,7 +1539,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                         </pre>
                       ) : includeBlobPreview ? (
                         <s-paragraph>
-                          <span style={{ color: "#8c9196", fontSize: "13px" }}>（无预览内容）</span>
+                          <span style={{ color: "#8c9196", fontSize: "13px" }}>{t("translationRuntime.noPreviewContent")}</span>
                         </s-paragraph>
                       ) : null}
                     </s-stack>
@@ -1534,14 +1555,14 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                 <s-stack direction="block" gap="small">
                   <s-stack direction="inline" gap="small" alignItems="center">
                     <span style={{ fontWeight: 600, fontSize: "14px", color: "#202223" }}>
-                      整包翻译报告（translation-report.md）
+                      {t("translationRuntime.reportTitleWithFile")}
                     </span>
                     <s-badge tone={trBlob?.exists === true ? "success" : "info"}>
                       {trBlob?.exists === true
-                        ? "已存在"
+                        ? t("translationRuntime.exists")
                         : trBlob?.exists === false
-                          ? "不存在"
-                          : "未知"}
+                          ? t("translationRuntime.notExists")
+                          : t("translationRuntime.unknown")}
                     </s-badge>
                     <span style={{ fontSize: "13px", color: "#6d7175" }}>
                       {formatBytes(trBlob?.sizeBytes)}
@@ -1549,8 +1570,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                   </s-stack>
                   <s-paragraph>
                     <span style={{ color: "#6d7175", fontSize: "13px" }}>
-                      由翻译完成后 LLM 生成的 Markdown 总报告，与各 chunk 同级存放在{" "}
-                      <code style={{ fontSize: "12px" }}>chunks/</code> 下。点击下方按钮可拉取 Blob 预览并在弹窗中渲染。
+                      {t("translationRuntime.reportBlobDesc")}
                     </span>
                   </s-paragraph>
                   {trBlob?.blobPath ? (
@@ -1571,7 +1591,9 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                     onClick={() => void fetchTranslationReportMdPreview()}
                     {...(mdPreviewLoading || emptyInput ? { disabled: true } : {})}
                   >
-                    {mdPreviewLoading ? "加载中…" : "弹窗预览 Markdown"}
+                    {mdPreviewLoading
+                      ? t("translationRuntime.loading")
+                      : t("translationRuntime.previewMarkdownInModal")}
                   </s-button>
                 </s-stack>
               </s-box>
@@ -1584,14 +1606,14 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                 <s-stack direction="block" gap="small">
                   <s-stack direction="inline" gap="small" alignItems="center">
                     <span style={{ fontWeight: 600, fontSize: "14px", color: "#202223" }}>
-                      翻译质量检测（translation-quality-report.md）
+                      {t("translationRuntime.qualityReportTitleLong")}
                     </span>
                     <s-badge tone={qrBlob?.exists === true ? "success" : "info"}>
                       {qrBlob?.exists === true
-                        ? "已存在"
+                        ? t("translationRuntime.exists")
                         : qrBlob?.exists === false
-                          ? "不存在"
-                          : "未知"}
+                          ? t("translationRuntime.notExists")
+                          : t("translationRuntime.unknown")}
                     </s-badge>
                     <span style={{ fontSize: "13px", color: "#6d7175" }}>
                       {formatBytes(qrBlob?.sizeBytes)}
@@ -1599,7 +1621,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                   </s-stack>
                   <s-paragraph>
                     <span style={{ color: "#6d7175", fontSize: "13px" }}>
-                      对照已成功翻译的原文/译文路径抽样，由 LLM 给出总体分数与较差译例说明（与 translation-report.md 相互独立）。
+                      {t("translationRuntime.qualityBlobDesc")}
                     </span>
                   </s-paragraph>
                   {qrBlob?.blobPath ? (
@@ -1620,7 +1642,9 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                     onClick={() => void fetchQualityReportMdPreview()}
                     {...(mdPreviewLoading || emptyInput ? { disabled: true } : {})}
                   >
-                    {mdPreviewLoading ? "加载中…" : "弹窗预览质检报告"}
+                    {mdPreviewLoading
+                      ? t("translationRuntime.loading")
+                      : t("translationRuntime.previewQualityInModal")}
                   </s-button>
                 </s-stack>
               </s-box>
@@ -1628,7 +1652,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
           </s-section>
 
           {payload.reportParsed && Object.keys(payload.reportParsed).length ? (
-            <s-section heading="解析后的报告（reportParsed）">
+            <s-section heading={t("translationRuntime.parsedReportHeading")}>
               <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
                 <pre
                   style={{
@@ -1679,7 +1703,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
           >
             <strong style={{ fontSize: "15px", color: "#202223" }}>{mdPreviewTitle}</strong>
             <s-button type="button" variant="secondary" onClick={() => setMdPreviewOpen(false)}>
-              关闭
+              {t("common.close")}
             </s-button>
           </div>
           {mdPreviewTruncated ? (
@@ -1693,7 +1717,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                 flexShrink: 0,
               }}
             >
-              预览已按服务端长度上限截断；完整内容请在存储控制台下载 Blob。
+              {t("translationRuntime.previewServerTruncatedHint")}
             </div>
           ) : null}
           <div
