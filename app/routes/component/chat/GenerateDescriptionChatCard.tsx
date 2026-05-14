@@ -3,6 +3,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useGenerateDescription } from "../../../hooks/useGenerateDescription";
 import type { ProductSelectorSelection } from "../../../lib/productSearchTypes";
 import { ProductSelector } from "../product/ProductSelector";
+import { GenerateDescriptionResultEditor } from "../generateDescription/GenerateDescriptionResultEditor";
 
 type Props = {
   /** 嵌在助手气泡内时略收紧边距与阴影 */
@@ -24,10 +25,19 @@ export function GenerateDescriptionChatCard({ embedded = false }: Props) {
     localeOptions,
     localesLoading,
     isSubmitting,
+    isSaving,
     errorText,
-    productTitle,
+    saveErrorText,
     description,
+    draftTitle,
+    setDraftTitle,
+    draftDescription,
+    setDraftDescription,
     copyTarget,
+    saveConfirmOpen,
+    requestOpenSaveDialog,
+    cancelSaveDialog,
+    confirmSaveToShopify,
     submitGenerate,
     copyTitle,
     copyDescription,
@@ -45,6 +55,8 @@ export function GenerateDescriptionChatCard({ embedded = false }: Props) {
     const pid = (selectedProduct?.id ?? productId).trim();
     await submitGenerate(pid);
   };
+
+  const productIdForActions = (selectedProduct?.id ?? productId).trim();
 
   const copyBusy = copyTarget !== null;
 
@@ -159,7 +171,7 @@ export function GenerateDescriptionChatCard({ embedded = false }: Props) {
                 id="generate-description-lang-card"
                 value={targetLanguage}
                 onChange={(e) => setTargetLanguage(e.target.value)}
-                disabled={localesLoading || isSubmitting}
+                disabled={localesLoading || isSubmitting || isSaving || saveConfirmOpen}
                 style={{
                   display: "block",
                   width: "100%",
@@ -213,75 +225,28 @@ export function GenerateDescriptionChatCard({ embedded = false }: Props) {
             </div>
           ) : null}
 
-          {description ? (
-            <div style={{ marginBottom: "0.85rem" }}>
-              <div
-                style={{
-                  fontSize: "0.75rem",
-                  fontWeight: 600,
-                  color: "#444",
-                  marginBottom: "0.35rem",
-                }}
-              >
-                生成结果
-              </div>
-              <div
-                style={{
-                  padding: "0.65rem 0.75rem",
-                  borderRadius: "10px",
-                  background: "rgba(44, 110, 203, 0.06)",
-                  border: "1px solid rgba(44, 110, 203, 0.2)",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "0.8125rem",
-                    color: "#303030",
-                    lineHeight: 1.5,
-                    marginBottom: "0.5rem",
-                  }}
-                >
-                  商品名：
-                  {productTitle?.trim() ? productTitle : "Unknown Product"}
-                </div>
-                <div
-                  style={{
-                    fontSize: "0.8125rem",
-                    color: "#303030",
-                    whiteSpace: "pre-wrap",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {description}
-                </div>
-              </div>
-              <s-stack direction="inline" gap="small">
-                <s-button
-                  type="button"
-                  variant="secondary"
-                  onClick={copyTitle}
-                  {...(isSubmitting || copyBusy ? { disabled: true } : {})}
-                >
-                  {copyTarget === "title" ? "复制中…" : "复制标题"}
-                </s-button>
-                <s-button
-                  type="button"
-                  variant="secondary"
-                  onClick={copyDescription}
-                  {...(isSubmitting || copyBusy ? { disabled: true } : {})}
-                >
-                  {copyTarget === "description" ? "复制中…" : "复制描述"}
-                </s-button>
-                <s-button
-                  type="button"
-                  variant="secondary"
-                  onClick={copyAll}
-                  {...(isSubmitting || copyBusy ? { disabled: true } : {})}
-                >
-                  {copyTarget === "all" ? "复制中…" : "复制全部"}
-                </s-button>
-              </s-stack>
-            </div>
+          {description !== null ? (
+            <GenerateDescriptionResultEditor
+              variant="card"
+              draftTitle={draftTitle}
+              draftDescription={draftDescription}
+              onDraftTitleChange={setDraftTitle}
+              onDraftDescriptionChange={setDraftDescription}
+              copyTarget={copyTarget}
+              copyBusy={copyBusy}
+              isSubmitting={isSubmitting}
+              isSaving={isSaving}
+              saveErrorText={saveErrorText}
+              onCopyTitle={copyTitle}
+              onCopyDescription={copyDescription}
+              onCopyAll={copyAll}
+              onClickSave={requestOpenSaveDialog}
+              saveConfirmOpen={saveConfirmOpen}
+              onSaveConfirm={() => {
+                void confirmSaveToShopify(productIdForActions);
+              }}
+              onSaveCancel={cancelSaveDialog}
+            />
           ) : null}
 
           <s-stack direction="block" gap="small">
@@ -292,7 +257,7 @@ export function GenerateDescriptionChatCard({ embedded = false }: Props) {
                 onClick={() => {
                   void handleGenerate();
                 }}
-                {...(isSubmitting || localesLoading ? { disabled: true } : {})}
+                {...(isSubmitting || isSaving || localesLoading || saveConfirmOpen ? { disabled: true } : {})}
               >
                 {isSubmitting
                   ? "正在生成…"

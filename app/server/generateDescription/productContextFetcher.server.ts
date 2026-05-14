@@ -31,7 +31,8 @@ type ProductQueryResponse = {
   errors?: Array<{ message?: string }>;
 };
 
-function toProductGid(productId: string): string {
+/** 与写回商品等 mutation 共用，避免各处 ID 格式不一致。 */
+export function toProductGid(productId: string): string {
   const trimmed = productId.trim();
   if (trimmed.startsWith("gid://")) return trimmed;
   return `gid://shopify/Product/${trimmed}`;

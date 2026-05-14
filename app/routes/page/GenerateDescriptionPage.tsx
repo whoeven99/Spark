@@ -5,6 +5,7 @@ import { useGenerateDescription } from "../../hooks/useGenerateDescription";
 import type { loader } from "../app.generate-description";
 import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
 import { ProductSelector } from "../component/product/ProductSelector";
+import { GenerateDescriptionResultEditor } from "../component/generateDescription/GenerateDescriptionResultEditor";
 
 export function GenerateDescriptionPage() {
   const shopify = useAppBridge();
@@ -23,10 +24,19 @@ export function GenerateDescriptionPage() {
     localeOptions,
     localesLoading,
     isSubmitting,
+    isSaving,
     errorText,
-    productTitle,
+    saveErrorText,
     description,
+    draftTitle,
+    setDraftTitle,
+    draftDescription,
+    setDraftDescription,
     copyTarget,
+    saveConfirmOpen,
+    requestOpenSaveDialog,
+    cancelSaveDialog,
+    confirmSaveToShopify,
     submitGenerate,
     copyTitle,
     copyDescription,
@@ -46,8 +56,9 @@ export function GenerateDescriptionPage() {
     await submitGenerate(pid);
   };
 
-  const copyBusy = copyTarget !== null;
+  const productIdForActions = (selectedProduct?.id ?? productId).trim();
 
+  const copyBusy = copyTarget !== null;
   return (
     <s-page heading="生成商品描述">
       <div
@@ -120,7 +131,7 @@ export function GenerateDescriptionPage() {
                     id="generate-description-lang"
                     value={targetLanguage}
                     onChange={(e) => setTargetLanguage(e.target.value)}
-                    disabled={localesLoading || isSubmitting}
+                    disabled={localesLoading || isSubmitting || isSaving || saveConfirmOpen}
                     style={{
                       display: "block",
                       width: "100%",
@@ -175,65 +186,28 @@ export function GenerateDescriptionPage() {
                   </div>
                 ) : null}
 
-                {description ? (
-                  <s-section heading="生成结果">
-                    <s-stack direction="block" gap="small">
-                      <div
-                        style={{
-                          fontSize: "0.875rem",
-                          color: "#303030",
-                          lineHeight: 1.55,
-                        }}
-                      >
-                        商品名：
-                        {productTitle?.trim()
-                          ? productTitle
-                          : "Unknown Product"}
-                      </div>
-                      <div
-                        style={{
-                          padding: "0.75rem 0.85rem",
-                          borderRadius: "10px",
-                          background: "rgba(44, 110, 203, 0.06)",
-                          border: "1px solid rgba(44, 110, 203, 0.2)",
-                          fontSize: "0.875rem",
-                          color: "#303030",
-                          whiteSpace: "pre-wrap",
-                          lineHeight: 1.55,
-                        }}
-                      >
-                        {description}
-                      </div>
-                      <s-stack direction="inline" gap="small">
-                        <s-button
-                          type="button"
-                          variant="secondary"
-                          onClick={copyTitle}
-                          {...(isSubmitting || copyBusy ? { disabled: true } : {})}
-                        >
-                          {copyTarget === "title" ? "复制中…" : "复制标题"}
-                        </s-button>
-                        <s-button
-                          type="button"
-                          variant="secondary"
-                          onClick={copyDescription}
-                          {...(isSubmitting || copyBusy ? { disabled: true } : {})}
-                        >
-                          {copyTarget === "description"
-                            ? "复制中…"
-                            : "复制描述"}
-                        </s-button>
-                        <s-button
-                          type="button"
-                          variant="secondary"
-                          onClick={copyAll}
-                          {...(isSubmitting || copyBusy ? { disabled: true } : {})}
-                        >
-                          {copyTarget === "all" ? "复制中…" : "复制全部"}
-                        </s-button>
-                      </s-stack>
-                    </s-stack>
-                  </s-section>
+                {description !== null ? (
+                  <GenerateDescriptionResultEditor
+                    variant="page"
+                    draftTitle={draftTitle}
+                    draftDescription={draftDescription}
+                    onDraftTitleChange={setDraftTitle}
+                    onDraftDescriptionChange={setDraftDescription}
+                    copyTarget={copyTarget}
+                    copyBusy={copyBusy}
+                    isSubmitting={isSubmitting}
+                    isSaving={isSaving}
+                    saveErrorText={saveErrorText}
+                    onCopyTitle={copyTitle}
+                    onCopyDescription={copyDescription}
+                    onCopyAll={copyAll}
+                    onClickSave={requestOpenSaveDialog}
+                    saveConfirmOpen={saveConfirmOpen}
+                    onSaveConfirm={() => {
+                      void confirmSaveToShopify(productIdForActions);
+                    }}
+                    onSaveCancel={cancelSaveDialog}
+                  />
                 ) : null}
 
                 <s-stack direction="inline" gap="small">
@@ -243,7 +217,7 @@ export function GenerateDescriptionPage() {
                     onClick={() => {
                       void handleGenerate();
                     }}
-                    {...(isSubmitting || localesLoading ? { disabled: true } : {})}
+                    {...(isSubmitting || isSaving || localesLoading || saveConfirmOpen ? { disabled: true } : {})}
                   >
                     {isSubmitting
                       ? "正在生成…"
@@ -259,12 +233,11 @@ export function GenerateDescriptionPage() {
                       setSelectedProduct(null);
                       setProductId("");
                     }}
-                    {...(isSubmitting ? { disabled: true } : {})}
+                    {...(isSubmitting || isSaving ? { disabled: true } : {})}
                   >
                     清空结果
                   </s-button>
-                </s-stack>
-              </s-stack>
+                </s-stack>              </s-stack>
             </s-section>
           </s-stack>
         </div>

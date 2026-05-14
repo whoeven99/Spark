@@ -6,6 +6,7 @@ import {
   type ShopLocalesApiResponse,
   type ShopLocalesPayload,
 } from "../lib/generateDescriptionLocales";
+import type { UpdateProductDescriptionApiResponse } from "../lib/updateProductDescriptionTypes";
 
 const LOG_PREFIX = "[useGenerateDescription]";
 
@@ -35,6 +36,19 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
   const [productTitle, setProductTitle] = useState<string | null>(null);
   const [description, setDescription] = useState<string | null>(null);
   const [copyTarget, setCopyTarget] = useState<CopyTarget | null>(null);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftDescription, setDraftDescription] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveErrorText, setSaveErrorText] = useState<string | null>(null);
+  const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
+
+  useEffect(() => {
+    setDraftTitle(productTitle ?? "");
+  }, [productTitle]);
+
+  useEffect(() => {
+    setDraftDescription(description ?? "");
+  }, [description]);
 
   useEffect(() => {
     if (resolvedLocales && !appliedDefaultRef.current) {
@@ -87,6 +101,8 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
     setProductTitle(null);
     setDescription(null);
     setErrorText(null);
+    setSaveErrorText(null);
+    setSaveConfirmOpen(false);
   }, []);
 
   const submitGenerate = useCallback(
@@ -108,6 +124,8 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
 
       setIsSubmitting(true);
       setErrorText(null);
+      setSaveErrorText(null);
+      setSaveConfirmOpen(false);
       setProductTitle(null);
       setDescription(null);
 
@@ -156,8 +174,8 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
 
   const runCopy = useCallback(
     async (kind: CopyTarget) => {
-      const title = (productTitle ?? "").trim();
-      const desc = description ?? "";
+      const title = draftTitle.trim();
+      const desc = draftDescription;
       let text = "";
       if (kind === "title") {
         if (!title) {
@@ -176,7 +194,7 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
           toastShow("暂无可复制内容");
           return;
         }
-        text = buildCopyAllText(title || "Unknown Product", desc);
+        text = buildCopyAllText(title, desc);
       }
 
       setCopyTarget(kind);
@@ -197,7 +215,102 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
         setCopyTarget(null);
       }
     },
-    [description, productTitle, toastShow],
+    [draftDescription, draftTitle, toastShow],
+  );
+
+  const requestOpenSaveDialog = useCallback(() => {
+    if (!draftTitle.trim()) {
+      toastShow("标题不能为空");
+      return;
+    }
+    if (!draftDescription.trim()) {
+      toastShow("描述不能为空");
+      return;
+    }
+    setSaveErrorText(null);
+    setSaveConfirmOpen(true);
+  }, [draftDescription, draftTitle, toastShow]);
+
+  const cancelSaveDialog = useCallback(() => {
+    if (!isSaving) {
+      setSaveConfirmOpen(false);
+    }
+  }, [isSaving]);
+
+  const confirmSaveToShopify = useCallback(
+    async (productIdRaw: string) => {
+      const pid = productIdRaw.trim();
+      if (!pid) {
+        toastShow("请选择商品或填写商品 ID");
+        return;
+      }
+      const title = draftTitle.trim();
+      const descPlain = draftDescription.trim();
+      if (!title) {
+        toastShow("标题不能为空");
+        return;
+      }
+      if (!descPlain) {
+        toastShow("描述不能为空");
+        return;
+      }
+
+      setIsSaving(true);
+      setSaveErrorText(null);
+      console.info(
+        `${LOG_PREFIX} save start productId=${pid} titleLen=${title.length} descLen=${descPlain.length}`,
+      );
+
+      try {
+        const response = await fetch(
+          `/api/update-product-description${locationSearch}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: JSON.stringify({
+              productId: pid,
+              title,
+              descriptionPlain: descPlain,
+            }),
+          },
+        );
+        const apiPayload = (await response.json().catch(() => ({}))) as UpdateProductDescriptionApiResponse;
+
+        if (!response.ok || apiPayload.success === false) {
+          const msg =
+            apiPayload.success === false
+              ? apiPayload.errorMsg
+              : `请求失败（${response.status}）`;
+          setSaveErrorText(msg || `请求失败（${response.status}）`);
+          console.info(`${LOG_PREFIX} save failed: ${msg}`);
+          return;
+        }
+
+        if (
+          apiPayload.success === true &&
+          apiPayload.response &&
+          typeof apiPayload.response.title === "string"
+        ) {
+          setProductTitle(apiPayload.response.title);
+          setSaveConfirmOpen(false);
+          toastShow("已保存到 Shopify");
+          console.info(`${LOG_PREFIX} save ok id=${apiPayload.response.id}`);
+        } else {
+          setSaveErrorText("返回数据异常，请重试");
+        }
+      } catch {
+        const msg = "网络异常，请稍后重试";
+        setSaveErrorText(msg);
+        toastShow(msg);
+        console.info(`${LOG_PREFIX} save network error`);
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [draftDescription, draftTitle, locationSearch, toastShow],
   );
 
   return {
@@ -207,10 +320,20 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
     localesLoading,
     localesIsFallback: resolvedLocales?.isFallback === true,
     isSubmitting,
+    isSaving,
     errorText,
+    saveErrorText,
     productTitle,
     description,
+    draftTitle,
+    setDraftTitle,
+    draftDescription,
+    setDraftDescription,
     copyTarget,
+    saveConfirmOpen,
+    requestOpenSaveDialog,
+    cancelSaveDialog,
+    confirmSaveToShopify,
     submitGenerate,
     copyTitle: () => {
       void runCopy("title");
