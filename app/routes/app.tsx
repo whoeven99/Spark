@@ -21,6 +21,7 @@ export default function App() {
         <s-link href="/app">AI Assistant</s-link>
         <s-link href="/app/additional">诊断报告</s-link>
         <s-link href="/app/translation">创建翻译任务</s-link>
+        <s-link href="/app/generate-description">Generate Description</s-link>
       </s-app-nav>
       <Outlet />
     </AppProvider>

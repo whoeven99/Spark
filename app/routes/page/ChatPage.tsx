@@ -1,11 +1,17 @@
 import { useState, useRef, useEffect } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import type { ChatMessage } from "../../lib/chatMessage";
+import type { GenerateDescriptionCardPayload } from "../../lib/chatMessage";
 import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { ChatMessages } from "../component/chat/ChatMessages";
 import { ChatInput } from "../component/chat/ChatInput";
 import { ChatPageCredentialsChrome } from "./chat/ChatPageCredentialsChrome";
-import { INITIAL_ASSISTANT_MESSAGE, quickPrompts, quickPromptTones } from "./chat/chatPageConstants";
+import {
+  GENERATE_DESCRIPTION_QUICK_PROMPT,
+  INITIAL_ASSISTANT_MESSAGE,
+  quickPrompts,
+  quickPromptTones,
+} from "./chat/chatPageConstants";
 import { asideCardStyle } from "./chat/chatPageStyles";
 
 export function ChatPage() {
@@ -18,6 +24,20 @@ export function ChatPage() {
     },
   ]);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  const openGenerateDescriptionCard = () => {
+    if (isSending) return;
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: GENERATE_DESCRIPTION_QUICK_PROMPT },
+      {
+        role: "assistant",
+        content:
+          "已为你打开「商品描述生成」表单。请搜索并选择商品（或展开高级手动填写商品 ID），在「目标语言」下拉中选择生成语言（默认与店铺主语言一致），系统将基于 Shopify 商品数据生成结构化营销描述。",
+        generateDescriptionCard: true,
+      },
+    ]);
+  };
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -53,6 +73,8 @@ export function ChatPage() {
         reply?: string;
         error?: string;
         translationTaskForm?: TranslationTaskFormPayload;
+        generateDescriptionCard?: boolean;
+        generateDescriptionCardPayload?: GenerateDescriptionCardPayload;
       };
       const assistantText =
         data.reply?.trim() ||
@@ -66,6 +88,10 @@ export function ChatPage() {
           role: "assistant",
           content: assistantText,
           ...(data.translationTaskForm ? { translationTaskForm: data.translationTaskForm } : {}),
+          ...(data.generateDescriptionCard ? { generateDescriptionCard: true } : {}),
+          ...(data.generateDescriptionCardPayload
+            ? { generateDescriptionCardPayload: data.generateDescriptionCardPayload }
+            : {}),
         },
       ]);
     } catch {
@@ -138,7 +164,11 @@ export function ChatPage() {
                     type="button"
                     tone={quickPromptTones[index]}
                     variant="secondary"
-                    onClick={() => sendMessage(prompt)}
+                    onClick={() =>
+                      prompt === GENERATE_DESCRIPTION_QUICK_PROMPT
+                        ? openGenerateDescriptionCard()
+                        : sendMessage(prompt)
+                    }
                     {...(isSending ? { disabled: true } : {})}
                   >
                     {prompt}

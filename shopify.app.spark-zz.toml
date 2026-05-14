@@ -1,15 +1,15 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "8191fdd554fc1ea1b10152aa6f7a0060"
-name = "Spark-local"
+client_id = "17fa704a57a5ac567f6a938bfaad9110"
 application_url = "https://example.com"
 embedded = true
+name = "spark_zz"
 
 [build]
 automatically_update_urls_on_dev = true
 include_config_on_deploy = true
 
-[webhooks]
+[webhooks] 
 api_version = "2026-07"
 
 [access_scopes]

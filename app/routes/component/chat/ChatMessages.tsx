@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { ChatMessage } from "../../../lib/chatMessage";
 import { ChatMessageContent } from "./ChatMessageContent";
+import { GenerateDescriptionChatCard } from "./GenerateDescriptionChatCard";
 import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard";
 
 type ChatMessagesProps = {
@@ -20,6 +21,9 @@ export function ChatMessages({
       {messages.map((item, index) => {
         const hasTranslationCard =
           item.role === "assistant" && Boolean(item.translationTaskForm);
+        const hasGenerateDescriptionCard =
+          item.role === "assistant" && Boolean(item.generateDescriptionCard);
+        const hasEmbeddedCard = hasTranslationCard || hasGenerateDescriptionCard;
 
         const bubbleShellStyle: CSSProperties = {
           borderRadius: "12px",
@@ -46,7 +50,7 @@ export function ChatMessages({
           >
             <div
               style={{
-                maxWidth: hasTranslationCard ? "min(540px, 96%)" : "80%",
+                maxWidth: hasEmbeddedCard ? "min(540px, 96%)" : "80%",
               }}
             >
               <div style={bubbleShellStyle}>
@@ -72,6 +76,15 @@ export function ChatMessages({
                         onSuccess={(detail) =>
                           onTranslationCardSuccess(index, detail)
                         }
+                      />
+                    </div>
+                  ) : null}
+
+                  {hasGenerateDescriptionCard ? (
+                    <div style={{ marginTop: "0.85rem" }}>
+                      <GenerateDescriptionChatCard
+                        embedded
+                        initialResult={item.generateDescriptionCardPayload}
                       />
                     </div>
                   ) : null}
