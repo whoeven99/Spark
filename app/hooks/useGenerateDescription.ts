@@ -6,6 +6,7 @@ import {
   type ShopLocalesApiResponse,
   type ShopLocalesPayload,
 } from "../lib/generateDescriptionLocales";
+import type { GenerateDescriptionCardPayload } from "../lib/chatMessage";
 import type { UpdateProductDescriptionApiResponse } from "../lib/updateProductDescriptionTypes";
 
 const LOG_PREFIX = "[useGenerateDescription]";
@@ -16,11 +17,12 @@ export type UseGenerateDescriptionParams = {
   locationSearch: string;
   /** 独立页由 loader 注入；聊天卡片传 `null`，由 hook 请求 `/api/shop-locales`。 */
   initialShopLocales: ShopLocalesPayload | null;
+  initialResult?: GenerateDescriptionCardPayload;
   toastShow: (message: string) => void;
 };
 
 export function useGenerateDescription(params: UseGenerateDescriptionParams) {
-  const { locationSearch, initialShopLocales, toastShow } = params;
+  const { locationSearch, initialShopLocales, initialResult, toastShow } = params;
 
   const [resolvedLocales, setResolvedLocales] = useState<ShopLocalesPayload | null>(
     initialShopLocales,
@@ -33,14 +35,23 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
-  const [productTitle, setProductTitle] = useState<string | null>(null);
-  const [description, setDescription] = useState<string | null>(null);
+  const [productTitle, setProductTitle] = useState<string | null>(
+    initialResult?.title?.trim() || null,
+  );
+  const [description, setDescription] = useState<string | null>(
+    initialResult?.description ?? null,
+  );
   const [copyTarget, setCopyTarget] = useState<CopyTarget | null>(null);
-  const [draftTitle, setDraftTitle] = useState("");
-  const [draftDescription, setDraftDescription] = useState("");
+  const [draftTitle, setDraftTitle] = useState(initialResult?.title ?? "");
+  const [draftDescription, setDraftDescription] = useState(
+    initialResult?.description ?? "",
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [saveErrorText, setSaveErrorText] = useState<string | null>(null);
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
+  const [pinnedProductId, setPinnedProductId] = useState(
+    initialResult?.productId?.trim() ?? "",
+  );
 
   useEffect(() => {
     setDraftTitle(productTitle ?? "");
@@ -53,9 +64,9 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
   useEffect(() => {
     if (resolvedLocales && !appliedDefaultRef.current) {
       appliedDefaultRef.current = true;
-      setTargetLanguage(resolvedLocales.defaultTargetLanguage);
+      setTargetLanguage(initialResult?.targetLanguage ?? resolvedLocales.defaultTargetLanguage);
     }
-  }, [resolvedLocales]);
+  }, [initialResult?.targetLanguage, resolvedLocales]);
 
   useEffect(() => {
     if (initialShopLocales != null) {
@@ -103,6 +114,7 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
     setErrorText(null);
     setSaveErrorText(null);
     setSaveConfirmOpen(false);
+    setPinnedProductId("");
   }, []);
 
   const submitGenerate = useCallback(
@@ -128,6 +140,7 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
       setSaveConfirmOpen(false);
       setProductTitle(null);
       setDescription(null);
+      setPinnedProductId(pid);
 
       try {
         const response = await fetch(`/api/generate-description${locationSearch}`, {
@@ -239,7 +252,7 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
 
   const confirmSaveToShopify = useCallback(
     async (productIdRaw: string) => {
-      const pid = productIdRaw.trim();
+      const pid = (productIdRaw.trim() || pinnedProductId).trim();
       if (!pid) {
         toastShow("请选择商品或填写商品 ID");
         return;
@@ -310,7 +323,7 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
         setIsSaving(false);
       }
     },
-    [draftDescription, draftTitle, locationSearch, toastShow],
+    [draftDescription, draftTitle, locationSearch, pinnedProductId, toastShow],
   );
 
   return {
@@ -325,6 +338,7 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
     saveErrorText,
     productTitle,
     description,
+    pinnedProductId,
     draftTitle,
     setDraftTitle,
     draftDescription,

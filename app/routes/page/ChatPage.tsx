@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import type { ChatMessage } from "../../lib/chatMessage";
+import type { GenerateDescriptionCardPayload } from "../../lib/chatMessage";
 import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { ChatMessages } from "../component/chat/ChatMessages";
 import { ChatInput } from "../component/chat/ChatInput";
@@ -72,6 +73,8 @@ export function ChatPage() {
         reply?: string;
         error?: string;
         translationTaskForm?: TranslationTaskFormPayload;
+        generateDescriptionCard?: boolean;
+        generateDescriptionCardPayload?: GenerateDescriptionCardPayload;
       };
       const assistantText =
         data.reply?.trim() ||
@@ -85,6 +88,10 @@ export function ChatPage() {
           role: "assistant",
           content: assistantText,
           ...(data.translationTaskForm ? { translationTaskForm: data.translationTaskForm } : {}),
+          ...(data.generateDescriptionCard ? { generateDescriptionCard: true } : {}),
+          ...(data.generateDescriptionCardPayload
+            ? { generateDescriptionCardPayload: data.generateDescriptionCardPayload }
+            : {}),
         },
       ]);
     } catch {

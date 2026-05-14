@@ -3,6 +3,7 @@ import {
   AIMessage,
   HumanMessage,
   SystemMessage,
+  ToolMessage,
   type BaseMessage,
 } from "@langchain/core/messages";
 import { createAgent } from "langchain";
@@ -12,6 +13,7 @@ import {
   extractMessagesContext,
 } from "./langchainMessageText";
 import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
+import type { GenerateDescriptionCardPayload } from "../../lib/chatMessage";
 import { polishFinalReply } from "./polishFinalReply";
 import {
   defaultTranslationTaskFormPayload,
@@ -19,10 +21,13 @@ import {
   shouldInjectTranslationTaskFormFallback,
 } from "./translationTaskFormExtract";
 import { baseAgentTools } from "./tools";
+import { GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME } from "./tool/generateDescriptionTool";
 
 export type InvokeChatAgentResult = {
   reply: string;
   translationTaskForm?: TranslationTaskFormPayload;
+  generateDescriptionCard?: boolean;
+  generateDescriptionCardPayload?: GenerateDescriptionCardPayload;
 };
 
 let chatModel: ChatOpenAI | null = null;
@@ -82,6 +87,76 @@ async function generateFallbackReply(input: string, contextText: string) {
   return extractMessageText(result).trim();
 }
 
+function hasGenerateDescriptionToolCall(messages: BaseMessage[]): boolean {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const msg = messages[i];
+    if (!ToolMessage.isInstance(msg)) continue;
+    if (msg.name === GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function shouldInjectGenerateDescriptionCardFallback(
+  lastUserText: string,
+  assistantReplyText: string,
+): boolean {
+  const u = lastUserText.trim();
+  const a = assistantReplyText.trim();
+  if (!u || !a) return false;
+  const userSignals =
+    /(商品描述|营销描述|文案|写描述|优化描述|product description)/i.test(u) &&
+    /(gid:\/\/shopify\/Product\/\d+|\b\d{6,}\b)/i.test(u);
+  const assistantSignals =
+    /(已生成|生成结果|核心要点|一句话概括|如需调整|商品描述)/i.test(a);
+  return userSignals && assistantSignals;
+}
+
+function extractGenerateDescriptionCardPayload(
+  messages: BaseMessage[],
+): GenerateDescriptionCardPayload | undefined {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const msg = messages[i];
+    if (!ToolMessage.isInstance(msg)) continue;
+    if (msg.name !== GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME) continue;
+
+    const raw = extractMessageText(msg).trim();
+    if (!raw.startsWith("{")) continue;
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      continue;
+    }
+    if (!parsed || typeof parsed !== "object") continue;
+
+    const rec = parsed as Record<string, unknown>;
+    if (rec.ok !== true) continue;
+
+    const title = typeof rec.title === "string" ? rec.title.trim() : "";
+    const description =
+      typeof rec.description === "string" ? rec.description : "";
+    if (!title || !description) continue;
+
+    const productId =
+      typeof rec.productId === "string" ? rec.productId.trim() : "";
+    const targetLanguage =
+      typeof rec.targetLanguage === "string"
+        ? rec.targetLanguage.trim()
+        : undefined;
+
+    return {
+      productId,
+      title,
+      description,
+      ...(targetLanguage ? { targetLanguage } : {}),
+    };
+  }
+  return undefined;
+}
+
 export type InvokeChatAgentParams = {
   /** 完整对话上下文；最后一条须为用户消息（HumanMessage）。 */
   messages: BaseMessage[];
@@ -99,8 +174,10 @@ export async function invokeChatAgent(
 
   const { messages } = result;
   const extractedForm = extractTranslationTaskFormFromMessages(messages);
+  const extractedGeneratePayload = extractGenerateDescriptionCardPayload(messages);
   const lastUserText =
     lastHumanUtterance(agentInputMessages) || lastHumanUtterance(messages) || "";
+  const toolCalledGenerateDescription = hasGenerateDescriptionToolCall(messages);
 
   const resolveTranslationTaskForm = (assistantReplyRaw: string) => {
     if (extractedForm) return extractedForm;
@@ -108,6 +185,14 @@ export async function invokeChatAgent(
       return defaultTranslationTaskFormPayload();
     }
     return undefined;
+  };
+
+  const resolveGenerateDescriptionCard = (assistantReplyRaw: string) => {
+    if (toolCalledGenerateDescription) return true;
+    return shouldInjectGenerateDescriptionCardFallback(
+      lastUserText,
+      assistantReplyRaw,
+    );
   };
 
   for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -118,6 +203,10 @@ export async function invokeChatAgent(
         return {
           reply: polishFinalReply(text),
           translationTaskForm: resolveTranslationTaskForm(text),
+          generateDescriptionCard: resolveGenerateDescriptionCard(text),
+          ...(extractedGeneratePayload
+            ? { generateDescriptionCardPayload: extractedGeneratePayload }
+            : {}),
         };
       }
     }
@@ -132,6 +221,10 @@ export async function invokeChatAgent(
       return {
         reply: polishFinalReply(fallbackText),
         translationTaskForm: resolveTranslationTaskForm(fallbackText),
+        generateDescriptionCard: resolveGenerateDescriptionCard(fallbackText),
+        ...(extractedGeneratePayload
+          ? { generateDescriptionCardPayload: extractedGeneratePayload }
+          : {}),
       };
     }
   } catch {
@@ -144,5 +237,9 @@ export async function invokeChatAgent(
   return {
     reply: defaultReply,
     translationTaskForm: resolveTranslationTaskForm(defaultReply),
+    generateDescriptionCard: resolveGenerateDescriptionCard(defaultReply),
+    ...(extractedGeneratePayload
+      ? { generateDescriptionCardPayload: extractedGeneratePayload }
+      : {}),
   };
 }

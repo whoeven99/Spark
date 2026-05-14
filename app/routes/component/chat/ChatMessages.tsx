@@ -82,7 +82,10 @@ export function ChatMessages({
 
                   {hasGenerateDescriptionCard ? (
                     <div style={{ marginTop: "0.85rem" }}>
-                      <GenerateDescriptionChatCard embedded />
+                      <GenerateDescriptionChatCard
+                        embedded
+                        initialResult={item.generateDescriptionCardPayload}
+                      />
                     </div>
                   ) : null}
                 </s-box>

@@ -72,6 +72,8 @@ export function createGenerateProductDescriptionTool(
         );
         return JSON.stringify({
           ok: true,
+          productId: productId.trim(),
+          targetLanguage: resolvedLang,
           title: result.data.title,
           description: result.data.description,
         });

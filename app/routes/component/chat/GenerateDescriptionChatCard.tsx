@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useGenerateDescription } from "../../../hooks/useGenerateDescription";
+import type { GenerateDescriptionCardPayload } from "../../../lib/chatMessage";
 import type { ProductSelectorSelection } from "../../../lib/productSearchTypes";
 import { ProductSelector } from "../product/ProductSelector";
 import { GenerateDescriptionResultEditor } from "../generateDescription/GenerateDescriptionResultEditor";
@@ -8,13 +9,17 @@ import { GenerateDescriptionResultEditor } from "../generateDescription/Generate
 type Props = {
   /** 嵌在助手气泡内时略收紧边距与阴影 */
   embedded?: boolean;
+  initialResult?: GenerateDescriptionCardPayload;
 };
 
-export function GenerateDescriptionChatCard({ embedded = false }: Props) {
+export function GenerateDescriptionChatCard({
+  embedded = false,
+  initialResult,
+}: Props) {
   const shopify = useAppBridge();
   const [selectedProduct, setSelectedProduct] =
     useState<ProductSelectorSelection | null>(null);
-  const [productId, setProductId] = useState("");
+  const [productId, setProductId] = useState(initialResult?.productId ?? "");
   const [showManualProductId, setShowManualProductId] = useState(false);
 
   const search = typeof window !== "undefined" ? window.location.search : "";
@@ -29,6 +34,7 @@ export function GenerateDescriptionChatCard({ embedded = false }: Props) {
     errorText,
     saveErrorText,
     description,
+    pinnedProductId,
     draftTitle,
     setDraftTitle,
     draftDescription,
@@ -46,6 +52,7 @@ export function GenerateDescriptionChatCard({ embedded = false }: Props) {
   } = useGenerateDescription({
     locationSearch: search,
     initialShopLocales: null,
+    initialResult,
     toastShow: (message: string) => {
       shopify.toast.show(message);
     },
@@ -56,7 +63,10 @@ export function GenerateDescriptionChatCard({ embedded = false }: Props) {
     await submitGenerate(pid);
   };
 
-  const productIdForActions = (selectedProduct?.id ?? productId).trim();
+  const productIdForActions = (selectedProduct?.id ?? productId ?? pinnedProductId).trim();
+  const hasPrefilledResult =
+    Boolean(initialResult?.title?.trim()) &&
+    Boolean(initialResult?.description);
 
   const copyBusy = copyTarget !== null;
 
@@ -119,95 +129,99 @@ export function GenerateDescriptionChatCard({ embedded = false }: Props) {
             </div>
           </div>
 
-          <div style={{ marginBottom: "0.85rem" }}>
-            <ProductSelector
-              locationSearch={search}
-              embedded={embedded}
-              selected={selectedProduct}
-              onSelectedChange={setSelectedProduct}
-            />
-            <details
-              style={{ marginTop: "0.35rem" }}
-              open={showManualProductId}
-              onToggle={(e) =>
-                setShowManualProductId(e.currentTarget.open)
-              }
-            >
-              <summary
-                style={{
-                  cursor: "pointer",
-                  fontSize: "0.75rem",
-                  color: "#2c6ecb",
-                  userSelect: "none",
-                }}
-              >
-                高级：手动输入商品 ID
-              </summary>
-              <div style={{ marginTop: "0.5rem" }}>
-                <s-text-field
-                  label="商品 ID"
-                  value={productId}
-                  onChange={(e) => setProductId(e.currentTarget.value)}
-                  autocomplete="off"
+          {!hasPrefilledResult ? (
+            <>
+              <div style={{ marginBottom: "0.85rem" }}>
+                <ProductSelector
+                  locationSearch={search}
+                  embedded={embedded}
+                  selected={selectedProduct}
+                  onSelectedChange={setSelectedProduct}
                 />
-              </div>
-            </details>
-          </div>
-
-          <div style={{ ...fieldGridStyle, marginBottom: "0.85rem" }}>
-            <div style={{ gridColumn: "1 / -1" }}>
-              <label
-                htmlFor="generate-description-lang-card"
-                style={{
-                  display: "block",
-                  fontSize: "0.75rem",
-                  fontWeight: 600,
-                  color: "#444",
-                }}
-              >
-                目标语言
-              </label>
-              <select
-                id="generate-description-lang-card"
-                value={targetLanguage}
-                onChange={(e) => setTargetLanguage(e.target.value)}
-                disabled={localesLoading || isSubmitting || isSaving || saveConfirmOpen}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  marginTop: "0.35rem",
-                  padding: "0.45rem 0.55rem",
-                  fontSize: "0.8125rem",
-                  borderRadius: "8px",
-                  border: "1px solid #c9cccf",
-                  background: localesLoading ? "#f6f6f7" : "#fff",
-                  color: "#303030",
-                  boxSizing: "border-box",
-                }}
-              >
-                {localesLoading && localeOptions.length === 0 ? (
-                  <option value="">加载语言列表…</option>
-                ) : null}
-                {localeOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-              {localesIsFallback ? (
-                <div
-                  style={{
-                    marginTop: "0.3rem",
-                    fontSize: "0.6875rem",
-                    color: "#6d7175",
-                    lineHeight: 1.4,
-                  }}
+                <details
+                  style={{ marginTop: "0.35rem" }}
+                  open={showManualProductId}
+                  onToggle={(e) =>
+                    setShowManualProductId(e.currentTarget.open)
+                  }
                 >
-                  使用内置语言列表；授权 read_locales 并重新安装后可同步店铺语言。
+                  <summary
+                    style={{
+                      cursor: "pointer",
+                      fontSize: "0.75rem",
+                      color: "#2c6ecb",
+                      userSelect: "none",
+                    }}
+                  >
+                    高级：手动输入商品 ID
+                  </summary>
+                  <div style={{ marginTop: "0.5rem" }}>
+                    <s-text-field
+                      label="商品 ID"
+                      value={productId}
+                      onChange={(e) => setProductId(e.currentTarget.value)}
+                      autocomplete="off"
+                    />
+                  </div>
+                </details>
+              </div>
+
+              <div style={{ ...fieldGridStyle, marginBottom: "0.85rem" }}>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label
+                    htmlFor="generate-description-lang-card"
+                    style={{
+                      display: "block",
+                      fontSize: "0.75rem",
+                      fontWeight: 600,
+                      color: "#444",
+                    }}
+                  >
+                    目标语言
+                  </label>
+                  <select
+                    id="generate-description-lang-card"
+                    value={targetLanguage}
+                    onChange={(e) => setTargetLanguage(e.target.value)}
+                    disabled={localesLoading || isSubmitting || isSaving || saveConfirmOpen}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      marginTop: "0.35rem",
+                      padding: "0.45rem 0.55rem",
+                      fontSize: "0.8125rem",
+                      borderRadius: "8px",
+                      border: "1px solid #c9cccf",
+                      background: localesLoading ? "#f6f6f7" : "#fff",
+                      color: "#303030",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    {localesLoading && localeOptions.length === 0 ? (
+                      <option value="">加载语言列表…</option>
+                    ) : null}
+                    {localeOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  {localesIsFallback ? (
+                    <div
+                      style={{
+                        marginTop: "0.3rem",
+                        fontSize: "0.6875rem",
+                        color: "#6d7175",
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      使用内置语言列表；授权 read_locales 并重新安装后可同步店铺语言。
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
-          </div>
+              </div>
+            </>
+          ) : null}
 
           {errorText ? (
             <div
@@ -249,24 +263,26 @@ export function GenerateDescriptionChatCard({ embedded = false }: Props) {
             />
           ) : null}
 
-          <s-stack direction="block" gap="small">
-            <div style={primaryBtnStyle}>
-              <s-button
-                type="button"
-                variant="primary"
-                onClick={() => {
-                  void handleGenerate();
-                }}
-                {...(isSubmitting || isSaving || localesLoading || saveConfirmOpen ? { disabled: true } : {})}
-              >
-                {isSubmitting
-                  ? "正在生成…"
-                  : localesLoading
-                    ? "加载语言…"
-                    : "生成描述"}
-              </s-button>
-            </div>
-          </s-stack>
+          {!hasPrefilledResult ? (
+            <s-stack direction="block" gap="small">
+              <div style={primaryBtnStyle}>
+                <s-button
+                  type="button"
+                  variant="primary"
+                  onClick={() => {
+                    void handleGenerate();
+                  }}
+                  {...(isSubmitting || isSaving || localesLoading || saveConfirmOpen ? { disabled: true } : {})}
+                >
+                  {isSubmitting
+                    ? "正在生成…"
+                    : localesLoading
+                      ? "加载语言…"
+                      : "生成描述"}
+                </s-button>
+              </div>
+            </s-stack>
+          ) : null}
         </div>
       </div>
     </div>

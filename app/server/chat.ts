@@ -41,13 +41,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     const { admin } = await authenticate.admin(request);
-    const { reply, translationTaskForm } = await invokeChatAgent({
+    const {
+      reply,
+      translationTaskForm,
+      generateDescriptionCard,
+      generateDescriptionCardPayload,
+    } = await invokeChatAgent({
       messages: agentMessages,
       extraTools: buildChatAgentExtraTools(admin),
     });
     return Response.json({
       reply,
       ...(translationTaskForm ? { translationTaskForm } : {}),
+      ...(generateDescriptionCard ? { generateDescriptionCard } : {}),
+      ...(generateDescriptionCardPayload
+        ? { generateDescriptionCardPayload }
+        : {}),
     });
   } catch (error) {
     console.error("Chat agent error:", error);
