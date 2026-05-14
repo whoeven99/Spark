@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ShopifyAdminGraphqlClient } from "../ai/tools/implementations/shopifyShopInfoTool";
+import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/tool";
 import {
   DEFAULT_DESCRIPTION_TEMPERATURE,
   MAX_DESCRIPTION_TEMPERATURE,
