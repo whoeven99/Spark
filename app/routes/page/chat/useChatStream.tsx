@@ -6,7 +6,14 @@ type StreamChunk =
   | { type: "tool_call"; name: string; args: unknown }
   | { type: "tool_result"; name: string; result: string }
   | { type: "error"; message: string }
-  | { type: "done"; metadata: { totalTokens: number; model: string } };
+  | {
+      type: "done";
+      metadata: {
+        totalTokens: number;
+        model: string;
+        finalReply?: string;
+      };
+    };
 
 export type ChatStreamFinishPayload = {
   aborted: boolean;
@@ -152,9 +159,13 @@ export function useChatStream() {
                 snapshotRef.current.reply = msg;
               } else if (chunk.type === "done") {
                 markFirstChunkSeen();
+                const reply =
+                  chunk.metadata.finalReply?.trim() ||
+                  snapshotRef.current.reply;
+                snapshotRef.current.reply = reply;
                 finalizeOnce({
                   aborted: false,
-                  reply: snapshotRef.current.reply,
+                  reply,
                   translationTaskForm: snapshotRef.current.translationTaskForm,
                   generateDescriptionCard: snapshotRef.current.generateDescriptionCard,
                   generateDescriptionCardPayload:

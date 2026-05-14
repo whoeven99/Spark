@@ -1,11 +1,7 @@
 name: spark - Shopify App Deploy (Test)
 
-on:
-  push:
-    branches:
-      - allen
-      - master
-  workflow_dispatch:
+# 任意分支 push 触发（非 master 时部署 jobs 跳过）；手动可随时部署所选分支
+on: [push, workflow_dispatch]
 
 defaults:
   run:
@@ -16,6 +12,8 @@ jobs:
     name: Shopify app deploy (test.toml)
     runs-on: ubuntu-latest
     environment: CommonShopifyRenderConfig
+    # 仅：手动运行；或推送到 master
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master'
 
     steps:
       - name: Checkout
@@ -49,6 +47,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: CommonShopifyRenderConfig
     needs: deploy_shopify
+    # 与 deploy_shopify 一致：手动或 master；push 其它分支时上游跳过则本 job 也会跳过
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master'
 
     steps:
       - name: Checkout
