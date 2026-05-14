@@ -13,7 +13,7 @@
 - 前端：React + TypeScript + React Router（文件系统路由）。
 - UI：Shopify Web Components（`s-*` 标签）+ App Bridge。
 - 服务端：React Router action/loader + Shopify Admin GraphQL。
-- AI：LangChain + ChatOpenAI 兼容接口（默认可走 DeepSeek Base URL）。
+- AI：LangGraph（`@langchain/langgraph/prebuilt` 的 ReAct Agent）+ `@langchain/openai` 兼容 DeepSeek Base URL；消息与工具类型仍基于 `@langchain/core`。
 - 持久化与服务依赖（与代码一致）：
   - **Shopify Session、用户建议、广告 OAuth 配置**：同一 Prisma Client，运行时通过 `@prisma/adapter-libsql` 连接 **Turso（libSQL）**（见 `app/db.server.ts`）。`prisma/schema.prisma` 中 datasource 仍为 `sqlite` + `DATABASE_URL`，用于迁移与类型生成；线上/测试库 URL 与 Token 由 `TURSO_*` 环境变量提供。
   - **翻译任务元数据**：**Azure Cosmos DB**（容器默认 `translation` / `translation_jobs`，与 Spring 后端文档模型对齐，见 `app/server/translation/cosmosJobStore.server.ts`）。
@@ -44,7 +44,7 @@
   - 物流：`app.logistics.sf.config.tsx` / `app.logistics.fedex.config.tsx`
 - 反馈路由：
   - `app.feedback.suggestion.tsx`：`POST` 校验后 **`prisma.suggestion.create`** 写入 Turso（字段 `shop`、`content`，最多 2000 字）；前端从 `ChatPage` 提交至 `/app/feedback/suggestion`。
-- **生成商品描述**：`POST /api/generate-description`（`api.generate-description.ts`）与 `POST /app/generate-description`（同上页面 action），服务端逻辑见 `app/server/generateDescription/generateDescriptionHttp.server.ts`；**写回 Shopify 商品标题与描述**：`POST /api/update-product-description`（`api.update-product-description.ts`），服务端见 `app/server/generateDescription/updateProductDescriptionHttp.server.ts` 与 `services/updateProductDescriptionService.ts`。AI Assistant 通过工具 `generate_product_description`（`app/server/ai/tool/generateDescriptionTool.ts`）调用同一套 `services/generateDescriptionService.ts`。
+- **生成商品描述**：`POST /api/generate-description`（`api.generate-description.ts`）与 `POST /app/generate-description`（同上页面 action），服务端逻辑见 `app/server/generateDescription/generateDescriptionHttp.server.ts`；**写回 Shopify 商品标题与描述**：`POST /api/update-product-description`（`api.update-product-description.ts`），服务端见 `app/server/generateDescription/updateProductDescriptionHttp.server.ts` 与 `services/updateProductDescriptionService.ts`。AI Assistant 通过工具 `generate_product_description`（`app/server/ai/tools/implementations/generateDescriptionTool.ts`）调用同一套 `services/generateDescriptionService.ts`。
 - 翻译相关 HTTP 路由（文件位于 `app/routes/`，URL 与 React Router 扁平路由约定一致）：
   - **`GET /api/translate/v3/json-runtime-tasks`**：`api.translate.v3.json-runtime-tasks.ts`，当前店铺 JSON Runtime 任务列表（Cosmos）。
   - **`GET /api/translate/v3/json-runtime-task-detail`**：`api.translate.v3.json-runtime-task-detail.ts`，任务详情；默认转发 **`AGENT_TASK_BASE_URL`** 下的 Java `/translate/v3/jsonRuntimeTaskDetail`；若设置 **`JSON_RUNTIME_TASK_DETAIL_SOURCE=local`**，则在 Spark 进程内聚合 Cosmos / Redis / Blob（见该文件与 `jsonRuntimeTaskDetail.server.ts`）。
@@ -56,12 +56,15 @@
   - 先做 Shopify admin 鉴权。
   - 通过 `buildChatAgentExtraTools(admin)` 注入 Shopify 指标工具、翻译表单工具与 **`generate_product_description`** 等。
   - 调用 `invokeChatAgent()` 获取回复。
-- `app/server/ai/agent.ts`：`invokeChatAgent`、Agent 构建与模型实例化；系统提示词强制简体中文、鼓励结构化输出、避免 Markdown 表格；若无可用 AIMessage 文本则走 fallback 模型。
-- **回复后处理**（已从 `agent.ts` 拆出，便于单测与单独演进）：
-  - `app/server/ai/langchainMessageText.ts`：从 LangChain `BaseMessage` 抽取纯文本；拼接对话上下文供兜底（`extractMessagesContext`，最长 4000 字符）。
-  - `app/server/ai/markdownTableNormalize.ts`：识别 Markdown 表格、转为列表（粗体首列 + 「列名：值」）。
-  - `app/server/ai/polishFinalReply.ts`：在表格规整基础上做最终润色（代码围栏保护、已有标题/列表则跳过重排、多行「指标：值」格式化为小节等）。
-- **配套测试**：`app/server/ai/*.test.ts`（Vitest）；改动上述模块后建议执行 `npm run test -- --run app/server/ai`。
+- `app/server/ai/graph/shopChatGraph.server.ts`：`buildShopChatGraph`、`getShopChatModel`（LangGraph ReAct 编译图）；系统提示词见同目录 `shopAssistantPrompt.ts`（简体中文、鼓励结构化输出、避免 Markdown 表格）。
+- `app/server/ai/chat/invokeChatAgent.server.ts`：`invokeChatAgent`（图执行、表单解析、兜底模型）；若无可用 AIMessage 文本则走 fallback。
+- **流式**：`app/server/ai/chat/stream/agentStream.server.ts`：`invokeChatAgentStream`（`graph.stream`，供 `/chat-stream` 等）。
+- **回复后处理**（`app/server/ai/postprocess/`，便于单测与单独演进）：
+  - `langchainMessageText.ts`：从 LangChain `BaseMessage` 抽取纯文本；拼接对话上下文供兜底（`extractMessagesContext`，最长 4000 字符）。
+  - `markdownTableNormalize.ts`：识别 Markdown 表格、转为列表（粗体首列 + 「列名：值」）。
+  - `polishFinalReply.ts`：在表格规整基础上做最终润色（代码围栏保护、已有标题/列表则跳过重排、多行「指标：值」格式化为小节等）。
+  - `translationTaskFormExtract.ts`：从 ToolMessage / 对话推断翻译任务表单载荷。
+- **配套测试**：`app/server/ai/postprocess/*.test.ts`（Vitest）；改动上述模块后建议执行 `npm run test -- --run app/server/ai`。
 
 ## 6. AI 工具能力概览
 - 基础工具：
@@ -71,7 +74,7 @@
   - 商店基础信息：店铺名、域名、币种、时区、套餐等。
   - scopes 查询与订单访问诊断。
   - 经营指标：销售额、订单数、转化率、AOV、来源表现、弃购率、退款率、库存健康。
-- 商品文案：`generate_product_description`（按商品 ID 生成结构化 `description`，见 `app/server/ai/tool/generateDescriptionTool.ts`）。
+- 商品文案：`generate_product_description`（按商品 ID 生成结构化 `description`，见 `app/server/ai/tools/implementations/generateDescriptionTool.ts`）。
 - 说明：部分指标依赖权限（如 `read_orders`），工具内置了缺权限诊断文案。
 
 ## 7. 诊断报告页口径（`app.additional.tsx`）
@@ -97,8 +100,8 @@
   - `npm run build` / `npm run start`：构建与启动。
   - `npm run lint` / `npm run typecheck` / `npm run test`：质量检查与测试。
 - CI 工作流：`.github/workflows/spark-deploy-test.yml`
-  - 先执行 Shopify deploy（`shopify.app.test.toml`）。
-  - 再触发 Render 指定 commit 部署。
+  - 先触发 Render Test 部署（commit deploy）。
+  - Shopify deploy（`shopify.app.test.toml`）仅在 `workflow_dispatch` 或 `master` push 时执行。
 
 ## 10. 环境变量（代码中实际依赖）
 - Shopify 侧：
@@ -137,12 +140,12 @@
 
 ## 12. 改动落点指南（按需求类型）
 - 改欢迎语/聊天 UI：`app/routes/page/ChatPage.tsx`、`app/routes/component/chat/*`（页面旁路与凭证弹层逻辑见 `app/routes/page/chat/`）。
-- 改聊天行为/工具调用：`app/server/chat.ts`、`app/server/ai/agent.ts`、`app/server/ai/chatAgentTools.server.ts`。
-- 改 AI 回复抽取、Markdown 表格规整或最终润色：`app/server/ai/langchainMessageText.ts`、`markdownTableNormalize.ts`、`polishFinalReply.ts`（单测同目录 `*.test.ts`）。
-- 加新 AI 工具：`app/server/ai/tool/*`，并在 `app/server/ai/chatAgentTools.server.ts` 的 `buildChatAgentExtraTools` 中注册（与 `shopifyShopInfoTool` 等一并注入聊天链路）。
+- 改聊天行为/工具调用：`app/server/chat.ts`、`app/server/ai/chat/invokeChatAgent.server.ts`、`app/server/ai/chat/chatAgentTools.server.ts`、`app/server/ai/graph/shopChatGraph.server.ts`。
+- 改 AI 回复抽取、Markdown 表格规整或最终润色：`app/server/ai/postprocess/langchainMessageText.ts`、`markdownTableNormalize.ts`、`polishFinalReply.ts`（单测同目录 `*.test.ts`）。
+- 加新 AI 工具：`app/server/ai/tools/implementations/*`，并在 `app/server/ai/chat/chatAgentTools.server.ts` 的 `buildChatAgentExtraTools` 中注册（与 `shopifyShopInfoTool` 等一并注入聊天链路）。
 - 改诊断指标：`app/routes/app.additional.tsx`（含查询、阈值、文案）。
 - 改广告 OAuth 配置字段：`app/routes/app.ads.*.config.tsx` + `app/server/adAuthCredentialStore.server.ts`（及 Meta 的 `adsCredentialStore.server.ts`）；改物流：`app/routes/app.logistics.*.config.tsx` + `app/server/logisticsCredentialStore.server.ts`。
-- 改生成商品描述页或 API：`app/routes/app.generate-description.tsx`、`app/routes/page/GenerateDescriptionPage.tsx`、`app/routes/component/generateDescription/GenerateDescriptionResultEditor.tsx`、`app/routes/api.generate-description.ts`、`app/routes/api.update-product-description.ts`、`app/server/generateDescription/**`、`app/hooks/useGenerateDescription.ts`、`app/server/ai/tool/generateDescriptionTool.ts`。
+- 改生成商品描述页或 API：`app/routes/app.generate-description.tsx`、`app/routes/page/GenerateDescriptionPage.tsx`、`app/routes/component/generateDescription/GenerateDescriptionResultEditor.tsx`、`app/routes/api.generate-description.ts`、`app/routes/api.update-product-description.ts`、`app/server/generateDescription/**`、`app/hooks/useGenerateDescription.ts`、`app/server/ai/tools/implementations/generateDescriptionTool.ts`。
 - 改翻译创建/流水线/Cosmos 文档：`app/server/translation/*`（先读 `agent.md`）；改翻译 UI：`app/routes/page/TranslationPage.tsx`、`app/routes/component/translation/*`；改 API：`app/routes/api.translate.v3.*.ts`。
 
 ## 13. 改动边界与风险提示

@@ -18,7 +18,7 @@ This is a template for building a [Shopify app](https://shopify.dev/docs/apps/ge
 | 翻译页面 | `app/routes/app.translation.tsx`、`app/routes/page/TranslationPage.tsx` |
 | 翻译 API | `GET /api/translate/v3/json-runtime-tasks`、`GET /api/translate/v3/json-runtime-task-detail`（`app/routes/api.translate.v3.*.ts`）；详情默认转发 AgentTask，设 `JSON_RUNTIME_TASK_DETAIL_SOURCE=local` 时由 Spark 聚合 |
 | 翻译开发约定 | 改动前阅读 `app/server/translation/agent.md` |
-| AI 回复后处理 | `app/server/ai/langchainMessageText.ts`、`markdownTableNormalize.ts`、`polishFinalReply.ts`（单测 `app/server/ai/*.test.ts`，可 `npm run test -- --run app/server/ai`） |
+| AI 回复后处理 | `app/server/ai/postprocess/langchainMessageText.ts`、`markdownTableNormalize.ts`、`polishFinalReply.ts`（单测 `app/server/ai/postprocess/*.test.ts`，可 `npm run test -- --run app/server/ai`） |
 
 Rather than cloning this repo, follow the [Quick Start steps](https://github.com/Shopify/shopify-app-template-react-router#quick-start).
 

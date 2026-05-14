@@ -33,7 +33,8 @@
   "dependencies": {
     "@azure/cosmos": "^4.9.3",
     "@azure/storage-blob": "^12.31.0",
-    "@langchain/core": "^1.1.40",
+    "@langchain/core": "^1.1.44",
+    "@langchain/langgraph": "^1.3.0",
     "@langchain/openai": "^1.4.4",
     "@libsql/client": "^0.17.3",
     "@prisma/adapter-libsql": "^6.19.3",
@@ -48,7 +49,6 @@
     "i18next": "^26.1.0",
     "ioredis": "^5.10.1",
     "isbot": "^5.1.31",
-    "langchain": "^1.3.3",
     "langsmith": "^0.5.20",
     "prisma": "^6.16.3",
     "react": "^18.3.1",

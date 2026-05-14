@@ -4,11 +4,12 @@ import { useTranslation } from "react-i18next";
 type ChatInputProps = {
   onMessageSend: (message: string) => void;
   isSending: boolean;
+  onAbort?: () => void;
 };
 
 const CHAT_INPUT_ID = "spark-chat-input";
 
-export function ChatInput({ onMessageSend, isSending }: ChatInputProps) {
+export function ChatInput({ onMessageSend, isSending, onAbort }: ChatInputProps) {
   const { t } = useTranslation();
   const [input, setInput] = useState("");
   const handleSend = useCallback(() => {
@@ -50,7 +51,7 @@ export function ChatInput({ onMessageSend, isSending }: ChatInputProps) {
         handleSend();
       }}
     >
-      <s-stack direction="inline" gap="base">
+      <s-stack direction="inline" gap="base" alignItems="end">
         <div style={{ flex: 1 }}>
           <s-text-field
             id={CHAT_INPUT_ID}
@@ -64,6 +65,11 @@ export function ChatInput({ onMessageSend, isSending }: ChatInputProps) {
             autocomplete="off"
           />
         </div>
+        {isSending && onAbort ? (
+          <s-button type="button" variant="secondary" onClick={() => onAbort()}>
+            {t("chat.stopGenerating")}
+          </s-button>
+        ) : null}
         <s-button
           type="submit"
           variant="primary"

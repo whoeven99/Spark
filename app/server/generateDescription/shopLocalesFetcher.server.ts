@@ -1,6 +1,7 @@
-import type { ShopifyAdminGraphqlClient } from "../ai/tool/shopifyShopInfoTool";
+import type { ShopifyAdminGraphqlClient } from "../ai/tools/implementations/shopifyShopInfoTool";
 import {
   type ShopLocaleGraphqlRow,
+  type ShopLocalesPayload,
   SHOP_LOCALES_FALLBACK,
 } from "../../lib/generateDescriptionLocales";
 import { logDetailedError } from "./generateDescriptionLog.server";

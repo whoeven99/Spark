@@ -1,9 +1,9 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { DEFAULT_DESCRIPTION_TEMPERATURE } from "../../generateDescription/constants.server";
-import { logDetailedError } from "../../generateDescription/generateDescriptionLog.server";
-import { fetchShopLocalesPayload } from "../../generateDescription/shopLocalesFetcher.server";
-import { runProductDescriptionGeneration } from "../../generateDescription/services/generateDescriptionService";
+import { DEFAULT_DESCRIPTION_TEMPERATURE } from "../../../generateDescription/constants.server";
+import { logDetailedError } from "../../../generateDescription/generateDescriptionLog.server";
+import { fetchShopLocalesPayload } from "../../../generateDescription/shopLocalesFetcher.server";
+import { runProductDescriptionGeneration } from "../../../generateDescription/services/generateDescriptionService";
 import type { ShopifyAdminGraphqlClient } from "./shopifyShopInfoTool";
 
 export const GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME =

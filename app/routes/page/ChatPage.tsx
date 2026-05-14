@@ -1,9 +1,12 @@
+import type { CSSProperties } from "react";
 import { useState, useRef, useEffect } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import type { ChatMessage, GenerateDescriptionCardPayload } from "../../lib/chatMessage";
 import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { ChatMessages } from "../component/chat/ChatMessages";
+import { ChatMessageContent } from "../component/chat/ChatMessageContent";
+import { ChatStreamingSkeleton } from "../component/chat/ChatStreamingSkeleton";
 import { ChatInput } from "../component/chat/ChatInput";
 import { ChatPageCredentialsChrome } from "./chat/ChatPageCredentialsChrome";
 import {
@@ -12,6 +15,16 @@ import {
   quickPromptTones,
 } from "./chat/chatPageConstants";
 import { asideCardStyle } from "./chat/chatPageStyles";
+import { useChatStream } from "./chat/useChatStream";
+
+const streamingAssistantBubbleShellStyle: CSSProperties = {
+  borderRadius: "12px",
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(44, 110, 203, 0.35)",
+  background:
+    "linear-gradient(180deg, rgba(44, 110, 203, 0.08), rgba(44, 110, 203, 0.02))",
+};
 
 export function ChatPage() {
   const shopify = useAppBridge();
@@ -19,7 +32,13 @@ export function ChatPage() {
   const firstMessage = buildInitialAssistantMessage(t);
   const quickPrompts = buildQuickPrompts(t);
   const generateDescriptionQuickPrompt = t("chat.quickPromptGenerateDescription");
-  const [isSending, setIsSending] = useState(false);
+  const {
+    isStreaming,
+    awaitingFirstChunk,
+    streamingText,
+    sendMessage: streamConversation,
+    abort: abortStream,
+  } = useChatStream();
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
       role: "assistant",
@@ -27,6 +46,8 @@ export function ChatPage() {
     },
   ]);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  /** 忽略重置会话或中止后延迟抵达的流式 onFinish，避免把旧回复拼回列表 */
+  const replyEpochRef = useRef(0);
 
   useEffect(() => {
     setMessages((prev) => {
@@ -38,7 +59,7 @@ export function ChatPage() {
   }, [i18n.language, t]);
 
   const openGenerateDescriptionCard = () => {
-    if (isSending) return;
+    if (isStreaming) return;
     setMessages((prev) => [
       ...prev,
       { role: "user", content: generateDescriptionQuickPrompt },
@@ -61,12 +82,13 @@ export function ChatPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isSending]);
+  }, [messages, isStreaming, awaitingFirstChunk, streamingText]);
 
   const sendMessage = async (content: string) => {
-    if (isSending) return;
+    if (isStreaming) return;
+    replyEpochRef.current += 1;
+    const epoch = replyEpochRef.current;
     setMessages((prev) => [...prev, { role: "user", content }]);
-    setIsSending(true);
 
     try {
       const authQuery = typeof window !== "undefined" ? window.location.search : "";
@@ -74,41 +96,43 @@ export function ChatPage() {
         role: m.role,
         content: m.content,
       }));
-      const response = await fetch(`/chat${authQuery}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: apiMessages }),
-      });
 
-      const data = (await response.json().catch(() => ({}))) as {
-        reply?: string;
-        error?: string;
-        translationTaskForm?: TranslationTaskFormPayload;
-        generateDescriptionCard?: boolean;
-        generateDescriptionCardPayload?: GenerateDescriptionCardPayload;
-      };
-      const assistantText =
-        data.reply?.trim() ||
-        data.error?.trim() ||
-        (!response.ok
-          ? t("chat.requestFailed", { status: response.status })
-          : t("chat.invalidReply"));
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: assistantText,
-          ...(data.translationTaskForm ? { translationTaskForm: data.translationTaskForm } : {}),
-          ...(data.generateDescriptionCard ? { generateDescriptionCard: true } : {}),
-          ...(data.generateDescriptionCardPayload
-            ? { generateDescriptionCardPayload: data.generateDescriptionCardPayload }
-            : {}),
+      await streamConversation(apiMessages, {
+        url: `/chat-stream${authQuery}`,
+        onFinish: (p) => {
+          if (epoch !== replyEpochRef.current) return;
+          const assistantText =
+            p.httpStatus !== undefined
+              ? t("chat.requestFailed", { status: p.httpStatus })
+              : p.aborted && !p.reply.trim()
+                ? t("chat.streamAbortedEmpty")
+                : p.reply.trim() || t("chat.invalidReply");
+
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content: assistantText,
+              ...(p.translationTaskForm
+                ? { translationTaskForm: p.translationTaskForm as TranslationTaskFormPayload }
+                : {}),
+              ...(p.generateDescriptionCard ? { generateDescriptionCard: true } : {}),
+              ...(p.generateDescriptionCardPayload
+                ? {
+                    generateDescriptionCardPayload:
+                      p.generateDescriptionCardPayload as GenerateDescriptionCardPayload,
+                  }
+                : {}),
+            },
+          ]);
+
+          if (p.aborted) {
+            shopify.toast.show(t("chat.streamAborted"));
+          }
         },
-      ]);
+      });
     } catch {
       shopify.toast.show(t("chat.sendFailed"));
-    } finally {
-      setIsSending(false);
     }
   };
 
@@ -147,10 +171,11 @@ export function ChatPage() {
             type="button"
             variant="secondary"
             onClick={() => {
+              replyEpochRef.current += 1;
+              abortStream();
               setMessages([{ role: "assistant", content: firstMessage }]);
               shopify.toast.show(t("chat.newChatStarted"));
             }}
-            {...(isSending ? { disabled: true } : {})}
           >
             {t("common.newChat")}
           </s-button>
@@ -180,7 +205,7 @@ export function ChatPage() {
                         ? openGenerateDescriptionCard()
                         : sendMessage(prompt)
                     }
-                    {...(isSending ? { disabled: true } : {})}
+                    {...(isStreaming ? { disabled: true } : {})}
                   >
                     {prompt}
                   </s-button>
@@ -193,12 +218,38 @@ export function ChatPage() {
             <div ref={messagesContainerRef} style={{ height: "100%", overflowY: "auto" }}>
               <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
                 <ChatMessages messages={messages} onTranslationCardSuccess={succeedTranslationCard} />
+                {isStreaming ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "flex-start",
+                      marginTop: "1rem",
+                    }}
+                  >
+                    <div style={{ maxWidth: "80%" }}>
+                      <div style={streamingAssistantBubbleShellStyle}>
+                        <s-box padding="base" borderRadius="base" background="transparent">
+                          <div style={{ marginBottom: "0.25rem" }}>
+                            <s-badge tone="neutral">AI Assistant</s-badge>
+                          </div>
+                          <div style={{ marginTop: "0.35rem", minHeight: awaitingFirstChunk ? "3rem" : undefined }}>
+                            {awaitingFirstChunk ? (
+                              <ChatStreamingSkeleton />
+                            ) : (
+                              <ChatMessageContent content={streamingText} />
+                            )}
+                          </div>
+                        </s-box>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </s-box>
             </div>
           </div>
 
           <s-box padding="base" borderWidth="base" borderRadius="base">
-            <ChatInput onMessageSend={sendMessage} isSending={isSending} />
+            <ChatInput onMessageSend={sendMessage} isSending={isStreaming} onAbort={abortStream} />
           </s-box>
         </div>
       </s-section>

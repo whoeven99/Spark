@@ -1,4 +1,4 @@
-import type { ShopifyAdminGraphqlClient } from "../ai/tool/shopifyShopInfoTool";
+import type { ShopifyAdminGraphqlClient } from "../ai/tools/implementations/shopifyShopInfoTool";
 import { logDetailedError } from "../generateDescription/generateDescriptionLog.server";
 import type { ProductSearchItem } from "../../lib/productSearchTypes";
 

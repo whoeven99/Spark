@@ -1,8 +1,8 @@
 import type { ActionFunctionArgs } from "react-router";
 import { HumanMessage } from "@langchain/core/messages";
 import { authenticate } from "../shopify.server";
-import { buildChatAgentExtraTools } from "./ai/chatAgentTools.server";
-import { invokeChatAgent } from "./ai/agent";
+import { buildChatAgentExtraTools } from "./ai/chat/chatAgentTools.server";
+import { invokeChatAgent } from "./ai/chat/invokeChatAgent.server";
 import { parseClientChatMessages } from "./chatPayload.server";
 import { isLangsmithAvailable } from "./ai/langsmith.server";
 

@@ -1,54 +1,17 @@
 name: spark - Shopify App Deploy (Test)
 
-on:
-  push:
-    branches:
-      - allen
-      - master
-  workflow_dispatch:
+# 任意分支 push / 手动均可触发。Render 始终部署；Shopify 仅 workflow_dispatch 或 push 到 master
+on: [push, workflow_dispatch]
 
 defaults:
   run:
     working-directory: .
 
 jobs:
-  deploy_shopify:
-    name: Shopify app deploy (test.toml)
-    runs-on: ubuntu-latest
-    environment: CommonShopifyRenderConfig
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.ref }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Shopify CLI
-        run: npm install -g @shopify/cli@latest
-
-      - name: Deploy
-        env:
-          SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
-          # 与 shopify.app.test.toml 中 client_id 一致
-          SHOPIFY_API_KEY: 940b967eda872dd81f9ffc283e29a013
-        run: shopify app deploy -c shopify.app.test.toml -f
-
   deploy_render:
     name: Trigger Render deploy (Test)
     runs-on: ubuntu-latest
     environment: CommonShopifyRenderConfig
-    needs: deploy_shopify
 
     steps:
       - name: Checkout
@@ -136,3 +99,37 @@ jobs:
           echo "Timed out waiting Render deploy result."
           echo "final_status=timeout" >> "$GITHUB_OUTPUT"
           exit 1
+
+  deploy_shopify:
+    name: Shopify app deploy (test.toml)
+    runs-on: ubuntu-latest
+    environment: CommonShopifyRenderConfig
+    # 仅：手动运行；或推送到 master
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Shopify CLI
+        run: npm install -g @shopify/cli@latest
+
+      - name: Deploy
+        env:
+          SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
+          # 与 shopify.app.test.toml 中 client_id 一致
+          SHOPIFY_API_KEY: 940b967eda872dd81f9ffc283e29a013
+        run: shopify app deploy -c shopify.app.test.toml -f
