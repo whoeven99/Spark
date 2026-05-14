@@ -1,4 +1,4 @@
-import type { ShopifyAdminGraphqlClient } from "../../ai/tool/shopifyShopInfoTool";
+import type { ShopifyAdminGraphqlClient } from "../../ai/tools/implementations/shopifyShopInfoTool";
 import { invokeDescriptionModels } from "../descriptionAiClient.server";
 import { parseAndValidateProductDescriptionJson } from "../generatedDescriptionJson.server";
 import { logDetailedError } from "../generateDescriptionLog.server";

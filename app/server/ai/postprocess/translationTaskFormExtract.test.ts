@@ -1,6 +1,6 @@
 import { ToolMessage } from "@langchain/core/messages";
 import { describe, expect, it } from "vitest";
-import { TRANSLATION_FORM_PAYLOAD_KIND } from "../../lib/translationTaskFormPayload";
+import { TRANSLATION_FORM_PAYLOAD_KIND } from "../../../lib/translationTaskFormPayload";
 import {
   extractTranslationTaskFormFromMessages,
   shouldInjectTranslationTaskFormFallback,

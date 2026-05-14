@@ -1,4 +1,8 @@
-import { AIMessage, HumanMessage } from "@langchain/core/messages";
+import {
+  AIMessage,
+  HumanMessage,
+  type BaseMessage,
+} from "@langchain/core/messages";
 import { describe, expect, it } from "vitest";
 import { extractMessageText, extractMessagesContext } from "./langchainMessageText";
 
@@ -19,9 +23,7 @@ describe("extractMessageText", () => {
   });
 
   it("数组中的纯字符串块保留", () => {
-    const msg = new HumanMessage({
-      content: ["x", "y"],
-    });
+    const msg = { content: ["x", "y"] } as unknown as BaseMessage;
     expect(extractMessageText(msg)).toBe("xy");
   });
 

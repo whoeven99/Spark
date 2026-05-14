@@ -9,21 +9,21 @@ import {
 import {
   extractMessageText,
   extractMessagesContext,
-} from "./langchainMessageText";
-import { buildShopChatGraph, getShopChatModel } from "./chatGraph.server";
-import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
-import type { GenerateDescriptionCardPayload } from "../../lib/chatMessage";
-import { polishFinalReply } from "./polishFinalReply";
+} from "../postprocess/langchainMessageText";
+import { buildShopChatGraph, getShopChatModel } from "../graph/shopChatGraph.server";
+import type { TranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
+import type { GenerateDescriptionCardPayload } from "../../../lib/chatMessage";
+import { polishFinalReply } from "../postprocess/polishFinalReply";
 import {
   defaultTranslationTaskFormPayload,
   extractTranslationTaskFormFromMessages,
   shouldInjectTranslationTaskFormFallback,
-} from "./translationTaskFormExtract";
-import { GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME } from "./tool/generateDescriptionTool";
+} from "../postprocess/translationTaskFormExtract";
+import { GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME } from "../tools/implementations/generateDescriptionTool";
 import {
   createLangsmithTracer,
   getTraceUrl,
-} from "./langsmith.server";
+} from "../langsmith.server";
 
 export type InvokeChatAgentResult = {
   reply: string;

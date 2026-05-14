@@ -3,8 +3,8 @@ import { ToolMessage } from "@langchain/core/messages";
 import {
   TRANSLATION_FORM_PAYLOAD_KIND,
   type TranslationTaskFormPayload,
-} from "../../lib/translationTaskFormPayload";
-import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../translation/types";
+} from "../../../lib/translationTaskFormPayload";
+import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../../translation/types";
 import { extractMessageText } from "./langchainMessageText";
 
 const DEFAULT_RESOURCE_MODULES: TranslationTaskFormPayload["resourceTypes"] = [

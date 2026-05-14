@@ -41,7 +41,7 @@ export function createLangsmithTracer(sessionName?: string): LangChainTracer | n
   try {
     const tracer = new LangChainTracer({
       projectName: LANGSMITH_CONFIG.projectName,
-      sessionName: sessionName || `chat-session-${Date.now()}`,
+      ...(sessionName ? { metadata: { sessionName } } : {}),
       client: getLangsmithClient() || undefined,
     });
     

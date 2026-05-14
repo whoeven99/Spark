@@ -2,11 +2,11 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
   ALLOWED_TRANSLATABLE_RESOURCE_TYPES,
-} from "../../translation/types";
+} from "../../../translation/types";
 import {
   TRANSLATION_FORM_PAYLOAD_KIND,
   type TranslationTaskFormPayload,
-} from "../../../lib/translationTaskFormPayload";
+} from "../../../../lib/translationTaskFormPayload";
 
 export const OPEN_TRANSLATION_TASK_FORM_TOOL_NAME = "open_translation_task_form";
 
