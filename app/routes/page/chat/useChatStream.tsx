@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { ChatMessage } from "../../../lib/chatMessage";
+import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 
 type StreamChunk =
   | { type: "text"; content: string }
@@ -140,8 +141,9 @@ export function useChatStream() {
               } else if (chunk.type === "tool_call") {
                 markFirstChunkSeen();
                 if (chunk.name === "open_translation_task_form") {
-                  snapshotRef.current.translationTaskForm = chunk.args;
-                  setStreamingTranslationForm(chunk.args);
+                  const normalized = coerceTranslationTaskFormPayload(chunk.args);
+                  snapshotRef.current.translationTaskForm = normalized;
+                  setStreamingTranslationForm(normalized);
                 }
               } else if (chunk.type === "tool_result") {
                 markFirstChunkSeen();

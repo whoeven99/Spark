@@ -1,27 +1,15 @@
 import type { BaseMessage } from "@langchain/core/messages";
 import { ToolMessage } from "@langchain/core/messages";
 import {
+  coerceTranslationTaskFormPayload,
   TRANSLATION_FORM_PAYLOAD_KIND,
   type TranslationTaskFormPayload,
 } from "../../../lib/translationTaskFormPayload";
-import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../../translation/types";
 import { extractMessageText } from "./langchainMessageText";
-
-const DEFAULT_RESOURCE_MODULES: TranslationTaskFormPayload["resourceTypes"] = [
-  "PRODUCT",
-  "COLLECTION",
-  "PAGE",
-  "ARTICLE",
-];
 
 /** 与 `open_translation_task_form` 工具缺省一致，供服务端兜底下发给前端。 */
 export function defaultTranslationTaskFormPayload(): TranslationTaskFormPayload {
-  return {
-    sourceLocale: "zh-CN",
-    targetLocale: "",
-    limitPerType: 20,
-    resourceTypes: [...DEFAULT_RESOURCE_MODULES],
-  };
+  return coerceTranslationTaskFormPayload({});
 }
 
 /**
@@ -56,8 +44,6 @@ function toolMessageJsonPayloadString(m: ToolMessage): string | null {
 export function extractTranslationTaskFormFromMessages(
   messages: BaseMessage[],
 ): TranslationTaskFormPayload | undefined {
-  const allowed = new Set<string>(ALLOWED_TRANSLATABLE_RESOURCE_TYPES);
-
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const m = messages[i];
     if (!ToolMessage.isInstance(m)) continue;
@@ -76,20 +62,7 @@ export function extractTranslationTaskFormFromMessages(
     const rec = parsed as Record<string, unknown>;
     if (rec._sparkKind !== TRANSLATION_FORM_PAYLOAD_KIND) continue;
 
-    const rawTypes = Array.isArray(rec.resourceTypes)
-      ? rec.resourceTypes.map((x) => String(x).trim().toUpperCase()).filter(Boolean)
-      : [];
-    const resourceTypes = rawTypes.filter((x) => allowed.has(x));
-
-    return {
-      sourceLocale: String(rec.sourceLocale ?? "zh-CN"),
-      targetLocale: String(rec.targetLocale ?? ""),
-      limitPerType:
-        typeof rec.limitPerType === "number" && Number.isFinite(rec.limitPerType)
-          ? rec.limitPerType
-          : 20,
-      resourceTypes: resourceTypes.length ? resourceTypes : [...DEFAULT_RESOURCE_MODULES],
-    };
+    return coerceTranslationTaskFormPayload(rec);
   }
   return undefined;
 }

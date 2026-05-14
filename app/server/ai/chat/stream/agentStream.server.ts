@@ -14,6 +14,7 @@ import {
 } from "../../postprocess/langchainMessageText";
 import { buildShopChatGraph, getShopChatModel } from "../../graph/shopChatGraph.server";
 import type { GenerateDescriptionCardPayload } from "../../../../lib/chatMessage";
+import { coerceTranslationTaskFormPayload } from "../../../../lib/translationTaskFormPayload";
 import { polishFinalReply } from "../../postprocess/polishFinalReply";
 import {
   defaultTranslationTaskFormPayload,
@@ -218,7 +219,7 @@ export async function invokeChatAgentStream(
               controller.enqueue({
                 type: "tool_call",
                 name: ev.name,
-                args: ev.input,
+                args: coerceTranslationTaskFormPayload(ev.input),
               });
             } else if (
               ev.event === "on_tool_end" &&
