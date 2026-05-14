@@ -2,6 +2,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { DEFAULT_DESCRIPTION_TEMPERATURE } from "../../generateDescription/constants.server";
 import { logDetailedError } from "../../generateDescription/generateDescriptionLog.server";
+import { fetchShopLocalesPayload } from "../../generateDescription/shopLocalesFetcher.server";
 import { runProductDescriptionGeneration } from "../../generateDescription/services/generateDescriptionService";
 import type { ShopifyAdminGraphqlClient } from "./shopifyShopInfoTool";
 
@@ -28,7 +29,9 @@ export function createGenerateProductDescriptionTool(
       targetLanguage: z
         .string()
         .optional()
-        .describe("目标语言 BCP47，如 zh-CN、en、ja；缺省 zh-CN"),
+        .describe(
+          "目标语言 BCP47，如 zh-CN、en、ja；缺省时由 Admin API shopLocales 解析店铺主语言（失败则回退内置列表默认 en）",
+        ),
     }),
     func: async ({ productId, targetLanguage }) => {
       const requestId = crypto.randomUUID();
@@ -36,10 +39,21 @@ export function createGenerateProductDescriptionTool(
         `[GenerateDescription][Tool Start] requestId=${requestId} tool=${GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME} productId=${productId}`,
       );
       try {
+        let resolvedLang = (targetLanguage ?? "").trim();
+        if (!resolvedLang) {
+          const locales = await fetchShopLocalesPayload(
+            admin,
+            `toolDefaultLang requestId=${requestId}`,
+          );
+          resolvedLang = locales.defaultTargetLanguage;
+          console.info(
+            `[GenerateDescription][Tool] requestId=${requestId} inferred targetLanguage=${resolvedLang} fallback=${locales.isFallback}`,
+          );
+        }
         const result = await runProductDescriptionGeneration({
           admin,
           productId: productId.trim(),
-          targetLanguage: (targetLanguage ?? "zh-CN").trim() || "zh-CN",
+          targetLanguage: resolvedLang,
           temperature: DEFAULT_DESCRIPTION_TEMPERATURE,
           requestId,
         });

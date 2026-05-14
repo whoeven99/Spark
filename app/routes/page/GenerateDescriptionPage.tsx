@@ -1,80 +1,52 @@
 import { useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useLoaderData } from "react-router";
+import { useGenerateDescription } from "../../hooks/useGenerateDescription";
 import type { loader } from "../app.generate-description";
-import type { GenerateDescriptionApiResponse } from "../../lib/generateDescriptionTypes";
+import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
+import { ProductSelector } from "../component/product/ProductSelector";
 
 export function GenerateDescriptionPage() {
   const shopify = useAppBridge();
   const loaderData = useLoaderData<typeof loader>();
+  const [selectedProduct, setSelectedProduct] =
+    useState<ProductSelectorSelection | null>(null);
   const [productId, setProductId] = useState("");
-  const [targetLanguage, setTargetLanguage] = useState(
-    loaderData.defaultTargetLanguage,
-  );
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorText, setErrorText] = useState<string | null>(null);
-  const [productTitle, setProductTitle] = useState<string | null>(null);
-  const [description, setDescription] = useState<string | null>(null);
+  const [showManualProductId, setShowManualProductId] = useState(false);
+
+  const search =
+    typeof window !== "undefined" ? window.location.search : "";
+
+  const {
+    targetLanguage,
+    setTargetLanguage,
+    localeOptions,
+    localesLoading,
+    isSubmitting,
+    errorText,
+    productTitle,
+    description,
+    copyTarget,
+    submitGenerate,
+    copyTitle,
+    copyDescription,
+    copyAll,
+    resetResult,
+    localesIsFallback,
+  } = useGenerateDescription({
+    locationSearch: search,
+    initialShopLocales: loaderData.shopLocales,
+    toastShow: (message) => {
+      shopify.toast.show(message);
+    },
+  });
 
   const handleGenerate = async () => {
-    const pid = productId.trim();
-    if (!pid) {
-      shopify.toast.show("请填写商品 ID");
-      return;
-    }
-    const lang = targetLanguage.trim();
-    if (!lang) {
-      shopify.toast.show("请填写目标语言");
-      return;
-    }
-
-    setIsSubmitting(true);
-    setErrorText(null);
-    setProductTitle(null);
-    setDescription(null);
-
-    const query = typeof window !== "undefined" ? window.location.search : "";
-    try {
-      // 走独立 API：裸 JSON + 与聊天卡片一致；避免对 /app/* 路由 action 的 fetch 在 RR/嵌入壳下解析异常。
-      const response = await fetch(`/api/generate-description${query}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({ productId: pid, targetLanguage: lang }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as GenerateDescriptionApiResponse;
-
-      if (!response.ok || payload.success === false) {
-        const msg =
-          payload.success === false
-            ? payload.errorMsg
-            : `请求失败（${response.status}）`;
-        setErrorText(msg || `请求失败（${response.status}）`);
-        return;
-      }
-
-      if (
-        payload.success === true &&
-        payload.response &&
-        typeof payload.response.description === "string" &&
-        typeof payload.response.title === "string"
-      ) {
-        setProductTitle(payload.response.title);
-        setDescription(payload.response.description);
-        shopify.toast.show("描述生成成功");
-      } else {
-        setErrorText("返回数据异常，请重试");
-      }
-    } catch {
-      const msg = "网络异常，请稍后重试";
-      setErrorText(msg);
-      shopify.toast.show(msg);
-    } finally {
-      setIsSubmitting(false);
-    }
+    const pid = (selectedProduct?.id ?? productId).trim();
+    await submitGenerate(pid);
   };
+
+  const copyBusy = copyTarget !== null;
 
   return (
     <s-page heading="生成商品描述">
@@ -97,22 +69,96 @@ export function GenerateDescriptionPage() {
                     lineHeight: 1.5,
                   }}
                 >
-                  基于当前店铺在 Shopify 中的商品数据生成营销描述。商品 ID 可为数字或
-                  gid://shopify/Product/…；目标语言示例：zh-CN、en、ja。与 AI Assistant
-                  页快捷入口使用同一套服务端能力。
+                  基于当前店铺在 Shopify 中的商品数据生成营销描述。请先在下方搜索并选择商品；
+                  目标语言默认与店铺主语言一致，可在下拉中切换。与 AI Assistant 页快捷入口使用同一套服务端能力。
                 </div>
-                <s-text-field
-                  label="商品 ID"
-                  value={productId}
-                  onChange={(e) => setProductId(e.currentTarget.value)}
-                  autocomplete="off"
+                <ProductSelector
+                  locationSearch={search}
+                  selected={selectedProduct}
+                  onSelectedChange={setSelectedProduct}
                 />
-                <s-text-field
-                  label="目标语言"
-                  value={targetLanguage}
-                  onChange={(e) => setTargetLanguage(e.currentTarget.value)}
-                  autocomplete="off"
-                />
+                <details
+                  style={{ marginTop: "0.25rem" }}
+                  open={showManualProductId}
+                  onToggle={(e) =>
+                    setShowManualProductId(e.currentTarget.open)
+                  }
+                >
+                  <summary
+                    style={{
+                      cursor: "pointer",
+                      fontSize: "0.8125rem",
+                      color: "#2c6ecb",
+                      userSelect: "none",
+                    }}
+                  >
+                    高级：手动输入商品 ID
+                  </summary>
+                  <div style={{ marginTop: "0.65rem" }}>
+                    <s-text-field
+                      label="商品 ID（数字或 gid://shopify/Product/…）"
+                      value={productId}
+                      onChange={(e) => setProductId(e.currentTarget.value)}
+                      autocomplete="off"
+                    />
+                  </div>
+                </details>
+
+                <div>
+                  <label
+                    htmlFor="generate-description-lang"
+                    style={{
+                      display: "block",
+                      fontSize: "0.8125rem",
+                      fontWeight: 500,
+                      color: "#303030",
+                    }}
+                  >
+                    目标语言
+                  </label>
+                  <select
+                    id="generate-description-lang"
+                    value={targetLanguage}
+                    onChange={(e) => setTargetLanguage(e.target.value)}
+                    disabled={localesLoading || isSubmitting}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      maxWidth: "100%",
+                      marginTop: "0.35rem",
+                      padding: "0.5rem 0.65rem",
+                      fontSize: "0.875rem",
+                      borderRadius: "8px",
+                      border: "1px solid #c9cccf",
+                      background: localesLoading ? "#f6f6f7" : "#fff",
+                      color: "#303030",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    {localesLoading && localeOptions.length === 0 ? (
+                      <option value="">加载语言列表…</option>
+                    ) : null}
+                    {localeOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  {localesIsFallback ? (
+                    <div
+                      style={{
+                        marginTop: "0.35rem",
+                        fontSize: "0.75rem",
+                        color: "#6d7175",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      当前为内置语言列表。若已在应用配置中授权{" "}
+                      <code style={{ fontSize: "0.7rem" }}>read_locales</code>{" "}
+                      并重新安装应用，将自动同步店铺在 Shopify 中启用的语言。
+                    </div>
+                  ) : null}
+                </div>
 
                 {errorText ? (
                   <div
@@ -158,6 +204,34 @@ export function GenerateDescriptionPage() {
                       >
                         {description}
                       </div>
+                      <s-stack direction="inline" gap="small">
+                        <s-button
+                          type="button"
+                          variant="secondary"
+                          onClick={copyTitle}
+                          {...(isSubmitting || copyBusy ? { disabled: true } : {})}
+                        >
+                          {copyTarget === "title" ? "复制中…" : "复制标题"}
+                        </s-button>
+                        <s-button
+                          type="button"
+                          variant="secondary"
+                          onClick={copyDescription}
+                          {...(isSubmitting || copyBusy ? { disabled: true } : {})}
+                        >
+                          {copyTarget === "description"
+                            ? "复制中…"
+                            : "复制描述"}
+                        </s-button>
+                        <s-button
+                          type="button"
+                          variant="secondary"
+                          onClick={copyAll}
+                          {...(isSubmitting || copyBusy ? { disabled: true } : {})}
+                        >
+                          {copyTarget === "all" ? "复制中…" : "复制全部"}
+                        </s-button>
+                      </s-stack>
                     </s-stack>
                   </s-section>
                 ) : null}
@@ -166,18 +240,24 @@ export function GenerateDescriptionPage() {
                   <s-button
                     type="button"
                     variant="primary"
-                    onClick={handleGenerate}
-                    {...(isSubmitting ? { disabled: true } : {})}
+                    onClick={() => {
+                      void handleGenerate();
+                    }}
+                    {...(isSubmitting || localesLoading ? { disabled: true } : {})}
                   >
-                    {isSubmitting ? "正在生成…" : "生成描述"}
+                    {isSubmitting
+                      ? "正在生成…"
+                      : localesLoading
+                        ? "加载语言…"
+                        : "生成描述"}
                   </s-button>
                   <s-button
                     type="button"
                     variant="secondary"
                     onClick={() => {
-                      setProductTitle(null);
-                      setDescription(null);
-                      setErrorText(null);
+                      resetResult();
+                      setSelectedProduct(null);
+                      setProductId("");
                     }}
                     {...(isSubmitting ? { disabled: true } : {})}
                   >

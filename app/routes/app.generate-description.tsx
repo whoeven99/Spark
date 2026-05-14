@@ -11,13 +11,16 @@ import {
   parseGenerateDescriptionBody,
 } from "../server/generateDescription/generateDescriptionHttp.server";
 import { logDetailedError } from "../server/generateDescription/generateDescriptionLog.server";
+import { fetchShopLocalesPayload } from "../server/generateDescription/shopLocalesFetcher.server";
 import { GenerateDescriptionPage } from "./page/GenerateDescriptionPage";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
-  return data({
-    defaultTargetLanguage: "zh-CN",
-  });
+  const { admin, session } = await authenticate.admin(request);
+  const shopLocales = await fetchShopLocalesPayload(
+    admin,
+    `[PageLoader] shop=${session.shop}`,
+  );
+  return data({ shopLocales });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {

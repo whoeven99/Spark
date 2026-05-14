@@ -32,7 +32,7 @@ export function ChatPage() {
       {
         role: "assistant",
         content:
-          "已为你打开「商品描述生成」表单。请填写商品 ID（数字或 gid://shopify/Product/…）与目标语言（如 zh-CN、en），系统将基于 Shopify 商品数据生成结构化营销描述。",
+          "已为你打开「商品描述生成」表单。请搜索并选择商品（或展开高级手动填写商品 ID），在「目标语言」下拉中选择生成语言（默认与店铺主语言一致），系统将基于 Shopify 商品数据生成结构化营销描述。",
         generateDescriptionCard: true,
       },
     ]);
