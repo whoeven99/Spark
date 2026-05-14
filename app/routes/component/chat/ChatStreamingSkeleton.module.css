@@ -1,0 +1,26 @@
+@keyframes spark-chat-shimmer {
+  0% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0.45;
+  }
+}
+
+.bar {
+  height: 10px;
+  border-radius: 6px;
+  background: rgba(44, 110, 203, 0.22);
+  animation: spark-chat-shimmer 1.25s ease-in-out infinite;
+}
+
+.bar:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.bar:nth-child(3) {
+  animation-delay: 0.3s;
+}

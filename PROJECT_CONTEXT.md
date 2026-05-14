@@ -13,7 +13,7 @@
 - 前端：React + TypeScript + React Router（文件系统路由）。
 - UI：Shopify Web Components（`s-*` 标签）+ App Bridge。
 - 服务端：React Router action/loader + Shopify Admin GraphQL。
-- AI：LangChain + ChatOpenAI 兼容接口（默认可走 DeepSeek Base URL）。
+- AI：LangGraph（`@langchain/langgraph/prebuilt` 的 ReAct Agent）+ `@langchain/openai` 兼容 DeepSeek Base URL；消息与工具类型仍基于 `@langchain/core`。
 - 持久化与服务依赖（与代码一致）：
   - **Shopify Session、用户建议、广告 OAuth 配置**：同一 Prisma Client，运行时通过 `@prisma/adapter-libsql` 连接 **Turso（libSQL）**（见 `app/db.server.ts`）。`prisma/schema.prisma` 中 datasource 仍为 `sqlite` + `DATABASE_URL`，用于迁移与类型生成；线上/测试库 URL 与 Token 由 `TURSO_*` 环境变量提供。
   - **翻译任务元数据**：**Azure Cosmos DB**（容器默认 `translation` / `translation_jobs`，与 Spring 后端文档模型对齐，见 `app/server/translation/cosmosJobStore.server.ts`）。
@@ -56,7 +56,7 @@
   - 先做 Shopify admin 鉴权。
   - 通过 `buildChatAgentExtraTools(admin)` 注入 Shopify 指标工具、翻译表单工具与 **`generate_product_description`** 等。
   - 调用 `invokeChatAgent()` 获取回复。
-- `app/server/ai/agent.ts`：`invokeChatAgent`、Agent 构建与模型实例化；系统提示词强制简体中文、鼓励结构化输出、避免 Markdown 表格；若无可用 AIMessage 文本则走 fallback 模型。
+- `app/server/ai/agent.ts`：`invokeChatAgent`、LangGraph ReAct 图编译（`chatGraph.server.ts`）与模型单例；系统提示词强制简体中文、鼓励结构化输出、避免 Markdown 表格；若无可用 AIMessage 文本则走 fallback 模型。
 - **回复后处理**（已从 `agent.ts` 拆出，便于单测与单独演进）：
   - `app/server/ai/langchainMessageText.ts`：从 LangChain `BaseMessage` 抽取纯文本；拼接对话上下文供兜底（`extractMessagesContext`，最长 4000 字符）。
   - `app/server/ai/markdownTableNormalize.ts`：识别 Markdown 表格、转为列表（粗体首列 + 「列名：值」）。

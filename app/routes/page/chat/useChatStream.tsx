@@ -8,31 +8,83 @@ type StreamChunk =
   | { type: "error"; message: string }
   | { type: "done"; metadata: { totalTokens: number; model: string } };
 
+export type ChatStreamFinishPayload = {
+  aborted: boolean;
+  reply: string;
+  translationTaskForm?: unknown;
+  generateDescriptionCard?: boolean;
+  generateDescriptionCardPayload?: unknown;
+  httpStatus?: number;
+};
+
+type Snapshot = {
+  reply: string;
+  translationTaskForm?: unknown;
+  generateDescriptionCard: boolean;
+  generateDescriptionCardPayload?: unknown;
+};
+
 export function useChatStream() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [currentMessage, setCurrentMessage] = useState("");
-  const [currentTranslationForm, setCurrentTranslationForm] = useState<unknown>();
-  const [currentGenerateCard, setCurrentGenerateCard] = useState<unknown>();
-  const [currentGeneratePayload, setCurrentGeneratePayload] = useState<unknown>();
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [awaitingFirstChunk, setAwaitingFirstChunk] = useState(false);
+  const [streamingText, setStreamingText] = useState("");
+  const [streamingTranslationForm, setStreamingTranslationForm] = useState<unknown>();
+  const [streamingGenerateCard, setStreamingGenerateCard] = useState(false);
+  const [streamingGeneratePayload, setStreamingGeneratePayload] = useState<unknown>();
   const abortControllerRef = useRef<AbortController | null>(null);
+  const snapshotRef = useRef<Snapshot>({
+    reply: "",
+    translationTaskForm: undefined,
+    generateDescriptionCard: false,
+    generateDescriptionCardPayload: undefined,
+  });
+
+  const resetSnapshot = () => {
+    snapshotRef.current = {
+      reply: "",
+      translationTaskForm: undefined,
+      generateDescriptionCard: false,
+      generateDescriptionCardPayload: undefined,
+    };
+  };
 
   const sendMessage = useCallback(
     async (
       messages: ChatMessage[],
-      onChunk?: (chunk: StreamChunk) => void,
-      onComplete?: (data: { reply: string; translationTaskForm?: unknown; generateDescriptionCard?: boolean; generateDescriptionCardPayload?: unknown }) => void,
+      options?: {
+        url?: string;
+        onFinish?: (payload: ChatStreamFinishPayload) => void;
+      },
     ) => {
-      setIsLoading(true);
-      setCurrentMessage("");
-      setCurrentTranslationForm(undefined);
-      setCurrentGenerateCard(undefined);
-      setCurrentGeneratePayload(undefined);
+      const url = options?.url ?? "/chat-stream";
+      const onFinish = options?.onFinish;
+
+      setIsStreaming(true);
+      setAwaitingFirstChunk(true);
+      resetSnapshot();
+      setStreamingText("");
+      setStreamingTranslationForm(undefined);
+      setStreamingGenerateCard(false);
+      setStreamingGeneratePayload(undefined);
 
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
+      let finalized = false;
+      const finalizeOnce = (payload: ChatStreamFinishPayload) => {
+        if (finalized) return;
+        finalized = true;
+        setIsStreaming(false);
+        setAwaitingFirstChunk(false);
+        setStreamingText("");
+        setStreamingTranslationForm(undefined);
+        setStreamingGenerateCard(false);
+        setStreamingGeneratePayload(undefined);
+        onFinish?.(payload);
+      };
+
       try {
-        const response = await fetch("/chat-stream", {
+        const response = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ messages }),
@@ -40,7 +92,12 @@ export function useChatStream() {
         });
 
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+          finalizeOnce({
+            aborted: false,
+            reply: "",
+            httpStatus: response.status,
+          });
+          return;
         }
 
         const reader = response.body?.getReader();
@@ -48,6 +105,10 @@ export function useChatStream() {
 
         const decoder = new TextDecoder();
         let buffer = "";
+
+        const markFirstChunkSeen = () => {
+          setAwaitingFirstChunk(false);
+        };
 
         while (true) {
           const { done, value } = await reader.read();
@@ -58,63 +119,117 @@ export function useChatStream() {
           buffer = lines.pop() || "";
 
           for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              try {
-                const chunk: StreamChunk = JSON.parse(line.slice(6));
-                
-                onChunk?.(chunk);
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const chunk: StreamChunk = JSON.parse(line.slice(6));
 
-                if (chunk.type === "text") {
-                  setCurrentMessage((prev) => prev + chunk.content);
-                } else if (chunk.type === "tool_call") {
-                  if (chunk.name === "open_translation_task_form") {
-                    setCurrentTranslationForm(chunk.args);
-                  }
-                } else if (chunk.type === "tool_result") {
-                  if (chunk.name === "generate_product_description") {
-                    setCurrentGenerateCard(true);
-                    setCurrentGeneratePayload(JSON.parse(chunk.result));
-                  }
-                } else if (chunk.type === "done") {
-                  onComplete?.({
-                    reply: currentMessage,
-                    translationTaskForm: currentTranslationForm,
-                    generateDescriptionCard: currentGenerateCard,
-                    generateDescriptionCardPayload: currentGeneratePayload,
-                  });
+              if (chunk.type === "text") {
+                markFirstChunkSeen();
+                setStreamingText((prev) => {
+                  const next = prev + chunk.content;
+                  snapshotRef.current.reply = next;
+                  return next;
+                });
+              } else if (chunk.type === "tool_call") {
+                markFirstChunkSeen();
+                if (chunk.name === "open_translation_task_form") {
+                  snapshotRef.current.translationTaskForm = chunk.args;
+                  setStreamingTranslationForm(chunk.args);
                 }
-              } catch (e) {
-                console.error("Failed to parse chunk", e);
+              } else if (chunk.type === "tool_result") {
+                markFirstChunkSeen();
+                if (chunk.name === "generate_product_description") {
+                  const parsed = JSON.parse(chunk.result) as unknown;
+                  snapshotRef.current.generateDescriptionCard = true;
+                  snapshotRef.current.generateDescriptionCardPayload = parsed;
+                  setStreamingGenerateCard(true);
+                  setStreamingGeneratePayload(parsed);
+                }
+              } else if (chunk.type === "error") {
+                markFirstChunkSeen();
+                const msg = chunk.message;
+                setStreamingText(msg);
+                snapshotRef.current.reply = msg;
+              } else if (chunk.type === "done") {
+                markFirstChunkSeen();
+                finalizeOnce({
+                  aborted: false,
+                  reply: snapshotRef.current.reply,
+                  translationTaskForm: snapshotRef.current.translationTaskForm,
+                  generateDescriptionCard: snapshotRef.current.generateDescriptionCard,
+                  generateDescriptionCardPayload:
+                    snapshotRef.current.generateDescriptionCardPayload,
+                });
               }
+            } catch (e) {
+              console.error("Failed to parse chunk", e);
             }
           }
         }
+
+        if (!finalized) {
+          finalizeOnce({
+            aborted: false,
+            reply: snapshotRef.current.reply,
+            translationTaskForm: snapshotRef.current.translationTaskForm,
+            generateDescriptionCard: snapshotRef.current.generateDescriptionCard,
+            generateDescriptionCardPayload:
+              snapshotRef.current.generateDescriptionCardPayload,
+          });
+        }
       } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") {
-          console.log("Request aborted");
+        const aborted = e instanceof Error && e.name === "AbortError";
+        if (aborted) {
+          finalizeOnce({
+            aborted: true,
+            reply: snapshotRef.current.reply,
+            translationTaskForm: snapshotRef.current.translationTaskForm,
+            generateDescriptionCard: snapshotRef.current.generateDescriptionCard,
+            generateDescriptionCardPayload:
+              snapshotRef.current.generateDescriptionCardPayload,
+          });
         } else {
           console.error("Stream error", e);
-          setCurrentMessage("抱歉，服务暂时不可用，请稍后重试。");
+          const fallback = "抱歉，服务暂时不可用，请稍后重试。";
+          setStreamingText(fallback);
+          snapshotRef.current.reply = fallback;
+          finalizeOnce({
+            aborted: false,
+            reply: fallback,
+            translationTaskForm: snapshotRef.current.translationTaskForm,
+            generateDescriptionCard: snapshotRef.current.generateDescriptionCard,
+            generateDescriptionCardPayload:
+              snapshotRef.current.generateDescriptionCardPayload,
+          });
         }
       } finally {
-        setIsLoading(false);
         abortControllerRef.current = null;
+        if (!finalized) {
+          finalizeOnce({
+            aborted: controller.signal.aborted,
+            reply: snapshotRef.current.reply,
+            translationTaskForm: snapshotRef.current.translationTaskForm,
+            generateDescriptionCard: snapshotRef.current.generateDescriptionCard,
+            generateDescriptionCardPayload:
+              snapshotRef.current.generateDescriptionCardPayload,
+          });
+        }
       }
     },
-    [currentMessage, currentTranslationForm, currentGenerateCard, currentGeneratePayload],
+    [],
   );
 
   const abort = useCallback(() => {
     abortControllerRef.current?.abort();
-    setIsLoading(false);
   }, []);
 
   return {
-    isLoading,
-    currentMessage,
-    currentTranslationForm,
-    currentGenerateCard,
-    currentGeneratePayload,
+    isStreaming,
+    awaitingFirstChunk,
+    streamingText,
+    streamingTranslationForm,
+    streamingGenerateCard,
+    streamingGeneratePayload,
     sendMessage,
     abort,
   };
