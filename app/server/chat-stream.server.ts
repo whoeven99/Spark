@@ -2,9 +2,8 @@ import type { ActionFunctionArgs } from "react-router";
 import { HumanMessage } from "@langchain/core/messages";
 import { authenticate } from "../shopify.server";
 import { buildChatAgentExtraTools } from "./ai/chatAgentTools.server";
-import { invokeChatAgent } from "./ai/agent";
+import { invokeChatAgentStream, type StreamChunk } from "./ai/agent-stream.server";
 import { parseClientChatMessages } from "./chatPayload.server";
-import { isLangsmithAvailable } from "./ai/langsmith.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
@@ -41,36 +40,30 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   try {
-    const { admin, session } = await authenticate.admin(request);
-    
-    // 生成会话名称用于 LangSmith 追踪
-    const shopDomain = session?.shop;
-    const sessionName = shopDomain 
-      ? `chat-session-${shopDomain}-${Date.now()}` 
-      : undefined;
-    
-    console.log(`[Chat] LangSmith available: ${isLangsmithAvailable()}`);
-    
-    const {
-      reply,
-      translationTaskForm,
-      generateDescriptionCard,
-      generateDescriptionCardPayload,
-      langsmithTraceUrl,
-    } = await invokeChatAgent({
+    const { admin } = await authenticate.admin(request);
+    const stream = await invokeChatAgentStream({
       messages: agentMessages,
       extraTools: buildChatAgentExtraTools(admin),
-      sessionName,
     });
-    
-    return Response.json({
-      reply,
-      ...(translationTaskForm ? { translationTaskForm } : {}),
-      ...(generateDescriptionCard ? { generateDescriptionCard } : {}),
-      ...(generateDescriptionCardPayload
-        ? { generateDescriptionCardPayload }
-        : {}),
-      ...(langsmithTraceUrl ? { langsmithTraceUrl } : {}),
+
+    const encoder = new TextEncoder();
+
+    const transformedStream = stream.pipeThrough(
+      new TransformStream<StreamChunk, Uint8Array>({
+        transform(chunk, controller) {
+          const data = `data: ${JSON.stringify(chunk)}\n\n`;
+          controller.enqueue(encoder.encode(data));
+        },
+      }),
+    );
+
+    return new Response(transformedStream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "Access-Control-Allow-Origin": "*",
+      },
     });
   } catch (error) {
     console.error("Chat agent error:", error);
@@ -78,9 +71,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       error instanceof Error && error.message.includes("DEEPSEEK_API_KEY")
         ? "未配置 DEEPSEEK_API_KEY，请在环境变量中设置后再试。"
         : "AI 服务暂时不可用，请稍后重试。";
-    return Response.json(
-      { error: hint, reply: hint },
-      { status: 500 },
-    );
+    
+    const encoder = new TextEncoder();
+    const errorStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", message: hint })}\n\n`));
+        controller.close();
+      },
+    });
+
+    return new Response(errorStream, {
+      status: 500,
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+      },
+    });
   }
 };
