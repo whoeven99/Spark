@@ -1,7 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
 import { HumanMessage } from "@langchain/core/messages";
 import { authenticate } from "../shopify.server";
-import { buildChatAgentExtraTools } from "./ai/skills/index";
 import { invokeChatAgent } from "./ai/core/invokeChatAgent.server";
 import { parseClientChatMessages } from "./chatPayload.server";
 import { isLangsmithAvailable } from "./ai/utils/langsmith.server";
@@ -60,20 +59,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     
     console.log(`[Chat] LangSmith available: ${isLangsmithAvailable()}`);
     
-    const extraTools = await buildChatAgentExtraTools({ admin, profile: dummyProfile });
-
     const {
       reply,
-      translationTaskForm,
-      generateDescriptionCard,
-      generateDescriptionCardPayload,
+      uiPayloads,
       langsmithTraceUrl,
     } = await invokeChatAgent({
       messages: agentMessages,
-      extraTools,
+      context: { admin, profile: dummyProfile },
       sessionName,
-      profile: dummyProfile,
     });
+    
+    // 兼容原有的前端期望结构
+    const translationTaskForm = uiPayloads?.translationTaskForm;
+    let generateDescriptionCard = undefined;
+    let generateDescriptionCardPayload = undefined;
+    
+    if (uiPayloads?.generateDescriptionCardPayload) {
+      if (uiPayloads.generateDescriptionCardPayload._fallback) {
+        generateDescriptionCard = true;
+      } else {
+        generateDescriptionCard = true;
+        generateDescriptionCardPayload = uiPayloads.generateDescriptionCardPayload;
+      }
+    }
     
     return Response.json({
       reply,
