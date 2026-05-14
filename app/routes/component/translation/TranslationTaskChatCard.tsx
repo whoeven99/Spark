@@ -2,7 +2,10 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { Link } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
-import type { TranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
+import {
+  coerceTranslationTaskFormPayload,
+  type TranslationTaskFormPayload,
+} from "../../../lib/translationTaskFormPayload";
 import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../../../server/translation/types";
 
 const MODULE_LABELS: Record<string, string> = {
@@ -29,21 +32,19 @@ export function TranslationTaskChatCard({
 }: Props) {
   const shopify = useAppBridge();
   const { t } = useTranslation();
-  const [sourceLocale, setSourceLocale] = useState(initialPayload.sourceLocale);
-  const [targetLocale, setTargetLocale] = useState(initialPayload.targetLocale);
-  const [limitPerType, setLimitPerType] = useState(initialPayload.limitPerType);
-  const [resourceTypes, setResourceTypes] = useState<string[]>(
-    initialPayload.resourceTypes.length ? initialPayload.resourceTypes : [],
-  );
+  const safeInitial = coerceTranslationTaskFormPayload(initialPayload);
+  const [sourceLocale, setSourceLocale] = useState(safeInitial.sourceLocale);
+  const [targetLocale, setTargetLocale] = useState(safeInitial.targetLocale);
+  const [limitPerType, setLimitPerType] = useState(safeInitial.limitPerType);
+  const [resourceTypes, setResourceTypes] = useState<string[]>(safeInitial.resourceTypes);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    setSourceLocale(initialPayload.sourceLocale);
-    setTargetLocale(initialPayload.targetLocale);
-    setLimitPerType(initialPayload.limitPerType);
-    setResourceTypes(
-      initialPayload.resourceTypes.length ? initialPayload.resourceTypes : [],
-    );
+    const p = coerceTranslationTaskFormPayload(initialPayload);
+    setSourceLocale(p.sourceLocale);
+    setTargetLocale(p.targetLocale);
+    setLimitPerType(p.limitPerType);
+    setResourceTypes(p.resourceTypes);
   }, [initialPayload]);
 
   const search =
