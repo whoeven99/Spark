@@ -11,17 +11,17 @@ import {
 import {
   extractMessageText,
   extractMessagesContext,
-} from "../../postprocess/langchainMessageText";
-import { buildShopChatGraph, getShopChatModel } from "../../graph/shopChatGraph.server";
-import type { GenerateDescriptionCardPayload } from "../../../../lib/chatMessage";
-import { coerceTranslationTaskFormPayload } from "../../../../lib/translationTaskFormPayload";
-import { polishFinalReply } from "../../postprocess/polishFinalReply";
+} from "../utils/langchainMessageText";
+import { buildShopChatGraph, getShopChatModel } from "./shopChatGraph.server";
+import type { GenerateDescriptionCardPayload } from "../../../lib/chatMessage";
+import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
+import { polishFinalReply } from "../utils/polishFinalReply";
 import {
   defaultTranslationTaskFormPayload,
   extractTranslationTaskFormFromMessages,
   shouldInjectTranslationTaskFormFallback,
-} from "../../postprocess/translationTaskFormExtract";
-import { GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME } from "../../tools/implementations/generateDescriptionTool";
+} from "../skills/translation/extract";
+import { GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME } from "../skills/marketing/tool";
 
 export type StreamChunk =
   | { type: "text"; content: string }
@@ -161,10 +161,13 @@ function extractGenerateDescriptionCardPayload(
   return undefined;
 }
 
+import type { UserProfile } from "./toolRegistry.server";
+
 export type InvokeChatAgentStreamParams = {
   messages: BaseMessage[];
   extraTools?: DynamicStructuredTool[];
   config?: RunnableConfig;
+  profile?: UserProfile;
 };
 
 /**
@@ -176,8 +179,8 @@ export type InvokeChatAgentStreamParams = {
 export async function invokeChatAgentStream(
   params: InvokeChatAgentStreamParams,
 ): Promise<ReadableStream<StreamChunk>> {
-  const { messages: agentInputMessages, extraTools, config } = params;
-  const graph = buildShopChatGraph(extraTools ?? []);
+  const { messages: agentInputMessages, extraTools, config, profile } = params;
+  const graph = buildShopChatGraph(extraTools ?? [], profile);
 
   return new ReadableStream<StreamChunk>({
     async start(controller) {

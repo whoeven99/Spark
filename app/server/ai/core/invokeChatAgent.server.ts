@@ -9,21 +9,21 @@ import {
 import {
   extractMessageText,
   extractMessagesContext,
-} from "../postprocess/langchainMessageText";
-import { buildShopChatGraph, getShopChatModel } from "../graph/shopChatGraph.server";
+} from "../utils/langchainMessageText";
+import { buildShopChatGraph, getShopChatModel } from "./shopChatGraph.server";
 import type { TranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import type { GenerateDescriptionCardPayload } from "../../../lib/chatMessage";
-import { polishFinalReply } from "../postprocess/polishFinalReply";
+import { polishFinalReply } from "../utils/polishFinalReply";
 import {
   defaultTranslationTaskFormPayload,
   extractTranslationTaskFormFromMessages,
   shouldInjectTranslationTaskFormFallback,
-} from "../postprocess/translationTaskFormExtract";
-import { GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME } from "../tools/implementations/generateDescriptionTool";
+} from "../skills/translation/extract";
+import { GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME } from "../skills/marketing/tool";
 import {
   createLangsmithTracer,
   getTraceUrl,
-} from "../langsmith.server";
+} from "../utils/langsmith.server";
 
 export type InvokeChatAgentResult = {
   reply: string;
@@ -125,24 +125,28 @@ function extractGenerateDescriptionCardPayload(
   return undefined;
 }
 
+import type { UserProfile } from "./toolRegistry.server";
+
 export type InvokeChatAgentParams = {
   /** 完整对话上下文；最后一条须为用户消息（HumanMessage）。 */
   messages: BaseMessage[];
   extraTools?: DynamicStructuredTool[];
   /** 可选的会话名称，用于 LangSmith 追踪 */
   sessionName?: string;
+  /** 用户画像，用于动态个性化建议 */
+  profile?: UserProfile;
 };
 
 export async function invokeChatAgent(
   params: InvokeChatAgentParams,
 ): Promise<InvokeChatAgentResult & { langsmithTraceUrl?: string}> {
-  const { messages: agentInputMessages, extraTools, sessionName } = params;
+  const { messages: agentInputMessages, extraTools, sessionName, profile } = params;
   
   // 创建 LangSmith 追踪器
   const tracer = createLangsmithTracer(sessionName);
   const callbacks = tracer ? [tracer] : [];
   
-  const graph = buildShopChatGraph(extraTools ?? []);
+  const graph = buildShopChatGraph(extraTools ?? [], profile);
   const result = await graph.invoke(
     { messages: agentInputMessages },
     { callbacks }

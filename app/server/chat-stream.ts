@@ -1,10 +1,11 @@
 import type { ActionFunctionArgs } from "react-router";
 import { HumanMessage } from "@langchain/core/messages";
 import { authenticate } from "../shopify.server";
-import { buildChatAgentExtraTools } from "./ai/chat/chatAgentTools.server";
-import { invokeChatAgentStream, type StreamChunk } from "./ai/chat/stream/agentStream.server";
+import { buildChatAgentExtraTools } from "./ai/skills/index";
+import { invokeChatAgentStream, type StreamChunk } from "./ai/core/agentStream.server";
 import { parseClientChatMessages } from "./chatPayload.server";
-import { createLangsmithTracer, isLangsmithAvailable, getTraceUrl } from "./ai/langsmith.server";
+import { createLangsmithTracer, isLangsmithAvailable, getTraceUrl } from "./ai/utils/langsmith.server";
+import type { UserProfile } from "./ai/core/toolRegistry.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
@@ -42,6 +43,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     const { admin } = await authenticate.admin(request);
+    
+    // TODO: 从数据库读取当前商店/用户的画像数据
+    // const userProfile = await db.userProfile.findUnique({ where: { shop: session?.shop } });
+    const dummyProfile: UserProfile = {
+      plan: "pro",
+      industry: "fashion",
+      preferences: { tone: "professional" }
+    };
+    
     const langsmithTracer = isLangsmithAvailable() 
       ? await createLangsmithTracer(`chat-stream-${Date.now()}`)
       : undefined;
@@ -50,10 +60,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       console.log(`[LangSmith] Streaming chat tracing started: ${getTraceUrl() ?? "enabled"}`);
     }
 
+    const extraTools = await buildChatAgentExtraTools({ admin, profile: dummyProfile });
+
     const stream = await invokeChatAgentStream({
       messages: agentMessages,
-      extraTools: buildChatAgentExtraTools(admin),
+      extraTools,
       config: langsmithTracer ? { callbacks: [langsmithTracer] } : undefined,
+      profile: dummyProfile,
     });
 
     const encoder = new TextEncoder();
