@@ -38,12 +38,7 @@ globalToolRegistry.register({
     }
   },
   extractUIPayload: (messages, lastUserText, assistantReplyRaw) => {
-    const extractedForm = extractTranslationTaskFormFromMessages(messages);
-    if (extractedForm) return extractedForm;
-    if (shouldInjectTranslationTaskFormFallback(lastUserText, assistantReplyRaw)) {
-      return defaultTranslationTaskFormPayload();
-    }
-    return undefined;
+    return defaultTranslationTaskFormPayload(); // 临时修改，强制返回默认表单
   }
 });
 
