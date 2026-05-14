@@ -4,8 +4,8 @@ import {
   coerceTranslationTaskFormPayload,
   TRANSLATION_FORM_PAYLOAD_KIND,
   type TranslationTaskFormPayload,
-} from "../../../lib/translationTaskFormPayload";
-import { extractMessageText } from "./langchainMessageText";
+} from "../../../../lib/translationTaskFormPayload";
+import { extractMessageText } from "../../utils/langchainMessageText";
 
 /** 与 `open_translation_task_form` 工具缺省一致，供服务端兜底下发给前端。 */
 export function defaultTranslationTaskFormPayload(): TranslationTaskFormPayload {

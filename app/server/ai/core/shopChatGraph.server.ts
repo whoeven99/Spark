@@ -1,8 +1,9 @@
 import type { DynamicStructuredTool } from "@langchain/core/tools";
 import { ChatOpenAI } from "@langchain/openai";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
-import { SHOP_CHAT_AGENT_SYSTEM_PROMPT } from "./shopAssistantPrompt";
-import { baseAgentTools } from "../tools/baseAgentTools.server";
+import { getPersonalizedSystemPrompt } from "./shopAssistantPrompt";
+import { baseAgentTools } from "../skills/system/baseAgentTools.server";
+import type { AgentContext, ToolDefinition } from "./toolRegistry.server";
 
 let shopChatModel: ChatOpenAI | null = null;
 
@@ -27,13 +28,19 @@ export function getShopChatModel(): ChatOpenAI {
 }
 
 /** 构建 Shopify 店铺对话用的 LangGraph ReAct Agent（CompiledStateGraph）。 */
-export function buildShopChatGraph(extraTools: DynamicStructuredTool[] = []) {
+export async function buildShopChatGraph(
+  context: AgentContext,
+  extraTools: DynamicStructuredTool[] = [],
+  activeDefs: ToolDefinition[] = []
+) {
   const model = getShopChatModel();
   const tools = [...baseAgentTools, ...extraTools];
+
+  const dynamicPrompt = await getPersonalizedSystemPrompt(context, activeDefs);
 
   return createReactAgent({
     llm: model,
     tools,
-    prompt: SHOP_CHAT_AGENT_SYSTEM_PROMPT,
+    prompt: dynamicPrompt,
   });
 }

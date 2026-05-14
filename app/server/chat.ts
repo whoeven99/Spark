@@ -1,10 +1,10 @@
 import type { ActionFunctionArgs } from "react-router";
 import { HumanMessage } from "@langchain/core/messages";
 import { authenticate } from "../shopify.server";
-import { buildChatAgentExtraTools } from "./ai/chat/chatAgentTools.server";
-import { invokeChatAgent } from "./ai/chat/invokeChatAgent.server";
+import { invokeChatAgent } from "./ai/core/invokeChatAgent.server";
 import { parseClientChatMessages } from "./chatPayload.server";
-import { isLangsmithAvailable } from "./ai/langsmith.server";
+import { isLangsmithAvailable } from "./ai/utils/langsmith.server";
+import type { UserProfile } from "./ai/core/toolRegistry.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
@@ -43,6 +43,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     const { admin, session } = await authenticate.admin(request);
     
+    // TODO: 从数据库读取当前商店/用户的画像数据
+    // const userProfile = await db.userProfile.findUnique({ where: { shop: session?.shop } });
+    const dummyProfile: UserProfile = {
+      plan: "pro",
+      industry: "fashion",
+      preferences: { tone: "professional" }
+    };
+    
     // 生成会话名称用于 LangSmith 追踪
     const shopDomain = session?.shop;
     const sessionName = shopDomain 
@@ -53,15 +61,27 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     
     const {
       reply,
-      translationTaskForm,
-      generateDescriptionCard,
-      generateDescriptionCardPayload,
+      uiPayloads,
       langsmithTraceUrl,
     } = await invokeChatAgent({
       messages: agentMessages,
-      extraTools: buildChatAgentExtraTools(admin),
+      context: { admin, profile: dummyProfile },
       sessionName,
     });
+    
+    // 兼容原有的前端期望结构
+    const translationTaskForm = uiPayloads?.translationTaskForm;
+    let generateDescriptionCard = undefined;
+    let generateDescriptionCardPayload = undefined;
+    
+    if (uiPayloads?.generateDescriptionCardPayload) {
+      if (uiPayloads.generateDescriptionCardPayload._fallback) {
+        generateDescriptionCard = true;
+      } else {
+        generateDescriptionCard = true;
+        generateDescriptionCardPayload = uiPayloads.generateDescriptionCardPayload;
+      }
+    }
     
     return Response.json({
       reply,

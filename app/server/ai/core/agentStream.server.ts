@@ -1,27 +1,18 @@
-import type { DynamicStructuredTool } from "@langchain/core/tools";
 import type { RunnableConfig } from "@langchain/core/runnables";
 import {
   AIMessage,
   AIMessageChunk,
   HumanMessage,
   SystemMessage,
-  ToolMessage,
   type BaseMessage,
 } from "@langchain/core/messages";
 import {
   extractMessageText,
   extractMessagesContext,
-} from "../../postprocess/langchainMessageText";
-import { buildShopChatGraph, getShopChatModel } from "../../graph/shopChatGraph.server";
-import type { GenerateDescriptionCardPayload } from "../../../../lib/chatMessage";
-import { coerceTranslationTaskFormPayload } from "../../../../lib/translationTaskFormPayload";
-import { polishFinalReply } from "../../postprocess/polishFinalReply";
-import {
-  defaultTranslationTaskFormPayload,
-  extractTranslationTaskFormFromMessages,
-  shouldInjectTranslationTaskFormFallback,
-} from "../../postprocess/translationTaskFormExtract";
-import { GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME } from "../../tools/implementations/generateDescriptionTool";
+} from "../utils/langchainMessageText";
+import { buildShopChatGraph, getShopChatModel } from "./shopChatGraph.server";
+import { polishFinalReply } from "../utils/polishFinalReply";
+import { globalToolRegistry, type AgentContext } from "./toolRegistry.server";
 
 export type StreamChunk =
   | { type: "text"; content: string }
@@ -61,15 +52,6 @@ type ToolLifecycleEvent =
 
 function isToolLifecycleEvent(x: unknown): x is ToolLifecycleEvent {
   return typeof x === "object" && x !== null && "event" in x;
-}
-
-function stringifyToolOutput(output: unknown): string {
-  if (typeof output === "string") return output;
-  try {
-    return JSON.stringify(output);
-  } catch {
-    return String(output);
-  }
 }
 
 function lastHumanUtterance(messages: BaseMessage[]): string {
@@ -117,53 +99,9 @@ async function generateFallbackReplyStream(
   });
 }
 
-function extractGenerateDescriptionCardPayload(
-  messages: BaseMessage[],
-): GenerateDescriptionCardPayload | undefined {
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const msg = messages[i];
-    if (!ToolMessage.isInstance(msg)) continue;
-    if (msg.name !== GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME) continue;
-
-    const raw = extractMessageText(msg).trim();
-    if (!raw.startsWith("{")) continue;
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      continue;
-    }
-    if (!parsed || typeof parsed !== "object") continue;
-
-    const rec = parsed as Record<string, unknown>;
-    if (rec.ok !== true) continue;
-
-    const title = typeof rec.title === "string" ? rec.title.trim() : "";
-    const description =
-      typeof rec.description === "string" ? rec.description : "";
-    if (!title || !description) continue;
-
-    const productId =
-      typeof rec.productId === "string" ? rec.productId.trim() : "";
-    const targetLanguage =
-      typeof rec.targetLanguage === "string"
-        ? rec.targetLanguage.trim()
-        : undefined;
-
-    return {
-      productId,
-      title,
-      description,
-      ...(targetLanguage ? { targetLanguage } : {}),
-    };
-  }
-  return undefined;
-}
-
 export type InvokeChatAgentStreamParams = {
   messages: BaseMessage[];
-  extraTools?: DynamicStructuredTool[];
+  context: AgentContext;
   config?: RunnableConfig;
 };
 
@@ -176,8 +114,11 @@ export type InvokeChatAgentStreamParams = {
 export async function invokeChatAgentStream(
   params: InvokeChatAgentStreamParams,
 ): Promise<ReadableStream<StreamChunk>> {
-  const { messages: agentInputMessages, extraTools, config } = params;
-  const graph = buildShopChatGraph(extraTools ?? []);
+  const { messages: agentInputMessages, context, config } = params;
+  
+  const activeDefs = await globalToolRegistry.getActiveToolDefinitions(context);
+  const extraTools = await globalToolRegistry.getToolsForContext(context);
+  const graph = await buildShopChatGraph(context, extraTools, activeDefs);
 
   return new ReadableStream<StreamChunk>({
     async start(controller) {
@@ -193,8 +134,7 @@ export async function invokeChatAgentStream(
         );
 
         let lastMessages: BaseMessage[] | undefined;
-        let emittedTranslationTool = false;
-        let emittedGenerateToolResult = false;
+        const streamContext = { emittedFlags: new Set<string>() };
 
         for await (const item of lgStream) {
           if (!Array.isArray(item) || item.length < 2) continue;
@@ -214,25 +154,12 @@ export async function invokeChatAgentStream(
           } else if (mode === "tools") {
             if (!isToolLifecycleEvent(payload)) continue;
             const ev = payload;
-            if (ev.event === "on_tool_start" && ev.name === "open_translation_task_form") {
-              emittedTranslationTool = true;
-              controller.enqueue({
-                type: "tool_call",
-                name: ev.name,
-                args: coerceTranslationTaskFormPayload(ev.input),
-              });
-            } else if (
-              ev.event === "on_tool_end" &&
-              ev.name === GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME
-            ) {
-              emittedGenerateToolResult = true;
-              controller.enqueue({
-                type: "tool_result",
-                name: ev.name,
-                result: stringifyToolOutput(
-                  "output" in ev ? ev.output : undefined,
-                ),
-              });
+            
+            // 委托给注册好的 tool def 处理流式事件
+            for (const def of activeDefs) {
+              if (def.onStreamEvent) {
+                def.onStreamEvent(ev, (chunk) => controller.enqueue(chunk), streamContext);
+              }
             }
           } else if (mode === "values") {
             const state = payload as { messages?: BaseMessage[] };
@@ -243,23 +170,10 @@ export async function invokeChatAgentStream(
         }
 
         const resultMessages = lastMessages ?? [];
-        const extractedForm =
-          extractTranslationTaskFormFromMessages(resultMessages);
-        const extractedGeneratePayload =
-          extractGenerateDescriptionCardPayload(resultMessages);
         const lastUserText =
           lastHumanUtterance(agentInputMessages) ||
           lastHumanUtterance(resultMessages) ||
           "";
-        const resolveTranslationTaskForm = (assistantReplyRaw: string) => {
-          if (extractedForm) return extractedForm;
-          if (
-            shouldInjectTranslationTaskFormFallback(lastUserText, assistantReplyRaw)
-          ) {
-            return defaultTranslationTaskFormPayload();
-          }
-          return undefined;
-        };
 
         let finalReply = "";
         for (let i = resultMessages.length - 1; i >= 0; i -= 1) {
@@ -279,6 +193,7 @@ export async function invokeChatAgentStream(
             extractMessagesContext(resultMessages),
           );
           const reader = fb.getReader();
+          // eslint-disable-next-line no-constant-condition
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
@@ -288,21 +203,34 @@ export async function invokeChatAgentStream(
           return;
         }
 
-        const translationTaskForm = resolveTranslationTaskForm(finalReply);
-        if (translationTaskForm && !emittedTranslationTool) {
-          controller.enqueue({
-            type: "tool_call",
-            name: "open_translation_task_form",
-            args: translationTaskForm,
-          });
-        }
-
-        if (extractedGeneratePayload && !emittedGenerateToolResult) {
-          controller.enqueue({
-            type: "tool_result",
-            name: GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME,
-            result: JSON.stringify(extractedGeneratePayload),
-          });
+        // 调用 Tool Definition 提取兜底的卡片数据并通过 controller enqueue
+        // 旧逻辑中会主动将遗漏的卡片通过特定的 tool_call/tool_result 发出去，
+        // 既然我们重构了，就让它们作为 uiPayloads 放在 final metadata 中。
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const uiPayloads: Record<string, any> = {};
+        for (const def of activeDefs) {
+          if (def.extractUIPayload && def.uiPayloadKey) {
+            const payload = def.extractUIPayload(resultMessages, lastUserText, finalReply);
+            if (payload !== undefined) {
+              uiPayloads[def.uiPayloadKey] = payload;
+              
+              // 兼容性保留旧的 SSE 事件
+              if (def.name === "translationTaskForm" && !streamContext.emittedFlags.has("translationTaskForm")) {
+                controller.enqueue({
+                  type: "tool_call",
+                  name: "open_translation_task_form",
+                  args: payload,
+                });
+              }
+              if (def.name === "generateProductDescription" && !streamContext.emittedFlags.has("generateProductDescription")) {
+                 controller.enqueue({
+                  type: "tool_result",
+                  name: "generate_product_description",
+                  result: typeof payload === 'object' ? JSON.stringify(payload) : String(payload),
+                });
+              }
+            }
+          }
         }
 
         controller.enqueue({
@@ -311,6 +239,7 @@ export async function invokeChatAgentStream(
             totalTokens: 0,
             model: modelName,
             finalReply,
+            uiPayloads,
           },
         });
         controller.close();

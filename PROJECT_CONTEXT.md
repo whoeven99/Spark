@@ -57,8 +57,8 @@
   - 通过 `buildChatAgentExtraTools(admin)` 注入 Shopify 指标工具、翻译表单工具与 **`generate_product_description`** 等。
   - 调用 `invokeChatAgent()` 获取回复。
 - `app/server/ai/graph/shopChatGraph.server.ts`：`buildShopChatGraph`、`getShopChatModel`（LangGraph ReAct 编译图）；系统提示词见同目录 `shopAssistantPrompt.ts`（简体中文、鼓励结构化输出、避免 Markdown 表格）。
-- `app/server/ai/chat/invokeChatAgent.server.ts`：`invokeChatAgent`（图执行、表单解析、兜底模型）；若无可用 AIMessage 文本则走 fallback。
-- **流式**：`app/server/ai/chat/stream/agentStream.server.ts`：`invokeChatAgentStream`（`graph.stream`，供 `/chat-stream` 等）。
+- `app/server/ai/core/invokeChatAgent.server.ts`：`invokeChatAgent`（图执行、表单解析、兜底模型）；若无可用 AIMessage 文本则走 fallback。
+- **流式**：`app/server/ai/core/agentStream.server.ts`：`invokeChatAgentStream`（`graph.stream`，供 `/chat-stream` 等）。
 - **回复后处理**（`app/server/ai/postprocess/`，便于单测与单独演进）：
   - `langchainMessageText.ts`：从 LangChain `BaseMessage` 抽取纯文本；拼接对话上下文供兜底（`extractMessagesContext`，最长 4000 字符）。
   - `markdownTableNormalize.ts`：识别 Markdown 表格、转为列表（粗体首列 + 「列名：值」）。
@@ -140,7 +140,7 @@
 
 ## 12. 改动落点指南（按需求类型）
 - 改欢迎语/聊天 UI：`app/routes/page/ChatPage.tsx`、`app/routes/component/chat/*`（页面旁路与凭证弹层逻辑见 `app/routes/page/chat/`）。
-- 改聊天行为/工具调用：`app/server/chat.ts`、`app/server/ai/chat/invokeChatAgent.server.ts`、`app/server/ai/chat/chatAgentTools.server.ts`、`app/server/ai/graph/shopChatGraph.server.ts`。
+- 改聊天行为/工具调用：`app/server/chat.ts`、`app/server/ai/core/invokeChatAgent.server.ts`、`app/server/ai/skills/index.ts`、`app/server/ai/core/shopChatGraph.server.ts`。
 - 改 AI 回复抽取、Markdown 表格规整或最终润色：`app/server/ai/postprocess/langchainMessageText.ts`、`markdownTableNormalize.ts`、`polishFinalReply.ts`（单测同目录 `*.test.ts`）。
 - 加新 AI 工具：`app/server/ai/tools/implementations/*`，并在 `app/server/ai/chat/chatAgentTools.server.ts` 的 `buildChatAgentExtraTools` 中注册（与 `shopifyShopInfoTool` 等一并注入聊天链路）。
 - 改诊断指标：`app/routes/app.additional.tsx`（含查询、阈值、文案）。
