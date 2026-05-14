@@ -4,6 +4,7 @@ import { authenticate } from "../shopify.server";
 import { buildChatAgentExtraTools } from "./ai/chatAgentTools.server";
 import { invokeChatAgent } from "./ai/agent";
 import { parseClientChatMessages } from "./chatPayload.server";
+import { isLangsmithAvailable } from "./ai/langsmith.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
@@ -40,16 +41,28 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   try {
-    const { admin } = await authenticate.admin(request);
+    const { admin, session } = await authenticate.admin(request);
+    
+    // 生成会话名称用于 LangSmith 追踪
+    const shopDomain = session?.shop;
+    const sessionName = shopDomain 
+      ? `chat-session-${shopDomain}-${Date.now()}` 
+      : undefined;
+    
+    console.log(`[Chat] LangSmith available: ${isLangsmithAvailable()}`);
+    
     const {
       reply,
       translationTaskForm,
       generateDescriptionCard,
       generateDescriptionCardPayload,
+      langsmithTraceUrl,
     } = await invokeChatAgent({
       messages: agentMessages,
       extraTools: buildChatAgentExtraTools(admin),
+      sessionName,
     });
+    
     return Response.json({
       reply,
       ...(translationTaskForm ? { translationTaskForm } : {}),
@@ -57,6 +70,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       ...(generateDescriptionCardPayload
         ? { generateDescriptionCardPayload }
         : {}),
+      ...(langsmithTraceUrl ? { langsmithTraceUrl } : {}),
     });
   } catch (error) {
     console.error("Chat agent error:", error);

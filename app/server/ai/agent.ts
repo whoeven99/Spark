@@ -22,6 +22,11 @@ import {
 } from "./translationTaskFormExtract";
 import { baseAgentTools } from "./tools";
 import { GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME } from "./tool/generateDescriptionTool";
+import {
+  createLangsmithTracer,
+  isLangsmithAvailable,
+  getTraceUrl,
+} from "./langsmith.server";
 
 export type InvokeChatAgentResult = {
   reply: string;
@@ -161,16 +166,24 @@ export type InvokeChatAgentParams = {
   /** 完整对话上下文；最后一条须为用户消息（HumanMessage）。 */
   messages: BaseMessage[];
   extraTools?: DynamicStructuredTool[];
+  /** 可选的会话名称，用于 LangSmith 追踪 */
+  sessionName?: string;
 };
 
 export async function invokeChatAgent(
   params: InvokeChatAgentParams,
-): Promise<InvokeChatAgentResult> {
-  const { messages: agentInputMessages, extraTools } = params;
+): Promise<InvokeChatAgentResult & { langsmithTraceUrl?: string}> {
+  const { messages: agentInputMessages, extraTools, sessionName } = params;
+  
+  // 创建 LangSmith 追踪器
+  const tracer = createLangsmithTracer(sessionName);
+  const callbacks = tracer ? [tracer] : [];
+  
   const agent = await buildAgent(extraTools ?? []);
-  const result = await agent.invoke({
-    messages: agentInputMessages,
-  });
+  const result = await agent.invoke(
+    { messages: agentInputMessages },
+    { callbacks }
+  );
 
   const { messages } = result;
   const extractedForm = extractTranslationTaskFormFromMessages(messages);
@@ -195,6 +208,9 @@ export async function invokeChatAgent(
     );
   };
 
+  // 从 tracer 获取 traceUrl（如果可用）
+  const traceUrl = tracer ? getTraceUrl() : undefined;
+
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const msg = messages[i];
     if (AIMessage.isInstance(msg)) {
@@ -207,6 +223,7 @@ export async function invokeChatAgent(
           ...(extractedGeneratePayload
             ? { generateDescriptionCardPayload: extractedGeneratePayload }
             : {}),
+          ...(traceUrl ? { langsmithTraceUrl: traceUrl } : {}),
         };
       }
     }
@@ -225,6 +242,7 @@ export async function invokeChatAgent(
         ...(extractedGeneratePayload
           ? { generateDescriptionCardPayload: extractedGeneratePayload }
           : {}),
+        ...(traceUrl ? { langsmithTraceUrl: traceUrl } : {}),
       };
     }
   } catch {
@@ -241,5 +259,6 @@ export async function invokeChatAgent(
     ...(extractedGeneratePayload
       ? { generateDescriptionCardPayload: extractedGeneratePayload }
       : {}),
+    ...(traceUrl ? { langsmithTraceUrl: traceUrl } : {}),
   };
 }
