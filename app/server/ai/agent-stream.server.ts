@@ -1,4 +1,5 @@
 import type { DynamicStructuredTool } from "@langchain/core/tools";
+import type { RunnableConfig } from "@langchain/core/runnables";
 import {
   AIMessage,
   HumanMessage,
@@ -175,16 +176,17 @@ function extractGenerateDescriptionCardPayload(
 export type InvokeChatAgentStreamParams = {
   messages: BaseMessage[];
   extraTools?: DynamicStructuredTool[];
+  config?: RunnableConfig;
 };
 
 export async function invokeChatAgentStream(
   params: InvokeChatAgentStreamParams,
 ): Promise<ReadableStream<StreamChunk>> {
-  const { messages: agentInputMessages, extraTools } = params;
+  const { messages: agentInputMessages, extraTools, config } = params;
   const agent = await buildAgent(extraTools ?? []);
   const result = await agent.invoke({
     messages: agentInputMessages,
-  });
+  }, config);
 
   const { messages: resultMessages } = result;
   const extractedForm = extractTranslationTaskFormFromMessages(resultMessages);
