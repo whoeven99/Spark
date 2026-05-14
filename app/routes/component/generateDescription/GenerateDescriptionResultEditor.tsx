@@ -1,4 +1,5 @@
 import { useEffect, useRef, type CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import type { CopyTarget } from "../../../hooks/useGenerateDescription";
 
 export type GenerateDescriptionResultEditorProps = {
@@ -39,6 +40,7 @@ const textAreaBase = (variant: "page" | "card"): CSSProperties => ({
 });
 
 export function GenerateDescriptionResultEditor(props: GenerateDescriptionResultEditorProps) {
+  const { t } = useTranslation();
   const {
     variant,
     draftTitle,
@@ -88,12 +90,12 @@ export function GenerateDescriptionResultEditor(props: GenerateDescriptionResult
             marginBottom: "0.25rem",
           }}
         >
-          生成结果
+          {t("generate.resultTitle")}
         </div>
       ) : null}
 
       <s-text-field
-        label="商品标题"
+        label={t("generate.productTitleLabel")}
         value={draftTitle}
         onChange={(e) => onDraftTitleChange(e.currentTarget.value)}
         autocomplete="off"
@@ -110,7 +112,7 @@ export function GenerateDescriptionResultEditor(props: GenerateDescriptionResult
             color: variant === "card" ? "#444" : "#303030",
           }}
         >
-          商品描述
+          {t("generate.productDescriptionLabel")}
         </label>
         <textarea
           id={descFieldId}
@@ -144,7 +146,7 @@ export function GenerateDescriptionResultEditor(props: GenerateDescriptionResult
           onClick={onCopyTitle}
           {...(disabledCopy ? { disabled: true } : {})}
         >
-          {copyTarget === "title" ? "复制中…" : "复制标题"}
+          {copyTarget === "title" ? t("generate.copying") : t("generate.copyTitle")}
         </s-button>
         <s-button
           type="button"
@@ -152,7 +154,7 @@ export function GenerateDescriptionResultEditor(props: GenerateDescriptionResult
           onClick={onCopyDescription}
           {...(disabledCopy ? { disabled: true } : {})}
         >
-          {copyTarget === "description" ? "复制中…" : "复制描述"}
+          {copyTarget === "description" ? t("generate.copying") : t("generate.copyDescription")}
         </s-button>
         <s-button
           type="button"
@@ -160,7 +162,7 @@ export function GenerateDescriptionResultEditor(props: GenerateDescriptionResult
           onClick={onCopyAll}
           {...(disabledCopy ? { disabled: true } : {})}
         >
-          {copyTarget === "all" ? "复制中…" : "复制全部"}
+          {copyTarget === "all" ? t("generate.copying") : t("generate.copyAll")}
         </s-button>
         <s-button
           type="button"
@@ -168,7 +170,7 @@ export function GenerateDescriptionResultEditor(props: GenerateDescriptionResult
           onClick={onClickSave}
           {...(isSubmitting || isSaving ? { disabled: true } : {})}
         >
-          {isSaving ? "保存中…" : "保存到 Shopify"}
+          {isSaving ? t("generate.saving") : t("generate.saveToShopify")}
         </s-button>
       </s-stack>
     </s-stack>
@@ -177,7 +179,7 @@ export function GenerateDescriptionResultEditor(props: GenerateDescriptionResult
   return (
     <>
       {variant === "page" ? (
-        <s-section heading="生成结果">{body}</s-section>
+        <s-section heading={t("generate.resultTitle")}>{body}</s-section>
       ) : (
         <div style={{ marginBottom: "0.85rem" }}>{body}</div>
       )}
@@ -208,7 +210,7 @@ export function GenerateDescriptionResultEditor(props: GenerateDescriptionResult
               marginBottom: "0.5rem",
             }}
           >
-            确认保存到 Shopify？
+            {t("generate.confirmSaveTitle")}
           </div>
           <div
             style={{
@@ -218,14 +220,14 @@ export function GenerateDescriptionResultEditor(props: GenerateDescriptionResult
               marginBottom: "1rem",
             }}
           >
-            将把当前编辑的标题与描述写回该商品，并覆盖店铺中的商品文案。
+            {t("generate.confirmSaveDesc")}
           </div>
           <s-stack direction="inline" gap="small">
             <s-button type="button" variant="secondary" onClick={onSaveCancel} {...(isSaving ? { disabled: true } : {})}>
-              取消
+              {t("common.cancel")}
             </s-button>
             <s-button type="button" variant="primary" onClick={onSaveConfirm} {...(isSaving ? { disabled: true } : {})}>
-              {isSaving ? "保存中…" : "确认保存"}
+              {isSaving ? t("generate.saving") : t("generate.confirmSaveAction")}
             </s-button>
           </s-stack>
         </div>

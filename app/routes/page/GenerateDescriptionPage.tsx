@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
+import { useTranslation } from "react-i18next";
 import { useLoaderData } from "react-router";
 import { useGenerateDescription } from "../../hooks/useGenerateDescription";
 import type { loader } from "../app.generate-description";
@@ -9,6 +10,7 @@ import { GenerateDescriptionResultEditor } from "../component/generateDescriptio
 
 export function GenerateDescriptionPage() {
   const shopify = useAppBridge();
+  const { t } = useTranslation();
   const loaderData = useLoaderData<typeof loader>();
   const [selectedProduct, setSelectedProduct] =
     useState<ProductSelectorSelection | null>(null);
@@ -60,7 +62,7 @@ export function GenerateDescriptionPage() {
 
   const copyBusy = copyTarget !== null;
   return (
-    <s-page heading="生成商品描述">
+    <s-page heading={t("generate.pageTitle")}>
       <div
         style={{
           display: "flex",
@@ -71,7 +73,7 @@ export function GenerateDescriptionPage() {
       >
         <div style={{ flex: "1 1 420px", minWidth: 0 }}>
           <s-stack direction="block" gap="large">
-            <s-section heading="商品描述生成">
+            <s-section heading={t("generate.sectionTitle")}>
               <s-stack direction="block" gap="base">
                 <div
                   style={{
@@ -80,8 +82,7 @@ export function GenerateDescriptionPage() {
                     lineHeight: 1.5,
                   }}
                 >
-                  基于当前店铺在 Shopify 中的商品数据生成营销描述。请先在下方搜索并选择商品；
-                  目标语言默认与店铺主语言一致，可在下拉中切换。与 AI Assistant 页快捷入口使用同一套服务端能力。
+                  {t("generate.intro")}
                 </div>
                 <ProductSelector
                   locationSearch={search}
@@ -103,11 +104,11 @@ export function GenerateDescriptionPage() {
                       userSelect: "none",
                     }}
                   >
-                    高级：手动输入商品 ID
+                    {t("generate.advancedManualProductId")}
                   </summary>
                   <div style={{ marginTop: "0.65rem" }}>
                     <s-text-field
-                      label="商品 ID（数字或 gid://shopify/Product/…）"
+                      label={t("generate.productIdLabel")}
                       value={productId}
                       onChange={(e) => setProductId(e.currentTarget.value)}
                       autocomplete="off"
@@ -125,7 +126,7 @@ export function GenerateDescriptionPage() {
                       color: "#303030",
                     }}
                   >
-                    目标语言
+                    {t("generate.targetLanguage")}
                   </label>
                   <select
                     id="generate-description-lang"
@@ -147,7 +148,7 @@ export function GenerateDescriptionPage() {
                     }}
                   >
                     {localesLoading && localeOptions.length === 0 ? (
-                      <option value="">加载语言列表…</option>
+                      <option value="">{t("common.loadingLanguage")}</option>
                     ) : null}
                     {localeOptions.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -164,9 +165,8 @@ export function GenerateDescriptionPage() {
                         lineHeight: 1.45,
                       }}
                     >
-                      当前为内置语言列表。若已在应用配置中授权{" "}
+                      {t("generate.fallbackLocalesHint")}{" "}
                       <code style={{ fontSize: "0.7rem" }}>read_locales</code>{" "}
-                      并重新安装应用，将自动同步店铺在 Shopify 中启用的语言。
                     </div>
                   ) : null}
                 </div>
@@ -220,10 +220,10 @@ export function GenerateDescriptionPage() {
                     {...(isSubmitting || isSaving || localesLoading || saveConfirmOpen ? { disabled: true } : {})}
                   >
                     {isSubmitting
-                      ? "正在生成…"
+                      ? t("generate.generating")
                       : localesLoading
-                        ? "加载语言…"
-                        : "生成描述"}
+                        ? t("common.loadingLanguage")
+                        : t("generate.generateAction")}
                   </s-button>
                   <s-button
                     type="button"
@@ -235,7 +235,7 @@ export function GenerateDescriptionPage() {
                     }}
                     {...(isSubmitting || isSaving ? { disabled: true } : {})}
                   >
-                    清空结果
+                    {t("common.clearResult")}
                   </s-button>
                 </s-stack>              </s-stack>
             </s-section>

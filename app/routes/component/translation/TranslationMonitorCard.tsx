@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type {
@@ -139,7 +140,10 @@ function ProgressBar(props: {
   );
 }
 
-function useRuntimeProgress(payload: JsonRuntimeTaskDetailPayload | null) {
+function useRuntimeProgress(
+  payload: JsonRuntimeTaskDetailPayload | null,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   return useMemo(() => {
     if (!payload?.redisRuntime) {
       return {
@@ -198,19 +202,25 @@ function useRuntimeProgress(payload: JsonRuntimeTaskDetailPayload | null) {
     const chunkSub =
       chunkTotal !== null ? (
         <span>
-          已完成 <strong>{chunkDone ?? 0}</strong> / <strong>{chunkTotal}</strong> 个<strong>分块文件</strong>
+          {t("translationRuntime.completedChunkFiles", {
+            done: chunkDone ?? 0,
+            total: chunkTotal,
+          })}
         </span>
       ) : null;
 
     const entrySubResolved =
       entryTotal !== null ? (
         <span>
-          已完成 <strong>{entryDone ?? 0}</strong> / <strong>{entryTotal}</strong> 个<strong>文本节点</strong>
+          {t("translationRuntime.completedTextNodes", {
+            done: entryDone ?? 0,
+            total: entryTotal,
+          })}
         </span>
       ) : null;
 
     return { entryPct, chunkPct, entrySub: entrySubResolved, chunkSub };
-  }, [payload]);
+  }, [payload, t]);
 }
 
 /** 列表中的更新时间：只展示到秒（兼容带纳秒的 ISO 字符串） */
@@ -231,6 +241,7 @@ function formatTaskUpdatedAt(raw: string | undefined): string {
 type Props = { defaultShopName: string };
 
 export function TranslationMonitorCard({ defaultShopName }: Props) {
+  const { t, i18n } = useTranslation();
   const shopName = defaultShopName.trim();
 
   const [listLoading, setListLoading] = useState(false);
@@ -244,11 +255,11 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
 
   const [mdOpen, setMdOpen] = useState(false);
   const [mdLoading, setMdLoading] = useState(false);
-  const [mdTitle, setMdTitle] = useState("整包翻译报告");
+  const [mdTitle, setMdTitle] = useState("");
   const [mdText, setMdText] = useState("");
   const [mdTruncated, setMdTruncated] = useState(false);
 
-  const progress = useRuntimeProgress(detail);
+  const progress = useRuntimeProgress(detail, t);
 
   const fetchList = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent === true;
@@ -268,7 +279,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
       if (!res.ok || env.success === false) {
         if (!silent) {
           setTasks([]);
-          setListError(env.errorMsg || `加载失败（${res.status}）`);
+          setListError(env.errorMsg || t("translation.createFailed", { status: res.status }));
         }
         return;
       }
@@ -278,7 +289,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
     } catch {
       if (!silent) {
         setTasks([]);
-        setListError("加载失败，请稍后重试");
+        setListError(t("translation.createFailedRetry"));
       }
     } finally {
       if (!silent) setListLoading(false);
@@ -319,14 +330,14 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
         const env = (await res.json().catch(() => ({}))) as JsonRuntimeTaskDetailEnvelope;
         if (!res.ok || env.success === false) {
           if (!silent) setDetail(null);
-          setDetailError(env.errorMsg || `加载详情失败（${res.status}）`);
+          setDetailError(env.errorMsg || t("translationRuntime.monitorDetailLoadFailed", { status: res.status }));
           return;
         }
         setDetail(env.response ?? null);
         setDetailError("");
       } catch {
         if (!silent) setDetail(null);
-        setDetailError("网络异常，请稍后重试");
+        setDetailError(t("chat.sendFailed"));
       } finally {
         if (!silent) setDetailLoading(false);
       }
@@ -353,7 +364,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
     const tid = selectedId.trim();
     if (!tid) return;
     setMdLoading(true);
-    setMdTitle("整包翻译报告");
+    setMdTitle(t("translationRuntime.reportTitle"));
     try {
       const params = new URLSearchParams();
       params.set("taskId", tid);
@@ -365,18 +376,18 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
       const res = await fetch(`/api/translate/v3/json-runtime-task-detail?${params.toString()}`);
       const env = (await res.json().catch(() => ({}))) as JsonRuntimeTaskDetailEnvelope;
       if (!res.ok || env.success === false) {
-        setMdText(env.errorMsg || "加载失败");
+        setMdText(env.errorMsg || t("translationRuntime.loadFailed"));
         setMdTruncated(false);
         setMdOpen(true);
         return;
       }
       const snap = env.response?.blobs?.translationReportMd;
       const text = typeof snap?.preview === "string" ? snap.preview : "";
-      setMdText(text.length > 0 ? text : "（暂无报告内容）");
+      setMdText(text.length > 0 ? text : t("translationRuntime.monitorNoReportContent"));
       setMdTruncated(snap?.previewTruncated === true);
       setMdOpen(true);
     } catch {
-      setMdText("加载失败，请稍后重试");
+      setMdText(t("translationRuntime.loadFailedRetry"));
       setMdTruncated(false);
       setMdOpen(true);
     } finally {
@@ -388,7 +399,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
     const tid = selectedId.trim();
     if (!tid) return;
     setMdLoading(true);
-    setMdTitle("翻译质量检测（translation-quality-report.md）");
+    setMdTitle(t("translationRuntime.qualityReportTitleLong"));
     try {
       const params = new URLSearchParams();
       params.set("taskId", tid);
@@ -400,18 +411,18 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
       const res = await fetch(`/api/translate/v3/json-runtime-task-detail?${params.toString()}`);
       const env = (await res.json().catch(() => ({}))) as JsonRuntimeTaskDetailEnvelope;
       if (!res.ok || env.success === false) {
-        setMdText(env.errorMsg || "加载失败");
+        setMdText(env.errorMsg || t("translationRuntime.loadFailed"));
         setMdTruncated(false);
         setMdOpen(true);
         return;
       }
       const snap = env.response?.blobs?.qualityReportMd;
       const text = typeof snap?.preview === "string" ? snap.preview : "";
-      setMdText(text.length > 0 ? text : "（暂无报告内容）");
+      setMdText(text.length > 0 ? text : t("translationRuntime.monitorNoReportContent"));
       setMdTruncated(snap?.previewTruncated === true);
       setMdOpen(true);
     } catch {
-      setMdText("加载失败，请稍后重试");
+      setMdText(t("translationRuntime.loadFailedRetry"));
       setMdTruncated(false);
       setMdOpen(true);
     } finally {
@@ -432,7 +443,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
     const md = readMetricNumber(tm.initModuleDone);
     const mt = readMetricNumber(tm.initModuleTotal);
     const acc = readMetricNumber(tm.initAccumulatedCount);
-    const modulePart = md !== null && mt !== null ? `模块 ${md}/${mt}` : null;
+    const modulePart = md !== null && mt !== null ? t("translationRuntime.moduleProgress", { done: md, total: mt }) : null;
     const chunksFileTotal = readRuntimeChunksFileTotal(detail);
     return { phase, phaseLabel, modulePart, accumulatedCount: acc, chunksFileTotal };
   }, [tm, detail]);
@@ -450,14 +461,14 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
               flexWrap: "wrap",
             }}
           >
-            <span style={{ fontWeight: 600, fontSize: "15px", color: "#202223" }}>翻译任务列表</span>
+            <span style={{ fontWeight: 600, fontSize: "15px", color: "#202223" }}>{t("translationRuntime.monitorTaskListTitle")}</span>
             <s-button
               type="button"
               variant="secondary"
               onClick={() => void fetchList()}
               {...(listLoading ? { disabled: true } : {})}
             >
-              {listLoading ? "刷新中…" : "刷新"}
+              {listLoading ? t("translationRuntime.refreshing") : t("translationRuntime.refresh")}
             </s-button>
           </div>
 
@@ -466,7 +477,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
           ) : null}
 
           {!listLoading && !listError && tasks.length === 0 ? (
-            <span style={{ color: "#6d7175", fontSize: "13px" }}>暂无任务</span>
+            <span style={{ color: "#6d7175", fontSize: "13px" }}>{t("translationRuntime.noTasks")}</span>
           ) : null}
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -509,12 +520,12 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                       {(row.source ?? "—").trim()} → {(row.target ?? "—").trim()}
                     </span>
                     <s-badge tone={listBadgeTone(row.statusText)}>
-                      {formatTranslateTaskV3CosmosStatusText(row.statusText)}
+                      {formatTranslateTaskV3CosmosStatusText(row.statusText, t, i18n)}
                     </s-badge>
                   </div>
                   {row.updatedAt ? (
                     <div style={{ fontSize: "12px", color: "#8c9196", marginTop: 8 }}>
-                      更新 {formatTaskUpdatedAt(row.updatedAt)}
+                      {t("translationRuntime.updatedAt")} {formatTaskUpdatedAt(row.updatedAt)}
                     </div>
                   ) : null}
                 </button>
@@ -531,7 +542,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
               }}
             >
               {detailLoading && !detail ? (
-                <span style={{ color: "#6d7175", fontSize: "13px" }}>加载详情…</span>
+                <span style={{ color: "#6d7175", fontSize: "13px" }}>{t("translationRuntime.loadingDetail")}</span>
               ) : null}
               {detailError ? (
                 <span style={{ color: "#bf0711", fontSize: "13px" }}>{detailError}</span>
@@ -539,7 +550,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
 
               {detail ? (
                 <s-stack direction="block" gap="small">
-                  <div style={{ fontSize: "14px", fontWeight: 600, color: "#202223" }}>任务详情</div>
+                  <div style={{ fontSize: "14px", fontWeight: 600, color: "#202223" }}>{t("translationRuntime.taskDetail")}</div>
 
                   <div
                     style={{
@@ -550,7 +561,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                     }}
                   >
                     <s-badge tone={cosmosTone(readString(cosmos, "statusText"))}>
-                      {formatTranslateTaskV3CosmosStatusText(readString(cosmos, "statusText"))}
+                      {formatTranslateTaskV3CosmosStatusText(readString(cosmos, "statusText"), t, i18n)}
                     </s-badge>
                     <span style={{ fontSize: "13px", color: "#42474c" }}>
                       <strong>{readString(cosmos, "source") || "—"}</strong>
@@ -561,7 +572,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
 
                   {initDisplay ? (
                     <div>
-                      <div style={{ fontSize: "12px", color: "#8c9196", marginBottom: 6 }}>初始化</div>
+                      <div style={{ fontSize: "12px", color: "#8c9196", marginBottom: 6 }}>{t("translationRuntime.initPhase")}</div>
                       <div
                         style={{
                           display: "flex",
@@ -573,7 +584,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                         <s-badge tone="info">{initDisplay.phaseLabel}</s-badge>
                         {initDisplay.chunksFileTotal !== null ? (
                           <span style={{ fontSize: "13px", color: "#42474c" }}>
-                            分块文件 <strong>{initDisplay.chunksFileTotal}</strong> 个
+                            {t("translationRuntime.chunkFileCount", { count: initDisplay.chunksFileTotal })}
                           </span>
                         ) : null}
                         {initDisplay.modulePart ? (
@@ -592,7 +603,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                               boxShadow: "0 1px 2px rgba(0, 82, 54, 0.08)",
                             }}
                           >
-                            <span style={{ fontSize: "12px", fontWeight: 700, color: "#244235" }}>已拉取</span>
+                            <span style={{ fontSize: "12px", fontWeight: 700, color: "#244235" }}>{t("translationRuntime.fetched")}</span>
                             <span
                               style={{
                                 fontSize: "22px",
@@ -605,7 +616,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                             >
                               {initDisplay.accumulatedCount}
                             </span>
-                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#244235" }}>条</span>
+                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#244235" }}>{t("translationRuntime.itemsUnit")}</span>
                           </span>
                         ) : null}
                       </div>
@@ -614,7 +625,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
 
                   {progress.entryPct !== null ? (
                     <ProgressBar
-                      label="文本节点（解析明细）"
+                      label={t("translationRuntime.entryProgressLabel")}
                       sub={progress.entrySub}
                       percent={progress.entryPct}
                       gradient="linear-gradient(90deg, #006fbb 0%, #2c6ecb 70%)"
@@ -623,14 +634,14 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                   ) : (
                     <span style={{ fontSize: "12px", color: "#8c9196" }}>
                       {progress.chunkPct !== null
-                        ? "暂无文本节点级进度数据"
-                        : "翻译进度：暂无可用数据"}
+                        ? t("translationRuntime.noEntryProgressData")
+                        : t("translationRuntime.noProgressData")}
                     </span>
                   )}
 
                   {progress.chunkPct !== null ? (
                     <ProgressBar
-                      label="翻译分块（chunks 文件）"
+                      label={t("translationRuntime.chunkProgressLabel")}
                       sub={progress.chunkSub}
                       percent={progress.chunkPct}
                       gradient="linear-gradient(90deg, #007146 0%, #008060 65%)"
@@ -648,14 +659,14 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                       }}
                     >
                       <span style={{ fontSize: "13px", fontWeight: 600, color: "#202223" }}>
-                        整包翻译报告
+                        {t("translationRuntime.reportTitle")}
                       </span>
                       <s-badge tone={trBlob?.exists === true ? "success" : "info"}>
                         {trBlob?.exists === true
-                          ? "已生成"
+                          ? t("translationRuntime.generated")
                           : trBlob?.exists === false
-                            ? "未生成"
-                            : "未知"}
+                            ? t("translationRuntime.notGenerated")
+                            : t("translationRuntime.unknown")}
                       </s-badge>
                     </div>
                     <div style={{ marginTop: 8 }}>
@@ -665,7 +676,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                         onClick={() => void openReportPreview()}
                         {...(mdLoading ? { disabled: true } : {})}
                       >
-                        {mdLoading ? "打开中…" : "弹窗预览"}
+                        {mdLoading ? t("translationRuntime.opening") : t("translationRuntime.previewInModal")}
                       </s-button>
                     </div>
                   </div>
@@ -680,14 +691,14 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                       }}
                     >
                       <span style={{ fontSize: "13px", fontWeight: 600, color: "#202223" }}>
-                        翻译质量检测（translation-quality-report.md）
+                        {t("translationRuntime.qualityReportTitleLong")}
                       </span>
                       <s-badge tone={qrBlob?.exists === true ? "success" : "info"}>
                         {qrBlob?.exists === true
-                          ? "已生成"
+                          ? t("translationRuntime.generated")
                           : qrBlob?.exists === false
-                            ? "未生成"
-                            : "未知"}
+                            ? t("translationRuntime.notGenerated")
+                            : t("translationRuntime.unknown")}
                       </s-badge>
                     </div>
                     <div style={{ marginTop: 8 }}>
@@ -697,7 +708,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                         onClick={() => void openQualityReportPreview()}
                         {...(mdLoading ? { disabled: true } : {})}
                       >
-                        {mdLoading ? "打开中…" : "弹窗预览"}
+                        {mdLoading ? t("translationRuntime.opening") : t("translationRuntime.previewInModal")}
                       </s-button>
                     </div>
                   </div>
@@ -705,7 +716,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
               ) : null}
             </div>
           ) : (
-            <span style={{ color: "#8c9196", fontSize: "12px" }}>请从上方列表选择任务</span>
+            <span style={{ color: "#8c9196", fontSize: "12px" }}>{t("translationRuntime.selectTaskHint")}</span>
           )}
         </s-stack>
       </s-box>
@@ -738,7 +749,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
             >
               <strong style={{ fontSize: "15px", color: "#202223" }}>{mdTitle}</strong>
               <s-button type="button" variant="secondary" onClick={() => setMdOpen(false)}>
-                关闭
+                {t("common.close")}
               </s-button>
             </div>
             {mdTruncated ? (
@@ -751,7 +762,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                   borderBottom: "1px solid #ffd79c",
                 }}
               >
-                预览已截断；完整内容请在存储中下载。
+                {t("translationRuntime.previewTruncatedDownloadHint")}
               </div>
             ) : null}
             <div

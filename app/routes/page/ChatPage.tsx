@@ -1,39 +1,50 @@
 import { useState, useRef, useEffect } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
-import type { ChatMessage } from "../../lib/chatMessage";
-import type { GenerateDescriptionCardPayload } from "../../lib/chatMessage";
+import { useTranslation } from "react-i18next";
+import type { ChatMessage, GenerateDescriptionCardPayload } from "../../lib/chatMessage";
 import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { ChatMessages } from "../component/chat/ChatMessages";
 import { ChatInput } from "../component/chat/ChatInput";
 import { ChatPageCredentialsChrome } from "./chat/ChatPageCredentialsChrome";
 import {
-  GENERATE_DESCRIPTION_QUICK_PROMPT,
-  INITIAL_ASSISTANT_MESSAGE,
-  quickPrompts,
+  buildInitialAssistantMessage,
+  buildQuickPrompts,
   quickPromptTones,
 } from "./chat/chatPageConstants";
 import { asideCardStyle } from "./chat/chatPageStyles";
 
 export function ChatPage() {
   const shopify = useAppBridge();
+  const { t, i18n } = useTranslation();
+  const firstMessage = buildInitialAssistantMessage(t);
+  const quickPrompts = buildQuickPrompts(t);
+  const generateDescriptionQuickPrompt = t("chat.quickPromptGenerateDescription");
   const [isSending, setIsSending] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
       role: "assistant",
-      content: INITIAL_ASSISTANT_MESSAGE,
+      content: firstMessage,
     },
   ]);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMessages((prev) => {
+      if (prev.length === 1 && prev[0]?.role === "assistant") {
+        return [{ role: "assistant", content: buildInitialAssistantMessage(t) }];
+      }
+      return prev;
+    });
+  }, [i18n.language, t]);
 
   const openGenerateDescriptionCard = () => {
     if (isSending) return;
     setMessages((prev) => [
       ...prev,
-      { role: "user", content: GENERATE_DESCRIPTION_QUICK_PROMPT },
+      { role: "user", content: generateDescriptionQuickPrompt },
       {
         role: "assistant",
-        content:
-          "已为你打开「商品描述生成」表单。请搜索并选择商品（或展开高级手动填写商品 ID），在「目标语言」下拉中选择生成语言（默认与店铺主语言一致），系统将基于 Shopify 商品数据生成结构化营销描述。",
+        content: t("chat.assistantOpenGenerateCard"),
         generateDescriptionCard: true,
       },
     ]);
@@ -80,8 +91,8 @@ export function ChatPage() {
         data.reply?.trim() ||
         data.error?.trim() ||
         (!response.ok
-          ? `请求失败（${response.status}），请稍后重试。`
-          : "未收到有效回复，请重试。");
+          ? t("chat.requestFailed", { status: response.status })
+          : t("chat.invalidReply"));
       setMessages((prev) => [
         ...prev,
         {
@@ -95,7 +106,7 @@ export function ChatPage() {
         },
       ]);
     } catch {
-      shopify.toast.show("发送失败，请稍后重试");
+      shopify.toast.show(t("chat.sendFailed"));
     } finally {
       setIsSending(false);
     }
@@ -105,7 +116,7 @@ export function ChatPage() {
     messageIndex: number,
     detail: { jobId?: string; message: string },
   ) => {
-    shopify.toast.show(detail.message || "翻译任务创建成功");
+    shopify.toast.show(detail.message || t("chat.translationCreateSuccess"));
     setMessages((prev) => {
       const next = prev.map((m, i): ChatMessage =>
         i === messageIndex && m.role === "assistant"
@@ -115,33 +126,33 @@ export function ChatPage() {
       next.push({
         role: "assistant",
         content: detail.jobId
-          ? `翻译任务已提交（任务 ID：${detail.jobId}）。请到应用「翻译任务」页查看 JSON Runtime 进度。`
-          : "翻译任务已提交。请到「翻译任务」页查看进度。",
+          ? t("chat.translationSubmittedWithId", { jobId: detail.jobId })
+          : t("chat.translationSubmitted"),
       });
       return next;
     });
   };
 
   return (
-    <s-page heading="Shopify Ai Assistant">
-      <s-section heading="智能问答">
+    <s-page heading={t("chat.pageTitle")}>
+      <s-section heading={t("chat.sectionTitle")}>
         <s-stack direction="inline" gap="base" alignItems="center" justifyContent="space-between">
           <s-stack direction="inline" gap="base" alignItems="center">
             <s-paragraph>
-              你可以在这里直接提问，获取店铺经营分析、广告/物流授权引导和运营建议。
+              {t("chat.intro")}
             </s-paragraph>
-            <s-badge tone="success">AI 助手在线</s-badge>
+            <s-badge tone="success">{t("chat.assistantOnline")}</s-badge>
           </s-stack>
           <s-button
             type="button"
             variant="secondary"
             onClick={() => {
-              setMessages([{ role: "assistant", content: INITIAL_ASSISTANT_MESSAGE }]);
-              shopify.toast.show("已开始新对话");
+              setMessages([{ role: "assistant", content: firstMessage }]);
+              shopify.toast.show(t("chat.newChatStarted"));
             }}
             {...(isSending ? { disabled: true } : {})}
           >
-            新对话
+            {t("common.newChat")}
           </s-button>
         </s-stack>
 
@@ -156,7 +167,7 @@ export function ChatPage() {
         >
           <s-box padding="small" borderWidth="base" borderRadius="base" background="base">
             <s-stack direction="block" gap="none">
-              <s-paragraph>快捷问题</s-paragraph>
+              <s-paragraph>{t("chat.quickQuestions")}</s-paragraph>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.25rem" }}>
                 {quickPrompts.map((prompt, index) => (
                   <s-button
@@ -165,7 +176,7 @@ export function ChatPage() {
                     tone={quickPromptTones[index]}
                     variant="secondary"
                     onClick={() =>
-                      prompt === GENERATE_DESCRIPTION_QUICK_PROMPT
+                      prompt === generateDescriptionQuickPrompt
                         ? openGenerateDescriptionCard()
                         : sendMessage(prompt)
                     }
@@ -192,14 +203,14 @@ export function ChatPage() {
         </div>
       </s-section>
 
-      <s-section slot="aside" heading="使用建议">
+      <s-section slot="aside" heading={t("chat.tipsTitle")}>
         <div style={asideCardStyle}>
           <s-unordered-list>
-            <s-list-item>尽量一次只提一个问题，回答会更准确。</s-list-item>
-            <s-list-item>可直接说明场景，例如“新客拉新”“复购提升”。</s-list-item>
-            <s-list-item>需要执行动作时，请明确给出目标和限制条件。</s-list-item>
+            <s-list-item>{t("chat.tipSingleQuestion")}</s-list-item>
+            <s-list-item>{t("chat.tipScenario")}</s-list-item>
+            <s-list-item>{t("chat.tipAction")}</s-list-item>
             <s-list-item>
-              模型会记住当前页这段对话；点「新对话」可清空上下文重新开始。
+              {t("chat.tipNewChat")}
             </s-list-item>
           </s-unordered-list>
         </div>

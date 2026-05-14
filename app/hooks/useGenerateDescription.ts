@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { buildCopyAllText } from "../lib/generateDescriptionCopyText";
 import type { GenerateDescriptionApiResponse } from "../lib/generateDescriptionTypes";
 import {
@@ -22,6 +23,7 @@ export type UseGenerateDescriptionParams = {
 };
 
 export function useGenerateDescription(params: UseGenerateDescriptionParams) {
+  const { t } = useTranslation();
   const { locationSearch, initialShopLocales, initialResult, toastShow } = params;
 
   const [resolvedLocales, setResolvedLocales] = useState<ShopLocalesPayload | null>(
@@ -122,15 +124,15 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
       const pid = productIdRaw.trim();
       const lang = targetLanguage.trim();
       if (!pid) {
-        toastShow("请选择商品或填写商品 ID");
+        toastShow(t("generate.validationSelectProductId"));
         return;
       }
       if (!lang) {
-        toastShow("请选择目标语言");
+        toastShow(t("generate.validationSelectTargetLanguage"));
         return;
       }
       if (localesLoading) {
-        toastShow("语言列表加载中，请稍候");
+        toastShow(t("generate.validationLocalesLoading"));
         return;
       }
 
@@ -157,8 +159,8 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
           const msg =
             apiPayload.success === false
               ? apiPayload.errorMsg
-              : `请求失败（${response.status}）`;
-          setErrorText(msg || `请求失败（${response.status}）`);
+              : t("chat.requestFailed", { status: response.status });
+          setErrorText(msg || t("chat.requestFailed", { status: response.status }));
           return;
         }
 
@@ -170,19 +172,19 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
         ) {
           setProductTitle(apiPayload.response.title);
           setDescription(apiPayload.response.description);
-          toastShow("描述生成成功");
+          toastShow(t("generate.generateSuccess"));
         } else {
-          setErrorText("返回数据异常，请重试");
+          setErrorText(t("chat.invalidReply"));
         }
       } catch {
-        const msg = "网络异常，请稍后重试";
+        const msg = t("chat.sendFailed");
         setErrorText(msg);
         toastShow(msg);
       } finally {
         setIsSubmitting(false);
       }
     },
-    [locationSearch, localesLoading, targetLanguage, toastShow],
+    [locationSearch, localesLoading, t, targetLanguage, toastShow],
   );
 
   const runCopy = useCallback(
@@ -192,19 +194,19 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
       let text = "";
       if (kind === "title") {
         if (!title) {
-          toastShow("暂无可复制的标题");
+          toastShow(t("generate.copyTitleEmpty"));
           return;
         }
         text = title;
       } else if (kind === "description") {
         if (!desc) {
-          toastShow("暂无可复制的描述");
+          toastShow(t("generate.copyDescriptionEmpty"));
           return;
         }
         text = desc;
       } else {
         if (!title && !desc) {
-          toastShow("暂无可复制内容");
+          toastShow(t("generate.copyAllEmpty"));
           return;
         }
         text = buildCopyAllText(title, desc);
@@ -215,34 +217,34 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
         await navigator.clipboard.writeText(text);
         toastShow(
           kind === "title"
-            ? "标题已复制"
+            ? t("generate.copyTitleDone")
             : kind === "description"
-              ? "描述已复制"
-              : "标题与描述已复制",
+              ? t("generate.copyDescriptionDone")
+              : t("generate.copyAllDone"),
         );
         console.info(`${LOG_PREFIX} clipboard ok kind=${kind} chars=${text.length}`);
       } catch (e) {
         console.info(`${LOG_PREFIX} clipboard failed kind=${kind}`, e);
-        toastShow("复制失败，请检查浏览器权限或手动选择文本复制");
+        toastShow(t("generate.copyFailed"));
       } finally {
         setCopyTarget(null);
       }
     },
-    [draftDescription, draftTitle, toastShow],
+    [draftDescription, draftTitle, t, toastShow],
   );
 
   const requestOpenSaveDialog = useCallback(() => {
     if (!draftTitle.trim()) {
-      toastShow("标题不能为空");
+      toastShow(t("generate.validationTitleRequired"));
       return;
     }
     if (!draftDescription.trim()) {
-      toastShow("描述不能为空");
+      toastShow(t("generate.validationDescriptionRequired"));
       return;
     }
     setSaveErrorText(null);
     setSaveConfirmOpen(true);
-  }, [draftDescription, draftTitle, toastShow]);
+  }, [draftDescription, draftTitle, t, toastShow]);
 
   const cancelSaveDialog = useCallback(() => {
     if (!isSaving) {
@@ -254,17 +256,17 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
     async (productIdRaw: string) => {
       const pid = (productIdRaw.trim() || pinnedProductId).trim();
       if (!pid) {
-        toastShow("请选择商品或填写商品 ID");
+        toastShow(t("generate.validationSelectProductId"));
         return;
       }
       const title = draftTitle.trim();
       const descPlain = draftDescription.trim();
       if (!title) {
-        toastShow("标题不能为空");
+        toastShow(t("generate.validationTitleRequired"));
         return;
       }
       if (!descPlain) {
-        toastShow("描述不能为空");
+        toastShow(t("generate.validationDescriptionRequired"));
         return;
       }
 
@@ -296,8 +298,8 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
           const msg =
             apiPayload.success === false
               ? apiPayload.errorMsg
-              : `请求失败（${response.status}）`;
-          setSaveErrorText(msg || `请求失败（${response.status}）`);
+              : t("chat.requestFailed", { status: response.status });
+          setSaveErrorText(msg || t("chat.requestFailed", { status: response.status }));
           console.info(`${LOG_PREFIX} save failed: ${msg}`);
           return;
         }
@@ -309,13 +311,13 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
         ) {
           setProductTitle(apiPayload.response.title);
           setSaveConfirmOpen(false);
-          toastShow("已保存到 Shopify");
+          toastShow(t("generate.saveSuccess"));
           console.info(`${LOG_PREFIX} save ok id=${apiPayload.response.id}`);
         } else {
-          setSaveErrorText("返回数据异常，请重试");
+          setSaveErrorText(t("chat.invalidReply"));
         }
       } catch {
-        const msg = "网络异常，请稍后重试";
+        const msg = t("chat.sendFailed");
         setSaveErrorText(msg);
         toastShow(msg);
         console.info(`${LOG_PREFIX} save network error`);
@@ -323,7 +325,7 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
         setIsSaving(false);
       }
     },
-    [draftDescription, draftTitle, locationSearch, pinnedProductId, toastShow],
+    [draftDescription, draftTitle, locationSearch, pinnedProductId, t, toastShow],
   );
 
   return {
