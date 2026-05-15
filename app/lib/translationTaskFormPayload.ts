@@ -1,4 +1,3 @@
-import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../server/translation/types";
 
 /** Tool / API 间传递「首页翻译任务卡片」载荷（与 open_translation_task_form 输出对齐）。 */
 export const TRANSLATION_FORM_PAYLOAD_KIND = "translation_task_form_v1" as const;
@@ -6,16 +5,12 @@ export const TRANSLATION_FORM_PAYLOAD_KIND = "translation_task_form_v1" as const
 export type TranslationTaskFormPayload = {
   sourceLocale: string;
   targetLocale: string;
-  limitPerType: number;
-  resourceTypes: string[];
+  taskName?: string;
+  contentToTranslate?: string;
+  notes?: string;
 };
 
-const DEFAULT_RESOURCE_MODULES: TranslationTaskFormPayload["resourceTypes"] = [
-  "PRODUCT",
-  "COLLECTION",
-  "PAGE",
-  "ARTICLE",
-];
+
 
 /**
  * 将流式 tool_call 的原始 args 或部分载荷规范为完整表单（避免 resourceTypes 等缺省为 undefined）。
@@ -26,26 +21,18 @@ export function coerceTranslationTaskFormPayload(raw: unknown): TranslationTaskF
     raw && typeof raw === "object" && !Array.isArray(raw)
       ? (raw as Record<string, unknown>)
       : {};
-  const allowed = new Set<string>(ALLOWED_TRANSLATABLE_RESOURCE_TYPES as readonly string[]);
-
-  const rawTypes = Array.isArray(rec.resourceTypes)
-    ? rec.resourceTypes.map((x) => String(x).trim().toUpperCase()).filter(Boolean)
-    : [];
-  const resourceTypes = rawTypes.filter((x) => allowed.has(x));
-
-  const limitRaw = rec.limitPerType;
-  const limitPerType =
-    typeof limitRaw === "number" && Number.isFinite(limitRaw)
-      ? Math.min(200, Math.max(1, Math.floor(limitRaw)))
-      : 20;
 
   const source = String(rec.sourceLocale ?? "zh-CN").trim();
   const target = String(rec.targetLocale ?? "").trim();
+  const taskName = String(rec.taskName ?? "").trim();
+  const contentToTranslate = String(rec.contentToTranslate ?? "").trim();
+  const notes = String(rec.notes ?? "").trim();
 
   return {
     sourceLocale: source || "zh-CN",
     targetLocale: target,
-    limitPerType,
-    resourceTypes: resourceTypes.length ? resourceTypes : [...DEFAULT_RESOURCE_MODULES],
+    taskName,
+    contentToTranslate,
+    notes,
   };
 }

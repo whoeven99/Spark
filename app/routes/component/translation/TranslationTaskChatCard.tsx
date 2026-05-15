@@ -35,6 +35,9 @@ export function TranslationTaskChatCard({
   const safeInitial = coerceTranslationTaskFormPayload(initialPayload);
   const [sourceLocale, setSourceLocale] = useState(safeInitial.sourceLocale);
   const [targetLocale, setTargetLocale] = useState(safeInitial.targetLocale);
+  const [taskName, setTaskName] = useState(safeInitial.taskName || "");
+  const [contentToTranslate, setContentToTranslate] = useState(safeInitial.contentToTranslate || "");
+  const [notes, setNotes] = useState(safeInitial.notes || "");
   const [limitPerType, setLimitPerType] = useState(safeInitial.limitPerType);
   const [resourceTypes, setResourceTypes] = useState<string[]>(safeInitial.resourceTypes);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,6 +46,9 @@ export function TranslationTaskChatCard({
     const p = coerceTranslationTaskFormPayload(initialPayload);
     setSourceLocale(p.sourceLocale);
     setTargetLocale(p.targetLocale);
+    setTaskName(p.taskName || "");
+    setContentToTranslate(p.contentToTranslate || "");
+    setNotes(p.notes || "");
     setLimitPerType(p.limitPerType);
     setResourceTypes(p.resourceTypes);
   }, [initialPayload]);
@@ -62,8 +68,14 @@ export function TranslationTaskChatCard({
       shopify.toast.show(t("translationRuntime.validationTargetExample"));
       return;
     }
-    if (!resourceTypes.length) {
-      shopify.toast.show(t("translationRuntime.validationModule"));
+    const name = taskName.trim();
+    if (!name) {
+      shopify.toast.show(t("translationRuntime.validationTaskName"));
+      return;
+    }
+    const content = contentToTranslate.trim();
+    if (!content) {
+      shopify.toast.show(t("translationRuntime.validationContent"));
       return;
     }
 
@@ -76,10 +88,11 @@ export function TranslationTaskChatCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "create_job",
-          targetLocale: target,
+          taskName: name,
           sourceLocale: sourceLocale.trim() || "zh-CN",
-          resourceTypes,
-          limitPerType: limit,
+          targetLocale: target,
+          contentToTranslate: content,
+          notes: notes.trim(),
         }),
       });
       const payload = (await response.json().catch(() => ({}))) as {
@@ -111,7 +124,7 @@ export function TranslationTaskChatCard({
     borderRadius: embedded ? "14px" : "16px",
     padding: "1px",
     background:
-      "linear-gradient(135deg, rgba(0, 128, 96, 0.35) 0%, rgba(44, 110, 203, 0.28) 45%, rgba(147, 112, 219, 0.22) 100%)",
+      "linear-gradient(135deg, rgba(44, 110, 203, 0.38) 0%, rgba(0, 128, 96, 0.28) 50%, rgba(147, 112, 219, 0.22) 100%)",
     boxShadow: embedded
       ? "0 2px 12px rgba(0, 0, 0, 0.05)"
       : "0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04)",
@@ -194,46 +207,33 @@ export function TranslationTaskChatCard({
 
           <div style={{ marginBottom: "0.85rem" }}>
             <s-text-field
-              label={t("translationRuntime.limitPerModule")}
-              value={String(limitPerType)}
-              onChange={(e) =>
-                setLimitPerType(Number(e.currentTarget.value) || 20)
-              }
+              label={t("translationRuntime.taskName")}
+              value={taskName}
+              onChange={(e) => setTaskName(e.currentTarget.value)}
               autocomplete="off"
             />
           </div>
 
-          <div style={{ marginBottom: "0.65rem" }}>
-            <span
-              style={{
-                fontSize: "0.75rem",
-                fontWeight: 600,
-                color: "#444",
-                textTransform: "uppercase",
-                letterSpacing: "0.04em",
-              }}
-            >
-              {t("translationRuntime.moduleTitle")}
-            </span>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "0.45rem",
-                marginTop: "0.45rem",
-              }}
-            >
-              {ALLOWED_TRANSLATABLE_RESOURCE_TYPES.map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  style={pillStyle(resourceTypes.includes(type))}
-                  onClick={() => toggleModule(type)}
-                >
-                  {t(MODULE_LABELS[type] ?? type)}
-                </button>
-              ))}
-            </div>
+          <div style={{ marginBottom: "0.85rem" }}>
+            <s-text-field
+              label={t("translationRuntime.contentToTranslate")}
+              value={contentToTranslate}
+              onChange={(e) => setContentToTranslate(e.currentTarget.value)}
+              autocomplete="off"
+              multiline
+              rows={5}
+            />
+          </div>
+
+          <div style={{ marginBottom: "0.85rem" }}>
+            <s-text-field
+              label={t("translationRuntime.notes")}
+              value={notes}
+              onChange={(e) => setNotes(e.currentTarget.value)}
+              autocomplete="off"
+              multiline
+              rows={3}
+            />
           </div>
 
           <s-stack direction="block" gap="small">
