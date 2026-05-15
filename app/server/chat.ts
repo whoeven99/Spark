@@ -4,6 +4,7 @@ import { authenticate } from "../shopify.server";
 import { invokeChatAgent } from "./ai/core/invokeChatAgent.server";
 import { parseClientChatMessages } from "./chatPayload.server";
 import { isLangsmithAvailable } from "./ai/utils/langsmith.server";
+import { extractTranslationTaskFormPayload } from "./ai/postprocess/translationTaskFormExtract";
 import type { UserProfile } from "./ai/core/toolRegistry.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -65,12 +66,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       langsmithTraceUrl,
     } = await invokeChatAgent({
       messages: agentMessages,
-      context: { admin, profile: dummyProfile },
+      context: { admin, profile: dummyProfile, shop: session?.shop },
       sessionName,
     });
     
     // 兼容原有的前端期望结构
-    const translationTaskForm = uiPayloads?.translationTaskForm;
+    let translationTaskForm = uiPayloads?.translationTaskForm;
+    if (!translationTaskForm && agentMessages.length > 0) {
+      const latestUserMessage = agentMessages[agentMessages.length - 1];
+      if (latestUserMessage instanceof HumanMessage) {
+        translationTaskForm = extractTranslationTaskFormPayload(latestUserMessage.content);
+      }
+    }
     let generateDescriptionCard = undefined;
     let generateDescriptionCardPayload = undefined;
     

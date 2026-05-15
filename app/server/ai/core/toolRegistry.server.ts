@@ -13,6 +13,7 @@ export interface UserProfile {
 export interface AgentContext {
   admin: ShopifyAdminGraphqlClient;
   profile?: UserProfile;
+  shop?: string;
 }
 
 export interface ToolDefinition {
