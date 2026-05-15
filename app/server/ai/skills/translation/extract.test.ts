@@ -12,8 +12,8 @@ describe("extractTranslationTaskFormFromMessages", () => {
       _sparkKind: TRANSLATION_FORM_PAYLOAD_KIND,
       sourceLocale: "zh-CN",
       targetLocale: "en",
-      taskName: "首页文案翻译",
-      contentToTranslate: "测试内容",
+      limitPerType: 10,
+      resourceTypes: ["PRODUCT"],
     };
     const messages = [
       new ToolMessage({
@@ -24,6 +24,8 @@ describe("extractTranslationTaskFormFromMessages", () => {
     ];
     const r = extractTranslationTaskFormFromMessages(messages);
     expect(r?.targetLocale).toBe("en");
+    expect(r?.limitPerType).toBe(10);
+    expect(r?.resourceTypes).toEqual(["PRODUCT"]);
   });
 
   it("parses ToolMessage with array text blocks (LangChain multimodal content)", () => {
@@ -31,8 +33,8 @@ describe("extractTranslationTaskFormFromMessages", () => {
       _sparkKind: TRANSLATION_FORM_PAYLOAD_KIND,
       sourceLocale: "zh-CN",
       targetLocale: "",
-      taskName: "商品翻译",
-      contentToTranslate: "一些商品内容",
+      limitPerType: 20,
+      resourceTypes: ["PRODUCT", "COLLECTION"],
     };
     const json = JSON.stringify(payload);
     const messages = [
@@ -44,6 +46,7 @@ describe("extractTranslationTaskFormFromMessages", () => {
     ];
     const r = extractTranslationTaskFormFromMessages(messages);
     expect(r?.sourceLocale).toBe("zh-CN");
+    expect(r?.resourceTypes).toEqual(["PRODUCT", "COLLECTION"]);
   });
 });
 
