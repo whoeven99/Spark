@@ -15,6 +15,7 @@ import {
   getTraceUrl,
 } from "../utils/langsmith.server";
 import { globalToolRegistry, type AgentContext } from "./toolRegistry.server";
+import "../skills/index";
 
 export type InvokeChatAgentResult = {
   reply: string;

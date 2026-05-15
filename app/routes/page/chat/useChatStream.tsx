@@ -13,6 +13,10 @@ type StreamChunk =
         totalTokens: number;
         model: string;
         finalReply?: string;
+        uiPayloads?: {
+          translationTaskForm?: unknown;
+          generateDescriptionCardPayload?: unknown;
+        };
       };
     };
 
@@ -165,6 +169,23 @@ export function useChatStream() {
                   chunk.metadata.finalReply?.trim() ||
                   snapshotRef.current.reply;
                 snapshotRef.current.reply = reply;
+
+                const ui = chunk.metadata.uiPayloads;
+                if (ui?.translationTaskForm) {
+                  const normalized = coerceTranslationTaskFormPayload(
+                    ui.translationTaskForm,
+                  );
+                  snapshotRef.current.translationTaskForm = normalized;
+                  setStreamingTranslationForm(normalized);
+                }
+                if (ui?.generateDescriptionCardPayload) {
+                  snapshotRef.current.generateDescriptionCard = true;
+                  snapshotRef.current.generateDescriptionCardPayload =
+                    ui.generateDescriptionCardPayload;
+                  setStreamingGenerateCard(true);
+                  setStreamingGeneratePayload(ui.generateDescriptionCardPayload);
+                }
+
                 finalizeOnce({
                   aborted: false,
                   reply,

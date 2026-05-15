@@ -45,6 +45,7 @@
     "newChatStarted": "새 대화를 시작했습니다",
     "translationCreateSuccess": "번역 작업이 생성되었습니다",
     "assistantOpenGenerateCard": "상품 설명 생성 폼을 열었습니다. 상품을 검색해 선택하거나 고급에서 상품 ID를 직접 입력한 뒤 대상 언어를 선택하면 Shopify 상품 데이터를 기반으로 구조화된 마케팅 설명을 생성합니다.",
+    "assistantOpenTranslationCard": "번역 작업 카드를 열었습니다. 아래 양식에서 대상 언어, 모듈별 최대 항목 수, 번역 모듈(상품·컬렉션·페이지·글 등)을 선택한 뒤 제출하면 번역 작업이 시작됩니다.",
     "translationSubmittedWithId": "번역 작업이 제출되었습니다(작업 ID: {{jobId}}). 번역 작업 페이지에서 JSON Runtime 진행 상황을 확인해 주세요.",
     "translationSubmitted": "번역 작업이 제출되었습니다. 번역 작업 페이지에서 진행 상황을 확인해 주세요."
   },

@@ -45,6 +45,7 @@
     "newChatStarted": "已开始新对话",
     "translationCreateSuccess": "翻译任务创建成功",
     "assistantOpenGenerateCard": "已为你打开「商品描述生成」表单。请搜索并选择商品（或展开高级手动填写商品 ID），在「目标语言」下拉中选择生成语言（默认与店铺主语言一致），系统将基于 Shopify 商品数据生成结构化营销描述。",
+    "assistantOpenTranslationCard": "翻译任务卡片已为您打开！请在下方表单中填写目标语言、每种模块最多条目数，并选择要翻译的模块（商品、集合、页面、文章等），确认后提交即可开始翻译任务。",
     "translationSubmittedWithId": "翻译任务已提交（任务 ID：{{jobId}}）。请到「翻译任务」页查看 JSON Runtime 进度。",
     "translationSubmitted": "翻译任务已提交。请到「翻译任务」页查看进度。"
   },
