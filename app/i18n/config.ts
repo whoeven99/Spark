@@ -1,4 +1,4 @@
-export const SUPPORTED_LOCALES = ["en", "zh-CN", "ja", "ko"] as const;
+export const SUPPORTED_LOCALES = ["en", "zh-CN", "ja", "ko", "es", "fr", "de", "it", "pt"] as const;
 
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
@@ -31,6 +31,22 @@ export function normalizeLocale(raw: string | null | undefined): SupportedLocale
   }
   if (lower === "ko" || lower.startsWith("ko-")) {
     return "ko";
+  }
+  if (lower === "es" || lower.startsWith("es-")) {
+    return "es";
+  }
+  if (lower === "fr" || lower.startsWith("fr-")) {
+    return "fr";
+  }
+  if (lower === "de" || lower.startsWith("de-")) {
+    return "de";
+  }
+  if (lower === "it" || lower.startsWith("it-")) {
+    return "it";
+  }
+  // pt、pt-BR、pt-PT 等统一映射到应用内单一 pt 资源包。
+  if (lower === "pt" || lower.startsWith("pt-")) {
+    return "pt";
   }
 
   return isSupportedLocale(trimmed) ? trimmed : null;
