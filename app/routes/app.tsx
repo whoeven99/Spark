@@ -20,6 +20,19 @@ import { detectRequestLocale } from "../i18n/detector.server";
 
 import { authenticate } from "../shopify.server";
 
+/** 语言下拉选项展示：每种语言用自身书写形式，不随 UI 语言变化，也不走 t()。 */
+const LANGUAGE_NATIVE_LABELS: Record<SupportedLocale, string> = {
+  en: "English",
+  "zh-CN": "中文（简体）",
+  ja: "日本語",
+  ko: "한국어",
+  es: "Español",
+  fr: "Français",
+  de: "Deutsch",
+  it: "Italiano",
+  pt: "Português",
+};
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
   const locale = detectRequestLocale(request);
@@ -56,7 +69,7 @@ function LanguageSelector({ locale }: { locale: SupportedLocale }) {
   const { setLocale, isSyncingLocale } = useLocaleActions();
 
   return (
-    <div style={{ margin: "0.5rem 0 0.35rem" }}>
+    <div style={{ margin: 0 }}>
       <label
         htmlFor="spark-language-selector"
         style={{
@@ -91,7 +104,7 @@ function LanguageSelector({ locale }: { locale: SupportedLocale }) {
       >
         {SUPPORTED_LOCALES.map((item) => (
           <option key={item} value={item}>
-            {item}
+            {LANGUAGE_NATIVE_LABELS[item] ?? item}
           </option>
         ))}
       </select>
@@ -105,9 +118,31 @@ export default function App() {
   return (
     <AppI18nProvider locale={locale}>
       <AppProvider embedded apiKey={apiKey}>
-        <LanguageSelector locale={locale} />
         <AppNav />
-        <Outlet />
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: "1 1 auto",
+            minHeight: 0,
+          }}
+        >
+          <div style={{ flex: "1 1 auto", minHeight: 0 }}>
+            <Outlet />
+          </div>
+          <footer
+            className="spark-app-shell-footer"
+            style={{
+              flexShrink: 0,
+              marginTop: "0.75rem",
+              paddingTop: "0.75rem",
+              paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0px))",
+              borderTop: "1px solid #e1e3e5",
+            }}
+          >
+            <LanguageSelector locale={locale} />
+          </footer>
+        </div>
       </AppProvider>
     </AppI18nProvider>
   );
