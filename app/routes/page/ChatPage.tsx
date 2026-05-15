@@ -4,6 +4,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import type { ChatMessage, GenerateDescriptionCardPayload } from "../../lib/chatMessage";
 import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
+import { coerceTranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { ChatMessages } from "../component/chat/ChatMessages";
 import { ChatMessageContent } from "../component/chat/ChatMessageContent";
 import { ChatStreamingSkeleton } from "../component/chat/ChatStreamingSkeleton";
@@ -32,6 +33,7 @@ export function ChatPage() {
   const firstMessage = buildInitialAssistantMessage(t);
   const quickPrompts = buildQuickPrompts(t);
   const generateDescriptionQuickPrompt = t("chat.quickPromptGenerateDescription");
+  const createTranslationQuickPrompt = t("chat.quickPromptCreateTranslation");
   const {
     isStreaming,
     awaitingFirstChunk,
@@ -57,6 +59,19 @@ export function ChatPage() {
       return prev;
     });
   }, [i18n.language, t]);
+
+  const openTranslationTaskCard = () => {
+    if (isStreaming) return;
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: createTranslationQuickPrompt },
+      {
+        role: "assistant",
+        content: t("chat.assistantOpenTranslationCard"),
+        translationTaskForm: coerceTranslationTaskFormPayload({}),
+      },
+    ]);
+  };
 
   const openGenerateDescriptionCard = () => {
     if (isStreaming) return;
@@ -200,11 +215,15 @@ export function ChatPage() {
                     type="button"
                     tone={quickPromptTones[index]}
                     variant="secondary"
-                    onClick={() =>
-                      prompt === generateDescriptionQuickPrompt
-                        ? openGenerateDescriptionCard()
-                        : sendMessage(prompt)
-                    }
+                    onClick={() => {
+                      if (prompt === generateDescriptionQuickPrompt) {
+                        openGenerateDescriptionCard();
+                      } else if (prompt === createTranslationQuickPrompt) {
+                        openTranslationTaskCard();
+                      } else {
+                        sendMessage(prompt);
+                      }
+                    }}
                     {...(isStreaming ? { disabled: true } : {})}
                   >
                     {prompt}

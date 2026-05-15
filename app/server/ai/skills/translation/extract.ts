@@ -21,12 +21,21 @@ export function shouldInjectTranslationTaskFormFallback(
 ): boolean {
   const u = lastUserText.trim();
   const a = assistantReplyText.trim();
-  if (!u || !a) return false;
-  const userSignals =
-    /翻译任务|创建翻译|批量翻译|打开卡片|翻译\s*卡片|我要翻译|开启翻译/i.test(u);
+  if (!u) return false;
+
+  const userWantsCard =
+    /翻译任务|创建翻译|批量翻译|打开卡片|翻译\s*卡片|翻译卡片|我要翻译|开启翻译/i.test(u);
+
+  if (!userWantsCard) return false;
+
+  // 用户明确要「翻译卡片」时，无论助手是否口头描述表单，都展示交互卡片
+  if (/翻译\s*卡片|翻译卡片|打开卡片/i.test(u)) return true;
+
+  if (!a) return false;
+
   const assistantSignals =
-    /卡片|表单|创建翻译任务|翻译任务创建|已为你打开|已经为你打开/i.test(a);
-  return userSignals && assistantSignals;
+    /卡片|表单|创建翻译任务|翻译任务创建|已为你打开|已经为你打开|默认设置|请确认|请提供以下信息/i.test(a);
+  return assistantSignals;
 }
 
 function toolMessageJsonPayloadString(m: ToolMessage): string | null {

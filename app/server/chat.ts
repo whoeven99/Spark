@@ -65,7 +65,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       langsmithTraceUrl,
     } = await invokeChatAgent({
       messages: agentMessages,
-      context: { admin, profile: dummyProfile },
+      context: { admin, profile: dummyProfile, shop: session?.shop },
       sessionName,
     });
     

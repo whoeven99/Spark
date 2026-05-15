@@ -45,6 +45,7 @@
     "newChatStarted": "Started a new chat",
     "translationCreateSuccess": "Translation task created successfully",
     "assistantOpenGenerateCard": "I have opened the product description form. Please search and select a product (or manually enter product ID in Advanced), choose the target language, and the system will generate structured marketing copy based on Shopify product data.",
+    "assistantOpenTranslationCard": "The translation task card is open. Fill in the target language, item limit per module, and select modules (products, collections, pages, articles, etc.), then submit to start the translation task.",
     "translationSubmittedWithId": "Translation task submitted (Task ID: {{jobId}}). Please go to Translation tasks page to check JSON Runtime progress.",
     "translationSubmitted": "Translation task submitted. Please go to Translation tasks page to check progress."
   },

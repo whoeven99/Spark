@@ -38,13 +38,13 @@ globalToolRegistry.register({
     }
   },
   extractUIPayload: (messages, lastUserText, assistantReplyRaw) => {
-    const extractedForm = extractTranslationTaskFormFromMessages(messages);
-    if (extractedForm) return extractedForm;
+    const fromTool = extractTranslationTaskFormFromMessages(messages);
+    if (fromTool) return fromTool;
     if (shouldInjectTranslationTaskFormFallback(lastUserText, assistantReplyRaw)) {
       return defaultTranslationTaskFormPayload();
     }
     return undefined;
-  }
+  },
 });
 
 import { ToolMessage } from "@langchain/core/messages";

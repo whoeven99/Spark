@@ -13,6 +13,7 @@ import {
 import { buildShopChatGraph, getShopChatModel } from "./shopChatGraph.server";
 import { polishFinalReply } from "../utils/polishFinalReply";
 import { globalToolRegistry, type AgentContext } from "./toolRegistry.server";
+import "../skills/index";
 
 export type StreamChunk =
   | { type: "text"; content: string }
@@ -24,8 +25,11 @@ export type StreamChunk =
       metadata: {
         totalTokens: number;
         model: string;
-        /** 润色后的完整助手正文，供前端写入最终气泡（可与流式增量略有差异） */
         finalReply?: string;
+        uiPayloads?: {
+          translationTaskForm?: unknown;
+          generateDescriptionCardPayload?: unknown;
+        };
       };
     };
 

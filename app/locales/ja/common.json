@@ -45,6 +45,7 @@
     "newChatStarted": "新しい会話を開始しました",
     "translationCreateSuccess": "翻訳タスクを作成しました",
     "assistantOpenGenerateCard": "商品説明生成フォームを開きました。商品を検索して選択するか、詳細で商品 ID を入力し、対象言語を選択すると、Shopify 商品データに基づいて構造化されたマーケティング説明を生成します。",
+    "assistantOpenTranslationCard": "翻訳タスクカードを開きました。下のフォームで対象言語、モジュールごとの上限件数、翻訳モジュール（商品・コレクション・ページ・記事など）を選択し、送信して翻訳タスクを開始してください。",
     "translationSubmittedWithId": "翻訳タスクを送信しました（タスクID：{{jobId}}）。翻訳タスクページで JSON Runtime 進捗をご確認ください。",
     "translationSubmitted": "翻訳タスクを送信しました。翻訳タスクページで進捗をご確認ください。"
   },

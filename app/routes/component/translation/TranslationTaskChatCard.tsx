@@ -111,7 +111,7 @@ export function TranslationTaskChatCard({
     borderRadius: embedded ? "14px" : "16px",
     padding: "1px",
     background:
-      "linear-gradient(135deg, rgba(0, 128, 96, 0.35) 0%, rgba(44, 110, 203, 0.28) 45%, rgba(147, 112, 219, 0.22) 100%)",
+      "linear-gradient(135deg, rgba(44, 110, 203, 0.38) 0%, rgba(0, 128, 96, 0.28) 50%, rgba(147, 112, 219, 0.22) 100%)",
     boxShadow: embedded
       ? "0 2px 12px rgba(0, 0, 0, 0.05)"
       : "0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04)",

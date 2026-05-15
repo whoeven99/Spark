@@ -60,6 +60,15 @@ describe("shouldInjectTranslationTaskFormFallback", () => {
     ).toBe(true);
   });
 
+  it("returns true when user asks for translation card explicitly", () => {
+    expect(
+      shouldInjectTranslationTaskFormFallback(
+        "翻译卡片",
+        "好的，请提供以下信息来创建翻译任务：",
+      ),
+    ).toBe(true);
+  });
+
   it("returns false when assistant does not mention card-like UI", () => {
     expect(
       shouldInjectTranslationTaskFormFallback("翻译任务", "翻译一般是指把内容从一种语言转成另一种语言。"),
