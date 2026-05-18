@@ -45,6 +45,7 @@
 - 反馈路由：
   - `app.feedback.suggestion.tsx`：`POST` 校验后 **`prisma.suggestion.create`** 写入 Turso（字段 `shop`、`content`，最多 2000 字）；前端从 `ChatPage` 提交至 `/app/feedback/suggestion`。
 - **生成商品描述**：`POST /api/generate-description`（`api.generate-description.ts`）与 `POST /app/generate-description`（同上页面 action），服务端逻辑见 `app/server/generateDescription/generateDescriptionHttp.server.ts`；**写回 Shopify 商品标题与描述**：`POST /api/update-product-description`（`api.update-product-description.ts`），服务端见 `app/server/generateDescription/updateProductDescriptionHttp.server.ts` 与 `services/updateProductDescriptionService.ts`。AI Assistant 通过工具 `generate_product_description`（`app/server/ai/tools/implementations/generateDescriptionTool.ts`）调用同一套 `services/generateDescriptionService.ts`。
+- **整图翻译（火山，对齐 Spring `POST /pcUserPic/translatePic` 的 modelType=2 路径）**：`POST /api/picture-translate`（`api.picture-translate.ts`），服务端见 `app/server/pictureTranslate/**`。`modelType=1`（Aidge）一期返回 **501** 及稳定业务码；与 Spring 的 **PC 用户点数 / `APP_PIC_FEE` 扣费** 未对齐：默认 **noop**（不扣费但仍译图），日志与下文环境变量说明；若需与「未实现扣费则禁止调用」一致，可设 `PICTURE_TRANSLATE_BILLING_STRICT=true`（返回 501，不调用火山）。
 - 翻译相关 HTTP 路由（文件位于 `app/routes/`，URL 与 React Router 扁平路由约定一致）：
   - **`GET /api/translate/v3/json-runtime-tasks`**：`api.translate.v3.json-runtime-tasks.ts`，当前店铺 JSON Runtime 任务列表（Cosmos）。
   - **`GET /api/translate/v3/json-runtime-task-detail`**：`api.translate.v3.json-runtime-task-detail.ts`，任务详情；默认转发 **`AGENT_TASK_BASE_URL`** 下的 Java `/translate/v3/jsonRuntimeTaskDetail`；若设置 **`JSON_RUNTIME_TASK_DETAIL_SOURCE=local`**，则在 Spark 进程内聚合 Cosmos / Redis / Blob（见该文件与 `jsonRuntimeTaskDetail.server.ts`）。
@@ -91,6 +92,7 @@
 - 现状：
   - 广告凭证已在 DB 中托管（Turso）；字段校验与脱敏展示仍应注意。
   - 物流仍为本地 JSON；未做加密存储、KMS。
+- 整图翻译（`/api/picture-translate`）：**未**接入 Spring PC 用户表与 **`APP_PIC_FEE`（2000 点）** 扣费逻辑；默认行为为 **noop**（不扣费、仍返回译图 URL），并在日志中打 `[PictureTranslate][HTTP] Billing noop` 前缀说明；需要「未对齐扣费则禁止译图」时使用 `PICTURE_TRANSLATE_BILLING_STRICT=true`。
 - 安全建议：
   - 敏感字段生产环境优先 KMS / 字段级加密；`.data` 目录禁止提交到仓库。
 
@@ -131,6 +133,12 @@
 - 翻译详情代理：
   - `AGENT_TASK_BASE_URL`（可选；未设时使用代码内默认 Render 基址）
   - `JSON_RUNTIME_TASK_DETAIL_SOURCE`：设为 `local` 时详情由 Spark 本机聚合，否则走 AgentTask
+- 整图翻译（火山 `TranslateImage` + Azure Blob，见 `app/server/pictureTranslate/`）：
+  - `HUOSHAN_API_KEY`、`HUOSHAN_API_SECRET`（与 Spring `ConfigUtils` 命名一致；**仅列名，不写值**）
+  - 兼容占位：`VOLC_ACCESSKEY`、`VOLC_SECRETKEY`（`@volcengine/openapi` 默认读取名，二选一即可）
+  - 可选：`PICTURE_TRANSLATE_IMAGE_FETCH_CONNECT_MS`、`PICTURE_TRANSLATE_IMAGE_FETCH_READ_MS`（毫秒，默认各 `5000`，实际截止为二者之和）
+  - 可选：`PICTURE_TRANSLATE_BLOB_SAS_TTL_MINUTES`（正整数则对译图 Blob URL 附加只读 SAS；不设则返回默认 Blob URL，依赖容器公共读或边缘策略）
+  - 可选：`PICTURE_TRANSLATE_BILLING_STRICT`：设为 `true` 时因计费未接入在调用火山前 **501** 硬阻断（见上文 §4）
 
 ## 11. 文案与交互约定
 - 角色命名统一使用：`AI Assistant`。
@@ -146,6 +154,7 @@
 - 改诊断指标：`app/routes/app.additional.tsx`（含查询、阈值、文案）。
 - 改广告 OAuth 配置字段：`app/routes/app.ads.*.config.tsx` + `app/server/adAuthCredentialStore.server.ts`（及 Meta 的 `adsCredentialStore.server.ts`）；改物流：`app/routes/app.logistics.*.config.tsx` + `app/server/logisticsCredentialStore.server.ts`。
 - 改生成商品描述页或 API：`app/routes/app.generate-description.tsx`、`app/routes/page/GenerateDescriptionPage.tsx`、`app/routes/component/generateDescription/GenerateDescriptionResultEditor.tsx`、`app/routes/api.generate-description.ts`、`app/routes/api.update-product-description.ts`、`app/server/generateDescription/**`、`app/hooks/useGenerateDescription.ts`、`app/server/ai/tools/implementations/generateDescriptionTool.ts`。
+- 改整图翻译（火山）API：`app/routes/api.picture-translate.ts`、`app/server/pictureTranslate/**`。
 - 改翻译创建/流水线/Cosmos 文档：`app/server/translation/*`（先读 `agent.md`）；改翻译 UI：`app/routes/page/TranslationPage.tsx`、`app/routes/component/translation/*`；改 API：`app/routes/api.translate.v3.*.ts`。
 
 ## 13. 改动边界与风险提示
