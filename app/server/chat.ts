@@ -5,6 +5,7 @@ import { invokeChatAgent } from "./ai/core/invokeChatAgent.server";
 import { parseClientChatMessages } from "./chatPayload.server";
 import { isLangsmithAvailable } from "./ai/utils/langsmith.server";
 import type { UserProfile } from "./ai/core/toolRegistry.server";
+import { coerceChatMessageAttachments } from "../lib/chatMessage";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
@@ -71,6 +72,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     
     // 兼容原有的前端期望结构
     const translationTaskForm = uiPayloads?.translationTaskForm;
+    const attachments = coerceChatMessageAttachments(uiPayloads?.attachments);
     let generateDescriptionCard = undefined;
     let generateDescriptionCardPayload = undefined;
     
@@ -86,6 +88,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return Response.json({
       reply,
       ...(translationTaskForm ? { translationTaskForm } : {}),
+      ...(attachments.length ? { attachments } : {}),
       ...(generateDescriptionCard ? { generateDescriptionCard } : {}),
       ...(generateDescriptionCardPayload
         ? { generateDescriptionCardPayload }

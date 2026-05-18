@@ -1,17 +1,10 @@
 import { z } from "zod";
-import { logDetailedError } from "../generateDescription/generateDescriptionLog.server";
-import { uploadPictureTranslateJpegAndGetUrl } from "./pictureTranslateBlob.server";
+import { executePictureTranslatePipeline } from "./pictureTranslateExecutor.server";
 import {
   getExtensionFromUrl,
-  isDifferentImageTranslateInputCode,
-  isSupportModelAndImageType,
   mapZhTwToZhHantForVolcano,
 } from "./pictureTranslatePictureUtils.server";
 import type { PictureTranslateResponse } from "./pictureTranslateTypes.server";
-import {
-  fetchSourceImageBytes,
-  volcengineTranslateImageToBytes,
-} from "./volcenginePictureTranslate.server";
 
 const LOG_PREFIX = "[PictureTranslate][HTTP]";
 
@@ -61,12 +54,73 @@ function ok(imageUrl: string): { status: number; body: PictureTranslateResponse 
   return { status: 200, body: { success: true, imageUrl } };
 }
 
+function mapPipelineFailure(
+  reason: string,
+  detail: string | undefined,
+  modelType: 1 | 2,
+): { status: number; body: PictureTranslateResponse } {
+  if (reason === "language_pair_not_supported") {
+    const label = modelType === 1 ? "Aidge" : "火山";
+    return err(
+      40003,
+      `当前源语言与目标语言组合不支持${label}整图翻译`,
+      400,
+    );
+  }
+  if (reason === "auto_requires_explicit_source") {
+    return err(40004, "请提供明确的 sourceCode，不支持 auto", 400);
+  }
+  if (reason === "image_format_invalid") {
+    return err(
+      40002,
+      modelType === 1
+        ? "当前模型不支持该图片格式。Aidge 支持 png、jpg、jpeg、bmp、webp。"
+        : "当前模型不支持该图片格式。火山整图翻译仅支持 png、jpg（不含 jpeg 后缀）。",
+      400,
+    );
+  }
+  if (reason === "image_fetch_failed") {
+    return err(50302, "下载源图失败，请检查 imageUrl 是否可访问", 503);
+  }
+  if (reason === "blob_upload_failed") {
+    return err(50303, "译图上传至 Blob 失败", 503);
+  }
+  if (reason === "volc_failed") {
+    if (detail?.includes("volc_credentials_missing")) {
+      return err(
+        50304,
+        "火山访问未配置：请设置 HUOSHAN_API_KEY / HUOSHAN_API_SECRET（或 VOLC_ACCESSKEY / VOLC_SECRETKEY）",
+        503,
+      );
+    }
+    const isUpstreamParse = detail?.includes("volc_response_parse_failed");
+    const status = isUpstreamParse ? 502 : 503;
+    const errorCode = isUpstreamParse ? 50201 : 50301;
+    const errorMsg =
+      detail != null && detail.length > 0
+        ? `火山整图翻译失败：${detail}`
+        : "火山整图翻译失败";
+    return err(errorCode, errorMsg, status);
+  }
+  if (reason === "aidge_failed") {
+    if (detail?.includes("aidge_credentials_missing")) {
+      return err(
+        50305,
+        "Aidge 访问未配置：请设置 AIDGE_ACCESS_KEY_ID 与 AIDGE_ACCESS_KEY_SECRET",
+        503,
+      );
+    }
+    const errorMsg =
+      detail != null && detail.length > 0
+        ? `Aidge 整图翻译失败：${detail}`
+        : "Aidge 整图翻译失败";
+    return err(50306, errorMsg, 503);
+  }
+  return err(50001, "整图翻译失败", 500);
+}
+
 /**
- * 鉴权完成后执行整图翻译（火山路径）；与 Spring `POST /pcUserPic/translatePic` 的 modelType=2 语义对齐。
- *
- * 与 Spring 差异（一期）：
- * - `modelType === 1`（Aidge）：未实现，返回 501。
- * - 未接入 Spring `APP_PIC_FEE` / PC 用户点数扣费；默认仍执行译图，见 `PROJECT_CONTEXT.md` 说明。若需硬阻断可设 `PICTURE_TRANSLATE_BILLING_STRICT=true`。
+ * 鉴权完成后执行整图翻译；`modelType=1` 仅 Aidge，`modelType=2` 仅火山（不做交叉 fallback）。
  */
 export async function executePictureTranslateRequest(params: {
   requestId: string;
@@ -84,22 +138,11 @@ export async function executePictureTranslateRequest(params: {
     return err(40301, "shop 与当前会话店铺不一致", 403);
   }
 
-  if (parsed.modelType === 1) {
-    console.info(
-      `${LOG_PREFIX} modelType=1 (Aidge) not implemented clientRequestId=${clientRequestId} shop=${sessionShop}`,
-    );
-    return err(
-      50101,
-      "Aidge 整图翻译（modelType=1）在 Spark 一期未实现；请使用 modelType=2（火山）",
-      501,
-    );
-  }
-
   const billingStrict =
     process.env.PICTURE_TRANSLATE_BILLING_STRICT?.trim() === "true";
   if (billingStrict) {
     console.info(
-      `${LOG_PREFIX} billing strict — blocked before Volcano clientRequestId=${clientRequestId} shop=${sessionShop}`,
+      `${LOG_PREFIX} billing strict — blocked clientRequestId=${clientRequestId} shop=${sessionShop}`,
     );
     return err(
       50102,
@@ -109,101 +152,45 @@ export async function executePictureTranslateRequest(params: {
   }
 
   console.info(
-    `${LOG_PREFIX} Billing noop — Spark 一期未接入 Spring APP_PIC_FEE / PC 用户点数扣费；仍将执行译图。clientRequestId=${clientRequestId} shop=${sessionShop}`,
+    `${LOG_PREFIX} Billing noop — clientRequestId=${clientRequestId} shop=${sessionShop} modelType=${parsed.modelType}`,
   );
 
   const extensionRaw = getExtensionFromUrl(parsed.imageUrl);
-  let sourceForVolcano = parsed.sourceCode;
-  let targetForVolcano = parsed.targetCode;
-  if (parsed.modelType === 2) {
-    sourceForVolcano = mapZhTwToZhHantForVolcano(parsed.sourceCode);
-    targetForVolcano = mapZhTwToZhHantForVolcano(parsed.targetCode);
-  }
-
   if (extensionRaw == null) {
     return err(40001, "图片格式无法识别", 400);
   }
 
-  const extLower = extensionRaw.toLowerCase();
-  if (!isSupportModelAndImageType(extLower, parsed.modelType)) {
-    return err(
-      40002,
-      "当前模型不支持该图片格式。火山整图翻译仅支持 png、jpg（不含 jpeg 后缀）。",
-      400,
-    );
-  }
-
-  if (
-    !isDifferentImageTranslateInputCode(
-      sourceForVolcano,
-      targetForVolcano,
-      parsed.modelType,
-    )
-  ) {
-    return err(
-      40003,
-      "当前源语言与目标语言组合不支持火山整图翻译",
-      400,
-    );
-  }
+  const sourceForLog =
+    parsed.modelType === 2
+      ? mapZhTwToZhHantForVolcano(parsed.sourceCode)
+      : parsed.sourceCode;
+  const targetForLog =
+    parsed.modelType === 2
+      ? mapZhTwToZhHantForVolcano(parsed.targetCode)
+      : parsed.targetCode;
 
   console.info(
-    `${LOG_PREFIX} Request validated — shop=${sessionShop} modelType=${parsed.modelType} clientRequestId=${clientRequestId} ext=${extLower} sourceMapped=${sourceForVolcano} targetMapped=${targetForVolcano}`,
+    `${LOG_PREFIX} Request validated — shop=${sessionShop} modelType=${parsed.modelType} clientRequestId=${clientRequestId} ext=${extensionRaw} source=${sourceForLog} target=${targetForLog}`,
   );
 
-  const fetched = await fetchSourceImageBytes(parsed.imageUrl);
-  if (!fetched.ok) {
-    console.info(
-      `${LOG_PREFIX} Translation done — failure image fetch reason=${fetched.reasonCode} clientRequestId=${clientRequestId}`,
-    );
-    return err(50302, "下载源图失败，请检查 imageUrl 是否可访问", 503);
-  }
-
-  console.info(
-    `${LOG_PREFIX} Translation start — Volcano image translate clientRequestId=${clientRequestId} targetLanguage=${targetForVolcano}`,
-  );
-
-  const translated = await volcengineTranslateImageToBytes({
-    imageBytes: fetched.bytes,
-    targetLanguage: targetForVolcano,
+  const pipeline = await executePictureTranslatePipeline({
+    requestId: clientRequestId,
+    shop: sessionShop,
+    imageUrl: parsed.imageUrl,
+    sourceLanguage: parsed.sourceCode,
+    targetLanguage: parsed.targetCode,
+    forceModelType: parsed.modelType,
   });
 
-  if (!translated.ok) {
+  if (!pipeline.ok) {
     console.info(
-      `${LOG_PREFIX} Translation done — Volcano failure reason=${translated.reasonCode} clientRequestId=${clientRequestId}`,
+      `${LOG_PREFIX} Translation done — failure reason=${pipeline.reason} provider=${pipeline.provider ?? "n/a"} detail=${pipeline.detail ?? "n/a"} clientRequestId=${clientRequestId}`,
     );
-    if (translated.reasonCode === "volc_credentials_missing") {
-      return err(
-        50304,
-        "火山访问未配置：请设置 HUOSHAN_API_KEY / HUOSHAN_API_SECRET（或 VOLC_ACCESSKEY / VOLC_SECRETKEY）",
-        503,
-      );
-    }
-    const isUpstreamParse = translated.reasonCode === "volc_response_parse_failed";
-    const status = isUpstreamParse ? 502 : 503;
-    const errorCode = isUpstreamParse ? 50201 : 50301;
-    const errorMsg =
-      translated.detail != null && translated.detail.length > 0
-        ? `火山整图翻译失败（${translated.reasonCode}）：${translated.detail}`
-        : `火山整图翻译失败（${translated.reasonCode}）`;
-    return err(errorCode, errorMsg, status);
+    return mapPipelineFailure(pipeline.reason, pipeline.detail, parsed.modelType);
   }
 
-  try {
-    const imageUrl = await uploadPictureTranslateJpegAndGetUrl({
-      shop: sessionShop,
-      jpegBytes: translated.bytes,
-    });
-    console.info(
-      `${LOG_PREFIX} Translation done — success blob public/sas url ready clientRequestId=${clientRequestId}`,
-    );
-    return ok(imageUrl);
-  } catch (e) {
-    logDetailedError(
-      `${LOG_PREFIX} clientRequestId=${clientRequestId}`,
-      "uploadPictureTranslateJpegAndGetUrl",
-      e,
-    );
-    return err(50303, "译图上传至 Blob 失败", 503);
-  }
+  console.info(
+    `${LOG_PREFIX} Translation done — success provider=${pipeline.provider} clientRequestId=${clientRequestId}`,
+  );
+  return ok(pipeline.imageUrl);
 }

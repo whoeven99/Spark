@@ -59,8 +59,7 @@ export interface ToolDefinition {
     messages: BaseMessage[],
     lastUserText: string,
     assistantReplyRaw: string
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ) => Record<string, any> | boolean | undefined;
+  ) => unknown;
 
   /**
    * 对应 extractUIPayload 的字段名称，例如 "translationTaskForm" 或 "generateDescriptionCard"

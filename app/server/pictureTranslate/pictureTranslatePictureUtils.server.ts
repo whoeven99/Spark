@@ -94,7 +94,7 @@ export const HUO_SHAN_IMAGE_TRANSLATE_OUTPUT_CODE_SET = new Set<string>([
   "ka",
 ]);
 
-/** Aidge 基础图片翻译输入范围（一期未实现模型 1，常量保留供后续扩展） */
+/** Aidge 基础图片翻译输入范围（modelType=1 / 自动路由 fallback） */
 export const AIDGE_IMAGE_TRANSLATE_INPUT_CODE_SET = new Set<string>([
   "zh",
   "zh-tw",
