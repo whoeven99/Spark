@@ -1,6 +1,9 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
-import { getAppEntryConfig } from "../config/appEntry.server";
+import {
+  buildEmbeddedAppPath,
+  getAppEntryConfig,
+} from "../config/appEntry.server";
 import { debugAuthenticateAdmin } from "../server/debug/authenticateAdminDebug.server";
 import { debugAuthLog } from "../server/debug/authDebug.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -19,7 +22,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       data: { home, from: "/app" },
     });
     // #endregion
-    throw redirect(home);
+    throw redirect(buildEmbeddedAppPath(home, request));
   }
 
   return null;
