@@ -4,9 +4,12 @@ import {
   useState,
   type CSSProperties,
   type ChangeEvent,
+  type KeyboardEvent,
 } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
+import { useProductSearch } from "../../../hooks/useProductSearch";
+import type { ProductSearchItem } from "../../../lib/productSearchTypes";
 import {
   filterPictureTranslateSourceLanguages,
   filterPictureTranslateTargetLanguages,
@@ -30,7 +33,10 @@ type PictureTranslateChatResponse = {
   requestId?: unknown;
 };
 
+type ImageSourceType = "upload" | "url" | "product";
+
 const PICTURE_TRANSLATE_PROVIDER: PictureTranslateProvider | null = null;
+const PRODUCT_SEARCH_DEBOUNCE_MS = 300;
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -57,10 +63,26 @@ export function PictureTranslateChatCard({
   const [imageUrl, setImageUrl] = useState("");
   const [imageBase64, setImageBase64] = useState<string | undefined>(undefined);
   const [imageFileName, setImageFileName] = useState("");
+  const [selectedSource, setSelectedSource] = useState<ImageSourceType>("upload");
+  const [productKeyword, setProductKeyword] = useState("");
+  const [submittedKeyword, setSubmittedKeyword] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState<ProductSearchItem | null>(null);
+  const [selectedImage, setSelectedImage] = useState<{
+    url: string;
+    altText: string | null;
+  } | null>(null);
   const [sourceLanguage, setSourceLanguage] = useState("auto");
   const [targetLanguage, setTargetLanguage] = useState("zh");
   const [errorText, setErrorText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const locationSearch =
+    typeof window !== "undefined" ? window.location.search : "";
+  const { items: productItems, isLoading: isProductSearching, errorText: productSearchError } =
+    useProductSearch({
+      input: submittedKeyword,
+      locationSearch,
+      debounceMs: PRODUCT_SEARCH_DEBOUNCE_MS,
+    });
 
   const sourceLanguageOptions = useMemo<PictureTranslateLanguageOption[]>(
     () =>
@@ -99,6 +121,10 @@ export function PictureTranslateChatCard({
   }, [sourceLanguage]);
 
   useEffect(() => {
+    console.info(`[PictureTranslateCard] source_changed selectedSource=${selectedSource}`);
+  }, [selectedSource]);
+
+  useEffect(() => {
     if (targetLanguageOptions.length === 0) return;
     const stillValid = targetLanguageOptions.some(
       (option) => option.value === targetLanguage,
@@ -134,6 +160,51 @@ export function PictureTranslateChatCard({
     gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
     gap: "0.75rem",
   };
+  const sourceSelectorStyle: CSSProperties = {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "0.5rem",
+  };
+  const productImageGridStyle: CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(108px, 1fr))",
+    gap: "0.55rem",
+  };
+
+  const executeSearch = () => {
+    const trimmed = productKeyword.trim();
+    setSubmittedKeyword(trimmed);
+    setSelectedProduct(null);
+    setSelectedImage(null);
+    if (trimmed) {
+      console.info(`[ProductSearch] keyword=${trimmed}`);
+    }
+  };
+
+  const handleSearchInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    executeSearch();
+  };
+
+  const handleProductSelect = (product: ProductSearchItem) => {
+    setSelectedProduct(product);
+    setSelectedImage(null);
+    console.info(
+      `[ProductSelected] keyword=${submittedKeyword || productKeyword.trim()} productId=${product.id} imageCount=${product.images.length}`,
+    );
+  };
+
+  const handleProductImageSelect = (image: { url: string; altText: string | null }) => {
+    setSelectedImage(image);
+    setImageUrl(image.url);
+    setImageBase64(undefined);
+    setImageFileName("");
+    setErrorText("");
+    console.info(
+      `[ProductImageSelected] productId=${selectedProduct?.id ?? ""} imageCount=${selectedProduct?.images.length ?? 0}`,
+    );
+  };
 
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -147,6 +218,7 @@ export function PictureTranslateChatCard({
 
     try {
       const nextBase64 = await readFileAsDataUrl(file);
+      setImageUrl("");
       setImageBase64(nextBase64);
       setImageFileName(file.name);
       setErrorText("");
@@ -163,7 +235,13 @@ export function PictureTranslateChatCard({
   const handleSubmit = async () => {
     if (isSubmitting) return;
     const trimmedUrl = imageUrl.trim();
-    if (!trimmedUrl && !imageBase64) {
+    const isUploadSource = selectedSource === "upload";
+    const isUrlSource = selectedSource === "url";
+    const isProductSource = selectedSource === "product";
+    const hasValidImage =
+      (isUploadSource && Boolean(imageBase64)) ||
+      ((isUrlSource || isProductSource) && Boolean(trimmedUrl));
+    if (!hasValidImage) {
       const message = t("pictureTranslate.validationImageRequired");
       setErrorText(message);
       shopify.toast.show(message);
@@ -190,8 +268,9 @@ export function PictureTranslateChatCard({
       imageBase64Length: payload.imageBase64?.length ?? 0,
       sourceLanguage: payload.sourceLanguage,
       targetLanguage: payload.targetLanguage,
+      selectedSource,
     };
-    console.info(`[PictureTranslateSubmit] submit ${JSON.stringify(payloadSummary)}`);
+    console.info(`[PictureTranslateCard] submit ${JSON.stringify(payloadSummary)}`);
 
     setIsSubmitting(true);
     setErrorText("");
@@ -272,18 +351,8 @@ export function PictureTranslateChatCard({
           </div>
 
           <s-stack direction="block" gap="small">
-            <s-text-field
-              label={t("pictureTranslate.imageUrl")}
-              value={imageUrl}
-              onChange={(event) => setImageUrl(event.currentTarget.value)}
-              placeholder={t("pictureTranslate.imageUrlPlaceholder")}
-              autocomplete="off"
-              {...(isSubmitting ? { disabled: true } : {})}
-            />
-
             <div>
-              <label
-                htmlFor="picture-translate-file-input"
+              <div
                 style={{
                   display: "block",
                   fontSize: "0.75rem",
@@ -292,24 +361,333 @@ export function PictureTranslateChatCard({
                   marginBottom: "0.35rem",
                 }}
               >
-                {t("pictureTranslate.uploadImage")}
-              </label>
-              <input
-                id="picture-translate-file-input"
-                type="file"
-                accept="image/png,image/jpeg,image/jpg"
-                onChange={(event) => {
-                  void handleFileChange(event);
-                }}
-                disabled={isSubmitting}
-                style={{ width: "100%" }}
-              />
-              {imageFileName ? (
-                <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#6d7175" }}>
-                  {t("pictureTranslate.selectedFile", { fileName: imageFileName })}
-                </div>
-              ) : null}
+                {t("pictureTranslate.imageSource")}
+              </div>
+              <div style={sourceSelectorStyle}>
+                <label style={{ fontSize: "0.8125rem", color: "#303030", display: "inline-flex", gap: "0.35rem", alignItems: "center" }}>
+                  <input
+                    type="radio"
+                    name="picture-translate-image-source"
+                    value="upload"
+                    checked={selectedSource === "upload"}
+                    disabled={isSubmitting}
+                    onChange={() => setSelectedSource("upload")}
+                  />
+                  {t("pictureTranslate.imageSourceUpload")}
+                </label>
+                <label style={{ fontSize: "0.8125rem", color: "#303030", display: "inline-flex", gap: "0.35rem", alignItems: "center" }}>
+                  <input
+                    type="radio"
+                    name="picture-translate-image-source"
+                    value="url"
+                    checked={selectedSource === "url"}
+                    disabled={isSubmitting}
+                    onChange={() => setSelectedSource("url")}
+                  />
+                  {t("pictureTranslate.imageSourceUrl")}
+                </label>
+                <label style={{ fontSize: "0.8125rem", color: "#303030", display: "inline-flex", gap: "0.35rem", alignItems: "center" }}>
+                  <input
+                    type="radio"
+                    name="picture-translate-image-source"
+                    value="product"
+                    checked={selectedSource === "product"}
+                    disabled={isSubmitting}
+                    onChange={() => setSelectedSource("product")}
+                  />
+                  {t("pictureTranslate.imageSourceProduct")}
+                </label>
+              </div>
             </div>
+
+            {selectedSource === "upload" ? (
+              <div>
+                <label
+                  htmlFor="picture-translate-file-input"
+                  style={{
+                    display: "block",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    color: "#444",
+                    marginBottom: "0.35rem",
+                  }}
+                >
+                  {t("pictureTranslate.uploadImage")}
+                </label>
+                <input
+                  id="picture-translate-file-input"
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg"
+                  onChange={(event) => {
+                    void handleFileChange(event);
+                  }}
+                  disabled={isSubmitting}
+                  style={{ width: "100%" }}
+                />
+                {imageFileName ? (
+                  <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#6d7175" }}>
+                    {t("pictureTranslate.selectedFile", { fileName: imageFileName })}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {selectedSource === "url" ? (
+              <s-text-field
+                label={t("pictureTranslate.imageUrl")}
+                value={imageUrl}
+                onChange={(event) => {
+                  setImageUrl(event.currentTarget.value);
+                  setImageBase64(undefined);
+                  setImageFileName("");
+                }}
+                placeholder={t("pictureTranslate.imageUrlPlaceholder")}
+                autocomplete="off"
+                {...(isSubmitting ? { disabled: true } : {})}
+              />
+            ) : null}
+
+            {selectedSource === "product" ? (
+              <s-stack direction="block" gap="small">
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "0.45rem",
+                      alignItems: "flex-end",
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <label
+                        htmlFor="picture-translate-product-search"
+                        style={{
+                          display: "block",
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          color: "#444",
+                          marginBottom: "0.35rem",
+                        }}
+                      >
+                        {t("pictureTranslate.productKeywordLabel")}
+                      </label>
+                      <input
+                        id="picture-translate-product-search"
+                        value={productKeyword}
+                        onChange={(event) => setProductKeyword(event.currentTarget.value)}
+                        onKeyDown={handleSearchInputKeyDown}
+                        placeholder={t("pictureTranslate.productKeywordPlaceholder")}
+                        disabled={isSubmitting}
+                        style={{
+                          width: "100%",
+                          padding: "0.45rem 0.55rem",
+                          fontSize: "0.8125rem",
+                          borderRadius: "8px",
+                          border: "1px solid #c9cccf",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                    <s-button
+                      type="button"
+                      variant="secondary"
+                      onClick={executeSearch}
+                      {...(isSubmitting ? { disabled: true } : {})}
+                    >
+                      {t("pictureTranslate.searchProduct")}
+                    </s-button>
+                  </div>
+                </div>
+
+                {isProductSearching ? (
+                  <div style={{ fontSize: "0.8125rem", color: "#6d7175" }}>
+                    {t("pictureTranslate.productSearching")}
+                  </div>
+                ) : null}
+                {productSearchError ? (
+                  <div style={{ ...fieldGridStyle, display: "block" }}>
+                    <div
+                      style={{
+                        padding: "0.5rem 0.65rem",
+                        borderRadius: "8px",
+                        background: "rgba(216, 44, 13, 0.08)",
+                        color: "#8a2712",
+                        fontSize: "0.8125rem",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {productSearchError}
+                    </div>
+                  </div>
+                ) : null}
+                {!isProductSearching && !productSearchError && submittedKeyword && productItems.length === 0 ? (
+                  <div
+                    style={{
+                      padding: "0.6rem 0.65rem",
+                      borderRadius: "8px",
+                      background: "rgba(109, 113, 117, 0.08)",
+                      color: "#6d7175",
+                      fontSize: "0.8125rem",
+                    }}
+                  >
+                    {t("pictureTranslate.productEmpty")}
+                  </div>
+                ) : null}
+
+                {productItems.length > 0 ? (
+                  <div style={{ display: "grid", gap: "0.5rem" }}>
+                    {productItems.map((product) => {
+                      const isSelected = selectedProduct?.id === product.id;
+                      return (
+                        <button
+                          key={product.id}
+                          type="button"
+                          onClick={() => handleProductSelect(product)}
+                          disabled={isSubmitting}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "42px 1fr",
+                            gap: "0.55rem",
+                            alignItems: "center",
+                            padding: "0.5rem 0.6rem",
+                            borderRadius: "8px",
+                            border: isSelected ? "1px solid #2c6ecb" : "1px solid rgba(0,0,0,0.12)",
+                            background: isSelected ? "rgba(44, 110, 203, 0.08)" : "#fff",
+                            textAlign: "left",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {product.featuredImageUrl ? (
+                            <img
+                              src={product.featuredImageUrl}
+                              alt=""
+                              width={42}
+                              height={42}
+                              style={{ borderRadius: "6px", objectFit: "cover" }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: 42,
+                                height: 42,
+                                borderRadius: "6px",
+                                background: "rgba(109, 113, 117, 0.12)",
+                              }}
+                            />
+                          )}
+                          <div style={{ minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: "0.8125rem",
+                                color: "#202223",
+                                lineHeight: 1.35,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {product.title}
+                            </div>
+                            <div
+                              style={{
+                                marginTop: "0.1rem",
+                                fontSize: "0.75rem",
+                                color: "#6d7175",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {product.id}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                {selectedProduct ? (
+                  <>
+                    {selectedProduct.images.length > 0 ? (
+                      <div style={productImageGridStyle}>
+                        {selectedProduct.images.map((image) => {
+                          const active = selectedImage?.url === image.url;
+                          return (
+                            <button
+                              key={image.url}
+                              type="button"
+                              onClick={() => handleProductImageSelect(image)}
+                              disabled={isSubmitting}
+                              style={{
+                                borderRadius: "8px",
+                                overflow: "hidden",
+                                border: active ? "2px solid #2c6ecb" : "1px solid rgba(0,0,0,0.12)",
+                                background: "#fff",
+                                padding: 0,
+                                cursor: "pointer",
+                                boxShadow: active
+                                  ? "0 0 0 2px rgba(44,110,203,0.12)"
+                                  : "0 1px 3px rgba(0,0,0,0.08)",
+                              }}
+                              title={image.altText ?? ""}
+                            >
+                              <img
+                                src={image.url}
+                                alt={image.altText ?? ""}
+                                style={{
+                                  display: "block",
+                                  width: "100%",
+                                  aspectRatio: "1 / 1",
+                                  objectFit: "cover",
+                                }}
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          padding: "0.6rem 0.65rem",
+                          borderRadius: "8px",
+                          background: "rgba(109, 113, 117, 0.08)",
+                          color: "#6d7175",
+                          fontSize: "0.8125rem",
+                        }}
+                      >
+                        {t("pictureTranslate.productImageEmpty")}
+                      </div>
+                    )}
+                  </>
+                ) : null}
+
+                {selectedImage ? (
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        color: "#444",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      {t("pictureTranslate.selectedProductImage")}
+                    </div>
+                    <img
+                      src={selectedImage.url}
+                      alt={selectedImage.altText ?? t("pictureTranslate.translatedImageAlt")}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        maxWidth: "280px",
+                        borderRadius: "10px",
+                        border: "1px solid rgba(44,110,203,0.18)",
+                      }}
+                    />
+                  </div>
+                ) : null}
+              </s-stack>
+            ) : null}
 
             <div style={fieldGridStyle}>
               <div>

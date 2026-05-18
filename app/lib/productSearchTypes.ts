@@ -5,6 +5,10 @@ export type ProductSearchItem = {
   id: string;
   title: string;
   featuredImageUrl: string | null;
+  images: Array<{
+    url: string;
+    altText: string | null;
+  }>;
 };
 
 export type ProductSearchApiSuccessBody = {
