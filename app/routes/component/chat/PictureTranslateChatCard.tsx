@@ -1,6 +1,17 @@
-import { useMemo, useState, type CSSProperties, type ChangeEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ChangeEvent,
+} from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
+import {
+  filterPictureTranslateSourceLanguages,
+  filterPictureTranslateTargetLanguages,
+  type PictureTranslateProvider,
+} from "../../../config/pictureTranslateLanguages";
 
 type PictureTranslateLanguageOption = {
   value: string;
@@ -18,6 +29,8 @@ type PictureTranslateChatResponse = {
   error?: unknown;
   requestId?: unknown;
 };
+
+const PICTURE_TRANSLATE_PROVIDER: PictureTranslateProvider | null = null;
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -50,22 +63,56 @@ export function PictureTranslateChatCard({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const sourceLanguageOptions = useMemo<PictureTranslateLanguageOption[]>(
-    () => [
-      { value: "auto", label: t("pictureTranslate.languageAuto") },
-      { value: "zh", label: t("pictureTranslate.languageZh") },
-      { value: "en", label: t("pictureTranslate.languageEn") },
-      { value: "ja", label: t("pictureTranslate.languageJa") },
-      { value: "ko", label: t("pictureTranslate.languageKo") },
-      { value: "fr", label: t("pictureTranslate.languageFr") },
-      { value: "de", label: t("pictureTranslate.languageDe") },
-      { value: "es", label: t("pictureTranslate.languageEs") },
-    ],
+    () =>
+      filterPictureTranslateSourceLanguages(PICTURE_TRANSLATE_PROVIDER).map(
+        (language) => ({
+          value: language.code,
+          label: t(language.i18nKey, { defaultValue: language.code }),
+        }),
+      ),
     [t],
   );
   const targetLanguageOptions = useMemo<PictureTranslateLanguageOption[]>(
-    () => sourceLanguageOptions.filter((item) => item.value !== "auto"),
-    [sourceLanguageOptions],
+    () =>
+      filterPictureTranslateTargetLanguages({
+        sourceLanguage,
+        provider: PICTURE_TRANSLATE_PROVIDER,
+      }).map((language) => ({
+        value: language.code,
+        label: t(language.i18nKey, { defaultValue: language.code }),
+      })),
+    [sourceLanguage, t],
   );
+
+  useEffect(() => {
+    console.info(
+      `[PictureTranslateLanguage] provider=${PICTURE_TRANSLATE_PROVIDER ?? "auto-route"} source=${sourceLanguage} targetOptions=${JSON.stringify(
+        targetLanguageOptions.map((option) => option.value),
+      )}`,
+    );
+  }, [sourceLanguage, targetLanguageOptions]);
+
+  useEffect(() => {
+    console.info(
+      `[SourceLanguageChanged] provider=${PICTURE_TRANSLATE_PROVIDER ?? "auto-route"} source=${sourceLanguage}`,
+    );
+  }, [sourceLanguage]);
+
+  useEffect(() => {
+    if (targetLanguageOptions.length === 0) return;
+    const stillValid = targetLanguageOptions.some(
+      (option) => option.value === targetLanguage,
+    );
+    if (stillValid) return;
+
+    const nextTarget = targetLanguageOptions[0].value;
+    setTargetLanguage(nextTarget);
+    console.info(
+      `[TargetLanguageUpdated] provider=${PICTURE_TRANSLATE_PROVIDER ?? "auto-route"} source=${sourceLanguage} nextTarget=${nextTarget} targetOptions=${JSON.stringify(
+        targetLanguageOptions.map((option) => option.value),
+      )}`,
+    );
+  }, [sourceLanguage, targetLanguage, targetLanguageOptions]);
 
   const shellStyle: CSSProperties = {
     marginTop: embedded ? 0 : "0.5rem",

@@ -2,149 +2,32 @@
  * 与 Spring `PictureUtils` / `PCUserPicturesService.translatePic` 对齐的图片翻译校验工具。
  * 语言集合与 Java `Set.of` 顺序无关，以 Set 语义为准。
  */
+import {
+  AIDGE_SOURCE_LANGUAGE_CODES_RAW,
+  AIDGE_TARGET_LANGUAGE_CODES_RAW,
+  VOLCENGINE_SOURCE_LANGUAGE_CODES_RAW,
+  VOLCENGINE_TARGET_LANGUAGE_CODES_RAW,
+} from "../../config/pictureTranslateLanguages";
 
 /** 火山机器翻译支持的输入 code（与 PictureUtils.java 一致） */
-export const HUO_SHAN_IMAGE_TRANSLATE_INPUT_CODE_SET = new Set<string>([
-  "bs",
-  "et",
-  "lt",
-  "ta",
-  "lv",
-  "sl",
-  "ms",
-  "mr",
-  "ml",
-  "sk",
-  "az",
-  "bn",
-  "cs",
-  "da",
-  "de",
-  "en",
-  "es",
-  "fi",
-  "fr",
-  "gu",
-  "hi",
-  "hr",
-  "id",
-  "it",
-  "ja",
-  "ko",
-  "nl",
-  "no",
-  "pa",
-  "pl",
-  "pt",
-  "ru",
-  "sv",
-  "th",
-  "vi",
-  "zh",
-  "zh-Hant",
-]);
+export const HUO_SHAN_IMAGE_TRANSLATE_INPUT_CODE_SET = new Set<string>(
+  VOLCENGINE_SOURCE_LANGUAGE_CODES_RAW,
+);
 
 /** 火山机器翻译支持的输出 code（与 PictureUtils.java 一致） */
-export const HUO_SHAN_IMAGE_TRANSLATE_OUTPUT_CODE_SET = new Set<string>([
-  "zh",
-  "en",
-  "pt",
-  "fr",
-  "de",
-  "id",
-  "nl",
-  "it",
-  "tr",
-  "ru",
-  "pl",
-  "fi",
-  "ro",
-  "cs",
-  "el",
-  "uk",
-  "sv",
-  "ms",
-  "no",
-  "sk",
-  "mk",
-  "lv",
-  "tl",
-  "mn",
-  "lt",
-  "hr",
-  "et",
-  "bs",
-  "da",
-  "bg",
-  "af",
-  "ja",
-  "ko",
-  "zh-Hant",
-  "th",
-  "hi",
-  "mr",
-  "te",
-  "ta",
-  "my",
-  "ml",
-  "km",
-  "kn",
-  "he",
-  "bn",
-  "ka",
-]);
+export const HUO_SHAN_IMAGE_TRANSLATE_OUTPUT_CODE_SET = new Set<string>(
+  VOLCENGINE_TARGET_LANGUAGE_CODES_RAW,
+);
 
 /** Aidge 基础图片翻译输入范围（modelType=1 / 自动路由 fallback） */
-export const AIDGE_IMAGE_TRANSLATE_INPUT_CODE_SET = new Set<string>([
-  "zh",
-  "zh-tw",
-  "en",
-  "fr",
-  "it",
-  "ja",
-  "ko",
-  "pt",
-  "ru",
-  "es",
-  "th",
-  "tr",
-  "vi",
-]);
+export const AIDGE_IMAGE_TRANSLATE_INPUT_CODE_SET = new Set<string>(
+  AIDGE_SOURCE_LANGUAGE_CODES_RAW,
+);
 
 /** Aidge 基础图片翻译输出范围 */
-export const AIDGE_IMAGE_TRANSLATE_OUTPUT_CODE_SET = new Set<string>([
-  "ar",
-  "bn",
-  "zh",
-  "zh-tw",
-  "cs",
-  "da",
-  "nl",
-  "en",
-  "fi",
-  "fr",
-  "de",
-  "el",
-  "he",
-  "hu",
-  "id",
-  "it",
-  "ja",
-  "kk",
-  "ko",
-  "ms",
-  "pl",
-  "pt",
-  "ru",
-  "es",
-  "sv",
-  "th",
-  "tl",
-  "tr",
-  "uk",
-  "ur",
-  "vi",
-]);
+export const AIDGE_IMAGE_TRANSLATE_OUTPUT_CODE_SET = new Set<string>(
+  AIDGE_TARGET_LANGUAGE_CODES_RAW,
+);
 
 export const HUO_SHAN_IMAGE_TYPE_SET = new Set<string>(["png", "jpg"]);
 
