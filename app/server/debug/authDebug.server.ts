@@ -5,6 +5,33 @@ const DEBUG_ENDPOINT =
   "http://127.0.0.1:7753/ingest/818798f0-158f-41e7-bccb-86c20f299999";
 const DEBUG_SESSION = "2c7630";
 const DEBUG_LOG_FILE = resolve(process.cwd(), "debug-2c7630.log");
+const MAX_DEBUG_BUFFER = 80;
+
+type DebugEntry = {
+  sessionId: string;
+  timestamp: number;
+  runId: string;
+  hypothesisId: string;
+  location: string;
+  message: string;
+  data: Record<string, unknown>;
+};
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __sparkAuthDebugBuffer: DebugEntry[] | undefined;
+}
+
+function getDebugBuffer(): DebugEntry[] {
+  if (!globalThis.__sparkAuthDebugBuffer) {
+    globalThis.__sparkAuthDebugBuffer = [];
+  }
+  return globalThis.__sparkAuthDebugBuffer;
+}
+
+export function getDebugAuthLogs(): DebugEntry[] {
+  return [...getDebugBuffer()];
+}
 
 type DebugPayload = {
   hypothesisId: string;
@@ -15,7 +42,7 @@ type DebugPayload = {
 };
 
 export function debugAuthLog(payload: DebugPayload): void {
-  const entry = {
+  const entry: DebugEntry = {
     sessionId: DEBUG_SESSION,
     timestamp: Date.now(),
     runId: payload.runId ?? "pre-fix",
@@ -26,6 +53,11 @@ export function debugAuthLog(payload: DebugPayload): void {
   };
 
   const line = `${JSON.stringify(entry)}\n`;
+  const buffer = getDebugBuffer();
+  buffer.push(entry);
+  if (buffer.length > MAX_DEBUG_BUFFER) {
+    buffer.splice(0, buffer.length - MAX_DEBUG_BUFFER);
+  }
 
   // #region agent log
   console.info(`[DEBUG-2c7630] ${line.trim()}`);
