@@ -5,6 +5,8 @@ export const pageColorTokens = {
   textPrimary: "#202223",
   textBody: "#303030",
   textSecondary: "#6d7175",
+  /** §3 弱化脚注（列表 meta、字段标签） */
+  textFootnote: "#8c9196",
   textMuted: "#42474c",
   border: "#e1e3e5",
   borderInput: "#c9cccf",

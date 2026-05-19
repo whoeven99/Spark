@@ -1,22 +1,10 @@
-
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { debugAuthenticateAdmin } from "../server/debug/authenticateAdminDebug.server";
-import { debugAuthLog, extractAuthRequestContext } from "../server/debug/authDebug.server";
+import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const context = extractAuthRequestContext(request);
-  // #region agent log
-  debugAuthLog({
-    hypothesisId: "A",
-    location: "auth.$.tsx:entry",
-    message: "auth route hit",
-    data: { context },
-  });
-  // #endregion
-
-  const { session } = await debugAuthenticateAdmin(request, "auth.catch-all");
+  const { session } = await authenticate.admin(request);
 
   try {
     await recordAppInstalled({

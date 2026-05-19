@@ -5,6 +5,7 @@ import {
   logisticsProviders,
   type ProviderItem,
 } from "./chatPageConstants";
+import { pageColorTokens } from "../pageUiStyles";
 
 type ShopifyToast = {
   toast: { show: (message: string) => void };
@@ -443,7 +444,10 @@ export function useChatPageCredentials(shopify: ShopifyToast) {
               justifyContent: "space-between",
               gap: "0.75rem",
               padding: "0.5rem 0",
-              borderBottom: index < providers.length - 1 ? "1px solid #ececec" : "none",
+              borderBottom:
+                index < providers.length - 1
+                  ? `1px solid ${pageColorTokens.divider}`
+                  : "none",
             }}
           >
             <div
