@@ -110,7 +110,10 @@
       "FROZEN": "已冻结"
     },
     "quotaTitle": "您的 Token 额度",
-    "planBenefits": "计划福利：按量购买的 Token 不会过期 · 订阅周期内 Token 随套餐刷新 · 支持额外购包补充额度。",
+    "planBenefits": "按量包不过期 · 订阅额度按周期刷新 · 可另购补充",
+    "quotaUsageAria": "已用 {{used}}，可用 {{available}} Token",
+    "quotaProgressAria": "已使用 {{percent}}%",
+    "poolBreakdown": "订阅 {{subscription}} · 按量 {{purchased}} · 试用 {{trial}}",
     "tokenUnit": "Token",
     "choosePlanTitle": "选择适合您的计划",
     "toggleAnnual": "切换年付",

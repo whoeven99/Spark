@@ -208,6 +208,12 @@ export function BillingPage() {
     t,
   });
 
+  const tokenCapacity = billing.usedTokens + billing.availableTokens;
+  const usagePercent =
+    tokenCapacity > 0
+      ? Math.min(100, Math.round((billing.usedTokens / tokenCapacity) * 100))
+      : 0;
+
   if (actionData?.ok && "noopCheckout" in actionData && actionData.noopCheckout) {
     shopify.toast.show(t("billing.checkoutCompleteNoRedirect"));
   } else if (actionData?.ok && "cancelled" in actionData && actionData.cancelled) {
@@ -296,7 +302,7 @@ export function BillingPage() {
           <s-banner tone="warning">{t("billing.lowBalanceWarning")}</s-banner>
         ) : null}
 
-        <section>
+        <section className={styles.quotaSection}>
           <div className={styles.usageHeader}>
             <h2 className={styles.usageTitle}>{t("billing.quotaTitle")}</h2>
             <span className={styles.planBadge}>{currentPlanLabel}</span>
@@ -305,32 +311,45 @@ export function BillingPage() {
             <div className={styles.usageBenefits}>
               {t("billing.planBenefits")}
             </div>
-            <div className={styles.usageMetrics}>
-              <div className={styles.usageMetric}>
-                <p className={styles.metricLabel}>{t("billing.availableTokens")}</p>
-                <p className={styles.metricValue}>
-                  {billing.availableTokens.toLocaleString()}
-                </p>
-                <p className={styles.metricUnit}>{t("billing.tokenUnit")}</p>
-              </div>
-              <div className={styles.usageMetric}>
-                <p className={styles.metricLabel}>{t("billing.usedTokens")}</p>
-                <p className={styles.metricValue}>
+            <div className={styles.usageMain}>
+              <p
+                className={styles.quotaRatio}
+                aria-label={t("billing.quotaUsageAria", {
+                  used: billing.usedTokens.toLocaleString(),
+                  available: billing.availableTokens.toLocaleString(),
+                })}
+              >
+                <span className={styles.quotaRatioLabel}>
+                  {t("billing.usedTokens")} / {t("billing.availableTokens")}
+                </span>
+                <span className={styles.quotaRatioValue}>
                   {billing.usedTokens.toLocaleString()}
-                </p>
-                <p className={styles.metricUnit}>{t("billing.tokenUnit")}</p>
+                  <span className={styles.quotaRatioSep}> / </span>
+                  {billing.availableTokens.toLocaleString()}
+                </span>
+                <span className={styles.quotaRatioUnit}>{t("billing.tokenUnit")}</span>
+              </p>
+              <div
+                className={styles.progressTrack}
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={usagePercent}
+                aria-label={t("billing.quotaProgressAria", { percent: usagePercent })}
+              >
+                <div
+                  className={styles.progressFill}
+                  style={{ width: `${usagePercent}%` }}
+                />
               </div>
+              <p className={styles.usagePools}>
+                {t("billing.poolBreakdown", {
+                  subscription: billing.account.subscriptionTokens.toLocaleString(),
+                  purchased: billing.account.purchasedTokens.toLocaleString(),
+                  trial: billing.account.trialTokens.toLocaleString(),
+                })}
+              </p>
             </div>
-            <p className={styles.usagePools}>
-              {t("billing.poolSubscription")}:{" "}
-              {billing.account.subscriptionTokens.toLocaleString()}
-              {" \u00b7 "}
-              {t("billing.poolPurchased")}:{" "}
-              {billing.account.purchasedTokens.toLocaleString()}
-              {" \u00b7 "}
-              {t("billing.poolTrial")}:{" "}
-              {billing.account.trialTokens.toLocaleString()}
-            </p>
           </div>
           {sub?.status === "ACTIVE" ? (
             <p className={styles.subscriptionMeta}>

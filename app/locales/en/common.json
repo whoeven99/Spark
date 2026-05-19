@@ -110,7 +110,10 @@
       "FROZEN": "Frozen"
     },
     "quotaTitle": "Your token balance",
-    "planBenefits": "Purchased tokens never expire · Subscription tokens refresh each period · Buy packs anytime for extra capacity.",
+    "planBenefits": "Packs never expire · Subscription refreshes each period · Buy extra packs anytime",
+    "quotaUsageAria": "Used {{used}}, available {{available}} tokens",
+    "quotaProgressAria": "{{percent}}% used",
+    "poolBreakdown": "Subscription {{subscription}} · Packs {{purchased}} · Trial {{trial}}",
     "tokenUnit": "tokens",
     "choosePlanTitle": "Choose the plan that fits you",
     "toggleAnnual": "Toggle annual billing",
