@@ -6,6 +6,8 @@
 - `translation-agent.md` — 翻译功能约定
 - `generateDescription.md` — 商品描述生成方案
 - `UI_DESIGN.md` — 前端展示层 UI 规范
+- `agent-run-log.md` — Agent 运行摘要（Cosmos `spark_ops`）与 LangSmith 互链
+- `render-daily-digest.md` — Render 日志日报（GitHub Actions → 飞书）
 
 ## 1. 项目定位
 - 这是一个嵌入式 Shopify App，核心能力是 `AI Assistant + 店铺运维诊断 + 翻译任务（V3 / JSON Runtime）+ 卫星 App 订阅计费（generate-description）`。
@@ -169,6 +171,12 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
   - `COSMOS_ENDPOINT`、`COSMOS_KEY`
   - `COSMOS_TRANSLATION_DATABASE_ID`（可选，默认 `translation`）
   - `COSMOS_TRANSLATION_JOBS_CONTAINER`（可选，默认 `translation_jobs`）
+- Agent 运行摘要 Cosmos（`app/server/agentRunLog/`，见 `docs/agent-run-log.md`）：
+  - 与翻译共用 `COSMOS_ENDPOINT`、`COSMOS_KEY`
+  - `COSMOS_OPS_DATABASE_ID`（可选，默认 `spark_ops`）
+  - `COSMOS_AGENT_RUNS_CONTAINER`（可选，默认 `agent_runs`）
+  - `AGENT_RUN_LOG_ENABLED`（默认开启；`false` 关闭写入）
+  - `AGENT_RUN_TIMEOUT_MS`（可选，默认 `120000`）
 - 翻译 Blob（`translateBlobStore.server.ts`）：
   - `BLOB_TRANSLATE_V3_CONNECTION_STRING` 或 `AZURE_BLOB_CONNECTION_STRING`
   - `BLOB_TRANSLATE_V3_CONTAINER` 或 `AZURE_BLOB_TRANSLATION_CONTAINER`（可选，默认 `translate-v3`）
@@ -197,6 +205,7 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
 - 改欢迎语/聊天 UI：`app/routes/page/ChatPage.tsx`、`app/routes/component/chat/*`（页面旁路与凭证弹层逻辑见 `app/routes/page/chat/`）。
 - 改聊天行为/工具调用：`app/server/chat.ts`、`app/server/ai/core/invokeChatAgent.server.ts`、`app/server/ai/skills/index.ts`、`app/server/ai/core/shopChatGraph.server.ts`。
 - 改 AI 回复抽取、Markdown 表格规整或最终润色：`app/server/ai/postprocess/langchainMessageText.ts`、`markdownTableNormalize.ts`、`polishFinalReply.ts`（单测同目录 `*.test.ts`）。
+- 改 Agent 运行摘要 / Cosmos 写入：`app/server/agentRunLog/**`（先读 `docs/agent-run-log.md`）；聊天写入见 `invokeChatAgent.server.ts`、`agentStream.server.ts`。
 - 加新 AI 工具：`app/server/ai/tools/implementations/*`，并在 `app/server/ai/chat/chatAgentTools.server.ts` 的 `buildChatAgentExtraTools` 中注册（与 `shopifyShopInfoTool` 等一并注入聊天链路）。
 - 改诊断指标：`app/routes/app.additional.tsx`（含查询、阈值、文案）。
 - 改广告 OAuth 配置字段：`app/routes/app.ads.*.config.tsx` + `app/server/adAuthCredentialStore.server.ts`（及 Meta 的 `adsCredentialStore.server.ts`）；改物流：`app/routes/app.logistics.*.config.tsx` + `app/server/logisticsCredentialStore.server.ts`。

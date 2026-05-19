@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+﻿import { useMemo, useState, type CSSProperties } from "react";
 import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
@@ -464,6 +464,13 @@ export function BillingPage() {
               </div>
               <div
                 className={styles.packOptions}
+                style={
+                  {
+                    ["--pack-columns" as string]: String(
+                      Math.min(tokenPacks.length, 4),
+                    ),
+                  } as CSSProperties
+                }
                 role="radiogroup"
                 aria-label={t("billing.sectionPacks")}
               >

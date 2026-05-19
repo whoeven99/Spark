@@ -10,6 +10,12 @@ import {
   MAX_DESCRIPTION_TEMPERATURE,
   MIN_DESCRIPTION_TEMPERATURE,
 } from "./constants.server";
+import {
+  isAgentRunLogEnabled,
+  recordAgentRun,
+  resolveAgentRunStatus,
+} from "../agentRunLog/index.server";
+import { parseUsageMetadata } from "../tokenUsage/parseUsageMetadata.server";
 import { logDetailedError } from "./generateDescriptionLog.server";
 import { runProductDescriptionGeneration } from "./services/generateDescriptionService";
 import type { GenerateDescriptionApiResponse } from "../../lib/generateDescriptionTypes";
@@ -64,6 +70,51 @@ export async function executeGenerateDescriptionRequest(params: {
 }): Promise<{ status: number; body: GenerateDescriptionApiResponse }> {
   const { requestId, admin, sessionShop, parsed } = params;
   const routeStart = Date.now();
+  const startedAtIso = new Date().toISOString();
+  const appName = getAppEntry();
+
+  const persistRun = (input: {
+    status: "success" | "error";
+    errorCode?: number;
+    errorMsg?: string;
+    usageMeta?: unknown;
+  }) => {
+    if (!isAgentRunLogEnabled()) return;
+    const durationMs = Date.now() - routeStart;
+    const usage = parseUsageMetadata(input.usageMeta);
+    recordAgentRun({
+      runId: requestId,
+      shop: sessionShop,
+      appName,
+      feature: "generate_description",
+      status: resolveAgentRunStatus({
+        explicitStatus: input.status,
+        durationMs,
+      }),
+      startedAt: startedAtIso,
+      durationMs,
+      inputSummary: {
+        productId: parsed.productId,
+        targetLanguage: parsed.targetLanguage,
+      },
+      tokenUsage:
+        usage.totalTokens > 0
+          ? {
+              prompt: usage.inputTokens,
+              completion: usage.outputTokens,
+              total: usage.totalTokens,
+            }
+          : undefined,
+      error:
+        input.status === "error"
+          ? {
+              code: input.errorCode != null ? String(input.errorCode) : undefined,
+              message: input.errorMsg ?? "unknown",
+            }
+          : undefined,
+      refs: { requestId },
+    });
+  };
 
   console.info(
     `${LOG_PREFIX} requestId=${requestId} execute start shop=${sessionShop} productId=${parsed.productId}`,
@@ -74,6 +125,11 @@ export async function executeGenerateDescriptionRequest(params: {
     console.info(
       `${LOG_PREFIX} requestId=${requestId} shop mismatch session=${sessionShop} param=${shopParam}`,
     );
+    persistRun({
+      status: "error",
+      errorCode: 403,
+      errorMsg: "shop 与当前会话店铺不一致",
+    });
     return jsonBody(
       {
         success: false,
@@ -122,6 +178,11 @@ export async function executeGenerateDescriptionRequest(params: {
           durationMs,
         }),
       );
+      persistRun({
+        status: "error",
+        errorCode: result.errorCode,
+        errorMsg: result.errorMsg,
+      });
       return jsonBody(
         {
           success: false,
@@ -145,6 +206,7 @@ export async function executeGenerateDescriptionRequest(params: {
         tokenUsage: result.usageMeta ?? null,
       }),
     );
+    persistRun({ status: "success", usageMeta: result.usageMeta });
 
     console.log("[GenerateDescription] product title:", result.data.title);
 
@@ -167,6 +229,11 @@ export async function executeGenerateDescriptionRequest(params: {
         errorMsg?: string;
         errorCode?: string;
       };
+      persistRun({
+        status: "error",
+        errorCode: 402,
+        errorMsg: body.errorMsg ?? "需要订阅或购买 Token",
+      });
       return jsonBody(
         {
           success: false,
@@ -184,6 +251,7 @@ export async function executeGenerateDescriptionRequest(params: {
       error,
     );
     const message = error instanceof Error ? error.message : "请求处理失败";
+    persistRun({ status: "error", errorCode: 500, errorMsg: message });
     return jsonBody(
       {
         success: false,

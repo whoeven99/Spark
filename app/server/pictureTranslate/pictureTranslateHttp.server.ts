@@ -1,4 +1,11 @@
 import { z } from "zod";
+import { getAppEntry } from "../../config/appEntry.server";
+import {
+  imageUrlToHost,
+  isAgentRunLogEnabled,
+  recordAgentRun,
+  resolveAgentRunStatus,
+} from "../agentRunLog/index.server";
 import { executePictureTranslatePipeline } from "./pictureTranslateExecutor.server";
 import {
   getExtensionFromUrl,
@@ -129,12 +136,56 @@ export async function executePictureTranslateRequest(params: {
 }): Promise<{ status: number; body: PictureTranslateResponse }> {
   const { requestId, sessionShop, parsed } = params;
   const clientRequestId = parsed.requestId?.trim() || requestId;
+  const routeStart = Date.now();
+  const startedAtIso = new Date().toISOString();
+  const appName = getAppEntry();
+  const runId = clientRequestId;
+
+  const persistRun = (input: {
+    status: "success" | "error";
+    errorCode?: number;
+    errorMsg?: string;
+  }) => {
+    if (!isAgentRunLogEnabled()) return;
+    const durationMs = Date.now() - routeStart;
+    recordAgentRun({
+      runId,
+      shop: sessionShop,
+      appName,
+      feature: "picture_translate",
+      status: resolveAgentRunStatus({
+        explicitStatus: input.status,
+        durationMs,
+      }),
+      startedAt: startedAtIso,
+      durationMs,
+      inputSummary: {
+        imageUrlHost: imageUrlToHost(parsed.imageUrl),
+        sourceCode: parsed.sourceCode,
+        targetCode: parsed.targetCode,
+        modelType: parsed.modelType,
+      },
+      error:
+        input.status === "error"
+          ? {
+              code: input.errorCode != null ? String(input.errorCode) : undefined,
+              message: input.errorMsg ?? "unknown",
+            }
+          : undefined,
+      refs: { requestId: clientRequestId },
+    });
+  };
 
   const shopParam = parsed.shop?.trim();
   if (shopParam && shopParam !== sessionShop) {
     console.info(
       `${LOG_PREFIX} Request validated blocked — shop mismatch session=${sessionShop} param=${shopParam} clientRequestId=${clientRequestId}`,
     );
+    persistRun({
+      status: "error",
+      errorCode: 40301,
+      errorMsg: "shop 与当前会话店铺不一致",
+    });
     return err(40301, "shop 与当前会话店铺不一致", 403);
   }
 
@@ -144,6 +195,12 @@ export async function executePictureTranslateRequest(params: {
     console.info(
       `${LOG_PREFIX} billing strict — blocked clientRequestId=${clientRequestId} shop=${sessionShop}`,
     );
+    persistRun({
+      status: "error",
+      errorCode: 50102,
+      errorMsg:
+        "计费未接入：已设置 PICTURE_TRANSLATE_BILLING_STRICT=true，整图翻译在扣费对齐前被硬阻断",
+    });
     return err(
       50102,
       "计费未接入：已设置 PICTURE_TRANSLATE_BILLING_STRICT=true，整图翻译在扣费对齐前被硬阻断",
@@ -157,6 +214,7 @@ export async function executePictureTranslateRequest(params: {
 
   const extensionRaw = getExtensionFromUrl(parsed.imageUrl);
   if (extensionRaw == null) {
+    persistRun({ status: "error", errorCode: 40001, errorMsg: "图片格式无法识别" });
     return err(40001, "图片格式无法识别", 400);
   }
 
@@ -186,11 +244,24 @@ export async function executePictureTranslateRequest(params: {
     console.info(
       `${LOG_PREFIX} Translation done — failure reason=${pipeline.reason} provider=${pipeline.provider ?? "n/a"} detail=${pipeline.detail ?? "n/a"} clientRequestId=${clientRequestId}`,
     );
-    return mapPipelineFailure(pipeline.reason, pipeline.detail, parsed.modelType);
+    const failure = mapPipelineFailure(
+      pipeline.reason,
+      pipeline.detail,
+      parsed.modelType,
+    );
+    if (!failure.body.success) {
+      persistRun({
+        status: "error",
+        errorCode: failure.body.errorCode,
+        errorMsg: failure.body.errorMsg,
+      });
+    }
+    return failure;
   }
 
   console.info(
     `${LOG_PREFIX} Translation done — success provider=${pipeline.provider} clientRequestId=${clientRequestId}`,
   );
+  persistRun({ status: "success" });
   return ok(pipeline.imageUrl);
 }
