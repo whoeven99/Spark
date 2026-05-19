@@ -13,7 +13,8 @@
  *   DIGEST_QUERY_DELAY_MS — 两次查询之间的间隔，默认 2500
  *   DIGEST_PAGE_DELAY_MS  — 分页之间的间隔，默认 600
  *   DIGEST_RENDER_MAX_RETRIES — 429 时最大重试次数，默认 6
- *   DIGEST_SKIP_FEISHU    — 设为 true 仅写本地报告不发飞书
+ *   DIGEST_SKIP_FEISHU    — true/1/yes 时不发飞书
+ *   RENDER_SERVICE_DISPLAY_NAME — 报告/飞书中展示的服务名（yml 可填）；未设则用 service id
  *   DIGEST_OUTPUT_DIR     — 默认 reports
  */
 const fs = require("fs");
@@ -33,6 +34,13 @@ const RENDER_API = "https://api.render.com/v1";
 function env(name, fallback) {
   const v = process.env[name]?.trim();
   return v || fallback;
+}
+
+/** 识别 true / 1 / yes（GitHub input 偶发 True、带空格） */
+function parseBoolEnv(name, defaultValue = false) {
+  const raw = process.env[name]?.trim().toLowerCase();
+  if (!raw) return defaultValue;
+  return raw === "true" || raw === "1" || raw === "yes";
 }
 
 function requireEnv(name) {
@@ -273,9 +281,18 @@ function resolveTimeWindow() {
 async function main() {
   const apiKey = requireEnv("RENDER_API_KEY");
   const serviceId = requireEnv("RENDER_SERVICE_ID");
+  const serviceLabel =
+    env("RENDER_SERVICE_DISPLAY_NAME", "") || serviceId;
   const ownerIdExplicit = env("RENDER_OWNER_ID", "");
-  const skipFeishu = env("DIGEST_SKIP_FEISHU", "") === "true";
+  const skipFeishu = parseBoolEnv("DIGEST_SKIP_FEISHU", false);
   const outputDir = env("DIGEST_OUTPUT_DIR", "reports");
+
+  console.info(
+    `[render-digest] DIGEST_SKIP_FEISHU raw="${process.env.DIGEST_SKIP_FEISHU ?? ""}" → skip=${skipFeishu}`,
+  );
+  console.info(
+    `[render-digest] service label="${serviceLabel}" id=${serviceId}`,
+  );
 
   const { start, end, windowLabel, reportDate, mode } = resolveTimeWindow();
 
@@ -298,7 +315,11 @@ async function main() {
   );
   console.info(`[render-digest] fetched ${logs.length} log lines (deduped)`);
 
-  const digest = buildDigest(logs, { serviceId, windowLabel });
+  const digest = buildDigest(logs, {
+    serviceId,
+    serviceLabel,
+    windowLabel,
+  });
   const markdown = formatDigestMarkdown(digest);
   const jsonPath = path.join(outputDir, `render-digest-${reportDate}.json`);
   const mdPath = path.join(outputDir, `render-digest-${reportDate}.md`);

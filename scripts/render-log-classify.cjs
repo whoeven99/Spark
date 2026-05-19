@@ -138,6 +138,7 @@ function isRelevantLog(log) {
  */
 function buildDigest(logs, options = {}) {
   const serviceId = options.serviceId ?? "unknown";
+  const serviceLabel = options.serviceLabel ?? serviceId;
   const windowLabel = options.windowLabel ?? "";
   const categories = {};
   const samples = {};
@@ -185,6 +186,7 @@ function buildDigest(logs, options = {}) {
 
   return {
     serviceId,
+    serviceLabel,
     windowLabel,
     generatedAt: new Date().toISOString(),
     totalLogsScanned: logs.length,
@@ -199,7 +201,10 @@ function formatDigestMarkdown(digest) {
   const lines = [
     `# Spark Render 日志日报`,
     ``,
-    `- 服务: \`${digest.serviceId}\``,
+    `- 服务: **${digest.serviceLabel}**` +
+      (digest.serviceLabel !== digest.serviceId
+        ? `（\`${digest.serviceId}\`）`
+        : ""),
     `- 窗口: ${digest.windowLabel}`,
     `- 生成: ${digest.generatedAt}`,
     `- 扫描条数: ${digest.totalLogsScanned}（相关 ${digest.totalRelevant}）`,
@@ -239,7 +244,10 @@ function formatFeishuPostContent(digest) {
 
   const blocks = [];
   blocks.push([
-    { tag: "text", text: `服务 ${digest.serviceId}\n窗口 ${digest.windowLabel}\n` },
+    {
+      tag: "text",
+      text: `服务 ${digest.serviceLabel}\n窗口 ${digest.windowLabel}\n`,
+    },
   ]);
 
   if (!digest.hasIssues) {

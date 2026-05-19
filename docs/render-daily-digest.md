@@ -9,7 +9,8 @@
 
 - 文件：`.github/workflows/render-daily-log-digest.yml`
 - 定时：每天 **北京时间 08:30**（GitHub cron 为 UTC `00:30`）
-- 手动：`workflow_dispatch` 可设 `skip_feishu`；`lookback_hours` 仅调试（留空 = 昨日北京日历日）
+- 手动：`skip_feishu` 选 **true** 只生成 Artifact、不发飞书；`lookback_hours` 仅调试（留空 = 昨日北京日历日）
+- 展示名：在 workflow 里设 `RENDER_SERVICE_DISPLAY_NAME`（与 `RENDER_SERVICE_ID` 并列）
 
 ## GitHub Secrets（Environment: `CommonShopifyRenderConfig`）
 
@@ -66,7 +67,8 @@ export RENDER_SERVICE_ID=srv-d7j6ogaqqhas739in900
 export FEISHU_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/...
 # 可选
 export RENDER_OWNER_ID=tea-...
-export DIGEST_SKIP_FEISHU=true
+export DIGEST_SKIP_FEISHU=true   # 或 1 / yes
+export RENDER_SERVICE_DISPLAY_NAME="Spark Test"
 # 调试才用：export DIGEST_LOOKBACK_HOURS=24
 
 node scripts/render-daily-log-digest.cjs

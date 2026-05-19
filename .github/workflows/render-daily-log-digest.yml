@@ -12,8 +12,11 @@ on:
         required: false
         default: ""
       skip_feishu:
-        description: "仅生成报告不发飞书 (true/false)"
-        required: false
+        description: "仅生成报告，不发飞书"
+        type: choice
+        options:
+          - "true"
+          - "false"
         default: "false"
 
 defaults:
@@ -34,10 +37,13 @@ jobs:
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_APIKEY }}
           RENDER_SERVICE_ID: srv-d84veasvikkc739fk0f0
+          # 报告/飞书里显示的名称（可改成 Render Dashboard 上的服务名）
+          RENDER_SERVICE_DISPLAY_NAME: Desc Test
           RENDER_OWNER_ID: ${{ secrets.RENDER_OWNER_ID }}
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
           DIGEST_LOOKBACK_HOURS: ${{ github.event.inputs.lookback_hours }}
-          DIGEST_SKIP_FEISHU: ${{ github.event.inputs.skip_feishu || 'false' }}
+          # 定时任务无 inputs，仅手动运行时 skip_feishu=true 才跳过飞书
+          DIGEST_SKIP_FEISHU: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_feishu == 'true' && 'true' || 'false' }}
           DIGEST_QUERY_DELAY_MS: "3000"
           DIGEST_PAGE_DELAY_MS: "800"
           DIGEST_MAX_PAGES: "8"
