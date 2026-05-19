@@ -7,6 +7,15 @@ import type { loader } from "../app.generate-description";
 import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
 import { ProductSelector } from "../component/product/ProductSelector";
 import { GenerateDescriptionResultEditor } from "../component/generateDescription/GenerateDescriptionResultEditor";
+import {
+  PageSurface,
+  formErrorBoxStyle,
+  pageEmptyStateStyle,
+  pageIntroBannerStyle,
+  twoColumnLayoutStyle,
+  twoColumnMainStyle,
+  twoColumnSideStyle,
+} from "./pageUiStyles";
 
 export function GenerateDescriptionPage() {
   const shopify = useAppBridge();
@@ -60,8 +69,8 @@ export function GenerateDescriptionPage() {
   };
 
   const productIdForActions = (selectedProduct?.id ?? productId).trim();
-
   const copyBusy = copyTarget !== null;
+
   return (
     <s-page heading={t("generate.pageTitle")}>
       {billing.billingRequired && !billing.hasAccess ? (
@@ -70,40 +79,12 @@ export function GenerateDescriptionPage() {
           <s-link href={`/app/billing${search}`}>{t("billing.openBillingPage")}</s-link>
         </s-banner>
       ) : null}
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "1.5rem",
-          alignItems: "flex-start",
-        }}
-      >
-        <div style={{ flex: "2 1 360px", minWidth: 0 }}>
-          <div style={{
-            background: "#ffffff",
-            border: "1px solid #e3e3e3",
-            borderRadius: "12px",
-            padding: "1.5rem",
-            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.02)"
-          }}>
-            <div style={{ marginBottom: "1.5rem" }}>
-              <div style={{ fontSize: "1.25rem", fontWeight: 600, color: "#0d0d0d" }}>
-                {t("generate.sectionTitle")}
-              </div>
-            </div>
+
+      <div style={twoColumnLayoutStyle}>
+        <div style={twoColumnMainStyle}>
+          <PageSurface title={t("generate.sectionTitle")}>
             <s-stack direction="block" gap="base">
-              <div
-                style={{
-                  fontSize: "0.875rem",
-                  color: "#6d7175",
-                  lineHeight: 1.5,
-                  padding: "1rem 1.25rem",
-                  background: "linear-gradient(to right, rgba(72, 0, 140, 0.03), rgba(243, 71, 255, 0.03))",
-                  borderLeft: "3px solid #48008c",
-                  borderRadius: "0 8px 8px 0",
-                  marginBottom: "1rem"
-                }}
-              >
+              <div style={pageIntroBannerStyle("render", { marginBottom: "0" })}>
                 {t("generate.intro")}
               </div>
               <ProductSelector
@@ -114,28 +95,26 @@ export function GenerateDescriptionPage() {
               <details
                 style={{ marginTop: "0.25rem" }}
                 open={showManualProductId}
-                onToggle={(e) =>
-                  setShowManualProductId(e.currentTarget.open)
-                }
+                onToggle={(e) => setShowManualProductId(e.currentTarget.open)}
               >
-                  <summary
-                    style={{
-                      cursor: "pointer",
-                      fontSize: "0.8125rem",
-                      color: "#8a05ff",
-                      userSelect: "none",
-                    }}
-                  >
+                <summary
+                  style={{
+                    cursor: "pointer",
+                    fontSize: "0.8125rem",
+                    color: "#2c6ecb",
+                    userSelect: "none",
+                  }}
+                >
                   {t("generate.advancedManualProductId")}
                 </summary>
-                    <div style={{ marginTop: "0.65rem", padding: "0.1rem" }}>
-                      <s-text-field
-                        label={t("generate.productIdLabel")}
-                        value={productId}
-                        onChange={(e) => setProductId(e.currentTarget.value)}
-                        autocomplete="off"
-                      />
-                    </div>
+                <div style={{ marginTop: "0.65rem" }}>
+                  <s-text-field
+                    label={t("generate.productIdLabel")}
+                    value={productId}
+                    onChange={(e) => setProductId(e.currentTarget.value)}
+                    autocomplete="off"
+                  />
+                </div>
               </details>
 
               <div>
@@ -164,8 +143,8 @@ export function GenerateDescriptionPage() {
                     fontSize: "0.875rem",
                     borderRadius: "8px",
                     border: "1px solid #c9cccf",
-                    background: localesLoading ? "#f9f9f9" : "#fff",
-                    color: "#0d0d0d",
+                    background: localesLoading ? "#f6f6f7" : "#fff",
+                    color: "#303030",
                     boxSizing: "border-box",
                   }}
                 >
@@ -188,25 +167,12 @@ export function GenerateDescriptionPage() {
                     }}
                   >
                     {t("generate.fallbackLocalesHint")}{" "}
-                    <code style={{ fontSize: "0.7rem" }}>read_locales</code>{" "}
+                    <code style={{ fontSize: "0.7rem" }}>read_locales</code>
                   </div>
                 ) : null}
               </div>
 
-              {errorText ? (
-                <div
-                  style={{
-                    padding: "0.5rem 0.65rem",
-                    borderRadius: "8px",
-                    background: "rgba(216, 44, 13, 0.08)",
-                    color: "#8a2712",
-                    fontSize: "0.8125rem",
-                    lineHeight: 1.45,
-                  }}
-                >
-                  {errorText}
-                </div>
-              ) : null}
+              {errorText ? <div style={formErrorBoxStyle}>{errorText}</div> : null}
 
               <s-stack direction="inline" gap="small">
                 <s-button
@@ -215,7 +181,9 @@ export function GenerateDescriptionPage() {
                   onClick={() => {
                     void handleGenerate();
                   }}
-                  {...(isSubmitting || isSaving || localesLoading || saveConfirmOpen ? { disabled: true } : {})}
+                  {...(isSubmitting || isSaving || localesLoading || saveConfirmOpen
+                    ? { disabled: true }
+                    : {})}
                 >
                   {isSubmitting
                     ? t("generate.generating")
@@ -237,68 +205,42 @@ export function GenerateDescriptionPage() {
                 </s-button>
               </s-stack>
             </s-stack>
-          </div>
+          </PageSurface>
         </div>
 
-        <div style={{ flex: "3 1 480px", minWidth: 0 }}>
-          <div style={{
-            background: "#ffffff",
-            border: "1px solid #e3e3e3",
-            borderRadius: "12px",
-            padding: "1.5rem",
-            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.02)"
-          }}>
-            <div style={{ marginBottom: "1.5rem" }}>
-              <div style={{ fontSize: "1.25rem", fontWeight: 600, color: "#0d0d0d" }}>
-                {t("generate.resultTitle")}
-              </div>
-            </div>
+        <div style={twoColumnSideStyle}>
+          <PageSurface title={t("generate.resultTitle")}>
             {description !== null ? (
-            <GenerateDescriptionResultEditor
-              variant="page"
-              draftTitle={draftTitle}
-              draftDescription={draftDescription}
-              onDraftTitleChange={setDraftTitle}
-              onDraftDescriptionChange={setDraftDescription}
-              copyTarget={copyTarget}
-              copyBusy={copyBusy}
-              isSubmitting={isSubmitting}
-              isSaving={isSaving}
-              saveErrorText={saveErrorText}
-              onCopyTitle={copyTitle}
-              onCopyDescription={copyDescription}
-              onCopyAll={copyAll}
-              onClickSave={requestOpenSaveDialog}
-              saveConfirmOpen={saveConfirmOpen}
-              onSaveConfirm={() => {
-                void confirmSaveToShopify(productIdForActions);
-              }}
-              onSaveCancel={cancelSaveDialog}
-            />
-          ) : (
-            <s-section heading={t("generate.resultTitle")}>
-              <div
-                style={{
-                  padding: "2.5rem 1.5rem",
-                  borderRadius: "8px",
-                  background: "linear-gradient(180deg, #fafafa 0%, #f4f5f6 100%)",
-                  border: "1px dashed #e3e3e3",
-                  color: "#6b6b6b",
-                  fontSize: "0.875rem",
-                  lineHeight: 1.5,
-                  textAlign: "center",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "0.75rem",
+              <GenerateDescriptionResultEditor
+                variant="page"
+                draftTitle={draftTitle}
+                draftDescription={draftDescription}
+                onDraftTitleChange={setDraftTitle}
+                onDraftDescriptionChange={setDraftDescription}
+                copyTarget={copyTarget}
+                copyBusy={copyBusy}
+                isSubmitting={isSubmitting}
+                isSaving={isSaving}
+                saveErrorText={saveErrorText}
+                onCopyTitle={copyTitle}
+                onCopyDescription={copyDescription}
+                onCopyAll={copyAll}
+                onClickSave={requestOpenSaveDialog}
+                saveConfirmOpen={saveConfirmOpen}
+                onSaveConfirm={() => {
+                  void confirmSaveToShopify(productIdForActions);
                 }}
-              >
-                <div style={{ fontSize: "1.75rem", opacity: 0.6 }}>✨</div>
-                <div style={{ color: "#4d4d4d" }}>{t("generate.emptyResult")}</div>
+                onSaveCancel={cancelSaveDialog}
+              />
+            ) : (
+              <div style={pageEmptyStateStyle}>
+                <span style={{ fontSize: "1.75rem", opacity: 0.6 }} aria-hidden>
+                  ✨
+                </span>
+                <span>{t("generate.emptyResult")}</span>
               </div>
-            </s-section>
-          )}
-          </div>
+            )}
+          </PageSurface>
         </div>
       </div>
     </s-page>

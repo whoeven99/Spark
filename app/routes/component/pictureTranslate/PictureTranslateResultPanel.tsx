@@ -2,15 +2,18 @@ import { useCallback, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import { usePictureTranslateContext } from "./pictureTranslateContext";
+import { formErrorBoxStyle, pageEmptyStateStyle } from "../../page/pageUiStyles";
 
-const errorBoxStyle = {
-  padding: "0.5rem 0.65rem",
-  borderRadius: "8px",
-  background: "rgba(216, 44, 13, 0.08)",
-  color: "#8a2712",
-  fontSize: "0.8125rem",
-  lineHeight: 1.45,
-} as const;
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div style={pageEmptyStateStyle}>
+      <span style={{ fontSize: "1.75rem", opacity: 0.6 }} aria-hidden>
+        🖼️
+      </span>
+      <span>{message}</span>
+    </div>
+  );
+}
 
 export function PictureTranslateResultPanel() {
   const shopify = useAppBridge();
@@ -32,67 +35,47 @@ export function PictureTranslateResultPanel() {
     try {
       await navigator.clipboard.writeText(translatedImage);
       shopify.toast.show(t("pictureTranslate.copyLinkDone"));
-      console.info("[PictureTranslateResult] copy_link ok");
-    } catch (e) {
-      console.info("[PictureTranslateResult] copy_link failed", e);
+    } catch {
+      // toast only on success per existing behavior
     } finally {
       setCopyBusy(false);
     }
   }, [shopify, t, translatedImage]);
 
-    if (!hasSubmittedOnce && !translatedImage && !isSubmitting) {
-      return (
+  if (!hasSubmittedOnce && !translatedImage && !isSubmitting) {
+    return <EmptyState message={t("pictureTranslate.empty")} />;
+  }
+
+  if (isSubmitting) {
+    return (
+      <div style={{ display: "grid", gap: "0.75rem" }}>
         <div
           style={{
-            padding: "2.5rem 1.5rem",
-            borderRadius: "8px",
-            background: "linear-gradient(180deg, #fafafa 0%, #f4f5f6 100%)",
-            border: "1px dashed #e3e3e3",
-            color: "#6b6b6b",
-            fontSize: "0.875rem",
-            lineHeight: 1.5,
-            textAlign: "center",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: "0.75rem",
+            height: "200px",
+            borderRadius: "12px",
+            background:
+              "linear-gradient(90deg, #f1f2f3 25%, rgba(138, 5, 255, 0.1) 50%, #f1f2f3 75%)",
+            backgroundSize: "200% 100%",
+            animation: "pictureTranslateShimmer 1.2s ease-in-out infinite",
           }}
-        >
-          <div style={{ fontSize: "1.75rem", opacity: 0.6 }}>🖼️</div>
-          <div style={{ color: "#4d4d4d" }}>{t("pictureTranslate.empty")}</div>
+        />
+        <div style={{ fontSize: "0.875rem", color: "#6d7175" }}>
+          {t("pictureTranslate.submitting")}
         </div>
-      );
-    }
-
-    if (isSubmitting) {
-      return (
-        <div style={{ display: "grid", gap: "0.75rem" }}>
-          <div
-            style={{
-              height: "200px",
-              borderRadius: "8px",
-              background: "linear-gradient(90deg, #f1f2f3 25%, rgba(138, 5, 255, 0.1) 50%, #f1f2f3 75%)",
-              backgroundSize: "200% 100%",
-              animation: "pictureTranslateShimmer 1.2s ease-in-out infinite",
-            }}
-          />
-          <div style={{ fontSize: "0.875rem", color: "#6d7175" }}>
-            {t("pictureTranslate.submitting")}
-          </div>
-          <style>
-            {`@keyframes pictureTranslateShimmer {
-              0% { background-position: 100% 0; }
-              100% { background-position: -100% 0; }
-            }`}
-          </style>
-        </div>
-      );
-    }
+        <style>
+          {`@keyframes pictureTranslateShimmer {
+            0% { background-position: 100% 0; }
+            100% { background-position: -100% 0; }
+          }`}
+        </style>
+      </div>
+    );
+  }
 
   if (resultErrorText && !translatedImage) {
     return (
       <div style={{ display: "grid", gap: "0.75rem" }}>
-        <div style={errorBoxStyle}>{resultErrorText}</div>
+        <div style={formErrorBoxStyle}>{resultErrorText}</div>
         <s-button
           type="button"
           variant="secondary"
@@ -106,29 +89,9 @@ export function PictureTranslateResultPanel() {
     );
   }
 
-    if (!translatedImage) {
-      return (
-        <div
-          style={{
-            padding: "2.5rem 1.5rem",
-            borderRadius: "8px",
-            background: "linear-gradient(180deg, #fafafa 0%, #f4f5f6 100%)",
-            border: "1px dashed #e3e3e3",
-            color: "#6b6b6b",
-            fontSize: "0.875rem",
-            lineHeight: 1.5,
-            textAlign: "center",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: "0.75rem",
-          }}
-        >
-          <div style={{ fontSize: "1.75rem", opacity: 0.6 }}>🖼️</div>
-          <div style={{ color: "#4d4d4d" }}>{t("pictureTranslate.empty")}</div>
-        </div>
-      );
-    }
+  if (!translatedImage) {
+    return <EmptyState message={t("pictureTranslate.empty")} />;
+  }
 
   return (
     <s-stack direction="block" gap="base">
@@ -157,9 +120,8 @@ export function PictureTranslateResultPanel() {
             maxWidth: "100%",
             maxHeight: "520px",
             objectFit: "contain",
-            borderRadius: "8px",
-            border: "1px solid #e3e3e3",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.02)"
+            borderRadius: "12px",
+            border: "1px solid rgba(44, 110, 203, 0.18)",
           }}
         />
       </button>
@@ -175,19 +137,19 @@ export function PictureTranslateResultPanel() {
           }}
         >
           <div>
-            <span style={{ fontWeight: 600, color: "#444" }}>
+            <span style={{ fontWeight: 600, color: "#202223" }}>
               {t("pictureTranslate.imageSourceSummary")}:{" "}
             </span>
             {resultMeta.imageSourceLabel}
           </div>
           <div>
-            <span style={{ fontWeight: 600, color: "#444" }}>
+            <span style={{ fontWeight: 600, color: "#202223" }}>
               {t("pictureTranslate.sourceLanguage")}:{" "}
             </span>
             {resultMeta.sourceLanguageLabel}
           </div>
           <div>
-            <span style={{ fontWeight: 600, color: "#444" }}>
+            <span style={{ fontWeight: 600, color: "#202223" }}>
               {t("pictureTranslate.targetLanguage")}:{" "}
             </span>
             {resultMeta.targetLanguageLabel}

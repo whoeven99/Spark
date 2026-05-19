@@ -21,6 +21,7 @@ import {
 } from "./chat/chatPageConstants";
 import { asideCardStyle } from "./chat/chatPageStyles";
 import { useChatStream } from "./chat/useChatStream";
+import { pageIntroBannerStyle } from "./pageUiStyles";
 
 const streamingAssistantBubbleShellStyle: CSSProperties = {
   borderRadius: "12px",
@@ -225,14 +226,10 @@ export function ChatPage() {
   return (
     <s-page heading={t("chat.pageTitle")}>
       <s-section heading={t("chat.sectionTitle")}>
-        <s-stack direction="inline" gap="base" alignItems="center" justifyContent="space-between">
-          <s-stack direction="inline" gap="base" alignItems="center">
-            <s-paragraph>
-              {t("chat.intro")}
-            </s-paragraph>
+        <s-stack direction="block" gap="base">
+          <s-stack direction="inline" gap="base" alignItems="center" justifyContent="space-between">
             <s-badge tone="success">{t("chat.assistantOnline")}</s-badge>
-          </s-stack>
-          <s-button
+            <s-button
             type="button"
             variant="secondary"
             onClick={() => {
@@ -244,7 +241,10 @@ export function ChatPage() {
           >
             {t("common.newChat")}
           </s-button>
-        </s-stack>
+          </s-stack>
+          <div style={pageIntroBannerStyle("chat", { marginBottom: "0" })}>
+            {t("chat.intro")}
+          </div>
 
         <div
           style={{
@@ -327,6 +327,7 @@ export function ChatPage() {
             <ChatInput onMessageSend={sendMessage} isSending={isStreaming} onAbort={abortStream} />
           </s-box>
         </div>
+        </s-stack>
       </s-section>
 
       <s-section slot="aside" heading={t("chat.tipsTitle")}>

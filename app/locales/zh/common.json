@@ -80,6 +80,7 @@
   },
   "billing": {
     "pageTitle": "计费与订阅",
+    "pageIntro": "查看 Token 用量、订阅套餐与按量购包。试用额度用完后可在此开通订阅或购买 Token 包。",
     "sectionUsage": "Token 用量",
     "sectionSubscription": "当前订阅",
     "sectionPlans": "订阅套餐",
@@ -355,6 +356,7 @@
   },
   "additional": {
     "pageTitle": "店铺运维诊断报告",
+    "pageIntro": "基于最近 7 天订单、库存与转化数据生成的店铺健康诊断。右侧可查看流量与投放相关建议。",
     "coreBoard": "核心看板（最近7天）",
     "shopLabel": "店铺：{{value}}",
     "updatedAtLabel": "更新时间：{{value}}",
@@ -399,6 +401,9 @@
   },
   "translation": {
     "pageTitle": "翻译任务",
+    "pageIntro": "创建 JSON Runtime 翻译任务并监控进度。选择目标语言与资源类型后提交，右侧可查看任务列表与运行状态。",
+    "resourceTypesLabel": "翻译资源类型",
+    "monitorAsideTitle": "任务监控",
     "createSectionTitle": "创建翻译任务",
     "targetLocale": "目标语言（target locale）",
     "sourceLocale": "源语言（source locale）",

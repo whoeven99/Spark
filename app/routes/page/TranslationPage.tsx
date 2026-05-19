@@ -6,6 +6,13 @@ import type { loader } from "../app.translation";
 import { JsonRuntimeTaskStatusPanel } from "../component/translation/JsonRuntimeTaskStatusPanel";
 import { TranslationMonitorCard } from "../component/translation/TranslationMonitorCard";
 import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../../server/translation/types";
+import {
+  PageSurface,
+  pageIntroBannerStyle,
+  stickyAsideColumnStyle,
+  twoColumnLayoutStyle,
+  twoColumnMainStyle,
+} from "./pageUiStyles";
 
 const RESOURCE_TYPE_OPTIONS = ALLOWED_TRANSLATABLE_RESOURCE_TYPES;
 
@@ -63,7 +70,6 @@ export function TranslationPage() {
         message?: string;
         error?: string;
       };
-      // 兼容部分情况下 payload.ok 缺失但响应 2xx 的场景，避免误报“创建失败(200)”。
       if (!response.ok || payload.ok === false) {
         shopify.toast.show(payload.error || t("translation.createFailed", { status: response.status }));
         return;
@@ -79,20 +85,16 @@ export function TranslationPage() {
     }
   };
 
-
   return (
     <s-page heading={t("translation.pageTitle")}>
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "1.5rem",
-          alignItems: "flex-start",
-        }}
-      >
-        <div style={{ flex: "1 1 360px", minWidth: 0 }}>
+      <div style={pageIntroBannerStyle("translation", { marginBottom: "1.5rem" })}>
+        {t("translation.pageIntro")}
+      </div>
+
+      <div style={twoColumnLayoutStyle}>
+        <div style={twoColumnMainStyle}>
           <s-stack direction="block" gap="large">
-            <s-section heading={t("translation.createSectionTitle")}>
+            <PageSurface title={t("translation.createSectionTitle")}>
               <s-stack direction="block" gap="base">
                 <s-text-field
                   label={t("translation.targetLocale")}
@@ -112,18 +114,30 @@ export function TranslationPage() {
                   onChange={(event) => setLimitPerType(Number(event.currentTarget.value) || 20)}
                   autocomplete="off"
                 />
-                <s-stack direction="inline" gap="small">
-                  {RESOURCE_TYPE_OPTIONS.map((type) => (
-                    <s-button
-                      key={type}
-                      type="button"
-                      variant={resourceTypes.includes(type) ? "primary" : "secondary"}
-                      onClick={() => handleToggleResourceType(type)}
-                    >
-                      {type}
-                    </s-button>
-                  ))}
-                </s-stack>
+                <div>
+                  <div
+                    style={{
+                      fontSize: "0.8125rem",
+                      fontWeight: 500,
+                      color: "#303030",
+                      marginBottom: "0.35rem",
+                    }}
+                  >
+                    {t("translation.resourceTypesLabel")}
+                  </div>
+                  <s-stack direction="inline" gap="small">
+                    {RESOURCE_TYPE_OPTIONS.map((type) => (
+                      <s-button
+                        key={type}
+                        type="button"
+                        variant={resourceTypes.includes(type) ? "primary" : "secondary"}
+                        onClick={() => handleToggleResourceType(type)}
+                      >
+                        {type}
+                      </s-button>
+                    ))}
+                  </s-stack>
+                </div>
                 <div>
                   <s-button
                     type="button"
@@ -135,25 +149,18 @@ export function TranslationPage() {
                   </s-button>
                 </div>
               </s-stack>
-            </s-section>
+            </PageSurface>
 
-            <s-section heading={t("translation.runtimeSectionTitle")}>
+            <PageSurface title={t("translation.runtimeSectionTitle")}>
               <JsonRuntimeTaskStatusPanel defaultShopName={loaderData.shop} />
-            </s-section>
+            </PageSurface>
           </s-stack>
         </div>
 
-        <div
-          style={{
-            flex: "0 1 400px",
-            width: "100%",
-            maxWidth: 440,
-            position: "sticky",
-            top: "1rem",
-            alignSelf: "flex-start",
-          }}
-        >
-          <TranslationMonitorCard defaultShopName={loaderData.shop} />
+        <div style={stickyAsideColumnStyle}>
+          <PageSurface>
+            <TranslationMonitorCard defaultShopName={loaderData.shop} />
+          </PageSurface>
         </div>
       </div>
     </s-page>
