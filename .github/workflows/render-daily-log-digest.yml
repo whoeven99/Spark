@@ -33,11 +33,14 @@ jobs:
       - name: Run daily log digest
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_APIKEY }}
-          RENDER_SERVICE_ID: srv-d7j6ogaqqhas739in900
+          RENDER_SERVICE_ID: srv-d84veasvikkc739fk0f0
           RENDER_OWNER_ID: ${{ secrets.RENDER_OWNER_ID }}
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
           DIGEST_LOOKBACK_HOURS: ${{ github.event.inputs.lookback_hours }}
           DIGEST_SKIP_FEISHU: ${{ github.event.inputs.skip_feishu || 'false' }}
+          DIGEST_QUERY_DELAY_MS: "3000"
+          DIGEST_PAGE_DELAY_MS: "800"
+          DIGEST_MAX_PAGES: "8"
         run: node scripts/render-daily-log-digest.cjs
 
       - name: Upload digest artifacts
