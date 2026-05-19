@@ -14,7 +14,7 @@ import {
   type BillingIntervalView,
 } from "../../lib/billingPlanUi";
 import styles from "../component/billing/billingPage.module.css";
-import { pageIntroBannerStyle } from "./pageUiStyles";
+import { pageContentStyle, pageIntroBannerStyle } from "./pageUiStyles";
 
 const EMPTY = "-";
 
@@ -284,7 +284,7 @@ export function BillingPage() {
 
   return (
     <s-page heading={t("billing.pageTitle")}>
-      <div className={styles.page}>
+      <div style={pageContentStyle}>
         <div style={pageIntroBannerStyle("billing", { marginBottom: "1.25rem" })}>
           {t("billing.pageIntro")}
         </div>

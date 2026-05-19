@@ -8,6 +8,7 @@ import { TranslationMonitorCard } from "../component/translation/TranslationMoni
 import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../../server/translation/types";
 import {
   PageSurface,
+  pageContentStyle,
   pageIntroBannerStyle,
   stickyAsideColumnStyle,
   twoColumnLayoutStyle,
@@ -91,6 +92,7 @@ export function TranslationPage() {
         {t("translation.pageIntro")}
       </div>
 
+      <div style={pageContentStyle}>
       <div style={twoColumnLayoutStyle}>
         <div style={twoColumnMainStyle}>
           <s-stack direction="block" gap="large">
@@ -162,6 +164,7 @@ export function TranslationPage() {
             <TranslationMonitorCard defaultShopName={loaderData.shop} />
           </PageSurface>
         </div>
+      </div>
       </div>
     </s-page>
   );

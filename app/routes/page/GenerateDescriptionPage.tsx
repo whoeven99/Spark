@@ -10,6 +10,7 @@ import { GenerateDescriptionResultEditor } from "../component/generateDescriptio
 import {
   PageSurface,
   formErrorBoxStyle,
+  pageContentStyle,
   pageEmptyStateStyle,
   pageIntroBannerStyle,
   twoColumnLayoutStyle,
@@ -80,13 +81,15 @@ export function GenerateDescriptionPage() {
         </s-banner>
       ) : null}
 
+      <div style={pageIntroBannerStyle("render", { marginBottom: "1.5rem" })}>
+        {t("generate.intro")}
+      </div>
+
+      <div style={pageContentStyle}>
       <div style={twoColumnLayoutStyle}>
         <div style={twoColumnMainStyle}>
           <PageSurface title={t("generate.sectionTitle")}>
             <s-stack direction="block" gap="base">
-              <div style={pageIntroBannerStyle("render", { marginBottom: "0" })}>
-                {t("generate.intro")}
-              </div>
               <ProductSelector
                 locationSearch={search}
                 selected={selectedProduct}
@@ -242,6 +245,7 @@ export function GenerateDescriptionPage() {
             )}
           </PageSurface>
         </div>
+      </div>
       </div>
     </s-page>
   );

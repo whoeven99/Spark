@@ -5,6 +5,7 @@ import { PictureTranslateProvider } from "../component/pictureTranslate/pictureT
 import { PictureTranslateResultPanel } from "../component/pictureTranslate/PictureTranslateResultPanel";
 import {
   PageSurface,
+  pageContentStyle,
   pageIntroBannerStyle,
   twoColumnLayoutStyle,
   twoColumnMainStyle,
@@ -30,6 +31,7 @@ export function PictureTranslatePage() {
           {t("pictureTranslate.pageSubtitle")}
         </div>
 
+        <div style={pageContentStyle}>
         <div style={twoColumnLayoutStyle}>
           <div style={twoColumnMainStyle}>
             <PageSurface title={t("pictureTranslate.sectionConfig")}>
@@ -42,6 +44,7 @@ export function PictureTranslatePage() {
               <PictureTranslateResultPanel />
             </PageSurface>
           </div>
+        </div>
         </div>
       </s-page>
     </PictureTranslateProvider>
