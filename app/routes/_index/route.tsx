@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { redirect, Form, useLoaderData } from "react-router";
 
+import { buildEmbeddedAppPath, getAppEntryConfig } from "../../config/appEntry.server";
 import { login } from "../../shopify.server";
 
 import styles from "./styles.module.css";
@@ -9,7 +10,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
 
   if (url.searchParams.get("shop")) {
-    throw redirect(`/app?${url.searchParams.toString()}`);
+    const { home } = getAppEntryConfig();
+    throw redirect(buildEmbeddedAppPath(home, request));
   }
 
   return { showForm: Boolean(login) };

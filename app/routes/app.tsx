@@ -18,7 +18,11 @@ import {
 } from "../i18n/config";
 import { detectRequestLocale } from "../i18n/detector.server";
 
-import { authenticate } from "../shopify.server";
+import { debugAuthenticateAdmin } from "../server/debug/authenticateAdminDebug.server";
+import {
+  getAppEntryConfig,
+  type NavItemKey,
+} from "../config/appEntry.server";
 
 /** 语言下拉选项展示：每种语言用自身书写形式，不随 UI 语言变化，也不走 t()。 */
 const LANGUAGE_NATIVE_LABELS: Record<SupportedLocale, string> = {
@@ -33,16 +37,42 @@ const LANGUAGE_NATIVE_LABELS: Record<SupportedLocale, string> = {
   pt: "Português",
 };
 
+const NAV_ITEMS: Record<
+  NavItemKey,
+  {
+    href: string;
+    labelKey:
+      | "nav.aiAssistant"
+      | "nav.diagnosis"
+      | "nav.translation"
+      | "nav.generateDescription"
+      | "nav.pictureTranslate";
+  }
+> = {
+  chat: { href: "/app", labelKey: "nav.aiAssistant" },
+  diagnosis: { href: "/app/additional", labelKey: "nav.diagnosis" },
+  translation: { href: "/app/translation", labelKey: "nav.translation" },
+  "generate-description": {
+    href: "/app/generate-description",
+    labelKey: "nav.generateDescription",
+  },
+  "picture-translate": {
+    href: "/app/picture-translate",
+    labelKey: "nav.pictureTranslate",
+  },
+};
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+  await debugAuthenticateAdmin(request, "app.shell");
   const locale = detectRequestLocale(request);
+  const nav = getAppEntryConfig().nav;
 
   // eslint-disable-next-line no-undef
-  return { apiKey: process.env.SHOPIFY_API_KEY || "", locale };
+  return { apiKey: process.env.SHOPIFY_API_KEY || "", locale, nav };
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  await authenticate.admin(request);
+  await debugAuthenticateAdmin(request, "app.shell.action");
 
   const url = new URL(request.url);
   if (!url.searchParams.has("setLocale")) {
@@ -113,12 +143,12 @@ function LanguageSelector({ locale }: { locale: SupportedLocale }) {
 }
 
 export default function App() {
-  const { apiKey, locale } = useLoaderData<typeof loader>();
+  const { apiKey, locale, nav } = useLoaderData<typeof loader>();
 
   return (
     <AppI18nProvider locale={locale}>
       <AppProvider embedded apiKey={apiKey}>
-        <AppNav />
+        <AppNav nav={nav} />
         <div
           style={{
             display: "flex",
@@ -148,15 +178,18 @@ export default function App() {
   );
 }
 
-function AppNav() {
+function AppNav({ nav }: { nav: readonly NavItemKey[] }) {
   const { t } = useTranslation();
   return (
     <s-app-nav>
-      <s-link href="/app">{t("nav.aiAssistant")}</s-link>
-      <s-link href="/app/additional">{t("nav.diagnosis")}</s-link>
-      <s-link href="/app/translation">{t("nav.translation")}</s-link>
-      <s-link href="/app/generate-description">{t("nav.generateDescription")}</s-link>
-      <s-link href="/app/picture-translate">{t("nav.pictureTranslate")}</s-link>
+      {nav.map((item) => {
+        const config = NAV_ITEMS[item];
+        return (
+          <s-link key={item} href={config.href}>
+            {t(config.labelKey)}
+          </s-link>
+        );
+      })}
     </s-app-nav>
   );
 }
