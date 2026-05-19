@@ -35,6 +35,29 @@ model Session {
   refreshTokenExpires DateTime?
 }
 
+/// 卫星 App（generate-description）Session，与主 App `Session` 同库分表。
+model GenerateDescriptionSession {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+
+  @@map("Session_generate_description")
+}
+
 model Suggestion {
   id        String   @id @default(cuid())
   shop      String

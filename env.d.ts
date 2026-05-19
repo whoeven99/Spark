@@ -8,4 +8,6 @@ interface ImportMetaEnv {
   readonly TURSO_PROD_DATABASE_URL?: string;
   readonly TURSO_PROD_AUTH_TOKEN?: string;
   readonly TURSO_TARGET?: "test" | "prod";
+  readonly APP_ENTRY?: string;
+  readonly SESSION_PRISMA_TABLE?: "session" | "generateDescriptionSession";
 }
