@@ -215,7 +215,16 @@ export function ProductSelector(props: ProductSelectorProps) {
                     lineHeight: 1.35,
                   }}
                 >
-                  {row.title}
+                  <div>{row.title}</div>
+                  <div
+                    style={{
+                      marginTop: "0.1rem",
+                      fontSize: "0.75rem",
+                      color: "#6d7175",
+                    }}
+                  >
+                    {row.id}
+                  </div>
                 </div>
               </div>
               </li>

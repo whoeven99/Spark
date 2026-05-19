@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
-import type { ChatMessage } from "../../../lib/chatMessage";
+import type { ChatMessage, ChatMessageAttachment } from "../../../lib/chatMessage";
+import { coerceChatMessageAttachments } from "../../../lib/chatMessage";
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 
 type StreamChunk =
@@ -16,6 +17,7 @@ type StreamChunk =
         uiPayloads?: {
           translationTaskForm?: unknown;
           generateDescriptionCardPayload?: unknown;
+          attachments?: unknown;
         };
       };
     };
@@ -24,6 +26,7 @@ export type ChatStreamFinishPayload = {
   aborted: boolean;
   reply: string;
   translationTaskForm?: unknown;
+  attachments?: ChatMessageAttachment[];
   generateDescriptionCard?: boolean;
   generateDescriptionCardPayload?: unknown;
   httpStatus?: number;
@@ -32,6 +35,7 @@ export type ChatStreamFinishPayload = {
 type Snapshot = {
   reply: string;
   translationTaskForm?: unknown;
+  attachments: ChatMessageAttachment[];
   generateDescriptionCard: boolean;
   generateDescriptionCardPayload?: unknown;
 };
@@ -47,6 +51,7 @@ export function useChatStream() {
   const snapshotRef = useRef<Snapshot>({
     reply: "",
     translationTaskForm: undefined,
+    attachments: [],
     generateDescriptionCard: false,
     generateDescriptionCardPayload: undefined,
   });
@@ -55,6 +60,7 @@ export function useChatStream() {
     snapshotRef.current = {
       reply: "",
       translationTaskForm: undefined,
+      attachments: [],
       generateDescriptionCard: false,
       generateDescriptionCardPayload: undefined,
     };
@@ -122,9 +128,13 @@ export function useChatStream() {
           setAwaitingFirstChunk(false);
         };
 
-        while (true) {
+        let reading = true;
+        while (reading) {
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done) {
+            reading = false;
+            break;
+          }
 
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n\n");
@@ -178,6 +188,10 @@ export function useChatStream() {
                   snapshotRef.current.translationTaskForm = normalized;
                   setStreamingTranslationForm(normalized);
                 }
+                if (ui?.attachments) {
+                  snapshotRef.current.attachments =
+                    coerceChatMessageAttachments(ui.attachments);
+                }
                 if (ui?.generateDescriptionCardPayload) {
                   snapshotRef.current.generateDescriptionCard = true;
                   snapshotRef.current.generateDescriptionCardPayload =
@@ -190,6 +204,7 @@ export function useChatStream() {
                   aborted: false,
                   reply,
                   translationTaskForm: snapshotRef.current.translationTaskForm,
+                  attachments: snapshotRef.current.attachments,
                   generateDescriptionCard: snapshotRef.current.generateDescriptionCard,
                   generateDescriptionCardPayload:
                     snapshotRef.current.generateDescriptionCardPayload,
@@ -206,6 +221,7 @@ export function useChatStream() {
             aborted: false,
             reply: snapshotRef.current.reply,
             translationTaskForm: snapshotRef.current.translationTaskForm,
+            attachments: snapshotRef.current.attachments,
             generateDescriptionCard: snapshotRef.current.generateDescriptionCard,
             generateDescriptionCardPayload:
               snapshotRef.current.generateDescriptionCardPayload,
@@ -218,6 +234,7 @@ export function useChatStream() {
             aborted: true,
             reply: snapshotRef.current.reply,
             translationTaskForm: snapshotRef.current.translationTaskForm,
+            attachments: snapshotRef.current.attachments,
             generateDescriptionCard: snapshotRef.current.generateDescriptionCard,
             generateDescriptionCardPayload:
               snapshotRef.current.generateDescriptionCardPayload,
@@ -231,6 +248,7 @@ export function useChatStream() {
             aborted: false,
             reply: fallback,
             translationTaskForm: snapshotRef.current.translationTaskForm,
+            attachments: snapshotRef.current.attachments,
             generateDescriptionCard: snapshotRef.current.generateDescriptionCard,
             generateDescriptionCardPayload:
               snapshotRef.current.generateDescriptionCardPayload,
@@ -243,6 +261,7 @@ export function useChatStream() {
             aborted: controller.signal.aborted,
             reply: snapshotRef.current.reply,
             translationTaskForm: snapshotRef.current.translationTaskForm,
+            attachments: snapshotRef.current.attachments,
             generateDescriptionCard: snapshotRef.current.generateDescriptionCard,
             generateDescriptionCardPayload:
               snapshotRef.current.generateDescriptionCardPayload,

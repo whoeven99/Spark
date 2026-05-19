@@ -32,6 +32,12 @@ describe("searchProducts", () => {
                       id: "gid://shopify/Product/99",
                       title: "Running Shoes",
                       featuredImage: { url: "https://cdn/j.jpg" },
+                      images: {
+                        edges: [
+                          { node: { url: "https://cdn/1.jpg", altText: "front" } },
+                          { node: { url: "https://cdn/2.jpg", altText: null } },
+                        ],
+                      },
                     },
                   },
                   { node: { id: "", title: "skip" } },
@@ -48,6 +54,10 @@ describe("searchProducts", () => {
         id: "gid://shopify/Product/99",
         title: "Running Shoes",
         featuredImageUrl: "https://cdn/j.jpg",
+        images: [
+          { url: "https://cdn/1.jpg", altText: "front" },
+          { url: "https://cdn/2.jpg", altText: null },
+        ],
       },
     ]);
   });

@@ -16,6 +16,7 @@ export function buildQuickPrompts(t: (key: string) => string): string[] {
     t("chat.quickPromptCampaign"),
     t("chat.quickPromptCreateTranslation"),
     t("chat.quickPromptGenerateDescription"),
+    t("chat.quickPromptPictureTranslate"),
   ];
 }
 
@@ -25,6 +26,7 @@ export const quickPromptTones: Array<"neutral" | "auto" | "critical"> = [
   "critical",
   "auto",
   "neutral",
+  "auto",
 ];
 
 export const adProviders: ProviderItem[] = [

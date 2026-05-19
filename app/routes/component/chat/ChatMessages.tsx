@@ -1,7 +1,9 @@
 import type { CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import type { ChatMessage } from "../../../lib/chatMessage";
 import { ChatMessageContent } from "./ChatMessageContent";
 import { GenerateDescriptionChatCard } from "./GenerateDescriptionChatCard";
+import { PictureTranslateChatCard } from "./PictureTranslateChatCard";
 import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard";
 
 type ChatMessagesProps = {
@@ -10,12 +12,18 @@ type ChatMessagesProps = {
     messageIndex: number,
     detail: { jobId?: string; message: string },
   ) => void;
+  onPictureTranslateCardSuccess: (
+    messageIndex: number,
+    detail: { translatedImage: string; message: string },
+  ) => void;
 };
 
 export function ChatMessages({
   messages,
   onTranslationCardSuccess,
+  onPictureTranslateCardSuccess,
 }: ChatMessagesProps) {
+  const { t } = useTranslation();
   return (
     <s-stack direction="block" gap="base">
       {messages.map((item, index) => {
@@ -23,7 +31,18 @@ export function ChatMessages({
           item.role === "assistant" && Boolean(item.translationTaskForm);
         const hasGenerateDescriptionCard =
           item.role === "assistant" && Boolean(item.generateDescriptionCard);
-        const hasEmbeddedCard = hasTranslationCard || hasGenerateDescriptionCard;
+        const hasPictureTranslateCard =
+          item.role === "assistant" && Boolean(item.pictureTranslateCard);
+        const imageAttachments =
+          item.role === "assistant"
+            ? item.attachments?.filter((attachment) => attachment.type === "image") ?? []
+            : [];
+        const hasImageAttachments = imageAttachments.length > 0;
+        const hasEmbeddedCard =
+          hasTranslationCard ||
+          hasGenerateDescriptionCard ||
+          hasPictureTranslateCard ||
+          hasImageAttachments;
 
         const bubbleShellStyle: CSSProperties = {
           borderRadius: "12px",
@@ -68,6 +87,46 @@ export function ChatMessages({
                     )}
                   </div>
 
+                  {hasImageAttachments ? (
+                    <div style={{ marginTop: "0.85rem" }}>
+                      <s-stack direction="block" gap="small">
+                        {imageAttachments.map((attachment, attachmentIndex) => (
+                          <div
+                            key={`${attachment.url}-${attachmentIndex}`}
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "0.45rem",
+                            }}
+                          >
+                            <img
+                              src={attachment.url}
+                              alt={attachment.alt ?? t("pictureTranslate.translatedImageAlt")}
+                              loading="lazy"
+                              style={{
+                                display: "block",
+                                maxWidth: "100%",
+                                maxHeight: "520px",
+                                objectFit: "contain",
+                                borderRadius: "10px",
+                                border: "1px solid rgba(44, 110, 203, 0.18)",
+                              }}
+                            />
+                            <a
+                              href={attachment.url}
+                              download
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ fontSize: "0.875rem" }}
+                            >
+                              {t("pictureTranslate.downloadImage")}
+                            </a>
+                          </div>
+                        ))}
+                      </s-stack>
+                    </div>
+                  ) : null}
+
                   {hasTranslationCard && item.translationTaskForm ? (
                     <div style={{ marginTop: "0.85rem" }}>
                       <TranslationTaskChatCard
@@ -85,6 +144,17 @@ export function ChatMessages({
                       <GenerateDescriptionChatCard
                         embedded
                         initialResult={item.generateDescriptionCardPayload}
+                      />
+                    </div>
+                  ) : null}
+
+                  {hasPictureTranslateCard ? (
+                    <div style={{ marginTop: "0.85rem" }}>
+                      <PictureTranslateChatCard
+                        embedded
+                        onSuccess={(detail) =>
+                          onPictureTranslateCardSuccess(index, detail)
+                        }
                       />
                     </div>
                   ) : null}

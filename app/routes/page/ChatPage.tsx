@@ -2,7 +2,11 @@ import type { CSSProperties } from "react";
 import { useState, useRef, useEffect } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
-import type { ChatMessage, GenerateDescriptionCardPayload } from "../../lib/chatMessage";
+import type {
+  ChatMessage,
+  ChatMessageAttachment,
+  GenerateDescriptionCardPayload,
+} from "../../lib/chatMessage";
 import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { coerceTranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { ChatMessages } from "../component/chat/ChatMessages";
@@ -34,6 +38,7 @@ export function ChatPage() {
   const quickPrompts = buildQuickPrompts(t);
   const generateDescriptionQuickPrompt = t("chat.quickPromptGenerateDescription");
   const createTranslationQuickPrompt = t("chat.quickPromptCreateTranslation");
+  const pictureTranslateQuickPrompt = t("chat.quickPromptPictureTranslate");
   const {
     isStreaming,
     awaitingFirstChunk,
@@ -86,6 +91,20 @@ export function ChatPage() {
     ]);
   };
 
+  const openPictureTranslateCard = () => {
+    if (isStreaming) return;
+    console.info("[PictureTranslateButton] click open picture translate card");
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: pictureTranslateQuickPrompt },
+      {
+        role: "assistant",
+        content: t("chat.assistantOpenPictureTranslateCard"),
+        pictureTranslateCard: true,
+      },
+    ]);
+  };
+
   const scrollToBottom = () => {
     setTimeout(() => {
       const container = messagesContainerRef.current;
@@ -128,6 +147,9 @@ export function ChatPage() {
             {
               role: "assistant",
               content: assistantText,
+              ...(p.attachments?.length
+                ? { attachments: p.attachments as ChatMessageAttachment[] }
+                : {}),
               ...(p.translationTaskForm
                 ? { translationTaskForm: p.translationTaskForm as TranslationTaskFormPayload }
                 : {}),
@@ -167,6 +189,34 @@ export function ChatPage() {
         content: detail.jobId
           ? t("chat.translationSubmittedWithId", { jobId: detail.jobId })
           : t("chat.translationSubmitted"),
+      });
+      return next;
+    });
+  };
+
+  const succeedPictureTranslateCard = (
+    messageIndex: number,
+    detail: { translatedImage: string; message: string },
+  ) => {
+    shopify.toast.show(detail.message);
+    setMessages((prev) => {
+      const next = prev.map((m, i): ChatMessage => {
+        if (i !== messageIndex || m.role !== "assistant") return m;
+        return {
+          role: "assistant",
+          content: m.content,
+        };
+      });
+      next.push({
+        role: "assistant",
+        content: t("chat.pictureTranslateCompleted"),
+        attachments: [
+          {
+            type: "image",
+            url: detail.translatedImage,
+            alt: t("pictureTranslate.translatedImageAlt"),
+          },
+        ],
       });
       return next;
     });
@@ -220,6 +270,8 @@ export function ChatPage() {
                         openGenerateDescriptionCard();
                       } else if (prompt === createTranslationQuickPrompt) {
                         openTranslationTaskCard();
+                      } else if (prompt === pictureTranslateQuickPrompt) {
+                        openPictureTranslateCard();
                       } else {
                         sendMessage(prompt);
                       }
@@ -236,7 +288,11 @@ export function ChatPage() {
           <div style={{ flex: 1, minHeight: 0 }}>
             <div ref={messagesContainerRef} style={{ height: "100%", overflowY: "auto" }}>
               <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
-                <ChatMessages messages={messages} onTranslationCardSuccess={succeedTranslationCard} />
+                <ChatMessages
+                  messages={messages}
+                  onTranslationCardSuccess={succeedTranslationCard}
+                  onPictureTranslateCardSuccess={succeedPictureTranslateCard}
+                />
                 {isStreaming ? (
                   <div
                     style={{

@@ -39,7 +39,15 @@ const LANGUAGE_NATIVE_LABELS: Record<SupportedLocale, string> = {
 
 const NAV_ITEMS: Record<
   NavItemKey,
-  { href: string; labelKey: "nav.aiAssistant" | "nav.diagnosis" | "nav.translation" | "nav.generateDescription" }
+  {
+    href: string;
+    labelKey:
+      | "nav.aiAssistant"
+      | "nav.diagnosis"
+      | "nav.translation"
+      | "nav.generateDescription"
+      | "nav.pictureTranslate";
+  }
 > = {
   chat: { href: "/app", labelKey: "nav.aiAssistant" },
   diagnosis: { href: "/app/additional", labelKey: "nav.diagnosis" },
@@ -47,6 +55,10 @@ const NAV_ITEMS: Record<
   "generate-description": {
     href: "/app/generate-description",
     labelKey: "nav.generateDescription",
+  },
+  "picture-translate": {
+    href: "/app/picture-translate",
+    labelKey: "nav.pictureTranslate",
   },
 };
 

@@ -14,6 +14,14 @@ const PRODUCT_SEARCH_QUERY = `#graphql
           featuredImage {
             url
           }
+          images(first: 20) {
+            edges {
+              node {
+                url
+                altText
+              }
+            }
+          }
         }
       }
     }
@@ -28,6 +36,14 @@ type ProductSearchQueryResponse = {
           id?: string;
           title?: string | null;
           featuredImage?: { url?: string | null } | null;
+          images?: {
+            edges?: Array<{
+              node?: {
+                url?: string | null;
+                altText?: string | null;
+              };
+            }>;
+          } | null;
         };
       }>;
     } | null;
@@ -81,10 +97,19 @@ export async function searchProducts(
       if (!id) continue;
       const title = (node?.title ?? "").trim() || "未命名商品";
       const url = node?.featuredImage?.url?.trim();
+      const images = (node?.images?.edges ?? [])
+        .map((edge) => {
+          const imageUrl = edge?.node?.url?.trim();
+          if (!imageUrl) return null;
+          const altText = edge?.node?.altText?.trim() || null;
+          return { url: imageUrl, altText };
+        })
+        .filter((image): image is { url: string; altText: string | null } => image !== null);
       out.push({
         id,
         title,
         featuredImageUrl: url ? url : null,
+        images,
       });
     }
     return out;

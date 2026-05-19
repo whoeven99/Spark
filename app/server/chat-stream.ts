@@ -41,7 +41,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   try {
-    const { admin } = await authenticate.admin(request);
+    const { admin, session } = await authenticate.admin(request);
     
     // TODO: 从数据库读取当前商店/用户的画像数据
     // const userProfile = await db.userProfile.findUnique({ where: { shop: session?.shop } });
@@ -61,7 +61,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     const stream = await invokeChatAgentStream({
       messages: agentMessages,
-      context: { admin, profile: dummyProfile },
+      context: { admin, profile: dummyProfile, shop: session?.shop },
       config: langsmithTracer ? { callbacks: [langsmithTracer] } : undefined,
     });
 

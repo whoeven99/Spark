@@ -37,6 +37,7 @@
   - `app/routes/app.additional.tsx`：诊断报告页。
   - `app/routes/app.translation.tsx`：翻译入口页（嵌入 `TranslationPage`）。
   - `app/routes/app.generate-description.tsx`：生成商品描述独立页（嵌入 `GenerateDescriptionPage`，路径 `/app/generate-description`）。
+  - `app/routes/app.picture-translate.tsx`：图片翻译独立页（嵌入 `PictureTranslatePage`，路径 `/app/picture-translate`）。
 - AI 聊天路由：
   - `app/routes/chat.ts` -> 转发到 `app/server/chat.ts` 的 action。
 - 授权配置路由（均需 `authenticate.admin`）：
@@ -45,6 +46,7 @@
 - 反馈路由：
   - `app.feedback.suggestion.tsx`：`POST` 校验后 **`prisma.suggestion.create`** 写入 Turso（字段 `shop`、`content`，最多 2000 字）；前端从 `ChatPage` 提交至 `/app/feedback/suggestion`。
 - **生成商品描述**：`POST /api/generate-description`（`api.generate-description.ts`）与 `POST /app/generate-description`（同上页面 action），服务端逻辑见 `app/server/generateDescription/generateDescriptionHttp.server.ts`；**写回 Shopify 商品标题与描述**：`POST /api/update-product-description`（`api.update-product-description.ts`），服务端见 `app/server/generateDescription/updateProductDescriptionHttp.server.ts` 与 `services/updateProductDescriptionService.ts`。AI Assistant 通过工具 `generate_product_description`（`app/server/ai/tools/implementations/generateDescriptionTool.ts`）调用同一套 `services/generateDescriptionService.ts`。
+- **整图翻译（火山 + Aidge，对齐 Spring `POST /pcUserPic/translatePic`）**：`POST /api/picture-translate`（`api.picture-translate.ts`），服务端见 `app/server/pictureTranslate/**`。`modelType=1` 仅 Aidge、`modelType=2` 仅火山（不做交叉 fallback）。AI 聊天工具 `picture_translate` 按语言范围自动路由：**重叠范围优先火山**，仅 Aidge 支持的语言走 Aidge，均不支持则不译。与 Spring 的 **PC 用户点数 / `APP_PIC_FEE` 扣费** 未对齐：默认 **noop**；可设 `PICTURE_TRANSLATE_BILLING_STRICT=true` 硬阻断。
 - 翻译相关 HTTP 路由（文件位于 `app/routes/`，URL 与 React Router 扁平路由约定一致）：
   - **`GET /api/translate/v3/json-runtime-tasks`**：`api.translate.v3.json-runtime-tasks.ts`，当前店铺 JSON Runtime 任务列表（Cosmos）。
   - **`GET /api/translate/v3/json-runtime-task-detail`**：`api.translate.v3.json-runtime-task-detail.ts`，任务详情；默认转发 **`AGENT_TASK_BASE_URL`** 下的 Java `/translate/v3/jsonRuntimeTaskDetail`；若设置 **`JSON_RUNTIME_TASK_DETAIL_SOURCE=local`**，则在 Spark 进程内聚合 Cosmos / Redis / Blob（见该文件与 `jsonRuntimeTaskDetail.server.ts`）。
@@ -91,6 +93,7 @@
 - 现状：
   - 广告凭证已在 DB 中托管（Turso）；字段校验与脱敏展示仍应注意。
   - 物流仍为本地 JSON；未做加密存储、KMS。
+- 整图翻译（`/api/picture-translate`）：**未**接入 Spring PC 用户表与 **`APP_PIC_FEE`（2000 点）** 扣费逻辑；默认行为为 **noop**（不扣费、仍返回译图 URL），并在日志中打 `[PictureTranslate][HTTP] Billing noop` 前缀说明；需要「未对齐扣费则禁止译图」时使用 `PICTURE_TRANSLATE_BILLING_STRICT=true`。
 - 安全建议：
   - 敏感字段生产环境优先 KMS / 字段级加密；`.data` 目录禁止提交到仓库。
 
@@ -131,6 +134,12 @@
 - 翻译详情代理：
   - `AGENT_TASK_BASE_URL`（可选；未设时使用代码内默认 Render 基址）
   - `JSON_RUNTIME_TASK_DETAIL_SOURCE`：设为 `local` 时详情由 Spark 本机聚合，否则走 AgentTask
+- 整图翻译（火山 `TranslateImage` + Aidge IOP + Azure Blob，见 `app/server/pictureTranslate/`）：
+  - 火山：`HUOSHAN_API_KEY`、`HUOSHAN_API_SECRET`；兼容 `VOLC_ACCESSKEY`、`VOLC_SECRETKEY`
+  - Aidge：`AIDGE_ACCESS_KEY_ID`（或 `AIDGE_ACCESS_KEY_NAME`）、`AIDGE_ACCESS_KEY_SECRET`；`AIDGE_BASE_URL`（默认 `https://cn-api.aidc-ai.com`）；`AIDGE_IMAGE_TRANSLATE_PATH`（默认 `/ai/image/translation`）
+  - 可选：`AIDGE_REQUEST_TIMEOUT_MS`（默认 `30000`）、`AIDGE_IOP_TRIAL=true`（试用请求头）、`AIDGE_PARTNER_ID`（默认 `iop`）
+  - 可选：`PICTURE_TRANSLATE_IMAGE_FETCH_CONNECT_MS`、`PICTURE_TRANSLATE_IMAGE_FETCH_READ_MS`（毫秒，默认各 `5000`）
+  - 可选：`PICTURE_TRANSLATE_BLOB_SAS_TTL_MINUTES`、`PICTURE_TRANSLATE_BILLING_STRICT`
 
 ## 11. 文案与交互约定
 - 角色命名统一使用：`AI Assistant`。
@@ -146,6 +155,7 @@
 - 改诊断指标：`app/routes/app.additional.tsx`（含查询、阈值、文案）。
 - 改广告 OAuth 配置字段：`app/routes/app.ads.*.config.tsx` + `app/server/adAuthCredentialStore.server.ts`（及 Meta 的 `adsCredentialStore.server.ts`）；改物流：`app/routes/app.logistics.*.config.tsx` + `app/server/logisticsCredentialStore.server.ts`。
 - 改生成商品描述页或 API：`app/routes/app.generate-description.tsx`、`app/routes/page/GenerateDescriptionPage.tsx`、`app/routes/component/generateDescription/GenerateDescriptionResultEditor.tsx`、`app/routes/api.generate-description.ts`、`app/routes/api.update-product-description.ts`、`app/server/generateDescription/**`、`app/hooks/useGenerateDescription.ts`、`app/server/ai/tools/implementations/generateDescriptionTool.ts`。
+- 改整图翻译 API / 双引擎路由：`app/routes/api.picture-translate.ts`、`app/server/pictureTranslate/**`、`app/server/ai/skills/pictureTranslate/**`。
 - 改翻译创建/流水线/Cosmos 文档：`app/server/translation/*`（先读 `agent.md`）；改翻译 UI：`app/routes/page/TranslationPage.tsx`、`app/routes/component/translation/*`；改 API：`app/routes/api.translate.v3.*.ts`。
 
 ## 13. 改动边界与风险提示

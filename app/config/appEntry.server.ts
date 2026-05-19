@@ -2,7 +2,8 @@ export type AppEntry =
   | "chat"
   | "diagnosis"
   | "translation"
-  | "generate-description";
+  | "generate-description"
+  | "picture-translate";
 
 export type NavItemKey = AppEntry;
 
@@ -16,7 +17,13 @@ type AppEntryConfig = {
 const APP_ENTRY_CONFIGS = {
   chat: {
     home: "/app",
-    nav: ["chat", "diagnosis", "translation", "generate-description"],
+    nav: [
+      "chat",
+      "diagnosis",
+      "translation",
+      "generate-description",
+      "picture-translate",
+    ],
     sessionPrismaTable: "session",
   },
   diagnosis: {
@@ -33,6 +40,11 @@ const APP_ENTRY_CONFIGS = {
     home: "/app/generate-description",
     nav: ["generate-description"],
     sessionPrismaTable: "generateDescriptionSession",
+  },
+  "picture-translate": {
+    home: "/app/picture-translate",
+    nav: ["picture-translate"],
+    sessionPrismaTable: "session",
   },
 } as const satisfies Record<AppEntry, AppEntryConfig>;
 

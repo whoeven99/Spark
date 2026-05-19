@@ -29,6 +29,7 @@ export type StreamChunk =
         uiPayloads?: {
           translationTaskForm?: unknown;
           generateDescriptionCardPayload?: unknown;
+          attachments?: unknown;
         };
       };
     };
