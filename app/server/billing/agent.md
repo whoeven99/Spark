@@ -1,5 +1,22 @@
 # 计费模块约定
 
+改动本目录、`app/server/tokenUsage/`、计费路由或 Webhook 前请先读本文档；仓库总览见根目录 `PROJECT_CONTEXT.md` 第 5 节。
+
+## 模块入口（按职责）
+
+| 路径 | 职责 |
+|------|------|
+| `index.server.ts` | 对外导出（context、checkout、webhook、gateway） |
+| `billingContext.server.ts` | 加载账户/订阅快照；首次访问可 `grantProductTrialIfEligible` |
+| `requireBilling.server.ts` | `requireBillingAccess`、`billingErrorToResponse` |
+| `billingActions.server.ts` | 订阅 / 按量包结账（返回 Shopify `confirmationUrl`） |
+| `gateway/` | `getBillingGateway`：Shopify GraphQL 或 `noop` |
+| `subscription/` | 开通、续费、`app_subscriptions/update` webhook |
+| `purchase/` | 按量购包、`purchases_one_time/update` webhook |
+| `account/` | `ensureAccount`、`grantTrial` |
+| `plans/planCatalog.server.ts` | 读 `PlanCatalog` |
+| `../tokenUsage/` | AI 调用后累加 `usedTokens`（`recordTokenUsage`）；余额见 `accountBalance.server.ts` 的 `getAvailableTokens` / `hasTokenQuota` |
+
 ## 环境变量
 
 | 变量 | 说明 |
