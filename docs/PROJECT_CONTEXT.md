@@ -163,7 +163,7 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
   - `DEEPSEEK_MODEL` / `OPENAI_MODEL`（可选）
   - `DEEPSEEK_BASE_URL`（可选，默认 DeepSeek v1）
 - Prisma / Turso（`app/db.server.ts`）：
-  - `TURSO_TARGET`：`test` | `prod`（可选；未设时生产默认为 `prod`，否则 `test`）
+  - `TURSO_TARGET`：`test` | `prod`（可选；未设时若**仅**配置 `TURSO_TEST_*` 或**仅** `TURSO_PROD_*` 则自动选用；两套都配时 `NODE_ENV=production` 用 prod，否则 test；Render Test 通常只需 test 凭据，无需 prod）
   - 测试库：`TURSO_TEST_DATABASE_URL`、`TURSO_TEST_AUTH_TOKEN`
   - 生产库：`TURSO_PROD_DATABASE_URL`、`TURSO_PROD_AUTH_TOKEN`
   - `DATABASE_URL`：`schema.prisma` / 迁移用（本地 SQLite 等）

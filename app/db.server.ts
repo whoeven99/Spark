@@ -2,6 +2,10 @@ import { PrismaLibSQL } from "@prisma/adapter-libsql";
 import { createRequire } from "node:module";
 import path from "node:path";
 import type { PrismaClient as PrismaClientType } from "./generated/prisma";
+import {
+  getTursoEnvKeys,
+  resolveTursoTarget,
+} from "./config/tursoTarget.server";
 
 const require = createRequire(import.meta.url);
 const prismaClientModulePath = path.resolve(process.cwd(), "app/generated/prisma");
@@ -24,19 +28,18 @@ declare global {
 }
 
 function createTursoPrismaClient(): PrismaClientType {
-  const target =
-    process.env.TURSO_TARGET?.trim().toLowerCase() ||
-    (process.env.NODE_ENV === "production" ? "prod" : "test");
-  const isProd = target === "prod";
-
-  const urlKey = isProd ? "TURSO_PROD_DATABASE_URL" : "TURSO_TEST_DATABASE_URL";
-  const tokenKey = isProd ? "TURSO_PROD_AUTH_TOKEN" : "TURSO_TEST_AUTH_TOKEN";
+  const target = resolveTursoTarget();
+  const { urlKey, tokenKey } = getTursoEnvKeys(target);
 
   const url = process.env[urlKey]?.trim() || "";
   const authToken = process.env[tokenKey]?.trim() || "";
 
   if (!url.startsWith("libsql://")) {
-    throw new Error(`请设置有效的 ${urlKey}，例如 "libsql://xxx.turso.io"`);
+    const hint =
+      target === "prod" && !process.env.TURSO_TARGET?.trim()
+        ? " 若仅为测试环境，请配置 TURSO_TEST_DATABASE_URL / TURSO_TEST_AUTH_TOKEN，或设置 TURSO_TARGET=test。"
+        : "";
+    throw new Error(`请设置有效的 ${urlKey}，例如 "libsql://xxx.turso.io"。${hint}`);
   }
 
   if (!authToken) {
