@@ -156,6 +156,7 @@ function AppNav() {
       <s-link href="/app/additional">{t("nav.diagnosis")}</s-link>
       <s-link href="/app/translation">{t("nav.translation")}</s-link>
       <s-link href="/app/generate-description">{t("nav.generateDescription")}</s-link>
+      <s-link href="/app/picture-translate">{t("nav.pictureTranslate")}</s-link>
     </s-app-nav>
   );
 }

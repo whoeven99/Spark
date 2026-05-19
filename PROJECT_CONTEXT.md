@@ -37,6 +37,7 @@
   - `app/routes/app.additional.tsx`：诊断报告页。
   - `app/routes/app.translation.tsx`：翻译入口页（嵌入 `TranslationPage`）。
   - `app/routes/app.generate-description.tsx`：生成商品描述独立页（嵌入 `GenerateDescriptionPage`，路径 `/app/generate-description`）。
+  - `app/routes/app.picture-translate.tsx`：图片翻译独立页（嵌入 `PictureTranslatePage`，路径 `/app/picture-translate`）。
 - AI 聊天路由：
   - `app/routes/chat.ts` -> 转发到 `app/server/chat.ts` 的 action。
 - 授权配置路由（均需 `authenticate.admin`）：

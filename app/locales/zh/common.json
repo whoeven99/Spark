@@ -74,7 +74,8 @@
     "aiAssistant": "AI Assistant",
     "diagnosis": "诊断报告",
     "translation": "翻译任务",
-    "generateDescription": "生成描述"
+    "generateDescription": "生成描述",
+    "pictureTranslate": "图片翻译"
   },
   "chat": {
     "pageTitle": "Shopify AI Assistant",
@@ -139,7 +140,17 @@
     "validationInvalidFileType": "仅支持 png、jpg、jpeg 图片",
     "readFileFailed": "读取图片失败，请重试",
     "translatedImageAlt": "翻译后的图片",
-    "downloadImage": "下载图片"
+    "downloadImage": "下载图片",
+    "pageTitle": "图片翻译",
+    "pageSubtitle": "翻译图片中的文字，同时保持原有排版",
+    "sectionConfig": "翻译配置",
+    "result": "翻译结果",
+    "empty": "上传图片开始翻译",
+    "retry": "重新翻译",
+    "copyLink": "复制图片链接",
+    "copyLinkDone": "图片链接已复制",
+    "copying": "复制中...",
+    "imageSourceSummary": "图片来源"
   },
   "generate": {
     "pageTitle": "生成商品描述",

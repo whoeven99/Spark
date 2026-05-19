@@ -74,7 +74,8 @@
     "aiAssistant": "AI Assistant",
     "diagnosis": "Diagnostics",
     "translation": "Translation tasks",
-    "generateDescription": "Generate Description"
+    "generateDescription": "Generate Description",
+    "pictureTranslate": "Picture Translate"
   },
   "chat": {
     "pageTitle": "Shopify AI Assistant",
@@ -139,7 +140,17 @@
     "validationInvalidFileType": "Only png, jpg, jpeg images are supported",
     "readFileFailed": "Failed to read image, please retry",
     "translatedImageAlt": "Translated image",
-    "downloadImage": "Download image"
+    "downloadImage": "Download image",
+    "pageTitle": "Picture Translate",
+    "pageSubtitle": "Translate text in images while preserving original layout",
+    "sectionConfig": "Translation settings",
+    "result": "Translation result",
+    "empty": "Upload an image to start translation",
+    "retry": "Translate again",
+    "copyLink": "Copy image link",
+    "copyLinkDone": "Image link copied",
+    "copying": "Copying...",
+    "imageSourceSummary": "Image source"
   },
   "generate": {
     "pageTitle": "Generate product description",

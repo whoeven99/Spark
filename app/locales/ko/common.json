@@ -74,7 +74,8 @@
     "aiAssistant": "AI Assistant",
     "diagnosis": "진단 보고서",
     "translation": "번역 작업",
-    "generateDescription": "설명 생성"
+    "generateDescription": "설명 생성",
+    "pictureTranslate": "이미지 번역"
   },
   "chat": {
     "pageTitle": "Shopify AI Assistant",
@@ -139,7 +140,17 @@
     "validationInvalidFileType": "png, jpg, jpeg 이미지 형식만 지원합니다",
     "readFileFailed": "이미지 읽기에 실패했습니다. 다시 시도해 주세요",
     "translatedImageAlt": "번역된 이미지",
-    "downloadImage": "이미지 다운로드"
+    "downloadImage": "이미지 다운로드",
+    "pageTitle": "이미지 번역",
+    "pageSubtitle": "이미지 속 텍스트를 번역하면서 원본 레이아웃을 유지합니다",
+    "sectionConfig": "번역 설정",
+    "result": "번역 결과",
+    "empty": "이미지를 업로드하여 번역을 시작하세요",
+    "retry": "다시 번역",
+    "copyLink": "이미지 링크 복사",
+    "copyLinkDone": "이미지 링크가 복사되었습니다",
+    "copying": "복사 중...",
+    "imageSourceSummary": "이미지 소스"
   },
   "generate": {
     "pageTitle": "상품 설명 생성",
