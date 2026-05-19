@@ -1,5 +1,6 @@
 import { appendFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { getSessionPrismaTableName } from "../../config/appEntry.server";
 
 const DEBUG_ENDPOINT =
   "http://127.0.0.1:7753/ingest/818798f0-158f-41e7-bccb-86c20f299999";
@@ -127,6 +128,7 @@ export function extractEnvSnapshot() {
   const apiKey = process.env.SHOPIFY_API_KEY?.trim() ?? "";
   return {
     appEntry: process.env.APP_ENTRY ?? "(unset)",
+    sessionPrismaTable: getSessionPrismaTableName(),
     shopifyAppUrl: process.env.SHOPIFY_APP_URL ?? "(unset)",
     scopes: process.env.SCOPES ?? "(unset)",
     apiKeySuffix: apiKey ? apiKey.slice(-6) : "(unset)",
