@@ -174,6 +174,27 @@ model AccountPeriodUsage {
   @@index([shop, appName, periodEnd])
 }
 
+/// App 通用事件流水：安装、卸载、scope 变更等（与 BillingLog 计费语义分离）。
+model CommonEventLog {
+  id          String   @id @default(cuid())
+  shop        String
+  /// 与 `AppEntry` 一致
+  appName     String
+  /// APP_INSTALLED | APP_UNINSTALLED | SCOPES_UPDATE
+  eventType   String
+  /// Shopify webhook topic，如 app/uninstalled
+  topic       String?
+  /// 幂等键（如 session id、webhook id）
+  referenceId String?
+  payload     Json?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([shop, appName, createdAt])
+  @@index([eventType, createdAt])
+  @@index([referenceId])
+}
+
 /// 计费流水：试用、订阅、续费、按量购 token 等。
 model BillingLog {
   id          String   @id @default(cuid())

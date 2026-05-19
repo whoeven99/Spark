@@ -56,6 +56,19 @@
 
 - `app_subscriptions/update` → `webhooks.app.subscriptions_update.tsx`
 - `app/purchases_one_time/update` → `webhooks.app.purchases_one_time_update.tsx`
+- `app/uninstalled` → `webhooks.app.uninstalled.tsx`（`CommonEventLog`）
+- `app/scopes_update` → `webhooks.app.scopes_update.tsx`（`CommonEventLog`）
+- **安装**：无 `app/installed` webhook；OAuth 成功后 `auth.$.tsx` 调用 `recordAppInstalled` 写入 `CommonEventLog`
+
+## CommonEventLog（与 BillingLog 分表）
+
+| eventType | 含义 |
+|-----------|------|
+| `APP_INSTALLED` | OAuth 完成，获得 session |
+| `APP_UNINSTALLED` | 卸载 |
+| `SCOPES_UPDATE` | 授权 scope 变更 |
+
+计费流水仍在 `BillingLog`，勿合并改名。
 
 ## 路由
 

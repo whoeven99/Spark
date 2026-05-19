@@ -14,6 +14,14 @@ uri = "/webhooks/app/subscriptions_update"
 topics = ["app/purchases_one_time/update"]
 uri = "/webhooks/app/purchases_one_time_update"
 
+[[webhooks.subscriptions]]
+topics = ["app/uninstalled"]
+uri = "/webhooks/app/uninstalled"
+
+[[webhooks.subscriptions]]
+topics = ["app/scopes_update"]
+uri = "/webhooks/app/scopes_update"
+
 [access_scopes]
 scopes = "read_locales,write_products"
 
