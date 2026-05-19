@@ -81,6 +81,14 @@
   "billing": {
     "pageTitle": "Billing & Subscription",
     "pageIntro": "View token usage, subscription plans, and pay-as-you-go packs. Subscribe or buy packs when trial credits run out.",
+    "quotaSubtitle": "For AI product titles and descriptions. Upgrade or buy packs below when you need more.",
+    "usagePercentUsed": "{{percent}}% used",
+    "planBenefitsFootnote": "Packs never expire · Subscription refreshes each period",
+    "choosePlanSubtitle": "Upgrade anytime. Monthly or annual billing, checkout secured by Shopify.",
+    "billedAnnually": "Billed annually at {{amount}}",
+    "equivalentMonthly": "≈ {{amount}}/mo",
+    "trustCheckout": "Subscriptions and packs are billed through Shopify in your store currency.",
+    "packSelectedSummary": "Selected {{tokens}} tokens · {{price}}",
     "sectionUsage": "Token usage",
     "sectionSubscription": "Current subscription",
     "sectionPlans": "Subscription plans",
@@ -143,6 +151,8 @@
     "featureTokensPerPeriod": "{{count}} tokens per period",
     "featureShopifyTrial": "{{count}}-day Shopify trial",
     "featurePriority": "Priority access to latest models",
+    "devEnvBadge": "Test",
+    "devCancelHint": "Cancel subscription (test gateway only)",
     "cancelSubscription": "Cancel subscription",
     "cancelSubscriptionPending": "Cancelling…",
     "cancelSubscriptionSuccess": "Subscription cancelled"

@@ -81,6 +81,14 @@
   "billing": {
     "pageTitle": "计费与订阅",
     "pageIntro": "查看 Token 用量、订阅套餐与按量购包。试用额度用完后可在此开通订阅或购买 Token 包。",
+    "quotaSubtitle": "用于 AI 商品标题与描述；额度用尽可在下方升级套餐或购买 Token 包。",
+    "usagePercentUsed": "已使用 {{percent}}%",
+    "planBenefitsFootnote": "按量包不过期 · 订阅额度按周期刷新",
+    "choosePlanSubtitle": "随时升级或切换月付 / 年付，结账由 Shopify 安全处理",
+    "billedAnnually": "按年计费 {{amount}}",
+    "equivalentMonthly": "约合 {{amount}}/月",
+    "trustCheckout": "订阅与购包通过 Shopify 结账，价格以商店币种结算",
+    "packSelectedSummary": "已选 {{tokens}} Token · {{price}}",
     "sectionUsage": "Token 用量",
     "sectionSubscription": "当前订阅",
     "sectionPlans": "订阅套餐",
@@ -143,6 +151,8 @@
     "featureTokensPerPeriod": "每周期 {{count}} Token",
     "featureShopifyTrial": "含 {{count}} 天 Shopify 试用",
     "featurePriority": "优先使用最新模型",
+    "devEnvBadge": "测试",
+    "devCancelHint": "仅测试网关可取消当前订阅",
     "cancelSubscription": "取消订阅",
     "cancelSubscriptionPending": "正在取消…",
     "cancelSubscriptionSuccess": "订阅已取消"
