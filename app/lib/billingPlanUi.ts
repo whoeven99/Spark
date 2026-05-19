@@ -29,6 +29,19 @@ export function formatPlanPrice(
 }
 
 /** 年付相对月付×12 的折扣百分比（四舍五入）。 */
+/** 年付套餐折算为「每月约」展示价（用于定价卡副文案）。 */
+export function formatAnnualMonthlyEquivalent(
+  annualPlan: PlanRecord,
+  locale: string,
+): string | null {
+  const annualPrice = Number.parseFloat(annualPlan.priceAmount);
+  if (!Number.isFinite(annualPrice) || annualPrice <= 0) return null;
+  const monthly = annualPrice / 12;
+  const rounded =
+    monthly % 1 === 0 ? monthly.toFixed(0) : (Math.round(monthly * 100) / 100).toFixed(2);
+  return formatPlanPrice(rounded, annualPlan.currencyCode, locale);
+}
+
 export function computeAnnualDiscountPercent(
   monthly: PlanRecord,
   annual: PlanRecord,

@@ -4,9 +4,11 @@ import { PictureTranslateForm } from "../component/pictureTranslate/PictureTrans
 import { PictureTranslateProvider } from "../component/pictureTranslate/pictureTranslateContext";
 import { PictureTranslateResultPanel } from "../component/pictureTranslate/PictureTranslateResultPanel";
 import {
+  PageSectionHeader,
   PageSurface,
   pageContentStyle,
-  pageIntroBannerStyle,
+  pageTrustFootnoteStyle,
+  stickyAsideColumnStyle,
   twoColumnLayoutStyle,
   twoColumnMainStyle,
   twoColumnSideStyle,
@@ -27,24 +29,27 @@ export function PictureTranslatePage() {
       }}
     >
       <s-page heading={t("pictureTranslate.pageTitle")}>
-        <div style={pageIntroBannerStyle("picture", { marginBottom: "1.5rem" })}>
-          {t("pictureTranslate.pageSubtitle")}
-        </div>
-
         <div style={pageContentStyle}>
-        <div style={twoColumnLayoutStyle}>
-          <div style={twoColumnMainStyle}>
-            <PageSurface title={t("pictureTranslate.sectionConfig")}>
-              <PictureTranslateForm variant="page" />
-            </PageSurface>
+          <PageSectionHeader
+            title={t("pictureTranslate.sectionConfig")}
+            subtitle={t("pictureTranslate.pageSubtitle")}
+          />
+
+          <div style={twoColumnLayoutStyle}>
+            <div style={twoColumnMainStyle}>
+              <PageSurface>
+                <PictureTranslateForm variant="page" />
+              </PageSurface>
+            </div>
+
+            <div style={{ ...twoColumnSideStyle, ...stickyAsideColumnStyle }}>
+              <PageSurface title={t("pictureTranslate.result")}>
+                <PictureTranslateResultPanel />
+              </PageSurface>
+            </div>
           </div>
 
-          <div style={twoColumnSideStyle}>
-            <PageSurface title={t("pictureTranslate.result")}>
-              <PictureTranslateResultPanel />
-            </PageSurface>
-          </div>
-        </div>
+          <p style={pageTrustFootnoteStyle}>{t("pictureTranslate.pageFootnote")}</p>
         </div>
       </s-page>
     </PictureTranslateProvider>

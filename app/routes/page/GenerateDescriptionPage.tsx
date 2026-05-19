@@ -8,15 +8,18 @@ import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
 import { ProductSelector } from "../component/product/ProductSelector";
 import { GenerateDescriptionResultEditor } from "../component/generateDescription/GenerateDescriptionResultEditor";
 import {
+  PageSectionHeader,
   PageSurface,
   formErrorBoxStyle,
   pageContentStyle,
   pageEmptyStateStyle,
   pageFieldLabelStyle,
   pageHintTextStyle,
-  pageIntroBannerStyle,
   pageLinkHintStyle,
   pageSelectStyle,
+  pageStatusBadgeStyle,
+  pageTrustFootnoteStyle,
+  stickyAsideColumnStyle,
   twoColumnLayoutStyle,
   twoColumnMainStyle,
   twoColumnSideStyle,
@@ -76,148 +79,160 @@ export function GenerateDescriptionPage() {
   const productIdForActions = (selectedProduct?.id ?? productId).trim();
   const copyBusy = copyTarget !== null;
 
+  const billingBadge =
+    billing.billingRequired && !billing.hasAccess ? (
+      <span style={pageStatusBadgeStyle}>{t("generate.billingBadgeLow")}</span>
+    ) : null;
+
   return (
     <s-page heading={t("generate.pageTitle")}>
-      {billing.billingRequired && !billing.hasAccess ? (
-        <s-banner tone="warning">
-          {t("billing.lowBalanceWarning")}{" "}
-          <s-link href={`/app/billing${search}`}>{t("billing.openBillingPage")}</s-link>
-        </s-banner>
-      ) : null}
-
-      <div style={pageIntroBannerStyle("render", { marginBottom: "1.5rem" })}>
-        {t("generate.intro")}
-      </div>
-
       <div style={pageContentStyle}>
-      <div style={twoColumnLayoutStyle}>
-        <div style={twoColumnMainStyle}>
-          <PageSurface title={t("generate.sectionTitle")}>
-            <s-stack direction="block" gap="base">
-              <ProductSelector
-                locationSearch={search}
-                selected={selectedProduct}
-                onSelectedChange={setSelectedProduct}
-              />
-              <details
-                style={{ marginTop: "0.25rem" }}
-                open={showManualProductId}
-                onToggle={(e) => setShowManualProductId(e.currentTarget.open)}
-              >
-                <summary style={pageLinkHintStyle}>
-                  {t("generate.advancedManualProductId")}
-                </summary>
-                <div style={{ marginTop: "0.65rem" }}>
-                  <s-text-field
-                    label={t("generate.productIdLabel")}
-                    value={productId}
-                    onChange={(e) => setProductId(e.currentTarget.value)}
-                    autocomplete="off"
-                  />
-                </div>
-              </details>
+        {billing.billingRequired && !billing.hasAccess ? (
+          <s-banner tone="warning">
+            {t("billing.lowBalanceWarning")}{" "}
+            <s-link href={`/app/billing${search}`}>{t("billing.openBillingPage")}</s-link>
+          </s-banner>
+        ) : null}
 
-              <div>
-                <label htmlFor="generate-description-lang" style={pageFieldLabelStyle}>
-                  {t("generate.targetLanguage")}
-                </label>
-                <select
-                  id="generate-description-lang"
-                  value={targetLanguage}
-                  onChange={(e) => setTargetLanguage(e.target.value)}
-                  disabled={localesLoading || isSubmitting || isSaving || saveConfirmOpen}
-                  style={pageSelectStyle(
-                    localesLoading || isSubmitting || isSaving || saveConfirmOpen,
-                  )}
+        <PageSectionHeader
+          title={t("generate.sectionTitle")}
+          subtitle={t("generate.intro")}
+          badge={billingBadge}
+        />
+
+        <div style={twoColumnLayoutStyle}>
+          <div style={twoColumnMainStyle}>
+            <PageSurface
+              title={t("generate.formCardTitle")}
+              subtitle={t("generate.formCardSubtitle")}
+            >
+              <s-stack direction="block" gap="base">
+                <ProductSelector
+                  locationSearch={search}
+                  selected={selectedProduct}
+                  onSelectedChange={setSelectedProduct}
+                />
+                <details
+                  style={{ marginTop: "0.25rem" }}
+                  open={showManualProductId}
+                  onToggle={(e) => setShowManualProductId(e.currentTarget.open)}
                 >
-                  {localesLoading && localeOptions.length === 0 ? (
-                    <option value="">{t("common.loadingLanguage")}</option>
-                  ) : null}
-                  {localeOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-                {localesIsFallback ? (
-                  <div style={pageHintTextStyle}>
-                    {t("generate.fallbackLocalesHint")}{" "}
-                    <code style={{ fontSize: "0.7rem" }}>read_locales</code>
+                  <summary style={pageLinkHintStyle}>
+                    {t("generate.advancedManualProductId")}
+                  </summary>
+                  <div style={{ marginTop: "0.65rem" }}>
+                    <s-text-field
+                      label={t("generate.productIdLabel")}
+                      value={productId}
+                      onChange={(e) => setProductId(e.currentTarget.value)}
+                      autocomplete="off"
+                    />
                   </div>
-                ) : null}
-              </div>
+                </details>
 
-              {errorText ? <div style={formErrorBoxStyle}>{errorText}</div> : null}
+                <div>
+                  <label htmlFor="generate-description-lang" style={pageFieldLabelStyle}>
+                    {t("generate.targetLanguage")}
+                  </label>
+                  <select
+                    id="generate-description-lang"
+                    value={targetLanguage}
+                    onChange={(e) => setTargetLanguage(e.target.value)}
+                    disabled={localesLoading || isSubmitting || isSaving || saveConfirmOpen}
+                    style={pageSelectStyle(
+                      localesLoading || isSubmitting || isSaving || saveConfirmOpen,
+                    )}
+                  >
+                    {localesLoading && localeOptions.length === 0 ? (
+                      <option value="">{t("common.loadingLanguage")}</option>
+                    ) : null}
+                    {localeOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  {localesIsFallback ? (
+                    <div style={pageHintTextStyle}>
+                      {t("generate.fallbackLocalesHint")}{" "}
+                      <code style={{ fontSize: "0.7rem" }}>read_locales</code>
+                    </div>
+                  ) : null}
+                </div>
 
-              <s-stack direction="inline" gap="small">
-                <s-button
-                  type="button"
-                  variant="primary"
-                  onClick={() => {
-                    void handleGenerate();
-                  }}
-                  {...(isSubmitting || isSaving || localesLoading || saveConfirmOpen
-                    ? { disabled: true }
-                    : {})}
-                >
-                  {isSubmitting
-                    ? t("generate.generating")
-                    : localesLoading
-                      ? t("common.loadingLanguage")
-                      : t("generate.generateAction")}
-                </s-button>
-                <s-button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    resetResult();
-                    setSelectedProduct(null);
-                    setProductId("");
-                  }}
-                  {...(isSubmitting || isSaving ? { disabled: true } : {})}
-                >
-                  {t("common.clearResult")}
-                </s-button>
+                {errorText ? <div style={formErrorBoxStyle}>{errorText}</div> : null}
+
+                <s-stack direction="inline" gap="small">
+                  <s-button
+                    type="button"
+                    variant="primary"
+                    onClick={() => {
+                      void handleGenerate();
+                    }}
+                    {...(isSubmitting || isSaving || localesLoading || saveConfirmOpen
+                      ? { disabled: true }
+                      : {})}
+                  >
+                    {isSubmitting
+                      ? t("generate.generating")
+                      : localesLoading
+                        ? t("common.loadingLanguage")
+                        : t("generate.generateAction")}
+                  </s-button>
+                  <s-button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      resetResult();
+                      setSelectedProduct(null);
+                      setProductId("");
+                    }}
+                    {...(isSubmitting || isSaving ? { disabled: true } : {})}
+                  >
+                    {t("common.clearResult")}
+                  </s-button>
+                </s-stack>
               </s-stack>
-            </s-stack>
-          </PageSurface>
+            </PageSurface>
+          </div>
+
+          <div style={{ ...twoColumnSideStyle, ...stickyAsideColumnStyle }}>
+            <PageSurface title={t("generate.resultTitle")}>
+              {description !== null ? (
+                <GenerateDescriptionResultEditor
+                  variant="page"
+                  draftTitle={draftTitle}
+                  draftDescription={draftDescription}
+                  onDraftTitleChange={setDraftTitle}
+                  onDraftDescriptionChange={setDraftDescription}
+                  copyTarget={copyTarget}
+                  copyBusy={copyBusy}
+                  isSubmitting={isSubmitting}
+                  isSaving={isSaving}
+                  saveErrorText={saveErrorText}
+                  onCopyTitle={copyTitle}
+                  onCopyDescription={copyDescription}
+                  onCopyAll={copyAll}
+                  onClickSave={requestOpenSaveDialog}
+                  saveConfirmOpen={saveConfirmOpen}
+                  onSaveConfirm={() => {
+                    void confirmSaveToShopify(productIdForActions);
+                  }}
+                  onSaveCancel={cancelSaveDialog}
+                />
+              ) : (
+                <div style={pageEmptyStateStyle}>
+                  <span style={{ fontSize: "1.75rem", opacity: 0.6 }} aria-hidden>
+                    ✨
+                  </span>
+                  <span>{t("generate.emptyResult")}</span>
+                </div>
+              )}
+            </PageSurface>
+          </div>
         </div>
 
-        <div style={twoColumnSideStyle}>
-          <PageSurface title={t("generate.resultTitle")}>
-            {description !== null ? (
-              <GenerateDescriptionResultEditor
-                variant="page"
-                draftTitle={draftTitle}
-                draftDescription={draftDescription}
-                onDraftTitleChange={setDraftTitle}
-                onDraftDescriptionChange={setDraftDescription}
-                copyTarget={copyTarget}
-                copyBusy={copyBusy}
-                isSubmitting={isSubmitting}
-                isSaving={isSaving}
-                saveErrorText={saveErrorText}
-                onCopyTitle={copyTitle}
-                onCopyDescription={copyDescription}
-                onCopyAll={copyAll}
-                onClickSave={requestOpenSaveDialog}
-                saveConfirmOpen={saveConfirmOpen}
-                onSaveConfirm={() => {
-                  void confirmSaveToShopify(productIdForActions);
-                }}
-                onSaveCancel={cancelSaveDialog}
-              />
-            ) : (
-              <div style={pageEmptyStateStyle}>
-                <span style={{ fontSize: "1.75rem", opacity: 0.6 }} aria-hidden>
-                  ✨
-                </span>
-                <span>{t("generate.emptyResult")}</span>
-              </div>
-            )}
-          </PageSurface>
-        </div>
-      </div>
+        <p style={pageTrustFootnoteStyle}>{t("generate.pageFootnote")}</p>
       </div>
     </s-page>
   );
