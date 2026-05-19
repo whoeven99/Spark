@@ -450,8 +450,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
 
   return (
     <>
-      <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
-        <s-stack direction="block" gap="small">
+      <s-stack direction="block" gap="small">
           <div
             style={{
               display: "flex",
@@ -719,7 +718,6 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
             <span style={{ color: "#8c9196", fontSize: "12px" }}>{t("translationRuntime.selectTaskHint")}</span>
           )}
         </s-stack>
-      </s-box>
 
       {mdOpen ? (
         <div

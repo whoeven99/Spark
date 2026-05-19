@@ -156,6 +156,10 @@ export function BillingPage() {
     navigation.formData?.get("intent") === "subscribe"
       ? String(navigation.formData.get("planKey") ?? "")
       : "";
+  const buyingPackKey =
+    navigation.state !== "idle" && navigation.formData?.get("intent") === "buy_pack"
+      ? String(navigation.formData.get("planKey") ?? "")
+      : "";
   const { t, i18n } = useTranslation();
   const locale = i18n.language;
 
@@ -451,6 +455,65 @@ export function BillingPage() {
           </section>
         ) : null}
 
+        {tokenPacks.length > 0 ? (
+          <section className={styles.packSection}>
+            <div className={styles.packCard}>
+              <div className={styles.packCardHeader}>
+                <h2 className={styles.packTitle}>{t("billing.sectionPacks")}</h2>
+                <p className={styles.packHint}>{t("billing.sectionPacksHint")}</p>
+              </div>
+              <div
+                className={styles.packOptions}
+                role="radiogroup"
+                aria-label={t("billing.sectionPacks")}
+              >
+                {tokenPacks.map((pack) => {
+                  const selected = pack.planKey === selectedPack?.planKey;
+                  return (
+                    <button
+                      key={pack.planKey}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      className={`${styles.packOption} ${selected ? styles.packOptionSelected : ""}`}
+                      onClick={() => setSelectedPackKey(pack.planKey)}
+                    >
+                      <span className={styles.packOptionTokens}>
+                        {pack.tokens.toLocaleString()}
+                      </span>
+                      <span className={styles.packOptionTokensUnit}>
+                        {t("billing.tokenUnit")}
+                      </span>
+                      <span className={styles.packOptionPrice}>
+                        {formatPlanPrice(
+                          pack.priceAmount,
+                          pack.currencyCode,
+                          locale,
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedPack ? (
+                <Form method="post" className={styles.packCta}>
+                  <input type="hidden" name="intent" value="buy_pack" />
+                  <input type="hidden" name="planKey" value={selectedPack.planKey} />
+                  <s-button
+                    type="submit"
+                    variant="primary"
+                    disabled={Boolean(buyingPackKey)}
+                  >
+                    {buyingPackKey
+                      ? t("billing.redirectingToCheckout")
+                      : t("billing.purchaseCredits")}
+                  </s-button>
+                </Form>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
         {basePlan && proPlan ? (
           <section className={styles.compareSection}>
             <h2 className={styles.compareTitle}>{t("billing.compareTitle")}</h2>
@@ -474,47 +537,6 @@ export function BillingPage() {
                 ))}
               </tbody>
             </table>
-          </section>
-        ) : null}
-
-        {tokenPacks.length > 0 ? (
-          <section>
-            <h2 className={styles.plansTitle}>{t("billing.sectionPacks")}</h2>
-            <div className={styles.packCard}>
-              <div className={styles.packOptions} role="radiogroup">
-                {tokenPacks.map((pack) => {
-                  const selected = pack.planKey === selectedPack?.planKey;
-                  return (
-                    <button
-                      key={pack.planKey}
-                      type="button"
-                      role="radio"
-                      aria-checked={selected}
-                      className={`${styles.packOption} ${selected ? styles.packOptionSelected : ""}`}
-                      onClick={() => setSelectedPackKey(pack.planKey)}
-                    >
-                      <span className={styles.packOptionLabel}>
-                        {pack.tokens.toLocaleString()} /{" "}
-                        {formatPlanPrice(
-                          pack.priceAmount,
-                          pack.currencyCode,
-                          locale,
-                        )}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              {selectedPack ? (
-                <Form method="post">
-                  <input type="hidden" name="intent" value="buy_pack" />
-                  <input type="hidden" name="planKey" value={selectedPack.planKey} />
-                  <s-button type="submit" variant="primary">
-                    {t("billing.purchaseCredits")}
-                  </s-button>
-                </Form>
-              ) : null}
-            </div>
           </section>
         ) : null}
       </div>
