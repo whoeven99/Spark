@@ -123,6 +123,21 @@ async function main() {
     await executeWithRetry(statement);
   }
 
+  const seedPath = path.join(root, "prisma", "billing-plan-catalog-seed.sql");
+  if (fs.existsSync(seedPath)) {
+    const seedSql = fs.readFileSync(seedPath, "utf8");
+    const seedStatements = seedSql
+      .split(/;\s*(?:\r?\n|$)/g)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    for (const statement of seedStatements) {
+      await executeWithRetry(statement);
+    }
+    console.log(
+      `[turso:sync:${target}] 已执行 PlanCatalog 种子 ${seedStatements.length} 条`,
+    );
+  }
+
   const tables = await executeWithRetry(
     "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
   );

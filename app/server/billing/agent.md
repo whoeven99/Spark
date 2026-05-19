@@ -13,7 +13,7 @@
 |----|------|
 | `Account` | 当前 token 分池与 `usedTokens` |
 | `AppSubscription` | **当前**生效的 Shopify 订阅（`@@unique([shop, appName])`） |
-| `PlanCatalog` | 套餐/按量包/试用定义（种子数据见 migration） |
+| `PlanCatalog` | 套餐/按量包/试用定义（种子见 `prisma/billing-plan-catalog-seed.sql`，由 `npm run turso:sync:*` 写入） |
 | `AccountPeriodUsage` | 每个订阅周期结束时的用量归档 |
 | `BillingLog` | 试用、开通、续费、按量购等流水 |
 
@@ -48,3 +48,8 @@
 ## 主 App
 
 `BILLING_ENABLED_APPS` 仅含 `generate-description`；`chat` 不校验。
+
+## Turso 同步
+
+- 可用余额由应用层 `getAvailableTokens()` 计算（`subscription + purchased + trial`），**不要**在 Turso 上依赖 `Account.availableTokens` 生成列。
+- 新增/变更计费表结构后执行：`npm run turso:sync:test` 或 `npm run turso:sync:prod`（会刷新 baseline 并写入 PlanCatalog 种子）。

@@ -91,8 +91,6 @@ model Account {
   purchasedTokens    Int      @default(0)
   /// 产品层免费试用剩余 token
   trialTokens        Int      @default(0)
-  /// 库内生成列：subscription + purchased + trial（只读）
-  availableTokens    Int      @default(dbgenerated("(subscriptionTokens + purchasedTokens + trialTokens)"))
   usedTokens         Int      @default(0)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
