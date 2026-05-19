@@ -8,6 +8,7 @@ import { getAppEntry } from "../config/appEntry.server";
 import { authenticate } from "../shopify.server";
 import {
   BillingError,
+  cancelActiveSubscription,
   loadBillingPageData,
   startSubscriptionCheckout,
   startTokenPackCheckout,
@@ -21,17 +22,31 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session, redirect: shopifyRedirect } =
+    await authenticate.admin(request);
   const appName = getAppEntry();
   const form = await request.formData();
   const intent = form.get("intent")?.toString();
   const planKey = form.get("planKey")?.toString();
 
-  if (!intent || !planKey) {
-    return { ok: false as const, error: "缺少 intent 或 planKey" };
+  if (!intent) {
+    return { ok: false as const, error: "缺少 intent" };
   }
 
   try {
+    if (intent === "cancel_subscription") {
+      await cancelActiveSubscription({
+        admin,
+        shop: session.shop,
+        appName,
+      });
+      return { ok: true as const, cancelled: true as const };
+    }
+
+    if (!planKey) {
+      return { ok: false as const, error: "缺少 planKey" };
+    }
+
     if (intent === "subscribe") {
       const { confirmationUrl } = await startSubscriptionCheckout({
         admin,
@@ -40,7 +55,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         planKey,
         request,
       });
-      return { ok: true as const, confirmationUrl };
+      if (confirmationUrl) {
+        throw shopifyRedirect(confirmationUrl, { target: "_top" });
+      }
+      return { ok: true as const, noopCheckout: true as const };
     }
     if (intent === "buy_pack") {
       const { confirmationUrl } = await startTokenPackCheckout({
@@ -50,7 +68,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         planKey,
         request,
       });
-      return { ok: true as const, confirmationUrl };
+      if (confirmationUrl) {
+        throw shopifyRedirect(confirmationUrl, { target: "_top" });
+      }
+      return { ok: true as const, noopCheckout: true as const };
     }
     return { ok: false as const, error: "未知操作" };
   } catch (error) {

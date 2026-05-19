@@ -64,6 +64,38 @@ INSERT OR IGNORE INTO "PlanCatalog" (
         CURRENT_TIMESTAMP
     ),
     (
+        'gd_pro_monthly',
+        'generate-description',
+        'SUBSCRIPTION',
+        'MONTHLY',
+        'Pro (Monthly)',
+        2000000,
+        '79.99',
+        'USD',
+        7,
+        'Generate Description Pro Monthly',
+        25,
+        1,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+    ),
+    (
+        'gd_pro_annual',
+        'generate-description',
+        'SUBSCRIPTION',
+        'ANNUAL',
+        'Pro (Annual)',
+        26000000,
+        '799.99',
+        'USD',
+        7,
+        'Generate Description Pro Annual',
+        35,
+        1,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+    ),
+    (
         'gd_pack_100k',
         'generate-description',
         'ONE_TIME_PACK',

@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 import { useTranslation } from "react-i18next";
 import { authenticate } from "../shopify.server";
+import { pageIntroBannerStyle } from "./page/pageUiStyles";
 
 const ORDER_METRICS_QUERY = `#graphql
   query OrderMetrics($first: Int!, $after: String, $query: String!) {
@@ -431,6 +432,9 @@ export default function AdditionalPage() {
 
   return (
     <s-page heading={t("additional.pageTitle")}>
+      <div style={pageIntroBannerStyle("diagnosis", { marginBottom: "1.5rem" })}>
+        {t("additional.pageIntro")}
+      </div>
       <s-section heading={t("additional.coreBoard")}>
         <s-stack direction="inline" gap="base" alignItems="center">
           <s-badge tone="info">{t("additional.shopLabel", { value: data.summary.shop })}</s-badge>

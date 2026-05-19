@@ -80,6 +80,7 @@
   },
   "billing": {
     "pageTitle": "Billing & Subscription",
+    "pageIntro": "View token usage, subscription plans, and pay-as-you-go packs. Subscribe or buy packs when trial credits run out.",
     "sectionUsage": "Token usage",
     "sectionSubscription": "Current subscription",
     "sectionPlans": "Subscription plans",
@@ -116,12 +117,17 @@
     "recommended": "Recommended",
     "planFree": "Free trial",
     "currentPlan": "Current plan",
+    "pendingConfirmation": "Awaiting payment",
+    "pendingPlanLabel": "Awaiting payment · {{plan}}",
+    "redirectingToCheckout": "Redirecting…",
+    "checkoutCompleteNoRedirect": "Subscription created (test mode, no redirect)",
     "getStarted": "Get started",
     "perMonth": "/mo",
     "perYear": "/yr",
     "compareTitle": "Compare plans",
     "compareFeatureCol": "Feature",
     "compareMonthlyPrice": "Monthly price",
+    "compareAnnualPrice": "Annual price",
     "compareAnnualDiscount": "Annual discount",
     "compareTokens": "Tokens per period",
     "compareTrialDays": "Shopify trial days",
@@ -132,7 +138,10 @@
     "featureNoSubscription": "No paid Shopify subscription required",
     "featureTokensPerPeriod": "{{count}} tokens per period",
     "featureShopifyTrial": "{{count}}-day Shopify trial",
-    "featurePriority": "Priority access to latest models"
+    "featurePriority": "Priority access to latest models",
+    "cancelSubscription": "Cancel subscription",
+    "cancelSubscriptionPending": "Cancelling…",
+    "cancelSubscriptionSuccess": "Subscription cancelled"
   },
   "chat": {
     "pageTitle": "Shopify AI Assistant",
@@ -220,6 +229,7 @@
     "generateAction": "Generate description",
     "generating": "Generating...",
     "resultTitle": "Generated result",
+    "emptyResult": "Please select a product and generate description.",
     "productTitleLabel": "Product title",
     "productDescriptionLabel": "Product description",
     "copyTitle": "Copy title",
@@ -346,6 +356,7 @@
   },
   "additional": {
     "pageTitle": "Store operations diagnostics report",
+    "pageIntro": "Store health diagnostics from the last 7 days of orders, inventory, and conversion data. See traffic and ads guidance in the aside.",
     "coreBoard": "Core dashboard (last 7 days)",
     "shopLabel": "Shop: {{value}}",
     "updatedAtLabel": "Updated at: {{value}}",
@@ -390,6 +401,9 @@
   },
   "translation": {
     "pageTitle": "Translation tasks",
+    "pageIntro": "Create JSON Runtime translation jobs and monitor progress. Choose target locale and resource types, then submit. Use the panel on the right for task list and runtime status.",
+    "resourceTypesLabel": "Resource types to translate",
+    "monitorAsideTitle": "Task monitor",
     "createSectionTitle": "Create translation task",
     "targetLocale": "Target locale",
     "sourceLocale": "Source locale",
