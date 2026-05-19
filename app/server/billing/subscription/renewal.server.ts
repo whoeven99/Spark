@@ -1,5 +1,9 @@
 import type { Account, AppSubscription } from "../../../generated/prisma";
 import prisma from "../../../db.server";
+import {
+  canSettlePoolsAtRenewal,
+  settlePoolsAtRenewal,
+} from "../../tokenUsage/tokenPools.server";
 import { appendBillingLog } from "../billingLog.server";
 import { BILLING_LOG_EVENT } from "../types.server";
 
@@ -11,7 +15,8 @@ export type SubscriptionPeriodSnapshot = {
 };
 
 /**
- * 续费：归档上一周期用量 → 写 Log → 更新订阅周期 → 重置 Account 订阅池与 usedTokens。
+ * 续费：归档上一周期 → 写 Log → 刷新订阅池、清零 `usedTokens`；
+ * 按本周期 `usedTokens` 结算一次，`purchasedTokens` / `trialTokens` 写入真实剩余（周期内不改各池）。
  */
 export async function archivePeriodAndRenew(params: {
   shop: string;
@@ -74,11 +79,21 @@ export async function archivePeriodAndRenew(params: {
     },
   });
 
+  const settledPools = canSettlePoolsAtRenewal(account)
+    ? settlePoolsAtRenewal(account)
+    : {
+        subscriptionTokens: account.subscriptionTokens,
+        purchasedTokens: account.purchasedTokens,
+        trialTokens: account.trialTokens,
+      };
+
   await prisma.account.update({
     where: { shop_appName: { shop, appName } },
     data: {
       usedTokens: 0,
       subscriptionTokens: next.tokensPerPeriod,
+      purchasedTokens: settledPools.purchasedTokens,
+      trialTokens: settledPools.trialTokens,
     },
   });
 }

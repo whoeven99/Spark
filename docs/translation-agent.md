@@ -7,7 +7,7 @@
 ## 代码范围
 - 路由入口：`app/routes/app.translation.tsx`
 - 页面组件：`app/routes/page/TranslationPage.tsx`
-- 首页对话：`app/server/chat.ts` 响应中的 `translationTaskForm` 由 `ChatPage` 写入对应助手消息的 `translationTaskForm` 字段；`ChatMessages` 在同一条 AI Assistant 气泡内渲染 `TranslationTaskChatCard`；工具定义 `app/server/ai/tools/implementations/translationTaskFormTool.ts`，载荷解析 `app/server/ai/postprocess/translationTaskFormExtract.ts`
+- 首页对话：`app/server/chat-stream.ts`（SSE）流式响应中的 `translationTaskForm` 由 `ChatPage` 写入对应助手消息的 `translationTaskForm` 字段；`ChatMessages` 在同一条 AI Assistant 气泡内渲染 `TranslationTaskChatCard`；工具定义 `app/server/ai/tools/implementations/translationTaskFormTool.ts`，载荷解析 `app/server/ai/postprocess/translationTaskFormExtract.ts`
 - 创建任务：`app/server/translation/translationPipelineCore.server.ts`（`createTranslationJob`：同店同源同目标已存在任务时**幂等**返回最近更新的那条，不重复写入；新建时仅写 Cosmos）
 - 类型：`app/routes/page/TranslationPage.tsx` 使用的 resource 类型见 `app/server/translation/types.ts`
 - 持久化：`app/server/translation/cosmosJobStore.server.ts`

@@ -8,6 +8,7 @@
 |------|------|
 | `app/routes/page/BillingPage.tsx` | 分区结构、状态展示、转化布局 |
 | `app/routes/component/billing/billingPage.module.css` | 卡片、徽章、分段控件、表格等样式参考 |
+| `app/routes/component/shared/pagePrimitives.module.css` | 非计费页可复用的卡片 / meta 样式（对齐计费卡片语义） |
 | `app/routes/page/pageUiStyles.tsx` | 全站色值令牌与可复用布局 primitive |
 
 ---
@@ -43,7 +44,7 @@
 | `textPrimary` | `#202223` | 标题、主数字、价格 |
 | `textBody` | `#303030` | 列表正文、特性项 |
 | `textSecondary` | `#6d7175` | 副标题、标签、meta |
-| 弱化脚注 | `#8c9196` | 区段脚注、辅助说明 |
+| `textFootnote` | `#8c9196` | 区段脚注、辅助说明、字段标签 |
 | `border` | `#e1e3e5` | 卡片、分段容器边框 |
 | `divider` | `#f1f2f3` | 表行、进度条轨道 |
 | `surface` | `#ffffff` | 卡片、选中分段项 |

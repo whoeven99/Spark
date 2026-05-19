@@ -14,6 +14,7 @@ import {
   readRuntimeChunksFileTotal,
 } from "../../../lib/redisTranslatePhaseLabel";
 import { formatTranslateTaskV3CosmosStatusText } from "../../../lib/translateTaskV3CosmosStatusLabel";
+import { pageColorTokens } from "../../page/pageUiStyles";
 
 const POLL_SEC = 4;
 /** 任务列表刷新间隔（秒），低于详情轮询频率，避免多余请求 */
@@ -34,8 +35,8 @@ const MD_CARD: CSSProperties = {
   width: "100%",
   maxWidth: "720px",
   maxHeight: "90vh",
-  backgroundColor: "#ffffff",
-  borderRadius: "12px",
+  backgroundColor: pageColorTokens.surface,
+  borderRadius: pageColorTokens.radiusCard,
   boxShadow: "0 12px 30px rgba(0, 0, 0, 0.2)",
   display: "flex",
   flexDirection: "column",
@@ -97,9 +98,9 @@ function ProgressBar(props: {
         }}
       >
         <div style={{ minWidth: 0 }}>
-          <span style={{ fontWeight: 600, fontSize: "13px", color: "#202223" }}>{props.label}</span>
+          <span style={{ fontWeight: 600, fontSize: "13px", color: pageColorTokens.textPrimary }}>{props.label}</span>
           {props.sub ? (
-            <span style={{ display: "block", color: "#6d7175", fontSize: "12px", marginTop: 2 }}>
+            <span style={{ display: "block", color: pageColorTokens.textSecondary, fontSize: "12px", marginTop: 2 }}>
               {props.sub}
             </span>
           ) : null}
@@ -108,7 +109,7 @@ function ProgressBar(props: {
           style={{
             fontWeight: 700,
             fontSize: "14px",
-            color: "#202223",
+            color: pageColorTokens.textPrimary,
             fontVariantNumeric: "tabular-nums",
             flexShrink: 0,
           }}
@@ -460,7 +461,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
               flexWrap: "wrap",
             }}
           >
-            <span style={{ fontWeight: 600, fontSize: "15px", color: "#202223" }}>{t("translationRuntime.monitorTaskListTitle")}</span>
+            <span style={{ fontWeight: 600, fontSize: "15px", color: pageColorTokens.textPrimary }}>{t("translationRuntime.monitorTaskListTitle")}</span>
             <s-button
               type="button"
               variant="secondary"
@@ -472,11 +473,11 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
           </div>
 
           {listError ? (
-            <span style={{ color: "#bf0711", fontSize: "13px" }}>{listError}</span>
+            <span style={{ color: pageColorTokens.critical, fontSize: "13px" }}>{listError}</span>
           ) : null}
 
           {!listLoading && !listError && tasks.length === 0 ? (
-            <span style={{ color: "#6d7175", fontSize: "13px" }}>{t("translationRuntime.noTasks")}</span>
+            <span style={{ color: pageColorTokens.textSecondary, fontSize: "13px" }}>{t("translationRuntime.noTasks")}</span>
           ) : null}
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -493,8 +494,10 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                     textAlign: "left",
                     padding: "10px 12px",
                     borderRadius: 10,
-                    border: active ? "2px solid #2c6ecb" : "1px solid #e3e5e8",
-                    background: active ? "#f4f6f8" : "#fff",
+                    border: active
+                      ? `2px solid ${pageColorTokens.brandBlue}`
+                      : `1px solid ${pageColorTokens.border}`,
+                    background: active ? pageColorTokens.surfaceMuted : pageColorTokens.surface,
                     cursor: id ? "pointer" : "not-allowed",
                     opacity: id ? 1 : 0.6,
                   }}
@@ -512,7 +515,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                       style={{
                         fontSize: "15px",
                         fontWeight: 700,
-                        color: "#202223",
+                        color: pageColorTokens.textPrimary,
                         letterSpacing: "0.02em",
                       }}
                     >
@@ -523,7 +526,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                     </s-badge>
                   </div>
                   {row.updatedAt ? (
-                    <div style={{ fontSize: "12px", color: "#8c9196", marginTop: 8 }}>
+                    <div style={{ fontSize: "12px", color: pageColorTokens.textFootnote, marginTop: 8 }}>
                       {t("translationRuntime.updatedAt")} {formatTaskUpdatedAt(row.updatedAt)}
                     </div>
                   ) : null}
@@ -537,19 +540,19 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
               style={{
                 marginTop: 12,
                 paddingTop: 14,
-                borderTop: "1px solid #e3e5e8",
+                borderTop: `1px solid ${pageColorTokens.border}`,
               }}
             >
               {detailLoading && !detail ? (
-                <span style={{ color: "#6d7175", fontSize: "13px" }}>{t("translationRuntime.loadingDetail")}</span>
+                <span style={{ color: pageColorTokens.textSecondary, fontSize: "13px" }}>{t("translationRuntime.loadingDetail")}</span>
               ) : null}
               {detailError ? (
-                <span style={{ color: "#bf0711", fontSize: "13px" }}>{detailError}</span>
+                <span style={{ color: pageColorTokens.critical, fontSize: "13px" }}>{detailError}</span>
               ) : null}
 
               {detail ? (
                 <s-stack direction="block" gap="small">
-                  <div style={{ fontSize: "14px", fontWeight: 600, color: "#202223" }}>{t("translationRuntime.taskDetail")}</div>
+                  <div style={{ fontSize: "14px", fontWeight: 600, color: pageColorTokens.textPrimary }}>{t("translationRuntime.taskDetail")}</div>
 
                   <div
                     style={{
@@ -562,7 +565,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                     <s-badge tone={cosmosTone(readString(cosmos, "statusText"))}>
                       {formatTranslateTaskV3CosmosStatusText(readString(cosmos, "statusText"), t, i18n)}
                     </s-badge>
-                    <span style={{ fontSize: "13px", color: "#42474c" }}>
+                    <span style={{ fontSize: "13px", color: pageColorTokens.textMuted }}>
                       <strong>{readString(cosmos, "source") || "—"}</strong>
                       {" → "}
                       <strong>{readString(cosmos, "target") || "—"}</strong>
@@ -571,7 +574,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
 
                   {initDisplay ? (
                     <div>
-                      <div style={{ fontSize: "12px", color: "#8c9196", marginBottom: 6 }}>{t("translationRuntime.initPhase")}</div>
+                      <div style={{ fontSize: "12px", color: pageColorTokens.textFootnote, marginBottom: 6 }}>{t("translationRuntime.initPhase")}</div>
                       <div
                         style={{
                           display: "flex",
@@ -582,12 +585,12 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                       >
                         <s-badge tone="info">{initDisplay.phaseLabel}</s-badge>
                         {initDisplay.chunksFileTotal !== null ? (
-                          <span style={{ fontSize: "13px", color: "#42474c" }}>
+                          <span style={{ fontSize: "13px", color: pageColorTokens.textMuted }}>
                             {t("translationRuntime.chunkFileCount", { count: initDisplay.chunksFileTotal })}
                           </span>
                         ) : null}
                         {initDisplay.modulePart ? (
-                          <span style={{ fontSize: "13px", color: "#42474c" }}>{initDisplay.modulePart}</span>
+                          <span style={{ fontSize: "13px", color: pageColorTokens.textMuted }}>{initDisplay.modulePart}</span>
                         ) : null}
                         {initDisplay.accumulatedCount !== null ? (
                           <span
@@ -607,7 +610,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                               style={{
                                 fontSize: "22px",
                                 fontWeight: 800,
-                                color: "#008060",
+                                color: pageColorTokens.brandGreen,
                                 fontVariantNumeric: "tabular-nums",
                                 lineHeight: 1,
                                 letterSpacing: "-0.02em",
@@ -631,7 +634,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                       height={10}
                     />
                   ) : (
-                    <span style={{ fontSize: "12px", color: "#8c9196" }}>
+                    <span style={{ fontSize: "12px", color: pageColorTokens.textFootnote }}>
                       {progress.chunkPct !== null
                         ? t("translationRuntime.noEntryProgressData")
                         : t("translationRuntime.noProgressData")}
@@ -657,7 +660,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                         gap: "8px",
                       }}
                     >
-                      <span style={{ fontSize: "13px", fontWeight: 600, color: "#202223" }}>
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: pageColorTokens.textPrimary }}>
                         {t("translationRuntime.reportTitle")}
                       </span>
                       <s-badge tone={trBlob?.exists === true ? "success" : "info"}>
@@ -689,7 +692,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                         gap: "8px",
                       }}
                     >
-                      <span style={{ fontSize: "13px", fontWeight: 600, color: "#202223" }}>
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: pageColorTokens.textPrimary }}>
                         {t("translationRuntime.qualityReportTitleLong")}
                       </span>
                       <s-badge tone={qrBlob?.exists === true ? "success" : "info"}>
@@ -715,7 +718,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
               ) : null}
             </div>
           ) : (
-            <span style={{ color: "#8c9196", fontSize: "12px" }}>{t("translationRuntime.selectTaskHint")}</span>
+            <span style={{ color: pageColorTokens.textFootnote, fontSize: "12px" }}>{t("translationRuntime.selectTaskHint")}</span>
           )}
         </s-stack>
 
@@ -741,11 +744,11 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "12px 16px",
-                borderBottom: "1px solid #e3e5e8",
+                borderBottom: `1px solid ${pageColorTokens.border}`,
                 flexShrink: 0,
               }}
             >
-              <strong style={{ fontSize: "15px", color: "#202223" }}>{mdTitle}</strong>
+              <strong style={{ fontSize: "15px", color: pageColorTokens.textPrimary }}>{mdTitle}</strong>
               <s-button type="button" variant="secondary" onClick={() => setMdOpen(false)}>
                 {t("common.close")}
               </s-button>
@@ -755,7 +758,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                 style={{
                   padding: "8px 16px",
                   fontSize: "12px",
-                  color: "#6d7175",
+                  color: pageColorTokens.textSecondary,
                   background: "#fff5ea",
                   borderBottom: "1px solid #ffd79c",
                 }}
@@ -771,7 +774,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                 minHeight: 0,
                 fontSize: "14px",
                 lineHeight: 1.55,
-                color: "#202223",
+                color: pageColorTokens.textPrimary,
               }}
               className="translation-monitor-md"
             >

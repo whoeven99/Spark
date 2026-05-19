@@ -18,7 +18,7 @@ import {
 } from "../i18n/config";
 import { detectRequestLocale } from "../i18n/detector.server";
 
-import { debugAuthenticateAdmin } from "../server/debug/authenticateAdminDebug.server";
+import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import {
   getAppEntryConfig,
@@ -66,7 +66,7 @@ const NAV_ITEMS: Record<
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await debugAuthenticateAdmin(request, "app.shell");
+  const { session } = await authenticate.admin(request);
   try {
     await recordAppInstalled({
       shop: session.shop,
@@ -86,7 +86,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  await debugAuthenticateAdmin(request, "app.shell.action");
+  await authenticate.admin(request);
 
   const url = new URL(request.url);
   if (!url.searchParams.has("setLocale")) {

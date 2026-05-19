@@ -85,12 +85,13 @@ model Account {
   shop               String
   /// 与 `AppEntry` 一致，如 chat、generate-description
   appName            String
-  /// 当前订阅周期内的套餐 token（周期刷新，不随按量包清零）
+  /// 当前订阅周期套餐 token（周期内不随用量减少；续费刷新）
   subscriptionTokens Int      @default(0)
-  /// 按量购买的 token 余额（不随订阅周期清零）
+  /// 按量购买 token（续费结算后写入真实剩余；周期内不随用量减少）
   purchasedTokens    Int      @default(0)
-  /// 产品层免费试用剩余 token
+  /// 产品层免费试用 token（续费结算后写入真实剩余）
   trialTokens        Int      @default(0)
+  /// 本周期累计已用 token（续费清零；续费时用于结算按量包剩余）
   usedTokens         Int      @default(0)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt

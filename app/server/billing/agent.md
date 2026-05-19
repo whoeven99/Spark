@@ -15,7 +15,7 @@
 | `purchase/` | 按量购包、`purchases_one_time/update` webhook |
 | `account/` | `ensureAccount`、`grantTrial` |
 | `plans/planCatalog.server.ts` | 读 `PlanCatalog` |
-| `../tokenUsage/` | AI 调用后累加 `usedTokens`（`recordTokenUsage`）；余额见 `accountBalance.server.ts` 的 `getAvailableTokens` / `hasTokenQuota` |
+| `../tokenUsage/` | 周期内仅累加 `usedTokens`（`recordTokenUsage`）；续费时结算按量包剩余见 `tokenPools.server.ts`；余额见 `getAvailableTokens` / `hasTokenQuota` |
 
 ## 环境变量
 
@@ -47,7 +47,12 @@
 2. `AccountPeriodUsage.create`（归档即将结束的周期）
 3. `BillingLog` → `SUBSCRIPTION_RENEWED`
 4. `AppSubscription.update`（新周期）
-5. `Account.update`：`usedTokens = 0`，`subscriptionTokens = tokensPerPeriod`（**仅续费**；开通/升级/换套餐不清零 `usedTokens`，见 `activateSubscription.server.ts`）
+5. `Account.update`：`usedTokens = 0`，`subscriptionTokens = tokensPerPeriod`；`purchasedTokens` / `trialTokens` 按本周期 `usedTokens` 结算为真实剩余（`settlePoolsAtRenewal`，仅当 `usedTokens ≤` 三池之和时结算，见 `tokenPools.server.ts`）（**仅续费**；开通/升级/换套餐不清零 `usedTokens`，见 `activateSubscription.server.ts`）
+
+## Token 续费结算顺序
+
+1. 周期内：`recordTokenUsage` 只累加 `usedTokens`，**不**改 `subscriptionTokens` / `purchasedTokens` / `trialTokens`
+2. 续费时：`trialTokens` → `subscriptionTokens` → `purchasedTokens` 扣减本周期 `usedTokens`，写入真实剩余后刷新订阅池
 
 ## BillingLog 事件
 

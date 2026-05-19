@@ -47,8 +47,8 @@
   - `app/routes/app.generate-description.tsx`：生成商品描述独立页（嵌入 `GenerateDescriptionPage`，路径 `/app/generate-description`）；loader 注入 `loadBillingContext`。
   - `app/routes/app.billing.tsx`：计费与订阅页（`/app/billing`，`BillingPage`）。
   - `app/routes/app.picture-translate.tsx`：图片翻译独立页（嵌入 `PictureTranslatePage`，路径 `/app/picture-translate`）。
-- AI 聊天路由：
-  - `app/routes/chat.ts` -> 转发到 `app/server/chat.ts` 的 action。
+- AI 聊天路由（流式 SSE，唯一入口）：
+  - `app/routes/chat-stream.ts` -> `app/server/chat-stream.ts` 的 action（`POST /chat-stream`，请求体 `{ messages }` 或兼容 `{ message }`）。
 - 授权配置路由（均需 `authenticate.admin`）：
   - 广告：`app.ads.google.config.tsx` / `app.ads.tiktok.config.tsx` / `app.ads.microsoft.config.tsx` / `app.ads.meta.config.tsx` / `app.ads.meta.start.tsx`；OAuth 回调 `ads.meta.callback.tsx`。
   - 物流：`app.logistics.sf.config.tsx` / `app.logistics.fedex.config.tsx`
@@ -72,14 +72,14 @@
 - **启用范围**：`BILLING_ENABLED_APPS` 仅含 `generate-description`；主 App `chat` 不校验 token。
 - **网关**：`getBillingGateway()` — 生产走 Shopify Billing GraphQL；`BILLING_GATEWAY=noop` 时本地直接生效（开发）。
 - **访问控制**：`requireBillingAccess` / `loadBillingContext`（`app/server/billing/`）；生成描述 HTTP 在调用前校验余额。
-- **用量**：LangChain 调用经 `app/server/tokenUsage/` 累加 `Account.usedTokens`；可用余额由 `getAvailableTokens()` 计算（`subscription + purchased + trial`，见 `accountBalance.server.ts`）。
+- **用量**：LangChain 调用经 `app/server/tokenUsage/` 累加 `usedTokens`；可用余额为 `getAvailableTokens()`（三池之和减 `usedTokens` 判断见 `hasTokenQuota`）；订阅续费时按 `tokenPools.server.ts` 结算按量包真实剩余。
 - **表与流水**：见 `app/server/billing/agent.md`（续费顺序、`BillingLog` / `CommonEventLog` 事件类型、Turso 迁移命令）。
 - **App 生命周期事件**（卫星 App）：`CommonEventLog` 记录安装 / 卸载 / scope 变更；卸载与 scope webhook 见 `app/server/billing/agent.md`；安装在进入 `/app` 或 OAuth 时写入。
 - **与整图翻译计费区分**：`PICTURE_TRANSLATE_BILLING_*` 仅作用于 `/api/picture-translate` 的 Spring 点数对齐，与 Shopify 订阅模块无关。
 
 ## 6. AI 聊天链路（端到端）
-- 前端 `ChatPage` 调用 `POST /chat`，请求体 `{ message }`。
-- 服务端 `app/server/chat.ts`：
+- 前端 `ChatPage` 经 `useChatStream` 调用 `POST /chat-stream`（SSE），请求体为 `messages` 数组（兼容单条 `message`）。
+- 服务端 `app/server/chat-stream.ts`：
   - 先做 Shopify admin 鉴权。
   - 通过 `buildChatAgentExtraTools(admin)` 注入 Shopify 指标工具、翻译表单工具与 **`generate_product_description`** 等。
   - 调用 `invokeChatAgent()` 获取回复。
@@ -91,7 +91,7 @@
   - `markdownTableNormalize.ts`：识别 Markdown 表格、转为列表（粗体首列 + 「列名：值」）。
   - `polishFinalReply.ts`：在表格规整基础上做最终润色（代码围栏保护、已有标题/列表则跳过重排、多行「指标：值」格式化为小节等）。
   - `translationTaskFormExtract.ts`：从 ToolMessage / 对话推断翻译任务表单载荷。
-- **配套测试**：`app/server/ai/postprocess/*.test.ts`（Vitest）；改动上述模块后建议执行 `npm run test -- --run app/server/ai`。
+- **配套测试**：`tests/app/server/ai/postprocess/*.test.ts`（Vitest）；改动上述模块后建议执行 `npm run test`。
 
 ## 7. AI 工具能力概览
 - 基础工具：
@@ -163,7 +163,10 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
   - `DEEPSEEK_MODEL` / `OPENAI_MODEL`（可选）
   - `DEEPSEEK_BASE_URL`（可选，默认 DeepSeek v1）
 - Prisma / Turso（`app/db.server.ts`）：
-  - `TURSO_TARGET`：`test` | `prod`（可选；未设时生产默认为 `prod`，否则 `test`）
+  - `TURSO_TARGET`：`test` | `prod`（可选；未设时 `NODE_ENV=production` 默认连 **prod** 并读 `TURSO_PROD_*`；非 production 默认 test）
+  - 占位 prod URL（如 `your-prod-db`）视为未配置，不会误连
+  - Render Test：同为 `NODE_ENV=production`，须显式 `TURSO_TARGET=test` 或**仅**配置 `TURSO_TEST_*`（勿留占位 `TURSO_PROD_*`）
+  - **Render 环境变量**：在 Web Service → **Environment** 面板添加（会注入 `process.env`）。若用 **Secret File** 上传 `.env`，需挂载到 `/etc/secrets/.env`（或设 `ENV_FILE` 指向路径）；Secret File **不会**自动进 `process.env`，启动时由 `app/config/runtimeEnv.server.ts` 读取
   - 测试库：`TURSO_TEST_DATABASE_URL`、`TURSO_TEST_AUTH_TOKEN`
   - 生产库：`TURSO_PROD_DATABASE_URL`、`TURSO_PROD_AUTH_TOKEN`
   - `DATABASE_URL`：`schema.prisma` / 迁移用（本地 SQLite 等）
@@ -203,7 +206,7 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
 
 ## 13. 改动落点指南（按需求类型）
 - 改欢迎语/聊天 UI：`app/routes/page/ChatPage.tsx`、`app/routes/component/chat/*`（页面旁路与凭证弹层逻辑见 `app/routes/page/chat/`）。
-- 改聊天行为/工具调用：`app/server/chat.ts`、`app/server/ai/core/invokeChatAgent.server.ts`、`app/server/ai/skills/index.ts`、`app/server/ai/core/shopChatGraph.server.ts`。
+- 改聊天行为/工具调用：`app/server/chat-stream.ts`、`app/server/ai/core/invokeChatAgent.server.ts`、`app/server/ai/core/agentStream.server.ts`、`app/server/ai/skills/index.ts`、`app/server/ai/core/shopChatGraph.server.ts`。
 - 改 AI 回复抽取、Markdown 表格规整或最终润色：`app/server/ai/postprocess/langchainMessageText.ts`、`markdownTableNormalize.ts`、`polishFinalReply.ts`（单测同目录 `*.test.ts`）。
 - 改 Agent 运行摘要 / Cosmos 写入：`app/server/agentRunLog/**`（先读 `docs/agent-run-log.md`）；聊天写入见 `invokeChatAgent.server.ts`、`agentStream.server.ts`。
 - 加新 AI 工具：`app/server/ai/tools/implementations/*`，并在 `app/server/ai/chat/chatAgentTools.server.ts` 的 `buildChatAgentExtraTools` 中注册（与 `shopifyShopInfoTool` 等一并注入聊天链路）。

@@ -20,6 +20,9 @@ database.sqlite
 .env
 .env.*
 
+# 本地凭证（物流等），禁止提交
+.data/
+
 
 
 

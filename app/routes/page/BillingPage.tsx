@@ -8,6 +8,8 @@ import {
   computeAnnualDiscountPercent,
   formatAnnualMonthlyEquivalent,
   formatPlanPrice,
+  formatTokenUsagePercentDisplay,
+  getTokenUsagePercent,
   isActiveSubscriptionPlan,
   isPendingSubscriptionPlan,
   pickSubscriptionPlan,
@@ -236,10 +238,8 @@ export function BillingPage() {
   });
 
   const tokenCapacity = billing.usedTokens + billing.availableTokens;
-  const usagePercent =
-    tokenCapacity > 0
-      ? Math.min(100, Math.round((billing.usedTokens / tokenCapacity) * 100))
-      : 0;
+  const usagePercent = getTokenUsagePercent(billing.usedTokens, tokenCapacity);
+  const usagePercentDisplay = formatTokenUsagePercentDisplay(usagePercent);
   const recommendedTier: PlanTier = interval === "MONTHLY" ? "base" : "pro";
   const usageLow = usagePercent >= 85;
 
@@ -359,7 +359,7 @@ export function BillingPage() {
                 <span
                   className={`${styles.usagePercentBadge} ${usageLow ? styles.usagePercentBadgeLow : ""}`}
                 >
-                  {t("billing.usagePercentUsed", { percent: usagePercent })}
+                  {t("billing.usagePercentUsed", { percent: usagePercentDisplay })}
                 </span>
               </div>
               <div
@@ -368,7 +368,9 @@ export function BillingPage() {
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={usagePercent}
-                aria-label={t("billing.quotaProgressAria", { percent: usagePercent })}
+                aria-label={t("billing.quotaProgressAria", {
+                  percent: usagePercentDisplay,
+                })}
               >
                 <div
                   className={`${styles.progressFill} ${usageLow ? styles.progressFillLow : ""}`}
