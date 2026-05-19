@@ -55,7 +55,9 @@
 - 翻译服务端约定与边界： **`app/server/translation/agent.md`**（改动翻译功能前先读）。
 - **计费 Webhook**（卫星 App toml 已注册）：
   - `app_subscriptions/update` → `webhooks.app.subscriptions_update.tsx`
-  - `app/purchases_one_time/update` → `webhooks.app.purchases_one_time_update.tsx`
+  - `app_purchases_one_time/update` → `webhooks.app.purchases_one_time_update.tsx`
+  - `app/uninstalled` → `webhooks.app.uninstalled.tsx`（`CommonEventLog`）
+  - `app/scopes_update` → `webhooks.app.scopes_update.tsx`（`CommonEventLog`）
 - 计费服务端约定与边界： **`app/server/billing/agent.md`**（改动计费/订阅/购包前先读）。
 
 ## 5. 计费与订阅（generate-description）
@@ -64,7 +66,8 @@
 - **网关**：`getBillingGateway()` — 生产走 Shopify Billing GraphQL；`BILLING_GATEWAY=noop` 时本地直接生效（开发）。
 - **访问控制**：`requireBillingAccess` / `loadBillingContext`（`app/server/billing/`）；生成描述 HTTP 在调用前校验余额。
 - **用量**：LangChain 调用经 `app/server/tokenUsage/` 累加 `Account.usedTokens`；可用余额由 `getAvailableTokens()` 计算（`subscription + purchased + trial`，见 `accountBalance.server.ts`）。
-- **表与流水**：见 `app/server/billing/agent.md`（续费顺序、`BillingLog` 事件类型、Turso 同步命令）。
+- **表与流水**：见 `app/server/billing/agent.md`（续费顺序、`BillingLog` / `CommonEventLog` 事件类型、Turso 迁移命令）。
+- **App 生命周期事件**（卫星 App）：`CommonEventLog` 记录安装 / 卸载 / scope 变更；卸载与 scope webhook 见 `agent.md`；安装在进入 `/app` 或 OAuth 时写入。
 - **与整图翻译计费区分**：`PICTURE_TRANSLATE_BILLING_*` 仅作用于 `/api/picture-translate` 的 Spring 点数对齐，与 Shopify 订阅模块无关。
 
 ## 6. AI 聊天链路（端到端）
@@ -120,6 +123,26 @@
 - CI 工作流：`.github/workflows/spark-deploy-test.yml`
   - 先触发 Render Test 部署（commit deploy）。
   - Shopify deploy（`shopify.app.test.toml`）仅在 `workflow_dispatch` 或 `master` push 时执行。
+  - **卫星 App**（`shopify.app.smart-description.toml`，如 Desc - Test）的 Webhook 注册**不会**随上述 CI 自动更新；改 webhook 后需本地执行：`shopify app deploy -c shopify.app.smart-description.toml`。
+
+### Turso 数据库（迁移与同步）
+
+Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sqlite` 时要求 `file:` URL）。对 Turso 请用仓库脚本，运行时仍由 `app/db.server.ts` + `TURSO_*` 连接。
+
+| 命令 | 用途 |
+|------|------|
+| `npm run turso:migrate:test` / `turso:migrate:prod` | **首选**：维护 `_prisma_migrations`，只执行未应用的 `prisma/migrations/*/migration.sql`，并写入 PlanCatalog 种子 |
+| `npm run turso:migrate:test -- --baseline` | 库曾仅用 `turso:sync` 建好、表已齐：只把已有 migration **标记为已应用**，不执行 SQL（**勿**对缺表库使用） |
+| `npm run turso:sync:test` / `turso:sync:prod` | 空库兜底：从全部 migration 生成 `turso-baseline.sql` 并全量执行（`CREATE IF NOT EXISTS`）；**不会** ALTER 已有表，**无**版本表 |
+
+推荐流程：
+
+1. 本地改 schema → `npx prisma migrate dev`（`DATABASE_URL=file:...`）。
+2. 推到 Turso 测试库 → `npm run turso:migrate:test`。
+3. 生产 → `npm run turso:migrate:prod`。
+4. 首次从 `turso:sync` 迁到 migrate：先 `--baseline`，之后只用 `turso:migrate`。
+
+实现见 `scripts/turso-migrate.cjs`、`scripts/turso-sync.cjs`。
 
 ## 11. 环境变量（代码中实际依赖）
 - Shopify 侧：
@@ -175,7 +198,7 @@
 - 改生成商品描述页或 API：`app/routes/app.generate-description.tsx`、`app/routes/page/GenerateDescriptionPage.tsx`、`app/routes/component/generateDescription/GenerateDescriptionResultEditor.tsx`、`app/routes/api.generate-description.ts`、`app/routes/api.update-product-description.ts`、`app/server/generateDescription/**`、`app/hooks/useGenerateDescription.ts`、`app/server/ai/tools/implementations/generateDescriptionTool.ts`。
 - 改整图翻译 API / 双引擎路由：`app/routes/api.picture-translate.ts`、`app/server/pictureTranslate/**`、`app/server/ai/skills/pictureTranslate/**`。
 - 改翻译创建/流水线/Cosmos 文档：`app/server/translation/*`（先读 `agent.md`）；改翻译 UI：`app/routes/page/TranslationPage.tsx`、`app/routes/component/translation/*`；改 API：`app/routes/api.translate.v3.*.ts`。
-- 改订阅/购包/余额/Webhook：`app/server/billing/**`（先读 `agent.md`）；改计费页 UI：`app/routes/app.billing.tsx`、`app/routes/page/BillingPage.tsx`、`app/routes/component/billing/*`、`app/lib/billingPlanUi.ts`、`app/lib/billingPageTypes.ts`；改 Webhook：`app/routes/webhooks.app.subscriptions_update.tsx`、`app/routes/webhooks.app.purchases_one_time_update.tsx`；改 token 累加：`app/server/tokenUsage/**`；改套餐种子：`prisma/billing-plan-catalog-seed.sql` + `npm run turso:sync:*`。
+- 改订阅/购包/余额/Webhook：`app/server/billing/**`（先读 `agent.md`）；改计费页 UI：`app/routes/app.billing.tsx`、`app/routes/page/BillingPage.tsx`、`app/routes/component/billing/*`、`app/lib/billingPlanUi.ts`、`app/lib/billingPageTypes.ts`；改 Webhook：`app/routes/webhooks.app.subscriptions_update.tsx`、`webhooks.app.purchases_one_time_update.tsx`、`webhooks.app.uninstalled.tsx`、`webhooks.app.scopes_update.tsx`；改 App 生命周期流水：`app/server/commonEventLog/**`；改 token 累加：`app/server/tokenUsage/**`；改套餐种子：`prisma/billing-plan-catalog-seed.sql` + `npm run turso:migrate:*`。
 
 ## 14. 改动边界与风险提示
 - 未明确要求时，不改以下区域：

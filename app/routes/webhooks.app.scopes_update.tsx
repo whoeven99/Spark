@@ -16,6 +16,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
   } catch (error) {
     console.error("[CommonEvent] app/scopes_update handler failed:", error);
+    throw error;
   }
 
   return new Response();

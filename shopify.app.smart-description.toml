@@ -11,7 +11,7 @@ topics = ["app_subscriptions/update"]
 uri = "/webhooks/app/subscriptions_update"
 
 [[webhooks.subscriptions]]
-topics = ["app/purchases_one_time/update"]
+topics = ["app_purchases_one_time/update"]
 uri = "/webhooks/app/purchases_one_time_update"
 
 [[webhooks.subscriptions]]
