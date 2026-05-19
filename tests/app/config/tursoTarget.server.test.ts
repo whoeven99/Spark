@@ -79,11 +79,19 @@ describe("resolveTursoTarget", () => {
     expect(resolveTursoTarget()).toBe("prod");
   });
 
-  it("defaults to test when no valid URL is configured", () => {
+  it("defaults to prod when NODE_ENV is production and no valid URL is configured", () => {
     delete process.env.TURSO_TARGET;
     delete process.env.TURSO_TEST_DATABASE_URL;
     delete process.env.TURSO_PROD_DATABASE_URL;
     process.env.NODE_ENV = "production";
+    expect(resolveTursoTarget()).toBe("prod");
+  });
+
+  it("defaults to test when NODE_ENV is not production and no valid URL", () => {
+    delete process.env.TURSO_TARGET;
+    delete process.env.TURSO_TEST_DATABASE_URL;
+    delete process.env.TURSO_PROD_DATABASE_URL;
+    process.env.NODE_ENV = "development";
     expect(resolveTursoTarget()).toBe("test");
   });
 });
