@@ -9,8 +9,12 @@
  *                         未设则从 GET /v1/services/:id 自动解析，一般无需配置。
  *   FEISHU_WEBHOOK_URL  — 飞书自定义机器人 Webhook（完整 URL）
  *   DIGEST_LOOKBACK_HOURS — 仅调试：设正整数则改为「过去 N 小时」，覆盖北京昨日日历日
- *   DIGEST_MAX_PAGES      — 每类查询最多分页数，默认 30（每页最多 100 条）
- *   DIGEST_SKIP_FEISHU    — 设为 true 仅写本地报告不发飞书
+ *   DIGEST_MAX_PAGES      — 每类查询最多分页数，默认 8（每页最多 100 条）
+ *   DIGEST_QUERY_DELAY_MS — 两次查询之间的间隔，默认 2500
+ *   DIGEST_PAGE_DELAY_MS  — 分页之间的间隔，默认 600
+ *   DIGEST_RENDER_MAX_RETRIES — 429 时最大重试次数，默认 6
+ *   DIGEST_SKIP_FEISHU    — true/1/yes 时不发飞书
+ *   RENDER_SERVICE_DISPLAY_NAME — 报告/飞书中展示的服务名（yml 可填）；未设则用 service id
  *   DIGEST_OUTPUT_DIR     — 默认 reports
  */
 const fs = require("fs");
@@ -32,10 +36,21 @@ function env(name, fallback) {
   return v || fallback;
 }
 
+/** 识别 true / 1 / yes（GitHub input 偶发 True、带空格） */
+function parseBoolEnv(name, defaultValue = false) {
+  const raw = process.env[name]?.trim().toLowerCase();
+  if (!raw) return defaultValue;
+  return raw === "true" || raw === "1" || raw === "yes";
+}
+
 function requireEnv(name) {
   const v = process.env[name]?.trim();
   if (!v) throw new Error(`缺少环境变量 ${name}`);
   return v;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function renderFetch(apiKey, urlPath, query = {}) {
@@ -48,25 +63,51 @@ async function renderFetch(apiKey, urlPath, query = {}) {
       url.searchParams.set(k, String(v));
     }
   }
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      Accept: "application/json",
-    },
-  });
-  const text = await res.text();
-  let body;
-  try {
-    body = text ? JSON.parse(text) : {};
-  } catch {
-    body = { raw: text };
+
+  const maxRetries = Number(env("DIGEST_RENDER_MAX_RETRIES", "6"));
+  const baseDelayMs = Number(env("DIGEST_RENDER_RETRY_BASE_MS", "2000"));
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        Accept: "application/json",
+      },
+    });
+    const text = await res.text();
+    let body;
+    try {
+      body = text ? JSON.parse(text) : {};
+    } catch {
+      body = { raw: text };
+    }
+
+    if (res.status === 429) {
+      if (attempt >= maxRetries) {
+        throw new Error(
+          `Render API ${urlPath} HTTP 429: rate limit exceeded（已重试 ${maxRetries} 次）`,
+        );
+      }
+      const retryAfterSec = Number(res.headers.get("Retry-After"));
+      const waitMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0
+        ? retryAfterSec * 1000
+        : baseDelayMs * 2 ** attempt;
+      console.warn(
+        `[render-digest] Render 429 rate limit, wait ${waitMs}ms then retry (${attempt + 1}/${maxRetries})`,
+      );
+      await sleep(waitMs);
+      continue;
+    }
+
+    if (!res.ok) {
+      throw new Error(
+        `Render API ${urlPath} HTTP ${res.status}: ${JSON.stringify(body).slice(0, 500)}`,
+      );
+    }
+    return body;
   }
-  if (!res.ok) {
-    throw new Error(
-      `Render API ${urlPath} HTTP ${res.status}: ${JSON.stringify(body).slice(0, 500)}`,
-    );
-  }
-  return body;
+
+  throw new Error(`Render API ${urlPath} 重试耗尽`);
 }
 
 async function resolveOwnerId(apiKey, serviceId, explicitOwnerId) {
@@ -94,8 +135,10 @@ async function fetchLogsWindow(params) {
     endTime,
     extraQuery = {},
     maxPages,
+    label = "logs",
   } = params;
 
+  const pageDelayMs = Number(env("DIGEST_PAGE_DELAY_MS", "600"));
   const all = [];
   let page = 0;
   let cursorStart = startTime;
@@ -120,6 +163,16 @@ async function fetchLogsWindow(params) {
     cursorStart = body.nextStartTime;
     cursorEnd = body.nextEndTime;
     page += 1;
+
+    if (page < maxPages && pageDelayMs > 0) {
+      await sleep(pageDelayMs);
+    }
+  }
+
+  if (page >= maxPages) {
+    console.warn(
+      `[render-digest] query ${label} hit DIGEST_MAX_PAGES=${maxPages}, results may be truncated`,
+    );
   }
 
   return all;
@@ -144,7 +197,8 @@ function dedupeLogs(logs) {
 }
 
 async function fetchAllRelevantLogs(apiKey, ownerId, serviceId, startIso, endIso) {
-  const maxPages = Number(env("DIGEST_MAX_PAGES", "30"));
+  const maxPages = Number(env("DIGEST_MAX_PAGES", "8"));
+  const queryDelayMs = Number(env("DIGEST_QUERY_DELAY_MS", "2500"));
   const base = {
     apiKey,
     ownerId,
@@ -154,18 +208,38 @@ async function fetchAllRelevantLogs(apiKey, ownerId, serviceId, startIso, endIso
     maxPages,
   };
 
+  // 串行查询，避免 Promise.all 触发 Render Logs API 429；去掉宽泛 text 通配（与 error 重复且量大）
   const queries = [
-    { type: ["app"], level: ["error"] },
-    { type: ["app"], text: ["*error*", "*failed*", "*timeout*"] },
-    { type: ["request"], statusCode: ["5*"] },
-    { type: ["build"] },
+    {
+      label: "app-error",
+      extraQuery: { type: ["app"], level: ["error"] },
+    },
+    {
+      label: "request-5xx",
+      extraQuery: { type: ["request"], statusCode: ["5*"] },
+    },
+    {
+      label: "build",
+      extraQuery: { type: ["build"] },
+    },
   ];
 
-  const batches = await Promise.all(
-    queries.map((q) => fetchLogsWindow({ ...base, extraQuery: q })),
-  );
+  const merged = [];
+  for (let i = 0; i < queries.length; i += 1) {
+    const q = queries[i];
+    console.info(`[render-digest] fetch ${q.label} (max ${maxPages} pages)...`);
+    const batch = await fetchLogsWindow({
+      ...base,
+      extraQuery: q.extraQuery,
+      label: q.label,
+    });
+    merged.push(...batch);
+    if (i < queries.length - 1 && queryDelayMs > 0) {
+      await sleep(queryDelayMs);
+    }
+  }
 
-  return dedupeLogs(batches.flat());
+  return dedupeLogs(merged);
 }
 
 async function sendFeishu(webhookUrl, payload) {
@@ -207,9 +281,18 @@ function resolveTimeWindow() {
 async function main() {
   const apiKey = requireEnv("RENDER_API_KEY");
   const serviceId = requireEnv("RENDER_SERVICE_ID");
+  const serviceLabel =
+    env("RENDER_SERVICE_DISPLAY_NAME", "") || serviceId;
   const ownerIdExplicit = env("RENDER_OWNER_ID", "");
-  const skipFeishu = env("DIGEST_SKIP_FEISHU", "") === "true";
+  const skipFeishu = parseBoolEnv("DIGEST_SKIP_FEISHU", false);
   const outputDir = env("DIGEST_OUTPUT_DIR", "reports");
+
+  console.info(
+    `[render-digest] DIGEST_SKIP_FEISHU raw="${process.env.DIGEST_SKIP_FEISHU ?? ""}" → skip=${skipFeishu}`,
+  );
+  console.info(
+    `[render-digest] service label="${serviceLabel}" id=${serviceId}`,
+  );
 
   const { start, end, windowLabel, reportDate, mode } = resolveTimeWindow();
 
@@ -232,7 +315,11 @@ async function main() {
   );
   console.info(`[render-digest] fetched ${logs.length} log lines (deduped)`);
 
-  const digest = buildDigest(logs, { serviceId, windowLabel });
+  const digest = buildDigest(logs, {
+    serviceId,
+    serviceLabel,
+    windowLabel,
+  });
   const markdown = formatDigestMarkdown(digest);
   const jsonPath = path.join(outputDir, `render-digest-${reportDate}.json`);
   const mdPath = path.join(outputDir, `render-digest-${reportDate}.md`);
