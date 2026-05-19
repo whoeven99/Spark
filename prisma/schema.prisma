@@ -78,3 +78,121 @@ model AdPlatformCredential {
 
   @@unique([shop, platform])
 }
+
+/// 店铺在各 App 入口下的账户（token 分池 + 用量）。
+model Account {
+  id                 String   @id @default(cuid())
+  shop               String
+  /// 与 `AppEntry` 一致，如 chat、generate-description
+  appName            String
+  /// 当前订阅周期内的套餐 token（周期刷新，不随按量包清零）
+  subscriptionTokens Int      @default(0)
+  /// 按量购买的 token 余额（不随订阅周期清零）
+  purchasedTokens    Int      @default(0)
+  /// 产品层免费试用剩余 token
+  trialTokens        Int      @default(0)
+  /// 库内生成列：subscription + purchased + trial（只读）
+  availableTokens    Int      @default(dbgenerated("(subscriptionTokens + purchasedTokens + trialTokens)"))
+  usedTokens         Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  appSubscription   AppSubscription?
+  periodUsages      AccountPeriodUsage[]
+  billingLogs       BillingLog[]
+
+  @@unique([shop, appName])
+  @@index([shop])
+}
+
+/// 套餐目录（订阅 / 按量包 / 内置试用定义）。
+model PlanCatalog {
+  planKey          String   @id
+  appName          String
+  /// SUBSCRIPTION | ONE_TIME_PACK | INTERNAL_TRIAL
+  kind             String
+  /// MONTHLY | ANNUAL；一次性包为 null
+  billingInterval  String?
+  displayName      String
+  tokens           Int
+  priceAmount      String
+  currencyCode     String   @default("USD")
+  trialDays        Int?
+  shopifyPlanName  String?
+  sortOrder        Int      @default(0)
+  enabled          Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([appName, enabled, sortOrder])
+}
+
+/// 当前生效的 Shopify 订阅（每 shop + appName 一条）。
+model AppSubscription {
+  id                     String   @id @default(cuid())
+  shop                   String
+  appName                String
+  planKey                String
+  shopifySubscriptionId  String   @unique
+  billingInterval        String
+  /// PENDING | ACTIVE | CANCELLED | EXPIRED | FROZEN
+  status                 String
+  tokensPerPeriod        Int
+  trialEndsAt            DateTime?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelledAt            DateTime?
+  confirmationUrl        String?
+  rawPayload             Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  account      Account?             @relation(fields: [shop, appName], references: [shop, appName])
+  periodUsages AccountPeriodUsage[]
+
+  @@unique([shop, appName])
+  @@index([status])
+}
+
+/// 每个订阅周期结束时的 token 用量归档（续费时写入）。
+model AccountPeriodUsage {
+  id                          String   @id @default(cuid())
+  shop                        String
+  appName                     String
+  appSubscriptionId           String
+  planKey                     String
+  periodStart                 DateTime
+  periodEnd                   DateTime
+  usedTokens                  Int
+  subscriptionTokensAllocated Int
+  purchasedTokensRemaining    Int      @default(0)
+  trialTokensRemaining        Int      @default(0)
+  archivedAt                  DateTime @default(now())
+
+  account        Account         @relation(fields: [shop, appName], references: [shop, appName])
+  appSubscription AppSubscription @relation(fields: [appSubscriptionId], references: [id])
+
+  @@unique([appSubscriptionId, periodStart, periodEnd])
+  @@index([shop, appName, periodEnd])
+}
+
+/// 计费流水：试用、订阅、续费、按量购 token 等。
+model BillingLog {
+  id          String   @id @default(cuid())
+  shop        String
+  appName     String
+  /// TRIAL_GRANTED | SUBSCRIPTION_ACTIVATED | SUBSCRIPTION_RENEWED | TOKEN_PACK_PURCHASED
+  eventType   String
+  planKey     String?
+  referenceId String?
+  tokensDelta Int?
+  usedTokens  Int?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  account Account @relation(fields: [shop, appName], references: [shop, appName])
+
+  @@index([shop, appName, createdAt])
+  @@index([eventType, createdAt])
+  @@index([referenceId])
+}

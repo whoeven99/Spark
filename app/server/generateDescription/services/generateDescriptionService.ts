@@ -1,4 +1,9 @@
 import type { ShopifyAdminGraphqlClient } from "../../ai/skills/shopifyInfo/tool";
+import { getAppEntry } from "../../../config/appEntry.server";
+import {
+  parseUsageMetadata,
+  recordTokenUsage,
+} from "../../tokenUsage/index.server";
 import { invokeDescriptionModels } from "../descriptionAiClient.server";
 import { parseAndValidateProductDescriptionJson } from "../generatedDescriptionJson.server";
 import { logDetailedError } from "../generateDescriptionLog.server";
@@ -51,12 +56,18 @@ function clampTemperature(t: number): number {
  * 生成商品营销描述：拉取商品上下文 → 构建 Prompt → 调用 LLM → 校验结构化 JSON。
  * 所有异步步骤均带 requestId 日志。
  */
+export type GenerateDescriptionTokenContext = {
+  shop: string;
+  appName?: string;
+};
+
 export async function runProductDescriptionGeneration(params: {
   admin: ShopifyAdminGraphqlClient;
   productId: string;
   targetLanguage: string;
   temperature?: number;
   requestId: string;
+  tokenContext?: GenerateDescriptionTokenContext;
 }): Promise<GenerateDescriptionServiceResult> {
   const serviceStart = Date.now();
   const {
@@ -153,6 +164,19 @@ export async function runProductDescriptionGeneration(params: {
       title: context.title,
       description: aiPayload.description,
     };
+
+    const tokenCtx = params.tokenContext;
+    if (tokenCtx?.shop.trim()) {
+      const usage = parseUsageMetadata(raw.usageMeta);
+      if (usage.totalTokens > 0) {
+        await recordTokenUsage({
+          shop: tokenCtx.shop.trim(),
+          appName: tokenCtx.appName?.trim() || getAppEntry(),
+          usage,
+        });
+      }
+    }
+
     console.info(
       `${LOG} [Tool Success] requestId=${requestId} descriptionLen=${data.description.length} totalMs=${Date.now() - serviceStart}`,
     );

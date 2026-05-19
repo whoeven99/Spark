@@ -10,4 +10,7 @@ interface ImportMetaEnv {
   readonly TURSO_TARGET?: "test" | "prod";
   readonly APP_ENTRY?: string;
   readonly SESSION_PRISMA_TABLE?: "session" | "generateDescriptionSession";
+  /** noop | shopify（默认 shopify） */
+  readonly BILLING_GATEWAY?: string;
+  readonly BILLING_TEST?: string;
 }

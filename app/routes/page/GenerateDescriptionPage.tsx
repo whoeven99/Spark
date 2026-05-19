@@ -12,6 +12,7 @@ export function GenerateDescriptionPage() {
   const shopify = useAppBridge();
   const { t } = useTranslation();
   const loaderData = useLoaderData<typeof loader>();
+  const billing = loaderData.billing;
   const [selectedProduct, setSelectedProduct] =
     useState<ProductSelectorSelection | null>(null);
   const [productId, setProductId] = useState("");
@@ -63,6 +64,22 @@ export function GenerateDescriptionPage() {
   const copyBusy = copyTarget !== null;
   return (
     <s-page heading={t("generate.pageTitle")}>
+      {billing.billingRequired ? (
+        <s-section heading="Token 余额">
+          <s-stack direction="inline" gap="base">
+            <s-text>
+              可用 {billing.availableTokens.toLocaleString()} / 已用{" "}
+              {billing.usedTokens.toLocaleString()}
+            </s-text>
+            <s-link href={`/app/billing${search}`}>管理订阅与购包</s-link>
+          </s-stack>
+          {!billing.hasAccess ? (
+            <s-banner tone="warning">
+              Token 不足或未订阅，请先前往计费页开通。
+            </s-banner>
+          ) : null}
+        </s-section>
+      ) : null}
       <div
         style={{
           display: "flex",

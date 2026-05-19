@@ -4,7 +4,8 @@ import { DEFAULT_DESCRIPTION_TEMPERATURE } from "../../../generateDescription/co
 import { logDetailedError } from "../../../generateDescription/generateDescriptionLog.server";
 import { fetchShopLocalesPayload } from "../../../generateDescription/shopLocalesFetcher.server";
 import { runProductDescriptionGeneration } from "../../../generateDescription/services/generateDescriptionService";
-import type { ShopifyAdminGraphqlClient } from "./shopifyShopInfoTool";
+import { getAppEntry } from "../../../../config/appEntry.server";
+import type { AgentContext } from "../../core/toolRegistry.server";
 
 export const GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME =
   "generate_product_description";
@@ -12,9 +13,8 @@ export const GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME =
 /**
  * LangChain Tool：由 AI Assistant 调用，内部走商品上下文拉取 + Prompt + LLM，返回 JSON 字符串。
  */
-export function createGenerateProductDescriptionTool(
-  admin: ShopifyAdminGraphqlClient,
-) {
+export function createGenerateProductDescriptionTool(context: AgentContext) {
+  const { admin } = context;
   return new DynamicStructuredTool({
     name: GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME,
     description:
@@ -56,6 +56,14 @@ export function createGenerateProductDescriptionTool(
           targetLanguage: resolvedLang,
           temperature: DEFAULT_DESCRIPTION_TEMPERATURE,
           requestId,
+          ...(context.shop
+            ? {
+                tokenContext: {
+                  shop: context.shop,
+                  appName: context.appName ?? getAppEntry(),
+                },
+              }
+            : {}),
         });
         if (!result.ok) {
           console.info(

@@ -4,6 +4,7 @@ import { authenticate } from "../shopify.server";
 import { invokeChatAgent } from "./ai/core/invokeChatAgent.server";
 import { parseClientChatMessages } from "./chatPayload.server";
 import { isLangsmithAvailable } from "./ai/utils/langsmith.server";
+import { getAppEntry } from "../config/appEntry.server";
 import type { UserProfile } from "./ai/core/toolRegistry.server";
 import { coerceChatMessageAttachments } from "../lib/chatMessage";
 
@@ -54,10 +55,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     
     // 生成会话名称用于 LangSmith 追踪
     const shopDomain = session?.shop;
-    const sessionName = shopDomain 
-      ? `chat-session-${shopDomain}-${Date.now()}` 
+    const sessionName = shopDomain
+      ? `chat-session-${shopDomain}-${Date.now()}`
       : undefined;
-    
+
     console.log(`[Chat] LangSmith available: ${isLangsmithAvailable()}`);
     
     const {
@@ -66,7 +67,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       langsmithTraceUrl,
     } = await invokeChatAgent({
       messages: agentMessages,
-      context: { admin, profile: dummyProfile, shop: session?.shop },
+      context: {
+        admin,
+        profile: dummyProfile,
+        shop: shopDomain,
+        appName: getAppEntry(),
+      },
       sessionName,
     });
     
