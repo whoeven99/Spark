@@ -122,6 +122,7 @@
     "compareTitle": "Compare plans",
     "compareFeatureCol": "Feature",
     "compareMonthlyPrice": "Monthly price",
+    "compareAnnualPrice": "Annual price",
     "compareAnnualDiscount": "Annual discount",
     "compareTokens": "Tokens per period",
     "compareTrialDays": "Shopify trial days",

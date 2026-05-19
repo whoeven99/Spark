@@ -45,7 +45,7 @@
 2. `AccountPeriodUsage.create`（归档即将结束的周期）
 3. `BillingLog` → `SUBSCRIPTION_RENEWED`
 4. `AppSubscription.update`（新周期）
-5. `Account.update`：`usedTokens = 0`，`subscriptionTokens = tokensPerPeriod`
+5. `Account.update`：`usedTokens = 0`，`subscriptionTokens = tokensPerPeriod`（**仅续费**；开通/升级/换套餐不清零 `usedTokens`，见 `activateSubscription.server.ts`）
 
 ## BillingLog 事件
 

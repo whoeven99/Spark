@@ -100,10 +100,10 @@ export async function applyActiveSubscription(params: {
     },
   });
 
+  // 开通 / 升级 / 换套餐：保留 usedTokens；仅周期续费（renewal.server）清零。
   await prisma.account.update({
     where: { shop_appName: { shop, appName } },
     data: {
-      usedTokens: 0,
       subscriptionTokens: tokensPerPeriod,
     },
   });

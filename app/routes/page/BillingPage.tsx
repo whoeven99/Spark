@@ -8,7 +8,7 @@ import {
   computeAnnualDiscountPercent,
   formatPlanPrice,
   isActiveSubscriptionPlan,
-  pickSubscriptionByInterval,
+  pickSubscriptionPlan,
   resolveCurrentPlanLabel,
   type BillingIntervalView,
 } from "../../lib/billingPlanUi";
@@ -37,6 +37,52 @@ function PlanFeatureList({ items }: { items: string[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+function PaidPlanCard({
+  plan,
+  interval,
+  isRecommended,
+  isCurrent,
+  locale,
+  t,
+  paidFeatures,
+}: {
+  plan: PlanRecord;
+  interval: BillingIntervalView;
+  isRecommended: boolean;
+  isCurrent: boolean;
+  locale: string;
+  t: (key: string, options?: Record<string, unknown>) => string;
+  paidFeatures: (plan: PlanRecord) => string[];
+}) {
+  const priceSuffix =
+    interval === "ANNUAL" ? t("billing.perYear") : t("billing.perMonth");
+
+  return (
+    <article
+      className={`${styles.planCard} ${
+        isRecommended ? styles.planCardRecommended : ""
+      } ${isCurrent ? styles.planCardCurrent : ""}`}
+    >
+      {isRecommended ? (
+        <span className={styles.recommendedRibbon}>{t("billing.recommended")}</span>
+      ) : null}
+      <h3 className={styles.planName}>{plan.displayName}</h3>
+      <div className={styles.planPriceRow}>
+        <span className={styles.planPrice}>
+          {formatPlanPrice(plan.priceAmount, plan.currencyCode, locale)}
+        </span>
+        <span className={styles.planPriceSuffix}>{priceSuffix}</span>
+      </div>
+      <PlanFeatureList items={paidFeatures(plan)} />
+      <PlanSubscribeButton
+        plan={plan}
+        isCurrent={isCurrent}
+        label={isCurrent ? t("billing.currentPlan") : t("billing.getStarted")}
+      />
+    </article>
   );
 }
 
@@ -75,12 +121,26 @@ export function BillingPage() {
   const { t, i18n } = useTranslation();
   const locale = i18n.language;
 
-  const monthlyPlan = pickSubscriptionByInterval(subscriptionPlans, "MONTHLY");
-  const annualPlan = pickSubscriptionByInterval(subscriptionPlans, "ANNUAL");
-  const annualDiscount = useMemo(() => {
-    if (!monthlyPlan || !annualPlan) return null;
-    return computeAnnualDiscountPercent(monthlyPlan, annualPlan);
-  }, [monthlyPlan, annualPlan]);
+  const baseMonthly = pickSubscriptionPlan(subscriptionPlans, "MONTHLY", "base");
+  const baseAnnual = pickSubscriptionPlan(subscriptionPlans, "ANNUAL", "base");
+  const proMonthly = pickSubscriptionPlan(subscriptionPlans, "MONTHLY", "pro");
+  const proAnnual = pickSubscriptionPlan(subscriptionPlans, "ANNUAL", "pro");
+
+  const baseAnnualDiscount = useMemo(() => {
+    if (!baseMonthly || !baseAnnual) return null;
+    return computeAnnualDiscountPercent(baseMonthly, baseAnnual);
+  }, [baseMonthly, baseAnnual]);
+
+  const proAnnualDiscount = useMemo(() => {
+    if (!proMonthly || !proAnnual) return null;
+    return computeAnnualDiscountPercent(proMonthly, proAnnual);
+  }, [proMonthly, proAnnual]);
+
+  const headerAnnualDiscount = proAnnualDiscount ?? baseAnnualDiscount;
+
+  const hasIntervalToggle =
+    subscriptionPlans.some((p) => p.billingInterval === "MONTHLY") &&
+    subscriptionPlans.some((p) => p.billingInterval === "ANNUAL");
 
   const [interval, setInterval] = useState<BillingIntervalView>(
     billing.subscription?.billingInterval === "ANNUAL" ? "ANNUAL" : "MONTHLY",
@@ -89,7 +149,8 @@ export function BillingPage() {
     () => tokenPacks[0]?.planKey ?? "",
   );
 
-  const highlightedPlan = pickSubscriptionByInterval(subscriptionPlans, interval);
+  const basePlan = pickSubscriptionPlan(subscriptionPlans, interval, "base");
+  const proPlan = pickSubscriptionPlan(subscriptionPlans, interval, "pro");
   const sub = billing.subscription;
 
   const isOnPaidPlan =
@@ -132,42 +193,50 @@ export function BillingPage() {
       t("billing.featurePriority"),
     ].filter((line): line is string => Boolean(line));
 
+  const periodSuffix =
+    interval === "ANNUAL" ? t("billing.perYear") : t("billing.perMonth");
+
+  const formatPlanPriceWithPeriod = (plan: PlanRecord) =>
+    `${formatPlanPrice(plan.priceAmount, plan.currencyCode, locale)}${periodSuffix}`;
+
   const compareRows: {
     label: string;
     free: string;
-    monthly: string;
-    annual: string;
+    base: string;
+    pro: string;
   }[] = [
     {
-      label: t("billing.compareMonthlyPrice"),
+      label:
+        interval === "MONTHLY"
+          ? t("billing.compareMonthlyPrice")
+          : t("billing.compareAnnualPrice"),
       free: formatPlanPrice("0", trialPlan?.currencyCode ?? "USD", locale),
-      monthly: monthlyPlan
-        ? `${formatPlanPrice(monthlyPlan.priceAmount, monthlyPlan.currencyCode, locale)}${t("billing.perMonth")}`
-        : EMPTY,
-      annual: annualPlan
-        ? `${formatPlanPrice(annualPlan.priceAmount, annualPlan.currencyCode, locale)}${t("billing.perYear")}`
-        : EMPTY,
+      base: basePlan ? formatPlanPriceWithPeriod(basePlan) : EMPTY,
+      pro: proPlan ? formatPlanPriceWithPeriod(proPlan) : EMPTY,
     },
     {
       label: t("billing.compareAnnualDiscount"),
       free: EMPTY,
-      monthly: EMPTY,
-      annual:
-        annualDiscount != null
-          ? t("billing.discountPercent", { percent: annualDiscount })
+      base:
+        interval === "ANNUAL" && baseAnnualDiscount != null
+          ? t("billing.discountPercent", { percent: baseAnnualDiscount })
+          : EMPTY,
+      pro:
+        interval === "ANNUAL" && proAnnualDiscount != null
+          ? t("billing.discountPercent", { percent: proAnnualDiscount })
           : EMPTY,
     },
     {
       label: t("billing.compareTokens"),
       free: trialPlan?.tokens.toLocaleString() ?? EMPTY,
-      monthly: monthlyPlan?.tokens.toLocaleString() ?? EMPTY,
-      annual: annualPlan?.tokens.toLocaleString() ?? EMPTY,
+      base: basePlan?.tokens.toLocaleString() ?? EMPTY,
+      pro: proPlan?.tokens.toLocaleString() ?? EMPTY,
     },
     {
       label: t("billing.compareTrialDays"),
       free: EMPTY,
-      monthly: monthlyPlan?.trialDays?.toString() ?? EMPTY,
-      annual: annualPlan?.trialDays?.toString() ?? EMPTY,
+      base: basePlan?.trialDays?.toString() ?? EMPTY,
+      pro: proPlan?.trialDays?.toString() ?? EMPTY,
     },
   ];
 
@@ -231,7 +300,7 @@ export function BillingPage() {
           <section>
             <div className={styles.plansSectionHead}>
               <h2 className={styles.plansTitle}>{t("billing.choosePlanTitle")}</h2>
-              {monthlyPlan && annualPlan ? (
+              {hasIntervalToggle ? (
                 <div className={styles.intervalToggle}>
                   <span
                     className={
@@ -263,9 +332,11 @@ export function BillingPage() {
                   >
                     {t("billing.intervalAnnual")}
                   </span>
-                  {annualDiscount != null && interval === "ANNUAL" ? (
+                  {headerAnnualDiscount != null && interval === "ANNUAL" ? (
                     <span className={styles.discountPill}>
-                      {t("billing.annualDiscountBadge", { percent: annualDiscount })}
+                      {t("billing.annualDiscountBadge", {
+                        percent: headerAnnualDiscount,
+                      })}
                     </span>
                   ) : null}
                 </div>
@@ -295,95 +366,34 @@ export function BillingPage() {
                 </s-button>
               </article>
 
-              {monthlyPlan ? (
-                <article
-                  className={`${styles.planCard} ${
-                    interval === "MONTHLY" &&
-                    highlightedPlan?.planKey === monthlyPlan.planKey
-                      ? styles.planCardRecommended
-                      : ""
-                  } ${
-                    isActiveSubscriptionPlan(monthlyPlan.planKey, sub)
-                      ? styles.planCardCurrent
-                      : ""
-                  }`}
-                >
-                  {interval === "MONTHLY" ? (
-                    <span className={styles.recommendedRibbon}>
-                      {t("billing.recommended")}
-                    </span>
-                  ) : null}
-                  <h3 className={styles.planName}>{monthlyPlan.displayName}</h3>
-                  <div className={styles.planPriceRow}>
-                    <span className={styles.planPrice}>
-                      {formatPlanPrice(
-                        monthlyPlan.priceAmount,
-                        monthlyPlan.currencyCode,
-                        locale,
-                      )}
-                    </span>
-                    <span className={styles.planPriceSuffix}>
-                      {t("billing.perMonth")}
-                    </span>
-                  </div>
-                  <PlanFeatureList items={paidFeatures(monthlyPlan)} />
-                  <PlanSubscribeButton
-                    plan={monthlyPlan}
-                    isCurrent={isActiveSubscriptionPlan(monthlyPlan.planKey, sub)}
-                    label={
-                      isActiveSubscriptionPlan(monthlyPlan.planKey, sub)
-                        ? t("billing.currentPlan")
-                        : t("billing.getStarted")
-                    }
-                  />
-                </article>
+              {basePlan ? (
+                <PaidPlanCard
+                  plan={basePlan}
+                  interval={interval}
+                  isRecommended={interval === "MONTHLY"}
+                  isCurrent={isActiveSubscriptionPlan(basePlan.planKey, sub)}
+                  locale={locale}
+                  t={t}
+                  paidFeatures={paidFeatures}
+                />
               ) : null}
 
-              {annualPlan ? (
-                <article
-                  className={`${styles.planCard} ${
-                    interval === "ANNUAL" ? styles.planCardRecommended : ""
-                  } ${
-                    isActiveSubscriptionPlan(annualPlan.planKey, sub)
-                      ? styles.planCardCurrent
-                      : ""
-                  }`}
-                >
-                  {interval === "ANNUAL" ? (
-                    <span className={styles.recommendedRibbon}>
-                      {t("billing.recommended")}
-                    </span>
-                  ) : null}
-                  <h3 className={styles.planName}>{annualPlan.displayName}</h3>
-                  <div className={styles.planPriceRow}>
-                    <span className={styles.planPrice}>
-                      {formatPlanPrice(
-                        annualPlan.priceAmount,
-                        annualPlan.currencyCode,
-                        locale,
-                      )}
-                    </span>
-                    <span className={styles.planPriceSuffix}>
-                      {t("billing.perYear")}
-                    </span>
-                  </div>
-                  <PlanFeatureList items={paidFeatures(annualPlan)} />
-                  <PlanSubscribeButton
-                    plan={annualPlan}
-                    isCurrent={isActiveSubscriptionPlan(annualPlan.planKey, sub)}
-                    label={
-                      isActiveSubscriptionPlan(annualPlan.planKey, sub)
-                        ? t("billing.currentPlan")
-                        : t("billing.getStarted")
-                    }
-                  />
-                </article>
+              {proPlan ? (
+                <PaidPlanCard
+                  plan={proPlan}
+                  interval={interval}
+                  isRecommended={interval === "ANNUAL"}
+                  isCurrent={isActiveSubscriptionPlan(proPlan.planKey, sub)}
+                  locale={locale}
+                  t={t}
+                  paidFeatures={paidFeatures}
+                />
               ) : null}
             </div>
           </section>
         ) : null}
 
-        {monthlyPlan && annualPlan ? (
+        {basePlan && proPlan ? (
           <section className={styles.compareSection}>
             <h2 className={styles.compareTitle}>{t("billing.compareTitle")}</h2>
             <table className={styles.compareTable}>
@@ -391,8 +401,8 @@ export function BillingPage() {
                 <tr>
                   <th>{t("billing.compareFeatureCol")}</th>
                   <th>{trialPlan?.displayName ?? t("billing.planFree")}</th>
-                  <th>{monthlyPlan.displayName}</th>
-                  <th>{annualPlan.displayName}</th>
+                  <th>{basePlan.displayName}</th>
+                  <th>{proPlan.displayName}</th>
                 </tr>
               </thead>
               <tbody>
@@ -400,8 +410,8 @@ export function BillingPage() {
                   <tr key={row.label}>
                     <td>{row.label}</td>
                     <td>{row.free}</td>
-                    <td>{row.monthly}</td>
-                    <td>{row.annual}</td>
+                    <td>{row.base}</td>
+                    <td>{row.pro}</td>
                   </tr>
                 ))}
               </tbody>
