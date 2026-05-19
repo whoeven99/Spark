@@ -236,8 +236,7 @@ export function GenerateDescriptionPage() {
                   {t("common.clearResult")}
                 </s-button>
               </s-stack>
-              </s-stack>
-            </s-section>
+            </s-stack>
           </div>
         </div>
 
