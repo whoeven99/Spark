@@ -142,11 +142,51 @@ export function pageTextareaStyle(options?: {
   };
 }
 
+/** 卡片内区块标题（PageSurface） */
 export const pageSectionTitleStyle: CSSProperties = {
   fontSize: "1.125rem",
   fontWeight: 600,
   color: pageColorTokens.textPrimary,
   margin: "0 0 1rem",
+};
+
+/** 页内主区块标题（PageSectionHeader，对标计费 usageTitle） */
+export const pageBlockTitleStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "1.125rem",
+  fontWeight: 600,
+  color: pageColorTokens.textPrimary,
+};
+
+export const pageSectionSubtitleStyle: CSSProperties = {
+  margin: "0.25rem 0 0",
+  fontSize: "0.8125rem",
+  lineHeight: 1.45,
+  color: pageColorTokens.textSecondary,
+  maxWidth: "36rem",
+};
+
+/** 状态胶囊（对标计费 planBadge） */
+export const pageStatusBadgeStyle: CSSProperties = {
+  flexShrink: 0,
+  padding: "0.3rem 0.75rem",
+  borderRadius: "999px",
+  fontSize: "0.8125rem",
+  fontWeight: 600,
+  color: "#006e52",
+  background: pageColorTokens.brandGreenLight,
+  border: "1px solid #b7e0d0",
+};
+
+export const pageTrustFootnoteStyle: CSSProperties = {
+  margin: 0,
+  padding: "0.85rem 1rem",
+  borderRadius: pageColorTokens.radiusControl,
+  background: pageColorTokens.surfaceMuted,
+  fontSize: "0.75rem",
+  lineHeight: 1.45,
+  color: pageColorTokens.textSecondary,
+  textAlign: "center",
 };
 
 export const pageSectionMajorTitleStyle: CSSProperties = {
@@ -323,15 +363,51 @@ export const pageStatusCardStyle: CSSProperties = {
   boxShadow: pageColorTokens.shadowCard,
 };
 
+type PageSectionHeaderProps = {
+  title: string;
+  subtitle?: string;
+  badge?: ReactNode;
+};
+
+/** 页内首区块标题行：主标题 + 副标题 + 可选胶囊（全站默认，替代 pageIntroBanner） */
+export function PageSectionHeader({ title, subtitle, badge }: PageSectionHeaderProps) {
+  return (
+    <div style={pageSectionHeaderRowStyle}>
+      <div style={{ flex: "1 1 14rem", minWidth: 0 }}>
+        <h2 style={pageBlockTitleStyle}>{title}</h2>
+        {subtitle ? <p style={pageSectionSubtitleStyle}>{subtitle}</p> : null}
+      </div>
+      {badge ?? null}
+    </div>
+  );
+}
+
 type PageSurfaceProps = {
   title?: string;
+  subtitle?: string;
   children: ReactNode;
 };
 
-export function PageSurface({ title, children }: PageSurfaceProps) {
+export function PageSurface({ title, subtitle, children }: PageSurfaceProps) {
   return (
     <div style={pageSurfaceStyle}>
-      {title ? <div style={pageSectionTitleStyle}>{title}</div> : null}
+      {title || subtitle ? (
+        <div style={{ marginBottom: "1rem" }}>
+          {title ? (
+            <h3
+              style={{
+                ...pageBlockTitleStyle,
+                marginBottom: subtitle ? "0.25rem" : 0,
+              }}
+            >
+              {title}
+            </h3>
+          ) : null}
+          {subtitle ? (
+            <p style={{ ...pageSectionSubtitleStyle, margin: 0 }}>{subtitle}</p>
+          ) : null}
+        </div>
+      ) : null}
       {children}
     </div>
   );
