@@ -24,6 +24,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       sessionId: session.id,
       scope: session.scope,
       isOnline: session.isOnline,
+      source: "auth_callback",
     });
   } catch (error) {
     console.error("[CommonEvent] recordAppInstalled failed:", error);

@@ -58,7 +58,7 @@
 - `app_purchases_one_time/update` → `webhooks.app.purchases_one_time_update.tsx`
 - `app/uninstalled` → `webhooks.app.uninstalled.tsx`（`CommonEventLog`）
 - `app/scopes_update` → `webhooks.app.scopes_update.tsx`（`CommonEventLog`）
-- **安装**：无 `app/installed` webhook；OAuth / 嵌入式首次进 `/app` 时 `recordAppInstalled` 写入 `CommonEventLog`（`auth.$.tsx` 与 `app.tsx` loader，按 session 幂等）
+- **安装**：无 `app/installed` webhook；OAuth / 进入 `/app` 时 `recordAppInstalled` 写入（`auth.$.tsx`、`app.tsx`）。幂等按「最近安装是否晚于最近卸载」，**勿**用 `session:offline_${shop}` 作 referenceId（重装后 session id 不变会误跳过）
 
 ## CommonEventLog（与 BillingLog 分表）
 
