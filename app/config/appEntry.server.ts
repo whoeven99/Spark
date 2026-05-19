@@ -9,24 +9,30 @@ export type NavItemKey = AppEntry;
 type AppEntryConfig = {
   home: string;
   nav: readonly NavItemKey[];
+  /** Prisma Client 委托名，供 `PrismaSessionStorage` 使用。 */
+  sessionPrismaTable: "session" | "generateDescriptionSession";
 };
 
 const APP_ENTRY_CONFIGS = {
   chat: {
     home: "/app",
     nav: ["chat", "diagnosis", "translation", "generate-description"],
+    sessionPrismaTable: "session",
   },
   diagnosis: {
     home: "/app/additional",
     nav: ["diagnosis"],
+    sessionPrismaTable: "session",
   },
   translation: {
     home: "/app/translation",
     nav: ["translation"],
+    sessionPrismaTable: "session",
   },
   "generate-description": {
     home: "/app/generate-description",
     nav: ["generate-description"],
+    sessionPrismaTable: "generateDescriptionSession",
   },
 } as const satisfies Record<AppEntry, AppEntryConfig>;
 
@@ -43,6 +49,15 @@ export function getAppEntry(): AppEntry {
 
 export function getAppEntryConfig(): AppEntryConfig {
   return APP_ENTRY_CONFIGS[getAppEntry()];
+}
+
+/** 当前 App 使用的 Session 表（Prisma 委托名）。主 App 为 `session`，卫星 App 为独立表。 */
+export function getSessionPrismaTableName(): AppEntryConfig["sessionPrismaTable"] {
+  const override = process.env.SESSION_PRISMA_TABLE?.trim();
+  if (override === "session" || override === "generateDescriptionSession") {
+    return override;
+  }
+  return getAppEntryConfig().sessionPrismaTable;
 }
 
 /** 嵌入式 Admin 跳转时保留 shop/host/id_token 等查询参数，避免鉴权循环。 */
