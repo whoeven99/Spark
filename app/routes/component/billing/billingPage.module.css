@@ -487,11 +487,11 @@
   box-sizing: border-box;
   padding: 0.625rem 1rem;
   border-radius: 8px;
-  border: 1px solid #c9cccf;
-  background: #f6f6f7;
-  color: #6d7175;
+  border: 1px solid #b7e0d0;
+  background: #f1f8f5;
+  color: #006e52;
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.25;
   text-align: center;
 }
@@ -503,8 +503,8 @@
   padding: 0.625rem 1rem;
   border-radius: 8px;
   border: 1px solid #e1e3e5;
-  background: #f6f6f7;
-  color: #6d7175;
+  background: #fafbfb;
+  color: #8c9196;
   font-size: 0.875rem;
   font-weight: 500;
   line-height: 1.25;
@@ -668,7 +668,7 @@
 .packCheckoutBar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 0.75rem 1rem;
   flex-wrap: wrap;
   padding: 0.65rem 0.85rem;
@@ -678,12 +678,12 @@
 
 .packSelectionSummary {
   margin: 0;
-  flex: 1 1 12rem;
+  flex: 0 1 auto;
   min-width: 0;
   font-size: 0.875rem;
   font-weight: 600;
   color: #202223;
-  text-align: left;
+  text-align: center;
 }
 
 .packCtaInline {
@@ -722,15 +722,12 @@
 @media (max-width: 520px) {
   .packCheckoutBar {
     flex-direction: column;
-    align-items: stretch;
-  }
-
-  .packSelectionSummary {
-    text-align: center;
+    align-items: center;
   }
 
   .packBuyButton {
     width: 100%;
+    max-width: 16rem;
   }
 }
 
