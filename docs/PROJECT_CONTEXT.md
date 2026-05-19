@@ -165,6 +165,7 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
 - Prisma / Turso（`app/db.server.ts`）：
   - `TURSO_TARGET`：`test` | `prod`（推荐 Render Test 显式设为 `test`；占位 prod URL 如 `your-prod-db` 会被忽略）
   - Render Test：**不要**配置占位符 `TURSO_PROD_*`；仅 `TURSO_TEST_*` + `TURSO_TARGET=test` 即可
+  - **Render 环境变量**：在 Web Service → **Environment** 面板添加（会注入 `process.env`）。若用 **Secret File** 上传 `.env`，需挂载到 `/etc/secrets/.env`（或设 `ENV_FILE` 指向路径）；Secret File **不会**自动进 `process.env`，启动时由 `app/config/runtimeEnv.server.ts` 读取
   - 测试库：`TURSO_TEST_DATABASE_URL`、`TURSO_TEST_AUTH_TOKEN`
   - 生产库：`TURSO_PROD_DATABASE_URL`、`TURSO_PROD_AUTH_TOKEN`
   - `DATABASE_URL`：`schema.prisma` / 迁移用（本地 SQLite 等）
