@@ -1,0 +1,364 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 1120px;
+}
+
+.bannerWarning {
+  margin: 0;
+}
+
+/* —— 额度卡片 —— */
+.usageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.usageTitle {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #202223;
+}
+
+.planBadge {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #008060;
+}
+
+.usageCard {
+  background: #fff;
+  border: 1px solid #e1e3e5;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.usageBenefits {
+  background: linear-gradient(90deg, #1a6b52 0%, #208060 100%);
+  color: #fff;
+  padding: 0.65rem 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.usageMetrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+.usageMetric {
+  padding: 1.25rem 1.5rem;
+  text-align: center;
+}
+
+.usageMetric + .usageMetric {
+  border-left: 1px solid #f1f2f3;
+}
+
+.metricLabel {
+  margin: 0 0 0.35rem;
+  font-size: 0.8125rem;
+  color: #6d7175;
+}
+
+.metricValue {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #202223;
+  line-height: 1.1;
+}
+
+.metricUnit {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: #6d7175;
+}
+
+.usagePools {
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid #f1f2f3;
+  font-size: 0.8125rem;
+  color: #6d7175;
+  text-align: center;
+}
+
+/* —— 选计划 —— */
+.plansSectionHead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  text-align: center;
+}
+
+.plansTitle {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: #202223;
+}
+
+.intervalToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.toggleLabel {
+  font-size: 0.875rem;
+  color: #6d7175;
+}
+
+.toggleLabelActive {
+  font-weight: 600;
+  color: #202223;
+}
+
+.switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: #c9cccf;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.switchOn {
+  background: #008060;
+}
+
+.switchThumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  transition: transform 0.2s;
+}
+
+.switchOn .switchThumb {
+  transform: translateX(20px);
+}
+
+.discountPill {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: #ffea8a;
+  color: #5c4813;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.planGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.planCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #e1e3e5;
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.planCardRecommended {
+  border-color: #2c6ecb;
+  box-shadow: 0 0 0 1px #2c6ecb;
+}
+
+.planCardCurrent {
+  border-color: #8c9196;
+}
+
+.recommendedRibbon {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0.25rem 0.65rem;
+  border-radius: 0 12px 0 8px;
+  background: #2c6ecb;
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.planName {
+  margin: 0 0 0.75rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #202223;
+}
+
+.planPriceRow {
+  margin: 0 0 1rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.planPrice {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #202223;
+}
+
+.planPriceSuffix {
+  font-size: 0.875rem;
+  color: #6d7175;
+}
+
+.planFeatures {
+  list-style: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  flex: 1;
+}
+
+.planFeature {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: #303030;
+}
+
+.checkIcon {
+  flex-shrink: 0;
+  color: #008060;
+  font-weight: 700;
+}
+
+.planCta {
+  margin-top: auto;
+  width: 100%;
+}
+
+.planCtaCurrent {
+  opacity: 0.85;
+}
+
+/* —— 对比表 —— */
+.compareSection {
+  background: #fff;
+  border: 1px solid #e1e3e5;
+  border-radius: 12px;
+  padding: 1.25rem;
+  overflow-x: auto;
+}
+
+.compareTitle {
+  margin: 0 0 1rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #202223;
+}
+
+.compareTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.compareTable th,
+.compareTable td {
+  padding: 0.65rem 0.75rem;
+  text-align: center;
+  border-bottom: 1px solid #f1f2f3;
+}
+
+.compareTable th:first-child,
+.compareTable td:first-child {
+  text-align: left;
+  font-weight: 500;
+  color: #303030;
+}
+
+.compareTable thead th {
+  font-weight: 600;
+  color: #202223;
+  border-bottom: 1px solid #e1e3e5;
+}
+
+.compareTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* —— 购包 —— */
+.packCard {
+  background: #fff;
+  border: 1px solid #e1e3e5;
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.packOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.packOption {
+  padding: 0.65rem 1rem;
+  border: 1px solid #c9cccf;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #008060;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.packOption:hover {
+  border-color: #008060;
+}
+
+.packOptionSelected {
+  border-color: #008060;
+  background: #f1f8f5;
+  box-shadow: 0 0 0 1px #008060;
+}
+
+.packOptionLabel {
+  display: block;
+  white-space: nowrap;
+}
+
+.subscriptionMeta {
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.75rem;
+  background: #f6f6f7;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  color: #303030;
+}

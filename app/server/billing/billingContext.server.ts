@@ -61,6 +61,8 @@ export async function loadBillingPageData(
   return {
     appName,
     billing: toBillingPageSnapshot(ctx),
+    trialPlan:
+      ctx.plans.find((p) => p.kind === PLAN_CATALOG_KIND.INTERNAL_TRIAL) ?? null,
     subscriptionPlans: ctx.plans.filter(
       (p) => p.kind === PLAN_CATALOG_KIND.SUBSCRIPTION,
     ),
