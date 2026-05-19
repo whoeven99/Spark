@@ -220,6 +220,7 @@
     "generateAction": "生成描述",
     "generating": "正在生成...",
     "resultTitle": "生成结果",
+    "emptyResult": "请在左侧选择商品并点击生成描述。",
     "productTitleLabel": "商品标题",
     "productDescriptionLabel": "商品描述",
     "copyTitle": "复制标题",

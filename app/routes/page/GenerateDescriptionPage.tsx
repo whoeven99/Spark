@@ -78,175 +78,192 @@ export function GenerateDescriptionPage() {
           alignItems: "flex-start",
         }}
       >
-        <div style={{ flex: "1 1 420px", minWidth: 0 }}>
-          <s-stack direction="block" gap="large">
-            <s-section heading={t("generate.sectionTitle")}>
-              <s-stack direction="block" gap="base">
-                <div
+        <div style={{ flex: "2 1 360px", minWidth: 0 }}>
+          <s-section heading={t("generate.sectionTitle")}>
+            <s-stack direction="block" gap="base">
+              <div
+                style={{
+                  fontSize: "0.875rem",
+                  color: "#6d7175",
+                  lineHeight: 1.5,
+                }}
+              >
+                {t("generate.intro")}
+              </div>
+              <ProductSelector
+                locationSearch={search}
+                selected={selectedProduct}
+                onSelectedChange={setSelectedProduct}
+              />
+              <details
+                style={{ marginTop: "0.25rem" }}
+                open={showManualProductId}
+                onToggle={(e) =>
+                  setShowManualProductId(e.currentTarget.open)
+                }
+              >
+                <summary
                   style={{
-                    fontSize: "0.875rem",
-                    color: "#6d7175",
-                    lineHeight: 1.5,
+                    cursor: "pointer",
+                    fontSize: "0.8125rem",
+                    color: "#2c6ecb",
+                    userSelect: "none",
                   }}
                 >
-                  {t("generate.intro")}
+                  {t("generate.advancedManualProductId")}
+                </summary>
+                <div style={{ marginTop: "0.65rem" }}>
+                  <s-text-field
+                    label={t("generate.productIdLabel")}
+                    value={productId}
+                    onChange={(e) => setProductId(e.currentTarget.value)}
+                    autocomplete="off"
+                  />
                 </div>
-                <ProductSelector
-                  locationSearch={search}
-                  selected={selectedProduct}
-                  onSelectedChange={setSelectedProduct}
-                />
-                <details
-                  style={{ marginTop: "0.25rem" }}
-                  open={showManualProductId}
-                  onToggle={(e) =>
-                    setShowManualProductId(e.currentTarget.open)
-                  }
+              </details>
+
+              <div>
+                <label
+                  htmlFor="generate-description-lang"
+                  style={{
+                    display: "block",
+                    fontSize: "0.8125rem",
+                    fontWeight: 500,
+                    color: "#303030",
+                  }}
                 >
-                  <summary
-                    style={{
-                      cursor: "pointer",
-                      fontSize: "0.8125rem",
-                      color: "#2c6ecb",
-                      userSelect: "none",
-                    }}
-                  >
-                    {t("generate.advancedManualProductId")}
-                  </summary>
-                  <div style={{ marginTop: "0.65rem" }}>
-                    <s-text-field
-                      label={t("generate.productIdLabel")}
-                      value={productId}
-                      onChange={(e) => setProductId(e.currentTarget.value)}
-                      autocomplete="off"
-                    />
-                  </div>
-                </details>
-
-                <div>
-                  <label
-                    htmlFor="generate-description-lang"
-                    style={{
-                      display: "block",
-                      fontSize: "0.8125rem",
-                      fontWeight: 500,
-                      color: "#303030",
-                    }}
-                  >
-                    {t("generate.targetLanguage")}
-                  </label>
-                  <select
-                    id="generate-description-lang"
-                    value={targetLanguage}
-                    onChange={(e) => setTargetLanguage(e.target.value)}
-                    disabled={localesLoading || isSubmitting || isSaving || saveConfirmOpen}
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      maxWidth: "100%",
-                      marginTop: "0.35rem",
-                      padding: "0.5rem 0.65rem",
-                      fontSize: "0.875rem",
-                      borderRadius: "8px",
-                      border: "1px solid #c9cccf",
-                      background: localesLoading ? "#f6f6f7" : "#fff",
-                      color: "#303030",
-                      boxSizing: "border-box",
-                    }}
-                  >
-                    {localesLoading && localeOptions.length === 0 ? (
-                      <option value="">{t("common.loadingLanguage")}</option>
-                    ) : null}
-                    {localeOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                  {localesIsFallback ? (
-                    <div
-                      style={{
-                        marginTop: "0.35rem",
-                        fontSize: "0.75rem",
-                        color: "#6d7175",
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      {t("generate.fallbackLocalesHint")}{" "}
-                      <code style={{ fontSize: "0.7rem" }}>read_locales</code>{" "}
-                    </div>
+                  {t("generate.targetLanguage")}
+                </label>
+                <select
+                  id="generate-description-lang"
+                  value={targetLanguage}
+                  onChange={(e) => setTargetLanguage(e.target.value)}
+                  disabled={localesLoading || isSubmitting || isSaving || saveConfirmOpen}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    maxWidth: "100%",
+                    marginTop: "0.35rem",
+                    padding: "0.5rem 0.65rem",
+                    fontSize: "0.875rem",
+                    borderRadius: "8px",
+                    border: "1px solid #c9cccf",
+                    background: localesLoading ? "#f6f6f7" : "#fff",
+                    color: "#303030",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  {localesLoading && localeOptions.length === 0 ? (
+                    <option value="">{t("common.loadingLanguage")}</option>
                   ) : null}
-                </div>
-
-                {errorText ? (
+                  {localeOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                {localesIsFallback ? (
                   <div
                     style={{
-                      padding: "0.5rem 0.65rem",
-                      borderRadius: "8px",
-                      background: "rgba(216, 44, 13, 0.08)",
-                      color: "#8a2712",
-                      fontSize: "0.8125rem",
+                      marginTop: "0.35rem",
+                      fontSize: "0.75rem",
+                      color: "#6d7175",
                       lineHeight: 1.45,
                     }}
                   >
-                    {errorText}
+                    {t("generate.fallbackLocalesHint")}{" "}
+                    <code style={{ fontSize: "0.7rem" }}>read_locales</code>{" "}
                   </div>
                 ) : null}
+              </div>
 
-                {description !== null ? (
-                  <GenerateDescriptionResultEditor
-                    variant="page"
-                    draftTitle={draftTitle}
-                    draftDescription={draftDescription}
-                    onDraftTitleChange={setDraftTitle}
-                    onDraftDescriptionChange={setDraftDescription}
-                    copyTarget={copyTarget}
-                    copyBusy={copyBusy}
-                    isSubmitting={isSubmitting}
-                    isSaving={isSaving}
-                    saveErrorText={saveErrorText}
-                    onCopyTitle={copyTitle}
-                    onCopyDescription={copyDescription}
-                    onCopyAll={copyAll}
-                    onClickSave={requestOpenSaveDialog}
-                    saveConfirmOpen={saveConfirmOpen}
-                    onSaveConfirm={() => {
-                      void confirmSaveToShopify(productIdForActions);
-                    }}
-                    onSaveCancel={cancelSaveDialog}
-                  />
-                ) : null}
+              {errorText ? (
+                <div
+                  style={{
+                    padding: "0.5rem 0.65rem",
+                    borderRadius: "8px",
+                    background: "rgba(216, 44, 13, 0.08)",
+                    color: "#8a2712",
+                    fontSize: "0.8125rem",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {errorText}
+                </div>
+              ) : null}
 
-                <s-stack direction="inline" gap="small">
-                  <s-button
-                    type="button"
-                    variant="primary"
-                    onClick={() => {
-                      void handleGenerate();
-                    }}
-                    {...(isSubmitting || isSaving || localesLoading || saveConfirmOpen ? { disabled: true } : {})}
-                  >
-                    {isSubmitting
-                      ? t("generate.generating")
-                      : localesLoading
-                        ? t("common.loadingLanguage")
-                        : t("generate.generateAction")}
-                  </s-button>
-                  <s-button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      resetResult();
-                      setSelectedProduct(null);
-                      setProductId("");
-                    }}
-                    {...(isSubmitting || isSaving ? { disabled: true } : {})}
-                  >
-                    {t("common.clearResult")}
-                  </s-button>
-                </s-stack>              </s-stack>
+              <s-stack direction="inline" gap="small">
+                <s-button
+                  type="button"
+                  variant="primary"
+                  onClick={() => {
+                    void handleGenerate();
+                  }}
+                  {...(isSubmitting || isSaving || localesLoading || saveConfirmOpen ? { disabled: true } : {})}
+                >
+                  {isSubmitting
+                    ? t("generate.generating")
+                    : localesLoading
+                      ? t("common.loadingLanguage")
+                      : t("generate.generateAction")}
+                </s-button>
+                <s-button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    resetResult();
+                    setSelectedProduct(null);
+                    setProductId("");
+                  }}
+                  {...(isSubmitting || isSaving ? { disabled: true } : {})}
+                >
+                  {t("common.clearResult")}
+                </s-button>
+              </s-stack>
+            </s-stack>
+          </s-section>
+        </div>
+
+        <div style={{ flex: "3 1 480px", minWidth: 0 }}>
+          {description !== null ? (
+            <GenerateDescriptionResultEditor
+              variant="page"
+              draftTitle={draftTitle}
+              draftDescription={draftDescription}
+              onDraftTitleChange={setDraftTitle}
+              onDraftDescriptionChange={setDraftDescription}
+              copyTarget={copyTarget}
+              copyBusy={copyBusy}
+              isSubmitting={isSubmitting}
+              isSaving={isSaving}
+              saveErrorText={saveErrorText}
+              onCopyTitle={copyTitle}
+              onCopyDescription={copyDescription}
+              onCopyAll={copyAll}
+              onClickSave={requestOpenSaveDialog}
+              saveConfirmOpen={saveConfirmOpen}
+              onSaveConfirm={() => {
+                void confirmSaveToShopify(productIdForActions);
+              }}
+              onSaveCancel={cancelSaveDialog}
+            />
+          ) : (
+            <s-section heading={t("generate.resultTitle")}>
+              <div
+                style={{
+                  padding: "1.25rem 1rem",
+                  borderRadius: "10px",
+                  background: "rgba(109, 113, 117, 0.08)",
+                  color: "#6d7175",
+                  fontSize: "0.875rem",
+                  lineHeight: 1.5,
+                  textAlign: "center",
+                }}
+              >
+                {t("generate.emptyResult")}
+              </div>
             </s-section>
-          </s-stack>
+          )}
         </div>
       </div>
     </s-page>

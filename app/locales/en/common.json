@@ -220,6 +220,7 @@
     "generateAction": "Generate description",
     "generating": "Generating...",
     "resultTitle": "Generated result",
+    "emptyResult": "Please select a product and generate description.",
     "productTitleLabel": "Product title",
     "productDescriptionLabel": "Product description",
     "copyTitle": "Copy title",
