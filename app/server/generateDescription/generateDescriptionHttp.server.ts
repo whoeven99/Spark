@@ -3,7 +3,7 @@ import { getAppEntry } from "../../config/appEntry.server";
 import {
   billingErrorToResponse,
   requireBillingAccess,
-} from "../billing";
+} from "../billing/index.server";
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/tool";
 import {
   DEFAULT_DESCRIPTION_TEMPERATURE,

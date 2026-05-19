@@ -13,7 +13,7 @@ import {
   loadBillingContext,
   startSubscriptionCheckout,
   startTokenPackCheckout,
-} from "../server/billing";
+} from "../server/billing/index.server";
 import { PLAN_CATALOG_KIND } from "../server/billing/types.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {

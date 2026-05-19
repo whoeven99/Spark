@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
 import { getAppEntry } from "../config/appEntry.server";
-import { handleAppSubscriptionWebhook } from "../server/billing";
+import { handleAppSubscriptionWebhook } from "../server/billing/index.server";
 import { authenticate, unauthenticated } from "../shopify.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {

@@ -13,7 +13,7 @@ import {
 import { logDetailedError } from "../server/generateDescription/generateDescriptionLog.server";
 import { fetchShopLocalesPayload } from "../server/generateDescription/shopLocalesFetcher.server";
 import { getAppEntry } from "../config/appEntry.server";
-import { billingErrorToResponse, loadBillingContext } from "../server/billing";
+import { billingErrorToResponse, loadBillingContext } from "../server/billing/index.server";
 import { GenerateDescriptionPage } from "./page/GenerateDescriptionPage";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
