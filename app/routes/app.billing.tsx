@@ -20,7 +20,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const appName = getAppEntry();
   const billing = await loadBillingContext(session.shop, appName);
-  return { billing, appName };
+  const subscriptionPlans = billing.plans.filter(
+    (p) => p.kind === PLAN_CATALOG_KIND.SUBSCRIPTION,
+  );
+  const tokenPacks = billing.plans.filter(
+    (p) => p.kind === PLAN_CATALOG_KIND.ONE_TIME_PACK,
+  );
+  return { billing, appName, subscriptionPlans, tokenPacks };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -68,7 +74,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function BillingPage() {
-  const { billing, appName } = useLoaderData<typeof loader>();
+  const { billing, appName, subscriptionPlans, tokenPacks } =
+    useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const shopify = useAppBridge();
 
@@ -79,13 +86,6 @@ export default function BillingPage() {
   } else if (actionData && !actionData.ok) {
     shopify.toast.show(actionData.error);
   }
-
-  const subscriptionPlans = billing.plans.filter(
-    (p) => p.kind === PLAN_CATALOG_KIND.SUBSCRIPTION,
-  );
-  const packs = billing.plans.filter(
-    (p) => p.kind === PLAN_CATALOG_KIND.ONE_TIME_PACK,
-  );
 
   return (
     <s-page heading="计费与 Token">
@@ -144,10 +144,10 @@ export default function BillingPage() {
         </s-section>
       ) : null}
 
-      {packs.length > 0 ? (
+      {tokenPacks.length > 0 ? (
         <s-section heading="按量购买 Token">
           <s-stack direction="block" gap="base">
-            {packs.map((plan) => (
+            {tokenPacks.map((plan) => (
               <s-box
                 key={plan.planKey}
                 padding="base"
