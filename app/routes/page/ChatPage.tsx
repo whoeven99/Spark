@@ -19,9 +19,8 @@ import {
   buildQuickPrompts,
   quickPromptTones,
 } from "./chat/chatPageConstants";
-import { asideCardStyle } from "./chat/chatPageStyles";
 import { useChatStream } from "./chat/useChatStream";
-import { pageIntroBannerStyle } from "./pageUiStyles";
+import { pageIntroBannerStyle, PageSurface } from "./pageUiStyles";
 
 const streamingAssistantBubbleShellStyle: CSSProperties = {
   borderRadius: "12px",
@@ -331,7 +330,7 @@ export function ChatPage() {
       </s-section>
 
       <s-section slot="aside" heading={t("chat.tipsTitle")}>
-        <div style={asideCardStyle}>
+        <PageSurface>
           <s-unordered-list>
             <s-list-item>{t("chat.tipSingleQuestion")}</s-list-item>
             <s-list-item>{t("chat.tipScenario")}</s-list-item>
@@ -340,7 +339,7 @@ export function ChatPage() {
               {t("chat.tipNewChat")}
             </s-list-item>
           </s-unordered-list>
-        </div>
+        </PageSurface>
       </s-section>
 
       <ChatPageCredentialsChrome shopify={shopify} />
