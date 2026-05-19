@@ -1,45 +1,14 @@
-import { CosmosClient, type Container } from "@azure/cosmos";
 import type { ShopProfileDoc } from "./types.server";
-
-const DEFAULT_DATABASE_ID = "spark_ops";
-const DEFAULT_CONTAINER_ID = "shop_profiles";
-
-let containerPromise: Promise<Container> | null = null;
-
-function getRequiredEnv(name: string): string {
-  const value = process.env[name]?.trim();
-  if (!value) throw new Error(`缺少环境变量 ${name}`);
-  return value;
-}
+import {
+  getShopProfileSparkOpsContainer,
+  isCosmosSparkOpsConfigured,
+} from "../cosmos/cosmosSparkOps.server";
 
 export function isShopProfileCosmosConfigured(): boolean {
-  return Boolean(
-    process.env.COSMOS_ENDPOINT?.trim() && process.env.COSMOS_KEY?.trim(),
-  );
+  return isCosmosSparkOpsConfigured();
 }
 
-async function getShopProfilesContainer(): Promise<Container> {
-  if (containerPromise) return containerPromise;
-  containerPromise = (async () => {
-    const endpoint = getRequiredEnv("COSMOS_ENDPOINT");
-    const key = getRequiredEnv("COSMOS_KEY");
-    const databaseId =
-      process.env.COSMOS_OPS_DATABASE_ID?.trim() || DEFAULT_DATABASE_ID;
-    const containerId =
-      process.env.COSMOS_SHOP_PROFILES_CONTAINER?.trim() ||
-      DEFAULT_CONTAINER_ID;
-    const client = new CosmosClient({ endpoint, key });
-    const { database } = await client.databases.createIfNotExists({
-      id: databaseId,
-    });
-    const { container } = await database.containers.createIfNotExists({
-      id: containerId,
-      partitionKey: { paths: ["/shop"] },
-    });
-    return container;
-  })();
-  return containerPromise;
-}
+const SHOP_PROFILE_DOC_TYPE = "shop_profile";
 
 export async function getShopProfileDoc(
   shop: string,
@@ -47,11 +16,12 @@ export async function getShopProfileDoc(
   const shopTrim = shop.trim();
   if (!shopTrim || !isShopProfileCosmosConfigured()) return null;
   try {
-    const container = await getShopProfilesContainer();
+    const container = await getShopProfileSparkOpsContainer();
     const { resource } = await container
       .item("profile", shopTrim)
       .read<ShopProfileDoc>();
-    return resource ?? null;
+    if (!resource || resource.docType !== SHOP_PROFILE_DOC_TYPE) return null;
+    return resource;
   } catch (error: unknown) {
     const code =
       typeof error === "object" &&
@@ -68,6 +38,13 @@ export async function getShopProfileDoc(
 export async function upsertShopProfileDoc(doc: ShopProfileDoc): Promise<void> {
   const shop = doc.shop.trim();
   if (!shop) return;
-  const container = await getShopProfilesContainer();
-  await container.items.upsert({ ...doc, id: "profile", shop });
+  const container = await getShopProfileSparkOpsContainer();
+  await container.items.upsert({
+    ...doc,
+    id: "profile",
+    shop,
+    docType: SHOP_PROFILE_DOC_TYPE,
+    /** 与 agent_runs 同容器时，避免继承容器 90 天 TTL */
+    ttl: -1,
+  });
 }

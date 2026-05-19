@@ -34,9 +34,10 @@ export type ShopBasicFacts = {
   primaryDomainUrl?: string;
 };
 
-/** Cosmos `shop_profiles` 文档（partition: /shop，每店 id 固定为 profile） */
+/** Cosmos 店铺画像文档（partition: /shop，id 固定 profile；默认与 agent_runs 同容器） */
 export type ShopProfileDoc = {
   id: "profile";
+  docType: "shop_profile";
   shop: string;
   appName: AppEntry | string;
   version: number;

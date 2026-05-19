@@ -76,6 +76,7 @@ export async function bootstrapShopProfile(params: {
 
   const doc: ShopProfileDoc = {
     id: "profile",
+    docType: "shop_profile",
     shop,
     appName: params.appName,
     version,
