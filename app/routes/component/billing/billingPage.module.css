@@ -387,16 +387,24 @@
 
 .packOptions {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(var(--pack-columns, 2), minmax(0, 1fr));
+  gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .packOptions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .packOption {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 0.15rem;
-  padding: 1rem 0.75rem;
+  min-height: 7.5rem;
+  padding: 1.15rem 0.75rem;
   border: 1px solid #c9cccf;
   border-radius: 10px;
   background: #fff;

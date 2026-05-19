@@ -58,15 +58,19 @@ export function isLangsmithAvailable(): boolean {
   return LANGSMITH_CONFIG.enabled && Boolean(LANGSMITH_CONFIG.apiKey);
 }
 
-// 获取追踪链接（可选功能）
+// 获取追踪链接（runId 为 LangSmith root run uuid）
 export function getTraceUrl(runId?: string): string | null {
-  if (!LANGSMITH_CONFIG.enabled || !LANGSMITH_CONFIG.projectName) {
+  if (!LANGSMITH_CONFIG.enabled) {
     return null;
   }
-  
-  if (runId) {
-    return `https://smith.langchain.com/o/${LANGSMITH_CONFIG.projectName}/runs/${runId}`;
+
+  if (runId?.trim()) {
+    return `https://smith.langchain.com/runs/${runId.trim()}`;
   }
-  
-  return `https://smith.langchain.com/o/${LANGSMITH_CONFIG.projectName}`;
+
+  if (LANGSMITH_CONFIG.projectName) {
+    return `https://smith.langchain.com/o/default/projects/p/${encodeURIComponent(LANGSMITH_CONFIG.projectName)}`;
+  }
+
+  return "https://smith.langchain.com";
 }

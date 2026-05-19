@@ -1,0 +1,49 @@
+# 每日拉取 Render Test 服务日志，归因汇总后发送飞书（需配置 FEISHU_WEBHOOK_URL）
+name: Render daily log digest
+
+on:
+  schedule:
+    # UTC 00:30 = 北京时间 08:30（东八区）
+    - cron: "30 0 * * *"
+  workflow_dispatch:
+    inputs:
+      lookback_hours:
+        description: "调试用：设正整数则改为过去 N 小时（留空=北京昨日 0:00–24:00）"
+        required: false
+        default: ""
+      skip_feishu:
+        description: "仅生成报告不发飞书 (true/false)"
+        required: false
+        default: "false"
+
+defaults:
+  run:
+    working-directory: .
+
+jobs:
+  digest:
+    name: Render logs → digest → Feishu
+    runs-on: ubuntu-latest
+    environment: CommonShopifyRenderConfig
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run daily log digest
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_APIKEY }}
+          RENDER_SERVICE_ID: srv-d7j6ogaqqhas739in900
+          RENDER_OWNER_ID: ${{ secrets.RENDER_OWNER_ID }}
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+          DIGEST_LOOKBACK_HOURS: ${{ github.event.inputs.lookback_hours }}
+          DIGEST_SKIP_FEISHU: ${{ github.event.inputs.skip_feishu || 'false' }}
+        run: node scripts/render-daily-log-digest.cjs
+
+      - name: Upload digest artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: render-digest-${{ github.run_id }}
+          path: reports/render-digest-*.*
+          retention-days: 30

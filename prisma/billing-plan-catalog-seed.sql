@@ -126,4 +126,36 @@ INSERT OR IGNORE INTO "PlanCatalog" (
         1,
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
+    ),
+    (
+        'gd_pack_1m',
+        'generate-description',
+        'ONE_TIME_PACK',
+        NULL,
+        'Token pack 1M',
+        1000000,
+        '69.99',
+        'USD',
+        NULL,
+        'Generate Description Token Pack 1M',
+        60,
+        1,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+    ),
+    (
+        'gd_pack_2m',
+        'generate-description',
+        'ONE_TIME_PACK',
+        NULL,
+        'Token pack 2M',
+        2000000,
+        '129.99',
+        'USD',
+        NULL,
+        'Generate Description Token Pack 2M',
+        70,
+        1,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
     );
