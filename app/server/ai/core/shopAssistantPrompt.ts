@@ -27,15 +27,26 @@ export async function getPersonalizedSystemPrompt(
     }
   }
 
-  // 如果有用户画像，拼接个性化提示
   if (context.profile) {
-    parts.push(
-      `【用户画像与偏好】：\n请根据以下用户信息提供更贴近其业务场景和习惯的个性化建议：\n${JSON.stringify(
-        context.profile,
-        null,
-        2
-      )}`
-    );
+    const profileParts: string[] = [
+      "【商店画像】",
+      "以下为安装/刷新时从 Shopify 写入的店铺基础信息；勿编造未列出的事实。",
+    ];
+    if (context.profile.promptSnippet) {
+      profileParts.push(context.profile.promptSnippet);
+    }
+    if (context.profile.shopProfileMarkdown) {
+      profileParts.push("", context.profile.shopProfileMarkdown);
+    }
+    if (profileParts.length > 2) {
+      parts.push(profileParts.join("\n"));
+    }
+    const prefs = context.profile.preferences;
+    if (prefs && Object.keys(prefs).length > 0) {
+      parts.push(
+        `【商户偏好】\n${JSON.stringify(prefs, null, 2)}`,
+      );
+    }
   }
 
   return parts.join("\n\n");

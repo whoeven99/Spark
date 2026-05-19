@@ -21,6 +21,11 @@ import { detectRequestLocale } from "../i18n/detector.server";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import {
+  scheduleEnsureShopProfile,
+  scheduleShopProfileBootstrap,
+} from "../server/shopProfile/index.server";
+import {
+  getAppEntry,
   getAppEntryConfig,
   type NavItemKey,
 } from "../config/appEntry.server";
@@ -66,15 +71,29 @@ const NAV_ITEMS: Record<
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   try {
-    await recordAppInstalled({
+    const installRecorded = await recordAppInstalled({
       shop: session.shop,
       sessionId: session.id,
       scope: session.scope,
       isOnline: session.isOnline,
       source: "app_shell",
     });
+    if (installRecorded) {
+      scheduleShopProfileBootstrap({
+        admin,
+        shop: session.shop,
+        appName: getAppEntry(),
+        reason: "install",
+      });
+    } else {
+      scheduleEnsureShopProfile({
+        admin,
+        shop: session.shop,
+        appName: getAppEntry(),
+      });
+    }
   } catch (error) {
     console.error("[CommonEvent] recordAppInstalled failed:", error);
   }

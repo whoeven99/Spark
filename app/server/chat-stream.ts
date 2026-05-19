@@ -5,7 +5,7 @@ import { invokeChatAgentStream, type StreamChunk } from "./ai/core/agentStream.s
 import { parseClientChatMessages } from "./chatPayload.server";
 import { createLangsmithTracer, isLangsmithAvailable, getTraceUrl } from "./ai/utils/langsmith.server";
 import { getAppEntry } from "../config/appEntry.server";
-import type { UserProfile } from "./ai/core/toolRegistry.server";
+import { loadShopProfileForPrompt } from "./shopProfile/index.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
@@ -43,15 +43,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     const { admin, session } = await authenticate.admin(request);
-    
-    // TODO: 从数据库读取当前商店/用户的画像数据
-    // const userProfile = await db.userProfile.findUnique({ where: { shop: session?.shop } });
-    const dummyProfile: UserProfile = {
-      plan: "pro",
-      industry: "fashion",
-      preferences: { tone: "professional" }
-    };
-    
+
+    const profile = await loadShopProfileForPrompt(session.shop).catch((error) => {
+      console.error("[ShopProfile] loadShopProfileForPrompt failed:", error);
+      return undefined;
+    });
+
     const langsmithTracer = isLangsmithAvailable() 
       ? await createLangsmithTracer(`chat-stream-${Date.now()}`)
       : undefined;
@@ -64,7 +61,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       messages: agentMessages,
       context: {
         admin,
-        profile: dummyProfile,
+        profile,
         shop: session?.shop,
         appName: getAppEntry(),
       },
