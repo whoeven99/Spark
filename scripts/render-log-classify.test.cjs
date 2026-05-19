@@ -5,6 +5,7 @@ const {
   buildDigest,
   formatDigestMarkdown,
 } = require("./render-log-classify.cjs");
+const { getBeijingYesterdayWindow } = require("./beijing-digest-window.cjs");
 
 describe("classifyLog", () => {
   it("classifies chat agent errors", () => {
@@ -26,6 +27,17 @@ describe("classifyLog", () => {
       classifyLog({ message: "Server listening on port 10000", level: "info" }),
       null,
     );
+  });
+});
+
+describe("getBeijingYesterdayWindow", () => {
+  it("uses yesterday 00:00–24:00 Asia/Shanghai", () => {
+    const ref = new Date("2026-05-19T00:30:00.000Z");
+    const w = getBeijingYesterdayWindow(ref);
+    assert.equal(w.reportDate, "2026-05-18");
+    assert.equal(w.windowLabel, "2026-05-18 北京时间 00:00–24:00");
+    assert.equal(w.start.toISOString(), "2026-05-17T16:00:00.000Z");
+    assert.equal(w.end.toISOString(), "2026-05-18T16:00:00.000Z");
   });
 });
 

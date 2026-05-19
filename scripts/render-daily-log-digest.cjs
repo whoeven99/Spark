@@ -5,9 +5,10 @@
  * 环境变量:
  *   RENDER_API_KEY      — Render API Key（GitHub: RENDER_APIKEY）
  *   RENDER_SERVICE_ID   — Web 服务 id，如 srv-xxx
- *   RENDER_OWNER_ID     — 可选；未设则从 GET /v1/services/:id 解析 ownerId
+ *   RENDER_OWNER_ID     — 可选；Render Workspace id（tea-/usr- 开头）。
+ *                         未设则从 GET /v1/services/:id 自动解析，一般无需配置。
  *   FEISHU_WEBHOOK_URL  — 飞书自定义机器人 Webhook（完整 URL）
- *   DIGEST_LOOKBACK_HOURS — 默认 24
+ *   DIGEST_LOOKBACK_HOURS — 仅调试：设正整数则改为「过去 N 小时」，覆盖北京昨日日历日
  *   DIGEST_MAX_PAGES      — 每类查询最多分页数，默认 30（每页最多 100 条）
  *   DIGEST_SKIP_FEISHU    — 设为 true 仅写本地报告不发飞书
  *   DIGEST_OUTPUT_DIR     — 默认 reports
@@ -19,6 +20,10 @@ const {
   formatDigestMarkdown,
   formatFeishuPostContent,
 } = require("./render-log-classify.cjs");
+const {
+  getBeijingYesterdayWindow,
+  getLookbackWindow,
+} = require("./beijing-digest-window.cjs");
 
 const RENDER_API = "https://api.render.com/v1";
 
@@ -184,24 +189,35 @@ async function sendFeishu(webhookUrl, payload) {
   return body;
 }
 
-function formatWindowLabel(start, end) {
-  return `${start.toISOString().slice(0, 16)}Z ~ ${end.toISOString().slice(0, 16)}Z`;
+function resolveTimeWindow() {
+  const lookbackRaw = env("DIGEST_LOOKBACK_HOURS", "");
+  const lookbackHours = lookbackRaw ? Number(lookbackRaw) : 0;
+  if (lookbackRaw && Number.isFinite(lookbackHours) && lookbackHours > 0) {
+    return {
+      ...getLookbackWindow(lookbackHours),
+      mode: "lookback",
+    };
+  }
+  return {
+    ...getBeijingYesterdayWindow(),
+    mode: "beijing_yesterday",
+  };
 }
 
 async function main() {
   const apiKey = requireEnv("RENDER_API_KEY");
   const serviceId = requireEnv("RENDER_SERVICE_ID");
   const ownerIdExplicit = env("RENDER_OWNER_ID", "");
-  const lookbackHours = Number(env("DIGEST_LOOKBACK_HOURS", "24"));
   const skipFeishu = env("DIGEST_SKIP_FEISHU", "") === "true";
   const outputDir = env("DIGEST_OUTPUT_DIR", "reports");
 
-  const end = new Date();
-  const start = new Date(end.getTime() - lookbackHours * 60 * 60 * 1000);
-  const windowLabel = formatWindowLabel(start, end);
+  const { start, end, windowLabel, reportDate, mode } = resolveTimeWindow();
 
   console.info(
-    `[render-digest] service=${serviceId} window=${windowLabel} lookback=${lookbackHours}h`,
+    `[render-digest] service=${serviceId} mode=${mode} window=${windowLabel}`,
+  );
+  console.info(
+    `[render-digest] query ${start.toISOString()} .. ${end.toISOString()}`,
   );
 
   const ownerId = await resolveOwnerId(apiKey, serviceId, ownerIdExplicit);
@@ -218,14 +234,8 @@ async function main() {
 
   const digest = buildDigest(logs, { serviceId, windowLabel });
   const markdown = formatDigestMarkdown(digest);
-  const jsonPath = path.join(
-    outputDir,
-    `render-digest-${end.toISOString().slice(0, 10)}.json`,
-  );
-  const mdPath = path.join(
-    outputDir,
-    `render-digest-${end.toISOString().slice(0, 10)}.md`,
-  );
+  const jsonPath = path.join(outputDir, `render-digest-${reportDate}.json`);
+  const mdPath = path.join(outputDir, `render-digest-${reportDate}.md`);
 
   fs.mkdirSync(outputDir, { recursive: true });
   fs.writeFileSync(jsonPath, JSON.stringify(digest, null, 2), "utf8");
