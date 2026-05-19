@@ -46,7 +46,8 @@ const NAV_ITEMS: Record<
       | "nav.diagnosis"
       | "nav.translation"
       | "nav.generateDescription"
-      | "nav.pictureTranslate";
+      | "nav.pictureTranslate"
+      | "nav.billing";
   }
 > = {
   chat: { href: "/app", labelKey: "nav.aiAssistant" },
@@ -60,6 +61,7 @@ const NAV_ITEMS: Record<
     href: "/app/picture-translate",
     labelKey: "nav.pictureTranslate",
   },
+  billing: { href: "/app/billing", labelKey: "nav.billing" },
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {

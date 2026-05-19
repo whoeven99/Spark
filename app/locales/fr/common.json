@@ -75,7 +75,8 @@
     "diagnosis": "Diagnostics",
     "translation": "Tâches de traduction",
     "generateDescription": "Générer la description",
-    "pictureTranslate": "Traduction d’images"
+    "pictureTranslate": "Traduction d’images",
+    "billing": "Facturation et abonnement"
   },
   "chat": {
     "pageTitle": "Shopify AI Assistant",
@@ -498,5 +499,35 @@
     "cosmosStatusSaveRunning": "Écriture vers Shopify",
     "cosmosStatusSaveDone": "Terminé",
     "cosmosStatusFailed": "Échec"
+  },
+  "billing": {
+    "pageTitle": "Facturation et abonnement",
+    "sectionUsage": "Utilisation des tokens",
+    "sectionSubscription": "Abonnement actuel",
+    "sectionPlans": "Formules d'abonnement",
+    "sectionPacks": "Packs de tokens",
+    "availableTokens": "Tokens disponibles",
+    "usedTokens": "Tokens utilisés",
+    "poolSubscription": "Pool abonnement",
+    "poolPurchased": "Packs achetés",
+    "poolTrial": "Essai",
+    "noSubscription": "Aucun abonnement payant actif",
+    "subscribe": "S'abonner",
+    "buyPack": "Acheter",
+    "lowBalanceWarning": "Tokens insuffisants. Abonnez-vous ou achetez un pack sur la page de facturation.",
+    "openBillingPage": "Aller à la facturation",
+    "periodEnd": "Fin de période",
+    "trialEnds": "Fin de l'essai",
+    "intervalMonthly": "Mensuel",
+    "intervalAnnual": "Annuel",
+    "trialDays_one": "Essai {{count}} jour",
+    "trialDays_other": "Essai {{count}} jours",
+    "status": {
+      "PENDING": "En attente",
+      "ACTIVE": "Actif",
+      "CANCELLED": "Annulé",
+      "EXPIRED": "Expiré",
+      "FROZEN": "Gelé"
+    }
   }
 }

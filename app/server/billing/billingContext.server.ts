@@ -7,7 +7,66 @@ import {
 import { isBillingEnabledForApp } from "./constants.server";
 import { ensureAccount } from "./account/ensureAccount.server";
 import { grantProductTrialIfEligible } from "./account/grantTrial.server";
+import type {
+  BillingAccessSnapshot,
+  BillingPageLoaderData,
+  BillingPageSnapshot,
+} from "../../lib/billingPageTypes";
 import { listEnabledPlansForApp, type PlanRecord } from "./plans/planCatalog.server";
+import { PLAN_CATALOG_KIND } from "./types.server";
+
+function toIso(value: Date | null | undefined): string | null {
+  return value ? value.toISOString() : null;
+}
+
+export function toBillingPageSnapshot(ctx: BillingContext): BillingPageSnapshot {
+  return {
+    shop: ctx.shop,
+    appName: ctx.appName,
+    billingRequired: ctx.billingRequired,
+    hasAccess: ctx.hasAccess,
+    availableTokens: ctx.availableTokens,
+    usedTokens: ctx.usedTokens,
+    account: {
+      subscriptionTokens: ctx.account.subscriptionTokens,
+      purchasedTokens: ctx.account.purchasedTokens,
+      trialTokens: ctx.account.trialTokens,
+    },
+    subscription: ctx.subscription
+      ? {
+          planKey: ctx.subscription.planKey,
+          status: ctx.subscription.status,
+          billingInterval: ctx.subscription.billingInterval,
+          tokensPerPeriod: ctx.subscription.tokensPerPeriod,
+          currentPeriodStart: toIso(ctx.subscription.currentPeriodStart),
+          currentPeriodEnd: toIso(ctx.subscription.currentPeriodEnd),
+          trialEndsAt: toIso(ctx.subscription.trialEndsAt),
+        }
+      : null,
+  };
+}
+
+export function toBillingAccessSnapshot(ctx: BillingContext): BillingAccessSnapshot {
+  return {
+    billingRequired: ctx.billingRequired,
+    hasAccess: ctx.hasAccess,
+  };
+}
+
+export async function loadBillingPageData(
+  shop: string,
+  appName: string,
+): Promise<BillingPageLoaderData> {
+  const ctx = await loadBillingContext(shop, appName);
+  return {
+    appName,
+    billing: toBillingPageSnapshot(ctx),
+    subscriptionPlans: ctx.plans.filter(
+      (p) => p.kind === PLAN_CATALOG_KIND.SUBSCRIPTION,
+    ),
+    tokenPacks: ctx.plans.filter((p) => p.kind === PLAN_CATALOG_KIND.ONE_TIME_PACK),
+  };
+}
 export type BillingContext = {
   shop: string;
   appName: string;

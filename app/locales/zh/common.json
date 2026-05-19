@@ -75,7 +75,38 @@
     "diagnosis": "诊断报告",
     "translation": "翻译任务",
     "generateDescription": "生成描述",
-    "pictureTranslate": "图片翻译"
+    "pictureTranslate": "图片翻译",
+    "billing": "计费与订阅"
+  },
+  "billing": {
+    "pageTitle": "计费与订阅",
+    "sectionUsage": "Token 用量",
+    "sectionSubscription": "当前订阅",
+    "sectionPlans": "订阅套餐",
+    "sectionPacks": "按量购包",
+    "availableTokens": "可用 Token",
+    "usedTokens": "已用 Token",
+    "poolSubscription": "订阅池",
+    "poolPurchased": "按量包",
+    "poolTrial": "试用",
+    "noSubscription": "尚未开通付费订阅",
+    "subscribe": "订阅",
+    "buyPack": "购买",
+    "lowBalanceWarning": "Token 不足或未订阅，请前往计费页开通或购包。",
+    "openBillingPage": "前往计费页",
+    "periodEnd": "当前周期至",
+    "trialEnds": "试用截止",
+    "intervalMonthly": "月付",
+    "intervalAnnual": "年付",
+    "trialDays_one": "{{count}} 天试用",
+    "trialDays_other": "{{count}} 天试用",
+    "status": {
+      "PENDING": "待确认",
+      "ACTIVE": "生效中",
+      "CANCELLED": "已取消",
+      "EXPIRED": "已过期",
+      "FROZEN": "已冻结"
+    }
   },
   "chat": {
     "pageTitle": "Shopify AI Assistant",

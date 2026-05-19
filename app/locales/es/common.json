@@ -75,7 +75,38 @@
     "diagnosis": "Diagnóstico",
     "translation": "Tareas de traducción",
     "generateDescription": "Generar descripción",
-    "pictureTranslate": "Traducción de imágenes"
+    "pictureTranslate": "Traducción de imágenes",
+    "billing": "Facturación y suscripción"
+  },
+  "billing": {
+    "pageTitle": "Facturación y suscripción",
+    "sectionUsage": "Uso de tokens",
+    "sectionSubscription": "Suscripción actual",
+    "sectionPlans": "Planes de suscripción",
+    "sectionPacks": "Paquetes de tokens",
+    "availableTokens": "Tokens disponibles",
+    "usedTokens": "Tokens usados",
+    "poolSubscription": "Pool de suscripción",
+    "poolPurchased": "Paquetes comprados",
+    "poolTrial": "Prueba",
+    "noSubscription": "Sin suscripción de pago activa",
+    "subscribe": "Suscribirse",
+    "buyPack": "Comprar",
+    "lowBalanceWarning": "Tokens insuficientes. Suscríbete o compra un paquete en la página de facturación.",
+    "openBillingPage": "Ir a facturación",
+    "periodEnd": "Fin del período actual",
+    "trialEnds": "Fin de prueba",
+    "intervalMonthly": "Mensual",
+    "intervalAnnual": "Anual",
+    "trialDays_one": "Prueba de {{count}} día",
+    "trialDays_other": "Prueba de {{count}} días",
+    "status": {
+      "PENDING": "Pendiente",
+      "ACTIVE": "Activa",
+      "CANCELLED": "Cancelada",
+      "EXPIRED": "Expirada",
+      "FROZEN": "Congelada"
+    }
   },
   "chat": {
     "pageTitle": "Shopify AI Assistant",

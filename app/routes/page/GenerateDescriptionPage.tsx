@@ -64,21 +64,11 @@ export function GenerateDescriptionPage() {
   const copyBusy = copyTarget !== null;
   return (
     <s-page heading={t("generate.pageTitle")}>
-      {billing.billingRequired ? (
-        <s-section heading="Token 余额">
-          <s-stack direction="inline" gap="base">
-            <s-text>
-              可用 {billing.availableTokens.toLocaleString()} / 已用{" "}
-              {billing.usedTokens.toLocaleString()}
-            </s-text>
-            <s-link href={`/app/billing${search}`}>管理订阅与购包</s-link>
-          </s-stack>
-          {!billing.hasAccess ? (
-            <s-banner tone="warning">
-              Token 不足或未订阅，请先前往计费页开通。
-            </s-banner>
-          ) : null}
-        </s-section>
+      {billing.billingRequired && !billing.hasAccess ? (
+        <s-banner tone="warning">
+          {t("billing.lowBalanceWarning")}{" "}
+          <s-link href={`/app/billing${search}`}>{t("billing.openBillingPage")}</s-link>
+        </s-banner>
       ) : null}
       <div
         style={{

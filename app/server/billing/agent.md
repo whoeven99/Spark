@@ -42,7 +42,7 @@
 
 ## 路由
 
-- `/app/billing`：订阅 / 购包
+- `/app/billing`：计费与订阅独立页（`BillingPage`）；`generate-description` App 侧栏含「计费与订阅」入口
 - 生成描述 API / 页面：调用 `requireBillingAccess`
 
 ## 主 App
