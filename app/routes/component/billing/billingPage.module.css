@@ -189,7 +189,9 @@
 }
 
 .planCardCurrent {
-  border-color: #8c9196;
+  border-color: #008060;
+  box-shadow: 0 0 0 1px #008060;
+  background: linear-gradient(180deg, #f1f8f5 0%, #fff 28%);
 }
 
 .recommendedRibbon {
@@ -258,8 +260,36 @@
   width: 100%;
 }
 
-.planCtaCurrent {
-  opacity: 0.85;
+/* 当前方案：实心绿底，比 disabled 灰按钮更醒目 */
+.planCurrentCta {
+  margin-top: auto;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.625rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #006e52;
+  background: #008060;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
+}
+
+.planMutedCta {
+  margin-top: auto;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.625rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #e1e3e5;
+  background: #f6f6f7;
+  color: #6d7175;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: center;
 }
 
 /* —— 对比表 —— */

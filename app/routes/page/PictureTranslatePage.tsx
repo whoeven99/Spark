@@ -29,7 +29,11 @@ export function PictureTranslatePage() {
             fontSize: "0.875rem",
             color: "#6d7175",
             lineHeight: 1.5,
-            marginBottom: "1rem",
+            padding: "1rem 1.25rem",
+            background: "linear-gradient(to right, rgba(138, 5, 255, 0.04), rgba(0, 158, 122, 0.04))",
+            borderLeft: "4px solid #8a05ff",
+            borderRadius: "0 8px 8px 0",
+            marginBottom: "1.5rem"
           }}
         >
           {t("pictureTranslate.pageSubtitle")}

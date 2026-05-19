@@ -86,6 +86,11 @@ export function GenerateDescriptionPage() {
                   fontSize: "0.875rem",
                   color: "#6d7175",
                   lineHeight: 1.5,
+                  padding: "1rem 1.25rem",
+                  background: "linear-gradient(to right, rgba(72, 0, 140, 0.04), rgba(243, 71, 255, 0.04))",
+                  borderLeft: "4px solid #48008c",
+                  borderRadius: "0 8px 8px 0",
+                  marginBottom: "1rem"
                 }}
               >
                 {t("generate.intro")}
@@ -251,16 +256,22 @@ export function GenerateDescriptionPage() {
             <s-section heading={t("generate.resultTitle")}>
               <div
                 style={{
-                  padding: "1.25rem 1rem",
-                  borderRadius: "10px",
-                  background: "rgba(109, 113, 117, 0.08)",
+                  padding: "2.5rem 1.5rem",
+                  borderRadius: "12px",
+                  background: "linear-gradient(180deg, #fafafa 0%, #f4f5f6 100%)",
+                  border: "1px dashed #c9cccf",
                   color: "#6d7175",
                   fontSize: "0.875rem",
                   lineHeight: 1.5,
                   textAlign: "center",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "0.75rem",
                 }}
               >
-                {t("generate.emptyResult")}
+                <div style={{ fontSize: "1.75rem", opacity: 0.6 }}>✨</div>
+                <div>{t("generate.emptyResult")}</div>
               </div>
             </s-section>
           )}

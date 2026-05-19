@@ -13,4 +13,6 @@ interface ImportMetaEnv {
   /** noop | shopify（默认 shopify） */
   readonly BILLING_GATEWAY?: string;
   readonly BILLING_TEST?: string;
+  /** true 强制显示计费页取消订阅；false 强制隐藏 */
+  readonly BILLING_DEV_CANCEL?: string;
 }

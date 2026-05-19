@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
@@ -97,9 +97,9 @@ function PlanSubscribeButton({
 }) {
   if (isCurrent) {
     return (
-      <s-button disabled className={styles.planCta}>
+      <div className={styles.planCurrentCta} role="status" aria-current="true">
         {label}
-      </s-button>
+      </div>
     );
   }
   return (
@@ -375,11 +375,13 @@ export function BillingPage() {
                   </span>
                 </div>
                 <PlanFeatureList items={trialFeatures} />
-                <s-button disabled className={styles.planCta}>
-                  {isTrialCurrent
-                    ? t("billing.currentPlan")
-                    : t("billing.planFree")}
-                </s-button>
+                {isTrialCurrent ? (
+                  <div className={styles.planCurrentCta} role="status" aria-current="true">
+                    {t("billing.currentPlan")}
+                  </div>
+                ) : (
+                  <div className={styles.planMutedCta}>{t("billing.planFree")}</div>
+                )}
               </article>
 
               {basePlan ? (

@@ -58,8 +58,9 @@
 
 ## 测试环境取消按钮
 
-- `NODE_ENV=test` 时计费页展示「取消订阅」；调用 `appSubscriptionCancel`（`BILLING_GATEWAY=noop` 时仅同步本地）。
-- 实现见 `cancelActiveSubscription.server.ts`、`BillingPage`。
+- 计费页「取消订阅」：`isBillingDevCancelEnabled()` 为 true 时展示（`BILLING_TEST=true`、`NODE_ENV=test`、或非 `production`）；可用 `BILLING_DEV_CANCEL=false` 强制关闭。
+- 还需 Turso 中存在 `ACTIVE` / `PENDING` 的 `AppSubscription` 行。
+- 调用 `appSubscriptionCancel`（`BILLING_GATEWAY=noop` 时仅同步本地）。见 `cancelActiveSubscription.server.ts`。
 | `TOKEN_PACK_INITIATED` | 按量购包待确认 |
 | `TOKEN_PACK_PURCHASED` | 按量购包入账 |
 

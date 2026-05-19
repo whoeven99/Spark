@@ -24,7 +24,7 @@ export async function cancelActiveSubscription(params: {
 }): Promise<void> {
   if (!isBillingDevCancelEnabled()) {
     throw new BillingError(
-      "仅 NODE_ENV=test 时可使用取消订阅",
+      "当前环境未启用测试取消订阅（需 BILLING_TEST=true 或 NODE_ENV=test）",
       BILLING_ERROR_CODE.SHOPIFY_BILLING_FAILED,
       403,
     );

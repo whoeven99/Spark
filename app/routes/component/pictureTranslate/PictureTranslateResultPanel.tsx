@@ -40,48 +40,54 @@ export function PictureTranslateResultPanel() {
     }
   }, [shopify, t, translatedImage]);
 
-  if (!hasSubmittedOnce && !translatedImage && !isSubmitting) {
-    return (
-      <div
-        style={{
-          padding: "1.25rem 1rem",
-          borderRadius: "10px",
-          background: "rgba(109, 113, 117, 0.08)",
-          color: "#6d7175",
-          fontSize: "0.875rem",
-          lineHeight: 1.5,
-          textAlign: "center",
-        }}
-      >
-        {t("pictureTranslate.empty")}
-      </div>
-    );
-  }
-
-  if (isSubmitting) {
-    return (
-      <div style={{ display: "grid", gap: "0.75rem" }}>
+    if (!hasSubmittedOnce && !translatedImage && !isSubmitting) {
+      return (
         <div
           style={{
-            height: "200px",
-            borderRadius: "10px",
-            background: "linear-gradient(90deg, #f1f2f3 25%, #e8e9ea 50%, #f1f2f3 75%)",
-            backgroundSize: "200% 100%",
-            animation: "pictureTranslateShimmer 1.2s ease-in-out infinite",
+            padding: "2.5rem 1.5rem",
+            borderRadius: "12px",
+            background: "linear-gradient(180deg, #fafafa 0%, #f4f5f6 100%)",
+            border: "1px dashed #c9cccf",
+            color: "#6d7175",
+            fontSize: "0.875rem",
+            lineHeight: 1.5,
+            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "0.75rem",
           }}
-        />
-        <div style={{ fontSize: "0.875rem", color: "#6d7175" }}>
-          {t("pictureTranslate.submitting")}
+        >
+          <div style={{ fontSize: "1.75rem", opacity: 0.6 }}>🖼️</div>
+          <div>{t("pictureTranslate.empty")}</div>
         </div>
-        <style>
-          {`@keyframes pictureTranslateShimmer {
-            0% { background-position: 100% 0; }
-            100% { background-position: -100% 0; }
-          }`}
-        </style>
-      </div>
-    );
-  }
+      );
+    }
+
+    if (isSubmitting) {
+      return (
+        <div style={{ display: "grid", gap: "0.75rem" }}>
+          <div
+            style={{
+              height: "200px",
+              borderRadius: "12px",
+              background: "linear-gradient(90deg, #f1f2f3 25%, rgba(138, 5, 255, 0.1) 50%, #f1f2f3 75%)",
+              backgroundSize: "200% 100%",
+              animation: "pictureTranslateShimmer 1.2s ease-in-out infinite",
+            }}
+          />
+          <div style={{ fontSize: "0.875rem", color: "#6d7175" }}>
+            {t("pictureTranslate.submitting")}
+          </div>
+          <style>
+            {`@keyframes pictureTranslateShimmer {
+              0% { background-position: 100% 0; }
+              100% { background-position: -100% 0; }
+            }`}
+          </style>
+        </div>
+      );
+    }
 
   if (resultErrorText && !translatedImage) {
     return (
@@ -100,23 +106,29 @@ export function PictureTranslateResultPanel() {
     );
   }
 
-  if (!translatedImage) {
-    return (
-      <div
-        style={{
-          padding: "1.25rem 1rem",
-          borderRadius: "10px",
-          background: "rgba(109, 113, 117, 0.08)",
-          color: "#6d7175",
-          fontSize: "0.875rem",
-          lineHeight: 1.5,
-          textAlign: "center",
-        }}
-      >
-        {t("pictureTranslate.empty")}
-      </div>
-    );
-  }
+    if (!translatedImage) {
+      return (
+        <div
+          style={{
+            padding: "2.5rem 1.5rem",
+            borderRadius: "12px",
+            background: "linear-gradient(180deg, #fafafa 0%, #f4f5f6 100%)",
+            border: "1px dashed #c9cccf",
+            color: "#6d7175",
+            fontSize: "0.875rem",
+            lineHeight: 1.5,
+            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "0.75rem",
+          }}
+        >
+          <div style={{ fontSize: "1.75rem", opacity: 0.6 }}>🖼️</div>
+          <div>{t("pictureTranslate.empty")}</div>
+        </div>
+      );
+    }
 
   return (
     <s-stack direction="block" gap="base">

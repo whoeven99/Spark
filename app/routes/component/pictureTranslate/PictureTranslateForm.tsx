@@ -70,6 +70,67 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
     void handleFileChange(file);
   };
 
+  const renderUploadArea = () => {
+    const fileInputId = `picture-translate-file-input-${variant}`;
+
+    return (
+      <label
+        htmlFor={fileInputId}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "1.5rem",
+          marginTop: "0.5rem",
+          border: "1px dashed #c9cccf",
+          borderRadius: "8px",
+          background: isSubmitting ? "#f9f9f9" : "#fafafa",
+          cursor: isSubmitting ? "not-allowed" : "pointer",
+          transition: "all 0.2s ease-in-out",
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.currentTarget.style.borderColor = "#8a05ff";
+          e.currentTarget.style.background = "rgba(138, 5, 255, 0.02)";
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          e.currentTarget.style.borderColor = "#c9cccf";
+          e.currentTarget.style.background = "#fafafa";
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.currentTarget.style.borderColor = "#c9cccf";
+          e.currentTarget.style.background = "#fafafa";
+          const file = e.dataTransfer.files?.[0];
+          if (file) void handleFileChange(file);
+        }}
+      >
+        <input
+          id={fileInputId}
+          type="file"
+          accept="image/png,image/jpeg,image/jpg"
+          onChange={handleFileInputChange}
+          disabled={isSubmitting}
+          style={{ display: "none" }}
+        />
+        <div style={{ fontSize: "1.5rem", opacity: 0.5, marginBottom: "0.5rem" }}>📁</div>
+        <div style={{ fontSize: "0.8125rem", color: "#303030", fontWeight: 500 }}>
+          {t("pictureTranslate.uploadImage")}
+        </div>
+        <div style={{ fontSize: "0.75rem", color: "#6d7175", marginTop: "0.25rem" }}>
+          {t("pictureTranslate.validationInvalidFileType")}
+        </div>
+        {imageFileName ? (
+          <div style={{ marginTop: "0.75rem", fontSize: "0.75rem", color: "#2c6ecb", fontWeight: 500 }}>
+            {t("pictureTranslate.selectedFile", { fileName: imageFileName })}
+          </div>
+        ) : null}
+      </label>
+    );
+  };
+
   return (
     <>
       {variant === "card" ? (
@@ -171,35 +232,7 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
           </div>
         </div>
 
-        {selectedSource === "upload" ? (
-          <div>
-            <label
-              htmlFor={`picture-translate-file-input-${variant}`}
-              style={{
-                display: "block",
-                fontSize: "0.75rem",
-                fontWeight: 600,
-                color: "#444",
-                marginBottom: "0.35rem",
-              }}
-            >
-              {t("pictureTranslate.uploadImage")}
-            </label>
-            <input
-              id={`picture-translate-file-input-${variant}`}
-              type="file"
-              accept="image/png,image/jpeg,image/jpg"
-              onChange={handleFileInputChange}
-              disabled={isSubmitting}
-              style={{ width: "100%" }}
-            />
-            {imageFileName ? (
-              <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#6d7175" }}>
-                {t("pictureTranslate.selectedFile", { fileName: imageFileName })}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
+        {selectedSource === "upload" ? renderUploadArea() : null}
 
         {selectedSource === "url" ? (
           <s-text-field
