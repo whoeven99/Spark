@@ -38,7 +38,7 @@ const APP_ENTRY_CONFIGS = {
   },
   "generate-description": {
     home: "/app/generate-description",
-    nav: ["generate-description"],
+    nav: ["generate-description", "picture-translate"],
     sessionPrismaTable: "generateDescriptionSession",
   },
   "picture-translate": {
