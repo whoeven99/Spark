@@ -162,9 +162,9 @@ function PlanSubscribeButton({
     <Form method="post" className={styles.planCta}>
       <input type="hidden" name="intent" value="subscribe" />
       <input type="hidden" name="planKey" value={plan.planKey} />
-      <s-button type="submit" variant="primary" disabled={isSubmitting}>
+      <button type="submit" className={styles.planPrimaryCta} disabled={isSubmitting}>
         {label}
-      </s-button>
+      </button>
     </Form>
   );
 }
@@ -582,7 +582,7 @@ export function BillingPage() {
                 })}
               </div>
               {selectedPack ? (
-                <>
+                <div className={styles.packCheckoutBar}>
                   <p className={styles.packSelectionSummary}>
                     {t("billing.packSelectedSummary", {
                       tokens: selectedPack.tokens.toLocaleString(),
@@ -593,20 +593,20 @@ export function BillingPage() {
                       ),
                     })}
                   </p>
-                  <Form method="post" className={styles.packCta}>
-                  <input type="hidden" name="intent" value="buy_pack" />
-                  <input type="hidden" name="planKey" value={selectedPack.planKey} />
-                  <s-button
-                    type="submit"
-                    variant="primary"
-                    disabled={Boolean(buyingPackKey)}
-                  >
-                    {buyingPackKey
-                      ? t("billing.redirectingToCheckout")
-                      : t("billing.purchaseCredits")}
-                  </s-button>
-                </Form>
-                </>
+                  <Form method="post" className={styles.packCtaInline}>
+                    <input type="hidden" name="intent" value="buy_pack" />
+                    <input type="hidden" name="planKey" value={selectedPack.planKey} />
+                    <button
+                      type="submit"
+                      className={styles.packBuyButton}
+                      disabled={Boolean(buyingPackKey)}
+                    >
+                      {buyingPackKey
+                        ? t("billing.redirectingToCheckout")
+                        : t("billing.purchaseCredits")}
+                    </button>
+                  </Form>
+                </div>
               ) : null}
             </div>
           </section>

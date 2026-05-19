@@ -346,9 +346,9 @@
 }
 
 .planCardCurrent {
-  border-color: #008060;
-  box-shadow: 0 0 0 1px #008060;
-  background: linear-gradient(180deg, #f1f8f5 0%, #fff 28%);
+  border-color: #b7e0d0;
+  box-shadow: 0 0 0 1px #b7e0d0;
+  background: linear-gradient(180deg, #f9fcfb 0%, #fff 24%);
 }
 
 .planCardPending {
@@ -431,11 +431,42 @@
   padding-top: 0.25rem;
 }
 
-.planCta s-button {
+.planPrimaryCta {
+  display: block;
   width: 100%;
+  box-sizing: border-box;
+  margin-top: auto;
+  padding: 0.625rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #006e52;
+  background: #008060;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  line-height: 1.25;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 
-/* 当前方案：实心绿底，比 disabled 灰按钮更醒目 */
+.planPrimaryCta:hover:not(:disabled) {
+  background: #006e52;
+  border-color: #005c46;
+}
+
+.planPrimaryCta:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.planCardRecommended .planPrimaryCta {
+  box-shadow: 0 2px 6px rgba(0, 128, 96, 0.22);
+}
+
 .planPendingCta {
   margin-top: auto;
   width: 100%;
@@ -456,14 +487,13 @@
   box-sizing: border-box;
   padding: 0.625rem 1rem;
   border-radius: 8px;
-  border: 1px solid #006e52;
-  background: #008060;
-  color: #fff;
+  border: 1px solid #c9cccf;
+  background: #f6f6f7;
+  color: #6d7175;
   font-size: 0.875rem;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.25;
   text-align: center;
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
 }
 
 .planMutedCta {
@@ -635,25 +665,73 @@
   color: #008060;
 }
 
-.packSelectionSummary {
-  margin: 0;
+.packCheckoutBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  flex-wrap: wrap;
   padding: 0.65rem 0.85rem;
   border-radius: 8px;
   background: #f6f6f7;
+}
+
+.packSelectionSummary {
+  margin: 0;
+  flex: 1 1 12rem;
+  min-width: 0;
   font-size: 0.875rem;
   font-weight: 600;
   color: #202223;
-  text-align: center;
+  text-align: left;
 }
 
-.packCta {
+.packCtaInline {
   margin: 0;
-  padding-top: 0.25rem;
-  border-top: 1px solid #f1f2f3;
+  flex-shrink: 0;
 }
 
-.packCta s-button {
-  width: 100%;
+.packBuyButton {
+  appearance: none;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #006e52;
+  background: #008060;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  line-height: 1.25;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.packBuyButton:hover:not(:disabled) {
+  background: #006e52;
+  border-color: #005c46;
+}
+
+.packBuyButton:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+@media (max-width: 520px) {
+  .packCheckoutBar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .packSelectionSummary {
+    text-align: center;
+  }
+
+  .packBuyButton {
+    width: 100%;
+  }
 }
 
 .quotaFooter {
