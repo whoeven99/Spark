@@ -22,7 +22,12 @@
 | 变量 | 说明 |
 |------|------|
 | `BILLING_GATEWAY=noop` | 不调 Shopify Billing，本地直接生效（开发） |
-| `BILLING_TEST=true` | Shopify 测试计费（开发店） |
+| `BILLING_TEST=true` | Shopify 测试计费（开发店）；Render 等 `NODE_ENV=production` 时必须显式设置 |
+
+## Shopify returnUrl
+
+- Billing GraphQL 的 `returnUrl` **最多 255 字符**。
+- `buildBillingReturnUrl` 仅带 `shop` + `host`，**勿**复制嵌入式 URL 中的 `id_token` 等长参数（见 `buildBillingReturnUrl.server.ts`）。
 
 ## 表职责
 

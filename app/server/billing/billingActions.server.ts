@@ -1,5 +1,5 @@
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/tool";
-import { buildEmbeddedAppPath } from "../../config/appEntry.server";
+import { buildBillingReturnUrl } from "./buildBillingReturnUrl.server";
 import { BillingError, BILLING_ERROR_CODE } from "./errors.server";
 import { getBillingGateway } from "./gateway/getBillingGateway.server";
 import { getPlanByKey } from "./plans/planCatalog.server";
@@ -20,10 +20,11 @@ export async function startSubscriptionCheckout(params: {
     throw new BillingError("该套餐不是订阅类型", BILLING_ERROR_CODE.INVALID_PLAN_KIND, 400);
   }
 
-  const returnUrl = new URL(
-    buildEmbeddedAppPath("/app/billing", params.request),
-    params.request.url,
-  ).toString();
+  const returnUrl = buildBillingReturnUrl(
+    "/app/billing",
+    params.request,
+    params.shop,
+  );
 
   const gateway = getBillingGateway();
   const result = await gateway.createSubscription({
@@ -52,10 +53,11 @@ export async function startTokenPackCheckout(params: {
     throw new BillingError("该套餐不是按量购包", BILLING_ERROR_CODE.INVALID_PLAN_KIND, 400);
   }
 
-  const returnUrl = new URL(
-    buildEmbeddedAppPath("/app/billing", params.request),
-    params.request.url,
-  ).toString();
+  const returnUrl = buildBillingReturnUrl(
+    "/app/billing",
+    params.request,
+    params.shop,
+  );
 
   const gateway = getBillingGateway();
   const result = await gateway.createOneTimePurchase({
