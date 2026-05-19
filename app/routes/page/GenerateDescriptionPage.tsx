@@ -79,7 +79,18 @@ export function GenerateDescriptionPage() {
         }}
       >
         <div style={{ flex: "2 1 360px", minWidth: 0 }}>
-          <s-section heading={t("generate.sectionTitle")}>
+          <div style={{
+            background: "#ffffff",
+            border: "1px solid #e3e3e3",
+            borderRadius: "12px",
+            padding: "1.5rem",
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.02)"
+          }}>
+            <div style={{ marginBottom: "1.5rem" }}>
+              <div style={{ fontSize: "1.25rem", fontWeight: 600, color: "#0d0d0d" }}>
+                {t("generate.sectionTitle")}
+              </div>
+            </div>
             <s-stack direction="block" gap="base">
               <div
                 style={{
@@ -87,8 +98,8 @@ export function GenerateDescriptionPage() {
                   color: "#6d7175",
                   lineHeight: 1.5,
                   padding: "1rem 1.25rem",
-                  background: "linear-gradient(to right, rgba(72, 0, 140, 0.04), rgba(243, 71, 255, 0.04))",
-                  borderLeft: "4px solid #48008c",
+                  background: "linear-gradient(to right, rgba(72, 0, 140, 0.03), rgba(243, 71, 255, 0.03))",
+                  borderLeft: "3px solid #48008c",
                   borderRadius: "0 8px 8px 0",
                   marginBottom: "1rem"
                 }}
@@ -107,24 +118,24 @@ export function GenerateDescriptionPage() {
                   setShowManualProductId(e.currentTarget.open)
                 }
               >
-                <summary
-                  style={{
-                    cursor: "pointer",
-                    fontSize: "0.8125rem",
-                    color: "#2c6ecb",
-                    userSelect: "none",
-                  }}
-                >
+                  <summary
+                    style={{
+                      cursor: "pointer",
+                      fontSize: "0.8125rem",
+                      color: "#8a05ff",
+                      userSelect: "none",
+                    }}
+                  >
                   {t("generate.advancedManualProductId")}
                 </summary>
-                <div style={{ marginTop: "0.65rem" }}>
-                  <s-text-field
-                    label={t("generate.productIdLabel")}
-                    value={productId}
-                    onChange={(e) => setProductId(e.currentTarget.value)}
-                    autocomplete="off"
-                  />
-                </div>
+                    <div style={{ marginTop: "0.65rem", padding: "0.1rem" }}>
+                      <s-text-field
+                        label={t("generate.productIdLabel")}
+                        value={productId}
+                        onChange={(e) => setProductId(e.currentTarget.value)}
+                        autocomplete="off"
+                      />
+                    </div>
               </details>
 
               <div>
@@ -153,8 +164,8 @@ export function GenerateDescriptionPage() {
                     fontSize: "0.875rem",
                     borderRadius: "8px",
                     border: "1px solid #c9cccf",
-                    background: localesLoading ? "#f6f6f7" : "#fff",
-                    color: "#303030",
+                    background: localesLoading ? "#f9f9f9" : "#fff",
+                    color: "#0d0d0d",
                     boxSizing: "border-box",
                   }}
                 >
@@ -225,12 +236,25 @@ export function GenerateDescriptionPage() {
                   {t("common.clearResult")}
                 </s-button>
               </s-stack>
-            </s-stack>
-          </s-section>
+              </s-stack>
+            </s-section>
+          </div>
         </div>
 
         <div style={{ flex: "3 1 480px", minWidth: 0 }}>
-          {description !== null ? (
+          <div style={{
+            background: "#ffffff",
+            border: "1px solid #e3e3e3",
+            borderRadius: "12px",
+            padding: "1.5rem",
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.02)"
+          }}>
+            <div style={{ marginBottom: "1.5rem" }}>
+              <div style={{ fontSize: "1.25rem", fontWeight: 600, color: "#0d0d0d" }}>
+                {t("generate.resultTitle")}
+              </div>
+            </div>
+            {description !== null ? (
             <GenerateDescriptionResultEditor
               variant="page"
               draftTitle={draftTitle}
@@ -257,10 +281,10 @@ export function GenerateDescriptionPage() {
               <div
                 style={{
                   padding: "2.5rem 1.5rem",
-                  borderRadius: "12px",
+                  borderRadius: "8px",
                   background: "linear-gradient(180deg, #fafafa 0%, #f4f5f6 100%)",
-                  border: "1px dashed #c9cccf",
-                  color: "#6d7175",
+                  border: "1px dashed #e3e3e3",
+                  color: "#6b6b6b",
                   fontSize: "0.875rem",
                   lineHeight: 1.5,
                   textAlign: "center",
@@ -271,10 +295,11 @@ export function GenerateDescriptionPage() {
                 }}
               >
                 <div style={{ fontSize: "1.75rem", opacity: 0.6 }}>✨</div>
-                <div>{t("generate.emptyResult")}</div>
+                <div style={{ color: "#4d4d4d" }}>{t("generate.emptyResult")}</div>
               </div>
             </s-section>
           )}
+          </div>
         </div>
       </div>
     </s-page>

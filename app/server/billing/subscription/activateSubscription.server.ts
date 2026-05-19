@@ -2,7 +2,6 @@ import type { Prisma } from "../../../generated/prisma";
 import prisma from "../../../db.server";
 import { appendBillingLog } from "../billingLog.server";
 import { ensureAccount } from "../account/ensureAccount.server";
-import { getInternalTrialPlan } from "../plans/planCatalog.server";
 import {
   archivePeriodAndRenew,
   isSubscriptionRenewal,
@@ -123,18 +122,28 @@ export async function applyActiveSubscription(params: {
 }
 
 /**
- * 取消付费订阅后：`subscriptionTokens` 恢复为产品试用套餐额度（PlanCatalog INTERNAL_TRIAL）。
+ * 取消付费订阅：从 `subscriptionTokens` 扣减该套餐周期额度（通常归零）；
+ * `trialTokens` / `purchasedTokens` 不在此函数内修改。
  */
-export function subscriptionTokensAfterCancelToTrial(
+export function subscriptionTokensAfterCancel(
   currentSubscriptionTokens: number,
-  trialTokensQuota: number,
+  subscriptionTokensToRemove: number,
 ): {
   nextSubscriptionTokens: number;
+  removedTokens: number;
   tokensDelta: number;
 } {
-  const nextSubscriptionTokens = Math.max(0, trialTokensQuota);
+  const removedTokens = Math.min(
+    Math.max(0, currentSubscriptionTokens),
+    Math.max(0, subscriptionTokensToRemove),
+  );
+  const nextSubscriptionTokens = Math.max(
+    0,
+    currentSubscriptionTokens - removedTokens,
+  );
   return {
     nextSubscriptionTokens,
+    removedTokens,
     tokensDelta: nextSubscriptionTokens - currentSubscriptionTokens,
   };
 }
@@ -187,19 +196,16 @@ export async function markSubscriptionNonActive(params: {
     return;
   }
 
-  const trialPlan = await getInternalTrialPlan(params.appName);
-  const trialTokensQuota = trialPlan?.tokens ?? 0;
-
   await prisma.$transaction(async (tx) => {
     const account = await tx.account.findUnique({
       where: { shop_appName: { shop: params.shop, appName: params.appName } },
     });
 
     const previousSubscriptionTokens = account?.subscriptionTokens ?? 0;
-    const { nextSubscriptionTokens, tokensDelta } =
-      subscriptionTokensAfterCancelToTrial(
+    const { nextSubscriptionTokens, removedTokens, tokensDelta } =
+      subscriptionTokensAfterCancel(
         previousSubscriptionTokens,
-        trialTokensQuota,
+        sub.tokensPerPeriod,
       );
 
     await tx.billingLog.create({
@@ -207,14 +213,15 @@ export async function markSubscriptionNonActive(params: {
         shop: params.shop,
         appName: params.appName,
         eventType: BILLING_LOG_EVENT.SUBSCRIPTION_CANCELLED,
-        planKey: trialPlan?.planKey ?? sub.planKey,
+        planKey: sub.planKey,
         referenceId: sub.shopifySubscriptionId,
         tokensDelta,
         metadata: {
           label: "取消订阅",
           status: params.status,
           cancelledPlanKey: sub.planKey,
-          trialTokensQuota,
+          subscriptionTokensRemoved: removedTokens,
+          tokensPerPeriod: sub.tokensPerPeriod,
           previousSubscriptionTokens,
           nextSubscriptionTokens,
           cancelledAt: new Date().toISOString(),

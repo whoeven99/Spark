@@ -2,6 +2,10 @@ import type { LoaderFunctionArgs } from "react-router";
 import { redirect, Form, useLoaderData } from "react-router";
 
 import { buildEmbeddedAppPath, getAppEntryConfig } from "../../config/appEntry.server";
+import {
+  BILLING_PAGE_PATH,
+  isBillingReturnRequest,
+} from "../../server/billing/buildBillingReturnUrl.server";
 import { login } from "../../shopify.server";
 
 import styles from "./styles.module.css";
@@ -11,7 +15,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   if (url.searchParams.get("shop")) {
     const { home } = getAppEntryConfig();
-    throw redirect(buildEmbeddedAppPath(home, request));
+    const path = isBillingReturnRequest(request) ? BILLING_PAGE_PATH : home;
+    throw redirect(buildEmbeddedAppPath(path, request));
   }
 
   return { showForm: Boolean(login) };

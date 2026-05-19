@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
@@ -8,6 +8,7 @@ import {
   computeAnnualDiscountPercent,
   formatPlanPrice,
   isActiveSubscriptionPlan,
+  isPendingSubscriptionPlan,
   pickSubscriptionPlan,
   resolveCurrentPlanLabel,
   type BillingIntervalView,
@@ -45,6 +46,8 @@ function PaidPlanCard({
   interval,
   isRecommended,
   isCurrent,
+  isPending,
+  isSubmitting,
   locale,
   t,
   paidFeatures,
@@ -53,6 +56,8 @@ function PaidPlanCard({
   interval: BillingIntervalView;
   isRecommended: boolean;
   isCurrent: boolean;
+  isPending: boolean;
+  isSubmitting: boolean;
   locale: string;
   t: (key: string, options?: Record<string, unknown>) => string;
   paidFeatures: (plan: PlanRecord) => string[];
@@ -64,7 +69,9 @@ function PaidPlanCard({
     <article
       className={`${styles.planCard} ${
         isRecommended ? styles.planCardRecommended : ""
-      } ${isCurrent ? styles.planCardCurrent : ""}`}
+      } ${isCurrent ? styles.planCardCurrent : ""} ${
+        isPending ? styles.planCardPending : ""
+      }`}
     >
       {isRecommended ? (
         <span className={styles.recommendedRibbon}>{t("billing.recommended")}</span>
@@ -80,7 +87,17 @@ function PaidPlanCard({
       <PlanSubscribeButton
         plan={plan}
         isCurrent={isCurrent}
-        label={isCurrent ? t("billing.currentPlan") : t("billing.getStarted")}
+        isPending={isPending}
+        isSubmitting={isSubmitting}
+        label={
+          isCurrent
+            ? t("billing.currentPlan")
+            : isPending
+              ? t("billing.pendingConfirmation")
+              : isSubmitting
+                ? t("billing.redirectingToCheckout")
+                : t("billing.getStarted")
+        }
       />
     </article>
   );
@@ -89,10 +106,14 @@ function PaidPlanCard({
 function PlanSubscribeButton({
   plan,
   isCurrent,
+  isPending,
+  isSubmitting,
   label,
 }: {
   plan: PlanRecord;
   isCurrent: boolean;
+  isPending: boolean;
+  isSubmitting: boolean;
   label: string;
 }) {
   if (isCurrent) {
@@ -102,11 +123,18 @@ function PlanSubscribeButton({
       </div>
     );
   }
+  if (isPending) {
+    return (
+      <div className={styles.planPendingCta} role="status">
+        {label}
+      </div>
+    );
+  }
   return (
     <Form method="post" className={styles.planCta}>
       <input type="hidden" name="intent" value="subscribe" />
       <input type="hidden" name="planKey" value={plan.planKey} />
-      <s-button type="submit" variant="primary">
+      <s-button type="submit" variant="primary" disabled={isSubmitting}>
         {label}
       </s-button>
     </Form>
@@ -122,6 +150,11 @@ export function BillingPage() {
   const isCancelling =
     navigation.state !== "idle" &&
     navigation.formData?.get("intent") === "cancel_subscription";
+  const subscribingPlanKey =
+    navigation.state !== "idle" &&
+    navigation.formData?.get("intent") === "subscribe"
+      ? String(navigation.formData.get("planKey") ?? "")
+      : "";
   const { t, i18n } = useTranslation();
   const locale = i18n.language;
 
@@ -157,9 +190,10 @@ export function BillingPage() {
   const proPlan = pickSubscriptionPlan(subscriptionPlans, interval, "pro");
   const sub = billing.subscription;
 
-  const isOnPaidPlan =
-    !!sub && (sub.status === "ACTIVE" || sub.status === "PENDING");
-  const isTrialCurrent = !isOnPaidPlan && billing.account.trialTokens > 0;
+  const isTrialCurrent =
+    sub?.status !== "ACTIVE" &&
+    sub?.status !== "PENDING" &&
+    billing.account.trialTokens > 0;
 
   const currentPlanLabel = resolveCurrentPlanLabel({
     subscription: sub,
@@ -169,10 +203,8 @@ export function BillingPage() {
     t,
   });
 
-  if (actionData?.ok && "confirmationUrl" in actionData && actionData.confirmationUrl) {
-    if (typeof window !== "undefined") {
-      window.open(actionData.confirmationUrl, "_top");
-    }
+  if (actionData?.ok && "noopCheckout" in actionData && actionData.noopCheckout) {
+    shopify.toast.show(t("billing.checkoutCompleteNoRedirect"));
   } else if (actionData?.ok && "cancelled" in actionData && actionData.cancelled) {
     shopify.toast.show(t("billing.cancelSubscriptionSuccess"));
   } else if (actionData && !actionData.ok) {
@@ -292,7 +324,7 @@ export function BillingPage() {
               {billing.account.trialTokens.toLocaleString()}
             </p>
           </div>
-          {sub && (sub.status === "ACTIVE" || sub.status === "PENDING") ? (
+          {sub?.status === "ACTIVE" ? (
             <p className={styles.subscriptionMeta}>
               {t("billing.periodEnd")}: {formatDate(sub.currentPeriodEnd, locale)}
               {sub.trialEndsAt
@@ -390,6 +422,8 @@ export function BillingPage() {
                   interval={interval}
                   isRecommended={interval === "MONTHLY"}
                   isCurrent={isActiveSubscriptionPlan(basePlan.planKey, sub)}
+                  isPending={isPendingSubscriptionPlan(basePlan.planKey, sub)}
+                  isSubmitting={subscribingPlanKey === basePlan.planKey}
                   locale={locale}
                   t={t}
                   paidFeatures={paidFeatures}
@@ -402,6 +436,8 @@ export function BillingPage() {
                   interval={interval}
                   isRecommended={interval === "ANNUAL"}
                   isCurrent={isActiveSubscriptionPlan(proPlan.planKey, sub)}
+                  isPending={isPendingSubscriptionPlan(proPlan.planKey, sub)}
+                  isSubmitting={subscribingPlanKey === proPlan.planKey}
                   locale={locale}
                   t={t}
                   paidFeatures={paidFeatures}

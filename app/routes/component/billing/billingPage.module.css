@@ -194,6 +194,12 @@
   background: linear-gradient(180deg, #f1f8f5 0%, #fff 28%);
 }
 
+.planCardPending {
+  border-color: #b98900;
+  box-shadow: 0 0 0 1px #b98900;
+  background: linear-gradient(180deg, #fffbf0 0%, #fff 28%);
+}
+
 .recommendedRibbon {
   position: absolute;
   top: 0;
@@ -261,6 +267,20 @@
 }
 
 /* 当前方案：实心绿底，比 disabled 灰按钮更醒目 */
+.planPendingCta {
+  margin-top: auto;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.625rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #b98900;
+  background: #fff4e5;
+  color: #7a5200;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+}
+
 .planCurrentCta {
   margin-top: auto;
   width: 100%;

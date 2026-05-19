@@ -27,7 +27,9 @@
 ## Shopify returnUrl
 
 - Billing GraphQL 的 `returnUrl` **最多 255 字符**。
-- `buildBillingReturnUrl` 仅带 `shop` + `host`，**勿**复制嵌入式 URL 中的 `id_token` 等长参数（见 `buildBillingReturnUrl.server.ts`）。
+- `buildBillingReturnUrl` 指向 **`/app/billing`**（订阅与按量购包共用），origin 优先用 `SHOPIFY_APP_URL`；query 带 `shop` + `host` + `embedded=1` + `billing_return=1`，**勿**复制 `id_token`。若请求无 `host`，用 `buildShopifyAdminHostParam(shop)` 推导，避免批准后落到登录页。
+- 跳转 Shopify 结账页须用 `authenticate.admin` 返回的 `redirect(url, { target: "_top" })`（嵌入式 exit iframe），勿直接用 React Router `redirect`。
+- 若 Shopify 将商户落到站点根路径 `/` 或 `/app`，`billing_return=1` 会由 `_index` / `app._index` 兜底重定向到计费页，避免回到 `APP_ENTRY` 默认首页。
 
 ## 表职责
 
@@ -54,7 +56,7 @@
 | `TRIAL_GRANTED` | 免费试用发放 |
 | `SUBSCRIPTION_ACTIVATED` | 订阅确认生效 |
 | `SUBSCRIPTION_RENEWED` | 周期续费 |
-| `SUBSCRIPTION_CANCELLED` | 取消订阅（写流水；删除 `AppSubscription`；`Account.subscriptionTokens` 恢复为 `INTERNAL_TRIAL` 套餐额度） |
+| `SUBSCRIPTION_CANCELLED` | 取消订阅（写流水；删除 `AppSubscription`；`subscriptionTokens` 扣减该套餐 `tokensPerPeriod`，`trialTokens` 不动） |
 
 ## 测试环境取消按钮
 

@@ -22,7 +22,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session, redirect: shopifyRedirect } =
+    await authenticate.admin(request);
   const appName = getAppEntry();
   const form = await request.formData();
   const intent = form.get("intent")?.toString();
@@ -54,7 +55,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         planKey,
         request,
       });
-      return { ok: true as const, confirmationUrl };
+      if (confirmationUrl) {
+        throw shopifyRedirect(confirmationUrl, { target: "_top" });
+      }
+      return { ok: true as const, noopCheckout: true as const };
     }
     if (intent === "buy_pack") {
       const { confirmationUrl } = await startTokenPackCheckout({
@@ -64,7 +68,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         planKey,
         request,
       });
-      return { ok: true as const, confirmationUrl };
+      if (confirmationUrl) {
+        throw shopifyRedirect(confirmationUrl, { target: "_top" });
+      }
+      return { ok: true as const, noopCheckout: true as const };
     }
     return { ok: false as const, error: "未知操作" };
   } catch (error) {

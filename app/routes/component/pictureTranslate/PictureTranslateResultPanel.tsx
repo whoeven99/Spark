@@ -45,10 +45,10 @@ export function PictureTranslateResultPanel() {
         <div
           style={{
             padding: "2.5rem 1.5rem",
-            borderRadius: "12px",
+            borderRadius: "8px",
             background: "linear-gradient(180deg, #fafafa 0%, #f4f5f6 100%)",
-            border: "1px dashed #c9cccf",
-            color: "#6d7175",
+            border: "1px dashed #e3e3e3",
+            color: "#6b6b6b",
             fontSize: "0.875rem",
             lineHeight: 1.5,
             textAlign: "center",
@@ -59,7 +59,7 @@ export function PictureTranslateResultPanel() {
           }}
         >
           <div style={{ fontSize: "1.75rem", opacity: 0.6 }}>🖼️</div>
-          <div>{t("pictureTranslate.empty")}</div>
+          <div style={{ color: "#4d4d4d" }}>{t("pictureTranslate.empty")}</div>
         </div>
       );
     }
@@ -70,7 +70,7 @@ export function PictureTranslateResultPanel() {
           <div
             style={{
               height: "200px",
-              borderRadius: "12px",
+              borderRadius: "8px",
               background: "linear-gradient(90deg, #f1f2f3 25%, rgba(138, 5, 255, 0.1) 50%, #f1f2f3 75%)",
               backgroundSize: "200% 100%",
               animation: "pictureTranslateShimmer 1.2s ease-in-out infinite",
@@ -111,10 +111,10 @@ export function PictureTranslateResultPanel() {
         <div
           style={{
             padding: "2.5rem 1.5rem",
-            borderRadius: "12px",
+            borderRadius: "8px",
             background: "linear-gradient(180deg, #fafafa 0%, #f4f5f6 100%)",
-            border: "1px dashed #c9cccf",
-            color: "#6d7175",
+            border: "1px dashed #e3e3e3",
+            color: "#6b6b6b",
             fontSize: "0.875rem",
             lineHeight: 1.5,
             textAlign: "center",
@@ -125,7 +125,7 @@ export function PictureTranslateResultPanel() {
           }}
         >
           <div style={{ fontSize: "1.75rem", opacity: 0.6 }}>🖼️</div>
-          <div>{t("pictureTranslate.empty")}</div>
+          <div style={{ color: "#4d4d4d" }}>{t("pictureTranslate.empty")}</div>
         </div>
       );
     }
@@ -157,8 +157,9 @@ export function PictureTranslateResultPanel() {
             maxWidth: "100%",
             maxHeight: "520px",
             objectFit: "contain",
-            borderRadius: "10px",
-            border: "1px solid rgba(44, 110, 203, 0.18)",
+            borderRadius: "8px",
+            border: "1px solid #e3e3e3",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.02)"
           }}
         />
       </button>

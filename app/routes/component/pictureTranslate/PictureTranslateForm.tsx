@@ -83,9 +83,9 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
           justifyContent: "center",
           padding: "1.5rem",
           marginTop: "0.5rem",
-          border: "1px dashed #c9cccf",
+          border: "1px dashed #e3e3e3",
           borderRadius: "8px",
-          background: isSubmitting ? "#f9f9f9" : "#fafafa",
+          background: isSubmitting ? "#f9f9f9" : "#ffffff",
           cursor: isSubmitting ? "not-allowed" : "pointer",
           transition: "all 0.2s ease-in-out",
         }}
@@ -96,13 +96,13 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
         }}
         onDragLeave={(e) => {
           e.preventDefault();
-          e.currentTarget.style.borderColor = "#c9cccf";
-          e.currentTarget.style.background = "#fafafa";
+          e.currentTarget.style.borderColor = "#e3e3e3";
+          e.currentTarget.style.background = "#ffffff";
         }}
         onDrop={(e) => {
           e.preventDefault();
-          e.currentTarget.style.borderColor = "#c9cccf";
-          e.currentTarget.style.background = "#fafafa";
+          e.currentTarget.style.borderColor = "#e3e3e3";
+          e.currentTarget.style.background = "#ffffff";
           const file = e.dataTransfer.files?.[0];
           if (file) void handleFileChange(file);
         }}
@@ -123,7 +123,7 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
           {t("pictureTranslate.validationInvalidFileType")}
         </div>
         {imageFileName ? (
-          <div style={{ marginTop: "0.75rem", fontSize: "0.75rem", color: "#2c6ecb", fontWeight: 500 }}>
+          <div style={{ marginTop: "0.75rem", fontSize: "0.75rem", color: "#8a05ff", fontWeight: 500 }}>
             {t("pictureTranslate.selectedFile", { fileName: imageFileName })}
           </div>
         ) : null}
@@ -286,6 +286,8 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
                       borderRadius: "8px",
                       border: "1px solid #c9cccf",
                       boxSizing: "border-box",
+                      color: "#0d0d0d",
+                      background: isSubmitting ? "#f9f9f9" : "#fff"
                     }}
                   />
                 </div>
@@ -354,9 +356,9 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
                         padding: "0.5rem 0.6rem",
                         borderRadius: "8px",
                         border: isSelected
-                          ? "1px solid #2c6ecb"
+                          ? "1px solid #8a05ff"
                           : "1px solid rgba(0,0,0,0.12)",
-                        background: isSelected ? "rgba(44, 110, 203, 0.08)" : "#fff",
+                        background: isSelected ? "rgba(138, 5, 255, 0.04)" : "#fff",
                         textAlign: "left",
                         cursor: "pointer",
                       }}
@@ -383,11 +385,12 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
                         <div
                           style={{
                             fontSize: "0.8125rem",
-                            color: "#202223",
+                            color: "#0d0d0d",
                             lineHeight: 1.35,
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
+                            fontWeight: isSelected ? 500 : 400,
                           }}
                         >
                           {product.title}
@@ -427,13 +430,13 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
                             borderRadius: "8px",
                             overflow: "hidden",
                             border: active
-                              ? "2px solid #2c6ecb"
+                              ? "2px solid #8a05ff"
                               : "1px solid rgba(0,0,0,0.12)",
                             background: "#fff",
                             padding: 0,
                             cursor: "pointer",
                             boxShadow: active
-                              ? "0 0 0 2px rgba(44,110,203,0.12)"
+                              ? "0 0 0 2px rgba(138,5,255,0.12)"
                               : "0 1px 3px rgba(0,0,0,0.08)",
                           }}
                           title={image.altText ?? ""}
@@ -522,8 +525,8 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
                 fontSize: "0.8125rem",
                 borderRadius: "8px",
                 border: "1px solid #c9cccf",
-                background: isSubmitting ? "#f6f6f7" : "#fff",
-                color: "#303030",
+                background: isSubmitting ? "#f9f9f9" : "#fff",
+                color: "#0d0d0d",
                 boxSizing: "border-box",
               }}
             >
@@ -560,8 +563,8 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
                 fontSize: "0.8125rem",
                 borderRadius: "8px",
                 border: "1px solid #c9cccf",
-                background: isSubmitting ? "#f6f6f7" : "#fff",
-                color: "#303030",
+                background: isSubmitting ? "#f9f9f9" : "#fff",
+                color: "#0d0d0d",
                 boxSizing: "border-box",
               }}
             >
@@ -590,7 +593,7 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
           </div>
         ) : null}
 
-        <div style={{ marginTop: "0.25rem" }}>
+        <div style={{ gridColumn: "1 / -1", marginTop: "0.25rem" }}>
           <s-button
             type="button"
             variant="primary"

@@ -1,18 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { subscriptionTokensAfterCancelToTrial } from "./activateSubscription.server";
+import { subscriptionTokensAfterCancel } from "./activateSubscription.server";
 
-describe("subscriptionTokensAfterCancelToTrial", () => {
-  it("付费订阅池恢复为试用套餐额度", () => {
-    expect(subscriptionTokensAfterCancelToTrial(500_000, 10_000)).toEqual({
-      nextSubscriptionTokens: 10_000,
-      tokensDelta: -490_000,
+describe("subscriptionTokensAfterCancel", () => {
+  it("扣减订阅套餐额度，subscriptionTokens 归零", () => {
+    expect(subscriptionTokensAfterCancel(500_000, 500_000)).toEqual({
+      nextSubscriptionTokens: 0,
+      removedTokens: 500_000,
+      tokensDelta: -500_000,
     });
   });
 
-  it("试用额度为 0 时订阅池归零", () => {
-    expect(subscriptionTokensAfterCancelToTrial(100, 0)).toEqual({
+  it("订阅池小于套餐额度时扣到 0", () => {
+    expect(subscriptionTokensAfterCancel(100_000, 500_000)).toEqual({
       nextSubscriptionTokens: 0,
-      tokensDelta: -100,
+      removedTokens: 100_000,
+      tokensDelta: -100_000,
+    });
+  });
+
+  it("订阅池已为 0 时不变", () => {
+    expect(subscriptionTokensAfterCancel(0, 500_000)).toEqual({
+      nextSubscriptionTokens: 0,
+      removedTokens: 0,
+      tokensDelta: 0,
     });
   });
 });

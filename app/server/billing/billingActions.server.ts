@@ -1,5 +1,8 @@
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/tool";
-import { buildBillingReturnUrl } from "./buildBillingReturnUrl.server";
+import {
+  BILLING_PAGE_PATH,
+  buildBillingReturnUrl,
+} from "./buildBillingReturnUrl.server";
 import { BillingError, BILLING_ERROR_CODE } from "./errors.server";
 import { getBillingGateway } from "./gateway/getBillingGateway.server";
 import { getPlanByKey } from "./plans/planCatalog.server";
@@ -21,7 +24,7 @@ export async function startSubscriptionCheckout(params: {
   }
 
   const returnUrl = buildBillingReturnUrl(
-    "/app/billing",
+    BILLING_PAGE_PATH,
     params.request,
     params.shop,
   );
@@ -54,7 +57,7 @@ export async function startTokenPackCheckout(params: {
   }
 
   const returnUrl = buildBillingReturnUrl(
-    "/app/billing",
+    BILLING_PAGE_PATH,
     params.request,
     params.shop,
   );

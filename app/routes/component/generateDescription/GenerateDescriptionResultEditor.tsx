@@ -84,11 +84,10 @@ export function GenerateDescriptionResultEditor(props: GenerateDescriptionResult
       style={
         variant === "page"
           ? {
-              background: "#fff",
-              borderRadius: "12px",
+              background: "#fafafa",
+              borderRadius: "8px",
               padding: "1.25rem",
-              border: "1px solid #e1e3e5",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+              border: "1px solid #e3e3e3",
             }
           : {}
       }
@@ -195,7 +194,7 @@ export function GenerateDescriptionResultEditor(props: GenerateDescriptionResult
   return (
     <>
       {variant === "page" ? (
-        <s-section heading={t("generate.resultTitle")}>{body}</s-section>
+        body
       ) : (
         <div style={{ marginBottom: "0.85rem" }}>{body}</div>
       )}
