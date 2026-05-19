@@ -85,6 +85,7 @@
     "sectionSubscription": "当前订阅",
     "sectionPlans": "订阅套餐",
     "sectionPacks": "按量购包",
+    "sectionPacksHint": "按量购买的 Token 永久有效，与订阅额度叠加使用，随时补充。",
     "availableTokens": "可用 Token",
     "usedTokens": "已用 Token",
     "poolSubscription": "订阅池",

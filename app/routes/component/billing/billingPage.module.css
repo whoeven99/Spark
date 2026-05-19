@@ -352,34 +352,57 @@
 }
 
 /* —— 购包 —— */
+.packSection {
+  margin-top: 0.25rem;
+}
+
 .packCard {
   background: #fff;
   border: 1px solid #e1e3e5;
   border-radius: 12px;
-  padding: 1.25rem;
+  padding: 1.25rem 1.5rem 1.5rem;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.packCardHeader {
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid #f1f2f3;
+}
+
+.packTitle {
+  margin: 0 0 0.35rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #202223;
+}
+
+.packHint {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #6d7175;
 }
 
 .packOptions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 0.75rem;
 }
 
 .packOption {
-  padding: 0.65rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 1rem 0.75rem;
   border: 1px solid #c9cccf;
-  border-radius: 8px;
+  border-radius: 10px;
   background: #fff;
   cursor: pointer;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #008060;
-  transition: border-color 0.15s, background 0.15s;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
 
 .packOption:hover {
@@ -388,13 +411,40 @@
 
 .packOptionSelected {
   border-color: #008060;
-  background: #f1f8f5;
+  background: linear-gradient(180deg, #f1f8f5 0%, #fff 100%);
   box-shadow: 0 0 0 1px #008060;
 }
 
-.packOptionLabel {
-  display: block;
-  white-space: nowrap;
+.packOptionTokens {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #202223;
+  line-height: 1.2;
+}
+
+.packOptionTokensUnit {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: #6d7175;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.packOptionPrice {
+  margin-top: 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #008060;
+}
+
+.packCta {
+  margin: 0;
+  padding-top: 0.25rem;
+  border-top: 1px solid #f1f2f3;
+}
+
+.packCta s-button {
+  width: 100%;
 }
 
 .subscriptionMeta {

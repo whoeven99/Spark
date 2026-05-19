@@ -12,7 +12,11 @@ import {
   formErrorBoxStyle,
   pageContentStyle,
   pageEmptyStateStyle,
+  pageFieldLabelStyle,
+  pageHintTextStyle,
   pageIntroBannerStyle,
+  pageLinkHintStyle,
+  pageSelectStyle,
   twoColumnLayoutStyle,
   twoColumnMainStyle,
   twoColumnSideStyle,
@@ -100,14 +104,7 @@ export function GenerateDescriptionPage() {
                 open={showManualProductId}
                 onToggle={(e) => setShowManualProductId(e.currentTarget.open)}
               >
-                <summary
-                  style={{
-                    cursor: "pointer",
-                    fontSize: "0.8125rem",
-                    color: "#2c6ecb",
-                    userSelect: "none",
-                  }}
-                >
+                <summary style={pageLinkHintStyle}>
                   {t("generate.advancedManualProductId")}
                 </summary>
                 <div style={{ marginTop: "0.65rem" }}>
@@ -121,15 +118,7 @@ export function GenerateDescriptionPage() {
               </details>
 
               <div>
-                <label
-                  htmlFor="generate-description-lang"
-                  style={{
-                    display: "block",
-                    fontSize: "0.8125rem",
-                    fontWeight: 500,
-                    color: "#303030",
-                  }}
-                >
+                <label htmlFor="generate-description-lang" style={pageFieldLabelStyle}>
                   {t("generate.targetLanguage")}
                 </label>
                 <select
@@ -137,19 +126,9 @@ export function GenerateDescriptionPage() {
                   value={targetLanguage}
                   onChange={(e) => setTargetLanguage(e.target.value)}
                   disabled={localesLoading || isSubmitting || isSaving || saveConfirmOpen}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    maxWidth: "100%",
-                    marginTop: "0.35rem",
-                    padding: "0.5rem 0.65rem",
-                    fontSize: "0.875rem",
-                    borderRadius: "8px",
-                    border: "1px solid #c9cccf",
-                    background: localesLoading ? "#f6f6f7" : "#fff",
-                    color: "#303030",
-                    boxSizing: "border-box",
-                  }}
+                  style={pageSelectStyle(
+                    localesLoading || isSubmitting || isSaving || saveConfirmOpen,
+                  )}
                 >
                   {localesLoading && localeOptions.length === 0 ? (
                     <option value="">{t("common.loadingLanguage")}</option>
@@ -161,14 +140,7 @@ export function GenerateDescriptionPage() {
                   ))}
                 </select>
                 {localesIsFallback ? (
-                  <div
-                    style={{
-                      marginTop: "0.35rem",
-                      fontSize: "0.75rem",
-                      color: "#6d7175",
-                      lineHeight: 1.45,
-                    }}
-                  >
+                  <div style={pageHintTextStyle}>
                     {t("generate.fallbackLocalesHint")}{" "}
                     <code style={{ fontSize: "0.7rem" }}>read_locales</code>
                   </div>

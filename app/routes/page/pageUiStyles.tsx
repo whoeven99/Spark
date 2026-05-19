@@ -1,5 +1,30 @@
 import type { CSSProperties, ReactNode } from "react";
 
+/** §3.5.2 视觉令牌 — 与 billingPage.module.css 对齐，全站复用 */
+export const pageColorTokens = {
+  textPrimary: "#202223",
+  textBody: "#303030",
+  textSecondary: "#6d7175",
+  textMuted: "#42474c",
+  border: "#e1e3e5",
+  borderInput: "#c9cccf",
+  divider: "#f1f2f3",
+  brandGreen: "#008060",
+  brandGreenDark: "#208060",
+  brandGreenDeep: "#1a6b52",
+  brandGreenLight: "#f1f8f5",
+  brandBlue: "#2c6ecb",
+  surface: "#ffffff",
+  surfaceMuted: "#f6f6f7",
+  surfaceSubtle: "#fafafa",
+  critical: "#bf0711",
+  criticalBg: "rgba(216, 44, 13, 0.08)",
+  criticalText: "#8a2712",
+  shadowCard: "0 1px 2px rgba(0, 0, 0, 0.04)",
+  radiusCard: "12px",
+  radiusControl: "8px",
+} as const;
+
 /** §3.2 双栏布局 */
 export const twoColumnLayoutStyle: CSSProperties = {
   display: "flex",
@@ -37,24 +62,97 @@ export const pageContentStyle: CSSProperties = {
 
 /** 白底卡片容器（12px 圆角，对齐计费卡片） */
 export const pageSurfaceStyle: CSSProperties = {
-  background: "#ffffff",
-  border: "1px solid #e1e3e5",
-  borderRadius: "12px",
+  background: pageColorTokens.surface,
+  border: `1px solid ${pageColorTokens.border}`,
+  borderRadius: pageColorTokens.radiusCard,
   padding: "1.25rem",
-  boxShadow: "0 1px 2px rgba(0, 0, 0, 0.04)",
+  boxShadow: pageColorTokens.shadowCard,
 };
+
+export const pageCompactSurfaceStyle: CSSProperties = {
+  ...pageSurfaceStyle,
+  padding: "0.75rem",
+};
+
+export const pageInnerPanelStyle: CSSProperties = {
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.border}`,
+  borderRadius: pageColorTokens.radiusControl,
+  padding: "1.25rem",
+};
+
+export const pageFieldLabelStyle: CSSProperties = {
+  display: "block",
+  fontSize: "0.8125rem",
+  fontWeight: 500,
+  color: pageColorTokens.textBody,
+  marginBottom: "0.35rem",
+};
+
+export const pageHintTextStyle: CSSProperties = {
+  marginTop: "0.35rem",
+  fontSize: "0.75rem",
+  color: pageColorTokens.textSecondary,
+  lineHeight: 1.45,
+};
+
+export const pageLinkHintStyle: CSSProperties = {
+  cursor: "pointer",
+  fontSize: "0.8125rem",
+  color: pageColorTokens.brandBlue,
+  userSelect: "none",
+};
+
+export function pageSelectStyle(disabled = false): CSSProperties {
+  return {
+    display: "block",
+    width: "100%",
+    maxWidth: "100%",
+    marginTop: "0.35rem",
+    padding: "0.5rem 0.65rem",
+    fontSize: "0.875rem",
+    borderRadius: pageColorTokens.radiusControl,
+    border: `1px solid ${pageColorTokens.borderInput}`,
+    background: disabled ? pageColorTokens.surfaceMuted : pageColorTokens.surface,
+    color: pageColorTokens.textBody,
+    boxSizing: "border-box",
+  };
+}
+
+export function pageTextareaStyle(options?: {
+  minHeight?: string;
+  fontSize?: string;
+  padding?: string;
+}): CSSProperties {
+  return {
+    display: "block",
+    width: "100%",
+    marginTop: "0.35rem",
+    padding: options?.padding ?? "0.5rem 0.65rem",
+    fontSize: options?.fontSize ?? "0.875rem",
+    borderRadius: pageColorTokens.radiusControl,
+    border: `1px solid ${pageColorTokens.borderInput}`,
+    background: pageColorTokens.surface,
+    color: pageColorTokens.textBody,
+    boxSizing: "border-box",
+    lineHeight: 1.55,
+    minHeight: options?.minHeight ?? "160px",
+    resize: "vertical",
+    fontFamily: "inherit",
+  };
+}
 
 export const pageSectionTitleStyle: CSSProperties = {
   fontSize: "1.125rem",
   fontWeight: 600,
-  color: "#202223",
+  color: pageColorTokens.textPrimary,
   margin: "0 0 1rem",
 };
 
 export const pageSectionMajorTitleStyle: CSSProperties = {
   fontSize: "1.375rem",
   fontWeight: 700,
-  color: "#202223",
+  color: pageColorTokens.textPrimary,
   margin: 0,
 };
 
@@ -70,16 +168,16 @@ export const pageSectionHeaderRowStyle: CSSProperties = {
 export const pageAccentBadgeStyle: CSSProperties = {
   fontSize: "0.875rem",
   fontWeight: 600,
-  color: "#008060",
+  color: pageColorTokens.brandGreen,
 };
 
 export const pageMetaTextStyle: CSSProperties = {
   margin: 0,
   padding: "0.65rem 0.75rem",
-  background: "#f6f6f7",
-  borderRadius: "8px",
+  background: pageColorTokens.surfaceMuted,
+  borderRadius: pageColorTokens.radiusControl,
   fontSize: "0.8125rem",
-  color: "#303030",
+  color: pageColorTokens.textBody,
 };
 
 export type PageIntroTone =
@@ -133,22 +231,22 @@ export function pageIntroBannerStyle(
   const token = introToneTokens[tone];
   return {
     fontSize: "0.875rem",
-    color: "#6d7175",
+    color: pageColorTokens.textSecondary,
     lineHeight: 1.5,
     padding: "1rem 1.25rem",
     background: token.gradient,
     borderLeft: `4px solid ${token.borderColor}`,
-    borderRadius: "0 8px 8px 0",
+    borderRadius: `0 ${pageColorTokens.radiusControl} ${pageColorTokens.radiusControl} 0`,
     marginBottom: options?.marginBottom ?? "1rem",
   };
 }
 
 export const pageEmptyStateStyle: CSSProperties = {
   padding: "2.5rem 1.5rem",
-  borderRadius: "12px",
-  background: "linear-gradient(180deg, #fafafa 0%, #f4f5f6 100%)",
-  border: "1px dashed #c9cccf",
-  color: "#6d7175",
+  borderRadius: pageColorTokens.radiusCard,
+  background: `linear-gradient(180deg, ${pageColorTokens.surfaceSubtle} 0%, ${pageColorTokens.surfaceMuted} 100%)`,
+  border: `1px dashed ${pageColorTokens.borderInput}`,
+  color: pageColorTokens.textSecondary,
   fontSize: "0.875rem",
   lineHeight: 1.5,
   textAlign: "center",
@@ -160,24 +258,24 @@ export const pageEmptyStateStyle: CSSProperties = {
 
 export const formErrorBoxStyle: CSSProperties = {
   padding: "0.5rem 0.65rem",
-  borderRadius: "8px",
-  background: "rgba(216, 44, 13, 0.08)",
-  color: "#8a2712",
+  borderRadius: pageColorTokens.radiusControl,
+  background: pageColorTokens.criticalBg,
+  color: pageColorTokens.criticalText,
   fontSize: "0.8125rem",
   lineHeight: 1.45,
 };
 
 export const pageMetricCardStyle: CSSProperties = {
-  background: "#fff",
-  border: "1px solid #e1e3e5",
-  borderRadius: "12px",
+  background: pageColorTokens.surface,
+  border: `1px solid ${pageColorTokens.border}`,
+  borderRadius: pageColorTokens.radiusCard,
   overflow: "hidden",
-  boxShadow: "0 1px 2px rgba(0, 0, 0, 0.04)",
+  boxShadow: pageColorTokens.shadowCard,
 };
 
 export const pageMetricCardAccentStyle: CSSProperties = {
-  background: "linear-gradient(90deg, #1a6b52 0%, #208060 100%)",
-  color: "#fff",
+  background: `linear-gradient(90deg, ${pageColorTokens.brandGreenDeep} 0%, ${pageColorTokens.brandGreenDark} 100%)`,
+  color: pageColorTokens.surface,
   padding: "0.65rem 1rem",
   fontSize: "0.8125rem",
   lineHeight: 1.45,
@@ -191,14 +289,14 @@ export const pageMetricTileStyle: CSSProperties = {
 export const pageMetricLabelStyle: CSSProperties = {
   margin: "0 0 0.35rem",
   fontSize: "0.8125rem",
-  color: "#6d7175",
+  color: pageColorTokens.textSecondary,
 };
 
 export const pageMetricValueStyle: CSSProperties = {
   margin: 0,
   fontSize: "1.5rem",
   fontWeight: 700,
-  color: "#202223",
+  color: pageColorTokens.textPrimary,
   lineHeight: 1.15,
   wordBreak: "break-word",
 };
@@ -206,23 +304,23 @@ export const pageMetricValueStyle: CSSProperties = {
 export const pageMetricUnitStyle: CSSProperties = {
   margin: "0.25rem 0 0",
   fontSize: "0.8125rem",
-  color: "#6d7175",
+  color: pageColorTokens.textSecondary,
 };
 
 export const pageMetricFooterStyle: CSSProperties = {
   padding: "0.75rem 1rem 1rem",
-  borderTop: "1px solid #f1f2f3",
+  borderTop: `1px solid ${pageColorTokens.divider}`,
   fontSize: "0.8125rem",
-  color: "#6d7175",
+  color: pageColorTokens.textSecondary,
   textAlign: "center",
 };
 
 export const pageStatusCardStyle: CSSProperties = {
   padding: "0.85rem 1rem",
-  border: "1px solid #e1e3e5",
-  borderRadius: "12px",
-  background: "#fff",
-  boxShadow: "0 1px 2px rgba(0, 0, 0, 0.04)",
+  border: `1px solid ${pageColorTokens.border}`,
+  borderRadius: pageColorTokens.radiusCard,
+  background: pageColorTokens.surface,
+  boxShadow: pageColorTokens.shadowCard,
 };
 
 type PageSurfaceProps = {
@@ -234,6 +332,39 @@ export function PageSurface({ title, children }: PageSurfaceProps) {
   return (
     <div style={pageSurfaceStyle}>
       {title ? <div style={pageSectionTitleStyle}>{title}</div> : null}
+      {children}
+    </div>
+  );
+}
+
+type PagePanelProps = {
+  children: ReactNode;
+  padding?: "small" | "base" | "large";
+  highlighted?: boolean;
+};
+
+/** 替代 s-box background="subdued"，统一为计费风白底卡片 */
+export function PagePanel({
+  children,
+  padding = "base",
+  highlighted = false,
+}: PagePanelProps) {
+  const paddingPx =
+    padding === "large" ? "1.5rem" : padding === "small" ? "0.75rem" : "1.25rem";
+  return (
+    <div
+      style={{
+        ...pageSurfaceStyle,
+        padding: paddingPx,
+        ...(highlighted
+          ? {
+              borderColor: pageColorTokens.brandGreen,
+              boxShadow: `0 0 0 1px ${pageColorTokens.brandGreen}`,
+              background: `linear-gradient(180deg, ${pageColorTokens.brandGreenLight} 0%, ${pageColorTokens.surface} 28%)`,
+            }
+          : {}),
+      }}
+    >
       {children}
     </div>
   );

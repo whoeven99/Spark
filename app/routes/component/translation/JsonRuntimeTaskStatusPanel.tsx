@@ -8,6 +8,7 @@ import {
   readRuntimeChunksFileTotal,
 } from "../../../lib/redisTranslatePhaseLabel";
 import { formatTranslateTaskV3CosmosStatusText } from "../../../lib/translateTaskV3CosmosStatusLabel";
+import { PagePanel } from "../../page/pageUiStyles";
 
 export type JsonRuntimeTaskDetailEnvelope = {
   success: boolean;
@@ -769,7 +770,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
   return (
     <>
     <s-stack direction="block" gap="base">
-      <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+      <PagePanel>
         <s-stack direction="block" gap="small">
           <s-paragraph>
             <span style={{ color: "#42474c", lineHeight: 1.5 }}>
@@ -780,7 +781,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
             </span>
           </s-paragraph>
         </s-stack>
-      </s-box>
+      </PagePanel>
 
       <s-section heading={t("translationRuntime.currentShopTasksHeading")}>
         <s-stack direction="inline" gap="small" alignItems="center">
@@ -799,20 +800,20 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
           ) : null}
         </s-stack>
         {listErrorText ? (
-          <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+          <PagePanel>
             <s-paragraph>
               <span style={{ color: "#bf0711" }}>{t("translationRuntime.listErrorPrefix")}：{listErrorText}</span>
             </s-paragraph>
-          </s-box>
+          </PagePanel>
         ) : null}
         {!listLoading && !listErrorText && taskList.length === 0 ? (
-          <s-box padding="large" borderWidth="base" borderRadius="base" background="subdued">
+          <PagePanel padding="large">
             <s-paragraph>
               <span style={{ color: "#6d7175" }}>
                 {t("translationRuntime.noTaskRecords")}
               </span>
             </s-paragraph>
-          </s-box>
+          </PagePanel>
         ) : null}
         {taskList.length > 0 ? (
           <s-stack direction="block" gap="small">
@@ -820,13 +821,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
               const rid = row.id?.trim() ?? "";
               const active = rid !== "" && taskId.trim() === rid;
               return (
-                <s-box
-                  key={rid || `${row.updatedAt}-${row.sessionId}`}
-                  padding="base"
-                  borderWidth="base"
-                  borderRadius="base"
-                  background={active ? "base" : "subdued"}
-                >
+                <PagePanel key={rid || `${row.updatedAt}-${row.sessionId}`} highlighted={active}>
                   <s-stack direction="block" gap="small">
                     <s-stack direction="inline" gap="small" alignItems="center">
                       <s-badge tone={listRowBadgeTone(row.statusText)}>
@@ -882,14 +877,14 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                       ) : null}
                     </div>
                   </s-stack>
-                </s-box>
+                </PagePanel>
               );
             })}
           </s-stack>
         ) : null}
       </s-section>
 
-      <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+      <PagePanel>
         <s-stack direction="block" gap="small">
           <s-stack direction="inline" gap="small" alignItems="end">
             <div style={{ flex: "1 1 180px", minWidth: 140 }}>
@@ -932,46 +927,46 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
             </s-button>
           </s-stack>
         </s-stack>
-      </s-box>
+      </PagePanel>
 
       {emptyInput ? (
-        <s-box padding="large" borderWidth="base" borderRadius="base" background="subdued">
+        <PagePanel padding="large">
           <s-paragraph>
             <span style={{ color: "#6d7175" }}>
               {t("translationRuntime.selectTaskToView")}
             </span>
           </s-paragraph>
-        </s-box>
+        </PagePanel>
       ) : null}
 
       {!emptyInput && loading && !payload ? (
-        <s-box padding="large" borderWidth="base" borderRadius="base" background="subdued">
+        <PagePanel padding="large">
           <s-paragraph>
             <span style={{ color: "#6d7175" }}>{t("translationRuntime.loadingTaskDetail")}</span>
           </s-paragraph>
-        </s-box>
+        </PagePanel>
       ) : null}
 
       {errorText ? (
-        <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+        <PagePanel>
           <s-paragraph>
             <span style={{ color: "#bf0711" }}>{t("translationRuntime.errorPrefix")}：{errorText}</span>
           </s-paragraph>
-        </s-box>
+        </PagePanel>
       ) : null}
 
       {!emptyInput && !loading && !errorText && !payload ? (
-        <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+        <PagePanel>
           <s-paragraph>
             <span style={{ color: "#6d7175" }}>{t("translationRuntime.noDataEmptyResponse")}</span>
           </s-paragraph>
-        </s-box>
+        </PagePanel>
       ) : null}
 
       {payload ? (
         <s-stack direction="block" gap="base">
           <s-section heading={t("translationRuntime.cosmosSummary")}>
-            <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+            <PagePanel>
               <s-stack direction="block" gap="base">
                 <s-stack direction="inline" gap="small" alignItems="center">
                   <s-badge tone="info">{readString(cosmos, "taskType") || "—"}</s-badge>
@@ -1059,12 +1054,12 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                   </details>
                 ) : null}
               </s-stack>
-            </s-box>
+            </PagePanel>
           </s-section>
 
           {payload.translateMonitor && Object.keys(payload.translateMonitor).length > 0 ? (
             <s-section heading={t("translationRuntime.initFetchHeading")}>
-              <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+              <PagePanel>
                 <s-stack direction="block" gap="small">
                   <s-stack direction="inline" gap="small" alignItems="center">
                     <s-badge tone="info">
@@ -1160,13 +1155,13 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                     </pre>
                   </details>
                 </s-stack>
-              </s-box>
+              </PagePanel>
             </s-section>
           ) : null}
 
           <s-section heading={t("translationRuntime.redisProgressHeading")}>
             <s-stack direction="block" gap="small">
-                <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+                <PagePanel>
                   <s-stack direction="inline" gap="small" alignItems="center">
                     <span style={{ fontSize: "12px", color: "#6d7175" }}>{t("translationRuntime.prefixLabel")}</span>
                     <s-badge tone="info">{payload.resolvedRedisPrefix ?? "—"}</s-badge>
@@ -1181,9 +1176,9 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                       </span>
                     ) : null}
                   </s-stack>
-                </s-box>
+                </PagePanel>
 
-                <s-box padding="large" borderWidth="base" borderRadius="base" background="base">
+                <PagePanel padding="large">
                   <s-stack direction="block" gap="large">
                     {!progressView.hasAnyBar ? (
                       <s-paragraph>{progressView.noBarHint}</s-paragraph>
@@ -1306,29 +1301,29 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                       </div>
                     </details>
                   </s-stack>
-                </s-box>
+                </PagePanel>
             </s-stack>
           </s-section>
 
           <div id="json-runtime-failure-panel">
           <s-section heading={t("translationRuntime.failuresHeading")}>
             {payload.runtimeReportFailuresTruncated ? (
-              <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+              <PagePanel>
                 <s-paragraph>
                   <span style={{ color: "#6d7175", fontSize: "13px" }}>
                     {t("translationRuntime.largeReportBlobHint")}
                   </span>
                 </s-paragraph>
-              </s-box>
+              </PagePanel>
             ) : null}
             {payload.runtimeFailedJsonTruncated ? (
-              <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+              <PagePanel>
                 <s-paragraph>
                   <span style={{ color: "#6d7175", fontSize: "13px" }}>
                     {t("translationRuntime.failedJsonLargeHint")}
                   </span>
                 </s-paragraph>
-              </s-box>
+              </PagePanel>
             ) : null}
             {mergedFailRows.length ? (
               <s-stack direction="block" gap="small">
@@ -1385,13 +1380,13 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
               </s-stack>
             ) : Array.isArray((payload.runtimeFailedJson as { items?: unknown[] } | undefined)?.items) &&
               ((payload.runtimeFailedJson as { items: unknown[] }).items?.length ?? 0) > 0 ? null : (
-              <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+              <PagePanel>
                 <s-paragraph>
                   <span style={{ color: "#6d7175" }}>
                     {t("translationRuntime.noFailureDetailHint")}
                   </span>
                 </s-paragraph>
-              </s-box>
+              </PagePanel>
             )}
             {Array.isArray((payload.runtimeFailedJson as { items?: unknown[] } | undefined)?.items) &&
             ((payload.runtimeFailedJson as { items: unknown[] }).items?.length ?? 0) > 0 ? (
@@ -1481,13 +1476,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                 const b = payload.blobs?.[key];
                 const existsOk = b?.exists === true;
                 return (
-                  <s-box
-                    key={key}
-                    padding="base"
-                    borderWidth="base"
-                    borderRadius="base"
-                    background="subdued"
-                  >
+                  <PagePanel key={key}>
                     <s-stack direction="block" gap="small">
                       <s-stack direction="inline" gap="small" alignItems="center">
                         <span style={{ fontWeight: 600, fontSize: "14px", color: "#202223" }}>
@@ -1543,15 +1532,10 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                         </s-paragraph>
                       ) : null}
                     </s-stack>
-                  </s-box>
+                  </PagePanel>
                 );
               })}
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
+              <PagePanel>
                 <s-stack direction="block" gap="small">
                   <s-stack direction="inline" gap="small" alignItems="center">
                     <span style={{ fontWeight: 600, fontSize: "14px", color: "#202223" }}>
@@ -1596,13 +1580,8 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                       : t("translationRuntime.previewMarkdownInModal")}
                   </s-button>
                 </s-stack>
-              </s-box>
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
+              </PagePanel>
+              <PagePanel>
                 <s-stack direction="block" gap="small">
                   <s-stack direction="inline" gap="small" alignItems="center">
                     <span style={{ fontWeight: 600, fontSize: "14px", color: "#202223" }}>
@@ -1647,13 +1626,13 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                       : t("translationRuntime.previewQualityInModal")}
                   </s-button>
                 </s-stack>
-              </s-box>
+              </PagePanel>
             </s-stack>
           </s-section>
 
           {payload.reportParsed && Object.keys(payload.reportParsed).length ? (
             <s-section heading={t("translationRuntime.parsedReportHeading")}>
-              <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+              <PagePanel>
                 <pre
                   style={{
                     maxHeight: 320,
@@ -1668,7 +1647,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                 >
                   {JSON.stringify(payload.reportParsed, null, 2)}
                 </pre>
-              </s-box>
+              </PagePanel>
             </s-section>
           ) : null}
         </s-stack>

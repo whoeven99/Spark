@@ -85,6 +85,7 @@
     "sectionSubscription": "Current subscription",
     "sectionPlans": "Subscription plans",
     "sectionPacks": "Token packs",
+    "sectionPacksHint": "Purchased tokens never expire and stack with your subscription balance.",
     "availableTokens": "Available tokens",
     "usedTokens": "Used tokens",
     "poolSubscription": "Subscription pool",

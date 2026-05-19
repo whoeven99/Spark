@@ -9,6 +9,7 @@ import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../../server/translation/ty
 import {
   PageSurface,
   pageContentStyle,
+  pageFieldLabelStyle,
   pageIntroBannerStyle,
   stickyAsideColumnStyle,
   twoColumnLayoutStyle,
@@ -117,16 +118,7 @@ export function TranslationPage() {
                   autocomplete="off"
                 />
                 <div>
-                  <div
-                    style={{
-                      fontSize: "0.8125rem",
-                      fontWeight: 500,
-                      color: "#303030",
-                      marginBottom: "0.35rem",
-                    }}
-                  >
-                    {t("translation.resourceTypesLabel")}
-                  </div>
+                  <div style={pageFieldLabelStyle}>{t("translation.resourceTypesLabel")}</div>
                   <s-stack direction="inline" gap="small">
                     {RESOURCE_TYPE_OPTIONS.map((type) => (
                       <s-button

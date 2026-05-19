@@ -1,6 +1,13 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { CopyTarget } from "../../../hooks/useGenerateDescription";
+import {
+  formErrorBoxStyle,
+  pageColorTokens,
+  pageFieldLabelStyle,
+  pageInnerPanelStyle,
+  pageTextareaStyle,
+} from "../../page/pageUiStyles";
 
 export type GenerateDescriptionResultEditorProps = {
   variant: "page" | "card";
@@ -22,22 +29,12 @@ export type GenerateDescriptionResultEditorProps = {
   onSaveCancel: () => void;
 };
 
-const textAreaBase = (variant: "page" | "card"): CSSProperties => ({
-  display: "block",
-  width: "100%",
-  marginTop: variant === "card" ? "0.35rem" : "0.35rem",
-  padding: variant === "card" ? "0.45rem 0.55rem" : "0.5rem 0.65rem",
-  fontSize: variant === "card" ? "0.8125rem" : "0.875rem",
-  borderRadius: "8px",
-  border: "1px solid #c9cccf",
-  background: "#fff",
-  color: "#303030",
-  boxSizing: "border-box",
-  lineHeight: 1.55,
-  minHeight: variant === "card" ? "120px" : "160px",
-  resize: "vertical" as const,
-  fontFamily: "inherit",
-});
+const textAreaBase = (variant: "page" | "card") =>
+  pageTextareaStyle({
+    minHeight: variant === "card" ? "120px" : "160px",
+    fontSize: variant === "card" ? "0.8125rem" : "0.875rem",
+    padding: variant === "card" ? "0.45rem 0.55rem" : "0.5rem 0.65rem",
+  });
 
 export function GenerateDescriptionResultEditor(props: GenerateDescriptionResultEditorProps) {
   const { t } = useTranslation();
@@ -80,25 +77,14 @@ export function GenerateDescriptionResultEditor(props: GenerateDescriptionResult
     variant === "page" ? "generate-description-draft-desc" : "generate-description-draft-desc-card";
 
   const body = (
-    <div
-      style={
-        variant === "page"
-          ? {
-              background: "#fafafa",
-              borderRadius: "8px",
-              padding: "1.25rem",
-              border: "1px solid #e3e3e3",
-            }
-          : {}
-      }
-    >
+    <div style={variant === "page" ? pageInnerPanelStyle : undefined}>
       <s-stack direction="block" gap="small">
         {variant === "card" ? (
           <div
             style={{
               fontSize: "0.75rem",
               fontWeight: 600,
-              color: "#444",
+              color: pageColorTokens.textBody,
               marginBottom: "0.25rem",
             }}
           >
@@ -118,10 +104,9 @@ export function GenerateDescriptionResultEditor(props: GenerateDescriptionResult
           <label
             htmlFor={descFieldId}
             style={{
-              display: "block",
+              ...pageFieldLabelStyle,
               fontSize: variant === "card" ? "0.75rem" : "0.8125rem",
               fontWeight: variant === "card" ? 600 : 500,
-              color: variant === "card" ? "#444" : "#303030",
             }}
           >
             {t("generate.productDescriptionLabel")}
@@ -136,20 +121,7 @@ export function GenerateDescriptionResultEditor(props: GenerateDescriptionResult
           />
         </div>
 
-        {saveErrorText ? (
-          <div
-            style={{
-              padding: "0.5rem 0.65rem",
-              borderRadius: "8px",
-              background: "rgba(216, 44, 13, 0.08)",
-              color: "#8a2712",
-              fontSize: "0.8125rem",
-              lineHeight: 1.45,
-            }}
-          >
-            {saveErrorText}
-          </div>
-        ) : null}
+        {saveErrorText ? <div style={formErrorBoxStyle}>{saveErrorText}</div> : null}
 
         <div style={{ marginTop: "0.5rem" }}>
           <s-stack direction="inline" gap="small">

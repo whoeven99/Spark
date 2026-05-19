@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import type { ChangeEvent, CSSProperties, KeyboardEvent } from "react";
 import { usePictureTranslateContext } from "./pictureTranslateContext";
+import { pageColorTokens } from "../../page/pageUiStyles";
 
 type PictureTranslateFormProps = {
   variant: "page" | "card";
@@ -83,9 +84,9 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
           justifyContent: "center",
           padding: "1.5rem",
           marginTop: "0.5rem",
-          border: "1px dashed #e3e3e3",
-          borderRadius: "8px",
-          background: isSubmitting ? "#f9f9f9" : "#ffffff",
+          border: `1px dashed ${pageColorTokens.border}`,
+          borderRadius: pageColorTokens.radiusControl,
+          background: isSubmitting ? pageColorTokens.surfaceMuted : pageColorTokens.surface,
           cursor: isSubmitting ? "not-allowed" : "pointer",
           transition: "all 0.2s ease-in-out",
         }}
@@ -96,13 +97,13 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
         }}
         onDragLeave={(e) => {
           e.preventDefault();
-          e.currentTarget.style.borderColor = "#e3e3e3";
-          e.currentTarget.style.background = "#ffffff";
+          e.currentTarget.style.borderColor = pageColorTokens.border;
+          e.currentTarget.style.background = pageColorTokens.surface;
         }}
         onDrop={(e) => {
           e.preventDefault();
-          e.currentTarget.style.borderColor = "#e3e3e3";
-          e.currentTarget.style.background = "#ffffff";
+          e.currentTarget.style.borderColor = pageColorTokens.border;
+          e.currentTarget.style.background = pageColorTokens.surface;
           const file = e.dataTransfer.files?.[0];
           if (file) void handleFileChange(file);
         }}

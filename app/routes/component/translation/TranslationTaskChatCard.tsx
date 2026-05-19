@@ -7,6 +7,7 @@ import {
   type TranslationTaskFormPayload,
 } from "../../../lib/translationTaskFormPayload";
 import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../../../server/translation/types";
+import { pageColorTokens } from "../../page/pageUiStyles";
 
 const MODULE_LABELS: Record<string, string> = {
   PRODUCT: "translationRuntime.moduleProduct",
@@ -134,7 +135,7 @@ export function TranslationTaskChatCard({
     padding: "0.35rem 0.75rem",
     fontSize: "0.8125rem",
     fontWeight: selected ? 600 : 500,
-    border: selected ? "1px solid #008060" : "1px solid #e3e3e3",
+    border: selected ? `1px solid ${pageColorTokens.brandGreen}` : `1px solid ${pageColorTokens.border}`,
     background: selected ? "rgba(0, 128, 96, 0.12)" : "#ffffff",
     color: selected ? "#004d3d" : "#303030",
     cursor: "pointer",

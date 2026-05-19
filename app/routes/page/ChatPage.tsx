@@ -20,15 +20,20 @@ import {
   quickPromptTones,
 } from "./chat/chatPageConstants";
 import { useChatStream } from "./chat/useChatStream";
-import { pageIntroBannerStyle, PageSurface } from "./pageUiStyles";
+import {
+  pageCompactSurfaceStyle,
+  pageColorTokens,
+  pageIntroBannerStyle,
+  pageSurfaceStyle,
+  PageSurface,
+} from "./pageUiStyles";
 
 const streamingAssistantBubbleShellStyle: CSSProperties = {
-  borderRadius: "12px",
+  borderRadius: pageColorTokens.radiusCard,
   borderWidth: 1,
   borderStyle: "solid",
   borderColor: "rgba(44, 110, 203, 0.35)",
-  background:
-    "linear-gradient(180deg, rgba(44, 110, 203, 0.08), rgba(44, 110, 203, 0.02))",
+  background: `linear-gradient(180deg, rgba(44, 110, 203, 0.08), rgba(44, 110, 203, 0.02))`,
 };
 
 export function ChatPage() {
@@ -254,7 +259,7 @@ export function ChatPage() {
             gap: "0.75rem",
           }}
         >
-          <s-box padding="small" borderWidth="base" borderRadius="base" background="base">
+          <div style={pageCompactSurfaceStyle}>
             <s-stack direction="block" gap="none">
               <s-paragraph>{t("chat.quickQuestions")}</s-paragraph>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.25rem" }}>
@@ -282,11 +287,11 @@ export function ChatPage() {
                 ))}
               </div>
             </s-stack>
-          </s-box>
+          </div>
 
           <div style={{ flex: 1, minHeight: 0 }}>
             <div ref={messagesContainerRef} style={{ height: "100%", overflowY: "auto" }}>
-              <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
+              <div style={pageSurfaceStyle}>
                 <ChatMessages
                   messages={messages}
                   onTranslationCardSuccess={succeedTranslationCard}
@@ -318,13 +323,13 @@ export function ChatPage() {
                     </div>
                   </div>
                 ) : null}
-              </s-box>
+              </div>
             </div>
           </div>
 
-          <s-box padding="base" borderWidth="base" borderRadius="base">
+          <div style={pageSurfaceStyle}>
             <ChatInput onMessageSend={sendMessage} isSending={isStreaming} onAbort={abortStream} />
-          </s-box>
+          </div>
         </div>
         </s-stack>
       </s-section>
