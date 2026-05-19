@@ -2,6 +2,7 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { debugAuthenticateAdmin } from "../server/debug/authenticateAdminDebug.server";
 import { debugAuthLog, extractAuthRequestContext } from "../server/debug/authDebug.server";
+import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -15,7 +16,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
   // #endregion
 
-  await debugAuthenticateAdmin(request, "auth.catch-all");
+  const { session } = await debugAuthenticateAdmin(request, "auth.catch-all");
+
+  try {
+    await recordAppInstalled({
+      shop: session.shop,
+      sessionId: session.id,
+      scope: session.scope,
+      isOnline: session.isOnline,
+      source: "auth_callback",
+    });
+  } catch (error) {
+    console.error("[CommonEvent] recordAppInstalled failed:", error);
+  }
 
   return null;
 };

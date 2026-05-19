@@ -78,6 +78,19 @@ CREATE TABLE IF NOT EXISTS "BillingLog" (
 );
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "CommonEventLog" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "shop" TEXT NOT NULL,
+    "appName" TEXT NOT NULL,
+    "eventType" TEXT NOT NULL,
+    "topic" TEXT,
+    "referenceId" TEXT,
+    "payload" json,
+    "metadata" json,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "PlanCatalog" (
     "planKey" TEXT NOT NULL PRIMARY KEY,
     "appName" TEXT NOT NULL,
@@ -178,6 +191,15 @@ CREATE INDEX IF NOT EXISTS "BillingLog_eventType_createdAt_idx" ON "BillingLog"(
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "BillingLog_shop_appName_createdAt_idx" ON "BillingLog"("shop" ASC, "appName" ASC, "createdAt" ASC);
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "CommonEventLog_referenceId_idx" ON "CommonEventLog"("referenceId" ASC);
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "CommonEventLog_eventType_createdAt_idx" ON "CommonEventLog"("eventType" ASC, "createdAt" ASC);
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "CommonEventLog_shop_appName_createdAt_idx" ON "CommonEventLog"("shop" ASC, "appName" ASC, "createdAt" ASC);
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "PlanCatalog_appName_enabled_sortOrder_idx" ON "PlanCatalog"("appName" ASC, "enabled" ASC, "sortOrder" ASC);

@@ -9,7 +9,12 @@ import {
 
 type AdminAuthResult = {
   admin: ShopifyAdminGraphqlClient;
-  session: { shop: string; scope?: string | null; isOnline?: boolean };
+  session: {
+    id: string;
+    shop: string;
+    scope?: string | null;
+    isOnline?: boolean;
+  };
 };
 
 export async function debugAuthenticateAdmin(

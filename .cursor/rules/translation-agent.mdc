@@ -10,9 +10,9 @@ alwaysApply: true
 - `app/routes/page/TranslationPage.tsx`
 - `app/server/translation/**`
 
-必须先读取 `app/server/translation/agent.md`，再进行分析、实现或测试。
+必须先读取 `docs/translation-agent.md`，再进行分析、实现或测试。
 
 ## 执行要求
-1. 先读 `agent.md`，再动手。
-2. 若需求与 `agent.md` 约定冲突，以用户明确指令为准，并在改动说明中指出偏离点。
+1. 先读 `docs/translation-agent.md`，再动手。
+2. 若需求与 `docs/translation-agent.md` 约定冲突，以用户明确指令为准，并在改动说明中指出偏离点。
 3. 保持最小改动，不做无关重构。

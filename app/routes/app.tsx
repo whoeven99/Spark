@@ -19,6 +19,7 @@ import {
 import { detectRequestLocale } from "../i18n/detector.server";
 
 import { debugAuthenticateAdmin } from "../server/debug/authenticateAdminDebug.server";
+import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import {
   getAppEntryConfig,
   type NavItemKey,
@@ -65,7 +66,18 @@ const NAV_ITEMS: Record<
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await debugAuthenticateAdmin(request, "app.shell");
+  const { session } = await debugAuthenticateAdmin(request, "app.shell");
+  try {
+    await recordAppInstalled({
+      shop: session.shop,
+      sessionId: session.id,
+      scope: session.scope,
+      isOnline: session.isOnline,
+      source: "app_shell",
+    });
+  } catch (error) {
+    console.error("[CommonEvent] recordAppInstalled failed:", error);
+  }
   const locale = detectRequestLocale(request);
   const nav = getAppEntryConfig().nav;
 
