@@ -17,3 +17,8 @@ export function isBillingTestMode(): boolean {
 export function useNoopBillingGateway(): boolean {
   return process.env.BILLING_GATEWAY?.trim().toLowerCase() === "noop";
 }
+
+/** 仅测试环境：计费页展示「取消订阅」按钮（NODE_ENV=test）。 */
+export function isBillingDevCancelEnabled(): boolean {
+  return process.env.NODE_ENV?.trim() === "test";
+}

@@ -42,6 +42,8 @@ export type BillingPageLoaderData = {
   trialPlan: PlanRecord | null;
   subscriptionPlans: PlanRecord[];
   tokenPacks: PlanRecord[];
+  /** NODE_ENV=test 且存在可取消订阅时为 true */
+  showDevCancelSubscription: boolean;
 };
 
 /** 其它页面仅需展示访问状态时使用。 */

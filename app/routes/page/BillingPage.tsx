@@ -1,5 +1,5 @@
 ﻿import { useMemo, useState } from "react";
-import { Form, useActionData, useLoaderData } from "react-router";
+import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import type { PlanRecord } from "../../lib/billingPageTypes";
@@ -114,10 +114,14 @@ function PlanSubscribeButton({
 }
 
 export function BillingPage() {
-  const { billing, trialPlan, subscriptionPlans, tokenPacks } =
+  const { billing, trialPlan, subscriptionPlans, tokenPacks, showDevCancelSubscription } =
     useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const navigation = useNavigation();
   const shopify = useAppBridge();
+  const isCancelling =
+    navigation.state !== "idle" &&
+    navigation.formData?.get("intent") === "cancel_subscription";
   const { t, i18n } = useTranslation();
   const locale = i18n.language;
 
@@ -165,10 +169,12 @@ export function BillingPage() {
     t,
   });
 
-  if (actionData?.ok && actionData.confirmationUrl) {
+  if (actionData?.ok && "confirmationUrl" in actionData && actionData.confirmationUrl) {
     if (typeof window !== "undefined") {
       window.open(actionData.confirmationUrl, "_top");
     }
+  } else if (actionData?.ok && "cancelled" in actionData && actionData.cancelled) {
+    shopify.toast.show(t("billing.cancelSubscriptionSuccess"));
   } else if (actionData && !actionData.ok) {
     shopify.toast.show(actionData.error);
   }
@@ -218,11 +224,11 @@ export function BillingPage() {
       label: t("billing.compareAnnualDiscount"),
       free: EMPTY,
       base:
-        interval === "ANNUAL" && baseAnnualDiscount != null
+        baseAnnualDiscount != null
           ? t("billing.discountPercent", { percent: baseAnnualDiscount })
           : EMPTY,
       pro:
-        interval === "ANNUAL" && proAnnualDiscount != null
+        proAnnualDiscount != null
           ? t("billing.discountPercent", { percent: proAnnualDiscount })
           : EMPTY,
     },
@@ -294,6 +300,16 @@ export function BillingPage() {
                 : null}
             </p>
           ) : null}
+          {showDevCancelSubscription ? (
+            <Form method="post" className={styles.devCancelForm}>
+              <input type="hidden" name="intent" value="cancel_subscription" />
+              <s-button type="submit" tone="critical" disabled={isCancelling}>
+                {isCancelling
+                  ? t("billing.cancelSubscriptionPending")
+                  : t("billing.cancelSubscription")}
+              </s-button>
+            </Form>
+          ) : null}
         </section>
 
         {subscriptionPlans.length > 0 ? (
@@ -332,7 +348,7 @@ export function BillingPage() {
                   >
                     {t("billing.intervalAnnual")}
                   </span>
-                  {headerAnnualDiscount != null && interval === "ANNUAL" ? (
+                  {headerAnnualDiscount != null ? (
                     <span className={styles.discountPill}>
                       {t("billing.annualDiscountBadge", {
                         percent: headerAnnualDiscount,

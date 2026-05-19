@@ -133,7 +133,10 @@
     "featureNoSubscription": "无需 Shopify 付费订阅",
     "featureTokensPerPeriod": "每周期 {{count}} Token",
     "featureShopifyTrial": "含 {{count}} 天 Shopify 试用",
-    "featurePriority": "优先使用最新模型"
+    "featurePriority": "优先使用最新模型",
+    "cancelSubscription": "取消订阅",
+    "cancelSubscriptionPending": "正在取消…",
+    "cancelSubscriptionSuccess": "订阅已取消"
   },
   "chat": {
     "pageTitle": "Shopify AI Assistant",

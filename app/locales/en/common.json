@@ -133,7 +133,10 @@
     "featureNoSubscription": "No paid Shopify subscription required",
     "featureTokensPerPeriod": "{{count}} tokens per period",
     "featureShopifyTrial": "{{count}}-day Shopify trial",
-    "featurePriority": "Priority access to latest models"
+    "featurePriority": "Priority access to latest models",
+    "cancelSubscription": "Cancel subscription",
+    "cancelSubscriptionPending": "Cancelling…",
+    "cancelSubscriptionSuccess": "Subscription cancelled"
   },
   "chat": {
     "pageTitle": "Shopify AI Assistant",

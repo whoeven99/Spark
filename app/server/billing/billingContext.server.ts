@@ -4,7 +4,7 @@ import {
   getAvailableTokens,
   hasTokenQuota,
 } from "../tokenUsage/accountBalance.server";
-import { isBillingEnabledForApp } from "./constants.server";
+import { isBillingDevCancelEnabled, isBillingEnabledForApp } from "./constants.server";
 import { ensureAccount } from "./account/ensureAccount.server";
 import { grantProductTrialIfEligible } from "./account/grantTrial.server";
 import type {
@@ -13,7 +13,7 @@ import type {
   BillingPageSnapshot,
 } from "../../lib/billingPageTypes";
 import { listEnabledPlansForApp, type PlanRecord } from "./plans/planCatalog.server";
-import { PLAN_CATALOG_KIND } from "./types.server";
+import { APP_SUBSCRIPTION_STATUS, PLAN_CATALOG_KIND } from "./types.server";
 
 function toIso(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null;
@@ -58,6 +58,13 @@ export async function loadBillingPageData(
   appName: string,
 ): Promise<BillingPageLoaderData> {
   const ctx = await loadBillingContext(shop, appName);
+  const sub = ctx.subscription;
+  const showDevCancelSubscription =
+    isBillingDevCancelEnabled() &&
+    !!sub &&
+    (sub.status === APP_SUBSCRIPTION_STATUS.ACTIVE ||
+      sub.status === APP_SUBSCRIPTION_STATUS.PENDING);
+
   return {
     appName,
     billing: toBillingPageSnapshot(ctx),
@@ -67,6 +74,7 @@ export async function loadBillingPageData(
       (p) => p.kind === PLAN_CATALOG_KIND.SUBSCRIPTION,
     ),
     tokenPacks: ctx.plans.filter((p) => p.kind === PLAN_CATALOG_KIND.ONE_TIME_PACK),
+    showDevCancelSubscription,
   };
 }
 export type BillingContext = {

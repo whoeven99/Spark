@@ -227,6 +227,52 @@ export async function shopifyCreateOneTimePurchase(
   };
 }
 
+const APP_SUBSCRIPTION_CANCEL = `#graphql
+  mutation AppSubscriptionCancel($id: ID!, $prorate: Boolean) {
+    appSubscriptionCancel(id: $id, prorate: $prorate) {
+      appSubscription {
+        id
+        status
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+export async function shopifyCancelAppSubscription(
+  admin: ShopifyAdminGraphqlClient,
+  subscriptionId: string,
+): Promise<void> {
+  const data = await runGraphql<{
+    appSubscriptionCancel: {
+      appSubscription: { id: string; status: string } | null;
+      userErrors: { field: string[]; message: string }[];
+    };
+  }>(admin, APP_SUBSCRIPTION_CANCEL, {
+    id: subscriptionId,
+    prorate: false,
+  });
+
+  const payload = data.appSubscriptionCancel;
+  if (payload.userErrors?.length) {
+    throw new BillingError(
+      payload.userErrors.map((e) => e.message).join("; "),
+      BILLING_ERROR_CODE.SHOPIFY_BILLING_FAILED,
+      400,
+    );
+  }
+  if (!payload.appSubscription?.id) {
+    throw new BillingError(
+      "appSubscriptionCancel 未返回订阅",
+      BILLING_ERROR_CODE.SHOPIFY_BILLING_FAILED,
+      502,
+    );
+  }
+}
+
 export async function shopifyFetchAppSubscription(
   admin: ShopifyAdminGraphqlClient,
   subscriptionId: string,

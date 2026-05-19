@@ -55,6 +55,11 @@
 | `SUBSCRIPTION_ACTIVATED` | 订阅确认生效 |
 | `SUBSCRIPTION_RENEWED` | 周期续费 |
 | `SUBSCRIPTION_CANCELLED` | 取消订阅（写流水；删除 `AppSubscription`；`Account.subscriptionTokens` 恢复为 `INTERNAL_TRIAL` 套餐额度） |
+
+## 测试环境取消按钮
+
+- `NODE_ENV=test` 时计费页展示「取消订阅」；调用 `appSubscriptionCancel`（`BILLING_GATEWAY=noop` 时仅同步本地）。
+- 实现见 `cancelActiveSubscription.server.ts`、`BillingPage`。
 | `TOKEN_PACK_INITIATED` | 按量购包待确认 |
 | `TOKEN_PACK_PURCHASED` | 按量购包入账 |
 

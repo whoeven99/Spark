@@ -8,6 +8,7 @@ import { getAppEntry } from "../config/appEntry.server";
 import { authenticate } from "../shopify.server";
 import {
   BillingError,
+  cancelActiveSubscription,
   loadBillingPageData,
   startSubscriptionCheckout,
   startTokenPackCheckout,
@@ -27,11 +28,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const intent = form.get("intent")?.toString();
   const planKey = form.get("planKey")?.toString();
 
-  if (!intent || !planKey) {
-    return { ok: false as const, error: "缺少 intent 或 planKey" };
+  if (!intent) {
+    return { ok: false as const, error: "缺少 intent" };
   }
 
   try {
+    if (intent === "cancel_subscription") {
+      await cancelActiveSubscription({
+        admin,
+        shop: session.shop,
+        appName,
+      });
+      return { ok: true as const, cancelled: true as const };
+    }
+
+    if (!planKey) {
+      return { ok: false as const, error: "缺少 planKey" };
+    }
+
     if (intent === "subscribe") {
       const { confirmationUrl } = await startSubscriptionCheckout({
         admin,
