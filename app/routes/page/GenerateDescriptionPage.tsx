@@ -12,6 +12,7 @@ export function GenerateDescriptionPage() {
   const shopify = useAppBridge();
   const { t } = useTranslation();
   const loaderData = useLoaderData<typeof loader>();
+  const billing = loaderData.billing;
   const [selectedProduct, setSelectedProduct] =
     useState<ProductSelectorSelection | null>(null);
   const [productId, setProductId] = useState("");
@@ -63,6 +64,12 @@ export function GenerateDescriptionPage() {
   const copyBusy = copyTarget !== null;
   return (
     <s-page heading={t("generate.pageTitle")}>
+      {billing.billingRequired && !billing.hasAccess ? (
+        <s-banner tone="warning">
+          {t("billing.lowBalanceWarning")}{" "}
+          <s-link href={`/app/billing${search}`}>{t("billing.openBillingPage")}</s-link>
+        </s-banner>
+      ) : null}
       <div
         style={{
           display: "flex",

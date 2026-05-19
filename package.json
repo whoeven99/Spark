@@ -4,7 +4,7 @@
   "scripts": {
     "build": "react-router build",
     "dev": "shopify app dev",
-    "dev:smart-description": "shopify app dev -c shopify.app.smart-description.toml",
+    "dev:yw": "shopify app dev -c shopify.app.yw.toml",
     "config:link": "shopify app config link",
     "generate": "shopify app generate",
     "deploy": "shopify app deploy",

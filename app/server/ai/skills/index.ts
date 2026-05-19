@@ -115,7 +115,7 @@ globalToolRegistry.register({
   systemPromptExtension: "当用户明确要求根据商品 ID 生成、撰写或优化商品营销描述时，应调用工具 generate_product_description，传入 productId（及可选 targetLanguage）。工具返回 JSON 字符串：成功时含 description 字段，请用简洁中文向用户概括要点并引用描述中的关键信息，不要编造工具未返回的内容。若用户未提供商品 ID，先请对方提供，不要猜测 ID。",
   // 示例：可以根据 profile 决定是否提供特定功能
   // condition: ({ profile }) => profile?.plan !== 'free',
-  createTool: ({ admin }) => createGenerateProductDescriptionTool(admin),
+  createTool: (context) => createGenerateProductDescriptionTool(context),
   onStreamEvent: (ev, enqueue, streamContext) => {
     if (ev.event === "on_tool_end" && ev.name === "generate_product_description") {
       streamContext.emittedFlags.add("generateProductDescription");

@@ -5,7 +5,7 @@ export type AppEntry =
   | "generate-description"
   | "picture-translate";
 
-export type NavItemKey = AppEntry;
+export type NavItemKey = AppEntry | "billing";
 
 type AppEntryConfig = {
   home: string;
@@ -38,7 +38,7 @@ const APP_ENTRY_CONFIGS = {
   },
   "generate-description": {
     home: "/app/generate-description",
-    nav: ["generate-description", "picture-translate"],
+    nav: ["generate-description", "picture-translate", "billing"],
     sessionPrismaTable: "generateDescriptionSession",
   },
   "picture-translate": {

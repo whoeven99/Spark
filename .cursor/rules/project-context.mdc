@@ -8,7 +8,7 @@ alwaysApply: true
 每次开始修改代码前，请先阅读 `PROJECT_CONTEXT.md`，并遵循其中的约定与边界。
 
 ## 执行要求
-1. 在动手改代码前，先确认需求影响范围，并阅读对应文件。
+1. 在动手改代码前，先确认需求影响范围，并阅读 `PROJECT_CONTEXT.md`；若涉及翻译或计费，另读对应 `app/server/translation/agent.md` 或 `app/server/billing/agent.md`。
 2. 尽量做最小改动，避免无关重构。
 3. 保持文案与命名一致，角色名统一使用 `AI Assistant`。
 4. 未被明确要求时，不改动鉴权、部署流程、密钥相关逻辑。

@@ -14,6 +14,11 @@ import {
   createLangsmithTracer,
   getTraceUrl,
 } from "../utils/langsmith.server";
+import { getAppEntry } from "../../../config/appEntry.server";
+import {
+  extractTokenUsageFromMessages,
+  recordTokenUsage,
+} from "../../tokenUsage/index.server";
 import { globalToolRegistry, type AgentContext } from "./toolRegistry.server";
 import "../skills/index";
 
@@ -76,6 +81,18 @@ export async function invokeChatAgent(
   );
 
   const { messages } = result;
+
+  const shop = context.shop?.trim();
+  if (shop) {
+    const agentUsage = extractTokenUsageFromMessages(messages);
+    if (agentUsage.totalTokens > 0) {
+      await recordTokenUsage({
+        shop,
+        appName: context.appName ?? getAppEntry(),
+        usage: agentUsage,
+      });
+    }
+  }
   
   const lastUserText =
     lastHumanUtterance(agentInputMessages) || lastHumanUtterance(messages) || "";

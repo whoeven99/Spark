@@ -1,4 +1,9 @@
 import { z } from "zod";
+import { getAppEntry } from "../../config/appEntry.server";
+import {
+  billingErrorToResponse,
+  requireBillingAccess,
+} from "../billing/index.server";
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/tool";
 import {
   DEFAULT_DESCRIPTION_TEMPERATURE,
@@ -83,12 +88,18 @@ export async function executeGenerateDescriptionRequest(params: {
   const temperature = parsed.temperature ?? DEFAULT_DESCRIPTION_TEMPERATURE;
 
   try {
+    await requireBillingAccess(sessionShop, getAppEntry());
+
     const result = await runProductDescriptionGeneration({
       admin,
       productId: parsed.productId,
       targetLanguage: parsed.targetLanguage,
       temperature,
       requestId,
+      tokenContext: {
+        shop: sessionShop,
+        appName: getAppEntry(),
+      },
     });
 
     const durationMs = Date.now() - routeStart;
@@ -150,6 +161,23 @@ export async function executeGenerateDescriptionRequest(params: {
       200,
     );
   } catch (error) {
+    const billingResponse = billingErrorToResponse(error);
+    if (billingResponse) {
+      const body = (await billingResponse.json()) as {
+        errorMsg?: string;
+        errorCode?: string;
+      };
+      return jsonBody(
+        {
+          success: false,
+          errorCode: 402,
+          errorMsg: body.errorMsg ?? "需要订阅或购买 Token",
+          response: null,
+        },
+        402,
+      );
+    }
+
     logDetailedError(
       `${LOG_PREFIX} requestId=${requestId}`,
       "executeGenerateDescriptionRequest unexpected",

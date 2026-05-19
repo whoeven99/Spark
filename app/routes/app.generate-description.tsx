@@ -12,6 +12,12 @@ import {
 } from "../server/generateDescription/generateDescriptionHttp.server";
 import { logDetailedError } from "../server/generateDescription/generateDescriptionLog.server";
 import { fetchShopLocalesPayload } from "../server/generateDescription/shopLocalesFetcher.server";
+import { getAppEntry } from "../config/appEntry.server";
+import {
+  billingErrorToResponse,
+  loadBillingContext,
+  toBillingAccessSnapshot,
+} from "../server/billing/index.server";
 import { GenerateDescriptionPage } from "./page/GenerateDescriptionPage";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -20,7 +26,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     admin,
     `[PageLoader] shop=${session.shop}`,
   );
-  return data({ shopLocales });
+  const billing = toBillingAccessSnapshot(
+    await loadBillingContext(session.shop, getAppEntry()),
+  );
+  return data({ shopLocales, billing });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -80,6 +89,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // 使用 Response.json：页面内 fetch 需要标准 JSON；data() 在部分 RR 配置下响应体非裸 JSON，会导致前端解析失败。
     return Response.json(body, { status });
   } catch (error) {
+    const billingResponse = billingErrorToResponse(error);
+    if (billingResponse) {
+      return billingResponse;
+    }
+
     logDetailedError(
       `[GenerateDescription][Page Action] requestId=${requestId}`,
       "unexpected",

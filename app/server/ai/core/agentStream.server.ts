@@ -12,6 +12,11 @@ import {
 } from "../utils/langchainMessageText";
 import { buildShopChatGraph, getShopChatModel } from "./shopChatGraph.server";
 import { polishFinalReply } from "../utils/polishFinalReply";
+import { getAppEntry } from "../../../config/appEntry.server";
+import {
+  extractTokenUsageFromMessages,
+  recordTokenUsage,
+} from "../../tokenUsage/index.server";
 import { globalToolRegistry, type AgentContext } from "./toolRegistry.server";
 import "../skills/index";
 
@@ -238,10 +243,20 @@ export async function invokeChatAgentStream(
           }
         }
 
+        const agentUsage = extractTokenUsageFromMessages(resultMessages);
+        const shop = context.shop?.trim();
+        if (shop && agentUsage.totalTokens > 0) {
+          await recordTokenUsage({
+            shop,
+            appName: context.appName ?? getAppEntry(),
+            usage: agentUsage,
+          });
+        }
+
         controller.enqueue({
           type: "done",
           metadata: {
-            totalTokens: 0,
+            totalTokens: agentUsage.totalTokens,
             model: modelName,
             finalReply,
             uiPayloads,

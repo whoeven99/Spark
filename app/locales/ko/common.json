@@ -75,7 +75,38 @@
     "diagnosis": "진단 보고서",
     "translation": "번역 작업",
     "generateDescription": "설명 생성",
-    "pictureTranslate": "이미지 번역"
+    "pictureTranslate": "이미지 번역",
+    "billing": "결제 및 구독"
+  },
+  "billing": {
+    "pageTitle": "결제 및 구독",
+    "sectionUsage": "Token 사용량",
+    "sectionSubscription": "현재 구독",
+    "sectionPlans": "구독 플랜",
+    "sectionPacks": "Token 팩",
+    "availableTokens": "사용 가능 Token",
+    "usedTokens": "사용한 Token",
+    "poolSubscription": "구독 풀",
+    "poolPurchased": "구매 팩",
+    "poolTrial": "체험",
+    "noSubscription": "유료 구독 없음",
+    "subscribe": "구독",
+    "buyPack": "구매",
+    "lowBalanceWarning": "Token이 부족합니다. 결제 페이지에서 구독하거나 팩을 구매하세요.",
+    "openBillingPage": "결제 페이지로",
+    "periodEnd": "현재 기간 종료",
+    "trialEnds": "체험 종료",
+    "intervalMonthly": "월간",
+    "intervalAnnual": "연간",
+    "trialDays_one": "{{count}}일 체험",
+    "trialDays_other": "{{count}}일 체험",
+    "status": {
+      "PENDING": "대기",
+      "ACTIVE": "활성",
+      "CANCELLED": "취소됨",
+      "EXPIRED": "만료",
+      "FROZEN": "동결"
+    }
   },
   "chat": {
     "pageTitle": "Shopify AI Assistant",

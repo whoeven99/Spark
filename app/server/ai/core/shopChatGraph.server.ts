@@ -3,6 +3,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { getPersonalizedSystemPrompt } from "./shopAssistantPrompt";
 import { baseAgentTools } from "../skills/system/baseAgentTools.server";
+import { wrapToolWithTokenUsage } from "../../tokenUsage/wrapToolWithTokenUsage.server";
 import type { AgentContext, ToolDefinition } from "./toolRegistry.server";
 
 let shopChatModel: ChatOpenAI | null = null;
@@ -34,7 +35,10 @@ export async function buildShopChatGraph(
   activeDefs: ToolDefinition[] = []
 ) {
   const model = getShopChatModel();
-  const tools = [...baseAgentTools, ...extraTools];
+  const wrappedBaseTools = context.shop?.trim()
+    ? baseAgentTools.map((tool) => wrapToolWithTokenUsage(tool, context))
+    : baseAgentTools;
+  const tools = [...wrappedBaseTools, ...extraTools];
 
   const dynamicPrompt = await getPersonalizedSystemPrompt(context, activeDefs);
 
