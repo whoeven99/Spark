@@ -60,6 +60,31 @@ export function computeAnnualDiscountPercent(
   return Math.round((1 - annualPrice / fullYear) * 100);
 }
 
+/** Token 已用占比（0–100，未取整，供进度条与阈值判断）。 */
+export function getTokenUsagePercent(usedTokens: number, capacity: number): number {
+  if (capacity <= 0 || usedTokens <= 0) return 0;
+  return Math.min(100, (usedTokens / capacity) * 100);
+}
+
+/**
+ * 用量百分比展示：≥10% 整数；1–10% 一位小数；<1% 两位小数，避免低用量显示为 0%。
+ */
+export function formatTokenUsagePercentDisplay(percent: number): string {
+  const clamped = Math.min(100, Math.max(0, percent));
+  if (clamped >= 100) return "100";
+  if (clamped >= 10) return String(Math.round(clamped));
+  if (clamped >= 1) {
+    const oneDecimal = clamped.toFixed(1);
+    return oneDecimal.endsWith(".0") ? oneDecimal.slice(0, -2) : oneDecimal;
+  }
+  if (clamped > 0) {
+    const twoDecimals = clamped.toFixed(2);
+    const trimmed = twoDecimals.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+    return trimmed.length > 0 ? trimmed : "0.01";
+  }
+  return "0";
+}
+
 export function pickSubscriptionPlan(
   plans: PlanRecord[],
   interval: BillingIntervalView,

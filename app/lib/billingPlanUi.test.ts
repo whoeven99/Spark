@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatTokenUsagePercentDisplay,
+  getTokenUsagePercent,
   isActiveSubscriptionPlan,
   isPendingSubscriptionPlan,
   pickSubscriptionPlan,
@@ -32,6 +34,20 @@ const plans: PlanRecord[] = [
     shopifyPlanName: null,
   },
 ];
+
+describe("token usage percent", () => {
+  it("低用量保留两位小数，避免显示 0%", () => {
+    const pct = getTokenUsagePercent(1053, 610_000);
+    expect(pct).toBeCloseTo(0.1725, 3);
+    expect(formatTokenUsagePercentDisplay(pct)).toBe("0.17");
+  });
+
+  it("中高用量按档位取整或一位小数", () => {
+    expect(formatTokenUsagePercentDisplay(50.4)).toBe("50");
+    expect(formatTokenUsagePercentDisplay(5.26)).toBe("5.3");
+    expect(formatTokenUsagePercentDisplay(100)).toBe("100");
+  });
+});
 
 describe("pickSubscriptionPlan", () => {
   it("按档位与周期选取套餐", () => {

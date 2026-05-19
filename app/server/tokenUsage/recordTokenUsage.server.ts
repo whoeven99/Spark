@@ -9,8 +9,7 @@ export type RecordTokenUsageParams = {
 };
 
 /**
- * 累加店铺在对应 App 下的 `usedTokens`（不写明细表）。
- * `allTokens` 保持默认 0，供后续配额逻辑使用。
+ * 累加 `usedTokens`（周期内不修改各池额度；续费时再结算按量包剩余）。
  */
 export async function recordTokenUsage(
   params: RecordTokenUsageParams,

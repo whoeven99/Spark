@@ -72,7 +72,7 @@
 - **启用范围**：`BILLING_ENABLED_APPS` 仅含 `generate-description`；主 App `chat` 不校验 token。
 - **网关**：`getBillingGateway()` — 生产走 Shopify Billing GraphQL；`BILLING_GATEWAY=noop` 时本地直接生效（开发）。
 - **访问控制**：`requireBillingAccess` / `loadBillingContext`（`app/server/billing/`）；生成描述 HTTP 在调用前校验余额。
-- **用量**：LangChain 调用经 `app/server/tokenUsage/` 累加 `Account.usedTokens`；可用余额由 `getAvailableTokens()` 计算（`subscription + purchased + trial`，见 `accountBalance.server.ts`）。
+- **用量**：LangChain 调用经 `app/server/tokenUsage/` 累加 `usedTokens`；可用余额为 `getAvailableTokens()`（三池之和减 `usedTokens` 判断见 `hasTokenQuota`）；订阅续费时按 `tokenPools.server.ts` 结算按量包真实剩余。
 - **表与流水**：见 `app/server/billing/agent.md`（续费顺序、`BillingLog` / `CommonEventLog` 事件类型、Turso 迁移命令）。
 - **App 生命周期事件**（卫星 App）：`CommonEventLog` 记录安装 / 卸载 / scope 变更；卸载与 scope webhook 见 `app/server/billing/agent.md`；安装在进入 `/app` 或 OAuth 时写入。
 - **与整图翻译计费区分**：`PICTURE_TRANSLATE_BILLING_*` 仅作用于 `/api/picture-translate` 的 Spring 点数对齐，与 Shopify 订阅模块无关。
