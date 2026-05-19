@@ -14,6 +14,7 @@ import {
 import { fetchShopBasicFacts } from "./fetchShopBasicFacts.server";
 import {
   isShopProfileBlobConfigured,
+  readShopProfileMarkdown,
   writeShopProfileMarkdown,
 } from "./shopProfileBlobStore.server";
 import type { ShopProfileDoc } from "./types.server";
@@ -23,11 +24,11 @@ const LOG_PREFIX = "[ShopProfile]";
 export function isShopProfileEnabled(): boolean {
   const flag = process.env.SHOP_PROFILE_ENABLED?.trim().toLowerCase();
   if (flag === "false" || flag === "0") return false;
-  return isShopProfileCosmosConfigured();
+  return isShopProfileCosmosConfigured() || isShopProfileBlobConfigured();
 }
 
 /**
- * 拉取 Shopify 基础信息并写入 Cosmos + Blob（安装后或手动刷新）。
+ * 拉取 Shopify 基础信息并写入 Blob（优先）+ Cosmos（可选）。
  */
 export async function bootstrapShopProfile(params: {
   admin: ShopifyAdminGraphqlClient;
@@ -35,7 +36,7 @@ export async function bootstrapShopProfile(params: {
   appName: AppEntry | string;
 }): Promise<ShopProfileDoc | null> {
   if (!isShopProfileEnabled()) {
-    console.info(`${LOG_PREFIX} skipped (disabled or Cosmos not configured)`);
+    console.info(`${LOG_PREFIX} skipped (disabled; need Cosmos and/or Blob)`);
     return null;
   }
 
@@ -50,7 +51,7 @@ export async function bootstrapShopProfile(params: {
 
   const now = new Date().toISOString();
   const sourceHash = hashShopBasicFacts(facts);
-  const existing = await getShopProfileDoc(shop);
+  const existing = await getShopProfileDoc(shop).catch(() => null);
   const version = (existing?.version ?? 0) + 1;
 
   const markdown = buildShopProfileMarkdown(facts, {
@@ -91,9 +92,15 @@ export async function bootstrapShopProfile(params: {
     allowTraining: false,
   };
 
-  await upsertShopProfileDoc(doc);
+  const cosmosOk = await upsertShopProfileDoc(doc);
+
+  if (!cosmosOk && !blobRef && !profileMarkdownInline) {
+    console.warn(`${LOG_PREFIX} bootstrap failed: no storage backend shop=${shop}`);
+    return null;
+  }
+
   console.info(
-    `${LOG_PREFIX} bootstrap ok shop=${shop} version=${version} blob=${Boolean(blobRef)}`,
+    `${LOG_PREFIX} bootstrap ok shop=${shop} version=${version} cosmos=${cosmosOk} blob=${Boolean(blobRef)}`,
   );
   return doc;
 }
@@ -109,8 +116,12 @@ export async function ensureShopProfile(params: {
   if (!isShopProfileEnabled()) return;
   const shop = params.shop.trim();
   if (!shop) return;
-  const existing = await getShopProfileDoc(shop);
+  const existing = await getShopProfileDoc(shop).catch(() => null);
   if (existing) return;
+  if (isShopProfileBlobConfigured()) {
+    const blobMd = await readShopProfileMarkdown(shop);
+    if (blobMd?.trim()) return;
+  }
   await bootstrapShopProfile(params);
 }
 

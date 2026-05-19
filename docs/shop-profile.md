@@ -36,10 +36,13 @@ Blob 未配置时，将 `profile.md` 全文存入 Cosmos 字段 `profileMarkdown
 
 ## Cosmos RU 配额说明
 
-免费/低配 Cosmos 账户常有**账户级 RU 上限**（例如 1000 RU/s）。代码**不会**再自动创建 `shop_profiles` 容器，以免 `createIfNotExists` 为第二容器分配吞吐量导致 400 错误（substatus 1028）。
+免费/低配 Cosmos 账户常有**账户级 RU 上限**（例如 1000 RU/s）。
 
-- **默认**：画像写入已有 `agent_runs` 容器（`id: profile`，`ttl: -1` 免 90 天过期）。
-- **若曾设** `COSMOS_SHOP_PROFILES_CONTAINER=shop_profiles`：请删除该环境变量并重新部署；或在 Portal 删除未建成功的容器配置。
+- 店铺画像**绝不**调用 `containers.createIfNotExists`，只连接已有 **`agent_runs`** 容器。
+- `COSMOS_SHOP_PROFILES_CONTAINER` 若指向其他容器名会被**忽略**（并打 warn 日志）。
+- Cosmos upsert 失败（RU 超限、容器不存在）时：若已配置 Blob，仍视为 **bootstrap ok**，聊天从 Blob 读 `profile.md`。
+- 建议配置 **`AZURE_BLOB_CONNECTION_STRING`**（或 `SHOP_PROFILE_BLOB_CONNECTION_STRING`），作为 Cosmos 不可用时的可靠存储。
+- 可选：设 `COSMOS_SPARK_OPS_AUTO_CREATE=false`，Agent Run 也不再自动建容器（须事先在 Portal 建好 `agent_runs`）。
 
 ## 后续扩展
 
