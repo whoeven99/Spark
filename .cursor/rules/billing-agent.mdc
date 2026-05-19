@@ -18,6 +18,6 @@ alwaysApply: true
 必须先读取 `app/server/billing/agent.md`，再进行分析、实现或测试。
 
 ## 执行要求
-1. 先读 `agent.md`，再动手；架构总览可同时参考 `PROJECT_CONTEXT.md` 第 5 节。
+1. 先读 `agent.md`，再动手；架构总览可同时参考 `docs/PROJECT_CONTEXT.md` 第 5 节。
 2. 若需求与 `agent.md` 约定冲突，以用户明确指令为准，并在改动说明中指出偏离点。
 3. 保持最小改动，不做无关重构；未明确要求时不改 Shopify 鉴权与部署流水线。

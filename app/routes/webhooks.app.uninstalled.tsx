@@ -13,6 +13,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       topic,
       payload,
       sessionId: session?.id,
+      webhookHeaders: request.headers,
     });
   } catch (error) {
     console.error("[CommonEvent] app/uninstalled handler failed:", error);

@@ -1,6 +1,11 @@
 # Spark 项目说明文档
 
-本文档描述 **Spark 与本模板分叉部分的架构与约定**（路由、持久化、翻译、环境变量）。Shopify 通用脚手架说明仍可参考仓库根目录 `README.md`；二者冲突时以本仓库 **代码** 为准，并应回头更新本文档。
+本文档描述 **Spark 与本模板分叉部分的架构与约定**（路由、持久化、翻译、环境变量）。路径：`docs/PROJECT_CONTEXT.md`。Shopify 通用脚手架说明仍可参考仓库根目录 `README.md`；二者冲突时以本仓库 **代码** 为准，并应回头更新本文档。
+
+相关文档（均在 `docs/`）：
+- `translation-agent.md` — 翻译功能约定
+- `generateDescription.md` — 商品描述生成方案
+- `UI_DESIGN.md` — 前端展示层 UI 规范
 
 ## 1. 项目定位
 - 这是一个嵌入式 Shopify App，核心能力是 `AI Assistant + 店铺运维诊断 + 翻译任务（V3 / JSON Runtime）+ 卫星 App 订阅计费（generate-description）`。
@@ -47,12 +52,12 @@
   - 物流：`app.logistics.sf.config.tsx` / `app.logistics.fedex.config.tsx`
 - 反馈路由：
   - `app.feedback.suggestion.tsx`：`POST` 校验后 **`prisma.suggestion.create`** 写入 Turso（字段 `shop`、`content`，最多 2000 字）；前端从 `ChatPage` 提交至 `/app/feedback/suggestion`。
-- **生成商品描述**：`POST /api/generate-description`（`api.generate-description.ts`）与 `POST /app/generate-description`（同上页面 action），服务端逻辑见 `app/server/generateDescription/generateDescriptionHttp.server.ts`；**写回 Shopify 商品标题与描述**：`POST /api/update-product-description`（`api.update-product-description.ts`），服务端见 `app/server/generateDescription/updateProductDescriptionHttp.server.ts` 与 `services/updateProductDescriptionService.ts`。AI Assistant 通过工具 `generate_product_description`（`app/server/ai/tools/implementations/generateDescriptionTool.ts`）调用同一套 `services/generateDescriptionService.ts`。
+- **生成商品描述**：`POST /api/generate-description`（`api.generate-description.ts`）与 `POST /app/generate-description`（同上页面 action），服务端逻辑见 `app/server/generateDescription/generateDescriptionHttp.server.ts`；**写回 Shopify 商品标题与描述**：`POST /api/update-product-description`（`api.update-product-description.ts`），服务端见 `app/server/generateDescription/updateProductDescriptionHttp.server.ts` 与 `services/updateProductDescriptionService.ts`。AI Assistant 通过工具 `generate_product_description`（`app/server/ai/tools/implementations/generateDescriptionTool.ts`）调用同一套 `services/generateDescriptionService.ts`。方案与契约见 **`docs/generateDescription.md`**（改动前先读）。
 - **整图翻译（火山 + Aidge，对齐 Spring `POST /pcUserPic/translatePic`）**：`POST /api/picture-translate`（`api.picture-translate.ts`），服务端见 `app/server/pictureTranslate/**`。`modelType=1` 仅 Aidge、`modelType=2` 仅火山（不做交叉 fallback）。AI 聊天工具 `picture_translate` 按语言范围自动路由：**重叠范围优先火山**，仅 Aidge 支持的语言走 Aidge，均不支持则不译。与 Spring 的 **PC 用户点数 / `APP_PIC_FEE` 扣费** 未对齐：默认 **noop**；可设 `PICTURE_TRANSLATE_BILLING_STRICT=true` 硬阻断。
 - 翻译相关 HTTP 路由（文件位于 `app/routes/`，URL 与 React Router 扁平路由约定一致）：
   - **`GET /api/translate/v3/json-runtime-tasks`**：`api.translate.v3.json-runtime-tasks.ts`，当前店铺 JSON Runtime 任务列表（Cosmos）。
   - **`GET /api/translate/v3/json-runtime-task-detail`**：`api.translate.v3.json-runtime-task-detail.ts`，任务详情；默认转发 **`AGENT_TASK_BASE_URL`** 下的 Java `/translate/v3/jsonRuntimeTaskDetail`；若设置 **`JSON_RUNTIME_TASK_DETAIL_SOURCE=local`**，则在 Spark 进程内聚合 Cosmos / Redis / Blob（见该文件与 `jsonRuntimeTaskDetail.server.ts`）。
-- 翻译服务端约定与边界： **`app/server/translation/agent.md`**（改动翻译功能前先读）。
+- 翻译服务端约定与边界： **`docs/translation-agent.md`**（改动翻译功能前先读）。
 - **计费 Webhook**（卫星 App toml 已注册）：
   - `app_subscriptions/update` → `webhooks.app.subscriptions_update.tsx`
   - `app_purchases_one_time/update` → `webhooks.app.purchases_one_time_update.tsx`
@@ -67,7 +72,7 @@
 - **访问控制**：`requireBillingAccess` / `loadBillingContext`（`app/server/billing/`）；生成描述 HTTP 在调用前校验余额。
 - **用量**：LangChain 调用经 `app/server/tokenUsage/` 累加 `Account.usedTokens`；可用余额由 `getAvailableTokens()` 计算（`subscription + purchased + trial`，见 `accountBalance.server.ts`）。
 - **表与流水**：见 `app/server/billing/agent.md`（续费顺序、`BillingLog` / `CommonEventLog` 事件类型、Turso 迁移命令）。
-- **App 生命周期事件**（卫星 App）：`CommonEventLog` 记录安装 / 卸载 / scope 变更；卸载与 scope webhook 见 `agent.md`；安装在进入 `/app` 或 OAuth 时写入。
+- **App 生命周期事件**（卫星 App）：`CommonEventLog` 记录安装 / 卸载 / scope 变更；卸载与 scope webhook 见 `app/server/billing/agent.md`；安装在进入 `/app` 或 OAuth 时写入。
 - **与整图翻译计费区分**：`PICTURE_TRANSLATE_BILLING_*` 仅作用于 `/api/picture-translate` 的 Spring 点数对齐，与 Shopify 订阅模块无关。
 
 ## 6. AI 聊天链路（端到端）
@@ -195,10 +200,10 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
 - 加新 AI 工具：`app/server/ai/tools/implementations/*`，并在 `app/server/ai/chat/chatAgentTools.server.ts` 的 `buildChatAgentExtraTools` 中注册（与 `shopifyShopInfoTool` 等一并注入聊天链路）。
 - 改诊断指标：`app/routes/app.additional.tsx`（含查询、阈值、文案）。
 - 改广告 OAuth 配置字段：`app/routes/app.ads.*.config.tsx` + `app/server/adAuthCredentialStore.server.ts`（及 Meta 的 `adsCredentialStore.server.ts`）；改物流：`app/routes/app.logistics.*.config.tsx` + `app/server/logisticsCredentialStore.server.ts`。
-- 改生成商品描述页或 API：`app/routes/app.generate-description.tsx`、`app/routes/page/GenerateDescriptionPage.tsx`、`app/routes/component/generateDescription/GenerateDescriptionResultEditor.tsx`、`app/routes/api.generate-description.ts`、`app/routes/api.update-product-description.ts`、`app/server/generateDescription/**`、`app/hooks/useGenerateDescription.ts`、`app/server/ai/tools/implementations/generateDescriptionTool.ts`。
+- 改生成商品描述页或 API（先读 `docs/generateDescription.md`）：`app/routes/app.generate-description.tsx`、`app/routes/page/GenerateDescriptionPage.tsx`、`app/routes/component/generateDescription/GenerateDescriptionResultEditor.tsx`、`app/routes/api.generate-description.ts`、`app/routes/api.update-product-description.ts`、`app/server/generateDescription/**`、`app/hooks/useGenerateDescription.ts`、`app/server/ai/tools/implementations/generateDescriptionTool.ts`。
 - 改整图翻译 API / 双引擎路由：`app/routes/api.picture-translate.ts`、`app/server/pictureTranslate/**`、`app/server/ai/skills/pictureTranslate/**`。
-- 改翻译创建/流水线/Cosmos 文档：`app/server/translation/*`（先读 `agent.md`）；改翻译 UI：`app/routes/page/TranslationPage.tsx`、`app/routes/component/translation/*`；改 API：`app/routes/api.translate.v3.*.ts`。
-- 改订阅/购包/余额/Webhook：`app/server/billing/**`（先读 `agent.md`）；改计费页 UI：`app/routes/app.billing.tsx`、`app/routes/page/BillingPage.tsx`、`app/routes/component/billing/*`、`app/lib/billingPlanUi.ts`、`app/lib/billingPageTypes.ts`；改 Webhook：`app/routes/webhooks.app.subscriptions_update.tsx`、`webhooks.app.purchases_one_time_update.tsx`、`webhooks.app.uninstalled.tsx`、`webhooks.app.scopes_update.tsx`；改 App 生命周期流水：`app/server/commonEventLog/**`；改 token 累加：`app/server/tokenUsage/**`；改套餐种子：`prisma/billing-plan-catalog-seed.sql` + `npm run turso:migrate:*`。
+- 改翻译创建/流水线/Cosmos 文档：`app/server/translation/*`（先读 `docs/translation-agent.md`）；改翻译 UI：`app/routes/page/TranslationPage.tsx`、`app/routes/component/translation/*`；改 API：`app/routes/api.translate.v3.*.ts`。
+- 改订阅/购包/余额/Webhook：`app/server/billing/**`（先读 `app/server/billing/agent.md`）；改计费页 UI：`app/routes/app.billing.tsx`、`app/routes/page/BillingPage.tsx`、`app/routes/component/billing/*`、`app/lib/billingPlanUi.ts`、`app/lib/billingPageTypes.ts`；改 Webhook：`app/routes/webhooks.app.subscriptions_update.tsx`、`webhooks.app.purchases_one_time_update.tsx`、`webhooks.app.uninstalled.tsx`、`webhooks.app.scopes_update.tsx`；改 App 生命周期流水：`app/server/commonEventLog/**`；改 token 累加：`app/server/tokenUsage/**`；改套餐种子：`prisma/billing-plan-catalog-seed.sql` + `npm run turso:migrate:*`。
 
 ## 14. 改动边界与风险提示
 - 未明确要求时，不改以下区域：

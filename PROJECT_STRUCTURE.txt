@@ -1,6 +1,6 @@
 # Spark 项目目录结构（骨架视图，深度约 4）
 # 已跳过: node_modules, .git, app/generated, build, dist, .cache, coverage, .react-router, *.br
-# 详尽的架构说明见 PROJECT_CONTEXT.md
+# 详尽的架构说明见 docs/PROJECT_CONTEXT.md
 #
 # 【导读】
 # app/routes/        React Router 页面与 API（chat.ts、app.*.tsx、api.*.ts 等）
@@ -140,7 +140,6 @@ Spark/
 |   |   |   +-- productSearch.server.test.ts
 |   |   |   `-- productSearch.server.ts
 |   |   +-- translation
-|   |   |   +-- agent.md
 |   |   |   +-- cosmosJobStore.server.ts
 |   |   |   +-- jsonRuntimeTaskDetail.server.ts
 |   |   |   +-- translateBlobStore.server.ts
@@ -188,11 +187,14 @@ Spark/
 +-- .prettierignore
 +-- CHANGELOG.md
 +-- Dockerfile
++-- docs
+|   +-- PROJECT_CONTEXT.md
+|   +-- UI_DESIGN.md
+|   +-- generateDescription.md
+|   `-- translation-agent.md
 +-- env.d.ts
-+-- generateDescription.md
 +-- package.json
 +-- package-lock.json
-+-- PROJECT_CONTEXT.md
 +-- README.md
 +-- shopify.app.spark-zz.toml
 +-- shopify.app.test.toml

@@ -1,6 +1,6 @@
 # 计费模块约定
 
-改动本目录、`app/server/tokenUsage/`、计费路由或 Webhook 前请先读本文档；仓库总览见根目录 `PROJECT_CONTEXT.md` 第 5 节。
+改动本目录、`app/server/tokenUsage/`、计费路由或 Webhook 前请先读本文档；仓库总览见 `docs/PROJECT_CONTEXT.md` 第 5 节。
 
 ## 模块入口（按职责）
 
@@ -65,8 +65,19 @@
 | eventType | 含义 |
 |-----------|------|
 | `APP_INSTALLED` | OAuth 完成，获得 session |
-| `APP_UNINSTALLED` | 卸载 |
+| `APP_UNINSTALLED` | 卸载；`metadata.uninstallReason` / `uninstallDescription` 存商户填写的卸载原因（见下） |
 | `SCOPES_UPDATE` | 授权 scope 变更 |
+
+### 卸载原因（APP_UNINSTALLED）
+
+- Shopify `app/uninstalled` **HTTP body 多为店铺信息**，卸载原因通常在 Partner API 的 `RelationshipUninstalled`（`reason`、`description`）。
+- 写入顺序：先解析 webhook `payload` / 请求头 → 若为空且已配置 Partner API，再拉取最近一条卸载事件。
+- 查询：`SELECT shop, metadata FROM CommonEventLog WHERE eventType = 'APP_UNINSTALLED'`（`metadata` 为 JSON：`uninstallReason`、`uninstallDescription`、`uninstallFeedbackSource`）。
+- **可选环境变量**（Render / `.env`）：
+  - `SHOPIFY_PARTNER_ORG_ID`：Partner 组织 ID（Dashboard URL 中）
+  - `SHOPIFY_PARTNER_APP_GID`：如 `gid://partners/App/...`
+  - `SHOPIFY_PARTNER_API_TOKEN` 或 `SHOPIFY_CLI_PARTNERS_TOKEN`
+  - `SHOPIFY_PARTNER_API_VERSION`（默认 `2025-07`）
 
 计费流水仍在 `BillingLog`，勿合并改名。
 
@@ -85,7 +96,7 @@
 - **日常**：`npm run turso:migrate:test` / `turso:migrate:prod`（维护 `_prisma_migrations`，只跑未应用的 `prisma/migrations/*/migration.sql`）。
 - **曾仅用 `turso:sync` 建库**：先执行一次 `npm run turso:migrate:test -- --baseline`（只标记、不执行 SQL），之后再 `turso:migrate`。
 - **空库兜底**：`npm run turso:sync:*`（全量 baseline，`CREATE IF NOT EXISTS`，**不会** ALTER 已有表）。
-- 详情见根目录 `PROJECT_CONTEXT.md`「Turso 数据库」一节。
+- 详情见 `docs/PROJECT_CONTEXT.md`「Turso 数据库」一节。
 
 ## CommonEventLog 无数据时排查
 
