@@ -34,7 +34,7 @@
 | 表 | 职责 |
 |----|------|
 | `Account` | 当前 token 分池与 `usedTokens` |
-| `AppSubscription` | **当前**生效的 Shopify 订阅（`@@unique([shop, appName])`） |
+| `AppSubscription` | **当前**生效的 Shopify 订阅（`@@unique([shop, appName])`）；取消 / 过期时**删除行** |
 | `PlanCatalog` | 套餐/按量包/试用定义（种子见 `prisma/billing-plan-catalog-seed.sql`，由 `npm run turso:migrate:*` 写入） |
 | `AccountPeriodUsage` | 每个订阅周期结束时的用量归档 |
 | `BillingLog` | 试用、开通、续费、按量购等流水 |
@@ -54,6 +54,7 @@
 | `TRIAL_GRANTED` | 免费试用发放 |
 | `SUBSCRIPTION_ACTIVATED` | 订阅确认生效 |
 | `SUBSCRIPTION_RENEWED` | 周期续费 |
+| `SUBSCRIPTION_CANCELLED` | 取消订阅（写流水；删除 `AppSubscription`；`Account.subscriptionTokens` 恢复为 `INTERNAL_TRIAL` 套餐额度） |
 | `TOKEN_PACK_INITIATED` | 按量购包待确认 |
 | `TOKEN_PACK_PURCHASED` | 按量购包入账 |
 
