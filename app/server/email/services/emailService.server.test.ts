@@ -7,7 +7,7 @@ describe("sendTemplateEmail", () => {
   it("returns validation error for invalid email", async () => {
     const result = await sendTemplateEmail(
       {
-        templateId: 144209,
+        templateId: 137916,
         subject: "Test",
         to: "not-an-email",
         templateData: {},
@@ -50,7 +50,7 @@ describe("sendTemplateEmail", () => {
 
     const result = await sendTemplateEmail(
       {
-        templateId: 144209,
+        templateId: 137916,
         subject: "Success",
         to: "user@example.com",
         templateData: { username: "Ada" },

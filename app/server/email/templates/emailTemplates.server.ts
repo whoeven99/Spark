@@ -18,8 +18,6 @@ export const EMAIL_SUBJECTS = {
   PLAN_TRIALS_SUCCESSFUL: "You're now on your 5-day free trial｜Ciwi-translator",
   APG_INIT:
     "Create High-Converting Product Descriptions in 10 Seconds | Ciwi.ai-Product Content",
-  APG_GENERATE_SUCCESS:
-    "Your content generation task has been successfully completed | Ciwi.ai-Product Content",
   APG_PURCHASE_EMAIL:
     "Confirmation of Successful Credits Purchase｜Ciwi.ai:Product Description",
   APG_TASK_INTERRUPT:
@@ -39,7 +37,6 @@ export const EMAIL_TEMPLATE_IDS = {
   IP_OUT: 141471,
   SUBSCRIBE_SUCCESS: 143058,
   APG_INIT: 144208,
-  APG_GENERATE_SUCCESS: 144209,
   APG_PURCHASE: 144922,
   APG_TASK_INTERRUPT: 144923,
   IP_REPORT: 156623,

@@ -204,8 +204,7 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
   - `TENCENT_CLOUD_KEY_ID`、`TENCENT_CLOUD_KEY`（与 Spring 同名）
   - 可选：`EMAIL_PROVIDER`（默认 `tencent`）、`EMAIL_ENABLED`（默认 `true`）、`TENCENT_SES_REGION`（默认 `ap-hongkong`）、`TENCENT_FROM_EMAIL`、`TENCENT_SES_CC`、`EMAIL_SEND_TIMEOUT_MS`、`EMAIL_SEND_MAX_RETRIES`
   - 运营通知：`OPS_NOTIFY_EMAIL`（未设则用 `TENCENT_SES_CC` 首地址）；卸载模板 `OPS_UNINSTALL_TEMPLATE_ID`（未设则跳过卸载邮件）
-  - 生成描述成功通知：`POST` 请求体 `notifyEmail: true` 时发送 templateId `144209`（见 `generateDescriptionHttp.server.ts`）
-  - App 安装/卸载运营邮件：进程内 `app/server/events/` EventBus；安装在 `recordAppInstalled` 成功后 publish；卸载 Webhook 仅 publish（见 `docs/email-architecture-analysis.md` 第 10 节）
+  - App 安装/卸载运营邮件：进程内 `app/server/events/` EventBus；安装在 `recordAppInstalled` 成功后 publish；卸载 Webhook 仅 publish（见 `docs/email-architecture-analysis.md` 第 8 节）
 
 ## 12. 文案与交互约定
 - 角色命名统一使用：`AI Assistant`。

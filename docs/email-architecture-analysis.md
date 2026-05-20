@@ -38,7 +38,7 @@ flowchart TB
 
 ```mermaid
 sequenceDiagram
-  participant Biz as sendApgSuccessEmail
+  participant Biz as sendInstallOpsEmail_or_sendUninstallOpsEmail
   participant Svc as emailService
   participant Factory as providerFactory
   participant Tencent as tencentSesProvider
@@ -95,13 +95,13 @@ sequenceDiagram
 | 141470 / 141471 | IP 配额告警 | TencentEmailService |
 | 143058 | 订阅到账 | TencentEmailService |
 | 144208 | APG 初始化 | TencentEmailService |
-| **144209** | **APG 生成成功** | **TencentEmailService.sendAPGSuccessEmail** |
+| 144209 | APG 生成成功 | TencentEmailService（Spark 未接入） |
 | 144922 / 144923 | APG 购买 / 任务中断 | TencentEmailService |
 | 156623 | IP 周报 | TencentEmailService |
 | 158999–159005 | PC 图片翻译 | PCEmailService |
 | 159294–159297 | 主题/语言/批量 | TencentEmailService |
 
-首期 Spark 仅实现通用发送 + **144209** 场景封装。
+首期 Spark 实现通用发送 + App 安装/卸载运营邮件（见第 10 节）。
 
 ## 6. 异常与重试
 
@@ -109,24 +109,13 @@ sequenceDiagram
 - Spark：`retryWithTimeout.server.ts` 可配置次数与超时；Provider 内统一重试，避免 Java 双 Client 分歧。
 - 失败码：`TENCENT_SEND_FAILED`（对齐 `MailChimpConstants`）。
 
-## 7. 首期业务接入
-
-**场景：** `sendApgSuccessEmail`（templateId `144209`）。
-
-**触发：** `POST /api/generate-description` 成功且请求体 `notifyEmail=true` 时，由 HTTP 层调用（避免 AI Tool 单次生成误发批量邮件）。
-
-**收件人：** Shopify Admin GraphQL `shop { email contactEmail }`，回退 `contactEmail`。
-
-**templateData 字段：** `task_type`, `username`, `product_count`, `duration`, `credit_used`, `credit_remaining`（对齐 Java）。
-
-## 8. 手动测试清单
+## 7. 手动测试清单
 
 1. 配置 `TENCENT_CLOUD_KEY_ID`、`TENCENT_CLOUD_KEY` 后重启应用。
-2. `POST /api/generate-description`，body 含 `notifyEmail: true` 及正常 `productId` / `targetLanguage`。
-3. 检查日志前缀 `[Email][Service]`、`[Email][Tencent]`，确认 `requestId` 或明确失败码。
-4. 缺凭证时：`sendTemplateEmail` 应返回 `EMAIL_MISSING_CREDENTIALS`，HTTP 仍 200（邮件失败不阻断生成）。
+2. 触发 App 安装或卸载 Webhook，检查日志前缀 `[Email][Service]`、`[Email][Tencent]`，确认 `requestId` 或明确失败码。
+3. 缺凭证时：`sendTemplateEmail` 应返回 `EMAIL_MISSING_CREDENTIALS`，业务主流程不阻断。
 
-## 10. App 生命周期运营邮件（EventBus）
+## 8. App 生命周期运营邮件（EventBus）
 
 ```mermaid
 sequenceDiagram
@@ -156,7 +145,7 @@ sequenceDiagram
 
 邮件 Handler 失败不阻断安装 Loader；卸载邮件失败不阻断后续持久化。持久化失败时 Webhook 仍 `throw` 以便 Shopify 重试。
 
-## 9. 后续扩展
+## 9. 后续扩展（含 APG 生成成功 templateId `144209`）
 
 - 多 Provider（SES / SendGrid / SMTP）
 - 失败降级、消息队列异步
