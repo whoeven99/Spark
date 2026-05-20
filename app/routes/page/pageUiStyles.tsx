@@ -131,6 +131,41 @@ export function pageSelectStyle(disabled = false): CSSProperties {
   };
 }
 
+/** 聊天页等主栏底部的紧凑语言条容器 */
+export const languageSelectorBarStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  gap: "0.5rem 0.75rem",
+  marginTop: "0.5rem",
+  padding: "0.65rem 0.85rem",
+  borderRadius: pageColorTokens.radiusControl,
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.border}`,
+  boxShadow: pageColorTokens.shadowCard,
+};
+
+export const languageSelectorLabelStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "0.75rem",
+  fontWeight: 500,
+  color: pageColorTokens.textSecondary,
+  whiteSpace: "nowrap",
+};
+
+export function pageSelectCompactStyle(disabled = false): CSSProperties {
+  return {
+    ...pageSelectStyle(disabled),
+    marginTop: 0,
+    width: "auto",
+    minWidth: "10rem",
+    maxWidth: "14rem",
+    flex: "1 1 10rem",
+    fontSize: "0.8125rem",
+    padding: "0.4rem 0.55rem",
+  };
+}
+
 export function pageTextareaStyle(options?: {
   minHeight?: string;
   fontSize?: string;

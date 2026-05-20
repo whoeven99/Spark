@@ -13,6 +13,7 @@ import { ChatMessages } from "../component/chat/ChatMessages";
 import { ChatMessageContent } from "../component/chat/ChatMessageContent";
 import { ChatStreamingSkeleton } from "../component/chat/ChatStreamingSkeleton";
 import { ChatInput } from "../component/chat/ChatInput";
+import { LanguageSelector } from "../component/common/LanguageSelector";
 import { ChatPageCredentialsChrome } from "./chat/ChatPageCredentialsChrome";
 import {
   buildInitialAssistantMessage,
@@ -27,6 +28,9 @@ import {
   pageSurfaceStyle,
   PageSurface,
 } from "./pageUiStyles";
+
+/** App Bridge 顶栏 + 主栏底部语言条预留高度 */
+const CHAT_PAGE_VIEWPORT_OFFSET_PX = 152;
 
 const streamingAssistantBubbleShellStyle: CSSProperties = {
   borderRadius: pageColorTokens.radiusCard,
@@ -254,8 +258,8 @@ export function ChatPage() {
           style={{
             display: "flex",
             flexDirection: "column",
-            height: "calc(100dvh - 140px)",
-            minHeight: "calc(100dvh - 140px)",
+            height: `calc(100dvh - ${CHAT_PAGE_VIEWPORT_OFFSET_PX}px)`,
+            minHeight: `calc(100dvh - ${CHAT_PAGE_VIEWPORT_OFFSET_PX}px)`,
             gap: "0.75rem",
           }}
         >
@@ -330,6 +334,8 @@ export function ChatPage() {
           <div style={pageSurfaceStyle}>
             <ChatInput onMessageSend={sendMessage} isSending={isStreaming} onAbort={abortStream} />
           </div>
+
+          <LanguageSelector />
         </div>
         </s-stack>
       </s-section>

@@ -1,11 +1,17 @@
 import { useTranslation } from "react-i18next";
 import { useLocaleActions } from "../../../i18n/provider";
 import {
+  DEFAULT_LOCALE,
   isSupportedLocale,
   normalizeLocale,
   SUPPORTED_LOCALES,
   type SupportedLocale,
 } from "../../../i18n/config";
+import {
+  languageSelectorBarStyle,
+  languageSelectorLabelStyle,
+  pageSelectCompactStyle,
+} from "../../page/pageUiStyles";
 
 /** 语言下拉选项展示：每种语言用自身书写形式，不随 UI 语言变化，也不走 t()。 */
 const LANGUAGE_NATIVE_LABELS: Record<SupportedLocale, string> = {
@@ -20,23 +26,21 @@ const LANGUAGE_NATIVE_LABELS: Record<SupportedLocale, string> = {
   pt: "Português",
 };
 
-export function LanguageSelector({ locale }: { locale: SupportedLocale }) {
+type LanguageSelectorProps = {
+  locale?: SupportedLocale;
+};
+
+export function LanguageSelector({ locale = DEFAULT_LOCALE }: LanguageSelectorProps) {
   const { i18n, t } = useTranslation();
   const { setLocale, isSyncingLocale } = useLocaleActions();
 
   return (
-    <div style={{ margin: 0 }}>
-      <label
-        htmlFor="spark-language-selector"
-        style={{
-          display: "inline-block",
-          marginBottom: "0.25rem",
-          fontSize: "0.75rem",
-          color: "#6d7175",
-        }}
-      >
-        {t("common.languageSelectorLabel")}
-      </label>
+    <div
+      style={languageSelectorBarStyle}
+      role="group"
+      aria-label={t("common.languageSelectorLabel")}
+    >
+      <span style={languageSelectorLabelStyle}>{t("common.languageSelectorLabel")}</span>
       <select
         id="spark-language-selector"
         value={isSupportedLocale(i18n.language) ? i18n.language : locale}
@@ -47,16 +51,7 @@ export function LanguageSelector({ locale }: { locale: SupportedLocale }) {
           setLocale(next);
         }}
         disabled={isSyncingLocale}
-        style={{
-          display: "block",
-          minWidth: "180px",
-          padding: "0.35rem 0.5rem",
-          borderRadius: "8px",
-          border: "1px solid #c9cccf",
-          background: "#fff",
-          color: "#303030",
-          fontSize: "0.8125rem",
-        }}
+        style={pageSelectCompactStyle(isSyncingLocale)}
       >
         {SUPPORTED_LOCALES.map((item) => (
           <option key={item} value={item}>

@@ -1,5 +1,9 @@
 import { useTranslation } from "react-i18next";
-import { pageColorTokens } from "../../page/pageUiStyles";
+import {
+  pageColorTokens,
+  pageFieldLabelStyle,
+  pageSelectStyle,
+} from "../../page/pageUiStyles";
 import type { ChangeEvent, CSSProperties, KeyboardEvent } from "react";
 import { usePictureTranslateContext } from "./pictureTranslateContext";
 import { CriticalErrorBox } from "../shared/CriticalErrorBox";
@@ -494,12 +498,7 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
           <div>
             <label
               htmlFor={`picture-translate-source-language-${variant}`}
-              style={{
-                display: "block",
-                fontSize: "0.75rem",
-                fontWeight: 600,
-                color: "#444",
-              }}
+              style={pageFieldLabelStyle}
             >
               {t("pictureTranslate.sourceLanguage")}
             </label>
@@ -508,18 +507,7 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
               value={sourceLanguage}
               onChange={(event) => setSourceLanguage(event.target.value)}
               disabled={isSubmitting}
-              style={{
-                display: "block",
-                width: "100%",
-                marginTop: "0.35rem",
-                padding: "0.45rem 0.55rem",
-                fontSize: "0.8125rem",
-                borderRadius: "8px",
-                border: "1px solid #c9cccf",
-                background: isSubmitting ? "#f9f9f9" : "#fff",
-                color: "#0d0d0d",
-                boxSizing: "border-box",
-              }}
+              style={pageSelectStyle(isSubmitting)}
             >
               {sourceLanguageOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -532,12 +520,7 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
           <div>
             <label
               htmlFor={`picture-translate-target-language-${variant}`}
-              style={{
-                display: "block",
-                fontSize: "0.75rem",
-                fontWeight: 600,
-                color: "#444",
-              }}
+              style={pageFieldLabelStyle}
             >
               {t("pictureTranslate.targetLanguage")}
             </label>
@@ -546,18 +529,7 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
               value={targetLanguage}
               onChange={(event) => setTargetLanguage(event.target.value)}
               disabled={isSubmitting}
-              style={{
-                display: "block",
-                width: "100%",
-                marginTop: "0.35rem",
-                padding: "0.45rem 0.55rem",
-                fontSize: "0.8125rem",
-                borderRadius: "8px",
-                border: "1px solid #c9cccf",
-                background: isSubmitting ? "#f9f9f9" : "#fff",
-                color: "#0d0d0d",
-                boxSizing: "border-box",
-              }}
+              style={pageSelectStyle(isSubmitting)}
             >
               {targetLanguageOptions.map((option) => (
                 <option key={option.value} value={option.value}>

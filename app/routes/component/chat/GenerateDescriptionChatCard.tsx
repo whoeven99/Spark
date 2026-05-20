@@ -7,6 +7,11 @@ import type { GenerateDescriptionCardPayload } from "../../../lib/chatMessage";
 import type { ProductSelectorSelection } from "../../../lib/productSearchTypes";
 import { ProductSelector } from "../product/ProductSelector";
 import { GenerateDescriptionResultEditor } from "../generateDescription/GenerateDescriptionResultEditor";
+import {
+  pageFieldLabelStyle,
+  pageHintTextStyle,
+  pageSelectStyle,
+} from "../../page/pageUiStyles";
 
 type Props = {
   /** 嵌在助手气泡内时略收紧边距与阴影 */
@@ -173,12 +178,7 @@ export function GenerateDescriptionChatCard({
                 <div style={{ gridColumn: "1 / -1" }}>
                   <label
                     htmlFor="generate-description-lang-card"
-                    style={{
-                      display: "block",
-                      fontSize: "0.75rem",
-                      fontWeight: 600,
-                      color: "#444",
-                    }}
+                    style={pageFieldLabelStyle}
                   >
                     {t("generate.targetLanguage")}
                   </label>
@@ -186,19 +186,12 @@ export function GenerateDescriptionChatCard({
                     id="generate-description-lang-card"
                     value={targetLanguage}
                     onChange={(e) => setTargetLanguage(e.target.value)}
-                    disabled={localesLoading || isSubmitting || isSaving || saveConfirmOpen}
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      marginTop: "0.35rem",
-                      padding: "0.45rem 0.55rem",
-                      fontSize: "0.8125rem",
-                      borderRadius: "8px",
-                      border: "1px solid #c9cccf",
-                      background: localesLoading ? "#f6f6f7" : "#fff",
-                      color: "#303030",
-                      boxSizing: "border-box",
-                    }}
+                    disabled={
+                      localesLoading || isSubmitting || isSaving || saveConfirmOpen
+                    }
+                    style={pageSelectStyle(
+                      localesLoading || isSubmitting || isSaving || saveConfirmOpen,
+                    )}
                   >
                     {localesLoading && localeOptions.length === 0 ? (
                       <option value="">{t("common.loadingLanguage")}</option>
@@ -210,16 +203,7 @@ export function GenerateDescriptionChatCard({
                     ))}
                   </select>
                   {localesIsFallback ? (
-                    <div
-                      style={{
-                        marginTop: "0.3rem",
-                        fontSize: "0.6875rem",
-                        color: "#6d7175",
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      {t("generate.fallbackLocalesHint")}
-                    </div>
+                    <div style={pageHintTextStyle}>{t("generate.fallbackLocalesHint")}</div>
                   ) : null}
                 </div>
               </div>

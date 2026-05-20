@@ -3,7 +3,7 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { Outlet, useLoaderData, useLocation, useRouteError } from "react-router";
+import { Outlet, useLoaderData, useRouteError } from "react-router";
 import { useTranslation } from "react-i18next";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
@@ -14,8 +14,6 @@ import {
   normalizeLocale,
 } from "../i18n/config";
 import { detectRequestLocale } from "../i18n/detector.server";
-import { LanguageSelector } from "./component/common/LanguageSelector";
-
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import {
@@ -114,38 +112,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function App() {
-  const { apiKey, locale, nav, home } = useLoaderData<typeof loader>();
-  const { pathname } = useLocation();
-  const showLanguageSelector = pathname === home;
+  const { apiKey, locale, nav } = useLoaderData<typeof loader>();
 
   return (
     <AppI18nProvider locale={locale}>
       <AppProvider embedded apiKey={apiKey}>
         <AppNav nav={nav} />
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            flex: "1 1 auto",
-            minHeight: 0,
-          }}
-        >
-          <div style={{ flex: "1 1 auto", minHeight: 0 }}>
-            <Outlet />
-          </div>
-          <footer
-            className="spark-app-shell-footer"
-            style={{
-              flexShrink: 0,
-              marginTop: "0.75rem",
-              paddingTop: "0.75rem",
-              paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0px))",
-              borderTop: "1px solid #e1e3e5",
-            }}
-          >
-            {showLanguageSelector ? <LanguageSelector locale={locale} /> : null}
-          </footer>
-        </div>
+        <Outlet />
       </AppProvider>
     </AppI18nProvider>
   );
