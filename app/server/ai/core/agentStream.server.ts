@@ -179,17 +179,23 @@ export async function invokeChatAgentStream(
     },
   };
 
-  const persistStreamRun = (params: {
+  const persistStreamRun = async (params: {
     status: "success" | "error";
     resultMessages: BaseMessage[];
     errorMessage?: string;
   }) => {
-    if (!shop || !isAgentRunLogEnabled()) return;
+    if (!shop) {
+      console.warn(
+        `[AgentRunLog] skip chat_stream persist (no shop in context) runId=${runId}`,
+      );
+      return;
+    }
+    if (!isAgentRunLogEnabled()) return;
     const durationMs = Date.now() - wallStart;
     const agentUsage = extractTokenUsageFromMessages(params.resultMessages);
     const tools = extractToolSummariesFromMessages(params.resultMessages);
     const langsmithRunId = getRootLangsmithRunId(runCollector);
-    recordAgentRun({
+    await recordAgentRun({
       runId,
       shop,
       appName,
@@ -306,7 +312,7 @@ export async function invokeChatAgentStream(
         }
 
         if (!finalReply.trim()) {
-          persistStreamRun({ status: "success", resultMessages });
+          await persistStreamRun({ status: "success", resultMessages });
           const fb = await generateFallbackReplyStream(
             lastUserText,
             extractMessagesContext(resultMessages),
@@ -376,7 +382,7 @@ export async function invokeChatAgentStream(
           });
         }
 
-        persistStreamRun({ status: "success", resultMessages });
+        await persistStreamRun({ status: "success", resultMessages });
 
         controller.enqueue({
           type: "done",
@@ -397,7 +403,7 @@ export async function invokeChatAgentStream(
             : error instanceof Error
               ? error.message
               : "AI 服务暂时不可用，请稍后重试。";
-        persistStreamRun({
+        await persistStreamRun({
           status: "error",
           resultMessages: [],
           errorMessage: hint,

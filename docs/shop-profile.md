@@ -65,7 +65,7 @@ Portal 路径：`{accountName}` → 容器 `{container}`（默认 `spark-shop-pr
 - `COSMOS_SHOP_PROFILES_CONTAINER` 若指向其他容器名会被**忽略**（并打 warn 日志）。
 - Cosmos upsert 失败（RU 超限、容器不存在）时：若已配置 Blob，仍视为 **bootstrap ok**，聊天从 Blob 读 `profile.md`。
 - 建议配置 **`AZURE_BLOB_CONNECTION_STRING`**（或 `SHOP_PROFILE_BLOB_CONNECTION_STRING`），作为 Cosmos 不可用时的可靠存储。
-- 可选：设 `COSMOS_SPARK_OPS_AUTO_CREATE=false`，Agent Run 也不再自动建容器（须事先在 Portal 建好 `agent_runs`）。
+- Agent Run 默认与店铺画像相同：**不**自动建容器；须事先在 Portal 建好 `agent_runs`。仅调试时可设 `COSMOS_SPARK_OPS_AUTO_CREATE=true`（账户 RU 不足时会失败）。
 
 ## 首次在 Azure 创建 `agent_runs`（Portal）
 

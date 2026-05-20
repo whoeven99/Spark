@@ -4,7 +4,7 @@ import { getAgentRunsSparkOpsContainer } from "../cosmos/cosmosSparkOps.server";
 export async function upsertAgentRunDoc(doc: AgentRunDoc): Promise<void> {
   const shop = doc.shop.trim();
   if (!shop) return;
-  const container = await getAgentRunsSparkOpsContainer();
+  const container = getAgentRunsSparkOpsContainer();
   await container.items.upsert({ ...doc, shop });
 }
 
@@ -12,7 +12,7 @@ export async function upsertAgentRunDoc(doc: AgentRunDoc): Promise<void> {
 export async function deleteAgentRunsForShop(shop: string): Promise<number> {
   const shopTrim = shop.trim();
   if (!shopTrim) return 0;
-  const container = await getAgentRunsSparkOpsContainer();
+  const container = getAgentRunsSparkOpsContainer();
   const query = container.items.query<{ id: string }>({
     query:
       "SELECT c.id FROM c WHERE c.shop = @shop AND c.id != @profileId AND (NOT IS_DEFINED(c.docType) OR c.docType != @profileDocType)",
