@@ -1,7 +1,8 @@
 import { useTranslation } from "react-i18next";
+import { pageColorTokens } from "../../page/pageUiStyles";
 import type { ChangeEvent, CSSProperties, KeyboardEvent } from "react";
 import { usePictureTranslateContext } from "./pictureTranslateContext";
-import { pageColorTokens } from "../../page/pageUiStyles";
+import { CriticalErrorBox } from "../shared/CriticalErrorBox";
 
 type PictureTranslateFormProps = {
   variant: "page" | "card";
@@ -120,7 +121,7 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
         <div style={{ fontSize: "0.8125rem", color: "#303030", fontWeight: 500 }}>
           {t("pictureTranslate.uploadImage")}
         </div>
-        <div style={{ fontSize: "0.75rem", color: "#6d7175", marginTop: "0.25rem" }}>
+        <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: "0.25rem" }}>
           {t("pictureTranslate.validationInvalidFileType")}
         </div>
         {imageFileName ? (
@@ -150,7 +151,7 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
             style={{
               marginTop: "0.35rem",
               fontSize: "0.8125rem",
-              color: "#6d7175",
+              color: pageColorTokens.textSecondary,
               lineHeight: 1.45,
             }}
           >
@@ -304,23 +305,12 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
             </div>
 
             {isProductSearching ? (
-              <div style={{ fontSize: "0.8125rem", color: "#6d7175" }}>
+              <div style={{ fontSize: "0.8125rem", color: pageColorTokens.textSecondary }}>
                 {t("pictureTranslate.productSearching")}
               </div>
             ) : null}
             {productSearchError ? (
-              <div
-                style={{
-                  padding: "0.5rem 0.65rem",
-                  borderRadius: "8px",
-                  background: "rgba(216, 44, 13, 0.08)",
-                  color: "#8a2712",
-                  fontSize: "0.8125rem",
-                  lineHeight: 1.45,
-                }}
-              >
-                {productSearchError}
-              </div>
+            <CriticalErrorBox>{productSearchError}</CriticalErrorBox>
             ) : null}
             {!isProductSearching &&
             !productSearchError &&
@@ -330,8 +320,8 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
                 style={{
                   padding: "0.6rem 0.65rem",
                   borderRadius: "8px",
-                  background: "rgba(109, 113, 117, 0.08)",
-                  color: "#6d7175",
+                  background: pageColorTokens.mutedBg,
+                  color: pageColorTokens.textSecondary,
                   fontSize: "0.8125rem",
                 }}
               >
@@ -400,7 +390,7 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
                           style={{
                             marginTop: "0.1rem",
                             fontSize: "0.75rem",
-                            color: "#6d7175",
+                            color: pageColorTokens.textSecondary,
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
@@ -461,8 +451,8 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
                     style={{
                       padding: "0.6rem 0.65rem",
                       borderRadius: "8px",
-                      background: "rgba(109, 113, 117, 0.08)",
-                      color: "#6d7175",
+                      background: pageColorTokens.mutedBg,
+                      color: pageColorTokens.textSecondary,
                       fontSize: "0.8125rem",
                     }}
                   >
@@ -579,19 +569,7 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
         </div>
 
         {formErrorText ? (
-          <div
-            style={{
-              marginTop: "0.3rem",
-              padding: "0.5rem 0.65rem",
-              borderRadius: "8px",
-              background: "rgba(216, 44, 13, 0.08)",
-              color: "#8a2712",
-              fontSize: "0.8125rem",
-              lineHeight: 1.45,
-            }}
-          >
-            {formErrorText}
-          </div>
+          <CriticalErrorBox style={{ marginTop: "0.3rem" }}>{formErrorText}</CriticalErrorBox>
         ) : null}
 
         <div style={{ gridColumn: "1 / -1", marginTop: "0.25rem" }}>

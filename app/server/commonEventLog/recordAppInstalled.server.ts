@@ -34,9 +34,9 @@ export async function recordAppInstalled(params: {
   scope?: string | null;
   isOnline?: boolean;
   source?: string;
-}): Promise<void> {
+}): Promise<boolean> {
   const shop = params.shop.trim();
-  if (!shop) return;
+  if (!shop) return false;
 
   const appName = getAppEntry();
 
@@ -44,7 +44,7 @@ export async function recordAppInstalled(params: {
     console.info(
       `[CommonEvent] APP_INSTALLED skipped shop=${shop} appName=${appName} (log shows still installed)`,
     );
-    return;
+    return false;
   }
 
   await appendCommonEventLog({
@@ -63,4 +63,5 @@ export async function recordAppInstalled(params: {
   console.info(
     `[CommonEvent] APP_INSTALLED recorded shop=${shop} appName=${appName} source=${params.source ?? "unknown"}`,
   );
+  return true;
 }

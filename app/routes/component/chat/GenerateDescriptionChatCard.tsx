@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
+import { CriticalErrorBox } from "../shared/CriticalErrorBox";
 import { useGenerateDescription } from "../../../hooks/useGenerateDescription";
 import type { GenerateDescriptionCardPayload } from "../../../lib/chatMessage";
 import type { ProductSelectorSelection } from "../../../lib/productSearchTypes";
@@ -226,19 +227,7 @@ export function GenerateDescriptionChatCard({
           ) : null}
 
           {errorText ? (
-            <div
-              style={{
-                marginBottom: "0.75rem",
-                padding: "0.5rem 0.65rem",
-                borderRadius: "8px",
-                background: "rgba(216, 44, 13, 0.08)",
-                color: "#8a2712",
-                fontSize: "0.8125rem",
-                lineHeight: 1.45,
-              }}
-            >
-              {errorText}
-            </div>
+            <CriticalErrorBox style={{ marginBottom: "0.75rem" }}>{errorText}</CriticalErrorBox>
           ) : null}
 
           {description !== null ? (
