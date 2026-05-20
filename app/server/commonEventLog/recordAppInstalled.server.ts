@@ -1,5 +1,10 @@
 import { getAppEntry } from "../../config/appEntry.server";
 import prisma from "../../db.server";
+import {
+  AppInstalledEvent,
+  ensureAppEventHandlersRegistered,
+  eventBus,
+} from "../events/index.server";
 import { appendCommonEventLog } from "./appendCommonEventLog.server";
 import { COMMON_EVENT_TYPE } from "./types.server";
 
@@ -63,5 +68,32 @@ export async function recordAppInstalled(params: {
   console.info(
     `[CommonEvent] APP_INSTALLED recorded shop=${shop} appName=${appName} source=${params.source ?? "unknown"}`,
   );
+
+  try {
+    ensureAppEventHandlersRegistered();
+    console.info(
+      `[CommonEvent] before-publish AppInstalled shop=${shop} appName=${appName} source=${params.source ?? "unknown"} sessionId=${params.sessionId}`,
+    );
+    await eventBus.publish(
+      new AppInstalledEvent({
+        shop,
+        sessionId: params.sessionId,
+        appName,
+        source: params.source,
+        scope: params.scope,
+        isOnline: params.isOnline,
+        installedAt: new Date(),
+      }),
+    );
+    console.info(
+      `[CommonEvent] after-publish AppInstalled shop=${shop} (install email handler should have run)`,
+    );
+  } catch (error) {
+    console.error(
+      `[CommonEvent] publish AppInstalled failed shop=${shop}:`,
+      error,
+    );
+  }
+
   return true;
 }

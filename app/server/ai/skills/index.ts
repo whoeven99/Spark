@@ -11,6 +11,7 @@ import {
 } from "./translation/extract";
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import { pictureTranslateToolDefinition } from "./pictureTranslate/tool";
+import { sendTemplateEmailToolDefinition } from "./email/tool";
 
 // ==========================================
 // 注册各类核心与扩展 Tools 到全局注册表
@@ -149,6 +150,8 @@ globalToolRegistry.register({
 });
 
 globalToolRegistry.register(pictureTranslateToolDefinition);
+
+globalToolRegistry.register(sendTemplateEmailToolDefinition);
 
 /**
  * 嵌入式聊天 Agent 的店铺相关工具集合（基于注册表动态组装）。

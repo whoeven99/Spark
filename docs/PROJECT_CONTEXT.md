@@ -10,6 +10,7 @@
 - `UI_DESIGN.md` — 前端展示层 UI 规范
 - `agent-run-log.md` — Agent 运行摘要（Cosmos `spark_ops`）与 LangSmith 互链
 - `render-daily-digest.md` — Render 日志日报（GitHub Actions → 飞书）
+- `email-architecture-analysis.md` — 事务邮件（腾讯 SES）与 EventBus 安装/卸载通知
 
 ## 1. 项目定位
 - 这是一个嵌入式 Shopify App，核心能力是 `AI Assistant + 店铺运维诊断 + 翻译任务（V3 / JSON Runtime）+ 卫星 App 订阅计费（generate-description）`。
@@ -30,6 +31,7 @@
   - **翻译 V3 报表 / chunk 等 Blob**：**Azure Blob Storage**（见 `app/server/translation/translateBlobStore.server.ts`）。
   - **翻译进度与监控键**：**Redis**（`ioredis`，见 `app/server/translation/translateRedis.server.ts`）。
   - **物流承运商授权**：本地 JSON `.data/logistics-provider-credentials.json`（见 `app/server/logisticsCredentialStore.server.ts`）。
+  - **事务邮件（腾讯 SES 模板）**：`app/server/email/`（Provider 模式；业务统一走 `sendTemplateEmail`）；安装/卸载运营通知经 `app/server/events/` EventBus（见 `docs/email-architecture-analysis.md`）。
 
 ## 3. 目录结构（迁移后，根目录即应用目录）
 - `app/routes/`：页面路由与 API action/loader。
@@ -104,6 +106,7 @@
   - scopes 查询与订单访问诊断。
   - 经营指标：销售额、订单数、转化率、AOV、来源表现、弃购率、退款率、库存健康。
 - 商品文案：`generate_product_description`（按商品 ID 生成结构化 `description`，见 `app/server/ai/tools/implementations/generateDescriptionTool.ts`）。
+- 模板邮件：`send_template_email`（`app/server/ai/skills/email/`，凭证齐全时挂载；经 `sendTemplateEmail` 发送，模板 ID 白名单校验）。
 - 说明：部分指标依赖权限（如 `read_orders`），工具内置了缺权限诊断文案。
 
 ## 8. 诊断报告页口径（`app.additional.tsx`）
@@ -199,6 +202,11 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
 - 订阅计费（`app/server/billing/`）：
   - `BILLING_GATEWAY=noop`：不调 Shopify Billing，本地直接生效（开发）
   - `BILLING_TEST=true`：Shopify 测试计费（开发店）；未设时非 production 亦视为测试模式
+- 腾讯 SES 邮件（`app/server/email/`，详见 `docs/email-architecture-analysis.md`）：
+  - `TENCENT_CLOUD_KEY_ID`、`TENCENT_CLOUD_KEY`（与 Spring 同名）
+  - 可选：`EMAIL_PROVIDER`（默认 `tencent`）、`EMAIL_ENABLED`（默认 `true`）、`TENCENT_SES_REGION`（默认 `ap-hongkong`）、`TENCENT_FROM_EMAIL`、`TENCENT_SES_CC`、`EMAIL_SEND_TIMEOUT_MS`、`EMAIL_SEND_MAX_RETRIES`
+  - 运营通知：`OPS_NOTIFY_EMAIL`（未设则取 `TENCENT_SES_CC` 首地址）；卸载模板 `OPS_UNINSTALL_TEMPLATE_ID`（未设则跳过卸载邮件）
+  - App 安装/卸载运营邮件：进程内 EventBus；安装在 `recordAppInstalled` 成功后 publish；卸载 Webhook 仅 publish，由 orchestrator 先邮件后删 Session
 
 ## 12. 文案与交互约定
 - 角色命名统一使用：`AI Assistant`。
@@ -211,7 +219,10 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
 - 改聊天行为/工具调用：`app/server/chat-stream.ts`、`app/server/ai/core/invokeChatAgent.server.ts`、`app/server/ai/core/agentStream.server.ts`、`app/server/ai/skills/index.ts`、`app/server/ai/core/shopChatGraph.server.ts`。
 - 改 AI 回复抽取、Markdown 表格规整或最终润色：`app/server/ai/postprocess/langchainMessageText.ts`、`markdownTableNormalize.ts`、`polishFinalReply.ts`（单测同目录 `*.test.ts`）。
 - 改 Agent 运行摘要 / Cosmos 写入：`app/server/agentRunLog/**`（先读 `docs/agent-run-log.md`）；聊天写入见 `invokeChatAgent.server.ts`、`agentStream.server.ts`。
-- 加新 AI 工具：`app/server/ai/tools/implementations/*`，并在 `app/server/ai/chat/chatAgentTools.server.ts` 的 `buildChatAgentExtraTools` 中注册（与 `shopifyShopInfoTool` 等一并注入聊天链路）。
+- 加新 AI 工具：`app/server/ai/skills/index.ts` 的 `globalToolRegistry.register`（或 legacy `app/server/ai/tools/implementations/*`），由 `buildChatAgentExtraTools` 注入聊天链路。
+- 改邮件发送 / 模板 / Provider：`app/server/email/**`（业务只调 `sendTemplateEmail` / scenario 封装，勿直接用 Provider）。
+- 改 App 安装/卸载运营邮件 / EventBus：`app/server/events/**`、`app/server/commonEventLog/recordAppInstalled.server.ts`、`app/routes/webhooks.app.uninstalled.tsx`、`app/server/email/scenarios/sendInstallOpsEmail.server.ts`、`sendUninstallOpsEmail.server.ts`。
+- 改 Agent 模板邮件工具：`app/server/ai/skills/email/**`。
 - 改诊断指标：`app/routes/app.additional.tsx`（含查询、阈值、文案）。
 - 改广告 OAuth 配置字段：`app/routes/app.ads.*.config.tsx` + `app/server/adAuthCredentialStore.server.ts`（及 Meta 的 `adsCredentialStore.server.ts`）；改物流：`app/routes/app.logistics.*.config.tsx` + `app/server/logisticsCredentialStore.server.ts`。
 - 改生成商品描述页或 API（先读 `docs/generateDescription.md`）：`app/routes/app.generate-description.tsx`、`app/routes/page/GenerateDescriptionPage.tsx`、`app/routes/component/generateDescription/GenerateDescriptionResultEditor.tsx`、`app/routes/api.generate-description.ts`、`app/routes/api.update-product-description.ts`、`app/server/generateDescription/**`、`app/hooks/useGenerateDescription.ts`、`app/server/ai/tools/implementations/generateDescriptionTool.ts`。
