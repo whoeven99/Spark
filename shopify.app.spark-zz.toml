@@ -7,10 +7,27 @@ name = "spark_zz"
 
 [build]
 automatically_update_urls_on_dev = true
-include_config_on_deploy = true
 
-[webhooks] 
+[webhooks]
 api_version = "2026-07"
+
+# 卸载：Shopify 标准 topic，触发运营邮件与 CommonEventLog
+[[webhooks.subscriptions]]
+topics = ["app/uninstalled"]
+uri = "/webhooks/app/uninstalled"
+
+# 安装：Shopify 无 app/installed topic；首次 scope 授权时由 scopes_update 补充触发 recordAppInstalled
+[[webhooks.subscriptions]]
+topics = ["app/scopes_update"]
+uri = "/webhooks/app/scopes_update"
+
+[[webhooks.subscriptions]]
+topics = ["app_subscriptions/update"]
+uri = "/webhooks/app/subscriptions_update"
+
+[[webhooks.subscriptions]]
+topics = ["app_purchases_one_time/update"]
+uri = "/webhooks/app/purchases_one_time_update"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes

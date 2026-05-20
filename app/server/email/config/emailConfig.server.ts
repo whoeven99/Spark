@@ -1,6 +1,6 @@
 const DEFAULT_REGION = "ap-hongkong";
 const DEFAULT_FROM = "support@msg.ciwi.ai";
-const DEFAULT_CC = ["feynman@ciwi.ai"];
+const DEFAULT_CC = ["feynman@ciwi.ai", "yewen@ciwi.ai"];
 const DEFAULT_TIMEOUT_MS = 300_000;
 const DEFAULT_MAX_RETRIES = 3;
 
@@ -32,14 +32,6 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function parseCcList(value: string | undefined): string[] {
-  if (!value?.trim()) return DEFAULT_CC;
-  return value
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-}
-
 export function loadEmailConfig(): EmailConfig {
   const enabled = parseBoolean(process.env.EMAIL_ENABLED, true);
   const provider = (process.env.EMAIL_PROVIDER?.trim() || "tencent").toLowerCase();
@@ -54,7 +46,7 @@ export function loadEmailConfig(): EmailConfig {
           secretKey,
           region: process.env.TENCENT_SES_REGION?.trim() || DEFAULT_REGION,
           fromEmail: process.env.TENCENT_FROM_EMAIL?.trim() || DEFAULT_FROM,
-          cc: parseCcList(process.env.TENCENT_SES_CC),
+          cc: [...DEFAULT_CC],
         }
       : null;
 

@@ -21,7 +21,10 @@ interface ImportMetaEnv {
   readonly TENCENT_CLOUD_KEY?: string;
   readonly TENCENT_SES_REGION?: string;
   readonly TENCENT_FROM_EMAIL?: string;
-  readonly TENCENT_SES_CC?: string;
   readonly EMAIL_SEND_TIMEOUT_MS?: string;
   readonly EMAIL_SEND_MAX_RETRIES?: string;
+  /** 运营通知收件人（To） */
+  readonly OPS_NOTIFY_EMAIL?: string;
+  /** 卸载运营邮件腾讯 SES 模板 ID；未设则跳过发送 */
+  readonly OPS_UNINSTALL_TEMPLATE_ID?: string;
 }

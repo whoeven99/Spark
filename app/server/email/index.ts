@@ -12,6 +12,15 @@ export type {
 } from "./services/emailService.server";
 export { sendApgSuccessEmail } from "./scenarios/sendApgSuccessEmail.server";
 export type { SendApgSuccessEmailParams } from "./scenarios/sendApgSuccessEmail.server";
+export { sendInstallOpsEmail } from "./scenarios/sendInstallOpsEmail.server";
+export type { SendInstallOpsEmailParams } from "./scenarios/sendInstallOpsEmail.server";
+export { sendUninstallOpsEmail } from "./scenarios/sendUninstallOpsEmail.server";
+export type { SendUninstallOpsEmailParams } from "./scenarios/sendUninstallOpsEmail.server";
+export {
+  resolveOpsEmailDestination,
+  resolveOpsNotifyEmail,
+  resolveOpsUninstallTemplateId,
+} from "./opsNotifyEmail.server";
 export { fetchShopContactEmail } from "./shopEmailFetcher.server";
 export type { EmailError, EmailErrorCode } from "./types/emailError";
 export { EMAIL_ERROR_CODES } from "./types/emailError";

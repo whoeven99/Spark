@@ -126,6 +126,36 @@ sequenceDiagram
 3. 检查日志前缀 `[Email][Service]`、`[Email][Tencent]`，确认 `requestId` 或明确失败码。
 4. 缺凭证时：`sendTemplateEmail` 应返回 `EMAIL_MISSING_CREDENTIALS`，HTTP 仍 200（邮件失败不阻断生成）。
 
+## 10. App 生命周期运营邮件（EventBus）
+
+```mermaid
+sequenceDiagram
+  participant Route as auth_or_webhook
+  participant Log as recordAppInstalled_or_EventBus
+  participant Bus as eventBus
+  participant Handler as EmailHandler
+  participant Email as sendTemplateEmail
+
+  Route->>Log: publish AppInstalled_or_Uninstalled
+  Log->>Bus: publish
+  Bus->>Handler: install_parallel_or_uninstall_orchestrator
+  Handler->>Email: sendInstallOpsEmail_or_sendUninstallOpsEmail
+```
+
+| 环节 | 路径 |
+|------|------|
+| EventBus | `app/server/events/eventBus.server.ts` |
+| 安装 publish | `recordAppInstalled` 写入 `CommonEventLog` 成功后（OAuth `auth.$.tsx`、进入 `/app`、`app/scopes_update` 首次授权） |
+| 卸载 publish | `webhooks.app.uninstalled.tsx`（仅鉴权 + publish；须在 `shopify.app.*.toml` 声明 `app/uninstalled` 订阅） |
+| 卸载 orchestrator | `handleAppUninstalledOrchestrated`：先邮件后 `handleAppUninstalled`（读 Session → 发邮件 → 写日志并删 Session） |
+| 安装邮件 | `sendInstallOpsEmail`（templateId `137916`，`templateData.user` 等） |
+| 卸载邮件 | `sendUninstallOpsEmail`（`OPS_UNINSTALL_TEMPLATE_ID`，未配置则跳过） |
+| 收件人 | `OPS_NOTIFY_EMAIL` 或 `TENCENT_SES_CC[0]` |
+| 安装 enrichment | `unauthenticated.admin(shop)` + `fetchShopBasicInfo` |
+| 卸载 enrichment | `loadSessionSnapshotForUninstall`（Session.`firstName` / `email`；卸载后不调 GraphQL） |
+
+邮件 Handler 失败不阻断安装 Loader；卸载邮件失败不阻断后续持久化。持久化失败时 Webhook 仍 `throw` 以便 Shopify 重试。
+
 ## 9. 后续扩展
 
 - 多 Provider（SES / SendGrid / SMTP）
@@ -133,3 +163,4 @@ sequenceDiagram
 - Prisma 发送审计
 - 飞书/Webhook 告警
 - 其余 templateId 场景按需迁移
+- 专用运维 SES 模板（替代复用 `137916` 商户欢迎信）

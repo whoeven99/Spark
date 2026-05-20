@@ -72,26 +72,32 @@ export function createTencentSesProvider(
 
       const tencent = config.tencent;
       const cc = request.cc?.length ? request.cc : tencent.cc;
+      const templateDataJson = serializeTemplateData(request.templateData);
+
+      const sendEmailParams = {
+        FromEmailAddress: request.from,
+        Subject: request.subject,
+        Destination: [request.to],
+        Cc: cc,
+        Template: {
+          TemplateID: request.templateId,
+          TemplateData: templateDataJson,
+        },
+      };
 
       logEmailInfo(
         EMAIL_LOG.request,
         `templateId=${request.templateId} to=${request.to} subjectLen=${request.subject.length}`,
       );
+      logEmailInfo(
+        EMAIL_LOG.tencent,
+        `SendEmail params (before SDK call): ${JSON.stringify(sendEmailParams)}`,
+      );
 
       try {
         const client = getSesClient(tencent);
         const resp = await retryWithTimeout(
-          () =>
-            client.SendEmail({
-              FromEmailAddress: request.from,
-              Subject: request.subject,
-              Destination: [request.to],
-              Cc: cc,
-              Template: {
-                TemplateID: request.templateId,
-                TemplateData: serializeTemplateData(request.templateData),
-              },
-            }),
+          () => client.SendEmail(sendEmailParams),
           {
             timeoutMs: config.sendTimeoutMs,
             maxRetries: config.maxRetries,
