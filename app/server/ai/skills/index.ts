@@ -11,6 +11,7 @@ import {
 } from "./translation/extract";
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import { pictureTranslateToolDefinition } from "./pictureTranslate/tool";
+import { imageGenerationToolDefinition } from "./imageGeneration/tool";
 import { sendTemplateEmailToolDefinition } from "./email/tool";
 
 // ==========================================
@@ -150,6 +151,8 @@ globalToolRegistry.register({
 });
 
 globalToolRegistry.register(pictureTranslateToolDefinition);
+
+globalToolRegistry.register(imageGenerationToolDefinition);
 
 globalToolRegistry.register(sendTemplateEmailToolDefinition);
 

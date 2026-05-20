@@ -36,6 +36,7 @@ const NAV_ITEMS: Record<
       | "nav.translation"
       | "nav.generateDescription"
       | "nav.pictureTranslate"
+      | "nav.generateImage"
       | "nav.billing";
   }
 > = {
@@ -49,6 +50,10 @@ const NAV_ITEMS: Record<
   "picture-translate": {
     href: "/app/picture-translate",
     labelKey: "nav.pictureTranslate",
+  },
+  "generate-image": {
+    href: "/app/generate-image",
+    labelKey: "nav.generateImage",
   },
   billing: { href: "/app/billing", labelKey: "nav.billing" },
 };

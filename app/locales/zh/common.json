@@ -76,6 +76,7 @@
     "translation": "翻译任务",
     "generateDescription": "生成描述",
     "pictureTranslate": "图片翻译",
+    "generateImage": "商品图片生成",
     "billing": "计费与订阅"
   },
   "billing": {
@@ -232,6 +233,26 @@
     "copyLinkDone": "图片链接已复制",
     "copying": "复制中...",
     "imageSourceSummary": "图片来源"
+  },
+  "imageGeneration": {
+    "pageTitle": "商品图片生成",
+    "pageSubtitle": "输入画面描述，由 AI 生成商品或营销场景图",
+    "sectionConfig": "生成配置",
+    "promptLabel": "提示词",
+    "promptHint": "描述主体、风格、背景与光线，例如：白色背景上的运动鞋产品图，柔和侧光，极简电商风格",
+    "promptPlaceholder": "请输入你想生成的画面描述…",
+    "submit": "生成图片",
+    "submitting": "生成中…",
+    "submitSuccess": "图片已生成",
+    "submitFailed": "生成失败，请重试",
+    "validationPromptMin": "提示词至少 4 个字符",
+    "generatedImageAlt": "生成的图片",
+    "openImage": "在新窗口打开",
+    "result": "生成结果",
+    "empty": "暂无图片，请调整提示词后重试",
+    "emptyBeforeSubmit": "填写提示词并点击「生成图片」",
+    "retry": "重新生成",
+    "pageFootnote": "与图片翻译共用火山视觉凭证；生成结果保存在云端并返回可访问链接，仅供预览，不会自动写入 Shopify 商品。"
   },
   "generate": {
     "pageTitle": "生成商品描述",

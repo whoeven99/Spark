@@ -76,6 +76,7 @@
     "translation": "Translation tasks",
     "generateDescription": "Generate Description",
     "pictureTranslate": "Picture Translate",
+    "generateImage": "Product image",
     "billing": "Billing & Subscription"
   },
   "billing": {
@@ -232,6 +233,26 @@
     "copyLinkDone": "Image link copied",
     "copying": "Copying...",
     "imageSourceSummary": "Image source"
+  },
+  "imageGeneration": {
+    "pageTitle": "Product image generation",
+    "pageSubtitle": "Describe the scene; AI generates a product or marketing image",
+    "sectionConfig": "Generation settings",
+    "promptLabel": "Prompt",
+    "promptHint": "Describe subject, style, background, and lighting — e.g. minimalist e-commerce product shot of sneakers on white with soft side light",
+    "promptPlaceholder": "Enter your image description…",
+    "submit": "Generate image",
+    "submitting": "Generating…",
+    "submitSuccess": "Image generated",
+    "submitFailed": "Generation failed, please retry",
+    "validationPromptMin": "Prompt must be at least 4 characters",
+    "generatedImageAlt": "Generated image",
+    "openImage": "Open in new tab",
+    "result": "Result",
+    "empty": "No image yet — adjust the prompt and try again",
+    "emptyBeforeSubmit": "Enter a prompt and click Generate image",
+    "retry": "Generate again",
+    "pageFootnote": "Uses the same Volcano Visual credentials as picture translate. Images are stored in cloud storage with a preview URL only; they are not written to Shopify automatically."
   },
   "generate": {
     "pageTitle": "Generate product description",

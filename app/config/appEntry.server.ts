@@ -3,7 +3,8 @@ export type AppEntry =
   | "diagnosis"
   | "translation"
   | "generate-description"
-  | "picture-translate";
+  | "picture-translate"
+  | "generate-image";
 
 export type NavItemKey = AppEntry | "billing";
 
@@ -23,6 +24,7 @@ const APP_ENTRY_CONFIGS = {
       "translation",
       "generate-description",
       "picture-translate",
+      "generate-image",
     ],
     sessionPrismaTable: "session",
   },
@@ -44,6 +46,11 @@ const APP_ENTRY_CONFIGS = {
   "picture-translate": {
     home: "/app/picture-translate",
     nav: ["picture-translate"],
+    sessionPrismaTable: "session",
+  },
+  "generate-image": {
+    home: "/app/generate-image",
+    nav: ["generate-image"],
     sessionPrismaTable: "session",
   },
 } as const satisfies Record<AppEntry, AppEntryConfig>;
