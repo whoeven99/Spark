@@ -8,6 +8,7 @@ export {
   bootstrapShopProfile,
   ensureShopProfile,
   isShopProfileEnabled,
+  refreshShopProfileOnInstall,
   scheduleEnsureShopProfile,
   scheduleShopProfileBootstrap,
 } from "./bootstrapShopProfile.server";

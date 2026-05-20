@@ -25,8 +25,21 @@ Blob 未配置时，将 `profile.md` 全文存入 Cosmos 字段 `profileMarkdown
 
 ## 触发时机
 
-1. **新安装**（`recordAppInstalled` 写入 `APP_INSTALLED`）：`auth.$.tsx`、`app.tsx` 异步 `bootstrapShopProfile`
-2. **已有安装但无画像**：进入 `/app` 时 `ensureShopProfile` 兜底
+1. **新安装 / 重装**（Turso 写入新的 `APP_INSTALLED`）：`auth.$.tsx`、`app.tsx` 调用 `refreshShopProfileOnInstall`（**会覆盖**已有 Blob/Cosmos，`version` +1）
+2. **普通刷新 / 已进入过 App**（安装事件已存在）：`ensureShopProfile`；若 Blob 或 Cosmos 已有画像则**跳过**（仅打 info 日志，不再 `bootstrap ok`）
+
+### 日志对照（Render 等服务端日志）
+
+| 日志 | 含义 |
+|------|------|
+| `[ShopProfile] schedule ensure shop=…` | 刷新页面，进入 `/app` 壳 loader |
+| `[ShopProfile] ensure skipped (profile already exists via blob)` | 画像已在 Blob，**正常**，不会重复写入 |
+| `[ShopProfile] ensure starting bootstrap` | 尚无画像，开始拉 Shopify |
+| `[ShopProfile] bootstrap ok …` | 写入完成 |
+| `[ShopProfile] refresh on install shop=…` | 判定为新安装，强制刷新 |
+| `[CommonEvent] APP_INSTALLED skipped …` | 未算新安装，故不会 refresh |
+
+仅刷新浏览器**不会**重复 `bootstrap ok`，除非删除 Blob 中 `shops/{shop}/profile.md` 或 Cosmos 中 `profile` 文档。
 
 ## 代码
 
@@ -43,6 +56,33 @@ Blob 未配置时，将 `profile.md` 全文存入 Cosmos 字段 `profileMarkdown
 - Cosmos upsert 失败（RU 超限、容器不存在）时：若已配置 Blob，仍视为 **bootstrap ok**，聊天从 Blob 读 `profile.md`。
 - 建议配置 **`AZURE_BLOB_CONNECTION_STRING`**（或 `SHOP_PROFILE_BLOB_CONNECTION_STRING`），作为 Cosmos 不可用时的可靠存储。
 - 可选：设 `COSMOS_SPARK_OPS_AUTO_CREATE=false`，Agent Run 也不再自动建容器（须事先在 Portal 建好 `agent_runs`）。
+
+## 首次在 Azure 创建 `agent_runs`（Portal）
+
+截图中已有库 **`spark_ops`**，但下面**没有容器**时，会出现：
+
+`Cosmos container not found … ensure "agent_runs" exists in Azure`
+
+此时 **Blob 画像仍可用**（`bootstrap ok … cosmos=false blob=true`），AI 聊天会从 Blob 读 `profile.md`。若还要写 Cosmos（Agent Run 摘要 + 画像索引），请手动建容器：
+
+1. Azure Portal → Cosmos 账户 → **Data Explorer**
+2. 展开 **`spark_ops`** → **New Container**
+3. 填写：
+   - **Container id**：`agent_runs`（与 `COSMOS_AGENT_RUNS_CONTAINER` 一致，默认即此名）
+   - **Partition key**：`/shop`
+   - **Throughput**：选 **Database (shared)** / **使用数据库吞吐量**，**不要**给容器单独再分配 400 RU（否则会再次触发账户 1000 RU 上限）
+4. （可选）容器 **TTL** 设为 `7776000`（90 天，供 Agent Run）；店铺画像文档会自带 `ttl: -1` 不会被删
+5. 保存后，让商户再进一次 `/app` 或重装触发画像；日志应出现 `cosmos=true`
+
+若 `spark_ops` 库本身没有吞吐量，需先在库级别配置 **Manual** 或 **Autoscale**（例如 400–1000 RU/s），再在其下建容器并选 **共享库吞吐量**。
+
+## 当前状态说明
+
+| 日志 | 含义 |
+|------|------|
+| `bootstrap ok … cosmos=false blob=true` | 画像已写入 Blob，**聊天可用** |
+| `Cosmos container not found` | 仅 Cosmos 索引未写入，**不是致命错误** |
+| `bootstrap ok … cosmos=true blob=true` | Cosmos + Blob 双写成功 |
 
 ## 后续扩展
 

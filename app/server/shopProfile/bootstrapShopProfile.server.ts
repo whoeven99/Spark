@@ -105,6 +105,19 @@ export async function bootstrapShopProfile(params: {
   return doc;
 }
 
+async function shopProfileAlreadyExists(shop: string): Promise<{
+  exists: boolean;
+  via: "cosmos" | "blob" | null;
+}> {
+  const existing = await getShopProfileDoc(shop).catch(() => null);
+  if (existing) return { exists: true, via: "cosmos" };
+  if (isShopProfileBlobConfigured()) {
+    const blobMd = await readShopProfileMarkdown(shop);
+    if (blobMd?.trim()) return { exists: true, via: "blob" };
+  }
+  return { exists: false, via: null };
+}
+
 /**
  * 若尚无画像则创建（用于进入 /app 时兜底）。
  */
@@ -113,15 +126,36 @@ export async function ensureShopProfile(params: {
   shop: string;
   appName: AppEntry | string;
 }): Promise<void> {
-  if (!isShopProfileEnabled()) return;
+  if (!isShopProfileEnabled()) {
+    console.info(`${LOG_PREFIX} ensure skipped (disabled) shop=${params.shop}`);
+    return;
+  }
   const shop = params.shop.trim();
   if (!shop) return;
-  const existing = await getShopProfileDoc(shop).catch(() => null);
-  if (existing) return;
-  if (isShopProfileBlobConfigured()) {
-    const blobMd = await readShopProfileMarkdown(shop);
-    if (blobMd?.trim()) return;
+
+  const { exists, via } = await shopProfileAlreadyExists(shop);
+  if (exists) {
+    console.info(
+      `${LOG_PREFIX} ensure skipped (profile already exists via ${via}) shop=${shop}`,
+    );
+    return;
   }
+
+  console.info(`${LOG_PREFIX} ensure starting bootstrap shop=${shop}`);
+  await bootstrapShopProfile(params);
+}
+
+/**
+ * 安装/OAuth 后刷新画像（会覆盖 Blob/Cosmos，version +1）。
+ */
+export async function refreshShopProfileOnInstall(params: {
+  admin: ShopifyAdminGraphqlClient;
+  shop: string;
+  appName: AppEntry | string;
+}): Promise<void> {
+  console.info(
+    `${LOG_PREFIX} refresh on install shop=${params.shop} appName=${params.appName}`,
+  );
   await bootstrapShopProfile(params);
 }
 
@@ -132,7 +166,15 @@ export function scheduleShopProfileBootstrap(params: {
   appName: AppEntry | string;
   reason: "install" | "ensure";
 }): void {
-  if (!isShopProfileEnabled()) return;
+  if (!isShopProfileEnabled()) {
+    console.info(
+      `${LOG_PREFIX} schedule bootstrap skipped (disabled) shop=${params.shop}`,
+    );
+    return;
+  }
+  console.info(
+    `${LOG_PREFIX} schedule bootstrap shop=${params.shop} reason=${params.reason}`,
+  );
   void bootstrapShopProfile(params).catch((error) => {
     console.error(
       `${LOG_PREFIX} async bootstrap failed shop=${params.shop} reason=${params.reason}`,
@@ -146,7 +188,13 @@ export function scheduleEnsureShopProfile(params: {
   shop: string;
   appName: AppEntry | string;
 }): void {
-  if (!isShopProfileEnabled()) return;
+  if (!isShopProfileEnabled()) {
+    console.info(
+      `${LOG_PREFIX} schedule ensure skipped (disabled) shop=${params.shop}`,
+    );
+    return;
+  }
+  console.info(`${LOG_PREFIX} schedule ensure shop=${params.shop}`);
   void ensureShopProfile(params).catch((error) => {
     console.error(`${LOG_PREFIX} async ensure failed shop=${params.shop}`, error);
   });

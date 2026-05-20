@@ -21,8 +21,8 @@ import { detectRequestLocale } from "../i18n/detector.server";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import {
+  refreshShopProfileOnInstall,
   scheduleEnsureShopProfile,
-  scheduleShopProfileBootstrap,
 } from "../server/shopProfile/index.server";
 import {
   getAppEntry,
@@ -81,11 +81,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       source: "app_shell",
     });
     if (installRecorded) {
-      scheduleShopProfileBootstrap({
+      void refreshShopProfileOnInstall({
         admin,
         shop: session.shop,
         appName: getAppEntry(),
-        reason: "install",
+      }).catch((error) => {
+        console.error("[ShopProfile] refresh on install failed:", error);
       });
     } else {
       scheduleEnsureShopProfile({

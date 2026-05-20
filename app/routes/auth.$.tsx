@@ -2,8 +2,8 @@ import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import {
+  refreshShopProfileOnInstall,
   scheduleEnsureShopProfile,
-  scheduleShopProfileBootstrap,
 } from "../server/shopProfile/index.server";
 import { getAppEntry } from "../config/appEntry.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -20,11 +20,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       source: "auth_callback",
     });
     if (installRecorded) {
-      scheduleShopProfileBootstrap({
+      void refreshShopProfileOnInstall({
         admin,
         shop: session.shop,
         appName: getAppEntry(),
-        reason: "install",
+      }).catch((error) => {
+        console.error("[ShopProfile] refresh on install failed:", error);
       });
     } else {
       scheduleEnsureShopProfile({
