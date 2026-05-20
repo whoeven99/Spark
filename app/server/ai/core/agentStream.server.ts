@@ -29,6 +29,7 @@ import {
   resolveAgentRunStatus,
   sanitizeHumanInput,
 } from "../../agentRunLog/index.server";
+import { buildReflectionFromRun } from "../../agentRunLog/recentReflection.server";
 import "../skills/index";
 
 export type StreamChunk =
@@ -186,6 +187,7 @@ export async function invokeChatAgentStream(
     if (!shop || !isAgentRunLogEnabled()) return;
     const durationMs = Date.now() - wallStart;
     const agentUsage = extractTokenUsageFromMessages(params.resultMessages);
+    const tools = extractToolSummariesFromMessages(params.resultMessages);
     const langsmithRunId = getRootLangsmithRunId(runCollector);
     recordAgentRun({
       runId,
@@ -204,7 +206,7 @@ export async function invokeChatAgentStream(
           lastHumanUtterance(params.resultMessages) || lastUserTextInput,
         ),
       },
-      tools: extractToolSummariesFromMessages(params.resultMessages),
+      tools,
       tokenUsage:
         agentUsage.totalTokens > 0
           ? {
@@ -216,6 +218,16 @@ export async function invokeChatAgentStream(
       error: params.errorMessage
         ? { message: params.errorMessage }
         : undefined,
+      reflection: buildReflectionFromRun({
+        status: params.status,
+        replyText: params.resultMessages
+          .map((message) => extractMessageText(message))
+          .filter(Boolean)
+          .join("\n"),
+        toolNames: tools.map((tool) => tool.name),
+        errorMessage: params.errorMessage,
+        inputText: lastUserTextInput,
+      }),
     });
   };
 

@@ -1,11 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { getAppEntry } from "../config/appEntry.server";
+import { onAppUninstalled } from "../server/appLifecycle/onAppUninstalled.server";
 import { authenticate } from "../shopify.server";
-import {
-  AppUninstalledEvent,
-  ensureAppEventHandlersRegistered,
-  eventBus,
-} from "../server/events/index.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const appName = getAppEntry();
@@ -26,26 +22,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   try {
-    ensureAppEventHandlersRegistered();
     console.info(
-      `[Webhook] before-publish AppUninstalled shop=${shop} appName=${appName}`,
+      `[Webhook] before-uninstall-handlers shop=${shop} appName=${appName}`,
     );
-    await eventBus.publish(
-      new AppUninstalledEvent({
-        shop,
-        topic,
-        payload,
-        sessionId: session?.id,
-        appName,
-        uninstalledAt: new Date(),
-      }),
-    );
+    await onAppUninstalled({
+      shop,
+      topic,
+      payload,
+      sessionId: session?.id,
+      appName,
+      uninstalledAt: new Date(),
+    });
     console.info(
-      `[Webhook] after-publish AppUninstalled shop=${shop} (persistence + uninstall email handlers should have run)`,
+      `[Webhook] after-uninstall-handlers shop=${shop}`,
     );
   } catch (error) {
     console.error(
-      `[Webhook] publish AppUninstalled failed shop=${shop} appName=${appName}:`,
+      `[Webhook] uninstall handlers failed shop=${shop} appName=${appName}:`,
       error,
     );
     throw error;

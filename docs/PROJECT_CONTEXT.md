@@ -10,7 +10,6 @@
 - `UI_DESIGN.md` — 前端展示层 UI 规范
 - `agent-run-log.md` — Agent 运行摘要（Cosmos `spark_ops`）与 LangSmith 互链
 - `render-daily-digest.md` — Render 日志日报（GitHub Actions → 飞书）
-- `email-architecture-analysis.md` — 事务邮件（腾讯 SES）与 EventBus 安装/卸载通知
 
 ## 1. 项目定位
 - 这是一个嵌入式 Shopify App，核心能力是 `AI Assistant + 店铺运维诊断 + 翻译任务（V3 / JSON Runtime）+ 卫星 App 订阅计费（generate-description）`。
@@ -31,13 +30,13 @@
   - **翻译 V3 报表 / chunk 等 Blob**：**Azure Blob Storage**（见 `app/server/translation/translateBlobStore.server.ts`）。
   - **翻译进度与监控键**：**Redis**（`ioredis`，见 `app/server/translation/translateRedis.server.ts`）。
   - **物流承运商授权**：本地 JSON `.data/logistics-provider-credentials.json`（见 `app/server/logisticsCredentialStore.server.ts`）。
-  - **事务邮件（腾讯 SES 模板）**：`app/server/email/`（Provider 模式；业务统一走 `sendTemplateEmail`）；安装/卸载运营通知经 `app/server/events/` EventBus（见 `docs/email-architecture-analysis.md`）。
+  - **事务邮件（腾讯 SES 模板）**：`app/server/email/`（Provider 模式；业务统一走 `sendTemplateEmail`）；安装/卸载运营通知由 `app/server/appLifecycle/` 直接调用（见 §10）。
 
 ## 3. 目录结构（迁移后，根目录即应用目录）
 - `app/routes/`：页面路由与 API action/loader。
 - `app/routes/page/`：聊天页、翻译页等页面级组件；`chat/` 子目录为 `ChatPage` 拆分模块。
 - `app/routes/component/`：按域分子目录（`chat/`、`translation/` 等）。
-- `app/server/`：AI Agent、工具、授权凭证存储、`translation/` 流水线与外部存储客户端、`billing/` 订阅与按量计费、`tokenUsage/` token 用量累加。
+- `app/server/`：AI Agent、工具、授权凭证存储、`translation/` 流水线与外部存储客户端、`billing/` 订阅与按量计费、`tokenUsage/` token 用量累加、`email/` 腾讯 SES 发信、`appLifecycle/` 安装/卸载副作用。
 - `prisma/`：数据库 schema 与迁移文件。
 - `.github/workflows/`：CI/CD（Shopify deploy + Render deploy）。
 - `.cursor/rules/`：Cursor 规则（包括本项目上下文规则）。
@@ -127,7 +126,48 @@
 - 安全建议：
   - 敏感字段生产环境优先 KMS / 字段级加密；`.data` 目录禁止提交到仓库。
 
-## 10. 运行与部署
+## 10. 事务邮件（腾讯 SES）
+
+Spark **不调用 Spring Backend 邮件 API**，进程内直连腾讯 SES SDK（`tencentcloud-sdk-nodejs-ses`）。模板 ID、发件人、CC 等与历史 Java 侧命名对齐，仅作常量参照。
+
+### 目录结构（`app/server/email/`）
+
+| 路径 | 职责 |
+|------|------|
+| `config/emailConfig.server.ts` | 读取 `TENCENT_*`、`EMAIL_*` 等环境变量 |
+| `services/emailService.server.ts` | **`sendTemplateEmail`** 统一入口（业务勿直连 Provider） |
+| `providers/providerFactory.server.ts` | 按 `EMAIL_PROVIDER` 选择实现（默认 `tencent`） |
+| `providers/tencentSesProvider.server.ts` | 腾讯 `SendEmail` API + 重试 |
+| `utils/retryWithTimeout.server.ts` | 超时与重试（可配置次数；HTTP 400 不重试） |
+| `templates/emailTemplates.server.ts` | 模板 ID / 主题常量（`EMAIL_TEMPLATE_IDS`） |
+| `templates/installOpsTemplateData.server.ts` | 安装运营邮件 `templateData` |
+| `templates/uninstallOpsTemplateData.server.ts` | 卸载运营邮件 `templateData` |
+| `scenarios/sendInstallOpsEmail.server.ts` | 安装运营场景（templateId `137916`） |
+| `scenarios/sendUninstallOpsEmail.server.ts` | 卸载运营场景 |
+| `opsNotifyEmail.server.ts` | 运营收件人、`OPS_UNINSTALL_TEMPLATE_ID` 解析 |
+| `index.ts` | 对外导出 |
+
+### App 生命周期运营邮件（`app/server/appLifecycle/`）
+
+| 文件 | 触发 | 行为 |
+|------|------|------|
+| `onAppInstalled.server.ts` | `recordAppInstalled` 写入 `CommonEventLog` 成功后（OAuth `auth.$.tsx`、进入 `/app` 等） | Shopify 店铺信息 + Session 快照 → `sendInstallOpsEmail` |
+| `onAppUninstalled.server.ts` | `webhooks.app.uninstalled.tsx` 鉴权后 | **先** `sendUninstallOpsEmail`，**再** `handleAppUninstalled`（写日志并删 Session） |
+
+安装 enrichment：`unauthenticated.admin(shop)` + `fetchShopBasicInfo`。卸载 enrichment：`loadSessionSnapshotForUninstall`（不调 GraphQL）。邮件失败不阻断安装 Loader；卸载邮件失败不阻断后续持久化；持久化失败时 Webhook 仍 `throw` 以便 Shopify 重试。
+
+### 首期接入范围
+
+- 已实现：通用 `sendTemplateEmail`、安装/卸载运营邮件、AI 工具 `send_template_email`（`app/server/ai/skills/email/`，模板 ID 白名单）。
+- 未接入：`emailTemplates.server.ts` 中其余 templateId（翻译成功/失败、购包、APG 等）按需后续在 `scenarios/` 扩展。
+
+### 日志与排错
+
+- 前缀：`[Email][Service]`、`[Email][Tencent]`、`[Email][InstallOps]`、`[Email][UninstallOps]`、`[AppLifecycle:install]`、`[AppLifecycle:uninstall]`。
+- 缺凭证：`sendTemplateEmail` 返回 `EMAIL_MISSING_CREDENTIALS`，主流程不阻断。
+- 发送失败：`TENCENT_SEND_FAILED`；成功以响应非空 `RequestId` 为准。
+
+## 11. 运行与部署
 - 常用命令（根目录执行）：
   - `npm run dev`：本地开发（Shopify CLI）。
   - `npm run build` / `npm run start`：构建与启动。
@@ -156,7 +196,7 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
 
 实现见 `scripts/turso-migrate.cjs`、`scripts/turso-sync.cjs`。
 
-## 11. 环境变量（代码中实际依赖）
+## 12. 环境变量（代码中实际依赖）
 - Shopify 侧：
   - `SHOPIFY_API_KEY`
   - `SHOPIFY_API_SECRET`
@@ -202,26 +242,26 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
 - 订阅计费（`app/server/billing/`）：
   - `BILLING_GATEWAY=noop`：不调 Shopify Billing，本地直接生效（开发）
   - `BILLING_TEST=true`：Shopify 测试计费（开发店）；未设时非 production 亦视为测试模式
-- 腾讯 SES 邮件（`app/server/email/`，详见 `docs/email-architecture-analysis.md`）：
+- 腾讯 SES 邮件（`app/server/email/`，结构见 §10）：
   - `TENCENT_CLOUD_KEY_ID`、`TENCENT_CLOUD_KEY`（与 Spring 同名）
   - 可选：`EMAIL_PROVIDER`（默认 `tencent`）、`EMAIL_ENABLED`（默认 `true`）、`TENCENT_SES_REGION`（默认 `ap-hongkong`）、`TENCENT_FROM_EMAIL`、`TENCENT_SES_CC`、`EMAIL_SEND_TIMEOUT_MS`、`EMAIL_SEND_MAX_RETRIES`
   - 运营通知：`OPS_NOTIFY_EMAIL`（未设则取 `TENCENT_SES_CC` 首地址）；卸载模板 `OPS_UNINSTALL_TEMPLATE_ID`（未设则跳过卸载邮件）
-  - App 安装/卸载运营邮件：进程内 EventBus；安装在 `recordAppInstalled` 成功后 publish；卸载 Webhook 仅 publish，由 orchestrator 先邮件后删 Session
+  - App 安装/卸载运营邮件：安装在 `recordAppInstalled` 成功后直接调用 `onAppInstalled`；卸载 Webhook 直接调用 `onAppUninstalled`（先邮件后删 Session）
 
-## 12. 文案与交互约定
+## 13. 文案与交互约定
 - 角色命名统一使用：`AI Assistant`。
 - 中文文案优先，保持简洁与可执行。
 - 欢迎语、诊断文案、按钮文案要全局一致。
 - 涉及指标输出时，优先列表与短段落，避免大段堆叠。
 
-## 13. 改动落点指南（按需求类型）
+## 14. 改动落点指南（按需求类型）
 - 改欢迎语/聊天 UI：`app/routes/page/ChatPage.tsx`、`app/routes/component/chat/*`（页面旁路与凭证弹层逻辑见 `app/routes/page/chat/`）。
 - 改聊天行为/工具调用：`app/server/chat-stream.ts`、`app/server/ai/core/invokeChatAgent.server.ts`、`app/server/ai/core/agentStream.server.ts`、`app/server/ai/skills/index.ts`、`app/server/ai/core/shopChatGraph.server.ts`。
 - 改 AI 回复抽取、Markdown 表格规整或最终润色：`app/server/ai/postprocess/langchainMessageText.ts`、`markdownTableNormalize.ts`、`polishFinalReply.ts`（单测同目录 `*.test.ts`）。
 - 改 Agent 运行摘要 / Cosmos 写入：`app/server/agentRunLog/**`（先读 `docs/agent-run-log.md`）；聊天写入见 `invokeChatAgent.server.ts`、`agentStream.server.ts`。
 - 加新 AI 工具：`app/server/ai/skills/index.ts` 的 `globalToolRegistry.register`（或 legacy `app/server/ai/tools/implementations/*`），由 `buildChatAgentExtraTools` 注入聊天链路。
 - 改邮件发送 / 模板 / Provider：`app/server/email/**`（业务只调 `sendTemplateEmail` / scenario 封装，勿直接用 Provider）。
-- 改 App 安装/卸载运营邮件 / EventBus：`app/server/events/**`、`app/server/commonEventLog/recordAppInstalled.server.ts`、`app/routes/webhooks.app.uninstalled.tsx`、`app/server/email/scenarios/sendInstallOpsEmail.server.ts`、`sendUninstallOpsEmail.server.ts`。
+- 改 App 安装/卸载运营邮件：`app/server/appLifecycle/`、`app/server/commonEventLog/recordAppInstalled.server.ts`、`app/routes/webhooks.app.uninstalled.tsx`、`app/server/email/scenarios/sendInstallOpsEmail.server.ts`、`sendUninstallOpsEmail.server.ts`。
 - 改 Agent 模板邮件工具：`app/server/ai/skills/email/**`。
 - 改诊断指标：`app/routes/app.additional.tsx`（含查询、阈值、文案）。
 - 改广告 OAuth 配置字段：`app/routes/app.ads.*.config.tsx` + `app/server/adAuthCredentialStore.server.ts`（及 Meta 的 `adsCredentialStore.server.ts`）；改物流：`app/routes/app.logistics.*.config.tsx` + `app/server/logisticsCredentialStore.server.ts`。
@@ -230,7 +270,7 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
 - 改翻译创建/流水线/Cosmos 文档：`app/server/translation/*`（先读 `docs/translation-agent.md`）；改翻译 UI：`app/routes/page/TranslationPage.tsx`、`app/routes/component/translation/*`；改 API：`app/routes/api.translate.v3.*.ts`。
 - 改订阅/购包/余额/Webhook：`app/server/billing/**`（先读 `app/server/billing/agent.md`）；改计费页 UI：`app/routes/app.billing.tsx`、`app/routes/page/BillingPage.tsx`、`app/routes/component/billing/*`、`app/lib/billingPlanUi.ts`、`app/lib/billingPageTypes.ts`；改 Webhook：`app/routes/webhooks.app.subscriptions_update.tsx`、`webhooks.app.purchases_one_time_update.tsx`、`webhooks.app.uninstalled.tsx`、`webhooks.app.scopes_update.tsx`；改 App 生命周期流水：`app/server/commonEventLog/**`；改 token 累加：`app/server/tokenUsage/**`；改套餐种子：`prisma/billing-plan-catalog-seed.sql` + `npm run turso:migrate:*`。
 
-## 14. 改动边界与风险提示
+## 15. 改动边界与风险提示
 - 未明确要求时，不改以下区域：
   - Shopify 鉴权与 session 逻辑（`app/shopify.server.ts`、`app/db.server.ts`）。
   - 部署流水线与环境配置（workflow 与 `shopify.app.*.toml`）。
@@ -240,7 +280,7 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
   - Shopify CLI 配置路径
   - 代码中硬编码路径（`process.cwd()` 相关）
 
-## 15. 开发检查清单
+## 16. 开发检查清单
 - 改前：
   - 明确影响范围（聊天/诊断/授权/部署）。
   - 只改需求相关文件，避免无关重构。

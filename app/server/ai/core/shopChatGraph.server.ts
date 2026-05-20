@@ -2,6 +2,7 @@ import type { DynamicStructuredTool } from "@langchain/core/tools";
 import { ChatOpenAI } from "@langchain/openai";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { getPersonalizedSystemPrompt } from "./shopAssistantPrompt";
+import { fetchRecentReflectionSummary } from "../../agentRunLog/recentReflection.server";
 import { baseAgentTools } from "../skills/system/baseAgentTools.server";
 import { wrapToolWithTokenUsage } from "../../tokenUsage/wrapToolWithTokenUsage.server";
 import type { AgentContext, ToolDefinition } from "./toolRegistry.server";
@@ -40,7 +41,14 @@ export async function buildShopChatGraph(
     : baseAgentTools;
   const tools = [...wrappedBaseTools, ...extraTools];
 
-  const dynamicPrompt = await getPersonalizedSystemPrompt(context, activeDefs);
+  const reflectionSummary = context.shop?.trim()
+    ? await fetchRecentReflectionSummary(context.shop)
+    : undefined;
+  const dynamicPrompt = await getPersonalizedSystemPrompt(
+    context,
+    activeDefs,
+    reflectionSummary,
+  );
 
   return createReactAgent({
     llm: model,
