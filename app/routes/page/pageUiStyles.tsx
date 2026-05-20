@@ -10,6 +10,8 @@ export const pageColorTokens = {
   textMuted: "#42474c",
   border: "#e1e3e5",
   borderInput: "#c9cccf",
+  /** 更细的分隔/边框（常用于列表展开块、轻量分区） */
+  borderSubtle: "#dfe3e8",
   divider: "#f1f2f3",
   brandGreen: "#008060",
   brandGreenDark: "#208060",
@@ -18,13 +20,21 @@ export const pageColorTokens = {
   brandBlue: "#2c6ecb",
   surface: "#ffffff",
   surfaceMuted: "#f6f6f7",
+  /** 列表交替行背景（接近但不等同 surfaceMuted） */
+  surfaceEvenRow: "#fafbfb",
   surfaceSubtle: "#fafafa",
   critical: "#bf0711",
   criticalBg: "rgba(216, 44, 13, 0.08)",
   criticalText: "#8a2712",
   shadowCard: "0 1px 2px rgba(0, 0, 0, 0.04)",
+  /** 弹层/预览卡片更强阴影 */
+  shadowModal: "0 12px 30px rgba(0, 0, 0, 0.2)",
+  /** 进度条轨道（未填充部分）的渐变 */
+  progressTrackGradient: "linear-gradient(180deg, #e7e9ec 0%, #dfe3e8 100%)",
   radiusCard: "12px",
   radiusControl: "8px",
+  /** 失误/空态的弱化灰底（非关键错误） */
+  mutedBg: "rgba(109, 113, 117, 0.08)",
 } as const;
 
 /** §3.2 双栏布局 */

@@ -2,6 +2,8 @@ import { useMemo, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import type { ProductSelectorSelection } from "../../../lib/productSearchTypes";
 import { useProductSearch } from "../../../hooks/useProductSearch";
+import { pageColorTokens } from "../../page/pageUiStyles";
+import { CriticalErrorBox } from "../shared/CriticalErrorBox";
 
 type BaseProps = {
   locationSearch: string;
@@ -29,20 +31,11 @@ function isMultipleProps(
   return p.selectionMode === "multiple";
 }
 
-const errorBoxStyle: CSSProperties = {
-  padding: "0.5rem 0.65rem",
-  borderRadius: "8px",
-  background: "rgba(216, 44, 13, 0.08)",
-  color: "#8a2712",
-  fontSize: "0.8125rem",
-  lineHeight: 1.45,
-};
-
 const emptyBoxStyle: CSSProperties = {
   padding: "0.75rem 0.65rem",
   borderRadius: "8px",
-  background: "rgba(109, 113, 117, 0.08)",
-  color: "#6d7175",
+  background: pageColorTokens.mutedBg,
+  color: pageColorTokens.textSecondary,
   fontSize: "0.8125rem",
   lineHeight: 1.45,
   textAlign: "center",
@@ -113,7 +106,7 @@ export function ProductSelector(props: ProductSelectorProps) {
         </div>
       ) : null}
 
-      {searchError ? <div style={errorBoxStyle}>{searchError}</div> : null}
+      {searchError ? <CriticalErrorBox>{searchError}</CriticalErrorBox> : null}
 
       {!isLoading && !searchError && kw && items.length === 0 ? (
         <div style={emptyBoxStyle}>{t("productSelector.empty")}</div>

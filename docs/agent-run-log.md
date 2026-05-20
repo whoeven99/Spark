@@ -11,6 +11,8 @@ Agent 每次调用的**摘要**写入 Azure Cosmos DB（`spark_ops` / `agent_run
 | Partition key | `/shop` |
 | TTL | 容器默认 90 天（`defaultTtl: 7776000`） |
 
+容器须已在 Azure 中创建（代码默认**不**自动建容器，避免 RU 配额报错）。创建步骤见 **`docs/shop-profile.md` §「首次在 Azure 创建 agent_runs」**。
+
 不写入 Blob；不存 accessToken、完整 messages（仅 `inputSummary` 截断摘要）。
 
 ## 环境变量

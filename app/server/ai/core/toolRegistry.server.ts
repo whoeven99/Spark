@@ -5,9 +5,13 @@ import type { ShopifyAdminGraphqlClient } from "../skills/shopifyInfo/tool";
 import { wrapToolWithTokenUsage } from "../../tokenUsage/wrapToolWithTokenUsage.server";
 
 export interface UserProfile {
-  // 可根据需要扩展，例如订阅套餐、行业、商户偏好等
-  plan?: "free" | "pro" | "enterprise";
-  industry?: string;
+  /** Cosmos 短摘要，注入 system prompt */
+  promptSnippet?: string;
+  /** Blob profile.md（可截断） */
+  shopProfileMarkdown?: string;
+  facets?: Record<string, unknown>;
+  profileVersion?: number;
+  profileUpdatedAt?: string;
   preferences?: Record<string, unknown>;
   [key: string]: unknown;
 }

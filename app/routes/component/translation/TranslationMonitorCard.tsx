@@ -37,7 +37,7 @@ const MD_CARD: CSSProperties = {
   maxHeight: "90vh",
   backgroundColor: pageColorTokens.surface,
   borderRadius: pageColorTokens.radiusCard,
-  boxShadow: "0 12px 30px rgba(0, 0, 0, 0.2)",
+  boxShadow: pageColorTokens.shadowModal,
   display: "flex",
   flexDirection: "column",
   overflow: "hidden",
@@ -121,7 +121,7 @@ function ProgressBar(props: {
         style={{
           width: "100%",
           height: props.height ?? 10,
-          background: "linear-gradient(180deg, #e7e9ec 0%, #dfe3e8 100%)",
+          background: pageColorTokens.progressTrackGradient,
           borderRadius: 999,
           overflow: "hidden",
           boxShadow: "inset 0 1px 2px rgba(32,34,35,0.12)",
