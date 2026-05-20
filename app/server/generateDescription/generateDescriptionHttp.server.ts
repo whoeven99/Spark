@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/tool";
+import { fetchShopContactEmail, sendApgSuccessEmail } from "../email";
 import {
   DEFAULT_DESCRIPTION_TEMPERATURE,
   MAX_DESCRIPTION_TEMPERATURE,
@@ -20,6 +21,11 @@ const requestBodySchema = z.object({
     .min(MIN_DESCRIPTION_TEMPERATURE)
     .max(MAX_DESCRIPTION_TEMPERATURE)
     .optional(),
+  /** 为 true 时在生成成功后发送 APG 成功邮件（templateId 144209） */
+  notifyEmail: z.boolean().optional(),
+  apgEmailUsername: z.string().min(1).optional(),
+  apgCreditUsed: z.number().nonnegative().optional(),
+  apgCreditRemaining: z.number().nonnegative().optional(),
 });
 
 export type ParsedGenerateDescriptionBody = z.infer<typeof requestBodySchema>;
@@ -81,6 +87,7 @@ export async function executeGenerateDescriptionRequest(params: {
   }
 
   const temperature = parsed.temperature ?? DEFAULT_DESCRIPTION_TEMPERATURE;
+  const generationStartedAtMs = Date.now();
 
   try {
     const result = await runProductDescriptionGeneration({
@@ -136,6 +143,39 @@ export async function executeGenerateDescriptionRequest(params: {
     );
 
     console.log("[GenerateDescription] product title:", result.data.title);
+
+    if (parsed.notifyEmail) {
+      try {
+        const to = await fetchShopContactEmail(admin);
+        if (!to) {
+          console.info(
+            `${LOG_PREFIX} requestId=${requestId} notifyEmail skipped: shop email not found`,
+          );
+        } else {
+          const emailResult = await sendApgSuccessEmail({
+            to,
+            taskType: "product",
+            username: parsed.apgEmailUsername?.trim() || sessionShop,
+            productCount: 1,
+            durationSeconds: 0,
+            startedAtMs: generationStartedAtMs,
+            creditUsed: parsed.apgCreditUsed,
+            creditRemaining: parsed.apgCreditRemaining,
+          });
+          if (!emailResult.ok) {
+            console.info(
+              `${LOG_PREFIX} requestId=${requestId} notifyEmail failed code=${emailResult.error.code}`,
+            );
+          }
+        }
+      } catch (emailError) {
+        logDetailedError(
+          `${LOG_PREFIX} requestId=${requestId}`,
+          "notifyEmail unexpected",
+          emailError,
+        );
+      }
+    }
 
     return jsonBody(
       {

@@ -20,6 +20,7 @@
   - **翻译 V3 报表 / chunk 等 Blob**：**Azure Blob Storage**（见 `app/server/translation/translateBlobStore.server.ts`）。
   - **翻译进度与监控键**：**Redis**（`ioredis`，见 `app/server/translation/translateRedis.server.ts`）。
   - **物流承运商授权**：本地 JSON `.data/logistics-provider-credentials.json`（见 `app/server/logisticsCredentialStore.server.ts`）。
+  - **事务邮件（腾讯 SES 模板）**：`app/server/email/`（Provider 模式；对齐 Spring `EmailIntegration`）。
 
 ## 3. 目录结构（迁移后，根目录即应用目录）
 - `app/routes/`：页面路由与 API action/loader。
@@ -140,6 +141,10 @@
   - 可选：`AIDGE_REQUEST_TIMEOUT_MS`（默认 `30000`）、`AIDGE_IOP_TRIAL=true`（试用请求头）、`AIDGE_PARTNER_ID`（默认 `iop`）
   - 可选：`PICTURE_TRANSLATE_IMAGE_FETCH_CONNECT_MS`、`PICTURE_TRANSLATE_IMAGE_FETCH_READ_MS`（毫秒，默认各 `5000`）
   - 可选：`PICTURE_TRANSLATE_BLOB_SAS_TTL_MINUTES`、`PICTURE_TRANSLATE_BILLING_STRICT`
+- 腾讯 SES 邮件（`app/server/email/`，详见 `docs/email-architecture-analysis.md`）：
+  - `TENCENT_CLOUD_KEY_ID`、`TENCENT_CLOUD_KEY`（与 Spring 同名）
+  - 可选：`EMAIL_PROVIDER`（默认 `tencent`）、`EMAIL_ENABLED`（默认 `true`）、`TENCENT_SES_REGION`（默认 `ap-hongkong`）、`TENCENT_FROM_EMAIL`、`TENCENT_SES_CC`、`EMAIL_SEND_TIMEOUT_MS`、`EMAIL_SEND_MAX_RETRIES`
+  - 生成描述成功通知：`POST` 请求体 `notifyEmail: true` 时发送 templateId `144209`（见 `generateDescriptionHttp.server.ts`）
 
 ## 11. 文案与交互约定
 - 角色命名统一使用：`AI Assistant`。
@@ -155,6 +160,7 @@
 - 改诊断指标：`app/routes/app.additional.tsx`（含查询、阈值、文案）。
 - 改广告 OAuth 配置字段：`app/routes/app.ads.*.config.tsx` + `app/server/adAuthCredentialStore.server.ts`（及 Meta 的 `adsCredentialStore.server.ts`）；改物流：`app/routes/app.logistics.*.config.tsx` + `app/server/logisticsCredentialStore.server.ts`。
 - 改生成商品描述页或 API：`app/routes/app.generate-description.tsx`、`app/routes/page/GenerateDescriptionPage.tsx`、`app/routes/component/generateDescription/GenerateDescriptionResultEditor.tsx`、`app/routes/api.generate-description.ts`、`app/routes/api.update-product-description.ts`、`app/server/generateDescription/**`、`app/hooks/useGenerateDescription.ts`、`app/server/ai/tools/implementations/generateDescriptionTool.ts`。
+- 改邮件发送 / 模板 / Provider：`app/server/email/**`（业务只调 `sendTemplateEmail` / `sendApgSuccessEmail`，勿直接调 Provider）。
 - 改整图翻译 API / 双引擎路由：`app/routes/api.picture-translate.ts`、`app/server/pictureTranslate/**`、`app/server/ai/skills/pictureTranslate/**`。
 - 改翻译创建/流水线/Cosmos 文档：`app/server/translation/*`（先读 `agent.md`）；改翻译 UI：`app/routes/page/TranslationPage.tsx`、`app/routes/component/translation/*`；改 API：`app/routes/api.translate.v3.*.ts`。
 
