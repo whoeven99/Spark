@@ -18,6 +18,7 @@ const LOG_PREFIX = "[usePictureTranslate]";
 const PICTURE_TRANSLATE_PROVIDER: PictureTranslateProvider | null = null;
 const PRODUCT_SEARCH_DEBOUNCE_MS = 300;
 
+import { postDeleteShopVisualJob } from "../lib/shopVisualJobApi";
 import type { ShopVisualJobHistoryItem } from "../lib/shopVisualJobTypes";
 
 export type UsePictureTranslateParams = {
@@ -78,6 +79,7 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
   const [resultMeta, setResultMeta] = useState<PictureTranslateResultMeta | null>(null);
   const [hasSubmittedOnce, setHasSubmittedOnce] = useState(false);
   const [history, setHistory] = useState<ShopVisualJobHistoryItem[]>(initialHistory);
+  const [deletingRequestId, setDeletingRequestId] = useState<string | null>(null);
 
   useEffect(() => {
     setHistory(initialHistory);
@@ -370,6 +372,33 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
     toastShow,
   ]);
 
+  const deleteHistoryItem = useCallback(
+    async (item: ShopVisualJobHistoryItem) => {
+      setDeletingRequestId(item.requestId);
+      try {
+        const body = await postDeleteShopVisualJob({
+          locationSearch,
+          requestId: item.requestId,
+        });
+        if (!body.success) {
+          toastShow(body.errorMsg || t("visualHistory.deleteFailed"));
+          return;
+        }
+        setHistory((prev) => prev.filter((h) => h.requestId !== item.requestId));
+        if (requestId === item.requestId) {
+          resetResult();
+        }
+        toastShow(t("visualHistory.deleteSuccess"));
+      } catch (e) {
+        console.error(`${LOG_PREFIX} delete error`, e);
+        toastShow(t("visualHistory.deleteFailed"));
+      } finally {
+        setDeletingRequestId(null);
+      }
+    },
+    [locationSearch, requestId, resetResult, t, toastShow],
+  );
+
   const displayFormError = mode === "card" ? formErrorText || resultErrorText : formErrorText;
 
   return {
@@ -409,6 +438,8 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
     submitTranslate,
     resetResult,
     history,
+    deleteHistoryItem,
+    deletingRequestId,
     selectHistoryItem: (item: ShopVisualJobHistoryItem) => {
       setRequestId(item.requestId);
       setHasSubmittedOnce(true);

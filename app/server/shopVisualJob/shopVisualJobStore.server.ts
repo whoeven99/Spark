@@ -1,6 +1,7 @@
 import type { Prisma } from "../../generated/prisma";
 import prisma from "../../db.server";
 import { getGeneratedImageReadUrl } from "../imageGeneration/imageGenerationBlob.server";
+import { parseImageGenerationJobMetadata } from "../imageGeneration/imageGenerationJobMetadata.server";
 import type {
   ShopVisualJobHistoryItem,
   ShopVisualJobKind,
@@ -36,13 +37,19 @@ function rowToHistoryItem(row: {
   provider: string | null;
   createdAt: Date;
   imageUrl: string | null;
+  metadata?: unknown;
 }): ShopVisualJobHistoryItem {
   const kind =
     row.kind === "picture_translate" ? "picture_translate" : "image_generation";
+  const imageMeta =
+    kind === "image_generation" ?
+      parseImageGenerationJobMetadata(row.metadata)
+    : null;
   return {
     requestId: row.requestId,
     kind,
     summary: row.summary,
+    ...(imageMeta?.description ? { description: imageMeta.description } : {}),
     status: toJobStatus(row.status),
     imageUrl: row.imageUrl,
     errorMsg: row.errorMsg,
@@ -185,6 +192,7 @@ export async function listRecentShopVisualJobsForShop(params: {
         provider: row.provider,
         createdAt: row.createdAt,
         imageUrl: await resolveImageUrl(row.blobPath),
+        metadata: row.metadata,
       }),
     );
   }

@@ -7,6 +7,7 @@ import {
   markShopVisualJobSucceeded,
 } from "../shopVisualJob/shopVisualJobStore.server";
 import { SHOP_VISUAL_JOB_KIND_IMAGE_GENERATION } from "../shopVisualJob/types.server";
+import { buildImageGenerationJobMetadata } from "./imageGenerationJobMetadata.server";
 import type {
   ImageGenerationHistoryItem,
   ImageGenerationJobStatus,
@@ -18,12 +19,22 @@ export async function createPendingGeneratedImageJob(params: {
   requestId: string;
   shop: string;
   prompt: string;
+  description?: string;
 }): Promise<void> {
+  const metadata =
+    params.description?.trim() ?
+      buildImageGenerationJobMetadata({
+        description: params.description,
+        prompt: params.prompt,
+      })
+    : undefined;
+
   await createPendingShopVisualJob({
     requestId: params.requestId,
     shop: params.shop,
     kind: KIND,
     summary: params.prompt,
+    metadata,
   });
 }
 
@@ -78,6 +89,7 @@ export async function listRecentGeneratedImageJobsForShop(
     kind: "image_generation" as const,
     prompt: row.summary,
     summary: row.summary,
+    ...(row.description ? { description: row.description } : {}),
     status: row.status,
     imageUrl: row.imageUrl,
     errorMsg: row.errorMsg,
@@ -90,15 +102,25 @@ export async function persistSyncImageGenerationJob(params: {
   requestId: string;
   shop: string;
   prompt: string;
+  description?: string;
   result: Awaited<
     ReturnType<typeof import("./imageGenerationExecutor.server").executeImageGeneration>
   >;
 }): Promise<void> {
+  const metadata =
+    params.description?.trim() ?
+      buildImageGenerationJobMetadata({
+        description: params.description,
+        prompt: params.prompt,
+      })
+    : undefined;
+
   await createPendingShopVisualJob({
     requestId: params.requestId,
     shop: params.shop,
     kind: KIND,
     summary: params.prompt,
+    metadata,
   });
   if (!params.result.ok) {
     await markShopVisualJobFailed({

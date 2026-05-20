@@ -8,23 +8,74 @@ import {
   validateImageGenerationPrompt,
 } from "./imageGenerationExecutor.server";
 import { isImageGenerationConfigured } from "./imageGenerationConfig.server";
+import { generateImagePromptFromDescription } from "./generateImagePromptFromDescription.server";
 import { persistSyncImageGenerationJob } from "./imageGenerationJobStore.server";
 import type { ImageGenerationHttpResponse } from "./types";
 
-const bodySchema = z.object({
-  prompt: z.string(),
-});
+const bodySchema = z
+  .object({
+    prompt: z.string().optional(),
+    description: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    const hasPrompt = Boolean(data.prompt?.trim());
+    const hasDescription = Boolean(data.description?.trim());
+    if (!hasPrompt && !hasDescription) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "请求体需包含 description 或 prompt",
+      });
+    }
+  });
+
+export type ImageGenerationRequestBody = z.infer<typeof bodySchema>;
 
 export function parseImageGenerationBody(
   raw: unknown,
 ):
-  | { ok: true; data: z.infer<typeof bodySchema> }
+  | { ok: true; data: ImageGenerationRequestBody }
   | { ok: false; errorMsg: string } {
   const parsed = bodySchema.safeParse(raw);
   if (!parsed.success) {
-    return { ok: false, errorMsg: "请求体缺少 prompt 字段" };
+    const msg = parsed.error.issues[0]?.message;
+    return { ok: false, errorMsg: msg || "请求体格式无效" };
   }
   return { ok: true, data: parsed.data };
+}
+
+async function resolveImageGenerationPrompt(params: {
+  requestId: string;
+  prompt?: string;
+  description?: string;
+}): Promise<{ ok: true; prompt: string; description?: string } | { ok: false; errorMsg: string }> {
+  const trimmedPrompt = params.prompt?.trim() ?? "";
+  if (trimmedPrompt) {
+    const promptError = validateImageGenerationPrompt(trimmedPrompt);
+    if (promptError) {
+      return { ok: false, errorMsg: promptError };
+    }
+    const description = params.description?.trim() || undefined;
+    return { ok: true, prompt: trimmedPrompt, description };
+  }
+
+  const description = params.description?.trim() ?? "";
+  if (!description) {
+    return { ok: false, errorMsg: "请求体需包含 description 或 prompt" };
+  }
+
+  const promptResult = await generateImagePromptFromDescription({
+    requestId: params.requestId,
+    description,
+  });
+  if (!promptResult.ok) {
+    return { ok: false, errorMsg: promptResult.errorMsg };
+  }
+
+  return {
+    ok: true,
+    prompt: promptResult.prompt,
+    description,
+  };
 }
 
 function isImageGenerationEnabled(): boolean {
@@ -71,11 +122,34 @@ function precheckImageGenerationRequest(params: {
 export async function executeImageGenerationRequest(params: {
   requestId: string;
   sessionShop: string;
-  prompt: string;
+  prompt?: string;
+  description?: string;
 }): Promise<{ status: number; body: ImageGenerationHttpResponse }> {
-  const precheck = precheckImageGenerationRequest({
+  const resolved = await resolveImageGenerationPrompt({
     requestId: params.requestId,
     prompt: params.prompt,
+    description: params.description,
+  });
+  if (!resolved.ok) {
+    const isValidation =
+      resolved.errorMsg.includes("至少") || resolved.errorMsg.includes("不能超过");
+    return {
+      status: isValidation ? 400 : 502,
+      body: {
+        success: false,
+        errorCode: isValidation ? 40000 : 50200,
+        errorMsg: resolved.errorMsg,
+        requestId: params.requestId,
+        status: "failed",
+      },
+    };
+  }
+
+  const { prompt, description } = resolved;
+
+  const precheck = precheckImageGenerationRequest({
+    requestId: params.requestId,
+    prompt,
   });
   if (!precheck.ok) {
     return {
@@ -94,7 +168,8 @@ export async function executeImageGenerationRequest(params: {
     await startImageGenerationJob({
       requestId: params.requestId,
       shop: params.sessionShop,
-      prompt: params.prompt,
+      prompt,
+      description,
     });
 
     return {
@@ -110,14 +185,15 @@ export async function executeImageGenerationRequest(params: {
   const result = await executeImageGeneration({
     requestId: params.requestId,
     shop: params.sessionShop,
-    prompt: params.prompt,
+    prompt,
   });
 
   try {
     await persistSyncImageGenerationJob({
       requestId: params.requestId,
       shop: params.sessionShop,
-      prompt: params.prompt,
+      prompt,
+      description,
       result,
     });
   } catch (e) {

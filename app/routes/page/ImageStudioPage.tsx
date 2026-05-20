@@ -91,6 +91,20 @@ function ImageStudioPageInner() {
     [imageGen, setActiveTab, translate],
   );
 
+  const handleHistoryDelete = useCallback(
+    (item: ShopVisualJobHistoryItem) => {
+      if (item.kind === "picture_translate") {
+        void translate.deleteHistoryItem(item);
+        return;
+      }
+      void imageGen.deleteHistoryItem(item);
+    },
+    [imageGen, translate],
+  );
+
+  const deletingRequestId =
+    imageGen.deletingRequestId ?? translate.deletingRequestId;
+
   const sectionSubtitle =
     activeTab === "translate"
       ? t("pictureTranslate.pageSubtitle")
@@ -126,14 +140,8 @@ function ImageStudioPageInner() {
                   description={imageGen.description}
                   onDescriptionChange={imageGen.setDescription}
                   descriptionErrorText={imageGen.descriptionErrorText}
-                  prompt={imageGen.prompt}
-                  onPromptChange={imageGen.setPrompt}
-                  promptErrorText={imageGen.promptErrorText}
                   busy={imageGen.busy}
-                  isGeneratingPrompt={imageGen.isGeneratingPrompt}
                   isSubmitting={imageGen.isSubmitting || imageGen.isPolling}
-                  hasGeneratedPromptOnce={imageGen.hasGeneratedPromptOnce}
-                  onGeneratePrompt={() => void imageGen.submitGeneratePrompt()}
                   onGenerateImage={() => void imageGen.submitGenerate()}
                 />
               ) : (
@@ -147,6 +155,8 @@ function ImageStudioPageInner() {
                 activeRequestId={activeRequestId}
                 activeTab={activeTab}
                 onSelect={handleHistorySelect}
+                onDelete={handleHistoryDelete}
+                deletingRequestId={deletingRequestId}
               />
             </PageSurface>
           </div>

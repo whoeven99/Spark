@@ -64,6 +64,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       requestId,
       sessionShop: session.shop,
       prompt: parsed.data.prompt,
+      description: parsed.data.description,
     });
 
     console.info(

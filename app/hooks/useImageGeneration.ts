@@ -3,8 +3,8 @@ import { useTranslation } from "react-i18next";
 import type {
   ImageGenerationApiResponse,
   ImageGenerationStatusApiResponse,
-  ImagePromptApiResponse,
 } from "../lib/imageGenerationTypes";
+import { postDeleteShopVisualJob } from "../lib/shopVisualJobApi";
 import type { ShopVisualJobHistoryItem } from "../lib/shopVisualJobTypes";
 
 const LOG_PREFIX = "[useImageGeneration]";
@@ -17,23 +17,24 @@ export type UseImageGenerationParams = {
   initialHistory?: ShopVisualJobHistoryItem[];
 };
 
+function historySummary(item: ShopVisualJobHistoryItem): string {
+  return item.description?.trim() || item.summary;
+}
+
 export function useImageGeneration(params: UseImageGenerationParams) {
   const { locationSearch, toastShow, initialHistory = [] } = params;
   const { t } = useTranslation();
 
   const [description, setDescription] = useState("");
-  const [prompt, setPrompt] = useState("");
   const [descriptionErrorText, setDescriptionErrorText] = useState("");
-  const [promptErrorText, setPromptErrorText] = useState("");
   const [resultErrorText, setResultErrorText] = useState("");
-  const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [requestId, setRequestId] = useState<string | null>(null);
   const [hasSubmittedOnce, setHasSubmittedOnce] = useState(false);
-  const [hasGeneratedPromptOnce, setHasGeneratedPromptOnce] = useState(false);
   const [history, setHistory] = useState<ShopVisualJobHistoryItem[]>(initialHistory);
+  const [deletingRequestId, setDeletingRequestId] = useState<string | null>(null);
 
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartedRef = useRef<number | null>(null);
@@ -78,7 +79,7 @@ export function useImageGeneration(params: UseImageGenerationParams) {
   );
 
   const startPolling = useCallback(
-    (jobRequestId: string, jobPrompt: string) => {
+    (jobRequestId: string, jobItem: ShopVisualJobHistoryItem) => {
       stopPolling();
       setIsPolling(true);
       pollStartedRef.current = Date.now();
@@ -89,14 +90,11 @@ export function useImageGeneration(params: UseImageGenerationParams) {
           stopPolling();
           setResultErrorText(t("imageGeneration.pollTimeout"));
           upsertHistoryItem({
+            ...jobItem,
             requestId: jobRequestId,
-            kind: "image_generation",
-            summary: jobPrompt,
             status: "pending",
             imageUrl: null,
             errorMsg: null,
-            provider: null,
-            createdAt: new Date().toISOString(),
           });
           return;
         }
@@ -116,14 +114,11 @@ export function useImageGeneration(params: UseImageGenerationParams) {
             setResultErrorText("");
             toastShow(t("imageGeneration.submitSuccess"));
             upsertHistoryItem({
+              ...jobItem,
               requestId: body.requestId,
-              kind: "image_generation",
-              summary: jobPrompt,
               status: "succeeded",
               imageUrl: body.imageUrl,
               errorMsg: null,
-              provider: null,
-              createdAt: new Date().toISOString(),
             });
             return;
           }
@@ -131,14 +126,11 @@ export function useImageGeneration(params: UseImageGenerationParams) {
           const msg = body.errorMsg || t("imageGeneration.submitFailed");
           setResultErrorText(msg);
           upsertHistoryItem({
+            ...jobItem,
             requestId: body.requestId,
-            kind: "image_generation",
-            summary: jobPrompt,
             status: "failed",
             imageUrl: null,
             errorMsg: msg,
-            provider: null,
-            createdAt: new Date().toISOString(),
           });
         } catch (e) {
           console.error(`${LOG_PREFIX} poll error`, e);
@@ -151,59 +143,16 @@ export function useImageGeneration(params: UseImageGenerationParams) {
     [pollJobStatus, stopPolling, t, toastShow, upsertHistoryItem],
   );
 
-  const busy = isGeneratingPrompt || isSubmitting || isPolling;
-
-  const submitGeneratePrompt = useCallback(async () => {
-    const trimmed = description.trim();
-    setDescriptionErrorText("");
-    setPromptErrorText("");
-
-    if (trimmed.length < 4) {
-      setDescriptionErrorText(t("imageGeneration.validationDescriptionMin"));
-      return;
-    }
-
-    setIsGeneratingPrompt(true);
-    const clientRequestId = crypto.randomUUID();
-    console.info(
-      `${LOG_PREFIX} prompt start requestId=${clientRequestId} descriptionLen=${trimmed.length}`,
-    );
-
-    try {
-      const res = await fetch(`/api/generate-image-prompt${locationSearch}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: trimmed }),
-      });
-
-      const body = (await res.json()) as ImagePromptApiResponse;
-      if (!body.success) {
-        setDescriptionErrorText(body.errorMsg || t("imageGeneration.promptGenFailed"));
-        return;
-      }
-
-      setPrompt(body.prompt);
-      setHasGeneratedPromptOnce(true);
-      toastShow(t("imageGeneration.promptGenSuccess"));
-      console.info(`${LOG_PREFIX} prompt ok requestId=${body.requestId}`);
-    } catch (e) {
-      const msg =
-        e instanceof Error ? e.message : t("imageGeneration.promptGenFailed");
-      setDescriptionErrorText(msg);
-      console.error(`${LOG_PREFIX} prompt error`, e);
-    } finally {
-      setIsGeneratingPrompt(false);
-    }
-  }, [description, locationSearch, t, toastShow]);
+  const busy = isSubmitting || isPolling;
 
   const submitGenerate = useCallback(async () => {
-    const trimmed = prompt.trim();
-    setPromptErrorText("");
+    const trimmed = description.trim();
+    setDescriptionErrorText("");
     setResultErrorText("");
     stopPolling();
 
     if (trimmed.length < 4) {
-      setPromptErrorText(t("imageGeneration.validationPromptMin"));
+      setDescriptionErrorText(t("imageGeneration.validationDescriptionMin"));
       return;
     }
 
@@ -211,40 +160,47 @@ export function useImageGeneration(params: UseImageGenerationParams) {
     setHasSubmittedOnce(true);
     const clientRequestId = crypto.randomUUID();
     console.info(
-      `${LOG_PREFIX} image start requestId=${clientRequestId} promptLen=${trimmed.length}`,
+      `${LOG_PREFIX} start requestId=${clientRequestId} descriptionLen=${trimmed.length}`,
     );
+
+    const pendingHistoryBase: ShopVisualJobHistoryItem = {
+      requestId: clientRequestId,
+      kind: "image_generation",
+      summary: trimmed,
+      description: trimmed,
+      status: "pending",
+      imageUrl: null,
+      errorMsg: null,
+      provider: null,
+      createdAt: new Date().toISOString(),
+    };
 
     try {
       const res = await fetch(`/api/generate-image${locationSearch}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: trimmed }),
+        body: JSON.stringify({ description: trimmed }),
       });
 
       const body = (await res.json()) as ImageGenerationApiResponse;
       if (!body.success) {
         const msg = body.errorMsg || t("imageGeneration.submitFailed");
-        setResultErrorText(msg);
+        setDescriptionErrorText(msg);
         setIsSubmitting(false);
         return;
       }
 
       setRequestId(body.requestId);
+      const historyItem: ShopVisualJobHistoryItem = {
+        ...pendingHistoryBase,
+        requestId: body.requestId,
+      };
 
       if (body.status === "pending") {
         setGeneratedImageUrl(null);
         setResultErrorText("");
-        upsertHistoryItem({
-          requestId: body.requestId,
-          kind: "image_generation",
-          summary: trimmed,
-          status: "pending",
-          imageUrl: null,
-          errorMsg: null,
-          provider: null,
-          createdAt: new Date().toISOString(),
-        });
-        startPolling(body.requestId, trimmed);
+        upsertHistoryItem(historyItem);
+        startPolling(body.requestId, historyItem);
         return;
       }
 
@@ -253,25 +209,20 @@ export function useImageGeneration(params: UseImageGenerationParams) {
       setIsSubmitting(false);
       toastShow(t("imageGeneration.submitSuccess"));
       upsertHistoryItem({
-        requestId: body.requestId,
-        kind: "image_generation",
-        summary: trimmed,
+        ...historyItem,
         status: "succeeded",
         imageUrl: body.imageUrl,
-        errorMsg: null,
-        provider: null,
-        createdAt: new Date().toISOString(),
       });
-      console.info(`${LOG_PREFIX} image ok requestId=${body.requestId}`);
+      console.info(`${LOG_PREFIX} ok requestId=${body.requestId}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : t("imageGeneration.submitFailed");
-      setResultErrorText(msg);
+      setDescriptionErrorText(msg);
       setIsSubmitting(false);
-      console.error(`${LOG_PREFIX} image error`, e);
+      console.error(`${LOG_PREFIX} error`, e);
     }
   }, [
+    description,
     locationSearch,
-    prompt,
     startPolling,
     stopPolling,
     t,
@@ -279,26 +230,29 @@ export function useImageGeneration(params: UseImageGenerationParams) {
     upsertHistoryItem,
   ]);
 
-  const selectHistoryItem = useCallback((item: ShopVisualJobHistoryItem) => {
-    stopPolling();
-    setIsSubmitting(false);
-    setRequestId(item.requestId);
-    setPrompt(item.summary);
-    setHasSubmittedOnce(true);
-    if (item.status === "succeeded" && item.imageUrl) {
-      setGeneratedImageUrl(item.imageUrl);
-      setResultErrorText("");
-      return;
-    }
-    if (item.status === "failed") {
+  const selectHistoryItem = useCallback(
+    (item: ShopVisualJobHistoryItem) => {
+      stopPolling();
+      setIsSubmitting(false);
+      setRequestId(item.requestId);
+      setDescription(item.description?.trim() || historySummary(item));
+      setHasSubmittedOnce(true);
+      if (item.status === "succeeded" && item.imageUrl) {
+        setGeneratedImageUrl(item.imageUrl);
+        setResultErrorText("");
+        return;
+      }
+      if (item.status === "failed") {
+        setGeneratedImageUrl(null);
+        setResultErrorText(item.errorMsg || t("imageGeneration.submitFailed"));
+        return;
+      }
       setGeneratedImageUrl(null);
-      setResultErrorText(item.errorMsg || t("imageGeneration.submitFailed"));
-      return;
-    }
-    setGeneratedImageUrl(null);
-    setResultErrorText("");
-    startPolling(item.requestId, item.summary);
-  }, [startPolling, stopPolling, t]);
+      setResultErrorText("");
+      startPolling(item.requestId, item);
+    },
+    [startPolling, stopPolling, t],
+  );
 
   const resetResult = useCallback(() => {
     stopPolling();
@@ -309,26 +263,49 @@ export function useImageGeneration(params: UseImageGenerationParams) {
     setIsSubmitting(false);
   }, [stopPolling]);
 
+  const deleteHistoryItem = useCallback(
+    async (item: ShopVisualJobHistoryItem) => {
+      setDeletingRequestId(item.requestId);
+      try {
+        const body = await postDeleteShopVisualJob({
+          locationSearch,
+          requestId: item.requestId,
+        });
+        if (!body.success) {
+          toastShow(body.errorMsg || t("visualHistory.deleteFailed"));
+          return;
+        }
+        setHistory((prev) => prev.filter((h) => h.requestId !== item.requestId));
+        if (requestId === item.requestId) {
+          resetResult();
+        }
+        toastShow(t("visualHistory.deleteSuccess"));
+      } catch (e) {
+        console.error(`${LOG_PREFIX} delete error`, e);
+        toastShow(t("visualHistory.deleteFailed"));
+      } finally {
+        setDeletingRequestId(null);
+      }
+    },
+    [locationSearch, requestId, resetResult, t, toastShow],
+  );
+
   return {
     description,
     setDescription,
-    prompt,
-    setPrompt,
     descriptionErrorText,
-    promptErrorText,
     resultErrorText,
-    isGeneratingPrompt,
     isSubmitting,
     isPolling,
     busy,
     generatedImageUrl,
     requestId,
     hasSubmittedOnce,
-    hasGeneratedPromptOnce,
     history,
-    submitGeneratePrompt,
     submitGenerate,
     resetResult,
     selectHistoryItem,
+    deleteHistoryItem,
+    deletingRequestId,
   };
 };

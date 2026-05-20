@@ -73,6 +73,7 @@ export async function startImageGenerationJob(params: {
   requestId: string;
   shop: string;
   prompt: string;
+  description?: string;
 }): Promise<void> {
   await createPendingGeneratedImageJob(params);
   enqueueImageGenerationJob(params);

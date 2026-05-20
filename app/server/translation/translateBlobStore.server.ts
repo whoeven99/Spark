@@ -41,6 +41,19 @@ export async function translateV3BlobExists(blobPath: string): Promise<boolean> 
   return container.getBlockBlobClient(p).exists();
 }
 
+/** 删除 Blob（不存在时静默跳过）；用于视觉任务历史清理。 */
+export async function deleteTranslateV3BlobIfExists(blobPath: string): Promise<void> {
+  const p = blobPath.trim();
+  if (!p) return;
+  try {
+    const container = await getTranslateV3BlobContainer();
+    const client = container.getBlockBlobClient(p);
+    await client.deleteIfExists();
+  } catch (e) {
+    console.error(`[TranslateV3Blob] delete failed path=${p}`, e);
+  }
+}
+
 export async function translateV3BlobSizeBytes(blobPath: string): Promise<number | null> {
   const p = blobPath.trim();
   if (!p) return null;

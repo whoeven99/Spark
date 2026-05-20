@@ -27,24 +27,20 @@ export function GenerateImagePage() {
   const {
     description,
     setDescription,
-    prompt,
-    setPrompt,
     descriptionErrorText,
-    promptErrorText,
     resultErrorText,
-    isGeneratingPrompt,
     isSubmitting,
     isPolling,
     busy,
     generatedImageUrl,
     requestId,
     hasSubmittedOnce,
-    hasGeneratedPromptOnce,
     history,
-    submitGeneratePrompt,
     submitGenerate,
     resetResult,
     selectHistoryItem,
+    deleteHistoryItem,
+    deletingRequestId,
   } = useImageGeneration({
     locationSearch,
     initialHistory: loaderData.history,
@@ -72,14 +68,8 @@ export function GenerateImagePage() {
                 description={description}
                 onDescriptionChange={setDescription}
                 descriptionErrorText={descriptionErrorText}
-                prompt={prompt}
-                onPromptChange={setPrompt}
-                promptErrorText={promptErrorText}
                 busy={busy}
-                isGeneratingPrompt={isGeneratingPrompt}
                 isSubmitting={isSubmitting || isPolling}
-                hasGeneratedPromptOnce={hasGeneratedPromptOnce}
-                onGeneratePrompt={() => void submitGeneratePrompt()}
                 onGenerateImage={() => void submitGenerate()}
               />
             </PageSurface>
@@ -90,6 +80,8 @@ export function GenerateImagePage() {
                 items={history}
                 activeRequestId={requestId}
                 onSelect={selectHistoryItem}
+                onDelete={(item) => void deleteHistoryItem(item)}
+                deletingRequestId={deletingRequestId}
               />
             </PageSurface>
           </div>

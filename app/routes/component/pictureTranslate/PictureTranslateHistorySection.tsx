@@ -5,7 +5,8 @@ import { usePictureTranslateContext } from "./pictureTranslateContext";
 
 export function PictureTranslateHistorySection() {
   const { t } = useTranslation();
-  const { history, requestId, selectHistoryItem } = usePictureTranslateContext();
+  const { history, requestId, selectHistoryItem, deleteHistoryItem, deletingRequestId } =
+    usePictureTranslateContext();
 
   return (
     <PageSurface title={t("pictureTranslate.historyTitle")}>
@@ -14,6 +15,8 @@ export function PictureTranslateHistorySection() {
         items={history}
         activeRequestId={requestId}
         onSelect={selectHistoryItem}
+        onDelete={(item) => void deleteHistoryItem(item)}
+        deletingRequestId={deletingRequestId}
       />
     </PageSurface>
   );
