@@ -251,7 +251,9 @@
     "promptHintAfterGen": "可根据需要微调提示词，确认后点击「生成图片」",
     "promptPlaceholder": "生成提示词后将显示在此，也可直接输入…",
     "submit": "生成图片",
-    "submitting": "生成中…",
+    "submitting": "提交中…",
+    "generatingAsync": "图片生成中，可先处理其他事项；完成后会自动显示，也可在下方历史记录中查看",
+    "pollTimeout": "生成时间较长，请稍后在「最近生成」中查看或重试",
     "submitSuccess": "图片已生成",
     "submitFailed": "生成失败，请重试",
     "validationPromptMin": "提示词至少 4 个字符",
@@ -261,7 +263,13 @@
     "empty": "暂无图片，请调整提示词后重试",
     "emptyBeforeSubmit": "生成提示词后点击「生成图片」",
     "retry": "重新生成",
-    "pageFootnote": "商品图片由 gpt-image-2（OpenAI Images API）生成；结果保存在云端并返回可访问链接，仅供预览，不会自动写入 Shopify 商品。"
+    "historyTitle": "最近生成",
+    "historyHint": "重新进入本页仍可查看；生成中的任务可点击继续等待",
+    "historyEmpty": "暂无历史记录",
+    "historyStatusPending": "生成中",
+    "historyStatusDone": "已完成",
+    "historyStatusFailed": "失败",
+    "pageFootnote": "图片异步生成并保存在云端；重新进入本页可在「最近生成」中查看，不会自动写入 Shopify 商品。"
   },
   "generate": {
     "pageTitle": "生成商品描述",

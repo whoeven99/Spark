@@ -140,13 +140,16 @@ export async function executeImageGeneration(params: {
   }
 
   let imageUrl: string;
+  let blobPath: string;
   try {
-    imageUrl = await uploadGeneratedImageAndGetUrl({
+    const uploaded = await uploadGeneratedImageAndGetUrl({
       shop: params.shop,
       imageBytes: generated.bytes,
       requestId,
       extension: "png",
     });
+    imageUrl = uploaded.imageUrl;
+    blobPath = uploaded.blobPath;
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
     console.error(
@@ -167,6 +170,7 @@ export async function executeImageGeneration(params: {
   return {
     ok: true,
     imageUrl,
+    blobPath,
     provider: provider === "volc" ? "volc" : "openai",
     requestId,
   };

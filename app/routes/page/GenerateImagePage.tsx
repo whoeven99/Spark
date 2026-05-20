@@ -1,7 +1,10 @@
 import { useAppBridge } from "@shopify/app-bridge-react";
+import { useLoaderData } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useImageGeneration } from "../../hooks/useImageGeneration";
+import type { GenerateImagePageLoaderData } from "../../server/imageGeneration/imageGenerationPageLoader.server";
 import { ImageGenerationForm } from "../component/imageGeneration/ImageGenerationForm";
+import { ImageGenerationHistoryPanel } from "../component/imageGeneration/ImageGenerationHistoryPanel";
 import { ImageGenerationResultPanel } from "../component/imageGeneration/ImageGenerationResultPanel";
 import {
   PageSectionHeader,
@@ -17,6 +20,7 @@ import {
 export function GenerateImagePage() {
   const shopify = useAppBridge();
   const { t } = useTranslation();
+  const loaderData = useLoaderData<GenerateImagePageLoaderData>();
   const locationSearch =
     typeof window !== "undefined" ? window.location.search : "";
 
@@ -30,15 +34,20 @@ export function GenerateImagePage() {
     resultErrorText,
     isGeneratingPrompt,
     isSubmitting,
+    isPolling,
     busy,
     generatedImageUrl,
+    requestId,
     hasSubmittedOnce,
     hasGeneratedPromptOnce,
+    history,
     submitGeneratePrompt,
     submitGenerate,
     resetResult,
+    selectHistoryItem,
   } = useImageGeneration({
     locationSearch,
+    initialHistory: loaderData.history,
     toastShow: (message) => {
       shopify.toast.show(message);
     },
@@ -68,10 +77,18 @@ export function GenerateImagePage() {
                 promptErrorText={promptErrorText}
                 busy={busy}
                 isGeneratingPrompt={isGeneratingPrompt}
-                isSubmitting={isSubmitting}
+                isSubmitting={isSubmitting || isPolling}
                 hasGeneratedPromptOnce={hasGeneratedPromptOnce}
                 onGeneratePrompt={() => void submitGeneratePrompt()}
                 onGenerateImage={() => void submitGenerate()}
+              />
+            </PageSurface>
+
+            <PageSurface title={t("imageGeneration.historyTitle")}>
+              <ImageGenerationHistoryPanel
+                items={history}
+                activeRequestId={requestId}
+                onSelect={selectHistoryItem}
               />
             </PageSurface>
           </div>
@@ -80,6 +97,7 @@ export function GenerateImagePage() {
             <PageSurface title={t("imageGeneration.result")}>
               <ImageGenerationResultPanel
                 isSubmitting={isSubmitting}
+                isPolling={isPolling}
                 hasSubmittedOnce={hasSubmittedOnce}
                 resultErrorText={resultErrorText}
                 generatedImageUrl={generatedImageUrl}

@@ -216,3 +216,20 @@ model BillingLog {
   @@index([eventType, createdAt])
   @@index([referenceId])
 }
+
+/// 商品文生图任务（异步生成 + 历史回看）。
+model GeneratedImageJob {
+  id        String   @id @default(cuid())
+  requestId String   @unique
+  shop      String
+  prompt    String
+  /// pending | succeeded | failed
+  status    String
+  blobPath  String?
+  errorMsg  String?
+  provider  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([shop, createdAt])
+}

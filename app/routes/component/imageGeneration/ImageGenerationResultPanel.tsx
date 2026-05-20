@@ -3,6 +3,7 @@ import { pageEmptyStateStyle } from "../../page/pageUiStyles";
 
 export type ImageGenerationResultPanelProps = {
   isSubmitting: boolean;
+  isPolling?: boolean;
   hasSubmittedOnce: boolean;
   resultErrorText: string;
   generatedImageUrl: string | null;
@@ -15,6 +16,7 @@ function EmptyState({ message }: { message: string }) {
 
 export function ImageGenerationResultPanel({
   isSubmitting,
+  isPolling = false,
   hasSubmittedOnce,
   resultErrorText,
   generatedImageUrl,
@@ -22,10 +24,12 @@ export function ImageGenerationResultPanel({
 }: ImageGenerationResultPanelProps) {
   const { t } = useTranslation();
 
-  if (isSubmitting) {
+  if (isSubmitting || isPolling) {
     return (
       <div>
-        <p style={pageEmptyStateStyle}>{t("imageGeneration.submitting")}</p>
+        <p style={pageEmptyStateStyle}>
+          {isPolling ? t("imageGeneration.generatingAsync") : t("imageGeneration.submitting")}
+        </p>
       </div>
     );
   }

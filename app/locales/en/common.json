@@ -251,7 +251,9 @@
     "promptHintAfterGen": "Fine-tune the prompt if needed, then click Generate image",
     "promptPlaceholder": "Prompt appears here after generation, or type your own…",
     "submit": "Generate image",
-    "submitting": "Generating…",
+    "submitting": "Submitting…",
+    "generatingAsync": "Generating image in the background. It will appear here when ready; check Recent generations below.",
+    "pollTimeout": "Generation is taking longer than expected. Check Recent generations later or retry.",
     "submitSuccess": "Image generated",
     "submitFailed": "Generation failed, please retry",
     "validationPromptMin": "Prompt must be at least 4 characters",
@@ -261,7 +263,13 @@
     "empty": "No image yet — adjust the prompt and try again",
     "emptyBeforeSubmit": "Generate a prompt, then click Generate image",
     "retry": "Generate again",
-    "pageFootnote": "Product images use gpt-image-2 (OpenAI Images API). Images are stored in cloud storage with a preview URL only; they are not written to Shopify automatically."
+    "historyTitle": "Recent generations",
+    "historyHint": "History persists when you return to this page; click a pending item to keep waiting",
+    "historyEmpty": "No history yet",
+    "historyStatusPending": "In progress",
+    "historyStatusDone": "Done",
+    "historyStatusFailed": "Failed",
+    "pageFootnote": "Images are generated asynchronously and stored in the cloud. Return to this page to view Recent generations; they are not written to Shopify automatically."
   },
   "generate": {
     "pageTitle": "Generate product description",

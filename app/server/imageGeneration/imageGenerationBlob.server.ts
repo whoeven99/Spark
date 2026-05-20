@@ -76,16 +76,57 @@ function appendReadSasToBlobUrl(params: {
   return `${params.blobUrl}?${sas}`;
 }
 
+export function buildGeneratedImageBlobPath(params: {
+  shop: string;
+  requestId: string;
+  extension?: "png" | "jpg";
+}): string {
+  const ext = params.extension ?? "png";
+  return `generated-images/${sanitizeShopSegment(params.shop)}/${params.requestId}.${ext}`;
+}
+
+export function getGeneratedImageReadUrl(blobPath: string): string {
+  const containerName = blobContainerName();
+  const conn = blobConnectionString();
+  const { accountName } = parseAccountFromConnectionString(conn);
+  const blobUrl = `https://${accountName}.blob.core.windows.net/${containerName}/${blobPath}`;
+
+  const sasTtl =
+    resolveImageGenerationBlobSasTtlMinutes() ??
+    resolvePictureTranslateBlobSasTtlMinutes();
+  if (sasTtl == null) {
+    return blobUrl;
+  }
+
+  return appendReadSasToBlobUrl({
+    blobUrl,
+    blobPath,
+    sasTtlMinutes: sasTtl,
+  });
+}
+
+function resolveImageGenerationBlobSasTtlMinutes(): number | null {
+  const raw = process.env.IMAGE_GEN_BLOB_SAS_TTL_MINUTES?.trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.min(Math.floor(n), 60 * 24 * 30);
+}
+
 /** 上传文生图 PNG/JPEG 至 Azure，路径前缀 `generated-images/`。 */
 export async function uploadGeneratedImageAndGetUrl(params: {
   shop: string;
   imageBytes: Buffer;
   requestId: string;
   extension?: "png" | "jpg";
-}): Promise<string> {
+}): Promise<{ imageUrl: string; blobPath: string }> {
   const ext = params.extension ?? "png";
   const container = await getTranslateV3BlobContainer();
-  const blobPath = `generated-images/${sanitizeShopSegment(params.shop)}/${params.requestId}.${ext}`;
+  const blobPath = buildGeneratedImageBlobPath({
+    shop: params.shop,
+    requestId: params.requestId,
+    extension: ext,
+  });
   const client = container.getBlockBlobClient(blobPath);
   const contentType = ext === "jpg" ? "image/jpeg" : "image/png";
 
@@ -93,14 +134,6 @@ export async function uploadGeneratedImageAndGetUrl(params: {
     blobHTTPHeaders: { blobContentType: contentType },
   });
 
-  const sasTtl = resolvePictureTranslateBlobSasTtlMinutes();
-  if (sasTtl == null) {
-    return client.url;
-  }
-
-  return appendReadSasToBlobUrl({
-    blobUrl: client.url,
-    blobPath,
-    sasTtlMinutes: sasTtl,
-  });
+  const imageUrl = getGeneratedImageReadUrl(blobPath);
+  return { imageUrl, blobPath };
 }
