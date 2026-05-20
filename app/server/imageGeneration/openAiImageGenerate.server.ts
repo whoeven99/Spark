@@ -57,7 +57,20 @@ function resolveImagesPostUrl(): string {
   if (endpoint) {
     return endpoint;
   }
-  return `${resolveBaseUrl()}/images/generations`;
+
+  const base = resolveBaseUrl();
+  // 兼容把完整 Azure 地址误填在 OPENAI_IMAGE_BASE_URL 的情况
+  if (base.includes("/images/generations")) {
+    return base;
+  }
+
+  const apiVersion = process.env.OPENAI_IMAGE_API_VERSION?.trim();
+  let url = `${base}/images/generations`;
+  if (apiVersion) {
+    const sep = url.includes("?") ? "&" : "?";
+    url += `${sep}api-version=${encodeURIComponent(apiVersion)}`;
+  }
+  return url;
 }
 
 function resolveImageModel(): string {
@@ -109,7 +122,9 @@ function buildAuthHeaders(apiKey: string, postUrl: string): Record<string, strin
   const style = process.env.OPENAI_IMAGE_AUTH_STYLE?.trim().toLowerCase();
   const useApiKeyHeader =
     style === "api-key" ||
-    (style !== "bearer" && postUrl.includes(".openai.azure.com"));
+    (style !== "bearer" &&
+      (postUrl.includes(".openai.azure.com") ||
+        postUrl.includes("cognitiveservices.azure.com")));
 
   if (useApiKeyHeader) {
     return { "api-key": apiKey };
