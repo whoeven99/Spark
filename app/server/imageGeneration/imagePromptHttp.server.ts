@@ -1,4 +1,12 @@
 import { z } from "zod";
+import { getAppEntry } from "../../config/appEntry.server";
+import { billingErrorToResponse } from "../billing/index.server";
+import {
+  buildImagePromptBillingItem,
+  normalizeBillingModelKey,
+  recordVisualToolTokenUsage,
+  requireVisualToolBillingAccess,
+} from "../tokenUsage/index.server";
 import { generateImagePromptFromDescription } from "./generateImagePromptFromDescription.server";
 
 const bodySchema = z.object({
@@ -32,8 +40,28 @@ export function parseImagePromptBody(
 
 export async function executeImagePromptRequest(params: {
   requestId: string;
+  sessionShop: string;
   description: string;
 }): Promise<{ status: number; body: ImagePromptHttpResponse }> {
+  try {
+    await requireVisualToolBillingAccess(params.sessionShop);
+  } catch (error) {
+    const billingResponse = billingErrorToResponse(error);
+    if (billingResponse) {
+      const body = (await billingResponse.json()) as { errorMsg?: string };
+      return {
+        status: 402,
+        body: {
+          success: false,
+          errorCode: 40200,
+          errorMsg: body.errorMsg ?? "Token 余额不足或尚未订阅，请前往套餐页开通",
+          requestId: params.requestId,
+        },
+      };
+    }
+    throw error;
+  }
+
   const result = await generateImagePromptFromDescription({
     requestId: params.requestId,
     description: params.description,
@@ -52,6 +80,17 @@ export async function executeImagePromptRequest(params: {
       },
     };
   }
+
+  await recordVisualToolTokenUsage({
+    shop: params.sessionShop,
+    appName: getAppEntry(),
+    items: [
+      buildImagePromptBillingItem(
+        normalizeBillingModelKey(result.modelLabel),
+        result.usageMeta,
+      ),
+    ],
+  });
 
   return {
     status: 200,

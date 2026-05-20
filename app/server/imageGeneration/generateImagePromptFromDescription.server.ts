@@ -48,7 +48,7 @@ function stripPromptArtifacts(raw: string): string {
 }
 
 export type GenerateImagePromptResult =
-  | { ok: true; prompt: string }
+  | { ok: true; prompt: string; modelLabel: string; usageMeta?: unknown }
   | { ok: false; errorMsg: string };
 
 export async function generateImagePromptFromDescription(params: {
@@ -93,7 +93,7 @@ export async function generateImagePromptFromDescription(params: {
       `${IMAGE_GENERATION_LOG_PREFIX}[PromptAi] ok requestId=${params.requestId} promptLen=${prompt.length} model=${llm.modelLabel}`,
     );
 
-    return { ok: true, prompt };
+    return { ok: true, prompt, modelLabel: llm.modelLabel, usageMeta: llm.usageMeta };
   } catch (e) {
     logDetailedError(
       `${IMAGE_GENERATION_LOG_PREFIX}[PromptAi] requestId=${params.requestId}`,

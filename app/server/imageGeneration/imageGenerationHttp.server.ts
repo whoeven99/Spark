@@ -1,4 +1,17 @@
 import { z } from "zod";
+import { getAppEntry } from "../../config/appEntry.server";
+import { billingErrorToResponse } from "../billing/index.server";
+import {
+  buildImageGenerateBillingItem,
+  buildImagePromptBillingItem,
+  normalizeBillingModelKey,
+  parseUsageMetadata,
+  recordVisualToolTokenUsage,
+  requireVisualToolBillingAccess,
+  resolveImageGenerationProvider,
+  type BilledTokenUsageItem,
+  type ParsedTokenUsage,
+} from "../tokenUsage/index.server";
 import {
   isImageGenerationAsyncEnabled,
   startImageGenerationJob,
@@ -47,7 +60,16 @@ async function resolveImageGenerationPrompt(params: {
   requestId: string;
   prompt?: string;
   description?: string;
-}): Promise<{ ok: true; prompt: string; description?: string } | { ok: false; errorMsg: string }> {
+}): Promise<
+  | {
+      ok: true;
+      prompt: string;
+      description?: string;
+      promptModelKey?: string;
+      promptTokenUsage?: ParsedTokenUsage;
+    }
+  | { ok: false; errorMsg: string }
+> {
   const trimmedPrompt = params.prompt?.trim() ?? "";
   if (trimmedPrompt) {
     const promptError = validateImageGenerationPrompt(trimmedPrompt);
@@ -71,10 +93,13 @@ async function resolveImageGenerationPrompt(params: {
     return { ok: false, errorMsg: promptResult.errorMsg };
   }
 
+  const promptTokenUsage = parseUsageMetadata(promptResult.usageMeta);
   return {
     ok: true,
     prompt: promptResult.prompt,
     description,
+    promptModelKey: normalizeBillingModelKey(promptResult.modelLabel),
+    ...(promptTokenUsage.totalTokens > 0 ? { promptTokenUsage } : {}),
   };
 }
 
@@ -119,12 +144,62 @@ function precheckImageGenerationRequest(params: {
   return { ok: true };
 }
 
+async function recordImageGenerationSuccessUsage(params: {
+  shop: string;
+  promptModelKey?: string;
+  promptTokenUsage?: ParsedTokenUsage;
+  imageProvider: "openai" | "volc";
+}): Promise<void> {
+  const items: BilledTokenUsageItem[] = [
+    buildImageGenerateBillingItem(params.imageProvider),
+  ];
+  if (
+    params.promptTokenUsage &&
+    params.promptTokenUsage.totalTokens > 0 &&
+    params.promptModelKey
+  ) {
+    items.unshift(
+      buildImagePromptBillingItem(
+        params.promptModelKey,
+        params.promptTokenUsage,
+      ),
+    );
+  }
+  await recordVisualToolTokenUsage({
+    shop: params.shop,
+    appName: getAppEntry(),
+    items,
+  });
+}
+
 export async function executeImageGenerationRequest(params: {
   requestId: string;
   sessionShop: string;
   prompt?: string;
   description?: string;
 }): Promise<{ status: number; body: ImageGenerationHttpResponse }> {
+  try {
+    await requireVisualToolBillingAccess(params.sessionShop);
+  } catch (error) {
+    const billingResponse = billingErrorToResponse(error);
+    if (billingResponse) {
+      const body = (await billingResponse.json()) as {
+        errorMsg?: string;
+      };
+      return {
+        status: 402,
+        body: {
+          success: false,
+          errorCode: 40200,
+          errorMsg: body.errorMsg ?? "Token 余额不足或尚未订阅，请前往套餐页开通",
+          requestId: params.requestId,
+          status: "failed",
+        },
+      };
+    }
+    throw error;
+  }
+
   const resolved = await resolveImageGenerationPrompt({
     requestId: params.requestId,
     prompt: params.prompt,
@@ -145,7 +220,8 @@ export async function executeImageGenerationRequest(params: {
     };
   }
 
-  const { prompt, description } = resolved;
+  const { prompt, description, promptModelKey, promptTokenUsage } = resolved;
+  const imageProvider = resolveImageGenerationProvider() ?? "openai";
 
   const precheck = precheckImageGenerationRequest({
     requestId: params.requestId,
@@ -170,6 +246,9 @@ export async function executeImageGenerationRequest(params: {
       shop: params.sessionShop,
       prompt,
       description,
+      promptModelKey,
+      promptTokenUsage,
+      imageProvider,
     });
 
     return {
@@ -221,6 +300,13 @@ export async function executeImageGenerationRequest(params: {
       },
     };
   }
+
+  await recordImageGenerationSuccessUsage({
+    shop: params.sessionShop,
+    promptModelKey,
+    promptTokenUsage,
+    imageProvider: result.provider,
+  });
 
   return {
     status: 200,

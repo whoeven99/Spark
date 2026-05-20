@@ -1,5 +1,11 @@
 import { z } from "zod";
 import { getAppEntry } from "../../config/appEntry.server";
+import { billingErrorToResponse } from "../billing/index.server";
+import {
+  buildPictureTranslateBillingItem,
+  recordVisualToolTokenUsage,
+  requireVisualToolBillingAccess,
+} from "../tokenUsage/index.server";
 import {
   imageUrlToHost,
   isAgentRunLogEnabled,
@@ -190,28 +196,19 @@ export async function executePictureTranslateRequest(params: {
     return err(40301, "shop 与当前会话店铺不一致", 403);
   }
 
-  const billingStrict =
-    process.env.PICTURE_TRANSLATE_BILLING_STRICT?.trim() === "true";
-  if (billingStrict) {
-    console.info(
-      `${LOG_PREFIX} billing strict — blocked clientRequestId=${clientRequestId} shop=${sessionShop}`,
-    );
-    persistRun({
-      status: "error",
-      errorCode: 50102,
-      errorMsg:
-        "计费未接入：已设置 PICTURE_TRANSLATE_BILLING_STRICT=true，整图翻译在扣费对齐前被硬阻断",
-    });
-    return err(
-      50102,
-      "计费未接入：已设置 PICTURE_TRANSLATE_BILLING_STRICT=true，整图翻译在扣费对齐前被硬阻断",
-      501,
-    );
+  try {
+    await requireVisualToolBillingAccess(sessionShop, appName);
+  } catch (error) {
+    const billingResponse = billingErrorToResponse(error);
+    if (billingResponse) {
+      const body = (await billingResponse.json()) as { errorMsg?: string };
+      const errorMsg =
+        body.errorMsg ?? "Token 余额不足或尚未订阅，请前往套餐页开通";
+      persistRun({ status: "error", errorCode: 40201, errorMsg });
+      return err(40201, errorMsg, 402);
+    }
+    throw error;
   }
-
-  console.info(
-    `${LOG_PREFIX} Billing noop — clientRequestId=${clientRequestId} shop=${sessionShop} modelType=${parsed.modelType}`,
-  );
 
   const extensionRaw = getExtensionFromUrl(parsed.imageUrl);
   if (extensionRaw == null) {
@@ -273,6 +270,11 @@ export async function executePictureTranslateRequest(params: {
       modelType: parsed.modelType,
       imageUrlHost: imageUrlToHost(parsed.imageUrl),
     },
+  });
+  await recordVisualToolTokenUsage({
+    shop: sessionShop,
+    appName,
+    items: [buildPictureTranslateBillingItem(pipeline.provider)],
   });
   persistRun({ status: "success" });
   return ok(pipeline.imageUrl);

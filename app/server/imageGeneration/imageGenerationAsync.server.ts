@@ -1,3 +1,11 @@
+import { getAppEntry } from "../../config/appEntry.server";
+import {
+  buildImageGenerateBillingItem,
+  buildImagePromptBillingItem,
+  recordVisualToolTokenUsage,
+  type BilledTokenUsageItem,
+  type ParsedTokenUsage,
+} from "../tokenUsage/index.server";
 import { IMAGE_GENERATION_LOG_PREFIX } from "./constants.server";
 import { executeImageGeneration } from "./imageGenerationExecutor.server";
 import {
@@ -18,6 +26,9 @@ export function enqueueImageGenerationJob(params: {
   requestId: string;
   shop: string;
   prompt: string;
+  promptModelKey?: string;
+  promptTokenUsage?: ParsedTokenUsage;
+  imageProvider: "openai" | "volc";
 }): void {
   void runImageGenerationJob(params).catch((e) => {
     const detail = e instanceof Error ? e.message : String(e);
@@ -35,6 +46,9 @@ async function runImageGenerationJob(params: {
   requestId: string;
   shop: string;
   prompt: string;
+  promptModelKey?: string;
+  promptTokenUsage?: ParsedTokenUsage;
+  imageProvider: "openai" | "volc";
 }): Promise<void> {
   const startedAt = Date.now();
   console.info(
@@ -64,6 +78,27 @@ async function runImageGenerationJob(params: {
     provider: result.provider,
   });
 
+  const items: BilledTokenUsageItem[] = [
+    buildImageGenerateBillingItem(result.provider),
+  ];
+  if (
+    params.promptTokenUsage &&
+    params.promptTokenUsage.totalTokens > 0 &&
+    params.promptModelKey
+  ) {
+    items.unshift(
+      buildImagePromptBillingItem(
+        params.promptModelKey,
+        params.promptTokenUsage,
+      ),
+    );
+  }
+  await recordVisualToolTokenUsage({
+    shop: params.shop,
+    appName: getAppEntry(),
+    items,
+  });
+
   console.info(
     `${LOG_PREFIX} ok requestId=${params.requestId} elapsedMs=${Date.now() - startedAt}`,
   );
@@ -74,7 +109,17 @@ export async function startImageGenerationJob(params: {
   shop: string;
   prompt: string;
   description?: string;
+  promptModelKey?: string;
+  promptTokenUsage?: ParsedTokenUsage;
+  imageProvider: "openai" | "volc";
 }): Promise<void> {
   await createPendingGeneratedImageJob(params);
-  enqueueImageGenerationJob(params);
+  enqueueImageGenerationJob({
+    requestId: params.requestId,
+    shop: params.shop,
+    prompt: params.prompt,
+    promptModelKey: params.promptModelKey,
+    promptTokenUsage: params.promptTokenUsage,
+    imageProvider: params.imageProvider,
+  });
 }

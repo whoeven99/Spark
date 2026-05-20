@@ -43,9 +43,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   try {
-    await authenticate.admin(request);
+    const { session } = await authenticate.admin(request);
     const { status, body } = await executeImagePromptRequest({
       requestId,
+      sessionShop: session.shop,
       description: parsed.data.description,
     });
     console.info(`${LOG_PREFIX} requestId=${requestId} status=${status}`);

@@ -237,3 +237,25 @@ model ShopVisualJob {
 
   @@index([shop, kind, createdAt])
 }
+
+/// 业务能力 × 模型/提供商的 token 计费系数（运维在 Turso 维护，种子见 `prisma/token-billing-rule-seed.sql`）。
+model TokenBillingRule {
+  ruleKey       String   @id
+  /// 与 `AppEntry` 一致；`*` 表示所有 App 的兜底规则
+  appName       String
+  /// product_copy | image_prompt | image_generate | picture_translate
+  feature       String
+  /// 模型标识（如 deepseek-chat、volc-translate）；`_default` 为该 feature 下未匹配模型时的兜底
+  modelKey      String
+  displayName   String
+  /// 记入 Account.usedTokens 前对 token 的乘数（≥0）
+  multiplier    Float
+  /// 定额计费时的基准 token（可选；未设则用代码内环境变量默认）
+  baseTokenCost Int?
+  enabled       Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([appName, feature, modelKey])
+  @@index([appName, feature, enabled])
+}

@@ -1,3 +1,4 @@
+import { getAppEntry } from "../../../config/appEntry.server";
 import { executeImageGeneration } from "../../../imageGeneration/imageGenerationExecutor.server";
 import {
   createPendingGeneratedImageJob,
@@ -5,6 +6,10 @@ import {
   markGeneratedImageJobSucceeded,
 } from "../../../imageGeneration/imageGenerationJobStore.server";
 import { logDetailedError } from "../../../generateDescription/generateDescriptionLog.server";
+import {
+  buildImageGenerateBillingItem,
+  recordVisualToolTokenUsage,
+} from "../../../tokenUsage/index.server";
 import {
   GENERATE_PRODUCT_IMAGE_TOOL_NAME,
   IMAGE_GENERATION_TOOL_LOG_PREFIX,
@@ -62,6 +67,12 @@ export async function executeGenerateProductImageTool(
   if (!result.ok) {
     return fail(result.errorMsg, result.requestId);
   }
+
+  await recordVisualToolTokenUsage({
+    shop: params.shop,
+    appName: getAppEntry(),
+    items: [buildImageGenerateBillingItem(result.provider)],
+  });
 
   return ok(result.imageUrl, result.requestId);
 }
