@@ -3,20 +3,18 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { Outlet, useLoaderData, useRouteError } from "react-router";
+import { Outlet, useLoaderData, useLocation, useRouteError } from "react-router";
 import { useTranslation } from "react-i18next";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
-import { AppI18nProvider, useLocaleActions } from "../i18n/provider";
+import { AppI18nProvider } from "../i18n/provider";
 import {
   DEFAULT_LOCALE,
-  SUPPORTED_LOCALES,
   buildLocaleCookieHeader,
-  isSupportedLocale,
   normalizeLocale,
-  type SupportedLocale,
 } from "../i18n/config";
 import { detectRequestLocale } from "../i18n/detector.server";
+import { LanguageSelector } from "./component/common/LanguageSelector";
 
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
@@ -29,19 +27,6 @@ import {
   getAppEntryConfig,
   type NavItemKey,
 } from "../config/appEntry.server";
-
-/** 语言下拉选项展示：每种语言用自身书写形式，不随 UI 语言变化，也不走 t()。 */
-const LANGUAGE_NATIVE_LABELS: Record<SupportedLocale, string> = {
-  en: "English",
-  "zh-CN": "中文（简体）",
-  ja: "日本語",
-  ko: "한국어",
-  es: "Español",
-  fr: "Français",
-  de: "Deutsch",
-  it: "Italiano",
-  pt: "Português",
-};
 
 const NAV_ITEMS: Record<
   NavItemKey,
@@ -99,10 +84,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     console.error("[CommonEvent] recordAppInstalled failed:", error);
   }
   const locale = detectRequestLocale(request);
-  const nav = getAppEntryConfig().nav;
+  const { nav, home } = getAppEntryConfig();
 
   // eslint-disable-next-line no-undef
-  return { apiKey: process.env.SHOPIFY_API_KEY || "", locale, nav };
+  return { apiKey: process.env.SHOPIFY_API_KEY || "", locale, nav, home };
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -128,56 +113,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   );
 };
 
-function LanguageSelector({ locale }: { locale: SupportedLocale }) {
-  const { i18n, t } = useTranslation();
-  const { setLocale, isSyncingLocale } = useLocaleActions();
-
-  return (
-    <div style={{ margin: 0 }}>
-      <label
-        htmlFor="spark-language-selector"
-        style={{
-          display: "inline-block",
-          marginBottom: "0.25rem",
-          fontSize: "0.75rem",
-          color: "#6d7175",
-        }}
-      >
-        {t("common.languageSelectorLabel")}
-      </label>
-      <select
-        id="spark-language-selector"
-        value={isSupportedLocale(i18n.language) ? i18n.language : locale}
-        onChange={(event) => {
-          const next = normalizeLocale(event.target.value);
-          if (!next) return;
-          void i18n.changeLanguage(next);
-          setLocale(next);
-        }}
-        disabled={isSyncingLocale}
-        style={{
-          display: "block",
-          minWidth: "180px",
-          padding: "0.35rem 0.5rem",
-          borderRadius: "8px",
-          border: "1px solid #c9cccf",
-          background: "#fff",
-          color: "#303030",
-          fontSize: "0.8125rem",
-        }}
-      >
-        {SUPPORTED_LOCALES.map((item) => (
-          <option key={item} value={item}>
-            {LANGUAGE_NATIVE_LABELS[item] ?? item}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
 export default function App() {
-  const { apiKey, locale, nav } = useLoaderData<typeof loader>();
+  const { apiKey, locale, nav, home } = useLoaderData<typeof loader>();
+  const { pathname } = useLocation();
+  const showLanguageSelector = pathname === home;
 
   return (
     <AppI18nProvider locale={locale}>
@@ -204,7 +143,7 @@ export default function App() {
               borderTop: "1px solid #e1e3e5",
             }}
           >
-            <LanguageSelector locale={locale} />
+            {showLanguageSelector ? <LanguageSelector locale={locale} /> : null}
           </footer>
         </div>
       </AppProvider>
