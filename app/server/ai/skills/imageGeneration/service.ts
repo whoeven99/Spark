@@ -1,4 +1,4 @@
-import { getAppEntry } from "../../../config/appEntry.server";
+import { getAppEntry } from "../../../../config/appEntry.server";
 import { executeImageGeneration } from "../../../imageGeneration/imageGenerationExecutor.server";
 import {
   createPendingGeneratedImageJob,

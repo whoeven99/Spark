@@ -8,10 +8,10 @@ import {
   parseUsageMetadata,
   recordVisualToolTokenUsage,
   requireVisualToolBillingAccess,
-  resolveImageGenerationProvider,
   type BilledTokenUsageItem,
   type ParsedTokenUsage,
 } from "../tokenUsage/index.server";
+import { resolveImageGenerationProvider } from "./imageGenerationConfig.server";
 import {
   isImageGenerationAsyncEnabled,
   startImageGenerationJob,
