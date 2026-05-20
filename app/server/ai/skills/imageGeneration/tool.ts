@@ -1,6 +1,6 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import type { AgentContext, ToolDefinition } from "../../core/toolRegistry.server";
-import { isVolcengineConfigured } from "../../../volcengine/volcCredentials.server";
+import { isImageGenerationConfigured } from "../../../imageGeneration/imageGenerationConfig.server";
 import {
   GENERATE_PRODUCT_IMAGE_TOOL_NAME,
   IMAGE_GENERATION_TOOL_LOG_PREFIX,
@@ -12,7 +12,7 @@ import { extractChatImageAttachmentsFromMessages } from "../shared/imageAttachme
 function isImageGenerationToolEnabled(): boolean {
   const raw = process.env.IMAGE_GENERATION_ENABLED?.trim().toLowerCase();
   if (raw === "false" || raw === "0") return false;
-  return isVolcengineConfigured();
+  return isImageGenerationConfigured();
 }
 
 export function createGenerateProductImageTool(

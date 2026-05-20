@@ -261,7 +261,7 @@
     "empty": "No image yet — adjust the prompt and try again",
     "emptyBeforeSubmit": "Generate a prompt, then click Generate image",
     "retry": "Generate again",
-    "pageFootnote": "Uses the same Volcano Visual credentials as picture translate. Images are stored in cloud storage with a preview URL only; they are not written to Shopify automatically."
+    "pageFootnote": "Product images use gpt-image-2 (OpenAI Images API). Images are stored in cloud storage with a preview URL only; they are not written to Shopify automatically."
   },
   "generate": {
     "pageTitle": "Generate product description",

@@ -1,6 +1,10 @@
 export type ImageGenerationFailureReason =
   | "credentials_missing"
   | "prompt_invalid"
+  | "openai_request_failed"
+  | "openai_api_error"
+  | "openai_response_parse_failed"
+  | "openai_empty_image"
   | "volc_request_failed"
   | "volc_api_error"
   | "volc_response_parse_failed"
@@ -11,7 +15,7 @@ export type ImageGenerationFailureReason =
 export type ImageGenerationSuccess = {
   ok: true;
   imageUrl: string;
-  provider: "volc";
+  provider: "openai" | "volc";
   requestId: string;
 };
 

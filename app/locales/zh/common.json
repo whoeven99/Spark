@@ -261,7 +261,7 @@
     "empty": "暂无图片，请调整提示词后重试",
     "emptyBeforeSubmit": "生成提示词后点击「生成图片」",
     "retry": "重新生成",
-    "pageFootnote": "与图片翻译共用火山视觉凭证；生成结果保存在云端并返回可访问链接，仅供预览，不会自动写入 Shopify 商品。"
+    "pageFootnote": "商品图片由 gpt-image-2（OpenAI Images API）生成；结果保存在云端并返回可访问链接，仅供预览，不会自动写入 Shopify 商品。"
   },
   "generate": {
     "pageTitle": "生成商品描述",
