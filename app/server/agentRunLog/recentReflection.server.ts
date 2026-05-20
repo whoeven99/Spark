@@ -1,4 +1,8 @@
-import { getAgentRunsSparkOpsContainer } from "../cosmos/cosmosSparkOps.server";
+import {
+  getAgentRunsSparkOpsContainer,
+  isCosmosSparkOpsConfigured,
+  isCosmosThroughputLimitError,
+} from "../cosmos/cosmosSparkOps.server";
 import type { AgentRunDoc, AgentRunReflection } from "./types.server";
 
 const MAX_RECENT_REFLECTIONS = 5;
@@ -32,9 +36,9 @@ function docToReflectionSummary(doc: AgentRunDoc): string | undefined {
 export async function fetchRecentReflectionSummary(shop: string): Promise<string | undefined> {
   try {
     const shopTrim = shop.trim();
-    if (!shopTrim) return undefined;
+    if (!shopTrim || !isCosmosSparkOpsConfigured()) return undefined;
 
-    const container = await getAgentRunsSparkOpsContainer();
+    const container = getAgentRunsSparkOpsContainer();
     const query = container.items.query<AgentRunDoc>({
       query:
         "SELECT * FROM c WHERE c.shop = @shop AND IS_DEFINED(c.reflection) ORDER BY c.startedAt DESC",
@@ -51,7 +55,14 @@ export async function fetchRecentReflectionSummary(shop: string): Promise<string
     if (!summaries.length) return undefined;
     return summaries.join("\n");
   } catch (error) {
-    console.error("[AgentRunLog] fetchRecentReflectionSummary failed:", error);
+    if (isCosmosThroughputLimitError(error)) {
+      console.warn(
+        "[AgentRunLog] fetchRecentReflectionSummary skipped (Cosmos RU limit on provision). " +
+          "Unset COSMOS_SPARK_OPS_AUTO_CREATE; use existing agent_runs container only.",
+      );
+    } else {
+      console.error("[AgentRunLog] fetchRecentReflectionSummary failed:", error);
+    }
     return undefined;
   }
 }

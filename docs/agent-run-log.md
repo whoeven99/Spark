@@ -11,7 +11,11 @@ Agent 每次调用的**摘要**写入 Azure Cosmos DB（`spark_ops` / `agent_run
 | Partition key | `/shop` |
 | TTL | 容器默认 90 天（`defaultTtl: 7776000`） |
 
-容器须已在 Azure 中创建（代码默认**不**自动建容器，避免 RU 配额报错）。创建步骤见 **`docs/shop-profile.md` §「首次在 Azure 创建 agent_runs」**。
+容器须已在 Azure Portal 手动创建（与店铺画像一致）。**聊天/写入热路径绝不** `createIfNotExists`。仅本地运维脚本在设 `COSMOS_SPARK_OPS_AUTO_CREATE=true` 时可尝试自动建容器。创建步骤见 **`docs/shop-profile.md` §「首次在 Azure 创建 agent_runs」**。
+
+**勿**在 Render/生产环境设 `COSMOS_SPARK_OPS_AUTO_CREATE=true`，否则会触发账户 RU 配额错误（日志里 `total throughput limit` / `1600 RU/s`）。
+
+写入失败时服务端日志关键字：`[AgentRunLog] upsert failed`（容器不存在或 RU 超限时会附带可操作说明）。
 
 不写入 Blob；不存 accessToken、完整 messages（仅 `inputSummary` 截断摘要）。
 

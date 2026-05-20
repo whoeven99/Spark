@@ -53,15 +53,15 @@ export function isCosmosThroughputLimitError(error: unknown): boolean {
 }
 
 /**
- * 可选：自动创建容器（仅 Agent Run 等；店铺画像勿用）。
- * 设 COSMOS_SPARK_OPS_AUTO_CREATE=false 可关闭。
+ * 可选：自动创建库/容器（仅运维脚本或显式开启时使用）。
+ * 默认**不**创建；须设 `COSMOS_SPARK_OPS_AUTO_CREATE=true` 才会 createIfNotExists。
  */
 export async function ensureSparkOpsContainer(
   containerId: string,
   options?: { defaultTtl?: number },
 ): Promise<Container> {
   const autoCreate = process.env.COSMOS_SPARK_OPS_AUTO_CREATE?.trim().toLowerCase();
-  if (autoCreate === "false" || autoCreate === "0") {
+  if (autoCreate !== "true" && autoCreate !== "1") {
     return getExistingSparkOpsContainer(containerId);
   }
 
@@ -94,7 +94,16 @@ export const SPARK_OPS_AGENT_RUNS_CONTAINER =
 
 export const AGENT_RUNS_DEFAULT_TTL_SECONDS = 77_760_000;
 
-export async function getAgentRunsSparkOpsContainer(): Promise<Container> {
+/**
+ * Agent Run 读写容器：仅连接 Portal 已创建的 `agent_runs`，绝不 createIfNotExists。
+ * 自动建容器请用 `ensureAgentRunsSparkOpsContainer()`（运维脚本）。
+ */
+export function getAgentRunsSparkOpsContainer(): Container {
+  return getExistingSparkOpsContainer(SPARK_OPS_AGENT_RUNS_CONTAINER);
+}
+
+/** 运维/本地探测：显式开启 `COSMOS_SPARK_OPS_AUTO_CREATE=true` 时尝试建库建容器 */
+export async function ensureAgentRunsSparkOpsContainer(): Promise<Container> {
   return ensureSparkOpsContainer(SPARK_OPS_AGENT_RUNS_CONTAINER, {
     defaultTtl: AGENT_RUNS_DEFAULT_TTL_SECONDS,
   });

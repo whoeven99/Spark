@@ -109,7 +109,7 @@ export async function invokeChatAgent(
     const durationMs = Date.now() - wallStart;
     const langsmithRunId = getRootLangsmithRunId(runCollector);
     if (shop && isAgentRunLogEnabled()) {
-      recordAgentRun({
+      await recordAgentRun({
         runId,
         shop,
         appName,
@@ -151,8 +151,12 @@ export async function invokeChatAgent(
   const langsmithRunId = getRootLangsmithRunId(runCollector);
   const langsmithTraceUrl = langsmithRunId ? getTraceUrl(langsmithRunId) : undefined;
 
-  const writeRunLog = (status: "success" | "error") => {
-    if (!shop || !isAgentRunLogEnabled()) return;
+  const writeRunLog = async (status: "success" | "error") => {
+    if (!shop) {
+      console.warn(`[AgentRunLog] skip chat persist (no shop in context) runId=${runId}`);
+      return;
+    }
+    if (!isAgentRunLogEnabled()) return;
     const durationMs = Date.now() - wallStart;
     const agentUsage = extractTokenUsageFromMessages(messages);
     const tools = extractToolSummariesFromMessages(messages);
@@ -160,7 +164,7 @@ export async function invokeChatAgent(
       .map((message) => extractMessageText(message))
       .filter(Boolean)
       .join("\n");
-    recordAgentRun({
+    await recordAgentRun({
       runId,
       shop,
       appName,
@@ -209,7 +213,7 @@ export async function invokeChatAgent(
           }
         }
 
-        writeRunLog("success");
+        await writeRunLog("success");
         return {
           reply: polishFinalReply(text),
           uiPayloads,
@@ -234,7 +238,7 @@ export async function invokeChatAgent(
         }
       }
 
-      writeRunLog("success");
+      await writeRunLog("success");
       return {
         reply: polishFinalReply(fallbackText),
         uiPayloads,
@@ -257,7 +261,7 @@ export async function invokeChatAgent(
     }
   }
 
-  writeRunLog("success");
+  await writeRunLog("success");
   return {
     reply: defaultReply,
     uiPayloads,
