@@ -4,7 +4,7 @@ import {
   MIN_PROMPT_CHARS,
 } from "./constants.server";
 import { uploadGeneratedImageAndGetUrl } from "./imageGenerationBlob.server";
-import type { ImageGenerationResult } from "./types";
+import type { ImageGenerationFailureReason, ImageGenerationResult } from "./types";
 import { volcengineGenerateImageToBytes } from "./volcengineImageGenerate.server";
 import { isVolcengineConfigured } from "../volcengine/volcCredentials.server";
 
@@ -54,11 +54,21 @@ function mapVolcFailure(
       requestId,
     };
   }
-  const base =
-    REASON_MESSAGES[reasonCode] ?? REASON_MESSAGES.volc_api_error;
+
+  const reasonMap: Partial<Record<string, ImageGenerationFailureReason>> = {
+    volc_request_failed: "volc_api_error",
+    volc_api_error: "volc_api_error",
+    volc_response_parse_failed: "volc_response_parse_failed",
+    volc_empty_image: "volc_empty_image",
+    volc_image_fetch_failed: "volc_api_error",
+    volc_image_base64_decode_failed: "volc_api_error",
+  };
+
+  const reason = reasonMap[reasonCode] ?? "volc_api_error";
+  const base = REASON_MESSAGES[reason] ?? REASON_MESSAGES.volc_api_error;
   return {
     ok: false,
-    reason: "volc_api_error",
+    reason,
     errorMsg: detail ? `${base}（${detail}）` : base,
     requestId,
   };

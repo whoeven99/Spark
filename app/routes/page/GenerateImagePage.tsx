@@ -21,13 +21,20 @@ export function GenerateImagePage() {
     typeof window !== "undefined" ? window.location.search : "";
 
   const {
+    description,
+    setDescription,
     prompt,
     setPrompt,
-    formErrorText,
+    descriptionErrorText,
+    promptErrorText,
     resultErrorText,
+    isGeneratingPrompt,
     isSubmitting,
+    busy,
     generatedImageUrl,
     hasSubmittedOnce,
+    hasGeneratedPromptOnce,
+    submitGeneratePrompt,
     submitGenerate,
     resetResult,
   } = useImageGeneration({
@@ -53,11 +60,18 @@ export function GenerateImagePage() {
           <div style={twoColumnMainStyle}>
             <PageSurface>
               <ImageGenerationForm
+                description={description}
+                onDescriptionChange={setDescription}
+                descriptionErrorText={descriptionErrorText}
                 prompt={prompt}
                 onPromptChange={setPrompt}
-                formErrorText={formErrorText}
+                promptErrorText={promptErrorText}
+                busy={busy}
+                isGeneratingPrompt={isGeneratingPrompt}
                 isSubmitting={isSubmitting}
-                onSubmit={() => void submitGenerate()}
+                hasGeneratedPromptOnce={hasGeneratedPromptOnce}
+                onGeneratePrompt={() => void submitGeneratePrompt()}
+                onGenerateImage={() => void submitGenerate()}
               />
             </PageSurface>
           </div>
