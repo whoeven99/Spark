@@ -2,16 +2,13 @@ import type { Prisma } from "../../generated/prisma";
 
 export type ImageGenerationJobMetadata = {
   description: string;
-  prompt: string;
 };
 
 export function buildImageGenerationJobMetadata(params: {
   description: string;
-  prompt: string;
 }): Prisma.InputJsonValue {
   return {
     description: params.description.trim(),
-    prompt: params.prompt.trim(),
   };
 }
 
@@ -24,9 +21,8 @@ export function parseImageGenerationJobMetadata(
   const obj = raw as Record<string, unknown>;
   const description =
     typeof obj.description === "string" ? obj.description.trim() : "";
-  const prompt = typeof obj.prompt === "string" ? obj.prompt.trim() : "";
-  if (!description && !prompt) {
+  if (!description) {
     return null;
   }
-  return { description, prompt };
+  return { description };
 }

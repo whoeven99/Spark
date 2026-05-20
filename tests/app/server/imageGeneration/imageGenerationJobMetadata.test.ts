@@ -5,16 +5,18 @@ import {
 } from "../../../../app/server/imageGeneration/imageGenerationJobMetadata.server";
 
 describe("imageGenerationJobMetadata", () => {
-  it("round-trips description and prompt", () => {
+  it("round-trips description", () => {
     const raw = buildImageGenerationJobMetadata({
       description: "  夏季跑步鞋  ",
-      prompt: "  hero shot  ",
     });
     const parsed = parseImageGenerationJobMetadata(raw);
     expect(parsed).toEqual({
       description: "夏季跑步鞋",
-      prompt: "hero shot",
     });
+  });
+
+  it("ignores legacy prompt-only metadata", () => {
+    expect(parseImageGenerationJobMetadata({ prompt: "hero shot" })).toBeNull();
   });
 
   it("returns null for invalid metadata", () => {

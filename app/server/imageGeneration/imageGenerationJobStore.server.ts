@@ -23,10 +23,7 @@ export async function createPendingGeneratedImageJob(params: {
 }): Promise<void> {
   const metadata =
     params.description?.trim() ?
-      buildImageGenerationJobMetadata({
-        description: params.description,
-        prompt: params.prompt,
-      })
+      buildImageGenerationJobMetadata({ description: params.description })
     : undefined;
 
   await createPendingShopVisualJob({
@@ -109,10 +106,7 @@ export async function persistSyncImageGenerationJob(params: {
 }): Promise<void> {
   const metadata =
     params.description?.trim() ?
-      buildImageGenerationJobMetadata({
-        description: params.description,
-        prompt: params.prompt,
-      })
+      buildImageGenerationJobMetadata({ description: params.description })
     : undefined;
 
   await createPendingShopVisualJob({

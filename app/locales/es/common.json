@@ -74,12 +74,13 @@
     "aiAssistant": "AI Assistant",
     "diagnosis": "Diagnóstico",
     "translation": "Tareas de traducción",
-    "generateDescription": "Generar descripción",
+    "generateDescription": "Texto de producto",
+    "imageStudio": "Herramientas de imagen",
     "pictureTranslate": "Traducción de imágenes",
-    "billing": "Facturación y suscripción"
+    "billing": "Planes y saldo"
   },
   "billing": {
-    "pageTitle": "Facturación y suscripción",
+    "pageTitle": "Planes y saldo de tokens",
     "sectionUsage": "Uso de tokens",
     "sectionSubscription": "Suscripción actual",
     "sectionPlans": "Planes de suscripción",
@@ -93,7 +94,7 @@
     "subscribe": "Suscribirse",
     "buyPack": "Comprar",
     "lowBalanceWarning": "Tokens insuficientes. Suscríbete o compra un paquete en la página de facturación.",
-    "openBillingPage": "Ir a facturación",
+    "openBillingPage": "Ir a planes",
     "periodEnd": "Fin del período actual",
     "trialEnds": "Fin de prueba",
     "intervalMonthly": "Mensual",
@@ -184,14 +185,14 @@
     "imageSourceSummary": "Fuente de imagen"
   },
   "generate": {
-    "pageTitle": "Generar descripción de producto",
-    "sectionTitle": "Generación de descripciones de producto",
+    "pageTitle": "Texto de producto con IA",
+    "sectionTitle": "Texto de producto",
     "intro": "Genera textos de marketing a partir de los datos de producto de Shopify de tu tienda actual. Primero selecciona un producto; el idioma de destino usa por defecto el idioma principal de la tienda y puedes cambiarlo en el desplegable.",
     "advancedManualProductId": "Avanzado: introducir ID de producto manualmente",
     "productIdLabel": "ID de producto (número o gid://shopify/Product/...)",
     "targetLanguage": "Idioma de destino",
     "fallbackLocalesHint": "Usando lista de configuraciones regional integrada. Concede el permiso read_locales y reinstala la app para sincronizar las configuraciones regional habilitadas en Shopify.",
-    "generateAction": "Generar descripción",
+    "generateAction": "Generar texto",
     "generating": "Generando...",
     "resultTitle": "Resultado generado",
     "productTitleLabel": "Título del producto",

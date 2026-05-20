@@ -74,12 +74,13 @@
     "aiAssistant": "AI Assistant",
     "diagnosis": "診断レポート",
     "translation": "翻訳タスク",
-    "generateDescription": "説明文生成",
+    "generateDescription": "商品コピー",
+    "imageStudio": "画像ツール",
     "pictureTranslate": "画像翻訳",
-    "billing": "課金・サブスク"
+    "billing": "プランと残高"
   },
   "billing": {
-    "pageTitle": "課金・サブスクリプション",
+    "pageTitle": "プランとトークン残高",
     "sectionUsage": "Token 利用状況",
     "sectionSubscription": "現在のサブスク",
     "sectionPlans": "サブスクプラン",
@@ -93,7 +94,7 @@
     "subscribe": "契約する",
     "buyPack": "購入",
     "lowBalanceWarning": "Token が不足しています。課金ページで契約または購入してください。",
-    "openBillingPage": "課金ページへ",
+    "openBillingPage": "プランへ",
     "periodEnd": "現在の期間終了",
     "trialEnds": "トライアル終了",
     "intervalMonthly": "月額",
@@ -184,14 +185,14 @@
     "imageSourceSummary": "画像ソース"
   },
   "generate": {
-    "pageTitle": "商品説明を生成",
-    "sectionTitle": "商品説明生成",
+    "pageTitle": "AI 商品コピー",
+    "sectionTitle": "商品コピー",
     "intro": "現在のストアの Shopify 商品データからマーケティング説明を生成します。まず商品を選択してください。対象言語はストアの主言語が既定で、ドロップダウンで変更できます。",
     "advancedManualProductId": "詳細：商品 ID を手動入力",
     "productIdLabel": "商品 ID（数字 または gid://shopify/Product/...）",
     "targetLanguage": "対象言語",
     "fallbackLocalesHint": "内蔵言語リストを使用中です。read_locales 権限を付与して再インストールすると Shopify 有効言語を同期できます。",
-    "generateAction": "説明を生成",
+    "generateAction": "コピーを生成",
     "generating": "生成中...",
     "resultTitle": "生成結果",
     "productTitleLabel": "商品タイトル",

@@ -74,12 +74,13 @@
     "aiAssistant": "AI Assistant",
     "diagnosis": "Diagnostica",
     "translation": "Attività di traduzione",
-    "generateDescription": "Genera descrizione",
+    "generateDescription": "Testi prodotto",
+    "imageStudio": "Strumenti immagine",
     "pictureTranslate": "Traduzione immagini",
-    "billing": "Fatturazione e abbonamento"
+    "billing": "Piani e crediti"
   },
   "billing": {
-    "pageTitle": "Fatturazione e abbonamento",
+    "pageTitle": "Piani e saldo token",
     "sectionUsage": "Utilizzo token",
     "sectionSubscription": "Abbonamento attuale",
     "sectionPlans": "Piani di abbonamento",
@@ -93,7 +94,7 @@
     "subscribe": "Abbonati",
     "buyPack": "Acquista",
     "lowBalanceWarning": "Token insufficienti. Abbonati o acquista un pacchetto nella pagina di fatturazione.",
-    "openBillingPage": "Vai alla fatturazione",
+    "openBillingPage": "Vai ai piani",
     "periodEnd": "Fine periodo corrente",
     "trialEnds": "Fine prova",
     "intervalMonthly": "Mensile",
@@ -184,14 +185,14 @@
     "imageSourceSummary": "Sorgente immagine"
   },
   "generate": {
-    "pageTitle": "Genera descrizione prodotto",
-    "sectionTitle": "Generazione descrizioni prodotto",
+    "pageTitle": "Testi prodotto IA",
+    "sectionTitle": "Testi prodotto",
     "intro": "Genera testi marketing dai dati prodotto Shopify del negozio corrente. Seleziona prima un prodotto; la lingua di destinazione segue la lingua principale del negozio e può essere modificata dal menu.",
     "advancedManualProductId": "Avanzate: inserisci manualmente l’ID prodotto",
     "productIdLabel": "ID prodotto (numero o gid://shopify/Product/...)",
     "targetLanguage": "Lingua di destinazione",
     "fallbackLocalesHint": "In uso elenco locale integrato. Concedi lo scope read_locales e reinstalla l’app per sincronizzare le lingue Shopify abilitate.",
-    "generateAction": "Genera descrizione",
+    "generateAction": "Genera testo",
     "generating": "Generazione...",
     "resultTitle": "Risultato generato",
     "productTitleLabel": "Titolo prodotto",
