@@ -3,6 +3,7 @@ export type AppEntry =
   | "diagnosis"
   | "translation"
   | "generate-description"
+  | "image-studio"
   | "picture-translate"
   | "generate-image";
 
@@ -23,8 +24,7 @@ const APP_ENTRY_CONFIGS = {
       "diagnosis",
       "translation",
       "generate-description",
-      "picture-translate",
-      "generate-image",
+      "image-studio",
     ],
     sessionPrismaTable: "session",
   },
@@ -40,17 +40,22 @@ const APP_ENTRY_CONFIGS = {
   },
   "generate-description": {
     home: "/app/generate-description",
-    nav: ["generate-description", "picture-translate", "billing"],
+    nav: ["generate-description", "image-studio", "billing"],
     sessionPrismaTable: "generateDescriptionSession",
   },
+  "image-studio": {
+    home: "/app/image-studio",
+    nav: ["image-studio"],
+    sessionPrismaTable: "session",
+  },
   "picture-translate": {
-    home: "/app/picture-translate",
-    nav: ["picture-translate"],
+    home: "/app/image-studio?tab=translate",
+    nav: ["image-studio"],
     sessionPrismaTable: "session",
   },
   "generate-image": {
-    home: "/app/generate-image",
-    nav: ["generate-image"],
+    home: "/app/image-studio?tab=generate",
+    nav: ["image-studio"],
     sessionPrismaTable: "session",
   },
 } as const satisfies Record<AppEntry, AppEntryConfig>;

@@ -8,11 +8,7 @@ import {
   validateImageGenerationPrompt,
 } from "./imageGenerationExecutor.server";
 import { isImageGenerationConfigured } from "./imageGenerationConfig.server";
-import {
-  createPendingGeneratedImageJob,
-  markGeneratedImageJobFailed,
-  markGeneratedImageJobSucceeded,
-} from "./imageGenerationJobStore.server";
+import { persistSyncImageGenerationJob } from "./imageGenerationJobStore.server";
 import type { ImageGenerationHttpResponse } from "./types";
 
 const bodySchema = z.object({
@@ -29,33 +25,6 @@ export function parseImageGenerationBody(
     return { ok: false, errorMsg: "请求体缺少 prompt 字段" };
   }
   return { ok: true, data: parsed.data };
-}
-
-async function persistSyncJobResult(params: {
-  requestId: string;
-  shop: string;
-  prompt: string;
-  result: Awaited<ReturnType<typeof executeImageGeneration>>;
-}): Promise<void> {
-  await createPendingGeneratedImageJob({
-    requestId: params.requestId,
-    shop: params.shop,
-    prompt: params.prompt,
-  });
-
-  if (!params.result.ok) {
-    await markGeneratedImageJobFailed({
-      requestId: params.requestId,
-      errorMsg: params.result.errorMsg,
-    });
-    return;
-  }
-
-  await markGeneratedImageJobSucceeded({
-    requestId: params.requestId,
-    blobPath: params.result.blobPath,
-    provider: params.result.provider,
-  });
 }
 
 function isImageGenerationEnabled(): boolean {
@@ -145,7 +114,7 @@ export async function executeImageGenerationRequest(params: {
   });
 
   try {
-    await persistSyncJobResult({
+    await persistSyncImageGenerationJob({
       requestId: params.requestId,
       shop: params.sessionShop,
       prompt: params.prompt,

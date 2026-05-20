@@ -217,19 +217,23 @@ model BillingLog {
   @@index([referenceId])
 }
 
-/// 商品文生图任务（异步生成 + 历史回看）。
-model GeneratedImageJob {
+/// 店铺视觉任务：商品文生图、整图翻译等（历史回看 + Blob 路径）。
+model ShopVisualJob {
   id        String   @id @default(cuid())
   requestId String   @unique
   shop      String
-  prompt    String
+  /// image_generation | picture_translate
+  kind      String
   /// pending | succeeded | failed
   status    String
+  /// 文生图提示词，或翻译语言对等摘要
+  summary   String
   blobPath  String?
   errorMsg  String?
   provider  String?
+  metadata  Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([shop, createdAt])
+  @@index([shop, kind, createdAt])
 }

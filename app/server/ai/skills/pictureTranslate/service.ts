@@ -1,5 +1,6 @@
 import { logDetailedError } from "../../../generateDescription/generateDescriptionLog.server";
 import { executePictureTranslatePipeline } from "../../../pictureTranslate/pictureTranslateExecutor.server";
+import { persistPictureTranslateSuccess } from "../../../pictureTranslate/pictureTranslatePersist.server";
 import { fetchSourceImageBytes } from "../../../pictureTranslate/volcenginePictureTranslate.server";
 import {
   ERROR_MESSAGES,
@@ -281,6 +282,17 @@ export async function executePictureTranslateTool(
   console.info(
     `${PICTURE_TRANSLATE_TOOL_LOG_PREFIX} response success requestId=${requestId} provider=${pipeline.provider}`,
   );
+  await persistPictureTranslateSuccess({
+    requestId,
+    shop,
+    sourceLanguage: input.sourceLanguage,
+    targetLanguage: input.targetLanguage,
+    pipeline,
+    extraMetadata: {
+      channel: "ai_tool",
+      imageUrlHost: inputSummary.imageUrlHost,
+    },
+  });
   return ok(pipeline.imageUrl);
 }
 

@@ -1,36 +1,39 @@
 import { useTranslation } from "react-i18next";
-import type { ImageGenerationHistoryItem } from "../../../lib/imageGenerationTypes";
+import type { ShopVisualJobHistoryItem } from "../../../lib/shopVisualJobTypes";
 import { pageEmptyStateStyle, pageHintTextStyle } from "../../page/pageUiStyles";
 
 type Props = {
-  items: ImageGenerationHistoryItem[];
+  items: ShopVisualJobHistoryItem[];
   activeRequestId: string | null;
-  onSelect: (item: ImageGenerationHistoryItem) => void;
+  onSelect: (item: ShopVisualJobHistoryItem) => void;
+  i18nPrefix: "imageGeneration" | "pictureTranslate";
 };
 
 function statusLabel(
   t: (key: string) => string,
-  status: ImageGenerationHistoryItem["status"],
+  prefix: Props["i18nPrefix"],
+  status: ShopVisualJobHistoryItem["status"],
 ): string {
-  if (status === "pending") return t("imageGeneration.historyStatusPending");
-  if (status === "failed") return t("imageGeneration.historyStatusFailed");
-  return t("imageGeneration.historyStatusDone");
+  if (status === "pending") return t(`${prefix}.historyStatusPending`);
+  if (status === "failed") return t(`${prefix}.historyStatusFailed`);
+  return t(`${prefix}.historyStatusDone`);
 }
 
-export function ImageGenerationHistoryPanel({
+export function ShopVisualJobHistoryPanel({
   items,
   activeRequestId,
   onSelect,
+  i18nPrefix,
 }: Props) {
   const { t } = useTranslation();
 
   if (items.length === 0) {
-    return <p style={pageEmptyStateStyle}>{t("imageGeneration.historyEmpty")}</p>;
+    return <p style={pageEmptyStateStyle}>{t(`${i18nPrefix}.historyEmpty`)}</p>;
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-      <p style={pageHintTextStyle}>{t("imageGeneration.historyHint")}</p>
+      <p style={pageHintTextStyle}>{t(`${i18nPrefix}.historyHint`)}</p>
       <ul
         style={{
           listStyle: "none",
@@ -97,7 +100,7 @@ export function ImageGenerationHistoryPanel({
                       color: "var(--p-color-text-secondary, #616161)",
                     }}
                   >
-                    {statusLabel(t, item.status)}
+                    {statusLabel(t, i18nPrefix, item.status)}
                   </span>
                   <span
                     style={{
@@ -108,7 +111,7 @@ export function ImageGenerationHistoryPanel({
                       fontSize: 13,
                     }}
                   >
-                    {item.prompt}
+                    {item.summary}
                   </span>
                 </span>
               </button>

@@ -24,10 +24,14 @@ export type ImageGenerationJobStatus = "pending" | "succeeded" | "failed";
 
 export type ImageGenerationHistoryItem = {
   requestId: string;
+  /** @deprecated 使用 summary；保留 prompt 便于旧代码兼容 */
   prompt: string;
+  summary: string;
+  kind: "image_generation";
   status: ImageGenerationJobStatus;
   imageUrl: string | null;
   errorMsg: string | null;
+  provider: string | null;
   createdAt: string;
 };
 

@@ -143,13 +143,24 @@ export async function uploadPictureTranslateSourceImageAndGetUrl(params: {
   });
 }
 
+export function buildPictureTranslateResultBlobPath(params: {
+  shop: string;
+  requestId: string;
+}): string {
+  return `picture-translate/${sanitizeShopSegment(params.shop)}/${params.requestId}.jpg`;
+}
+
 export async function uploadPictureTranslateJpegAndGetUrl(params: {
   shop: string;
   jpegBytes: Buffer;
-}): Promise<string> {
+  requestId?: string;
+}): Promise<{ imageUrl: string; blobPath: string }> {
   const container = await getTranslateV3BlobContainer();
-  const id = crypto.randomUUID();
-  const blobPath = `picture-translate/${sanitizeShopSegment(params.shop)}/${id}.jpg`;
+  const requestId = params.requestId?.trim() || crypto.randomUUID();
+  const blobPath = buildPictureTranslateResultBlobPath({
+    shop: params.shop,
+    requestId,
+  });
   const client = container.getBlockBlobClient(blobPath);
 
   await client.uploadData(params.jpegBytes, {
@@ -157,13 +168,13 @@ export async function uploadPictureTranslateJpegAndGetUrl(params: {
   });
 
   const sasTtl = resolvePictureTranslateBlobSasTtlMinutes();
-  if (sasTtl == null) {
-    return client.url;
-  }
-
-  return appendReadSasToBlobUrl({
-    blobUrl: client.url,
-    blobPath,
-    sasTtlMinutes: sasTtl,
-  });
+  const imageUrl =
+    sasTtl == null
+      ? client.url
+      : appendReadSasToBlobUrl({
+          blobUrl: client.url,
+          blobPath,
+          sasTtlMinutes: sasTtl,
+        });
+  return { imageUrl, blobPath };
 }

@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useImageGeneration } from "../../hooks/useImageGeneration";
 import type { GenerateImagePageLoaderData } from "../../server/imageGeneration/imageGenerationPageLoader.server";
 import { ImageGenerationForm } from "../component/imageGeneration/ImageGenerationForm";
-import { ImageGenerationHistoryPanel } from "../component/imageGeneration/ImageGenerationHistoryPanel";
+import { ShopVisualJobHistoryPanel } from "../component/shopVisualJob/ShopVisualJobHistoryPanel";
 import { ImageGenerationResultPanel } from "../component/imageGeneration/ImageGenerationResultPanel";
 import {
   PageSectionHeader,
@@ -85,7 +85,8 @@ export function GenerateImagePage() {
             </PageSurface>
 
             <PageSurface title={t("imageGeneration.historyTitle")}>
-              <ImageGenerationHistoryPanel
+              <ShopVisualJobHistoryPanel
+                i18nPrefix="imageGeneration"
                 items={history}
                 activeRequestId={requestId}
                 onSelect={selectHistoryItem}

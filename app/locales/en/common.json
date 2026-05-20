@@ -75,8 +75,7 @@
     "diagnosis": "Diagnostics",
     "translation": "Translation tasks",
     "generateDescription": "Generate Description",
-    "pictureTranslate": "Picture Translate",
-    "generateImage": "Product image",
+    "imageStudio": "Image studio",
     "billing": "Billing & Subscription"
   },
   "billing": {
@@ -193,6 +192,19 @@
     "translationSubmitted": "Translation task submitted. Please go to Translation tasks page to check progress.",
     "pictureTranslateCompleted": "Picture translation completed.\n\nTranslated image below 👇"
   },
+  "imageStudio": {
+    "pageTitle": "Image studio",
+    "sectionTitle": "Image tools",
+    "pageSubtitle": "Generate product images or translate picture text on one page; history is saved together",
+    "tabListLabel": "Feature tabs",
+    "tabGenerate": "Generate image",
+    "tabTranslate": "Translate image",
+    "historyTitle": "Recent activity",
+    "historyHint": "Generation and translation history merged by time; click to switch tab and preview",
+    "historyEmpty": "No activity yet — generate or translate to see items here",
+    "historyKindGenerate": "Generate",
+    "historyKindTranslate": "Translate"
+  },
   "pictureTranslate": {
     "title": "Picture translation",
     "subtitle": "Upload an image and choose translation languages",
@@ -232,7 +244,13 @@
     "copyLink": "Copy image link",
     "copyLinkDone": "Image link copied",
     "copying": "Copying...",
-    "imageSourceSummary": "Image source"
+    "imageSourceSummary": "Image source",
+    "historyTitle": "Recent translations",
+    "historyHint": "History persists when you return; click an entry to preview on the right",
+    "historyEmpty": "No translation history yet",
+    "historyStatusPending": "In progress",
+    "historyStatusDone": "Done",
+    "historyStatusFailed": "Failed"
   },
   "imageGeneration": {
     "pageTitle": "Product image generation",

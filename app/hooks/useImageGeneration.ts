@@ -2,10 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   ImageGenerationApiResponse,
-  ImageGenerationHistoryItem,
   ImageGenerationStatusApiResponse,
   ImagePromptApiResponse,
 } from "../lib/imageGenerationTypes";
+import type { ShopVisualJobHistoryItem } from "../lib/shopVisualJobTypes";
 
 const LOG_PREFIX = "[useImageGeneration]";
 const POLL_INTERVAL_MS = 3000;
@@ -14,7 +14,7 @@ const POLL_MAX_MS = 300_000;
 export type UseImageGenerationParams = {
   locationSearch: string;
   toastShow: (message: string) => void;
-  initialHistory?: ImageGenerationHistoryItem[];
+  initialHistory?: ShopVisualJobHistoryItem[];
 };
 
 export function useImageGeneration(params: UseImageGenerationParams) {
@@ -33,7 +33,7 @@ export function useImageGeneration(params: UseImageGenerationParams) {
   const [requestId, setRequestId] = useState<string | null>(null);
   const [hasSubmittedOnce, setHasSubmittedOnce] = useState(false);
   const [hasGeneratedPromptOnce, setHasGeneratedPromptOnce] = useState(false);
-  const [history, setHistory] = useState<ImageGenerationHistoryItem[]>(initialHistory);
+  const [history, setHistory] = useState<ShopVisualJobHistoryItem[]>(initialHistory);
 
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartedRef = useRef<number | null>(null);
@@ -55,7 +55,7 @@ export function useImageGeneration(params: UseImageGenerationParams) {
     setHistory(initialHistory);
   }, [initialHistory]);
 
-  const upsertHistoryItem = useCallback((item: ImageGenerationHistoryItem) => {
+  const upsertHistoryItem = useCallback((item: ShopVisualJobHistoryItem) => {
     setHistory((prev) => {
       const rest = prev.filter((h) => h.requestId !== item.requestId);
       return [item, ...rest].slice(0, 12);
@@ -90,10 +90,12 @@ export function useImageGeneration(params: UseImageGenerationParams) {
           setResultErrorText(t("imageGeneration.pollTimeout"));
           upsertHistoryItem({
             requestId: jobRequestId,
-            prompt: jobPrompt,
+            kind: "image_generation",
+            summary: jobPrompt,
             status: "pending",
             imageUrl: null,
             errorMsg: null,
+            provider: null,
             createdAt: new Date().toISOString(),
           });
           return;
@@ -115,10 +117,12 @@ export function useImageGeneration(params: UseImageGenerationParams) {
             toastShow(t("imageGeneration.submitSuccess"));
             upsertHistoryItem({
               requestId: body.requestId,
-              prompt: jobPrompt,
+              kind: "image_generation",
+              summary: jobPrompt,
               status: "succeeded",
               imageUrl: body.imageUrl,
               errorMsg: null,
+              provider: null,
               createdAt: new Date().toISOString(),
             });
             return;
@@ -128,10 +132,12 @@ export function useImageGeneration(params: UseImageGenerationParams) {
           setResultErrorText(msg);
           upsertHistoryItem({
             requestId: body.requestId,
-            prompt: jobPrompt,
+            kind: "image_generation",
+            summary: jobPrompt,
             status: "failed",
             imageUrl: null,
             errorMsg: msg,
+            provider: null,
             createdAt: new Date().toISOString(),
           });
         } catch (e) {
@@ -230,10 +236,12 @@ export function useImageGeneration(params: UseImageGenerationParams) {
         setResultErrorText("");
         upsertHistoryItem({
           requestId: body.requestId,
-          prompt: trimmed,
+          kind: "image_generation",
+          summary: trimmed,
           status: "pending",
           imageUrl: null,
           errorMsg: null,
+          provider: null,
           createdAt: new Date().toISOString(),
         });
         startPolling(body.requestId, trimmed);
@@ -246,10 +254,12 @@ export function useImageGeneration(params: UseImageGenerationParams) {
       toastShow(t("imageGeneration.submitSuccess"));
       upsertHistoryItem({
         requestId: body.requestId,
-        prompt: trimmed,
+        kind: "image_generation",
+        summary: trimmed,
         status: "succeeded",
         imageUrl: body.imageUrl,
         errorMsg: null,
+        provider: null,
         createdAt: new Date().toISOString(),
       });
       console.info(`${LOG_PREFIX} image ok requestId=${body.requestId}`);
@@ -269,11 +279,11 @@ export function useImageGeneration(params: UseImageGenerationParams) {
     upsertHistoryItem,
   ]);
 
-  const selectHistoryItem = useCallback((item: ImageGenerationHistoryItem) => {
+  const selectHistoryItem = useCallback((item: ShopVisualJobHistoryItem) => {
     stopPolling();
     setIsSubmitting(false);
     setRequestId(item.requestId);
-    setPrompt(item.prompt);
+    setPrompt(item.summary);
     setHasSubmittedOnce(true);
     if (item.status === "succeeded" && item.imageUrl) {
       setGeneratedImageUrl(item.imageUrl);
@@ -287,7 +297,7 @@ export function useImageGeneration(params: UseImageGenerationParams) {
     }
     setGeneratedImageUrl(null);
     setResultErrorText("");
-    startPolling(item.requestId, item.prompt);
+    startPolling(item.requestId, item.summary);
   }, [startPolling, stopPolling, t]);
 
   const resetResult = useCallback(() => {

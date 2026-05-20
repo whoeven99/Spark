@@ -49,7 +49,7 @@
   - `app/routes/app.translation.tsx`：翻译入口页（嵌入 `TranslationPage`）。
   - `app/routes/app.generate-description.tsx`：生成商品描述独立页（嵌入 `GenerateDescriptionPage`，路径 `/app/generate-description`）；loader 注入 `loadBillingContext`。
   - `app/routes/app.billing.tsx`：计费与订阅页（`/app/billing`，`BillingPage`）。
-  - `app/routes/app.picture-translate.tsx`：图片翻译独立页（嵌入 `PictureTranslatePage`，路径 `/app/picture-translate`）。
+  - `app/routes/app.image-studio.tsx`：图片工作室（文生图 + 整图翻译 Tab，`/app/image-studio`）；旧路径 `/app/picture-translate`、`/app/generate-image` 重定向至此。
 - AI 聊天路由（流式 SSE，唯一入口）：
   - `app/routes/chat-stream.ts` -> `app/server/chat-stream.ts` 的 action（`POST /chat-stream`，请求体 `{ messages }` 或兼容 `{ message }`）。
 - 授权配置路由（均需 `authenticate.admin`）：

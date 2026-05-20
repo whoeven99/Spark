@@ -1,17 +1,14 @@
-import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { boundary } from "@shopify/shopify-app-react-router/server";
+import type { LoaderFunctionArgs } from "react-router";
+import { redirect } from "react-router";
+import { buildEmbeddedAppPath } from "../config/appEntry.server";
 import { authenticate } from "../shopify.server";
-import { PictureTranslatePage } from "./page/PictureTranslatePage";
 
+/** 兼容旧链接：合并至图片工作室 */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
+  return redirect(buildEmbeddedAppPath("/app/image-studio?tab=translate", request));
+};
+
+export default function AppPictureTranslateRedirect() {
   return null;
-};
-
-export default function AppPictureTranslate() {
-  return <PictureTranslatePage />;
 }
-
-export const headers: HeadersFunction = (headersArgs) => {
-  return boundary.headers(headersArgs);
-};

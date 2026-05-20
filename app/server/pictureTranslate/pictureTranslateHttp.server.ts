@@ -7,6 +7,7 @@ import {
   resolveAgentRunStatus,
 } from "../agentRunLog/index.server";
 import { executePictureTranslatePipeline } from "./pictureTranslateExecutor.server";
+import { persistPictureTranslateSuccess } from "./pictureTranslatePersist.server";
 import {
   getExtensionFromUrl,
   mapZhTwToZhHantForVolcano,
@@ -262,6 +263,17 @@ export async function executePictureTranslateRequest(params: {
   console.info(
     `${LOG_PREFIX} Translation done — success provider=${pipeline.provider} clientRequestId=${clientRequestId}`,
   );
+  await persistPictureTranslateSuccess({
+    requestId: clientRequestId,
+    shop: sessionShop,
+    sourceLanguage: parsed.sourceCode,
+    targetLanguage: parsed.targetCode,
+    pipeline,
+    extraMetadata: {
+      modelType: parsed.modelType,
+      imageUrlHost: imageUrlToHost(parsed.imageUrl),
+    },
+  });
   persistRun({ status: "success" });
   return ok(pipeline.imageUrl);
 }

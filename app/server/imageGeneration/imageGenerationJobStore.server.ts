@@ -1,31 +1,29 @@
-import prisma from "../../db.server";
-import { getGeneratedImageReadUrl } from "./imageGenerationBlob.server";
+import type { Prisma } from "../../generated/prisma";
+import {
+  createPendingShopVisualJob,
+  getShopVisualJobForShop,
+  listRecentShopVisualJobsForShop,
+  markShopVisualJobFailed,
+  markShopVisualJobSucceeded,
+} from "../shopVisualJob/shopVisualJobStore.server";
+import { SHOP_VISUAL_JOB_KIND_IMAGE_GENERATION } from "../shopVisualJob/types.server";
 import type {
   ImageGenerationHistoryItem,
   ImageGenerationJobStatus,
 } from "./types";
 
-const HISTORY_LIMIT = 12;
-
-function toJobStatus(raw: string): ImageGenerationJobStatus {
-  if (raw === "succeeded" || raw === "failed" || raw === "pending") {
-    return raw;
-  }
-  return "failed";
-}
+const KIND = SHOP_VISUAL_JOB_KIND_IMAGE_GENERATION;
 
 export async function createPendingGeneratedImageJob(params: {
   requestId: string;
   shop: string;
   prompt: string;
 }): Promise<void> {
-  await prisma.generatedImageJob.create({
-    data: {
-      requestId: params.requestId,
-      shop: params.shop,
-      prompt: params.prompt,
-      status: "pending",
-    },
+  await createPendingShopVisualJob({
+    requestId: params.requestId,
+    shop: params.shop,
+    kind: KIND,
+    summary: params.prompt,
   });
 }
 
@@ -34,14 +32,10 @@ export async function markGeneratedImageJobSucceeded(params: {
   blobPath: string;
   provider: string;
 }): Promise<void> {
-  await prisma.generatedImageJob.update({
-    where: { requestId: params.requestId },
-    data: {
-      status: "succeeded",
-      blobPath: params.blobPath,
-      provider: params.provider,
-      errorMsg: null,
-    },
+  await markShopVisualJobSucceeded({
+    requestId: params.requestId,
+    blobPath: params.blobPath,
+    provider: params.provider,
   });
 }
 
@@ -49,13 +43,7 @@ export async function markGeneratedImageJobFailed(params: {
   requestId: string;
   errorMsg: string;
 }): Promise<void> {
-  await prisma.generatedImageJob.update({
-    where: { requestId: params.requestId },
-    data: {
-      status: "failed",
-      errorMsg: params.errorMsg.slice(0, 2000),
-    },
-  });
+  await markShopVisualJobFailed(params);
 }
 
 export async function getGeneratedImageJobForShop(params: {
@@ -67,38 +55,61 @@ export async function getGeneratedImageJobForShop(params: {
   imageUrl: string | null;
   errorMsg: string | null;
 } | null> {
-  const row = await prisma.generatedImageJob.findFirst({
-    where: { requestId: params.requestId, shop: params.shop },
+  const job = await getShopVisualJobForShop({
+    requestId: params.requestId,
+    shop: params.shop,
+    kind: KIND,
   });
-  if (!row) return null;
-
-  const status = toJobStatus(row.status);
+  if (!job) return null;
   return {
-    requestId: row.requestId,
-    status,
-    imageUrl: row.blobPath ? getGeneratedImageReadUrl(row.blobPath) : null,
-    errorMsg: row.errorMsg,
+    requestId: job.requestId,
+    status: job.status,
+    imageUrl: job.imageUrl,
+    errorMsg: job.errorMsg,
   };
 }
 
 export async function listRecentGeneratedImageJobsForShop(
   shop: string,
 ): Promise<ImageGenerationHistoryItem[]> {
-  const rows = await prisma.generatedImageJob.findMany({
-    where: { shop },
-    orderBy: { createdAt: "desc" },
-    take: HISTORY_LIMIT,
-  });
+  const rows = await listRecentShopVisualJobsForShop({ shop, kind: KIND });
+  return rows.map((row) => ({
+    requestId: row.requestId,
+    kind: "image_generation" as const,
+    prompt: row.summary,
+    summary: row.summary,
+    status: row.status,
+    imageUrl: row.imageUrl,
+    errorMsg: row.errorMsg,
+    provider: row.provider,
+    createdAt: row.createdAt,
+  }));
+}
 
-  return rows.map((row) => {
-    const status = toJobStatus(row.status);
-    return {
-      requestId: row.requestId,
-      prompt: row.prompt,
-      status,
-      imageUrl: row.blobPath ? getGeneratedImageReadUrl(row.blobPath) : null,
-      errorMsg: row.errorMsg,
-      createdAt: row.createdAt.toISOString(),
-    };
+export async function persistSyncImageGenerationJob(params: {
+  requestId: string;
+  shop: string;
+  prompt: string;
+  result: Awaited<
+    ReturnType<typeof import("./imageGenerationExecutor.server").executeImageGeneration>
+  >;
+}): Promise<void> {
+  await createPendingShopVisualJob({
+    requestId: params.requestId,
+    shop: params.shop,
+    kind: KIND,
+    summary: params.prompt,
+  });
+  if (!params.result.ok) {
+    await markShopVisualJobFailed({
+      requestId: params.requestId,
+      errorMsg: params.result.errorMsg,
+    });
+    return;
+  }
+  await markShopVisualJobSucceeded({
+    requestId: params.requestId,
+    blobPath: params.result.blobPath,
+    provider: params.result.provider,
   });
 }

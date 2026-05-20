@@ -75,8 +75,7 @@
     "diagnosis": "诊断报告",
     "translation": "翻译任务",
     "generateDescription": "生成描述",
-    "pictureTranslate": "图片翻译",
-    "generateImage": "商品图片生成",
+    "imageStudio": "图片工作室",
     "billing": "计费与订阅"
   },
   "billing": {
@@ -193,6 +192,19 @@
     "translationSubmitted": "翻译任务已提交。请到「翻译任务」页查看进度。",
     "pictureTranslateCompleted": "图片翻译完成。\n\n翻译后的图片👇"
   },
+  "imageStudio": {
+    "pageTitle": "图片工作室",
+    "sectionTitle": "图片工具",
+    "pageSubtitle": "在同一页面生成商品图或翻译图片文字，历史记录统一保存",
+    "tabListLabel": "功能切换",
+    "tabGenerate": "生成图片",
+    "tabTranslate": "图片翻译",
+    "historyTitle": "最近记录",
+    "historyHint": "文生图与整图翻译记录按时间合并；点击可切换功能并预览",
+    "historyEmpty": "暂无记录，完成一次生成或翻译后会显示在这里",
+    "historyKindGenerate": "生成",
+    "historyKindTranslate": "翻译"
+  },
   "pictureTranslate": {
     "title": "图片翻译",
     "subtitle": "上传图片并选择翻译语言",
@@ -232,7 +244,13 @@
     "copyLink": "复制图片链接",
     "copyLinkDone": "图片链接已复制",
     "copying": "复制中...",
-    "imageSourceSummary": "图片来源"
+    "imageSourceSummary": "图片来源",
+    "historyTitle": "最近翻译",
+    "historyHint": "重新进入本页可查看历史译图；点击条目可在右侧预览",
+    "historyEmpty": "暂无翻译记录",
+    "historyStatusPending": "处理中",
+    "historyStatusDone": "已完成",
+    "historyStatusFailed": "失败"
   },
   "imageGeneration": {
     "pageTitle": "商品图片生成",

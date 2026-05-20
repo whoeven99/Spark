@@ -18,10 +18,13 @@ const LOG_PREFIX = "[usePictureTranslate]";
 const PICTURE_TRANSLATE_PROVIDER: PictureTranslateProvider | null = null;
 const PRODUCT_SEARCH_DEBOUNCE_MS = 300;
 
+import type { ShopVisualJobHistoryItem } from "../lib/shopVisualJobTypes";
+
 export type UsePictureTranslateParams = {
   locationSearch: string;
   toastShow: (message: string) => void;
   mode: "page" | "card";
+  initialHistory?: ShopVisualJobHistoryItem[];
   onSuccess?: (detail: { translatedImage: string; message: string }) => void;
 };
 
@@ -50,7 +53,7 @@ function safeUrlHost(url: string): string {
 }
 
 export function usePictureTranslate(params: UsePictureTranslateParams) {
-  const { locationSearch, toastShow, mode, onSuccess } = params;
+  const { locationSearch, toastShow, mode, onSuccess, initialHistory = [] } = params;
   const { t } = useTranslation();
 
   const [imageUrl, setImageUrl] = useState("");
@@ -74,6 +77,11 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
   const [requestId, setRequestId] = useState<string | null>(null);
   const [resultMeta, setResultMeta] = useState<PictureTranslateResultMeta | null>(null);
   const [hasSubmittedOnce, setHasSubmittedOnce] = useState(false);
+  const [history, setHistory] = useState<ShopVisualJobHistoryItem[]>(initialHistory);
+
+  useEffect(() => {
+    setHistory(initialHistory);
+  }, [initialHistory]);
 
   const {
     items: productItems,
@@ -305,6 +313,20 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
 
       setTranslatedImage(nextTranslatedImage);
       setResultMeta(meta);
+      setHistory((prev) => {
+        const summary = `${sourceLanguage} → ${targetLanguage}`;
+        const item: ShopVisualJobHistoryItem = {
+          requestId: nextRequestId,
+          kind: "picture_translate",
+          summary,
+          status: "succeeded",
+          imageUrl: nextTranslatedImage,
+          errorMsg: null,
+          provider: null,
+          createdAt: new Date().toISOString(),
+        };
+        return [item, ...prev.filter((h) => h.requestId !== nextRequestId)].slice(0, 12);
+      });
       const successMessage = t("pictureTranslate.submitSuccess");
       console.info(
         `[PictureTranslateResult] success=true durationMs=${durationMs} requestId=${nextRequestId}`,
@@ -386,6 +408,20 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
     handleFileChange,
     submitTranslate,
     resetResult,
+    history,
+    selectHistoryItem: (item: ShopVisualJobHistoryItem) => {
+      setRequestId(item.requestId);
+      setHasSubmittedOnce(true);
+      setResultErrorText("");
+      if (item.status === "succeeded" && item.imageUrl) {
+        setTranslatedImage(item.imageUrl);
+        return;
+      }
+      if (item.status === "failed") {
+        setTranslatedImage(null);
+        setResultErrorText(item.errorMsg || t("pictureTranslate.submitFailed"));
+      }
+    },
   };
 }
 
