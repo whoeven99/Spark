@@ -35,7 +35,7 @@ const NAV_ITEMS: Record<
       | "nav.diagnosis"
       | "nav.translation"
       | "nav.generateDescription"
-      | "nav.pictureTranslate"
+      | "nav.imageStudio"
       | "nav.billing";
   }
 > = {
@@ -46,9 +46,17 @@ const NAV_ITEMS: Record<
     href: "/app/generate-description",
     labelKey: "nav.generateDescription",
   },
+  "image-studio": {
+    href: "/app/image-studio",
+    labelKey: "nav.imageStudio",
+  },
   "picture-translate": {
-    href: "/app/picture-translate",
-    labelKey: "nav.pictureTranslate",
+    href: "/app/image-studio?tab=translate",
+    labelKey: "nav.imageStudio",
+  },
+  "generate-image": {
+    href: "/app/image-studio?tab=generate",
+    labelKey: "nav.imageStudio",
   },
   billing: { href: "/app/billing", labelKey: "nav.billing" },
 };

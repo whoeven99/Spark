@@ -2,7 +2,8 @@ import type { ShopifyAdminGraphqlClient } from "../../ai/skills/shopifyInfo/tool
 import { getAppEntry } from "../../../config/appEntry.server";
 import {
   parseUsageMetadata,
-  recordTokenUsage,
+  normalizeBillingModelKey,
+  recordBilledTokenUsage,
 } from "../../tokenUsage/index.server";
 import { invokeDescriptionModels } from "../descriptionAiClient.server";
 import { parseAndValidateProductDescriptionJson } from "../generatedDescriptionJson.server";
@@ -169,9 +170,11 @@ export async function runProductDescriptionGeneration(params: {
     if (tokenCtx?.shop.trim()) {
       const usage = parseUsageMetadata(raw.usageMeta);
       if (usage.totalTokens > 0) {
-        await recordTokenUsage({
+        await recordBilledTokenUsage({
           shop: tokenCtx.shop.trim(),
           appName: tokenCtx.appName?.trim() || getAppEntry(),
+          feature: "product_copy",
+          modelKey: normalizeBillingModelKey(raw.modelLabel),
           usage,
         });
       }

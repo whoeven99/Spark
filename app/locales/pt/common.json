@@ -74,12 +74,13 @@
     "aiAssistant": "AI Assistant",
     "diagnosis": "Diagnóstico",
     "translation": "Tarefas de tradução",
-    "generateDescription": "Gerar descrição",
+    "generateDescription": "Texto do produto",
+    "imageStudio": "Ferramentas de imagem",
     "pictureTranslate": "Tradução de imagens",
-    "billing": "Cobrança e assinatura"
+    "billing": "Planos e créditos"
   },
   "billing": {
-    "pageTitle": "Cobrança e assinatura",
+    "pageTitle": "Planos e saldo de tokens",
     "sectionUsage": "Uso de tokens",
     "sectionSubscription": "Assinatura atual",
     "sectionPlans": "Planos de assinatura",
@@ -93,7 +94,7 @@
     "subscribe": "Assinar",
     "buyPack": "Comprar",
     "lowBalanceWarning": "Tokens insuficientes. Assine ou compre um pacote na página de cobrança.",
-    "openBillingPage": "Ir para cobrança",
+    "openBillingPage": "Ir para planos",
     "periodEnd": "Fim do período atual",
     "trialEnds": "Fim do teste",
     "intervalMonthly": "Mensal",
@@ -184,14 +185,14 @@
     "imageSourceSummary": "Fonte da imagem"
   },
   "generate": {
-    "pageTitle": "Gerar descrição do produto",
-    "sectionTitle": "Geração de descrição do produto",
+    "pageTitle": "Texto do produto com IA",
+    "sectionTitle": "Texto do produto",
     "intro": "Gere textos de marketing a partir dos dados de produto Shopify da loja atual. Selecione um produto primeiro; o idioma de destino segue o idioma principal da loja e pode ser alterado no menu.",
     "advancedManualProductId": "Avançado: informar ID do produto manualmente",
     "productIdLabel": "ID do produto (número ou gid://shopify/Product/...)",
     "targetLanguage": "Idioma de destino",
     "fallbackLocalesHint": "Usando lista de locales integrada. Conceda o escopo read_locales e reinstale o app para sincronizar os locales habilitados na Shopify.",
-    "generateAction": "Gerar descrição",
+    "generateAction": "Gerar texto",
     "generating": "Gerando...",
     "resultTitle": "Resultado gerado",
     "productTitleLabel": "Título do produto",

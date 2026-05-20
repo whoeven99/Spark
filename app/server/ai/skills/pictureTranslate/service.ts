@@ -1,5 +1,11 @@
+import { getAppEntry } from "../../../../config/appEntry.server";
 import { logDetailedError } from "../../../generateDescription/generateDescriptionLog.server";
+import {
+  buildPictureTranslateBillingItem,
+  recordVisualToolTokenUsage,
+} from "../../../tokenUsage/index.server";
 import { executePictureTranslatePipeline } from "../../../pictureTranslate/pictureTranslateExecutor.server";
+import { persistPictureTranslateSuccess } from "../../../pictureTranslate/pictureTranslatePersist.server";
 import { fetchSourceImageBytes } from "../../../pictureTranslate/volcenginePictureTranslate.server";
 import {
   ERROR_MESSAGES,
@@ -281,6 +287,22 @@ export async function executePictureTranslateTool(
   console.info(
     `${PICTURE_TRANSLATE_TOOL_LOG_PREFIX} response success requestId=${requestId} provider=${pipeline.provider}`,
   );
+  await persistPictureTranslateSuccess({
+    requestId,
+    shop,
+    sourceLanguage: input.sourceLanguage,
+    targetLanguage: input.targetLanguage,
+    pipeline,
+    extraMetadata: {
+      channel: "ai_tool",
+      imageUrlHost: inputSummary.imageUrlHost,
+    },
+  });
+  await recordVisualToolTokenUsage({
+    shop,
+    appName: getAppEntry(),
+    items: [buildPictureTranslateBillingItem(pipeline.provider)],
+  });
   return ok(pipeline.imageUrl);
 }
 

@@ -21,6 +21,7 @@ const LOG_ROUTE = "[PictureTranslate][Route]";
 export type PictureTranslateExecutorSuccess = {
   ok: true;
   imageUrl: string;
+  blobPath: string | null;
   provider: PictureTranslateProvider;
 };
 
@@ -209,11 +210,17 @@ export async function executePictureTranslatePipeline(params: {
       };
     }
     try {
-      const imageUrl = await uploadPictureTranslateJpegAndGetUrl({
+      const uploaded = await uploadPictureTranslateJpegAndGetUrl({
         shop,
         jpegBytes: volc.bytes,
+        requestId: params.requestId,
       });
-      return { ok: true, imageUrl, provider: "volc" };
+      return {
+        ok: true,
+        imageUrl: uploaded.imageUrl,
+        blobPath: uploaded.blobPath,
+        provider: "volc",
+      };
     } catch (e) {
       logDetailedError(
         `${LOG_ROUTE} requestId=${params.requestId}`,
@@ -243,11 +250,17 @@ export async function executePictureTranslatePipeline(params: {
   const fetched = await fetchSourceImageBytes(aidge.imageUrl);
   if (fetched.ok) {
     try {
-      const imageUrl = await uploadPictureTranslateJpegAndGetUrl({
+      const uploaded = await uploadPictureTranslateJpegAndGetUrl({
         shop,
         jpegBytes: fetched.bytes,
+        requestId: params.requestId,
       });
-      return { ok: true, imageUrl, provider: "aidge" };
+      return {
+        ok: true,
+        imageUrl: uploaded.imageUrl,
+        blobPath: uploaded.blobPath,
+        provider: "aidge",
+      };
     } catch (e) {
       logDetailedError(
         `${LOG_ROUTE} requestId=${params.requestId}`,
@@ -258,7 +271,12 @@ export async function executePictureTranslatePipeline(params: {
   }
 
   if (/^https:\/\//i.test(aidge.imageUrl)) {
-    return { ok: true, imageUrl: aidge.imageUrl, provider: "aidge" };
+    return {
+      ok: true,
+      imageUrl: aidge.imageUrl,
+      blobPath: null,
+      provider: "aidge",
+    };
   }
 
   return {

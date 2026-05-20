@@ -15,7 +15,7 @@
 | `purchase/` | 按量购包、`purchases_one_time/update` webhook |
 | `account/` | `ensureAccount`、`grantTrial` |
 | `plans/planCatalog.server.ts` | 读 `PlanCatalog` |
-| `../tokenUsage/` | 周期内仅累加 `usedTokens`（`recordTokenUsage`）；续费时结算按量包剩余见 `tokenPools.server.ts`；余额见 `getAvailableTokens` / `hasTokenQuota` |
+| `../tokenUsage/` | 周期内仅累加 `usedTokens`（`recordTokenUsage`）；计费前按 Turso `TokenBillingRule` 乘数（见 `docs/token-billing-rules.md`）经 `recordBilledTokenUsage` / `recordVisualToolTokenUsage`；续费时结算按量包剩余见 `tokenPools.server.ts`；余额见 `getAvailableTokens` / `hasTokenQuota` |
 
 ## 环境变量
 

@@ -107,14 +107,19 @@ async function markApplied(client, migrationName, sql) {
   });
 }
 
-async function runSeed(client, root) {
-  const seedPath = path.join(root, "prisma", "billing-plan-catalog-seed.sql");
+async function runSeedFile(client, root, fileName, label) {
+  const seedPath = path.join(root, "prisma", fileName);
   if (!fs.existsSync(seedPath)) return;
   const statements = splitStatements(fs.readFileSync(seedPath, "utf8"));
   for (const statement of statements) {
     await executeWithRetry(client, statement);
   }
-  console.log(`[turso:migrate] PlanCatalog 种子 ${statements.length} 条`);
+  console.log(`[turso:migrate] ${label} 种子 ${statements.length} 条`);
+}
+
+async function runSeed(client, root) {
+  await runSeedFile(client, root, "billing-plan-catalog-seed.sql", "PlanCatalog");
+  await runSeedFile(client, root, "token-billing-rule-seed.sql", "TokenBillingRule");
 }
 
 async function main() {

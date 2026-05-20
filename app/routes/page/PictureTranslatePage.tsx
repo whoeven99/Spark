@@ -1,6 +1,9 @@
 import { useAppBridge } from "@shopify/app-bridge-react";
+import { useLoaderData } from "react-router";
 import { useTranslation } from "react-i18next";
+import type { PictureTranslatePageLoaderData } from "../../server/pictureTranslate/pictureTranslatePageLoader.server";
 import { PictureTranslateForm } from "../component/pictureTranslate/PictureTranslateForm";
+import { PictureTranslateHistorySection } from "../component/pictureTranslate/PictureTranslateHistorySection";
 import { PictureTranslateProvider } from "../component/pictureTranslate/pictureTranslateContext";
 import { PictureTranslateResultPanel } from "../component/pictureTranslate/PictureTranslateResultPanel";
 import {
@@ -17,6 +20,7 @@ import {
 export function PictureTranslatePage() {
   const shopify = useAppBridge();
   const { t } = useTranslation();
+  const loaderData = useLoaderData<PictureTranslatePageLoaderData>();
   const locationSearch =
     typeof window !== "undefined" ? window.location.search : "";
 
@@ -24,6 +28,7 @@ export function PictureTranslatePage() {
     <PictureTranslateProvider
       mode="page"
       locationSearch={locationSearch}
+      initialHistory={loaderData.history}
       toastShow={(message) => {
         shopify.toast.show(message);
       }}
@@ -40,6 +45,8 @@ export function PictureTranslatePage() {
               <PageSurface>
                 <PictureTranslateForm variant="page" />
               </PageSurface>
+
+              <PictureTranslateHistorySection />
             </div>
 
             <div style={{ ...twoColumnSideStyle, ...stickyAsideColumnStyle }}>

@@ -123,8 +123,12 @@ async function main() {
     await executeWithRetry(statement);
   }
 
-  const seedPath = path.join(root, "prisma", "billing-plan-catalog-seed.sql");
-  if (fs.existsSync(seedPath)) {
+  for (const seedFile of [
+    "billing-plan-catalog-seed.sql",
+    "token-billing-rule-seed.sql",
+  ]) {
+    const seedPath = path.join(root, "prisma", seedFile);
+    if (!fs.existsSync(seedPath)) continue;
     const seedSql = fs.readFileSync(seedPath, "utf8");
     const seedStatements = seedSql
       .split(/;\s*(?:\r?\n|$)/g)
@@ -134,7 +138,7 @@ async function main() {
       await executeWithRetry(statement);
     }
     console.log(
-      `[turso:sync:${target}] 已执行 PlanCatalog 种子 ${seedStatements.length} 条`,
+      `[turso:sync:${target}] 已执行 ${seedFile} 种子 ${seedStatements.length} 条`,
     );
   }
 

@@ -49,7 +49,7 @@
   - `app/routes/app.translation.tsx`：翻译入口页（嵌入 `TranslationPage`）。
   - `app/routes/app.generate-description.tsx`：生成商品描述独立页（嵌入 `GenerateDescriptionPage`，路径 `/app/generate-description`）；loader 注入 `loadBillingContext`。
   - `app/routes/app.billing.tsx`：计费与订阅页（`/app/billing`，`BillingPage`）。
-  - `app/routes/app.picture-translate.tsx`：图片翻译独立页（嵌入 `PictureTranslatePage`，路径 `/app/picture-translate`）。
+  - `app/routes/app.image-studio.tsx`：图片工作室（文生图 + 整图翻译 Tab，`/app/image-studio`）；旧路径 `/app/picture-translate`、`/app/generate-image` 重定向至此。
 - AI 聊天路由（流式 SSE，唯一入口）：
   - `app/routes/chat-stream.ts` -> `app/server/chat-stream.ts` 的 action（`POST /chat-stream`，请求体 `{ messages }` 或兼容 `{ message }`）。
 - 授权配置路由（均需 `authenticate.admin`）：
@@ -58,7 +58,7 @@
 - 反馈路由：
   - `app.feedback.suggestion.tsx`：`POST` 校验后 **`prisma.suggestion.create`** 写入 Turso（字段 `shop`、`content`，最多 2000 字）；前端从 `ChatPage` 提交至 `/app/feedback/suggestion`。
 - **生成商品描述**：`POST /api/generate-description`（`api.generate-description.ts`）与 `POST /app/generate-description`（同上页面 action），服务端逻辑见 `app/server/generateDescription/generateDescriptionHttp.server.ts`；**写回 Shopify 商品标题与描述**：`POST /api/update-product-description`（`api.update-product-description.ts`），服务端见 `app/server/generateDescription/updateProductDescriptionHttp.server.ts` 与 `services/updateProductDescriptionService.ts`。AI Assistant 通过工具 `generate_product_description`（`app/server/ai/tools/implementations/generateDescriptionTool.ts`）调用同一套 `services/generateDescriptionService.ts`。方案与契约见 **`docs/generateDescription.md`**（改动前先读）。
-- **整图翻译（火山 + Aidge，对齐 Spring `POST /pcUserPic/translatePic`）**：`POST /api/picture-translate`（`api.picture-translate.ts`），服务端见 `app/server/pictureTranslate/**`。`modelType=1` 仅 Aidge、`modelType=2` 仅火山（不做交叉 fallback）。AI 聊天工具 `picture_translate` 按语言范围自动路由：**重叠范围优先火山**，仅 Aidge 支持的语言走 Aidge，均不支持则不译。与 Spring 的 **PC 用户点数 / `APP_PIC_FEE` 扣费** 未对齐：默认 **noop**；可设 `PICTURE_TRANSLATE_BILLING_STRICT=true` 硬阻断。
+- **整图翻译（火山 + Aidge，对齐 Spring `POST /pcUserPic/translatePic`）**：`POST /api/picture-translate`（`api.picture-translate.ts`），服务端见 `app/server/pictureTranslate/**`。`modelType=1` 仅 Aidge、`modelType=2` 仅火山（不做交叉 fallback）。AI 聊天工具 `picture_translate` 按语言范围自动路由：**重叠范围优先火山**，仅 Aidge 支持的语言走 Aidge，均不支持则不译。在启用计费的 App（`generate-description`）上成功译图后通过 `recordVisualToolTokenUsage` 累加 `Account.usedTokens`（默认定额 `PICTURE_TRANSLATE_TOKEN_COST=2000`，对齐 Spring `APP_PIC_FEE` 量级）。
 - 翻译相关 HTTP 路由（文件位于 `app/routes/`，URL 与 React Router 扁平路由约定一致）：
   - **`GET /api/translate/v3/json-runtime-tasks`**：`api.translate.v3.json-runtime-tasks.ts`，当前店铺 JSON Runtime 任务列表（Cosmos）。
   - **`GET /api/translate/v3/json-runtime-task-detail`**：`api.translate.v3.json-runtime-task-detail.ts`，任务详情；默认转发 **`AGENT_TASK_BASE_URL`** 下的 Java `/translate/v3/jsonRuntimeTaskDetail`；若设置 **`JSON_RUNTIME_TASK_DETAIL_SOURCE=local`**，则在 Spark 进程内聚合 Cosmos / Redis / Blob（见该文件与 `jsonRuntimeTaskDetail.server.ts`）。
@@ -122,7 +122,7 @@
 - 现状：
   - 广告凭证已在 DB 中托管（Turso）；字段校验与脱敏展示仍应注意。
   - 物流仍为本地 JSON；未做加密存储、KMS。
-- 整图翻译（`/api/picture-translate`）：**未**接入 Spring PC 用户表与 **`APP_PIC_FEE`（2000 点）** 扣费逻辑；默认行为为 **noop**（不扣费、仍返回译图 URL），并在日志中打 `[PictureTranslate][HTTP] Billing noop` 前缀说明；需要「未对齐扣费则禁止译图」时使用 `PICTURE_TRANSLATE_BILLING_STRICT=true`。
+- 图片工具与商品文案 token 入账前按 Turso **`TokenBillingRule`**（能力 × 模型 × `multiplier`）折算，运维配置见 **`docs/token-billing-rules.md`**。图片工具在启用计费的 App 上 `requireVisualToolBillingAccess` 校验余额；成功后 `recordBilledTokenUsage` / `recordVisualToolTokenUsage` 累加 `usedTokens`。主 App（`chat`）未启用计费时不扣减。
 - 安全建议：
   - 敏感字段生产环境优先 KMS / 字段级加密；`.data` 目录禁止提交到仓库。
 
@@ -186,6 +186,7 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
 | `npm run turso:migrate:test` / `turso:migrate:prod` | **首选**：维护 `_prisma_migrations`，只执行未应用的 `prisma/migrations/*/migration.sql`，并写入 PlanCatalog 种子 |
 | `npm run turso:migrate:test -- --baseline` | 库曾仅用 `turso:sync` 建好、表已齐：只把已有 migration **标记为已应用**，不执行 SQL（**勿**对缺表库使用） |
 | `npm run turso:sync:test` / `turso:sync:prod` | 空库兜底：从全部 migration 生成 `turso-baseline.sql` 并全量执行（`CREATE IF NOT EXISTS`）；**不会** ALTER 已有表，**无**版本表 |
+| `prisma/token-billing-rule-seed.sql` | Token 计费系数种子（`turso:migrate` / `turso:sync` 后执行） |
 
 推荐流程：
 
