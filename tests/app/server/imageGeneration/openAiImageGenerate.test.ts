@@ -58,10 +58,14 @@ describe("openAiImageGenerate config", () => {
     const result = await openAiGenerateImageToBytes({ prompt: "test prompt ok" });
     expect(result.ok).toBe(true);
 
-    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(
       "https://example.cognitiveservices.azure.com/openai/deployments/gpt-image-2/images/generations?api-version=2024-02-01",
     );
     expect(url).not.toContain("/images/generations/images");
+
+    const sentBody = JSON.parse(String(init.body)) as Record<string, unknown>;
+    expect(sentBody.response_format).toBeUndefined();
+    expect(sentBody.model).toBe("gpt-image-2");
   });
 });

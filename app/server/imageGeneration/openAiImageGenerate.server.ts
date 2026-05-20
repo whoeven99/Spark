@@ -118,6 +118,35 @@ function resolveImageQuality(model: string): string | undefined {
   return undefined;
 }
 
+function buildImageRequestBody(params: {
+  prompt: string;
+  model: string;
+  size: string;
+}): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: params.model,
+    prompt: params.prompt,
+    n: 1,
+    size: params.size,
+  };
+
+  const quality = resolveImageQuality(params.model);
+  if (quality) {
+    body.quality = quality;
+  }
+
+  // gpt-image 系列（含 Azure）不支持 response_format，默认返回 base64
+  if (!isGptImageModel(params.model)) {
+    body.response_format = "b64_json";
+    const style = process.env.OPENAI_IMAGE_STYLE?.trim();
+    if (style === "vivid" || style === "natural") {
+      body.style = style;
+    }
+  }
+
+  return body;
+}
+
 function buildAuthHeaders(apiKey: string, postUrl: string): Record<string, string> {
   const style = process.env.OPENAI_IMAGE_AUTH_STYLE?.trim().toLowerCase();
   const useApiKeyHeader =
@@ -184,25 +213,11 @@ export async function openAiGenerateImageToBytes(params: {
   const model = resolveImageModel();
   const size = resolveImageSize(model);
 
-  const body: Record<string, unknown> = {
-    model,
+  const body = buildImageRequestBody({
     prompt: params.prompt,
-    n: 1,
+    model,
     size,
-    response_format: "b64_json",
-  };
-
-  const quality = resolveImageQuality(model);
-  if (quality) {
-    body.quality = quality;
-  }
-
-  if (!isGptImageModel(model)) {
-    const style = process.env.OPENAI_IMAGE_STYLE?.trim();
-    if (style === "vivid" || style === "natural") {
-      body.style = style;
-    }
-  }
+  });
 
   const authHeaders = buildAuthHeaders(apiKey, postUrl);
 
