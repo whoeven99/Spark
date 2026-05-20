@@ -37,6 +37,7 @@ function toDoc(input: RecordAgentRunInput) {
         }
       : undefined,
     refs: input.refs,
+    reflection: input.reflection,
     allowTraining: true,
   };
 }

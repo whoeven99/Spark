@@ -39,6 +39,14 @@ export type AgentRunTokenUsage = {
   total: number;
 };
 
+export type AgentRunReflection = {
+  summary: string;
+  rootCause?: string;
+  nextTimeStrategy?: string[];
+  confidence?: number;
+  generatedAt: string;
+};
+
 /** Cosmos `agent_runs` 文档（partition: shop） */
 export type AgentRunDoc = {
   id: string;
@@ -56,6 +64,7 @@ export type AgentRunDoc = {
   error?: AgentRunErrorSummary;
   refs?: AgentRunRefs;
   allowTraining?: boolean;
+  reflection?: AgentRunReflection;
 };
 
 export type RecordAgentRunInput = {
@@ -72,4 +81,5 @@ export type RecordAgentRunInput = {
   tokenUsage?: AgentRunTokenUsage;
   error?: AgentRunErrorSummary;
   refs?: AgentRunRefs;
+  reflection?: AgentRunReflection;
 };
