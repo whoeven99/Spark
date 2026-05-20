@@ -231,7 +231,7 @@ function ProgressBarRow(props: {
         style={{
           width: "100%",
           height: trackHeight,
-          background: "linear-gradient(180deg, #e7e9ec 0%, #dfe3e8 100%)",
+          background: pageColorTokens.progressTrackGradient,
           borderRadius: 999,
           overflow: "hidden",
           boxShadow: "inset 0 1px 2px rgba(32,34,35,0.12)",
@@ -298,7 +298,7 @@ const MD_PREVIEW_MODAL_CARD_STYLE: CSSProperties = {
   maxHeight: "90vh",
   backgroundColor: pageColorTokens.surface,
   borderRadius: "12px",
-  boxShadow: "0 12px 30px rgba(0, 0, 0, 0.2)",
+  boxShadow: pageColorTokens.shadowModal,
   display: "flex",
   flexDirection: "column",
   overflow: "hidden",
@@ -1280,7 +1280,10 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                                 padding: "10px 12px",
                                 fontSize: 12,
                                 borderTop: i === 0 ? "none" : "1px solid #f1f2f4",
-                                background: i % 2 === 0 ? "#fafbfb" : "#fff",
+                                background:
+                                  i % 2 === 0
+                                    ? pageColorTokens.surfaceEvenRow
+                                    : pageColorTokens.surface,
                               }}
                             >
                               <span
@@ -1419,7 +1422,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                         style={{
                           marginBottom: 12,
                           padding: "12px 14px",
-                          background: "#fafbfb",
+                          background: pageColorTokens.surfaceEvenRow,
                           borderRadius: 8,
                           border: `1px solid ${pageColorTokens.border}`,
                         }}
@@ -1444,7 +1447,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                               padding: "10px 12px",
                               background: pageColorTokens.surface,
                               borderRadius: 6,
-                              border: "1px solid #dfe3e8",
+                              border: `1px solid ${pageColorTokens.borderSubtle}`,
                               fontSize: 14,
                               lineHeight: 1.45,
                               wordBreak: "break-word",

@@ -41,18 +41,15 @@ Blob 未配置时，将 `profile.md` 全文存入 Cosmos 字段 `profileMarkdown
 
 仅刷新浏览器**不会**重复 `bootstrap ok`，除非删除 Blob 中 `shops/{shop}/profile.md` 或 Cosmos 中 `profile` 文档。
 
-### Blob 路径核对（Debug 日志）
+### Blob 路径（Portal 对照）
 
-进入 `/app` 或读写画像时，服务端会打 `[ShopProfile][Blob]` 日志，例如：
+进程**首次**访问店铺画像 Blob 时打一条日志：
 
 ```text
-[ShopProfile][Blob] target … accountName=xxx container=spark-shop-profiles blobPath=shops/ciwishop.myshopify.com/profile.md connectionSource=BLOB_TRANSLATE_V3_CONNECTION_STRING
-[ShopProfile][Blob] probe context=ensure_skipped {"accountName":"xxx","container":"spark-shop-profiles","blobPath":"shops/ciwishop.myshopify.com/profile.md","blobUrl":"https://xxx.blob.core.windows.net/...","exists":true,...}
+[ShopProfile][Blob] init container accountName=… container=spark-shop-profiles connectionSource=…
 ```
 
-在 Azure Portal 中请打开：**同一 `accountName` 存储账户** → 容器名 **`container` 字段**（默认 `spark-shop-profiles`，不是 `translate-v3`）→ 虚拟目录 **`shops/ciwishop.myshopify.com/`** → 文件 **`profile.md`**。
-
-`connectionSource` 表示实际使用的环境变量（优先级：`SHOP_PROFILE_BLOB_CONNECTION_STRING` > `BLOB_TRANSLATE_V3_CONNECTION_STRING` > `AZURE_BLOB_CONNECTION_STRING`）。
+Portal 路径：`{accountName}` → 容器 `{container}`（默认 `spark-shop-profiles`）→ `shops/{shop}/profile.md`。
 
 ## 代码
 

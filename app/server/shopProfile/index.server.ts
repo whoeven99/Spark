@@ -14,10 +14,4 @@ export {
 } from "./bootstrapShopProfile.server";
 export { loadShopProfileForPrompt } from "./loadShopProfileForPrompt.server";
 export { getShopProfileDoc } from "./cosmosShopProfileStore.server";
-export {
-  logShopProfileBlobTarget,
-  probeShopProfileBlob,
-  logShopProfileBlobProbe,
-  shopProfileBlobPath,
-  shopProfileBlobConnectionSource,
-} from "./shopProfileBlobStore.server";
+export { shopProfileBlobPath } from "./shopProfileBlobStore.server";

@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
+import { pageColorTokens } from "../../page/pageUiStyles";
 import { useGenerateDescription } from "../../../hooks/useGenerateDescription";
 import type { GenerateDescriptionCardPayload } from "../../../lib/chatMessage";
 import type { ProductSelectorSelection } from "../../../lib/productSearchTypes";
@@ -231,8 +232,8 @@ export function GenerateDescriptionChatCard({
                 marginBottom: "0.75rem",
                 padding: "0.5rem 0.65rem",
                 borderRadius: "8px",
-                background: "rgba(216, 44, 13, 0.08)",
-                color: "#8a2712",
+                background: pageColorTokens.criticalBg,
+                color: pageColorTokens.criticalText,
                 fontSize: "0.8125rem",
                 lineHeight: 1.45,
               }}

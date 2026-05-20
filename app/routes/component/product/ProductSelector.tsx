@@ -2,6 +2,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import type { ProductSelectorSelection } from "../../../lib/productSearchTypes";
 import { useProductSearch } from "../../../hooks/useProductSearch";
+import { pageColorTokens } from "../../page/pageUiStyles";
 
 type BaseProps = {
   locationSearch: string;
@@ -32,8 +33,8 @@ function isMultipleProps(
 const errorBoxStyle: CSSProperties = {
   padding: "0.5rem 0.65rem",
   borderRadius: "8px",
-  background: "rgba(216, 44, 13, 0.08)",
-  color: "#8a2712",
+  background: pageColorTokens.criticalBg,
+  color: pageColorTokens.criticalText,
   fontSize: "0.8125rem",
   lineHeight: 1.45,
 };
@@ -41,8 +42,8 @@ const errorBoxStyle: CSSProperties = {
 const emptyBoxStyle: CSSProperties = {
   padding: "0.75rem 0.65rem",
   borderRadius: "8px",
-  background: "rgba(109, 113, 117, 0.08)",
-  color: "#6d7175",
+  background: pageColorTokens.mutedBg,
+  color: pageColorTokens.textSecondary,
   fontSize: "0.8125rem",
   lineHeight: 1.45,
   textAlign: "center",

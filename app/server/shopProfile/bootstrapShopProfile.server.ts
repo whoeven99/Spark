@@ -14,8 +14,6 @@ import {
 import { fetchShopBasicFacts } from "./fetchShopBasicFacts.server";
 import {
   isShopProfileBlobConfigured,
-  logShopProfileBlobProbe,
-  probeShopProfileBlob,
   readShopProfileMarkdown,
   writeShopProfileMarkdown,
 } from "./shopProfileBlobStore.server";
@@ -114,20 +112,8 @@ async function shopProfileAlreadyExists(shop: string): Promise<{
   const existing = await getShopProfileDoc(shop).catch(() => null);
   if (existing) return { exists: true, via: "cosmos" };
   if (isShopProfileBlobConfigured()) {
-    const probe = await probeShopProfileBlob(shop);
-    logShopProfileBlobProbe(probe, "already_exists_check");
     const blobMd = await readShopProfileMarkdown(shop);
-    if (blobMd?.trim()) {
-      console.info(
-        `${LOG_PREFIX} blob content detected shop=${shop} bytes=${blobMd.length} (see [ShopProfile][Blob] probe for account/container/path)`,
-      );
-      return { exists: true, via: "blob" };
-    }
-    if (probe.exists && !blobMd?.trim()) {
-      console.warn(
-        `${LOG_PREFIX} blob exists=true but read empty shop=${shop}; check probe blobUrl in logs`,
-      );
-    }
+    if (blobMd?.trim()) return { exists: true, via: "blob" };
   }
   return { exists: false, via: null };
 }
@@ -152,10 +138,6 @@ export async function ensureShopProfile(params: {
     console.info(
       `${LOG_PREFIX} ensure skipped (profile already exists via ${via}) shop=${shop}`,
     );
-    if (via === "blob" || via === "cosmos") {
-      const probe = await probeShopProfileBlob(shop);
-      logShopProfileBlobProbe(probe, "ensure_skipped");
-    }
     return;
   }
 
