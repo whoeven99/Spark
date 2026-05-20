@@ -107,8 +107,9 @@ function ImageStudioPageInner() {
         <PageSectionHeader
           title={t("imageStudio.sectionTitle")}
           subtitle={t("imageStudio.pageSubtitle")}
-          badge={<VisualToolsTabBar activeTab={activeTab} onTabChange={setActiveTab} />}
         />
+
+        <VisualToolsTabBar activeTab={activeTab} onTabChange={setActiveTab} />
 
         <div style={twoColumnLayoutStyle}>
           <div style={twoColumnMainStyle}>
