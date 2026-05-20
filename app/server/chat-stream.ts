@@ -4,6 +4,7 @@ import { authenticate } from "../shopify.server";
 import { invokeChatAgentStream, type StreamChunk } from "./ai/core/agentStream.server";
 import { parseClientChatMessages } from "./chatPayload.server";
 import { createLangsmithTracer, isLangsmithAvailable, getTraceUrl } from "./ai/utils/langsmith.server";
+import { getAppEntry } from "../config/appEntry.server";
 import type { UserProfile } from "./ai/core/toolRegistry.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -61,7 +62,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     const stream = await invokeChatAgentStream({
       messages: agentMessages,
-      context: { admin, profile: dummyProfile, shop: session?.shop },
+      context: {
+        admin,
+        profile: dummyProfile,
+        shop: session?.shop,
+        appName: getAppEntry(),
+      },
       config: langsmithTracer ? { callbacks: [langsmithTracer] } : undefined,
     });
 

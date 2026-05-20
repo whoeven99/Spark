@@ -8,6 +8,7 @@ import {
   readRuntimeChunksFileTotal,
 } from "../../../lib/redisTranslatePhaseLabel";
 import { formatTranslateTaskV3CosmosStatusText } from "../../../lib/translateTaskV3CosmosStatusLabel";
+import { PagePanel, pageColorTokens } from "../../page/pageUiStyles";
 
 export type JsonRuntimeTaskDetailEnvelope = {
   success: boolean;
@@ -207,9 +208,9 @@ function ProgressBarRow(props: {
         }}
       >
         <div style={{ minWidth: 0 }}>
-          <span style={{ fontWeight: 600, fontSize: "13px", color: "#202223" }}>{title}</span>
+          <span style={{ fontWeight: 600, fontSize: "13px", color: pageColorTokens.textPrimary }}>{title}</span>
           {detail ? (
-            <span style={{ display: "block", color: "#6d7175", fontSize: "12px", marginTop: 2 }}>
+            <span style={{ display: "block", color: pageColorTokens.textSecondary, fontSize: "12px", marginTop: 2 }}>
               {detail}
             </span>
           ) : null}
@@ -218,7 +219,7 @@ function ProgressBarRow(props: {
           style={{
             fontWeight: 700,
             fontSize: "15px",
-            color: "#202223",
+            color: pageColorTokens.textPrimary,
             fontVariantNumeric: "tabular-nums",
             flexShrink: 0,
           }}
@@ -257,19 +258,19 @@ function MetricTile(props: { label: string; value: string }) {
       style={{
         padding: "10px 12px",
         borderRadius: 10,
-        background: "#fff",
-        border: "1px solid #e3e5e8",
+        background: pageColorTokens.surface,
+        border: `1px solid ${pageColorTokens.border}`,
         minWidth: 0,
       }}
     >
-      <div style={{ fontSize: "11px", color: "#6d7175", marginBottom: 4, letterSpacing: "0.02em" }}>
+      <div style={{ fontSize: "11px", color: pageColorTokens.textSecondary, marginBottom: 4, letterSpacing: "0.02em" }}>
         {props.label}
       </div>
       <div
         style={{
           fontSize: "14px",
           fontWeight: 600,
-          color: "#202223",
+          color: pageColorTokens.textPrimary,
           wordBreak: "break-all",
           fontVariantNumeric: "tabular-nums",
         }}
@@ -295,7 +296,7 @@ const MD_PREVIEW_MODAL_CARD_STYLE: CSSProperties = {
   width: "100%",
   maxWidth: "720px",
   maxHeight: "90vh",
-  backgroundColor: "#ffffff",
+  backgroundColor: pageColorTokens.surface,
   borderRadius: "12px",
   boxShadow: "0 12px 30px rgba(0, 0, 0, 0.2)",
   display: "flex",
@@ -654,7 +655,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
     let noBarHint: ReactNode = "";
     if (!hasAnyBar) {
       noBarHint = (
-        <span style={{ color: "#6d7175", fontSize: "13px", lineHeight: 1.5 }}>
+        <span style={{ color: pageColorTokens.textSecondary, fontSize: "13px", lineHeight: 1.5 }}>
           {t("translationRuntime.noPercentReason")}
           {doneSize !== null ? (
             <>
@@ -769,10 +770,10 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
   return (
     <>
     <s-stack direction="block" gap="base">
-      <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+      <PagePanel>
         <s-stack direction="block" gap="small">
           <s-paragraph>
-            <span style={{ color: "#42474c", lineHeight: 1.5 }}>
+            <span style={{ color: pageColorTokens.textMuted, lineHeight: 1.5 }}>
               {t("translationRuntime.panelIntro", {
                 listSec: LIST_POLL_INTERVAL_SEC,
                 detailSec: DETAIL_POLL_INTERVAL_SEC,
@@ -780,7 +781,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
             </span>
           </s-paragraph>
         </s-stack>
-      </s-box>
+      </PagePanel>
 
       <s-section heading={t("translationRuntime.currentShopTasksHeading")}>
         <s-stack direction="inline" gap="small" alignItems="center">
@@ -793,26 +794,26 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
             {listLoading ? t("translationRuntime.refreshListLoading") : t("translationRuntime.refreshList")}
           </s-button>
           {!listLoading && taskList.length > 0 ? (
-            <span style={{ fontSize: "13px", color: "#6d7175" }}>
+            <span style={{ fontSize: "13px", color: pageColorTokens.textSecondary }}>
               {t("translationRuntime.totalTasks", { count: taskList.length })}
             </span>
           ) : null}
         </s-stack>
         {listErrorText ? (
-          <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+          <PagePanel>
             <s-paragraph>
-              <span style={{ color: "#bf0711" }}>{t("translationRuntime.listErrorPrefix")}：{listErrorText}</span>
+              <span style={{ color: pageColorTokens.critical }}>{t("translationRuntime.listErrorPrefix")}：{listErrorText}</span>
             </s-paragraph>
-          </s-box>
+          </PagePanel>
         ) : null}
         {!listLoading && !listErrorText && taskList.length === 0 ? (
-          <s-box padding="large" borderWidth="base" borderRadius="base" background="subdued">
+          <PagePanel padding="large">
             <s-paragraph>
-              <span style={{ color: "#6d7175" }}>
+              <span style={{ color: pageColorTokens.textSecondary }}>
                 {t("translationRuntime.noTaskRecords")}
               </span>
             </s-paragraph>
-          </s-box>
+          </PagePanel>
         ) : null}
         {taskList.length > 0 ? (
           <s-stack direction="block" gap="small">
@@ -820,13 +821,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
               const rid = row.id?.trim() ?? "";
               const active = rid !== "" && taskId.trim() === rid;
               return (
-                <s-box
-                  key={rid || `${row.updatedAt}-${row.sessionId}`}
-                  padding="base"
-                  borderWidth="base"
-                  borderRadius="base"
-                  background={active ? "base" : "subdued"}
-                >
+                <PagePanel key={rid || `${row.updatedAt}-${row.sessionId}`} highlighted={active}>
                   <s-stack direction="block" gap="small">
                     <s-stack direction="inline" gap="small" alignItems="center">
                       <s-badge tone={listRowBadgeTone(row.statusText)}>
@@ -837,7 +832,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                           fontFamily:
                             'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
                           fontSize: "13px",
-                          color: "#202223",
+                          color: pageColorTokens.textPrimary,
                           wordBreak: "break-all",
                           flex: 1,
                           minWidth: 0,
@@ -861,35 +856,35 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                         flexWrap: "wrap",
                         gap: "8px 16px",
                         fontSize: "12px",
-                        color: "#6d7175",
+                        color: pageColorTokens.textSecondary,
                       }}
                     >
                       <span>
-                        <span style={{ color: "#8c9196" }}>{t("translationRuntime.langLabel")}</span>{" "}
-                        <strong style={{ color: "#42474c" }}>
+                        <span style={{ color: pageColorTokens.textFootnote }}>{t("translationRuntime.langLabel")}</span>{" "}
+                        <strong style={{ color: pageColorTokens.textMuted }}>
                           {row.source ?? "—"} → {row.target ?? "—"}
                         </strong>
                       </span>
                       <span>
-                        <span style={{ color: "#8c9196" }}>{t("translationRuntime.updatedAt")}</span>{" "}
-                        <strong style={{ color: "#42474c" }}>{row.updatedAt ?? "—"}</strong>
+                        <span style={{ color: pageColorTokens.textFootnote }}>{t("translationRuntime.updatedAt")}</span>{" "}
+                        <strong style={{ color: pageColorTokens.textMuted }}>{row.updatedAt ?? "—"}</strong>
                       </span>
                       {row.aiModel ? (
                         <span>
-                          <span style={{ color: "#8c9196" }}>{t("translationRuntime.modelLabel")}</span>{" "}
-                          <strong style={{ color: "#42474c" }}>{row.aiModel}</strong>
+                          <span style={{ color: pageColorTokens.textFootnote }}>{t("translationRuntime.modelLabel")}</span>{" "}
+                          <strong style={{ color: pageColorTokens.textMuted }}>{row.aiModel}</strong>
                         </span>
                       ) : null}
                     </div>
                   </s-stack>
-                </s-box>
+                </PagePanel>
               );
             })}
           </s-stack>
         ) : null}
       </s-section>
 
-      <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+      <PagePanel>
         <s-stack direction="block" gap="small">
           <s-stack direction="inline" gap="small" alignItems="end">
             <div style={{ flex: "1 1 180px", minWidth: 140 }}>
@@ -932,53 +927,53 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
             </s-button>
           </s-stack>
         </s-stack>
-      </s-box>
+      </PagePanel>
 
       {emptyInput ? (
-        <s-box padding="large" borderWidth="base" borderRadius="base" background="subdued">
+        <PagePanel padding="large">
           <s-paragraph>
-            <span style={{ color: "#6d7175" }}>
+            <span style={{ color: pageColorTokens.textSecondary }}>
               {t("translationRuntime.selectTaskToView")}
             </span>
           </s-paragraph>
-        </s-box>
+        </PagePanel>
       ) : null}
 
       {!emptyInput && loading && !payload ? (
-        <s-box padding="large" borderWidth="base" borderRadius="base" background="subdued">
+        <PagePanel padding="large">
           <s-paragraph>
-            <span style={{ color: "#6d7175" }}>{t("translationRuntime.loadingTaskDetail")}</span>
+            <span style={{ color: pageColorTokens.textSecondary }}>{t("translationRuntime.loadingTaskDetail")}</span>
           </s-paragraph>
-        </s-box>
+        </PagePanel>
       ) : null}
 
       {errorText ? (
-        <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+        <PagePanel>
           <s-paragraph>
-            <span style={{ color: "#bf0711" }}>{t("translationRuntime.errorPrefix")}：{errorText}</span>
+            <span style={{ color: pageColorTokens.critical }}>{t("translationRuntime.errorPrefix")}：{errorText}</span>
           </s-paragraph>
-        </s-box>
+        </PagePanel>
       ) : null}
 
       {!emptyInput && !loading && !errorText && !payload ? (
-        <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+        <PagePanel>
           <s-paragraph>
-            <span style={{ color: "#6d7175" }}>{t("translationRuntime.noDataEmptyResponse")}</span>
+            <span style={{ color: pageColorTokens.textSecondary }}>{t("translationRuntime.noDataEmptyResponse")}</span>
           </s-paragraph>
-        </s-box>
+        </PagePanel>
       ) : null}
 
       {payload ? (
         <s-stack direction="block" gap="base">
           <s-section heading={t("translationRuntime.cosmosSummary")}>
-            <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+            <PagePanel>
               <s-stack direction="block" gap="base">
                 <s-stack direction="inline" gap="small" alignItems="center">
                   <s-badge tone="info">{readString(cosmos, "taskType") || "—"}</s-badge>
                   <s-badge tone={cosmosBadgeTone(readString(cosmos, "statusText"))}>
                     {formatTranslateTaskV3CosmosStatusText(readString(cosmos, "statusText"), t, i18n)}
                   </s-badge>
-                  <span style={{ fontSize: "12px", color: "#6d7175" }}>
+                  <span style={{ fontSize: "12px", color: pageColorTokens.textSecondary }}>
                     {t("translationRuntime.statusCode")} {String(cosmos?.status ?? "—")}
                   </span>
                 </s-stack>
@@ -991,45 +986,45 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>{t("translationRuntime.taskIdLabel")}</div>
+                    <div style={{ fontSize: "11px", color: pageColorTokens.textFootnote, marginBottom: 4 }}>{t("translationRuntime.taskIdLabel")}</div>
                     <div
                       style={{
                         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                         wordBreak: "break-all",
-                        color: "#202223",
+                        color: pageColorTokens.textPrimary,
                       }}
                     >
                       {readString(cosmos, "id") || "—"}
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>{t("translationRuntime.shopLabel")}</div>
-                    <div style={{ color: "#202223" }}>{readString(cosmos, "shopName") || "—"}</div>
+                    <div style={{ fontSize: "11px", color: pageColorTokens.textFootnote, marginBottom: 4 }}>{t("translationRuntime.shopLabel")}</div>
+                    <div style={{ color: pageColorTokens.textPrimary }}>{readString(cosmos, "shopName") || "—"}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>{t("translationRuntime.langLabel")}</div>
-                    <div style={{ color: "#202223" }}>
+                    <div style={{ fontSize: "11px", color: pageColorTokens.textFootnote, marginBottom: 4 }}>{t("translationRuntime.langLabel")}</div>
+                    <div style={{ color: pageColorTokens.textPrimary }}>
                       {readString(cosmos, "source") || "—"} → {readString(cosmos, "target") || "—"}
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>{t("translationRuntime.modelLabel")}</div>
-                    <div style={{ color: "#202223" }}>{readString(cosmos, "aiModel") || "—"}</div>
+                    <div style={{ fontSize: "11px", color: pageColorTokens.textFootnote, marginBottom: 4 }}>{t("translationRuntime.modelLabel")}</div>
+                    <div style={{ color: pageColorTokens.textPrimary }}>{readString(cosmos, "aiModel") || "—"}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>{t("translationRuntime.createdAt")}</div>
-                    <div style={{ color: "#42474c" }}>{readString(cosmos, "createdAt") || "—"}</div>
+                    <div style={{ fontSize: "11px", color: pageColorTokens.textFootnote, marginBottom: 4 }}>{t("translationRuntime.createdAt")}</div>
+                    <div style={{ color: pageColorTokens.textMuted }}>{readString(cosmos, "createdAt") || "—"}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>{t("translationRuntime.updatedAt")}</div>
-                    <div style={{ color: "#42474c" }}>{readString(cosmos, "updatedAt") || "—"}</div>
+                    <div style={{ fontSize: "11px", color: pageColorTokens.textFootnote, marginBottom: 4 }}>{t("translationRuntime.updatedAt")}</div>
+                    <div style={{ color: pageColorTokens.textMuted }}>{readString(cosmos, "updatedAt") || "—"}</div>
                   </div>
                   <div style={{ gridColumn: "1 / -1" }}>
-                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 4 }}>{t("translationRuntime.sessionIdLabel")}</div>
+                    <div style={{ fontSize: "11px", color: pageColorTokens.textFootnote, marginBottom: 4 }}>{t("translationRuntime.sessionIdLabel")}</div>
                     <div
                       style={{
                         fontSize: "12px",
-                        color: "#42474c",
+                        color: pageColorTokens.textMuted,
                         wordBreak: "break-all",
                       }}
                     >
@@ -1039,7 +1034,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                 </div>
                 {cosmos?.checkpoint !== undefined ? (
                   <details>
-                    <summary style={{ cursor: "pointer", fontSize: "13px", color: "#2c6ecb" }}>
+                    <summary style={{ cursor: "pointer", fontSize: "13px", color: pageColorTokens.brandBlue }}>
                       {t("translationRuntime.viewCheckpoint")}
                     </summary>
                     <pre
@@ -1048,10 +1043,10 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                         maxHeight: 280,
                         overflow: "auto",
                         fontSize: 12,
-                        background: "#fff",
+                        background: pageColorTokens.surface,
                         padding: 12,
                         borderRadius: 8,
-                        border: "1px solid #e3e5e8",
+                        border: `1px solid ${pageColorTokens.border}`,
                       }}
                     >
                       {JSON.stringify(cosmos.checkpoint, null, 2)}
@@ -1059,29 +1054,29 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                   </details>
                 ) : null}
               </s-stack>
-            </s-box>
+            </PagePanel>
           </s-section>
 
           {payload.translateMonitor && Object.keys(payload.translateMonitor).length > 0 ? (
             <s-section heading={t("translationRuntime.initFetchHeading")}>
-              <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+              <PagePanel>
                 <s-stack direction="block" gap="small">
                   <s-stack direction="inline" gap="small" alignItems="center">
                     <s-badge tone="info">
                       {formatRedisTranslatePhaseLabel(payload.translateMonitor.phase?.trim() || "—")}
                     </s-badge>
                     {runtimeChunksFileTotal !== null ? (
-                      <span style={{ fontSize: "13px", color: "#42474c" }}>
+                      <span style={{ fontSize: "13px", color: pageColorTokens.textMuted }}>
                         {t("translationRuntime.chunkFileCount", { count: runtimeChunksFileTotal })}
                       </span>
                     ) : null}
-                    <span style={{ fontSize: "12px", color: "#6d7175", lineHeight: 1.5 }}>
+                    <span style={{ fontSize: "12px", color: pageColorTokens.textSecondary, lineHeight: 1.5 }}>
                       {t("translationRuntime.initFetchExplain", { sec: DETAIL_POLL_INTERVAL_SEC })}
                     </span>
                   </s-stack>
                   {payload.translateMonitor.initCurrentModule?.trim() ? (
-                    <div style={{ fontSize: "13px", color: "#42474c" }}>
-                      <span style={{ color: "#8c9196" }}>{t("translationRuntime.currentModule")} </span>
+                    <div style={{ fontSize: "13px", color: pageColorTokens.textMuted }}>
+                      <span style={{ color: pageColorTokens.textFootnote }}>{t("translationRuntime.currentModule")} </span>
                       <strong>{payload.translateMonitor.initCurrentModule}</strong>
                     </div>
                   ) : null}
@@ -1104,7 +1099,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                         style={{
                           fontSize: "26px",
                           fontWeight: 800,
-                          color: "#008060",
+                          color: pageColorTokens.brandGreen,
                           fontVariantNumeric: "tabular-nums",
                           lineHeight: 1,
                           letterSpacing: "-0.02em",
@@ -1141,7 +1136,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                     />
                   </div>
                   <details>
-                    <summary style={{ cursor: "pointer", fontSize: "13px", color: "#2c6ecb" }}>
+                    <summary style={{ cursor: "pointer", fontSize: "13px", color: pageColorTokens.brandBlue }}>
                       {t("translationRuntime.viewFullMonitorFields")}
                     </summary>
                     <pre
@@ -1150,25 +1145,25 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                         maxHeight: 240,
                         overflow: "auto",
                         fontSize: 12,
-                        background: "#fff",
+                        background: pageColorTokens.surface,
                         padding: 12,
                         borderRadius: 8,
-                        border: "1px solid #e3e5e8",
+                        border: `1px solid ${pageColorTokens.border}`,
                       }}
                     >
                       {JSON.stringify(payload.translateMonitor, null, 2)}
                     </pre>
                   </details>
                 </s-stack>
-              </s-box>
+              </PagePanel>
             </s-section>
           ) : null}
 
           <s-section heading={t("translationRuntime.redisProgressHeading")}>
             <s-stack direction="block" gap="small">
-                <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+                <PagePanel>
                   <s-stack direction="inline" gap="small" alignItems="center">
-                    <span style={{ fontSize: "12px", color: "#6d7175" }}>{t("translationRuntime.prefixLabel")}</span>
+                    <span style={{ fontSize: "12px", color: pageColorTokens.textSecondary }}>{t("translationRuntime.prefixLabel")}</span>
                     <s-badge tone="info">{payload.resolvedRedisPrefix ?? "—"}</s-badge>
                     {payload.redisRuntime?.redisPrefix &&
                     payload.redisRuntime.redisPrefix !== payload.resolvedRedisPrefix ? (
@@ -1176,14 +1171,14 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                     ) : null}
                     {meta?.status ? <s-badge tone="warning">{meta.status}</s-badge> : null}
                     {meta?.updatedAt ? (
-                      <span style={{ fontSize: "12px", color: "#8c9196", marginLeft: "auto" }}>
+                      <span style={{ fontSize: "12px", color: pageColorTokens.textFootnote, marginLeft: "auto" }}>
                         {t("translationRuntime.updatedAt")} {meta.updatedAt}
                       </span>
                     ) : null}
                   </s-stack>
-                </s-box>
+                </PagePanel>
 
-                <s-box padding="large" borderWidth="base" borderRadius="base" background="base">
+                <PagePanel padding="large">
                   <s-stack direction="block" gap="large">
                     {!progressView.hasAnyBar ? (
                       <s-paragraph>{progressView.noBarHint}</s-paragraph>
@@ -1204,7 +1199,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                               style={{
                                 border: "none",
                                 background: "none",
-                                color: "#2c6ecb",
+                                color: pageColorTokens.brandBlue,
                                 cursor: "pointer",
                                 padding: 0,
                                 fontSize: "13px",
@@ -1259,7 +1254,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                         style={{
                           cursor: "pointer",
                           fontSize: "13px",
-                          color: "#2c6ecb",
+                          color: pageColorTokens.brandBlue,
                           fontWeight: 500,
                         }}
                       >
@@ -1268,10 +1263,10 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                       <div
                         style={{
                           marginTop: 12,
-                          border: "1px solid #e3e5e8",
+                          border: `1px solid ${pageColorTokens.border}`,
                           borderRadius: 8,
                           overflow: "hidden",
-                          background: "#fff",
+                          background: pageColorTokens.surface,
                         }}
                       >
                         {metaEntries.length ? (
@@ -1290,45 +1285,45 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                             >
                               <span
                                 style={{
-                                  color: "#6d7175",
+                                  color: pageColorTokens.textSecondary,
                                   wordBreak: "break-all",
                                   fontFamily: "ui-monospace, monospace",
                                 }}
                               >
                                 {k}
                               </span>
-                              <span style={{ wordBreak: "break-word", color: "#202223" }}>{v}</span>
+                              <span style={{ wordBreak: "break-word", color: pageColorTokens.textPrimary }}>{v}</span>
                             </div>
                           ))
                         ) : (
-                          <div style={{ padding: 12, color: "#6d7175", fontSize: 13 }}>{t("translationRuntime.noMeta")}</div>
+                          <div style={{ padding: 12, color: pageColorTokens.textSecondary, fontSize: 13 }}>{t("translationRuntime.noMeta")}</div>
                         )}
                       </div>
                     </details>
                   </s-stack>
-                </s-box>
+                </PagePanel>
             </s-stack>
           </s-section>
 
           <div id="json-runtime-failure-panel">
           <s-section heading={t("translationRuntime.failuresHeading")}>
             {payload.runtimeReportFailuresTruncated ? (
-              <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+              <PagePanel>
                 <s-paragraph>
-                  <span style={{ color: "#6d7175", fontSize: "13px" }}>
+                  <span style={{ color: pageColorTokens.textSecondary, fontSize: "13px" }}>
                     {t("translationRuntime.largeReportBlobHint")}
                   </span>
                 </s-paragraph>
-              </s-box>
+              </PagePanel>
             ) : null}
             {payload.runtimeFailedJsonTruncated ? (
-              <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+              <PagePanel>
                 <s-paragraph>
-                  <span style={{ color: "#6d7175", fontSize: "13px" }}>
+                  <span style={{ color: pageColorTokens.textSecondary, fontSize: "13px" }}>
                     {t("translationRuntime.failedJsonLargeHint")}
                   </span>
                 </s-paragraph>
-              </s-box>
+              </PagePanel>
             ) : null}
             {mergedFailRows.length ? (
               <s-stack direction="block" gap="small">
@@ -1344,14 +1339,14 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                       borderLeftWidth: 4,
                     }}
                   >
-                    <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 6 }}>
+                    <div style={{ fontSize: "11px", color: pageColorTokens.textFootnote, marginBottom: 6 }}>
                       {t("translationRuntime.sourceLabel")}：{row.source}
                     </div>
                     <div
                       style={{
                         fontFamily: "ui-monospace, monospace",
                         fontSize: 12,
-                        color: "#202223",
+                        color: pageColorTokens.textPrimary,
                         wordBreak: "break-all",
                         marginBottom: 6,
                       }}
@@ -1363,35 +1358,35 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                         style={{
                           marginBottom: 10,
                           padding: "10px 12px",
-                          background: "#fff",
+                          background: pageColorTokens.surface,
                           borderRadius: 8,
-                          border: "1px solid #e3e5e8",
+                          border: `1px solid ${pageColorTokens.border}`,
                           fontSize: 14,
-                          color: "#202223",
+                          color: pageColorTokens.textPrimary,
                           lineHeight: 1.45,
                           wordBreak: "break-word",
                           whiteSpace: "pre-wrap",
                         }}
                       >
-                        <div style={{ fontSize: "11px", color: "#8c9196", marginBottom: 6 }}>
+                        <div style={{ fontSize: "11px", color: pageColorTokens.textFootnote, marginBottom: 6 }}>
                           {t("translationRuntime.sourceValueLabel")}
                         </div>
                         {row.sourceText}
                       </div>
                     ) : null}
-                    <div style={{ fontSize: 13, color: "#6d7175" }}>{row.reason}</div>
+                    <div style={{ fontSize: 13, color: pageColorTokens.textSecondary }}>{row.reason}</div>
                   </div>
                 ))}
               </s-stack>
             ) : Array.isArray((payload.runtimeFailedJson as { items?: unknown[] } | undefined)?.items) &&
               ((payload.runtimeFailedJson as { items: unknown[] }).items?.length ?? 0) > 0 ? null : (
-              <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+              <PagePanel>
                 <s-paragraph>
-                  <span style={{ color: "#6d7175" }}>
+                  <span style={{ color: pageColorTokens.textSecondary }}>
                     {t("translationRuntime.noFailureDetailHint")}
                   </span>
                 </s-paragraph>
-              </s-box>
+              </PagePanel>
             )}
             {Array.isArray((payload.runtimeFailedJson as { items?: unknown[] } | undefined)?.items) &&
             ((payload.runtimeFailedJson as { items: unknown[] }).items?.length ?? 0) > 0 ? (
@@ -1400,7 +1395,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                   style={{
                     cursor: "pointer",
                     fontSize: "13px",
-                    color: "#2c6ecb",
+                    color: pageColorTokens.brandBlue,
                     fontWeight: 600,
                   }}
                 >
@@ -1426,10 +1421,10 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                           padding: "12px 14px",
                           background: "#fafbfb",
                           borderRadius: 8,
-                          border: "1px solid #e3e5e8",
+                          border: `1px solid ${pageColorTokens.border}`,
                         }}
                       >
-                        <div style={{ fontSize: "12px", color: "#6d7175", marginBottom: 8 }}>
+                        <div style={{ fontSize: "12px", color: pageColorTokens.textSecondary, marginBottom: 8 }}>
                           {t("translationRuntime.moduleChunkFile", { module: mod, chunkFile: cf })}
                         </div>
                         <div
@@ -1437,7 +1432,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                             fontFamily: "ui-monospace, monospace",
                             fontSize: 12,
                             wordBreak: "break-all",
-                            color: "#42474c",
+                            color: pageColorTokens.textMuted,
                             marginBottom: 8,
                           }}
                         >
@@ -1447,7 +1442,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                           <div
                             style={{
                               padding: "10px 12px",
-                              background: "#fff",
+                              background: pageColorTokens.surface,
                               borderRadius: 6,
                               border: "1px solid #dfe3e8",
                               fontSize: 14,
@@ -1457,15 +1452,15 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                               marginBottom: 8,
                             }}
                           >
-                            <span style={{ fontSize: "11px", color: "#8c9196" }}>{t("translationRuntime.sourceTextPrefix")} · </span>
+                            <span style={{ fontSize: "11px", color: pageColorTokens.textFootnote }}>{t("translationRuntime.sourceTextPrefix")} · </span>
                             {sv}
                           </div>
                         ) : (
-                          <div style={{ fontSize: "12px", color: "#8c9196", marginBottom: 8 }}>
+                          <div style={{ fontSize: "12px", color: pageColorTokens.textFootnote, marginBottom: 8 }}>
                             {t("translationRuntime.noSourceValueHint")}
                           </div>
                         )}
-                        <div style={{ fontSize: 13, color: "#6d7175" }}>{r}</div>
+                        <div style={{ fontSize: 13, color: pageColorTokens.textSecondary }}>{r}</div>
                       </div>
                     );
                   })}
@@ -1481,16 +1476,10 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                 const b = payload.blobs?.[key];
                 const existsOk = b?.exists === true;
                 return (
-                  <s-box
-                    key={key}
-                    padding="base"
-                    borderWidth="base"
-                    borderRadius="base"
-                    background="subdued"
-                  >
+                  <PagePanel key={key}>
                     <s-stack direction="block" gap="small">
                       <s-stack direction="inline" gap="small" alignItems="center">
-                        <span style={{ fontWeight: 600, fontSize: "14px", color: "#202223" }}>
+                        <span style={{ fontWeight: 600, fontSize: "14px", color: pageColorTokens.textPrimary }}>
                           {blobLabels[key]}
                         </span>
                         <s-badge tone={existsOk ? "success" : b?.exists === false ? "critical" : "info"}>
@@ -1500,21 +1489,21 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                               ? t("translationRuntime.notExists")
                               : t("translationRuntime.unknown")}
                         </s-badge>
-                        <span style={{ fontSize: "13px", color: "#6d7175" }}>
+                        <span style={{ fontSize: "13px", color: pageColorTokens.textSecondary }}>
                           {formatBytes(b?.sizeBytes)}
                           {b?.previewTruncated ? ` · ${t("translationRuntime.previewTruncatedShort")}` : ""}
                         </span>
                       </s-stack>
                       {b?.note ? (
                         <s-paragraph>
-                          <span style={{ color: "#6d7175", fontSize: "13px" }}>{b.note}</span>
+                          <span style={{ color: pageColorTokens.textSecondary, fontSize: "13px" }}>{b.note}</span>
                         </s-paragraph>
                       ) : null}
                       {b?.uri ? (
                         <div
                           style={{
                             wordBreak: "break-all",
-                            color: "#6d7175",
+                            color: pageColorTokens.textSecondary,
                             fontSize: "12px",
                             lineHeight: 1.45,
                           }}
@@ -1529,32 +1518,27 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                             overflow: "auto",
                             fontSize: 11,
                             margin: 0,
-                            background: "#fff",
+                            background: pageColorTokens.surface,
                             padding: 10,
                             borderRadius: 8,
-                            border: "1px solid #e3e5e8",
+                            border: `1px solid ${pageColorTokens.border}`,
                           }}
                         >
                           {b.preview}
                         </pre>
                       ) : includeBlobPreview ? (
                         <s-paragraph>
-                          <span style={{ color: "#8c9196", fontSize: "13px" }}>{t("translationRuntime.noPreviewContent")}</span>
+                          <span style={{ color: pageColorTokens.textFootnote, fontSize: "13px" }}>{t("translationRuntime.noPreviewContent")}</span>
                         </s-paragraph>
                       ) : null}
                     </s-stack>
-                  </s-box>
+                  </PagePanel>
                 );
               })}
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
+              <PagePanel>
                 <s-stack direction="block" gap="small">
                   <s-stack direction="inline" gap="small" alignItems="center">
-                    <span style={{ fontWeight: 600, fontSize: "14px", color: "#202223" }}>
+                    <span style={{ fontWeight: 600, fontSize: "14px", color: pageColorTokens.textPrimary }}>
                       {t("translationRuntime.reportTitleWithFile")}
                     </span>
                     <s-badge tone={trBlob?.exists === true ? "success" : "info"}>
@@ -1564,12 +1548,12 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                           ? t("translationRuntime.notExists")
                           : t("translationRuntime.unknown")}
                     </s-badge>
-                    <span style={{ fontSize: "13px", color: "#6d7175" }}>
+                    <span style={{ fontSize: "13px", color: pageColorTokens.textSecondary }}>
                       {formatBytes(trBlob?.sizeBytes)}
                     </span>
                   </s-stack>
                   <s-paragraph>
-                    <span style={{ color: "#6d7175", fontSize: "13px" }}>
+                    <span style={{ color: pageColorTokens.textSecondary, fontSize: "13px" }}>
                       {t("translationRuntime.reportBlobDesc")}
                     </span>
                   </s-paragraph>
@@ -1577,7 +1561,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                     <div
                       style={{
                         wordBreak: "break-all",
-                        color: "#6d7175",
+                        color: pageColorTokens.textSecondary,
                         fontSize: "12px",
                         lineHeight: 1.45,
                       }}
@@ -1596,16 +1580,11 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                       : t("translationRuntime.previewMarkdownInModal")}
                   </s-button>
                 </s-stack>
-              </s-box>
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
+              </PagePanel>
+              <PagePanel>
                 <s-stack direction="block" gap="small">
                   <s-stack direction="inline" gap="small" alignItems="center">
-                    <span style={{ fontWeight: 600, fontSize: "14px", color: "#202223" }}>
+                    <span style={{ fontWeight: 600, fontSize: "14px", color: pageColorTokens.textPrimary }}>
                       {t("translationRuntime.qualityReportTitleLong")}
                     </span>
                     <s-badge tone={qrBlob?.exists === true ? "success" : "info"}>
@@ -1615,12 +1594,12 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                           ? t("translationRuntime.notExists")
                           : t("translationRuntime.unknown")}
                     </s-badge>
-                    <span style={{ fontSize: "13px", color: "#6d7175" }}>
+                    <span style={{ fontSize: "13px", color: pageColorTokens.textSecondary }}>
                       {formatBytes(qrBlob?.sizeBytes)}
                     </span>
                   </s-stack>
                   <s-paragraph>
-                    <span style={{ color: "#6d7175", fontSize: "13px" }}>
+                    <span style={{ color: pageColorTokens.textSecondary, fontSize: "13px" }}>
                       {t("translationRuntime.qualityBlobDesc")}
                     </span>
                   </s-paragraph>
@@ -1628,7 +1607,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                     <div
                       style={{
                         wordBreak: "break-all",
-                        color: "#6d7175",
+                        color: pageColorTokens.textSecondary,
                         fontSize: "12px",
                         lineHeight: 1.45,
                       }}
@@ -1647,28 +1626,28 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                       : t("translationRuntime.previewQualityInModal")}
                   </s-button>
                 </s-stack>
-              </s-box>
+              </PagePanel>
             </s-stack>
           </s-section>
 
           {payload.reportParsed && Object.keys(payload.reportParsed).length ? (
             <s-section heading={t("translationRuntime.parsedReportHeading")}>
-              <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+              <PagePanel>
                 <pre
                   style={{
                     maxHeight: 320,
                     overflow: "auto",
                     fontSize: 12,
                     margin: 0,
-                    background: "#fff",
+                    background: pageColorTokens.surface,
                     padding: 14,
                     borderRadius: 8,
-                    border: "1px solid #e3e5e8",
+                    border: `1px solid ${pageColorTokens.border}`,
                   }}
                 >
                   {JSON.stringify(payload.reportParsed, null, 2)}
                 </pre>
-              </s-box>
+              </PagePanel>
             </s-section>
           ) : null}
         </s-stack>
@@ -1701,7 +1680,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
               flexShrink: 0,
             }}
           >
-            <strong style={{ fontSize: "15px", color: "#202223" }}>{mdPreviewTitle}</strong>
+            <strong style={{ fontSize: "15px", color: pageColorTokens.textPrimary }}>{mdPreviewTitle}</strong>
             <s-button type="button" variant="secondary" onClick={() => setMdPreviewOpen(false)}>
               {t("common.close")}
             </s-button>
@@ -1711,7 +1690,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
               style={{
                 padding: "8px 16px",
                 fontSize: "12px",
-                color: "#6d7175",
+                color: pageColorTokens.textSecondary,
                 background: "#fff5ea",
                 borderBottom: "1px solid #ffd79c",
                 flexShrink: 0,
@@ -1728,7 +1707,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
               minHeight: 0,
               fontSize: "14px",
               lineHeight: 1.55,
-              color: "#202223",
+              color: pageColorTokens.textPrimary,
             }}
             className="json-runtime-md-preview"
           >

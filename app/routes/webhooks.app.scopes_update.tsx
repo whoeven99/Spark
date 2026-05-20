@@ -1,21 +1,23 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
-import db from "../db.server";
+import { handleScopesUpdate } from "../server/commonEventLog/index.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-    const { payload, session, topic, shop } = await authenticate.webhook(request);
-    console.log(`Received ${topic} webhook for ${shop}`);
+  const { shop, session, topic, payload } = await authenticate.webhook(request);
 
-    const current = payload.current as string[];
-    if (session) {
-        await db.session.update({   
-            where: {
-                id: session.id
-            },
-            data: {
-                scope: current.toString(),
-            },
-        });
-    }
-    return new Response();
+  console.info(`[CommonEvent] webhook ${topic} shop=${shop}`);
+
+  try {
+    await handleScopesUpdate({
+      shop,
+      topic,
+      payload,
+      sessionId: session?.id,
+    });
+  } catch (error) {
+    console.error("[CommonEvent] app/scopes_update handler failed:", error);
+    throw error;
+  }
+
+  return new Response();
 };

@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import type { ChangeEvent, CSSProperties, KeyboardEvent } from "react";
 import { usePictureTranslateContext } from "./pictureTranslateContext";
+import { pageColorTokens } from "../../page/pageUiStyles";
 
 type PictureTranslateFormProps = {
   variant: "page" | "card";
@@ -68,6 +69,67 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
     const file = event.currentTarget.files?.[0];
     if (!file) return;
     void handleFileChange(file);
+  };
+
+  const renderUploadArea = () => {
+    const fileInputId = `picture-translate-file-input-${variant}`;
+
+    return (
+      <label
+        htmlFor={fileInputId}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "1.5rem",
+          marginTop: "0.5rem",
+          border: `1px dashed ${pageColorTokens.border}`,
+          borderRadius: pageColorTokens.radiusControl,
+          background: isSubmitting ? pageColorTokens.surfaceMuted : pageColorTokens.surface,
+          cursor: isSubmitting ? "not-allowed" : "pointer",
+          transition: "all 0.2s ease-in-out",
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.currentTarget.style.borderColor = "#8a05ff";
+          e.currentTarget.style.background = "rgba(138, 5, 255, 0.02)";
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          e.currentTarget.style.borderColor = pageColorTokens.border;
+          e.currentTarget.style.background = pageColorTokens.surface;
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.currentTarget.style.borderColor = pageColorTokens.border;
+          e.currentTarget.style.background = pageColorTokens.surface;
+          const file = e.dataTransfer.files?.[0];
+          if (file) void handleFileChange(file);
+        }}
+      >
+        <input
+          id={fileInputId}
+          type="file"
+          accept="image/png,image/jpeg,image/jpg"
+          onChange={handleFileInputChange}
+          disabled={isSubmitting}
+          style={{ display: "none" }}
+        />
+        <div style={{ fontSize: "1.5rem", opacity: 0.5, marginBottom: "0.5rem" }}>📁</div>
+        <div style={{ fontSize: "0.8125rem", color: "#303030", fontWeight: 500 }}>
+          {t("pictureTranslate.uploadImage")}
+        </div>
+        <div style={{ fontSize: "0.75rem", color: "#6d7175", marginTop: "0.25rem" }}>
+          {t("pictureTranslate.validationInvalidFileType")}
+        </div>
+        {imageFileName ? (
+          <div style={{ marginTop: "0.75rem", fontSize: "0.75rem", color: "#8a05ff", fontWeight: 500 }}>
+            {t("pictureTranslate.selectedFile", { fileName: imageFileName })}
+          </div>
+        ) : null}
+      </label>
+    );
   };
 
   return (
@@ -171,35 +233,7 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
           </div>
         </div>
 
-        {selectedSource === "upload" ? (
-          <div>
-            <label
-              htmlFor={`picture-translate-file-input-${variant}`}
-              style={{
-                display: "block",
-                fontSize: "0.75rem",
-                fontWeight: 600,
-                color: "#444",
-                marginBottom: "0.35rem",
-              }}
-            >
-              {t("pictureTranslate.uploadImage")}
-            </label>
-            <input
-              id={`picture-translate-file-input-${variant}`}
-              type="file"
-              accept="image/png,image/jpeg,image/jpg"
-              onChange={handleFileInputChange}
-              disabled={isSubmitting}
-              style={{ width: "100%" }}
-            />
-            {imageFileName ? (
-              <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#6d7175" }}>
-                {t("pictureTranslate.selectedFile", { fileName: imageFileName })}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
+        {selectedSource === "upload" ? renderUploadArea() : null}
 
         {selectedSource === "url" ? (
           <s-text-field
@@ -253,6 +287,8 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
                       borderRadius: "8px",
                       border: "1px solid #c9cccf",
                       boxSizing: "border-box",
+                      color: "#0d0d0d",
+                      background: isSubmitting ? "#f9f9f9" : "#fff"
                     }}
                   />
                 </div>
@@ -321,9 +357,9 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
                         padding: "0.5rem 0.6rem",
                         borderRadius: "8px",
                         border: isSelected
-                          ? "1px solid #2c6ecb"
+                          ? "1px solid #8a05ff"
                           : "1px solid rgba(0,0,0,0.12)",
-                        background: isSelected ? "rgba(44, 110, 203, 0.08)" : "#fff",
+                        background: isSelected ? "rgba(138, 5, 255, 0.04)" : "#fff",
                         textAlign: "left",
                         cursor: "pointer",
                       }}
@@ -350,11 +386,12 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
                         <div
                           style={{
                             fontSize: "0.8125rem",
-                            color: "#202223",
+                            color: "#0d0d0d",
                             lineHeight: 1.35,
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
+                            fontWeight: isSelected ? 500 : 400,
                           }}
                         >
                           {product.title}
@@ -394,13 +431,13 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
                             borderRadius: "8px",
                             overflow: "hidden",
                             border: active
-                              ? "2px solid #2c6ecb"
+                              ? "2px solid #8a05ff"
                               : "1px solid rgba(0,0,0,0.12)",
                             background: "#fff",
                             padding: 0,
                             cursor: "pointer",
                             boxShadow: active
-                              ? "0 0 0 2px rgba(44,110,203,0.12)"
+                              ? "0 0 0 2px rgba(138,5,255,0.12)"
                               : "0 1px 3px rgba(0,0,0,0.08)",
                           }}
                           title={image.altText ?? ""}
@@ -489,8 +526,8 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
                 fontSize: "0.8125rem",
                 borderRadius: "8px",
                 border: "1px solid #c9cccf",
-                background: isSubmitting ? "#f6f6f7" : "#fff",
-                color: "#303030",
+                background: isSubmitting ? "#f9f9f9" : "#fff",
+                color: "#0d0d0d",
                 boxSizing: "border-box",
               }}
             >
@@ -527,8 +564,8 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
                 fontSize: "0.8125rem",
                 borderRadius: "8px",
                 border: "1px solid #c9cccf",
-                background: isSubmitting ? "#f6f6f7" : "#fff",
-                color: "#303030",
+                background: isSubmitting ? "#f9f9f9" : "#fff",
+                color: "#0d0d0d",
                 boxSizing: "border-box",
               }}
             >
@@ -557,7 +594,7 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
           </div>
         ) : null}
 
-        <div style={{ marginTop: "0.25rem" }}>
+        <div style={{ gridColumn: "1 / -1", marginTop: "0.25rem" }}>
           <s-button
             type="button"
             variant="primary"

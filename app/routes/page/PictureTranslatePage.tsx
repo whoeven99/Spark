@@ -1,19 +1,24 @@
-import { useEffect } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import { PictureTranslateForm } from "../component/pictureTranslate/PictureTranslateForm";
 import { PictureTranslateProvider } from "../component/pictureTranslate/pictureTranslateContext";
 import { PictureTranslateResultPanel } from "../component/pictureTranslate/PictureTranslateResultPanel";
+import {
+  PageSectionHeader,
+  PageSurface,
+  pageContentStyle,
+  pageTrustFootnoteStyle,
+  stickyAsideColumnStyle,
+  twoColumnLayoutStyle,
+  twoColumnMainStyle,
+  twoColumnSideStyle,
+} from "./pageUiStyles";
 
 export function PictureTranslatePage() {
   const shopify = useAppBridge();
   const { t } = useTranslation();
   const locationSearch =
     typeof window !== "undefined" ? window.location.search : "";
-
-  useEffect(() => {
-    console.info("[PictureTranslatePage] mount");
-  }, []);
 
   return (
     <PictureTranslateProvider
@@ -24,36 +29,27 @@ export function PictureTranslatePage() {
       }}
     >
       <s-page heading={t("pictureTranslate.pageTitle")}>
-        <div
-          style={{
-            fontSize: "0.875rem",
-            color: "#6d7175",
-            lineHeight: 1.5,
-            marginBottom: "1rem",
-          }}
-        >
-          {t("pictureTranslate.pageSubtitle")}
-        </div>
+        <div style={pageContentStyle}>
+          <PageSectionHeader
+            title={t("pictureTranslate.sectionConfig")}
+            subtitle={t("pictureTranslate.pageSubtitle")}
+          />
 
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "1.5rem",
-            alignItems: "flex-start",
-          }}
-        >
-          <div style={{ flex: "2 1 360px", minWidth: 0 }}>
-            <s-section heading={t("pictureTranslate.sectionConfig")}>
-              <PictureTranslateForm variant="page" />
-            </s-section>
+          <div style={twoColumnLayoutStyle}>
+            <div style={twoColumnMainStyle}>
+              <PageSurface>
+                <PictureTranslateForm variant="page" />
+              </PageSurface>
+            </div>
+
+            <div style={{ ...twoColumnSideStyle, ...stickyAsideColumnStyle }}>
+              <PageSurface title={t("pictureTranslate.result")}>
+                <PictureTranslateResultPanel />
+              </PageSurface>
+            </div>
           </div>
 
-          <div style={{ flex: "3 1 480px", minWidth: 0 }}>
-            <s-section heading={t("pictureTranslate.result")}>
-              <PictureTranslateResultPanel />
-            </s-section>
-          </div>
+          <p style={pageTrustFootnoteStyle}>{t("pictureTranslate.pageFootnote")}</p>
         </div>
       </s-page>
     </PictureTranslateProvider>

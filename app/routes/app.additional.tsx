@@ -2,6 +2,16 @@ import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 import { useTranslation } from "react-i18next";
 import { authenticate } from "../shopify.server";
+import {
+  PageMetricCard,
+  PageSurface,
+  pageAccentBadgeStyle,
+  pageContentStyle,
+  pageIntroBannerStyle,
+  pageSectionHeaderRowStyle,
+  pageSectionMajorTitleStyle,
+  pageStatusCardStyle,
+} from "./page/pageUiStyles";
 
 const ORDER_METRICS_QUERY = `#graphql
   query OrderMetrics($first: Int!, $after: String, $query: String!) {
@@ -431,60 +441,82 @@ export default function AdditionalPage() {
 
   return (
     <s-page heading={t("additional.pageTitle")}>
-      <s-section heading={t("additional.coreBoard")}>
-        <s-stack direction="inline" gap="base" alignItems="center">
-          <s-badge tone="info">{t("additional.shopLabel", { value: data.summary.shop })}</s-badge>
-          <s-badge tone="success">{t("additional.updatedAtLabel", { value: data.summary.updatedAt })}</s-badge>
-        </s-stack>
+      <div style={pageIntroBannerStyle("diagnosis", { marginBottom: "1.5rem" })}>
+        {t("additional.pageIntro")}
+      </div>
 
-        <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
-          <s-stack direction="block" gap="small">
-            <s-paragraph>{t("additional.salesAmount", { value: resolveSummary(data.summary.salesAmount) })}</s-paragraph>
-            <s-paragraph>{t("additional.orderCount", { value: data.summary.orderCount })}</s-paragraph>
-            <s-paragraph>{t("additional.aov", { value: resolveSummary(data.summary.aov) })}</s-paragraph>
-            <s-paragraph>{t("additional.conversionRate", { value: resolveSummary(data.summary.conversionRate) })}</s-paragraph>
-            <s-paragraph>{t("additional.refundRate", { value: resolveSummary(data.summary.refundRate) })}</s-paragraph>
-            <s-paragraph>{t("additional.lowStockRate", { value: resolveSummary(data.summary.lowStockRate) })}</s-paragraph>
-            <s-paragraph>{t("additional.outOfStockRate", { value: resolveSummary(data.summary.outOfStockRate) })}</s-paragraph>
-          </s-stack>
-        </s-box>
-      </s-section>
+      <div style={pageContentStyle}>
+        <section>
+          <div style={pageSectionHeaderRowStyle}>
+            <h2 style={pageSectionMajorTitleStyle}>{t("additional.coreBoard")}</h2>
+            <span style={pageAccentBadgeStyle}>
+              {t("additional.shopLabel", { value: data.summary.shop })}
+            </span>
+          </div>
+          <PageMetricCard
+            accent={t("additional.periodLast7Days")}
+            metrics={[
+              {
+                label: t("additional.metricSalesAmount"),
+                value: resolveSummary(data.summary.salesAmount),
+              },
+              {
+                label: t("additional.metricOrderCount"),
+                value: String(data.summary.orderCount),
+              },
+              {
+                label: t("additional.metricAov"),
+                value: resolveSummary(data.summary.aov),
+              },
+              {
+                label: t("additional.metricConversionRate"),
+                value: resolveSummary(data.summary.conversionRate),
+              },
+              {
+                label: t("additional.metricRefundRate"),
+                value: resolveSummary(data.summary.refundRate),
+              },
+              {
+                label: t("additional.metricLowStockRate"),
+                value: resolveSummary(data.summary.lowStockRate),
+              },
+              {
+                label: t("additional.metricOutOfStockRate"),
+                value: resolveSummary(data.summary.outOfStockRate),
+              },
+            ]}
+            footer={t("additional.updatedAtLabel", { value: data.summary.updatedAt })}
+          />
+        </section>
 
-      <s-section heading={t("additional.healthDiagnosis")}>
-        <s-stack direction="block" gap="small">
-          {data.statuses.map((item) => (
-            <s-box
-              key={item.label}
-              padding="base"
-              borderWidth="base"
-              borderRadius="base"
-              background="subdued"
-            >
-              <s-stack direction="inline" gap="base" alignItems="center">
-                <s-badge tone={statusTone(item.status)}>
-                  {t(item.label)}：{resolveStatusText(item.status)}
-                </s-badge>
-                <s-paragraph>{resolveDetailText(item)}</s-paragraph>
-              </s-stack>
-            </s-box>
-          ))}
-        </s-stack>
-      </s-section>
+        <PageSurface title={t("additional.healthDiagnosis")}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            {data.statuses.map((item) => (
+              <div key={item.label} style={pageStatusCardStyle}>
+                <s-stack direction="inline" gap="base" alignItems="center">
+                  <s-badge tone={statusTone(item.status)}>
+                    {t(item.label)}：{resolveStatusText(item.status)}
+                  </s-badge>
+                  <s-paragraph>{resolveDetailText(item)}</s-paragraph>
+                </s-stack>
+              </div>
+            ))}
+          </div>
+        </PageSurface>
 
-      <s-section heading={t("additional.systemConclusion")}>
-        <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+        <PageSurface title={t("additional.systemConclusion")}>
           <s-unordered-list>
             {data.diagnoses.map((line) => (
               <s-list-item key={line}>{resolveDiagnosis(line)}</s-list-item>
             ))}
           </s-unordered-list>
-        </s-box>
-      </s-section>
+        </PageSurface>
+      </div>
 
       <s-section slot="aside" heading={t("additional.trafficAdvice")}>
-        <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+        <PageSurface>
           <s-paragraph>{t(data.clickInsight)}</s-paragraph>
-        </s-box>
+        </PageSurface>
       </s-section>
     </s-page>
   );

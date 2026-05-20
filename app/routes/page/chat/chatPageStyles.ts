@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { pageColorTokens } from "../pageUiStyles";
 
 export const modalOverlayStyle: CSSProperties = {
   position: "fixed",
@@ -14,15 +15,16 @@ export const modalOverlayStyle: CSSProperties = {
 export const modalCardStyle: CSSProperties = {
   width: "100%",
   maxWidth: "560px",
-  backgroundColor: "#ffffff",
-  borderRadius: "12px",
+  backgroundColor: pageColorTokens.surface,
+  borderRadius: pageColorTokens.radiusCard,
   boxShadow: "0 12px 30px rgba(0, 0, 0, 0.2)",
 };
 
+/** 聊天页侧栏等非消息流区块，对齐全站 pageColorTokens */
 export const asideCardStyle: CSSProperties = {
-  border: "1px solid #e3e3e3",
-  borderRadius: "12px",
-  backgroundColor: "#fafafa",
+  border: `1px solid ${pageColorTokens.border}`,
+  borderRadius: pageColorTokens.radiusCard,
+  backgroundColor: pageColorTokens.surfaceSubtle,
   padding: "0.75rem",
 };
 

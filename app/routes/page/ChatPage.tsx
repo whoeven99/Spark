@@ -19,16 +19,21 @@ import {
   buildQuickPrompts,
   quickPromptTones,
 } from "./chat/chatPageConstants";
-import { asideCardStyle } from "./chat/chatPageStyles";
 import { useChatStream } from "./chat/useChatStream";
+import {
+  pageCompactSurfaceStyle,
+  pageColorTokens,
+  pageIntroBannerStyle,
+  pageSurfaceStyle,
+  PageSurface,
+} from "./pageUiStyles";
 
 const streamingAssistantBubbleShellStyle: CSSProperties = {
-  borderRadius: "12px",
+  borderRadius: pageColorTokens.radiusCard,
   borderWidth: 1,
   borderStyle: "solid",
   borderColor: "rgba(44, 110, 203, 0.35)",
-  background:
-    "linear-gradient(180deg, rgba(44, 110, 203, 0.08), rgba(44, 110, 203, 0.02))",
+  background: `linear-gradient(180deg, rgba(44, 110, 203, 0.08), rgba(44, 110, 203, 0.02))`,
 };
 
 export function ChatPage() {
@@ -225,14 +230,10 @@ export function ChatPage() {
   return (
     <s-page heading={t("chat.pageTitle")}>
       <s-section heading={t("chat.sectionTitle")}>
-        <s-stack direction="inline" gap="base" alignItems="center" justifyContent="space-between">
-          <s-stack direction="inline" gap="base" alignItems="center">
-            <s-paragraph>
-              {t("chat.intro")}
-            </s-paragraph>
+        <s-stack direction="block" gap="base">
+          <s-stack direction="inline" gap="base" alignItems="center" justifyContent="space-between">
             <s-badge tone="success">{t("chat.assistantOnline")}</s-badge>
-          </s-stack>
-          <s-button
+            <s-button
             type="button"
             variant="secondary"
             onClick={() => {
@@ -244,7 +245,10 @@ export function ChatPage() {
           >
             {t("common.newChat")}
           </s-button>
-        </s-stack>
+          </s-stack>
+          <div style={pageIntroBannerStyle("chat", { marginBottom: "0" })}>
+            {t("chat.intro")}
+          </div>
 
         <div
           style={{
@@ -255,7 +259,7 @@ export function ChatPage() {
             gap: "0.75rem",
           }}
         >
-          <s-box padding="small" borderWidth="base" borderRadius="base" background="base">
+          <div style={pageCompactSurfaceStyle}>
             <s-stack direction="block" gap="none">
               <s-paragraph>{t("chat.quickQuestions")}</s-paragraph>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.25rem" }}>
@@ -283,11 +287,11 @@ export function ChatPage() {
                 ))}
               </div>
             </s-stack>
-          </s-box>
+          </div>
 
           <div style={{ flex: 1, minHeight: 0 }}>
             <div ref={messagesContainerRef} style={{ height: "100%", overflowY: "auto" }}>
-              <s-box padding="base" borderWidth="base" borderRadius="base" background="base">
+              <div style={pageSurfaceStyle}>
                 <ChatMessages
                   messages={messages}
                   onTranslationCardSuccess={succeedTranslationCard}
@@ -319,18 +323,19 @@ export function ChatPage() {
                     </div>
                   </div>
                 ) : null}
-              </s-box>
+              </div>
             </div>
           </div>
 
-          <s-box padding="base" borderWidth="base" borderRadius="base">
+          <div style={pageSurfaceStyle}>
             <ChatInput onMessageSend={sendMessage} isSending={isStreaming} onAbort={abortStream} />
-          </s-box>
+          </div>
         </div>
+        </s-stack>
       </s-section>
 
       <s-section slot="aside" heading={t("chat.tipsTitle")}>
-        <div style={asideCardStyle}>
+        <PageSurface>
           <s-unordered-list>
             <s-list-item>{t("chat.tipSingleQuestion")}</s-list-item>
             <s-list-item>{t("chat.tipScenario")}</s-list-item>
@@ -339,7 +344,7 @@ export function ChatPage() {
               {t("chat.tipNewChat")}
             </s-list-item>
           </s-unordered-list>
-        </div>
+        </PageSurface>
       </s-section>
 
       <ChatPageCredentialsChrome shopify={shopify} />

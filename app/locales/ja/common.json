@@ -75,7 +75,38 @@
     "diagnosis": "診断レポート",
     "translation": "翻訳タスク",
     "generateDescription": "説明文生成",
-    "pictureTranslate": "画像翻訳"
+    "pictureTranslate": "画像翻訳",
+    "billing": "課金・サブスク"
+  },
+  "billing": {
+    "pageTitle": "課金・サブスクリプション",
+    "sectionUsage": "Token 利用状況",
+    "sectionSubscription": "現在のサブスク",
+    "sectionPlans": "サブスクプラン",
+    "sectionPacks": "Token パック",
+    "availableTokens": "利用可能 Token",
+    "usedTokens": "使用済み Token",
+    "poolSubscription": "サブスク枠",
+    "poolPurchased": "購入パック",
+    "poolTrial": "トライアル",
+    "noSubscription": "有料サブスク未契約",
+    "subscribe": "契約する",
+    "buyPack": "購入",
+    "lowBalanceWarning": "Token が不足しています。課金ページで契約または購入してください。",
+    "openBillingPage": "課金ページへ",
+    "periodEnd": "現在の期間終了",
+    "trialEnds": "トライアル終了",
+    "intervalMonthly": "月額",
+    "intervalAnnual": "年額",
+    "trialDays_one": "{{count}} 日間トライアル",
+    "trialDays_other": "{{count}} 日間トライアル",
+    "status": {
+      "PENDING": "保留",
+      "ACTIVE": "有効",
+      "CANCELLED": "解約済み",
+      "EXPIRED": "期限切れ",
+      "FROZEN": "凍結"
+    }
   },
   "chat": {
     "pageTitle": "Shopify AI Assistant",

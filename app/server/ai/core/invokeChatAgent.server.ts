@@ -14,7 +14,22 @@ import {
   createLangsmithTracer,
   getTraceUrl,
 } from "../utils/langsmith.server";
+import { getAppEntry } from "../../../config/appEntry.server";
+import {
+  extractTokenUsageFromMessages,
+  recordTokenUsage,
+} from "../../tokenUsage/index.server";
 import { globalToolRegistry, type AgentContext } from "./toolRegistry.server";
+import {
+  createAgentRunId,
+  createRunCollector,
+  extractToolSummariesFromMessages,
+  getRootLangsmithRunId,
+  isAgentRunLogEnabled,
+  recordAgentRun,
+  resolveAgentRunStatus,
+  sanitizeHumanInput,
+} from "../../agentRunLog/index.server";
 import "../skills/index";
 
 export type InvokeChatAgentResult = {
@@ -60,30 +75,110 @@ export async function invokeChatAgent(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<InvokeChatAgentResult & { langsmithTraceUrl?: string }> {
   const { messages: agentInputMessages, context, sessionName } = params;
-  
-  // 从全局注册表获取当前上下文激活的工具
+  const runId = createAgentRunId();
+  const startedAtIso = new Date().toISOString();
+  const wallStart = Date.now();
+  const shop = context.shop?.trim();
+  const appName = context.appName ?? getAppEntry();
+  const lastUserTextInput = lastHumanUtterance(agentInputMessages);
+
   const activeDefs = await globalToolRegistry.getActiveToolDefinitions(context);
   const extraTools = await globalToolRegistry.getToolsForContext(context);
 
-  // 创建 LangSmith 追踪器
   const tracer = createLangsmithTracer(sessionName);
-  const callbacks = tracer ? [tracer] : [];
-  
-  const graph = await buildShopChatGraph(context, extraTools, activeDefs);
-  const result = await graph.invoke(
-    { messages: agentInputMessages },
-    { callbacks }
+  const runCollector = createRunCollector();
+  const callbacks = [tracer, runCollector].filter(
+    (c): c is NonNullable<typeof c> => c != null,
   );
 
-  const { messages } = result;
-  
+  const graph = await buildShopChatGraph(context, extraTools, activeDefs);
+  let resultMessages: BaseMessage[] = [];
+
+  try {
+    const result = await graph.invoke(
+      { messages: agentInputMessages },
+      {
+        callbacks,
+        runName: `spark-chat-${runId}`,
+        metadata: { sparkRunId: runId, shop, appName, feature: "chat" },
+      },
+    );
+    resultMessages = result.messages;
+  } catch (error) {
+    const durationMs = Date.now() - wallStart;
+    const langsmithRunId = getRootLangsmithRunId(runCollector);
+    if (shop && isAgentRunLogEnabled()) {
+      recordAgentRun({
+        runId,
+        shop,
+        appName,
+        feature: "chat",
+        status: resolveAgentRunStatus({
+          explicitStatus: "error",
+          durationMs,
+        }),
+        startedAt: startedAtIso,
+        durationMs,
+        langsmithRunId,
+        inputSummary: {
+          lastHuman: sanitizeHumanInput(lastUserTextInput),
+        },
+        error: {
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+    throw error;
+  }
+
+  const { messages } = { messages: resultMessages };
+
+  if (shop) {
+    const agentUsage = extractTokenUsageFromMessages(messages);
+    if (agentUsage.totalTokens > 0) {
+      await recordTokenUsage({
+        shop,
+        appName,
+        usage: agentUsage,
+      });
+    }
+  }
+
   const lastUserText =
     lastHumanUtterance(agentInputMessages) || lastHumanUtterance(messages) || "";
 
-  // 动态提取各 Tool 定义的 UI Payload
+  const langsmithRunId = getRootLangsmithRunId(runCollector);
+  const langsmithTraceUrl = langsmithRunId ? getTraceUrl(langsmithRunId) : undefined;
+
+  const writeRunLog = (status: "success" | "error") => {
+    if (!shop || !isAgentRunLogEnabled()) return;
+    const durationMs = Date.now() - wallStart;
+    const agentUsage = extractTokenUsageFromMessages(messages);
+    recordAgentRun({
+      runId,
+      shop,
+      appName,
+      feature: "chat",
+      status: resolveAgentRunStatus({ explicitStatus: status, durationMs }),
+      startedAt: startedAtIso,
+      durationMs,
+      langsmithRunId,
+      inputSummary: { lastHuman: sanitizeHumanInput(lastUserText) },
+      tools: extractToolSummariesFromMessages(messages),
+      tokenUsage:
+        agentUsage.totalTokens > 0
+          ? {
+              prompt: agentUsage.inputTokens,
+              completion: agentUsage.outputTokens,
+              total: agentUsage.totalTokens,
+            }
+          : undefined,
+    });
+  };
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const uiPayloads: Record<string, any> = {};
-  
+
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const msg = messages[i];
     if (AIMessage.isInstance(msg)) {
@@ -98,10 +193,11 @@ export async function invokeChatAgent(
           }
         }
 
+        writeRunLog("success");
         return {
           reply: polishFinalReply(text),
           uiPayloads,
-          ...(tracer ? { langsmithTraceUrl: getTraceUrl() } : {}),
+          ...(langsmithTraceUrl ? { langsmithTraceUrl } : {}),
         };
       }
     }
@@ -122,10 +218,11 @@ export async function invokeChatAgent(
         }
       }
 
+      writeRunLog("success");
       return {
         reply: polishFinalReply(fallbackText),
         uiPayloads,
-        ...(tracer ? { langsmithTraceUrl: getTraceUrl() } : {}),
+        ...(langsmithTraceUrl ? { langsmithTraceUrl } : {}),
       };
     }
   } catch {
@@ -144,9 +241,10 @@ export async function invokeChatAgent(
     }
   }
 
+  writeRunLog("success");
   return {
     reply: defaultReply,
     uiPayloads,
-    ...(tracer ? { langsmithTraceUrl: getTraceUrl() } : {}),
+    ...(langsmithTraceUrl ? { langsmithTraceUrl } : {}),
   };
 }

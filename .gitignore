@@ -14,8 +14,14 @@ node_modules
 /prisma/dev.sqlite-journal
 database.sqlite
 
+# CI 本地 Render 日报产物
+/reports/
+
 .env
 .env.*
+
+# 本地凭证（物流等），禁止提交
+.data/
 
 
 

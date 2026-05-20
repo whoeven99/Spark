@@ -1,6 +1,8 @@
 import type { DynamicStructuredTool } from "@langchain/core/tools";
 import type { BaseMessage } from "@langchain/core/messages";
+import type { AppEntry } from "../../../config/appEntry.server";
 import type { ShopifyAdminGraphqlClient } from "../skills/shopifyInfo/tool";
+import { wrapToolWithTokenUsage } from "../../tokenUsage/wrapToolWithTokenUsage.server";
 
 export interface UserProfile {
   // 可根据需要扩展，例如订阅套餐、行业、商户偏好等
@@ -14,6 +16,8 @@ export interface AgentContext {
   admin: ShopifyAdminGraphqlClient;
   profile?: UserProfile;
   shop?: string;
+  /** 与 `AppEntry` 一致；缺省时由 `getAppEntry()` 推断 */
+  appName?: AppEntry;
 }
 
 export interface ToolDefinition {
@@ -104,10 +108,13 @@ class ToolRegistry {
     for (const def of activeDefs) {
       try {
         const created = await def.createTool(context);
+        const wrap = (tool: DynamicStructuredTool) =>
+          wrapToolWithTokenUsage(tool, context);
+
         if (Array.isArray(created)) {
-          activeTools.push(...created);
+          activeTools.push(...created.map(wrap));
         } else {
-          activeTools.push(created);
+          activeTools.push(wrap(created));
         }
       } catch (err) {
         console.error(`[ToolRegistry] Failed to create tool ${def.name}:`, err);
