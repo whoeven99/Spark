@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import type { ChangeEvent, CSSProperties, KeyboardEvent } from "react";
 import { usePictureTranslateContext } from "./pictureTranslateContext";
+import { CriticalErrorBox } from "../shared/CriticalErrorBox";
 
 type PictureTranslateFormProps = {
   variant: "page" | "card";
@@ -309,18 +310,7 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
               </div>
             ) : null}
             {productSearchError ? (
-              <div
-                style={{
-                  padding: "0.5rem 0.65rem",
-                  borderRadius: "8px",
-                  background: pageColorTokens.criticalBg,
-                  color: pageColorTokens.criticalText,
-                  fontSize: "0.8125rem",
-                  lineHeight: 1.45,
-                }}
-              >
-                {productSearchError}
-              </div>
+            <CriticalErrorBox>{productSearchError}</CriticalErrorBox>
             ) : null}
             {!isProductSearching &&
             !productSearchError &&
@@ -579,19 +569,7 @@ export function PictureTranslateForm({ variant, embedded = false }: PictureTrans
         </div>
 
         {formErrorText ? (
-          <div
-            style={{
-              marginTop: "0.3rem",
-              padding: "0.5rem 0.65rem",
-              borderRadius: "8px",
-              background: pageColorTokens.criticalBg,
-              color: pageColorTokens.criticalText,
-              fontSize: "0.8125rem",
-              lineHeight: 1.45,
-            }}
-          >
-            {formErrorText}
-          </div>
+          <CriticalErrorBox style={{ marginTop: "0.3rem" }}>{formErrorText}</CriticalErrorBox>
         ) : null}
 
         <div style={{ gridColumn: "1 / -1", marginTop: "0.25rem" }}>

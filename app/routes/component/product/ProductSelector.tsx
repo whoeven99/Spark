@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { ProductSelectorSelection } from "../../../lib/productSearchTypes";
 import { useProductSearch } from "../../../hooks/useProductSearch";
 import { pageColorTokens } from "../../page/pageUiStyles";
+import { CriticalErrorBox } from "../shared/CriticalErrorBox";
 
 type BaseProps = {
   locationSearch: string;
@@ -29,15 +30,6 @@ function isMultipleProps(
 ): p is MultipleModeProps {
   return p.selectionMode === "multiple";
 }
-
-const errorBoxStyle: CSSProperties = {
-  padding: "0.5rem 0.65rem",
-  borderRadius: "8px",
-  background: pageColorTokens.criticalBg,
-  color: pageColorTokens.criticalText,
-  fontSize: "0.8125rem",
-  lineHeight: 1.45,
-};
 
 const emptyBoxStyle: CSSProperties = {
   padding: "0.75rem 0.65rem",
@@ -114,7 +106,7 @@ export function ProductSelector(props: ProductSelectorProps) {
         </div>
       ) : null}
 
-      {searchError ? <div style={errorBoxStyle}>{searchError}</div> : null}
+      {searchError ? <CriticalErrorBox>{searchError}</CriticalErrorBox> : null}
 
       {!isLoading && !searchError && kw && items.length === 0 ? (
         <div style={emptyBoxStyle}>{t("productSelector.empty")}</div>
