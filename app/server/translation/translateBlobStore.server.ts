@@ -17,9 +17,8 @@ function blobConnectionString(): string {
 
 function blobContainerName(): string {
   return (
-    process.env.BLOB_TRANSLATE_V3_CONTAINER?.trim() ||
     process.env.AZURE_BLOB_TRANSLATION_CONTAINER?.trim() ||
-    "translate-v3"
+    "translation-content"
   );
 }
 

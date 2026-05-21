@@ -1,10 +1,13 @@
+import type { ContainerClient } from "@azure/storage-blob";
 import {
   BlobSASPermissions,
+  BlobServiceClient,
   generateBlobSASQueryParameters,
   StorageSharedKeyCredential,
 } from "@azure/storage-blob";
-import { getTranslateV3BlobContainer } from "../translation/translateBlobStore.server";
 import { resolvePictureTranslateBlobSasTtlMinutes } from "../pictureTranslate/pictureTranslateBlob.server";
+
+let containerPromise: Promise<ContainerClient> | null = null;
 
 function blobConnectionString(): string {
   const conn =
@@ -12,7 +15,7 @@ function blobConnectionString(): string {
     process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
   if (!conn) {
     throw new Error(
-      "Blob 未配置：请设置 BLOB_TRANSLATE_V3_CONNECTION_STRING 或 AZURE_BLOB_CONNECTION_STRING",
+      "Blob 未配置：请设置 AZURE_BLOB_CONNECTION_STRING",
     );
   }
   return conn;
@@ -20,10 +23,19 @@ function blobConnectionString(): string {
 
 function blobContainerName(): string {
   return (
-    process.env.BLOB_TRANSLATE_V3_CONTAINER?.trim() ||
-    process.env.AZURE_BLOB_TRANSLATION_CONTAINER?.trim() ||
-    "translate-v3"
+    process.env.AZURE_BLOB_GENERATED_IMAGES_CONTAINER?.trim() ||
+    "generatedimages"
   );
+}
+
+export async function getGeneratedImagesBlobContainer(): Promise<ContainerClient> {
+  if (!containerPromise) {
+    containerPromise = (async () => {
+      const service = BlobServiceClient.fromConnectionString(blobConnectionString());
+      return service.getContainerClient(blobContainerName());
+    })();
+  }
+  return containerPromise;
 }
 
 function parseAccountFromConnectionString(connectionString: string): {
@@ -113,7 +125,7 @@ function resolveImageGenerationBlobSasTtlMinutes(): number | null {
   return Math.min(Math.floor(n), 60 * 24 * 30);
 }
 
-/** 上传文生图 PNG/JPEG 至 Azure，路径前缀 `generated-images/`。 */
+/** 上传文生图 PNG/JPEG 至独立容器 `generatedimages`，路径前缀 `generated-images/`。 */
 export async function uploadGeneratedImageAndGetUrl(params: {
   shop: string;
   imageBytes: Buffer;
@@ -121,7 +133,7 @@ export async function uploadGeneratedImageAndGetUrl(params: {
   extension?: "png" | "jpg";
 }): Promise<{ imageUrl: string; blobPath: string }> {
   const ext = params.extension ?? "png";
-  const container = await getTranslateV3BlobContainer();
+  const container = await getGeneratedImagesBlobContainer();
   const blobPath = buildGeneratedImageBlobPath({
     shop: params.shop,
     requestId: params.requestId,
