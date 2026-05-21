@@ -3,6 +3,7 @@
 ## 目标
 - 在 Shopify 嵌入式应用中提供「创建翻译任务」入口：向 Cosmos 写入任务元数据。
 - 任务的实际拉取、翻译、写回由 **AgentTask Camunda TranslationV4** 执行（Cosmos `taskType=spark-transtion`）；Spark 仅创建任务元数据。
+- **Cosmos 数据位置（Spark）**：`sparkcosmostest` → 数据库 `translation` → 容器 `translation_jobs`。Render 须配置相同 `COSMOS_ENDPOINT`/`COSMOS_KEY`；未设库表变量时默认即上述路径。日志搜 `[TranslationCosmos]`。
 
 ## 代码范围
 - 路由入口：`app/routes/app.translation.tsx`

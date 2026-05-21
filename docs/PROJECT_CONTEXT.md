@@ -219,8 +219,10 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
   - `DATABASE_URL`：`schema.prisma` / 迁移用（本地 SQLite 等）
 - 翻译 Cosmos（`cosmosJobStore.server.ts`）：
   - `COSMOS_ENDPOINT`、`COSMOS_KEY`
-  - `COSMOS_TRANSLATION_DATABASE_ID`（可选，默认 `translation`）
+  - `COSMOS_TRANSLATION_DATABASE_ID`（可选，默认 `translation`，sparkcosmostest 账户）
   - `COSMOS_TRANSLATION_JOBS_CONTAINER`（可选，默认 `translation_jobs`）
+  - `TRANSLATION_COSMOS_ENABLE_FALLBACK`（可选，默认 `true`；设为 `false` 时列表/创建仅查主库表）
+  - Cosmos 查询日志前缀：`[TranslationCosmos]`、`[TranslationV4Tasks]`（Render Logs 可搜）
 - Agent 运行摘要 Cosmos（`app/server/agentRunLog/`，见 `docs/agent-run-log.md`）：
   - 与翻译共用 `COSMOS_ENDPOINT`、`COSMOS_KEY`
   - `COSMOS_OPS_DATABASE_ID`（可选，默认 `spark_ops`）

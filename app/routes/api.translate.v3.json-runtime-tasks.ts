@@ -19,7 +19,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     if (forbidden) return forbidden;
 
     const effectiveShop = effectiveShopFromQuery(shopNameParam, session.shop);
-    const tasks = await listTranslationTasksForShop(effectiveShop);
+    const { tasks } = await listTranslationTasksForShop(effectiveShop);
     return Response.json({
       success: true,
       errorCode: 0,

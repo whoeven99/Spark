@@ -1,6 +1,9 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
-import { listTranslationTasksForShop } from "../server/translation/cosmosJobStore.server";
+import {
+  getTranslationCosmosMeta,
+  listTranslationTasksForShop,
+} from "../server/translation/cosmosJobStore.server";
 import {
   DEFAULT_TRANSLATION_TASK_LIST_TYPES,
   parseTaskTypeQueryParam,
@@ -29,7 +32,25 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const taskTypes =
       parsedTypes.length > 0 ? parsedTypes : [...DEFAULT_TRANSLATION_TASK_LIST_TYPES];
 
-    const tasks = await listTranslationTasksForShop(effectiveShop, taskTypes);
+    console.log("[TranslationV4Tasks] loader", {
+      shopNameParam,
+      sessionShop: session.shop,
+      effectiveShop,
+      taskTypeParam,
+      taskTypes,
+    });
+
+    const { tasks, resolvedFrom, queriedTargets } = await listTranslationTasksForShop(
+      effectiveShop,
+      taskTypes,
+    );
+
+    console.log("[TranslationV4Tasks] loader result", {
+      effectiveShop,
+      total: tasks.length,
+      resolvedFrom,
+    });
+    const cosmosMeta = getTranslationCosmosMeta();
     return Response.json({
       success: true,
       errorCode: 0,
@@ -39,6 +60,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         taskType: taskTypes.join(","),
         total: tasks.length,
         tasks,
+        meta: {
+          cosmosEndpointHost: cosmosMeta.endpointHost,
+          cosmosDatabase: cosmosMeta.databaseId,
+          cosmosContainer: cosmosMeta.containerId,
+          resolvedFromDatabase: resolvedFrom?.databaseId ?? null,
+          resolvedFromContainer: resolvedFrom?.containerId ?? null,
+          queriedTargets,
+        },
       },
     });
   } catch (error) {
