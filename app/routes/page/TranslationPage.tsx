@@ -3,7 +3,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import { useLoaderData } from "react-router";
 import type { loader } from "../app.translation";
-import { JsonRuntimeTaskStatusPanel } from "../component/translation/JsonRuntimeTaskStatusPanel";
+import { TranslationTaskStatusPanel } from "../component/translation/TranslationTaskStatusPanel";
 import { TranslationMonitorCard } from "../component/translation/TranslationMonitorCard";
 import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../../server/translation/types";
 import {
@@ -146,7 +146,7 @@ export function TranslationPage() {
             </PageSurface>
 
             <PageSurface title={t("translation.runtimeSectionTitle")}>
-              <JsonRuntimeTaskStatusPanel defaultShopName={loaderData.shop} />
+              <TranslationTaskStatusPanel defaultShopName={loaderData.shop} />
             </PageSurface>
           </s-stack>
         </div>

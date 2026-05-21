@@ -4,27 +4,21 @@ import { BlobServiceClient } from "@azure/storage-blob";
 let containerPromise: Promise<ContainerClient> | null = null;
 
 function blobConnectionString(): string {
-  const conn =
-    process.env.BLOB_TRANSLATE_V3_CONNECTION_STRING?.trim() ||
-    process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
+  const conn = process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
   if (!conn) {
-    throw new Error(
-      "Blob 未配置：请设置 BLOB_TRANSLATE_V3_CONNECTION_STRING 或 AZURE_BLOB_CONNECTION_STRING",
-    );
+    throw new Error("Blob 未配置：请设置 AZURE_BLOB_CONNECTION_STRING");
   }
   return conn;
 }
 
 function blobContainerName(): string {
   return (
-    process.env.BLOB_TRANSLATE_V3_CONTAINER?.trim() ||
-    process.env.AZURE_BLOB_TRANSLATION_CONTAINER?.trim() ||
-    "translate-v3"
+    process.env.AZURE_BLOB_TRANSLATION_CONTAINER?.trim() || "translation-content"
   );
 }
 
-/** 与 BogdaRepository TranslateV3BlobConfig 同一容器 */
-export async function getTranslateV3BlobContainer(): Promise<ContainerClient> {
+/** 与 AgentTask blob.translate-v4 / Spark AZURE_BLOB_TRANSLATION_CONTAINER 同一容器 */
+export async function getTranslationBlobContainer(): Promise<ContainerClient> {
   if (!containerPromise) {
     containerPromise = (async () => {
       const service = BlobServiceClient.fromConnectionString(blobConnectionString());
@@ -34,31 +28,31 @@ export async function getTranslateV3BlobContainer(): Promise<ContainerClient> {
   return containerPromise;
 }
 
-export async function translateV3BlobExists(blobPath: string): Promise<boolean> {
+export async function translationBlobExists(blobPath: string): Promise<boolean> {
   const p = blobPath.trim();
   if (!p) return false;
-  const container = await getTranslateV3BlobContainer();
+  const container = await getTranslationBlobContainer();
   return container.getBlockBlobClient(p).exists();
 }
 
 /** 删除 Blob（不存在时静默跳过）；用于视觉任务历史清理。 */
-export async function deleteTranslateV3BlobIfExists(blobPath: string): Promise<void> {
+export async function deleteTranslationBlobIfExists(blobPath: string): Promise<void> {
   const p = blobPath.trim();
   if (!p) return;
   try {
-    const container = await getTranslateV3BlobContainer();
+    const container = await getTranslationBlobContainer();
     const client = container.getBlockBlobClient(p);
     await client.deleteIfExists();
   } catch (e) {
-    console.error(`[TranslateV3Blob] delete failed path=${p}`, e);
+    console.error(`[TranslationBlob] delete failed path=${p}`, e);
   }
 }
 
-export async function translateV3BlobSizeBytes(blobPath: string): Promise<number | null> {
+export async function translationBlobSizeBytes(blobPath: string): Promise<number | null> {
   const p = blobPath.trim();
   if (!p) return null;
   try {
-    const container = await getTranslateV3BlobContainer();
+    const container = await getTranslationBlobContainer();
     const client = container.getBlockBlobClient(p);
     if (!(await client.exists())) return null;
     const props = await client.getProperties();
@@ -69,14 +63,14 @@ export async function translateV3BlobSizeBytes(blobPath: string): Promise<number
 }
 
 /** 仅读取前 maxBytes UTF-8 字节（与 Java readTextPrefix 一致） */
-export async function translateV3ReadTextPrefix(
+export async function translationBlobReadTextPrefix(
   blobPath: string,
   maxBytes: number,
 ): Promise<string | null> {
   const p = blobPath.trim();
   if (!p || maxBytes <= 0) return null;
   try {
-    const container = await getTranslateV3BlobContainer();
+    const container = await getTranslationBlobContainer();
     const client = container.getBlockBlobClient(p);
     if (!(await client.exists())) return null;
     const download = await client.download(0, maxBytes);
@@ -92,11 +86,11 @@ export async function translateV3ReadTextPrefix(
   }
 }
 
-export async function translateV3ReadTextFull(blobPath: string): Promise<string | null> {
+export async function translationBlobReadTextFull(blobPath: string): Promise<string | null> {
   const p = blobPath.trim();
   if (!p) return null;
   try {
-    const container = await getTranslateV3BlobContainer();
+    const container = await getTranslationBlobContainer();
     const client = container.getBlockBlobClient(p);
     if (!(await client.exists())) return null;
     const buf = await client.downloadToBuffer();

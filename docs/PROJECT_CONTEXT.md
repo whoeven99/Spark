@@ -12,11 +12,11 @@
 - `render-daily-digest.md` — Render 日志日报（GitHub Actions → 飞书）
 
 ## 1. 项目定位
-- 这是一个嵌入式 Shopify App，核心能力是 `AI Assistant + 店铺运维诊断 + 翻译任务（V3 / JSON Runtime）+ 卫星 App 订阅计费（generate-description）`。
+- 这是一个嵌入式 Shopify App，核心能力是 `AI Assistant + 店铺运维诊断 + 翻译任务（V4 / Camunda）+ 卫星 App 订阅计费（generate-description）`。
 - 当前主要用户入口：
   - `AI Assistant`：自然语言问答、店铺数据查询、运营建议、授权引导。
   - `诊断报告`：最近 7 天核心指标、健康状态与结论建议。
-  - `翻译`：在嵌入式应用中创建翻译任务（写入 Cosmos）、查看 JSON Runtime 任务列表与详情（Cosmos / Redis / Blob；详情可走 AgentTask 代理或 Spark 本机聚合）。
+  - `翻译`：在嵌入式应用中创建翻译任务（写入 Cosmos）、查看 V4 任务列表与详情（Cosmos / Redis / Blob；详情可走 AgentTask 代理或 Spark 本机聚合）。
   - **计费与订阅**（卫星 App `generate-description`）：`/app/billing` 开通月/年订阅、按量购包、查看 token 配额；生成描述 API 在余额不足时拦截。
 
 ## 2. 技术栈与运行形态
@@ -27,7 +27,7 @@
 - 持久化与服务依赖（与代码一致）：
   - **Shopify Session、用户建议、广告 OAuth 配置、计费账户**：同一 Prisma Client，运行时通过 `@prisma/adapter-libsql` 连接 **Turso（libSQL）**（见 `app/db.server.ts`）。计费相关模型：`Account`、`AppSubscription`、`PlanCatalog`、`AccountPeriodUsage`、`BillingLog`（见 `prisma/schema.prisma`；套餐种子 `prisma/billing-plan-catalog-seed.sql`）。`prisma/schema.prisma` 中 datasource 仍为 `sqlite` + `DATABASE_URL`，用于迁移与类型生成；线上/测试库 URL 与 Token 由 `TURSO_*` 环境变量提供。
   - **翻译任务元数据**：**Azure Cosmos DB**（容器默认 `translation` / `translation_jobs`，与 Spring 后端文档模型对齐，见 `app/server/translation/cosmosJobStore.server.ts`）。
-  - **翻译 V3 报表 / chunk 等 Blob**：**Azure Blob Storage**（见 `app/server/translation/translateBlobStore.server.ts`）。
+  - **翻译 chunk / 报表等 Blob**：**Azure Blob Storage**（见 `app/server/translation/translateBlobStore.server.ts`）。
   - **翻译进度与监控键**：**Redis**（`ioredis`，见 `app/server/translation/translateRedis.server.ts`）。
   - **物流承运商授权**：本地 JSON `.data/logistics-provider-credentials.json`（见 `app/server/logisticsCredentialStore.server.ts`）。
   - **事务邮件（腾讯 SES 模板）**：`app/server/email/`（Provider 模式；业务统一走 `sendTemplateEmail`）；安装/卸载运营通知由 `app/server/appLifecycle/` 直接调用（见 §10）。
@@ -60,9 +60,8 @@
 - **生成商品描述**：`POST /api/generate-description`（`api.generate-description.ts`）与 `POST /app/generate-description`（同上页面 action），服务端逻辑见 `app/server/generateDescription/generateDescriptionHttp.server.ts`；**写回 Shopify 商品标题与描述**：`POST /api/update-product-description`（`api.update-product-description.ts`），服务端见 `app/server/generateDescription/updateProductDescriptionHttp.server.ts` 与 `services/updateProductDescriptionService.ts`。AI Assistant 通过工具 `generate_product_description`（`app/server/ai/tools/implementations/generateDescriptionTool.ts`）调用同一套 `services/generateDescriptionService.ts`。方案与契约见 **`docs/generateDescription.md`**（改动前先读）。
 - **整图翻译（火山 + Aidge，对齐 Spring `POST /pcUserPic/translatePic`）**：`POST /api/picture-translate`（`api.picture-translate.ts`），服务端见 `app/server/pictureTranslate/**`。`modelType=1` 仅 Aidge、`modelType=2` 仅火山（不做交叉 fallback）。AI 聊天工具 `picture_translate` 按语言范围自动路由：**重叠范围优先火山**，仅 Aidge 支持的语言走 Aidge，均不支持则不译。在启用计费的 App（`generate-description`）上成功译图后通过 `recordVisualToolTokenUsage` 累加 `Account.usedTokens`（默认定额 `PICTURE_TRANSLATE_TOKEN_COST=2000`，对齐 Spring `APP_PIC_FEE` 量级）。
 - 翻译相关 HTTP 路由（文件位于 `app/routes/`，URL 与 React Router 扁平路由约定一致）：
-  - **`GET /api/translate/v4/tasks`**：`api.translate.v4.tasks.ts`，查询参数 `shopName`、`taskType`（Cosmos 分区列表；UI 默认 `taskType=spark-transtion`）。
-  - **`GET /api/translate/v3/json-runtime-tasks`**：兼容旧路径，不按 `taskType` 过滤。
-  - **`GET /api/translate/v3/json-runtime-task-detail`**：`api.translate.v3.json-runtime-task-detail.ts`，任务详情；默认转发 **`AGENT_TASK_BASE_URL`** 下的 Java `/translate/v3/jsonRuntimeTaskDetail`；若设置 **`JSON_RUNTIME_TASK_DETAIL_SOURCE=local`**，则在 Spark 进程内聚合 Cosmos / Redis / Blob（见该文件与 `jsonRuntimeTaskDetail.server.ts`）。
+  - **`GET /api/translate/v4/tasks`**：`api.translate.v4.tasks.ts`，查询参数 `shopName`、`taskType`（Cosmos `translation` / `translation_jobs`）。
+  - **`GET /api/translate/v4/task-detail`**：`api.translate.v4.task-detail.ts`，任务详情；默认转发 **`AGENT_TASK_BASE_URL`** 下的 Java `/translate/v3/jsonRuntimeTaskDetail`；若设置 **`TRANSLATION_TASK_DETAIL_SOURCE=local`**（兼容旧名 `JSON_RUNTIME_TASK_DETAIL_SOURCE`），则在 Spark 进程内聚合（见 `translationTaskDetail.server.ts`）。
 - 翻译服务端约定与边界： **`docs/translation-agent.md`**（改动翻译功能前先读）。
 - **计费 Webhook**（卫星 App toml 已注册）：
   - `app_subscriptions/update` → `webhooks.app.subscriptions_update.tsx`
@@ -221,7 +220,6 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
   - `COSMOS_ENDPOINT`、`COSMOS_KEY`
   - `COSMOS_TRANSLATION_DATABASE_ID`（可选，默认 `translation`，sparkcosmostest 账户）
   - `COSMOS_TRANSLATION_JOBS_CONTAINER`（可选，默认 `translation_jobs`）
-  - `TRANSLATION_COSMOS_ENABLE_FALLBACK`（可选，默认 `true`；设为 `false` 时列表/创建仅查主库表）
   - Cosmos 查询日志前缀：`[TranslationCosmos]`、`[TranslationV4Tasks]`（Render Logs 可搜）
 - Agent 运行摘要 Cosmos（`app/server/agentRunLog/`，见 `docs/agent-run-log.md`）：
   - 与翻译共用 `COSMOS_ENDPOINT`、`COSMOS_KEY`
@@ -230,13 +228,13 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
   - `AGENT_RUN_LOG_ENABLED`（默认开启；`false` 关闭写入）
   - `AGENT_RUN_TIMEOUT_MS`（可选，默认 `120000`）
 - 翻译 Blob（`translateBlobStore.server.ts`）：
-  - `BLOB_TRANSLATE_V3_CONNECTION_STRING` 或 `AZURE_BLOB_CONNECTION_STRING`
-  - `BLOB_TRANSLATE_V3_CONTAINER` 或 `AZURE_BLOB_TRANSLATION_CONTAINER`（可选，默认 `translate-v3`）
+  - `AZURE_BLOB_CONNECTION_STRING`
+  - `AZURE_BLOB_TRANSLATION_CONTAINER`（可选，默认 `translation-content`）
 - 翻译 Redis（`translateRedis.server.ts`）：
   - `REDIS_URL`，或 `REDIS_HOSTNAME`（或 `REDIS_HOST`）+ `REDIS_PASSWORD`（或 `REDIS_CACHEKEY_VAULT`）；可选 `REDIS_PORT`（默认 `6380`）、`REDIS_TLS`
 - 翻译详情代理：
   - `AGENT_TASK_BASE_URL`（可选；未设时使用代码内默认 Render 基址）
-  - `JSON_RUNTIME_TASK_DETAIL_SOURCE`：设为 `local` 时详情由 Spark 本机聚合，否则走 AgentTask
+  - `TRANSLATION_TASK_DETAIL_SOURCE`（或兼容 `JSON_RUNTIME_TASK_DETAIL_SOURCE`）：设为 `local` 时详情由 Spark 本机聚合，否则走 AgentTask
 - 整图翻译（火山 `TranslateImage` + Aidge IOP + Azure Blob，见 `app/server/pictureTranslate/`）：
   - 火山：`HUOSHAN_API_KEY`、`HUOSHAN_API_SECRET`；兼容 `VOLC_ACCESSKEY`、`VOLC_SECRETKEY`
   - Aidge：`AIDGE_ACCESS_KEY_ID`（或 `AIDGE_ACCESS_KEY_NAME`）、`AIDGE_ACCESS_KEY_SECRET`；`AIDGE_BASE_URL`（默认 `https://cn-api.aidc-ai.com`）；`AIDGE_IMAGE_TRANSLATE_PATH`（默认 `/ai/image/translation`）
@@ -271,7 +269,7 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
 - 改广告 OAuth 配置字段：`app/routes/app.ads.*.config.tsx` + `app/server/adAuthCredentialStore.server.ts`（及 Meta 的 `adsCredentialStore.server.ts`）；改物流：`app/routes/app.logistics.*.config.tsx` + `app/server/logisticsCredentialStore.server.ts`。
 - 改生成商品描述页或 API（先读 `docs/generateDescription.md`）：`app/routes/app.generate-description.tsx`、`app/routes/page/GenerateDescriptionPage.tsx`、`app/routes/component/generateDescription/GenerateDescriptionResultEditor.tsx`、`app/routes/api.generate-description.ts`、`app/routes/api.update-product-description.ts`、`app/server/generateDescription/**`、`app/hooks/useGenerateDescription.ts`、`app/server/ai/tools/implementations/generateDescriptionTool.ts`。
 - 改整图翻译 API / 双引擎路由：`app/routes/api.picture-translate.ts`、`app/server/pictureTranslate/**`、`app/server/ai/skills/pictureTranslate/**`。
-- 改翻译创建/流水线/Cosmos 文档：`app/server/translation/*`（先读 `docs/translation-agent.md`）；改翻译 UI：`app/routes/page/TranslationPage.tsx`、`app/routes/component/translation/*`；改 API：`app/routes/api.translate.v3.*.ts`。
+- 改翻译创建/流水线/Cosmos 文档：`app/server/translation/*`（先读 `docs/translation-agent.md`）；改翻译 UI：`app/routes/page/TranslationPage.tsx`、`app/routes/component/translation/*`；改 API：`app/routes/api.translate.v4.*.ts`。
 - 改订阅/购包/余额/Webhook：`app/server/billing/**`（先读 `app/server/billing/agent.md`）；改计费页 UI：`app/routes/app.billing.tsx`、`app/routes/page/BillingPage.tsx`、`app/routes/component/billing/*`、`app/lib/billingPlanUi.ts`、`app/lib/billingPageTypes.ts`；改 Webhook：`app/routes/webhooks.app.subscriptions_update.tsx`、`webhooks.app.purchases_one_time_update.tsx`、`webhooks.app.uninstalled.tsx`、`webhooks.app.scopes_update.tsx`；改 App 生命周期流水：`app/server/commonEventLog/**`；改 token 累加：`app/server/tokenUsage/**`；改套餐种子：`prisma/billing-plan-catalog-seed.sql` + `npm run turso:migrate:*`。
 
 ## 15. 改动边界与风险提示

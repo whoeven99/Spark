@@ -3,25 +3,19 @@ import {
   generateBlobSASQueryParameters,
   StorageSharedKeyCredential,
 } from "@azure/storage-blob";
-import { getTranslateV3BlobContainer } from "../translation/translateBlobStore.server";
+import { getTranslationBlobContainer } from "../translation/translateBlobStore.server";
 
 function blobConnectionString(): string {
-  const conn =
-    process.env.BLOB_TRANSLATE_V3_CONNECTION_STRING?.trim() ||
-    process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
+  const conn = process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
   if (!conn) {
-    throw new Error(
-      "Blob 未配置：请设置 BLOB_TRANSLATE_V3_CONNECTION_STRING 或 AZURE_BLOB_CONNECTION_STRING",
-    );
+    throw new Error("Blob 未配置：请设置 AZURE_BLOB_CONNECTION_STRING");
   }
   return conn;
 }
 
 function blobContainerName(): string {
   return (
-    process.env.BLOB_TRANSLATE_V3_CONTAINER?.trim() ||
-    process.env.AZURE_BLOB_TRANSLATION_CONTAINER?.trim() ||
-    "translate-v3"
+    process.env.AZURE_BLOB_TRANSLATION_CONTAINER?.trim() || "translation-content"
   );
 }
 
@@ -95,7 +89,7 @@ function appendReadSasToBlobUrl(params: {
 }
 
 /**
- * 上传译后 JPEG 字节至与 V3 翻译相同的 Azure 容器，路径前缀 `picture-translate/`，避免与 chunk 冲突。
+ * 上传译后 JPEG 字节至翻译共用 Azure 容器，路径前缀 `picture-translate/`，避免与 chunk 冲突。
  * 默认在 URL 上附加只读 SAS（见 `resolvePictureTranslateBlobSasTtlMinutes`）。
  */
 function contentTypeForExtension(ext: string): string {
@@ -122,7 +116,7 @@ export async function uploadPictureTranslateSourceImageAndGetUrl(params: {
   extension: string;
 }): Promise<string> {
   const ext = params.extension.toLowerCase() === "jpeg" ? "jpg" : params.extension.toLowerCase();
-  const container = await getTranslateV3BlobContainer();
+  const container = await getTranslationBlobContainer();
   const id = crypto.randomUUID();
   const blobPath = `picture-translate/source/${sanitizeShopSegment(params.shop)}/${id}.${ext}`;
   const client = container.getBlockBlobClient(blobPath);
@@ -155,7 +149,7 @@ export async function uploadPictureTranslateJpegAndGetUrl(params: {
   jpegBytes: Buffer;
   requestId?: string;
 }): Promise<{ imageUrl: string; blobPath: string }> {
-  const container = await getTranslateV3BlobContainer();
+  const container = await getTranslationBlobContainer();
   const requestId = params.requestId?.trim() || crypto.randomUUID();
   const blobPath = buildPictureTranslateResultBlobPath({
     shop: params.shop,

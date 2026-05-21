@@ -41,7 +41,7 @@ type UpdateJobInput = {
   errorMessage?: string | null;
 };
 
-/** 与 SpringBackend Cosmos TranslateTaskV3 文档对齐（partitionKey: shopName） */
+/** Cosmos 翻译任务文档（partitionKey: shopName） */
 export type TranslationJobDoc = {
   id: string;
   shopName: string;
@@ -108,12 +108,6 @@ const SPARK_TRANSLATION_COSMOS_TARGET: TranslationCosmosTarget = {
   databaseId: "translation",
   containerId: "translation_jobs",
 };
-
-/** AgentTask / Spring 侧库表（仅作回退） */
-const KNOWN_TRANSLATION_COSMOS_TARGETS: TranslationCosmosTarget[] = [
-  SPARK_TRANSLATION_COSMOS_TARGET,
-  { databaseId: "bogdatechtest", containerId: "translate_tasks_v3" },
-];
 
 const LOG_PREFIX = "[TranslationCosmos]";
 
@@ -247,11 +241,10 @@ function cosmosEndpointHost(): string {
   }
 }
 
-/** 主库表：环境变量优先，否则 Spark 默认 translation / translation_jobs */
+/** 环境变量优先，否则 Spark 默认 translation / translation_jobs */
 export function resolveTranslationCosmosConfig(): TranslationCosmosTarget {
   const databaseId =
     process.env.COSMOS_TRANSLATION_DATABASE_ID?.trim() ||
-    process.env.COSMOS_DATABASE_ID?.trim() ||
     SPARK_TRANSLATION_COSMOS_TARGET.databaseId;
   const containerId =
     process.env.COSMOS_TRANSLATION_JOBS_CONTAINER?.trim() ||
@@ -259,26 +252,12 @@ export function resolveTranslationCosmosConfig(): TranslationCosmosTarget {
   return { databaseId, containerId };
 }
 
-export function getTranslationCosmosLookupTargets(): TranslationCosmosTarget[] {
-  const primary = resolveTranslationCosmosConfig();
-  const seen = new Set<string>();
-  const ordered: TranslationCosmosTarget[] = [];
-  for (const target of [primary, ...KNOWN_TRANSLATION_COSMOS_TARGETS]) {
-    const key = `${target.databaseId}/${target.containerId}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    ordered.push(target);
-  }
-  return ordered;
-}
-
 export function getTranslationCosmosMeta() {
-  const primary = resolveTranslationCosmosConfig();
+  const target = resolveTranslationCosmosConfig();
   return {
     endpointHost: cosmosEndpointHost(),
-    databaseId: primary.databaseId,
-    containerId: primary.containerId,
-    lookupTargets: getTranslationCosmosLookupTargets(),
+    databaseId: target.databaseId,
+    containerId: target.containerId,
   };
 }
 
@@ -323,7 +302,7 @@ async function readJobDoc(shop: string, jobId: string) {
   return resource ?? null;
 }
 
-/** 点读任务文档（含 checkpoint），供 JSON Runtime 详情与后端 getJsonRuntimeTaskDetail 对齐 */
+/** 点读任务文档（含 checkpoint），供翻译任务详情 API 与 AgentTask 对齐 */
 export async function readTranslationJobDocument(shop: string, jobId: string) {
   return readJobDoc(shop.trim(), jobId.trim());
 }
@@ -540,65 +519,31 @@ async function listTranslationTasksInContainer(
   }
 }
 
-export type TranslationTaskListResult = {
-  tasks: TranslationTaskListItem[];
-  /** 实际命中数据的 Cosmos 库表（多目标回退时可能与环境变量主配置不同） */
-  resolvedFrom: TranslationCosmosTarget | null;
-  queriedTargets: TranslationCosmosTarget[];
-};
-
-/**
- * 列出翻译任务：先查环境变量主库表，无结果时回退到已知库表组合（与 AgentTask 共用 translate_tasks_v3 等）。
- */
+/** 从 translation / translation_jobs 列出店铺翻译任务 */
 export async function listTranslationTasksForShop(
   shop: string,
   taskTypes: string[] = [],
-): Promise<TranslationTaskListResult> {
-  const primary = resolveTranslationCosmosConfig();
-  const enableFallback = process.env.TRANSLATION_COSMOS_ENABLE_FALLBACK !== "false";
-  const targets = enableFallback
-    ? getTranslationCosmosLookupTargets()
-    : [primary];
+): Promise<TranslationTaskListItem[]> {
+  const target = resolveTranslationCosmosConfig();
 
   logTranslationCosmos("listTranslationTasksForShop", {
     endpointHost: cosmosEndpointHost(),
-    primary,
-    enableFallback,
-    targets,
+    ...target,
     shop,
     taskTypes,
   });
 
-  const merged = new Map<string, TranslationTaskListItem>();
-  let resolvedFrom: TranslationCosmosTarget | null = null;
-
-  for (const target of targets) {
-    const batch = await listTranslationTasksInContainer(target, shop, taskTypes);
-    if (batch.length === 0) continue;
-    if (!resolvedFrom) resolvedFrom = target;
-    for (const item of batch) {
-      merged.set(item.id, item);
-    }
-    if (!enableFallback) break;
-  }
-
-  const tasks = [...merged.values()]
+  const batch = await listTranslationTasksInContainer(target, shop, taskTypes);
+  const tasks = [...batch]
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 50);
 
   logTranslationCosmos("listTranslationTasksForShop result", {
     shop,
     total: tasks.length,
-    resolvedFrom,
     taskIds: tasks.slice(0, 10).map((t) => t.id),
   });
 
-  return { tasks, resolvedFrom, queriedTargets: targets };
-}
-
-/** @deprecated 请使用 {@link listTranslationTasksForShop} 或 `GET /api/translate/v4/tasks` */
-export async function listJsonRuntimeTasksForShop(shop: string) {
-  const { tasks } = await listTranslationTasksForShop(shop);
   return tasks;
 }
 

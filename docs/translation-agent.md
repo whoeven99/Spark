@@ -12,9 +12,9 @@
 - 创建任务：`app/server/translation/translationPipelineCore.server.ts`（`createTranslationJob`：同店同源同目标已存在任务时**幂等**返回最近更新的那条，不重复写入；新建时仅写 Cosmos，并写入 `accessToken` 供 AgentTask 拉取/写回 Shopify，**勿**在列表/详情 API 中返回该字段）
 - 类型：`app/routes/page/TranslationPage.tsx` 使用的 resource 类型见 `app/server/translation/types.ts`
 - 持久化：`app/server/translation/cosmosJobStore.server.ts`
-- 任务列表：`GET /api/translate/v4/tasks?shopName=&taskType=`（`api.translate.v4.tasks.ts`；`taskType` 可逗号分隔，默认 `spark-transtion,spark,json-runtime`）。`GET /api/translate/v3/json-runtime-tasks` 仍可用（兼容，不按 taskType 过滤）。
-- AgentTask 代理：`app/routes/api.translate.v3.json-runtime-task-detail.ts`
-- 运行时详情 UI：`app/routes/component/translation/JsonRuntimeTaskStatusPanel.tsx`
+- 任务列表：`GET /api/translate/v4/tasks?shopName=&taskType=`（`api.translate.v4.tasks.ts`；Cosmos `translation` / `translation_jobs`；默认 `taskType=spark-transtion`）。
+- 任务详情：`GET /api/translate/v4/task-detail?taskId=&shopName=`（`api.translate.v4.task-detail.ts`；默认转发 AgentTask，或 `TRANSLATION_TASK_DETAIL_SOURCE=local` 本机聚合）
+- 运行时详情 UI：`app/routes/component/translation/TranslationTaskStatusPanel.tsx`、`TranslationMonitorCard.tsx`
 
 ## 处理原则
 1. 先确认影响范围，再修改对应最小文件集合。

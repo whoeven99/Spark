@@ -1,7 +1,7 @@
 import type { i18n as I18nInstance } from "i18next";
 
-/** 与 Spring TranslateTaskV3CosmosRepo / Spark cosmosJobStore STATUS_META 的 statusText 对齐 */
-export const TRANSLATE_TASK_V3_COSMOS_STATUS_I18N_KEYS: Record<string, string> = {
+/** 与 AgentTask Cosmos / Spark cosmosJobStore STATUS_META 的 statusText 对齐 */
+export const TRANSLATE_TASK_COSMOS_STATUS_I18N_KEYS: Record<string, string> = {
   INIT_PENDING: "translationRuntime.cosmosStatusInitPending",
   TRANSLATE_PENDING: "translationRuntime.cosmosStatusTranslatePending",
   SAVE_PENDING: "translationRuntime.cosmosStatusSavePending",
@@ -55,8 +55,8 @@ function readNestedString(bundle: unknown, dottedKey: string): string | undefine
   return typeof cur === "string" ? cur : undefined;
 }
 
-/** 将 V3 Cosmos statusText 转为当前语言；未收录时回退为原始字符串 */
-export function formatTranslateTaskV3CosmosStatusText(
+/** 将 Cosmos statusText 转为当前语言；未收录时回退为原始字符串 */
+export function formatTranslateTaskCosmosStatusText(
   statusText: string | null | undefined,
   t: CosmosStatusTranslateFn,
   i18n: CosmosStatusI18n,
@@ -73,7 +73,7 @@ export function formatTranslateTaskV3CosmosStatusText(
     return trimmed;
   }
 
-  const i18nKey = TRANSLATE_TASK_V3_COSMOS_STATUS_I18N_KEYS[upper];
+  const i18nKey = TRANSLATE_TASK_COSMOS_STATUS_I18N_KEYS[upper];
   if (!i18nKey) return trimmed;
 
   const fromBundle = resolveFromBundle(i18n, i18nKey);

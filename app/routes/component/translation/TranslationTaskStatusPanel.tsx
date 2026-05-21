@@ -7,14 +7,14 @@ import {
   formatRedisTranslatePhaseLabel,
   readRuntimeChunksFileTotal,
 } from "../../../lib/redisTranslatePhaseLabel";
-import { formatTranslateTaskV3CosmosStatusText } from "../../../lib/translateTaskV3CosmosStatusLabel";
+import { formatTranslateTaskCosmosStatusText } from "../../../lib/translateTaskCosmosStatusLabel";
 import { PagePanel, pageColorTokens } from "../../page/pageUiStyles";
 
-export type JsonRuntimeTaskDetailEnvelope = {
+export type TranslationTaskDetailEnvelope = {
   success: boolean;
   errorCode?: number;
   errorMsg?: string;
-  response?: JsonRuntimeTaskDetailPayload | null;
+  response?: TranslationTaskDetailPayload | null;
 };
 
 export type BlobSnapshot = {
@@ -27,7 +27,7 @@ export type BlobSnapshot = {
   previewTruncated?: boolean;
 };
 
-export type JsonRuntimeTaskListRow = {
+export type TranslationTaskListRow = {
   id?: string;
   shopName?: string;
   source?: string;
@@ -42,20 +42,20 @@ export type JsonRuntimeTaskListRow = {
   moduleList?: string;
 };
 
-export type JsonRuntimeTaskListPayload = {
+export type TranslationTaskListPayload = {
   shopName?: string;
   total?: number;
-  tasks?: JsonRuntimeTaskListRow[];
+  tasks?: TranslationTaskListRow[];
 };
 
-export type JsonRuntimeTaskListEnvelope = {
+export type TranslationTaskListEnvelope = {
   success: boolean;
   errorCode?: number;
   errorMsg?: string;
-  response?: JsonRuntimeTaskListPayload | null;
+  response?: TranslationTaskListPayload | null;
 };
 
-export type JsonRuntimeTaskDetailPayload = {
+export type TranslationTaskDetailPayload = {
   cosmos?: Record<string, unknown>;
   resolvedRedisPrefix?: string;
   /** 由后端从当前 report Blob 解析，弥补 Redis failMap 跨 chunk 覆盖问题 */
@@ -309,7 +309,7 @@ const DETAIL_POLL_INTERVAL_SEC = 4;
 /** 任务列表静默刷新间隔（秒），低于详情频率 */
 const LIST_POLL_INTERVAL_SEC = 25;
 
-export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
+export function TranslationTaskStatusPanel({ defaultShopName }: Props) {
   const { t, i18n } = useTranslation();
   const [taskId, setTaskId] = useState("");
   const [includeBlobPreview, setIncludeBlobPreview] = useState(false);
@@ -321,11 +321,11 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
 
   const [listLoading, setListLoading] = useState(false);
   const [listErrorText, setListErrorText] = useState("");
-  const [taskList, setTaskList] = useState<JsonRuntimeTaskListRow[]>([]);
+  const [taskList, setTaskList] = useState<TranslationTaskListRow[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
-  const [payload, setPayload] = useState<JsonRuntimeTaskDetailPayload | null>(null);
+  const [payload, setPayload] = useState<TranslationTaskDetailPayload | null>(null);
 
   const [mdPreviewOpen, setMdPreviewOpen] = useState(false);
   const [mdPreviewLoading, setMdPreviewLoading] = useState(false);
@@ -351,7 +351,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
       params.set("shopName", shopName);
       params.set("taskType", "spark-transtion");
       const response = await fetch(`/api/translate/v4/tasks?${params.toString()}`);
-      const envelope = (await response.json().catch(() => ({}))) as JsonRuntimeTaskListEnvelope;
+      const envelope = (await response.json().catch(() => ({}))) as TranslationTaskListEnvelope;
       if (!response.ok || envelope.success === false) {
         if (!silent) {
           setTaskList([]);
@@ -412,9 +412,9 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
         params.set("maxPreviewBytes", String(maxPreviewBytes));
 
         const response = await fetch(
-          `/api/translate/v3/json-runtime-task-detail?${params.toString()}`,
+          `/api/translate/v4/task-detail?${params.toString()}`,
         );
-        const envelope = (await response.json().catch(() => ({}))) as JsonRuntimeTaskDetailEnvelope;
+        const envelope = (await response.json().catch(() => ({}))) as TranslationTaskDetailEnvelope;
 
         if (!response.ok || envelope.success === false) {
           if (!silent) setPayload(null);
@@ -450,9 +450,9 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
       const rp = payload?.resolvedRedisPrefix?.trim();
       if (rp) params.set("redisPrefix", rp);
       const response = await fetch(
-        `/api/translate/v3/json-runtime-task-detail?${params.toString()}`,
+        `/api/translate/v4/task-detail?${params.toString()}`,
       );
-      const envelope = (await response.json().catch(() => ({}))) as JsonRuntimeTaskDetailEnvelope;
+      const envelope = (await response.json().catch(() => ({}))) as TranslationTaskDetailEnvelope;
       if (!response.ok || envelope.success === false) {
         setMdPreviewText(
           envelope.errorMsg || t("translationRuntime.loadFailedStatus", { status: response.status }),
@@ -489,9 +489,9 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
       const rp = payload?.resolvedRedisPrefix?.trim();
       if (rp) params.set("redisPrefix", rp);
       const response = await fetch(
-        `/api/translate/v3/json-runtime-task-detail?${params.toString()}`,
+        `/api/translate/v4/task-detail?${params.toString()}`,
       );
-      const envelope = (await response.json().catch(() => ({}))) as JsonRuntimeTaskDetailEnvelope;
+      const envelope = (await response.json().catch(() => ({}))) as TranslationTaskDetailEnvelope;
       if (!response.ok || envelope.success === false) {
         setMdPreviewText(
           envelope.errorMsg || t("translationRuntime.loadFailedStatus", { status: response.status }),
@@ -824,7 +824,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                   <s-stack direction="block" gap="small">
                     <s-stack direction="inline" gap="small" alignItems="center">
                       <s-badge tone={listRowBadgeTone(row.statusText)}>
-                        {formatTranslateTaskV3CosmosStatusText(row.statusText, t, i18n)}
+                        {formatTranslateTaskCosmosStatusText(row.statusText, t, i18n)}
                       </s-badge>
                       <span
                         style={{
@@ -970,7 +970,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                 <s-stack direction="inline" gap="small" alignItems="center">
                   <s-badge tone="info">{readString(cosmos, "taskType") || "—"}</s-badge>
                   <s-badge tone={cosmosBadgeTone(readString(cosmos, "statusText"))}>
-                    {formatTranslateTaskV3CosmosStatusText(readString(cosmos, "statusText"), t, i18n)}
+                    {formatTranslateTaskCosmosStatusText(readString(cosmos, "statusText"), t, i18n)}
                   </s-badge>
                   <span style={{ fontSize: "12px", color: pageColorTokens.textSecondary }}>
                     {t("translationRuntime.statusCode")} {String(cosmos?.status ?? "—")}
@@ -1207,7 +1207,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                               }}
                               onClick={() =>
                                 document
-                                  .getElementById("json-runtime-failure-panel")
+                                  .getElementById("translation-task-failure-panel")
                                   ?.scrollIntoView({ behavior: "smooth", block: "start" })
                               }
                             >
@@ -1307,7 +1307,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
             </s-stack>
           </s-section>
 
-          <div id="json-runtime-failure-panel">
+          <div id="translation-task-failure-panel">
           <s-section heading={t("translationRuntime.failuresHeading")}>
             {payload.runtimeReportFailuresTruncated ? (
               <PagePanel>
@@ -1711,7 +1711,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
               lineHeight: 1.55,
               color: pageColorTokens.textPrimary,
             }}
-            className="json-runtime-md-preview"
+            className="translation-task-md-preview"
           >
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}

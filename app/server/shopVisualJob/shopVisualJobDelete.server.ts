@@ -1,5 +1,5 @@
 import prisma from "../../db.server";
-import { deleteTranslateV3BlobIfExists } from "../translation/translateBlobStore.server";
+import { deleteTranslationBlobIfExists } from "../translation/translateBlobStore.server";
 import type { ShopVisualJobKind } from "./types.server";
 
 const LOG_PREFIX = "[ShopVisualJob][Delete]";
@@ -59,7 +59,7 @@ export async function deleteShopVisualJobForShop(params: {
   }
 
   for (const blobPath of blobPaths) {
-    await deleteTranslateV3BlobIfExists(blobPath);
+    await deleteTranslationBlobIfExists(blobPath);
   }
 
   await prisma.shopVisualJob.delete({ where: { requestId } });

@@ -1,24 +1,22 @@
 import type { TranslationTaskCheckpoint } from "./types";
 import { readTranslationJobDocument, type TranslationJobDoc } from "./cosmosJobStore.server";
 import { getTranslateRedisClient } from "./translateRedis.server";
-
-/** 与 TranslateTaskMonitorV3RedisService.MONITOR_KEY_PREFIX 一致 */
-const TRANSLATE_MONITOR_V3_KEY_PREFIX = "translate_monitor_v3:";
 import {
-  translateV3BlobExists,
-  translateV3BlobSizeBytes,
-  translateV3ReadTextFull,
-  translateV3ReadTextPrefix,
+  translationBlobExists,
+  translationBlobReadTextFull,
+  translationBlobReadTextPrefix,
+  translationBlobSizeBytes,
 } from "./translateBlobStore.server";
+
+/** 与 AgentTask TranslateTaskMonitorV3RedisService.MONITOR_KEY_PREFIX 一致（Redis 键名未改） */
+const TRANSLATION_MONITOR_REDIS_PREFIX = "translate_monitor_v3:";
 
 const REPORT_FAILURES_MAX_BYTES = 512 * 1024;
 
 export const BASE_RESPONSE_FAILED_CODE = 10001;
 
-/**
- * 与 Spring BaseResponse 及 getJsonRuntimeTaskDetail 的 body 结构对齐。
- */
-export type JsonRuntimeTaskDetailEnvelope = {
+/** 与 Spring BaseResponse 及 AgentTask jsonRuntimeTaskDetail 的 body 结构对齐 */
+export type TranslationTaskDetailEnvelope = {
   success: boolean;
   errorCode: number;
   errorMsg: string;
@@ -30,7 +28,6 @@ function safeText(value: unknown): string {
   return String(value).trim();
 }
 
-/** 对齐 TranslateV3Service.toBlobPath */
 function toBlobPath(blobUriOrPath: string): string {
   const raw = safeText(blobUriOrPath);
   if (!raw || !raw.includes("://")) return raw;
@@ -94,7 +91,7 @@ function cosmosJobDocToMap(doc: TranslationJobDoc): Record<string, unknown> {
   };
 }
 
-async function getJsonRuntimeTaskProgress(
+async function getTranslationTaskProgress(
   taskId: string,
   redisPrefix: string,
 ): Promise<Record<string, unknown>> {
@@ -115,7 +112,6 @@ async function getJsonRuntimeTaskProgress(
     redis.hlen(resultKey),
   ]);
 
-  // 与 Java getJsonRuntimeTaskProgress 一致：doneSize/chunkDoneSize/resultSize 为整数
   return {
     taskId: tid,
     redisPrefix: cleanPrefix,
@@ -136,20 +132,20 @@ async function buildRuntimeBlobSnapshot(
   const snap: Record<string, unknown> = { uri };
   if (!uri) {
     snap.exists = false;
-    snap.note = "checkpoint 中无此 URI（非 spark/json-runtime 运行时任务或字段未写入）";
+    snap.note = "checkpoint 中无此 URI（非 spark-transtion 任务或字段未写入）";
     return snap;
   }
   const path = toBlobPath(uri);
   snap.blobPath = path;
-  const exists = await translateV3BlobExists(path);
+  const exists = await translationBlobExists(path);
   snap.exists = exists;
   if (!exists) return snap;
 
-  const sizeBytes = await translateV3BlobSizeBytes(path);
+  const sizeBytes = await translationBlobSizeBytes(path);
   snap.sizeBytes = sizeBytes;
   if (!includePreview) return snap;
 
-  const preview = await translateV3ReadTextPrefix(path, maxPreviewBytes);
+  const preview = await translationBlobReadTextPrefix(path, maxPreviewBytes);
   snap.preview = preview;
   if (sizeBytes != null && preview != null) {
     snap.previewTruncated = sizeBytes > maxPreviewBytes;
@@ -157,21 +153,21 @@ async function buildRuntimeBlobSnapshot(
   return snap;
 }
 
-async function enrichJsonRuntimeDetailWithReportFailures(
+async function enrichDetailWithReportFailures(
   body: Record<string, unknown>,
   reportUri: string,
 ): Promise<void> {
   const uri = safeText(reportUri);
   if (!uri) return;
   const path = toBlobPath(uri);
-  if (!(await translateV3BlobExists(path))) return;
+  if (!(await translationBlobExists(path))) return;
 
-  const sz = await translateV3BlobSizeBytes(path);
+  const sz = await translationBlobSizeBytes(path);
   if (sz != null && sz > REPORT_FAILURES_MAX_BYTES) {
     body.runtimeReportFailuresTruncated = true;
     return;
   }
-  const raw = await translateV3ReadTextFull(path);
+  const raw = await translationBlobReadTextFull(path);
   if (!raw?.trim()) return;
   try {
     const rep = JSON.parse(raw) as Record<string, unknown>;
@@ -184,10 +180,6 @@ async function enrichJsonRuntimeDetailWithReportFailures(
   }
 }
 
-/**
- * Redis meta Hash 可能过期、未写完或与 BogdaService 写入时机不一致；用 Cosmos 文档中的 metrics / checkpoint
- * 补齐缺失字段，使 Spark 本地聚合与 Java getJsonRuntimeTaskDetail 一样能算出条目与分块进度条。
- */
 function augmentRuntimeMetaFromCosmos(
   redisRuntime: Record<string, unknown>,
   doc: TranslationJobDoc,
@@ -219,7 +211,7 @@ function augmentRuntimeMetaFromCosmos(
   redisRuntime.meta = meta;
 }
 
-async function enrichJsonRuntimeDetailWithChunksFailedJson(
+async function enrichDetailWithChunksFailedJson(
   body: Record<string, unknown>,
   shopName: string,
   taskId: string,
@@ -228,13 +220,13 @@ async function enrichJsonRuntimeDetailWithChunksFailedJson(
   const tid = safeText(taskId);
   if (!shop || !tid) return;
   const blobRel = `tasks/${shop}/${tid}/chunks/failed.json`;
-  if (!(await translateV3BlobExists(blobRel))) return;
-  const sz = await translateV3BlobSizeBytes(blobRel);
+  if (!(await translationBlobExists(blobRel))) return;
+  const sz = await translationBlobSizeBytes(blobRel);
   if (sz != null && sz > REPORT_FAILURES_MAX_BYTES) {
     body.runtimeFailedJsonTruncated = true;
     return;
   }
-  const raw = await translateV3ReadTextFull(blobRel);
+  const raw = await translationBlobReadTextFull(blobRel);
   if (!raw?.trim()) return;
   try {
     const doc = JSON.parse(raw) as Record<string, unknown>;
@@ -246,16 +238,14 @@ async function enrichJsonRuntimeDetailWithChunksFailedJson(
   }
 }
 
-/**
- * 与 BogdaService TranslateV3Service.getJsonRuntimeTaskDetail 等价的数据聚合（Spark 进程内）。
- */
-export async function buildSparkJsonRuntimeTaskDetailEnvelope(options: {
+/** Spark 进程内聚合翻译任务详情（Cosmos / Redis / Blob） */
+export async function buildSparkTranslationTaskDetailEnvelope(options: {
   taskId: string;
   shopName: string;
   redisPrefix?: string;
   includeBlobPreview: boolean;
   maxPreviewBytes: number;
-}): Promise<JsonRuntimeTaskDetailEnvelope> {
+}): Promise<TranslationTaskDetailEnvelope> {
   const cleanId = safeText(options.taskId);
   if (!cleanId) {
     return {
@@ -303,7 +293,7 @@ export async function buildSparkJsonRuntimeTaskDetailEnvelope(options: {
   const body: Record<string, unknown> = {};
   body.cosmos = cosmosJobDocToMap(doc);
   body.resolvedRedisPrefix = effectiveRedis;
-  body.redisRuntime = await getJsonRuntimeTaskProgress(cleanId, effectiveRedis);
+  body.redisRuntime = await getTranslationTaskProgress(cleanId, effectiveRedis);
   augmentRuntimeMetaFromCosmos(body.redisRuntime as Record<string, unknown>, doc);
 
   const redisMeta =
@@ -344,17 +334,17 @@ export async function buildSparkJsonRuntimeTaskDetailEnvelope(options: {
     }
   }
 
-  await enrichJsonRuntimeDetailWithReportFailures(body, reportUri);
-  await enrichJsonRuntimeDetailWithChunksFailedJson(body, doc.shopName, cleanId);
+  await enrichDetailWithReportFailures(body, reportUri);
+  await enrichDetailWithChunksFailedJson(body, doc.shopName, cleanId);
 
   try {
     const redis = getTranslateRedisClient();
-    const monitor = await redis.hgetall(`${TRANSLATE_MONITOR_V3_KEY_PREFIX}${cleanId}`);
+    const monitor = await redis.hgetall(`${TRANSLATION_MONITOR_REDIS_PREFIX}${cleanId}`);
     if (monitor && Object.keys(monitor).length > 0) {
       body.translateMonitor = monitor;
     }
   } catch (err) {
-    console.warn("[json-runtime-task-detail] translate_monitor_v3 read failed", err);
+    console.warn("[TranslationTaskDetail] translate_monitor read failed", err);
   }
 
   return {

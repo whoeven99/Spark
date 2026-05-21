@@ -1,4 +1,4 @@
-/** Redis translate_monitor_v3 phase → 界面文案 */
+/** Redis translate_monitor（AgentTask）phase → 界面文案 */
 
 function readMetricNumber(raw: unknown): number | null {
   if (raw === undefined || raw === null) return null;

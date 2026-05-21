@@ -40,15 +40,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       taskTypes,
     });
 
-    const { tasks, resolvedFrom, queriedTargets } = await listTranslationTasksForShop(
-      effectiveShop,
-      taskTypes,
-    );
+    const tasks = await listTranslationTasksForShop(effectiveShop, taskTypes);
 
     console.log("[TranslationV4Tasks] loader result", {
       effectiveShop,
       total: tasks.length,
-      resolvedFrom,
     });
     const cosmosMeta = getTranslationCosmosMeta();
     return Response.json({
@@ -64,9 +60,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           cosmosEndpointHost: cosmosMeta.endpointHost,
           cosmosDatabase: cosmosMeta.databaseId,
           cosmosContainer: cosmosMeta.containerId,
-          resolvedFromDatabase: resolvedFrom?.databaseId ?? null,
-          resolvedFromContainer: resolvedFrom?.containerId ?? null,
-          queriedTargets,
         },
       },
     });

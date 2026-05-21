@@ -2,8 +2,8 @@ import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import {
   BASE_RESPONSE_FAILED_CODE,
-  buildSparkJsonRuntimeTaskDetailEnvelope,
-} from "../server/translation/jsonRuntimeTaskDetail.server";
+  buildSparkTranslationTaskDetailEnvelope,
+} from "../server/translation/translationTaskDetail.server";
 import {
   effectiveShopFromQuery,
   forbiddenIfShopMismatch,
@@ -11,7 +11,6 @@ import {
 
 const DEFAULT_AGENT_BASE = "https://agent-task-0qi3.onrender.com";
 
-/** 兼容 Jackson / 少数网关对布尔字段的序列化差异 */
 function coerceEnvelopeSuccess(value: unknown): boolean | undefined {
   if (typeof value === "boolean") return value;
   if (value === 1 || value === "1" || value === "true") return true;
@@ -19,8 +18,8 @@ function coerceEnvelopeSuccess(value: unknown): boolean | undefined {
   return undefined;
 }
 
-/** 转发至 AgentTask GET /translate/v3/jsonRuntimeTaskDetail（Java，与 BogdaService 同源实现） */
-async function proxyJsonRuntimeTaskDetailFromAgentTask(
+/** 转发至 AgentTask GET /translate/v3/jsonRuntimeTaskDetail（Java 路径暂未改） */
+async function proxyTranslationTaskDetailFromAgentTask(
   requestUrl: URL,
   effectiveShop: string,
   taskId: string,
@@ -59,7 +58,7 @@ async function proxyJsonRuntimeTaskDetailFromAgentTask(
   if (upstream.status === 204 || trimmed === "") {
     const hint204 =
       upstream.status === 204
-        ? "AgentTask 返回 HTTP 204（空响应）。多为路由未注册：请部署包含 JsonRuntimeTaskDetailController 的版本（GET /translate/v3/jsonRuntimeTaskDetail）。旧版 BogdaService 对 NoResourceFoundException 曾返回 204。"
+        ? "AgentTask 返回 HTTP 204（空响应）。请确认已部署 JsonRuntimeTaskDetailController。"
         : `AgentTask 返回空响应体（HTTP ${upstream.status}）`;
     return Response.json(
       {
@@ -108,9 +107,15 @@ async function proxyJsonRuntimeTaskDetailFromAgentTask(
   );
 }
 
+function taskDetailSource(): string | undefined {
+  return (
+    process.env.TRANSLATION_TASK_DETAIL_SOURCE?.trim().toLowerCase() ||
+    process.env.JSON_RUNTIME_TASK_DETAIL_SOURCE?.trim().toLowerCase()
+  );
+}
+
 /**
- * 默认：转发至 Java AgentTask（AGENT_TASK_BASE_URL /translate/v3/jsonRuntimeTaskDetail）。
- * 仅当环境变量 JSON_RUNTIME_TASK_DETAIL_SOURCE=local 时，在 Spark 进程内聚合 Cosmos/Redis/Blob。
+ * 默认转发 AgentTask；TRANSLATION_TASK_DETAIL_SOURCE=local 时 Spark 本机聚合。
  */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
@@ -133,7 +138,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const forbidden = forbiddenIfShopMismatch(
       shopNameParam,
       session.shop,
-      "只能查询当前店铺的 JSON Runtime 任务",
+      "只能查询当前店铺的翻译任务",
     );
     if (forbidden) return forbidden;
 
@@ -146,11 +151,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       : 8192;
     const redisPrefix = url.searchParams.get("redisPrefix")?.trim();
 
-    const detailSource = process.env.JSON_RUNTIME_TASK_DETAIL_SOURCE?.trim().toLowerCase();
-
-    if (detailSource === "local") {
+    if (taskDetailSource() === "local") {
       try {
-        const envelope = await buildSparkJsonRuntimeTaskDetailEnvelope({
+        const envelope = await buildSparkTranslationTaskDetailEnvelope({
           taskId,
           shopName: effectiveShop,
           redisPrefix,
@@ -169,7 +172,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       } catch (aggregateErr) {
         const msg =
           aggregateErr instanceof Error ? aggregateErr.message : String(aggregateErr);
-        console.error("[json-runtime-task-detail] local aggregate failed", aggregateErr);
+        console.error("[TranslationTaskDetail] local aggregate failed", aggregateErr);
         return Response.json(
           {
             success: false,
@@ -182,7 +185,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       }
     }
 
-    return proxyJsonRuntimeTaskDetailFromAgentTask(url, effectiveShop, taskId);
+    return proxyTranslationTaskDetailFromAgentTask(url, effectiveShop, taskId);
   } catch (error) {
     const message = error instanceof Error ? error.message : "请求处理失败";
     return Response.json(

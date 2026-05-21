@@ -3,26 +3,20 @@ import {
   generateBlobSASQueryParameters,
   StorageSharedKeyCredential,
 } from "@azure/storage-blob";
-import { getTranslateV3BlobContainer } from "../translation/translateBlobStore.server";
+import { getTranslationBlobContainer } from "../translation/translateBlobStore.server";
 import { resolvePictureTranslateBlobSasTtlMinutes } from "../pictureTranslate/pictureTranslateBlob.server";
 
 function blobConnectionString(): string {
-  const conn =
-    process.env.BLOB_TRANSLATE_V3_CONNECTION_STRING?.trim() ||
-    process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
+  const conn = process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
   if (!conn) {
-    throw new Error(
-      "Blob 未配置：请设置 BLOB_TRANSLATE_V3_CONNECTION_STRING 或 AZURE_BLOB_CONNECTION_STRING",
-    );
+    throw new Error("Blob 未配置：请设置 AZURE_BLOB_CONNECTION_STRING");
   }
   return conn;
 }
 
 function blobContainerName(): string {
   return (
-    process.env.BLOB_TRANSLATE_V3_CONTAINER?.trim() ||
-    process.env.AZURE_BLOB_TRANSLATION_CONTAINER?.trim() ||
-    "translate-v3"
+    process.env.AZURE_BLOB_TRANSLATION_CONTAINER?.trim() || "translation-content"
   );
 }
 
@@ -121,7 +115,7 @@ export async function uploadGeneratedImageAndGetUrl(params: {
   extension?: "png" | "jpg";
 }): Promise<{ imageUrl: string; blobPath: string }> {
   const ext = params.extension ?? "png";
-  const container = await getTranslateV3BlobContainer();
+  const container = await getTranslationBlobContainer();
   const blobPath = buildGeneratedImageBlobPath({
     shop: params.shop,
     requestId: params.requestId,

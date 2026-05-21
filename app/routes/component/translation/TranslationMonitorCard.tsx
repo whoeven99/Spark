@@ -4,16 +4,16 @@ import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type {
-  JsonRuntimeTaskDetailEnvelope,
-  JsonRuntimeTaskDetailPayload,
-  JsonRuntimeTaskListEnvelope,
-  JsonRuntimeTaskListRow,
-} from "./JsonRuntimeTaskStatusPanel";
+  TranslationTaskDetailEnvelope,
+  TranslationTaskDetailPayload,
+  TranslationTaskListEnvelope,
+  TranslationTaskListRow,
+} from "./TranslationTaskStatusPanel";
 import {
   formatRedisTranslatePhaseLabel,
   readRuntimeChunksFileTotal,
 } from "../../../lib/redisTranslatePhaseLabel";
-import { formatTranslateTaskV3CosmosStatusText } from "../../../lib/translateTaskV3CosmosStatusLabel";
+import { formatTranslateTaskCosmosStatusText } from "../../../lib/translateTaskCosmosStatusLabel";
 import { pageColorTokens } from "../../page/pageUiStyles";
 
 const POLL_SEC = 4;
@@ -142,7 +142,7 @@ function ProgressBar(props: {
 }
 
 function useRuntimeProgress(
-  payload: JsonRuntimeTaskDetailPayload | null,
+  payload: TranslationTaskDetailPayload | null,
   t: (key: string, options?: Record<string, unknown>) => string,
 ) {
   return useMemo(() => {
@@ -247,12 +247,12 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
 
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState("");
-  const [tasks, setTasks] = useState<JsonRuntimeTaskListRow[]>([]);
+  const [tasks, setTasks] = useState<TranslationTaskListRow[]>([]);
 
   const [selectedId, setSelectedId] = useState("");
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
-  const [detail, setDetail] = useState<JsonRuntimeTaskDetailPayload | null>(null);
+  const [detail, setDetail] = useState<TranslationTaskDetailPayload | null>(null);
 
   const [mdOpen, setMdOpen] = useState(false);
   const [mdLoading, setMdLoading] = useState(false);
@@ -277,7 +277,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
       params.set("shopName", shopName);
       params.set("taskType", "spark-transtion");
       const res = await fetch(`/api/translate/v4/tasks?${params.toString()}`);
-      const env = (await res.json().catch(() => ({}))) as JsonRuntimeTaskListEnvelope;
+      const env = (await res.json().catch(() => ({}))) as TranslationTaskListEnvelope;
       if (!res.ok || env.success === false) {
         if (!silent) {
           setTasks([]);
@@ -328,8 +328,8 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
         params.set("taskId", tid);
         if (shopName) params.set("shopName", shopName);
         params.set("maxPreviewBytes", "8192");
-        const res = await fetch(`/api/translate/v3/json-runtime-task-detail?${params.toString()}`);
-        const env = (await res.json().catch(() => ({}))) as JsonRuntimeTaskDetailEnvelope;
+        const res = await fetch(`/api/translate/v4/task-detail?${params.toString()}`);
+        const env = (await res.json().catch(() => ({}))) as TranslationTaskDetailEnvelope;
         if (!res.ok || env.success === false) {
           if (!silent) setDetail(null);
           setDetailError(env.errorMsg || t("translationRuntime.monitorDetailLoadFailed", { status: res.status }));
@@ -375,8 +375,8 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
       params.set("maxPreviewBytes", String(512 * 1024));
       const rp = detail?.resolvedRedisPrefix?.trim();
       if (rp) params.set("redisPrefix", rp);
-      const res = await fetch(`/api/translate/v3/json-runtime-task-detail?${params.toString()}`);
-      const env = (await res.json().catch(() => ({}))) as JsonRuntimeTaskDetailEnvelope;
+      const res = await fetch(`/api/translate/v4/task-detail?${params.toString()}`);
+      const env = (await res.json().catch(() => ({}))) as TranslationTaskDetailEnvelope;
       if (!res.ok || env.success === false) {
         setMdText(env.errorMsg || t("translationRuntime.loadFailed"));
         setMdTruncated(false);
@@ -410,8 +410,8 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
       params.set("maxPreviewBytes", String(512 * 1024));
       const rp = detail?.resolvedRedisPrefix?.trim();
       if (rp) params.set("redisPrefix", rp);
-      const res = await fetch(`/api/translate/v3/json-runtime-task-detail?${params.toString()}`);
-      const env = (await res.json().catch(() => ({}))) as JsonRuntimeTaskDetailEnvelope;
+      const res = await fetch(`/api/translate/v4/task-detail?${params.toString()}`);
+      const env = (await res.json().catch(() => ({}))) as TranslationTaskDetailEnvelope;
       if (!res.ok || env.success === false) {
         setMdText(env.errorMsg || t("translationRuntime.loadFailed"));
         setMdTruncated(false);
@@ -523,7 +523,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                       {(row.source ?? "—").trim()} → {(row.target ?? "—").trim()}
                     </span>
                     <s-badge tone={listBadgeTone(row.statusText)}>
-                      {formatTranslateTaskV3CosmosStatusText(row.statusText, t, i18n)}
+                      {formatTranslateTaskCosmosStatusText(row.statusText, t, i18n)}
                     </s-badge>
                   </div>
                   {row.updatedAt ? (
@@ -564,7 +564,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                     }}
                   >
                     <s-badge tone={cosmosTone(readString(cosmos, "statusText"))}>
-                      {formatTranslateTaskV3CosmosStatusText(readString(cosmos, "statusText"), t, i18n)}
+                      {formatTranslateTaskCosmosStatusText(readString(cosmos, "statusText"), t, i18n)}
                     </s-badge>
                     <span style={{ fontSize: "13px", color: pageColorTokens.textMuted }}>
                       <strong>{readString(cosmos, "source") || "—"}</strong>

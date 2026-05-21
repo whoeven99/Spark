@@ -4,7 +4,7 @@ This is a template for building a [Shopify app](https://shopify.dev/docs/apps/ge
 
 ## Spark（本项目）
 
-**Spark** 是在该模板上的嵌入式 Shopify 应用：AI 对话、店铺诊断报告、广告/物流授权配置，以及 **翻译 V3（JSON Runtime）** 任务创建与监控。与本模板默认脚手架的差异（Turso、Azure、Redis、Prisma 模型、翻译路由等）请以 **[docs/PROJECT_CONTEXT.md](./docs/PROJECT_CONTEXT.md) 为单一真相**；下文仍以 Shopify 官方模板说明为主。
+**Spark** 是在该模板上的嵌入式 Shopify 应用：AI 对话、店铺诊断报告、广告/物流授权配置，以及 **翻译 V4（Camunda）** 任务创建与监控。与本模板默认脚手架的差异（Turso、Azure、Redis、Prisma 模型、翻译路由等）请以 **[docs/PROJECT_CONTEXT.md](./docs/PROJECT_CONTEXT.md) 为单一真相**；下文仍以 Shopify 官方模板说明为主。
 
 概要（详情见 PROJECT_CONTEXT）：
 
@@ -13,10 +13,10 @@ This is a template for building a [Shopify app](https://shopify.dev/docs/apps/ge
 | 文档入口 | [docs/PROJECT_CONTEXT.md](./docs/PROJECT_CONTEXT.md) |
 | Prisma / Turso | `Session`、`Suggestion`（用户建议）、`AdPlatformCredential`（广告 OAuth 配置）走同一 Prisma Client，`app/db.server.ts` 经 libSQL 连接 Turso |
 | Azure Cosmos | 翻译任务元数据（与 Spring 侧 `translation_jobs` 对齐） |
-| Azure Blob | 翻译 V3 报表与 chunk 等对象存储 |
+| Azure Blob | 翻译 chunk 与报表等对象存储 |
 | Redis | `ioredis`，翻译进度与监控键（与后端 Redis 键约定对齐） |
 | 翻译页面 | `app/routes/app.translation.tsx`、`app/routes/page/TranslationPage.tsx` |
-| 翻译 API | `GET /api/translate/v3/json-runtime-tasks`、`GET /api/translate/v3/json-runtime-task-detail`（`app/routes/api.translate.v3.*.ts`）；详情默认转发 AgentTask，设 `JSON_RUNTIME_TASK_DETAIL_SOURCE=local` 时由 Spark 聚合 |
+| 翻译 API | `GET /api/translate/v4/tasks`、`GET /api/translate/v4/task-detail`（详情默认转发 AgentTask，`TRANSLATION_TASK_DETAIL_SOURCE=local` 时 Spark 本机聚合） |
 | 翻译开发约定 | 改动前阅读 [docs/translation-agent.md](./docs/translation-agent.md) |
 | 商品描述生成 | 改动前阅读 [docs/generateDescription.md](./docs/generateDescription.md) |
 | 前端 UI | 改动前阅读 [docs/UI_DESIGN.md](./docs/UI_DESIGN.md) |

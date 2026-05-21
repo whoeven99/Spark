@@ -10,7 +10,6 @@ let containerPromise: Promise<ContainerClient> | null = null;
 function shopProfileBlobConnectionString(): string | null {
   const conn =
     process.env.SHOP_PROFILE_BLOB_CONNECTION_STRING?.trim() ||
-    process.env.BLOB_TRANSLATE_V3_CONNECTION_STRING?.trim() ||
     process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
   return conn || null;
 }
@@ -18,9 +17,6 @@ function shopProfileBlobConnectionString(): string | null {
 function shopProfileBlobConnectionSource(): string {
   if (process.env.SHOP_PROFILE_BLOB_CONNECTION_STRING?.trim()) {
     return "SHOP_PROFILE_BLOB_CONNECTION_STRING";
-  }
-  if (process.env.BLOB_TRANSLATE_V3_CONNECTION_STRING?.trim()) {
-    return "BLOB_TRANSLATE_V3_CONNECTION_STRING";
   }
   if (process.env.AZURE_BLOB_CONNECTION_STRING?.trim()) {
     return "AZURE_BLOB_CONNECTION_STRING";

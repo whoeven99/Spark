@@ -55,7 +55,7 @@ Spark/
 |   |   +-- generateDescriptionTypes.ts
 |   |   +-- productSearchTypes.ts
 |   |   +-- redisTranslatePhaseLabel.ts
-|   |   +-- translateTaskV3CosmosStatusLabel.ts
+|   |   +-- translateTaskCosmosStatusLabel.ts
 |   |   +-- translationTaskFormPayload.ts
 |   |   `-- updateProductDescriptionTypes.ts
 |   +-- locales
@@ -88,8 +88,8 @@ Spark/
 |   |   +-- api.generate-description.ts
 |   |   +-- api.product-search.ts
 |   |   +-- api.shop-locales.ts
-|   |   +-- api.translate.v3.json-runtime-task-detail.ts
-|   |   +-- api.translate.v3.json-runtime-tasks.ts
+|   |   +-- api.translate.v4.task-detail.ts
+|   |   +-- api.translate.v4.tasks.ts
 |   |   +-- api.update-product-description.ts
 |   |   +-- app._index.tsx
 |   |   +-- app.additional.tsx
@@ -141,7 +141,7 @@ Spark/
 |   |   |   `-- productSearch.server.ts
 |   |   +-- translation
 |   |   |   +-- cosmosJobStore.server.ts
-|   |   |   +-- jsonRuntimeTaskDetail.server.ts
+|   |   |   +-- translationTaskDetail.server.ts
 |   |   |   +-- translateBlobStore.server.ts
 |   |   |   +-- translateRedis.server.ts
 |   |   |   +-- translateRouteHelpers.server.ts
