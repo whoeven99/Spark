@@ -22,6 +22,8 @@ type CreateJobInput = {
   resourceTypes: string[];
   limitPerType: number;
   createdBy: string;
+  /** Shopify Admin API token（来自 Turso Session）；仅写入 Cosmos，不下发前端。 */
+  accessToken?: string;
 };
 
 type UpdateJobInput = {
@@ -57,6 +59,7 @@ export type TranslationJobDoc = {
   updatedAt: string;
   handle: boolean;
   cover: boolean;
+  accessToken?: string;
 };
 
 const STATUS_META: Record<TranslationJobStatus, { code: number; text: string }> = {
@@ -245,7 +248,7 @@ export async function createTranslationJobRecord(input: CreateJobInput) {
     status: "PENDING",
     sourceLocale: input.sourceLocale,
     targetLocale: input.targetLocale,
-    taskType: input.taskType ?? "spark",
+    taskType: input.taskType ?? "spark-transtion",
     aiModel: input.aiModel ?? "gpt-4.1-nano",
     isCover: input.isCover ?? false,
     isHandle: input.isHandle ?? false,
@@ -263,6 +266,10 @@ export async function createTranslationJobRecord(input: CreateJobInput) {
     updatedAt: now,
   };
   const doc = toCosmosDoc(record);
+  const token = input.accessToken?.trim();
+  if (token) {
+    doc.accessToken = token;
+  }
   await jobs.items.upsert(doc);
   return mapJob(doc);
 }
@@ -340,7 +347,7 @@ export async function listTranslationJobs(shop: string) {
   return resources.map(mapJob);
 }
 
-/** 与 Spark 创建任务同一容器；taskType 为 spark（忽略大小写），并兼容历史 json-runtime。按 updatedAt 降序，最多 50 条。 */
+/** 与 Spark 创建任务同一容器；taskType 为 spark-transtion，并兼容历史 spark / json-runtime。按 updatedAt 降序，最多 50 条。 */
 export async function listJsonRuntimeTasksForShop(shop: string) {
   const shopTrim = shop.trim();
   if (!shopTrim) return [];
@@ -348,7 +355,7 @@ export async function listJsonRuntimeTasksForShop(shop: string) {
   const query = jobs.items.query<TranslationJobDoc>(
     {
       query:
-        "SELECT TOP 50 * FROM c WHERE c.shopName = @shop AND (LOWER(c.taskType) = 'spark' OR LOWER(c.taskType) = 'json-runtime') ORDER BY c.updatedAt DESC",
+        "SELECT TOP 50 * FROM c WHERE c.shopName = @shop AND (LOWER(c.taskType) = 'spark-transtion' OR LOWER(c.taskType) = 'spark' OR LOWER(c.taskType) = 'json-runtime') ORDER BY c.updatedAt DESC",
       parameters: [{ name: "@shop", value: shopTrim }],
     },
     { partitionKey: shopTrim },
@@ -361,7 +368,7 @@ export async function listJsonRuntimeTasksForShop(shop: string) {
     target: doc.target,
     status: doc.status,
     statusText: doc.statusText,
-    taskType: doc.taskType ?? "spark",
+    taskType: doc.taskType ?? "spark-transtion",
     aiModel: doc.aiModel ?? "",
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,

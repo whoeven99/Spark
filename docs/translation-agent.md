@@ -2,13 +2,13 @@
 
 ## 目标
 - 在 Shopify 嵌入式应用中提供「创建翻译任务」入口：向 Cosmos 写入任务元数据。
-- 任务的实际拉取、翻译、写回等由后端其他服务（如 AgentTask）执行；Spark 不再内置多步流水线。
+- 任务的实际拉取、翻译、写回由 **AgentTask Camunda TranslationV4** 执行（Cosmos `taskType=spark-transtion`）；Spark 仅创建任务元数据。
 
 ## 代码范围
 - 路由入口：`app/routes/app.translation.tsx`
 - 页面组件：`app/routes/page/TranslationPage.tsx`
 - 首页对话：`app/server/chat-stream.ts`（SSE）流式响应中的 `translationTaskForm` 由 `ChatPage` 写入对应助手消息的 `translationTaskForm` 字段；`ChatMessages` 在同一条 AI Assistant 气泡内渲染 `TranslationTaskChatCard`；工具定义 `app/server/ai/tools/implementations/translationTaskFormTool.ts`，载荷解析 `app/server/ai/postprocess/translationTaskFormExtract.ts`
-- 创建任务：`app/server/translation/translationPipelineCore.server.ts`（`createTranslationJob`：同店同源同目标已存在任务时**幂等**返回最近更新的那条，不重复写入；新建时仅写 Cosmos）
+- 创建任务：`app/server/translation/translationPipelineCore.server.ts`（`createTranslationJob`：同店同源同目标已存在任务时**幂等**返回最近更新的那条，不重复写入；新建时仅写 Cosmos，并写入 `accessToken` 供 AgentTask 拉取/写回 Shopify，**勿**在列表/详情 API 中返回该字段）
 - 类型：`app/routes/page/TranslationPage.tsx` 使用的 resource 类型见 `app/server/translation/types.ts`
 - 持久化：`app/server/translation/cosmosJobStore.server.ts`
 - AgentTask 代理：`app/routes/api.translate.v3.json-runtime-task-detail.ts`

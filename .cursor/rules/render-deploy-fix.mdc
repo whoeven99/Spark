@@ -1,0 +1,52 @@
+---
+description: Render 发布失败时：MCP 查日志 → 本地修复 → 验证 build → commit & push
+alwaysApply: false
+---
+
+# Render 发布失败自动修复流程
+
+当用户提到 **Render 部署/发布失败**、**build_failed**、**SmartDescriptionTest / Spark Test 挂了** 等时，按本规则执行（无需用户逐步确认中间步骤）。
+
+## 1. 识别目标服务
+
+按用户描述或上下文选择 `RENDER_SERVICE_ID`（未说明时默认 Smart Description Test）：
+
+| 环境 | Service ID | 域名 |
+|------|------------|------|
+| Smart Description Test | `srv-d84veasvikkc739fk0f0` | `smartdescriptiontest.onrender.com` |
+| Spark Test | `srv-d7j6ogaqqhas739in900` | `aiassistant-wi7b.onrender.com` |
+
+## 2. 用 Render MCP 查发布（优先）
+
+1. 确认 Cursor 已配置 Render MCP（`~/.cursor/mcp.json` 或项目 `.cursor/mcp.json`，Bearer API Key 有效）。
+2. 使用 Render MCP 工具（勿把 API Key 写入仓库）：
+   - 列出/选中 workspace 与服务
+   - 查询该服务 **最近一次 `build_failed` 或 `update_failed` 的 deploy**
+   - 拉取该 deploy 的 **build 日志**（完整错误栈）
+3. MCP 不可用时：用 Render REST API 或 `render` CLI 作为降级，仍须拿到 build 日志再动手改代码。
+
+## 3. 修复与验证
+
+1. 根据 build 日志定位根因（常见：错误 import 路径、缺失 export、未安装依赖、TypeScript/SSR 打包错误）。
+2. 先读 `docs/PROJECT_CONTEXT.md`；若改动触及翻译/计费，再读对应 agent 文档。
+3. **最小改动**修复；本地运行 `npm run build`，必须通过后再进入提交步骤。
+4. 不要改鉴权、密钥、`.env` 内容；不要把 API Key 提交进 git。
+
+## 4. 自动提交并 push（本场景例外）
+
+用户对「发布失败修复」已授权自动化时：
+
+1. `git status` / `git diff` 确认仅包含本次修复相关文件。
+2. 提交信息风格与仓库近期 commit 一致，说明修复的 build 错误（1–2 句）。
+3. **push 到当前分支**（`git push`）；需要 `git_write` 与 `network` 权限。
+4. push 后再次用 MCP/API 查看是否触发新 deploy；若仍为 failed，重复 2–4 直至 `live` 或明确阻塞（需人工/env/Render 配置）。
+
+## 5. 汇报
+
+用中文简要说明：失败原因、改了哪些文件、commit hash、push 分支、新 deploy 状态（或为何无法 push）。
+
+## 6. 禁止
+
+- 不要 force push `main`/`master`。
+- 不要 `--no-verify` 跳过 hook，除非用户明确要求。
+- 不要提交 `.env`、`mcp.json` 中的 API Key、或无关大改动。

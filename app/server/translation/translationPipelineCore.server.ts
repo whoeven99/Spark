@@ -1,3 +1,4 @@
+import { getAppEntry } from "../../config/appEntry.server";
 import { createTranslationJobRecord, listTranslationJobs } from "./cosmosJobStore.server";
 import {
   ALLOWED_TRANSLATABLE_RESOURCE_TYPES,
@@ -5,8 +6,8 @@ import {
   type TranslationJobRecord,
 } from "./types";
 
-/** 与 SpringBackend `TranslateV3Service.isRuntimeJsonTask` 一致，供 AgentTask 调度 Spark 翻译任务 */
-const SPARK_TRANSLATION_TASK_TYPE = "spark";
+/** AgentTask Camunda TranslationV4 轮询的 taskType（非 json-runtime 的 spark 旧值） */
+const SPARK_TRANSLATION_TASK_TYPE = "spark-transtion";
 
 export type CreateTranslationJobResult = {
   job: TranslationJobRecord;
@@ -21,6 +22,7 @@ type CreateTranslationJobInput = {
   resourceTypes: string[];
   createdBy: string;
   limitPerType: number;
+  accessToken: string;
 };
 
 const DEFAULT_RESOURCE_TYPES: TranslatableResourceType[] = ["PRODUCT", "COLLECTION", "PAGE", "ARTICLE"];
@@ -84,11 +86,16 @@ export async function createTranslationJob(
     isHandle: false,
     moduleList: resourceTypes,
     sessionId: `${input.shop}:${jobId}`,
-    checkpoint: { phase: "INIT_CREATED", updatedAt: new Date().toISOString() },
+    checkpoint: {
+      phase: "INIT_CREATED",
+      updatedAt: new Date().toISOString(),
+      billingAppName: getAppEntry(),
+    },
     metrics: {},
     resourceTypes,
     limitPerType,
     createdBy: input.createdBy,
+    accessToken: input.accessToken,
   });
   return { job, reusedExisting: false };
 }

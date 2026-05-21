@@ -10,12 +10,16 @@ vi.mock("~/server/translation/cosmosJobStore.server", () => ({
   listTranslationJobs: mocks.listTranslationJobs,
 }));
 
+vi.mock("~/config/appEntry.server", () => ({
+  getAppEntry: () => "chat",
+}));
+
 import { createTranslationJob } from "../../../../app/server/translation/translationPipelineCore.server";
 
 const baseExisting = {
   shop: "demo-shop",
   status: "PENDING" as const,
-  taskType: "spark",
+  taskType: "spark-transtion",
   aiModel: "gpt-4o-mini",
   isCover: false,
   isHandle: false,
@@ -56,6 +60,7 @@ describe("createTranslationJob", () => {
       resourceTypes: ["product"],
       createdBy: "tester",
       limitPerType: 30,
+      accessToken: "shpat_test",
     });
 
     expect(mocks.createTranslationJobRecord).not.toHaveBeenCalled();
@@ -71,7 +76,7 @@ describe("createTranslationJob", () => {
       status: "PENDING",
       sourceLocale: input.sourceLocale,
       targetLocale: input.targetLocale,
-      taskType: input.taskType ?? "spark",
+      taskType: input.taskType ?? "spark-transtion",
       aiModel: input.aiModel ?? "gpt-4o-mini",
       isCover: false,
       isHandle: false,
@@ -96,6 +101,7 @@ describe("createTranslationJob", () => {
       resourceTypes: ["PRODUCT"],
       createdBy: "tester",
       limitPerType: 20,
+      accessToken: "shpat_test_token",
     });
 
     expect(mocks.createTranslationJobRecord).toHaveBeenCalledWith(
@@ -104,7 +110,11 @@ describe("createTranslationJob", () => {
         sourceLocale: "en",
         targetLocale: "de",
         limitPerType: 20,
-        taskType: "spark",
+        taskType: "spark-transtion",
+        accessToken: "shpat_test_token",
+        checkpoint: expect.objectContaining({
+          billingAppName: "chat",
+        }),
       }),
     );
     expect(result.reusedExisting).toBe(false);
@@ -129,6 +139,7 @@ describe("createTranslationJob", () => {
       resourceTypes: ["PRODUCT"],
       createdBy: "tester",
       limitPerType: 20,
+      accessToken: "shpat_test",
     });
 
     expect(result.reusedExisting).toBe(true);

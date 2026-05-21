@@ -8,7 +8,7 @@
 |------|------|
 | `ruleKey` | 主键，建议 `gd:{feature}:{modelKey}` |
 | `appName` | `generate-description` 或 `*`（全局兜底） |
-| `feature` | `product_copy` · `image_prompt` · `image_generate` · `picture_translate` |
+| `feature` | `product_copy` · `image_prompt` · `image_generate` · `picture_translate` · `translation_v3` |
 | `modelKey` | 模型/提供商标识，见下表；未命中时用 `_default` |
 | `displayName` | 运维备注 |
 | `multiplier` | 乘数（≥0），记入账户前对 token 向上取整：`ceil(n × multiplier)` |
@@ -23,6 +23,7 @@
 | `image_prompt` | `deepseek-chat` | 同上（画面扩写） |
 | `image_generate` | `gpt-image-2` | `OPENAI_IMAGE_MODEL`，`IMAGE_GEN_PROVIDER=openai` |
 | `picture_translate` | `volc-translate` / `aidge-translate` | 整图翻译路由到的提供商 |
+| `translation_v3` | `deepseek-chat` / `_default` | AgentTask JSON Runtime / V3 翻译（Spring 经 Internal API 入账） |
 
 若启用 `IMAGE_GEN_PROVIDER=volc`，入账 modelKey 为 `IMAGE_GEN_VOLC_REQ_KEY`（默认 `high_aes_general_v20`），需在表中另加一行规则。
 

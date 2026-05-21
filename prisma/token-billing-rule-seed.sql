@@ -1,5 +1,5 @@
 -- TokenBillingRule 种子（与 .env 对齐；INSERT OR IGNORE 可重复执行）
--- feature: product_copy | image_prompt | image_generate | picture_translate
+-- feature: product_copy | image_prompt | image_generate | picture_translate | translation_v3
 
 INSERT OR IGNORE INTO "TokenBillingRule" (
     "ruleKey",
@@ -30,7 +30,7 @@ INSERT OR IGNORE INTO "TokenBillingRule" (
         'generate-description',
         'image_prompt',
         'deepseek-chat',
-        '画面扩写 · deepseek-chat',
+        '图片提示词 · deepseek-chat',
         1.0,
         NULL,
         1,
@@ -69,6 +69,30 @@ INSERT OR IGNORE INTO "TokenBillingRule" (
         '整图翻译 · Aidge',
         1.0,
         2000,
+        1,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+    ),
+    (
+        'gd:translation_v3:_default',
+        'generate-description',
+        'translation_v3',
+        '_default',
+        'JSON Runtime 翻译 · 默认模型',
+        1.0,
+        NULL,
+        1,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+    ),
+    (
+        'gd:translation_v3:deepseek-chat',
+        'generate-description',
+        'translation_v3',
+        'deepseek-chat',
+        'JSON Runtime 翻译 · deepseek-chat',
+        1.0,
+        NULL,
         1,
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP

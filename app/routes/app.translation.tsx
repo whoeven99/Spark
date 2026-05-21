@@ -46,6 +46,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     if (actionType === "create_job") {
+      const accessToken = session.accessToken?.trim();
+      if (!accessToken) {
+        return data({ ok: false, error: "缺少 Shopify 访问令牌，请重新打开应用授权" }, { status: 401 });
+      }
       const created = await createTranslationJob({
         shop: session.shop,
         targetLocale: body.targetLocale ?? "",
@@ -53,6 +57,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         resourceTypes: body.resourceTypes ?? [],
         createdBy: session.shop,
         limitPerType: body.limitPerType ?? 20,
+        accessToken,
       });
       if (!created?.job?.id) {
         return data({ ok: false, error: "翻译任务创建失败" }, { status: 500 });

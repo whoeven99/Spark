@@ -4,6 +4,7 @@ export const TOKEN_BILLING_FEATURES = [
   "image_prompt",
   "image_generate",
   "picture_translate",
+  "translation_v3",
 ] as const;
 
 export type TokenBillingFeature = (typeof TOKEN_BILLING_FEATURES)[number];
