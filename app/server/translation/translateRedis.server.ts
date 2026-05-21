@@ -19,11 +19,9 @@ export function getTranslateRedisClient(): Redis {
   }
 
   const host =
-    process.env.REDIS_HOSTNAME?.trim() ||
-    process.env.REDIS_HOST?.trim();
+    process.env.REDIS_HOSTNAME?.trim();
   const password =
-    process.env.REDIS_PASSWORD?.trim() ||
-    process.env.REDIS_CACHEKEY_VAULT?.trim();
+    process.env.REDIS_PASSWORD?.trim();
 
   if (!host || !password) {
     throw new Error(

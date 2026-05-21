@@ -1,9 +1,12 @@
+import type { ContainerClient } from "@azure/storage-blob";
 import {
   BlobSASPermissions,
+  BlobServiceClient,
   generateBlobSASQueryParameters,
   StorageSharedKeyCredential,
 } from "@azure/storage-blob";
-import { getTranslateV3BlobContainer } from "../translation/translateBlobStore.server";
+
+let containerPromise: Promise<ContainerClient> | null = null;
 
 function blobConnectionString(): string {
   const conn =
@@ -11,7 +14,7 @@ function blobConnectionString(): string {
     process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
   if (!conn) {
     throw new Error(
-      "Blob 未配置：请设置 BLOB_TRANSLATE_V3_CONNECTION_STRING 或 AZURE_BLOB_CONNECTION_STRING",
+      "Blob 未配置：请设置 AZURE_BLOB_CONNECTION_STRING",
     );
   }
   return conn;
@@ -19,10 +22,19 @@ function blobConnectionString(): string {
 
 function blobContainerName(): string {
   return (
-    process.env.BLOB_TRANSLATE_V3_CONTAINER?.trim() ||
-    process.env.AZURE_BLOB_TRANSLATION_CONTAINER?.trim() ||
-    "translate-v3"
+    process.env.AZURE_BLOB_PICTURE_TRANSLATE_CONTAINER?.trim() ||
+    "picturetranslate"
   );
+}
+
+export async function getPictureTranslateBlobContainer(): Promise<ContainerClient> {
+  if (!containerPromise) {
+    containerPromise = (async () => {
+      const service = BlobServiceClient.fromConnectionString(blobConnectionString());
+      return service.getContainerClient(blobContainerName());
+    })();
+  }
+  return containerPromise;
 }
 
 function parseAccountFromConnectionString(connectionString: string): {
@@ -122,7 +134,7 @@ export async function uploadPictureTranslateSourceImageAndGetUrl(params: {
   extension: string;
 }): Promise<string> {
   const ext = params.extension.toLowerCase() === "jpeg" ? "jpg" : params.extension.toLowerCase();
-  const container = await getTranslateV3BlobContainer();
+  const container = await getPictureTranslateBlobContainer();
   const id = crypto.randomUUID();
   const blobPath = `picture-translate/source/${sanitizeShopSegment(params.shop)}/${id}.${ext}`;
   const client = container.getBlockBlobClient(blobPath);
@@ -155,7 +167,7 @@ export async function uploadPictureTranslateJpegAndGetUrl(params: {
   jpegBytes: Buffer;
   requestId?: string;
 }): Promise<{ imageUrl: string; blobPath: string }> {
-  const container = await getTranslateV3BlobContainer();
+  const container = await getPictureTranslateBlobContainer();
   const requestId = params.requestId?.trim() || crypto.randomUUID();
   const blobPath = buildPictureTranslateResultBlobPath({
     shop: params.shop,

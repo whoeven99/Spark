@@ -27,7 +27,8 @@
 - 持久化与服务依赖（与代码一致）：
   - **Shopify Session、用户建议、广告 OAuth 配置、计费账户**：同一 Prisma Client，运行时通过 `@prisma/adapter-libsql` 连接 **Turso（libSQL）**（见 `app/db.server.ts`）。计费相关模型：`Account`、`AppSubscription`、`PlanCatalog`、`AccountPeriodUsage`、`BillingLog`（见 `prisma/schema.prisma`；套餐种子 `prisma/billing-plan-catalog-seed.sql`）。`prisma/schema.prisma` 中 datasource 仍为 `sqlite` + `DATABASE_URL`，用于迁移与类型生成；线上/测试库 URL 与 Token 由 `TURSO_*` 环境变量提供。
   - **翻译任务元数据**：**Azure Cosmos DB**（容器默认 `translation` / `translation_jobs`，与 Spring 后端文档模型对齐，见 `app/server/translation/cosmosJobStore.server.ts`）。
-  - **翻译 V3 报表 / chunk 等 Blob**：**Azure Blob Storage**（见 `app/server/translation/translateBlobStore.server.ts`）。
+  - **翻译 V3 报表 / chunk 等 Blob**：**Azure Blob Storage** 容器 `translation-content`（见 `app/server/translation/translateBlobStore.server.ts`）。
+  - **整图翻译 / 文生图 Blob**：同一 Storage 账号下独立容器 `picturetranslate`、`generatedimages`（见 `pictureTranslateBlob.server.ts`、`imageGenerationBlob.server.ts`）。
   - **翻译进度与监控键**：**Redis**（`ioredis`，见 `app/server/translation/translateRedis.server.ts`）。
   - **物流承运商授权**：本地 JSON `.data/logistics-provider-credentials.json`（见 `app/server/logisticsCredentialStore.server.ts`）。
   - **事务邮件（腾讯 SES 模板）**：`app/server/email/`（Provider 模式；业务统一走 `sendTemplateEmail`）；安装/卸载运营通知由 `app/server/appLifecycle/` 直接调用（见 §10）。
@@ -228,7 +229,7 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
   - `AGENT_RUN_TIMEOUT_MS`（可选，默认 `120000`）
 - 翻译 Blob（`translateBlobStore.server.ts`）：
   - `BLOB_TRANSLATE_V3_CONNECTION_STRING` 或 `AZURE_BLOB_CONNECTION_STRING`
-  - `BLOB_TRANSLATE_V3_CONTAINER` 或 `AZURE_BLOB_TRANSLATION_CONTAINER`（可选，默认 `translate-v3`）
+  - `BLOB_TRANSLATE_V3_CONTAINER` 或 `AZURE_BLOB_TRANSLATION_CONTAINER`（可选，默认 `translation-content`）
 - 翻译 Redis（`translateRedis.server.ts`）：
   - `REDIS_URL`，或 `REDIS_HOSTNAME`（或 `REDIS_HOST`）+ `REDIS_PASSWORD`（或 `REDIS_CACHEKEY_VAULT`）；可选 `REDIS_PORT`（默认 `6380`）、`REDIS_TLS`
 - 翻译详情代理：
@@ -240,6 +241,10 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
   - 可选：`AIDGE_REQUEST_TIMEOUT_MS`（默认 `30000`）、`AIDGE_IOP_TRIAL=true`（试用请求头）、`AIDGE_PARTNER_ID`（默认 `iop`）
   - 可选：`PICTURE_TRANSLATE_IMAGE_FETCH_CONNECT_MS`、`PICTURE_TRANSLATE_IMAGE_FETCH_READ_MS`（毫秒，默认各 `5000`）
   - 可选：`PICTURE_TRANSLATE_BLOB_SAS_TTL_MINUTES`、`PICTURE_TRANSLATE_BILLING_STRICT`
+  - Blob 容器：`AZURE_BLOB_PICTURE_TRANSLATE_CONTAINER`（可选，默认 `picturetranslate`）；连接串与 V3 共用 `BLOB_TRANSLATE_V3_CONNECTION_STRING` 或 `AZURE_BLOB_CONNECTION_STRING`
+- 文生图（见 `app/server/imageGeneration/`）：
+  - Blob 容器：`AZURE_BLOB_GENERATED_IMAGES_CONTAINER`（可选，默认 `generatedimages`）
+  - 可选：`IMAGE_GEN_BLOB_SAS_TTL_MINUTES`（未设时回退 `PICTURE_TRANSLATE_BLOB_SAS_TTL_MINUTES` 规则）
 - 订阅计费（`app/server/billing/`）：
   - `BILLING_GATEWAY=noop`：不调 Shopify Billing，本地直接生效（开发）
   - `BILLING_TEST=true`：Shopify 测试计费（开发店）；未设时非 production 亦视为测试模式
