@@ -23,7 +23,8 @@ topics = ["app/scopes_update"]
 uri = "/webhooks/app/scopes_update"
 
 [access_scopes]
-scopes = "read_locales,write_products"
+# 翻译读写与主 App 对齐；改后须 deploy 并让商家重新授权
+scopes = "read_locales,write_products,read_translations,write_translations"
 
 [auth]
 redirect_urls = [

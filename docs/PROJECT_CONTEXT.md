@@ -175,7 +175,7 @@ Spark **不调用 Spring Backend 邮件 API**，进程内直连腾讯 SES SDK（
 - CI 工作流：`.github/workflows/spark-deploy-test.yml`
   - 先触发 Render Test 部署（commit deploy）。
   - Shopify deploy（`shopify.app.test.toml`）仅在 `workflow_dispatch` 或 `master` push 时执行。
-  - **卫星 App**（`shopify.app.smart-description.toml`，如 Desc - Test）的 Webhook 注册**不会**随上述 CI 自动更新；改 webhook 后需本地执行：`shopify app deploy -c shopify.app.smart-description.toml`。
+  - **卫星 App**（`shopify.app.smart-description.toml`，如 Desc - Test）的 Webhook / scopes **不会**随上述 CI 自动更新；改 webhook 或 `access_scopes` 后需本地执行：`shopify app deploy -c shopify.app.smart-description.toml`，并在 Render 服务 `smartdescriptiontest` 将 `SCOPES` 设为与 toml 一致（含 `read_translations,write_translations`），商家店铺需重新授权。
 
 ### Turso 数据库（迁移与同步）
 

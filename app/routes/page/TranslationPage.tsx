@@ -3,6 +3,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import { useLoaderData } from "react-router";
 import type { loader } from "../app.translation";
+import { TranslationDataInspector } from "../component/translation/TranslationDataInspector";
 import { TranslationTaskStatusPanel } from "../component/translation/TranslationTaskStatusPanel";
 import { TranslationMonitorCard } from "../component/translation/TranslationMonitorCard";
 import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../../server/translation/types";
@@ -29,6 +30,7 @@ export function TranslationPage() {
     loaderData.defaults.resourceTypes,
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [lastCreatedJobId, setLastCreatedJobId] = useState("");
 
   useEffect(() => {
     setTargetLocale(loaderData.defaults.targetLocale);
@@ -71,14 +73,15 @@ export function TranslationPage() {
         ok?: boolean;
         message?: string;
         error?: string;
+        jobId?: string;
       };
       if (!response.ok || payload.ok === false) {
         shopify.toast.show(payload.error || t("translation.createFailed", { status: response.status }));
         return;
       }
       shopify.toast.show(payload.message || t("translation.createSuccess"));
-      if (typeof window !== "undefined") {
-        window.location.reload();
+      if (payload.jobId?.trim()) {
+        setLastCreatedJobId(payload.jobId.trim());
       }
     } catch {
       shopify.toast.show(t("translation.createFailedRetry"));
@@ -143,6 +146,13 @@ export function TranslationPage() {
                   </s-button>
                 </div>
               </s-stack>
+            </PageSurface>
+
+            <PageSurface title={t("translation.dataInspect.sectionTitle")}>
+              <TranslationDataInspector
+                shopName={loaderData.shop}
+                suggestedTaskId={lastCreatedJobId}
+              />
             </PageSurface>
 
             <PageSurface title={t("translation.runtimeSectionTitle")}>

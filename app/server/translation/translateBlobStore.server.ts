@@ -86,6 +86,50 @@ export async function translationBlobReadTextPrefix(
   }
 }
 
+export type TranslationBlobListEntry = {
+  path: string;
+  sizeBytes: number | null;
+};
+
+/** 解析连接串中的存储账户名（仅用于运维 UI 展示） */
+export function getTranslationBlobMeta() {
+  const conn = blobConnectionString();
+  const container = blobContainerName();
+  const match = /AccountName=([^;]+)/i.exec(conn);
+  return {
+    accountName: match?.[1]?.trim() ?? "",
+    container,
+  };
+}
+
+/** 列出某任务前缀下的 Blob（Init chunk、manifest 等） */
+export async function listTranslationBlobPaths(
+  prefix: string,
+): Promise<TranslationBlobListEntry[]> {
+  const p = prefix.trim();
+  if (!p) return [];
+  try {
+    const container = await getTranslationBlobContainer();
+    const out: TranslationBlobListEntry[] = [];
+    for await (const item of container.listBlobsFlat({ prefix: p })) {
+      const name = item.name?.trim();
+      if (!name) continue;
+      out.push({
+        path: name,
+        sizeBytes:
+          typeof item.properties.contentLength === "number"
+            ? item.properties.contentLength
+            : null,
+      });
+    }
+    out.sort((a, b) => a.path.localeCompare(b.path));
+    return out;
+  } catch (e) {
+    console.error("[TranslationBlob] list failed", { prefix: p, error: e });
+    return [];
+  }
+}
+
 export async function translationBlobReadTextFull(blobPath: string): Promise<string | null> {
   const p = blobPath.trim();
   if (!p) return null;

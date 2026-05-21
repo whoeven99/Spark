@@ -494,7 +494,30 @@
     "validationResourceTypes": "请至少选择一种资源类型",
     "createFailed": "创建失败（{{status}}）",
     "createSuccess": "任务创建成功",
-    "createFailedRetry": "创建任务失败，请稍后再试"
+    "createFailedRetry": "创建任务失败，请稍后再试",
+    "dataInspect": {
+      "sectionTitle": "Cosmos + Blob 数据查询",
+      "intro": "在 Spark 进程内直接读取 Cosmos 任务文档与 Azure Blob（translation-content），不依赖 AgentTask。创建任务后会自动填入 taskId，也可手动输入后点击查询。",
+      "taskIdLabel": "任务 ID（taskId）",
+      "queryAction": "查询 Cosmos + Blob",
+      "querying": "查询中…",
+      "validationTaskId": "请填写 taskId",
+      "loadFailed": "查询失败（HTTP {{status}}）",
+      "loadFailedRetry": "查询失败，请稍后重试",
+      "storageHeading": "数据位置",
+      "prefixLabel": "Blob 前缀",
+      "cosmosHeading": "Cosmos 任务文档",
+      "blobHeading": "Blob 文件（{{count}}）",
+      "chunkFiles": "Init chunk（{{count}}）",
+      "noBlobs": "该前缀下没有 Blob 文件。若 Cosmos 显示 Init 完成但此处为空，请核对存储账户/容器是否与 AgentTask 一致（sparkblobstoragetest / translation-content）。",
+      "cosmosJson": "查看完整 Cosmos JSON",
+      "lang": "语言",
+      "updatedAt": "更新时间",
+      "metricsTotal": "metrics.totalCount",
+      "checkpointPhase": "checkpoint.phase",
+      "exists": "存在",
+      "missing": "不存在"
+    }
   },
   "productSelector": {
     "searchLabel": "搜索商品（标题）",

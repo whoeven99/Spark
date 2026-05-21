@@ -494,7 +494,30 @@
     "validationResourceTypes": "Please select at least one resource type",
     "createFailed": "Create failed ({{status}})",
     "createSuccess": "Task created successfully",
-    "createFailedRetry": "Failed to create task. Please try again later."
+    "createFailedRetry": "Failed to create task. Please try again later.",
+    "dataInspect": {
+      "sectionTitle": "Cosmos + Blob inspector",
+      "intro": "Reads Cosmos job documents and Azure Blob files (translation-content) directly in Spark—no AgentTask proxy. After creating a job, taskId is filled automatically; you can also query any taskId manually.",
+      "taskIdLabel": "Task ID (taskId)",
+      "queryAction": "Query Cosmos + Blob",
+      "querying": "Querying…",
+      "validationTaskId": "Please enter taskId",
+      "loadFailed": "Query failed (HTTP {{status}})",
+      "loadFailedRetry": "Query failed, please try again",
+      "storageHeading": "Storage locations",
+      "prefixLabel": "Blob prefix",
+      "cosmosHeading": "Cosmos job document",
+      "blobHeading": "Blob files ({{count}})",
+      "chunkFiles": "Init chunks ({{count}})",
+      "noBlobs": "No blobs under this prefix. If Cosmos shows init done but nothing here, verify the storage account/container matches AgentTask (sparkblobstoragetest / translation-content).",
+      "cosmosJson": "View full Cosmos JSON",
+      "lang": "Locales",
+      "updatedAt": "Updated",
+      "metricsTotal": "metrics.totalCount",
+      "checkpointPhase": "checkpoint.phase",
+      "exists": "Present",
+      "missing": "Missing"
+    }
   },
   "productSelector": {
     "searchLabel": "Search products (title)",
