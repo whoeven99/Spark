@@ -17,6 +17,9 @@ type BlobFileRow = {
 
 export type TranslationDataInspectPayload = {
   cosmos?: Record<string, unknown>;
+  resolvedVia?: "partition" | "crossPartition";
+  requestedShop?: string;
+  effectiveShop?: string;
   storage?: {
     cosmos?: { endpointHost?: string; databaseId?: string; containerId?: string };
     blob?: { accountName?: string; container?: string };
@@ -85,11 +88,11 @@ export function TranslationDataInspector({ shopName, suggestedTaskId }: Props) {
       const response = await fetch(`/api/translate/v4/data-inspect?${params.toString()}`);
       const envelope = (await response.json().catch(() => ({}))) as TranslationDataInspectEnvelope;
       if (!response.ok || envelope.success === false) {
-        setPayload(null);
         setErrorText(
           envelope.errorMsg ||
             t("translation.dataInspect.loadFailed", { status: response.status }),
         );
+        setPayload(envelope.response ?? null);
         return;
       }
       setPayload(envelope.response ?? null);
@@ -169,10 +172,19 @@ export function TranslationDataInspector({ shopName, suggestedTaskId }: Props) {
                 <div>
                   {t("translation.dataInspect.prefixLabel")}: {storage?.blobPrefix ?? "—"}
                 </div>
+                {payload.resolvedVia ? (
+                  <div>
+                    {t("translation.dataInspect.resolvedVia")}: {payload.resolvedVia}
+                    {payload.effectiveShop && payload.effectiveShop !== payload.requestedShop
+                      ? ` · ${t("translation.dataInspect.effectiveShop")} ${payload.effectiveShop}`
+                      : ""}
+                  </div>
+                ) : null}
               </div>
             </s-stack>
           </PagePanel>
 
+          {cosmos ? (
           <s-section heading={t("translation.dataInspect.cosmosHeading")}>
             <PagePanel>
               <s-stack direction="block" gap="small">
@@ -242,6 +254,7 @@ export function TranslationDataInspector({ shopName, suggestedTaskId }: Props) {
               </s-stack>
             </PagePanel>
           </s-section>
+          ) : null}
 
           <s-section heading={t("translation.dataInspect.blobHeading", { count: blobFiles.length })}>
             {blobFiles.length === 0 ? (

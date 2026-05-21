@@ -516,7 +516,9 @@
       "metricsTotal": "metrics.totalCount",
       "checkpointPhase": "checkpoint.phase",
       "exists": "Present",
-      "missing": "Missing"
+      "missing": "Missing",
+      "resolvedVia": "Cosmos resolved via",
+      "effectiveShop": "effective shopName"
     }
   },
   "productSelector": {

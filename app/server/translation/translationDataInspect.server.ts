@@ -1,7 +1,8 @@
 import type { TranslationJobDoc } from "./cosmosJobStore.server";
 import {
+  findTranslationJobsById,
   getTranslationCosmosMeta,
-  readTranslationJobDocument,
+  resolveTranslationJobDocument,
 } from "./cosmosJobStore.server";
 import {
   getTranslationBlobMeta,
@@ -46,6 +47,10 @@ function taskBlobPrefix(shop: string, taskId: string) {
   return `tasks/${shop}/${taskId}/`;
 }
 
+function normalizeShopForHint(value: string) {
+  return value.trim().toLowerCase();
+}
+
 /**
  * Spark 本机聚合：Cosmos 任务文档 + 该任务下 Blob 列表（不转发 AgentTask）。
  */
@@ -74,17 +79,43 @@ export async function buildTranslationDataInspectEnvelope(options: {
     };
   }
 
-  const doc = await readTranslationJobDocument(shop, cleanId);
-  if (!doc) {
+  const cosmosMeta = getTranslationCosmosMeta();
+  const resolved = await resolveTranslationJobDocument(shop, cleanId);
+  if (!resolved) {
+    const prefixGuess = taskBlobPrefix(shop, cleanId);
+    const blobGuess = await listTranslationBlobPaths(prefixGuess);
+    const crossMatches = await findTranslationJobsById(cleanId);
+    const crossHint =
+      crossMatches.length > 0
+        ? crossMatches.some((d) => normalizeShopForHint(d.shopName) === normalizeShopForHint(shop))
+          ? "（文档存在；容器分区键为 /shop，老文档无 shop 字段，不能用 shopName 做点读）"
+          : "（跨分区 id 查询有结果，但 shopName 与当前店铺不一致，请用正确店铺打开应用）"
+        : "";
+    const blobHint =
+      blobGuess.length > 0
+        ? ` Blob 在 ${prefixGuess} 下仍有 ${blobGuess.length} 个文件，可能是 Cosmos 点读分区键不匹配或文档已删。`
+        : "";
     return {
       success: false,
       errorCode: DATA_INSPECT_FAILED_CODE,
-      errorMsg: `Cosmos 未找到任务：${cleanId}`,
-      response: null,
+      errorMsg:
+        `Cosmos 未找到任务：${cleanId}（店铺=${shop || "—"}，库=${cosmosMeta.databaseId}/${cosmosMeta.containerId}@${cosmosMeta.endpointHost}）${crossHint}${blobHint}`,
+      response: {
+        storage: {
+          cosmos: cosmosMeta,
+          blob: getTranslationBlobMeta(),
+          attemptedShop: shop,
+          attemptedBlobPrefix: prefixGuess,
+        },
+        blobs: { total: blobGuess.length, files: blobGuess },
+      },
     };
   }
 
-  const prefix = taskBlobPrefix(shop, cleanId);
+  const doc = resolved.doc;
+  const effectiveShop = doc.shopName?.trim() || shop;
+
+  const prefix = taskBlobPrefix(effectiveShop, cleanId);
   const blobs = await listTranslationBlobPaths(prefix);
   const manifestPath = `${prefix}chunks/manifest.json`;
   let manifestPreview: string | null = null;
@@ -109,8 +140,11 @@ export async function buildTranslationDataInspectEnvelope(options: {
     errorMsg: "",
     response: {
       cosmos: cosmosDocToPublicMap(doc),
+      resolvedVia: resolved.resolvedVia,
+      requestedShop: shop,
+      effectiveShop,
       storage: {
-        cosmos: getTranslationCosmosMeta(),
+        cosmos: cosmosMeta,
         blob: getTranslationBlobMeta(),
         blobPrefix: prefix,
       },

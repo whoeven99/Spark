@@ -41,9 +41,14 @@ type UpdateJobInput = {
   errorMessage?: string | null;
 };
 
-/** Cosmos 翻译任务文档（partitionKey: shopName） */
+/**
+ * Cosmos 翻译任务文档。
+ * 线上容器 `translation_jobs` 分区键为 `/shop`（非 `/shopName`）；老文档可能仅有 `shopName` 而无 `shop`，此时物理分区为 undefined。
+ */
 export type TranslationJobDoc = {
   id: string;
+  /** 与容器分区键 `/shop` 对齐；新建任务应与 shopName 同值 */
+  shop?: string;
   shopName: string;
   source: string;
   target: string;
@@ -214,6 +219,7 @@ function toCosmosDoc(record: TranslationJobRecord, previous?: TranslationJobDoc)
 
   return {
     id: record.id,
+    shop: record.shop,
     shopName: record.shop,
     source: record.sourceLocale,
     target: record.targetLocale,
@@ -258,6 +264,7 @@ export function getTranslationCosmosMeta() {
     endpointHost: cosmosEndpointHost(),
     databaseId: target.databaseId,
     containerId: target.containerId,
+    partitionKeyPath: "/shop",
   };
 }
 
@@ -282,7 +289,7 @@ async function getJobsContainerForTarget(target: TranslationCosmosTarget) {
       const { database } = await client.databases.createIfNotExists({ id: target.databaseId });
       const { container } = await database.containers.createIfNotExists({
         id: target.containerId,
-        partitionKey: { paths: ["/shopName"] },
+        partitionKey: { paths: ["/shop"] },
       });
       return container;
     })();
@@ -296,15 +303,134 @@ async function getJobsContainer() {
   return getJobsContainerForTarget(resolveTranslationCosmosConfig());
 }
 
+/** 与 Cosmos 容器分区键路径 `/shop` 一致；缺 `shop` 的老文档物理分区为 undefined */
+export function cosmosPartitionKeyForDoc(doc: TranslationJobDoc): string | undefined {
+  const shop = doc.shop?.trim();
+  if (shop) return shop;
+  return undefined;
+}
+
+async function readJobDocWithPartitionKey(
+  jobs: Container,
+  jobId: string,
+  partitionKey: string | undefined,
+): Promise<TranslationJobDoc | null> {
+  try {
+    const { resource } = await jobs.item(jobId, partitionKey).read<TranslationJobDoc>();
+    return resource ?? null;
+  } catch (error) {
+    const code = (error as { code?: number })?.code;
+    const status = (error as { statusCode?: number })?.statusCode;
+    if (code === 404 || status === 404) {
+      return null;
+    }
+    logTranslationCosmos("readJobDocWithPartitionKey failed", {
+      jobId,
+      partitionKey: partitionKey ?? "(undefined)",
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
 async function readJobDoc(shop: string, jobId: string) {
+  const cleanShop = shop.trim();
+  const cleanId = jobId.trim();
+  if (!cleanId) return null;
   const jobs = await getJobsContainer();
-  const { resource } = await jobs.item(jobId, shop).read<TranslationJobDoc>();
-  return resource ?? null;
+  const partitionAttempts: (string | undefined)[] = cleanShop
+    ? [cleanShop, undefined]
+    : [undefined];
+  for (const pk of partitionAttempts) {
+    const doc = await readJobDocWithPartitionKey(jobs, cleanId, pk);
+    if (doc) return doc;
+  }
+  return null;
+}
+
+/** 按 id 跨分区查询（与 AgentTask listByTaskId 一致） */
+export async function findTranslationJobsById(jobId: string): Promise<TranslationJobDoc[]> {
+  const cleanId = jobId.trim();
+  if (!cleanId) return [];
+  const jobs = await getJobsContainer();
+  const target = resolveTranslationCosmosConfig();
+  const sql = "SELECT * FROM c WHERE c.id = @id";
+  const startedAt = Date.now();
+  try {
+    const { resources } = await jobs.items
+      .query<TranslationJobDoc>({
+        query: sql,
+        parameters: [{ name: "@id", value: cleanId }],
+      })
+      .fetchAll();
+    const items = resources ?? [];
+    logTranslationCosmos("findTranslationJobsById", {
+      ...target,
+      jobId: cleanId,
+      count: items.length,
+      elapsedMs: Date.now() - startedAt,
+      shopNames: items.map((d) => d.shopName),
+    });
+    return items;
+  } catch (error) {
+    logTranslationCosmos("findTranslationJobsById failed", {
+      ...target,
+      jobId: cleanId,
+      elapsedMs: Date.now() - startedAt,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
+}
+
+/**
+ * 解析任务文档：先按 shop 点读，失败则跨分区按 id 查（分区键与传入 shop 不一致时仍可命中）。
+ */
+export async function resolveTranslationJobDocument(
+  shop: string,
+  jobId: string,
+): Promise<{ doc: TranslationJobDoc; resolvedVia: "partition" | "crossPartition" } | null> {
+  const cleanId = jobId.trim();
+  const cleanShop = shop.trim();
+  if (!cleanId) return null;
+
+  if (cleanShop) {
+    const direct = await readJobDoc(cleanShop, cleanId);
+    if (direct) {
+      return { doc: direct, resolvedVia: "partition" };
+    }
+  }
+
+  const byId = await findTranslationJobsById(cleanId);
+  if (byId.length === 0) return null;
+
+  if (cleanShop) {
+    const normalized = normalizeShopDomain(cleanShop);
+    const matched = byId.find((d) => normalizeShopDomain(d.shopName) === normalized);
+    if (matched) {
+      return { doc: matched, resolvedVia: "crossPartition" };
+    }
+  }
+
+  if (byId.length > 1) {
+    logTranslationCosmos("resolveTranslationJobDocument multiple ids", {
+      jobId: cleanId,
+      requestedShop: cleanShop,
+      shopNames: byId.map((d) => d.shopName),
+      using: byId[0].shopName,
+    });
+  }
+  return { doc: byId[0], resolvedVia: "crossPartition" };
+}
+
+function normalizeShopDomain(value: string): string {
+  return value.trim().toLowerCase();
 }
 
 /** 点读任务文档（含 checkpoint），供翻译任务详情 API 与 AgentTask 对齐 */
 export async function readTranslationJobDocument(shop: string, jobId: string) {
-  return readJobDoc(shop.trim(), jobId.trim());
+  const resolved = await resolveTranslationJobDocument(shop, jobId);
+  return resolved?.doc ?? null;
 }
 
 export async function createTranslationJobRecord(input: CreateJobInput) {
@@ -357,8 +483,9 @@ export async function resetTranslationJobRecord(
     Pick<CreateJobInput, "sourceLocale" | "targetLocale" | "resourceTypes" | "limitPerType" | "createdBy">,
 ) {
   const jobs = await getJobsContainer();
-  const currentDoc = await readJobDoc(shop, jobId);
+  const currentDoc = await readTranslationJobDocument(shop, jobId);
   if (!currentDoc) return null;
+  const pk = cosmosPartitionKeyForDoc(currentDoc);
   const current = mapJob(currentDoc);
   const now = nowIso();
   const nextRecord: TranslationJobRecord = {
@@ -383,14 +510,15 @@ export async function resetTranslationJobRecord(
     updatedAt: now,
   };
   const nextDoc = toCosmosDoc(nextRecord, currentDoc);
-  await jobs.item(jobId, shop).replace(nextDoc);
+  await jobs.item(jobId, pk).replace(nextDoc);
   return mapJob(nextDoc);
 }
 
 export async function updateTranslationJobRecord(shop: string, jobId: string, input: UpdateJobInput) {
   const jobs = await getJobsContainer();
-  const currentDoc = await readJobDoc(shop, jobId);
+  const currentDoc = await readTranslationJobDocument(shop, jobId);
   if (!currentDoc) return null;
+  const pk = cosmosPartitionKeyForDoc(currentDoc);
   const current = mapJob(currentDoc);
   const nextRecord: TranslationJobRecord = {
     ...current,
@@ -409,7 +537,7 @@ export async function updateTranslationJobRecord(shop: string, jobId: string, in
     updatedAt: nowIso(),
   };
   const nextDoc = toCosmosDoc(nextRecord, currentDoc);
-  await jobs.item(jobId, shop).replace(nextDoc);
+  await jobs.item(jobId, pk).replace(nextDoc);
   return mapJob(nextDoc);
 }
 
@@ -548,6 +676,6 @@ export async function listTranslationTasksForShop(
 }
 
 export async function getTranslationJobRecord(shop: string, jobId: string) {
-  const doc = await readJobDoc(shop, jobId);
+  const doc = await readTranslationJobDocument(shop, jobId);
   return doc ? mapJob(doc) : null;
 }

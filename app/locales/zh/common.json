@@ -516,7 +516,9 @@
       "metricsTotal": "metrics.totalCount",
       "checkpointPhase": "checkpoint.phase",
       "exists": "存在",
-      "missing": "不存在"
+      "missing": "不存在",
+      "resolvedVia": "Cosmos 解析方式",
+      "effectiveShop": "实际分区 shopName"
     }
   },
   "productSelector": {
