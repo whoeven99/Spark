@@ -347,21 +347,23 @@ export async function listTranslationJobs(shop: string) {
   return resources.map(mapJob);
 }
 
-/** 与 Spark 创建任务同一容器；taskType 为 spark-transtion，并兼容历史 spark / json-runtime。按 updatedAt 降序，最多 50 条。 */
-export async function listJsonRuntimeTasksForShop(shop: string) {
-  const shopTrim = shop.trim();
-  if (!shopTrim) return [];
-  const jobs = await getJobsContainer();
-  const query = jobs.items.query<TranslationJobDoc>(
-    {
-      query:
-        "SELECT TOP 50 * FROM c WHERE c.shopName = @shop AND (LOWER(c.taskType) = 'spark-transtion' OR LOWER(c.taskType) = 'spark' OR LOWER(c.taskType) = 'json-runtime') ORDER BY c.updatedAt DESC",
-      parameters: [{ name: "@shop", value: shopTrim }],
-    },
-    { partitionKey: shopTrim },
-  );
-  const { resources } = await query.fetchAll();
-  return resources.map((doc) => ({
+export type TranslationTaskListItem = {
+  id: string;
+  shopName: string;
+  source: string;
+  target: string;
+  status: number;
+  statusText: string;
+  taskType: string;
+  aiModel: string;
+  createdAt: string;
+  updatedAt: string;
+  sessionId: string;
+  moduleList: string;
+};
+
+function mapDocToListItem(doc: TranslationJobDoc): TranslationTaskListItem {
+  return {
     id: doc.id,
     shopName: doc.shopName,
     source: doc.source,
@@ -374,7 +376,47 @@ export async function listJsonRuntimeTasksForShop(shop: string) {
     updatedAt: doc.updatedAt,
     sessionId: doc.sessionId ?? "",
     moduleList: doc.moduleList ?? "",
-  }));
+  };
+}
+
+/**
+ * 按店铺分区列出翻译任务；可选 {@code taskTypes}（小写比对，支持多值 OR）。
+ */
+export async function listTranslationTasksForShop(
+  shop: string,
+  taskTypes: string[] = [],
+): Promise<TranslationTaskListItem[]> {
+  const shopTrim = shop.trim();
+  if (!shopTrim) return [];
+  const jobs = await getJobsContainer();
+
+  const parameters: { name: string; value: string }[] = [{ name: "@shop", value: shopTrim }];
+  let sql: string;
+  const normalizedTypes = taskTypes.map((t) => t.trim().toLowerCase()).filter(Boolean);
+
+  if (normalizedTypes.length === 0) {
+    sql = "SELECT TOP 50 * FROM c WHERE c.shopName = @shop ORDER BY c.updatedAt DESC";
+  } else if (normalizedTypes.length === 1) {
+    sql =
+      "SELECT TOP 50 * FROM c WHERE c.shopName = @shop AND LOWER(c.taskType) = @taskType ORDER BY c.updatedAt DESC";
+    parameters.push({ name: "@taskType", value: normalizedTypes[0] });
+  } else {
+    const clauses = normalizedTypes.map((_, i) => `LOWER(c.taskType) = @tt${i}`).join(" OR ");
+    sql = `SELECT TOP 50 * FROM c WHERE c.shopName = @shop AND (${clauses}) ORDER BY c.updatedAt DESC`;
+    normalizedTypes.forEach((t, i) => parameters.push({ name: `@tt${i}`, value: t }));
+  }
+
+  const query = jobs.items.query<TranslationJobDoc>(
+    { query: sql, parameters },
+    { partitionKey: shopTrim },
+  );
+  const { resources } = await query.fetchAll();
+  return resources.map(mapDocToListItem);
+}
+
+/** @deprecated 请使用 {@link listTranslationTasksForShop} 或 `GET /api/translate/v4/tasks` */
+export async function listJsonRuntimeTasksForShop(shop: string) {
+  return listTranslationTasksForShop(shop);
 }
 
 export async function getTranslationJobRecord(shop: string, jobId: string) {

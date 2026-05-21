@@ -275,7 +275,8 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
     try {
       const params = new URLSearchParams();
       params.set("shopName", shopName);
-      const res = await fetch(`/api/translate/v3/json-runtime-tasks?${params.toString()}`);
+      params.set("taskType", "spark-transtion");
+      const res = await fetch(`/api/translate/v4/tasks?${params.toString()}`);
       const env = (await res.json().catch(() => ({}))) as JsonRuntimeTaskListEnvelope;
       if (!res.ok || env.success === false) {
         if (!silent) {

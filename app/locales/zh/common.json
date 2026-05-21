@@ -570,7 +570,7 @@
     "refreshListLoading": "刷新列表...",
     "totalTasks": "共 {{count}} 条",
     "listErrorPrefix": "列表错误",
-    "noTaskRecords": "该店铺在 Cosmos（translation_jobs）中暂无 taskType 为 spark（或历史 json-runtime）的任务记录。",
+    "noTaskRecords": "该店铺在 Cosmos 翻译任务容器中暂无记录（含 spark-transtion / 历史 spark / json-runtime）。",
     "noId": "（无 id）",
     "viewing": "查看中",
     "viewDetail": "查看详情",

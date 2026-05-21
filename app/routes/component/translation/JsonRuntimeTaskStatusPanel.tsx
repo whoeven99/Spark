@@ -349,9 +349,8 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
     try {
       const params = new URLSearchParams();
       params.set("shopName", shopName);
-      const response = await fetch(
-        `/api/translate/v3/json-runtime-tasks?${params.toString()}`,
-      );
+      params.set("taskType", "spark-transtion");
+      const response = await fetch(`/api/translate/v4/tasks?${params.toString()}`);
       const envelope = (await response.json().catch(() => ({}))) as JsonRuntimeTaskListEnvelope;
       if (!response.ok || envelope.success === false) {
         if (!silent) {

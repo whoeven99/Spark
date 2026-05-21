@@ -1,13 +1,11 @@
 import { getAppEntry } from "../../config/appEntry.server";
 import { createTranslationJobRecord, listTranslationJobs } from "./cosmosJobStore.server";
+import { SPARK_TRANSLATION_V4_TASK_TYPE } from "./translationTaskTypes.server";
 import {
   ALLOWED_TRANSLATABLE_RESOURCE_TYPES,
   type TranslatableResourceType,
   type TranslationJobRecord,
 } from "./types";
-
-/** AgentTask Camunda TranslationV4 轮询的 taskType（非 json-runtime 的 spark 旧值） */
-const SPARK_TRANSLATION_TASK_TYPE = "spark-transtion";
 
 export type CreateTranslationJobResult = {
   job: TranslationJobRecord;
@@ -80,7 +78,7 @@ export async function createTranslationJob(
     shop: input.shop,
     sourceLocale,
     targetLocale,
-    taskType: SPARK_TRANSLATION_TASK_TYPE,
+    taskType: SPARK_TRANSLATION_V4_TASK_TYPE,
     aiModel: process.env.TRANSLATION_AI_MODEL?.trim() || "gpt-4o-mini",
     isCover: false,
     isHandle: false,

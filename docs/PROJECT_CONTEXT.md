@@ -60,7 +60,8 @@
 - **生成商品描述**：`POST /api/generate-description`（`api.generate-description.ts`）与 `POST /app/generate-description`（同上页面 action），服务端逻辑见 `app/server/generateDescription/generateDescriptionHttp.server.ts`；**写回 Shopify 商品标题与描述**：`POST /api/update-product-description`（`api.update-product-description.ts`），服务端见 `app/server/generateDescription/updateProductDescriptionHttp.server.ts` 与 `services/updateProductDescriptionService.ts`。AI Assistant 通过工具 `generate_product_description`（`app/server/ai/tools/implementations/generateDescriptionTool.ts`）调用同一套 `services/generateDescriptionService.ts`。方案与契约见 **`docs/generateDescription.md`**（改动前先读）。
 - **整图翻译（火山 + Aidge，对齐 Spring `POST /pcUserPic/translatePic`）**：`POST /api/picture-translate`（`api.picture-translate.ts`），服务端见 `app/server/pictureTranslate/**`。`modelType=1` 仅 Aidge、`modelType=2` 仅火山（不做交叉 fallback）。AI 聊天工具 `picture_translate` 按语言范围自动路由：**重叠范围优先火山**，仅 Aidge 支持的语言走 Aidge，均不支持则不译。在启用计费的 App（`generate-description`）上成功译图后通过 `recordVisualToolTokenUsage` 累加 `Account.usedTokens`（默认定额 `PICTURE_TRANSLATE_TOKEN_COST=2000`，对齐 Spring `APP_PIC_FEE` 量级）。
 - 翻译相关 HTTP 路由（文件位于 `app/routes/`，URL 与 React Router 扁平路由约定一致）：
-  - **`GET /api/translate/v3/json-runtime-tasks`**：`api.translate.v3.json-runtime-tasks.ts`，当前店铺 JSON Runtime 任务列表（Cosmos）。
+  - **`GET /api/translate/v4/tasks`**：`api.translate.v4.tasks.ts`，查询参数 `shopName`、`taskType`（Cosmos 分区列表；UI 默认 `taskType=spark-transtion`）。
+  - **`GET /api/translate/v3/json-runtime-tasks`**：兼容旧路径，不按 `taskType` 过滤。
   - **`GET /api/translate/v3/json-runtime-task-detail`**：`api.translate.v3.json-runtime-task-detail.ts`，任务详情；默认转发 **`AGENT_TASK_BASE_URL`** 下的 Java `/translate/v3/jsonRuntimeTaskDetail`；若设置 **`JSON_RUNTIME_TASK_DETAIL_SOURCE=local`**，则在 Spark 进程内聚合 Cosmos / Redis / Blob（见该文件与 `jsonRuntimeTaskDetail.server.ts`）。
 - 翻译服务端约定与边界： **`docs/translation-agent.md`**（改动翻译功能前先读）。
 - **计费 Webhook**（卫星 App toml 已注册）：

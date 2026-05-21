@@ -570,7 +570,7 @@
     "refreshListLoading": "Refreshing list...",
     "totalTasks": "Total {{count}}",
     "listErrorPrefix": "List error",
-    "noTaskRecords": "No tasks found in Cosmos (translation_jobs) for this shop with taskType=spark (or legacy json-runtime).",
+    "noTaskRecords": "No translation tasks in Cosmos for this shop (spark-transtion, legacy spark, or json-runtime).",
     "noId": "(no id)",
     "viewing": "Viewing",
     "viewDetail": "View details",
