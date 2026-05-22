@@ -30,7 +30,7 @@ export function buildTokenPackMessage(
     `店铺: ${params.shop}`,
     `App: ${params.appName}`,
     `套餐: ${plan.displayName} (${params.planKey})`,
-    `价格:  **${formatOpsNotifyPrice(plan.priceAmount, plan.currencyCode)}** `,
+    `价格:  ** ${formatOpsNotifyPrice(plan.priceAmount, plan.currencyCode)} ** `,
     `Token: ${plan.tokens}`,
     `时间: ${formatOpsNotifyTime()}`,
   ].join("\n");
