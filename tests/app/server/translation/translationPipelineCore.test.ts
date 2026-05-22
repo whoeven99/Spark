@@ -8,6 +8,14 @@ const mocks = vi.hoisted(() => ({
 vi.mock("~/server/translation/cosmosJobStore.server", () => ({
   createTranslationJobRecord: mocks.createTranslationJobRecord,
   listTranslationJobs: mocks.listTranslationJobs,
+  logTranslationCosmosTarget: vi.fn(),
+  getTranslationJobsCosmosLocation: vi.fn(() => ({
+    endpoint: "",
+    databaseId: "translation",
+    containerId: "translation_jobs",
+    partitionKeyPath: "/shopName",
+    cosmosKeySuffix: "****",
+  })),
 }));
 
 import { createTranslationJob } from "../../../../app/server/translation/translationPipelineCore.server";
@@ -110,6 +118,50 @@ describe("createTranslationJob", () => {
     expect(result.reusedExisting).toBe(false);
     expect(result.job.id).toBeDefined();
     expect(result.job.status).toBe("PENDING");
+  });
+
+  it("新建任务时将 shopifyAccessToken 写入 checkpoint", async () => {
+    mocks.createTranslationJobRecord.mockImplementation(async (input) => ({
+      id: input.id,
+      shop: input.shop,
+      status: "PENDING",
+      sourceLocale: input.sourceLocale,
+      targetLocale: input.targetLocale,
+      taskType: "spark",
+      aiModel: "gpt-4o-mini",
+      isCover: false,
+      isHandle: false,
+      moduleList: input.resourceTypes,
+      sessionId: input.sessionId,
+      checkpoint: input.checkpoint ?? {},
+      metrics: {},
+      resourceTypes: input.resourceTypes,
+      limitPerType: input.limitPerType,
+      totalItems: 0,
+      fetchedItems: 0,
+      errorMessage: null,
+      createdBy: input.createdBy,
+      createdAt: "2020-01-01T00:00:00.000Z",
+      updatedAt: "2020-01-01T00:00:00.000Z",
+    }));
+
+    await createTranslationJob({
+      shop: "demo-shop",
+      sourceLocale: "en",
+      targetLocale: "fr",
+      resourceTypes: ["PRODUCT"],
+      createdBy: "tester",
+      limitPerType: 20,
+      shopifyAccessToken: "shpat_test_token",
+    });
+
+    expect(mocks.createTranslationJobRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        checkpoint: expect.objectContaining({
+          shopifyAccessToken: "shpat_test_token",
+        }),
+      }),
+    );
   });
 
   it("大小写不同的 locale 仍视为同一语言对", async () => {

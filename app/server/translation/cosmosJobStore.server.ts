@@ -43,6 +43,8 @@ type UpdateJobInput = {
 export type TranslationJobDoc = {
   id: string;
   shopName: string;
+  /** 历史文档可能仅有 shop 字段 */
+  shop?: string;
   source: string;
   target: string;
   status: number;
@@ -75,12 +77,20 @@ const STATUS_TEXT_TO_APP: Record<string, TranslationJobStatus> = {
   INIT_PENDING: "PENDING",
   INIT_READING_SHOPIFY: "FETCHING",
   INIT_DONE: "FETCHED",
+  /** Spring AgentTask：待翻译 */
+  TRANSLATE_PENDING: "TRANSLATING",
   TRANSLATE_RUNNING: "TRANSLATING",
   TRANSLATE_STOPPED_MANUAL: "PAUSED",
   TRANSLATE_DONE: "TRANSLATED",
+  /** Spring AgentTask：翻译完成待回写（勿与 code=2 的 INIT_DONE 混淆） */
+  SAVE_PENDING: "TRANSLATED",
   SAVE_RUNNING: "WRITING_BACK",
   SAVE_DONE: "COMPLETED",
+  STOPPED: "PAUSED",
+  STOPPED_TOKEN_LIMIT: "PAUSED",
+  VERIFY_PENDING: "COMPLETED",
   FAILED: "FAILED",
+  UNKNOWN: "PENDING",
 };
 
 const STATUS_CODE_TO_APP: Record<number, TranslationJobStatus> = {
@@ -377,11 +387,33 @@ export async function updateTranslationJobRecord(shop: string, jobId: string, in
   return mapJob(nextDoc);
 }
 
+function shopListQueryParams(shop: string) {
+  const shopTrim = shop.trim();
+  const shopLower = shopTrim.toLowerCase();
+  return {
+    shopTrim,
+    shopLower,
+    sessionPrefix: shopTrim ? `${shopTrim}:` : "",
+  };
+}
+
+/** 按店铺列任务：兼容 shopName / 历史 shop 字段 / sessionId 前缀（Agent upsert 后 shopName 缺失时仍能列出） */
+const LIST_JOBS_BY_SHOP_SQL =
+  "SELECT TOP 50 * FROM c WHERE (LOWER(c.shopName) = @shopLower OR LOWER(c.shop) = @shopLower OR STARTSWITH(c.sessionId, @sessionPrefix)) ORDER BY c.createdAt DESC";
+
+const LIST_JSON_RUNTIME_BY_SHOP_SQL =
+  "SELECT TOP 50 * FROM c WHERE (LOWER(c.shopName) = @shopLower OR LOWER(c.shop) = @shopLower OR STARTSWITH(c.sessionId, @sessionPrefix)) ORDER BY c.updatedAt DESC";
+
 export async function listTranslationJobs(shop: string) {
+  const { shopTrim, shopLower, sessionPrefix } = shopListQueryParams(shop);
+  if (!shopTrim) return [];
   const jobs = await getJobsContainer();
   const query = jobs.items.query<TranslationJobDoc>({
-    query: "SELECT TOP 50 * FROM c WHERE c.shopName = @shop ORDER BY c.createdAt DESC",
-    parameters: [{ name: "@shop", value: shop }],
+    query: LIST_JOBS_BY_SHOP_SQL,
+    parameters: [
+      { name: "@shopLower", value: shopLower },
+      { name: "@sessionPrefix", value: sessionPrefix },
+    ],
   });
   const { resources } = await query.fetchAll();
   return resources.map(mapJob);
@@ -393,13 +425,15 @@ export async function listTranslationJobs(shop: string) {
  * AgentTask 调度仍只处理 spark / json-runtime（见 Spring TranslateV3Service）。
  */
 export async function listJsonRuntimeTasksForShop(shop: string) {
-  const shopTrim = shop.trim();
+  const { shopTrim, shopLower, sessionPrefix } = shopListQueryParams(shop);
   if (!shopTrim) return [];
   const jobs = await getJobsContainer();
-  // 与 listTranslationJobs 相同：容器内按 shopName 查询，不显式传 partitionKey（创建幂等已验证此路径能读到文档）
   const query = jobs.items.query<TranslationJobDoc>({
-    query: "SELECT TOP 50 * FROM c WHERE c.shopName = @shop ORDER BY c.updatedAt DESC",
-    parameters: [{ name: "@shop", value: shopTrim }],
+    query: LIST_JSON_RUNTIME_BY_SHOP_SQL,
+    parameters: [
+      { name: "@shopLower", value: shopLower },
+      { name: "@sessionPrefix", value: sessionPrefix },
+    ],
   });
   const { resources } = await query.fetchAll();
   logTranslationCosmosTarget("list_done", {
@@ -409,7 +443,7 @@ export async function listJsonRuntimeTasksForShop(shop: string) {
   });
   return resources.map((doc) => ({
     id: doc.id,
-    shopName: doc.shopName,
+    shopName: doc.shopName ?? doc.shop ?? shopTrim,
     source: doc.source,
     target: doc.target,
     status: doc.status,

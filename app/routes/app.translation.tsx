@@ -57,6 +57,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         resourceTypes: body.resourceTypes ?? [],
         createdBy: session.shop,
         limitPerType: body.limitPerType ?? 20,
+        shopifyAccessToken: session.accessToken,
       });
       if (!created?.job?.id) {
         return data({ ok: false, error: "翻译任务创建失败" }, { status: 500 });

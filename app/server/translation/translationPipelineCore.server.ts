@@ -26,6 +26,8 @@ type CreateTranslationJobInput = {
   resourceTypes: string[];
   createdBy: string;
   limitPerType: number;
+  /** Spark Session accessToken；写入 checkpoint 供 AgentTask init 拉取 Shopify（无 SQL Users 时） */
+  shopifyAccessToken?: string;
 };
 
 const DEFAULT_RESOURCE_TYPES: TranslatableResourceType[] = ["PRODUCT", "COLLECTION", "PAGE", "ARTICLE"];
@@ -92,6 +94,14 @@ export async function createTranslationJob(
   }
 
   const jobId = crypto.randomUUID();
+  const token = input.shopifyAccessToken?.trim();
+  const checkpoint: Record<string, unknown> = {
+    phase: "INIT_CREATED",
+    updatedAt: new Date().toISOString(),
+  };
+  if (token) {
+    checkpoint.shopifyAccessToken = token;
+  }
   // 直接返回 upsert 后的映射结果，避免紧接点读因 Cosmos 一致性/延迟返回 null，
   // 导致路由误判 500 而任务实际已写入（列表刷新可见）。
   const job = await createTranslationJobRecord({
@@ -105,7 +115,7 @@ export async function createTranslationJob(
     isHandle: false,
     moduleList: resourceTypes,
     sessionId: `${input.shop}:${jobId}`,
-    checkpoint: { phase: "INIT_CREATED", updatedAt: new Date().toISOString() },
+    checkpoint,
     metrics: {},
     resourceTypes,
     limitPerType,
