@@ -32,6 +32,7 @@
   - **翻译进度与监控键**：**Redis**（`ioredis`，见 `app/server/translation/translateRedis.server.ts`）。
   - **物流承运商授权**：本地 JSON `.data/logistics-provider-credentials.json`（见 `app/server/logisticsCredentialStore.server.ts`）。
   - **事务邮件（腾讯 SES 模板）**：`app/server/email/`（Provider 模式；业务统一走 `sendTemplateEmail`）；安装/卸载运营通知由 `app/server/appLifecycle/` 直接调用（见 §10）。
+  - **飞书运营通知**：`app/server/feishu/`（按 channel 映射独立 Webhook；失败不阻断主流程，见 §10 飞书小节）。
 
 ## 3. 目录结构（迁移后，根目录即应用目录）
 - `app/routes/`：页面路由与 API action/loader。
@@ -153,7 +154,7 @@ Spark **不调用 Spring Backend 邮件 API**，进程内直连腾讯 SES SDK（
 | 文件 | 触发 | 行为 |
 |------|------|------|
 | `onAppInstalled.server.ts` | `recordAppInstalled` 写入 `CommonEventLog` 成功后（OAuth `auth.$.tsx`、进入 `/app` 等） | Shopify 店铺信息 + Session 快照 → `sendInstallOpsEmail` |
-| `onAppUninstalled.server.ts` | `webhooks.app.uninstalled.tsx` 鉴权后 | **先** `sendUninstallOpsEmail`，**再** `handleAppUninstalled`（写日志并删 Session） |
+| `onAppUninstalled.server.ts` | `webhooks.app.uninstalled.tsx` 鉴权后 | **先** `sendUninstallOpsEmail`，**再** 飞书卸载通知，**再** `handleAppUninstalled`（写日志并删 Session） |
 
 安装 enrichment：`unauthenticated.admin(shop)` + `fetchShopBasicInfo`。卸载 enrichment：`loadSessionSnapshotForUninstall`（不调 GraphQL）。邮件失败不阻断安装 Loader；卸载邮件失败不阻断后续持久化；持久化失败时 Webhook 仍 `throw` 以便 Shopify 重试。
 
@@ -167,6 +168,30 @@ Spark **不调用 Spring Backend 邮件 API**，进程内直连腾讯 SES SDK（
 - 前缀：`[Email][Service]`、`[Email][Tencent]`、`[Email][InstallOps]`、`[Email][UninstallOps]`、`[AppLifecycle:install]`、`[AppLifecycle:uninstall]`。
 - 缺凭证：`sendTemplateEmail` 返回 `EMAIL_MISSING_CREDENTIALS`，主流程不阻断。
 - 发送失败：`TENCENT_SEND_FAILED`；成功以响应非空 `RequestId` 为准。
+
+### 飞书运营通知（`app/server/feishu/`）
+
+与 GitHub Actions 日志日报（`scripts/render-daily-log-digest.cjs` 使用 `FEISHU_WEBHOOK_URL`）**分离**，App 内按场景配置独立 Webhook。
+
+| 路径 | 职责 |
+|------|------|
+| `feishuConfig.server.ts` | `FeishuChannel` → `FEISHU_WEBHOOK_URL_*`；`FEISHU_ENABLED` 总开关 |
+| `sendFeishuTextMessage.server.ts` | 唯一 `fetch` 出口（text 消息） |
+| `scenarios/sendUninstallFeishuNotify.server.ts` | 卸载 → `ops_uninstall` |
+| `scenarios/sendSubscriptionFeishuNotify.server.ts` | 首次订阅生效 → `ops_subscription` |
+
+| channel | 环境变量 | 触发 |
+|---------|----------|------|
+| `ops_uninstall` | `FEISHU_WEBHOOK_URL_UNINSTALL` | `onAppUninstalled`（邮件之后、持久化之前） |
+| `ops_subscription` | `FEISHU_WEBHOOK_URL_SUBSCRIPTION` | `applyActiveSubscription` 且 `wasPending`（`SUBSCRIPTION_ACTIVATED` 之后） |
+
+日志前缀：`[Feishu]`、`[Feishu][UninstallOps]`、`[Feishu][SubscriptionOps]`、`[AppLifecycle:uninstall] feishu-*`。未配置 URL 或 `FEISHU_ENABLED=false` 时 skipped，不抛错。
+
+卸载原因与用户反馈（仅飞书文案，非 webhook payload）：
+- `app/uninstalled` webhook 不含卸载问卷字段；发飞书前由 `app/server/partner/fetchUninstallFeedbackFromPartner.server.ts` 查询 Partner API `RelationshipUninstalled`（`reason` / `description`）。
+- `SHOPIFY_PARTNER_API_TOKEN` + `SHOPIFY_PARTNER_ORGANIZATION_ID` + `SHOPIFY_PARTNER_APP_ID`（组织 ID、Partner API client **Manage apps**、App ID 如 `gid://partners/App/361747677185` 或纯数字）未配置或查询失败时，飞书仍发送，对应行显示「（未提供）」；Partner 失败不阻断卸载主流程。查询为 `app(id).events(types: [RELATIONSHIP_UNINSTALLED])`。
+- 重复 `app/uninstalled` 投递：10 分钟内同 shop+app 或相同 `X-Shopify-Webhook-Id` 已处理则跳过邮件/飞书，仍执行持久化与删 Session。
+- 与 `FEISHU_WEBHOOK_URL_UNINSTALL` 分工：后者仅负责 Spark → 飞书推送；前者仅负责 Spark → Shopify Partner 拉取问卷数据。
 
 ## 11. 运行与部署
 - 常用命令（根目录执行）：
@@ -253,6 +278,11 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
   - 可选：`EMAIL_PROVIDER`（默认 `tencent`）、`EMAIL_ENABLED`（默认 `true`）、`TENCENT_SES_REGION`（默认 `ap-hongkong`）、`TENCENT_FROM_EMAIL`、`TENCENT_SES_CC`、`EMAIL_SEND_TIMEOUT_MS`、`EMAIL_SEND_MAX_RETRIES`
   - 运营通知：`OPS_NOTIFY_EMAIL`（未设则取 `TENCENT_SES_CC` 首地址）；卸载模板 `OPS_UNINSTALL_TEMPLATE_ID`（未设则跳过卸载邮件）
   - App 安装/卸载运营邮件：安装在 `recordAppInstalled` 成功后直接调用 `onAppInstalled`；卸载 Webhook 直接调用 `onAppUninstalled`（先邮件后删 Session）
+- 飞书运营通知（`app/server/feishu/`，与日报 `FEISHU_WEBHOOK_URL` 分离）：
+  - `FEISHU_ENABLED`（可选，默认 `true`）；`false` 关闭全部 channel
+  - `FEISHU_WEBHOOK_URL_UNINSTALL`：卸载通知群（未设则 skipped）
+  - `FEISHU_WEBHOOK_URL_SUBSCRIPTION`：首次订阅生效通知群（未设则 skipped）
+  - `SHOPIFY_PARTNER_API_TOKEN`、`SHOPIFY_PARTNER_ORGANIZATION_ID`、`SHOPIFY_PARTNER_APP_ID`：卸载飞书通知中的原因/反馈（Partner API `app.events`；未设则两行显示「未提供」）
 
 ## 13. 文案与交互约定
 - 角色命名统一使用：`AI Assistant`。
@@ -268,6 +298,7 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
 - 加新 AI 工具：`app/server/ai/skills/index.ts` 的 `globalToolRegistry.register`（或 legacy `app/server/ai/tools/implementations/*`），由 `buildChatAgentExtraTools` 注入聊天链路。
 - 改邮件发送 / 模板 / Provider：`app/server/email/**`（业务只调 `sendTemplateEmail` / scenario 封装，勿直接用 Provider）。
 - 改 App 安装/卸载运营邮件：`app/server/appLifecycle/`、`app/server/commonEventLog/recordAppInstalled.server.ts`、`app/routes/webhooks.app.uninstalled.tsx`、`app/server/email/scenarios/sendInstallOpsEmail.server.ts`、`sendUninstallOpsEmail.server.ts`。
+- 改飞书运营通知：`app/server/feishu/**`；卸载挂载 `onAppUninstalled`；订阅挂载 `activateSubscription.server.ts`（仅 `wasPending`）。
 - 改 Agent 模板邮件工具：`app/server/ai/skills/email/**`。
 - 改诊断指标：`app/routes/app.additional.tsx`（含查询、阈值、文案）。
 - 改广告 OAuth 配置字段：`app/routes/app.ads.*.config.tsx` + `app/server/adAuthCredentialStore.server.ts`（及 Meta 的 `adsCredentialStore.server.ts`）；改物流：`app/routes/app.logistics.*.config.tsx` + `app/server/logisticsCredentialStore.server.ts`。

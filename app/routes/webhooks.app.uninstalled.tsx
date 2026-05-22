@@ -25,11 +25,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.info(
       `[Webhook] before-uninstall-handlers shop=${shop} appName=${appName}`,
     );
+    const webhookId = request.headers.get("X-Shopify-Webhook-Id") ?? undefined;
+
     await onAppUninstalled({
       shop,
       topic,
       payload,
       sessionId: session?.id,
+      webhookId,
       appName,
       uninstalledAt: new Date(),
     });

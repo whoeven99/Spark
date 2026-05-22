@@ -7,6 +7,7 @@ import {
   isSubscriptionRenewal,
   type SubscriptionPeriodSnapshot,
 } from "./renewal.server";
+import { sendSubscriptionFeishuNotify } from "../../feishu/scenarios/sendSubscriptionFeishuNotify.server";
 import {
   APP_SUBSCRIPTION_STATUS,
   BILLING_LOG_EVENT,
@@ -118,6 +119,20 @@ export async function applyActiveSubscription(params: {
       tokensDelta: tokensPerPeriod,
       metadata: { billingInterval },
     });
+
+    try {
+      await sendSubscriptionFeishuNotify({
+        shop,
+        appName,
+        planKey,
+        billingInterval,
+      });
+    } catch (error) {
+      console.error(
+        `[Billing] subscription feishu notify failed shop=${shop} appName=${appName}:`,
+        error,
+      );
+    }
   }
 }
 
