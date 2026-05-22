@@ -8,7 +8,10 @@ import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 // @ts-expect-error IDE 对该模块存在暂时性解析延迟，运行时路径有效
 import { TranslationPage } from "./page/TranslationPage";
-import { getTranslationJobsCosmosLocation } from "../server/translation/cosmosJobStore.server";
+import {
+  getTranslationJobsCosmosLocation,
+  logTranslationCosmosTarget,
+} from "../server/translation/cosmosJobStore.server";
 import { createTranslationJob } from "../server/translation/translationPipelineCore.server";
 import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../server/translation/types";
 
@@ -59,9 +62,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return data({ ok: false, error: "翻译任务创建失败" }, { status: 500 });
       }
       const message = created.reusedExisting
-        ? "该源语言与目标语言已存在翻译任务，已关联到现有任务。可在下方查看进度。"
+        ? `未新建文档：该店 ${body.sourceLocale ?? "zh-CN"}→${body.targetLocale} 已有任务（id=${created.job.id}）。请在下方任务列表中查看，勿只在 Cosmos 里找「刚生成」的新 id。`
         : "翻译任务已创建";
       const cosmos = getTranslationJobsCosmosLocation();
+      logTranslationCosmosTarget("action_create_job_response", {
+        shop: session.shop,
+        jobId: created.job.id,
+        reusedExisting: created.reusedExisting,
+      });
       return data({
         ok: true,
         jobId: created.job.id,

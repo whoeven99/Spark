@@ -97,6 +97,9 @@ const STATUS_CODE_TO_APP: Record<number, TranslationJobStatus> = {
 
 let jobsContainerPromise: Promise<Container> | null = null;
 
+/** 历史 Cosmos 文档曾写入错误拼写 spark-transtion；Spark 新建统一为 spark */
+export const SPARK_TRANSLATION_TASK_TYPES = ["spark", "json-runtime", "spark-transtion"] as const;
+
 /** 与 Spark 创建 / 列表 API 共用的 Cosmos 位置（便于排查「创建成功但列表为空」） */
 export function getTranslationJobsCosmosLocation() {
   return {
@@ -104,7 +107,26 @@ export function getTranslationJobsCosmosLocation() {
     databaseId: process.env.COSMOS_TRANSLATION_DATABASE_ID?.trim() || "translation",
     containerId: process.env.COSMOS_TRANSLATION_JOBS_CONTAINER?.trim() || "translation_jobs",
     partitionKeyPath: "/shopName",
+    cosmosKeySuffix: maskCosmosKeySuffix(process.env.COSMOS_KEY?.trim() || ""),
   };
+}
+
+function maskCosmosKeySuffix(key: string) {
+  if (!key) return "(missing)";
+  if (key.length <= 4) return "****";
+  return `****${key.slice(-4)}`;
+}
+
+/** 控制台日志：创建任务时写入的 Cosmos 目标（勿记录完整 key） */
+export function logTranslationCosmosTarget(
+  event: string,
+  extra: Record<string, string | number | boolean | undefined> = {},
+) {
+  const loc = getTranslationJobsCosmosLocation();
+  console.log(
+    `[translation][cosmos] ${event} endpoint=${loc.endpoint} database=${loc.databaseId} container=${loc.containerId} partitionKey=${loc.partitionKeyPath} key=${loc.cosmosKeySuffix}`,
+    extra,
+  );
 }
 
 function getRequiredEnv(name: string) {
@@ -230,6 +252,7 @@ async function getJobsContainer() {
       id: jobsId,
       partitionKey: { paths: ["/shopName"] },
     });
+    logTranslationCosmosTarget("container_ready");
     return container;
   })();
   return jobsContainerPromise;
@@ -273,7 +296,21 @@ export async function createTranslationJobRecord(input: CreateJobInput) {
     updatedAt: now,
   };
   const doc = toCosmosDoc(record);
-  await jobs.items.upsert(doc);
+  const loc = getTranslationJobsCosmosLocation();
+  logTranslationCosmosTarget("upsert_start", {
+    jobId: input.id,
+    shopName: input.shop,
+    source: input.sourceLocale,
+    target: input.targetLocale,
+    taskType: doc.taskType,
+  });
+  const upsertResult = await jobs.items.upsert(doc);
+  logTranslationCosmosTarget("upsert_done", {
+    jobId: input.id,
+    shopName: input.shop,
+    cosmosResourceId: upsertResult.resource?.id ?? input.id,
+    portalHint: `Azure Data Explorer → ${loc.databaseId} → ${loc.containerId} → Items → partition shopName=${input.shop} → id=${input.id}`,
+  });
   return mapJob(doc);
 }
 

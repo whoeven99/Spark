@@ -1,4 +1,9 @@
-import { createTranslationJobRecord, listTranslationJobs } from "./cosmosJobStore.server";
+import {
+  createTranslationJobRecord,
+  getTranslationJobsCosmosLocation,
+  listTranslationJobs,
+  logTranslationCosmosTarget,
+} from "./cosmosJobStore.server";
 import {
   ALLOWED_TRANSLATABLE_RESOURCE_TYPES,
   type TranslatableResourceType,
@@ -54,6 +59,12 @@ export async function createTranslationJob(
   if (!targetLocale) throw new Error("请先填写目标语言，例如 fr 或 ja");
   if (targetLocale === sourceLocale) throw new Error("目标语言不能和源语言相同");
 
+  logTranslationCosmosTarget("create_job_start", {
+    shop: input.shop,
+    sourceLocale,
+    targetLocale,
+  });
+
   const existingJobs = await listTranslationJobs(input.shop);
   const samePairJobs = existingJobs.filter(
     (job) =>
@@ -66,6 +77,16 @@ export async function createTranslationJob(
     );
     const job = sorted[0];
     if (job) {
+      const loc = getTranslationJobsCosmosLocation();
+      logTranslationCosmosTarget("create_job_reused_existing", {
+        shop: input.shop,
+        jobId: job.id,
+        taskType: job.taskType,
+        sourceLocale: job.sourceLocale,
+        targetLocale: job.targetLocale,
+        note: "未执行 upsert，Cosmos 中不会新增文档",
+        portalHint: `${loc.databaseId}/${loc.containerId} shopName=${input.shop} id=${job.id}`,
+      });
       return { job, reusedExisting: true };
     }
   }
@@ -89,6 +110,11 @@ export async function createTranslationJob(
     resourceTypes,
     limitPerType,
     createdBy: input.createdBy,
+  });
+  logTranslationCosmosTarget("create_job_new", {
+    shop: input.shop,
+    jobId: job.id,
+    taskType: job.taskType,
   });
   return { job, reusedExisting: false };
 }
