@@ -3,6 +3,7 @@ import {
   getTranslationJobsCosmosLocation,
   listTranslationJobs,
   logTranslationCosmosTarget,
+  updateTranslationJobRecord,
 } from "./cosmosJobStore.server";
 import {
   ALLOWED_TRANSLATABLE_RESOURCE_TYPES,
@@ -79,17 +80,31 @@ export async function createTranslationJob(
     );
     const job = sorted[0];
     if (job) {
+      const token = input.shopifyAccessToken?.trim();
+      let resolvedJob = job;
+      if (token) {
+        const patched = await updateTranslationJobRecord(input.shop, job.id, {
+          checkpoint: {
+            ...job.checkpoint,
+            shopifyAccessToken: token,
+            updatedAt: new Date().toISOString(),
+          },
+        });
+        if (patched) resolvedJob = patched;
+      }
       const loc = getTranslationJobsCosmosLocation();
       logTranslationCosmosTarget("create_job_reused_existing", {
         shop: input.shop,
-        jobId: job.id,
-        taskType: job.taskType,
-        sourceLocale: job.sourceLocale,
-        targetLocale: job.targetLocale,
-        note: "未执行 upsert，Cosmos 中不会新增文档",
-        portalHint: `${loc.databaseId}/${loc.containerId} shopName=${input.shop} id=${job.id}`,
+        jobId: resolvedJob.id,
+        taskType: resolvedJob.taskType,
+        sourceLocale: resolvedJob.sourceLocale,
+        targetLocale: resolvedJob.targetLocale,
+        note: token
+          ? "未新建文档；已刷新 checkpoint.shopifyAccessToken"
+          : "未执行 upsert，Cosmos 中不会新增文档",
+        portalHint: `${loc.databaseId}/${loc.containerId} shopName=${input.shop} id=${resolvedJob.id}`,
       });
-      return { job, reusedExisting: true };
+      return { job: resolvedJob, reusedExisting: true };
     }
   }
 

@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   createTranslationJobRecord: vi.fn(),
   listTranslationJobs: vi.fn(),
+  updateTranslationJobRecord: vi.fn(),
 }));
 
 vi.mock("~/server/translation/cosmosJobStore.server", () => ({
   createTranslationJobRecord: mocks.createTranslationJobRecord,
   listTranslationJobs: mocks.listTranslationJobs,
+  updateTranslationJobRecord: mocks.updateTranslationJobRecord,
   logTranslationCosmosTarget: vi.fn(),
   getTranslationJobsCosmosLocation: vi.fn(() => ({
     endpoint: "",
@@ -67,8 +69,48 @@ describe("createTranslationJob", () => {
     });
 
     expect(mocks.createTranslationJobRecord).not.toHaveBeenCalled();
+    expect(mocks.updateTranslationJobRecord).not.toHaveBeenCalled();
     expect(result.reusedExisting).toBe(true);
     expect(result.job.id).toBe("job-old");
+  });
+
+  it("幂等复用已有任务时刷新 checkpoint.shopifyAccessToken", async () => {
+    mocks.listTranslationJobs.mockResolvedValue([
+      {
+        ...baseExisting,
+        id: "job-old",
+        sourceLocale: "en",
+        targetLocale: "fr",
+        checkpoint: { phase: "INIT_CREATED" },
+      },
+    ]);
+    mocks.updateTranslationJobRecord.mockResolvedValue({
+      ...baseExisting,
+      id: "job-old",
+      sourceLocale: "en",
+      targetLocale: "fr",
+      checkpoint: { phase: "INIT_CREATED", shopifyAccessToken: "shpat_refreshed" },
+    });
+
+    const result = await createTranslationJob({
+      shop: "demo-shop",
+      sourceLocale: "en",
+      targetLocale: "fr",
+      resourceTypes: ["PRODUCT"],
+      createdBy: "tester",
+      limitPerType: 20,
+      shopifyAccessToken: "shpat_refreshed",
+    });
+
+    expect(mocks.updateTranslationJobRecord).toHaveBeenCalledWith(
+      "demo-shop",
+      "job-old",
+      expect.objectContaining({
+        checkpoint: expect.objectContaining({ shopifyAccessToken: "shpat_refreshed" }),
+      }),
+    );
+    expect(result.reusedExisting).toBe(true);
+    expect(result.job.checkpoint).toMatchObject({ shopifyAccessToken: "shpat_refreshed" });
   });
 
   it("无历史任务时新建 Cosmos 记录", async () => {
