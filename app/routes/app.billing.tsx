@@ -75,6 +75,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
     return { ok: false as const, error: "未知操作" };
   } catch (error) {
+    // authenticate.admin 的 redirect() 抛出 Response（302），须继续向上抛以完成结账跳转
+    if (error instanceof Response) {
+      throw error;
+    }
     const message =
       error instanceof BillingError
         ? error.message

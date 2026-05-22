@@ -28,4 +28,16 @@ interface ImportMetaEnv {
   readonly OPS_NOTIFY_EMAIL?: string;
   /** 卸载运营邮件腾讯 SES 模板 ID；未设则跳过发送 */
   readonly OPS_UNINSTALL_TEMPLATE_ID?: string;
+  /** 飞书运营通知总开关；false 关闭全部 channel（默认 true） */
+  readonly FEISHU_ENABLED?: string;
+  /** 卸载飞书群机器人 Webhook；未设则跳过 */
+  readonly FEISHU_WEBHOOK_URL_UNINSTALL?: string;
+  /** 订阅生效飞书群机器人 Webhook；未设则跳过 */
+  readonly FEISHU_WEBHOOK_URL_SUBSCRIPTION?: string;
+  /** Partner API Access Token；用于卸载时读取 RelationshipUninstalled 原因/反馈；未设则飞书显示「未提供」 */
+  readonly SHOPIFY_PARTNER_API_TOKEN?: string;
+  /** Partner Dashboard 组织 ID（URL 中 partners.shopify.com/{id}/...）；未设则跳过 Partner 查询 */
+  readonly SHOPIFY_PARTNER_ORGANIZATION_ID?: string;
+  /** Partner App ID（Dev Dashboard URL 中 /apps/{id}/ 或 gid://partners/App/{id}）；未设则跳过 Partner 查询 */
+  readonly SHOPIFY_PARTNER_APP_ID?: string;
 }
