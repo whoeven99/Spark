@@ -23,7 +23,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     if (forbidden) return forbidden;
 
     const effectiveShop = effectiveShopFromQuery(shopNameParam, session.shop);
-    logTranslationCosmosTarget("list_api_start", { shop: effectiveShop });
+    logTranslationCosmosTarget("list_api_start", {
+      shop: effectiveShop,
+      mode: "container_all_no_filter",
+    });
     const tasks = await listJsonRuntimeTasksForShop(effectiveShop);
     return Response.json({
       success: true,
@@ -33,6 +36,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         shopName: effectiveShop,
         total: tasks.length,
         tasks,
+        listMode: "container_all",
         cosmos: {
           ...getTranslationJobsCosmosLocation(),
           shop: effectiveShop,

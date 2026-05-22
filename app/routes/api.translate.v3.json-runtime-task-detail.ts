@@ -4,10 +4,6 @@ import {
   BASE_RESPONSE_FAILED_CODE,
   buildSparkJsonRuntimeTaskDetailEnvelope,
 } from "../server/translation/jsonRuntimeTaskDetail.server";
-import {
-  effectiveShopFromQuery,
-  forbiddenIfShopMismatch,
-} from "../server/translation/translateRouteHelpers.server";
 
 const DEFAULT_AGENT_BASE = "https://agent-task-0qi3.onrender.com";
 
@@ -130,14 +126,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
 
     const shopNameParam = url.searchParams.get("shopName")?.trim();
-    const forbidden = forbiddenIfShopMismatch(
-      shopNameParam,
-      session.shop,
-      "只能查询当前店铺的 JSON Runtime 任务",
-    );
-    if (forbidden) return forbidden;
-
-    const effectiveShop = effectiveShopFromQuery(shopNameParam, session.shop);
+    // 与全量任务列表一致：显式传入的 shopName 作为 Cosmos 分区键点读，不与 session 店铺强制一致（便于调试）
+    const effectiveShop = shopNameParam || session.shop;
 
     const includeBlobPreview = url.searchParams.get("includeBlobPreview") === "true";
     const maxPreviewBytesRaw = url.searchParams.get("maxPreviewBytes")?.trim();

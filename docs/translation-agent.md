@@ -13,6 +13,7 @@
 - 持久化：`app/server/translation/cosmosJobStore.server.ts`
 - AgentTask 代理：`app/routes/api.translate.v3.json-runtime-task-detail.ts`
 - 运行时详情 UI：`app/routes/component/translation/JsonRuntimeTaskStatusPanel.tsx`
+- 任务列表 API：`GET /api/translate/v3/json-runtime-tasks` 跨分区返回 `translation_jobs` 容器内全部文档（最多 200 条，不按 shop / taskType 过滤，便于排查「列表为空」）
 
 ## 处理原则
 1. 先确认影响范围，再修改对应最小文件集合。

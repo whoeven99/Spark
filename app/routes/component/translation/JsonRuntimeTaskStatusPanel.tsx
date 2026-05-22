@@ -313,6 +313,8 @@ const LIST_POLL_INTERVAL_SEC = 25;
 export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
   const { t, i18n } = useTranslation();
   const [taskId, setTaskId] = useState("");
+  /** 选中任务所在店铺（Cosmos 分区键）；全量列表时可能与当前登录店不同 */
+  const [detailShopName, setDetailShopName] = useState("");
   const [includeBlobPreview, setIncludeBlobPreview] = useState(false);
   const [maxPreviewBytes, setMaxPreviewBytes] = useState(8192);
   /** 默认开启：选中任务后周期性静默拉取详情 */
@@ -335,14 +337,10 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
   const [mdPreviewTitle, setMdPreviewTitle] = useState("");
 
   const shopName = defaultShopName.trim();
+  const shopNameForDetail = detailShopName.trim() || shopName;
 
   const fetchTaskList = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent === true;
-    if (!shopName) {
-      setTaskList([]);
-      setListErrorText("");
-      return;
-    }
     if (!silent) {
       setListLoading(true);
       setListErrorText("");
@@ -396,7 +394,11 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
   }, [shopName, fetchTaskList]);
 
   const fetchDetail = useCallback(
-    async (options?: { silent?: boolean; overrideTaskId?: string }) => {
+    async (options?: {
+      silent?: boolean;
+      overrideTaskId?: string;
+      overrideShopName?: string;
+    }) => {
       const tid = (options?.overrideTaskId ?? taskId).trim();
       if (!tid) {
         setErrorText("");
@@ -410,10 +412,13 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
         setErrorText("");
       }
 
+      const partitionShop =
+        options?.overrideShopName?.trim() || detailShopName.trim() || shopName;
+
       try {
         const params = new URLSearchParams();
         params.set("taskId", tid);
-        if (shopName) params.set("shopName", shopName);
+        if (partitionShop) params.set("shopName", partitionShop);
         if (includeBlobPreview) params.set("includeBlobPreview", "true");
         params.set("maxPreviewBytes", String(maxPreviewBytes));
 
@@ -439,7 +444,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
         if (!silent) setLoading(false);
       }
     },
-    [taskId, shopName, includeBlobPreview, maxPreviewBytes],
+    [taskId, detailShopName, shopName, includeBlobPreview, maxPreviewBytes],
   );
 
   const fetchTranslationReportMdPreview = useCallback(async () => {
@@ -450,7 +455,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
       setMdPreviewTitle(t("translationRuntime.reportTitle"));
       const params = new URLSearchParams();
       params.set("taskId", tid);
-      if (shopName) params.set("shopName", shopName);
+      if (shopNameForDetail) params.set("shopName", shopNameForDetail);
       params.set("includeBlobPreview", "true");
       params.set("maxPreviewBytes", String(512 * 1024));
       const rp = payload?.resolvedRedisPrefix?.trim();
@@ -479,7 +484,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
     } finally {
       setMdPreviewLoading(false);
     }
-  }, [taskId, shopName, payload?.resolvedRedisPrefix]);
+  }, [taskId, shopNameForDetail, payload?.resolvedRedisPrefix]);
 
   const fetchQualityReportMdPreview = useCallback(async () => {
     const tid = taskId.trim();
@@ -489,7 +494,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
       setMdPreviewTitle(t("translationRuntime.qualityReportTitle"));
       const params = new URLSearchParams();
       params.set("taskId", tid);
-      if (shopName) params.set("shopName", shopName);
+      if (shopNameForDetail) params.set("shopName", shopNameForDetail);
       params.set("includeBlobPreview", "true");
       params.set("maxPreviewBytes", String(512 * 1024));
       const rp = payload?.resolvedRedisPrefix?.trim();
@@ -518,7 +523,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
     } finally {
       setMdPreviewLoading(false);
     }
-  }, [taskId, shopName, payload?.resolvedRedisPrefix]);
+  }, [taskId, shopNameForDetail, payload?.resolvedRedisPrefix]);
 
   useEffect(() => {
     if (!pollEnabled || !taskId.trim()) {
@@ -546,11 +551,13 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
     };
   }, [pollEnabled, taskId, fetchDetail]);
 
-  const handleSelectTask = (id: string) => {
+  const handleSelectTask = (id: string, partitionShop?: string) => {
     const clean = id.trim();
     if (!clean) return;
+    const pk = partitionShop?.trim() || shopName;
+    setDetailShopName(pk);
     setTaskId(clean);
-    void fetchDetail({ overrideTaskId: clean });
+    void fetchDetail({ overrideTaskId: clean, overrideShopName: pk });
   };
 
   const progressView = useMemo(() => {
@@ -849,7 +856,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                       <s-button
                         type="button"
                         variant={active ? "primary" : "secondary"}
-                        onClick={() => handleSelectTask(rid)}
+                        onClick={() => handleSelectTask(rid, row.shopName)}
                         disabled={!rid}
                       >
                         {active ? t("translationRuntime.viewing") : t("translationRuntime.viewDetail")}
@@ -864,6 +871,12 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                         color: pageColorTokens.textSecondary,
                       }}
                     >
+                      {row.shopName ? (
+                        <span>
+                          <span style={{ color: pageColorTokens.textFootnote }}>{t("translationRuntime.shopLabel")}</span>{" "}
+                          <strong style={{ color: pageColorTokens.textMuted }}>{row.shopName}</strong>
+                        </span>
+                      ) : null}
                       <span>
                         <span style={{ color: pageColorTokens.textFootnote }}>{t("translationRuntime.langLabel")}</span>{" "}
                         <strong style={{ color: pageColorTokens.textMuted }}>

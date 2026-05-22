@@ -404,6 +404,41 @@ const LIST_JOBS_BY_SHOP_SQL =
 const LIST_JSON_RUNTIME_BY_SHOP_SQL =
   "SELECT TOP 50 * FROM c WHERE (LOWER(c.shopName) = @shopLower OR LOWER(c.shop) = @shopLower OR STARTSWITH(c.sessionId, @sessionPrefix)) ORDER BY c.updatedAt DESC";
 
+/** 调试/列表：跨分区拉取容器内全部任务（不按 shop / taskType 过滤） */
+const LIST_ALL_JOBS_SQL = "SELECT TOP 200 * FROM c ORDER BY c.updatedAt DESC";
+
+function mapDocToJsonRuntimeListRow(doc: TranslationJobDoc) {
+  return {
+    id: doc.id,
+    shopName: doc.shopName ?? doc.shop ?? "",
+    source: doc.source,
+    target: doc.target,
+    status: doc.status,
+    statusText: doc.statusText,
+    taskType: doc.taskType ?? "spark",
+    aiModel: doc.aiModel ?? "",
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+    sessionId: doc.sessionId ?? "",
+    moduleList: doc.moduleList ?? "",
+  };
+}
+
+/** 列出 translation_jobs 容器内全部文档（最多 200 条，按 updatedAt 降序）。 */
+export async function listAllTranslationJobsInContainer() {
+  const jobs = await getJobsContainer();
+  const query = jobs.items.query<TranslationJobDoc>({
+    query: LIST_ALL_JOBS_SQL,
+  });
+  const { resources } = await query.fetchAll();
+  logTranslationCosmosTarget("list_all_done", {
+    count: resources.length,
+    taskIds: resources.map((d) => d.id).join(",") || "(none)",
+    shops: [...new Set(resources.map((d) => d.shopName ?? d.shop ?? "").filter(Boolean))].join(","),
+  });
+  return resources.map(mapDocToJsonRuntimeListRow);
+}
+
 export async function listTranslationJobs(shop: string) {
   const { shopTrim, shopLower, sessionPrefix } = shopListQueryParams(shop);
   if (!shopTrim) return [];
@@ -420,41 +455,16 @@ export async function listTranslationJobs(shop: string) {
 }
 
 /**
- * 与 {@link createTranslationJobRecord} 同一库表分区；按 updatedAt 降序最多 50 条。
- * 不按 taskType 过滤，避免「创建成功但列表看不到」（历史 taskType、大小写等）。
- * AgentTask 调度仍只处理 spark / json-runtime（见 Spring TranslateV3Service）。
+ * 任务列表 API 使用：返回容器内全部任务（见 {@link listAllTranslationJobsInContainer}）。
+ * {@code shop} 仅用于日志，不参与 Cosmos 查询过滤。
  */
 export async function listJsonRuntimeTasksForShop(shop: string) {
-  const { shopTrim, shopLower, sessionPrefix } = shopListQueryParams(shop);
-  if (!shopTrim) return [];
-  const jobs = await getJobsContainer();
-  const query = jobs.items.query<TranslationJobDoc>({
-    query: LIST_JSON_RUNTIME_BY_SHOP_SQL,
-    parameters: [
-      { name: "@shopLower", value: shopLower },
-      { name: "@sessionPrefix", value: sessionPrefix },
-    ],
+  const shopTrim = shop.trim();
+  logTranslationCosmosTarget("list_json_runtime_start", {
+    shop: shopTrim || "(all)",
+    mode: "container_all_no_filter",
   });
-  const { resources } = await query.fetchAll();
-  logTranslationCosmosTarget("list_done", {
-    shop: shopTrim,
-    count: resources.length,
-    taskIds: resources.map((d) => d.id).join(",") || "(none)",
-  });
-  return resources.map((doc) => ({
-    id: doc.id,
-    shopName: doc.shopName ?? doc.shop ?? shopTrim,
-    source: doc.source,
-    target: doc.target,
-    status: doc.status,
-    statusText: doc.statusText,
-    taskType: doc.taskType ?? "spark",
-    aiModel: doc.aiModel ?? "",
-    createdAt: doc.createdAt,
-    updatedAt: doc.updatedAt,
-    sessionId: doc.sessionId ?? "",
-    moduleList: doc.moduleList ?? "",
-  }));
+  return listAllTranslationJobsInContainer();
 }
 
 export async function getTranslationJobRecord(shop: string, jobId: string) {
