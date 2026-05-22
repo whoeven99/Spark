@@ -8,6 +8,7 @@ import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 // @ts-expect-error IDE 对该模块存在暂时性解析延迟，运行时路径有效
 import { TranslationPage } from "./page/TranslationPage";
+import { getTranslationJobsCosmosLocation } from "../server/translation/cosmosJobStore.server";
 import { createTranslationJob } from "../server/translation/translationPipelineCore.server";
 import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../server/translation/types";
 
@@ -60,11 +61,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const message = created.reusedExisting
         ? "该源语言与目标语言已存在翻译任务，已关联到现有任务。可在下方查看进度。"
         : "翻译任务已创建";
+      const cosmos = getTranslationJobsCosmosLocation();
       return data({
         ok: true,
         jobId: created.job.id,
         message,
         reusedExisting: created.reusedExisting,
+        cosmos: {
+          ...cosmos,
+          shop: session.shop,
+        },
       });
     }
 

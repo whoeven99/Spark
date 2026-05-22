@@ -1,6 +1,9 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
-import { listJsonRuntimeTasksForShop } from "../server/translation/cosmosJobStore.server";
+import {
+  getTranslationJobsCosmosLocation,
+  listJsonRuntimeTasksForShop,
+} from "../server/translation/cosmosJobStore.server";
 import {
   effectiveShopFromQuery,
   forbiddenIfShopMismatch,
@@ -28,6 +31,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         shopName: effectiveShop,
         total: tasks.length,
         tasks,
+        cosmos: {
+          ...getTranslationJobsCosmosLocation(),
+          shop: effectiveShop,
+        },
       },
     });
   } catch (error) {

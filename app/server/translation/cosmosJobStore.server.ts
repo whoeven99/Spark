@@ -97,6 +97,16 @@ const STATUS_CODE_TO_APP: Record<number, TranslationJobStatus> = {
 
 let jobsContainerPromise: Promise<Container> | null = null;
 
+/** 与 Spark 创建 / 列表 API 共用的 Cosmos 位置（便于排查「创建成功但列表为空」） */
+export function getTranslationJobsCosmosLocation() {
+  return {
+    endpoint: process.env.COSMOS_ENDPOINT?.trim() || "",
+    databaseId: process.env.COSMOS_TRANSLATION_DATABASE_ID?.trim() || "translation",
+    containerId: process.env.COSMOS_TRANSLATION_JOBS_CONTAINER?.trim() || "translation_jobs",
+    partitionKeyPath: "/shopName",
+  };
+}
+
 function getRequiredEnv(name: string) {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`缺少环境变量 ${name}`);
@@ -340,15 +350,18 @@ export async function listTranslationJobs(shop: string) {
   return resources.map(mapJob);
 }
 
-/** 与 Spark 创建任务同一容器；taskType 为 spark（忽略大小写），并兼容历史 json-runtime。按 updatedAt 降序，最多 50 条。 */
+/**
+ * 与 {@link createTranslationJobRecord} 同一库表分区；按 updatedAt 降序最多 50 条。
+ * 不按 taskType 过滤，避免「创建成功但列表看不到」（历史 taskType、大小写等）。
+ * AgentTask 调度仍只处理 spark / json-runtime（见 Spring TranslateV3Service）。
+ */
 export async function listJsonRuntimeTasksForShop(shop: string) {
   const shopTrim = shop.trim();
   if (!shopTrim) return [];
   const jobs = await getJobsContainer();
   const query = jobs.items.query<TranslationJobDoc>(
     {
-      query:
-        "SELECT TOP 50 * FROM c WHERE c.shopName = @shop AND (LOWER(c.taskType) = 'spark' OR LOWER(c.taskType) = 'json-runtime') ORDER BY c.updatedAt DESC",
+      query: "SELECT TOP 50 * FROM c WHERE c.shopName = @shop ORDER BY c.updatedAt DESC",
       parameters: [{ name: "@shop", value: shopTrim }],
     },
     { partitionKey: shopTrim },
