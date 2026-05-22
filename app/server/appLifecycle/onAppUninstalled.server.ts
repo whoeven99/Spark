@@ -8,8 +8,7 @@ import { fetchUninstallFeedbackFromPartner } from "../partner/fetchUninstallFeed
 
 const LOG = "[AppLifecycle:uninstall]";
 /** 重复 app/uninstalled 投递时跳过邮件/飞书（持久化仍执行） */
-// const UNINSTALL_OPS_DEDUP_WINDOW_MS = 10 * 60 * 1000;
-const UNINSTALL_OPS_DEDUP_WINDOW_MS = 0;
+const UNINSTALL_OPS_DEDUP_WINDOW_MS = 10 * 60 * 1000;
 
 export type OnAppUninstalledParams = {
   shop: string;

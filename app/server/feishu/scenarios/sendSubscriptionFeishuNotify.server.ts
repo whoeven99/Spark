@@ -1,5 +1,9 @@
 import { isBillingEnabledForApp } from "../../billing/constants.server";
 import { getPlanByKey } from "../../billing/plans/planCatalog.server";
+import {
+  formatOpsNotifyPrice,
+  formatOpsNotifyTime,
+} from "../feishuMessageFormat.server";
 import { sendFeishuTextMessage } from "../sendFeishuTextMessage.server";
 import type { SendFeishuResult } from "../feishuTypes.server";
 
@@ -20,16 +24,15 @@ function buildSubscriptionMessage(
     currencyCode: string;
   },
 ): string {
-  const at = new Date().toISOString();
   return [
     "🎉 用户订阅成功",
     "",
     `店铺: ${params.shop}`,
     `App: ${params.appName}`,
     `套餐: ${plan.displayName} (${params.planKey})`,
-    `价格: ${plan.priceAmount} ${plan.currencyCode}`,
+    `价格: ${formatOpsNotifyPrice(plan.priceAmount, plan.currencyCode)}`,
     `周期: ${params.billingInterval}`,
-    `时间: ${at}`,
+    `时间: ${formatOpsNotifyTime()}`,
   ].join("\n");
 }
 

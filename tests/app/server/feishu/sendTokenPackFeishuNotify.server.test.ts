@@ -37,6 +37,8 @@ describe("buildTokenPackMessage", () => {
     expect(message).toContain("店铺: demo.myshopify.com");
     expect(message).toContain("token-pack-10k");
     expect(message).toContain("Token: 10000");
+    expect(message).toContain("价格: 【9.99 USD】");
+    expect(message).toMatch(/时间: \d{4}-\d{2}-\d{2} \d{2}:\d{2}/);
   });
 });
 
