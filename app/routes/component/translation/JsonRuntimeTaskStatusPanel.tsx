@@ -9,6 +9,7 @@ import {
 } from "../../../lib/redisTranslatePhaseLabel";
 import { formatTranslateTaskV3CosmosStatusText } from "../../../lib/translateTaskV3CosmosStatusLabel";
 import { PagePanel, pageColorTokens } from "../../page/pageUiStyles";
+import { ScheduleLogPanel } from "./ScheduleLogPanel";
 
 export type JsonRuntimeTaskDetailEnvelope = {
   success: boolean;
@@ -171,6 +172,19 @@ function lookupSourceValueFromRuntimeFailedJson(
 }
 
 /** 列表行 statusText（Spark Cosmos）粗略映射到徽章色调 */
+function formatListStatusLabel(
+  row: JsonRuntimeTaskListRow,
+  t: ReturnType<typeof useTranslation>["t"],
+  i18n: ReturnType<typeof useTranslation>["i18n"],
+) {
+  const label = formatTranslateTaskV3CosmosStatusText(row.statusText, t, i18n);
+  const code = row.status;
+  if (typeof code === "number" && Number.isFinite(code)) {
+    return `${code} · ${label}`;
+  }
+  return label;
+}
+
 function listRowBadgeTone(statusText?: string): "success" | "warning" | "critical" | "info" {
   const s = (statusText ?? "").toUpperCase();
   if (s.includes("DONE") || s.includes("COMPLETE") || s.includes("SAVE_DONE")) return "success";
@@ -782,19 +796,6 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
   return (
     <>
     <s-stack direction="block" gap="base">
-      <PagePanel>
-        <s-stack direction="block" gap="small">
-          <s-paragraph>
-            <span style={{ color: pageColorTokens.textMuted, lineHeight: 1.5 }}>
-              {t("translationRuntime.panelIntro", {
-                listSec: LIST_POLL_INTERVAL_SEC,
-                detailSec: DETAIL_POLL_INTERVAL_SEC,
-              })}
-            </span>
-          </s-paragraph>
-        </s-stack>
-      </PagePanel>
-
       <s-section heading={t("translationRuntime.currentShopTasksHeading")}>
         <s-stack direction="inline" gap="small" alignItems="center">
           <s-button
@@ -837,7 +838,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                   <s-stack direction="block" gap="small">
                     <s-stack direction="inline" gap="small" alignItems="center">
                       <s-badge tone={listRowBadgeTone(row.statusText)}>
-                        {formatTranslateTaskV3CosmosStatusText(row.statusText, t, i18n)}
+                        {formatListStatusLabel(row, t, i18n)}
                       </s-badge>
                       <span
                         style={{
@@ -904,6 +905,15 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
 
       <PagePanel>
         <s-stack direction="block" gap="small">
+          <s-stack direction="inline" gap="small" alignItems="center">
+            <span style={{ fontWeight: 600, fontSize: "14px", color: pageColorTokens.textPrimary }}>
+              {t("translationRuntime.taskDetailQueryHeading")}
+            </span>
+            <s-badge tone="info">{t("translationRuntime.agentTaskDetailDataSourceBadge")}</s-badge>
+          </s-stack>
+          <span style={{ fontSize: "12px", color: pageColorTokens.textFootnote, lineHeight: 1.45 }}>
+            {t("translationRuntime.agentTaskDetailDataSourceHint")}
+          </span>
           <s-stack direction="inline" gap="small" alignItems="end">
             <div style={{ flex: "1 1 180px", minWidth: 140 }}>
               <s-text-field
@@ -989,11 +999,10 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                 <s-stack direction="inline" gap="small" alignItems="center">
                   <s-badge tone="info">{readString(cosmos, "taskType") || "—"}</s-badge>
                   <s-badge tone={cosmosBadgeTone(readString(cosmos, "statusText"))}>
-                    {formatTranslateTaskV3CosmosStatusText(readString(cosmos, "statusText"), t, i18n)}
+                    {typeof cosmos?.status === "number" && Number.isFinite(cosmos.status)
+                      ? `${cosmos.status} · ${formatTranslateTaskV3CosmosStatusText(readString(cosmos, "statusText"), t, i18n)}`
+                      : formatTranslateTaskV3CosmosStatusText(readString(cosmos, "statusText"), t, i18n)}
                   </s-badge>
-                  <span style={{ fontSize: "12px", color: pageColorTokens.textSecondary }}>
-                    {t("translationRuntime.statusCode")} {String(cosmos?.status ?? "—")}
-                  </span>
                 </s-stack>
                 <div
                   style={{
@@ -1671,6 +1680,13 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
               </PagePanel>
             </s-section>
           ) : null}
+
+          {/* Schedule Logs Section */}
+          <s-section heading={t("translationRuntime.scheduleLogsHeading", { defaultValue: "Scheduling Logs" })}>
+            <PagePanel>
+              <ScheduleLogPanel taskId={taskId} shopName={detailShopName || undefined} />
+            </PagePanel>
+          </s-section>
         </s-stack>
       ) : null}
     </s-stack>

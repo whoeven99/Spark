@@ -4,6 +4,13 @@ const mocks = vi.hoisted(() => ({
   createTranslationJobRecord: vi.fn(),
   listTranslationJobs: vi.fn(),
   updateTranslationJobRecord: vi.fn(),
+  enqueueTranslateTaskV3Init: vi.fn(),
+  enqueueTranslateTaskV3Translate: vi.fn(),
+}));
+
+vi.mock("~/server/translation/translateTaskV3Queue.server", () => ({
+  enqueueTranslateTaskV3Init: mocks.enqueueTranslateTaskV3Init,
+  enqueueTranslateTaskV3Translate: mocks.enqueueTranslateTaskV3Translate,
 }));
 
 vi.mock("~/server/translation/cosmosJobStore.server", () => ({
@@ -72,6 +79,7 @@ describe("createTranslationJob", () => {
     expect(mocks.updateTranslationJobRecord).not.toHaveBeenCalled();
     expect(result.reusedExisting).toBe(true);
     expect(result.job.id).toBe("job-old");
+    expect(mocks.enqueueTranslateTaskV3Init).toHaveBeenCalledWith("job-old", "demo-shop");
   });
 
   it("幂等复用已有任务时刷新 checkpoint.shopifyAccessToken", async () => {
@@ -160,6 +168,10 @@ describe("createTranslationJob", () => {
     expect(result.reusedExisting).toBe(false);
     expect(result.job.id).toBeDefined();
     expect(result.job.status).toBe("PENDING");
+    expect(mocks.enqueueTranslateTaskV3Init).toHaveBeenCalledWith(
+      result.job.id,
+      "demo-shop",
+    );
   });
 
   it("新建任务时将 shopifyAccessToken 写入 checkpoint", async () => {

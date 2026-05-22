@@ -35,6 +35,25 @@ describe("ensureRuntimeEnv from file", () => {
     expect(process.env.SPARK_ENV_FILE_PROBE).toBe("from-env-file");
   });
 
+  it("does not override SHOPIFY_API_KEY when CLI already injected it", () => {
+    fs.writeFileSync(
+      tmpFile,
+      "SHOPIFY_API_KEY=from-env-file\nSHOPIFY_API_SECRET=from-secret\n",
+      "utf8",
+    );
+    process.env.ENV_FILE = tmpFile;
+    process.env.SHOPIFY_API_KEY = "cli-injected-key";
+    process.env.SHOPIFY_API_SECRET = "cli-injected-secret";
+    resetRuntimeEnvLoaderForTests();
+
+    ensureRuntimeEnv();
+
+    expect(process.env.SHOPIFY_API_KEY).toBe("cli-injected-key");
+    expect(process.env.SHOPIFY_API_SECRET).toBe("cli-injected-secret");
+    delete process.env.SHOPIFY_API_KEY;
+    delete process.env.SHOPIFY_API_SECRET;
+  });
+
   it("getProjectRoot resolves to repo root", async () => {
     const { getProjectRoot } = await import("../../../app/config/runtimeEnv.server");
     const root = getProjectRoot();

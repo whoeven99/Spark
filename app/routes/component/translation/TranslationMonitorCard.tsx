@@ -61,6 +61,19 @@ function readString(record: Record<string, unknown> | undefined, key: string) {
   return typeof v === "string" ? v : v != null ? String(v) : "";
 }
 
+function formatListStatusLabel(
+  row: JsonRuntimeTaskListRow,
+  t: ReturnType<typeof useTranslation>["t"],
+  i18n: ReturnType<typeof useTranslation>["i18n"],
+) {
+  const label = formatTranslateTaskV3CosmosStatusText(row.statusText, t, i18n);
+  const code = row.status;
+  if (typeof code === "number" && Number.isFinite(code)) {
+    return `${code} · ${label}`;
+  }
+  return label;
+}
+
 function listBadgeTone(statusText?: string): "success" | "warning" | "critical" | "info" {
   const s = (statusText ?? "").toUpperCase();
   if (s.includes("DONE") || s.includes("COMPLETE") || s.includes("SAVE_DONE")) return "success";
@@ -465,7 +478,6 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
               flexWrap: "wrap",
             }}
           >
-            <span style={{ fontWeight: 600, fontSize: "15px", color: pageColorTokens.textPrimary }}>{t("translationRuntime.monitorTaskListTitle")}</span>
             <s-button
               type="button"
               variant="secondary"
@@ -526,7 +538,7 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                       {(row.source ?? "—").trim()} → {(row.target ?? "—").trim()}
                     </span>
                     <s-badge tone={listBadgeTone(row.statusText)}>
-                      {formatTranslateTaskV3CosmosStatusText(row.statusText, t, i18n)}
+                      {formatListStatusLabel(row, t, i18n)}
                     </s-badge>
                   </div>
                   {row.updatedAt ? (
@@ -556,7 +568,22 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
 
               {detail ? (
                 <s-stack direction="block" gap="small">
-                  <div style={{ fontSize: "14px", fontWeight: 600, color: pageColorTokens.textPrimary }}>{t("translationRuntime.taskDetail")}</div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <span style={{ fontSize: "14px", fontWeight: 600, color: pageColorTokens.textPrimary }}>
+                      {t("translationRuntime.taskDetail")}
+                    </span>
+                    <s-badge tone="info">{t("translationRuntime.agentTaskDetailDataSourceBadge")}</s-badge>
+                  </div>
+                  <span style={{ fontSize: "11px", color: pageColorTokens.textFootnote, lineHeight: 1.45 }}>
+                    {t("translationRuntime.agentTaskDetailDataSourceHint")}
+                  </span>
 
                   <div
                     style={{
@@ -567,7 +594,9 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                     }}
                   >
                     <s-badge tone={cosmosTone(readString(cosmos, "statusText"))}>
-                      {formatTranslateTaskV3CosmosStatusText(readString(cosmos, "statusText"), t, i18n)}
+                      {typeof cosmos?.status === "number" && Number.isFinite(cosmos.status)
+                        ? `${cosmos.status} · ${formatTranslateTaskV3CosmosStatusText(readString(cosmos, "statusText"), t, i18n)}`
+                        : formatTranslateTaskV3CosmosStatusText(readString(cosmos, "statusText"), t, i18n)}
                     </s-badge>
                     <span style={{ fontSize: "13px", color: pageColorTokens.textMuted }}>
                       <strong>{readString(cosmos, "source") || "—"}</strong>

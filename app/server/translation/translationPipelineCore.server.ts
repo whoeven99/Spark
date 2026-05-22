@@ -6,6 +6,10 @@ import {
   updateTranslationJobRecord,
 } from "./cosmosJobStore.server";
 import {
+  enqueueTranslateTaskV3Init,
+  enqueueTranslateTaskV3Translate,
+} from "./translateTaskV3Queue.server";
+import {
   ALLOWED_TRANSLATABLE_RESOURCE_TYPES,
   type TranslatableResourceType,
   type TranslationJobRecord,
@@ -49,6 +53,17 @@ function normalizeLimit(limitPerType: number) {
   const limit = Number(limitPerType);
   if (!Number.isFinite(limit) || limit <= 0) return 20;
   return Math.min(Math.floor(limit), 200);
+}
+
+/** 按 Cosmos 映射状态入队，供 AgentTask BRPOP 即时拉起。 */
+async function enqueueTranslationJobByStatus(job: TranslationJobRecord) {
+  if (job.status === "PENDING") {
+    await enqueueTranslateTaskV3Init(job.id, job.shop);
+    return;
+  }
+  if (job.status === "FETCHED" || job.status === "TRANSLATING") {
+    await enqueueTranslateTaskV3Translate(job.id, job.shop);
+  }
 }
 
 /** Spark 侧仅在 Cosmos 中新建翻译任务记录。同店同源同目标已存在任务时幂等返回其中最近更新的一条，避免重复提交被误判为失败。 */
@@ -104,6 +119,7 @@ export async function createTranslationJob(
           : "未执行 upsert，Cosmos 中不会新增文档",
         portalHint: `${loc.databaseId}/${loc.containerId} shopName=${input.shop} id=${resolvedJob.id}`,
       });
+      await enqueueTranslationJobByStatus(resolvedJob);
       return { job: resolvedJob, reusedExisting: true };
     }
   }
@@ -141,5 +157,6 @@ export async function createTranslationJob(
     jobId: job.id,
     taskType: job.taskType,
   });
+  await enqueueTranslateTaskV3Init(job.id, job.shop);
   return { job, reusedExisting: false };
 }

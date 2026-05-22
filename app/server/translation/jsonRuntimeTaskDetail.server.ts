@@ -94,7 +94,7 @@ function cosmosJobDocToMap(doc: TranslationJobDoc): Record<string, unknown> {
   };
 }
 
-async function getJsonRuntimeTaskProgress(
+export async function getJsonRuntimeTaskProgress(
   taskId: string,
   redisPrefix: string,
 ): Promise<Record<string, unknown>> {
@@ -362,5 +362,36 @@ export async function buildSparkJsonRuntimeTaskDetailEnvelope(options: {
     errorCode: 0,
     errorMsg: "",
     response: body,
+  };
+}
+
+/** 仅聚合 Cosmos + Redis（含 translate_monitor_v3），不读 Blob，供侧栏进度卡片使用。 */
+export async function buildSparkJsonRuntimeTaskProgressEnvelope(options: {
+  taskId: string;
+  shopName: string;
+  redisPrefix?: string;
+}): Promise<JsonRuntimeTaskDetailEnvelope> {
+  const envelope = await buildSparkJsonRuntimeTaskDetailEnvelope({
+    taskId: options.taskId,
+    shopName: options.shopName,
+    redisPrefix: options.redisPrefix,
+    includeBlobPreview: false,
+    maxPreviewBytes: 0,
+  });
+  if (!envelope.success || !envelope.response) {
+    return envelope;
+  }
+  const full = envelope.response;
+  return {
+    success: true,
+    errorCode: 0,
+    errorMsg: "",
+    response: {
+      cosmos: full.cosmos,
+      resolvedRedisPrefix: full.resolvedRedisPrefix,
+      redisRuntime: full.redisRuntime,
+      translateMonitor: full.translateMonitor,
+      dataSource: "spark-local-cosmos-redis",
+    },
   };
 }

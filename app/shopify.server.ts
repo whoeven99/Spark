@@ -9,12 +9,19 @@ import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prism
 import { getSessionPrismaTableName } from "./config/appEntry.server";
 import prisma from "./db.server";
 
+/** 本地 dev 时 Shopify CLI 通过 HOST 注入隧道 URL，勿被 .env 里线上 SHOPIFY_APP_URL 覆盖 */
+function resolveShopifyAppUrl(): string {
+  const host = process.env.HOST?.trim();
+  if (host) return host.startsWith("http") ? host : `https://${host}`;
+  return process.env.SHOPIFY_APP_URL?.trim() || "";
+}
+
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
   apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
   apiVersion: ApiVersion.October25,
   scopes: process.env.SCOPES?.split(","),
-  appUrl: process.env.SHOPIFY_APP_URL || "",
+  appUrl: resolveShopifyAppUrl(),
   authPathPrefix: "/auth",
   // Prisma Client 使用自定义 output（见 prisma/schema.prisma）；与 @shopify/...-prisma 的类型声明路径不同，运行时兼容。
   sessionStorage: new PrismaSessionStorage(prisma as unknown as PrismaClient, {

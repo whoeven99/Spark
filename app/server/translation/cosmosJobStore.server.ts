@@ -454,17 +454,35 @@ export async function listTranslationJobs(shop: string) {
   return resources.map(mapJob);
 }
 
+/** 按店铺从 Cosmos 拉任务文档（分区键 shopName，兼容历史 shop / sessionId 前缀）。 */
+export async function listTranslationJobDocsForShop(shop: string, limit = 50) {
+  const { shopTrim, shopLower, sessionPrefix } = shopListQueryParams(shop);
+  if (!shopTrim) return [];
+  const jobs = await getJobsContainer();
+  const query = jobs.items.query<TranslationJobDoc>({
+    query: LIST_JSON_RUNTIME_BY_SHOP_SQL,
+    parameters: [
+      { name: "@shopLower", value: shopLower },
+      { name: "@sessionPrefix", value: sessionPrefix },
+    ],
+  });
+  const { resources } = await query.fetchAll();
+  logTranslationCosmosTarget("list_by_shop_done", {
+    shop: shopTrim,
+    count: resources.length,
+    taskIds: resources.map((d) => d.id).join(",") || "(none)",
+  });
+  return resources.slice(0, limit);
+}
+
 /**
- * 任务列表 API 使用：返回容器内全部任务（见 {@link listAllTranslationJobsInContainer}）。
- * {@code shop} 仅用于日志，不参与 Cosmos 查询过滤。
+ * 任务列表 API：按店铺过滤（与 {@link listTranslationJobDocsForShop} 同源）。
  */
 export async function listJsonRuntimeTasksForShop(shop: string) {
   const shopTrim = shop.trim();
-  logTranslationCosmosTarget("list_json_runtime_start", {
-    shop: shopTrim || "(all)",
-    mode: "container_all_no_filter",
-  });
-  return listAllTranslationJobsInContainer();
+  logTranslationCosmosTarget("list_json_runtime_start", { shop: shopTrim, mode: "shop_filter" });
+  const docs = await listTranslationJobDocsForShop(shopTrim, 50);
+  return docs.map(mapDocToJsonRuntimeListRow);
 }
 
 export async function getTranslationJobRecord(shop: string, jobId: string) {

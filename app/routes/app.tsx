@@ -92,8 +92,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const locale = detectRequestLocale(request);
   const { nav, home } = getAppEntryConfig();
 
-  // eslint-disable-next-line no-undef
-  return { apiKey: process.env.SHOPIFY_API_KEY || "", locale, nav, home };
+  const apiKey = process.env.SHOPIFY_API_KEY?.trim() || "";
+  if (!apiKey) {
+    console.error(
+      "[app] SHOPIFY_API_KEY 为空：请用 `shopify app env show -c <你的.toml>` 核对，或执行 `shopify app env pull`",
+    );
+  }
+  return { apiKey, locale, nav, home };
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {

@@ -17,6 +17,20 @@ export function normalizeEnvValue(value: string | undefined): string {
 
 let runtimeEnvLoaded = false;
 
+/**
+ * `shopify app dev` 会注入与当前 shopify.app.*.toml 一致的变量；本地 .env 若存另一套 App 的密钥，
+ * 不应覆盖 CLI 已注入的值（否则嵌入式 Admin 白屏）。
+ */
+const SHOPIFY_CLI_PROTECTED_ENV_KEYS = new Set([
+  "SHOPIFY_API_KEY",
+  "SHOPIFY_API_SECRET",
+  "SCOPES",
+  "HOST",
+  "FRONTEND_PORT",
+  "PORT",
+  "SHOPIFY_APP_URL",
+]);
+
 /** 仓库根目录（含 package.json），不依赖 process.cwd() */
 export function getProjectRoot(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -52,10 +66,13 @@ function applyEnvFileContent(
       value = value.slice(1, -1);
     }
     const existing = process.env[key];
+    const cliAlreadySet =
+      !process.env.RENDER && SHOPIFY_CLI_PROTECTED_ENV_KEYS.has(key) && existing !== undefined && existing !== "";
     const shouldApply =
-      existing === undefined ||
-      existing === "" ||
-      (overrideExisting && !process.env.RENDER);
+      !cliAlreadySet &&
+      (existing === undefined ||
+        existing === "" ||
+        (overrideExisting && !process.env.RENDER));
     if (shouldApply) {
       process.env[key] = value;
       applied += 1;
