@@ -179,13 +179,14 @@ Spark **不调用 Spring Backend 邮件 API**，进程内直连腾讯 SES SDK（
 | `sendFeishuTextMessage.server.ts` | 唯一 `fetch` 出口（text 消息） |
 | `scenarios/sendUninstallFeishuNotify.server.ts` | 卸载 → `ops_uninstall` |
 | `scenarios/sendSubscriptionFeishuNotify.server.ts` | 首次订阅生效 → `ops_subscription` |
+| `scenarios/sendTokenPackFeishuNotify.server.ts` | 按量购包入账 → `ops_subscription` |
 
 | channel | 环境变量 | 触发 |
 |---------|----------|------|
 | `ops_uninstall` | `FEISHU_WEBHOOK_URL_UNINSTALL` | `onAppUninstalled`（邮件之后、持久化之前） |
-| `ops_subscription` | `FEISHU_WEBHOOK_URL_SUBSCRIPTION` | `applyActiveSubscription` 且 `wasPending`（`SUBSCRIPTION_ACTIVATED` 之后） |
+| `ops_subscription` | `FEISHU_WEBHOOK_URL_SUBSCRIPTION` | `applyActiveSubscription` 且 `wasPending`（`SUBSCRIPTION_ACTIVATED` 之后）；`applyTokenPackPurchase` 首次 `TOKEN_PACK_PURCHASED` 之后 |
 
-日志前缀：`[Feishu]`、`[Feishu][UninstallOps]`、`[Feishu][SubscriptionOps]`、`[AppLifecycle:uninstall] feishu-*`。未配置 URL 或 `FEISHU_ENABLED=false` 时 skipped，不抛错。
+日志前缀：`[Feishu]`、`[Feishu][UninstallOps]`、`[Feishu][SubscriptionOps]`、`[Feishu][TokenPackOps]`、`[AppLifecycle:uninstall] feishu-*`。未配置 URL 或 `FEISHU_ENABLED=false` 时 skipped，不抛错。
 
 卸载原因与用户反馈（仅飞书文案，非 webhook payload）：
 - `app/uninstalled` webhook 不含卸载问卷字段；发飞书前由 `app/server/partner/fetchUninstallFeedbackFromPartner.server.ts` 查询 Partner API `RelationshipUninstalled`（`reason` / `description`）。

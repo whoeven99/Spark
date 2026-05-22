@@ -1,4 +1,5 @@
 import prisma from "../../../db.server";
+import { sendTokenPackFeishuNotify } from "../../feishu/scenarios/sendTokenPackFeishuNotify.server";
 import { appendBillingLog } from "../billingLog.server";
 import { ensureAccount } from "../account/ensureAccount.server";
 import type { PlanRecord } from "../plans/planCatalog.server";
@@ -41,4 +42,17 @@ export async function applyTokenPackPurchase(params: {
     tokensDelta: plan.tokens,
     metadata: params.metadata,
   });
+
+  try {
+    await sendTokenPackFeishuNotify({
+      shop,
+      appName,
+      planKey: plan.planKey,
+    });
+  } catch (error) {
+    console.error(
+      `[Billing] token pack feishu notify failed shop=${shop} appName=${appName}:`,
+      error,
+    );
+  }
 }
