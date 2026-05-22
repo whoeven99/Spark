@@ -46,6 +46,7 @@ export type JsonRuntimeTaskListPayload = {
   shopName?: string;
   total?: number;
   tasks?: JsonRuntimeTaskListRow[];
+  cosmos?: Record<string, string>;
 };
 
 export type JsonRuntimeTaskListEnvelope = {
@@ -364,7 +365,11 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
         return;
       }
       const tasks = envelope.response?.tasks;
-      setTaskList(Array.isArray(tasks) ? tasks : []);
+      const list = Array.isArray(tasks) ? tasks : [];
+      setTaskList(list);
+      if (!silent && list.length === 0 && envelope.response?.cosmos) {
+        console.info("[translation][list] empty tasks", envelope.response.cosmos);
+      }
       if (!silent) setListErrorText("");
     } catch {
       if (!silent) {

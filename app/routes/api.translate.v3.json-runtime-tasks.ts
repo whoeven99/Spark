@@ -3,6 +3,7 @@ import { authenticate } from "../shopify.server";
 import {
   getTranslationJobsCosmosLocation,
   listJsonRuntimeTasksForShop,
+  logTranslationCosmosTarget,
 } from "../server/translation/cosmosJobStore.server";
 import {
   effectiveShopFromQuery,
@@ -22,6 +23,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     if (forbidden) return forbidden;
 
     const effectiveShop = effectiveShopFromQuery(shopNameParam, session.shop);
+    logTranslationCosmosTarget("list_api_start", { shop: effectiveShop });
     const tasks = await listJsonRuntimeTasksForShop(effectiveShop);
     return Response.json({
       success: true,

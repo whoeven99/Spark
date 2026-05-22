@@ -285,7 +285,11 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
         return;
       }
       const list = env.response?.tasks;
-      setTasks(Array.isArray(list) ? list : []);
+      const rows = Array.isArray(list) ? list : [];
+      setTasks(rows);
+      if (!silent && rows.length === 0 && env.response?.cosmos) {
+        console.info("[translation][list] empty tasks", env.response.cosmos);
+      }
       if (!silent) setListError("");
     } catch {
       if (!silent) {

@@ -396,14 +396,17 @@ export async function listJsonRuntimeTasksForShop(shop: string) {
   const shopTrim = shop.trim();
   if (!shopTrim) return [];
   const jobs = await getJobsContainer();
-  const query = jobs.items.query<TranslationJobDoc>(
-    {
-      query: "SELECT TOP 50 * FROM c WHERE c.shopName = @shop ORDER BY c.updatedAt DESC",
-      parameters: [{ name: "@shop", value: shopTrim }],
-    },
-    { partitionKey: shopTrim },
-  );
+  // 与 listTranslationJobs 相同：容器内按 shopName 查询，不显式传 partitionKey（创建幂等已验证此路径能读到文档）
+  const query = jobs.items.query<TranslationJobDoc>({
+    query: "SELECT TOP 50 * FROM c WHERE c.shopName = @shop ORDER BY c.updatedAt DESC",
+    parameters: [{ name: "@shop", value: shopTrim }],
+  });
   const { resources } = await query.fetchAll();
+  logTranslationCosmosTarget("list_done", {
+    shop: shopTrim,
+    count: resources.length,
+    taskIds: resources.map((d) => d.id).join(",") || "(none)",
+  });
   return resources.map((doc) => ({
     id: doc.id,
     shopName: doc.shopName,
