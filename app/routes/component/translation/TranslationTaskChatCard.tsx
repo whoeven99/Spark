@@ -6,7 +6,7 @@ import {
   coerceTranslationTaskFormPayload,
   type TranslationTaskFormPayload,
 } from "../../../lib/translationTaskFormPayload";
-import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../../../server/translation/types";
+import { TRANSLATION_V4_MODULES } from "../../../server/translation/v4/types";
 import { pageColorTokens } from "../../page/pageUiStyles";
 
 const MODULE_LABELS: Record<string, string> = {
@@ -72,22 +72,20 @@ export function TranslationTaskChatCard({
 
     setIsSubmitting(true);
     try {
-      const response = await fetch(`/app/translation${search}`, {
+      const response = await fetch(`/api/translate/v4/tasks${search}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "create_job",
-          targetLocale: target,
-          sourceLocale: sourceLocale.trim() || "zh-CN",
-          resourceTypes,
+          source: sourceLocale.trim() || "zh-CN",
+          target: targetLocale.trim(),
+          modules: resourceTypes,
           limitPerType: limit,
         }),
       });
       const payload = (await response.json().catch(() => ({}))) as {
         ok?: boolean;
-        message?: string;
-        error?: string;
         jobId?: string;
+        error?: string;
       };
 
       if (!response.ok || payload.ok === false) {
@@ -95,10 +93,10 @@ export function TranslationTaskChatCard({
         return;
       }
 
-      shopify.toast.show(payload.message || t("translationRuntime.createSuccess"));
+      shopify.toast.show(t("translationRuntime.createSuccess"));
       onSuccess({
         jobId: payload.jobId,
-        message: payload.message || t("translationRuntime.createSuccess"),
+        message: t("translationRuntime.createSuccess"),
       });
     } catch {
       shopify.toast.show(t("chat.sendFailed"));
@@ -224,7 +222,7 @@ export function TranslationTaskChatCard({
                 marginTop: "0.45rem",
               }}
             >
-              {ALLOWED_TRANSLATABLE_RESOURCE_TYPES.map((type) => (
+              {[...TRANSLATION_V4_MODULES].map((type) => (
                 <button
                   key={type}
                   type="button"
@@ -258,7 +256,7 @@ export function TranslationTaskChatCard({
               }}
             >
               <Link
-                to={`/app/translation${search}`}
+                to={`/app/translation-v4${search}`}
                 style={{ color: "#2c6ecb", fontWeight: 500 }}
               >
                 {t("translationRuntime.openTaskPage")}
