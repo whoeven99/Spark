@@ -45,7 +45,7 @@ export type StreamChunk =
         finalReply?: string;
         uiPayloads?: {
           translationTaskForm?: unknown;
-          generateDescriptionCardPayload?: unknown;
+          productImproveCardPayload?: unknown;
           attachments?: unknown;
         };
         langsmithTraceUrl?: string;

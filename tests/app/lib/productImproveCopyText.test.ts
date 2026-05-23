@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCopyAllText } from "../../../app/lib/generateDescriptionCopyText";
+import { buildCopyAllText } from "../../../app/lib/productImproveCopyText";
 
 describe("buildCopyAllText", () => {
   it("formats title and description with fixed labels", () => {

@@ -1,28 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { buildCopyAllText } from "../lib/generateDescriptionCopyText";
-import type { GenerateDescriptionApiResponse } from "../lib/generateDescriptionTypes";
+import { buildCopyAllText } from "../lib/productImproveCopyText";
+import type { GenerateDescriptionApiResponse } from "../lib/productImproveTypes";
 import {
   SHOP_LOCALES_FALLBACK,
   type ShopLocalesApiResponse,
   type ShopLocalesPayload,
-} from "../lib/generateDescriptionLocales";
-import type { GenerateDescriptionCardPayload } from "../lib/chatMessage";
+} from "../lib/productImproveLocales";
+import type { ProductImproveCardPayload } from "../lib/chatMessage";
 import type { UpdateProductDescriptionApiResponse } from "../lib/updateProductDescriptionTypes";
 
-const LOG_PREFIX = "[useGenerateDescription]";
+const LOG_PREFIX = "[useProductImprove]";
 
 export type CopyTarget = "title" | "description" | "all";
 
-export type UseGenerateDescriptionParams = {
+export type UseProductImproveParams = {
   locationSearch: string;
   /** 独立页由 loader 注入；聊天卡片传 `null`，由 hook 请求 `/api/shop-locales`。 */
   initialShopLocales: ShopLocalesPayload | null;
-  initialResult?: GenerateDescriptionCardPayload;
+  initialResult?: ProductImproveCardPayload;
   toastShow: (message: string) => void;
 };
 
-export function useGenerateDescription(params: UseGenerateDescriptionParams) {
+export function useProductImprove(params: UseProductImproveParams) {
   const { t } = useTranslation();
   const { locationSearch, initialShopLocales, initialResult, toastShow } = params;
 
@@ -145,7 +145,7 @@ export function useGenerateDescription(params: UseGenerateDescriptionParams) {
       setPinnedProductId(pid);
 
       try {
-        const response = await fetch(`/api/generate-description${locationSearch}`, {
+        const response = await fetch(`/api/product-improve${locationSearch}`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

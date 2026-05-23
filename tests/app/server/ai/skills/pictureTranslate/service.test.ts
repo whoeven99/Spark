@@ -15,7 +15,7 @@ vi.mock("~/server/pictureTranslate/volcenginePictureTranslate.server", () => ({
   fetchSourceImageBytes: mocks.fetchSourceImageBytes,
 }));
 
-vi.mock("~/server/generateDescription/generateDescriptionLog.server", () => ({
+vi.mock("~/server/productImprove/generateDescriptionLog.server", () => ({
   logDetailedError: mocks.logDetailedError,
 }));
 

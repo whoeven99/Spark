@@ -1,4 +1,4 @@
-/** POST `/api/generate-description` 与 `/app/generate-description` action 响应（与 `generateDescriptionHttp.server` 对齐）。 */
+/** POST `/api/product-improve` 与 `/app/product-improve` action 响应（与 `generateDescriptionHttp.server` 对齐）。 */
 export type GenerateDescriptionApiSuccessBody = {
   success: true;
   errorCode: number;

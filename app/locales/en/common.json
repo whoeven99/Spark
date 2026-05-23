@@ -74,10 +74,10 @@
     "aiAssistant": "AI Assistant",
     "diagnosis": "Diagnostics",
     "translation": "Translation tasks",
-    "generateDescription": "Product copy",
     "imageStudio": "Image tools",
     "billing": "Plans & credits",
-    "translationV4": "Translation v4"
+    "translationV4": "Translation v4",
+    "productImprove": "Product Improve"
   },
   "billing": {
     "pageTitle": "Plans & token balance",

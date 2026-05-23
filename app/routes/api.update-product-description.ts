@@ -1,1 +1,1 @@
-export { action } from "../server/generateDescription/updateProductDescriptionRoute.server";
+export { action } from "../server/productImprove/updateProductDescriptionRoute.server";

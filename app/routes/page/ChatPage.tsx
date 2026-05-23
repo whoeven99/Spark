@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import type {
   ChatMessage,
   ChatMessageAttachment,
-  GenerateDescriptionCardPayload,
+  ProductImproveCardPayload,
 } from "../../lib/chatMessage";
 import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { coerceTranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
@@ -95,7 +95,7 @@ export function ChatPage() {
       {
         role: "assistant",
         content: t("chat.assistantOpenGenerateCard"),
-        generateDescriptionCard: true,
+        productImproveCard: true,
       },
     ]);
   };
@@ -162,11 +162,11 @@ export function ChatPage() {
               ...(p.translationTaskForm
                 ? { translationTaskForm: p.translationTaskForm as TranslationTaskFormPayload }
                 : {}),
-              ...(p.generateDescriptionCard ? { generateDescriptionCard: true } : {}),
-              ...(p.generateDescriptionCardPayload
+              ...(p.productImproveCard ? { productImproveCard: true } : {}),
+              ...(p.productImproveCardPayload
                 ? {
-                    generateDescriptionCardPayload:
-                      p.generateDescriptionCardPayload as GenerateDescriptionCardPayload,
+                    productImproveCardPayload:
+                      p.productImproveCardPayload as ProductImproveCardPayload,
                   }
                 : {}),
             },

@@ -1,5 +1,5 @@
 import { getAppEntry } from "../../../../config/appEntry.server";
-import { logDetailedError } from "../../../generateDescription/generateDescriptionLog.server";
+import { logDetailedError } from "../../../productImprove/generateDescriptionLog.server";
 import {
   buildPictureTranslateBillingItem,
   recordVisualToolTokenUsage,

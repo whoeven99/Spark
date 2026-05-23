@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../../shopify.server";
-import type { ShopLocalesApiResponse } from "../../lib/generateDescriptionLocales";
+import type { ShopLocalesApiResponse } from "../../lib/productImproveLocales";
 import { fetchShopLocalesPayload } from "./shopLocalesFetcher.server";
 import { logDetailedError } from "./generateDescriptionLog.server";
 

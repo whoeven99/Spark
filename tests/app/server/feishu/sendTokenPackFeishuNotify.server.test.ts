@@ -22,7 +22,7 @@ describe("buildTokenPackMessage", () => {
     const message = buildTokenPackMessage(
       {
         shop: "demo.myshopify.com",
-        appName: "generate-description",
+        appName: "product-improve",
         planKey: "token-pack-10k",
       },
       {
@@ -47,7 +47,7 @@ describe("sendTokenPackFeishuNotify", () => {
 
   beforeEach(() => {
     process.env.FEISHU_ENABLED = "true";
-    process.env.APP_ENTRY = "generate-description";
+    process.env.APP_ENTRY = "product-improve";
   });
 
   afterEach(() => {
@@ -61,7 +61,7 @@ describe("sendTokenPackFeishuNotify", () => {
 
     const result = await sendTokenPackFeishuNotify({
       shop: "demo.myshopify.com",
-      appName: "generate-description",
+      appName: "product-improve",
       planKey: "token-pack-10k",
     });
 
@@ -77,7 +77,7 @@ describe("sendTokenPackFeishuNotify", () => {
 
     const result = await sendTokenPackFeishuNotify({
       shop: "demo.myshopify.com",
-      appName: "generate-description",
+      appName: "product-improve",
       planKey: "token-pack-10k",
     });
 
@@ -100,7 +100,7 @@ describe("sendTokenPackFeishuNotify", () => {
 
     const result = await sendTokenPackFeishuNotify({
       shop: "demo.myshopify.com",
-      appName: "generate-description",
+      appName: "product-improve",
       planKey: "token-pack-10k",
     });
 

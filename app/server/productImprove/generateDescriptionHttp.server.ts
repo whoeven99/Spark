@@ -18,7 +18,7 @@ import {
 import { parseUsageMetadata } from "../tokenUsage/parseUsageMetadata.server";
 import { logDetailedError } from "./generateDescriptionLog.server";
 import { runProductDescriptionGeneration } from "./services/generateDescriptionService";
-import type { GenerateDescriptionApiResponse } from "../../lib/generateDescriptionTypes";
+import type { GenerateDescriptionApiResponse } from "../../lib/productImproveTypes";
 
 const LOG_PREFIX = "[GenerateDescription][HTTP]";
 

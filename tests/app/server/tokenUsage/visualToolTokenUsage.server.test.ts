@@ -17,7 +17,7 @@ vi.mock("../../../../app/server/billing/requireBilling.server", () => ({
 }));
 
 vi.mock("../../../../app/config/appEntry.server", () => ({
-  getAppEntry: vi.fn(() => "generate-description"),
+  getAppEntry: vi.fn(() => "product-improve"),
 }));
 
 vi.mock("../../../../app/server/tokenUsage/tokenBillingCatalog.server", () => ({

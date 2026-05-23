@@ -3,7 +3,7 @@ import {
   type ShopLocaleGraphqlRow,
   type ShopLocalesPayload,
   SHOP_LOCALES_FALLBACK,
-} from "../../lib/generateDescriptionLocales";
+} from "../../lib/productImproveLocales";
 import { logDetailedError } from "./generateDescriptionLog.server";
 
 const LOG_PREFIX = "[GenerateDescription][ShopLocales]";

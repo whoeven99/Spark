@@ -1,4 +1,4 @@
-import { logDetailedError } from "../generateDescription/generateDescriptionLog.server";
+import { logDetailedError } from "../productImprove/generateDescriptionLog.server";
 import { aidgeTranslateImageByUrl } from "./aidgePictureTranslate.server";
 import {
   uploadPictureTranslateJpegAndGetUrl,

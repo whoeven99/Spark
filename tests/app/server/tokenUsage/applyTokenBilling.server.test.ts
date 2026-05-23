@@ -34,7 +34,7 @@ describe("billTokenUsage", () => {
     });
 
     const billed = await billTokenUsage({
-      appName: "generate-description",
+      appName: "product-improve",
       feature: "product_copy",
       modelKey: "deepseek-chat",
       usage: { total_tokens: 100 },
@@ -51,7 +51,7 @@ describe("billTokenUsage", () => {
     });
 
     const billed = await billTokenUsage({
-      appName: "generate-description",
+      appName: "product-improve",
       feature: "picture_translate",
       modelKey: "volc-translate",
       usage: {},

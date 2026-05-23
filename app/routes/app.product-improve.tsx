@@ -9,16 +9,16 @@ import { authenticate } from "../shopify.server";
 import {
   executeGenerateDescriptionRequest,
   parseGenerateDescriptionBody,
-} from "../server/generateDescription/generateDescriptionHttp.server";
-import { logDetailedError } from "../server/generateDescription/generateDescriptionLog.server";
-import { fetchShopLocalesPayload } from "../server/generateDescription/shopLocalesFetcher.server";
+} from "../server/productImprove/generateDescriptionHttp.server";
+import { logDetailedError } from "../server/productImprove/generateDescriptionLog.server";
+import { fetchShopLocalesPayload } from "../server/productImprove/shopLocalesFetcher.server";
 import { getAppEntry } from "../config/appEntry.server";
 import {
   billingErrorToResponse,
   loadBillingContext,
   toBillingAccessSnapshot,
 } from "../server/billing/index.server";
-import { GenerateDescriptionPage } from "./page/GenerateDescriptionPage";
+import { ProductImprovePage } from "./page/ProductImprovePage";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -35,7 +35,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export const action = async ({ request }: ActionFunctionArgs) => {
   const requestId = crypto.randomUUID();
   console.info(
-    `[GenerateDescription][Page Action] requestId=${requestId} method=${request.method}`,
+    `[ProductImprove][Page Action] requestId=${requestId} method=${request.method}`,
   );
 
   if (request.method !== "POST") {
@@ -50,7 +50,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     raw = (await request.json()) as unknown;
   } catch (e) {
     logDetailedError(
-      `[GenerateDescription][Page Action] requestId=${requestId}`,
+      `[ProductImprove][Page Action] requestId=${requestId}`,
       "request.json failed",
       e,
     );
@@ -95,7 +95,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     logDetailedError(
-      `[GenerateDescription][Page Action] requestId=${requestId}`,
+      `[ProductImprove][Page Action] requestId=${requestId}`,
       "unexpected",
       error,
     );
@@ -111,8 +111,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 };
 
-export default function AppGenerateDescription() {
-  return <GenerateDescriptionPage />;
+export default function AppProductImprove() {
+  return <ProductImprovePage />;
 }
 
 export const headers: HeadersFunction = (headersArgs) => {

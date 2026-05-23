@@ -2,7 +2,7 @@ export type AppEntry =
   | "chat"
   | "diagnosis"
   | "translation-v4"
-  | "generate-description"
+  | "product-improve"
   | "image-studio"
   | "picture-translate"
   | "generate-image";
@@ -13,7 +13,7 @@ type AppEntryConfig = {
   home: string;
   nav: readonly NavItemKey[];
   /** Prisma Client 委托名，供 `PrismaSessionStorage` 使用。 */
-  sessionPrismaTable: "session" | "generateDescriptionSession";
+  sessionPrismaTable: "session" | "productImproveSession";
 };
 
 const APP_ENTRY_CONFIGS = {
@@ -23,7 +23,7 @@ const APP_ENTRY_CONFIGS = {
       "chat",
       "diagnosis",
       "translation-v4",
-      "generate-description",
+      "product-improve",
       "image-studio",
     ],
     sessionPrismaTable: "session",
@@ -38,10 +38,10 @@ const APP_ENTRY_CONFIGS = {
     nav: ["translation-v4"],
     sessionPrismaTable: "session",
   },
-  "generate-description": {
-    home: "/app/generate-description",
-    nav: ["generate-description", "image-studio", "billing"],
-    sessionPrismaTable: "generateDescriptionSession",
+  "product-improve": {
+    home: "/app/product-improve",
+    nav: ["product-improve", "image-studio", "billing"],
+    sessionPrismaTable: "productImproveSession",
   },
   "image-studio": {
     home: "/app/image-studio",
@@ -78,7 +78,7 @@ export function getAppEntryConfig(): AppEntryConfig {
 /** 当前 App 使用的 Session 表（Prisma 委托名）。主 App 为 `session`，卫星 App 为独立表。 */
 export function getSessionPrismaTableName(): AppEntryConfig["sessionPrismaTable"] {
   const override = process.env.SESSION_PRISMA_TABLE?.trim();
-  if (override === "session" || override === "generateDescriptionSession") {
+  if (override === "session" || override === "productImproveSession") {
     return override;
   }
   return getAppEntryConfig().sessionPrismaTable;

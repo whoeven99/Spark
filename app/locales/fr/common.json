@@ -74,11 +74,11 @@
     "aiAssistant": "AI Assistant",
     "diagnosis": "Diagnostics",
     "translation": "Tâches de traduction",
-    "generateDescription": "Texte produit",
     "imageStudio": "Outils image",
     "pictureTranslate": "Traduction d’images",
     "billing": "Plans et crédits",
-    "translationV4": "Traduction v4"
+    "translationV4": "Traduction v4",
+    "productImprove": "Améliorer produit"
   },
   "chat": {
     "pageTitle": "Shopify AI Assistant",

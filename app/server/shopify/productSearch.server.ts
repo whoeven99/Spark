@@ -1,5 +1,5 @@
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/tool";
-import { logDetailedError } from "../generateDescription/generateDescriptionLog.server";
+import { logDetailedError } from "../productImprove/generateDescriptionLog.server";
 import type { ProductSearchItem } from "../../lib/productSearchTypes";
 
 const LOG_PREFIX = "[ProductSearch]";

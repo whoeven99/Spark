@@ -74,11 +74,11 @@
     "aiAssistant": "AI Assistant",
     "diagnosis": "진단 보고서",
     "translation": "번역 작업",
-    "generateDescription": "상품 카피",
     "imageStudio": "이미지 도구",
     "pictureTranslate": "이미지 번역",
     "billing": "요금제 및 잔액",
-    "translationV4": "번역 v4"
+    "translationV4": "번역 v4",
+    "productImprove": "상품 개선"
   },
   "billing": {
     "pageTitle": "요금제 및 토큰 잔액",

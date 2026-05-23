@@ -5,7 +5,7 @@ import {
   markGeneratedImageJobFailed,
   markGeneratedImageJobSucceeded,
 } from "../../../imageGeneration/imageGenerationJobStore.server";
-import { logDetailedError } from "../../../generateDescription/generateDescriptionLog.server";
+import { logDetailedError } from "../../../productImprove/generateDescriptionLog.server";
 import {
   buildImageGenerateBillingItem,
   recordVisualToolTokenUsage,

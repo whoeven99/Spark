@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildShopLocalesPayloadFromGraphqlRows } from "../../../../app/server/generateDescription/shopLocalesFetcher.server";
+import { buildShopLocalesPayloadFromGraphqlRows } from "../../../../app/server/productImprove/shopLocalesFetcher.server";
 
 describe("buildShopLocalesPayloadFromGraphqlRows", () => {
   it("picks primary locale as default and sorts primary first", () => {

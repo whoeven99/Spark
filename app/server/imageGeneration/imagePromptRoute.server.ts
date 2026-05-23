@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../../shopify.server";
-import { logDetailedError } from "../generateDescription/generateDescriptionLog.server";
+import { logDetailedError } from "../productImprove/generateDescriptionLog.server";
 import {
   executeImagePromptRequest,
   parseImagePromptBody,

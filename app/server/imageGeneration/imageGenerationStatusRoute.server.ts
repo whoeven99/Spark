@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../../shopify.server";
-import { logDetailedError } from "../generateDescription/generateDescriptionLog.server";
+import { logDetailedError } from "../productImprove/generateDescriptionLog.server";
 import { getImageGenerationStatusResponse } from "./imageGenerationStatusHttp.server";
 import type { ImageGenerationStatusHttpResponse } from "./types";
 

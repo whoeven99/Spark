@@ -3,7 +3,7 @@ import {
   parseAndValidateGeneratedDescriptionJson,
   parseAndValidateProductDescriptionJson,
   stripJsonFence,
-} from "../../../../app/server/generateDescription/generatedDescriptionJson.server";
+} from "../../../../app/server/productImprove/generatedDescriptionJson.server";
 
 describe("stripJsonFence", () => {
   it("unwraps json code fence", () => {

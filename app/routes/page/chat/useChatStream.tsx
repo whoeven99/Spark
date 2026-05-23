@@ -16,7 +16,7 @@ type StreamChunk =
         finalReply?: string;
         uiPayloads?: {
           translationTaskForm?: unknown;
-          generateDescriptionCardPayload?: unknown;
+          productImproveCardPayload?: unknown;
           attachments?: unknown;
         };
       };
@@ -27,8 +27,8 @@ export type ChatStreamFinishPayload = {
   reply: string;
   translationTaskForm?: unknown;
   attachments?: ChatMessageAttachment[];
-  generateDescriptionCard?: boolean;
-  generateDescriptionCardPayload?: unknown;
+  productImproveCard?: boolean;
+  productImproveCardPayload?: unknown;
   httpStatus?: number;
 };
 
@@ -36,8 +36,8 @@ type Snapshot = {
   reply: string;
   translationTaskForm?: unknown;
   attachments: ChatMessageAttachment[];
-  generateDescriptionCard: boolean;
-  generateDescriptionCardPayload?: unknown;
+  productImproveCard: boolean;
+  productImproveCardPayload?: unknown;
 };
 
 export function useChatStream() {
@@ -52,8 +52,8 @@ export function useChatStream() {
     reply: "",
     translationTaskForm: undefined,
     attachments: [],
-    generateDescriptionCard: false,
-    generateDescriptionCardPayload: undefined,
+    productImproveCard: false,
+    productImproveCardPayload: undefined,
   });
 
   const resetSnapshot = () => {
@@ -61,8 +61,8 @@ export function useChatStream() {
       reply: "",
       translationTaskForm: undefined,
       attachments: [],
-      generateDescriptionCard: false,
-      generateDescriptionCardPayload: undefined,
+      productImproveCard: false,
+      productImproveCardPayload: undefined,
     };
   };
 
@@ -163,8 +163,8 @@ export function useChatStream() {
                 markFirstChunkSeen();
                 if (chunk.name === "generate_product_description") {
                   const parsed = JSON.parse(chunk.result) as unknown;
-                  snapshotRef.current.generateDescriptionCard = true;
-                  snapshotRef.current.generateDescriptionCardPayload = parsed;
+                  snapshotRef.current.productImproveCard = true;
+                  snapshotRef.current.productImproveCardPayload = parsed;
                   setStreamingGenerateCard(true);
                   setStreamingGeneratePayload(parsed);
                 }
@@ -192,12 +192,12 @@ export function useChatStream() {
                   snapshotRef.current.attachments =
                     coerceChatMessageAttachments(ui.attachments);
                 }
-                if (ui?.generateDescriptionCardPayload) {
-                  snapshotRef.current.generateDescriptionCard = true;
-                  snapshotRef.current.generateDescriptionCardPayload =
-                    ui.generateDescriptionCardPayload;
+                if (ui?.productImproveCardPayload) {
+                  snapshotRef.current.productImproveCard = true;
+                  snapshotRef.current.productImproveCardPayload =
+                    ui.productImproveCardPayload;
                   setStreamingGenerateCard(true);
-                  setStreamingGeneratePayload(ui.generateDescriptionCardPayload);
+                  setStreamingGeneratePayload(ui.productImproveCardPayload);
                 }
 
                 finalizeOnce({
@@ -205,9 +205,9 @@ export function useChatStream() {
                   reply,
                   translationTaskForm: snapshotRef.current.translationTaskForm,
                   attachments: snapshotRef.current.attachments,
-                  generateDescriptionCard: snapshotRef.current.generateDescriptionCard,
-                  generateDescriptionCardPayload:
-                    snapshotRef.current.generateDescriptionCardPayload,
+                  productImproveCard: snapshotRef.current.productImproveCard,
+                  productImproveCardPayload:
+                    snapshotRef.current.productImproveCardPayload,
                 });
               }
             } catch (e) {
@@ -222,9 +222,9 @@ export function useChatStream() {
             reply: snapshotRef.current.reply,
             translationTaskForm: snapshotRef.current.translationTaskForm,
             attachments: snapshotRef.current.attachments,
-            generateDescriptionCard: snapshotRef.current.generateDescriptionCard,
-            generateDescriptionCardPayload:
-              snapshotRef.current.generateDescriptionCardPayload,
+            productImproveCard: snapshotRef.current.productImproveCard,
+            productImproveCardPayload:
+              snapshotRef.current.productImproveCardPayload,
           });
         }
       } catch (e) {
@@ -235,9 +235,9 @@ export function useChatStream() {
             reply: snapshotRef.current.reply,
             translationTaskForm: snapshotRef.current.translationTaskForm,
             attachments: snapshotRef.current.attachments,
-            generateDescriptionCard: snapshotRef.current.generateDescriptionCard,
-            generateDescriptionCardPayload:
-              snapshotRef.current.generateDescriptionCardPayload,
+            productImproveCard: snapshotRef.current.productImproveCard,
+            productImproveCardPayload:
+              snapshotRef.current.productImproveCardPayload,
           });
         } else {
           console.error("Stream error", e);
@@ -249,9 +249,9 @@ export function useChatStream() {
             reply: fallback,
             translationTaskForm: snapshotRef.current.translationTaskForm,
             attachments: snapshotRef.current.attachments,
-            generateDescriptionCard: snapshotRef.current.generateDescriptionCard,
-            generateDescriptionCardPayload:
-              snapshotRef.current.generateDescriptionCardPayload,
+            productImproveCard: snapshotRef.current.productImproveCard,
+            productImproveCardPayload:
+              snapshotRef.current.productImproveCardPayload,
           });
         }
       } finally {
@@ -262,9 +262,9 @@ export function useChatStream() {
             reply: snapshotRef.current.reply,
             translationTaskForm: snapshotRef.current.translationTaskForm,
             attachments: snapshotRef.current.attachments,
-            generateDescriptionCard: snapshotRef.current.generateDescriptionCard,
-            generateDescriptionCardPayload:
-              snapshotRef.current.generateDescriptionCardPayload,
+            productImproveCard: snapshotRef.current.productImproveCard,
+            productImproveCardPayload:
+              snapshotRef.current.productImproveCardPayload,
           });
         }
       }

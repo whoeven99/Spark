@@ -2,11 +2,11 @@ import { useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import { useLoaderData } from "react-router";
-import { useGenerateDescription } from "../../hooks/useGenerateDescription";
-import type { loader } from "../app.generate-description";
+import { useProductImprove } from "../../hooks/useProductImprove";
+import type { loader } from "../app.product-improve";
 import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
 import { ProductSelector } from "../component/product/ProductSelector";
-import { GenerateDescriptionResultEditor } from "../component/generateDescription/GenerateDescriptionResultEditor";
+import { GenerateDescriptionResultEditor } from "../component/productImprove/GenerateDescriptionResultEditor";
 import {
   PageSectionHeader,
   PageSurface,
@@ -25,7 +25,7 @@ import {
   twoColumnSideStyle,
 } from "./pageUiStyles";
 
-export function GenerateDescriptionPage() {
+export function ProductImprovePage() {
   const shopify = useAppBridge();
   const { t } = useTranslation();
   const loaderData = useLoaderData<typeof loader>();
@@ -63,7 +63,7 @@ export function GenerateDescriptionPage() {
     copyAll,
     resetResult,
     localesIsFallback,
-  } = useGenerateDescription({
+  } = useProductImprove({
     locationSearch: search,
     initialShopLocales: loaderData.shopLocales,
     toastShow: (message) => {
