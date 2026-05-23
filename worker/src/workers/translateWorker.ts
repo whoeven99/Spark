@@ -31,6 +31,8 @@ async function claimNextJob(): Promise<TranslationV4Job | null> {
 
 async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   const { shopName, id: jobId, source, target, aiModel, testMode } = job;
+  // Honor environment override for translation engine (TRANSLATION_AI_MODEL)
+  const effectiveAiModel = process.env.TRANSLATION_AI_MODEL?.trim() || aiModel;
   const blobPrefix = job.blobPrefix || `tasks/v4/${shopName}/${jobId}`;
 
   let translateDone = 0;
@@ -67,9 +69,9 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
                 digest: r.digest,
               })),
             });
-            translateDone += resource.fields.length;
+            translateDone++;
           } catch (e) {
-            translateFailed += resource.fields.length;
+            translateFailed++;
             console.warn(`[translate] resource ${resource.resourceId} failed`, e);
           }
         }
