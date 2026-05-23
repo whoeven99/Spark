@@ -76,7 +76,8 @@
     "translation": "翻译任务",
     "generateDescription": "商品文案",
     "imageStudio": "图片工具",
-    "billing": "套餐与额度"
+    "billing": "套餐与额度",
+    "translationV4": "翻译 v4"
   },
   "billing": {
     "pageTitle": "套餐与 Token 额度",

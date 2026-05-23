@@ -1,0 +1,156 @@
+import { CosmosClient, type Container } from "@azure/cosmos";
+import {
+  EMPTY_V4_METRICS,
+  type TranslationV4Job,
+  type TranslationV4Metrics,
+  type TranslationV4Status,
+} from "./types";
+
+let _client: CosmosClient | null = null;
+
+function getClient(): CosmosClient {
+  if (!_client) {
+    const endpoint = process.env.COSMOS_ENDPOINT?.trim();
+    const key = process.env.COSMOS_KEY?.trim();
+    if (!endpoint || !key) throw new Error("COSMOS_ENDPOINT and COSMOS_KEY are required");
+    _client = new CosmosClient({ endpoint, key });
+  }
+  return _client;
+}
+
+function getContainer(): Container {
+  const dbId = process.env.COSMOS_TRANSLATION_DATABASE_ID?.trim() || "translation";
+  const containerId =
+    process.env.COSMOS_TRANSLATION_V4_JOBS_CONTAINER?.trim() || "translation_v4_jobs";
+  return getClient().database(dbId).container(containerId);
+}
+
+export async function createV4Job(
+  input: Omit<
+    TranslationV4Job,
+    "metrics" | "claimedBy" | "claimedAt" | "lastHeartbeat" | "errorMessage" | "errorStage" | "createdAt" | "updatedAt"
+  > & { metrics?: Partial<TranslationV4Metrics> },
+): Promise<TranslationV4Job> {
+  const now = new Date().toISOString();
+  const doc: TranslationV4Job = {
+    ...input,
+    metrics: { ...EMPTY_V4_METRICS, ...input.metrics },
+    claimedBy: null,
+    claimedAt: null,
+    lastHeartbeat: null,
+    errorMessage: null,
+    errorStage: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await getContainer().items.upsert(doc);
+  return doc;
+}
+
+export async function getV4Job(
+  shopName: string,
+  jobId: string,
+): Promise<TranslationV4Job | null> {
+  try {
+    const { resource } = await getContainer()
+      .item(jobId, shopName)
+      .read<TranslationV4Job>();
+    return resource ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function listV4Jobs(shopName: string, limit = 50): Promise<TranslationV4Job[]> {
+  try {
+    const { resources } = await getContainer()
+      .items.query<TranslationV4Job>(
+        {
+          query:
+            "SELECT * FROM c WHERE c.shopName = @shopName ORDER BY c.createdAt DESC OFFSET 0 LIMIT @limit",
+          parameters: [
+            { name: "@shopName", value: shopName },
+            { name: "@limit", value: limit },
+          ],
+        },
+        { partitionKey: shopName },
+      )
+      .fetchAll();
+    return resources;
+  } catch {
+    return [];
+  }
+}
+
+export type UpdateV4JobInput = Partial<
+  Pick<
+    TranslationV4Job,
+    | "status"
+    | "claimedBy"
+    | "claimedAt"
+    | "lastHeartbeat"
+    | "metrics"
+    | "errorMessage"
+    | "errorStage"
+    | "blobPrefix"
+  >
+>;
+
+export async function updateV4Job(
+  shopName: string,
+  jobId: string,
+  updates: UpdateV4JobInput,
+): Promise<TranslationV4Job | null> {
+  try {
+    const { resource: existing, etag } = await getContainer()
+      .item(jobId, shopName)
+      .read<TranslationV4Job>();
+    if (!existing) return null;
+    const updated: TranslationV4Job = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+    const { resource: saved } = await getContainer()
+      .item(jobId, shopName)
+      .replace<TranslationV4Job>(updated, {
+        accessCondition: { type: "IfMatch", condition: etag! },
+      });
+    return saved ?? updated;
+  } catch {
+    return null;
+  }
+}
+
+/** Atomically claim a job by moving it from expectedStatus → newStatus using etag. */
+export async function claimV4Job(
+  shopName: string,
+  jobId: string,
+  expectedStatus: TranslationV4Status,
+  newStatus: TranslationV4Status,
+  claimedBy: string,
+): Promise<TranslationV4Job | null> {
+  try {
+    const { resource: existing, etag } = await getContainer()
+      .item(jobId, shopName)
+      .read<TranslationV4Job>();
+    if (!existing || existing.status !== expectedStatus) return null;
+    const now = new Date().toISOString();
+    const updated: TranslationV4Job = {
+      ...existing,
+      status: newStatus,
+      claimedBy,
+      claimedAt: now,
+      lastHeartbeat: now,
+      updatedAt: now,
+    };
+    const { resource: saved } = await getContainer()
+      .item(jobId, shopName)
+      .replace<TranslationV4Job>(updated, {
+        accessCondition: { type: "IfMatch", condition: etag! },
+      });
+    return saved ?? updated;
+  } catch {
+    return null;
+  }
+}

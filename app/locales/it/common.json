@@ -77,7 +77,8 @@
     "generateDescription": "Testi prodotto",
     "imageStudio": "Strumenti immagine",
     "pictureTranslate": "Traduzione immagini",
-    "billing": "Piani e crediti"
+    "billing": "Piani e crediti",
+    "translationV4": "Traduzione v4"
   },
   "billing": {
     "pageTitle": "Piani e saldo token",

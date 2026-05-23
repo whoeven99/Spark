@@ -77,7 +77,8 @@
     "generateDescription": "Produkttext",
     "imageStudio": "Bildtools",
     "pictureTranslate": "Bildübersetzung",
-    "billing": "Pläne & Guthaben"
+    "billing": "Pläne & Guthaben",
+    "translationV4": "Übersetzung v4"
   },
   "billing": {
     "pageTitle": "Pläne & Token-Guthaben",

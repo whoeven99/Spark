@@ -2,6 +2,7 @@ export type AppEntry =
   | "chat"
   | "diagnosis"
   | "translation"
+  | "translation-v4"
   | "generate-description"
   | "image-studio"
   | "picture-translate"
@@ -23,6 +24,7 @@ const APP_ENTRY_CONFIGS = {
       "chat",
       "diagnosis",
       "translation",
+      "translation-v4",
       "generate-description",
       "image-studio",
     ],
@@ -34,8 +36,13 @@ const APP_ENTRY_CONFIGS = {
     sessionPrismaTable: "session",
   },
   translation: {
-    home: "/app/translation",
-    nav: ["translation"],
+    home: "/app/translation-v4",
+    nav: ["translation", "translation-v4"],
+    sessionPrismaTable: "session",
+  },
+  "translation-v4": {
+    home: "/app/translation-v4",
+    nav: ["translation-v4"],
     sessionPrismaTable: "session",
   },
   "generate-description": {

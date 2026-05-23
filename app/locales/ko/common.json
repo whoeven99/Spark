@@ -77,7 +77,8 @@
     "generateDescription": "상품 카피",
     "imageStudio": "이미지 도구",
     "pictureTranslate": "이미지 번역",
-    "billing": "요금제 및 잔액"
+    "billing": "요금제 및 잔액",
+    "translationV4": "번역 v4"
   },
   "billing": {
     "pageTitle": "요금제 및 토큰 잔액",
