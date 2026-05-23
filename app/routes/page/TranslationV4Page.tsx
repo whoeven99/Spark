@@ -383,8 +383,8 @@ function StageBar({ label, done, total, active, complete, failed = 0 }: StageBar
       <div style={{ flex: 1, height: 6, borderRadius: 3, background: pageColorTokens.progressTrackGradient, overflow: "hidden" }}>
         <div style={{ width: `${pct}%`, height: "100%", background: barColor, borderRadius: 3, transition: "width 0.4s ease" }} />
       </div>
-      <span style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, width: 54, flexShrink: 0, textAlign: "right" }}>
-        {complete ? "完成" : active ? `${pct}%` : total > 0 ? `${done}/${total}` : "等待"}
+      <span style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, minWidth: 80, flexShrink: 0, textAlign: "right" }}>
+        {total > 0 ? `${done}/${total}` : "等待"} {complete ? "✓" : active ? "⟳" : ""}
         {failed > 0 ? ` ⚠${failed}` : ""}
       </span>
     </div>

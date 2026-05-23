@@ -80,6 +80,7 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
 
           if (!translations.length) {
             writtenSet.add(resource.resourceId);
+            writebackDone++;
             continue;
           }
 
