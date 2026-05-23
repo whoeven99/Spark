@@ -1,8 +1,8 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
-  ALLOWED_TRANSLATABLE_RESOURCE_TYPES,
-} from "../../../translation/types";
+  TRANSLATION_V4_MODULES,
+} from "../../../translation/v4/types";
 import {
   TRANSLATION_FORM_PAYLOAD_KIND,
   type TranslationTaskFormPayload,
@@ -18,7 +18,7 @@ const DEFAULT_MODULES: TranslationTaskFormPayload["resourceTypes"] = [
 ];
 
 function normalizeModules(input: string[] | undefined): string[] {
-  const allowed = new Set<string>(ALLOWED_TRANSLATABLE_RESOURCE_TYPES);
+  const allowed = new Set<string>(TRANSLATION_V4_MODULES);
   const picked = (input ?? [])
     .map((item) => item.trim().toUpperCase())
     .filter((item) => allowed.has(item));
