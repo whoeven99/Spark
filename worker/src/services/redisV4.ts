@@ -1,13 +1,13 @@
-import Redis from "ioredis";
+import IORedis from "ioredis";
 
-let _redis: Redis | undefined;
+let _redis: IORedis | undefined;
 
-export function getRedis(): Redis {
+export function getRedis(): IORedis {
   if (_redis) return _redis;
 
   const url = process.env.REDIS_URL?.trim();
   if (url) {
-    _redis = new Redis(url, { maxRetriesPerRequest: 2, connectTimeout: 10_000 });
+    _redis = new IORedis(url, { maxRetriesPerRequest: 2, connectTimeout: 10_000 });
     return _redis;
   }
 
@@ -26,7 +26,7 @@ export function getRedis(): Redis {
   const port = Number(process.env.REDIS_PORT?.trim() || "6380");
   const useTls = process.env.REDIS_TLS !== "false";
 
-  _redis = new Redis({
+  _redis = new IORedis({
     host,
     port,
     password,
