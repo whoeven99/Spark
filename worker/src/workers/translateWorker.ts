@@ -69,9 +69,9 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
                 digest: r.digest,
               })),
             });
-            translateDone += resource.fields.length;
+            translateDone++;
           } catch (e) {
-            translateFailed += resource.fields.length;
+            translateFailed++;
             console.warn(`[translate] resource ${resource.resourceId} failed`, e);
           }
         }
