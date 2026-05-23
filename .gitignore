@@ -37,3 +37,4 @@ database.sqlite
 .react-router/
 shopify.app.toml
 shopify.app.toml
+/worker/dist
