@@ -294,7 +294,9 @@ export async function translateBatch(
   }
 
   const resultMap = new Map<string, TranslateResult>();
-  const isGoogle = aiModel === "google-translate";
+  const envModel = process.env.TRANSLATION_AI_MODEL?.trim();
+  const usedModel = envModel || aiModel;
+  const isGoogle = usedModel === "google-translate";
 
   // 1. Skip fields
   for (const item of items) {
