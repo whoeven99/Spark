@@ -77,7 +77,8 @@
     "generateDescription": "商品コピー",
     "imageStudio": "画像ツール",
     "pictureTranslate": "画像翻訳",
-    "billing": "プランと残高"
+    "billing": "プランと残高",
+    "translationV4": "翻訳 v4"
   },
   "billing": {
     "pageTitle": "プランとトークン残高",

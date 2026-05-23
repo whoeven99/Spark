@@ -77,7 +77,8 @@
     "generateDescription": "Texto de producto",
     "imageStudio": "Herramientas de imagen",
     "pictureTranslate": "Traducción de imágenes",
-    "billing": "Planes y saldo"
+    "billing": "Planes y saldo",
+    "translationV4": "Traducción v4"
   },
   "billing": {
     "pageTitle": "Planes y saldo de tokens",

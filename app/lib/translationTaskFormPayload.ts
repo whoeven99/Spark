@@ -1,4 +1,4 @@
-import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../server/translation/types";
+import { TRANSLATION_V4_MODULES } from "../server/translation/v4/types";
 
 /** Tool / API 间传递「首页翻译任务卡片」载荷（与 open_translation_task_form 输出对齐）。 */
 export const TRANSLATION_FORM_PAYLOAD_KIND = "translation_task_form_v1" as const;
@@ -11,10 +11,7 @@ export type TranslationTaskFormPayload = {
 };
 
 const DEFAULT_RESOURCE_MODULES: TranslationTaskFormPayload["resourceTypes"] = [
-  "PRODUCT",
-  "COLLECTION",
-  "PAGE",
-  "ARTICLE",
+  ...TRANSLATION_V4_MODULES,
 ];
 
 /**
@@ -26,7 +23,7 @@ export function coerceTranslationTaskFormPayload(raw: unknown): TranslationTaskF
     raw && typeof raw === "object" && !Array.isArray(raw)
       ? (raw as Record<string, unknown>)
       : {};
-  const allowed = new Set<string>(ALLOWED_TRANSLATABLE_RESOURCE_TYPES as readonly string[]);
+  const allowed = new Set<string>([...TRANSLATION_V4_MODULES]);
 
   const rawTypes = Array.isArray(rec.resourceTypes)
     ? rec.resourceTypes.map((x) => String(x).trim().toUpperCase()).filter(Boolean)

@@ -77,7 +77,8 @@
     "generateDescription": "Texte produit",
     "imageStudio": "Outils image",
     "pictureTranslate": "Traduction d’images",
-    "billing": "Plans et crédits"
+    "billing": "Plans et crédits",
+    "translationV4": "Traduction v4"
   },
   "chat": {
     "pageTitle": "Shopify AI Assistant",

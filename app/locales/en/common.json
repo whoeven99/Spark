@@ -76,7 +76,8 @@
     "translation": "Translation tasks",
     "generateDescription": "Product copy",
     "imageStudio": "Image tools",
-    "billing": "Plans & credits"
+    "billing": "Plans & credits",
+    "translationV4": "Translation v4"
   },
   "billing": {
     "pageTitle": "Plans & token balance",
