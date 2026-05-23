@@ -13,7 +13,9 @@ import {
   formatRedisTranslatePhaseLabel,
   readRuntimeChunksFileTotal,
 } from "../../../lib/redisTranslatePhaseLabel";
+import { readTaskFailureInfo } from "../../../lib/translateTaskFailure";
 import { formatTranslateTaskV3CosmosStatusText } from "../../../lib/translateTaskV3CosmosStatusLabel";
+import { TaskFailureAlert } from "./TaskFailureAlert";
 import { pageColorTokens } from "../../page/pageUiStyles";
 
 const POLL_SEC = 4;
@@ -466,6 +468,8 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
     return { phase, phaseLabel, modulePart, accumulatedCount: acc, chunksFileTotal };
   }, [tm, detail]);
 
+  const taskFailure = useMemo(() => readTaskFailureInfo(detail ?? null), [detail]);
+
   return (
     <>
       <s-stack direction="block" gap="small">
@@ -604,6 +608,8 @@ export function TranslationMonitorCard({ defaultShopName }: Props) {
                       <strong>{readString(cosmos, "target") || "—"}</strong>
                     </span>
                   </div>
+
+                  <TaskFailureAlert failure={taskFailure} compact />
 
                   {initDisplay ? (
                     <div>

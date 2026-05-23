@@ -5,7 +5,6 @@ import { useLoaderData } from "react-router";
 import type { loader } from "../app.translation";
 import { JsonRuntimeTaskStatusPanel } from "../component/translation/JsonRuntimeTaskStatusPanel";
 import { TranslationMonitorCard } from "../component/translation/TranslationMonitorCard";
-import { TranslationShopMonitorCard } from "../component/translation/TranslationShopMonitorCard";
 import { ALLOWED_TRANSLATABLE_RESOURCE_TYPES } from "../../server/translation/types";
 import {
   PageSurface,
@@ -153,17 +152,9 @@ export function TranslationPage() {
         </div>
 
         <div style={stickyAsideColumnStyle}>
-          <s-stack direction="block" gap="large">
-            <PageSurface
-              title={t("translation.monitorAsideTitle")}
-              subtitle={t("translation.monitorAsideFromDatabase")}
-            >
-              <TranslationShopMonitorCard defaultShopName={loaderData.shop} />
-            </PageSurface>
-            <PageSurface title={t("translationRuntime.monitorTaskListTitle")}>
-              <TranslationMonitorCard defaultShopName={loaderData.shop} />
-            </PageSurface>
-          </s-stack>
+          <PageSurface title={t("translationRuntime.monitorTaskListTitle")}>
+            <TranslationMonitorCard defaultShopName={loaderData.shop} />
+          </PageSurface>
         </div>
       </div>
       </div>

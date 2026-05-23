@@ -1,4 +1,5 @@
 import { getTranslateRedisClient } from "./translateRedis.server";
+import { writeScheduleLog } from "./scheduleLogCosmos.server";
 
 /** 与 AgentTask {@code TranslateTaskV3QueueKeys} 完全一致 */
 export const TRANSLATE_V3_QUEUE_KEYS = {
@@ -48,6 +49,18 @@ async function lpushStage(
     console.log(
       `[translation][queue] LPUSH stage=${stage} taskId=${id} shop=${shop}`,
     );
+    // write schedule log to Cosmos (best-effort)
+    void writeScheduleLog({
+      taskId: id,
+      shopName: shop,
+      eventType: stage === "TRANSLATE" ? "ENQUEUED_TRANSLATE" : "ENQUEUED_INIT",
+      queueStage: stage,
+      enqueuedAt: Date.now(),
+      message: `LPUSH to ${key}`,
+      success: true,
+      source: "spark",
+      createdAt: Date.now(),
+    });
   } catch (error) {
     console.warn(
       `[translation][queue] LPUSH failed stage=${stage} taskId=${id} shop=${shop}`,

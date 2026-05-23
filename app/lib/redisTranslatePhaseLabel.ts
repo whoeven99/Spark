@@ -21,6 +21,11 @@ export function formatRedisTranslatePhaseLabel(phase: string): string {
     INIT_STOPPED_PRIMARY_LOCALE_MISMATCH: "已停止（店铺主语言不一致）",
     INIT_DONE_EMPTY_MODULES: "初始化完成（无可用模块）",
     INIT_DONE: "初始化完成",
+    TRANSLATE_FAILED_RUNTIME: "Runtime 翻译失败",
+    TRANSLATE_PARTIAL_FAILED_RUNTIME: "Runtime 翻译部分失败",
+    TRANSLATE_FAILED_NO_USER: "翻译失败（无授权）",
+    TRANSLATE_STOPPED_TOKEN_LIMIT: "已停止（配额不足）",
+    TRANSLATE_STOPPED_PRIMARY_LOCALE_MISMATCH: "已停止（主语言不一致）",
   };
   return map[p] ?? trimmed;
 }

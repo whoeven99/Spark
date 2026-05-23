@@ -57,11 +57,12 @@ function normalizeLimit(limitPerType: number) {
 
 /** 按 Cosmos 映射状态入队，供 AgentTask BRPOP 即时拉起。 */
 async function enqueueTranslationJobByStatus(job: TranslationJobRecord) {
-  if (job.status === "PENDING") {
+  if (job.status === "PENDING" || job.status === "FETCHING") {
     await enqueueTranslateTaskV3Init(job.id, job.shop);
     return;
   }
-  if (job.status === "FETCHED" || job.status === "TRANSLATING") {
+  // 仅 INIT 已完成（FETCHED）时入 TRANSLATE；TRANSLATING 等状态复用创建时不再塞翻译队，避免未拉取 Shopify 就翻译
+  if (job.status === "FETCHED") {
     await enqueueTranslateTaskV3Translate(job.id, job.shop);
   }
 }

@@ -7,9 +7,11 @@ import {
   formatRedisTranslatePhaseLabel,
   readRuntimeChunksFileTotal,
 } from "../../../lib/redisTranslatePhaseLabel";
+import { readTaskFailureInfo } from "../../../lib/translateTaskFailure";
 import { formatTranslateTaskV3CosmosStatusText } from "../../../lib/translateTaskV3CosmosStatusLabel";
 import { PagePanel, pageColorTokens } from "../../page/pageUiStyles";
 import { ScheduleLogPanel } from "./ScheduleLogPanel";
+import { TaskFailureAlert } from "./TaskFailureAlert";
 
 export type JsonRuntimeTaskDetailEnvelope = {
   success: boolean;
@@ -716,6 +718,8 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
     };
   }, [payload, t]);
 
+  const taskFailure = useMemo(() => readTaskFailureInfo(payload), [payload]);
+
   const meta = progressView.meta ?? payload?.redisRuntime?.meta;
   const metaEntries = useMemo(() => sortedEntries(meta), [meta]);
 
@@ -1004,6 +1008,7 @@ export function JsonRuntimeTaskStatusPanel({ defaultShopName }: Props) {
                       : formatTranslateTaskV3CosmosStatusText(readString(cosmos, "statusText"), t, i18n)}
                   </s-badge>
                 </s-stack>
+                <TaskFailureAlert failure={taskFailure} />
                 <div
                   style={{
                     display: "grid",

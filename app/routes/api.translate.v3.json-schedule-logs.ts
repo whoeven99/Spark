@@ -1,5 +1,11 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
+import { isCosmosSparkOpsConfigured } from "../server/cosmos/cosmosSparkOps.server";
+import {
+  queryScheduleLogsByTask,
+  queryScheduleLogsByShop,
+  queryScheduleLogSummary,
+} from "../server/translation/scheduleLogCosmos.server";
 
 const DEFAULT_AGENT_BASE = "https://agent-task-0qi3.onrender.com";
 
@@ -14,6 +20,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const startTime = url.searchParams.get("startTime") ? Number(url.searchParams.get("startTime")) : undefined;
     const endTime = url.searchParams.get("endTime") ? Number(url.searchParams.get("endTime")) : undefined;
     const limit = url.searchParams.get("limit") ? Math.max(Math.min(Number(url.searchParams.get("limit")), 500), 10) : 100;
+
+    // If Cosmos ops container is configured, read logs directly from Cosmos instead of proxying to AgentTask.
+    if (isCosmosSparkOpsConfigured()) {
+      if (queryType === "shop") {
+        const logs = await queryScheduleLogsByShop(shopName || session.shop, startTime, endTime, limit);
+        return Response.json({ success: true, response: { logs, total: Array.isArray(logs) ? logs.length : 0, shopName } });
+      }
+      if (queryType === "summary") {
+        const summary = await queryScheduleLogSummary(taskId);
+        return Response.json({ success: true, response: { summary } });
+      }
+      // default: task
+      const logs = await queryScheduleLogsByTask(taskId, limit);
+      return Response.json({ success: true, response: { logs, total: Array.isArray(logs) ? logs.length : 0 } });
+    }
 
     let agentUrl: URL;
 

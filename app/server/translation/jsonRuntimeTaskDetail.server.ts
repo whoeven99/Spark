@@ -1,5 +1,6 @@
 import type { TranslationTaskCheckpoint } from "./types";
-import { readTranslationJobDocument, type TranslationJobDoc } from "./cosmosJobStore.server";
+import { readTranslationJobDocument, updateTranslationJobRecord, type TranslationJobDoc } from "./cosmosJobStore.server";
+import { enqueueTranslateTaskV3Translate } from "./translateTaskV3Queue.server";
 import { getTranslateRedisClient } from "./translateRedis.server";
 
 /** 与 TranslateTaskMonitorV3RedisService.MONITOR_KEY_PREFIX 一致 */
@@ -212,11 +213,115 @@ function augmentRuntimeMetaFromCosmos(
   };
 
   setIfAbsent("totalCountThisBlob", m.totalCount);
-  setIfAbsent("currentDoneThisBlob", m.translatedCount);
+  // 翻译进行中时勿用 init 阶段的 translatedCount=0 覆盖 Redis 实时 currentDoneThisBlob
+  const runtimeStatus = safeText(meta.status).toUpperCase();
+  if (runtimeStatus !== "RUNNING") {
+    setIfAbsent("currentDoneThisBlob", m.translatedCount);
+  }
   setIfAbsent("failCountThisBlob", m.failedCount);
   setIfAbsent("runtimeChunksTotal", m.runtimeChunksTotal ?? ck.runtimeChunksTotal);
   setIfAbsent("runtimeChunkDoneSize", m.runtimeChunksDone);
   redisRuntime.meta = meta;
+}
+
+/** Cosmos INIT_DONE(2) 后若 runtime 未在跑，补入 TRANSLATE 队列（AgentTask 30s 轮询已停用）。 */
+const RUNTIME_PROGRESS_STALE_MS = 15 * 60 * 1000;
+
+function parseMetaUpdatedAtMs(meta: Record<string, string>): number | null {
+  const raw = safeText(meta.updatedAt);
+  if (!raw) return null;
+  const t = Date.parse(raw);
+  return Number.isFinite(t) ? t : null;
+}
+
+function parseJobModules(doc: TranslationJobDoc): string[] {
+  const fromCp = doc.checkpoint?.modules;
+  if (Array.isArray(fromCp)) {
+    return fromCp.map((m) => safeText(m)).filter(Boolean);
+  }
+  const raw = doc.moduleList;
+  if (Array.isArray(raw)) {
+    return raw.map((m) => safeText(m)).filter(Boolean);
+  }
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed.map((m) => safeText(m)).filter(Boolean);
+      }
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+/** 与 AgentTask {@code hasInitChunkArtifacts} 对齐：至少一个 chunk-*.json 或 manifest 存在 */
+async function hasInitChunkArtifactsOnBlob(doc: TranslationJobDoc): Promise<boolean> {
+  const shop = safeText(doc.shopName);
+  const tid = safeText(doc.id);
+  if (!shop || !tid) return false;
+  if (await translateV3BlobExists(`tasks/${shop}/${tid}/chunks/manifest.json`)) {
+    return true;
+  }
+  const modules = parseJobModules(doc);
+  for (const module of modules) {
+    const prefix = `tasks/${shop}/${tid}/chunks/${module}/`;
+    for (let i = 0; i < 32; i++) {
+      if (await translateV3BlobExists(`${prefix}chunk-${i}.json`)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+async function maybeEnqueueTranslateAfterFetchedInit(
+  doc: TranslationJobDoc,
+  redisRuntime: Record<string, unknown>,
+): Promise<void> {
+  const statusCode = typeof doc.status === "number" ? doc.status : Number(doc.status);
+  // 与 TranslateTaskV3CosmosStatus.INIT_DONE / Spark FETCHED 对齐
+  if (statusCode !== 2) return;
+
+  if (!(await hasInitChunkArtifactsOnBlob(doc))) {
+    console.warn(
+      `[translation][queue] skip TRANSLATE enqueue, init chunks not on blob yet taskId=${doc.id} shop=${doc.shopName}`,
+    );
+    return;
+  }
+
+  const meta =
+    redisRuntime.meta && typeof redisRuntime.meta === "object" && !Array.isArray(redisRuntime.meta)
+      ? (redisRuntime.meta as Record<string, string>)
+      : {};
+  const runtimeStatus = safeText(meta.status).toUpperCase();
+  const updatedAtMs = parseMetaUpdatedAtMs(meta);
+  const now = Date.now();
+  const doneThisBlob = Number(safeText(meta.currentDoneThisBlob) || "0");
+
+  if (runtimeStatus === "RUNNING") {
+    const stale =
+      updatedAtMs !== null && now - updatedAtMs > RUNTIME_PROGRESS_STALE_MS && doneThisBlob <= 0;
+    if (!stale) return;
+    console.warn(
+      `[translation][queue] runtime RUNNING stale, re-enqueue TRANSLATE taskId=${doc.id} shop=${doc.shopName}`,
+    );
+  } else if (runtimeStatus === "COMPLETED" || runtimeStatus === "PARTIAL_FAILED" || runtimeStatus === "FAILED") {
+    return;
+  }
+
+  try {
+    await enqueueTranslateTaskV3Translate(doc.id, doc.shopName);
+    console.log(
+      `[translation][queue] LPUSH TRANSLATE (init done, runtime idle) taskId=${doc.id} shop=${doc.shopName}`,
+    );
+  } catch (err) {
+    console.warn(
+      `[translation][queue] LPUSH TRANSLATE after FETCHED failed taskId=${doc.id}`,
+      err,
+    );
+  }
 }
 
 async function enrichJsonRuntimeDetailWithChunksFailedJson(
@@ -305,6 +410,7 @@ export async function buildSparkJsonRuntimeTaskDetailEnvelope(options: {
   body.resolvedRedisPrefix = effectiveRedis;
   body.redisRuntime = await getJsonRuntimeTaskProgress(cleanId, effectiveRedis);
   augmentRuntimeMetaFromCosmos(body.redisRuntime as Record<string, unknown>, doc);
+  await maybeEnqueueTranslateAfterFetchedInit(doc, body.redisRuntime as Record<string, unknown>);
 
   const redisMeta =
     (body.redisRuntime as { meta?: Record<string, string> }).meta ?? {};
@@ -352,6 +458,23 @@ export async function buildSparkJsonRuntimeTaskDetailEnvelope(options: {
     const monitor = await redis.hgetall(`${TRANSLATE_MONITOR_V3_KEY_PREFIX}${cleanId}`);
     if (monitor && Object.keys(monitor).length > 0) {
       body.translateMonitor = monitor;
+      try {
+        // 如果初始化累积数为 0 且 Cosmos 当前状态为 TRANSLATING（code=3），则直接标记为 TRANSLATED（翻译结束）
+        const accumulatedRaw = monitor.initAccumulatedCount ?? monitor.initAccumulatedCount;
+        const accumulated = Number(accumulatedRaw ?? 0);
+        const currentStatusCode = typeof doc.status === "number" ? doc.status : Number(doc.status);
+        if (Number.isFinite(accumulated) && accumulated === 0 && currentStatusCode === 3) {
+          try {
+            await updateTranslationJobRecord(doc.shopName, cleanId, { status: "TRANSLATED" });
+            const refreshed = await readTranslationJobDocument(doc.shopName, cleanId);
+            if (refreshed) body.cosmos = cosmosJobDocToMap(refreshed);
+          } catch (e) {
+            console.warn("[json-runtime-task-detail] auto-mark translated failed", e);
+          }
+        }
+      } catch (e) {
+        console.warn("[json-runtime-task-detail] auto-check translated failed", e);
+      }
     }
   } catch (err) {
     console.warn("[json-runtime-task-detail] translate_monitor_v3 read failed", err);
