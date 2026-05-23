@@ -1,9 +1,9 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { DEFAULT_DESCRIPTION_TEMPERATURE } from "../../../generateDescription/constants.server";
-import { logDetailedError } from "../../../generateDescription/generateDescriptionLog.server";
-import { fetchShopLocalesPayload } from "../../../generateDescription/shopLocalesFetcher.server";
-import { runProductDescriptionGeneration } from "../../../generateDescription/services/generateDescriptionService";
+import { DEFAULT_DESCRIPTION_TEMPERATURE } from "../../../productImprove/constants.server";
+import { logDetailedError } from "../../../productImprove/generateDescriptionLog.server";
+import { fetchShopLocalesPayload } from "../../../productImprove/shopLocalesFetcher.server";
+import { runProductDescriptionGeneration } from "../../../productImprove/services/generateDescriptionService";
 import { getAppEntry } from "../../../../config/appEntry.server";
 import type { AgentContext } from "../../core/toolRegistry.server";
 

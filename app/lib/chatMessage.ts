@@ -8,7 +8,7 @@ export type ChatMessageImageAttachment = {
 
 export type ChatMessageAttachment = ChatMessageImageAttachment;
 
-export type GenerateDescriptionCardPayload = {
+export type ProductImproveCardPayload = {
   productId: string;
   title: string;
   description: string;
@@ -53,9 +53,9 @@ export type ChatMessage =
       content: string;
       attachments?: ChatMessageAttachment[];
       translationTaskForm?: TranslationTaskFormPayload;
-      /** 为 true 时在气泡内渲染「商品描述生成」交互卡片（走 /api/generate-description）。 */
-      generateDescriptionCard?: boolean;
+      /** 为 true 时在气泡内渲染「商品描述生成」交互卡片（走 /api/product-improve）。 */
+      productImproveCard?: boolean;
       /** 为 true 时在气泡内渲染「图片翻译」交互卡片（走 /api/picture-translate-chat）。 */
       pictureTranslateCard?: boolean;
-      generateDescriptionCardPayload?: GenerateDescriptionCardPayload;
+      productImproveCardPayload?: ProductImproveCardPayload;
     };

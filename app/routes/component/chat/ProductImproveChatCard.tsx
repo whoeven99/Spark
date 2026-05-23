@@ -2,11 +2,11 @@ import { useState, type CSSProperties } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import { CriticalErrorBox } from "../shared/CriticalErrorBox";
-import { useGenerateDescription } from "../../../hooks/useGenerateDescription";
-import type { GenerateDescriptionCardPayload } from "../../../lib/chatMessage";
+import { useProductImprove } from "../../../hooks/useProductImprove";
+import type { ProductImproveCardPayload } from "../../../lib/chatMessage";
 import type { ProductSelectorSelection } from "../../../lib/productSearchTypes";
 import { ProductSelector } from "../product/ProductSelector";
-import { GenerateDescriptionResultEditor } from "../generateDescription/GenerateDescriptionResultEditor";
+import { GenerateDescriptionResultEditor } from "../productImprove/GenerateDescriptionResultEditor";
 import {
   pageFieldLabelStyle,
   pageHintTextStyle,
@@ -16,10 +16,10 @@ import {
 type Props = {
   /** 嵌在助手气泡内时略收紧边距与阴影 */
   embedded?: boolean;
-  initialResult?: GenerateDescriptionCardPayload;
+  initialResult?: ProductImproveCardPayload;
 };
 
-export function GenerateDescriptionChatCard({
+export function ProductImproveChatCard({
   embedded = false,
   initialResult,
 }: Props) {
@@ -57,7 +57,7 @@ export function GenerateDescriptionChatCard({
     copyDescription,
     copyAll,
     localesIsFallback,
-  } = useGenerateDescription({
+  } = useProductImprove({
     locationSearch: search,
     initialShopLocales: null,
     initialResult,

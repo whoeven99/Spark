@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   escapeHtmlForDescriptionText,
   plainDescriptionTextToDescriptionHtml,
-} from "../../../../app/server/generateDescription/plainDescriptionTextToHtml.server";
+} from "../../../../app/server/productImprove/plainDescriptionTextToHtml.server";
 
 describe("escapeHtmlForDescriptionText", () => {
   it("转义常见 HTML 特殊字符", () => {

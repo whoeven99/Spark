@@ -7,8 +7,8 @@ export async function deleteSessionsForShop(
   shop: string,
   tableName: SessionTableName,
 ): Promise<void> {
-  if (tableName === "generateDescriptionSession") {
-    await prisma.generateDescriptionSession.deleteMany({ where: { shop } });
+  if (tableName === "productImproveSession") {
+    await prisma.productImproveSession.deleteMany({ where: { shop } });
     return;
   }
   await prisma.session.deleteMany({ where: { shop } });
@@ -19,8 +19,8 @@ export async function updateSessionScope(
   scope: string,
   tableName: SessionTableName,
 ): Promise<void> {
-  if (tableName === "generateDescriptionSession") {
-    await prisma.generateDescriptionSession.update({
+  if (tableName === "productImproveSession") {
+    await prisma.productImproveSession.update({
       where: { id: sessionId },
       data: { scope },
     });

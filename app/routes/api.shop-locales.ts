@@ -1,1 +1,1 @@
-export { loader } from "../server/generateDescription/shopLocalesRoute.server";
+export { loader } from "../server/productImprove/shopLocalesRoute.server";

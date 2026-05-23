@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import type { ChatMessage } from "../../../lib/chatMessage";
 import { ChatMessageContent } from "./ChatMessageContent";
-import { GenerateDescriptionChatCard } from "./GenerateDescriptionChatCard";
+import { ProductImproveChatCard } from "./ProductImproveChatCard";
 import { PictureTranslateChatCard } from "./PictureTranslateChatCard";
 import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard";
 
@@ -30,7 +30,7 @@ export function ChatMessages({
         const hasTranslationCard =
           item.role === "assistant" && Boolean(item.translationTaskForm);
         const hasGenerateDescriptionCard =
-          item.role === "assistant" && Boolean(item.generateDescriptionCard);
+          item.role === "assistant" && Boolean(item.productImproveCard);
         const hasPictureTranslateCard =
           item.role === "assistant" && Boolean(item.pictureTranslateCard);
         const imageAttachments =
@@ -141,9 +141,9 @@ export function ChatMessages({
 
                   {hasGenerateDescriptionCard ? (
                     <div style={{ marginTop: "0.85rem" }}>
-                      <GenerateDescriptionChatCard
+                      <ProductImproveChatCard
                         embedded
-                        initialResult={item.generateDescriptionCardPayload}
+                        initialResult={item.productImproveCardPayload}
                       />
                     </div>
                   ) : null}

@@ -74,11 +74,11 @@
     "aiAssistant": "AI Assistant",
     "diagnosis": "Diagnose",
     "translation": "Übersetzungsaufgaben",
-    "generateDescription": "Produkttext",
     "imageStudio": "Bildtools",
     "pictureTranslate": "Bildübersetzung",
     "billing": "Pläne & Guthaben",
-    "translationV4": "Übersetzung v4"
+    "translationV4": "Übersetzung v4",
+    "productImprove": "Produktoptimierung"
   },
   "billing": {
     "pageTitle": "Pläne & Token-Guthaben",

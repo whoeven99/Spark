@@ -1,7 +1,7 @@
 import type { AppEntry } from "../../config/appEntry.server";
 
 /** 需要校验订阅 / token 的 App（主 App 暂不启用）。 */
-export const BILLING_ENABLED_APPS = new Set<AppEntry>(["generate-description"]);
+export const BILLING_ENABLED_APPS = new Set<AppEntry>(["product-improve"]);
 
 export function isBillingEnabledForApp(appName: string): boolean {
   return BILLING_ENABLED_APPS.has(appName as AppEntry);

@@ -44,8 +44,8 @@ export async function loadSessionSnapshotForUninstall(
 
   if (sessionId?.trim()) {
     const byId =
-      tableName === "generateDescriptionSession"
-        ? await prisma.generateDescriptionSession.findUnique({
+      tableName === "productImproveSession"
+        ? await prisma.productImproveSession.findUnique({
             where: { id: sessionId.trim() },
             select,
           })
@@ -60,8 +60,8 @@ export async function loadSessionSnapshotForUninstall(
 
   if (!row) {
     row =
-      tableName === "generateDescriptionSession"
-        ? await prisma.generateDescriptionSession.findFirst({
+      tableName === "productImproveSession"
+        ? await prisma.productImproveSession.findFirst({
             where: { shop: normalizedShop },
             orderBy: { isOnline: "asc" },
             select,

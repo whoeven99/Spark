@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { z } from "zod";
 import { authenticate } from "../../shopify.server";
-import { logDetailedError } from "../generateDescription/generateDescriptionLog.server";
+import { logDetailedError } from "../productImprove/generateDescriptionLog.server";
 import type { ShopVisualJobDeleteResponse } from "../../lib/shopVisualJobTypes";
 import { deleteShopVisualJobForShop } from "./shopVisualJobDelete.server";
 

@@ -11,7 +11,7 @@ import type { PlanRecord } from "../../../app/lib/billingPageTypes";
 const plans: PlanRecord[] = [
   {
     planKey: "gd_base_monthly",
-    appName: "generate-description",
+    appName: "product-improve",
     kind: "SUBSCRIPTION",
     billingInterval: "MONTHLY",
     displayName: "Base (Monthly)",
@@ -23,7 +23,7 @@ const plans: PlanRecord[] = [
   },
   {
     planKey: "gd_pro_annual",
-    appName: "generate-description",
+    appName: "product-improve",
     kind: "SUBSCRIPTION",
     billingInterval: "ANNUAL",
     displayName: "Pro (Annual)",

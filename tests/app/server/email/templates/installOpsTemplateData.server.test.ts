@@ -6,7 +6,7 @@ describe("buildInstallOpsTemplateData", () => {
     const installedAt = new Date("2026-05-20T10:00:00.000Z");
     const data = buildInstallOpsTemplateData({
       shop: "demo.myshopify.com",
-      appName: "generate-description",
+      appName: "product-improve",
       source: "auth_callback",
       installedAt,
       shopInfo: {
@@ -21,14 +21,14 @@ describe("buildInstallOpsTemplateData", () => {
     expect(data.shop_domain).toBe("demo.myshopify.com");
     expect(data.owner_email).toBe("owner@example.com");
     expect(data.plan).toContain("Basic");
-    expect(data.app_name).toBe("generate-description");
+    expect(data.app_name).toBe("product-improve");
     expect(data.installed_at).toBe(installedAt.toISOString());
   });
 
   it("prefers sessionSnapshot first_name, second_name, and email", () => {
     const data = buildInstallOpsTemplateData({
       shop: "demo.myshopify.com",
-      appName: "generate-description",
+      appName: "product-improve",
       installedAt: new Date("2026-05-20T10:00:00.000Z"),
       shopInfo: { name: "Demo Store", email: "shop@example.com" },
       sessionSnapshot: {

@@ -39,6 +39,26 @@ export type InvokeChatAgentResult = {
   uiPayloads?: Record<string, any>;
 };
 
+function collectUIPayloads(
+  activeDefs: Awaited<ReturnType<typeof globalToolRegistry.getActiveToolDefinitions>>,
+  messages: BaseMessage[],
+  lastUserText: string,
+  reply: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Record<string, any> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const payloads: Record<string, any> = {};
+  for (const def of activeDefs) {
+    if (def.extractUIPayload && def.uiPayloadKey) {
+      const payload = def.extractUIPayload(messages, lastUserText, reply);
+      if (payload !== undefined) {
+        payloads[def.uiPayloadKey] = payload;
+      }
+    }
+  }
+  return payloads;
+}
+
 function lastHumanUtterance(messages: BaseMessage[]): string {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const msg = messages[i];
@@ -196,27 +216,15 @@ export async function invokeChatAgent(
     });
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const uiPayloads: Record<string, any> = {};
-
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const msg = messages[i];
     if (AIMessage.isInstance(msg)) {
       const text = extractMessageText(msg).trim();
       if (text) {
-        for (const def of activeDefs) {
-          if (def.extractUIPayload && def.uiPayloadKey) {
-            const payload = def.extractUIPayload(messages, lastUserText, text);
-            if (payload !== undefined) {
-              uiPayloads[def.uiPayloadKey] = payload;
-            }
-          }
-        }
-
         await writeRunLog("success");
         return {
           reply: polishFinalReply(text),
-          uiPayloads,
+          uiPayloads: collectUIPayloads(activeDefs, messages, lastUserText, text),
           ...(langsmithTraceUrl ? { langsmithTraceUrl } : {}),
         };
       }
@@ -229,19 +237,10 @@ export async function invokeChatAgent(
       extractMessagesContext(messages),
     );
     if (fallbackText) {
-      for (const def of activeDefs) {
-        if (def.extractUIPayload && def.uiPayloadKey) {
-          const payload = def.extractUIPayload(messages, lastUserText, fallbackText);
-          if (payload !== undefined) {
-            uiPayloads[def.uiPayloadKey] = payload;
-          }
-        }
-      }
-
       await writeRunLog("success");
       return {
         reply: polishFinalReply(fallbackText),
-        uiPayloads,
+        uiPayloads: collectUIPayloads(activeDefs, messages, lastUserText, fallbackText),
         ...(langsmithTraceUrl ? { langsmithTraceUrl } : {}),
       };
     }
@@ -252,19 +251,10 @@ export async function invokeChatAgent(
   const defaultReply =
     "我暂时没拿到工具结果，但可以继续帮你分析。你可以换个问法，或告诉我你想要的数据范围（例如最近 7 天销售额/订单数/转化率）。";
 
-  for (const def of activeDefs) {
-    if (def.extractUIPayload && def.uiPayloadKey) {
-      const payload = def.extractUIPayload(messages, lastUserText, defaultReply);
-      if (payload !== undefined) {
-        uiPayloads[def.uiPayloadKey] = payload;
-      }
-    }
-  }
-
   await writeRunLog("success");
   return {
     reply: defaultReply,
-    uiPayloads,
+    uiPayloads: collectUIPayloads(activeDefs, messages, lastUserText, defaultReply),
     ...(langsmithTraceUrl ? { langsmithTraceUrl } : {}),
   };
 }

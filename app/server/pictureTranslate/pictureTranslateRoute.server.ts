@@ -4,7 +4,7 @@ import {
   executePictureTranslateRequest,
   parsePictureTranslateBody,
 } from "./pictureTranslateHttp.server";
-import { logDetailedError } from "../generateDescription/generateDescriptionLog.server";
+import { logDetailedError } from "../productImprove/generateDescriptionLog.server";
 import type { PictureTranslateResponse } from "./pictureTranslateTypes.server";
 
 const LOG_PREFIX = "[PictureTranslate][Route]";

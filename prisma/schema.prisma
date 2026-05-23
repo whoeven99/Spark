@@ -35,8 +35,8 @@ model Session {
   refreshTokenExpires DateTime?
 }
 
-/// 卫星 App（generate-description）Session，与主 App `Session` 同库分表。
-model GenerateDescriptionSession {
+/// 卫星 App（product-improve）Session，与主 App `Session` 同库分表。
+model ProductImproveSession {
   id            String    @id
   shop          String
   state         String
@@ -83,7 +83,7 @@ model AdPlatformCredential {
 model Account {
   id                 String   @id @default(cuid())
   shop               String
-  /// 与 `AppEntry` 一致，如 chat、generate-description
+  /// 与 `AppEntry` 一致，如 chat、product-improve
   appName            String
   /// 当前订阅周期套餐 token（周期内不随用量减少；续费刷新）
   subscriptionTokens Int      @default(0)

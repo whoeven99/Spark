@@ -74,11 +74,11 @@
     "aiAssistant": "AI Assistant",
     "diagnosis": "Diagnostica",
     "translation": "Attività di traduzione",
-    "generateDescription": "Testi prodotto",
     "imageStudio": "Strumenti immagine",
     "pictureTranslate": "Traduzione immagini",
     "billing": "Piani e crediti",
-    "translationV4": "Traduzione v4"
+    "translationV4": "Traduzione v4",
+    "productImprove": "Ottimizza prodotto"
   },
   "billing": {
     "pageTitle": "Piani e saldo token",

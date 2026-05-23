@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import type { CopyTarget } from "../../../hooks/useGenerateDescription";
+import type { CopyTarget } from "../../../hooks/useProductImprove";
 import {
   formErrorBoxStyle,
   pageColorTokens,

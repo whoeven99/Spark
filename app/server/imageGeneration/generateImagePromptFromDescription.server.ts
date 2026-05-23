@@ -1,5 +1,5 @@
-import { invokeDescriptionModels } from "../generateDescription/descriptionAiClient.server";
-import { logDetailedError } from "../generateDescription/generateDescriptionLog.server";
+import { invokeDescriptionModels } from "../productImprove/descriptionAiClient.server";
+import { logDetailedError } from "../productImprove/generateDescriptionLog.server";
 import {
   IMAGE_GENERATION_LOG_PREFIX,
   MAX_PROMPT_CHARS,
