@@ -133,4 +133,4 @@ jobs:
           SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
           # 与 shopify.app.test.toml 中 client_id 一致
           SHOPIFY_API_KEY: 940b967eda872dd81f9ffc283e29a013
-        run: shopify app deploy -c shopify.app.test.toml -f
+        run: shopify app deploy -c shopify.app.test.toml
