@@ -1,6 +1,7 @@
 import { runInitWorker } from "./workers/initWorker.js";
 import { runTranslateWorker } from "./workers/translateWorker.js";
 import { runWritebackWorker } from "./workers/writebackWorker.js";
+import { runVerifyWorker } from "./workers/verifyWorker.js";
 import { resetStaleJobs } from "./services/cosmosV4.js";
 
 const INTERVAL_MS = 30_000;
@@ -18,9 +19,11 @@ export function startScheduler(): void {
   safeRun("init", runInitWorker);
   safeRun("translate", runTranslateWorker);
   safeRun("writeback", runWritebackWorker);
+  safeRun("verify", runVerifyWorker);
 
   setInterval(() => safeRun("init", runInitWorker), INTERVAL_MS);
   setInterval(() => safeRun("translate", runTranslateWorker), INTERVAL_MS);
   setInterval(() => safeRun("writeback", runWritebackWorker), INTERVAL_MS);
+  setInterval(() => safeRun("verify", runVerifyWorker), INTERVAL_MS);
   setInterval(() => safeRun("resetStale", () => resetStaleJobs()), STALE_RESET_INTERVAL_MS);
 }

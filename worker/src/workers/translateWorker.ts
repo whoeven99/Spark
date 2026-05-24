@@ -53,6 +53,15 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
       for (const chunkPath of chunkPaths) {
         await heartbeat(shopName, jobId);
 
+        // Resume: skip chunks already translated in a prior run
+        const translatePath = chunkPath.replace(`${blobPrefix}/init/`, `${blobPrefix}/translate/`);
+        const existingTranslated = await blobRead<Array<{ resourceId: string }>>(translatePath);
+        if (existingTranslated !== null) {
+          translateDone += existingTranslated.length;
+          await setProgress(jobId, { translateDone, translateFailed, translateTotal, currentModule: module });
+          continue;
+        }
+
         const chunk = await blobRead<Array<{ resourceId: string; fields: TranslateItem[] }>>(chunkPath);
         if (!chunk) continue;
 
@@ -77,7 +86,6 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         }
 
         // Write to translate/ blob
-        const translatePath = chunkPath.replace(`${blobPrefix}/init/`, `${blobPrefix}/translate/`);
         await blobWrite(translatePath, translatedChunk);
 
         await setProgress(jobId, {

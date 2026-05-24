@@ -19,6 +19,8 @@ export type TranslationV4Status =
   | "TRANSLATE_DONE"
   | "WRITEBACK_QUEUED"
   | "WRITING_BACK"
+  | "VERIFY_QUEUED"
+  | "VERIFYING"
   | "COMPLETED"
   | "FAILED"
   | "PAUSED"
@@ -33,6 +35,9 @@ export type TranslationV4Metrics = {
   writebackTotal: number;
   writebackDone: number;
   writebackFailed: number;
+  verifyTotal: number;
+  verifyDone: number;
+  verifyFailed: number;
   usedTokens: number;
 };
 
@@ -45,6 +50,9 @@ export const EMPTY_V4_METRICS: TranslationV4Metrics = {
   writebackTotal: 0,
   writebackDone: 0,
   writebackFailed: 0,
+  verifyTotal: 0,
+  verifyDone: 0,
+  verifyFailed: 0,
   usedTokens: 0,
 };
 
@@ -83,6 +91,8 @@ export const ACTIVE_V4_STATUSES: TranslationV4Status[] = [
   "TRANSLATE_DONE",
   "WRITEBACK_QUEUED",
   "WRITING_BACK",
+  "VERIFY_QUEUED",
+  "VERIFYING",
 ];
 
 export const TERMINAL_V4_STATUSES: TranslationV4Status[] = [

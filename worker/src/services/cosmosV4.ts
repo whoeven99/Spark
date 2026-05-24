@@ -10,6 +10,8 @@ export type TranslationV4Status =
   | "TRANSLATE_DONE"
   | "WRITEBACK_QUEUED"
   | "WRITING_BACK"
+  | "VERIFY_QUEUED"
+  | "VERIFYING"
   | "COMPLETED"
   | "FAILED"
   | "PAUSED"
@@ -24,6 +26,9 @@ export type TranslationV4Metrics = {
   writebackTotal: number;
   writebackDone: number;
   writebackFailed: number;
+  verifyTotal: number;
+  verifyDone: number;
+  verifyFailed: number;
   usedTokens: number;
 };
 
@@ -186,6 +191,7 @@ export async function resetStaleJobs(staleMinutes = 10): Promise<void> {
     ["INITIALIZING", "INIT_QUEUED"],
     ["TRANSLATING", "TRANSLATE_QUEUED"],
     ["WRITING_BACK", "WRITEBACK_QUEUED"],
+    ["VERIFYING", "VERIFY_QUEUED"],
   ];
   for (const [processingStatus, resetStatus] of staleMap) {
     try {
