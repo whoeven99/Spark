@@ -12,8 +12,6 @@ export type NavItemKey = AppEntry | "billing";
 type AppEntryConfig = {
   home: string;
   nav: readonly NavItemKey[];
-  /** Prisma Client 委托名，供 `PrismaSessionStorage` 使用。 */
-  sessionPrismaTable: "session" | "productImproveSession";
 };
 
 const APP_ENTRY_CONFIGS = {
@@ -26,37 +24,30 @@ const APP_ENTRY_CONFIGS = {
       "product-improve",
       "image-studio",
     ],
-    sessionPrismaTable: "session",
   },
   diagnosis: {
     home: "/app/additional",
     nav: ["diagnosis"],
-    sessionPrismaTable: "session",
   },
   "translation-v4": {
     home: "/app/translation-v4",
     nav: ["translation-v4"],
-    sessionPrismaTable: "session",
   },
   "product-improve": {
     home: "/app/product-improve",
     nav: ["product-improve", "image-studio", "billing"],
-    sessionPrismaTable: "productImproveSession",
   },
   "image-studio": {
     home: "/app/image-studio",
     nav: ["image-studio"],
-    sessionPrismaTable: "session",
   },
   "picture-translate": {
     home: "/app/image-studio?tab=translate",
     nav: ["image-studio"],
-    sessionPrismaTable: "session",
   },
   "generate-image": {
     home: "/app/image-studio?tab=generate",
     nav: ["image-studio"],
-    sessionPrismaTable: "session",
   },
 } as const satisfies Record<AppEntry, AppEntryConfig>;
 
@@ -73,15 +64,6 @@ export function getAppEntry(): AppEntry {
 
 export function getAppEntryConfig(): AppEntryConfig {
   return APP_ENTRY_CONFIGS[getAppEntry()];
-}
-
-/** 当前 App 使用的 Session 表（Prisma 委托名）。主 App 为 `session`，卫星 App 为独立表。 */
-export function getSessionPrismaTableName(): AppEntryConfig["sessionPrismaTable"] {
-  const override = process.env.SESSION_PRISMA_TABLE?.trim();
-  if (override === "session" || override === "productImproveSession") {
-    return override;
-  }
-  return getAppEntryConfig().sessionPrismaTable;
 }
 
 /** 嵌入式 Admin 跳转时保留 shop/host/id_token 等查询参数，避免鉴权循环。 */

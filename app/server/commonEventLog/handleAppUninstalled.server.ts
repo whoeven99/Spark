@@ -1,4 +1,4 @@
-import { getAppEntry, getSessionPrismaTableName } from "../../config/appEntry.server";
+import { getAppEntry } from "../../config/appEntry.server";
 import { appendCommonEventLog } from "./appendCommonEventLog.server";
 import { deleteSessionsForShop } from "./sessionTable.server";
 import { COMMON_EVENT_TYPE } from "./types.server";
@@ -44,5 +44,5 @@ export async function handleAppUninstalled(params: {
         : { raw: params.payload },
   });
 
-  await deleteSessionsForShop(shop, getSessionPrismaTableName());
+  await deleteSessionsForShop(shop, appName);
 }

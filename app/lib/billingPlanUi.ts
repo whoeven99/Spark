@@ -2,12 +2,12 @@ import type { PlanRecord } from "./billingPageTypes";
 
 export type BillingIntervalView = "MONTHLY" | "ANNUAL";
 
-/** 订阅档位，与 PlanCatalog `planKey` 前缀一致（`gd_base_*` / `gd_pro_*`）。 */
+/** 订阅档位，与 PlanCatalog `planKey` 中段一致（如 `pi_base_monthly`、`gd_pro_annual`）。 */
 export type PlanTier = "base" | "pro";
 
-const TIER_PLAN_KEY_PREFIX: Record<PlanTier, string> = {
-  base: "gd_base_",
-  pro: "gd_pro_",
+const TIER_PLAN_KEY_SEGMENT: Record<PlanTier, string> = {
+  base: "_base_",
+  pro: "_pro_",
 };
 
 export function formatPlanPrice(
@@ -85,15 +85,31 @@ export function formatTokenUsagePercentDisplay(percent: number): string {
   return "0";
 }
 
+export function planTierFromPlanKey(planKey: string): PlanTier | null {
+  if (planKey.includes(TIER_PLAN_KEY_SEGMENT.base)) return "base";
+  if (planKey.includes(TIER_PLAN_KEY_SEGMENT.pro)) return "pro";
+  return null;
+}
+
 export function pickSubscriptionPlan(
   plans: PlanRecord[],
   interval: BillingIntervalView,
   tier: PlanTier,
 ): PlanRecord | undefined {
-  const prefix = TIER_PLAN_KEY_PREFIX[tier];
+  const segment = TIER_PLAN_KEY_SEGMENT[tier];
   return plans.find(
-    (p) => p.billingInterval === interval && p.planKey.startsWith(prefix),
+    (p) => p.billingInterval === interval && p.planKey.includes(segment),
   );
+}
+
+/** 当前月付/年付周期下全部付费订阅（不含试用）。 */
+export function listSubscriptionPlansForInterval(
+  plans: PlanRecord[],
+  interval: BillingIntervalView,
+): PlanRecord[] {
+  return plans
+    .filter((p) => p.billingInterval === interval)
+    .sort((a, b) => a.planKey.localeCompare(b.planKey));
 }
 
 /** @deprecated 多档位时请用 {@link pickSubscriptionPlan} */

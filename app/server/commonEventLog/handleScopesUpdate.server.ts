@@ -1,4 +1,4 @@
-import { getAppEntry, getSessionPrismaTableName } from "../../config/appEntry.server";
+import { getAppEntry } from "../../config/appEntry.server";
 import { appendCommonEventLog } from "./appendCommonEventLog.server";
 import { updateSessionScope } from "./sessionTable.server";
 import { COMMON_EVENT_TYPE } from "./types.server";
@@ -26,7 +26,7 @@ export async function handleScopesUpdate(params: {
     await updateSessionScope(
       params.sessionId,
       scopeString,
-      getSessionPrismaTableName(),
+      getAppEntry(),
     );
   }
 

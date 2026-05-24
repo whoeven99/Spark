@@ -1,5 +1,7 @@
--- PlanCatalog 种子（prisma migrate diff 不会包含 migration 里的 INSERT，turso-sync 单独执行）
-INSERT OR IGNORE INTO "PlanCatalog" (
+-- PlanCatalog 种子（turso:migrate 执行；product-improve 使用 pi_* planKey）
+DELETE FROM "PlanCatalog" WHERE "appName" = 'generate-description' OR "planKey" LIKE 'gd_%';
+
+INSERT INTO "PlanCatalog" (
     "planKey",
     "appName",
     "kind",
@@ -16,8 +18,8 @@ INSERT OR IGNORE INTO "PlanCatalog" (
     "updatedAt"
 ) VALUES
     (
-        'gd_trial',
-        'generate-description',
+        'pi_trial',
+        'product-improve',
         'INTERNAL_TRIAL',
         NULL,
         'Free trial',
@@ -25,15 +27,15 @@ INSERT OR IGNORE INTO "PlanCatalog" (
         '0',
         'USD',
         NULL,
-        'Generate Description Free Trial',
+        'Product Improve Free Trial',
         10,
         1,
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
     ),
     (
-        'gd_base_monthly',
-        'generate-description',
+        'pi_base_monthly',
+        'product-improve',
         'SUBSCRIPTION',
         'MONTHLY',
         'Base (Monthly)',
@@ -41,15 +43,15 @@ INSERT OR IGNORE INTO "PlanCatalog" (
         '29.99',
         'USD',
         7,
-        'Generate Description Base Monthly',
+        'Product Improve Base Monthly',
         20,
         1,
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
     ),
     (
-        'gd_base_annual',
-        'generate-description',
+        'pi_base_annual',
+        'product-improve',
         'SUBSCRIPTION',
         'ANNUAL',
         'Base (Annual)',
@@ -57,15 +59,15 @@ INSERT OR IGNORE INTO "PlanCatalog" (
         '299.99',
         'USD',
         7,
-        'Generate Description Base Annual',
+        'Product Improve Base Annual',
         30,
         1,
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
     ),
     (
-        'gd_pro_monthly',
-        'generate-description',
+        'pi_pro_monthly',
+        'product-improve',
         'SUBSCRIPTION',
         'MONTHLY',
         'Pro (Monthly)',
@@ -73,15 +75,15 @@ INSERT OR IGNORE INTO "PlanCatalog" (
         '79.99',
         'USD',
         7,
-        'Generate Description Pro Monthly',
+        'Product Improve Pro Monthly',
         25,
         1,
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
     ),
     (
-        'gd_pro_annual',
-        'generate-description',
+        'pi_pro_annual',
+        'product-improve',
         'SUBSCRIPTION',
         'ANNUAL',
         'Pro (Annual)',
@@ -89,15 +91,15 @@ INSERT OR IGNORE INTO "PlanCatalog" (
         '799.99',
         'USD',
         7,
-        'Generate Description Pro Annual',
+        'Product Improve Pro Annual',
         35,
         1,
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
     ),
     (
-        'gd_pack_100k',
-        'generate-description',
+        'pi_pack_100k',
+        'product-improve',
         'ONE_TIME_PACK',
         NULL,
         'Token pack 100K',
@@ -105,15 +107,15 @@ INSERT OR IGNORE INTO "PlanCatalog" (
         '9.99',
         'USD',
         NULL,
-        'Generate Description Token Pack 100K',
+        'Product Improve Token Pack 100K',
         40,
         1,
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
     ),
     (
-        'gd_pack_500k',
-        'generate-description',
+        'pi_pack_500k',
+        'product-improve',
         'ONE_TIME_PACK',
         NULL,
         'Token pack 500K',
@@ -121,15 +123,15 @@ INSERT OR IGNORE INTO "PlanCatalog" (
         '39.99',
         'USD',
         NULL,
-        'Generate Description Token Pack 500K',
+        'Product Improve Token Pack 500K',
         50,
         1,
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
     ),
     (
-        'gd_pack_1m',
-        'generate-description',
+        'pi_pack_1m',
+        'product-improve',
         'ONE_TIME_PACK',
         NULL,
         'Token pack 1M',
@@ -137,15 +139,15 @@ INSERT OR IGNORE INTO "PlanCatalog" (
         '69.99',
         'USD',
         NULL,
-        'Generate Description Token Pack 1M',
+        'Product Improve Token Pack 1M',
         60,
         1,
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
     ),
     (
-        'gd_pack_2m',
-        'generate-description',
+        'pi_pack_2m',
+        'product-improve',
         'ONE_TIME_PACK',
         NULL,
         'Token pack 2M',
@@ -153,9 +155,22 @@ INSERT OR IGNORE INTO "PlanCatalog" (
         '129.99',
         'USD',
         NULL,
-        'Generate Description Token Pack 2M',
+        'Product Improve Token Pack 2M',
         70,
         1,
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
-    );
+    )
+ON CONFLICT("planKey") DO UPDATE SET
+    "appName" = excluded."appName",
+    "kind" = excluded."kind",
+    "billingInterval" = excluded."billingInterval",
+    "displayName" = excluded."displayName",
+    "tokens" = excluded."tokens",
+    "priceAmount" = excluded."priceAmount",
+    "currencyCode" = excluded."currencyCode",
+    "trialDays" = excluded."trialDays",
+    "shopifyPlanName" = excluded."shopifyPlanName",
+    "sortOrder" = excluded."sortOrder",
+    "enabled" = excluded."enabled",
+    "updatedAt" = CURRENT_TIMESTAMP;

@@ -20,6 +20,7 @@ import {
   refreshShopProfileOnInstall,
   scheduleEnsureShopProfile,
 } from "../server/shopProfile/index.server";
+import { ensureSessionAppName } from "../server/session/sessionManager.server";
 import {
   getAppEntry,
   getAppEntryConfig,
@@ -63,7 +64,12 @@ const NAV_ITEMS: Record<
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
+  const appName = getAppEntry();
+
   try {
+    // 确保 session 的 appName 与当前 APP_ENTRY 一致
+    await ensureSessionAppName(session.id, appName);
+
     const installRecorded = await recordAppInstalled({
       shop: session.shop,
       sessionId: session.id,
@@ -75,7 +81,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       void refreshShopProfileOnInstall({
         admin,
         shop: session.shop,
-        appName: getAppEntry(),
+        appName,
       }).catch((error) => {
         console.error("[ShopProfile] refresh on install failed:", error);
       });
@@ -83,7 +89,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       scheduleEnsureShopProfile({
         admin,
         shop: session.shop,
-        appName: getAppEntry(),
+        appName,
       });
     }
   } catch (error) {

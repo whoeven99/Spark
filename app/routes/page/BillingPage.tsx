@@ -12,7 +12,9 @@ import {
   getTokenUsagePercent,
   isActiveSubscriptionPlan,
   isPendingSubscriptionPlan,
+  listSubscriptionPlansForInterval,
   pickSubscriptionPlan,
+  planTierFromPlanKey,
   resolveCurrentPlanLabel,
   type BillingIntervalView,
   type PlanTier,
@@ -222,6 +224,16 @@ export function BillingPage() {
 
   const basePlan = pickSubscriptionPlan(subscriptionPlans, interval, "base");
   const proPlan = pickSubscriptionPlan(subscriptionPlans, interval, "pro");
+  const paidPlansForInterval = useMemo(
+    () => listSubscriptionPlansForInterval(subscriptionPlans, interval),
+    [subscriptionPlans, interval],
+  );
+  const paidPlansToShow = useMemo(() => {
+    if (basePlan || proPlan) {
+      return [basePlan, proPlan].filter((p): p is PlanRecord => Boolean(p));
+    }
+    return paidPlansForInterval;
+  }, [basePlan, proPlan, paidPlansForInterval]);
   const sub = billing.subscription;
 
   const isTrialCurrent =
@@ -505,33 +517,26 @@ export function BillingPage() {
                 )}
               </article>
 
-              {basePlan ? (
-                <PaidPlanCard
-                  plan={basePlan}
-                  interval={interval}
-                  isRecommended={interval === "MONTHLY"}
-                  isCurrent={isActiveSubscriptionPlan(basePlan.planKey, sub)}
-                  isPending={isPendingSubscriptionPlan(basePlan.planKey, sub)}
-                  isSubmitting={subscribingPlanKey === basePlan.planKey}
-                  locale={locale}
-                  t={t}
-                  paidFeatures={paidFeatures}
-                />
-              ) : null}
-
-              {proPlan ? (
-                <PaidPlanCard
-                  plan={proPlan}
-                  interval={interval}
-                  isRecommended={interval === "ANNUAL"}
-                  isCurrent={isActiveSubscriptionPlan(proPlan.planKey, sub)}
-                  isPending={isPendingSubscriptionPlan(proPlan.planKey, sub)}
-                  isSubmitting={subscribingPlanKey === proPlan.planKey}
-                  locale={locale}
-                  t={t}
-                  paidFeatures={paidFeatures}
-                />
-              ) : null}
+              {paidPlansToShow.map((plan) => {
+                const tier = planTierFromPlanKey(plan.planKey);
+                const isRecommended =
+                  (interval === "MONTHLY" && tier === "base") ||
+                  (interval === "ANNUAL" && tier === "pro");
+                return (
+                  <PaidPlanCard
+                    key={plan.planKey}
+                    plan={plan}
+                    interval={interval}
+                    isRecommended={isRecommended}
+                    isCurrent={isActiveSubscriptionPlan(plan.planKey, sub)}
+                    isPending={isPendingSubscriptionPlan(plan.planKey, sub)}
+                    isSubmitting={subscribingPlanKey === plan.planKey}
+                    locale={locale}
+                    t={t}
+                    paidFeatures={paidFeatures}
+                  />
+                );
+              })}
             </div>
           </section>
         ) : null}

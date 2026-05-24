@@ -17,6 +17,7 @@ datasource db {
 
 model Session {
   id            String    @id
+  appName       String    @default("chat")
   shop          String
   state         String
   isOnline      Boolean   @default(false)
@@ -33,29 +34,10 @@ model Session {
   emailVerified Boolean?  @default(false)
   refreshToken        String?
   refreshTokenExpires DateTime?
-}
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-/// 卫星 App（product-improve）Session，与主 App `Session` 同库分表。
-model ProductImproveSession {
-  id            String    @id
-  shop          String
-  state         String
-  isOnline      Boolean   @default(false)
-  scope         String?
-  expires       DateTime?
-  accessToken   String
-  userId        BigInt?
-  firstName     String?
-  lastName      String?
-  email         String?
-  accountOwner  Boolean   @default(false)
-  locale        String?
-  collaborator  Boolean?  @default(false)
-  emailVerified Boolean?  @default(false)
-  refreshToken        String?
-  refreshTokenExpires DateTime?
-
-  @@map("Session_generate_description")
+  @@index([appName, shop])
 }
 
 model Suggestion {

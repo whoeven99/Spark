@@ -88,6 +88,54 @@ async function executeWithRetry(client, statement, maxAttempts = 3) {
   throw lastError;
 }
 
+const SATELLITE_SESSION_TABLE = "Session_generate_description";
+
+async function tableExists(client, tableName) {
+  const res = await client.execute({
+    sql: "SELECT 1 AS n FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
+    args: [tableName],
+  });
+  return res.rows.length > 0;
+}
+
+/** 卫星 Session 表已合并或从未存在时，跳过 INSERT…FROM。 */
+async function shouldSkipMigrationStatement(client, statement) {
+  const referencesSatellite = new RegExp(
+    `FROM\\s+"${SATELLITE_SESSION_TABLE}"`,
+    "i",
+  ).test(statement);
+  if (!referencesSatellite) return false;
+  if (await tableExists(client, SATELLITE_SESSION_TABLE)) return false;
+  console.log(
+    `[turso:migrate] 跳过（表不存在）: 从 ${SATELLITE_SESSION_TABLE} 合并 Session 数据`,
+  );
+  return true;
+}
+
+/** SQLite/Turso 不支持 ADD COLUMN IF NOT EXISTS；列已存在时跳过 ALTER。 */
+async function executeMigrationStatement(client, statement) {
+  try {
+    return await executeWithRetry(client, statement);
+  } catch (error) {
+    const msg = String(error.message || error);
+    const isAlterAdd = /^\s*ALTER\s+TABLE\b/i.test(statement) && /\bADD\s+COLUMN\b/i.test(statement);
+    if (isAlterAdd && /duplicate column name/i.test(msg)) {
+      console.log(`[turso:migrate] 跳过已存在列 (${statement.split(/\s+/).slice(-3).join(" ")})`);
+      return;
+    }
+    if (
+      /no such table/i.test(msg) &&
+      statement.includes(SATELLITE_SESSION_TABLE)
+    ) {
+      console.log(
+        `[turso:migrate] 跳过（表不存在）: 从 ${SATELLITE_SESSION_TABLE} 合并 Session 数据`,
+      );
+      return;
+    }
+    throw error;
+  }
+}
+
 async function getAppliedNames(client) {
   const res = await client.execute(
     'SELECT migration_name FROM "_prisma_migrations" WHERE rolled_back_at IS NULL',
@@ -166,7 +214,8 @@ async function main() {
 
     console.log(`[turso:migrate:${target}] 应用: ${migration.name}`);
     for (const statement of splitStatements(sql)) {
-      await executeWithRetry(client, statement);
+      if (await shouldSkipMigrationStatement(client, statement)) continue;
+      await executeMigrationStatement(client, statement);
     }
     await markApplied(client, migration.name, sql);
     ran += 1;

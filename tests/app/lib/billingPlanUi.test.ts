@@ -4,13 +4,14 @@ import {
   getTokenUsagePercent,
   isActiveSubscriptionPlan,
   isPendingSubscriptionPlan,
+  listSubscriptionPlansForInterval,
   pickSubscriptionPlan,
 } from "../../../app/lib/billingPlanUi";
 import type { PlanRecord } from "../../../app/lib/billingPageTypes";
 
 const plans: PlanRecord[] = [
   {
-    planKey: "gd_base_monthly",
+    planKey: "pi_base_monthly",
     appName: "product-improve",
     kind: "SUBSCRIPTION",
     billingInterval: "MONTHLY",
@@ -22,7 +23,7 @@ const plans: PlanRecord[] = [
     shopifyPlanName: null,
   },
   {
-    planKey: "gd_pro_annual",
+    planKey: "pi_pro_annual",
     appName: "product-improve",
     kind: "SUBSCRIPTION",
     billingInterval: "ANNUAL",
@@ -49,13 +50,24 @@ describe("token usage percent", () => {
   });
 });
 
+describe("listSubscriptionPlansForInterval", () => {
+  it("返回当前周期的全部订阅", () => {
+    expect(listSubscriptionPlansForInterval(plans, "MONTHLY").map((p) => p.planKey)).toEqual([
+      "pi_base_monthly",
+    ]);
+    expect(listSubscriptionPlansForInterval(plans, "ANNUAL").map((p) => p.planKey)).toEqual([
+      "pi_pro_annual",
+    ]);
+  });
+});
+
 describe("pickSubscriptionPlan", () => {
   it("按档位与周期选取套餐", () => {
     expect(pickSubscriptionPlan(plans, "MONTHLY", "base")?.planKey).toBe(
-      "gd_base_monthly",
+      "pi_base_monthly",
     );
     expect(pickSubscriptionPlan(plans, "ANNUAL", "pro")?.planKey).toBe(
-      "gd_pro_annual",
+      "pi_pro_annual",
     );
     expect(pickSubscriptionPlan(plans, "ANNUAL", "base")).toBeUndefined();
   });
