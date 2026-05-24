@@ -6,7 +6,6 @@ import {
   shopifyApp,
 } from "@shopify/shopify-app-react-router/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
-import { getSessionPrismaTableName } from "./config/appEntry.server";
 import prisma from "./db.server";
 
 const shopify = shopifyApp({
@@ -16,9 +15,9 @@ const shopify = shopifyApp({
   scopes: process.env.SCOPES?.split(","),
   appUrl: process.env.SHOPIFY_APP_URL || "",
   authPathPrefix: "/auth",
-  // Prisma Client 使用自定义 output（见 prisma/schema.prisma）；与 @shopify/...-prisma 的类型声明路径不同，运行时兼容。
+  // 使用统一的 Session 表；appName 由业务层通过 ensureSessionAppName 管理
   sessionStorage: new PrismaSessionStorage(prisma as unknown as PrismaClient, {
-    tableName: getSessionPrismaTableName(),
+    tableName: "Session",
   }),
   distribution: AppDistribution.AppStore,
   future: {

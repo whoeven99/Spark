@@ -1,33 +1,24 @@
-import type { getSessionPrismaTableName } from "../../config/appEntry.server";
 import prisma from "../../db.server";
-
-type SessionTableName = ReturnType<typeof getSessionPrismaTableName>;
 
 export async function deleteSessionsForShop(
   shop: string,
-  tableName: SessionTableName,
+  appName?: string,
 ): Promise<void> {
-  if (tableName === "productImproveSession") {
-    await prisma.productImproveSession.deleteMany({ where: { shop } });
-    return;
-  }
-  await prisma.session.deleteMany({ where: { shop } });
+  const where = appName ? { shop, appName } : { shop };
+  await prisma.session.deleteMany({ where });
 }
 
 export async function updateSessionScope(
   sessionId: string,
   scope: string,
-  tableName: SessionTableName,
+  appName?: string,
 ): Promise<void> {
-  if (tableName === "productImproveSession") {
-    await prisma.productImproveSession.update({
-      where: { id: sessionId },
-      data: { scope },
-    });
-    return;
+  const where: any = { id: sessionId };
+  if (appName) {
+    where.appName = appName;
   }
   await prisma.session.update({
-    where: { id: sessionId },
+    where,
     data: { scope },
   });
 }

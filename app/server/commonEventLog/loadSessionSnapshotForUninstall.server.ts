@@ -1,4 +1,4 @@
-import { getSessionPrismaTableName } from "../../config/appEntry.server";
+import { getAppEntry } from "../../config/appEntry.server";
 import prisma from "../../db.server";
 
 const LOG = "[SessionSnapshot]";
@@ -37,45 +37,32 @@ export async function loadSessionSnapshotForUninstall(
   const normalizedShop = shop.trim();
   if (!normalizedShop) return null;
 
-  const tableName = getSessionPrismaTableName();
+  const appName = getAppEntry();
   const select = { shop: true, firstName: true, lastName: true, email: true } as const;
 
   let row: SessionRow | null = null;
 
   if (sessionId?.trim()) {
-    const byId =
-      tableName === "productImproveSession"
-        ? await prisma.productImproveSession.findUnique({
-            where: { id: sessionId.trim() },
-            select,
-          })
-        : await prisma.session.findUnique({
-            where: { id: sessionId.trim() },
-            select,
-          });
+    const byId = await prisma.session.findUnique({
+      where: { id: sessionId.trim() },
+      select,
+    });
     if (byId && byId.shop === normalizedShop) {
       row = byId;
     }
   }
 
   if (!row) {
-    row =
-      tableName === "productImproveSession"
-        ? await prisma.productImproveSession.findFirst({
-            where: { shop: normalizedShop },
-            orderBy: { isOnline: "asc" },
-            select,
-          })
-        : await prisma.session.findFirst({
-            where: { shop: normalizedShop },
-            orderBy: { isOnline: "asc" },
-            select,
-          });
+    row = await prisma.session.findFirst({
+      where: { shop: normalizedShop, appName },
+      orderBy: { isOnline: "asc" },
+      select,
+    });
   }
 
   if (!row) {
     console.warn(
-      `${LOG} no session found shop=${normalizedShop} sessionId=${sessionId ?? "(none)"} table=${tableName}`,
+      `${LOG} no session found shop=${normalizedShop} sessionId=${sessionId ?? "(none)"} appName=${appName}`,
     );
     return null;
   }
