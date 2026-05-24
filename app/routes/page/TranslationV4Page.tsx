@@ -352,8 +352,8 @@ function JobCard({ job, status, progress, onAction }: JobCardProps) {
       </div>
 
       {metrics.currentModule && isActive && (
-        <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: "0.35rem" }}>
-          当前模块: {metrics.currentModule}
+        <div style={{ fontSize: "0.75rem", color: pageColorTokens.brandBlue, marginTop: "0.4rem", fontWeight: 600 }}>
+          ▶ 当前模块: {metrics.currentModule}
         </div>
       )}
 
@@ -377,69 +377,123 @@ type StageBarProps = {
 
 function StageBar({ label, done, total, active, complete, failed = 0 }: StageBarProps) {
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : (complete ? 100 : 0);
-  const barColor = complete
-    ? pageColorTokens.brandGreen
+
+  const fillBg = complete
+    ? "linear-gradient(90deg, #00c48c 0%, #00a67c 60%, #007a5a 100%)"
     : active
-    ? pageColorTokens.brandBlue
-    : pageColorTokens.border;
+    ? "linear-gradient(90deg, #6090ff 0%, #4070f4 60%, #2952d8 100%)"
+    : pageColorTokens.borderInput;
+
+  const fillGlow = complete
+    ? "0 0 10px rgba(0, 166, 124, 0.5)"
+    : active
+    ? "0 0 10px rgba(64, 112, 244, 0.45)"
+    : "none";
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-      <span style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, width: 42, flexShrink: 0 }}>{label}</span>
-      <div style={{ flex: 1, height: 6, borderRadius: 3, background: pageColorTokens.progressTrackGradient, overflow: "hidden" }}>
-        <div style={{ width: `${pct}%`, height: "100%", background: barColor, borderRadius: 3, transition: "width 0.4s ease" }} />
+    <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
+      <span style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, width: 46, flexShrink: 0, fontWeight: active || complete ? 600 : 400 }}>{label}</span>
+      <div style={{ flex: 1, height: 8, borderRadius: 4, background: "linear-gradient(90deg, #e8eaef 0%, #dfe3ea 100%)", overflow: "hidden" }}>
+        <div style={{ width: `${pct}%`, height: "100%", background: fillBg, borderRadius: 4, transition: "width 0.45s ease", boxShadow: fillGlow }} />
       </div>
-      <span style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, minWidth: 80, flexShrink: 0, textAlign: "right" }}>
-        {total > 0 ? `${done}/${total}` : "等待"} {complete ? "✓" : active ? "⟳" : ""}
-        {failed > 0 ? ` ⚠${failed}` : ""}
+      <span style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, minWidth: 84, flexShrink: 0, textAlign: "right" }}>
+        {total > 0 ? `${done}/${total}` : "等待"}
+        {" "}{complete ? <span style={{ color: "#00a67c", fontWeight: 700 }}>✓</span> : active ? <span style={{ color: "#4070f4" }}>⟳</span> : ""}
+        {failed > 0 ? <span style={{ color: "#f59e0b", fontWeight: 600 }}> ⚠{failed}</span> : ""}
       </span>
     </div>
   );
 }
 
 function StatusBadge({ status }: { status: TranslationV4Status }) {
-  const config = STATUS_DISPLAY[status] ?? { label: status, color: "#6d7175", bg: "#f1f2f3" };
+  const config = STATUS_DISPLAY[status] ?? { label: status, color: "#4b5563", bg: "#f3f4f6" };
   return (
     <span style={{
-      padding: "0.15rem 0.55rem",
+      padding: "0.18rem 0.65rem",
       borderRadius: 999,
       fontSize: "0.75rem",
-      fontWeight: 600,
+      fontWeight: 700,
       color: config.color,
       background: config.bg,
+      boxShadow: config.shadow ?? "none",
+      letterSpacing: "0.01em",
     }}>
       {config.label}
     </span>
   );
 }
 
-const STATUS_DISPLAY: Partial<Record<TranslationV4Status, { label: string; color: string; bg: string }>> = {
-  CREATED:         { label: "已创建",   color: "#6d7175", bg: "#f1f2f3" },
-  INIT_QUEUED:     { label: "等待初始化", color: "#2c6ecb", bg: "#e8f0fb" },
-  INITIALIZING:    { label: "初始化中",  color: "#2c6ecb", bg: "#e8f0fb" },
-  INIT_DONE:       { label: "初始化完成", color: "#008060", bg: "#f1f8f5" },
-  TRANSLATE_QUEUED:{ label: "等待翻译",  color: "#2c6ecb", bg: "#e8f0fb" },
-  TRANSLATING:     { label: "翻译中",    color: "#2c6ecb", bg: "#e8f0fb" },
-  TRANSLATE_DONE:  { label: "翻译完成",  color: "#008060", bg: "#f1f8f5" },
-  WRITEBACK_QUEUED:{ label: "等待回写",  color: "#2c6ecb", bg: "#e8f0fb" },
-  WRITING_BACK:    { label: "回写中",    color: "#2c6ecb", bg: "#e8f0fb" },
-  VERIFY_QUEUED:   { label: "等待验证",  color: "#7c5cad", bg: "#f3eeff" },
-  VERIFYING:       { label: "验证中",    color: "#7c5cad", bg: "#f3eeff" },
-  COMPLETED:       { label: "已完成",    color: "#006e52", bg: "#f1f8f5" },
-  FAILED:          { label: "失败",      color: "#bf0711", bg: "rgba(216,44,13,0.08)" },
-  PAUSED:          { label: "已暂停",    color: "#b54708", bg: "#fff4e5" },
-  CANCELLED:       { label: "已取消",    color: "#6d7175", bg: "#f1f2f3" },
+const STATUS_DISPLAY: Partial<Record<TranslationV4Status, { label: string; color: string; bg: string; shadow?: string }>> = {
+  CREATED:         { label: "已创建",    color: "#4b5563", bg: "linear-gradient(135deg, #f3f4f6 0%, #e9ebee 100%)" },
+  INIT_QUEUED:     { label: "等待初始化", color: "#2952d8", bg: "linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%)", shadow: "0 1px 4px rgba(64,112,244,0.18)" },
+  INITIALIZING:    { label: "初始化中",  color: "#1d40c0", bg: "linear-gradient(135deg, #c7d2fe 0%, #a5b4fc 100%)", shadow: "0 1px 6px rgba(64,112,244,0.25)" },
+  INIT_DONE:       { label: "初始化完成", color: "#005c46", bg: "linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)", shadow: "0 1px 4px rgba(0,166,124,0.18)" },
+  TRANSLATE_QUEUED:{ label: "等待翻译",  color: "#2952d8", bg: "linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)", shadow: "0 1px 4px rgba(64,112,244,0.18)" },
+  TRANSLATING:     { label: "翻译中",    color: "#1d40c0", bg: "linear-gradient(135deg, #93c5fd 0%, #60a5fa 100%)", shadow: "0 1px 8px rgba(64,112,244,0.3)" },
+  TRANSLATE_DONE:  { label: "翻译完成",  color: "#005c46", bg: "linear-gradient(135deg, #d1fae5 0%, #6ee7b7 100%)", shadow: "0 1px 4px rgba(0,166,124,0.2)" },
+  WRITEBACK_QUEUED:{ label: "等待回写",  color: "#2952d8", bg: "linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)", shadow: "0 1px 4px rgba(64,112,244,0.18)" },
+  WRITING_BACK:    { label: "回写中",    color: "#1d40c0", bg: "linear-gradient(135deg, #93c5fd 0%, #60a5fa 100%)", shadow: "0 1px 8px rgba(64,112,244,0.3)" },
+  VERIFY_QUEUED:   { label: "等待验证",  color: "#5b21b6", bg: "linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)", shadow: "0 1px 4px rgba(124,92,214,0.2)" },
+  VERIFYING:       { label: "验证中",    color: "#4c1d95", bg: "linear-gradient(135deg, #c4b5fd 0%, #a78bfa 100%)", shadow: "0 1px 8px rgba(124,92,214,0.3)" },
+  COMPLETED:       { label: "已完成",    color: "#005c46", bg: "linear-gradient(135deg, #34d399 0%, #10b981 100%)", shadow: "0 1px 8px rgba(0,166,124,0.35)" },
+  FAILED:          { label: "失败",      color: "#991b1b", bg: "linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)", shadow: "0 1px 4px rgba(220,38,38,0.2)" },
+  PAUSED:          { label: "已暂停",    color: "#7a4f00", bg: "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)", shadow: "0 1px 4px rgba(245,158,11,0.2)" },
+  CANCELLED:       { label: "已取消",    color: "#6b7280", bg: "linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)" },
 };
 
 function jobCardStyle(status: TranslationV4Status): React.CSSProperties {
   const isActive = ACTIVE_STATUSES.includes(status);
+  const isCompleted = status === "COMPLETED";
+  const isFailed = status === "FAILED";
+  const isPaused = status === "PAUSED";
+
+  if (isActive) {
+    return {
+      padding: "1.1rem 1.2rem",
+      border: "1.5px solid rgba(64, 112, 244, 0.4)",
+      borderRadius: "14px",
+      background: "linear-gradient(160deg, #ffffff 0%, #f3f7ff 100%)",
+      boxShadow: "0 6px 24px rgba(64, 112, 244, 0.14), 0 1px 4px rgba(0,0,0,0.05)",
+      transition: "border-color 0.2s, box-shadow 0.2s",
+    };
+  }
+  if (isCompleted) {
+    return {
+      padding: "1.1rem 1.2rem",
+      border: "1.5px solid rgba(0, 166, 124, 0.35)",
+      borderRadius: "14px",
+      background: "linear-gradient(160deg, #ffffff 0%, #f3fdf8 100%)",
+      boxShadow: "0 4px 16px rgba(0, 166, 124, 0.12), 0 1px 3px rgba(0,0,0,0.04)",
+      transition: "border-color 0.2s, box-shadow 0.2s",
+    };
+  }
+  if (isFailed) {
+    return {
+      padding: "1.1rem 1.2rem",
+      border: "1.5px solid rgba(220, 38, 38, 0.3)",
+      borderRadius: "14px",
+      background: "linear-gradient(160deg, #ffffff 0%, #fff5f5 100%)",
+      boxShadow: "0 4px 14px rgba(220, 38, 38, 0.1), 0 1px 3px rgba(0,0,0,0.04)",
+      transition: "border-color 0.2s, box-shadow 0.2s",
+    };
+  }
+  if (isPaused) {
+    return {
+      padding: "1.1rem 1.2rem",
+      border: "1.5px solid rgba(245, 158, 11, 0.35)",
+      borderRadius: "14px",
+      background: "linear-gradient(160deg, #ffffff 0%, #fffbf0 100%)",
+      boxShadow: "0 4px 14px rgba(245, 158, 11, 0.1), 0 1px 3px rgba(0,0,0,0.04)",
+      transition: "border-color 0.2s, box-shadow 0.2s",
+    };
+  }
   return {
-    padding: "1rem",
-    border: `1px solid ${isActive ? pageColorTokens.brandBlue : pageColorTokens.border}`,
-    borderRadius: pageColorTokens.radiusControl,
-    background: pageColorTokens.surface,
-    boxShadow: isActive ? `0 0 0 1px ${pageColorTokens.brandBlue}22` : "none",
-    transition: "border-color 0.2s",
+    padding: "1.1rem 1.2rem",
+    border: `1px solid ${pageColorTokens.border}`,
+    borderRadius: "14px",
+    background: "linear-gradient(160deg, #ffffff 0%, #f8faff 100%)",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.04)",
+    transition: "border-color 0.2s, box-shadow 0.2s",
   };
 }
 
@@ -455,31 +509,36 @@ const checkboxLabelStyle: React.CSSProperties = {
 
 function testModeBannerStyle(active: boolean): React.CSSProperties {
   return {
-    padding: "0.75rem 1rem",
-    borderRadius: pageColorTokens.radiusControl,
-    border: `2px solid ${active ? "#f0b429" : pageColorTokens.border}`,
-    background: active ? "#fffbeb" : pageColorTokens.surfaceMuted,
+    padding: "0.8rem 1rem",
+    borderRadius: "10px",
+    border: `2px solid ${active ? "#f59e0b" : pageColorTokens.border}`,
+    background: active
+      ? "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)"
+      : "linear-gradient(135deg, #f5f6f8 0%, #eef0f6 100%)",
     cursor: "pointer",
-    transition: "border-color 0.2s, background 0.2s",
+    boxShadow: active ? "0 2px 10px rgba(245, 158, 11, 0.2)" : "none",
+    transition: "border-color 0.2s, background 0.2s, box-shadow 0.2s",
   };
 }
 
 const testModePillStyle: React.CSSProperties = {
-  padding: "0.1rem 0.4rem",
-  borderRadius: 4,
+  padding: "0.12rem 0.5rem",
+  borderRadius: 999,
   fontSize: "0.7rem",
-  fontWeight: 700,
-  letterSpacing: "0.04em",
-  color: "#b54708",
-  background: "#fff4e5",
-  border: "1px solid #f0b429",
+  fontWeight: 800,
+  letterSpacing: "0.06em",
+  color: "#92400e",
+  background: "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)",
+  border: "1px solid rgba(245, 158, 11, 0.5)",
+  boxShadow: "0 1px 4px rgba(245, 158, 11, 0.25)",
 };
 
 const failErrorStyle: React.CSSProperties = {
-  padding: "0.4rem 0.6rem",
-  borderRadius: pageColorTokens.radiusControl,
-  background: pageColorTokens.criticalBg,
-  color: pageColorTokens.criticalText,
+  padding: "0.45rem 0.7rem",
+  borderRadius: "9px",
+  background: "linear-gradient(135deg, rgba(220,38,38,0.08) 0%, rgba(220,38,38,0.05) 100%)",
+  border: "1px solid rgba(220,38,38,0.2)",
+  color: "#991b1b",
   fontSize: "0.75rem",
   lineHeight: 1.45,
   wordBreak: "break-word",

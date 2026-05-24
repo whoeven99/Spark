@@ -1,40 +1,43 @@
 import type { CSSProperties, ReactNode } from "react";
 
-/** §3.5.2 视觉令牌 — 与 billingPage.module.css 对齐，全站复用 */
 export const pageColorTokens = {
-  textPrimary: "#202223",
-  textBody: "#303030",
-  textSecondary: "#6d7175",
-  /** §3 弱化脚注（列表 meta、字段标签） */
-  textFootnote: "#8c9196",
-  textMuted: "#42474c",
-  border: "#e1e3e5",
-  borderInput: "#c9cccf",
-  /** 更细的分隔/边框（常用于列表展开块、轻量分区） */
-  borderSubtle: "#dfe3e8",
-  divider: "#f1f2f3",
-  brandGreen: "#008060",
-  brandGreenDark: "#208060",
-  brandGreenDeep: "#1a6b52",
-  brandGreenLight: "#f1f8f5",
-  brandBlue: "#2c6ecb",
+  textPrimary: "#1a1d1f",
+  textBody: "#2c2f32",
+  textSecondary: "#6b7280",
+  textFootnote: "#9ca3af",
+  textMuted: "#4b5563",
+  border: "#e2e5e9",
+  borderInput: "#c8cdd3",
+  borderSubtle: "#dde1e6",
+  divider: "#f0f2f4",
+  // Brand — slightly more vivid than legacy #008060 / #2c6ecb
+  brandGreen: "#00a67c",
+  brandGreenDark: "#007a5a",
+  brandGreenDeep: "#005c46",
+  brandGreenLight: "#edfaf5",
+  brandGreenGlow: "rgba(0, 166, 124, 0.18)",
+  brandBlue: "#4070f4",
+  brandBlueDark: "#2952d8",
+  brandBlueLight: "#eef2ff",
+  brandBlueGlow: "rgba(64, 112, 244, 0.18)",
+  // Surfaces
   surface: "#ffffff",
-  surfaceMuted: "#f6f6f7",
-  /** 列表交替行背景（接近但不等同 surfaceMuted） */
-  surfaceEvenRow: "#fafbfb",
+  surfaceGlass: "linear-gradient(160deg, #ffffff 0%, #f7f9ff 100%)",
+  surfaceMuted: "#f5f6f8",
+  surfaceEvenRow: "#f9fafb",
   surfaceSubtle: "#fafafa",
-  critical: "#bf0711",
-  criticalBg: "rgba(216, 44, 13, 0.08)",
-  criticalText: "#8a2712",
-  shadowCard: "0 1px 2px rgba(0, 0, 0, 0.04)",
-  /** 弹层/预览卡片更强阴影 */
-  shadowModal: "0 12px 30px rgba(0, 0, 0, 0.2)",
-  /** 进度条轨道（未填充部分）的渐变 */
-  progressTrackGradient: "linear-gradient(180deg, #e7e9ec 0%, #dfe3e8 100%)",
-  radiusCard: "12px",
-  radiusControl: "8px",
-  /** 失误/空态的弱化灰底（非关键错误） */
-  mutedBg: "rgba(109, 113, 117, 0.08)",
+  // Feedback
+  critical: "#dc2626",
+  criticalBg: "rgba(220, 38, 38, 0.07)",
+  criticalText: "#991b1b",
+  // Elevation
+  shadowCard: "0 2px 10px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04)",
+  shadowCardStrong: "0 8px 28px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06)",
+  shadowModal: "0 16px 40px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.08)",
+  progressTrackGradient: "linear-gradient(90deg, #e8eaef 0%, #dfe3ea 100%)",
+  radiusCard: "14px",
+  radiusControl: "9px",
+  mutedBg: "rgba(107, 114, 128, 0.08)",
 } as const;
 
 /** §3.2 双栏布局 */
@@ -64,7 +67,6 @@ export const stickyAsideColumnStyle: CSSProperties = {
   alignSelf: "flex-start",
 };
 
-/** 单栏页内容区（对齐计费页 `.page`） */
 export const pageContentStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
@@ -72,9 +74,8 @@ export const pageContentStyle: CSSProperties = {
   maxWidth: "1120px",
 };
 
-/** 白底卡片容器（12px 圆角，对齐计费卡片） */
 export const pageSurfaceStyle: CSSProperties = {
-  background: pageColorTokens.surface,
+  background: "linear-gradient(160deg, #ffffff 0%, #f8faff 100%)",
   border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusCard,
   padding: "1.25rem",
@@ -96,7 +97,7 @@ export const pageInnerPanelStyle: CSSProperties = {
 export const pageFieldLabelStyle: CSSProperties = {
   display: "block",
   fontSize: "0.8125rem",
-  fontWeight: 500,
+  fontWeight: 600,
   color: pageColorTokens.textBody,
   marginBottom: "0.35rem",
 };
@@ -131,7 +132,6 @@ export function pageSelectStyle(disabled = false): CSSProperties {
   };
 }
 
-/** 聊天页等主栏底部的紧凑语言条容器 */
 export const languageSelectorBarStyle: CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
@@ -140,15 +140,15 @@ export const languageSelectorBarStyle: CSSProperties = {
   marginTop: "0.5rem",
   padding: "0.65rem 0.85rem",
   borderRadius: pageColorTokens.radiusControl,
-  background: pageColorTokens.surfaceMuted,
+  background: "linear-gradient(135deg, #f5f6f8 0%, #eef0f6 100%)",
   border: `1px solid ${pageColorTokens.border}`,
-  boxShadow: pageColorTokens.shadowCard,
+  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
 };
 
 export const languageSelectorLabelStyle: CSSProperties = {
   margin: 0,
   fontSize: "0.75rem",
-  fontWeight: 500,
+  fontWeight: 600,
   color: pageColorTokens.textSecondary,
   whiteSpace: "nowrap",
 };
@@ -189,47 +189,45 @@ export function pageTextareaStyle(options?: {
   };
 }
 
-/** 卡片内区块标题（PageSurface） */
 export const pageSectionTitleStyle: CSSProperties = {
   fontSize: "1.125rem",
-  fontWeight: 600,
+  fontWeight: 700,
   color: pageColorTokens.textPrimary,
   margin: "0 0 1rem",
 };
 
-/** 页内主区块标题（PageSectionHeader，对标计费 usageTitle） */
 export const pageBlockTitleStyle: CSSProperties = {
   margin: 0,
   fontSize: "1.125rem",
-  fontWeight: 600,
+  fontWeight: 700,
   color: pageColorTokens.textPrimary,
 };
 
 export const pageSectionSubtitleStyle: CSSProperties = {
   margin: "0.25rem 0 0",
   fontSize: "0.8125rem",
-  lineHeight: 1.45,
+  lineHeight: 1.5,
   color: pageColorTokens.textSecondary,
   maxWidth: "36rem",
 };
 
-/** 状态胶囊（对标计费 planBadge） */
 export const pageStatusBadgeStyle: CSSProperties = {
   flexShrink: 0,
-  padding: "0.3rem 0.75rem",
+  padding: "0.3rem 0.8rem",
   borderRadius: "999px",
   fontSize: "0.8125rem",
-  fontWeight: 600,
+  fontWeight: 700,
   color: "#006e52",
-  background: pageColorTokens.brandGreenLight,
-  border: "1px solid #b7e0d0",
+  background: "linear-gradient(135deg, #edfaf5 0%, #d4f5e9 100%)",
+  border: "1px solid rgba(0, 166, 124, 0.3)",
+  boxShadow: "0 1px 4px rgba(0, 166, 124, 0.12)",
 };
 
 export const pageTrustFootnoteStyle: CSSProperties = {
   margin: 0,
   padding: "0.85rem 1rem",
   borderRadius: pageColorTokens.radiusControl,
-  background: pageColorTokens.surfaceMuted,
+  background: "linear-gradient(135deg, #f5f6f8 0%, #eef0f6 100%)",
   fontSize: "0.75rem",
   lineHeight: 1.45,
   color: pageColorTokens.textSecondary,
@@ -254,14 +252,14 @@ export const pageSectionHeaderRowStyle: CSSProperties = {
 
 export const pageAccentBadgeStyle: CSSProperties = {
   fontSize: "0.875rem",
-  fontWeight: 600,
+  fontWeight: 700,
   color: pageColorTokens.brandGreen,
 };
 
 export const pageMetaTextStyle: CSSProperties = {
   margin: 0,
   padding: "0.65rem 0.75rem",
-  background: pageColorTokens.surfaceMuted,
+  background: "linear-gradient(135deg, #f5f6f8 0%, #eef0f6 100%)",
   borderRadius: pageColorTokens.radiusControl,
   fontSize: "0.8125rem",
   color: pageColorTokens.textBody,
@@ -280,34 +278,28 @@ const introToneTokens: Record<
   { gradient: string; borderColor: string }
 > = {
   render: {
-    gradient:
-      "linear-gradient(to right, rgba(72, 0, 140, 0.04), rgba(243, 71, 255, 0.04))",
-    borderColor: "#48008c",
+    gradient: "linear-gradient(135deg, rgba(109, 40, 217, 0.08) 0%, rgba(236, 72, 153, 0.06) 100%)",
+    borderColor: "#7c3aed",
   },
   picture: {
-    gradient:
-      "linear-gradient(to right, rgba(138, 5, 255, 0.04), rgba(0, 158, 122, 0.04))",
+    gradient: "linear-gradient(135deg, rgba(139, 5, 255, 0.09) 0%, rgba(0, 166, 124, 0.07) 100%)",
     borderColor: "#8a05ff",
   },
   translation: {
-    gradient:
-      "linear-gradient(to right, rgba(0, 128, 96, 0.05), rgba(44, 110, 203, 0.04))",
-    borderColor: "#008060",
+    gradient: "linear-gradient(135deg, rgba(0, 166, 124, 0.09) 0%, rgba(64, 112, 244, 0.07) 100%)",
+    borderColor: "#00a67c",
   },
   chat: {
-    gradient:
-      "linear-gradient(to right, rgba(44, 110, 203, 0.06), rgba(0, 128, 96, 0.04))",
-    borderColor: "#2c6ecb",
+    gradient: "linear-gradient(135deg, rgba(64, 112, 244, 0.09) 0%, rgba(0, 166, 124, 0.07) 100%)",
+    borderColor: "#4070f4",
   },
   billing: {
-    gradient:
-      "linear-gradient(to right, rgba(0, 128, 96, 0.05), rgba(138, 5, 255, 0.03))",
-    borderColor: "#008060",
+    gradient: "linear-gradient(135deg, rgba(0, 166, 124, 0.08) 0%, rgba(139, 5, 255, 0.05) 100%)",
+    borderColor: "#00a67c",
   },
   diagnosis: {
-    gradient:
-      "linear-gradient(to right, rgba(44, 110, 203, 0.04), rgba(109, 113, 117, 0.06))",
-    borderColor: "#2c6ecb",
+    gradient: "linear-gradient(135deg, rgba(64, 112, 244, 0.08) 0%, rgba(107, 114, 128, 0.07) 100%)",
+    borderColor: "#4070f4",
   },
 };
 
@@ -318,21 +310,22 @@ export function pageIntroBannerStyle(
   const token = introToneTokens[tone];
   return {
     fontSize: "0.875rem",
-    color: pageColorTokens.textSecondary,
-    lineHeight: 1.5,
-    padding: "1rem 1.25rem",
+    color: pageColorTokens.textBody,
+    lineHeight: 1.55,
+    padding: "0.9rem 1.25rem",
     background: token.gradient,
     borderLeft: `4px solid ${token.borderColor}`,
     borderRadius: `0 ${pageColorTokens.radiusControl} ${pageColorTokens.radiusControl} 0`,
     marginBottom: options?.marginBottom ?? "1rem",
+    boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
   };
 }
 
 export const pageEmptyStateStyle: CSSProperties = {
   padding: "2.5rem 1.5rem",
   borderRadius: pageColorTokens.radiusCard,
-  background: `linear-gradient(180deg, ${pageColorTokens.surfaceSubtle} 0%, ${pageColorTokens.surfaceMuted} 100%)`,
-  border: `1px dashed ${pageColorTokens.borderInput}`,
+  background: "linear-gradient(160deg, #f7f9ff 0%, #f0f2f7 100%)",
+  border: `1.5px dashed ${pageColorTokens.borderInput}`,
   color: pageColorTokens.textSecondary,
   fontSize: "0.875rem",
   lineHeight: 1.5,
@@ -344,16 +337,17 @@ export const pageEmptyStateStyle: CSSProperties = {
 };
 
 export const formErrorBoxStyle: CSSProperties = {
-  padding: "0.5rem 0.65rem",
+  padding: "0.55rem 0.75rem",
   borderRadius: pageColorTokens.radiusControl,
-  background: pageColorTokens.criticalBg,
+  background: "linear-gradient(135deg, rgba(220,38,38,0.07) 0%, rgba(220,38,38,0.04) 100%)",
+  border: "1px solid rgba(220,38,38,0.2)",
   color: pageColorTokens.criticalText,
   fontSize: "0.8125rem",
   lineHeight: 1.45,
 };
 
 export const pageMetricCardStyle: CSSProperties = {
-  background: pageColorTokens.surface,
+  background: "linear-gradient(160deg, #ffffff 0%, #f8faff 100%)",
   border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusCard,
   overflow: "hidden",
@@ -361,11 +355,12 @@ export const pageMetricCardStyle: CSSProperties = {
 };
 
 export const pageMetricCardAccentStyle: CSSProperties = {
-  background: `linear-gradient(90deg, ${pageColorTokens.brandGreenDeep} 0%, ${pageColorTokens.brandGreenDark} 100%)`,
-  color: pageColorTokens.surface,
-  padding: "0.65rem 1rem",
+  background: "linear-gradient(135deg, #005c46 0%, #007a5a 50%, #00c48c 100%)",
+  color: "#ffffff",
+  padding: "0.7rem 1rem",
   fontSize: "0.8125rem",
   lineHeight: 1.45,
+  letterSpacing: "0.01em",
 };
 
 export const pageMetricTileStyle: CSSProperties = {
@@ -406,7 +401,7 @@ export const pageStatusCardStyle: CSSProperties = {
   padding: "0.85rem 1rem",
   border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusCard,
-  background: pageColorTokens.surface,
+  background: "linear-gradient(160deg, #ffffff 0%, #f8faff 100%)",
   boxShadow: pageColorTokens.shadowCard,
 };
 
@@ -416,7 +411,6 @@ type PageSectionHeaderProps = {
   badge?: ReactNode;
 };
 
-/** 页内首区块标题行：主标题 + 副标题 + 可选胶囊（全站默认，替代 pageIntroBanner） */
 export function PageSectionHeader({ title, subtitle, badge }: PageSectionHeaderProps) {
   return (
     <div style={pageSectionHeaderRowStyle}>
@@ -441,12 +435,7 @@ export function PageSurface({ title, subtitle, children }: PageSurfaceProps) {
       {title || subtitle ? (
         <div style={{ marginBottom: "1rem" }}>
           {title ? (
-            <h3
-              style={{
-                ...pageBlockTitleStyle,
-                marginBottom: subtitle ? "0.25rem" : 0,
-              }}
-            >
+            <h3 style={{ ...pageBlockTitleStyle, marginBottom: subtitle ? "0.25rem" : 0 }}>
               {title}
             </h3>
           ) : null}
@@ -466,12 +455,7 @@ type PagePanelProps = {
   highlighted?: boolean;
 };
 
-/** 替代 s-box background="subdued"，统一为计费风白底卡片 */
-export function PagePanel({
-  children,
-  padding = "base",
-  highlighted = false,
-}: PagePanelProps) {
+export function PagePanel({ children, padding = "base", highlighted = false }: PagePanelProps) {
   const paddingPx =
     padding === "large" ? "1.5rem" : padding === "small" ? "0.75rem" : "1.25rem";
   return (
@@ -482,8 +466,8 @@ export function PagePanel({
         ...(highlighted
           ? {
               borderColor: pageColorTokens.brandGreen,
-              boxShadow: `0 0 0 1px ${pageColorTokens.brandGreen}`,
-              background: `linear-gradient(180deg, ${pageColorTokens.brandGreenLight} 0%, ${pageColorTokens.surface} 28%)`,
+              boxShadow: `0 0 0 1px ${pageColorTokens.brandGreen}, 0 4px 20px ${pageColorTokens.brandGreenGlow}`,
+              background: `linear-gradient(160deg, ${pageColorTokens.brandGreenLight} 0%, #ffffff 32%)`,
             }
           : {}),
       }}
@@ -514,7 +498,6 @@ function pageMetricGridStyle(columnCount: number): CSSProperties {
   };
 }
 
-/** 对齐计费页额度卡：顶栏强调 + 指标网格 + 可选页脚 */
 export function PageMetricCard({ accent, metrics, footer }: PageMetricCardProps) {
   return (
     <div style={pageMetricCardStyle}>
