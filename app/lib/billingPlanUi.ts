@@ -85,6 +85,12 @@ export function formatTokenUsagePercentDisplay(percent: number): string {
   return "0";
 }
 
+export function planTierFromPlanKey(planKey: string): PlanTier | null {
+  if (planKey.includes(TIER_PLAN_KEY_SEGMENT.base)) return "base";
+  if (planKey.includes(TIER_PLAN_KEY_SEGMENT.pro)) return "pro";
+  return null;
+}
+
 export function pickSubscriptionPlan(
   plans: PlanRecord[],
   interval: BillingIntervalView,
@@ -94,6 +100,16 @@ export function pickSubscriptionPlan(
   return plans.find(
     (p) => p.billingInterval === interval && p.planKey.includes(segment),
   );
+}
+
+/** 当前月付/年付周期下全部付费订阅（不含试用）。 */
+export function listSubscriptionPlansForInterval(
+  plans: PlanRecord[],
+  interval: BillingIntervalView,
+): PlanRecord[] {
+  return plans
+    .filter((p) => p.billingInterval === interval)
+    .sort((a, b) => a.planKey.localeCompare(b.planKey));
 }
 
 /** @deprecated 多档位时请用 {@link pickSubscriptionPlan} */

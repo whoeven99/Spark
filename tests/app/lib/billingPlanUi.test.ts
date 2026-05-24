@@ -4,6 +4,7 @@ import {
   getTokenUsagePercent,
   isActiveSubscriptionPlan,
   isPendingSubscriptionPlan,
+  listSubscriptionPlansForInterval,
   pickSubscriptionPlan,
 } from "../../../app/lib/billingPlanUi";
 import type { PlanRecord } from "../../../app/lib/billingPageTypes";
@@ -46,6 +47,17 @@ describe("token usage percent", () => {
     expect(formatTokenUsagePercentDisplay(50.4)).toBe("50");
     expect(formatTokenUsagePercentDisplay(5.26)).toBe("5.3");
     expect(formatTokenUsagePercentDisplay(100)).toBe("100");
+  });
+});
+
+describe("listSubscriptionPlansForInterval", () => {
+  it("返回当前周期的全部订阅", () => {
+    expect(listSubscriptionPlansForInterval(plans, "MONTHLY").map((p) => p.planKey)).toEqual([
+      "pi_base_monthly",
+    ]);
+    expect(listSubscriptionPlansForInterval(plans, "ANNUAL").map((p) => p.planKey)).toEqual([
+      "pi_pro_annual",
+    ]);
   });
 });
 
