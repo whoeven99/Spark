@@ -88,6 +88,21 @@ async function executeWithRetry(client, statement, maxAttempts = 3) {
   throw lastError;
 }
 
+/** SQLite/Turso 不支持 ADD COLUMN IF NOT EXISTS；列已存在时跳过 ALTER。 */
+async function executeMigrationStatement(client, statement) {
+  try {
+    return await executeWithRetry(client, statement);
+  } catch (error) {
+    const msg = String(error.message || error);
+    const isAlterAdd = /^\s*ALTER\s+TABLE\b/i.test(statement) && /\bADD\s+COLUMN\b/i.test(statement);
+    if (isAlterAdd && /duplicate column name/i.test(msg)) {
+      console.log(`[turso:migrate] 跳过已存在列 (${statement.split(/\s+/).slice(-3).join(" ")})`);
+      return;
+    }
+    throw error;
+  }
+}
+
 async function getAppliedNames(client) {
   const res = await client.execute(
     'SELECT migration_name FROM "_prisma_migrations" WHERE rolled_back_at IS NULL',
@@ -166,7 +181,7 @@ async function main() {
 
     console.log(`[turso:migrate:${target}] 应用: ${migration.name}`);
     for (const statement of splitStatements(sql)) {
-      await executeWithRetry(client, statement);
+      await executeMigrationStatement(client, statement);
     }
     await markApplied(client, migration.name, sql);
     ran += 1;
