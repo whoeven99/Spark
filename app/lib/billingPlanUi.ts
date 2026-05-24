@@ -2,12 +2,12 @@ import type { PlanRecord } from "./billingPageTypes";
 
 export type BillingIntervalView = "MONTHLY" | "ANNUAL";
 
-/** 订阅档位，与 PlanCatalog `planKey` 前缀一致（`gd_base_*` / `gd_pro_*`）。 */
+/** 订阅档位，与 PlanCatalog `planKey` 中段一致（如 `pi_base_monthly`、`gd_pro_annual`）。 */
 export type PlanTier = "base" | "pro";
 
-const TIER_PLAN_KEY_PREFIX: Record<PlanTier, string> = {
-  base: "gd_base_",
-  pro: "gd_pro_",
+const TIER_PLAN_KEY_SEGMENT: Record<PlanTier, string> = {
+  base: "_base_",
+  pro: "_pro_",
 };
 
 export function formatPlanPrice(
@@ -90,9 +90,9 @@ export function pickSubscriptionPlan(
   interval: BillingIntervalView,
   tier: PlanTier,
 ): PlanRecord | undefined {
-  const prefix = TIER_PLAN_KEY_PREFIX[tier];
+  const segment = TIER_PLAN_KEY_SEGMENT[tier];
   return plans.find(
-    (p) => p.billingInterval === interval && p.planKey.startsWith(prefix),
+    (p) => p.billingInterval === interval && p.planKey.includes(segment),
   );
 }
 

@@ -10,7 +10,7 @@ import type { PlanRecord } from "../../../app/lib/billingPageTypes";
 
 const plans: PlanRecord[] = [
   {
-    planKey: "gd_base_monthly",
+    planKey: "pi_base_monthly",
     appName: "product-improve",
     kind: "SUBSCRIPTION",
     billingInterval: "MONTHLY",
@@ -22,7 +22,7 @@ const plans: PlanRecord[] = [
     shopifyPlanName: null,
   },
   {
-    planKey: "gd_pro_annual",
+    planKey: "pi_pro_annual",
     appName: "product-improve",
     kind: "SUBSCRIPTION",
     billingInterval: "ANNUAL",
@@ -52,10 +52,10 @@ describe("token usage percent", () => {
 describe("pickSubscriptionPlan", () => {
   it("按档位与周期选取套餐", () => {
     expect(pickSubscriptionPlan(plans, "MONTHLY", "base")?.planKey).toBe(
-      "gd_base_monthly",
+      "pi_base_monthly",
     );
     expect(pickSubscriptionPlan(plans, "ANNUAL", "pro")?.planKey).toBe(
-      "gd_pro_annual",
+      "pi_pro_annual",
     );
     expect(pickSubscriptionPlan(plans, "ANNUAL", "base")).toBeUndefined();
   });

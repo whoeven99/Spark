@@ -1,5 +1,7 @@
--- PlanCatalog 种子（prisma migrate diff 不会包含 migration 里的 INSERT，turso-sync 单独执行）
-INSERT OR IGNORE INTO "PlanCatalog" (
+-- PlanCatalog 种子（turso:migrate 执行；product-improve 使用 pi_* planKey）
+DELETE FROM "PlanCatalog" WHERE "appName" = 'generate-description' OR "planKey" LIKE 'gd_%';
+
+INSERT INTO "PlanCatalog" (
     "planKey",
     "appName",
     "kind",
@@ -15,151 +17,6 @@ INSERT OR IGNORE INTO "PlanCatalog" (
     "createdAt",
     "updatedAt"
 ) VALUES
-    (
-        'gd_trial',
-        'generate-description',
-        'INTERNAL_TRIAL',
-        NULL,
-        'Free trial',
-        10000,
-        '0',
-        'USD',
-        NULL,
-        'Generate Description Free Trial',
-        10,
-        1,
-        CURRENT_TIMESTAMP,
-        CURRENT_TIMESTAMP
-    ),
-    (
-        'gd_base_monthly',
-        'generate-description',
-        'SUBSCRIPTION',
-        'MONTHLY',
-        'Base (Monthly)',
-        500000,
-        '29.99',
-        'USD',
-        7,
-        'Generate Description Base Monthly',
-        20,
-        1,
-        CURRENT_TIMESTAMP,
-        CURRENT_TIMESTAMP
-    ),
-    (
-        'gd_base_annual',
-        'generate-description',
-        'SUBSCRIPTION',
-        'ANNUAL',
-        'Base (Annual)',
-        6500000,
-        '299.99',
-        'USD',
-        7,
-        'Generate Description Base Annual',
-        30,
-        1,
-        CURRENT_TIMESTAMP,
-        CURRENT_TIMESTAMP
-    ),
-    (
-        'gd_pro_monthly',
-        'generate-description',
-        'SUBSCRIPTION',
-        'MONTHLY',
-        'Pro (Monthly)',
-        2000000,
-        '79.99',
-        'USD',
-        7,
-        'Generate Description Pro Monthly',
-        25,
-        1,
-        CURRENT_TIMESTAMP,
-        CURRENT_TIMESTAMP
-    ),
-    (
-        'gd_pro_annual',
-        'generate-description',
-        'SUBSCRIPTION',
-        'ANNUAL',
-        'Pro (Annual)',
-        26000000,
-        '799.99',
-        'USD',
-        7,
-        'Generate Description Pro Annual',
-        35,
-        1,
-        CURRENT_TIMESTAMP,
-        CURRENT_TIMESTAMP
-    ),
-    (
-        'gd_pack_100k',
-        'generate-description',
-        'ONE_TIME_PACK',
-        NULL,
-        'Token pack 100K',
-        100000,
-        '9.99',
-        'USD',
-        NULL,
-        'Generate Description Token Pack 100K',
-        40,
-        1,
-        CURRENT_TIMESTAMP,
-        CURRENT_TIMESTAMP
-    ),
-    (
-        'gd_pack_500k',
-        'generate-description',
-        'ONE_TIME_PACK',
-        NULL,
-        'Token pack 500K',
-        500000,
-        '39.99',
-        'USD',
-        NULL,
-        'Generate Description Token Pack 500K',
-        50,
-        1,
-        CURRENT_TIMESTAMP,
-        CURRENT_TIMESTAMP
-    ),
-    (
-        'gd_pack_1m',
-        'generate-description',
-        'ONE_TIME_PACK',
-        NULL,
-        'Token pack 1M',
-        1000000,
-        '69.99',
-        'USD',
-        NULL,
-        'Generate Description Token Pack 1M',
-        60,
-        1,
-        CURRENT_TIMESTAMP,
-        CURRENT_TIMESTAMP
-    ),
-    (
-        'gd_pack_2m',
-        'generate-description',
-        'ONE_TIME_PACK',
-        NULL,
-        'Token pack 2M',
-        2000000,
-        '129.99',
-        'USD',
-        NULL,
-        'Generate Description Token Pack 2M',
-        70,
-        1,
-        CURRENT_TIMESTAMP,
-        CURRENT_TIMESTAMP
-    ),
-    -- Product Improve plans
     (
         'pi_trial',
         'product-improve',
@@ -303,4 +160,17 @@ INSERT OR IGNORE INTO "PlanCatalog" (
         1,
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
-    );
+    )
+ON CONFLICT("planKey") DO UPDATE SET
+    "appName" = excluded."appName",
+    "kind" = excluded."kind",
+    "billingInterval" = excluded."billingInterval",
+    "displayName" = excluded."displayName",
+    "tokens" = excluded."tokens",
+    "priceAmount" = excluded."priceAmount",
+    "currencyCode" = excluded."currencyCode",
+    "trialDays" = excluded."trialDays",
+    "shopifyPlanName" = excluded."shopifyPlanName",
+    "sortOrder" = excluded."sortOrder",
+    "enabled" = excluded."enabled",
+    "updatedAt" = CURRENT_TIMESTAMP;
