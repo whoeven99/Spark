@@ -40,6 +40,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     writebackTotal: Number(redisProgress.writebackTotal) || job.metrics.writebackTotal,
     writebackDone: Number(redisProgress.writebackDone) || job.metrics.writebackDone,
     writebackFailed: Number(redisProgress.writebackFailed) || job.metrics.writebackFailed,
+    verifyTotal: Number(redisProgress.verifyTotal) || job.metrics.verifyTotal,
+    verifyDone: Number(redisProgress.verifyDone) || job.metrics.verifyDone,
+    verifyFailed: Number(redisProgress.verifyFailed) || job.metrics.verifyFailed,
     currentModule: redisProgress.currentModule ?? null,
     progressUpdatedAt: redisProgress.updatedAt ?? null,
   };

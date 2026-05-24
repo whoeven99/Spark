@@ -1,5 +1,5 @@
 import { claimJob, updateJob, heartbeat, findPendingJobs, getJob } from "../services/cosmosV4.js";
-import { popHint, setProgress } from "../services/redisV4.js";
+import { popHint, pushHint, setProgress } from "../services/redisV4.js";
 import { blobRead, blobListPaths, blobWrite } from "../services/blobV4.js";
 import { registerTranslations, type TranslationInput } from "../services/shopifyFetch.js";
 import type { TranslationV4Job } from "../services/cosmosV4.js";
@@ -39,11 +39,17 @@ type TranslatedItem = {
   }>;
 };
 
+type FailedResource = {
+  resourceId: string;
+  translations: TranslationInput[];
+};
+
 async function processWritebackJob(job: TranslationV4Job): Promise<void> {
   const { shopName, id: jobId, target, isCover } = job;
   const shopDomain = job.shopName;
   const blobPrefix = job.blobPrefix || `tasks/v4/${shopName}/${jobId}`;
   const progressPath = `${blobPrefix}/writeback/progress.json`;
+  const failedPath = `${blobPrefix}/writeback/failed.json`;
 
   // Load existing progress for resume support
   const existingProgress = await blobRead<{ written: string[] }>(progressPath);
@@ -52,6 +58,7 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
   let writebackDone = writtenSet.size;
   let writebackFailed = 0;
   const writebackTotal = job.metrics.writebackTotal || job.metrics.translateDone;
+  const failedResources: FailedResource[] = [];
 
   try {
     for (const module of job.modules) {
@@ -96,6 +103,7 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
             writebackDone++;
           } else {
             writebackFailed++;
+            failedResources.push({ resourceId: resource.resourceId, translations });
             console.warn(`[writeback] resource ${resource.resourceId} errors:`, result.userErrors);
           }
 
@@ -118,17 +126,30 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
     await blobWrite(progressPath, { written: [...writtenSet] });
 
     const latestJob = await getJob(shopName, jobId);
-    await updateJob(shopName, jobId, {
-      status: "COMPLETED",
-      claimedBy: null,
-      metrics: {
-        ...(latestJob?.metrics ?? job.metrics),
-        writebackDone,
-        writebackFailed,
-      },
-    });
+    const updatedMetrics = {
+      ...(latestJob?.metrics ?? job.metrics),
+      writebackDone,
+      writebackFailed,
+    };
 
-    console.log(`[writeback] done job=${jobId} written=${writebackDone} failed=${writebackFailed}`);
+    if (writebackFailed > 0) {
+      // Save failed resources so verifyWorker can retry them
+      await blobWrite(failedPath, failedResources);
+      await updateJob(shopName, jobId, {
+        status: "VERIFY_QUEUED",
+        claimedBy: null,
+        metrics: { ...updatedMetrics, verifyTotal: writebackFailed },
+      });
+      await pushHint("verify", { taskId: jobId, shopName });
+      console.log(`[writeback] done job=${jobId} written=${writebackDone} failed=${writebackFailed} → VERIFY_QUEUED`);
+    } else {
+      await updateJob(shopName, jobId, {
+        status: "COMPLETED",
+        claimedBy: null,
+        metrics: updatedMetrics,
+      });
+      console.log(`[writeback] done job=${jobId} written=${writebackDone}`);
+    }
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e);
     await updateJob(shopName, jobId, {

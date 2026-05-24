@@ -41,6 +41,7 @@ export const HINT_KEYS = {
   init: "translate:v4:hint:init",
   translate: "translate:v4:hint:translate",
   writeback: "translate:v4:hint:writeback",
+  verify: "translate:v4:hint:verify",
 } as const;
 
 export type HintPayload = { taskId: string; shopName: string };

@@ -21,6 +21,7 @@ const ACTIVE_STATUSES: TranslationV4Status[] = [
   "INIT_QUEUED", "INITIALIZING", "INIT_DONE",
   "TRANSLATE_QUEUED", "TRANSLATING", "TRANSLATE_DONE",
   "WRITEBACK_QUEUED", "WRITING_BACK",
+  "VERIFY_QUEUED", "VERIFYING",
 ];
 
 type ProgressData = {
@@ -36,6 +37,7 @@ type ProgressData = {
     initTotal: number; initDone: number;
     translateTotal: number; translateDone: number; translateFailed: number;
     writebackTotal: number; writebackDone: number; writebackFailed: number;
+    verifyTotal: number; verifyDone: number; verifyFailed: number;
     currentModule: string | null;
   };
 };
@@ -254,6 +256,7 @@ export function TranslationV4Page() {
                   ["① 初始化", "拉取 Shopify 数据 → Blob"],
                   ["② 翻译", "读取 Blob → LLM 翻译 → 写回 Blob"],
                   ["③ 回写", "读取翻译结果 → 写回 Shopify"],
+                  ["④ 验证", "重试回写失败的资源，确保写入完整"],
                 ].map(([step, desc]) => (
                   <div key={step} style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}>
                     <span style={{ fontWeight: 600, color: pageColorTokens.textBody, whiteSpace: "nowrap" }}>{step}</span>
@@ -340,9 +343,12 @@ function JobCard({ job, status, progress, onAction }: JobCardProps) {
 
       {/* Stage progress bars */}
       <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-        <StageBar label="初始化" done={metrics.initDone} total={metrics.initTotal} active={status === "INITIALIZING"} complete={["INIT_DONE","TRANSLATE_QUEUED","TRANSLATING","TRANSLATE_DONE","WRITEBACK_QUEUED","WRITING_BACK","COMPLETED"].includes(status)} />
-        <StageBar label="翻译" done={metrics.translateDone} total={metrics.translateTotal} active={status === "TRANSLATING"} complete={["TRANSLATE_DONE","WRITEBACK_QUEUED","WRITING_BACK","COMPLETED"].includes(status)} failed={metrics.translateFailed} />
-        <StageBar label="回写" done={metrics.writebackDone} total={metrics.writebackTotal} active={status === "WRITING_BACK"} complete={status === "COMPLETED"} failed={metrics.writebackFailed} />
+        <StageBar label="初始化" done={metrics.initDone} total={metrics.initTotal} active={status === "INITIALIZING"} complete={["INIT_DONE","TRANSLATE_QUEUED","TRANSLATING","TRANSLATE_DONE","WRITEBACK_QUEUED","WRITING_BACK","VERIFY_QUEUED","VERIFYING","COMPLETED"].includes(status)} />
+        <StageBar label="翻译" done={metrics.translateDone} total={metrics.translateTotal} active={status === "TRANSLATING"} complete={["TRANSLATE_DONE","WRITEBACK_QUEUED","WRITING_BACK","VERIFY_QUEUED","VERIFYING","COMPLETED"].includes(status)} failed={metrics.translateFailed} />
+        <StageBar label="回写" done={metrics.writebackDone} total={metrics.writebackTotal} active={status === "WRITING_BACK"} complete={["VERIFY_QUEUED","VERIFYING","COMPLETED"].includes(status)} failed={metrics.writebackFailed} />
+        {(metrics.verifyTotal > 0 || ["VERIFY_QUEUED","VERIFYING"].includes(status)) && (
+          <StageBar label="验证" done={metrics.verifyDone} total={metrics.verifyTotal} active={status === "VERIFYING"} complete={status === "COMPLETED" && metrics.verifyTotal > 0} failed={metrics.verifyFailed} />
+        )}
       </div>
 
       {metrics.currentModule && isActive && (
@@ -417,6 +423,8 @@ const STATUS_DISPLAY: Partial<Record<TranslationV4Status, { label: string; color
   TRANSLATE_DONE:  { label: "翻译完成",  color: "#008060", bg: "#f1f8f5" },
   WRITEBACK_QUEUED:{ label: "等待回写",  color: "#2c6ecb", bg: "#e8f0fb" },
   WRITING_BACK:    { label: "回写中",    color: "#2c6ecb", bg: "#e8f0fb" },
+  VERIFY_QUEUED:   { label: "等待验证",  color: "#7c5cad", bg: "#f3eeff" },
+  VERIFYING:       { label: "验证中",    color: "#7c5cad", bg: "#f3eeff" },
   COMPLETED:       { label: "已完成",    color: "#006e52", bg: "#f1f8f5" },
   FAILED:          { label: "失败",      color: "#bf0711", bg: "rgba(216,44,13,0.08)" },
   PAUSED:          { label: "已暂停",    color: "#b54708", bg: "#fff4e5" },
