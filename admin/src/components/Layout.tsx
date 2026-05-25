@@ -34,12 +34,12 @@ export default function Layout() {
     { key: "/shops", icon: <ShopOutlined />, label: <Link to="/shops">商店</Link>, ownerOnly: false },
     { key: "/translations", icon: <TranslationOutlined />, label: <Link to="/translations">翻译任务</Link>, ownerOnly: false },
     { key: "/usage", icon: <BarChartOutlined />, label: <Link to="/usage">用量统计</Link>, ownerOnly: false },
-    { key: "/subscriptions", icon: <CreditCardOutlined />, label: <Link to="/subscriptions">订阅统计</Link>, ownerOnly: true },
+    { key: "/subscriptions", icon: <CreditCardOutlined />, label: <Link to="/subscriptions">订阅统计</Link>, ownerOnly: false },
     { key: "/revenue", icon: <DollarOutlined />, label: <Link to="/revenue">收入分析</Link>, ownerOnly: true },
     { key: "/capabilities", icon: <RobotOutlined />, label: <Link to="/capabilities">Agent 能力</Link>, ownerOnly: false },
     { key: "/code-agent", icon: <RocketOutlined />, label: <Link to="/code-agent">AI Code Agent</Link>, ownerOnly: false },
     { key: "/agent-runs", icon: <MonitorOutlined />, label: <Link to="/agent-runs">AI 执行监控</Link>, ownerOnly: false },
-    { key: "/billing-rules", icon: <ControlOutlined />, label: <Link to="/billing-rules">计费规则</Link>, ownerOnly: true },
+    { key: "/billing-rules", icon: <ControlOutlined />, label: <Link to="/billing-rules">计费规则</Link>, ownerOnly: false },
   ];
 
   const menuItems = allMenuItems
