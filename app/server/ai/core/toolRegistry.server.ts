@@ -130,3 +130,6 @@ class ToolRegistry {
 }
 
 export const globalToolRegistry = new ToolRegistry();
+
+/** Atomic Skill 的语义别名，与 ToolDefinition 完全等价 */
+export type AtomicSkillDefinition = ToolDefinition;
