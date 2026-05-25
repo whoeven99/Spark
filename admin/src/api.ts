@@ -269,6 +269,56 @@ export function fetchBillingLogs(
   return apiFetch(`/subscriptions/${encodeURIComponent(shop)}/billing`);
 }
 
+export type BillingTrendPoint = {
+  period: string;
+  count: number;
+  creditTokens: number;
+  debitTokens: number;
+  shopCount: number;
+};
+
+export type BillingEvent = {
+  shop: string;
+  appName: string;
+  eventType: string;
+  planKey: string | null;
+  tokensDelta: number;
+  usedTokens: number;
+  createdAt: string;
+};
+
+export function fetchBillingTrend(params: {
+  period?: "daily" | "monthly";
+  startDate?: string;
+  endDate?: string;
+  eventType?: string;
+}): Promise<{ trend: BillingTrendPoint[]; eventTypes: string[] }> {
+  const query = new URLSearchParams();
+  if (params.period) query.set("period", params.period);
+  if (params.startDate) query.set("startDate", params.startDate);
+  if (params.endDate) query.set("endDate", params.endDate);
+  if (params.eventType) query.set("eventType", params.eventType);
+  return apiFetch(`/subscriptions/billing/trend?${query}`);
+}
+
+export function fetchBillingEvents(params: {
+  shop?: string;
+  eventType?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<{ events: BillingEvent[]; total: number }> {
+  const query = new URLSearchParams();
+  if (params.shop) query.set("shop", params.shop);
+  if (params.eventType) query.set("eventType", params.eventType);
+  if (params.startDate) query.set("startDate", params.startDate);
+  if (params.endDate) query.set("endDate", params.endDate);
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("pageSize", String(params.pageSize));
+  return apiFetch(`/subscriptions/billing/events?${query}`);
+}
+
 export function fetchRole(): Promise<{ role: AdminRole }> {
   return apiFetch("/auth/role");
 }
