@@ -236,6 +236,18 @@ export function BillingPage() {
   }, [basePlan, proPlan, paidPlansForInterval]);
   const sub = billing.subscription;
 
+  const subscriptionPeriodMeta =
+    sub?.status === "ACTIVE" && sub.currentPeriodEnd
+      ? [
+          `${t("billing.periodEnd")}: ${formatDate(sub.currentPeriodEnd, locale)}`,
+          sub.trialEndsAt
+            ? `${t("billing.trialEnds")}: ${formatDate(sub.trialEndsAt, locale)}`
+            : null,
+        ]
+          .filter((part): part is string => Boolean(part))
+          .join(" · ")
+      : null;
+
   const isTrialCurrent =
     sub?.status !== "ACTIVE" &&
     sub?.status !== "PENDING" &&
@@ -346,7 +358,12 @@ export function BillingPage() {
               <h2 className={styles.usageTitle}>{t("billing.quotaTitle")}</h2>
               <p className={styles.quotaSubtitle}>{t("billing.quotaSubtitle")}</p>
             </div>
-            <span className={styles.planBadge}>{currentPlanLabel}</span>
+            <div className={styles.usageHeaderBadge}>
+              <span className={styles.planBadge}>{currentPlanLabel}</span>
+              {subscriptionPeriodMeta ? (
+                <p className={styles.subscriptionMeta}>{subscriptionPeriodMeta}</p>
+              ) : null}
+            </div>
           </div>
           <div className={styles.usageCard}>
             <div className={styles.usageMain}>
@@ -389,17 +406,6 @@ export function BillingPage() {
                   style={{ width: `${usagePercent}%` }}
                 />
               </div>
-              {sub?.status === "ACTIVE" && sub.currentPeriodEnd ? (
-                <p className={styles.quotaResetRow}>
-                  <span className={styles.quotaResetIcon} aria-hidden>↻</span>
-                  <span>
-                    {t("billing.quotaResets")}{" "}{formatDate(sub.currentPeriodEnd, locale)}
-                    {sub.trialEndsAt
-                      ? ` · ${t("billing.trialEnds")}: ${formatDate(sub.trialEndsAt, locale)}`
-                      : null}
-                  </span>
-                </p>
-              ) : null}
               <div className={styles.poolChips} aria-label={t("billing.sectionUsage")}>
                 <div className={styles.poolChip}>
                   <span className={styles.poolChipLabel}>{t("billing.poolSubscription")}</span>

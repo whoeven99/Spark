@@ -36,6 +36,15 @@
   max-width: 36rem;
 }
 
+.usageHeaderBadge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.3rem;
+  flex-shrink: 0;
+  max-width: min(100%, 16rem);
+}
+
 .planBadge {
   flex-shrink: 0;
   padding: 0.3rem 0.8rem;
@@ -135,23 +144,6 @@
 .progressFillLow {
   background: linear-gradient(90deg, #fbbf24 0%, #f59e0b 60%, #d97706 100%);
   box-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
-}
-
-.quotaResetRow {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin: 0 0 0.85rem;
-  font-size: 0.75rem;
-  color: #6d7175;
-  line-height: 1.4;
-}
-
-.quotaResetIcon {
-  font-size: 0.875rem;
-  color: #00a67c;
-  flex-shrink: 0;
-  line-height: 1;
 }
 
 .poolChips {
@@ -783,11 +775,10 @@
 
 .subscriptionMeta {
   margin: 0;
-  flex: 1 1 16rem;
-  min-width: 0;
-  font-size: 0.8125rem;
-  line-height: 1.45;
+  font-size: 0.75rem;
+  line-height: 1.4;
   color: #6d7175;
+  text-align: right;
 }
 
 .devCancelBar {
