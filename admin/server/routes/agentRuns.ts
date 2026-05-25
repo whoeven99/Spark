@@ -98,6 +98,10 @@ agentRunsRouter.get("/stats", async (req, res) => {
       topErrors,
     });
   } catch (err) {
+    if (String(err).includes("Owner resource does not exist")) {
+      res.json({ note: "agent_runs 容器不存在或无访问权限", summary: null, byFeature: [], topErrors: [] });
+      return;
+    }
     console.error("[agent-runs/stats]", err);
     res.status(500).json({ error: String(err) });
   }
@@ -144,6 +148,10 @@ agentRunsRouter.get("/", async (req, res) => {
 
     res.json({ runs: resources });
   } catch (err) {
+    if (String(err).includes("Owner resource does not exist")) {
+      res.json({ runs: [], note: "agent_runs 容器不存在或无访问权限" });
+      return;
+    }
     console.error("[agent-runs]", err);
     res.status(500).json({ error: String(err) });
   }

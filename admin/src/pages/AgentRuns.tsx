@@ -70,7 +70,10 @@ export default function AgentRuns() {
     setStatsLoading(true);
     setStatsError("");
     fetchAgentRunStats(p)
-      .then((r) => setStats(r))
+      .then((r) => {
+        setStats(r);
+        if (r.note && !r.summary) setStatsError(r.note);
+      })
       .catch((e) => setStatsError(String(e)))
       .finally(() => setStatsLoading(false));
   }, []);
@@ -80,7 +83,10 @@ export default function AgentRuns() {
       setRunsLoading(true);
       setRunsError("");
       fetchAgentRuns({ period: p, feature, status, shop: shop || undefined, limit: 100 })
-        .then((r) => setRuns(r.runs))
+        .then((r) => {
+          setRuns(r.runs);
+          if (r.note && r.runs.length === 0) setRunsError(r.note);
+        })
         .catch((e) => setRunsError(String(e)))
         .finally(() => setRunsLoading(false));
     },
@@ -237,7 +243,7 @@ export default function AgentRuns() {
         </Button>
       </div>
 
-      {statsError && <Alert type="error" message={statsError} style={{ marginBottom: 16 }} />}
+      {statsError && <Alert type={statsError.includes("不存在") ? "warning" : "error"} message={statsError} style={{ marginBottom: 16 }} />}
 
       <Spin spinning={statsLoading}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 20 }}>
@@ -361,7 +367,7 @@ export default function AgentRuns() {
             onClear={() => { setShopFilter(""); applyRunFilters({ shop: "" }); }}
           />
         </div>
-        {runsError && <Alert type="error" message={runsError} style={{ marginBottom: 8 }} />}
+        {runsError && <Alert type={runsError.includes("不存在") ? "warning" : "error"} message={runsError} style={{ marginBottom: 8 }} />}
         <Spin spinning={runsLoading}>
           <Table
             dataSource={runs}

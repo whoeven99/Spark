@@ -52,6 +52,7 @@ export default function Translations() {
   const [jobs, setJobs] = useState<TranslationJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [errorLevel, setErrorLevel] = useState<"error" | "warning">("error");
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
   const [shopFilter, setShopFilter] = useState("");
   const [selected, setSelected] = useState<TranslationJob | null>(null);
@@ -60,13 +61,20 @@ export default function Translations() {
 
   const load = useCallback(() => {
     setLoading(true);
+    setError("");
     fetchTranslations({
       status: statusFilter,
       shop: shopFilter || undefined,
       limit: 200,
     })
-      .then((r) => setJobs(r.jobs))
-      .catch((e) => setError(String(e)))
+      .then((r) => {
+        setJobs(r.jobs);
+        if ((r as { note?: string }).note) {
+          setError((r as { note?: string }).note!);
+          setErrorLevel("warning");
+        }
+      })
+      .catch((e) => { setError(String(e)); setErrorLevel("error"); })
       .finally(() => setLoading(false));
   }, [statusFilter, shopFilter]);
 
@@ -177,12 +185,14 @@ export default function Translations() {
     );
   }, [jobs]);
 
-  if (error) return <Alert type="error" message={error} />;
+  if (error && errorLevel === "error") return <Alert type="error" message={error} />;
 
   return (
     <div>
-      {stuckJobs.length > 0 && (
-        <Alert
+      {error && errorLevel === "warning" && (
+        <Alert type="warning" message={error} style={{ marginBottom: 16 }} showIcon />
+      )}
+      {stuckJobs.length > 0 && (        <Alert
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
