@@ -26,10 +26,10 @@ function RequireOwner({ children }: { children: React.ReactNode }) {
       <Result
         status="403"
         title="无访问权限"
-        subTitle="该页面仅限 owner 账号查看"
+        subTitle="收入分析仅限 owner 账号查看"
         extra={
-          <Button type="primary" onClick={() => navigate("/translations")}>
-            前往翻译任务
+          <Button type="primary" onClick={() => navigate("/")}>
+            返回概览
           </Button>
         }
       />
@@ -61,12 +61,12 @@ export default function App() {
             <Route path="shops" element={<Shops />} />
             <Route path="translations" element={<Translations />} />
             <Route path="usage" element={<Usage />} />
-            <Route path="subscriptions" element={<RequireOwner><Subscriptions /></RequireOwner>} />
+            <Route path="subscriptions" element={<Subscriptions />} />
             <Route path="revenue" element={<RequireOwner><Revenue /></RequireOwner>} />
             <Route path="capabilities" element={<Capabilities />} />
             <Route path="code-agent" element={<CodeAgent />} />
             <Route path="agent-runs" element={<AgentRuns />} />
-            <Route path="billing-rules" element={<RequireOwner><BillingRules /></RequireOwner>} />
+            <Route path="billing-rules" element={<BillingRules />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
