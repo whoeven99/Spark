@@ -211,6 +211,64 @@ export function fetchCapabilities(): Promise<CapabilitiesData> {
   return apiFetch("/capabilities");
 }
 
+export type SubscriptionRow = {
+  shop: string;
+  appName: string;
+  planKey: string | null;
+  status: string;
+  billingInterval: string | null;
+  currentPeriodEnd: string | null;
+  subscriptionTokens: number;
+  purchasedTokens: number;
+  trialTokens: number;
+  usedTokens: number;
+  accountCreatedAt: string | null;
+};
+
+export type SubscriptionStats = {
+  total: number;
+  byStatus: Record<string, number>;
+  byInterval: Record<string, number>;
+  byPlan: { planKey: string | null; total: number; activeCount: number }[];
+  expiringSoon: number;
+};
+
+export type SubscriptionsData = {
+  stats: SubscriptionStats;
+  subscriptions: SubscriptionRow[];
+};
+
+export type BillingLogRow = {
+  shop: string;
+  appName: string;
+  eventType: string;
+  planKey: string | null;
+  tokensDelta: number;
+  usedTokens: number;
+  createdAt: string;
+};
+
+export function fetchSubscriptions(params?: {
+  search?: string;
+  status?: string;
+  plan?: string;
+  interval?: string;
+}): Promise<SubscriptionsData> {
+  const query = new URLSearchParams();
+  if (params?.search) query.set("search", params.search);
+  if (params?.status) query.set("status", params.status);
+  if (params?.plan) query.set("plan", params.plan);
+  if (params?.interval) query.set("interval", params.interval);
+  const qs = query.toString();
+  return apiFetch(`/subscriptions${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchBillingLogs(
+  shop: string,
+): Promise<{ billingLogs: BillingLogRow[] }> {
+  return apiFetch(`/subscriptions/${encodeURIComponent(shop)}/billing`);
+}
+
 export function fetchRole(): Promise<{ role: AdminRole }> {
   return apiFetch("/auth/role");
 }

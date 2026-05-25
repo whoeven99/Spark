@@ -8,6 +8,7 @@ import Shops from "./pages/Shops";
 import Translations from "./pages/Translations";
 import Usage from "./pages/Usage";
 import Capabilities from "./pages/Capabilities";
+import Subscriptions from "./pages/Subscriptions";
 import { useNavigate } from "react-router-dom";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -33,9 +34,8 @@ function RequireOwner({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// user role default landing: redirect / to /translations
+// user role default landing: redirect / to dashboard
 function IndexRedirect() {
-  if (!isOwner()) return <Navigate to="/translations" replace />;
   return <Dashboard />;
 }
 
@@ -54,9 +54,10 @@ export default function App() {
             }
           >
             <Route index element={<IndexRedirect />} />
-            <Route path="shops" element={<RequireOwner><Shops /></RequireOwner>} />
+            <Route path="shops" element={<Shops />} />
             <Route path="translations" element={<Translations />} />
-            <Route path="usage" element={<RequireOwner><Usage /></RequireOwner>} />
+            <Route path="usage" element={<Usage />} />
+            <Route path="subscriptions" element={<RequireOwner><Subscriptions /></RequireOwner>} />
             <Route path="capabilities" element={<Capabilities />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

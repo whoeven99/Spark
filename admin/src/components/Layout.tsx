@@ -8,6 +8,7 @@ import {
   BarChartOutlined,
   LogoutOutlined,
   RobotOutlined,
+  CreditCardOutlined,
 } from "@ant-design/icons";
 import { clearToken, isOwner, getRole } from "../api";
 
@@ -25,10 +26,11 @@ export default function Layout() {
   }
 
   const allMenuItems = [
-    { key: "/", icon: <DashboardOutlined />, label: <Link to="/">概览</Link>, ownerOnly: true },
-    { key: "/shops", icon: <ShopOutlined />, label: <Link to="/shops">商店</Link>, ownerOnly: true },
+    { key: "/", icon: <DashboardOutlined />, label: <Link to="/">概览</Link>, ownerOnly: false },
+    { key: "/shops", icon: <ShopOutlined />, label: <Link to="/shops">商店</Link>, ownerOnly: false },
     { key: "/translations", icon: <TranslationOutlined />, label: <Link to="/translations">翻译任务</Link>, ownerOnly: false },
-    { key: "/usage", icon: <BarChartOutlined />, label: <Link to="/usage">用量统计</Link>, ownerOnly: true },
+    { key: "/usage", icon: <BarChartOutlined />, label: <Link to="/usage">用量统计</Link>, ownerOnly: false },
+    { key: "/subscriptions", icon: <CreditCardOutlined />, label: <Link to="/subscriptions">订阅统计</Link>, ownerOnly: true },
     { key: "/capabilities", icon: <RobotOutlined />, label: <Link to="/capabilities">Agent 能力</Link>, ownerOnly: false },
   ];
 
