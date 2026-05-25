@@ -14,6 +14,7 @@ import { ChatMessageContent } from "../component/chat/ChatMessageContent";
 import { ChatStreamingSkeleton } from "../component/chat/ChatStreamingSkeleton";
 import { ChatInput } from "../component/chat/ChatInput";
 import { LanguageSelector } from "../component/common/LanguageSelector";
+import { DebugAgentSkillsCard } from "../component/debug/DebugAgentSkillsCard";
 import { ChatPageCredentialsChrome } from "./chat/ChatPageCredentialsChrome";
 import {
   buildInitialAssistantMessage,
@@ -43,6 +44,7 @@ const streamingAssistantBubbleShellStyle: CSSProperties = {
 export function ChatPage() {
   const shopify = useAppBridge();
   const { t, i18n } = useTranslation();
+  const isTestEnvironment = typeof window !== "undefined" && process.env.NODE_ENV !== "production";
   const firstMessage = buildInitialAssistantMessage(t);
   const quickPrompts = buildQuickPrompts(t);
   const generateDescriptionQuickPrompt = t("chat.quickPromptGenerateDescription");
@@ -351,6 +353,7 @@ export function ChatPage() {
             </s-list-item>
           </s-unordered-list>
         </PageSurface>
+        {isTestEnvironment && <DebugAgentSkillsCard />}
       </s-section>
 
       <ChatPageCredentialsChrome shopify={shopify} />
