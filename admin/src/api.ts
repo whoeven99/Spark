@@ -1,4 +1,7 @@
 const TOKEN_KEY = "spark_admin_token";
+const ROLE_KEY = "spark_admin_role";
+
+export type AdminRole = "owner" | "user";
 
 export function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) ?? "";
@@ -10,6 +13,19 @@ export function setToken(token: string): void {
 
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(ROLE_KEY);
+}
+
+export function getRole(): AdminRole | null {
+  return (localStorage.getItem(ROLE_KEY) as AdminRole) ?? null;
+}
+
+export function setRole(role: AdminRole): void {
+  localStorage.setItem(ROLE_KEY, role);
+}
+
+export function isOwner(): boolean {
+  return getRole() === "owner";
 }
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -193,4 +209,201 @@ export type CapabilitiesData = {
 
 export function fetchCapabilities(): Promise<CapabilitiesData> {
   return apiFetch("/capabilities");
+}
+
+export type SubscriptionRow = {
+  shop: string;
+  appName: string;
+  planKey: string | null;
+  status: string;
+  billingInterval: string | null;
+  currentPeriodEnd: string | null;
+  subscriptionTokens: number;
+  purchasedTokens: number;
+  trialTokens: number;
+  usedTokens: number;
+  accountCreatedAt: string | null;
+};
+
+export type SubscriptionStats = {
+  total: number;
+  byStatus: Record<string, number>;
+  byInterval: Record<string, number>;
+  byPlan: { planKey: string | null; total: number; activeCount: number }[];
+  expiringSoon: number;
+};
+
+export type SubscriptionsData = {
+  stats: SubscriptionStats;
+  subscriptions: SubscriptionRow[];
+};
+
+export type BillingLogRow = {
+  shop: string;
+  appName: string;
+  eventType: string;
+  planKey: string | null;
+  tokensDelta: number;
+  usedTokens: number;
+  createdAt: string;
+};
+
+export function fetchSubscriptions(params?: {
+  search?: string;
+  status?: string;
+  plan?: string;
+  interval?: string;
+}): Promise<SubscriptionsData> {
+  const query = new URLSearchParams();
+  if (params?.search) query.set("search", params.search);
+  if (params?.status) query.set("status", params.status);
+  if (params?.plan) query.set("plan", params.plan);
+  if (params?.interval) query.set("interval", params.interval);
+  const qs = query.toString();
+  return apiFetch(`/subscriptions${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchBillingLogs(
+  shop: string,
+): Promise<{ billingLogs: BillingLogRow[] }> {
+  return apiFetch(`/subscriptions/${encodeURIComponent(shop)}/billing`);
+}
+
+export type BillingTrendPoint = {
+  period: string;
+  count: number;
+  creditTokens: number;
+  debitTokens: number;
+  shopCount: number;
+};
+
+export type BillingEvent = {
+  shop: string;
+  appName: string;
+  eventType: string;
+  planKey: string | null;
+  tokensDelta: number;
+  usedTokens: number;
+  createdAt: string;
+};
+
+export function fetchBillingTrend(params: {
+  period?: "daily" | "monthly";
+  startDate?: string;
+  endDate?: string;
+  eventType?: string;
+}): Promise<{ trend: BillingTrendPoint[]; eventTypes: string[] }> {
+  const query = new URLSearchParams();
+  if (params.period) query.set("period", params.period);
+  if (params.startDate) query.set("startDate", params.startDate);
+  if (params.endDate) query.set("endDate", params.endDate);
+  if (params.eventType) query.set("eventType", params.eventType);
+  return apiFetch(`/subscriptions/billing/trend?${query}`);
+}
+
+export function fetchBillingEvents(params: {
+  shop?: string;
+  eventType?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<{ events: BillingEvent[]; total: number }> {
+  const query = new URLSearchParams();
+  if (params.shop) query.set("shop", params.shop);
+  if (params.eventType) query.set("eventType", params.eventType);
+  if (params.startDate) query.set("startDate", params.startDate);
+  if (params.endDate) query.set("endDate", params.endDate);
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("pageSize", String(params.pageSize));
+  return apiFetch(`/subscriptions/billing/events?${query}`);
+}
+
+// --- Revenue ---
+
+export type RevenuePlanRow = {
+  planKey: string;
+  priceAmount: number;
+  billingInterval: string | null;
+  kind: string;
+  activeCount: number;
+  planMrr: number;
+};
+
+export type RevenueTopShop = {
+  shop: string;
+  appName: string;
+  planKey: string;
+  priceAmount: number;
+  billingInterval: string | null;
+  shopMrr: number;
+};
+
+export type RevenueSummary = {
+  mrr: number;
+  arr: number;
+  payingCustomers: number;
+  arpu: number;
+  planBreakdown: RevenuePlanRow[];
+  topShops: RevenueTopShop[];
+};
+
+export type RevenueTrendPoint = {
+  period: string;
+  chargeCount: number;
+  shopCount: number;
+  totalRevenue: number;
+  subscriptionRevenue: number;
+  packRevenue: number;
+};
+
+export type RevenueCharge = {
+  shop: string;
+  appName: string;
+  eventType: string;
+  planKey: string;
+  priceAmount: number;
+  billingInterval: string | null;
+  kind: string;
+  createdAt: string;
+};
+
+export function fetchRevenueSummary(): Promise<RevenueSummary> {
+  return apiFetch("/revenue/summary");
+}
+
+export function fetchRevenueTrend(params: {
+  period?: "daily" | "monthly";
+  startDate?: string;
+  endDate?: string;
+  kind?: string;
+}): Promise<{ trend: RevenueTrendPoint[] }> {
+  const query = new URLSearchParams();
+  if (params.period) query.set("period", params.period);
+  if (params.startDate) query.set("startDate", params.startDate);
+  if (params.endDate) query.set("endDate", params.endDate);
+  if (params.kind) query.set("kind", params.kind);
+  return apiFetch(`/revenue/trend?${query}`);
+}
+
+export function fetchRevenueCharges(params: {
+  shop?: string;
+  startDate?: string;
+  endDate?: string;
+  kind?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<{ charges: RevenueCharge[]; total: number }> {
+  const query = new URLSearchParams();
+  if (params.shop) query.set("shop", params.shop);
+  if (params.startDate) query.set("startDate", params.startDate);
+  if (params.endDate) query.set("endDate", params.endDate);
+  if (params.kind) query.set("kind", params.kind);
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("pageSize", String(params.pageSize));
+  return apiFetch(`/revenue/charges?${query}`);
+}
+
+export function fetchRole(): Promise<{ role: AdminRole }> {
+  return apiFetch("/auth/role");
 }
