@@ -18,7 +18,7 @@ billingRulesRouter.get("/", async (_req, res) => {
       displayName: r.displayName as string,
       multiplier: Number(r.multiplier),
       baseTokenCost: r.baseTokenCost != null ? Number(r.baseTokenCost) : null,
-      enabled: r.enabled === 1 || r.enabled === true,
+      enabled: Number(r.enabled) !== 0,
       createdAt: r.createdAt as string,
       updatedAt: r.updatedAt as string,
     }));
@@ -57,7 +57,7 @@ billingRulesRouter.post("/", requireOwner, async (req, res) => {
 billingRulesRouter.put("/:ruleKey", requireOwner, async (req, res) => {
   try {
     const db = getDb();
-    const { ruleKey } = req.params;
+    const ruleKey = String(req.params.ruleKey);
     const { displayName, multiplier, baseTokenCost, enabled } = req.body as Record<string, unknown>;
     const sets: string[] = [];
     const args: (string | number | null)[] = [];
@@ -87,7 +87,7 @@ billingRulesRouter.put("/:ruleKey", requireOwner, async (req, res) => {
 billingRulesRouter.delete("/:ruleKey", requireOwner, async (req, res) => {
   try {
     const db = getDb();
-    const { ruleKey } = req.params;
+    const ruleKey = String(req.params.ruleKey);
     await db.execute({ sql: "DELETE FROM TokenBillingRule WHERE ruleKey = ?", args: [ruleKey] });
     res.json({ ok: true });
   } catch (err) {
