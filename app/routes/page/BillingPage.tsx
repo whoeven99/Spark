@@ -360,7 +360,6 @@ export function BillingPage() {
               <p className={styles.quotaSubtitle}>{t("billing.quotaSubtitle")}</p>
             </div>
             <div className={styles.usageHeaderBadge}>
-              <span className={styles.planBadge}>{currentPlanLabel}</span>
               {showSubscriptionPeriodMeta && sub ? (
                 <div className={styles.subscriptionMetaList}>
                   <span className={styles.subscriptionMetaItem}>
@@ -375,6 +374,7 @@ export function BillingPage() {
                   ) : null}
                 </div>
               ) : null}
+              <span className={styles.planBadge}>{currentPlanLabel}</span>
             </div>
           </div>
           <div className={styles.usageCard}>
