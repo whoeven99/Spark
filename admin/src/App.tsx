@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Shops from "./pages/Shops";
 import Translations from "./pages/Translations";
 import Usage from "./pages/Usage";
+import Capabilities from "./pages/Capabilities";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   return getToken() ? <>{children}</> : <Navigate to="/login" replace />;
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="shops" element={<Shops />} />
             <Route path="translations" element={<Translations />} />
             <Route path="usage" element={<Usage />} />
+            <Route path="capabilities" element={<Capabilities />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

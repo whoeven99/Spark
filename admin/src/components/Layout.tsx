@@ -7,6 +7,7 @@ import {
   TranslationOutlined,
   BarChartOutlined,
   LogoutOutlined,
+  RobotOutlined,
 } from "@ant-design/icons";
 import { clearToken } from "../api";
 
@@ -17,6 +18,7 @@ const menuItems = [
   { key: "/shops", icon: <ShopOutlined />, label: <Link to="/shops">商店</Link> },
   { key: "/translations", icon: <TranslationOutlined />, label: <Link to="/translations">翻译任务</Link> },
   { key: "/usage", icon: <BarChartOutlined />, label: <Link to="/usage">用量统计</Link> },
+  { key: "/capabilities", icon: <RobotOutlined />, label: <Link to="/capabilities">Agent 能力</Link> },
 ];
 
 export default function Layout() {

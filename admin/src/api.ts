@@ -156,3 +156,41 @@ export function fetchUsageHistory(
 ): Promise<{ history: unknown[] }> {
   return apiFetch(`/usage/${encodeURIComponent(shop)}/history`);
 }
+
+export type ToolParam = { name: string; type: string; desc: string };
+export type ToolDef = {
+  name: string;
+  displayName: string;
+  description: string;
+  params: ToolParam[];
+};
+export type SkillDef = {
+  name: string;
+  displayName: string;
+  description: string;
+  category: string;
+  conditional: boolean;
+  conditionalNote?: string;
+  tools: ToolDef[];
+  emailTemplates?: string[];
+};
+export type PlaybookDef = {
+  name: string;
+  displayName: string;
+  description: string;
+  category: string;
+  triggerDescription: string;
+  steps: readonly string[];
+  conditional: boolean;
+  anomalyRules?: string[];
+  completenessChecks?: string[];
+};
+export type CapabilitiesData = {
+  stats: { skillCount: number; toolCount: number; playbookCount: number };
+  skills: SkillDef[];
+  playbooks: PlaybookDef[];
+};
+
+export function fetchCapabilities(): Promise<CapabilitiesData> {
+  return apiFetch("/capabilities");
+}

@@ -10,6 +10,7 @@ import { overviewRouter } from "./routes/overview.js";
 import { shopsRouter } from "./routes/shops.js";
 import { translationsRouter } from "./routes/translations.js";
 import { usageRouter } from "./routes/usage.js";
+import { capabilitiesRouter } from "./routes/capabilities.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 3099);
@@ -32,6 +33,7 @@ app.use("/api/overview", authMiddleware, overviewRouter);
 app.use("/api/shops", authMiddleware, shopsRouter);
 app.use("/api/translations", authMiddleware, translationsRouter);
 app.use("/api/usage", authMiddleware, usageRouter);
+app.use("/api/capabilities", authMiddleware, capabilitiesRouter);
 
 // Serve built frontend in production
 if (IS_PROD) {
