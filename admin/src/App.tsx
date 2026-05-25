@@ -9,6 +9,8 @@ import Translations from "./pages/Translations";
 import Usage from "./pages/Usage";
 import Capabilities from "./pages/Capabilities";
 import Subscriptions from "./pages/Subscriptions";
+import Revenue from "./pages/Revenue";
+import CodeAgent from "./pages/CodeAgent";
 import { useNavigate } from "react-router-dom";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -58,7 +60,9 @@ export default function App() {
             <Route path="translations" element={<Translations />} />
             <Route path="usage" element={<Usage />} />
             <Route path="subscriptions" element={<RequireOwner><Subscriptions /></RequireOwner>} />
+            <Route path="revenue" element={<RequireOwner><Revenue /></RequireOwner>} />
             <Route path="capabilities" element={<Capabilities />} />
+            <Route path="code-agent" element={<CodeAgent />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

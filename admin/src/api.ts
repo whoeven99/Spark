@@ -319,6 +319,91 @@ export function fetchBillingEvents(params: {
   return apiFetch(`/subscriptions/billing/events?${query}`);
 }
 
+// --- Revenue ---
+
+export type RevenuePlanRow = {
+  planKey: string;
+  priceAmount: number;
+  billingInterval: string | null;
+  kind: string;
+  activeCount: number;
+  planMrr: number;
+};
+
+export type RevenueTopShop = {
+  shop: string;
+  appName: string;
+  planKey: string;
+  priceAmount: number;
+  billingInterval: string | null;
+  shopMrr: number;
+};
+
+export type RevenueSummary = {
+  mrr: number;
+  arr: number;
+  payingCustomers: number;
+  arpu: number;
+  planBreakdown: RevenuePlanRow[];
+  topShops: RevenueTopShop[];
+};
+
+export type RevenueTrendPoint = {
+  period: string;
+  chargeCount: number;
+  shopCount: number;
+  totalRevenue: number;
+  subscriptionRevenue: number;
+  packRevenue: number;
+};
+
+export type RevenueCharge = {
+  shop: string;
+  appName: string;
+  eventType: string;
+  planKey: string;
+  priceAmount: number;
+  billingInterval: string | null;
+  kind: string;
+  createdAt: string;
+};
+
+export function fetchRevenueSummary(): Promise<RevenueSummary> {
+  return apiFetch("/revenue/summary");
+}
+
+export function fetchRevenueTrend(params: {
+  period?: "daily" | "monthly";
+  startDate?: string;
+  endDate?: string;
+  kind?: string;
+}): Promise<{ trend: RevenueTrendPoint[] }> {
+  const query = new URLSearchParams();
+  if (params.period) query.set("period", params.period);
+  if (params.startDate) query.set("startDate", params.startDate);
+  if (params.endDate) query.set("endDate", params.endDate);
+  if (params.kind) query.set("kind", params.kind);
+  return apiFetch(`/revenue/trend?${query}`);
+}
+
+export function fetchRevenueCharges(params: {
+  shop?: string;
+  startDate?: string;
+  endDate?: string;
+  kind?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<{ charges: RevenueCharge[]; total: number }> {
+  const query = new URLSearchParams();
+  if (params.shop) query.set("shop", params.shop);
+  if (params.startDate) query.set("startDate", params.startDate);
+  if (params.endDate) query.set("endDate", params.endDate);
+  if (params.kind) query.set("kind", params.kind);
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("pageSize", String(params.pageSize));
+  return apiFetch(`/revenue/charges?${query}`);
+}
+
 export function fetchRole(): Promise<{ role: AdminRole }> {
   return apiFetch("/auth/role");
 }
