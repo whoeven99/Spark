@@ -41,6 +41,16 @@ function formatDate(iso: string | null, locale: string): string {
   });
 }
 
+/** 计费页徽章区：更短的日期，避免一行过长换行 */
+function formatBillingMetaDate(iso: string | null, locale: string): string {
+  if (!iso) return EMPTY;
+  return new Date(iso).toLocaleDateString(locale, {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  });
+}
+
 function PlanFeatureList({ items }: { items: string[] }) {
   return (
     <ul className={styles.planFeatures}>
@@ -236,6 +246,9 @@ export function BillingPage() {
   }, [basePlan, proPlan, paidPlansForInterval]);
   const sub = billing.subscription;
 
+  const showSubscriptionPeriodMeta =
+    sub?.status === "ACTIVE" && !!sub.currentPeriodEnd;
+
   const isTrialCurrent =
     sub?.status !== "ACTIVE" &&
     sub?.status !== "PENDING" &&
@@ -346,7 +359,23 @@ export function BillingPage() {
               <h2 className={styles.usageTitle}>{t("billing.quotaTitle")}</h2>
               <p className={styles.quotaSubtitle}>{t("billing.quotaSubtitle")}</p>
             </div>
-            <span className={styles.planBadge}>{currentPlanLabel}</span>
+            <div className={styles.usageHeaderBadge}>
+              {showSubscriptionPeriodMeta && sub ? (
+                <div className={styles.subscriptionMetaList}>
+                  <span className={styles.subscriptionMetaItem}>
+                    {t("billing.periodEnd")}:{" "}
+                    {formatBillingMetaDate(sub.currentPeriodEnd, locale)}
+                  </span>
+                  {sub.trialEndsAt ? (
+                    <span className={styles.subscriptionMetaItem}>
+                      {t("billing.trialEnds")}:{" "}
+                      {formatBillingMetaDate(sub.trialEndsAt, locale)}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+              <span className={styles.planBadge}>{currentPlanLabel}</span>
+            </div>
           </div>
           <div className={styles.usageCard}>
             <div className={styles.usageMain}>
@@ -389,17 +418,6 @@ export function BillingPage() {
                   style={{ width: `${usagePercent}%` }}
                 />
               </div>
-              {sub?.status === "ACTIVE" && sub.currentPeriodEnd ? (
-                <p className={styles.quotaResetRow}>
-                  <span className={styles.quotaResetIcon} aria-hidden>↻</span>
-                  <span>
-                    {t("billing.quotaResets")}{" "}{formatDate(sub.currentPeriodEnd, locale)}
-                    {sub.trialEndsAt
-                      ? ` · ${t("billing.trialEnds")}: ${formatDate(sub.trialEndsAt, locale)}`
-                      : null}
-                  </span>
-                </p>
-              ) : null}
               <div className={styles.poolChips} aria-label={t("billing.sectionUsage")}>
                 <div className={styles.poolChip}>
                   <span className={styles.poolChipLabel}>{t("billing.poolSubscription")}</span>
