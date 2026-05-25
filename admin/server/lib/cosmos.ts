@@ -22,6 +22,12 @@ export function getTranslationJobsContainer(): Container {
   return getClient().database(db).container(container);
 }
 
+export function getAgentRunsContainer(): Container {
+  const db = getEnv("COSMOS_AGENT_RUNS_DATABASE_ID", "spark_ops");
+  const container = getEnv("COSMOS_AGENT_RUNS_CONTAINER", "agent_runs");
+  return getClient().database(db).container(container);
+}
+
 export function isCosmosConfigured(): boolean {
   return Boolean(
     process.env.COSMOS_ENDPOINT?.trim() && process.env.COSMOS_KEY?.trim(),

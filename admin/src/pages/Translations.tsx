@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   Table,
   Select,
@@ -170,10 +170,35 @@ export default function Translations() {
     },
   ];
 
+  const stuckJobs = useMemo(() => {
+    const cutoff = Date.now() - 60 * 60 * 1000;
+    return jobs.filter(
+      (j) => ACTIVE_STATUSES.has(j.status) && new Date(j.updatedAt).getTime() < cutoff,
+    );
+  }, [jobs]);
+
   if (error) return <Alert type="error" message={error} />;
 
   return (
     <div>
+      {stuckJobs.length > 0 && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={`发现 ${stuckJobs.length} 个卡住的任务（超过 1 小时未更新）`}
+          description={
+            <ul style={{ margin: "4px 0 0 0", paddingLeft: 16 }}>
+              {stuckJobs.map((j) => (
+                <li key={j.id} style={{ fontSize: 12 }}>
+                  <strong>{j.shopName}</strong> — {j.source}→{j.target} — 状态: {j.status} — 最后更新:{" "}
+                  {new Date(j.updatedAt).toLocaleString("zh-CN")}
+                </li>
+              ))}
+            </ul>
+          }
+        />
+      )}
       <div
         style={{
           display: "flex",

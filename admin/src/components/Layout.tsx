@@ -11,6 +11,8 @@ import {
   CreditCardOutlined,
   DollarOutlined,
   RocketOutlined,
+  MonitorOutlined,
+  ControlOutlined,
 } from "@ant-design/icons";
 import { clearToken, isOwner, getRole } from "../api";
 
@@ -36,6 +38,8 @@ export default function Layout() {
     { key: "/revenue", icon: <DollarOutlined />, label: <Link to="/revenue">收入分析</Link>, ownerOnly: true },
     { key: "/capabilities", icon: <RobotOutlined />, label: <Link to="/capabilities">Agent 能力</Link>, ownerOnly: false },
     { key: "/code-agent", icon: <RocketOutlined />, label: <Link to="/code-agent">AI Code Agent</Link>, ownerOnly: false },
+    { key: "/agent-runs", icon: <MonitorOutlined />, label: <Link to="/agent-runs">AI 执行监控</Link>, ownerOnly: false },
+    { key: "/billing-rules", icon: <ControlOutlined />, label: <Link to="/billing-rules">计费规则</Link>, ownerOnly: true },
   ];
 
   const menuItems = allMenuItems

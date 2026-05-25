@@ -15,6 +15,8 @@ import { capabilitiesRouter } from "./routes/capabilities.js";
 import { subscriptionsRouter } from "./routes/subscriptions.js";
 import { revenueRouter } from "./routes/revenue.js";
 import { codeAgentRouter } from "./routes/codeAgent.js";
+import { agentRunsRouter } from "./routes/agentRuns.js";
+import { billingRulesRouter } from "./routes/billingRules.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 3099);
@@ -44,6 +46,8 @@ app.use("/api/capabilities", authMiddleware, capabilitiesRouter);
 app.use("/api/subscriptions", authMiddleware, subscriptionsRouter);
 app.use("/api/revenue", authMiddleware, revenueRouter);
 app.use("/api/code-agent", authMiddleware, codeAgentRouter);
+app.use("/api/agent-runs", authMiddleware, agentRunsRouter);
+app.use("/api/billing-rules", authMiddleware, billingRulesRouter);
 
 // Serve built frontend in production
 if (IS_PROD) {
