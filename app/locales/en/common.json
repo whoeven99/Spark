@@ -169,6 +169,8 @@
     "quickPromptCreateTranslation": "Create translation task",
     "quickPromptGenerateDescription": "Generate product copy",
     "quickPromptPictureTranslate": "Picture translation",
+    "quickPromptShopHealthCheck": "Shop health check",
+    "quickPromptProductLaunchPipeline": "Product launch pipeline",
     "intro": "Ask directly for store insights, ads/logistics authorization guidance, and operation suggestions.",
     "assistantOnline": "AI Assistant online",
     "quickQuestions": "Quick questions",

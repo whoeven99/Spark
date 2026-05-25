@@ -121,6 +121,8 @@
     "quickPromptCreateTranslation": "翻訳タスクを作成",
     "quickPromptGenerateDescription": "商品説明を生成",
     "quickPromptPictureTranslate": "画像翻訳",
+    "quickPromptShopHealthCheck": "店舗健診",
+    "quickPromptProductLaunchPipeline": "新商品投入パイプライン",
     "intro": "店舗分析、広告/物流の認証ガイド、運用提案を直接質問できます。",
     "assistantOnline": "AI アシスタント稼働中",
     "quickQuestions": "クイック質問",
