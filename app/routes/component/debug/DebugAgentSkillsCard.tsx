@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { CSSProperties } from "react";
+import { useState, useEffect } from "react";
 import { pageColorTokens } from "../../page/pageUiStyles";
 
 const skillsInfo = [
@@ -80,6 +81,16 @@ const skillNameStyle: CSSProperties = {
 
 export function DebugAgentSkillsCard() {
   const { t } = useTranslation();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    console.log("[DebugAgentSkillsCard] ✅ Component mounted and rendering", skillsInfo.length, "skills");
+  }, []);
+
+  if (!isMounted) {
+    return null;
+  }
 
   return (
     <div style={cardStyle}>

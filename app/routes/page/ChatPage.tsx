@@ -44,7 +44,16 @@ const streamingAssistantBubbleShellStyle: CSSProperties = {
 export function ChatPage() {
   const shopify = useAppBridge();
   const { t, i18n } = useTranslation();
-  const isTestEnvironment = typeof window !== "undefined" && process.env.NODE_ENV !== "production";
+  // 通过 URL 参数 ?debug 或 NODE_ENV 来判断是否为测试环境
+  const isTestEnvironment =
+    typeof window !== "undefined" && (
+      process.env.NODE_ENV !== "production" ||
+      new URLSearchParams(window.location.search).has("debug")
+    );
+
+  if (typeof window !== "undefined" && isTestEnvironment) {
+    console.log("[ChatPage] Test environment detected, debug card should render");
+  }
   const firstMessage = buildInitialAssistantMessage(t);
   const quickPrompts = buildQuickPrompts(t);
   const generateDescriptionQuickPrompt = t("chat.quickPromptGenerateDescription");
