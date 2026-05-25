@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { SqlParameter } from "@azure/cosmos";
 import { getTranslationJobsContainer, isCosmosConfigured } from "../lib/cosmos.js";
 import type { TranslationV4Job } from "../types/translation.js";
 
@@ -18,7 +19,7 @@ translationsRouter.get("/", async (req, res) => {
 
     let query =
       "SELECT c.id, c.shopName, c.source, c.target, c.modules, c.status, c.aiModel, c.metrics, c.errorMessage, c.errorStage, c.createdAt, c.updatedAt, c.claimedBy FROM c";
-    const params: { name: string; value: unknown }[] = [];
+    const params: SqlParameter[] = [];
     const conditions: string[] = [];
 
     if (status) {
