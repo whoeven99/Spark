@@ -1,0 +1,44 @@
+{
+  "name": "spark-admin",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "tsx watch --tsconfig tsconfig.server.json server/index.ts",
+    "dev:client": "vite",
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "start": "node dist/server/index.js"
+  },
+  "dependencies": {
+    "@azure/cosmos": "^4.9.3",
+    "@libsql/client": "^0.17.3",
+    "@prisma/adapter-libsql": "^6.19.3",
+    "@prisma/client": "^6.16.3",
+    "antd": "^5.22.7",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "ioredis": "^5.6.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "recharts": "^2.15.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.1",
+    "@types/node": "^22.10.10",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.11"
+  }
+}
