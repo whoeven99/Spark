@@ -137,11 +137,28 @@
   box-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
 }
 
+.quotaResetRow {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.85rem;
+  font-size: 0.75rem;
+  color: #6d7175;
+  line-height: 1.4;
+}
+
+.quotaResetIcon {
+  font-size: 0.875rem;
+  color: #00a67c;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
 .poolChips {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
-  margin-top: 0.85rem;
+  margin-top: 0;
 }
 
 .poolChip {

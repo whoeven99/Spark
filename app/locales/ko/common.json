@@ -97,6 +97,7 @@
     "lowBalanceWarning": "Token이 부족합니다. 결제 페이지에서 구독하거나 팩을 구매하세요.",
     "openBillingPage": "요금제로",
     "periodEnd": "현재 기간 종료",
+    "quotaResets": "할당량 초기화",
     "trialEnds": "체험 종료",
     "intervalMonthly": "월간",
     "intervalAnnual": "연간",
