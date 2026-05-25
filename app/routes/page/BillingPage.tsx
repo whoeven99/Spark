@@ -389,6 +389,17 @@ export function BillingPage() {
                   style={{ width: `${usagePercent}%` }}
                 />
               </div>
+              {sub?.status === "ACTIVE" && sub.currentPeriodEnd ? (
+                <p className={styles.quotaResetRow}>
+                  <span className={styles.quotaResetIcon} aria-hidden>↻</span>
+                  <span>
+                    {t("billing.quotaResets")}{" "}{formatDate(sub.currentPeriodEnd, locale)}
+                    {sub.trialEndsAt
+                      ? ` · ${t("billing.trialEnds")}: ${formatDate(sub.trialEndsAt, locale)}`
+                      : null}
+                  </span>
+                </p>
+              ) : null}
               <div className={styles.poolChips} aria-label={t("billing.sectionUsage")}>
                 <div className={styles.poolChip}>
                   <span className={styles.poolChipLabel}>{t("billing.poolSubscription")}</span>
@@ -412,20 +423,10 @@ export function BillingPage() {
               <p className={styles.quotaFootnote}>{t("billing.planBenefitsFootnote")}</p>
             </div>
           </div>
-          {sub?.status === "ACTIVE" || showDevCancelSubscription ? (
+          {showDevCancelSubscription ? (
             <div className={styles.quotaFooter}>
-              {sub?.status === "ACTIVE" ? (
-                <p className={styles.subscriptionMeta}>
-                  {t("billing.periodEnd")}: {formatDate(sub.currentPeriodEnd, locale)}
-                  {sub.trialEndsAt
-                    ? ` \u00b7 ${t("billing.trialEnds")}: ${formatDate(sub.trialEndsAt, locale)}`
-                    : null}
-                </p>
-              ) : (
-                <span className={styles.quotaFooterSpacer} aria-hidden />
-              )}
-              {showDevCancelSubscription ? (
-                <div className={styles.devCancelBar}>
+              <span className={styles.quotaFooterSpacer} aria-hidden />
+              <div className={styles.devCancelBar}>
                   <span className={styles.devCancelBadge}>{t("billing.devEnvBadge")}</span>
                   <p className={styles.devCancelHint}>{t("billing.devCancelHint")}</p>
                   <Form method="post" className={styles.devCancelForm}>
@@ -441,7 +442,6 @@ export function BillingPage() {
                     </button>
                   </Form>
                 </div>
-              ) : null}
             </div>
           ) : null}
         </section>

@@ -97,6 +97,7 @@
     "lowBalanceWarning": "Token が不足しています。課金ページで契約または購入してください。",
     "openBillingPage": "プランへ",
     "periodEnd": "現在の期間終了",
+    "quotaResets": "リセット日",
     "trialEnds": "トライアル終了",
     "intervalMonthly": "月額",
     "intervalAnnual": "年額",

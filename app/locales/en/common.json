@@ -106,6 +106,7 @@
     "lowBalanceWarning": "Insufficient tokens. Please subscribe or purchase a token pack on the plans page.",
     "openBillingPage": "Go to plans",
     "periodEnd": "Current period ends",
+    "quotaResets": "Resets on",
     "trialEnds": "Trial ends",
     "intervalMonthly": "Monthly",
     "intervalAnnual": "Annual",

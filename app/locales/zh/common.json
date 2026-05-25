@@ -106,6 +106,7 @@
     "lowBalanceWarning": "Token 不足或未订阅，请前往套餐页开通或购包。",
     "openBillingPage": "前往套餐页",
     "periodEnd": "当前周期至",
+    "quotaResets": "额度重置于",
     "trialEnds": "试用截止",
     "intervalMonthly": "月付",
     "intervalAnnual": "年付",
