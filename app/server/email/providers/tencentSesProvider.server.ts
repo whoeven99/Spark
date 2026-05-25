@@ -85,9 +85,11 @@ export function createTencentSesProvider(
         },
       };
 
+      const ccForLog = cc?.length ? cc.join(",") : "(none)";
+
       logEmailInfo(
         EMAIL_LOG.request,
-        `templateId=${request.templateId} to=${request.to} subjectLen=${request.subject.length}`,
+        `templateId=${request.templateId} from=${request.from} to=${request.to} cc=${ccForLog} subjectLen=${request.subject.length}`,
       );
       logEmailInfo(
         EMAIL_LOG.tencent,

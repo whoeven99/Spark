@@ -1,5 +1,6 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { isEmailSendReady, loadEmailConfig } from "../../../email/config/emailConfig.server";
+import { buildOpsRoutingLog } from "../../../email/emailOpsDebugLog.server";
 import { sendTemplateEmail } from "../../../email/services/emailService.server";
 import type { ToolDefinition } from "../../core/toolRegistry.server";
 import {
@@ -45,8 +46,9 @@ export function createSendTemplateEmailTool(): DynamicStructuredTool {
       }
 
       const { to, subject, templateId, templateData } = parsed.data;
+      const routing = buildOpsRoutingLog(to);
       console.info(
-        `${SEND_TEMPLATE_EMAIL_LOG_PREFIX} start requestId=${requestId} templateId=${templateId} to=${to}`,
+        `${SEND_TEMPLATE_EMAIL_LOG_PREFIX} start requestId=${requestId} templateId=${templateId} from=${routing.from} to=${routing.to} cc=${routing.cc}`,
       );
 
       const result = await sendTemplateEmail({
@@ -57,7 +59,7 @@ export function createSendTemplateEmailTool(): DynamicStructuredTool {
       });
 
       console.info(
-        `${SEND_TEMPLATE_EMAIL_LOG_PREFIX} done requestId=${requestId} ok=${String(result.ok)}`,
+        `${SEND_TEMPLATE_EMAIL_LOG_PREFIX} done requestId=${requestId} ok=${String(result.ok)} from=${routing.from} to=${routing.to} cc=${routing.cc}`,
       );
       return formatToolResult(result);
     },

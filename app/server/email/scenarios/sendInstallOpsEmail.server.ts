@@ -8,6 +8,7 @@ import { buildInstallOpsTemplateData } from "../templates/installOpsTemplateData
 import type { UninstallSessionSnapshot } from "../../commonEventLog/loadSessionSnapshotForUninstall.server";
 import type { ShopBasicInfo } from "../../shopify/fetchShopBasicInfo.server";
 import {
+  buildOpsRoutingLog,
   logEmailOpsAfterSend,
   logEmailOpsPreflight,
 } from "../emailOpsDebugLog.server";
@@ -51,8 +52,9 @@ export async function sendInstallOpsEmail(
     return skipped;
   }
 
+  const routing = buildOpsRoutingLog(to);
   console.info(
-    `${LOG} destination shop=${params.shop} to=${to} source=${params.sessionSnapshot?.email?.trim() ? "session" : "ops_fallback"}`,
+    `${LOG} destination shop=${params.shop} from=${routing.from} to=${routing.to} cc=${routing.cc} source=${params.sessionSnapshot?.email?.trim() ? "session" : "ops_fallback"}`,
   );
 
   const templateData = buildInstallOpsTemplateData({
@@ -78,6 +80,6 @@ export async function sendInstallOpsEmail(
     deps,
   );
 
-  logEmailOpsAfterSend(LOG, params.shop, result);
+  logEmailOpsAfterSend(LOG, params.shop, result, routing);
   return result;
 }

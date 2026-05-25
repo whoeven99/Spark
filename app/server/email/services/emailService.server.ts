@@ -40,6 +40,14 @@ function resolveFrom(
   return config.tencent?.fromEmail ?? TENCENT_FROM_EMAIL;
 }
 
+function formatCcForLog(
+  cc: string[] | undefined,
+  config: EmailConfig,
+): string {
+  const list = cc?.length ? cc : (config.tencent?.cc ?? []);
+  return list.length > 0 ? list.join(",") : "(none)";
+}
+
 /**
  * 发送腾讯 SES 模板邮件。业务代码应调用此函数，禁止直接使用 Provider。
  */
@@ -49,10 +57,6 @@ export async function sendTemplateEmail(
 ): Promise<SendEmailResult> {
   const config = deps.config ?? loadEmailConfig();
 
-  logEmailInfo(
-    EMAIL_LOG.service,
-    `sendTemplateEmail start templateId=${params.templateId} to=${params.to}`,
-  );
 
   if (!config.enabled) {
     return {
@@ -111,18 +115,31 @@ export async function sendTemplateEmail(
     };
   }
 
+  const request = parsed.data as SendEmailRequest;
+  const ccForLog = formatCcForLog(request.cc, config);
+
+  logEmailInfo(
+    EMAIL_LOG.service,
+    `sendTemplateEmail start templateId=${request.templateId} from=${request.from} to=${request.to} cc=${ccForLog}`,
+  );
+
   try {
-    const result = await provider.send(parsed.data as SendEmailRequest);
+    const result = await provider.send(request);
     if (result.ok) {
       logEmailInfo(
         EMAIL_LOG.service,
-        `sendTemplateEmail ok requestId=${result.requestId} provider=${result.provider}`,
+        `sendTemplateEmail ok requestId=${result.requestId} provider=${result.provider} from=${request.from} to=${request.to} cc=${ccForLog}`,
       );
     } else {
       logEmailError(
         EMAIL_LOG.service,
         "sendTemplateEmail provider error",
         result.error,
+        {
+          from: request.from,
+          to: request.to,
+          templateId: request.templateId,
+        },
       );
     }
     return result;

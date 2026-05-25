@@ -6,16 +6,24 @@ import {
   resolveOpsNotifyEmail,
   resolveOpsUninstallTemplateId,
 } from "./opsNotifyEmail.server";
+import { TENCENT_FROM_EMAIL } from "./templates/emailTemplates.server";
 import type { SendEmailResult } from "./types/sendEmailResult";
 
-function maskEmail(email: string): string {
-  const trimmed = email.trim();
-  const at = trimmed.indexOf("@");
-  if (at <= 0) return "(invalid)";
-  const local = trimmed.slice(0, at);
-  const domain = trimmed.slice(at + 1);
-  const visible = local.slice(0, Math.min(2, local.length));
-  return `${visible}***@${domain}`;
+export type EmailOpsRoutingLog = {
+  from: string;
+  to: string;
+  cc?: string;
+};
+
+/** 运营邮件发信路由（完整邮箱，供 after-send 日志） */
+export function buildOpsRoutingLog(to: string): EmailOpsRoutingLog {
+  const config = loadEmailConfig();
+  const cc = config.tencent?.cc ?? [];
+  return {
+    from: config.tencent?.fromEmail ?? TENCENT_FROM_EMAIL,
+    to,
+    cc: cc.length > 0 ? cc.join(",") : "(none)",
+  };
 }
 
 export function logEmailOpsPreflight(
@@ -33,7 +41,9 @@ export function logEmailOpsPreflight(
       emailProvider: config.provider,
       emailSendReady: isEmailSendReady(config),
       hasTencentCredentials: config.tencent != null,
-      opsNotifyRecipient: recipient ? maskEmail(recipient) : null,
+      opsNotifyRecipient: recipient ?? null,
+      defaultFromEmail: config.tencent?.fromEmail ?? null,
+      defaultCc: config.tencent?.cc?.join(",") ?? null,
       opsUninstallTemplateId: uninstallTemplateId,
     })}`,
   );
@@ -43,22 +53,29 @@ export function logEmailOpsAfterSend(
   logPrefix: string,
   shop: string,
   result: SendEmailResult | { ok: false; skipped: true; reason: string },
+  routing?: EmailOpsRoutingLog,
 ): void {
+  const routingSuffix = routing
+    ? ` from=${routing.from} to=${routing.to} cc=${routing.cc ?? "(none)"}`
+    : "";
+
   if ("skipped" in result && result.skipped) {
     console.info(
-      `${logPrefix} after-send shop=${shop} outcome=skipped reason=${result.reason}`,
+      `${logPrefix} after-send shop=${shop} outcome=skipped reason=${result.reason}${routingSuffix}`,
     );
     return;
   }
 
   if (result.ok) {
     console.info(
-      `${logPrefix} after-send shop=${shop} outcome=success requestId=${result.requestId ?? "(none)"}`,
+      `${logPrefix} after-send shop=${shop} outcome=success requestId=${result.requestId ?? "(none)"}${routingSuffix}`,
     );
     return;
   }
 
-  console.error(
-    `${logPrefix} after-send shop=${shop} outcome=failed code=${result.error?.code ?? "unknown"} message=${result.error?.message ?? "unknown"}`,
-  );
+  if ("error" in result) {
+    console.error(
+      `${logPrefix} after-send shop=${shop} outcome=failed code=${result.error.code} message=${result.error.message}${routingSuffix}`,
+    );
+  }
 }
