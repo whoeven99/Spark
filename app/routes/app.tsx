@@ -65,6 +65,10 @@ const NAV_ITEMS: Record<
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
   const appName = getAppEntry();
+  // 打印accessToken 和 admin
+  console.log(
+    `[debug] shop=${session.shop} accessToken=${session.accessToken ?? "(empty)"}`,
+  );
 
   try {
     // 确保 session 的 appName 与当前 APP_ENTRY 一致
