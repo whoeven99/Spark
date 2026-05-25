@@ -54,6 +54,7 @@ export function ChatPage() {
     streamingText,
     sendMessage: streamConversation,
     abort: abortStream,
+    playbookSteps,
   } = useChatStream();
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
@@ -316,8 +317,41 @@ export function ChatPage() {
                             <s-badge tone="neutral">AI Assistant</s-badge>
                           </div>
                           <div style={{ marginTop: "0.35rem", minHeight: awaitingFirstChunk ? "3rem" : undefined }}>
-                            {awaitingFirstChunk ? (
+                            {awaitingFirstChunk && playbookSteps.length === 0 ? (
                               <ChatStreamingSkeleton />
+                            ) : playbookSteps.length > 0 ? (
+                              <div>
+                                {playbookSteps.length > 0 && (
+                                  <div
+                                    style={{
+                                      marginBottom: streamingText ? "0.75rem" : 0,
+                                      padding: "0.6rem 0.75rem",
+                                      borderRadius: "8px",
+                                      background: "rgba(44, 110, 203, 0.06)",
+                                      border: "1px solid rgba(44, 110, 203, 0.18)",
+                                    }}
+                                  >
+                                    <div style={{ fontSize: "0.78rem", color: "rgba(44,110,203,0.8)", marginBottom: "0.4rem", fontWeight: 600 }}>
+                                      ⚡ 正在执行剧本
+                                    </div>
+                                    <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                                      {playbookSteps.map((s) => (
+                                        <div key={`${s.playbookName}-${s.step}`} style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.82rem" }}>
+                                          {s.status === "running" && (
+                                            <span style={{ display: "inline-block", width: "14px", textAlign: "center", color: "rgba(44,110,203,0.8)" }}>○</span>
+                                          )}
+                                          {s.status === "completed" && <span style={{ color: "#008060", width: "14px", textAlign: "center" }}>✓</span>}
+                                          {s.status === "error" && <span style={{ color: "#d72c0d", width: "14px", textAlign: "center" }}>✗</span>}
+                                          <span style={{ color: s.status === "running" ? "inherit" : s.status === "error" ? "#d72c0d" : "rgba(0,0,0,0.55)" }}>
+                                            {s.step}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {streamingText && <ChatMessageContent content={streamingText} />}
+                              </div>
                             ) : (
                               <ChatMessageContent content={streamingText} />
                             )}

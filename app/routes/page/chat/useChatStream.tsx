@@ -7,6 +7,7 @@ type StreamChunk =
   | { type: "text"; content: string }
   | { type: "tool_call"; name: string; args: unknown }
   | { type: "tool_result"; name: string; result: string }
+  | { type: "playbook_step"; playbookName: string; step: string; status: "running" | "completed" | "error" }
   | { type: "error"; message: string }
   | {
       type: "done";
@@ -21,6 +22,12 @@ type StreamChunk =
         };
       };
     };
+
+export type PlaybookStepProgress = {
+  playbookName: string;
+  step: string;
+  status: "running" | "completed" | "error";
+};
 
 export type ChatStreamFinishPayload = {
   aborted: boolean;
@@ -47,6 +54,7 @@ export function useChatStream() {
   const [streamingTranslationForm, setStreamingTranslationForm] = useState<unknown>();
   const [streamingGenerateCard, setStreamingGenerateCard] = useState(false);
   const [streamingGeneratePayload, setStreamingGeneratePayload] = useState<unknown>();
+  const [playbookSteps, setPlaybookSteps] = useState<PlaybookStepProgress[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const snapshotRef = useRef<Snapshot>({
     reply: "",
@@ -84,6 +92,7 @@ export function useChatStream() {
       setStreamingTranslationForm(undefined);
       setStreamingGenerateCard(false);
       setStreamingGeneratePayload(undefined);
+      setPlaybookSteps([]);
 
       const controller = new AbortController();
       abortControllerRef.current = controller;
@@ -98,6 +107,7 @@ export function useChatStream() {
         setStreamingTranslationForm(undefined);
         setStreamingGenerateCard(false);
         setStreamingGeneratePayload(undefined);
+        setPlaybookSteps([]);
         onFinish?.(payload);
       };
 
@@ -151,6 +161,19 @@ export function useChatStream() {
                   const next = prev + chunk.content;
                   snapshotRef.current.reply = next;
                   return next;
+                });
+              } else if (chunk.type === "playbook_step") {
+                markFirstChunkSeen();
+                setPlaybookSteps((prev) => {
+                  const idx = prev.findIndex(
+                    (s) => s.playbookName === chunk.playbookName && s.step === chunk.step,
+                  );
+                  if (idx >= 0) {
+                    const next = [...prev];
+                    next[idx] = { playbookName: chunk.playbookName, step: chunk.step, status: chunk.status };
+                    return next;
+                  }
+                  return [...prev, { playbookName: chunk.playbookName, step: chunk.step, status: chunk.status }];
                 });
               } else if (chunk.type === "tool_call") {
                 markFirstChunkSeen();
@@ -283,6 +306,7 @@ export function useChatStream() {
     streamingTranslationForm,
     streamingGenerateCard,
     streamingGeneratePayload,
+    playbookSteps,
     sendMessage,
     abort,
   };

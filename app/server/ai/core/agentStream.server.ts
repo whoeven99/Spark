@@ -38,6 +38,7 @@ export type StreamChunk =
   | { type: "text"; content: string }
   | { type: "tool_call"; name: string; args: unknown }
   | { type: "tool_result"; name: string; result: string }
+  | { type: "playbook_step"; playbookName: string; step: string; status: "running" | "completed" | "error" }
   | { type: "error"; message: string }
   | {
       type: "done";
@@ -251,6 +252,10 @@ export async function invokeChatAgentStream(
       };
 
       try {
+        context.emitPlaybookStep = (playbookName, step, status) => {
+          controller.enqueue({ type: "playbook_step", playbookName, step, status });
+        };
+
         const lgStream = await graph.stream(
           { messages: agentInputMessages },
           {
