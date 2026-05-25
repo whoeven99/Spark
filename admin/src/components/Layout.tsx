@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Outlet, useNavigate, useLocation, Link } from "react-router-dom";
-import { Layout as AntLayout, Menu, Button, Typography } from "antd";
+import { Layout as AntLayout, Menu, Button, Typography, Tag } from "antd";
 import {
   DashboardOutlined,
   ShopOutlined,
@@ -9,27 +9,32 @@ import {
   LogoutOutlined,
   RobotOutlined,
 } from "@ant-design/icons";
-import { clearToken } from "../api";
+import { clearToken, isOwner, getRole } from "../api";
 
 const { Sider, Content, Header } = AntLayout;
-
-const menuItems = [
-  { key: "/", icon: <DashboardOutlined />, label: <Link to="/">概览</Link> },
-  { key: "/shops", icon: <ShopOutlined />, label: <Link to="/shops">商店</Link> },
-  { key: "/translations", icon: <TranslationOutlined />, label: <Link to="/translations">翻译任务</Link> },
-  { key: "/usage", icon: <BarChartOutlined />, label: <Link to="/usage">用量统计</Link> },
-  { key: "/capabilities", icon: <RobotOutlined />, label: <Link to="/capabilities">Agent 能力</Link> },
-];
 
 export default function Layout() {
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const owner = isOwner();
 
   function logout() {
     clearToken();
     navigate("/login", { replace: true });
   }
+
+  const allMenuItems = [
+    { key: "/", icon: <DashboardOutlined />, label: <Link to="/">概览</Link>, ownerOnly: true },
+    { key: "/shops", icon: <ShopOutlined />, label: <Link to="/shops">商店</Link>, ownerOnly: true },
+    { key: "/translations", icon: <TranslationOutlined />, label: <Link to="/translations">翻译任务</Link>, ownerOnly: false },
+    { key: "/usage", icon: <BarChartOutlined />, label: <Link to="/usage">用量统计</Link>, ownerOnly: true },
+    { key: "/capabilities", icon: <RobotOutlined />, label: <Link to="/capabilities">Agent 能力</Link>, ownerOnly: false },
+  ];
+
+  const menuItems = allMenuItems
+    .filter((item) => !item.ownerOnly || owner)
+    .map(({ key, icon, label }) => ({ key, icon, label }));
 
   const selectedKey =
     menuItems.find((m) => m.key !== "/" && pathname.startsWith(m.key))?.key ??
@@ -73,13 +78,14 @@ export default function Layout() {
           <Typography.Text type="secondary" style={{ fontSize: 13 }}>
             内部管理后台
           </Typography.Text>
-          <Button
-            icon={<LogoutOutlined />}
-            type="text"
-            onClick={logout}
-          >
-            退出
-          </Button>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <Tag color={owner ? "gold" : "blue"}>
+              {getRole() === "owner" ? "Owner" : "User"}
+            </Tag>
+            <Button icon={<LogoutOutlined />} type="text" onClick={logout}>
+              退出
+            </Button>
+          </div>
         </Header>
         <Content style={{ margin: 24, overflow: "auto" }}>
           <Outlet />

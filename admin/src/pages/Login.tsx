@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Form, Input, Button, Card, Typography, Alert } from "antd";
 import { LockOutlined } from "@ant-design/icons";
-import { setToken } from "../api";
+import { setToken, setRole, type AdminRole } from "../api";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -13,14 +13,16 @@ export default function Login() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/overview", {
+      const res = await fetch("/api/auth/role", {
         headers: { Authorization: `Bearer ${secret}` },
       });
       if (res.status === 401) {
         setError("密码错误");
         return;
       }
+      const { role } = await res.json() as { role: AdminRole };
       setToken(secret);
+      setRole(role);
       navigate("/", { replace: true });
     } catch {
       setError("连接失败，请重试");

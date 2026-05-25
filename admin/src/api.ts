@@ -1,4 +1,7 @@
 const TOKEN_KEY = "spark_admin_token";
+const ROLE_KEY = "spark_admin_role";
+
+export type AdminRole = "owner" | "user";
 
 export function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) ?? "";
@@ -10,6 +13,19 @@ export function setToken(token: string): void {
 
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(ROLE_KEY);
+}
+
+export function getRole(): AdminRole | null {
+  return (localStorage.getItem(ROLE_KEY) as AdminRole) ?? null;
+}
+
+export function setRole(role: AdminRole): void {
+  localStorage.setItem(ROLE_KEY, role);
+}
+
+export function isOwner(): boolean {
+  return getRole() === "owner";
 }
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -193,4 +209,8 @@ export type CapabilitiesData = {
 
 export function fetchCapabilities(): Promise<CapabilitiesData> {
   return apiFetch("/capabilities");
+}
+
+export function fetchRole(): Promise<{ role: AdminRole }> {
+  return apiFetch("/auth/role");
 }

@@ -5,7 +5,8 @@ import express from "express";
 import cors from "cors";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { authMiddleware } from "./middleware/auth.js";
+import { authMiddleware, requireOwner } from "./middleware/auth.js";
+import { authRouter } from "./routes/auth.js";
 import { overviewRouter } from "./routes/overview.js";
 import { shopsRouter } from "./routes/shops.js";
 import { translationsRouter } from "./routes/translations.js";
@@ -28,11 +29,16 @@ app.use(
 // Health check — no auth needed
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-// All API routes require auth
-app.use("/api/overview", authMiddleware, overviewRouter);
-app.use("/api/shops", authMiddleware, shopsRouter);
+// Role discovery — any authenticated user
+app.use("/api/auth", authRouter);
+
+// Owner-only routes
+app.use("/api/overview", authMiddleware, requireOwner, overviewRouter);
+app.use("/api/shops", authMiddleware, requireOwner, shopsRouter);
+app.use("/api/usage", authMiddleware, requireOwner, usageRouter);
+
+// All authenticated users
 app.use("/api/translations", authMiddleware, translationsRouter);
-app.use("/api/usage", authMiddleware, usageRouter);
 app.use("/api/capabilities", authMiddleware, capabilitiesRouter);
 
 // Serve built frontend in production

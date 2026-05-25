@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { ConfigProvider, theme } from "antd";
-import { getToken } from "./api";
+import { ConfigProvider, theme, Result, Button } from "antd";
+import { getToken, isOwner } from "./api";
 import Login from "./pages/Login";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
@@ -8,9 +8,35 @@ import Shops from "./pages/Shops";
 import Translations from "./pages/Translations";
 import Usage from "./pages/Usage";
 import Capabilities from "./pages/Capabilities";
+import { useNavigate } from "react-router-dom";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   return getToken() ? <>{children}</> : <Navigate to="/login" replace />;
+}
+
+function RequireOwner({ children }: { children: React.ReactNode }) {
+  const navigate = useNavigate();
+  if (!isOwner()) {
+    return (
+      <Result
+        status="403"
+        title="无访问权限"
+        subTitle="该页面仅限 owner 账号查看"
+        extra={
+          <Button type="primary" onClick={() => navigate("/translations")}>
+            前往翻译任务
+          </Button>
+        }
+      />
+    );
+  }
+  return <>{children}</>;
+}
+
+// user role default landing: redirect / to /translations
+function IndexRedirect() {
+  if (!isOwner()) return <Navigate to="/translations" replace />;
+  return <Dashboard />;
 }
 
 export default function App() {
@@ -27,10 +53,10 @@ export default function App() {
               </RequireAuth>
             }
           >
-            <Route index element={<Dashboard />} />
-            <Route path="shops" element={<Shops />} />
+            <Route index element={<IndexRedirect />} />
+            <Route path="shops" element={<RequireOwner><Shops /></RequireOwner>} />
             <Route path="translations" element={<Translations />} />
-            <Route path="usage" element={<Usage />} />
+            <Route path="usage" element={<RequireOwner><Usage /></RequireOwner>} />
             <Route path="capabilities" element={<Capabilities />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
