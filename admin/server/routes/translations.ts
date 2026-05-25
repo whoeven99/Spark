@@ -45,6 +45,10 @@ translationsRouter.get("/", async (req, res) => {
 
     res.json({ jobs: resources, total: resources.length });
   } catch (err) {
+    if (String(err).includes("Owner resource does not exist")) {
+      res.json({ jobs: [], total: 0, note: "翻译任务容器不存在或无访问权限" });
+      return;
+    }
     console.error("[translations]", err);
     res.status(500).json({ error: String(err) });
   }

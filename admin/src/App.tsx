@@ -11,6 +11,8 @@ import Capabilities from "./pages/Capabilities";
 import Subscriptions from "./pages/Subscriptions";
 import Revenue from "./pages/Revenue";
 import CodeAgent from "./pages/CodeAgent";
+import AgentRuns from "./pages/AgentRuns";
+import BillingRules from "./pages/BillingRules";
 import { useNavigate } from "react-router-dom";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -63,6 +65,8 @@ export default function App() {
             <Route path="revenue" element={<RequireOwner><Revenue /></RequireOwner>} />
             <Route path="capabilities" element={<Capabilities />} />
             <Route path="code-agent" element={<CodeAgent />} />
+            <Route path="agent-runs" element={<AgentRuns />} />
+            <Route path="billing-rules" element={<RequireOwner><BillingRules /></RequireOwner>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

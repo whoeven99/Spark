@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   Table,
   Select,
@@ -52,6 +52,7 @@ export default function Translations() {
   const [jobs, setJobs] = useState<TranslationJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [errorLevel, setErrorLevel] = useState<"error" | "warning">("error");
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
   const [shopFilter, setShopFilter] = useState("");
   const [selected, setSelected] = useState<TranslationJob | null>(null);
@@ -60,13 +61,20 @@ export default function Translations() {
 
   const load = useCallback(() => {
     setLoading(true);
+    setError("");
     fetchTranslations({
       status: statusFilter,
       shop: shopFilter || undefined,
       limit: 200,
     })
-      .then((r) => setJobs(r.jobs))
-      .catch((e) => setError(String(e)))
+      .then((r) => {
+        setJobs(r.jobs);
+        if ((r as { note?: string }).note) {
+          setError((r as { note?: string }).note!);
+          setErrorLevel("warning");
+        }
+      })
+      .catch((e) => { setError(String(e)); setErrorLevel("error"); })
       .finally(() => setLoading(false));
   }, [statusFilter, shopFilter]);
 
@@ -170,10 +178,37 @@ export default function Translations() {
     },
   ];
 
-  if (error) return <Alert type="error" message={error} />;
+  const stuckJobs = useMemo(() => {
+    const cutoff = Date.now() - 60 * 60 * 1000;
+    return jobs.filter(
+      (j) => ACTIVE_STATUSES.has(j.status) && new Date(j.updatedAt).getTime() < cutoff,
+    );
+  }, [jobs]);
+
+  if (error && errorLevel === "error") return <Alert type="error" message={error} />;
 
   return (
     <div>
+      {error && errorLevel === "warning" && (
+        <Alert type="warning" message={error} style={{ marginBottom: 16 }} showIcon />
+      )}
+      {stuckJobs.length > 0 && (        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={`发现 ${stuckJobs.length} 个卡住的任务（超过 1 小时未更新）`}
+          description={
+            <ul style={{ margin: "4px 0 0 0", paddingLeft: 16 }}>
+              {stuckJobs.map((j) => (
+                <li key={j.id} style={{ fontSize: 12 }}>
+                  <strong>{j.shopName}</strong> — {j.source}→{j.target} — 状态: {j.status} — 最后更新:{" "}
+                  {new Date(j.updatedAt).toLocaleString("zh-CN")}
+                </li>
+              ))}
+            </ul>
+          }
+        />
+      )}
       <div
         style={{
           display: "flex",

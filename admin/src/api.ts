@@ -407,3 +407,119 @@ export function fetchRevenueCharges(params: {
 export function fetchRole(): Promise<{ role: AdminRole }> {
   return apiFetch("/auth/role");
 }
+
+// --- Agent Runs ---
+
+export type AgentRunRow = {
+  id: string;
+  shop: string;
+  appName: string;
+  feature: string;
+  status: "success" | "error" | "timeout" | "partial";
+  startedAt: string;
+  durationMs: number;
+  langsmithRunId?: string;
+  langsmithProject?: string;
+  tools?: { name: string; ok: boolean }[];
+  tokenUsage?: { prompt: number; completion: number; total: number };
+  error?: { code?: string; message: string };
+  reflection?: {
+    summary: string;
+    rootCause?: string;
+    nextTimeStrategy?: string[];
+    confidence?: number;
+    generatedAt: string;
+  };
+  inputSummary?: Record<string, unknown>;
+};
+
+export type AgentRunStats = {
+  summary: {
+    total: number;
+    successCount: number;
+    errorCount: number;
+    successRate: number;
+    avgDurationMs: number;
+    period: string;
+    cutoff: string;
+  } | null;
+  byFeature: {
+    feature: string;
+    total: number;
+    success: number;
+    error: number;
+    timeout: number;
+    partial: number;
+    successRate: number;
+    avgDurationMs: number;
+  }[];
+  topErrors: { message: string; count: number }[];
+  note?: string;
+};
+
+export function fetchAgentRunStats(period?: string): Promise<AgentRunStats> {
+  const q = period ? `?period=${encodeURIComponent(period)}` : "";
+  return apiFetch(`/agent-runs/stats${q}`);
+}
+
+export function fetchAgentRuns(params?: {
+  feature?: string;
+  status?: string;
+  shop?: string;
+  period?: string;
+  limit?: number;
+}): Promise<{ runs: AgentRunRow[]; note?: string }> {
+  const query = new URLSearchParams();
+  if (params?.feature) query.set("feature", params.feature);
+  if (params?.status) query.set("status", params.status);
+  if (params?.shop) query.set("shop", params.shop);
+  if (params?.period) query.set("period", params.period);
+  if (params?.limit) query.set("limit", String(params.limit));
+  const qs = query.toString();
+  return apiFetch(`/agent-runs${qs ? `?${qs}` : ""}`);
+}
+
+// --- Billing Rules ---
+
+export type BillingRuleRow = {
+  ruleKey: string;
+  appName: string;
+  feature: string;
+  modelKey: string;
+  displayName: string;
+  multiplier: number;
+  baseTokenCost: number | null;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function fetchBillingRules(): Promise<{ rules: BillingRuleRow[] }> {
+  return apiFetch("/billing-rules");
+}
+
+export function createBillingRule(data: {
+  appName: string;
+  feature: string;
+  modelKey: string;
+  displayName: string;
+  multiplier: number;
+  baseTokenCost?: number | null;
+  enabled?: boolean;
+}): Promise<{ ok: boolean; ruleKey: string }> {
+  return apiFetch("/billing-rules", { method: "POST", body: JSON.stringify(data) });
+}
+
+export function updateBillingRule(
+  ruleKey: string,
+  data: { displayName?: string; multiplier?: number; baseTokenCost?: number | null; enabled?: boolean },
+): Promise<{ ok: boolean }> {
+  return apiFetch(`/billing-rules/${encodeURIComponent(ruleKey)}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteBillingRule(ruleKey: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/billing-rules/${encodeURIComponent(ruleKey)}`, { method: "DELETE" });
+}
