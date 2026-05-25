@@ -40,9 +40,9 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 0.3rem;
+  gap: 0.35rem;
   flex-shrink: 0;
-  max-width: min(100%, 16rem);
+  min-width: 0;
 }
 
 .planBadge {
@@ -773,12 +773,29 @@
   flex: 1 1 auto;
 }
 
-.subscriptionMeta {
-  margin: 0;
+.subscriptionMetaList {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.12rem;
+}
+
+.subscriptionMetaItem {
   font-size: 0.75rem;
-  line-height: 1.4;
+  line-height: 1.35;
   color: #6d7175;
-  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .usageHeaderBadge {
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  .subscriptionMetaList {
+    align-items: flex-start;
+  }
 }
 
 .devCancelBar {

@@ -41,6 +41,16 @@ function formatDate(iso: string | null, locale: string): string {
   });
 }
 
+/** 计费页徽章区：更短的日期，避免一行过长换行 */
+function formatBillingMetaDate(iso: string | null, locale: string): string {
+  if (!iso) return EMPTY;
+  return new Date(iso).toLocaleDateString(locale, {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  });
+}
+
 function PlanFeatureList({ items }: { items: string[] }) {
   return (
     <ul className={styles.planFeatures}>
@@ -236,17 +246,8 @@ export function BillingPage() {
   }, [basePlan, proPlan, paidPlansForInterval]);
   const sub = billing.subscription;
 
-  const subscriptionPeriodMeta =
-    sub?.status === "ACTIVE" && sub.currentPeriodEnd
-      ? [
-          `${t("billing.periodEnd")}: ${formatDate(sub.currentPeriodEnd, locale)}`,
-          sub.trialEndsAt
-            ? `${t("billing.trialEnds")}: ${formatDate(sub.trialEndsAt, locale)}`
-            : null,
-        ]
-          .filter((part): part is string => Boolean(part))
-          .join(" · ")
-      : null;
+  const showSubscriptionPeriodMeta =
+    sub?.status === "ACTIVE" && !!sub.currentPeriodEnd;
 
   const isTrialCurrent =
     sub?.status !== "ACTIVE" &&
@@ -360,8 +361,19 @@ export function BillingPage() {
             </div>
             <div className={styles.usageHeaderBadge}>
               <span className={styles.planBadge}>{currentPlanLabel}</span>
-              {subscriptionPeriodMeta ? (
-                <p className={styles.subscriptionMeta}>{subscriptionPeriodMeta}</p>
+              {showSubscriptionPeriodMeta && sub ? (
+                <div className={styles.subscriptionMetaList}>
+                  <span className={styles.subscriptionMetaItem}>
+                    {t("billing.periodEnd")}:{" "}
+                    {formatBillingMetaDate(sub.currentPeriodEnd, locale)}
+                  </span>
+                  {sub.trialEndsAt ? (
+                    <span className={styles.subscriptionMetaItem}>
+                      {t("billing.trialEnds")}:{" "}
+                      {formatBillingMetaDate(sub.trialEndsAt, locale)}
+                    </span>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           </div>
