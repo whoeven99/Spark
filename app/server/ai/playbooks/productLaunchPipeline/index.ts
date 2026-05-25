@@ -132,6 +132,7 @@ async function run({
   goal,
   constraints,
   context,
+  onStep,
 }: PlaybookRunParams): Promise<PlaybookRunResult> {
   const steps: PlaybookStepResult[] = [];
 
@@ -139,6 +140,7 @@ async function run({
   const productId = extractProductId(goal);
 
   if (!productId) {
+    onStep?.("商品信息检查", "completed");
     steps.push({
       step: "商品信息检查",
       status: "skipped",
@@ -166,11 +168,13 @@ async function run({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let product: any = null;
   try {
+    onStep?.("商品信息检查", "running");
     const res = await context.admin.graphql(buildProductQuery(productId));
     const json = (await res.json()) as { data?: { product?: unknown } };
     product = json?.data?.product;
 
     if (!product) {
+      onStep?.("商品信息检查", "error");
       steps.push({
         step: "商品信息检查",
         status: "error",
@@ -183,6 +187,7 @@ async function run({
       };
     }
 
+    onStep?.("商品信息检查", "completed");
     steps.push({
       step: "商品信息检查",
       status: "completed",
@@ -190,6 +195,7 @@ async function run({
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    onStep?.("商品信息检查", "error");
     steps.push({ step: "商品信息检查", status: "error", output: `查询失败：${msg}` });
     return { ok: false, summary: `商品数据查询失败：${msg}`, steps };
   }
@@ -199,6 +205,7 @@ async function run({
   // ── Step 2: 文案建议（LLM）──
   let copyAdvice = "";
   try {
+    onStep?.("文案建议", "running");
     const model = getShopChatModel();
     const res = await model.invoke([
       new SystemMessage(
@@ -210,21 +217,26 @@ async function run({
     ]);
     copyAdvice =
       typeof res.content === "string" ? res.content : JSON.stringify(res.content);
+    onStep?.("文案建议", "completed");
     steps.push({ step: "文案建议", status: "completed", output: "文案建议已生成" });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    onStep?.("文案建议", "error");
     steps.push({ step: "文案建议", status: "error", output: `文案生成失败：${msg}` });
     copyAdvice = "（文案生成失败，请手动填写）";
   }
 
   // ── Step 3: 翻译准备 ──
+  onStep?.("翻译准备", "running");
   const translationNote =
     check.hasDescription
       ? `建议翻译字段：标题（${product.title.length}字）、描述（${check.descriptionLength}字）、卖点标签。可使用翻译任务功能批量处理。`
       : "建议先完善中文描述，再进行翻译。";
+  onStep?.("翻译准备", "completed");
   steps.push({ step: "翻译准备", status: "completed", output: translationNote });
 
   // ── Step 4: 上架清单 ──
+  onStep?.("上架清单", "running");
   const checklist = [
     `完整度评分：${check.score}/100`,
     check.missingFields.length > 0
@@ -235,6 +247,7 @@ async function run({
     `当前状态：${check.isPublished ? "已上架 (ACTIVE)" : "草稿 (DRAFT)"}`,
   ].join("\n");
 
+  onStep?.("上架清单", "completed");
   steps.push({ step: "上架清单", status: "completed", output: checklist });
 
   const summary = [

@@ -121,6 +121,8 @@
     "quickPromptCreateTranslation": "번역 작업 생성",
     "quickPromptGenerateDescription": "상품 설명 생성",
     "quickPromptPictureTranslate": "이미지 번역",
+    "quickPromptShopHealthCheck": "스토어 건강 진단",
+    "quickPromptProductLaunchPipeline": "신상품 출시 파이프라인",
     "intro": "스토어 분석, 광고/물류 인증 가이드, 운영 제안을 바로 질문할 수 있습니다.",
     "assistantOnline": "AI 어시스턴트 온라인",
     "quickQuestions": "빠른 질문",

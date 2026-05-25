@@ -90,6 +90,8 @@
     "quickPromptCreateTranslation": "Créer une tâche de traduction",
     "quickPromptGenerateDescription": "Générer une description produit",
     "quickPromptPictureTranslate": "Traduction d’images",
+    "quickPromptShopHealthCheck": "Diagnostic boutique",
+    "quickPromptProductLaunchPipeline": "Pipeline de lancement",
     "intro": "Demandez directement des informations boutique, l’autorisation pub/logistique et des suggestions opérationnelles.",
     "assistantOnline": "AI Assistant en ligne",
     "quickQuestions": "Questions rapides",

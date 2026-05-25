@@ -169,6 +169,8 @@
     "quickPromptCreateTranslation": "创建翻译任务",
     "quickPromptGenerateDescription": "生成商品文案",
     "quickPromptPictureTranslate": "图片翻译",
+    "quickPromptShopHealthCheck": "经营体检",
+    "quickPromptProductLaunchPipeline": "上新流水线",
     "intro": "你可以在这里直接提问，获取店铺经营分析、广告/物流授权引导和运营建议。",
     "assistantOnline": "AI 助手在线",
     "quickQuestions": "快捷问题",

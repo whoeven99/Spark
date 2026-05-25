@@ -25,6 +25,7 @@ export interface PlaybookRunParams {
   goal: string;
   constraints?: string;
   context: AgentContext;
+  onStep?: (step: string, status: "running" | "completed" | "error") => void;
 }
 
 // ──────────────────────────────────────────────
@@ -123,7 +124,12 @@ export class PlaybookRegistry {
           }),
           func: async ({ goal, constraints }) => {
             try {
-              const result = await def.run({ goal, constraints, context: ctx });
+              const result = await def.run({
+                goal,
+                constraints,
+                context: ctx,
+                onStep: (step, status) => ctx.emitPlaybookStep?.(def.name, step, status),
+              });
               return JSON.stringify(result);
             } catch (e) {
               const msg = e instanceof Error ? e.message : String(e);

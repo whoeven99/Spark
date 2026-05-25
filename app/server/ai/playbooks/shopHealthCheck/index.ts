@@ -108,6 +108,7 @@ async function run({
   goal,
   constraints,
   context,
+  onStep,
 }: PlaybookRunParams): Promise<PlaybookRunResult> {
   const steps: PlaybookStepResult[] = [];
 
@@ -115,6 +116,7 @@ async function run({
   let shopData: Record<string, unknown> = {};
   let inventoryData: Record<string, unknown> = {};
   try {
+    onStep?.("数据拉取", "running");
     const [shopRes, invRes] = await Promise.all([
       context.admin.graphql(SHOP_INFO_QUERY),
       context.admin.graphql(INVENTORY_QUERY),
@@ -122,14 +124,17 @@ async function run({
     shopData = (await shopRes.json()) as Record<string, unknown>;
     inventoryData = (await invRes.json()) as Record<string, unknown>;
 
+    onStep?.("数据拉取", "completed");
     steps.push({ step: "数据拉取", status: "completed", output: "店铺、订单、库存数据已获取" });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    onStep?.("数据拉取", "error");
     steps.push({ step: "数据拉取", status: "error", output: `GraphQL 查询失败：${msg}` });
     return { ok: false, summary: `数据拉取失败：${msg}`, steps };
   }
 
   // ── Step 2: 异常检测 ──
+  onStep?.("异常检测", "running");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const shopNode = (shopData as any)?.data?.shop ?? {};
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -150,6 +155,7 @@ async function run({
   if (invHealth.lowStockCount > 0)
     anomalies.push(`${invHealth.lowStockCount} 个 SKU 库存 ≤ 5（需关注补货）`);
 
+  onStep?.("异常检测", "completed");
   steps.push({
     step: "异常检测",
     status: "completed",
@@ -169,6 +175,7 @@ async function run({
 
   let summary = "";
   try {
+    onStep?.("建议生成", "running");
     const model = getShopChatModel();
     const response = await model.invoke([
       new SystemMessage(
@@ -177,9 +184,11 @@ async function run({
       new HumanMessage(`店铺数据：\n${dataContext}`),
     ]);
     summary = typeof response.content === "string" ? response.content : JSON.stringify(response.content);
+    onStep?.("建议生成", "completed");
     steps.push({ step: "建议生成", status: "completed", output: "健康报告已生成" });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    onStep?.("建议生成", "error");
     steps.push({ step: "建议生成", status: "error", output: `LLM 合成失败：${msg}` });
     // 降级：仅返回结构化数据
     summary = `【经营体检结果】\n近期订单：${orderMetrics.orderCount} 单，GMV ${orderMetrics.gmv} ${orderMetrics.currency}，退款率 ${orderMetrics.refundRate}%\n库存：${invHealth.activeVariants} 个活跃 SKU，${invHealth.outOfStockCount} 个缺货\n${anomalies.length > 0 ? "异常：" + anomalies.join("；") : "未发现明显异常"}`;
