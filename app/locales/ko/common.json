@@ -534,5 +534,22 @@
     "cosmosStatusSaveRunning": "Shopify에 쓰는 중",
     "cosmosStatusSaveDone": "완료됨",
     "cosmosStatusFailed": "실패"
+  },
+  "qualityScore": {
+    "scoreAction": "Score quality",
+    "scoring": "Scoring...",
+    "scoreSuccess": "Scoring complete",
+    "emptyResult": "Select a product and click Score quality.",
+    "overallScore": "Overall quality score",
+    "levelGood": "Good — product page quality is strong",
+    "levelFair": "Fair — room for improvement",
+    "levelPoor": "Needs work — improvements recommended",
+    "dimTitle": "Title quality",
+    "dimImages": "Image count",
+    "dimDescription": "Description completeness",
+    "dimVariants": "Variant structure",
+    "dimTags": "Tags & category",
+    "suggestions": "Key recommendations",
+    "resultTitle": "Quality score"
   }
 }
