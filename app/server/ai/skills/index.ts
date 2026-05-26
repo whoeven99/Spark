@@ -1,23 +1,14 @@
-import { ToolMessage } from "@langchain/core/messages";
 import { createShopifyShopInfoTools } from "./shopifyInfo/tool";
-import { createGenerateProductDescriptionTool } from "./marketing/tool";
 import { translationTaskFormTool } from "./translation/tool";
 import { globalToolRegistry } from "../core/toolRegistry.server";
-
 import {
   extractTranslationTaskFormFromMessages,
   shouldInjectTranslationTaskFormFallback,
   defaultTranslationTaskFormPayload,
 } from "./translation/extract";
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
-import { pictureTranslateToolDefinition } from "./pictureTranslate/tool";
-import { imageGenerationToolDefinition } from "./imageGeneration/tool";
 import { sendTemplateEmailToolDefinition } from "./email/tool";
-import {
-  extractProductImproveCardPayload,
-  hasProductImproveToolCall,
-  shouldInjectProductImproveFallback,
-} from "./marketing/extract";
+import { productOptimizationSkills } from "./productOptimization";
 
 // ==========================================
 // 注册各类核心与扩展 Tools 到全局注册表
@@ -56,48 +47,9 @@ globalToolRegistry.register({
   },
 });
 
-globalToolRegistry.register({
-  name: "generateProductDescription",
-  description: "生成商品描述（可结合用户画像进行个性化建议）",
-  uiPayloadKey: "productImproveCardPayload",
-  systemPromptExtension:
-    "当用户明确要求根据商品 ID 生成、撰写或优化商品营销描述时，应调用工具 generate_product_description，传入 productId（及可选 targetLanguage）。工具返回 JSON 字符串：成功时含 description 字段，请用简洁中文向用户概括要点并引用描述中的关键信息，不要编造工具未返回的内容。若用户未提供商品 ID，先请对方提供，不要猜测 ID。",
-  createTool: (context) => createGenerateProductDescriptionTool(context),
-  onStreamEvent: (ev, enqueue, streamContext) => {
-    if (ev.event === "on_tool_end" && ev.name === "generate_product_description") {
-      streamContext.emittedFlags.add("generateProductDescription");
-
-      let resultStr = String(ev.output);
-      if (typeof ev.output === "object") {
-        try {
-          resultStr = JSON.stringify(ev.output);
-        } catch {
-          // ignore
-        }
-      }
-
-      enqueue({
-        type: "tool_result",
-        name: ev.name,
-        result: resultStr,
-      });
-    }
-  },
-  extractUIPayload: (messages, lastUserText, assistantReplyRaw) => {
-    const payload = extractProductImproveCardPayload(messages);
-    if (payload) return payload;
-
-    const isFallbackCard =
-      hasProductImproveToolCall(messages) ||
-      shouldInjectProductImproveFallback(lastUserText, assistantReplyRaw);
-
-    if (isFallbackCard) return { _fallback: true };
-    return undefined;
-  },
-});
-
-globalToolRegistry.register(pictureTranslateToolDefinition);
-
-globalToolRegistry.register(imageGenerationToolDefinition);
+// 商品优化 Skill 组：文案生成、图片翻译、图片生成、质量评分
+for (const skill of productOptimizationSkills) {
+  globalToolRegistry.register(skill);
+}
 
 globalToolRegistry.register(sendTemplateEmailToolDefinition);
