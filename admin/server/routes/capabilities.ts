@@ -104,11 +104,13 @@ const CAPABILITIES = {
       ],
     },
     {
-      name: "generateProductDescription",
-      displayName: "商品文案生成",
-      description: "基于商品信息自动生成优化的商品标题和描述，支持多语言",
-      category: "内容创作",
-      conditional: false,
+      name: "productOptimization",
+      displayName: "商品优化",
+      description:
+        "商品内容与视觉优化技能组：文案生成、整图翻译、文生图、商品页质量评分（对应 app/server/ai/skills/productOptimization）",
+      category: "商品优化",
+      conditional: true,
+      conditionalNote: "文生图工具需 IMAGE_GENERATION_ENABLED=true；其余工具默认启用",
       tools: [
         {
           name: "generate_product_description",
@@ -119,19 +121,10 @@ const CAPABILITIES = {
             { name: "targetLanguage", type: "string", desc: "目标语言 BCP47 代码，不填则自动检测" },
           ],
         },
-      ],
-    },
-    {
-      name: "pictureTranslate",
-      displayName: "图片翻译",
-      description: "翻译图片中的文字并保持原始布局，支持多种语言对",
-      category: "本地化",
-      conditional: false,
-      tools: [
         {
           name: "picture_translate",
           displayName: "翻译图片文字",
-          description: "识别图片中的文字并翻译，返回翻译后图片 URL 和各文字块的对照",
+          description: "识别图片中的文字并翻译，返回翻译后图片 URL，保持原图布局",
           params: [
             { name: "imageUrl", type: "string", desc: "图片 HTTPS URL（与 imageBase64 二选一）" },
             { name: "imageBase64", type: "string", desc: "图片 Base64 编码（与 imageUrl 二选一）" },
@@ -139,22 +132,18 @@ const CAPABILITIES = {
             { name: "sourceLanguage", type: "string", desc: "源语言代码，默认 auto 自动识别" },
           ],
         },
-      ],
-    },
-    {
-      name: "imageGeneration",
-      displayName: "图片生成",
-      description: "根据提示词生成商品图或营销图，需开启 IMAGE_GENERATION_ENABLED",
-      category: "内容创作",
-      conditional: true,
-      conditionalNote: "需要环境变量 IMAGE_GENERATION_ENABLED=true",
-      tools: [
         {
           name: "generate_product_image",
           displayName: "文生图",
-          description: "输入图片描述，AI 生成对应的商品或营销图片",
+          description: "输入图片描述，AI 生成对应的商品或营销图片（需开启 IMAGE_GENERATION_ENABLED）",
+          params: [{ name: "prompt", type: "string", desc: "图片描述（英文效果更佳）" }],
+        },
+        {
+          name: "score_product_quality",
+          displayName: "商品页质量评分",
+          description: "评估商品标题、图片、描述、Variant、标签等维度并给出改进建议",
           params: [
-            { name: "prompt", type: "string", desc: "图片描述（英文效果更佳）" },
+            { name: "productId", type: "string", desc: "Shopify 商品 ID（数字或 gid://shopify/Product/...）" },
           ],
         },
       ],

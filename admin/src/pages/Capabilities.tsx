@@ -34,6 +34,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   店铺运营: "blue",
   本地化: "purple",
   内容创作: "orange",
+  商品优化: "gold",
   通知: "cyan",
   基础能力: "default",
   选品上新: "green",
