@@ -1,4 +1,6 @@
 /** Maps our module names to Shopify's TranslatableResourceType enum values */
+import { shouldIncludeField } from "./translationFilter.js";
+
 export const MODULE_TO_SHOPIFY_TYPE: Record<string, string> = {
   PRODUCT: "PRODUCT",
   COLLECTION: "COLLECTION",
@@ -19,19 +21,35 @@ export type TranslatableResource = {
   fields: TranslatableField[];
 };
 
+export type FetchTranslatableOptions = {
+  targetLocale: string;
+  isCover: boolean;
+  isHandle: boolean;
+};
+
 const FETCH_PAGE_SIZE = 50;
 
 const TRANSLATABLE_RESOURCES_QUERY = `
-query GetTranslatableResources($resourceType: TranslatableResourceType!, $first: Int!, $after: String) {
+query GetTranslatableResources(
+  $resourceType: TranslatableResourceType!
+  $first: Int!
+  $locale: String!
+  $after: String
+) {
   translatableResources(resourceType: $resourceType, first: $first, after: $after) {
     edges {
       node {
         resourceId
+        translations(locale: $locale) {
+          key
+          outdated
+        }
         translatableContent {
           key
           value
           digest
           locale
+          type
         }
       }
     }
@@ -82,13 +100,14 @@ async function shopifyGraphql(
   return json.data;
 }
 
-/** Fetch all translatable resources for a module, up to the limit. Returns chunked arrays. */
+/** Fetch translatable resources for a module, filtered by isCover/isHandle rules. Returns chunked arrays. */
 export async function fetchTranslatableResources(
   shopDomain: string,
   accessToken: string,
   module: string,
   limitPerType: number,
-  chunkSize = 50,
+  chunkSize: number,
+  options: FetchTranslatableOptions,
 ): Promise<TranslatableResource[][]> {
   const shopifyType = MODULE_TO_SHOPIFY_TYPE[module];
   if (!shopifyType) {
@@ -106,6 +125,7 @@ export async function fetchTranslatableResources(
     const variables: Record<string, unknown> = {
       resourceType: shopifyType,
       first: pageSize,
+      locale: options.targetLocale,
       ...(cursor ? { after: cursor } : {}),
     };
 
@@ -114,7 +134,14 @@ export async function fetchTranslatableResources(
         edges: Array<{
           node: {
             resourceId: string;
-            translatableContent: Array<{ key: string; value: string; digest: string; locale: string }>;
+            translations: Array<{ key: string; outdated?: boolean | null }>;
+            translatableContent: Array<{
+              key: string;
+              value: string;
+              digest: string;
+              locale: string;
+              type?: string | null;
+            }>;
           };
         }>;
         pageInfo: { hasNextPage: boolean; endCursor: string };
@@ -123,11 +150,21 @@ export async function fetchTranslatableResources(
 
     const edges = data.translatableResources.edges;
     for (const edge of edges) {
-      const fields = edge.node.translatableContent.filter((f) => f.value?.trim());
+      const translations = edge.node.translations ?? [];
+      const fields = edge.node.translatableContent
+        .filter((f) =>
+          shouldIncludeField(
+            { key: f.key, value: f.value, type: f.type },
+            translations,
+            { isCover: options.isCover, isHandle: options.isHandle },
+          ),
+        )
+        .map((f) => ({ key: f.key, value: f.value, digest: f.digest }));
+
       if (fields.length > 0) {
         allResources.push({
           resourceId: edge.node.resourceId,
-          fields: fields.map((f) => ({ key: f.key, value: f.value, digest: f.digest })),
+          fields,
         });
       }
     }
@@ -137,7 +174,6 @@ export async function fetchTranslatableResources(
     cursor = data.translatableResources.pageInfo.endCursor;
   }
 
-  // Split into chunks
   const chunks: TranslatableResource[][] = [];
   for (let i = 0; i < allResources.length; i += chunkSize) {
     chunks.push(allResources.slice(i, i + chunkSize));
