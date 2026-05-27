@@ -4,6 +4,8 @@
 
 **关键约定**：改代码前必先读对应的 `docs/` 文档（translation、generateDescription、billing 等）。改代码后必须 `npm run test && npm run build` 通过。
 
+**新增 Skill / Tool 前必读**：[`docs/ROADMAP.md`](docs/ROADMAP.md) — 包含全部规划中的原子 Skill、优先级、实现路径和所需新增 Shopify Scope，避免重复造轮子或遗漏依赖。
+
 ---
 
 ## 项目概览

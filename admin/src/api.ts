@@ -528,7 +528,7 @@ export function deleteBillingRule(ruleKey: string): Promise<{ ok: boolean }> {
 
 export type TodoStatus = "todo" | "doing" | "done";
 export type TodoPriority = "low" | "medium" | "high";
-export type TodoAssignee = "yewen" | "allen" | "zz";
+export type TodoAssignee = "yewen" | "allen" | "zhuangze";
 
 export type TodoRow = {
   id: string;

@@ -12,13 +12,15 @@ import {
   Alert,
   Popconfirm,
   Empty,
-  Badge,
 } from "antd";
 import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
   UserOutlined,
+  CheckCircleOutlined,
+  CircleOutlined,
+  PlayCircleOutlined,
 } from "@ant-design/icons";
 import {
   fetchTodos,
@@ -31,12 +33,12 @@ import {
   type TodoAssignee,
 } from "../api";
 
-const MEMBERS: TodoAssignee[] = ["yewen", "allen", "zz"];
+const MEMBERS: TodoAssignee[] = ["yewen", "allen", "zhuangze"];
 
 const ASSIGNEE_COLORS: Record<TodoAssignee, string> = {
   yewen: "blue",
   allen: "green",
-  zz: "purple",
+  zhuangze: "purple",
 };
 
 const PRIORITY_CONFIG: Record<TodoPriority, { color: string; label: string }> = {
@@ -45,16 +47,22 @@ const PRIORITY_CONFIG: Record<TodoPriority, { color: string; label: string }> = 
   low: { color: "default", label: "低" },
 };
 
-const COLUMNS: { key: TodoStatus; label: string; color: string }[] = [
-  { key: "todo", label: "待办", color: "#1677ff" },
-  { key: "doing", label: "进行中", color: "#fa8c16" },
-  { key: "done", label: "已完成", color: "#52c41a" },
+const STATUS_ROWS: {
+  key: TodoStatus;
+  label: string;
+  icon: React.ReactNode;
+  color: string;
+  bgColor: string;
+}[] = [
+  { key: "doing", label: "进行中", icon: <PlayCircleOutlined />, color: "#faad14", bgColor: "#fffbe6" },
+  { key: "todo", label: "待办", icon: <CircleOutlined />, color: "#d9d9d9", bgColor: "#fafafa" },
+  { key: "done", label: "已完成", icon: <CheckCircleOutlined />, color: "#52c41a", bgColor: "#f6ffed" },
 ];
 
 const ME_KEY = "spark_admin_me";
 
 function getMe(): string {
-  return localStorage.getItem(ME_KEY) ?? "";
+  return localStorage.getItem(ME_KEY) ?? MEMBERS[0];
 }
 function setMe(v: string) {
   localStorage.setItem(ME_KEY, v);
@@ -172,11 +180,12 @@ export default function Todo() {
 
   if (error) return <Alert type="error" message={error} style={{ margin: 24 }} />;
 
-  const byStatus = (status: TodoStatus) => todos.filter((t) => t.status === status);
+  const getTodosFor = (assignee: TodoAssignee | null, status: TodoStatus) =>
+    todos.filter((t) => (assignee ? t.assignee === assignee : t.assignee === null) && t.status === status);
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>
           Team Todo
         </Typography.Title>
@@ -186,25 +195,56 @@ export default function Todo() {
       </div>
 
       <Spin spinning={loading}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, alignItems: "start" }}>
-          {COLUMNS.map((col) => {
-            const items = byStatus(col.key);
-            return (
-              <div key={col.key}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: col.color, display: "inline-block" }} />
-                  <Typography.Text strong style={{ fontSize: 15 }}>{col.label}</Typography.Text>
-                  <Badge count={items.length} style={{ background: col.color }} showZero />
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {items.length === 0 ? (
+        <div style={{ display: "grid", gridTemplateColumns: `100px repeat(${MEMBERS.length + 1}, 1fr)`, gap: 16, alignItems: "start" }}>
+          {/* Header row: member names */}
+          <div />
+          {MEMBERS.map((member) => (
+            <div key={member} style={{ textAlign: "center" }}>
+              <Tag color={ASSIGNEE_COLORS[member]} style={{ fontSize: 12, padding: "4px 12px" }}>
+                {member.toUpperCase()}
+              </Tag>
+            </div>
+          ))}
+          <div style={{ textAlign: "center" }}>
+            <Tag style={{ fontSize: 12, padding: "4px 12px", color: "#666", borderColor: "#d9d9d9" }}>
+              未分配
+            </Tag>
+          </div>
+
+          {/* Rows: status rows with cards */}
+          {STATUS_ROWS.map((statusRow) => (
+            <div
+              key={statusRow.key}
+              style={{
+                gridColumn: "1 / -1",
+                display: "grid",
+                gridTemplateColumns: `100px repeat(${MEMBERS.length + 1}, 1fr)`,
+                gap: 16,
+                alignItems: "start",
+                padding: "12px 0",
+                backgroundColor: statusRow.bgColor,
+                borderRadius: 4,
+                paddingLeft: 12,
+              }}
+            >
+              {/* Status label */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 20, color: statusRow.color }}>{statusRow.icon}</span>
+                <Typography.Text strong style={{ fontSize: 12, color: statusRow.color }}>
+                  {statusRow.label}
+                </Typography.Text>
+              </div>
+
+              {/* Columns for each member + unassigned */}
+              {MEMBERS.map((member) => (
+                <div key={member} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {getTodosFor(member, statusRow.key).length === 0 ? (
                     <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={false} style={{ margin: "12px 0" }} />
                   ) : (
-                    items.map((todo) => (
+                    getTodosFor(member, statusRow.key).map((todo) => (
                       <TodoCard
                         key={todo.id}
                         todo={todo}
-                        col={col}
                         onEdit={() => openEdit(todo)}
                         onDelete={() => handleDelete(todo.id)}
                         onMove={moveStatus}
@@ -212,9 +252,26 @@ export default function Todo() {
                     ))
                   )}
                 </div>
+              ))}
+
+              {/* Unassigned column */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {getTodosFor(null, statusRow.key).length === 0 ? (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={false} style={{ margin: "12px 0" }} />
+                ) : (
+                  getTodosFor(null, statusRow.key).map((todo) => (
+                    <TodoCard
+                      key={todo.id}
+                      todo={todo}
+                      onEdit={() => openEdit(todo)}
+                      onDelete={() => handleDelete(todo.id)}
+                      onMove={moveStatus}
+                    />
+                  ))
+                )}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       </Spin>
 
@@ -239,7 +296,9 @@ export default function Todo() {
               <Select allowClear placeholder="未分配">
                 {MEMBERS.map((m) => (
                   <Select.Option key={m} value={m}>
-                    <Tag color={ASSIGNEE_COLORS[m]} style={{ margin: 0 }}>{m}</Tag>
+                    <Tag color={ASSIGNEE_COLORS[m]} style={{ margin: 0 }}>
+                      {m.toUpperCase()}
+                    </Tag>
                   </Select.Option>
                 ))}
               </Select>
@@ -248,7 +307,9 @@ export default function Todo() {
               <Select>
                 {(["high", "medium", "low"] as TodoPriority[]).map((p) => (
                   <Select.Option key={p} value={p}>
-                    <Tag color={PRIORITY_CONFIG[p].color} style={{ margin: 0 }}>{PRIORITY_CONFIG[p].label}</Tag>
+                    <Tag color={PRIORITY_CONFIG[p].color} style={{ margin: 0 }}>
+                      {PRIORITY_CONFIG[p].label}
+                    </Tag>
                   </Select.Option>
                 ))}
               </Select>
@@ -257,8 +318,10 @@ export default function Todo() {
           {editing && (
             <Form.Item name="status" label="状态" rules={[{ required: true }]}>
               <Select>
-                {COLUMNS.map((c) => (
-                  <Select.Option key={c.key} value={c.key}>{c.label}</Select.Option>
+                {STATUS_ROWS.map((s) => (
+                  <Select.Option key={s.key} value={s.key}>
+                    {s.label}
+                  </Select.Option>
                 ))}
               </Select>
             </Form.Item>
@@ -268,7 +331,9 @@ export default function Todo() {
               <Select placeholder="选择你是谁">
                 {MEMBERS.map((m) => (
                   <Select.Option key={m} value={m}>
-                    <Tag color={ASSIGNEE_COLORS[m]} style={{ margin: 0 }}>{m}</Tag>
+                    <Tag color={ASSIGNEE_COLORS[m]} style={{ margin: 0 }}>
+                      {m.toUpperCase()}
+                    </Tag>
                   </Select.Option>
                 ))}
               </Select>
@@ -282,25 +347,24 @@ export default function Todo() {
 
 function TodoCard({
   todo,
-  col,
   onEdit,
   onDelete,
   onMove,
 }: {
   todo: TodoRow;
-  col: { key: TodoStatus; label: string };
   onEdit: () => void;
   onDelete: () => void;
   onMove: (todo: TodoRow, status: TodoStatus) => void;
 }) {
-  const prevCol = COLUMNS[COLUMNS.findIndex((c) => c.key === col.key) - 1];
-  const nextCol = COLUMNS[COLUMNS.findIndex((c) => c.key === col.key) + 1];
+  const statusIndex = STATUS_ROWS.findIndex((s) => s.key === todo.status);
+  const canMovePrev = statusIndex > 0;
+  const canMoveNext = statusIndex < STATUS_ROWS.length - 1;
   const pri = PRIORITY_CONFIG[todo.priority];
 
   return (
     <Card
       size="small"
-      style={{ borderLeft: `3px solid ${COLUMNS.find((c) => c.key === col.key)!.color}` }}
+      style={{ borderLeft: `3px solid ${STATUS_ROWS.find((s) => s.key === todo.status)?.color}` }}
       styles={{ body: { padding: "10px 12px" } }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
@@ -322,31 +386,33 @@ function TodoCard({
       )}
 
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-        {todo.assignee ? (
-          <Tag color={ASSIGNEE_COLORS[todo.assignee]} style={{ margin: 0, fontSize: 11 }}>
-            {todo.assignee}
-          </Tag>
-        ) : (
-          <Tag icon={<UserOutlined />} style={{ margin: 0, fontSize: 11, color: "#999", borderColor: "#d9d9d9" }}>
-            未分配
-          </Tag>
-        )}
-        <Tag color={pri.color} style={{ margin: 0, fontSize: 11 }}>{pri.label}</Tag>
+        <Tag color={pri.color} style={{ margin: 0, fontSize: 11 }}>
+          {pri.label}
+        </Tag>
         <Typography.Text type="secondary" style={{ fontSize: 11, marginLeft: "auto" }}>
           {new Date(todo.createdAt).toLocaleDateString("zh-CN")}
         </Typography.Text>
       </div>
 
-      {(prevCol || nextCol) && (
+      {(canMovePrev || canMoveNext) && (
         <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-          {prevCol && (
-            <Button size="small" style={{ fontSize: 11, height: 22, padding: "0 8px" }} onClick={() => onMove(todo, prevCol.key)}>
-              ← {prevCol.label}
+          {canMovePrev && (
+            <Button
+              size="small"
+              style={{ fontSize: 11, height: 22, padding: "0 8px" }}
+              onClick={() => onMove(todo, STATUS_ROWS[statusIndex - 1].key)}
+            >
+              ← {STATUS_ROWS[statusIndex - 1].label}
             </Button>
           )}
-          {nextCol && (
-            <Button size="small" type="primary" style={{ fontSize: 11, height: 22, padding: "0 8px" }} onClick={() => onMove(todo, nextCol.key)}>
-              {nextCol.label} →
+          {canMoveNext && (
+            <Button
+              size="small"
+              type="primary"
+              style={{ fontSize: 11, height: 22, padding: "0 8px" }}
+              onClick={() => onMove(todo, STATUS_ROWS[statusIndex + 1].key)}
+            >
+              {STATUS_ROWS[statusIndex + 1].label} →
             </Button>
           )}
         </div>
