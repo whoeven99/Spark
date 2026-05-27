@@ -37,6 +37,29 @@ function stageFromV4Status(status: TranslationV4Status): string {
   return "INIT";
 }
 
+/** Aligns with resolveResumeStatus in api.translate.v4.task-action.ts */
+function resolveResumeV4Status(
+  currentStatus: TranslationV4Status,
+  errorStage: string | null,
+): TranslationV4Status | null {
+  if (currentStatus !== "PAUSED" && currentStatus !== "FAILED") return null;
+  switch (errorStage) {
+    case "TRANSLATE": return "TRANSLATE_QUEUED";
+    case "WRITEBACK": return "WRITEBACK_QUEUED";
+    case "VERIFY": return "VERIFY_QUEUED";
+    default: return "INIT_QUEUED";
+  }
+}
+
+type OptimisticActionIntent = "pause" | "cancel" | "resume";
+
+type OptimisticJobPatch = {
+  status: TranslationV4Status;
+  priorStatus: TranslationV4Status;
+  errorStage?: string | null;
+  errorMessage?: string | null;
+};
+
 function progressFromJob(
   job: TranslationV4Job,
   status: TranslationV4Status,
@@ -94,6 +117,12 @@ function resolveDisplayStatus(
   if (job.status === "PAUSED" || TERMINAL_V4_STATUSES.includes(job.status)) {
     return job.status;
   }
+  if (
+    ACTIVE_STATUSES.includes(job.status) &&
+    progress?.status === "PAUSED"
+  ) {
+    return job.status;
+  }
   return (progress?.status ?? job.status) as TranslationV4Status;
 }
 
@@ -114,7 +143,7 @@ export function TranslationV4Page() {
   const [jobs, setJobs] = useState<TranslationV4Job[]>(loaderData.jobs as TranslationV4Job[]);
   const [progressMap, setProgressMap] = useState<Record<string, ProgressData>>({});
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const optimisticPausedRef = useRef<Set<string>>(new Set());
+  const optimisticActionRef = useRef<Map<string, OptimisticActionIntent>>(new Map());
 
   const shopName = loaderData.shop;
   const query = typeof window !== "undefined" ? window.location.search : "";
@@ -124,6 +153,63 @@ export function TranslationV4Page() {
     const listPayload = (await listRes.json()) as { ok: boolean; jobs?: TranslationV4Job[] };
     if (listPayload.ok && listPayload.jobs) setJobs(listPayload.jobs);
   }, [query, shopName]);
+
+  const applyOptimisticPatch = useCallback(
+    (taskId: string, job: TranslationV4Job, patch: OptimisticJobPatch) => {
+      const errorStage =
+        patch.errorStage !== undefined ? patch.errorStage : job.errorStage;
+      const errorMessage =
+        patch.errorMessage !== undefined ? patch.errorMessage : job.errorMessage;
+
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.id === taskId
+            ? {
+                ...j,
+                status: patch.status,
+                errorStage,
+                errorMessage,
+              }
+            : j,
+        ),
+      );
+      setProgressMap((prev) => {
+        const base =
+          prev[taskId] ?? progressFromJob(job, patch.priorStatus, job.errorStage);
+        return {
+          ...prev,
+          [taskId]: {
+            ...base,
+            status: patch.status,
+            errorStage,
+            errorMessage,
+          },
+        };
+      });
+    },
+    [],
+  );
+
+  const syncTaskAction = useCallback(
+    async (taskId: string, action: OptimisticActionIntent) => {
+      try {
+        const res = await fetch(`/api/translate/v4/task-action${query}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ taskId, shopName, action }),
+        });
+        const payload = (await res.json()) as { ok?: boolean };
+        if (!res.ok || !payload.ok) throw new Error("task action failed");
+        optimisticActionRef.current.delete(taskId);
+        await refreshJobList();
+      } catch {
+        optimisticActionRef.current.delete(taskId);
+        shopify.toast.show("操作失败");
+        await refreshJobList();
+      }
+    },
+    [query, shopName, refreshJobList, shopify],
+  );
 
   // Poll active jobs
   const pollActiveJobs = useCallback(async () => {
@@ -142,12 +228,14 @@ export function TranslationV4Page() {
           const payload = (await res.json()) as { ok: boolean } & ProgressData;
           if (!payload.ok) return;
 
-          const isOptimisticPaused = optimisticPausedRef.current.has(taskId);
-          const isActiveFromServer = ACTIVE_STATUSES.includes(payload.status);
-          if (isOptimisticPaused && isActiveFromServer) return;
+          const intent = optimisticActionRef.current.get(taskId);
+          if (intent === "pause" || intent === "cancel") {
+            if (ACTIVE_STATUSES.includes(payload.status)) return;
+          }
+          if (intent === "resume" && payload.status === "PAUSED") return;
 
           if (payload.status === "PAUSED") {
-            optimisticPausedRef.current.delete(taskId);
+            optimisticActionRef.current.delete(taskId);
           }
 
           setProgressMap((prev) => ({ ...prev, [taskId]: payload }));
@@ -201,55 +289,47 @@ export function TranslationV4Page() {
     }
   };
 
-  const handleAction = async (taskId: string, action: "cancel" | "pause" | "resume") => {
+  const handleAction = (taskId: string, action: "cancel" | "pause" | "resume") => {
+    const job = jobs.find((j) => j.id === taskId);
+    if (!job) return;
+
+    const priorStatus = (progressMap[taskId]?.status ?? job.status) as TranslationV4Status;
+
     if (action === "pause") {
-      const job = jobs.find((j) => j.id === taskId);
-      if (!job) return;
-
-      optimisticPausedRef.current.add(taskId);
-      const priorStatus = (progressMap[taskId]?.status ?? job.status) as TranslationV4Status;
-      const errorStage = stageFromV4Status(priorStatus);
-
-      setJobs((prev) =>
-        prev.map((j) =>
-          j.id === taskId ? { ...j, status: "PAUSED", errorStage } : j,
-        ),
-      );
-      setProgressMap((prev) => {
-        const base =
-          prev[taskId] ?? progressFromJob(job, priorStatus, job.errorStage);
-        return { ...prev, [taskId]: { ...base, status: "PAUSED", errorStage } };
+      optimisticActionRef.current.set(taskId, "pause");
+      applyOptimisticPatch(taskId, job, {
+        status: "PAUSED",
+        priorStatus,
+        errorStage: stageFromV4Status(priorStatus),
       });
-
-      void (async () => {
-        try {
-          const res = await fetch(`/api/translate/v4/task-action${query}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ taskId, shopName, action: "pause" }),
-          });
-          const payload = (await res.json()) as { ok?: boolean };
-          if (!res.ok || !payload.ok) throw new Error("pause failed");
-          optimisticPausedRef.current.delete(taskId);
-          await refreshJobList();
-        } catch {
-          optimisticPausedRef.current.delete(taskId);
-          shopify.toast.show("操作失败");
-          await refreshJobList();
-        }
-      })();
+      void syncTaskAction(taskId, "pause");
       return;
     }
 
-    try {
-      await fetch(`/api/translate/v4/task-action${query}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskId, shopName, action }),
+    if (action === "cancel") {
+      optimisticActionRef.current.set(taskId, "cancel");
+      applyOptimisticPatch(taskId, job, {
+        status: "CANCELLED",
+        priorStatus,
       });
-      await refreshJobList();
-    } catch {
-      shopify.toast.show("操作失败");
+      void syncTaskAction(taskId, "cancel");
+      return;
+    }
+
+    if (action === "resume") {
+      const resumeStatus = resolveResumeV4Status(job.status, job.errorStage);
+      if (!resumeStatus) {
+        shopify.toast.show("无法重试该任务");
+        return;
+      }
+      optimisticActionRef.current.set(taskId, "resume");
+      applyOptimisticPatch(taskId, job, {
+        status: resumeStatus,
+        priorStatus,
+        errorStage: null,
+        errorMessage: null,
+      });
+      void syncTaskAction(taskId, "resume");
     }
   };
 
@@ -409,7 +489,7 @@ type JobCardProps = {
   job: TranslationV4Job;
   status: TranslationV4Status;
   progress: ProgressData | null;
-  onAction: (taskId: string, action: "cancel" | "pause" | "resume") => Promise<void>;
+  onAction: (taskId: string, action: "cancel" | "pause" | "resume") => void | Promise<void>;
 };
 
 function JobCard({ job, status, progress, onAction }: JobCardProps) {
