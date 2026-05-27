@@ -402,7 +402,7 @@ function TodoCard({
               style={{ fontSize: 11, height: 22, padding: "0 8px" }}
               onClick={() => onMove(todo, STATUS_ROWS[statusIndex - 1].key)}
             >
-              ← {STATUS_ROWS[statusIndex - 1].label}
+              ↑ {STATUS_ROWS[statusIndex - 1].label}
             </Button>
           )}
           {canMoveNext && (
@@ -412,7 +412,7 @@ function TodoCard({
               style={{ fontSize: 11, height: 22, padding: "0 8px" }}
               onClick={() => onMove(todo, STATUS_ROWS[statusIndex + 1].key)}
             >
-              {STATUS_ROWS[statusIndex + 1].label} →
+              {STATUS_ROWS[statusIndex + 1].label} ↓
             </Button>
           )}
         </div>
