@@ -2,7 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useLoaderData } from "react-router";
 import type { loader } from "../app.translation-v4";
-import type { TranslationV4Job, TranslationV4Status } from "../../server/translation/v4/types";
+import {
+  TERMINAL_V4_STATUSES,
+  type TranslationV4Job,
+  type TranslationV4Status,
+} from "../../server/translation/v4/types";
 import {
   PageSurface,
   pageColorTokens,
@@ -81,6 +85,17 @@ type ProgressData = {
     currentModule: string | null;
   };
 };
+
+/** job.status 为暂停/终端态时以 Cosmos 列表为准，避免陈旧 poll 覆盖 UI */
+function resolveDisplayStatus(
+  job: TranslationV4Job,
+  progress: ProgressData | undefined,
+): TranslationV4Status {
+  if (job.status === "PAUSED" || TERMINAL_V4_STATUSES.includes(job.status)) {
+    return job.status;
+  }
+  return (progress?.status ?? job.status) as TranslationV4Status;
+}
 
 export function TranslationV4Page() {
   const shopify = useAppBridge();
@@ -371,7 +386,7 @@ export function TranslationV4Page() {
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
               {jobs.map((job) => {
                 const progress = progressMap[job.id];
-                const status = (progress?.status ?? job.status) as TranslationV4Status;
+                const status = resolveDisplayStatus(job, progress);
                 return (
                   <JobCard
                     key={job.id}
