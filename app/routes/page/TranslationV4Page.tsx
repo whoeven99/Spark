@@ -24,6 +24,46 @@ const ACTIVE_STATUSES: TranslationV4Status[] = [
   "VERIFY_QUEUED", "VERIFYING",
 ];
 
+/** Aligns with stageFromStatus in api.translate.v4.task-action.ts */
+function stageFromV4Status(status: TranslationV4Status): string {
+  if (["INIT_QUEUED", "INITIALIZING", "INIT_DONE"].includes(status)) return "INIT";
+  if (["TRANSLATE_QUEUED", "TRANSLATING", "TRANSLATE_DONE"].includes(status)) return "TRANSLATE";
+  if (["WRITEBACK_QUEUED", "WRITING_BACK"].includes(status)) return "WRITEBACK";
+  if (["VERIFY_QUEUED", "VERIFYING"].includes(status)) return "VERIFY";
+  return "INIT";
+}
+
+function progressFromJob(
+  job: TranslationV4Job,
+  status: TranslationV4Status,
+  errorStage: string | null,
+): ProgressData {
+  return {
+    status,
+    testMode: job.testMode,
+    source: job.source,
+    target: job.target,
+    errorMessage: job.errorMessage,
+    errorStage,
+    lastHeartbeat: job.lastHeartbeat,
+    updatedAt: job.updatedAt,
+    metrics: {
+      initTotal: job.metrics.initTotal,
+      initDone: job.metrics.initDone,
+      translateTotal: job.metrics.translateTotal,
+      translateDone: job.metrics.translateDone,
+      translateFailed: job.metrics.translateFailed,
+      writebackTotal: job.metrics.writebackTotal,
+      writebackDone: job.metrics.writebackDone,
+      writebackFailed: job.metrics.writebackFailed,
+      verifyTotal: job.metrics.verifyTotal,
+      verifyDone: job.metrics.verifyDone,
+      verifyFailed: job.metrics.verifyFailed,
+      currentModule: null,
+    },
+  };
+}
+
 type ProgressData = {
   status: TranslationV4Status;
   testMode: boolean;
@@ -59,9 +99,16 @@ export function TranslationV4Page() {
   const [jobs, setJobs] = useState<TranslationV4Job[]>(loaderData.jobs as TranslationV4Job[]);
   const [progressMap, setProgressMap] = useState<Record<string, ProgressData>>({});
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const optimisticPausedRef = useRef<Set<string>>(new Set());
 
   const shopName = loaderData.shop;
   const query = typeof window !== "undefined" ? window.location.search : "";
+
+  const refreshJobList = useCallback(async () => {
+    const listRes = await fetch(`/api/translate/v4/tasks${query}&shopName=${shopName}`);
+    const listPayload = (await listRes.json()) as { ok: boolean; jobs?: TranslationV4Job[] };
+    if (listPayload.ok && listPayload.jobs) setJobs(listPayload.jobs);
+  }, [query, shopName]);
 
   // Poll active jobs
   const pollActiveJobs = useCallback(async () => {
@@ -79,8 +126,16 @@ export function TranslationV4Page() {
           if (!res.ok) return;
           const payload = (await res.json()) as { ok: boolean } & ProgressData;
           if (!payload.ok) return;
+
+          const isOptimisticPaused = optimisticPausedRef.current.has(taskId);
+          const isActiveFromServer = ACTIVE_STATUSES.includes(payload.status);
+          if (isOptimisticPaused && isActiveFromServer) return;
+
+          if (payload.status === "PAUSED") {
+            optimisticPausedRef.current.delete(taskId);
+          }
+
           setProgressMap((prev) => ({ ...prev, [taskId]: payload }));
-          // Update job status in list
           setJobs((prev) =>
             prev.map((j) => (j.id === taskId ? { ...j, status: payload.status } : j)),
           );
@@ -132,15 +187,52 @@ export function TranslationV4Page() {
   };
 
   const handleAction = async (taskId: string, action: "cancel" | "pause" | "resume") => {
+    if (action === "pause") {
+      const job = jobs.find((j) => j.id === taskId);
+      if (!job) return;
+
+      optimisticPausedRef.current.add(taskId);
+      const priorStatus = (progressMap[taskId]?.status ?? job.status) as TranslationV4Status;
+      const errorStage = stageFromV4Status(priorStatus);
+
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.id === taskId ? { ...j, status: "PAUSED", errorStage } : j,
+        ),
+      );
+      setProgressMap((prev) => {
+        const base =
+          prev[taskId] ?? progressFromJob(job, priorStatus, job.errorStage);
+        return { ...prev, [taskId]: { ...base, status: "PAUSED", errorStage } };
+      });
+
+      void (async () => {
+        try {
+          const res = await fetch(`/api/translate/v4/task-action${query}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ taskId, shopName, action: "pause" }),
+          });
+          const payload = (await res.json()) as { ok?: boolean };
+          if (!res.ok || !payload.ok) throw new Error("pause failed");
+          optimisticPausedRef.current.delete(taskId);
+          await refreshJobList();
+        } catch {
+          optimisticPausedRef.current.delete(taskId);
+          shopify.toast.show("操作失败");
+          await refreshJobList();
+        }
+      })();
+      return;
+    }
+
     try {
       await fetch(`/api/translate/v4/task-action${query}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ taskId, shopName, action }),
       });
-      const listRes = await fetch(`/api/translate/v4/tasks${query}&shopName=${shopName}`);
-      const listPayload = (await listRes.json()) as { ok: boolean; jobs?: TranslationV4Job[] };
-      if (listPayload.ok && listPayload.jobs) setJobs(listPayload.jobs);
+      await refreshJobList();
     } catch {
       shopify.toast.show("操作失败");
     }
