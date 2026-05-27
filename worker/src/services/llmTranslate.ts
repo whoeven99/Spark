@@ -290,7 +290,7 @@ export async function translateBatch(
   testMode: boolean,
 ): Promise<TranslateResult[]> {
   if (testMode) {
-    return items.map((item) => ({ key: item.key, translatedValue: item.value, digest: item.digest }));
+    return items.map((item) => ({ key: item.key, translatedValue: `${item.value} - test`, digest: item.digest }));
   }
 
   const resultMap = new Map<string, TranslateResult>();

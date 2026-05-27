@@ -77,7 +77,7 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
           await heartbeat(shopName, jobId);
 
           const translations: TranslationInput[] = resource.translations
-            .filter((t) => t.translatedValue?.trim())
+            .filter((t) => t.translatedValue?.trim() && t.translatedValue !== t.originalValue)
             .map((t) => ({
               locale: target,
               key: t.key,
