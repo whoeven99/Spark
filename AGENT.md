@@ -2,7 +2,7 @@
 
 本文档是 AI Agent 在对话中需要的完整项目上下文。包含代码结构、业务流程、快速定位、改动指南等。
 
-**关键约定**：改代码前必先读对应的 `docs/` 文档（translation、generateDescription、billing 等）。改代码后必须 `npm run test && npm run build` 通过。
+**关键约定**：改代码前必先读对应的 `docs/` 文档（translation、generateDescription、billing 等）。改代码后必须 `npm run test && npm run build` 通过。**admin 项目改动后必须进入 `admin/` 目录运行 `npm run build` 检查编译错误**。
 
 **新增 Skill / Tool 前必读**：[`docs/ROADMAP.md`](docs/ROADMAP.md) — 包含全部规划中的原子 Skill、优先级、实现路径和所需新增 Shopify Scope，避免重复造轮子或遗漏依赖。
 
@@ -307,6 +307,7 @@ activateSubscription / applyTokenPackPurchase
 | 改数据库模型 | `prisma/schema.prisma` → `npm run turso:migrate:*` | — |
 | 改广告 OAuth 配置 | `app/routes/app.ads.*.config.tsx`、`app/server/adAuthCredentialStore.server.ts` | — |
 | 改物流凭证 | `app/routes/app.logistics.*.config.tsx`、`app/server/logisticsCredentialStore.server.ts` | — |
+| **[admin]** 改 Todo 功能 | `admin/server/routes/todos.ts`、`admin/src/pages/Todo.tsx`、`admin/src/api.ts` | 改后需 `cd admin && npm run build` 验证 |
 
 ---
 
@@ -386,6 +387,7 @@ npm run render:digest          # 生成日报
 - ✅ 只改需求相关文件，避免无关重构
 - ✅ 改后运行：`npm run lint && npm run typecheck && npm run test`
 - ✅ **改后必须 `npm run build && npm run test` 通过**
+- ✅ **若改 admin 项目，进入 `admin/` 目录运行 `npm run build` 验证编译（无测试框架）**
 - ✅ 推送前再次检查文案一致性、鉴权流程、API 返回结构
 
 ---

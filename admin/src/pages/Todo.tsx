@@ -19,7 +19,7 @@ import {
   DeleteOutlined,
   UserOutlined,
   CheckCircleOutlined,
-  CircleOutlined,
+  HourglassOutlined,
   PlayCircleOutlined,
 } from "@ant-design/icons";
 import {
@@ -55,7 +55,7 @@ const STATUS_ROWS: {
   bgColor: string;
 }[] = [
   { key: "doing", label: "进行中", icon: <PlayCircleOutlined />, color: "#faad14", bgColor: "#fffbe6" },
-  { key: "todo", label: "待办", icon: <CircleOutlined />, color: "#d9d9d9", bgColor: "#fafafa" },
+  { key: "todo", label: "待办", icon: <HourglassOutlined />, color: "#d9d9d9", bgColor: "#fafafa" },
   { key: "done", label: "已完成", icon: <CheckCircleOutlined />, color: "#52c41a", bgColor: "#f6ffed" },
 ];
 
