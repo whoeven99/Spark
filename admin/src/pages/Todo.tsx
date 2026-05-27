@@ -52,8 +52,8 @@ const ASSIGNEE_HEX: Record<TodoAssignee, string> = {
 };
 
 const PRIORITY_CONFIG: Record<TodoPriority, { color: string; label: string }> = {
-  high: { color: "red", label: "高" },
-  medium: { color: "orange", label: "中" },
+  high: { color: "volcano", label: "高" },
+  medium: { color: "gold", label: "中" },
   low: { color: "default", label: "低" },
 };
 
@@ -65,9 +65,9 @@ const STATUS_ROWS: {
   bgColor: string;
   borderColor: string;
 }[] = [
-  { key: "doing", label: "进行中", icon: <PlayCircleOutlined />, color: "#fa8c16", bgColor: "#fff7e6", borderColor: "#ffd591" },
-  { key: "todo",  label: "待办",   icon: <HourglassOutlined />,  color: "#8c8c8c", bgColor: "#f5f5f5", borderColor: "#d9d9d9" },
-  { key: "done",  label: "已完成", icon: <CheckCircleOutlined />, color: "#389e0d", bgColor: "#f6ffed", borderColor: "#b7eb8f" },
+  { key: "doing", label: "进行中", icon: <PlayCircleOutlined />, color: "#d97706", bgColor: "#fffcf5", borderColor: "#fde68a" },
+  { key: "todo",  label: "待办",   icon: <HourglassOutlined />,  color: "#6b7280", bgColor: "#fafafa", borderColor: "#e5e7eb" },
+  { key: "done",  label: "已完成", icon: <CheckCircleOutlined />, color: "#059669", bgColor: "#f8fffe", borderColor: "#d1fae5" },
 ];
 
 const ME_KEY = "spark_admin_me";
@@ -362,7 +362,7 @@ function TodoCard({
   return (
     <Card
       size="small"
-      style={{ borderTop: `3px solid ${statusRow.color}`, borderRadius: 6 }}
+      style={{ borderTop: `2px solid ${statusRow.borderColor}`, borderRadius: 6, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
       styles={{ body: { padding: "10px 12px" } }}
     >
       {/* Title + actions */}
@@ -390,7 +390,7 @@ function TodoCard({
 
       {/* Priority + date */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
-        <Tag color={pri.color} style={{ margin: 0, fontSize: 11 }}>{pri.label}优先级</Tag>
+        <Tag color={pri.color} style={{ margin: 0, fontSize: 11 }}>{pri.label}</Tag>
         <Typography.Text type="secondary" style={{ fontSize: 11, marginLeft: "auto" }}>
           {new Date(todo.createdAt).toLocaleDateString("zh-CN")}
         </Typography.Text>
@@ -412,8 +412,8 @@ function TodoCard({
                     fontSize: 11,
                     height: 26,
                     color: prevStatus.color,
-                    borderColor: prevStatus.color,
-                    background: prevStatus.bgColor,
+                    borderColor: prevStatus.borderColor,
+                    background: "#fff",
                   }}
                 >
                   {prevStatus.label}
@@ -430,9 +430,9 @@ function TodoCard({
                     flex: 1,
                     fontSize: 11,
                     height: 26,
-                    color: "#fff",
-                    background: nextStatus.color,
+                    color: nextStatus.color,
                     borderColor: nextStatus.color,
+                    background: nextStatus.bgColor,
                     fontWeight: 600,
                   }}
                 >
