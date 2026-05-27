@@ -36,6 +36,16 @@
   max-width: 36rem;
 }
 
+.usageHeaderBadge {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
 .planBadge {
   flex-shrink: 0;
   padding: 0.3rem 0.8rem;
@@ -141,7 +151,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
-  margin-top: 0.85rem;
+  margin-top: 0;
 }
 
 .poolChip {
@@ -764,13 +774,33 @@
   flex: 1 1 auto;
 }
 
-.subscriptionMeta {
-  margin: 0;
-  flex: 1 1 16rem;
-  min-width: 0;
-  font-size: 0.8125rem;
-  line-height: 1.45;
+.subscriptionMetaList {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.12rem;
+}
+
+.subscriptionMetaItem {
+  font-size: 0.75rem;
+  line-height: 1.35;
   color: #6d7175;
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .usageHeaderBadge {
+    width: 100%;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .subscriptionMetaList {
+    align-items: flex-start;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
 }
 
 .devCancelBar {

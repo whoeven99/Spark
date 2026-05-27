@@ -106,6 +106,7 @@
     "lowBalanceWarning": "Token 不足或未订阅，请前往套餐页开通或购包。",
     "openBillingPage": "前往套餐页",
     "periodEnd": "当前周期至",
+    "quotaResets": "额度重置于",
     "trialEnds": "试用截止",
     "intervalMonthly": "月付",
     "intervalAnnual": "年付",
@@ -168,6 +169,8 @@
     "quickPromptCreateTranslation": "创建翻译任务",
     "quickPromptGenerateDescription": "生成商品文案",
     "quickPromptPictureTranslate": "图片翻译",
+    "quickPromptShopHealthCheck": "经营体检",
+    "quickPromptProductLaunchPipeline": "上新流水线",
     "intro": "你可以在这里直接提问，获取店铺经营分析、广告/物流授权引导和运营建议。",
     "assistantOnline": "AI 助手在线",
     "quickQuestions": "快捷问题",
@@ -649,5 +652,22 @@
     "cosmosStatusSaveRunning": "正在写回 Shopify",
     "cosmosStatusSaveDone": "已完成",
     "cosmosStatusFailed": "失败"
+  },
+  "qualityScore": {
+    "scoreAction": "质量评分",
+    "scoring": "正在评分...",
+    "scoreSuccess": "评分完成",
+    "emptyResult": "请在左侧选择商品并点击质量评分。",
+    "overallScore": "综合质量评分",
+    "levelGood": "优秀 — 商品页面质量良好",
+    "levelFair": "良好 — 还有提升空间",
+    "levelPoor": "待优化 — 建议优先改进",
+    "dimTitle": "标题质量",
+    "dimImages": "主图数量",
+    "dimDescription": "描述完整度",
+    "dimVariants": "Variant 结构",
+    "dimTags": "标签与分类",
+    "suggestions": "综合改进建议",
+    "resultTitle": "质量评分结果"
   }
 }

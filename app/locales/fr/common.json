@@ -90,6 +90,8 @@
     "quickPromptCreateTranslation": "Créer une tâche de traduction",
     "quickPromptGenerateDescription": "Générer une description produit",
     "quickPromptPictureTranslate": "Traduction d’images",
+    "quickPromptShopHealthCheck": "Diagnostic boutique",
+    "quickPromptProductLaunchPipeline": "Pipeline de lancement",
     "intro": "Demandez directement des informations boutique, l’autorisation pub/logistique et des suggestions opérationnelles.",
     "assistantOnline": "AI Assistant en ligne",
     "quickQuestions": "Questions rapides",
@@ -519,6 +521,7 @@
     "lowBalanceWarning": "Tokens insuffisants. Abonnez-vous ou achetez un pack sur la page des plans.",
     "openBillingPage": "Aller aux plans",
     "periodEnd": "Fin de période",
+    "quotaResets": "Réinitialisation le",
     "trialEnds": "Fin de l'essai",
     "intervalMonthly": "Mensuel",
     "intervalAnnual": "Annuel",
@@ -531,5 +534,22 @@
       "EXPIRED": "Expiré",
       "FROZEN": "Gelé"
     }
+  },
+  "qualityScore": {
+    "scoreAction": "Score quality",
+    "scoring": "Scoring...",
+    "scoreSuccess": "Scoring complete",
+    "emptyResult": "Select a product and click Score quality.",
+    "overallScore": "Overall quality score",
+    "levelGood": "Good — product page quality is strong",
+    "levelFair": "Fair — room for improvement",
+    "levelPoor": "Needs work — improvements recommended",
+    "dimTitle": "Title quality",
+    "dimImages": "Image count",
+    "dimDescription": "Description completeness",
+    "dimVariants": "Variant structure",
+    "dimTags": "Tags & category",
+    "suggestions": "Key recommendations",
+    "resultTitle": "Quality score"
   }
 }

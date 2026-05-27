@@ -97,6 +97,7 @@
     "lowBalanceWarning": "Token이 부족합니다. 결제 페이지에서 구독하거나 팩을 구매하세요.",
     "openBillingPage": "요금제로",
     "periodEnd": "현재 기간 종료",
+    "quotaResets": "할당량 초기화",
     "trialEnds": "체험 종료",
     "intervalMonthly": "월간",
     "intervalAnnual": "연간",
@@ -120,6 +121,8 @@
     "quickPromptCreateTranslation": "번역 작업 생성",
     "quickPromptGenerateDescription": "상품 설명 생성",
     "quickPromptPictureTranslate": "이미지 번역",
+    "quickPromptShopHealthCheck": "스토어 건강 진단",
+    "quickPromptProductLaunchPipeline": "신상품 출시 파이프라인",
     "intro": "스토어 분석, 광고/물류 인증 가이드, 운영 제안을 바로 질문할 수 있습니다.",
     "assistantOnline": "AI 어시스턴트 온라인",
     "quickQuestions": "빠른 질문",
@@ -531,5 +534,22 @@
     "cosmosStatusSaveRunning": "Shopify에 쓰는 중",
     "cosmosStatusSaveDone": "완료됨",
     "cosmosStatusFailed": "실패"
+  },
+  "qualityScore": {
+    "scoreAction": "Score quality",
+    "scoring": "Scoring...",
+    "scoreSuccess": "Scoring complete",
+    "emptyResult": "Select a product and click Score quality.",
+    "overallScore": "Overall quality score",
+    "levelGood": "Good — product page quality is strong",
+    "levelFair": "Fair — room for improvement",
+    "levelPoor": "Needs work — improvements recommended",
+    "dimTitle": "Title quality",
+    "dimImages": "Image count",
+    "dimDescription": "Description completeness",
+    "dimVariants": "Variant structure",
+    "dimTags": "Tags & category",
+    "suggestions": "Key recommendations",
+    "resultTitle": "Quality score"
   }
 }

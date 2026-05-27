@@ -3,10 +3,12 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import { useLoaderData } from "react-router";
 import { useProductImprove } from "../../hooks/useProductImprove";
+import { useProductQualityScore } from "../../hooks/useProductQualityScore";
 import type { loader } from "../app.product-improve";
 import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
 import { ProductSelector } from "../component/product/ProductSelector";
 import { GenerateDescriptionResultEditor } from "../component/productImprove/GenerateDescriptionResultEditor";
+import { ProductQualityScoreResult } from "../component/productImprove/ProductQualityScoreResult";
 import {
   PageSectionHeader,
   PageSurface,
@@ -19,7 +21,6 @@ import {
   pageSelectStyle,
   pageStatusBadgeStyle,
   pageTrustFootnoteStyle,
-  stickyAsideColumnStyle,
   twoColumnLayoutStyle,
   twoColumnMainStyle,
   twoColumnSideStyle,
@@ -71,9 +72,22 @@ export function ProductImprovePage() {
     },
   });
 
+  const { isScoring, scoreResult, scoreError, submitScore, resetScore } =
+    useProductQualityScore({
+      locationSearch: search,
+      toastShow: (message) => {
+        shopify.toast.show(message);
+      },
+    });
+
   const handleGenerate = async () => {
     const pid = (selectedProduct?.id ?? productId).trim();
     await submitGenerate(pid);
+  };
+
+  const handleScore = async () => {
+    const pid = (selectedProduct?.id ?? productId).trim();
+    await submitScore(pid);
   };
 
   const productIdForActions = (selectedProduct?.id ?? productId).trim();
@@ -183,11 +197,22 @@ export function ProductImprovePage() {
                     type="button"
                     variant="secondary"
                     onClick={() => {
+                      void handleScore();
+                    }}
+                    {...(isScoring || isSubmitting || isSaving ? { disabled: true } : {})}
+                  >
+                    {isScoring ? t("qualityScore.scoring") : t("qualityScore.scoreAction")}
+                  </s-button>
+                  <s-button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
                       resetResult();
+                      resetScore();
                       setSelectedProduct(null);
                       setProductId("");
                     }}
-                    {...(isSubmitting || isSaving ? { disabled: true } : {})}
+                    {...(isSubmitting || isSaving || isScoring ? { disabled: true } : {})}
                   >
                     {t("common.clearResult")}
                   </s-button>
@@ -196,7 +221,7 @@ export function ProductImprovePage() {
             </PageSurface>
           </div>
 
-          <div style={{ ...twoColumnSideStyle, ...stickyAsideColumnStyle }}>
+          <div style={{ ...twoColumnSideStyle, display: "flex", flexDirection: "column", gap: "1.5rem" }}>
             <PageSurface title={t("generate.resultTitle")}>
               {description !== null ? (
                 <GenerateDescriptionResultEditor
@@ -228,6 +253,14 @@ export function ProductImprovePage() {
                   <span>{t("generate.emptyResult")}</span>
                 </div>
               )}
+            </PageSurface>
+
+            <PageSurface title={t("qualityScore.resultTitle")}>
+              <ProductQualityScoreResult
+                result={scoreResult}
+                isScoring={isScoring}
+                errorText={scoreError}
+              />
             </PageSurface>
           </div>
         </div>

@@ -6,6 +6,7 @@ import { fetchRecentReflectionSummary } from "../../agentRunLog/recentReflection
 import { baseAgentTools } from "../skills/system/baseAgentTools.server";
 import { wrapToolWithTokenUsage } from "../../tokenUsage/wrapToolWithTokenUsage.server";
 import type { AgentContext, ToolDefinition } from "./toolRegistry.server";
+import type { PlaybookDefinition } from "./playbookRegistry.server";
 
 let shopChatModel: ChatOpenAI | null = null;
 
@@ -33,7 +34,8 @@ export function getShopChatModel(): ChatOpenAI {
 export async function buildShopChatGraph(
   context: AgentContext,
   extraTools: DynamicStructuredTool[] = [],
-  activeDefs: ToolDefinition[] = []
+  activeDefs: ToolDefinition[] = [],
+  activePlaybookDefs: PlaybookDefinition[] = []
 ) {
   const model = getShopChatModel();
   const wrappedBaseTools = context.shop?.trim()
@@ -48,6 +50,7 @@ export async function buildShopChatGraph(
     context,
     activeDefs,
     reflectionSummary,
+    activePlaybookDefs,
   );
 
   return createReactAgent({

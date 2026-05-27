@@ -97,6 +97,7 @@
     "lowBalanceWarning": "Tokens insuficientes. Suscríbete o compra un paquete en la página de facturación.",
     "openBillingPage": "Ir a planes",
     "periodEnd": "Fin del período actual",
+    "quotaResets": "Se reinicia el",
     "trialEnds": "Fin de prueba",
     "intervalMonthly": "Mensual",
     "intervalAnnual": "Anual",
@@ -120,6 +121,8 @@
     "quickPromptCreateTranslation": "Crear tarea de traducción",
     "quickPromptGenerateDescription": "Generar descripción de producto",
     "quickPromptPictureTranslate": "Traducción de imágenes",
+    "quickPromptShopHealthCheck": "Diagnóstico de tienda",
+    "quickPromptProductLaunchPipeline": "Pipeline de lanzamiento",
     "intro": "Pregunta directamente por información de la tienda, guía de autorización de anuncios/logística y sugerencias operativas.",
     "assistantOnline": "AI Assistant en línea",
     "quickQuestions": "Preguntas rápidas",
@@ -531,5 +534,22 @@
     "cosmosStatusSaveRunning": "Escribiendo en Shopify",
     "cosmosStatusSaveDone": "Completado",
     "cosmosStatusFailed": "Fallido"
+  },
+  "qualityScore": {
+    "scoreAction": "Score quality",
+    "scoring": "Scoring...",
+    "scoreSuccess": "Scoring complete",
+    "emptyResult": "Select a product and click Score quality.",
+    "overallScore": "Overall quality score",
+    "levelGood": "Good — product page quality is strong",
+    "levelFair": "Fair — room for improvement",
+    "levelPoor": "Needs work — improvements recommended",
+    "dimTitle": "Title quality",
+    "dimImages": "Image count",
+    "dimDescription": "Description completeness",
+    "dimVariants": "Variant structure",
+    "dimTags": "Tags & category",
+    "suggestions": "Key recommendations",
+    "resultTitle": "Quality score"
   }
 }

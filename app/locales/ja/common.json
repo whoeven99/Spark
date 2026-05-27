@@ -97,6 +97,7 @@
     "lowBalanceWarning": "Token が不足しています。課金ページで契約または購入してください。",
     "openBillingPage": "プランへ",
     "periodEnd": "現在の期間終了",
+    "quotaResets": "リセット日",
     "trialEnds": "トライアル終了",
     "intervalMonthly": "月額",
     "intervalAnnual": "年額",
@@ -120,6 +121,8 @@
     "quickPromptCreateTranslation": "翻訳タスクを作成",
     "quickPromptGenerateDescription": "商品説明を生成",
     "quickPromptPictureTranslate": "画像翻訳",
+    "quickPromptShopHealthCheck": "店舗健診",
+    "quickPromptProductLaunchPipeline": "新商品投入パイプライン",
     "intro": "店舗分析、広告/物流の認証ガイド、運用提案を直接質問できます。",
     "assistantOnline": "AI アシスタント稼働中",
     "quickQuestions": "クイック質問",
@@ -531,5 +534,22 @@
     "cosmosStatusSaveRunning": "Shopify へ書き戻し中",
     "cosmosStatusSaveDone": "完了",
     "cosmosStatusFailed": "失敗"
+  },
+  "qualityScore": {
+    "scoreAction": "Score quality",
+    "scoring": "Scoring...",
+    "scoreSuccess": "Scoring complete",
+    "emptyResult": "Select a product and click Score quality.",
+    "overallScore": "Overall quality score",
+    "levelGood": "Good — product page quality is strong",
+    "levelFair": "Fair — room for improvement",
+    "levelPoor": "Needs work — improvements recommended",
+    "dimTitle": "Title quality",
+    "dimImages": "Image count",
+    "dimDescription": "Description completeness",
+    "dimVariants": "Variant structure",
+    "dimTags": "Tags & category",
+    "suggestions": "Key recommendations",
+    "resultTitle": "Quality score"
   }
 }

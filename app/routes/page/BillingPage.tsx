@@ -41,6 +41,16 @@ function formatDate(iso: string | null, locale: string): string {
   });
 }
 
+/** 计费页徽章区：更短的日期，避免一行过长换行 */
+function formatBillingMetaDate(iso: string | null, locale: string): string {
+  if (!iso) return EMPTY;
+  return new Date(iso).toLocaleDateString(locale, {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  });
+}
+
 function PlanFeatureList({ items }: { items: string[] }) {
   return (
     <ul className={styles.planFeatures}>
@@ -236,6 +246,9 @@ export function BillingPage() {
   }, [basePlan, proPlan, paidPlansForInterval]);
   const sub = billing.subscription;
 
+  const showSubscriptionPeriodMeta =
+    sub?.status === "ACTIVE" && !!sub.currentPeriodEnd;
+
   const isTrialCurrent =
     sub?.status !== "ACTIVE" &&
     sub?.status !== "PENDING" &&
@@ -346,7 +359,23 @@ export function BillingPage() {
               <h2 className={styles.usageTitle}>{t("billing.quotaTitle")}</h2>
               <p className={styles.quotaSubtitle}>{t("billing.quotaSubtitle")}</p>
             </div>
-            <span className={styles.planBadge}>{currentPlanLabel}</span>
+            <div className={styles.usageHeaderBadge}>
+              {showSubscriptionPeriodMeta && sub ? (
+                <div className={styles.subscriptionMetaList}>
+                  <span className={styles.subscriptionMetaItem}>
+                    {t("billing.periodEnd")}:{" "}
+                    {formatBillingMetaDate(sub.currentPeriodEnd, locale)}
+                  </span>
+                  {sub.trialEndsAt ? (
+                    <span className={styles.subscriptionMetaItem}>
+                      {t("billing.trialEnds")}:{" "}
+                      {formatBillingMetaDate(sub.trialEndsAt, locale)}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+              <span className={styles.planBadge}>{currentPlanLabel}</span>
+            </div>
           </div>
           <div className={styles.usageCard}>
             <div className={styles.usageMain}>
@@ -412,20 +441,10 @@ export function BillingPage() {
               <p className={styles.quotaFootnote}>{t("billing.planBenefitsFootnote")}</p>
             </div>
           </div>
-          {sub?.status === "ACTIVE" || showDevCancelSubscription ? (
+          {showDevCancelSubscription ? (
             <div className={styles.quotaFooter}>
-              {sub?.status === "ACTIVE" ? (
-                <p className={styles.subscriptionMeta}>
-                  {t("billing.periodEnd")}: {formatDate(sub.currentPeriodEnd, locale)}
-                  {sub.trialEndsAt
-                    ? ` \u00b7 ${t("billing.trialEnds")}: ${formatDate(sub.trialEndsAt, locale)}`
-                    : null}
-                </p>
-              ) : (
-                <span className={styles.quotaFooterSpacer} aria-hidden />
-              )}
-              {showDevCancelSubscription ? (
-                <div className={styles.devCancelBar}>
+              <span className={styles.quotaFooterSpacer} aria-hidden />
+              <div className={styles.devCancelBar}>
                   <span className={styles.devCancelBadge}>{t("billing.devEnvBadge")}</span>
                   <p className={styles.devCancelHint}>{t("billing.devCancelHint")}</p>
                   <Form method="post" className={styles.devCancelForm}>
@@ -441,7 +460,6 @@ export function BillingPage() {
                     </button>
                   </Form>
                 </div>
-              ) : null}
             </div>
           ) : null}
         </section>

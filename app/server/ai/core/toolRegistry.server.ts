@@ -22,6 +22,8 @@ export interface AgentContext {
   shop?: string;
   /** 与 `AppEntry` 一致；缺省时由 `getAppEntry()` 推断 */
   appName?: AppEntry;
+  /** Set by agentStream before graph.stream() runs; called by playbooks to stream step progress */
+  emitPlaybookStep?: (playbookName: string, step: string, status: "running" | "completed" | "error") => void;
 }
 
 export interface ToolDefinition {
@@ -130,3 +132,6 @@ class ToolRegistry {
 }
 
 export const globalToolRegistry = new ToolRegistry();
+
+/** Atomic Skill 的语义别名，与 ToolDefinition 完全等价 */
+export type AtomicSkillDefinition = ToolDefinition;

@@ -1,0 +1,1 @@
+- [Spark 项目代码结构速查](project_spark_codebase.md) — 项目目录、功能模块、常用路由、快速诊断

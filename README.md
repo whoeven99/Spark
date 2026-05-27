@@ -1,256 +1,124 @@
-# Shopify App Template - React Router
+# Spark 项目 README
 
-This is a template for building a [Shopify app](https://shopify.dev/docs/apps/getting-started) using [React Router](https://reactrouter.com/). It was forked from the [Shopify Remix app template](https://github.com/Shopify/shopify-app-template-remix) and converted to React Router.
+Spark 是一个嵌入式 Shopify 应用，集成 AI Assistant、翻译 V3、商品描述生成、订阅计费等功能。
 
-## Spark（本项目）
+## 核心功能
 
-**Spark** 是在该模板上的嵌入式 Shopify 应用：AI 对话、店铺诊断报告、广告/物流授权配置，以及 **翻译 V3（JSON Runtime）** 任务创建与监控。与本模板默认脚手架的差异（Turso、Azure、Redis、Prisma 模型、翻译路由等）请以 **[docs/PROJECT_CONTEXT.md](./docs/PROJECT_CONTEXT.md) 为单一真相**；下文仍以 Shopify 官方模板说明为主。
+1. **AI Assistant**（主页）- LangGraph ReAct Agent，支持 Shopify 数据查询、商品描述生成、整图翻译、模板邮件等
+2. **诊断报告** - 7 天核心指标、健康状态评估
+3. **翻译 V3** - JSON Runtime 任务创建与监控（Cosmos + Redis + Blob）
+4. **生成商品描述** - 订阅制+按量计费（Shopify Billing）
+5. **图片工具** - 整图翻译（火山 + Aidge）、文生图
 
-概要（详情见 PROJECT_CONTEXT）：
+## 快速开始
 
-| 主题 | 说明 |
-|------|------|
-| 文档入口 | [docs/PROJECT_CONTEXT.md](./docs/PROJECT_CONTEXT.md) |
-| Prisma / Turso | `Session`、`Suggestion`（用户建议）、`AdPlatformCredential`（广告 OAuth 配置）走同一 Prisma Client，`app/db.server.ts` 经 libSQL 连接 Turso |
-| Azure Cosmos | 翻译任务元数据（与 Spring 侧 `translation_jobs` 对齐） |
-| Azure Blob | 翻译 V3 报表与 chunk 等对象存储 |
-| Redis | `ioredis`，翻译进度与监控键（与后端 Redis 键约定对齐） |
-| 翻译页面 | `app/routes/app.translation.tsx`、`app/routes/page/TranslationPage.tsx` |
-| 翻译 API | `GET /api/translate/v3/json-runtime-tasks`、`GET /api/translate/v3/json-runtime-task-detail`（`app/routes/api.translate.v3.*.ts`）；详情默认转发 AgentTask，设 `JSON_RUNTIME_TASK_DETAIL_SOURCE=local` 时由 Spark 聚合 |
-| 翻译开发约定 | 改动前阅读 [docs/translation-agent.md](./docs/translation-agent.md) |
-| 商品描述生成 | 改动前阅读 [docs/generateDescription.md](./docs/generateDescription.md) |
-| 前端 UI | 改动前阅读 [docs/UI_DESIGN.md](./docs/UI_DESIGN.md) |
-| AI 回复后处理 | `app/server/ai/postprocess/langchainMessageText.ts`、`markdownTableNormalize.ts`、`polishFinalReply.ts`（单测 `app/server/ai/postprocess/*.test.ts`，可 `npm run test -- --run app/server/ai`） |
+```bash
+# 本地开发
+npm run dev
 
-Rather than cloning this repo, follow the [Quick Start steps](https://github.com/Shopify/shopify-app-template-react-router#quick-start).
+# 代码质量检查
+npm run lint && npm run typecheck && npm run test
 
-Visit the [`shopify.dev` documentation](https://shopify.dev/docs/api/shopify-app-react-router) for more details on the React Router app package.
-
-## Upgrading from Remix
-
-If you have an existing Remix app that you want to upgrade to React Router, please follow the [upgrade guide](https://github.com/Shopify/shopify-app-template-react-router/wiki/Upgrading-from-Remix). Otherwise, please follow the quick start guide below.
-
-## Quick start
-
-### Prerequisites
-
-Before you begin, you'll need to [download and install the Shopify CLI](https://shopify.dev/docs/apps/tools/cli/getting-started) if you haven't already.
-
-### Setup
-
-```shell
-shopify app init --template=https://github.com/Shopify/shopify-app-template-react-router
-```
-
-### Local Development
-
-```shell
-shopify app dev
-```
-
-Press P to open the URL to your app. Once you click install, you can start development.
-
-Local development is powered by [the Shopify CLI](https://shopify.dev/docs/apps/tools/cli). It logs into your account, connects to an app, provides environment variables, updates remote config, creates a tunnel and provides commands to generate extensions.
-
-### Authenticating and querying data
-
-To authenticate and query data you can use the `shopify` const that is exported from `/app/shopify.server.js`:
-
-```js
-export async function loader({ request }) {
-  const { admin } = await shopify.authenticate.admin(request);
-
-  const response = await admin.graphql(`
-    {
-      products(first: 25) {
-        nodes {
-          title
-          description
-        }
-      }
-    }`);
-
-  const {
-    data: {
-      products: { nodes },
-    },
-  } = await response.json();
-
-  return nodes;
-}
-```
-
-This template comes pre-configured with examples of:
-
-1. Setting up your Shopify app in [/app/shopify.server.ts](https://github.com/Shopify/shopify-app-template-react-router/blob/main/app/shopify.server.ts)
-2. Querying data using Graphql. Please see: [/app/routes/app.\_index.tsx](https://github.com/Shopify/shopify-app-template-react-router/blob/main/app/routes/app._index.tsx).
-3. Responding to webhooks. Please see [/app/routes/webhooks.tsx](https://github.com/Shopify/shopify-app-template-react-router/blob/main/app/routes/webhooks.app.uninstalled.tsx).
-
-Please read the [documentation for @shopify/shopify-app-react-router](https://shopify.dev/docs/api/shopify-app-react-router) to see what other API's are available.
-
-## Shopify Dev MCP
-
-This template is configured with the Shopify Dev MCP. This instructs [Cursor](https://cursor.com/), [GitHub Copilot](https://github.com/features/copilot) and [Claude Code](https://claude.com/product/claude-code) and [Google Gemini CLI](https://github.com/google-gemini/gemini-cli) to use the Shopify Dev MCP.
-
-For more information on the Shopify Dev MCP please read [the documentation](https://shopify.dev/docs/apps/build/devmcp).
-
-## Deployment
-
-### Application Storage
-
-This template uses [Prisma](https://www.prisma.io/) to store session data, by default using an [SQLite](https://www.sqlite.org/index.html) database.
-The database is defined as a Prisma schema in `prisma/schema.prisma`.
-
-This use of SQLite works in production if your app runs as a single instance.
-The database that works best for you depends on the data your app needs and how it is queried.
-Here’s a short list of databases providers that provide a free tier to get started:
-
-| Database   | Type             | Hosters                                                                                                                                                                                                                                    |
-| ---------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| MySQL      | SQL              | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-mysql), [Planet Scale](https://planetscale.com/), [Amazon Aurora](https://aws.amazon.com/rds/aurora/), [Google Cloud SQL](https://cloud.google.com/sql/docs/mysql) |
-| PostgreSQL | SQL              | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-postgresql), [Amazon Aurora](https://aws.amazon.com/rds/aurora/), [Google Cloud SQL](https://cloud.google.com/sql/docs/postgres)                                   |
-| Redis      | Key-value        | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-redis), [Amazon MemoryDB](https://aws.amazon.com/memorydb/)                                                                                                        |
-| MongoDB    | NoSQL / Document | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-mongodb), [MongoDB Atlas](https://www.mongodb.com/atlas/database)                                                                                                  |
-
-To use one of these, you can use a different [datasource provider](https://www.prisma.io/docs/reference/api-reference/prisma-schema-reference#datasource) in your `schema.prisma` file, or a different [SessionStorage adapter package](https://github.com/Shopify/shopify-api-js/blob/main/packages/shopify-api/docs/guides/session-storage.md).
-
-### Build
-
-Build the app by running the command below with the package manager of your choice:
-
-Using yarn:
-
-```shell
-yarn build
-```
-
-Using npm:
-
-```shell
+# 生产构建
 npm run build
+
+# 数据库迁移（Turso）
+npm run turso:migrate:test   # 测试库
+npm run turso:migrate:prod   # 生产库
 ```
 
-Using pnpm:
+## 项目结构速查
 
-```shell
-pnpm run build
+| 路径 | 说明 |
+|------|------|
+| `app/routes/` | 页面与 API 路由 |
+| `app/server/ai/` | AI Agent 链路（LangGraph + ReAct） |
+| `app/server/generateDescription/` | 商品描述生成 |
+| `app/server/translation/` | 翻译 V3 流水线 |
+| `app/server/pictureTranslate/` | 图片翻译 |
+| `app/server/billing/` | 订阅与计费 |
+| `app/server/email/` | 邮件（腾讯 SES） |
+| `prisma/` | 数据库 Schema + 迁移 |
+| `docs/` | 项目文档（**改代码前必读**） |
+
+## 改动指南
+
+### 改代码前必读对应文档
+
+- 改翻译 → `docs/translation-agent.md`
+- 改生成描述 → `docs/generateDescription.md`
+- 改计费/订阅 → `app/server/billing/agent.md`
+- 改 UI → `docs/UI_DESIGN.md`
+- 改 Agent 摘要 → `docs/agent-run-log.md`
+- 完整架构 → `docs/PROJECT_CONTEXT.md`
+
+### 改代码后必须运行
+
+```bash
+npm run lint && npm run typecheck && npm run test
+npm run build  # 推送前必须通过
 ```
 
-## Hosting
+## 常用路由
 
-When you're ready to set up your app in production, you can follow [our deployment documentation](https://shopify.dev/docs/apps/launch/deployment) to host it externally. From there, you have a few options:
+| 路由 | 说明 |
+|------|------|
+| `/app` | 应用壳、鉴权 |
+| `/app/_index` | 首页（聊天） |
+| `/app/additional` | 诊断报告 |
+| `/app/translation` | 翻译页 |
+| `/app/generate-description` | 生成描述页 |
+| `/app/billing` | 订阅与计费页 |
+| `/app/image-studio` | 图片工具 |
+| `POST /chat-stream` | 聊天 SSE 流 |
 
-- [Google Cloud Run](https://shopify.dev/docs/apps/launch/deployment/deploy-to-google-cloud-run): This tutorial is written specifically for this example repo, and is compatible with the extended steps included in the subsequent [**Build your app**](tutorial) in the **Getting started** docs. It is the most detailed tutorial for taking a React Router-based Shopify app and deploying it to production. It includes configuring permissions and secrets, setting up a production database, and even hosting your apps behind a load balancer across multiple regions.
-- [Fly.io](https://fly.io/docs/js/shopify/): Leverages the Fly.io CLI to quickly launch Shopify apps to a single machine.
-- [Render](https://render.com/docs/deploy-shopify-app): This tutorial guides you through using Docker to deploy and install apps on a Dev store.
-- [Manual deployment guide](https://shopify.dev/docs/apps/launch/deployment/deploy-to-hosting-service): This resource provides general guidance on the requirements of deployment including environment variables, secrets, and persistent data.
+## 数据存储
 
-When you reach the step for [setting up environment variables](https://shopify.dev/docs/apps/deployment/web#set-env-vars), you also need to set the variable `NODE_ENV=production`.
+- **Turso (libSQL)**：Session、Account、订阅、建议、广告凭证、计费日志
+- **Azure Cosmos DB**：翻译任务元数据、Agent 运行摘要
+- **Azure Blob Storage**：翻译报表/chunk、图片翻译结果、生成图片
+- **Redis**：翻译进度键、监控指标
 
-## Gotchas / Troubleshooting
+## AI 工具
 
-### Database tables don't exist
+在 `app/server/ai/skills/index.ts` 中注册：
 
-If you get an error like:
+- `get_current_time` - 当前时间
+- `get_weather` - 天气
+- `get_shop_info` - 店铺信息
+- `get_shop_kpis` - 经营指标
+- `generate_product_description` - 生成描述
+- `picture_translate` - 整图翻译
+- `send_template_email` - 模板邮件
 
-```
-The table `main.Session` does not exist in the current database.
-```
+## 计费系统
 
-Create the database for Prisma. Run the `setup` script in `package.json` using `npm`, `yarn` or `pnpm`.
+- **启用应用**：`BILLING_ENABLED_APPS` 仅含 `generate-description`
+- **网关**：`BILLING_GATEWAY=noop` 时本地生效（开发）
+- **Token 池**：订阅赠送 + 购包 - 使用
+- **校验**：生成描述 API 调用前通过 `hasTokenQuota()` 校验
 
-### Navigating/redirecting breaks an embedded app
+## 快速诊断
 
-Embedded apps must maintain the user session, which can be tricky inside an iFrame. To avoid issues:
+**聊天不工作** → 检查 `app/server/chat-stream.ts` + `app/server/ai/graph/shopChatGraph.server.ts` + Shopify admin 鉴权
 
-1. Use `Link` from `react-router` or `@shopify/polaris`. Do not use `<a>`.
-2. Use `redirect` returned from `authenticate.admin`. Do not use `redirect` from `react-router`
-3. Use `useSubmit` from `react-router`.
+**工具不工作** → 检查 `app/server/ai/skills/index.ts` 注册 + 工具实现 + LangSmith
 
-This only applies if your app is embedded, which it will be by default.
+**翻译不工作** → 检查 `COSMOS_*`、`REDIS_*`、`BLOB_*` 环境变量 + `translationPipelineCore` 逻辑
 
-### Webhooks: shop-specific webhook subscriptions aren't updated
+**计费不工作** → 检查 `BILLING_GATEWAY` + `BILLING_ENABLED_APPS` + `hasTokenQuota()`
 
-If you are registering webhooks in the `afterAuth` hook, using `shopify.registerWebhooks`, you may find that your subscriptions aren't being updated.
+## 相关文档
 
-Instead of using the `afterAuth` hook declare app-specific webhooks in the `shopify.app.toml` file. This approach is easier since Shopify will automatically sync changes every time you run `deploy` (e.g: `npm run deploy`). Please read these guides to understand more:
+- **[AGENT.md](./AGENT.md)** - Agent 专用上下文（详细代码结构、流程、诊断等）
+- **[docs/PROJECT_CONTEXT.md](./docs/PROJECT_CONTEXT.md)** - 完整架构与约定
+- **[docs/translation-agent.md](./docs/translation-agent.md)** - 翻译功能设计
+- **[docs/generateDescription.md](./docs/generateDescription.md)** - 生成描述方案
+- **[app/server/billing/agent.md](./app/server/billing/agent.md)** - 计费系统详解
+- **[docs/UI_DESIGN.md](./docs/UI_DESIGN.md)** - 前端 UI 规范
 
-1. [app-specific vs shop-specific webhooks](https://shopify.dev/docs/apps/build/webhooks/subscribe#app-specific-subscriptions)
-2. [Create a subscription tutorial](https://shopify.dev/docs/apps/build/webhooks/subscribe/get-started?deliveryMethod=https)
+## 环境配置
 
-If you do need shop-specific webhooks, keep in mind that the package calls `afterAuth` in 2 scenarios:
+主要环境变量见 `docs/PROJECT_CONTEXT.md` 第 12 节。
 
-- After installing the app
-- When an access token expires
-
-During normal development, the app won't need to re-authenticate most of the time, so shop-specific subscriptions aren't updated. To force your app to update the subscriptions, uninstall and reinstall the app. Revisiting the app will call the `afterAuth` hook.
-
-### Webhooks: Admin created webhook failing HMAC validation
-
-Webhooks subscriptions created in the [Shopify admin](https://help.shopify.com/en/manual/orders/notifications/webhooks) will fail HMAC validation. This is because the webhook payload is not signed with your app's secret key.
-
-The recommended solution is to use [app-specific webhooks](https://shopify.dev/docs/apps/build/webhooks/subscribe#app-specific-subscriptions) defined in your toml file instead. Test your webhooks by triggering events manually in the Shopify admin(e.g. Updating the product title to trigger a `PRODUCTS_UPDATE`).
-
-### Webhooks: Admin object undefined on webhook events triggered by the CLI
-
-When you trigger a webhook event using the Shopify CLI, the `admin` object will be `undefined`. This is because the CLI triggers an event with a valid, but non-existent, shop. The `admin` object is only available when the webhook is triggered by a shop that has installed the app. This is expected.
-
-Webhooks triggered by the CLI are intended for initial experimentation testing of your webhook configuration. For more information on how to test your webhooks, see the [Shopify CLI documentation](https://shopify.dev/docs/apps/tools/cli/commands#webhook-trigger).
-
-### Incorrect GraphQL Hints
-
-By default the [graphql.vscode-graphql](https://marketplace.visualstudio.com/items?itemName=GraphQL.vscode-graphql) extension for will assume that GraphQL queries or mutations are for the [Shopify Admin API](https://shopify.dev/docs/api/admin). This is a sensible default, but it may not be true if:
-
-1. You use another Shopify API such as the storefront API.
-2. You use a third party GraphQL API.
-
-If so, please update [.graphqlrc.ts](https://github.com/Shopify/shopify-app-template-react-router/blob/main/.graphqlrc.ts).
-
-### Using Defer & await for streaming responses
-
-By default the CLI uses a cloudflare tunnel. Unfortunately cloudflare tunnels wait for the Response stream to finish, then sends one chunk. This will not affect production.
-
-To test [streaming using await](https://reactrouter.com/api/components/Await#await) during local development we recommend [localhost based development](https://shopify.dev/docs/apps/build/cli-for-apps/networking-options#localhost-based-development).
-
-### "nbf" claim timestamp check failed
-
-This is because a JWT token is expired. If you are consistently getting this error, it could be that the clock on your machine is not in sync with the server. To fix this ensure you have enabled "Set time and date automatically" in the "Date and Time" settings on your computer.
-
-### Using MongoDB and Prisma
-
-If you choose to use MongoDB with Prisma, there are some gotchas in Prisma's MongoDB support to be aware of. Please see the [Prisma SessionStorage README](https://www.npmjs.com/package/@shopify/shopify-app-session-storage-prisma#mongodb).
-
-### Unable to require(`C:\...\query_engine-windows.dll.node`).
-
-Unable to require(`C:\...\query_engine-windows.dll.node`).
-The Prisma engines do not seem to be compatible with your system.
-
-query_engine-windows.dll.node is not a valid Win32 application.
-
-**Fix:** Set the environment variable:
-
-```shell
-PRISMA_CLIENT_ENGINE_TYPE=binary
-```
-
-This forces Prisma to use the binary engine mode, which runs the query engine as a separate process and can work via emulation on Windows ARM64.
-
-## Resources
-
-React Router:
-
-- [React Router docs](https://reactrouter.com/home)
-
-Shopify:
-
-- [Intro to Shopify apps](https://shopify.dev/docs/apps/getting-started)
-- [Shopify App React Router docs](https://shopify.dev/docs/api/shopify-app-react-router)
-- [Shopify CLI](https://shopify.dev/docs/apps/tools/cli)
-- [Shopify App Bridge](https://shopify.dev/docs/api/app-bridge-library).
-- [Polaris Web Components](https://shopify.dev/docs/api/app-home/polaris-web-components).
-- [App extensions](https://shopify.dev/docs/apps/app-extensions/list)
-- [Shopify Functions](https://shopify.dev/docs/api/functions)
-
-Internationalization:
-
-- [Internationalizing your app](https://shopify.dev/docs/apps/best-practices/internationalization/getting-started)
+关键依赖：Shopify Admin API、Azure Cosmos DB、Azure Blob Storage、Redis、Turso、DeepSeek/OpenAI API、腾讯 SES。

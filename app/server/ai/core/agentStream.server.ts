@@ -19,6 +19,7 @@ import {
   recordTokenUsage,
 } from "../../tokenUsage/index.server";
 import { globalToolRegistry, type AgentContext } from "./toolRegistry.server";
+import { globalPlaybookRegistry } from "./playbookRegistry.server";
 import {
   createAgentRunId,
   createRunCollector,
@@ -31,11 +32,13 @@ import {
 } from "../../agentRunLog/index.server";
 import { buildReflectionFromRun } from "../../agentRunLog/recentReflection.server";
 import "../skills/index";
+import "../playbooks/index";
 
 export type StreamChunk =
   | { type: "text"; content: string }
   | { type: "tool_call"; name: string; args: unknown }
   | { type: "tool_result"; name: string; result: string }
+  | { type: "playbook_step"; playbookName: string; step: string; status: "running" | "completed" | "error" }
   | { type: "error"; message: string }
   | {
       type: "done";
@@ -43,11 +46,7 @@ export type StreamChunk =
         totalTokens: number;
         model: string;
         finalReply?: string;
-        uiPayloads?: {
-          translationTaskForm?: unknown;
-          productImproveCardPayload?: unknown;
-          attachments?: unknown;
-        };
+        uiPayloads?: Record<string, unknown>;
         langsmithTraceUrl?: string;
         sparkRunId?: string;
       };
@@ -142,8 +141,11 @@ export async function invokeChatAgentStream(
   const { messages: agentInputMessages, context, config, sessionName } = params;
 
   const activeDefs = await globalToolRegistry.getActiveToolDefinitions(context);
-  const extraTools = await globalToolRegistry.getToolsForContext(context);
-  const graph = await buildShopChatGraph(context, extraTools, activeDefs);
+  const atomicTools = await globalToolRegistry.getToolsForContext(context);
+  const activePlaybookDefs = await globalPlaybookRegistry.getActiveDefinitions(context);
+  const playbookTools = await globalPlaybookRegistry.getPlaybookTools(context);
+  const extraTools = [...atomicTools, ...playbookTools];
+  const graph = await buildShopChatGraph(context, extraTools, activeDefs, activePlaybookDefs);
 
   const runId = createAgentRunId();
   const startedAtIso = new Date().toISOString();
@@ -250,6 +252,10 @@ export async function invokeChatAgentStream(
       };
 
       try {
+        context.emitPlaybookStep = (playbookName, step, status) => {
+          controller.enqueue({ type: "playbook_step", playbookName, step, status });
+        };
+
         const lgStream = await graph.stream(
           { messages: agentInputMessages },
           {
@@ -281,6 +287,11 @@ export async function invokeChatAgentStream(
             const ev = payload;
 
             for (const def of activeDefs) {
+              if (def.onStreamEvent) {
+                def.onStreamEvent(ev, (chunk) => controller.enqueue(chunk), streamContext);
+              }
+            }
+            for (const def of activePlaybookDefs) {
               if (def.onStreamEvent) {
                 def.onStreamEvent(ev, (chunk) => controller.enqueue(chunk), streamContext);
               }
@@ -356,6 +367,7 @@ export async function invokeChatAgentStream(
                   args: payload,
                 });
               }
+
               if (
                 def.name === "generateProductDescription" &&
                 !streamContext.emittedFlags.has("generateProductDescription")
@@ -369,6 +381,14 @@ export async function invokeChatAgentStream(
                       : String(payload),
                 });
               }
+            }
+          }
+        }
+        for (const def of activePlaybookDefs) {
+          if (def.extractUIPayload && def.uiPayloadKey) {
+            const payload = def.extractUIPayload(resultMessages, lastUserText, finalReply);
+            if (payload !== undefined) {
+              uiPayloads[def.uiPayloadKey] = payload;
             }
           }
         }
