@@ -13,6 +13,7 @@ import {
   RocketOutlined,
   MonitorOutlined,
   ControlOutlined,
+  CheckSquareOutlined,
 } from "@ant-design/icons";
 import { clearToken, isOwner, getRole } from "../api";
 
@@ -40,6 +41,7 @@ export default function Layout() {
     { key: "/code-agent", icon: <RocketOutlined />, label: <Link to="/code-agent">AI Code Agent</Link>, ownerOnly: false },
     { key: "/agent-runs", icon: <MonitorOutlined />, label: <Link to="/agent-runs">AI 执行监控</Link>, ownerOnly: false },
     { key: "/billing-rules", icon: <ControlOutlined />, label: <Link to="/billing-rules">计费规则</Link>, ownerOnly: false },
+    { key: "/todo", icon: <CheckSquareOutlined />, label: <Link to="/todo">Team Todo</Link>, ownerOnly: false },
   ];
 
   const menuItems = allMenuItems

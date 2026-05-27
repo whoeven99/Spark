@@ -13,6 +13,7 @@ import Revenue from "./pages/Revenue";
 import CodeAgent from "./pages/CodeAgent";
 import AgentRuns from "./pages/AgentRuns";
 import BillingRules from "./pages/BillingRules";
+import Todo from "./pages/Todo";
 import { useNavigate } from "react-router-dom";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -67,6 +68,7 @@ export default function App() {
             <Route path="code-agent" element={<CodeAgent />} />
             <Route path="agent-runs" element={<AgentRuns />} />
             <Route path="billing-rules" element={<BillingRules />} />
+            <Route path="todo" element={<Todo />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
