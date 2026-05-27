@@ -51,10 +51,10 @@ const ASSIGNEE_HEX: Record<TodoAssignee, string> = {
   zhuangze: "#722ed1",
 };
 
-const PRIORITY_CONFIG: Record<TodoPriority, { color: string; label: string }> = {
-  high: { color: "volcano", label: "高" },
-  medium: { color: "gold", label: "中" },
-  low: { color: "default", label: "低" },
+const PRIORITY_CONFIG: Record<TodoPriority, { color: string; bg: string; border: string; label: string }> = {
+  high:   { color: "#fff",     bg: "#f5222d", border: "#f5222d", label: "高" },
+  medium: { color: "#fff",     bg: "#fa8c16", border: "#fa8c16", label: "中" },
+  low:    { color: "#8c8c8c",  bg: "#f5f5f5", border: "#d9d9d9", label: "低" },
 };
 
 const STATUS_ROWS: {
@@ -390,56 +390,59 @@ function TodoCard({
 
       {/* Priority + date */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
-        <Tag color={pri.color} style={{ margin: 0, fontSize: 11 }}>{pri.label}</Tag>
+        <Tag style={{ margin: 0, fontSize: 11, color: pri.color, background: pri.bg, borderColor: pri.border }}>{pri.label}</Tag>
         <Typography.Text type="secondary" style={{ fontSize: 11, marginLeft: "auto" }}>
           {new Date(todo.createdAt).toLocaleDateString("zh-CN")}
         </Typography.Text>
       </div>
 
-      {/* Move buttons — clearly separated from content */}
+      {/* Move buttons: ↓ next on left, ↑ prev on right, small, not full-width */}
       {(prevStatus || nextStatus) && (
         <>
           <Divider style={{ margin: "8px 0" }} />
-          <div style={{ display: "flex", gap: 6 }}>
-            {prevStatus && (
-              <Tooltip title={`移到「${prevStatus.label}」`}>
-                <Button
-                  size="small"
-                  icon={<ArrowUpOutlined />}
-                  onClick={() => onMove(todo, prevStatus.key)}
-                  style={{
-                    flex: 1,
-                    fontSize: 11,
-                    height: 26,
-                    color: prevStatus.color,
-                    borderColor: prevStatus.borderColor,
-                    background: "#fff",
-                  }}
-                >
-                  {prevStatus.label}
-                </Button>
-              </Tooltip>
-            )}
-            {nextStatus && (
-              <Tooltip title={`移到「${nextStatus.label}」`}>
-                <Button
-                  size="small"
-                  icon={<ArrowDownOutlined />}
-                  onClick={() => onMove(todo, nextStatus.key)}
-                  style={{
-                    flex: 1,
-                    fontSize: 11,
-                    height: 26,
-                    color: nextStatus.color,
-                    borderColor: nextStatus.color,
-                    background: nextStatus.bgColor,
-                    fontWeight: 600,
-                  }}
-                >
-                  {nextStatus.label}
-                </Button>
-              </Tooltip>
-            )}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              {nextStatus && (
+                <Tooltip title={`移到「${nextStatus.label}」`}>
+                  <Button
+                    size="small"
+                    icon={<ArrowDownOutlined />}
+                    onClick={() => onMove(todo, nextStatus.key)}
+                    style={{
+                      fontSize: 11,
+                      height: 22,
+                      padding: "0 8px",
+                      color: nextStatus.color,
+                      borderColor: nextStatus.color,
+                      background: nextStatus.bgColor,
+                    }}
+                  >
+                    {nextStatus.label}
+                  </Button>
+                </Tooltip>
+              )}
+            </div>
+            <div>
+              {prevStatus && (
+                <Tooltip title={`移到「${prevStatus.label}」`}>
+                  <Button
+                    size="small"
+                    icon={<ArrowUpOutlined />}
+                    onClick={() => onMove(todo, prevStatus.key)}
+                    style={{
+                      fontSize: 11,
+                      height: 22,
+                      padding: "0 8px",
+                      color: "#8c8c8c",
+                      borderColor: "#d9d9d9",
+                      background: "#fff",
+                    }}
+                  >
+                    {prevStatus.label}
+                  </Button>
+                </Tooltip>
+              )}
+            </div>
           </div>
         </>
       )}
