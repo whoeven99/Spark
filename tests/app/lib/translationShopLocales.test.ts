@@ -25,10 +25,10 @@ describe("resolveTranslationLocales", () => {
     const resolved = resolveTranslationLocales(payload());
     expect(resolved.sourceLocale).toBe("en");
     expect(resolved.sourceLabel).toBe("English (en)");
-    expect(resolved.targetOptions.map((o) => o.value)).toEqual(["fr"]);
+    expect(resolved.targetOptions.map((o) => o.value)).toEqual(["fr", "de"]);
   });
 
-  it("prefers published locales for targets", () => {
+  it("includes unpublished locales for targets", () => {
     const resolved = resolveTranslationLocales(
       payload({
         defaultTargetLanguage: "zh-CN",
@@ -40,10 +40,10 @@ describe("resolveTranslationLocales", () => {
       }),
     );
     expect(resolved.sourceLocale).toBe("zh-CN");
-    expect(resolved.targetOptions.map((o) => o.value)).toEqual(["en"]);
+    expect(resolved.targetOptions.map((o) => o.value)).toEqual(["en", "de"]);
   });
 
-  it("falls back to all non-source when no published targets", () => {
+  it("returns all non-source when only unpublished remain besides source", () => {
     const resolved = resolveTranslationLocales(
       payload({
         defaultTargetLanguage: "en",

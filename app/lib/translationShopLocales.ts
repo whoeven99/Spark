@@ -7,7 +7,7 @@ export type TranslationLocalesResolved = {
   /** 店铺主语言（primary），用作翻译源语言 */
   sourceLocale: string;
   sourceLabel: string;
-  /** 可选目标语言（已排除源语言，优先 published） */
+  /** 可选目标语言（已排除源语言，含 published / 未 published） */
   targetOptions: ShopLocaleOption[];
 };
 
@@ -23,10 +23,7 @@ function filterTargetOptions(
   options: ShopLocaleOption[],
   sourceLocale: string,
 ): ShopLocaleOption[] {
-  const nonSource = options.filter((o) => o.value !== sourceLocale);
-  const publishedOnly = nonSource.filter((o) => o.published === true);
-  if (publishedOnly.length > 0) return publishedOnly;
-  return nonSource;
+  return options.filter((o) => o.value !== sourceLocale);
 }
 
 /**
