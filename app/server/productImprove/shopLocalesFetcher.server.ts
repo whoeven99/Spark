@@ -71,6 +71,7 @@ export function buildShopLocalesPayloadFromGraphqlRows(
   const localeOptions = unique.map((r) => ({
     value: r.locale,
     label: `${r.name} (${r.locale})`,
+    published: r.published,
   }));
 
   return {

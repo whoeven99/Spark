@@ -10,7 +10,7 @@ type ChatMessagesProps = {
   messages: ChatMessage[];
   onTranslationCardSuccess: (
     messageIndex: number,
-    detail: { jobId?: string; message: string },
+    detail: { jobId?: string; jobIds?: string[]; message: string },
   ) => void;
   onPictureTranslateCardSuccess: (
     messageIndex: number,
