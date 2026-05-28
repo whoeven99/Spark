@@ -147,9 +147,10 @@ export function TranslationV4Page() {
 
   const shopName = loaderData.shop;
   const query = typeof window !== "undefined" ? window.location.search : "";
+  const querySep = query ? "&" : "?";
 
   const refreshJobList = useCallback(async () => {
-    const listRes = await fetch(`/api/translate/v4/tasks${query}&shopName=${shopName}`);
+    const listRes = await fetch(`/api/translate/v4/tasks${query}${querySep}shopName=${shopName}`);
     const listPayload = (await listRes.json()) as { ok: boolean; jobs?: TranslationV4Job[] };
     if (listPayload.ok && listPayload.jobs) setJobs(listPayload.jobs);
   }, [query, shopName]);
@@ -222,7 +223,7 @@ export function TranslationV4Page() {
       activeJobIds.map(async (taskId) => {
         try {
           const res = await fetch(
-            `/api/translate/v4/task-progress${query}&taskId=${taskId}&shopName=${shopName}`,
+            `/api/translate/v4/task-progress${query}${querySep}taskId=${taskId}&shopName=${shopName}`,
           );
           if (!res.ok) return;
           const payload = (await res.json()) as { ok: boolean } & ProgressData;
@@ -279,7 +280,7 @@ export function TranslationV4Page() {
       const modeLabel = payload.testMode ? "（测试模式）" : "";
       shopify.toast.show(`翻译任务已创建${modeLabel}`);
       // Refresh job list
-      const listRes = await fetch(`/api/translate/v4/tasks${query}&shopName=${shopName}`);
+      const listRes = await fetch(`/api/translate/v4/tasks${query}${querySep}shopName=${shopName}`);
       const listPayload = (await listRes.json()) as { ok: boolean; jobs?: TranslationV4Job[] };
       if (listPayload.ok && listPayload.jobs) setJobs(listPayload.jobs);
     } catch {
