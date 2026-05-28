@@ -1,14 +1,17 @@
 /** Maps our module names to Shopify's TranslatableResourceType enum values */
-import { shouldIncludeField } from "./translationFilter.js";
+import { shouldIncludeFieldV2 } from "./translationFilter.js";
 
 export const MODULE_TO_SHOPIFY_TYPE: Record<string, string> = {
   PRODUCT: "PRODUCT",
   PRODUCT_OPTION: "PRODUCT_OPTION",
   PRODUCT_OPTION_VALUE: "PRODUCT_OPTION_VALUE",
   COLLECTION: "COLLECTION",
+  ONLINE_STORE_THEME: "ONLINE_STORE_THEME",
   ONLINE_STORE_THEME_APP_EMBED: "ONLINE_STORE_THEME_APP_EMBED",
+  ONLINE_STORE_THEME_LOCALE_CONTENT: "ONLINE_STORE_THEME_LOCALE_CONTENT",
   ONLINE_STORE_THEME_JSON_TEMPLATE: "ONLINE_STORE_THEME_JSON_TEMPLATE",
   ONLINE_STORE_THEME_SECTION_GROUP: "ONLINE_STORE_THEME_SECTION_GROUP",
+  ONLINE_STORE_THEME_SETTINGS_CATEGORY: "ONLINE_STORE_THEME_SETTINGS_CATEGORY",
   ONLINE_STORE_THEME_SETTINGS_DATA_SECTIONS: "ONLINE_STORE_THEME_SETTINGS_DATA_SECTIONS",
   MENU: "MENU",
   LINK: "LINK",
@@ -168,10 +171,14 @@ export async function fetchTranslatableResources(
       const translations = edge.node.translations ?? [];
       const fields = edge.node.translatableContent
         .filter((f) =>
-          shouldIncludeField(
+          shouldIncludeFieldV2(
             { key: f.key, value: f.value, type: f.type },
             translations,
-            { isCover: options.isCover, isHandle: options.isHandle },
+            {
+              module,
+              isCover: options.isCover,
+              isHandle: options.isHandle,
+            },
           ),
         )
         .map((f) => ({ key: f.key, value: f.value, digest: f.digest }));

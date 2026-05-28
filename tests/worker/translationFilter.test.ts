@@ -31,13 +31,13 @@ describe("shouldIncludeField", () => {
     ).toBe(true);
   });
 
-  it("isCover=false includes field when translation outdated is null", () => {
+  it("isCover=false excludes field when translation outdated is null (aligns V2 !outdated)", () => {
     expect(
       shouldIncludeField(baseField, [{ key: "title", outdated: null }], {
         isCover: false,
         isHandle: false,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("isCover=true includes field even when translation is current", () => {
