@@ -523,3 +523,55 @@ export function updateBillingRule(
 export function deleteBillingRule(ruleKey: string): Promise<{ ok: boolean }> {
   return apiFetch(`/billing-rules/${encodeURIComponent(ruleKey)}`, { method: "DELETE" });
 }
+
+// --- Todos ---
+
+export type TodoStatus = "todo" | "doing" | "done";
+export type TodoPriority = "low" | "medium" | "high";
+export type TodoAssignee = "yewen" | "allen" | "zhuangze";
+
+export type TodoRow = {
+  id: string;
+  title: string;
+  description: string | null;
+  assignee: TodoAssignee | null;
+  status: TodoStatus;
+  priority: TodoPriority;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function fetchTodos(): Promise<{ todos: TodoRow[] }> {
+  return apiFetch("/todos");
+}
+
+export function createTodo(data: {
+  title: string;
+  description?: string;
+  assignee?: TodoAssignee;
+  priority?: TodoPriority;
+  createdBy: string;
+}): Promise<{ ok: boolean; id: string }> {
+  return apiFetch("/todos", { method: "POST", body: JSON.stringify(data) });
+}
+
+export function updateTodo(
+  id: string,
+  data: {
+    title: string;
+    description?: string | null;
+    assignee?: TodoAssignee | null;
+    status: TodoStatus;
+    priority: TodoPriority;
+  },
+): Promise<{ ok: boolean }> {
+  return apiFetch(`/todos/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteTodo(id: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/todos/${encodeURIComponent(id)}`, { method: "DELETE" });
+}

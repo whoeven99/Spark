@@ -17,6 +17,7 @@ import { revenueRouter } from "./routes/revenue.js";
 import { codeAgentRouter } from "./routes/codeAgent.js";
 import { agentRunsRouter } from "./routes/agentRuns.js";
 import { billingRulesRouter } from "./routes/billingRules.js";
+import { todosRouter } from "./routes/todos.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 3099);
@@ -48,6 +49,7 @@ app.use("/api/revenue", authMiddleware, requireOwner, revenueRouter);
 app.use("/api/code-agent", authMiddleware, codeAgentRouter);
 app.use("/api/agent-runs", authMiddleware, agentRunsRouter);
 app.use("/api/billing-rules", authMiddleware, billingRulesRouter);
+app.use("/api/todos", authMiddleware, todosRouter);
 
 // Serve built frontend in production
 if (IS_PROD) {
