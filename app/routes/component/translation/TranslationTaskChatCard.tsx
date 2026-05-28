@@ -16,7 +16,6 @@ const MODULE_LABELS: Record<string, string> = {
   ARTICLE: "translationRuntime.moduleArticle",
   METAOBJECT: "translationRuntime.moduleMetaobject",
   METAFIELD: "translationRuntime.moduleMetafield",
-  ONLINE_STORE_THEME: "translationRuntime.moduleTheme",
 };
 
 type Props = {
