@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import { useLoaderData } from "react-router";
 import { createTranslationV4Tasks } from "../../lib/createTranslationV4Tasks";
+import { dedupeTranslationV4JobsByLocalePair } from "../../lib/dedupeTranslationV4JobsByLocalePair";
 import {
   formatCreateTasksToast,
   resolveValidationErrorMessage,
@@ -163,6 +164,10 @@ export function TranslationV4Page() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const [jobs, setJobs] = useState<TranslationV4Job[]>(loaderData.jobs as TranslationV4Job[]);
+  const displayJobs = useMemo(
+    () => dedupeTranslationV4JobsByLocalePair(jobs),
+    [jobs],
+  );
   const [progressMap, setProgressMap] = useState<Record<string, ProgressData>>({});
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const optimisticActionRef = useRef<Map<string, OptimisticActionIntent>>(new Map());
@@ -498,12 +503,12 @@ export function TranslationV4Page() {
         </div>
 
         {/* Job list */}
-        <PageSurface title={`任务列表（${jobs.length}）`}>
-          {jobs.length === 0 ? (
+        <PageSurface title={`任务列表（${displayJobs.length}）`}>
+          {displayJobs.length === 0 ? (
             <div style={pageEmptyStateStyle}>暂无翻译任务，创建一个开始</div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-              {jobs.map((job) => {
+              {displayJobs.map((job) => {
                 const progress = progressMap[job.id];
                 const status = resolveDisplayStatus(job, progress);
                 return (
