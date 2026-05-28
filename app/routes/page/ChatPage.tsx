@@ -185,9 +185,10 @@ export function ChatPage() {
 
   const succeedTranslationCard = (
     messageIndex: number,
-    detail: { jobId?: string; message: string },
+    detail: { jobId?: string; jobIds?: string[]; message: string },
   ) => {
     shopify.toast.show(detail.message || t("chat.translationCreateSuccess"));
+    const ids = detail.jobIds ?? (detail.jobId ? [detail.jobId] : []);
     setMessages((prev) => {
       const next = prev.map((m, i): ChatMessage =>
         i === messageIndex && m.role === "assistant"
@@ -196,9 +197,12 @@ export function ChatPage() {
       );
       next.push({
         role: "assistant",
-        content: detail.jobId
-          ? t("chat.translationSubmittedWithId", { jobId: detail.jobId })
-          : t("chat.translationSubmitted"),
+        content:
+          ids.length > 1
+            ? detail.message
+            : ids.length === 1
+              ? t("chat.translationSubmittedWithId", { jobId: ids[0] })
+              : t("chat.translationSubmitted"),
       });
       return next;
     });

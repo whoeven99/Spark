@@ -4,24 +4,25 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import {
   coerceTranslationTaskFormPayload,
+  getTargetLocalesFromPayload,
   type TranslationTaskFormPayload,
 } from "../../../lib/translationTaskFormPayload";
-import { TRANSLATION_V4_MODULES } from "../../../server/translation/v4/types";
-import { pageColorTokens } from "../../page/pageUiStyles";
-
-const MODULE_LABELS: Record<string, string> = {
-  PRODUCT: "translationRuntime.moduleProduct",
-  COLLECTION: "translationRuntime.moduleCollection",
-  PAGE: "translationRuntime.modulePage",
-  ARTICLE: "translationRuntime.moduleArticle",
-  METAOBJECT: "translationRuntime.moduleMetaobject",
-  METAFIELD: "translationRuntime.moduleMetafield",
-  ONLINE_STORE_THEME: "translationRuntime.moduleTheme",
-};
+import { createTranslationV4Tasks } from "../../../lib/createTranslationV4Tasks";
+import {
+  formatCreateTasksToast,
+  resolveValidationErrorMessage,
+} from "../../../lib/translationCreateFeedback";
+import { useShopLocales } from "../../../hooks/useShopLocales";
+import { TranslationLocaleFields } from "./TranslationLocaleFields";
+import { TranslationModuleMultiSelect } from "./TranslationModuleMultiSelect";
 
 type Props = {
   initialPayload: TranslationTaskFormPayload;
-  onSuccess: (detail: { jobId?: string; message: string }) => void;
+  onSuccess: (detail: {
+    jobId?: string;
+    jobIds?: string[];
+    message: string;
+  }) => void;
   /** 嵌在助手气泡内时略收紧边距与阴影 */
   embedded?: boolean;
 };
@@ -34,33 +35,44 @@ export function TranslationTaskChatCard({
   const shopify = useAppBridge();
   const { t } = useTranslation();
   const safeInitial = coerceTranslationTaskFormPayload(initialPayload);
-  const [sourceLocale, setSourceLocale] = useState(safeInitial.sourceLocale);
-  const [targetLocale, setTargetLocale] = useState(safeInitial.targetLocale);
+  const initialTargets = getTargetLocalesFromPayload(safeInitial);
   const [limitPerType, setLimitPerType] = useState(safeInitial.limitPerType);
   const [resourceTypes, setResourceTypes] = useState<string[]>(safeInitial.resourceTypes);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    const p = coerceTranslationTaskFormPayload(initialPayload);
-    setSourceLocale(p.sourceLocale);
-    setTargetLocale(p.targetLocale);
-    setLimitPerType(p.limitPerType);
-    setResourceTypes(p.resourceTypes);
-  }, [initialPayload]);
-
   const search =
     typeof window !== "undefined" ? window.location.search : "";
 
-  const toggleModule = (type: string) => {
-    setResourceTypes((prev) =>
-      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
-    );
-  };
+  const {
+    sourceLocale,
+    sourceLabel,
+    targetLocales,
+    setTargetLocales,
+    targetOptions,
+    loading: localesLoading,
+    isFallback: localesIsFallback,
+  } = useShopLocales({
+    locationSearch: search,
+    initialShopLocales: null,
+    initialTargetLocale: safeInitial.targetLocale,
+    initialTargetLocales: initialTargets,
+    selectionMode: "multiple",
+  });
+
+  useEffect(() => {
+    const p = coerceTranslationTaskFormPayload(initialPayload);
+    setLimitPerType(p.limitPerType);
+    setResourceTypes(p.resourceTypes);
+    const targets = getTargetLocalesFromPayload(p);
+    if (targets.length) {
+      setTargetLocales(targets);
+    }
+  }, [initialPayload, setTargetLocales]);
 
   const handleCreate = async () => {
-    const target = targetLocale.trim();
-    if (!target) {
-      shopify.toast.show(t("translationRuntime.validationTargetExample"));
+    const source = sourceLocale.trim();
+    if (!source) {
+      shopify.toast.show(t("common.loadingLanguage"));
       return;
     }
     if (!resourceTypes.length) {
@@ -72,31 +84,37 @@ export function TranslationTaskChatCard({
 
     setIsSubmitting(true);
     try {
-      const response = await fetch(`/api/translate/v4/tasks${search}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          source: sourceLocale.trim() || "zh-CN",
-          target: targetLocale.trim(),
-          modules: resourceTypes,
-          limitPerType: limit,
-        }),
+      const result = await createTranslationV4Tasks({
+        search,
+        source,
+        targets: targetLocales,
+        modules: resourceTypes,
+        limitPerType: limit,
+        targetOptions,
       });
-      const payload = (await response.json().catch(() => ({}))) as {
-        ok?: boolean;
-        jobId?: string;
-        error?: string;
-      };
 
-      if (!response.ok || payload.ok === false) {
-        shopify.toast.show(payload.error || t("translation.createFailed", { status: response.status }));
+      if (result.validationError) {
+        shopify.toast.show(resolveValidationErrorMessage(result.validationError, t));
         return;
       }
 
-      shopify.toast.show(t("translationRuntime.createSuccess"));
+      const toast = formatCreateTasksToast(result, t);
+      if (toast) {
+        shopify.toast.show(toast);
+      }
+
+      if (!result.created.length) {
+        const err = result.failed[0]?.error ?? t("translation.createFailedRetry");
+        shopify.toast.show(err);
+        return;
+      }
+
+      const jobIds = result.created.map((c) => c.jobId);
+      const message = toast ?? t("translationRuntime.createSuccess");
       onSuccess({
-        jobId: payload.jobId,
-        message: t("translationRuntime.createSuccess"),
+        jobId: jobIds[0],
+        jobIds,
+        message,
       });
     } catch {
       shopify.toast.show(t("chat.sendFailed"));
@@ -119,26 +137,8 @@ export function TranslationTaskChatCard({
   const innerStyle: CSSProperties = {
     borderRadius: embedded ? "13px" : "15px",
     background: "linear-gradient(180deg, #ffffff 0%, #fafbfb 100%)",
-    overflow: "hidden",
+    overflow: "visible",
   };
-
-  const fieldGridStyle: CSSProperties = {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-    gap: "0.75rem",
-  };
-
-  const pillStyle = (selected: boolean): CSSProperties => ({
-    borderRadius: "999px",
-    padding: "0.35rem 0.75rem",
-    fontSize: "0.8125rem",
-    fontWeight: selected ? 600 : 500,
-    border: selected ? `1px solid ${pageColorTokens.brandGreen}` : `1px solid ${pageColorTokens.border}`,
-    background: selected ? "rgba(0, 128, 96, 0.12)" : "#ffffff",
-    color: selected ? "#004d3d" : "#303030",
-    cursor: "pointer",
-    transition: "background 0.15s ease, border-color 0.15s ease, transform 0.1s ease",
-  });
 
   const primaryBtnStyle: CSSProperties = {
     width: "100%",
@@ -176,18 +176,18 @@ export function TranslationTaskChatCard({
             </div>
           </div>
 
-          <div style={{ ...fieldGridStyle, marginBottom: "0.85rem" }}>
-            <s-text-field
-              label={t("translation.sourceLocale")}
-              value={sourceLocale}
-              onChange={(e) => setSourceLocale(e.currentTarget.value)}
-              autocomplete="off"
-            />
-            <s-text-field
-              label={t("translation.targetLocale")}
-              value={targetLocale}
-              onChange={(e) => setTargetLocale(e.currentTarget.value)}
-              autocomplete="off"
+          <div style={{ marginBottom: "0.85rem" }}>
+            <TranslationLocaleFields
+              sourceLocale={sourceLocale}
+              sourceLabel={sourceLabel}
+              selectionMode="multiple"
+              targetLocales={targetLocales}
+              onTargetLocalesChange={setTargetLocales}
+              targetOptions={targetOptions}
+              loading={localesLoading}
+              disabled={isSubmitting}
+              localesIsFallback={localesIsFallback}
+              targetFieldId="translation-chat-target-locale"
             />
           </div>
 
@@ -203,36 +203,12 @@ export function TranslationTaskChatCard({
           </div>
 
           <div style={{ marginBottom: "0.65rem" }}>
-            <span
-              style={{
-                fontSize: "0.75rem",
-                fontWeight: 600,
-                color: "#444",
-                textTransform: "uppercase",
-                letterSpacing: "0.04em",
-              }}
-            >
-              {t("translationRuntime.moduleTitle")}
-            </span>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "0.45rem",
-                marginTop: "0.45rem",
-              }}
-            >
-              {[...TRANSLATION_V4_MODULES].map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  style={pillStyle(resourceTypes.includes(type))}
-                  onClick={() => toggleModule(type)}
-                >
-                  {t(MODULE_LABELS[type] ?? type)}
-                </button>
-              ))}
-            </div>
+            <TranslationModuleMultiSelect
+              id="translation-chat-modules"
+              values={resourceTypes}
+              onChange={setResourceTypes}
+              disabled={isSubmitting}
+            />
           </div>
 
           <s-stack direction="block" gap="small">
@@ -241,7 +217,7 @@ export function TranslationTaskChatCard({
                 type="button"
                 variant="primary"
                 onClick={handleCreate}
-                {...(isSubmitting ? { disabled: true } : {})}
+                {...(isSubmitting || localesLoading ? { disabled: true } : {})}
               >
                 {isSubmitting ? t("translation.creating") : t("translation.createAction")}
               </s-button>

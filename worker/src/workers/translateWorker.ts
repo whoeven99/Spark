@@ -67,6 +67,8 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
 
         const translatedChunk = [];
         for (const resource of chunk) {
+          if (!resource.fields?.length) continue;
+
           try {
             const results = await translateBatch(resource.fields, source, target, aiModel, testMode);
             translatedChunk.push({

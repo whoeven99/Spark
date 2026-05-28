@@ -70,6 +70,11 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
         module,
         job.limitPerType,
         CHUNK_SIZE,
+        {
+          targetLocale: job.target,
+          isCover: job.isCover,
+          isHandle: job.isHandle,
+        },
       );
 
       for (let i = 0; i < chunks.length; i++) {

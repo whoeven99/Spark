@@ -1,13 +1,26 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
+import { useTranslation } from "react-i18next";
 import { useLoaderData } from "react-router";
+import { createTranslationV4Tasks } from "../../lib/createTranslationV4Tasks";
+import { dedupeTranslationV4JobsByLocalePair } from "../../lib/dedupeTranslationV4JobsByLocalePair";
+import {
+  formatCreateTasksToast,
+  resolveValidationErrorMessage,
+} from "../../lib/translationCreateFeedback";
 import type { loader } from "../app.translation-v4";
-import type { TranslationV4Job, TranslationV4Status } from "../../server/translation/v4/types";
+import {
+  TERMINAL_V4_STATUSES,
+  type TranslationV4Job,
+  type TranslationV4Status,
+} from "../../server/translation/v4/types";
+import { useShopLocales } from "../../hooks/useShopLocales";
+import { TranslationLocaleFields } from "../component/translation/TranslationLocaleFields";
+import { TranslationModuleMultiSelect } from "../component/translation/TranslationModuleMultiSelect";
 import {
   PageSurface,
   pageColorTokens,
   pageContentStyle,
-  pageFieldLabelStyle,
   pageIntroBannerStyle,
   twoColumnLayoutStyle,
   twoColumnMainStyle,
@@ -23,6 +36,69 @@ const ACTIVE_STATUSES: TranslationV4Status[] = [
   "WRITEBACK_QUEUED", "WRITING_BACK",
   "VERIFY_QUEUED", "VERIFYING",
 ];
+
+/** Aligns with stageFromStatus in api.translate.v4.task-action.ts */
+function stageFromV4Status(status: TranslationV4Status): string {
+  if (["INIT_QUEUED", "INITIALIZING", "INIT_DONE"].includes(status)) return "INIT";
+  if (["TRANSLATE_QUEUED", "TRANSLATING", "TRANSLATE_DONE"].includes(status)) return "TRANSLATE";
+  if (["WRITEBACK_QUEUED", "WRITING_BACK"].includes(status)) return "WRITEBACK";
+  if (["VERIFY_QUEUED", "VERIFYING"].includes(status)) return "VERIFY";
+  return "INIT";
+}
+
+/** Aligns with resolveResumeStatus in api.translate.v4.task-action.ts */
+function resolveResumeV4Status(
+  currentStatus: TranslationV4Status,
+  errorStage: string | null,
+): TranslationV4Status | null {
+  if (currentStatus !== "PAUSED" && currentStatus !== "FAILED") return null;
+  switch (errorStage) {
+    case "TRANSLATE": return "TRANSLATE_QUEUED";
+    case "WRITEBACK": return "WRITEBACK_QUEUED";
+    case "VERIFY": return "VERIFY_QUEUED";
+    default: return "INIT_QUEUED";
+  }
+}
+
+type OptimisticActionIntent = "pause" | "cancel" | "resume";
+
+type OptimisticJobPatch = {
+  status: TranslationV4Status;
+  priorStatus: TranslationV4Status;
+  errorStage?: string | null;
+  errorMessage?: string | null;
+};
+
+function progressFromJob(
+  job: TranslationV4Job,
+  status: TranslationV4Status,
+  errorStage: string | null,
+): ProgressData {
+  return {
+    status,
+    testMode: job.testMode,
+    source: job.source,
+    target: job.target,
+    errorMessage: job.errorMessage,
+    errorStage,
+    lastHeartbeat: job.lastHeartbeat,
+    updatedAt: job.updatedAt,
+    metrics: {
+      initTotal: job.metrics.initTotal,
+      initDone: job.metrics.initDone,
+      translateTotal: job.metrics.translateTotal,
+      translateDone: job.metrics.translateDone,
+      translateFailed: job.metrics.translateFailed,
+      writebackTotal: job.metrics.writebackTotal,
+      writebackDone: job.metrics.writebackDone,
+      writebackFailed: job.metrics.writebackFailed,
+      verifyTotal: job.metrics.verifyTotal,
+      verifyDone: job.metrics.verifyDone,
+      verifyFailed: job.metrics.verifyFailed,
+      currentModule: null,
+    },
+  };
+}
 
 type ProgressData = {
   status: TranslationV4Status;
@@ -42,12 +118,43 @@ type ProgressData = {
   };
 };
 
+/** job.status 为暂停/终端态时以 Cosmos 列表为准，避免陈旧 poll 覆盖 UI */
+function resolveDisplayStatus(
+  job: TranslationV4Job,
+  progress: ProgressData | undefined,
+): TranslationV4Status {
+  if (job.status === "PAUSED" || TERMINAL_V4_STATUSES.includes(job.status)) {
+    return job.status;
+  }
+  if (
+    ACTIVE_STATUSES.includes(job.status) &&
+    progress?.status === "PAUSED"
+  ) {
+    return job.status;
+  }
+  return (progress?.status ?? job.status) as TranslationV4Status;
+}
+
 export function TranslationV4Page() {
   const shopify = useAppBridge();
+  const { t } = useTranslation();
   const loaderData = useLoaderData<typeof loader>();
 
-  const [source, setSource] = useState("zh-CN");
-  const [target, setTarget] = useState("en");
+  const query = typeof window !== "undefined" ? window.location.search : "";
+  const {
+    sourceLocale,
+    sourceLabel,
+    targetLocales,
+    setTargetLocales,
+    targetOptions,
+    loading: localesLoading,
+    isFallback: localesIsFallback,
+  } = useShopLocales({
+    locationSearch: query,
+    initialShopLocales: loaderData.shopLocales,
+    selectionMode: "multiple",
+  });
+
   const [modules, setModules] = useState<string[]>(["PRODUCT", "COLLECTION", "PAGE", "ARTICLE"]);
   const [limitPerType, setLimitPerType] = useState(20);
   const [isCover, setIsCover] = useState(false);
@@ -57,11 +164,79 @@ export function TranslationV4Page() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const [jobs, setJobs] = useState<TranslationV4Job[]>(loaderData.jobs as TranslationV4Job[]);
+  const displayJobs = useMemo(
+    () => dedupeTranslationV4JobsByLocalePair(jobs),
+    [jobs],
+  );
   const [progressMap, setProgressMap] = useState<Record<string, ProgressData>>({});
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const optimisticActionRef = useRef<Map<string, OptimisticActionIntent>>(new Map());
 
   const shopName = loaderData.shop;
-  const query = typeof window !== "undefined" ? window.location.search : "";
+  const querySep = query ? "&" : "?";
+
+  const refreshJobList = useCallback(async () => {
+    const listRes = await fetch(`/api/translate/v4/tasks${query}${querySep}shopName=${shopName}`);
+    const listPayload = (await listRes.json()) as { ok: boolean; jobs?: TranslationV4Job[] };
+    if (listPayload.ok && listPayload.jobs) setJobs(listPayload.jobs);
+  }, [query, shopName]);
+
+  const applyOptimisticPatch = useCallback(
+    (taskId: string, job: TranslationV4Job, patch: OptimisticJobPatch) => {
+      const errorStage =
+        patch.errorStage !== undefined ? patch.errorStage : job.errorStage;
+      const errorMessage =
+        patch.errorMessage !== undefined ? patch.errorMessage : job.errorMessage;
+
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.id === taskId
+            ? {
+                ...j,
+                status: patch.status,
+                errorStage,
+                errorMessage,
+              }
+            : j,
+        ),
+      );
+      setProgressMap((prev) => {
+        const base =
+          prev[taskId] ?? progressFromJob(job, patch.priorStatus, job.errorStage);
+        return {
+          ...prev,
+          [taskId]: {
+            ...base,
+            status: patch.status,
+            errorStage,
+            errorMessage,
+          },
+        };
+      });
+    },
+    [],
+  );
+
+  const syncTaskAction = useCallback(
+    async (taskId: string, action: OptimisticActionIntent) => {
+      try {
+        const res = await fetch(`/api/translate/v4/task-action${query}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ taskId, shopName, action }),
+        });
+        const payload = (await res.json()) as { ok?: boolean };
+        if (!res.ok || !payload.ok) throw new Error("task action failed");
+        optimisticActionRef.current.delete(taskId);
+        await refreshJobList();
+      } catch {
+        optimisticActionRef.current.delete(taskId);
+        shopify.toast.show("操作失败");
+        await refreshJobList();
+      }
+    },
+    [query, shopName, refreshJobList, shopify],
+  );
 
   // Poll active jobs
   const pollActiveJobs = useCallback(async () => {
@@ -74,13 +249,23 @@ export function TranslationV4Page() {
       activeJobIds.map(async (taskId) => {
         try {
           const res = await fetch(
-            `/api/translate/v4/task-progress${query}&taskId=${taskId}&shopName=${shopName}`,
+            `/api/translate/v4/task-progress${query}${querySep}taskId=${taskId}&shopName=${shopName}`,
           );
           if (!res.ok) return;
           const payload = (await res.json()) as { ok: boolean } & ProgressData;
           if (!payload.ok) return;
+
+          const intent = optimisticActionRef.current.get(taskId);
+          if (intent === "pause" || intent === "cancel") {
+            if (ACTIVE_STATUSES.includes(payload.status)) return;
+          }
+          if (intent === "resume" && payload.status === "PAUSED") return;
+
+          if (payload.status === "PAUSED") {
+            optimisticActionRef.current.delete(taskId);
+          }
+
           setProgressMap((prev) => ({ ...prev, [taskId]: payload }));
-          // Update job status in list
           setJobs((prev) =>
             prev.map((j) => (j.id === taskId ? { ...j, status: payload.status } : j)),
           );
@@ -98,32 +283,51 @@ export function TranslationV4Page() {
     };
   }, [pollActiveJobs]);
 
-  const handleToggleModule = (m: string) => {
-    setModules((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]));
-  };
-
   const handleCreateJob = async () => {
     setFormError(null);
-    if (!target.trim()) { setFormError("目标语言不能为空"); return; }
-    if (!modules.length) { setFormError("至少选择一个模块"); return; }
+    const source = sourceLocale.trim();
+    if (!source) {
+      setFormError("源语言加载中，请稍候");
+      return;
+    }
+    if (!modules.length) {
+      setFormError("至少选择一个模块");
+      return;
+    }
     setIsSubmitting(true);
     try {
-      const res = await fetch(`/api/translate/v4/tasks${query}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source, target, modules, limitPerType, isCover, isHandle, testMode }),
+      const result = await createTranslationV4Tasks({
+        search: query,
+        source,
+        targets: targetLocales,
+        modules,
+        limitPerType,
+        isCover,
+        isHandle,
+        testMode,
+        targetOptions,
       });
-      const payload = (await res.json()) as { ok: boolean; jobId?: string; error?: string; testMode?: boolean };
-      if (!res.ok || !payload.ok) {
-        setFormError(payload.error || "创建失败");
+
+      if (result.validationError) {
+        setFormError(resolveValidationErrorMessage(result.validationError, t));
         return;
       }
-      const modeLabel = payload.testMode ? "（测试模式）" : "";
-      shopify.toast.show(`翻译任务已创建${modeLabel}`);
-      // Refresh job list
-      const listRes = await fetch(`/api/translate/v4/tasks${query}&shopName=${shopName}`);
-      const listPayload = (await listRes.json()) as { ok: boolean; jobs?: TranslationV4Job[] };
-      if (listPayload.ok && listPayload.jobs) setJobs(listPayload.jobs);
+
+      const toast = formatCreateTasksToast(result, t);
+      if (toast) {
+        shopify.toast.show(toast);
+      }
+
+      if (result.failed.length) {
+        const detail = result.failed.map((f) => `${f.target}: ${f.error}`).join("; ");
+        setFormError(detail);
+      }
+
+      if (result.created.length) {
+        await refreshJobList();
+      } else if (!result.failed.length && !result.validationError) {
+        setFormError("创建失败");
+      }
     } catch {
       setFormError("请求失败，请重试");
     } finally {
@@ -131,18 +335,47 @@ export function TranslationV4Page() {
     }
   };
 
-  const handleAction = async (taskId: string, action: "cancel" | "pause" | "resume") => {
-    try {
-      await fetch(`/api/translate/v4/task-action${query}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskId, shopName, action }),
+  const handleAction = (taskId: string, action: "cancel" | "pause" | "resume") => {
+    const job = jobs.find((j) => j.id === taskId);
+    if (!job) return;
+
+    const priorStatus = (progressMap[taskId]?.status ?? job.status) as TranslationV4Status;
+
+    if (action === "pause") {
+      optimisticActionRef.current.set(taskId, "pause");
+      applyOptimisticPatch(taskId, job, {
+        status: "PAUSED",
+        priorStatus,
+        errorStage: stageFromV4Status(priorStatus),
       });
-      const listRes = await fetch(`/api/translate/v4/tasks${query}&shopName=${shopName}`);
-      const listPayload = (await listRes.json()) as { ok: boolean; jobs?: TranslationV4Job[] };
-      if (listPayload.ok && listPayload.jobs) setJobs(listPayload.jobs);
-    } catch {
-      shopify.toast.show("操作失败");
+      void syncTaskAction(taskId, "pause");
+      return;
+    }
+
+    if (action === "cancel") {
+      optimisticActionRef.current.set(taskId, "cancel");
+      applyOptimisticPatch(taskId, job, {
+        status: "CANCELLED",
+        priorStatus,
+      });
+      void syncTaskAction(taskId, "cancel");
+      return;
+    }
+
+    if (action === "resume") {
+      const resumeStatus = resolveResumeV4Status(job.status, job.errorStage);
+      if (!resumeStatus) {
+        shopify.toast.show("无法重试该任务");
+        return;
+      }
+      optimisticActionRef.current.set(taskId, "resume");
+      applyOptimisticPatch(taskId, job, {
+        status: resumeStatus,
+        priorStatus,
+        errorStage: null,
+        errorMessage: null,
+      });
+      void syncTaskAction(taskId, "resume");
     }
   };
 
@@ -158,48 +391,33 @@ export function TranslationV4Page() {
           <div style={twoColumnMainStyle}>
             <PageSurface title="创建翻译任务">
               <s-stack direction="block" gap="base">
-                <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-                  <div style={{ flex: "1 1 140px" }}>
-                    <s-text-field
-                      label="源语言"
-                      value={source}
-                      onChange={(e) => setSource(e.currentTarget.value)}
-                      autocomplete="off"
-                    />
-                  </div>
-                  <div style={{ flex: "1 1 140px" }}>
-                    <s-text-field
-                      label="目标语言"
-                      value={target}
-                      onChange={(e) => setTarget(e.currentTarget.value)}
-                      autocomplete="off"
-                    />
-                  </div>
-                  <div style={{ flex: "1 1 100px" }}>
-                    <s-text-field
-                      label="每模块数量限制"
-                      value={String(limitPerType)}
-                      onChange={(e) => setLimitPerType(Number(e.currentTarget.value) || 20)}
-                      autocomplete="off"
-                    />
-                  </div>
+                <TranslationLocaleFields
+                  sourceLocale={sourceLocale}
+                  sourceLabel={sourceLabel}
+                  selectionMode="multiple"
+                  targetLocales={targetLocales}
+                  onTargetLocalesChange={setTargetLocales}
+                  targetOptions={targetOptions}
+                  loading={localesLoading}
+                  disabled={isSubmitting}
+                  localesIsFallback={localesIsFallback}
+                  targetFieldId="translation-v4-target-locale"
+                />
+                <div style={{ maxWidth: "12rem" }}>
+                  <s-text-field
+                    label="每模块数量限制"
+                    value={String(limitPerType)}
+                    onChange={(e) => setLimitPerType(Number(e.currentTarget.value) || 20)}
+                    autocomplete="off"
+                  />
                 </div>
 
-                <div>
-                  <div style={pageFieldLabelStyle}>翻译模块</div>
-                  <s-stack direction="inline" gap="small">
-                    {loaderData.modules.map((m) => (
-                      <s-button
-                        key={m}
-                        type="button"
-                        variant={modules.includes(m) ? "primary" : "secondary"}
-                        onClick={() => handleToggleModule(m)}
-                      >
-                        {m}
-                      </s-button>
-                    ))}
-                  </s-stack>
-                </div>
+                <TranslationModuleMultiSelect
+                  id="translation-v4-modules"
+                  values={modules}
+                  onChange={setModules}
+                  disabled={isSubmitting}
+                />
 
                 <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
                   <label style={checkboxLabelStyle}>
@@ -272,14 +490,14 @@ export function TranslationV4Page() {
         </div>
 
         {/* Job list */}
-        <PageSurface title={`任务列表（${jobs.length}）`}>
-          {jobs.length === 0 ? (
+        <PageSurface title={`任务列表（${displayJobs.length}）`}>
+          {displayJobs.length === 0 ? (
             <div style={pageEmptyStateStyle}>暂无翻译任务，创建一个开始</div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-              {jobs.map((job) => {
+              {displayJobs.map((job) => {
                 const progress = progressMap[job.id];
-                const status = (progress?.status ?? job.status) as TranslationV4Status;
+                const status = resolveDisplayStatus(job, progress);
                 return (
                   <JobCard
                     key={job.id}
@@ -302,7 +520,7 @@ type JobCardProps = {
   job: TranslationV4Job;
   status: TranslationV4Status;
   progress: ProgressData | null;
-  onAction: (taskId: string, action: "cancel" | "pause" | "resume") => Promise<void>;
+  onAction: (taskId: string, action: "cancel" | "pause" | "resume") => void | Promise<void>;
 };
 
 function JobCard({ job, status, progress, onAction }: JobCardProps) {
