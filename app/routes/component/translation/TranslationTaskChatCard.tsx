@@ -13,18 +13,8 @@ import {
   resolveValidationErrorMessage,
 } from "../../../lib/translationCreateFeedback";
 import { useShopLocales } from "../../../hooks/useShopLocales";
-import { TRANSLATION_V4_MODULES } from "../../../server/translation/v4/types";
-import { pageColorTokens } from "../../page/pageUiStyles";
 import { TranslationLocaleFields } from "./TranslationLocaleFields";
-
-const MODULE_LABELS: Record<string, string> = {
-  PRODUCT: "translationRuntime.moduleProduct",
-  COLLECTION: "translationRuntime.moduleCollection",
-  PAGE: "translationRuntime.modulePage",
-  ARTICLE: "translationRuntime.moduleArticle",
-  METAOBJECT: "translationRuntime.moduleMetaobject",
-  METAFIELD: "translationRuntime.moduleMetafield",
-};
+import { TranslationModuleMultiSelect } from "./TranslationModuleMultiSelect";
 
 type Props = {
   initialPayload: TranslationTaskFormPayload;
@@ -57,7 +47,6 @@ export function TranslationTaskChatCard({
     sourceLocale,
     sourceLabel,
     targetLocales,
-    toggleTargetLocale,
     setTargetLocales,
     targetOptions,
     loading: localesLoading,
@@ -79,12 +68,6 @@ export function TranslationTaskChatCard({
       setTargetLocales(targets);
     }
   }, [initialPayload, setTargetLocales]);
-
-  const toggleModule = (type: string) => {
-    setResourceTypes((prev) =>
-      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
-    );
-  };
 
   const handleCreate = async () => {
     const source = sourceLocale.trim();
@@ -154,20 +137,8 @@ export function TranslationTaskChatCard({
   const innerStyle: CSSProperties = {
     borderRadius: embedded ? "13px" : "15px",
     background: "linear-gradient(180deg, #ffffff 0%, #fafbfb 100%)",
-    overflow: "hidden",
+    overflow: "visible",
   };
-
-  const pillStyle = (selected: boolean): CSSProperties => ({
-    borderRadius: "999px",
-    padding: "0.35rem 0.75rem",
-    fontSize: "0.8125rem",
-    fontWeight: selected ? 600 : 500,
-    border: selected ? `1px solid ${pageColorTokens.brandGreen}` : `1px solid ${pageColorTokens.border}`,
-    background: selected ? "rgba(0, 128, 96, 0.12)" : "#ffffff",
-    color: selected ? "#004d3d" : "#303030",
-    cursor: "pointer",
-    transition: "background 0.15s ease, border-color 0.15s ease, transform 0.1s ease",
-  });
 
   const primaryBtnStyle: CSSProperties = {
     width: "100%",
@@ -211,7 +182,7 @@ export function TranslationTaskChatCard({
               sourceLabel={sourceLabel}
               selectionMode="multiple"
               targetLocales={targetLocales}
-              onToggleTargetLocale={toggleTargetLocale}
+              onTargetLocalesChange={setTargetLocales}
               targetOptions={targetOptions}
               loading={localesLoading}
               disabled={isSubmitting}
@@ -232,36 +203,12 @@ export function TranslationTaskChatCard({
           </div>
 
           <div style={{ marginBottom: "0.65rem" }}>
-            <span
-              style={{
-                fontSize: "0.75rem",
-                fontWeight: 600,
-                color: "#444",
-                textTransform: "uppercase",
-                letterSpacing: "0.04em",
-              }}
-            >
-              {t("translationRuntime.moduleTitle")}
-            </span>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "0.45rem",
-                marginTop: "0.45rem",
-              }}
-            >
-              {[...TRANSLATION_V4_MODULES].map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  style={pillStyle(resourceTypes.includes(type))}
-                  onClick={() => toggleModule(type)}
-                >
-                  {t(MODULE_LABELS[type] ?? type)}
-                </button>
-              ))}
-            </div>
+            <TranslationModuleMultiSelect
+              id="translation-chat-modules"
+              values={resourceTypes}
+              onChange={setResourceTypes}
+              disabled={isSubmitting}
+            />
           </div>
 
           <s-stack direction="block" gap="small">

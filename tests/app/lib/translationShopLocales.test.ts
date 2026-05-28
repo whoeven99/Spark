@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatTranslationLocaleLabel,
   resolveDefaultTargetLocale,
   resolveInitialTargetLocales,
   resolveTranslationLocales,
+  toTranslationLocaleOptions,
 } from "../../../app/lib/translationShopLocales";
 import type { ShopLocalesPayload } from "../../../app/lib/productImproveLocales";
 
@@ -21,12 +23,37 @@ function payload(
   };
 }
 
+describe("formatTranslationLocaleLabel", () => {
+  it("strips trailing locale code in parentheses", () => {
+    expect(formatTranslationLocaleLabel("English (en)")).toBe("English");
+    expect(formatTranslationLocaleLabel("简体中文 (zh-CN)")).toBe("简体中文");
+  });
+
+  it("leaves label unchanged when no suffix", () => {
+    expect(formatTranslationLocaleLabel("English")).toBe("English");
+  });
+});
+
+describe("toTranslationLocaleOptions", () => {
+  it("maps labels without changing values", () => {
+    const options = [
+      { value: "en", label: "English (en)", published: true },
+      { value: "fr", label: "French (fr)", published: true },
+    ];
+    expect(toTranslationLocaleOptions(options)).toEqual([
+      { value: "en", label: "English", published: true },
+      { value: "fr", label: "French", published: true },
+    ]);
+  });
+});
+
 describe("resolveTranslationLocales", () => {
   it("uses defaultTargetLanguage as source and excludes it from targets", () => {
     const resolved = resolveTranslationLocales(payload());
     expect(resolved.sourceLocale).toBe("en");
-    expect(resolved.sourceLabel).toBe("English (en)");
+    expect(resolved.sourceLabel).toBe("English");
     expect(resolved.targetOptions.map((o) => o.value)).toEqual(["fr", "de"]);
+    expect(resolved.targetOptions.map((o) => o.label)).toEqual(["French", "German"]);
   });
 
   it("includes unpublished locales for targets", () => {

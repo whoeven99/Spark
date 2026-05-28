@@ -16,11 +16,11 @@ import {
 } from "../../server/translation/v4/types";
 import { useShopLocales } from "../../hooks/useShopLocales";
 import { TranslationLocaleFields } from "../component/translation/TranslationLocaleFields";
+import { TranslationModuleMultiSelect } from "../component/translation/TranslationModuleMultiSelect";
 import {
   PageSurface,
   pageColorTokens,
   pageContentStyle,
-  pageFieldLabelStyle,
   pageIntroBannerStyle,
   twoColumnLayoutStyle,
   twoColumnMainStyle,
@@ -145,7 +145,7 @@ export function TranslationV4Page() {
     sourceLocale,
     sourceLabel,
     targetLocales,
-    toggleTargetLocale,
+    setTargetLocales,
     targetOptions,
     loading: localesLoading,
     isFallback: localesIsFallback,
@@ -283,10 +283,6 @@ export function TranslationV4Page() {
     };
   }, [pollActiveJobs]);
 
-  const handleToggleModule = (m: string) => {
-    setModules((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]));
-  };
-
   const handleCreateJob = async () => {
     setFormError(null);
     const source = sourceLocale.trim();
@@ -400,7 +396,7 @@ export function TranslationV4Page() {
                   sourceLabel={sourceLabel}
                   selectionMode="multiple"
                   targetLocales={targetLocales}
-                  onToggleTargetLocale={toggleTargetLocale}
+                  onTargetLocalesChange={setTargetLocales}
                   targetOptions={targetOptions}
                   loading={localesLoading}
                   disabled={isSubmitting}
@@ -416,21 +412,12 @@ export function TranslationV4Page() {
                   />
                 </div>
 
-                <div>
-                  <div style={pageFieldLabelStyle}>翻译模块</div>
-                  <s-stack direction="inline" gap="small">
-                    {loaderData.modules.map((m) => (
-                      <s-button
-                        key={m}
-                        type="button"
-                        variant={modules.includes(m) ? "primary" : "secondary"}
-                        onClick={() => handleToggleModule(m)}
-                      >
-                        {m}
-                      </s-button>
-                    ))}
-                  </s-stack>
-                </div>
+                <TranslationModuleMultiSelect
+                  id="translation-v4-modules"
+                  values={modules}
+                  onChange={setModules}
+                  disabled={isSubmitting}
+                />
 
                 <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
                   <label style={checkboxLabelStyle}>
