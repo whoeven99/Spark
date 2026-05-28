@@ -382,7 +382,8 @@
     "createSuccess": "작업이 생성되었습니다",
     "createFailedRetry": "작업 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.",
     "fallbackLocalesHint": "내장 언어 목록을 사용 중입니다. read_locales 권한을 부여하고 앱을 재설치하면 Shopify 활성 언어를 동기화할 수 있습니다.",
-    "validationSameLocale": "대상 언어는 원본 언어와 같을 수 없습니다"
+    "validationSameLocale": "대상 언어는 원본 언어와 같을 수 없습니다",
+    "selectTargetLocale": "선택 가능한 대상 언어가 없습니다. Shopify에서 더 많은 언어를 활성화하세요."
   },
   "productSelector": {
     "searchLabel": "상품 검색（제목）",

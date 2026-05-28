@@ -382,7 +382,8 @@
     "createSuccess": "Tarea creada correctamente",
     "createFailedRetry": "No se pudo crear la tarea. Inténtalo más tarde.",
     "fallbackLocalesHint": "Usando lista de configuraciones regional integrada. Concede el permiso read_locales y reinstala la app para sincronizar las configuraciones regional habilitadas en Shopify.",
-    "validationSameLocale": "La configuración regional de destino no puede ser igual a la de origen"
+    "validationSameLocale": "La configuración regional de destino no puede ser igual a la de origen",
+    "selectTargetLocale": "No hay idiomas de destino disponibles. Active más idiomas en Shopify."
   },
   "productSelector": {
     "searchLabel": "Buscar productos (título)",

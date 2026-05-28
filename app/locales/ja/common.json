@@ -382,7 +382,8 @@
     "createSuccess": "タスクを作成しました",
     "createFailedRetry": "タスク作成に失敗しました。後でもう一度お試しください。",
     "fallbackLocalesHint": "内蔵言語リストを使用中です。read_locales 権限を付与して再インストールすると Shopify 有効言語を同期できます。",
-    "validationSameLocale": "対象言語は元言語と同じにできません"
+    "validationSameLocale": "対象言語は元言語と同じにできません",
+    "selectTargetLocale": "選択できる対象言語がありません。Shopify で他の言語を有効にしてください。"
   },
   "productSelector": {
     "searchLabel": "商品検索（タイトル）",

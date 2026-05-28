@@ -500,7 +500,8 @@
     "createSuccess": "任务创建成功",
     "createFailedRetry": "创建任务失败，请稍后再试",
     "fallbackLocalesHint": "当前为内置语言列表。若已在应用配置中授权 read_locales 并重新安装应用，将自动同步店铺在 Shopify 中启用的语言。",
-    "validationSameLocale": "目标语言不能与源语言相同"
+    "validationSameLocale": "目标语言不能与源语言相同",
+    "selectTargetLocale": "暂无可选目标语言，请在 Shopify 后台启用更多语言"
   },
   "productSelector": {
     "searchLabel": "搜索商品（标题）",

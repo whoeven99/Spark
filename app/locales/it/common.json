@@ -382,7 +382,8 @@
     "createSuccess": "Attività creata correttamente",
     "createFailedRetry": "Impossibile creare l’attività. Riprova più tardi.",
     "fallbackLocalesHint": "In uso elenco locale integrato. Concedi lo scope read_locales e reinstalla l’app per sincronizzare le lingue Shopify abilitate.",
-    "validationSameLocale": "Il locale di destinazione non può coincidere con quello di origine"
+    "validationSameLocale": "Il locale di destinazione non può coincidere con quello di origine",
+    "selectTargetLocale": "Nessuna lingua di destinazione disponibile. Abilita altre lingue in Shopify."
   },
   "productSelector": {
     "searchLabel": "Cerca prodotti (titolo)",
