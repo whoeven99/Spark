@@ -31,6 +31,25 @@ function normalizeLimit(n: number | undefined): number {
   return Math.min(200, Math.floor(v));
 }
 
+function normalizeTargetLocales(
+  targetLocales: string[] | undefined,
+  targetLocale: string | undefined,
+): string[] {
+  const fromList = (targetLocales ?? [])
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean);
+  if (fromList.length) {
+    const seen = new Set<string>();
+    return fromList.filter((x) => {
+      if (seen.has(x)) return false;
+      seen.add(x);
+      return true;
+    });
+  }
+  const single = (targetLocale ?? "").trim().toLowerCase();
+  return single ? [single] : [];
+}
+
 /**
  * 当用户要创建翻译任务时调用：在首页展示可编辑表单卡片（不直接写入 Cosmos）。
  * 返回 JSON 字符串供服务端解析并下发给前端。
@@ -38,7 +57,7 @@ function normalizeLimit(n: number | undefined): number {
 export const translationTaskFormTool = new DynamicStructuredTool({
   name: OPEN_TRANSLATION_TASK_FORM_TOOL_NAME,
   description:
-    "当用户明确表示要创建翻译任务、批量翻译商品/集合/页面等时使用。源语言由店铺主语言决定，卡片内不可改；根据对话尽量填入目标语言、条目上限与模块，目标语言须为店铺已启用语言之一。不要在未提及翻译任务时调用。",
+    "当用户明确表示要创建翻译任务、批量翻译商品/集合/页面等时使用。源语言由店铺主语言决定，卡片内不可改；根据对话尽量填入目标语言（可多个）、条目上限与模块，目标语言须为店铺已启用语言之一。用户说「翻译成法语和日语」等时填 targetLocales。不要在未提及翻译任务时调用。",
   schema: z.object({
     sourceLocale: z
       .string()
@@ -47,7 +66,11 @@ export const translationTaskFormTool = new DynamicStructuredTool({
     targetLocale: z
       .string()
       .optional()
-      .describe("目标语言 locale（BCP47），如 fr、ja、en；须为店铺已启用语言；未知则留空"),
+      .describe("单个目标语言 locale（BCP47）；与 targetLocales 二选一"),
+    targetLocales: z
+      .array(z.string())
+      .optional()
+      .describe("多个目标语言 locale，如 [\"fr\", \"ja\"]"),
     limitPerType: z
       .number()
       .optional()
@@ -59,13 +82,15 @@ export const translationTaskFormTool = new DynamicStructuredTool({
         "翻译模块：PRODUCT、PRODUCT_OPTION、PRODUCT_OPTION_VALUE、COLLECTION、ONLINE_STORE_THEME_APP_EMBED、ONLINE_STORE_THEME_JSON_TEMPLATE、ONLINE_STORE_THEME_SECTION_GROUP、ONLINE_STORE_THEME_SETTINGS_DATA_SECTIONS、MENU、LINK、DELIVERY_METHOD_DEFINITION、FILTER、METAFIELD、METAOBJECT、PAYMENT_GATEWAY、SELLING_PLAN、SELLING_PLAN_GROUP、SHOP、ARTICLE、BLOG、PAGE；缺省为 PRODUCT/COLLECTION/PAGE/ARTICLE",
       ),
   }),
-  func: async ({ sourceLocale, targetLocale, limitPerType, resourceTypes }) => {
+  func: async ({ sourceLocale, targetLocale, targetLocales, limitPerType, resourceTypes }) => {
+    const locales = normalizeTargetLocales(targetLocales, targetLocale);
     const payload: TranslationTaskFormPayload & {
       _sparkKind: typeof TRANSLATION_FORM_PAYLOAD_KIND;
     } = {
       _sparkKind: TRANSLATION_FORM_PAYLOAD_KIND,
       sourceLocale: (sourceLocale ?? "zh-CN").trim().toLowerCase() || "zh-cn",
-      targetLocale: (targetLocale ?? "").trim().toLowerCase(),
+      targetLocale: locales[0] ?? "",
+      ...(locales.length ? { targetLocales: locales } : {}),
       limitPerType: normalizeLimit(limitPerType),
       resourceTypes: normalizeModules(resourceTypes),
     };

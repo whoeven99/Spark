@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   SHOP_LOCALES_FALLBACK,
   type ShopLocaleOption,
@@ -6,7 +6,7 @@ import {
   type ShopLocalesPayload,
 } from "../lib/productImproveLocales";
 import {
-  resolveDefaultTargetLocale,
+  resolveInitialTargetLocales,
   resolveTranslationLocales,
 } from "../lib/translationShopLocales";
 
@@ -18,21 +18,32 @@ export type UseShopLocalesParams = {
   locationSearch: string;
   /** 独立页由 loader 注入；聊天卡片传 `null`，由 hook 请求 `/api/shop-locales`。 */
   initialShopLocales: ShopLocalesPayload | null;
-  /** AI 预填或表单 coerce 的目标语言 */
+  /** AI 预填或表单 coerce 的目标语言（单值） */
   initialTargetLocale?: string;
+  /** AI 预填多个目标语言 */
+  initialTargetLocales?: string[];
+  selectionMode?: LocaleSelectionMode;
 };
 
 export function useShopLocales(params: UseShopLocalesParams) {
-  const { locationSearch, initialShopLocales, initialTargetLocale } = params;
+  const {
+    locationSearch,
+    initialShopLocales,
+    initialTargetLocale,
+    initialTargetLocales,
+    selectionMode = "multiple",
+  } = params;
 
   const [resolvedLocales, setResolvedLocales] = useState<ShopLocalesPayload | null>(
     initialShopLocales,
   );
   const [loading, setLoading] = useState(initialShopLocales == null);
-  const initialTargetRef = useRef(initialTargetLocale);
-  initialTargetRef.current = initialTargetLocale;
+  const initialTargetLocaleRef = useRef(initialTargetLocale);
+  const initialTargetLocalesRef = useRef(initialTargetLocales);
+  initialTargetLocaleRef.current = initialTargetLocale;
+  initialTargetLocalesRef.current = initialTargetLocales;
 
-  const [targetLocale, setTargetLocale] = useState("");
+  const [targetLocales, setTargetLocales] = useState<string[]>([]);
 
   const resolved = useMemo(() => {
     if (!resolvedLocales) {
@@ -87,20 +98,41 @@ export function useShopLocales(params: UseShopLocalesParams) {
     if (!resolvedLocales || resolved.targetOptions.length === 0) {
       return;
     }
-    const next = resolveDefaultTargetLocale(
+    const defaults = resolveInitialTargetLocales(
       resolved.targetOptions,
-      initialTargetRef.current,
+      initialTargetLocaleRef.current,
+      initialTargetLocalesRef.current,
     );
-    setTargetLocale((prev) => {
-      if (prev && resolved.targetOptions.some((o) => o.value === prev)) {
-        return prev;
+    setTargetLocales((prev) => {
+      const validPrev = prev.filter((v) =>
+        resolved.targetOptions.some((o) => o.value === v),
+      );
+      if (validPrev.length) {
+        return validPrev;
       }
-      return next;
+      return defaults;
     });
   }, [resolvedLocales, resolved.targetOptions]);
 
+  const toggleTargetLocale = useCallback((locale: string) => {
+    setTargetLocales((prev) => {
+      if (selectionMode === "single") {
+        return [locale];
+      }
+      if (prev.includes(locale)) {
+        return prev.filter((x) => x !== locale);
+      }
+      return [...prev, locale];
+    });
+  }, [selectionMode]);
+
+  const targetLocale = targetLocales[0] ?? "";
+
+  const setTargetLocale = useCallback((locale: string) => {
+    setTargetLocales(locale.trim() ? [locale.trim()] : []);
+  }, []);
+
   const isFallback = resolvedLocales?.isFallback ?? false;
-  const selectionMode: LocaleSelectionMode = "single";
 
   return {
     sourceLocale: resolved.sourceLocale,
@@ -108,6 +140,9 @@ export function useShopLocales(params: UseShopLocalesParams) {
     targetOptions: resolved.targetOptions,
     targetLocale,
     setTargetLocale,
+    targetLocales,
+    setTargetLocales,
+    toggleTargetLocale,
     loading,
     isFallback,
     selectionMode,

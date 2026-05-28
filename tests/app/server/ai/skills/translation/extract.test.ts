@@ -1,6 +1,10 @@
 import { ToolMessage } from "@langchain/core/messages";
 import { describe, expect, it } from "vitest";
-import { TRANSLATION_FORM_PAYLOAD_KIND } from "../../../../../../app/lib/translationTaskFormPayload";
+import {
+  TRANSLATION_FORM_PAYLOAD_KIND,
+  coerceTranslationTaskFormPayload,
+  getTargetLocalesFromPayload,
+} from "../../../../../../app/lib/translationTaskFormPayload";
 import {
   extractTranslationTaskFormFromMessages,
   shouldInjectTranslationTaskFormFallback,
@@ -47,6 +51,22 @@ describe("extractTranslationTaskFormFromMessages", () => {
     const r = extractTranslationTaskFormFromMessages(messages);
     expect(r?.sourceLocale).toBe("zh-CN");
     expect(r?.resourceTypes).toEqual(["PRODUCT", "COLLECTION"]);
+  });
+});
+
+describe("coerceTranslationTaskFormPayload targetLocales", () => {
+  it("prefers targetLocales array over single targetLocale", () => {
+    const p = coerceTranslationTaskFormPayload({
+      targetLocale: "en",
+      targetLocales: ["fr", "ja"],
+    });
+    expect(getTargetLocalesFromPayload(p)).toEqual(["fr", "ja"]);
+    expect(p.targetLocale).toBe("fr");
+  });
+
+  it("falls back to single targetLocale", () => {
+    const p = coerceTranslationTaskFormPayload({ targetLocale: "de" });
+    expect(getTargetLocalesFromPayload(p)).toEqual(["de"]);
   });
 });
 

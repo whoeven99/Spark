@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
+import { useTranslation } from "react-i18next";
 import { useLoaderData } from "react-router";
+import { createTranslationV4Tasks } from "../../lib/createTranslationV4Tasks";
+import {
+  formatCreateTasksToast,
+  resolveValidationErrorMessage,
+} from "../../lib/translationCreateFeedback";
 import type { loader } from "../app.translation-v4";
 import {
   TERMINAL_V4_STATUSES,
@@ -130,21 +136,22 @@ function resolveDisplayStatus(
 
 export function TranslationV4Page() {
   const shopify = useAppBridge();
+  const { t } = useTranslation();
   const loaderData = useLoaderData<typeof loader>();
 
   const query = typeof window !== "undefined" ? window.location.search : "";
   const {
     sourceLocale,
     sourceLabel,
-    targetLocale,
-    setTargetLocale,
+    targetLocales,
+    toggleTargetLocale,
     targetOptions,
     loading: localesLoading,
     isFallback: localesIsFallback,
-    selectionMode,
   } = useShopLocales({
     locationSearch: query,
     initialShopLocales: loaderData.shopLocales,
+    selectionMode: "multiple",
   });
 
   const [modules, setModules] = useState<string[]>(["PRODUCT", "COLLECTION", "PAGE", "ARTICLE"]);
@@ -278,29 +285,48 @@ export function TranslationV4Page() {
   const handleCreateJob = async () => {
     setFormError(null);
     const source = sourceLocale.trim();
-    const target = targetLocale.trim();
-    if (!source) { setFormError("源语言加载中，请稍候"); return; }
-    if (!target) { setFormError("目标语言不能为空"); return; }
-    if (target === source) { setFormError("目标语言不能和源语言相同"); return; }
-    if (!modules.length) { setFormError("至少选择一个模块"); return; }
+    if (!source) {
+      setFormError("源语言加载中，请稍候");
+      return;
+    }
+    if (!modules.length) {
+      setFormError("至少选择一个模块");
+      return;
+    }
     setIsSubmitting(true);
     try {
-      const res = await fetch(`/api/translate/v4/tasks${query}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source, target, modules, limitPerType, isCover, isHandle, testMode }),
+      const result = await createTranslationV4Tasks({
+        search: query,
+        source,
+        targets: targetLocales,
+        modules,
+        limitPerType,
+        isCover,
+        isHandle,
+        testMode,
+        targetOptions,
       });
-      const payload = (await res.json()) as { ok: boolean; jobId?: string; error?: string; testMode?: boolean };
-      if (!res.ok || !payload.ok) {
-        setFormError(payload.error || "创建失败");
+
+      if (result.validationError) {
+        setFormError(resolveValidationErrorMessage(result.validationError, t));
         return;
       }
-      const modeLabel = payload.testMode ? "（测试模式）" : "";
-      shopify.toast.show(`翻译任务已创建${modeLabel}`);
-      // Refresh job list
-      const listRes = await fetch(`/api/translate/v4/tasks${query}${querySep}shopName=${shopName}`);
-      const listPayload = (await listRes.json()) as { ok: boolean; jobs?: TranslationV4Job[] };
-      if (listPayload.ok && listPayload.jobs) setJobs(listPayload.jobs);
+
+      const toast = formatCreateTasksToast(result, t);
+      if (toast) {
+        shopify.toast.show(toast);
+      }
+
+      if (result.failed.length) {
+        const detail = result.failed.map((f) => `${f.target}: ${f.error}`).join("; ");
+        setFormError(detail);
+      }
+
+      if (result.created.length) {
+        await refreshJobList();
+      } else if (!result.failed.length && !result.validationError) {
+        setFormError("创建失败");
+      }
     } catch {
       setFormError("请求失败，请重试");
     } finally {
@@ -367,13 +393,13 @@ export function TranslationV4Page() {
                 <TranslationLocaleFields
                   sourceLocale={sourceLocale}
                   sourceLabel={sourceLabel}
-                  targetLocale={targetLocale}
-                  onTargetLocaleChange={setTargetLocale}
+                  selectionMode="multiple"
+                  targetLocales={targetLocales}
+                  onToggleTargetLocale={toggleTargetLocale}
                   targetOptions={targetOptions}
                   loading={localesLoading}
                   disabled={isSubmitting}
                   localesIsFallback={localesIsFallback}
-                  selectionMode={selectionMode}
                   targetFieldId="translation-v4-target-locale"
                 />
                 <div style={{ maxWidth: "12rem" }}>

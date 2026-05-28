@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   resolveDefaultTargetLocale,
+  resolveInitialTargetLocales,
   resolveTranslationLocales,
 } from "../../../app/lib/translationShopLocales";
 import type { ShopLocalesPayload } from "../../../app/lib/productImproveLocales";
@@ -84,5 +85,27 @@ describe("resolveDefaultTargetLocale", () => {
 
   it("returns empty when no options", () => {
     expect(resolveDefaultTargetLocale([], "en")).toBe("");
+  });
+});
+
+describe("resolveInitialTargetLocales", () => {
+  const options = [
+    { value: "fr", label: "French (fr)" },
+    { value: "ja", label: "日本語 (ja)" },
+  ];
+
+  it("uses initialTargetLocales when valid", () => {
+    expect(resolveInitialTargetLocales(options, undefined, ["ja", "fr", "ja"])).toEqual([
+      "ja",
+      "fr",
+    ]);
+  });
+
+  it("falls back to single initialTargetLocale", () => {
+    expect(resolveInitialTargetLocales(options, "ja")).toEqual(["ja"]);
+  });
+
+  it("defaults to first option", () => {
+    expect(resolveInitialTargetLocales(options)).toEqual(["fr"]);
   });
 });

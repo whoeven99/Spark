@@ -4,8 +4,14 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import {
   coerceTranslationTaskFormPayload,
+  getTargetLocalesFromPayload,
   type TranslationTaskFormPayload,
 } from "../../../lib/translationTaskFormPayload";
+import { createTranslationV4Tasks } from "../../../lib/createTranslationV4Tasks";
+import {
+  formatCreateTasksToast,
+  resolveValidationErrorMessage,
+} from "../../../lib/translationCreateFeedback";
 import { useShopLocales } from "../../../hooks/useShopLocales";
 import { TRANSLATION_V4_MODULES } from "../../../server/translation/v4/types";
 import { pageColorTokens } from "../../page/pageUiStyles";
@@ -22,7 +28,11 @@ const MODULE_LABELS: Record<string, string> = {
 
 type Props = {
   initialPayload: TranslationTaskFormPayload;
-  onSuccess: (detail: { jobId?: string; message: string }) => void;
+  onSuccess: (detail: {
+    jobId?: string;
+    jobIds?: string[];
+    message: string;
+  }) => void;
   /** 嵌在助手气泡内时略收紧边距与阴影 */
   embedded?: boolean;
 };
@@ -35,6 +45,7 @@ export function TranslationTaskChatCard({
   const shopify = useAppBridge();
   const { t } = useTranslation();
   const safeInitial = coerceTranslationTaskFormPayload(initialPayload);
+  const initialTargets = getTargetLocalesFromPayload(safeInitial);
   const [limitPerType, setLimitPerType] = useState(safeInitial.limitPerType);
   const [resourceTypes, setResourceTypes] = useState<string[]>(safeInitial.resourceTypes);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -45,26 +56,29 @@ export function TranslationTaskChatCard({
   const {
     sourceLocale,
     sourceLabel,
-    targetLocale,
-    setTargetLocale,
+    targetLocales,
+    toggleTargetLocale,
+    setTargetLocales,
     targetOptions,
     loading: localesLoading,
     isFallback: localesIsFallback,
-    selectionMode,
   } = useShopLocales({
     locationSearch: search,
     initialShopLocales: null,
     initialTargetLocale: safeInitial.targetLocale,
+    initialTargetLocales: initialTargets,
+    selectionMode: "multiple",
   });
 
   useEffect(() => {
     const p = coerceTranslationTaskFormPayload(initialPayload);
     setLimitPerType(p.limitPerType);
     setResourceTypes(p.resourceTypes);
-    if (p.targetLocale.trim()) {
-      setTargetLocale(p.targetLocale.trim());
+    const targets = getTargetLocalesFromPayload(p);
+    if (targets.length) {
+      setTargetLocales(targets);
     }
-  }, [initialPayload, setTargetLocale]);
+  }, [initialPayload, setTargetLocales]);
 
   const toggleModule = (type: string) => {
     setResourceTypes((prev) =>
@@ -74,17 +88,8 @@ export function TranslationTaskChatCard({
 
   const handleCreate = async () => {
     const source = sourceLocale.trim();
-    const target = targetLocale.trim();
     if (!source) {
       shopify.toast.show(t("common.loadingLanguage"));
-      return;
-    }
-    if (!target) {
-      shopify.toast.show(t("translationRuntime.validationTargetExample"));
-      return;
-    }
-    if (target === source) {
-      shopify.toast.show(t("translation.validationSameLocale"));
       return;
     }
     if (!resourceTypes.length) {
@@ -96,31 +101,37 @@ export function TranslationTaskChatCard({
 
     setIsSubmitting(true);
     try {
-      const response = await fetch(`/api/translate/v4/tasks${search}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          source,
-          target,
-          modules: resourceTypes,
-          limitPerType: limit,
-        }),
+      const result = await createTranslationV4Tasks({
+        search,
+        source,
+        targets: targetLocales,
+        modules: resourceTypes,
+        limitPerType: limit,
+        targetOptions,
       });
-      const payload = (await response.json().catch(() => ({}))) as {
-        ok?: boolean;
-        jobId?: string;
-        error?: string;
-      };
 
-      if (!response.ok || payload.ok === false) {
-        shopify.toast.show(payload.error || t("translation.createFailed", { status: response.status }));
+      if (result.validationError) {
+        shopify.toast.show(resolveValidationErrorMessage(result.validationError, t));
         return;
       }
 
-      shopify.toast.show(t("translationRuntime.createSuccess"));
+      const toast = formatCreateTasksToast(result, t);
+      if (toast) {
+        shopify.toast.show(toast);
+      }
+
+      if (!result.created.length) {
+        const err = result.failed[0]?.error ?? t("translation.createFailedRetry");
+        shopify.toast.show(err);
+        return;
+      }
+
+      const jobIds = result.created.map((c) => c.jobId);
+      const message = toast ?? t("translationRuntime.createSuccess");
       onSuccess({
-        jobId: payload.jobId,
-        message: t("translationRuntime.createSuccess"),
+        jobId: jobIds[0],
+        jobIds,
+        message,
       });
     } catch {
       shopify.toast.show(t("chat.sendFailed"));
@@ -198,13 +209,13 @@ export function TranslationTaskChatCard({
             <TranslationLocaleFields
               sourceLocale={sourceLocale}
               sourceLabel={sourceLabel}
-              targetLocale={targetLocale}
-              onTargetLocaleChange={setTargetLocale}
+              selectionMode="multiple"
+              targetLocales={targetLocales}
+              onToggleTargetLocale={toggleTargetLocale}
               targetOptions={targetOptions}
               loading={localesLoading}
               disabled={isSubmitting}
               localesIsFallback={localesIsFallback}
-              selectionMode={selectionMode}
               targetFieldId="translation-chat-target-locale"
             />
           </div>
