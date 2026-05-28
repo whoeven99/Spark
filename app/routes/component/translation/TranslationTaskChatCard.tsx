@@ -6,8 +6,10 @@ import {
   coerceTranslationTaskFormPayload,
   type TranslationTaskFormPayload,
 } from "../../../lib/translationTaskFormPayload";
+import { useShopLocales } from "../../../hooks/useShopLocales";
 import { TRANSLATION_V4_MODULES } from "../../../server/translation/v4/types";
 import { pageColorTokens } from "../../page/pageUiStyles";
+import { TranslationLocaleFields } from "./TranslationLocaleFields";
 
 const MODULE_LABELS: Record<string, string> = {
   PRODUCT: "translationRuntime.moduleProduct",
@@ -33,22 +35,36 @@ export function TranslationTaskChatCard({
   const shopify = useAppBridge();
   const { t } = useTranslation();
   const safeInitial = coerceTranslationTaskFormPayload(initialPayload);
-  const [sourceLocale, setSourceLocale] = useState(safeInitial.sourceLocale);
-  const [targetLocale, setTargetLocale] = useState(safeInitial.targetLocale);
   const [limitPerType, setLimitPerType] = useState(safeInitial.limitPerType);
   const [resourceTypes, setResourceTypes] = useState<string[]>(safeInitial.resourceTypes);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    const p = coerceTranslationTaskFormPayload(initialPayload);
-    setSourceLocale(p.sourceLocale);
-    setTargetLocale(p.targetLocale);
-    setLimitPerType(p.limitPerType);
-    setResourceTypes(p.resourceTypes);
-  }, [initialPayload]);
-
   const search =
     typeof window !== "undefined" ? window.location.search : "";
+
+  const {
+    sourceLocale,
+    sourceLabel,
+    targetLocale,
+    setTargetLocale,
+    targetOptions,
+    loading: localesLoading,
+    isFallback: localesIsFallback,
+    selectionMode,
+  } = useShopLocales({
+    locationSearch: search,
+    initialShopLocales: null,
+    initialTargetLocale: safeInitial.targetLocale,
+  });
+
+  useEffect(() => {
+    const p = coerceTranslationTaskFormPayload(initialPayload);
+    setLimitPerType(p.limitPerType);
+    setResourceTypes(p.resourceTypes);
+    if (p.targetLocale.trim()) {
+      setTargetLocale(p.targetLocale.trim());
+    }
+  }, [initialPayload, setTargetLocale]);
 
   const toggleModule = (type: string) => {
     setResourceTypes((prev) =>
@@ -57,9 +73,18 @@ export function TranslationTaskChatCard({
   };
 
   const handleCreate = async () => {
+    const source = sourceLocale.trim();
     const target = targetLocale.trim();
+    if (!source) {
+      shopify.toast.show(t("common.loadingLanguage"));
+      return;
+    }
     if (!target) {
       shopify.toast.show(t("translationRuntime.validationTargetExample"));
+      return;
+    }
+    if (target === source) {
+      shopify.toast.show(t("translation.validationSameLocale"));
       return;
     }
     if (!resourceTypes.length) {
@@ -75,8 +100,8 @@ export function TranslationTaskChatCard({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          source: sourceLocale.trim() || "zh-CN",
-          target: targetLocale.trim(),
+          source,
+          target,
           modules: resourceTypes,
           limitPerType: limit,
         }),
@@ -119,12 +144,6 @@ export function TranslationTaskChatCard({
     borderRadius: embedded ? "13px" : "15px",
     background: "linear-gradient(180deg, #ffffff 0%, #fafbfb 100%)",
     overflow: "hidden",
-  };
-
-  const fieldGridStyle: CSSProperties = {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-    gap: "0.75rem",
   };
 
   const pillStyle = (selected: boolean): CSSProperties => ({
@@ -175,18 +194,18 @@ export function TranslationTaskChatCard({
             </div>
           </div>
 
-          <div style={{ ...fieldGridStyle, marginBottom: "0.85rem" }}>
-            <s-text-field
-              label={t("translation.sourceLocale")}
-              value={sourceLocale}
-              onChange={(e) => setSourceLocale(e.currentTarget.value)}
-              autocomplete="off"
-            />
-            <s-text-field
-              label={t("translation.targetLocale")}
-              value={targetLocale}
-              onChange={(e) => setTargetLocale(e.currentTarget.value)}
-              autocomplete="off"
+          <div style={{ marginBottom: "0.85rem" }}>
+            <TranslationLocaleFields
+              sourceLocale={sourceLocale}
+              sourceLabel={sourceLabel}
+              targetLocale={targetLocale}
+              onTargetLocaleChange={setTargetLocale}
+              targetOptions={targetOptions}
+              loading={localesLoading}
+              disabled={isSubmitting}
+              localesIsFallback={localesIsFallback}
+              selectionMode={selectionMode}
+              targetFieldId="translation-chat-target-locale"
             />
           </div>
 
@@ -240,7 +259,7 @@ export function TranslationTaskChatCard({
                 type="button"
                 variant="primary"
                 onClick={handleCreate}
-                {...(isSubmitting ? { disabled: true } : {})}
+                {...(isSubmitting || localesLoading ? { disabled: true } : {})}
               >
                 {isSubmitting ? t("translation.creating") : t("translation.createAction")}
               </s-button>

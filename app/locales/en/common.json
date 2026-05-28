@@ -498,7 +498,9 @@
     "validationResourceTypes": "Please select at least one resource type",
     "createFailed": "Create failed ({{status}})",
     "createSuccess": "Task created successfully",
-    "createFailedRetry": "Failed to create task. Please try again later."
+    "createFailedRetry": "Failed to create task. Please try again later.",
+    "fallbackLocalesHint": "Using built-in locale list. Grant read_locales scope and reinstall app to sync enabled Shopify locales.",
+    "validationSameLocale": "Target locale cannot be the same as source locale"
   },
   "productSelector": {
     "searchLabel": "Search products (title)",

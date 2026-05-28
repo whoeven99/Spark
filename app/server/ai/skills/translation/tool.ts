@@ -38,16 +38,16 @@ function normalizeLimit(n: number | undefined): number {
 export const translationTaskFormTool = new DynamicStructuredTool({
   name: OPEN_TRANSLATION_TASK_FORM_TOOL_NAME,
   description:
-    "当用户明确表示要创建翻译任务、批量翻译商品/集合/页面等时使用。根据对话尽量填入源语言、目标语言、条目上限与模块；不确定的字段可留空由店主在卡片里填写。不要在未提及翻译任务时调用。",
+    "当用户明确表示要创建翻译任务、批量翻译商品/集合/页面等时使用。源语言由店铺主语言决定，卡片内不可改；根据对话尽量填入目标语言、条目上限与模块，目标语言须为店铺已启用语言之一。不要在未提及翻译任务时调用。",
   schema: z.object({
     sourceLocale: z
       .string()
       .optional()
-      .describe("源语言 locale（BCP47），如 zh-CN；默认 zh-CN"),
+      .describe("已废弃：源语言由店铺主语言自动确定，可忽略"),
     targetLocale: z
       .string()
       .optional()
-      .describe("目标语言 locale，如 fr、ja、en；未知则留空"),
+      .describe("目标语言 locale（BCP47），如 fr、ja、en；须为店铺已启用语言；未知则留空"),
     limitPerType: z
       .number()
       .optional()

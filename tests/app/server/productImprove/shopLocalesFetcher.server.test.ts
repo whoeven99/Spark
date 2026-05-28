@@ -10,6 +10,7 @@ describe("buildShopLocalesPayloadFromGraphqlRows", () => {
     expect(payload.isFallback).toBe(false);
     expect(payload.defaultTargetLanguage).toBe("en");
     expect(payload.localeOptions[0]?.value).toBe("en");
+    expect(payload.localeOptions[0]?.published).toBe(true);
   });
 
   it("dedupes by locale", () => {

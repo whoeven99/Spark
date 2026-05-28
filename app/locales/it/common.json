@@ -380,7 +380,9 @@
     "validationResourceTypes": "Seleziona almeno un tipo di risorsa",
     "createFailed": "Creazione non riuscita ({{status}})",
     "createSuccess": "Attività creata correttamente",
-    "createFailedRetry": "Impossibile creare l’attività. Riprova più tardi."
+    "createFailedRetry": "Impossibile creare l’attività. Riprova più tardi.",
+    "fallbackLocalesHint": "In uso elenco locale integrato. Concedi lo scope read_locales e reinstalla l’app per sincronizzare le lingue Shopify abilitate.",
+    "validationSameLocale": "Il locale di destinazione non può coincidere con quello di origine"
   },
   "productSelector": {
     "searchLabel": "Cerca prodotti (titolo)",

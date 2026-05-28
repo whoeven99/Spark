@@ -380,7 +380,9 @@
     "validationResourceTypes": "Selecciona al menos un tipo de recurso",
     "createFailed": "Error al crear ({{status}})",
     "createSuccess": "Tarea creada correctamente",
-    "createFailedRetry": "No se pudo crear la tarea. Inténtalo más tarde."
+    "createFailedRetry": "No se pudo crear la tarea. Inténtalo más tarde.",
+    "fallbackLocalesHint": "Usando lista de configuraciones regional integrada. Concede el permiso read_locales y reinstala la app para sincronizar las configuraciones regional habilitadas en Shopify.",
+    "validationSameLocale": "La configuración regional de destino no puede ser igual a la de origen"
   },
   "productSelector": {
     "searchLabel": "Buscar productos (título)",

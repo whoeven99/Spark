@@ -380,7 +380,9 @@
     "validationResourceTypes": "Bitte mindestens einen Ressourcentyp auswählen",
     "createFailed": "Erstellen fehlgeschlagen ({{status}})",
     "createSuccess": "Aufgabe erfolgreich erstellt",
-    "createFailedRetry": "Aufgabe konnte nicht erstellt werden. Bitte später erneut versuchen."
+    "createFailedRetry": "Aufgabe konnte nicht erstellt werden. Bitte später erneut versuchen.",
+    "fallbackLocalesHint": "Es wird die integrierte Locale-Liste verwendet. Bitte read_locales-Berechtigung erteilen und die App neu installieren, um die in Shopify aktivierten Locales zu synchronisieren.",
+    "validationSameLocale": "Ziel-Locale darf nicht mit der Quell-Locale identisch sein"
   },
   "productSelector": {
     "searchLabel": "Produkte suchen (Titel)",

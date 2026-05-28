@@ -7,6 +7,8 @@ import {
   type TranslationV4Job,
   type TranslationV4Status,
 } from "../../server/translation/v4/types";
+import { useShopLocales } from "../../hooks/useShopLocales";
+import { TranslationLocaleFields } from "../component/translation/TranslationLocaleFields";
 import {
   PageSurface,
   pageColorTokens,
@@ -130,8 +132,21 @@ export function TranslationV4Page() {
   const shopify = useAppBridge();
   const loaderData = useLoaderData<typeof loader>();
 
-  const [source, setSource] = useState("zh-CN");
-  const [target, setTarget] = useState("en");
+  const query = typeof window !== "undefined" ? window.location.search : "";
+  const {
+    sourceLocale,
+    sourceLabel,
+    targetLocale,
+    setTargetLocale,
+    targetOptions,
+    loading: localesLoading,
+    isFallback: localesIsFallback,
+    selectionMode,
+  } = useShopLocales({
+    locationSearch: query,
+    initialShopLocales: loaderData.shopLocales,
+  });
+
   const [modules, setModules] = useState<string[]>(["PRODUCT", "COLLECTION", "PAGE", "ARTICLE"]);
   const [limitPerType, setLimitPerType] = useState(20);
   const [isCover, setIsCover] = useState(false);
@@ -146,7 +161,6 @@ export function TranslationV4Page() {
   const optimisticActionRef = useRef<Map<string, OptimisticActionIntent>>(new Map());
 
   const shopName = loaderData.shop;
-  const query = typeof window !== "undefined" ? window.location.search : "";
   const querySep = query ? "&" : "?";
 
   const refreshJobList = useCallback(async () => {
@@ -263,7 +277,11 @@ export function TranslationV4Page() {
 
   const handleCreateJob = async () => {
     setFormError(null);
-    if (!target.trim()) { setFormError("目标语言不能为空"); return; }
+    const source = sourceLocale.trim();
+    const target = targetLocale.trim();
+    if (!source) { setFormError("源语言加载中，请稍候"); return; }
+    if (!target) { setFormError("目标语言不能为空"); return; }
+    if (target === source) { setFormError("目标语言不能和源语言相同"); return; }
     if (!modules.length) { setFormError("至少选择一个模块"); return; }
     setIsSubmitting(true);
     try {
@@ -346,31 +364,25 @@ export function TranslationV4Page() {
           <div style={twoColumnMainStyle}>
             <PageSurface title="创建翻译任务">
               <s-stack direction="block" gap="base">
-                <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-                  <div style={{ flex: "1 1 140px" }}>
-                    <s-text-field
-                      label="源语言"
-                      value={source}
-                      onChange={(e) => setSource(e.currentTarget.value)}
-                      autocomplete="off"
-                    />
-                  </div>
-                  <div style={{ flex: "1 1 140px" }}>
-                    <s-text-field
-                      label="目标语言"
-                      value={target}
-                      onChange={(e) => setTarget(e.currentTarget.value)}
-                      autocomplete="off"
-                    />
-                  </div>
-                  <div style={{ flex: "1 1 100px" }}>
-                    <s-text-field
-                      label="每模块数量限制"
-                      value={String(limitPerType)}
-                      onChange={(e) => setLimitPerType(Number(e.currentTarget.value) || 20)}
-                      autocomplete="off"
-                    />
-                  </div>
+                <TranslationLocaleFields
+                  sourceLocale={sourceLocale}
+                  sourceLabel={sourceLabel}
+                  targetLocale={targetLocale}
+                  onTargetLocaleChange={setTargetLocale}
+                  targetOptions={targetOptions}
+                  loading={localesLoading}
+                  disabled={isSubmitting}
+                  localesIsFallback={localesIsFallback}
+                  selectionMode={selectionMode}
+                  targetFieldId="translation-v4-target-locale"
+                />
+                <div style={{ maxWidth: "12rem" }}>
+                  <s-text-field
+                    label="每模块数量限制"
+                    value={String(limitPerType)}
+                    onChange={(e) => setLimitPerType(Number(e.currentTarget.value) || 20)}
+                    autocomplete="off"
+                  />
                 </div>
 
                 <div>

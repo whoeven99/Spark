@@ -349,7 +349,9 @@
     "validationResourceTypes": "Sélectionnez au moins un type de ressource",
     "createFailed": "Échec de création ({{status}})",
     "createSuccess": "Tâche créée avec succès",
-    "createFailedRetry": "Impossible de créer la tâche. Réessayez plus tard."
+    "createFailedRetry": "Impossible de créer la tâche. Réessayez plus tard.",
+    "fallbackLocalesHint": "Liste de paramètres régionaux intégrée. Accordez read_locales et réinstallez l’app pour synchroniser les paramètres régionaux Shopify activés.",
+    "validationSameLocale": "La langue cible ne peut pas être identique à la langue source"
   },
   "productSelector": {
     "searchLabel": "Rechercher des produits (titre)",

@@ -3,6 +3,8 @@
 export type ShopLocaleOption = {
   value: string;
   label: string;
+  /** 是否已在 Shopify 店铺中发布；翻译目标语言过滤时使用，生成描述页可忽略。 */
+  published?: boolean;
 };
 
 export type ShopLocalesPayload = {
@@ -26,14 +28,14 @@ export type ShopLocaleGraphqlRow = {
 export const SHOP_LOCALES_FALLBACK: ShopLocalesPayload = {
   defaultTargetLanguage: "en",
   localeOptions: [
-    { value: "en", label: "English (en)" },
-    { value: "zh-CN", label: "简体中文 (zh-CN)" },
-    { value: "zh-TW", label: "繁體中文 (zh-TW)" },
-    { value: "ja", label: "日本語 (ja)" },
-    { value: "ko", label: "한국어 (ko)" },
-    { value: "de", label: "Deutsch (de)" },
-    { value: "fr", label: "Français (fr)" },
-    { value: "es", label: "Español (es)" },
+    { value: "en", label: "English (en)", published: true },
+    { value: "zh-CN", label: "简体中文 (zh-CN)", published: true },
+    { value: "zh-TW", label: "繁體中文 (zh-TW)", published: true },
+    { value: "ja", label: "日本語 (ja)", published: true },
+    { value: "ko", label: "한국어 (ko)", published: true },
+    { value: "de", label: "Deutsch (de)", published: true },
+    { value: "fr", label: "Français (fr)", published: true },
+    { value: "es", label: "Español (es)", published: true },
   ],
   isFallback: true,
 };
