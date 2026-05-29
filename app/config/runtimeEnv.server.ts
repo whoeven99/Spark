@@ -27,6 +27,17 @@ export function resetRuntimeEnvLoaderForTests(): void {
   runtimeEnvLoaded = false;
 }
 
+/** Shopify CLI 在 `shopify app dev` 时注入；本地 .env 不应覆盖（多 App toml 切换） */
+const PRESERVE_WHEN_SET_KEYS = new Set([
+  "SHOPIFY_API_KEY",
+  "SHOPIFY_API_SECRET",
+  "SHOPIFY_APP_URL",
+  "HOST",
+  "PORT",
+  "FRONTEND_PORT",
+  "SCOPES",
+]);
+
 /**
  * 解析 KEY=VALUE 行。
  * @param overrideExisting 本地 .env 为 true：用文件值覆盖空字符串；Render 密钥文件为 false。
@@ -52,10 +63,13 @@ function applyEnvFileContent(
       value = value.slice(1, -1);
     }
     const existing = process.env[key];
+    const alreadySet = existing !== undefined && existing !== "";
+    const preserveCliValue = alreadySet && PRESERVE_WHEN_SET_KEYS.has(key);
     const shouldApply =
-      existing === undefined ||
-      existing === "" ||
-      (overrideExisting && !process.env.RENDER);
+      !preserveCliValue &&
+      (existing === undefined ||
+        existing === "" ||
+        (overrideExisting && !process.env.RENDER));
     if (shouldApply) {
       process.env[key] = value;
       applied += 1;

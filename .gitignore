@@ -12,6 +12,8 @@ node_modules
 /app/generated/prisma
 /prisma/dev.sqlite
 /prisma/dev.sqlite-journal
+/prisma/dev.db
+/prisma/dev.db-journal
 database.sqlite
 
 # CI 本地 Render 日报产物

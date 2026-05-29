@@ -1,102 +1,204 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
-import { useLoaderData } from "react-router";
-import { useProductImprove } from "../../hooks/useProductImprove";
-import { useProductQualityScore } from "../../hooks/useProductQualityScore";
+import { useFetcher, useLoaderData } from "react-router";
 import type { loader } from "../app.product-improve";
 import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
 import { ProductSelector } from "../component/product/ProductSelector";
-import { GenerateDescriptionResultEditor } from "../component/productImprove/GenerateDescriptionResultEditor";
-import { ProductQualityScoreResult } from "../component/productImprove/ProductQualityScoreResult";
+import { ProductImproveTaskListPage } from "../component/productImprove/ProductImproveTaskListPage";
+import { TaskListSummary } from "../component/aiTask/TaskListSummary";
+import type { AITaskItem } from "../../lib/aiTaskTypes";
 import {
   PageSectionHeader,
   PageSurface,
   formErrorBoxStyle,
+  pageColorTokens,
   pageContentStyle,
-  pageEmptyStateStyle,
   pageFieldLabelStyle,
   pageHintTextStyle,
   pageLinkHintStyle,
   pageSelectStyle,
-  pageStatusBadgeStyle,
   pageTrustFootnoteStyle,
   twoColumnLayoutStyle,
   twoColumnMainStyle,
   twoColumnSideStyle,
 } from "./pageUiStyles";
 
+type PageTab = "config" | "tasks";
+
+function PageTabBar({
+  activeTab,
+  onTabChange,
+  runningCount,
+}: {
+  activeTab: PageTab;
+  onTabChange: (tab: PageTab) => void;
+  runningCount: number;
+}) {
+  const btnStyle = (active: boolean): React.CSSProperties => ({
+    padding: "8px 18px",
+    borderRadius: 9,
+    border: active
+      ? `2px solid ${pageColorTokens.brandGreen}`
+      : `2px solid transparent`,
+    background: active ? pageColorTokens.brandGreenLight : "transparent",
+    color: active ? pageColorTokens.brandGreenDark : pageColorTokens.textSecondary,
+    fontWeight: active ? 600 : 500,
+    fontSize: 14,
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+  });
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 4,
+        alignItems: "center",
+        background: pageColorTokens.surface,
+        border: `1px solid ${pageColorTokens.border}`,
+        borderRadius: 12,
+        padding: "6px 8px",
+        marginBottom: 20,
+      }}
+    >
+      <button type="button" style={btnStyle(activeTab === "config")} onClick={() => onTabChange("config")}>
+        配置页
+      </button>
+      <button type="button" style={btnStyle(activeTab === "tasks")} onClick={() => onTabChange("tasks")}>
+        任务列表
+        {runningCount > 0 && (
+          <span
+            style={{
+              background: pageColorTokens.brandBlue,
+              color: "#fff",
+              borderRadius: 10,
+              padding: "1px 7px",
+              fontSize: 11,
+              fontWeight: 700,
+            }}
+          >
+            {runningCount}
+          </span>
+        )}
+      </button>
+      {activeTab === "tasks" && (
+        <span style={{ fontSize: 13, color: pageColorTokens.textSecondary, marginLeft: 8 }}>
+          执行中、待审查、已应用和评分结果统一在这里查看。
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function ProductImprovePage() {
   const shopify = useAppBridge();
   const { t } = useTranslation();
   const loaderData = useLoaderData<typeof loader>();
   const billing = loaderData.billing;
-  const [selectedProduct, setSelectedProduct] =
-    useState<ProductSelectorSelection | null>(null);
+  const [tasks, setTasks] = useState<AITaskItem[]>(loaderData.recentTasks);
+  const [pageTab, setPageTab] = useState<PageTab>("config");
+
+  const shopLocales = loaderData.shopLocales;
+  const [selectedProduct, setSelectedProduct] = useState<ProductSelectorSelection | null>(null);
   const [productId, setProductId] = useState("");
+  const [targetLanguage, setTargetLanguage] = useState(
+    shopLocales?.defaultTargetLanguage ?? "zh-CN",
+  );
   const [showManualProductId, setShowManualProductId] = useState(false);
+
+  const fetcher = useFetcher();
+  const isSubmitting = fetcher.state === "submitting";
+  const actionData = fetcher.data as
+    | { success: true; taskId: string; batchId: string }
+    | { success: false; errorMsg: string }
+    | undefined;
 
   const search =
     typeof window !== "undefined" ? window.location.search : "";
 
-  const {
-    targetLanguage,
-    setTargetLanguage,
-    localeOptions,
-    localesLoading,
-    isSubmitting,
-    isSaving,
-    errorText,
-    saveErrorText,
-    description,
-    draftTitle,
-    setDraftTitle,
-    draftDescription,
-    setDraftDescription,
-    copyTarget,
-    saveConfirmOpen,
-    requestOpenSaveDialog,
-    cancelSaveDialog,
-    confirmSaveToShopify,
-    submitGenerate,
-    copyTitle,
-    copyDescription,
-    copyAll,
-    resetResult,
-    localesIsFallback,
-  } = useProductImprove({
-    locationSearch: search,
-    initialShopLocales: loaderData.shopLocales,
-    toastShow: (message) => {
-      shopify.toast.show(message);
-    },
-  });
+  const runningCount = tasks.filter((t) => t.status === "running").length;
 
-  const { isScoring, scoreResult, scoreError, submitScore, resetScore } =
-    useProductQualityScore({
-      locationSearch: search,
-      toastShow: (message) => {
-        shopify.toast.show(message);
-      },
-    });
-
-  const handleGenerate = async () => {
-    const pid = (selectedProduct?.id ?? productId).trim();
-    await submitGenerate(pid);
-  };
-
-  const handleScore = async () => {
-    const pid = (selectedProduct?.id ?? productId).trim();
-    await submitScore(pid);
-  };
+  const localeOptions = shopLocales?.localeOptions ?? [];
 
   const productIdForActions = (selectedProduct?.id ?? productId).trim();
-  const copyBusy = copyTarget !== null;
 
-  const billingBadge =
-    billing.billingRequired && !billing.hasAccess ? (
-      <span style={pageStatusBadgeStyle}>{t("generate.billingBadgeLow")}</span>
-    ) : null;
+  function handleTaskDeleted(taskId: string) {
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+  }
+
+  const pendingSubmitRef = useRef<{
+    productId: string;
+    targetLanguage: string;
+    originalTitle: string;
+  } | null>(null);
+  const lastHandledTaskIdRef = useRef<string | undefined>();
+
+  async function handleGenerate() {
+    if (!productIdForActions) {
+      shopify.toast.show("请先选择或输入商品 ID");
+      return;
+    }
+    pendingSubmitRef.current = {
+      productId: productIdForActions,
+      targetLanguage,
+      originalTitle: selectedProduct?.title ?? "",
+    };
+    fetcher.submit(
+      { productId: productIdForActions, targetLanguage },
+      { method: "POST", encType: "application/json" },
+    );
+  }
+
+  useEffect(() => {
+    if (fetcher.state !== "idle" || !fetcher.data) return;
+
+    const data = fetcher.data as
+      | { success: true; taskId: string; batchId: string }
+      | { success: false; errorMsg: string };
+    if (!data.success || !data.taskId || !data.batchId) return;
+    if (data.taskId === lastHandledTaskIdRef.current) return;
+
+    lastHandledTaskIdRef.current = data.taskId;
+    const submitContext = pendingSubmitRef.current;
+    pendingSubmitRef.current = null;
+
+    const now = new Date().toISOString();
+    const optimisticTask: AITaskItem = {
+      id: data.taskId,
+      batchId: data.batchId,
+      shop: "",
+      appName: "",
+      taskType: "product_improve",
+      status: "running",
+      config: {
+        productId: submitContext?.productId ?? "",
+        targetLanguage: submitContext?.targetLanguage ?? targetLanguage,
+        originalTitle: submitContext?.originalTitle ?? "",
+        originalText: "",
+      },
+      result: null,
+      estimatedCredits: null,
+      actualCredits: null,
+      startedAt: now,
+      completedAt: null,
+      errorMsg: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    setTasks((prev) => [optimisticTask, ...prev]);
+    setPageTab("tasks");
+    shopify.toast.show("文案生成任务已创建，请在任务列表中查看进度");
+  }, [fetcher.data, fetcher.state, shopify, targetLanguage]);
+
+  const errorText =
+    actionData && !actionData.success ? actionData.errorMsg : null;
+
+  // Estimate panel values
+  const selectedName = selectedProduct?.title ?? (productId ? `商品 ${productId}` : null);
 
   return (
     <s-page heading={t("generate.pageTitle")}>
@@ -110,160 +212,162 @@ export function ProductImprovePage() {
 
         <PageSectionHeader
           title={t("generate.sectionTitle")}
-          subtitle={t("generate.intro")}
-          badge={billingBadge}
+          subtitle="在配置页发起任务，并在任务列表中完成审查与写入。"
         />
 
-        <div style={twoColumnLayoutStyle}>
-          <div style={twoColumnMainStyle}>
-            <PageSurface
-              title={t("generate.formCardTitle")}
-              subtitle={t("generate.formCardSubtitle")}
-            >
-              <s-stack direction="block" gap="base">
-                <ProductSelector
-                  locationSearch={search}
-                  selected={selectedProduct}
-                  onSelectedChange={setSelectedProduct}
-                />
-                <details
-                  style={{ marginTop: "0.25rem" }}
-                  open={showManualProductId}
-                  onToggle={(e) => setShowManualProductId(e.currentTarget.open)}
-                >
-                  <summary style={pageLinkHintStyle}>
-                    {t("generate.advancedManualProductId")}
-                  </summary>
-                  <div style={{ marginTop: "0.65rem" }}>
-                    <s-text-field
-                      label={t("generate.productIdLabel")}
-                      value={productId}
-                      onChange={(e) => setProductId(e.currentTarget.value)}
-                      autocomplete="off"
+        <PageTabBar
+          activeTab={pageTab}
+          onTabChange={setPageTab}
+          runningCount={runningCount}
+        />
+
+        {pageTab === "config" && (
+          <>
+            {/* Task summary always visible in config tab */}
+            <TaskListSummary tasks={tasks} mode="product_improve" />
+
+            {/* Generation form + estimate panel */}
+            <div style={twoColumnLayoutStyle}>
+              <div style={twoColumnMainStyle}>
+                <PageSurface title="生成配置" subtitle="选择商品与目标语言后点击生成">
+                  <s-stack direction="block" gap="base">
+                    <ProductSelector
+                      locationSearch={search}
+                      selected={selectedProduct}
+                      onSelectedChange={setSelectedProduct}
                     />
-                  </div>
-                </details>
 
-                <div>
-                  <label htmlFor="generate-description-lang" style={pageFieldLabelStyle}>
-                    {t("generate.targetLanguage")}
-                  </label>
-                  <select
-                    id="generate-description-lang"
-                    value={targetLanguage}
-                    onChange={(e) => setTargetLanguage(e.target.value)}
-                    disabled={localesLoading || isSubmitting || isSaving || saveConfirmOpen}
-                    style={pageSelectStyle(
-                      localesLoading || isSubmitting || isSaving || saveConfirmOpen,
-                    )}
-                  >
-                    {localesLoading && localeOptions.length === 0 ? (
-                      <option value="">{t("common.loadingLanguage")}</option>
-                    ) : null}
-                    {localeOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                  {localesIsFallback ? (
-                    <div style={pageHintTextStyle}>
-                      {t("generate.fallbackLocalesHint")}{" "}
-                      <code style={{ fontSize: "0.7rem" }}>read_locales</code>
+                    <details
+                      style={{ marginTop: "0.25rem" }}
+                      open={showManualProductId}
+                      onToggle={(e) => setShowManualProductId(e.currentTarget.open)}
+                    >
+                      <summary style={pageLinkHintStyle}>
+                        {t("generate.advancedManualProductId")}
+                      </summary>
+                      <div style={{ marginTop: "0.65rem" }}>
+                        <s-text-field
+                          label={t("generate.productIdLabel")}
+                          value={productId}
+                          onChange={(e) => setProductId(e.currentTarget.value)}
+                          autocomplete="off"
+                        />
+                      </div>
+                    </details>
+
+                    <div>
+                      <label htmlFor="pi-target-lang" style={pageFieldLabelStyle}>
+                        {t("generate.targetLanguage")}
+                      </label>
+                      <select
+                        id="pi-target-lang"
+                        value={targetLanguage}
+                        onChange={(e) => setTargetLanguage(e.target.value)}
+                        disabled={isSubmitting}
+                        style={pageSelectStyle(isSubmitting)}
+                      >
+                        {localeOptions.length === 0 && (
+                          <option value="zh-CN">Chinese (Simplified) (zh-CN)</option>
+                        )}
+                        {localeOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                  ) : null}
-                </div>
 
-                {errorText ? <div style={formErrorBoxStyle}>{errorText}</div> : null}
+                    {errorText ? <div style={formErrorBoxStyle}>{errorText}</div> : null}
+                  </s-stack>
+                </PageSurface>
+              </div>
 
-                <s-stack direction="inline" gap="small">
-                  <s-button
-                    type="button"
-                    variant="primary"
-                    onClick={() => {
-                      void handleGenerate();
+              <div style={twoColumnSideStyle}>
+                <PageSurface title="执行前预估" subtitle="确认影响范围、预估耗时和预估 Token 后开始生成。">
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: 10,
+                      marginBottom: 16,
                     }}
-                    {...(isSubmitting || isSaving || localesLoading || saveConfirmOpen
-                      ? { disabled: true }
-                      : {})}
                   >
-                    {isSubmitting
-                      ? t("generate.generating")
-                      : localesLoading
-                        ? t("common.loadingLanguage")
-                        : t("generate.generateAction")}
-                  </s-button>
-                  <s-button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      void handleScore();
-                    }}
-                    {...(isScoring || isSubmitting || isSaving ? { disabled: true } : {})}
-                  >
-                    {isScoring ? t("qualityScore.scoring") : t("qualityScore.scoreAction")}
-                  </s-button>
-                  <s-button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      resetResult();
-                      resetScore();
-                      setSelectedProduct(null);
-                      setProductId("");
-                    }}
-                    {...(isSubmitting || isSaving || isScoring ? { disabled: true } : {})}
-                  >
-                    {t("common.clearResult")}
-                  </s-button>
-                </s-stack>
-              </s-stack>
-            </PageSurface>
-          </div>
+                    {[
+                      { label: "商品", value: selectedName ?? "-" },
+                      {
+                        label: "目标语言",
+                        value:
+                          localeOptions.find((o) => o.value === targetLanguage)?.label ??
+                          targetLanguage,
+                      },
+                      { label: "预估耗时", value: "1–2 min" },
+                      { label: "预估 Token", value: "320 Token" },
+                    ].map((item) => (
+                      <div
+                        key={item.label}
+                        style={{
+                          border: `1px solid ${pageColorTokens.border}`,
+                          borderRadius: 8,
+                          padding: "10px 12px",
+                          background: pageColorTokens.surfaceMuted,
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: pageColorTokens.textSecondary,
+                            marginBottom: 4,
+                          }}
+                        >
+                          {item.label}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: pageColorTokens.textPrimary,
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          {item.value}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
 
-          <div style={{ ...twoColumnSideStyle, display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-            <PageSurface title={t("generate.resultTitle")}>
-              {description !== null ? (
-                <GenerateDescriptionResultEditor
-                  variant="page"
-                  draftTitle={draftTitle}
-                  draftDescription={draftDescription}
-                  onDraftTitleChange={setDraftTitle}
-                  onDraftDescriptionChange={setDraftDescription}
-                  copyTarget={copyTarget}
-                  copyBusy={copyBusy}
-                  isSubmitting={isSubmitting}
-                  isSaving={isSaving}
-                  saveErrorText={saveErrorText}
-                  onCopyTitle={copyTitle}
-                  onCopyDescription={copyDescription}
-                  onCopyAll={copyAll}
-                  onClickSave={requestOpenSaveDialog}
-                  saveConfirmOpen={saveConfirmOpen}
-                  onSaveConfirm={() => {
-                    void confirmSaveToShopify(productIdForActions);
-                  }}
-                  onSaveCancel={cancelSaveDialog}
-                />
-              ) : (
-                <div style={pageEmptyStateStyle}>
-                  <span style={{ fontSize: "1.75rem", opacity: 0.6 }} aria-hidden>
-                    ✨
-                  </span>
-                  <span>{t("generate.emptyResult")}</span>
-                </div>
-              )}
-            </PageSurface>
+                  <s-stack direction="inline" gap="small">
+                    <s-button
+                      type="button"
+                      variant="primary"
+                      onClick={() => void handleGenerate()}
+                      {...(isSubmitting || !productIdForActions ? { disabled: true } : {})}
+                    >
+                      {isSubmitting ? "提交中..." : "生成文案"}
+                    </s-button>
+                  </s-stack>
 
-            <PageSurface title={t("qualityScore.resultTitle")}>
-              <ProductQualityScoreResult
-                result={scoreResult}
-                isScoring={isScoring}
-                errorText={scoreError}
-              />
-            </PageSurface>
-          </div>
-        </div>
+                  <div
+                    style={{
+                      marginTop: 12,
+                      fontSize: 12,
+                      color: pageColorTokens.textFootnote,
+                    }}
+                  >
+                    生成将消耗 Token；保存至 Shopify 前可在任务列表预览并编辑标题与描述。
+                  </div>
+                </PageSurface>
+              </div>
+            </div>
+          </>
+        )}
+
+        {pageTab === "tasks" && (
+          <ProductImproveTaskListPage
+            tasks={tasks}
+            locationSearch={search}
+            onTaskDeleted={handleTaskDeleted}
+          />
+        )}
 
         <p style={pageTrustFootnoteStyle}>{t("generate.pageFootnote")}</p>
       </div>

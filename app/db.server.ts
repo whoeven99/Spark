@@ -1,4 +1,5 @@
-import { PrismaLibSQL } from "@prisma/adapter-libsql";
+// 远程 Turso 走 HTTP 客户端，避免 Windows 上 libsql 原生 .node 依赖 VC++ 运行库
+import { PrismaLibSQL } from "@prisma/adapter-libsql/web";
 import { createRequire } from "node:module";
 import path from "node:path";
 import type { PrismaClient as PrismaClientType } from "./generated/prisma";

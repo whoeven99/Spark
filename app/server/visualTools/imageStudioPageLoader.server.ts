@@ -1,32 +1,23 @@
-import { listRecentShopVisualJobsForShop } from "../shopVisualJob/shopVisualJobStore.server";
-import {
-  SHOP_VISUAL_JOB_KIND_IMAGE_GENERATION,
-  SHOP_VISUAL_JOB_KIND_PICTURE_TRANSLATE,
-} from "../shopVisualJob/kinds.server";
-import type { ShopVisualJobHistoryItem } from "../../lib/shopVisualJobTypes";
+import { listRecentTasksForShop } from "../aiTask/aiTaskStore.server";
+import type { AITaskItem } from "../../lib/aiTaskTypes";
 
 export type ImageStudioPageLoaderData = {
-  imageHistory: ShopVisualJobHistoryItem[];
-  translateHistory: ShopVisualJobHistoryItem[];
+  imageGenTasks: AITaskItem[];
+  translateTasks: AITaskItem[];
 };
 
 export async function loadImageStudioPageData(
   shop: string,
+  appName: string,
 ): Promise<ImageStudioPageLoaderData> {
   try {
-    const [imageHistory, translateHistory] = await Promise.all([
-      listRecentShopVisualJobsForShop({
-        shop,
-        kind: SHOP_VISUAL_JOB_KIND_IMAGE_GENERATION,
-      }),
-      listRecentShopVisualJobsForShop({
-        shop,
-        kind: SHOP_VISUAL_JOB_KIND_PICTURE_TRANSLATE,
-      }),
+    const [imageGenTasks, translateTasks] = await Promise.all([
+      listRecentTasksForShop({ shop, appName, taskType: "image_generation" }),
+      listRecentTasksForShop({ shop, appName, taskType: "picture_translate" }),
     ]);
-    return { imageHistory, translateHistory };
+    return { imageGenTasks, translateTasks };
   } catch (e) {
-    console.error("[ImageStudio] load history failed", e);
-    return { imageHistory: [], translateHistory: [] };
+    console.error("[ImageStudio] load tasks failed", e);
+    return { imageGenTasks: [], translateTasks: [] };
   }
 }

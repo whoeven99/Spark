@@ -6,27 +6,22 @@ import {
   type PictureTranslateProvider,
 } from "../config/pictureTranslateLanguages";
 import type {
-  PictureTranslateChatResponse,
   PictureTranslateImageSource,
   PictureTranslateLanguageOption,
-  PictureTranslateResultMeta,
 } from "../lib/pictureTranslateTypes";
 import type { ProductSearchItem } from "../lib/productSearchTypes";
 import { useProductSearch } from "./useProductSearch";
+import type { AITaskCreateResponse } from "../lib/aiTaskTypes";
 
 const LOG_PREFIX = "[usePictureTranslate]";
 const PICTURE_TRANSLATE_PROVIDER: PictureTranslateProvider | null = null;
 const PRODUCT_SEARCH_DEBOUNCE_MS = 300;
 
-import { postDeleteShopVisualJob } from "../lib/shopVisualJobApi";
-import type { ShopVisualJobHistoryItem } from "../lib/shopVisualJobTypes";
-
 export type UsePictureTranslateParams = {
   locationSearch: string;
   toastShow: (message: string) => void;
   mode: "page" | "card";
-  initialHistory?: ShopVisualJobHistoryItem[];
-  onSuccess?: (detail: { translatedImage: string; message: string }) => void;
+  onTaskCreated?: (taskId: string, batchId: string) => void;
 };
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -54,7 +49,7 @@ function safeUrlHost(url: string): string {
 }
 
 export function usePictureTranslate(params: UsePictureTranslateParams) {
-  const { locationSearch, toastShow, mode, onSuccess, initialHistory = [] } = params;
+  const { locationSearch, toastShow, mode, onTaskCreated } = params;
   const { t } = useTranslation();
 
   const [imageUrl, setImageUrl] = useState("");
@@ -72,18 +67,7 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
   const [sourceLanguage, setSourceLanguage] = useState("auto");
   const [targetLanguage, setTargetLanguage] = useState("zh");
   const [formErrorText, setFormErrorText] = useState("");
-  const [resultErrorText, setResultErrorText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [translatedImage, setTranslatedImage] = useState<string | null>(null);
-  const [requestId, setRequestId] = useState<string | null>(null);
-  const [resultMeta, setResultMeta] = useState<PictureTranslateResultMeta | null>(null);
-  const [hasSubmittedOnce, setHasSubmittedOnce] = useState(false);
-  const [history, setHistory] = useState<ShopVisualJobHistoryItem[]>(initialHistory);
-  const [deletingRequestId, setDeletingRequestId] = useState<string | null>(null);
-
-  useEffect(() => {
-    setHistory(initialHistory);
-  }, [initialHistory]);
 
   const {
     items: productItems,
@@ -139,30 +123,6 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
       `${LOG_PREFIX} target_language_updated source=${sourceLanguage} nextTarget=${nextTarget}`,
     );
   }, [sourceLanguage, targetLanguage, targetLanguageOptions]);
-
-  const resolveImageSourceLabel = useCallback(
-    (source: PictureTranslateImageSource) => {
-      if (source === "upload") return t("pictureTranslate.imageSourceUpload");
-      if (source === "url") return t("pictureTranslate.imageSourceUrl");
-      return t("pictureTranslate.imageSourceProduct");
-    },
-    [t],
-  );
-
-  const resolveLanguageLabel = useCallback(
-    (code: string, options: PictureTranslateLanguageOption[]) =>
-      options.find((option) => option.value === code)?.label ?? code,
-    [],
-  );
-
-  const resetResult = useCallback(() => {
-    setTranslatedImage(null);
-    setResultErrorText("");
-    setRequestId(null);
-    setResultMeta(null);
-    setHasSubmittedOnce(false);
-    console.info(`${LOG_PREFIX} reset_result mode=${mode}`);
-  }, [mode]);
 
   const executeSearch = useCallback(() => {
     const trimmed = productKeyword.trim();
@@ -245,111 +205,51 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
       return;
     }
 
-    const payload = {
-      imageUrl: trimmedUrl || undefined,
-      imageBase64,
+    const payloadSummary = {
+      hasImageUrl: Boolean(trimmedUrl),
+      imageUrlHost: trimmedUrl ? safeUrlHost(trimmedUrl) : "",
+      hasImageBase64: Boolean(imageBase64),
       sourceLanguage,
       targetLanguage,
-    };
-    const payloadSummary = {
-      hasImageUrl: Boolean(payload.imageUrl),
-      imageUrlHost: payload.imageUrl ? safeUrlHost(payload.imageUrl) : "",
-      hasImageBase64: Boolean(payload.imageBase64),
-      imageBase64Length: payload.imageBase64?.length ?? 0,
-      sourceLanguage: payload.sourceLanguage,
-      targetLanguage: payload.targetLanguage,
       selectedSource,
     };
     console.info(`[PictureTranslateSubmit] start ${JSON.stringify(payloadSummary)}`);
 
     setIsSubmitting(true);
     setFormErrorText("");
-    setResultErrorText("");
-    setHasSubmittedOnce(true);
-    if (mode === "page") {
-      setTranslatedImage(null);
-    }
 
-    const startedAt = Date.now();
     try {
-      const response = await fetch(`/api/picture-translate-chat${locationSearch}`, {
+      const body: Record<string, unknown> = {
+        imageUrl: trimmedUrl || undefined,
+        sourceCode: sourceLanguage,
+        targetCode: targetLanguage,
+        modelType: 1,
+      };
+
+      const response = await fetch(`/api/picture-translate${locationSearch}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body),
       });
-      const raw = (await response.json().catch(() => ({}))) as PictureTranslateChatResponse;
-      const success = raw.success === true;
-      const nextTranslatedImage =
-        typeof raw.translatedImage === "string" ? raw.translatedImage.trim() : "";
-      const error =
-        typeof raw.error === "string" && raw.error.trim()
-          ? raw.error.trim()
-          : t("pictureTranslate.submitFailed");
-      const nextRequestId = typeof raw.requestId === "string" ? raw.requestId : "n/a";
-      const durationMs = Date.now() - startedAt;
-      setRequestId(nextRequestId);
 
-      if (!response.ok || !success || !nextTranslatedImage) {
-        const message = response.ok ? error : t("pictureTranslate.submitFailed");
-        setResultErrorText(message);
-        if (mode === "card") {
-          setFormErrorText(message);
-        }
+      const raw = (await response.json().catch(() => ({}))) as AITaskCreateResponse;
+
+      if (!raw.success) {
+        const message = raw.errorMsg || t("pictureTranslate.submitFailed");
+        setFormErrorText(message);
         toastShow(message);
-        console.info(
-          `[PictureTranslateResult] success=false durationMs=${durationMs} requestId=${nextRequestId} error=${message}`,
-        );
         return;
       }
 
-      const meta: PictureTranslateResultMeta = {
-        imageSource: selectedSource,
-        imageSourceLabel: resolveImageSourceLabel(selectedSource),
-        sourceLanguage,
-        sourceLanguageLabel: resolveLanguageLabel(sourceLanguage, sourceLanguageOptions),
-        targetLanguage,
-        targetLanguageLabel: resolveLanguageLabel(targetLanguage, targetLanguageOptions),
-        originalImageUrl:
-          selectedSource === "upload" ? undefined : trimmedUrl || selectedImage?.url,
-      };
-
-      setTranslatedImage(nextTranslatedImage);
-      setResultMeta(meta);
-      setHistory((prev) => {
-        const summary = `${sourceLanguage} → ${targetLanguage}`;
-        const item: ShopVisualJobHistoryItem = {
-          requestId: nextRequestId,
-          kind: "picture_translate",
-          summary,
-          status: "succeeded",
-          imageUrl: nextTranslatedImage,
-          errorMsg: null,
-          provider: null,
-          createdAt: new Date().toISOString(),
-        };
-        return [item, ...prev.filter((h) => h.requestId !== nextRequestId)].slice(0, 12);
-      });
-      const successMessage = t("pictureTranslate.submitSuccess");
       console.info(
-        `[PictureTranslateResult] success=true durationMs=${durationMs} requestId=${nextRequestId}`,
+        `${LOG_PREFIX} task created taskId=${raw.taskId} batchId=${raw.batchId}`,
       );
-
-      if (mode === "card" && onSuccess) {
-        onSuccess({ translatedImage: nextTranslatedImage, message: successMessage });
-      } else if (mode === "page") {
-        toastShow(successMessage);
-      }
+      toastShow(t("pictureTranslate.submitSuccess"));
+      onTaskCreated?.(raw.taskId, raw.batchId);
     } catch {
-      const durationMs = Date.now() - startedAt;
       const message = t("pictureTranslate.submitFailed");
-      setResultErrorText(message);
-      if (mode === "card") {
-        setFormErrorText(message);
-      }
+      setFormErrorText(message);
       toastShow(message);
-      console.info(
-        `[PictureTranslateResult] success=false durationMs=${durationMs} requestId=n/a error=${message}`,
-      );
     } finally {
       setIsSubmitting(false);
     }
@@ -359,47 +259,15 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
     isSubmitting,
     locationSearch,
     mode,
-    onSuccess,
-    resolveImageSourceLabel,
-    resolveLanguageLabel,
-    selectedImage?.url,
+    onTaskCreated,
     selectedSource,
     sourceLanguage,
-    sourceLanguageOptions,
     t,
     targetLanguage,
-    targetLanguageOptions,
     toastShow,
   ]);
 
-  const deleteHistoryItem = useCallback(
-    async (item: ShopVisualJobHistoryItem) => {
-      setDeletingRequestId(item.requestId);
-      try {
-        const body = await postDeleteShopVisualJob({
-          locationSearch,
-          requestId: item.requestId,
-        });
-        if (!body.success) {
-          toastShow(body.errorMsg || t("visualHistory.deleteFailed"));
-          return;
-        }
-        setHistory((prev) => prev.filter((h) => h.requestId !== item.requestId));
-        if (requestId === item.requestId) {
-          resetResult();
-        }
-        toastShow(t("visualHistory.deleteSuccess"));
-      } catch (e) {
-        console.error(`${LOG_PREFIX} delete error`, e);
-        toastShow(t("visualHistory.deleteFailed"));
-      } finally {
-        setDeletingRequestId(null);
-      }
-    },
-    [locationSearch, requestId, resetResult, t, toastShow],
-  );
-
-  const displayFormError = mode === "card" ? formErrorText || resultErrorText : formErrorText;
+  const displayFormError = formErrorText;
 
   return {
     imageUrl,
@@ -425,34 +293,12 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
     isProductSearching,
     productSearchError,
     formErrorText: displayFormError,
-    resultErrorText,
     isSubmitting,
-    translatedImage,
-    requestId,
-    resultMeta,
-    hasSubmittedOnce,
     executeSearch,
     handleProductSelect,
     handleProductImageSelect,
     handleFileChange,
     submitTranslate,
-    resetResult,
-    history,
-    deleteHistoryItem,
-    deletingRequestId,
-    selectHistoryItem: (item: ShopVisualJobHistoryItem) => {
-      setRequestId(item.requestId);
-      setHasSubmittedOnce(true);
-      setResultErrorText("");
-      if (item.status === "succeeded" && item.imageUrl) {
-        setTranslatedImage(item.imageUrl);
-        return;
-      }
-      if (item.status === "failed") {
-        setTranslatedImage(null);
-        setResultErrorText(item.errorMsg || t("pictureTranslate.submitFailed"));
-      }
-    },
   };
 }
 

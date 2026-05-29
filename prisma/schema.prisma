@@ -199,25 +199,56 @@ model BillingLog {
   @@index([referenceId])
 }
 
-/// 店铺视觉任务：商品文生图、整图翻译等（历史回看 + Blob 路径）。
-model ShopVisualJob {
-  id        String   @id @default(cuid())
-  requestId String   @unique
+/// AI 任务批次：一次提交对应一个批次（含单任务）。
+model AITaskBatch {
+  id        String   @id @default(uuid())
   shop      String
+  appName   String
   /// image_generation | picture_translate
-  kind      String
-  /// pending | succeeded | failed
-  status    String
-  /// 文生图提示词，或翻译语言对等摘要
-  summary   String
-  blobPath  String?
-  errorMsg  String?
-  provider  String?
-  metadata  Json?
+  taskType  String
+  config    Json
+  tasks     AITask[]
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
-  @@index([shop, kind, createdAt])
+  @@index([shop, appName, createdAt])
+}
+
+/// AI 任务：每个商品/图片对应一条，归属于某批次。
+model AITask {
+  id               String      @id @default(uuid())
+  shop             String
+  appName          String
+  /// image_generation | picture_translate
+  taskType         String
+  batchId          String
+  batch            AITaskBatch @relation(fields: [batchId], references: [id])
+  /// running | succeeded | failed | cancelled
+  status           String
+  config           Json
+  result           Json?
+  estimatedCredits Int?
+  actualCredits    Int?
+  startedAt        DateTime    @default(now())
+  completedAt      DateTime?
+  errorMsg         String?
+  logs             AITaskLog[]
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@index([shop, appName, taskType, createdAt])
+  @@index([batchId])
+}
+
+/// AI 任务日志：每条为一个时间戳 + 消息，支持 SSE 流式推送。
+model AITaskLog {
+  id             String   @id @default(uuid())
+  taskId         String
+  task           AITask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  elapsedSeconds Int
+  message        String
+  createdAt      DateTime @default(now())
+
+  @@index([taskId, createdAt])
 }
 
 /// 电商订单（增量同步自 Shopify Webhook + 历史回补）。
