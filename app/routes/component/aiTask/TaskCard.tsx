@@ -286,15 +286,16 @@ export function TaskCard({ task, locationSearch, onDelete, deleting }: Props) {
         </div>
       )}
 
-      {localStatus === "running" && (
-        <LogViewer
-          taskId={task.id}
-          locationSearch={locationSearch}
-          startedAt={task.startedAt}
-          initialLogs={[]}
-          onStatusChange={handleStatusChange}
-        />
-      )}
+      <LogViewer
+        taskId={task.id}
+        taskType={task.taskType}
+        status={localStatus}
+        locationSearch={locationSearch}
+        startedAt={task.startedAt}
+        initialLogs={[]}
+        defaultLogsOpen={localStatus === "running"}
+        onStatusChange={handleStatusChange}
+      />
 
       {localStatus === "failed" && task.errorMsg && (
         <div

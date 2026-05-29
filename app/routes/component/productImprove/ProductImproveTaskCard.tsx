@@ -155,16 +155,16 @@ export function ProductImproveTaskCard({ task, locationSearch, onDelete, deletin
         </button>
       </div>
 
-      {/* Running: show LogViewer */}
-      {localStatus === "running" && (
-        <LogViewer
-          taskId={task.id}
-          locationSearch={locationSearch}
-          startedAt={task.startedAt}
-          initialLogs={[]}
-          onStatusChange={handleStatusChange}
-        />
-      )}
+      <LogViewer
+        taskId={task.id}
+        taskType={task.taskType}
+        status={localStatus}
+        locationSearch={locationSearch}
+        startedAt={task.startedAt}
+        initialLogs={[]}
+        defaultLogsOpen={localStatus === "running"}
+        onStatusChange={handleStatusChange}
+      />
 
       {/* Pending review: show before/after + apply button */}
       {localStatus === "pending_review" && result && (

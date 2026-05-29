@@ -53,9 +53,8 @@ async function runProductImproveTask(params: {
 
   console.info(`${LOG_PREFIX} start taskId=${taskId} shop=${shop}`);
 
-  await appendLog({ taskId, startedAt, message: "任务开始" });
-  await appendLog({ taskId, startedAt, message: "已读取商品标题、描述与语言信息" });
-  await appendLog({ taskId, startedAt, message: "开始提炼高转化卖点，并对原文结构进行压缩..." });
+  await appendLog({ taskId, startedAt, message: "正在等待执行任务" });
+  await appendLog({ taskId, startedAt, message: "正在分析商品信息与原始文案" });
 
   const systemPrompt = buildDescriptionSystemPrompt();
   const userPrompt = buildDescriptionUserPrompt(context, targetLanguage);
@@ -63,9 +62,9 @@ async function runProductImproveTask(params: {
 
   let raw: { rawText: string; modelLabel: string; usageMeta?: unknown };
   try {
-    await appendLog({ taskId, startedAt, message: "正在生成新的标题草稿，保持关键词自然出现..." });
+    await appendLog({ taskId, startedAt, message: "正在生成高转化商品文案" });
     raw = await invokeDescriptionModels(systemPrompt, userPrompt, temperature, taskId);
-    await appendLog({ taskId, startedAt, message: "正在补充描述段落，并准备输出结果摘要..." });
+    await appendLog({ taskId, startedAt, message: "文案已生成，正在整理结果等待审查" });
   } catch (e) {
     logDetailedError(`${LOG_PREFIX} taskId=${taskId}`, "invokeDescriptionModels failed", e);
     const msg = e instanceof Error ? e.message : "模型调用失败";
@@ -90,6 +89,7 @@ async function runProductImproveTask(params: {
       title: context.title,
       description,
     },
+    startedAt,
     finalMessage: "文案已生成，等待审查",
   });
 

@@ -11,7 +11,7 @@ import type {
 } from "../lib/pictureTranslateTypes";
 import type { ProductSearchItem } from "../lib/productSearchTypes";
 import { useProductSearch } from "./useProductSearch";
-import type { AITaskCreateResponse } from "../lib/aiTaskTypes";
+import type { AITaskCreateResponse, AITaskType } from "../lib/aiTaskTypes";
 
 const LOG_PREFIX = "[usePictureTranslate]";
 const PICTURE_TRANSLATE_PROVIDER: PictureTranslateProvider | null = null;
@@ -21,7 +21,7 @@ export type UsePictureTranslateParams = {
   locationSearch: string;
   toastShow: (message: string) => void;
   mode: "page" | "card";
-  onTaskCreated?: (taskId: string, batchId: string) => void;
+  onTaskCreated?: (taskId: string, batchId: string, taskType: AITaskType) => void;
 };
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -49,7 +49,7 @@ function safeUrlHost(url: string): string {
 }
 
 export function usePictureTranslate(params: UsePictureTranslateParams) {
-  const { locationSearch, toastShow, mode, onTaskCreated } = params;
+  const { locationSearch, toastShow, onTaskCreated } = params;
   const { t } = useTranslation();
 
   const [imageUrl, setImageUrl] = useState("");
@@ -245,7 +245,7 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
         `${LOG_PREFIX} task created taskId=${raw.taskId} batchId=${raw.batchId}`,
       );
       toastShow(t("pictureTranslate.submitSuccess"));
-      onTaskCreated?.(raw.taskId, raw.batchId);
+      onTaskCreated?.(raw.taskId, raw.batchId, "picture_translate");
     } catch {
       const message = t("pictureTranslate.submitFailed");
       setFormErrorText(message);
@@ -258,7 +258,6 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
     imageUrl,
     isSubmitting,
     locationSearch,
-    mode,
     onTaskCreated,
     selectedSource,
     sourceLanguage,

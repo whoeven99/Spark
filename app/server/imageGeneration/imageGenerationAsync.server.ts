@@ -53,7 +53,7 @@ async function runImageGenerationTask(params: {
     `${LOG_PREFIX} start taskId=${params.taskId} shop=${params.shop}`,
   );
 
-  await appendLog({ taskId: params.taskId, startedAt, message: "图片生成任务开始" });
+  await appendLog({ taskId: params.taskId, startedAt, message: "正在等待执行任务" });
 
   // Resolve the final generation prompt and collect billing info for it
   let finalPrompt: string;
@@ -61,8 +61,7 @@ async function runImageGenerationTask(params: {
 
   if (params.description && !params.prompt) {
     // Path A: generate prompt from natural-language description via AI
-    await appendLog({ taskId: params.taskId, startedAt, message: "已读取生成文字" });
-    await appendLog({ taskId: params.taskId, startedAt, message: "正在将文字润色为大模型生成指令..." });
+    await appendLog({ taskId: params.taskId, startedAt, message: "正在润色提示词生成更好的图片" });
 
     const promptResult = await generateImagePromptFromDescription({
       description: params.description,
@@ -79,7 +78,7 @@ async function runImageGenerationTask(params: {
       return;
     }
 
-    await appendLog({ taskId: params.taskId, startedAt, message: "文字已优化，适合大模型生成" });
+    await appendLog({ taskId: params.taskId, startedAt, message: "提示词已润色，准备进入图片生成" });
 
     finalPrompt = promptResult.prompt;
     const promptTokenUsage = parseUsageMetadata(promptResult.usageMeta);
@@ -89,7 +88,7 @@ async function runImageGenerationTask(params: {
     }
   } else if (params.prompt) {
     // Path B: user provided a direct prompt
-    await appendLog({ taskId: params.taskId, startedAt, message: "已读取图片描述词" });
+    await appendLog({ taskId: params.taskId, startedAt, message: "正在润色提示词生成更好的图片" });
     finalPrompt = params.prompt;
   } else {
     await failTask({
@@ -100,7 +99,7 @@ async function runImageGenerationTask(params: {
     return;
   }
 
-  await appendLog({ taskId: params.taskId, startedAt, message: "大模型正在生成图片..." });
+  await appendLog({ taskId: params.taskId, startedAt, message: "正在大模型生成图片中" });
 
   const result = await getImageGenLimiter().run(() =>
     executeImageGeneration({
@@ -128,6 +127,7 @@ async function runImageGenerationTask(params: {
   await completeTask({
     taskId: params.taskId,
     result: { blobPath: result.blobPath, provider: result.provider },
+    startedAt,
     finalMessage: "任务完成",
   });
 

@@ -1,13 +1,13 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { AITaskCreateResponse } from "../lib/aiTaskTypes";
+import type { AITaskCreateResponse, AITaskType } from "../lib/aiTaskTypes";
 
 const LOG_PREFIX = "[useImageGeneration]";
 
 export type UseImageGenerationParams = {
   locationSearch: string;
   toastShow: (message: string) => void;
-  onTaskCreated?: (taskId: string, batchId: string) => void;
+  onTaskCreated?: (taskId: string, batchId: string, taskType: AITaskType) => void;
 };
 
 export function useImageGeneration(params: UseImageGenerationParams) {
@@ -47,7 +47,7 @@ export function useImageGeneration(params: UseImageGenerationParams) {
         `${LOG_PREFIX} task created taskId=${body.taskId} batchId=${body.batchId}`,
       );
       toastShow(t("imageGeneration.submitSuccess"));
-      onTaskCreated?.(body.taskId, body.batchId);
+      onTaskCreated?.(body.taskId, body.batchId, "image_generation");
     } catch (e) {
       const msg = e instanceof Error ? e.message : t("imageGeneration.submitFailed");
       setDescriptionErrorText(msg);

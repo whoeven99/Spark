@@ -43,13 +43,14 @@ async function runPictureTranslateTask(params: {
     `${LOG_PREFIX} start taskId=${params.taskId} shop=${params.shop}`,
   );
 
-  await appendLog({ taskId: params.taskId, startedAt, message: "整图翻译任务开始" });
+  await appendLog({ taskId: params.taskId, startedAt, message: "正在等待执行任务" });
+  await appendLog({ taskId: params.taskId, startedAt, message: "正在解析图片与语言配置" });
 
   const pipeline = await getPicTranslateLimiter().run(async () => {
     await appendLog({
       taskId: params.taskId,
       startedAt,
-      message: `正在调用翻译 API (${params.sourceCode} → ${params.targetCode})...`,
+      message: `正在调用大模型翻译图片 (${params.sourceCode} → ${params.targetCode})`,
     });
     return executePictureTranslatePipeline({
       requestId: params.taskId,
@@ -85,6 +86,7 @@ async function runPictureTranslateTask(params: {
   await completeTask({
     taskId: params.taskId,
     result,
+    startedAt,
     finalMessage: "任务完成",
   });
 

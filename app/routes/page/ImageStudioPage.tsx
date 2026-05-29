@@ -3,7 +3,7 @@ import { useCallback, useState } from "react";
 import { useLoaderData, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useImageGeneration } from "../../hooks/useImageGeneration";
-import type { AITaskItem } from "../../lib/aiTaskTypes";
+import type { AITaskItem, AITaskType } from "../../lib/aiTaskTypes";
 import type { ImageStudioPageLoaderData } from "../../server/visualTools/imageStudioPageLoader.server";
 import { ImageGenerationForm } from "../component/imageGeneration/ImageGenerationForm";
 import { PictureTranslateForm } from "../component/pictureTranslate/PictureTranslateForm";
@@ -92,7 +92,7 @@ type InnerProps = {
   pageTab: PageTab;
   setPageTab: (tab: PageTab) => void;
   locationSearch: string;
-  onTaskCreated: (taskId: string, batchId: string) => void;
+  onTaskCreated: (taskId: string, batchId: string, taskType: AITaskType) => void;
   onTaskDeleted: (taskId: string) => void;
 };
 
@@ -215,14 +215,14 @@ export function ImageStudioPage() {
   const [pageTab, setPageTab] = useState<PageTab>("config");
 
   const handleTaskCreated = useCallback(
-    (taskId: string, batchId: string) => {
+    (taskId: string, batchId: string, taskType: AITaskType = "image_generation") => {
       const now = new Date().toISOString();
       const optimisticTask: AITaskItem = {
         id: taskId,
         batchId,
         shop: "",
         appName: "",
-        taskType: "image_generation",
+        taskType,
         status: "running",
         config: {},
         result: null,

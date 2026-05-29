@@ -33,12 +33,16 @@ export async function completeTask(params: {
   taskId: string;
   result: Record<string, unknown>;
   actualCredits?: number;
+  startedAt?: number;
   finalMessage?: string;
 }): Promise<void> {
   if (params.finalMessage) {
+    const elapsedSeconds = params.startedAt
+      ? Math.floor((Date.now() - params.startedAt) / 1000)
+      : 0;
     const entry = await appendTaskLog({
       taskId: params.taskId,
-      elapsedSeconds: 0,
+      elapsedSeconds,
       message: params.finalMessage,
     });
     emitTaskEvent(params.taskId, {
@@ -66,12 +70,16 @@ export async function completeTask(params: {
 export async function pendingReviewTask(params: {
   taskId: string;
   result: Record<string, unknown>;
+  startedAt?: number;
   finalMessage?: string;
 }): Promise<void> {
   if (params.finalMessage) {
+    const elapsedSeconds = params.startedAt
+      ? Math.floor((Date.now() - params.startedAt) / 1000)
+      : 0;
     const entry = await appendTaskLog({
       taskId: params.taskId,
-      elapsedSeconds: 0,
+      elapsedSeconds,
       message: params.finalMessage,
     });
     emitTaskEvent(params.taskId, {
