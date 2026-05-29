@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import type {
   AITaskLogEntry,
@@ -58,6 +58,7 @@ function elapsedSecondsBetween(
 
 // Estimated duration in seconds used only to compute progress bar fill
 const ESTIMATED_SECONDS = 90;
+const RUNNING_POLL_MS = 2500;
 
 function buildStreamUrl(taskId: string, locationSearch: string): string {
   const params = new URLSearchParams(
@@ -67,6 +68,14 @@ function buildStreamUrl(taskId: string, locationSearch: string): string {
   return `/api/ai-task-stream?${params.toString()}`;
 }
 
+function buildDetailUrl(taskId: string, locationSearch: string): string {
+  const params = new URLSearchParams(
+    locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
+  );
+  params.set("taskId", taskId);
+  return `/api/ai-task-detail?${params.toString()}`;
+}
+
 function dedupeConsecutiveLogs(logs: AITaskLogEntry[]): AITaskLogEntry[] {
   return logs.filter((log, index) => index === 0 || log.message !== logs[index - 1].message);
 }
@@ -74,6 +83,36 @@ function dedupeConsecutiveLogs(logs: AITaskLogEntry[]): AITaskLogEntry[] {
 function stepDurationSeconds(logs: AITaskLogEntry[], index: number): number {
   if (index <= 0) return logs[index]?.elapsedSeconds ?? 0;
   return Math.max(0, logs[index].elapsedSeconds - logs[index - 1].elapsedSeconds);
+}
+
+function mergeLogEntries(
+  prev: AITaskLogEntry[],
+  incoming: AITaskLogEntry[],
+): AITaskLogEntry[] {
+  if (incoming.length === 0) return prev;
+  const seen = new Set(prev.map((log) => log.id));
+  const appended = incoming.filter((log) => !seen.has(log.id));
+  if (appended.length === 0) return prev;
+  return [...prev, ...appended];
+}
+
+function parseSSEChunk(buffer: string): {
+  events: AITaskSSEEvent[];
+  rest: string;
+} {
+  const events: AITaskSSEEvent[] = [];
+  const parts = buffer.split("\n\n");
+  const rest = parts.pop() ?? "";
+  for (const part of parts) {
+    const line = part.trim();
+    if (!line.startsWith("data: ")) continue;
+    try {
+      events.push(JSON.parse(line.slice(6)) as AITaskSSEEvent);
+    } catch {
+      // ignore parse errors
+    }
+  }
+  return { events, rest };
 }
 
 export function LogViewer({
@@ -87,21 +126,60 @@ export function LogViewer({
   onStatusChange,
 }: Props) {
   const startMsRef = useRef(resolveStartMs(startedAt));
+  const onStatusChangeRef = useRef(onStatusChange);
   const [logs, setLogs] = useState<AITaskLogEntry[]>(initialLogs);
   const [currentStatus, setCurrentStatus] = useState<AITaskStatus>(status);
   const [logsOpen, setLogsOpen] = useState(defaultLogsOpen ?? status === "running");
   const [elapsed, setElapsed] = useState(() =>
     Math.floor((Date.now() - startMsRef.current) / 1000),
   );
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const logsScrollRef = useRef<HTMLDivElement>(null);
   const isDone = currentStatus !== "running";
-  const shouldConnect = currentStatus === "running" || logsOpen || logs.length === 0;
   const workflowLogs = dedupeConsecutiveLogs(logs);
   const completedElapsed = Math.max(
     logs.reduce((max, log) => Math.max(max, log.elapsedSeconds), 0),
     elapsedSecondsBetween(startedAt, completedAt),
   );
   const displayElapsed = isDone && completedElapsed > 0 ? completedElapsed : elapsed;
+
+  useEffect(() => {
+    onStatusChangeRef.current = onStatusChange;
+  }, [onStatusChange]);
+
+  const applyStatusChange = useCallback(
+    (nextStatus: AITaskStatus, result?: Record<string, unknown>) => {
+      setCurrentStatus(nextStatus);
+      onStatusChangeRef.current?.(nextStatus, result);
+    },
+    [],
+  );
+
+  const handleStreamEvent = useCallback(
+    (event: AITaskSSEEvent) => {
+      if (event.type === "connected") {
+        setLogs(event.existingLogs);
+        return;
+      }
+      if (event.type === "log") {
+        setLogs((prev) =>
+          mergeLogEntries(prev, [
+            {
+              id: `${event.taskId}-${event.createdAt}`,
+              taskId: event.taskId,
+              elapsedSeconds: event.elapsedSeconds,
+              message: event.message,
+              createdAt: event.createdAt,
+            },
+          ]),
+        );
+        return;
+      }
+      if (event.type === "status_change") {
+        applyStatusChange(event.status, event.result);
+      }
+    },
+    [applyStatusChange],
+  );
 
   useEffect(() => {
     startMsRef.current = resolveStartMs(startedAt);
@@ -124,49 +202,96 @@ export function LogViewer({
     return () => clearInterval(id);
   }, [isDone]);
 
+  // 拉取任务快照（日志 + 状态）；运行中任务轮询兜底，避免 SSE 在嵌入式环境失效
   useEffect(() => {
-    if (!shouldConnect) return;
-    const url = buildStreamUrl(taskId, locationSearch);
-    const source = new EventSource(url);
+    let cancelled = false;
 
-    source.onmessage = (e) => {
+    async function syncTaskSnapshot() {
       try {
-        const event = JSON.parse(e.data as string) as AITaskSSEEvent;
-        if (event.type === "connected") {
-          setLogs(event.existingLogs);
-        } else if (event.type === "log") {
-          setLogs((prev) => [
-            ...prev,
-            {
-              id: `${event.taskId}-${event.createdAt}`,
-              taskId: event.taskId,
-              elapsedSeconds: event.elapsedSeconds,
-              message: event.message,
-              createdAt: event.createdAt,
-            },
-          ]);
-        } else if (event.type === "status_change") {
-          setCurrentStatus(event.status);
-          onStatusChange?.(event.status, event.result);
-          source.close();
+        const resp = await fetch(buildDetailUrl(taskId, locationSearch));
+        if (!resp.ok || cancelled) return;
+        const body = (await resp.json()) as {
+          task?: {
+            status: AITaskStatus;
+            result?: Record<string, unknown> | null;
+          };
+          logs?: AITaskLogEntry[];
+        };
+        if (cancelled) return;
+
+        if (body.logs?.length) {
+          setLogs((prev) => mergeLogEntries(prev, body.logs ?? []));
+        }
+        if (body.task?.status && body.task.status !== "running") {
+          applyStatusChange(
+            body.task.status,
+            body.task.result ?? undefined,
+          );
         }
       } catch {
-        // ignore parse errors
+        // ignore network errors; stream or next poll may recover
       }
+    }
+
+    void syncTaskSnapshot();
+
+    if (currentStatus !== "running") return () => {
+      cancelled = true;
     };
 
-    source.onerror = () => {
-      source.close();
-    };
+    const pollId = setInterval(() => {
+      void syncTaskSnapshot();
+    }, RUNNING_POLL_MS);
 
     return () => {
-      source.close();
+      cancelled = true;
+      clearInterval(pollId);
     };
-  }, [taskId, locationSearch, onStatusChange, shouldConnect]);
+  }, [applyStatusChange, currentStatus, locationSearch, taskId]);
+
+  // 运行中任务：用 fetch 读取 SSE（与聊天流一致，比 EventSource 更可靠）
+  useEffect(() => {
+    if (currentStatus !== "running") return;
+
+    const abort = new AbortController();
+    let buffer = "";
+
+    async function consumeStream() {
+      const resp = await fetch(buildStreamUrl(taskId, locationSearch), {
+        signal: abort.signal,
+      });
+      if (!resp.ok || !resp.body) return;
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parsed = parseSSEChunk(buffer);
+        buffer = parsed.rest;
+        for (const event of parsed.events) {
+          handleStreamEvent(event);
+        }
+      }
+    }
+
+    void consumeStream().catch((error: unknown) => {
+      if (error instanceof Error && error.name === "AbortError") return;
+    });
+
+    return () => {
+      abort.abort();
+    };
+  }, [currentStatus, handleStreamEvent, locationSearch, taskId]);
 
   useEffect(() => {
-    if (logsOpen) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [logs, logsOpen]);
+    if (!logsOpen || currentStatus !== "running") return;
+    const el = logsScrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [logs, logsOpen, currentStatus]);
 
   const progressPct = isDone
     ? 100
@@ -316,7 +441,16 @@ export function LogViewer({
                 : "等待执行中..."}
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div
+            ref={logsScrollRef}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+              maxHeight: 240,
+              overflowY: "auto",
+            }}
+          >
             {logs.map((log, index) => (
               <div
                 key={log.id}
@@ -350,7 +484,6 @@ export function LogViewer({
                 <span>{log.message}</span>
               </div>
             ))}
-            <div ref={bottomRef} />
           </div>
         )
       )}

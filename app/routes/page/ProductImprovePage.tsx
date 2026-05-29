@@ -129,6 +129,29 @@ export function ProductImprovePage() {
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
   }
 
+  function handleTaskUpdated(
+    taskId: string,
+    status: AITaskItem["status"],
+    result?: Record<string, unknown>,
+  ) {
+    setTasks((prev) =>
+      prev.map((task) => {
+        if (task.id !== taskId) return task;
+        const completedAt =
+          status !== "running" && !task.completedAt
+            ? new Date().toISOString()
+            : task.completedAt;
+        return {
+          ...task,
+          status,
+          result: result ?? task.result,
+          completedAt,
+          updatedAt: new Date().toISOString(),
+        };
+      }),
+    );
+  }
+
   const pendingSubmitRef = useRef<{
     productId: string;
     targetLanguage: string;
@@ -366,6 +389,7 @@ export function ProductImprovePage() {
             tasks={tasks}
             locationSearch={search}
             onTaskDeleted={handleTaskDeleted}
+            onTaskUpdated={handleTaskUpdated}
           />
         )}
 

@@ -2,15 +2,21 @@ import { useEffect, useState } from "react";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { ProductImproveTaskCard } from "./ProductImproveTaskCard";
 import { TaskListSummary } from "../aiTask/TaskListSummary";
-import type { AITaskItem } from "../../../lib/aiTaskTypes";
+import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 
 type Props = {
   tasks: AITaskItem[];
   locationSearch: string;
   onTaskDeleted: (taskId: string) => void;
+  onTaskUpdated?: (taskId: string, status: AITaskStatus, result?: Record<string, unknown>) => void;
 };
 
-export function ProductImproveTaskListPage({ tasks, locationSearch, onTaskDeleted }: Props) {
+export function ProductImproveTaskListPage({
+  tasks,
+  locationSearch,
+  onTaskDeleted,
+  onTaskUpdated,
+}: Props) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [localTasks, setLocalTasks] = useState<AITaskItem[]>(tasks);
 
@@ -69,6 +75,7 @@ export function ProductImproveTaskListPage({ tasks, locationSearch, onTaskDelete
               task={task}
               locationSearch={locationSearch}
               onDelete={handleDelete}
+              onTaskUpdated={onTaskUpdated}
               deleting={deletingId === task.id}
             />
           ))}

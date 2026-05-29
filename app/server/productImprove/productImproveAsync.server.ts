@@ -55,7 +55,6 @@ async function runProductImproveTask(params: {
 
   await appendLog({ taskId, startedAt, message: "正在等待执行任务" });
   await appendLog({ taskId, startedAt, message: "已读取商品的标题、描述和其他信息" });
-  await appendLog({ taskId, startedAt, message: "开始提炼转化卖点，并对原文进行压缩" });
 
   const systemPrompt = buildDescriptionSystemPrompt();
   const userPrompt = buildDescriptionUserPrompt(context, targetLanguage);

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { TaskStatusBadge } from "../aiTask/TaskStatusBadge";
 import { LogViewer } from "../aiTask/LogViewer";
@@ -13,6 +13,7 @@ type Props = {
   task: AITaskItem;
   locationSearch: string;
   onDelete: (taskId: string) => void;
+  onTaskUpdated?: (taskId: string, status: AITaskStatus, result?: Record<string, unknown>) => void;
   deleting: boolean;
 };
 
@@ -24,7 +25,13 @@ function formatActualElapsed(startedAt: string | null, completedAt: string | nul
   return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
 }
 
-export function ProductImproveTaskCard({ task, locationSearch, onDelete, deleting }: Props) {
+export function ProductImproveTaskCard({
+  task,
+  locationSearch,
+  onDelete,
+  onTaskUpdated,
+  deleting,
+}: Props) {
   const [localStatus, setLocalStatus] = useState<AITaskStatus>(task.status);
   const [localResult, setLocalResult] = useState<Record<string, unknown> | null>(task.result);
   const [applying, setApplying] = useState(false);
@@ -35,10 +42,14 @@ export function ProductImproveTaskCard({ task, locationSearch, onDelete, deletin
   const shortId = task.id.slice(0, 8).toUpperCase();
   const actualElapsed = formatActualElapsed(task.startedAt, task.completedAt);
 
-  function handleStatusChange(status: AITaskStatus, r?: Record<string, unknown>) {
-    setLocalStatus(status);
-    if (r) setLocalResult(r);
-  }
+  const handleStatusChange = useCallback(
+    (status: AITaskStatus, r?: Record<string, unknown>) => {
+      setLocalStatus(status);
+      if (r) setLocalResult(r);
+      onTaskUpdated?.(task.id, status, r);
+    },
+    [onTaskUpdated, task.id],
+  );
 
   async function handleApply() {
     if (!result?.title || !result?.description) return;

@@ -60,9 +60,7 @@ export const loader = async ({
           controller.enqueue(encode(event));
           if (
             event.type === "status_change" &&
-            (event.status === "succeeded" ||
-              event.status === "failed" ||
-              event.status === "cancelled")
+            event.status !== "running"
           ) {
             controller.close();
           }
