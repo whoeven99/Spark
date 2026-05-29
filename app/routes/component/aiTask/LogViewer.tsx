@@ -15,6 +15,7 @@ type Props = {
   initialLogs?: AITaskLogEntry[];
   /** 任务实际开始时间；用于刷新页面后恢复已执行时长与进度条 */
   startedAt?: string | null;
+  completedAt?: string | null;
   defaultLogsOpen?: boolean;
   onStatusChange?: (status: AITaskStatus, result?: Record<string, unknown>) => void;
 };
@@ -44,73 +45,19 @@ function resolveStartMs(startedAt?: string | null): number {
   return Date.now();
 }
 
+function elapsedSecondsBetween(
+  startedAt: string | null | undefined,
+  completedAt: string | null | undefined,
+): number {
+  if (!startedAt || !completedAt) return 0;
+  const startMs = new Date(startedAt).getTime();
+  const endMs = new Date(completedAt).getTime();
+  if (Number.isNaN(startMs) || Number.isNaN(endMs)) return 0;
+  return Math.max(0, Math.floor((endMs - startMs) / 1000));
+}
+
 // Estimated duration in seconds used only to compute progress bar fill
 const ESTIMATED_SECONDS = 90;
-
-type PlaybookStep = {
-  label: string;
-  match: string[];
-};
-
-const PLAYBOOKS: Record<AITaskType, PlaybookStep[]> = {
-  image_generation: [
-    {
-      label: "正在等待执行任务",
-      match: ["正在等待执行任务", "图片生成任务开始", "任务开始"],
-    },
-    {
-      label: "正在润色提示词生成更好的图片",
-      match: ["正在润色提示词生成更好的图片", "正在将文字润色", "文字已优化", "已读取图片描述词"],
-    },
-    {
-      label: "正在大模型生成图片中",
-      match: ["正在大模型生成图片中", "大模型正在生成图片", "图片已生成"],
-    },
-  ],
-  picture_translate: [
-    {
-      label: "正在等待执行任务",
-      match: ["正在等待执行任务", "整图翻译任务开始", "任务开始"],
-    },
-    {
-      label: "正在解析图片与语言配置",
-      match: ["正在解析图片与语言配置", "正在调用翻译 API"],
-    },
-    {
-      label: "正在调用大模型翻译图片",
-      match: ["正在调用大模型翻译图片", "翻译完成"],
-    },
-  ],
-  product_improve: [
-    {
-      label: "正在等待执行任务",
-      match: ["正在等待执行任务", "任务开始"],
-    },
-    {
-      label: "已读取商品的标题、描述和其他信息",
-      match: ["已读取商品的标题、描述和其他信息", "已读取商品标题"],
-    },
-    {
-      label: "开始提炼转化卖点，并对原文进行压缩",
-      match: ["开始提炼转化卖点，并对原文进行压缩", "开始提炼高转化卖点"],
-    },
-    {
-      label: "正在生成新的标题草稿，保证关键词自然出现",
-      match: ["正在生成新的标题草稿", "正在生成高转化商品文案"],
-    },
-    {
-      label: "正在补充描述段落，准备输出结果摘要",
-      match: ["正在补充描述段落", "文案已生成"],
-    },
-  ],
-};
-
-const FINISHED_STATUSES: AITaskStatus[] = [
-  "succeeded",
-  "pending_review",
-  "applied",
-  "scored",
-];
 
 function buildStreamUrl(taskId: string, locationSearch: string): string {
   const params = new URLSearchParams(
@@ -120,33 +67,22 @@ function buildStreamUrl(taskId: string, locationSearch: string): string {
   return `/api/ai-task-stream?${params.toString()}`;
 }
 
-function formatLogTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString("zh-CN", { hour12: false });
+function dedupeConsecutiveLogs(logs: AITaskLogEntry[]): AITaskLogEntry[] {
+  return logs.filter((log, index) => index === 0 || log.message !== logs[index - 1].message);
 }
 
-function resolveActiveStepIndex(
-  steps: PlaybookStep[],
-  logs: AITaskLogEntry[],
-): number {
-  let active = 0;
-  for (let i = 0; i < steps.length; i += 1) {
-    const step = steps[i];
-    if (logs.some((log) => step.match.some((m) => log.message.includes(m)))) {
-      active = i;
-    }
-  }
-  return active;
+function stepDurationSeconds(logs: AITaskLogEntry[], index: number): number {
+  if (index <= 0) return logs[index]?.elapsedSeconds ?? 0;
+  return Math.max(0, logs[index].elapsedSeconds - logs[index - 1].elapsedSeconds);
 }
 
 export function LogViewer({
   taskId,
-  taskType,
   status,
   locationSearch,
   initialLogs = [],
   startedAt,
+  completedAt,
   defaultLogsOpen,
   onStatusChange,
 }: Props) {
@@ -158,17 +94,23 @@ export function LogViewer({
     Math.floor((Date.now() - startMsRef.current) / 1000),
   );
   const bottomRef = useRef<HTMLDivElement>(null);
-  const steps = PLAYBOOKS[taskType] ?? PLAYBOOKS.image_generation;
   const isDone = currentStatus !== "running";
-  const shouldConnect = currentStatus === "running" || logsOpen;
-  const activeStepIndex = FINISHED_STATUSES.includes(currentStatus)
-    ? steps.length
-    : resolveActiveStepIndex(steps, logs);
+  const shouldConnect = currentStatus === "running" || logsOpen || logs.length === 0;
+  const workflowLogs = dedupeConsecutiveLogs(logs);
+  const completedElapsed = Math.max(
+    logs.reduce((max, log) => Math.max(max, log.elapsedSeconds), 0),
+    elapsedSecondsBetween(startedAt, completedAt),
+  );
+  const displayElapsed = isDone && completedElapsed > 0 ? completedElapsed : elapsed;
 
   useEffect(() => {
     startMsRef.current = resolveStartMs(startedAt);
-    setElapsed(Math.floor((Date.now() - startMsRef.current) / 1000));
-  }, [startedAt]);
+    setElapsed(
+      completedAt
+        ? elapsedSecondsBetween(startedAt, completedAt)
+        : Math.floor((Date.now() - startMsRef.current) / 1000),
+    );
+  }, [completedAt, startedAt]);
 
   useEffect(() => {
     setCurrentStatus(status);
@@ -267,7 +209,7 @@ export function LogViewer({
               letterSpacing: "0.02em",
             }}
           >
-            {formatElapsedClock(elapsed)}
+            {formatElapsedClock(displayElapsed)}
           </span>
         </div>
 
@@ -295,43 +237,55 @@ export function LogViewer({
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {steps.map((step, index) => {
-          const complete = FINISHED_STATUSES.includes(currentStatus) || index < activeStepIndex;
-          const active = currentStatus === "running" && index === activeStepIndex;
-          const failed = currentStatus === "failed" && index === activeStepIndex;
-          const dotColor = failed
-            ? pageColorTokens.critical
-            : complete
-              ? pageColorTokens.brandGreen
-              : active
+        {workflowLogs.length === 0 ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: pageColorTokens.brandBlue,
+                flexShrink: 0,
+              }}
+            />
+            <span style={{ fontSize: 12, lineHeight: 1.5, color: pageColorTokens.textSecondary }}>
+              等待调度日志...
+            </span>
+          </div>
+        ) : (
+          workflowLogs.map((log, index) => {
+            const isLatest = currentStatus === "running" && index === workflowLogs.length - 1;
+            const isFailed = currentStatus === "failed" && index === workflowLogs.length - 1;
+            const dotColor = isFailed
+              ? pageColorTokens.critical
+              : isLatest
                 ? pageColorTokens.brandBlue
-                : pageColorTokens.textFootnote;
-          return (
-            <div key={step.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  background: dotColor,
-                  flexShrink: 0,
-                }}
-              />
-              <span
-                style={{
-                  fontSize: 12,
-                  lineHeight: 1.5,
-                  color: complete || active || failed
-                    ? pageColorTokens.textBody
-                    : pageColorTokens.textSecondary,
-                  fontWeight: active ? 600 : 400,
-                }}
-              >
-                {step.label}
-              </span>
-            </div>
-          );
-        })}
+                : pageColorTokens.brandGreen;
+            return (
+              <div key={log.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: dotColor,
+                    flexShrink: 0,
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                    color: pageColorTokens.textBody,
+                    fontWeight: isLatest ? 600 : 400,
+                  }}
+                >
+                  {log.message}
+                </span>
+              </div>
+            );
+          })
+        )}
       </div>
 
       <div>
@@ -355,16 +309,20 @@ export function LogViewer({
       {logsOpen && (
         logs.length === 0 ? (
           <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
-            {elapsed > 0 ? `任务执行中，已运行 ${formatElapsedClock(elapsed)}` : "等待执行中..."}
+            {isDone && completedElapsed > 0
+              ? `任务已结束，实际耗时 ${formatElapsedClock(completedElapsed)}`
+              : elapsed > 0
+                ? `任务执行中，已运行 ${formatElapsedClock(elapsed)}`
+                : "等待执行中..."}
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {logs.map((log) => (
+            {logs.map((log, index) => (
               <div
                 key={log.id}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "48px 76px minmax(0, 1fr)",
+                  gridTemplateColumns: "48px 56px minmax(0, 1fr)",
                   gap: 8,
                   fontSize: 12,
                   lineHeight: 1.6,
@@ -387,7 +345,7 @@ export function LogViewer({
                     fontSize: 11,
                   }}
                 >
-                  {formatLogTime(log.createdAt)}
+                  +{formatElapsedClock(stepDurationSeconds(logs, index))}
                 </span>
                 <span>{log.message}</span>
               </div>

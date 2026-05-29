@@ -44,14 +44,8 @@ async function runPictureTranslateTask(params: {
   );
 
   await appendLog({ taskId: params.taskId, startedAt, message: "正在等待执行任务" });
-  await appendLog({ taskId: params.taskId, startedAt, message: "正在解析图片与语言配置" });
 
   const pipeline = await getPicTranslateLimiter().run(async () => {
-    await appendLog({
-      taskId: params.taskId,
-      startedAt,
-      message: `正在调用大模型翻译图片 (${params.sourceCode} → ${params.targetCode})`,
-    });
     return executePictureTranslatePipeline({
       requestId: params.taskId,
       shop: params.shop,
@@ -59,6 +53,7 @@ async function runPictureTranslateTask(params: {
       sourceLanguage: params.sourceCode,
       targetLanguage: params.targetCode,
       forceModelType: params.modelType,
+      onStep: (message) => appendLog({ taskId: params.taskId, startedAt, message }),
     });
   });
 
@@ -75,8 +70,6 @@ async function runPictureTranslateTask(params: {
     );
     return;
   }
-
-  await appendLog({ taskId: params.taskId, startedAt, message: "翻译完成，正在保存..." });
 
   const result: Record<string, unknown> = {
     translatedBlobPath: pipeline.blobPath ?? "",

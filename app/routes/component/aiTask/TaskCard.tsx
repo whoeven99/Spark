@@ -292,6 +292,7 @@ export function TaskCard({ task, locationSearch, onDelete, deleting }: Props) {
         status={localStatus}
         locationSearch={locationSearch}
         startedAt={task.startedAt}
+        completedAt={task.completedAt}
         initialLogs={[]}
         defaultLogsOpen={localStatus === "running"}
         onStatusChange={handleStatusChange}
