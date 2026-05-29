@@ -201,7 +201,10 @@
     "delete": "Delete",
     "deleting": "Deleting…",
     "deleteSuccess": "Record deleted",
-    "deleteFailed": "Delete failed, please retry"
+    "deleteFailed": "Delete failed, please retry",
+    "view": "View",
+    "viewLarge": "View full image",
+    "collapse": "Collapse"
   },
   "imageStudio": {
     "pageTitle": "Image tools",

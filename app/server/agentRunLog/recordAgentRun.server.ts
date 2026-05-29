@@ -88,7 +88,7 @@ function logUpsertFailure(
   if (code === 404) {
     console.error(
       `${LOG_PREFIX} upsert failed (container not found) runId=${input.runId} shop=${shop} feature=${input.feature}. ` +
-        `Ensure database spark_ops has container "${SPARK_OPS_AGENT_RUNS_CONTAINER}" (partition key /shop). See docs/shop-profile.md.`,
+        `Ensure database spark_ops has container "${SPARK_OPS_AGENT_RUNS_CONTAINER}" (partition key /shop). See docs/agent-run-log.md.`,
     );
     return;
   }

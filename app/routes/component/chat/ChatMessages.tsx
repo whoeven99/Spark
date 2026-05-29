@@ -14,7 +14,7 @@ type ChatMessagesProps = {
   ) => void;
   onPictureTranslateCardSuccess: (
     messageIndex: number,
-    detail: { translatedImage: string; message: string },
+    detail: { taskId: string; batchId: string },
   ) => void;
 };
 
@@ -152,8 +152,8 @@ export function ChatMessages({
                     <div style={{ marginTop: "0.85rem" }}>
                       <PictureTranslateChatCard
                         embedded
-                        onSuccess={(detail) =>
-                          onPictureTranslateCardSuccess(index, detail)
+                        onTaskCreated={(taskId, batchId) =>
+                          onPictureTranslateCardSuccess(index, { taskId, batchId })
                         }
                       />
                     </div>

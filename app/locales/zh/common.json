@@ -201,7 +201,10 @@
     "delete": "删除",
     "deleting": "删除中…",
     "deleteSuccess": "已删除该记录",
-    "deleteFailed": "删除失败，请重试"
+    "deleteFailed": "删除失败，请重试",
+    "view": "查看",
+    "viewLarge": "查看大图",
+    "collapse": "收起"
   },
   "imageStudio": {
     "pageTitle": "图片工具",

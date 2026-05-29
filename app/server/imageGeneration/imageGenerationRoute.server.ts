@@ -79,7 +79,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         success: false,
         errorCode: 50001,
         errorMsg: message,
-        requestId,
       },
       500,
     );

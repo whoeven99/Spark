@@ -151,6 +151,7 @@ export async function executePictureTranslatePipeline(params: {
   targetLanguage: string;
   /** HTTP modelType：1 仅 Aidge，2 仅火山；不传则自动路由 */
   forceModelType?: 1 | 2;
+  onStep?: (message: string) => Promise<void>;
 }): Promise<PictureTranslateExecutorSuccess | PictureTranslateExecutorFailure> {
   const shop = params.shop.trim() || "unknown-shop";
   let imageBytes = params.imageBytes;
@@ -159,6 +160,7 @@ export async function executePictureTranslatePipeline(params: {
     if (!params.imageUrl?.trim()) {
       return { ok: false, reason: "image_fetch_failed" };
     }
+    await params.onStep?.("正在读取源图片内容");
     const fetched = await fetchSourceImageBytes(params.imageUrl.trim());
     if (!fetched.ok) {
       return { ok: false, reason: "image_fetch_failed", detail: fetched.detail };
@@ -166,6 +168,7 @@ export async function executePictureTranslatePipeline(params: {
     imageBytes = fetched.bytes;
   }
 
+  await params.onStep?.("正在识别图片格式");
   const extension = resolveExtension({
     imageUrl: params.imageUrl,
     imageBytes,
@@ -174,6 +177,7 @@ export async function executePictureTranslatePipeline(params: {
     return { ok: false, reason: "image_format_invalid" };
   }
 
+  await params.onStep?.("正在校验语言方向并选择翻译引擎");
   const routeResult = params.forceModelType
     ? resolvePictureTranslateProviderForced({
         modelType: params.forceModelType,
@@ -195,11 +199,17 @@ export async function executePictureTranslatePipeline(params: {
   }
 
   const route = routeResult;
+  await params.onStep?.(
+    route.provider === "volc"
+      ? "已选择火山图片翻译引擎"
+      : "已选择 Aidge 图片翻译引擎",
+  );
   console.info(
     `${LOG_ROUTE} requestId=${params.requestId} provider=${route.provider} sourceVolc=${route.sourceVolc} targetVolc=${route.targetVolc} sourceAidge=${route.sourceAidge} targetAidge=${route.targetAidge} ext=${extension}`,
   );
 
   if (route.provider === "volc") {
+    await params.onStep?.("正在调用火山图片翻译引擎");
     const volc = await translateWithVolc({ imageBytes, route });
     if (!volc.ok) {
       return {
@@ -210,6 +220,7 @@ export async function executePictureTranslatePipeline(params: {
       };
     }
     try {
+      await params.onStep?.("翻译结果已返回，正在保存图片");
       const uploaded = await uploadPictureTranslateJpegAndGetUrl({
         shop,
         jpegBytes: volc.bytes,
@@ -231,6 +242,7 @@ export async function executePictureTranslatePipeline(params: {
     }
   }
 
+  await params.onStep?.("正在调用 Aidge 图片翻译引擎");
   const aidge = await translateWithAidge({
     shop,
     imageUrl: params.imageUrl,
@@ -247,6 +259,7 @@ export async function executePictureTranslatePipeline(params: {
     };
   }
 
+  await params.onStep?.("翻译结果已返回，正在保存图片");
   const fetched = await fetchSourceImageBytes(aidge.imageUrl);
   if (fetched.ok) {
     try {

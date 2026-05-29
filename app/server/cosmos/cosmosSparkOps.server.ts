@@ -108,17 +108,3 @@ export async function ensureAgentRunsSparkOpsContainer(): Promise<Container> {
     defaultTtl: AGENT_RUNS_DEFAULT_TTL_SECONDS,
   });
 }
-
-/** 店铺画像固定使用已存在的 agent_runs，忽略独立容器 env（防 RU 超限） */
-export function getShopProfileSparkOpsContainer(): Container {
-  const configured = process.env.COSMOS_SHOP_PROFILES_CONTAINER?.trim();
-  if (
-    configured &&
-    configured !== SPARK_OPS_AGENT_RUNS_CONTAINER
-  ) {
-    console.warn(
-      `[ShopProfile] COSMOS_SHOP_PROFILES_CONTAINER=${configured} is ignored; using existing container "${SPARK_OPS_AGENT_RUNS_CONTAINER}" (no auto-create).`,
-    );
-  }
-  return getExistingSparkOpsContainer(SPARK_OPS_AGENT_RUNS_CONTAINER);
-}
