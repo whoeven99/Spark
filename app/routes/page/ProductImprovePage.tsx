@@ -1,7 +1,21 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import { useLoaderData } from "react-router";
+import {
+  Alert,
+  Button,
+  Card,
+  Collapse,
+  Empty,
+  Input,
+  Modal,
+  Progress,
+  Select,
+  Space,
+  Tabs,
+  Tag,
+} from "antd";
 import { useProductImprove } from "../../hooks/useProductImprove";
 import { useProductQualityScore } from "../../hooks/useProductQualityScore";
 import type { ProductQualityScoreResult as ProductQualityScoreTaskResult } from "../../hooks/useProductQualityScore";
@@ -10,27 +24,7 @@ import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
 import { ProductSelector } from "../component/product/ProductSelector";
 import { GenerateDescriptionResultEditor } from "../component/productImprove/GenerateDescriptionResultEditor";
 import { ProductQualityScoreResult } from "../component/productImprove/ProductQualityScoreResult";
-import {
-  PageMetricCard,
-  PagePanel,
-  PageSectionHeader,
-  PageSurface,
-  pageColorTokens,
-  formErrorBoxStyle,
-  pageContentStyle,
-  pageEmptyStateStyle,
-  pageFieldLabelStyle,
-  pageHintTextStyle,
-  pageLinkHintStyle,
-  pageMetaTextStyle,
-  pageSelectStyle,
-  pageStatusCardStyle,
-  pageStatusBadgeStyle,
-  pageTrustFootnoteStyle,
-  stickyAsideColumnStyle,
-  twoColumnLayoutStyle,
-  twoColumnMainStyle,
-} from "./pageUiStyles";
+import { PageSectionHeader, pageContentStyle, pageTrustFootnoteStyle } from "./pageUiStyles";
 
 type TaskStatus = "running" | "review_required" | "applied" | "scored" | "failed";
 type TaskKind = "generate" | "quality_score";
@@ -55,70 +49,19 @@ type ProductImproveTask = {
   scoreResult?: ProductQualityScoreTaskResult;
 };
 
-const tabRailStyle: CSSProperties = {
-  display: "inline-flex",
-  gap: "0.5rem",
-  padding: "0.35rem",
-  borderRadius: "999px",
-  background: pageColorTokens.surfaceMuted,
+const sectionCardClassName = "spark-ant-card rounded-app-card border border-app shadow-app-card";
+const subtlePanelClassName = "rounded-app-control border border-app-subtle bg-app-subtle p-4";
+const metaGridClassName = "mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5";
+const metaItemClassName = "rounded-app-control border border-app-subtle bg-app-subtle px-4 py-3";
+const taskCardClassName = "spark-ant-card rounded-app-card border border-app shadow-app-card";
+
+const statusToneClassName: Record<TaskStatus, string> = {
+  running: "border-app-subtle bg-app-muted text-app-text-secondary",
+  review_required: "border-app-warning-subtle bg-app-warning-subtle text-app-warning",
+  applied: "border-app-primary-subtle bg-app-primary-subtle text-app-success",
+  scored: "border-app-subtle bg-app-subtle text-app-text-primary",
+  failed: "border-app-critical-subtle bg-app-critical-subtle text-app-critical",
 };
-
-const tabButtonStyle = (active: boolean): CSSProperties => ({
-  border: `1px solid ${active ? pageColorTokens.borderSubtle : "transparent"}`,
-  cursor: "pointer",
-  borderRadius: "999px",
-  padding: "0.7rem 1rem",
-  background: active ? pageColorTokens.surface : "transparent",
-  color: active ? pageColorTokens.textPrimary : pageColorTokens.textSecondary,
-  fontSize: "0.875rem",
-  fontWeight: 700,
-  boxShadow: active ? pageColorTokens.shadowCard : "none",
-});
-
-const taskMetaGridStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-  gap: "0.75rem",
-  marginTop: "1rem",
-};
-
-const taskMetaItemStyle: CSSProperties = {
-  padding: "0.85rem 0.9rem",
-  borderRadius: "12px",
-  border: `1px solid ${pageColorTokens.border}`,
-  background: pageColorTokens.surfaceMuted,
-};
-
-const taskLogStyle: CSSProperties = {
-  margin: "0.25rem 0 0",
-  paddingLeft: "1rem",
-  color: pageColorTokens.textSecondary,
-  fontSize: "0.8125rem",
-  lineHeight: 1.6,
-};
-
-const progressTrackStyle: CSSProperties = {
-  width: "100%",
-  height: "8px",
-  borderRadius: "999px",
-  background: pageColorTokens.progressTrackGradient,
-  overflow: "hidden",
-};
-
-function taskAccentColor(status: TaskStatus): string {
-  if (status === "applied") return pageColorTokens.brandGreen;
-  if (status === "failed") return pageColorTokens.critical;
-  if (status === "scored") return pageColorTokens.borderSubtle;
-  return pageColorTokens.brandBlue;
-}
-
-function taskCardStyle(status: TaskStatus): CSSProperties {
-  return {
-    ...pageStatusCardStyle,
-    padding: "1rem 1.1rem",
-    borderLeft: `4px solid ${taskAccentColor(status)}`,
-  };
-}
 
 function buildTaskId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -152,7 +95,6 @@ export function ProductImprovePage() {
   const [tasks, setTasks] = useState<ProductImproveTask[]>([]);
   const [estimateOpen, setEstimateOpen] = useState(false);
   const [activeReviewTaskId, setActiveReviewTaskId] = useState<string | null>(null);
-  const estimateDialogRef = useRef<HTMLDialogElement>(null);
   const taskTimerRef = useRef<number[]>([]);
 
   const search =
@@ -200,16 +142,6 @@ export function ProductImprovePage() {
     });
 
   useEffect(() => {
-    const dialog = estimateDialogRef.current;
-    if (!dialog) return;
-    if (estimateOpen) {
-      if (!dialog.open) dialog.showModal();
-    } else if (dialog.open) {
-      dialog.close();
-    }
-  }, [estimateOpen]);
-
-  useEffect(() => {
     return () => {
       taskTimerRef.current.forEach((id) => window.clearTimeout(id));
       taskTimerRef.current = [];
@@ -254,21 +186,6 @@ export function ProductImprovePage() {
   const tasksCountLabel = t("productImproveStage1.tasksBadge", {
     count: tasks.length,
   });
-  const targetLanguageLabel =
-    localeOptions.find((opt) => opt.value === targetLanguage)?.label || targetLanguage || "-";
-  const taskSummary = tasks.reduce(
-    (summary, task) => {
-      summary[task.status] += 1;
-      return summary;
-    },
-    {
-      running: 0,
-      review_required: 0,
-      applied: 0,
-      scored: 0,
-      failed: 0,
-    } satisfies Record<TaskStatus, number>,
-  );
 
   const handleOpenEstimate = () => {
     if (!primaryProductId) {
@@ -306,14 +223,14 @@ export function ProductImprovePage() {
         estimateTime,
         estimateCredits,
         progress: 8,
-        logs: [t("productImproveStage1.logGenerateCreated")],
+        logs: ["已创建生成任务，准备读取商品信息。"],
       },
       ...current,
     ]);
 
-    appendTimedTaskUpdate(taskId, 300, 24, t("productImproveStage1.logGenerateFetchingProduct"));
-    appendTimedTaskUpdate(taskId, 1100, 56, t("productImproveStage1.logGeneratePreparingContext"));
-    appendTimedTaskUpdate(taskId, 2200, 82, t("productImproveStage1.logGenerateWritingDraft"));
+    appendTimedTaskUpdate(taskId, 300, 24, "正在读取 Shopify 商品信息。");
+    appendTimedTaskUpdate(taskId, 1100, 56, "正在整理卖点与目标语言语境。");
+    appendTimedTaskUpdate(taskId, 2200, 82, "正在生成标题和描述草稿。");
 
     const outcome = await submitGenerate(pid);
     if (outcome?.ok) {
@@ -321,7 +238,7 @@ export function ProductImprovePage() {
         ...task,
         status: "review_required",
         progress: 100,
-        logs: [...task.logs, t("productImproveStage1.logGenerateReadyForReview")],
+        logs: [...task.logs, "生成完成，等待审查后写入 Shopify。"],
         actualTime: formatDurationMs(Date.now() - startedAt),
         actualCredits: estimateCredits,
         resultTitle: outcome.result.title,
@@ -336,7 +253,7 @@ export function ProductImprovePage() {
       ...task,
       status: "failed",
       progress: 100,
-      logs: [...task.logs, t("productImproveStage1.logGenerateFailed")],
+      logs: [...task.logs, "任务执行失败，请检查参数后重试。"],
       actualTime: formatDurationMs(Date.now() - startedAt),
       errorText: outcome?.errorText ?? t("chat.sendFailed"),
     }));
@@ -363,13 +280,13 @@ export function ProductImprovePage() {
         estimateTime: "30-60s",
         estimateCredits: 120,
         progress: 12,
-        logs: [t("productImproveStage1.logScoreCreated")],
+        logs: ["已创建评分任务，准备分析商品质量。"],
       },
       ...current,
     ]);
 
-    appendTimedTaskUpdate(taskId, 250, 38, t("productImproveStage1.logScoreFetchingProduct"));
-    appendTimedTaskUpdate(taskId, 900, 72, t("productImproveStage1.logScoreComputing"));
+    appendTimedTaskUpdate(taskId, 250, 38, "正在读取商品标题、图片与描述信息。");
+    appendTimedTaskUpdate(taskId, 900, 72, "正在计算质量得分与优化建议。");
 
     const outcome = await submitScore(pid);
     if (outcome?.ok) {
@@ -377,7 +294,7 @@ export function ProductImprovePage() {
         ...task,
         status: "scored",
         progress: 100,
-        logs: [...task.logs, t("productImproveStage1.logScoreCompleted")],
+        logs: [...task.logs, "质量评分已完成。"],
         actualTime: formatDurationMs(Date.now() - startedAt),
         actualCredits: 120,
         scoreResult: outcome.result,
@@ -389,7 +306,7 @@ export function ProductImprovePage() {
       ...task,
       status: "failed",
       progress: 100,
-      logs: [...task.logs, t("productImproveStage1.logScoreFailed")],
+      logs: [...task.logs, "质量评分失败，请稍后重试。"],
       actualTime: formatDurationMs(Date.now() - startedAt),
       errorText: outcome?.errorText ?? t("chat.sendFailed"),
     }));
@@ -397,7 +314,12 @@ export function ProductImprovePage() {
 
   const billingBadge =
     billing.billingRequired && !billing.hasAccess ? (
-      <span style={pageStatusBadgeStyle}>{t("generate.billingBadgeLow")}</span>
+      <Tag
+        bordered={false}
+        className="m-0 rounded-full bg-app-warning-subtle px-3 py-1 text-app-warning"
+      >
+        {t("generate.billingBadgeLow")}
+      </Tag>
     ) : null;
 
   const handleApplyTask = async (taskId: string, fallbackProductId: string) => {
@@ -406,7 +328,7 @@ export function ProductImprovePage() {
     updateTask(taskId, (task) => ({
       ...task,
       status: "applied",
-      logs: [...task.logs, t("productImproveStage1.logApplied")],
+      logs: [...task.logs, "已写入 Shopify。"],
       actualTime: task.actualTime ?? "1 min",
       actualCredits: task.actualCredits ?? estimateCredits,
     }));
@@ -424,52 +346,22 @@ export function ProductImprovePage() {
             : status === "scored"
               ? t("productImproveStage1.statusScored")
               : t("productImproveStage1.statusFailed");
-    const toneStyle: CSSProperties =
-      status === "running"
-        ? {
-            background: pageColorTokens.surfaceMuted,
-            color: pageColorTokens.textBody,
-            border: `1px solid ${pageColorTokens.borderSubtle}`,
-            boxShadow: "none",
-          }
-        : status === "review_required"
-          ? {
-              background: pageColorTokens.brandBlueLight,
-              color: pageColorTokens.brandBlueDark,
-              border: `1px solid ${pageColorTokens.brandBlueGlow}`,
-              boxShadow: "none",
-            }
-          : status === "applied"
-            ? {
-                background: pageColorTokens.brandGreenLight,
-                color: pageColorTokens.brandGreenDeep,
-                border: `1px solid ${pageColorTokens.brandGreenGlow}`,
-                boxShadow: "none",
-              }
-            : status === "scored"
-              ? {
-                  background: pageColorTokens.surfaceSubtle,
-                  color: pageColorTokens.textBody,
-                  border: `1px solid ${pageColorTokens.borderSubtle}`,
-                  boxShadow: "none",
-                }
-              : {
-                  background: pageColorTokens.criticalBg,
-                  color: pageColorTokens.criticalText,
-                  border: `1px solid rgba(220, 38, 38, 0.2)`,
-                  boxShadow: "none",
-                };
-
     return (
-      <span
-        style={{
-          ...pageStatusBadgeStyle,
-          ...toneStyle,
-        }}
+      <Tag
+        bordered
+        className={`m-0 rounded-full px-3 py-1 text-xs font-semibold ${statusToneClassName[status]}`}
       >
         {label}
-      </span>
+      </Tag>
     );
+  };
+
+  const clearCurrentResult = () => {
+    resetResult();
+    resetScore();
+    setSelectedProduct(null);
+    setProductId("");
+    setActiveReviewTaskId(null);
   };
 
   return (
@@ -487,513 +379,405 @@ export function ProductImprovePage() {
           subtitle={t("productImproveStage1.subtitle")}
           badge={billingBadge}
         />
-
-        <PagePanel padding="small">
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "0.75rem",
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={tabRailStyle}>
-              <button
-                type="button"
-                style={tabButtonStyle(activeTab === "config")}
-                onClick={() => setActiveTab("config")}
-              >
-                {t("productImproveStage1.tabsConfig")}
-              </button>
-              <button
-                type="button"
-                style={tabButtonStyle(activeTab === "tasks")}
-                onClick={() => setActiveTab("tasks")}
-              >
-                {t("productImproveStage1.tabsTasks")}
-              </button>
-            </div>
-            <div style={{ ...pageMetaTextStyle, flex: "1 1 18rem", minWidth: 0 }}>
-              {activeTab === "config"
-                ? t("productImproveStage1.configHint")
-                : t("productImproveStage1.taskListSubtitle")}
-            </div>
-          </div>
-        </PagePanel>
-
-        <PageMetricCard
-          accent={t("productImproveStage1.taskListTitle")}
-          metrics={[
-            {
-              label: t("productImproveStage1.statusRunning"),
-              value: String(taskSummary.running),
-            },
-            {
-              label: t("productImproveStage1.statusReview"),
-              value: String(taskSummary.review_required),
-            },
-            {
-              label: t("productImproveStage1.statusApplied"),
-              value: String(taskSummary.applied),
-            },
-            {
-              label: t("productImproveStage1.statusScored"),
-              value: String(taskSummary.scored),
-            },
-            {
-              label: t("productImproveStage1.statusFailed"),
-              value: String(taskSummary.failed),
-            },
-          ]}
-          footer={tasksCountLabel}
-        />
-
-        {activeTab === "config" ? (
-          <div style={twoColumnLayoutStyle}>
-            <div style={twoColumnMainStyle}>
-              <PageSurface
-                title={t("generate.formCardTitle")}
-                subtitle={t("generate.formCardSubtitle")}
-              >
-                <s-stack direction="block" gap="base">
-                  <ProductSelector
-                    locationSearch={search}
-                    selected={selectedProduct}
-                    onSelectedChange={setSelectedProduct}
-                  />
-                  <details
-                    style={{ marginTop: "0.25rem" }}
-                    open={showManualProductId}
-                    onToggle={(e) => setShowManualProductId(e.currentTarget.open)}
-                  >
-                    <summary style={pageLinkHintStyle}>
-                      {t("generate.advancedManualProductId")}
-                    </summary>
-                    <div style={{ marginTop: "0.65rem" }}>
-                      <s-text-field
-                        label={t("generate.productIdLabel")}
-                        value={productId}
-                        onChange={(e) => setProductId(e.currentTarget.value)}
-                        autocomplete="off"
-                      />
-                    </div>
-                  </details>
-
-                  <div>
-                    <label htmlFor="generate-description-lang" style={pageFieldLabelStyle}>
-                      {t("generate.targetLanguage")}
-                    </label>
-                    <select
-                      id="generate-description-lang"
-                      value={targetLanguage}
-                      onChange={(e) => setTargetLanguage(e.target.value)}
-                      disabled={localesLoading || isSubmitting || isSaving || saveConfirmOpen}
-                      style={pageSelectStyle(
-                        localesLoading || isSubmitting || isSaving || saveConfirmOpen,
-                      )}
-                    >
-                      {localesLoading && localeOptions.length === 0 ? (
-                        <option value="">{t("common.loadingLanguage")}</option>
-                      ) : null}
-                      {localeOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                    {localesIsFallback ? (
-                      <div style={pageHintTextStyle}>
-                        {t("generate.fallbackLocalesHint")}{" "}
-                        <code style={{ fontSize: "0.7rem" }}>read_locales</code>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {errorText ? <div style={formErrorBoxStyle}>{errorText}</div> : null}
-                </s-stack>
-              </PageSurface>
-            </div>
-
-            <div style={stickyAsideColumnStyle}>
-              <PageSurface
-                title={t("productImproveStage1.estimateTitle")}
-                subtitle={t("productImproveStage1.estimateDesc")}
-              >
-                <div style={taskMetaGridStyle}>
-                  <div style={taskMetaItemStyle}>
-                    <div style={pageFieldLabelStyle}>{t("productImproveStage1.taskProduct")}</div>
-                    <div style={{ color: pageColorTokens.textPrimary }}>{estimateScope}</div>
-                  </div>
-                  <div style={taskMetaItemStyle}>
-                    <div style={pageFieldLabelStyle}>
-                      {t("productImproveStage1.taskLanguage")}
-                    </div>
-                    <div style={{ color: pageColorTokens.textPrimary }}>{targetLanguageLabel}</div>
-                  </div>
-                  <div style={taskMetaItemStyle}>
-                    <div style={pageFieldLabelStyle}>{t("productImproveStage1.estimateTime")}</div>
-                    <div style={{ color: pageColorTokens.textPrimary }}>{estimateTime}</div>
-                  </div>
-                  <div style={taskMetaItemStyle}>
-                    <div style={pageFieldLabelStyle}>
-                      {t("productImproveStage1.estimateCredits")}
-                    </div>
-                    <div style={{ color: pageColorTokens.textPrimary }}>{estimateCredits} Token</div>
-                  </div>
-                </div>
-
-                {billing.billingRequired && !billing.hasAccess ? (
-                  <div style={{ ...pageMetaTextStyle, marginTop: "1rem" }}>
-                    {t("billing.lowBalanceWarning")}{" "}
-                    <s-link href={`/app/billing${search}`}>{t("billing.openBillingPage")}</s-link>
-                  </div>
-                ) : null}
-
-                <div style={{ marginTop: "1rem" }}>
-                  <s-stack direction="block" gap="small">
-                    <s-button
-                      type="button"
-                      variant="primary"
-                      onClick={() => {
-                        handleOpenEstimate();
-                      }}
-                      {...(isSubmitting || isSaving || localesLoading || saveConfirmOpen
-                        ? { disabled: true }
-                        : {})}
-                    >
-                      {isSubmitting
-                        ? t("generate.generating")
-                        : localesLoading
-                          ? t("common.loadingLanguage")
-                          : t("generate.generateAction")}
-                    </s-button>
-                    <s-stack direction="inline" gap="small">
-                      <s-button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => {
-                          void handleScore();
-                        }}
-                        {...(isScoring || isSubmitting || isSaving
-                          ? { disabled: true }
-                          : {})}
-                      >
-                        {isScoring ? t("qualityScore.scoring") : t("qualityScore.scoreAction")}
-                      </s-button>
-                      <s-button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => {
-                          resetResult();
-                          resetScore();
-                          setSelectedProduct(null);
-                          setProductId("");
-                          setActiveReviewTaskId(null);
-                        }}
-                        {...(isSubmitting || isSaving || isScoring ? { disabled: true } : {})}
-                      >
-                        {t("common.clearResult")}
-                      </s-button>
-                    </s-stack>
-                  </s-stack>
-                </div>
-              </PageSurface>
-            </div>
-          </div>
-        ) : (
-          <PageSurface
-            title={t("productImproveStage1.taskListTitle")}
-            subtitle={t("productImproveStage1.taskListSubtitle")}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: "1rem",
-                flexWrap: "wrap",
-                marginBottom: "1rem",
-              }}
-            >
-              <div style={{ color: pageColorTokens.textSecondary, fontSize: "0.875rem" }}>
-                {tasksCountLabel}
-              </div>
-              <s-button
-                type="button"
-                variant="secondary"
-                onClick={() => setActiveTab("config")}
-              >
-                {t("productImproveStage1.backToConfig")}
-              </s-button>
-            </div>
-
-            {tasks.length === 0 ? (
-              <div style={pageEmptyStateStyle}>
-                <span style={{ fontSize: "1.75rem", opacity: 0.6 }} aria-hidden>
-                  🗂
-                </span>
-                <span>{t("productImproveStage1.taskEmpty")}</span>
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                {tasks.map((task) => (
-                  <div key={task.id} style={taskCardStyle(task.status)}>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "0.85rem",
-                        alignItems: "start",
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      <div>
-                        <div
-                          style={{
-                            fontSize: "1rem",
-                            fontWeight: 700,
-                            color: pageColorTokens.textPrimary,
-                          }}
-                        >
-                          {task.kind === "generate"
-                            ? t("productImproveStage1.taskGenerate")
-                            : t("productImproveStage1.taskScore")}
+        <div className="mt-4 rounded-full border border-app-subtle bg-app-muted p-1">
+          <Tabs
+            activeKey={activeTab}
+            onChange={(key) => setActiveTab(key as "config" | "tasks")}
+            className="spark-ant-tabs"
+            items={[
+              {
+                key: "config",
+                label: t("productImproveStage1.tabsConfig"),
+                children: (
+                  <>
+                    <Card className={sectionCardClassName}>
+                      <div className="mb-5">
+                        <div className="text-[18px] font-semibold text-app-text-primary">
+                          {t("generate.formCardTitle")}
                         </div>
-                        <div style={{ ...pageHintTextStyle, marginTop: "0.3rem" }}>
-                          {task.productLabel}
+                        <div className="mt-1 text-sm leading-6 text-app-text-secondary">
+                          {t("productImproveStage1.configHint")}
                         </div>
                       </div>
-                      {renderStatusBadge(task.status)}
-                    </div>
 
-                    <div style={taskMetaGridStyle}>
-                      <div style={taskMetaItemStyle}>
-                        <div style={pageFieldLabelStyle}>{t("productImproveStage1.taskProduct")}</div>
-                        <div style={{ color: pageColorTokens.textPrimary }}>{task.productLabel}</div>
-                      </div>
-                      <div style={taskMetaItemStyle}>
-                        <div style={pageFieldLabelStyle}>{t("productImproveStage1.taskLanguage")}</div>
-                        <div style={{ color: pageColorTokens.textPrimary }}>
-                          {task.targetLanguage || "-"}
-                        </div>
-                      </div>
-                      <div style={taskMetaItemStyle}>
-                        <div style={pageFieldLabelStyle}>{t("productImproveStage1.taskCreatedAt")}</div>
-                        <div style={{ color: pageColorTokens.textPrimary }}>
-                          {formatTaskTime(task.createdAt)}
-                        </div>
-                      </div>
-                      <div style={taskMetaItemStyle}>
-                        <div style={pageFieldLabelStyle}>{t("productImproveStage1.taskEstimate")}</div>
-                        <div style={{ color: pageColorTokens.textPrimary }}>
-                          {task.estimateTime} / {task.estimateCredits} Token
-                        </div>
-                      </div>
-                      <div style={taskMetaItemStyle}>
-                        <div style={pageFieldLabelStyle}>{t("productImproveStage1.taskActual")}</div>
-                        <div style={{ color: pageColorTokens.textPrimary }}>
-                          {task.actualTime
-                            ? `${task.actualTime} / ${task.actualCredits ?? 0} Token`
-                            : "-"}
-                        </div>
-                      </div>
-                    </div>
-
-                    {task.status === "running" ? (
-                      <div style={{ marginTop: "1rem" }}>
-                        <div style={progressTrackStyle}>
-                          <div
-                            style={{
-                              width: `${task.progress}%`,
-                              height: "100%",
-                              borderRadius: "999px",
-                              background: `linear-gradient(90deg, ${pageColorTokens.brandBlue} 0%, ${pageColorTokens.brandGreen} 100%)`,
-                              transition: "width 220ms ease",
+                      <div className="space-y-4">
+                        <div className={subtlePanelClassName}>
+                          <ProductSelector
+                            locationSearch={search}
+                            selected={selectedProduct}
+                            onSelectedChange={setSelectedProduct}
+                          />
+                          <Collapse
+                            ghost
+                            className="mt-3 [&_.ant-collapse-content-box]:px-0 [&_.ant-collapse-header]:px-0 [&_.ant-collapse-header-text]:text-sm [&_.ant-collapse-header-text]:font-medium [&_.ant-collapse-header-text]:text-app-text-secondary"
+                            activeKey={showManualProductId ? ["manual-product-id"] : []}
+                            onChange={(keys) => {
+                              const nextKeys = Array.isArray(keys) ? keys : [keys];
+                              setShowManualProductId(nextKeys.includes("manual-product-id"));
                             }}
+                            items={[
+                              {
+                                key: "manual-product-id",
+                                label: t("generate.advancedManualProductId"),
+                                children: (
+                                  <div className="pt-2">
+                                    <label
+                                      className="mb-2 block text-xs font-semibold tracking-[0.01em] text-app-text-secondary"
+                                      htmlFor="manual-product-id"
+                                    >
+                                      {t("generate.productIdLabel")}
+                                    </label>
+                                    <Input
+                                      id="manual-product-id"
+                                      value={productId}
+                                      onChange={(e) => setProductId(e.target.value)}
+                                      autoComplete="off"
+                                      disabled={isSubmitting || isSaving}
+                                    />
+                                  </div>
+                                ),
+                              },
+                            ]}
                           />
                         </div>
-                        <div style={{ marginTop: "0.5rem", color: pageColorTokens.textSecondary, fontSize: "0.8125rem" }}>
-                          {t("productImproveStage1.progressPercent", { progress: task.progress })}
-                        </div>
-                      </div>
-                    ) : null}
 
-                    {task.logs.length > 0 ? (
-                      <div style={{ marginTop: "1rem" }}>
-                        <div style={pageFieldLabelStyle}>{t("productImproveStage1.logTitle")}</div>
-                        <ul style={taskLogStyle}>
-                          {task.logs.map((log, index) => (
-                            <li key={`${task.id}-${index}`}>{log}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-
-                    {task.status === "review_required" ? (
-                      <div style={{ marginTop: "1rem" }}>
-                        {activeReviewTaskId === task.id && description !== null ? (
-                          <GenerateDescriptionResultEditor
-                            variant="page"
-                            draftTitle={draftTitle}
-                            draftDescription={draftDescription}
-                            onDraftTitleChange={setDraftTitle}
-                            onDraftDescriptionChange={setDraftDescription}
-                            copyTarget={copyTarget}
-                            copyBusy={copyBusy}
-                            isSubmitting={isSubmitting}
-                            isSaving={isSaving}
-                            saveErrorText={saveErrorText}
-                            onCopyTitle={copyTitle}
-                            onCopyDescription={copyDescription}
-                            onCopyAll={copyAll}
-                            onClickSave={requestOpenSaveDialog}
-                            saveConfirmOpen={saveConfirmOpen}
-                            onSaveConfirm={() => {
-                              void handleApplyTask(task.id, task.productId);
-                            }}
-                            onSaveCancel={cancelSaveDialog}
+                        <div className={subtlePanelClassName}>
+                          <label
+                            className="mb-2 block text-xs font-semibold tracking-[0.01em] text-app-text-secondary"
+                            htmlFor="generate-description-lang"
+                          >
+                            {t("generate.targetLanguage")}
+                          </label>
+                          <Select
+                            id="generate-description-lang"
+                            value={targetLanguage || undefined}
+                            className="w-full"
+                            placeholder={t("generate.targetLanguage")}
+                            onChange={(value) => setTargetLanguage(value)}
+                            disabled={localesLoading || isSubmitting || isSaving || saveConfirmOpen}
+                            options={localeOptions.map((opt) => ({
+                              value: opt.value,
+                              label: opt.label,
+                            }))}
+                            showSearch
+                            optionFilterProp="label"
                           />
-                        ) : (
-                          <div style={{ ...pageEmptyStateStyle, padding: "1rem 1.2rem" }}>
-                            <span>{task.resultTitle || t("generate.resultTitle")}</span>
-                            <s-button
-                              type="button"
-                              variant="secondary"
-                              onClick={() => setActiveReviewTaskId(task.id)}
+                          {localesLoading && localeOptions.length === 0 ? (
+                            <div className="mt-2 text-xs text-app-text-footnote">
+                              {t("common.loadingLanguage")}
+                            </div>
+                          ) : null}
+                          {localesIsFallback ? (
+                            <div className="mt-2 text-xs leading-5 text-app-text-secondary">
+                              {t("generate.fallbackLocalesHint")}{" "}
+                              <code className="text-[11px]">read_locales</code>
+                            </div>
+                          ) : null}
+                        </div>
+
+                        {errorText ? (
+                          <Alert
+                            type="error"
+                            showIcon
+                            className="rounded-app-card"
+                            message={errorText}
+                          />
+                        ) : null}
+
+                        <div className={subtlePanelClassName}>
+                          <Space wrap size="middle">
+                            <Button
+                              type="primary"
+                              onClick={() => {
+                                handleOpenEstimate();
+                              }}
+                              loading={isSubmitting}
+                              disabled={isSaving || localesLoading || saveConfirmOpen}
                             >
-                              {t("productImproveStage1.openReview")}
-                            </s-button>
-                          </div>
-                        )}
+                              {localesLoading
+                                ? t("common.loadingLanguage")
+                                : t("generate.generateAction")}
+                            </Button>
+                            <Button
+                              onClick={() => {
+                                void handleScore();
+                              }}
+                              loading={isScoring}
+                              disabled={isSubmitting || isSaving}
+                            >
+                              {t("qualityScore.scoreAction")}
+                            </Button>
+                            <Button
+                              onClick={() => {
+                                clearCurrentResult();
+                              }}
+                              disabled={isSubmitting || isSaving || isScoring}
+                            >
+                              {t("common.clearResult")}
+                            </Button>
+                          </Space>
+                        </div>
                       </div>
-                    ) : null}
-
-                    {task.status === "applied" ? (
-                      <div
-                        style={{
-                          marginTop: "1rem",
-                          padding: "0.9rem 1rem",
-                          borderRadius: "12px",
-                          background: pageColorTokens.brandGreenLight,
-                          color: pageColorTokens.brandGreenDeep,
-                          border: `1px solid ${pageColorTokens.brandGreenGlow}`,
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: "1rem",
-                          alignItems: "center",
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <div>{t("productImproveStage1.appliedNotice")}</div>
-                        <s-button
-                          type="button"
-                          variant="secondary"
-                          onClick={() => setActiveTab("config")}
-                        >
-                          {t("productImproveStage1.continueProcess")}
-                        </s-button>
+                    </Card>
+                    <p style={pageTrustFootnoteStyle}>{t("productImproveStage1.stage1BatchHint")}</p>
+                  </>
+                ),
+              },
+              {
+                key: "tasks",
+                label: t("productImproveStage1.tabsTasks"),
+                children: (
+                  <Card className={sectionCardClassName}>
+                    <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+                      <div>
+                        <div className="text-[18px] font-semibold text-app-text-primary">
+                          {t("productImproveStage1.taskListTitle")}
+                        </div>
+                        <div className="mt-1 text-sm leading-6 text-app-text-secondary">
+                          {t("productImproveStage1.taskListSubtitle")}
+                        </div>
                       </div>
-                    ) : null}
+                      <Button onClick={() => setActiveTab("config")}>
+                        {t("productImproveStage1.backToConfig")}
+                      </Button>
+                    </div>
 
-                    {task.status === "scored" ? (
-                      <div style={{ marginTop: "1rem" }}>
-                        <ProductQualityScoreResult
-                          result={task.scoreResult ?? null}
-                          isScoring={false}
-                          errorText={null}
-                        />
+                    <div className="mb-4 text-sm text-app-text-secondary">{tasksCountLabel}</div>
+
+                    {tasks.length === 0 ? (
+                      <Empty
+                        className="spark-ant-empty rounded-app-card border border-dashed border-app-subtle bg-app-subtle py-10"
+                        description={t("productImproveStage1.taskEmpty")}
+                      />
+                    ) : (
+                      <div className="space-y-4">
+                        {tasks.map((task) => (
+                          <Card key={task.id} className={taskCardClassName}>
+                            <div className="flex flex-wrap items-start justify-between gap-4">
+                              <div>
+                                <div className="text-base font-semibold text-app-text-primary">
+                                  {task.kind === "generate"
+                                    ? t("productImproveStage1.taskGenerate")
+                                    : t("productImproveStage1.taskScore")}
+                                </div>
+                                <div className="mt-1 text-sm text-app-text-secondary">
+                                  {task.productLabel}
+                                </div>
+                              </div>
+                              {renderStatusBadge(task.status)}
+                            </div>
+
+                            <div className={metaGridClassName}>
+                              <div className={metaItemClassName}>
+                                <div className="mb-1 text-xs font-semibold text-app-text-secondary">
+                                  {t("productImproveStage1.taskProduct")}
+                                </div>
+                                <div className="text-sm text-app-text-primary">
+                                  {task.productLabel}
+                                </div>
+                              </div>
+                              <div className={metaItemClassName}>
+                                <div className="mb-1 text-xs font-semibold text-app-text-secondary">
+                                  {t("productImproveStage1.taskLanguage")}
+                                </div>
+                                <div className="text-sm text-app-text-primary">
+                                  {task.targetLanguage || "-"}
+                                </div>
+                              </div>
+                              <div className={metaItemClassName}>
+                                <div className="mb-1 text-xs font-semibold text-app-text-secondary">
+                                  {t("productImproveStage1.taskCreatedAt")}
+                                </div>
+                                <div className="text-sm text-app-text-primary">
+                                  {formatTaskTime(task.createdAt)}
+                                </div>
+                              </div>
+                              <div className={metaItemClassName}>
+                                <div className="mb-1 text-xs font-semibold text-app-text-secondary">
+                                  {t("productImproveStage1.taskEstimate")}
+                                </div>
+                                <div className="text-sm text-app-text-primary">
+                                  {task.estimateTime} / {task.estimateCredits} Token
+                                </div>
+                              </div>
+                              <div className={metaItemClassName}>
+                                <div className="mb-1 text-xs font-semibold text-app-text-secondary">
+                                  {t("productImproveStage1.taskActual")}
+                                </div>
+                                <div className="text-sm text-app-text-primary">
+                                  {task.actualTime
+                                    ? `${task.actualTime} / ${task.actualCredits ?? 0} Token`
+                                    : "-"}
+                                </div>
+                              </div>
+                            </div>
+
+                            {task.status === "running" ? (
+                              <div className="mt-4">
+                                <Progress percent={task.progress} showInfo={false} strokeColor="#008060" />
+                                <div className="mt-2 text-xs text-app-text-secondary">
+                                  {task.progress}%
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {task.logs.length > 0 ? (
+                              <div className="mt-4">
+                                <div className="text-xs font-semibold text-app-text-secondary">
+                                  {t("productImproveStage1.logTitle")}
+                                </div>
+                                <ul className="mt-2 list-disc pl-5 text-[13px] leading-6 text-app-text-secondary">
+                                  {task.logs.map((log, index) => (
+                                    <li key={`${task.id}-${index}`}>{log}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : null}
+
+                            {task.status === "review_required" ? (
+                              <div className="mt-4">
+                                {activeReviewTaskId === task.id && description !== null ? (
+                                  <GenerateDescriptionResultEditor
+                                    variant="page"
+                                    draftTitle={draftTitle}
+                                    draftDescription={draftDescription}
+                                    onDraftTitleChange={setDraftTitle}
+                                    onDraftDescriptionChange={setDraftDescription}
+                                    copyTarget={copyTarget}
+                                    copyBusy={copyBusy}
+                                    isSubmitting={isSubmitting}
+                                    isSaving={isSaving}
+                                    saveErrorText={saveErrorText}
+                                    onCopyTitle={copyTitle}
+                                    onCopyDescription={copyDescription}
+                                    onCopyAll={copyAll}
+                                    onClickSave={requestOpenSaveDialog}
+                                    saveConfirmOpen={saveConfirmOpen}
+                                    onSaveConfirm={() => {
+                                      void handleApplyTask(task.id, task.productId);
+                                    }}
+                                    onSaveCancel={cancelSaveDialog}
+                                  />
+                                ) : (
+                                  <div className="rounded-app-control border border-dashed border-app-subtle bg-app-subtle px-4 py-5">
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                      <div className="text-sm text-app-text-primary">
+                                        {task.resultTitle || t("generate.resultTitle")}
+                                      </div>
+                                      <Button onClick={() => setActiveReviewTaskId(task.id)}>
+                                        {t("productImproveStage1.openReview")}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ) : null}
+
+                            {task.status === "applied" ? (
+                              <div className="mt-4">
+                                <Alert
+                                  type="success"
+                                  showIcon
+                                  message="Shopify"
+                                  description="结果已写入 Shopify，可继续发起下一轮优化或其他加工。"
+                                  action={
+                                    <Button size="small" onClick={() => setActiveTab("config")}>
+                                      {t("productImproveStage1.continueProcess")}
+                                    </Button>
+                                  }
+                                />
+                              </div>
+                            ) : null}
+
+                            {task.status === "scored" ? (
+                              <div className="mt-4">
+                                <ProductQualityScoreResult
+                                  result={task.scoreResult ?? null}
+                                  isScoring={false}
+                                  errorText={null}
+                                />
+                              </div>
+                            ) : null}
+
+                            {task.status === "failed" && task.errorText ? (
+                              <div className="mt-4">
+                                <Alert type="error" showIcon message={task.errorText} />
+                              </div>
+                            ) : null}
+                          </Card>
+                        ))}
                       </div>
-                    ) : null}
+                    )}
+                  </Card>
+                ),
+              },
+            ]}
+          />
+        </div>
 
-                    {task.status === "failed" && task.errorText ? (
-                      <div style={{ marginTop: "1rem" }}>
-                        <div style={formErrorBoxStyle}>{task.errorText}</div>
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            )}
-          </PageSurface>
-        )}
-
-        <p style={pageTrustFootnoteStyle}>
-          {activeTab === "config"
-            ? t("productImproveStage1.stage1BatchHint")
-            : t("generate.pageFootnote")}
-        </p>
+        <p style={pageTrustFootnoteStyle}>{t("generate.pageFootnote")}</p>
       </div>
 
-      <dialog
-        ref={estimateDialogRef}
-        onCancel={(event) => {
-          event.preventDefault();
+      <Modal
+        open={estimateOpen}
+        onCancel={() => {
           if (!isSubmitting) setEstimateOpen(false);
         }}
-        style={{
-          maxWidth: "460px",
-          width: "calc(100% - 2rem)",
-          padding: 0,
-          border: "none",
-          borderRadius: "16px",
-          boxShadow: pageColorTokens.shadowModal,
-        }}
+        footer={null}
+        className="spark-ant-modal"
+        destroyOnHidden
+        maskClosable={!isSubmitting}
+        width={460}
       >
-        <div style={{ padding: "1.2rem 1.25rem" }}>
-          <div
-            style={{
-              fontSize: "1rem",
-              fontWeight: 700,
-              color: pageColorTokens.textPrimary,
-              marginBottom: "0.4rem",
-            }}
-          >
-            {t("productImproveStage1.estimateTitle")}
-          </div>
-          <div
-            style={{
-              fontSize: "0.875rem",
-              color: pageColorTokens.textSecondary,
-              lineHeight: 1.5,
-              marginBottom: "1rem",
-            }}
-          >
-            {t("productImproveStage1.estimateDesc")}
-          </div>
-          <div style={taskMetaGridStyle}>
-            <div style={taskMetaItemStyle}>
-              <div style={pageFieldLabelStyle}>{t("productImproveStage1.estimateScope")}</div>
-              <div style={{ color: pageColorTokens.textPrimary }}>{estimateScope}</div>
+        <div className="space-y-4">
+          <div className={subtlePanelClassName}>
+            <div className="text-base font-semibold text-app-text-primary">
+              {t("productImproveStage1.estimateTitle")}
             </div>
-            <div style={taskMetaItemStyle}>
-              <div style={pageFieldLabelStyle}>{t("productImproveStage1.estimateTime")}</div>
-              <div style={{ color: pageColorTokens.textPrimary }}>{estimateTime}</div>
-            </div>
-            <div style={taskMetaItemStyle}>
-              <div style={pageFieldLabelStyle}>{t("productImproveStage1.estimateCredits")}</div>
-              <div style={{ color: pageColorTokens.textPrimary }}>{estimateCredits} Token</div>
+            <div className="mt-1 text-sm leading-6 text-app-text-secondary">
+              {t("productImproveStage1.estimateDesc")}
             </div>
           </div>
-          <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.25rem" }}>
-            <s-button type="button" variant="secondary" onClick={() => setEstimateOpen(false)}>
+
+          <div className={subtlePanelClassName}>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className={metaItemClassName}>
+                <div className="mb-1 text-xs font-semibold text-app-text-secondary">
+                  {t("productImproveStage1.estimateScope")}
+                </div>
+                <div className="text-sm text-app-text-primary">{estimateScope}</div>
+              </div>
+              <div className={metaItemClassName}>
+                <div className="mb-1 text-xs font-semibold text-app-text-secondary">
+                  {t("productImproveStage1.estimateTime")}
+                </div>
+                <div className="text-sm text-app-text-primary">{estimateTime}</div>
+              </div>
+              <div className={metaItemClassName}>
+                <div className="mb-1 text-xs font-semibold text-app-text-secondary">
+                  {t("productImproveStage1.estimateCredits")}
+                </div>
+                <div className="text-sm text-app-text-primary">{estimateCredits} Token</div>
+              </div>
+            </div>
+          </div>
+
+          <div className={`${subtlePanelClassName} flex flex-wrap gap-3`}>
+            <Button onClick={() => setEstimateOpen(false)} disabled={isSubmitting}>
               {t("common.cancel")}
-            </s-button>
-            <s-button
-              type="button"
-              variant="primary"
+            </Button>
+            <Button
+              type="primary"
+              loading={isSubmitting}
               onClick={() => {
                 void handleGenerate();
               }}
-              {...(isSubmitting ? { disabled: true } : {})}
             >
-              {isSubmitting
-                ? t("generate.generating")
-                : t("productImproveStage1.estimateConfirm")}
-            </s-button>
+              {t("productImproveStage1.estimateConfirm")}
+            </Button>
           </div>
         </div>
-      </dialog>
+      </Modal>
     </s-page>
   );
 }

@@ -52,7 +52,9 @@
     "@shopify/app-bridge-react": "^4.2.4",
     "@shopify/shopify-app-react-router": "^1.1.0",
     "@shopify/shopify-app-session-storage-prisma": "^9.0.0",
+    "@tailwindcss/vite": "^4.3.0",
     "@volcengine/openapi": "^1.36.2",
+    "antd": "^6.4.3",
     "i18next": "^26.1.0",
     "ioredis": "^5.10.1",
     "isbot": "^5.1.31",
@@ -64,6 +66,7 @@
     "react-markdown": "^10.1.0",
     "react-router": "^7.12.0",
     "remark-gfm": "^4.0.1",
+    "tailwindcss": "^4.3.0",
     "tencentcloud-sdk-nodejs-ses": "^4.1.222",
     "vite-tsconfig-paths": "^5.1.4",
     "zod": "^4.3.6"
