@@ -23,7 +23,7 @@ topics = ["app/scopes_update"]
 uri = "/webhooks/app/scopes_update"
 
 [access_scopes]
-scopes = "read_locales,write_products"
+scopes = "read_locales,write_products,read_content"
 
 [auth]
 redirect_urls = [
