@@ -121,14 +121,13 @@ Spark/
 │   ├── schema.prisma             Prisma 数据模型
 │   ├── migrations/               迁移文件（Turso 版本追踪）
 │   ├── dev.sqlite                本地开发数据库
-│   ├── turso-baseline.sql        Turso 库初始化脚本
 │   ├── billing-plan-catalog-seed.sql  套餐种子数据
 │   └── token-billing-rule-seed.sql    Token 计费系数种子
 │
 ├── admin/                        管理后台（独立 Vite + TS 应用）
 ├── worker/                       后台任务（未来扩展点）
 ├── extensions/                   Shopify 应用扩展占位
-├── scripts/                      工具脚本（turso-sync、turso-migrate 等）
+├── scripts/                      工具脚本（turso-migrate 等）
 ├── docs/                         项目文档
 ├── .github/workflows/            CI/CD（Shopify + Render 部署）
 ├── public/                       静态资源
@@ -343,9 +342,8 @@ npm run test:watch             # 监听模式
 # 数据库
 npm run setup                  # Prisma generate + 本地迁移
 npm run prisma:studio          # Prisma Studio
-npm run turso:migrate:test     # **推荐**：Turso 迁移（测试库）
+npm run turso:migrate:test     # Turso 迁移（测试库）
 npm run turso:migrate:prod     # Turso 迁移（生产库）
-npm run turso:sync:test        # Turso 初始化（测试库）
 
 # 其他
 npm run deploy                 # Shopify 应用部署

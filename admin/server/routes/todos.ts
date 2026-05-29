@@ -20,10 +20,21 @@ async function ensureTable() {
   `);
 }
 
-ensureTable().catch((e) => console.error("[todos] init table error", e));
+let tableReady: Promise<void> | null = null;
+
+function readyTable() {
+  if (!tableReady) {
+    tableReady = ensureTable().catch((error) => {
+      tableReady = null;
+      throw error;
+    });
+  }
+  return tableReady;
+}
 
 todosRouter.get("/", async (_req, res) => {
   try {
+    await readyTable();
     const result = await getDb().execute(
       "SELECT * FROM AdminTodo ORDER BY createdAt DESC",
     );
@@ -35,6 +46,7 @@ todosRouter.get("/", async (_req, res) => {
 
 todosRouter.post("/", async (req, res) => {
   try {
+    await readyTable();
     const { title, description, assignee, priority, createdBy } = req.body;
     if (!title || !createdBy) {
       res.status(400).json({ error: "title and createdBy required" });
@@ -55,6 +67,7 @@ todosRouter.post("/", async (req, res) => {
 
 todosRouter.put("/:id", async (req, res) => {
   try {
+    await readyTable();
     const { title, description, assignee, status, priority } = req.body;
     const now = new Date().toISOString();
     await getDb().execute({
@@ -69,6 +82,7 @@ todosRouter.put("/:id", async (req, res) => {
 
 todosRouter.delete("/:id", async (req, res) => {
   try {
+    await readyTable();
     await getDb().execute({
       sql: "DELETE FROM AdminTodo WHERE id=?",
       args: [req.params.id],
