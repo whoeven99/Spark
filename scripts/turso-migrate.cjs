@@ -5,8 +5,8 @@
  * 不能直接连 libsql://。本脚本用 @libsql/client 执行 SQL，并写入 _prisma_migrations。
  *
  * 用法：
- *   npm run turso:migrate:test          # 应用未执行的 migration
- *   npm run turso:migrate:test -- --baseline  # 仅标记已全部应用（曾用 turso:sync 建库时）
+ *   npm run turso:migrate:test   # 应用未执行的 migration（测试库）
+ *   npm run turso:migrate:prod   # 应用未执行的 migration（生产库）
  */
 const crypto = require("crypto");
 const fs = require("fs");
@@ -174,7 +174,6 @@ async function main() {
   const root = process.cwd();
   const envFromFile = loadDotEnv(path.join(root, ".env"));
   const target = (process.argv[2] || "test").trim().toLowerCase();
-  const baselineOnly = process.argv.includes("--baseline");
 
   if (target !== "test" && target !== "prod") {
     throw new Error('仅支持 "test" 或 "prod"');
@@ -198,19 +197,11 @@ async function main() {
   const applied = await getAppliedNames(client);
 
   let ran = 0;
-  let marked = 0;
 
   for (const migration of migrations) {
     if (applied.has(migration.name)) continue;
 
     const sql = fs.readFileSync(migration.sqlPath, "utf8");
-
-    if (baselineOnly) {
-      await markApplied(client, migration.name, sql);
-      marked += 1;
-      console.log(`[turso:migrate:${target}] baseline 标记: ${migration.name}`);
-      continue;
-    }
 
     console.log(`[turso:migrate:${target}] 应用: ${migration.name}`);
     for (const statement of splitStatements(sql)) {
@@ -226,13 +217,11 @@ async function main() {
   const status = await client.execute(
     'SELECT migration_name, finished_at FROM "_prisma_migrations" ORDER BY finished_at',
   );
-  console.log(
-    `[turso:migrate:${target}] 本次应用 ${ran} 条 migration，baseline 标记 ${marked} 条`,
-  );
+  console.log(`[turso:migrate:${target}] 本次应用 ${ran} 条 migration`);
   console.log(
     `[turso:migrate:${target}] 共 ${status.rows.length} 条记录在 _prisma_migrations`,
   );
-  if (ran === 0 && marked === 0) {
+  if (ran === 0) {
     console.log(`[turso:migrate:${target}] 无待执行 migration（已是最新）`);
   }
 }

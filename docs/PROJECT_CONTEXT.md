@@ -210,19 +210,16 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
 
 | 命令 | 用途 |
 |------|------|
-| `npm run turso:migrate:test` / `turso:migrate:prod` | **首选**：维护 `_prisma_migrations`，只执行未应用的 `prisma/migrations/*/migration.sql`，并写入 PlanCatalog 种子 |
-| `npm run turso:migrate:test -- --baseline` | 库曾仅用 `turso:sync` 建好、表已齐：只把已有 migration **标记为已应用**，不执行 SQL（**勿**对缺表库使用） |
-| `npm run turso:sync:test` / `turso:sync:prod` | 空库兜底：从全部 migration 生成 `turso-baseline.sql` 并全量执行（`CREATE IF NOT EXISTS`）；**不会** ALTER 已有表，**无**版本表 |
-| `prisma/token-billing-rule-seed.sql` | Token 计费系数种子（`turso:migrate` / `turso:sync` 后执行） |
+| `npm run turso:migrate:test` / `turso:migrate:prod` | 维护 `_prisma_migrations`，只执行未应用的 `prisma/migrations/*/migration.sql`，并写入 PlanCatalog / TokenBillingRule 种子 |
+| `prisma/token-billing-rule-seed.sql` | Token 计费系数种子（`turso:migrate` 执行时自动写入） |
 
 推荐流程：
 
 1. 本地改 schema → `npx prisma migrate dev`（`DATABASE_URL=file:...`）。
 2. 推到 Turso 测试库 → `npm run turso:migrate:test`。
 3. 生产 → `npm run turso:migrate:prod`。
-4. 首次从 `turso:sync` 迁到 migrate：先 `--baseline`，之后只用 `turso:migrate`。
 
-实现见 `scripts/turso-migrate.cjs`、`scripts/turso-sync.cjs`。
+实现见 `scripts/turso-migrate.cjs`。
 
 ## 12. 环境变量（代码中实际依赖）
 - Shopify 侧：
