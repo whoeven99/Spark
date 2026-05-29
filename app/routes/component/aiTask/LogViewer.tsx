@@ -76,13 +76,21 @@ function buildDetailUrl(taskId: string, locationSearch: string): string {
   return `/api/ai-task-detail?${params.toString()}`;
 }
 
-function dedupeConsecutiveLogs(logs: AITaskLogEntry[]): AITaskLogEntry[] {
-  return logs.filter((log, index) => index === 0 || log.message !== logs[index - 1].message);
-}
-
 function stepDurationSeconds(logs: AITaskLogEntry[], index: number): number {
   if (index <= 0) return logs[index]?.elapsedSeconds ?? 0;
   return Math.max(0, logs[index].elapsedSeconds - logs[index - 1].elapsedSeconds);
+}
+
+/** 按消息去重，保留 elapsedSeconds 更大的一条（避免 SSE 与轮询重复写入） */
+function normalizeLogList(logs: AITaskLogEntry[]): AITaskLogEntry[] {
+  const byMessage = new Map<string, AITaskLogEntry>();
+  for (const log of logs) {
+    const existing = byMessage.get(log.message);
+    if (!existing || log.elapsedSeconds >= existing.elapsedSeconds) {
+      byMessage.set(log.message, log);
+    }
+  }
+  return [...byMessage.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
 function mergeLogEntries(
@@ -90,10 +98,7 @@ function mergeLogEntries(
   incoming: AITaskLogEntry[],
 ): AITaskLogEntry[] {
   if (incoming.length === 0) return prev;
-  const seen = new Set(prev.map((log) => log.id));
-  const appended = incoming.filter((log) => !seen.has(log.id));
-  if (appended.length === 0) return prev;
-  return [...prev, ...appended];
+  return normalizeLogList([...prev, ...incoming]);
 }
 
 function parseSSEChunk(buffer: string): {
@@ -135,9 +140,10 @@ export function LogViewer({
   );
   const logsScrollRef = useRef<HTMLDivElement>(null);
   const isDone = currentStatus !== "running";
-  const workflowLogs = dedupeConsecutiveLogs(logs);
+  const displayLogs = normalizeLogList(logs);
+  const workflowLogs = displayLogs;
   const completedElapsed = Math.max(
-    logs.reduce((max, log) => Math.max(max, log.elapsedSeconds), 0),
+    displayLogs.reduce((max, log) => Math.max(max, log.elapsedSeconds), 0),
     elapsedSecondsBetween(startedAt, completedAt),
   );
   const displayElapsed = isDone && completedElapsed > 0 ? completedElapsed : elapsed;
@@ -157,7 +163,7 @@ export function LogViewer({
   const handleStreamEvent = useCallback(
     (event: AITaskSSEEvent) => {
       if (event.type === "connected") {
-        setLogs(event.existingLogs);
+        setLogs(normalizeLogList(event.existingLogs));
         return;
       }
       if (event.type === "log") {
@@ -219,8 +225,14 @@ export function LogViewer({
         };
         if (cancelled) return;
 
-        if (body.logs?.length) {
-          setLogs((prev) => mergeLogEntries(prev, body.logs ?? []));
+        if (body.logs) {
+          setLogs((prev) =>
+            normalizeLogList(
+              body.task?.status && body.task.status !== "running"
+                ? body.logs!
+                : [...prev, ...body.logs!],
+            ),
+          );
         }
         if (body.task?.status && body.task.status !== "running") {
           applyStatusChange(
@@ -324,7 +336,7 @@ export function LogViewer({
               color: isDone ? pageColorTokens.brandGreenDark : pageColorTokens.brandBlue,
             }}
           >
-            {isDone ? "流程记录" : "Playbook 执行中"}
+            {isDone ? "流程记录" : "任务执行中"}
           </span>
           <span
             style={{
@@ -431,8 +443,8 @@ export function LogViewer({
         </button>
       </div>
 
-      {logsOpen && (
-        logs.length === 0 ? (
+      {        logsOpen && (
+        displayLogs.length === 0 ? (
           <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
             {isDone && completedElapsed > 0
               ? `任务已结束，实际耗时 ${formatElapsedClock(completedElapsed)}`
@@ -451,12 +463,12 @@ export function LogViewer({
               overflowY: "auto",
             }}
           >
-            {logs.map((log, index) => (
+            {displayLogs.map((log, index) => (
               <div
                 key={log.id}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "48px 56px minmax(0, 1fr)",
+                  gridTemplateColumns: "48px 48px minmax(0, 1fr)",
                   gap: 8,
                   fontSize: 12,
                   lineHeight: 1.6,
@@ -479,7 +491,7 @@ export function LogViewer({
                     fontSize: 11,
                   }}
                 >
-                  +{formatElapsedClock(stepDurationSeconds(logs, index))}
+                  {formatElapsedClock(stepDurationSeconds(displayLogs, index))}
                 </span>
                 <span>{log.message}</span>
               </div>
