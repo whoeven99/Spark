@@ -27,12 +27,16 @@ export type TranslateResult = {
 
 // These fields must not be translated (Shopify uses them as URL segments)
 const SKIP_KEYS = new Set(["handle"]);
-// These fields contain HTML content
-const HTML_KEYS = new Set(["body_html", "summary_html", "content"]);
 
-export function classifyField(key: string): "skip" | "html" | "plain" {
+const HTML_TAG_RE = /<\/?[a-z][^>]*>/i;
+
+function isHtml(value: string): boolean {
+  return HTML_TAG_RE.test(value);
+}
+
+export function classifyField(key: string, value?: string): "skip" | "html" | "plain" {
   if (SKIP_KEYS.has(key)) return "skip";
-  if (HTML_KEYS.has(key) || key.endsWith("_html")) return "html";
+  if (value !== undefined && isHtml(value)) return "html";
   return "plain";
 }
 
@@ -300,13 +304,13 @@ export async function translateBatch(
 
   // 1. Skip fields
   for (const item of items) {
-    if (classifyField(item.key) === "skip") {
+    if (classifyField(item.key, item.value) === "skip") {
       resultMap.set(item.key, { key: item.key, translatedValue: item.value, digest: item.digest });
     }
   }
 
   // 2. HTML fields — each translated individually with node-level batching
-  for (const item of items.filter((i) => classifyField(i.key) === "html")) {
+  for (const item of items.filter((i) => classifyField(i.key, i.value) === "html")) {
     try {
       const translatedValue = isGoogle
         ? await translateHtmlGoogle(item.value, source, target)
@@ -319,7 +323,7 @@ export async function translateBatch(
   }
 
   // 3. Plain text fields — split long values, batch by char count
-  const plainItems = items.filter((i) => classifyField(i.key) === "plain");
+  const plainItems = items.filter((i) => classifyField(i.key, i.value) === "plain");
   if (plainItems.length > 0) {
     // Expand long items into numbered parts
     type Part = { internalKey: string; originalKey: string; value: string; digest: string; idx: number; total: number };

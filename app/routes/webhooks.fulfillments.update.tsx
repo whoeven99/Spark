@@ -1,0 +1,17 @@
+import type { ActionFunctionArgs } from "react-router";
+import { authenticate } from "../shopify.server";
+import { syncFulfillment } from "../server/shopify/sync/fulfillmentSync.server";
+import type { ShopifyFulfillmentPayload } from "../server/shopify/sync/types";
+
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { shop, topic, payload } = await authenticate.webhook(request);
+  console.info(`[Webhook] ${topic} shop=${shop}`);
+
+  try {
+    await syncFulfillment(shop, payload as ShopifyFulfillmentPayload);
+  } catch (error) {
+    console.error(`[Webhook] fulfillments/update sync failed shop=${shop}:`, error);
+  }
+
+  return new Response();
+};

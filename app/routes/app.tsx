@@ -37,7 +37,8 @@ const NAV_ITEMS: Record<
       | "nav.translationV4"
       | "nav.productImprove"
       | "nav.imageStudio"
-      | "nav.billing";
+      | "nav.billing"
+      | "nav.orderMonitor";
   }
 > = {
   chat: { href: "/app", labelKey: "nav.aiAssistant" },
@@ -59,6 +60,7 @@ const NAV_ITEMS: Record<
     href: "/app/image-studio?tab=generate",
     labelKey: "nav.imageStudio",
   },
+  "order-monitor": { href: "/app/order-monitor", labelKey: "nav.orderMonitor" },
   billing: { href: "/app/billing", labelKey: "nav.billing" },
 };
 
