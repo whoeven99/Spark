@@ -6,14 +6,34 @@ type Props = {
   taskId: string;
   locationSearch: string;
   initialLogs?: AITaskLogEntry[];
+  /** 任务实际开始时间；用于刷新页面后恢复已执行时长与进度条 */
+  startedAt?: string | null;
   onStatusChange?: (status: AITaskStatus, result?: Record<string, unknown>) => void;
 };
 
-function formatElapsed(seconds: number): string {
+export function elapsedSecondsSince(
+  iso: string | null | undefined,
+  now = Date.now(),
+): number {
+  if (!iso) return 0;
+  const startMs = new Date(iso).getTime();
+  if (Number.isNaN(startMs)) return 0;
+  return Math.max(0, Math.floor((now - startMs) / 1000));
+}
+
+export function formatElapsedClock(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   if (m > 0) return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   return `00:${s.toString().padStart(2, "0")}`;
+}
+
+function resolveStartMs(startedAt?: string | null): number {
+  if (startedAt) {
+    const ms = new Date(startedAt).getTime();
+    if (!Number.isNaN(ms)) return ms;
+  }
+  return Date.now();
 }
 
 // Estimated duration in seconds used only to compute progress bar fill
@@ -23,20 +43,26 @@ export function LogViewer({
   taskId,
   locationSearch,
   initialLogs = [],
+  startedAt,
   onStatusChange,
 }: Props) {
+  const startMsRef = useRef(resolveStartMs(startedAt));
   const [logs, setLogs] = useState<AITaskLogEntry[]>(initialLogs);
   const [done, setDone] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-  const startTimeRef = useRef<number>(Date.now());
+  const [elapsed, setElapsed] = useState(() =>
+    Math.floor((Date.now() - startMsRef.current) / 1000),
+  );
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Live elapsed-time ticker
+  useEffect(() => {
+    startMsRef.current = resolveStartMs(startedAt);
+    setElapsed(Math.floor((Date.now() - startMsRef.current) / 1000));
+  }, [startedAt]);
+
   useEffect(() => {
     if (done) return;
-    startTimeRef.current = Date.now();
     const id = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
+      setElapsed(Math.floor((Date.now() - startMsRef.current) / 1000));
     }, 1000);
     return () => clearInterval(id);
   }, [done]);
@@ -125,7 +151,7 @@ export function LogViewer({
               letterSpacing: "0.02em",
             }}
           >
-            {formatElapsed(elapsed)}
+            {formatElapsedClock(elapsed)}
           </span>
         </div>
 
@@ -155,7 +181,7 @@ export function LogViewer({
       {/* Step log */}
       {logs.length === 0 ? (
         <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
-          等待执行中...
+          {elapsed > 0 ? `任务执行中，已运行 ${formatElapsedClock(elapsed)}` : "等待执行中..."}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -179,7 +205,7 @@ export function LogViewer({
                   fontSize: 11,
                 }}
               >
-                {formatElapsed(log.elapsedSeconds)}
+                {formatElapsedClock(log.elapsedSeconds)}
               </span>
               <span>{log.message}</span>
             </div>

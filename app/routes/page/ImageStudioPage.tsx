@@ -11,6 +11,7 @@ import { PictureTranslateProvider } from "../component/pictureTranslate/pictureT
 import type { VisualToolsTab } from "../component/visualTools/VisualToolsTabBar";
 import { VisualToolsTabBar } from "../component/visualTools/VisualToolsTabBar";
 import { TaskListPage } from "../component/aiTask/TaskListPage";
+import { TaskListSummary } from "../component/aiTask/TaskListSummary";
 import {
   PageSectionHeader,
   PageSurface,
@@ -150,6 +151,9 @@ function ImageStudioPageInner({
 
         {pageTab === "config" && (
           <>
+            {/* Task summary always visible in config tab */}
+            <TaskListSummary tasks={tasks} mode="image" />
+
             <VisualToolsTabBar
               activeTab={activeToolTab}
               onTabChange={setActiveToolTab}

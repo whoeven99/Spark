@@ -160,6 +160,7 @@ export function ProductImproveTaskCard({ task, locationSearch, onDelete, deletin
         <LogViewer
           taskId={task.id}
           locationSearch={locationSearch}
+          startedAt={task.startedAt}
           initialLogs={[]}
           onStatusChange={handleStatusChange}
         />

@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { TaskStatusBadge } from "./TaskStatusBadge";
-import { LogViewer } from "./LogViewer";
+import { elapsedSecondsSince, LogViewer } from "./LogViewer";
 import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 
 type Props = {
@@ -45,12 +45,36 @@ function formatActualElapsed(startedAt: string | null, completedAt: string | nul
   return `${s}s`;
 }
 
+function formatRunningElapsed(startedAt: string | null): string | null {
+  const seconds = elapsedSecondsSince(startedAt);
+  if (seconds <= 0) return null;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
 export function TaskCard({ task, locationSearch, onDelete, deleting }: Props) {
   const { t } = useTranslation();
   const [localStatus, setLocalStatus] = useState<AITaskStatus>(task.status);
   const [localResult, setLocalResult] = useState<Record<string, unknown> | null>(
     task.result,
   );
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [runningElapsed, setRunningElapsed] = useState<string | null>(() =>
+    task.status === "running" ? formatRunningElapsed(task.startedAt) : null,
+  );
+
+  useEffect(() => {
+    if (localStatus !== "running") {
+      setRunningElapsed(null);
+      return;
+    }
+    const tick = () => setRunningElapsed(formatRunningElapsed(task.startedAt));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [localStatus, task.startedAt]);
 
   const imageUrl =
     (localResult?.imageUrl as string | undefined) ??
@@ -91,17 +115,33 @@ export function TaskCard({ task, locationSearch, onDelete, deleting }: Props) {
         }}
       >
         {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt=""
+          <button
+            type="button"
+            onClick={() => {
+              if (localStatus === "succeeded") setPreviewOpen((open) => !open);
+            }}
+            disabled={localStatus !== "succeeded"}
             style={{
-              width: 52,
-              height: 52,
-              objectFit: "cover",
-              borderRadius: 8,
+              border: "none",
+              padding: 0,
+              background: "none",
+              cursor: localStatus === "succeeded" ? "pointer" : "default",
               flexShrink: 0,
             }}
-          />
+            aria-label={t("visualHistory.viewLarge")}
+          >
+            <img
+              src={imageUrl}
+              alt={t("imageGeneration.generatedImageAlt")}
+              style={{
+                width: 52,
+                height: 52,
+                objectFit: "cover",
+                borderRadius: 8,
+                display: "block",
+              }}
+            />
+          </button>
         ) : (
           <div
             style={{
@@ -154,6 +194,12 @@ export function TaskCard({ task, locationSearch, onDelete, deleting }: Props) {
                 <span>预估 {estimatedTime}</span>
               </>
             )}
+            {localStatus === "running" && runningElapsed && (
+              <>
+                <span style={{ color: pageColorTokens.textFootnote }}>·</span>
+                <span>已执行 {runningElapsed}</span>
+              </>
+            )}
             {localStatus !== "running" && actualElapsed && (
               <>
                 <span style={{ color: pageColorTokens.textFootnote }}>·</span>
@@ -186,21 +232,65 @@ export function TaskCard({ task, locationSearch, onDelete, deleting }: Props) {
           </div>
         </div>
 
-        <s-button
-          variant="tertiary"
-          tone="critical"
-          disabled={deleting}
-          onClick={() => onDelete(task.id)}
-          accessibilityLabel={t("visualHistory.delete")}
-        >
-          {deleting ? t("visualHistory.deleting") : t("visualHistory.delete")}
-        </s-button>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+          {imageUrl && localStatus === "succeeded" && (
+            <s-button
+              variant="tertiary"
+              onClick={() => setPreviewOpen((open) => !open)}
+            >
+              {previewOpen ? t("visualHistory.collapse") : t("visualHistory.view")}
+            </s-button>
+          )}
+          <s-button
+            variant="tertiary"
+            tone="critical"
+            disabled={deleting}
+            onClick={() => onDelete(task.id)}
+            accessibilityLabel={t("visualHistory.delete")}
+          >
+            {deleting ? t("visualHistory.deleting") : t("visualHistory.delete")}
+          </s-button>
+        </div>
       </div>
+
+      {previewOpen && imageUrl && localStatus === "succeeded" && (
+        <div
+          style={{
+            border: `1px solid ${pageColorTokens.border}`,
+            borderRadius: 10,
+            padding: 12,
+            background: pageColorTokens.surfaceMuted,
+          }}
+        >
+          <img
+            src={imageUrl}
+            alt={t("imageGeneration.generatedImageAlt")}
+            style={{
+              width: "100%",
+              maxHeight: 480,
+              objectFit: "contain",
+              borderRadius: 8,
+              display: "block",
+            }}
+          />
+          <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <s-button
+              variant="secondary"
+              onClick={() => {
+                window.open(imageUrl, "_blank", "noopener,noreferrer");
+              }}
+            >
+              {t("imageGeneration.openImage")}
+            </s-button>
+          </div>
+        </div>
+      )}
 
       {localStatus === "running" && (
         <LogViewer
           taskId={task.id}
           locationSearch={locationSearch}
+          startedAt={task.startedAt}
           initialLogs={[]}
           onStatusChange={handleStatusChange}
         />

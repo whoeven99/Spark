@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { TaskCard } from "./TaskCard";
 import { TaskListSummary } from "./TaskListSummary";
@@ -13,6 +13,10 @@ type Props = {
 export function TaskListPage({ tasks, locationSearch, onTaskDeleted }: Props) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [localTasks, setLocalTasks] = useState<AITaskItem[]>(tasks);
+
+  useEffect(() => {
+    setLocalTasks(tasks);
+  }, [tasks]);
 
   async function handleDelete(taskId: string) {
     setDeletingId(taskId);
