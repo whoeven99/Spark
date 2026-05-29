@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { authenticate } from "../shopify.server";
+import { existsBlockingV4Task } from "../server/translation/v4/activeTaskGuard.server";
 import { createV4Job, listV4Jobs } from "../server/translation/v4/cosmosV4Store.server";
 import { TRANSLATION_V4_MODULES, type TranslationV4Module } from "../server/translation/v4/types";
 import { getTranslateRedisClient } from "../server/translation/translateRedis.server";
@@ -44,9 +45,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (!modules.length) return data({ ok: false, error: "至少选择一个翻译模块" }, { status: 400 });
 
+  const shopName = session.shop;
+  if (await existsBlockingV4Task(shopName, source, target)) {
+    return data(
+      { ok: false, error: "该目标语言已有进行中的翻译任务" },
+      { status: 409 },
+    );
+  }
+
   const limitPerType = Math.min(Math.max(Number(body.limitPerType) || 20, 1), 500);
   const jobId = crypto.randomUUID();
-  const shopName = session.shop;
 
   const job = await createV4Job({
     id: jobId,

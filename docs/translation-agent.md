@@ -95,11 +95,24 @@ CREATED
 **执行流程**：
 1. claim job（乐观锁，etag 防并发）
 2. 设 `blobPrefix = "tasks/v4/{shopName}/{jobId}"`
-3. 对每个 module，分页调用 Shopify `translatableResources` GraphQL，按 `chunkSize=50` 写 Blob：
+3. 对每个 module 拉取可翻译资源（`worker/src/services/shopifyFetch.ts`），按 `chunkSize=50` 写 Blob：
+   - **PRODUCT / ARTICLE / PAGE / COLLECTION**：先按硬编码 Shopify Admin `query` 分页拉资源 GID，再 `translatableResourcesByIds` 取字段
+   - **其他模块**：`translatableResources(resourceType, first, after)` 分页
    - `{blobPrefix}/init/{MODULE}/chunk-{00}.json` → `TranslatableResource[]`
 4. 写 manifest：`{blobPrefix}/manifest.json`
 5. 更新 Cosmos：`status=TRANSLATE_QUEUED`，metrics 初始化
 6. `lpush translate:v4:hint:translate`
+
+**Init 模块 query（硬编码，对齐 Spring 默认筛选）**：
+
+| 模块 | Shopify query |
+|------|----------------|
+| PRODUCT | （无，拉全部） |
+| COLLECTION | `published_status:published` |
+| PAGE | `published_status:published` |
+| ARTICLE | `published_status:published` |
+
+**创建任务互斥**：`POST /api/translate/v4/tasks` 在写入 Cosmos 前检查同 `shopName + source + target` 是否已有 `ACTIVE_V4_STATUSES` 中的任务；有则返回 **409**。`PAUSED` / `COMPLETED` / `FAILED` / `CANCELLED` 允许新建。
 
 **Blob — init chunk 结构**：
 ```json
