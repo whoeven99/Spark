@@ -34,7 +34,7 @@ export function translationRuleJudgment(key: string, value: string): boolean {
 
   // PHASE2: isHtml(value) → return true
 
-  if (value.includes("px")) {
+  if (/\d+px\b/.test(value)) {
     return false;
   }
 

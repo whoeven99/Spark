@@ -271,7 +271,8 @@ export type PageIntroTone =
   | "translation"
   | "chat"
   | "billing"
-  | "diagnosis";
+  | "diagnosis"
+  | "order-monitor";
 
 const introToneTokens: Record<
   PageIntroTone,
@@ -300,6 +301,10 @@ const introToneTokens: Record<
   diagnosis: {
     gradient: "linear-gradient(135deg, rgba(64, 112, 244, 0.08) 0%, rgba(107, 114, 128, 0.07) 100%)",
     borderColor: "#4070f4",
+  },
+  "order-monitor": {
+    gradient: "linear-gradient(135deg, rgba(234, 88, 12, 0.08) 0%, rgba(0, 166, 124, 0.07) 100%)",
+    borderColor: "#ea580c",
   },
 };
 

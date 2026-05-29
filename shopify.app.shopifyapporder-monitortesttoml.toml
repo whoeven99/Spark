@@ -1,0 +1,19 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "d0550d3455a8076d94bb2fc5a7081b45"
+application_url = "https://shopify.dev/apps/default-app-home"
+embedded = true
+name = "Order monitor test"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = ""
+
+[auth]
+redirect_urls = [ "https://shopify.dev/apps/default-app-home/api/auth" ]
+
+[webhooks]
+api_version = "2026-07"
+
+[build]
+automatically_update_urls_on_dev = true

@@ -11,7 +11,7 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
-const { createClient } = require("@libsql/client");
+const { createClient } = require("@libsql/client/http");
 
 const PRISMA_MIGRATIONS_DDL = `
 CREATE TABLE IF NOT EXISTS "_prisma_migrations" (

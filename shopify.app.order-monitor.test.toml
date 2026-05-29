@@ -1,24 +1,15 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "17fa704a57a5ac567f6a938bfaad9110"
-application_url = "https://example.com"
+client_id = "d0550d3455a8076d94bb2fc5a7081b45"
+name = "Order Monitor Test"
+application_url = "https://your-order-monitor-test.onrender.com"
 embedded = true
-name = "spark_zz"
 
 [build]
 automatically_update_urls_on_dev = true
-include_config_on_deploy = true
 
-[webhooks] 
+[webhooks]
 api_version = "2026-07"
-
-[[webhooks.subscriptions]]
-topics = ["app_subscriptions/update"]
-uri = "/webhooks/app/subscriptions_update"
-
-[[webhooks.subscriptions]]
-topics = ["app_purchases_one_time/update"]
-uri = "/webhooks/app/purchases_one_time_update"
 
 [[webhooks.subscriptions]]
 topics = ["app/uninstalled"]
@@ -41,10 +32,6 @@ topics = ["refunds/create"]
 uri = "/webhooks/refunds/create"
 
 [[webhooks.subscriptions]]
-topics = ["inventory_levels/update"]
-uri = "/webhooks/inventory_levels/update"
-
-[[webhooks.subscriptions]]
 topics = ["fulfillments/create"]
 uri = "/webhooks/fulfillments/create"
 
@@ -52,9 +39,13 @@ uri = "/webhooks/fulfillments/create"
 topics = ["fulfillments/update"]
 uri = "/webhooks/fulfillments/update"
 
+[[webhooks.subscriptions]]
+topics = ["inventory_levels/update"]
+uri = "/webhooks/inventory_levels/update"
+
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_orders,write_products,read_translations,write_translations,read_locales"
+scopes = "read_orders,read_fulfillments,read_inventory"
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ "https://your-order-monitor-test.onrender.com" ]
