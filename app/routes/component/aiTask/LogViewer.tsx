@@ -142,6 +142,7 @@ export function LogViewer({
   const isDone = currentStatus !== "running";
   const displayLogs = normalizeLogList(logs);
   const workflowLogs = displayLogs;
+  const showWorkflowSteps = !isDone;
   const completedElapsed = Math.max(
     displayLogs.reduce((max, log) => Math.max(max, log.elapsedSeconds), 0),
     elapsedSecondsBetween(startedAt, completedAt),
@@ -373,6 +374,7 @@ export function LogViewer({
         </div>
       </div>
 
+      {showWorkflowSteps && (
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {workflowLogs.length === 0 ? (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -391,13 +393,8 @@ export function LogViewer({
           </div>
         ) : (
           workflowLogs.map((log, index) => {
-            const isLatest = currentStatus === "running" && index === workflowLogs.length - 1;
-            const isFailed = currentStatus === "failed" && index === workflowLogs.length - 1;
-            const dotColor = isFailed
-              ? pageColorTokens.critical
-              : isLatest
-                ? pageColorTokens.brandBlue
-                : pageColorTokens.brandGreen;
+            const isLatest = index === workflowLogs.length - 1;
+            const dotColor = isLatest ? pageColorTokens.brandBlue : pageColorTokens.brandGreen;
             return (
               <div key={log.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span
@@ -424,6 +421,7 @@ export function LogViewer({
           })
         )}
       </div>
+      )}
 
       <div>
         <button
@@ -443,7 +441,7 @@ export function LogViewer({
         </button>
       </div>
 
-      {        logsOpen && (
+      {logsOpen && (
         displayLogs.length === 0 ? (
           <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
             {isDone && completedElapsed > 0
