@@ -1,15 +1,18 @@
 # Spark 前端 UI 设计规范
 
-本文档定义嵌入式 Shopify App 的**全站视觉与交互风格**。设计语言以 **计费与订阅页**（`/app/billing`）为标杆提炼，并通过 `pageUiStyles.tsx` 向其它页面推广；不涉及服务端、鉴权与业务计算。
+本文档定义 Spark 作为嵌入式 Shopify App 时，所有 tool 页面的视觉系统、组件选型边界与代码落地规则。  
+`docs/INTERACTION_DESIGN.md` 负责流程、页面层级与任务模型；本文只回答三个问题：
 
-**标杆实现**（改 UI 前先对照）：
+1. 页面应该看起来像什么
+2. 组件应该优先怎么选
+3. 后续如何从代码层面统一所有 tools 的风格
 
-| 文件 | 职责 |
-|------|------|
-| `app/routes/page/BillingPage.tsx` | 分区结构、状态展示、转化布局 |
-| `app/routes/component/billing/billingPage.module.css` | 卡片、徽章、分段控件、表格等样式参考 |
-| `app/routes/component/shared/pagePrimitives.module.css` | 非计费页可复用的卡片 / meta 样式（对齐计费卡片语义） |
-| `app/routes/page/pageUiStyles.tsx` | 全站色值令牌与可复用布局 primitive |
+当前项目会持续集成更多 Shopify 能力，因此视觉规范必须满足两件事：
+
+- **首先像 Shopify App**，而不是像一个外部营销站或独立后台
+- **其次可工程化复用**，而不是每个 tool 单独写一套样式
+
+品牌色目前**尚未确定**，因此本文档不建立额外品牌色体系；在品牌未冻结前，统一采用 Shopify Admin 风格的中性色与语义色，并通过 `pageUiStyles.tsx` 抽象令牌层。
 
 ---
 
@@ -17,267 +20,364 @@
 
 | 包含 | 不包含 |
 |------|--------|
-| `app/routes/page/**`、`app/routes/component/**` 展示层 | `app/server/**`、Prisma、Webhook |
-| `app/routes/app.tsx` 导航与壳 | 计费金额、token 计算逻辑 |
-| `app/hooks/**`（仅影响 UI 时） | |
+| `app/routes/page/**`、`app/routes/component/**` 的展示层 | `app/server/**`、Prisma、Webhook、模型调用 |
+| `app/routes/app.tsx` 与各 tool 页的页面壳、局部导航 | 业务规则本身 |
+| `app/hooks/**` 中直接影响视觉状态的前端逻辑 | 纯数据变换逻辑 |
+| 通用样式与视觉 primitive | 服务端权限与计费判断 |
 
-冲突时：UI 展示以本文档为准；数据与安全以 `docs/PROJECT_CONTEXT.md` 为准。
+冲突处理顺序：
 
----
-
-## 2. 设计原则
-
-1. **先状态、后操作**：页顶可选告警 → 当前状态卡片（指标 / 进度）→ 主操作区 → 对比或说明 → 页脚信任/脚注。
-2. **卡片化分区**：白底、12px 圆角、1px 浅灰边框、轻阴影；避免大面积色块横幅。
-3. **克制用色**：灰白为底；**品牌绿**表示当前/成功/主进度；**蓝**表示推荐/强调列；**琥珀**表示待确认或用量告警。
-4. **对齐 Shopify Admin**：优先 `s-*` 组件；自定义样式仅补充 Admin 未覆盖的定价/仪表盘类排版。
-5. **全站一致**：色值来自 `pageColorTokens`，禁止在页面内随意写 `#e3e3e3` 等新灰度。
+1. 当前用户需求
+2. Shopify 官方设计体系
+3. 本文档
+4. `docs/INTERACTION_DESIGN.md`
+5. 现有页面实现
 
 ---
 
-## 3. 色彩
+## 2. 设计目标
 
-统一使用 `pageColorTokens`（定义于 `pageUiStyles.tsx`，与 `billingPage.module.css` 对齐）。
+所有 tool 页统一满足以下目标：
 
-| 令牌 / 语义 | 色值 | 用途 |
-|-------------|------|------|
-| `textPrimary` | `#202223` | 标题、主数字、价格 |
-| `textBody` | `#303030` | 列表正文、特性项 |
-| `textSecondary` | `#6d7175` | 副标题、标签、meta |
-| `textFootnote` | `#8c9196` | 区段脚注、辅助说明、字段标签 |
-| `border` | `#e1e3e5` | 卡片、分段容器边框 |
-| `divider` | `#f1f2f3` | 表行、进度条轨道 |
-| `surface` | `#ffffff` | 卡片、选中分段项 |
-| `surfaceMuted` | `#f6f6f7` | 芯片底、信任条、表偶数行 |
-| `surfaceSubtle` | `#fafafa` | 次要浅底 |
-| `brandGreen` | `#008060` | 主强调、当前态、进度条 |
-| `brandGreenDark` | `#208060` | 进度渐变 |
-| `brandGreenDeep` | `#006e52` / `#1a6b52` | 深绿文案、渐变 |
-| `brandGreenLight` | `#f1f8f5` | 胶囊 badge 底、当前卡顶渐变 |
-| 品牌绿描边 | `#b7e0d0` | 状态胶囊边框 |
-| `brandBlue` | `#2c6ecb` | 推荐描边、丝带、表高亮列 |
-| 折扣黄 | `#ffea8a` / `#5c4813` | 角标 pill |
-| 警告琥珀 | `#b98900`、`#fff4e5`、`#7a5200`、`#8a6116` | 待确认、低余额（如用量 ≥85%） |
-| `critical` / `criticalText` | `#bf0711` / `#8a2712` | 破坏性操作（测试环境等） |
+1. **Shopify 原生感**：进入页面后，应像 Shopify Admin 内部能力，而不是第三方拼装页面。
+2. **工具一致性**：不同 tool 在页面结构、表单节奏、卡片样式、反馈方式上保持同一语言。
+3. **低品牌依赖**：在品牌色未确定前，仍可依靠语义令牌稳定输出一致 UI。
+4. **代码可约束**：规范必须能映射到共享 token、共享组件、共享样式层，而不是停留在文字描述。
+5. **可持续扩展**：后续新增 Shopify 场景时，只扩展模式，不重写整套视觉系统。
 
-**语义映射（全站通用）**
+---
 
-| 状态 | 视觉 |
+## 3. 设计来源与基线
+
+视觉决策统一按以下来源理解：
+
+| 来源 | 角色 | 说明 |
+|------|------|------|
+| Shopify 官方组件与设计语言 | 上位约束 | 优先遵循嵌入式 App 的 Admin 风格、组件语义、内容密度与反馈方式 |
+| `app/routes/page/pageUiStyles.tsx` | 本地令牌层 | 项目内唯一的页面级 token 与 primitive 出口 |
+| `app/routes/component/shared/**` | 本地共享组件层 | 承接跨 tool 复用的视觉模式 |
+| `BillingPage.tsx` 等现有页面 | 参考样板 | 可借鉴成熟布局，但**不是唯一母版** |
+
+结论：
+
+- `BillingPage` 可以作为当前最完整的参考页
+- 但后续所有 tools 的统一标准，应由 **Shopify 设计语言 + `pageUiStyles.tsx` 抽象层**共同决定
+- 不允许继续把某个业务页面的局部视觉细节直接上升为全站默认
+
+---
+
+## 4. 核心视觉原则
+
+### 4.1 Shopify First
+
+优先使用 Shopify 提供的页面容器、按钮、输入、状态、反馈组件；自定义样式只补 Shopify 官方组件暂未覆盖的布局与信息密度需求。
+
+### 4.2 中性色为底，语义色表达状态
+
+页面主要依赖留白、边框、层级、间距来建立信息结构，而不是依赖大面积品牌色。颜色只承担以下职责：
+
+- 交互可点击
+- 状态成功 / 警告 / 错误
+- 当前选中 / 推荐 / 待确认
+
+### 4.3 一致性优先于局部精致
+
+同一类问题必须复用同一类视觉解法。例如：
+
+- 表单 section 用统一的卡片容器
+- 状态 badge 用统一语义色与圆角
+- 页脚说明用统一的辅助文案区块
+- 空态、错误、加载态采用统一模板
+
+### 4.4 层级靠排版与结构，不靠装饰
+
+避免营销化的视觉手段：
+
+- 大面积渐变横幅
+- 过强阴影
+- 大片彩色底卡
+- 与业务无关的插画式装饰
+
+工具页的重点应该是“清楚、可信、可执行”。
+
+### 4.5 可访问性是默认要求
+
+所有页面默认满足：
+
+- 明确的标题层级
+- 可见焦点态
+- 不只靠颜色传达状态
+- 合理的触控尺寸与表单标签
+- loading / empty / error / success 均可被识别
+
+---
+
+## 5. 色彩与令牌策略
+
+### 5.1 总原则
+
+品牌色未确定前，统一采用**语义化命名**，避免在文档或页面中绑定“品牌绿”“品牌蓝”这类长期会变的表达。
+
+推荐令牌分组：
+
+| 分组 | 示例 | 用途 |
+|------|------|------|
+| 文本 | `textPrimary`、`textSecondary`、`textFootnote` | 标题、正文、辅助文案 |
+| 背景 | `surface`、`surfaceSubtle`、`surfaceMuted` | 页面卡片、弱背景、分组底色 |
+| 边框 | `border`、`divider`、`borderStrong` | 容器分隔、控件边框 |
+| 交互 | `interactive`、`interactiveHover`、`interactiveSubtle` | 主按钮、可点状态、选中态 |
+| 反馈 | `success`、`warning`、`critical`、`info` | 语义状态与反馈 |
+| 阴影/圆角 | `shadowCard`、`shadowModal`、`radiusCard`、`radiusControl` | 一致的层级与容器形态 |
+
+### 5.2 当前阶段的具体要求
+
+1. 页面中**禁止新增裸写十六进制色值**。
+2. 所有新颜色必须先进入 `pageColorTokens`，再被页面消费。
+3. 现有代码中已存在的绿色、蓝色、渐变，可视为迁移存量；后续改版时优先向语义令牌收敛。
+4. 在品牌色未冻结前，`interactive` 默认映射到 Shopify 风格主交互色，而不是自定义品牌色。
+5. “推荐”“当前”“待确认”都属于**状态语义**，不要把它们做成品牌风格展示位。
+
+### 5.3 状态语义映射
+
+| 状态 | 推荐表现 |
+|------|----------|
+| 默认 | 白底或浅底 + 常规边框 |
+| 当前 / 已生效 | 轻度强调边框 + 轻微选中背景 + 清晰主操作状态 |
+| 推荐 | 比默认更高层级，但不高于错误/告警 |
+| 待确认 | warning 语义，不与 destructive 混用 |
+| 错误 / 风险 | `critical` 语义 + 明确修复动作 |
+
+---
+
+## 6. 排版、间距与容器
+
+### 6.1 排版层级
+
+| 层级 | 规格建议 | 场景 |
+|------|----------|------|
+| 页面主标题 | `1.5rem` 左右，`700` | tool 页标题 |
+| 区块标题 | `1.125rem–1.25rem`，`600–700` | 表单区、状态区、结果区 |
+| 正文 | `0.875rem` 左右，`1.4–1.6` 行高 | 描述、表单说明、列表 |
+| 辅助文案 | `0.75rem–0.8125rem` | hint、meta、脚注 |
+
+规则：
+
+- 用字重和留白区分层级，不靠颜色堆层级
+- 同一页面的标题层级不超过 4 层
+- 辅助文案永远不能比主操作更抢眼
+
+### 6.2 容器与圆角
+
+| 元素 | 建议 |
 |------|------|
-| 默认 | 白底 + `#e1e3e5` 边框 |
-| 当前 / 生效 | 绿框 + `#f1f8f5` 浅顶渐变 + 实心绿 CTA |
-| 推荐 | 蓝框 + 轻阴影（桌面可 `translateY(-2px)`） |
-| 待确认 | 琥珀框 + 浅琥珀底 CTA |
-| 告警 | `s-banner tone="warning"` 或琥珀进度/徽章 |
+| 页面主卡片 | 中性色背景 + 统一圆角 + 轻边框 + 轻阴影 |
+| 输入控件 | 比卡片更小一档圆角 |
+| badge / pill / progress | 完全圆角 |
+| modal / popover | 与主卡片同体系，但阴影更高一层 |
 
----
+### 6.3 间距规则
 
-## 4. 字体、圆角与阴影
+| 场景 | 建议 |
+|------|------|
+| 页面区块间距 | `1.5rem` 左右 |
+| 卡片内边距 | `1rem–1.25rem` |
+| 表单字段上下间距 | `0.75rem–1rem` |
+| 双栏布局列间距 | `1.5rem` |
 
-| 层级 | 规格 | 示例场景 |
-|------|------|----------|
-| 主数字 | `1.5rem–1.75rem`，`font-weight: 700` | Token 余额、价格 |
-| 区块标题 | `1.125rem–1.25rem`，`600–700` | 「您的 Token 额度」「选择计划」 |
-| 正文 / 列表 | `0.8125rem`，行高 `1.4–1.45` | 特性列表、表单说明 |
-| 标签 / 脚注 | `0.75rem` 及以下 | 池标签、信任说明 |
-
-| 元素 | 值 |
-|------|-----|
-| 卡片圆角 | `12px`（`pageColorTokens.radiusCard`） |
-| 按钮 / 芯片 / 输入 | `8px`（`radiusControl`） |
-| 胶囊 badge / 进度条 | `999px` |
-| 卡片阴影 | `0 1px 2px rgba(0,0,0,0.04)` |
-| 推荐/强调卡片 | 可叠加 `0 4px 16px rgba(44,110,203,0.12)` |
-
----
-
-## 5. 布局与间距
-
-### 5.1 页面骨架（全站默认）
+### 6.4 页面骨架
 
 ```tsx
 <s-page heading={t("xxx.pageTitle")}>
   <div style={pageContentStyle}>
-    {/* 可选 s-banner */}
-    {/* 若干 section：状态区 → 操作区 → 说明/对比 → 页脚 */}
+    {/* 可选 banner */}
+    {/* status / config / task / review / footnote sections */}
   </div>
 </s-page>
 ```
 
-- **`pageContentStyle`**：`max-width: 1120px`；`display: flex; flex-direction: column; gap: 1.5rem`。
-- **不用**页顶宽横幅介绍整页；场景说明放在**第一个区块的副标题**（计费页 `quotaSubtitle` 模式）。
-- 需要侧栏时：外层 `twoColumnLayoutStyle`（`gap: 1.5rem`，`flexWrap: wrap`，列 `minWidth: 0`）。
+要求：
 
-### 5.2 区块标题行（全站复用）
+- `pageContentStyle` 继续作为页面主容器
+- 页面说明优先放在首个 section 的副标题，不做营销式 hero
+- 双栏页面统一使用 `twoColumnLayoutStyle` 系列样式
 
-对标计费页 `usageHeader` / `plansSectionHead`：
+---
 
-```
-[ 主标题 + 副标题（左） ]     [ 状态胶囊 / 分段控件（右） ]
-```
+## 7. Tool 页面视觉模式
 
-- 主标题：`1.125rem`，`#202223`。
-- 副标题：`0.8125rem`，`#6d7175`，`max-width` 约 `28–36rem`。
-- 状态胶囊：浅绿底 `#f1f8f5` + 绿字 + 细绿边框（`planBadge`）。
+交互流程定义见 `docs/INTERACTION_DESIGN.md`；本文只规定每种页面承载方式的视觉重点。
 
-### 5.3 间距令牌
+| 页面类型 | 视觉重点 | 说明 |
+|----------|----------|------|
+| Tool Home | 概览、最近任务、快捷入口 | 强调入口清晰，不做内容堆叠 |
+| Config Page | 表单优先、说明次之 | 第一屏优先出现真实输入区 |
+| Task List | 状态可扫描、批量信息清楚 | 强调 badge、进度、影响范围 |
+| Review Gate | 差异清楚、确认动作单一 | 结果与应用动作分层显示 |
+| Result Panel | 下一步明确 | 至少给保存、复制、重试或应用之一 |
 
-| 令牌 | 值 | 用途 |
-|------|-----|------|
-| 页面区块间距 | `1.5rem` | `pageContentStyle` gap |
-| 双栏列间距 | `1.5rem` | `twoColumnLayoutStyle` |
-| 卡片内边距 | `1rem–1.25rem` | 仪表盘、套餐卡 |
-| 卡片栅格间距 | `1rem` | 三列网格 gap |
-| Shopify `s-stack` | `small` / `base` / `large` | 组件内部列表 |
+统一要求：
 
-### 5.4 响应式断点（与计费页一致）
+- 每个主要区块用共享卡片模式承载
+- 每个阶段只突出一个主操作
+- 状态变化必须在视觉上可扫描
+- 结果页不能只有内容，没有下一步动作
 
-| 断点 | 行为 |
+---
+
+## 8. 组件优先级与开源库策略
+
+本项目后续可以接入可靠的前端开源组件库和样式库，但前提是：**它们只能作为实现手段，不能盖过 Shopify App 的视觉与交互语义**。
+
+### 8.1 组件优先级
+
+| 层级 | 优先级 | 规则 |
+|------|--------|------|
+| Shopify 官方组件 | 最高 | 页面壳、按钮、banner、链接、输入、badge、导航优先使用 |
+| 项目共享 primitive | 次高 | `pageUiStyles.tsx` 与共享组件封装统一风格 |
+| Headless 开源库 | 可选 | 只用于补充复杂交互能力，不直接带入陌生视觉 |
+| 带完整主题的 UI 框架 | 谨慎限制 | 只有在 Shopify 官方明显缺失且经过评审时才可局部接入 |
+
+### 8.2 推荐引入方向
+
+| 能力 | 推荐方向 | 使用要求 |
+|------|----------|----------|
+| 表单状态与校验 | `react-router` `Form` + `zod`；复杂场景可补 `react-hook-form` | 只解决状态与校验，不改变视觉 |
+| Headless 交互 | `Radix UI` 或 `Ariakit` 一类 headless 组件 | 必须包一层项目组件，样式走 token |
+| 数据表格 / 密集列表 | `TanStack Table` | 只用数据与行为层，表格视觉仍由本项目控制 |
+| 样式组织 | 继续以 `CSS Modules` 为默认；必要时可评估 `vanilla-extract` | 禁止引入难以约束的全局主题污染 |
+| class 组合 | `clsx`、`class-variance-authority` | 用于收敛 variant，不直接定义视觉体系 |
+
+### 8.3 明确限制
+
+1. 不允许页面直接引入第三方组件库主题后“原样使用”。
+2. 不允许同一工具内混用两套视觉语言。
+3. 若引入新库，必须先回答三个问题：
+   - Shopify 官方组件为什么不够
+   - 是否可以只引入行为层而不引入视觉层
+   - 是否可以先包成共享组件再落到业务页
+
+---
+
+## 9. 代码落地规则
+
+这是后续统一所有 tools 风格的核心部分。
+
+### 9.1 单一出口
+
+页面级视觉能力统一从以下两层输出：
+
+| 层 | 职责 |
+|----|------|
+| `pageUiStyles.tsx` | token、布局、基础 primitive |
+| `app/routes/component/shared/**` | 共享卡片、标题行、状态区、空态、结果区等复合组件 |
+
+新增视觉模式时，优先顺序如下：
+
+1. 扩展 `pageUiStyles.tsx` 中已有 token / style primitive
+2. 如涉及复合结构，沉淀到共享组件层
+3. 只有业务强相关样式才留在域内 `*.module.css`
+
+### 9.2 样式优先级
+
+统一遵循：
+
+1. Shopify 组件属性与语义
+2. `pageUiStyles.tsx`
+3. 共享组件样式
+4. 域内 `*.module.css`
+5. 局部 `style`
+
+禁止反向扩散：
+
+- 页面里重新定义一套 token
+- 在多个页面复制相同 CSS
+- 为了某个局部需求引入全局样式覆盖
+
+### 9.3 第三方组件接入规则
+
+若未来接入开源组件库，必须满足以下约束：
+
+1. 业务页不得直接依赖第三方视觉组件作为 UI 规范来源。
+2. 必须在共享层提供包装组件，隐藏第三方 API。
+3. 包装组件只暴露与项目设计语言相关的 variant。
+4. 视觉样式必须接入 `pageColorTokens`，不能直接使用库默认主题色。
+
+### 9.4 品牌色预留
+
+可在 token 层预留以下抽象名，但暂不写品牌说明：
+
+- `interactive`
+- `interactiveHover`
+- `accentSubtle`
+- `accentStrong`
+
+待品牌色确定后，只更新 token 映射，不要求逐页改业务代码。
+
+---
+
+## 10. 当前项目参考实现
+
+以下文件可作为现阶段迁移与统一时的参考，但不应被机械复制：
+
+| 文件 | 参考价值 |
+|------|----------|
+| `app/routes/page/pageUiStyles.tsx` | 全站 token 与布局入口 |
+| `app/routes/page/BillingPage.tsx` | 较完整的 section 组织与商业化页面节奏 |
+| `app/routes/component/billing/billingPage.module.css` | 卡片、状态、对比表等复杂模式样例 |
+| `app/routes/component/shared/pagePrimitives.module.css` | 跨页面复用样式的收敛方向 |
+
+说明：
+
+- `BillingPage` 可继续作为“复杂页参考”
+- 但后续新增 tool，不要求复刻其绿色渐变、丝带、营销化细节
+- 应优先抽取“结构模式”，而不是复制“业务装饰”
+
+---
+
+## 11. 状态、反馈与文案
+
+| 场景 | 规范 |
 |------|------|
-| `≤900px` | 多列卡片栅格改为单列，可 `max-width: 22rem` 居中 |
-| `≤640px` | 页脚操作区纵向堆叠 |
-| `≤520px` | 标题行纵向居中；芯片/grid 单列 |
+| 成功 / 失败 | 使用 `shopify.toast.show()` 或近场反馈 |
+| 需要立即处理 | 使用页内 `s-banner` 或区块级错误提示 |
+| 提交中 | 主按钮 loading / disabled，保留上下文，不清空表单 |
+| 空状态 | 提供说明 + 下一步动作，不只写“暂无数据” |
+| 风险操作 | 与主流程分层，避免与 primary 并列竞争 |
+| 文案 | 一律走 i18n；不要在组件中硬编码商户可见文本 |
+
+补充要求：
+
+- 错误信息优先贴近出错区域
+- 状态文案要告诉用户“接下来怎么做”
+- 不要只依赖颜色区分成功、失败、待确认
 
 ---
 
-## 6. 组件模式（抽象自计费页，推广到全站）
+## 12. 禁止项
 
-以下模式在计费页命名最全；其它页面应使用 `pageUiStyles` 中等价 primitive，或复用相同 CSS 语义。
-
-| 模式 | 计费页参考类 | 全站用法 | `pageUiStyles` |
-|------|--------------|----------|----------------|
-| **状态卡片** | `usageCard` | 核心指标、进度、分项芯片 | `PageSurface`、`PageMetricCard` |
-| **指标行** | `usageStatsRow` + 大数字 | 主 KPI + 右侧百分比徽章 | `PageMetricCard` |
-| **进度条** | `progressTrack` / `progressFill` | 用量、任务完成度；≥85% 用琥珀色 | 按需 CSS Module |
-| **分项芯片** | `poolChips` / `poolChip` | 多池/多维度并列数字 | `PageMetricCard` 网格 |
-| **区段脚注** | `quotaFootnote` | 规则说明一行灰字 | `pageHintTextStyle` |
-| **选项卡片栅格** | `planGrid` / `planCard` | 套餐、方案、档位选择 | `PageSurface` 网格 |
-| **卡片状态** | `planCardCurrent` 等 | 当前 / 推荐 / 待确认 | 边框色 + 浅渐变顶 |
-| **分段切换** | `intervalSegmented` | 月/年、模式切换 | 灰底 pill + 白底选中项 |
-| **对比表** | `compareTable` | 功能矩阵；推荐列 `compareColHighlight` | `PageSurface` 内 table |
-| **可选列表 + 摘要** | `packOptions` + `packSelectionSummary` | 单选卡片 + 选中后摘要条 | 自定义 |
-| **页脚信任/说明** | `trustCheckout` | 结账、合规、帮助一行 | `pageTrustFootnoteStyle` |
-| **页脚 meta** | `quotaFooter` | 周期、次要操作 | `pageSectionHeaderRowStyle` |
-
-**主操作**：每区块一个 `s-button variant="primary"`，宽度可 `100%`（计费 `planCta`）；当前态用实心绿块 `planCurrentCta`，不用 disabled 灰按钮冒充。
-
----
-
-## 7. 计费页分区（标杆结构）
-
-其它复杂页可裁剪下列分区，但**顺序与视觉层级**建议保持一致：
-
-```
-s-page
-└── pageContentStyle
-    ├── s-banner?                    告警
-    ├── section（状态区）            标题行 + 状态卡片 + 页脚 meta
-    ├── section（主操作区）          标题行 + 分段控件 + 卡片栅格
-    ├── section（补充购买/扩展）     可选
-    ├── section（对比表）            可选
-    └── 页脚说明行                   信任/合规文案
-```
-
-计费专属、暂不强制全站复制的样式保留在 `billingPage.module.css`（套餐丝带、年付等价价、购包 radio、测试取消条等）。新增类似 UI 时**先抽 token 到 `pageUiStyles`**，再考虑是否下沉到 CSS Module。
-
----
-
-## 8. 技术边界
-
-1. **组件**：仅 [Shopify App Home](https://shopify.dev/docs/api/app-home)（`s-page`、`s-button`、`s-banner` 等）；禁止 MUI / Ant Design / shadcn 等。
-2. **反馈**：`shopify.toast.show()`；配额类用 `s-banner` + 可选 `s-link`。
-3. **链接**：`<s-link href="...">`，保留 `location.search`。
-4. **i18n**：可见文案一律 `t('namespace.key')`；日期/数字用 `i18n.language` + `toLocaleString`。
-5. **角色名**：统一 **AI Assistant**。
-6. **样式优先级**：`s-*` 属性 → `pageUiStyles.tsx` → 域内 `*.module.css` → 局部 `style`（尽量少）。
-7. **禁止**：全局 CSS、Tailwind、硬编码色值、硬编码句子。
-
----
-
-## 9. `pageUiStyles.tsx` 导出（全站入口）
-
-| 导出 | 用途 |
-|------|------|
-| `pageColorTokens` | 色值、圆角、阴影**唯一来源** |
-| `pageContentStyle` | 单栏页容器 |
-| `twoColumnLayoutStyle` / `twoColumnMainStyle` / `twoColumnSideStyle` | 双栏页 |
-| `PageSurface` / `PagePanel` | 白底圆角分区（对标 `usageCard`） |
-| `PageMetricCard` | 顶栏强调 + 指标网格 + 页脚 |
-| `PageSectionHeader` | 页内主标题 + 副标题 + 可选胶囊（替代页顶横幅） |
-| `pageSectionHeaderRowStyle` | 标题行布局 |
-| `pageBlockTitleStyle` / `pageSectionSubtitleStyle` | 主标题 / 副标题 |
-| `pageStatusBadgeStyle` | 绿色状态胶囊 |
-| `pageSectionTitleStyle` / `pageSectionMajorTitleStyle` | 卡片内区块标题 |
-| `pageAccentBadgeStyle` | 绿色文字 badge（简化版） |
-| `pageHintTextStyle` / `pageMetaTextStyle` | 表单 hint、meta 行 |
-| `pageTrustFootnoteStyle` | 页脚灰底信任/说明 |
-| `pageFieldLabelStyle` / `pageSelectStyle` / `pageTextareaStyle` | 表单控件 |
-| `pageEmptyStateStyle` / `formErrorBoxStyle` | 空态、错误 |
-| `stickyAsideColumnStyle` | 侧栏固定 |
-
-`pageIntroBannerStyle` 已**不作为全站默认**；新页面用「区块标题 + 副标题」替代（见 §5.2）。
-
----
-
-## 10. Shopify 组件白名单
-
-| 用途 | 组件 |
-|------|------|
-| 页面根 | `s-page`（必填 `heading`） |
-| 告警 | `s-banner` |
-| 布局 | `s-stack`、`s-box`（简单场景） |
-| 文案 | `s-paragraph`、`s-unordered-list` |
-| 操作 | `s-button`、`s-link` |
-| 表单 | `s-text-field` |
-| 状态 | `s-badge` |
-| 导航 | `s-app-nav` |
-
-页面级分区优先 `PageSurface` / `pageContentStyle`，而非堆叠 `s-section` 替代自定义栅格。
-
----
-
-## 11. 反馈与文案
-
-| 场景 | 做法 |
-|------|------|
-| 成功/失败 | `shopify.toast.show` |
-| 需立即注意 | 页顶 `s-banner` |
-| 提交中 | `s-button` `disabled` + i18n 进行中文案 |
-| 空数据 | 灰字说明 + 可选 secondary 引导 |
-| 文案键 | `billing.*`、`chat.*`、`translation.*` 等，见 `app/locales/` |
-
----
-
-## 12. 禁止与推荐
-
-**禁止**
-
-- 第三方 UI 库、全局 CSS、Tailwind
-- 页顶大面积渐变引导条（改用区块副标题）
-- 与 §3 色板脱节的渐变/阴影
+- 把某个 tool 做成独立品牌站视觉
+- 在页面里新增裸写颜色、阴影、圆角体系
+- 使用与 Shopify Admin 明显冲突的默认第三方主题
+- 大面积 hero、营销横幅、无关插画装饰
+- 同一页面出现两套按钮风格、两套表单风格或两套卡片风格
 - 硬编码商户可见文案
-- 未授权修改 `app.tsx` 导航
-
-**推荐**
-
-- 新页：`s-page` → `pageContentStyle` → 状态卡片 → 主操作 → 脚注
-- 改色/间距：只改 `pageColorTokens` 或 `billingPage.module.css` + 同步 `pageUiStyles`
-- 对照 `BillingPage.tsx` 做视觉自检
-- 双栏 `flexWrap` + `minWidth: 0` 防溢出
-
-**聊天页说明**：`ChatPage` 消息流区域可为交互密度保留 `chatPageStyles.ts`；**新增非聊天区块**（侧栏、卡片入口）仍应遵循本规范。
+- 为局部样式问题直接引入全局 CSS 污染
 
 ---
 
-## 13. Agent 执行清单
+## 13. 设计评审与开发自检
 
-1. 阅读本文档 + 打开 `BillingPage.tsx`、`pageUiStyles.tsx`。
-2. 确认改动在 §1 范围内；色值用 `pageColorTokens`。
-3. 新 UI 映射到 §6 组件模式之一，避免发明新视觉语言。
-4. 文案同步 `app/locales/en` 与 `zh`。
-5. 说明中注明参照的 §6 模式与是否触及 `billingPage.module.css`。
+每次新增或重构 tool 页时，至少检查以下问题：
 
-用户需求与本文冲突时，以用户当次指令为准并标注偏离点。
+1. 这页是否第一眼像 Shopify App，而不是外部站点
+2. 是否优先使用了 Shopify 组件和共享 primitive
+3. 是否只通过 token 使用颜色，而不是页面直接写值
+4. 主卡片、表单、状态、结果区是否使用统一容器语言
+5. loading / empty / error / success 是否完整
+6. 响应式下是否仍保持可读、可点、可操作
+7. 如果用了第三方库，是否只引入行为层并做了共享封装
+
+用户需求与本文冲突时，以用户当次指令为准，并在实现说明中标注偏离点。
 
 ---
 
@@ -286,4 +386,4 @@ s-page
 - [Shopify App Home](https://shopify.dev/docs/api/app-home)
 - [App Bridge](https://shopify.dev/docs/api/app-bridge)
 
-与 Shopify 官方冲突且无本文特例时，以官方文档为准。
+若 Shopify 官方设计体系与本文冲突，且本文未明确给出项目特例，则以官方为准。

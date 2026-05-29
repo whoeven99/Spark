@@ -363,7 +363,21 @@
     "openReview": "Open review",
     "continueProcess": "Continue",
     "backToConfig": "Back to config",
-    "stage1BatchHint": "Stage 1 focuses on the single-task structure. Batch execution will be connected in a later phase."
+    "stage1BatchHint": "Stage 1 focuses on the single-task structure. Batch execution will be connected in a later phase.",
+    "progressPercent": "{{progress}}% complete",
+    "appliedNotice": "The result has been written to Shopify. You can continue with another optimization or follow-up task.",
+    "logGenerateCreated": "Generation task created. Preparing product data.",
+    "logGenerateFetchingProduct": "Fetching Shopify product details.",
+    "logGeneratePreparingContext": "Preparing selling points and target-language context.",
+    "logGenerateWritingDraft": "Drafting title and description.",
+    "logGenerateReadyForReview": "Generation complete. Review is required before writing to Shopify.",
+    "logGenerateFailed": "Task failed. Check the inputs and try again.",
+    "logScoreCreated": "Quality scoring task created. Preparing product analysis.",
+    "logScoreFetchingProduct": "Reading product title, images, and description.",
+    "logScoreComputing": "Computing the quality score and recommendations.",
+    "logScoreCompleted": "Quality scoring completed.",
+    "logScoreFailed": "Quality scoring failed. Please try again later.",
+    "logApplied": "Written to Shopify."
   },
   "credentials": {
     "suggestionTitle": "Submit suggestion",

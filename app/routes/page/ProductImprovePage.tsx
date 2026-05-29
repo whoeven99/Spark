@@ -11,6 +11,8 @@ import { ProductSelector } from "../component/product/ProductSelector";
 import { GenerateDescriptionResultEditor } from "../component/productImprove/GenerateDescriptionResultEditor";
 import { ProductQualityScoreResult } from "../component/productImprove/ProductQualityScoreResult";
 import {
+  PageMetricCard,
+  PagePanel,
   PageSectionHeader,
   PageSurface,
   pageColorTokens,
@@ -20,9 +22,14 @@ import {
   pageFieldLabelStyle,
   pageHintTextStyle,
   pageLinkHintStyle,
+  pageMetaTextStyle,
   pageSelectStyle,
+  pageStatusCardStyle,
   pageStatusBadgeStyle,
   pageTrustFootnoteStyle,
+  stickyAsideColumnStyle,
+  twoColumnLayoutStyle,
+  twoColumnMainStyle,
 } from "./pageUiStyles";
 
 type TaskStatus = "running" | "review_required" | "applied" | "scored" | "failed";
@@ -53,23 +60,19 @@ const tabRailStyle: CSSProperties = {
   gap: "0.5rem",
   padding: "0.35rem",
   borderRadius: "999px",
-  border: `1px solid ${pageColorTokens.border}`,
-  background: pageColorTokens.surface,
-  boxShadow: pageColorTokens.shadowCard,
+  background: pageColorTokens.surfaceMuted,
 };
 
 const tabButtonStyle = (active: boolean): CSSProperties => ({
-  border: "none",
+  border: `1px solid ${active ? pageColorTokens.borderSubtle : "transparent"}`,
   cursor: "pointer",
   borderRadius: "999px",
   padding: "0.7rem 1rem",
-  background: active
-    ? `linear-gradient(135deg, ${pageColorTokens.brandGreenDeep} 0%, ${pageColorTokens.brandGreen} 100%)`
-    : "transparent",
-  color: active ? "#ffffff" : pageColorTokens.textBody,
+  background: active ? pageColorTokens.surface : "transparent",
+  color: active ? pageColorTokens.textPrimary : pageColorTokens.textSecondary,
   fontSize: "0.875rem",
   fontWeight: 700,
-  boxShadow: active ? "0 8px 22px rgba(0, 92, 70, 0.18)" : "none",
+  boxShadow: active ? pageColorTokens.shadowCard : "none",
 });
 
 const taskMetaGridStyle: CSSProperties = {
@@ -84,14 +87,6 @@ const taskMetaItemStyle: CSSProperties = {
   borderRadius: "12px",
   border: `1px solid ${pageColorTokens.border}`,
   background: pageColorTokens.surfaceMuted,
-};
-
-const taskCardStyle: CSSProperties = {
-  border: `1px solid ${pageColorTokens.border}`,
-  borderRadius: pageColorTokens.radiusCard,
-  background: pageColorTokens.surface,
-  boxShadow: pageColorTokens.shadowCard,
-  padding: "1rem 1.1rem",
 };
 
 const taskLogStyle: CSSProperties = {
@@ -109,6 +104,21 @@ const progressTrackStyle: CSSProperties = {
   background: pageColorTokens.progressTrackGradient,
   overflow: "hidden",
 };
+
+function taskAccentColor(status: TaskStatus): string {
+  if (status === "applied") return pageColorTokens.brandGreen;
+  if (status === "failed") return pageColorTokens.critical;
+  if (status === "scored") return pageColorTokens.borderSubtle;
+  return pageColorTokens.brandBlue;
+}
+
+function taskCardStyle(status: TaskStatus): CSSProperties {
+  return {
+    ...pageStatusCardStyle,
+    padding: "1rem 1.1rem",
+    borderLeft: `4px solid ${taskAccentColor(status)}`,
+  };
+}
 
 function buildTaskId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -244,6 +254,21 @@ export function ProductImprovePage() {
   const tasksCountLabel = t("productImproveStage1.tasksBadge", {
     count: tasks.length,
   });
+  const targetLanguageLabel =
+    localeOptions.find((opt) => opt.value === targetLanguage)?.label || targetLanguage || "-";
+  const taskSummary = tasks.reduce(
+    (summary, task) => {
+      summary[task.status] += 1;
+      return summary;
+    },
+    {
+      running: 0,
+      review_required: 0,
+      applied: 0,
+      scored: 0,
+      failed: 0,
+    } satisfies Record<TaskStatus, number>,
+  );
 
   const handleOpenEstimate = () => {
     if (!primaryProductId) {
@@ -281,14 +306,14 @@ export function ProductImprovePage() {
         estimateTime,
         estimateCredits,
         progress: 8,
-        logs: ["已创建生成任务，准备读取商品信息。"],
+        logs: [t("productImproveStage1.logGenerateCreated")],
       },
       ...current,
     ]);
 
-    appendTimedTaskUpdate(taskId, 300, 24, "正在读取 Shopify 商品信息。");
-    appendTimedTaskUpdate(taskId, 1100, 56, "正在整理卖点与目标语言语境。");
-    appendTimedTaskUpdate(taskId, 2200, 82, "正在生成标题和描述草稿。");
+    appendTimedTaskUpdate(taskId, 300, 24, t("productImproveStage1.logGenerateFetchingProduct"));
+    appendTimedTaskUpdate(taskId, 1100, 56, t("productImproveStage1.logGeneratePreparingContext"));
+    appendTimedTaskUpdate(taskId, 2200, 82, t("productImproveStage1.logGenerateWritingDraft"));
 
     const outcome = await submitGenerate(pid);
     if (outcome?.ok) {
@@ -296,7 +321,7 @@ export function ProductImprovePage() {
         ...task,
         status: "review_required",
         progress: 100,
-        logs: [...task.logs, "生成完成，等待审查后写入 Shopify。"],
+        logs: [...task.logs, t("productImproveStage1.logGenerateReadyForReview")],
         actualTime: formatDurationMs(Date.now() - startedAt),
         actualCredits: estimateCredits,
         resultTitle: outcome.result.title,
@@ -311,7 +336,7 @@ export function ProductImprovePage() {
       ...task,
       status: "failed",
       progress: 100,
-      logs: [...task.logs, "任务执行失败，请检查参数后重试。"],
+      logs: [...task.logs, t("productImproveStage1.logGenerateFailed")],
       actualTime: formatDurationMs(Date.now() - startedAt),
       errorText: outcome?.errorText ?? t("chat.sendFailed"),
     }));
@@ -338,13 +363,13 @@ export function ProductImprovePage() {
         estimateTime: "30-60s",
         estimateCredits: 120,
         progress: 12,
-        logs: ["已创建评分任务，准备分析商品质量。"],
+        logs: [t("productImproveStage1.logScoreCreated")],
       },
       ...current,
     ]);
 
-    appendTimedTaskUpdate(taskId, 250, 38, "正在读取商品标题、图片与描述信息。");
-    appendTimedTaskUpdate(taskId, 900, 72, "正在计算质量得分与优化建议。");
+    appendTimedTaskUpdate(taskId, 250, 38, t("productImproveStage1.logScoreFetchingProduct"));
+    appendTimedTaskUpdate(taskId, 900, 72, t("productImproveStage1.logScoreComputing"));
 
     const outcome = await submitScore(pid);
     if (outcome?.ok) {
@@ -352,7 +377,7 @@ export function ProductImprovePage() {
         ...task,
         status: "scored",
         progress: 100,
-        logs: [...task.logs, "质量评分已完成。"],
+        logs: [...task.logs, t("productImproveStage1.logScoreCompleted")],
         actualTime: formatDurationMs(Date.now() - startedAt),
         actualCredits: 120,
         scoreResult: outcome.result,
@@ -364,7 +389,7 @@ export function ProductImprovePage() {
       ...task,
       status: "failed",
       progress: 100,
-      logs: [...task.logs, "质量评分失败，请稍后重试。"],
+      logs: [...task.logs, t("productImproveStage1.logScoreFailed")],
       actualTime: formatDurationMs(Date.now() - startedAt),
       errorText: outcome?.errorText ?? t("chat.sendFailed"),
     }));
@@ -381,7 +406,7 @@ export function ProductImprovePage() {
     updateTask(taskId, (task) => ({
       ...task,
       status: "applied",
-      logs: [...task.logs, "已写入 Shopify。"],
+      logs: [...task.logs, t("productImproveStage1.logApplied")],
       actualTime: task.actualTime ?? "1 min",
       actualCredits: task.actualCredits ?? estimateCredits,
     }));
@@ -402,32 +427,37 @@ export function ProductImprovePage() {
     const toneStyle: CSSProperties =
       status === "running"
         ? {
-            background: pageColorTokens.brandBlueLight,
-            color: pageColorTokens.brandBlueDark,
-            borderColor: "rgba(64, 112, 244, 0.2)",
+            background: pageColorTokens.surfaceMuted,
+            color: pageColorTokens.textBody,
+            border: `1px solid ${pageColorTokens.borderSubtle}`,
+            boxShadow: "none",
           }
         : status === "review_required"
           ? {
-              background: "rgba(245, 158, 11, 0.12)",
-              color: "#b45309",
-              borderColor: "rgba(245, 158, 11, 0.2)",
+              background: pageColorTokens.brandBlueLight,
+              color: pageColorTokens.brandBlueDark,
+              border: `1px solid ${pageColorTokens.brandBlueGlow}`,
+              boxShadow: "none",
             }
           : status === "applied"
             ? {
                 background: pageColorTokens.brandGreenLight,
                 color: pageColorTokens.brandGreenDeep,
-                borderColor: "rgba(0, 166, 124, 0.2)",
+                border: `1px solid ${pageColorTokens.brandGreenGlow}`,
+                boxShadow: "none",
               }
             : status === "scored"
               ? {
-                  background: "rgba(124, 58, 237, 0.1)",
-                  color: "#6d28d9",
-                  borderColor: "rgba(124, 58, 237, 0.2)",
+                  background: pageColorTokens.surfaceSubtle,
+                  color: pageColorTokens.textBody,
+                  border: `1px solid ${pageColorTokens.borderSubtle}`,
+                  boxShadow: "none",
                 }
               : {
                   background: pageColorTokens.criticalBg,
                   color: pageColorTokens.criticalText,
-                  borderColor: "rgba(220, 38, 38, 0.2)",
+                  border: `1px solid rgba(220, 38, 38, 0.2)`,
+                  boxShadow: "none",
                 };
 
     return (
@@ -458,131 +488,219 @@ export function ProductImprovePage() {
           badge={billingBadge}
         />
 
-        <div style={tabRailStyle}>
-          <button
-            type="button"
-            style={tabButtonStyle(activeTab === "config")}
-            onClick={() => setActiveTab("config")}
+        <PagePanel padding="small">
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "0.75rem",
+              flexWrap: "wrap",
+            }}
           >
-            {t("productImproveStage1.tabsConfig")}
-          </button>
-          <button
-            type="button"
-            style={tabButtonStyle(activeTab === "tasks")}
-            onClick={() => setActiveTab("tasks")}
-          >
-            {t("productImproveStage1.tabsTasks")}
-          </button>
-        </div>
+            <div style={tabRailStyle}>
+              <button
+                type="button"
+                style={tabButtonStyle(activeTab === "config")}
+                onClick={() => setActiveTab("config")}
+              >
+                {t("productImproveStage1.tabsConfig")}
+              </button>
+              <button
+                type="button"
+                style={tabButtonStyle(activeTab === "tasks")}
+                onClick={() => setActiveTab("tasks")}
+              >
+                {t("productImproveStage1.tabsTasks")}
+              </button>
+            </div>
+            <div style={{ ...pageMetaTextStyle, flex: "1 1 18rem", minWidth: 0 }}>
+              {activeTab === "config"
+                ? t("productImproveStage1.configHint")
+                : t("productImproveStage1.taskListSubtitle")}
+            </div>
+          </div>
+        </PagePanel>
+
+        <PageMetricCard
+          accent={t("productImproveStage1.taskListTitle")}
+          metrics={[
+            {
+              label: t("productImproveStage1.statusRunning"),
+              value: String(taskSummary.running),
+            },
+            {
+              label: t("productImproveStage1.statusReview"),
+              value: String(taskSummary.review_required),
+            },
+            {
+              label: t("productImproveStage1.statusApplied"),
+              value: String(taskSummary.applied),
+            },
+            {
+              label: t("productImproveStage1.statusScored"),
+              value: String(taskSummary.scored),
+            },
+            {
+              label: t("productImproveStage1.statusFailed"),
+              value: String(taskSummary.failed),
+            },
+          ]}
+          footer={tasksCountLabel}
+        />
 
         {activeTab === "config" ? (
-          <>
-            <PageSurface
-              title={t("generate.formCardTitle")}
-              subtitle={t("productImproveStage1.configHint")}
-            >
-              <s-stack direction="block" gap="base">
-                <ProductSelector
-                  locationSearch={search}
-                  selected={selectedProduct}
-                  onSelectedChange={setSelectedProduct}
-                />
-                <details
-                  style={{ marginTop: "0.25rem" }}
-                  open={showManualProductId}
-                  onToggle={(e) => setShowManualProductId(e.currentTarget.open)}
-                >
-                  <summary style={pageLinkHintStyle}>
-                    {t("generate.advancedManualProductId")}
-                  </summary>
-                  <div style={{ marginTop: "0.65rem" }}>
-                    <s-text-field
-                      label={t("generate.productIdLabel")}
-                      value={productId}
-                      onChange={(e) => setProductId(e.currentTarget.value)}
-                      autocomplete="off"
-                    />
-                  </div>
-                </details>
-
-                <div>
-                  <label htmlFor="generate-description-lang" style={pageFieldLabelStyle}>
-                    {t("generate.targetLanguage")}
-                  </label>
-                  <select
-                    id="generate-description-lang"
-                    value={targetLanguage}
-                    onChange={(e) => setTargetLanguage(e.target.value)}
-                    disabled={localesLoading || isSubmitting || isSaving || saveConfirmOpen}
-                    style={pageSelectStyle(
-                      localesLoading || isSubmitting || isSaving || saveConfirmOpen,
-                    )}
+          <div style={twoColumnLayoutStyle}>
+            <div style={twoColumnMainStyle}>
+              <PageSurface
+                title={t("generate.formCardTitle")}
+                subtitle={t("generate.formCardSubtitle")}
+              >
+                <s-stack direction="block" gap="base">
+                  <ProductSelector
+                    locationSearch={search}
+                    selected={selectedProduct}
+                    onSelectedChange={setSelectedProduct}
+                  />
+                  <details
+                    style={{ marginTop: "0.25rem" }}
+                    open={showManualProductId}
+                    onToggle={(e) => setShowManualProductId(e.currentTarget.open)}
                   >
-                    {localesLoading && localeOptions.length === 0 ? (
-                      <option value="">{t("common.loadingLanguage")}</option>
-                    ) : null}
-                    {localeOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                  {localesIsFallback ? (
-                    <div style={pageHintTextStyle}>
-                      {t("generate.fallbackLocalesHint")}{" "}
-                      <code style={{ fontSize: "0.7rem" }}>read_locales</code>
+                    <summary style={pageLinkHintStyle}>
+                      {t("generate.advancedManualProductId")}
+                    </summary>
+                    <div style={{ marginTop: "0.65rem" }}>
+                      <s-text-field
+                        label={t("generate.productIdLabel")}
+                        value={productId}
+                        onChange={(e) => setProductId(e.currentTarget.value)}
+                        autocomplete="off"
+                      />
                     </div>
-                  ) : null}
+                  </details>
+
+                  <div>
+                    <label htmlFor="generate-description-lang" style={pageFieldLabelStyle}>
+                      {t("generate.targetLanguage")}
+                    </label>
+                    <select
+                      id="generate-description-lang"
+                      value={targetLanguage}
+                      onChange={(e) => setTargetLanguage(e.target.value)}
+                      disabled={localesLoading || isSubmitting || isSaving || saveConfirmOpen}
+                      style={pageSelectStyle(
+                        localesLoading || isSubmitting || isSaving || saveConfirmOpen,
+                      )}
+                    >
+                      {localesLoading && localeOptions.length === 0 ? (
+                        <option value="">{t("common.loadingLanguage")}</option>
+                      ) : null}
+                      {localeOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    {localesIsFallback ? (
+                      <div style={pageHintTextStyle}>
+                        {t("generate.fallbackLocalesHint")}{" "}
+                        <code style={{ fontSize: "0.7rem" }}>read_locales</code>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {errorText ? <div style={formErrorBoxStyle}>{errorText}</div> : null}
+                </s-stack>
+              </PageSurface>
+            </div>
+
+            <div style={stickyAsideColumnStyle}>
+              <PageSurface
+                title={t("productImproveStage1.estimateTitle")}
+                subtitle={t("productImproveStage1.estimateDesc")}
+              >
+                <div style={taskMetaGridStyle}>
+                  <div style={taskMetaItemStyle}>
+                    <div style={pageFieldLabelStyle}>{t("productImproveStage1.taskProduct")}</div>
+                    <div style={{ color: pageColorTokens.textPrimary }}>{estimateScope}</div>
+                  </div>
+                  <div style={taskMetaItemStyle}>
+                    <div style={pageFieldLabelStyle}>
+                      {t("productImproveStage1.taskLanguage")}
+                    </div>
+                    <div style={{ color: pageColorTokens.textPrimary }}>{targetLanguageLabel}</div>
+                  </div>
+                  <div style={taskMetaItemStyle}>
+                    <div style={pageFieldLabelStyle}>{t("productImproveStage1.estimateTime")}</div>
+                    <div style={{ color: pageColorTokens.textPrimary }}>{estimateTime}</div>
+                  </div>
+                  <div style={taskMetaItemStyle}>
+                    <div style={pageFieldLabelStyle}>
+                      {t("productImproveStage1.estimateCredits")}
+                    </div>
+                    <div style={{ color: pageColorTokens.textPrimary }}>{estimateCredits} Token</div>
+                  </div>
                 </div>
 
-                {errorText ? <div style={formErrorBoxStyle}>{errorText}</div> : null}
+                {billing.billingRequired && !billing.hasAccess ? (
+                  <div style={{ ...pageMetaTextStyle, marginTop: "1rem" }}>
+                    {t("billing.lowBalanceWarning")}{" "}
+                    <s-link href={`/app/billing${search}`}>{t("billing.openBillingPage")}</s-link>
+                  </div>
+                ) : null}
 
-                <s-stack direction="inline" gap="small">
-                  <s-button
-                    type="button"
-                    variant="primary"
-                    onClick={() => {
-                      handleOpenEstimate();
-                    }}
-                    {...(isSubmitting || isSaving || localesLoading || saveConfirmOpen
-                      ? { disabled: true }
-                      : {})}
-                  >
-                    {isSubmitting
-                      ? t("generate.generating")
-                      : localesLoading
-                        ? t("common.loadingLanguage")
-                        : t("generate.generateAction")}
-                  </s-button>
-                  <s-button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      void handleScore();
-                    }}
-                    {...(isScoring || isSubmitting || isSaving ? { disabled: true } : {})}
-                  >
-                    {isScoring ? t("qualityScore.scoring") : t("qualityScore.scoreAction")}
-                  </s-button>
-                  <s-button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      resetResult();
-                      resetScore();
-                      setSelectedProduct(null);
-                      setProductId("");
-                      setActiveReviewTaskId(null);
-                    }}
-                    {...(isSubmitting || isSaving || isScoring ? { disabled: true } : {})}
-                  >
-                    {t("common.clearResult")}
-                  </s-button>
-                </s-stack>
-              </s-stack>
-            </PageSurface>
-            <p style={pageTrustFootnoteStyle}>{t("productImproveStage1.stage1BatchHint")}</p>
-          </>
+                <div style={{ marginTop: "1rem" }}>
+                  <s-stack direction="block" gap="small">
+                    <s-button
+                      type="button"
+                      variant="primary"
+                      onClick={() => {
+                        handleOpenEstimate();
+                      }}
+                      {...(isSubmitting || isSaving || localesLoading || saveConfirmOpen
+                        ? { disabled: true }
+                        : {})}
+                    >
+                      {isSubmitting
+                        ? t("generate.generating")
+                        : localesLoading
+                          ? t("common.loadingLanguage")
+                          : t("generate.generateAction")}
+                    </s-button>
+                    <s-stack direction="inline" gap="small">
+                      <s-button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => {
+                          void handleScore();
+                        }}
+                        {...(isScoring || isSubmitting || isSaving
+                          ? { disabled: true }
+                          : {})}
+                      >
+                        {isScoring ? t("qualityScore.scoring") : t("qualityScore.scoreAction")}
+                      </s-button>
+                      <s-button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => {
+                          resetResult();
+                          resetScore();
+                          setSelectedProduct(null);
+                          setProductId("");
+                          setActiveReviewTaskId(null);
+                        }}
+                        {...(isSubmitting || isSaving || isScoring ? { disabled: true } : {})}
+                      >
+                        {t("common.clearResult")}
+                      </s-button>
+                    </s-stack>
+                  </s-stack>
+                </div>
+              </PageSurface>
+            </div>
+          </div>
         ) : (
           <PageSurface
             title={t("productImproveStage1.taskListTitle")}
@@ -620,7 +738,7 @@ export function ProductImprovePage() {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                 {tasks.map((task) => (
-                  <div key={task.id} style={taskCardStyle}>
+                  <div key={task.id} style={taskCardStyle(task.status)}>
                     <div
                       style={{
                         display: "flex",
@@ -642,13 +760,7 @@ export function ProductImprovePage() {
                             ? t("productImproveStage1.taskGenerate")
                             : t("productImproveStage1.taskScore")}
                         </div>
-                        <div
-                          style={{
-                            marginTop: "0.3rem",
-                            color: pageColorTokens.textSecondary,
-                            fontSize: "0.875rem",
-                          }}
-                        >
+                        <div style={{ ...pageHintTextStyle, marginTop: "0.3rem" }}>
                           {task.productLabel}
                         </div>
                       </div>
@@ -702,7 +814,7 @@ export function ProductImprovePage() {
                           />
                         </div>
                         <div style={{ marginTop: "0.5rem", color: pageColorTokens.textSecondary, fontSize: "0.8125rem" }}>
-                          {task.progress}% complete
+                          {t("productImproveStage1.progressPercent", { progress: task.progress })}
                         </div>
                       </div>
                     ) : null}
@@ -765,6 +877,7 @@ export function ProductImprovePage() {
                           borderRadius: "12px",
                           background: pageColorTokens.brandGreenLight,
                           color: pageColorTokens.brandGreenDeep,
+                          border: `1px solid ${pageColorTokens.brandGreenGlow}`,
                           display: "flex",
                           justifyContent: "space-between",
                           gap: "1rem",
@@ -772,7 +885,7 @@ export function ProductImprovePage() {
                           flexWrap: "wrap",
                         }}
                       >
-                        <div>结果已写入 Shopify，可继续发起下一轮优化或其他加工。</div>
+                        <div>{t("productImproveStage1.appliedNotice")}</div>
                         <s-button
                           type="button"
                           variant="secondary"
@@ -805,7 +918,11 @@ export function ProductImprovePage() {
           </PageSurface>
         )}
 
-        <p style={pageTrustFootnoteStyle}>{t("generate.pageFootnote")}</p>
+        <p style={pageTrustFootnoteStyle}>
+          {activeTab === "config"
+            ? t("productImproveStage1.stage1BatchHint")
+            : t("generate.pageFootnote")}
+        </p>
       </div>
 
       <dialog
