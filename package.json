@@ -4,6 +4,7 @@
   "scripts": {
     "build": "react-router build",
     "dev": "shopify app dev",
+    "dev:yw": "shopify app dev -c shopify.app.yw.toml",
     "config:link": "shopify app config link",
     "generate": "shopify app generate",
     "deploy": "shopify app deploy",
@@ -19,17 +20,27 @@
     "graphql-codegen": "graphql-codegen",
     "vite": "vite",
     "typecheck": "react-router typegen && tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prisma:studio": "prisma studio",
     "turso:sync": "npm run turso:sync:test",
     "turso:sync:test": "node scripts/turso-sync.cjs test",
-    "turso:sync:prod": "node scripts/turso-sync.cjs prod"
+    "turso:sync:prod": "node scripts/turso-sync.cjs prod",
+    "turso:migrate": "npm run turso:migrate:test",
+    "turso:migrate:test": "node scripts/turso-migrate.cjs test",
+    "turso:migrate:prod": "node scripts/turso-migrate.cjs prod",
+    "render:digest": "node scripts/render-daily-log-digest.cjs",
+    "test:render-digest": "node --test scripts/render-log-classify.test.cjs"
   },
   "type": "module",
   "engines": {
     "node": ">=20.19 <22 || >=22.12"
   },
   "dependencies": {
-    "@langchain/core": "^1.1.40",
+    "@azure/cosmos": "^4.9.3",
+    "@azure/storage-blob": "^12.31.0",
+    "@langchain/core": "^1.1.44",
+    "@langchain/langgraph": "^1.3.0",
     "@langchain/openai": "^1.4.4",
     "@libsql/client": "^0.17.3",
     "@prisma/adapter-libsql": "^6.19.3",
@@ -41,19 +52,25 @@
     "@shopify/app-bridge-react": "^4.2.4",
     "@shopify/shopify-app-react-router": "^1.1.0",
     "@shopify/shopify-app-session-storage-prisma": "^9.0.0",
+    "@volcengine/openapi": "^1.36.2",
+    "i18next": "^26.1.0",
+    "ioredis": "^5.10.1",
     "isbot": "^5.1.31",
-    "langchain": "^1.3.3",
+    "langsmith": "^0.5.20",
     "prisma": "^6.16.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-i18next": "^17.0.7",
     "react-markdown": "^10.1.0",
     "react-router": "^7.12.0",
     "remark-gfm": "^4.0.1",
+    "tencentcloud-sdk-nodejs-ses": "^4.1.222",
     "vite-tsconfig-paths": "^5.1.4",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@shopify/api-codegen-preset": "^2.0.0",
+    "@shopify/cli": "^3.94.3",
     "@shopify/polaris-types": "1.0.1",
     "@types/eslint": "^9.6.1",
     "@types/node": "^22.18.8",
@@ -61,6 +78,7 @@
     "@types/react-dom": "^18.3.7",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
+    "@vitest/coverage-v8": "^4.1.5",
     "eslint": "^8.57.1",
     "eslint-import-resolver-typescript": "^3.10.1",
     "eslint-plugin-import": "^2.32.0",
@@ -70,7 +88,8 @@
     "graphql-config": "^5.1.1",
     "prettier": "^3.6.2",
     "typescript": "^5.9.3",
-    "vite": "^6.3.6"
+    "vite": "^6.3.6",
+    "vitest": "^4.1.5"
   },
   "workspaces": [
     "extensions/*"

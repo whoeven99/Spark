@@ -1,0 +1,23 @@
+---
+description: 计费与订阅任务前置阅读规则
+alwaysApply: true
+---
+
+# 计费任务前置规则
+
+当任务涉及「订阅 / 计费 / token 配额 / 购包」或修改以下路径时：
+- `app/routes/app.billing.tsx`
+- `app/routes/page/BillingPage.tsx`
+- `app/routes/component/billing/**`
+- `app/routes/webhooks.app.subscriptions_update.tsx`
+- `app/routes/webhooks.app.purchases_one_time_update.tsx`
+- `app/server/billing/**`
+- `app/server/tokenUsage/**`（与 `Account.usedTokens` 累加相关）
+- `prisma/billing-plan-catalog-seed.sql`、计费相关 Prisma 模型与迁移
+
+必须先读取 `app/server/billing/agent.md`，再进行分析、实现或测试。
+
+## 执行要求
+1. 先读 `agent.md`，再动手；架构总览可同时参考 `docs/PROJECT_CONTEXT.md` 第 5 节。
+2. 若需求与 `agent.md` 约定冲突，以用户明确指令为准，并在改动说明中指出偏离点。
+3. 保持最小改动，不做无关重构；未明确要求时不改 Shopify 鉴权与部署流水线。

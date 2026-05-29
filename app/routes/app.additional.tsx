@@ -1,6 +1,17 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
+import { useTranslation } from "react-i18next";
 import { authenticate } from "../shopify.server";
+import {
+  PageMetricCard,
+  PageSurface,
+  pageAccentBadgeStyle,
+  pageContentStyle,
+  pageIntroBannerStyle,
+  pageSectionHeaderRowStyle,
+  pageSectionMajorTitleStyle,
+  pageStatusCardStyle,
+} from "./page/pageUiStyles";
 
 const ORDER_METRICS_QUERY = `#graphql
   query OrderMetrics($first: Int!, $after: String, $query: String!) {
@@ -81,7 +92,12 @@ type DashboardData = {
     outOfStockRate: string;
   };
   diagnoses: string[];
-  statuses: Array<{ label: string; status: "健康" | "关注" | "风险"; detail: string }>;
+  statuses: Array<{
+    label: string;
+    status: "健康" | "关注" | "风险";
+    detail: string;
+    detailType?: "salesTrend" | "conversion" | "inventory" | "refund";
+  }>;
   clickInsight: string;
 };
 
@@ -168,7 +184,7 @@ async function queryOrderMetrics(
     salesAmount: Number(salesAmount.toFixed(2)),
     refundAmount: Number(refundAmount.toFixed(2)),
     refundedOrderCount: refundedOrderIds.size,
-    currencyCode: currencyCode || "未知币种",
+    currencyCode: currencyCode || "N/A",
   };
 }
 
@@ -242,6 +258,7 @@ async function queryInventoryHealth(
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const locale = request.headers.get("accept-language")?.startsWith("en") ? "en-US" : "zh-CN";
   const { admin, session } = await authenticate.admin(request);
   const now = new Date();
   const currentRangeQuery = `created_at:>=${isoSince(7)}`;
@@ -286,31 +303,31 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     const diagnoses: string[] = [];
     if (salesStatus === "健康") {
-      diagnoses.push("销售趋势健康：近7天销售额较前7天保持增长。");
+      diagnoses.push("additional.diagSalesHealthy");
     } else if (salesStatus === "风险") {
-      diagnoses.push("销售趋势偏弱：近7天销售额较前7天下滑，建议检查流量与活动。");
+      diagnoses.push("additional.diagSalesRisk");
     } else {
-      diagnoses.push("销售趋势平稳：建议继续观察渠道投放与活动转化。");
+      diagnoses.push("additional.diagSalesWatch");
     }
     if (inventoryStatus === "风险") {
-      diagnoses.push("库存风险较高：缺货占比偏高，需优先补货高动销 SKU。");
+      diagnoses.push("additional.diagInventoryRisk");
     } else if (inventoryStatus === "关注") {
-      diagnoses.push("库存需关注：低库存 SKU 占比偏高，建议做补货排期。");
+      diagnoses.push("additional.diagInventoryWatch");
     } else {
-      diagnoses.push("库存整体健康：当前缺货风险可控。");
+      diagnoses.push("additional.diagInventoryHealthy");
     }
     if (conversionStatus === "风险") {
-      diagnoses.push("转化偏低：建议优先排查商品页、运费策略和结账流程。");
+      diagnoses.push("additional.diagConversionRisk");
     }
     if (refundStatus === "风险") {
-      diagnoses.push("退款率偏高：建议排查商品描述、质量与履约时效。");
+      diagnoses.push("additional.diagRefundRisk");
     }
 
     const dashboard: DashboardData = {
       summary: {
         shop: session.shop,
-        updatedAt: now.toLocaleString("zh-CN"),
-        periodLabel: "最近7天",
+        updatedAt: now.toLocaleString(locale),
+        periodLabel: "additional.periodLast7Days",
         salesAmount: `${currentMetrics.salesAmount.toFixed(2)} ${currentMetrics.currencyCode}`,
         orderCount: currentMetrics.orderCount,
         aov: `${aov.toFixed(2)} ${currentMetrics.currencyCode}`,
@@ -321,59 +338,61 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       },
       statuses: [
         {
-          label: "销售趋势",
+          label: "additional.statusSalesTrend",
           status: salesStatus,
-          detail: `近7天较前7天：${formatPercent(salesGrowth)}`,
+          detail: formatPercent(salesGrowth),
+          detailType: "salesTrend",
         },
         {
-          label: "转化健康度",
+          label: "additional.statusConversion",
           status: conversionStatus,
-          detail: `订单+弃购口径转化率：${formatPercent(conversionRate)}`,
+          detail: formatPercent(conversionRate),
+          detailType: "conversion",
         },
         {
-          label: "库存健康度",
+          label: "additional.statusInventory",
           status: inventoryStatus,
-          detail: `低库存 ${formatPercent(lowStockRate)}，缺货 ${formatPercent(outOfStockRate)}`,
+          detail: `${formatPercent(lowStockRate)}|${formatPercent(outOfStockRate)}`,
+          detailType: "inventory",
         },
         {
-          label: "退款健康度",
+          label: "additional.statusRefund",
           status: refundStatus,
-          detail: `退款订单占比：${formatPercent(refundRate)}`,
+          detail: formatPercent(refundRate),
+          detailType: "refund",
         },
       ],
       diagnoses,
-      clickInsight:
-        "点击量健康度：当前未接入广告点击数据源（Meta/Google/TikTok）。建议先完成广告平台授权后再诊断点击率与ROAS。",
+      clickInsight: "additional.clickInsight",
     };
 
     return Response.json(dashboard);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "未知错误";
+    const message = error instanceof Error ? error.message : "Unknown error";
     const fallback: DashboardData = {
       summary: {
         shop: session.shop,
-        updatedAt: now.toLocaleString("zh-CN"),
-        periodLabel: "最近7天",
-        salesAmount: "N/A",
+        updatedAt: now.toLocaleString(locale),
+        periodLabel: "additional.periodLast7Days",
+        salesAmount: "additional.fallbackNoData",
         orderCount: 0,
-        aov: "N/A",
-        conversionRate: "N/A",
-        refundRate: "N/A",
-        lowStockRate: "N/A",
-        outOfStockRate: "N/A",
+        aov: "additional.fallbackNoData",
+        conversionRate: "additional.fallbackNoData",
+        refundRate: "additional.fallbackNoData",
+        lowStockRate: "additional.fallbackNoData",
+        outOfStockRate: "additional.fallbackNoData",
       },
       statuses: [
-        { label: "销售趋势", status: "关注", detail: "暂无法读取订单数据" },
-        { label: "转化健康度", status: "关注", detail: "暂无法读取弃购或订单数据" },
-        { label: "库存健康度", status: "关注", detail: "暂无法读取库存数据" },
-        { label: "退款健康度", status: "关注", detail: "暂无法读取退款数据" },
+        { label: "additional.statusSalesTrend", status: "关注", detail: "additional.fallbackSalesTrend" },
+        { label: "additional.statusConversion", status: "关注", detail: "additional.fallbackConversion" },
+        { label: "additional.statusInventory", status: "关注", detail: "additional.fallbackInventory" },
+        { label: "additional.statusRefund", status: "关注", detail: "additional.fallbackRefund" },
       ],
       diagnoses: [
-        `诊断数据读取失败：${message}`,
-        "请检查应用 scopes（read_orders/read_products）和当前员工账号权限后重试。",
+        `additional.fallbackDiagFailure::${message}`,
+        "additional.fallbackDiagScopes",
       ],
-      clickInsight:
-        "点击量健康度：当前未接入广告点击数据源（Meta/Google/TikTok）。建议先完成广告平台授权后再诊断点击率与ROAS。",
+      clickInsight: "additional.clickInsight",
     };
     return Response.json(fallback);
   }
@@ -386,62 +405,118 @@ function statusTone(status: "健康" | "关注" | "风险"): "success" | "warnin
 }
 
 export default function AdditionalPage() {
+  const { t } = useTranslation();
   const data = useLoaderData<typeof loader>();
+  const resolveStatusText = (status: "健康" | "关注" | "风险") => {
+    if (status === "健康") return t("additional.statusHealthy");
+    if (status === "关注") return t("additional.statusWatch");
+    return t("additional.statusRisk");
+  };
+  const resolveDetailText = (item: { detail: string; detailType?: string }) => {
+    if (item.detailType === "salesTrend") {
+      return t("additional.salesTrendDetail", { value: item.detail });
+    }
+    if (item.detailType === "conversion") {
+      return t("additional.conversionDetail", { value: item.detail });
+    }
+    if (item.detailType === "inventory") {
+      const [low, out] = item.detail.split("|");
+      return t("additional.inventoryDetail", { low, out });
+    }
+    if (item.detailType === "refund") {
+      return t("additional.refundDetail", { value: item.detail });
+    }
+    return t(item.detail);
+  };
+  const resolveDiagnosis = (line: string) => {
+    if (line.startsWith("additional.fallbackDiagFailure::")) {
+      return t("additional.fallbackDiagFailure", {
+        message: line.replace("additional.fallbackDiagFailure::", ""),
+      });
+    }
+    return t(line);
+  };
+  const resolveSummary = (value: string) =>
+    value.startsWith("additional.") ? t(value) : value;
 
   return (
-    <s-page heading="店铺运维诊断报告">
-      <s-section heading="核心看板（最近7天）">
-        <s-stack direction="inline" gap="base" alignItems="center">
-          <s-badge tone="info">店铺：{data.summary.shop}</s-badge>
-          <s-badge tone="success">更新时间：{data.summary.updatedAt}</s-badge>
-        </s-stack>
+    <s-page heading={t("additional.pageTitle")}>
+      <div style={pageIntroBannerStyle("diagnosis", { marginBottom: "1.5rem" })}>
+        {t("additional.pageIntro")}
+      </div>
 
-        <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
-          <s-stack direction="block" gap="small">
-            <s-paragraph>销售额：{data.summary.salesAmount}</s-paragraph>
-            <s-paragraph>订单数：{data.summary.orderCount}</s-paragraph>
-            <s-paragraph>客单价（AOV）：{data.summary.aov}</s-paragraph>
-            <s-paragraph>转化率（订单+弃购口径）：{data.summary.conversionRate}</s-paragraph>
-            <s-paragraph>退款率：{data.summary.refundRate}</s-paragraph>
-            <s-paragraph>低库存率：{data.summary.lowStockRate}</s-paragraph>
-            <s-paragraph>缺货率：{data.summary.outOfStockRate}</s-paragraph>
-          </s-stack>
-        </s-box>
-      </s-section>
+      <div style={pageContentStyle}>
+        <section>
+          <div style={pageSectionHeaderRowStyle}>
+            <h2 style={pageSectionMajorTitleStyle}>{t("additional.coreBoard")}</h2>
+            <span style={pageAccentBadgeStyle}>
+              {t("additional.shopLabel", { value: data.summary.shop })}
+            </span>
+          </div>
+          <PageMetricCard
+            accent={t("additional.periodLast7Days")}
+            metrics={[
+              {
+                label: t("additional.metricSalesAmount"),
+                value: resolveSummary(data.summary.salesAmount),
+              },
+              {
+                label: t("additional.metricOrderCount"),
+                value: String(data.summary.orderCount),
+              },
+              {
+                label: t("additional.metricAov"),
+                value: resolveSummary(data.summary.aov),
+              },
+              {
+                label: t("additional.metricConversionRate"),
+                value: resolveSummary(data.summary.conversionRate),
+              },
+              {
+                label: t("additional.metricRefundRate"),
+                value: resolveSummary(data.summary.refundRate),
+              },
+              {
+                label: t("additional.metricLowStockRate"),
+                value: resolveSummary(data.summary.lowStockRate),
+              },
+              {
+                label: t("additional.metricOutOfStockRate"),
+                value: resolveSummary(data.summary.outOfStockRate),
+              },
+            ]}
+            footer={t("additional.updatedAtLabel", { value: data.summary.updatedAt })}
+          />
+        </section>
 
-      <s-section heading="健康状态诊断">
-        <s-stack direction="block" gap="small">
-          {data.statuses.map((item) => (
-            <s-box
-              key={item.label}
-              padding="base"
-              borderWidth="base"
-              borderRadius="base"
-              background="subdued"
-            >
-              <s-stack direction="inline" gap="base" alignItems="center">
-                <s-badge tone={statusTone(item.status)}>{item.label}：{item.status}</s-badge>
-                <s-paragraph>{item.detail}</s-paragraph>
-              </s-stack>
-            </s-box>
-          ))}
-        </s-stack>
-      </s-section>
+        <PageSurface title={t("additional.healthDiagnosis")}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            {data.statuses.map((item) => (
+              <div key={item.label} style={pageStatusCardStyle}>
+                <s-stack direction="inline" gap="base" alignItems="center">
+                  <s-badge tone={statusTone(item.status)}>
+                    {t(item.label)}：{resolveStatusText(item.status)}
+                  </s-badge>
+                  <s-paragraph>{resolveDetailText(item)}</s-paragraph>
+                </s-stack>
+              </div>
+            ))}
+          </div>
+        </PageSurface>
 
-      <s-section heading="系统诊断结论">
-        <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+        <PageSurface title={t("additional.systemConclusion")}>
           <s-unordered-list>
             {data.diagnoses.map((line) => (
-              <s-list-item key={line}>{line}</s-list-item>
+              <s-list-item key={line}>{resolveDiagnosis(line)}</s-list-item>
             ))}
           </s-unordered-list>
-        </s-box>
-      </s-section>
+        </PageSurface>
+      </div>
 
-      <s-section slot="aside" heading="点击与流量建议">
-        <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
-          <s-paragraph>{data.clickInsight}</s-paragraph>
-        </s-box>
+      <s-section slot="aside" heading={t("additional.trafficAdvice")}>
+        <PageSurface>
+          <s-paragraph>{t(data.clickInsight)}</s-paragraph>
+        </PageSurface>
       </s-section>
     </s-page>
   );

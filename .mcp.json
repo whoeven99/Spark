@@ -4,6 +4,13 @@
       "type": "stdio",
       "command": "npx",
       "args": ["-y", "@shopify/dev-mcp@latest"]
+    },
+    "render": {
+      "type": "sse",
+      "url": "https://mcp.render.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${RENDER_API_KEY}"
+      }
     }
   }
 }

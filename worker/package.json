@@ -1,0 +1,24 @@
+{
+  "name": "spark-translation-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Background worker for Spark translation v4 pipeline",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@azure/cosmos": "^4.9.3",
+    "@azure/storage-blob": "^12.31.0",
+    "ioredis": "^5.10.1",
+    "openai": "^4.100.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.8",
+    "tsx": "^4.19.4",
+    "typescript": "^5.9.3"
+  }
+}

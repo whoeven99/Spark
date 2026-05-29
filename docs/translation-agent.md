@@ -1,0 +1,392 @@
+# 翻译功能完整指南
+
+**改动翻译相关代码前必读本文档。** 覆盖范围：页面、API、Worker 四阶段流水线、存储结构、状态机、恢复机制。
+
+---
+
+## 整体架构
+
+```
+[用户] 在聊天页 或 翻译管理页 发起任务
+          ↓
+[App]  POST /api/translate/v4/tasks
+          写 Cosmos (status=INIT_QUEUED) + lpush Redis hint
+          ↓
+[Worker] scheduler.ts 每 30s 轮询，每 5min 重置僵死任务
+    ├─ initWorker     INIT_QUEUED     → INITIALIZING   → TRANSLATE_QUEUED
+    ├─ translateWorker TRANSLATE_QUEUED → TRANSLATING   → WRITEBACK_QUEUED
+    ├─ writebackWorker WRITEBACK_QUEUED → WRITING_BACK  → VERIFY_QUEUED / COMPLETED
+    └─ verifyWorker   VERIFY_QUEUED   → VERIFYING      → COMPLETED
+```
+
+---
+
+## 文件地图
+
+### App 侧
+
+| 文件 | 职责 |
+|---|---|
+| `app/routes/app.translation-v4.tsx` | 翻译页面路由，loader 加载任务列表 |
+| `app/routes/page/TranslationV4Page.tsx` | 翻译管理页 UI（任务列表、进度轮询、操作） |
+| `app/routes/component/translation/TranslationTaskChatCard.tsx` | 聊天内嵌创建任务的表单卡片 |
+| `app/lib/translationTaskFormPayload.ts` | 聊天卡片 payload 类型 + coerce 工具 |
+| `app/routes/api.translate.v4.tasks.ts` | GET 列表 / POST 创建任务 |
+| `app/routes/api.translate.v4.task-progress.ts` | GET 任务进度（Cosmos + Redis 合并） |
+| `app/routes/api.translate.v4.task-action.ts` | POST 任务控制（cancel / pause / resume） |
+| `app/server/translation/v4/types.ts` | 全部类型定义（状态枚举、Job 结构、Metrics） |
+| `app/server/translation/v4/cosmosV4Store.server.ts` | App 侧 Cosmos 操作（读/写/claim） |
+| `app/server/translation/translateBlobStore.server.ts` | App 侧 Azure Blob 工具函数 |
+| `app/server/translation/translateRedis.server.ts` | App 侧 Redis 单例 |
+
+### Worker 侧（`worker/src/`）
+
+| 文件 | 职责 |
+|---|---|
+| `index.ts` | 入口，注册异常处理，调 startScheduler |
+| `scheduler.ts` | 30s 轮询驱动四个 Worker；5min 重置僵死任务 |
+| `services/cosmosV4.ts` | Worker 侧 Cosmos 操作（与 App 侧逻辑一致，独立副本） |
+| `services/blobV4.ts` | Worker 侧 Blob 读写（JSON 序列化） |
+| `services/redisV4.ts` | Worker 侧 Redis，含 hint 队列和 progress hash |
+| `services/shopifyFetch.ts` | Shopify GraphQL 拉取可翻译资源 + 写回翻译 |
+| `services/llmTranslate.ts` | 翻译引擎：LLM（OpenAI）或 Google Translate |
+| `workers/initWorker.ts` | 阶段 1：从 Shopify 拉取原文，写 Blob |
+| `workers/translateWorker.ts` | 阶段 2：调 LLM 翻译，写 Blob |
+| `workers/writebackWorker.ts` | 阶段 3：把译文写回 Shopify，支持断点续传 |
+| `workers/verifyWorker.ts` | 阶段 4：重试 writeback 失败的资源 |
+
+---
+
+## 状态机
+
+```
+CREATED
+  → INIT_QUEUED        (createV4Job 写入时的初始状态)
+    → INITIALIZING     (initWorker claim)
+      → INIT_DONE      (init 完成，仅中间态，立即流转)
+        → TRANSLATE_QUEUED
+          → TRANSLATING
+            → TRANSLATE_DONE  (中间态，立即流转)
+              → WRITEBACK_QUEUED
+                → WRITING_BACK
+                  → VERIFY_QUEUED   (有 writeback 失败时)
+                    → VERIFYING
+                      → COMPLETED
+                  → COMPLETED       (无失败时直接完成)
+
+任意阶段均可流转到:
+  FAILED     (errorStage="INIT"|"TRANSLATE"|"WRITEBACK"|"VERIFY")
+  PAUSED     (用户暂停, errorStage 记录当前阶段)
+  CANCELLED  (用户取消)
+```
+
+**活跃状态**（`ACTIVE_V4_STATUSES`）：所有 `_QUEUED`、processing、`_DONE` 状态，页面会对这些状态开启 3s 进度轮询。
+
+**终态**（`TERMINAL_V4_STATUSES`）：`COMPLETED`、`FAILED`、`CANCELLED`。
+
+---
+
+## 四阶段 Worker 详解
+
+### 阶段 1 — Init Worker
+
+**状态迁移**：`INIT_QUEUED → INITIALIZING → TRANSLATE_QUEUED`
+
+**执行流程**：
+1. claim job（乐观锁，etag 防并发）
+2. 设 `blobPrefix = "tasks/v4/{shopName}/{jobId}"`
+3. 对每个 module 拉取可翻译资源（`worker/src/services/shopifyFetch.ts`），按 `chunkSize=50` 写 Blob：
+   - **PRODUCT / ARTICLE / PAGE / COLLECTION**：先按硬编码 Shopify Admin `query` 分页拉资源 GID，再 `translatableResourcesByIds` 取字段
+   - **其他模块**：`translatableResources(resourceType, first, after)` 分页
+   - `{blobPrefix}/init/{MODULE}/chunk-{00}.json` → `TranslatableResource[]`
+4. 写 manifest：`{blobPrefix}/manifest.json`
+5. 更新 Cosmos：`status=TRANSLATE_QUEUED`，metrics 初始化
+6. `lpush translate:v4:hint:translate`
+
+**Init 模块 query（硬编码，对齐 Spring 默认筛选）**：
+
+| 模块 | Shopify query |
+|------|----------------|
+| PRODUCT | （无，拉全部） |
+| COLLECTION | `published_status:published` |
+| PAGE | `published_status:published` |
+| ARTICLE | `published_status:published` |
+
+**创建任务互斥**：`POST /api/translate/v4/tasks` 在写入 Cosmos 前检查同 `shopName + source + target` 是否已有 `ACTIVE_V4_STATUSES` 中的任务；有则返回 **409**。`PAUSED` / `COMPLETED` / `FAILED` / `CANCELLED` 允许新建。
+
+**Blob — init chunk 结构**：
+```json
+[
+  {
+    "resourceId": "gid://shopify/Product/123",
+    "fields": [
+      { "key": "title", "value": "原文标题", "digest": "sha256hash" }
+    ]
+  }
+]
+```
+
+---
+
+### 阶段 2 — Translate Worker
+
+**状态迁移**：`TRANSLATE_QUEUED → TRANSLATING → WRITEBACK_QUEUED`
+
+**执行流程**：
+1. claim job
+2. 对每个 module，遍历 `init/{MODULE}/` 下所有 chunk
+3. **断点续传**：若对应 `translate/{MODULE}/chunk-{nn}.json` 已存在，跳过
+4. 调 `translateBatch(fields, source, target, aiModel, testMode)` 翻译
+5. 写 translate chunk：`{blobPrefix}/translate/{MODULE}/chunk-{nn}.json`
+6. 更新 Cosmos：`status=WRITEBACK_QUEUED`
+7. `lpush translate:v4:hint:writeback`
+
+**Blob — translate chunk 结构**：
+```json
+[
+  {
+    "resourceId": "gid://shopify/Product/123",
+    "translations": [
+      { "key": "title", "originalValue": "原文", "translatedValue": "Translated", "digest": "sha256hash" }
+    ]
+  }
+]
+```
+
+**翻译引擎路由**：
+- `testMode=true` → 直接返回原文（跳过 API 调用）
+- `aiModel="google-translate"` 或 `TRANSLATION_AI_MODEL=google-translate` → Google Translate API
+- 其他 → OpenAI `chat.completions.create`，默认模型 `gpt-4o-mini`，`temperature=0.1`
+
+**字段分类**（`classifyField(key)`）：
+- `skip`：`handle`（Shopify URL slug，跳过不翻）
+- `html`：`body_html`、`summary_html`、`content`、以 `_html` 结尾 → 先提取文本节点，翻译后还原
+- `plain`：其余字段
+
+**批量策略**：`MAX_CHARS_PER_BATCH=5000`，超 `LONG_TEXT_THRESHOLD=4000` 的长文本按段落/句子拆分。
+
+---
+
+### 阶段 3 — Writeback Worker
+
+**状态迁移**：`WRITEBACK_QUEUED → WRITING_BACK → COMPLETED / VERIFY_QUEUED`
+
+**执行流程**：
+1. claim job
+2. 读 `{blobPrefix}/writeback/progress.json`（已写回的 resourceId 集合，断点续传用）
+3. 对每个 translate chunk 中的每个 resource（未在 writtenSet 中）：
+   - 过滤：`translatedValue.trim() && translatedValue !== originalValue` 的字段
+   - 调 Shopify `translationsRegister` mutation（locale=target）
+   - 成功：加入 writtenSet，`writebackDone++`
+   - 失败：加入 failedResources，`writebackFailed++`
+   - 每 20 条资源持久化一次 `progress.json`（断点续传检查点）
+4. 若有失败：写 `writeback/failed.json`，`status=VERIFY_QUEUED`，`lpush hint:verify`
+5. 无失败：`status=COMPLETED`
+
+---
+
+### 阶段 4 — Verify Worker
+
+**状态迁移**：`VERIFY_QUEUED → VERIFYING → COMPLETED`
+
+**执行流程**：
+1. claim job
+2. 读 `{blobPrefix}/writeback/failed.json`（writeback 阶段失败的资源）
+3. 对每个失败资源重试 `registerTranslations`
+4. 统计 `verifyDone` / `verifyFailed`，更新 Cosmos metrics
+5. `status=COMPLETED`（无论是否仍有失败，verify 是最终兜底）
+
+---
+
+## Blob Storage 路径
+
+| 路径 | 内容 | 写入阶段 |
+|---|---|---|
+| `tasks/v4/{shop}/{id}/manifest.json` | `{taskId, shopName, source, target, modules:{[mod]:{totalItems,chunks}}, createdAt}` | Init |
+| `tasks/v4/{shop}/{id}/init/{MODULE}/chunk-{nn}.json` | `TranslatableResource[]` | Init |
+| `tasks/v4/{shop}/{id}/translate/{MODULE}/chunk-{nn}.json` | `[{resourceId, translations:[...]}]` | Translate |
+| `tasks/v4/{shop}/{id}/writeback/progress.json` | `{written: resourceId[]}` | Writeback（每 20 条更新） |
+| `tasks/v4/{shop}/{id}/writeback/failed.json` | `[{resourceId, translations:TranslationInput[]}]` | Writeback |
+
+---
+
+## Redis Keys
+
+| Key | 类型 | 内容 | 用途 |
+|---|---|---|---|
+| `translate:v4:hint:init` | List | `{taskId, shopName}` | 通知 initWorker 有新任务 |
+| `translate:v4:hint:translate` | List | `{taskId, shopName}` | 通知 translateWorker |
+| `translate:v4:hint:writeback` | List | `{taskId, shopName}` | 通知 writebackWorker |
+| `translate:v4:hint:verify` | List | `{taskId, shopName}` | 通知 verifyWorker |
+| `translate:v4:progress:{taskId}` | Hash | 11 个指标计数器 + `currentModule` + `updatedAt` | 实时进度（TTL 7 天） |
+
+**Progress hash 字段**：`initTotal`, `initDone`, `translateTotal`, `translateDone`, `translateFailed`, `writebackTotal`, `writebackDone`, `writebackFailed`, `verifyTotal`, `verifyDone`, `verifyFailed`, `currentModule`, `updatedAt`
+
+---
+
+## Cosmos DB Schema
+
+- **Database**：`translation`（env `COSMOS_TRANSLATION_DATABASE_ID`）
+- **Container**：`translation_v4_jobs`（env `COSMOS_TRANSLATION_V4_JOBS_CONTAINER`）
+- **Partition key**：`shopName`
+- **Item id**：UUID（jobId）
+
+**`TranslationV4Job` 字段**：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `id` | string | UUID，Cosmos item id = jobId |
+| `shopName` | string | Partition key，如 `xxx.myshopify.com` |
+| `shopifyAccessToken` | string | 执行 Shopify GraphQL 的 token |
+| `source` | string | 源语言，如 `zh-CN` |
+| `target` | string | 目标语言，如 `en` |
+| `modules` | TranslationV4Module[] | 待翻译模块 |
+| `aiModel` | string | 翻译模型，如 `gpt-4o-mini` 或 `google-translate` |
+| `limitPerType` | number | 每个模块最多翻译条目数（1–500） |
+| `isCover` | boolean | 是否覆盖已有译文 |
+| `isHandle` | boolean | 是否翻译 handle 字段 |
+| `testMode` | boolean | 测试模式（跳过实际翻译，返回原文） |
+| `status` | TranslationV4Status | 当前状态 |
+| `claimedBy` | string \| null | 持有该任务的 Worker ID |
+| `claimedAt` | string \| null | claim 时间 ISO 8601 |
+| `lastHeartbeat` | string \| null | Worker 最近心跳时间 |
+| `blobPrefix` | string | Blob 路径前缀 `tasks/v4/{shop}/{id}` |
+| `metrics` | TranslationV4Metrics | 各阶段进度计数 |
+| `errorMessage` | string \| null | 错误详情 |
+| `errorStage` | string \| null | `INIT`/`TRANSLATE`/`WRITEBACK`/`VERIFY` |
+| `createdBy` | string | 创建来源，如 `api` |
+| `createdAt` / `updatedAt` | string | ISO 8601 |
+
+---
+
+## API 端点
+
+### POST `/api/translate/v4/tasks` — 创建任务
+
+**请求 body**（均可选，除 `target`）：
+```json
+{
+  "target": "en",
+  "source": "zh-CN",
+  "modules": ["PRODUCT", "COLLECTION", "PAGE", "ARTICLE"],
+  "limitPerType": 20,
+  "isCover": false,
+  "isHandle": false,
+  "testMode": false,
+  "aiModel": "gpt-4o-mini"
+}
+```
+
+- `limitPerType` 上下限：1–500，默认 20
+- `aiModel` 默认取 `TRANSLATION_AI_MODEL` 环境变量，再退回 `gpt-4o-mini`
+- 创建后同步 `lpush translate:v4:hint:init`
+
+### GET `/api/translate/v4/tasks?shopName=` — 列表
+
+返回 `{ ok: true, jobs: TranslationV4Job[] }`，按 `createdAt DESC` 排序，最多 30 条。
+
+### GET `/api/translate/v4/task-progress?taskId=&shopName=` — 进度
+
+同时查 Cosmos + Redis，Redis 计数器优先（实时性更高），Cosmos 字段作兜底。
+返回完整 job 对象 + 合并后 metrics + `currentModule` + `progressUpdatedAt`。
+
+### POST `/api/translate/v4/task-action` — 控制
+
+```json
+{ "taskId": "uuid", "shopName": "xxx.myshopify.com", "action": "cancel|pause|resume" }
+```
+
+| action | 效果 |
+|---|---|
+| `cancel` | `status=CANCELLED`，`claimedBy=null` |
+| `pause` | `status=PAUSED`，`errorStage=当前阶段`，`claimedBy=null` |
+| `resume` | 根据 `errorStage` 恢复到对应 `_QUEUED`，推 Redis hint |
+
+**resume 状态映射**（`errorStage → 恢复 status`）：
+- `TRANSLATE` → `TRANSLATE_QUEUED`
+- `WRITEBACK` → `WRITEBACK_QUEUED`
+- `VERIFY` → `VERIFY_QUEUED`
+- 其他 / 无 → `INIT_QUEUED`
+
+---
+
+## 僵死任务重置
+
+`scheduler.ts` 每 **5 分钟**调用 `resetStaleJobs(staleMinutes=10)`：
+
+对处于 processing 状态（`INITIALIZING` / `TRANSLATING` / `WRITING_BACK` / `VERIFYING`）的任务，若 `lastHeartbeat < now - 10min`，则重置回对应 `_QUEUED` 状态，清空 `claimedBy`，Worker 下次轮询时重新认领。
+
+---
+
+## Worker 调度机制
+
+Worker 认领任务的两条路径（优先级从高到低）：
+1. **Hint 队列**（Redis lpop）：任务创建/流转时立即推送，Worker 优先消费，延迟最低
+2. **Cosmos 轮询兜底**（`findPendingJobs(status, limit=3)`）：每 30s 兜底扫描，防止 hint 丢失
+
+**并发安全**：`claimJob` 使用 Cosmos etag 乐观锁，同一任务只有一个 Worker 能 claim 成功，其余返回 null 后直接跳过。
+
+---
+
+## 支持的翻译模块
+
+```typescript
+type TranslationV4Module =
+  | "PRODUCT" | "COLLECTION" | "PAGE" | "ARTICLE"
+  | "METAOBJECT" | "ONLINE_STORE_THEME"
+```
+
+---
+
+## 聊天内嵌入口（Chat Card）
+
+`TranslationTaskChatCard` 组件由 AI Agent 通过 `open_translation_task_form` 工具触发，渲染在聊天气泡中。
+
+**payload 类型**（`app/lib/translationTaskFormPayload.ts`）：
+```typescript
+type TranslationTaskFormPayload = {
+  sourceLocale: string    // 默认 "zh-CN"
+  targetLocale: string    // 必填
+  limitPerType: number    // 1–200，默认 20
+  resourceTypes: string[] // 翻译模块列表
+}
+```
+
+表单提交到 `POST /api/translate/v4/tasks`，成功后弹 toast 并提供「查看任务页面」链接。
+
+---
+
+## 环境变量
+
+| 变量 | 用于 | 说明 |
+|---|---|---|
+| `COSMOS_ENDPOINT` | App + Worker | CosmosDB 端点 |
+| `COSMOS_KEY` | App + Worker | CosmosDB 密钥 |
+| `COSMOS_TRANSLATION_DATABASE_ID` | App + Worker | 数据库名，默认 `translation` |
+| `COSMOS_TRANSLATION_V4_JOBS_CONTAINER` | App + Worker | 容器名，默认 `translation_v4_jobs` |
+| `BLOB_TRANSLATE_V3_CONNECTION_STRING` | App + Worker | Blob 连接字符串（优先） |
+| `AZURE_BLOB_CONNECTION_STRING` | App + Worker | Blob 连接字符串（兜底） |
+| `AZURE_BLOB_TRANSLATION_CONTAINER` | App + Worker | Blob 容器名，默认 `translation-content` |
+| `REDIS_URL` | App + Worker | Redis 完整 URL（优先） |
+| `REDIS_HOSTNAME` / `REDIS_HOST` / `REDISCACHEHOSTNAME` | App + Worker | Redis 主机（备选） |
+| `REDIS_PASSWORD` / `REDISCACHEKEY` | App + Worker | Redis 密码 |
+| `REDIS_PORT` | App + Worker | Redis 端口，默认 `6380` |
+| `REDIS_TLS` | App + Worker | 设为 `"false"` 关闭 TLS（Azure Cache 默认开启） |
+| `OPENAI_API_KEY` | Worker | OpenAI API 密钥 |
+| `GOOGLE_TRANSLATE_API_KEY` | Worker | Google Translate API 密钥 |
+| `TRANSLATION_AI_MODEL` | App + Worker | 全局覆盖翻译模型，如 `gpt-4o-mini`、`google-translate` |
+
+---
+
+## 改动注意事项
+
+1. **新增任务状态**：同步更新 `v4/types.ts`（`TranslationV4Status`）和 `worker/src/services/cosmosV4.ts`（Worker 侧副本），两处必须保持一致。
+2. **修改 Cosmos 字段**：`app/server/translation/v4/cosmosV4Store.server.ts` 和 `worker/src/services/cosmosV4.ts` 是独立副本，均需同步修改。
+3. **修改 Blob 路径**：init / translate / writeback / verify 四个 Worker 的读写路径必须一致，断点续传依赖固定路径格式。
+4. **修改 Redis Key**：`app/routes/api.translate.v4.task-action.ts` 中有本地 `HINT_KEYS` 常量（与 Worker 侧 `redisV4.ts` 独立定义），需同步。
+5. **Worker 不引用 App 代码**：`worker/` 是独立 Node 进程，所有类型和服务均为独立副本，不要跨包 import。
+6. **etag 乐观锁**：`claimJob` / `updateV4Job` 均依赖 Cosmos `_etag` 做并发控制，修改这两个函数时不得移除 `IfMatch` 条件。
+
+---
+
+*最后更新：2026-05-27*

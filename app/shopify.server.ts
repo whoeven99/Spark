@@ -15,8 +15,10 @@ const shopify = shopifyApp({
   scopes: process.env.SCOPES?.split(","),
   appUrl: process.env.SHOPIFY_APP_URL || "",
   authPathPrefix: "/auth",
-  // Prisma Client 使用自定义 output（见 prisma/schema.prisma）；与 @shopify/...-prisma 的类型声明路径不同，运行时兼容。
-  sessionStorage: new PrismaSessionStorage(prisma as unknown as PrismaClient),
+  // 使用统一的 Session 表；appName 由业务层通过 ensureSessionAppName 管理
+  sessionStorage: new PrismaSessionStorage(prisma as unknown as PrismaClient, {
+    tableName: "Session",
+  }),
   distribution: AppDistribution.AppStore,
   future: {
     expiringOfflineAccessTokens: true,

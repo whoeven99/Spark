@@ -1,0 +1,32 @@
+client_id = "c5ef97ab6bf73b8904cfdf93c921710b"
+name = "Desc - Test"
+application_url = "https://smartdescriptiontest.onrender.com"
+embedded = true
+
+[webhooks]
+api_version = "2026-07"
+
+[[webhooks.subscriptions]]
+topics = ["app_subscriptions/update"]
+uri = "/webhooks/app/subscriptions_update"
+
+[[webhooks.subscriptions]]
+topics = ["app_purchases_one_time/update"]
+uri = "/webhooks/app/purchases_one_time_update"
+
+[[webhooks.subscriptions]]
+topics = ["app/uninstalled"]
+uri = "/webhooks/app/uninstalled"
+
+[[webhooks.subscriptions]]
+topics = ["app/scopes_update"]
+uri = "/webhooks/app/scopes_update"
+
+[access_scopes]
+scopes = "read_locales,write_products,read_content"
+
+[auth]
+redirect_urls = [
+  "https://smartdescriptiontest.onrender.com/auth/callback",
+  "https://smartdescriptiontest.onrender.com/auth/shopify/callback",
+]

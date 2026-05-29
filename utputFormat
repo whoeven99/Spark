@@ -1,0 +1,19 @@
+HTTP/1.1 400 Bad Request
+Date: Tue, 19 May 2026 12:29:09 GMT
+Content-Type: application/json
+Content-Length: 59
+Connection: keep-alive
+server-timing: processing;dur=0, socket_queue;dur=3.214, util;dur=0.0
+reporting-endpoints: csp-reports="https://security-reports.shopifysvc.com/reporting-api?source_app=Partners&policy_id=45766", other="https://security-reports.shopifysvc.com/reporting-api?source_app=Partners&policy_id=45766"
+strict-transport-security: max-age=15552000; includeSubDomains; preload
+Report-To: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=3H0BsYiy%2FmK2obw9YJEXwJs1s1Fl0lVi8gaDwTTfFJYHo6c8ZDcXJ297%2Ba%2BmicDr54CI2ZMgBj%2F5x0BRC%2FvQQqWL7m4Kz3wMEPe3MOvQfmz0I9uJNUoOssUO0CO5t7iJFDEkYVUh"}]}
+Nel: {"report_to":"cf-nel","success_fraction":0.01,"max_age":604800}
+x-dc: gcp-us-central1,gcp-us-east1
+x-request-id: 898c8987-068d-4f0d-8892-35cfaebb740e-1779193749
+server: cloudflare
+cf-cache-status: DYNAMIC
+X-Content-Type-Options: nosniff
+CF-RAY: 9fe31b05ef3a1a0f-SJC
+alt-svc: h3=":443"; ma=86400
+
+{"error":"Error occurred while parsing request parameters"}

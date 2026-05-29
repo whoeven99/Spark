@@ -1,0 +1,105 @@
+import IORedis from "ioredis";
+
+let _redis: IORedis | undefined;
+
+export function getRedis(): IORedis {
+  if (_redis) return _redis;
+
+  const url = process.env.REDIS_URL?.trim();
+  if (url) {
+    _redis = new IORedis(url, { maxRetriesPerRequest: 2, connectTimeout: 10_000 });
+    return _redis;
+  }
+
+  const host =
+    process.env.REDIS_HOSTNAME?.trim() ||
+    process.env.REDIS_HOST?.trim() ||
+    process.env.REDISCACHEHOSTNAME?.trim();
+  const password =
+    process.env.REDIS_PASSWORD?.trim() ||
+    process.env.REDISCACHEKEY?.trim();
+
+  if (!host || !password) {
+    throw new Error("Redis not configured: set REDIS_URL or REDIS_HOSTNAME + REDIS_PASSWORD");
+  }
+
+  const port = Number(process.env.REDIS_PORT?.trim() || "6380");
+  const useTls = process.env.REDIS_TLS !== "false";
+
+  _redis = new IORedis({
+    host,
+    port,
+    password,
+    tls: useTls ? {} : undefined,
+    maxRetriesPerRequest: 2,
+    connectTimeout: 10_000,
+  });
+  return _redis;
+}
+
+export const HINT_KEYS = {
+  init: "translate:v4:hint:init",
+  translate: "translate:v4:hint:translate",
+  writeback: "translate:v4:hint:writeback",
+  verify: "translate:v4:hint:verify",
+} as const;
+
+export type HintPayload = { taskId: string; shopName: string };
+
+export async function popHint(
+  stage: keyof typeof HINT_KEYS,
+): Promise<HintPayload | null> {
+  try {
+    const raw = await getRedis().lpop(HINT_KEYS[stage]);
+    if (!raw) return null;
+    return JSON.parse(raw) as HintPayload;
+  } catch {
+    return null;
+  }
+}
+
+export async function pushHint(
+  stage: keyof typeof HINT_KEYS,
+  payload: HintPayload,
+): Promise<void> {
+  try {
+    await getRedis().lpush(HINT_KEYS[stage], JSON.stringify(payload));
+  } catch {
+    // best-effort
+  }
+}
+
+const PROGRESS_TTL = 7 * 24 * 3600; // 7 days in seconds
+
+export function progressKey(taskId: string): string {
+  return `translate:v4:progress:${taskId}`;
+}
+
+export async function setProgress(
+  taskId: string,
+  fields: Record<string, string | number>,
+): Promise<void> {
+  try {
+    const redis = getRedis();
+    const key = progressKey(taskId);
+    const flat: string[] = [];
+    for (const [k, v] of Object.entries(fields)) {
+      flat.push(k, String(v));
+    }
+    flat.push("updatedAt", Date.now().toString());
+    await redis.hset(key, ...flat);
+    await redis.expire(key, PROGRESS_TTL);
+  } catch {
+    // best-effort
+  }
+}
+
+export async function getProgress(
+  taskId: string,
+): Promise<Record<string, string>> {
+  try {
+    return await getRedis().hgetall(progressKey(taskId)) ?? {};
+  } catch {
+    return {};
+  }
+}

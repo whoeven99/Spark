@@ -123,6 +123,25 @@ async function main() {
     await executeWithRetry(statement);
   }
 
+  for (const seedFile of [
+    "billing-plan-catalog-seed.sql",
+    "token-billing-rule-seed.sql",
+  ]) {
+    const seedPath = path.join(root, "prisma", seedFile);
+    if (!fs.existsSync(seedPath)) continue;
+    const seedSql = fs.readFileSync(seedPath, "utf8");
+    const seedStatements = seedSql
+      .split(/;\s*(?:\r?\n|$)/g)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    for (const statement of seedStatements) {
+      await executeWithRetry(statement);
+    }
+    console.log(
+      `[turso:sync:${target}] 已执行 ${seedFile} 种子 ${seedStatements.length} 条`,
+    );
+  }
+
   const tables = await executeWithRetry(
     "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
   );
