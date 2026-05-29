@@ -1,5 +1,6 @@
 import prisma from "../../../db.server";
 import { sendTokenPackFeishuNotify } from "../../feishu/scenarios/sendTokenPackFeishuNotify.server";
+import { notifyMerchantPurchaseEmail } from "../notifyMerchantBillingEmail.server";
 import { appendBillingLog } from "../billingLog.server";
 import { ensureAccount } from "../account/ensureAccount.server";
 import type { PlanRecord } from "../plans/planCatalog.server";
@@ -15,6 +16,11 @@ export async function applyTokenPackPurchase(params: {
   const { shop, appName, plan, shopifyPurchaseId } = params;
 
   await ensureAccount(shop, appName);
+
+  const account = await prisma.account.findUniqueOrThrow({
+    where: { shop_appName: { shop, appName } },
+  });
+  const purchasedTokensBefore = account.purchasedTokens;
 
   const prior = await prisma.billingLog.findFirst({
     where: {
@@ -52,6 +58,22 @@ export async function applyTokenPackPurchase(params: {
   } catch (error) {
     console.error(
       `[Billing] token pack feishu notify failed shop=${shop} appName=${appName}:`,
+      error,
+    );
+  }
+
+  try {
+    await notifyMerchantPurchaseEmail({
+      shop,
+      appName,
+      plan,
+      shopifyPurchaseId,
+      purchasedTokensBefore,
+      purchasedTokensAfter: purchasedTokensBefore + plan.tokens,
+    });
+  } catch (error) {
+    console.error(
+      `[Billing] token pack merchant email failed shop=${shop} appName=${appName}:`,
       error,
     );
   }

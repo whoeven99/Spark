@@ -26,8 +26,18 @@ interface ImportMetaEnv {
   readonly EMAIL_SEND_MAX_RETRIES?: string;
   /** 运营通知收件人（To）兜底 */
   readonly OPS_NOTIFY_EMAIL?: string;
-  /** 卸载运营邮件腾讯 SES 模板 ID；未设则跳过发送 */
-  readonly OPS_UNINSTALL_TEMPLATE_ID?: string;
+  /** 商户通知腾讯 SES 模板 ID 覆盖（默认见 notificationTemplateIds.server.ts） */
+  readonly NOTIFICATION_TEMPLATE_ID_APP_INSTALLED?: string;
+  readonly NOTIFICATION_TEMPLATE_ID_APP_UNINSTALLED?: string;
+  readonly NOTIFICATION_TEMPLATE_ID_PURCHASE?: string;
+  readonly NOTIFICATION_TEMPLATE_ID_SUBSCRIPTION_STARTED?: string;
+  readonly NOTIFICATION_TEMPLATE_ID_SUBSCRIPTION_CHANGED?: string;
+  readonly NOTIFICATION_TEMPLATE_ID_SUBSCRIPTION_CANCELED?: string;
+  readonly NOTIFICATION_APP_NAME?: string;
+  readonly NOTIFICATION_BRAND_NAME?: string;
+  readonly NOTIFICATION_APP_ICON_URL?: string;
+  readonly NOTIFICATION_HELP_CENTER_URL?: string;
+  readonly NOTIFICATION_LEGAL_NAME?: string;
   /** 飞书运营通知总开关；false 关闭全部 channel（默认 true） */
   readonly FEISHU_ENABLED?: string;
   /** 卸载飞书群机器人 Webhook；未设则跳过 */

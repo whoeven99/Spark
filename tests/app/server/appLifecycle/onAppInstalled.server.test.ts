@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../../../app/server/email/scenarios/sendInstallOpsEmail.server", () => ({
-  sendInstallOpsEmail: vi.fn().mockResolvedValue({ ok: true, requestId: "req-1" }),
+vi.mock("../../../../app/server/email/scenarios/sendNotificationEmail.server", () => ({
+  sendNotificationEmail: vi.fn().mockResolvedValue({ ok: true, requestId: "req-1" }),
 }));
 
 vi.mock("../../../../app/shopify.server", () => ({
@@ -15,9 +15,9 @@ describe("onAppInstalled", () => {
     vi.clearAllMocks();
   });
 
-  it("invokes sendInstallOpsEmail with install params", async () => {
-    const { sendInstallOpsEmail } = await import(
-      "../../../../app/server/email/scenarios/sendInstallOpsEmail.server"
+  it("invokes sendNotificationEmail with install params", async () => {
+    const { sendNotificationEmail } = await import(
+      "../../../../app/server/email/scenarios/sendNotificationEmail.server"
     );
     const { onAppInstalled } = await import(
       "../../../../app/server/appLifecycle/onAppInstalled.server"
@@ -31,11 +31,14 @@ describe("onAppInstalled", () => {
       installedAt: new Date("2026-05-20T10:00:00.000Z"),
     });
 
-    expect(sendInstallOpsEmail).toHaveBeenCalledWith(
+    expect(sendNotificationEmail).toHaveBeenCalledWith(
       expect.objectContaining({
+        event: "appInstalled",
         shop: "demo.myshopify.com",
-        appName: "chat",
-        source: "test",
+        appKey: "chat",
+        variables: expect.objectContaining({
+          shopDomain: "demo.myshopify.com",
+        }),
       }),
     );
   });

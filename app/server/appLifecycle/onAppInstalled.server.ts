@@ -1,5 +1,6 @@
 import { loadSessionSnapshotForUninstall } from "../commonEventLog/loadSessionSnapshotForUninstall.server";
-import { sendInstallOpsEmail } from "../email/scenarios/sendInstallOpsEmail.server";
+import { sendNotificationEmail } from "../email/scenarios/sendNotificationEmail.server";
+import { buildAppInstalledVariables } from "../notifications/buildNotificationVariables.server";
 import { fetchShopBasicInfo } from "../shopify/fetchShopBasicInfo.server";
 
 const LOG = "[AppLifecycle:install]";
@@ -58,17 +59,22 @@ export async function onAppInstalled(params: OnAppInstalledParams): Promise<void
       `${LOG} after-fetchShopInfo shop=${params.shop} hasShopInfo=${Boolean(shopInfo)} shopName=${shopInfo?.name ?? "(none)"}`,
     );
 
-    console.info(`${LOG} before-sendInstallOpsEmail shop=${params.shop}`);
-    const result = await sendInstallOpsEmail({
+    console.info(`${LOG} before-sendNotificationEmail shop=${params.shop}`);
+    const variables = buildAppInstalledVariables({
       shop: params.shop,
-      appName: params.appName,
-      source: params.source,
       installedAt: params.installedAt,
       shopInfo,
       sessionSnapshot,
     });
+    const result = await sendNotificationEmail({
+      event: "appInstalled",
+      shop: params.shop,
+      appKey: params.appName,
+      variables,
+      sessionSnapshot,
+    });
     console.info(
-      `${LOG} after-sendInstallOpsEmail shop=${params.shop} elapsedMs=${Date.now() - startedAt} ok=${result.ok} skipped=${"skipped" in result ? result.skipped : false}`,
+      `${LOG} after-sendNotificationEmail shop=${params.shop} elapsedMs=${Date.now() - startedAt} ok=${result.ok} skipped=${"skipped" in result ? result.skipped : false}`,
     );
   } catch (error) {
     console.error(

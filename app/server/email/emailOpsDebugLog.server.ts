@@ -2,10 +2,7 @@ import {
   isEmailSendReady,
   loadEmailConfig,
 } from "./config/emailConfig.server";
-import {
-  resolveOpsNotifyEmail,
-  resolveOpsUninstallTemplateId,
-} from "./opsNotifyEmail.server";
+import { resolveOpsNotifyEmail } from "./opsNotifyEmail.server";
 import type { SendEmailResult } from "./types/sendEmailResult";
 
 function maskEmail(email: string): string {
@@ -24,7 +21,6 @@ export function logEmailOpsPreflight(
 ): void {
   const config = loadEmailConfig();
   const recipient = resolveOpsNotifyEmail();
-  const uninstallTemplateId = resolveOpsUninstallTemplateId();
 
   console.info(
     `${logPrefix} preflight ${JSON.stringify({
@@ -34,7 +30,6 @@ export function logEmailOpsPreflight(
       emailSendReady: isEmailSendReady(config),
       hasTencentCredentials: config.tencent != null,
       opsNotifyRecipient: recipient ? maskEmail(recipient) : null,
-      opsUninstallTemplateId: uninstallTemplateId,
     })}`,
   );
 }

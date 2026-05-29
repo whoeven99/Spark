@@ -2,7 +2,8 @@ import prisma from "../../db.server";
 import { handleAppUninstalled } from "../commonEventLog/handleAppUninstalled.server";
 import { loadSessionSnapshotForUninstall } from "../commonEventLog/loadSessionSnapshotForUninstall.server";
 import { COMMON_EVENT_TYPE } from "../commonEventLog/types.server";
-import { sendUninstallOpsEmail } from "../email/scenarios/sendUninstallOpsEmail.server";
+import { sendNotificationEmail } from "../email/scenarios/sendNotificationEmail.server";
+import { buildAppUninstalledVariables } from "../notifications/buildNotificationVariables.server";
 import { sendUninstallFeishuNotify } from "../feishu/scenarios/sendUninstallFeishuNotify.server";
 import { fetchUninstallFeedbackFromPartner } from "../partner/fetchUninstallFeedbackFromPartner.server";
 
@@ -113,16 +114,21 @@ async function sendAppUninstalledOpsEmail(
       `${LOG} after-loadSessionSnapshot shop=${params.shop} hasSessionSnapshot=${Boolean(sessionSnapshot)}`,
     );
 
-    console.info(`${LOG} before-sendUninstallOpsEmail shop=${params.shop}`);
-    const result = await sendUninstallOpsEmail({
+    console.info(`${LOG} before-sendNotificationEmail shop=${params.shop}`);
+    const variables = buildAppUninstalledVariables({
       shop: params.shop,
-      appName: params.appName,
       uninstalledAt: params.uninstalledAt,
-      installDurationMs,
+      sessionSnapshot,
+    });
+    const result = await sendNotificationEmail({
+      event: "appUninstalled",
+      shop: params.shop,
+      appKey: params.appName,
+      variables,
       sessionSnapshot,
     });
     console.info(
-      `${LOG} after-sendUninstallOpsEmail shop=${params.shop} elapsedMs=${Date.now() - startedAt} ok=${result.ok} skipped=${"skipped" in result ? result.skipped : false}`,
+      `${LOG} after-sendNotificationEmail shop=${params.shop} elapsedMs=${Date.now() - startedAt} ok=${result.ok} skipped=${"skipped" in result ? result.skipped : false}`,
     );
   } catch (error) {
     console.error(

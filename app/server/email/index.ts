@@ -10,14 +10,11 @@ export type {
   SendTemplateEmailParams,
   EmailServiceDeps,
 } from "./services/emailService.server";
-export { sendInstallOpsEmail } from "./scenarios/sendInstallOpsEmail.server";
-export type { SendInstallOpsEmailParams } from "./scenarios/sendInstallOpsEmail.server";
-export { sendUninstallOpsEmail } from "./scenarios/sendUninstallOpsEmail.server";
-export type { SendUninstallOpsEmailParams } from "./scenarios/sendUninstallOpsEmail.server";
+export { sendNotificationEmail } from "./scenarios/sendNotificationEmail.server";
+export type { SendNotificationEmailParams } from "./scenarios/sendNotificationEmail.server";
 export {
   resolveOpsEmailDestination,
   resolveOpsNotifyEmail,
-  resolveOpsUninstallTemplateId,
 } from "./opsNotifyEmail.server";
 export type { EmailError, EmailErrorCode } from "./types/emailError";
 export { EMAIL_ERROR_CODES } from "./types/emailError";
