@@ -2,7 +2,7 @@
 
 client_id = "d0550d3455a8076d94bb2fc5a7081b45"
 name = "Order Monitor Test"
-application_url = "https://your-order-monitor-test.onrender.com"
+application_url = "https://order-monitor-test.onrender.com"
 embedded = true
 
 [build]
@@ -48,4 +48,7 @@ uri = "/webhooks/inventory_levels/update"
 scopes = "read_orders,read_fulfillments,read_inventory"
 
 [auth]
-redirect_urls = [ "https://your-order-monitor-test.onrender.com" ]
+redirect_urls = [
+  "https://order-monitor-test.onrender.com/auth/callback",
+  "https://order-monitor-test.onrender.com/auth/shopify/callback",
+]
