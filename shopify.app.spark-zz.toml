@@ -54,7 +54,7 @@ uri = "/webhooks/fulfillments/update"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_orders,write_products,read_translations,write_translations,read_locales"
+scopes = "read_orders,write_products,read_translations,write_translations,read_locales,read_content"
 
 [auth]
 redirect_urls = [ "https://example.com/api/auth" ]

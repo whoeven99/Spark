@@ -1,4 +1,5 @@
 import { CosmosClient, type Container } from "@azure/cosmos";
+import { sameTranslationLocale } from "./localeUtils";
 import {
   EMPTY_V4_METRICS,
   type TranslationV4Job,
@@ -58,6 +59,40 @@ export async function getV4Job(
     return resource ?? null;
   } catch {
     return null;
+  }
+}
+
+/** 同 shop + source + target 是否存在阻塞态任务（用于创建前互斥）。 */
+export async function existsBlockingV4Job(
+  shopName: string,
+  source: string,
+  target: string,
+  blockingStatuses: TranslationV4Status[],
+): Promise<boolean> {
+  if (!blockingStatuses.length) return false;
+
+  try {
+    const { resources } = await getContainer()
+      .items.query<TranslationV4Job>(
+        {
+          query:
+            "SELECT c.source, c.target, c.status FROM c WHERE c.shopName = @shopName AND ARRAY_CONTAINS(@blockingStatuses, c.status)",
+          parameters: [
+            { name: "@shopName", value: shopName },
+            { name: "@blockingStatuses", value: blockingStatuses },
+          ],
+        },
+        { partitionKey: shopName },
+      )
+      .fetchAll();
+
+    return resources.some(
+      (job) =>
+        sameTranslationLocale(job.source, source) &&
+        sameTranslationLocale(job.target, target),
+    );
+  } catch {
+    return false;
   }
 }
 
