@@ -12,8 +12,8 @@ import Subscriptions from "./pages/Subscriptions";
 import Revenue from "./pages/Revenue";
 import CodeAgent from "./pages/CodeAgent";
 import AgentRuns from "./pages/AgentRuns";
-import BillingRules from "./pages/BillingRules";
 import PricingStudio from "./pages/PricingStudio";
+import PricingWorkbenchV2 from "./pages/PricingWorkbenchV2";
 import Todo from "./pages/Todo";
 import OpsChecklist from "./pages/OpsChecklist";
 import { useNavigate } from "react-router-dom";
@@ -69,7 +69,7 @@ export default function App() {
             <Route path="capabilities" element={<Capabilities />} />
             <Route path="code-agent" element={<CodeAgent />} />
             <Route path="agent-runs" element={<AgentRuns />} />
-            <Route path="billing-rules" element={<BillingRules />} />
+            <Route path="pricing-workbench" element={<RequireOwner><PricingWorkbenchV2 /></RequireOwner>} />
             <Route path="pricing-studio" element={<RequireOwner><PricingStudio /></RequireOwner>} />
             <Route path="ops-checklist" element={<OpsChecklist />} />
             <Route path="todo" element={<Todo />} />

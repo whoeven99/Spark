@@ -489,6 +489,7 @@ export type BillingRuleRow = {
   displayName: string;
   multiplier: number;
   baseTokenCost: number | null;
+  costUsdPerMillionToken: number | null;
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
@@ -505,6 +506,7 @@ export function createBillingRule(data: {
   displayName: string;
   multiplier: number;
   baseTokenCost?: number | null;
+  costUsdPerMillionToken?: number | null;
   enabled?: boolean;
 }): Promise<{ ok: boolean; ruleKey: string }> {
   return apiFetch("/billing-rules", { method: "POST", body: JSON.stringify(data) });
@@ -512,7 +514,13 @@ export function createBillingRule(data: {
 
 export function updateBillingRule(
   ruleKey: string,
-  data: { displayName?: string; multiplier?: number; baseTokenCost?: number | null; enabled?: boolean },
+  data: {
+    displayName?: string;
+    multiplier?: number;
+    baseTokenCost?: number | null;
+    costUsdPerMillionToken?: number | null;
+    enabled?: boolean;
+  },
 ): Promise<{ ok: boolean }> {
   return apiFetch(`/billing-rules/${encodeURIComponent(ruleKey)}`, {
     method: "PUT",
@@ -542,6 +550,89 @@ export function fetchOpsChecklist(): Promise<OpsChecklistData> {
 
 export function deleteBillingRule(ruleKey: string): Promise<{ ok: boolean }> {
   return apiFetch(`/billing-rules/${encodeURIComponent(ruleKey)}`, { method: "DELETE" });
+}
+
+// --- Pricing Studio ---
+
+export type MonthlyFixedCostItem = {
+  id: string;
+  name: string;
+  amountUsd: number;
+  enabled: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PricingStudioSettings = {
+  payingShops: number;
+  targetGrossMarginPct: number;
+  planPriceUsd: number;
+  tokenGrantPerUser: number;
+  blendedCostUsdPerMillionBilledToken: number;
+  shopifyRevSharePct: number;
+  paymentFeePct: number;
+};
+
+export type PlanCatalogItem = {
+  planKey: string;
+  appName: string;
+  kind: string;
+  billingInterval: string | null;
+  displayName: string;
+  tokens: number;
+  priceAmount: string;
+  currencyCode: string;
+};
+
+export function fetchPricingStudio(): Promise<{
+  settings: PricingStudioSettings & { usageScenarios?: unknown[] | null };
+  fixedCosts: MonthlyFixedCostItem[];
+  plans: PlanCatalogItem[];
+}> {
+  return apiFetch("/pricing-studio");
+}
+
+export function updatePricingStudioSettings(
+  settings: PricingStudioSettings & { usageScenarios?: unknown[] },
+): Promise<{ ok: boolean }> {
+  return apiFetch("/pricing-studio/settings", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
+export function createMonthlyFixedCost(data: {
+  name: string;
+  amountUsd: number;
+  enabled?: boolean;
+  sortOrder?: number;
+}): Promise<{ ok: boolean; id: string }> {
+  return apiFetch("/pricing-studio/fixed-costs", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateMonthlyFixedCost(
+  id: string,
+  data: {
+    name?: string;
+    amountUsd?: number;
+    enabled?: boolean;
+    sortOrder?: number;
+  },
+): Promise<{ ok: boolean }> {
+  return apiFetch(`/pricing-studio/fixed-costs/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteMonthlyFixedCost(id: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/pricing-studio/fixed-costs/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
 }
 
 // --- Todos ---
