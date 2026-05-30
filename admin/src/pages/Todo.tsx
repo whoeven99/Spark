@@ -13,7 +13,6 @@ import {
   Alert,
   Popconfirm,
   Empty,
-  Popover,
   Tooltip,
   Badge,
 } from "antd";
@@ -393,8 +392,8 @@ function TodoCard({
   onEtaDaysChange: (todo: TodoRow, etaDays: number | null) => Promise<void> | void;
 }) {
   const pri = PRIORITY_CONFIG[todo.priority];
-  const [etaEditorOpen, setEtaEditorOpen] = useState(false);
   const [etaDraft, setEtaDraft] = useState<number | null>(todo.etaDays ?? null);
+  const [savingEta, setSavingEta] = useState(false);
   const doingRow = STATUS_ROWS.find((s) => s.key === "doing") ?? STATUS_ROWS[0];
   const currentStatusRow = STATUS_ROWS.find((s) => s.key === todo.status) ?? statusRow;
   const statusOptionRows = STATUS_ROWS.filter((s) => s.key === "todo" || s.key === "done");
@@ -435,6 +434,21 @@ function TodoCard({
             </span>
           ),
         }));
+
+  const normalizeEta = (value: number | null): number | null =>
+    value == null || Number.isNaN(value) ? null : Math.max(0, Math.floor(value));
+
+  async function persistEtaDays(rawValue: number | null) {
+    const next = normalizeEta(rawValue);
+    const current = normalizeEta(todo.etaDays ?? null);
+    if (next === current) return;
+    setSavingEta(true);
+    try {
+      await onEtaDaysChange(todo, next);
+    } finally {
+      setSavingEta(false);
+    }
+  }
 
   return (
     <Card
@@ -494,55 +508,41 @@ function TodoCard({
             options={statusOptions}
           />
         </div>
-        <Popover
-          trigger="click"
-          open={etaEditorOpen}
-          onOpenChange={(open) => {
-            setEtaEditorOpen(open);
-            if (open) {
-              setEtaDraft(todo.etaDays ?? null);
-            }
+        <div
+          style={{
+            height: 22,
+            padding: "0 4px",
+            border: "1px solid #cbd5e1",
+            borderRadius: 6,
+            background: "#f8fafc",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            flexShrink: 0,
           }}
-          content={(
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <InputNumber
-                size="small"
-                value={etaDraft}
-                onChange={(value) => setEtaDraft(typeof value === "number" ? Math.max(0, Math.floor(value)) : null)}
-                placeholder="x"
-                min={0}
-                precision={0}
-                controls={false}
-                style={{ width: 94 }}
-              />
-              <Button
-                size="small"
-                type="primary"
-                onClick={async () => {
-                  await onEtaDaysChange(todo, etaDraft == null ? null : Math.max(0, Math.floor(etaDraft)));
-                  setEtaEditorOpen(false);
-                }}
-              >
-                存
-              </Button>
-            </div>
-          )}
         >
-          <Button
+          <InputNumber
             size="small"
-            style={{
-              height: 22,
-              fontSize: 11,
-              padding: "0 6px",
-              color: "#64748b",
-              borderColor: "#cbd5e1",
-              background: "#f8fafc",
-              flexShrink: 0,
+            value={etaDraft}
+            onChange={(value) =>
+              setEtaDraft(typeof value === "number" ? Math.max(0, Math.floor(value)) : null)
+            }
+            onBlur={() => {
+              void persistEtaDays(etaDraft);
             }}
-          >
-            {todo.etaDays == null ? "x days" : `${todo.etaDays} days`}
-          </Button>
-        </Popover>
+            onPressEnter={() => {
+              void persistEtaDays(etaDraft);
+            }}
+            placeholder="x"
+            min={0}
+            precision={0}
+            controls={false}
+            style={{ width: 38 }}
+            variant="borderless"
+            disabled={savingEta}
+          />
+          <Typography.Text style={{ fontSize: 11, color: "#64748b" }}>days</Typography.Text>
+        </div>
         <Typography.Text type="secondary" style={{ fontSize: 11, marginLeft: "auto" }}>
           {new Date(todo.createdAt).toLocaleDateString("zh-CN")}
         </Typography.Text>
