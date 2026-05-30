@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import {
   Alert,
   Badge,
@@ -75,6 +74,31 @@ function marginColor(pct: number, target: number): string {
   if (pct >= target) return "#389e0d";
   if (pct >= target - 10) return "#d48806";
   return "#cf1322";
+}
+
+function findRuleForScenario(
+  row: Pick<FeatureScenario, "feature" | "modelKey">,
+  rules: BillingRuleRow[],
+): BillingRuleRow | null {
+  return (
+    rules.find(
+      (r) => r.enabled && r.feature === row.feature && r.modelKey === row.modelKey,
+    ) ??
+    rules.find(
+      (r) => r.enabled && r.feature === row.feature && r.modelKey === "_default",
+    ) ??
+    null
+  );
+}
+
+function findCalcForRule(
+  rule: BillingRuleRow,
+  rows: FeatureCalcRow[],
+): FeatureCalcRow | undefined {
+  return (
+    rows.find((x) => x.feature === rule.feature && x.modelKey === rule.modelKey) ??
+    rows.find((x) => x.feature === rule.feature)
+  );
 }
 
 function parseScenarios(raw: unknown[] | null | undefined): FeatureScenario[] {
@@ -173,6 +197,45 @@ export default function PricingWorkbenchV2() {
     [plans, assumptions, totals],
   );
 
+  const orphanRules = useMemo(
+    () =>
+      billingRules.filter(
+        (rule) =>
+          rule.enabled &&
+          !featureRows.some(
+            (row) => row.feature === rule.feature && row.modelKey === rule.modelKey,
+          ),
+      ),
+    [billingRules, featureRows],
+  );
+
+  function importRuleAsScenario(rule: BillingRuleRow) {
+    setScenarios((prev) => {
+      if (prev.some((r) => r.feature === rule.feature && r.modelKey === rule.modelKey)) {
+        return prev;
+      }
+      return [
+        ...prev,
+        {
+          id: `rule_${rule.ruleKey}`,
+          name: rule.displayName.split("·")[0]?.trim() || rule.feature,
+          feature: rule.feature,
+          modelKey: rule.modelKey,
+          callsPerUserPerMonth: 10,
+          inputTokensPerCall: 1000,
+          outputTokensPerCall: 500,
+          priceInputPer1M: 0.14,
+          priceOutputPer1M: 0.28,
+          flatCostPerCallUsd: 0,
+          multiplier: rule.multiplier,
+          baseTokenCost: rule.baseTokenCost ?? 0,
+          enabled: true,
+        },
+      ];
+    });
+    notification.success({ message: `已导入 ${rule.ruleKey}` });
+  }
+
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -243,16 +306,7 @@ export default function PricingWorkbenchV2() {
   function syncFromBillingRules() {
     setScenarios((prev) =>
       prev.map((row) => {
-        const rule =
-          billingRules.find(
-            (r) =>
-              r.enabled &&
-              r.feature === row.feature &&
-              r.modelKey === row.modelKey,
-          ) ??
-          billingRules.find(
-            (r) => r.enabled && r.feature === row.feature && r.modelKey === "_default",
-          );
+        const rule = findRuleForScenario(row, billingRules);
         if (!rule) return row;
         return {
           ...row,
@@ -262,7 +316,15 @@ export default function PricingWorkbenchV2() {
         };
       }),
     );
-    notification.success({ message: "已从 TokenBillingRule 同步倍率与定额" });
+    notification.success({ message: "已从线上规则同步倍率与 base" });
+  }
+
+  function adoptSuggestionToScenario(row: FeatureCalcRow) {
+    patchScenario(row.id, {
+      multiplier: row.suggestedMultiplier,
+      baseTokenCost: row.suggestedBaseTokenCost,
+    });
+    notification.success({ message: `${row.name} 已采纳建议参数` });
   }
 
   async function handleSave() {
@@ -322,20 +384,19 @@ export default function PricingWorkbenchV2() {
     }
   }
 
-  async function applyRuleSuggestion(rule: BillingRuleRow, row: FeatureScenario | undefined) {
+  async function applyRuleSuggestion(rule: BillingRuleRow) {
     if (!owner) return;
-    const calc = featureRows.find((r) => r.feature === rule.feature && r.modelKey === rule.modelKey)
-      ?? featureRows.find((r) => r.feature === rule.feature);
+    const calc = findCalcForRule(rule, featureRows);
     if (!calc) {
-      notification.warning({ message: "工作台中无对应能力行，请先在能力模型中添加" });
+      notification.warning({ message: "请先在本页添加对应能力行" });
       return;
     }
     try {
       await updateBillingRule(rule.ruleKey, {
-        multiplier: calc.suggestedMultiplier,
-        baseTokenCost: calc.suggestedBaseTokenCost > 0 ? calc.suggestedBaseTokenCost : null,
+        multiplier: calc.multiplier,
+        baseTokenCost: calc.baseTokenCost > 0 ? calc.baseTokenCost : null,
       });
-      notification.success({ message: `已更新规则 ${rule.ruleKey}` });
+      notification.success({ message: `已写回 ${rule.ruleKey}` });
       loadRules();
     } catch (e) {
       notification.error({ message: String(e) });
@@ -569,37 +630,37 @@ export default function PricingWorkbenchV2() {
     </Space>
   );
 
-  const featureTab = (
+  const capabilitiesTab = (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
       <Alert
         type="info"
         showIcon
-        message="能力成本模型"
-        description={
-          <>
-            每次 API 成本 = input×单价 + output×单价 + 固定美元成本；计费 Token 与线上一致（raw×multiplier 或
-            baseTokenCost×multiplier）。综合加权后得到「每计费 Token 成本」，驱动套餐反推。
-          </>
-        }
+        message="能力与计费规则"
+        description="左侧编辑成本与模拟参数（驱动套餐反推）；右侧对照线上 TokenBillingRule。写回规则会把当前模拟倍率/base 同步到 Turso，不影响 PlanCatalog。"
       />
       <Space wrap>
         <Button icon={<PlusOutlined />} onClick={addScenario}>
           新增能力
         </Button>
         <Button icon={<SyncOutlined />} onClick={syncFromBillingRules}>
-          从计费规则同步倍率
+          从线上规则拉取
+        </Button>
+        <Button icon={<ReloadOutlined />} onClick={loadRules} loading={rulesLoading}>
+          刷新规则
         </Button>
       </Space>
       <Table
         size="small"
-        scroll={{ x: 2000 }}
+        scroll={{ x: 1680 }}
         pagination={false}
         rowKey="id"
+        loading={rulesLoading}
         dataSource={featureRows}
         columns={[
           {
-            title: "启用",
-            width: 56,
+            title: "",
+            width: 48,
+            fixed: "left" as const,
             render: (_: unknown, r: FeatureScenario) => (
               <Switch
                 size="small"
@@ -609,210 +670,308 @@ export default function PricingWorkbenchV2() {
             ),
           },
           {
-            title: "能力",
-            dataIndex: "name",
-            width: 120,
-            render: (v: string, r: FeatureScenario) => (
-              <Input
-                size="small"
-                value={v}
-                onChange={(e) => patchScenario(r.id, { name: e.target.value })}
-              />
-            ),
+            title: "能力 / 规则",
+            width: 168,
+            fixed: "left" as const,
+            render: (_: unknown, r: FeatureCalcRow) => {
+              const rule = findRuleForScenario(r, billingRules);
+              return (
+                <Space direction="vertical" size={0}>
+                  <Input
+                    size="small"
+                    value={r.name}
+                    onChange={(e) => patchScenario(r.id, { name: e.target.value })}
+                  />
+                  <Typography.Text type="secondary" style={{ fontSize: 10 }}>
+                    {r.feature} · {r.modelKey}
+                  </Typography.Text>
+                  {rule ? (
+                    <Typography.Text code style={{ fontSize: 10 }}>
+                      {rule.ruleKey}
+                    </Typography.Text>
+                  ) : (
+                    <Tag color="default" style={{ marginTop: 2, fontSize: 10 }}>
+                      无线上规则
+                    </Tag>
+                  )}
+                </Space>
+              );
+            },
           },
           {
-            title: "调用/月",
-            width: 90,
-            render: (_: unknown, r: FeatureScenario) => (
-              <InputNumber
-                size="small"
-                min={0}
-                value={r.callsPerUserPerMonth}
-                onChange={(n) =>
-                  patchScenario(r.id, { callsPerUserPerMonth: Number(n ?? 0) })
-                }
-              />
-            ),
+            title: "用量 & 成本",
+            children: [
+              {
+                title: "次/月",
+                width: 72,
+                render: (_: unknown, r: FeatureScenario) => (
+                  <InputNumber
+                    size="small"
+                    min={0}
+                    value={r.callsPerUserPerMonth}
+                    onChange={(n) =>
+                      patchScenario(r.id, { callsPerUserPerMonth: Number(n ?? 0) })
+                    }
+                  />
+                ),
+              },
+              {
+                title: "In",
+                width: 68,
+                render: (_: unknown, r: FeatureScenario) => (
+                  <InputNumber
+                    size="small"
+                    min={0}
+                    value={r.inputTokensPerCall}
+                    onChange={(n) =>
+                      patchScenario(r.id, { inputTokensPerCall: Number(n ?? 0) })
+                    }
+                  />
+                ),
+              },
+              {
+                title: "Out",
+                width: 68,
+                render: (_: unknown, r: FeatureScenario) => (
+                  <InputNumber
+                    size="small"
+                    min={0}
+                    value={r.outputTokensPerCall}
+                    onChange={(n) =>
+                      patchScenario(r.id, { outputTokensPerCall: Number(n ?? 0) })
+                    }
+                  />
+                ),
+              },
+              {
+                title: "$/1M",
+                width: 88,
+                render: (_: unknown, r: FeatureScenario) => (
+                  <Tooltip title={`In ${r.priceInputPer1M} / Out ${r.priceOutputPer1M}`}>
+                    <Space size={2}>
+                      <InputNumber
+                        size="small"
+                        min={0}
+                        step={0.01}
+                        style={{ width: 52 }}
+                        value={r.priceInputPer1M}
+                        onChange={(n) =>
+                          patchScenario(r.id, { priceInputPer1M: Number(n ?? 0) })
+                        }
+                      />
+                      <InputNumber
+                        size="small"
+                        min={0}
+                        step={0.01}
+                        style={{ width: 52 }}
+                        value={r.priceOutputPer1M}
+                        onChange={(n) =>
+                          patchScenario(r.id, { priceOutputPer1M: Number(n ?? 0) })
+                        }
+                      />
+                    </Space>
+                  </Tooltip>
+                ),
+              },
+              {
+                title: "$/次",
+                width: 72,
+                render: (_: unknown, r: FeatureScenario) => (
+                  <InputNumber
+                    size="small"
+                    min={0}
+                    step={0.001}
+                    value={r.flatCostPerCallUsd}
+                    onChange={(n) =>
+                      patchScenario(r.id, { flatCostPerCallUsd: Number(n ?? 0) })
+                    }
+                  />
+                ),
+              },
+              {
+                title: "API",
+                width: 72,
+                render: (_: unknown, r: FeatureCalcRow) => (
+                  <Typography.Text style={{ fontSize: 11 }}>
+                    {USD(r.costPerCallUsd, 4)}
+                  </Typography.Text>
+                ),
+              },
+            ],
           },
           {
-            title: "In/次",
-            width: 80,
-            render: (_: unknown, r: FeatureScenario) => (
-              <InputNumber
-                size="small"
-                min={0}
-                value={r.inputTokensPerCall}
-                onChange={(n) =>
-                  patchScenario(r.id, { inputTokensPerCall: Number(n ?? 0) })
-                }
-              />
-            ),
+            title: "模拟（工作台）",
+            children: [
+              {
+                title: "×",
+                width: 64,
+                render: (_: unknown, r: FeatureScenario) => (
+                  <InputNumber
+                    size="small"
+                    min={0}
+                    step={0.1}
+                    value={r.multiplier}
+                    onChange={(n) => patchScenario(r.id, { multiplier: Number(n ?? 0) })}
+                  />
+                ),
+              },
+              {
+                title: "base",
+                width: 72,
+                render: (_: unknown, r: FeatureScenario) => (
+                  <InputNumber
+                    size="small"
+                    min={0}
+                    value={r.baseTokenCost}
+                    onChange={(n) =>
+                      patchScenario(r.id, { baseTokenCost: Number(n ?? 0) })
+                    }
+                  />
+                ),
+              },
+              {
+                title: "扣费/次",
+                width: 80,
+                render: (_: unknown, r: FeatureCalcRow) => NUM(r.billedTokensPerCall),
+              },
+            ],
           },
           {
-            title: "Out/次",
-            width: 80,
-            render: (_: unknown, r: FeatureScenario) => (
-              <InputNumber
-                size="small"
-                min={0}
-                value={r.outputTokensPerCall}
-                onChange={(n) =>
-                  patchScenario(r.id, { outputTokensPerCall: Number(n ?? 0) })
-                }
-              />
-            ),
+            title: "线上（Turso）",
+            children: [
+              {
+                title: "×",
+                width: 56,
+                render: (_: unknown, r: FeatureCalcRow) => {
+                  const rule = findRuleForScenario(r, billingRules);
+                  if (!rule) return "-";
+                  const drift = Math.abs(rule.multiplier - r.multiplier) > 0.05;
+                  return (
+                    <Tag color={drift ? "orange" : "default"}>{rule.multiplier}x</Tag>
+                  );
+                },
+              },
+              {
+                title: "base",
+                width: 72,
+                render: (_: unknown, r: FeatureCalcRow) => {
+                  const rule = findRuleForScenario(r, billingRules);
+                  if (!rule || rule.baseTokenCost == null) return "-";
+                  const drift = rule.baseTokenCost !== r.baseTokenCost;
+                  return (
+                    <Tag color={drift ? "orange" : "default"}>{NUM(rule.baseTokenCost)}</Tag>
+                  );
+                },
+              },
+            ],
           },
           {
-            title: "$/1M In",
-            width: 100,
-            render: (_: unknown, r: FeatureScenario) => (
-              <InputNumber
-                size="small"
-                min={0}
-                step={0.01}
-                value={r.priceInputPer1M}
-                onChange={(n) =>
-                  patchScenario(r.id, { priceInputPer1M: Number(n ?? 0) })
-                }
-              />
-            ),
-          },
-          {
-            title: "$/1M Out",
-            width: 100,
-            render: (_: unknown, r: FeatureScenario) => (
-              <InputNumber
-                size="small"
-                min={0}
-                step={0.01}
-                value={r.priceOutputPer1M}
-                onChange={(n) =>
-                  patchScenario(r.id, { priceOutputPer1M: Number(n ?? 0) })
-                }
-              />
-            ),
-          },
-          {
-            title: "$/次固定",
-            width: 100,
-            render: (_: unknown, r: FeatureScenario) => (
-              <InputNumber
-                size="small"
-                min={0}
-                step={0.001}
-                value={r.flatCostPerCallUsd}
-                onChange={(n) =>
-                  patchScenario(r.id, { flatCostPerCallUsd: Number(n ?? 0) })
-                }
-              />
-            ),
-          },
-          {
-            title: "倍率",
-            width: 72,
-            render: (_: unknown, r: FeatureScenario) => (
-              <InputNumber
-                size="small"
-                min={0}
-                step={0.1}
-                value={r.multiplier}
-                onChange={(n) => patchScenario(r.id, { multiplier: Number(n ?? 0) })}
-              />
-            ),
-          },
-          {
-            title: "base",
-            width: 80,
-            render: (_: unknown, r: FeatureScenario) => (
-              <InputNumber
-                size="small"
-                min={0}
-                value={r.baseTokenCost}
-                onChange={(n) =>
-                  patchScenario(r.id, { baseTokenCost: Number(n ?? 0) })
-                }
-              />
-            ),
-          },
-          {
-            title: "$/次",
-            width: 80,
-            render: (_: unknown, r: FeatureCalcRow) => (
-              <Tag color="blue">{USD(r.costPerCallUsd, 4)}</Tag>
-            ),
-          },
-          {
-            title: "计费/次",
-            width: 88,
-            render: (_: unknown, r: FeatureCalcRow) => NUM(r.billedTokensPerCall),
-          },
-          {
-            title: "建议倍率",
-            width: 88,
-            render: (_: unknown, r: FeatureCalcRow) => (
-              <Tooltip title="相对最便宜 LLM 能力的成本比">
-                <Tag color={Math.abs(r.suggestedMultiplier - r.multiplier) > 0.2 ? "orange" : "default"}>
-                  {r.suggestedMultiplier}x
-                </Tag>
-              </Tooltip>
-            ),
-          },
-          {
-            title: "建议 base",
-            width: 96,
-            render: (_: unknown, r: FeatureCalcRow) =>
-              r.suggestedBaseTokenCost > 0 ? (
-                <Tag color="purple">{NUM(r.suggestedBaseTokenCost)}</Tag>
-              ) : (
-                "-"
-              ),
-          },
-          {
-            title: "",
-            width: 48,
-            render: (_: unknown, r: FeatureScenario) => (
-              <Button
-                danger
-                size="small"
-                type="text"
-                icon={<DeleteOutlined />}
-                onClick={() =>
-                  setScenarios((prev) => prev.filter((x) => x.id !== r.id))
-                }
-              />
-            ),
+            title: "建议",
+            children: [
+              {
+                title: "× / base",
+                width: 120,
+                render: (_: unknown, r: FeatureCalcRow) => (
+                  <Space size={4} wrap>
+                    <Tag
+                      color={
+                        Math.abs(r.suggestedMultiplier - r.multiplier) > 0.15
+                          ? "gold"
+                          : "default"
+                      }
+                    >
+                      {r.suggestedMultiplier}x
+                    </Tag>
+                    {r.suggestedBaseTokenCost > 0 && (
+                      <Tag color="purple">{NUM(r.suggestedBaseTokenCost)}</Tag>
+                    )}
+                  </Space>
+                ),
+              },
+              {
+                title: "操作",
+                width: 148,
+                render: (_: unknown, r: FeatureCalcRow) => {
+                  const rule = findRuleForScenario(r, billingRules);
+                  return (
+                    <Space size={0} wrap>
+                      <Button
+                        type="link"
+                        size="small"
+                        onClick={() => adoptSuggestionToScenario(r)}
+                      >
+                        采纳建议
+                      </Button>
+                      {owner && rule && (
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<CloudSyncOutlined />}
+                          onClick={() => applyRuleSuggestion(rule)}
+                        >
+                          写回
+                        </Button>
+                      )}
+                      <Button
+                        type="text"
+                        danger
+                        size="small"
+                        icon={<DeleteOutlined />}
+                        onClick={() =>
+                          setScenarios((prev) => prev.filter((x) => x.id !== r.id))
+                        }
+                      />
+                    </Space>
+                  );
+                },
+              },
+            ],
           },
         ]}
       />
+      {orphanRules.length > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          message={`${orphanRules.length} 条线上规则尚未纳入模拟`}
+          description={
+            <Space wrap style={{ marginTop: 8 }}>
+              {orphanRules.map((rule) => (
+                <Button
+                  key={rule.ruleKey}
+                  size="small"
+                  onClick={() => importRuleAsScenario(rule)}
+                >
+                  导入 {rule.displayName}
+                </Button>
+              ))}
+            </Space>
+          }
+        />
+      )}
       <Row gutter={16}>
-        <Col span={8}>
+        <Col xs={24} md={8}>
           <Card size="small">
-            <Typography.Text type="secondary">变量成本/店/月</Typography.Text>
-            <div>
-              <Typography.Title level={4} style={{ margin: "4px 0" }}>
-                {USD(totals.variableCostPerUser)}
-              </Typography.Title>
-            </div>
+            <Typography.Text type="secondary">变量成本 / 店 / 月</Typography.Text>
+            <Typography.Title level={4} style={{ margin: "4px 0" }}>
+              {USD(totals.variableCostPerUser)}
+            </Typography.Title>
           </Card>
         </Col>
-        <Col span={8}>
+        <Col xs={24} md={8}>
           <Card size="small">
-            <Typography.Text type="secondary">计费 Token/店/月</Typography.Text>
-            <div>
-              <Typography.Title level={4} style={{ margin: "4px 0" }}>
-                {NUM(totals.billedTokensPerUser)}
-              </Typography.Title>
-            </div>
+            <Typography.Text type="secondary">计费 Token / 店 / 月</Typography.Text>
+            <Typography.Title level={4} style={{ margin: "4px 0" }}>
+              {NUM(totals.billedTokensPerUser)}
+            </Typography.Title>
           </Card>
         </Col>
-        <Col span={8}>
+        <Col xs={24} md={8}>
           <Card size="small">
             <Typography.Text type="secondary">$/计费 Token</Typography.Text>
-            <div>
-              <Typography.Title level={4} style={{ margin: "4px 0" }}>
-                {USD(totals.effectiveCostPerBilledToken, 6)}
-              </Typography.Title>
-            </div>
+            <Typography.Title level={4} style={{ margin: "4px 0" }}>
+              {USD(totals.effectiveCostPerBilledToken, 6)}
+            </Typography.Title>
           </Card>
         </Col>
       </Row>
@@ -911,90 +1070,6 @@ export default function PricingWorkbenchV2() {
     </Space>
   );
 
-  const rulesTab = (
-    <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <Alert
-        type="info"
-        showIcon
-        message="计费规则建议"
-        description="对比 Turso TokenBillingRule 与工作台建议值。Owner 可一键写回 multiplier / baseTokenCost（不影响线上 PlanCatalog）。"
-      />
-      <Button icon={<ReloadOutlined />} onClick={loadRules} loading={rulesLoading}>
-        刷新规则
-      </Button>
-      <Table
-        size="small"
-        rowKey="ruleKey"
-        loading={rulesLoading}
-        pagination={{ pageSize: 15 }}
-        scroll={{ x: 1200 }}
-        dataSource={billingRules}
-        columns={[
-          { title: "规则", dataIndex: "ruleKey", render: (v: string) => <Typography.Text code style={{ fontSize: 11 }}>{v}</Typography.Text> },
-          { title: "名称", dataIndex: "displayName" },
-          { title: "倍率", dataIndex: "multiplier", render: (v: number) => `${v}x` },
-          {
-            title: "base",
-            dataIndex: "baseTokenCost",
-            render: (v: number | null) => (v != null ? NUM(v) : "-"),
-          },
-          {
-            title: "建议倍率",
-            render: (_: unknown, r: BillingRuleRow) => {
-              const calc =
-                featureRows.find(
-                  (x) => x.feature === r.feature && x.modelKey === r.modelKey,
-                ) ?? featureRows.find((x) => x.feature === r.feature);
-              return calc ? (
-                <Tag color={Math.abs(calc.suggestedMultiplier - r.multiplier) > 0.15 ? "orange" : "default"}>
-                  {calc.suggestedMultiplier}x
-                </Tag>
-              ) : (
-                "-"
-              );
-            },
-          },
-          {
-            title: "建议 base",
-            render: (_: unknown, r: BillingRuleRow) => {
-              const calc =
-                featureRows.find(
-                  (x) => x.feature === r.feature && x.modelKey === r.modelKey,
-                ) ?? featureRows.find((x) => x.feature === r.feature);
-              return calc && calc.suggestedBaseTokenCost > 0
-                ? NUM(calc.suggestedBaseTokenCost)
-                : "-";
-            },
-          },
-          ...(owner
-            ? [
-                {
-                  title: "操作",
-                  render: (_: unknown, r: BillingRuleRow) => {
-                    const calc =
-                      featureRows.find(
-                        (x) => x.feature === r.feature && x.modelKey === r.modelKey,
-                      ) ?? featureRows.find((x) => x.feature === r.feature);
-                    return (
-                      <Button
-                        type="link"
-                        size="small"
-                        icon={<CloudSyncOutlined />}
-                        disabled={!calc}
-                        onClick={() => applyRuleSuggestion(r, calc)}
-                      >
-                        应用建议
-                      </Button>
-                    );
-                  },
-                },
-              ]
-            : []),
-        ]}
-      />
-    </Space>
-  );
-
   if (loading) {
     return (
       <div style={{ textAlign: "center", padding: 80 }}>
@@ -1016,11 +1091,10 @@ export default function PricingWorkbenchV2() {
       >
         <div>
           <Typography.Title level={3} style={{ marginBottom: 4 }}>
-            定价工作台 v2
+            定价工作台
           </Typography.Title>
           <Typography.Paragraph type="secondary" style={{ margin: 0, maxWidth: 720 }}>
-            独立 v2 页面：模型/API 成本、基础设施固定成本与 Shopify 分成 → 套餐 Token 面值与计费倍率。
-            配置与「定价工作台」分离存储；月固定成本两项共用。
+            模型/API 成本、基础设施固定成本与 Shopify 分成 → 套餐 Token 面值与计费倍率。
           </Typography.Paragraph>
         </div>
         <Space>
@@ -1037,9 +1111,6 @@ export default function PricingWorkbenchV2() {
               保存配置
             </Button>
           )}
-          <Link to="/pricing-studio" style={{ fontSize: 13 }}>
-            原版定价工作台
-          </Link>
         </Space>
       </div>
 
@@ -1063,9 +1134,8 @@ export default function PricingWorkbenchV2() {
             ),
             children: overviewTab,
           },
-          { key: "features", label: "能力模型", children: featureTab },
+          { key: "capabilities", label: "能力与计费", children: capabilitiesTab },
           { key: "plans", label: "套餐对照", children: plansTab },
-          { key: "rules", label: "规则建议", children: rulesTab },
         ]}
       />
 

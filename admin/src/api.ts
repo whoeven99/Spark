@@ -552,7 +552,7 @@ export function deleteBillingRule(ruleKey: string): Promise<{ ok: boolean }> {
   return apiFetch(`/billing-rules/${encodeURIComponent(ruleKey)}`, { method: "DELETE" });
 }
 
-// --- Pricing Studio ---
+// --- Pricing Workbench ---
 
 export type MonthlyFixedCostItem = {
   id: string;
@@ -562,16 +562,6 @@ export type MonthlyFixedCostItem = {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
-};
-
-export type PricingStudioSettings = {
-  payingShops: number;
-  targetGrossMarginPct: number;
-  planPriceUsd: number;
-  tokenGrantPerUser: number;
-  blendedCostUsdPerMillionBilledToken: number;
-  shopifyRevSharePct: number;
-  paymentFeePct: number;
 };
 
 export type PlanCatalogItem = {
@@ -584,24 +574,6 @@ export type PlanCatalogItem = {
   priceAmount: string;
   currencyCode: string;
 };
-
-export function fetchPricingStudio(): Promise<{
-  settings: PricingStudioSettings;
-  fixedCosts: MonthlyFixedCostItem[];
-}> {
-  return apiFetch("/pricing-studio");
-}
-
-export function updatePricingStudioSettings(
-  settings: PricingStudioSettings,
-): Promise<{ ok: boolean }> {
-  return apiFetch("/pricing-studio/settings", {
-    method: "PUT",
-    body: JSON.stringify(settings),
-  });
-}
-
-// --- Pricing Workbench v2（独立配置，不覆盖 pricing-studio）---
 
 export type PricingWorkbenchV2Settings = {
   payingShops: number;
@@ -635,7 +607,7 @@ export function createMonthlyFixedCost(data: {
   enabled?: boolean;
   sortOrder?: number;
 }): Promise<{ ok: boolean; id: string }> {
-  return apiFetch("/pricing-studio/fixed-costs", {
+  return apiFetch("/pricing-workbench/fixed-costs", {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -650,14 +622,14 @@ export function updateMonthlyFixedCost(
     sortOrder?: number;
   },
 ): Promise<{ ok: boolean }> {
-  return apiFetch(`/pricing-studio/fixed-costs/${encodeURIComponent(id)}`, {
+  return apiFetch(`/pricing-workbench/fixed-costs/${encodeURIComponent(id)}`, {
     method: "PUT",
     body: JSON.stringify(data),
   });
 }
 
 export function deleteMonthlyFixedCost(id: string): Promise<{ ok: boolean }> {
-  return apiFetch(`/pricing-studio/fixed-costs/${encodeURIComponent(id)}`, {
+  return apiFetch(`/pricing-workbench/fixed-costs/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
 }

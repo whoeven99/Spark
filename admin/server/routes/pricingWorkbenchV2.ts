@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { getDb } from "../lib/db.js";
 import { requireOwner } from "../middleware/auth.js";
@@ -218,6 +219,124 @@ pricingWorkbenchV2Router.put("/settings", requireOwner, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("[pricing-workbench PUT settings]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+pricingWorkbenchV2Router.post("/fixed-costs", requireOwner, async (req, res) => {
+  try {
+    await readyTable();
+    const { name, amountUsd, enabled, sortOrder } = req.body as Record<string, unknown>;
+    if (!name || String(name).trim().length === 0) {
+      res.status(400).json({ error: "name required" });
+      return;
+    }
+
+    const parsedAmount = Number(amountUsd);
+    if (!Number.isFinite(parsedAmount) || parsedAmount < 0) {
+      res.status(400).json({ error: "amountUsd must be a non-negative number" });
+      return;
+    }
+
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    await getDb().execute({
+      sql: `
+        INSERT INTO AdminMonthlyFixedCost
+          (id, name, amountUsd, enabled, sortOrder, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      args: [
+        id,
+        String(name).trim(),
+        parsedAmount,
+        enabled === false ? 0 : 1,
+        Number.isFinite(Number(sortOrder)) ? Number(sortOrder) : 0,
+        now,
+        now,
+      ],
+    });
+
+    res.json({ ok: true, id });
+  } catch (err) {
+    console.error("[pricing-workbench POST fixed-costs]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+pricingWorkbenchV2Router.put("/fixed-costs/:id", requireOwner, async (req, res) => {
+  try {
+    await readyTable();
+    const { name, amountUsd, enabled, sortOrder } = req.body as Record<string, unknown>;
+    const sets: string[] = [];
+    const args: Array<string | number> = [];
+
+    if (name !== undefined) {
+      const n = String(name).trim();
+      if (!n) {
+        res.status(400).json({ error: "name cannot be empty" });
+        return;
+      }
+      sets.push("name = ?");
+      args.push(n);
+    }
+
+    if (amountUsd !== undefined) {
+      const amount = Number(amountUsd);
+      if (!Number.isFinite(amount) || amount < 0) {
+        res.status(400).json({ error: "amountUsd must be a non-negative number" });
+        return;
+      }
+      sets.push("amountUsd = ?");
+      args.push(amount);
+    }
+
+    if (enabled !== undefined) {
+      sets.push("enabled = ?");
+      args.push(enabled ? 1 : 0);
+    }
+
+    if (sortOrder !== undefined) {
+      const s = Number(sortOrder);
+      if (!Number.isFinite(s)) {
+        res.status(400).json({ error: "sortOrder must be a number" });
+        return;
+      }
+      sets.push("sortOrder = ?");
+      args.push(Math.floor(s));
+    }
+
+    if (sets.length === 0) {
+      res.status(400).json({ error: "No fields to update" });
+      return;
+    }
+
+    sets.push("updatedAt = ?");
+    args.push(new Date().toISOString());
+    args.push(String(req.params.id));
+
+    await getDb().execute({
+      sql: `UPDATE AdminMonthlyFixedCost SET ${sets.join(", ")} WHERE id = ?`,
+      args,
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[pricing-workbench PUT fixed-costs]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+pricingWorkbenchV2Router.delete("/fixed-costs/:id", requireOwner, async (req, res) => {
+  try {
+    await readyTable();
+    await getDb().execute({
+      sql: "DELETE FROM AdminMonthlyFixedCost WHERE id = ?",
+      args: [String(req.params.id)],
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[pricing-workbench DELETE fixed-costs]", err);
     res.status(500).json({ error: String(err) });
   }
 });
