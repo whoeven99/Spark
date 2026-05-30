@@ -5,7 +5,6 @@ import { useFetcher, useLoaderData } from "react-router";
 import type { loader } from "../app.product-improve";
 import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
 import { ProductSelector } from "../component/product/ProductSelector";
-import { TaskListSummary } from "../component/aiTask/TaskListSummary";
 import { ProductImproveTaskListPage } from "../component/productImprove/ProductImproveTaskListPage";
 import type { AITaskItem } from "../../lib/aiTaskTypes";
 import {
@@ -290,8 +289,6 @@ export function ProductImprovePage() {
 
         {pageTab === "config" && (
           <>
-            <TaskListSummary tasks={tasks} mode="product_improve" />
-
             <PageSurface
               title={t("productImproveStage1.configSurfaceTitle")}
               subtitle={t("productImproveStage1.configSurfaceSubtitle")}

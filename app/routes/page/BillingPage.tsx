@@ -298,6 +298,7 @@ export function BillingPage() {
   const [selectedPackKey, setSelectedPackKey] = useState(
     () => tokenPacks[0]?.planKey ?? "",
   );
+  const [showAccountDetailPage, setShowAccountDetailPage] = useState(false);
 
   const basePlan = pickSubscriptionPlan(subscriptionPlans, interval, "base");
   const proPlan = pickSubscriptionPlan(subscriptionPlans, interval, "pro");
@@ -418,56 +419,6 @@ export function BillingPage() {
   const selectedPack =
     tokenPacks.find((p) => p.planKey === selectedPackKey) ?? tokenPacks[0];
 
-  const featureCards = [
-    {
-      key: "trial",
-      title: trialPlan?.displayName ?? t("billing.planFree"),
-      price: formatPlanPrice("0", trialPlan?.currencyCode ?? "USD", locale),
-      cadence: t("billing.perMonth"),
-      bullets: [
-        t("billing.featureTrialTokens", {
-          count: (trialPlan?.tokens ?? 10000).toLocaleString(),
-        }),
-        t("billing.planDetailTrialAudience"),
-        t("billing.planDetailReviewFlow"),
-      ],
-    },
-    ...(basePlan
-      ? [
-          {
-            key: basePlan.planKey,
-            title: basePlan.displayName,
-            price: formatPlanPriceWithPeriod(basePlan),
-            cadence: "",
-            bullets: [
-              t("billing.featureTokensPerPeriod", {
-                count: basePlan.tokens.toLocaleString(),
-              }),
-              t("billing.planDetailBaseAudience"),
-              t("billing.planDetailBaseSupport"),
-            ],
-          },
-        ]
-      : []),
-    ...(proPlan
-      ? [
-          {
-            key: proPlan.planKey,
-            title: proPlan.displayName,
-            price: formatPlanPriceWithPeriod(proPlan),
-            cadence: "",
-            bullets: [
-              t("billing.featureTokensPerPeriod", {
-                count: proPlan.tokens.toLocaleString(),
-              }),
-              t("billing.planDetailProAudience"),
-              t("billing.planDetailProSupport"),
-            ],
-          },
-        ]
-      : []),
-  ];
-
   const faqItems = [
     {
       question: t("billing.faqBillingQuestion"),
@@ -486,6 +437,185 @@ export function BillingPage() {
       answer: t("billing.faqRefundAnswer"),
     },
   ];
+
+  const accountSummaryItems = [
+    {
+      key: "available",
+      label: t("billing.summaryAvailableCredits"),
+      value: billing.availableTokens.toLocaleString(),
+    },
+    {
+      key: "status",
+      label: t("billing.summarySubscriptionStatus"),
+      value: sub ? t(`billing.status.${sub.status}`) : t("billing.noSubscription"),
+    },
+    {
+      key: "period",
+      label: t("billing.summaryCurrentPeriod"),
+      value:
+        sub?.currentPeriodStart && sub?.currentPeriodEnd
+          ? `${formatDate(sub.currentPeriodStart, locale)} - ${formatDate(sub.currentPeriodEnd, locale)}`
+          : EMPTY,
+    },
+  ];
+
+  if (showAccountDetailPage) {
+    return (
+      <s-page heading={t("billing.accountDetailPageTitle")}>
+        <div style={pageContentStyle}>
+          <section className={styles.accountDetailPage}>
+            <div className={styles.accountDetailHeader}>
+              <button
+                type="button"
+                className={styles.backLinkButton}
+                onClick={() => setShowAccountDetailPage(false)}
+              >
+                {t("billing.backToBilling")}
+              </button>
+              <div className={styles.sectionHeadMain}>
+                <h2 className={styles.sectionTitle}>{t("billing.accountSectionTitle")}</h2>
+                <p className={styles.sectionSubtitle}>
+                  {t("billing.accountDetailPageSubtitle")}
+                </p>
+              </div>
+            </div>
+
+            <div className={styles.accountStack}>
+              <article className={styles.accountCard}>
+                <div className={styles.accountCardHeader}>
+                  <h3 className={styles.accountCardTitle}>{t("billing.sectionSubscription")}</h3>
+                  <span className={styles.accountCardBadge}>{currentPlanLabel}</span>
+                </div>
+                <dl className={styles.accountFacts}>
+                  <div className={styles.accountFact}>
+                    <dt>{t("billing.summarySubscriptionStatus")}</dt>
+                    <dd>
+                      {sub ? t(`billing.status.${sub.status}`) : t("billing.noSubscription")}
+                    </dd>
+                  </div>
+                  <div className={styles.accountFact}>
+                    <dt>{t("billing.summaryCurrentPeriod")}</dt>
+                    <dd>
+                      {sub?.currentPeriodStart && sub?.currentPeriodEnd
+                        ? `${formatDate(sub.currentPeriodStart, locale)} - ${formatDate(sub.currentPeriodEnd, locale)}`
+                        : EMPTY}
+                    </dd>
+                  </div>
+                  <div className={styles.accountFact}>
+                    <dt>{t("billing.summaryAvailableCredits")}</dt>
+                    <dd>{billing.availableTokens.toLocaleString()}</dd>
+                  </div>
+                  <div className={styles.accountFact}>
+                    <dt>{t("billing.summaryUsedCredits")}</dt>
+                    <dd>{billing.usedTokens.toLocaleString()}</dd>
+                  </div>
+                </dl>
+              </article>
+
+              <article className={styles.accountCard}>
+                <div className={styles.accountCardHeader}>
+                  <h3 className={styles.accountCardTitle}>{t("billing.historyTitle")}</h3>
+                  <span className={styles.accountCardMeta}>
+                    {t("billing.historyCount", {
+                      count: billingHistory.length,
+                    })}
+                  </span>
+                </div>
+                {billingHistory.length > 0 ? (
+                  <div className={styles.historyList}>
+                    {billingHistory.slice(0, 6).map((item) => (
+                      <div key={item.id} className={styles.historyItem}>
+                        <div className={styles.historyItemTop}>
+                          <span
+                            className={`${styles.historyTone} ${resolveBillingEventToneClass(item.eventType, styles)}`}
+                          >
+                            {resolveBillingEventLabel(item.eventType, t)}
+                          </span>
+                          <span className={styles.historyTimestamp}>
+                            {formatDateTime(item.createdAt, locale)}
+                          </span>
+                        </div>
+                        <div className={styles.historyItemMeta}>
+                          <span>
+                            {t("billing.historyPlanLabel")}:{" "}
+                            {resolvePlanDisplayName(item.planKey, allPlans)}
+                          </span>
+                          {item.tokensDelta != null ? (
+                            <span
+                              className={
+                                item.tokensDelta >= 0
+                                  ? styles.historyDeltaPositive
+                                  : styles.historyDeltaNegative
+                              }
+                            >
+                              {item.tokensDelta >= 0 ? "+" : ""}
+                              {item.tokensDelta.toLocaleString()} {t("billing.tokenUnit")}
+                            </span>
+                          ) : null}
+                          {item.usedTokens != null ? (
+                            <span>
+                              {t("billing.historyUsedLabel", {
+                                count: item.usedTokens.toLocaleString(),
+                              })}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className={styles.emptyPanel}>{t("billing.historyEmpty")}</div>
+                )}
+              </article>
+
+              <article className={styles.accountCard}>
+                <div className={styles.accountCardHeader}>
+                  <h3 className={styles.accountCardTitle}>{t("billing.usageHistoryTitle")}</h3>
+                  <span className={styles.accountCardMeta}>
+                    {t("billing.historyCount", {
+                      count: usageHistory.length,
+                    })}
+                  </span>
+                </div>
+                {usageHistory.length > 0 ? (
+                  <div className={styles.periodList}>
+                    {usageHistory.slice(0, 4).map((item: BillingUsagePeriodItem) => (
+                      <div key={item.id} className={styles.periodItem}>
+                        <div className={styles.periodItemTop}>
+                          <span className={styles.periodPlan}>
+                            {resolvePlanDisplayName(item.planKey, allPlans)}
+                          </span>
+                          <span className={styles.historyTimestamp}>
+                            {formatDate(item.periodStart, locale)} - {formatDate(item.periodEnd, locale)}
+                          </span>
+                        </div>
+                        <div className={styles.periodStats}>
+                          <span>
+                            {t("billing.periodUsageLabel", {
+                              used: item.usedTokens.toLocaleString(),
+                              total: item.subscriptionTokensAllocated.toLocaleString(),
+                            })}
+                          </span>
+                          <span>
+                            {t("billing.periodCarryLabel", {
+                              purchased: item.purchasedTokensRemaining.toLocaleString(),
+                              trial: item.trialTokensRemaining.toLocaleString(),
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className={styles.emptyPanel}>{t("billing.usageHistoryEmpty")}</div>
+                )}
+              </article>
+            </div>
+          </section>
+        </div>
+      </s-page>
+    );
+  }
 
   return (
     <s-page heading={t("billing.pageTitle")}>
@@ -605,143 +735,30 @@ export function BillingPage() {
           ) : null}
         </section>
 
-        <section className={styles.accountSection}>
+        <section className={styles.accountEntrySection}>
           <div className={styles.sectionHead}>
             <div className={styles.sectionHeadMain}>
               <h2 className={styles.sectionTitle}>{t("billing.accountSectionTitle")}</h2>
               <p className={styles.sectionSubtitle}>{t("billing.accountSectionSubtitle")}</p>
             </div>
+            <button
+              type="button"
+              className={styles.secondaryEntryButton}
+              onClick={() => setShowAccountDetailPage(true)}
+            >
+              {t("billing.openAccountDetailPage")}
+            </button>
           </div>
-          <div className={styles.accountGrid}>
-            <article className={styles.accountCard}>
-              <div className={styles.accountCardHeader}>
-                <h3 className={styles.accountCardTitle}>{t("billing.sectionSubscription")}</h3>
-                <span className={styles.accountCardBadge}>{currentPlanLabel}</span>
-              </div>
-              <dl className={styles.accountFacts}>
-                <div className={styles.accountFact}>
-                  <dt>{t("billing.summarySubscriptionStatus")}</dt>
-                  <dd>
-                    {sub ? t(`billing.status.${sub.status}`) : t("billing.noSubscription")}
-                  </dd>
+          <div className={styles.accountEntryCard}>
+            <div className={styles.accountEntrySummary}>
+              {accountSummaryItems.map((item) => (
+                <div key={item.key} className={styles.accountEntryItem}>
+                  <span className={styles.accountEntryLabel}>{item.label}</span>
+                  <span className={styles.accountEntryValue}>{item.value}</span>
                 </div>
-                <div className={styles.accountFact}>
-                  <dt>{t("billing.summaryCurrentPeriod")}</dt>
-                  <dd>
-                    {sub?.currentPeriodStart && sub?.currentPeriodEnd
-                      ? `${formatDate(sub.currentPeriodStart, locale)} - ${formatDate(sub.currentPeriodEnd, locale)}`
-                      : EMPTY}
-                  </dd>
-                </div>
-                <div className={styles.accountFact}>
-                  <dt>{t("billing.summaryAvailableCredits")}</dt>
-                  <dd>{billing.availableTokens.toLocaleString()}</dd>
-                </div>
-                <div className={styles.accountFact}>
-                  <dt>{t("billing.summaryUsedCredits")}</dt>
-                  <dd>{billing.usedTokens.toLocaleString()}</dd>
-                </div>
-              </dl>
-            </article>
-
-            <article className={styles.accountCard}>
-              <div className={styles.accountCardHeader}>
-                <h3 className={styles.accountCardTitle}>{t("billing.historyTitle")}</h3>
-                <span className={styles.accountCardMeta}>
-                  {t("billing.historyCount", {
-                    count: billingHistory.length,
-                  })}
-                </span>
-              </div>
-              {billingHistory.length > 0 ? (
-                <div className={styles.historyList}>
-                  {billingHistory.slice(0, 6).map((item) => (
-                    <div key={item.id} className={styles.historyItem}>
-                      <div className={styles.historyItemTop}>
-                        <span
-                          className={`${styles.historyTone} ${resolveBillingEventToneClass(item.eventType, styles)}`}
-                        >
-                          {resolveBillingEventLabel(item.eventType, t)}
-                        </span>
-                        <span className={styles.historyTimestamp}>
-                          {formatDateTime(item.createdAt, locale)}
-                        </span>
-                      </div>
-                      <div className={styles.historyItemMeta}>
-                        <span>
-                          {t("billing.historyPlanLabel")}:{" "}
-                          {resolvePlanDisplayName(item.planKey, allPlans)}
-                        </span>
-                        {item.tokensDelta != null ? (
-                          <span
-                            className={
-                              item.tokensDelta >= 0
-                                ? styles.historyDeltaPositive
-                                : styles.historyDeltaNegative
-                            }
-                          >
-                            {item.tokensDelta >= 0 ? "+" : ""}
-                            {item.tokensDelta.toLocaleString()} {t("billing.tokenUnit")}
-                          </span>
-                        ) : null}
-                        {item.usedTokens != null ? (
-                          <span>
-                            {t("billing.historyUsedLabel", {
-                              count: item.usedTokens.toLocaleString(),
-                            })}
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className={styles.emptyPanel}>{t("billing.historyEmpty")}</div>
-              )}
-            </article>
-
-            <article className={styles.accountCard}>
-              <div className={styles.accountCardHeader}>
-                <h3 className={styles.accountCardTitle}>{t("billing.usageHistoryTitle")}</h3>
-                <span className={styles.accountCardMeta}>
-                  {t("billing.historyCount", {
-                    count: usageHistory.length,
-                  })}
-                </span>
-              </div>
-              {usageHistory.length > 0 ? (
-                <div className={styles.periodList}>
-                  {usageHistory.slice(0, 4).map((item: BillingUsagePeriodItem) => (
-                    <div key={item.id} className={styles.periodItem}>
-                      <div className={styles.periodItemTop}>
-                        <span className={styles.periodPlan}>
-                          {resolvePlanDisplayName(item.planKey, allPlans)}
-                        </span>
-                        <span className={styles.historyTimestamp}>
-                          {formatDate(item.periodStart, locale)} - {formatDate(item.periodEnd, locale)}
-                        </span>
-                      </div>
-                      <div className={styles.periodStats}>
-                        <span>
-                          {t("billing.periodUsageLabel", {
-                            used: item.usedTokens.toLocaleString(),
-                            total: item.subscriptionTokensAllocated.toLocaleString(),
-                          })}
-                        </span>
-                        <span>
-                          {t("billing.periodCarryLabel", {
-                            purchased: item.purchasedTokensRemaining.toLocaleString(),
-                            trial: item.trialTokensRemaining.toLocaleString(),
-                          })}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className={styles.emptyPanel}>{t("billing.usageHistoryEmpty")}</div>
-              )}
-            </article>
+              ))}
+            </div>
+            <p className={styles.accountEntryHint}>{t("billing.accountEntryHint")}</p>
           </div>
         </section>
 
@@ -949,39 +966,6 @@ export function BillingPage() {
                 ))}
               </tbody>
             </table>
-          </section>
-        ) : null}
-
-        {featureCards.length > 0 ? (
-          <section className={styles.detailSection}>
-            <div className={styles.sectionHead}>
-              <div className={styles.sectionHeadMain}>
-                <h2 className={styles.sectionTitle}>{t("billing.featureDetailsTitle")}</h2>
-                <p className={styles.sectionSubtitle}>{t("billing.featureDetailsSubtitle")}</p>
-              </div>
-            </div>
-            <div className={styles.detailGrid}>
-              {featureCards.map((card) => (
-                <article key={card.key} className={styles.detailCard}>
-                  <div className={styles.detailCardTop}>
-                    <h3 className={styles.detailCardTitle}>{card.title}</h3>
-                    <div className={styles.detailPrice}>
-                      <span className={styles.detailPriceValue}>{card.price}</span>
-                      {card.cadence ? (
-                        <span className={styles.detailPriceSuffix}>{card.cadence}</span>
-                      ) : null}
-                    </div>
-                  </div>
-                  <ul className={styles.detailBulletList}>
-                    {card.bullets.map((bullet) => (
-                      <li key={bullet} className={styles.detailBulletItem}>
-                        {bullet}
-                      </li>
-                    ))}
-                  </ul>
-                </article>
-              ))}
-            </div>
           </section>
         ) : null}
 

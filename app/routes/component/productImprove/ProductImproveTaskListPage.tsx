@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { pageColorTokens, pageEmptyStateStyle } from "../../page/pageUiStyles";
 import { ProductImproveTaskCard } from "./ProductImproveTaskCard";
 import { ProductImproveTaskDetailPage } from "./ProductImproveTaskDetailPage";
-import { TaskListSummary } from "../aiTask/TaskListSummary";
 import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 
 type TaskViewTab = "current" | "history";
@@ -91,8 +90,6 @@ export function ProductImproveTaskListPage({
         />
       ) : visibleTasks.length === 0 ? (
         <>
-          <TaskListSummary tasks={sorted} mode="product_improve" />
-
           <div
             style={{
               display: "flex",
@@ -157,8 +154,6 @@ export function ProductImproveTaskListPage({
         </>
       ) : (
         <>
-          <TaskListSummary tasks={sorted} mode="product_improve" />
-
           <div
             style={{
               display: "flex",
