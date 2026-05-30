@@ -111,7 +111,7 @@ npm run build  # 推送前必须通过
 
 ## 相关文档
 
-- **[AGENT.md](./AGENT.md)** - Agent 专用上下文（详细代码结构、流程、诊断等）
+- **[AGENTS.md](./AGENTS.md)** - Agent 专用上下文（详细代码结构、流程、诊断等）
 - **[docs/PROJECT_CONTEXT.md](./docs/PROJECT_CONTEXT.md)** - 完整架构与约定
 - **[docs/translation-agent.md](./docs/translation-agent.md)** - 翻译功能设计
 - **[docs/generateDescription.md](./docs/generateDescription.md)** - 生成描述方案
