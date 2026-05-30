@@ -406,7 +406,22 @@
     "openReview": "Open review",
     "continueProcess": "Continue",
     "backToConfig": "Back to config",
-    "stage1BatchHint": "Stage 1 focuses on the single-task structure. Batch execution will be connected in a later phase."
+    "stage1BatchHint": "Stage 1 focuses on the single-task structure. Batch execution will be connected in a later phase.",
+    "configSurfaceTitle": "Generation config",
+    "configSurfaceSubtitle": "Select a product and target language, then create a task. The pre-run estimate appears in the confirmation dialog.",
+    "targetLanguageHint": "Language controls tone and output. After creating a task, continue review in the task list.",
+    "confirmFlowHint": "Creating a task opens a confirmation dialog with scope, estimated time, and tokens before submission.",
+    "createTaskAction": "Create generation task",
+    "submitting": "Submitting…",
+    "toastSelectProduct": "Select or enter a product ID first",
+    "toastTaskCreated": "Copy generation task created. Track progress in the task list.",
+    "confirmDialogTitle": "Create product copy task?",
+    "confirmDialogDesc": "You will be taken to the task list to track progress, review results, and apply changes to Shopify.",
+    "confirmLabelTarget": "Task target",
+    "confirmDialogFootnote": "Creating a task does not write to Shopify. Review results on the task page before applying.",
+    "confirmAndCreate": "Confirm and create",
+    "productFallbackName": "Product {{id}}",
+    "estimatedTokenValue": "{{count}} Token"
   },
   "credentials": {
     "suggestionTitle": "Submit suggestion",

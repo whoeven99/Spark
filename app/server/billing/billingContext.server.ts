@@ -1,4 +1,9 @@
-import type { Account, AppSubscription } from "../../generated/prisma";
+import type {
+  Account,
+  AccountPeriodUsage,
+  AppSubscription,
+  BillingLog,
+} from "../../generated/prisma";
 import prisma from "../../db.server";
 import {
   getAvailableTokens,
@@ -17,53 +22,11 @@ import type {
 import { listEnabledPlansForApp, type PlanRecord } from "./plans/planCatalog.server";
 import { APP_SUBSCRIPTION_STATUS, PLAN_CATALOG_KIND } from "./types.server";
 
-const billingDb = prisma as typeof prisma & {
-  appSubscription: {
-    findUnique: (args: unknown) => Promise<AppSubscription | null>;
-  };
-  accountPeriodUsage: {
-    findMany: (args: unknown) => Promise<
-      Array<{
-        id: string;
-        planKey: string;
-        periodStart: Date;
-        periodEnd: Date;
-        usedTokens: number;
-        subscriptionTokensAllocated: number;
-        purchasedTokensRemaining: number;
-        trialTokensRemaining: number;
-        archivedAt: Date;
-      }>
-    >;
-  };
-  billingLog: {
-    findMany: (args: unknown) => Promise<
-      Array<{
-        id: string;
-        eventType: string;
-        planKey: string | null;
-        referenceId: string | null;
-        tokensDelta: number | null;
-        usedTokens: number | null;
-        createdAt: Date;
-      }>
-    >;
-  };
-};
-
 function toIso(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null;
 }
 
-function toBillingHistoryItem(row: {
-  id: string;
-  eventType: string;
-  planKey: string | null;
-  referenceId: string | null;
-  tokensDelta: number | null;
-  usedTokens: number | null;
-  createdAt: Date;
-}): BillingHistoryItem {
+function toBillingHistoryItem(row: BillingLog): BillingHistoryItem {
   return {
     id: row.id,
     eventType: row.eventType,
@@ -75,17 +38,7 @@ function toBillingHistoryItem(row: {
   };
 }
 
-function toBillingUsagePeriodItem(row: {
-  id: string;
-  planKey: string;
-  periodStart: Date;
-  periodEnd: Date;
-  usedTokens: number;
-  subscriptionTokensAllocated: number;
-  purchasedTokensRemaining: number;
-  trialTokensRemaining: number;
-  archivedAt: Date;
-}): BillingUsagePeriodItem {
+function toBillingUsagePeriodItem(row: AccountPeriodUsage): BillingUsagePeriodItem {
   return {
     id: row.id,
     planKey: row.planKey,
@@ -139,12 +92,12 @@ export async function loadBillingPageData(
 ): Promise<BillingPageLoaderData> {
   const ctx = await loadBillingContext(shop, appName);
   const [usageHistoryRows, billingHistoryRows] = await Promise.all([
-    billingDb.accountPeriodUsage.findMany({
+    prisma.accountPeriodUsage.findMany({
       where: { shop, appName },
       orderBy: { periodEnd: "desc" },
       take: 6,
     }),
-    billingDb.billingLog.findMany({
+    prisma.billingLog.findMany({
       where: { shop, appName },
       orderBy: { createdAt: "desc" },
       take: 12,
@@ -193,7 +146,7 @@ export async function loadBillingContext(
   }
 
   const account = await ensureAccount(shop, appName);
-  const subscription = await billingDb.appSubscription.findUnique({
+  const subscription = await prisma.appSubscription.findUnique({
     where: { shop_appName: { shop, appName } },
   });
 

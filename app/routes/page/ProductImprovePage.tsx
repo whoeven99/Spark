@@ -33,6 +33,8 @@ function PageTabBar({
   onTabChange: (tab: PageTab) => void;
   runningCount: number;
 }) {
+  const { t } = useTranslation();
+
   const btnStyle = (active: boolean): React.CSSProperties => ({
     padding: "9px 16px",
     borderRadius: 999,
@@ -64,10 +66,10 @@ function PageTabBar({
       }}
     >
       <button type="button" style={btnStyle(activeTab === "config")} onClick={() => onTabChange("config")}>
-        配置页
+        {t("productImproveStage1.tabsConfig")}
       </button>
       <button type="button" style={btnStyle(activeTab === "tasks")} onClick={() => onTabChange("tasks")}>
-        任务列表
+        {t("productImproveStage1.tabsTasks")}
         {runningCount > 0 && (
           <span
             style={{
@@ -95,7 +97,7 @@ function PageTabBar({
             border: `1px solid ${pageColorTokens.borderSubtle}`,
           }}
         >
-          执行中、待审查、已应用和评分结果统一在这里查看。
+          {t("productImproveStage1.taskListSubtitle")}
         </span>
       )}
     </div>
@@ -129,14 +131,14 @@ export function ProductImprovePage() {
   const search =
     typeof window !== "undefined" ? window.location.search : "";
 
-  const runningCount = tasks.filter((t) => t.status === "running").length;
+  const runningCount = tasks.filter((task) => task.status === "running").length;
 
   const localeOptions = shopLocales?.localeOptions ?? [];
 
   const productIdForActions = (selectedProduct?.id ?? productId).trim();
 
   function handleTaskDeleted(taskId: string) {
-    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    setTasks((prev) => prev.filter((task) => task.id !== taskId));
   }
 
   function handleTaskUpdated(
@@ -205,7 +207,7 @@ export function ProductImprovePage() {
 
   function handleOpenConfirm() {
     if (!productIdForActions) {
-      shopify.toast.show("请先选择或输入商品 ID");
+      shopify.toast.show(t("productImproveStage1.toastSelectProduct"));
       return;
     }
     setConfirmOpen(true);
@@ -266,16 +268,28 @@ export function ProductImprovePage() {
 
     setTasks((prev) => [optimisticTask, ...prev]);
     setPageTab("tasks");
-    shopify.toast.show("文案生成任务已创建，请在任务列表中查看进度");
-  }, [fetcher.data, fetcher.state, shopify, targetLanguage]);
+    shopify.toast.show(t("productImproveStage1.toastTaskCreated"));
+  }, [fetcher.data, fetcher.state, shopify, t, targetLanguage]);
 
   const errorText =
     actionData && !actionData.success ? actionData.errorMsg : null;
 
-  // Estimate panel values
-  const selectedName = selectedProduct?.title ?? (productId ? `商品 ${productId}` : null);
+  const selectedName =
+    selectedProduct?.title ??
+    (productId ? t("productImproveStage1.productFallbackName", { id: productId }) : null);
   const selectedLanguageLabel =
     localeOptions.find((o) => o.value === targetLanguage)?.label ?? targetLanguage;
+
+  const confirmSummaryItems = [
+    { key: "target", label: t("productImproveStage1.confirmLabelTarget"), value: selectedName ?? "-" },
+    { key: "language", label: t("productImproveStage1.taskLanguage"), value: selectedLanguageLabel },
+    { key: "time", label: t("productImproveStage1.estimateTime"), value: ESTIMATED_DURATION },
+    {
+      key: "tokens",
+      label: t("productImproveStage1.estimateCredits"),
+      value: t("productImproveStage1.estimatedTokenValue", { count: ESTIMATED_TOKENS }),
+    },
+  ] as const;
 
   return (
     <s-page heading={t("generate.pageTitle")}>
@@ -289,7 +303,7 @@ export function ProductImprovePage() {
 
         <PageSectionHeader
           title={t("generate.sectionTitle")}
-          subtitle="在配置页发起任务，并在任务列表中完成审查与写入。"
+          subtitle={t("productImproveStage1.subtitle")}
         />
 
         <PageTabBar
@@ -300,7 +314,10 @@ export function ProductImprovePage() {
 
         {pageTab === "config" && (
           <>
-            <PageSurface title="生成配置" subtitle="选择商品与目标语言后点击生成，执行前预估会在二次确认弹窗中展示。">
+            <PageSurface
+              title={t("productImproveStage1.configSurfaceTitle")}
+              subtitle={t("productImproveStage1.configSurfaceSubtitle")}
+            >
               <s-stack direction="block" gap="base">
                 <ProductSelector
                   locationSearch={search}
@@ -353,7 +370,7 @@ export function ProductImprovePage() {
                     ))}
                   </select>
                   <div style={pageHintTextStyle}>
-                    语言用于控制生成语气和输出结果，发起任务后可在任务列表中继续审查。
+                    {t("productImproveStage1.targetLanguageHint")}
                   </div>
                 </div>
 
@@ -369,7 +386,7 @@ export function ProductImprovePage() {
                     border: `1px solid ${pageColorTokens.borderSubtle}`,
                   }}
                 >
-                  点击“创建生成任务”后会先弹出二次确认，展示任务目标、预估耗时和预估 Token，再确认创建。
+                  {t("productImproveStage1.confirmFlowHint")}
                 </div>
 
                 <s-stack direction="inline" gap="small">
@@ -379,7 +396,9 @@ export function ProductImprovePage() {
                     onClick={handleOpenConfirm}
                     {...(isSubmitting || !productIdForActions ? { disabled: true } : {})}
                   >
-                    {isSubmitting ? "提交中..." : "创建生成任务"}
+                    {isSubmitting
+                      ? t("productImproveStage1.submitting")
+                      : t("productImproveStage1.createTaskAction")}
                   </s-button>
                 </s-stack>
               </s-stack>
@@ -411,7 +430,7 @@ export function ProductImprovePage() {
                     marginBottom: "0.45rem",
                   }}
                 >
-                  确认创建商品文案任务？
+                  {t("productImproveStage1.confirmDialogTitle")}
                 </div>
                 <div
                   style={{
@@ -421,7 +440,7 @@ export function ProductImprovePage() {
                     marginBottom: "0.9rem",
                   }}
                 >
-                  创建后会进入任务页查看执行进度、结果审核和后续写入 Shopify 的应用流程。
+                  {t("productImproveStage1.confirmDialogDesc")}
                 </div>
                 <div
                   style={{
@@ -431,18 +450,8 @@ export function ProductImprovePage() {
                     marginBottom: "0.9rem",
                   }}
                 >
-                  {[
-                    { label: "任务目标", value: selectedName ?? "-" },
-                    { label: "目标语言", value: selectedLanguageLabel },
-                    { label: "预估耗时", value: ESTIMATED_DURATION },
-                    { label: "预估 Token", value: `${ESTIMATED_TOKENS} Token` },
-                  ].map((item) => (
-                    <div
-                      key={item.label}
-                      style={{
-                        minWidth: 0,
-                      }}
-                    >
+                  {confirmSummaryItems.map((item) => (
+                    <div key={item.key} style={{ minWidth: 0 }}>
                       <div style={{ fontSize: "0.6875rem", color: pageColorTokens.textSecondary }}>
                         {item.label}
                       </div>
@@ -468,7 +477,7 @@ export function ProductImprovePage() {
                     marginBottom: "1rem",
                   }}
                 >
-                  任务创建后不会直接写入 Shopify。你仍可在任务页中查看结果、人工审核并决定是否应用。
+                  {t("productImproveStage1.confirmDialogFootnote")}
                 </div>
                 <s-stack direction="inline" gap="small">
                   <s-button
@@ -477,7 +486,7 @@ export function ProductImprovePage() {
                     onClick={() => setConfirmOpen(false)}
                     {...(isSubmitting ? { disabled: true } : {})}
                   >
-                    取消
+                    {t("common.cancel")}
                   </s-button>
                   <s-button
                     type="button"
@@ -485,7 +494,9 @@ export function ProductImprovePage() {
                     onClick={() => void handleGenerateConfirmed()}
                     {...(isSubmitting ? { disabled: true } : {})}
                   >
-                    {isSubmitting ? "提交中..." : "确认并创建"}
+                    {isSubmitting
+                      ? t("productImproveStage1.submitting")
+                      : t("productImproveStage1.confirmAndCreate")}
                   </s-button>
                 </s-stack>
               </div>

@@ -406,7 +406,22 @@
     "openReview": "打开审查",
     "continueProcess": "继续加工",
     "backToConfig": "返回配置页",
-    "stage1BatchHint": "阶段 1 先完成单任务结构重组，批量执行将在后续阶段接入。"
+    "stage1BatchHint": "阶段 1 先完成单任务结构重组，批量执行将在后续阶段接入。",
+    "configSurfaceTitle": "生成配置",
+    "configSurfaceSubtitle": "选择商品与目标语言后点击生成，执行前预估会在二次确认弹窗中展示。",
+    "targetLanguageHint": "语言用于控制生成语气和输出结果，发起任务后可在任务列表中继续审查。",
+    "confirmFlowHint": "点击「创建生成任务」后会先弹出二次确认，展示任务目标、预估耗时和预估 Token，再确认创建。",
+    "createTaskAction": "创建生成任务",
+    "submitting": "提交中…",
+    "toastSelectProduct": "请先选择或输入商品 ID",
+    "toastTaskCreated": "文案生成任务已创建，请在任务列表中查看进度",
+    "confirmDialogTitle": "确认创建商品文案任务？",
+    "confirmDialogDesc": "创建后会进入任务页查看执行进度、结果审核和后续写入 Shopify 的应用流程。",
+    "confirmLabelTarget": "任务目标",
+    "confirmDialogFootnote": "任务创建后不会直接写入 Shopify。你仍可在任务页中查看结果、人工审核并决定是否应用。",
+    "confirmAndCreate": "确认并创建",
+    "productFallbackName": "商品 {{id}}",
+    "estimatedTokenValue": "{{count}} Token"
   },
   "credentials": {
     "suggestionTitle": "提交建议",
