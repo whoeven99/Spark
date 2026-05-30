@@ -2,107 +2,21 @@ import { useEffect, useRef, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import { useFetcher, useLoaderData } from "react-router";
+import { Alert, Button, Card, Collapse, Input, Modal, Select, Space, Tabs, Tag } from "antd";
 import type { loader } from "../app.product-improve";
 import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
 import { ProductSelector } from "../component/product/ProductSelector";
 import { ProductImproveTaskListPage } from "../component/productImprove/ProductImproveTaskListPage";
 import type { AITaskItem } from "../../lib/aiTaskTypes";
-import {
-  PageSectionHeader,
-  PageSurface,
-  formErrorBoxStyle,
-  pageColorTokens,
-  pageContentStyle,
-  pageFieldLabelStyle,
-  pageHintTextStyle,
-  pageLinkHintStyle,
-  pageSelectStyle,
-  pageTrustFootnoteStyle,
-} from "./pageUiStyles";
+import { pageContentStyle, pageTrustFootnoteStyle } from "./pageUiStyles";
 
 type PageTab = "config" | "tasks";
 const ESTIMATED_TOKENS = 320;
 const ESTIMATED_DURATION = "1-2 min";
 
-function PageTabBar({
-  activeTab,
-  onTabChange,
-  runningCount,
-}: {
-  activeTab: PageTab;
-  onTabChange: (tab: PageTab) => void;
-  runningCount: number;
-}) {
-  const { t } = useTranslation();
-
-  const btnStyle = (active: boolean): React.CSSProperties => ({
-    padding: "9px 16px",
-    borderRadius: 999,
-    border: `1px solid ${active ? pageColorTokens.borderSubtle : "transparent"}`,
-    background: active ? pageColorTokens.surface : "transparent",
-    color: active ? pageColorTokens.textPrimary : pageColorTokens.textSecondary,
-    boxShadow: active ? pageColorTokens.shadowCard : "none",
-    fontWeight: active ? 700 : 600,
-    fontSize: 14,
-    cursor: "pointer",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-  });
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        gap: 4,
-        alignItems: "center",
-        background: pageColorTokens.surfaceMuted,
-        border: `1px solid ${pageColorTokens.borderSubtle}`,
-        borderRadius: 999,
-        padding: "5px",
-        marginBottom: 20,
-        boxShadow: "inset 0 1px 2px rgba(0,0,0,0.03)",
-        flexWrap: "wrap",
-      }}
-    >
-      <button type="button" style={btnStyle(activeTab === "config")} onClick={() => onTabChange("config")}>
-        {t("productImproveStage1.tabsConfig")}
-      </button>
-      <button type="button" style={btnStyle(activeTab === "tasks")} onClick={() => onTabChange("tasks")}>
-        {t("productImproveStage1.tabsTasks")}
-        {runningCount > 0 && (
-          <span
-            style={{
-              background: pageColorTokens.brandGreen,
-              color: "#fff",
-              borderRadius: 10,
-              padding: "1px 8px",
-              fontSize: 11,
-              fontWeight: 700,
-            }}
-          >
-            {runningCount}
-          </span>
-        )}
-      </button>
-      {activeTab === "tasks" && (
-        <span
-          style={{
-            fontSize: 13,
-            color: pageColorTokens.textSecondary,
-            marginLeft: 8,
-            padding: "0.35rem 0.75rem",
-            borderRadius: 999,
-            background: pageColorTokens.surface,
-            border: `1px solid ${pageColorTokens.borderSubtle}`,
-          }}
-        >
-          {t("productImproveStage1.taskListSubtitle")}
-        </span>
-      )}
-    </div>
-  );
-}
+const sectionCardClassName =
+  "spark-ant-card rounded-app-card border border-app-subtle bg-app-card shadow-app-card";
+const subtlePanelClassName = "rounded-app-control border border-app-subtle bg-app-subtle p-4";
 
 export function ProductImprovePage() {
   const shopify = useAppBridge();
@@ -191,19 +105,6 @@ export function ProductImprovePage() {
     estimatedCredits: number;
   } | null>(null);
   const lastHandledTaskIdRef = useRef<string | undefined>();
-  const confirmDialogRef = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    const el = confirmDialogRef.current;
-    if (!el) return;
-    if (confirmOpen) {
-      if (!el.open) {
-        el.showModal();
-      }
-    } else if (el.open) {
-      el.close();
-    }
-  }, [confirmOpen]);
 
   function handleOpenConfirm() {
     if (!productIdForActions) {
@@ -291,230 +192,247 @@ export function ProductImprovePage() {
     },
   ] as const;
 
+  const billingBadge =
+    billing.billingRequired && !billing.hasAccess ? (
+      <Tag
+        bordered={false}
+        className="m-0 rounded-full bg-app-warning-subtle px-3 py-1 text-app-warning"
+      >
+        {t("generate.billingBadgeLow")}
+      </Tag>
+    ) : null;
+
   return (
     <s-page heading={t("generate.pageTitle")}>
       <div style={pageContentStyle}>
         {billing.billingRequired && !billing.hasAccess ? (
-          <s-banner tone="warning">
-            {t("billing.lowBalanceWarning")}{" "}
-            <s-link href={`/app/billing${search}`}>{t("billing.openBillingPage")}</s-link>
-          </s-banner>
+          <Alert
+            type="warning"
+            showIcon
+            message={
+              <span>
+                {t("billing.lowBalanceWarning")}{" "}
+                <a
+                  href={`/app/billing${search}`}
+                  className="font-semibold text-app-primary underline-offset-2 hover:underline"
+                >
+                  {t("billing.openBillingPage")}
+                </a>
+              </span>
+            }
+          />
         ) : null}
 
-        <PageSectionHeader
-          title={t("generate.sectionTitle")}
-          subtitle={t("productImproveStage1.subtitle")}
-        />
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg font-semibold text-app-text-primary">
+              {t("generate.sectionTitle")}
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-app-text-secondary">
+              {t("productImproveStage1.subtitle")}
+            </p>
+          </div>
+          {billingBadge}
+        </div>
 
-        <PageTabBar
-          activeTab={pageTab}
-          onTabChange={setPageTab}
-          runningCount={runningCount}
-        />
-
-        {pageTab === "config" && (
-          <>
-            <PageSurface
-              title={t("productImproveStage1.configSurfaceTitle")}
-              subtitle={t("productImproveStage1.configSurfaceSubtitle")}
-            >
-              <s-stack direction="block" gap="base">
-                <ProductSelector
-                  locationSearch={search}
-                  selected={selectedProduct}
-                  onSelectedChange={setSelectedProduct}
-                />
-
-                <details
-                  style={{
-                    marginTop: "0.25rem",
-                    padding: "0.85rem 0.95rem",
-                    borderRadius: pageColorTokens.radiusControl,
-                    background: pageColorTokens.surfaceSubtle,
-                    border: `1px solid ${pageColorTokens.borderSubtle}`,
-                  }}
-                  open={showManualProductId}
-                  onToggle={(e) => setShowManualProductId(e.currentTarget.open)}
-                >
-                  <summary style={pageLinkHintStyle}>
-                    {t("generate.advancedManualProductId")}
-                  </summary>
-                  <div style={{ marginTop: "0.65rem" }}>
-                    <s-text-field
-                      label={t("generate.productIdLabel")}
-                      value={productId}
-                      onChange={(e) => setProductId(e.currentTarget.value)}
-                      autocomplete="off"
-                    />
-                  </div>
-                </details>
-
-                <div>
-                  <label htmlFor="pi-target-lang" style={pageFieldLabelStyle}>
-                    {t("generate.targetLanguage")}
-                  </label>
-                  <select
-                    id="pi-target-lang"
-                    value={targetLanguage}
-                    onChange={(e) => setTargetLanguage(e.target.value)}
-                    disabled={isSubmitting}
-                    style={pageSelectStyle(isSubmitting)}
-                  >
-                    {localeOptions.length === 0 && (
-                      <option value="zh-CN">Chinese (Simplified) (zh-CN)</option>
-                    )}
-                    {localeOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                  <div style={pageHintTextStyle}>
-                    {t("productImproveStage1.targetLanguageHint")}
-                  </div>
-                </div>
-
-                {errorText ? <div style={formErrorBoxStyle}>{errorText}</div> : null}
-
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: pageColorTokens.textFootnote,
-                    padding: "0.75rem 0.85rem",
-                    borderRadius: pageColorTokens.radiusControl,
-                    background: pageColorTokens.surfaceSubtle,
-                    border: `1px solid ${pageColorTokens.borderSubtle}`,
-                  }}
-                >
-                  {t("productImproveStage1.confirmFlowHint")}
-                </div>
-
-                <s-stack direction="inline" gap="small">
-                  <s-button
-                    type="button"
-                    variant="primary"
-                    onClick={handleOpenConfirm}
-                    {...(isSubmitting || !productIdForActions ? { disabled: true } : {})}
-                  >
-                    {isSubmitting
-                      ? t("productImproveStage1.submitting")
-                      : t("productImproveStage1.createTaskAction")}
-                  </s-button>
-                </s-stack>
-              </s-stack>
-            </PageSurface>
-
-            <dialog
-              ref={confirmDialogRef}
-              onCancel={(e) => {
-                e.preventDefault();
-                if (!isSubmitting) {
-                  setConfirmOpen(false);
-                }
-              }}
-              style={{
-                maxWidth: "460px",
-                width: "calc(100% - 2rem)",
-                padding: 0,
-                border: "none",
-                borderRadius: "12px",
-                boxShadow: "0 12px 40px rgba(0,0,0,0.18)",
-              }}
-            >
-              <div style={{ padding: "1.125rem 1.25rem" }}>
-                <div
-                  style={{
-                    fontSize: "1rem",
-                    fontWeight: 700,
-                    color: pageColorTokens.textPrimary,
-                    marginBottom: "0.45rem",
-                  }}
-                >
-                  {t("productImproveStage1.confirmDialogTitle")}
-                </div>
-                <div
-                  style={{
-                    fontSize: "0.8125rem",
-                    color: pageColorTokens.textSecondary,
-                    lineHeight: 1.5,
-                    marginBottom: "0.9rem",
-                  }}
-                >
-                  {t("productImproveStage1.confirmDialogDesc")}
-                </div>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "8px 16px",
-                    marginBottom: "0.9rem",
-                  }}
-                >
-                  {confirmSummaryItems.map((item) => (
-                    <div key={item.key} style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: "0.6875rem", color: pageColorTokens.textSecondary }}>
-                        {item.label}
+        <div className="rounded-full border border-app-subtle bg-app-muted p-1">
+          <Tabs
+            activeKey={pageTab}
+            onChange={(key) => setPageTab(key as PageTab)}
+            className="spark-ant-tabs"
+            destroyOnHidden
+            items={[
+              {
+                key: "config",
+                label: t("productImproveStage1.tabsConfig"),
+                children: (
+                  <Card className={sectionCardClassName}>
+                    <div className="mb-5">
+                      <div className="text-[18px] font-semibold text-app-text-primary">
+                        {t("productImproveStage1.configSurfaceTitle")}
                       </div>
-                      <div
-                        style={{
-                          fontSize: "0.8125rem",
-                          color: pageColorTokens.textPrimary,
-                          fontWeight: 600,
-                          marginTop: 3,
-                          wordBreak: "break-word",
-                        }}
-                      >
-                        {item.value}
+                      <div className="mt-1 text-sm leading-6 text-app-text-secondary">
+                        {t("productImproveStage1.configSurfaceSubtitle")}
                       </div>
                     </div>
-                  ))}
-                </div>
-                <div
-                  style={{
-                    fontSize: "0.75rem",
-                    color: pageColorTokens.textSecondary,
-                    lineHeight: 1.5,
-                    marginBottom: "1rem",
-                  }}
-                >
-                  {t("productImproveStage1.confirmDialogFootnote")}
-                </div>
-                <s-stack direction="inline" gap="small">
-                  <s-button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => setConfirmOpen(false)}
-                    {...(isSubmitting ? { disabled: true } : {})}
-                  >
-                    {t("common.cancel")}
-                  </s-button>
-                  <s-button
-                    type="button"
-                    variant="primary"
-                    onClick={() => void handleGenerateConfirmed()}
-                    {...(isSubmitting ? { disabled: true } : {})}
-                  >
-                    {isSubmitting
-                      ? t("productImproveStage1.submitting")
-                      : t("productImproveStage1.confirmAndCreate")}
-                  </s-button>
-                </s-stack>
-              </div>
-            </dialog>
-          </>
-        )}
 
-        {pageTab === "tasks" && (
-          <ProductImproveTaskListPage
-            tasks={tasks}
-            locationSearch={search}
-            onTaskDeleted={handleTaskDeleted}
-            onTaskUpdated={handleTaskUpdated}
+                    <div className="space-y-4">
+                      <div className={subtlePanelClassName}>
+                        <ProductSelector
+                          locationSearch={search}
+                          selected={selectedProduct}
+                          onSelectedChange={setSelectedProduct}
+                        />
+                        <Collapse
+                          ghost
+                          className="mt-3 [&_.ant-collapse-content-box]:px-0 [&_.ant-collapse-header]:px-0 [&_.ant-collapse-header-text]:text-sm [&_.ant-collapse-header-text]:font-medium [&_.ant-collapse-header-text]:text-app-text-secondary"
+                          activeKey={showManualProductId ? ["manual-product-id"] : []}
+                          onChange={(keys) => {
+                            const nextKeys = Array.isArray(keys) ? keys : [keys];
+                            setShowManualProductId(nextKeys.includes("manual-product-id"));
+                          }}
+                          items={[
+                            {
+                              key: "manual-product-id",
+                              label: t("generate.advancedManualProductId"),
+                              children: (
+                                <div className="pt-2">
+                                  <label
+                                    className="mb-2 block text-xs font-semibold tracking-[0.01em] text-app-text-secondary"
+                                    htmlFor="manual-product-id"
+                                  >
+                                    {t("generate.productIdLabel")}
+                                  </label>
+                                  <Input
+                                    id="manual-product-id"
+                                    value={productId}
+                                    onChange={(e) => setProductId(e.target.value)}
+                                    autoComplete="off"
+                                    disabled={isSubmitting}
+                                  />
+                                </div>
+                              ),
+                            },
+                          ]}
+                        />
+                      </div>
+
+                      <div className={subtlePanelClassName}>
+                        <label
+                          className="mb-2 block text-xs font-semibold tracking-[0.01em] text-app-text-secondary"
+                          htmlFor="pi-target-lang"
+                        >
+                          {t("generate.targetLanguage")}
+                        </label>
+                        <Select
+                          id="pi-target-lang"
+                          value={targetLanguage || undefined}
+                          className="w-full"
+                          placeholder={t("generate.targetLanguage")}
+                          onChange={(value) => setTargetLanguage(value)}
+                          disabled={isSubmitting}
+                          options={
+                            localeOptions.length > 0
+                              ? localeOptions.map((opt) => ({
+                                  value: opt.value,
+                                  label: opt.label,
+                                }))
+                              : [{ value: "zh-CN", label: "Chinese (Simplified) (zh-CN)" }]
+                          }
+                          showSearch
+                          optionFilterProp="label"
+                        />
+                        <div className="mt-2 text-xs leading-5 text-app-text-secondary">
+                          {t("productImproveStage1.targetLanguageHint")}
+                        </div>
+                      </div>
+
+                      {errorText ? (
+                        <Alert type="error" showIcon className="rounded-app-card" message={errorText} />
+                      ) : null}
+
+                      <div className="rounded-app-control border border-app-subtle bg-app-subtle px-4 py-3 text-xs leading-5 text-app-text-footnote">
+                        {t("productImproveStage1.confirmFlowHint")}
+                      </div>
+
+                      <div className={subtlePanelClassName}>
+                        <Space wrap size="middle">
+                          <Button
+                            type="primary"
+                            onClick={handleOpenConfirm}
+                            loading={isSubmitting}
+                            disabled={!productIdForActions}
+                          >
+                            {isSubmitting
+                              ? t("productImproveStage1.submitting")
+                              : t("productImproveStage1.createTaskAction")}
+                          </Button>
+                        </Space>
+                      </div>
+                    </div>
+                  </Card>
+                ),
+              },
+              {
+                key: "tasks",
+                label: (
+                  <span className="inline-flex items-center gap-1.5">
+                    {t("productImproveStage1.tabsTasks")}
+                    {runningCount > 0 ? (
+                      <Tag
+                        bordered={false}
+                        className="m-0 rounded-full bg-app-primary px-2 py-0 text-[11px] font-bold text-white"
+                      >
+                        {runningCount}
+                      </Tag>
+                    ) : null}
+                  </span>
+                ),
+                children: (
+                  <div className="space-y-4">
+                    <p className="text-sm text-app-text-secondary">
+                      {t("productImproveStage1.taskListSubtitle")}
+                    </p>
+                    <ProductImproveTaskListPage
+                      tasks={tasks}
+                      locationSearch={search}
+                      onTaskDeleted={handleTaskDeleted}
+                      onTaskUpdated={handleTaskUpdated}
+                    />
+                  </div>
+                ),
+              },
+            ]}
           />
-        )}
+        </div>
 
         <p style={pageTrustFootnoteStyle}>{t("generate.pageFootnote")}</p>
       </div>
+
+      <Modal
+        open={confirmOpen}
+        onCancel={() => {
+          if (!isSubmitting) setConfirmOpen(false);
+        }}
+        footer={null}
+        className="spark-ant-modal"
+        destroyOnHidden
+        maskClosable={!isSubmitting}
+        width={460}
+        title={t("productImproveStage1.confirmDialogTitle")}
+      >
+        <div className="space-y-4">
+          <p className="text-sm leading-6 text-app-text-secondary">
+            {t("productImproveStage1.confirmDialogDesc")}
+          </p>
+
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            {confirmSummaryItems.map((item) => (
+              <div key={item.key} className="min-w-0">
+                <div className="text-[11px] text-app-text-secondary">{item.label}</div>
+                <div className="mt-0.5 break-words text-[13px] font-semibold text-app-text-primary">
+                  {item.value}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-xs leading-5 text-app-text-secondary">
+            {t("productImproveStage1.confirmDialogFootnote")}
+          </p>
+
+          <Space wrap>
+            <Button onClick={() => setConfirmOpen(false)} disabled={isSubmitting}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="primary" loading={isSubmitting} onClick={() => void handleGenerateConfirmed()}>
+              {isSubmitting
+                ? t("productImproveStage1.submitting")
+                : t("productImproveStage1.confirmAndCreate")}
+            </Button>
+          </Space>
+        </div>
+      </Modal>
     </s-page>
   );
 }

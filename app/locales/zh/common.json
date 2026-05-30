@@ -421,7 +421,12 @@
     "confirmDialogFootnote": "任务创建后不会直接写入 Shopify。你仍可在任务页中查看结果、人工审核并决定是否应用。",
     "confirmAndCreate": "确认并创建",
     "productFallbackName": "商品 {{id}}",
-    "estimatedTokenValue": "{{count}} Token"
+    "estimatedTokenValue": "{{count}} Token",
+    "taskViewCurrent": "当前任务",
+    "taskViewHistory": "历史任务",
+    "taskHistoryHint": "历史任务定义为创建时间超过 24 小时的任务。",
+    "taskEmptyCurrent": "当前还没有任务。先在配置页创建一次生成任务。",
+    "taskEmptyHistory": "暂无超过 24 小时的历史任务记录。"
   },
   "credentials": {
     "suggestionTitle": "提交建议",
