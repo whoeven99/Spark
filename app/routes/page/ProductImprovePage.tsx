@@ -418,7 +418,7 @@ export function ProductImprovePage() {
                     fontSize: "0.8125rem",
                     color: pageColorTokens.textSecondary,
                     lineHeight: 1.5,
-                    marginBottom: "1rem",
+                    marginBottom: "0.9rem",
                   }}
                 >
                   创建后会进入任务页查看执行进度、结果审核和后续写入 Shopify 的应用流程。
@@ -427,8 +427,8 @@ export function ProductImprovePage() {
                   style={{
                     display: "grid",
                     gridTemplateColumns: "1fr 1fr",
-                    gap: 10,
-                    marginBottom: "1rem",
+                    gap: "8px 16px",
+                    marginBottom: "0.9rem",
                   }}
                 >
                   {[
@@ -440,19 +440,10 @@ export function ProductImprovePage() {
                     <div
                       key={item.label}
                       style={{
-                        border: `1px solid ${pageColorTokens.borderSubtle}`,
-                        borderRadius: pageColorTokens.radiusControl,
-                        padding: "0.7rem 0.8rem",
-                        background: pageColorTokens.surfaceSubtle,
+                        minWidth: 0,
                       }}
                     >
-                      <div
-                        style={{
-                          fontSize: "0.6875rem",
-                          color: pageColorTokens.textSecondary,
-                          marginBottom: 4,
-                        }}
-                      >
+                      <div style={{ fontSize: "0.6875rem", color: pageColorTokens.textSecondary" }}>
                         {item.label}
                       </div>
                       <div
@@ -460,6 +451,7 @@ export function ProductImprovePage() {
                           fontSize: "0.8125rem",
                           color: pageColorTokens.textPrimary,
                           fontWeight: 600,
+                          marginTop: 3,
                           wordBreak: "break-word",
                         }}
                       >
@@ -474,10 +466,6 @@ export function ProductImprovePage() {
                     color: pageColorTokens.textSecondary,
                     lineHeight: 1.5,
                     marginBottom: "1rem",
-                    padding: "0.75rem 0.85rem",
-                    borderRadius: pageColorTokens.radiusControl,
-                    background: pageColorTokens.surfaceSubtle,
-                    border: `1px solid ${pageColorTokens.borderSubtle}`,
                   }}
                 >
                   任务创建后不会直接写入 Shopify。你仍可在任务页中查看结果、人工审核并决定是否应用。

@@ -64,6 +64,27 @@ function SectionShell(props: {
   );
 }
 
+function CompactMetaItem(props: { label: string; value: string }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <span style={{ fontSize: 11, color: pageColorTokens.textSecondary, fontWeight: 600 }}>
+        {props.label}
+      </span>
+      <span
+        style={{
+          fontSize: 13,
+          color: pageColorTokens.textPrimary,
+          fontWeight: 600,
+          marginLeft: 8,
+          wordBreak: "break-word",
+        }}
+      >
+        {props.value}
+      </span>
+    </div>
+  );
+}
+
 function ReviewContentPanel(props: {
   label: string;
   tone?: "neutral" | "positive";
@@ -219,11 +240,9 @@ export function ProductImproveTaskDetailPage({
   const [localResult, setLocalResult] = useState<Record<string, unknown> | null>(task.result);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
-  const [reviewScore, setReviewScore] = useState(4);
+  const [reviewScore, setReviewScore] = useState<number | null>(null);
   const [reviewNote, setReviewNote] = useState("");
   const [optimizationComment, setOptimizationComment] = useState("");
-  const [reviewSaving, setReviewSaving] = useState(false);
-  const [reviewError, setReviewError] = useState<string | null>(null);
   const [refining, setRefining] = useState(false);
   const [refineError, setRefineError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
@@ -242,7 +261,7 @@ export function ProductImproveTaskDetailPage({
     const next = task.result as Partial<ProductImproveTaskResult> | null;
     setDraftTitle(next?.title ?? "");
     setDraftDescription(next?.description ?? "");
-    setReviewScore(next?.reviewScore ?? 4);
+    setReviewScore(next?.reviewScore ?? null);
     setReviewNote(next?.reviewNote ?? "");
     setOptimizationComment(next?.optimizationComment ?? "");
   }, [task.result]);
@@ -260,42 +279,10 @@ export function ProductImproveTaskDetailPage({
     return {
       title: draftTitle.trim(),
       description: draftDescription.trim(),
-      reviewScore,
+      reviewScore: reviewScore ?? undefined,
       reviewNote: reviewNote.trim() || undefined,
       optimizationComment: optimizationComment.trim() || undefined,
     };
-  }
-
-  async function handleSaveScore() {
-    const reviewedResult = buildReviewedResult();
-    if (!reviewedResult.title || !reviewedResult.description) {
-      setReviewError("请先补充审核后的标题和描述");
-      return;
-    }
-    setReviewSaving(true);
-    setReviewError(null);
-    try {
-      const resp = await fetch(`/api/ai-task${locationSearch}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "score",
-          taskId: task.id,
-          result: reviewedResult,
-        }),
-      });
-      const body = (await resp.json()) as { success: boolean; errorMsg?: string };
-      if (!body.success) {
-        setReviewError(body.errorMsg ?? "保存评分失败");
-        return;
-      }
-      setLocalResult(reviewedResult);
-      handleStatusChange("scored", reviewedResult);
-    } catch {
-      setReviewError("保存评分时发生网络错误");
-    } finally {
-      setReviewSaving(false);
-    }
   }
 
   async function handleApply() {
@@ -351,7 +338,6 @@ export function ProductImproveTaskDetailPage({
 
     setRefining(true);
     setRefineError(null);
-    setReviewError(null);
     setApplyError(null);
 
     try {
@@ -377,7 +363,7 @@ export function ProductImproveTaskDetailPage({
       }
       setDraftTitle(body.result.title ?? "");
       setDraftDescription(body.result.description ?? "");
-      setReviewScore(body.result.reviewScore ?? 4);
+      setReviewScore(body.result.reviewScore ?? reviewScore);
       setLocalResult(body.result);
       handleStatusChange("pending_review", body.result);
     } catch {
@@ -396,103 +382,103 @@ export function ProductImproveTaskDetailPage({
           justifyContent: "space-between",
           gap: 12,
           flexWrap: "wrap",
+          paddingBottom: 4,
         }}
       >
-        <div>
-          <button
-            type="button"
-            onClick={onBack}
-            style={{
-              padding: "0.45rem 0.8rem",
-              borderRadius: pageColorTokens.radiusControl,
-              border: `1px solid ${pageColorTokens.borderSubtle}`,
-              background: pageColorTokens.surface,
-              color: pageColorTokens.textBody,
-              cursor: "pointer",
-              fontSize: 13,
-              fontWeight: 600,
-            }}
-          >
-            返回任务列表
-          </button>
+        <div style={{ minWidth: 0, flex: "1 1 28rem" }}>
           <div
             style={{
-              fontSize: 18,
-              fontWeight: 700,
-              color: pageColorTokens.textPrimary,
-              marginTop: 10,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap",
             }}
           >
-            审核任务 #{task.id.slice(0, 8).toUpperCase()}
+            <button
+              type="button"
+              onClick={onBack}
+              style={{
+                padding: "0.35rem 0.7rem",
+                borderRadius: pageColorTokens.radiusControl,
+                border: `1px solid ${pageColorTokens.borderSubtle}`,
+                background: pageColorTokens.surface,
+                color: pageColorTokens.textBody,
+                cursor: "pointer",
+                fontSize: 12,
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+              }}
+            >
+              返回任务列表
+            </button>
+            <div
+              style={{
+                fontSize: 17,
+                fontWeight: 700,
+                color: pageColorTokens.textPrimary,
+                minWidth: 0,
+              }}
+            >
+              审核任务 #{task.id.slice(0, 8).toUpperCase()}
+            </div>
           </div>
-          <div style={{ fontSize: 13, color: pageColorTokens.textSecondary, marginTop: 4 }}>
-            在这里集中查看原文、结果、人工评分、AI 继续优化和最终应用动作。
+          <div
+            style={{
+              fontSize: 12,
+              color: pageColorTokens.textSecondary,
+              marginTop: 6,
+              display: "flex",
+              gap: 6,
+              flexWrap: "wrap",
+            }}
+          >
+            <span>商品：{cfg.originalTitle || "未命名商品"}</span>
+            <span style={{ color: pageColorTokens.textFootnote }}>·</span>
+            <span>在这里集中查看原文、结果、人工评分、AI 继续优化和最终应用动作</span>
           </div>
         </div>
-        <div
-          style={{
-            padding: "0.85rem 1rem",
-            borderRadius: pageColorTokens.radiusCard,
-            border: `1px solid ${pageColorTokens.borderSubtle}`,
-            background: pageColorTokens.surfaceSubtle,
-            minWidth: 240,
-          }}
-        >
-          <div style={{ fontSize: 11, color: pageColorTokens.textSecondary, fontWeight: 700 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: pageColorTokens.textSecondary, fontWeight: 600 }}>
             当前状态
-          </div>
-          <div style={{ marginTop: 8 }}>
-            <TaskStatusBadge status={localStatus} />
-          </div>
-          <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, marginTop: 6 }}>
-            商品：{cfg.originalTitle || "未命名商品"}
-          </div>
+          </span>
+          <TaskStatusBadge status={localStatus} />
         </div>
       </div>
 
-      <SectionShell title="任务摘要" description="先确认当前任务目标、时间与消耗，再进入内容审核。">
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingBottom: 2 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: pageColorTokens.textPrimary }}>
+            任务摘要
+          </div>
+          <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, marginTop: 4 }}>
+            先确认当前任务目标、时间与消耗，再进入内容审核。
+          </div>
+        </div>
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-            gap: 10,
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: "8px 18px",
           }}
         >
-          {[
-            { label: "任务 ID", value: `#${task.id.slice(0, 8).toUpperCase()}` },
-            { label: "创建时间", value: formatTaskDate(task.createdAt) },
-            { label: "目标语言", value: cfg.targetLanguage ?? "-" },
-            { label: "预估 Token", value: task.estimatedCredits ? `${task.estimatedCredits}` : "-" },
-            { label: "实际耗时", value: actualElapsed ?? "-" },
-            { label: "目标商品", value: cfg.productId ?? "-" },
-          ].map((item) => (
-            <div
-              key={item.label}
-              style={{
-                border: `1px solid ${pageColorTokens.borderSubtle}`,
-                borderRadius: pageColorTokens.radiusControl,
-                background: pageColorTokens.surfaceSubtle,
-                padding: "0.75rem 0.8rem",
-              }}
-            >
-              <div style={{ fontSize: 11, color: pageColorTokens.textSecondary, fontWeight: 700 }}>
-                {item.label}
-              </div>
-              <div
-                style={{
-                  fontSize: 13,
-                  color: pageColorTokens.textPrimary,
-                  fontWeight: 600,
-                  marginTop: 6,
-                  wordBreak: "break-word",
-                }}
-              >
-                {item.value}
-              </div>
-            </div>
-          ))}
+          <CompactMetaItem label="任务 ID" value={`#${task.id.slice(0, 8).toUpperCase()}`} />
+          <CompactMetaItem label="创建时间" value={formatTaskDate(task.createdAt)} />
+          <CompactMetaItem label="目标语言" value={cfg.targetLanguage ?? "-"} />
+          <CompactMetaItem
+            label="预估 Token"
+            value={task.estimatedCredits ? `${task.estimatedCredits}` : "-"}
+          />
+          <CompactMetaItem label="实际耗时" value={actualElapsed ?? "-"} />
+          <CompactMetaItem label="目标商品" value={cfg.productId ?? "-"} />
         </div>
-      </SectionShell>
+        <div
+          style={{
+            height: 1,
+            background: pageColorTokens.borderSubtle,
+            opacity: 0.8,
+          }}
+        />
+      </div>
 
       <SectionShell title="内容审核" description="左侧查看原始内容，右侧直接编辑当前审核草稿。">
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -507,7 +493,7 @@ export function ProductImproveTaskDetailPage({
             title={draftTitle}
             description={draftDescription}
             editable
-            disabled={reviewSaving || refining || applying || localStatus === "applied"}
+            disabled={refining || applying || localStatus === "applied"}
             onTitleChange={setDraftTitle}
             onDescriptionChange={setDraftDescription}
             descriptionRows={10}
@@ -515,24 +501,25 @@ export function ProductImproveTaskDetailPage({
         </div>
       </SectionShell>
 
-      <SectionShell title="人工审核" description="记录人工评分和备注，用于沉淀当前草稿的审核结论。">
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <SectionShell title="审核备注" description="评分是可选信息，不需要单独保存；备注会随应用或后续 AI 优化一起带走。">
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>可选评分</span>
           {[1, 2, 3, 4, 5].map((score) => {
             const active = reviewScore === score;
             return (
               <button
                 key={score}
                 type="button"
-                onClick={() => setReviewScore(score)}
-                disabled={reviewSaving || refining || applying || localStatus === "applied"}
+                onClick={() => setReviewScore((prev) => (prev === score ? null : score))}
+                disabled={refining || applying || localStatus === "applied"}
                 style={{
-                  padding: "0.45rem 0.8rem",
+                  padding: "0.3rem 0.6rem",
                   borderRadius: 999,
                   border: `1px solid ${active ? pageColorTokens.brandGreen : pageColorTokens.borderSubtle}`,
-                  background: active ? pageColorTokens.brandGreenLight : pageColorTokens.surface,
-                  color: active ? pageColorTokens.brandGreenDark : pageColorTokens.textBody,
-                  fontSize: 12,
-                  fontWeight: 700,
+                  background: active ? pageColorTokens.brandGreenLight : "transparent",
+                  color: active ? pageColorTokens.brandGreenDark : pageColorTokens.textSecondary,
+                  fontSize: 11,
+                  fontWeight: active ? 700 : 600,
                   cursor: "pointer",
                 }}
               >
@@ -540,11 +527,29 @@ export function ProductImproveTaskDetailPage({
               </button>
             );
           })}
+          {reviewScore !== null ? (
+            <button
+              type="button"
+              onClick={() => setReviewScore(null)}
+              disabled={refining || applying || localStatus === "applied"}
+              style={{
+                padding: "0.3rem 0.5rem",
+                borderRadius: 999,
+                border: "none",
+                background: "transparent",
+                color: pageColorTokens.textSecondary,
+                fontSize: 11,
+                cursor: "pointer",
+              }}
+            >
+              清除
+            </button>
+          ) : null}
         </div>
         <textarea
           value={reviewNote}
           onChange={(e) => setReviewNote(e.currentTarget.value)}
-          disabled={reviewSaving || refining || applying || localStatus === "applied"}
+          disabled={refining || applying || localStatus === "applied"}
           rows={3}
           placeholder="可记录修改原因、语气问题或后续优化建议"
           style={{
@@ -566,7 +571,7 @@ export function ProductImproveTaskDetailPage({
           <textarea
             value={optimizationComment}
             onChange={(e) => setOptimizationComment(e.currentTarget.value)}
-            disabled={reviewSaving || refining || applying}
+            disabled={refining || applying}
             rows={4}
             placeholder="例如：保留当前第一段结构，把语气改得更高级一些，并补充适用场景。"
             style={{
@@ -586,7 +591,7 @@ export function ProductImproveTaskDetailPage({
             <button
               type="button"
               onClick={() => void handleRefine()}
-              disabled={reviewSaving || refining || applying}
+              disabled={refining || applying}
               style={{
                 padding: "8px 16px",
                 borderRadius: pageColorTokens.radiusControl,
@@ -620,21 +625,6 @@ export function ProductImproveTaskDetailPage({
             {result.optimizationComment ? <span>AI 优化说明：{result.optimizationComment}</span> : null}
           </div>
         </SectionShell>
-      ) : null}
-
-      {reviewError ? (
-        <div
-          style={{
-            fontSize: 12,
-            color: pageColorTokens.criticalText,
-            background: pageColorTokens.criticalBg,
-            padding: "8px 10px",
-            borderRadius: pageColorTokens.radiusControl,
-            border: "1px solid rgba(220, 38, 38, 0.15)",
-          }}
-        >
-          {reviewError}
-        </div>
       ) : null}
 
       {refineError ? (
@@ -672,7 +662,7 @@ export function ProductImproveTaskDetailPage({
         description={
           localStatus === "applied"
             ? "该任务已完成写入，可返回列表继续处理其他任务。"
-            : "确认评分后，可将当前审核草稿应用到 Shopify。"
+            : "确认内容后，可将当前审核草稿应用到 Shopify。评分和备注会一并保留。"
         }
       >
         {localStatus === "applied" ? (
@@ -697,25 +687,8 @@ export function ProductImproveTaskDetailPage({
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button
             type="button"
-            onClick={() => void handleSaveScore()}
-            disabled={reviewSaving || refining || applying || localStatus === "applied"}
-            style={{
-              padding: "8px 16px",
-              borderRadius: pageColorTokens.radiusControl,
-              background: pageColorTokens.surfaceSubtle,
-              color: pageColorTokens.textBody,
-              border: `1px solid ${pageColorTokens.borderSubtle}`,
-              cursor: "pointer",
-              fontSize: 13,
-              fontWeight: 600,
-            }}
-          >
-            {reviewSaving ? "保存中..." : "保存评分"}
-          </button>
-          <button
-            type="button"
             onClick={() => void handleApply()}
-            disabled={reviewSaving || refining || applying || localStatus === "applied"}
+            disabled={refining || applying || localStatus === "applied"}
             style={{
               padding: "8px 16px",
               borderRadius: pageColorTokens.radiusControl,
