@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Card,
@@ -50,17 +50,6 @@ export default function OpsChecklist() {
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }, []);
-
-  const stackRows = useMemo(() => {
-    if (!data) return [];
-    return [
-      { area: "前端", items: data.technologyStack.frontend.join(" / ") },
-      { area: "后端", items: data.technologyStack.backend.join(" / ") },
-      { area: "数据基础设施", items: data.technologyStack.dataInfra.join(" / ") },
-      { area: "AI", items: data.technologyStack.ai.join(" / ") },
-      { area: "运维与通知", items: data.technologyStack.ops.join(" / ") },
-    ];
-  }, [data]);
 
   if (loading) {
     return <Spin size="large" style={{ display: "block", margin: "80px auto" }} />;
@@ -141,19 +130,6 @@ export default function OpsChecklist() {
                 </Space>
               </List.Item>
             )}
-          />
-        </Card>
-
-        <Card title="技术栈分层">
-          <Table
-            dataSource={stackRows}
-            rowKey={(r) => r.area}
-            size="small"
-            pagination={false}
-            columns={[
-              { title: "层", dataIndex: "area", key: "area", width: 180 },
-              { title: "技术", dataIndex: "items", key: "items" },
-            ]}
           />
         </Card>
 

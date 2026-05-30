@@ -29,16 +29,6 @@ function hasEnv(...names: string[]): boolean {
 function buildServiceStatuses(): ServiceStatus[] {
   return [
     {
-      key: "shopify-admin-api",
-      name: "Shopify Admin GraphQL API",
-      category: "core",
-      required: true,
-      configured: hasEnv("SHOPIFY_API_KEY", "SHOPIFY_API_SECRET"),
-      note: "商店数据读取、计费事件与核心业务入口",
-      costSignal: "通常按平台配额与业务量关注限流",
-      rechargeSignal: "出现频繁 API 限流、错误重试显著增多",
-    },
-    {
       key: "turso-libsql",
       name: "Turso (libSQL)",
       category: "core",
@@ -105,36 +95,6 @@ function buildServiceStatuses(): ServiceStatus[] {
       note: "整图翻译双引擎路由",
       costSignal: "图片翻译请求量与每张图定额 token",
       rechargeSignal: "调用失败重试增多、余额预警",
-    },
-    {
-      key: "tencent-ses",
-      name: "Tencent SES",
-      category: "ops",
-      required: false,
-      configured: hasEnv("TENCENT_CLOUD_KEY_ID", "TENCENT_CLOUD_KEY"),
-      note: "安装/卸载与运营模板邮件",
-      costSignal: "发送量、失败率、模板退信率",
-      rechargeSignal: "额度不足或发送失败持续上升",
-    },
-    {
-      key: "feishu-webhook",
-      name: "Feishu Webhook",
-      category: "ops",
-      required: false,
-      configured: hasEnv("FEISHU_WEBHOOK_URL_UNINSTALL", "FEISHU_WEBHOOK_URL_SUBSCRIPTION"),
-      note: "卸载/订阅通知与运营告警",
-      costSignal: "主要是稳定性成本，关注告警触达",
-      rechargeSignal: "一般无需充值，重点看 webhook 可用性",
-    },
-    {
-      key: "langsmith",
-      name: "LangSmith",
-      category: "ops",
-      required: false,
-      configured: hasEnv("LANGSMITH_API_KEY"),
-      note: "LLM 链路观测与追踪",
-      costSignal: "trace 保留与采样比例",
-      rechargeSignal: "保留配额接近上限",
     },
   ];
 }

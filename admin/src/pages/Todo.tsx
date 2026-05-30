@@ -369,11 +369,46 @@ function TodoCard({
   onMove: (todo: TodoRow, status: TodoStatus) => void;
 }) {
   const pri = PRIORITY_CONFIG[todo.priority];
+  const doingRow = STATUS_ROWS.find((s) => s.key === "doing") ?? STATUS_ROWS[0];
+  const currentStatusRow = STATUS_ROWS.find((s) => s.key === todo.status) ?? statusRow;
   const statusOptionRows = STATUS_ROWS.filter((s) => s.key === "todo" || s.key === "done");
-  const statusOptions: { value: TodoStatus; label: string; disabled?: boolean }[] =
+  const statusOptions: { value: TodoStatus; label: React.ReactNode; disabled?: boolean }[] =
     todo.status === "doing"
-      ? [{ value: "doing", label: "进行中", disabled: true }, ...statusOptionRows.map((s) => ({ value: s.key, label: s.label }))]
-      : statusOptionRows.map((s) => ({ value: s.key, label: s.label }));
+      ? [doingRow, ...statusOptionRows].map((s) => ({
+          value: s.key,
+          label: (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: s.color,
+                  opacity: 0.85,
+                }}
+              />
+              <span>{s.label}</span>
+            </span>
+          ),
+          disabled: s.key === "doing",
+        }))
+      : statusOptionRows.map((s) => ({
+          value: s.key,
+          label: (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: s.color,
+                  opacity: 0.85,
+                }}
+              />
+              <span>{s.label}</span>
+            </span>
+          ),
+        }));
 
   return (
     <Card
@@ -407,17 +442,32 @@ function TodoCard({
       {/* Priority + status + date */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
         <Tag style={{ margin: 0, fontSize: 11, color: pri.color, background: pri.bg, borderColor: pri.border }}>{pri.label}</Tag>
-        <Select<TodoStatus>
-          size="small"
-          value={todo.status}
-          onChange={(value) => {
-            if (value !== todo.status) {
-              onMove(todo, value);
-            }
+        <div
+          style={{
+            minWidth: 102,
+            height: 24,
+            border: `1px solid ${currentStatusRow.borderColor}`,
+            background: currentStatusRow.bgColor,
+            borderRadius: 6,
+            display: "flex",
+            alignItems: "center",
+            padding: "0 4px",
           }}
-          style={{ minWidth: 90 }}
-          options={statusOptions}
-        />
+        >
+          <Select<TodoStatus>
+            size="small"
+            variant="borderless"
+            value={todo.status}
+            onChange={(value) => {
+              if (value !== todo.status) {
+                onMove(todo, value);
+              }
+            }}
+            style={{ width: "100%", fontSize: 12, color: "#334155" }}
+            popupMatchSelectWidth={false}
+            options={statusOptions}
+          />
+        </div>
         <Typography.Text type="secondary" style={{ fontSize: 11, marginLeft: "auto" }}>
           {new Date(todo.createdAt).toLocaleDateString("zh-CN")}
         </Typography.Text>
