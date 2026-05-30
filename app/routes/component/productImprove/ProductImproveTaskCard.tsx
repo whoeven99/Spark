@@ -91,7 +91,7 @@ export function ProductImproveTaskCard({
         border: `1px solid ${pageColorTokens.border}`,
         borderRadius: pageColorTokens.radiusCard,
         padding: "14px 16px",
-        background: pageColorTokens.surface,
+        background: "linear-gradient(160deg, #ffffff 0%, #fafbfd 100%)",
         boxShadow: pageColorTokens.shadowCard,
         display: "flex",
         flexDirection: "column",
@@ -101,15 +101,33 @@ export function ProductImproveTaskCard({
       {/* Header row */}
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: pageColorTokens.textPrimary }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: pageColorTokens.textSecondary,
+                padding: "0.2rem 0.5rem",
+                borderRadius: 999,
+                background: pageColorTokens.surfaceMuted,
+                border: `1px solid ${pageColorTokens.borderSubtle}`,
+              }}
+            >
               #{shortId}
             </span>
             <TaskStatusBadge status={localStatus} />
           </div>
 
           {/* Meta line */}
-          <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, display: "flex", gap: 4, flexWrap: "wrap" }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: pageColorTokens.textSecondary,
+              display: "flex",
+              gap: 4,
+              flexWrap: "wrap",
+            }}
+          >
             <span>商品文案</span>
             {cfg.targetLanguage && (
               <>
@@ -153,12 +171,13 @@ export function ProductImproveTaskCard({
           onClick={() => onDelete(task.id)}
           disabled={deleting}
           style={{
-            background: "none",
-            border: "none",
             cursor: deleting ? "default" : "pointer",
             color: deleting ? pageColorTokens.textFootnote : pageColorTokens.critical,
             fontSize: 13,
-            padding: "4px 0",
+            padding: "6px 10px",
+            borderRadius: pageColorTokens.radiusControl,
+            border: `1px solid ${pageColorTokens.borderSubtle}`,
+            background: pageColorTokens.surface,
             flexShrink: 0,
           }}
         >
@@ -184,18 +203,19 @@ export function ProductImproveTaskCard({
           {/* Before */}
           <div
             style={{
-              border: `1px solid ${pageColorTokens.border}`,
-              borderRadius: 8,
+              border: `1px solid ${pageColorTokens.borderSubtle}`,
+              borderRadius: pageColorTokens.radiusControl,
               overflow: "hidden",
+              background: pageColorTokens.surfaceSubtle,
             }}
           >
             <div
               style={{
-                background: "#fff3cd",
-                color: "#856404",
+                background: pageColorTokens.surfaceMuted,
+                color: pageColorTokens.textSecondary,
                 fontSize: 11,
                 fontWeight: 700,
-                padding: "4px 10px",
+                padding: "6px 10px",
                 letterSpacing: "0.05em",
               }}
             >
@@ -214,9 +234,10 @@ export function ProductImproveTaskCard({
           {/* After */}
           <div
             style={{
-              border: `1px solid ${pageColorTokens.brandGreen}`,
-              borderRadius: 8,
+                border: `1px solid rgba(0, 166, 124, 0.25)`,
+                borderRadius: pageColorTokens.radiusControl,
               overflow: "hidden",
+                background: "#fcfffd",
             }}
           >
             <div
@@ -225,7 +246,7 @@ export function ProductImproveTaskCard({
                 color: pageColorTokens.brandGreenDark,
                 fontSize: 11,
                 fontWeight: 700,
-                padding: "4px 10px",
+                padding: "6px 10px",
                 letterSpacing: "0.05em",
               }}
             >
@@ -247,8 +268,9 @@ export function ProductImproveTaskCard({
                 fontSize: 12,
                 color: pageColorTokens.criticalText,
                 background: pageColorTokens.criticalBg,
-                padding: "6px 10px",
-                borderRadius: 6,
+                padding: "8px 10px",
+                borderRadius: pageColorTokens.radiusControl,
+                border: "1px solid rgba(220, 38, 38, 0.15)",
               }}
             >
               {applyError}
@@ -262,13 +284,14 @@ export function ProductImproveTaskCard({
               disabled={applying}
               style={{
                 padding: "8px 16px",
-                borderRadius: 8,
+                borderRadius: pageColorTokens.radiusControl,
                 background: applying ? pageColorTokens.surfaceMuted : pageColorTokens.brandGreen,
                 color: applying ? pageColorTokens.textSecondary : "#fff",
                 border: "none",
                 cursor: applying ? "default" : "pointer",
                 fontSize: 13,
                 fontWeight: 600,
+                boxShadow: applying ? "none" : "0 4px 14px rgba(0, 166, 124, 0.18)",
               }}
             >
               {applying ? "应用中..." : "写入 Shopify"}
@@ -279,10 +302,10 @@ export function ProductImproveTaskCard({
               disabled={deleting}
               style={{
                 padding: "8px 16px",
-                borderRadius: 8,
-                background: pageColorTokens.surfaceMuted,
+                borderRadius: pageColorTokens.radiusControl,
+                background: pageColorTokens.surfaceSubtle,
                 color: pageColorTokens.textBody,
-                border: `1px solid ${pageColorTokens.border}`,
+                border: `1px solid ${pageColorTokens.borderSubtle}`,
                 cursor: "pointer",
                 fontSize: 13,
               }}
@@ -302,10 +325,11 @@ export function ProductImproveTaskCard({
             gap: 8,
             padding: "8px 12px",
             background: pageColorTokens.brandGreenLight,
-            borderRadius: 8,
+            borderRadius: pageColorTokens.radiusControl,
             fontSize: 13,
             color: pageColorTokens.brandGreenDark,
             fontWeight: 500,
+            border: "1px solid rgba(0, 166, 124, 0.18)",
           }}
         >
           <span>✓</span>
@@ -326,7 +350,8 @@ export function ProductImproveTaskCard({
             color: pageColorTokens.criticalText,
             background: pageColorTokens.criticalBg,
             padding: "8px 10px",
-            borderRadius: 8,
+            borderRadius: pageColorTokens.radiusControl,
+            border: "1px solid rgba(220, 38, 38, 0.15)",
           }}
         >
           {task.errorMsg}

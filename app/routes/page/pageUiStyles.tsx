@@ -75,7 +75,7 @@ export const pageContentStyle: CSSProperties = {
 };
 
 export const pageSurfaceStyle: CSSProperties = {
-  background: "linear-gradient(160deg, #ffffff 0%, #f8faff 100%)",
+  background: "linear-gradient(160deg, #ffffff 0%, #fbfcfd 100%)",
   border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusCard,
   padding: "1.25rem",
@@ -88,8 +88,8 @@ export const pageCompactSurfaceStyle: CSSProperties = {
 };
 
 export const pageInnerPanelStyle: CSSProperties = {
-  background: pageColorTokens.surfaceMuted,
-  border: `1px solid ${pageColorTokens.border}`,
+  background: pageColorTokens.surfaceSubtle,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
   borderRadius: pageColorTokens.radiusControl,
   padding: "1.25rem",
 };
@@ -112,7 +112,11 @@ export const pageHintTextStyle: CSSProperties = {
 export const pageLinkHintStyle: CSSProperties = {
   cursor: "pointer",
   fontSize: "0.8125rem",
-  color: pageColorTokens.brandBlue,
+  color: pageColorTokens.textSecondary,
+  fontWeight: 600,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.35rem",
   userSelect: "none",
 };
 
@@ -125,10 +129,12 @@ export function pageSelectStyle(disabled = false): CSSProperties {
     padding: "0.5rem 0.65rem",
     fontSize: "0.875rem",
     borderRadius: pageColorTokens.radiusControl,
-    border: `1px solid ${pageColorTokens.borderInput}`,
-    background: disabled ? pageColorTokens.surfaceMuted : pageColorTokens.surface,
+    border: `1px solid ${disabled ? pageColorTokens.borderSubtle : pageColorTokens.borderInput}`,
+    background: disabled ? pageColorTokens.surfaceMuted : pageColorTokens.surfaceSubtle,
     color: pageColorTokens.textBody,
     boxSizing: "border-box",
+    boxShadow: disabled ? "none" : "inset 0 1px 0 rgba(255,255,255,0.6)",
+    transition: "border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease",
   };
 }
 
@@ -140,9 +146,9 @@ export const languageSelectorBarStyle: CSSProperties = {
   marginTop: "0.5rem",
   padding: "0.65rem 0.85rem",
   borderRadius: pageColorTokens.radiusControl,
-  background: "linear-gradient(135deg, #f5f6f8 0%, #eef0f6 100%)",
-  border: `1px solid ${pageColorTokens.border}`,
-  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+  background: "linear-gradient(135deg, #fafafa 0%, #f5f6f8 100%)",
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.55)",
 };
 
 export const languageSelectorLabelStyle: CSSProperties = {
@@ -213,21 +219,22 @@ export const pageSectionSubtitleStyle: CSSProperties = {
 
 export const pageStatusBadgeStyle: CSSProperties = {
   flexShrink: 0,
-  padding: "0.3rem 0.8rem",
+  padding: "0.32rem 0.78rem",
   borderRadius: "999px",
   fontSize: "0.8125rem",
   fontWeight: 700,
-  color: "#006e52",
-  background: "linear-gradient(135deg, #edfaf5 0%, #d4f5e9 100%)",
-  border: "1px solid rgba(0, 166, 124, 0.3)",
-  boxShadow: "0 1px 4px rgba(0, 166, 124, 0.12)",
+  color: pageColorTokens.brandGreenDark,
+  background: pageColorTokens.brandGreenLight,
+  border: "1px solid rgba(0, 166, 124, 0.18)",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.5)",
 };
 
 export const pageTrustFootnoteStyle: CSSProperties = {
   margin: 0,
   padding: "0.85rem 1rem",
   borderRadius: pageColorTokens.radiusControl,
-  background: "linear-gradient(135deg, #f5f6f8 0%, #eef0f6 100%)",
+  background: "linear-gradient(135deg, #fafafa 0%, #f5f6f8 100%)",
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
   fontSize: "0.75rem",
   lineHeight: 1.45,
   color: pageColorTokens.textSecondary,
@@ -253,14 +260,19 @@ export const pageSectionHeaderRowStyle: CSSProperties = {
 export const pageAccentBadgeStyle: CSSProperties = {
   fontSize: "0.875rem",
   fontWeight: 700,
-  color: pageColorTokens.brandGreen,
+  color: pageColorTokens.brandGreenDark,
+  padding: "0.28rem 0.6rem",
+  borderRadius: "999px",
+  background: pageColorTokens.brandGreenLight,
+  border: "1px solid rgba(0, 166, 124, 0.16)",
 };
 
 export const pageMetaTextStyle: CSSProperties = {
   margin: 0,
   padding: "0.65rem 0.75rem",
-  background: "linear-gradient(135deg, #f5f6f8 0%, #eef0f6 100%)",
+  background: "linear-gradient(135deg, #fafafa 0%, #f5f6f8 100%)",
   borderRadius: pageColorTokens.radiusControl,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
   fontSize: "0.8125rem",
   color: pageColorTokens.textBody,
 };
@@ -319,18 +331,19 @@ export function pageIntroBannerStyle(
     lineHeight: 1.55,
     padding: "0.9rem 1.25rem",
     background: token.gradient,
+    border: `1px solid ${pageColorTokens.borderSubtle}`,
     borderLeft: `4px solid ${token.borderColor}`,
-    borderRadius: `0 ${pageColorTokens.radiusControl} ${pageColorTokens.radiusControl} 0`,
+    borderRadius: pageColorTokens.radiusControl,
     marginBottom: options?.marginBottom ?? "1rem",
-    boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+    boxShadow: pageColorTokens.shadowCard,
   };
 }
 
 export const pageEmptyStateStyle: CSSProperties = {
   padding: "2.5rem 1.5rem",
   borderRadius: pageColorTokens.radiusCard,
-  background: "linear-gradient(160deg, #f7f9ff 0%, #f0f2f7 100%)",
-  border: `1.5px dashed ${pageColorTokens.borderInput}`,
+  background: "linear-gradient(160deg, #fafafa 0%, #f5f6f8 100%)",
+  border: `1px dashed ${pageColorTokens.borderSubtle}`,
   color: pageColorTokens.textSecondary,
   fontSize: "0.875rem",
   lineHeight: 1.5,
@@ -352,7 +365,7 @@ export const formErrorBoxStyle: CSSProperties = {
 };
 
 export const pageMetricCardStyle: CSSProperties = {
-  background: "linear-gradient(160deg, #ffffff 0%, #f8faff 100%)",
+  background: "linear-gradient(160deg, #ffffff 0%, #fbfcfd 100%)",
   border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusCard,
   overflow: "hidden",
@@ -406,7 +419,7 @@ export const pageStatusCardStyle: CSSProperties = {
   padding: "0.85rem 1rem",
   border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusCard,
-  background: "linear-gradient(160deg, #ffffff 0%, #f8faff 100%)",
+  background: "linear-gradient(160deg, #ffffff 0%, #fbfcfd 100%)",
   boxShadow: pageColorTokens.shadowCard,
 };
 

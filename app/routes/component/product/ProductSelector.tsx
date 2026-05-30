@@ -32,9 +32,10 @@ function isMultipleProps(
 }
 
 const emptyBoxStyle: CSSProperties = {
-  padding: "0.75rem 0.65rem",
-  borderRadius: "8px",
-  background: pageColorTokens.mutedBg,
+  padding: "1.1rem 0.85rem",
+  borderRadius: pageColorTokens.radiusControl,
+  background: "linear-gradient(160deg, #fafafa 0%, #f5f6f8 100%)",
+  border: `1px dashed ${pageColorTokens.borderInput}`,
   color: pageColorTokens.textSecondary,
   fontSize: "0.8125rem",
   lineHeight: 1.45,
@@ -98,8 +99,11 @@ export function ProductSelector(props: ProductSelectorProps) {
         <div
           style={{
             fontSize: "0.8125rem",
-            color: "#6d7175",
-            padding: "0.25rem 0",
+            color: pageColorTokens.textSecondary,
+            padding: "0.55rem 0.75rem",
+            borderRadius: pageColorTokens.radiusControl,
+            background: pageColorTokens.surfaceSubtle,
+            border: `1px solid ${pageColorTokens.borderSubtle}`,
           }}
         >
           {t("productSelector.searching")}
@@ -117,9 +121,10 @@ export function ProductSelector(props: ProductSelectorProps) {
           style={{
             maxHeight: listMaxHeight,
             overflowY: "auto",
-            borderRadius: "10px",
-            border: "1px solid rgba(0, 0, 0, 0.08)",
-            background: "#fff",
+            borderRadius: pageColorTokens.radiusCard,
+            border: `1px solid ${pageColorTokens.border}`,
+            background: pageColorTokens.surface,
+            boxShadow: pageColorTokens.shadowCard,
             margin: 0,
             padding: 0,
             listStyle: "none",
@@ -139,16 +144,17 @@ export function ProductSelector(props: ProductSelectorProps) {
                     gap: "0.65rem",
                     width: "100%",
                     margin: 0,
-                    padding: embedded ? "0.45rem 0.55rem" : "0.55rem 0.65rem",
+                    padding: embedded ? "0.55rem 0.7rem" : "0.7rem 0.8rem",
                     cursor: "pointer",
-                    borderBottom: "1px solid rgba(0, 0, 0, 0.06)",
+                    borderBottom: `1px solid ${pageColorTokens.divider}`,
                     borderLeft: active
-                      ? "3px solid #2c6ecb"
+                      ? `3px solid ${pageColorTokens.brandGreen}`
                       : "3px solid transparent",
                     background: active
-                      ? "rgba(44, 110, 203, 0.08)"
-                      : "transparent",
+                      ? pageColorTokens.brandGreenLight
+                      : pageColorTokens.surface,
                     boxSizing: "border-box",
+                    transition: "background 0.18s ease, border-color 0.18s ease",
                   }}
                   onClick={() => onRowActivate(row)}
                   onKeyDown={(e) => {
@@ -194,7 +200,7 @@ export function ProductSelector(props: ProductSelectorProps) {
                       width: 40,
                       height: 40,
                       borderRadius: "6px",
-                      background: "rgba(109, 113, 117, 0.12)",
+                      background: pageColorTokens.surfaceMuted,
                       flexShrink: 0,
                     }}
                   />
@@ -204,7 +210,7 @@ export function ProductSelector(props: ProductSelectorProps) {
                     minWidth: 0,
                     flex: 1,
                     fontSize: "0.875rem",
-                    color: "#202223",
+                    color: pageColorTokens.textPrimary,
                     lineHeight: 1.35,
                   }}
                 >
@@ -213,7 +219,7 @@ export function ProductSelector(props: ProductSelectorProps) {
                     style={{
                       marginTop: "0.1rem",
                       fontSize: "0.75rem",
-                      color: "#6d7175",
+                      color: pageColorTokens.textSecondary,
                     }}
                   >
                     {row.id}

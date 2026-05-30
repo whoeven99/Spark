@@ -36,14 +36,13 @@ function PageTabBar({
   runningCount: number;
 }) {
   const btnStyle = (active: boolean): React.CSSProperties => ({
-    padding: "8px 18px",
-    borderRadius: 9,
-    border: active
-      ? `2px solid ${pageColorTokens.brandGreen}`
-      : `2px solid transparent`,
-    background: active ? pageColorTokens.brandGreenLight : "transparent",
-    color: active ? pageColorTokens.brandGreenDark : pageColorTokens.textSecondary,
-    fontWeight: active ? 600 : 500,
+    padding: "9px 16px",
+    borderRadius: 999,
+    border: `1px solid ${active ? pageColorTokens.borderSubtle : "transparent"}`,
+    background: active ? pageColorTokens.surface : "transparent",
+    color: active ? pageColorTokens.textPrimary : pageColorTokens.textSecondary,
+    boxShadow: active ? pageColorTokens.shadowCard : "none",
+    fontWeight: active ? 700 : 600,
     fontSize: 14,
     cursor: "pointer",
     display: "inline-flex",
@@ -57,11 +56,13 @@ function PageTabBar({
         display: "flex",
         gap: 4,
         alignItems: "center",
-        background: pageColorTokens.surface,
-        border: `1px solid ${pageColorTokens.border}`,
-        borderRadius: 12,
-        padding: "6px 8px",
+        background: pageColorTokens.surfaceMuted,
+        border: `1px solid ${pageColorTokens.borderSubtle}`,
+        borderRadius: 999,
+        padding: "5px",
         marginBottom: 20,
+        boxShadow: "inset 0 1px 2px rgba(0,0,0,0.03)",
+        flexWrap: "wrap",
       }}
     >
       <button type="button" style={btnStyle(activeTab === "config")} onClick={() => onTabChange("config")}>
@@ -72,10 +73,10 @@ function PageTabBar({
         {runningCount > 0 && (
           <span
             style={{
-              background: pageColorTokens.brandBlue,
+              background: pageColorTokens.brandGreen,
               color: "#fff",
               borderRadius: 10,
-              padding: "1px 7px",
+              padding: "1px 8px",
               fontSize: 11,
               fontWeight: 700,
             }}
@@ -85,7 +86,17 @@ function PageTabBar({
         )}
       </button>
       {activeTab === "tasks" && (
-        <span style={{ fontSize: 13, color: pageColorTokens.textSecondary, marginLeft: 8 }}>
+        <span
+          style={{
+            fontSize: 13,
+            color: pageColorTokens.textSecondary,
+            marginLeft: 8,
+            padding: "0.35rem 0.75rem",
+            borderRadius: 999,
+            background: pageColorTokens.surface,
+            border: `1px solid ${pageColorTokens.borderSubtle}`,
+          }}
+        >
           执行中、待审查、已应用和评分结果统一在这里查看。
         </span>
       )}
@@ -281,7 +292,13 @@ export function ProductImprovePage() {
                     />
 
                     <details
-                      style={{ marginTop: "0.25rem" }}
+                      style={{
+                        marginTop: "0.25rem",
+                        padding: "0.85rem 0.95rem",
+                        borderRadius: pageColorTokens.radiusControl,
+                        background: pageColorTokens.surfaceSubtle,
+                        border: `1px solid ${pageColorTokens.borderSubtle}`,
+                      }}
                       open={showManualProductId}
                       onToggle={(e) => setShowManualProductId(e.currentTarget.open)}
                     >
@@ -318,6 +335,9 @@ export function ProductImprovePage() {
                           </option>
                         ))}
                       </select>
+                      <div style={pageHintTextStyle}>
+                        语言用于控制生成语气和输出结果，发起任务后可在任务列表中继续审查。
+                      </div>
                     </div>
 
                     {errorText ? <div style={formErrorBoxStyle}>{errorText}</div> : null}
@@ -349,10 +369,11 @@ export function ProductImprovePage() {
                       <div
                         key={item.label}
                         style={{
-                          border: `1px solid ${pageColorTokens.border}`,
-                          borderRadius: 8,
+                          border: `1px solid ${pageColorTokens.borderSubtle}`,
+                          borderRadius: pageColorTokens.radiusControl,
                           padding: "10px 12px",
-                          background: pageColorTokens.surfaceMuted,
+                          background: pageColorTokens.surfaceSubtle,
+                          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.5)",
                         }}
                       >
                         <div
@@ -391,9 +412,13 @@ export function ProductImprovePage() {
 
                   <div
                     style={{
-                      marginTop: 12,
+                      marginTop: 14,
                       fontSize: 12,
                       color: pageColorTokens.textFootnote,
+                      padding: "0.75rem 0.85rem",
+                      borderRadius: pageColorTokens.radiusControl,
+                      background: pageColorTokens.surfaceSubtle,
+                      border: `1px solid ${pageColorTokens.borderSubtle}`,
                     }}
                   >
                     生成将消耗 Token；保存至 Shopify 前可在任务列表预览并编辑标题与描述。

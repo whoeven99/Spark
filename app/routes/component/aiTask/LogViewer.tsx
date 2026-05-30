@@ -313,21 +313,23 @@ export function LogViewer({
   return (
     <div
       style={{
-        background: pageColorTokens.surfaceMuted,
-        borderRadius: 10,
+        background: pageColorTokens.surfaceSubtle,
+        borderRadius: pageColorTokens.radiusControl,
+        border: `1px solid ${pageColorTokens.borderSubtle}`,
         padding: "12px 14px",
         display: "flex",
         flexDirection: "column",
         gap: 10,
       }}
     >
-      {/* Header row: status label + elapsed time + progress bar */}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <div
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
           }}
         >
           <span
@@ -335,6 +337,10 @@ export function LogViewer({
               fontSize: 12,
               fontWeight: 600,
               color: isDone ? pageColorTokens.brandGreenDark : pageColorTokens.brandBlue,
+              padding: "0.25rem 0.6rem",
+              borderRadius: 999,
+              background: isDone ? pageColorTokens.brandGreenLight : pageColorTokens.brandBlueLight,
+              border: `1px solid ${isDone ? "rgba(0, 166, 124, 0.16)" : "rgba(64, 112, 244, 0.16)"}`,
             }}
           >
             {isDone ? "流程记录" : "任务执行中"}
@@ -345,25 +351,28 @@ export function LogViewer({
               fontVariantNumeric: "tabular-nums",
               color: pageColorTokens.textSecondary,
               letterSpacing: "0.02em",
+              padding: "0.2rem 0.55rem",
+              borderRadius: 999,
+              background: pageColorTokens.surface,
+              border: `1px solid ${pageColorTokens.borderSubtle}`,
             }}
           >
             {formatElapsedClock(displayElapsed)}
           </span>
         </div>
 
-        {/* Progress bar */}
         <div
           style={{
             height: 6,
-            borderRadius: 3,
-            background: pageColorTokens.border,
+            borderRadius: 999,
+            background: pageColorTokens.divider,
             overflow: "hidden",
           }}
         >
           <div
             style={{
               height: "100%",
-              borderRadius: 3,
+              borderRadius: 999,
               width: `${progressPct}%`,
               background: isDone
                 ? pageColorTokens.brandGreen
@@ -375,52 +384,82 @@ export function LogViewer({
       </div>
 
       {showWorkflowSteps && (
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {workflowLogs.length === 0 ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            padding: "0.15rem 0.1rem 0.1rem",
+          }}
+        >
+          {workflowLogs.length === 0 ? (
+            <div
               style={{
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                background: pageColorTokens.brandBlue,
-                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "0.65rem 0.8rem",
+                borderRadius: pageColorTokens.radiusControl,
+                background: pageColorTokens.surface,
+                border: `1px dashed ${pageColorTokens.borderSubtle}`,
               }}
-            />
-            <span style={{ fontSize: 12, lineHeight: 1.5, color: pageColorTokens.textSecondary }}>
-              等待调度日志...
-            </span>
-          </div>
-        ) : (
-          workflowLogs.map((log, index) => {
-            const isLatest = index === workflowLogs.length - 1;
-            const dotColor = isLatest ? pageColorTokens.brandBlue : pageColorTokens.brandGreen;
-            return (
-              <div key={log.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            >
                 <span
                   style={{
                     width: 8,
                     height: 8,
                     borderRadius: "50%",
-                    background: dotColor,
+                  background: pageColorTokens.brandBlue,
                     flexShrink: 0,
+                  boxShadow: `0 0 0 4px ${pageColorTokens.brandBlue}18`,
                   }}
                 />
-                <span
+              <span style={{ fontSize: 12, lineHeight: 1.5, color: pageColorTokens.textSecondary }}>
+                等待调度日志...
+              </span>
+            </div>
+          ) : (
+            workflowLogs.map((log, index) => {
+              const isLatest = index === workflowLogs.length - 1;
+              const dotColor = isLatest ? pageColorTokens.brandBlue : pageColorTokens.brandGreen;
+              return (
+                <div
+                  key={log.id}
                   style={{
-                    fontSize: 12,
-                    lineHeight: 1.5,
-                    color: pageColorTokens.textBody,
-                    fontWeight: isLatest ? 600 : 400,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "0.65rem 0.8rem",
+                    borderRadius: pageColorTokens.radiusControl,
+                    background: isLatest ? pageColorTokens.surface : "transparent",
+                    border: isLatest ? `1px solid ${pageColorTokens.borderSubtle}` : "1px solid transparent",
                   }}
                 >
-                  {log.message}
-                </span>
-              </div>
-            );
-          })
-        )}
-      </div>
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: dotColor,
+                      flexShrink: 0,
+                      boxShadow: isLatest ? `0 0 0 4px ${dotColor}18` : "none",
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontSize: 12,
+                      lineHeight: 1.5,
+                      color: pageColorTokens.textBody,
+                      fontWeight: isLatest ? 600 : 400,
+                    }}
+                  >
+                    {log.message}
+                  </span>
+                </div>
+              );
+            })
+          )}
+        </div>
       )}
 
       <div>
@@ -428,12 +467,13 @@ export function LogViewer({
           type="button"
           onClick={() => setLogsOpen((open) => !open)}
           style={{
-            border: "none",
-            background: "transparent",
-            color: pageColorTokens.brandBlue,
+            border: `1px solid ${pageColorTokens.borderSubtle}`,
+            background: pageColorTokens.surface,
+            color: pageColorTokens.textSecondary,
             fontSize: 12,
             fontWeight: 600,
-            padding: 0,
+            padding: "0.45rem 0.75rem",
+            borderRadius: 999,
             cursor: "pointer",
           }}
         >
@@ -443,7 +483,16 @@ export function LogViewer({
 
       {logsOpen && (
         displayLogs.length === 0 ? (
-          <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: pageColorTokens.textSecondary,
+              padding: "0.65rem 0.8rem",
+              borderRadius: pageColorTokens.radiusControl,
+              background: pageColorTokens.surface,
+              border: `1px dashed ${pageColorTokens.borderSubtle}`,
+            }}
+          >
             {isDone && completedElapsed > 0
               ? `任务已结束，实际耗时 ${formatElapsedClock(completedElapsed)}`
               : elapsed > 0
@@ -456,7 +505,7 @@ export function LogViewer({
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: 4,
+              gap: 6,
               maxHeight: 240,
               overflowY: "auto",
             }}
@@ -468,6 +517,10 @@ export function LogViewer({
                   display: "grid",
                   gridTemplateColumns: "48px 48px minmax(0, 1fr)",
                   gap: 8,
+                  padding: "0.55rem 0.75rem",
+                  borderRadius: pageColorTokens.radiusControl,
+                  background: index === displayLogs.length - 1 ? pageColorTokens.surface : "rgba(255,255,255,0.55)",
+                  border: `1px solid ${index === displayLogs.length - 1 ? pageColorTokens.borderSubtle : "transparent"}`,
                   fontSize: 12,
                   lineHeight: 1.6,
                   color: pageColorTokens.textBody,
