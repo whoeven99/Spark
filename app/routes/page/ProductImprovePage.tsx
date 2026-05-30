@@ -5,6 +5,7 @@ import { useFetcher, useLoaderData } from "react-router";
 import type { loader } from "../app.product-improve";
 import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
 import { ProductSelector } from "../component/product/ProductSelector";
+import { TaskListSummary } from "../component/aiTask/TaskListSummary";
 import { ProductImproveTaskListPage } from "../component/productImprove/ProductImproveTaskListPage";
 import type { AITaskItem } from "../../lib/aiTaskTypes";
 import {
@@ -36,13 +37,16 @@ function PageTabBar({
   const { t } = useTranslation();
 
   const btnStyle = (active: boolean): React.CSSProperties => ({
-    padding: "9px 16px",
-    borderRadius: 999,
-    border: `1px solid ${active ? pageColorTokens.borderSubtle : "transparent"}`,
-    background: active ? pageColorTokens.surface : "transparent",
-    color: active ? pageColorTokens.textPrimary : pageColorTokens.textSecondary,
-    boxShadow: active ? pageColorTokens.shadowCard : "none",
-    fontWeight: active ? 700 : 600,
+    padding: "8px 18px",
+    borderRadius: 9,
+    border: active
+      ? `2px solid ${pageColorTokens.brandGreen}`
+      : `2px solid transparent`,
+    background: active ? pageColorTokens.brandGreenLight : "transparent",
+    color: active
+      ? pageColorTokens.brandGreenDark
+      : pageColorTokens.textSecondary,
+    fontWeight: active ? 600 : 500,
     fontSize: 14,
     cursor: "pointer",
     display: "inline-flex",
@@ -51,20 +55,7 @@ function PageTabBar({
   });
 
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: 4,
-        alignItems: "center",
-        background: pageColorTokens.surfaceMuted,
-        border: `1px solid ${pageColorTokens.borderSubtle}`,
-        borderRadius: 999,
-        padding: "5px",
-        marginBottom: 20,
-        boxShadow: "inset 0 1px 2px rgba(0,0,0,0.03)",
-        flexWrap: "wrap",
-      }}
-    >
+    <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
       <button type="button" style={btnStyle(activeTab === "config")} onClick={() => onTabChange("config")}>
         {t("productImproveStage1.tabsConfig")}
       </button>
@@ -73,10 +64,10 @@ function PageTabBar({
         {runningCount > 0 && (
           <span
             style={{
-              background: pageColorTokens.brandGreen,
+              background: pageColorTokens.brandBlue,
               color: "#fff",
               borderRadius: 10,
-              padding: "1px 8px",
+              padding: "1px 7px",
               fontSize: 11,
               fontWeight: 700,
             }}
@@ -85,21 +76,6 @@ function PageTabBar({
           </span>
         )}
       </button>
-      {activeTab === "tasks" && (
-        <span
-          style={{
-            fontSize: 13,
-            color: pageColorTokens.textSecondary,
-            marginLeft: 8,
-            padding: "0.35rem 0.75rem",
-            borderRadius: 999,
-            background: pageColorTokens.surface,
-            border: `1px solid ${pageColorTokens.borderSubtle}`,
-          }}
-        >
-          {t("productImproveStage1.taskListSubtitle")}
-        </span>
-      )}
     </div>
   );
 }
@@ -314,6 +290,8 @@ export function ProductImprovePage() {
 
         {pageTab === "config" && (
           <>
+            <TaskListSummary tasks={tasks} mode="product_improve" />
+
             <PageSurface
               title={t("productImproveStage1.configSurfaceTitle")}
               subtitle={t("productImproveStage1.configSurfaceSubtitle")}
