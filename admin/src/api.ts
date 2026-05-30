@@ -576,12 +576,9 @@ export type PlanCatalogItem = {
 };
 
 export type PricingWorkbenchV2Settings = {
-  payingShops: number;
   targetGrossMarginPct: number;
-  planPriceUsd: number;
-  tokenGrantPerUser: number;
+  probePriceUsd: number;
   shopifyRevSharePct: number;
-  paymentFeePct: number;
 };
 
 export function fetchPricingWorkbenchV2(): Promise<{

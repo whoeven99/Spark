@@ -6,21 +6,15 @@ import { requireOwner } from "../middleware/auth.js";
 export const pricingWorkbenchV2Router = Router();
 
 const V2_DEFAULTS = {
-  payingShops: 100,
   targetGrossMarginPct: 70,
-  planPriceUsd: 29.99,
-  tokenGrantPerUser: 500_000,
+  probePriceUsd: 10,
   shopifyRevSharePct: 15,
-  paymentFeePct: 0,
 };
 
 const V2_NUMERIC_KEYS = [
-  "v2_payingShops",
   "v2_targetGrossMarginPct",
-  "v2_planPriceUsd",
-  "v2_tokenGrantPerUser",
+  "v2_probePriceUsd",
   "v2_shopifyRevSharePct",
-  "v2_paymentFeePct",
 ] as const;
 
 async function ensureTables() {
@@ -81,18 +75,13 @@ async function readV2Settings() {
   }
 
   return {
-    payingShops: Number(map.get("v2_payingShops") ?? V2_DEFAULTS.payingShops),
     targetGrossMarginPct: Number(
       map.get("v2_targetGrossMarginPct") ?? V2_DEFAULTS.targetGrossMarginPct,
     ),
-    planPriceUsd: Number(map.get("v2_planPriceUsd") ?? V2_DEFAULTS.planPriceUsd),
-    tokenGrantPerUser: Number(
-      map.get("v2_tokenGrantPerUser") ?? V2_DEFAULTS.tokenGrantPerUser,
-    ),
+    probePriceUsd: Number(map.get("v2_probePriceUsd") ?? V2_DEFAULTS.probePriceUsd),
     shopifyRevSharePct: Number(
       map.get("v2_shopifyRevSharePct") ?? V2_DEFAULTS.shopifyRevSharePct,
     ),
-    paymentFeePct: Number(map.get("v2_paymentFeePct") ?? V2_DEFAULTS.paymentFeePct),
     usageScenarios,
   };
 }
@@ -154,22 +143,19 @@ pricingWorkbenchV2Router.put("/settings", requireOwner, async (req, res) => {
     await readyTable();
     const now = new Date().toISOString();
     const {
-      payingShops,
       targetGrossMarginPct,
-      planPriceUsd,
-      tokenGrantPerUser,
+      probePriceUsd,
       shopifyRevSharePct,
-      paymentFeePct,
       usageScenarios,
     } = req.body as Record<string, unknown>;
 
     const entries: Array<[string, number]> = [
-      ["v2_payingShops", Number(payingShops)],
       ["v2_targetGrossMarginPct", Number(targetGrossMarginPct)],
-      ["v2_planPriceUsd", Number(planPriceUsd)],
-      ["v2_tokenGrantPerUser", Number(tokenGrantPerUser)],
-      ["v2_shopifyRevSharePct", Number(shopifyRevSharePct ?? V2_DEFAULTS.shopifyRevSharePct)],
-      ["v2_paymentFeePct", Number(paymentFeePct ?? V2_DEFAULTS.paymentFeePct)],
+      ["v2_probePriceUsd", Number(probePriceUsd ?? V2_DEFAULTS.probePriceUsd)],
+      [
+        "v2_shopifyRevSharePct",
+        Number(shopifyRevSharePct ?? V2_DEFAULTS.shopifyRevSharePct),
+      ],
     ];
 
     for (const [key, value] of entries) {
@@ -180,9 +166,8 @@ pricingWorkbenchV2Router.put("/settings", requireOwner, async (req, res) => {
     }
 
     const revShare = Number(shopifyRevSharePct ?? V2_DEFAULTS.shopifyRevSharePct);
-    const payFee = Number(paymentFeePct ?? V2_DEFAULTS.paymentFeePct);
-    if (revShare + payFee >= 100) {
-      res.status(400).json({ error: "shopifyRevSharePct + paymentFeePct must be < 100" });
+    if (revShare >= 100) {
+      res.status(400).json({ error: "shopifyRevSharePct must be < 100" });
       return;
     }
 

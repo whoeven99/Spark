@@ -5,12 +5,10 @@ import {
   Button,
   Card,
   Col,
-  Divider,
   Input,
   InputNumber,
   Modal,
   Popconfirm,
-  Progress,
   Row,
   Space,
   Spin,
@@ -46,9 +44,10 @@ import {
 } from "../api";
 import {
   DEFAULT_SCENARIOS,
+  REFERENCE_TOKEN_FACE_VALUE,
   calcFeatureRows,
   calcPlanMargins,
-  calcReversePricing,
+  calcProbePricing,
   calcTotals,
   type FeatureCalcRow,
   type FeatureScenario,
@@ -133,12 +132,9 @@ export default function PricingWorkbenchV2() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const [payingShops, setPayingShops] = useState(100);
   const [targetGrossMarginPct, setTargetGrossMarginPct] = useState(70);
   const [shopifyRevSharePct, setShopifyRevSharePct] = useState(15);
-  const [paymentFeePct, setPaymentFeePct] = useState(0);
-  const [planPriceUsd, setPlanPriceUsd] = useState(29.99);
-  const [tokenGrantPerUser, setTokenGrantPerUser] = useState(500_000);
+  const [probePriceUsd, setProbePriceUsd] = useState(10);
 
   const [fixedCosts, setFixedCosts] = useState<MonthlyFixedCostItem[]>([]);
   const [scenarios, setScenarios] = useState<FeatureScenario[]>(DEFAULT_SCENARIOS);
@@ -157,39 +153,29 @@ export default function PricingWorkbenchV2() {
 
   const assumptions: GlobalAssumptions = useMemo(
     () => ({
-      payingShops,
       targetGrossMarginPct,
       shopifyRevSharePct,
-      paymentFeePct,
-      planPriceUsd,
-      tokenGrantPerUser,
     }),
-    [
-      payingShops,
-      targetGrossMarginPct,
-      shopifyRevSharePct,
-      paymentFeePct,
-      planPriceUsd,
-      tokenGrantPerUser,
-    ],
+    [targetGrossMarginPct, shopifyRevSharePct],
   );
 
-  const tokenDollarValue =
-    planPriceUsd > 0 ? tokenGrantPerUser / planPriceUsd : 0;
-
   const featureRows = useMemo(
-    () => calcFeatureRows(scenarios, tokenDollarValue),
-    [scenarios, tokenDollarValue],
+    () => calcFeatureRows(scenarios, REFERENCE_TOKEN_FACE_VALUE),
+    [scenarios],
   );
 
   const totals = useMemo(
-    () => calcTotals(featureRows, fixedMonthly, payingShops),
-    [featureRows, fixedMonthly, payingShops],
+    () => calcTotals(featureRows, fixedMonthly),
+    [featureRows, fixedMonthly],
   );
 
-  const reverse = useMemo(
-    () => calcReversePricing(assumptions, totals),
-    [assumptions, totals],
+  const probe = useMemo(
+    () =>
+      calcProbePricing(
+        { probePriceUsd, targetGrossMarginPct, shopifyRevSharePct },
+        totals,
+      ),
+    [probePriceUsd, targetGrossMarginPct, shopifyRevSharePct, totals],
   );
 
   const planMargins = useMemo(
@@ -242,12 +228,9 @@ export default function PricingWorkbenchV2() {
     try {
       const data = await fetchPricingWorkbenchV2();
       const s = data.settings;
-      setPayingShops(s.payingShops);
       setTargetGrossMarginPct(s.targetGrossMarginPct);
       setShopifyRevSharePct(s.shopifyRevSharePct ?? 15);
-      setPaymentFeePct(s.paymentFeePct ?? 0);
-      setPlanPriceUsd(s.planPriceUsd);
-      setTokenGrantPerUser(s.tokenGrantPerUser);
+      setProbePriceUsd(s.probePriceUsd ?? 10);
       setFixedCosts(data.fixedCosts);
       setPlans(data.plans ?? []);
       setScenarios(parseScenarios(s.usageScenarios));
@@ -332,12 +315,9 @@ export default function PricingWorkbenchV2() {
     setSaving(true);
     try {
       await updatePricingWorkbenchV2Settings({
-        payingShops,
         targetGrossMarginPct,
-        planPriceUsd,
-        tokenGrantPerUser,
+        probePriceUsd,
         shopifyRevSharePct,
-        paymentFeePct,
         usageScenarios: scenarios,
       });
       notification.success({ message: "工作台配置已保存" });
@@ -405,138 +385,20 @@ export default function PricingWorkbenchV2() {
 
   const overviewTab = (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <Row gutter={[16, 16]}>
-        {[
-          {
-            label: "每计费 Token 成本",
-            value: USD(totals.effectiveCostPerBilledToken, 6),
-            sub: `变量 ${USD(totals.variableCostPerUser)} / 店 / 月`,
-          },
-          {
-            label: "净收入（标价 − 平台费）",
-            value: USD(reverse.netRevenueUsd),
-            sub: `标价 ${USD(planPriceUsd)}，费率 ${shopifyRevSharePct + paymentFeePct}%`,
-          },
-          {
-            label: "当前 Token 面值",
-            value: `${NUM(reverse.currentTokenFaceValue)} / $`,
-            sub: `安全上限 ${NUM(reverse.maxTokenFaceValue)} / $`,
-          },
-          {
-            label: "模拟套餐毛利率",
-            value: `${reverse.currentMarginPct.toFixed(1)}%`,
-            sub: `目标 ${targetGrossMarginPct}%`,
-            color: marginColor(reverse.currentMarginPct, targetGrossMarginPct),
-          },
-        ].map((kpi) => (
-          <Col xs={24} sm={12} lg={6} key={kpi.label}>
-            <Card size="small" style={{ height: "100%" }}>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {kpi.label}
-              </Typography.Text>
-              <Typography.Title
-                level={4}
-                style={{ margin: "6px 0 0", color: kpi.color }}
-              >
-                {kpi.value}
-              </Typography.Title>
-              <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                {kpi.sub}
-              </Typography.Text>
-            </Card>
-          </Col>
-        ))}
-      </Row>
-
       <Card title="反推模拟（主套餐探针）">
-        <Row gutter={24}>
-          <Col xs={24} lg={12}>
-            <Typography.Text strong>A · 给定 Token，算建议标价</Typography.Text>
-            <div style={{ marginTop: 8 }}>
-              <Typography.Text type="secondary">发放 Token / 店 / 月</Typography.Text>
-              <InputNumber
-                style={{ width: "100%", marginTop: 4 }}
-                min={0}
-                step={10_000}
-                value={tokenGrantPerUser}
-                formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                parser={(v) => Number(v?.replace(/,/g, "") ?? 0)}
-                onChange={(n) => setTokenGrantPerUser(Number(n ?? 0))}
-              />
-            </div>
-            <Divider style={{ margin: "12px 0" }} />
-            <Typography.Text type="secondary">固定成本分摊</Typography.Text>
-            <div>{USD(totals.fixedPerUser)} / 店 / 月</div>
-            <Typography.Text type="secondary" style={{ display: "block", marginTop: 8 }}>
-              建议标价（含平台费还原）
-            </Typography.Text>
-            <Typography.Title level={3} style={{ margin: "4px 0" }}>
-              {USD(reverse.suggestedPriceListUsd)}
-            </Typography.Title>
-          </Col>
-          <Col xs={24} lg={12}>
-            <Typography.Text strong>B · 给定标价，算建议 Token</Typography.Text>
-            <div style={{ marginTop: 8 }}>
-              <Typography.Text type="secondary">月费标价 (USD)</Typography.Text>
-              <InputNumber
-                style={{ width: "100%", marginTop: 4 }}
-                min={0}
-                step={0.01}
-                precision={2}
-                value={planPriceUsd}
-                onChange={(n) => setPlanPriceUsd(Number(n ?? 0))}
-              />
-            </div>
-            <Divider style={{ margin: "12px 0" }} />
-            <Typography.Text type="secondary">建议发放 Token</Typography.Text>
-            <Typography.Title level={3} style={{ margin: "4px 0" }}>
-              {NUM(reverse.suggestedGrantForPrice)}
-            </Typography.Title>
-            <Progress
-              percent={Math.min(
-                100,
-                tokenGrantPerUser > 0
-                  ? (reverse.suggestedGrantForPrice / tokenGrantPerUser) * 100
-                  : 0,
-              )}
-              format={() =>
-                tokenGrantPerUser > 0
-                  ? `${((reverse.suggestedGrantForPrice / tokenGrantPerUser) * 100).toFixed(0)}%`
-                  : "0%"
-              }
-              strokeColor={
-                reverse.currentMarginPct >= targetGrossMarginPct
-                  ? "#52c41a"
-                  : "#ff4d4f"
-              }
-            />
-            <Typography.Text type="secondary">
-              当前配置毛利率{" "}
-              <span
-                style={{
-                  color: marginColor(reverse.currentMarginPct, targetGrossMarginPct),
-                  fontWeight: 600,
-                }}
-              >
-                {reverse.currentMarginPct.toFixed(1)}%
-              </span>
-            </Typography.Text>
-          </Col>
-        </Row>
-      </Card>
-
-      <Card title="全局假设">
-        <Row gutter={[16, 16]}>
-          <Col xs={12} md={6}>
-            <Typography.Text type="secondary">付费商店数</Typography.Text>
+        <Row gutter={[24, 16]} align="middle">
+          <Col xs={24} md={8}>
+            <Typography.Text type="secondary">探针价格 (USD)</Typography.Text>
             <InputNumber
               style={{ width: "100%", marginTop: 4 }}
-              min={1}
-              value={payingShops}
-              onChange={(n) => setPayingShops(Number(n ?? 1))}
+              min={0.01}
+              step={1}
+              precision={2}
+              value={probePriceUsd}
+              onChange={(n) => setProbePriceUsd(Number(n ?? 10))}
             />
           </Col>
-          <Col xs={12} md={6}>
+          <Col xs={12} md={4}>
             <Typography.Text type="secondary">目标毛利率 (%)</Typography.Text>
             <InputNumber
               style={{ width: "100%", marginTop: 4 }}
@@ -547,7 +409,7 @@ export default function PricingWorkbenchV2() {
               onChange={(n) => setTargetGrossMarginPct(Number(n ?? 0))}
             />
           </Col>
-          <Col xs={12} md={6}>
+          <Col xs={12} md={4}>
             <Typography.Text type="secondary">Shopify 分成 (%)</Typography.Text>
             <InputNumber
               style={{ width: "100%", marginTop: 4 }}
@@ -558,16 +420,17 @@ export default function PricingWorkbenchV2() {
               onChange={(n) => setShopifyRevSharePct(Number(n ?? 0))}
             />
           </Col>
-          <Col xs={12} md={6}>
-            <Typography.Text type="secondary">支付附加费 (%)</Typography.Text>
-            <InputNumber
-              style={{ width: "100%", marginTop: 4 }}
-              min={0}
-              max={99}
-              step={0.1}
-              value={paymentFeePct}
-              onChange={(n) => setPaymentFeePct(Number(n ?? 0))}
-            />
+          <Col xs={24} md={8}>
+            <Typography.Text type="secondary">
+              {USD(probePriceUsd)} 建议发放 Token
+            </Typography.Text>
+            <Typography.Title level={2} style={{ margin: "4px 0" }}>
+              {NUM(probe.suggestedTokens)}
+            </Typography.Title>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              净收 {USD(probe.netRevenueUsd)} · 成本{" "}
+              {USD(probe.effectiveCostPerBilledToken, 6)}/计费 Token
+            </Typography.Text>
           </Col>
         </Row>
       </Card>
@@ -577,9 +440,6 @@ export default function PricingWorkbenchV2() {
           <Space>
             月固定成本
             <Tag>{USD(fixedMonthly)}/月</Tag>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              分摊 {USD(totals.fixedPerUser)}/店
-            </Typography.Text>
           </Space>
         }
         extra={
@@ -699,83 +559,43 @@ export default function PricingWorkbenchV2() {
             },
           },
           {
-            title: "用量 & 成本",
+            title: "成本",
             children: [
               {
-                title: "次/月",
-                width: 72,
+                title: "$/1M In",
+                width: 80,
                 render: (_: unknown, r: FeatureScenario) => (
                   <InputNumber
                     size="small"
                     min={0}
-                    value={r.callsPerUserPerMonth}
+                    step={0.01}
+                    style={{ width: "100%" }}
+                    value={r.priceInputPer1M}
                     onChange={(n) =>
-                      patchScenario(r.id, { callsPerUserPerMonth: Number(n ?? 0) })
+                      patchScenario(r.id, { priceInputPer1M: Number(n ?? 0) })
                     }
                   />
                 ),
               },
               {
-                title: "In",
-                width: 68,
+                title: "$/1M Out",
+                width: 80,
                 render: (_: unknown, r: FeatureScenario) => (
                   <InputNumber
                     size="small"
                     min={0}
-                    value={r.inputTokensPerCall}
+                    step={0.01}
+                    style={{ width: "100%" }}
+                    value={r.priceOutputPer1M}
                     onChange={(n) =>
-                      patchScenario(r.id, { inputTokensPerCall: Number(n ?? 0) })
+                      patchScenario(r.id, { priceOutputPer1M: Number(n ?? 0) })
                     }
                   />
                 ),
               },
               {
-                title: "Out",
-                width: 68,
-                render: (_: unknown, r: FeatureScenario) => (
-                  <InputNumber
-                    size="small"
-                    min={0}
-                    value={r.outputTokensPerCall}
-                    onChange={(n) =>
-                      patchScenario(r.id, { outputTokensPerCall: Number(n ?? 0) })
-                    }
-                  />
-                ),
-              },
-              {
-                title: "$/1M",
-                width: 88,
-                render: (_: unknown, r: FeatureScenario) => (
-                  <Tooltip title={`In ${r.priceInputPer1M} / Out ${r.priceOutputPer1M}`}>
-                    <Space size={2}>
-                      <InputNumber
-                        size="small"
-                        min={0}
-                        step={0.01}
-                        style={{ width: 52 }}
-                        value={r.priceInputPer1M}
-                        onChange={(n) =>
-                          patchScenario(r.id, { priceInputPer1M: Number(n ?? 0) })
-                        }
-                      />
-                      <InputNumber
-                        size="small"
-                        min={0}
-                        step={0.01}
-                        style={{ width: 52 }}
-                        value={r.priceOutputPer1M}
-                        onChange={(n) =>
-                          patchScenario(r.id, { priceOutputPer1M: Number(n ?? 0) })
-                        }
-                      />
-                    </Space>
-                  </Tooltip>
-                ),
-              },
-              {
-                title: "$/次",
-                width: 72,
+                title: "$/次固定",
+                width: 80,
                 render: (_: unknown, r: FeatureScenario) => (
                   <InputNumber
                     size="small"
@@ -789,7 +609,7 @@ export default function PricingWorkbenchV2() {
                 ),
               },
               {
-                title: "API",
+                title: "API/次",
                 width: 72,
                 render: (_: unknown, r: FeatureCalcRow) => (
                   <Typography.Text style={{ fontSize: 11 }}>
@@ -950,25 +770,9 @@ export default function PricingWorkbenchV2() {
         />
       )}
       <Row gutter={16}>
-        <Col xs={24} md={8}>
+        <Col xs={24}>
           <Card size="small">
-            <Typography.Text type="secondary">变量成本 / 店 / 月</Typography.Text>
-            <Typography.Title level={4} style={{ margin: "4px 0" }}>
-              {USD(totals.variableCostPerUser)}
-            </Typography.Title>
-          </Card>
-        </Col>
-        <Col xs={24} md={8}>
-          <Card size="small">
-            <Typography.Text type="secondary">计费 Token / 店 / 月</Typography.Text>
-            <Typography.Title level={4} style={{ margin: "4px 0" }}>
-              {NUM(totals.billedTokensPerUser)}
-            </Typography.Title>
-          </Card>
-        </Col>
-        <Col xs={24} md={8}>
-          <Card size="small">
-            <Typography.Text type="secondary">$/计费 Token</Typography.Text>
+            <Typography.Text type="secondary">综合 $ / 计费 Token（各能力均权）</Typography.Text>
             <Typography.Title level={4} style={{ margin: "4px 0" }}>
               {USD(totals.effectiveCostPerBilledToken, 6)}
             </Typography.Title>

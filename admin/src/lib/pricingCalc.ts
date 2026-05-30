@@ -22,12 +22,12 @@ export type FeatureScenario = {
 };
 
 export type GlobalAssumptions = {
-  payingShops: number;
   targetGrossMarginPct: number;
   shopifyRevSharePct: number;
-  paymentFeePct: number;
-  planPriceUsd: number;
-  tokenGrantPerUser: number;
+};
+
+export type ProbePricingInput = GlobalAssumptions & {
+  probePriceUsd: number;
 };
 
 export type FeatureCalcRow = FeatureScenario & {
@@ -63,13 +63,13 @@ export type PlanMarginRow = {
 };
 
 export type ReversePricing = {
+  suggestedTokens: number;
   netRevenueUsd: number;
-  suggestedPriceListUsd: number;
-  suggestedGrantForPrice: number;
-  currentMarginPct: number;
-  maxTokenFaceValue: number;
-  currentTokenFaceValue: number;
+  effectiveCostPerBilledToken: number;
 };
+
+/** 参考 Token 面值（$/token 反算），用于能力模型 base 建议，与探针价解耦 */
+export const REFERENCE_TOKEN_FACE_VALUE = 500_000 / 29.99;
 
 export function clamp(n: number, min: number, max: number): number {
   if (!Number.isFinite(n)) return min;
@@ -84,20 +84,9 @@ export function positive(n: number): number {
 export function netRevenueFromListPrice(
   listPriceUsd: number,
   shopifyRevSharePct: number,
-  paymentFeePct: number,
 ): number {
-  const fee = clamp(shopifyRevSharePct + paymentFeePct, 0, 99) / 100;
+  const fee = clamp(shopifyRevSharePct, 0, 99) / 100;
   return positive(listPriceUsd) * (1 - fee);
-}
-
-export function listPriceFromNetRevenue(
-  netRevenueUsd: number,
-  shopifyRevSharePct: number,
-  paymentFeePct: number,
-): number {
-  const fee = clamp(shopifyRevSharePct + paymentFeePct, 0, 99) / 100;
-  const factor = 1 - fee;
-  return factor > 0 ? positive(netRevenueUsd) / factor : Number.POSITIVE_INFINITY;
 }
 
 /** 与主 App `applyTokenBillingMultiplier` 对齐 */
@@ -185,77 +174,54 @@ export function calcFeatureRows(
 export function calcTotals(
   rows: FeatureCalcRow[],
   fixedCostMonthly: number,
-  payingShops: number,
 ): PricingTotals {
-  const enabled = rows.filter((r) => r.enabled);
-  const variableCostPerUser = enabled.reduce(
-    (s, r) => s + r.monthlyCostPerUserUsd,
-    0,
-  );
-  const billedTokensPerUser = enabled.reduce(
-    (s, r) => s + r.monthlyBilledTokensPerUser,
-    0,
-  );
+  const enabled = rows.filter((r) => r.enabled && r.billedTokensPerCall > 0);
   const effectiveCostPerBilledToken =
-    billedTokensPerUser > 0 ? variableCostPerUser / billedTokensPerUser : 0;
-  const shops = Math.max(1, positive(payingShops));
-  const fixedPerUser = positive(fixedCostMonthly) / shops;
+    enabled.length > 0
+      ? enabled.reduce((s, r) => s + r.costPerCallUsd / r.billedTokensPerCall, 0) /
+        enabled.length
+      : 0;
 
   return {
-    variableCostPerUser,
-    billedTokensPerUser,
+    variableCostPerUser: 0,
+    billedTokensPerUser: 0,
     effectiveCostPerBilledToken,
     fixedCostMonthly: positive(fixedCostMonthly),
-    fixedPerUser,
+    fixedPerUser: 0,
   };
 }
 
-export function calcReversePricing(
-  assumptions: GlobalAssumptions,
+/** 给定标价（如 $10），在目标毛利率下建议发放多少计费 Token（仅变量成本） */
+export function calcSuggestedTokensForPrice(
+  listPriceUsd: number,
+  targetGrossMarginPct: number,
+  shopifyRevSharePct: number,
+  effectiveCostPerBilledToken: number,
+): number {
+  const margin = clamp(targetGrossMarginPct, 0, 99.9) / 100;
+  const cpb = positive(effectiveCostPerBilledToken);
+  if (cpb <= 0) return 0;
+  const netRev = netRevenueFromListPrice(listPriceUsd, shopifyRevSharePct);
+  return Math.max(0, Math.floor((netRev * (1 - margin)) / cpb));
+}
+
+export function calcProbePricing(
+  input: ProbePricingInput,
   totals: PricingTotals,
 ): ReversePricing {
-  const margin = clamp(assumptions.targetGrossMarginPct, 0, 99.9) / 100;
   const cpb = totals.effectiveCostPerBilledToken;
-  const grant = positive(assumptions.tokenGrantPerUser);
-  const listPrice = positive(assumptions.planPriceUsd);
-
-  const netRev = netRevenueFromListPrice(
-    listPrice,
-    assumptions.shopifyRevSharePct,
-    assumptions.paymentFeePct,
+  const netRev = netRevenueFromListPrice(input.probePriceUsd, input.shopifyRevSharePct);
+  const suggestedTokens = calcSuggestedTokensForPrice(
+    input.probePriceUsd,
+    input.targetGrossMarginPct,
+    input.shopifyRevSharePct,
+    cpb,
   );
-
-  const costAtGrant = totals.fixedPerUser + grant * cpb;
-  const netNeededForGrant =
-    margin < 1 ? costAtGrant / (1 - margin) : Number.POSITIVE_INFINITY;
-  const suggestedPriceListUsd = listPriceFromNetRevenue(
-    netNeededForGrant,
-    assumptions.shopifyRevSharePct,
-    assumptions.paymentFeePct,
-  );
-
-  const suggestedGrantForPrice =
-    cpb > 0
-      ? Math.max(0, Math.floor((netRev * (1 - margin) - totals.fixedPerUser) / cpb))
-      : 0;
-
-  const currentMarginPct =
-    netRev > 0 ? (1 - costAtGrant / netRev) * 100 : 0;
-
-  const maxTokenFaceValue =
-    cpb > 0 && netRev > 0
-      ? Math.floor((netRev * (1 - margin) - totals.fixedPerUser) / cpb) / listPrice
-      : 0;
-
-  const currentTokenFaceValue = listPrice > 0 ? grant / listPrice : 0;
 
   return {
+    suggestedTokens,
     netRevenueUsd: netRev,
-    suggestedPriceListUsd,
-    suggestedGrantForPrice,
-    currentMarginPct,
-    maxTokenFaceValue,
-    currentTokenFaceValue,
+    effectiveCostPerBilledToken: cpb,
   };
 }
 
@@ -273,7 +239,6 @@ export function calcPlanMargins(
   assumptions: GlobalAssumptions,
   totals: PricingTotals,
 ): PlanMarginRow[] {
-  const margin = clamp(assumptions.targetGrossMarginPct, 0, 99.9) / 100;
   const cpb = totals.effectiveCostPerBilledToken;
 
   return plans
@@ -281,17 +246,15 @@ export function calcPlanMargins(
     .map((plan) => {
       const priceUsd = positive(Number(plan.priceAmount));
       const tokens = positive(plan.tokens);
-      const netRev = netRevenueFromListPrice(
-        priceUsd,
-        assumptions.shopifyRevSharePct,
-        assumptions.paymentFeePct,
-      );
-      const costAtGrant = totals.fixedPerUser + tokens * cpb;
+      const netRev = netRevenueFromListPrice(priceUsd, assumptions.shopifyRevSharePct);
+      const costAtGrant = tokens * cpb;
       const impliedMarginPct = netRev > 0 ? (1 - costAtGrant / netRev) * 100 : 0;
-      const suggestedTokens =
-        cpb > 0
-          ? Math.max(0, Math.floor((netRev * (1 - margin) - totals.fixedPerUser) / cpb))
-          : 0;
+      const suggestedTokens = calcSuggestedTokensForPrice(
+        priceUsd,
+        assumptions.targetGrossMarginPct,
+        assumptions.shopifyRevSharePct,
+        cpb,
+      );
       const tokenDeltaPct =
         tokens > 0 ? ((suggestedTokens - tokens) / tokens) * 100 : 0;
 
