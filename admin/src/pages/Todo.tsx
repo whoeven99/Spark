@@ -57,6 +57,22 @@ const PRIORITY_CONFIG: Record<TodoPriority, { color: string; bg: string; border:
   low:    { color: "#8c8c8c",  bg: "#f5f5f5", border: "#d9d9d9", label: "低" },
 };
 
+function renderPriorityTag(priority: TodoPriority): React.ReactNode {
+  const cfg = PRIORITY_CONFIG[priority];
+  return (
+    <Tag
+      style={{
+        margin: 0,
+        color: cfg.color,
+        background: cfg.bg,
+        borderColor: cfg.border,
+      }}
+    >
+      {cfg.label}
+    </Tag>
+  );
+}
+
 const STATUS_ROWS: {
   key: TodoStatus;
   label: string;
@@ -65,9 +81,9 @@ const STATUS_ROWS: {
   bgColor: string;
   borderColor: string;
 }[] = [
-  { key: "doing", label: "进行中", icon: <PlayCircleOutlined />, color: "#d97706", bgColor: "#fffcf5", borderColor: "#fde68a" },
-  { key: "todo",  label: "待办",   icon: <HourglassOutlined />,  color: "#6b7280", bgColor: "#fafafa", borderColor: "#e5e7eb" },
-  { key: "done",  label: "已完成", icon: <CheckCircleOutlined />, color: "#059669", bgColor: "#f8fffe", borderColor: "#d1fae5" },
+  { key: "doing", label: "进行中", icon: <PlayCircleOutlined />, color: "#1d4ed8", bgColor: "#eff6ff", borderColor: "#bfdbfe" },
+  { key: "todo",  label: "待办",   icon: <HourglassOutlined />,  color: "#475569", bgColor: "#f8fafc", borderColor: "#cbd5e1" },
+  { key: "done",  label: "已完成", icon: <CheckCircleOutlined />, color: "#047857", bgColor: "#ecfdf5", borderColor: "#a7f3d0" },
 ];
 
 const ME_KEY = "spark_admin_me";
@@ -207,6 +223,7 @@ export default function Todo() {
                 background: statusRow.bgColor,
                 border: `1px solid ${statusRow.borderColor}`,
                 borderLeft: `5px solid ${statusRow.color}`,
+                boxShadow: "inset 0 -1px 0 rgba(0,0,0,0.03)",
                 borderRadius: "6px 6px 0 0",
               }}>
                 <span style={{ fontSize: 18, color: statusRow.color, display: "flex", alignItems: "center" }}>
@@ -309,7 +326,7 @@ export default function Todo() {
               <Select>
                 {(["high", "medium", "low"] as TodoPriority[]).map((p) => (
                   <Select.Option key={p} value={p}>
-                    <Tag color={PRIORITY_CONFIG[p].color} style={{ margin: 0 }}>{PRIORITY_CONFIG[p].label}</Tag>
+                    {renderPriorityTag(p)}
                   </Select.Option>
                 ))}
               </Select>
@@ -362,7 +379,7 @@ function TodoCard({
   return (
     <Card
       size="small"
-      style={{ borderTop: `2px solid ${statusRow.borderColor}`, borderRadius: 6, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
+      style={{ borderTop: `2px solid ${statusRow.color}`, borderRadius: 6, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
       styles={{ body: { padding: "10px 12px" } }}
     >
       {/* Title + actions */}
