@@ -234,9 +234,9 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
   - `DEEPSEEK_MODEL` / `OPENAI_MODEL`（可选）
   - `DEEPSEEK_BASE_URL`（可选，默认 DeepSeek v1）
 - Prisma / Turso（`app/db.server.ts`）：
-  - `TURSO_TARGET`：`test` | `prod`（可选；未设时 `NODE_ENV=production` 默认连 **prod** 并读 `TURSO_PROD_*`；非 production 默认 test）
+  - `TURSO_TARGET`：`test` | `prod`（可选；未设时 `NODE_ENV=prod`（或 `production`）默认连 **prod** 并读 `TURSO_PROD_*`；非 prod 默认 test）
   - 占位 prod URL（如 `your-prod-db`）视为未配置，不会误连
-  - Render Test：同为 `NODE_ENV=production`，须显式 `TURSO_TARGET=test` 或**仅**配置 `TURSO_TEST_*`（勿留占位 `TURSO_PROD_*`）
+  - Render Test：同为 `NODE_ENV=prod` 时，须显式 `TURSO_TARGET=test` 或**仅**配置 `TURSO_TEST_*`（勿留占位 `TURSO_PROD_*`）
   - **Render 环境变量**：在 Web Service → **Environment** 面板添加（会注入 `process.env`）。若用 **Secret File** 上传 `.env`，需挂载到 `/etc/secrets/.env`（或设 `ENV_FILE` 指向路径）；Secret File **不会**自动进 `process.env`，启动时由 `app/config/runtimeEnv.server.ts` 读取
   - 测试库：`TURSO_TEST_DATABASE_URL`、`TURSO_TEST_AUTH_TOKEN`
   - 生产库：`TURSO_PROD_DATABASE_URL`、`TURSO_PROD_AUTH_TOKEN`

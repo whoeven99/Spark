@@ -520,6 +520,26 @@ export function updateBillingRule(
   });
 }
 
+export type OpsServiceStatus = {
+  key: string;
+  name: string;
+  category: "core" | "ai" | "ops";
+  required: boolean;
+  configured: boolean;
+  note: string;
+  costSignal: string;
+  rechargeSignal: string;
+};
+
+export type OpsChecklistData = {
+  generatedAt: string;
+  services: OpsServiceStatus[];
+};
+
+export function fetchOpsChecklist(): Promise<OpsChecklistData> {
+  return apiFetch("/ops-checklist");
+}
+
 export function deleteBillingRule(ruleKey: string): Promise<{ ok: boolean }> {
   return apiFetch(`/billing-rules/${encodeURIComponent(ruleKey)}`, { method: "DELETE" });
 }
@@ -537,6 +557,7 @@ export type TodoRow = {
   assignee: TodoAssignee | null;
   status: TodoStatus;
   priority: TodoPriority;
+  etaDays: number | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -551,6 +572,7 @@ export function createTodo(data: {
   description?: string;
   assignee?: TodoAssignee;
   priority?: TodoPriority;
+  etaDays?: number | null;
   createdBy: string;
 }): Promise<{ ok: boolean; id: string }> {
   return apiFetch("/todos", { method: "POST", body: JSON.stringify(data) });
@@ -564,6 +586,7 @@ export function updateTodo(
     assignee?: TodoAssignee | null;
     status: TodoStatus;
     priority: TodoPriority;
+    etaDays?: number | null;
   },
 ): Promise<{ ok: boolean }> {
   return apiFetch(`/todos/${encodeURIComponent(id)}`, {
