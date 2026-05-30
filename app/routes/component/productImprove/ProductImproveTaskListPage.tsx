@@ -6,6 +6,23 @@ import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 
 type TaskViewTab = "current" | "history";
 
+function resolveNextActionLabel(status: AITaskStatus): string {
+  switch (status) {
+    case "running":
+      return "等待执行完成并查看流式进度";
+    case "pending_review":
+      return "优先进入审核，确认标题、描述和修改建议";
+    case "scored":
+      return "评分已完成，下一步可确认写入 Shopify";
+    case "applied":
+      return "已完成应用，可回看审核记录与最终结果";
+    case "failed":
+      return "查看失败原因，必要时重新创建任务";
+    default:
+      return "在任务卡片中查看当前状态和后续动作";
+  }
+}
+
 type Props = {
   tasks: AITaskItem[];
   locationSearch: string;
@@ -55,9 +72,85 @@ export function ProductImproveTaskListPage({
     (task) => new Date(task.createdAt).getTime() < cutoff,
   );
   const visibleTasks = viewTab === "current" ? currentTasks : historyTasks;
+  const actionableTask =
+    currentTasks.find((task) => task.status === "pending_review") ??
+    currentTasks.find((task) => task.status === "scored") ??
+    currentTasks.find((task) => task.status === "running") ??
+    currentTasks[0];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div
+        style={{
+          border: `1px solid ${pageColorTokens.border}`,
+          borderRadius: pageColorTokens.radiusCard,
+          background: "linear-gradient(160deg, #ffffff 0%, #fafbfd 100%)",
+          boxShadow: pageColorTokens.shadowCard,
+          padding: "14px 16px",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 14,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ flex: "1 1 18rem", minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: pageColorTokens.textPrimary }}>
+            任务工作台
+          </div>
+          <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, marginTop: 4 }}>
+            当前任务页承载执行、审核、评分和应用动作，优先处理待审查与评分完成的任务。
+          </div>
+        </div>
+        {actionableTask ? (
+          <div
+            style={{
+              flex: "1 1 22rem",
+              minWidth: 0,
+              border: `1px solid ${pageColorTokens.borderSubtle}`,
+              borderRadius: pageColorTokens.radiusControl,
+              background: pageColorTokens.surfaceSubtle,
+              padding: "12px 14px",
+            }}
+          >
+            <div style={{ fontSize: 11, fontWeight: 700, color: pageColorTokens.textSecondary }}>
+              当前优先任务
+            </div>
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: pageColorTokens.textPrimary,
+                marginTop: 6,
+              }}
+            >
+              #{actionableTask.id.slice(0, 8).toUpperCase()} ·{" "}
+              {String(
+                (actionableTask.config as { originalTitle?: string }).originalTitle ?? "商品文案任务",
+              )}
+            </div>
+            <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, marginTop: 6 }}>
+              {resolveNextActionLabel(actionableTask.status)}
+            </div>
+          </div>
+        ) : (
+          <div
+            style={{
+              flex: "1 1 18rem",
+              minWidth: 0,
+              border: `1px dashed ${pageColorTokens.borderSubtle}`,
+              borderRadius: pageColorTokens.radiusControl,
+              background: pageColorTokens.surfaceSubtle,
+              padding: "12px 14px",
+              fontSize: 12,
+              color: pageColorTokens.textSecondary,
+            }}
+          >
+            当前没有需要优先处理的任务，创建新任务后会自动在这里显示下一步建议。
+          </div>
+        )}
+      </div>
+
       <TaskListSummary tasks={sorted} mode="product_improve" />
 
       <div

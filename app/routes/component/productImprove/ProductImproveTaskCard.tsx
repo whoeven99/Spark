@@ -34,6 +34,151 @@ function formatTaskDate(iso: string): string {
   });
 }
 
+function ReviewContentPanel(props: {
+  label: string;
+  tone?: "neutral" | "positive";
+  title: string;
+  description: string;
+  editable?: boolean;
+  disabled?: boolean;
+  onTitleChange?: (value: string) => void;
+  onDescriptionChange?: (value: string) => void;
+  descriptionRows?: number;
+}) {
+  const tone = props.tone ?? "neutral";
+  const headerBg =
+    tone === "positive" ? pageColorTokens.brandGreenLight : pageColorTokens.surfaceMuted;
+  const headerColor =
+    tone === "positive" ? pageColorTokens.brandGreenDark : pageColorTokens.textSecondary;
+  const borderColor =
+    tone === "positive" ? "rgba(0, 166, 124, 0.18)" : pageColorTokens.borderSubtle;
+
+  return (
+    <div
+      style={{
+        border: `1px solid ${borderColor}`,
+        borderRadius: pageColorTokens.radiusControl,
+        background: tone === "positive" ? "#fcfffd" : pageColorTokens.surfaceSubtle,
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <div
+        style={{
+          padding: "8px 10px",
+          background: headerBg,
+          fontSize: 11,
+          fontWeight: 700,
+          color: headerColor,
+          letterSpacing: "0.04em",
+        }}
+      >
+        {props.label}
+      </div>
+      <div style={{ padding: "12px", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div>
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: pageColorTokens.textSecondary,
+              marginBottom: 6,
+            }}
+          >
+            标题
+          </div>
+          {props.editable ? (
+            <input
+              value={props.title}
+              onChange={(e) => props.onTitleChange?.(e.currentTarget.value)}
+              disabled={props.disabled}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "0.65rem 0.75rem",
+                borderRadius: pageColorTokens.radiusControl,
+                border: `1px solid ${pageColorTokens.borderInput}`,
+                fontSize: 13,
+                fontWeight: 600,
+                color: pageColorTokens.textPrimary,
+                background: "#fff",
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                border: `1px solid ${pageColorTokens.borderSubtle}`,
+                borderRadius: pageColorTokens.radiusControl,
+                padding: "0.7rem 0.8rem",
+                fontSize: 13,
+                fontWeight: 600,
+                color: pageColorTokens.textPrimary,
+                background: "#fff",
+                minHeight: 42,
+                boxSizing: "border-box",
+              }}
+            >
+              {props.title || "（无标题）"}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: pageColorTokens.textSecondary,
+              marginBottom: 6,
+            }}
+          >
+            描述
+          </div>
+          {props.editable ? (
+            <textarea
+              value={props.description}
+              onChange={(e) => props.onDescriptionChange?.(e.currentTarget.value)}
+              disabled={props.disabled}
+              rows={props.descriptionRows ?? 10}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "0.7rem 0.75rem",
+                borderRadius: pageColorTokens.radiusControl,
+                border: `1px solid ${pageColorTokens.borderInput}`,
+                fontSize: 13,
+                fontFamily: "inherit",
+                lineHeight: 1.6,
+                color: pageColorTokens.textBody,
+                background: "#fff",
+                resize: "vertical",
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                border: `1px solid ${pageColorTokens.borderSubtle}`,
+                borderRadius: pageColorTokens.radiusControl,
+                padding: "0.7rem 0.8rem",
+                fontSize: 13,
+                lineHeight: 1.6,
+                color: pageColorTokens.textBody,
+                background: "#fff",
+                minHeight: 170,
+                boxSizing: "border-box",
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              {props.description || "（无原始描述）"}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ProductImproveTaskCard({
   task,
   locationSearch,
@@ -47,9 +192,12 @@ export function ProductImproveTaskCard({
   const [draftDescription, setDraftDescription] = useState("");
   const [reviewScore, setReviewScore] = useState(4);
   const [reviewNote, setReviewNote] = useState("");
+  const [optimizationComment, setOptimizationComment] = useState("");
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewSaving, setReviewSaving] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [refining, setRefining] = useState(false);
+  const [refineError, setRefineError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -78,6 +226,9 @@ export function ProductImproveTaskCard({
     );
     setReviewNote(
       (task.result as Partial<ProductImproveTaskResult> | null)?.reviewNote ?? "",
+    );
+    setOptimizationComment(
+      (task.result as Partial<ProductImproveTaskResult> | null)?.optimizationComment ?? "",
     );
   }, [reviewOpen, task.result]);
 
@@ -108,6 +259,7 @@ export function ProductImproveTaskCard({
       description: draftDescription.trim(),
       reviewScore,
       reviewNote: reviewNote.trim() || undefined,
+      optimizationComment: optimizationComment.trim() || undefined,
     };
   }
 
@@ -116,7 +268,9 @@ export function ProductImproveTaskCard({
     setDraftDescription(result?.description ?? "");
     setReviewScore(result?.reviewScore ?? 4);
     setReviewNote(result?.reviewNote ?? "");
+    setOptimizationComment(result?.optimizationComment ?? "");
     setReviewError(null);
+    setRefineError(null);
     setApplyError(null);
     setReviewOpen(true);
   }
@@ -194,6 +348,54 @@ export function ProductImproveTaskCard({
       setApplyError("应用时发生网络错误");
     } finally {
       setApplying(false);
+    }
+  }
+
+  async function handleRefine() {
+    if (!draftTitle.trim() || !draftDescription.trim()) {
+      setRefineError("请先补充当前草稿标题和描述");
+      return;
+    }
+    if (!optimizationComment.trim()) {
+      setRefineError("请填写希望 AI 继续优化的方向或评论");
+      return;
+    }
+
+    setRefining(true);
+    setRefineError(null);
+    setReviewError(null);
+    setApplyError(null);
+
+    try {
+      const resp = await fetch(`/api/ai-task${locationSearch}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "refine",
+          taskId: task.id,
+          draftTitle,
+          draftDescription,
+          optimizationComment,
+        }),
+      });
+      const body = (await resp.json()) as {
+        success: boolean;
+        errorMsg?: string;
+        result?: ProductImproveTaskResult;
+      };
+      if (!body.success || !body.result) {
+        setRefineError(body.errorMsg ?? "继续 AI 优化失败");
+        return;
+      }
+      setDraftTitle(body.result.title ?? "");
+      setDraftDescription(body.result.description ?? "");
+      setReviewScore(4);
+      setLocalResult(body.result);
+      handleStatusChange("pending_review", body.result);
+    } catch {
+      setRefineError("继续 AI 优化时发生网络错误");
+    } finally {
+      setRefining(false);
     }
   }
 
@@ -321,110 +523,41 @@ export function ProductImproveTaskCard({
         localStatus === "applied") &&
         result && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div
-            style={{
-              border: `1px solid ${pageColorTokens.borderSubtle}`,
-              borderRadius: pageColorTokens.radiusControl,
-              overflow: "hidden",
-              background: pageColorTokens.surfaceSubtle,
-            }}
-          >
-            <div
-              style={{
-                background: pageColorTokens.surfaceMuted,
-                color: pageColorTokens.textSecondary,
-                fontSize: 11,
-                fontWeight: 700,
-                padding: "6px 10px",
-                letterSpacing: "0.05em",
-              }}
-            >
-              BEFORE
-            </div>
-            <div style={{ padding: "10px 12px" }}>
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: pageColorTokens.textPrimary,
-                  marginBottom: 4,
-                }}
-              >
-                {cfg.originalTitle}
-              </div>
-              <div
-                style={{
-                  fontSize: 12,
-                  color: pageColorTokens.textSecondary,
-                  maxHeight: 80,
-                  overflowY: "auto",
-                }}
-              >
-                {cfg.originalText || "（无原始描述）"}
-              </div>
-            </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <ReviewContentPanel
+              label="原始内容"
+              title={cfg.originalTitle ?? ""}
+              description={cfg.originalText ?? ""}
+            />
+            <ReviewContentPanel
+              label="当前结果"
+              tone="positive"
+              title={String(result.title ?? "")}
+              description={String(result.description ?? "")}
+            />
           </div>
 
-          <div
-            style={{
-              border: `1px solid rgba(0, 166, 124, 0.25)`,
-              borderRadius: pageColorTokens.radiusControl,
-              overflow: "hidden",
-              background: "#fcfffd",
-            }}
-          >
+          {(result.reviewScore || result.reviewNote || result.optimizationComment) && (
             <div
               style={{
-                background: pageColorTokens.brandGreenLight,
-                color: pageColorTokens.brandGreenDark,
-                fontSize: 11,
-                fontWeight: 700,
-                padding: "6px 10px",
-                letterSpacing: "0.05em",
+                border: `1px solid ${pageColorTokens.borderSubtle}`,
+                borderRadius: pageColorTokens.radiusControl,
+                background: pageColorTokens.surfaceSubtle,
+                padding: "10px 12px",
+                display: "flex",
+                gap: 8,
+                flexWrap: "wrap",
+                fontSize: 12,
+                color: pageColorTokens.textSecondary,
               }}
             >
-              AFTER
+              {result.reviewScore ? <span>人工评分 {result.reviewScore}/5</span> : null}
+              {result.reviewNote ? <span>审核备注：{result.reviewNote}</span> : null}
+              {result.optimizationComment ? (
+                <span>AI 优化说明：{result.optimizationComment}</span>
+              ) : null}
             </div>
-            <div style={{ padding: "10px 12px" }}>
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: pageColorTokens.textPrimary,
-                  marginBottom: 4,
-                }}
-              >
-                {result.title}
-              </div>
-              <div
-                style={{
-                  fontSize: 12,
-                  color: pageColorTokens.textBody,
-                  maxHeight: 120,
-                  overflowY: "auto",
-                }}
-              >
-                {result.description}
-              </div>
-              {(result.reviewScore || result.reviewNote) && (
-                <div
-                  style={{
-                    marginTop: 10,
-                    paddingTop: 10,
-                    borderTop: `1px solid ${pageColorTokens.borderSubtle}`,
-                    display: "flex",
-                    gap: 8,
-                    flexWrap: "wrap",
-                    fontSize: 12,
-                    color: pageColorTokens.textSecondary,
-                  }}
-                >
-                  {result.reviewScore ? <span>人工评分 {result.reviewScore}/5</span> : null}
-                  {result.reviewNote ? <span>备注：{result.reviewNote}</span> : null}
-                </div>
-              )}
-            </div>
-          </div>
+          )}
 
           <div style={{ display: "flex", gap: 8 }}>
             {localStatus !== "applied" ? (
@@ -514,7 +647,7 @@ export function ProductImproveTaskCard({
         ref={dialogRef}
         onCancel={(e) => {
           e.preventDefault();
-          if (!reviewSaving && !applying) {
+          if (!reviewSaving && !refining && !applying) {
             setReviewOpen(false);
           }
         }}
@@ -540,104 +673,27 @@ export function ProductImproveTaskCard({
               审核商品文案结果
             </div>
             <div style={{ fontSize: 13, color: pageColorTokens.textSecondary, lineHeight: 1.5 }}>
-              审核通过前不会写入 Shopify。你可以先修改生成结果、记录人工评分，再决定是否应用。
+              审核通过前不会写入 Shopify。你可以先人工改稿、写评论让 AI 继续优化，再保存评分或决定是否应用。
             </div>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div
-              style={{
-                border: `1px solid ${pageColorTokens.borderSubtle}`,
-                borderRadius: pageColorTokens.radiusControl,
-                background: pageColorTokens.surfaceSubtle,
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  padding: "8px 10px",
-                  background: pageColorTokens.surfaceMuted,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: pageColorTokens.textSecondary,
-                  letterSpacing: "0.04em",
-                }}
-              >
-                原始内容
-              </div>
-              <div style={{ padding: "10px 12px" }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: pageColorTokens.textPrimary, marginBottom: 6 }}>
-                  {cfg.originalTitle || "（无标题）"}
-                </div>
-                <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
-                  {cfg.originalText || "（无原始描述）"}
-                </div>
-              </div>
-            </div>
-
-            <div
-              style={{
-                border: `1px solid rgba(0, 166, 124, 0.18)`,
-                borderRadius: pageColorTokens.radiusControl,
-                background: "#fcfffd",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  padding: "8px 10px",
-                  background: pageColorTokens.brandGreenLight,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: pageColorTokens.brandGreenDark,
-                  letterSpacing: "0.04em",
-                }}
-              >
-                审核后结果
-              </div>
-              <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
-                <div>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: pageColorTokens.textBody, marginBottom: 4 }}>
-                    标题
-                  </label>
-                  <input
-                    value={draftTitle}
-                    onChange={(e) => setDraftTitle(e.currentTarget.value)}
-                    disabled={reviewSaving || applying || localStatus === "applied"}
-                    style={{
-                      width: "100%",
-                      boxSizing: "border-box",
-                      padding: "0.55rem 0.65rem",
-                      borderRadius: pageColorTokens.radiusControl,
-                      border: `1px solid ${pageColorTokens.borderInput}`,
-                      fontSize: 13,
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: pageColorTokens.textBody, marginBottom: 4 }}>
-                    描述
-                  </label>
-                  <textarea
-                    value={draftDescription}
-                    onChange={(e) => setDraftDescription(e.currentTarget.value)}
-                    disabled={reviewSaving || applying || localStatus === "applied"}
-                    rows={8}
-                    style={{
-                      width: "100%",
-                      boxSizing: "border-box",
-                      padding: "0.55rem 0.65rem",
-                      borderRadius: pageColorTokens.radiusControl,
-                      border: `1px solid ${pageColorTokens.borderInput}`,
-                      fontSize: 13,
-                      fontFamily: "inherit",
-                      lineHeight: 1.55,
-                      resize: "vertical",
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
+            <ReviewContentPanel
+              label="原始内容"
+              title={cfg.originalTitle ?? ""}
+              description={cfg.originalText ?? ""}
+            />
+            <ReviewContentPanel
+              label="审核草稿"
+              tone="positive"
+              title={draftTitle}
+              description={draftDescription}
+              editable
+              disabled={reviewSaving || refining || applying || localStatus === "applied"}
+              onTitleChange={setDraftTitle}
+              onDescriptionChange={setDraftDescription}
+              descriptionRows={10}
+            />
           </div>
 
           <div
@@ -651,6 +707,9 @@ export function ProductImproveTaskCard({
             <div style={{ fontSize: 12, fontWeight: 700, color: pageColorTokens.textPrimary, marginBottom: 8 }}>
               人工评分
             </div>
+            <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, marginBottom: 10 }}>
+              人工评分用于记录当前草稿质量；如果继续让 AI 改写，建议在新结果生成后重新评分。
+            </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
               {[1, 2, 3, 4, 5].map((score) => {
                 const active = reviewScore === score;
@@ -659,7 +718,7 @@ export function ProductImproveTaskCard({
                     key={score}
                     type="button"
                     onClick={() => setReviewScore(score)}
-                    disabled={reviewSaving || applying || localStatus === "applied"}
+                    disabled={reviewSaving || refining || applying || localStatus === "applied"}
                     style={{
                       padding: "0.45rem 0.8rem",
                       borderRadius: 999,
@@ -683,7 +742,7 @@ export function ProductImproveTaskCard({
               <textarea
                 value={reviewNote}
                 onChange={(e) => setReviewNote(e.currentTarget.value)}
-                disabled={reviewSaving || applying || localStatus === "applied"}
+                disabled={reviewSaving || refining || applying || localStatus === "applied"}
                 rows={3}
                 placeholder="可记录修改原因、语气问题或后续优化建议"
                 style={{
@@ -701,6 +760,62 @@ export function ProductImproveTaskCard({
             </div>
           </div>
 
+          {localStatus !== "applied" ? (
+            <div
+              style={{
+                border: `1px solid ${pageColorTokens.borderSubtle}`,
+                borderRadius: pageColorTokens.radiusControl,
+                padding: "0.9rem 1rem",
+                background: "#fbfcff",
+              }}
+            >
+              <div style={{ fontSize: 12, fontWeight: 700, color: pageColorTokens.textPrimary, marginBottom: 8 }}>
+                继续 AI 优化
+              </div>
+              <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, marginBottom: 10, lineHeight: 1.55 }}>
+                输入你希望 AI 继续优化的方向，例如语气更简洁、突出材质卖点、保留你刚刚手动改过的结构等。AI 会基于当前草稿继续改写。
+              </div>
+              <textarea
+                value={optimizationComment}
+                onChange={(e) => setOptimizationComment(e.currentTarget.value)}
+                disabled={reviewSaving || refining || applying}
+                rows={4}
+                placeholder="例如：保留当前第一段结构，把语气改得更高级一些，并补充适用场景。"
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: "0.65rem 0.75rem",
+                  borderRadius: pageColorTokens.radiusControl,
+                  border: `1px solid ${pageColorTokens.borderInput}`,
+                  fontSize: 13,
+                  fontFamily: "inherit",
+                  lineHeight: 1.55,
+                  resize: "vertical",
+                  background: "#fff",
+                }}
+              />
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => void handleRefine()}
+                  disabled={reviewSaving || refining || applying}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: pageColorTokens.radiusControl,
+                    background: refining ? pageColorTokens.surfaceMuted : pageColorTokens.surface,
+                    color: refining ? pageColorTokens.textSecondary : pageColorTokens.textBody,
+                    border: `1px solid ${pageColorTokens.borderSubtle}`,
+                    cursor: refining ? "default" : "pointer",
+                    fontSize: 13,
+                    fontWeight: 600,
+                  }}
+                >
+                  {refining ? "AI 优化中..." : "提交 AI 继续优化"}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           {reviewError ? (
             <div
               style={{
@@ -713,6 +828,21 @@ export function ProductImproveTaskCard({
               }}
             >
               {reviewError}
+            </div>
+          ) : null}
+
+          {refineError ? (
+            <div
+              style={{
+                fontSize: 12,
+                color: pageColorTokens.criticalText,
+                background: pageColorTokens.criticalBg,
+                padding: "8px 10px",
+                borderRadius: pageColorTokens.radiusControl,
+                border: "1px solid rgba(220, 38, 38, 0.15)",
+              }}
+            >
+              {refineError}
             </div>
           ) : null}
 
@@ -735,7 +865,7 @@ export function ProductImproveTaskCard({
             <button
               type="button"
               onClick={() => setReviewOpen(false)}
-              disabled={reviewSaving || applying}
+              disabled={reviewSaving || refining || applying}
               style={{
                 padding: "8px 16px",
                 borderRadius: pageColorTokens.radiusControl,
@@ -753,7 +883,7 @@ export function ProductImproveTaskCard({
                 <button
                   type="button"
                   onClick={() => void handleSaveScore()}
-                  disabled={reviewSaving || applying}
+                  disabled={reviewSaving || refining || applying}
                   style={{
                     padding: "8px 16px",
                     borderRadius: pageColorTokens.radiusControl,
@@ -770,7 +900,7 @@ export function ProductImproveTaskCard({
                 <button
                   type="button"
                   onClick={() => void handleApply()}
-                  disabled={reviewSaving || applying}
+                  disabled={reviewSaving || refining || applying}
                   style={{
                     padding: "8px 16px",
                     borderRadius: pageColorTokens.radiusControl,

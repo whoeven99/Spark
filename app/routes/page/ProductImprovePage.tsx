@@ -6,7 +6,6 @@ import type { loader } from "../app.product-improve";
 import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
 import { ProductSelector } from "../component/product/ProductSelector";
 import { ProductImproveTaskListPage } from "../component/productImprove/ProductImproveTaskListPage";
-import { TaskListSummary } from "../component/aiTask/TaskListSummary";
 import type { AITaskItem } from "../../lib/aiTaskTypes";
 import {
   PageSectionHeader,
@@ -19,14 +18,49 @@ import {
   pageLinkHintStyle,
   pageSelectStyle,
   pageTrustFootnoteStyle,
-  twoColumnLayoutStyle,
-  twoColumnMainStyle,
-  twoColumnSideStyle,
 } from "./pageUiStyles";
 
 type PageTab = "config" | "tasks";
 const ESTIMATED_TOKENS = 320;
 const ESTIMATED_DURATION = "1-2 min";
+
+function ConfigHintCard({
+  taskCount,
+  runningCount,
+  onOpenTasks,
+}: {
+  taskCount: number;
+  runningCount: number;
+  onOpenTasks: () => void;
+}) {
+  return (
+    <div
+      style={{
+        border: `1px solid ${pageColorTokens.borderSubtle}`,
+        borderRadius: pageColorTokens.radiusControl,
+        padding: "0.95rem 1rem",
+        background: pageColorTokens.surfaceSubtle,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        flexWrap: "wrap",
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: pageColorTokens.textPrimary }}>
+          当前工具任务入口
+        </div>
+        <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, marginTop: 4 }}>
+          当前共有 {taskCount} 个任务，其中 {runningCount} 个正在执行；审核、评分和写入都统一在任务页完成。
+        </div>
+      </div>
+      <s-button type="button" variant="secondary" onClick={onOpenTasks}>
+        打开任务页
+      </s-button>
+    </div>
+  );
+}
 
 function PageTabBar({
   activeTab,
@@ -304,150 +338,96 @@ export function ProductImprovePage() {
 
         {pageTab === "config" && (
           <>
-            {/* Task summary always visible in config tab */}
-            <TaskListSummary tasks={tasks} mode="product_improve" />
+            <PageSurface title="生成配置" subtitle="选择商品与目标语言后点击生成，执行前预估会在二次确认弹窗中展示。">
+              <s-stack direction="block" gap="base">
+                <ConfigHintCard
+                  taskCount={tasks.length}
+                  runningCount={runningCount}
+                  onOpenTasks={() => setPageTab("tasks")}
+                />
 
-            {/* Generation form + estimate panel */}
-            <div style={twoColumnLayoutStyle}>
-              <div style={twoColumnMainStyle}>
-                <PageSurface title="生成配置" subtitle="选择商品与目标语言后点击生成">
-                  <s-stack direction="block" gap="base">
-                    <ProductSelector
-                      locationSearch={search}
-                      selected={selectedProduct}
-                      onSelectedChange={setSelectedProduct}
+                <ProductSelector
+                  locationSearch={search}
+                  selected={selectedProduct}
+                  onSelectedChange={setSelectedProduct}
+                />
+
+                <details
+                  style={{
+                    marginTop: "0.25rem",
+                    padding: "0.85rem 0.95rem",
+                    borderRadius: pageColorTokens.radiusControl,
+                    background: pageColorTokens.surfaceSubtle,
+                    border: `1px solid ${pageColorTokens.borderSubtle}`,
+                  }}
+                  open={showManualProductId}
+                  onToggle={(e) => setShowManualProductId(e.currentTarget.open)}
+                >
+                  <summary style={pageLinkHintStyle}>
+                    {t("generate.advancedManualProductId")}
+                  </summary>
+                  <div style={{ marginTop: "0.65rem" }}>
+                    <s-text-field
+                      label={t("generate.productIdLabel")}
+                      value={productId}
+                      onChange={(e) => setProductId(e.currentTarget.value)}
+                      autocomplete="off"
                     />
+                  </div>
+                </details>
 
-                    <details
-                      style={{
-                        marginTop: "0.25rem",
-                        padding: "0.85rem 0.95rem",
-                        borderRadius: pageColorTokens.radiusControl,
-                        background: pageColorTokens.surfaceSubtle,
-                        border: `1px solid ${pageColorTokens.borderSubtle}`,
-                      }}
-                      open={showManualProductId}
-                      onToggle={(e) => setShowManualProductId(e.currentTarget.open)}
-                    >
-                      <summary style={pageLinkHintStyle}>
-                        {t("generate.advancedManualProductId")}
-                      </summary>
-                      <div style={{ marginTop: "0.65rem" }}>
-                        <s-text-field
-                          label={t("generate.productIdLabel")}
-                          value={productId}
-                          onChange={(e) => setProductId(e.currentTarget.value)}
-                          autocomplete="off"
-                        />
-                      </div>
-                    </details>
-
-                    <div>
-                      <label htmlFor="pi-target-lang" style={pageFieldLabelStyle}>
-                        {t("generate.targetLanguage")}
-                      </label>
-                      <select
-                        id="pi-target-lang"
-                        value={targetLanguage}
-                        onChange={(e) => setTargetLanguage(e.target.value)}
-                        disabled={isSubmitting}
-                        style={pageSelectStyle(isSubmitting)}
-                      >
-                        {localeOptions.length === 0 && (
-                          <option value="zh-CN">Chinese (Simplified) (zh-CN)</option>
-                        )}
-                        {localeOptions.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                      <div style={pageHintTextStyle}>
-                        语言用于控制生成语气和输出结果，发起任务后可在任务列表中继续审查。
-                      </div>
-                    </div>
-
-                    {errorText ? <div style={formErrorBoxStyle}>{errorText}</div> : null}
-                  </s-stack>
-                </PageSurface>
-              </div>
-
-              <div style={twoColumnSideStyle}>
-                <PageSurface title="执行前预估" subtitle="确认影响范围、预估耗时和预估 Token 后开始生成。">
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: 10,
-                      marginBottom: 16,
-                    }}
+                <div>
+                  <label htmlFor="pi-target-lang" style={pageFieldLabelStyle}>
+                    {t("generate.targetLanguage")}
+                  </label>
+                  <select
+                    id="pi-target-lang"
+                    value={targetLanguage}
+                    onChange={(e) => setTargetLanguage(e.target.value)}
+                    disabled={isSubmitting}
+                    style={pageSelectStyle(isSubmitting)}
                   >
-                    {[
-                      { label: "商品", value: selectedName ?? "-" },
-                      { label: "目标语言", value: selectedLanguageLabel },
-                      { label: "预估耗时", value: ESTIMATED_DURATION },
-                      { label: "预估 Token", value: `${ESTIMATED_TOKENS} Token` },
-                    ].map((item) => (
-                      <div
-                        key={item.label}
-                        style={{
-                          border: `1px solid ${pageColorTokens.borderSubtle}`,
-                          borderRadius: pageColorTokens.radiusControl,
-                          padding: "10px 12px",
-                          background: pageColorTokens.surfaceSubtle,
-                          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.5)",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: pageColorTokens.textSecondary,
-                            marginBottom: 4,
-                          }}
-                        >
-                          {item.label}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 500,
-                            color: pageColorTokens.textPrimary,
-                            wordBreak: "break-word",
-                          }}
-                        >
-                          {item.value}
-                        </div>
-                      </div>
+                    {localeOptions.length === 0 && (
+                      <option value="zh-CN">Chinese (Simplified) (zh-CN)</option>
+                    )}
+                    {localeOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
                     ))}
+                  </select>
+                  <div style={pageHintTextStyle}>
+                    语言用于控制生成语气和输出结果，发起任务后可在任务列表中继续审查。
                   </div>
+                </div>
 
-                  <s-stack direction="inline" gap="small">
-                    <s-button
-                      type="button"
-                      variant="primary"
-                      onClick={handleOpenConfirm}
-                      {...(isSubmitting || !productIdForActions ? { disabled: true } : {})}
-                    >
-                      {isSubmitting ? "提交中..." : "创建生成任务"}
-                    </s-button>
-                  </s-stack>
+                {errorText ? <div style={formErrorBoxStyle}>{errorText}</div> : null}
 
-                  <div
-                    style={{
-                      marginTop: 14,
-                      fontSize: 12,
-                      color: pageColorTokens.textFootnote,
-                      padding: "0.75rem 0.85rem",
-                      borderRadius: pageColorTokens.radiusControl,
-                      background: pageColorTokens.surfaceSubtle,
-                      border: `1px solid ${pageColorTokens.borderSubtle}`,
-                    }}
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: pageColorTokens.textFootnote,
+                    padding: "0.75rem 0.85rem",
+                    borderRadius: pageColorTokens.radiusControl,
+                    background: pageColorTokens.surfaceSubtle,
+                    border: `1px solid ${pageColorTokens.borderSubtle}`,
+                  }}
+                >
+                  点击“创建生成任务”后会先弹出二次确认，展示任务目标、预估耗时和预估 Token，再确认创建。
+                </div>
+
+                <s-stack direction="inline" gap="small">
+                  <s-button
+                    type="button"
+                    variant="primary"
+                    onClick={handleOpenConfirm}
+                    {...(isSubmitting || !productIdForActions ? { disabled: true } : {})}
                   >
-                    生成将消耗 Token；保存至 Shopify 前可在任务列表预览并编辑标题与描述。
-                  </div>
-                </PageSurface>
-              </div>
-            </div>
+                    {isSubmitting ? "提交中..." : "创建生成任务"}
+                  </s-button>
+                </s-stack>
+              </s-stack>
+            </PageSurface>
 
             <dialog
               ref={confirmDialogRef}

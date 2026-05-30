@@ -89,6 +89,7 @@ export interface ProductImproveTaskResult {
   description: string;
   reviewScore?: number;
   reviewNote?: string;
+  optimizationComment?: string;
 }
 
 export type AITaskCreateResponse =
