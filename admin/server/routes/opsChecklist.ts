@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { getDb } from "../lib/db.js";
-import Redis from "ioredis";
+import { Redis } from "ioredis";
 import {
   getAgentRunsContainer,
   getTranslationJobsContainer,
