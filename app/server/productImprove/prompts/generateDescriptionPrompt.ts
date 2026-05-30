@@ -27,6 +27,35 @@ export function buildDescriptionUserPrompt(
   ].join("\n");
 }
 
+export function buildDescriptionRefineSystemPrompt(): string {
+  return [
+    "你是 Shopify 电商商品文案优化专家，负责根据人工审核意见继续改写商品标题和描述。",
+    "输出目标：保留商品真实信息，吸收人工反馈，提升可读性、转化感和结构清晰度。",
+    "约束：不夸大、不编造、不输出与商品无关的信息；必须充分利用人工给出的修改意见和当前草稿。",
+    "输出约束：严格输出 JSON，且仅包含 title 和 description 两个字符串字段，不要输出 Markdown 或额外解释。",
+  ].join("\n");
+}
+
+export function buildDescriptionRefineUserPrompt(params: {
+  context: ProductDescriptionContext;
+  targetLanguage: string;
+  currentTitle: string;
+  currentDescription: string;
+  optimizationComment: string;
+}): string {
+  const lang = params.targetLanguage.trim() || "简体中文";
+  return [
+    "以下为商品原始内容、当前草稿以及人工优化意见，请据此输出新的 JSON。",
+    "",
+    `商品原始标题：${params.context.title}`,
+    `商品原始描述：${params.context.text}`,
+    `当前草稿标题：${params.currentTitle.trim()}`,
+    `当前草稿描述：${params.currentDescription.trim()}`,
+    `人工优化意见：${params.optimizationComment.trim()}`,
+    `目标语言：${lang}`,
+  ].join("\n");
+}
+
 /** 供日志调用方打印 Prompt 规模（不含全文，避免日志过大）。 */
 export function logPromptBuildMeta(
   requestId: string,

@@ -1,9 +1,8 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useState } from "react";
+import { Alert, Checkbox, Empty, Input, Spin } from "antd";
 import { useTranslation } from "react-i18next";
 import type { ProductSelectorSelection } from "../../../lib/productSearchTypes";
 import { useProductSearch } from "../../../hooks/useProductSearch";
-import { pageColorTokens } from "../../page/pageUiStyles";
-import { CriticalErrorBox } from "../shared/CriticalErrorBox";
 
 type BaseProps = {
   locationSearch: string;
@@ -25,21 +24,9 @@ type MultipleModeProps = BaseProps & {
 
 export type ProductSelectorProps = SingleModeProps | MultipleModeProps;
 
-function isMultipleProps(
-  p: ProductSelectorProps,
-): p is MultipleModeProps {
+function isMultipleProps(p: ProductSelectorProps): p is MultipleModeProps {
   return p.selectionMode === "multiple";
 }
-
-const emptyBoxStyle: CSSProperties = {
-  padding: "0.75rem 0.65rem",
-  borderRadius: "8px",
-  background: pageColorTokens.mutedBg,
-  color: pageColorTokens.textSecondary,
-  fontSize: "0.8125rem",
-  lineHeight: 1.45,
-  textAlign: "center",
-};
 
 export function ProductSelector(props: ProductSelectorProps) {
   const { t } = useTranslation();
@@ -81,150 +68,94 @@ export function ProductSelector(props: ProductSelectorProps) {
     else toggleSingle(row);
   };
 
-  const listMaxHeight = embedded ? "200px" : "280px";
+  const listMaxHeight = embedded ? 200 : 280;
   const kw = keyword.trim();
 
   return (
-    <s-stack direction="block" gap="small">
-      <s-text-field
-        label={t("productSelector.searchLabel")}
+    <div className="space-y-3">
+      <div>
+        <label
+          htmlFor="product-selector-search"
+          className="mb-2 block text-xs font-semibold tracking-[0.01em] text-app-text-secondary"
+        >
+          {t("productSelector.searchLabel")}
+        </label>
+        <Input
+          id="product-selector-search"
         value={keyword}
-        onChange={(e) => setKeyword(e.currentTarget.value)}
-        autocomplete="off"
+        onChange={(e) => setKeyword(e.target.value)}
+        autoComplete="off"
         placeholder={t("productSelector.searchPlaceholder")}
-      />
+        />
+      </div>
 
       {isLoading ? (
-        <div
-          style={{
-            fontSize: "0.8125rem",
-            color: "#6d7175",
-            padding: "0.25rem 0",
-          }}
-        >
+        <div className="flex items-center gap-2 px-1 py-1 text-sm text-app-text-secondary">
+          <Spin size="small" />
           {t("productSelector.searching")}
         </div>
       ) : null}
 
-      {searchError ? <CriticalErrorBox>{searchError}</CriticalErrorBox> : null}
+      {searchError ? <Alert type="error" showIcon message={searchError} /> : null}
 
       {!isLoading && !searchError && kw && items.length === 0 ? (
-        <div style={emptyBoxStyle}>{t("productSelector.empty")}</div>
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          className="spark-ant-empty rounded-app-control border border-dashed border-app-subtle bg-app-subtle py-6"
+          description={t("productSelector.empty")}
+        />
       ) : null}
 
       {items.length > 0 ? (
         <ul
-          style={{
-            maxHeight: listMaxHeight,
-            overflowY: "auto",
-            borderRadius: "10px",
-            border: "1px solid rgba(0, 0, 0, 0.08)",
-            background: "#fff",
-            margin: 0,
-            padding: 0,
-            listStyle: "none",
-          }}
+          className="overflow-y-auto rounded-app-control border border-app-subtle bg-app-card"
+          style={{ maxHeight: listMaxHeight }}
         >
           {items.map((row) => {
             const active = selectedIds.has(row.id);
             return (
-              <li key={row.id} style={{ margin: 0, padding: 0 }}>
-                <div
-                  role="button"
-                  tabIndex={0}
+              <li key={row.id} className="m-0 list-none p-0">
+                <button
+                  type="button"
                   aria-pressed={active}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.65rem",
-                    width: "100%",
-                    margin: 0,
-                    padding: embedded ? "0.45rem 0.55rem" : "0.55rem 0.65rem",
-                    cursor: "pointer",
-                    borderBottom: "1px solid rgba(0, 0, 0, 0.06)",
-                    borderLeft: active
-                      ? "3px solid #2c6ecb"
-                      : "3px solid transparent",
-                    background: active
-                      ? "rgba(44, 110, 203, 0.08)"
-                      : "transparent",
-                    boxSizing: "border-box",
-                  }}
+                  className={`flex w-full items-center gap-3 border-b border-app-divider text-left transition-colors last:border-b-0 ${
+                    embedded ? "px-3 py-2" : "px-3.5 py-2.5"
+                  } ${active ? "border-l-4 border-l-app-primary bg-app-primary-subtle" : "border-l-4 border-l-transparent bg-app-card hover:bg-app-subtle"}`}
                   onClick={() => onRowActivate(row)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      onRowActivate(row);
-                    }
-                  }}
                 >
-                {isMultipleProps(props) ? (
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={active}
                     onClick={(e) => e.stopPropagation()}
-                    onChange={() => toggleMultiple(row)}
+                    onChange={() => onRowActivate(row)}
                     aria-label={t("productSelector.selectAria", { title: row.title })}
                   />
-                ) : (
-                  <input
-                    type="checkbox"
-                    checked={active}
-                    readOnly
-                    tabIndex={-1}
-                    aria-label={t("productSelector.selectAria", { title: row.title })}
-                    style={{ pointerEvents: "none" }}
-                  />
-                )}
-                {row.featuredImageUrl ? (
-                  <img
-                    src={row.featuredImageUrl}
-                    alt=""
-                    width={40}
-                    height={40}
-                    style={{
-                      borderRadius: "6px",
-                      objectFit: "cover",
-                      flexShrink: 0,
-                    }}
-                  />
-                ) : (
-                  <div
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: "6px",
-                      background: "rgba(109, 113, 117, 0.12)",
-                      flexShrink: 0,
-                    }}
-                  />
-                )}
-                <div
-                  style={{
-                    minWidth: 0,
-                    flex: 1,
-                    fontSize: "0.875rem",
-                    color: "#202223",
-                    lineHeight: 1.35,
-                  }}
-                >
-                  <div>{row.title}</div>
-                  <div
-                    style={{
-                      marginTop: "0.1rem",
-                      fontSize: "0.75rem",
-                      color: "#6d7175",
-                    }}
-                  >
-                    {row.id}
+
+                  {row.featuredImageUrl ? (
+                    <img
+                      src={row.featuredImageUrl}
+                      alt=""
+                      width={40}
+                      height={40}
+                      className="h-10 w-10 shrink-0 rounded-md object-cover"
+                    />
+                  ) : (
+                    <div className="h-10 w-10 shrink-0 rounded-md bg-app-muted" />
+                  )}
+
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-app-text-primary">
+                      {row.title}
+                    </div>
+                    <div className="mt-0.5 truncate text-xs text-app-text-secondary">
+                      {row.id}
+                    </div>
                   </div>
-                </div>
-              </div>
+                </button>
               </li>
             );
           })}
         </ul>
       ) : null}
-    </s-stack>
+    </div>
   );
 }

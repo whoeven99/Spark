@@ -1,0 +1,113 @@
+@import "antd/dist/reset.css";
+@import "tailwindcss";
+
+@theme {
+  --color-app-page: #f6f6f7;
+  --color-app-card: #ffffff;
+  --color-app-subtle: #fafafa;
+  --color-app-muted: #f5f6f8;
+  --color-app-primary: #008060;
+  --color-app-primary-hover: #006e52;
+  --color-app-primary-subtle: #edfaf5;
+  --color-app-border: #e2e5e9;
+  --color-app-border-subtle: #dde1e6;
+  --color-app-divider: #f0f2f4;
+  --color-app-text-primary: #1a1d1f;
+  --color-app-text-secondary: #6b7280;
+  --color-app-text-footnote: #9ca3af;
+  --color-app-success: #00a67c;
+  --color-app-warning: #b45309;
+  --color-app-warning-subtle: #fff7ed;
+  --color-app-critical: #dc2626;
+  --color-app-critical-subtle: rgba(220, 38, 38, 0.07);
+  --color-app-info: #4070f4;
+  --radius-app-control: 9px;
+  --radius-app-card: 14px;
+  --shadow-app-card: 0 2px 10px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-app-modal: 0 16px 40px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+:root {
+  color-scheme: light;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f6f6f7;
+  color: #1a1d1f;
+}
+
+html,
+body {
+  min-height: 100%;
+  background: #f6f6f7;
+  color: #1a1d1f;
+}
+
+body {
+  font-family: inherit;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+code {
+  font-family:
+    ui-monospace, SFMono-Regular, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+}
+
+.spark-ant-app {
+  min-height: 100%;
+}
+
+.spark-ant-card.ant-card {
+  border-color: #e2e5e9;
+  border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.spark-ant-card-subtle.ant-card {
+  background: #fafafa;
+}
+
+.spark-ant-tabs .ant-tabs-nav {
+  margin-bottom: 0;
+}
+
+.spark-ant-tabs .ant-tabs-nav::before {
+  display: none;
+}
+
+.spark-ant-tabs .ant-tabs-tab {
+  margin: 0;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: #6b7280;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.spark-ant-tabs .ant-tabs-tab-active {
+  background: #ffffff;
+  border-color: #dde1e6;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.spark-ant-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #1a1d1f;
+}
+
+.spark-ant-tabs .ant-tabs-ink-bar {
+  display: none;
+}
+
+.spark-ant-modal .ant-modal-content {
+  border: 1px solid #dde1e6;
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.spark-ant-empty .ant-empty-description {
+  color: #6b7280;
+}

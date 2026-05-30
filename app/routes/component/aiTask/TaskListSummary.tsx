@@ -39,70 +39,85 @@ export function TaskListSummary({ tasks, mode = "image" }: Props) {
   return (
     <div
       style={{
-        border: `1px solid ${pageColorTokens.border}`,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        flexWrap: "wrap",
+        padding: "0.75rem 0.9rem",
+        border: `1px solid ${pageColorTokens.borderSubtle}`,
         borderRadius: pageColorTokens.radiusCard,
-        overflow: "hidden",
-        marginBottom: 14,
-        background: pageColorTokens.surface,
-        boxShadow: pageColorTokens.shadowCard,
+        background: "#fff",
       }}
     >
-      {/* Header */}
       <div
         style={{
-          background: `linear-gradient(90deg, ${pageColorTokens.brandGreenDeep} 0%, ${pageColorTokens.brandGreen} 100%)`,
-          padding: "10px 16px",
+          display: "flex",
+          gap: 10,
+          flexWrap: "wrap",
+          alignItems: "center",
         }}
       >
-        <span style={{ fontSize: 13, fontWeight: 700, color: "#ffffff" }}>
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            color: pageColorTokens.textPrimary,
+            whiteSpace: "nowrap",
+          }}
+        >
           任务列表
         </span>
-      </div>
-
-      {/* Stats grid */}
-      <div style={{ display: "flex", padding: "14px 16px 10px", gap: 0 }}>
-        {stats.map((stat, i) => (
-          <div
+        {stats.map((stat) => (
+          <span
             key={stat.label}
             style={{
-              flex: 1,
               display: "flex",
-              flexDirection: "column",
+              gap: 6,
               alignItems: "center",
-              gap: 4,
-              borderLeft: i > 0 ? `1px solid ${pageColorTokens.border}` : undefined,
-              padding: "0 4px",
+              padding: "0.4rem 0.7rem",
+              border: `1px solid ${pageColorTokens.borderSubtle}`,
+              borderRadius: 999,
+              background: stat.count > 0 ? pageColorTokens.surfaceSubtle : "#fff",
+              whiteSpace: "nowrap",
             }}
           >
+            {stat.count > 0 ? (
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: stat.activeColor,
+                }}
+              />
+            ) : null}
             <span
               style={{
-                fontSize: 22,
-                fontWeight: 700,
-                color: stat.count > 0 ? stat.activeColor : pageColorTokens.textFootnote,
-                lineHeight: 1,
+                fontSize: 12,
+                fontWeight: 600,
+                color: pageColorTokens.textSecondary,
               }}
             >
-              {stat.count}
+              {stat.label} {stat.count}
             </span>
-            <span style={{ fontSize: 12, color: pageColorTokens.textSecondary, textAlign: "center" }}>
-              {stat.label}
-            </span>
-          </div>
+          </span>
         ))}
       </div>
-
-      {/* Total */}
-      <div
+      <span
         style={{
-          padding: "6px 16px 12px",
-          textAlign: "center",
           fontSize: 12,
+          fontWeight: 700,
           color: pageColorTokens.textSecondary,
-          borderTop: `1px solid ${pageColorTokens.divider}`,
+          padding: "0.35rem 0.7rem",
+          borderRadius: 999,
+          background: pageColorTokens.surfaceMuted,
+          border: `1px solid ${pageColorTokens.borderSubtle}`,
+          whiteSpace: "nowrap",
         }}
       >
         共 {total} 个任务
-      </div>
+      </span>
     </div>
   );
 }

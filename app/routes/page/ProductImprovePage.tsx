@@ -5,8 +5,8 @@ import { useFetcher, useLoaderData } from "react-router";
 import type { loader } from "../app.product-improve";
 import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
 import { ProductSelector } from "../component/product/ProductSelector";
-import { ProductImproveTaskListPage } from "../component/productImprove/ProductImproveTaskListPage";
 import { TaskListSummary } from "../component/aiTask/TaskListSummary";
+import { ProductImproveTaskListPage } from "../component/productImprove/ProductImproveTaskListPage";
 import type { AITaskItem } from "../../lib/aiTaskTypes";
 import {
   PageSectionHeader,
@@ -19,12 +19,11 @@ import {
   pageLinkHintStyle,
   pageSelectStyle,
   pageTrustFootnoteStyle,
-  twoColumnLayoutStyle,
-  twoColumnMainStyle,
-  twoColumnSideStyle,
 } from "./pageUiStyles";
 
 type PageTab = "config" | "tasks";
+const ESTIMATED_TOKENS = 320;
+const ESTIMATED_DURATION = "1-2 min";
 
 function PageTabBar({
   activeTab,
@@ -35,6 +34,8 @@ function PageTabBar({
   onTabChange: (tab: PageTab) => void;
   runningCount: number;
 }) {
+  const { t } = useTranslation();
+
   const btnStyle = (active: boolean): React.CSSProperties => ({
     padding: "8px 18px",
     borderRadius: 9,
@@ -42,7 +43,9 @@ function PageTabBar({
       ? `2px solid ${pageColorTokens.brandGreen}`
       : `2px solid transparent`,
     background: active ? pageColorTokens.brandGreenLight : "transparent",
-    color: active ? pageColorTokens.brandGreenDark : pageColorTokens.textSecondary,
+    color: active
+      ? pageColorTokens.brandGreenDark
+      : pageColorTokens.textSecondary,
     fontWeight: active ? 600 : 500,
     fontSize: 14,
     cursor: "pointer",
@@ -52,23 +55,12 @@ function PageTabBar({
   });
 
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: 4,
-        alignItems: "center",
-        background: pageColorTokens.surface,
-        border: `1px solid ${pageColorTokens.border}`,
-        borderRadius: 12,
-        padding: "6px 8px",
-        marginBottom: 20,
-      }}
-    >
+    <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
       <button type="button" style={btnStyle(activeTab === "config")} onClick={() => onTabChange("config")}>
-        配置页
+        {t("productImproveStage1.tabsConfig")}
       </button>
       <button type="button" style={btnStyle(activeTab === "tasks")} onClick={() => onTabChange("tasks")}>
-        任务列表
+        {t("productImproveStage1.tabsTasks")}
         {runningCount > 0 && (
           <span
             style={{
@@ -84,11 +76,6 @@ function PageTabBar({
           </span>
         )}
       </button>
-      {activeTab === "tasks" && (
-        <span style={{ fontSize: 13, color: pageColorTokens.textSecondary, marginLeft: 8 }}>
-          执行中、待审查、已应用和评分结果统一在这里查看。
-        </span>
-      )}
     </div>
   );
 }
@@ -108,6 +95,7 @@ export function ProductImprovePage() {
     shopLocales?.defaultTargetLanguage ?? "zh-CN",
   );
   const [showManualProductId, setShowManualProductId] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const fetcher = useFetcher();
   const isSubmitting = fetcher.state === "submitting";
@@ -119,14 +107,14 @@ export function ProductImprovePage() {
   const search =
     typeof window !== "undefined" ? window.location.search : "";
 
-  const runningCount = tasks.filter((t) => t.status === "running").length;
+  const runningCount = tasks.filter((task) => task.status === "running").length;
 
   const localeOptions = shopLocales?.localeOptions ?? [];
 
   const productIdForActions = (selectedProduct?.id ?? productId).trim();
 
   function handleTaskDeleted(taskId: string) {
-    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    setTasks((prev) => prev.filter((task) => task.id !== taskId));
   }
 
   function handleTaskUpdated(
@@ -176,19 +164,41 @@ export function ProductImprovePage() {
     productId: string;
     targetLanguage: string;
     originalTitle: string;
+    estimatedCredits: number;
   } | null>(null);
   const lastHandledTaskIdRef = useRef<string | undefined>();
+  const confirmDialogRef = useRef<HTMLDialogElement>(null);
 
-  async function handleGenerate() {
+  useEffect(() => {
+    const el = confirmDialogRef.current;
+    if (!el) return;
+    if (confirmOpen) {
+      if (!el.open) {
+        el.showModal();
+      }
+    } else if (el.open) {
+      el.close();
+    }
+  }, [confirmOpen]);
+
+  function handleOpenConfirm() {
     if (!productIdForActions) {
-      shopify.toast.show("请先选择或输入商品 ID");
+      shopify.toast.show(t("productImproveStage1.toastSelectProduct"));
       return;
     }
+    setConfirmOpen(true);
+  }
+
+  async function handleGenerateConfirmed() {
+    if (!productIdForActions) return;
     pendingSubmitRef.current = {
       productId: productIdForActions,
       targetLanguage,
       originalTitle: selectedProduct?.title ?? "",
+      estimatedCredits: ESTIMATED_TOKENS,
     };
+    setConfirmOpen(false);
+    setPageTab("tasks");
     fetcher.submit(
       { productId: productIdForActions, targetLanguage },
       { method: "POST", encType: "application/json" },
@@ -223,7 +233,7 @@ export function ProductImprovePage() {
         originalText: "",
       },
       result: null,
-      estimatedCredits: null,
+      estimatedCredits: submitContext?.estimatedCredits ?? ESTIMATED_TOKENS,
       actualCredits: null,
       startedAt: now,
       completedAt: null,
@@ -234,14 +244,28 @@ export function ProductImprovePage() {
 
     setTasks((prev) => [optimisticTask, ...prev]);
     setPageTab("tasks");
-    shopify.toast.show("文案生成任务已创建，请在任务列表中查看进度");
-  }, [fetcher.data, fetcher.state, shopify, targetLanguage]);
+    shopify.toast.show(t("productImproveStage1.toastTaskCreated"));
+  }, [fetcher.data, fetcher.state, shopify, t, targetLanguage]);
 
   const errorText =
     actionData && !actionData.success ? actionData.errorMsg : null;
 
-  // Estimate panel values
-  const selectedName = selectedProduct?.title ?? (productId ? `商品 ${productId}` : null);
+  const selectedName =
+    selectedProduct?.title ??
+    (productId ? t("productImproveStage1.productFallbackName", { id: productId }) : null);
+  const selectedLanguageLabel =
+    localeOptions.find((o) => o.value === targetLanguage)?.label ?? targetLanguage;
+
+  const confirmSummaryItems = [
+    { key: "target", label: t("productImproveStage1.confirmLabelTarget"), value: selectedName ?? "-" },
+    { key: "language", label: t("productImproveStage1.taskLanguage"), value: selectedLanguageLabel },
+    { key: "time", label: t("productImproveStage1.estimateTime"), value: ESTIMATED_DURATION },
+    {
+      key: "tokens",
+      label: t("productImproveStage1.estimateCredits"),
+      value: t("productImproveStage1.estimatedTokenValue", { count: ESTIMATED_TOKENS }),
+    },
+  ] as const;
 
   return (
     <s-page heading={t("generate.pageTitle")}>
@@ -255,7 +279,7 @@ export function ProductImprovePage() {
 
         <PageSectionHeader
           title={t("generate.sectionTitle")}
-          subtitle="在配置页发起任务，并在任务列表中完成审查与写入。"
+          subtitle={t("productImproveStage1.subtitle")}
         />
 
         <PageTabBar
@@ -266,141 +290,195 @@ export function ProductImprovePage() {
 
         {pageTab === "config" && (
           <>
-            {/* Task summary always visible in config tab */}
             <TaskListSummary tasks={tasks} mode="product_improve" />
 
-            {/* Generation form + estimate panel */}
-            <div style={twoColumnLayoutStyle}>
-              <div style={twoColumnMainStyle}>
-                <PageSurface title="生成配置" subtitle="选择商品与目标语言后点击生成">
-                  <s-stack direction="block" gap="base">
-                    <ProductSelector
-                      locationSearch={search}
-                      selected={selectedProduct}
-                      onSelectedChange={setSelectedProduct}
+            <PageSurface
+              title={t("productImproveStage1.configSurfaceTitle")}
+              subtitle={t("productImproveStage1.configSurfaceSubtitle")}
+            >
+              <s-stack direction="block" gap="base">
+                <ProductSelector
+                  locationSearch={search}
+                  selected={selectedProduct}
+                  onSelectedChange={setSelectedProduct}
+                />
+
+                <details
+                  style={{
+                    marginTop: "0.25rem",
+                    padding: "0.85rem 0.95rem",
+                    borderRadius: pageColorTokens.radiusControl,
+                    background: pageColorTokens.surfaceSubtle,
+                    border: `1px solid ${pageColorTokens.borderSubtle}`,
+                  }}
+                  open={showManualProductId}
+                  onToggle={(e) => setShowManualProductId(e.currentTarget.open)}
+                >
+                  <summary style={pageLinkHintStyle}>
+                    {t("generate.advancedManualProductId")}
+                  </summary>
+                  <div style={{ marginTop: "0.65rem" }}>
+                    <s-text-field
+                      label={t("generate.productIdLabel")}
+                      value={productId}
+                      onChange={(e) => setProductId(e.currentTarget.value)}
+                      autocomplete="off"
                     />
+                  </div>
+                </details>
 
-                    <details
-                      style={{ marginTop: "0.25rem" }}
-                      open={showManualProductId}
-                      onToggle={(e) => setShowManualProductId(e.currentTarget.open)}
-                    >
-                      <summary style={pageLinkHintStyle}>
-                        {t("generate.advancedManualProductId")}
-                      </summary>
-                      <div style={{ marginTop: "0.65rem" }}>
-                        <s-text-field
-                          label={t("generate.productIdLabel")}
-                          value={productId}
-                          onChange={(e) => setProductId(e.currentTarget.value)}
-                          autocomplete="off"
-                        />
-                      </div>
-                    </details>
-
-                    <div>
-                      <label htmlFor="pi-target-lang" style={pageFieldLabelStyle}>
-                        {t("generate.targetLanguage")}
-                      </label>
-                      <select
-                        id="pi-target-lang"
-                        value={targetLanguage}
-                        onChange={(e) => setTargetLanguage(e.target.value)}
-                        disabled={isSubmitting}
-                        style={pageSelectStyle(isSubmitting)}
-                      >
-                        {localeOptions.length === 0 && (
-                          <option value="zh-CN">Chinese (Simplified) (zh-CN)</option>
-                        )}
-                        {localeOptions.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {errorText ? <div style={formErrorBoxStyle}>{errorText}</div> : null}
-                  </s-stack>
-                </PageSurface>
-              </div>
-
-              <div style={twoColumnSideStyle}>
-                <PageSurface title="执行前预估" subtitle="确认影响范围、预估耗时和预估 Token 后开始生成。">
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: 10,
-                      marginBottom: 16,
-                    }}
+                <div>
+                  <label htmlFor="pi-target-lang" style={pageFieldLabelStyle}>
+                    {t("generate.targetLanguage")}
+                  </label>
+                  <select
+                    id="pi-target-lang"
+                    value={targetLanguage}
+                    onChange={(e) => setTargetLanguage(e.target.value)}
+                    disabled={isSubmitting}
+                    style={pageSelectStyle(isSubmitting)}
                   >
-                    {[
-                      { label: "商品", value: selectedName ?? "-" },
-                      {
-                        label: "目标语言",
-                        value:
-                          localeOptions.find((o) => o.value === targetLanguage)?.label ??
-                          targetLanguage,
-                      },
-                      { label: "预估耗时", value: "1–2 min" },
-                      { label: "预估 Token", value: "320 Token" },
-                    ].map((item) => (
+                    {localeOptions.length === 0 && (
+                      <option value="zh-CN">Chinese (Simplified) (zh-CN)</option>
+                    )}
+                    {localeOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div style={pageHintTextStyle}>
+                    {t("productImproveStage1.targetLanguageHint")}
+                  </div>
+                </div>
+
+                {errorText ? <div style={formErrorBoxStyle}>{errorText}</div> : null}
+
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: pageColorTokens.textFootnote,
+                    padding: "0.75rem 0.85rem",
+                    borderRadius: pageColorTokens.radiusControl,
+                    background: pageColorTokens.surfaceSubtle,
+                    border: `1px solid ${pageColorTokens.borderSubtle}`,
+                  }}
+                >
+                  {t("productImproveStage1.confirmFlowHint")}
+                </div>
+
+                <s-stack direction="inline" gap="small">
+                  <s-button
+                    type="button"
+                    variant="primary"
+                    onClick={handleOpenConfirm}
+                    {...(isSubmitting || !productIdForActions ? { disabled: true } : {})}
+                  >
+                    {isSubmitting
+                      ? t("productImproveStage1.submitting")
+                      : t("productImproveStage1.createTaskAction")}
+                  </s-button>
+                </s-stack>
+              </s-stack>
+            </PageSurface>
+
+            <dialog
+              ref={confirmDialogRef}
+              onCancel={(e) => {
+                e.preventDefault();
+                if (!isSubmitting) {
+                  setConfirmOpen(false);
+                }
+              }}
+              style={{
+                maxWidth: "460px",
+                width: "calc(100% - 2rem)",
+                padding: 0,
+                border: "none",
+                borderRadius: "12px",
+                boxShadow: "0 12px 40px rgba(0,0,0,0.18)",
+              }}
+            >
+              <div style={{ padding: "1.125rem 1.25rem" }}>
+                <div
+                  style={{
+                    fontSize: "1rem",
+                    fontWeight: 700,
+                    color: pageColorTokens.textPrimary,
+                    marginBottom: "0.45rem",
+                  }}
+                >
+                  {t("productImproveStage1.confirmDialogTitle")}
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.8125rem",
+                    color: pageColorTokens.textSecondary,
+                    lineHeight: 1.5,
+                    marginBottom: "0.9rem",
+                  }}
+                >
+                  {t("productImproveStage1.confirmDialogDesc")}
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "8px 16px",
+                    marginBottom: "0.9rem",
+                  }}
+                >
+                  {confirmSummaryItems.map((item) => (
+                    <div key={item.key} style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: "0.6875rem", color: pageColorTokens.textSecondary }}>
+                        {item.label}
+                      </div>
                       <div
-                        key={item.label}
                         style={{
-                          border: `1px solid ${pageColorTokens.border}`,
-                          borderRadius: 8,
-                          padding: "10px 12px",
-                          background: pageColorTokens.surfaceMuted,
+                          fontSize: "0.8125rem",
+                          color: pageColorTokens.textPrimary,
+                          fontWeight: 600,
+                          marginTop: 3,
+                          wordBreak: "break-word",
                         }}
                       >
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: pageColorTokens.textSecondary,
-                            marginBottom: 4,
-                          }}
-                        >
-                          {item.label}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 500,
-                            color: pageColorTokens.textPrimary,
-                            wordBreak: "break-word",
-                          }}
-                        >
-                          {item.value}
-                        </div>
+                        {item.value}
                       </div>
-                    ))}
-                  </div>
-
-                  <s-stack direction="inline" gap="small">
-                    <s-button
-                      type="button"
-                      variant="primary"
-                      onClick={() => void handleGenerate()}
-                      {...(isSubmitting || !productIdForActions ? { disabled: true } : {})}
-                    >
-                      {isSubmitting ? "提交中..." : "生成文案"}
-                    </s-button>
-                  </s-stack>
-
-                  <div
-                    style={{
-                      marginTop: 12,
-                      fontSize: 12,
-                      color: pageColorTokens.textFootnote,
-                    }}
+                    </div>
+                  ))}
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    color: pageColorTokens.textSecondary,
+                    lineHeight: 1.5,
+                    marginBottom: "1rem",
+                  }}
+                >
+                  {t("productImproveStage1.confirmDialogFootnote")}
+                </div>
+                <s-stack direction="inline" gap="small">
+                  <s-button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setConfirmOpen(false)}
+                    {...(isSubmitting ? { disabled: true } : {})}
                   >
-                    生成将消耗 Token；保存至 Shopify 前可在任务列表预览并编辑标题与描述。
-                  </div>
-                </PageSurface>
+                    {t("common.cancel")}
+                  </s-button>
+                  <s-button
+                    type="button"
+                    variant="primary"
+                    onClick={() => void handleGenerateConfirmed()}
+                    {...(isSubmitting ? { disabled: true } : {})}
+                  >
+                    {isSubmitting
+                      ? t("productImproveStage1.submitting")
+                      : t("productImproveStage1.confirmAndCreate")}
+                  </s-button>
+                </s-stack>
               </div>
-            </div>
+            </dialog>
           </>
         )}
 

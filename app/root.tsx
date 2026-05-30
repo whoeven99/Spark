@@ -1,3 +1,4 @@
+import "./styles/app.css";
 import { Links, Meta, Outlet, Scripts, ScrollRestoration, useMatches } from "react-router";
 import { DEFAULT_LOCALE } from "./i18n/config";
 

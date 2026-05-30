@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{appName}} 任务已开始</title>
+    <meta name="x-apple-disable-message-reformatting">
+    <style>
+      /* 基础兼容性：尽量减少不同邮件客户端的默认样式差异 */
+      body { margin: 0; padding: 0; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+      table { border-collapse: collapse; }
+      img { border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }
+
+      /* 移动端优化：只在支持 media query 的客户端生效 */
+      @media (max-width: 600px) {
+        .wrapper { padding: 20px 20px !important; }
+        .container { border-radius: 0 !important; }
+        .px { padding-left: 20px !important; padding-right: 20px !important; }
+        .header { padding-top: 24px !important; padding-bottom: 16px !important; }
+        .content { padding-top: 22px !important; padding-bottom: 22px !important; }
+        .footer { padding-top: 18px !important; padding-bottom: 18px !important; }
+        .btn { display: block !important; width: 100% !important; box-sizing: border-box !important; text-align: center !important; }
+      }
+    </style>
+  </head>
+  <body style="margin:0;padding:0;background:#FAFAFA;font-family:Arial,'Helvetica Neue',sans-serif;color:#0f2b46;">
+    <div style="display:none;max-height:0;overflow:hidden;">{{shopName}} 的任务状态已更新：{{taskName}}。</div>
+    <table role="presentation" class="wrapper" width="100%" cellspacing="0" cellpadding="0" style="background:#FAFAFA;padding:20px 10px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" class="container" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border-radius:0;overflow:hidden;">
+            <tr>
+              <td class="px header" style="padding:28px 32px 18px;border-bottom:1px solid #e5e7eb;">
+                <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 18px;">
+                  <tr>
+                    
+                    <td>
+                      <p style="margin:0 0 3px;color:#111827;font-size:16px;font-weight:700;line-height:1.35;">{{appName}}</p>
+                      <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.35;">{{brandName}}</p>
+                    </td>
+                  </tr>
+                </table>
+                <h1 style="margin:0;color:#111827;font-size:24px;line-height:1.35;">任务已开始</h1>
+              </td>
+            </tr>
+            <tr>
+              <td class="px content" style="padding:28px 32px;">
+                <p style="margin:0 0 18px;color:#111827;font-size:16px;line-height:1.6;">Hi {{recipientName}}，</p>
+                <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">{{appName}} 已开始处理 {{taskName}}。我们会在任务完成、暂停或需要你查看时继续同步状态。</p>
+                <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">任务状态可能与店铺数据同步、广告投放、物流处理、诊断分析或其他自动化流程有关。打开 Shopify App 可以看到更完整的上下文。</p>
+                <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">如果任务涉及积分消耗或退回，积分账户会在状态确认后更新。任务日志和积分明细会一起帮助你了解这次变化。</p>
+                <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">积分可用于任务执行、额度消耗或其他按量功能。完整明细会在 Shopify App 中展示。</p>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:22px 0;">
+                  <tr>
+                    <td style="background:#EAFFE9;padding:16px 18px;border-radius:12px;">
+                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                  
+        <tr>
+          <td style="padding:10px 0;color:#6b7280;font-size:14px;">店铺名称</td>
+          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{shopName}}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;color:#6b7280;font-size:14px;">店铺域名</td>
+          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{shopDomain}}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;color:#6b7280;font-size:14px;">发生时间 (UTC+0)</td>
+          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{occurredAtUtc}}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;color:#6b7280;font-size:14px;">任务名称</td>
+          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{taskName}}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;color:#6b7280;font-size:14px;">任务类型</td>
+          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{taskType}}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;color:#6b7280;font-size:14px;">任务编号</td>
+          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{taskId}}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;color:#6b7280;font-size:14px;">开始时间 (UTC+0)</td>
+          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{startedAtUtc}}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;color:#6b7280;font-size:14px;">积分变动</td>
+          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{creditsChanged}} {{creditUnit}}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;color:#6b7280;font-size:14px;">变动前余额</td>
+          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{creditsBefore}} {{creditUnit}}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;color:#6b7280;font-size:14px;">变动后余额</td>
+          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{creditsAfter}} {{creditUnit}}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;color:#6b7280;font-size:14px;">积分说明</td>
+          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{creditReason}}</td>
+        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:22px 0 12px;color:#374151;font-size:15px;line-height:1.7;">点击下方按钮，进入 Shopify App 查看完整详情。</p><p style="margin:0;"><a href="https://ciwi-us-1327177217.cos.na-ashburn.myqcloud.com/app/{id}" class="btn" style="display:inline-block;background:#0F2B46;color:#ffffff;text-decoration:none;border-radius:25px;padding:12px 18px;font-size:14px;font-weight:600;">前往 Shopify App 查看</a></p>
+              </td>
+            </tr>
+            <tr>
+              <td class="px footer" style="padding:22px 32px;background:#F8F8F8;border-top:1px solid #e5e7eb;">
+                <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 12px;">
+                  <tr>
+                    
+                    <td>
+                      <p style="margin:0 0 3px;color:#111827;font-size:14px;font-weight:700;line-height:1.35;">{{appName}}</p>
+                      <p style="margin:0;color:#6b7280;font-size:12px;line-height:1.35;">{{brandName}}</p>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:0;color:#6b7280;font-size:12px;line-height:1.7;">这是一封与 {{appName}} 服务状态相关的功能通知邮件。我们会在安装、订阅、积分账户和任务执行等关键节点发送提醒，帮助您及时了解店铺里的 app 使用情况。如有疑问，请联系 {{supportEmail}}。</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

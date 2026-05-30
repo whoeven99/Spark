@@ -7,7 +7,8 @@
 - `GENERATE_DESCRIPTION.md` — 商品描述生成方案
 - `shop-insight-agent-roadmap.md` — 店铺洞察 Agent 数据/工具路线图（商业建议能力演进）
 - `shop-profile.md` — 店铺画像（Cosmos + Blob，安装时 Shopify 基础信息）
-- `UI_DESIGN.md` — 前端展示层 UI 规范
+- `INTERACTION_DESIGN.md` — 任务型工具交互规范（页面层级、流程导航、主次操作）
+- `DESIGN.md` — 前端视觉系统与组件设计规范
 - `agent-run-log.md` — Agent 运行摘要（Cosmos `spark_ops`）与 LangSmith 互链
 - `render-daily-digest.md` — Render 日志日报（GitHub Actions → 飞书）
 

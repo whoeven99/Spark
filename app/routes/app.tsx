@@ -5,6 +5,7 @@ import type {
 } from "react-router";
 import { Outlet, useLoaderData, useRouteError } from "react-router";
 import { useTranslation } from "react-i18next";
+import { ConfigProvider } from "antd";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { AppI18nProvider } from "../i18n/provider";
@@ -13,7 +14,7 @@ import {
   buildLocaleCookieHeader,
   normalizeLocale,
 } from "../i18n/config";
-import { detectRequestLocale } from "../i18n/detector.server";
+import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import { ensureSessionAppName } from "../server/session/sessionManager.server";
@@ -22,6 +23,7 @@ import {
   getAppEntryConfig,
   type NavItemKey,
 } from "../config/appEntry.server";
+import { sparkAntTheme } from "./component/shared/antdTheme";
 
 const NAV_ITEMS: Record<
   NavItemKey,
@@ -76,7 +78,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   } catch (error) {
     console.error("[CommonEvent] recordAppInstalled failed:", error);
   }
-  const locale = detectRequestLocale(request);
+  const locale = detectRequestLocale(request, {
+    sessionLocale: readShopifySessionLocale(session),
+  });
   const { nav, home } = getAppEntryConfig();
 
   // eslint-disable-next-line no-undef
@@ -111,10 +115,14 @@ export default function App() {
 
   return (
     <AppI18nProvider locale={locale}>
-      <AppProvider embedded apiKey={apiKey}>
-        <AppNav nav={nav} />
-        <Outlet />
-      </AppProvider>
+      <ConfigProvider theme={sparkAntTheme}>
+        <AppProvider embedded apiKey={apiKey}>
+          <div className="spark-ant-app">
+            <AppNav nav={nav} />
+            <Outlet />
+          </div>
+        </AppProvider>
+      </ConfigProvider>
     </AppI18nProvider>
   );
 }
