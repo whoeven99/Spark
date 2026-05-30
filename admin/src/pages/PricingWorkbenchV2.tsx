@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Alert,
@@ -35,11 +36,11 @@ import {
   createMonthlyFixedCost,
   deleteMonthlyFixedCost,
   fetchBillingRules,
-  fetchPricingStudio,
+  fetchPricingWorkbenchV2,
   isOwner,
   updateBillingRule,
   updateMonthlyFixedCost,
-  updatePricingStudioSettings,
+  updatePricingWorkbenchV2Settings,
   type BillingRuleRow,
   type MonthlyFixedCostItem,
   type PlanCatalogItem,
@@ -176,7 +177,7 @@ export default function PricingWorkbenchV2() {
     setLoading(true);
     setError("");
     try {
-      const data = await fetchPricingStudio();
+      const data = await fetchPricingWorkbenchV2();
       const s = data.settings;
       setPayingShops(s.payingShops);
       setTargetGrossMarginPct(s.targetGrossMarginPct);
@@ -268,13 +269,11 @@ export default function PricingWorkbenchV2() {
     if (!owner) return;
     setSaving(true);
     try {
-      await updatePricingStudioSettings({
+      await updatePricingWorkbenchV2Settings({
         payingShops,
         targetGrossMarginPct,
         planPriceUsd,
         tokenGrantPerUser,
-        blendedCostUsdPerMillionBilledToken:
-          totals.effectiveCostPerBilledToken * 1_000_000,
         shopifyRevSharePct,
         paymentFeePct,
         usageScenarios: scenarios,
@@ -1020,7 +1019,8 @@ export default function PricingWorkbenchV2() {
             定价工作台 v2
           </Typography.Title>
           <Typography.Paragraph type="secondary" style={{ margin: 0, maxWidth: 720 }}>
-            把模型/API 成本、基础设施固定成本与 Shopify 分成，映射为套餐 Token 面值与计费倍率。配置持久化到 Admin 本地库，PlanCatalog 只读对照。
+            独立 v2 页面：模型/API 成本、基础设施固定成本与 Shopify 分成 → 套餐 Token 面值与计费倍率。
+            配置与「定价工作台」分离存储；月固定成本两项共用。
           </Typography.Paragraph>
         </div>
         <Space>
@@ -1038,7 +1038,7 @@ export default function PricingWorkbenchV2() {
             </Button>
           )}
           <Link to="/pricing-studio" style={{ fontSize: 13 }}>
-            v1
+            原版定价工作台
           </Link>
         </Space>
       </div>

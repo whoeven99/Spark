@@ -586,17 +586,44 @@ export type PlanCatalogItem = {
 };
 
 export function fetchPricingStudio(): Promise<{
-  settings: PricingStudioSettings & { usageScenarios?: unknown[] | null };
+  settings: PricingStudioSettings;
   fixedCosts: MonthlyFixedCostItem[];
-  plans: PlanCatalogItem[];
 }> {
   return apiFetch("/pricing-studio");
 }
 
 export function updatePricingStudioSettings(
-  settings: PricingStudioSettings & { usageScenarios?: unknown[] },
+  settings: PricingStudioSettings,
 ): Promise<{ ok: boolean }> {
   return apiFetch("/pricing-studio/settings", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
+// --- Pricing Workbench v2（独立配置，不覆盖 pricing-studio）---
+
+export type PricingWorkbenchV2Settings = {
+  payingShops: number;
+  targetGrossMarginPct: number;
+  planPriceUsd: number;
+  tokenGrantPerUser: number;
+  shopifyRevSharePct: number;
+  paymentFeePct: number;
+};
+
+export function fetchPricingWorkbenchV2(): Promise<{
+  settings: PricingWorkbenchV2Settings & { usageScenarios?: unknown[] | null };
+  fixedCosts: MonthlyFixedCostItem[];
+  plans: PlanCatalogItem[];
+}> {
+  return apiFetch("/pricing-workbench");
+}
+
+export function updatePricingWorkbenchV2Settings(
+  settings: PricingWorkbenchV2Settings & { usageScenarios?: unknown[] },
+): Promise<{ ok: boolean }> {
+  return apiFetch("/pricing-workbench/settings", {
     method: "PUT",
     body: JSON.stringify(settings),
   });

@@ -18,6 +18,7 @@ import { codeAgentRouter } from "./routes/codeAgent.js";
 import { agentRunsRouter } from "./routes/agentRuns.js";
 import { billingRulesRouter } from "./routes/billingRules.js";
 import { pricingStudioRouter } from "./routes/pricingStudio.js";
+import { pricingWorkbenchV2Router } from "./routes/pricingWorkbenchV2.js";
 import { todosRouter } from "./routes/todos.js";
 import { opsChecklistRouter } from "./routes/opsChecklist.js";
 import { isProductionNodeEnv } from "./lib/nodeEnv.js";
@@ -53,6 +54,7 @@ app.use("/api/code-agent", authMiddleware, codeAgentRouter);
 app.use("/api/agent-runs", authMiddleware, agentRunsRouter);
 app.use("/api/billing-rules", authMiddleware, billingRulesRouter);
 app.use("/api/pricing-studio", authMiddleware, pricingStudioRouter);
+app.use("/api/pricing-workbench", authMiddleware, pricingWorkbenchV2Router);
 app.use("/api/todos", authMiddleware, todosRouter);
 app.use("/api/ops-checklist", authMiddleware, opsChecklistRouter);
 

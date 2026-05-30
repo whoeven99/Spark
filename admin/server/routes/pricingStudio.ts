@@ -52,23 +52,12 @@ function readyTable() {
 
 async function readSettings() {
   const rows = await getDb().execute(
-    "SELECT key, value FROM AdminPricingConfig WHERE key IN ('payingShops','targetGrossMarginPct','planPriceUsd','tokenGrantPerUser','blendedCostUsdPerMillionBilledToken','shopifyRevSharePct','paymentFeePct','usageScenariosJson')",
+    "SELECT key, value FROM AdminPricingConfig WHERE key IN ('payingShops','targetGrossMarginPct','planPriceUsd','tokenGrantPerUser','blendedCostUsdPerMillionBilledToken','shopifyRevSharePct','paymentFeePct')",
   );
 
   const map = new Map<string, string>();
   for (const row of rows.rows) {
     map.set(String(row.key), String(row.value));
-  }
-
-  let usageScenarios: unknown[] | null = null;
-  const scenariosRaw = map.get("usageScenariosJson");
-  if (scenariosRaw) {
-    try {
-      const parsed = JSON.parse(scenariosRaw);
-      if (Array.isArray(parsed)) usageScenarios = parsed;
-    } catch {
-      usageScenarios = null;
-    }
   }
 
   return {
@@ -90,38 +79,17 @@ async function readSettings() {
     paymentFeePct: Number(
       map.get("paymentFeePct") ?? DEFAULT_SETTINGS.paymentFeePct,
     ),
-    usageScenarios,
   };
-}
-
-async function readPlanCatalog() {
-  const result = await getDb().execute(`
-    SELECT planKey, appName, kind, billingInterval, displayName, tokens, priceAmount, currencyCode, enabled, sortOrder
-    FROM PlanCatalog
-    WHERE enabled = 1
-    ORDER BY sortOrder ASC, planKey ASC
-  `);
-  return result.rows.map((row) => ({
-    planKey: String(row.planKey),
-    appName: String(row.appName),
-    kind: String(row.kind),
-    billingInterval: row.billingInterval != null ? String(row.billingInterval) : null,
-    displayName: String(row.displayName),
-    tokens: Number(row.tokens ?? 0),
-    priceAmount: String(row.priceAmount),
-    currencyCode: String(row.currencyCode ?? "USD"),
-  }));
 }
 
 pricingStudioRouter.get("/", async (_req, res) => {
   try {
     await readyTable();
-    const [settings, fixedCostsResult, plans] = await Promise.all([
+    const [settings, fixedCostsResult] = await Promise.all([
       readSettings(),
       getDb().execute(
         "SELECT id, name, amountUsd, enabled, sortOrder, createdAt, updatedAt FROM AdminMonthlyFixedCost ORDER BY sortOrder ASC, createdAt ASC",
       ),
-      readPlanCatalog().catch(() => []),
     ]);
 
     const fixedCosts = fixedCostsResult.rows.map((row) => ({
@@ -134,7 +102,7 @@ pricingStudioRouter.get("/", async (_req, res) => {
       updatedAt: String(row.updatedAt),
     }));
 
-    res.json({ settings, fixedCosts, plans });
+    res.json({ settings, fixedCosts });
   } catch (err) {
     console.error("[pricing-studio GET]", err);
     res.status(500).json({ error: String(err) });
@@ -153,7 +121,6 @@ pricingStudioRouter.put("/settings", requireOwner, async (req, res) => {
       blendedCostUsdPerMillionBilledToken,
       shopifyRevSharePct,
       paymentFeePct,
-      usageScenarios,
     } = req.body as Record<string, unknown>;
 
     const entries: Array<[string, number]> = [
@@ -195,23 +162,6 @@ pricingStudioRouter.put("/settings", requireOwner, async (req, res) => {
             updatedAt = excluded.updatedAt
         `,
         args: [key, String(value), now],
-      });
-    }
-
-    if (usageScenarios !== undefined) {
-      if (!Array.isArray(usageScenarios)) {
-        res.status(400).json({ error: "usageScenarios must be an array" });
-        return;
-      }
-      await getDb().execute({
-        sql: `
-          INSERT INTO AdminPricingConfig (key, value, updatedAt)
-          VALUES (?, ?, ?)
-          ON CONFLICT(key) DO UPDATE SET
-            value = excluded.value,
-            updatedAt = excluded.updatedAt
-        `,
-        args: ["usageScenariosJson", JSON.stringify(usageScenarios), now],
       });
     }
 
