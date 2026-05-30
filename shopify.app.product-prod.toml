@@ -2,7 +2,7 @@
 
 client_id = "dae0dae9cfeca7c8ba3bd0297d2f2e38"
 name = "Ciwi:ai-Product Improve"
-application_url = "https://product-improve.onrender.com"
+application_url = "https://product-improve.onrender.com/app/product-improve"
 embedded = true
 
 [build]
