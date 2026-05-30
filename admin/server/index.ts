@@ -19,10 +19,11 @@ import { agentRunsRouter } from "./routes/agentRuns.js";
 import { billingRulesRouter } from "./routes/billingRules.js";
 import { todosRouter } from "./routes/todos.js";
 import { opsChecklistRouter } from "./routes/opsChecklist.js";
+import { isProductionNodeEnv } from "./lib/nodeEnv.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 3099);
-const IS_PROD = process.env.NODE_ENV === "production";
+const IS_PROD = isProductionNodeEnv();
 
 const app = express();
 app.use(express.json());

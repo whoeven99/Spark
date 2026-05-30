@@ -22,7 +22,7 @@
 | 变量 | 说明 |
 |------|------|
 | `BILLING_GATEWAY=noop` | 不调 Shopify Billing，本地直接生效（开发） |
-| `BILLING_TEST=true` | Shopify 测试计费（开发店）；Render 等 `NODE_ENV=production` 时必须显式设置 |
+| `BILLING_TEST=true` | Shopify 测试计费（开发店）；Render 等 `NODE_ENV=prod` 时必须显式设置 |
 
 ## Shopify returnUrl
 
@@ -65,7 +65,7 @@
 
 ## 测试环境取消按钮
 
-- 计费页「取消订阅」：`isBillingDevCancelEnabled()` 为 true 时展示（`BILLING_TEST=true`、`NODE_ENV=test`、或非 `production`）；可用 `BILLING_DEV_CANCEL=false` 强制关闭。
+- 计费页「取消订阅」：`isBillingDevCancelEnabled()` 为 true 时展示（`BILLING_TEST=true`、`NODE_ENV=test`、或非 `prod`）；可用 `BILLING_DEV_CANCEL=false` 强制关闭。
 - 还需 Turso 中存在 `ACTIVE` / `PENDING` 的 `AppSubscription` 行。
 - 调用 `appSubscriptionCancel`（`BILLING_GATEWAY=noop` 时仅同步本地）。见 `cancelActiveSubscription.server.ts`。
 | `TOKEN_PACK_INITIATED` | 按量购包待确认 |

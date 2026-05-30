@@ -12,7 +12,6 @@ import {
   Alert,
   Popconfirm,
   Empty,
-  Divider,
   Tooltip,
   Badge,
 } from "antd";
@@ -23,8 +22,6 @@ import {
   CheckCircleOutlined,
   HourglassOutlined,
   PlayCircleOutlined,
-  ArrowUpOutlined,
-  ArrowDownOutlined,
 } from "@ant-design/icons";
 import {
   fetchTodos,
@@ -81,9 +78,9 @@ const STATUS_ROWS: {
   bgColor: string;
   borderColor: string;
 }[] = [
-  { key: "doing", label: "进行中", icon: <PlayCircleOutlined />, color: "#1d4ed8", bgColor: "#eff6ff", borderColor: "#bfdbfe" },
-  { key: "todo",  label: "待办",   icon: <HourglassOutlined />,  color: "#475569", bgColor: "#f8fafc", borderColor: "#cbd5e1" },
-  { key: "done",  label: "已完成", icon: <CheckCircleOutlined />, color: "#047857", bgColor: "#ecfdf5", borderColor: "#a7f3d0" },
+  { key: "doing", label: "进行中", icon: <PlayCircleOutlined />, color: "#ea580c", bgColor: "#fff7ed", borderColor: "#fdba74" },
+  { key: "todo",  label: "待办",   icon: <HourglassOutlined />,  color: "#334155", bgColor: "#f1f5f9", borderColor: "#94a3b8" },
+  { key: "done",  label: "已完成", icon: <CheckCircleOutlined />, color: "#059669", bgColor: "#ecfdf5", borderColor: "#6ee7b7" },
 ];
 
 const ME_KEY = "spark_admin_me";
@@ -371,10 +368,12 @@ function TodoCard({
   onDelete: () => void;
   onMove: (todo: TodoRow, status: TodoStatus) => void;
 }) {
-  const statusIndex = STATUS_ROWS.findIndex((s) => s.key === todo.status);
-  const prevStatus = statusIndex > 0 ? STATUS_ROWS[statusIndex - 1] : null;
-  const nextStatus = statusIndex < STATUS_ROWS.length - 1 ? STATUS_ROWS[statusIndex + 1] : null;
   const pri = PRIORITY_CONFIG[todo.priority];
+  const statusOptionRows = STATUS_ROWS.filter((s) => s.key === "todo" || s.key === "done");
+  const statusOptions: { value: TodoStatus; label: string; disabled?: boolean }[] =
+    todo.status === "doing"
+      ? [{ value: "doing", label: "进行中", disabled: true }, ...statusOptionRows.map((s) => ({ value: s.key, label: s.label }))]
+      : statusOptionRows.map((s) => ({ value: s.key, label: s.label }));
 
   return (
     <Card
@@ -405,64 +404,24 @@ function TodoCard({
         </Typography.Text>
       )}
 
-      {/* Priority + date */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
+      {/* Priority + status + date */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
         <Tag style={{ margin: 0, fontSize: 11, color: pri.color, background: pri.bg, borderColor: pri.border }}>{pri.label}</Tag>
+        <Select<TodoStatus>
+          size="small"
+          value={todo.status}
+          onChange={(value) => {
+            if (value !== todo.status) {
+              onMove(todo, value);
+            }
+          }}
+          style={{ minWidth: 90 }}
+          options={statusOptions}
+        />
         <Typography.Text type="secondary" style={{ fontSize: 11, marginLeft: "auto" }}>
           {new Date(todo.createdAt).toLocaleDateString("zh-CN")}
         </Typography.Text>
       </div>
-
-      {/* Move buttons: ↓ next on left, ↑ prev on right, small, not full-width */}
-      {(prevStatus || nextStatus) && (
-        <>
-          <Divider style={{ margin: "8px 0" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              {nextStatus && (
-                <Tooltip title={`移到「${nextStatus.label}」`}>
-                  <Button
-                    size="small"
-                    icon={<ArrowDownOutlined />}
-                    onClick={() => onMove(todo, nextStatus.key)}
-                    style={{
-                      fontSize: 11,
-                      height: 22,
-                      padding: "0 8px",
-                      color: nextStatus.color,
-                      borderColor: nextStatus.color,
-                      background: nextStatus.bgColor,
-                    }}
-                  >
-                    {nextStatus.label}
-                  </Button>
-                </Tooltip>
-              )}
-            </div>
-            <div>
-              {prevStatus && (
-                <Tooltip title={`移到「${prevStatus.label}」`}>
-                  <Button
-                    size="small"
-                    icon={<ArrowUpOutlined />}
-                    onClick={() => onMove(todo, prevStatus.key)}
-                    style={{
-                      fontSize: 11,
-                      height: 22,
-                      padding: "0 8px",
-                      color: "#8c8c8c",
-                      borderColor: "#d9d9d9",
-                      background: "#fff",
-                    }}
-                  >
-                    {prevStatus.label}
-                  </Button>
-                </Tooltip>
-              )}
-            </div>
-          </div>
-        </>
-      )}
     </Card>
   );
 }

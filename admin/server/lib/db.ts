@@ -1,5 +1,6 @@
 import { createClient, type Client } from "@libsql/client";
 import { requireEnv, getEnv } from "./env.js";
+import { isProductionNodeEnv } from "./nodeEnv.js";
 
 let _client: Client | null = null;
 
@@ -15,7 +16,7 @@ function resolveTursoTarget(): "prod" | "test" {
 
   if (hasProd && !hasTest) return "prod";
   if (hasTest && !hasProd) return "test";
-  return process.env.NODE_ENV === "production" ? "prod" : "test";
+  return isProductionNodeEnv() ? "prod" : "test";
 }
 
 export function getDb(): Client {

@@ -1,11 +1,12 @@
 /**
  * 解析连接哪套 Turso 库。
  * - 显式 `TURSO_TARGET` 优先。
- * - `NODE_ENV=production` 且两套 URL 均有效时，默认 prod。
+ * - `NODE_ENV=prod`（或 `production`）且两套 URL 均有效时，默认 prod。
  * - 仅占位 prod URL（your-prod-db 等）视为未配置。
- * - Render Test 同为 production 时，请设 `TURSO_TARGET=test` 或仅配置 `TURSO_TEST_*`。
+ * - Render Test 同为 prod 时，请设 `TURSO_TARGET=test` 或仅配置 `TURSO_TEST_*`。
  */
 
+import { isProductionNodeEnv } from "./nodeEnv.server";
 import { getRuntimeEnv, normalizeEnvValue } from "./runtimeEnv.server";
 
 export { normalizeEnvValue };
@@ -51,12 +52,8 @@ export function resolveTursoTarget(): "test" | "prod" {
     return isProductionNodeEnv() ? "prod" : "test";
   }
 
-  // 无有效 URL：与 NODE_ENV 对齐（production → 读 TURSO_PROD_*）
+  // 无有效 URL：与 NODE_ENV 对齐（prod → 读 TURSO_PROD_*）
   return isProductionNodeEnv() ? "prod" : "test";
-}
-
-function isProductionNodeEnv(): boolean {
-  return normalizeEnvValue(process.env.NODE_ENV).toLowerCase() === "production";
 }
 
 export function readTursoCredentials(target: "test" | "prod"): {
