@@ -43,7 +43,6 @@ export function ProductImproveTaskListPage({
   const [localTasks, setLocalTasks] = useState<AITaskItem[]>(tasks);
   const [viewTab, setViewTab] = useState<TaskViewTab>("current");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [cutoffMs] = useState(() => Date.now() - 24 * 60 * 60 * 1000);
 
   useEffect(() => {
     setLocalTasks(tasks);
@@ -72,7 +71,7 @@ export function ProductImproveTaskListPage({
     if (priorityDiff !== 0) return priorityDiff;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
-  const cutoff = cutoffMs;
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   const currentTasks = sorted.filter(
     (task) => new Date(task.createdAt).getTime() >= cutoff,
   );
