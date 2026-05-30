@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { Empty, Tag } from "antd";
-import { useTranslation } from "react-i18next";
+import { pageColorTokens, pageEmptyStateStyle } from "../../page/pageUiStyles";
 import { ProductImproveTaskCard } from "./ProductImproveTaskCard";
 import { ProductImproveTaskDetailPage } from "./ProductImproveTaskDetailPage";
 import { TaskListSummary } from "../aiTask/TaskListSummary";
@@ -38,7 +37,6 @@ export function ProductImproveTaskListPage({
   onTaskDeleted,
   onTaskUpdated,
 }: Props) {
-  const { t } = useTranslation();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [localTasks, setLocalTasks] = useState<AITaskItem[]>(tasks);
   const [viewTab, setViewTab] = useState<TaskViewTab>("current");
@@ -57,7 +55,7 @@ export function ProductImproveTaskListPage({
         body: JSON.stringify({ action: "delete", taskId }),
       });
       if (resp.ok) {
-        setLocalTasks((prev) => prev.filter((task) => task.id !== taskId));
+        setLocalTasks((prev) => prev.filter((t) => t.id !== taskId));
         setSelectedTaskId((prev) => (prev === taskId ? null : prev));
         onTaskDeleted(taskId);
       }
@@ -82,93 +80,146 @@ export function ProductImproveTaskListPage({
   const selectedTask =
     (selectedTaskId ? sorted.find((task) => task.id === selectedTaskId) : null) ?? null;
 
-  const taskViewTabs = (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-full border border-app-subtle bg-app-muted p-1">
-      <div className="flex flex-wrap gap-1 p-0.5">
-        {(
-          [
-            { key: "current" as const, count: currentTasks.length },
-            { key: "history" as const, count: historyTasks.length },
-          ] as const
-        ).map(({ key, count }) => {
-          const active = viewTab === key;
-          const label =
-            key === "current"
-              ? t("productImproveStage1.taskViewCurrent")
-              : t("productImproveStage1.taskViewHistory");
-          return (
-            <button
-              key={key}
-              type="button"
-              aria-pressed={active}
-              onClick={() => setViewTab(key)}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-semibold transition-colors ${
-                active
-                  ? "border border-app-subtle bg-app-card text-app-text-primary shadow-app-card"
-                  : "border border-transparent bg-transparent text-app-text-secondary hover:text-app-text-primary"
-              }`}
-            >
-              {label}
-              <Tag bordered={false} className="m-0 rounded-full bg-app-muted px-2 py-0 text-[11px]">
-                {count}
-              </Tag>
-            </button>
-          );
-        })}
-      </div>
-      <span className="px-3 text-xs text-app-text-secondary">
-        {t("productImproveStage1.taskHistoryHint")}
-      </span>
-    </div>
-  );
-
-  if (selectedTask) {
-    return (
-      <div className="space-y-3">
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {selectedTask ? (
         <ProductImproveTaskDetailPage
           task={selectedTask}
           locationSearch={locationSearch}
           onBack={() => setSelectedTaskId(null)}
           onTaskUpdated={onTaskUpdated}
         />
-      </div>
-    );
-  }
+      ) : visibleTasks.length === 0 ? (
+        <>
+          <TaskListSummary tasks={sorted} mode="product_improve" />
 
-  if (visibleTasks.length === 0) {
-    return (
-      <div className="space-y-3">
-        <TaskListSummary tasks={sorted} mode="product_improve" />
-        {taskViewTabs}
-        <Empty
-          className="spark-ant-empty rounded-app-card border border-dashed border-app-subtle bg-app-subtle py-10"
-          description={
-            viewTab === "current"
-              ? t("productImproveStage1.taskEmptyCurrent")
-              : t("productImproveStage1.taskEmptyHistory")
-          }
-        />
-      </div>
-    );
-  }
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+              padding: "0.5rem",
+              borderRadius: 999,
+              background: pageColorTokens.surfaceMuted,
+              border: `1px solid ${pageColorTokens.borderSubtle}`,
+            }}
+          >
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {[
+                { key: "current" as const, label: `当前任务 (${currentTasks.length})` },
+                { key: "history" as const, label: `历史任务 (${historyTasks.length})` },
+              ].map((tab) => {
+                const active = viewTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setViewTab(tab.key)}
+                    style={{
+                      padding: "0.5rem 0.9rem",
+                      borderRadius: 999,
+                      border: `1px solid ${active ? pageColorTokens.borderSubtle : "transparent"}`,
+                      background: active ? pageColorTokens.surface : "transparent",
+                      color: active ? pageColorTokens.textPrimary : pageColorTokens.textSecondary,
+                      boxShadow: active ? pageColorTokens.shadowCard : "none",
+                      fontSize: 13,
+                      fontWeight: active ? 700 : 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
+              历史任务定义为创建时间超过 24 小时的任务。
+            </div>
+          </div>
 
-  return (
-    <div className="space-y-3">
-      <TaskListSummary tasks={sorted} mode="product_improve" />
-      {taskViewTabs}
-      <div className="flex flex-col gap-2.5">
-        {visibleTasks.map((task) => (
-          <ProductImproveTaskCard
-            key={task.id}
-            task={task}
-            locationSearch={locationSearch}
-            onDelete={handleDelete}
-            onOpenDetail={() => setSelectedTaskId(task.id)}
-            onTaskUpdated={onTaskUpdated}
-            deleting={deletingId === task.id}
-          />
-        ))}
-      </div>
+          <div
+            style={{
+              ...pageEmptyStateStyle,
+              padding: "2.75rem 1.5rem",
+              background: "linear-gradient(160deg, #fafafa 0%, #f5f6f8 100%)",
+              border: `1px dashed ${pageColorTokens.borderSubtle}`,
+            }}
+          >
+            <span style={{ fontSize: 28, lineHeight: 1 }}>📋</span>
+            <span style={{ fontSize: 14, color: pageColorTokens.textSecondary }}>
+              {viewTab === "current"
+                ? "当前还没有任务。先在配置页创建一次生成任务。"
+                : "暂无超过 24 小时的历史任务记录。"}
+            </span>
+          </div>
+        </>
+      ) : (
+        <>
+          <TaskListSummary tasks={sorted} mode="product_improve" />
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+              padding: "0.5rem",
+              borderRadius: 999,
+              background: pageColorTokens.surfaceMuted,
+              border: `1px solid ${pageColorTokens.borderSubtle}`,
+            }}
+          >
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {[
+                { key: "current" as const, label: `当前任务 (${currentTasks.length})` },
+                { key: "history" as const, label: `历史任务 (${historyTasks.length})` },
+              ].map((tab) => {
+                const active = viewTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setViewTab(tab.key)}
+                    style={{
+                      padding: "0.5rem 0.9rem",
+                      borderRadius: 999,
+                      border: `1px solid ${active ? pageColorTokens.borderSubtle : "transparent"}`,
+                      background: active ? pageColorTokens.surface : "transparent",
+                      color: active ? pageColorTokens.textPrimary : pageColorTokens.textSecondary,
+                      boxShadow: active ? pageColorTokens.shadowCard : "none",
+                      fontSize: 13,
+                      fontWeight: active ? 700 : 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
+              历史任务定义为创建时间超过 24 小时的任务。
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {visibleTasks.map((task) => (
+              <ProductImproveTaskCard
+                key={task.id}
+                task={task}
+                locationSearch={locationSearch}
+                onDelete={handleDelete}
+                onOpenDetail={() => setSelectedTaskId(task.id)}
+                onTaskUpdated={onTaskUpdated}
+                deleting={deletingId === task.id}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

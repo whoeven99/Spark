@@ -421,12 +421,7 @@
     "confirmDialogFootnote": "Creating a task does not write to Shopify. Review results on the task page before applying.",
     "confirmAndCreate": "Confirm and create",
     "productFallbackName": "Product {{id}}",
-    "estimatedTokenValue": "{{count}} Token",
-    "taskViewCurrent": "Current tasks",
-    "taskViewHistory": "History",
-    "taskHistoryHint": "History includes tasks created more than 24 hours ago.",
-    "taskEmptyCurrent": "No current tasks yet. Create a generation task from the config tab.",
-    "taskEmptyHistory": "No tasks older than 24 hours."
+    "estimatedTokenValue": "{{count}} Token"
   },
   "credentials": {
     "suggestionTitle": "Submit suggestion",
