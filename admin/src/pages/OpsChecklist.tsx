@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import {
   Alert,
+  Button,
   Card,
   Col,
   Divider,
+  Form,
+  Input,
+  InputNumber,
   Row,
   Space,
   Spin,
@@ -12,6 +16,7 @@ import {
   Tag,
   Typography,
   List,
+  Modal,
 } from "antd";
 import {
   CheckCircleOutlined,
@@ -19,7 +24,12 @@ import {
   FireOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
-import { fetchOpsChecklist, type OpsChecklistData } from "../api";
+import {
+  fetchOpsChecklist,
+  updateOpsServiceCapacity,
+  type OpsChecklistData,
+  type OpsServiceStatus,
+} from "../api";
 
 const LEVEL_COLOR: Record<string, string> = {
   low: "green",
@@ -43,13 +53,57 @@ export default function OpsChecklist() {
   const [data, setData] = useState<OpsChecklistData | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [configTarget, setConfigTarget] = useState<OpsServiceStatus | null>(null);
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [form] = Form.useForm<{
+    capacityValue: number | null;
+    capacityUnit: string | null;
+    warningPercent: number;
+  }>();
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true);
     fetchOpsChecklist()
       .then(setData)
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
   }, []);
+
+  const openCapacityConfig = (service: OpsServiceStatus) => {
+    setConfigTarget(service);
+    form.setFieldsValue({
+      capacityValue: service.capacityValue,
+      capacityUnit: service.capacityUnit,
+      warningPercent: service.warningPercent || 80,
+    });
+    setConfigOpen(true);
+  };
+
+  const saveCapacityConfig = async () => {
+    if (!configTarget) return;
+    try {
+      const values = await form.validateFields();
+      setSavingConfig(true);
+      await updateOpsServiceCapacity(configTarget.key, {
+        capacityValue: values.capacityValue == null ? null : Number(values.capacityValue),
+        capacityUnit: values.capacityUnit?.trim() || null,
+        warningPercent: values.warningPercent,
+      });
+      setConfigOpen(false);
+      load();
+    } catch (e) {
+      if (String(e).includes("Error")) {
+        setError(String(e));
+      }
+    } finally {
+      setSavingConfig(false);
+    }
+  };
 
   if (loading) {
     return <Spin size="large" style={{ display: "block", margin: "80px auto" }} />;
@@ -175,6 +229,60 @@ export default function OpsChecklist() {
                 dataIndex: "rechargeSignal",
                 key: "rechargeSignal",
               },
+              {
+                title: "容量配置",
+                key: "capacity",
+                width: 180,
+                render: (_v, r: OpsServiceStatus) => (
+                  <Space direction="vertical" size={2}>
+                    <Typography.Text style={{ fontSize: 12 }}>
+                      {r.capacityValue == null
+                        ? "未配置"
+                        : `${r.capacityValue}${r.capacityUnit ? ` ${r.capacityUnit}` : ""}`}
+                    </Typography.Text>
+                    <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                      阈值 {r.warningPercent}%
+                    </Typography.Text>
+                    <Button size="small" type="link" onClick={() => openCapacityConfig(r)} style={{ padding: 0 }}>
+                      配置
+                    </Button>
+                  </Space>
+                ),
+              },
+              {
+                title: "已用容量(自动)",
+                key: "used",
+                width: 220,
+                render: (_v, r: OpsServiceStatus) => (
+                  <Space direction="vertical" size={2}>
+                    <Typography.Text style={{ fontSize: 12 }}>
+                      {r.usedValue == null
+                        ? "--"
+                        : `${r.usedValue}${r.usedUnit ? ` ${r.usedUnit}` : ""}`}
+                    </Typography.Text>
+                    <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                      {r.autoUsageNote ?? ""}
+                    </Typography.Text>
+                  </Space>
+                ),
+              },
+              {
+                title: "使用率",
+                key: "usagePercent",
+                width: 100,
+                render: (_v, r: OpsServiceStatus) => {
+                  if (r.usagePercent == null) {
+                    return <Typography.Text type="secondary">--</Typography.Text>;
+                  }
+                  const color =
+                    r.usagePercent >= r.warningPercent
+                      ? "red"
+                      : r.usagePercent >= r.warningPercent * 0.8
+                        ? "orange"
+                        : "green";
+                  return <Tag color={color}>{r.usagePercent}%</Tag>;
+                },
+              },
             ]}
           />
         </Card>
@@ -248,6 +356,34 @@ export default function OpsChecklist() {
           </Row>
         </Card>
       </Space>
+
+      <Modal
+        title={configTarget ? `容量配置 - ${configTarget.name}` : "容量配置"}
+        open={configOpen}
+        onCancel={() => setConfigOpen(false)}
+        onOk={saveCapacityConfig}
+        okText="保存"
+        confirmLoading={savingConfig}
+      >
+        <Form form={form} layout="vertical">
+          <Form.Item name="capacityValue" label="容量上限">
+            <InputNumber min={0} precision={2} style={{ width: "100%" }} placeholder="例如 10000" />
+          </Form.Item>
+          <Form.Item name="capacityUnit" label="容量单位">
+            <Input placeholder="例如 tokens / MB / docs / requests" maxLength={24} />
+          </Form.Item>
+          <Form.Item
+            name="warningPercent"
+            label="预警阈值 (%)"
+            rules={[{ required: true, message: "请填写预警阈值" }]}
+          >
+            <InputNumber min={1} max={100} precision={0} style={{ width: "100%" }} />
+          </Form.Item>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            自动已用容量会按服务类型尽量拉取；无法自动读取时会显示说明。
+          </Typography.Text>
+        </Form>
+      </Modal>
     </div>
   );
 }

@@ -529,6 +529,13 @@ export type OpsServiceStatus = {
   note: string;
   costSignal: string;
   rechargeSignal: string;
+  capacityValue: number | null;
+  capacityUnit: string | null;
+  warningPercent: number;
+  usedValue: number | null;
+  usedUnit: string | null;
+  usagePercent: number | null;
+  autoUsageNote?: string;
 };
 
 export type OpsPriorityAction = {
@@ -592,6 +599,20 @@ export function fetchOpsChecklist(): Promise<OpsChecklistData> {
   return apiFetch("/ops-checklist");
 }
 
+export function updateOpsServiceCapacity(
+  serviceKey: string,
+  data: {
+    capacityValue: number | null;
+    capacityUnit: string | null;
+    warningPercent?: number;
+  },
+): Promise<{ ok: boolean }> {
+  return apiFetch(`/ops-checklist/capacity/${encodeURIComponent(serviceKey)}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
 export function deleteBillingRule(ruleKey: string): Promise<{ ok: boolean }> {
   return apiFetch(`/billing-rules/${encodeURIComponent(ruleKey)}`, { method: "DELETE" });
 }
@@ -609,6 +630,7 @@ export type TodoRow = {
   assignee: TodoAssignee | null;
   status: TodoStatus;
   priority: TodoPriority;
+  etaDays: number | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -623,6 +645,7 @@ export function createTodo(data: {
   description?: string;
   assignee?: TodoAssignee;
   priority?: TodoPriority;
+  etaDays?: number | null;
   createdBy: string;
 }): Promise<{ ok: boolean; id: string }> {
   return apiFetch("/todos", { method: "POST", body: JSON.stringify(data) });
@@ -636,6 +659,7 @@ export function updateTodo(
     assignee?: TodoAssignee | null;
     status: TodoStatus;
     priority: TodoPriority;
+    etaDays?: number | null;
   },
 ): Promise<{ ok: boolean }> {
   return apiFetch(`/todos/${encodeURIComponent(id)}`, {

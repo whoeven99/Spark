@@ -1,6 +1,11 @@
 import { Router } from "express";
 import { getDb } from "../lib/db.js";
-import { getTranslationJobsContainer, isCosmosConfigured } from "../lib/cosmos.js";
+import Redis from "ioredis";
+import {
+  getAgentRunsContainer,
+  getTranslationJobsContainer,
+  isCosmosConfigured,
+} from "../lib/cosmos.js";
 
 type ServiceStatus = {
   key: string;
@@ -11,6 +16,37 @@ type ServiceStatus = {
   note: string;
   costSignal: string;
   rechargeSignal: string;
+  capacityValue: number | null;
+  capacityUnit: string | null;
+  warningPercent: number;
+  usedValue: number | null;
+  usedUnit: string | null;
+  usagePercent: number | null;
+  autoUsageNote?: string;
+};
+
+type ServiceBase = Omit<
+  ServiceStatus,
+  | "capacityValue"
+  | "capacityUnit"
+  | "warningPercent"
+  | "usedValue"
+  | "usedUnit"
+  | "usagePercent"
+  | "autoUsageNote"
+>;
+
+type ServiceCapacityConfig = {
+  serviceKey: string;
+  capacityValue: number | null;
+  capacityUnit: string | null;
+  warningPercent: number;
+};
+
+type AutoUsedCapacity = {
+  usedValue: number | null;
+  usedUnit: string | null;
+  autoUsageNote?: string;
 };
 
 type PriorityLevel = "low" | "medium" | "high";
@@ -26,7 +62,7 @@ function hasEnv(...names: string[]): boolean {
   return names.some((name) => Boolean(process.env[name]?.trim()));
 }
 
-function buildServiceStatuses(): ServiceStatus[] {
+function buildServiceStatusesBase(): ServiceBase[] {
   return [
     {
       key: "turso-libsql",
@@ -97,6 +133,205 @@ function buildServiceStatuses(): ServiceStatus[] {
       rechargeSignal: "调用失败重试增多、余额预警",
     },
   ];
+}
+
+async function ensureCapacityTable(): Promise<void> {
+  await getDb().execute(`
+    CREATE TABLE IF NOT EXISTS AdminServiceCapacity (
+      serviceKey TEXT PRIMARY KEY,
+      capacityValue REAL,
+      capacityUnit TEXT,
+      warningPercent INTEGER NOT NULL DEFAULT 80,
+      updatedAt TEXT NOT NULL
+    )
+  `);
+}
+
+let capacityTableReady: Promise<void> | null = null;
+
+function readyCapacityTable() {
+  if (!capacityTableReady) {
+    capacityTableReady = ensureCapacityTable().catch((error) => {
+      capacityTableReady = null;
+      throw error;
+    });
+  }
+  return capacityTableReady;
+}
+
+async function listCapacityConfigMap(): Promise<Record<string, ServiceCapacityConfig>> {
+  await readyCapacityTable();
+  const result = await getDb().execute(
+    "SELECT serviceKey, capacityValue, capacityUnit, warningPercent FROM AdminServiceCapacity",
+  );
+  const map: Record<string, ServiceCapacityConfig> = {};
+  for (const row of result.rows) {
+    const key = String(row.serviceKey ?? "");
+    if (!key) continue;
+    map[key] = {
+      serviceKey: key,
+      capacityValue:
+        row.capacityValue == null ? null : Number(row.capacityValue),
+      capacityUnit: row.capacityUnit == null ? null : String(row.capacityUnit),
+      warningPercent: Math.min(
+        100,
+        Math.max(1, Number(row.warningPercent ?? 80)),
+      ),
+    };
+  }
+  return map;
+}
+
+function buildRedisClient(): Redis | null {
+  const redisUrl = process.env.REDIS_URL?.trim();
+  if (redisUrl) {
+    return new Redis(redisUrl, {
+      lazyConnect: true,
+      maxRetriesPerRequest: 1,
+      enableReadyCheck: false,
+    });
+  }
+
+  const host =
+    process.env.REDIS_HOSTNAME?.trim() ||
+    process.env.REDIS_HOST?.trim() ||
+    "";
+  if (!host) return null;
+
+  return new Redis({
+    host,
+    port: Number(process.env.REDIS_PORT ?? 6380),
+    password:
+      process.env.REDIS_PASSWORD?.trim() ||
+      process.env.REDIS_CACHEKEY_VAULT?.trim() ||
+      undefined,
+    tls:
+      process.env.REDIS_TLS?.trim().toLowerCase() === "false"
+        ? undefined
+        : {},
+    lazyConnect: true,
+    maxRetriesPerRequest: 1,
+    enableReadyCheck: false,
+  });
+}
+
+async function getAutoUsedCapacityMap(): Promise<Record<string, AutoUsedCapacity>> {
+  const db = getDb();
+  const map: Record<string, AutoUsedCapacity> = {};
+
+  try {
+    const tursoUsed = await db.execute(
+      "SELECT SUM(usedTokens) AS totalUsedTokens FROM Account",
+    );
+    map["turso-libsql"] = {
+      usedValue: Number(tursoUsed.rows[0]?.totalUsedTokens ?? 0),
+      usedUnit: "tokens",
+      autoUsageNote: "自动读取 Account.usedTokens 汇总",
+    };
+  } catch {
+    map["turso-libsql"] = {
+      usedValue: null,
+      usedUnit: "tokens",
+      autoUsageNote: "自动读取失败",
+    };
+  }
+
+  try {
+    const llmUsed = await db.execute(`
+      SELECT SUM(CASE WHEN tokensDelta < 0 THEN ABS(tokensDelta) ELSE 0 END) AS used30d
+      FROM BillingLog
+      WHERE createdAt >= datetime('now', '-30 days')
+    `);
+    map["llm-openai-deepseek"] = {
+      usedValue: Number(llmUsed.rows[0]?.used30d ?? 0),
+      usedUnit: "tokens",
+      autoUsageNote: "自动读取 BillingLog 最近30天消耗",
+    };
+  } catch {
+    map["llm-openai-deepseek"] = {
+      usedValue: null,
+      usedUnit: "tokens",
+      autoUsageNote: "自动读取失败",
+    };
+  }
+
+  if (isCosmosConfigured()) {
+    try {
+      const translationContainer = getTranslationJobsContainer();
+      const agentRunsContainer = getAgentRunsContainer();
+      const [translationCount, agentCount] = await Promise.all([
+        translationContainer.items
+          .query<number>({ query: "SELECT VALUE COUNT(1) FROM c" })
+          .fetchAll(),
+        agentRunsContainer.items
+          .query<number>({ query: "SELECT VALUE COUNT(1) FROM c" })
+          .fetchAll(),
+      ]);
+      map["azure-cosmos"] = {
+        usedValue:
+          Number(translationCount.resources[0] ?? 0) +
+          Number(agentCount.resources[0] ?? 0),
+        usedUnit: "docs",
+        autoUsageNote: "自动读取 translation_jobs + agent_runs 文档数",
+      };
+    } catch {
+      map["azure-cosmos"] = {
+        usedValue: null,
+        usedUnit: "docs",
+        autoUsageNote: "自动读取失败",
+      };
+    }
+  } else {
+    map["azure-cosmos"] = {
+      usedValue: null,
+      usedUnit: "docs",
+      autoUsageNote: "Cosmos 未配置",
+    };
+  }
+
+  const redisClient = buildRedisClient();
+  if (redisClient) {
+    try {
+      await redisClient.connect();
+      const info = await redisClient.info("memory");
+      const usedMemory = Number(
+        (info.match(/used_memory:(\d+)/)?.[1] ?? "0"),
+      );
+      map["redis"] = {
+        usedValue: Number((usedMemory / (1024 * 1024)).toFixed(2)),
+        usedUnit: "MB",
+        autoUsageNote: "自动读取 Redis used_memory",
+      };
+    } catch {
+      map["redis"] = {
+        usedValue: null,
+        usedUnit: "MB",
+        autoUsageNote: "自动读取失败",
+      };
+    } finally {
+      redisClient.disconnect();
+    }
+  } else {
+    map["redis"] = {
+      usedValue: null,
+      usedUnit: "MB",
+      autoUsageNote: "Redis 未配置",
+    };
+  }
+
+  map["azure-blob"] = {
+    usedValue: null,
+    usedUnit: "GB",
+    autoUsageNote: "自动读取待接入 Blob SDK",
+  };
+
+  map["picture-translate-engines"] = {
+    usedValue: null,
+    usedUnit: "requests",
+    autoUsageNote: "自动读取待接入供应商计量接口",
+  };
+
+  return map;
 }
 
 function getMonitoringChecklist() {
@@ -198,9 +433,64 @@ async function getTranslationHealth(): Promise<{ active: number; failed: number;
 
 export const opsChecklistRouter = Router();
 
+opsChecklistRouter.put("/capacity/:serviceKey", async (req, res) => {
+  try {
+    await readyCapacityTable();
+    const serviceKey = String(req.params.serviceKey ?? "").trim();
+    const allowed = new Set(buildServiceStatusesBase().map((s) => s.key));
+    if (!allowed.has(serviceKey)) {
+      res.status(400).json({ error: "invalid serviceKey" });
+      return;
+    }
+
+    const rawValue = req.body?.capacityValue;
+    const rawUnit = req.body?.capacityUnit;
+    const rawWarning = req.body?.warningPercent;
+
+    const capacityValue =
+      rawValue == null || rawValue === ""
+        ? null
+        : Number.isFinite(Number(rawValue))
+          ? Math.max(0, Number(rawValue))
+          : null;
+    const capacityUnit =
+      rawUnit == null || String(rawUnit).trim() === ""
+        ? null
+        : String(rawUnit).trim().slice(0, 24);
+    const warningPercent =
+      rawWarning == null || rawWarning === ""
+        ? 80
+        : Math.min(100, Math.max(1, Math.floor(Number(rawWarning))));
+
+    const now = new Date().toISOString();
+    await getDb().execute({
+      sql: `
+        INSERT INTO AdminServiceCapacity (serviceKey, capacityValue, capacityUnit, warningPercent, updatedAt)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(serviceKey) DO UPDATE SET
+          capacityValue=excluded.capacityValue,
+          capacityUnit=excluded.capacityUnit,
+          warningPercent=excluded.warningPercent,
+          updatedAt=excluded.updatedAt
+      `,
+      args: [serviceKey, capacityValue, capacityUnit, warningPercent, now],
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[ops-checklist/capacity]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 opsChecklistRouter.get("/", async (_req, res) => {
   try {
     const db = getDb();
+
+    const [capacityConfigMap, autoUsedMap] = await Promise.all([
+      listCapacityConfigMap(),
+      getAutoUsedCapacityMap(),
+    ]);
 
     const [
       accountRiskResult,
@@ -329,6 +619,36 @@ opsChecklistRouter.get("/", async (_req, res) => {
       });
     }
 
+    const services: ServiceStatus[] = buildServiceStatusesBase().map((base) => {
+      const cfg = capacityConfigMap[base.key];
+      const auto = autoUsedMap[base.key];
+      const capacityValue = cfg?.capacityValue ?? null;
+      const capacityUnit = cfg?.capacityUnit ?? null;
+      const warningPercent = cfg?.warningPercent ?? 80;
+      const usedValue = auto?.usedValue ?? null;
+      const usedUnit = auto?.usedUnit ?? null;
+      const usagePercent =
+        capacityValue != null &&
+        capacityValue > 0 &&
+        usedValue != null &&
+        capacityUnit != null &&
+        usedUnit != null &&
+        capacityUnit.toLowerCase() === usedUnit.toLowerCase()
+          ? Number(((usedValue / capacityValue) * 100).toFixed(1))
+          : null;
+
+      return {
+        ...base,
+        capacityValue,
+        capacityUnit,
+        warningPercent,
+        usedValue,
+        usedUnit,
+        usagePercent,
+        autoUsageNote: auto?.autoUsageNote,
+      };
+    });
+
     res.json({
       generatedAt: new Date().toISOString(),
       technologyStack: {
@@ -338,7 +658,7 @@ opsChecklistRouter.get("/", async (_req, res) => {
         ai: ["LangGraph", "LangChain", "OpenAI/DeepSeek", "Volcengine", "Aidge"],
         ops: ["Shopify Admin GraphQL", "Tencent SES", "Feishu Webhook", "LangSmith"],
       },
-      services: buildServiceStatuses(),
+      services,
       metrics: {
         totalAccounts: Number(accountRisk.totalAccounts ?? 0),
         highUsage80: Number(accountRisk.highUsage80 ?? 0),

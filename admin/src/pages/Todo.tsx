@@ -5,6 +5,7 @@ import {
   Modal,
   Form,
   Input,
+  InputNumber,
   Select,
   Tag,
   Card,
@@ -12,6 +13,7 @@ import {
   Alert,
   Popconfirm,
   Empty,
+  Popover,
   Tooltip,
   Badge,
 } from "antd";
@@ -146,6 +148,7 @@ export default function Todo() {
           assignee: values.assignee ?? null,
           status: values.status,
           priority: values.priority,
+            etaDays: editing.etaDays ?? null,
         });
       } else {
         if (!values.createdBy) {
@@ -159,6 +162,7 @@ export default function Todo() {
           description: values.description,
           assignee: values.assignee,
           priority: values.priority,
+          etaDays: null,
           createdBy: values.createdBy,
         });
       }
@@ -184,9 +188,26 @@ export default function Todo() {
         assignee: todo.assignee,
         status,
         priority: todo.priority,
+        etaDays: todo.etaDays ?? null,
       });
       load();
     } catch (e) { setError(String(e)); }
+  }
+
+  async function updateEtaDays(todo: TodoRow, etaDays: number | null) {
+    try {
+      await updateTodo(todo.id, {
+        title: todo.title,
+        description: todo.description,
+        assignee: todo.assignee,
+        status: todo.status,
+        priority: todo.priority,
+        etaDays,
+      });
+      load();
+    } catch (e) {
+      setError(String(e));
+    }
   }
 
   if (error) return <Alert type="error" message={error} style={{ margin: 24 }} />;
@@ -280,6 +301,7 @@ export default function Todo() {
                               onEdit={() => openEdit(todo)}
                               onDelete={() => handleDelete(todo.id)}
                               onMove={moveStatus}
+                              onEtaDaysChange={updateEtaDays}
                             />
                           ))
                         )}
@@ -361,14 +383,18 @@ function TodoCard({
   onEdit,
   onDelete,
   onMove,
+  onEtaDaysChange,
 }: {
   todo: TodoRow;
   statusRow: typeof STATUS_ROWS[number];
   onEdit: () => void;
   onDelete: () => void;
   onMove: (todo: TodoRow, status: TodoStatus) => void;
+  onEtaDaysChange: (todo: TodoRow, etaDays: number | null) => Promise<void> | void;
 }) {
   const pri = PRIORITY_CONFIG[todo.priority];
+  const [etaEditorOpen, setEtaEditorOpen] = useState(false);
+  const [etaDraft, setEtaDraft] = useState<number | null>(todo.etaDays ?? null);
   const doingRow = STATUS_ROWS.find((s) => s.key === "doing") ?? STATUS_ROWS[0];
   const currentStatusRow = STATUS_ROWS.find((s) => s.key === todo.status) ?? statusRow;
   const statusOptionRows = STATUS_ROWS.filter((s) => s.key === "todo" || s.key === "done");
@@ -440,7 +466,7 @@ function TodoCard({
       )}
 
       {/* Priority + status + date */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "nowrap" }}>
         <Tag style={{ margin: 0, fontSize: 11, color: pri.color, background: pri.bg, borderColor: pri.border }}>{pri.label}</Tag>
         <div
           style={{
@@ -468,6 +494,55 @@ function TodoCard({
             options={statusOptions}
           />
         </div>
+        <Popover
+          trigger="click"
+          open={etaEditorOpen}
+          onOpenChange={(open) => {
+            setEtaEditorOpen(open);
+            if (open) {
+              setEtaDraft(todo.etaDays ?? null);
+            }
+          }}
+          content={(
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <InputNumber
+                size="small"
+                value={etaDraft}
+                onChange={(value) => setEtaDraft(typeof value === "number" ? Math.max(0, Math.floor(value)) : null)}
+                placeholder="x"
+                min={0}
+                precision={0}
+                controls={false}
+                style={{ width: 94 }}
+              />
+              <Button
+                size="small"
+                type="primary"
+                onClick={async () => {
+                  await onEtaDaysChange(todo, etaDraft == null ? null : Math.max(0, Math.floor(etaDraft)));
+                  setEtaEditorOpen(false);
+                }}
+              >
+                存
+              </Button>
+            </div>
+          )}
+        >
+          <Button
+            size="small"
+            style={{
+              height: 22,
+              fontSize: 11,
+              padding: "0 6px",
+              color: "#64748b",
+              borderColor: "#cbd5e1",
+              background: "#f8fafc",
+              flexShrink: 0,
+            }}
+          >
+            {todo.etaDays == null ? "x days" : `${todo.etaDays} days`}
+          </Button>
+        </Popover>
         <Typography.Text type="secondary" style={{ fontSize: 11, marginLeft: "auto" }}>
           {new Date(todo.createdAt).toLocaleDateString("zh-CN")}
         </Typography.Text>
