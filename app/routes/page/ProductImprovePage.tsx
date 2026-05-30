@@ -25,6 +25,8 @@ import {
 } from "./pageUiStyles";
 
 type PageTab = "config" | "tasks";
+const ESTIMATED_TOKENS = 320;
+const ESTIMATED_DURATION = "1-2 min";
 
 function PageTabBar({
   activeTab,
@@ -119,6 +121,7 @@ export function ProductImprovePage() {
     shopLocales?.defaultTargetLanguage ?? "zh-CN",
   );
   const [showManualProductId, setShowManualProductId] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const fetcher = useFetcher();
   const isSubmitting = fetcher.state === "submitting";
@@ -187,19 +190,41 @@ export function ProductImprovePage() {
     productId: string;
     targetLanguage: string;
     originalTitle: string;
+    estimatedCredits: number;
   } | null>(null);
   const lastHandledTaskIdRef = useRef<string | undefined>();
+  const confirmDialogRef = useRef<HTMLDialogElement>(null);
 
-  async function handleGenerate() {
+  useEffect(() => {
+    const el = confirmDialogRef.current;
+    if (!el) return;
+    if (confirmOpen) {
+      if (!el.open) {
+        el.showModal();
+      }
+    } else if (el.open) {
+      el.close();
+    }
+  }, [confirmOpen]);
+
+  function handleOpenConfirm() {
     if (!productIdForActions) {
       shopify.toast.show("请先选择或输入商品 ID");
       return;
     }
+    setConfirmOpen(true);
+  }
+
+  async function handleGenerateConfirmed() {
+    if (!productIdForActions) return;
     pendingSubmitRef.current = {
       productId: productIdForActions,
       targetLanguage,
       originalTitle: selectedProduct?.title ?? "",
+      estimatedCredits: ESTIMATED_TOKENS,
     };
+    setConfirmOpen(false);
+    setPageTab("tasks");
     fetcher.submit(
       { productId: productIdForActions, targetLanguage },
       { method: "POST", encType: "application/json" },
@@ -234,7 +259,7 @@ export function ProductImprovePage() {
         originalText: "",
       },
       result: null,
-      estimatedCredits: null,
+      estimatedCredits: submitContext?.estimatedCredits ?? ESTIMATED_TOKENS,
       actualCredits: null,
       startedAt: now,
       completedAt: null,
@@ -253,6 +278,8 @@ export function ProductImprovePage() {
 
   // Estimate panel values
   const selectedName = selectedProduct?.title ?? (productId ? `商品 ${productId}` : null);
+  const selectedLanguageLabel =
+    localeOptions.find((o) => o.value === targetLanguage)?.label ?? targetLanguage;
 
   return (
     <s-page heading={t("generate.pageTitle")}>
@@ -357,14 +384,9 @@ export function ProductImprovePage() {
                   >
                     {[
                       { label: "商品", value: selectedName ?? "-" },
-                      {
-                        label: "目标语言",
-                        value:
-                          localeOptions.find((o) => o.value === targetLanguage)?.label ??
-                          targetLanguage,
-                      },
-                      { label: "预估耗时", value: "1–2 min" },
-                      { label: "预估 Token", value: "320 Token" },
+                      { label: "目标语言", value: selectedLanguageLabel },
+                      { label: "预估耗时", value: ESTIMATED_DURATION },
+                      { label: "预估 Token", value: `${ESTIMATED_TOKENS} Token` },
                     ].map((item) => (
                       <div
                         key={item.label}
@@ -403,10 +425,10 @@ export function ProductImprovePage() {
                     <s-button
                       type="button"
                       variant="primary"
-                      onClick={() => void handleGenerate()}
+                      onClick={handleOpenConfirm}
                       {...(isSubmitting || !productIdForActions ? { disabled: true } : {})}
                     >
-                      {isSubmitting ? "提交中..." : "生成文案"}
+                      {isSubmitting ? "提交中..." : "创建生成任务"}
                     </s-button>
                   </s-stack>
 
@@ -426,6 +448,124 @@ export function ProductImprovePage() {
                 </PageSurface>
               </div>
             </div>
+
+            <dialog
+              ref={confirmDialogRef}
+              onCancel={(e) => {
+                e.preventDefault();
+                if (!isSubmitting) {
+                  setConfirmOpen(false);
+                }
+              }}
+              style={{
+                maxWidth: "460px",
+                width: "calc(100% - 2rem)",
+                padding: 0,
+                border: "none",
+                borderRadius: "12px",
+                boxShadow: "0 12px 40px rgba(0,0,0,0.18)",
+              }}
+            >
+              <div style={{ padding: "1.125rem 1.25rem" }}>
+                <div
+                  style={{
+                    fontSize: "1rem",
+                    fontWeight: 700,
+                    color: pageColorTokens.textPrimary,
+                    marginBottom: "0.45rem",
+                  }}
+                >
+                  确认创建商品文案任务？
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.8125rem",
+                    color: pageColorTokens.textSecondary,
+                    lineHeight: 1.5,
+                    marginBottom: "1rem",
+                  }}
+                >
+                  创建后会进入任务页查看执行进度、结果审核和后续写入 Shopify 的应用流程。
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 10,
+                    marginBottom: "1rem",
+                  }}
+                >
+                  {[
+                    { label: "任务目标", value: selectedName ?? "-" },
+                    { label: "目标语言", value: selectedLanguageLabel },
+                    { label: "预估耗时", value: ESTIMATED_DURATION },
+                    { label: "预估 Token", value: `${ESTIMATED_TOKENS} Token` },
+                  ].map((item) => (
+                    <div
+                      key={item.label}
+                      style={{
+                        border: `1px solid ${pageColorTokens.borderSubtle}`,
+                        borderRadius: pageColorTokens.radiusControl,
+                        padding: "0.7rem 0.8rem",
+                        background: pageColorTokens.surfaceSubtle,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: "0.6875rem",
+                          color: pageColorTokens.textSecondary,
+                          marginBottom: 4,
+                        }}
+                      >
+                        {item.label}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "0.8125rem",
+                          color: pageColorTokens.textPrimary,
+                          fontWeight: 600,
+                          wordBreak: "break-word",
+                        }}
+                      >
+                        {item.value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    color: pageColorTokens.textSecondary,
+                    lineHeight: 1.5,
+                    marginBottom: "1rem",
+                    padding: "0.75rem 0.85rem",
+                    borderRadius: pageColorTokens.radiusControl,
+                    background: pageColorTokens.surfaceSubtle,
+                    border: `1px solid ${pageColorTokens.borderSubtle}`,
+                  }}
+                >
+                  任务创建后不会直接写入 Shopify。你仍可在任务页中查看结果、人工审核并决定是否应用。
+                </div>
+                <s-stack direction="inline" gap="small">
+                  <s-button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setConfirmOpen(false)}
+                    {...(isSubmitting ? { disabled: true } : {})}
+                  >
+                    取消
+                  </s-button>
+                  <s-button
+                    type="button"
+                    variant="primary"
+                    onClick={() => void handleGenerateConfirmed()}
+                    {...(isSubmitting ? { disabled: true } : {})}
+                  >
+                    {isSubmitting ? "提交中..." : "确认并创建"}
+                  </s-button>
+                </s-stack>
+              </div>
+            </dialog>
           </>
         )}
 

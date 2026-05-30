@@ -171,10 +171,33 @@ export async function markTaskApplied(taskId: string): Promise<void> {
   });
 }
 
-export async function markTaskScored(taskId: string): Promise<void> {
+export async function markTaskAppliedWithResult(params: {
+  taskId: string;
+  result?: Record<string, unknown>;
+}): Promise<void> {
   await prisma.aITask.update({
-    where: { id: taskId },
-    data: { status: "scored" },
+    where: { id: params.taskId },
+    data: {
+      status: "applied",
+      ...(params.result
+        ? { result: params.result as unknown as PrismaJson }
+        : {}),
+    },
+  });
+}
+
+export async function markTaskScored(params: {
+  taskId: string;
+  result?: Record<string, unknown>;
+}): Promise<void> {
+  await prisma.aITask.update({
+    where: { id: params.taskId },
+    data: {
+      status: "scored",
+      ...(params.result
+        ? { result: params.result as unknown as PrismaJson }
+        : {}),
+    },
   });
 }
 

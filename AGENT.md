@@ -319,7 +319,8 @@ activateSubscription / applyTokenPackPurchase
 | **生成描述方案** | `docs/generateDescription.md` | 改生成描述前 |
 | **计费系统详解** | `app/server/billing/agent.md` | 改订阅/计费/购包前 |
 | **Agent 运行摘要** | `docs/agent-run-log.md` | 改 Agent 日志记录前 |
-| **UI 规范** | `docs/UI_DESIGN.md` | 改前端组件前 |
+| **工具交互规范** | `docs/INTERACTION_DESIGN.md` | 改 tools 页面流程与任务交互前 |
+| **设计系统规范** | `docs/DESIGN.md` | 改前端组件前 |
 
 ---
 

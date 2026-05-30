@@ -3,6 +3,8 @@ import { authenticate } from "../shopify.server";
 import {
   deleteTaskForShop,
   markTaskApplied,
+  markTaskAppliedWithResult,
+  markTaskScored,
   getTaskForShop,
 } from "../server/aiTask/aiTaskStore.server";
 import { cleanupTaskBlobs } from "../server/aiTask/aiTaskBlobCleanup.server";
@@ -21,6 +23,7 @@ export const action = async ({
   const body = (await request.json().catch(() => null)) as {
     action?: string;
     taskId?: string;
+    result?: Record<string, unknown>;
   } | null;
 
   if (!body || !body.taskId) {
@@ -59,13 +62,35 @@ export const action = async ({
         { status: 404 },
       );
     }
-    if (task.status !== "pending_review") {
+    if (task.status !== "pending_review" && task.status !== "scored") {
       return Response.json(
-        { success: false, errorCode: 40002, errorMsg: "Task is not in pending_review state" },
+        { success: false, errorCode: 40002, errorMsg: "Task is not in reviewable state" },
         { status: 400 },
       );
     }
-    await markTaskApplied(body.taskId);
+    if (body.result) {
+      await markTaskAppliedWithResult({ taskId: body.taskId, result: body.result });
+    } else {
+      await markTaskApplied(body.taskId);
+    }
+    return Response.json({ success: true, taskId: body.taskId });
+  }
+
+  if (body.action === "score") {
+    const task = await getTaskForShop({ taskId: body.taskId, shop });
+    if (!task) {
+      return Response.json(
+        { success: false, errorCode: 40401, errorMsg: "Task not found" },
+        { status: 404 },
+      );
+    }
+    if (task.status !== "pending_review" && task.status !== "scored") {
+      return Response.json(
+        { success: false, errorCode: 40003, errorMsg: "Task is not in scorable state" },
+        { status: 400 },
+      );
+    }
+    await markTaskScored({ taskId: body.taskId, result: body.result });
     return Response.json({ success: true, taskId: body.taskId });
   }
 
