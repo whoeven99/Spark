@@ -199,25 +199,237 @@ model BillingLog {
   @@index([referenceId])
 }
 
-/// 店铺视觉任务：商品文生图、整图翻译等（历史回看 + Blob 路径）。
-model ShopVisualJob {
-  id        String   @id @default(cuid())
-  requestId String   @unique
+/// AI 任务批次：一次提交对应一个批次（含单任务）。
+model AITaskBatch {
+  id        String   @id @default(uuid())
   shop      String
+  appName   String
   /// image_generation | picture_translate
-  kind      String
-  /// pending | succeeded | failed
-  status    String
-  /// 文生图提示词，或翻译语言对等摘要
-  summary   String
-  blobPath  String?
-  errorMsg  String?
-  provider  String?
-  metadata  Json?
+  taskType  String
+  config    Json
+  tasks     AITask[]
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
-  @@index([shop, kind, createdAt])
+  @@index([shop, appName, createdAt])
+}
+
+/// AI 任务：每个商品/图片对应一条，归属于某批次。
+model AITask {
+  id               String      @id @default(uuid())
+  shop             String
+  appName          String
+  /// image_generation | picture_translate
+  taskType         String
+  batchId          String
+  batch            AITaskBatch @relation(fields: [batchId], references: [id])
+  /// running | succeeded | failed | cancelled
+  status           String
+  config           Json
+  result           Json?
+  estimatedCredits Int?
+  actualCredits    Int?
+  startedAt        DateTime    @default(now())
+  completedAt      DateTime?
+  errorMsg         String?
+  logs             AITaskLog[]
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@index([shop, appName, taskType, createdAt])
+  @@index([batchId])
+}
+
+/// AI 任务日志：每条为一个时间戳 + 消息，支持 SSE 流式推送。
+model AITaskLog {
+  id             String   @id @default(uuid())
+  taskId         String
+  task           AITask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  elapsedSeconds Int
+  message        String
+  createdAt      DateTime @default(now())
+
+  @@index([taskId, createdAt])
+}
+
+/// 电商订单（增量同步自 Shopify Webhook + 历史回补）。
+model ShopOrder {
+  id                String    @id @default(cuid())
+  shop              String
+  shopifyOrderId    String
+  orderNumber       Int
+  email             String?
+  /// paid | partially_refunded | refunded | voided | pending | authorized | partially_paid
+  financialStatus   String?
+  /// unfulfilled | partial | fulfilled | restocked
+  fulfillmentStatus String?
+  /// open | archived | cancelled
+  status            String    @default("open")
+  currency          String
+  totalPrice        Float
+  subtotalPrice     Float     @default(0)
+  totalDiscounts    Float     @default(0)
+  totalTax          Float     @default(0)
+  totalShipping     Float     @default(0)
+  cancelledAt       DateTime?
+  cancelReason      String?
+  createdAt         DateTime
+  updatedAt         DateTime
+  processedAt       DateTime?
+  paidAt            DateTime?
+  closedAt          DateTime?
+  shopifyCustomerId String?
+  customerFirstName String?
+  customerLastName  String?
+  customerEmail     String?
+  tags              String?
+  sourceName        String?
+  landingSite       String?
+  referringSite     String?
+  utmSource         String?
+  utmMedium         String?
+  utmCampaign       String?
+  isFirstOrder      Boolean   @default(false)
+  syncedAt          DateTime  @default(now())
+
+  lineItems    ShopOrderLineItem[]
+  refunds      ShopRefund[]
+  fulfillments ShopFulfillment[]
+
+  @@unique([shop, shopifyOrderId])
+  @@index([shop, createdAt])
+  @@index([shop, paidAt])
+  @@index([shop, financialStatus])
+  @@index([shop, shopifyCustomerId])
+}
+
+/// 订单行项目（每个 SKU 一条）。
+model ShopOrderLineItem {
+  id             String  @id @default(cuid())
+  shop           String
+  shopifyOrderId String
+  lineItemId     String
+  variantId      String?
+  productId      String?
+  title          String
+  variantTitle   String?
+  sku            String?
+  quantity       Int
+  price          Float
+  totalDiscount  Float   @default(0)
+  vendor         String?
+
+  order ShopOrder @relation(fields: [shop, shopifyOrderId], references: [shop, shopifyOrderId])
+
+  @@unique([shop, lineItemId])
+  @@index([shop, shopifyOrderId])
+  @@index([shop, sku])
+  @@index([shop, productId])
+}
+
+/// 退款记录（含部分退款）。
+model ShopRefund {
+  id              String   @id @default(cuid())
+  shop            String
+  shopifyRefundId String
+  shopifyOrderId  String
+  refundAmount    Float    @default(0)
+  refundNote      String?
+  reason          String?
+  processedAt     DateTime
+  createdAt       DateTime
+  syncedAt        DateTime @default(now())
+
+  order ShopOrder @relation(fields: [shop, shopifyOrderId], references: [shop, shopifyOrderId])
+
+  @@unique([shop, shopifyRefundId])
+  @@index([shop, shopifyOrderId])
+  @@index([shop, processedAt])
+}
+
+/// 客户信息快照（首单/末单/LTV）。
+model ShopCustomer {
+  id                String    @id @default(cuid())
+  shop              String
+  shopifyCustomerId String
+  email             String?
+  phone             String?
+  firstName         String?
+  lastName          String?
+  ordersCount       Int       @default(0)
+  totalSpent        Float     @default(0)
+  firstOrderDate    DateTime?
+  lastOrderDate     DateTime?
+  /// active | disabled | declined
+  state             String?
+  tags              String?
+  acceptsMarketing  Boolean   @default(false)
+  createdAt         DateTime
+  updatedAt         DateTime
+  syncedAt          DateTime  @default(now())
+
+  @@unique([shop, shopifyCustomerId])
+  @@index([shop, email])
+  @@index([shop, firstOrderDate])
+  @@index([shop, lastOrderDate])
+}
+
+/// 多仓库存水位（按 inventory_item × location）。
+model ShopInventoryLevel {
+  id              String   @id @default(cuid())
+  shop            String
+  inventoryItemId String
+  locationId      String
+  locationName    String?
+  available       Int      @default(0)
+  onHand          Int      @default(0)
+  committed       Int      @default(0)
+  incoming        Int      @default(0)
+  updatedAt       DateTime
+  syncedAt        DateTime @default(now())
+
+  @@unique([shop, inventoryItemId, locationId])
+  @@index([shop, locationId])
+  @@index([shop, available])
+}
+
+/// 发货履约记录。
+model ShopFulfillment {
+  id                   String   @id @default(cuid())
+  shop                 String
+  shopifyFulfillmentId String
+  shopifyOrderId       String
+  /// pending | open | success | cancelled | error | failure
+  status               String
+  trackingCompany      String?
+  trackingNumber       String?
+  trackingUrl          String?
+  /// pre_transit | in_transit | out_for_delivery | delivered | failure
+  shipmentStatus       String?
+  createdAt            DateTime
+  updatedAt            DateTime
+  shippedAt            DateTime?
+  deliveredAt          DateTime?
+  syncedAt             DateTime @default(now())
+
+  order ShopOrder @relation(fields: [shop, shopifyOrderId], references: [shop, shopifyOrderId])
+
+  @@unique([shop, shopifyFulfillmentId])
+  @@index([shop, shopifyOrderId])
+  @@index([shop, status])
+  @@index([shop, createdAt])
+}
+
+/// 增量同步游标（记录每类资源的最后同步时间/分页游标）。
+model ShopSyncCheckpoint {
+  id           String   @id @default(cuid())
+  shop         String
+  /// orders | refunds | customers | inventory | fulfillments
+  resource     String
+  lastSyncedAt DateTime
+  lastCursor   String?
+  updatedAt    DateTime @updatedAt
+
+  @@unique([shop, resource])
 }
 
 /// 业务能力 × 模型/提供商的 token 计费系数（运维在 Turso 维护，种子见 `prisma/token-billing-rule-seed.sql`）。

@@ -48,20 +48,14 @@ export type ImageGenerationResult = ImageGenerationSuccess | ImageGenerationFail
 export type ImageGenerationHttpResponse =
   | {
       success: true;
-      requestId: string;
-      status: "pending";
-    }
-  | {
-      success: true;
-      requestId: string;
-      status: "succeeded";
-      imageUrl: string;
+      taskId: string;
+      batchId: string;
+      status: "running";
     }
   | {
       success: false;
       errorCode: number;
       errorMsg: string;
-      requestId?: string;
       status?: "failed";
     };
 

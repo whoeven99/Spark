@@ -6,18 +6,20 @@ import type {
 import { data } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
-import {
-  executeGenerateDescriptionRequest,
-  parseGenerateDescriptionBody,
-} from "../server/productImprove/generateDescriptionHttp.server";
+import { parseGenerateDescriptionBody } from "../server/productImprove/generateDescriptionHttp.server";
 import { logDetailedError } from "../server/productImprove/generateDescriptionLog.server";
 import { fetchShopLocalesPayload } from "../server/productImprove/shopLocalesFetcher.server";
+import { fetchProductDescriptionContext } from "../server/productImprove/productContextFetcher.server";
+import { enqueueProductImproveTask } from "../server/productImprove/productImproveAsync.server";
 import { getAppEntry } from "../config/appEntry.server";
 import {
   billingErrorToResponse,
   loadBillingContext,
+  requireBillingAccess,
   toBillingAccessSnapshot,
 } from "../server/billing/index.server";
+import { createBatchWithTask } from "../server/aiTask/aiTaskStore.server";
+import { listRecentTasksForShop } from "../server/aiTask/aiTaskStore.server";
 import { ProductImprovePage } from "./page/ProductImprovePage";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -29,7 +31,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const billing = toBillingAccessSnapshot(
     await loadBillingContext(session.shop, getAppEntry()),
   );
-  return data({ shopLocales, billing });
+  const recentTasks = await listRecentTasksForShop({
+    shop: session.shop,
+    appName: getAppEntry(),
+    taskType: "product_improve",
+  });
+  return data({ shopLocales, billing, recentTasks });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -40,7 +47,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (request.method !== "POST") {
     return Response.json(
-      { success: false as const, errorCode: 405, errorMsg: "仅支持 POST", response: null },
+      { success: false as const, errorCode: 405, errorMsg: "仅支持 POST", taskId: null },
       { status: 405 },
     );
   }
@@ -55,12 +62,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       e,
     );
     return Response.json(
-      {
-        success: false as const,
-        errorCode: 400,
-        errorMsg: "请求体不是合法 JSON",
-        response: null,
-      },
+      { success: false as const, errorCode: 400, errorMsg: "请求体不是合法 JSON", taskId: null },
       { status: 400 },
     );
   }
@@ -68,26 +70,56 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const parsed = parseGenerateDescriptionBody(raw);
   if (!parsed.ok) {
     return Response.json(
-      {
-        success: false as const,
-        errorCode: 400,
-        errorMsg: parsed.errorMsg,
-        response: null,
-      },
+      { success: false as const, errorCode: 400, errorMsg: parsed.errorMsg, taskId: null },
       { status: 400 },
     );
   }
 
   try {
     const { admin, session } = await authenticate.admin(request);
-    const { status, body } = await executeGenerateDescriptionRequest({
-      requestId,
-      admin,
-      sessionShop: session.shop,
-      parsed: parsed.data,
+    const shop = session.shop;
+    const appName = getAppEntry();
+
+    await requireBillingAccess(shop, appName);
+
+    // Fetch product context synchronously (needs admin client)
+    const context = await fetchProductDescriptionContext(admin, parsed.data.productId);
+    if (!context) {
+      return Response.json(
+        { success: false as const, errorCode: 40401, errorMsg: "未找到对应商品或无权访问", taskId: null },
+        { status: 404 },
+      );
+    }
+
+    const { taskId, batchId } = await createBatchWithTask({
+      shop,
+      appName,
+      taskType: "product_improve",
+      batchConfig: {
+        productId: parsed.data.productId,
+        targetLanguage: parsed.data.targetLanguage,
+        originalTitle: context.title,
+      },
+      taskConfig: {
+        productId: parsed.data.productId,
+        targetLanguage: parsed.data.targetLanguage,
+        originalTitle: context.title,
+        originalText: context.text,
+      },
     });
-    // 使用 Response.json：页面内 fetch 需要标准 JSON；data() 在部分 RR 配置下响应体非裸 JSON，会导致前端解析失败。
-    return Response.json(body, { status });
+
+    enqueueProductImproveTask({
+      taskId,
+      shop,
+      context,
+      targetLanguage: parsed.data.targetLanguage,
+      temperature: parsed.data.temperature,
+    });
+
+    return Response.json(
+      { success: true as const, errorCode: 0, taskId, batchId },
+      { status: 202 },
+    );
   } catch (error) {
     const billingResponse = billingErrorToResponse(error);
     if (billingResponse) {
@@ -104,7 +136,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         success: false as const,
         errorCode: 500,
         errorMsg: error instanceof Error ? error.message : "请求处理失败",
-        response: null,
+        taskId: null,
       },
       { status: 500 },
     );

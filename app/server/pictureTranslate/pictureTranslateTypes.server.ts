@@ -2,7 +2,9 @@
 
 export type PictureTranslateSuccess = {
   success: true;
-  imageUrl: string;
+  taskId: string;
+  batchId: string;
+  status: "running";
 };
 
 export type PictureTranslateError = {

@@ -5,7 +5,8 @@ export type AppEntry =
   | "product-improve"
   | "image-studio"
   | "picture-translate"
-  | "generate-image";
+  | "generate-image"
+  | "order-monitor";
 
 export type NavItemKey = AppEntry | "billing";
 
@@ -48,6 +49,10 @@ const APP_ENTRY_CONFIGS = {
   "generate-image": {
     home: "/app/image-studio?tab=generate",
     nav: ["image-studio"],
+  },
+  "order-monitor": {
+    home: "/app/order-monitor",
+    nav: ["order-monitor", "billing"],
   },
 } as const satisfies Record<AppEntry, AppEntryConfig>;
 

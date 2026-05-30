@@ -1,10 +1,5 @@
 import { getAppEntry } from "../../../../config/appEntry.server";
 import { executeImageGeneration } from "../../../imageGeneration/imageGenerationExecutor.server";
-import {
-  createPendingGeneratedImageJob,
-  markGeneratedImageJobFailed,
-  markGeneratedImageJobSucceeded,
-} from "../../../imageGeneration/imageGenerationJobStore.server";
 import { logDetailedError } from "../../../productImprove/generateDescriptionLog.server";
 import {
   buildImageGenerateBillingItem,
@@ -38,31 +33,6 @@ export async function executeGenerateProductImageTool(
     shop: params.shop,
     prompt: params.prompt,
   });
-
-  try {
-    await createPendingGeneratedImageJob({
-      requestId: params.requestId,
-      shop: params.shop,
-      prompt: params.prompt,
-    });
-    if (!result.ok) {
-      await markGeneratedImageJobFailed({
-        requestId: params.requestId,
-        errorMsg: result.errorMsg,
-      });
-      return fail(result.errorMsg, result.requestId);
-    }
-    await markGeneratedImageJobSucceeded({
-      requestId: params.requestId,
-      blobPath: result.blobPath,
-      provider: result.provider,
-    });
-  } catch (e) {
-    console.error(
-      `${IMAGE_GENERATION_TOOL_LOG_PREFIX} persist job failed requestId=${params.requestId}`,
-      e,
-    );
-  }
 
   if (!result.ok) {
     return fail(result.errorMsg, result.requestId);

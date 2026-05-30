@@ -11,12 +11,92 @@ import type {
   BillingAccessSnapshot,
   BillingPageLoaderData,
   BillingPageSnapshot,
+  BillingHistoryItem,
+  BillingUsagePeriodItem,
 } from "../../lib/billingPageTypes";
 import { listEnabledPlansForApp, type PlanRecord } from "./plans/planCatalog.server";
 import { APP_SUBSCRIPTION_STATUS, PLAN_CATALOG_KIND } from "./types.server";
 
+const billingDb = prisma as typeof prisma & {
+  appSubscription: {
+    findUnique: (args: unknown) => Promise<AppSubscription | null>;
+  };
+  accountPeriodUsage: {
+    findMany: (args: unknown) => Promise<
+      Array<{
+        id: string;
+        planKey: string;
+        periodStart: Date;
+        periodEnd: Date;
+        usedTokens: number;
+        subscriptionTokensAllocated: number;
+        purchasedTokensRemaining: number;
+        trialTokensRemaining: number;
+        archivedAt: Date;
+      }>
+    >;
+  };
+  billingLog: {
+    findMany: (args: unknown) => Promise<
+      Array<{
+        id: string;
+        eventType: string;
+        planKey: string | null;
+        referenceId: string | null;
+        tokensDelta: number | null;
+        usedTokens: number | null;
+        createdAt: Date;
+      }>
+    >;
+  };
+};
+
 function toIso(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null;
+}
+
+function toBillingHistoryItem(row: {
+  id: string;
+  eventType: string;
+  planKey: string | null;
+  referenceId: string | null;
+  tokensDelta: number | null;
+  usedTokens: number | null;
+  createdAt: Date;
+}): BillingHistoryItem {
+  return {
+    id: row.id,
+    eventType: row.eventType,
+    planKey: row.planKey,
+    referenceId: row.referenceId,
+    tokensDelta: row.tokensDelta,
+    usedTokens: row.usedTokens,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function toBillingUsagePeriodItem(row: {
+  id: string;
+  planKey: string;
+  periodStart: Date;
+  periodEnd: Date;
+  usedTokens: number;
+  subscriptionTokensAllocated: number;
+  purchasedTokensRemaining: number;
+  trialTokensRemaining: number;
+  archivedAt: Date;
+}): BillingUsagePeriodItem {
+  return {
+    id: row.id,
+    planKey: row.planKey,
+    periodStart: row.periodStart.toISOString(),
+    periodEnd: row.periodEnd.toISOString(),
+    usedTokens: row.usedTokens,
+    subscriptionTokensAllocated: row.subscriptionTokensAllocated,
+    purchasedTokensRemaining: row.purchasedTokensRemaining,
+    trialTokensRemaining: row.trialTokensRemaining,
+    archivedAt: row.archivedAt.toISOString(),
+  };
 }
 
 export function toBillingPageSnapshot(ctx: BillingContext): BillingPageSnapshot {
@@ -58,6 +138,18 @@ export async function loadBillingPageData(
   appName: string,
 ): Promise<BillingPageLoaderData> {
   const ctx = await loadBillingContext(shop, appName);
+  const [usageHistoryRows, billingHistoryRows] = await Promise.all([
+    billingDb.accountPeriodUsage.findMany({
+      where: { shop, appName },
+      orderBy: { periodEnd: "desc" },
+      take: 6,
+    }),
+    billingDb.billingLog.findMany({
+      where: { shop, appName },
+      orderBy: { createdAt: "desc" },
+      take: 12,
+    }),
+  ]);
   const sub = ctx.subscription;
   const showDevCancelSubscription =
     isBillingDevCancelEnabled() &&
@@ -74,6 +166,8 @@ export async function loadBillingPageData(
       (p) => p.kind === PLAN_CATALOG_KIND.SUBSCRIPTION,
     ),
     tokenPacks: ctx.plans.filter((p) => p.kind === PLAN_CATALOG_KIND.ONE_TIME_PACK),
+    usageHistory: usageHistoryRows.map(toBillingUsagePeriodItem),
+    billingHistory: billingHistoryRows.map(toBillingHistoryItem),
     showDevCancelSubscription,
   };
 }
@@ -99,7 +193,7 @@ export async function loadBillingContext(
   }
 
   const account = await ensureAccount(shop, appName);
-  const subscription = await prisma.appSubscription.findUnique({
+  const subscription = await billingDb.appSubscription.findUnique({
     where: { shop_appName: { shop, appName } },
   });
 

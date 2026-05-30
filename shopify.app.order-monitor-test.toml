@@ -1,0 +1,54 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "d0550d3455a8076d94bb2fc5a7081b45"
+name = "Order Monitor Test"
+application_url = "https://order-monitor-test.onrender.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+
+[webhooks]
+api_version = "2026-07"
+
+[[webhooks.subscriptions]]
+topics = ["app/uninstalled"]
+uri = "/webhooks/app/uninstalled"
+
+[[webhooks.subscriptions]]
+topics = ["app/scopes_update"]
+uri = "/webhooks/app/scopes_update"
+
+[[webhooks.subscriptions]]
+topics = ["orders/paid"]
+uri = "/webhooks/orders/paid"
+
+[[webhooks.subscriptions]]
+topics = ["orders/cancelled"]
+uri = "/webhooks/orders/cancelled"
+
+[[webhooks.subscriptions]]
+topics = ["refunds/create"]
+uri = "/webhooks/refunds/create"
+
+[[webhooks.subscriptions]]
+topics = ["fulfillments/create"]
+uri = "/webhooks/fulfillments/create"
+
+[[webhooks.subscriptions]]
+topics = ["fulfillments/update"]
+uri = "/webhooks/fulfillments/update"
+
+[[webhooks.subscriptions]]
+topics = ["inventory_levels/update"]
+uri = "/webhooks/inventory_levels/update"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_orders,read_fulfillments,read_inventory"
+
+[auth]
+redirect_urls = [
+  "https://order-monitor-test.onrender.com/auth/callback",
+  "https://order-monitor-test.onrender.com/auth/shopify/callback",
+]

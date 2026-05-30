@@ -79,25 +79,10 @@ export async function getPersonalizedSystemPrompt(
     }
   }
 
-  if (context.profile) {
-    const profileParts: string[] = [
-      "【商店画像】",
-      "以下为安装/刷新时从 Shopify 写入的店铺基础信息；勿编造未列出的事实。",
-    ];
-    if (context.profile.promptSnippet) {
-      profileParts.push(context.profile.promptSnippet);
-    }
-    if (context.profile.shopProfileMarkdown) {
-      profileParts.push("", context.profile.shopProfileMarkdown);
-    }
-    if (profileParts.length > 2) {
-      parts.push(profileParts.join("\n"));
-    }
+  if (context.profile?.preferences) {
     const prefs = context.profile.preferences;
-    if (prefs && Object.keys(prefs).length > 0) {
-      parts.push(
-        `【商户偏好】\n${JSON.stringify(prefs, null, 2)}`,
-      );
+    if (Object.keys(prefs).length > 0) {
+      parts.push(`【商户偏好】\n${JSON.stringify(prefs, null, 2)}`);
     }
   }
 
