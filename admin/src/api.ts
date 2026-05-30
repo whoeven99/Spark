@@ -529,88 +529,15 @@ export type OpsServiceStatus = {
   note: string;
   costSignal: string;
   rechargeSignal: string;
-  capacityValue: number | null;
-  capacityUnit: string | null;
-  warningPercent: number;
-  usedValue: number | null;
-  usedUnit: string | null;
-  usagePercent: number | null;
-  autoUsageNote?: string;
-};
-
-export type OpsPriorityAction = {
-  title: string;
-  level: "low" | "medium" | "high";
-  reason: string;
-  suggestion: string;
-};
-
-export type OpsChecklistGroup = {
-  frequency: "daily" | "weekly" | "monthly";
-  title: string;
-  checks: string[];
 };
 
 export type OpsChecklistData = {
   generatedAt: string;
-  technologyStack: {
-    frontend: string[];
-    backend: string[];
-    dataInfra: string[];
-    ai: string[];
-    ops: string[];
-  };
   services: OpsServiceStatus[];
-  metrics: {
-    totalAccounts: number;
-    highUsage80: number;
-    highUsage90: number;
-    depleted: number;
-    expiringIn7d: number;
-    billingEvents7d: number;
-    tokenPackPurchased7d: number;
-    subscriptionRenewed7d: number;
-    uninstall7d: number;
-    scopesUpdate7d: number;
-    translation: {
-      active: number;
-      failed: number;
-      paused: number;
-      completed24h: number;
-      note?: string;
-    };
-  };
-  topUsageShops: {
-    shop: string;
-    appName: string;
-    usedTokens: number;
-    totalTokens: number;
-    usagePercent: number;
-  }[];
-  billingEventTop7d: {
-    eventType: string;
-    total: number;
-  }[];
-  priorityActions: OpsPriorityAction[];
-  checklist: OpsChecklistGroup[];
 };
 
 export function fetchOpsChecklist(): Promise<OpsChecklistData> {
   return apiFetch("/ops-checklist");
-}
-
-export function updateOpsServiceCapacity(
-  serviceKey: string,
-  data: {
-    capacityValue: number | null;
-    capacityUnit: string | null;
-    warningPercent?: number;
-  },
-): Promise<{ ok: boolean }> {
-  return apiFetch(`/ops-checklist/capacity/${encodeURIComponent(serviceKey)}`, {
-    method: "PUT",
-    body: JSON.stringify(data),
-  });
 }
 
 export function deleteBillingRule(ruleKey: string): Promise<{ ok: boolean }> {
