@@ -39,109 +39,85 @@ export function TaskListSummary({ tasks, mode = "image" }: Props) {
   return (
     <div
       style={{
-        border: `1px solid ${pageColorTokens.border}`,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        flexWrap: "wrap",
+        padding: "0.75rem 0.9rem",
+        border: `1px solid ${pageColorTokens.borderSubtle}`,
         borderRadius: pageColorTokens.radiusCard,
-        marginBottom: 14,
-        background: "linear-gradient(160deg, #ffffff 0%, #fafbfd 100%)",
-        boxShadow: pageColorTokens.shadowCard,
-        padding: "14px 16px 12px",
+        background: "#fff",
       }}
     >
       <div
         style={{
           display: "flex",
+          gap: 10,
+          flexWrap: "wrap",
           alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-          marginBottom: 14,
         }}
       >
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: pageColorTokens.textPrimary }}>
-            任务列表
-          </div>
-          <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, marginTop: 4 }}>
-            跟踪当前工具的执行中、待审查和已完成状态。
-          </div>
-        </div>
         <span
           style={{
             fontSize: 12,
             fontWeight: 700,
-            color: pageColorTokens.textSecondary,
-            padding: "0.35rem 0.7rem",
-            borderRadius: 999,
-            background: pageColorTokens.surfaceMuted,
-            border: `1px solid ${pageColorTokens.borderSubtle}`,
+            color: pageColorTokens.textPrimary,
             whiteSpace: "nowrap",
           }}
         >
-          共 {total} 个任务
+          任务列表
         </span>
-      </div>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))`,
-          gap: 10,
-        }}
-      >
-        {stats.map((stat, i) => (
-          <div
+        {stats.map((stat) => (
+          <span
             key={stat.label}
             style={{
               display: "flex",
-              flexDirection: "column",
               gap: 6,
-              padding: "12px 12px 10px",
+              alignItems: "center",
+              padding: "0.4rem 0.7rem",
               border: `1px solid ${pageColorTokens.borderSubtle}`,
-              borderRadius: pageColorTokens.radiusControl,
-              background: stat.count > 0 ? pageColorTokens.surfaceSubtle : pageColorTokens.surface,
-              boxShadow: stat.count > 0 ? "inset 0 1px 0 rgba(255,255,255,0.55)" : "none",
+              borderRadius: 999,
+              background: stat.count > 0 ? pageColorTokens.surfaceSubtle : "#fff",
+              whiteSpace: "nowrap",
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "baseline",
-                gap: 6,
-              }}
-            >
+            {stat.count > 0 ? (
               <span
                 style={{
-                  fontSize: 22,
-                  fontWeight: 700,
-                  color: stat.count > 0 ? stat.activeColor : pageColorTokens.textFootnote,
-                  lineHeight: 1,
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: stat.activeColor,
                 }}
-              >
-                {stat.count}
-              </span>
-              {stat.count > 0 ? (
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    background: stat.activeColor,
-                    boxShadow: `0 0 0 4px ${stat.activeColor}18`,
-                  }}
-                />
-              ) : null}
-            </div>
+              />
+            ) : null}
             <span
               style={{
                 fontSize: 12,
-                fontWeight: 700,
+                fontWeight: 600,
                 color: pageColorTokens.textSecondary,
               }}
             >
-              {stat.label}
+              {stat.label} {stat.count}
             </span>
-          </div>
+          </span>
         ))}
       </div>
+      <span
+        style={{
+          fontSize: 12,
+          fontWeight: 700,
+          color: pageColorTokens.textSecondary,
+          padding: "0.35rem 0.7rem",
+          borderRadius: 999,
+          background: pageColorTokens.surfaceMuted,
+          border: `1px solid ${pageColorTokens.borderSubtle}`,
+          whiteSpace: "nowrap",
+        }}
+      >
+        共 {total} 个任务
+      </span>
     </div>
   );
 }

@@ -24,44 +24,6 @@ type PageTab = "config" | "tasks";
 const ESTIMATED_TOKENS = 320;
 const ESTIMATED_DURATION = "1-2 min";
 
-function ConfigHintCard({
-  taskCount,
-  runningCount,
-  onOpenTasks,
-}: {
-  taskCount: number;
-  runningCount: number;
-  onOpenTasks: () => void;
-}) {
-  return (
-    <div
-      style={{
-        border: `1px solid ${pageColorTokens.borderSubtle}`,
-        borderRadius: pageColorTokens.radiusControl,
-        padding: "0.95rem 1rem",
-        background: pageColorTokens.surfaceSubtle,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 12,
-        flexWrap: "wrap",
-      }}
-    >
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: pageColorTokens.textPrimary }}>
-          当前工具任务入口
-        </div>
-        <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, marginTop: 4 }}>
-          当前共有 {taskCount} 个任务，其中 {runningCount} 个正在执行；审核、评分和写入都统一在任务页完成。
-        </div>
-      </div>
-      <s-button type="button" variant="secondary" onClick={onOpenTasks}>
-        打开任务页
-      </s-button>
-    </div>
-  );
-}
-
 function PageTabBar({
   activeTab,
   onTabChange,
@@ -340,12 +302,6 @@ export function ProductImprovePage() {
           <>
             <PageSurface title="生成配置" subtitle="选择商品与目标语言后点击生成，执行前预估会在二次确认弹窗中展示。">
               <s-stack direction="block" gap="base">
-                <ConfigHintCard
-                  taskCount={tasks.length}
-                  runningCount={runningCount}
-                  onOpenTasks={() => setPageTab("tasks")}
-                />
-
                 <ProductSelector
                   locationSearch={search}
                   selected={selectedProduct}

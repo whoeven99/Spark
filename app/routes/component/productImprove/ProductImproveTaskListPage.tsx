@@ -1,25 +1,26 @@
 import { useEffect, useState } from "react";
 import { pageColorTokens, pageEmptyStateStyle } from "../../page/pageUiStyles";
 import { ProductImproveTaskCard } from "./ProductImproveTaskCard";
+import { ProductImproveTaskDetailPage } from "./ProductImproveTaskDetailPage";
 import { TaskListSummary } from "../aiTask/TaskListSummary";
 import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 
 type TaskViewTab = "current" | "history";
 
-function resolveNextActionLabel(status: AITaskStatus): string {
+function getTaskPriority(status: AITaskStatus): number {
   switch (status) {
-    case "running":
-      return "等待执行完成并查看流式进度";
     case "pending_review":
-      return "优先进入审核，确认标题、描述和修改建议";
+      return 1;
     case "scored":
-      return "评分已完成，下一步可确认写入 Shopify";
-    case "applied":
-      return "已完成应用，可回看审核记录与最终结果";
+      return 2;
+    case "running":
+      return 3;
     case "failed":
-      return "查看失败原因，必要时重新创建任务";
+      return 4;
+    case "applied":
+      return 5;
     default:
-      return "在任务卡片中查看当前状态和后续动作";
+      return 6;
   }
 }
 
@@ -39,6 +40,7 @@ export function ProductImproveTaskListPage({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [localTasks, setLocalTasks] = useState<AITaskItem[]>(tasks);
   const [viewTab, setViewTab] = useState<TaskViewTab>("current");
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   useEffect(() => {
     setLocalTasks(tasks);
@@ -54,6 +56,7 @@ export function ProductImproveTaskListPage({
       });
       if (resp.ok) {
         setLocalTasks((prev) => prev.filter((t) => t.id !== taskId));
+        setSelectedTaskId((prev) => (prev === taskId ? null : prev));
         onTaskDeleted(taskId);
       }
     } finally {
@@ -61,9 +64,11 @@ export function ProductImproveTaskListPage({
     }
   }
 
-  const sorted = [...localTasks].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  );
+  const sorted = [...localTasks].sort((a, b) => {
+    const priorityDiff = getTaskPriority(a.status) - getTaskPriority(b.status);
+    if (priorityDiff !== 0) return priorityDiff;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   const currentTasks = sorted.filter(
     (task) => new Date(task.createdAt).getTime() >= cutoff,
@@ -72,85 +77,11 @@ export function ProductImproveTaskListPage({
     (task) => new Date(task.createdAt).getTime() < cutoff,
   );
   const visibleTasks = viewTab === "current" ? currentTasks : historyTasks;
-  const actionableTask =
-    currentTasks.find((task) => task.status === "pending_review") ??
-    currentTasks.find((task) => task.status === "scored") ??
-    currentTasks.find((task) => task.status === "running") ??
-    currentTasks[0];
+  const selectedTask =
+    (selectedTaskId ? sorted.find((task) => task.id === selectedTaskId) : null) ?? null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div
-        style={{
-          border: `1px solid ${pageColorTokens.border}`,
-          borderRadius: pageColorTokens.radiusCard,
-          background: "linear-gradient(160deg, #ffffff 0%, #fafbfd 100%)",
-          boxShadow: pageColorTokens.shadowCard,
-          padding: "14px 16px",
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 14,
-          flexWrap: "wrap",
-        }}
-      >
-        <div style={{ flex: "1 1 18rem", minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: pageColorTokens.textPrimary }}>
-            任务工作台
-          </div>
-          <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, marginTop: 4 }}>
-            当前任务页承载执行、审核、评分和应用动作，优先处理待审查与评分完成的任务。
-          </div>
-        </div>
-        {actionableTask ? (
-          <div
-            style={{
-              flex: "1 1 22rem",
-              minWidth: 0,
-              border: `1px solid ${pageColorTokens.borderSubtle}`,
-              borderRadius: pageColorTokens.radiusControl,
-              background: pageColorTokens.surfaceSubtle,
-              padding: "12px 14px",
-            }}
-          >
-            <div style={{ fontSize: 11, fontWeight: 700, color: pageColorTokens.textSecondary }}>
-              当前优先任务
-            </div>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 700,
-                color: pageColorTokens.textPrimary,
-                marginTop: 6,
-              }}
-            >
-              #{actionableTask.id.slice(0, 8).toUpperCase()} ·{" "}
-              {String(
-                (actionableTask.config as { originalTitle?: string }).originalTitle ?? "商品文案任务",
-              )}
-            </div>
-            <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, marginTop: 6 }}>
-              {resolveNextActionLabel(actionableTask.status)}
-            </div>
-          </div>
-        ) : (
-          <div
-            style={{
-              flex: "1 1 18rem",
-              minWidth: 0,
-              border: `1px dashed ${pageColorTokens.borderSubtle}`,
-              borderRadius: pageColorTokens.radiusControl,
-              background: pageColorTokens.surfaceSubtle,
-              padding: "12px 14px",
-              fontSize: 12,
-              color: pageColorTokens.textSecondary,
-            }}
-          >
-            当前没有需要优先处理的任务，创建新任务后会自动在这里显示下一步建议。
-          </div>
-        )}
-      </div>
-
       <TaskListSummary tasks={sorted} mode="product_improve" />
 
       <div
@@ -199,7 +130,14 @@ export function ProductImproveTaskListPage({
         </div>
       </div>
 
-      {visibleTasks.length === 0 ? (
+      {selectedTask ? (
+        <ProductImproveTaskDetailPage
+          task={selectedTask}
+          locationSearch={locationSearch}
+          onBack={() => setSelectedTaskId(null)}
+          onTaskUpdated={onTaskUpdated}
+        />
+      ) : visibleTasks.length === 0 ? (
         <div
           style={{
             ...pageEmptyStateStyle,
@@ -223,6 +161,7 @@ export function ProductImproveTaskListPage({
               task={task}
               locationSearch={locationSearch}
               onDelete={handleDelete}
+              onOpenDetail={() => setSelectedTaskId(task.id)}
               onTaskUpdated={onTaskUpdated}
               deleting={deletingId === task.id}
             />
