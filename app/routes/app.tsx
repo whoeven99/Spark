@@ -14,7 +14,7 @@ import {
   buildLocaleCookieHeader,
   normalizeLocale,
 } from "../i18n/config";
-import { detectRequestLocale } from "../i18n/detector.server";
+import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import { ensureSessionAppName } from "../server/session/sessionManager.server";
@@ -78,7 +78,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   } catch (error) {
     console.error("[CommonEvent] recordAppInstalled failed:", error);
   }
-  const locale = detectRequestLocale(request);
+  const locale = detectRequestLocale(request, {
+    sessionLocale: readShopifySessionLocale(session),
+  });
   const { nav, home } = getAppEntryConfig();
 
   // eslint-disable-next-line no-undef

@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import type { i18n as I18nInstance } from "i18next";
 import { I18nextProvider } from "react-i18next";
 import { useFetcher } from "react-router";
-import { detectClientNavigatorLocale, readClientStoredLocale } from "./detector.client";
+import { readClientStoredLocale, resolveClientLocale } from "./detector.client";
 import { initI18n } from "./index";
 import {
   LOCALE_STORAGE_KEY,
@@ -28,15 +28,17 @@ export function AppI18nProvider({ locale, children }: Props) {
 
   useEffect(() => {
     const stored = readClientStoredLocale();
-    const target = stored ?? detectClientNavigatorLocale();
+    const target = resolveClientLocale(locale);
     if (target !== i18n.language) {
       void i18n.changeLanguage(target);
-      localeFetcher.submit(
-        { locale: target },
-        { method: "post", action: "/app?setLocale=1" },
-      );
+      if (!stored) {
+        localeFetcher.submit(
+          { locale: target },
+          { method: "post", action: "/app?setLocale=1" },
+        );
+      }
     }
-  }, [i18n, localeFetcher]);
+  }, [i18n, locale, localeFetcher]);
 
   useEffect(() => {
     const next = normalizeLocale(i18n.language);
