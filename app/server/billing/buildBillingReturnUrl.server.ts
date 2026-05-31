@@ -9,6 +9,16 @@ export const BILLING_PAGE_PATH = "/app/billing";
 /** 根路径或 `/app` 兜底重定向时识别「来自计费结账」的 query 标记。 */
 export const BILLING_RETURN_QUERY_FLAG = "billing_return";
 
+const ADMIN_APP_IDENTIFIER_BY_API_KEY: Record<string, string> = {
+  "81b68c6dd0b7e1b594b78ddcd202cd09": "desc-test-1",
+  b896c10abe3ca220b1efbc333ef41ad1: "ciwi-image-translation",
+};
+
+const ADMIN_APP_IDENTIFIER_BY_APP_HOST: Record<string, string> = {
+  "smartdescriptiontest.onrender.com": "desc-test-1",
+  "product-improve.onrender.com": "ciwi-image-translation",
+};
+
 export function isBillingReturnRequest(request: Request): boolean {
   return (
     new URL(request.url).searchParams.get(BILLING_RETURN_QUERY_FLAG) === "1"
@@ -40,6 +50,26 @@ function resolveAppOrigin(request: Request): string {
   return new URL(request.url).origin;
 }
 
+function appIdentifierFromConfiguredAppUrl(): string | null {
+  const configured = process.env.SHOPIFY_APP_URL?.trim();
+  if (!configured) return null;
+
+  try {
+    const withProtocol = configured.startsWith("http")
+      ? configured
+      : `https://${configured}`;
+    const host = new URL(withProtocol).hostname;
+    return ADMIN_APP_IDENTIFIER_BY_APP_HOST[host] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function appIdentifierFromApiKey(): string | null {
+  const apiKey = process.env.SHOPIFY_API_KEY?.trim();
+  return apiKey ? (ADMIN_APP_IDENTIFIER_BY_API_KEY[apiKey] ?? null) : null;
+}
+
 function shopifyAdminStoreHandle(shop: string): string {
   return shop.replace(/\.myshopify\.com$/i, "");
 }
@@ -67,6 +97,8 @@ function resolveAdminAppIdentifier(request: Request): string | null {
   const configured =
     process.env.SHOPIFY_ADMIN_APP_HANDLE?.trim() ||
     process.env.SHOPIFY_APP_HANDLE?.trim() ||
+    appIdentifierFromConfiguredAppUrl() ||
+    appIdentifierFromApiKey() ||
     process.env.SHOPIFY_API_KEY?.trim();
   return configured || null;
 }

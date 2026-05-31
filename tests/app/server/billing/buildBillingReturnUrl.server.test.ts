@@ -46,6 +46,24 @@ describe("buildBillingReturnUrl", () => {
     );
   });
 
+  it("uses the production app handle when the Admin referer is unavailable", () => {
+    process.env.SHOPIFY_APP_URL = "https://product-improve.onrender.com/app/product-improve";
+    process.env.SHOPIFY_API_KEY = "b896c10abe3ca220b1efbc333ef41ad1";
+    const request = new Request(
+      "https://product-improve.onrender.com/app/billing?shop=ciwishop.myshopify.com&host=encoded-host",
+    );
+
+    const returnUrl = buildBillingReturnUrl(
+      BILLING_PAGE_PATH,
+      request,
+      "ciwishop.myshopify.com",
+    );
+
+    expect(returnUrl).toBe(
+      "https://admin.shopify.com/store/ciwishop/apps/ciwi-image-translation/app/billing?billing_return=1",
+    );
+  });
+
   it("falls back to the app origin and keeps only shop, host, and billing markers", () => {
     process.env.SHOPIFY_APP_URL = "https://app.example.com";
     const longToken = "x".repeat(500);
