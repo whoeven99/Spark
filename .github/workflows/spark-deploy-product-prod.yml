@@ -1,29 +1,39 @@
 name: spark - Product Improve Deploy (Prod)
 
-# 仅手动触发；始终从 master 检出；通过输入选择要运行的 job
-# Render 飞书通知：在 Environment CommonShopifyRenderConfig 配置
-#   FEISHU_WEBHOOK_URL_PRODUCT_IMPROVE（机器人 webhook，勿提交到仓库）
+# 仅手动触发；始终从 master 检出；勾选要执行的任务（可多选）
+# Render 飞书通知：在 Environment CommonShopifyRenderConfig 配置 FEISHU_WEBHOOK_URL_PRODUCT_IMPROVE
 on:
   workflow_dispatch:
     inputs:
-      deploy_target:
-        description: 选择要执行的部署任务
-        required: true
-        type: choice
-        default: both
-        options:
-          - both
-          - render
-          - shopify
+      publish_render:
+        description: 发布服务
+        type: boolean
+        default: false
+      sync_shopify:
+        description: 同步 Shopify 配置
+        type: boolean
+        default: false
 
 defaults:
   run:
     working-directory: .
 
 jobs:
+  validate_inputs:
+    name: Validate workflow inputs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require at least one task
+        run: |
+          if [ "${{ github.event.inputs.publish_render }}" != "true" ] && [ "${{ github.event.inputs.sync_shopify }}" != "true" ]; then
+            echo "::error::请至少勾选「发布服务」或「同步 Shopify 配置」之一"
+            exit 1
+          fi
+
   deploy_render_product_improve:
     name: Trigger Render deploy (Product Improve Prod)
-    if: ${{ github.event.inputs.deploy_target == 'render' || github.event.inputs.deploy_target == 'both' }}
+    needs: validate_inputs
+    if: ${{ github.event.inputs.publish_render == 'true' }}
     runs-on: ubuntu-latest
     environment: CommonShopifyRenderConfig
 
@@ -191,7 +201,8 @@ jobs:
 
   deploy_shopify_product_improve:
     name: Shopify app deploy (product-prod.toml)
-    if: ${{ github.event.inputs.deploy_target == 'shopify' || github.event.inputs.deploy_target == 'both' }}
+    needs: validate_inputs
+    if: ${{ github.event.inputs.sync_shopify == 'true' }}
     runs-on: ubuntu-latest
     environment: CommonShopifyRenderConfig
 
