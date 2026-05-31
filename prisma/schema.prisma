@@ -314,6 +314,7 @@ model ShopOrder {
 
   lineItems    ShopOrderLineItem[]
   refunds      ShopRefund[]
+  refundLineItems ShopRefundLineItem[]
   fulfillments ShopFulfillment[]
 
   @@unique([shop, shopifyOrderId])
@@ -329,6 +330,7 @@ model ShopOrderLineItem {
   shop           String
   shopifyOrderId String
   lineItemId     String
+  inventoryItemId String?
   variantId      String?
   productId      String?
   title          String
@@ -344,6 +346,7 @@ model ShopOrderLineItem {
   @@unique([shop, lineItemId])
   @@index([shop, shopifyOrderId])
   @@index([shop, sku])
+  @@index([shop, inventoryItemId])
   @@index([shop, productId])
 }
 
@@ -360,11 +363,45 @@ model ShopRefund {
   createdAt       DateTime
   syncedAt        DateTime @default(now())
 
-  order ShopOrder @relation(fields: [shop, shopifyOrderId], references: [shop, shopifyOrderId])
+  order     ShopOrder            @relation(fields: [shop, shopifyOrderId], references: [shop, shopifyOrderId])
+  lineItems ShopRefundLineItem[]
 
   @@unique([shop, shopifyRefundId])
   @@index([shop, shopifyOrderId])
   @@index([shop, processedAt])
+}
+
+/// 閫€娆捐椤圭洰锛岀敤浜?SKU 褰掑洜銆侀€€娆鹃噾棰?Top SKU 鍜屽敭鍚庡缓璁€?
+model ShopRefundLineItem {
+  id              String @id @default(cuid())
+  shop            String
+  shopifyRefundId String
+  shopifyOrderId  String
+  refundLineItemId String
+  lineItemId      String
+  inventoryItemId String?
+  variantId       String?
+  productId       String?
+  title           String?
+  variantTitle    String?
+  sku             String?
+  quantity        Int    @default(0)
+  subtotal        Float  @default(0)
+  totalTax        Float  @default(0)
+  reason          String?
+  restockType     String?
+  createdAt       DateTime @default(now())
+  syncedAt        DateTime @default(now())
+
+  refund ShopRefund @relation(fields: [shop, shopifyRefundId], references: [shop, shopifyRefundId], onDelete: Cascade)
+  order   ShopOrder  @relation(fields: [shop, shopifyOrderId], references: [shop, shopifyOrderId])
+
+  @@unique([shop, refundLineItemId])
+  @@index([shop, shopifyRefundId])
+  @@index([shop, shopifyOrderId])
+  @@index([shop, lineItemId])
+  @@index([shop, sku])
+  @@index([shop, reason])
 }
 
 /// 客户信息快照（首单/末单/LTV）。
@@ -399,6 +436,11 @@ model ShopInventoryLevel {
   id              String   @id @default(cuid())
   shop            String
   inventoryItemId String
+  variantId       String?
+  productId       String?
+  sku             String?
+  productTitle    String?
+  variantTitle    String?
   locationId      String
   locationName    String?
   available       Int      @default(0)
@@ -409,6 +451,8 @@ model ShopInventoryLevel {
   syncedAt        DateTime @default(now())
 
   @@unique([shop, inventoryItemId, locationId])
+  @@index([shop, sku])
+  @@index([shop, variantId])
   @@index([shop, locationId])
   @@index([shop, available])
 }
