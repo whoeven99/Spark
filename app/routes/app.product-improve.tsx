@@ -3,7 +3,7 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { data } from "react-router";
+import { data, redirect } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { parseGenerateDescriptionBody } from "../server/productImprove/generateDescriptionHttp.server";
@@ -12,8 +12,11 @@ import { fetchShopLocalesPayload } from "../server/productImprove/shopLocalesFet
 import { fetchProductDescriptionContext } from "../server/productImprove/productContextFetcher.server";
 import { enqueueProductImproveTask } from "../server/productImprove/productImproveAsync.server";
 import { getAppEntry } from "../config/appEntry.server";
+import { buildEmbeddedAppPath } from "../config/appEntry.server";
+import { isBillingReturnRequest } from "../server/billing/buildBillingReturnUrl.server";
+import { BILLING_PAGE_PATH } from "../server/billing/buildBillingReturnUrl.server";
+import { billingErrorToResponse } from "../server/billing/index.server";
 import {
-  billingErrorToResponse,
   loadBillingContext,
   requireBillingAccess,
   toBillingAccessSnapshot,
@@ -24,6 +27,11 @@ import { ProductImprovePage } from "./page/ProductImprovePage";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
+
+  if (isBillingReturnRequest(request)) {
+    throw redirect(buildEmbeddedAppPath(BILLING_PAGE_PATH, request));
+  }
+
   const shopLocales = await fetchShopLocalesPayload(
     admin,
     `[PageLoader] shop=${session.shop}`,

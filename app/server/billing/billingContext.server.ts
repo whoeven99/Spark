@@ -3,6 +3,7 @@ import type {
   AccountPeriodUsage,
   AppSubscription,
   BillingLog,
+  ToolTokenUsageLog,
 } from "../../generated/prisma";
 import prisma from "../../db.server";
 import {
@@ -17,10 +18,14 @@ import type {
   BillingPageLoaderData,
   BillingPageSnapshot,
   BillingHistoryItem,
+  BillingToolUsageItem,
   BillingUsagePeriodItem,
 } from "../../lib/billingPageTypes";
 import { listEnabledPlansForApp, type PlanRecord } from "./plans/planCatalog.server";
-import { APP_SUBSCRIPTION_STATUS, PLAN_CATALOG_KIND } from "./types.server";
+import {
+  APP_SUBSCRIPTION_STATUS,
+  PLAN_CATALOG_KIND,
+} from "./types.server";
 
 function toIso(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null;
@@ -49,6 +54,17 @@ function toBillingUsagePeriodItem(row: AccountPeriodUsage): BillingUsagePeriodIt
     purchasedTokensRemaining: row.purchasedTokensRemaining,
     trialTokensRemaining: row.trialTokensRemaining,
     archivedAt: row.archivedAt.toISOString(),
+  };
+}
+
+function toBillingToolUsageItem(row: ToolTokenUsageLog): BillingToolUsageItem {
+  return {
+    id: row.id,
+    feature: row.feature,
+    modelKey: row.modelKey,
+    rawTokens: row.rawTokens,
+    billedTokens: row.billedTokens,
+    createdAt: row.createdAt.toISOString(),
   };
 }
 
@@ -91,7 +107,7 @@ export async function loadBillingPageData(
   appName: string,
 ): Promise<BillingPageLoaderData> {
   const ctx = await loadBillingContext(shop, appName);
-  const [usageHistoryRows, billingHistoryRows] = await Promise.all([
+  const [usageHistoryRows, billingHistoryRows, toolUsageRows] = await Promise.all([
     prisma.accountPeriodUsage.findMany({
       where: { shop, appName },
       orderBy: { periodEnd: "desc" },
@@ -101,6 +117,11 @@ export async function loadBillingPageData(
       where: { shop, appName },
       orderBy: { createdAt: "desc" },
       take: 12,
+    }),
+    prisma.toolTokenUsageLog.findMany({
+      where: { shop, appName },
+      orderBy: { createdAt: "desc" },
+      take: 20,
     }),
   ]);
   const sub = ctx.subscription;
@@ -121,6 +142,7 @@ export async function loadBillingPageData(
     tokenPacks: ctx.plans.filter((p) => p.kind === PLAN_CATALOG_KIND.ONE_TIME_PACK),
     usageHistory: usageHistoryRows.map(toBillingUsagePeriodItem),
     billingHistory: billingHistoryRows.map(toBillingHistoryItem),
+    toolUsageHistory: toolUsageRows.map(toBillingToolUsageItem),
     showDevCancelSubscription,
   };
 }

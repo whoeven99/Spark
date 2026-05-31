@@ -81,6 +81,7 @@ model Account {
   appSubscription   AppSubscription?
   periodUsages      AccountPeriodUsage[]
   billingLogs       BillingLog[]
+  toolTokenUsageLogs ToolTokenUsageLog[]
 
   @@unique([shop, appName])
   @@index([shop])
@@ -197,6 +198,26 @@ model BillingLog {
   @@index([shop, appName, createdAt])
   @@index([eventType, createdAt])
   @@index([referenceId])
+}
+
+/// 工具 token 明细：每次工具调用入账一条（高频），与 BillingLog 账务事件拆分。
+model ToolTokenUsageLog {
+  id          String   @id @default(cuid())
+  shop        String
+  appName     String
+  feature     String
+  modelKey    String
+  rawTokens   Int
+  billedTokens Int
+  inputTokens Int      @default(0)
+  outputTokens Int     @default(0)
+  createdAt   DateTime @default(now())
+
+  account Account @relation(fields: [shop, appName], references: [shop, appName])
+
+  @@index([shop, appName, createdAt])
+  @@index([shop, appName, feature, createdAt])
+  @@index([feature, createdAt])
 }
 
 /// AI 任务批次：一次提交对应一个批次（含单任务）。
