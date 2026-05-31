@@ -54,7 +54,7 @@ export function ChatPage() {
     streamingText,
     sendMessage: streamConversation,
     abort: abortStream,
-    playbookSteps,
+    skillSteps,
   } = useChatStream();
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
@@ -300,11 +300,11 @@ export function ChatPage() {
                             <s-badge tone="neutral">AI Assistant</s-badge>
                           </div>
                           <div style={{ marginTop: "0.35rem", minHeight: awaitingFirstChunk ? "3rem" : undefined }}>
-                            {awaitingFirstChunk && playbookSteps.length === 0 ? (
+                            {awaitingFirstChunk && skillSteps.length === 0 ? (
                               <ChatStreamingSkeleton />
-                            ) : playbookSteps.length > 0 ? (
+                            ) : skillSteps.length > 0 ? (
                               <div>
-                                {playbookSteps.length > 0 && (
+                                {skillSteps.length > 0 && (
                                   <div
                                     style={{
                                       marginBottom: streamingText ? "0.75rem" : 0,
@@ -315,18 +315,20 @@ export function ChatPage() {
                                     }}
                                   >
                                     <div style={{ fontSize: "0.78rem", color: "rgba(44,110,203,0.8)", marginBottom: "0.4rem", fontWeight: 600 }}>
-                                      ⚡ 正在执行剧本
+                                      ⚡ 正在执行
                                     </div>
                                     <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                                      {playbookSteps.map((s) => (
-                                        <div key={`${s.playbookName}-${s.step}`} style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.82rem" }}>
+                                      {skillSteps.map((s) => (
+                                        <div key={`${s.skill}-${s.stepId}`} style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.82rem" }}>
                                           {s.status === "running" && (
                                             <span style={{ display: "inline-block", width: "14px", textAlign: "center", color: "rgba(44,110,203,0.8)" }}>○</span>
                                           )}
                                           {s.status === "completed" && <span style={{ color: "#008060", width: "14px", textAlign: "center" }}>✓</span>}
+                                          {s.status === "skipped" && <span style={{ color: "rgba(0,0,0,0.35)", width: "14px", textAlign: "center" }}>–</span>}
                                           {s.status === "error" && <span style={{ color: "#d72c0d", width: "14px", textAlign: "center" }}>✗</span>}
                                           <span style={{ color: s.status === "running" ? "inherit" : s.status === "error" ? "#d72c0d" : "rgba(0,0,0,0.55)" }}>
-                                            {s.step}
+                                            {s.label}
+                                            {s.detail ? <span style={{ color: "rgba(0,0,0,0.4)", marginLeft: "0.35rem" }}>· {s.detail}</span> : null}
                                           </span>
                                         </div>
                                       ))}

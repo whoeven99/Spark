@@ -211,6 +211,9 @@ export function createScoreProductQualityTool(context: AgentContext): DynamicStr
 
 export const scoreProductQualityToolDefinition: ToolDefinition = {
   name: "productQualityScore",
+  displayName: "商品页质量评分",
+  category: "商品优化",
+  stage: "diagnose",
   description: "评估商品页面质量（标题/图片/描述/Variant/标签）并给出改进建议",
   systemPromptExtension:
     "当用户想要评估、诊断或了解某个商品的页面质量，或要求对商品页内容进行评分时，调用工具 score_product_quality，传入 productId。工具返回各维度评分（0-10分）与改进建议；请用简洁中文向用户说明评分结果，重点突出低分项与改进优先级。若用户未提供商品 ID，先请其提供。",

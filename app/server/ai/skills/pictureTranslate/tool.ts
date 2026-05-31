@@ -43,7 +43,10 @@ export function createPictureTranslateTool(context: AgentContext): DynamicStruct
 
 export const pictureTranslateToolDefinition: ToolDefinition = {
   name: "pictureTranslate",
-  description: "翻译图片中的文本并保持布局",
+  displayName: "整图翻译",
+  category: "商品优化",
+  stage: "execute",
+  description: "识别图片中的文字并翻译，返回翻译后图片，保持原图布局",
   uiPayloadKey: "attachments",
   systemPromptExtension:
     "当用户明确要求翻译图片、截图、商品图中的文字，或要求保持原图排版进行 OCR+翻译时，优先调用工具 picture_translate。不要把它用于普通文本翻译、PDF 翻译或纯文本处理。若用户未提供图片 URL 或图片 base64，先请其提供后再调用工具。工具成功后，请不要输出“点击查看翻译后的图片”之类的 Markdown 链接，译图会由前端在聊天消息内直接渲染；只需简洁说明图片翻译已完成，并说明图片文字已转换为目标语言且保持原有布局。",

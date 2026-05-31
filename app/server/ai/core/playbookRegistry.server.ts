@@ -2,6 +2,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import type { BaseMessage } from "@langchain/core/messages";
 import type { AgentContext, ToolDefinition } from "./toolRegistry.server";
+import { normalizeSteps, type StepInput } from "./skillTypes.server";
 
 // ──────────────────────────────────────────────
 // Playbook 执行结果
@@ -52,8 +53,11 @@ export interface PlaybookDefinition {
     | "competitive";
   /** 告诉 LLM 何时应选择此 Playbook */
   triggerDescription: string;
-  /** 步骤名列表，用于 system prompt 展示 */
-  steps: readonly string[];
+  /**
+   * 步骤声明，用于 system prompt / admin 流程图展示。
+   * 可写字符串（label 即 id），也可写完整 StepSpec 以携带 kind/stage/runningLabel。
+   */
+  steps: readonly StepInput[];
   /** 是否对当前上下文开放（未提供则默认开放）*/
   condition?: (ctx: AgentContext) => boolean | Promise<boolean>;
   /** 额外注入 system prompt 的专属指令（可选）*/
@@ -113,7 +117,7 @@ export class PlaybookRegistry {
             `[Playbook: ${def.displayName}]`,
             def.description,
             `触发条件：${def.triggerDescription}`,
-            `步骤：${def.steps.join(" → ")}`,
+            `步骤：${normalizeSteps(def.steps).map((s) => s.label).join(" → ")}`,
           ].join(" "),
           schema: z.object({
             goal: z.string().describe("用户的具体业务目标或问题描述"),
@@ -128,7 +132,13 @@ export class PlaybookRegistry {
                 goal,
                 constraints,
                 context: ctx,
-                onStep: (step, status) => ctx.emitPlaybookStep?.(def.name, step, status),
+                onStep: (step, status) =>
+                  ctx.emitProgress?.({
+                    skill: def.name,
+                    stepId: step,
+                    label: step,
+                    status,
+                  }),
               });
               return JSON.stringify(result);
             } catch (e) {

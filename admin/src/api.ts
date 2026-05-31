@@ -173,10 +173,34 @@ export function fetchUsageHistory(
   return apiFetch(`/usage/${encodeURIComponent(shop)}/history`);
 }
 
-export type ToolParam = { name: string; type: string; desc: string };
+export type SkillStage =
+  | "dataAlign"
+  | "monitor"
+  | "diagnose"
+  | "propose"
+  | "qc"
+  | "execute"
+  | "review";
+
+export type StepKind = "data" | "compute" | "llm" | "tool" | "qc" | "execute";
+
+export type StepSpec = {
+  id: string;
+  label: string;
+  kind: StepKind;
+  stage?: SkillStage;
+  runningLabel?: string;
+  optional?: boolean;
+};
+
+export type ToolParam = {
+  name: string;
+  type: string;
+  desc: string;
+  required?: boolean;
+};
 export type ToolDef = {
   name: string;
-  displayName: string;
   description: string;
   params: ToolParam[];
 };
@@ -185,10 +209,10 @@ export type SkillDef = {
   displayName: string;
   description: string;
   category: string;
+  stage?: SkillStage;
   conditional: boolean;
-  conditionalNote?: string;
+  steps: StepSpec[];
   tools: ToolDef[];
-  emailTemplates?: string[];
 };
 export type PlaybookDef = {
   name: string;
@@ -196,10 +220,8 @@ export type PlaybookDef = {
   description: string;
   category: string;
   triggerDescription: string;
-  steps: readonly string[];
+  steps: StepSpec[];
   conditional: boolean;
-  anomalyRules?: string[];
-  completenessChecks?: string[];
 };
 export type CapabilitiesData = {
   stats: { skillCount: number; toolCount: number; playbookCount: number };

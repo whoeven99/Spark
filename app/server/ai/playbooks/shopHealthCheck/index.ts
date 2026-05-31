@@ -213,6 +213,10 @@ export const shopHealthCheckPlaybook: PlaybookDefinition = {
   category: "operations",
   triggerDescription:
     "当用户询问店铺整体经营状况、KPI 概览、健康体检、异常分析、数据诊断等时触发。",
-  steps: ["数据拉取", "异常检测", "建议生成"],
+  steps: [
+    { id: "数据拉取", label: "数据拉取", kind: "data", stage: "dataAlign", runningLabel: "正在拉取店铺/订单/库存数据" },
+    { id: "异常检测", label: "异常检测", kind: "qc", stage: "diagnose", runningLabel: "正在检测异常指标" },
+    { id: "建议生成", label: "建议生成", kind: "llm", stage: "propose", runningLabel: "正在调用大模型生成健康报告" },
+  ],
   run,
 };
