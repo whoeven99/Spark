@@ -200,10 +200,10 @@ Spark **不调用 Spring Backend 邮件 API**，进程内直连腾讯 SES SDK（
   - `npm run dev`：本地开发（Shopify CLI）。
   - `npm run build` / `npm run start`：构建与启动。
   - `npm run lint` / `npm run typecheck` / `npm run test`：质量检查与测试。
-- CI 工作流：`.github/workflows/spark-deploy-test.yml`
-  - 先触发 Render Test 部署（commit deploy）。
-  - Shopify deploy（`shopify.app.test.toml`）仅在 `workflow_dispatch` 或 `master` push 时执行。
-  - **卫星 App**（`shopify.app.smart-description.toml`，如 Desc - Test）的 Webhook 注册**不会**随上述 CI 自动更新；改 webhook 后需本地执行：`shopify app deploy -c shopify.app.smart-description.toml`。
+- CI 工作流：
+  - Product Improve 生产（手动）：`.github/workflows/spark-deploy-product-prod.yml`（可选 Render `srv-d88llfml51nc73fksm2g` 或 Shopify `shopify.app.product-prod.toml`）。
+  - Render 日志日报（仅手动）：`.github/workflows/render-daily-log-digest.yml`（定时已关）。
+  - **卫星 App** Webhook 等需本地或单独 workflow：`shopify app deploy -c <对应 toml>`。
 
 ### Turso 数据库（迁移与同步）
 

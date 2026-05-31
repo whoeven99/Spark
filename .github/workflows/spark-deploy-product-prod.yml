@@ -1,6 +1,8 @@
 name: spark - Product Improve Deploy (Prod)
 
 # 仅手动触发；始终从 master 检出；通过输入选择要运行的 job
+# Render 飞书通知：在 Environment CommonShopifyRenderConfig 配置
+#   FEISHU_WEBHOOK_URL_PRODUCT_IMPROVE（机器人 webhook，勿提交到仓库）
 on:
   workflow_dispatch:
     inputs:
@@ -146,6 +148,46 @@ jobs:
           echo "Timed out waiting Render deploy result."
           echo "final_status=timeout" >> "$GITHUB_OUTPUT"
           exit 1
+
+      # 文案与 BogdaApps bundleV2 生产 deploy_render 飞书步骤一致（bundle-shopify-deploy-prod.yml）
+      - name: Notify Feishu on Render deploy success
+        if: success()
+        env:
+          FEISHU_WEBHOOK_URL: https://open.feishu.cn/open-apis/bot/v2/hook/e064b532-ecb3-4dab-bda7-8fe73781c51f
+          RENDER_DEPLOY_URL: ${{ steps.trigger_render.outputs.deploy_url }}
+          RENDER_FINAL_STATUS: ${{ steps.wait_render.outputs.final_status }}
+        run: |
+          if [ -z "$FEISHU_WEBHOOK_URL" ]; then
+            echo "FEISHU_WEBHOOK_URL_PRODUCT_IMPROVE is not set, skip Feishu notification."
+            exit 0
+          fi
+
+          COMMIT_BODY="$(git log -1 --pretty=%b)"
+          MESSAGE="Product Improve PROD deploy 成功, by ${GITHUB_ACTOR}.\n最终状态: ${RENDER_FINAL_STATUS}\n发布内容：${COMMIT_BODY}"
+          PAYLOAD=$(python3 -c 'import json,os; print(json.dumps({"msg_type":"text","content":{"text":os.environ["MESSAGE"]}}, ensure_ascii=False))' MESSAGE="$MESSAGE")
+
+          curl -sS -X POST "$FEISHU_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
+
+      - name: Notify Feishu on Render deploy failure
+        if: failure()
+        env:
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL_PRODUCT_IMPROVE }}
+          RENDER_DEPLOY_URL: ${{ steps.trigger_render.outputs.deploy_url }}
+          RENDER_FINAL_STATUS: ${{ steps.wait_render.outputs.final_status }}
+        run: |
+          if [ -z "$FEISHU_WEBHOOK_URL" ]; then
+            echo "FEISHU_WEBHOOK_URL_PRODUCT_IMPROVE is not set, skip Feishu notification."
+            exit 0
+          fi
+
+          MESSAGE="Product Improve PROD deploy 失败, by ${GITHUB_ACTOR}.\n最终状态: ${RENDER_FINAL_STATUS}\nRender: ${RENDER_DEPLOY_URL}\nRun: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          PAYLOAD=$(python3 -c 'import json,os; print(json.dumps({"msg_type":"text","content":{"text":os.environ["MESSAGE"]}}, ensure_ascii=False))' MESSAGE="$MESSAGE")
+
+          curl -sS -X POST "$FEISHU_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
 
   deploy_shopify_product_improve:
     name: Shopify app deploy (product-prod.toml)
