@@ -7,7 +7,8 @@ function extractUtm(landingSite: string | null): {
   utmMedium: string | null;
   utmCampaign: string | null;
 } {
-  if (!landingSite) return { utmSource: null, utmMedium: null, utmCampaign: null };
+  if (!landingSite)
+    return { utmSource: null, utmMedium: null, utmCampaign: null };
   try {
     const url = new URL(landingSite, "https://placeholder.invalid");
     return {
@@ -25,7 +26,9 @@ export async function syncOrder(
   payload: ShopifyOrderPayload,
 ): Promise<void> {
   const shopifyOrderId = String(payload.id);
-  const shopifyCustomerId = payload.customer ? String(payload.customer.id) : null;
+  const shopifyCustomerId = payload.customer
+    ? String(payload.customer.id)
+    : null;
   const utm = extractUtm(payload.landing_site ?? null);
 
   const totalPrice = parseFloat(payload.total_price ?? "0") || 0;
@@ -33,15 +36,18 @@ export async function syncOrder(
   const totalDiscounts = parseFloat(payload.total_discounts ?? "0") || 0;
   const totalTax = parseFloat(payload.total_tax ?? "0") || 0;
   const totalShipping =
-    parseFloat(
-      payload.total_shipping_price_set?.shop_money?.amount ?? "0",
-    ) || 0;
+    parseFloat(payload.total_shipping_price_set?.shop_money?.amount ?? "0") ||
+    0;
 
   // Check first order
   const previousOrders =
     shopifyCustomerId &&
     (await prisma.shopOrder.count({
-      where: { shop, shopifyCustomerId, shopifyOrderId: { not: shopifyOrderId } },
+      where: {
+        shop,
+        shopifyCustomerId,
+        shopifyOrderId: { not: shopifyOrderId },
+      },
     }));
   const isFirstOrder = previousOrders === 0;
 
@@ -119,6 +125,9 @@ export async function syncOrder(
           shop,
           shopifyOrderId,
           lineItemId,
+          inventoryItemId: item.inventory_item_id
+            ? String(item.inventory_item_id)
+            : null,
           variantId: item.variant_id ? String(item.variant_id) : null,
           productId: item.product_id ? String(item.product_id) : null,
           title: item.title,
@@ -130,9 +139,18 @@ export async function syncOrder(
           vendor: item.vendor ?? null,
         },
         update: {
+          inventoryItemId: item.inventory_item_id
+            ? String(item.inventory_item_id)
+            : null,
+          variantId: item.variant_id ? String(item.variant_id) : null,
+          productId: item.product_id ? String(item.product_id) : null,
+          title: item.title,
+          variantTitle: item.variant_title ?? null,
+          sku: item.sku ?? null,
           quantity: item.quantity,
           price: parseFloat(item.price ?? "0") || 0,
           totalDiscount: parseFloat(item.total_discount ?? "0") || 0,
+          vendor: item.vendor ?? null,
         },
       });
     }
@@ -160,7 +178,9 @@ export async function syncOrderCancelled(
     data: {
       status: "cancelled",
       financialStatus: payload.financial_status ?? undefined,
-      cancelledAt: payload.cancelled_at ? new Date(payload.cancelled_at) : new Date(),
+      cancelledAt: payload.cancelled_at
+        ? new Date(payload.cancelled_at)
+        : new Date(),
       cancelReason: payload.cancel_reason ?? null,
       updatedAt: payload.updated_at ? new Date(payload.updated_at) : new Date(),
       syncedAt: new Date(),

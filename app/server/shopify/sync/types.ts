@@ -4,6 +4,7 @@ export interface ShopifyLineItem {
   id: number;
   variant_id: number | null;
   product_id: number | null;
+  inventory_item_id?: number | null;
   title: string;
   variant_title: string | null;
   sku: string | null;
@@ -76,8 +77,11 @@ export interface ShopifyRefundPayload {
     id: number;
     quantity: number;
     line_item_id: number;
+    restock_type?: string | null;
+    reason?: string | null;
     subtotal: string;
     total_tax: string;
+    line_item?: ShopifyLineItem | null;
   }>;
   transactions: ShopifyRefundTransaction[];
 }
