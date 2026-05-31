@@ -138,9 +138,54 @@ function PlanFeatureList({ items }: { items: string[] }) {
           <span className={styles.checkIcon} aria-hidden>
             {"\u2713"}
           </span>
+          <span>{text}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function BillingPage() {
+  const {
+    billing,
+    trialPlan,
+    subscriptionPlans,
+    tokenPacks,
+    usageHistory,
+    billingHistory,
+    toolUsageHistory,
+    showDevCancelSubscription,
+  } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
+  const navigation = useNavigation();
+  const shopify = useAppBridge();
+  const isCancelling =
+    navigation.state !== "idle" &&
+    navigation.formData?.get("intent") === "cancel_subscription";
+  const subscribingPlanKey =
+    navigation.state !== "idle" &&
+    navigation.formData?.get("intent") === "subscribe"
+      ? String(navigation.formData.get("planKey") ?? "")
+      : "";
+  const buyingPackKey =
+    navigation.state !== "idle" && navigation.formData?.get("intent") === "buy_pack"
+      ? String(navigation.formData.get("planKey") ?? "")
+      : "";
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language;
+
+  const baseMonthly = pickSubscriptionPlan(subscriptionPlans, "MONTHLY", "base");
+  const baseAnnual = pickSubscriptionPlan(subscriptionPlans, "ANNUAL", "base");
+  const proMonthly = pickSubscriptionPlan(subscriptionPlans, "MONTHLY", "pro");
+  const proAnnual = pickSubscriptionPlan(subscriptionPlans, "ANNUAL", "pro");
+
+  const baseAnnualDiscount = useMemo(() => {
+    if (!baseMonthly || !baseAnnual) return null;
+    return computeAnnualDiscountPercent(baseMonthly, baseAnnual);
   }, [baseMonthly, baseAnnual]);
 
   const proAnnualDiscount = useMemo(() => {
+    if (!proMonthly || !proAnnual) return null;
     return computeAnnualDiscountPercent(proMonthly, proAnnual);
   }, [proMonthly, proAnnual]);
 

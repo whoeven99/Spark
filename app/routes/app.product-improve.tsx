@@ -13,11 +13,9 @@ import { fetchProductDescriptionContext } from "../server/productImprove/product
 import { enqueueProductImproveTask } from "../server/productImprove/productImproveAsync.server";
 import { getAppEntry } from "../config/appEntry.server";
 import { buildEmbeddedAppPath } from "../config/appEntry.server";
-import {
-  BILLING_PAGE_PATH,
-  billingErrorToResponse,
-  isBillingReturnRequest,
-} from "../server/billing/buildBillingReturnUrl.server";
+import { isBillingReturnRequest } from "../server/billing/buildBillingReturnUrl.server";
+import { BILLING_PAGE_PATH } from "../server/billing/buildBillingReturnUrl.server";
+import { billingErrorToResponse } from "../server/billing/index.server";
 import {
   loadBillingContext,
   requireBillingAccess,
