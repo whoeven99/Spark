@@ -307,7 +307,7 @@
   },
   "imageGeneration": {
     "pageTitle": "商品图片生成",
-    "pageSubtitle": "描述想要的画面，AI Assistant 将自动生成绘图提示词并生成商品图",
+    "pageSubtitle": "描述想要的画面，将自动生成绘图提示词并生成商品图",
     "sectionConfig": "生成配置",
     "descriptionLabel": "画面描述",
     "descriptionHint": "用自然语言说明商品、场景与风格，例如：夏季户外跑步鞋，草地背景，阳光明亮，适合电商主图",

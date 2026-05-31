@@ -329,9 +329,10 @@ export function BillingPage() {
     t,
   });
 
-  const tokenCapacity = billing.usedTokens + billing.availableTokens;
+  const tokenCapacity = billing.availableTokens;
   const usagePercent = getTokenUsagePercent(billing.usedTokens, tokenCapacity);
   const usagePercentDisplay = formatTokenUsagePercentDisplay(usagePercent);
+  const usagePercentForBar = Math.min(100, Math.max(0, usagePercent));
   const recommendedTier: PlanTier = interval === "MONTHLY" ? "base" : "pro";
   const usageLow = usagePercent >= 85;
 
@@ -549,14 +550,14 @@ export function BillingPage() {
                 role="progressbar"
                 aria-valuemin={0}
                 aria-valuemax={100}
-                aria-valuenow={usagePercent}
+                aria-valuenow={usagePercentForBar}
                 aria-label={t("billing.quotaProgressAria", {
                   percent: usagePercentDisplay,
                 })}
               >
                 <div
                   className={`${styles.progressFill} ${usageLow ? styles.progressFillLow : ""}`}
-                  style={{ width: `${usagePercent}%` }}
+                  style={{ width: `${usagePercentForBar}%` }}
                 />
               </div>
               <div className={styles.poolChips} aria-label={t("billing.sectionUsage")}>
