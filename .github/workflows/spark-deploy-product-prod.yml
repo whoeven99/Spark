@@ -162,7 +162,7 @@ jobs:
       - name: Notify Feishu on Render deploy success
         if: success()
         env:
-          FEISHU_WEBHOOK_URL: https://open.feishu.cn/open-apis/bot/v2/hook/e064b532-ecb3-4dab-bda7-8fe73781c51f
+          FEISHU_WEBHOOK_URL: https://open.feishu.cn/open-apis/bot/v2/hook/c3b2d5cb-291b-43f4-b0ac-658a18eb5636
           RENDER_DEPLOY_URL: ${{ steps.trigger_render.outputs.deploy_url }}
           RENDER_FINAL_STATUS: ${{ steps.wait_render.outputs.final_status }}
         run: |
@@ -181,7 +181,7 @@ jobs:
       - name: Notify Feishu on Render deploy failure
         if: failure()
         env:
-          FEISHU_WEBHOOK_URL: https://open.feishu.cn/open-apis/bot/v2/hook/e064b532-ecb3-4dab-bda7-8fe73781c51f
+          FEISHU_WEBHOOK_URL: https://open.feishu.cn/open-apis/bot/v2/hook/c3b2d5cb-291b-43f4-b0ac-658a18eb5636
           RENDER_DEPLOY_URL: ${{ steps.trigger_render.outputs.deploy_url }}
           RENDER_FINAL_STATUS: ${{ steps.wait_render.outputs.final_status }}
         run: |
