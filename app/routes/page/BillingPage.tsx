@@ -145,6 +145,77 @@ function PlanFeatureList({ items }: { items: string[] }) {
   );
 }
 
+function PaidPlanCard({
+  plan,
+  interval,
+  isRecommended,
+  isCurrent,
+  isPending,
+  isSubmitting,
+  locale,
+  t,
+  paidFeatures,
+}: {
+  plan: PlanRecord;
+  interval: BillingIntervalView;
+  isRecommended: boolean;
+  isCurrent: boolean;
+  isPending: boolean;
+  isSubmitting: boolean;
+  locale: string;
+  t: (key: string, options?: Record<string, unknown>) => string;
+  paidFeatures: (plan: PlanRecord) => string[];
+}) {
+  const periodSuffix = interval === "ANNUAL" ? t("billing.perYear") : t("billing.perMonth");
+  const monthlyEquivalent =
+    interval === "ANNUAL" ? formatAnnualMonthlyEquivalent(plan, locale) : null;
+
+  return (
+    <article
+      className={`${styles.planCard} ${
+        isRecommended ? styles.planCardRecommended : ""
+      } ${isCurrent ? styles.planCardCurrent : ""} ${isPending ? styles.planCardPending : ""}`}
+    >
+      {isRecommended ? (
+        <span className={styles.recommendedRibbon}>{t("billing.recommended")}</span>
+      ) : null}
+      <div className={styles.planCardBody}>
+        <h3 className={styles.planName}>{plan.displayName}</h3>
+        <div className={styles.planPriceRow}>
+          <span className={styles.planPrice}>
+            {formatPlanPrice(plan.priceAmount, plan.currencyCode, locale)}
+          </span>
+          <span className={styles.planPriceSuffix}>{periodSuffix}</span>
+        </div>
+        {monthlyEquivalent ? (
+          <p className={styles.planPriceMeta}>{`${monthlyEquivalent}${t("billing.perMonth")}`}</p>
+        ) : null}
+        <PlanFeatureList items={paidFeatures(plan)} />
+      </div>
+
+      <div className={styles.planCta}>
+        {isCurrent ? (
+          <div className={styles.planCurrentCta} role="status" aria-current="true">
+            {t("billing.currentPlan")}
+          </div>
+        ) : isPending ? (
+          <div className={styles.planPendingCta} role="status">
+            {t("billing.pendingConfirmation")}
+          </div>
+        ) : (
+          <Form method="post">
+            <input type="hidden" name="intent" value="subscribe" />
+            <input type="hidden" name="planKey" value={plan.planKey} />
+            <button type="submit" className={styles.planPrimaryCta} disabled={isSubmitting}>
+              {isSubmitting ? t("billing.redirectingToCheckout") : t("billing.subscribe")}
+            </button>
+          </Form>
+        )}
+      </div>
+    </article>
+  );
+}
+
 export function BillingPage() {
   const {
     billing,
@@ -747,9 +818,7 @@ export function BillingPage() {
 
               {paidPlansToShow.map((plan) => {
                 const tier = planTierFromPlanKey(plan.planKey);
-                const isRecommended =
-                  (interval === "MONTHLY" && tier === "base") ||
-                  (interval === "ANNUAL" && tier === "pro");
+                const isRecommended = tier === recommendedTier;
                 return (
                   <PaidPlanCard
                     key={plan.planKey}
