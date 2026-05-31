@@ -32,4 +32,7 @@ uri = "/webhooks/app/scopes_update"
 scopes = "read_locales,write_products"
 
 [auth]
-redirect_urls = [ "https://smartdescriptiontest.onrender.com" ]
+redirect_urls = [
+  "https://smartdescriptiontest.onrender.com/auth/callback",
+  "https://smartdescriptiontest.onrender.com/auth/shopify/callback",
+]
