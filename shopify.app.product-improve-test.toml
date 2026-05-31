@@ -2,7 +2,7 @@
 
 client_id = "81b68c6dd0b7e1b594b78ddcd202cd09"
 name = "Product Improve Test"
-application_url = "https://smartdescriptiontest.onrender.com/app/product-improve"
+application_url = "https://smartdescriptiontest.onrender.com"
 embedded = true
 
 [build]
