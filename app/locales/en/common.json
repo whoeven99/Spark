@@ -307,7 +307,7 @@
   },
   "imageGeneration": {
     "pageTitle": "Product image generation",
-    "pageSubtitle": "Describe the scene — AI Assistant will craft a drawing prompt and generate the image",
+    "pageSubtitle": "Describe the scene to automatically generate a drawing prompt and product image",
     "sectionConfig": "Generation settings",
     "descriptionLabel": "Scene description",
     "descriptionHint": "Describe the product, setting, and style in plain language — e.g. summer running shoes on grass, bright sunlight, e-commerce hero shot",
