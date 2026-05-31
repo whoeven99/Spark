@@ -4,6 +4,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import type {
   BillingHistoryItem,
+  BillingToolUsageItem,
   BillingUsagePeriodItem,
   PlanRecord,
 } from "../../lib/billingPageTypes";
@@ -108,6 +109,24 @@ function resolveBillingEventToneClass(
       return stylesMap.historyTonePositive;
     default:
       return stylesMap.historyToneNeutral;
+  }
+}
+
+function resolveToolUsageFeatureLabel(
+  feature: BillingToolUsageItem["feature"],
+  t: (key: string) => string,
+): string {
+  switch (feature) {
+    case "product_copy":
+      return t("billing.toolFeatureProductCopy");
+    case "image_generate":
+      return t("billing.toolFeatureImageGenerate");
+    case "image_prompt":
+      return t("billing.toolFeatureImagePrompt");
+    case "picture_translate":
+      return t("billing.toolFeaturePictureTranslate");
+    default:
+      return feature;
   }
 }
 
@@ -251,6 +270,7 @@ export function BillingPage() {
     tokenPacks,
     usageHistory,
     billingHistory,
+    toolUsageHistory,
     showDevCancelSubscription,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
@@ -489,7 +509,10 @@ export function BillingPage() {
   ];
 
   return (
-    <s-page heading={t("billing.pageTitle")}>
+    <s-page
+      heading={t("billing.pageTitle")}
+      style={{ overflow: "visible", height: "auto", minHeight: "auto" }}
+    >
       <div style={pageContentStyle}>
         {!billing.hasAccess && billing.billingRequired ? (
           <s-banner tone="warning">{t("billing.lowBalanceWarning")}</s-banner>
@@ -741,6 +764,48 @@ export function BillingPage() {
                 </div>
               ) : (
                 <div className={styles.emptyPanel}>{t("billing.usageHistoryEmpty")}</div>
+              )}
+            </article>
+
+            <article className={styles.accountCard}>
+              <div className={styles.accountCardHeader}>
+                <h3 className={styles.accountCardTitle}>{t("billing.toolUsageTitle")}</h3>
+                <span className={styles.accountCardMeta}>
+                  {t("billing.historyCount", {
+                    count: toolUsageHistory.length,
+                  })}
+                </span>
+              </div>
+              {toolUsageHistory.length > 0 ? (
+                <div className={styles.historyList}>
+                  {toolUsageHistory.slice(0, 8).map((item) => (
+                    <div key={item.id} className={styles.historyItem}>
+                      <div className={styles.historyItemTop}>
+                        <span className={`${styles.historyTone} ${styles.historyToneNeutral}`}>
+                          {resolveToolUsageFeatureLabel(item.feature, t)}
+                        </span>
+                        <span className={styles.historyTimestamp}>
+                          {formatDateTime(item.createdAt, locale)}
+                        </span>
+                      </div>
+                      <div className={styles.historyItemMeta}>
+                        <span>
+                          {t("billing.toolUsageModel", { model: item.modelKey })}
+                        </span>
+                        <span className={styles.historyDeltaNegative}>
+                          -{item.billedTokens.toLocaleString()} {t("billing.tokenUnit")}
+                        </span>
+                        <span>
+                          {t("billing.toolUsageRaw", {
+                            count: item.rawTokens.toLocaleString(),
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className={styles.emptyPanel}>{t("billing.toolUsageEmpty")}</div>
               )}
             </article>
           </div>

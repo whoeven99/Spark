@@ -17,10 +17,15 @@ import type {
   BillingPageLoaderData,
   BillingPageSnapshot,
   BillingHistoryItem,
+  BillingToolUsageItem,
   BillingUsagePeriodItem,
 } from "../../lib/billingPageTypes";
 import { listEnabledPlansForApp, type PlanRecord } from "./plans/planCatalog.server";
-import { APP_SUBSCRIPTION_STATUS, PLAN_CATALOG_KIND } from "./types.server";
+import {
+  APP_SUBSCRIPTION_STATUS,
+  BILLING_LOG_EVENT,
+  PLAN_CATALOG_KIND,
+} from "./types.server";
 
 function toIso(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null;
@@ -49,6 +54,56 @@ function toBillingUsagePeriodItem(row: AccountPeriodUsage): BillingUsagePeriodIt
     purchasedTokensRemaining: row.purchasedTokensRemaining,
     trialTokensRemaining: row.trialTokensRemaining,
     archivedAt: row.archivedAt.toISOString(),
+  };
+}
+
+function toBillingToolUsageItem(row: BillingLog): BillingToolUsageItem | null {
+  const metadata =
+    row.metadata && typeof row.metadata === "object"
+      ? (row.metadata as Record<string, unknown>)
+      : null;
+
+  const feature =
+    metadata && typeof metadata.feature === "string"
+      ? metadata.feature
+      : null;
+  const modelKey =
+    metadata && typeof metadata.modelKey === "string"
+      ? metadata.modelKey
+      : "_default";
+
+  const billedFromMeta =
+    metadata && typeof metadata.billedTokens === "number"
+      ? metadata.billedTokens
+      : null;
+  const rawFromMeta =
+    metadata && typeof metadata.rawTokens === "number"
+      ? metadata.rawTokens
+      : null;
+
+  const billedTokens =
+    billedFromMeta != null
+      ? Math.max(0, Math.floor(billedFromMeta))
+      : row.tokensDelta != null
+        ? Math.max(0, Math.abs(row.tokensDelta))
+        : row.usedTokens != null
+          ? Math.max(0, row.usedTokens)
+          : 0;
+
+  const rawTokens =
+    rawFromMeta != null
+      ? Math.max(0, Math.floor(rawFromMeta))
+      : billedTokens;
+
+  if (!feature || billedTokens <= 0) return null;
+
+  return {
+    id: row.id,
+    feature,
+    modelKey,
+    rawTokens,
+    billedTokens,
+    createdAt: row.createdAt.toISOString(),
   };
 }
 
@@ -91,16 +146,31 @@ export async function loadBillingPageData(
   appName: string,
 ): Promise<BillingPageLoaderData> {
   const ctx = await loadBillingContext(shop, appName);
-  const [usageHistoryRows, billingHistoryRows] = await Promise.all([
+  const [usageHistoryRows, billingHistoryRows, toolUsageRows] = await Promise.all([
     prisma.accountPeriodUsage.findMany({
       where: { shop, appName },
       orderBy: { periodEnd: "desc" },
       take: 6,
     }),
     prisma.billingLog.findMany({
-      where: { shop, appName },
+      where: {
+        shop,
+        appName,
+        eventType: {
+          not: BILLING_LOG_EVENT.TOOL_TOKEN_USED,
+        },
+      },
       orderBy: { createdAt: "desc" },
       take: 12,
+    }),
+    prisma.billingLog.findMany({
+      where: {
+        shop,
+        appName,
+        eventType: BILLING_LOG_EVENT.TOOL_TOKEN_USED,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 20,
     }),
   ]);
   const sub = ctx.subscription;
@@ -121,6 +191,9 @@ export async function loadBillingPageData(
     tokenPacks: ctx.plans.filter((p) => p.kind === PLAN_CATALOG_KIND.ONE_TIME_PACK),
     usageHistory: usageHistoryRows.map(toBillingUsagePeriodItem),
     billingHistory: billingHistoryRows.map(toBillingHistoryItem),
+    toolUsageHistory: toolUsageRows
+      .map(toBillingToolUsageItem)
+      .filter((row): row is BillingToolUsageItem => row != null),
     showDevCancelSubscription,
   };
 }

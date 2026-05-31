@@ -58,6 +58,15 @@ export type BillingUsagePeriodItem = {
   archivedAt: string;
 };
 
+export type BillingToolUsageItem = {
+  id: string;
+  feature: string;
+  modelKey: string;
+  rawTokens: number;
+  billedTokens: number;
+  createdAt: string;
+};
+
 export type BillingPageLoaderData = {
   appName: string;
   billing: BillingPageSnapshot;
@@ -66,6 +75,7 @@ export type BillingPageLoaderData = {
   tokenPacks: PlanRecord[];
   usageHistory: BillingUsagePeriodItem[];
   billingHistory: BillingHistoryItem[];
+  toolUsageHistory: BillingToolUsageItem[];
   /** NODE_ENV=test 且存在可取消订阅时为 true */
   showDevCancelSubscription: boolean;
 };
