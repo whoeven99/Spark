@@ -1,10 +1,8 @@
 # 每日拉取 Render Test 服务日志，归因汇总后发送飞书（需配置 FEISHU_WEBHOOK_URL）
 name: Render daily log digest
 
+# 定时任务已关闭；需要时在 Actions 里手动 Run workflow
 on:
-  schedule:
-    # UTC 00:30 = 北京时间 08:30（东八区）
-    - cron: "30 0 * * *"
   workflow_dispatch:
     inputs:
       lookback_hours:
@@ -42,8 +40,7 @@ jobs:
           RENDER_OWNER_ID: ${{ secrets.RENDER_OWNER_ID }}
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
           DIGEST_LOOKBACK_HOURS: ${{ github.event.inputs.lookback_hours }}
-          # 定时任务无 inputs，仅手动运行时 skip_feishu=true 才跳过飞书
-          DIGEST_SKIP_FEISHU: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_feishu == 'true' && 'true' || 'false' }}
+          DIGEST_SKIP_FEISHU: ${{ github.event.inputs.skip_feishu == 'true' && 'true' || 'false' }}
           DIGEST_QUERY_DELAY_MS: "3000"
           DIGEST_PAGE_DELAY_MS: "800"
           DIGEST_MAX_PAGES: "8"

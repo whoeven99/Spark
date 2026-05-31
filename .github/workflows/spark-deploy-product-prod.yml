@@ -1,31 +1,44 @@
-name: spark - Shopify App Deploy (Test)
+name: spark - Product Improve Deploy (Prod)
 
-# 任意分支 push / 手动均可触发。Render 始终部署；Shopify 仅 workflow_dispatch 或 push 到 master
-on: [push, workflow_dispatch]
+# 仅手动触发；始终从 master 检出；通过输入选择要运行的 job
+# Render 飞书通知：在 Environment CommonShopifyRenderConfig 配置
+#   FEISHU_WEBHOOK_URL_PRODUCT_IMPROVE（机器人 webhook，勿提交到仓库）
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: 选择要执行的部署任务
+        required: true
+        type: choice
+        default: both
+        options:
+          - both
+          - render
+          - shopify
 
 defaults:
   run:
     working-directory: .
 
 jobs:
-  deploy_render:
-    name: Trigger Render deploy (Test)
+  deploy_render_product_improve:
+    name: Trigger Render deploy (Product Improve Prod)
+    if: ${{ github.event.inputs.deploy_target == 'render' || github.event.inputs.deploy_target == 'both' }}
     runs-on: ubuntu-latest
     environment: CommonShopifyRenderConfig
 
     steps:
-      - name: Checkout
+      - name: Checkout master
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # 与本次要部署的代码一致；Render Create Deploy 对 branch 支持不可靠，下面用 commitId 触发
-          ref: ${{ github.ref }}
+          ref: master
 
-      - name: Deploy to Render Test
+      - name: Deploy to Render (product-improve)
         id: trigger_render
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_APIKEY }}
-          RENDER_SERVICE_ID: srv-d7j6ogaqqhas739in900
+          RENDER_SERVICE_ID: srv-d88llfml51nc73fksm2g
         run: |
           COMMIT="$(git rev-parse HEAD)"
           echo "Triggering Render deploy for commit: $COMMIT ($(git log -1 --oneline))"
@@ -34,7 +47,7 @@ jobs:
             -H "Content-Type: application/json" \
             -d "{\"commitId\": \"$COMMIT\"}")
           if [ "$RESPONSE" -eq 200 ] || [ "$RESPONSE" -eq 201 ]; then
-            echo "Deploy to test Render triggered successfully. HTTP status: $RESPONSE"
+            echo "Deploy to product-improve Render triggered successfully. HTTP status: $RESPONSE"
             DEPLOY_ID=$(python3 -c "import json;print(json.load(open('response.json')).get('id',''))")
             DEPLOY_STATUS=$(python3 -c "import json;print(json.load(open('response.json')).get('status',''))")
             DEPLOY_URL="https://dashboard.render.com/web/${RENDER_SERVICE_ID}/deploys/${DEPLOY_ID}"
@@ -49,11 +62,11 @@ jobs:
             exit 1
           fi
 
-      - name: Wait for Render Test deploy result
+      - name: Wait for Render deploy result
         id: wait_render
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_APIKEY }}
-          RENDER_SERVICE_ID: srv-d7j6ogaqqhas739in900
+          RENDER_SERVICE_ID: srv-d88llfml51nc73fksm2g
           DEPLOY_ID: ${{ steps.trigger_render.outputs.deploy_id }}
           TARGET_COMMIT: ${{ steps.trigger_render.outputs.commit_id }}
         run: |
@@ -62,7 +75,6 @@ jobs:
             exit 1
           fi
 
-          # 若本次 deploy 被更新的发布取消，检查同 commit 是否已有 live 发布（避免误报失败）
           check_commit_live() {
             curl -s -o recent_deploys.json \
               -H "Authorization: Bearer $RENDER_API_KEY" \
@@ -117,7 +129,7 @@ jobs:
                   echo "final_status=live_via_superseded" >> "$GITHUB_OUTPUT"
                   exit 0
                 fi
-                echo "Deploy canceled (often superseded by a newer deploy). Re-run workflow or push again."
+                echo "Deploy canceled (often superseded by a newer deploy). Re-run workflow."
                 echo "final_status=$FINAL_STATUS" >> "$GITHUB_OUTPUT"
                 exit 1
                 ;;
@@ -137,24 +149,62 @@ jobs:
           echo "final_status=timeout" >> "$GITHUB_OUTPUT"
           exit 1
 
-  deploy_shopify:
-    name: Shopify app deploy (test.toml)
+      # 文案与 BogdaApps bundleV2 生产 deploy_render 飞书步骤一致（bundle-shopify-deploy-prod.yml）
+      - name: Notify Feishu on Render deploy success
+        if: success()
+        env:
+          FEISHU_WEBHOOK_URL: https://open.feishu.cn/open-apis/bot/v2/hook/e064b532-ecb3-4dab-bda7-8fe73781c51f
+          RENDER_DEPLOY_URL: ${{ steps.trigger_render.outputs.deploy_url }}
+          RENDER_FINAL_STATUS: ${{ steps.wait_render.outputs.final_status }}
+        run: |
+          if [ -z "$FEISHU_WEBHOOK_URL" ]; then
+            echo "FEISHU_WEBHOOK_URL_PRODUCT_IMPROVE is not set, skip Feishu notification."
+            exit 0
+          fi
+
+          COMMIT_BODY="$(git log -1 --pretty=%b)"
+          MESSAGE="Product Improve PROD deploy 成功, by ${GITHUB_ACTOR}.\n最终状态: ${RENDER_FINAL_STATUS}\n发布内容：${COMMIT_BODY}"
+          PAYLOAD=$(python3 -c 'import json,os; print(json.dumps({"msg_type":"text","content":{"text":os.environ["MESSAGE"]}}, ensure_ascii=False))' MESSAGE="$MESSAGE")
+
+          curl -sS -X POST "$FEISHU_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
+
+      - name: Notify Feishu on Render deploy failure
+        if: failure()
+        env:
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL_PRODUCT_IMPROVE }}
+          RENDER_DEPLOY_URL: ${{ steps.trigger_render.outputs.deploy_url }}
+          RENDER_FINAL_STATUS: ${{ steps.wait_render.outputs.final_status }}
+        run: |
+          if [ -z "$FEISHU_WEBHOOK_URL" ]; then
+            echo "FEISHU_WEBHOOK_URL_PRODUCT_IMPROVE is not set, skip Feishu notification."
+            exit 0
+          fi
+
+          MESSAGE="Product Improve PROD deploy 失败, by ${GITHUB_ACTOR}.\n最终状态: ${RENDER_FINAL_STATUS}\nRender: ${RENDER_DEPLOY_URL}\nRun: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          PAYLOAD=$(python3 -c 'import json,os; print(json.dumps({"msg_type":"text","content":{"text":os.environ["MESSAGE"]}}, ensure_ascii=False))' MESSAGE="$MESSAGE")
+
+          curl -sS -X POST "$FEISHU_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
+
+  deploy_shopify_product_improve:
+    name: Shopify app deploy (product-prod.toml)
+    if: ${{ github.event.inputs.deploy_target == 'shopify' || github.event.inputs.deploy_target == 'both' }}
     runs-on: ubuntu-latest
     environment: CommonShopifyRenderConfig
-    # 仅：手动运行；或推送到 master
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master'
 
     steps:
-      - name: Checkout
+      - name: Checkout master
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.ref }}
+          ref: master
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          # @shopify/cli@latest 依赖 node:module.enableCompileCache（Node >= 22.12）
           node-version: "22"
           cache: npm
           cache-dependency-path: package-lock.json
@@ -165,9 +215,9 @@ jobs:
       - name: Install Shopify CLI
         run: npm install -g @shopify/cli@latest
 
-      - name: Deploy
+      - name: Deploy Shopify app config
         env:
           SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
-          # 与 shopify.app.test.toml 中 client_id 一致
-          SHOPIFY_API_KEY: 940b967eda872dd81f9ffc283e29a013
-        run: shopify app deploy -c shopify.app.test.toml --allow-updates
+          # 与 shopify.app.product-prod.toml 中 client_id 一致
+          SHOPIFY_API_KEY: b896c10abe3ca220b1efbc333ef41ad1
+        run: shopify app deploy -c shopify.app.product-prod.toml --allow-updates
