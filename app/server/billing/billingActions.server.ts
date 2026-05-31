@@ -1,6 +1,6 @@
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/tool";
+import { getAppEntryConfig } from "../../config/appEntry.server";
 import {
-  BILLING_PAGE_PATH,
   buildBillingReturnUrl,
 } from "./buildBillingReturnUrl.server";
 import { BillingError, BILLING_ERROR_CODE } from "./errors.server";
@@ -24,7 +24,7 @@ export async function startSubscriptionCheckout(params: {
   }
 
   const returnUrl = buildBillingReturnUrl(
-    BILLING_PAGE_PATH,
+    getAppEntryConfig().home,
     params.request,
     params.shop,
   );
@@ -57,7 +57,7 @@ export async function startTokenPackCheckout(params: {
   }
 
   const returnUrl = buildBillingReturnUrl(
-    BILLING_PAGE_PATH,
+    getAppEntryConfig().home,
     params.request,
     params.shop,
   );

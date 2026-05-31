@@ -192,7 +192,12 @@ function PlanFeatureList({ items }: { items: string[] }) {
   const usagePercent = getTokenUsagePercent(billing.usedTokens, tokenCapacity);
   const usagePercentDisplay = formatTokenUsagePercentDisplay(usagePercent);
   const usagePercentForBar = Math.min(100, Math.max(0, usagePercent));
-  const recommendedTier: PlanTier = interval === "MONTHLY" ? "base" : "pro";
+  const currentSubscriptionTier =
+    sub?.status === "ACTIVE" || sub?.status === "PENDING"
+      ? planTierFromPlanKey(sub.planKey)
+      : null;
+  const recommendedTier: PlanTier =
+    currentSubscriptionTier ?? (interval === "MONTHLY" ? "base" : "pro");
   const usageLow = usagePercent >= 85;
 
   if (actionData?.ok && "noopCheckout" in actionData && actionData.noopCheckout) {
