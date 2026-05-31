@@ -21,7 +21,6 @@ import {
   notification,
 } from "antd";
 import {
-  CloudSyncOutlined,
   DeleteOutlined,
   InfoCircleOutlined,
   PlusOutlined,
@@ -310,6 +309,41 @@ export default function PricingWorkbenchV2() {
     notification.success({ message: `${row.name} 已采纳建议参数` });
   }
 
+  function patchOnlineRule(ruleKey: string, patch: Partial<BillingRuleRow>) {
+    setBillingRules((prev) =>
+      prev.map((r) => (r.ruleKey === ruleKey ? { ...r, ...patch } : r)),
+    );
+  }
+
+  async function saveOnlineRule(rule: BillingRuleRow) {
+    if (!owner) return;
+    try {
+      await updateBillingRule(rule.ruleKey, {
+        displayName: rule.displayName,
+        multiplier: rule.multiplier,
+        baseTokenCost: rule.baseTokenCost,
+        enabled: rule.enabled,
+      });
+      notification.success({ message: `已保存 ${rule.ruleKey}` });
+      loadRules();
+    } catch (e) {
+      notification.error({ message: String(e) });
+    }
+  }
+
+  function copySimulationToRule(rule: BillingRuleRow) {
+    const calc = findCalcForRule(rule, featureRows);
+    if (!calc) {
+      notification.warning({ message: "模拟表中无对应能力行" });
+      return;
+    }
+    patchOnlineRule(rule.ruleKey, {
+      multiplier: calc.multiplier,
+      baseTokenCost: calc.baseTokenCost > 0 ? calc.baseTokenCost : null,
+    });
+    notification.info({ message: "已从模拟复制，请点击保存写回 Turso" });
+  }
+
   async function handleSave() {
     if (!owner) return;
     setSaving(true);
@@ -359,25 +393,6 @@ export default function PricingWorkbenchV2() {
       await deleteMonthlyFixedCost(id);
       await load();
       notification.success({ message: "已删除" });
-    } catch (e) {
-      notification.error({ message: String(e) });
-    }
-  }
-
-  async function applyRuleSuggestion(rule: BillingRuleRow) {
-    if (!owner) return;
-    const calc = findCalcForRule(rule, featureRows);
-    if (!calc) {
-      notification.warning({ message: "请先在本页添加对应能力行" });
-      return;
-    }
-    try {
-      await updateBillingRule(rule.ruleKey, {
-        multiplier: calc.multiplier,
-        baseTokenCost: calc.baseTokenCost > 0 ? calc.baseTokenCost : null,
-      });
-      notification.success({ message: `已写回 ${rule.ruleKey}` });
-      loadRules();
     } catch (e) {
       notification.error({ message: String(e) });
     }
@@ -492,50 +507,50 @@ export default function PricingWorkbenchV2() {
 
   const capabilitiesTab = (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <Alert
-        type="info"
-        showIcon
-        message="能力与计费规则"
-        description="左侧编辑成本与模拟参数（驱动套餐反推）；右侧对照线上 TokenBillingRule。写回规则会把当前模拟倍率/base 同步到 Turso，不影响 PlanCatalog。"
-      />
-      <Space wrap>
-        <Button icon={<PlusOutlined />} onClick={addScenario}>
-          新增能力
-        </Button>
-        <Button icon={<SyncOutlined />} onClick={syncFromBillingRules}>
-          从线上规则拉取
-        </Button>
-        <Button icon={<ReloadOutlined />} onClick={loadRules} loading={rulesLoading}>
-          刷新规则
-        </Button>
-      </Space>
-      <Table
-        size="small"
-        scroll={{ x: 1680 }}
-        pagination={false}
-        rowKey="id"
-        loading={rulesLoading}
-        dataSource={featureRows}
-        columns={[
-          {
-            title: "",
-            width: 48,
-            fixed: "left" as const,
-            render: (_: unknown, r: FeatureScenario) => (
-              <Switch
-                size="small"
-                checked={r.enabled}
-                onChange={(v) => patchScenario(r.id, { enabled: v })}
-              />
-            ),
-          },
-          {
-            title: "能力 / 规则",
-            width: 168,
-            fixed: "left" as const,
-            render: (_: unknown, r: FeatureCalcRow) => {
-              const rule = findRuleForScenario(r, billingRules);
-              return (
+      <Card
+        title="成本模拟"
+        extra={
+          <Space wrap>
+            <Button icon={<PlusOutlined />} onClick={addScenario}>
+              新增能力
+            </Button>
+            <Button icon={<SyncOutlined />} onClick={syncFromBillingRules}>
+              从线上拉取倍率
+            </Button>
+          </Space>
+        }
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="仅用于反推与套餐对照"
+          description="在此调整 API 成本假设与模拟倍率/base，驱动上方探针与套餐毛利率估算。不会写入 Turso。"
+        />
+        <Table
+          size="small"
+          scroll={{ x: 1200 }}
+          pagination={false}
+          rowKey="id"
+          dataSource={featureRows}
+          columns={[
+            {
+              title: "",
+              width: 48,
+              fixed: "left" as const,
+              render: (_: unknown, r: FeatureScenario) => (
+                <Switch
+                  size="small"
+                  checked={r.enabled}
+                  onChange={(v) => patchScenario(r.id, { enabled: v })}
+                />
+              ),
+            },
+            {
+              title: "能力",
+              width: 168,
+              fixed: "left" as const,
+              render: (_: unknown, r: FeatureCalcRow) => (
                 <Space direction="vertical" size={0}>
                   <Input
                     size="small"
@@ -545,175 +560,134 @@ export default function PricingWorkbenchV2() {
                   <Typography.Text type="secondary" style={{ fontSize: 10 }}>
                     {r.feature} · {r.modelKey}
                   </Typography.Text>
-                  {rule ? (
-                    <Typography.Text code style={{ fontSize: 10 }}>
-                      {rule.ruleKey}
-                    </Typography.Text>
-                  ) : (
-                    <Tag color="default" style={{ marginTop: 2, fontSize: 10 }}>
-                      无线上规则
-                    </Tag>
-                  )}
                 </Space>
-              );
+              ),
             },
-          },
-          {
-            title: "成本",
-            children: [
-              {
-                title: "$/1M In",
-                width: 80,
-                render: (_: unknown, r: FeatureScenario) => (
-                  <InputNumber
-                    size="small"
-                    min={0}
-                    step={0.01}
-                    style={{ width: "100%" }}
-                    value={r.priceInputPer1M}
-                    onChange={(n) =>
-                      patchScenario(r.id, { priceInputPer1M: Number(n ?? 0) })
-                    }
-                  />
-                ),
-              },
-              {
-                title: "$/1M Out",
-                width: 80,
-                render: (_: unknown, r: FeatureScenario) => (
-                  <InputNumber
-                    size="small"
-                    min={0}
-                    step={0.01}
-                    style={{ width: "100%" }}
-                    value={r.priceOutputPer1M}
-                    onChange={(n) =>
-                      patchScenario(r.id, { priceOutputPer1M: Number(n ?? 0) })
-                    }
-                  />
-                ),
-              },
-              {
-                title: "$/次固定",
-                width: 80,
-                render: (_: unknown, r: FeatureScenario) => (
-                  <InputNumber
-                    size="small"
-                    min={0}
-                    step={0.001}
-                    value={r.flatCostPerCallUsd}
-                    onChange={(n) =>
-                      patchScenario(r.id, { flatCostPerCallUsd: Number(n ?? 0) })
-                    }
-                  />
-                ),
-              },
-              {
-                title: "API/次",
-                width: 72,
-                render: (_: unknown, r: FeatureCalcRow) => (
-                  <Typography.Text style={{ fontSize: 11 }}>
-                    {USD(r.costPerCallUsd, 4)}
-                  </Typography.Text>
-                ),
-              },
-            ],
-          },
-          {
-            title: "模拟（工作台）",
-            children: [
-              {
-                title: "×",
-                width: 64,
-                render: (_: unknown, r: FeatureScenario) => (
-                  <InputNumber
-                    size="small"
-                    min={0}
-                    step={0.1}
-                    value={r.multiplier}
-                    onChange={(n) => patchScenario(r.id, { multiplier: Number(n ?? 0) })}
-                  />
-                ),
-              },
-              {
-                title: "base",
-                width: 72,
-                render: (_: unknown, r: FeatureScenario) => (
-                  <InputNumber
-                    size="small"
-                    min={0}
-                    value={r.baseTokenCost}
-                    onChange={(n) =>
-                      patchScenario(r.id, { baseTokenCost: Number(n ?? 0) })
-                    }
-                  />
-                ),
-              },
-              {
-                title: "扣费/次",
-                width: 80,
-                render: (_: unknown, r: FeatureCalcRow) => NUM(r.billedTokensPerCall),
-              },
-            ],
-          },
-          {
-            title: "线上（Turso）",
-            children: [
-              {
-                title: "×",
-                width: 56,
-                render: (_: unknown, r: FeatureCalcRow) => {
-                  const rule = findRuleForScenario(r, billingRules);
-                  if (!rule) return "-";
-                  const drift = Math.abs(rule.multiplier - r.multiplier) > 0.05;
-                  return (
-                    <Tag color={drift ? "orange" : "default"}>{rule.multiplier}x</Tag>
-                  );
-                },
-              },
-              {
-                title: "base",
-                width: 72,
-                render: (_: unknown, r: FeatureCalcRow) => {
-                  const rule = findRuleForScenario(r, billingRules);
-                  if (!rule || rule.baseTokenCost == null) return "-";
-                  const drift = rule.baseTokenCost !== r.baseTokenCost;
-                  return (
-                    <Tag color={drift ? "orange" : "default"}>{NUM(rule.baseTokenCost)}</Tag>
-                  );
-                },
-              },
-            ],
-          },
-          {
-            title: "建议",
-            children: [
-              {
-                title: "× / base",
-                width: 120,
-                render: (_: unknown, r: FeatureCalcRow) => (
-                  <Space size={4} wrap>
-                    <Tag
-                      color={
-                        Math.abs(r.suggestedMultiplier - r.multiplier) > 0.15
-                          ? "gold"
-                          : "default"
+            {
+              title: "成本",
+              children: [
+                {
+                  title: "$/1M In",
+                  width: 80,
+                  render: (_: unknown, r: FeatureScenario) => (
+                    <InputNumber
+                      size="small"
+                      min={0}
+                      step={0.01}
+                      style={{ width: "100%" }}
+                      value={r.priceInputPer1M}
+                      onChange={(n) =>
+                        patchScenario(r.id, { priceInputPer1M: Number(n ?? 0) })
                       }
-                    >
-                      {r.suggestedMultiplier}x
-                    </Tag>
-                    {r.suggestedBaseTokenCost > 0 && (
-                      <Tag color="purple">{NUM(r.suggestedBaseTokenCost)}</Tag>
-                    )}
-                  </Space>
-                ),
-              },
-              {
-                title: "操作",
-                width: 148,
-                render: (_: unknown, r: FeatureCalcRow) => {
-                  const rule = findRuleForScenario(r, billingRules);
-                  return (
+                    />
+                  ),
+                },
+                {
+                  title: "$/1M Out",
+                  width: 80,
+                  render: (_: unknown, r: FeatureScenario) => (
+                    <InputNumber
+                      size="small"
+                      min={0}
+                      step={0.01}
+                      style={{ width: "100%" }}
+                      value={r.priceOutputPer1M}
+                      onChange={(n) =>
+                        patchScenario(r.id, { priceOutputPer1M: Number(n ?? 0) })
+                      }
+                    />
+                  ),
+                },
+                {
+                  title: "$/次固定",
+                  width: 80,
+                  render: (_: unknown, r: FeatureScenario) => (
+                    <InputNumber
+                      size="small"
+                      min={0}
+                      step={0.001}
+                      value={r.flatCostPerCallUsd}
+                      onChange={(n) =>
+                        patchScenario(r.id, { flatCostPerCallUsd: Number(n ?? 0) })
+                      }
+                    />
+                  ),
+                },
+                {
+                  title: "API/次",
+                  width: 72,
+                  render: (_: unknown, r: FeatureCalcRow) => (
+                    <Typography.Text style={{ fontSize: 11 }}>
+                      {USD(r.costPerCallUsd, 4)}
+                    </Typography.Text>
+                  ),
+                },
+              ],
+            },
+            {
+              title: "模拟倍率",
+              children: [
+                {
+                  title: "×",
+                  width: 64,
+                  render: (_: unknown, r: FeatureScenario) => (
+                    <InputNumber
+                      size="small"
+                      min={0}
+                      step={0.1}
+                      value={r.multiplier}
+                      onChange={(n) => patchScenario(r.id, { multiplier: Number(n ?? 0) })}
+                    />
+                  ),
+                },
+                {
+                  title: "base",
+                  width: 72,
+                  render: (_: unknown, r: FeatureScenario) => (
+                    <InputNumber
+                      size="small"
+                      min={0}
+                      value={r.baseTokenCost}
+                      onChange={(n) =>
+                        patchScenario(r.id, { baseTokenCost: Number(n ?? 0) })
+                      }
+                    />
+                  ),
+                },
+                {
+                  title: "扣费/次",
+                  width: 80,
+                  render: (_: unknown, r: FeatureCalcRow) => NUM(r.billedTokensPerCall),
+                },
+              ],
+            },
+            {
+              title: "建议",
+              children: [
+                {
+                  title: "× / base",
+                  width: 120,
+                  render: (_: unknown, r: FeatureCalcRow) => (
+                    <Space size={4} wrap>
+                      <Tag
+                        color={
+                          Math.abs(r.suggestedMultiplier - r.multiplier) > 0.15
+                            ? "gold"
+                            : "default"
+                        }
+                      >
+                        {r.suggestedMultiplier}x
+                      </Tag>
+                      {r.suggestedBaseTokenCost > 0 && (
+                        <Tag color="purple">{NUM(r.suggestedBaseTokenCost)}</Tag>
+                      )}
+                    </Space>
+                  ),
+                },
+                {
+                  title: "操作",
+                  width: 120,
+                  render: (_: unknown, r: FeatureCalcRow) => (
                     <Space size={0} wrap>
                       <Button
                         type="link"
@@ -722,16 +696,6 @@ export default function PricingWorkbenchV2() {
                       >
                         采纳建议
                       </Button>
-                      {owner && rule && (
-                        <Button
-                          type="link"
-                          size="small"
-                          icon={<CloudSyncOutlined />}
-                          onClick={() => applyRuleSuggestion(rule)}
-                        >
-                          写回
-                        </Button>
-                      )}
                       <Button
                         type="text"
                         danger
@@ -742,43 +706,192 @@ export default function PricingWorkbenchV2() {
                         }
                       />
                     </Space>
-                  );
+                  ),
                 },
-              },
-            ],
-          },
-        ]}
-      />
-      {orphanRules.length > 0 && (
-        <Alert
-          type="warning"
-          showIcon
-          message={`${orphanRules.length} 条线上规则尚未纳入模拟`}
-          description={
-            <Space wrap style={{ marginTop: 8 }}>
-              {orphanRules.map((rule) => (
-                <Button
-                  key={rule.ruleKey}
-                  size="small"
-                  onClick={() => importRuleAsScenario(rule)}
-                >
-                  导入 {rule.displayName}
-                </Button>
-              ))}
-            </Space>
-          }
+              ],
+            },
+          ]}
         />
-      )}
-      <Row gutter={16}>
-        <Col xs={24}>
-          <Card size="small">
+        <Row gutter={16} style={{ marginTop: 16 }}>
+          <Col xs={24}>
             <Typography.Text type="secondary">综合 $ / 计费 Token（各能力均权）</Typography.Text>
             <Typography.Title level={4} style={{ margin: "4px 0" }}>
               {USD(totals.effectiveCostPerBilledToken, 6)}
             </Typography.Title>
-          </Card>
-        </Col>
-      </Row>
+          </Col>
+        </Row>
+      </Card>
+
+      <Card
+        title="线上计费规则（Turso）"
+        extra={
+          <Button icon={<ReloadOutlined />} onClick={loadRules} loading={rulesLoading}>
+            刷新
+          </Button>
+        }
+      >
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="生产环境 TokenBillingRule"
+          description="在此直接编辑并保存到 Turso，影响主 App 实际扣费。与上方模拟互不影响，可用「从模拟复制」对照后再保存。"
+        />
+        <Table
+          size="small"
+          scroll={{ x: 1100 }}
+          pagination={false}
+          rowKey="ruleKey"
+          loading={rulesLoading}
+          dataSource={billingRules}
+          columns={[
+            {
+              title: "规则",
+              width: 200,
+              fixed: "left" as const,
+              render: (_: unknown, r: BillingRuleRow) => (
+                <Space direction="vertical" size={0}>
+                  <Input
+                    size="small"
+                    value={r.displayName}
+                    disabled={!owner}
+                    onChange={(e) =>
+                      patchOnlineRule(r.ruleKey, { displayName: e.target.value })
+                    }
+                  />
+                  <Typography.Text code style={{ fontSize: 10 }}>
+                    {r.ruleKey}
+                  </Typography.Text>
+                  <Typography.Text type="secondary" style={{ fontSize: 10 }}>
+                    {r.feature} · {r.modelKey}
+                  </Typography.Text>
+                </Space>
+              ),
+            },
+            {
+              title: "×",
+              width: 80,
+              render: (_: unknown, r: BillingRuleRow) => {
+                const sim = findCalcForRule(r, featureRows);
+                const drift = sim && Math.abs(sim.multiplier - r.multiplier) > 0.05;
+                return (
+                  <Space direction="vertical" size={0}>
+                    <InputNumber
+                      size="small"
+                      min={0}
+                      step={0.1}
+                      disabled={!owner}
+                      value={r.multiplier}
+                      onChange={(n) =>
+                        patchOnlineRule(r.ruleKey, { multiplier: Number(n ?? 0) })
+                      }
+                    />
+                    {sim && drift && (
+                      <Typography.Text type="secondary" style={{ fontSize: 10 }}>
+                        模拟 {sim.multiplier}x
+                      </Typography.Text>
+                    )}
+                  </Space>
+                );
+              },
+            },
+            {
+              title: "base",
+              width: 88,
+              render: (_: unknown, r: BillingRuleRow) => {
+                const sim = findCalcForRule(r, featureRows);
+                const simBase = sim && sim.baseTokenCost > 0 ? sim.baseTokenCost : null;
+                const drift =
+                  simBase != null &&
+                  r.baseTokenCost != null &&
+                  r.baseTokenCost !== simBase;
+                return (
+                  <Space direction="vertical" size={0}>
+                    <InputNumber
+                      size="small"
+                      min={0}
+                      disabled={!owner}
+                      value={r.baseTokenCost ?? undefined}
+                      placeholder="-"
+                      onChange={(n) =>
+                        patchOnlineRule(r.ruleKey, {
+                          baseTokenCost: n == null || n === 0 ? null : Number(n),
+                        })
+                      }
+                    />
+                    {simBase != null && drift && (
+                      <Typography.Text type="secondary" style={{ fontSize: 10 }}>
+                        模拟 {NUM(simBase)}
+                      </Typography.Text>
+                    )}
+                  </Space>
+                );
+              },
+            },
+            {
+              title: "启用",
+              width: 64,
+              render: (_: unknown, r: BillingRuleRow) =>
+                owner ? (
+                  <Switch
+                    size="small"
+                    checked={r.enabled}
+                    onChange={(v) => patchOnlineRule(r.ruleKey, { enabled: v })}
+                  />
+                ) : (
+                  <Tag color={r.enabled ? "green" : "default"}>{r.enabled ? "是" : "否"}</Tag>
+                ),
+            },
+            {
+              title: "操作",
+              width: 160,
+              render: (_: unknown, r: BillingRuleRow) => (
+                <Space size={0} wrap>
+                  {owner && (
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<SaveOutlined />}
+                      onClick={() => saveOnlineRule(r)}
+                    >
+                      保存
+                    </Button>
+                  )}
+                  <Button
+                    type="link"
+                    size="small"
+                    disabled={!findCalcForRule(r, featureRows)}
+                    onClick={() => copySimulationToRule(r)}
+                  >
+                    从模拟复制
+                  </Button>
+                </Space>
+              ),
+            },
+          ]}
+        />
+        {orphanRules.length > 0 && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginTop: 12 }}
+            message={`${orphanRules.length} 条线上规则尚未纳入模拟对照`}
+            description={
+              <Space wrap style={{ marginTop: 8 }}>
+                {orphanRules.map((rule) => (
+                  <Button
+                    key={rule.ruleKey}
+                    size="small"
+                    onClick={() => importRuleAsScenario(rule)}
+                  >
+                    加入模拟 {rule.displayName}
+                  </Button>
+                ))}
+              </Space>
+            }
+          />
+        )}
+      </Card>
     </Space>
   );
 
