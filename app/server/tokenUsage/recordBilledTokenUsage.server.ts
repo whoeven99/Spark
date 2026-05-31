@@ -1,7 +1,6 @@
 import { getAppEntry } from "../../config/appEntry.server";
+import prisma from "../../db.server";
 import { isBillingEnabledForApp } from "../billing/constants.server";
-import { appendBillingLog } from "../billing/billingLog.server";
-import { BILLING_LOG_EVENT } from "../billing/types.server";
 import type { BilledTokenUsageItem } from "./applyTokenBilling.server";
 import { billTokenUsage } from "./applyTokenBilling.server";
 import { recordTokenUsage } from "./recordTokenUsage.server";
@@ -68,23 +67,16 @@ export async function recordBilledTokenUsages(params: {
 
   await recordTokenUsage({ shop, appName, usage });
 
-  await Promise.all(
-    positiveItems.map((entry) =>
-      appendBillingLog({
-        shop,
-        appName,
-        eventType: BILLING_LOG_EVENT.TOOL_TOKEN_USED,
-        tokensDelta: -entry.billedUsage.totalTokens,
-        usedTokens: entry.billedUsage.totalTokens,
-        metadata: {
-          feature: entry.item.feature,
-          modelKey: entry.item.modelKey,
-          rawTokens: entry.rawUsage.totalTokens,
-          billedTokens: entry.billedUsage.totalTokens,
-          inputTokens: entry.billedUsage.inputTokens,
-          outputTokens: entry.billedUsage.outputTokens,
-        },
-      }),
-    ),
-  );
+  await prisma.toolTokenUsageLog.createMany({
+    data: positiveItems.map((entry) => ({
+      shop,
+      appName,
+      feature: entry.item.feature,
+      modelKey: entry.item.modelKey,
+      rawTokens: entry.rawUsage.totalTokens,
+      billedTokens: entry.billedUsage.totalTokens,
+      inputTokens: entry.billedUsage.inputTokens,
+      outputTokens: entry.billedUsage.outputTokens,
+    })),
+  });
 }

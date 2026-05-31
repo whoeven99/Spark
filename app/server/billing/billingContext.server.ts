@@ -3,6 +3,7 @@ import type {
   AccountPeriodUsage,
   AppSubscription,
   BillingLog,
+  ToolTokenUsageLog,
 } from "../../generated/prisma";
 import prisma from "../../db.server";
 import {
@@ -23,7 +24,6 @@ import type {
 import { listEnabledPlansForApp, type PlanRecord } from "./plans/planCatalog.server";
 import {
   APP_SUBSCRIPTION_STATUS,
-  BILLING_LOG_EVENT,
   PLAN_CATALOG_KIND,
 } from "./types.server";
 
@@ -57,52 +57,13 @@ function toBillingUsagePeriodItem(row: AccountPeriodUsage): BillingUsagePeriodIt
   };
 }
 
-function toBillingToolUsageItem(row: BillingLog): BillingToolUsageItem | null {
-  const metadata =
-    row.metadata && typeof row.metadata === "object"
-      ? (row.metadata as Record<string, unknown>)
-      : null;
-
-  const feature =
-    metadata && typeof metadata.feature === "string"
-      ? metadata.feature
-      : null;
-  const modelKey =
-    metadata && typeof metadata.modelKey === "string"
-      ? metadata.modelKey
-      : "_default";
-
-  const billedFromMeta =
-    metadata && typeof metadata.billedTokens === "number"
-      ? metadata.billedTokens
-      : null;
-  const rawFromMeta =
-    metadata && typeof metadata.rawTokens === "number"
-      ? metadata.rawTokens
-      : null;
-
-  const billedTokens =
-    billedFromMeta != null
-      ? Math.max(0, Math.floor(billedFromMeta))
-      : row.tokensDelta != null
-        ? Math.max(0, Math.abs(row.tokensDelta))
-        : row.usedTokens != null
-          ? Math.max(0, row.usedTokens)
-          : 0;
-
-  const rawTokens =
-    rawFromMeta != null
-      ? Math.max(0, Math.floor(rawFromMeta))
-      : billedTokens;
-
-  if (!feature || billedTokens <= 0) return null;
-
+function toBillingToolUsageItem(row: ToolTokenUsageLog): BillingToolUsageItem {
   return {
     id: row.id,
-    feature,
-    modelKey,
-    rawTokens,
-    billedTokens,
+    feature: row.feature,
+    modelKey: row.modelKey,
+    rawTokens: row.rawTokens,
+    billedTokens: row.billedTokens,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -153,22 +114,12 @@ export async function loadBillingPageData(
       take: 6,
     }),
     prisma.billingLog.findMany({
-      where: {
-        shop,
-        appName,
-        eventType: {
-          not: BILLING_LOG_EVENT.TOOL_TOKEN_USED,
-        },
-      },
+      where: { shop, appName },
       orderBy: { createdAt: "desc" },
       take: 12,
     }),
-    prisma.billingLog.findMany({
-      where: {
-        shop,
-        appName,
-        eventType: BILLING_LOG_EVENT.TOOL_TOKEN_USED,
-      },
+    prisma.toolTokenUsageLog.findMany({
+      where: { shop, appName },
       orderBy: { createdAt: "desc" },
       take: 20,
     }),
@@ -191,9 +142,7 @@ export async function loadBillingPageData(
     tokenPacks: ctx.plans.filter((p) => p.kind === PLAN_CATALOG_KIND.ONE_TIME_PACK),
     usageHistory: usageHistoryRows.map(toBillingUsagePeriodItem),
     billingHistory: billingHistoryRows.map(toBillingHistoryItem),
-    toolUsageHistory: toolUsageRows
-      .map(toBillingToolUsageItem)
-      .filter((row): row is BillingToolUsageItem => row != null),
+    toolUsageHistory: toolUsageRows.map(toBillingToolUsageItem),
     showDevCancelSubscription,
   };
 }

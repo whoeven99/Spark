@@ -7,8 +7,6 @@ export const BILLING_LOG_EVENT = {
   /** 一次性购包已发起，待商家确认 */
   TOKEN_PACK_INITIATED: "TOKEN_PACK_INITIATED",
   TOKEN_PACK_PURCHASED: "TOKEN_PACK_PURCHASED",
-  /** 每次工具调用扣减 token 的明细记录（用于账单明细展示） */
-  TOOL_TOKEN_USED: "TOOL_TOKEN_USED",
 } as const;
 
 export type BillingLogEventType =

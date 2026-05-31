@@ -40,6 +40,7 @@
 | `PlanCatalog` | 套餐/按量包/试用定义（种子见 `prisma/billing-plan-catalog-seed.sql`，由 `npm run turso:migrate:*` 写入） |
 | `AccountPeriodUsage` | 每个订阅周期结束时的用量归档 |
 | `BillingLog` | 试用、开通、续费、按量购等流水 |
+| `ToolTokenUsageLog` | 工具级 token 消耗明细（高频：商品优化/图片生成/图片翻译等） |
 
 ## 续费时的顺序
 
