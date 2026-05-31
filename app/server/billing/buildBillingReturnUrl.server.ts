@@ -40,6 +40,53 @@ function resolveAppOrigin(request: Request): string {
   return new URL(request.url).origin;
 }
 
+function shopifyAdminStoreHandle(shop: string): string {
+  return shop.replace(/\.myshopify\.com$/i, "");
+}
+
+function appIdentifierFromAdminUrl(value: string | null): string | null {
+  if (!value) return null;
+
+  try {
+    const url = new URL(value);
+    if (url.hostname !== "admin.shopify.com") return null;
+
+    const segments = url.pathname.split("/").filter(Boolean);
+    const appsIndex = segments.indexOf("apps");
+    const identifier = appsIndex >= 0 ? segments[appsIndex + 1] : undefined;
+    return identifier ? decodeURIComponent(identifier) : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveAdminAppIdentifier(request: Request): string | null {
+  const fromReferer = appIdentifierFromAdminUrl(request.headers.get("referer"));
+  if (fromReferer) return fromReferer;
+
+  const configured =
+    process.env.SHOPIFY_ADMIN_APP_HANDLE?.trim() ||
+    process.env.SHOPIFY_APP_HANDLE?.trim() ||
+    process.env.SHOPIFY_API_KEY?.trim();
+  return configured || null;
+}
+
+function buildAdminEmbeddedBillingReturnUrl(
+  path: string,
+  request: Request,
+  shop: string,
+): string | null {
+  const appIdentifier = resolveAdminAppIdentifier(request);
+  if (!appIdentifier) return null;
+
+  const url = new URL(
+    `/store/${shopifyAdminStoreHandle(shop)}/apps/${encodeURIComponent(appIdentifier)}${path}`,
+    "https://admin.shopify.com",
+  );
+  url.searchParams.set(BILLING_RETURN_QUERY_FLAG, "1");
+  return url.toString();
+}
+
 function applyBillingReturnQuery(url: URL, shop: string, incoming: URL): void {
   url.searchParams.set("shop", shop);
   url.searchParams.set(BILLING_RETURN_QUERY_FLAG, "1");
@@ -56,6 +103,14 @@ export function buildBillingReturnUrl(
   request: Request,
   shop: string,
 ): string {
+  const adminReturnUrl = buildAdminEmbeddedBillingReturnUrl(path, request, shop);
+  if (
+    adminReturnUrl &&
+    adminReturnUrl.length <= SHOPIFY_BILLING_RETURN_URL_MAX_LENGTH
+  ) {
+    return adminReturnUrl;
+  }
+
   const origin = resolveAppOrigin(request);
   const incoming = new URL(request.url);
 

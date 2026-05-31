@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   BILLING_PAGE_PATH,
   buildBillingReturnUrl,
@@ -7,11 +7,46 @@ import {
 } from "../../../../app/server/billing/buildBillingReturnUrl.server";
 
 describe("buildBillingReturnUrl", () => {
-  afterEach(() => {
-    delete process.env.SHOPIFY_APP_URL;
+  beforeEach(() => {
+    delete process.env.SHOPIFY_ADMIN_APP_HANDLE;
+    delete process.env.SHOPIFY_APP_HANDLE;
+    delete process.env.SHOPIFY_API_KEY;
   });
 
-  it("只保留 shop、host 与计费回跳标记，不包含 id_token", () => {
+  afterEach(() => {
+    delete process.env.SHOPIFY_APP_URL;
+    delete process.env.SHOPIFY_ADMIN_APP_HANDLE;
+    delete process.env.SHOPIFY_APP_HANDLE;
+    delete process.env.SHOPIFY_API_KEY;
+  });
+
+  it("prefers the Shopify Admin embedded billing page when the app handle is available", () => {
+    process.env.SHOPIFY_APP_URL = "https://app.example.com";
+    const request = new Request(
+      "https://app.example.com/app/billing?shop=ciwishop.myshopify.com&host=encoded-host",
+      {
+        headers: {
+          referer:
+            "https://admin.shopify.com/store/ciwishop/apps/desc-test-1/app/billing?shop=ciwishop.myshopify.com",
+        },
+      },
+    );
+
+    const returnUrl = buildBillingReturnUrl(
+      BILLING_PAGE_PATH,
+      request,
+      "ciwishop.myshopify.com",
+    );
+
+    expect(returnUrl).toBe(
+      "https://admin.shopify.com/store/ciwishop/apps/desc-test-1/app/billing?billing_return=1",
+    );
+    expect(returnUrl.length).toBeLessThanOrEqual(
+      SHOPIFY_BILLING_RETURN_URL_MAX_LENGTH,
+    );
+  });
+
+  it("falls back to the app origin and keeps only shop, host, and billing markers", () => {
     process.env.SHOPIFY_APP_URL = "https://app.example.com";
     const longToken = "x".repeat(500);
     const request = new Request(
@@ -34,7 +69,7 @@ describe("buildBillingReturnUrl", () => {
     expect(returnUrl).not.toContain("session=");
   });
 
-  it("无 host 时从 shop 推导 host，避免回跳后进登录页", () => {
+  it("derives host from shop when host is missing in the app-origin fallback", () => {
     process.env.SHOPIFY_APP_URL = "https://app.example.com";
     const request = new Request(
       "https://app.example.com/app/billing?shop=store.myshopify.com",
