@@ -6,14 +6,28 @@ import {
   BILLING_PAGE_PATH,
   isBillingReturnRequest,
 } from "../../server/billing/buildBillingReturnUrl.server";
+import {
+  isEmbeddedAdminEntry,
+  resolveShopQueryFromRequest,
+} from "../../server/shopify/embeddedEntry.server";
 import { login } from "../../shopify.server";
 
 import styles from "./styles.module.css";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
+  const shop = resolveShopQueryFromRequest(request);
 
-  if (url.searchParams.get("shop")) {
+  if (shop) {
+    if (!url.searchParams.get("shop")) {
+      url.searchParams.set("shop", shop);
+    }
+    const { home } = getAppEntryConfig();
+    const path = isBillingReturnRequest(request) ? BILLING_PAGE_PATH : home;
+    throw redirect(buildEmbeddedAppPath(path, new Request(url.toString(), request)));
+  }
+
+  if (isEmbeddedAdminEntry(request)) {
     const { home } = getAppEntryConfig();
     const path = isBillingReturnRequest(request) ? BILLING_PAGE_PATH : home;
     throw redirect(buildEmbeddedAppPath(path, request));

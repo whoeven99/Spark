@@ -4,11 +4,37 @@ import { requireOwner } from "../middleware/auth.js";
 
 export const billingRulesRouter = Router();
 
+async function ensureBillingRuleColumns() {
+  const db = getDb();
+  const tableInfo = await db.execute("PRAGMA table_info(TokenBillingRule)");
+  const hasCostColumn = tableInfo.rows.some(
+    (row) => String(row.name) === "costUsdPerMillionToken",
+  );
+  if (!hasCostColumn) {
+    await db.execute(
+      "ALTER TABLE TokenBillingRule ADD COLUMN costUsdPerMillionToken REAL",
+    );
+  }
+}
+
+let billingRuleReady: Promise<void> | null = null;
+
+function readyBillingRuleTable() {
+  if (!billingRuleReady) {
+    billingRuleReady = ensureBillingRuleColumns().catch((error) => {
+      billingRuleReady = null;
+      throw error;
+    });
+  }
+  return billingRuleReady;
+}
+
 billingRulesRouter.get("/", async (_req, res) => {
   try {
+    await readyBillingRuleTable();
     const db = getDb();
     const result = await db.execute(
-      "SELECT ruleKey, appName, feature, modelKey, displayName, multiplier, baseTokenCost, enabled, createdAt, updatedAt FROM TokenBillingRule ORDER BY feature, modelKey",
+      "SELECT ruleKey, appName, feature, modelKey, displayName, multiplier, baseTokenCost, costUsdPerMillionToken, enabled, createdAt, updatedAt FROM TokenBillingRule ORDER BY feature, modelKey",
     );
     const rules = result.rows.map((r) => ({
       ruleKey: r.ruleKey as string,
@@ -18,6 +44,10 @@ billingRulesRouter.get("/", async (_req, res) => {
       displayName: r.displayName as string,
       multiplier: Number(r.multiplier),
       baseTokenCost: r.baseTokenCost != null ? Number(r.baseTokenCost) : null,
+      costUsdPerMillionToken:
+        r.costUsdPerMillionToken != null
+          ? Number(r.costUsdPerMillionToken)
+          : null,
       enabled: Number(r.enabled) !== 0,
       createdAt: r.createdAt as string,
       updatedAt: r.updatedAt as string,
@@ -31,8 +61,18 @@ billingRulesRouter.get("/", async (_req, res) => {
 
 billingRulesRouter.post("/", requireOwner, async (req, res) => {
   try {
+    await readyBillingRuleTable();
     const db = getDb();
-    const { appName, feature, modelKey, displayName, multiplier, baseTokenCost, enabled } = req.body as Record<string, unknown>;
+    const {
+      appName,
+      feature,
+      modelKey,
+      displayName,
+      multiplier,
+      baseTokenCost,
+      costUsdPerMillionToken,
+      enabled,
+    } = req.body as Record<string, unknown>;
     if (!appName || !feature || !modelKey || !displayName || multiplier == null) {
       res.status(400).json({ error: "Missing required fields: appName, feature, modelKey, displayName, multiplier" });
       return;
@@ -40,8 +80,20 @@ billingRulesRouter.post("/", requireOwner, async (req, res) => {
     const ruleKey = `${appName}:${feature}:${modelKey}`;
     const now = new Date().toISOString();
     await db.execute({
-      sql: "INSERT INTO TokenBillingRule (ruleKey, appName, feature, modelKey, displayName, multiplier, baseTokenCost, enabled, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      args: [ruleKey, String(appName), String(feature), String(modelKey), String(displayName), Number(multiplier), baseTokenCost != null ? Number(baseTokenCost) : null, enabled !== false ? 1 : 0, now, now],
+      sql: "INSERT INTO TokenBillingRule (ruleKey, appName, feature, modelKey, displayName, multiplier, baseTokenCost, costUsdPerMillionToken, enabled, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      args: [
+        ruleKey,
+        String(appName),
+        String(feature),
+        String(modelKey),
+        String(displayName),
+        Number(multiplier),
+        baseTokenCost != null ? Number(baseTokenCost) : null,
+        costUsdPerMillionToken != null ? Number(costUsdPerMillionToken) : null,
+        enabled !== false ? 1 : 0,
+        now,
+        now,
+      ],
     });
     res.json({ ok: true, ruleKey });
   } catch (err) {
@@ -56,15 +108,20 @@ billingRulesRouter.post("/", requireOwner, async (req, res) => {
 
 billingRulesRouter.put("/:ruleKey", requireOwner, async (req, res) => {
   try {
+    await readyBillingRuleTable();
     const db = getDb();
     const ruleKey = String(req.params.ruleKey);
-    const { displayName, multiplier, baseTokenCost, enabled } = req.body as Record<string, unknown>;
+    const { displayName, multiplier, baseTokenCost, costUsdPerMillionToken, enabled } = req.body as Record<string, unknown>;
     const sets: string[] = [];
     const args: (string | number | null)[] = [];
 
     if (displayName !== undefined) { sets.push("displayName = ?"); args.push(String(displayName)); }
     if (multiplier !== undefined) { sets.push("multiplier = ?"); args.push(Number(multiplier)); }
     if (baseTokenCost !== undefined) { sets.push("baseTokenCost = ?"); args.push(baseTokenCost != null ? Number(baseTokenCost) : null); }
+    if (costUsdPerMillionToken !== undefined) {
+      sets.push("costUsdPerMillionToken = ?");
+      args.push(costUsdPerMillionToken != null ? Number(costUsdPerMillionToken) : null);
+    }
     if (enabled !== undefined) { sets.push("enabled = ?"); args.push(enabled ? 1 : 0); }
 
     if (sets.length === 0) {
@@ -86,6 +143,7 @@ billingRulesRouter.put("/:ruleKey", requireOwner, async (req, res) => {
 
 billingRulesRouter.delete("/:ruleKey", requireOwner, async (req, res) => {
   try {
+    await readyBillingRuleTable();
     const db = getDb();
     const ruleKey = String(req.params.ruleKey);
     await db.execute({ sql: "DELETE FROM TokenBillingRule WHERE ruleKey = ?", args: [ruleKey] });

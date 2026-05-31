@@ -1,0 +1,327 @@
+import { randomUUID } from "node:crypto";
+import { Router } from "express";
+import { getDb } from "../lib/db.js";
+import { requireOwner } from "../middleware/auth.js";
+
+export const pricingWorkbenchV2Router = Router();
+
+const V2_DEFAULTS = {
+  targetGrossMarginPct: 70,
+  probePriceUsd: 10,
+  shopifyRevSharePct: 15,
+};
+
+const V2_NUMERIC_KEYS = [
+  "v2_targetGrossMarginPct",
+  "v2_probePriceUsd",
+  "v2_shopifyRevSharePct",
+] as const;
+
+async function ensureTables() {
+  const db = getDb();
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS AdminPricingConfig (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    )
+  `);
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS AdminMonthlyFixedCost (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      amountUsd REAL NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      sortOrder INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    )
+  `);
+}
+
+let tableReady: Promise<void> | null = null;
+
+function readyTable() {
+  if (!tableReady) {
+    tableReady = ensureTables().catch((error) => {
+      tableReady = null;
+      throw error;
+    });
+  }
+  return tableReady;
+}
+
+async function readV2Settings() {
+  const keys = [...V2_NUMERIC_KEYS, "v2_usageScenariosJson"];
+  const rows = await getDb().execute({
+    sql: `SELECT key, value FROM AdminPricingConfig WHERE key IN (${keys.map(() => "?").join(",")})`,
+    args: keys,
+  });
+
+  const map = new Map<string, string>();
+  for (const row of rows.rows) {
+    map.set(String(row.key), String(row.value));
+  }
+
+  let usageScenarios: unknown[] | null = null;
+  const scenariosRaw = map.get("v2_usageScenariosJson");
+  if (scenariosRaw) {
+    try {
+      const parsed = JSON.parse(scenariosRaw);
+      if (Array.isArray(parsed)) usageScenarios = parsed;
+    } catch {
+      usageScenarios = null;
+    }
+  }
+
+  return {
+    targetGrossMarginPct: Number(
+      map.get("v2_targetGrossMarginPct") ?? V2_DEFAULTS.targetGrossMarginPct,
+    ),
+    probePriceUsd: Number(map.get("v2_probePriceUsd") ?? V2_DEFAULTS.probePriceUsd),
+    shopifyRevSharePct: Number(
+      map.get("v2_shopifyRevSharePct") ?? V2_DEFAULTS.shopifyRevSharePct,
+    ),
+    usageScenarios,
+  };
+}
+
+async function readPlanCatalog() {
+  const result = await getDb().execute(`
+    SELECT planKey, appName, kind, billingInterval, displayName, tokens, priceAmount, currencyCode, enabled, sortOrder
+    FROM PlanCatalog
+    WHERE enabled = 1
+    ORDER BY sortOrder ASC, planKey ASC
+  `);
+  return result.rows.map((row) => ({
+    planKey: String(row.planKey),
+    appName: String(row.appName),
+    kind: String(row.kind),
+    billingInterval: row.billingInterval != null ? String(row.billingInterval) : null,
+    displayName: String(row.displayName),
+    tokens: Number(row.tokens ?? 0),
+    priceAmount: String(row.priceAmount),
+    currencyCode: String(row.currencyCode ?? "USD"),
+  }));
+}
+
+async function readSharedFixedCosts() {
+  await readyTable();
+  const result = await getDb().execute(`
+    SELECT id, name, amountUsd, enabled, sortOrder, createdAt, updatedAt
+    FROM AdminMonthlyFixedCost
+    ORDER BY sortOrder ASC, createdAt ASC
+  `);
+  return result.rows.map((row) => ({
+    id: String(row.id),
+    name: String(row.name),
+    amountUsd: Number(row.amountUsd ?? 0),
+    enabled: Number(row.enabled) !== 0,
+    sortOrder: Number(row.sortOrder ?? 0),
+    createdAt: String(row.createdAt),
+    updatedAt: String(row.updatedAt),
+  }));
+}
+
+pricingWorkbenchV2Router.get("/", async (_req, res) => {
+  try {
+    await readyTable();
+    const [settings, fixedCosts, plans] = await Promise.all([
+      readV2Settings(),
+      readSharedFixedCosts(),
+      readPlanCatalog().catch(() => []),
+    ]);
+    res.json({ settings, fixedCosts, plans });
+  } catch (err) {
+    console.error("[pricing-workbench GET]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+pricingWorkbenchV2Router.put("/settings", requireOwner, async (req, res) => {
+  try {
+    await readyTable();
+    const now = new Date().toISOString();
+    const {
+      targetGrossMarginPct,
+      probePriceUsd,
+      shopifyRevSharePct,
+      usageScenarios,
+    } = req.body as Record<string, unknown>;
+
+    const entries: Array<[string, number]> = [
+      ["v2_targetGrossMarginPct", Number(targetGrossMarginPct)],
+      ["v2_probePriceUsd", Number(probePriceUsd ?? V2_DEFAULTS.probePriceUsd)],
+      [
+        "v2_shopifyRevSharePct",
+        Number(shopifyRevSharePct ?? V2_DEFAULTS.shopifyRevSharePct),
+      ],
+    ];
+
+    for (const [key, value] of entries) {
+      if (!Number.isFinite(value) || value < 0) {
+        res.status(400).json({ error: `Invalid value for ${key}` });
+        return;
+      }
+    }
+
+    const revShare = Number(shopifyRevSharePct ?? V2_DEFAULTS.shopifyRevSharePct);
+    if (revShare >= 100) {
+      res.status(400).json({ error: "shopifyRevSharePct must be < 100" });
+      return;
+    }
+
+    for (const [key, value] of entries) {
+      await getDb().execute({
+        sql: `
+          INSERT INTO AdminPricingConfig (key, value, updatedAt)
+          VALUES (?, ?, ?)
+          ON CONFLICT(key) DO UPDATE SET
+            value = excluded.value,
+            updatedAt = excluded.updatedAt
+        `,
+        args: [key, String(value), now],
+      });
+    }
+
+    if (usageScenarios !== undefined) {
+      if (!Array.isArray(usageScenarios)) {
+        res.status(400).json({ error: "usageScenarios must be an array" });
+        return;
+      }
+      await getDb().execute({
+        sql: `
+          INSERT INTO AdminPricingConfig (key, value, updatedAt)
+          VALUES (?, ?, ?)
+          ON CONFLICT(key) DO UPDATE SET
+            value = excluded.value,
+            updatedAt = excluded.updatedAt
+        `,
+        args: ["v2_usageScenariosJson", JSON.stringify(usageScenarios), now],
+      });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[pricing-workbench PUT settings]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+pricingWorkbenchV2Router.post("/fixed-costs", requireOwner, async (req, res) => {
+  try {
+    await readyTable();
+    const { name, amountUsd, enabled, sortOrder } = req.body as Record<string, unknown>;
+    if (!name || String(name).trim().length === 0) {
+      res.status(400).json({ error: "name required" });
+      return;
+    }
+
+    const parsedAmount = Number(amountUsd);
+    if (!Number.isFinite(parsedAmount) || parsedAmount < 0) {
+      res.status(400).json({ error: "amountUsd must be a non-negative number" });
+      return;
+    }
+
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    await getDb().execute({
+      sql: `
+        INSERT INTO AdminMonthlyFixedCost
+          (id, name, amountUsd, enabled, sortOrder, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      args: [
+        id,
+        String(name).trim(),
+        parsedAmount,
+        enabled === false ? 0 : 1,
+        Number.isFinite(Number(sortOrder)) ? Number(sortOrder) : 0,
+        now,
+        now,
+      ],
+    });
+
+    res.json({ ok: true, id });
+  } catch (err) {
+    console.error("[pricing-workbench POST fixed-costs]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+pricingWorkbenchV2Router.put("/fixed-costs/:id", requireOwner, async (req, res) => {
+  try {
+    await readyTable();
+    const { name, amountUsd, enabled, sortOrder } = req.body as Record<string, unknown>;
+    const sets: string[] = [];
+    const args: Array<string | number> = [];
+
+    if (name !== undefined) {
+      const n = String(name).trim();
+      if (!n) {
+        res.status(400).json({ error: "name cannot be empty" });
+        return;
+      }
+      sets.push("name = ?");
+      args.push(n);
+    }
+
+    if (amountUsd !== undefined) {
+      const amount = Number(amountUsd);
+      if (!Number.isFinite(amount) || amount < 0) {
+        res.status(400).json({ error: "amountUsd must be a non-negative number" });
+        return;
+      }
+      sets.push("amountUsd = ?");
+      args.push(amount);
+    }
+
+    if (enabled !== undefined) {
+      sets.push("enabled = ?");
+      args.push(enabled ? 1 : 0);
+    }
+
+    if (sortOrder !== undefined) {
+      const s = Number(sortOrder);
+      if (!Number.isFinite(s)) {
+        res.status(400).json({ error: "sortOrder must be a number" });
+        return;
+      }
+      sets.push("sortOrder = ?");
+      args.push(Math.floor(s));
+    }
+
+    if (sets.length === 0) {
+      res.status(400).json({ error: "No fields to update" });
+      return;
+    }
+
+    sets.push("updatedAt = ?");
+    args.push(new Date().toISOString());
+    args.push(String(req.params.id));
+
+    await getDb().execute({
+      sql: `UPDATE AdminMonthlyFixedCost SET ${sets.join(", ")} WHERE id = ?`,
+      args,
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[pricing-workbench PUT fixed-costs]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+pricingWorkbenchV2Router.delete("/fixed-costs/:id", requireOwner, async (req, res) => {
+  try {
+    await readyTable();
+    await getDb().execute({
+      sql: "DELETE FROM AdminMonthlyFixedCost WHERE id = ?",
+      args: [String(req.params.id)],
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[pricing-workbench DELETE fixed-costs]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
