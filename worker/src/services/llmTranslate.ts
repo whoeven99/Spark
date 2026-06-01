@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { tmGet, tmSet } from "./translationMemory.js";
+import { loadGlossaryLines } from "./glossary.js";
 
 let _openai: OpenAI | null = null;
 
@@ -218,7 +219,13 @@ async function translateHtmlGoogle(html: string, source: string, target: string)
  * Text nodes are extracted from the HTML, sent to the LLM as plain text batches,
  * then restored into the original HTML structure.
  */
-async function translateHtmlLLM(html: string, source: string, target: string, aiModel: string): Promise<string> {
+async function translateHtmlLLM(
+  html: string,
+  source: string,
+  target: string,
+  aiModel: string,
+  shopName: string,
+): Promise<string> {
   const { template, texts } = extractHtmlTextNodes(html);
   if (texts.length === 0) return html;
 
@@ -227,7 +234,7 @@ async function translateHtmlLLM(html: string, source: string, target: string, ai
   const translated = new Array<string>(texts.length).fill("");
 
   for (const batch of batches) {
-    const results = await callLLM(batch, source, target, aiModel);
+    const results = await callLLM(batch, source, target, aiModel, shopName);
     for (const r of results) translated[Number(r.key)] = r.translatedValue;
   }
 
@@ -239,33 +246,45 @@ async function translateHtmlLLM(html: string, source: string, target: string, ai
 const MAX_LLM_RETRIES = 2;
 
 /**
+ * Build the static system prompt. Everything here is stable for a given
+ * (source, target, glossary) → it forms a byte-identical prefix across batches
+ * so OpenAI automatic prompt caching applies. The variable payload goes in the
+ * user message instead.
+ */
+function buildSystemPrompt(source: string, target: string, glossaryLines: string[]): string {
+  const glossaryBlock = glossaryLines.length
+    ? `\nGlossary (apply consistently):\n${glossaryLines.join("\n")}\n`
+    : "";
+  return `You are a professional e-commerce translator.
+Translate from "${source}" to "${target}".
+Rules:
+- Be accurate and natural for e-commerce
+- Preserve placeholders, HTML entities and variables (e.g. {{name}}, %s, {0}) exactly
+- If the value is empty, return it unchanged
+- You MUST return an entry for every key in the input
+${glossaryBlock}
+The user message is a JSON array of {"key","value"} objects to translate.
+Return ONLY a JSON object {"translations":[{"key":"<key>","translatedValue":"<text>"}]}, no markdown.`;
+}
+
+/**
  * One LLM round-trip. Returns a map of the keys the model actually returned.
  * Throws on unparseable JSON so the caller can retry.
  */
 async function callLLMOnce(
   items: TranslateItem[],
-  source: string,
-  target: string,
   aiModel: string,
+  systemPrompt: string,
 ): Promise<Map<string, string>> {
   const payload = items.map((i) => ({ key: i.key, value: i.value }));
-  const prompt = `You are a professional e-commerce translator.
-Translate from "${source}" to "${target}".
-Return a JSON object: {"translations": [{"key": "<original key>", "translatedValue": "<translated>"}]}.
-Rules:
-- Be accurate and natural for e-commerce
-- If the value is empty, return it unchanged
-- You MUST return an entry for every key in the input
-
-Input:
-${JSON.stringify(payload)}
-
-Return ONLY the JSON object, no markdown.`;
 
   const openai = getOpenAI();
   const completion = await openai.chat.completions.create({
     model: aiModel || "gpt-4o-mini",
-    messages: [{ role: "user", content: prompt }],
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: JSON.stringify(payload) },
+    ],
     temperature: 0.1,
     response_format: { type: "json_object" },
   });
@@ -296,13 +315,18 @@ async function callLLM(
   source: string,
   target: string,
   aiModel: string,
+  shopName: string,
 ): Promise<TranslateResult[]> {
+  // Load glossary once (cached) and build the stable system prefix for this call.
+  const glossaryLines = await loadGlossaryLines(shopName, target);
+  const systemPrompt = buildSystemPrompt(source, target, glossaryLines);
+
   const collected = new Map<string, string>();
   let pending = items;
 
   for (let attempt = 0; attempt <= MAX_LLM_RETRIES && pending.length > 0; attempt++) {
     try {
-      const map = await callLLMOnce(pending, source, target, aiModel);
+      const map = await callLLMOnce(pending, aiModel, systemPrompt);
       for (const [k, v] of map) if (!collected.has(k)) collected.set(k, v);
     } catch (e) {
       console.warn(`[llm] attempt ${attempt + 1} failed`, e);
@@ -379,7 +403,7 @@ export async function translateBatch(
     try {
       const translatedValue = isGoogle
         ? await translateHtmlGoogle(item.value, source, target)
-        : await translateHtmlLLM(item.value, source, target, aiModel);
+        : await translateHtmlLLM(item.value, source, target, aiModel, shopName);
       resultMap.set(item.key, { key: item.key, translatedValue, digest: item.digest, status: "translated" });
       await tmSet(shopName, target, usedModel, item.digest, translatedValue);
     } catch (e) {
@@ -420,7 +444,7 @@ export async function translateBatch(
             translatedParts.set(b.key, { value: translated[i] ?? b.value, status: "translated" }),
           );
         } else {
-          const results = await callLLM(batch, source, target, aiModel);
+          const results = await callLLM(batch, source, target, aiModel, shopName);
           for (const r of results) translatedParts.set(r.key, { value: r.translatedValue, status: r.status });
         }
       } catch (e) {

@@ -15,8 +15,14 @@ vi.mock("../../worker/src/services/translationMemory.js", () => ({
   tmKey: (s: string, t: string, m: string, d: string) => `tm:v4:${s}:${t}:${m}:${d}`,
 }));
 
+// Mock glossary so no Blob access happens; controllable per-test.
+vi.mock("../../worker/src/services/glossary.js", () => ({
+  loadGlossaryLines: vi.fn(async () => []),
+}));
+
 import { translateBatch } from "../../worker/src/services/llmTranslate.js";
 import { tmGet, tmSet } from "../../worker/src/services/translationMemory.js";
+import { loadGlossaryLines } from "../../worker/src/services/glossary.js";
 
 function llmResponse(translations: Array<{ key: string; translatedValue: string }>) {
   return { choices: [{ message: { content: JSON.stringify({ translations }) } }] };
@@ -26,6 +32,7 @@ beforeEach(() => {
   createMock.mockReset();
   vi.mocked(tmGet).mockReset().mockResolvedValue(null);
   vi.mocked(tmSet).mockReset().mockResolvedValue(undefined);
+  vi.mocked(loadGlossaryLines).mockReset().mockResolvedValue([]);
   process.env.OPENAI_API_KEY = "test-key";
   delete process.env.TRANSLATION_AI_MODEL;
 });
@@ -129,5 +136,42 @@ describe("translateBatch — retry & fallback", () => {
     );
     expect(out[0]).toEqual({ key: "title", translatedValue: "Hello", digest: "d1", status: "translated" });
     expect(createMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("translateBatch — prompt structure (caching-friendly)", () => {
+  it("sends static instructions in system and only the payload in user", async () => {
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "title", translatedValue: "Hello" }]));
+    await translateBatch(
+      [{ key: "title", value: "你好", digest: "d1" }],
+      "zh-CN",
+      "en",
+      "gpt-4o-mini",
+      false,
+      "shop.myshopify.com",
+    );
+    const messages = createMock.mock.calls[0][0].messages as Array<{ role: string; content: string }>;
+    expect(messages[0].role).toBe("system");
+    expect(messages[0].content).toContain("professional e-commerce translator");
+    expect(messages[0].content).not.toContain("你好"); // variable text must NOT be in the cached prefix
+    expect(messages[1].role).toBe("user");
+    expect(messages[1].content).toContain("你好");
+  });
+
+  it("injects glossary lines into the system prompt", async () => {
+    vi.mocked(loadGlossaryLines).mockResolvedValueOnce([`- Translate "闪购" as "Flash Sale".`]);
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "title", translatedValue: "Flash Sale" }]));
+    await translateBatch(
+      [{ key: "title", value: "闪购", digest: "d1" }],
+      "zh-CN",
+      "en",
+      "gpt-4o-mini",
+      false,
+      "shop.myshopify.com",
+    );
+    const messages = createMock.mock.calls[0][0].messages as Array<{ role: string; content: string }>;
+    expect(messages[0].content).toContain("Glossary");
+    expect(messages[0].content).toContain(`Translate "闪购" as "Flash Sale".`);
+    expect(loadGlossaryLines).toHaveBeenCalledWith("shop.myshopify.com", "en");
   });
 });

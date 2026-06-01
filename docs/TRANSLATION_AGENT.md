@@ -164,6 +164,17 @@ CREATED
 - 仅缓存成功译文（fallback 不缓存）；value 超 8KB 不缓存；`skip` 字段不查缓存。
 - 关闭：`TRANSLATION_TM_DISABLED=true`；TTL：`TRANSLATION_TM_TTL_DAYS`（默认 60 天）。
 
+**Prompt 结构（缓存友好）**（`callLLMOnce` / `buildSystemPrompt`）：
+- 拆成 `system`（静态指令 + 术语表，对同一 source/target/glossary 字节级稳定）+ `user`（仅待翻译 JSON payload）。
+- 变动的待翻译值只出现在 user 消息末尾，使 OpenAI 自动前缀缓存能命中（同一 job 的连续 batch 受益）。
+- system 还要求保留占位符/变量（`{{name}}`、`%s`、`{0}`）。
+
+**术语表注入**（`worker/src/services/glossary.ts`）：
+- 从 Blob `glossary/{shop}.json` 读取，按 target 过滤后注入 system 前缀；缺失则不注入。
+- 行内确定性排序保证前缀字节稳定（不破坏缓存）。进程内缓存 5 分钟，避免每个 batch 读 Blob。
+- 格式：`{ terms: [{ source, translations: {<locale>: "..."}, doNotTranslate?, note? }] }`；`doNotTranslate` 对所有语言生效。
+- **写入入口（admin/app 端）尚未实现**，当前需手动写 Blob；后续 PR 补管理界面。
+
 **LLM 重试与回退**（`callLLM`）：
 - LLM 返回 JSON 解析失败、或漏返回部分 key 时，只对未解析的 key 重试（最多 2 次，共 3 次尝试）。
 - 全部尝试后仍未解析的 key → 回退原文，`status="fallback"`。
@@ -217,6 +228,7 @@ CREATED
 | `tasks/v4/{shop}/{id}/init/{MODULE}/chunk-{nn}.json` | `TranslatableResource[]` | Init |
 | `tasks/v4/{shop}/{id}/translate/{MODULE}/chunk-{nn}.json` | `[{resourceId, translations:[...]}]` | Translate |
 | `tasks/v4/{shop}/{id}/translate/fallbacks.json` | `[{resourceId, module, key}]`（回退原文的字段，供 UI 展示） | Translate（有 fallback 时） |
+| `glossary/{shop}.json` | `{terms:[{source, translations, doNotTranslate?, note?}]}`（按店术语表，翻译时注入 prompt） | 手动/后续管理界面 |
 | `tasks/v4/{shop}/{id}/writeback/progress.json` | `{written: resourceId[]}` | Writeback（每 20 条更新） |
 | `tasks/v4/{shop}/{id}/writeback/failed.json` | `[{resourceId, translations:TranslationInput[]}]` | Writeback |
 
@@ -322,6 +334,21 @@ CREATED
 
 ---
 
+## 翻译质量报告（离线分析）
+
+`worker/src/scripts/exportTranslationReport.ts`：读取某任务 `translate/` 下的 before/after blob，生成字段清单 + 质量红旗报告。
+
+```bash
+# 需配置 Blob env（同 worker）
+cd worker && npx tsx src/scripts/exportTranslationReport.ts <shopName> <taskId> [outPath]
+```
+
+输出：每模块的字段 key 清单（classify、条数、平均长度、fallback/unchanged/empty 计数）+ 质量红旗（fallback、疑似漏翻 unchanged、空译文、长度比异常、HTML 标签数不一致、占位符丢失）+ 每类抽样。分析逻辑在 `worker/src/services/translationReport.ts`（纯函数，已覆盖单测）。
+
+**线上质量测试流程**：设 `WORKER_STAGES=init,translate` 跑任务（不写回店铺）→ 跑本脚本读 blob → 据报告优化 prompt/过滤/术语表。
+
+---
+
 ## 僵死任务重置
 
 `scheduler.ts` 每 **5 分钟**调用 `resetStaleJobs(staleMinutes=10)`：
@@ -389,6 +416,7 @@ type TranslationTaskFormPayload = {
 | `TRANSLATION_AI_MODEL` | App + Worker | 全局覆盖翻译模型，如 `gpt-4o-mini`、`google-translate` |
 | `TRANSLATION_TM_DISABLED` | Worker | 设为 `"true"` 关闭翻译记忆缓存 |
 | `TRANSLATION_TM_TTL_DAYS` | Worker | 翻译记忆缓存 TTL（天），默认 60 |
+| `WORKER_STAGES` | Worker | 逗号分隔启用的阶段，如 `init,translate`（默认全开）。用于线上质量测试时跳过 writeback/verify，不写回真实店铺 |
 
 ---
 
