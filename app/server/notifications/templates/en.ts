@@ -8,7 +8,7 @@ import type {
   SubscriptionNotificationVariables,
   TaskNotificationVariables,
 } from "../types";
-import { commonRows, creditRows } from "./sharedLayout";
+import { commonRows, creditRows, REVIEW_SAFE_APP_URL } from "./sharedLayout";
 
 const labels = {
   shopName: "Shop name",
@@ -35,7 +35,7 @@ export const enTemplates: NotificationTemplateRegistry = {
       ...commonRows(variables, labels),
       { label: "Installed at (UTC+0)", value: variables.installedAtUtc },
     ],
-    action: { label: "Open Shopify App", url: display.dashboardUrl },
+    action: { label: "Open Shopify App", url: REVIEW_SAFE_APP_URL },
   }),
 
   appUninstalled: ({ variables, display }) => ({
@@ -52,7 +52,7 @@ export const enTemplates: NotificationTemplateRegistry = {
       ...commonRows(variables, labels),
       { label: "Uninstalled at (UTC+0)", value: variables.uninstalledAtUtc },
     ],
-    action: { label: "View Shopify App status", url: display.dashboardUrl },
+    action: { label: "View Shopify App status", url: REVIEW_SAFE_APP_URL },
   }),
 
   purchaseCreated: ({ variables, display }) => ({
@@ -75,7 +75,7 @@ export const enTemplates: NotificationTemplateRegistry = {
       { label: "Billing period", value: variables.billingPeriod },
       ...creditRows(variables.creditAccountChange, labels),
     ],
-    action: { label: "Open Shopify App", url: display.dashboardUrl },
+    action: { label: "Open Shopify App", url: REVIEW_SAFE_APP_URL },
   }),
 
   subscriptionStarted: ({ variables, display }) => subscriptionContent({
@@ -176,7 +176,7 @@ function subscriptionContent({
       { label: "Billing period", value: variables.billingPeriod },
       ...creditRows(variables.creditAccountChange, labels),
     ],
-    action: { label: "Open Shopify App", url: display.dashboardUrl },
+    action: { label: "Open Shopify App", url: REVIEW_SAFE_APP_URL },
   };
 }
 
@@ -219,7 +219,7 @@ function taskContent({
       ...extraRows,
       ...creditRows(variables.creditAccountChange, labels),
     ],
-    action: { label: "Open Shopify App", url: variables.statusUrl ?? display.dashboardUrl },
+    action: { label: "Open Shopify App", url: REVIEW_SAFE_APP_URL },
   };
 }
 

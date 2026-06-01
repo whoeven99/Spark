@@ -8,7 +8,7 @@ import type {
   SubscriptionNotificationVariables,
   TaskNotificationVariables,
 } from "../types";
-import { commonRows, creditRows } from "./sharedLayout";
+import { commonRows, creditRows, REVIEW_SAFE_APP_URL } from "./sharedLayout";
 
 const labels = {
   shopName: "店铺名称",
@@ -35,7 +35,7 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
       ...commonRows(variables, labels),
       { label: "安装时间 (UTC+0)", value: variables.installedAtUtc },
     ],
-    action: { label: "前往 Shopify App 查看", url: display.dashboardUrl },
+    action: { label: "前往 Shopify App 查看", url: REVIEW_SAFE_APP_URL },
   }),
 
   appUninstalled: ({ variables, display }) => ({
@@ -52,7 +52,7 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
       ...commonRows(variables, labels),
       { label: "卸载时间 (UTC+0)", value: variables.uninstalledAtUtc },
     ],
-    action: { label: "查看 Shopify App 状态", url: display.dashboardUrl },
+    action: { label: "查看 Shopify App 状态", url: REVIEW_SAFE_APP_URL },
   }),
 
   purchaseCreated: ({ variables, display }) => ({
@@ -75,7 +75,7 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
       { label: "计费周期", value: variables.billingPeriod },
       ...creditRows(variables.creditAccountChange, labels),
     ],
-    action: { label: "前往 Shopify App 查看", url: display.dashboardUrl },
+    action: { label: "前往 Shopify App 查看", url: REVIEW_SAFE_APP_URL },
   }),
 
   subscriptionStarted: ({ variables, display }) => subscriptionContent({
@@ -176,7 +176,7 @@ function subscriptionContent({
       { label: "计费周期", value: variables.billingPeriod },
       ...creditRows(variables.creditAccountChange, labels),
     ],
-    action: { label: "前往 Shopify App 查看", url: display.dashboardUrl },
+    action: { label: "前往 Shopify App 查看", url: REVIEW_SAFE_APP_URL },
   };
 }
 
@@ -219,7 +219,7 @@ function taskContent({
       ...extraRows,
       ...creditRows(variables.creditAccountChange, labels),
     ],
-    action: { label: "前往 Shopify App 查看", url: variables.statusUrl ?? display.dashboardUrl },
+    action: { label: "前往 Shopify App 查看", url: REVIEW_SAFE_APP_URL },
   };
 }
 
