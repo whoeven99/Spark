@@ -1,11 +1,13 @@
 import type { ActionFunctionArgs } from "react-router";
-import { authenticate } from "../shopify.server";
 import { handleScopesUpdate } from "../server/commonEventLog/index.server";
+import {
+  authenticateWebhookLogged,
+  returnWebhookOk,
+} from "../server/webhook/webhookDebugLog.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { shop, session, topic, payload } = await authenticate.webhook(request);
-
-  console.info(`[CommonEvent] webhook ${topic} shop=${shop}`);
+  const { shop, session, topic, payload } =
+    await authenticateWebhookLogged(request);
 
   try {
     await handleScopesUpdate({
@@ -19,5 +21,5 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     throw error;
   }
 
-  return new Response();
+  return returnWebhookOk({ shop, topic });
 };

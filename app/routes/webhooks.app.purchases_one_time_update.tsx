@@ -1,11 +1,13 @@
 import type { ActionFunctionArgs } from "react-router";
 import { getAppEntry } from "../config/appEntry.server";
 import { handleAppPurchaseOneTimeWebhook } from "../server/billing/index.server";
-import { authenticate } from "../shopify.server";
+import {
+  authenticateWebhookLogged,
+  returnWebhookOk,
+} from "../server/webhook/webhookDebugLog.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { shop, topic, payload } = await authenticate.webhook(request);
-  console.info(`[Billing] webhook ${topic} shop=${shop}`);
+  const { shop, topic, payload } = await authenticateWebhookLogged(request);
 
   try {
     await handleAppPurchaseOneTimeWebhook({
@@ -17,5 +19,5 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.error("[Billing] app_purchases_one_time/update handler failed:", error);
   }
 
-  return new Response();
+  return returnWebhookOk({ shop, topic });
 };

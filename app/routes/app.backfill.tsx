@@ -34,6 +34,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
+
   const shop = session.shop;
 
   const form = await request.formData();

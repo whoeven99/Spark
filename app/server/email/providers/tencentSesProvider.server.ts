@@ -1,7 +1,14 @@
 import { ses } from "tencentcloud-sdk-nodejs-ses";
 import type { EmailConfig } from "../config/emailConfig.server";
 import { loadEmailConfig } from "../config/emailConfig.server";
-import { EMAIL_LOG, logEmailError, logEmailInfo } from "../emailLog.server";
+import { buildSendEmailRequestLog } from "../emailSendLogPayload.server";
+import {
+  EMAIL_LOG,
+  logEmailDetail,
+  logEmailError,
+  logEmailInfo,
+  maskEmailList,
+} from "../emailLog.server";
 import {
   createEmailError,
   EMAIL_ERROR_CODES,
@@ -85,17 +92,24 @@ export function createTencentSesProvider(
         },
       };
 
-      logEmailInfo(
-        EMAIL_LOG.request,
-        `templateId=${request.templateId} to=${request.to} subjectLen=${request.subject.length}`,
-      );
-      logEmailInfo(
-        EMAIL_LOG.tencent,
-        `SendEmail params (before SDK call): ${JSON.stringify(sendEmailParams)}`,
-      );
+      logEmailDetail(EMAIL_LOG.tencent, "before-sdk-call", {
+        region: tencent.region,
+        ...buildSendEmailRequestLog(request),
+        sdkParams: {
+          FromEmailAddress: request.from,
+          Subject: request.subject,
+          Destination: [request.to],
+          Cc: maskEmailList(cc),
+          Template: {
+            TemplateID: request.templateId,
+            TemplateData: templateDataJson,
+          },
+        },
+      });
 
       try {
         const client = getSesClient(tencent);
+        const sdkStartedAt = Date.now();
         const resp = await retryWithTimeout(
           () => client.SendEmail(sendEmailParams),
           {
@@ -113,23 +127,54 @@ export function createTencentSesProvider(
         );
 
         const requestId = resp.RequestId?.trim();
+        const messageId =
+          typeof resp === "object" &&
+          resp !== null &&
+          "MessageId" in resp &&
+          typeof (resp as { MessageId?: string }).MessageId === "string"
+            ? (resp as { MessageId: string }).MessageId
+            : undefined;
+
+        logEmailDetail(EMAIL_LOG.tencent, "after-sdk-call", {
+          sendSuccess: Boolean(requestId),
+          requestId: requestId ?? null,
+          messageId: messageId ?? null,
+          templateId: request.templateId,
+          elapsedMs: Date.now() - sdkStartedAt,
+          responseKeys:
+            typeof resp === "object" && resp !== null
+              ? Object.keys(resp as object)
+              : [],
+        });
+
         if (!requestId) {
-          logEmailInfo(
-            EMAIL_LOG.response,
-            `missing RequestId templateId=${request.templateId}`,
-          );
           return wrapSdkError(
             "Tencent SES response missing RequestId",
             resp,
           );
         }
 
-        logEmailInfo(
-          EMAIL_LOG.response,
-          `ok requestId=${requestId} templateId=${request.templateId}`,
-        );
         return { ok: true, requestId, provider: PROVIDER_NAME };
       } catch (error) {
+        const tencentError =
+          typeof error === "object" && error !== null
+            ? {
+                code:
+                  "code" in error
+                    ? String((error as { code?: unknown }).code)
+                    : undefined,
+                requestId:
+                  "requestId" in error
+                    ? String((error as { requestId?: unknown }).requestId)
+                    : undefined,
+              }
+            : undefined;
+
+        logEmailDetail(EMAIL_LOG.tencent, "after-sdk-call", {
+          sendSuccess: false,
+          templateId: request.templateId,
+          tencentError,
+        });
         logEmailError(
           EMAIL_LOG.error,
           "SendEmail failed",

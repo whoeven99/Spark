@@ -26,8 +26,29 @@ interface ImportMetaEnv {
   readonly EMAIL_SEND_MAX_RETRIES?: string;
   /** 运营通知收件人（To）兜底 */
   readonly OPS_NOTIFY_EMAIL?: string;
-  /** 卸载运营邮件腾讯 SES 模板 ID；未设则跳过发送 */
-  readonly OPS_UNINSTALL_TEMPLATE_ID?: string;
+  /** 测试用：设置后全部邮件 To 重定向到该地址（含 Session 店主邮箱与 AI 工具指定收件人） */
+  readonly EMAIL_TEST_RECIPIENT?: string;
+  /** 商户通知腾讯 SES 模板 ID 覆盖（默认见 notificationTemplateIds.server.ts） */
+  readonly NOTIFICATION_TEMPLATE_ID_APP_INSTALLED?: string;
+  readonly NOTIFICATION_TEMPLATE_ID_APP_UNINSTALLED?: string;
+  readonly NOTIFICATION_TEMPLATE_ID_PURCHASE?: string;
+  readonly NOTIFICATION_TEMPLATE_ID_SUBSCRIPTION_STARTED?: string;
+  readonly NOTIFICATION_TEMPLATE_ID_SUBSCRIPTION_CHANGED?: string;
+  readonly NOTIFICATION_TEMPLATE_ID_SUBSCRIPTION_CANCELED?: string;
+  /** 英文腾讯 SES 模板 ID（未配置时 fallback 中文模板） */
+  readonly NOTIFICATION_TEMPLATE_ID_APP_INSTALLED_EN?: string;
+  readonly NOTIFICATION_TEMPLATE_ID_APP_UNINSTALLED_EN?: string;
+  readonly NOTIFICATION_TEMPLATE_ID_PURCHASE_EN?: string;
+  readonly NOTIFICATION_TEMPLATE_ID_SUBSCRIPTION_STARTED_EN?: string;
+  readonly NOTIFICATION_TEMPLATE_ID_SUBSCRIPTION_CHANGED_EN?: string;
+  readonly NOTIFICATION_TEMPLATE_ID_SUBSCRIPTION_CANCELED_EN?: string;
+  /** 商户通知默认语言：zh-CN | en */
+  readonly NOTIFICATION_DEFAULT_LOCALE?: string;
+  readonly NOTIFICATION_APP_NAME?: string;
+  readonly NOTIFICATION_BRAND_NAME?: string;
+  readonly NOTIFICATION_APP_ICON_URL?: string;
+  readonly NOTIFICATION_HELP_CENTER_URL?: string;
+  readonly NOTIFICATION_LEGAL_NAME?: string;
   /** 飞书运营通知总开关；false 关闭全部 channel（默认 true） */
   readonly FEISHU_ENABLED?: string;
   /** 卸载飞书群机器人 Webhook；未设则跳过 */

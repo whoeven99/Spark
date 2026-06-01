@@ -1,11 +1,13 @@
 import { loadEmailConfig } from "./config/emailConfig.server";
+import { resolveEmailTestRecipientOverride } from "./emailTestRecipient.server";
 
 export type OpsEmailSessionSnapshot = {
   email?: string | null;
+  locale?: string | null;
 };
 
 /**
- * 运营通知兜底收件人：OPS_NOTIFY_EMAIL，未配置时取 TENCENT_SES_CC 首地址。
+ * 运营/商户通知兜底收件人：OPS_NOTIFY_EMAIL，未配置时取 TENCENT_SES_CC 首地址。
  */
 export function resolveOpsNotifyEmail(): string | null {
   const explicit = process.env.OPS_NOTIFY_EMAIL?.trim();
@@ -22,15 +24,10 @@ export function resolveOpsNotifyEmail(): string | null {
 export function resolveOpsEmailDestination(
   sessionSnapshot?: OpsEmailSessionSnapshot | null,
 ): string | null {
+  const testRecipient = resolveEmailTestRecipientOverride();
+  if (testRecipient) return testRecipient;
+
   const ownerEmail = sessionSnapshot?.email?.trim();
   if (ownerEmail) return ownerEmail;
   return resolveOpsNotifyEmail();
-}
-
-export function resolveOpsUninstallTemplateId(): number | null {
-  const raw = process.env.OPS_UNINSTALL_TEMPLATE_ID?.trim();
-  if (!raw) return null;
-  const parsed = Number.parseInt(raw, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) return null;
-  return parsed;
 }
