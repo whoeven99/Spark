@@ -14,6 +14,7 @@ import AgentRuns from "./pages/AgentRuns";
 import PricingWorkbenchV2 from "./pages/PricingWorkbenchV2";
 import Todo from "./pages/Todo";
 import OpsChecklist from "./pages/OpsChecklist";
+import VisitSource from "./pages/VisitSource";
 import { useNavigate } from "react-router-dom";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -68,6 +69,7 @@ export default function App() {
             <Route path="agent-runs" element={<AgentRuns />} />
             <Route path="pricing-workbench" element={<RequireOwner><PricingWorkbenchV2 /></RequireOwner>} />
             <Route path="ops-checklist" element={<OpsChecklist />} />
+            <Route path="visit-source" element={<VisitSource />} />
             <Route path="todo" element={<Todo />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
