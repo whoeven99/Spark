@@ -408,6 +408,45 @@ export function fetchRole(): Promise<{ role: AdminRole }> {
   return apiFetch("/auth/role");
 }
 
+// --- Visit Source (入口来源归因) ---
+
+export type VisitSourceRow = {
+  id: string;
+  shop: string;
+  appName: string;
+  path: string;
+  utm: string;
+  referer: string | null;
+  createdAt: string;
+};
+
+export type VisitSourceByUtm = {
+  utm: string;
+  visits: number;
+  shopCount: number;
+};
+
+export function fetchVisitSources(params?: {
+  shop?: string;
+  utm?: string;
+  path?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<{ visits: VisitSourceRow[]; total: number; byUtm: VisitSourceByUtm[] }> {
+  const query = new URLSearchParams();
+  if (params?.shop) query.set("shop", params.shop);
+  if (params?.utm) query.set("utm", params.utm);
+  if (params?.path) query.set("path", params.path);
+  if (params?.startDate) query.set("startDate", params.startDate);
+  if (params?.endDate) query.set("endDate", params.endDate);
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.pageSize) query.set("pageSize", String(params.pageSize));
+  const qs = query.toString();
+  return apiFetch(`/visit-source${qs ? `?${qs}` : ""}`);
+}
+
 // --- Agent Runs ---
 
 export type AgentRunRow = {
