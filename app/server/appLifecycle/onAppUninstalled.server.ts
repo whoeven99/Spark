@@ -2,6 +2,7 @@ import prisma from "../../db.server";
 import { handleAppUninstalled } from "../commonEventLog/handleAppUninstalled.server";
 import { COMMON_EVENT_TYPE } from "../commonEventLog/types.server";
 import { sendUninstallFeishuNotify } from "../feishu/scenarios/sendUninstallFeishuNotify.server";
+import { notifyAppUninstalledEmail } from "../notifications/notifyMerchant.server";
 import { fetchUninstallFeedbackFromPartner } from "../partner/fetchUninstallFeedbackFromPartner.server";
 
 const LOG = "[AppLifecycle:uninstall]";
@@ -132,6 +133,13 @@ export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<
     );
   } else {
     await sendAppUninstalledFeishuNotify(params);
+    // 必须在 persistAppUninstalled（删除 Session）之前发，否则取不到收件人快照
+    await notifyAppUninstalledEmail({
+      shop: params.shop,
+      appName: params.appName,
+      uninstalledAt: params.uninstalledAt,
+      sessionId: params.sessionId,
+    });
   }
 
   await persistAppUninstalled(params);

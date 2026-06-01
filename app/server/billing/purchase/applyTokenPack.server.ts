@@ -1,5 +1,6 @@
 import prisma from "../../../db.server";
 import { sendTokenPackFeishuNotify } from "../../feishu/scenarios/sendTokenPackFeishuNotify.server";
+import { notifyPurchaseCreatedEmail } from "../../notifications/notifyMerchant.server";
 import { appendBillingLog } from "../billingLog.server";
 import { ensureAccount } from "../account/ensureAccount.server";
 import type { PlanRecord } from "../plans/planCatalog.server";
@@ -56,4 +57,11 @@ export async function applyTokenPackPurchase(params: {
     );
   }
 
+  await notifyPurchaseCreatedEmail({
+    shop,
+    appName,
+    plan,
+    shopifyPurchaseId,
+    occurredAt: new Date(),
+  });
 }

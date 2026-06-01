@@ -8,6 +8,8 @@ import {
   type SubscriptionPeriodSnapshot,
 } from "./renewal.server";
 import { sendSubscriptionFeishuNotify } from "../../feishu/scenarios/sendSubscriptionFeishuNotify.server";
+import { notifySubscriptionEmail } from "../../notifications/notifyMerchant.server";
+import { getPlanByKey } from "../plans/planCatalog.server";
 import {
   APP_SUBSCRIPTION_STATUS,
   BILLING_LOG_EVENT,
@@ -135,6 +137,32 @@ export async function applyActiveSubscription(params: {
     }
 
   }
+
+  // 邮件：首次开通（started）或换套餐（changed）；周期续费走 renewal.server 已提前 return，不在此发送
+  const previousPlanKey = existing?.planKey;
+  const currentPlan = await getPlanByKey(planKey).catch(() => null);
+  const currentPlanName = currentPlan?.displayName ?? planKey;
+  if (wasPending) {
+    await notifySubscriptionEmail({
+      shop,
+      appName,
+      event: "subscriptionStarted",
+      currentPlanName,
+      billingInterval,
+      occurredAt: new Date(),
+    });
+  } else if (previousPlanKey && previousPlanKey !== planKey) {
+    const previousPlan = await getPlanByKey(previousPlanKey).catch(() => null);
+    await notifySubscriptionEmail({
+      shop,
+      appName,
+      event: "subscriptionChanged",
+      currentPlanName,
+      previousPlanName: previousPlan?.displayName ?? previousPlanKey,
+      billingInterval,
+      occurredAt: new Date(),
+    });
+  }
 }
 
 /**
@@ -261,4 +289,12 @@ export async function markSubscriptionNonActive(params: {
     });
   });
 
+  const cancelledPlan = await getPlanByKey(sub.planKey).catch(() => null);
+  await notifySubscriptionEmail({
+    shop: params.shop,
+    appName: params.appName,
+    event: "subscriptionCanceled",
+    currentPlanName: cancelledPlan?.displayName ?? sub.planKey,
+    occurredAt: new Date(),
+  });
 }
