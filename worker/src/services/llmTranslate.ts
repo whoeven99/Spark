@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { tmGet, tmSet } from "./translationMemory.js";
 
 let _openai: OpenAI | null = null;
 
@@ -21,6 +22,8 @@ export type TranslateResult = {
   key: string;
   translatedValue: string;
   digest: string;
+  /** "translated" = produced by the engine; "fallback" = engine failed, original text returned. */
+  status: "translated" | "fallback";
 };
 
 // ─── Field classification ──────────────────────────────────────────────────────
@@ -231,12 +234,20 @@ async function translateHtmlLLM(html: string, source: string, target: string, ai
   return restoreHtmlTextNodes(template, translated);
 }
 
-async function callLLM(
+// How many extra attempts (beyond the first) to recover keys the LLM dropped or
+// returned unparseable JSON for.
+const MAX_LLM_RETRIES = 2;
+
+/**
+ * One LLM round-trip. Returns a map of the keys the model actually returned.
+ * Throws on unparseable JSON so the caller can retry.
+ */
+async function callLLMOnce(
   items: TranslateItem[],
   source: string,
   target: string,
   aiModel: string,
-): Promise<TranslateResult[]> {
+): Promise<Map<string, string>> {
   const payload = items.map((i) => ({ key: i.key, value: i.value }));
   const prompt = `You are a professional e-commerce translator.
 Translate from "${source}" to "${target}".
@@ -244,6 +255,7 @@ Return a JSON object: {"translations": [{"key": "<original key>", "translatedVal
 Rules:
 - Be accurate and natural for e-commerce
 - If the value is empty, return it unchanged
+- You MUST return an entry for every key in the input
 
 Input:
 ${JSON.stringify(payload)}
@@ -259,20 +271,56 @@ Return ONLY the JSON object, no markdown.`;
   });
 
   const raw = completion.choices[0]?.message?.content ?? "{}";
-  let parsed: Array<{ key: string; translatedValue: string }> = [];
-  try {
-    const obj = JSON.parse(raw) as { translations?: unknown };
-    parsed = Array.isArray(obj.translations) ? (obj.translations as typeof parsed) : [];
-  } catch {
-    console.warn("[llm] failed to parse response, using originals");
+  // JSON.parse throws on malformed output → propagated to caller for retry.
+  const obj = JSON.parse(raw) as { translations?: unknown };
+  const parsed = Array.isArray(obj.translations)
+    ? (obj.translations as Array<{ key?: unknown; translatedValue?: unknown }>)
+    : [];
+
+  const map = new Map<string, string>();
+  for (const r of parsed) {
+    if (typeof r?.key === "string" && typeof r?.translatedValue === "string") {
+      map.set(r.key, r.translatedValue);
+    }
+  }
+  return map;
+}
+
+/**
+ * Translate a batch via the LLM, retrying only the keys that come back missing
+ * (dropped by the model) or after a parse failure. Keys still unresolved after
+ * all attempts are returned with status "fallback" (original value preserved).
+ */
+async function callLLM(
+  items: TranslateItem[],
+  source: string,
+  target: string,
+  aiModel: string,
+): Promise<TranslateResult[]> {
+  const collected = new Map<string, string>();
+  let pending = items;
+
+  for (let attempt = 0; attempt <= MAX_LLM_RETRIES && pending.length > 0; attempt++) {
+    try {
+      const map = await callLLMOnce(pending, source, target, aiModel);
+      for (const [k, v] of map) if (!collected.has(k)) collected.set(k, v);
+    } catch (e) {
+      console.warn(`[llm] attempt ${attempt + 1} failed`, e);
+    }
+    pending = pending.filter((i) => !collected.has(i.key));
   }
 
-  const resultMap = new Map(parsed.map((r) => [r.key, r.translatedValue]));
-  return items.map((item) => ({
-    key: item.key,
-    translatedValue: resultMap.get(item.key) ?? item.value,
-    digest: item.digest,
-  }));
+  if (pending.length > 0) {
+    console.warn(
+      `[llm] ${pending.length} key(s) unresolved after ${MAX_LLM_RETRIES + 1} attempts, using originals`,
+    );
+  }
+
+  return items.map((item) =>
+    collected.has(item.key)
+      ? { key: item.key, translatedValue: collected.get(item.key)!, digest: item.digest, status: "translated" as const }
+      : { key: item.key, translatedValue: item.value, digest: item.digest, status: "fallback" as const },
+  );
 }
 
 // ─── Main exported function ────────────────────────────────────────────────────
@@ -285,6 +333,9 @@ Return ONLY the JSON object, no markdown.`;
  * - plain fields: long values split at sentence/paragraph boundaries, batched by char count
  *
  * Engine routing: aiModel="google-translate" → Google Translate API; anything else → OpenAI.
+ *
+ * Translation Memory: fields already translated for the same (shop, target, model, digest)
+ * are served from cache without hitting any engine. Newly translated fields are cached.
  */
 export async function translateBatch(
   items: TranslateItem[],
@@ -292,9 +343,15 @@ export async function translateBatch(
   target: string,
   aiModel: string,
   testMode: boolean,
+  shopName: string,
 ): Promise<TranslateResult[]> {
   if (testMode) {
-    return items.map((item) => ({ key: item.key, translatedValue: `${item.value} - test`, digest: item.digest }));
+    return items.map((item) => ({
+      key: item.key,
+      translatedValue: `${item.value} - test`,
+      digest: item.digest,
+      status: "translated" as const,
+    }));
   }
 
   const resultMap = new Map<string, TranslateResult>();
@@ -302,28 +359,37 @@ export async function translateBatch(
   const usedModel = envModel || aiModel;
   const isGoogle = usedModel === "google-translate";
 
-  // 1. Skip fields
+  // 1. Resolve skip fields and cache hits; everything else goes to `pending`.
+  const pending: TranslateItem[] = [];
   for (const item of items) {
     if (classifyField(item.key, item.value) === "skip") {
-      resultMap.set(item.key, { key: item.key, translatedValue: item.value, digest: item.digest });
+      resultMap.set(item.key, { key: item.key, translatedValue: item.value, digest: item.digest, status: "translated" });
+      continue;
     }
+    const cached = await tmGet(shopName, target, usedModel, item.digest);
+    if (cached !== null) {
+      resultMap.set(item.key, { key: item.key, translatedValue: cached, digest: item.digest, status: "translated" });
+      continue;
+    }
+    pending.push(item);
   }
 
   // 2. HTML fields — each translated individually with node-level batching
-  for (const item of items.filter((i) => classifyField(i.key, i.value) === "html")) {
+  for (const item of pending.filter((i) => classifyField(i.key, i.value) === "html")) {
     try {
       const translatedValue = isGoogle
         ? await translateHtmlGoogle(item.value, source, target)
         : await translateHtmlLLM(item.value, source, target, aiModel);
-      resultMap.set(item.key, { key: item.key, translatedValue, digest: item.digest });
+      resultMap.set(item.key, { key: item.key, translatedValue, digest: item.digest, status: "translated" });
+      await tmSet(shopName, target, usedModel, item.digest, translatedValue);
     } catch (e) {
       console.warn(`[translate] html field "${item.key}" failed, using original`, e);
-      resultMap.set(item.key, { key: item.key, translatedValue: item.value, digest: item.digest });
+      resultMap.set(item.key, { key: item.key, translatedValue: item.value, digest: item.digest, status: "fallback" });
     }
   }
 
   // 3. Plain text fields — split long values, batch by char count
-  const plainItems = items.filter((i) => classifyField(i.key, i.value) === "plain");
+  const plainItems = pending.filter((i) => classifyField(i.key, i.value) === "plain");
   if (plainItems.length > 0) {
     // Expand long items into numbered parts
     type Part = { internalKey: string; originalKey: string; value: string; digest: string; idx: number; total: number };
@@ -344,21 +410,22 @@ export async function translateBatch(
 
     const batchItems: TranslateItem[] = expanded.map((p) => ({ key: p.internalKey, value: p.value, digest: p.digest }));
     const batches = batchByChars(batchItems, MAX_CHARS_PER_BATCH);
-    const translatedParts = new Map<string, string>();
+    const translatedParts = new Map<string, { value: string; status: "translated" | "fallback" }>();
 
     for (const batch of batches) {
       try {
-        let results: TranslateResult[];
         if (isGoogle) {
           const translated = await callGoogleTranslate(batch.map((b) => b.value), source, target, "text");
-          results = batch.map((b, i) => ({ key: b.key, translatedValue: translated[i] ?? b.value, digest: b.digest }));
+          batch.forEach((b, i) =>
+            translatedParts.set(b.key, { value: translated[i] ?? b.value, status: "translated" }),
+          );
         } else {
-          results = await callLLM(batch, source, target, aiModel);
+          const results = await callLLM(batch, source, target, aiModel);
+          for (const r of results) translatedParts.set(r.key, { value: r.translatedValue, status: r.status });
         }
-        for (const r of results) translatedParts.set(r.key, r.translatedValue);
       } catch (e) {
         console.warn("[translate] plain batch failed, using originals", e);
-        for (const b of batch) translatedParts.set(b.key, b.value);
+        for (const b of batch) translatedParts.set(b.key, { value: b.value, status: "fallback" });
       }
     }
 
@@ -373,12 +440,26 @@ export async function translateBatch(
     for (const [originalKey, parts] of partsByOriginal) {
       const originalItem = plainItems.find((i) => i.key === originalKey)!;
       const sorted = parts.sort((a, b) => a.idx - b.idx);
-      const translatedValue = sorted.map((p) => translatedParts.get(p.internalKey) ?? p.value).join("");
-      resultMap.set(originalKey, { key: originalKey, translatedValue, digest: originalItem.digest });
+      const pieces = sorted.map(
+        (p) => translatedParts.get(p.internalKey) ?? { value: p.value, status: "fallback" as const },
+      );
+      const translatedValue = pieces.map((p) => p.value).join("");
+      // A field is only "translated" if every one of its parts was translated.
+      const status = pieces.some((p) => p.status === "fallback") ? "fallback" : "translated";
+      resultMap.set(originalKey, { key: originalKey, translatedValue, digest: originalItem.digest, status });
+      if (status === "translated") {
+        await tmSet(shopName, target, usedModel, originalItem.digest, translatedValue);
+      }
     }
   }
 
   return items.map(
-    (item) => resultMap.get(item.key) ?? { key: item.key, translatedValue: item.value, digest: item.digest },
+    (item) =>
+      resultMap.get(item.key) ?? {
+        key: item.key,
+        translatedValue: item.value,
+        digest: item.digest,
+        status: "fallback" as const,
+      },
   );
 }

@@ -147,16 +147,27 @@ CREATED
   {
     "resourceId": "gid://shopify/Product/123",
     "translations": [
-      { "key": "title", "originalValue": "原文", "translatedValue": "Translated", "digest": "sha256hash" }
+      { "key": "title", "originalValue": "原文", "translatedValue": "Translated", "digest": "sha256hash", "status": "translated" }
     ]
   }
 ]
 ```
 
 **翻译引擎路由**：
-- `testMode=true` → 直接返回原文（跳过 API 调用）
+- `testMode=true` → 直接返回 `原文 - test`（跳过 API 调用）
 - `aiModel="google-translate"` 或 `TRANSLATION_AI_MODEL=google-translate` → Google Translate API
 - 其他 → OpenAI `chat.completions.create`，默认模型 `gpt-4o-mini`，`temperature=0.1`
+
+**翻译记忆（TM 缓存）**（`worker/src/services/translationMemory.ts`）：
+- 翻译前按 `tm:v4:{shop}:{target}:{model}:{digest}` 查 Redis，命中则跳过引擎调用；翻译成功后写回缓存。
+- key 用 Shopify 的字段 `digest`（源内容哈希）做天然失效：源文改动 → digest 变 → 自动失配重译。
+- 仅缓存成功译文（fallback 不缓存）；value 超 8KB 不缓存；`skip` 字段不查缓存。
+- 关闭：`TRANSLATION_TM_DISABLED=true`；TTL：`TRANSLATION_TM_TTL_DAYS`（默认 60 天）。
+
+**LLM 重试与回退**（`callLLM`）：
+- LLM 返回 JSON 解析失败、或漏返回部分 key 时，只对未解析的 key 重试（最多 2 次，共 3 次尝试）。
+- 全部尝试后仍未解析的 key → 回退原文，`status="fallback"`。
+- 每个字段结果带 `status: "translated" | "fallback"`。一个 plain 字段若有任一切分片段回退，则整字段标记 fallback。
 
 **字段分类**（`classifyField(key)`）：
 - `skip`：`handle`（Shopify URL slug，跳过不翻）
@@ -205,6 +216,7 @@ CREATED
 | `tasks/v4/{shop}/{id}/manifest.json` | `{taskId, shopName, source, target, modules:{[mod]:{totalItems,chunks}}, createdAt}` | Init |
 | `tasks/v4/{shop}/{id}/init/{MODULE}/chunk-{nn}.json` | `TranslatableResource[]` | Init |
 | `tasks/v4/{shop}/{id}/translate/{MODULE}/chunk-{nn}.json` | `[{resourceId, translations:[...]}]` | Translate |
+| `tasks/v4/{shop}/{id}/translate/fallbacks.json` | `[{resourceId, module, key}]`（回退原文的字段，供 UI 展示） | Translate（有 fallback 时） |
 | `tasks/v4/{shop}/{id}/writeback/progress.json` | `{written: resourceId[]}` | Writeback（每 20 条更新） |
 | `tasks/v4/{shop}/{id}/writeback/failed.json` | `[{resourceId, translations:TranslationInput[]}]` | Writeback |
 
@@ -220,7 +232,7 @@ CREATED
 | `translate:v4:hint:verify` | List | `{taskId, shopName}` | 通知 verifyWorker |
 | `translate:v4:progress:{taskId}` | Hash | 11 个指标计数器 + `currentModule` + `updatedAt` | 实时进度（TTL 7 天） |
 
-**Progress hash 字段**：`initTotal`, `initDone`, `translateTotal`, `translateDone`, `translateFailed`, `writebackTotal`, `writebackDone`, `writebackFailed`, `verifyTotal`, `verifyDone`, `verifyFailed`, `currentModule`, `updatedAt`
+**Progress hash 字段**：`initTotal`, `initDone`, `translateTotal`, `translateDone`, `translateFailed`, `translateFallback`, `writebackTotal`, `writebackDone`, `writebackFailed`, `verifyTotal`, `verifyDone`, `verifyFailed`, `currentModule`, `updatedAt`
 
 ---
 
@@ -375,6 +387,8 @@ type TranslationTaskFormPayload = {
 | `OPENAI_API_KEY` | Worker | OpenAI API 密钥 |
 | `GOOGLE_TRANSLATE_API_KEY` | Worker | Google Translate API 密钥 |
 | `TRANSLATION_AI_MODEL` | App + Worker | 全局覆盖翻译模型，如 `gpt-4o-mini`、`google-translate` |
+| `TRANSLATION_TM_DISABLED` | Worker | 设为 `"true"` 关闭翻译记忆缓存 |
+| `TRANSLATION_TM_TTL_DAYS` | Worker | 翻译记忆缓存 TTL（天），默认 60 |
 
 ---
 

@@ -47,6 +47,7 @@ export type TranslationV4Metrics = {
   translateTotal: number;
   translateDone: number;
   translateFailed: number;
+  translateFallback: number;
   writebackTotal: number;
   writebackDone: number;
   writebackFailed: number;
@@ -62,6 +63,7 @@ export const EMPTY_V4_METRICS: TranslationV4Metrics = {
   translateTotal: 0,
   translateDone: 0,
   translateFailed: 0,
+  translateFallback: 0,
   writebackTotal: 0,
   writebackDone: 0,
   writebackFailed: 0,

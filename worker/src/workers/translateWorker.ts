@@ -31,12 +31,15 @@ async function claimNextJob(): Promise<TranslationV4Job | null> {
 
 async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   const { shopName, id: jobId, source, target, aiModel, testMode } = job;
-  // Honor environment override for translation engine (TRANSLATION_AI_MODEL)
-  const effectiveAiModel = process.env.TRANSLATION_AI_MODEL?.trim() || aiModel;
+  // Engine override (TRANSLATION_AI_MODEL) is applied inside translateBatch.
   const blobPrefix = job.blobPrefix || `tasks/v4/${shopName}/${jobId}`;
 
   let translateDone = 0;
   let translateFailed = 0;
+  let translateFallback = 0;
+  // Fields that were translated but fell back to the original value (engine
+  // dropped the key / failed). Surfaced to the UI via translate/fallbacks.json.
+  const fallbacks: Array<{ resourceId: string; module: string; key: string }> = [];
   const translateTotal = job.metrics.translateTotal || job.metrics.initTotal;
 
   if (testMode) {
@@ -70,7 +73,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
           if (!resource.fields?.length) continue;
 
           try {
-            const results = await translateBatch(resource.fields, source, target, aiModel, testMode);
+            const results = await translateBatch(resource.fields, source, target, aiModel, testMode, shopName);
             translatedChunk.push({
               resourceId: resource.resourceId,
               translations: results.map((r) => ({
@@ -78,8 +81,15 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
                 originalValue: resource.fields.find((f) => f.key === r.key)?.value ?? "",
                 translatedValue: r.translatedValue,
                 digest: r.digest,
+                status: r.status,
               })),
             });
+            for (const r of results) {
+              if (r.status === "fallback") {
+                translateFallback++;
+                fallbacks.push({ resourceId: resource.resourceId, module, key: r.key });
+              }
+            }
             translateDone++;
           } catch (e) {
             translateFailed++;
@@ -93,10 +103,16 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         await setProgress(jobId, {
           translateDone,
           translateFailed,
+          translateFallback,
           translateTotal,
           currentModule: module,
         });
       }
+    }
+
+    // Persist the list of fields that fell back to original for UI visibility.
+    if (fallbacks.length > 0) {
+      await blobWrite(`${blobPrefix}/translate/fallbacks.json`, fallbacks);
     }
 
     // Refresh job to get latest metrics
@@ -108,12 +124,15 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         ...(latestJob?.metrics ?? job.metrics),
         translateDone,
         translateFailed,
+        translateFallback,
         writebackTotal: translateDone,
       },
     });
 
     await pushHint("writeback", { taskId: jobId, shopName });
-    console.log(`[translate] done job=${jobId} done=${translateDone} failed=${translateFailed}`);
+    console.log(
+      `[translate] done job=${jobId} done=${translateDone} failed=${translateFailed} fallback=${translateFallback}`,
+    );
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e);
     await updateJob(shopName, jobId, {

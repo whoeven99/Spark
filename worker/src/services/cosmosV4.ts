@@ -23,6 +23,7 @@ export type TranslationV4Metrics = {
   translateTotal: number;
   translateDone: number;
   translateFailed: number;
+  translateFallback: number;
   writebackTotal: number;
   writebackDone: number;
   writebackFailed: number;
