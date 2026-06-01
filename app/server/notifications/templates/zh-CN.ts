@@ -8,6 +8,13 @@ import type {
   SubscriptionNotificationVariables,
   TaskNotificationVariables,
 } from "../types";
+import {
+  formatBillingPeriod,
+  formatPurchaseType,
+  formatShopifyOrderDisplayId,
+  formatUsdDisplay,
+} from "../formatNotificationDisplay.server";
+import type { NotificationLocale } from "../types";
 import { commonRows, creditRows } from "./sharedLayout";
 
 const labels = {
@@ -55,7 +62,7 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
     action: { label: "查看 Shopify App 状态", url: display.dashboardUrl },
   }),
 
-  purchaseCreated: ({ variables, display }) => ({
+  purchaseCreated: ({ variables, display, locale }) => ({
     subject: `${display.appName} 购买记录已生成`,
     preheader: `${variables.shopName} 的购买或充值记录已生成，请查看订单和积分账户信息。`,
     title: "购买记录已生成",
@@ -68,41 +75,58 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
     ],
     details: [
       ...commonRows(variables, labels),
-      { label: "购买类型", value: purchaseTypeLabel(variables.purchaseType) },
-      { label: "订单编号", value: variables.orderId },
+      {
+        label: "购买类型",
+        value: formatPurchaseType(variables.purchaseType, locale),
+      },
+      {
+        label: "订单编号",
+        value: variables.orderId
+          ? formatShopifyOrderDisplayId(variables.orderId)
+          : undefined,
+      },
       { label: "套餐或项目", value: variables.planName },
-      { label: "金额 (USD)", value: formatUsdAmount(variables.amountUsd) },
-      { label: "计费周期", value: variables.billingPeriod },
-      ...creditRows(variables.creditAccountChange, labels),
+      { label: "金额 (USD)", value: formatUsdDisplay(variables.amountUsd) },
+      {
+        label: "计费周期",
+        value: resolvePurchaseBillingPeriod(variables, locale),
+      },
+      ...creditRows(variables.creditAccountChange, labels, locale),
     ],
     action: { label: "前往 Shopify App 查看", url: display.dashboardUrl },
   }),
 
-  subscriptionStarted: ({ variables, display }) => subscriptionContent({
-    subject: `${display.appName} 订阅已开始`,
-    title: "订阅已开始",
-    summary: `${display.appName} 订阅已经生效。这里是当前套餐、计费周期和积分账户的简要明细。`,
-    variables,
-    display,
-  }),
+  subscriptionStarted: ({ variables, display, locale }) =>
+    subscriptionContent({
+      subject: `${display.appName} 订阅已开始`,
+      title: "订阅已开始",
+      summary: `${display.appName} 订阅已经生效。这里是当前套餐、计费周期和积分账户的简要明细。`,
+      variables,
+      display,
+      locale,
+    }),
 
-  subscriptionChanged: ({ variables, display }) => subscriptionContent({
-    subject: `${display.appName} 订阅已变更`,
-    title: "订阅已变更",
-    summary: `${display.appName} 订阅已更新。下面是这次变更的明细，方便你快速核对。`,
-    variables,
-    display,
-  }),
+  subscriptionChanged: ({ variables, display, locale }) =>
+    subscriptionContent({
+      subject: `${display.appName} 订阅已变更`,
+      title: "订阅已变更",
+      summary: `${display.appName} 订阅已更新。下面是这次变更的明细，方便你快速核对。`,
+      variables,
+      display,
+      locale,
+    }),
 
-  subscriptionCanceled: ({ variables, display }) => subscriptionContent({
-    subject: `${display.appName} 订阅已取消`,
-    title: "订阅已取消",
-    summary: `${display.appName} 订阅已取消。当前账期结束后，部分高级能力、自动任务或额度可能会停止。`,
-    variables,
-    display,
-  }),
+  subscriptionCanceled: ({ variables, display, locale }) =>
+    subscriptionContent({
+      subject: `${display.appName} 订阅已取消`,
+      title: "订阅已取消",
+      summary: `${display.appName} 订阅已取消。当前账期结束后，部分高级能力、自动任务或额度可能会停止。`,
+      variables,
+      display,
+      locale,
+    }),
 
-  taskStarted: ({ variables, display }) => taskContent({
+  taskStarted: ({ variables, display, locale }) => taskContent({
     subject: `${display.appName} 任务已开始`,
     title: "任务已开始",
     summary: `${display.appName} 已开始处理 ${variables.taskName}。我们会在任务完成、暂停或需要你查看时继续同步状态。`,
@@ -110,9 +134,10 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
     display,
     timeLabel: "开始时间 (UTC+0)",
     timeValue: variables.startedAtUtc,
+    locale,
   }),
 
-  taskCompleted: ({ variables, display }) => taskContent({
+  taskCompleted: ({ variables, display, locale }) => taskContent({
     subject: `${display.appName} 任务已完成`,
     title: "任务已完成",
     summary: `好消息，${variables.taskName} 已经处理完成。你可以前往 Shopify App 查看结果、日志和相关明细。`,
@@ -120,9 +145,10 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
     display,
     timeLabel: "完成时间 (UTC+0)",
     timeValue: variables.completedAtUtc,
+    locale,
   }),
 
-  taskPaused: ({ variables, display }) => taskContent({
+  taskPaused: ({ variables, display, locale }) => taskContent({
     subject: `${display.appName} 任务已暂停`,
     title: "任务已暂停",
     summary: `${variables.taskName} 已暂停。暂停期间，任务通常不会继续处理新数据，也不会继续产生相关消耗。`,
@@ -130,9 +156,10 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
     display,
     timeLabel: "暂停时间 (UTC+0)",
     timeValue: variables.pausedAtUtc,
+    locale,
   }),
 
-  taskFailed: ({ variables, display }) => taskContent({
+  taskFailed: ({ variables, display, locale }) => taskContent({
     subject: `${display.appName} 任务执行失败`,
     title: "任务执行失败",
     summary: `很抱歉，您在 ${display.appName} 中配置的任务这次没有完成。建议您进入 Shopify App 查看失败原因，并检查配置、授权、积分余额或第三方连接状态。`,
@@ -141,6 +168,7 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
     timeLabel: "失败时间 (UTC+0)",
     timeValue: variables.occurredAtUtc,
     extraRows: [{ label: "失败原因", value: variables.failureReason }],
+    locale,
   }),
 };
 
@@ -150,12 +178,14 @@ function subscriptionContent({
   summary,
   variables,
   display,
+  locale,
 }: {
   subject: string;
   title: string;
   summary: string;
   variables: SubscriptionNotificationVariables;
   display: TemplateDisplay;
+  locale: NotificationLocale;
 }) {
   return {
     subject,
@@ -173,8 +203,16 @@ function subscriptionContent({
       { label: "原套餐", value: variables.previousPlanName },
       { label: "当前套餐", value: variables.currentPlanName },
       { label: "生效时间 (UTC+0)", value: variables.effectiveAtUtc },
-      { label: "计费周期", value: variables.billingPeriod },
-      ...creditRows(variables.creditAccountChange, labels),
+      {
+        label: "计费周期",
+        value: variables.billingInterval
+          ? formatBillingPeriod(
+              { kind: "subscription", interval: variables.billingInterval },
+              locale,
+            )
+          : undefined,
+      },
+      ...creditRows(variables.creditAccountChange, labels, locale),
     ],
     action: { label: "前往 Shopify App 查看", url: display.dashboardUrl },
   };
@@ -189,6 +227,7 @@ function taskContent({
   timeLabel,
   timeValue,
   extraRows = [],
+  locale = "zh-CN",
 }: {
   subject: string;
   title: string;
@@ -198,6 +237,7 @@ function taskContent({
   timeLabel: string;
   timeValue?: string;
   extraRows?: TemplateRow[];
+  locale?: NotificationLocale;
 }) {
   return {
     subject,
@@ -217,7 +257,7 @@ function taskContent({
       { label: "任务编号", value: variables.taskId },
       { label: timeLabel, value: timeValue },
       ...extraRows,
-      ...creditRows(variables.creditAccountChange, labels),
+      ...creditRows(variables.creditAccountChange, labels, locale),
     ],
     action: { label: "前往 Shopify App 查看", url: variables.statusUrl ?? display.dashboardUrl },
   };
@@ -231,17 +271,28 @@ function creditParagraph(change: CreditAccountChange | undefined): string[] {
   return ["积分可用于任务执行、额度消耗或其他按量功能。完整明细会在 Shopify App 中展示。"];
 }
 
-function purchaseTypeLabel(type: "subscription" | "creditPack" | "oneTime" | undefined): string | undefined {
-  if (type === "subscription") return "订阅计费";
-  if (type === "creditPack") return "积分购买";
-  if (type === "oneTime") return "一次性购买";
-  return undefined;
-}
-
-function formatUsdAmount(amountUsd: string | undefined): string | undefined {
-  if (!amountUsd) {
-    return undefined;
+function resolvePurchaseBillingPeriod(
+  variables: {
+    billingPeriodKind?: "oneTime";
+    billingInterval?: string;
+    purchaseType?: "subscription" | "creditPack" | "oneTime";
+  },
+  locale: NotificationLocale,
+): string | undefined {
+  if (variables.billingPeriodKind === "oneTime") {
+    return formatBillingPeriod({ kind: "oneTime" }, locale);
   }
-
-  return `USD ${amountUsd}`;
+  if (variables.billingInterval?.trim()) {
+    return formatBillingPeriod(
+      { kind: "subscription", interval: variables.billingInterval },
+      locale,
+    );
+  }
+  if (
+    variables.purchaseType === "creditPack" ||
+    variables.purchaseType === "oneTime"
+  ) {
+    return formatBillingPeriod({ kind: "oneTime" }, locale);
+  }
+  return undefined;
 }

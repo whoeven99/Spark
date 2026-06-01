@@ -1,3 +1,5 @@
+import type { CreditReasonKey } from "./formatNotificationDisplay.server";
+
 export const notificationLocales = ["zh-CN", "en"] as const;
 
 export type NotificationLocale = (typeof notificationLocales)[number];
@@ -25,12 +27,16 @@ export type NotificationAppConfig = {
   legalName?: string;
 };
 
+export type { CreditReasonKey };
+
 export type CreditAccountChange = {
   creditsChanged?: string | number;
   creditsBefore?: string | number;
   creditsAfter?: string | number;
   creditUnit?: string;
+  /** @deprecated Prefer creditReasonKey + locale formatting in TemplateData. */
   reason?: string;
+  creditReasonKey?: CreditReasonKey;
 };
 
 export type BaseNotificationVariables = {
@@ -53,10 +59,13 @@ export type AppLifecycleNotificationVariables = BaseNotificationVariables & {
 
 export type PurchaseNotificationVariables = BaseNotificationVariables & {
   purchaseType?: "subscription" | "creditPack" | "oneTime";
+  /** Raw Shopify GID; formatted in TemplateData. */
   orderId?: string;
   planName?: string;
   amountUsd?: string;
-  billingPeriod?: string;
+  /** Raw billing interval for subscription; one-time uses billingPeriodKind. */
+  billingInterval?: string;
+  billingPeriodKind?: "oneTime";
   creditAccountChange?: CreditAccountChange;
 };
 
@@ -64,7 +73,8 @@ export type SubscriptionNotificationVariables = BaseNotificationVariables & {
   currentPlanName: string;
   previousPlanName?: string;
   effectiveAtUtc?: string;
-  billingPeriod?: string;
+  /** Raw interval (MONTHLY, EVERY_30_DAYS, ANNUAL); localized in TemplateData. */
+  billingInterval?: string;
   creditAccountChange?: CreditAccountChange;
 };
 

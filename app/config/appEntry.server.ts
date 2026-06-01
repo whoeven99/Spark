@@ -71,6 +71,14 @@ export function getAppEntryConfig(): AppEntryConfig {
   return APP_ENTRY_CONFIGS[getAppEntry()];
 }
 
+export function getAppHomePath(entry: AppEntry = getAppEntry()): string {
+  return APP_ENTRY_CONFIGS[entry].home;
+}
+
+export function isAppEntryKey(value: string): value is AppEntry {
+  return isAppEntry(value);
+}
+
 /** 嵌入式 Admin 跳转时保留 shop/host/id_token 等查询参数，避免鉴权循环。 */
 export function buildEmbeddedAppPath(path: string, request: Request): string {
   const url = new URL(request.url);
