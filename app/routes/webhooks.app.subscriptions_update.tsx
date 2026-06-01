@@ -1,11 +1,14 @@
 import type { ActionFunctionArgs } from "react-router";
 import { getAppEntry } from "../config/appEntry.server";
 import { handleAppSubscriptionWebhook } from "../server/billing/index.server";
-import { authenticate, unauthenticated } from "../shopify.server";
+import {
+  authenticateWebhookLogged,
+  returnWebhookOk,
+} from "../server/webhook/webhookDebugLog.server";
+import { unauthenticated } from "../shopify.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { shop, topic, payload } = await authenticate.webhook(request);
-  console.info(`[Billing] webhook ${topic} shop=${shop}`);
+  const { shop, topic, payload } = await authenticateWebhookLogged(request);
 
   try {
     const { admin } = await unauthenticated.admin(shop);
@@ -19,5 +22,5 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.error("[Billing] app_subscriptions/update handler failed:", error);
   }
 
-  return new Response();
+  return returnWebhookOk({ shop, topic });
 };

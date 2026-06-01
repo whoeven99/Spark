@@ -1,3 +1,7 @@
+import {
+  formatCreditAmount,
+  formatCreditReason,
+} from "../formatNotificationDisplay.server";
 import type {
   BaseNotificationVariables,
   CreditAccountChange,
@@ -86,32 +90,46 @@ export function commonRows(variables: BaseNotificationVariables, labels: {
   ];
 }
 
-export function creditRows(change: CreditAccountChange | undefined, labels: {
-  changed: string;
-  before: string;
-  after: string;
-  reason: string;
-}): TemplateRow[] {
+export function creditRows(
+  change: CreditAccountChange | undefined,
+  labels: {
+    changed: string;
+    before: string;
+    after: string;
+    reason: string;
+  },
+  locale: NotificationLocale = "zh-CN",
+): TemplateRow[] {
   if (!change) {
     return [];
   }
 
-  const unit = change.creditUnit ? ` ${change.creditUnit}` : "";
+  const reason =
+    formatCreditReason(change.creditReasonKey, locale) || change.reason;
 
   return [
     {
       label: labels.changed,
-      value: change.creditsChanged === undefined ? undefined : `${change.creditsChanged}${unit}`,
+      value:
+        change.creditsChanged === undefined
+          ? undefined
+          : formatCreditAmount(change.creditsChanged),
     },
     {
       label: labels.before,
-      value: change.creditsBefore === undefined ? undefined : `${change.creditsBefore}${unit}`,
+      value:
+        change.creditsBefore === undefined
+          ? undefined
+          : formatCreditAmount(change.creditsBefore),
     },
     {
       label: labels.after,
-      value: change.creditsAfter === undefined ? undefined : `${change.creditsAfter}${unit}`,
+      value:
+        change.creditsAfter === undefined
+          ? undefined
+          : formatCreditAmount(change.creditsAfter),
     },
-    { label: labels.reason, value: change.reason },
+    { label: labels.reason, value: reason },
   ];
 }
 

@@ -1,18 +1,23 @@
 import type { ActionFunctionArgs } from "react-router";
 import { getAppEntry } from "../config/appEntry.server";
 import { onAppUninstalled } from "../server/appLifecycle/onAppUninstalled.server";
-import { authenticate } from "../shopify.server";
+import {
+  authenticateWebhookLogged,
+  returnWebhookOk,
+} from "../server/webhook/webhookDebugLog.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const appName = getAppEntry();
 
   let shop: string;
-  let session: Awaited<ReturnType<typeof authenticate.webhook>>["session"];
+  let session: Awaited<
+    ReturnType<typeof authenticateWebhookLogged>
+  >["session"];
   let topic: string;
   let payload: unknown;
 
   try {
-    ({ shop, session, topic, payload } = await authenticate.webhook(request));
+    ({ shop, session, topic, payload } = await authenticateWebhookLogged(request));
     console.info(
       `[Webhook] app/uninstalled authenticated shop=${shop} topic=${topic} sessionId=${session?.id ?? "(none)"} appName=${appName}`,
     );
@@ -48,5 +53,5 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   console.info(`[Webhook] app/uninstalled completed shop=${shop} status=200`);
-  return new Response();
+  return returnWebhookOk({ shop, topic });
 };

@@ -4,9 +4,10 @@ import {
   buildCreditAccountChange,
   buildPurchaseCreatedVariables,
   buildSubscriptionVariables,
-  formatBillingIntervalLabel,
 } from "../notifications/buildNotificationVariables.server";
+import type { CreditReasonKey } from "../notifications/formatNotificationDisplay.server";
 import type { MerchantNotificationEvent } from "../notifications/merchantNotificationEvents";
+import { fetchShopBasicInfo } from "../shopify/fetchShopBasicInfo.server";
 import { getPlanByKey } from "./plans/planCatalog.server";
 import type { PlanRecord } from "./plans/planCatalog.server";
 
@@ -20,6 +21,28 @@ async function loadSessionForShop(shop: string) {
     );
     return null;
   }
+}
+
+async function loadShopInfoForBilling(shop: string) {
+  try {
+    const { unauthenticated } = await import("../../shopify.server");
+    const { admin } = await unauthenticated.admin(shop);
+    return await fetchShopBasicInfo(admin);
+  } catch (error) {
+    console.warn(`[Billing] fetchShopBasicInfo failed shop=${shop}`, error);
+    return null;
+  }
+}
+
+function subscriptionCreditReasonKey(
+  event: Extract<
+    MerchantNotificationEvent,
+    "subscriptionStarted" | "subscriptionChanged" | "subscriptionCanceled"
+  >,
+): CreditReasonKey {
+  if (event === "subscriptionStarted") return "subscription_started";
+  if (event === "subscriptionChanged") return "subscription_changed";
+  return "subscription_canceled";
 }
 
 export async function notifyMerchantSubscriptionEmail(params: {
@@ -37,7 +60,10 @@ export async function notifyMerchantSubscriptionEmail(params: {
   subscriptionTokensAfter?: number;
 }): Promise<void> {
   const occurredAt = params.occurredAt ?? new Date();
-  const sessionSnapshot = await loadSessionForShop(params.shop);
+  const [sessionSnapshot, shopInfo] = await Promise.all([
+    loadSessionForShop(params.shop),
+    loadShopInfoForBilling(params.shop),
+  ]);
   const currentPlan = await getPlanByKey(params.planKey);
   const previousPlan = params.previousPlanKey
     ? await getPlanByKey(params.previousPlanKey)
@@ -51,12 +77,7 @@ export async function notifyMerchantSubscriptionEmail(params: {
     creditAccountChange = buildCreditAccountChange({
       creditsBefore: params.subscriptionTokensBefore,
       creditsAfter: params.subscriptionTokensAfter,
-      reason:
-        params.event === "subscriptionStarted"
-          ? "订阅生效"
-          : params.event === "subscriptionChanged"
-            ? "订阅套餐变更"
-            : "订阅取消",
+      creditReasonKey: subscriptionCreditReasonKey(params.event),
     });
   }
 
@@ -66,7 +87,8 @@ export async function notifyMerchantSubscriptionEmail(params: {
     currentPlanName: currentPlan.displayName,
     previousPlanName: previousPlan?.displayName,
     effectiveAtUtc: undefined,
-    billingPeriod: formatBillingIntervalLabel(params.billingInterval),
+    billingInterval: params.billingInterval,
+    shopInfo,
     sessionSnapshot,
     creditAccountChange,
   });
@@ -119,18 +141,22 @@ export async function notifyMerchantPurchaseEmail(params: {
   purchasedTokensBefore: number;
   purchasedTokensAfter: number;
 }): Promise<void> {
-  const sessionSnapshot = await loadSessionForShop(params.shop);
+  const [sessionSnapshot, shopInfo] = await Promise.all([
+    loadSessionForShop(params.shop),
+    loadShopInfoForBilling(params.shop),
+  ]);
   const variables = buildPurchaseCreatedVariables({
     shop: params.shop,
     occurredAt: new Date(),
     plan: params.plan,
     shopifyPurchaseId: params.shopifyPurchaseId,
+    shopInfo,
     sessionSnapshot,
     creditAccountChange: buildCreditAccountChange({
       creditsBefore: params.purchasedTokensBefore,
       creditsAfter: params.purchasedTokensAfter,
       creditsChanged: params.plan.tokens,
-      reason: "积分包购买",
+      creditReasonKey: "credit_pack_purchased",
     }),
   });
 
@@ -138,7 +164,7 @@ export async function notifyMerchantPurchaseEmail(params: {
     `[Billing] before-sendNotificationEmail ${JSON.stringify({
       shop: params.shop,
       event: "purchaseCreated",
-      planKey: params.plan.key,
+      planKey: params.plan.planKey,
       shopifyPurchaseId: params.shopifyPurchaseId,
     })}`,
   );

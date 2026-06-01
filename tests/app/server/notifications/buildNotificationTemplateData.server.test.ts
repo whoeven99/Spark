@@ -30,23 +30,57 @@ describe("buildNotificationTemplateData", () => {
     expect(data.creditUnit).toBe("");
   });
 
-  it("maps credit account change fields", () => {
-    const data = buildNotificationTemplateData(appConfig, {
-      shopName: "Demo",
-      shopDomain: "demo.myshopify.com",
-      occurredAtUtc: "2026-05-28 02:00 UTC",
-      purchaseType: "creditPack",
-      creditAccountChange: {
-        creditsChanged: 1000,
-        creditsBefore: 500,
-        creditsAfter: 1500,
-        creditUnit: "credits",
-        reason: "积分包购买",
+  it("maps credit account change fields with locale zh-CN", () => {
+    const data = buildNotificationTemplateData(
+      appConfig,
+      {
+        shopName: "Demo",
+        shopDomain: "demo.myshopify.com",
+        occurredAtUtc: "2026-05-28 02:00 UTC",
+        purchaseType: "creditPack",
+        billingPeriodKind: "oneTime",
+        orderId: "gid://shopify/AppPurchaseOneTime/2578481175",
+        amountUsd: "9.99",
+        creditAccountChange: {
+          creditsChanged: 1000,
+          creditsBefore: 500,
+          creditsAfter: 1500,
+          creditReasonKey: "credit_pack_purchased",
+        },
       },
-    });
+      "zh-CN",
+    );
 
     expect(data.purchaseType).toBe("积分购买");
-    expect(data.creditsChanged).toBe("1000");
+    expect(data.orderId).toBe("# 2578481175");
+    expect(data.amountUsd).toBe("$9.99");
+    expect(data.billingPeriod).toBe("一次性购买");
+    expect(data.creditsChanged).toBe("1,000");
+    expect(data.creditUnit).toBe("");
     expect(data.creditReason).toBe("积分包购买");
+  });
+
+  it("maps billing fields for en locale", () => {
+    const data = buildNotificationTemplateData(
+      appConfig,
+      {
+        shopName: "rinleaf",
+        shopDomain: "x0hgaj-gp.myshopify.com",
+        occurredAtUtc: "2026-05-28 02:00 UTC",
+        billingInterval: "EVERY_30_DAYS",
+        currentPlanName: "Pro",
+        creditAccountChange: {
+          creditsChanged: 5000,
+          creditsBefore: 0,
+          creditsAfter: 5000,
+          creditReasonKey: "subscription_started",
+        },
+      },
+      "en",
+    );
+
+    expect(data.billingPeriod).toBe("EVERY_30_DAYS");
+    expect(data.creditReason).toBe("Subscription activated");
+    expect(data.recipientName).toBe("merchant");
   });
 });

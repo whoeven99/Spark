@@ -9,6 +9,7 @@ export type UninstallSessionSnapshot = {
   /** 对应 second_name / 姓 */
   lastName?: string;
   email?: string;
+  locale?: string;
 };
 
 type SessionRow = {
@@ -16,6 +17,7 @@ type SessionRow = {
   firstName: string | null;
   lastName: string | null;
   email: string | null;
+  locale: string | null;
 };
 
 function mapRow(row: SessionRow): UninstallSessionSnapshot {
@@ -24,6 +26,7 @@ function mapRow(row: SessionRow): UninstallSessionSnapshot {
     firstName: row.firstName?.trim() || undefined,
     lastName: row.lastName?.trim() || undefined,
     email: row.email?.trim() || undefined,
+    locale: row.locale?.trim() || undefined,
   };
 }
 
@@ -38,7 +41,13 @@ export async function loadSessionSnapshotForUninstall(
   if (!normalizedShop) return null;
 
   const appName = getAppEntry();
-  const select = { shop: true, firstName: true, lastName: true, email: true } as const;
+  const select = {
+    shop: true,
+    firstName: true,
+    lastName: true,
+    email: true,
+    locale: true,
+  } as const;
 
   let row: SessionRow | null = null;
 

@@ -10,16 +10,17 @@ import {
 import { maskEmail } from "../emailLog.server";
 import { buildNotificationDashboardUrl } from "../../notifications/buildNotificationDashboardUrl.server";
 import { buildNotificationTemplateData } from "../../notifications/buildNotificationTemplateData.server";
+import { resolveNotificationLocale } from "../../notifications/formatNotificationDisplay.server";
 import { getNotificationAppConfig } from "../../notifications/config";
 import type { MerchantNotificationEvent } from "../../notifications/merchantNotificationEvents";
 import { resolveNotificationTemplateId } from "../../notifications/notificationTemplateIds.server";
 import { renderNotificationEmail } from "../../notifications/renderNotification";
 import type {
+  NotificationLocale,
   NotificationVariablesByEvent,
 } from "../../notifications/types";
 
 const LOG = "[Email][Notification]";
-const DEFAULT_LOCALE = "zh-CN" as const;
 
 export type SendNotificationEmailParams<E extends MerchantNotificationEvent> = {
   event: E;
@@ -27,6 +28,7 @@ export type SendNotificationEmailParams<E extends MerchantNotificationEvent> = {
   appKey: string;
   variables: NotificationVariablesByEvent[E];
   sessionSnapshot?: OpsEmailSessionSnapshot | null;
+  locale?: NotificationLocale;
 };
 
 export async function sendNotificationEmail<E extends MerchantNotificationEvent>(
@@ -34,7 +36,9 @@ export async function sendNotificationEmail<E extends MerchantNotificationEvent>
   deps: EmailServiceDeps = {},
 ) {
   const startedAt = Date.now();
-  const templateId = resolveNotificationTemplateId(params.event);
+  const locale =
+    params.locale ?? resolveNotificationLocale(params.sessionSnapshot?.locale);
+  const templateId = resolveNotificationTemplateId(params.event, locale);
   const appConfig = getNotificationAppConfig(params.appKey);
 
   logEmailOpsPreflight(LOG, {
@@ -46,7 +50,7 @@ export async function sendNotificationEmail<E extends MerchantNotificationEvent>
     sessionOwnerEmail: params.sessionSnapshot?.email
       ? maskEmail(params.sessionSnapshot.email)
       : null,
-    variableKeys: Object.keys(params.variables),
+    variableKeys: Object.keys(params.variables).join(","),
   });
 
   const to = resolveOpsEmailDestination(params.sessionSnapshot);
@@ -75,12 +79,16 @@ export async function sendNotificationEmail<E extends MerchantNotificationEvent>
     appIconUrl: params.variables.appIconUrl ?? appConfig.appIconUrl,
   };
 
-  const templateData = buildNotificationTemplateData(appConfig, enrichedVariables);
+  const templateData = buildNotificationTemplateData(
+    appConfig,
+    enrichedVariables,
+    locale,
+  );
   const rendered = renderNotificationEmail({
     event: params.event,
     appConfig,
     variables: enrichedVariables,
-    locale: DEFAULT_LOCALE,
+    locale,
   });
 
   const sendParams = {

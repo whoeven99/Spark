@@ -2,6 +2,7 @@ import { loadEmailConfig } from "./config/emailConfig.server";
 
 export type OpsEmailSessionSnapshot = {
   email?: string | null;
+  locale?: string | null;
 };
 
 /**

@@ -15,6 +15,16 @@ export {
   resolveRecipientName,
   formatBillingIntervalLabel,
 } from "./buildNotificationVariables.server";
+export {
+  formatBillingPeriod,
+  formatCreditAmount,
+  formatCreditReason,
+  formatPurchaseType,
+  formatShopifyOrderDisplayId,
+  formatUsdDisplay,
+  resolveNotificationLocale,
+} from "./formatNotificationDisplay.server";
+export type { CreditReasonKey } from "./formatNotificationDisplay.server";
 export { buildNotificationTemplateData } from "./buildNotificationTemplateData.server";
 export type { MerchantNotificationEvent } from "./merchantNotificationEvents";
 export { merchantNotificationEvents } from "./merchantNotificationEvents";

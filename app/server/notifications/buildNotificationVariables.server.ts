@@ -1,12 +1,16 @@
 import type { UninstallSessionSnapshot } from "../commonEventLog/loadSessionSnapshotForUninstall.server";
 import type { ShopBasicInfo } from "../shopify/fetchShopBasicInfo.server";
 import type { PlanRecord } from "../billing/plans/planCatalog.server";
+import type { CreditReasonKey } from "./formatNotificationDisplay.server";
+import { formatBillingIntervalLabel } from "./formatNotificationDisplay.server";
 import type {
   AppLifecycleNotificationVariables,
   CreditAccountChange,
   PurchaseNotificationVariables,
   SubscriptionNotificationVariables,
 } from "./types";
+
+export { formatBillingIntervalLabel };
 
 export function formatOccurredAtUtc(date: Date): string {
   const y = date.getUTCFullYear();
@@ -17,29 +21,21 @@ export function formatOccurredAtUtc(date: Date): string {
   return `${y}-${m}-${d} ${h}:${min} UTC`;
 }
 
-function formatDisplayName(snapshot?: UninstallSessionSnapshot | null): string {
-  const first = snapshot?.firstName?.trim() ?? "";
-  const last = snapshot?.lastName?.trim() ?? "";
-  return [first, last].filter(Boolean).join(" ").trim();
-}
-
 export function resolveRecipientName(
-  shop: string,
-  shopInfo?: ShopBasicInfo | null,
+  _shop: string,
+  _shopInfo?: ShopBasicInfo | null,
   sessionSnapshot?: UninstallSessionSnapshot | null,
 ): string {
-  const fromProfile = formatDisplayName(sessionSnapshot);
-  if (fromProfile) return fromProfile;
-  if (shopInfo?.name?.trim()) return shopInfo.name.trim();
-  const email =
-    sessionSnapshot?.email?.trim() ||
-    shopInfo?.email?.trim() ||
-    shopInfo?.contactEmail?.trim();
+  const firstName = sessionSnapshot?.firstName?.trim();
+  if (firstName) return firstName;
+
+  const email = sessionSnapshot?.email?.trim();
   if (email) {
     const local = email.split("@")[0]?.trim();
     if (local) return local;
   }
-  return "商家";
+
+  return "";
 }
 
 function resolveShopDomain(shop: string, shopInfo?: ShopBasicInfo | null): string {
@@ -78,7 +74,7 @@ export function buildCreditAccountChange(params: {
   creditsBefore: number;
   creditsAfter: number;
   creditsChanged?: number;
-  reason?: string;
+  creditReasonKey?: CreditReasonKey;
 }): CreditAccountChange {
   const changed =
     params.creditsChanged ??
@@ -87,8 +83,8 @@ export function buildCreditAccountChange(params: {
     creditsChanged: changed,
     creditsBefore: params.creditsBefore,
     creditsAfter: params.creditsAfter,
-    creditUnit: "credits",
-    reason: params.reason,
+    creditUnit: "",
+    creditReasonKey: params.creditReasonKey,
   };
 }
 
@@ -131,19 +127,22 @@ export function buildSubscriptionVariables(params: {
   currentPlanName: string;
   previousPlanName?: string;
   effectiveAtUtc?: string;
-  billingPeriod?: string;
+  billingInterval?: string;
+  shopInfo?: ShopBasicInfo | null;
   sessionSnapshot?: UninstallSessionSnapshot | null;
   creditAccountChange?: CreditAccountChange;
 }): SubscriptionNotificationVariables {
   return {
-    shopName: resolveShopName(params.shop),
-    shopDomain: resolveShopDomain(params.shop),
-    occurredAtUtc: formatOccurredAtUtc(params.occurredAt),
-    recipientName: resolveRecipientName(params.shop, null, params.sessionSnapshot),
+    ...baseFields({
+      shop: params.shop,
+      occurredAt: params.occurredAt,
+      shopInfo: params.shopInfo,
+      sessionSnapshot: params.sessionSnapshot,
+    }),
     currentPlanName: params.currentPlanName,
     previousPlanName: params.previousPlanName,
     effectiveAtUtc: params.effectiveAtUtc,
-    billingPeriod: params.billingPeriod,
+    billingInterval: params.billingInterval,
     creditAccountChange: params.creditAccountChange,
   };
 }
@@ -153,29 +152,24 @@ export function buildPurchaseCreatedVariables(params: {
   occurredAt: Date;
   plan: PlanRecord;
   shopifyPurchaseId: string;
+  shopInfo?: ShopBasicInfo | null;
   sessionSnapshot?: UninstallSessionSnapshot | null;
   creditAccountChange?: CreditAccountChange;
 }): PurchaseNotificationVariables {
   return {
-    shopName: resolveShopName(params.shop),
-    shopDomain: resolveShopDomain(params.shop),
-    occurredAtUtc: formatOccurredAtUtc(params.occurredAt),
-    recipientName: resolveRecipientName(params.shop, null, params.sessionSnapshot),
+    ...baseFields({
+      shop: params.shop,
+      occurredAt: params.occurredAt,
+      shopInfo: params.shopInfo,
+      sessionSnapshot: params.sessionSnapshot,
+    }),
     purchaseType: "creditPack",
     orderId: params.shopifyPurchaseId,
     planName: params.plan.displayName,
     amountUsd: params.plan.priceAmount
       ? `${params.plan.priceAmount}`
       : undefined,
-    billingPeriod: undefined,
+    billingPeriodKind: "oneTime",
     creditAccountChange: params.creditAccountChange,
   };
-}
-
-export function formatBillingIntervalLabel(interval: string | null | undefined): string {
-  if (!interval) return "";
-  const normalized = interval.toUpperCase();
-  if (normalized === "MONTHLY" || normalized === "EVERY_30_DAYS") return "月付";
-  if (normalized === "ANNUAL" || normalized === "YEARLY") return "年付";
-  return interval;
 }
