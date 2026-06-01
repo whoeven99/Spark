@@ -1,12 +1,13 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { isEmailSendReady, loadEmailConfig } from "../../../email/config/emailConfig.server";
 import { sendTemplateEmail } from "../../../email/services/emailService.server";
-import type { ToolDefinition } from "../../core/toolRegistry.server";
+import type { AgentContext, ToolDefinition } from "../../core/toolRegistry.server";
 import {
   AGENT_EMAIL_ERROR_CODES,
   SEND_TEMPLATE_EMAIL_LOG_PREFIX,
   SEND_TEMPLATE_EMAIL_TOOL_NAME,
 } from "./constants";
+import { enrichAgentTemplateData } from "./enrichAgentTemplateData.server";
 import { sendTemplateEmailToolSchema } from "./schema";
 
 function formatToolResult(result: Awaited<ReturnType<typeof sendTemplateEmail>>): string {
@@ -23,7 +24,7 @@ function formatToolResult(result: Awaited<ReturnType<typeof sendTemplateEmail>>)
   });
 }
 
-export function createSendTemplateEmailTool(): DynamicStructuredTool {
+export function createSendTemplateEmailTool(context: AgentContext): DynamicStructuredTool {
   return new DynamicStructuredTool({
     name: SEND_TEMPLATE_EMAIL_TOOL_NAME,
     description:
@@ -45,15 +46,23 @@ export function createSendTemplateEmailTool(): DynamicStructuredTool {
       }
 
       const { to, subject, templateId, templateData } = parsed.data;
+      const agentKeyCount = Object.keys(templateData ?? {}).length;
+      const enrichedTemplateData = await enrichAgentTemplateData(
+        templateId,
+        context,
+        templateData,
+      );
+      const enrichedKeyCount = Object.keys(enrichedTemplateData).length;
+
       console.info(
-        `${SEND_TEMPLATE_EMAIL_LOG_PREFIX} start requestId=${requestId} templateId=${templateId} to=${to}`,
+        `${SEND_TEMPLATE_EMAIL_LOG_PREFIX} start requestId=${requestId} templateId=${templateId} to=${to} templateDataKeyCount=${agentKeyCount}->${enrichedKeyCount}`,
       );
 
       const result = await sendTemplateEmail({
         to,
         subject,
         templateId,
-        templateData: templateData ?? {},
+        templateData: enrichedTemplateData,
       });
 
       console.info(
@@ -69,6 +78,6 @@ export const sendTemplateEmailToolDefinition: ToolDefinition = {
   description: "向指定收件人发送腾讯 SES 模板邮件",
   condition: () => isEmailSendReady(loadEmailConfig()),
   systemPromptExtension:
-    "仅当用户明确要求发送邮件、且对话中已确认收件人邮箱、邮件主题与模板场景（templateId）时，才调用工具 send_template_email。若缺少收件人或模板信息，先向用户追问，禁止编造「已发送成功」。工具返回 JSON：成功为 { ok: true, requestId }，失败为 { ok: false, code, message }，请据实告知用户。禁止通过工具修改发件人或抄送（from/cc 由系统配置）。",
-  createTool: () => createSendTemplateEmailTool(),
+    "仅当用户明确要求发送邮件、且对话中已确认收件人邮箱、邮件主题与模板场景（templateId）时，才调用工具 send_template_email。若缺少收件人或模板信息，先向用户追问，禁止编造「已发送成功」。工具返回 JSON：成功为 { ok: true, requestId }，失败为 { ok: false, code, message }，请据实告知用户。禁止通过工具修改发件人或抄送（from/cc 由系统配置）。templateData 的通用字段（appName、brandName、shopName、shopDomain、occurredAtUtc 等）及安装/卸载时间字段由服务端自动补全；你只需补充该模板特有的业务字段（如 taskName、planName、orderId）。",
+  createTool: (context) => createSendTemplateEmailTool(context),
 };
