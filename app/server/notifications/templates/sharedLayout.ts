@@ -260,3 +260,7 @@ function actionHint(locale: NotificationLocale): string {
     ? "点击下方按钮，进入 Shopify App 查看完整详情。"
     : "Use the button below to open the Shopify App and review the full details.";
 }
+
+function detailsTitle(locale: NotificationLocale): string {
+  return locale === "zh-CN" ? "明细" : "Breakdown";
+}

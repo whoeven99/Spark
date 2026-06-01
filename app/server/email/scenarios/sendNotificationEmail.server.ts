@@ -4,8 +4,10 @@ import { resolveOpsEmailDestination } from "../opsNotifyEmail.server";
 import type { OpsEmailSessionSnapshot } from "../opsNotifyEmail.server";
 import {
   logEmailOpsAfterSend,
+  logEmailOpsBeforeSend,
   logEmailOpsPreflight,
 } from "../emailOpsDebugLog.server";
+import { maskEmail } from "../emailLog.server";
 import { buildNotificationDashboardUrl } from "../../notifications/buildNotificationDashboardUrl.server";
 import { buildNotificationTemplateData } from "../../notifications/buildNotificationTemplateData.server";
 import { getNotificationAppConfig } from "../../notifications/config";
@@ -31,6 +33,7 @@ export async function sendNotificationEmail<E extends MerchantNotificationEvent>
   params: SendNotificationEmailParams<E>,
   deps: EmailServiceDeps = {},
 ) {
+  const startedAt = Date.now();
   const templateId = resolveNotificationTemplateId(params.event);
   const appConfig = getNotificationAppConfig(params.appKey);
 
@@ -40,6 +43,10 @@ export async function sendNotificationEmail<E extends MerchantNotificationEvent>
     event: params.event,
     templateId,
     sendMode: "tencent_template",
+    sessionOwnerEmail: params.sessionSnapshot?.email
+      ? maskEmail(params.sessionSnapshot.email)
+      : null,
+    variableKeys: Object.keys(params.variables),
   });
 
   const to = resolveOpsEmailDestination(params.sessionSnapshot);
@@ -49,7 +56,11 @@ export async function sendNotificationEmail<E extends MerchantNotificationEvent>
       skipped: true as const,
       reason: "no_recipient",
     };
-    logEmailOpsAfterSend(LOG, params.shop, skipped);
+    logEmailOpsAfterSend(LOG, params.shop, skipped, {
+      elapsedMs: Date.now() - startedAt,
+      event: params.event,
+      templateId,
+    });
     return skipped;
   }
 
@@ -72,16 +83,33 @@ export async function sendNotificationEmail<E extends MerchantNotificationEvent>
     locale: DEFAULT_LOCALE,
   });
 
-  const result = await sendTemplateEmail(
+  const sendParams = {
+    templateId,
+    subject: rendered.subject,
+    to,
+    templateData,
+  };
+
+  logEmailOpsBeforeSend(
+    LOG,
     {
-      templateId,
-      subject: rendered.subject,
-      to,
-      templateData,
+      shop: params.shop,
+      appKey: params.appKey,
+      event: params.event,
+      recipientSource: params.sessionSnapshot?.email?.trim()
+        ? "session_owner"
+        : "ops_notify_fallback",
     },
-    deps,
+    sendParams,
   );
 
-  logEmailOpsAfterSend(LOG, params.shop, result);
+  const result = await sendTemplateEmail(sendParams, deps);
+
+  logEmailOpsAfterSend(LOG, params.shop, result, {
+    elapsedMs: Date.now() - startedAt,
+    event: params.event,
+    templateId,
+    appKey: params.appKey,
+  });
   return result;
 }

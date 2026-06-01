@@ -71,6 +71,16 @@ export async function notifyMerchantSubscriptionEmail(params: {
     creditAccountChange,
   });
 
+  console.info(
+    `[Billing] before-sendNotificationEmail ${JSON.stringify({
+      shop: params.shop,
+      event: params.event,
+      planKey: params.planKey,
+      billingInterval: params.billingInterval,
+    })}`,
+  );
+
+  const startedAt = Date.now();
   const result = await sendNotificationEmail({
     event: params.event,
     shop: params.shop,
@@ -78,6 +88,20 @@ export async function notifyMerchantSubscriptionEmail(params: {
     variables,
     sessionSnapshot,
   });
+
+  console.info(
+    `[Billing] after-sendNotificationEmail ${JSON.stringify({
+      shop: params.shop,
+      event: params.event,
+      elapsedMs: Date.now() - startedAt,
+      sendSuccess: result.ok,
+      skipped: "skipped" in result ? result.skipped : false,
+      reason: "skipped" in result && result.skipped ? result.reason : undefined,
+      requestId: result.ok ? result.requestId : undefined,
+      errorCode: !result.ok && !("skipped" in result) ? result.error?.code : undefined,
+      errorMessage: !result.ok && !("skipped" in result) ? result.error?.message : undefined,
+    })}`,
+  );
 
   if (!result.ok && !("skipped" in result && result.skipped)) {
     console.error(
@@ -110,6 +134,16 @@ export async function notifyMerchantPurchaseEmail(params: {
     }),
   });
 
+  console.info(
+    `[Billing] before-sendNotificationEmail ${JSON.stringify({
+      shop: params.shop,
+      event: "purchaseCreated",
+      planKey: params.plan.key,
+      shopifyPurchaseId: params.shopifyPurchaseId,
+    })}`,
+  );
+
+  const startedAt = Date.now();
   const result = await sendNotificationEmail({
     event: "purchaseCreated",
     shop: params.shop,
@@ -117,6 +151,20 @@ export async function notifyMerchantPurchaseEmail(params: {
     variables,
     sessionSnapshot,
   });
+
+  console.info(
+    `[Billing] after-sendNotificationEmail ${JSON.stringify({
+      shop: params.shop,
+      event: "purchaseCreated",
+      elapsedMs: Date.now() - startedAt,
+      sendSuccess: result.ok,
+      skipped: "skipped" in result ? result.skipped : false,
+      reason: "skipped" in result && result.skipped ? result.reason : undefined,
+      requestId: result.ok ? result.requestId : undefined,
+      errorCode: !result.ok && !("skipped" in result) ? result.error?.code : undefined,
+      errorMessage: !result.ok && !("skipped" in result) ? result.error?.message : undefined,
+    })}`,
+  );
 
   if (!result.ok && !("skipped" in result && result.skipped)) {
     console.error(

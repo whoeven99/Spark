@@ -1,6 +1,11 @@
 import type { EmailConfig } from "../config/emailConfig.server";
 import { isEmailSendReady, loadEmailConfig } from "../config/emailConfig.server";
-import { EMAIL_LOG, logEmailError, logEmailInfo } from "../emailLog.server";
+import {
+  buildSendEmailRequestLog,
+  buildSendEmailResultLog,
+  buildTemplateEmailParamsLog,
+} from "../emailSendLogPayload.server";
+import { EMAIL_LOG, logEmailDetail, logEmailError, logEmailInfo } from "../emailLog.server";
 import { getEmailProvider } from "../providers/providerFactory.server";
 import type { EmailProvider } from "../providers/emailProvider";
 import {
@@ -47,15 +52,18 @@ export async function sendTemplateEmail(
   params: SendTemplateEmailParams,
   deps: EmailServiceDeps = {},
 ): Promise<SendEmailResult> {
+  const startedAt = Date.now();
   const config = deps.config ?? loadEmailConfig();
 
-  logEmailInfo(
-    EMAIL_LOG.service,
-    `sendTemplateEmail start templateId=${params.templateId} to=${params.to}`,
-  );
+  logEmailDetail(EMAIL_LOG.service, "before-send", {
+    ...buildTemplateEmailParamsLog(params),
+    emailEnabled: config.enabled,
+    emailSendReady: isEmailSendReady(config),
+    provider: config.provider,
+  });
 
   if (!config.enabled) {
-    return {
+    const result: SendEmailResult = {
       ok: false,
       error: createEmailError({
         code: EMAIL_ERROR_CODES.EMAIL_DISABLED,
@@ -63,10 +71,15 @@ export async function sendTemplateEmail(
         provider: config.provider,
       }),
     };
+    logEmailDetail(EMAIL_LOG.service, "after-send", {
+      ...buildSendEmailResultLog(result),
+      elapsedMs: Date.now() - startedAt,
+    });
+    return result;
   }
 
   if (!isEmailSendReady(config)) {
-    return {
+    const result: SendEmailResult = {
       ok: false,
       error: createEmailError({
         code: EMAIL_ERROR_CODES.MISSING_CREDENTIALS,
@@ -74,6 +87,11 @@ export async function sendTemplateEmail(
         provider: config.provider,
       }),
     };
+    logEmailDetail(EMAIL_LOG.service, "after-send", {
+      ...buildSendEmailResultLog(result),
+      elapsedMs: Date.now() - startedAt,
+    });
+    return result;
   }
 
   const parsed = sendEmailRequestSchema.safeParse({
@@ -87,7 +105,7 @@ export async function sendTemplateEmail(
 
   if (!parsed.success) {
     const message = parsed.error.issues.map((i) => i.message).join("；");
-    return {
+    const result: SendEmailResult = {
       ok: false,
       error: createEmailError({
         code: EMAIL_ERROR_CODES.VALIDATION_FAILED,
@@ -95,13 +113,22 @@ export async function sendTemplateEmail(
         provider: config.provider,
       }),
     };
+    logEmailDetail(EMAIL_LOG.service, "after-send", {
+      ...buildSendEmailResultLog(result),
+      validationIssues: parsed.error.issues.map((i) => ({
+        path: i.path.join("."),
+        message: i.message,
+      })),
+      elapsedMs: Date.now() - startedAt,
+    });
+    return result;
   }
 
   const provider =
     deps.provider !== undefined ? deps.provider : getEmailProvider(config);
 
   if (!provider) {
-    return {
+    const result: SendEmailResult = {
       ok: false,
       error: createEmailError({
         code: EMAIL_ERROR_CODES.PROVIDER_NOT_FOUND,
@@ -109,16 +136,26 @@ export async function sendTemplateEmail(
         provider: config.provider,
       }),
     };
+    logEmailDetail(EMAIL_LOG.service, "after-send", {
+      ...buildSendEmailResultLog(result),
+      elapsedMs: Date.now() - startedAt,
+    });
+    return result;
   }
+
+  logEmailDetail(EMAIL_LOG.request, "provider-request", {
+    provider: provider.name,
+    ...buildSendEmailRequestLog(parsed.data as SendEmailRequest),
+  });
 
   try {
     const result = await provider.send(parsed.data as SendEmailRequest);
-    if (result.ok) {
-      logEmailInfo(
-        EMAIL_LOG.service,
-        `sendTemplateEmail ok requestId=${result.requestId} provider=${result.provider}`,
-      );
-    } else {
+    logEmailDetail(EMAIL_LOG.service, "after-send", {
+      ...buildSendEmailResultLog(result),
+      provider: provider.name,
+      elapsedMs: Date.now() - startedAt,
+    });
+    if (!result.ok) {
       logEmailError(
         EMAIL_LOG.service,
         "sendTemplateEmail provider error",
@@ -128,7 +165,7 @@ export async function sendTemplateEmail(
     return result;
   } catch (error) {
     logEmailError(EMAIL_LOG.service, "sendTemplateEmail unexpected", error);
-    return {
+    const result: SendEmailResult = {
       ok: false,
       error: createEmailError({
         code: EMAIL_ERROR_CODES.UNKNOWN,
@@ -137,6 +174,11 @@ export async function sendTemplateEmail(
         cause: error,
       }),
     };
+    logEmailDetail(EMAIL_LOG.service, "after-send", {
+      ...buildSendEmailResultLog(result),
+      elapsedMs: Date.now() - startedAt,
+    });
+    return result;
   }
 }
 

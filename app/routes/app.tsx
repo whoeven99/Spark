@@ -64,6 +64,9 @@ const NAV_ITEMS: Record<
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
+  console.info(
+    `[AppShell] user entered app shop=${session.shop} accessToken=${session.accessToken ?? "(none)"}`,
+  );
   const appName = getAppEntry();
 
   try {

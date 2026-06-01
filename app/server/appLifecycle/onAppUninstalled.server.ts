@@ -128,7 +128,16 @@ async function sendAppUninstalledOpsEmail(
       sessionSnapshot,
     });
     console.info(
-      `${LOG} after-sendNotificationEmail shop=${params.shop} elapsedMs=${Date.now() - startedAt} ok=${result.ok} skipped=${"skipped" in result ? result.skipped : false}`,
+      `${LOG} after-sendNotificationEmail ${JSON.stringify({
+        shop: params.shop,
+        elapsedMs: Date.now() - startedAt,
+        sendSuccess: result.ok,
+        skipped: "skipped" in result ? result.skipped : false,
+        reason: "skipped" in result && result.skipped ? result.reason : undefined,
+        requestId: result.ok ? result.requestId : undefined,
+        errorCode: !result.ok && !("skipped" in result) ? result.error?.code : undefined,
+        errorMessage: !result.ok && !("skipped" in result) ? result.error?.message : undefined,
+      })}`,
     );
   } catch (error) {
     console.error(
