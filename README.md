@@ -48,7 +48,8 @@ npm run turso:migrate:prod   # 生产库
 - 改翻译 → `docs/translation-agent.md`
 - 改生成描述 → `docs/generateDescription.md`
 - 改计费/订阅 → `app/server/billing/agent.md`
-- 改 UI → `docs/UI_DESIGN.md`
+- 改 tools 交互结构 → `docs/INTERACTION_DESIGN.md`
+- 改 UI / 设计系统 → `docs/DESIGN.md`
 - 改 Agent 摘要 → `docs/agent-run-log.md`
 - 完整架构 → `docs/PROJECT_CONTEXT.md`
 
@@ -110,12 +111,13 @@ npm run build  # 推送前必须通过
 
 ## 相关文档
 
-- **[AGENT.md](./AGENT.md)** - Agent 专用上下文（详细代码结构、流程、诊断等）
+- **[AGENTS.md](./AGENTS.md)** - Agent 专用上下文（详细代码结构、流程、诊断等）
 - **[docs/PROJECT_CONTEXT.md](./docs/PROJECT_CONTEXT.md)** - 完整架构与约定
 - **[docs/translation-agent.md](./docs/translation-agent.md)** - 翻译功能设计
 - **[docs/generateDescription.md](./docs/generateDescription.md)** - 生成描述方案
 - **[app/server/billing/agent.md](./app/server/billing/agent.md)** - 计费系统详解
-- **[docs/UI_DESIGN.md](./docs/UI_DESIGN.md)** - 前端 UI 规范
+- **[docs/INTERACTION_DESIGN.md](./docs/INTERACTION_DESIGN.md)** - 任务型工具交互规范
+- **[docs/DESIGN.md](./docs/DESIGN.md)** - 视觉系统与组件设计规范
 
 ## 环境配置
 

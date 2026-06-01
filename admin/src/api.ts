@@ -489,6 +489,7 @@ export type BillingRuleRow = {
   displayName: string;
   multiplier: number;
   baseTokenCost: number | null;
+  costUsdPerMillionToken: number | null;
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
@@ -505,6 +506,7 @@ export function createBillingRule(data: {
   displayName: string;
   multiplier: number;
   baseTokenCost?: number | null;
+  costUsdPerMillionToken?: number | null;
   enabled?: boolean;
 }): Promise<{ ok: boolean; ruleKey: string }> {
   return apiFetch("/billing-rules", { method: "POST", body: JSON.stringify(data) });
@@ -512,7 +514,13 @@ export function createBillingRule(data: {
 
 export function updateBillingRule(
   ruleKey: string,
-  data: { displayName?: string; multiplier?: number; baseTokenCost?: number | null; enabled?: boolean },
+  data: {
+    displayName?: string;
+    multiplier?: number;
+    baseTokenCost?: number | null;
+    costUsdPerMillionToken?: number | null;
+    enabled?: boolean;
+  },
 ): Promise<{ ok: boolean }> {
   return apiFetch(`/billing-rules/${encodeURIComponent(ruleKey)}`, {
     method: "PUT",
@@ -520,8 +528,107 @@ export function updateBillingRule(
   });
 }
 
+export type OpsServiceStatus = {
+  key: string;
+  name: string;
+  category: "core" | "ai" | "ops";
+  required: boolean;
+  configured: boolean;
+  note: string;
+  costSignal: string;
+  rechargeSignal: string;
+};
+
+export type OpsChecklistData = {
+  generatedAt: string;
+  services: OpsServiceStatus[];
+};
+
+export function fetchOpsChecklist(): Promise<OpsChecklistData> {
+  return apiFetch("/ops-checklist");
+}
+
 export function deleteBillingRule(ruleKey: string): Promise<{ ok: boolean }> {
   return apiFetch(`/billing-rules/${encodeURIComponent(ruleKey)}`, { method: "DELETE" });
+}
+
+// --- Pricing Workbench ---
+
+export type MonthlyFixedCostItem = {
+  id: string;
+  name: string;
+  amountUsd: number;
+  enabled: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PlanCatalogItem = {
+  planKey: string;
+  appName: string;
+  kind: string;
+  billingInterval: string | null;
+  displayName: string;
+  tokens: number;
+  priceAmount: string;
+  currencyCode: string;
+};
+
+export type PricingWorkbenchV2Settings = {
+  targetGrossMarginPct: number;
+  probePriceUsd: number;
+  shopifyRevSharePct: number;
+};
+
+export function fetchPricingWorkbenchV2(): Promise<{
+  settings: PricingWorkbenchV2Settings & { usageScenarios?: unknown[] | null };
+  fixedCosts: MonthlyFixedCostItem[];
+  plans: PlanCatalogItem[];
+}> {
+  return apiFetch("/pricing-workbench");
+}
+
+export function updatePricingWorkbenchV2Settings(
+  settings: PricingWorkbenchV2Settings & { usageScenarios?: unknown[] },
+): Promise<{ ok: boolean }> {
+  return apiFetch("/pricing-workbench/settings", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
+export function createMonthlyFixedCost(data: {
+  name: string;
+  amountUsd: number;
+  enabled?: boolean;
+  sortOrder?: number;
+}): Promise<{ ok: boolean; id: string }> {
+  return apiFetch("/pricing-workbench/fixed-costs", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateMonthlyFixedCost(
+  id: string,
+  data: {
+    name?: string;
+    amountUsd?: number;
+    enabled?: boolean;
+    sortOrder?: number;
+  },
+): Promise<{ ok: boolean }> {
+  return apiFetch(`/pricing-workbench/fixed-costs/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteMonthlyFixedCost(id: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/pricing-workbench/fixed-costs/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
 }
 
 // --- Todos ---
@@ -537,6 +644,7 @@ export type TodoRow = {
   assignee: TodoAssignee | null;
   status: TodoStatus;
   priority: TodoPriority;
+  etaDays: number | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -551,6 +659,7 @@ export function createTodo(data: {
   description?: string;
   assignee?: TodoAssignee;
   priority?: TodoPriority;
+  etaDays?: number | null;
   createdBy: string;
 }): Promise<{ ok: boolean; id: string }> {
   return apiFetch("/todos", { method: "POST", body: JSON.stringify(data) });
@@ -564,6 +673,7 @@ export function updateTodo(
     assignee?: TodoAssignee | null;
     status: TodoStatus;
     priority: TodoPriority;
+    etaDays?: number | null;
   },
 ): Promise<{ ok: boolean }> {
   return apiFetch(`/todos/${encodeURIComponent(id)}`, {

@@ -14,14 +14,16 @@ import { usageRouter } from "./routes/usage.js";
 import { capabilitiesRouter } from "./routes/capabilities.js";
 import { subscriptionsRouter } from "./routes/subscriptions.js";
 import { revenueRouter } from "./routes/revenue.js";
-import { codeAgentRouter } from "./routes/codeAgent.js";
 import { agentRunsRouter } from "./routes/agentRuns.js";
 import { billingRulesRouter } from "./routes/billingRules.js";
+import { pricingWorkbenchV2Router } from "./routes/pricingWorkbenchV2.js";
 import { todosRouter } from "./routes/todos.js";
+import { opsChecklistRouter } from "./routes/opsChecklist.js";
+import { isProductionNodeEnv } from "./lib/nodeEnv.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 3099);
-const IS_PROD = process.env.NODE_ENV === "production";
+const IS_PROD = isProductionNodeEnv();
 
 const app = express();
 app.use(express.json());
@@ -46,10 +48,11 @@ app.use("/api/usage", authMiddleware, usageRouter);
 app.use("/api/capabilities", authMiddleware, capabilitiesRouter);
 app.use("/api/subscriptions", authMiddleware, subscriptionsRouter);
 app.use("/api/revenue", authMiddleware, requireOwner, revenueRouter);
-app.use("/api/code-agent", authMiddleware, codeAgentRouter);
 app.use("/api/agent-runs", authMiddleware, agentRunsRouter);
 app.use("/api/billing-rules", authMiddleware, billingRulesRouter);
+app.use("/api/pricing-workbench", authMiddleware, pricingWorkbenchV2Router);
 app.use("/api/todos", authMiddleware, todosRouter);
+app.use("/api/ops-checklist", authMiddleware, opsChecklistRouter);
 
 // Serve built frontend in production
 if (IS_PROD) {

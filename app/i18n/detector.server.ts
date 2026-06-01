@@ -43,10 +43,47 @@ function parseAcceptLanguageLocale(header: string | null): SupportedLocale | nul
   return null;
 }
 
-export function detectRequestLocale(request: Request): SupportedLocale {
+/** Shopify 在线会话里员工 Admin 语言（Prisma Session.locale → associated_user.locale）。 */
+export function readShopifySessionLocale(session: unknown): string | null {
+  if (!session || typeof session !== "object") {
+    return null;
+  }
+
+  const onlineLocale = (
+    session as {
+      onlineAccessInfo?: { associated_user?: { locale?: string | null } | null } | null;
+    }
+  ).onlineAccessInfo?.associated_user?.locale;
+
+  if (typeof onlineLocale === "string") {
+    const trimmed = onlineLocale.trim();
+    if (trimmed && trimmed !== "null") {
+      return trimmed;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 自动语言检测优先级（无用户手动选择时）：
+ * 1. Cookie（LanguageSelector 写入）
+ * 2. Shopify 员工 Admin locale
+ * 3. Accept-Language
+ * 4. 英语（DEFAULT_LOCALE）
+ */
+export function detectRequestLocale(
+  request: Request,
+  options?: { sessionLocale?: string | null },
+): SupportedLocale {
   const cookieLocale = parseCookieLocale(request.headers.get("cookie"));
   if (cookieLocale) {
     return cookieLocale;
+  }
+
+  const sessionLocale = normalizeLocale(options?.sessionLocale);
+  if (sessionLocale) {
+    return sessionLocale;
   }
 
   const acceptLanguageLocale = parseAcceptLanguageLocale(request.headers.get("accept-language"));

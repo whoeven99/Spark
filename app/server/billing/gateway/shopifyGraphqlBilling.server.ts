@@ -7,6 +7,31 @@ type GraphqlEnvelope<T> = {
   errors?: { message: string }[];
 };
 
+function toFriendlyShopifyBillingError(raw: string): string {
+  const message = raw.trim();
+  const lower = message.toLowerCase();
+
+  if (
+    lower.includes("cannot accept") ||
+    lower.includes("can't accept") ||
+    lower.includes("provided charge") ||
+    lower.includes("declined")
+  ) {
+    return "店铺当前无法接受该订阅费用。若为测试店，请开启 BILLING_TEST=true（测试计费）；若为正式店，请确认店铺可正常支付 Shopify 应用订阅费用。";
+  }
+
+  if (lower.includes("returnurl") && lower.includes("255")) {
+    return "订阅回跳地址超过 Shopify 限制，请联系管理员检查 SHOPIFY_APP_URL 配置。";
+  }
+
+  return message;
+}
+
+function joinUserErrors(errors: { message: string }[] | undefined): string {
+  if (!errors?.length) return "Shopify Billing 请求失败";
+  return errors.map((e) => toFriendlyShopifyBillingError(e.message)).join("; ");
+}
+
 async function runGraphql<T>(
   admin: ShopifyAdminGraphqlClient,
   query: string,
@@ -159,7 +184,7 @@ export async function shopifyCreateSubscription(
   const payload = data.appSubscriptionCreate;
   if (payload.userErrors?.length) {
     throw new BillingError(
-      payload.userErrors.map((e) => e.message).join("; "),
+      joinUserErrors(payload.userErrors),
       BILLING_ERROR_CODE.SHOPIFY_BILLING_FAILED,
       400,
     );
@@ -207,7 +232,7 @@ export async function shopifyCreateOneTimePurchase(
   const payload = data.appPurchaseOneTimeCreate;
   if (payload.userErrors?.length) {
     throw new BillingError(
-      payload.userErrors.map((e) => e.message).join("; "),
+      joinUserErrors(payload.userErrors),
       BILLING_ERROR_CODE.SHOPIFY_BILLING_FAILED,
       400,
     );
@@ -259,7 +284,7 @@ export async function shopifyCancelAppSubscription(
   const payload = data.appSubscriptionCancel;
   if (payload.userErrors?.length) {
     throw new BillingError(
-      payload.userErrors.map((e) => e.message).join("; "),
+      joinUserErrors(payload.userErrors),
       BILLING_ERROR_CODE.SHOPIFY_BILLING_FAILED,
       400,
     );

@@ -1,44 +1,115 @@
 import { useAppBridge } from "@shopify/app-bridge-react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useState } from "react";
 import { useLoaderData, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useImageGeneration } from "../../hooks/useImageGeneration";
-import type { ShopVisualJobHistoryItem } from "../../lib/shopVisualJobTypes";
+import type { AITaskItem, AITaskType } from "../../lib/aiTaskTypes";
 import type { ImageStudioPageLoaderData } from "../../server/visualTools/imageStudioPageLoader.server";
 import { ImageGenerationForm } from "../component/imageGeneration/ImageGenerationForm";
-import { ImageGenerationResultPanel } from "../component/imageGeneration/ImageGenerationResultPanel";
 import { PictureTranslateForm } from "../component/pictureTranslate/PictureTranslateForm";
 import { PictureTranslateProvider } from "../component/pictureTranslate/pictureTranslateContext";
-import { PictureTranslateResultPanel } from "../component/pictureTranslate/PictureTranslateResultPanel";
-import { usePictureTranslateContext } from "../component/pictureTranslate/pictureTranslateContext";
 import type { VisualToolsTab } from "../component/visualTools/VisualToolsTabBar";
 import { VisualToolsTabBar } from "../component/visualTools/VisualToolsTabBar";
-import { UnifiedVisualHistoryPanel } from "../component/visualTools/UnifiedVisualHistoryPanel";
+import { TaskListPage } from "../component/aiTask/TaskListPage";
+import { TaskListSummary } from "../component/aiTask/TaskListSummary";
 import {
   PageSectionHeader,
   PageSurface,
+  pageColorTokens,
   pageContentStyle,
   pageTrustFootnoteStyle,
-  stickyAsideColumnStyle,
-  twoColumnLayoutStyle,
-  twoColumnMainStyle,
-  twoColumnSideStyle,
 } from "./pageUiStyles";
 
-function parseTab(value: string | null): VisualToolsTab {
+type PageTab = "config" | "tasks";
+
+function parseToolTab(value: string | null): VisualToolsTab {
   return value === "translate" ? "translate" : "generate";
 }
 
-function ImageStudioPageInner() {
+function PageTabBar({
+  activeTab,
+  onTabChange,
+  runningCount,
+}: {
+  activeTab: PageTab;
+  onTabChange: (tab: PageTab) => void;
+  runningCount: number;
+}) {
+  const btnStyle = (active: boolean) => ({
+    padding: "8px 18px",
+    borderRadius: 9,
+    border: active
+      ? `2px solid ${pageColorTokens.brandGreen}`
+      : `2px solid transparent`,
+    background: active ? pageColorTokens.brandGreenLight : "transparent",
+    color: active
+      ? pageColorTokens.brandGreenDark
+      : pageColorTokens.textSecondary,
+    fontWeight: active ? 600 : 500,
+    fontSize: 14,
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+  });
+
+  return (
+    <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
+      <button
+        type="button"
+        style={btnStyle(activeTab === "config")}
+        onClick={() => onTabChange("config")}
+      >
+        配置页
+      </button>
+      <button
+        type="button"
+        style={btnStyle(activeTab === "tasks")}
+        onClick={() => onTabChange("tasks")}
+      >
+        任务列表
+        {runningCount > 0 && (
+          <span
+            style={{
+              background: pageColorTokens.brandBlue,
+              color: "#fff",
+              borderRadius: 10,
+              padding: "1px 7px",
+              fontSize: 11,
+              fontWeight: 700,
+            }}
+          >
+            {runningCount}
+          </span>
+        )}
+      </button>
+    </div>
+  );
+}
+
+type InnerProps = {
+  tasks: AITaskItem[];
+  pageTab: PageTab;
+  setPageTab: (tab: PageTab) => void;
+  locationSearch: string;
+  onTaskCreated: (taskId: string, batchId: string, taskType: AITaskType) => void;
+  onTaskDeleted: (taskId: string) => void;
+};
+
+function ImageStudioPageInner({
+  tasks,
+  pageTab,
+  setPageTab,
+  locationSearch,
+  onTaskCreated,
+  onTaskDeleted,
+}: InnerProps) {
   const shopify = useAppBridge();
   const { t } = useTranslation();
-  const loaderData = useLoaderData<ImageStudioPageLoaderData>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = parseTab(searchParams.get("tab"));
-  const locationSearch =
-    typeof window !== "undefined" ? window.location.search : "";
+  const activeToolTab = parseToolTab(searchParams.get("tab"));
 
-  const setActiveTab = useCallback(
+  const setActiveToolTab = useCallback(
     (tab: VisualToolsTab) => {
       const next = new URLSearchParams(searchParams);
       next.set("tab", tab);
@@ -48,72 +119,21 @@ function ImageStudioPageInner() {
   );
 
   const toastShow = useCallback(
-    (message: string) => {
-      shopify.toast.show(message);
-    },
+    (message: string) => shopify.toast.show(message),
     [shopify],
   );
 
   const imageGen = useImageGeneration({
     locationSearch,
-    initialHistory: loaderData.imageHistory,
     toastShow,
+    onTaskCreated,
   });
 
-  const translate = usePictureTranslateContext();
-
-  const unifiedHistory = useMemo(() => {
-    const merged: ShopVisualJobHistoryItem[] = [
-      ...imageGen.history,
-      ...translate.history,
-    ];
-    return merged
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      )
-      .slice(0, 16);
-  }, [imageGen.history, translate.history]);
-
-  const activeRequestId =
-    activeTab === "translate" ? translate.requestId : imageGen.requestId;
-
-  const handleHistorySelect = useCallback(
-    (item: ShopVisualJobHistoryItem) => {
-      if (item.kind === "picture_translate") {
-        setActiveTab("translate");
-        translate.selectHistoryItem(item);
-        return;
-      }
-      setActiveTab("generate");
-      imageGen.selectHistoryItem(item);
-    },
-    [imageGen, setActiveTab, translate],
-  );
-
-  const handleHistoryDelete = useCallback(
-    (item: ShopVisualJobHistoryItem) => {
-      if (item.kind === "picture_translate") {
-        void translate.deleteHistoryItem(item);
-        return;
-      }
-      void imageGen.deleteHistoryItem(item);
-    },
-    [imageGen, translate],
-  );
-
-  const deletingRequestId =
-    imageGen.deletingRequestId ?? translate.deletingRequestId;
-
+  const runningCount = tasks.filter((t) => t.status === "running").length;
   const sectionSubtitle =
-    activeTab === "translate"
+    activeToolTab === "translate"
       ? t("pictureTranslate.pageSubtitle")
       : t("imageGeneration.pageSubtitle");
-
-  const resultTitle =
-    activeTab === "translate"
-      ? t("pictureTranslate.result")
-      : t("imageGeneration.result");
 
   return (
     <s-page heading={t("imageStudio.pageTitle")}>
@@ -123,64 +143,57 @@ function ImageStudioPageInner() {
           subtitle={t("imageStudio.pageSubtitle")}
         />
 
-        <VisualToolsTabBar activeTab={activeTab} onTabChange={setActiveTab} />
+        <PageTabBar
+          activeTab={pageTab}
+          onTabChange={setPageTab}
+          runningCount={runningCount}
+        />
 
-        <div style={twoColumnLayoutStyle}>
-          <div style={twoColumnMainStyle}>
-            <PageSurface
-              title={
-                activeTab === "translate"
-                  ? t("pictureTranslate.sectionConfig")
-                  : t("imageGeneration.sectionConfig")
-              }
-              subtitle={sectionSubtitle}
-            >
-              {activeTab === "generate" ? (
-                <ImageGenerationForm
-                  description={imageGen.description}
-                  onDescriptionChange={imageGen.setDescription}
-                  descriptionErrorText={imageGen.descriptionErrorText}
-                  busy={imageGen.busy}
-                  isSubmitting={imageGen.isSubmitting || imageGen.isPolling}
-                  onGenerateImage={() => void imageGen.submitGenerate()}
-                />
-              ) : (
-                <PictureTranslateForm variant="page" />
-              )}
-            </PageSurface>
+        {pageTab === "config" && (
+          <>
+            {/* Task summary always visible in config tab */}
+            <TaskListSummary tasks={tasks} mode="image" />
 
-            <PageSurface title={t("imageStudio.historyTitle")}>
-              <UnifiedVisualHistoryPanel
-                items={unifiedHistory}
-                activeRequestId={activeRequestId}
-                activeTab={activeTab}
-                onSelect={handleHistorySelect}
-                onDelete={handleHistoryDelete}
-                deletingRequestId={deletingRequestId}
-              />
-            </PageSurface>
-          </div>
+            <VisualToolsTabBar
+              activeTab={activeToolTab}
+              onTabChange={setActiveToolTab}
+            />
+            <div style={{ marginTop: 16 }}>
+              <PageSurface
+                title={
+                  activeToolTab === "translate"
+                    ? t("pictureTranslate.sectionConfig")
+                    : t("imageGeneration.sectionConfig")
+                }
+                subtitle={sectionSubtitle}
+              >
+                {activeToolTab === "generate" ? (
+                  <ImageGenerationForm
+                    description={imageGen.description}
+                    onDescriptionChange={imageGen.setDescription}
+                    descriptionErrorText={imageGen.descriptionErrorText}
+                    busy={imageGen.isSubmitting}
+                    isSubmitting={imageGen.isSubmitting}
+                    onGenerateImage={() => void imageGen.submitGenerate()}
+                  />
+                ) : (
+                  <PictureTranslateForm variant="page" />
+                )}
+              </PageSurface>
+            </div>
+          </>
+        )}
 
-          <div style={{ ...twoColumnSideStyle, ...stickyAsideColumnStyle }}>
-            <PageSurface title={resultTitle}>
-              {activeTab === "generate" ? (
-                <ImageGenerationResultPanel
-                  isSubmitting={imageGen.isSubmitting}
-                  isPolling={imageGen.isPolling}
-                  hasSubmittedOnce={imageGen.hasSubmittedOnce}
-                  resultErrorText={imageGen.resultErrorText}
-                  generatedImageUrl={imageGen.generatedImageUrl}
-                  onRetry={imageGen.resetResult}
-                />
-              ) : (
-                <PictureTranslateResultPanel />
-              )}
-            </PageSurface>
-          </div>
-        </div>
+        {pageTab === "tasks" && (
+          <TaskListPage
+            tasks={tasks}
+            locationSearch={locationSearch}
+            onTaskDeleted={onTaskDeleted}
+          />
+        )}
 
         <p style={pageTrustFootnoteStyle}>
-          {activeTab === "translate"
+          {activeToolTab === "translate"
             ? t("pictureTranslate.pageFootnote")
             : t("imageGeneration.pageFootnote")}
         </p>
@@ -190,21 +203,62 @@ function ImageStudioPageInner() {
 }
 
 export function ImageStudioPage() {
+  const shopify = useAppBridge();
   const loaderData = useLoaderData<ImageStudioPageLoaderData>();
   const locationSearch =
     typeof window !== "undefined" ? window.location.search : "";
-  const shopify = useAppBridge();
+
+  const [tasks, setTasks] = useState<AITaskItem[]>(() => [
+    ...loaderData.imageGenTasks,
+    ...loaderData.translateTasks,
+  ]);
+  const [pageTab, setPageTab] = useState<PageTab>("config");
+
+  const handleTaskCreated = useCallback(
+    (taskId: string, batchId: string, taskType: AITaskType = "image_generation") => {
+      const now = new Date().toISOString();
+      const optimisticTask: AITaskItem = {
+        id: taskId,
+        batchId,
+        shop: "",
+        appName: "",
+        taskType,
+        status: "running",
+        config: {},
+        result: null,
+        estimatedCredits: null,
+        actualCredits: null,
+        startedAt: now,
+        completedAt: null,
+        errorMsg: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      setTasks((prev) => [optimisticTask, ...prev]);
+      setPageTab("tasks");
+    },
+    [],
+  );
+
+  const handleTaskDeleted = useCallback((taskId: string) => {
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+  }, []);
 
   return (
     <PictureTranslateProvider
       mode="page"
       locationSearch={locationSearch}
-      initialHistory={loaderData.translateHistory}
-      toastShow={(message) => {
-        shopify.toast.show(message);
-      }}
+      toastShow={(message) => shopify.toast.show(message)}
+      onTaskCreated={handleTaskCreated}
     >
-      <ImageStudioPageInner />
+      <ImageStudioPageInner
+        tasks={tasks}
+        pageTab={pageTab}
+        setPageTab={setPageTab}
+        locationSearch={locationSearch}
+        onTaskCreated={handleTaskCreated}
+        onTaskDeleted={handleTaskDeleted}
+      />
     </PictureTranslateProvider>
   );
 }

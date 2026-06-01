@@ -22,6 +22,23 @@ export type UseProductImproveParams = {
   toastShow: (message: string) => void;
 };
 
+export type SubmitGenerateOutcome =
+  | {
+      ok: true;
+      productId: string;
+      targetLanguage: string;
+      result: {
+        title: string;
+        description: string;
+      };
+    }
+  | {
+      ok: false;
+      productId: string;
+      targetLanguage: string;
+      errorText: string;
+    };
+
 export function useProductImprove(params: UseProductImproveParams) {
   const { t } = useTranslation();
   const { locationSearch, initialShopLocales, initialResult, toastShow } = params;
@@ -125,15 +142,30 @@ export function useProductImprove(params: UseProductImproveParams) {
       const lang = targetLanguage.trim();
       if (!pid) {
         toastShow(t("generate.validationSelectProductId"));
-        return;
+        return {
+          ok: false,
+          productId: pid,
+          targetLanguage: lang,
+          errorText: t("generate.validationSelectProductId"),
+        } satisfies SubmitGenerateOutcome;
       }
       if (!lang) {
         toastShow(t("generate.validationSelectTargetLanguage"));
-        return;
+        return {
+          ok: false,
+          productId: pid,
+          targetLanguage: lang,
+          errorText: t("generate.validationSelectTargetLanguage"),
+        } satisfies SubmitGenerateOutcome;
       }
       if (localesLoading) {
         toastShow(t("generate.validationLocalesLoading"));
-        return;
+        return {
+          ok: false,
+          productId: pid,
+          targetLanguage: lang,
+          errorText: t("generate.validationLocalesLoading"),
+        } satisfies SubmitGenerateOutcome;
       }
 
       setIsSubmitting(true);
@@ -161,7 +193,12 @@ export function useProductImprove(params: UseProductImproveParams) {
               ? apiPayload.errorMsg
               : t("chat.requestFailed", { status: response.status });
           setErrorText(msg || t("chat.requestFailed", { status: response.status }));
-          return;
+          return {
+            ok: false,
+            productId: pid,
+            targetLanguage: lang,
+            errorText: msg || t("chat.requestFailed", { status: response.status }),
+          } satisfies SubmitGenerateOutcome;
         }
 
         if (
@@ -173,13 +210,34 @@ export function useProductImprove(params: UseProductImproveParams) {
           setProductTitle(apiPayload.response.title);
           setDescription(apiPayload.response.description);
           toastShow(t("generate.generateSuccess"));
+          return {
+            ok: true,
+            productId: pid,
+            targetLanguage: lang,
+            result: {
+              title: apiPayload.response.title,
+              description: apiPayload.response.description,
+            },
+          } satisfies SubmitGenerateOutcome;
         } else {
           setErrorText(t("chat.invalidReply"));
+          return {
+            ok: false,
+            productId: pid,
+            targetLanguage: lang,
+            errorText: t("chat.invalidReply"),
+          } satisfies SubmitGenerateOutcome;
         }
       } catch {
         const msg = t("chat.sendFailed");
         setErrorText(msg);
         toastShow(msg);
+        return {
+          ok: false,
+          productId: pid,
+          targetLanguage: lang,
+          errorText: msg,
+        } satisfies SubmitGenerateOutcome;
       } finally {
         setIsSubmitting(false);
       }
@@ -257,17 +315,17 @@ export function useProductImprove(params: UseProductImproveParams) {
       const pid = (productIdRaw.trim() || pinnedProductId).trim();
       if (!pid) {
         toastShow(t("generate.validationSelectProductId"));
-        return;
+        return false;
       }
       const title = draftTitle.trim();
       const descPlain = draftDescription.trim();
       if (!title) {
         toastShow(t("generate.validationTitleRequired"));
-        return;
+        return false;
       }
       if (!descPlain) {
         toastShow(t("generate.validationDescriptionRequired"));
-        return;
+        return false;
       }
 
       setIsSaving(true);
@@ -301,7 +359,7 @@ export function useProductImprove(params: UseProductImproveParams) {
               : t("chat.requestFailed", { status: response.status });
           setSaveErrorText(msg || t("chat.requestFailed", { status: response.status }));
           console.info(`${LOG_PREFIX} save failed: ${msg}`);
-          return;
+          return false;
         }
 
         if (
@@ -313,14 +371,17 @@ export function useProductImprove(params: UseProductImproveParams) {
           setSaveConfirmOpen(false);
           toastShow(t("generate.saveSuccess"));
           console.info(`${LOG_PREFIX} save ok id=${apiPayload.response.id}`);
+          return true;
         } else {
           setSaveErrorText(t("chat.invalidReply"));
+          return false;
         }
       } catch {
         const msg = t("chat.sendFailed");
         setSaveErrorText(msg);
         toastShow(msg);
         console.info(`${LOG_PREFIX} save network error`);
+        return false;
       } finally {
         setIsSaving(false);
       }

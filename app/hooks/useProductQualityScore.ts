@@ -12,6 +12,16 @@ export type ProductQualityScoreResult = {
   title: string;
 } & ProductQualityScoreData;
 
+export type SubmitScoreOutcome =
+  | {
+      ok: true;
+      result: ProductQualityScoreResult;
+    }
+  | {
+      ok: false;
+      errorText: string;
+    };
+
 export function useProductQualityScore(params: {
   locationSearch: string;
   toastShow: (message: string) => void;
@@ -28,7 +38,10 @@ export function useProductQualityScore(params: {
       const pid = productIdRaw.trim();
       if (!pid) {
         toastShow(t("generate.validationSelectProductId"));
-        return;
+        return {
+          ok: false,
+          errorText: t("generate.validationSelectProductId"),
+        } satisfies SubmitScoreOutcome;
       }
 
       setIsScoring(true);
@@ -50,19 +63,34 @@ export function useProductQualityScore(params: {
               : t("chat.requestFailed", { status: response.status });
           setScoreError(msg || t("chat.requestFailed", { status: response.status }));
           console.info(`${LOG_PREFIX} score failed: ${msg}`);
-          return;
+          return {
+            ok: false,
+            errorText: msg || t("chat.requestFailed", { status: response.status }),
+          } satisfies SubmitScoreOutcome;
         }
 
         if (payload.success === true && payload.response) {
           setScoreResult(payload.response);
           toastShow(t("qualityScore.scoreSuccess"));
+          return {
+            ok: true,
+            result: payload.response,
+          } satisfies SubmitScoreOutcome;
         } else {
           setScoreError(t("chat.invalidReply"));
+          return {
+            ok: false,
+            errorText: t("chat.invalidReply"),
+          } satisfies SubmitScoreOutcome;
         }
       } catch {
         const msg = t("chat.sendFailed");
         setScoreError(msg);
         toastShow(msg);
+        return {
+          ok: false,
+          errorText: msg,
+        } satisfies SubmitScoreOutcome;
       } finally {
         setIsScoring(false);
       }

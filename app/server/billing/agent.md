@@ -22,7 +22,7 @@
 | 变量 | 说明 |
 |------|------|
 | `BILLING_GATEWAY=noop` | 不调 Shopify Billing，本地直接生效（开发） |
-| `BILLING_TEST=true` | Shopify 测试计费（开发店）；Render 等 `NODE_ENV=production` 时必须显式设置 |
+| `BILLING_TEST=true` | Shopify 测试计费（开发店）；Render 等 `NODE_ENV=prod` 时必须显式设置 |
 
 ## Shopify returnUrl
 
@@ -40,6 +40,7 @@
 | `PlanCatalog` | 套餐/按量包/试用定义（种子见 `prisma/billing-plan-catalog-seed.sql`，由 `npm run turso:migrate:*` 写入） |
 | `AccountPeriodUsage` | 每个订阅周期结束时的用量归档 |
 | `BillingLog` | 试用、开通、续费、按量购等流水 |
+| `ToolTokenUsageLog` | 工具级 token 消耗明细（高频：商品优化/图片生成/图片翻译等） |
 
 ## 续费时的顺序
 
@@ -65,7 +66,7 @@
 
 ## 测试环境取消按钮
 
-- 计费页「取消订阅」：`isBillingDevCancelEnabled()` 为 true 时展示（`BILLING_TEST=true`、`NODE_ENV=test`、或非 `production`）；可用 `BILLING_DEV_CANCEL=false` 强制关闭。
+- 计费页「取消订阅」：`isBillingDevCancelEnabled()` 为 true 时展示（`BILLING_TEST=true`、`NODE_ENV=test`、或非 `prod`）；可用 `BILLING_DEV_CANCEL=false` 强制关闭。
 - 还需 Turso 中存在 `ACTIVE` / `PENDING` 的 `AppSubscription` 行。
 - 调用 `appSubscriptionCancel`（`BILLING_GATEWAY=noop` 时仅同步本地）。见 `cancelActiveSubscription.server.ts`。
 | `TOKEN_PACK_INITIATED` | 按量购包待确认 |
@@ -102,8 +103,6 @@
 
 - 可用余额由应用层 `getAvailableTokens()` 计算（`subscription + purchased + trial`），**不要**在 Turso 上依赖 `Account.availableTokens` 生成列。
 - **日常**：`npm run turso:migrate:test` / `turso:migrate:prod`（维护 `_prisma_migrations`，只跑未应用的 `prisma/migrations/*/migration.sql`）。
-- **曾仅用 `turso:sync` 建库**：先执行一次 `npm run turso:migrate:test -- --baseline`（只标记、不执行 SQL），之后再 `turso:migrate`。
-- **空库兜底**：`npm run turso:sync:*`（全量 baseline，`CREATE IF NOT EXISTS`，**不会** ALTER 已有表）。
 - 详情见 `docs/PROJECT_CONTEXT.md`「Turso 数据库」一节。
 
 ## CommonEventLog 无数据时排查
@@ -111,5 +110,5 @@
 1. Render / 本地是否设置 `APP_ENTRY=generate-description`（未设则 `appName` 会写成 `chat`）。
 2. 代码是否已部署（含 `app/routes/webhooks.app.uninstalled.tsx` 等）。
 3. 卫星 App 需单独执行 `shopify app deploy -c shopify.app.smart-description.toml`（CI 默认只 deploy `shopify.app.test.toml`）。
-4. Turso 是否有 `CommonEventLog` 表：`npm run turso:migrate:test`（勿对缺表库只做 `--baseline`）。
+4. Turso 是否有 `CommonEventLog` 表：`npm run turso:migrate:test`。
 5. Render 日志搜 `[CommonEvent]`。

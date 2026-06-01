@@ -53,13 +53,13 @@
   font-size: 0.8125rem;
   font-weight: 700;
   color: #005c46;
-  background: linear-gradient(135deg, #edfaf5 0%, #d4f5e9 100%);
-  border: 1px solid rgba(0, 166, 124, 0.3);
-  box-shadow: 0 1px 4px rgba(0, 166, 124, 0.12);
+  background: #edfaf5;
+  border: 1px solid rgba(0, 166, 124, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
 .usageCard {
-  background: linear-gradient(160deg, #ffffff 0%, #f8faff 100%);
+  background: #ffffff;
   border: 1px solid #e2e5e9;
   border-radius: 14px;
   overflow: hidden;
@@ -86,14 +86,14 @@
   font-size: 0.75rem;
   font-weight: 700;
   color: #005c46;
-  background: linear-gradient(135deg, #edfaf5 0%, #d4f5e9 100%);
-  box-shadow: 0 1px 3px rgba(0, 166, 124, 0.15);
+  background: #edfaf5;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
 .usagePercentBadgeLow {
   color: #7a4f00;
-  background: linear-gradient(135deg, #fff4e5 0%, #ffe8b0 100%);
-  box-shadow: 0 1px 3px rgba(200, 130, 0, 0.15);
+  background: #fff4e5;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
 .quotaRatio {
@@ -129,7 +129,7 @@
 .progressTrack {
   height: 10px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #e8eaef 0%, #dfe3ea 100%);
+  background: #e8eaef;
   overflow: hidden;
   margin-bottom: 0.65rem;
 }
@@ -137,14 +137,14 @@
 .progressFill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #00c48c 0%, #00a67c 60%, #007a5a 100%);
-  box-shadow: 0 0 10px rgba(0, 166, 124, 0.45);
+  background: #00a67c;
+  box-shadow: none;
   transition: width 0.3s ease;
 }
 
 .progressFillLow {
-  background: linear-gradient(90deg, #fbbf24 0%, #f59e0b 60%, #d97706 100%);
-  box-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+  background: #f59e0b;
+  box-shadow: none;
 }
 
 .poolChips {
@@ -160,7 +160,7 @@
   gap: 0.15rem;
   padding: 0.55rem 0.65rem;
   border-radius: 9px;
-  background: linear-gradient(135deg, #f5f6f8 0%, #eef0f6 100%);
+  background: #fafbfb;
   border: 1px solid #e2e5e9;
 }
 
@@ -329,7 +329,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(160deg, #ffffff 0%, #f8faff 100%);
+  background: #ffffff;
   border: 1px solid #e2e5e9;
   border-radius: 14px;
   padding: 1.35rem;
@@ -348,11 +348,9 @@
 
 .planCardRecommended {
   border-color: #4070f4;
-  box-shadow:
-    0 8px 28px rgba(64, 112, 244, 0.18),
-    0 0 0 1.5px #4070f4;
-  transform: translateY(-3px);
-  background: linear-gradient(160deg, #ffffff 0%, #f0f4ff 100%);
+  box-shadow: 0 0 0 1px rgba(64, 112, 244, 0.22), 0 8px 24px rgba(64, 112, 244, 0.08);
+  transform: translateY(-2px);
+  background: #ffffff;
 }
 
 @media (max-width: 900px) {
@@ -363,14 +361,14 @@
 
 .planCardCurrent {
   border-color: rgba(0, 166, 124, 0.5);
-  box-shadow: 0 0 0 1.5px rgba(0, 166, 124, 0.4), 0 4px 16px rgba(0, 166, 124, 0.1);
-  background: linear-gradient(160deg, #f6fdf9 0%, #ffffff 28%);
+  box-shadow: 0 0 0 1px rgba(0, 166, 124, 0.2), 0 4px 16px rgba(0, 166, 124, 0.08);
+  background: #f8fcfa;
 }
 
 .planCardPending {
   border-color: #b98900;
   box-shadow: 0 0 0 1px #b98900;
-  background: linear-gradient(180deg, #fffbf0 0%, #fff 28%);
+  background: #fffbf0;
 }
 
 .recommendedRibbon {
@@ -379,12 +377,14 @@
   right: 0;
   padding: 0.28rem 0.7rem;
   border-radius: 0 14px 0 9px;
-  background: linear-gradient(135deg, #4070f4 0%, #2952d8 100%);
-  color: #fff;
+  background: #eef2ff;
+  border-left: 1px solid rgba(64, 112, 244, 0.18);
+  border-bottom: 1px solid rgba(64, 112, 244, 0.18);
+  color: #2952d8;
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.02em;
-  box-shadow: 0 2px 6px rgba(64, 112, 244, 0.3);
+  box-shadow: none;
 }
 
 .planName {
@@ -457,7 +457,7 @@
   padding: 0.65rem 1rem;
   border-radius: 9px;
   border: none;
-  background: linear-gradient(135deg, #00c48c 0%, #00a67c 60%, #007a5a 100%);
+  background: #111213;
   color: #fff;
   font-size: 0.875rem;
   font-weight: 700;
@@ -465,13 +465,13 @@
   line-height: 1.25;
   text-align: center;
   cursor: pointer;
-  box-shadow: 0 2px 10px rgba(0, 166, 124, 0.35), 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
   transition: opacity 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .planPrimaryCta:hover:not(:disabled) {
   opacity: 0.92;
-  box-shadow: 0 4px 16px rgba(0, 166, 124, 0.45), 0 1px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.16);
   transform: translateY(-1px);
 }
 
@@ -481,12 +481,12 @@
 }
 
 .planCardRecommended .planPrimaryCta {
-  background: linear-gradient(135deg, #6090ff 0%, #4070f4 60%, #2952d8 100%);
-  box-shadow: 0 2px 10px rgba(64, 112, 244, 0.38), 0 1px 3px rgba(0, 0, 0, 0.1);
+  background: #2952d8;
+  box-shadow: 0 1px 2px rgba(41, 82, 216, 0.28);
 }
 
 .planCardRecommended .planPrimaryCta:hover:not(:disabled) {
-  box-shadow: 0 4px 18px rgba(64, 112, 244, 0.5), 0 1px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 3px 12px rgba(41, 82, 216, 0.28);
 }
 
 .planPendingCta {
@@ -535,7 +535,7 @@
 
 /* —— 对比表 —— */
 .compareSection {
-  background: linear-gradient(160deg, #ffffff 0%, #f8faff 100%);
+  background: #ffffff;
   border: 1px solid #e2e5e9;
   border-radius: 14px;
   padding: 1.25rem;
@@ -585,7 +585,7 @@
 }
 
 .compareColHighlight {
-  background: linear-gradient(180deg, #eef2ff 0%, #f4f7ff 100%) !important;
+  background: #f5f8ff !important;
   font-weight: 700;
   color: #1a1d1f;
 }
@@ -600,7 +600,7 @@
 }
 
 .packCard {
-  background: linear-gradient(160deg, #ffffff 0%, #f8faff 100%);
+  background: #ffffff;
   border: 1px solid #e2e5e9;
   border-radius: 14px;
   padding: 1.25rem 1.5rem 1.5rem;
@@ -651,7 +651,7 @@
   padding: 1.15rem 0.75rem;
   border: 1.5px solid #c8cdd3;
   border-radius: 11px;
-  background: linear-gradient(160deg, #ffffff 0%, #f8faff 100%);
+  background: #ffffff;
   cursor: pointer;
   text-align: center;
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.15s;
@@ -665,8 +665,8 @@
 
 .packOptionSelected {
   border-color: #00a67c;
-  background: linear-gradient(160deg, #edfaf5 0%, #f5fef9 60%, #ffffff 100%);
-  box-shadow: 0 0 0 1.5px #00a67c, 0 4px 16px rgba(0, 166, 124, 0.2);
+  background: #f8fcfa;
+  box-shadow: 0 0 0 1px #00a67c, 0 4px 16px rgba(0, 166, 124, 0.08);
   transform: translateY(-1px);
 }
 
@@ -700,7 +700,7 @@
   flex-wrap: wrap;
   padding: 0.7rem 1rem;
   border-radius: 9px;
-  background: linear-gradient(135deg, #f5f6f8 0%, #eef0f6 100%);
+  background: #fafbfb;
   border: 1px solid #e2e5e9;
 }
 
@@ -724,7 +724,7 @@
   padding: 0.55rem 1.1rem;
   border-radius: 9px;
   border: none;
-  background: linear-gradient(135deg, #00c48c 0%, #00a67c 60%, #007a5a 100%);
+  background: #111213;
   color: #fff;
   font-size: 0.875rem;
   font-weight: 700;
@@ -732,13 +732,13 @@
   line-height: 1.25;
   white-space: nowrap;
   cursor: pointer;
-  box-shadow: 0 2px 10px rgba(0, 166, 124, 0.35);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
   transition: opacity 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .packBuyButton:hover:not(:disabled) {
   opacity: 0.92;
-  box-shadow: 0 4px 16px rgba(0, 166, 124, 0.45);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.16);
   transform: translateY(-1px);
 }
 
@@ -873,11 +873,296 @@
   margin: 0;
   padding: 0.85rem 1rem;
   border-radius: 9px;
-  background: linear-gradient(135deg, #f5f6f8 0%, #eef0f6 100%);
+  background: #fafbfb;
+  border: 1px solid #e2e5e9;
   font-size: 0.75rem;
   line-height: 1.45;
   color: #6b7280;
   text-align: center;
+}
+
+.accountEntrySection,
+.accountDetailPage,
+.faqSection {
+  margin-top: 0.25rem;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.sectionHeadMain {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #202223;
+}
+
+.sectionSubtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #6d7175;
+  max-width: 40rem;
+}
+
+.secondaryEntryButton,
+.backLinkButton {
+  appearance: none;
+  padding: 0.55rem 0.9rem;
+  border-radius: 9px;
+  border: 1px solid #d2d5d8;
+  background: #ffffff;
+  color: #202223;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.secondaryEntryButton:hover,
+.backLinkButton:hover {
+  background: #f6f6f7;
+  border-color: #b8bdc3;
+}
+
+.accountEntryCard {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid #e2e5e9;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.accountEntrySummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.accountEntryItem {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.accountEntryLabel {
+  font-size: 0.75rem;
+  color: #6d7175;
+}
+
+.accountEntryValue {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #202223;
+}
+
+.accountEntryHint {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #6d7175;
+}
+
+.accountDetailHeader {
+  display: grid;
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.backLinkButton {
+  justify-self: start;
+}
+
+.accountStack {
+  display: grid;
+  gap: 1rem;
+}
+
+.accountCard,
+.faqItem {
+  background: #ffffff;
+  border: 1px solid #e2e5e9;
+  border-radius: 14px;
+  padding: 1.1rem 1.15rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.accountCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.accountCardTitle,
+.faqQuestion {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #202223;
+}
+
+.accountCardBadge {
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: #edfaf5;
+  border: 1px solid rgba(0, 166, 124, 0.18);
+  color: #005c46;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.accountCardMeta {
+  font-size: 0.75rem;
+  color: #6d7175;
+}
+
+.accountFacts {
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.accountFact {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.accountFact dt {
+  font-size: 0.75rem;
+  color: #6d7175;
+}
+
+.accountFact dd {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #202223;
+  font-weight: 600;
+}
+
+.historyList,
+.periodList,
+.faqList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.historyItem,
+.periodItem {
+  padding: 0.8rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid #eef0f2;
+  background: #fafbfb;
+}
+
+.historyItemTop,
+.periodItemTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.historyItemMeta,
+.periodStats {
+  margin-top: 0.45rem;
+  display: flex;
+  gap: 0.45rem 0.75rem;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  color: #6d7175;
+}
+
+.historyTone {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.historyTonePositive {
+  color: #005c46;
+  background: #edfaf5;
+  border-color: rgba(0, 166, 124, 0.16);
+}
+
+.historyToneWarning {
+  color: #8a2712;
+  background: #fff1ed;
+  border-color: rgba(215, 44, 13, 0.16);
+}
+
+.historyToneNeutral {
+  color: #4b5563;
+  background: #f5f6f8;
+  border-color: #e1e3e5;
+}
+
+.historyTimestamp {
+  font-size: 0.75rem;
+  color: #8c9196;
+}
+
+.historyDeltaPositive {
+  color: #006e52;
+  font-weight: 600;
+}
+
+.historyDeltaNegative {
+  color: #8a2712;
+  font-weight: 600;
+}
+
+.periodPlan {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #202223;
+}
+
+.emptyPanel {
+  padding: 1rem;
+  border-radius: 10px;
+  border: 1px dashed #d6dae0;
+  background: #fafbfb;
+  color: #6d7175;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.faqAnswer {
+  margin: 0.45rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: #6d7175;
+}
+
+@media (max-width: 960px) {
+  .accountEntrySummary {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {

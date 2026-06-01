@@ -209,31 +209,10 @@ export function ChatPage() {
   };
 
   const succeedPictureTranslateCard = (
-    messageIndex: number,
-    detail: { translatedImage: string; message: string },
+    _messageIndex: number,
+    _detail: { taskId: string; batchId: string },
   ) => {
-    shopify.toast.show(detail.message);
-    setMessages((prev) => {
-      const next = prev.map((m, i): ChatMessage => {
-        if (i !== messageIndex || m.role !== "assistant") return m;
-        return {
-          role: "assistant",
-          content: m.content,
-        };
-      });
-      next.push({
-        role: "assistant",
-        content: t("chat.pictureTranslateCompleted"),
-        attachments: [
-          {
-            type: "image",
-            url: detail.translatedImage,
-            alt: t("pictureTranslate.translatedImageAlt"),
-          },
-        ],
-      });
-      return next;
-    });
+    shopify.toast.show(t("pictureTranslate.submitSuccess"));
   };
 
   return (

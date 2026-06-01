@@ -5,6 +5,7 @@ import {
   Modal,
   Form,
   Input,
+  InputNumber,
   Select,
   Tag,
   Card,
@@ -12,7 +13,6 @@ import {
   Alert,
   Popconfirm,
   Empty,
-  Divider,
   Tooltip,
   Badge,
 } from "antd";
@@ -23,8 +23,6 @@ import {
   CheckCircleOutlined,
   HourglassOutlined,
   PlayCircleOutlined,
-  ArrowUpOutlined,
-  ArrowDownOutlined,
 } from "@ant-design/icons";
 import {
   fetchTodos,
@@ -57,6 +55,22 @@ const PRIORITY_CONFIG: Record<TodoPriority, { color: string; bg: string; border:
   low:    { color: "#8c8c8c",  bg: "#f5f5f5", border: "#d9d9d9", label: "低" },
 };
 
+function renderPriorityTag(priority: TodoPriority): React.ReactNode {
+  const cfg = PRIORITY_CONFIG[priority];
+  return (
+    <Tag
+      style={{
+        margin: 0,
+        color: cfg.color,
+        background: cfg.bg,
+        borderColor: cfg.border,
+      }}
+    >
+      {cfg.label}
+    </Tag>
+  );
+}
+
 const STATUS_ROWS: {
   key: TodoStatus;
   label: string;
@@ -65,9 +79,9 @@ const STATUS_ROWS: {
   bgColor: string;
   borderColor: string;
 }[] = [
-  { key: "doing", label: "进行中", icon: <PlayCircleOutlined />, color: "#d97706", bgColor: "#fffcf5", borderColor: "#fde68a" },
-  { key: "todo",  label: "待办",   icon: <HourglassOutlined />,  color: "#6b7280", bgColor: "#fafafa", borderColor: "#e5e7eb" },
-  { key: "done",  label: "已完成", icon: <CheckCircleOutlined />, color: "#059669", bgColor: "#f8fffe", borderColor: "#d1fae5" },
+  { key: "doing", label: "进行中", icon: <PlayCircleOutlined />, color: "#ea580c", bgColor: "#fff7ed", borderColor: "#fdba74" },
+  { key: "todo",  label: "待办",   icon: <HourglassOutlined />,  color: "#334155", bgColor: "#f1f5f9", borderColor: "#94a3b8" },
+  { key: "done",  label: "已完成", icon: <CheckCircleOutlined />, color: "#059669", bgColor: "#ecfdf5", borderColor: "#6ee7b7" },
 ];
 
 const ME_KEY = "spark_admin_me";
@@ -133,6 +147,7 @@ export default function Todo() {
           assignee: values.assignee ?? null,
           status: values.status,
           priority: values.priority,
+            etaDays: editing.etaDays ?? null,
         });
       } else {
         if (!values.createdBy) {
@@ -146,6 +161,7 @@ export default function Todo() {
           description: values.description,
           assignee: values.assignee,
           priority: values.priority,
+          etaDays: null,
           createdBy: values.createdBy,
         });
       }
@@ -171,9 +187,26 @@ export default function Todo() {
         assignee: todo.assignee,
         status,
         priority: todo.priority,
+        etaDays: todo.etaDays ?? null,
       });
       load();
     } catch (e) { setError(String(e)); }
+  }
+
+  async function updateEtaDays(todo: TodoRow, etaDays: number | null) {
+    try {
+      await updateTodo(todo.id, {
+        title: todo.title,
+        description: todo.description,
+        assignee: todo.assignee,
+        status: todo.status,
+        priority: todo.priority,
+        etaDays,
+      });
+      load();
+    } catch (e) {
+      setError(String(e));
+    }
   }
 
   if (error) return <Alert type="error" message={error} style={{ margin: 24 }} />;
@@ -207,6 +240,7 @@ export default function Todo() {
                 background: statusRow.bgColor,
                 border: `1px solid ${statusRow.borderColor}`,
                 borderLeft: `5px solid ${statusRow.color}`,
+                boxShadow: "inset 0 -1px 0 rgba(0,0,0,0.03)",
                 borderRadius: "6px 6px 0 0",
               }}>
                 <span style={{ fontSize: 18, color: statusRow.color, display: "flex", alignItems: "center" }}>
@@ -266,6 +300,7 @@ export default function Todo() {
                               onEdit={() => openEdit(todo)}
                               onDelete={() => handleDelete(todo.id)}
                               onMove={moveStatus}
+                              onEtaDaysChange={updateEtaDays}
                             />
                           ))
                         )}
@@ -309,7 +344,7 @@ export default function Todo() {
               <Select>
                 {(["high", "medium", "low"] as TodoPriority[]).map((p) => (
                   <Select.Option key={p} value={p}>
-                    <Tag color={PRIORITY_CONFIG[p].color} style={{ margin: 0 }}>{PRIORITY_CONFIG[p].label}</Tag>
+                    {renderPriorityTag(p)}
                   </Select.Option>
                 ))}
               </Select>
@@ -347,22 +382,78 @@ function TodoCard({
   onEdit,
   onDelete,
   onMove,
+  onEtaDaysChange,
 }: {
   todo: TodoRow;
   statusRow: typeof STATUS_ROWS[number];
   onEdit: () => void;
   onDelete: () => void;
   onMove: (todo: TodoRow, status: TodoStatus) => void;
+  onEtaDaysChange: (todo: TodoRow, etaDays: number | null) => Promise<void> | void;
 }) {
-  const statusIndex = STATUS_ROWS.findIndex((s) => s.key === todo.status);
-  const prevStatus = statusIndex > 0 ? STATUS_ROWS[statusIndex - 1] : null;
-  const nextStatus = statusIndex < STATUS_ROWS.length - 1 ? STATUS_ROWS[statusIndex + 1] : null;
   const pri = PRIORITY_CONFIG[todo.priority];
+  const [etaDraft, setEtaDraft] = useState<number | null>(todo.etaDays ?? null);
+  const [savingEta, setSavingEta] = useState(false);
+  const doingRow = STATUS_ROWS.find((s) => s.key === "doing") ?? STATUS_ROWS[0];
+  const currentStatusRow = STATUS_ROWS.find((s) => s.key === todo.status) ?? statusRow;
+  const statusOptionRows = STATUS_ROWS.filter((s) => s.key === "todo" || s.key === "done");
+  const statusOptions: { value: TodoStatus; label: React.ReactNode; disabled?: boolean }[] =
+    todo.status === "doing"
+      ? [doingRow, ...statusOptionRows].map((s) => ({
+          value: s.key,
+          label: (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: s.color,
+                  opacity: 0.85,
+                }}
+              />
+              <span>{s.label}</span>
+            </span>
+          ),
+          disabled: s.key === "doing",
+        }))
+      : statusOptionRows.map((s) => ({
+          value: s.key,
+          label: (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: s.color,
+                  opacity: 0.85,
+                }}
+              />
+              <span>{s.label}</span>
+            </span>
+          ),
+        }));
+
+  const normalizeEta = (value: number | null): number | null =>
+    value == null || Number.isNaN(value) ? null : Math.max(0, Math.floor(value));
+
+  async function persistEtaDays(rawValue: number | null) {
+    const next = normalizeEta(rawValue);
+    const current = normalizeEta(todo.etaDays ?? null);
+    if (next === current) return;
+    setSavingEta(true);
+    try {
+      await onEtaDaysChange(todo, next);
+    } finally {
+      setSavingEta(false);
+    }
+  }
 
   return (
     <Card
       size="small"
-      style={{ borderTop: `2px solid ${statusRow.borderColor}`, borderRadius: 6, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
+      style={{ borderTop: `2px solid ${statusRow.color}`, borderRadius: 6, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
       styles={{ body: { padding: "10px 12px" } }}
     >
       {/* Title + actions */}
@@ -388,64 +479,74 @@ function TodoCard({
         </Typography.Text>
       )}
 
-      {/* Priority + date */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
+      {/* Priority + status + date */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "nowrap" }}>
         <Tag style={{ margin: 0, fontSize: 11, color: pri.color, background: pri.bg, borderColor: pri.border }}>{pri.label}</Tag>
+        <div
+          style={{
+            minWidth: 102,
+            height: 24,
+            border: `1px solid ${currentStatusRow.borderColor}`,
+            background: currentStatusRow.bgColor,
+            borderRadius: 6,
+            display: "flex",
+            alignItems: "center",
+            padding: "0 4px",
+          }}
+        >
+          <Select<TodoStatus>
+            size="small"
+            variant="borderless"
+            value={todo.status}
+            onChange={(value) => {
+              if (value !== todo.status) {
+                onMove(todo, value);
+              }
+            }}
+            style={{ width: "100%", fontSize: 12, color: "#334155" }}
+            popupMatchSelectWidth={false}
+            options={statusOptions}
+          />
+        </div>
+        <div
+          style={{
+            height: 22,
+            padding: "0 4px",
+            border: "1px solid #cbd5e1",
+            borderRadius: 6,
+            background: "#f8fafc",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            flexShrink: 0,
+          }}
+        >
+          <InputNumber
+            size="small"
+            value={etaDraft}
+            onChange={(value) =>
+              setEtaDraft(typeof value === "number" ? Math.max(0, Math.floor(value)) : null)
+            }
+            onBlur={() => {
+              void persistEtaDays(etaDraft);
+            }}
+            onPressEnter={() => {
+              void persistEtaDays(etaDraft);
+            }}
+            placeholder="x"
+            min={0}
+            precision={0}
+            controls={false}
+            style={{ width: 38 }}
+            variant="borderless"
+            disabled={savingEta}
+          />
+          <Typography.Text style={{ fontSize: 11, color: "#64748b" }}>days</Typography.Text>
+        </div>
         <Typography.Text type="secondary" style={{ fontSize: 11, marginLeft: "auto" }}>
           {new Date(todo.createdAt).toLocaleDateString("zh-CN")}
         </Typography.Text>
       </div>
-
-      {/* Move buttons: ↓ next on left, ↑ prev on right, small, not full-width */}
-      {(prevStatus || nextStatus) && (
-        <>
-          <Divider style={{ margin: "8px 0" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              {nextStatus && (
-                <Tooltip title={`移到「${nextStatus.label}」`}>
-                  <Button
-                    size="small"
-                    icon={<ArrowDownOutlined />}
-                    onClick={() => onMove(todo, nextStatus.key)}
-                    style={{
-                      fontSize: 11,
-                      height: 22,
-                      padding: "0 8px",
-                      color: nextStatus.color,
-                      borderColor: nextStatus.color,
-                      background: nextStatus.bgColor,
-                    }}
-                  >
-                    {nextStatus.label}
-                  </Button>
-                </Tooltip>
-              )}
-            </div>
-            <div>
-              {prevStatus && (
-                <Tooltip title={`移到「${prevStatus.label}」`}>
-                  <Button
-                    size="small"
-                    icon={<ArrowUpOutlined />}
-                    onClick={() => onMove(todo, prevStatus.key)}
-                    style={{
-                      fontSize: 11,
-                      height: 22,
-                      padding: "0 8px",
-                      color: "#8c8c8c",
-                      borderColor: "#d9d9d9",
-                      background: "#fff",
-                    }}
-                  >
-                    {prevStatus.label}
-                  </Button>
-                </Tooltip>
-              )}
-            </div>
-          </div>
-        </>
-      )}
     </Card>
   );
 }

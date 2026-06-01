@@ -5,7 +5,6 @@ import { invokeChatAgentStream, type StreamChunk } from "./ai/core/agentStream.s
 import { parseClientChatMessages } from "./chatPayload.server";
 import { createLangsmithTracer, isLangsmithAvailable, getTraceUrl } from "./ai/utils/langsmith.server";
 import { getAppEntry } from "../config/appEntry.server";
-import { loadShopProfileForPrompt } from "./shopProfile/index.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
@@ -44,12 +43,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     const { admin, session } = await authenticate.admin(request);
 
-    const profile = await loadShopProfileForPrompt(session.shop).catch((error) => {
-      console.error("[ShopProfile] loadShopProfileForPrompt failed:", error);
-      return undefined;
-    });
-
-    const langsmithTracer = isLangsmithAvailable() 
+    const langsmithTracer = isLangsmithAvailable()
       ? await createLangsmithTracer(`chat-stream-${Date.now()}`)
       : undefined;
     
@@ -61,7 +55,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       messages: agentMessages,
       context: {
         admin,
-        profile,
         shop: session?.shop,
         appName: getAppEntry(),
       },

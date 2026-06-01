@@ -5,12 +5,12 @@ import { PictureTranslateShell } from "../pictureTranslate/PictureTranslateShell
 
 type PictureTranslateChatCardProps = {
   embedded?: boolean;
-  onSuccess: (detail: { translatedImage: string; message: string }) => void;
+  onTaskCreated?: (taskId: string, batchId: string) => void;
 };
 
 export function PictureTranslateChatCard({
   embedded = false,
-  onSuccess,
+  onTaskCreated,
 }: PictureTranslateChatCardProps) {
   const shopify = useAppBridge();
   const locationSearch =
@@ -23,7 +23,7 @@ export function PictureTranslateChatCard({
       toastShow={(message) => {
         shopify.toast.show(message);
       }}
-      onSuccess={onSuccess}
+      onTaskCreated={onTaskCreated}
     >
       <PictureTranslateShell embedded={embedded}>
         <PictureTranslateForm variant="card" embedded={embedded} />

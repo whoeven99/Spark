@@ -36,12 +36,46 @@ export type BillingPageSnapshot = {
   } | null;
 };
 
+export type BillingHistoryItem = {
+  id: string;
+  eventType: string;
+  planKey: string | null;
+  referenceId: string | null;
+  tokensDelta: number | null;
+  usedTokens: number | null;
+  createdAt: string;
+};
+
+export type BillingUsagePeriodItem = {
+  id: string;
+  planKey: string;
+  periodStart: string;
+  periodEnd: string;
+  usedTokens: number;
+  subscriptionTokensAllocated: number;
+  purchasedTokensRemaining: number;
+  trialTokensRemaining: number;
+  archivedAt: string;
+};
+
+export type BillingToolUsageItem = {
+  id: string;
+  feature: string;
+  modelKey: string;
+  rawTokens: number;
+  billedTokens: number;
+  createdAt: string;
+};
+
 export type BillingPageLoaderData = {
   appName: string;
   billing: BillingPageSnapshot;
   trialPlan: PlanRecord | null;
   subscriptionPlans: PlanRecord[];
   tokenPacks: PlanRecord[];
+  usageHistory: BillingUsagePeriodItem[];
+  billingHistory: BillingHistoryItem[];
+  toolUsageHistory: BillingToolUsageItem[];
   /** NODE_ENV=test 且存在可取消订阅时为 true */
   showDevCancelSubscription: boolean;
 };

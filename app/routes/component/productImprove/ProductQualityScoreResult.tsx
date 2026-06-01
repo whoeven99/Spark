@@ -27,9 +27,11 @@ function DimensionRow({ label, score, suggestion }: { label: string; score: numb
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: "0.25rem",
-        padding: "0.6rem 0",
-        borderBottom: `1px solid ${pageColorTokens.divider}`,
+        gap: "0.35rem",
+        padding: "0.85rem 0.95rem",
+        border: `1px solid ${pageColorTokens.borderSubtle}`,
+        borderRadius: pageColorTokens.radiusControl,
+        background: pageColorTokens.surfaceSubtle,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
@@ -49,7 +51,7 @@ function DimensionRow({ label, score, suggestion }: { label: string; score: numb
             fontSize: "0.8125rem",
             fontWeight: 700,
             color,
-            minWidth: "2.5rem",
+            minWidth: "3rem",
             textAlign: "right",
           }}
         >
@@ -58,8 +60,8 @@ function DimensionRow({ label, score, suggestion }: { label: string; score: numb
       </div>
       <div
         style={{
-          height: "4px",
-          borderRadius: "2px",
+            height: "6px",
+            borderRadius: "999px",
           background: pageColorTokens.divider,
           overflow: "hidden",
         }}
@@ -69,7 +71,7 @@ function DimensionRow({ label, score, suggestion }: { label: string; score: numb
             height: "100%",
             width: `${score * 10}%`,
             background: color,
-            borderRadius: "2px",
+            borderRadius: "999px",
             transition: "width 0.4s ease",
           }}
         />
@@ -121,23 +123,23 @@ export function ProductQualityScoreResult({ result, isScoring, errorText }: Prop
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      {/* Overall score badge */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           gap: "1rem",
-          padding: "0.85rem 1rem",
-          borderRadius: pageColorTokens.radiusControl,
-          background: bg,
-          border: `1px solid ${color}40`,
+          padding: "1rem 1.1rem",
+          borderRadius: pageColorTokens.radiusCard,
+          background: `linear-gradient(160deg, ${bg} 0%, #ffffff 100%)`,
+          border: `1px solid ${color}35`,
+          boxShadow: pageColorTokens.shadowCard,
         }}
       >
         <div
           style={{
             flexShrink: 0,
-            width: "3.5rem",
-            height: "3.5rem",
+            width: "4rem",
+            height: "4rem",
             borderRadius: "50%",
             background: `${color}18`,
             border: `2px solid ${color}`,
@@ -147,6 +149,7 @@ export function ProductQualityScoreResult({ result, isScoring, errorText }: Prop
             fontSize: "1.25rem",
             fontWeight: 700,
             color,
+            boxShadow: `inset 0 0 0 4px ${color}10`,
           }}
         >
           {score}
@@ -157,7 +160,14 @@ export function ProductQualityScoreResult({ result, isScoring, errorText }: Prop
           >
             {t("qualityScore.overallScore")}
           </div>
-          <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: "0.1rem" }}>
+          <div
+            style={{
+              fontSize: "0.75rem",
+              color: pageColorTokens.textSecondary,
+              marginTop: "0.1rem",
+              lineHeight: 1.45,
+            }}
+          >
             {score >= 80
               ? t("qualityScore.levelGood")
               : score >= 60
@@ -167,8 +177,13 @@ export function ProductQualityScoreResult({ result, isScoring, errorText }: Prop
         </div>
       </div>
 
-      {/* Dimension breakdown */}
-      <div>
+      <div
+        style={{
+          display: "grid",
+          gap: "0.75rem",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+        }}
+      >
         <DimensionRow
           label={t("qualityScore.dimTitle")}
           score={dimensions.title.score}
@@ -196,15 +211,21 @@ export function ProductQualityScoreResult({ result, isScoring, errorText }: Prop
         />
       </div>
 
-      {/* Overall suggestions */}
       {overallSuggestions.length > 0 ? (
-        <div>
+        <div
+          style={{
+            border: `1px solid ${pageColorTokens.borderSubtle}`,
+            borderRadius: pageColorTokens.radiusCard,
+            background: pageColorTokens.surfaceSubtle,
+            padding: "1rem 1.1rem",
+          }}
+        >
           <div
             style={{
               fontSize: "0.8125rem",
               fontWeight: 600,
               color: pageColorTokens.textBody,
-              marginBottom: "0.5rem",
+              marginBottom: "0.65rem",
             }}
           >
             {t("qualityScore.suggestions")}
