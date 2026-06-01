@@ -1,4 +1,5 @@
 import { loadEmailConfig } from "./config/emailConfig.server";
+import { resolveEmailTestRecipientOverride } from "./emailTestRecipient.server";
 
 export type OpsEmailSessionSnapshot = {
   email?: string | null;
@@ -23,6 +24,9 @@ export function resolveOpsNotifyEmail(): string | null {
 export function resolveOpsEmailDestination(
   sessionSnapshot?: OpsEmailSessionSnapshot | null,
 ): string | null {
+  const testRecipient = resolveEmailTestRecipientOverride();
+  if (testRecipient) return testRecipient;
+
   const ownerEmail = sessionSnapshot?.email?.trim();
   if (ownerEmail) return ownerEmail;
   return resolveOpsNotifyEmail();

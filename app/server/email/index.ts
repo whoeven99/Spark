@@ -2,7 +2,6 @@ export { loadEmailConfig, isEmailSendReady } from "./config/emailConfig.server";
 export type { EmailConfig } from "./config/emailConfig.server";
 export {
   sendTemplateEmail,
-  EMAIL_SUBJECTS,
   EMAIL_TEMPLATE_IDS,
   TENCENT_FROM_EMAIL,
 } from "./services/emailService.server";
@@ -10,8 +9,6 @@ export type {
   SendTemplateEmailParams,
   EmailServiceDeps,
 } from "./services/emailService.server";
-export { sendNotificationEmail } from "./scenarios/sendNotificationEmail.server";
-export type { SendNotificationEmailParams } from "./scenarios/sendNotificationEmail.server";
 export {
   resolveOpsEmailDestination,
   resolveOpsNotifyEmail,

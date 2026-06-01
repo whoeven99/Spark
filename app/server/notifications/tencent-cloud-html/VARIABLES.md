@@ -22,7 +22,7 @@
 - `purchaseType`: Localized purchase type (zh: 积分购买; en: Credit pack).
 - `orderId`: Display order id, e.g. `# 2578481175` (from Shopify GID).
 - `planName`: Plan, product, or credit package name.
-- `amountUsd`: Formatted amount with `$` prefix only, e.g. `$9.99` (column label may still say Amount (USD)).
+- `amountUsd`: Formatted amount with `$` prefix only, e.g. `$9.99` (column label may still say Amount (USD)). Do not prefix the Tencent template placeholder with literal `USD` (e.g. use `{{amountUsd}}`, not `USD {{amountUsd}}`).
 - `billingPeriod`: Localized billing period. One-time: zh `一次性购买` / en `AppPurchaseOneTime`.
 
 ## Subscription variables

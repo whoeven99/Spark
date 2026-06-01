@@ -39,6 +39,12 @@ describe("formatUsdDisplay", () => {
 
   it("strips existing USD prefix", () => {
     expect(formatUsdDisplay("USD 12.00")).toBe("$12.00");
+    expect(formatUsdDisplay("USD$9.99")).toBe("$9.99");
+    expect(formatUsdDisplay("USD 9.99")).toBe("$9.99");
+  });
+
+  it("does not include USD in output", () => {
+    expect(formatUsdDisplay("9.99")).not.toMatch(/USD/i);
   });
 });
 
@@ -100,15 +106,25 @@ describe("resolveNotificationLocale", () => {
     process.env = { ...env };
   });
 
-  it("maps session locale", () => {
+  it("maps session locale strictly", () => {
     expect(mapSessionLocaleToNotificationLocale("en")).toBe("en");
+    expect(mapSessionLocaleToNotificationLocale("en-US")).toBe("en");
     expect(mapSessionLocaleToNotificationLocale("zh-CN")).toBe("zh-CN");
+    expect(mapSessionLocaleToNotificationLocale("zh-cn")).toBe("zh-CN");
+    expect(mapSessionLocaleToNotificationLocale("zh")).toBeNull();
+    expect(mapSessionLocaleToNotificationLocale("zh-TW")).toBeNull();
+    expect(mapSessionLocaleToNotificationLocale("ja")).toBeNull();
     expect(resolveNotificationLocale("en-US")).toBe("en");
+    expect(resolveNotificationLocale("zh-CN")).toBe("zh-CN");
   });
 
-  it("falls back to env then zh-CN", () => {
+  it("falls back to env then en", () => {
     delete process.env.NOTIFICATION_DEFAULT_LOCALE;
-    expect(resolveNotificationLocale(null)).toBe("zh-CN");
+    expect(resolveNotificationLocale(null)).toBe("en");
+    expect(resolveNotificationLocale("zh-TW")).toBe("en");
+
+    process.env.NOTIFICATION_DEFAULT_LOCALE = "zh-CN";
+    expect(resolveNotificationLocale(undefined)).toBe("zh-CN");
 
     process.env.NOTIFICATION_DEFAULT_LOCALE = "en";
     expect(resolveNotificationLocale(undefined)).toBe("en");

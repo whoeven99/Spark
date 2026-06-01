@@ -23,7 +23,7 @@ describe("sendTemplateEmailToolSchema", () => {
       sendTemplateEmailToolSchema.parse({
         to: "not-an-email",
         subject: "Hi",
-        templateId: EMAIL_TEMPLATE_IDS.TRANSLATION_SUCCESS,
+        templateId: EMAIL_TEMPLATE_IDS.APP_INSTALL_SUCCESS,
       }),
     ).toThrow(ZodError);
   });
@@ -53,7 +53,7 @@ describe("sendTemplateEmailToolSchema", () => {
       sendTemplateEmailToolSchema.parse({
         to: "",
         subject: "",
-        templateId: EMAIL_TEMPLATE_IDS.TRANSLATION_SUCCESS,
+        templateId: EMAIL_TEMPLATE_IDS.APP_INSTALL_SUCCESS,
       }),
     ).toThrow(ZodError);
   });

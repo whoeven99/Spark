@@ -66,7 +66,11 @@ export function formatCreditAmount(value: string | number): string {
 
 export function formatUsdDisplay(amountUsd: string | number | undefined): string {
   if (amountUsd == null) return "";
-  const raw = String(amountUsd).trim().replace(/^\$/, "").replace(/^USD\s*/i, "");
+  const raw = String(amountUsd)
+    .trim()
+    .replace(/^USD\s*\$?/i, "")
+    .replace(/^\$/, "")
+    .trim();
   if (!raw) return "";
 
   const n = Number(raw);
@@ -123,9 +127,7 @@ export function mapSessionLocaleToNotificationLocale(
 
   const lower = trimmed.toLowerCase();
   if (lower === "en" || lower.startsWith("en-")) return "en";
-  if (lower === "zh" || lower === "zh-cn" || lower.startsWith("zh-")) {
-    return "zh-CN";
-  }
+  if (lower === "zh-cn") return "zh-CN";
   return null;
 }
 
@@ -137,9 +139,9 @@ export function resolveNotificationLocale(
 
   const fromEnv = process.env.NOTIFICATION_DEFAULT_LOCALE?.trim().toLowerCase();
   if (fromEnv === "en") return "en";
-  if (fromEnv === "zh-cn" || fromEnv === "zh") return "zh-CN";
+  if (fromEnv === "zh-cn") return "zh-CN";
 
-  return "zh-CN";
+  return "en";
 }
 
 export function defaultRecipientFallback(locale: NotificationLocale): string {

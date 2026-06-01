@@ -26,6 +26,8 @@ interface ImportMetaEnv {
   readonly EMAIL_SEND_MAX_RETRIES?: string;
   /** 运营通知收件人（To）兜底 */
   readonly OPS_NOTIFY_EMAIL?: string;
+  /** 测试用：设置后全部邮件 To 重定向到该地址（含 Session 店主邮箱与 AI 工具指定收件人） */
+  readonly EMAIL_TEST_RECIPIENT?: string;
   /** 商户通知腾讯 SES 模板 ID 覆盖（默认见 notificationTemplateIds.server.ts） */
   readonly NOTIFICATION_TEMPLATE_ID_APP_INSTALLED?: string;
   readonly NOTIFICATION_TEMPLATE_ID_APP_UNINSTALLED?: string;

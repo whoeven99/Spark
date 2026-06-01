@@ -8,7 +8,6 @@ import {
   type SubscriptionPeriodSnapshot,
 } from "./renewal.server";
 import { sendSubscriptionFeishuNotify } from "../../feishu/scenarios/sendSubscriptionFeishuNotify.server";
-import { notifyMerchantSubscriptionEmail } from "../notifyMerchantBillingEmail.server";
 import {
   APP_SUBSCRIPTION_STATUS,
   BILLING_LOG_EVENT,
@@ -73,15 +72,6 @@ export async function applyActiveSubscription(params: {
     !existing ||
     existing.shopifySubscriptionId !== shopifySubscriptionId;
 
-  const previousPlanKey = existing?.planKey ?? null;
-  const planChanged =
-    Boolean(existing) &&
-    existing.shopifySubscriptionId === shopifySubscriptionId &&
-    previousPlanKey !== planKey &&
-    !wasPending;
-
-  const subscriptionTokensBefore = account.subscriptionTokens;
-
   await prisma.appSubscription.upsert({
     where: { shop_appName: { shop, appName } },
     create: {
@@ -144,40 +134,6 @@ export async function applyActiveSubscription(params: {
       );
     }
 
-    try {
-      await notifyMerchantSubscriptionEmail({
-        shop,
-        appName,
-        event: "subscriptionStarted",
-        planKey,
-        billingInterval,
-        subscriptionTokensBefore,
-        subscriptionTokensAfter: tokensPerPeriod,
-      });
-    } catch (error) {
-      console.error(
-        `[Billing] subscription merchant email failed shop=${shop} appName=${appName}:`,
-        error,
-      );
-    }
-  } else if (planChanged && previousPlanKey) {
-    try {
-      await notifyMerchantSubscriptionEmail({
-        shop,
-        appName,
-        event: "subscriptionChanged",
-        planKey,
-        previousPlanKey,
-        billingInterval,
-        subscriptionTokensBefore,
-        subscriptionTokensAfter: tokensPerPeriod,
-      });
-    } catch (error) {
-      console.error(
-        `[Billing] subscription change merchant email failed shop=${shop} appName=${appName}:`,
-        error,
-      );
-    }
   }
 }
 
@@ -305,18 +261,4 @@ export async function markSubscriptionNonActive(params: {
     });
   });
 
-  try {
-    await notifyMerchantSubscriptionEmail({
-      shop: params.shop,
-      appName: params.appName,
-      event: "subscriptionCanceled",
-      planKey: sub.planKey,
-      billingInterval: sub.billingInterval,
-    });
-  } catch (error) {
-    console.error(
-      `[Billing] subscription cancel merchant email failed shop=${params.shop} appName=${params.appName}:`,
-      error,
-    );
-  }
 }

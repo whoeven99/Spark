@@ -18,7 +18,10 @@ import {
 } from "../types/sendEmailRequest";
 import type { SendEmailResult } from "../types/sendEmailResult";
 import {
-  EMAIL_SUBJECTS,
+  applyEmailTestRecipientOverride,
+  logEmailTestRecipientOverride,
+} from "../emailTestRecipient.server";
+import {
   EMAIL_TEMPLATE_IDS,
   TENCENT_FROM_EMAIL,
 } from "../templates/emailTemplates.server";
@@ -94,13 +97,23 @@ export async function sendTemplateEmail(
     return result;
   }
 
-  const parsed = sendEmailRequestSchema.safeParse({
+  const routed = applyEmailTestRecipientOverride({
     templateId: params.templateId,
     templateData: params.templateData ?? {},
     subject: params.subject,
     from: resolveFrom(params.from, config),
     to: params.to,
     cc: params.cc,
+  });
+  logEmailTestRecipientOverride(EMAIL_LOG.service, routed.originalTo);
+
+  const parsed = sendEmailRequestSchema.safeParse({
+    templateId: routed.templateId,
+    templateData: routed.templateData,
+    subject: routed.subject,
+    from: routed.from,
+    to: routed.to,
+    cc: routed.cc,
   });
 
   if (!parsed.success) {
@@ -183,7 +196,6 @@ export async function sendTemplateEmail(
 }
 
 export {
-  EMAIL_SUBJECTS,
   EMAIL_TEMPLATE_IDS,
   TENCENT_FROM_EMAIL,
 };
