@@ -175,3 +175,45 @@ describe("translateBatch — prompt structure (caching-friendly)", () => {
     expect(loadGlossaryLines).toHaveBeenCalledWith("shop.myshopify.com", "en");
   });
 });
+
+describe("translateBatch — HTML entity & whitespace cleanup", () => {
+  it("decodes escaped quotes/apostrophes in plain fields", async () => {
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "title", translatedValue: `dis &quot;salut&quot; l&#39;ami` }]));
+    const out = await translateBatch(
+      [{ key: "title", value: "打招呼", digest: "d1" }],
+      "zh-CN",
+      "fr",
+      "gpt-4o-mini",
+      false,
+      "shop.myshopify.com",
+    );
+    expect(out[0].translatedValue).toBe(`dis "salut" l'ami`);
+  });
+
+  it("does NOT decode &amp; / &lt; / &gt; (keeps HTML well-formed)", async () => {
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "title", translatedValue: "Tom &amp; Jerry &lt;3 &gt;" }]));
+    const out = await translateBatch(
+      [{ key: "title", value: "汤姆", digest: "d1" }],
+      "zh-CN",
+      "en",
+      "gpt-4o-mini",
+      false,
+      "shop.myshopify.com",
+    );
+    expect(out[0].translatedValue).toBe("Tom &amp; Jerry &lt;3 &gt;");
+  });
+
+  it("trims model-injected whitespace and decodes entities in HTML nodes", async () => {
+    // node index "0" is the text "Hello"; model returns it padded + escaped.
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: `  Bonjour l&#39;ami  ` }]));
+    const out = await translateBatch(
+      [{ key: "body_html", value: "<p>Hello</p>", digest: "d1" }],
+      "zh-CN",
+      "fr",
+      "gpt-4o-mini",
+      false,
+      "shop.myshopify.com",
+    );
+    expect(out[0].translatedValue).toBe(`<p>Bonjour l'ami</p>`);
+  });
+});

@@ -175,6 +175,10 @@ CREATED
 - 格式：`{ terms: [{ source, translations: {<locale>: "..."}, doNotTranslate?, note? }] }`；`doNotTranslate` 对所有语言生效。
 - **写入入口（admin/app 端）尚未实现**，当前需手动写 Blob；后续 PR 补管理界面。
 
+**HTML 实体/空白清理**（`callLLM` / `translateHtmlLLM`）：
+- prompt 要求模型输出字面字符、不要 HTML 转义引号/撇号、不增删首尾空白。
+- 防御性后处理:对 LLM 输出只反转义 `&#39;/&apos;/&quot;/&#34;` → `'`/`"`（**不动** `&amp;/&lt;/&gt;`，保证 HTML 合法）；HTML 文本节点还原前 `trim()`，避免模型注入的首尾空白叠加到模板已保留的空白上。
+
 **LLM 重试与回退**（`callLLM`）：
 - LLM 返回 JSON 解析失败、或漏返回部分 key 时，只对未解析的 key 重试（最多 2 次，共 3 次尝试）。
 - 全部尝试后仍未解析的 key → 回退原文，`status="fallback"`。

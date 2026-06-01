@@ -235,7 +235,9 @@ async function translateHtmlLLM(
 
   for (const batch of batches) {
     const results = await callLLM(batch, source, target, aiModel, shopName);
-    for (const r of results) translated[Number(r.key)] = r.translatedValue;
+    // Trim each node: the original leading/trailing whitespace is preserved in the
+    // template, so any whitespace the model adds here would be injected on top.
+    for (const r of results) translated[Number(r.key)] = r.translatedValue.trim();
   }
 
   return restoreHtmlTextNodes(template, translated);
@@ -244,6 +246,19 @@ async function translateHtmlLLM(
 // How many extra attempts (beyond the first) to recover keys the LLM dropped or
 // returned unparseable JSON for.
 const MAX_LLM_RETRIES = 2;
+
+/**
+ * LLMs sometimes HTML-escape quotes/apostrophes in their output (`won't` →
+ * `won&#39;t`). In HTML text nodes and plain fields these characters are valid
+ * literals, so the escaping is pure noise (and can double-escape on re-runs).
+ * Decode ONLY quotes/apostrophes — never &amp;/&lt;/&gt;, which must stay escaped
+ * to keep HTML well-formed.
+ */
+function decodeQuoteEntities(text: string): string {
+  return text
+    .replace(/&#0*39;|&apos;/g, "'")
+    .replace(/&#0*34;|&quot;/g, '"');
+}
 
 /**
  * Build the static system prompt. Everything here is stable for a given
@@ -259,7 +274,9 @@ function buildSystemPrompt(source: string, target: string, glossaryLines: string
 Translate from "${source}" to "${target}".
 Rules:
 - Be accurate and natural for e-commerce
-- Preserve placeholders, HTML entities and variables (e.g. {{name}}, %s, {0}) exactly
+- Preserve placeholders and variables (e.g. {{name}}, %s, {0}) exactly
+- Output literal characters; do NOT HTML-escape. Use ' and " directly — never &#39; or &quot;
+- Do NOT add or remove leading or trailing whitespace
 - If the value is empty, return it unchanged
 - You MUST return an entry for every key in the input
 ${glossaryBlock}
@@ -327,7 +344,7 @@ async function callLLM(
   for (let attempt = 0; attempt <= MAX_LLM_RETRIES && pending.length > 0; attempt++) {
     try {
       const map = await callLLMOnce(pending, aiModel, systemPrompt);
-      for (const [k, v] of map) if (!collected.has(k)) collected.set(k, v);
+      for (const [k, v] of map) if (!collected.has(k)) collected.set(k, decodeQuoteEntities(v));
     } catch (e) {
       console.warn(`[llm] attempt ${attempt + 1} failed`, e);
     }
