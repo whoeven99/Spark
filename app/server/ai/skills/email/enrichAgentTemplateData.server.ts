@@ -9,7 +9,7 @@ import {
 } from "../../../notifications/buildNotificationVariables.server";
 import { getNotificationAppConfig } from "../../../notifications/config";
 import type { BaseNotificationVariables } from "../../../notifications/types";
-import { fetchShopBasicInfo } from "../../../shopify/fetchShopBasicInfo.server";
+import { fetchShopBasicInfo, type ShopBasicInfo } from "../../../shopify/fetchShopBasicInfo.server";
 import type { AgentContext } from "../../core/toolRegistry.server";
 
 /** 兼容 Agent 历史错误键名 APP_Name → appName */
@@ -29,25 +29,47 @@ function resolveAppKey(context: AgentContext): string {
   return context.appName?.trim() || getAppEntry();
 }
 
-async function buildBaseVariables(
+/**
+ * 服务端解析商家收件邮箱：优先店主账户邮箱，其次客服联系邮箱。
+ * 收件人不由 Agent 指定，杜绝越权/幻觉发往任意地址。
+ */
+export function resolveMerchantEmail(shopInfo: ShopBasicInfo | null): string | null {
+  const email = shopInfo?.email?.trim() || shopInfo?.contactEmail?.trim() || "";
+  return email.length > 0 ? email : null;
+}
+
+/**
+ * 拉取店铺基础信息（容错）。供收件人解析与 templateData 补全共用，避免重复请求。
+ */
+export async function loadShopBasicInfoSafe(
+  context: AgentContext,
+): Promise<ShopBasicInfo | null> {
+  if (!context.admin) {
+    if (context.shop?.trim()) {
+      console.warn(
+        "[EmailTool] enrichAgentTemplateData missing admin client; shop fields may be empty",
+      );
+    }
+    return null;
+  }
+  try {
+    return await fetchShopBasicInfo(context.admin);
+  } catch (error) {
+    console.warn(
+      "[EmailTool] enrichAgentTemplateData fetchShopBasicInfo failed:",
+      error instanceof Error ? error.message : error,
+    );
+    return null;
+  }
+}
+
+function buildBaseVariables(
   templateId: number,
   context: AgentContext,
   now: Date,
-): Promise<BaseNotificationVariables & { installedAtUtc?: string; uninstalledAtUtc?: string }> {
+  shopInfo: ShopBasicInfo | null,
+): BaseNotificationVariables & { installedAtUtc?: string; uninstalledAtUtc?: string } {
   const shop = context.shop?.trim() ?? "";
-  let shopInfo = null;
-  if (context.admin) {
-    try {
-      shopInfo = await fetchShopBasicInfo(context.admin);
-    } catch (error) {
-      console.warn(
-        "[EmailTool] enrichAgentTemplateData fetchShopBasicInfo failed:",
-        error instanceof Error ? error.message : error,
-      );
-    }
-  } else if (shop) {
-    console.warn("[EmailTool] enrichAgentTemplateData missing admin client; shop fields may be empty");
-  }
 
   const resolvedShop =
     shop || shopInfo?.myshopifyDomain?.trim() || "";
@@ -86,6 +108,7 @@ export async function enrichAgentTemplateData(
   templateId: number,
   context: AgentContext,
   agentData?: Record<string, string>,
+  shopInfo?: ShopBasicInfo | null,
 ): Promise<Record<string, string>> {
   const normalizedAgentData = normalizeAgentTemplateDataKeys(agentData);
   const appKey = resolveAppKey(context);
@@ -97,8 +120,10 @@ export async function enrichAgentTemplateData(
     ? { ...appConfig, dashboardUrl }
     : appConfig;
 
+  const resolvedShopInfo =
+    shopInfo !== undefined ? shopInfo : await loadShopBasicInfoSafe(context);
   const now = new Date();
-  const variables = await buildBaseVariables(templateId, context, now);
+  const variables = buildBaseVariables(templateId, context, now, resolvedShopInfo);
   const serverBuilt = buildNotificationTemplateData(configWithDashboard, variables);
 
   return { ...serverBuilt, ...normalizedAgentData };

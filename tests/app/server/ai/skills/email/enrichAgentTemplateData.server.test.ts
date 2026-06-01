@@ -5,6 +5,7 @@ import { fetchShopBasicInfo } from "../../../../../../app/server/shopify/fetchSh
 import {
   enrichAgentTemplateData,
   normalizeAgentTemplateDataKeys,
+  resolveMerchantEmail,
 } from "../../../../../../app/server/ai/skills/email/enrichAgentTemplateData.server";
 
 vi.mock("../../../../../../app/server/shopify/fetchShopBasicInfo.server", () => ({
@@ -43,6 +44,25 @@ describe("normalizeAgentTemplateDataKeys", () => {
     expect(
       normalizeAgentTemplateDataKeys({ APP_Name: "legacy", appName: "canonical" }),
     ).toEqual({ appName: "canonical" });
+  });
+});
+
+describe("resolveMerchantEmail", () => {
+  it("prefers store owner email", () => {
+    expect(
+      resolveMerchantEmail({ email: "owner@shop.com", contactEmail: "support@shop.com" }),
+    ).toBe("owner@shop.com");
+  });
+
+  it("falls back to contactEmail when email missing", () => {
+    expect(resolveMerchantEmail({ contactEmail: "support@shop.com" })).toBe(
+      "support@shop.com",
+    );
+  });
+
+  it("returns null when no email available", () => {
+    expect(resolveMerchantEmail(null)).toBeNull();
+    expect(resolveMerchantEmail({ name: "Shop" })).toBeNull();
   });
 });
 

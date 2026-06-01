@@ -8,7 +8,6 @@ import {
 } from "./translation/extract";
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import { sendTemplateEmailToolDefinition } from "./email/tool";
-import { appNameToolDefinition } from "./system/appNameTool";
 import { productOptimizationSkills } from "./productOptimization";
 
 // ==========================================
@@ -54,4 +53,3 @@ for (const skill of productOptimizationSkills) {
 }
 
 globalToolRegistry.register(sendTemplateEmailToolDefinition);
-globalToolRegistry.register(appNameToolDefinition);
