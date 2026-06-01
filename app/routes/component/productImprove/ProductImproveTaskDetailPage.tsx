@@ -15,6 +15,18 @@ type Props = {
   onTaskUpdated?: (taskId: string, status: AITaskStatus, result?: Record<string, unknown>) => void;
 };
 
+function getProductAdminUrl(locationSearch: string, productId: string): string | null {
+  const params = new URLSearchParams(
+    locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
+  );
+  const shop = params.get("shop");
+  if (!shop) return null;
+  // 从 GID 或纯数字中提取商品 ID
+  const idMatch = productId.match(/(?:Product\/)?(\d+)$/);
+  const numericId = idMatch?.[1] ?? productId;
+  return `https://admin.shopify.com/store/${shop.replace(/\.myshopify\.com$/, "")}/products/${numericId}`;
+}
+
 function formatTaskDate(iso: string): string {
   return new Date(iso).toLocaleString("zh-CN", {
     month: "short",
@@ -501,7 +513,7 @@ export function ProductImproveTaskDetailPage({
         </div>
       </SectionShell>
 
-      <SectionShell title="审核备注" description="评分是可选信息，不需要单独保存；备注会随应用或后续 AI 优化一起带走。">
+      <SectionShell title="审核备注" description="评分是可选信息，备注会随应用或后续 AI 优化一起提交。">
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <span style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>可选评分</span>
           {[1, 2, 3, 4, 5].map((score) => {
@@ -551,7 +563,7 @@ export function ProductImproveTaskDetailPage({
           onChange={(e) => setReviewNote(e.currentTarget.value)}
           disabled={refining || applying || localStatus === "applied"}
           rows={3}
-          placeholder="可记录修改原因、语气问题或后续优化建议"
+          placeholder="填写您对本次 AI 的效果评价"
           style={{
             width: "100%",
             boxSizing: "border-box",
@@ -669,7 +681,7 @@ export function ProductImproveTaskDetailPage({
           <div
             style={{
               display: "flex",
-              alignItems: "center",
+              flexDirection: "column",
               gap: 8,
               padding: "8px 12px",
               background: pageColorTokens.brandGreenLight,
@@ -680,8 +692,29 @@ export function ProductImproveTaskDetailPage({
               border: "1px solid rgba(0, 166, 124, 0.18)",
             }}
           >
-            <span>✓</span>
-            <span>已写入 Shopify</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span>✓</span>
+              <span>已写入 Shopify</span>
+            </div>
+            {(() => {
+              const url = getProductAdminUrl(locationSearch, cfg.productId ?? "");
+              if (!url) return null;
+              return (
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    color: pageColorTokens.brandBlue,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    textDecoration: "underline",
+                  }}
+                >
+                  在 Shopify 后台查看商品 →
+                </a>
+              );
+            })()}
           </div>
         ) : null}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
