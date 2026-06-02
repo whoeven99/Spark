@@ -153,12 +153,14 @@ export async function markTaskFailed(params: {
 export async function markTaskPendingReview(params: {
   taskId: string;
   result: Record<string, unknown>;
+  actualCredits?: number;
 }): Promise<void> {
   await prisma.aITask.update({
     where: { id: params.taskId },
     data: {
       status: "pending_review",
       result: params.result as unknown as PrismaJson,
+      actualCredits: params.actualCredits ?? null,
       completedAt: new Date(),
     },
   });

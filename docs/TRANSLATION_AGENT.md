@@ -178,6 +178,11 @@ CREATED
 
 > 占位符掩码、实体清理对**所有引擎**生效(在 `translateItemsRouted` 统一处理)。TM 缓存按字段 tier 的主引擎模型名隔离。job 的 `aiModel="google-translate"` 仍向后兼容锁 Google。
 
+**源语言自动识别**（`buildSystemPrompt` / `callGoogleTranslate`）：
+- 翻译**不再写死源语言**,只认目标语言。LLM prompt 改为"自动识别输入语言 → 翻成 target,无论输入是什么语言都翻;已是 target 的原样返回";Google 请求省略 `source` 让其自动检测。
+- 修复多语言目录(英/西/葡/韩/日 混装)被当成 zh-CN 而**原样漏翻**的问题。
+- 配套:TM 缓存 key 版本从 `tm:v4` 升到 `tm:v5`,丢弃之前被"漏翻 passthrough"冻住的旧缓存。
+
 **翻译记忆（TM 缓存）**（`worker/src/services/translationMemory.ts`）：
 - 翻译前按 `tm:v4:{shop}:{target}:{model}:{digest}` 查 Redis，命中则跳过引擎调用；翻译成功后写回缓存。
 - key 用 Shopify 的字段 `digest`（源内容哈希）做天然失效：源文改动 → digest 变 → 自动失配重译。

@@ -154,7 +154,7 @@ export function ProductImprovePage() {
     if (fetcher.state !== "idle" || !fetcher.data) return;
 
     const data = fetcher.data as
-      | { success: true; taskId: string; batchId: string }
+      | { success: true; taskId: string; batchId: string; sourceLanguage?: string; brandStyle?: string }
       | { success: false; errorMsg: string };
     if (!data.success || !data.taskId || !data.batchId) return;
     if (data.taskId === lastHandledTaskIdRef.current) return;
@@ -176,6 +176,9 @@ export function ProductImprovePage() {
         targetLanguage: submitContext?.targetLanguage ?? targetLanguage,
         originalTitle: submitContext?.originalTitle ?? "",
         originalText: "",
+        itemCount: 1,
+        sourceLanguage: data.sourceLanguage ?? "",
+        brandStyle: data.brandStyle ?? "",
       },
       result: null,
       estimatedCredits: submitContext?.estimatedCredits ?? ESTIMATED_TOKENS,

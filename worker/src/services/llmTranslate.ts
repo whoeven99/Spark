@@ -311,7 +311,6 @@ function batchByChars(items: TranslateItem[], maxChars: number): TranslateItem[]
 
 async function callGoogleTranslate(
   texts: string[],
-  source: string,
   target: string,
   format: "html" | "text",
 ): Promise<string[]> {
@@ -323,7 +322,8 @@ async function callGoogleTranslate(
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ q: texts, source, target, format }),
+      // Omit `source` so Google auto-detects — the catalog is multilingual.
+      body: JSON.stringify({ q: texts, target, format }),
     },
   );
 
@@ -372,7 +372,7 @@ async function translateItemsRouted(
       if (!llmConfigured()) continue;
       if (systemPrompt === null) {
         const glossary = await loadGlossaryLines(shopName, target);
-        systemPrompt = buildSystemPrompt(source, target, glossary);
+        systemPrompt = buildSystemPrompt(target, glossary);
       }
       try {
         await gatherTranslations(missing, aiModel, systemPrompt, collected);
@@ -385,7 +385,7 @@ async function translateItemsRouted(
       if (!googleConfigured()) continue;
       for (const batch of batchByChars(missing, MAX_CHARS_PER_BATCH)) {
         try {
-          const out = await callGoogleTranslate(batch.map((b) => b.value), source, target, "text");
+          const out = await callGoogleTranslate(batch.map((b) => b.value), target, "text");
           batch.forEach((b, i) => {
             if (out[i] != null && !collected.has(b.key)) {
               collected.set(b.key, out[i]);
@@ -502,14 +502,16 @@ function placeholdersIntact(text: string, tokens: string[]): boolean {
  * so OpenAI automatic prompt caching applies. The variable payload goes in the
  * user message instead.
  */
-function buildSystemPrompt(source: string, target: string, glossaryLines: string[]): string {
+function buildSystemPrompt(target: string, glossaryLines: string[]): string {
   const glossaryBlock = glossaryLines.length
     ? `\nGlossary (apply consistently):\n${glossaryLines.join("\n")}\n`
     : "";
   return `You are a professional e-commerce translator.
-Translate from "${source}" to "${target}".
+Detect the input language automatically and translate the content into "${target}".
 Rules:
 - Be accurate and natural for e-commerce
+- Translate ALL content into "${target}", no matter what language the input is in (English, Chinese, Spanish, etc.)
+- If a value is already entirely in "${target}", return it unchanged
 - Keep any ⟦number⟧ tokens exactly as they appear; never translate, modify, reorder, or drop them
 - Output literal characters; do NOT HTML-escape. Use ' and " directly — never &#39; or &quot;
 - Do NOT add or remove leading or trailing whitespace
