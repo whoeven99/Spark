@@ -18,12 +18,10 @@ const commonDetails = {
   zh: [
     ["店铺名称", "{{shopName}}"],
     ["店铺域名", "{{shopDomain}}"],
-    ["发生时间 (UTC+0)", "{{occurredAtUtc}}"],
   ],
   en: [
     ["Shop name", "{{shopName}}"],
     ["Shop domain", "{{shopDomain}}"],
-    ["Time (UTC+0)", "{{occurredAtUtc}}"],
   ],
 };
 
@@ -85,7 +83,7 @@ const templates = {
       ],
       details: [
         ...commonDetails.zh,
-        ["购买类型", "{{purchaseType}}"],
+        ["发生时间 (UTC+0)", "{{occurredAtUtc}}"],
         ["订单编号", "{{orderId}}"],
         ["套餐或项目", "{{planName}}"],
         ["金额 (USD)", "USD {{amountUsd}}"],
@@ -145,7 +143,7 @@ const templates = {
       ],
       details: [
         ...commonDetails.en,
-        ["Purchase type", "{{purchaseType}}"],
+        ["Time (UTC+0)", "{{occurredAtUtc}}"],
         ["Order ID", "{{orderId}}"],
         ["Plan or item", "{{planName}}"],
         ["Amount (USD)", "USD {{amountUsd}}"],
@@ -158,9 +156,9 @@ const templates = {
     subscriptionStarted: subscriptionEn("{{appName}} subscription started", "Subscription started", "{{appName}} is now active. Here is a quick breakdown of the current plan, billing period, and credit account."),
     subscriptionChanged: subscriptionEn("{{appName}} subscription changed", "Subscription changed", "{{appName}} has been updated. The plan, timing, and any related credit changes are listed below."),
     subscriptionCanceled: subscriptionEn("{{appName}} subscription canceled", "Subscription canceled", "{{appName}} has been canceled. Some premium features, automated tasks, or usage quotas may stop after the current billing period ends."),
-    taskStarted: taskEn("{{appName}} task started", "Task started", "{{appName}} has started processing {{taskName}}. We will keep you posted when it is completed, paused, or needs attention."),
-    taskCompleted: taskEn("{{appName}} task completed", "Task completed", "Good news: {{taskName}} is complete. Open the Shopify App to review results, logs, and related details."),
-    taskPaused: taskEn("{{appName}} task paused", "Task paused", "{{taskName}} has been paused. While paused, it usually stops processing new data and generating related usage."),
+    taskStarted: taskEn("{{appName}} task started", "Task started", "{{appName}} has started processing {{taskName}}. We will keep you posted when it is completed, paused, or needs attention.", "Started at (UTC+0)", "{{startedAtUtc}}"),
+    taskCompleted: taskEn("{{appName}} task completed", "Task completed", "Good news: {{taskName}} is complete. Open the Shopify App to review results, logs, and related details.", "Completed at (UTC+0)", "{{completedAtUtc}}"),
+    taskPaused: taskEn("{{appName}} task paused", "Task paused", "{{taskName}} has been paused. While paused, it usually stops processing new data and generating related usage.", "Paused at (UTC+0)", "{{pausedAtUtc}}"),
     taskFailed: taskEn("{{appName}} task failed", "Task failed", "{{taskName}} could not be completed this time. Open the Shopify App to review the reason and check settings, authorization, credit balance, or third-party connections.", "Failed at (UTC+0)", "{{occurredAtUtc}}", [["Failure reason", "{{failureReason}}"]]),
   },
 };
@@ -230,7 +228,6 @@ function taskZh(subject, title, summary, timeLabel, timeValue, extraDetails = []
     details: [
       ...commonDetails.zh,
       ["任务名称", "{{taskName}}"],
-      ["任务类型", "{{taskType}}"],
       ["任务编号", "{{taskId}}"],
       [timeLabel, timeValue],
       ...extraDetails,
@@ -256,7 +253,6 @@ function taskEn(subject, title, summary, timeLabel, timeValue, extraDetails = []
     details: [
       ...commonDetails.en,
       ["Task name", "{{taskName}}"],
-      ["Task type", "{{taskType}}"],
       ["Task ID", "{{taskId}}"],
       [timeLabel, timeValue],
       ...extraDetails,

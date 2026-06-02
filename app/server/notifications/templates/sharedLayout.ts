@@ -75,12 +75,10 @@ export function createTemplateContext<E extends NotificationEvent>(
 export function commonRows(variables: BaseNotificationVariables, labels: {
   shopName: string;
   shopDomain: string;
-  occurredAtUtc: string;
 }): TemplateRow[] {
   return [
     { label: labels.shopName, value: variables.shopName },
     { label: labels.shopDomain, value: variables.shopDomain },
-    { label: labels.occurredAtUtc, value: variables.occurredAtUtc },
   ];
 }
 

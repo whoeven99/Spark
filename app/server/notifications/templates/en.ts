@@ -33,7 +33,7 @@ export const enTemplates: NotificationTemplateRegistry = {
     ],
     details: [
       ...commonRows(variables, labels),
-      { label: "Installed at (UTC+0)", value: variables.installedAtUtc },
+      { label: "Installed at (UTC+0)", value: variables.installedAtUtc ?? variables.occurredAtUtc },
     ],
     action: { label: "Open Shopify App", url: REVIEW_SAFE_APP_URL },
   }),
@@ -50,7 +50,7 @@ export const enTemplates: NotificationTemplateRegistry = {
     ],
     details: [
       ...commonRows(variables, labels),
-      { label: "Uninstalled at (UTC+0)", value: variables.uninstalledAtUtc },
+      { label: "Uninstalled at (UTC+0)", value: variables.uninstalledAtUtc ?? variables.occurredAtUtc },
     ],
     action: { label: "View Shopify App status", url: REVIEW_SAFE_APP_URL },
   }),
@@ -68,7 +68,7 @@ export const enTemplates: NotificationTemplateRegistry = {
     ],
     details: [
       ...commonRows(variables, labels),
-      { label: "Purchase type", value: purchaseTypeLabel(variables.purchaseType) },
+      { label: labels.occurredAtUtc, value: variables.occurredAtUtc },
       { label: "Order ID", value: variables.orderId },
       { label: "Plan or item", value: variables.planName },
       { label: "Amount (USD)", value: formatUsdAmount(variables.amountUsd) },
@@ -172,7 +172,7 @@ function subscriptionContent({
       ...commonRows(variables, labels),
       { label: "Previous plan", value: variables.previousPlanName },
       { label: "Current plan", value: variables.currentPlanName },
-      { label: "Effective at (UTC+0)", value: variables.effectiveAtUtc },
+      { label: "Effective at (UTC+0)", value: variables.effectiveAtUtc ?? variables.occurredAtUtc },
       { label: "Billing period", value: variables.billingPeriod },
       ...creditRows(variables.creditAccountChange, labels),
     ],
@@ -213,9 +213,8 @@ function taskContent({
     details: [
       ...commonRows(variables, labels),
       { label: "Task name", value: variables.taskName },
-      { label: "Task type", value: variables.taskType },
       { label: "Task ID", value: variables.taskId },
-      { label: timeLabel, value: timeValue },
+      { label: timeLabel, value: timeValue ?? variables.occurredAtUtc },
       ...extraRows,
       ...creditRows(variables.creditAccountChange, labels),
     ],
@@ -229,13 +228,6 @@ function creditParagraph(change: CreditAccountChange | undefined): string[] {
   }
 
   return ["Credits can be used for task execution, usage quotas, and other metered features. The full history is available in the Shopify App."];
-}
-
-function purchaseTypeLabel(type: "subscription" | "creditPack" | "oneTime" | undefined): string | undefined {
-  if (type === "subscription") return "Subscription";
-  if (type === "creditPack") return "Credit purchase";
-  if (type === "oneTime") return "One-time purchase";
-  return undefined;
 }
 
 function formatUsdAmount(amountUsd: string | undefined): string | undefined {

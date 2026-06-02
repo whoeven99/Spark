@@ -33,7 +33,7 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
     ],
     details: [
       ...commonRows(variables, labels),
-      { label: "安装时间 (UTC+0)", value: variables.installedAtUtc },
+      { label: "安装时间 (UTC+0)", value: variables.installedAtUtc ?? variables.occurredAtUtc },
     ],
     action: { label: "前往 Shopify App 查看", url: REVIEW_SAFE_APP_URL },
   }),
@@ -50,7 +50,7 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
     ],
     details: [
       ...commonRows(variables, labels),
-      { label: "卸载时间 (UTC+0)", value: variables.uninstalledAtUtc },
+      { label: "卸载时间 (UTC+0)", value: variables.uninstalledAtUtc ?? variables.occurredAtUtc },
     ],
     action: { label: "查看 Shopify App 状态", url: REVIEW_SAFE_APP_URL },
   }),
@@ -68,7 +68,7 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
     ],
     details: [
       ...commonRows(variables, labels),
-      { label: "购买类型", value: purchaseTypeLabel(variables.purchaseType) },
+      { label: labels.occurredAtUtc, value: variables.occurredAtUtc },
       { label: "订单编号", value: variables.orderId },
       { label: "套餐或项目", value: variables.planName },
       { label: "金额 (USD)", value: formatUsdAmount(variables.amountUsd) },
@@ -172,7 +172,7 @@ function subscriptionContent({
       ...commonRows(variables, labels),
       { label: "原套餐", value: variables.previousPlanName },
       { label: "当前套餐", value: variables.currentPlanName },
-      { label: "生效时间 (UTC+0)", value: variables.effectiveAtUtc },
+      { label: "生效时间 (UTC+0)", value: variables.effectiveAtUtc ?? variables.occurredAtUtc },
       { label: "计费周期", value: variables.billingPeriod },
       ...creditRows(variables.creditAccountChange, labels),
     ],
@@ -213,9 +213,8 @@ function taskContent({
     details: [
       ...commonRows(variables, labels),
       { label: "任务名称", value: variables.taskName },
-      { label: "任务类型", value: variables.taskType },
       { label: "任务编号", value: variables.taskId },
-      { label: timeLabel, value: timeValue },
+      { label: timeLabel, value: timeValue ?? variables.occurredAtUtc },
       ...extraRows,
       ...creditRows(variables.creditAccountChange, labels),
     ],
@@ -229,13 +228,6 @@ function creditParagraph(change: CreditAccountChange | undefined): string[] {
   }
 
   return ["积分可用于任务执行、额度消耗或其他按量功能。完整明细会在 Shopify App 中展示。"];
-}
-
-function purchaseTypeLabel(type: "subscription" | "creditPack" | "oneTime" | undefined): string | undefined {
-  if (type === "subscription") return "订阅计费";
-  if (type === "creditPack") return "积分购买";
-  if (type === "oneTime") return "一次性购买";
-  return undefined;
 }
 
 function formatUsdAmount(amountUsd: string | undefined): string | undefined {
