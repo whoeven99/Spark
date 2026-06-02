@@ -18,8 +18,6 @@ function buildConfigForAppKey(appKey: string): NotificationAppConfig {
     appName: displayName,
     brandName: process.env.NOTIFICATION_BRAND_NAME?.trim() || displayName,
     supportEmail: resolveSupportEmail(),
-    appIconUrl: process.env.NOTIFICATION_APP_ICON_URL?.trim() || undefined,
-    dashboardUrl: undefined,
     helpCenterUrl: process.env.NOTIFICATION_HELP_CENTER_URL?.trim() || undefined,
     legalName: process.env.NOTIFICATION_LEGAL_NAME?.trim() || undefined,
   };
