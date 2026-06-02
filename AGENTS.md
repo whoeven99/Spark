@@ -379,6 +379,81 @@ activateSubscription / applyTokenPackPurchase
 
 ---
 
+## UI 规范：任务列表 Card
+
+**所有任务类型的列表 Card 必须使用 `AITaskCardShell` 作为基础组件，禁止自行实现 card 布局。**
+
+组件路径：`app/routes/component/aiTask/AITaskCardShell.tsx`
+
+### 设计原则
+
+Shell 负责**纯展示**，每个任务类型负责**业务逻辑**：
+
+- **Shell 负责**：card 容器样式、header 布局、分割线、进度条、按钮行、LogViewer 挂载
+- **任务组件负责**：计算文案（primaryCopy / secondaryCopy）、计算进度值、组装 actions 列表、读取 config 字段
+
+### 接入方法
+
+```tsx
+import { AITaskCardShell, type CardAction, formatActualElapsed, actionButtonStyle } from "../aiTask/AITaskCardShell";
+
+// 1. 用 useState 维护 localStatus（LogViewer 会实时更新它）
+// 2. 计算好所有展示值后，直接渲染 shell
+
+<AITaskCardShell
+  task={task}                          // AITaskItem，提供 id / 时间戳 / LogViewer 数据
+  locationSearch={locationSearch}
+  status={localStatus}                 // 实时状态（useState）
+
+  title="任务目标：生成产品描述"         // string | ReactNode
+  metaLine={<>10 个商品 | 英语 | ...</>} // 可选，标题下方详情行
+  extraBadges={<span>积分不足</span>}   // 可选，#id / 状态徽章旁边的额外标签
+
+  primaryCopy="正在生成商品文案..."      // 主状态句
+  primaryCopyColor="#0f172a"           // 可选，primaryCopy 文字颜色
+  secondaryCopy="已运行 1m 23s"        // 次要说明句
+
+  progressPercent={62}                 // 0–100
+  progressBackground="linear-gradient(90deg, #00a67c, #35b486)"  // 进度条颜色
+
+  actions={[                           // CardAction[]，shell 负责渲染按钮
+    { label: "查看详情", tone: "primary", onClick: onOpenDetail },
+    { label: "删除",     tone: "subtle",  onClick: () => onDelete(task.id), disabled: deleting },
+  ]}
+
+  showLogViewer={localStatus === "running"}   // 仅 running 时展示实时日志
+  onStatusChange={(s, r) => {                 // LogViewer 状态回调 → 更新 localStatus
+    setLocalStatus(s);
+    onTaskUpdated?.(task.id, s, r);
+  }}
+/>
+```
+
+### CardAction tone 说明
+
+| tone | 用途 |
+|------|------|
+| `primary` | 主要操作（审核、查看结果等），绿色填充按钮 |
+| `secondary` | 次要操作（查看详情、查看失败原因等），白色描边按钮 |
+| `subtle` | 危险或低权重操作（删除等），浅灰背景按钮 |
+
+### 可复用导出
+
+```ts
+import {
+  AITaskCardShell,   // shell 组件
+  type CardAction,   // 按钮类型定义
+  formatActualElapsed,  // 计算"已完成耗时"字符串（startedAt, completedAt → "1m 23s"）
+  actionButtonStyle,    // 按钮样式函数（tone, disabled → CSSProperties）
+} from "../aiTask/AITaskCardShell";
+```
+
+### 参考实现
+
+`ProductImproveTaskCard`（`app/routes/component/productImprove/ProductImproveTaskCard.tsx`）是标准接入示例，新任务类型可对照此文件实现自己的业务逻辑层。
+
+---
+
 ## 必读文档导航
 
 | 文档 | 路径 | 何时阅读 |
