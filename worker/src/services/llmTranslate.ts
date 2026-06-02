@@ -436,6 +436,8 @@ async function callLLMOnce(
     ],
     temperature: 0.1,
     response_format: { type: "json_object" },
+  }, {
+    timeout: 120_000, // 120s per batch — prevents hanging on unresponsive APIs
   });
 
   const raw = completion.choices[0]?.message?.content ?? "{}";

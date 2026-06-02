@@ -8,7 +8,8 @@
  * Usage:
  *   tsx src/scripts/exportTranslationReport.ts <shopName> <taskId> [outDir]
  *
- * Writes into <outDir> (default ./translation-report-<shop>-<taskId>/):
+ * Writes into <outDir> (default ./translation-reports/<shop>-<taskId>/ — all
+ * reports live under the single gitignored `translation-reports/` folder):
  *   - report.json        aggregate inventory + full-coverage quality flags
  *   - <MODULE>.jsonl      EVERY before/after entry for that module (one per line)
  *
@@ -80,7 +81,8 @@ async function main(): Promise<void> {
   }
 
   const report = analyzeTranslations(entries);
-  const outDir = outArg || `translation-report-${shopName}-${taskId}`;
+  // All reports live under one gitignored folder for easy cleanup.
+  const outDir = outArg || join("translation-reports", `${shopName}-${taskId}`);
   await mkdir(outDir, { recursive: true });
   await writeFile(join(outDir, "report.json"), JSON.stringify(report, null, 2), "utf8");
 

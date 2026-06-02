@@ -52,8 +52,13 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
 
       const initPaths = await blobListPaths(`${blobPrefix}/init/${module}/`);
       const chunkPaths = initPaths.filter((p) => p.endsWith(".json"));
+      const chunkTotal = chunkPaths.length;
 
-      for (const chunkPath of chunkPaths) {
+      for (let ci = 0; ci < chunkPaths.length; ci++) {
+        const chunkPath = chunkPaths[ci];
+        const chunkIdx = ci + 1; // 1-based for readability
+        const chunkStart = performance.now();
+
         await heartbeat(shopName, jobId);
 
         // Resume: skip chunks already translated in a prior run
@@ -61,12 +66,23 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         const existingTranslated = await blobRead<Array<{ resourceId: string }>>(translatePath);
         if (existingTranslated !== null) {
           translateDone += existingTranslated.length;
+          console.log(
+            `[translate] job=${jobId} module=${module} chunk=${chunkIdx}/${chunkTotal} ` +
+              `skip (already translated, ${existingTranslated.length} resources)`,
+          );
           await setProgress(jobId, { translateDone, translateFailed, translateTotal, currentModule: module });
           continue;
         }
 
         const chunk = await blobRead<Array<{ resourceId: string; fields: TranslateItem[] }>>(chunkPath);
         if (!chunk) continue;
+
+        const chunkResourceCount = chunk.length;
+        const chunkFieldCount = chunk.reduce((sum, r) => sum + (r.fields?.length ?? 0), 0);
+        console.log(
+          `[translate] job=${jobId} module=${module} chunk=${chunkIdx}/${chunkTotal} ` +
+            `resources=${chunkResourceCount} fields=${chunkFieldCount}`,
+        );
 
         const translatedChunk = [];
         for (const resource of chunk) {
@@ -99,6 +115,12 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
 
         // Write to translate/ blob
         await blobWrite(translatePath, translatedChunk);
+
+        const chunkElapsed = ((performance.now() - chunkStart) / 1000).toFixed(1);
+        console.log(
+          `[translate] job=${jobId} module=${module} chunk=${chunkIdx}/${chunkTotal} ` +
+            `done translated=${translatedChunk.length} elapsed=${chunkElapsed}s doneSoFar=${translateDone}/${translateTotal}`,
+        );
 
         await setProgress(jobId, {
           translateDone,
