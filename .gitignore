@@ -40,3 +40,8 @@ database.sqlite
 shopify.app.toml
 shopify.app.toml
 /worker/dist
+roadmap
+/_report-ciwishop
+
+# AI translation quality reports (local, disposable)
+translation-reports/

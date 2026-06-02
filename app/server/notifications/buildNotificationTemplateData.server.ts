@@ -1,4 +1,9 @@
 import {
+  getAppEntry,
+  getAppHomePath,
+  isAppEntryKey,
+} from "../../config/appEntry.server";
+import {
   defaultRecipientFallback,
   formatBillingPeriod,
   formatCreditAmount,
@@ -75,6 +80,21 @@ function appendCreditFields(
     str(change.reason);
 }
 
+function resolveShopAdminIdentifier(shopDomain: string | undefined): string {
+  const normalized = str(shopDomain)
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/.*$/, "")
+    .replace(/\.myshopify\.com$/i, "");
+  return normalized;
+}
+
+function resolveAppAdminPath(appKey: string | undefined): string {
+  const entry = appKey && isAppEntryKey(appKey) ? appKey : getAppEntry();
+  return getAppHomePath(entry)
+    .split("?")[0]
+    .replace(/^\/+/, "");
+}
+
 /**
  * 扁平 TemplateData，键名与 tencent-cloud-html/zh-CN/*.html 中 {{var}} 一致。
  */
@@ -92,6 +112,12 @@ export function buildNotificationTemplateData(
     previousPlanName?: string;
     currentPlanName?: string;
     effectiveAtUtc?: string;
+    taskName?: string;
+    taskId?: string;
+    startedAtUtc?: string;
+    completedAtUtc?: string;
+    pausedAtUtc?: string;
+    failureReason?: string;
     creditAccountChange?: CreditAccountChange;
   },
   locale: NotificationLocale = "zh-CN",
@@ -101,18 +127,17 @@ export function buildNotificationTemplateData(
   const recipientFallback = defaultRecipientFallback(locale);
 
   const data: Record<string, string> = {
+    shop_id: resolveShopAdminIdentifier(variables.shopDomain),
+    path: resolveAppAdminPath(appConfig.appKey),
     appName,
     brandName,
-    appIconUrl: str(variables.appIconUrl) || str(appConfig.appIconUrl),
     recipientName: str(variables.recipientName) || recipientFallback,
     supportEmail: str(variables.supportEmail) || appConfig.supportEmail,
-    dashboardUrl: str(variables.dashboardUrl) || str(appConfig.dashboardUrl),
-    helpCenterUrl: str(variables.helpCenterUrl) || str(appConfig.helpCenterUrl),
     shopName: str(variables.shopName),
     shopDomain: str(variables.shopDomain),
     occurredAtUtc: str(variables.occurredAtUtc),
-    installedAtUtc: str(variables.installedAtUtc),
-    uninstalledAtUtc: str(variables.uninstalledAtUtc),
+    installedAtUtc: str(variables.installedAtUtc) || str(variables.occurredAtUtc),
+    uninstalledAtUtc: str(variables.uninstalledAtUtc) || str(variables.occurredAtUtc),
     purchaseType: formatPurchaseType(variables.purchaseType, locale),
     orderId: variables.orderId
       ? formatShopifyOrderDisplayId(variables.orderId)
@@ -122,7 +147,13 @@ export function buildNotificationTemplateData(
     billingPeriod: resolveBillingPeriod(variables, locale),
     previousPlanName: str(variables.previousPlanName),
     currentPlanName: str(variables.currentPlanName),
-    effectiveAtUtc: str(variables.effectiveAtUtc),
+    effectiveAtUtc: str(variables.effectiveAtUtc) || str(variables.occurredAtUtc),
+    taskName: str(variables.taskName),
+    taskId: str(variables.taskId),
+    startedAtUtc: str(variables.startedAtUtc) || str(variables.occurredAtUtc),
+    completedAtUtc: str(variables.completedAtUtc) || str(variables.occurredAtUtc),
+    pausedAtUtc: str(variables.pausedAtUtc) || str(variables.occurredAtUtc),
+    failureReason: str(variables.failureReason),
   };
 
   appendCreditFields(data, variables.creditAccountChange, locale);

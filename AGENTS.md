@@ -83,7 +83,7 @@ Optional services (app works partially without): Cosmos DB, Azure Blob, Redis, D
 - 🤖 **AI Assistant**：自然语言聊天、店铺数据查询、运营建议、工具调用
 - 📊 **诊断报告**：7 天核心指标、健康状态评估
 - 🌐 **翻译 V3**：JSON Runtime 任务创建与监控（Cosmos + Redis + Blob）
-- 💰 **计费与订阅**：卫星 App 订阅制、按量购包、token 配额（Shopify Billing）
+- 💰 **计费与订阅**：卫星 App 订阅制、按量购包、Credit 配额（Shopify Billing）
 - 🎨 **生成商品描述**：AI 驱动的产品文案生成
 - 🖼️ **图片工具**：整图翻译（火山 + Aidge）、文生图
 

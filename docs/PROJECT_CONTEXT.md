@@ -18,7 +18,7 @@
   - `AI Assistant`：自然语言问答、店铺数据查询、运营建议、授权引导。
   - `诊断报告`：最近 7 天核心指标、健康状态与结论建议。
   - `翻译`：在嵌入式应用中创建翻译任务（写入 Cosmos）、查看 JSON Runtime 任务列表与详情（Cosmos / Redis / Blob；详情可走 AgentTask 代理或 Spark 本机聚合）。
-  - **计费与订阅**（卫星 App `generate-description`）：`/app/billing` 开通月/年订阅、按量购包、查看 token 配额；生成描述 API 在余额不足时拦截。
+- **计费与订阅**（卫星 App `generate-description`）：`/app/billing` 开通月/年订阅、按量购包、查看 Credit 配额；生成描述 API 在余额不足时拦截。
 
 ## 2. 技术栈与运行形态
 - 前端：React + TypeScript + React Router（文件系统路由）。

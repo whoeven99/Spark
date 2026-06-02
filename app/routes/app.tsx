@@ -16,7 +16,7 @@ import {
 } from "../i18n/config";
 import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
 import { authenticate } from "../shopify.server";
-import { recordAppInstalled } from "../server/commonEventLog/index.server";
+import { recordAppInstalled, recordVisitSource } from "../server/commonEventLog/index.server";
 import { ensureSessionAppName } from "../server/session/sessionManager.server";
 import {
   syncSessionShopProfile,
@@ -69,6 +69,11 @@ const NAV_ITEMS: Record<
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
   const appName = getAppEntry();
+
+  // 入口来源归因：带 utm 的外链首次进入时记一条（fire-and-forget，失败不影响页面）
+  recordVisitSource({ shop: session.shop, appName, request }).catch((error) => {
+    console.error("[VisitSource] recordVisitSource failed:", error);
+  });
 
   try {
     await ensureSessionAppName(session.id, appName);

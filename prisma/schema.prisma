@@ -181,6 +181,28 @@ model CommonEventLog {
   @@index([referenceId])
 }
 
+/// 入口来源归因：用户从带 utm 参数的外链（邮件 / 广告等）首次进入 App 时记一条。
+/// Shopify 仅在带参链接首次进入时透传 query，站内导航会丢弃，因此天然只记录外部入口。
+model AppVisitSource {
+  id        String   @id @default(cuid())
+  shop      String
+  /// 与 `AppEntry` 一致
+  appName   String
+  /// 落地 path，如 /app/product-improve
+  path      String
+  /// 原始 utm 字符串，如 email（保留原值，不在写入时解析）
+  utm       String
+  /// 整段 query string 兜底（如 ?utm=email），未来 utm 变复杂也不丢信息
+  query     String?
+  /// HTTP Referer（若有）
+  referer   String?
+  createdAt DateTime @default(now())
+
+  @@index([shop, createdAt])
+  @@index([appName, utm, createdAt])
+  @@index([utm, path])
+}
+
 /// 计费流水：试用、订阅、续费、按量购 token 等。
 model BillingLog {
   id          String   @id @default(cuid())

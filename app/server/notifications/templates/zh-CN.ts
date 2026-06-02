@@ -5,6 +5,7 @@ import type {
 } from "./sharedLayout";
 import type {
   CreditAccountChange,
+  NotificationLocale,
   SubscriptionNotificationVariables,
   TaskNotificationVariables,
 } from "../types";
@@ -14,8 +15,7 @@ import {
   formatShopifyOrderDisplayId,
   formatUsdDisplay,
 } from "../formatNotificationDisplay.server";
-import type { NotificationLocale } from "../types";
-import { commonRows, creditRows } from "./sharedLayout";
+import { commonRows, creditRows, REVIEW_SAFE_APP_URL } from "./sharedLayout";
 
 const labels = {
   shopName: "店铺名称",
@@ -40,9 +40,9 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
     ],
     details: [
       ...commonRows(variables, labels),
-      { label: "安装时间 (UTC+0)", value: variables.installedAtUtc },
+      { label: "安装时间 (UTC+0)", value: variables.installedAtUtc ?? variables.occurredAtUtc },
     ],
-    action: { label: "前往 Shopify App 查看", url: display.dashboardUrl },
+    action: { label: "前往 Shopify App 查看", url: REVIEW_SAFE_APP_URL },
   }),
 
   appUninstalled: ({ variables, display }) => ({
@@ -57,9 +57,9 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
     ],
     details: [
       ...commonRows(variables, labels),
-      { label: "卸载时间 (UTC+0)", value: variables.uninstalledAtUtc },
+      { label: "卸载时间 (UTC+0)", value: variables.uninstalledAtUtc ?? variables.occurredAtUtc },
     ],
-    action: { label: "查看 Shopify App 状态", url: display.dashboardUrl },
+    action: { label: "查看 Shopify App 状态", url: REVIEW_SAFE_APP_URL },
   }),
 
   purchaseCreated: ({ variables, display, locale }) => ({
@@ -75,6 +75,7 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
     ],
     details: [
       ...commonRows(variables, labels),
+      { label: labels.occurredAtUtc, value: variables.occurredAtUtc },
       {
         label: "购买类型",
         value: formatPurchaseType(variables.purchaseType, locale),
@@ -93,7 +94,7 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
       },
       ...creditRows(variables.creditAccountChange, labels, locale),
     ],
-    action: { label: "前往 Shopify App 查看", url: display.dashboardUrl },
+    action: { label: "前往 Shopify App 查看", url: REVIEW_SAFE_APP_URL },
   }),
 
   subscriptionStarted: ({ variables, display, locale }) =>
@@ -202,7 +203,7 @@ function subscriptionContent({
       ...commonRows(variables, labels),
       { label: "原套餐", value: variables.previousPlanName },
       { label: "当前套餐", value: variables.currentPlanName },
-      { label: "生效时间 (UTC+0)", value: variables.effectiveAtUtc },
+      { label: "生效时间 (UTC+0)", value: variables.effectiveAtUtc ?? variables.occurredAtUtc },
       {
         label: "计费周期",
         value: variables.billingInterval
@@ -214,7 +215,7 @@ function subscriptionContent({
       },
       ...creditRows(variables.creditAccountChange, labels, locale),
     ],
-    action: { label: "前往 Shopify App 查看", url: display.dashboardUrl },
+    action: { label: "前往 Shopify App 查看", url: REVIEW_SAFE_APP_URL },
   };
 }
 
@@ -253,13 +254,12 @@ function taskContent({
     details: [
       ...commonRows(variables, labels),
       { label: "任务名称", value: variables.taskName },
-      { label: "任务类型", value: variables.taskType },
       { label: "任务编号", value: variables.taskId },
-      { label: timeLabel, value: timeValue },
+      { label: timeLabel, value: timeValue ?? variables.occurredAtUtc },
       ...extraRows,
       ...creditRows(variables.creditAccountChange, labels, locale),
     ],
-    action: { label: "前往 Shopify App 查看", url: variables.statusUrl ?? display.dashboardUrl },
+    action: { label: "前往 Shopify App 查看", url: REVIEW_SAFE_APP_URL },
   };
 }
 
