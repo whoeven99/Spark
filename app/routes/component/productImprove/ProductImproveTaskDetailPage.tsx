@@ -698,7 +698,7 @@ export function ProductImproveTaskDetailPage({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "minmax(0, 0.92fr) minmax(0, 1.08fr)",
+            gridTemplateColumns: "1fr 1fr",
             gap: 12,
           }}
         >
@@ -709,23 +709,26 @@ export function ProductImproveTaskDetailPage({
           />
 
           <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                flexWrap: "wrap",
+            <ReviewContentPanel
+              label={activeRecord ? `创建内容 · V${activeRecord.version}` : "创建内容"}
+              tone="positive"
+              title={activeRecord?.title ?? ""}
+              description={activeRecord?.description ?? ""}
+              highlighted={draftHighlight}
+              editable
+              disabled={editingLocked || !activeRecord}
+              onTitleChange={(value) => {
+                if (!activeRecord) return;
+                updateResultRecord(activeRecord.id, { title: value });
               }}
-            >
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: pageColorTokens.textPrimary }}>
-                  {activeRecord ? `当前编辑版本 V${activeRecord.version}` : "当前编辑版本"}
-                </div>
-                <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, lineHeight: 1.5 }}>
-                  {activeRecord?.sourceLabel ?? "当前暂无可编辑的结果记录"}
-                </div>
-              </div>
+              onDescriptionChange={(value) => {
+                if (!activeRecord) return;
+                updateResultRecord(activeRecord.id, { description: value });
+              }}
+              descriptionRows={12}
+            />
+
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
               <button
                 type="button"
                 onClick={() => activeRecord && void handleApply(activeRecord)}
@@ -744,207 +747,6 @@ export function ProductImproveTaskDetailPage({
               >
                 {applying ? "应用中..." : "应用当前版本"}
               </button>
-            </div>
-
-            <ReviewContentPanel
-              label={activeRecord ? `当前草稿 · V${activeRecord.version}` : "当前草稿"}
-              tone="positive"
-              title={activeRecord?.title ?? ""}
-              description={activeRecord?.description ?? ""}
-              highlighted={draftHighlight}
-              editable
-              disabled={editingLocked || !activeRecord}
-              onTitleChange={(value) => {
-                if (!activeRecord) return;
-                updateResultRecord(activeRecord.id, { title: value });
-              }}
-              onDescriptionChange={(value) => {
-                if (!activeRecord) return;
-                updateResultRecord(activeRecord.id, { description: value });
-              }}
-              descriptionRows={12}
-            />
-
-            <div
-              style={{
-                border: `1px solid ${pageColorTokens.borderSubtle}`,
-                borderRadius: pageColorTokens.radiusControl,
-                background: "#fff",
-                padding: "0.9rem",
-                display: "flex",
-                flexDirection: "column",
-                gap: 10,
-              }}
-            >
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: pageColorTokens.textPrimary }}>
-                  结果记录
-                </div>
-                <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, marginTop: 4 }}>
-                  每次评分与 AI 优化都会沉淀为一条记录，新的优化结果会在这里继续新增版本。
-                </div>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {resultRecords.map((record) => {
-                  const isActive = activeRecord?.id === record.id;
-                  return (
-                    <div
-                      key={record.id}
-                      style={{
-                        border: `1px solid ${
-                          isActive ? "rgba(0, 166, 124, 0.28)" : pageColorTokens.borderSubtle
-                        }`,
-                        borderRadius: pageColorTokens.radiusControl,
-                        background: isActive ? "#f8fffc" : "#ffffff",
-                        padding: "0.8rem 0.85rem",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 8,
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          gap: 10,
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                          <span
-                            style={{
-                              padding: "0.2rem 0.5rem",
-                              borderRadius: 999,
-                              background: isActive ? pageColorTokens.brandGreenLight : pageColorTokens.surfaceMuted,
-                              color: isActive ? pageColorTokens.brandGreenDark : pageColorTokens.textSecondary,
-                              fontSize: 11,
-                              fontWeight: 700,
-                            }}
-                          >
-                            V{record.version}
-                          </span>
-                          <span style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
-                            {record.sourceLabel}
-                          </span>
-                          {record.applied ? (
-                            <span style={{ fontSize: 12, color: pageColorTokens.brandGreenDark, fontWeight: 700 }}>
-                              已应用
-                            </span>
-                          ) : null}
-                        </div>
-                        <span style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>
-                          {formatTaskDate(record.createdAt)}
-                        </span>
-                      </div>
-
-                      <div style={{ fontSize: 13, fontWeight: 600, color: pageColorTokens.textPrimary }}>
-                        {record.title || "（无标题）"}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: pageColorTokens.textSecondary,
-                          lineHeight: 1.6,
-                          display: "-webkit-box",
-                          WebkitLineClamp: 3,
-                          WebkitBoxOrient: "vertical",
-                          overflow: "hidden",
-                        }}
-                      >
-                        {record.description || "（无描述）"}
-                      </div>
-
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: 8,
-                          flexWrap: "wrap",
-                          fontSize: 12,
-                          color: pageColorTokens.textSecondary,
-                        }}
-                      >
-                        <span>
-                          {record.reviewScore !== null ? `结果评分 ${record.reviewScore}/5` : "结果评分未填写"}
-                        </span>
-                        <span>
-                          {record.reviewNote.trim() ? `评分说明：${record.reviewNote}` : "评分说明未填写"}
-                        </span>
-                      </div>
-
-                      {record.statusNote ? (
-                        <div style={{ fontSize: 12, color: pageColorTokens.textFootnote, lineHeight: 1.5 }}>
-                          {record.statusNote}
-                        </div>
-                      ) : null}
-
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveRecordId(record.id);
-                            openFeedbackDialog(record);
-                          }}
-                          disabled={editingLocked}
-                          style={{
-                            padding: "7px 12px",
-                            borderRadius: pageColorTokens.radiusControl,
-                            background: "#ffffff",
-                            color: editingLocked ? pageColorTokens.textFootnote : pageColorTokens.textBody,
-                            border: `1px solid ${pageColorTokens.borderSubtle}`,
-                            cursor: editingLocked ? "default" : "pointer",
-                            fontSize: 12,
-                            fontWeight: 600,
-                          }}
-                        >
-                          评分并继续优化
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setActiveRecordId(record.id)}
-                          style={{
-                            padding: "7px 12px",
-                            borderRadius: pageColorTokens.radiusControl,
-                            background: isActive ? pageColorTokens.brandGreenLight : "#ffffff",
-                            color: isActive ? pageColorTokens.brandGreenDark : pageColorTokens.textBody,
-                            border: `1px solid ${isActive ? pageColorTokens.brandGreen : pageColorTokens.borderSubtle}`,
-                            cursor: "pointer",
-                            fontSize: 12,
-                            fontWeight: 600,
-                          }}
-                        >
-                          {isActive ? "正在编辑" : "编辑这一版"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleApply(record)}
-                          disabled={refining || applying || localStatus === "applied"}
-                          style={{
-                            padding: "7px 12px",
-                            borderRadius: pageColorTokens.radiusControl,
-                            background: "#ffffff",
-                            color:
-                              refining || applying || localStatus === "applied"
-                                ? pageColorTokens.textFootnote
-                                : pageColorTokens.brandGreenDark,
-                            border: `1px solid ${
-                              refining || applying || localStatus === "applied"
-                                ? pageColorTokens.borderSubtle
-                                : "rgba(0, 166, 124, 0.24)"
-                            }`,
-                            cursor: refining || applying || localStatus === "applied" ? "default" : "pointer",
-                            fontSize: 12,
-                            fontWeight: 700,
-                          }}
-                        >
-                          应用这一版
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
             </div>
           </div>
         </div>
@@ -989,6 +791,172 @@ export function ProductImproveTaskDetailPage({
             })()}
           </div>
         ) : null}
+      </SectionShell>
+
+      <SectionShell
+        title="结果记录"
+        description="每次评分与 AI 优化都会沉淀为一条记录，新的优化结果会在这里继续新增版本。"
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {resultRecords.map((record) => {
+            const isActive = activeRecord?.id === record.id;
+            return (
+              <div
+                key={record.id}
+                style={{
+                  border: `1px solid ${
+                    isActive ? "rgba(0, 166, 124, 0.28)" : pageColorTokens.borderSubtle
+                  }`,
+                  borderRadius: pageColorTokens.radiusControl,
+                  background: isActive ? "#f8fffc" : "#ffffff",
+                  padding: "0.8rem 0.85rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 10,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span
+                      style={{
+                        padding: "0.2rem 0.5rem",
+                        borderRadius: 999,
+                        background: isActive ? pageColorTokens.brandGreenLight : pageColorTokens.surfaceMuted,
+                        color: isActive ? pageColorTokens.brandGreenDark : pageColorTokens.textSecondary,
+                        fontSize: 11,
+                        fontWeight: 700,
+                      }}
+                    >
+                      V{record.version}
+                    </span>
+                    <span style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
+                      {record.sourceLabel}
+                    </span>
+                    {record.applied ? (
+                      <span style={{ fontSize: 12, color: pageColorTokens.brandGreenDark, fontWeight: 700 }}>
+                        已应用
+                      </span>
+                    ) : null}
+                  </div>
+                  <span style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>
+                    {formatTaskDate(record.createdAt)}
+                  </span>
+                </div>
+
+                <div style={{ fontSize: 13, fontWeight: 600, color: pageColorTokens.textPrimary }}>
+                  {record.title || "（无标题）"}
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: pageColorTokens.textSecondary,
+                    lineHeight: 1.6,
+                    display: "-webkit-box",
+                    WebkitLineClamp: 3,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}
+                >
+                  {record.description || "（无描述）"}
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    flexWrap: "wrap",
+                    fontSize: 12,
+                    color: pageColorTokens.textSecondary,
+                  }}
+                >
+                  <span>
+                    {record.reviewScore !== null ? `结果评分 ${record.reviewScore}/5` : "结果评分未填写"}
+                  </span>
+                  <span>
+                    {record.reviewNote.trim() ? `评分说明：${record.reviewNote}` : "评分说明未填写"}
+                  </span>
+                </div>
+
+                {record.statusNote ? (
+                  <div style={{ fontSize: 12, color: pageColorTokens.textFootnote, lineHeight: 1.5 }}>
+                    {record.statusNote}
+                  </div>
+                ) : null}
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveRecordId(record.id);
+                      openFeedbackDialog(record);
+                    }}
+                    disabled={editingLocked}
+                    style={{
+                      padding: "7px 12px",
+                      borderRadius: pageColorTokens.radiusControl,
+                      background: "#ffffff",
+                      color: editingLocked ? pageColorTokens.textFootnote : pageColorTokens.textBody,
+                      border: `1px solid ${pageColorTokens.borderSubtle}`,
+                      cursor: editingLocked ? "default" : "pointer",
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    评分并继续优化
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveRecordId(record.id)}
+                    style={{
+                      padding: "7px 12px",
+                      borderRadius: pageColorTokens.radiusControl,
+                      background: isActive ? pageColorTokens.brandGreenLight : "#ffffff",
+                      color: isActive ? pageColorTokens.brandGreenDark : pageColorTokens.textBody,
+                      border: `1px solid ${isActive ? pageColorTokens.brandGreen : pageColorTokens.borderSubtle}`,
+                      cursor: "pointer",
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {isActive ? "正在编辑" : "编辑这一版"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleApply(record)}
+                    disabled={refining || applying || localStatus === "applied"}
+                    style={{
+                      padding: "7px 12px",
+                      borderRadius: pageColorTokens.radiusControl,
+                      background: "#ffffff",
+                      color:
+                        refining || applying || localStatus === "applied"
+                          ? pageColorTokens.textFootnote
+                          : pageColorTokens.brandGreenDark,
+                      border: `1px solid ${
+                        refining || applying || localStatus === "applied"
+                          ? pageColorTokens.borderSubtle
+                          : "rgba(0, 166, 124, 0.24)"
+                      }`,
+                      cursor: refining || applying || localStatus === "applied" ? "default" : "pointer",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    应用这一版
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </SectionShell>
 
       {refineError ? (
