@@ -8,6 +8,7 @@ import type { ImageStudioPageLoaderData } from "../../server/visualTools/imageSt
 import { ImageGenerationForm } from "../component/imageGeneration/ImageGenerationForm";
 import { PictureTranslateForm } from "../component/pictureTranslate/PictureTranslateForm";
 import { PictureTranslateProvider } from "../component/pictureTranslate/pictureTranslateContext";
+import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import type { VisualToolsTab } from "../component/visualTools/VisualToolsTabBar";
 import { VisualToolsTabBar } from "../component/visualTools/VisualToolsTabBar";
 import { TaskListPage } from "../component/aiTask/TaskListPage";
@@ -24,67 +25,6 @@ type PageTab = "config" | "tasks";
 
 function parseToolTab(value: string | null): VisualToolsTab {
   return value === "translate" ? "translate" : "generate";
-}
-
-function PageTabBar({
-  activeTab,
-  onTabChange,
-  runningCount,
-}: {
-  activeTab: PageTab;
-  onTabChange: (tab: PageTab) => void;
-  runningCount: number;
-}) {
-  const btnStyle = (active: boolean) => ({
-    padding: "8px 18px",
-    borderRadius: 9,
-    border: active
-      ? `2px solid ${pageColorTokens.brandGreen}`
-      : `2px solid transparent`,
-    background: active ? pageColorTokens.brandGreenLight : "transparent",
-    color: active
-      ? pageColorTokens.brandGreenDark
-      : pageColorTokens.textSecondary,
-    fontWeight: active ? 600 : 500,
-    fontSize: 14,
-    cursor: "pointer",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-  });
-
-  return (
-    <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
-      <button
-        type="button"
-        style={btnStyle(activeTab === "config")}
-        onClick={() => onTabChange("config")}
-      >
-        配置页
-      </button>
-      <button
-        type="button"
-        style={btnStyle(activeTab === "tasks")}
-        onClick={() => onTabChange("tasks")}
-      >
-        任务列表
-        {runningCount > 0 && (
-          <span
-            style={{
-              background: pageColorTokens.brandBlue,
-              color: "#fff",
-              borderRadius: 10,
-              padding: "1px 7px",
-              fontSize: 11,
-              fontWeight: 700,
-            }}
-          >
-            {runningCount}
-          </span>
-        )}
-      </button>
-    </div>
-  );
 }
 
 type InnerProps = {
@@ -143,10 +83,15 @@ function ImageStudioPageInner({
           subtitle={t("imageStudio.pageSubtitle")}
         />
 
-        <PageTabBar
+        <SegmentedPageTabs
           activeTab={pageTab}
           onTabChange={setPageTab}
-          runningCount={runningCount}
+          ariaLabel="图片工具页面导航"
+          items={[
+            { key: "config", label: "配置页" },
+            { key: "tasks", label: "任务页", badgeCount: runningCount },
+          ]}
+          style={{ margin: "0 0 20px" }}
         />
 
         {pageTab === "config" && (

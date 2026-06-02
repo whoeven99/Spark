@@ -21,8 +21,6 @@ export type NotificationAppConfig = {
   appName: string;
   supportEmail: string;
   brandName?: string;
-  appIconUrl?: string;
-  dashboardUrl?: string;
   helpCenterUrl?: string;
   legalName?: string;
 };
@@ -46,9 +44,7 @@ export type BaseNotificationVariables = {
   recipientName?: string;
   appName?: string;
   brandName?: string;
-  appIconUrl?: string;
   supportEmail?: string;
-  dashboardUrl?: string;
   helpCenterUrl?: string;
 };
 
@@ -82,7 +78,6 @@ export type TaskNotificationVariables = BaseNotificationVariables & {
   taskName: string;
   taskType?: string;
   taskId?: string;
-  statusUrl?: string;
   startedAtUtc?: string;
   completedAtUtc?: string;
   pausedAtUtc?: string;

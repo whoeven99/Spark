@@ -5,6 +5,7 @@ import type {
 } from "./sharedLayout";
 import type {
   CreditAccountChange,
+  NotificationLocale,
   SubscriptionNotificationVariables,
   TaskNotificationVariables,
 } from "../types";
@@ -14,8 +15,7 @@ import {
   formatShopifyOrderDisplayId,
   formatUsdDisplay,
 } from "../formatNotificationDisplay.server";
-import type { NotificationLocale } from "../types";
-import { commonRows, creditRows } from "./sharedLayout";
+import { commonRows, creditRows, REVIEW_SAFE_APP_URL } from "./sharedLayout";
 
 const labels = {
   shopName: "Shop name",
@@ -40,9 +40,9 @@ export const enTemplates: NotificationTemplateRegistry = {
     ],
     details: [
       ...commonRows(variables, labels),
-      { label: "Installed at (UTC+0)", value: variables.installedAtUtc },
+      { label: "Installed at (UTC+0)", value: variables.installedAtUtc ?? variables.occurredAtUtc },
     ],
-    action: { label: "Open Shopify App", url: display.dashboardUrl },
+    action: { label: "Open Shopify App", url: REVIEW_SAFE_APP_URL },
   }),
 
   appUninstalled: ({ variables, display }) => ({
@@ -57,9 +57,9 @@ export const enTemplates: NotificationTemplateRegistry = {
     ],
     details: [
       ...commonRows(variables, labels),
-      { label: "Uninstalled at (UTC+0)", value: variables.uninstalledAtUtc },
+      { label: "Uninstalled at (UTC+0)", value: variables.uninstalledAtUtc ?? variables.occurredAtUtc },
     ],
-    action: { label: "View Shopify App status", url: display.dashboardUrl },
+    action: { label: "View Shopify App status", url: REVIEW_SAFE_APP_URL },
   }),
 
   purchaseCreated: ({ variables, display, locale }) => ({
@@ -75,6 +75,7 @@ export const enTemplates: NotificationTemplateRegistry = {
     ],
     details: [
       ...commonRows(variables, labels),
+      { label: labels.occurredAtUtc, value: variables.occurredAtUtc },
       {
         label: "Purchase type",
         value: formatPurchaseType(variables.purchaseType, locale),
@@ -93,7 +94,7 @@ export const enTemplates: NotificationTemplateRegistry = {
       },
       ...creditRows(variables.creditAccountChange, labels, locale),
     ],
-    action: { label: "Open Shopify App", url: display.dashboardUrl },
+    action: { label: "Open Shopify App", url: REVIEW_SAFE_APP_URL },
   }),
 
   subscriptionStarted: ({ variables, display, locale }) =>
@@ -202,7 +203,7 @@ function subscriptionContent({
       ...commonRows(variables, labels),
       { label: "Previous plan", value: variables.previousPlanName },
       { label: "Current plan", value: variables.currentPlanName },
-      { label: "Effective at (UTC+0)", value: variables.effectiveAtUtc },
+      { label: "Effective at (UTC+0)", value: variables.effectiveAtUtc ?? variables.occurredAtUtc },
       {
         label: "Billing period",
         value: variables.billingInterval
@@ -214,7 +215,7 @@ function subscriptionContent({
       },
       ...creditRows(variables.creditAccountChange, labels, locale),
     ],
-    action: { label: "Open Shopify App", url: display.dashboardUrl },
+    action: { label: "Open Shopify App", url: REVIEW_SAFE_APP_URL },
   };
 }
 
@@ -253,13 +254,12 @@ function taskContent({
     details: [
       ...commonRows(variables, labels),
       { label: "Task name", value: variables.taskName },
-      { label: "Task type", value: variables.taskType },
       { label: "Task ID", value: variables.taskId },
-      { label: timeLabel, value: timeValue },
+      { label: timeLabel, value: timeValue ?? variables.occurredAtUtc },
       ...extraRows,
       ...creditRows(variables.creditAccountChange, labels, locale),
     ],
-    action: { label: "Open Shopify App", url: variables.statusUrl ?? display.dashboardUrl },
+    action: { label: "Open Shopify App", url: REVIEW_SAFE_APP_URL },
   };
 }
 

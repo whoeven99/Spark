@@ -6,6 +6,7 @@ import type { loader } from "../app.product-improve";
 import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
 import { ProductSelector } from "../component/product/ProductSelector";
 import { ProductImproveTaskListPage } from "../component/productImprove/ProductImproveTaskListPage";
+import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import type { AITaskItem } from "../../lib/aiTaskTypes";
 import {
   PageSectionHeader,
@@ -23,61 +24,6 @@ import {
 type PageTab = "config" | "tasks";
 const ESTIMATED_TOKENS = 320;
 const ESTIMATED_DURATION = "1-2 min";
-
-function PageTabBar({
-  activeTab,
-  onTabChange,
-  runningCount,
-}: {
-  activeTab: PageTab;
-  onTabChange: (tab: PageTab) => void;
-  runningCount: number;
-}) {
-  const { t } = useTranslation();
-
-  const btnStyle = (active: boolean): React.CSSProperties => ({
-    padding: "8px 18px",
-    borderRadius: 9,
-    border: active
-      ? `2px solid ${pageColorTokens.brandGreen}`
-      : `2px solid transparent`,
-    background: active ? pageColorTokens.brandGreenLight : "transparent",
-    color: active
-      ? pageColorTokens.brandGreenDark
-      : pageColorTokens.textSecondary,
-    fontWeight: active ? 600 : 500,
-    fontSize: 14,
-    cursor: "pointer",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-  });
-
-  return (
-    <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
-      <button type="button" style={btnStyle(activeTab === "config")} onClick={() => onTabChange("config")}>
-        {t("productImproveStage1.tabsConfig")}
-      </button>
-      <button type="button" style={btnStyle(activeTab === "tasks")} onClick={() => onTabChange("tasks")}>
-        {t("productImproveStage1.tabsTasks")}
-        {runningCount > 0 && (
-          <span
-            style={{
-              background: pageColorTokens.brandBlue,
-              color: "#fff",
-              borderRadius: 10,
-              padding: "1px 7px",
-              fontSize: 11,
-              fontWeight: 700,
-            }}
-          >
-            {runningCount}
-          </span>
-        )}
-      </button>
-    </div>
-  );
-}
 
 export function ProductImprovePage() {
   const shopify = useAppBridge();
@@ -281,10 +227,15 @@ export function ProductImprovePage() {
           subtitle={t("productImproveStage1.subtitle")}
         />
 
-        <PageTabBar
+        <SegmentedPageTabs
           activeTab={pageTab}
           onTabChange={setPageTab}
-          runningCount={runningCount}
+          ariaLabel="商品优化页面导航"
+          items={[
+            { key: "config", label: t("productImproveStage1.tabsConfig") },
+            { key: "tasks", label: t("productImproveStage1.tabsTasks"), badgeCount: runningCount },
+          ]}
+          style={{ margin: "0 0 20px" }}
         />
 
         {pageTab === "config" && (
