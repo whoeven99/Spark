@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { pageColorTokens } from "../../page/pageUiStyles";
-import { TaskStatusBadge } from "../aiTask/TaskStatusBadge";
-import { LogViewer, elapsedSecondsSince } from "../aiTask/LogViewer";
+import { elapsedSecondsSince } from "../aiTask/LogViewer";
+import {
+  AITaskCardShell,
+  formatActualElapsed,
+  actionButtonStyle,
+  type CardAction,
+} from "../aiTask/AITaskCardShell";
 import type {
   AITaskItem,
   AITaskStatus,
@@ -17,13 +22,7 @@ type Props = {
   deleting: boolean;
 };
 
-function formatActualElapsed(startedAt: string | null, completedAt: string | null): string | null {
-  if (!startedAt || !completedAt) return null;
-  const elapsedMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
-  const s = Math.floor(elapsedMs / 1000);
-  const m = Math.floor(s / 60);
-  return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatRunningElapsed(startedAt: string | null): string | null {
   const seconds = elapsedSecondsSince(startedAt);
@@ -33,32 +32,30 @@ function formatRunningElapsed(startedAt: string | null): string | null {
   return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
 }
 
-function formatTaskDate(iso: string): string {
-  return new Date(iso).toLocaleString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
 function formatVariableToken(name: string): string {
   return `{{${name}}}`;
 }
 
-function readStringField(source: Record<string, unknown> | null | undefined, key: string): string | null {
+function readStringField(
+  source: Record<string, unknown> | null | undefined,
+  key: string,
+): string | null {
   const value = source?.[key];
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function readNumberField(source: Record<string, unknown> | null | undefined, key: string): number | null {
+function readNumberField(
+  source: Record<string, unknown> | null | undefined,
+  key: string,
+): number | null {
   const value = source?.[key];
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function formatDisplayValue(value: string | number | null | undefined, variableName: string): string {
+function formatDisplayValue(
+  value: string | number | null | undefined,
+  variableName: string,
+): string {
   if (value == null || value === "") return formatVariableToken(variableName);
   return String(value);
 }
@@ -125,13 +122,6 @@ function getProgressTone(status: AITaskStatus) {
       };
   }
 }
-
-type CardAction = {
-  label: string;
-  tone: "primary" | "secondary" | "subtle";
-  disabled?: boolean;
-  onClick?: () => void;
-};
 
 function resolveCardActions(params: {
   status: AITaskStatus;
@@ -262,46 +252,7 @@ function getSecondaryStatusCopy(params: {
   }
 }
 
-function actionButtonStyle(tone: CardAction["tone"], disabled = false) {
-  if (tone === "primary") {
-    return {
-      padding: "8px 14px",
-      borderRadius: pageColorTokens.radiusControl,
-      background: disabled ? "#d9dde3" : pageColorTokens.brandGreen,
-      color: disabled ? "#ffffff" : "#ffffff",
-      border: `1px solid ${disabled ? "#d9dde3" : pageColorTokens.brandGreen}`,
-      boxShadow: disabled ? "none" : "0 6px 18px rgba(0, 166, 124, 0.18)",
-      cursor: disabled ? "not-allowed" : "pointer",
-      fontSize: 12,
-      fontWeight: 700,
-    } as const;
-  }
-
-  if (tone === "secondary") {
-    return {
-      padding: "8px 14px",
-      borderRadius: pageColorTokens.radiusControl,
-      background: "#ffffff",
-      color: disabled ? pageColorTokens.textFootnote : pageColorTokens.textPrimary,
-      border: `1px solid ${disabled ? pageColorTokens.border : pageColorTokens.borderSubtle}`,
-      boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
-      cursor: disabled ? "not-allowed" : "pointer",
-      fontSize: 12,
-      fontWeight: 600,
-    } as const;
-  }
-
-  return {
-    padding: "8px 12px",
-    borderRadius: pageColorTokens.radiusControl,
-    background: pageColorTokens.surfaceSubtle,
-    color: disabled ? pageColorTokens.textFootnote : pageColorTokens.textSecondary,
-    border: `1px solid ${pageColorTokens.borderSubtle}`,
-    cursor: disabled ? "not-allowed" : "pointer",
-    fontSize: 12,
-    fontWeight: 600,
-  } as const;
-}
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export function ProductImproveTaskCard({
   task,
@@ -315,13 +266,10 @@ export function ProductImproveTaskCard({
   const cfg = task.config as Partial<ProductImproveTaskConfig>;
   const extendedConfig = task.config as Record<string, unknown>;
   const extendedResult = task.result as Record<string, unknown> | null;
-  const shortId = task.id.slice(0, 8).toUpperCase();
-  const actualElapsed = formatActualElapsed(task.startedAt, task.completedAt);
+
   const [runningElapsed, setRunningElapsed] = useState<string | null>(() =>
     task.status === "running" ? formatRunningElapsed(task.startedAt) : null,
   );
-  const showExecutionRecord = localStatus === "running";
-  const creditInsufficient = inferCreditInsufficient(task);
 
   useEffect(() => {
     setLocalStatus(task.status);
@@ -332,24 +280,24 @@ export function ProductImproveTaskCard({
       setRunningElapsed(null);
       return;
     }
-
     const tick = () => setRunningElapsed(formatRunningElapsed(task.startedAt));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [localStatus, task.startedAt]);
 
+  const creditInsufficient = inferCreditInsufficient(task);
+
+  // ── Computed display values ──
   const taskGoal = readStringField(extendedConfig, "taskGoal") ?? "生成产品描述";
-  const itemCount = formatDisplayValue(
-    readNumberField(extendedConfig, "itemCount"),
-    "itemCount",
-  );
+  const itemCount = formatDisplayValue(readNumberField(extendedConfig, "itemCount"), "itemCount");
   const completedCount = formatDisplayValue(
     readNumberField(extendedResult, "completedCount") ??
       readNumberField(extendedConfig, "completedCount"),
     "completedCount",
   );
-  const progressPercentValue = readNumberField(extendedResult, "progressPercent") ??
+  const progressPercentValue =
+    readNumberField(extendedResult, "progressPercent") ??
     readNumberField(extendedConfig, "progressPercent");
   const progressPercentText = formatDisplayValue(progressPercentValue, "progressPercent");
   const sourceLanguage = formatDisplayValue(
@@ -369,7 +317,9 @@ export function ProductImproveTaskCard({
   const usedCredits = formatDisplayValue(task.actualCredits, "usedCredits");
   const estimatedCredits = formatDisplayValue(task.estimatedCredits, "estimatedCredits");
   const errorReason = task.errorMsg || formatVariableToken("errorReason");
+  const actualElapsed = formatActualElapsed(task.startedAt, task.completedAt);
   const elapsedLabel = runningElapsed ?? actualElapsed ?? formatVariableToken("elapsedMinutes");
+
   const progressPercent = getProgressPercent(task, localStatus, runningElapsed);
   const progressTone = getProgressTone(localStatus);
   const primaryCopy = getPrimaryStatusCopy({
@@ -398,222 +348,79 @@ export function ProductImproveTaskCard({
     deleting,
   });
 
-  return (
-    <div
+  // ── Meta line ──
+  const metaLine = (
+    <>
+      <span>任务详情：</span>
+      <span>{itemCount} 个商品</span>
+      <span style={{ color: pageColorTokens.textFootnote }}>|</span>
+      <span>输出 {targetLanguage}</span>
+      <span style={{ color: pageColorTokens.textFootnote }}>|</span>
+      <span>语言：{sourceLanguage}</span>
+      <span style={{ color: pageColorTokens.textFootnote }}>|</span>
+      <span>品牌风格：{brandStyle}</span>
+      {cfg.productId ? (
+        <>
+          <span style={{ color: pageColorTokens.textFootnote }}>|</span>
+          <span>产品 ID：{cfg.productId}</span>
+        </>
+      ) : null}
+      {cfg.originalTitle ? (
+        <>
+          <span style={{ color: pageColorTokens.textFootnote }}>|</span>
+          <span
+            style={{
+              maxWidth: 320,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              verticalAlign: "bottom",
+            }}
+            title={cfg.originalTitle}
+          >
+            商品：{cfg.originalTitle}
+          </span>
+        </>
+      ) : null}
+    </>
+  );
+
+  // ── "积分不足" extra badge ──
+  const extraBadges = creditInsufficient ? (
+    <span
       style={{
-        border: `1px solid ${pageColorTokens.border}`,
-        borderRadius: pageColorTokens.radiusCard,
-        padding: "18px 20px 16px",
-        background: "#fff",
-        boxShadow: pageColorTokens.shadowCard,
-        display: "flex",
-        flexDirection: "column",
-        gap: 16,
-        minHeight: 228,
+        fontSize: 11,
+        fontWeight: 700,
+        color: "#9a3412",
+        padding: "0.22rem 0.48rem",
+        borderRadius: 999,
+        background: "#fff7ed",
+        border: "1px solid rgba(234, 88, 12, 0.16)",
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 12,
-          flexWrap: "wrap",
-        }}
-      >
-        <div style={{ flex: "1 1 28rem", minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: pageColorTokens.textSecondary,
-                padding: "0.22rem 0.48rem",
-                borderRadius: 999,
-                background: pageColorTokens.surfaceMuted,
-                border: `1px solid ${pageColorTokens.borderSubtle}`,
-              }}
-            >
-              #{shortId}
-            </span>
-            <TaskStatusBadge status={localStatus} />
-            {creditInsufficient ? (
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "#9a3412",
-                  padding: "0.22rem 0.48rem",
-                  borderRadius: 999,
-                  background: "#fff7ed",
-                  border: "1px solid rgba(234, 88, 12, 0.16)",
-                }}
-              >
-                积分不足
-              </span>
-            ) : null}
-          </div>
-          <div
-            style={{
-              fontSize: 18,
-              fontWeight: 700,
-              color: pageColorTokens.textPrimary,
-              marginTop: 12,
-              lineHeight: 1.25,
-            }}
-          >
-            任务目标：{taskGoal}
-          </div>
-          <div
-            style={{
-              fontSize: 13,
-              color: pageColorTokens.textSecondary,
-              display: "flex",
-              gap: 6,
-              flexWrap: "wrap",
-              marginTop: 10,
-              lineHeight: 1.6,
-            }}
-          >
-            <span>任务详情：</span>
-            <span>{itemCount} 个商品</span>
-            <span style={{ color: pageColorTokens.textFootnote }}>|</span>
-            <span>输出 {targetLanguage}</span>
-            <span style={{ color: pageColorTokens.textFootnote }}>|</span>
-            <span>语言：{sourceLanguage}</span>
-            <span style={{ color: pageColorTokens.textFootnote }}>|</span>
-            <span>品牌风格：{brandStyle}</span>
-            {cfg.productId ? (
-              <>
-                <span style={{ color: pageColorTokens.textFootnote }}>|</span>
-                <span>产品 ID：{cfg.productId}</span>
-              </>
-            ) : null}
-            {cfg.originalTitle ? (
-              <>
-                <span style={{ color: pageColorTokens.textFootnote }}>|</span>
-                <span
-                  style={{
-                    maxWidth: 320,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                    verticalAlign: "bottom",
-                  }}
-                  title={cfg.originalTitle}
-                >
-                  商品：{cfg.originalTitle}
-                </span>
-              </>
-            ) : null}
-          </div>
-        </div>
-        <div
-          style={{
-            flexShrink: 0,
-            fontSize: 12,
-            color: pageColorTokens.textFootnote,
-            paddingTop: 2,
-          }}
-        >
-          创建时间：{formatTaskDate(task.createdAt)}
-        </div>
-      </div>
+      积分不足
+    </span>
+  ) : null;
 
-      <div
-        style={{
-          height: 1,
-          background: pageColorTokens.border,
-          margin: "0 -20px",
-        }}
-      />
-
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 10,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 15,
-            fontWeight: 700,
-            color: progressTone.text,
-            lineHeight: 1.5,
-          }}
-        >
-          {primaryCopy}
-        </div>
-        <div
-          style={{
-            fontSize: 12,
-            color: pageColorTokens.textSecondary,
-            lineHeight: 1.5,
-          }}
-        >
-          {secondaryCopy}
-        </div>
-
-        <div
-          style={{
-            height: 9,
-            borderRadius: 999,
-            background: "#e5e7eb",
-            overflow: "hidden",
-            marginTop: 4,
-          }}
-        >
-          <div
-            style={{
-              height: "100%",
-              width: `${progressPercent}%`,
-              borderRadius: 999,
-              background: progressTone.background,
-              transition: "width 0.35s ease",
-            }}
-          />
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: 8,
-            flexWrap: "wrap",
-            marginTop: 2,
-          }}
-        >
-          {actions.map((action) => (
-            <button
-              key={action.label}
-              type="button"
-              onClick={action.onClick}
-              disabled={action.disabled}
-              style={actionButtonStyle(action.tone, action.disabled)}
-            >
-              {action.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {showExecutionRecord ? (
-        <LogViewer
-          taskId={task.id}
-          taskType={task.taskType}
-          status={localStatus}
-          locationSearch={locationSearch}
-          startedAt={task.startedAt}
-          completedAt={task.completedAt}
-          initialLogs={[]}
-          defaultLogsOpen={false}
-          onStatusChange={(status, result) => {
-            setLocalStatus(status);
-            onTaskUpdated?.(task.id, status, result);
-          }}
-        />
-      ) : null}
-    </div>
+  return (
+    <AITaskCardShell
+      task={task}
+      locationSearch={locationSearch}
+      status={localStatus}
+      title={`任务目标：${taskGoal}`}
+      metaLine={metaLine}
+      extraBadges={extraBadges}
+      primaryCopy={primaryCopy}
+      primaryCopyColor={progressTone.text}
+      secondaryCopy={secondaryCopy}
+      progressPercent={progressPercent}
+      progressBackground={progressTone.background}
+      actions={actions}
+      showLogViewer={localStatus === "running"}
+      onStatusChange={(status, result) => {
+        setLocalStatus(status);
+        onTaskUpdated?.(task.id, status, result);
+      }}
+    />
   );
 }
