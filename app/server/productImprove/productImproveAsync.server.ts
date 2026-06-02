@@ -83,19 +83,23 @@ async function runProductImproveTask(params: {
     return;
   }
 
+  // Calculate usage for actualCredits
+  const usage = parseUsageMetadata(raw.usageMeta);
+  const actualCredits = usage.totalTokens > 0 ? usage.totalTokens : undefined;
+
   await pendingReviewTask({
     taskId,
     result: {
       title: context.title,
       description,
     },
+    actualCredits,
     startedAt,
     finalMessage: "文案已生成，等待审查",
   });
 
   // Record billing
   try {
-    const usage = parseUsageMetadata(raw.usageMeta);
     if (usage.totalTokens > 0) {
       await recordBilledTokenUsage({
         shop,

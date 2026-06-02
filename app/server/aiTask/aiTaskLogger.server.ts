@@ -70,6 +70,7 @@ export async function completeTask(params: {
 export async function pendingReviewTask(params: {
   taskId: string;
   result: Record<string, unknown>;
+  actualCredits?: number;
   startedAt?: number;
   finalMessage?: string;
 }): Promise<void> {
@@ -90,7 +91,11 @@ export async function pendingReviewTask(params: {
       createdAt: entry.createdAt,
     });
   }
-  await markTaskPendingReview({ taskId: params.taskId, result: params.result });
+  await markTaskPendingReview({
+    taskId: params.taskId,
+    result: params.result,
+    actualCredits: params.actualCredits,
+  });
   emitTaskEvent(params.taskId, {
     type: "status_change",
     taskId: params.taskId,

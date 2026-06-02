@@ -10,7 +10,9 @@ import { parseGenerateDescriptionBody } from "../server/productImprove/generateD
 import { logDetailedError } from "../server/productImprove/generateDescriptionLog.server";
 import { fetchShopLocalesPayload } from "../server/productImprove/shopLocalesFetcher.server";
 import { fetchProductDescriptionContext } from "../server/productImprove/productContextFetcher.server";
+import { detectTextLanguage } from "../server/productImprove/detectTextLanguage.server";
 import { enqueueProductImproveTask } from "../server/productImprove/productImproveAsync.server";
+import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
 import { getAppEntry } from "../config/appEntry.server";
 import { buildEmbeddedAppPath } from "../config/appEntry.server";
 import { isBillingReturnRequest } from "../server/billing/buildBillingReturnUrl.server";
@@ -99,6 +101,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
     }
 
+    // Detect source language from product text
+    const sourceLanguage = detectTextLanguage(context.title + " " + context.text);
+
+    // Get shop info for brand style
+    const shopInfo = await fetchShopBasicInfo(admin);
+    const brandStyle = shopInfo?.name || "标准";
+
     const { taskId, batchId } = await createBatchWithTask({
       shop,
       appName,
@@ -107,12 +116,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         productId: parsed.data.productId,
         targetLanguage: parsed.data.targetLanguage,
         originalTitle: context.title,
+        itemCount: 1,
+        sourceLanguage,
+        brandStyle,
       },
       taskConfig: {
         productId: parsed.data.productId,
         targetLanguage: parsed.data.targetLanguage,
         originalTitle: context.title,
         originalText: context.text,
+        itemCount: 1,
+        sourceLanguage,
+        brandStyle,
       },
     });
 
