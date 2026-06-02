@@ -794,6 +794,9 @@ export function ProductImproveTaskDetailPage({
           if (!editingLocked) setScoreDialogOpen(false);
         }}
         style={{
+          position: "fixed",
+          inset: 0,
+          margin: "auto",
           maxWidth: "520px",
           width: "calc(100% - 2rem)",
           padding: 0,
@@ -895,6 +898,9 @@ export function ProductImproveTaskDetailPage({
           if (!refining && !applying) setRefineDialogOpen(false);
         }}
         style={{
+          position: "fixed",
+          inset: 0,
+          margin: "auto",
           maxWidth: "560px",
           width: "calc(100% - 2rem)",
           padding: 0,
