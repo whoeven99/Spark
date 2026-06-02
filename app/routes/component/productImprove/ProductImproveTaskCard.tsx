@@ -207,7 +207,7 @@ function getPrimaryStatusCopy(params: {
 
   switch (status) {
     case "running":
-      return `当前进度 ${progressPercent}%，当前正在处理第 ${completedCount}/${itemCount} 个任务：${currentStepText}`;
+      return `正在生成商品文案，请稍候...`;
     case "pending_review":
       return `当前进度 100%，任务已完成，等待人工审核生成结果。`;
     case "succeeded":
@@ -243,6 +243,7 @@ function getSecondaryStatusCopy(params: {
 
   switch (status) {
     case "running":
+      return `任务执行中，已运行：${elapsedLabel}`;
     case "pending_review":
     case "succeeded":
     case "scored":
