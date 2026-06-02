@@ -3,7 +3,7 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { Outlet, useLoaderData, useRouteError } from "react-router";
+import { Link, Outlet, useLoaderData, useLocation, useRouteError } from "react-router";
 import { useTranslation } from "react-i18next";
 import { ConfigProvider } from "antd";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -134,17 +134,59 @@ export default function App() {
 
 function AppNav({ nav }: { nav: readonly NavItemKey[] }) {
   const { t } = useTranslation();
+  const location = useLocation();
+
+  const buildNavHref = (href: string) => {
+    const target = new URL(href, "https://spark.local");
+    const mergedSearch = new URLSearchParams(location.search);
+
+    for (const [key, value] of new URLSearchParams(target.search)) {
+      mergedSearch.set(key, value);
+    }
+
+    const search = mergedSearch.toString();
+    return `${target.pathname}${search ? `?${search}` : ""}`;
+  };
+
+  const isNavItemActive = (href: string) => {
+    const target = new URL(href, "https://spark.local");
+    const matchesPath =
+      target.pathname === "/app"
+        ? location.pathname === target.pathname
+        : location.pathname === target.pathname ||
+          location.pathname.startsWith(`${target.pathname}/`);
+
+    if (!matchesPath) return false;
+
+    const targetSearch = new URLSearchParams(target.search);
+    const currentSearch = new URLSearchParams(location.search);
+
+    for (const [key, value] of targetSearch) {
+      if (currentSearch.get(key) !== value) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
   return (
-    <s-app-nav>
+    <nav className="spark-app-nav" aria-label={t("nav.aiAssistant")}>
       {nav.map((item) => {
         const config = NAV_ITEMS[item];
+        const active = isNavItemActive(config.href);
         return (
-          <s-link key={item} href={config.href}>
+          <Link
+            key={item}
+            to={buildNavHref(config.href)}
+            className={`spark-app-nav__item${active ? " is-active" : ""}`}
+            aria-current={active ? "page" : undefined}
+          >
             {t(config.labelKey)}
-          </s-link>
+          </Link>
         );
       })}
-    </s-app-nav>
+    </nav>
   );
 }
 

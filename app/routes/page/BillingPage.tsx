@@ -418,27 +418,6 @@ export function BillingPage() {
     },
   ];
 
-  const accountSummaryItems = [
-    {
-      key: "available",
-      label: t("billing.summaryAvailableCredits"),
-      value: billing.availableTokens.toLocaleString(),
-    },
-    {
-      key: "status",
-      label: t("billing.summarySubscriptionStatus"),
-      value: sub ? t(`billing.status.${sub.status}`) : t("billing.noSubscription"),
-    },
-    {
-      key: "period",
-      label: t("billing.summaryCurrentPeriod"),
-      value:
-        sub?.currentPeriodStart && sub?.currentPeriodEnd
-          ? `${formatDate(sub.currentPeriodStart, locale)} - ${formatDate(sub.currentPeriodEnd, locale)}`
-          : EMPTY,
-    },
-  ];
-
   if (showAccountDetailPage) {
     return (
       <s-page heading={t("billing.accountDetailPageTitle")}>
@@ -695,35 +674,7 @@ export function BillingPage() {
               <p className={styles.quotaFootnote}>{t("billing.planBenefitsFootnote")}</p>
             </div>
           </div>
-          {showDevCancelSubscription ? (
-            <div className={styles.quotaFooter}>
-              <span className={styles.quotaFooterSpacer} aria-hidden />
-              <div className={styles.devCancelBar}>
-                  <span className={styles.devCancelBadge}>{t("billing.devEnvBadge")}</span>
-                  <p className={styles.devCancelHint}>{t("billing.devCancelHint")}</p>
-                  <Form method="post" className={styles.devCancelForm}>
-                    <input type="hidden" name="intent" value="cancel_subscription" />
-                    <button
-                      type="submit"
-                      className={styles.devCancelButton}
-                      disabled={isCancelling}
-                    >
-                      {isCancelling
-                        ? t("billing.cancelSubscriptionPending")
-                        : t("billing.cancelSubscription")}
-                    </button>
-                  </Form>
-                </div>
-            </div>
-          ) : null}
-        </section>
-
-        <section className={styles.accountEntrySection}>
-          <div className={styles.sectionHead}>
-            <div className={styles.sectionHeadMain}>
-              <h2 className={styles.sectionTitle}>{t("billing.accountSectionTitle")}</h2>
-              <p className={styles.sectionSubtitle}>{t("billing.accountSectionSubtitle")}</p>
-            </div>
+          <div className={styles.quotaFooter}>
             <button
               type="button"
               className={styles.secondaryEntryButton}
@@ -731,17 +682,26 @@ export function BillingPage() {
             >
               {t("billing.openAccountDetailPage")}
             </button>
-          </div>
-          <div className={styles.accountEntryCard}>
-            <div className={styles.accountEntrySummary}>
-              {accountSummaryItems.map((item) => (
-                <div key={item.key} className={styles.accountEntryItem}>
-                  <span className={styles.accountEntryLabel}>{item.label}</span>
-                  <span className={styles.accountEntryValue}>{item.value}</span>
-                </div>
-              ))}
-            </div>
-            <p className={styles.accountEntryHint}>{t("billing.accountEntryHint")}</p>
+            {showDevCancelSubscription ? (
+              <div className={styles.devCancelBar}>
+                <span className={styles.devCancelBadge}>{t("billing.devEnvBadge")}</span>
+                <p className={styles.devCancelHint}>{t("billing.devCancelHint")}</p>
+                <Form method="post" className={styles.devCancelForm}>
+                  <input type="hidden" name="intent" value="cancel_subscription" />
+                  <button
+                    type="submit"
+                    className={styles.devCancelButton}
+                    disabled={isCancelling}
+                  >
+                    {isCancelling
+                      ? t("billing.cancelSubscriptionPending")
+                      : t("billing.cancelSubscription")}
+                  </button>
+                </Form>
+              </div>
+            ) : (
+              <span className={styles.quotaFooterSpacer} aria-hidden />
+            )}
           </div>
         </section>
 

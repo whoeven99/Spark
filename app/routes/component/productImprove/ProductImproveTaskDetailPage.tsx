@@ -477,7 +477,7 @@ export function ProductImproveTaskDetailPage({
           <CompactMetaItem label="创建时间" value={formatTaskDate(task.createdAt)} />
           <CompactMetaItem label="目标语言" value={cfg.targetLanguage ?? "-"} />
           <CompactMetaItem
-            label="预估 Token"
+            label="预估积分"
             value={task.estimatedCredits ? `${task.estimatedCredits}` : "-"}
           />
           <CompactMetaItem label="实际耗时" value={actualElapsed ?? "-"} />

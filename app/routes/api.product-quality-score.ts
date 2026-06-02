@@ -110,7 +110,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         {
           success: false,
           errorCode: 402,
-          errorMsg: body.errorMsg ?? "需要订阅或购买 Token",
+          errorMsg: body.errorMsg ?? "需要订阅或购买积分",
           response: null,
         },
         402,
