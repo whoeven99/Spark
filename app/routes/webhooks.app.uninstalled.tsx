@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { getAppEntry } from "../config/appEntry.server";
 import { onAppUninstalled } from "../server/appLifecycle/onAppUninstalled.server";
+import { runWebhookWorkInBackground } from "../server/webhook/runWebhookWork.server";
 import {
   authenticateWebhookLogged,
   returnWebhookOk,
@@ -8,31 +9,12 @@ import {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const appName = getAppEntry();
+  const { shop, session, topic, payload } =
+    await authenticateWebhookLogged(request);
+  const webhookId = request.headers.get("X-Shopify-Webhook-Id") ?? undefined;
 
-  let shop: string;
-  let session: Awaited<
-    ReturnType<typeof authenticateWebhookLogged>
-  >["session"];
-  let topic: string;
-  let payload: unknown;
-
-  try {
-    ({ shop, session, topic, payload } = await authenticateWebhookLogged(request));
-    console.info(
-      `[Webhook] app/uninstalled authenticated shop=${shop} topic=${topic} sessionId=${session?.id ?? "(none)"} appName=${appName}`,
-    );
-  } catch (error) {
-    console.error("[Webhook] app/uninstalled authenticate.webhook failed:", error);
-    throw error;
-  }
-
-  try {
-    console.info(
-      `[Webhook] before-uninstall-handlers shop=${shop} appName=${appName}`,
-    );
-    const webhookId = request.headers.get("X-Shopify-Webhook-Id") ?? undefined;
-
-    await onAppUninstalled({
+  runWebhookWorkInBackground(
+    onAppUninstalled({
       shop,
       topic,
       payload,
@@ -40,18 +22,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       webhookId,
       appName,
       uninstalledAt: new Date(),
-    });
-    console.info(
-      `[Webhook] after-uninstall-handlers shop=${shop}`,
-    );
-  } catch (error) {
-    console.error(
-      `[Webhook] uninstall handlers failed shop=${shop} appName=${appName}:`,
-      error,
-    );
-    throw error;
-  }
+    }),
+    { shop, topic, label: "app/uninstalled" },
+  );
 
-  console.info(`[Webhook] app/uninstalled completed shop=${shop} status=200`);
   return returnWebhookOk({ shop, topic });
 };

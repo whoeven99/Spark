@@ -29,7 +29,7 @@ const labels = {
 
 export const zhCNTemplates: NotificationTemplateRegistry = {
   appInstalled: ({ variables, display }) => ({
-    subject: `${display.appName} 已成功安装`,
+    subject: `🎉 安装成功！马上开始体验吧 | ${display.appName}`,
     preheader: `${display.appName} 已连接到 ${variables.shopName}，您可以开始使用相关功能。`,
     title: `${display.appName} 已成功安装`,
     greeting: variables.recipientName ? `Hi ，` : "Hi，",
@@ -46,7 +46,7 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
   }),
 
   appUninstalled: ({ variables, display }) => ({
-    subject: `${display.appName} 已从店铺卸载`,
+    subject: `🔌 你的店铺已断开连接 | ${display.appName}`,
     preheader: `${display.appName} 已不再连接到 ${variables.shopName}。`,
     title: `${display.appName} 已从店铺卸载`,
     greeting: variables.recipientName ? `Hi ，` : "Hi，",
@@ -63,7 +63,7 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
   }),
 
   purchaseCreated: ({ variables, display, locale }) => ({
-    subject: `${display.appName} 购买记录已生成`,
+    subject: `🎉 支付成功！已为你确认订单 | ${display.appName}`,
     preheader: `${variables.shopName} 的购买或充值记录已生成，请查看订单和积分账户信息。`,
     title: "购买记录已生成",
     greeting: variables.recipientName ? `Hi ，` : "Hi，",
@@ -99,7 +99,7 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
 
   subscriptionStarted: ({ variables, display, locale }) =>
     subscriptionContent({
-      subject: `${display.appName} 订阅已开始`,
+      subject: `🎊 订阅成功！你的权益已生效 | ${display.appName}`,
       title: "订阅已开始",
       summary: `${display.appName} 订阅已经生效。这里是当前套餐、计费周期和积分账户的简要明细。`,
       variables,
@@ -109,7 +109,7 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
 
   subscriptionChanged: ({ variables, display, locale }) =>
     subscriptionContent({
-      subject: `${display.appName} 订阅已变更`,
+      subject: `🔄 你的套餐已更新 | ${display.appName}`,
       title: "订阅已变更",
       summary: `${display.appName} 订阅已更新。下面是这次变更的明细，方便你快速核对。`,
       variables,
@@ -119,7 +119,7 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
 
   subscriptionCanceled: ({ variables, display, locale }) =>
     subscriptionContent({
-      subject: `${display.appName} 订阅已取消`,
+      subject: `🧾 你的订阅已取消 | ${display.appName}`,
       title: "订阅已取消",
       summary: `${display.appName} 订阅已取消。当前账期结束后，部分高级能力、自动任务或额度可能会停止。`,
       variables,
@@ -128,7 +128,7 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
     }),
 
   taskStarted: ({ variables, display, locale }) => taskContent({
-    subject: `${display.appName} 任务已开始`,
+    subject: `⏳ 你创建的任务已开始执行 | ${display.appName}`,
     title: "任务已开始",
     summary: `${display.appName} 已开始处理 ${variables.taskName}。我们会在任务完成、暂停或需要你查看时继续同步状态。`,
     variables,
@@ -139,7 +139,7 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
   }),
 
   taskCompleted: ({ variables, display, locale }) => taskContent({
-    subject: `${display.appName} 任务已完成`,
+    subject: `✅ 你创建的任务已完成 | ${display.appName}`,
     title: "任务已完成",
     summary: `好消息，${variables.taskName} 已经处理完成。你可以前往 Shopify App 查看结果、日志和相关明细。`,
     variables,
@@ -150,7 +150,7 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
   }),
 
   taskPaused: ({ variables, display, locale }) => taskContent({
-    subject: `${display.appName} 任务已暂停`,
+    subject: `⚠️ 你创建的任务可能遇到了麻烦 | ${display.appName}`,
     title: "任务已暂停",
     summary: `${variables.taskName} 已暂停。暂停期间，任务通常不会继续处理新数据，也不会继续产生相关消耗。`,
     variables,
@@ -161,7 +161,7 @@ export const zhCNTemplates: NotificationTemplateRegistry = {
   }),
 
   taskFailed: ({ variables, display, locale }) => taskContent({
-    subject: `${display.appName} 任务执行失败`,
+    subject: `⚠️ 你创建的任务可能遇到了麻烦 | ${display.appName}`,
     title: "任务执行失败",
     summary: `很抱歉，您在 ${display.appName} 中配置的任务这次没有完成。建议您进入 Shopify App 查看失败原因，并检查配置、授权、积分余额或第三方连接状态。`,
     variables,

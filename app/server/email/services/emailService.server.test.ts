@@ -78,6 +78,48 @@ describe("sendTemplateEmail", () => {
       expect(result.requestId).toBe("req-1");
     }
     expect(mockProvider.send).toHaveBeenCalledOnce();
+    expect(mockProvider.send).toHaveBeenCalledWith(
+      expect.objectContaining({ from: "support@msg.ciwi.ai" }),
+    );
+  });
+
+  it("uses msg subdomain From when config fromEmail is merchant support inbox", async () => {
+    const mockProvider: EmailProvider = {
+      name: "mock",
+      send: vi.fn().mockResolvedValue({
+        ok: true,
+        requestId: "req-2",
+        provider: "mock",
+      }),
+    };
+
+    await sendTemplateEmail(
+      {
+        templateId: 137916,
+        subject: "Success",
+        to: "user@example.com",
+      },
+      {
+        config: {
+          enabled: true,
+          provider: "tencent",
+          tencent: {
+            secretId: "id",
+            secretKey: "key",
+            region: "ap-hongkong",
+            fromEmail: "support@ciwi.ai",
+            cc: [],
+          },
+          sendTimeoutMs: 1000,
+          maxRetries: 1,
+        },
+        provider: mockProvider,
+      },
+    );
+
+    expect(mockProvider.send).toHaveBeenCalledWith(
+      expect.objectContaining({ from: "support@msg.ciwi.ai" }),
+    );
   });
 
   it("returns missing credentials when tencent config absent", async () => {

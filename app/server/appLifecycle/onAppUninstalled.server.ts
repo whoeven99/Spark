@@ -1,12 +1,15 @@
-import prisma from "../../db.server";
-import { handleAppUninstalled } from "../commonEventLog/handleAppUninstalled.server";
+import { appendCommonEventLog } from "../commonEventLog/appendCommonEventLog.server";
+import {
+  buildUninstallEventReferenceId,
+  handleAppUninstalled,
+} from "../commonEventLog/handleAppUninstalled.server";
+import { loadSessionSnapshotForUninstall } from "../commonEventLog/loadSessionSnapshotForUninstall.server";
 import { COMMON_EVENT_TYPE } from "../commonEventLog/types.server";
 import { sendUninstallFeishuNotify } from "../feishu/scenarios/sendUninstallFeishuNotify.server";
+import { notifyAppUninstalledEmail } from "../notifications/notifyMerchant.server";
 import { fetchUninstallFeedbackFromPartner } from "../partner/fetchUninstallFeedbackFromPartner.server";
 
 const LOG = "[AppLifecycle:uninstall]";
-/** 重复 app/uninstalled 投递时跳过邮件/飞书（持久化仍执行） */
-const UNINSTALL_OPS_DEDUP_WINDOW_MS = 10 * 60 * 1000;
 
 export type OnAppUninstalledParams = {
   shop: string;
@@ -17,35 +20,6 @@ export type OnAppUninstalledParams = {
   appName: string;
   uninstalledAt: Date;
 };
-
-async function shouldSkipUninstallOpsNotify(params: {
-  shop: string;
-  appName: string;
-  webhookId?: string;
-}): Promise<boolean> {
-  if (params.webhookId) {
-    const byWebhook = await prisma.commonEventLog.findFirst({
-      where: {
-        shop: params.shop,
-        appName: params.appName,
-        eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
-        referenceId: `uninstall:webhook:${params.webhookId}`,
-      },
-    });
-    if (byWebhook) return true;
-  }
-
-  const since = new Date(Date.now() - UNINSTALL_OPS_DEDUP_WINDOW_MS);
-  const recent = await prisma.commonEventLog.findFirst({
-    where: {
-      shop: params.shop,
-      appName: params.appName,
-      eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
-      createdAt: { gte: since },
-    },
-  });
-  return Boolean(recent);
-}
 
 async function persistAppUninstalled(params: OnAppUninstalledParams): Promise<void> {
   const startedAt = Date.now();
@@ -113,7 +87,12 @@ async function sendAppUninstalledFeishuNotify(
 }
 
 /**
- * 卸载：发飞书通知，再写日志并删 Session。
+ * 卸载：提前写 CommonEventLog 作幂等门禁（首次写入者发通知），再删 Session。
+ *
+ * 执行顺序：
+ * 1. 加载收件人快照（Session 删除前）
+ * 2. 提前写 CommonEventLog（referenceId 去重）→ created=true 则首次，发飞书+邮件
+ * 3. persistAppUninstalled（内部的 appendCommonEventLog 因 dedup 幂等，deleteSessionsForShop 正常执行）
  */
 export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<void> {
   const startedAt = Date.now();
@@ -121,19 +100,49 @@ export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<
     `${LOG} enter shop=${params.shop} appName=${params.appName} webhookId=${params.webhookId ?? "(none)"}`,
   );
 
-  const skipOpsNotify = await shouldSkipUninstallOpsNotify({
+  // 1. 在删除 Session 之前加载收件人快照
+  let recipient: Awaited<ReturnType<typeof loadSessionSnapshotForUninstall>> = null;
+  try {
+    recipient = await loadSessionSnapshotForUninstall(params.shop, params.sessionId);
+  } catch (error) {
+    console.warn(`${LOG} load-recipient-failed shop=${params.shop}`, error);
+  }
+
+  // 2. 提前写日志作幂等门禁：第一条 Webhook 写入成功（created=true），后续重复投递找到已有记录（created=false）
+  const referenceId = buildUninstallEventReferenceId({
     shop: params.shop,
     appName: params.appName,
     webhookId: params.webhookId,
+    sessionId: params.sessionId,
   });
-  if (skipOpsNotify) {
-    console.info(
-      `${LOG} ops-notify-skipped shop=${params.shop} appName=${params.appName} reason=duplicate`,
-    );
-  } else {
+  const { created } = await appendCommonEventLog({
+    shop: params.shop,
+    appName: params.appName,
+    eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
+    topic: params.topic,
+    referenceId,
+    payload:
+      params.payload && typeof params.payload === "object"
+        ? (params.payload as Record<string, unknown>)
+        : { raw: params.payload },
+  });
+
+  if (created) {
     await sendAppUninstalledFeishuNotify(params);
+    // 传入预加载的收件人快照，Session 删除前已缓存
+    await notifyAppUninstalledEmail({
+      shop: params.shop,
+      appName: params.appName,
+      uninstalledAt: params.uninstalledAt,
+      recipient,
+    });
+  } else {
+    console.info(
+      `${LOG} ops-notify-skipped shop=${params.shop} appName=${params.appName} reason=duplicate referenceId=${referenceId}`,
+    );
   }
 
+  // 3. 持久化（appendCommonEventLog 内部 dedup 幂等，deleteSessionsForShop 正常执行）
   await persistAppUninstalled(params);
 
   console.info(

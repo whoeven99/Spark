@@ -29,7 +29,7 @@ const labels = {
 
 export const enTemplates: NotificationTemplateRegistry = {
   appInstalled: ({ variables, display }) => ({
-    subject: `${display.appName} has been installed`,
+    subject: `🎉 Successfully installed! Start exploring now | ${display.appName}`,
     preheader: `${display.appName} is now connected to ${variables.shopName}.`,
     title: `${display.appName} has been installed`,
     greeting: variables.recipientName ? `Hi ,` : "Hi,",
@@ -46,7 +46,7 @@ export const enTemplates: NotificationTemplateRegistry = {
   }),
 
   appUninstalled: ({ variables, display }) => ({
-    subject: `${display.appName} has been uninstalled`,
+    subject: `🔌 Your store has been disconnected | ${display.appName}`,
     preheader: `${display.appName} is no longer connected to ${variables.shopName}.`,
     title: `${display.appName} has been uninstalled`,
     greeting: variables.recipientName ? `Hi ,` : "Hi,",
@@ -63,7 +63,7 @@ export const enTemplates: NotificationTemplateRegistry = {
   }),
 
   purchaseCreated: ({ variables, display, locale }) => ({
-    subject: `${display.appName} purchase record created`,
+    subject: `🎉 Payment successful! Your order is confirmed | ${display.appName}`,
     preheader: `A purchase or credit transaction has been recorded for ${variables.shopName}.`,
     title: "Purchase record created",
     greeting: variables.recipientName ? `Hi ,` : "Hi,",
@@ -99,7 +99,7 @@ export const enTemplates: NotificationTemplateRegistry = {
 
   subscriptionStarted: ({ variables, display, locale }) =>
     subscriptionContent({
-      subject: `${display.appName} subscription started`,
+      subject: `🎊 Subscription activated! Your benefits are now live | ${display.appName}`,
       title: "Subscription started",
       summary: `${display.appName} is now active. Here is a quick breakdown of the current plan, billing period, and credit account.`,
       variables,
@@ -109,7 +109,7 @@ export const enTemplates: NotificationTemplateRegistry = {
 
   subscriptionChanged: ({ variables, display, locale }) =>
     subscriptionContent({
-      subject: `${display.appName} subscription changed`,
+      subject: `🔄 Your plan has been updated | ${display.appName}`,
       title: "Subscription changed",
       summary: `${display.appName} has been updated. The plan, timing, and any related credit changes are listed below.`,
       variables,
@@ -119,7 +119,7 @@ export const enTemplates: NotificationTemplateRegistry = {
 
   subscriptionCanceled: ({ variables, display, locale }) =>
     subscriptionContent({
-      subject: `${display.appName} subscription canceled`,
+      subject: `🧾 Your subscription has been canceled | ${display.appName}`,
       title: "Subscription canceled",
       summary: `${display.appName} has been canceled. Some premium features, automated tasks, or usage quotas may stop after the current billing period ends.`,
       variables,
@@ -128,7 +128,7 @@ export const enTemplates: NotificationTemplateRegistry = {
     }),
 
   taskStarted: ({ variables, display, locale }) => taskContent({
-    subject: `${display.appName} task started`,
+    subject: `⏳ Your task has started | ${display.appName}`,
     title: "Task started",
     summary: `${display.appName} has started processing ${variables.taskName}. We will keep you posted when it is completed, paused, or needs attention.`,
     variables,
@@ -139,7 +139,7 @@ export const enTemplates: NotificationTemplateRegistry = {
   }),
 
   taskCompleted: ({ variables, display, locale }) => taskContent({
-    subject: `${display.appName} task completed`,
+    subject: `✅ Your task is complete | ${display.appName}`,
     title: "Task completed",
     summary: `Good news: ${variables.taskName} is complete. Open the Shopify App to review results, logs, and related details.`,
     variables,
@@ -150,7 +150,7 @@ export const enTemplates: NotificationTemplateRegistry = {
   }),
 
   taskPaused: ({ variables, display, locale }) => taskContent({
-    subject: `${display.appName} task paused`,
+    subject: `⚠️ Your task may have run into an issue | ${display.appName}`,
     title: "Task paused",
     summary: `${variables.taskName} has been paused. While paused, it usually stops processing new data and generating related usage.`,
     variables,
@@ -161,7 +161,7 @@ export const enTemplates: NotificationTemplateRegistry = {
   }),
 
   taskFailed: ({ variables, display, locale }) => taskContent({
-    subject: `${display.appName} task failed`,
+    subject: `⚠️ Your task may have run into an issue | ${display.appName}`,
     title: "Task failed",
     summary: `${variables.taskName} could not be completed this time. Open the Shopify App to review the reason and check settings, authorization, credit balance, or third-party connections.`,
     variables,

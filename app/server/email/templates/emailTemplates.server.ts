@@ -1,4 +1,8 @@
+/** Tencent SES From address (msg subdomain). */
 export const TENCENT_FROM_EMAIL = "support@msg.ciwi.ai";
+
+/** Merchant-visible support inbox for template body/footer only — not SES From. */
+export const MERCHANT_SUPPORT_EMAIL = "support@ciwi.ai";
 
 export const EMAIL_TEMPLATE_IDS = {
   FIRST_INSTALL: 137916,

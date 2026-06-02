@@ -19,6 +19,10 @@ import { authenticate } from "../shopify.server";
 import { recordAppInstalled, recordVisitSource } from "../server/commonEventLog/index.server";
 import { ensureSessionAppName } from "../server/session/sessionManager.server";
 import {
+  syncSessionShopProfile,
+  syncSessionUserProfileFromOnline,
+} from "../server/session/syncSessionUserProfile.server";
+import {
   getAppEntry,
   getAppEntryConfig,
   type NavItemKey,
@@ -63,7 +67,7 @@ const NAV_ITEMS: Record<
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const appName = getAppEntry();
 
   // 入口来源归因：带 utm 的外链首次进入时记一条（fire-and-forget，失败不影响页面）
@@ -82,6 +86,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     });
   } catch (error) {
     console.error("[CommonEvent] recordAppInstalled failed:", error);
+  }
+
+  try {
+    await syncSessionUserProfileFromOnline(session);
+  } catch (error) {
+    console.warn("[SessionSync] syncSessionUserProfileFromOnline failed:", error);
+  }
+
+  try {
+    await syncSessionShopProfile(session.shop, admin);
+  } catch (error) {
+    console.warn("[SessionSync] syncSessionShopProfile failed:", error);
   }
   const locale = detectRequestLocale(request, {
     sessionLocale: readShopifySessionLocale(session),
