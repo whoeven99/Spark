@@ -114,6 +114,40 @@ function ReviewContentPanel(props: {
     tone === "positive" ? pageColorTokens.brandGreenDark : pageColorTokens.textSecondary;
   const borderColor =
     tone === "positive" ? "rgba(0, 166, 124, 0.18)" : pageColorTokens.borderSubtle;
+  const sharedFieldStyle = {
+    width: "100%",
+    boxSizing: "border-box" as const,
+    borderRadius: pageColorTokens.radiusControl,
+    border: `1px solid ${pageColorTokens.borderSubtle}`,
+    background: "#fff",
+  };
+  const sharedTitleStyle = {
+    ...sharedFieldStyle,
+    padding: "0.7rem 0.8rem",
+    minHeight: 72,
+    maxHeight: 72,
+    fontSize: 13,
+    lineHeight: 1.45,
+    color: pageColorTokens.textPrimary,
+    fontWeight: 600,
+    overflowY: "auto" as const,
+    whiteSpace: "pre-wrap" as const,
+    wordBreak: "break-word" as const,
+    resize: "none" as const,
+  };
+  const sharedDescriptionStyle = {
+    ...sharedFieldStyle,
+    padding: "0.75rem 0.8rem",
+    minHeight: 320,
+    maxHeight: 320,
+    fontSize: 13,
+    lineHeight: 1.6,
+    color: pageColorTokens.textBody,
+    overflowY: "auto" as const,
+    whiteSpace: "pre-wrap" as const,
+    wordBreak: "break-word" as const,
+    resize: "none" as const,
+  };
 
   return (
     <div
@@ -155,34 +189,21 @@ function ReviewContentPanel(props: {
             标题
           </div>
           {props.editable ? (
-            <input
+            <textarea
               value={props.title}
               onChange={(e) => props.onTitleChange?.(e.currentTarget.value)}
               disabled={props.disabled}
+              rows={2}
               style={{
-                width: "100%",
-                boxSizing: "border-box",
-                padding: "0.65rem 0.75rem",
-                borderRadius: pageColorTokens.radiusControl,
+                ...sharedTitleStyle,
                 border: `1px solid ${pageColorTokens.borderInput}`,
-                fontSize: 13,
-                fontWeight: 600,
-                color: pageColorTokens.textPrimary,
-                background: "#fff",
+                fontFamily: "inherit",
               }}
             />
           ) : (
             <div
               style={{
-                border: `1px solid ${pageColorTokens.borderSubtle}`,
-                borderRadius: pageColorTokens.radiusControl,
-                padding: "0.7rem 0.8rem",
-                fontSize: 13,
-                fontWeight: 600,
-                color: pageColorTokens.textPrimary,
-                background: "#fff",
-                minHeight: 42,
-                boxSizing: "border-box",
+                ...sharedTitleStyle,
               }}
             >
               {props.title || "（无标题）"}
@@ -208,32 +229,15 @@ function ReviewContentPanel(props: {
               disabled={props.disabled}
               rows={props.descriptionRows ?? 10}
               style={{
-                width: "100%",
-                boxSizing: "border-box",
-                padding: "0.7rem 0.75rem",
-                borderRadius: pageColorTokens.radiusControl,
+                ...sharedDescriptionStyle,
                 border: `1px solid ${pageColorTokens.borderInput}`,
-                fontSize: 13,
                 fontFamily: "inherit",
-                lineHeight: 1.6,
-                color: pageColorTokens.textBody,
-                background: "#fff",
-                resize: "vertical",
               }}
             />
           ) : (
             <div
               style={{
-                border: `1px solid ${pageColorTokens.borderSubtle}`,
-                borderRadius: pageColorTokens.radiusControl,
-                padding: "0.7rem 0.8rem",
-                fontSize: 13,
-                lineHeight: 1.6,
-                color: pageColorTokens.textBody,
-                background: "#fff",
-                minHeight: 170,
-                boxSizing: "border-box",
-                whiteSpace: "pre-wrap",
+                ...sharedDescriptionStyle,
               }}
             >
               {props.description || "（无原始描述）"}
