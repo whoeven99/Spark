@@ -1,7 +1,16 @@
 import { claimJob, updateJob, heartbeat, findPendingJobs, getJob } from "../services/cosmosV4.js";
 import { popHint, pushHint, setProgress } from "../services/redisV4.js";
 import { blobRead, blobWrite, blobListPaths } from "../services/blobV4.js";
-import { translateBatch, resolveEngine, type TranslateItem } from "../services/llmTranslate.js";
+import {
+  translateResources,
+  resolveEngine,
+  mergeEngineUsage,
+  countFieldUnits,
+  type EngineUsage,
+  type TranslateItem,
+} from "../services/llmTranslate.js";
+
+const HEARTBEAT_THROTTLE_MS = 30_000;
 import type { TranslationV4Job } from "../services/cosmosV4.js";
 
 const WORKER_ID = `translate-${process.pid}`;
@@ -37,10 +46,14 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   let translateDone = 0;
   let translateFailed = 0;
   let translateFallback = 0;
+  let translateUnitDone = 0; // node-level progress
+  let lastHeartbeatAt = 0;
   // Fields that were translated but fell back to the original value (engine
   // dropped the key / failed). Surfaced to the UI via translate/fallbacks.json.
   const fallbacks: Array<{ resourceId: string; module: string; key: string }> = [];
+  const engineUsage: EngineUsage = {};
   const translateTotal = job.metrics.translateTotal || job.metrics.initTotal;
+  const translateUnitTotal = job.metrics.translateUnitTotal || 0;
 
   if (testMode) {
     console.log(`[translate] TEST MODE: using original values as translations`);
@@ -66,11 +79,23 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         const existingTranslated = await blobRead<Array<{ resourceId: string }>>(translatePath);
         if (existingTranslated !== null) {
           translateDone += existingTranslated.length;
+          // Re-count this chunk's units so node progress stays consistent on resume.
+          const initChunk = await blobRead<Array<{ fields: TranslateItem[] }>>(chunkPath);
+          if (initChunk) {
+            for (const r of initChunk) for (const f of r.fields) translateUnitDone += countFieldUnits(f.key, f.value);
+          }
           console.log(
             `[translate] job=${jobId} module=${module} chunk=${chunkIdx}/${chunkTotal} ` +
               `skip (already translated, ${existingTranslated.length} resources)`,
           );
-          await setProgress(jobId, { translateDone, translateFailed, translateTotal, currentModule: module });
+          await setProgress(jobId, {
+            translateDone,
+            translateFailed,
+            translateUnitDone,
+            translateUnitTotal,
+            translateTotal,
+            currentModule: module,
+          });
           continue;
         }
 
@@ -84,17 +109,45 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
             `resources=${chunkResourceCount} fields=${chunkFieldCount}`,
         );
 
+        const resources = chunk.filter((r) => r.fields?.length);
         const translatedChunk = [];
-        for (const resource of chunk) {
-          if (!resource.fields?.length) continue;
-
-          try {
-            const results = await translateBatch(resource.fields, source, target, aiModel, testMode, shopName);
+        try {
+          // Per-batch progress: write Redis every batch (cheap, smooth bar) and
+          // heartbeat Cosmos throttled (expensive, just keep-alive).
+          const onProgress = async (deltaUnits: number) => {
+            translateUnitDone += deltaUnits;
+            await setProgress(jobId, {
+              translateDone,
+              translateFailed,
+              translateFallback,
+              translateUnitDone,
+              translateUnitTotal,
+              translateTotal,
+              currentModule: module,
+            });
+            const now = Date.now();
+            if (now - lastHeartbeatAt > HEARTBEAT_THROTTLE_MS) {
+              lastHeartbeatAt = now;
+              await heartbeat(shopName, jobId);
+            }
+          };
+          const { resources: perResource, usage } = await translateResources(
+            resources.map((r) => ({ resourceId: r.resourceId, fields: r.fields })),
+            source,
+            target,
+            aiModel,
+            testMode,
+            shopName,
+            onProgress,
+          );
+          mergeEngineUsage(engineUsage, usage);
+          for (const { resourceId, results } of perResource) {
+            const orig = resources.find((r) => r.resourceId === resourceId);
             translatedChunk.push({
-              resourceId: resource.resourceId,
+              resourceId,
               translations: results.map((r) => ({
                 key: r.key,
-                originalValue: resource.fields.find((f) => f.key === r.key)?.value ?? "",
+                originalValue: orig?.fields.find((f) => f.key === r.key)?.value ?? "",
                 translatedValue: r.translatedValue,
                 digest: r.digest,
                 status: r.status,
@@ -103,14 +156,14 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
             for (const r of results) {
               if (r.status === "fallback") {
                 translateFallback++;
-                fallbacks.push({ resourceId: resource.resourceId, module, key: r.key });
+                fallbacks.push({ resourceId, module, key: r.key });
               }
             }
             translateDone++;
-          } catch (e) {
-            translateFailed++;
-            console.warn(`[translate] resource ${resource.resourceId} failed`, e);
           }
+        } catch (e) {
+          translateFailed += resources.length;
+          console.warn(`[translate] chunk ${chunkIdx}/${chunkTotal} failed`, e);
         }
 
         // Write to translate/ blob
@@ -126,6 +179,8 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
           translateDone,
           translateFailed,
           translateFallback,
+          translateUnitDone,
+          translateUnitTotal,
           translateTotal,
           currentModule: module,
         });
@@ -149,11 +204,14 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
       claimedBy: null,
       aiModelUsed: engine.model,
       aiProvider: engine.provider,
+      engineUsage,
       metrics: {
         ...(latestJob?.metrics ?? job.metrics),
         translateDone,
         translateFailed,
         translateFallback,
+        translateUnitDone,
+        translateUnitTotal,
         writebackTotal: translateDone,
       },
     });

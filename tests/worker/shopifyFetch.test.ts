@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildInitModuleQueryFilterForTest,
+  chunkResourcesForTest,
   fetchResourceIdsByQuery,
   fetchTranslatableResources,
   ID_BASED_MODULE_QUERY,
@@ -181,5 +182,32 @@ describe("shopifyFetch init routing", () => {
 
     expect(calls).toEqual(["byType"]);
     expect(chunks[0][0].resourceId).toBe("gid://shopify/Menu/1");
+  });
+});
+
+describe("chunkResources — size-aware packing", () => {
+  const mk = (id: string, chars: number) => ({
+    resourceId: id,
+    fields: [{ key: "body_html", value: "x".repeat(chars), digest: "d" }],
+  });
+
+  it("splits by count when under the char cap", () => {
+    const res = [mk("1", 10), mk("2", 10), mk("3", 10)];
+    const chunks = chunkResourcesForTest(res, 2, 100000);
+    expect(chunks.map((c) => c.length)).toEqual([2, 1]);
+  });
+
+  it("splits by char cap before reaching the count limit", () => {
+    const res = [mk("1", 600), mk("2", 600), mk("3", 600)];
+    const chunks = chunkResourcesForTest(res, 50, 1000); // 2 resources already exceed 1000 chars
+    expect(chunks.map((c) => c.length)).toEqual([1, 1, 1]);
+  });
+
+  it("keeps a single oversized resource whole in its own chunk", () => {
+    const res = [mk("1", 5000), mk("2", 10)];
+    const chunks = chunkResourcesForTest(res, 50, 1000);
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0][0].resourceId).toBe("1"); // oversized, alone
+    expect(chunks[1][0].resourceId).toBe("2");
   });
 });

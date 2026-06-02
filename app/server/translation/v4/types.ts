@@ -48,6 +48,9 @@ export type TranslationV4Metrics = {
   translateDone: number;
   translateFailed: number;
   translateFallback: number;
+  /** Node-level progress: total / done translation units (HTML nodes + plain parts). */
+  translateUnitTotal: number;
+  translateUnitDone: number;
   writebackTotal: number;
   writebackDone: number;
   writebackFailed: number;
@@ -64,6 +67,8 @@ export const EMPTY_V4_METRICS: TranslationV4Metrics = {
   translateDone: 0,
   translateFailed: 0,
   translateFallback: 0,
+  translateUnitTotal: 0,
+  translateUnitDone: 0,
   writebackTotal: 0,
   writebackDone: 0,
   writebackFailed: 0,
@@ -84,6 +89,8 @@ export type TranslationV4Job = {
   /** The engine actually used at translate time (real data, set by the worker). */
   aiModelUsed: string | null;
   aiProvider: string | null;
+  /** Per-engine-model breakdown of translated content (units + source chars). */
+  engineUsage: Record<string, { units: number; chars: number }> | null;
   limitPerType: number;
   isCover: boolean;
   isHandle: boolean;

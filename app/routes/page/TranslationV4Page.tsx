@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import { useLoaderData } from "react-router";
@@ -29,7 +29,7 @@ import {
   pageEmptyStateStyle,
 } from "./pageUiStyles";
 
-const POLL_INTERVAL = 3000;
+const POLL_INTERVAL = 1500;
 const ACTIVE_STATUSES: TranslationV4Status[] = [
   "INIT_QUEUED", "INITIALIZING", "INIT_DONE",
   "TRANSLATE_QUEUED", "TRANSLATING", "TRANSLATE_DONE",
@@ -89,6 +89,8 @@ function progressFromJob(
       translateTotal: job.metrics.translateTotal,
       translateDone: job.metrics.translateDone,
       translateFailed: job.metrics.translateFailed,
+      translateUnitTotal: job.metrics.translateUnitTotal ?? 0,
+      translateUnitDone: job.metrics.translateUnitDone ?? 0,
       writebackTotal: job.metrics.writebackTotal,
       writebackDone: job.metrics.writebackDone,
       writebackFailed: job.metrics.writebackFailed,
@@ -112,6 +114,7 @@ type ProgressData = {
   metrics: {
     initTotal: number; initDone: number;
     translateTotal: number; translateDone: number; translateFailed: number;
+    translateUnitTotal: number; translateUnitDone: number;
     writebackTotal: number; writebackDone: number; writebackFailed: number;
     verifyTotal: number; verifyDone: number; verifyFailed: number;
     currentModule: string | null;
@@ -562,7 +565,22 @@ function JobCard({ job, status, progress, onAction }: JobCardProps) {
       {/* Stage progress bars */}
       <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
         <StageBar label="初始化" done={metrics.initDone} total={metrics.initTotal} active={status === "INITIALIZING"} complete={["INIT_DONE","TRANSLATE_QUEUED","TRANSLATING","TRANSLATE_DONE","WRITEBACK_QUEUED","WRITING_BACK","VERIFY_QUEUED","VERIFYING","COMPLETED"].includes(status)} />
-        <StageBar label="翻译" done={metrics.translateDone} total={metrics.translateTotal} active={status === "TRANSLATING"} complete={["TRANSLATE_DONE","WRITEBACK_QUEUED","WRITING_BACK","VERIFY_QUEUED","VERIFYING","COMPLETED"].includes(status)} failed={metrics.translateFailed} />
+        <StageBar
+          label="翻译"
+          done={metrics.translateUnitTotal > 0 ? metrics.translateUnitDone : metrics.translateDone}
+          total={metrics.translateUnitTotal > 0 ? metrics.translateUnitTotal : metrics.translateTotal}
+          active={status === "TRANSLATING"}
+          complete={["TRANSLATE_DONE","WRITEBACK_QUEUED","WRITING_BACK","VERIFY_QUEUED","VERIFYING","COMPLETED"].includes(status)}
+          failed={metrics.translateFailed}
+          detailLabel={
+            metrics.translateUnitTotal > 0 ? (
+              <>
+                资源 {metrics.translateDone}/{metrics.translateTotal} · 节点{" "}
+                <AnimatedNumber value={metrics.translateUnitDone} />/{metrics.translateUnitTotal}
+              </>
+            ) : undefined
+          }
+        />
         <StageBar label="回写" done={metrics.writebackDone} total={metrics.writebackTotal} active={status === "WRITING_BACK"} complete={["VERIFY_QUEUED","VERIFYING","COMPLETED"].includes(status)} failed={metrics.writebackFailed} />
         {(metrics.verifyTotal > 0 || ["VERIFY_QUEUED","VERIFYING"].includes(status)) && (
           <StageBar label="验证" done={metrics.verifyDone} total={metrics.verifyTotal} active={status === "VERIFYING"} complete={status === "COMPLETED" && metrics.verifyTotal > 0} failed={metrics.verifyFailed} />
@@ -584,6 +602,34 @@ function JobCard({ job, status, progress, onAction }: JobCardProps) {
   );
 }
 
+/**
+ * Animates a number toward `value` over ~1s (easeOutCubic) so polled jumps tick
+ * up smoothly instead of snapping. Pure client-side tween between poll values.
+ */
+function AnimatedNumber({ value, duration = 1100 }: { value: number; duration?: number }) {
+  const [display, setDisplay] = useState(value);
+  const fromRef = useRef(value);
+
+  useEffect(() => {
+    const from = fromRef.current;
+    const to = value;
+    if (from === to) return;
+    let raf = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setDisplay(Math.round(from + (to - from) * eased));
+      if (t < 1) raf = requestAnimationFrame(tick);
+      else fromRef.current = to;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, duration]);
+
+  return <>{display}</>;
+}
+
 type StageBarProps = {
   label: string;
   done: number;
@@ -591,9 +637,11 @@ type StageBarProps = {
   active: boolean;
   complete: boolean;
   failed?: number;
+  /** Overrides the "done/total" number text (e.g. to show both resources and nodes). */
+  detailLabel?: ReactNode;
 };
 
-function StageBar({ label, done, total, active, complete, failed = 0 }: StageBarProps) {
+function StageBar({ label, done, total, active, complete, failed = 0, detailLabel }: StageBarProps) {
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : (complete ? 100 : 0);
 
   const fillBg = complete
@@ -612,10 +660,10 @@ function StageBar({ label, done, total, active, complete, failed = 0 }: StageBar
     <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
       <span style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, width: 46, flexShrink: 0, fontWeight: active || complete ? 600 : 400 }}>{label}</span>
       <div style={{ flex: 1, height: 8, borderRadius: 4, background: "linear-gradient(90deg, #e8eaef 0%, #dfe3ea 100%)", overflow: "hidden" }}>
-        <div style={{ width: `${pct}%`, height: "100%", background: fillBg, borderRadius: 4, transition: "width 0.45s ease", boxShadow: fillGlow }} />
+        <div style={{ width: `${pct}%`, height: "100%", background: fillBg, borderRadius: 4, transition: "width 1.2s ease", boxShadow: fillGlow }} />
       </div>
-      <span style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, minWidth: 84, flexShrink: 0, textAlign: "right" }}>
-        {total > 0 ? `${done}/${total}` : "等待"}
+      <span style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, minWidth: detailLabel ? 196 : 84, flexShrink: 0, textAlign: "right" }}>
+        {detailLabel ?? (total > 0 ? `${done}/${total}` : "等待")}
         {" "}{complete ? <span style={{ color: "#00a67c", fontWeight: 700 }}>✓</span> : active ? <span style={{ color: "#4070f4" }}>⟳</span> : ""}
         {failed > 0 ? <span style={{ color: "#f59e0b", fontWeight: 600 }}> ⚠{failed}</span> : ""}
       </span>

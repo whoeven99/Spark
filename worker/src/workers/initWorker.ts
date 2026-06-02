@@ -2,6 +2,7 @@ import { claimJob, updateJob, heartbeat, findPendingJobs } from "../services/cos
 import { popHint, pushHint, setProgress } from "../services/redisV4.js";
 import { blobWrite } from "../services/blobV4.js";
 import { fetchTranslatableResources } from "../services/shopifyFetch.js";
+import { countFieldUnits } from "../services/llmTranslate.js";
 
 const WORKER_ID = `init-${process.pid}`;
 const CHUNK_SIZE = 50;
@@ -58,6 +59,7 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
 
   const manifest: Record<string, { totalItems: number; chunks: number }> = {};
   let totalItems = 0;
+  let totalUnits = 0; // node-level total (HTML nodes + plain parts) for progress
 
   try {
     for (const module of job.modules) {
@@ -83,6 +85,11 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
       }
 
       const moduleItemCount = chunks.reduce((sum, c) => sum + c.length, 0);
+      for (const chunk of chunks) {
+        for (const r of chunk) {
+          for (const f of r.fields) totalUnits += countFieldUnits(f.key, f.value);
+        }
+      }
       manifest[module] = { totalItems: moduleItemCount, chunks: chunks.length };
       totalItems += moduleItemCount;
 
@@ -111,10 +118,11 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
         initTotal: totalItems,
         initDone: totalItems,
         translateTotal: totalItems,
+        translateUnitTotal: totalUnits,
       },
     });
 
-    await setProgress(jobId, { initTotal: totalItems, initDone: totalItems });
+    await setProgress(jobId, { initTotal: totalItems, initDone: totalItems, translateUnitTotal: totalUnits });
 
     // Push hint to translate stage for immediate pickup
     await pushHint("translate", { taskId: jobId, shopName });

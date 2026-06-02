@@ -37,6 +37,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     translateTotal: Number(redisProgress.translateTotal) || job.metrics.translateTotal,
     translateDone: Number(redisProgress.translateDone) || job.metrics.translateDone,
     translateFailed: Number(redisProgress.translateFailed) || job.metrics.translateFailed,
+    translateUnitTotal: Number(redisProgress.translateUnitTotal) || job.metrics.translateUnitTotal || 0,
+    translateUnitDone: Number(redisProgress.translateUnitDone) || job.metrics.translateUnitDone || 0,
     writebackTotal: Number(redisProgress.writebackTotal) || job.metrics.writebackTotal,
     writebackDone: Number(redisProgress.writebackDone) || job.metrics.writebackDone,
     writebackFailed: Number(redisProgress.writebackFailed) || job.metrics.writebackFailed,
