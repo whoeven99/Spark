@@ -100,6 +100,7 @@ function ReviewContentPanel(props: {
   tone?: "neutral" | "positive";
   title: string;
   description: string;
+  highlighted?: boolean;
   editable?: boolean;
   disabled?: boolean;
   onTitleChange?: (value: string) => void;
@@ -117,12 +118,16 @@ function ReviewContentPanel(props: {
   return (
     <div
       style={{
-        border: `1px solid ${borderColor}`,
+        border: `1px solid ${props.highlighted ? pageColorTokens.brandGreen : borderColor}`,
         borderRadius: pageColorTokens.radiusControl,
         background: tone === "positive" ? "#fcfffd" : pageColorTokens.surfaceSubtle,
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
+        boxShadow: props.highlighted
+          ? `0 0 0 1px ${pageColorTokens.brandGreen}, 0 8px 24px ${pageColorTokens.brandGreenGlow}`
+          : "none",
+        transition: "border-color 0.2s ease, box-shadow 0.2s ease",
       }}
     >
       <div
@@ -257,6 +262,8 @@ export function ProductImproveTaskDetailPage({
   const [refineError, setRefineError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
+  const [refineSuccess, setRefineSuccess] = useState<string | null>(null);
+  const [draftHighlight, setDraftHighlight] = useState(false);
   const [scoreDialogOpen, setScoreDialogOpen] = useState(false);
   const [refineDialogOpen, setRefineDialogOpen] = useState(false);
 
@@ -319,6 +326,12 @@ export function ProductImproveTaskDetailPage({
     setReviewNote(next?.reviewNote ?? "");
     setOptimizationComment(next?.optimizationComment ?? "");
   }, [task.result]);
+
+  useEffect(() => {
+    if (!draftHighlight) return;
+    const timer = window.setTimeout(() => setDraftHighlight(false), 2600);
+    return () => window.clearTimeout(timer);
+  }, [draftHighlight]);
 
   const handleStatusChange = useCallback(
     (status: AITaskStatus, r?: Record<string, unknown>) => {
@@ -392,6 +405,7 @@ export function ProductImproveTaskDetailPage({
 
     setRefining(true);
     setRefineError(null);
+    setRefineSuccess(null);
     setApplyError(null);
 
     try {
@@ -419,6 +433,9 @@ export function ProductImproveTaskDetailPage({
       setDraftDescription(body.result.description ?? "");
       setReviewScore(body.result.reviewScore ?? reviewScore);
       setLocalResult(body.result);
+      setOptimizationComment(body.result.optimizationComment ?? optimizationComment);
+      setDraftHighlight(true);
+      setRefineSuccess("AI 已根据最新优化意见更新右侧审核草稿。");
       handleStatusChange("pending_review", body.result);
       return true;
     } catch {
@@ -689,6 +706,7 @@ export function ProductImproveTaskDetailPage({
             tone="positive"
             title={draftTitle}
             description={draftDescription}
+            highlighted={draftHighlight}
             editable
             disabled={editingLocked}
             onTitleChange={setDraftTitle}
@@ -696,6 +714,21 @@ export function ProductImproveTaskDetailPage({
             descriptionRows={12}
           />
         </div>
+
+        {refineSuccess ? (
+          <div
+            style={{
+              fontSize: 12,
+              color: pageColorTokens.brandGreenDark,
+              background: pageColorTokens.brandGreenLight,
+              padding: "9px 11px",
+              borderRadius: pageColorTokens.radiusControl,
+              border: "1px solid rgba(0, 166, 124, 0.18)",
+            }}
+          >
+            {refineSuccess}
+          </div>
+        ) : null}
 
         {localStatus === "applied" ? (
           <div
