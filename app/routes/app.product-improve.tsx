@@ -128,9 +128,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         itemCount: 1,
         sourceLanguage,
         brandStyle,
-        progressPercent: 0,
-        completedCount: 0,
-        currentStepText: "准备中...",
       },
     });
 
