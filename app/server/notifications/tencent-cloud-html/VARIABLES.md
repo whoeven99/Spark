@@ -6,7 +6,7 @@
 - `brandName`: Brand or company display name.
 - `appIconUrl`: Public app icon URL used in the email header and footer.
 - `recipientName`: Merchant user first name from Session (`firstName`). Fallback: `商家` (zh-CN) or `merchant` (en).
-- `supportEmail`: Support email address.
+- `supportEmail`: Merchant-visible support email shown in the email body/footer (default `support@ciwi.ai`). Not the Tencent SES From address (`support@msg.ciwi.ai`); override via `NOTIFICATION_SUPPORT_EMAIL`.
 - `dashboardUrl`: App dashboard URL.
 - `shopName`: Shopify Admin shop display name (`shop.name`), e.g. `rinleaf`.
 - `shopDomain`: Shopify shop domain, e.g. `x0hgaj-gp.myshopify.com`.

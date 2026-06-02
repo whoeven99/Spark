@@ -1,8 +1,10 @@
 import { isEmailSendReady, loadEmailConfig } from "../email/config/emailConfig.server";
+import { maskEmail } from "../email/emailLog.server";
 import {
   resolveOpsEmailDestination,
   type OpsEmailSessionSnapshot,
 } from "../email/opsNotifyEmail.server";
+import { TENCENT_FROM_EMAIL } from "../email/templates/emailTemplates.server";
 import { sendTemplateEmail } from "../email/services/emailService.server";
 import { buildNotificationDashboardUrl } from "./buildNotificationDashboardUrl.server";
 import { buildNotificationTemplateData } from "./buildNotificationTemplateData.server";
@@ -35,13 +37,18 @@ export async function dispatchMerchantNotificationEmail<
 
   const config = loadEmailConfig();
   if (!isEmailSendReady(config)) {
-    console.info(`${LOG} skip event=${event} shop=${shop} reason=email-not-ready`);
+    console.info(
+      `${LOG} skip event=${event} shop=${shop} reason=email-not-ready enabled=${config.enabled} provider=${config.provider} hasTencentCredentials=${config.tencent !== null}`,
+    );
     return;
   }
 
   const to = resolveOpsEmailDestination(params.recipient ?? null);
   if (!to) {
-    console.warn(`${LOG} skip event=${event} shop=${shop} reason=no-recipient`);
+    const ownerEmail = params.recipient?.email?.trim() || "(empty)";
+    console.warn(
+      `${LOG} skip event=${event} shop=${shop} reason=no-recipient sessionEmail=${ownerEmail} opsNotifyConfigured=${Boolean(process.env.OPS_NOTIFY_EMAIL?.trim())}`,
+    );
     return;
   }
 
@@ -59,18 +66,30 @@ export async function dispatchMerchantNotificationEmail<
   const templateData = buildNotificationTemplateData(appConfig, variables, locale);
   const templateId = resolveNotificationTemplateId(event, locale);
 
+  const sendStartedAt = Date.now();
+
   try {
-    const result = await sendTemplateEmail({ to, subject, templateId, templateData });
+    const result = await sendTemplateEmail({
+      to,
+      subject,
+      templateId,
+      templateData,
+      from: config.tencent?.fromEmail ?? TENCENT_FROM_EMAIL,
+    });
+    const elapsedMs = Date.now() - sendStartedAt;
     if (result.ok) {
       console.info(
-        `${LOG} sent event=${event} shop=${shop} templateId=${templateId} locale=${locale} requestId=${result.requestId}`,
+        `${LOG} sent event=${event} shop=${shop} templateId=${templateId} requestId=${result.requestId} elapsedMs=${elapsedMs} to=${maskEmail(to)}`,
       );
     } else {
       console.error(
-        `${LOG} failed event=${event} shop=${shop} templateId=${templateId} code=${result.error.code} message=${result.error.message}`,
+        `${LOG} failed event=${event} shop=${shop} templateId=${templateId} code=${result.error.code} message=${result.error.message} elapsedMs=${elapsedMs}`,
       );
     }
   } catch (error) {
-    console.error(`${LOG} unexpected event=${event} shop=${shop}:`, error);
+    console.error(
+      `${LOG} failed event=${event} shop=${shop} templateId=${templateId} unexpected=true elapsedMs=${Date.now() - sendStartedAt}:`,
+      error,
+    );
   }
 }

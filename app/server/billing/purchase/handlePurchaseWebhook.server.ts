@@ -19,22 +19,34 @@ function parseOneTimePurchase(payload: unknown): WebhookOneTimePurchase | null {
   return purchase as WebhookOneTimePurchase;
 }
 
+const LOG = "[Billing][TokenPackWebhook]";
+
 export async function handleAppPurchaseOneTimeWebhook(params: {
   shop: string;
   payload: unknown;
   appName?: string;
 }): Promise<void> {
+  const appName = params.appName ?? getAppEntry();
+  console.info(`${LOG} enter shop=${params.shop} appName=${appName}`);
+
   const purchase = parseOneTimePurchase(params.payload);
   if (!purchase?.admin_graphql_api_id) {
-    console.warn("[Billing] one-time purchase webhook missing id", params.payload);
+    console.warn(`${LOG} skip reason=missing-purchase-id`, params.payload);
     return;
   }
 
   const status = (purchase.status ?? "").toUpperCase();
-  if (status !== "ACTIVE") return;
-
   const purchaseId = purchase.admin_graphql_api_id;
-  const appName = params.appName ?? getAppEntry();
+  console.info(
+    `${LOG} parsed shop=${params.shop} purchaseId=${purchaseId} status=${status || "(empty)"}`,
+  );
+
+  if (status !== "ACTIVE") {
+    console.info(
+      `${LOG} skip reason=status-not-active shop=${params.shop} status=${status || "(empty)"} purchaseId=${purchaseId}`,
+    );
+    return;
+  }
 
   const pendingLog = await prisma.billingLog.findFirst({
     where: {
@@ -46,13 +58,21 @@ export async function handleAppPurchaseOneTimeWebhook(params: {
   });
 
   const planKey = pendingLog?.planKey ?? null;
+  console.info(
+    `${LOG} lookup-initiated-log shop=${params.shop} purchaseId=${purchaseId} found=${Boolean(pendingLog)} planKey=${planKey ?? "(none)"}`,
+  );
 
   if (!planKey) {
-    console.warn("[Billing] one-time purchase missing planKey", purchaseId);
+    console.error(
+      `${LOG} skip reason=missing-token-pack-initiated shop=${params.shop} appName=${appName} purchaseId=${purchaseId}`,
+    );
     return;
   }
 
   const plan = await getPlanByKey(planKey);
+  console.info(
+    `${LOG} apply-token-pack shop=${params.shop} planKey=${planKey} tokens=${plan.tokens}`,
+  );
   await applyTokenPackPurchase({
     shop: params.shop,
     appName,
@@ -62,4 +82,5 @@ export async function handleAppPurchaseOneTimeWebhook(params: {
       webhookStatus: status,
     },
   });
+  console.info(`${LOG} done shop=${params.shop} purchaseId=${purchaseId}`);
 }

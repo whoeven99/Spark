@@ -10,10 +10,10 @@ export async function appendCommonEventLog(params: {
   referenceId?: string;
   payload?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
-}): Promise<void> {
+}): Promise<{ created: boolean }> {
   const shop = params.shop.trim();
   const appName = params.appName.trim();
-  if (!shop || !appName) return;
+  if (!shop || !appName) return { created: false };
 
   if (params.referenceId) {
     const existing = await prisma.commonEventLog.findFirst({
@@ -24,7 +24,7 @@ export async function appendCommonEventLog(params: {
         referenceId: params.referenceId,
       },
     });
-    if (existing) return;
+    if (existing) return { created: false };
   }
 
   await prisma.commonEventLog.create({
@@ -42,4 +42,5 @@ export async function appendCommonEventLog(params: {
         : undefined,
     },
   });
+  return { created: true };
 }

@@ -11,8 +11,52 @@ import {
   formatOccurredAtUtc,
 } from "./buildNotificationVariables.server";
 import { dispatchMerchantNotificationEmail } from "./sendMerchantNotificationEmail.server";
+import { enrichSessionSnapshotFromShopInfo } from "./enrichSessionSnapshotFromShopInfo.server";
+import { fetchShopBasicInfo } from "../shopify/fetchShopBasicInfo.server";
+import type { CreditAccountChange } from "./types";
+import { getAppEntry } from "../../config/appEntry.server";
+import prisma from "../../db.server";
 
 const LOG = "[MerchantEmail]";
+
+/** 从 offline session 读取缓存的 shopName（API 失败时的降级来源）。 */
+async function loadCachedShopName(shop: string): Promise<string | null> {
+  try {
+    const appName = getAppEntry();
+    const row = await prisma.session.findFirst({
+      where: { shop, appName, isOnline: false },
+      select: { shopName: true },
+    });
+    return row?.shopName ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** 通过 offline token 拉取店铺基础信息，失败时降级到 Session 缓存，不阻断邮件发送。 */
+async function loadShopInfo(shop: string) {
+  // eslint-disable-next-line no-undef
+  if (!process.env.SHOPIFY_APP_URL?.trim()) {
+    const cachedName = await loadCachedShopName(shop);
+    return cachedName ? { name: cachedName } : null;
+  }
+  try {
+    // 懒加载 shopify.server，避免测试环境模块初始化时报 appUrl 未配置
+    const { unauthenticated } = await import("../../shopify.server");
+    // 加超时保护：unauthenticated.admin 在无有效 session 时可能发起网络请求
+    const timeoutMs = 1500;
+    const result = await Promise.race([
+      unauthenticated.admin(shop).then(({ admin }) => fetchShopBasicInfo(admin)),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+    ]);
+    if (result) return result;
+  } catch (error) {
+    console.warn(`${LOG} loadShopInfo API failed shop=${shop}:`, error);
+  }
+  // 降级：从 offline session 读取缓存的 shopName
+  const cachedName = await loadCachedShopName(shop);
+  return cachedName ? { name: cachedName } : null;
+}
 
 /** 从 Session 表读取收件人/语言快照（容错，失败返回 null）。 */
 async function loadRecipient(
@@ -35,18 +79,27 @@ export async function notifyAppInstalledEmail(params: {
   sessionId?: string;
 }): Promise<void> {
   try {
-    const recipient = await loadRecipient(params.shop, params.sessionId);
+    const [recipient, shopInfo] = await Promise.all([
+      loadRecipient(params.shop, params.sessionId),
+      loadShopInfo(params.shop),
+    ]);
+    const enrichedRecipient = enrichSessionSnapshotFromShopInfo(
+      recipient,
+      shopInfo,
+      params.shop,
+    );
     const variables = buildAppInstalledVariables({
       shop: params.shop,
       installedAt: params.installedAt,
-      sessionSnapshot: recipient,
+      shopInfo,
+      sessionSnapshot: enrichedRecipient,
     });
     await dispatchMerchantNotificationEmail({
       event: "appInstalled",
       shop: params.shop,
       appName: params.appName,
       variables,
-      recipient,
+      recipient: enrichedRecipient,
     });
   } catch (error) {
     console.error(`${LOG} notifyAppInstalledEmail failed shop=${params.shop}:`, error);
@@ -64,21 +117,29 @@ export async function notifyAppUninstalledEmail(params: {
   recipient?: UninstallSessionSnapshot | null;
 }): Promise<void> {
   try {
-    const recipient =
+    const [recipient, shopInfo] = await Promise.all([
       params.recipient !== undefined
-        ? params.recipient
-        : await loadRecipient(params.shop, params.sessionId);
+        ? Promise.resolve(params.recipient)
+        : loadRecipient(params.shop, params.sessionId),
+      loadShopInfo(params.shop),
+    ]);
+    const enrichedRecipient = enrichSessionSnapshotFromShopInfo(
+      recipient,
+      shopInfo,
+      params.shop,
+    );
     const variables = buildAppUninstalledVariables({
       shop: params.shop,
       uninstalledAt: params.uninstalledAt,
-      sessionSnapshot: recipient,
+      shopInfo,
+      sessionSnapshot: enrichedRecipient,
     });
     await dispatchMerchantNotificationEmail({
       event: "appUninstalled",
       shop: params.shop,
       appName: params.appName,
       variables,
-      recipient,
+      recipient: enrichedRecipient,
     });
   } catch (error) {
     console.error(`${LOG} notifyAppUninstalledEmail failed shop=${params.shop}:`, error);
@@ -92,22 +153,33 @@ export async function notifyPurchaseCreatedEmail(params: {
   plan: PlanRecord;
   shopifyPurchaseId: string;
   occurredAt: Date;
+  creditAccountChange?: CreditAccountChange;
 }): Promise<void> {
   try {
-    const recipient = await loadRecipient(params.shop);
+    const [recipient, shopInfo] = await Promise.all([
+      loadRecipient(params.shop),
+      loadShopInfo(params.shop),
+    ]);
+    const enrichedRecipient = enrichSessionSnapshotFromShopInfo(
+      recipient,
+      shopInfo,
+      params.shop,
+    );
     const variables = buildPurchaseCreatedVariables({
       shop: params.shop,
       occurredAt: params.occurredAt,
       plan: params.plan,
       shopifyPurchaseId: params.shopifyPurchaseId,
-      sessionSnapshot: recipient,
+      shopInfo,
+      sessionSnapshot: enrichedRecipient,
+      creditAccountChange: params.creditAccountChange,
     });
     await dispatchMerchantNotificationEmail({
       event: "purchaseCreated",
       shop: params.shop,
       appName: params.appName,
       variables,
-      recipient,
+      recipient: enrichedRecipient,
     });
   } catch (error) {
     console.error(`${LOG} notifyPurchaseCreatedEmail failed shop=${params.shop}:`, error);
@@ -123,9 +195,18 @@ export async function notifySubscriptionEmail(params: {
   previousPlanName?: string;
   billingInterval?: string;
   occurredAt: Date;
+  creditAccountChange?: CreditAccountChange;
 }): Promise<void> {
   try {
-    const recipient = await loadRecipient(params.shop);
+    const [recipient, shopInfo] = await Promise.all([
+      loadRecipient(params.shop),
+      loadShopInfo(params.shop),
+    ]);
+    const enrichedRecipient = enrichSessionSnapshotFromShopInfo(
+      recipient,
+      shopInfo,
+      params.shop,
+    );
     const variables = buildSubscriptionVariables({
       shop: params.shop,
       occurredAt: params.occurredAt,
@@ -133,14 +214,16 @@ export async function notifySubscriptionEmail(params: {
       previousPlanName: params.previousPlanName,
       effectiveAtUtc: formatOccurredAtUtc(params.occurredAt),
       billingInterval: params.billingInterval,
-      sessionSnapshot: recipient,
+      shopInfo,
+      sessionSnapshot: enrichedRecipient,
+      creditAccountChange: params.creditAccountChange,
     });
     await dispatchMerchantNotificationEmail({
       event: params.event,
       shop: params.shop,
       appName: params.appName,
       variables,
-      recipient,
+      recipient: enrichedRecipient,
     });
   } catch (error) {
     console.error(`${LOG} notifySubscriptionEmail failed shop=${params.shop}:`, error);

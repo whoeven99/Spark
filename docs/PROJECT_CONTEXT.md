@@ -32,7 +32,7 @@
   - **整图翻译 / 文生图 Blob**：同一 Storage 账号下独立容器 `picturetranslate`、`generatedimages`（见 `pictureTranslateBlob.server.ts`、`imageGenerationBlob.server.ts`）。
   - **翻译进度与监控键**：**Redis**（`ioredis`，见 `app/server/translation/translateRedis.server.ts`）。
   - **物流承运商授权**：本地 JSON `.data/logistics-provider-credentials.json`（见 `app/server/logisticsCredentialStore.server.ts`）。
-  - **事务邮件（腾讯 SES 模板）**：`app/server/email/` + `app/server/notifications/`（商户邮件 TemplateData 与模板 ID）；安装/卸载/订阅/购包由 `appLifecycle` / `billing` 调用 `sendNotificationEmail`（见 §10）。
+  - **事务邮件（腾讯 SES 模板）**：`app/server/email/` + `app/server/notifications/`（商户邮件 TemplateData 与模板 ID）；安装/卸载/订阅/购包由 `appLifecycle` / `billing` 调用 `notify*Email` → `dispatchMerchantNotificationEmail`（见 §10）。
   - **飞书运营通知**：`app/server/feishu/`（按 channel 映射独立 Webhook；失败不阻断主流程，见 §10 飞书小节）。
 
 ## 3. 目录结构（迁移后，根目录即应用目录）
@@ -143,27 +143,29 @@ Spark **不调用 Spring Backend 邮件 API**，进程内直连腾讯 SES SDK（
 | `providers/tencentSesProvider.server.ts` | 腾讯 `SendEmail` API + 重试 |
 | `utils/retryWithTimeout.server.ts` | 超时与重试（可配置次数；HTTP 400 不重试） |
 | `templates/emailTemplates.server.ts` | 模板 ID / 主题常量（`EMAIL_TEMPLATE_IDS`） |
-| `scenarios/sendNotificationEmail.server.ts` | 商户事务邮件（`renderNotificationEmail` + 腾讯模板 ID） |
 | `opsNotifyEmail.server.ts` | 收件人解析（Session 邮箱优先，`OPS_NOTIFY_EMAIL` 兜底） |
+| `emailTestRecipient.server.ts` | 测试环境 `EMAIL_TEST_RECIPIENT` 收件人重定向 |
+
+商户事务邮件编排见 `app/server/notifications/`（`notifyMerchant.server.ts` → `dispatchMerchantNotificationEmail` → `sendTemplateEmail`）。
 | `index.ts` | 对外导出 |
 
 ### App 生命周期运营邮件（`app/server/appLifecycle/`）
 
 | 文件 | 触发 | 行为 |
 |------|------|------|
-| `onAppInstalled.server.ts` | `recordAppInstalled` 写入 `CommonEventLog` 成功后（OAuth `auth.$.tsx`、进入 `/app` 等） | Shopify 店铺信息 + Session 快照 → `sendNotificationEmail`（`appInstalled`，模板 `180498`） |
-| `onAppUninstalled.server.ts` | `webhooks.app.uninstalled.tsx` 鉴权后 | **先** `sendNotificationEmail`（`appUninstalled`，`180499`），**再** 飞书卸载通知，**再** `handleAppUninstalled`（写日志并删 Session） |
+| `onAppInstalled.server.ts` | `recordAppInstalled` 写入 `CommonEventLog` 成功后（OAuth `auth.$.tsx`、进入 `/app` 等） | Shopify 店铺信息 + Session 快照 → `notifyAppInstalledEmail`（`appInstalled`，模板 `180498`） |
+| `onAppUninstalled.server.ts` | `webhooks.app.uninstalled.tsx` 鉴权后 | **先** `notifyAppUninstalledEmail`（`appUninstalled`，`180499`），**再** 飞书卸载通知，**再** `handleAppUninstalled`（写日志并删 Session） |
 
 安装 enrichment：`unauthenticated.admin(shop)` + `fetchShopBasicInfo`。卸载 enrichment：`loadSessionSnapshotForUninstall`（不调 GraphQL）。邮件失败不阻断安装 Loader；卸载邮件失败不阻断后续持久化；持久化失败时 Webhook 仍 `throw` 以便 Shopify 重试。
 
 ### 首期接入范围
 
-- 已实现：通用 `sendTemplateEmail`、商户事务邮件（`app/server/notifications/` + `sendNotificationEmail`；安装 `180498`、卸载 `180499`、订阅 `180501–180503`、购包 `180500`）、AI 工具 `send_template_email`（`app/server/ai/skills/email/`，模板 ID 白名单）。
-- 未接入：`emailTemplates.server.ts` 中其余 templateId（翻译成功/失败、APG 等）按需后续在 `scenarios/` 扩展；`task*` 通知模板（`180504–180507`）未挂载。
+- 已实现：通用 `sendTemplateEmail`、商户事务邮件（`app/server/notifications/` 的 `notify*Email` → `dispatchMerchantNotificationEmail`；安装 `180498`、卸载 `180499`、订阅 `180501–180503`、购包 `180500`）、AI 工具 `send_template_email`（`app/server/ai/skills/email/`，模板 ID 白名单）。
+- 未接入：`emailTemplates.server.ts` 中其余 templateId（翻译成功/失败、APG 等）按需后续扩展；`task*` 通知模板（`180504–180507`）未挂载。
 
 ### 日志与排错
 
-- 前缀：`[Email][Service]`、`[Email][Tencent]`、`[Email][Notification]`、`[AppLifecycle:install]`、`[AppLifecycle:uninstall]`。
+- 前缀：`[MerchantEmail]`（商户事务邮件 sent/skip/failed）、`[Email][Tencent]`（SES 重试）、`[Email][Service]`（`EMAIL_TEST_RECIPIENT` 重定向）、`[EmailTool]`（Agent 无收件人 warn）。
 - 缺凭证：`sendTemplateEmail` 返回 `EMAIL_MISSING_CREDENTIALS`，主流程不阻断。
 - 发送失败：`TENCENT_SEND_FAILED`；成功以响应非空 `RequestId` 为准。
 
@@ -293,7 +295,7 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
 - 改 Agent 运行摘要 / Cosmos 写入：`app/server/agentRunLog/**`（先读 `docs/agent-run-log.md`）；聊天写入见 `invokeChatAgent.server.ts`、`agentStream.server.ts`。
 - 加新 AI 工具：`app/server/ai/skills/index.ts` 的 `globalToolRegistry.register`（或 legacy `app/server/ai/tools/implementations/*`），由 `buildChatAgentExtraTools` 注入聊天链路。
 - 改邮件发送 / 模板 / Provider：`app/server/email/**`（业务只调 `sendTemplateEmail` / scenario 封装，勿直接用 Provider）。
-- 改 App 安装/卸载商户邮件：`app/server/appLifecycle/`、`app/server/commonEventLog/recordAppInstalled.server.ts`、`app/routes/webhooks.app.uninstalled.tsx`、`app/server/email/scenarios/sendNotificationEmail.server.ts`、`app/server/notifications/**`。
+- 改 App 安装/卸载商户邮件：`app/server/appLifecycle/`、`app/server/commonEventLog/recordAppInstalled.server.ts`、`app/routes/webhooks.app.uninstalled.tsx`、`app/server/notifications/**`。
 - 改飞书运营通知：`app/server/feishu/**`；卸载挂载 `onAppUninstalled`；订阅挂载 `activateSubscription.server.ts`（仅 `wasPending`）。
 - 改 Agent 模板邮件工具：`app/server/ai/skills/email/**`。
 - 改诊断指标：`app/routes/app.additional.tsx`（含查询、阈值、文案）。

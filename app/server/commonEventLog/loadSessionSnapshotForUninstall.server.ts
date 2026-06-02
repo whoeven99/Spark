@@ -18,13 +18,24 @@ type SessionRow = {
   lastName: string | null;
   email: string | null;
   locale: string | null;
+  shopOwnerName: string | null;
 };
 
 function mapRow(row: SessionRow): UninstallSessionSnapshot {
+  let firstName = row.firstName?.trim() || undefined;
+  let lastName = row.lastName?.trim() || undefined;
+
+  // 当 Session.firstName 为空时，从 shopOwnerName 解析（如 "John Doe" → firstName="John"）
+  if (!firstName && row.shopOwnerName?.trim()) {
+    const parts = row.shopOwnerName.trim().split(/\s+/);
+    firstName = parts[0];
+    lastName = lastName ?? (parts.slice(1).join(" ") || undefined);
+  }
+
   return {
     shop: row.shop,
-    firstName: row.firstName?.trim() || undefined,
-    lastName: row.lastName?.trim() || undefined,
+    firstName,
+    lastName,
     email: row.email?.trim() || undefined,
     locale: row.locale?.trim() || undefined,
   };
@@ -47,6 +58,7 @@ export async function loadSessionSnapshotForUninstall(
     lastName: true,
     email: true,
     locale: true,
+    shopOwnerName: true,
   } as const;
 
   let row: SessionRow | null = null;

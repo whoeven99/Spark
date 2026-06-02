@@ -30,6 +30,9 @@ export async function startSubscriptionCheckout(params: {
   );
 
   const gateway = getBillingGateway();
+  console.info(
+    `[Billing][Checkout] subscribe-start shop=${params.shop} appName=${params.appName} planKey=${params.planKey}`,
+  );
   const result = await gateway.createSubscription({
     admin: params.admin,
     shop: params.shop,
@@ -37,6 +40,9 @@ export async function startSubscriptionCheckout(params: {
     plan: plan,
     returnUrl,
   });
+  console.info(
+    `[Billing][Checkout] subscribe-done shop=${params.shop} confirmationUrl=${result.confirmationUrl ? "set" : "null"} subscriptionId=${result.shopifySubscriptionId ?? "(none)"}`,
+  );
 
   return { confirmationUrl: result.confirmationUrl };
 }
@@ -63,6 +69,9 @@ export async function startTokenPackCheckout(params: {
   );
 
   const gateway = getBillingGateway();
+  console.info(
+    `[Billing][Checkout] token-pack-start shop=${params.shop} appName=${params.appName} planKey=${params.planKey}`,
+  );
   const result = await gateway.createOneTimePurchase({
     admin: params.admin,
     shop: params.shop,
@@ -70,6 +79,9 @@ export async function startTokenPackCheckout(params: {
     plan,
     returnUrl,
   });
+  console.info(
+    `[Billing][Checkout] token-pack-done shop=${params.shop} confirmationUrl=${result.confirmationUrl ? "set" : "null"} purchaseId=${result.shopifyPurchaseId ?? "(none)"}`,
+  );
 
   return { confirmationUrl: result.confirmationUrl };
 }
