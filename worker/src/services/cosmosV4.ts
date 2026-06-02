@@ -23,6 +23,7 @@ export type TranslationV4Metrics = {
   translateTotal: number;
   translateDone: number;
   translateFailed: number;
+  translateFallback: number;
   writebackTotal: number;
   writebackDone: number;
   writebackFailed: number;
@@ -40,6 +41,9 @@ export type TranslationV4Job = {
   target: string;
   modules: string[];
   aiModel: string;
+  /** The engine actually used at translate time (real data, set by the worker). */
+  aiModelUsed: string | null;
+  aiProvider: string | null;
   limitPerType: number;
   isCover: boolean;
   isHandle: boolean;
@@ -134,6 +138,8 @@ export async function updateJob(
       | "errorMessage"
       | "errorStage"
       | "blobPrefix"
+      | "aiModelUsed"
+      | "aiProvider"
     >
   >,
 ): Promise<void> {

@@ -43,12 +43,22 @@ const PRESERVE_WHEN_SET_KEYS = new Set([
  * 解析 KEY=VALUE 行。
  * @param overrideExisting 本地 .env 为 true：用文件值覆盖空字符串；Render 密钥文件为 false。
  */
+function maskValue(key: string, value: string): string {
+  if (!value) return "(空)";
+  if (/token|secret|key|password|auth/i.test(key)) {
+    return `(已设置,len=${value.length})`;
+  }
+  return value.length > 40 ? `${value.slice(0, 40)}…` : value;
+}
+
 function applyEnvFileContent(
   content: string,
   sourceLabel: string,
   overrideExisting: boolean,
 ): number {
   let applied = 0;
+  const loadedKeys: string[] = [];
+  const skippedKeys: string[] = [];
   for (const rawLine of content.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line || line.startsWith("#")) continue;
@@ -74,18 +84,28 @@ function applyEnvFileContent(
     if (shouldApply) {
       process.env[key] = value;
       applied += 1;
+      loadedKeys.push(`${key}=${maskValue(key, value)}`);
+    } else if (alreadySet) {
+      skippedKeys.push(`${key}(已有值,跳过)`);
     }
   }
   if (applied > 0) {
-    console.info(`[env] 从 ${sourceLabel} 加载 ${applied} 个变量`);
+    console.info(`[env] 从 ${sourceLabel} 加载 ${applied} 个变量: ${loadedKeys.join("; ")}`);
+  }
+  if (skippedKeys.length > 0) {
+    console.info(`[env] 从 ${sourceLabel} 跳过 ${skippedKeys.length} 个已有键: ${skippedKeys.join("; ")}`);
   }
   return applied;
 }
 
 function tryLoadEnvFile(filePath: string, overrideExisting: boolean): void {
-  if (!existsSync(filePath)) return;
+  const exists = existsSync(filePath);
+  console.info(`[env] 检查 ${filePath}: ${exists ? "存在" : "不存在"}`);
+  if (!exists) return;
   try {
     const content = readFileSync(filePath, "utf8");
+    const lineCount = content.split(/\r?\n/).filter((l) => l.trim() && !l.trim().startsWith("#")).length;
+    console.info(`[env] ${filePath} 共 ${lineCount} 行有效内容`);
     applyEnvFileContent(content, filePath, overrideExisting);
   } catch (error) {
     console.warn(`[env] 读取 ${filePath} 失败:`, error);
@@ -119,12 +139,50 @@ function candidateEnvFiles(projectRoot: string): string[] {
  * 启动时加载 .env（本地）与 Render Secret File。
  * 会合并多个文件，不再「读到第一个就 break」。
  */
+/** 列出指定前缀的环境变量键，用于排错 */
+function logEnvKeysByPrefix(prefix: string): string[] {
+  return Object.keys(process.env)
+    .filter((k) => k.startsWith(prefix))
+    .sort();
+}
+
+/** 排错：打印关键环境变量是否存在（不含值内容，不含敏感信息） */
+function logCriticalEnvStatus(): void {
+  const prefixes = ["COSMOS_", "REDIS_", "BLOB_", "AZURE_", "TURSO_", "DEEPSEEK_", "OPENAI_", "SHOPIFY_", "TENCENT_", "LANGSMITH_", "FEISHU_"];
+  const found: string[] = [];
+  const missing: string[] = [];
+
+  for (const prefix of prefixes) {
+    const keys = logEnvKeysByPrefix(prefix);
+    if (keys.length > 0) {
+      found.push(`${prefix}(${keys.length}个): ${keys.join(", ")}`);
+    } else {
+      missing.push(prefix);
+    }
+  }
+
+  console.info(`[env] ===== 环境变量诊断 =====`);
+  console.info(`[env] NODE_ENV=${process.env.NODE_ENV}, RENDER=${process.env.RENDER}, projectRoot=${getProjectRoot()}, cwd=${process.cwd()}`);
+  console.info(`[env] COSMOS_ENDPOINT=${process.env.COSMOS_ENDPOINT ? "已设置" : "❌ 缺失"}`);
+  console.info(`[env] COSMOS_KEY=${process.env.COSMOS_KEY ? "已设置" : "❌ 缺失"}`);
+  if (found.length > 0) {
+    console.info(`[env] 已加载的变量前缀: ${found.join(" | ")}`);
+  }
+  if (missing.length > 0) {
+    console.warn(`[env] 未找到的前缀: ${missing.join(", ")}`);
+  }
+  console.info(`[env] process.env 总键数: ${Object.keys(process.env).length}`);
+  console.info(`[env] ===== 诊断结束 =====`);
+}
+
 export function ensureRuntimeEnv(): void {
   if (runtimeEnvLoaded) return;
   runtimeEnvLoaded = true;
 
   const projectRoot = getProjectRoot();
   const files = candidateEnvFiles(projectRoot);
+
+  console.info(`[env] 准备扫描 ${files.length} 个候选 .env 路径`);
 
   for (const filePath of files) {
     const isProjectDotEnv =
@@ -133,12 +191,8 @@ export function ensureRuntimeEnv(): void {
     tryLoadEnvFile(filePath, isProjectDotEnv);
   }
 
-  if (!isProductionNodeEnv()) {
-    const hasTurso = Boolean(process.env.TURSO_TEST_DATABASE_URL?.trim());
-    console.info(
-      `[env] projectRoot=${projectRoot} cwd=${process.cwd()} .env=${existsSync(path.join(projectRoot, ".env")) ? "有" : "无"} TURSO_TEST_URL=${hasTurso ? "已加载" : "未加载"}`,
-    );
-  }
+  // 总是打印关键环境变量状态（不再受 isProductionNodeEnv 限制）
+  logCriticalEnvStatus();
 }
 
 /** 运行时读取环境变量 */

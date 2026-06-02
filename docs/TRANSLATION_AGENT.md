@@ -147,16 +147,58 @@ CREATED
   {
     "resourceId": "gid://shopify/Product/123",
     "translations": [
-      { "key": "title", "originalValue": "原文", "translatedValue": "Translated", "digest": "sha256hash" }
+      { "key": "title", "originalValue": "原文", "translatedValue": "Translated", "digest": "sha256hash", "status": "translated" }
     ]
   }
 ]
 ```
 
 **翻译引擎路由**：
-- `testMode=true` → 直接返回原文（跳过 API 调用）
+- `testMode=true` → 直接返回 `原文 - test`（跳过 API 调用）
 - `aiModel="google-translate"` 或 `TRANSLATION_AI_MODEL=google-translate` → Google Translate API
-- 其他 → OpenAI `chat.completions.create`，默认模型 `gpt-4o-mini`，`temperature=0.1`
+- 其他 → 走 LLM（OpenAI 兼容）`chat.completions.create`，`temperature=0.1`
+
+**引擎/提供方选择**（`resolveProvider()` / `getOpenAI()` / `resolveModel()`）：
+
+`TRANSLATION_AI_MODEL` 是显式选择器:
+- `google-translate` → Google 机翻(不走 LLM)
+- `deepseek` → DeepSeek（`DEEPSEEK_BASE_URL` 默认 `https://api.deepseek.com/v1`,模型取 `DEEPSEEK_MODEL`）
+- `azure` → Azure OpenAI（模型取 `AZURE_OPENAI_DEPLOYMENT`）
+- **留空** → 按 env 存在性自动探测:`DEEPSEEK_API_KEY` → DeepSeek；否则 `AZURE_OPENAI_ENDPOINT` → Azure；否则 OpenAI 官方（模型取 job 的 `aiModel`）
+- 其它值 → OpenAI 官方
+
+> job 的 `aiModel` 仍可单独取 `google-translate` 走机翻（向后兼容）。TM 缓存按实际引擎模型名隔离,不同 provider 不会串缓存。
+
+**翻译记忆（TM 缓存）**（`worker/src/services/translationMemory.ts`）：
+- 翻译前按 `tm:v4:{shop}:{target}:{model}:{digest}` 查 Redis，命中则跳过引擎调用；翻译成功后写回缓存。
+- key 用 Shopify 的字段 `digest`（源内容哈希）做天然失效：源文改动 → digest 变 → 自动失配重译。
+- 仅缓存成功译文（fallback 不缓存）；value 超 8KB 不缓存；`skip` 字段不查缓存。
+- 关闭：`TRANSLATION_TM_DISABLED=true`；TTL：`TRANSLATION_TM_TTL_DAYS`（默认 60 天）。
+
+**Prompt 结构（缓存友好）**（`callLLMOnce` / `buildSystemPrompt`）：
+- 拆成 `system`（静态指令 + 术语表，对同一 source/target/glossary 字节级稳定）+ `user`（仅待翻译 JSON payload）。
+- 变动的待翻译值只出现在 user 消息末尾，使 OpenAI 自动前缀缓存能命中（同一 job 的连续 batch 受益）。
+- system 还要求保留占位符/变量（`{{name}}`、`%s`、`{0}`）。
+
+**术语表注入**（`worker/src/services/glossary.ts`）：
+- 从 Blob `glossary/{shop}.json` 读取，按 target 过滤后注入 system 前缀；缺失则不注入。
+- 行内确定性排序保证前缀字节稳定（不破坏缓存）。进程内缓存 5 分钟，避免每个 batch 读 Blob。
+- 格式：`{ terms: [{ source, translations: {<locale>: "..."}, doNotTranslate?, note? }] }`；`doNotTranslate` 对所有语言生效。
+- **写入入口（admin/app 端）尚未实现**，当前需手动写 Blob；后续 PR 补管理界面。
+
+**占位符保护**（`maskPlaceholders` / `restorePlaceholders`）：
+- 送 LLM 前把变量替换成哨兵 `⟦n⟧`，翻完还原——防止模型翻译变量名（如 `{{quantity}}`→`{{quantité}}`、`[qty]`→`[qté]` 会破坏 Shopify 变量替换）。
+- 覆盖：`{{ x }}`(Liquid)、`%{x}`(Ruby)、`${x}`、`%s/%d/%1$s`、`{0}`、`[name]`（**不含** markdown 链接 `[text](url)`）。
+- 还原前校验哨兵是否完好；若模型把哨兵搞坏 → 回退原文(占位符至少保持完整)并标记 `fallback`，避免静默损坏。
+
+**HTML 实体/空白清理**（`callLLM` / `translateHtmlLLM`）：
+- prompt 要求模型输出字面字符、不要 HTML 转义引号/撇号、不增删首尾空白。
+- 防御性后处理:对 LLM 输出只反转义 `&#39;/&apos;/&quot;/&#34;` → `'`/`"`（**不动** `&amp;/&lt;/&gt;`，保证 HTML 合法）；HTML 文本节点还原前 `trim()`，避免模型注入的首尾空白叠加到模板已保留的空白上。
+
+**LLM 重试与回退**（`callLLM`）：
+- LLM 返回 JSON 解析失败、或漏返回部分 key 时，只对未解析的 key 重试（最多 2 次，共 3 次尝试）。
+- 全部尝试后仍未解析的 key → 回退原文，`status="fallback"`。
+- 每个字段结果带 `status: "translated" | "fallback"`。一个 plain 字段若有任一切分片段回退，则整字段标记 fallback。
 
 **字段分类**（`classifyField(key)`）：
 - `skip`：`handle`（Shopify URL slug，跳过不翻）
@@ -205,6 +247,8 @@ CREATED
 | `tasks/v4/{shop}/{id}/manifest.json` | `{taskId, shopName, source, target, modules:{[mod]:{totalItems,chunks}}, createdAt}` | Init |
 | `tasks/v4/{shop}/{id}/init/{MODULE}/chunk-{nn}.json` | `TranslatableResource[]` | Init |
 | `tasks/v4/{shop}/{id}/translate/{MODULE}/chunk-{nn}.json` | `[{resourceId, translations:[...]}]` | Translate |
+| `tasks/v4/{shop}/{id}/translate/fallbacks.json` | `[{resourceId, module, key}]`（回退原文的字段，供 UI 展示） | Translate（有 fallback 时） |
+| `glossary/{shop}.json` | `{terms:[{source, translations, doNotTranslate?, note?}]}`（按店术语表，翻译时注入 prompt） | 手动/后续管理界面 |
 | `tasks/v4/{shop}/{id}/writeback/progress.json` | `{written: resourceId[]}` | Writeback（每 20 条更新） |
 | `tasks/v4/{shop}/{id}/writeback/failed.json` | `[{resourceId, translations:TranslationInput[]}]` | Writeback |
 
@@ -220,7 +264,7 @@ CREATED
 | `translate:v4:hint:verify` | List | `{taskId, shopName}` | 通知 verifyWorker |
 | `translate:v4:progress:{taskId}` | Hash | 11 个指标计数器 + `currentModule` + `updatedAt` | 实时进度（TTL 7 天） |
 
-**Progress hash 字段**：`initTotal`, `initDone`, `translateTotal`, `translateDone`, `translateFailed`, `writebackTotal`, `writebackDone`, `writebackFailed`, `verifyTotal`, `verifyDone`, `verifyFailed`, `currentModule`, `updatedAt`
+**Progress hash 字段**：`initTotal`, `initDone`, `translateTotal`, `translateDone`, `translateFailed`, `translateFallback`, `writebackTotal`, `writebackDone`, `writebackFailed`, `verifyTotal`, `verifyDone`, `verifyFailed`, `currentModule`, `updatedAt`
 
 ---
 
@@ -241,7 +285,9 @@ CREATED
 | `source` | string | 源语言，如 `zh-CN` |
 | `target` | string | 目标语言，如 `en` |
 | `modules` | TranslationV4Module[] | 待翻译模块 |
-| `aiModel` | string | 翻译模型，如 `gpt-4o-mini` 或 `google-translate` |
+| `aiModel` | string | **请求的**翻译模型（创建任务时填，默认 `gpt-4o-mini`） |
+| `aiModelUsed` | string \| null | **实际使用的**模型（worker 翻译完写入真实值，如 `deepseek-v4-flash`、Azure deployment、`gpt-4o-mini`、`google-translate`、testMode 时 `test`） |
+| `aiProvider` | string \| null | 实际引擎：`deepseek` / `azure` / `openai` / `google` / `test` |
 | `limitPerType` | number | 每个模块最多翻译条目数（1–500） |
 | `isCover` | boolean | 是否覆盖已有译文 |
 | `isHandle` | boolean | 是否翻译 handle 字段 |
@@ -310,6 +356,21 @@ CREATED
 
 ---
 
+## 翻译质量报告（离线分析）
+
+`worker/src/scripts/exportTranslationReport.ts`：读取某任务 `translate/` 下的 before/after blob，生成字段清单 + 质量红旗报告。
+
+```bash
+# 需配置 Blob env（同 worker）
+cd worker && npx tsx src/scripts/exportTranslationReport.ts <shopName> <taskId> [outPath]
+```
+
+输出：每模块的字段 key 清单（classify、条数、平均长度、fallback/unchanged/empty 计数）+ 质量红旗（fallback、疑似漏翻 unchanged、空译文、长度比异常、HTML 标签数不一致、占位符丢失）+ 每类抽样。分析逻辑在 `worker/src/services/translationReport.ts`（纯函数，已覆盖单测）。
+
+**线上质量测试流程**：设 `WORKER_STAGES=init,translate` 跑任务（不写回店铺）→ 跑本脚本读 blob → 据报告优化 prompt/过滤/术语表。
+
+---
+
 ## 僵死任务重置
 
 `scheduler.ts` 每 **5 分钟**调用 `resetStaleJobs(staleMinutes=10)`：
@@ -372,9 +433,19 @@ type TranslationTaskFormPayload = {
 | `REDIS_PASSWORD` / `REDISCACHEKEY` | App + Worker | Redis 密码 |
 | `REDIS_PORT` | App + Worker | Redis 端口，默认 `6380` |
 | `REDIS_TLS` | App + Worker | 设为 `"false"` 关闭 TLS（Azure Cache 默认开启） |
-| `OPENAI_API_KEY` | Worker | OpenAI API 密钥 |
+| `OPENAI_API_KEY` | Worker | OpenAI API 密钥（官方） |
+| `AZURE_OPENAI_ENDPOINT` | Worker | 设置后翻译走 Azure OpenAI（如 `https://xxx.openai.azure.com`） |
+| `AZURE_OPENAI_API_KEY` | Worker | Azure OpenAI 密钥（缺省回退 `OPENAI_API_KEY`） |
+| `AZURE_OPENAI_DEPLOYMENT` | Worker | Azure 部署名（即实际路由的模型，必填于 Azure 模式） |
+| `AZURE_OPENAI_API_VERSION` | Worker | Azure API 版本，默认 `2024-08-01-preview` |
+| `DEEPSEEK_API_KEY` | Worker | 设置后翻译走 DeepSeek（优先级高于 Azure/OpenAI） |
+| `DEEPSEEK_MODEL` | Worker | DeepSeek 模型，如 `deepseek-v4-flash` |
+| `DEEPSEEK_BASE_URL` | Worker | DeepSeek 端点，默认 `https://api.deepseek.com/v1` |
 | `GOOGLE_TRANSLATE_API_KEY` | Worker | Google Translate API 密钥 |
 | `TRANSLATION_AI_MODEL` | App + Worker | 全局覆盖翻译模型，如 `gpt-4o-mini`、`google-translate` |
+| `TRANSLATION_TM_DISABLED` | Worker | 设为 `"true"` 关闭翻译记忆缓存 |
+| `TRANSLATION_TM_TTL_DAYS` | Worker | 翻译记忆缓存 TTL（天），默认 60 |
+| `WORKER_STAGES` | Worker | 逗号分隔启用的阶段，如 `init,translate`（默认全开）。用于线上质量测试时跳过 writeback/verify，不写回真实店铺 |
 
 ---
 

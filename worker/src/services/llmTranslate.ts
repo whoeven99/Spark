@@ -1,14 +1,90 @@
-import OpenAI from "openai";
+import OpenAI, { AzureOpenAI } from "openai";
+import { tmGet, tmSet } from "./translationMemory.js";
+import { loadGlossaryLines } from "./glossary.js";
 
 let _openai: OpenAI | null = null;
 
-function getOpenAI(): OpenAI {
-  if (!_openai) {
-    const apiKey = process.env.OPENAI_API_KEY?.trim();
-    if (!apiKey) throw new Error("OPENAI_API_KEY is required for LLM translation");
-    _openai = new OpenAI({ apiKey });
+type Provider = "google" | "deepseek" | "azure" | "openai";
+
+/**
+ * Resolves the translation engine. `TRANSLATION_AI_MODEL` is an explicit selector:
+ *   - "google-translate" → Google Translate (machine translation, not LLM)
+ *   - "deepseek"         → DeepSeek
+ *   - "azure"            → Azure OpenAI
+ *   - "" (unset)         → auto-detect by env presence: DeepSeek → Azure → OpenAI
+ *   - any other value    → OpenAI, using that string as the model id
+ */
+function resolveProvider(aiModel?: string): Provider {
+  const envSel = process.env.TRANSLATION_AI_MODEL?.trim().toLowerCase();
+  // Env override wins; otherwise the job's own aiModel can name an engine.
+  const sel = envSel || aiModel?.trim().toLowerCase() || "";
+  if (sel === "google-translate") return "google";
+  if (sel === "deepseek") return "deepseek";
+  if (sel === "azure") return "azure";
+  // No explicit engine selected → auto-detect by configured credentials.
+  if (!envSel) {
+    if (process.env.DEEPSEEK_API_KEY?.trim()) return "deepseek";
+    if (process.env.AZURE_OPENAI_ENDPOINT?.trim()) return "azure";
   }
+  return "openai";
+}
+
+/** Returns an OpenAI-compatible client for the active LLM provider. */
+function getOpenAI(): OpenAI {
+  if (_openai) return _openai;
+
+  const provider = resolveProvider();
+
+  if (provider === "deepseek") {
+    const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
+    if (!apiKey) throw new Error("DEEPSEEK_API_KEY is required for DeepSeek translation");
+    const baseURL = process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com/v1";
+    _openai = new OpenAI({ apiKey, baseURL });
+    return _openai;
+  }
+
+  if (provider === "azure") {
+    const endpoint = process.env.AZURE_OPENAI_ENDPOINT?.trim();
+    const apiKey = process.env.AZURE_OPENAI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim();
+    const deployment = process.env.AZURE_OPENAI_DEPLOYMENT?.trim();
+    const apiVersion = process.env.AZURE_OPENAI_API_VERSION?.trim() || "2024-08-01-preview";
+    if (!endpoint) throw new Error("AZURE_OPENAI_ENDPOINT is required for Azure OpenAI translation");
+    if (!apiKey) throw new Error("AZURE_OPENAI_API_KEY is required for Azure OpenAI translation");
+    if (!deployment) throw new Error("AZURE_OPENAI_DEPLOYMENT is required for Azure OpenAI translation");
+    _openai = new AzureOpenAI({ endpoint, apiKey, deployment, apiVersion });
+    return _openai;
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) throw new Error("OPENAI_API_KEY is required for LLM translation");
+  _openai = new OpenAI({ apiKey });
   return _openai;
+}
+
+/**
+ * The model id to send, matching the active provider:
+ * DeepSeek → DEEPSEEK_MODEL, Azure → deployment name, OpenAI → job's aiModel.
+ */
+function resolveModel(aiModel: string): string {
+  switch (resolveProvider()) {
+    case "deepseek":
+      return process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
+    case "azure":
+      return process.env.AZURE_OPENAI_DEPLOYMENT?.trim() || aiModel || "gpt-4o-mini";
+    default:
+      return aiModel || "gpt-4o-mini";
+  }
+}
+
+/**
+ * The engine actually used for a given job model — the real provider + model id,
+ * after env overrides and provider resolution. Used to record truthful data in
+ * Cosmos (the job's `aiModel` is only what was requested).
+ */
+export function resolveEngine(aiModel: string): { provider: string; model: string } {
+  const provider = resolveProvider(aiModel);
+  const model = provider === "google" ? "google-translate" : resolveModel(aiModel);
+  return { provider, model };
 }
 
 export type TranslateItem = {
@@ -21,6 +97,8 @@ export type TranslateResult = {
   key: string;
   translatedValue: string;
   digest: string;
+  /** "translated" = produced by the engine; "fallback" = engine failed, original text returned. */
+  status: "translated" | "fallback";
 };
 
 // ─── Field classification ──────────────────────────────────────────────────────
@@ -215,7 +293,13 @@ async function translateHtmlGoogle(html: string, source: string, target: string)
  * Text nodes are extracted from the HTML, sent to the LLM as plain text batches,
  * then restored into the original HTML structure.
  */
-async function translateHtmlLLM(html: string, source: string, target: string, aiModel: string): Promise<string> {
+async function translateHtmlLLM(
+  html: string,
+  source: string,
+  target: string,
+  aiModel: string,
+  shopName: string,
+): Promise<string> {
   const { template, texts } = extractHtmlTextNodes(html);
   if (texts.length === 0) return html;
 
@@ -224,55 +308,260 @@ async function translateHtmlLLM(html: string, source: string, target: string, ai
   const translated = new Array<string>(texts.length).fill("");
 
   for (const batch of batches) {
-    const results = await callLLM(batch, source, target, aiModel);
-    for (const r of results) translated[Number(r.key)] = r.translatedValue;
+    const results = await callLLM(batch, source, target, aiModel, shopName);
+    // Trim each node: the original leading/trailing whitespace is preserved in the
+    // template, so any whitespace the model adds here would be injected on top.
+    for (const r of results) translated[Number(r.key)] = r.translatedValue.trim();
   }
 
   return restoreHtmlTextNodes(template, translated);
 }
 
+// Retries for a single (un-splittable) item that fails transiently.
+const LEAF_RETRIES = 2;
+
+/**
+ * Pull the JSON object out of a model response that may be wrapped in markdown
+ * fences or surrounded by prose. Still throws downstream if the inner text is
+ * genuinely malformed.
+ */
+function extractJsonObject(raw: string): string {
+  let s = raw.trim();
+  const fence = s.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fence) s = fence[1].trim();
+  const first = s.indexOf("{");
+  const last = s.lastIndexOf("}");
+  if (first >= 0 && last > first) s = s.slice(first, last + 1);
+  return s;
+}
+
+/**
+ * LLMs sometimes HTML-escape quotes/apostrophes in their output (`won't` →
+ * `won&#39;t`). In HTML text nodes and plain fields these characters are valid
+ * literals, so the escaping is pure noise (and can double-escape on re-runs).
+ * Decode ONLY quotes/apostrophes — never &amp;/&lt;/&gt;, which must stay escaped
+ * to keep HTML well-formed.
+ */
+function decodeQuoteEntities(text: string): string {
+  return text
+    .replace(/&#0*39;|&apos;/g, "'")
+    .replace(/&#0*34;|&quot;/g, '"');
+}
+
+// ─── Placeholder masking ───────────────────────────────────────────────────────
+
+/**
+ * Variables that must survive translation verbatim. LLMs otherwise translate the
+ * word inside them (e.g. {{quantity}} → {{quantité}}, [qty] → [qté]), which
+ * breaks Shopify's variable substitution. We mask them before sending and restore
+ * after, instead of trusting the model to leave them alone.
+ *
+ * Covered: Liquid/handlebars `{{ x }}`, Ruby i18n `%{x}`, template `${x}`,
+ * printf `%s/%d/%1$s`, numbered `{0}`, and bracket vars `[name]` (but NOT
+ * markdown links `[text](url)`).
+ */
+const PLACEHOLDER_RE =
+  /\{\{[^{}]*\}\}|%\{[^}]+\}|\$\{[^}]+\}|%\d*\$?[sd]|\{\d+\}|\[[A-Za-z_][\w-]*\](?!\()/g;
+
+// Rare bracket pair the model treats as an opaque token and won't translate.
+const SENT_OPEN = "⟦"; // ⟦
+const SENT_CLOSE = "⟧"; // ⟧
+const SENT_RE = /⟦(\d+)⟧/g;
+
+function maskPlaceholders(text: string): { masked: string; tokens: string[] } {
+  const tokens: string[] = [];
+  const masked = text.replace(PLACEHOLDER_RE, (m) => {
+    const i = tokens.length;
+    tokens.push(m);
+    return `${SENT_OPEN}${i}${SENT_CLOSE}`;
+  });
+  return { masked, tokens };
+}
+
+function restorePlaceholders(text: string, tokens: string[]): string {
+  return text.replace(SENT_RE, (_m, d: string) => tokens[Number(d)] ?? "");
+}
+
+/** True if every masked token's sentinel survived intact in the model output. */
+function placeholdersIntact(text: string, tokens: string[]): boolean {
+  for (let i = 0; i < tokens.length; i++) {
+    if (!text.includes(`${SENT_OPEN}${i}${SENT_CLOSE}`)) return false;
+  }
+  return true;
+}
+
+/**
+ * Build the static system prompt. Everything here is stable for a given
+ * (source, target, glossary) → it forms a byte-identical prefix across batches
+ * so OpenAI automatic prompt caching applies. The variable payload goes in the
+ * user message instead.
+ */
+function buildSystemPrompt(source: string, target: string, glossaryLines: string[]): string {
+  const glossaryBlock = glossaryLines.length
+    ? `\nGlossary (apply consistently):\n${glossaryLines.join("\n")}\n`
+    : "";
+  return `You are a professional e-commerce translator.
+Translate from "${source}" to "${target}".
+Rules:
+- Be accurate and natural for e-commerce
+- Keep any ⟦number⟧ tokens exactly as they appear; never translate, modify, reorder, or drop them
+- Output literal characters; do NOT HTML-escape. Use ' and " directly — never &#39; or &quot;
+- Do NOT add or remove leading or trailing whitespace
+- If the value is empty, return it unchanged
+- You MUST return an entry for every key in the input
+${glossaryBlock}
+The user message is a JSON array of {"key","value"} objects to translate.
+Return ONLY a JSON object {"translations":[{"key":"<key>","translatedValue":"<text>"}]}, no markdown.`;
+}
+
+/**
+ * One LLM round-trip. Returns a map of the keys the model actually returned.
+ * Throws on unparseable JSON so the caller can retry.
+ */
+async function callLLMOnce(
+  items: TranslateItem[],
+  aiModel: string,
+  systemPrompt: string,
+): Promise<Map<string, string>> {
+  const payload = items.map((i) => ({ key: i.key, value: i.value }));
+
+  const model = resolveModel(aiModel);
+
+  const openai = getOpenAI();
+  const completion = await openai.chat.completions.create({
+    model,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: JSON.stringify(payload) },
+    ],
+    temperature: 0.1,
+    response_format: { type: "json_object" },
+  }, {
+    timeout: 120_000, // 120s per batch — prevents hanging on unresponsive APIs
+  });
+
+  const raw = completion.choices[0]?.message?.content ?? "{}";
+  // JSON.parse throws on malformed output → propagated to caller for retry/splitting.
+  const obj = JSON.parse(extractJsonObject(raw)) as { translations?: unknown };
+  const parsed = Array.isArray(obj.translations)
+    ? (obj.translations as Array<{ key?: unknown; translatedValue?: unknown }>)
+    : [];
+
+  const map = new Map<string, string>();
+  for (const r of parsed) {
+    if (typeof r?.key === "string" && typeof r?.translatedValue === "string") {
+      map.set(r.key, r.translatedValue);
+    }
+  }
+  return map;
+}
+
+/**
+ * Translate a set of (already masked) items, writing results into `collected`.
+ * On an unparseable/failed response the batch is split in half and retried, so a
+ * single item that makes the model emit invalid JSON cannot poison the whole
+ * batch. A lone failing item is retried a few times, then left for fallback.
+ */
+async function gatherTranslations(
+  items: TranslateItem[],
+  aiModel: string,
+  systemPrompt: string,
+  collected: Map<string, string>,
+): Promise<void> {
+  const pend = items.filter((i) => !collected.has(i.key));
+  if (pend.length === 0) return;
+
+  try {
+    const map = await callLLMOnce(pend, aiModel, systemPrompt);
+    let progressed = false;
+    for (const [k, v] of map) {
+      if (!collected.has(k)) {
+        collected.set(k, v);
+        progressed = true;
+      }
+    }
+    const missing = pend.filter((i) => !collected.has(i.key));
+    // Model parsed OK but dropped some keys → retry just those, but only while
+    // making progress (avoids looping on a key the model refuses to return).
+    if (missing.length > 0 && progressed && missing.length < pend.length) {
+      await gatherTranslations(missing, aiModel, systemPrompt, collected);
+    }
+    return;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (pend.length > 1) {
+      const mid = Math.ceil(pend.length / 2);
+      console.warn(`[llm] batch of ${pend.length} unparseable (${msg}); splitting`);
+      await gatherTranslations(pend.slice(0, mid), aiModel, systemPrompt, collected);
+      await gatherTranslations(pend.slice(mid), aiModel, systemPrompt, collected);
+      return;
+    }
+    // Single item: retry for transient failures, then give up (→ fallback).
+    for (let r = 0; r < LEAF_RETRIES; r++) {
+      try {
+        const map = await callLLMOnce(pend, aiModel, systemPrompt);
+        for (const [k, v] of map) if (!collected.has(k)) collected.set(k, v);
+        if (collected.has(pend[0].key)) return;
+      } catch {
+        // keep retrying up to the cap
+      }
+    }
+    console.warn(`[llm] item ${pend[0].key} failed after retries (${msg}); using original`);
+  }
+}
+
+/**
+ * Translate a batch via the LLM. Placeholders are masked first; results are
+ * gathered with adaptive splitting. Keys still unresolved are returned with
+ * status "fallback" (original value preserved).
+ */
 async function callLLM(
   items: TranslateItem[],
   source: string,
   target: string,
   aiModel: string,
+  shopName: string,
 ): Promise<TranslateResult[]> {
-  const payload = items.map((i) => ({ key: i.key, value: i.value }));
-  const prompt = `You are a professional e-commerce translator.
-Translate from "${source}" to "${target}".
-Return a JSON object: {"translations": [{"key": "<original key>", "translatedValue": "<translated>"}]}.
-Rules:
-- Be accurate and natural for e-commerce
-- If the value is empty, return it unchanged
+  // Load glossary once (cached) and build the stable system prefix for this call.
+  const glossaryLines = await loadGlossaryLines(shopName, target);
+  const systemPrompt = buildSystemPrompt(source, target, glossaryLines);
 
-Input:
-${JSON.stringify(payload)}
-
-Return ONLY the JSON object, no markdown.`;
-
-  const openai = getOpenAI();
-  const completion = await openai.chat.completions.create({
-    model: aiModel || "gpt-4o-mini",
-    messages: [{ role: "user", content: prompt }],
-    temperature: 0.1,
-    response_format: { type: "json_object" },
+  // Mask placeholders before sending so the model cannot translate them.
+  const tokensByKey = new Map<string, string[]>();
+  const maskedItems = items.map((item) => {
+    const { masked, tokens } = maskPlaceholders(item.value);
+    tokensByKey.set(item.key, tokens);
+    return { key: item.key, value: masked, digest: item.digest };
   });
 
-  const raw = completion.choices[0]?.message?.content ?? "{}";
-  let parsed: Array<{ key: string; translatedValue: string }> = [];
-  try {
-    const obj = JSON.parse(raw) as { translations?: unknown };
-    parsed = Array.isArray(obj.translations) ? (obj.translations as typeof parsed) : [];
-  } catch {
-    console.warn("[llm] failed to parse response, using originals");
+  const collected = new Map<string, string>(); // masked translations, keyed by item key
+  await gatherTranslations(maskedItems, aiModel, systemPrompt, collected);
+
+  const unresolved = maskedItems.length - collected.size;
+  if (unresolved > 0) {
+    console.warn(`[llm] ${unresolved} key(s) unresolved, using originals`);
   }
 
-  const resultMap = new Map(parsed.map((r) => [r.key, r.translatedValue]));
-  return items.map((item) => ({
-    key: item.key,
-    translatedValue: resultMap.get(item.key) ?? item.value,
-    digest: item.digest,
-  }));
+  return items.map((item) => {
+    const raw = collected.get(item.key);
+    if (raw === undefined) {
+      return { key: item.key, translatedValue: item.value, digest: item.digest, status: "fallback" as const };
+    }
+    const tokens = tokensByKey.get(item.key) ?? [];
+    const decoded = decodeQuoteEntities(raw);
+    // If the model mangled a placeholder sentinel, restoring would corrupt the
+    // variable — safer to keep the original (placeholder stays intact) and flag it.
+    if (tokens.length > 0 && !placeholdersIntact(decoded, tokens)) {
+      console.warn(`[llm] placeholder sentinel corrupted for key=${item.key}, using original`);
+      return { key: item.key, translatedValue: item.value, digest: item.digest, status: "fallback" as const };
+    }
+    return {
+      key: item.key,
+      translatedValue: restorePlaceholders(decoded, tokens),
+      digest: item.digest,
+      status: "translated" as const,
+    };
+  });
 }
 
 // ─── Main exported function ────────────────────────────────────────────────────
@@ -285,6 +574,9 @@ Return ONLY the JSON object, no markdown.`;
  * - plain fields: long values split at sentence/paragraph boundaries, batched by char count
  *
  * Engine routing: aiModel="google-translate" → Google Translate API; anything else → OpenAI.
+ *
+ * Translation Memory: fields already translated for the same (shop, target, model, digest)
+ * are served from cache without hitting any engine. Newly translated fields are cached.
  */
 export async function translateBatch(
   items: TranslateItem[],
@@ -292,38 +584,54 @@ export async function translateBatch(
   target: string,
   aiModel: string,
   testMode: boolean,
+  shopName: string,
 ): Promise<TranslateResult[]> {
   if (testMode) {
-    return items.map((item) => ({ key: item.key, translatedValue: `${item.value} - test`, digest: item.digest }));
+    return items.map((item) => ({
+      key: item.key,
+      translatedValue: `${item.value} - test`,
+      digest: item.digest,
+      status: "translated" as const,
+    }));
   }
 
   const resultMap = new Map<string, TranslateResult>();
-  const envModel = process.env.TRANSLATION_AI_MODEL?.trim();
-  const usedModel = envModel || aiModel;
-  const isGoogle = usedModel === "google-translate";
+  const isGoogle = resolveProvider(aiModel) === "google";
+  // TM cache is keyed by the actual engine output so different providers/models
+  // never share cached values.
+  const usedModel = isGoogle ? "google-translate" : resolveModel(aiModel);
 
-  // 1. Skip fields
+  // 1. Resolve skip fields and cache hits; everything else goes to `pending`.
+  const pending: TranslateItem[] = [];
   for (const item of items) {
     if (classifyField(item.key, item.value) === "skip") {
-      resultMap.set(item.key, { key: item.key, translatedValue: item.value, digest: item.digest });
+      resultMap.set(item.key, { key: item.key, translatedValue: item.value, digest: item.digest, status: "translated" });
+      continue;
     }
+    const cached = await tmGet(shopName, target, usedModel, item.digest);
+    if (cached !== null) {
+      resultMap.set(item.key, { key: item.key, translatedValue: cached, digest: item.digest, status: "translated" });
+      continue;
+    }
+    pending.push(item);
   }
 
   // 2. HTML fields — each translated individually with node-level batching
-  for (const item of items.filter((i) => classifyField(i.key, i.value) === "html")) {
+  for (const item of pending.filter((i) => classifyField(i.key, i.value) === "html")) {
     try {
       const translatedValue = isGoogle
         ? await translateHtmlGoogle(item.value, source, target)
-        : await translateHtmlLLM(item.value, source, target, aiModel);
-      resultMap.set(item.key, { key: item.key, translatedValue, digest: item.digest });
+        : await translateHtmlLLM(item.value, source, target, aiModel, shopName);
+      resultMap.set(item.key, { key: item.key, translatedValue, digest: item.digest, status: "translated" });
+      await tmSet(shopName, target, usedModel, item.digest, translatedValue);
     } catch (e) {
       console.warn(`[translate] html field "${item.key}" failed, using original`, e);
-      resultMap.set(item.key, { key: item.key, translatedValue: item.value, digest: item.digest });
+      resultMap.set(item.key, { key: item.key, translatedValue: item.value, digest: item.digest, status: "fallback" });
     }
   }
 
   // 3. Plain text fields — split long values, batch by char count
-  const plainItems = items.filter((i) => classifyField(i.key, i.value) === "plain");
+  const plainItems = pending.filter((i) => classifyField(i.key, i.value) === "plain");
   if (plainItems.length > 0) {
     // Expand long items into numbered parts
     type Part = { internalKey: string; originalKey: string; value: string; digest: string; idx: number; total: number };
@@ -344,21 +652,22 @@ export async function translateBatch(
 
     const batchItems: TranslateItem[] = expanded.map((p) => ({ key: p.internalKey, value: p.value, digest: p.digest }));
     const batches = batchByChars(batchItems, MAX_CHARS_PER_BATCH);
-    const translatedParts = new Map<string, string>();
+    const translatedParts = new Map<string, { value: string; status: "translated" | "fallback" }>();
 
     for (const batch of batches) {
       try {
-        let results: TranslateResult[];
         if (isGoogle) {
           const translated = await callGoogleTranslate(batch.map((b) => b.value), source, target, "text");
-          results = batch.map((b, i) => ({ key: b.key, translatedValue: translated[i] ?? b.value, digest: b.digest }));
+          batch.forEach((b, i) =>
+            translatedParts.set(b.key, { value: translated[i] ?? b.value, status: "translated" }),
+          );
         } else {
-          results = await callLLM(batch, source, target, aiModel);
+          const results = await callLLM(batch, source, target, aiModel, shopName);
+          for (const r of results) translatedParts.set(r.key, { value: r.translatedValue, status: r.status });
         }
-        for (const r of results) translatedParts.set(r.key, r.translatedValue);
       } catch (e) {
         console.warn("[translate] plain batch failed, using originals", e);
-        for (const b of batch) translatedParts.set(b.key, b.value);
+        for (const b of batch) translatedParts.set(b.key, { value: b.value, status: "fallback" });
       }
     }
 
@@ -373,12 +682,26 @@ export async function translateBatch(
     for (const [originalKey, parts] of partsByOriginal) {
       const originalItem = plainItems.find((i) => i.key === originalKey)!;
       const sorted = parts.sort((a, b) => a.idx - b.idx);
-      const translatedValue = sorted.map((p) => translatedParts.get(p.internalKey) ?? p.value).join("");
-      resultMap.set(originalKey, { key: originalKey, translatedValue, digest: originalItem.digest });
+      const pieces = sorted.map(
+        (p) => translatedParts.get(p.internalKey) ?? { value: p.value, status: "fallback" as const },
+      );
+      const translatedValue = pieces.map((p) => p.value).join("");
+      // A field is only "translated" if every one of its parts was translated.
+      const status = pieces.some((p) => p.status === "fallback") ? "fallback" : "translated";
+      resultMap.set(originalKey, { key: originalKey, translatedValue, digest: originalItem.digest, status });
+      if (status === "translated") {
+        await tmSet(shopName, target, usedModel, originalItem.digest, translatedValue);
+      }
     }
   }
 
   return items.map(
-    (item) => resultMap.get(item.key) ?? { key: item.key, translatedValue: item.value, digest: item.digest },
+    (item) =>
+      resultMap.get(item.key) ?? {
+        key: item.key,
+        translatedValue: item.value,
+        digest: item.digest,
+        status: "fallback" as const,
+      },
   );
 }
