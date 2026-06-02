@@ -217,3 +217,54 @@ describe("translateBatch — HTML entity & whitespace cleanup", () => {
     expect(out[0].translatedValue).toBe(`<p>Bonjour l'ami</p>`);
   });
 });
+
+describe("translateBatch — placeholder masking", () => {
+  it("masks variables before sending and restores them verbatim", async () => {
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "body", translatedValue: "Retourné ⟦0⟧ articles" }]));
+    const out = await translateBatch(
+      [{ key: "body", value: "Returned {{quantity}} items", digest: "d1" }],
+      "zh-CN",
+      "fr",
+      "gpt-4o-mini",
+      false,
+      "shop.myshopify.com",
+    );
+    // The model never saw the real variable...
+    const userMsg = createMock.mock.calls[0][0].messages[1].content as string;
+    expect(userMsg).toContain("⟦0⟧");
+    expect(userMsg).not.toContain("{{quantity}}");
+    // ...and it is restored exactly in the output.
+    expect(out[0].translatedValue).toBe("Retourné {{quantity}} articles");
+  });
+
+  it("masks [bracket] vars but leaves markdown links alone", async () => {
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "body", translatedValue: "X ⟦0⟧ Y [docs](url)" }]));
+    const out = await translateBatch(
+      [{ key: "body", value: "Buy [qty] see [docs](url)", digest: "d1" }],
+      "zh-CN",
+      "fr",
+      "gpt-4o-mini",
+      false,
+      "shop.myshopify.com",
+    );
+    const userMsg = createMock.mock.calls[0][0].messages[1].content as string;
+    expect(userMsg).toContain("⟦0⟧"); // [qty] masked
+    expect(userMsg).toContain("[docs](url)"); // markdown link not masked
+    expect(out[0].translatedValue).toBe("X [qty] Y [docs](url)"); // [qty] restored, link intact
+  });
+
+  it("falls back to the original if the model corrupts a placeholder sentinel", async () => {
+    // Model translated inside the token instead of preserving the sentinel.
+    createMock.mockResolvedValue(llmResponse([{ key: "body", translatedValue: "Retourné {{quantité}} articles" }]));
+    const out = await translateBatch(
+      [{ key: "body", value: "Returned {{quantity}} items", digest: "d1" }],
+      "zh-CN",
+      "fr",
+      "gpt-4o-mini",
+      false,
+      "shop.myshopify.com",
+    );
+    expect(out[0].status).toBe("fallback");
+    expect(out[0].translatedValue).toBe("Returned {{quantity}} items");
+  });
+});

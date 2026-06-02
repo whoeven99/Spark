@@ -260,6 +260,48 @@ function decodeQuoteEntities(text: string): string {
     .replace(/&#0*34;|&quot;/g, '"');
 }
 
+// ─── Placeholder masking ───────────────────────────────────────────────────────
+
+/**
+ * Variables that must survive translation verbatim. LLMs otherwise translate the
+ * word inside them (e.g. {{quantity}} → {{quantité}}, [qty] → [qté]), which
+ * breaks Shopify's variable substitution. We mask them before sending and restore
+ * after, instead of trusting the model to leave them alone.
+ *
+ * Covered: Liquid/handlebars `{{ x }}`, Ruby i18n `%{x}`, template `${x}`,
+ * printf `%s/%d/%1$s`, numbered `{0}`, and bracket vars `[name]` (but NOT
+ * markdown links `[text](url)`).
+ */
+const PLACEHOLDER_RE =
+  /\{\{[^{}]*\}\}|%\{[^}]+\}|\$\{[^}]+\}|%\d*\$?[sd]|\{\d+\}|\[[A-Za-z_][\w-]*\](?!\()/g;
+
+// Rare bracket pair the model treats as an opaque token and won't translate.
+const SENT_OPEN = "⟦"; // ⟦
+const SENT_CLOSE = "⟧"; // ⟧
+const SENT_RE = /⟦(\d+)⟧/g;
+
+function maskPlaceholders(text: string): { masked: string; tokens: string[] } {
+  const tokens: string[] = [];
+  const masked = text.replace(PLACEHOLDER_RE, (m) => {
+    const i = tokens.length;
+    tokens.push(m);
+    return `${SENT_OPEN}${i}${SENT_CLOSE}`;
+  });
+  return { masked, tokens };
+}
+
+function restorePlaceholders(text: string, tokens: string[]): string {
+  return text.replace(SENT_RE, (_m, d: string) => tokens[Number(d)] ?? "");
+}
+
+/** True if every masked token's sentinel survived intact in the model output. */
+function placeholdersIntact(text: string, tokens: string[]): boolean {
+  for (let i = 0; i < tokens.length; i++) {
+    if (!text.includes(`${SENT_OPEN}${i}${SENT_CLOSE}`)) return false;
+  }
+  return true;
+}
+
 /**
  * Build the static system prompt. Everything here is stable for a given
  * (source, target, glossary) → it forms a byte-identical prefix across batches
@@ -274,7 +316,7 @@ function buildSystemPrompt(source: string, target: string, glossaryLines: string
 Translate from "${source}" to "${target}".
 Rules:
 - Be accurate and natural for e-commerce
-- Preserve placeholders and variables (e.g. {{name}}, %s, {0}) exactly
+- Keep any ⟦number⟧ tokens exactly as they appear; never translate, modify, reorder, or drop them
 - Output literal characters; do NOT HTML-escape. Use ' and " directly — never &#39; or &quot;
 - Do NOT add or remove leading or trailing whitespace
 - If the value is empty, return it unchanged
@@ -338,17 +380,25 @@ async function callLLM(
   const glossaryLines = await loadGlossaryLines(shopName, target);
   const systemPrompt = buildSystemPrompt(source, target, glossaryLines);
 
-  const collected = new Map<string, string>();
-  let pending = items;
+  // Mask placeholders before sending so the model cannot translate them.
+  const tokensByKey = new Map<string, string[]>();
+  const maskedItems = items.map((item) => {
+    const { masked, tokens } = maskPlaceholders(item.value);
+    tokensByKey.set(item.key, tokens);
+    return { key: item.key, value: masked, digest: item.digest };
+  });
+
+  const collected = new Map<string, string>(); // masked translations, keyed by item key
+  let pending = maskedItems;
 
   for (let attempt = 0; attempt <= MAX_LLM_RETRIES && pending.length > 0; attempt++) {
     try {
       const map = await callLLMOnce(pending, aiModel, systemPrompt);
-      for (const [k, v] of map) if (!collected.has(k)) collected.set(k, decodeQuoteEntities(v));
+      for (const [k, v] of map) if (!collected.has(k)) collected.set(k, v);
     } catch (e) {
       console.warn(`[llm] attempt ${attempt + 1} failed`, e);
     }
-    pending = pending.filter((i) => !collected.has(i.key));
+    pending = maskedItems.filter((i) => !collected.has(i.key));
   }
 
   if (pending.length > 0) {
@@ -357,11 +407,26 @@ async function callLLM(
     );
   }
 
-  return items.map((item) =>
-    collected.has(item.key)
-      ? { key: item.key, translatedValue: collected.get(item.key)!, digest: item.digest, status: "translated" as const }
-      : { key: item.key, translatedValue: item.value, digest: item.digest, status: "fallback" as const },
-  );
+  return items.map((item) => {
+    const raw = collected.get(item.key);
+    if (raw === undefined) {
+      return { key: item.key, translatedValue: item.value, digest: item.digest, status: "fallback" as const };
+    }
+    const tokens = tokensByKey.get(item.key) ?? [];
+    const decoded = decodeQuoteEntities(raw);
+    // If the model mangled a placeholder sentinel, restoring would corrupt the
+    // variable — safer to keep the original (placeholder stays intact) and flag it.
+    if (tokens.length > 0 && !placeholdersIntact(decoded, tokens)) {
+      console.warn(`[llm] placeholder sentinel corrupted for key=${item.key}, using original`);
+      return { key: item.key, translatedValue: item.value, digest: item.digest, status: "fallback" as const };
+    }
+    return {
+      key: item.key,
+      translatedValue: restorePlaceholders(decoded, tokens),
+      digest: item.digest,
+      status: "translated" as const,
+    };
+  });
 }
 
 // ─── Main exported function ────────────────────────────────────────────────────

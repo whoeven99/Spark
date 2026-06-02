@@ -175,6 +175,11 @@ CREATED
 - 格式：`{ terms: [{ source, translations: {<locale>: "..."}, doNotTranslate?, note? }] }`；`doNotTranslate` 对所有语言生效。
 - **写入入口（admin/app 端）尚未实现**，当前需手动写 Blob；后续 PR 补管理界面。
 
+**占位符保护**（`maskPlaceholders` / `restorePlaceholders`）：
+- 送 LLM 前把变量替换成哨兵 `⟦n⟧`，翻完还原——防止模型翻译变量名（如 `{{quantity}}`→`{{quantité}}`、`[qty]`→`[qté]` 会破坏 Shopify 变量替换）。
+- 覆盖：`{{ x }}`(Liquid)、`%{x}`(Ruby)、`${x}`、`%s/%d/%1$s`、`{0}`、`[name]`（**不含** markdown 链接 `[text](url)`）。
+- 还原前校验哨兵是否完好；若模型把哨兵搞坏 → 回退原文(占位符至少保持完整)并标记 `fallback`，避免静默损坏。
+
 **HTML 实体/空白清理**（`callLLM` / `translateHtmlLLM`）：
 - prompt 要求模型输出字面字符、不要 HTML 转义引号/撇号、不增删首尾空白。
 - 防御性后处理:对 LLM 输出只反转义 `&#39;/&apos;/&quot;/&#34;` → `'`/`"`（**不动** `&amp;/&lt;/&gt;`，保证 HTML 合法）；HTML 文本节点还原前 `trim()`，避免模型注入的首尾空白叠加到模板已保留的空白上。
