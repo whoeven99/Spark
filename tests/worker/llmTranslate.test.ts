@@ -194,6 +194,9 @@ describe("translateBatch — prompt structure (caching-friendly)", () => {
     expect(messages[0].role).toBe("system");
     expect(messages[0].content).toContain("professional e-commerce translator");
     expect(messages[0].content).not.toContain("你好"); // variable text must NOT be in the cached prefix
+    // Source language is auto-detected, not hardcoded; only the target appears.
+    expect(messages[0].content).not.toContain("zh-CN");
+    expect(messages[0].content).toContain("en");
     expect(messages[1].role).toBe("user");
     expect(messages[1].content).toContain("你好");
   });
@@ -304,6 +307,10 @@ describe("translateBatch — cost-tiered engine routing", () => {
     expect(out[0].translatedValue).toBe("Hello-G");
     expect(f).toHaveBeenCalled(); // Google used
     expect(createMock).not.toHaveBeenCalled(); // LLM not used
+    // Google request omits `source` (auto-detect) but sets target.
+    const gBody = JSON.parse(String((f.mock.calls[0][1] as { body?: string }).body));
+    expect(gBody.source).toBeUndefined();
+    expect(gBody.target).toBe("en");
   });
 
   it("routes rich content (HTML) to the LLM", async () => {

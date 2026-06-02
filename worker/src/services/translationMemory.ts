@@ -12,7 +12,9 @@ import { getRedis } from "./redisV4.js";
  * shops. A generic global tier can be layered on later for theme UI strings.
  */
 
-const TM_PREFIX = "tm:v4";
+// Bump this when translation logic/prompt changes so stale cache is abandoned.
+// v5: source language auto-detected (prompt no longer hardcodes source).
+const TM_PREFIX = "tm:v5";
 const DEFAULT_TTL_DAYS = 60;
 // Values larger than this are almost always unique (long HTML), so caching them
 // burns Redis memory for near-zero hit rate. Skip them.
