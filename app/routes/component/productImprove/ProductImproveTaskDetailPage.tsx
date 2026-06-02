@@ -97,6 +97,44 @@ function CompactMetaItem(props: { label: string; value: string }) {
   );
 }
 
+function SummaryMetric(props: { label: string; value: string }) {
+  return (
+    <div
+      style={{
+        minWidth: 0,
+        padding: "0.8rem 0.9rem",
+        borderRadius: pageColorTokens.radiusControl,
+        background: "#ffffff",
+        border: `1px solid ${pageColorTokens.borderSubtle}`,
+        boxShadow: "0 1px 2px rgba(15, 23, 42, 0.03)",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          color: pageColorTokens.textSecondary,
+          fontWeight: 700,
+          marginBottom: 6,
+          letterSpacing: "0.02em",
+        }}
+      >
+        {props.label}
+      </div>
+      <div
+        style={{
+          fontSize: 13,
+          color: pageColorTokens.textPrimary,
+          fontWeight: 600,
+          lineHeight: 1.45,
+          wordBreak: "break-word",
+        }}
+      >
+        {props.value}
+      </div>
+    </div>
+  );
+}
+
 function ReviewContentPanel(props: {
   label: string;
   tone?: "neutral" | "positive";
@@ -263,6 +301,11 @@ export function ProductImproveTaskDetailPage({
   const cfg = task.config as Partial<ProductImproveTaskConfig>;
   const result = localResult as Partial<ProductImproveTaskResult> | null;
   const actualElapsed = formatActualElapsed(task.startedAt, task.completedAt);
+  const shortId = task.id.slice(0, 8).toUpperCase();
+  const summaryDescription =
+    localStatus === "applied"
+      ? "已完成审核与写入，可直接查看结果并返回任务列表。"
+      : "在这里集中查看原文、审核草稿、评分备注和最终应用动作。";
 
   useEffect(() => {
     setLocalStatus(task.status);
@@ -389,107 +432,116 @@ export function ProductImproveTaskDetailPage({
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div
         style={{
+          border: `1px solid ${pageColorTokens.borderSubtle}`,
+          borderRadius: pageColorTokens.radiusCard,
+          background: "linear-gradient(160deg, #ffffff 0%, #fafbfc 100%)",
+          boxShadow: pageColorTokens.shadowCard,
+          padding: "1rem",
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-          flexWrap: "wrap",
-          paddingBottom: 4,
+          flexDirection: "column",
+          gap: 14,
         }}
       >
-        <div style={{ minWidth: 0, flex: "1 1 28rem" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              flexWrap: "wrap",
-            }}
-          >
-            <button
-              type="button"
-              onClick={onBack}
-              style={{
-                padding: "0.35rem 0.7rem",
-                borderRadius: pageColorTokens.radiusControl,
-                border: `1px solid ${pageColorTokens.borderSubtle}`,
-                background: pageColorTokens.surface,
-                color: pageColorTokens.textBody,
-                cursor: "pointer",
-                fontSize: 12,
-                fontWeight: 600,
-                whiteSpace: "nowrap",
-              }}
-            >
-              返回任务列表
-            </button>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ minWidth: 0, flex: "1 1 28rem" }}>
             <div
               style={{
-                fontSize: 17,
-                fontWeight: 700,
-                color: pageColorTokens.textPrimary,
-                minWidth: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                flexWrap: "wrap",
+                marginBottom: 10,
               }}
             >
-              审核任务 #{task.id.slice(0, 8).toUpperCase()}
+              <button
+                type="button"
+                onClick={onBack}
+                style={{
+                  padding: "0.35rem 0.7rem",
+                  borderRadius: pageColorTokens.radiusControl,
+                  border: `1px solid ${pageColorTokens.borderSubtle}`,
+                  background: "#ffffff",
+                  color: pageColorTokens.textBody,
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                返回任务列表
+              </button>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: pageColorTokens.textSecondary,
+                  padding: "0.22rem 0.48rem",
+                  borderRadius: 999,
+                  background: pageColorTokens.surfaceMuted,
+                  border: `1px solid ${pageColorTokens.borderSubtle}`,
+                }}
+              >
+                #{shortId}
+              </span>
+              <TaskStatusBadge status={localStatus} />
+            </div>
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                color: pageColorTokens.textPrimary,
+                lineHeight: 1.3,
+              }}
+            >
+              任务摘要
+            </div>
+            <div
+              style={{
+                fontSize: 13,
+                color: pageColorTokens.textSecondary,
+                marginTop: 6,
+                lineHeight: 1.55,
+                maxWidth: "52rem",
+              }}
+            >
+              {summaryDescription}
             </div>
           </div>
           <div
             style={{
+              flexShrink: 0,
+              alignSelf: "center",
               fontSize: 12,
-              color: pageColorTokens.textSecondary,
-              marginTop: 6,
-              display: "flex",
-              gap: 6,
-              flexWrap: "wrap",
+              color: pageColorTokens.textFootnote,
+              fontWeight: 600,
             }}
           >
-            <span>商品：{cfg.originalTitle || "未命名商品"}</span>
-            <span style={{ color: pageColorTokens.textFootnote }}>·</span>
-            <span>在这里集中查看原文、结果、人工评分、AI 继续优化和最终应用动作</span>
+            创建时间：{formatTaskDate(task.createdAt)}
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 12, color: pageColorTokens.textSecondary, fontWeight: 600 }}>
-            当前状态
-          </span>
-          <TaskStatusBadge status={localStatus} />
-        </div>
-      </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingBottom: 2 }}>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: pageColorTokens.textPrimary }}>
-            任务摘要
-          </div>
-          <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, marginTop: 4 }}>
-            先确认当前任务目标、时间与消耗，再进入内容审核。
-          </div>
-        </div>
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: "8px 18px",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: "10px",
           }}
         >
-          <CompactMetaItem label="任务 ID" value={`#${task.id.slice(0, 8).toUpperCase()}`} />
-          <CompactMetaItem label="创建时间" value={formatTaskDate(task.createdAt)} />
-          <CompactMetaItem label="目标语言" value={cfg.targetLanguage ?? "-"} />
-          <CompactMetaItem
-            label="预估积分"
-            value={task.estimatedCredits ? `${task.estimatedCredits}` : "-"}
-          />
-          <CompactMetaItem label="实际耗时" value={actualElapsed ?? "-"} />
-          <CompactMetaItem label="目标商品" value={cfg.productId ?? "-"} />
+          <SummaryMetric label="目标商品" value={cfg.originalTitle || "未命名商品"} />
+          <SummaryMetric label="目标语言" value={cfg.targetLanguage ?? "-"} />
+          <SummaryMetric label="预估积分" value={task.estimatedCredits ? `${task.estimatedCredits}` : "-"} />
+          <SummaryMetric label="实际耗时" value={actualElapsed ?? "-"} />
+          <SummaryMetric label="任务 ID" value={`#${shortId}`} />
+          <SummaryMetric label="目标商品 ID" value={cfg.productId ?? "-"} />
         </div>
-        <div
-          style={{
-            height: 1,
-            background: pageColorTokens.borderSubtle,
-            opacity: 0.8,
-          }}
-        />
       </div>
 
       <SectionShell title="内容审核" description="左侧查看原始内容，右侧直接编辑当前审核草稿。">
