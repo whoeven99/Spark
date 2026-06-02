@@ -1,11 +1,13 @@
 import type { ActionFunctionArgs } from "react-router";
-import { authenticate } from "../shopify.server";
 import { syncInventoryLevel } from "../server/shopify/sync/inventorySync.server";
 import type { ShopifyInventoryLevelPayload } from "../server/shopify/sync/types";
+import {
+  authenticateWebhookLogged,
+  returnWebhookOk,
+} from "../server/webhook/webhookDebugLog.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { shop, topic, payload } = await authenticate.webhook(request);
-  console.info(`[Webhook] ${topic} shop=${shop}`);
+  const { shop, topic, payload } = await authenticateWebhookLogged(request);
 
   try {
     await syncInventoryLevel(shop, payload as ShopifyInventoryLevelPayload);
@@ -13,5 +15,5 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.error(`[Webhook] inventory_levels/update sync failed shop=${shop}:`, error);
   }
 
-  return new Response();
+  return returnWebhookOk({ shop, topic });
 };

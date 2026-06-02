@@ -1,0 +1,280 @@
+name: spark - Product Improve Deploy (Prod)
+
+# 仅手动触发；始终从 master 检出；勾选要执行的任务（可多选）
+on:
+  workflow_dispatch:
+    inputs:
+      publish_render:
+        description: 发布Product服务
+        type: boolean
+        default: false
+      deploy_admin:
+        description: 发布Admin服务
+        type: boolean
+        default: false
+      sync_shopify:
+        description: 同步 Shopify 配置
+        type: boolean
+        default: false
+
+defaults:
+  run:
+    working-directory: .
+
+jobs:
+  validate_inputs:
+    name: Validate workflow inputs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require at least one task
+        run: |
+          if [ "${{ github.event.inputs.publish_render }}" != "true" ] && [ "${{ github.event.inputs.deploy_admin }}" != "true" ] && [ "${{ github.event.inputs.sync_shopify }}" != "true" ]; then
+            echo "::error::请至少勾选「发布服务」「发布Admin服务」「同步 Shopify 配置」之一"
+            exit 1
+          fi
+
+  deploy_render_product_improve:
+    name: Trigger Render deploy (Product Improve Prod)
+    needs: validate_inputs
+    if: ${{ github.event.inputs.publish_render == 'true' }}
+    runs-on: ubuntu-latest
+    environment: CommonShopifyRenderConfig
+
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: master
+
+      - name: Deploy to Render (product-improve)
+        id: trigger_render
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_APIKEY }}
+          RENDER_SERVICE_ID: srv-d88llfml51nc73fksm2g
+        run: |
+          COMMIT="$(git rev-parse HEAD)"
+          echo "Triggering Render deploy for commit: $COMMIT ($(git log -1 --oneline))"
+          RESPONSE=$(curl -s -o response.json -w "%{http_code}" -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"commitId\": \"$COMMIT\"}")
+          if [ "$RESPONSE" -eq 200 ] || [ "$RESPONSE" -eq 201 ]; then
+            echo "Deploy to product-improve Render triggered successfully. HTTP status: $RESPONSE"
+            DEPLOY_ID=$(python3 -c "import json;print(json.load(open('response.json')).get('id',''))")
+            DEPLOY_STATUS=$(python3 -c "import json;print(json.load(open('response.json')).get('status',''))")
+            DEPLOY_URL="https://dashboard.render.com/web/${RENDER_SERVICE_ID}/deploys/${DEPLOY_ID}"
+            echo "deploy_id=${DEPLOY_ID}" >> "$GITHUB_OUTPUT"
+            echo "commit_id=${COMMIT}" >> "$GITHUB_OUTPUT"
+            echo "initial_status=${DEPLOY_STATUS}" >> "$GITHUB_OUTPUT"
+            echo "deploy_url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
+            echo "Render deploy id: ${DEPLOY_ID}, status: ${DEPLOY_STATUS}"
+          else
+            echo "Failed to trigger deployment. HTTP status: $RESPONSE"
+            cat response.json
+            exit 1
+          fi
+
+      - name: Wait for Render deploy result
+        id: wait_render
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_APIKEY }}
+          RENDER_SERVICE_ID: srv-d88llfml51nc73fksm2g
+          DEPLOY_ID: ${{ steps.trigger_render.outputs.deploy_id }}
+          TARGET_COMMIT: ${{ steps.trigger_render.outputs.commit_id }}
+        run: |
+          if [ -z "$DEPLOY_ID" ]; then
+            echo "Render deploy id missing."
+            exit 1
+          fi
+
+          check_commit_live() {
+            curl -s -o recent_deploys.json \
+              -H "Authorization: Bearer $RENDER_API_KEY" \
+              "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys?limit=10"
+            python3 <<'PY'
+          import json, os, sys
+          target = os.environ.get("TARGET_COMMIT", "")
+          data = json.load(open("recent_deploys.json"))
+          for item in data:
+              d = item.get("deploy") or item
+              commit = (d.get("commit") or {}).get("id") or ""
+              if commit == target and d.get("status") == "live":
+                  print(f"Found live deploy for commit {target[:8]}: {d.get('id')}")
+                  sys.exit(0)
+          sys.exit(1)
+          PY
+          }
+
+          MAX_WAIT_SECONDS=600
+          SLEEP_SECONDS=20
+          ELAPSED=0
+          FINAL_STATUS="unknown"
+
+          while [ "$ELAPSED" -lt "$MAX_WAIT_SECONDS" ]; do
+            HTTP_CODE=$(curl -s -o deploy_status.json -w "%{http_code}" \
+              -H "Authorization: Bearer $RENDER_API_KEY" \
+              "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys/$DEPLOY_ID")
+
+            if [ "$HTTP_CODE" -ne 200 ]; then
+              echo "Failed to query Render deploy status. HTTP status: $HTTP_CODE"
+              cat deploy_status.json
+              sleep "$SLEEP_SECONDS"
+              ELAPSED=$((ELAPSED + SLEEP_SECONDS))
+              continue
+            fi
+
+            FINAL_STATUS=$(python3 -c "import json;print(json.load(open('deploy_status.json')).get('status',''))")
+            echo "Render deploy status: $FINAL_STATUS (elapsed ${ELAPSED}s)"
+
+            case "$FINAL_STATUS" in
+              live)
+                echo "final_status=$FINAL_STATUS" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+              build_failed|update_failed|failed)
+                echo "final_status=$FINAL_STATUS" >> "$GITHUB_OUTPUT"
+                exit 1
+                ;;
+              canceled)
+                if check_commit_live; then
+                  echo "Deploy $DEPLOY_ID was canceled, but commit $TARGET_COMMIT is live on Render."
+                  echo "final_status=live_via_superseded" >> "$GITHUB_OUTPUT"
+                  exit 0
+                fi
+                echo "Deploy canceled (often superseded by a newer deploy). Re-run workflow."
+                echo "final_status=$FINAL_STATUS" >> "$GITHUB_OUTPUT"
+                exit 1
+                ;;
+            esac
+
+            sleep "$SLEEP_SECONDS"
+            ELAPSED=$((ELAPSED + SLEEP_SECONDS))
+          done
+
+          if check_commit_live; then
+            echo "Timed out on deploy $DEPLOY_ID, but commit $TARGET_COMMIT is live."
+            echo "final_status=live_via_superseded" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Timed out waiting Render deploy result."
+          echo "final_status=timeout" >> "$GITHUB_OUTPUT"
+          exit 1
+
+      # 文案与 BogdaApps bundleV2 生产 deploy_render 飞书步骤一致（bundle-shopify-deploy-prod.yml）
+      - name: Notify Feishu on Render deploy success
+        if: success()
+        env:
+          FEISHU_WEBHOOK_URL: https://open.feishu.cn/open-apis/bot/v2/hook/c3b2d5cb-291b-43f4-b0ac-658a18eb5636
+          RENDER_DEPLOY_URL: ${{ steps.trigger_render.outputs.deploy_url }}
+          RENDER_FINAL_STATUS: ${{ steps.wait_render.outputs.final_status }}
+        run: |
+          COMMIT_BODY="$(git log -1 --pretty=%b)"
+          PAYLOAD=$(python3 -c 'import json,sys; print(json.dumps({"msg_type":"text","content":{"text":sys.stdin.read()}}, ensure_ascii=False))' <<EOF
+          Product Improve PROD deploy 成功, by ${GITHUB_ACTOR}.
+          最终状态: ${RENDER_FINAL_STATUS}
+          发布内容：${COMMIT_BODY}
+          EOF
+          )
+
+          curl -sS -X POST "$FEISHU_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
+
+      - name: Notify Feishu on Render deploy failure
+        if: failure()
+        env:
+          FEISHU_WEBHOOK_URL: https://open.feishu.cn/open-apis/bot/v2/hook/c3b2d5cb-291b-43f4-b0ac-658a18eb5636
+          RENDER_DEPLOY_URL: ${{ steps.trigger_render.outputs.deploy_url }}
+          RENDER_FINAL_STATUS: ${{ steps.wait_render.outputs.final_status }}
+        run: |
+          PAYLOAD=$(python3 -c 'import json,sys; print(json.dumps({"msg_type":"text","content":{"text":sys.stdin.read()}}, ensure_ascii=False))' <<EOF
+          Product Improve PROD deploy 失败, by ${GITHUB_ACTOR}.
+          最终状态: ${RENDER_FINAL_STATUS}
+          Render: ${RENDER_DEPLOY_URL}
+          Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+          )
+
+          curl -sS -X POST "$FEISHU_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
+
+  deploy_render_admin:
+    name: Trigger Render deploy (Admin Prod)
+    needs: validate_inputs
+    if: ${{ github.event.inputs.deploy_admin == 'true' }}
+    runs-on: ubuntu-latest
+    environment: CommonShopifyRenderConfig
+
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: master
+
+      - name: Deploy to Render (admin)
+        id: trigger_render
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_APIKEY }}
+          RENDER_SERVICE_ID: srv-d8a49ortqb8s7392ed4g
+        run: |
+          COMMIT="$(git rev-parse HEAD)"
+          echo "Triggering Render deploy for commit: $COMMIT ($(git log -1 --oneline))"
+          RESPONSE=$(curl -s -o response.json -w "%{http_code}" -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"commitId\": \"$COMMIT\"}")
+          if [ "$RESPONSE" -eq 200 ] || [ "$RESPONSE" -eq 201 ]; then
+            echo "Deploy to admin Render triggered successfully. HTTP status: $RESPONSE"
+            DEPLOY_ID=$(python3 -c "import json;print(json.load(open('response.json')).get('id',''))")
+            DEPLOY_STATUS=$(python3 -c "import json;print(json.load(open('response.json')).get('status',''))")
+            DEPLOY_URL="https://dashboard.render.com/web/${RENDER_SERVICE_ID}/deploys/${DEPLOY_ID}"
+            echo "deploy_id=${DEPLOY_ID}" >> "$GITHUB_OUTPUT"
+            echo "commit_id=${COMMIT}" >> "$GITHUB_OUTPUT"
+            echo "initial_status=${DEPLOY_STATUS}" >> "$GITHUB_OUTPUT"
+            echo "deploy_url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
+            echo "Render deploy id: ${DEPLOY_ID}, status: ${DEPLOY_STATUS}"
+          else
+            echo "Failed to trigger deployment. HTTP status: $RESPONSE"
+            cat response.json
+            exit 1
+          fi
+
+
+
+  deploy_shopify_product_improve:
+    name: Shopify app deploy (product-prod.toml)
+    needs: validate_inputs
+    if: ${{ github.event.inputs.sync_shopify == 'true' }}
+    runs-on: ubuntu-latest
+    environment: CommonShopifyRenderConfig
+
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: master
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Shopify CLI
+        run: npm install -g @shopify/cli@latest
+
+      - name: Deploy Shopify app config
+        env:
+          SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
+          # 与 shopify.app.product-prod.toml 中 client_id 一致
+          SHOPIFY_API_KEY: b896c10abe3ca220b1efbc333ef41ad1
+        run: shopify app deploy -c shopify.app.product-prod.toml --allow-updates

@@ -1,4 +1,8 @@
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/tool";
+import {
+  formatGraphqlErrors,
+  parseAdminGraphqlJson,
+} from "./parseAdminGraphqlJson.server";
 
 const SHOP_BASIC_INFO_QUERY = `#graphql
   query ShopBasicInfo {
@@ -97,20 +101,32 @@ function mapShopResponse(shop: NonNullable<ShopBasicInfoResponse["data"]>["shop"
 export async function fetchShopBasicInfo(
   admin: ShopifyAdminGraphqlClient,
 ): Promise<ShopBasicInfo | null> {
-  const response = (await admin.graphql(
-    SHOP_BASIC_INFO_QUERY,
-  )) as ShopBasicInfoResponse;
+  const httpResponse = await admin.graphql(SHOP_BASIC_INFO_QUERY);
 
-  if (response.errors?.length) {
+  if (!httpResponse.ok) {
     console.warn(
-      "[Shopify] fetchShopBasicInfo GraphQL errors:",
-      response.errors.map((e) => e.message).join("；"),
+      `[Shopify] fetchShopBasicInfo HTTP ${httpResponse.status}`,
     );
     return null;
   }
 
-  const shop = response.data?.shop;
-  if (!shop) return null;
+  const payload = await parseAdminGraphqlJson<
+    NonNullable<ShopBasicInfoResponse["data"]>
+  >(httpResponse);
+
+  if (payload.errors?.length) {
+    console.warn(
+      "[Shopify] fetchShopBasicInfo GraphQL errors:",
+      formatGraphqlErrors(payload.errors),
+    );
+    return null;
+  }
+
+  const shop = payload.data?.shop;
+  if (!shop) {
+    console.warn("[Shopify] fetchShopBasicInfo missing shop in response");
+    return null;
+  }
 
   return mapShopResponse(shop);
 }

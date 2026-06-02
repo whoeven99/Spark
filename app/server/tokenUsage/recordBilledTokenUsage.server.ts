@@ -1,9 +1,11 @@
 import { getAppEntry } from "../../config/appEntry.server";
+import prisma from "../../db.server";
 import { isBillingEnabledForApp } from "../billing/constants.server";
 import type { BilledTokenUsageItem } from "./applyTokenBilling.server";
-import { sumBilledTokenUsages } from "./applyTokenBilling.server";
+import { billTokenUsage } from "./applyTokenBilling.server";
 import { recordTokenUsage } from "./recordTokenUsage.server";
 import type { ParsedTokenUsage } from "./parseUsageMetadata.server";
+import { parseUsageMetadata, sumParsedTokenUsage } from "./parseUsageMetadata.server";
 import type { TokenBillingFeature } from "./tokenBillingTypes.server";
 
 export type RecordBilledTokenUsageParams = {
@@ -44,8 +46,37 @@ export async function recordBilledTokenUsages(params: {
   const appName = params.appName?.trim() || getAppEntry();
   if (!isBillingEnabledForApp(appName)) return;
 
-  const usage = await sumBilledTokenUsages({ appName, items: params.items });
+  const billedItems = await Promise.all(
+    params.items.map(async (item) => {
+      const rawUsage = parseUsageMetadata(item.usage);
+      const billedUsage = await billTokenUsage({
+        appName,
+        feature: item.feature,
+        modelKey: item.modelKey,
+        usage: item.usage,
+      });
+      return { item, rawUsage, billedUsage };
+    }),
+  );
+
+  const positiveItems = billedItems.filter((entry) => entry.billedUsage.totalTokens > 0);
+  if (positiveItems.length <= 0) return;
+
+  const usage = sumParsedTokenUsage(positiveItems.map((entry) => entry.billedUsage));
   if (usage.totalTokens <= 0) return;
 
   await recordTokenUsage({ shop, appName, usage });
+
+  await prisma.toolTokenUsageLog.createMany({
+    data: positiveItems.map((entry) => ({
+      shop,
+      appName,
+      feature: entry.item.feature,
+      modelKey: entry.item.modelKey,
+      rawTokens: entry.rawUsage.totalTokens,
+      billedTokens: entry.billedUsage.totalTokens,
+      inputTokens: entry.billedUsage.inputTokens,
+      outputTokens: entry.billedUsage.outputTokens,
+    })),
+  });
 }

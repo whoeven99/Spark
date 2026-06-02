@@ -415,7 +415,6 @@ These files are review-ready HTML templates for Tencent Cloud Email.
 
 ## Purchase variables
 
-- \`purchaseType\`: Purchase type, such as subscription, credit purchase, or one-time purchase.
 - \`orderId\`: Payment or order identifier.
 - \`planName\`: Plan, product, or credit package name.
 - \`amountUsd\`: Payment amount normalized to USD, for example \`12.00\`.
@@ -431,7 +430,6 @@ These files are review-ready HTML templates for Tencent Cloud Email.
 ## Task variables
 
 - \`taskName\`: Task display name.
-- \`taskType\`: Task category.
 - \`taskId\`: Task identifier.
 - \`startedAtUtc\`: Task start time in UTC+0.
 - \`completedAtUtc\`: Task completion time in UTC+0.

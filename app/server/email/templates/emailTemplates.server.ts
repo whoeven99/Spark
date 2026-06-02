@@ -1,28 +1,4 @@
-/** 对齐 Spring MailChimpConstants / TencentEmailService 模板 ID 与主题。 */
-
 export const TENCENT_FROM_EMAIL = "support@msg.ciwi.ai";
-
-export const EMAIL_SUBJECTS = {
-  FIRST_INSTALL:
-    "Welcome to Ciwi-Translator! Unlock a New Language Translation Experience",
-  SUCCESSFUL_TRANSLATION:
-    "Your Shopify Translation is Complete!｜Ciwi-translator",
-  SUCCESSFUL_AUTO_TRANSLATION:
-    "Ciwi.ai:Automatic translation completed｜Ciwi-translator",
-  TRANSLATION_FAILED:
-    "Your Shopify Translation Task Could Not Be Completed｜Ciwi-translator",
-  SUBSCRIBE_SUCCESSFUL: "Your Credits Have Been Added!｜Ciwi-translator",
-  CHARACTER_PURCHASE_SUCCESSFUL:
-    "Confirmation of Successful Credits Purchase｜Ciwi-translator",
-  PLAN_UPGRADE_SUCCESSFUL: "Plan Upgrade Successful!｜Ciwi-translator",
-  PLAN_TRIALS_SUCCESSFUL: "You're now on your 5-day free trial｜Ciwi-translator",
-  APG_INIT:
-    "Create High-Converting Product Descriptions in 10 Seconds | Ciwi.ai-Product Content",
-  APG_PURCHASE_EMAIL:
-    "Confirmation of Successful Credits Purchase｜Ciwi.ai:Product Description",
-  APG_TASK_INTERRUPT:
-    "Your Product Content Task Could Not Be Completed｜Ciwi.ai:Product Description",
-} as const;
 
 export const EMAIL_TEMPLATE_IDS = {
   FIRST_INSTALL: 137916,
@@ -40,4 +16,14 @@ export const EMAIL_TEMPLATE_IDS = {
   APG_PURCHASE: 144922,
   APG_TASK_INTERRUPT: 144923,
   IP_REPORT: 156623,
+  APP_INSTALL_SUCCESS: 180498,
+  APP_UNINSTALL: 180499,
+  ORDER_PAY_SUCCESS: 180500,
+  SUBSCRIPTION_CANCELLED: 180501,
+  SUBSCRIPTION_UPDATED: 180502,
+  SUBSCRIPTION_SUCCESS: 180503,
+  TASK_COMPLETED: 180504,
+  TASK_PAUSED: 180506,
+  TASK_FAILED: 180506,
+  TASK_STARTED: 180507,
 } as const;

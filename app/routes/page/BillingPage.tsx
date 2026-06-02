@@ -4,6 +4,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import type {
   BillingHistoryItem,
+  BillingToolUsageItem,
   BillingUsagePeriodItem,
   PlanRecord,
 } from "../../lib/billingPageTypes";
@@ -111,6 +112,24 @@ function resolveBillingEventToneClass(
   }
 }
 
+function resolveToolUsageFeatureLabel(
+  feature: BillingToolUsageItem["feature"],
+  t: (key: string) => string,
+): string {
+  switch (feature) {
+    case "product_copy":
+      return t("billing.toolFeatureProductCopy");
+    case "image_generate":
+      return t("billing.toolFeatureImageGenerate");
+    case "image_prompt":
+      return t("billing.toolFeatureImagePrompt");
+    case "picture_translate":
+      return t("billing.toolFeaturePictureTranslate");
+    default:
+      return feature;
+  }
+}
+
 function PlanFeatureList({ items }: { items: string[] }) {
   return (
     <ul className={styles.planFeatures}>
@@ -147,8 +166,7 @@ function PaidPlanCard({
   t: (key: string, options?: Record<string, unknown>) => string;
   paidFeatures: (plan: PlanRecord) => string[];
 }) {
-  const priceSuffix =
-    interval === "ANNUAL" ? t("billing.perYear") : t("billing.perMonth");
+  const periodSuffix = interval === "ANNUAL" ? t("billing.perYear") : t("billing.perMonth");
   const monthlyEquivalent =
     interval === "ANNUAL" ? formatAnnualMonthlyEquivalent(plan, locale) : null;
 
@@ -156,9 +174,7 @@ function PaidPlanCard({
     <article
       className={`${styles.planCard} ${
         isRecommended ? styles.planCardRecommended : ""
-      } ${isCurrent ? styles.planCardCurrent : ""} ${
-        isPending ? styles.planCardPending : ""
-      }`}
+      } ${isCurrent ? styles.planCardCurrent : ""} ${isPending ? styles.planCardPending : ""}`}
     >
       {isRecommended ? (
         <span className={styles.recommendedRibbon}>{t("billing.recommended")}</span>
@@ -167,79 +183,36 @@ function PaidPlanCard({
         <h3 className={styles.planName}>{plan.displayName}</h3>
         <div className={styles.planPriceRow}>
           <span className={styles.planPrice}>
-            {interval === "ANNUAL" && monthlyEquivalent
-              ? monthlyEquivalent
-              : formatPlanPrice(plan.priceAmount, plan.currencyCode, locale)}
+            {formatPlanPrice(plan.priceAmount, plan.currencyCode, locale)}
           </span>
-          <span className={styles.planPriceSuffix}>
-            {interval === "ANNUAL" && monthlyEquivalent
-              ? t("billing.perMonth")
-              : priceSuffix}
-          </span>
+          <span className={styles.planPriceSuffix}>{periodSuffix}</span>
         </div>
-        {interval === "ANNUAL" ? (
-          <p className={styles.planPriceMeta}>
-            {t("billing.billedAnnually", {
-              amount: formatPlanPrice(plan.priceAmount, plan.currencyCode, locale),
-            })}
-          </p>
+        {monthlyEquivalent ? (
+          <p className={styles.planPriceMeta}>{`${monthlyEquivalent}${t("billing.perMonth")}`}</p>
         ) : null}
         <PlanFeatureList items={paidFeatures(plan)} />
       </div>
-      <PlanSubscribeButton
-        plan={plan}
-        isCurrent={isCurrent}
-        isPending={isPending}
-        isSubmitting={isSubmitting}
-        label={
-          isCurrent
-            ? t("billing.currentPlan")
-            : isPending
-              ? t("billing.pendingConfirmation")
-              : isSubmitting
-                ? t("billing.redirectingToCheckout")
-                : t("billing.getStarted")
-        }
-      />
-    </article>
-  );
-}
 
-function PlanSubscribeButton({
-  plan,
-  isCurrent,
-  isPending,
-  isSubmitting,
-  label,
-}: {
-  plan: PlanRecord;
-  isCurrent: boolean;
-  isPending: boolean;
-  isSubmitting: boolean;
-  label: string;
-}) {
-  if (isCurrent) {
-    return (
-      <div className={styles.planCurrentCta} role="status" aria-current="true">
-        {label}
+      <div className={styles.planCta}>
+        {isCurrent ? (
+          <div className={styles.planCurrentCta} role="status" aria-current="true">
+            {t("billing.currentPlan")}
+          </div>
+        ) : isPending ? (
+          <div className={styles.planPendingCta} role="status">
+            {t("billing.pendingConfirmation")}
+          </div>
+        ) : (
+          <Form method="post">
+            <input type="hidden" name="intent" value="subscribe" />
+            <input type="hidden" name="planKey" value={plan.planKey} />
+            <button type="submit" className={styles.planPrimaryCta} disabled={isSubmitting}>
+              {isSubmitting ? t("billing.redirectingToCheckout") : t("billing.subscribe")}
+            </button>
+          </Form>
+        )}
       </div>
-    );
-  }
-  if (isPending) {
-    return (
-      <div className={styles.planPendingCta} role="status">
-        {label}
-      </div>
-    );
-  }
-  return (
-    <Form method="post" className={styles.planCta}>
-      <input type="hidden" name="intent" value="subscribe" />
-      <input type="hidden" name="planKey" value={plan.planKey} />
-      <button type="submit" className={styles.planPrimaryCta} disabled={isSubmitting}>
-        {label}
-      </button>
-    </Form>
+    </article>
   );
 }
 
@@ -251,6 +224,7 @@ export function BillingPage() {
     tokenPacks,
     usageHistory,
     billingHistory,
+    toolUsageHistory,
     showDevCancelSubscription,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
@@ -330,10 +304,16 @@ export function BillingPage() {
     t,
   });
 
-  const tokenCapacity = billing.usedTokens + billing.availableTokens;
+  const tokenCapacity = billing.availableTokens;
   const usagePercent = getTokenUsagePercent(billing.usedTokens, tokenCapacity);
   const usagePercentDisplay = formatTokenUsagePercentDisplay(usagePercent);
-  const recommendedTier: PlanTier = interval === "MONTHLY" ? "base" : "pro";
+  const usagePercentForBar = Math.min(100, Math.max(0, usagePercent));
+  const currentSubscriptionTier =
+    sub?.status === "ACTIVE" || sub?.status === "PENDING"
+      ? planTierFromPlanKey(sub.planKey)
+      : null;
+  const recommendedTier: PlanTier =
+    currentSubscriptionTier ?? (interval === "MONTHLY" ? "base" : "pro");
   const usageLow = usagePercent >= 85;
 
   if (actionData?.ok && "noopCheckout" in actionData && actionData.noopCheckout) {
@@ -618,7 +598,10 @@ export function BillingPage() {
   }
 
   return (
-    <s-page heading={t("billing.pageTitle")}>
+    <s-page
+      heading={t("billing.pageTitle")}
+      style={{ overflow: "visible", height: "auto", minHeight: "auto" }}
+    >
       <div style={pageContentStyle}>
         {!billing.hasAccess && billing.billingRequired ? (
           <s-banner tone="warning">{t("billing.lowBalanceWarning")}</s-banner>
@@ -679,14 +662,14 @@ export function BillingPage() {
                 role="progressbar"
                 aria-valuemin={0}
                 aria-valuemax={100}
-                aria-valuenow={usagePercent}
+                aria-valuenow={usagePercentForBar}
                 aria-label={t("billing.quotaProgressAria", {
                   percent: usagePercentDisplay,
                 })}
               >
                 <div
                   className={`${styles.progressFill} ${usageLow ? styles.progressFillLow : ""}`}
-                  style={{ width: `${usagePercent}%` }}
+                  style={{ width: `${usagePercentForBar}%` }}
                 />
               </div>
               <div className={styles.poolChips} aria-label={t("billing.sectionUsage")}>
@@ -835,9 +818,7 @@ export function BillingPage() {
 
               {paidPlansToShow.map((plan) => {
                 const tier = planTierFromPlanKey(plan.planKey);
-                const isRecommended =
-                  (interval === "MONTHLY" && tier === "base") ||
-                  (interval === "ANNUAL" && tier === "pro");
+                const isRecommended = tier === recommendedTier;
                 return (
                   <PaidPlanCard
                     key={plan.planKey}

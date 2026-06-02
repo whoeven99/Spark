@@ -32,7 +32,7 @@
   - **整图翻译 / 文生图 Blob**：同一 Storage 账号下独立容器 `picturetranslate`、`generatedimages`（见 `pictureTranslateBlob.server.ts`、`imageGenerationBlob.server.ts`）。
   - **翻译进度与监控键**：**Redis**（`ioredis`，见 `app/server/translation/translateRedis.server.ts`）。
   - **物流承运商授权**：本地 JSON `.data/logistics-provider-credentials.json`（见 `app/server/logisticsCredentialStore.server.ts`）。
-  - **事务邮件（腾讯 SES 模板）**：`app/server/email/`（Provider 模式；业务统一走 `sendTemplateEmail`）；安装/卸载运营通知由 `app/server/appLifecycle/` 直接调用（见 §10）。
+  - **事务邮件（腾讯 SES 模板）**：`app/server/email/` + `app/server/notifications/`（商户邮件 TemplateData 与模板 ID）；安装/卸载/订阅/购包由 `appLifecycle` / `billing` 调用 `sendNotificationEmail`（见 §10）。
   - **飞书运营通知**：`app/server/feishu/`（按 channel 映射独立 Webhook；失败不阻断主流程，见 §10 飞书小节）。
 
 ## 3. 目录结构（迁移后，根目录即应用目录）
@@ -143,30 +143,27 @@ Spark **不调用 Spring Backend 邮件 API**，进程内直连腾讯 SES SDK（
 | `providers/tencentSesProvider.server.ts` | 腾讯 `SendEmail` API + 重试 |
 | `utils/retryWithTimeout.server.ts` | 超时与重试（可配置次数；HTTP 400 不重试） |
 | `templates/emailTemplates.server.ts` | 模板 ID / 主题常量（`EMAIL_TEMPLATE_IDS`） |
-| `templates/installOpsTemplateData.server.ts` | 安装运营邮件 `templateData` |
-| `templates/uninstallOpsTemplateData.server.ts` | 卸载运营邮件 `templateData` |
-| `scenarios/sendInstallOpsEmail.server.ts` | 安装运营场景（templateId `137916`） |
-| `scenarios/sendUninstallOpsEmail.server.ts` | 卸载运营场景 |
-| `opsNotifyEmail.server.ts` | 运营收件人、`OPS_UNINSTALL_TEMPLATE_ID` 解析 |
+| `scenarios/sendNotificationEmail.server.ts` | 商户事务邮件（`renderNotificationEmail` + 腾讯模板 ID） |
+| `opsNotifyEmail.server.ts` | 收件人解析（Session 邮箱优先，`OPS_NOTIFY_EMAIL` 兜底） |
 | `index.ts` | 对外导出 |
 
 ### App 生命周期运营邮件（`app/server/appLifecycle/`）
 
 | 文件 | 触发 | 行为 |
 |------|------|------|
-| `onAppInstalled.server.ts` | `recordAppInstalled` 写入 `CommonEventLog` 成功后（OAuth `auth.$.tsx`、进入 `/app` 等） | Shopify 店铺信息 + Session 快照 → `sendInstallOpsEmail` |
-| `onAppUninstalled.server.ts` | `webhooks.app.uninstalled.tsx` 鉴权后 | **先** `sendUninstallOpsEmail`，**再** 飞书卸载通知，**再** `handleAppUninstalled`（写日志并删 Session） |
+| `onAppInstalled.server.ts` | `recordAppInstalled` 写入 `CommonEventLog` 成功后（OAuth `auth.$.tsx`、进入 `/app` 等） | Shopify 店铺信息 + Session 快照 → `sendNotificationEmail`（`appInstalled`，模板 `180498`） |
+| `onAppUninstalled.server.ts` | `webhooks.app.uninstalled.tsx` 鉴权后 | **先** `sendNotificationEmail`（`appUninstalled`，`180499`），**再** 飞书卸载通知，**再** `handleAppUninstalled`（写日志并删 Session） |
 
 安装 enrichment：`unauthenticated.admin(shop)` + `fetchShopBasicInfo`。卸载 enrichment：`loadSessionSnapshotForUninstall`（不调 GraphQL）。邮件失败不阻断安装 Loader；卸载邮件失败不阻断后续持久化；持久化失败时 Webhook 仍 `throw` 以便 Shopify 重试。
 
 ### 首期接入范围
 
-- 已实现：通用 `sendTemplateEmail`、安装/卸载运营邮件、AI 工具 `send_template_email`（`app/server/ai/skills/email/`，模板 ID 白名单）。
-- 未接入：`emailTemplates.server.ts` 中其余 templateId（翻译成功/失败、购包、APG 等）按需后续在 `scenarios/` 扩展。
+- 已实现：通用 `sendTemplateEmail`、商户事务邮件（`app/server/notifications/` + `sendNotificationEmail`；安装 `180498`、卸载 `180499`、订阅 `180501–180503`、购包 `180500`）、AI 工具 `send_template_email`（`app/server/ai/skills/email/`，模板 ID 白名单）。
+- 未接入：`emailTemplates.server.ts` 中其余 templateId（翻译成功/失败、APG 等）按需后续在 `scenarios/` 扩展；`task*` 通知模板（`180504–180507`）未挂载。
 
 ### 日志与排错
 
-- 前缀：`[Email][Service]`、`[Email][Tencent]`、`[Email][InstallOps]`、`[Email][UninstallOps]`、`[AppLifecycle:install]`、`[AppLifecycle:uninstall]`。
+- 前缀：`[Email][Service]`、`[Email][Tencent]`、`[Email][Notification]`、`[AppLifecycle:install]`、`[AppLifecycle:uninstall]`。
 - 缺凭证：`sendTemplateEmail` 返回 `EMAIL_MISSING_CREDENTIALS`，主流程不阻断。
 - 发送失败：`TENCENT_SEND_FAILED`；成功以响应非空 `RequestId` 为准。
 
@@ -200,10 +197,10 @@ Spark **不调用 Spring Backend 邮件 API**，进程内直连腾讯 SES SDK（
   - `npm run dev`：本地开发（Shopify CLI）。
   - `npm run build` / `npm run start`：构建与启动。
   - `npm run lint` / `npm run typecheck` / `npm run test`：质量检查与测试。
-- CI 工作流：`.github/workflows/spark-deploy-test.yml`
-  - 先触发 Render Test 部署（commit deploy）。
-  - Shopify deploy（`shopify.app.test.toml`）仅在 `workflow_dispatch` 或 `master` push 时执行。
-  - **卫星 App**（`shopify.app.smart-description.toml`，如 Desc - Test）的 Webhook 注册**不会**随上述 CI 自动更新；改 webhook 后需本地执行：`shopify app deploy -c shopify.app.smart-description.toml`。
+- CI 工作流：
+  - Product Improve 生产（手动）：`.github/workflows/spark-deploy-product-prod.yml`（可选 Render `srv-d88llfml51nc73fksm2g` 或 Shopify `shopify.app.product-prod.toml`）。
+  - Render 日志日报（仅手动）：`.github/workflows/render-daily-log-digest.yml`（定时已关）。
+  - **卫星 App** Webhook 等需本地或单独 workflow：`shopify app deploy -c <对应 toml>`。
 
 ### Turso 数据库（迁移与同步）
 
@@ -234,9 +231,9 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
   - `DEEPSEEK_MODEL` / `OPENAI_MODEL`（可选）
   - `DEEPSEEK_BASE_URL`（可选，默认 DeepSeek v1）
 - Prisma / Turso（`app/db.server.ts`）：
-  - `TURSO_TARGET`：`test` | `prod`（可选；未设时 `NODE_ENV=production` 默认连 **prod** 并读 `TURSO_PROD_*`；非 production 默认 test）
+  - `TURSO_TARGET`：`test` | `prod`（可选；未设时 `NODE_ENV=prod`（或 `production`）默认连 **prod** 并读 `TURSO_PROD_*`；非 prod 默认 test）
   - 占位 prod URL（如 `your-prod-db`）视为未配置，不会误连
-  - Render Test：同为 `NODE_ENV=production`，须显式 `TURSO_TARGET=test` 或**仅**配置 `TURSO_TEST_*`（勿留占位 `TURSO_PROD_*`）
+  - Render Test：同为 `NODE_ENV=prod` 时，须显式 `TURSO_TARGET=test` 或**仅**配置 `TURSO_TEST_*`（勿留占位 `TURSO_PROD_*`）
   - **Render 环境变量**：在 Web Service → **Environment** 面板添加（会注入 `process.env`）。若用 **Secret File** 上传 `.env`，需挂载到 `/etc/secrets/.env`（或设 `ENV_FILE` 指向路径）；Secret File **不会**自动进 `process.env`，启动时由 `app/config/runtimeEnv.server.ts` 读取
   - 测试库：`TURSO_TEST_DATABASE_URL`、`TURSO_TEST_AUTH_TOKEN`
   - 生产库：`TURSO_PROD_DATABASE_URL`、`TURSO_PROD_AUTH_TOKEN`
@@ -275,7 +272,7 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
 - 腾讯 SES 邮件（`app/server/email/`，结构见 §10）：
   - `TENCENT_CLOUD_KEY_ID`、`TENCENT_CLOUD_KEY`（与 Spring 同名）
   - 可选：`EMAIL_PROVIDER`（默认 `tencent`）、`EMAIL_ENABLED`（默认 `true`）、`TENCENT_SES_REGION`（默认 `ap-hongkong`）、`TENCENT_FROM_EMAIL`、`TENCENT_SES_CC`、`EMAIL_SEND_TIMEOUT_MS`、`EMAIL_SEND_MAX_RETRIES`
-  - 运营通知：`OPS_NOTIFY_EMAIL`（未设则取 `TENCENT_SES_CC` 首地址）；卸载模板 `OPS_UNINSTALL_TEMPLATE_ID`（未设则跳过卸载邮件）
+  - 商户/运营收件人兜底：`OPS_NOTIFY_EMAIL`（未设则取 `TENCENT_SES_CC` 首地址）；商户模板 ID 见 `app/server/notifications/notificationTemplateIds.server.ts`（可用 `NOTIFICATION_TEMPLATE_ID_*` 覆盖）
   - App 安装/卸载运营邮件：安装在 `recordAppInstalled` 成功后直接调用 `onAppInstalled`；卸载 Webhook 直接调用 `onAppUninstalled`（先邮件后删 Session）
 - 飞书运营通知（`app/server/feishu/`，与日报 `FEISHU_WEBHOOK_URL` 分离）：
   - `FEISHU_ENABLED`（可选，默认 `true`）；`false` 关闭全部 channel
@@ -296,7 +293,7 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
 - 改 Agent 运行摘要 / Cosmos 写入：`app/server/agentRunLog/**`（先读 `docs/agent-run-log.md`）；聊天写入见 `invokeChatAgent.server.ts`、`agentStream.server.ts`。
 - 加新 AI 工具：`app/server/ai/skills/index.ts` 的 `globalToolRegistry.register`（或 legacy `app/server/ai/tools/implementations/*`），由 `buildChatAgentExtraTools` 注入聊天链路。
 - 改邮件发送 / 模板 / Provider：`app/server/email/**`（业务只调 `sendTemplateEmail` / scenario 封装，勿直接用 Provider）。
-- 改 App 安装/卸载运营邮件：`app/server/appLifecycle/`、`app/server/commonEventLog/recordAppInstalled.server.ts`、`app/routes/webhooks.app.uninstalled.tsx`、`app/server/email/scenarios/sendInstallOpsEmail.server.ts`、`sendUninstallOpsEmail.server.ts`。
+- 改 App 安装/卸载商户邮件：`app/server/appLifecycle/`、`app/server/commonEventLog/recordAppInstalled.server.ts`、`app/routes/webhooks.app.uninstalled.tsx`、`app/server/email/scenarios/sendNotificationEmail.server.ts`、`app/server/notifications/**`。
 - 改飞书运营通知：`app/server/feishu/**`；卸载挂载 `onAppUninstalled`；订阅挂载 `activateSubscription.server.ts`（仅 `wasPending`）。
 - 改 Agent 模板邮件工具：`app/server/ai/skills/email/**`。
 - 改诊断指标：`app/routes/app.additional.tsx`（含查询、阈值、文案）。

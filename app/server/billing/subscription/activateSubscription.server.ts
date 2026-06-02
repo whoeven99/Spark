@@ -133,6 +133,7 @@ export async function applyActiveSubscription(params: {
         error,
       );
     }
+
   }
 }
 
@@ -259,4 +260,5 @@ export async function markSubscriptionNonActive(params: {
       where: { id: sub.id },
     });
   });
+
 }

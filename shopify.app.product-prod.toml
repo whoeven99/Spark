@@ -1,35 +1,42 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "dae0dae9cfeca7c8ba3bd0297d2f2e38"
-name = "Ciwi:ai-Product Improve"
-application_url = "https://product-improve.onrender.com"
+client_id = "b896c10abe3ca220b1efbc333ef41ad1"
+name = "Ciwi.ai: Image & Alt Translate"
+handle = "ciwi-image-translation"
+application_url = "https://product-improve.onrender.com/app/product-improve"
 embedded = true
 
 [build]
 automatically_update_urls_on_dev = true
+[pos] 
+embedded = false
 
 [webhooks]
 api_version = "2026-07"
 
+# 相对 uri 会拼在 application_url 路径后；App Home 需子路径时改用站点根上的绝对 URL
 [[webhooks.subscriptions]]
 topics = ["app_subscriptions/update"]
-uri = "/webhooks/app/subscriptions_update"
+uri = "https://product-improve.onrender.com/webhooks/app/subscriptions_update"
 
 [[webhooks.subscriptions]]
 topics = ["app_purchases_one_time/update"]
-uri = "/webhooks/app/purchases_one_time_update"
+uri = "https://product-improve.onrender.com/webhooks/app/purchases_one_time_update"
 
 [[webhooks.subscriptions]]
 topics = ["app/uninstalled"]
-uri = "/webhooks/app/uninstalled"
+uri = "https://product-improve.onrender.com/webhooks/app/uninstalled"
 
 [[webhooks.subscriptions]]
 topics = ["app/scopes_update"]
-uri = "/webhooks/app/scopes_update"
+uri = "https://product-improve.onrender.com/webhooks/app/scopes_update"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 scopes = "read_locales,write_products"
 
 [auth]
-redirect_urls = [ "https://product-improve.onrender.com/api/auth" ]
+redirect_urls = [
+  "https://product-improve.onrender.com/auth/callback",
+  "https://product-improve.onrender.com/auth/shopify/callback",
+]

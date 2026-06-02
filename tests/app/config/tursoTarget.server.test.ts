@@ -71,7 +71,15 @@ describe("resolveTursoTarget", () => {
     expect(resolveTursoTarget()).toBe("prod");
   });
 
-  it("prefers prod when both real URLs exist and NODE_ENV is production", () => {
+  it("prefers prod when both real URLs exist and NODE_ENV is prod", () => {
+    delete process.env.TURSO_TARGET;
+    process.env.NODE_ENV = "prod";
+    process.env.TURSO_TEST_DATABASE_URL = TEST_URL;
+    process.env.TURSO_PROD_DATABASE_URL = PROD_URL;
+    expect(resolveTursoTarget()).toBe("prod");
+  });
+
+  it("prefers prod when both real URLs exist and NODE_ENV is production (compat)", () => {
     delete process.env.TURSO_TARGET;
     process.env.NODE_ENV = "production";
     process.env.TURSO_TEST_DATABASE_URL = TEST_URL;
@@ -79,15 +87,15 @@ describe("resolveTursoTarget", () => {
     expect(resolveTursoTarget()).toBe("prod");
   });
 
-  it("defaults to prod when NODE_ENV is production and no valid URL is configured", () => {
+  it("defaults to prod when NODE_ENV is prod and no valid URL is configured", () => {
     delete process.env.TURSO_TARGET;
     delete process.env.TURSO_TEST_DATABASE_URL;
     delete process.env.TURSO_PROD_DATABASE_URL;
-    process.env.NODE_ENV = "production";
+    process.env.NODE_ENV = "prod";
     expect(resolveTursoTarget()).toBe("prod");
   });
 
-  it("defaults to test when NODE_ENV is not production and no valid URL", () => {
+  it("defaults to test when NODE_ENV is not prod and no valid URL", () => {
     delete process.env.TURSO_TARGET;
     delete process.env.TURSO_TEST_DATABASE_URL;
     delete process.env.TURSO_PROD_DATABASE_URL;

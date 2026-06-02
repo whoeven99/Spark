@@ -48,6 +48,12 @@ describe("token usage percent", () => {
     expect(formatTokenUsagePercentDisplay(5.26)).toBe("5.3");
     expect(formatTokenUsagePercentDisplay(100)).toBe("100");
   });
+
+  it("超额使用时显示超过 100% 的占比", () => {
+    const pct = getTokenUsagePercent(11_262, 10_000);
+    expect(pct).toBeCloseTo(112.62, 2);
+    expect(formatTokenUsagePercentDisplay(pct)).toBe("113");
+  });
 });
 
 describe("listSubscriptionPlansForInterval", () => {

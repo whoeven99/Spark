@@ -6,10 +6,12 @@
 - `path`: Shopify app path segment interpolated into the fixed app link `https://admin.shopify.com/store/{{shop_id}}/apps/{{path}}?utm=email`.
 - `appName`: App display name.
 - `brandName`: Brand or company display name.
-- `recipientName`: Recipient display name. Use a fallback value such as "商家" or "merchant" if no name is available.
+- `appIconUrl`: Public app icon URL used in the email header and footer.
+- `recipientName`: Merchant user first name from Session (`firstName`). Fallback: `商家` (zh-CN) or `merchant` (en).
 - `supportEmail`: Support email address.
-- `shopName`: Shopify shop name.
-- `shopDomain`: Shopify shop domain.
+- `dashboardUrl`: App dashboard URL.
+- `shopName`: Shopify Admin shop display name (`shop.name`), e.g. `rinleaf`.
+- `shopDomain`: Shopify shop domain, e.g. `x0hgaj-gp.myshopify.com`.
 - `occurredAtUtc`: Event time in UTC+0, for example `2026-05-28 02:00 UTC`.
 
 ## App lifecycle variables
@@ -19,18 +21,18 @@
 
 ## Purchase variables
 
-- `purchaseType`: Purchase type, such as subscription, credit purchase, or one-time purchase.
-- `orderId`: Payment or order identifier.
+- `purchaseType`: Localized purchase type (zh: 积分购买; en: Credit pack).
+- `orderId`: Display order id, e.g. `# 2578481175` (from Shopify GID).
 - `planName`: Plan, product, or credit package name.
-- `amountUsd`: Payment amount normalized to USD, for example `12.00`.
-- `billingPeriod`: Billing period.
+- `amountUsd`: Formatted amount with `$` prefix only, e.g. `$9.99` (column label may still say Amount (USD)). Do not prefix the Tencent template placeholder with literal `USD` (e.g. use `{{amountUsd}}`, not `USD {{amountUsd}}`).
+- `billingPeriod`: Localized billing period. One-time: zh `一次性购买` / en `AppPurchaseOneTime`.
 
 ## Subscription variables
 
 - `previousPlanName`: Previous plan name.
 - `currentPlanName`: Current plan name.
 - `effectiveAtUtc`: Subscription effective time in UTC+0.
-- `billingPeriod`: Billing period.
+- `billingPeriod`: Localized interval. zh: `月付` / `年付`; en: `EVERY_30_DAYS` / `ANNUAL`.
 
 ## Task variables
 
@@ -44,8 +46,8 @@
 
 ## Credit account variables
 
-- `creditsChanged`: Credit amount changed by this event.
-- `creditsBefore`: Credit balance before this event.
-- `creditsAfter`: Credit balance after this event.
-- `creditUnit`: Credit unit, such as credits.
-- `creditReason`: Reason for the credit change.
+- `creditsChanged`: Credit delta with en-US thousand separators, e.g. `1,000`.
+- `creditsBefore`: Balance before (formatted, no unit suffix).
+- `creditsAfter`: Balance after (formatted, no unit suffix).
+- `creditUnit`: Always empty in billing emails.
+- `creditReason`: Localized reason (no `credits` suffix).

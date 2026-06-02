@@ -5,9 +5,16 @@ import type {
 } from "./sharedLayout";
 import type {
   CreditAccountChange,
+  NotificationLocale,
   SubscriptionNotificationVariables,
   TaskNotificationVariables,
 } from "../types";
+import {
+  formatBillingPeriod,
+  formatPurchaseType,
+  formatShopifyOrderDisplayId,
+  formatUsdDisplay,
+} from "../formatNotificationDisplay.server";
 import { commonRows, creditRows, REVIEW_SAFE_APP_URL } from "./sharedLayout";
 
 const labels = {
@@ -55,7 +62,7 @@ export const enTemplates: NotificationTemplateRegistry = {
     action: { label: "View Shopify App status", url: REVIEW_SAFE_APP_URL },
   }),
 
-  purchaseCreated: ({ variables, display }) => ({
+  purchaseCreated: ({ variables, display, locale }) => ({
     subject: `${display.appName} purchase record created`,
     preheader: `A purchase or credit transaction has been recorded for ${variables.shopName}.`,
     title: "Purchase record created",
@@ -69,40 +76,58 @@ export const enTemplates: NotificationTemplateRegistry = {
     details: [
       ...commonRows(variables, labels),
       { label: labels.occurredAtUtc, value: variables.occurredAtUtc },
-      { label: "Order ID", value: variables.orderId },
+      {
+        label: "Purchase type",
+        value: formatPurchaseType(variables.purchaseType, locale),
+      },
+      {
+        label: "Order ID",
+        value: variables.orderId
+          ? formatShopifyOrderDisplayId(variables.orderId)
+          : undefined,
+      },
       { label: "Plan or item", value: variables.planName },
-      { label: "Amount (USD)", value: formatUsdAmount(variables.amountUsd) },
-      { label: "Billing period", value: variables.billingPeriod },
-      ...creditRows(variables.creditAccountChange, labels),
+      { label: "Amount (USD)", value: formatUsdDisplay(variables.amountUsd) },
+      {
+        label: "Billing period",
+        value: resolvePurchaseBillingPeriod(variables, locale),
+      },
+      ...creditRows(variables.creditAccountChange, labels, locale),
     ],
     action: { label: "Open Shopify App", url: REVIEW_SAFE_APP_URL },
   }),
 
-  subscriptionStarted: ({ variables, display }) => subscriptionContent({
-    subject: `${display.appName} subscription started`,
-    title: "Subscription started",
-    summary: `${display.appName} is now active. Here is a quick breakdown of the current plan, billing period, and credit account.`,
-    variables,
-    display,
-  }),
+  subscriptionStarted: ({ variables, display, locale }) =>
+    subscriptionContent({
+      subject: `${display.appName} subscription started`,
+      title: "Subscription started",
+      summary: `${display.appName} is now active. Here is a quick breakdown of the current plan, billing period, and credit account.`,
+      variables,
+      display,
+      locale,
+    }),
 
-  subscriptionChanged: ({ variables, display }) => subscriptionContent({
-    subject: `${display.appName} subscription changed`,
-    title: "Subscription changed",
-    summary: `${display.appName} has been updated. The plan, timing, and any related credit changes are listed below.`,
-    variables,
-    display,
-  }),
+  subscriptionChanged: ({ variables, display, locale }) =>
+    subscriptionContent({
+      subject: `${display.appName} subscription changed`,
+      title: "Subscription changed",
+      summary: `${display.appName} has been updated. The plan, timing, and any related credit changes are listed below.`,
+      variables,
+      display,
+      locale,
+    }),
 
-  subscriptionCanceled: ({ variables, display }) => subscriptionContent({
-    subject: `${display.appName} subscription canceled`,
-    title: "Subscription canceled",
-    summary: `${display.appName} has been canceled. Some premium features, automated tasks, or usage quotas may stop after the current billing period ends.`,
-    variables,
-    display,
-  }),
+  subscriptionCanceled: ({ variables, display, locale }) =>
+    subscriptionContent({
+      subject: `${display.appName} subscription canceled`,
+      title: "Subscription canceled",
+      summary: `${display.appName} has been canceled. Some premium features, automated tasks, or usage quotas may stop after the current billing period ends.`,
+      variables,
+      display,
+      locale,
+    }),
 
-  taskStarted: ({ variables, display }) => taskContent({
+  taskStarted: ({ variables, display, locale }) => taskContent({
     subject: `${display.appName} task started`,
     title: "Task started",
     summary: `${display.appName} has started processing ${variables.taskName}. We will keep you posted when it is completed, paused, or needs attention.`,
@@ -110,9 +135,10 @@ export const enTemplates: NotificationTemplateRegistry = {
     display,
     timeLabel: "Started at (UTC+0)",
     timeValue: variables.startedAtUtc,
+    locale,
   }),
 
-  taskCompleted: ({ variables, display }) => taskContent({
+  taskCompleted: ({ variables, display, locale }) => taskContent({
     subject: `${display.appName} task completed`,
     title: "Task completed",
     summary: `Good news: ${variables.taskName} is complete. Open the Shopify App to review results, logs, and related details.`,
@@ -120,9 +146,10 @@ export const enTemplates: NotificationTemplateRegistry = {
     display,
     timeLabel: "Completed at (UTC+0)",
     timeValue: variables.completedAtUtc,
+    locale,
   }),
 
-  taskPaused: ({ variables, display }) => taskContent({
+  taskPaused: ({ variables, display, locale }) => taskContent({
     subject: `${display.appName} task paused`,
     title: "Task paused",
     summary: `${variables.taskName} has been paused. While paused, it usually stops processing new data and generating related usage.`,
@@ -130,9 +157,10 @@ export const enTemplates: NotificationTemplateRegistry = {
     display,
     timeLabel: "Paused at (UTC+0)",
     timeValue: variables.pausedAtUtc,
+    locale,
   }),
 
-  taskFailed: ({ variables, display }) => taskContent({
+  taskFailed: ({ variables, display, locale }) => taskContent({
     subject: `${display.appName} task failed`,
     title: "Task failed",
     summary: `${variables.taskName} could not be completed this time. Open the Shopify App to review the reason and check settings, authorization, credit balance, or third-party connections.`,
@@ -141,6 +169,7 @@ export const enTemplates: NotificationTemplateRegistry = {
     timeLabel: "Failed at (UTC+0)",
     timeValue: variables.occurredAtUtc,
     extraRows: [{ label: "Failure reason", value: variables.failureReason }],
+    locale,
   }),
 };
 
@@ -150,12 +179,14 @@ function subscriptionContent({
   summary,
   variables,
   display,
+  locale,
 }: {
   subject: string;
   title: string;
   summary: string;
   variables: SubscriptionNotificationVariables;
   display: TemplateDisplay;
+  locale: NotificationLocale;
 }) {
   return {
     subject,
@@ -173,8 +204,16 @@ function subscriptionContent({
       { label: "Previous plan", value: variables.previousPlanName },
       { label: "Current plan", value: variables.currentPlanName },
       { label: "Effective at (UTC+0)", value: variables.effectiveAtUtc ?? variables.occurredAtUtc },
-      { label: "Billing period", value: variables.billingPeriod },
-      ...creditRows(variables.creditAccountChange, labels),
+      {
+        label: "Billing period",
+        value: variables.billingInterval
+          ? formatBillingPeriod(
+              { kind: "subscription", interval: variables.billingInterval },
+              locale,
+            )
+          : undefined,
+      },
+      ...creditRows(variables.creditAccountChange, labels, locale),
     ],
     action: { label: "Open Shopify App", url: REVIEW_SAFE_APP_URL },
   };
@@ -189,6 +228,7 @@ function taskContent({
   timeLabel,
   timeValue,
   extraRows = [],
+  locale = "en",
 }: {
   subject: string;
   title: string;
@@ -198,6 +238,7 @@ function taskContent({
   timeLabel: string;
   timeValue?: string;
   extraRows?: TemplateRow[];
+  locale?: NotificationLocale;
 }) {
   return {
     subject,
@@ -216,7 +257,7 @@ function taskContent({
       { label: "Task ID", value: variables.taskId },
       { label: timeLabel, value: timeValue ?? variables.occurredAtUtc },
       ...extraRows,
-      ...creditRows(variables.creditAccountChange, labels),
+      ...creditRows(variables.creditAccountChange, labels, locale),
     ],
     action: { label: "Open Shopify App", url: REVIEW_SAFE_APP_URL },
   };
@@ -230,10 +271,28 @@ function creditParagraph(change: CreditAccountChange | undefined): string[] {
   return ["Credits can be used for task execution, usage quotas, and other metered features. The full history is available in the Shopify App."];
 }
 
-function formatUsdAmount(amountUsd: string | undefined): string | undefined {
-  if (!amountUsd) {
-    return undefined;
+function resolvePurchaseBillingPeriod(
+  variables: {
+    billingPeriodKind?: "oneTime";
+    billingInterval?: string;
+    purchaseType?: "subscription" | "creditPack" | "oneTime";
+  },
+  locale: NotificationLocale,
+): string | undefined {
+  if (variables.billingPeriodKind === "oneTime") {
+    return formatBillingPeriod({ kind: "oneTime" }, locale);
   }
-
-  return `USD ${amountUsd}`;
+  if (variables.billingInterval?.trim()) {
+    return formatBillingPeriod(
+      { kind: "subscription", interval: variables.billingInterval },
+      locale,
+    );
+  }
+  if (
+    variables.purchaseType === "creditPack" ||
+    variables.purchaseType === "oneTime"
+  ) {
+    return formatBillingPeriod({ kind: "oneTime" }, locale);
+  }
+  return undefined;
 }

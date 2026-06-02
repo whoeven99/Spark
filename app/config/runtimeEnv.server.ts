@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isProductionNodeEnv } from "./nodeEnv.server";
 
 /** 去掉首尾空白与成对引号（Render 控制台偶发带入） */
 export function normalizeEnvValue(value: string | undefined): string {
@@ -132,7 +133,7 @@ export function ensureRuntimeEnv(): void {
     tryLoadEnvFile(filePath, isProjectDotEnv);
   }
 
-  if (process.env.NODE_ENV !== "production") {
+  if (!isProductionNodeEnv()) {
     const hasTurso = Boolean(process.env.TURSO_TEST_DATABASE_URL?.trim());
     console.info(
       `[env] projectRoot=${projectRoot} cwd=${process.cwd()} .env=${existsSync(path.join(projectRoot, ".env")) ? "有" : "无"} TURSO_TEST_URL=${hasTurso ? "已加载" : "未加载"}`,

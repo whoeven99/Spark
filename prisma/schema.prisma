@@ -81,6 +81,7 @@ model Account {
   appSubscription   AppSubscription?
   periodUsages      AccountPeriodUsage[]
   billingLogs       BillingLog[]
+  toolTokenUsageLogs ToolTokenUsageLog[]
 
   @@unique([shop, appName])
   @@index([shop])
@@ -178,6 +179,28 @@ model CommonEventLog {
   @@index([referenceId])
 }
 
+/// 入口来源归因：用户从带 utm 参数的外链（邮件 / 广告等）首次进入 App 时记一条。
+/// Shopify 仅在带参链接首次进入时透传 query，站内导航会丢弃，因此天然只记录外部入口。
+model AppVisitSource {
+  id        String   @id @default(cuid())
+  shop      String
+  /// 与 `AppEntry` 一致
+  appName   String
+  /// 落地 path，如 /app/product-improve
+  path      String
+  /// 原始 utm 字符串，如 email（保留原值，不在写入时解析）
+  utm       String
+  /// 整段 query string 兜底（如 ?utm=email），未来 utm 变复杂也不丢信息
+  query     String?
+  /// HTTP Referer（若有）
+  referer   String?
+  createdAt DateTime @default(now())
+
+  @@index([shop, createdAt])
+  @@index([appName, utm, createdAt])
+  @@index([utm, path])
+}
+
 /// 计费流水：试用、订阅、续费、按量购 token 等。
 model BillingLog {
   id          String   @id @default(cuid())
@@ -197,6 +220,26 @@ model BillingLog {
   @@index([shop, appName, createdAt])
   @@index([eventType, createdAt])
   @@index([referenceId])
+}
+
+/// 工具 token 明细：每次工具调用入账一条（高频），与 BillingLog 账务事件拆分。
+model ToolTokenUsageLog {
+  id          String   @id @default(cuid())
+  shop        String
+  appName     String
+  feature     String
+  modelKey    String
+  rawTokens   Int
+  billedTokens Int
+  inputTokens Int      @default(0)
+  outputTokens Int     @default(0)
+  createdAt   DateTime @default(now())
+
+  account Account @relation(fields: [shop, appName], references: [shop, appName])
+
+  @@index([shop, appName, createdAt])
+  @@index([shop, appName, feature, createdAt])
+  @@index([feature, createdAt])
 }
 
 /// AI 任务批次：一次提交对应一个批次（含单任务）。
@@ -293,6 +336,7 @@ model ShopOrder {
 
   lineItems    ShopOrderLineItem[]
   refunds      ShopRefund[]
+  refundLineItems ShopRefundLineItem[]
   fulfillments ShopFulfillment[]
 
   @@unique([shop, shopifyOrderId])
@@ -308,6 +352,7 @@ model ShopOrderLineItem {
   shop           String
   shopifyOrderId String
   lineItemId     String
+  inventoryItemId String?
   variantId      String?
   productId      String?
   title          String
@@ -323,6 +368,7 @@ model ShopOrderLineItem {
   @@unique([shop, lineItemId])
   @@index([shop, shopifyOrderId])
   @@index([shop, sku])
+  @@index([shop, inventoryItemId])
   @@index([shop, productId])
 }
 
@@ -339,11 +385,45 @@ model ShopRefund {
   createdAt       DateTime
   syncedAt        DateTime @default(now())
 
-  order ShopOrder @relation(fields: [shop, shopifyOrderId], references: [shop, shopifyOrderId])
+  order     ShopOrder            @relation(fields: [shop, shopifyOrderId], references: [shop, shopifyOrderId])
+  lineItems ShopRefundLineItem[]
 
   @@unique([shop, shopifyRefundId])
   @@index([shop, shopifyOrderId])
   @@index([shop, processedAt])
+}
+
+/// 閫€娆捐椤圭洰锛岀敤浜?SKU 褰掑洜銆侀€€娆鹃噾棰?Top SKU 鍜屽敭鍚庡缓璁€?
+model ShopRefundLineItem {
+  id              String @id @default(cuid())
+  shop            String
+  shopifyRefundId String
+  shopifyOrderId  String
+  refundLineItemId String
+  lineItemId      String
+  inventoryItemId String?
+  variantId       String?
+  productId       String?
+  title           String?
+  variantTitle    String?
+  sku             String?
+  quantity        Int    @default(0)
+  subtotal        Float  @default(0)
+  totalTax        Float  @default(0)
+  reason          String?
+  restockType     String?
+  createdAt       DateTime @default(now())
+  syncedAt        DateTime @default(now())
+
+  refund ShopRefund @relation(fields: [shop, shopifyRefundId], references: [shop, shopifyRefundId], onDelete: Cascade)
+  order   ShopOrder  @relation(fields: [shop, shopifyOrderId], references: [shop, shopifyOrderId])
+
+  @@unique([shop, refundLineItemId])
+  @@index([shop, shopifyRefundId])
+  @@index([shop, shopifyOrderId])
+  @@index([shop, lineItemId])
+  @@index([shop, sku])
+  @@index([shop, reason])
 }
 
 /// 客户信息快照（首单/末单/LTV）。
@@ -378,6 +458,11 @@ model ShopInventoryLevel {
   id              String   @id @default(cuid())
   shop            String
   inventoryItemId String
+  variantId       String?
+  productId       String?
+  sku             String?
+  productTitle    String?
+  variantTitle    String?
   locationId      String
   locationName    String?
   available       Int      @default(0)
@@ -388,6 +473,8 @@ model ShopInventoryLevel {
   syncedAt        DateTime @default(now())
 
   @@unique([shop, inventoryItemId, locationId])
+  @@index([shop, sku])
+  @@index([shop, variantId])
   @@index([shop, locationId])
   @@index([shop, available])
 }
