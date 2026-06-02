@@ -15,6 +15,20 @@ type Props = {
   onTaskUpdated?: (taskId: string, status: AITaskStatus, result?: Record<string, unknown>) => void;
 };
 
+type ResultRecord = {
+  id: string;
+  version: number;
+  title: string;
+  description: string;
+  reviewScore: number | null;
+  reviewNote: string;
+  optimizationComment: string;
+  createdAt: string;
+  sourceLabel: string;
+  statusNote: string | null;
+  applied: boolean;
+};
+
 function getProductAdminUrl(locationSearch: string, productId: string): string | null {
   const params = new URLSearchParams(
     locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
@@ -93,6 +107,35 @@ function readNumberField(source: Record<string, unknown> | null | undefined, key
 function formatDisplayValue(value: string | number | null | undefined, variableName: string): string {
   if (value == null || value === "") return formatVariableToken(variableName);
   return String(value);
+}
+
+function buildTaskResultFromRecord(record: ResultRecord): ProductImproveTaskResult {
+  return {
+    title: record.title.trim(),
+    description: record.description.trim(),
+    reviewScore: record.reviewScore ?? undefined,
+    reviewNote: record.reviewNote.trim() || undefined,
+    optimizationComment: record.optimizationComment.trim() || undefined,
+  };
+}
+
+function buildInitialResultRecords(task: AITaskItem): ResultRecord[] {
+  const result = task.result as Partial<ProductImproveTaskResult> | null;
+  return [
+    {
+      id: `${task.id}-v1`,
+      version: 1,
+      title: result?.title ?? "",
+      description: result?.description ?? "",
+      reviewScore: result?.reviewScore ?? null,
+      reviewNote: result?.reviewNote ?? "",
+      optimizationComment: result?.optimizationComment ?? "",
+      createdAt: task.completedAt ?? task.createdAt,
+      sourceLabel: "初始生成结果",
+      statusNote: null,
+      applied: task.status === "applied",
+    },
+  ];
 }
 
 function ReviewContentPanel(props: {
@@ -257,29 +300,31 @@ export function ProductImproveTaskDetailPage({
 }: Props) {
   const [localStatus, setLocalStatus] = useState<AITaskStatus>(task.status);
   const [localResult, setLocalResult] = useState<Record<string, unknown> | null>(task.result);
-  const [draftTitle, setDraftTitle] = useState("");
-  const [draftDescription, setDraftDescription] = useState("");
-  const [reviewScore, setReviewScore] = useState<number | null>(null);
-  const [reviewNote, setReviewNote] = useState("");
-  const [optimizationComment, setOptimizationComment] = useState("");
+  const [resultRecords, setResultRecords] = useState<ResultRecord[]>(() =>
+    buildInitialResultRecords(task),
+  );
+  const [activeRecordId, setActiveRecordId] = useState<string>(() =>
+    buildInitialResultRecords(task)[0]?.id ?? "",
+  );
   const [refining, setRefining] = useState(false);
   const [refineError, setRefineError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
-  const [refineSuccess, setRefineSuccess] = useState<string | null>(null);
   const [draftHighlight, setDraftHighlight] = useState(false);
-  const [scoreDialogOpen, setScoreDialogOpen] = useState(false);
-  const [refineDialogOpen, setRefineDialogOpen] = useState(false);
+  const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
+  const [feedbackRecordId, setFeedbackRecordId] = useState<string | null>(null);
+  const [feedbackScore, setFeedbackScore] = useState<number | null>(null);
+  const [feedbackNote, setFeedbackNote] = useState("");
+  const [feedbackOptimizationComment, setFeedbackOptimizationComment] = useState("");
 
   const cfg = task.config as Partial<ProductImproveTaskConfig>;
   const extendedConfig = task.config as Record<string, unknown>;
-  const result = localResult as Partial<ProductImproveTaskResult> | null;
   const actualElapsed = formatActualElapsed(task.startedAt, task.completedAt);
   const shortId = task.id.slice(0, 8).toUpperCase();
   const summaryDescription =
     localStatus === "applied"
       ? "已完成审核与写入，可直接查看结果并返回任务列表。"
-      : "在这里集中查看原文、审核草稿、评分备注和最终应用动作。";
+      : "左侧查看原始内容，右侧以结果记录的方式迭代草稿并选择最终应用版本。";
   const itemCount = formatDisplayValue(
     readNumberField(extendedConfig, "itemCount"),
     "itemCount",
@@ -293,29 +338,20 @@ export function ProductImproveTaskDetailPage({
     "brandStyle",
   );
   const productLabel = cfg.originalTitle || "Manual Juicer, Small Household Juicer, Squeeze...";
-  const scoreDialogRef = useRef<HTMLDialogElement | null>(null);
-  const refineDialogRef = useRef<HTMLDialogElement | null>(null);
+  const feedbackDialogRef = useRef<HTMLDialogElement | null>(null);
+  const activeRecord =
+    resultRecords.find((record) => record.id === activeRecordId) ?? resultRecords[0] ?? null;
   const editingLocked = refining || applying || localStatus === "applied";
 
   useEffect(() => {
-    const el = scoreDialogRef.current;
+    const el = feedbackDialogRef.current;
     if (!el) return;
-    if (scoreDialogOpen) {
+    if (feedbackDialogOpen) {
       if (!el.open) el.showModal();
     } else if (el.open) {
       el.close();
     }
-  }, [scoreDialogOpen]);
-
-  useEffect(() => {
-    const el = refineDialogRef.current;
-    if (!el) return;
-    if (refineDialogOpen) {
-      if (!el.open) el.showModal();
-    } else if (el.open) {
-      el.close();
-    }
-  }, [refineDialogOpen]);
+  }, [feedbackDialogOpen]);
 
   useEffect(() => {
     setLocalStatus(task.status);
@@ -323,19 +359,22 @@ export function ProductImproveTaskDetailPage({
 
   useEffect(() => {
     setLocalResult(task.result);
-    const next = task.result as Partial<ProductImproveTaskResult> | null;
-    setDraftTitle(next?.title ?? "");
-    setDraftDescription(next?.description ?? "");
-    setReviewScore(next?.reviewScore ?? null);
-    setReviewNote(next?.reviewNote ?? "");
-    setOptimizationComment(next?.optimizationComment ?? "");
-  }, [task.result]);
+    const nextRecords = buildInitialResultRecords(task);
+    setResultRecords(nextRecords);
+    setActiveRecordId(nextRecords[0]?.id ?? "");
+  }, [task]);
 
   useEffect(() => {
     if (!draftHighlight) return;
     const timer = window.setTimeout(() => setDraftHighlight(false), 2600);
     return () => window.clearTimeout(timer);
   }, [draftHighlight]);
+
+  const updateResultRecord = useCallback((recordId: string, patch: Partial<ResultRecord>) => {
+    setResultRecords((prev) =>
+      prev.map((record) => (record.id === recordId ? { ...record, ...patch } : record)),
+    );
+  }, []);
 
   const handleStatusChange = useCallback(
     (status: AITaskStatus, r?: Record<string, unknown>) => {
@@ -346,18 +385,16 @@ export function ProductImproveTaskDetailPage({
     [onTaskUpdated, task.id],
   );
 
-  function buildReviewedResult(): ProductImproveTaskResult {
-    return {
-      title: draftTitle.trim(),
-      description: draftDescription.trim(),
-      reviewScore: reviewScore ?? undefined,
-      reviewNote: reviewNote.trim() || undefined,
-      optimizationComment: optimizationComment.trim() || undefined,
-    };
+  function openFeedbackDialog(record: ResultRecord) {
+    setFeedbackRecordId(record.id);
+    setFeedbackScore(record.reviewScore);
+    setFeedbackNote(record.reviewNote);
+    setFeedbackOptimizationComment(record.optimizationComment);
+    setFeedbackDialogOpen(true);
   }
 
-  async function handleApply() {
-    const reviewedResult = buildReviewedResult();
+  async function handleApply(record: ResultRecord) {
+    const reviewedResult = buildTaskResultFromRecord(record);
     if (!reviewedResult.title || !reviewedResult.description) {
       setApplyError("请先完成审核并确认标题与描述");
       return;
@@ -389,6 +426,14 @@ export function ProductImproveTaskDetailPage({
         }),
       });
       setLocalResult(reviewedResult);
+      setResultRecords((prev) =>
+        prev.map((item) => ({
+          ...item,
+          applied: item.id === record.id,
+          statusNote: item.id === record.id ? "该版本已被确认为最终写入版本" : item.statusNote,
+        })),
+      );
+      setActiveRecordId(record.id);
       handleStatusChange("applied", reviewedResult);
     } catch {
       setApplyError("应用时发生网络错误");
@@ -398,19 +443,43 @@ export function ProductImproveTaskDetailPage({
   }
 
   async function handleRefine(): Promise<boolean> {
-    if (!draftTitle.trim() || !draftDescription.trim()) {
+    if (!feedbackRecordId) {
+      setRefineError("未找到要继续优化的结果记录");
+      return false;
+    }
+
+    const sourceRecord = resultRecords.find((record) => record.id === feedbackRecordId);
+    if (!sourceRecord) {
+      setRefineError("未找到要继续优化的结果记录");
+      return false;
+    }
+
+    if (!sourceRecord.title.trim() || !sourceRecord.description.trim()) {
       setRefineError("请先补充当前草稿标题和描述");
       return false;
     }
-    if (!optimizationComment.trim()) {
+    if (!feedbackOptimizationComment.trim()) {
       setRefineError("请填写希望 AI 继续优化的方向或评论");
       return false;
     }
 
     setRefining(true);
     setRefineError(null);
-    setRefineSuccess(null);
     setApplyError(null);
+
+    updateResultRecord(sourceRecord.id, {
+      reviewScore: feedbackScore,
+      reviewNote: feedbackNote,
+      optimizationComment: feedbackOptimizationComment,
+    });
+
+    const feedbackSummary = [
+      feedbackOptimizationComment.trim(),
+      feedbackScore !== null ? `结果评分：${feedbackScore}/5` : null,
+      feedbackNote.trim() ? `评价补充：${feedbackNote.trim()}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     try {
       const resp = await fetch(`/api/ai-task${locationSearch}`, {
@@ -419,9 +488,9 @@ export function ProductImproveTaskDetailPage({
         body: JSON.stringify({
           action: "refine",
           taskId: task.id,
-          draftTitle,
-          draftDescription,
-          optimizationComment,
+          draftTitle: sourceRecord.title,
+          draftDescription: sourceRecord.description,
+          optimizationComment: feedbackSummary,
         }),
       });
       const body = (await resp.json()) as {
@@ -433,13 +502,42 @@ export function ProductImproveTaskDetailPage({
         setRefineError(body.errorMsg ?? "继续 AI 优化失败");
         return false;
       }
-      setDraftTitle(body.result.title ?? "");
-      setDraftDescription(body.result.description ?? "");
-      setReviewScore(body.result.reviewScore ?? reviewScore);
+
+      const nextVersion =
+        resultRecords.reduce((max, record) => Math.max(max, record.version), 0) + 1;
+      const newRecord: ResultRecord = {
+        id: `${task.id}-v${nextVersion}-${Date.now()}`,
+        version: nextVersion,
+        title: body.result.title ?? "",
+        description: body.result.description ?? "",
+        reviewScore: null,
+        reviewNote: "",
+        optimizationComment: "",
+        createdAt: new Date().toISOString(),
+        sourceLabel: `基于 V${sourceRecord.version} 的反馈继续优化`,
+        statusNote: `由 V${sourceRecord.version} 的评分与优化意见生成`,
+        applied: false,
+      };
+
+      setResultRecords((prev) =>
+        prev
+          .map((record) =>
+            record.id === sourceRecord.id
+              ? {
+                  ...record,
+                  reviewScore: feedbackScore,
+                  reviewNote: feedbackNote,
+                  optimizationComment: feedbackOptimizationComment,
+                  statusNote: `已基于该记录生成 V${nextVersion}`,
+                }
+              : record,
+          )
+          .concat(newRecord),
+      );
       setLocalResult(body.result);
-      setOptimizationComment(body.result.optimizationComment ?? optimizationComment);
+      setActiveRecordId(newRecord.id);
       setDraftHighlight(true);
-      setRefineSuccess("AI 已根据最新优化意见更新右侧审核草稿。");
+      setFeedbackDialogOpen(false);
       handleStatusChange("pending_review", body.result);
       return true;
     } catch {
@@ -593,146 +691,263 @@ export function ProductImproveTaskDetailPage({
         </div>
       </div>
 
-      <SectionShell title="内容审核" description="左侧查看原始内容，右侧直接编辑当前草稿。评分与 AI 优化收纳到辅助弹窗中。">
+      <SectionShell
+        title="内容审核"
+        description="左侧查看原始内容，右侧编辑当前选中的结果版本。评分与 AI 优化收纳到记录级弹窗中。"
+      >
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 0.92fr) minmax(0, 1.08fr)",
             gap: 12,
-            flexWrap: "wrap",
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              flexWrap: "wrap",
-              alignItems: "center",
-            }}
-          >
-            {reviewScore !== null ? (
-              <span
-                style={{
-                  padding: "0.28rem 0.65rem",
-                  borderRadius: 999,
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: pageColorTokens.brandGreenDark,
-                  background: pageColorTokens.brandGreenLight,
-                  border: "1px solid rgba(0, 166, 124, 0.16)",
-                }}
-              >
-                结果评分 {reviewScore}/5
-              </span>
-            ) : (
-              <span style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
-                结果评分尚未填写
-              </span>
-            )}
-            {reviewNote.trim() ? (
-              <span style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
-                已添加评分说明
-              </span>
-            ) : null}
-            {optimizationComment.trim() ? (
-              <span style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
-                已保存 AI 优化提示
-              </span>
-            ) : null}
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={() => setScoreDialogOpen(true)}
-              disabled={editingLocked}
-              style={{
-                padding: "8px 14px",
-                borderRadius: pageColorTokens.radiusControl,
-                background: "#ffffff",
-                color: editingLocked ? pageColorTokens.textFootnote : pageColorTokens.textBody,
-                border: `1px solid ${pageColorTokens.borderSubtle}`,
-                cursor: editingLocked ? "default" : "pointer",
-                fontSize: 13,
-                fontWeight: 600,
-              }}
-            >
-              结果评分
-            </button>
-            {localStatus !== "applied" ? (
-              <button
-                type="button"
-                onClick={() => setRefineDialogOpen(true)}
-                disabled={refining || applying}
-                style={{
-                  padding: "8px 14px",
-                  borderRadius: pageColorTokens.radiusControl,
-                  background: "#ffffff",
-                  color: refining || applying ? pageColorTokens.textFootnote : pageColorTokens.textBody,
-                  border: `1px solid ${pageColorTokens.borderSubtle}`,
-                  cursor: refining || applying ? "default" : "pointer",
-                  fontSize: 13,
-                  fontWeight: 600,
-                }}
-              >
-                继续 AI 优化
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => void handleApply()}
-              disabled={refining || applying || localStatus === "applied"}
-              style={{
-                padding: "8px 16px",
-                borderRadius: pageColorTokens.radiusControl,
-                background: applying ? pageColorTokens.surfaceMuted : pageColorTokens.brandGreen,
-                color: applying ? pageColorTokens.textSecondary : "#fff",
-                border: "none",
-                cursor: applying ? "default" : "pointer",
-                fontSize: 13,
-                fontWeight: 700,
-                boxShadow: applying ? "none" : "0 6px 18px rgba(0, 166, 124, 0.18)",
-              }}
-            >
-              {applying ? "应用中..." : "确认并写入 Shopify"}
-            </button>
-          </div>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <ReviewContentPanel
             label="原始内容"
             title={cfg.originalTitle ?? ""}
             description={cfg.originalText ?? ""}
           />
-          <ReviewContentPanel
-            label="审核草稿"
-            tone="positive"
-            title={draftTitle}
-            description={draftDescription}
-            highlighted={draftHighlight}
-            editable
-            disabled={editingLocked}
-            onTitleChange={setDraftTitle}
-            onDescriptionChange={setDraftDescription}
-            descriptionRows={12}
-          />
-        </div>
 
-        {refineSuccess ? (
-          <div
-            style={{
-              fontSize: 12,
-              color: pageColorTokens.brandGreenDark,
-              background: pageColorTokens.brandGreenLight,
-              padding: "9px 11px",
-              borderRadius: pageColorTokens.radiusControl,
-              border: "1px solid rgba(0, 166, 124, 0.18)",
-            }}
-          >
-            {refineSuccess}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: pageColorTokens.textPrimary }}>
+                  {activeRecord ? `当前编辑版本 V${activeRecord.version}` : "当前编辑版本"}
+                </div>
+                <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, lineHeight: 1.5 }}>
+                  {activeRecord?.sourceLabel ?? "当前暂无可编辑的结果记录"}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => activeRecord && void handleApply(activeRecord)}
+                disabled={!activeRecord || refining || applying || localStatus === "applied"}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: pageColorTokens.radiusControl,
+                  background: applying ? pageColorTokens.surfaceMuted : pageColorTokens.brandGreen,
+                  color: applying ? pageColorTokens.textSecondary : "#fff",
+                  border: "none",
+                  cursor: applying ? "default" : "pointer",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  boxShadow: applying ? "none" : "0 6px 18px rgba(0, 166, 124, 0.18)",
+                }}
+              >
+                {applying ? "应用中..." : "应用当前版本"}
+              </button>
+            </div>
+
+            <ReviewContentPanel
+              label={activeRecord ? `当前草稿 · V${activeRecord.version}` : "当前草稿"}
+              tone="positive"
+              title={activeRecord?.title ?? ""}
+              description={activeRecord?.description ?? ""}
+              highlighted={draftHighlight}
+              editable
+              disabled={editingLocked || !activeRecord}
+              onTitleChange={(value) => {
+                if (!activeRecord) return;
+                updateResultRecord(activeRecord.id, { title: value });
+              }}
+              onDescriptionChange={(value) => {
+                if (!activeRecord) return;
+                updateResultRecord(activeRecord.id, { description: value });
+              }}
+              descriptionRows={12}
+            />
+
+            <div
+              style={{
+                border: `1px solid ${pageColorTokens.borderSubtle}`,
+                borderRadius: pageColorTokens.radiusControl,
+                background: "#fff",
+                padding: "0.9rem",
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: pageColorTokens.textPrimary }}>
+                  结果记录
+                </div>
+                <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, marginTop: 4 }}>
+                  每次评分与 AI 优化都会沉淀为一条记录，新的优化结果会在这里继续新增版本。
+                </div>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {resultRecords.map((record) => {
+                  const isActive = activeRecord?.id === record.id;
+                  return (
+                    <div
+                      key={record.id}
+                      style={{
+                        border: `1px solid ${
+                          isActive ? "rgba(0, 166, 124, 0.28)" : pageColorTokens.borderSubtle
+                        }`,
+                        borderRadius: pageColorTokens.radiusControl,
+                        background: isActive ? "#f8fffc" : "#ffffff",
+                        padding: "0.8rem 0.85rem",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 8,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: 10,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <span
+                            style={{
+                              padding: "0.2rem 0.5rem",
+                              borderRadius: 999,
+                              background: isActive ? pageColorTokens.brandGreenLight : pageColorTokens.surfaceMuted,
+                              color: isActive ? pageColorTokens.brandGreenDark : pageColorTokens.textSecondary,
+                              fontSize: 11,
+                              fontWeight: 700,
+                            }}
+                          >
+                            V{record.version}
+                          </span>
+                          <span style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
+                            {record.sourceLabel}
+                          </span>
+                          {record.applied ? (
+                            <span style={{ fontSize: 12, color: pageColorTokens.brandGreenDark, fontWeight: 700 }}>
+                              已应用
+                            </span>
+                          ) : null}
+                        </div>
+                        <span style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>
+                          {formatTaskDate(record.createdAt)}
+                        </span>
+                      </div>
+
+                      <div style={{ fontSize: 13, fontWeight: 600, color: pageColorTokens.textPrimary }}>
+                        {record.title || "（无标题）"}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: pageColorTokens.textSecondary,
+                          lineHeight: 1.6,
+                          display: "-webkit-box",
+                          WebkitLineClamp: 3,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                        }}
+                      >
+                        {record.description || "（无描述）"}
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 8,
+                          flexWrap: "wrap",
+                          fontSize: 12,
+                          color: pageColorTokens.textSecondary,
+                        }}
+                      >
+                        <span>
+                          {record.reviewScore !== null ? `结果评分 ${record.reviewScore}/5` : "结果评分未填写"}
+                        </span>
+                        <span>
+                          {record.reviewNote.trim() ? `评分说明：${record.reviewNote}` : "评分说明未填写"}
+                        </span>
+                      </div>
+
+                      {record.statusNote ? (
+                        <div style={{ fontSize: 12, color: pageColorTokens.textFootnote, lineHeight: 1.5 }}>
+                          {record.statusNote}
+                        </div>
+                      ) : null}
+
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveRecordId(record.id);
+                            openFeedbackDialog(record);
+                          }}
+                          disabled={editingLocked}
+                          style={{
+                            padding: "7px 12px",
+                            borderRadius: pageColorTokens.radiusControl,
+                            background: "#ffffff",
+                            color: editingLocked ? pageColorTokens.textFootnote : pageColorTokens.textBody,
+                            border: `1px solid ${pageColorTokens.borderSubtle}`,
+                            cursor: editingLocked ? "default" : "pointer",
+                            fontSize: 12,
+                            fontWeight: 600,
+                          }}
+                        >
+                          评分并继续优化
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveRecordId(record.id)}
+                          style={{
+                            padding: "7px 12px",
+                            borderRadius: pageColorTokens.radiusControl,
+                            background: isActive ? pageColorTokens.brandGreenLight : "#ffffff",
+                            color: isActive ? pageColorTokens.brandGreenDark : pageColorTokens.textBody,
+                            border: `1px solid ${isActive ? pageColorTokens.brandGreen : pageColorTokens.borderSubtle}`,
+                            cursor: "pointer",
+                            fontSize: 12,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {isActive ? "正在编辑" : "编辑这一版"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleApply(record)}
+                          disabled={refining || applying || localStatus === "applied"}
+                          style={{
+                            padding: "7px 12px",
+                            borderRadius: pageColorTokens.radiusControl,
+                            background: "#ffffff",
+                            color:
+                              refining || applying || localStatus === "applied"
+                                ? pageColorTokens.textFootnote
+                                : pageColorTokens.brandGreenDark,
+                            border: `1px solid ${
+                              refining || applying || localStatus === "applied"
+                                ? pageColorTokens.borderSubtle
+                                : "rgba(0, 166, 124, 0.24)"
+                            }`,
+                            cursor: refining || applying || localStatus === "applied" ? "default" : "pointer",
+                            fontSize: 12,
+                            fontWeight: 700,
+                          }}
+                        >
+                          应用这一版
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-        ) : null}
+        </div>
 
         {localStatus === "applied" ? (
           <div
@@ -776,24 +991,6 @@ export function ProductImproveTaskDetailPage({
         ) : null}
       </SectionShell>
 
-      {result && (result.reviewScore || result.reviewNote || result.optimizationComment) ? (
-        <SectionShell title="结果评分记录" description="沉淀本次任务的评分结果与 AI 继续优化说明。">
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              flexWrap: "wrap",
-              fontSize: 12,
-              color: pageColorTokens.textSecondary,
-            }}
-          >
-            {result.reviewScore ? <span>结果评分 {result.reviewScore}/5</span> : null}
-            {result.reviewNote ? <span>评分说明：{result.reviewNote}</span> : null}
-            {result.optimizationComment ? <span>AI 优化说明：{result.optimizationComment}</span> : null}
-          </div>
-        </SectionShell>
-      ) : null}
-
       {refineError ? (
         <div
           style={{
@@ -825,10 +1022,10 @@ export function ProductImproveTaskDetailPage({
       ) : null}
 
       <dialog
-        ref={scoreDialogRef}
+        ref={feedbackDialogRef}
         onCancel={(e) => {
           e.preventDefault();
-          if (!editingLocked) setScoreDialogOpen(false);
+          if (!editingLocked) setFeedbackDialogOpen(false);
         }}
         style={{
           position: "fixed",
@@ -852,7 +1049,7 @@ export function ProductImproveTaskDetailPage({
                 marginBottom: "0.35rem",
               }}
             >
-              结果评分
+              评分并继续优化
             </div>
             <div
               style={{
@@ -861,17 +1058,17 @@ export function ProductImproveTaskDetailPage({
                 lineHeight: 1.5,
               }}
             >
-              为当前创建内容打分，并可补充评分说明。
+              对当前结果版本填写评分与评价，再把这些反馈一起交给 AI 生成新的版本记录。
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             {[1, 2, 3, 4, 5].map((score) => {
-              const active = reviewScore === score;
+              const active = feedbackScore === score;
               return (
                 <button
                   key={score}
                   type="button"
-                  onClick={() => setReviewScore((prev) => (prev === score ? null : score))}
+                  onClick={() => setFeedbackScore((prev) => (prev === score ? null : score))}
                   disabled={editingLocked}
                   style={{
                     padding: "0.38rem 0.72rem",
@@ -890,8 +1087,8 @@ export function ProductImproveTaskDetailPage({
             })}
           </div>
           <textarea
-            value={reviewNote}
-            onChange={(e) => setReviewNote(e.currentTarget.value)}
+            value={feedbackNote}
+            onChange={(e) => setFeedbackNote(e.currentTarget.value)}
             disabled={editingLocked}
             rows={4}
             placeholder="可选：填写评分说明，例如文案准确性、品牌语气、可读性等。"
@@ -907,70 +1104,9 @@ export function ProductImproveTaskDetailPage({
               resize: "vertical",
             }}
           />
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-            <button
-              type="button"
-              onClick={() => setScoreDialogOpen(false)}
-              style={{
-                padding: "8px 14px",
-                borderRadius: pageColorTokens.radiusControl,
-                background: "#ffffff",
-                color: pageColorTokens.textBody,
-                border: `1px solid ${pageColorTokens.borderSubtle}`,
-                cursor: "pointer",
-                fontSize: 13,
-                fontWeight: 600,
-              }}
-            >
-              完成
-            </button>
-          </div>
-        </div>
-      </dialog>
-
-      <dialog
-        ref={refineDialogRef}
-        onCancel={(e) => {
-          e.preventDefault();
-          if (!refining && !applying) setRefineDialogOpen(false);
-        }}
-        style={{
-          position: "fixed",
-          inset: 0,
-          margin: "auto",
-          maxWidth: "560px",
-          width: "calc(100% - 2rem)",
-          padding: 0,
-          border: "none",
-          borderRadius: "12px",
-          boxShadow: "0 12px 40px rgba(0,0,0,0.18)",
-        }}
-      >
-        <div style={{ padding: "1.125rem 1.25rem", display: "flex", flexDirection: "column", gap: 14 }}>
-          <div>
-            <div
-              style={{
-                fontSize: "1rem",
-                fontWeight: 700,
-                color: pageColorTokens.textPrimary,
-                marginBottom: "0.35rem",
-              }}
-            >
-              继续 AI 优化
-            </div>
-            <div
-              style={{
-                fontSize: "0.8125rem",
-                color: pageColorTokens.textSecondary,
-                lineHeight: 1.5,
-              }}
-            >
-              输入新的优化意见，基于当前草稿继续迭代。
-            </div>
-          </div>
           <textarea
-            value={optimizationComment}
-            onChange={(e) => setOptimizationComment(e.currentTarget.value)}
+            value={feedbackOptimizationComment}
+            onChange={(e) => setFeedbackOptimizationComment(e.currentTarget.value)}
             disabled={refining || applying}
             rows={5}
             placeholder="例如：保留当前第一段结构，把语气改得更高级一些，并补充适用场景。"
@@ -990,7 +1126,7 @@ export function ProductImproveTaskDetailPage({
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
             <button
               type="button"
-              onClick={() => setRefineDialogOpen(false)}
+              onClick={() => setFeedbackDialogOpen(false)}
               disabled={refining}
               style={{
                 padding: "8px 14px",
@@ -1009,7 +1145,11 @@ export function ProductImproveTaskDetailPage({
               type="button"
               onClick={() => {
                 void handleRefine().then((ok) => {
-                  if (ok) setRefineDialogOpen(false);
+                  if (ok) {
+                    setFeedbackScore(null);
+                    setFeedbackNote("");
+                    setFeedbackOptimizationComment("");
+                  }
                 });
               }}
               disabled={refining || applying}
@@ -1024,7 +1164,7 @@ export function ProductImproveTaskDetailPage({
                 fontWeight: 600,
               }}
             >
-              {refining ? "AI 优化中..." : "提交 AI 继续优化"}
+              {refining ? "AI 优化中..." : "保存反馈并生成新版本"}
             </button>
           </div>
         </div>
