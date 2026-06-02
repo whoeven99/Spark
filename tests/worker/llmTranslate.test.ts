@@ -35,6 +35,9 @@ beforeEach(() => {
   vi.mocked(loadGlossaryLines).mockReset().mockResolvedValue([]);
   process.env.OPENAI_API_KEY = "test-key";
   delete process.env.TRANSLATION_AI_MODEL;
+  delete process.env.DEEPSEEK_API_KEY;
+  delete process.env.DEEPSEEK_MODEL;
+  delete process.env.AZURE_OPENAI_ENDPOINT;
 });
 
 afterEach(() => {
@@ -173,6 +176,24 @@ describe("translateBatch — prompt structure (caching-friendly)", () => {
     expect(messages[0].content).toContain("Glossary");
     expect(messages[0].content).toContain(`Translate "闪购" as "Flash Sale".`);
     expect(loadGlossaryLines).toHaveBeenCalledWith("shop.myshopify.com", "en");
+  });
+});
+
+describe("translateBatch — provider selection", () => {
+  it("sends DEEPSEEK_MODEL when TRANSLATION_AI_MODEL=deepseek", async () => {
+    process.env.DEEPSEEK_API_KEY = "dk-test";
+    process.env.DEEPSEEK_MODEL = "deepseek-v4-flash";
+    process.env.TRANSLATION_AI_MODEL = "deepseek";
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "title", translatedValue: "Bonjour" }]));
+    await translateBatch(
+      [{ key: "title", value: "你好", digest: "d1" }],
+      "zh-CN",
+      "fr",
+      "gpt-4o-mini", // job model is ignored once a provider is selected
+      false,
+      "shop.myshopify.com",
+    );
+    expect(createMock.mock.calls[0][0].model).toBe("deepseek-v4-flash");
   });
 });
 

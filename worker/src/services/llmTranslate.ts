@@ -1,16 +1,79 @@
-import OpenAI from "openai";
+import OpenAI, { AzureOpenAI } from "openai";
 import { tmGet, tmSet } from "./translationMemory.js";
 import { loadGlossaryLines } from "./glossary.js";
 
 let _openai: OpenAI | null = null;
 
-function getOpenAI(): OpenAI {
-  if (!_openai) {
-    const apiKey = process.env.OPENAI_API_KEY?.trim();
-    if (!apiKey) throw new Error("OPENAI_API_KEY is required for LLM translation");
-    _openai = new OpenAI({ apiKey });
+type Provider = "google" | "deepseek" | "azure" | "openai";
+
+/**
+ * Resolves the translation engine. `TRANSLATION_AI_MODEL` is an explicit selector:
+ *   - "google-translate" → Google Translate (machine translation, not LLM)
+ *   - "deepseek"         → DeepSeek
+ *   - "azure"            → Azure OpenAI
+ *   - "" (unset)         → auto-detect by env presence: DeepSeek → Azure → OpenAI
+ *   - any other value    → OpenAI, using that string as the model id
+ */
+function resolveProvider(aiModel?: string): Provider {
+  const envSel = process.env.TRANSLATION_AI_MODEL?.trim().toLowerCase();
+  // Env override wins; otherwise the job's own aiModel can name an engine.
+  const sel = envSel || aiModel?.trim().toLowerCase() || "";
+  if (sel === "google-translate") return "google";
+  if (sel === "deepseek") return "deepseek";
+  if (sel === "azure") return "azure";
+  // No explicit engine selected → auto-detect by configured credentials.
+  if (!envSel) {
+    if (process.env.DEEPSEEK_API_KEY?.trim()) return "deepseek";
+    if (process.env.AZURE_OPENAI_ENDPOINT?.trim()) return "azure";
   }
+  return "openai";
+}
+
+/** Returns an OpenAI-compatible client for the active LLM provider. */
+function getOpenAI(): OpenAI {
+  if (_openai) return _openai;
+
+  const provider = resolveProvider();
+
+  if (provider === "deepseek") {
+    const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
+    if (!apiKey) throw new Error("DEEPSEEK_API_KEY is required for DeepSeek translation");
+    const baseURL = process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com/v1";
+    _openai = new OpenAI({ apiKey, baseURL });
+    return _openai;
+  }
+
+  if (provider === "azure") {
+    const endpoint = process.env.AZURE_OPENAI_ENDPOINT?.trim();
+    const apiKey = process.env.AZURE_OPENAI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim();
+    const deployment = process.env.AZURE_OPENAI_DEPLOYMENT?.trim();
+    const apiVersion = process.env.AZURE_OPENAI_API_VERSION?.trim() || "2024-08-01-preview";
+    if (!endpoint) throw new Error("AZURE_OPENAI_ENDPOINT is required for Azure OpenAI translation");
+    if (!apiKey) throw new Error("AZURE_OPENAI_API_KEY is required for Azure OpenAI translation");
+    if (!deployment) throw new Error("AZURE_OPENAI_DEPLOYMENT is required for Azure OpenAI translation");
+    _openai = new AzureOpenAI({ endpoint, apiKey, deployment, apiVersion });
+    return _openai;
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) throw new Error("OPENAI_API_KEY is required for LLM translation");
+  _openai = new OpenAI({ apiKey });
   return _openai;
+}
+
+/**
+ * The model id to send, matching the active provider:
+ * DeepSeek → DEEPSEEK_MODEL, Azure → deployment name, OpenAI → job's aiModel.
+ */
+function resolveModel(aiModel: string): string {
+  switch (resolveProvider()) {
+    case "deepseek":
+      return process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
+    case "azure":
+      return process.env.AZURE_OPENAI_DEPLOYMENT?.trim() || aiModel || "gpt-4o-mini";
+    default:
+      return aiModel || "gpt-4o-mini";
+  }
 }
 
 export type TranslateItem = {
@@ -337,9 +400,11 @@ async function callLLMOnce(
 ): Promise<Map<string, string>> {
   const payload = items.map((i) => ({ key: i.key, value: i.value }));
 
+  const model = resolveModel(aiModel);
+
   const openai = getOpenAI();
   const completion = await openai.chat.completions.create({
-    model: aiModel || "gpt-4o-mini",
+    model,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: JSON.stringify(payload) },
@@ -461,9 +526,10 @@ export async function translateBatch(
   }
 
   const resultMap = new Map<string, TranslateResult>();
-  const envModel = process.env.TRANSLATION_AI_MODEL?.trim();
-  const usedModel = envModel || aiModel;
-  const isGoogle = usedModel === "google-translate";
+  const isGoogle = resolveProvider(aiModel) === "google";
+  // TM cache is keyed by the actual engine output so different providers/models
+  // never share cached values.
+  const usedModel = isGoogle ? "google-translate" : resolveModel(aiModel);
 
   // 1. Resolve skip fields and cache hits; everything else goes to `pending`.
   const pending: TranslateItem[] = [];

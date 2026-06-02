@@ -156,7 +156,18 @@ CREATED
 **翻译引擎路由**：
 - `testMode=true` → 直接返回 `原文 - test`（跳过 API 调用）
 - `aiModel="google-translate"` 或 `TRANSLATION_AI_MODEL=google-translate` → Google Translate API
-- 其他 → OpenAI `chat.completions.create`，默认模型 `gpt-4o-mini`，`temperature=0.1`
+- 其他 → 走 LLM（OpenAI 兼容）`chat.completions.create`，`temperature=0.1`
+
+**引擎/提供方选择**（`resolveProvider()` / `getOpenAI()` / `resolveModel()`）：
+
+`TRANSLATION_AI_MODEL` 是显式选择器:
+- `google-translate` → Google 机翻(不走 LLM)
+- `deepseek` → DeepSeek（`DEEPSEEK_BASE_URL` 默认 `https://api.deepseek.com/v1`,模型取 `DEEPSEEK_MODEL`）
+- `azure` → Azure OpenAI（模型取 `AZURE_OPENAI_DEPLOYMENT`）
+- **留空** → 按 env 存在性自动探测:`DEEPSEEK_API_KEY` → DeepSeek；否则 `AZURE_OPENAI_ENDPOINT` → Azure；否则 OpenAI 官方（模型取 job 的 `aiModel`）
+- 其它值 → OpenAI 官方
+
+> job 的 `aiModel` 仍可单独取 `google-translate` 走机翻（向后兼容）。TM 缓存按实际引擎模型名隔离,不同 provider 不会串缓存。
 
 **翻译记忆（TM 缓存）**（`worker/src/services/translationMemory.ts`）：
 - 翻译前按 `tm:v4:{shop}:{target}:{model}:{digest}` 查 Redis，命中则跳过引擎调用；翻译成功后写回缓存。
@@ -420,7 +431,14 @@ type TranslationTaskFormPayload = {
 | `REDIS_PASSWORD` / `REDISCACHEKEY` | App + Worker | Redis 密码 |
 | `REDIS_PORT` | App + Worker | Redis 端口，默认 `6380` |
 | `REDIS_TLS` | App + Worker | 设为 `"false"` 关闭 TLS（Azure Cache 默认开启） |
-| `OPENAI_API_KEY` | Worker | OpenAI API 密钥 |
+| `OPENAI_API_KEY` | Worker | OpenAI API 密钥（官方） |
+| `AZURE_OPENAI_ENDPOINT` | Worker | 设置后翻译走 Azure OpenAI（如 `https://xxx.openai.azure.com`） |
+| `AZURE_OPENAI_API_KEY` | Worker | Azure OpenAI 密钥（缺省回退 `OPENAI_API_KEY`） |
+| `AZURE_OPENAI_DEPLOYMENT` | Worker | Azure 部署名（即实际路由的模型，必填于 Azure 模式） |
+| `AZURE_OPENAI_API_VERSION` | Worker | Azure API 版本，默认 `2024-08-01-preview` |
+| `DEEPSEEK_API_KEY` | Worker | 设置后翻译走 DeepSeek（优先级高于 Azure/OpenAI） |
+| `DEEPSEEK_MODEL` | Worker | DeepSeek 模型，如 `deepseek-v4-flash` |
+| `DEEPSEEK_BASE_URL` | Worker | DeepSeek 端点，默认 `https://api.deepseek.com/v1` |
 | `GOOGLE_TRANSLATE_API_KEY` | Worker | Google Translate API 密钥 |
 | `TRANSLATION_AI_MODEL` | App + Worker | 全局覆盖翻译模型，如 `gpt-4o-mini`、`google-translate` |
 | `TRANSLATION_TM_DISABLED` | Worker | 设为 `"true"` 关闭翻译记忆缓存 |
