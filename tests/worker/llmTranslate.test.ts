@@ -107,8 +107,9 @@ describe("translateBatch — translation memory", () => {
 });
 
 describe("translateBatch — retry & fallback", () => {
-  it("retries when the model drops a key, then falls back to original", async () => {
-    // Every attempt returns no translations → key never resolved.
+  it("falls back to original when the model returns no translation for a key", async () => {
+    // Valid JSON but empty translations → key never resolved (no point retrying a
+    // single deterministic item, so it is not re-sent).
     createMock.mockResolvedValue(llmResponse([]));
     const out = await translateBatch(
       [{ key: "title", value: "你好", digest: "d1" }],
@@ -119,8 +120,7 @@ describe("translateBatch — retry & fallback", () => {
       "shop.myshopify.com",
     );
     expect(out[0]).toEqual({ key: "title", translatedValue: "你好", digest: "d1", status: "fallback" });
-    // 1 initial + 2 retries
-    expect(createMock).toHaveBeenCalledTimes(3);
+    expect(createMock).toHaveBeenCalledTimes(1);
     // fallbacks must not be cached
     expect(tmSet).not.toHaveBeenCalled();
   });
@@ -139,6 +139,28 @@ describe("translateBatch — retry & fallback", () => {
     );
     expect(out[0]).toEqual({ key: "title", translatedValue: "Hello", digest: "d1", status: "translated" });
     expect(createMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("splits the batch to isolate the item that breaks the JSON", async () => {
+    createMock
+      .mockResolvedValueOnce({ choices: [{ message: { content: "{bad json" } }] }) // whole batch → throw
+      .mockResolvedValueOnce(llmResponse([{ key: "a", translatedValue: "A-fr" }])) // split → item a
+      .mockResolvedValueOnce(llmResponse([{ key: "b", translatedValue: "B-fr" }])); // split → item b
+    const out = await translateBatch(
+      [
+        { key: "a", value: "甲", digest: "d1" },
+        { key: "b", value: "乙", digest: "d2" },
+      ],
+      "zh-CN",
+      "fr",
+      "gpt-4o-mini",
+      false,
+      "shop.myshopify.com",
+    );
+    const byKey = Object.fromEntries(out.map((r) => [r.key, r.translatedValue]));
+    expect(byKey.a).toBe("A-fr");
+    expect(byKey.b).toBe("B-fr");
+    expect(createMock).toHaveBeenCalledTimes(3); // 1 failed batch + 2 singles
   });
 });
 

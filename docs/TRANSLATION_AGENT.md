@@ -285,7 +285,9 @@ CREATED
 | `source` | string | 源语言，如 `zh-CN` |
 | `target` | string | 目标语言，如 `en` |
 | `modules` | TranslationV4Module[] | 待翻译模块 |
-| `aiModel` | string | 翻译模型，如 `gpt-4o-mini` 或 `google-translate` |
+| `aiModel` | string | **请求的**翻译模型（创建任务时填，默认 `gpt-4o-mini`） |
+| `aiModelUsed` | string \| null | **实际使用的**模型（worker 翻译完写入真实值，如 `deepseek-v4-flash`、Azure deployment、`gpt-4o-mini`、`google-translate`、testMode 时 `test`） |
+| `aiProvider` | string \| null | 实际引擎：`deepseek` / `azure` / `openai` / `google` / `test` |
 | `limitPerType` | number | 每个模块最多翻译条目数（1–500） |
 | `isCover` | boolean | 是否覆盖已有译文 |
 | `isHandle` | boolean | 是否翻译 handle 字段 |

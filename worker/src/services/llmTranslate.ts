@@ -76,6 +76,17 @@ function resolveModel(aiModel: string): string {
   }
 }
 
+/**
+ * The engine actually used for a given job model — the real provider + model id,
+ * after env overrides and provider resolution. Used to record truthful data in
+ * Cosmos (the job's `aiModel` is only what was requested).
+ */
+export function resolveEngine(aiModel: string): { provider: string; model: string } {
+  const provider = resolveProvider(aiModel);
+  const model = provider === "google" ? "google-translate" : resolveModel(aiModel);
+  return { provider, model };
+}
+
 export type TranslateItem = {
   key: string;
   value: string;
@@ -306,9 +317,23 @@ async function translateHtmlLLM(
   return restoreHtmlTextNodes(template, translated);
 }
 
-// How many extra attempts (beyond the first) to recover keys the LLM dropped or
-// returned unparseable JSON for.
-const MAX_LLM_RETRIES = 2;
+// Retries for a single (un-splittable) item that fails transiently.
+const LEAF_RETRIES = 2;
+
+/**
+ * Pull the JSON object out of a model response that may be wrapped in markdown
+ * fences or surrounded by prose. Still throws downstream if the inner text is
+ * genuinely malformed.
+ */
+function extractJsonObject(raw: string): string {
+  let s = raw.trim();
+  const fence = s.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fence) s = fence[1].trim();
+  const first = s.indexOf("{");
+  const last = s.lastIndexOf("}");
+  if (first >= 0 && last > first) s = s.slice(first, last + 1);
+  return s;
+}
 
 /**
  * LLMs sometimes HTML-escape quotes/apostrophes in their output (`won't` →
@@ -414,8 +439,8 @@ async function callLLMOnce(
   });
 
   const raw = completion.choices[0]?.message?.content ?? "{}";
-  // JSON.parse throws on malformed output → propagated to caller for retry.
-  const obj = JSON.parse(raw) as { translations?: unknown };
+  // JSON.parse throws on malformed output → propagated to caller for retry/splitting.
+  const obj = JSON.parse(extractJsonObject(raw)) as { translations?: unknown };
   const parsed = Array.isArray(obj.translations)
     ? (obj.translations as Array<{ key?: unknown; translatedValue?: unknown }>)
     : [];
@@ -430,9 +455,63 @@ async function callLLMOnce(
 }
 
 /**
- * Translate a batch via the LLM, retrying only the keys that come back missing
- * (dropped by the model) or after a parse failure. Keys still unresolved after
- * all attempts are returned with status "fallback" (original value preserved).
+ * Translate a set of (already masked) items, writing results into `collected`.
+ * On an unparseable/failed response the batch is split in half and retried, so a
+ * single item that makes the model emit invalid JSON cannot poison the whole
+ * batch. A lone failing item is retried a few times, then left for fallback.
+ */
+async function gatherTranslations(
+  items: TranslateItem[],
+  aiModel: string,
+  systemPrompt: string,
+  collected: Map<string, string>,
+): Promise<void> {
+  const pend = items.filter((i) => !collected.has(i.key));
+  if (pend.length === 0) return;
+
+  try {
+    const map = await callLLMOnce(pend, aiModel, systemPrompt);
+    let progressed = false;
+    for (const [k, v] of map) {
+      if (!collected.has(k)) {
+        collected.set(k, v);
+        progressed = true;
+      }
+    }
+    const missing = pend.filter((i) => !collected.has(i.key));
+    // Model parsed OK but dropped some keys → retry just those, but only while
+    // making progress (avoids looping on a key the model refuses to return).
+    if (missing.length > 0 && progressed && missing.length < pend.length) {
+      await gatherTranslations(missing, aiModel, systemPrompt, collected);
+    }
+    return;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (pend.length > 1) {
+      const mid = Math.ceil(pend.length / 2);
+      console.warn(`[llm] batch of ${pend.length} unparseable (${msg}); splitting`);
+      await gatherTranslations(pend.slice(0, mid), aiModel, systemPrompt, collected);
+      await gatherTranslations(pend.slice(mid), aiModel, systemPrompt, collected);
+      return;
+    }
+    // Single item: retry for transient failures, then give up (→ fallback).
+    for (let r = 0; r < LEAF_RETRIES; r++) {
+      try {
+        const map = await callLLMOnce(pend, aiModel, systemPrompt);
+        for (const [k, v] of map) if (!collected.has(k)) collected.set(k, v);
+        if (collected.has(pend[0].key)) return;
+      } catch {
+        // keep retrying up to the cap
+      }
+    }
+    console.warn(`[llm] item ${pend[0].key} failed after retries (${msg}); using original`);
+  }
+}
+
+/**
+ * Translate a batch via the LLM. Placeholders are masked first; results are
+ * gathered with adaptive splitting. Keys still unresolved are returned with
+ * status "fallback" (original value preserved).
  */
 async function callLLM(
   items: TranslateItem[],
@@ -454,22 +533,11 @@ async function callLLM(
   });
 
   const collected = new Map<string, string>(); // masked translations, keyed by item key
-  let pending = maskedItems;
+  await gatherTranslations(maskedItems, aiModel, systemPrompt, collected);
 
-  for (let attempt = 0; attempt <= MAX_LLM_RETRIES && pending.length > 0; attempt++) {
-    try {
-      const map = await callLLMOnce(pending, aiModel, systemPrompt);
-      for (const [k, v] of map) if (!collected.has(k)) collected.set(k, v);
-    } catch (e) {
-      console.warn(`[llm] attempt ${attempt + 1} failed`, e);
-    }
-    pending = maskedItems.filter((i) => !collected.has(i.key));
-  }
-
-  if (pending.length > 0) {
-    console.warn(
-      `[llm] ${pending.length} key(s) unresolved after ${MAX_LLM_RETRIES + 1} attempts, using originals`,
-    );
+  const unresolved = maskedItems.length - collected.size;
+  if (unresolved > 0) {
+    console.warn(`[llm] ${unresolved} key(s) unresolved, using originals`);
   }
 
   return items.map((item) => {

@@ -29,13 +29,24 @@ function getContainer(): Container {
 export async function createV4Job(
   input: Omit<
     TranslationV4Job,
-    "metrics" | "claimedBy" | "claimedAt" | "lastHeartbeat" | "errorMessage" | "errorStage" | "createdAt" | "updatedAt"
+    | "metrics"
+    | "claimedBy"
+    | "claimedAt"
+    | "lastHeartbeat"
+    | "errorMessage"
+    | "errorStage"
+    | "createdAt"
+    | "updatedAt"
+    | "aiModelUsed"
+    | "aiProvider"
   > & { metrics?: Partial<TranslationV4Metrics> },
 ): Promise<TranslationV4Job> {
   const now = new Date().toISOString();
   const doc: TranslationV4Job = {
     ...input,
     metrics: { ...EMPTY_V4_METRICS, ...input.metrics },
+    aiModelUsed: null,
+    aiProvider: null,
     claimedBy: null,
     claimedAt: null,
     lastHeartbeat: null,
@@ -128,6 +139,8 @@ export type UpdateV4JobInput = Partial<
     | "errorMessage"
     | "errorStage"
     | "blobPrefix"
+    | "aiModelUsed"
+    | "aiProvider"
   >
 >;
 

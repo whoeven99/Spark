@@ -81,6 +81,9 @@ export type TranslationV4Job = {
   target: string;
   modules: TranslationV4Module[];
   aiModel: string;
+  /** The engine actually used at translate time (real data, set by the worker). */
+  aiModelUsed: string | null;
+  aiProvider: string | null;
   limitPerType: number;
   isCover: boolean;
   isHandle: boolean;

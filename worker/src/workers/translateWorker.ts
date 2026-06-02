@@ -1,7 +1,7 @@
 import { claimJob, updateJob, heartbeat, findPendingJobs, getJob } from "../services/cosmosV4.js";
 import { popHint, pushHint, setProgress } from "../services/redisV4.js";
 import { blobRead, blobWrite, blobListPaths } from "../services/blobV4.js";
-import { translateBatch, type TranslateItem } from "../services/llmTranslate.js";
+import { translateBatch, resolveEngine, type TranslateItem } from "../services/llmTranslate.js";
 import type { TranslationV4Job } from "../services/cosmosV4.js";
 
 const WORKER_ID = `translate-${process.pid}`;
@@ -115,11 +115,18 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
       await blobWrite(`${blobPrefix}/translate/fallbacks.json`, fallbacks);
     }
 
+    // Record the engine actually used (real data — job.aiModel is only the request).
+    const engine = testMode
+      ? { provider: "test", model: "test" }
+      : resolveEngine(aiModel);
+
     // Refresh job to get latest metrics
     const latestJob = await getJob(shopName, jobId);
     await updateJob(shopName, jobId, {
       status: "WRITEBACK_QUEUED",
       claimedBy: null,
+      aiModelUsed: engine.model,
+      aiProvider: engine.provider,
       metrics: {
         ...(latestJob?.metrics ?? job.metrics),
         translateDone,

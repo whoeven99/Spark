@@ -21,6 +21,8 @@ function job(
     target: overrides.target,
     modules: ["PRODUCT"],
     aiModel: "gpt-4o-mini",
+    aiModelUsed: null,
+    aiProvider: null,
     limitPerType: 20,
     isCover: false,
     isHandle: false,
