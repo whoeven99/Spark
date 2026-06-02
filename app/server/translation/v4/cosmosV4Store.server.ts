@@ -39,6 +39,7 @@ export async function createV4Job(
     | "updatedAt"
     | "aiModelUsed"
     | "aiProvider"
+    | "engineUsage"
   > & { metrics?: Partial<TranslationV4Metrics> },
 ): Promise<TranslationV4Job> {
   const now = new Date().toISOString();
@@ -47,6 +48,7 @@ export async function createV4Job(
     metrics: { ...EMPTY_V4_METRICS, ...input.metrics },
     aiModelUsed: null,
     aiProvider: null,
+    engineUsage: null,
     claimedBy: null,
     claimedAt: null,
     lastHeartbeat: null,
@@ -141,6 +143,7 @@ export type UpdateV4JobInput = Partial<
     | "blobPrefix"
     | "aiModelUsed"
     | "aiProvider"
+    | "engineUsage"
   >
 >;
 

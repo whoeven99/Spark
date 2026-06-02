@@ -72,6 +72,10 @@ const FETCH_PAGE_SIZE = 50;
 const ID_FETCH_PAGE_SIZE = 250;
 const TRANSLATABLE_RESOURCES_BY_IDS_BATCH = 250;
 
+// Cap a chunk's total translatable text so a chunk blob / in-memory batch never
+// gets huge (a single resource is still kept whole, even if it exceeds this).
+const MAX_CHUNK_CHARS = Number(process.env.TRANSLATION_MAX_CHUNK_CHARS?.trim()) || 50_000;
+
 const TRANSLATABLE_RESOURCES_QUERY = `
 query GetTranslatableResources(
   $resourceType: TranslatableResourceType!
@@ -245,14 +249,36 @@ function mapNodeToResource(
   return { resourceId: node.resourceId, fields };
 }
 
+function resourceChars(r: TranslatableResource): number {
+  return r.fields.reduce((sum, f) => sum + (f.value?.length ?? 0), 0);
+}
+
+/**
+ * Pack resources into chunks bounded by BOTH a max count (`chunkSize`) and a max
+ * total char count (`MAX_CHUNK_CHARS`), whichever is hit first. Each resource is
+ * kept whole; a single oversized resource gets its own chunk.
+ */
 function chunkResources(
   resources: TranslatableResource[],
   chunkSize: number,
+  maxChars: number = MAX_CHUNK_CHARS,
 ): TranslatableResource[][] {
   const chunks: TranslatableResource[][] = [];
-  for (let i = 0; i < resources.length; i += chunkSize) {
-    chunks.push(resources.slice(i, i + chunkSize));
+  let current: TranslatableResource[] = [];
+  let currentChars = 0;
+
+  for (const r of resources) {
+    const size = resourceChars(r);
+    if (current.length > 0 && (current.length >= chunkSize || currentChars + size > maxChars)) {
+      chunks.push(current);
+      current = [];
+      currentChars = 0;
+    }
+    current.push(r);
+    currentChars += size;
   }
+
+  if (current.length > 0) chunks.push(current);
   return chunks;
 }
 
@@ -505,4 +531,13 @@ export function buildInitModuleQueryFilterForTest(
 /** @internal Vitest 用：判断是否 ID 模块 */
 export function isIdBasedModuleForTest(module: string): boolean {
   return (ID_BASED_MODULES as readonly string[]).includes(module);
+}
+
+/** @internal Vitest 用：size-aware chunk 切分 */
+export function chunkResourcesForTest(
+  resources: TranslatableResource[],
+  chunkSize: number,
+  maxChars: number,
+): TranslatableResource[][] {
+  return chunkResources(resources, chunkSize, maxChars);
 }

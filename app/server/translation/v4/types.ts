@@ -84,6 +84,8 @@ export type TranslationV4Job = {
   /** The engine actually used at translate time (real data, set by the worker). */
   aiModelUsed: string | null;
   aiProvider: string | null;
+  /** Per-engine-model breakdown of translated content (units + source chars). */
+  engineUsage: Record<string, { units: number; chars: number }> | null;
   limitPerType: number;
   isCover: boolean;
   isHandle: boolean;

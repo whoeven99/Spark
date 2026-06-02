@@ -1,7 +1,13 @@
 import { claimJob, updateJob, heartbeat, findPendingJobs, getJob } from "../services/cosmosV4.js";
 import { popHint, pushHint, setProgress } from "../services/redisV4.js";
 import { blobRead, blobWrite, blobListPaths } from "../services/blobV4.js";
-import { translateBatch, resolveEngine, type TranslateItem } from "../services/llmTranslate.js";
+import {
+  translateResources,
+  resolveEngine,
+  mergeEngineUsage,
+  type EngineUsage,
+  type TranslateItem,
+} from "../services/llmTranslate.js";
 import type { TranslationV4Job } from "../services/cosmosV4.js";
 
 const WORKER_ID = `translate-${process.pid}`;
@@ -40,6 +46,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   // Fields that were translated but fell back to the original value (engine
   // dropped the key / failed). Surfaced to the UI via translate/fallbacks.json.
   const fallbacks: Array<{ resourceId: string; module: string; key: string }> = [];
+  const engineUsage: EngineUsage = {};
   const translateTotal = job.metrics.translateTotal || job.metrics.initTotal;
 
   if (testMode) {
@@ -84,17 +91,28 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
             `resources=${chunkResourceCount} fields=${chunkFieldCount}`,
         );
 
+        const resources = chunk.filter((r) => r.fields?.length);
         const translatedChunk = [];
-        for (const resource of chunk) {
-          if (!resource.fields?.length) continue;
-
-          try {
-            const results = await translateBatch(resource.fields, source, target, aiModel, testMode, shopName);
+        try {
+          // Whole chunk translated in one batched+deduped pass; heartbeat between
+          // engine batches so a long chunk isn't reset as stale.
+          const { resources: perResource, usage } = await translateResources(
+            resources.map((r) => ({ resourceId: r.resourceId, fields: r.fields })),
+            source,
+            target,
+            aiModel,
+            testMode,
+            shopName,
+            () => heartbeat(shopName, jobId),
+          );
+          mergeEngineUsage(engineUsage, usage);
+          for (const { resourceId, results } of perResource) {
+            const orig = resources.find((r) => r.resourceId === resourceId);
             translatedChunk.push({
-              resourceId: resource.resourceId,
+              resourceId,
               translations: results.map((r) => ({
                 key: r.key,
-                originalValue: resource.fields.find((f) => f.key === r.key)?.value ?? "",
+                originalValue: orig?.fields.find((f) => f.key === r.key)?.value ?? "",
                 translatedValue: r.translatedValue,
                 digest: r.digest,
                 status: r.status,
@@ -103,14 +121,14 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
             for (const r of results) {
               if (r.status === "fallback") {
                 translateFallback++;
-                fallbacks.push({ resourceId: resource.resourceId, module, key: r.key });
+                fallbacks.push({ resourceId, module, key: r.key });
               }
             }
             translateDone++;
-          } catch (e) {
-            translateFailed++;
-            console.warn(`[translate] resource ${resource.resourceId} failed`, e);
           }
+        } catch (e) {
+          translateFailed += resources.length;
+          console.warn(`[translate] chunk ${chunkIdx}/${chunkTotal} failed`, e);
         }
 
         // Write to translate/ blob
@@ -149,6 +167,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
       claimedBy: null,
       aiModelUsed: engine.model,
       aiProvider: engine.provider,
+      engineUsage,
       metrics: {
         ...(latestJob?.metrics ?? job.metrics),
         translateDone,

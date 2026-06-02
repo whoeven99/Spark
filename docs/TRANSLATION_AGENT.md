@@ -95,7 +95,7 @@ CREATED
 **执行流程**：
 1. claim job（乐观锁，etag 防并发）
 2. 设 `blobPrefix = "tasks/v4/{shopName}/{jobId}"`
-3. 对每个 module 拉取可翻译资源（`worker/src/services/shopifyFetch.ts`），按 `chunkSize=50` 写 Blob：
+3. 对每个 module 拉取可翻译资源（`worker/src/services/shopifyFetch.ts`），按 **数量(`chunkSize=50`) + 字符总量(`MAX_CHUNK_CHARS`,默认 50000)双限制**切 chunk(谁先到达先切；单个资源保持完整,超限则独占一个 chunk),写 Blob：
    - **PRODUCT / ARTICLE / PAGE / COLLECTION**：先按硬编码 Shopify Admin `query` 分页拉资源 GID，再 `translatableResourcesByIds` 取字段
    - **其他模块**：`translatableResources(resourceType, first, after)` 分页
    - `{blobPrefix}/init/{MODULE}/chunk-{00}.json` → `TranslatableResource[]`
@@ -158,16 +158,25 @@ CREATED
 - `aiModel="google-translate"` 或 `TRANSLATION_AI_MODEL=google-translate` → Google Translate API
 - 其他 → 走 LLM（OpenAI 兼容）`chat.completions.create`，`temperature=0.1`
 
-**引擎/提供方选择**（`resolveProvider()` / `getOpenAI()` / `resolveModel()`）：
+**Chunk 级批量 + 去重**（`translateResources`）：
+- worker 现在**每个 chunk 调一次 `translateResources`**(不再逐 resource),把整 chunk 所有待翻单元(短字段 / HTML 文本节点 / 长文切片)**跨资源合并**后按引擎大批翻译,大幅减少调用次数(对慢的 DeepSeek 尤其关键)。
+- **去重**:同一 chunk 内相同 `(引擎顺序, 文本)` 只翻一次,所有出现处复用(如重复的 "Shipping Protection")。
+- 仍受 `MAX_CHARS_PER_BATCH=5000` 限制分批;批间 heartbeat 防僵死;断点续传仍按 chunk 落盘。
+- `translateBatch`(单资源)保留为 `translateResources` 的薄封装。
 
-`TRANSLATION_AI_MODEL` 是显式选择器:
-- `google-translate` → Google 机翻(不走 LLM)
-- `deepseek` → DeepSeek（`DEEPSEEK_BASE_URL` 默认 `https://api.deepseek.com/v1`,模型取 `DEEPSEEK_MODEL`）
-- `azure` → Azure OpenAI（模型取 `AZURE_OPENAI_DEPLOYMENT`）
-- **留空** → 按 env 存在性自动探测:`DEEPSEEK_API_KEY` → DeepSeek；否则 `AZURE_OPENAI_ENDPOINT` → Azure；否则 OpenAI 官方（模型取 job 的 `aiModel`）
-- 其它值 → OpenAI 官方
+**引擎路由(成本分级 + 失败级联)**（`engineOrderFor` / `translateItemsRouted`）：
 
-> job 的 `aiModel` 仍可单独取 `google-translate` 走机翻（向后兼容）。TM 缓存按实际引擎模型名隔离,不同 provider 不会串缓存。
+两个引擎家族:**llm**(DeepSeek/Azure/OpenAI,由 `resolveProvider` 按 env 选具体 provider)和 **google**(Google Translate)。是否纳入候选按 env 探测(配了对应 key 才算可用)。
+
+- `TRANSLATION_AI_MODEL` 设值 → **锁定单一引擎**(不路由):
+  - `google-translate` → 只用 Google
+  - `deepseek` / `azure` / `openai` / 任意模型名 → 只用 LLM(具体 provider 由 `resolveProvider` 决定)
+- `TRANSLATION_AI_MODEL` **留空** → **成本分级自动路由**:
+  - 短/简单字段(plain 且 `<80` 字符、非 `meta_description`)→ **Google 优先**,失败级联 LLM
+  - 富文本(html、`meta_description`、长 plain)→ **LLM 优先**,失败级联 Google
+- **失败级联**:主引擎失败(JSON 坏 / API 错 / 占位符损坏)→ 自动换候选列表里的下一个引擎;全失败才回退原文标 `fallback`。
+
+> 占位符掩码、实体清理对**所有引擎**生效(在 `translateItemsRouted` 统一处理)。TM 缓存按字段 tier 的主引擎模型名隔离。job 的 `aiModel="google-translate"` 仍向后兼容锁 Google。
 
 **翻译记忆（TM 缓存）**（`worker/src/services/translationMemory.ts`）：
 - 翻译前按 `tm:v4:{shop}:{target}:{model}:{digest}` 查 Redis，命中则跳过引擎调用；翻译成功后写回缓存。
@@ -287,7 +296,8 @@ CREATED
 | `modules` | TranslationV4Module[] | 待翻译模块 |
 | `aiModel` | string | **请求的**翻译模型（创建任务时填，默认 `gpt-4o-mini`） |
 | `aiModelUsed` | string \| null | **实际使用的**模型（worker 翻译完写入真实值，如 `deepseek-v4-flash`、Azure deployment、`gpt-4o-mini`、`google-translate`、testMode 时 `test`） |
-| `aiProvider` | string \| null | 实际引擎：`deepseek` / `azure` / `openai` / `google` / `test` |
+| `aiProvider` | string \| null | 实际引擎：`deepseek` / `azure` / `openai` / `google` / `auto`(路由) / `test` |
+| `engineUsage` | `{[model]:{units,chars}}` \| null | **按引擎汇总**:每个引擎/模型翻译了多少 units(去重后的文本单元)+ chars(源字符)。多引擎路由时看这个,如 `{"google-translate":{units:120,chars:3400},"deepseek-v4-pro":{units:38,chars:51000}}` |
 | `limitPerType` | number | 每个模块最多翻译条目数（1–500） |
 | `isCover` | boolean | 是否覆盖已有译文 |
 | `isHandle` | boolean | 是否翻译 handle 字段 |
@@ -446,6 +456,7 @@ type TranslationTaskFormPayload = {
 | `TRANSLATION_TM_DISABLED` | Worker | 设为 `"true"` 关闭翻译记忆缓存 |
 | `TRANSLATION_TM_TTL_DAYS` | Worker | 翻译记忆缓存 TTL（天），默认 60 |
 | `WORKER_STAGES` | Worker | 逗号分隔启用的阶段，如 `init,translate`（默认全开）。用于线上质量测试时跳过 writeback/verify，不写回真实店铺 |
+| `TRANSLATION_MAX_CHUNK_CHARS` | Worker | init 阶段单个 chunk 的字符总量上限，默认 50000（防止 chunk blob 过大 / 内存过高） |
 
 ---
 

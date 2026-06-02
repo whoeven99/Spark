@@ -23,6 +23,7 @@ function job(
     aiModel: "gpt-4o-mini",
     aiModelUsed: null,
     aiProvider: null,
+    engineUsage: null,
     limitPerType: 20,
     isCover: false,
     isHandle: false,

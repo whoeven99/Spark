@@ -20,7 +20,7 @@ vi.mock("../../worker/src/services/glossary.js", () => ({
   loadGlossaryLines: vi.fn(async () => []),
 }));
 
-import { translateBatch } from "../../worker/src/services/llmTranslate.js";
+import { translateBatch, translateResources } from "../../worker/src/services/llmTranslate.js";
 import { tmGet, tmSet } from "../../worker/src/services/translationMemory.js";
 import { loadGlossaryLines } from "../../worker/src/services/glossary.js";
 
@@ -38,11 +38,26 @@ beforeEach(() => {
   delete process.env.DEEPSEEK_API_KEY;
   delete process.env.DEEPSEEK_MODEL;
   delete process.env.AZURE_OPENAI_ENDPOINT;
+  delete process.env.GOOGLE_TRANSLATE_API_KEY;
 });
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
+
+/** Mock global fetch for Google Translate; returns `<text>-G` unless mapped. */
+function mockGoogleFetch(map: Record<string, string> = {}) {
+  const f = vi.fn(async (_url: string, init?: { body?: string }) => {
+    const body = JSON.parse(String(init?.body)) as { q: string[] };
+    return {
+      ok: true,
+      json: async () => ({ data: { translations: body.q.map((t) => ({ translatedText: map[t] ?? `${t}-G` })) } }),
+    };
+  });
+  vi.stubGlobal("fetch", f);
+  return f;
+}
 
 describe("translateBatch — testMode", () => {
   it("returns originals with status 'translated' and never calls the engine", async () => {
@@ -93,7 +108,7 @@ describe("translateBatch — translation memory", () => {
   });
 
   it("caches newly translated fields", async () => {
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "title", translatedValue: "Hello" }]));
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Hello" }]));
     await translateBatch(
       [{ key: "title", value: "你好", digest: "d1" }],
       "zh-CN",
@@ -128,7 +143,7 @@ describe("translateBatch — retry & fallback", () => {
   it("recovers after a malformed JSON response on the first attempt", async () => {
     createMock
       .mockResolvedValueOnce({ choices: [{ message: { content: "not json{" } }] })
-      .mockResolvedValueOnce(llmResponse([{ key: "title", translatedValue: "Hello" }]));
+      .mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Hello" }]));
     const out = await translateBatch(
       [{ key: "title", value: "你好", digest: "d1" }],
       "zh-CN",
@@ -144,8 +159,8 @@ describe("translateBatch — retry & fallback", () => {
   it("splits the batch to isolate the item that breaks the JSON", async () => {
     createMock
       .mockResolvedValueOnce({ choices: [{ message: { content: "{bad json" } }] }) // whole batch → throw
-      .mockResolvedValueOnce(llmResponse([{ key: "a", translatedValue: "A-fr" }])) // split → item a
-      .mockResolvedValueOnce(llmResponse([{ key: "b", translatedValue: "B-fr" }])); // split → item b
+      .mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "A-fr" }])) // split → unique text 甲
+      .mockResolvedValueOnce(llmResponse([{ key: "1", translatedValue: "B-fr" }])); // split → unique text 乙
     const out = await translateBatch(
       [
         { key: "a", value: "甲", digest: "d1" },
@@ -166,7 +181,7 @@ describe("translateBatch — retry & fallback", () => {
 
 describe("translateBatch — prompt structure (caching-friendly)", () => {
   it("sends static instructions in system and only the payload in user", async () => {
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "title", translatedValue: "Hello" }]));
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Hello" }]));
     await translateBatch(
       [{ key: "title", value: "你好", digest: "d1" }],
       "zh-CN",
@@ -185,7 +200,7 @@ describe("translateBatch — prompt structure (caching-friendly)", () => {
 
   it("injects glossary lines into the system prompt", async () => {
     vi.mocked(loadGlossaryLines).mockResolvedValueOnce([`- Translate "闪购" as "Flash Sale".`]);
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "title", translatedValue: "Flash Sale" }]));
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Flash Sale" }]));
     await translateBatch(
       [{ key: "title", value: "闪购", digest: "d1" }],
       "zh-CN",
@@ -201,12 +216,140 @@ describe("translateBatch — prompt structure (caching-friendly)", () => {
   });
 });
 
+describe("translateResources — chunk batching & dedup", () => {
+  it("batches fields from multiple resources into one call", async () => {
+    createMock.mockResolvedValueOnce(
+      llmResponse([
+        { key: "0", translatedValue: "A-en" },
+        { key: "1", translatedValue: "B-en" },
+      ]),
+    );
+    const out = await translateResources(
+      [
+        { resourceId: "r1", fields: [{ key: "title", value: "甲甲", digest: "d1" }] },
+        { resourceId: "r2", fields: [{ key: "title", value: "乙乙", digest: "d2" }] },
+      ],
+      "zh-CN",
+      "en",
+      "gpt-4o-mini",
+      false,
+      "shop.myshopify.com",
+    );
+    expect(out.resources[0].results[0].translatedValue).toBe("A-en");
+    expect(out.resources[1].results[0].translatedValue).toBe("B-en");
+    // usage attributed to the LLM model: 2 units
+    expect(out.usage["gpt-4o-mini"].units).toBe(2);
+    expect(createMock).toHaveBeenCalledTimes(1); // both resources in one call
+    const payload = JSON.parse(createMock.mock.calls[0][0].messages[1].content as string);
+    expect(payload).toHaveLength(2);
+  });
+
+  it("dedups identical text across resources (translated once, reused)", async () => {
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Once" }]));
+    const out = await translateResources(
+      [
+        { resourceId: "r1", fields: [{ key: "title", value: "重复", digest: "d1" }] },
+        { resourceId: "r2", fields: [{ key: "title", value: "重复", digest: "d2" }] },
+        { resourceId: "r3", fields: [{ key: "title", value: "重复", digest: "d3" }] },
+      ],
+      "zh-CN",
+      "en",
+      "gpt-4o-mini",
+      false,
+      "shop.myshopify.com",
+    );
+    expect(out.resources.map((r) => r.results[0].translatedValue)).toEqual(["Once", "Once", "Once"]);
+    const payload = JSON.parse(createMock.mock.calls[0][0].messages[1].content as string);
+    expect(payload).toHaveLength(1); // 3 occurrences → 1 unique unit sent
+    expect(out.usage["gpt-4o-mini"].units).toBe(1); // deduped: counted once
+  });
+
+  it("attributes usage to each engine in a mixed chunk", async () => {
+    process.env.GOOGLE_TRANSLATE_API_KEY = "gk";
+    mockGoogleFetch({ "短": "Short-G" });
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Body-LLM" }]));
+    const out = await translateResources(
+      [
+        {
+          resourceId: "r1",
+          fields: [
+            { key: "title", value: "短", digest: "d1" }, // trivial → Google
+            { key: "body_html", value: "<p>Hello</p>", digest: "d2" }, // rich → LLM
+          ],
+        },
+      ],
+      "zh-CN",
+      "en",
+      "gpt-4o-mini",
+      false,
+      "shop.myshopify.com",
+    );
+    expect(out.usage["google-translate"].units).toBe(1);
+    expect(out.usage["gpt-4o-mini"].units).toBe(1);
+  });
+});
+
+describe("translateBatch — cost-tiered engine routing", () => {
+  it("routes short/simple fields to Google", async () => {
+    process.env.GOOGLE_TRANSLATE_API_KEY = "gk"; // both engines available
+    const f = mockGoogleFetch({ "你好": "Hello-G" });
+    const out = await translateBatch(
+      [{ key: "title", value: "你好", digest: "d1" }],
+      "zh-CN",
+      "en",
+      "gpt-4o-mini",
+      false,
+      "shop.myshopify.com",
+    );
+    expect(out[0].translatedValue).toBe("Hello-G");
+    expect(f).toHaveBeenCalled(); // Google used
+    expect(createMock).not.toHaveBeenCalled(); // LLM not used
+  });
+
+  it("routes rich content (HTML) to the LLM", async () => {
+    process.env.GOOGLE_TRANSLATE_API_KEY = "gk";
+    const f = mockGoogleFetch();
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Bonjour" }]));
+    const out = await translateBatch(
+      [{ key: "body_html", value: "<p>Hello</p>", digest: "d1" }],
+      "zh-CN",
+      "fr",
+      "gpt-4o-mini",
+      false,
+      "shop.myshopify.com",
+    );
+    expect(out[0].translatedValue).toBe("<p>Bonjour</p>");
+    expect(createMock).toHaveBeenCalled(); // LLM used
+    expect(f).not.toHaveBeenCalled(); // Google not used
+  });
+
+  it("falls back to the LLM when Google fails", async () => {
+    process.env.GOOGLE_TRANSLATE_API_KEY = "gk";
+    const f = vi.fn(async () => {
+      throw new Error("google down");
+    });
+    vi.stubGlobal("fetch", f);
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Hello-LLM" }]));
+    const out = await translateBatch(
+      [{ key: "title", value: "你好", digest: "d1" }],
+      "zh-CN",
+      "en",
+      "gpt-4o-mini",
+      false,
+      "shop.myshopify.com",
+    );
+    expect(f).toHaveBeenCalled(); // Google attempted (primary for short field)
+    expect(createMock).toHaveBeenCalled(); // cascaded to LLM
+    expect(out[0].translatedValue).toBe("Hello-LLM");
+  });
+});
+
 describe("translateBatch — provider selection", () => {
   it("sends DEEPSEEK_MODEL when TRANSLATION_AI_MODEL=deepseek", async () => {
     process.env.DEEPSEEK_API_KEY = "dk-test";
     process.env.DEEPSEEK_MODEL = "deepseek-v4-flash";
     process.env.TRANSLATION_AI_MODEL = "deepseek";
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "title", translatedValue: "Bonjour" }]));
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Bonjour" }]));
     await translateBatch(
       [{ key: "title", value: "你好", digest: "d1" }],
       "zh-CN",
@@ -221,7 +364,7 @@ describe("translateBatch — provider selection", () => {
 
 describe("translateBatch — HTML entity & whitespace cleanup", () => {
   it("decodes escaped quotes/apostrophes in plain fields", async () => {
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "title", translatedValue: `dis &quot;salut&quot; l&#39;ami` }]));
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: `dis &quot;salut&quot; l&#39;ami` }]));
     const out = await translateBatch(
       [{ key: "title", value: "打招呼", digest: "d1" }],
       "zh-CN",
@@ -234,7 +377,7 @@ describe("translateBatch — HTML entity & whitespace cleanup", () => {
   });
 
   it("does NOT decode &amp; / &lt; / &gt; (keeps HTML well-formed)", async () => {
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "title", translatedValue: "Tom &amp; Jerry &lt;3 &gt;" }]));
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Tom &amp; Jerry &lt;3 &gt;" }]));
     const out = await translateBatch(
       [{ key: "title", value: "汤姆", digest: "d1" }],
       "zh-CN",
@@ -263,7 +406,7 @@ describe("translateBatch — HTML entity & whitespace cleanup", () => {
 
 describe("translateBatch — placeholder masking", () => {
   it("masks variables before sending and restores them verbatim", async () => {
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "body", translatedValue: "Retourné ⟦0⟧ articles" }]));
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Retourné ⟦0⟧ articles" }]));
     const out = await translateBatch(
       [{ key: "body", value: "Returned {{quantity}} items", digest: "d1" }],
       "zh-CN",
@@ -281,7 +424,7 @@ describe("translateBatch — placeholder masking", () => {
   });
 
   it("masks [bracket] vars but leaves markdown links alone", async () => {
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "body", translatedValue: "X ⟦0⟧ Y [docs](url)" }]));
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "X ⟦0⟧ Y [docs](url)" }]));
     const out = await translateBatch(
       [{ key: "body", value: "Buy [qty] see [docs](url)", digest: "d1" }],
       "zh-CN",
@@ -298,7 +441,7 @@ describe("translateBatch — placeholder masking", () => {
 
   it("falls back to the original if the model corrupts a placeholder sentinel", async () => {
     // Model translated inside the token instead of preserving the sentinel.
-    createMock.mockResolvedValue(llmResponse([{ key: "body", translatedValue: "Retourné {{quantité}} articles" }]));
+    createMock.mockResolvedValue(llmResponse([{ key: "0", translatedValue: "Retourné {{quantité}} articles" }]));
     const out = await translateBatch(
       [{ key: "body", value: "Returned {{quantity}} items", digest: "d1" }],
       "zh-CN",
