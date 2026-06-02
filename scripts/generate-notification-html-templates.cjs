@@ -12,16 +12,16 @@ const outputRoot = path.join(
   "tencent-cloud-html",
 );
 
+const reviewSafeAppUrl = "https://admin.shopify.com/store/{{shop_id}}/apps/{{path}}?utm=email";
+
 const commonDetails = {
   zh: [
     ["店铺名称", "{{shopName}}"],
     ["店铺域名", "{{shopDomain}}"],
-    ["发生时间 (UTC+0)", "{{occurredAtUtc}}"],
   ],
   en: [
     ["Shop name", "{{shopName}}"],
     ["Shop domain", "{{shopDomain}}"],
-    ["Time (UTC+0)", "{{occurredAtUtc}}"],
   ],
 };
 
@@ -54,7 +54,7 @@ const templates = {
       ],
       details: [...commonDetails.zh, ["安装时间 (UTC+0)", "{{installedAtUtc}}"] ],
       actionLabel: "前往 Shopify App 查看",
-      actionUrl: "{{dashboardUrl}}",
+      actionUrl: reviewSafeAppUrl,
     },
     appUninstalled: {
       subject: "{{appName}} 已从店铺卸载",
@@ -68,7 +68,7 @@ const templates = {
       ],
       details: [...commonDetails.zh, ["卸载时间 (UTC+0)", "{{uninstalledAtUtc}}"] ],
       actionLabel: "查看 Shopify App 状态",
-      actionUrl: "{{dashboardUrl}}",
+      actionUrl: reviewSafeAppUrl,
     },
     purchaseCreated: {
       subject: "{{appName}} 购买记录已生成",
@@ -83,15 +83,16 @@ const templates = {
       ],
       details: [
         ...commonDetails.zh,
+        ["发生时间 (UTC+0)", "{{occurredAtUtc}}"],
         ["购买类型", "{{purchaseType}}"],
         ["订单编号", "{{orderId}}"],
         ["套餐或项目", "{{planName}}"],
-        ["金额 (USD)", "USD {{amountUsd}}"],
+        ["金额 (USD)", "{{amountUsd}}"],
         ["计费周期", "{{billingPeriod}}"],
         ...creditDetails.zh,
       ],
       actionLabel: "前往 Shopify App 查看",
-      actionUrl: "{{dashboardUrl}}",
+      actionUrl: reviewSafeAppUrl,
     },
     subscriptionStarted: subscriptionZh("{{appName}} 订阅已开始", "订阅已开始", "{{appName}} 订阅已经生效。这里是当前套餐、计费周期和积分账户的简要明细。"),
     subscriptionChanged: subscriptionZh("{{appName}} 订阅已变更", "订阅已变更", "{{appName}} 订阅已更新。下面是这次变更的明细，方便你快速核对。"),
@@ -114,7 +115,7 @@ const templates = {
       ],
       details: [...commonDetails.en, ["Installed at (UTC+0)", "{{installedAtUtc}}"] ],
       actionLabel: "Open Shopify App",
-      actionUrl: "{{dashboardUrl}}",
+      actionUrl: reviewSafeAppUrl,
     },
     appUninstalled: {
       subject: "{{appName}} has been uninstalled",
@@ -128,7 +129,7 @@ const templates = {
       ],
       details: [...commonDetails.en, ["Uninstalled at (UTC+0)", "{{uninstalledAtUtc}}"] ],
       actionLabel: "View Shopify App status",
-      actionUrl: "{{dashboardUrl}}",
+      actionUrl: reviewSafeAppUrl,
     },
     purchaseCreated: {
       subject: "{{appName}} purchase record created",
@@ -143,22 +144,23 @@ const templates = {
       ],
       details: [
         ...commonDetails.en,
+        ["Time (UTC+0)", "{{occurredAtUtc}}"],
         ["Purchase type", "{{purchaseType}}"],
         ["Order ID", "{{orderId}}"],
         ["Plan or item", "{{planName}}"],
-        ["Amount (USD)", "USD {{amountUsd}}"],
+        ["Amount (USD)", "{{amountUsd}}"],
         ["Billing period", "{{billingPeriod}}"],
         ...creditDetails.en,
       ],
       actionLabel: "Open Shopify App",
-      actionUrl: "{{dashboardUrl}}",
+      actionUrl: reviewSafeAppUrl,
     },
     subscriptionStarted: subscriptionEn("{{appName}} subscription started", "Subscription started", "{{appName}} is now active. Here is a quick breakdown of the current plan, billing period, and credit account."),
     subscriptionChanged: subscriptionEn("{{appName}} subscription changed", "Subscription changed", "{{appName}} has been updated. The plan, timing, and any related credit changes are listed below."),
     subscriptionCanceled: subscriptionEn("{{appName}} subscription canceled", "Subscription canceled", "{{appName}} has been canceled. Some premium features, automated tasks, or usage quotas may stop after the current billing period ends."),
-    taskStarted: taskEn("{{appName}} task started", "Task started", "{{appName}} has started processing {{taskName}}. We will keep you posted when it is completed, paused, or needs attention."),
-    taskCompleted: taskEn("{{appName}} task completed", "Task completed", "Good news: {{taskName}} is complete. Open the Shopify App to review results, logs, and related details."),
-    taskPaused: taskEn("{{appName}} task paused", "Task paused", "{{taskName}} has been paused. While paused, it usually stops processing new data and generating related usage."),
+    taskStarted: taskEn("{{appName}} task started", "Task started", "{{appName}} has started processing {{taskName}}. We will keep you posted when it is completed, paused, or needs attention.", "Started at (UTC+0)", "{{startedAtUtc}}"),
+    taskCompleted: taskEn("{{appName}} task completed", "Task completed", "Good news: {{taskName}} is complete. Open the Shopify App to review results, logs, and related details.", "Completed at (UTC+0)", "{{completedAtUtc}}"),
+    taskPaused: taskEn("{{appName}} task paused", "Task paused", "{{taskName}} has been paused. While paused, it usually stops processing new data and generating related usage.", "Paused at (UTC+0)", "{{pausedAtUtc}}"),
     taskFailed: taskEn("{{appName}} task failed", "Task failed", "{{taskName}} could not be completed this time. Open the Shopify App to review the reason and check settings, authorization, credit balance, or third-party connections.", "Failed at (UTC+0)", "{{occurredAtUtc}}", [["Failure reason", "{{failureReason}}"]]),
   },
 };
@@ -184,7 +186,7 @@ function subscriptionZh(subject, title, summary) {
       ...creditDetails.zh,
     ],
     actionLabel: "前往 Shopify App 查看",
-    actionUrl: "{{dashboardUrl}}",
+    actionUrl: reviewSafeAppUrl,
   };
 }
 
@@ -209,7 +211,7 @@ function subscriptionEn(subject, title, summary) {
       ...creditDetails.en,
     ],
     actionLabel: "Open Shopify App",
-    actionUrl: "{{dashboardUrl}}",
+    actionUrl: reviewSafeAppUrl,
   };
 }
 
@@ -228,14 +230,13 @@ function taskZh(subject, title, summary, timeLabel, timeValue, extraDetails = []
     details: [
       ...commonDetails.zh,
       ["任务名称", "{{taskName}}"],
-      ["任务类型", "{{taskType}}"],
       ["任务编号", "{{taskId}}"],
       [timeLabel, timeValue],
       ...extraDetails,
       ...creditDetails.zh,
     ],
     actionLabel: "前往 Shopify App 查看",
-    actionUrl: "{{statusUrl}}",
+    actionUrl: reviewSafeAppUrl,
   };
 }
 
@@ -254,14 +255,13 @@ function taskEn(subject, title, summary, timeLabel, timeValue, extraDetails = []
     details: [
       ...commonDetails.en,
       ["Task name", "{{taskName}}"],
-      ["Task type", "{{taskType}}"],
       ["Task ID", "{{taskId}}"],
       [timeLabel, timeValue],
       ...extraDetails,
       ...creditDetails.en,
     ],
     actionLabel: "Open Shopify App",
-    actionUrl: "{{statusUrl}}",
+    actionUrl: reviewSafeAppUrl,
   };
 }
 
@@ -300,7 +300,6 @@ function html(locale, template) {
               <td align="center" style="padding:22px 40px 14px;background:#ffffff;">
                 <table role="presentation" cellspacing="0" cellpadding="0" align="center">
                   <tr>
-                    <td width="40" style="padding:0 10px 0 0;"><img src="{{appIconUrl}}" width="40" height="40" alt="{{appName}}" style="display:block;border:0;border-radius:8px;width:40px;height:40px;"></td>
                     <td>
                       <p style="margin:0 0 2px;color:#0f2b46;font-size:16px;font-weight:700;line-height:1.35;text-align:left;">{{appName}}</p>
                       <p style="margin:0;color:#52606d;font-size:12px;line-height:1.35;text-align:left;">{{brandName}}</p>
@@ -335,7 +334,6 @@ function html(locale, template) {
               <td align="center" style="padding:26px 20px 8px;background:#fafafa;">
                 <table role="presentation" cellspacing="0" cellpadding="0" align="center" style="margin:0 0 12px;">
                   <tr>
-                    <td width="28" style="padding:0 8px 0 0;"><img src="{{appIconUrl}}" width="28" height="28" alt="{{appName}}" style="display:block;border:0;border-radius:6px;width:28px;height:28px;"></td>
                     <td>
                       <p style="margin:0;color:#33475b;font-size:12px;font-weight:700;line-height:1.35;text-align:left;">{{appName}}</p>
                     </td>
@@ -402,14 +400,14 @@ These files are review-ready HTML templates for Tencent Cloud Email.
 
 ## Common variables
 
+- \`shop_id\`: Shopify store identifier interpolated into the fixed app link \`https://admin.shopify.com/store/{{shop_id}}/apps/{{path}}?utm=email\`.
+- \`path\`: Shopify app path segment interpolated into the fixed app link \`https://admin.shopify.com/store/{{shop_id}}/apps/{{path}}?utm=email\`.
 - \`appName\`: App display name.
 - \`brandName\`: Brand or company display name.
-- \`appIconUrl\`: Public app icon URL used in the email header and footer.
 - \`recipientName\`: Recipient display name. Use a fallback value such as "商家" or "merchant" if no name is available.
 - \`supportEmail\`: Support email address.
-- \`dashboardUrl\`: App dashboard URL.
 - \`shopName\`: Shopify shop name.
-- \`shopDomain\`: Shopify shop domain.
+- \`shopDomain\`: Shopify shop domain, e.g. \`demo.myshopify.com\`.
 - \`occurredAtUtc\`: Event time in UTC+0, for example \`2026-05-28 02:00 UTC\`.
 
 ## App lifecycle variables
@@ -419,11 +417,11 @@ These files are review-ready HTML templates for Tencent Cloud Email.
 
 ## Purchase variables
 
-- \`purchaseType\`: Purchase type, such as subscription, credit purchase, or one-time purchase.
+- \`purchaseType\`: Localized purchase type, such as zh \`积分购买\` or en \`Credit pack\`.
 - \`orderId\`: Payment or order identifier.
 - \`planName\`: Plan, product, or credit package name.
-- \`amountUsd\`: Payment amount normalized to USD, for example \`12.00\`.
-- \`billingPeriod\`: Billing period.
+- \`amountUsd\`: Formatted amount with \`$\` prefix only, for example \`$9.99\`.
+- \`billingPeriod\`: Localized billing period.
 
 ## Subscription variables
 
@@ -435,12 +433,10 @@ These files are review-ready HTML templates for Tencent Cloud Email.
 ## Task variables
 
 - \`taskName\`: Task display name.
-- \`taskType\`: Task category.
 - \`taskId\`: Task identifier.
-- \`statusUrl\`: Task detail URL.
-- \`startedAtUtc\`: Task start time in UTC+0.
-- \`completedAtUtc\`: Task completion time in UTC+0.
-- \`pausedAtUtc\`: Task pause time in UTC+0.
+- \`startedAtUtc\`: Task start time in UTC+0. Falls back to \`occurredAtUtc\` when not provided.
+- \`completedAtUtc\`: Task completion time in UTC+0. Falls back to \`occurredAtUtc\` when not provided.
+- \`pausedAtUtc\`: Task pause time in UTC+0. Falls back to \`occurredAtUtc\` when not provided.
 - \`failureReason\`: Failure reason.
 
 ## Credit account variables
@@ -448,8 +444,8 @@ These files are review-ready HTML templates for Tencent Cloud Email.
 - \`creditsChanged\`: Credit amount changed by this event.
 - \`creditsBefore\`: Credit balance before this event.
 - \`creditsAfter\`: Credit balance after this event.
-- \`creditUnit\`: Credit unit, such as credits.
-- \`creditReason\`: Reason for the credit change.
+- \`creditUnit\`: Empty string in current billing emails.
+- \`creditReason\`: Localized reason for the credit change.
 `,
   );
 }

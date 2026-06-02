@@ -105,7 +105,7 @@ export default function Dashboard() {
         <Col xs={24} sm={8}>
           <Card>
             <Statistic
-              title="累计已用 Tokens"
+              title="累计已用 Credits"
               value={data.totalUsedTokens.toLocaleString()}
               prefix={<ThunderboltOutlined />}
               valueStyle={{ color: "#1677ff" }}
@@ -118,7 +118,7 @@ export default function Dashboard() {
         <Col xs={24} md={12}>
           <Card>
             <Statistic
-              title="订阅 Tokens 总量"
+              title="订阅 Credits 总量"
               value={data.totalSubTokens.toLocaleString()}
             />
           </Card>
@@ -126,7 +126,7 @@ export default function Dashboard() {
         <Col xs={24} md={12}>
           <Card>
             <Statistic
-              title="购买 Tokens 总量"
+              title="购买 Credits 总量"
               value={data.totalPurchasedTokens.toLocaleString()}
             />
           </Card>

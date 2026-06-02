@@ -24,11 +24,11 @@ export type TemplateAction = {
 export type TemplateDisplay = {
   appName: string;
   brandName: string;
-  appIconUrl?: string;
   supportEmail: string;
-  dashboardUrl?: string;
   helpCenterUrl?: string;
 };
+
+export const REVIEW_SAFE_APP_URL = "https://admin.shopify.com/store/{{shop_id}}/apps/{{path}}?utm=email";
 
 export type TemplateContext<TVariables extends BaseNotificationVariables> = {
   appConfig: NotificationAppConfig;
@@ -70,9 +70,7 @@ export function createTemplateContext<E extends NotificationEvent>(
     display: {
       appName,
       brandName,
-      appIconUrl: variables.appIconUrl ?? appConfig.appIconUrl,
       supportEmail: variables.supportEmail ?? appConfig.supportEmail,
-      dashboardUrl: variables.dashboardUrl ?? appConfig.dashboardUrl,
       helpCenterUrl: variables.helpCenterUrl ?? appConfig.helpCenterUrl,
     },
   };
@@ -81,12 +79,10 @@ export function createTemplateContext<E extends NotificationEvent>(
 export function commonRows(variables: BaseNotificationVariables, labels: {
   shopName: string;
   shopDomain: string;
-  occurredAtUtc: string;
 }): TemplateRow[] {
   return [
     { label: labels.shopName, value: variables.shopName },
     { label: labels.shopDomain, value: variables.shopDomain },
-    { label: labels.occurredAtUtc, value: variables.occurredAtUtc },
   ];
 }
 
@@ -157,12 +153,6 @@ export function renderHtmlEmail(
   const action = content.action?.url
     ? `<p style="margin:0 0 18px;color:#0f2b46;font-size:15px;line-height:1.75;">${escapeHtml(actionHint(locale))}</p><p style="margin:0;"><a href="${escapeHtml(content.action.url)}" style="display:inline-block;background:#0f2b46;color:#ffffff;text-decoration:none;border-radius:25px;padding:12px 20px;font-size:15px;font-weight:700;">${escapeHtml(content.action.label)}</a></p>`
     : "";
-  const headerIcon = display.appIconUrl
-    ? `<td width="40" style="padding:0 10px 0 0;"><img src="${escapeHtml(display.appIconUrl)}" width="40" height="40" alt="${escapeHtml(display.appName)}" style="display:block;border:0;border-radius:8px;width:40px;height:40px;"></td>`
-    : "";
-  const footerIcon = display.appIconUrl
-    ? `<td width="28" style="padding:0 8px 0 0;"><img src="${escapeHtml(display.appIconUrl)}" width="28" height="28" alt="${escapeHtml(display.appName)}" style="display:block;border:0;border-radius:6px;width:28px;height:28px;"></td>`
-    : "";
 
   return `<!doctype html>
 <html lang="${locale}">
@@ -181,7 +171,6 @@ export function renderHtmlEmail(
               <td align="center" style="padding:22px 40px 14px;background:#ffffff;">
                 <table role="presentation" cellspacing="0" cellpadding="0" align="center">
                   <tr>
-                    ${headerIcon}
                     <td>
                       <p style="margin:0 0 2px;color:#0f2b46;font-size:16px;font-weight:700;line-height:1.35;text-align:left;">${escapeHtml(display.appName)}</p>
                       <p style="margin:0;color:#52606d;font-size:12px;line-height:1.35;text-align:left;">${escapeHtml(display.brandName)}</p>
@@ -219,7 +208,6 @@ export function renderHtmlEmail(
               <td align="center" style="padding:26px 20px 8px;background:#fafafa;">
                 <table role="presentation" cellspacing="0" cellpadding="0" align="center" style="margin:0 0 12px;">
                   <tr>
-                    ${footerIcon}
                     <td>
                       <p style="margin:0;color:#33475b;font-size:12px;font-weight:700;line-height:1.35;text-align:left;">${escapeHtml(display.appName)}</p>
                     </td>

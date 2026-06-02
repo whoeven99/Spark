@@ -7,7 +7,6 @@ const appConfig: NotificationAppConfig = {
   appName: "Spark",
   supportEmail: "support@example.com",
   brandName: "Spark",
-  dashboardUrl: "https://app.example.com/app",
 };
 
 describe("buildNotificationTemplateData", () => {
@@ -25,7 +24,8 @@ describe("buildNotificationTemplateData", () => {
     expect(data.recipientName).toBe("Alice");
     expect(data.installedAtUtc).toBe("2026-05-28 01:00 UTC");
     expect(data.supportEmail).toBe("support@example.com");
-    expect(data.dashboardUrl).toBe("https://app.example.com/app");
+    expect(data.shop_id).toBe("demo");
+    expect(data.path).toBe("app");
     expect(data).toHaveProperty("creditsChanged");
     expect(data.creditUnit).toBe("");
   });
@@ -111,5 +111,27 @@ describe("buildNotificationTemplateData", () => {
     expect(data.amountUsd).not.toMatch(/USD/i);
     expect(data.billingPeriod).toBe("AppPurchaseOneTime");
     expect(data.creditReason).toBe("Credit pack purchased");
+  });
+
+  it("maps task fields and falls back event time for missing task timestamps", () => {
+    const data = buildNotificationTemplateData(
+      appConfig,
+      {
+        shopName: "Demo Shop",
+        shopDomain: "demo.myshopify.com",
+        occurredAtUtc: "2026-06-02 08:30 UTC",
+        taskName: "Catalog sync",
+        taskId: "task_123",
+        failureReason: "API rate limit",
+      },
+      "en",
+    );
+
+    expect(data.taskName).toBe("Catalog sync");
+    expect(data.taskId).toBe("task_123");
+    expect(data.startedAtUtc).toBe("2026-06-02 08:30 UTC");
+    expect(data.completedAtUtc).toBe("2026-06-02 08:30 UTC");
+    expect(data.pausedAtUtc).toBe("2026-06-02 08:30 UTC");
+    expect(data.failureReason).toBe("API rate limit");
   });
 });

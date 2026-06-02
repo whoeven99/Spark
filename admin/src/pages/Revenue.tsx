@@ -409,7 +409,7 @@ function RevenueTrend() {
             onChange={setKindFilter}
             options={[
               { value: "SUBSCRIPTION", label: "订阅收入" },
-              { value: "ONE_TIME_PACK", label: "Token 包" },
+              { value: "ONE_TIME_PACK", label: "Credit 包" },
             ]}
           />
         </Space>

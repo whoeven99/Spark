@@ -4,120 +4,98 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{appName}} subscription canceled</title>
-    <meta name="x-apple-disable-message-reformatting">
-    <style>
-      /* 基础兼容性：尽量减少不同邮件客户端的默认样式差异 */
-      body { margin: 0; padding: 0; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
-      table { border-collapse: collapse; }
-      img { border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }
-
-      /* 移动端优化：只在支持 media query 的客户端生效 */
-      @media (max-width: 600px) {
-        .wrapper { padding: 20px 20px !important; }
-        .container { border-radius: 0 !important; }
-        .px { padding-left: 20px !important; padding-right: 20px !important; }
-        .header { padding-top: 24px !important; padding-bottom: 16px !important; }
-        .content { padding-top: 22px !important; padding-bottom: 22px !important; }
-        .footer { padding-top: 18px !important; padding-bottom: 18px !important; }
-        .btn { display: block !important; width: 100% !important; box-sizing: border-box !important; text-align: center !important; }
-      }
-    </style>
   </head>
-  <body style="margin:0;padding:0;background:#FAFAFA;font-family:Arial,'Helvetica Neue',sans-serif;color:#0f2b46;">
+  <body style="margin:0;padding:0;background:#fafafa;font-family:Arial,'Helvetica Neue',sans-serif;color:#0f2b46;">
     <div style="display:none;max-height:0;overflow:hidden;">{{shopName}} subscription status has been updated.</div>
-    <table role="presentation" class="wrapper" width="100%" cellspacing="0" cellpadding="0" style="background:#FAFAFA;padding:20px 10px;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#fafafa;padding:20px 10px;">
       <tr>
         <td align="center">
-          <table role="presentation" class="container" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border-radius:0;overflow:hidden;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;">
             <tr>
-              <td class="px header" style="padding:28px 32px 18px;border-bottom:1px solid #e5e7eb;">
-                <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 18px;">
+              <td align="center" style="padding:22px 40px 14px;background:#ffffff;">
+                <table role="presentation" cellspacing="0" cellpadding="0" align="center">
                   <tr>
-                    <td width="44" style="padding:0 12px 0 0;"><img src="{{appIconUrl}}" width="44" height="44" alt="{{appName}}" style="display:block;border:0;border-radius:8px;width:44px;height:44px;"></td>
                     <td>
-                      <p style="margin:0 0 3px;color:#111827;font-size:16px;font-weight:700;line-height:1.35;">{{appName}}</p>
-                      <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.35;">{{brandName}}</p>
+                      <p style="margin:0 0 2px;color:#0f2b46;font-size:16px;font-weight:700;line-height:1.35;text-align:left;">{{appName}}</p>
+                      <p style="margin:0;color:#52606d;font-size:12px;line-height:1.35;text-align:left;">{{brandName}}</p>
                     </td>
                   </tr>
                 </table>
-                <h1 style="margin:0;color:#111827;font-size:24px;line-height:1.35;">Subscription canceled</h1>
               </td>
             </tr>
             <tr>
-              <td class="px content" style="padding:28px 32px;">
-                <p style="margin:0 0 18px;color:#111827;font-size:16px;line-height:1.6;">Hi {{recipientName}},</p>
-                <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">{{appName}} has been canceled. Some premium features, automated tasks, or usage quotas may stop after the current billing period ends.</p>
-                <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Subscription status can affect available features, automated tasks, usage limits, and billing cycles. Open the Shopify App to review the full setup.</p>
-                <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">If this change includes granted, deducted, or carried-over credits, the credit account will update after processing. The final balance shown in the Shopify App is the source of truth.</p>
-                <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Credits can be used for task execution, usage quotas, and other metered features. The full history is available in the Shopify App.</p>
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:22px 0;">
-                  <tr>
-                    <td style="background:#EAFFE9;padding:16px 18px;border-radius:12px;">
-                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
-                  
-        <tr>
-          <td style="padding:10px 0;color:#6b7280;font-size:14px;">Shop name</td>
-          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{shopName}}</td>
-        </tr>
-        <tr>
-          <td style="padding:10px 0;color:#6b7280;font-size:14px;">Shop domain</td>
-          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{shopDomain}}</td>
-        </tr>
-        <tr>
-          <td style="padding:10px 0;color:#6b7280;font-size:14px;">Time (UTC+0)</td>
-          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{occurredAtUtc}}</td>
-        </tr>
-        <tr>
-          <td style="padding:10px 0;color:#6b7280;font-size:14px;">Previous plan</td>
-          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{previousPlanName}}</td>
-        </tr>
-        <tr>
-          <td style="padding:10px 0;color:#6b7280;font-size:14px;">Current plan</td>
-          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{currentPlanName}}</td>
-        </tr>
-        <tr>
-          <td style="padding:10px 0;color:#6b7280;font-size:14px;">Effective at (UTC+0)</td>
-          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{effectiveAtUtc}}</td>
-        </tr>
-        <tr>
-          <td style="padding:10px 0;color:#6b7280;font-size:14px;">Billing period</td>
-          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{billingPeriod}}</td>
-        </tr>
-        <tr>
-          <td style="padding:10px 0;color:#6b7280;font-size:14px;">Credit change</td>
-          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{creditsChanged}}</td>
-        </tr>
-        <tr>
-          <td style="padding:10px 0;color:#6b7280;font-size:14px;">Balance before</td>
-          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{creditsBefore}}</td>
-        </tr>
-        <tr>
-          <td style="padding:10px 0;color:#6b7280;font-size:14px;">Balance after</td>
-          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{creditsAfter}}</td>
-        </tr>
-        <tr>
-          <td style="padding:10px 0;color:#6b7280;font-size:14px;">Credit note</td>
-          <td style="padding:10px 0;color:#111827;font-size:14px;font-weight:600;text-align:right;">{{creditReason}}</td>
-        </tr>
-                      </table>
-                    </td>
-                  </tr>
-                </table>
-                <p style="margin:22px 0 12px;color:#374151;font-size:15px;line-height:1.7;">You can open the Shopify App to review subscription details and billing history.</p><p style="margin:0;"><a href="{{dashboardUrl}}" class="btn" style="display:inline-block;background:#0F2B46;color:#ffffff;text-decoration:none;border-radius:25px;padding:12px 18px;font-size:14px;font-weight:600;">Open Shopify App</a></p>
+              <td style="padding:28px 40px 22px;background:#ffffff;">
+                <h1 style="margin:0 0 22px;color:#0f2b46;font-size:30px;font-weight:500;line-height:1.35;">Subscription canceled</h1>
+                <p style="margin:0 0 18px;color:#0f2b46;font-size:15px;line-height:1.75;">Hi {{recipientName}},</p>
+                <p style="margin:0 0 16px;color:#0f2b46;font-size:15px;line-height:1.75;">{{appName}} has been canceled. Some premium features, automated tasks, or usage quotas may stop after the current billing period ends.</p>
+                <p style="margin:0 0 16px;color:#0f2b46;font-size:15px;line-height:1.75;">Subscription status can affect available features, automated tasks, usage limits, and billing cycles. Open the Shopify App to review the full setup.</p>
+                <p style="margin:0 0 16px;color:#0f2b46;font-size:15px;line-height:1.75;">If this change includes granted, deducted, or carried-over credits, the credit account will update after processing. The final balance shown in the Shopify App is the source of truth.</p>
+                <p style="margin:0 0 16px;color:#0f2b46;font-size:15px;line-height:1.75;">Credits can be used for task execution, usage quotas, and other metered features. The full history is available in the Shopify App.</p>
               </td>
             </tr>
             <tr>
-              <td class="px footer" style="padding:22px 32px;background:#F8F8F8;border-top:1px solid #e5e7eb;">
-                <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 12px;">
+              <td style="padding:18px 40px 24px;background:#f8f8f8;">
+                <p style="margin:0 0 12px;color:#0f2b46;font-size:18px;font-weight:700;line-height:1.5;">Breakdown</p>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                
+        <tr>
+          <td style="padding:9px 0;color:#52606d;font-size:14px;line-height:1.6;">Shop name</td>
+          <td style="padding:9px 0;color:#0f2b46;font-size:14px;font-weight:700;line-height:1.6;text-align:right;">{{shopName}}</td>
+        </tr>
+        <tr>
+          <td style="padding:9px 0;color:#52606d;font-size:14px;line-height:1.6;">Shop domain</td>
+          <td style="padding:9px 0;color:#0f2b46;font-size:14px;font-weight:700;line-height:1.6;text-align:right;">{{shopDomain}}</td>
+        </tr>
+        <tr>
+          <td style="padding:9px 0;color:#52606d;font-size:14px;line-height:1.6;">Previous plan</td>
+          <td style="padding:9px 0;color:#0f2b46;font-size:14px;font-weight:700;line-height:1.6;text-align:right;">{{previousPlanName}}</td>
+        </tr>
+        <tr>
+          <td style="padding:9px 0;color:#52606d;font-size:14px;line-height:1.6;">Current plan</td>
+          <td style="padding:9px 0;color:#0f2b46;font-size:14px;font-weight:700;line-height:1.6;text-align:right;">{{currentPlanName}}</td>
+        </tr>
+        <tr>
+          <td style="padding:9px 0;color:#52606d;font-size:14px;line-height:1.6;">Effective at (UTC+0)</td>
+          <td style="padding:9px 0;color:#0f2b46;font-size:14px;font-weight:700;line-height:1.6;text-align:right;">{{effectiveAtUtc}}</td>
+        </tr>
+        <tr>
+          <td style="padding:9px 0;color:#52606d;font-size:14px;line-height:1.6;">Billing period</td>
+          <td style="padding:9px 0;color:#0f2b46;font-size:14px;font-weight:700;line-height:1.6;text-align:right;">{{billingPeriod}}</td>
+        </tr>
+        <tr>
+          <td style="padding:9px 0;color:#52606d;font-size:14px;line-height:1.6;">Credit change</td>
+          <td style="padding:9px 0;color:#0f2b46;font-size:14px;font-weight:700;line-height:1.6;text-align:right;">{{creditsChanged}} {{creditUnit}}</td>
+        </tr>
+        <tr>
+          <td style="padding:9px 0;color:#52606d;font-size:14px;line-height:1.6;">Balance before</td>
+          <td style="padding:9px 0;color:#0f2b46;font-size:14px;font-weight:700;line-height:1.6;text-align:right;">{{creditsBefore}} {{creditUnit}}</td>
+        </tr>
+        <tr>
+          <td style="padding:9px 0;color:#52606d;font-size:14px;line-height:1.6;">Balance after</td>
+          <td style="padding:9px 0;color:#0f2b46;font-size:14px;font-weight:700;line-height:1.6;text-align:right;">{{creditsAfter}} {{creditUnit}}</td>
+        </tr>
+        <tr>
+          <td style="padding:9px 0;color:#52606d;font-size:14px;line-height:1.6;">Credit note</td>
+          <td style="padding:9px 0;color:#0f2b46;font-size:14px;font-weight:700;line-height:1.6;text-align:right;">{{creditReason}}</td>
+        </tr>
+              </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:22px 40px 26px;background:#eaffe9;">
+              <p style="margin:0 0 18px;color:#0f2b46;font-size:15px;line-height:1.75;">Use the button below to open the Shopify App and review the full details.</p><p style="margin:0;"><a href="https://admin.shopify.com/store/{{shop_id}}/apps/{{path}}?utm=email" style="display:inline-block;background:#0f2b46;color:#ffffff;text-decoration:none;border-radius:25px;padding:12px 20px;font-size:15px;font-weight:700;">Open Shopify App</a></p>
+              </td>
+            </tr>
+            <tr>
+              <td align="center" style="padding:26px 20px 8px;background:#fafafa;">
+                <table role="presentation" cellspacing="0" cellpadding="0" align="center" style="margin:0 0 12px;">
                   <tr>
-                    <td width="36" style="padding:0 10px 0 0;"><img src="{{appIconUrl}}" width="36" height="36" alt="{{appName}}" style="display:block;border:0;border-radius:8px;width:36px;height:36px;"></td>
                     <td>
-                      <p style="margin:0 0 3px;color:#111827;font-size:14px;font-weight:700;line-height:1.35;">{{appName}}</p>
-                      <p style="margin:0;color:#6b7280;font-size:12px;line-height:1.35;">{{brandName}}</p>
+                      <p style="margin:0;color:#33475b;font-size:12px;font-weight:700;line-height:1.35;text-align:left;">{{appName}}</p>
                     </td>
                   </tr>
                 </table>
-                <p style="margin:0;color:#6b7280;font-size:12px;line-height:1.7;">This is a functional notification about your {{appName}} service status. We send reminders for important installation, subscription, credit account, and task events so your team can stay informed. If you have questions, contact {{supportEmail}}.</p>
+                <p style="margin:0 auto;color:#52606d;font-size:11px;line-height:1.7;text-align:center;max-width:560px;">This is a functional notification about your {{appName}} service status. We send reminders for important installation, subscription, credit account, and task events so your team can stay informed. If you have questions, contact {{supportEmail}}.</p>
               </td>
             </tr>
           </table>

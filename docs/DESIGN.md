@@ -358,6 +358,9 @@ Rules:
 - Compact segmented control
 - Active item should be clearer, not louder
 - The container should remain neutral
+- For tool pages, prefer segmented page tabs for `配置页 / 任务页` switching instead of inventing page-specific tab skins
+- Tool-internal segmented tabs must derive from the current tool page's modes, not from app-level navigation data
+- Badge counts may appear on the task tab, but should remain secondary to the label
 
 ### Form controls
 
@@ -375,6 +378,19 @@ Rules:
 - Metrics should use restrained surfaces and numeric hierarchy
 - Avoid pricing-card, plan-card, or subscription-summary styling for task tools
 
+### Summary header
+
+- Task detail pages should use one unified summary header block instead of multiple competing header sections
+- The summary header should combine:
+  - back action
+  - task identity
+  - status
+  - a compact summary sentence or summary row
+- The summary content should prioritize task context over system metadata
+- Prefer one compact summary row such as quantity, output language, source language, style constraint, and object title
+- Avoid filling the summary area with low-value internal fields such as raw IDs, duplicated billing fields, or debugging metadata
+- Long object titles must truncate cleanly in one line and reveal full value on inspection rather than expanding the header height unpredictably
+
 ### Task card
 
 - Organize around:
@@ -384,12 +400,22 @@ Rules:
   - logs
   - review/apply actions
 - Do not style task cards like feature cards or pricing cards
+- Task cards may use a dedicated summary line for task context; this line should read like an operational brief, not a metadata dump
+- When item titles are long or multiple objects are involved, truncate the object label instead of letting the card become visually noisy
+- Card height may be slightly taller than legacy compact cards when it improves scanability of goal, summary, progress, and next action
 
 ### Log viewer
 
 - Must read as an execution trace
 - Latest step may be slightly emphasized
 - The container should stay quiet and highly readable
+
+### Action hierarchy
+
+- On review or detail pages, there should be one visually dominant primary CTA for the true next step
+- Auxiliary editing actions such as rating, notes, or further AI refinement should use secondary buttons or utility actions
+- Do not present multiple equal-weight action panels beneath the main comparison area
+- If auxiliary actions require forms, prefer modal or drawer presentation so the main comparison workspace retains vertical space
 
 ## Tool Templates
 
@@ -413,6 +439,9 @@ This template should be the default for Spark tools.
 - explicit task state surfaces
 - review and apply sections with clear semantic states
 - low-noise footnotes
+- page-internal segmented tabs for mode switching when both config and task modes exist
+- detail headers that read as compact operational summaries instead of stacked marketing-like blocks
+- comparison-focused workspaces where original content and generated content receive the majority of layout space
 
 ### Avoid
 
@@ -492,4 +521,3 @@ When updating:
 - keep YAML tokens machine-readable
 - keep rationale concise and human-readable
 - avoid duplicating old values that no longer match implementation
-
