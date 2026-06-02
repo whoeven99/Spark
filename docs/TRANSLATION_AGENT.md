@@ -273,7 +273,9 @@ CREATED
 | `translate:v4:hint:verify` | List | `{taskId, shopName}` | 通知 verifyWorker |
 | `translate:v4:progress:{taskId}` | Hash | 11 个指标计数器 + `currentModule` + `updatedAt` | 实时进度（TTL 7 天） |
 
-**Progress hash 字段**：`initTotal`, `initDone`, `translateTotal`, `translateDone`, `translateFailed`, `translateFallback`, `writebackTotal`, `writebackDone`, `writebackFailed`, `verifyTotal`, `verifyDone`, `verifyFailed`, `currentModule`, `updatedAt`
+**Progress hash 字段**：`initTotal`, `initDone`, `translateTotal`, `translateDone`, `translateFailed`, `translateFallback`, `translateUnitTotal`, `translateUnitDone`, `writebackTotal`, `writebackDone`, `writebackFailed`, `verifyTotal`, `verifyDone`, `verifyFailed`, `currentModule`, `updatedAt`
+
+**节点级进度**：translate 进度有两套计数 —— 资源级(`translateDone/translateTotal`)和**节点级**(`translateUnitDone/translateUnitTotal`,HTML 文本节点 + plain 切片,init 阶段算出总数)。worker **每个 batch 都写一次 Redis 进度**(便宜、平滑),Cosmos 心跳节流(~30s)、指标每 chunk 落盘。前端翻译条用节点驱动填充、标签同时显示"资源 a/b · 节点 x/y";老任务无节点数时自动回退资源数。
 
 ---
 

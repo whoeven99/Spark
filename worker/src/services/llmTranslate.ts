@@ -185,6 +185,18 @@ export function classifyField(key: string, value?: string): "skip" | "html" | "p
   return "plain";
 }
 
+/**
+ * Number of translation units (nodes) a field expands into: HTML → text-node
+ * count, plain → split-part count, skip → 0. Used for node-level progress so the
+ * total computed at init matches what translate processes.
+ */
+export function countFieldUnits(key: string, value: string): number {
+  const klass = classifyField(key, value);
+  if (klass === "skip") return 0;
+  if (klass === "html") return extractHtmlTextNodes(value).texts.length;
+  return splitPlainText(value).length;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 // Max total chars sent to the translation API in one request
@@ -652,7 +664,7 @@ export async function translateResources(
   aiModel: string,
   testMode: boolean,
   shopName: string,
-  onHeartbeat?: () => Promise<void>,
+  onProgress?: (doneUnitsDelta: number) => Promise<void>,
 ): Promise<TranslateChunkResult> {
   if (testMode) {
     return {
@@ -671,13 +683,16 @@ export async function translateResources(
 
   const resultMaps = new Map<string, Map<string, TranslateResult>>();
   const plans: FieldPlan[] = [];
-  // orderSig → set of unique texts to translate with that engine order.
-  const pools = new Map<string, Set<string>>();
+  // orderSig → (unique text → occurrence count across the chunk).
+  const pools = new Map<string, Map<string, number>>();
   const addUnit = (order: Engine[], text: string) => {
     const sig = order.join(",");
-    const set = pools.get(sig) ?? pools.set(sig, new Set()).get(sig)!;
-    set.add(text);
+    const occ = pools.get(sig) ?? pools.set(sig, new Map()).get(sig)!;
+    occ.set(text, (occ.get(text) ?? 0) + 1);
   };
+
+  // Units resolved without hitting an engine (cache hits) — credited immediately.
+  let cacheUnits = 0;
 
   // 1. Plan every field: resolve skip/cache directly; collect units to translate.
   for (const res of resources) {
@@ -695,6 +710,7 @@ export async function translateResources(
       const cached = await tmGet(shopName, target, cacheModel, f.digest);
       if (cached !== null) {
         rm.set(f.key, { key: f.key, translatedValue: cached, digest: f.digest, status: "translated" });
+        cacheUnits += countFieldUnits(f.key, f.value);
         continue;
       }
 
@@ -714,21 +730,26 @@ export async function translateResources(
     }
   }
 
+  // Credit cache hits immediately so the bar reflects them.
+  if (cacheUnits > 0 && onProgress) await onProgress(cacheUnits);
+
   // 2. Translate unique texts per engine order, in char-bounded batches.
-  //    Aggregate per-engine usage over the unique units actually translated.
+  //    Aggregate per-engine usage over the unique units actually translated, and
+  //    report progress per batch (by occurrence count) so the bar moves smoothly.
   const usage: EngineUsage = {};
   const translated = new Map<string, Map<string, RoutedResult>>();
-  for (const [sig, set] of pools) {
+  for (const [sig, occ] of pools) {
     const order = sig.split(",") as Engine[];
-    const texts = [...set];
+    const texts = [...occ.keys()];
     const tmap = new Map<string, RoutedResult>();
     const items: TranslateItem[] = texts.map((t, i) => ({ key: String(i), value: t, digest: "" }));
     for (const batch of batchByChars(items, MAX_CHARS_PER_BATCH)) {
-      if (onHeartbeat) await onHeartbeat();
       const m = await translateItemsRouted(batch, source, target, aiModel, shopName, order);
+      let batchUnits = 0; // occurrences processed in this batch
       for (const [k, v] of m) {
         const text = texts[Number(k)];
         tmap.set(text, v);
+        batchUnits += occ.get(text) ?? 1;
         if (v.status === "translated" && v.engine) {
           const model = engineModel(v.engine, aiModel);
           const acc = (usage[model] ??= { units: 0, chars: 0 });
@@ -736,6 +757,8 @@ export async function translateResources(
           acc.chars += text.length;
         }
       }
+      // Report progress (and let the worker heartbeat) after each batch.
+      if (onProgress) await onProgress(batchUnits);
     }
     translated.set(sig, tmap);
   }

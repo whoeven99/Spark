@@ -5,9 +5,12 @@ import {
   translateResources,
   resolveEngine,
   mergeEngineUsage,
+  countFieldUnits,
   type EngineUsage,
   type TranslateItem,
 } from "../services/llmTranslate.js";
+
+const HEARTBEAT_THROTTLE_MS = 30_000;
 import type { TranslationV4Job } from "../services/cosmosV4.js";
 
 const WORKER_ID = `translate-${process.pid}`;
@@ -43,11 +46,14 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   let translateDone = 0;
   let translateFailed = 0;
   let translateFallback = 0;
+  let translateUnitDone = 0; // node-level progress
+  let lastHeartbeatAt = 0;
   // Fields that were translated but fell back to the original value (engine
   // dropped the key / failed). Surfaced to the UI via translate/fallbacks.json.
   const fallbacks: Array<{ resourceId: string; module: string; key: string }> = [];
   const engineUsage: EngineUsage = {};
   const translateTotal = job.metrics.translateTotal || job.metrics.initTotal;
+  const translateUnitTotal = job.metrics.translateUnitTotal || 0;
 
   if (testMode) {
     console.log(`[translate] TEST MODE: using original values as translations`);
@@ -73,11 +79,23 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         const existingTranslated = await blobRead<Array<{ resourceId: string }>>(translatePath);
         if (existingTranslated !== null) {
           translateDone += existingTranslated.length;
+          // Re-count this chunk's units so node progress stays consistent on resume.
+          const initChunk = await blobRead<Array<{ fields: TranslateItem[] }>>(chunkPath);
+          if (initChunk) {
+            for (const r of initChunk) for (const f of r.fields) translateUnitDone += countFieldUnits(f.key, f.value);
+          }
           console.log(
             `[translate] job=${jobId} module=${module} chunk=${chunkIdx}/${chunkTotal} ` +
               `skip (already translated, ${existingTranslated.length} resources)`,
           );
-          await setProgress(jobId, { translateDone, translateFailed, translateTotal, currentModule: module });
+          await setProgress(jobId, {
+            translateDone,
+            translateFailed,
+            translateUnitDone,
+            translateUnitTotal,
+            translateTotal,
+            currentModule: module,
+          });
           continue;
         }
 
@@ -94,8 +112,25 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         const resources = chunk.filter((r) => r.fields?.length);
         const translatedChunk = [];
         try {
-          // Whole chunk translated in one batched+deduped pass; heartbeat between
-          // engine batches so a long chunk isn't reset as stale.
+          // Per-batch progress: write Redis every batch (cheap, smooth bar) and
+          // heartbeat Cosmos throttled (expensive, just keep-alive).
+          const onProgress = async (deltaUnits: number) => {
+            translateUnitDone += deltaUnits;
+            await setProgress(jobId, {
+              translateDone,
+              translateFailed,
+              translateFallback,
+              translateUnitDone,
+              translateUnitTotal,
+              translateTotal,
+              currentModule: module,
+            });
+            const now = Date.now();
+            if (now - lastHeartbeatAt > HEARTBEAT_THROTTLE_MS) {
+              lastHeartbeatAt = now;
+              await heartbeat(shopName, jobId);
+            }
+          };
           const { resources: perResource, usage } = await translateResources(
             resources.map((r) => ({ resourceId: r.resourceId, fields: r.fields })),
             source,
@@ -103,7 +138,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
             aiModel,
             testMode,
             shopName,
-            () => heartbeat(shopName, jobId),
+            onProgress,
           );
           mergeEngineUsage(engineUsage, usage);
           for (const { resourceId, results } of perResource) {
@@ -144,6 +179,8 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
           translateDone,
           translateFailed,
           translateFallback,
+          translateUnitDone,
+          translateUnitTotal,
           translateTotal,
           currentModule: module,
         });
@@ -173,6 +210,8 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         translateDone,
         translateFailed,
         translateFallback,
+        translateUnitDone,
+        translateUnitTotal,
         writebackTotal: translateDone,
       },
     });

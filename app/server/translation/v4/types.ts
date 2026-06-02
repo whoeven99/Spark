@@ -48,6 +48,9 @@ export type TranslationV4Metrics = {
   translateDone: number;
   translateFailed: number;
   translateFallback: number;
+  /** Node-level progress: total / done translation units (HTML nodes + plain parts). */
+  translateUnitTotal: number;
+  translateUnitDone: number;
   writebackTotal: number;
   writebackDone: number;
   writebackFailed: number;
@@ -64,6 +67,8 @@ export const EMPTY_V4_METRICS: TranslationV4Metrics = {
   translateDone: 0,
   translateFailed: 0,
   translateFallback: 0,
+  translateUnitTotal: 0,
+  translateUnitDone: 0,
   writebackTotal: 0,
   writebackDone: 0,
   writebackFailed: 0,
