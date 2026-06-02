@@ -68,7 +68,11 @@ function inferCreditInsufficient(task: AITaskItem): boolean {
   return haystack.includes("credit") || haystack.includes("积分") || haystack.includes("额度");
 }
 
-function getProgressPercent(task: AITaskItem, runningElapsed: string | null): number {
+function getProgressPercent(
+  task: AITaskItem,
+  status: AITaskStatus,
+  runningElapsed: string | null,
+): number {
   const config = task.config as Record<string, unknown>;
   const result = task.result as Record<string, unknown> | null;
   const explicit =
@@ -77,7 +81,7 @@ function getProgressPercent(task: AITaskItem, runningElapsed: string | null): nu
 
   if (explicit != null) return Math.max(0, Math.min(100, explicit));
 
-  switch (task.status) {
+  switch (status) {
     case "running":
       return runningElapsed ? 62 : 18;
     case "pending_review":
@@ -366,7 +370,7 @@ export function ProductImproveTaskCard({
   const estimatedCredits = formatDisplayValue(task.estimatedCredits, "estimatedCredits");
   const errorReason = task.errorMsg || formatVariableToken("errorReason");
   const elapsedLabel = runningElapsed ?? actualElapsed ?? formatVariableToken("elapsedMinutes");
-  const progressPercent = getProgressPercent(task, runningElapsed);
+  const progressPercent = getProgressPercent(task, localStatus, runningElapsed);
   const progressTone = getProgressTone(localStatus);
   const primaryCopy = getPrimaryStatusCopy({
     status: localStatus,
