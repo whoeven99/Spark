@@ -140,7 +140,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
 
     return Response.json(
-      { success: true as const, errorCode: 0, taskId, batchId },
+      { success: true as const, errorCode: 0, taskId, batchId, sourceLanguage, brandStyle },
       { status: 202 },
     );
   } catch (error) {
