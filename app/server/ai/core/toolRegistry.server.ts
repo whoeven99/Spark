@@ -3,6 +3,11 @@ import type { BaseMessage } from "@langchain/core/messages";
 import type { AppEntry } from "../../../config/appEntry.server";
 import type { ShopifyAdminGraphqlClient } from "../skills/shopifyInfo/tool";
 import { wrapToolWithTokenUsage } from "../../tokenUsage/wrapToolWithTokenUsage.server";
+import type {
+  EmitSkillProgress,
+  SkillStage,
+  StepInput,
+} from "./skillTypes.server";
 
 export interface UserProfile {
   preferences?: Record<string, unknown>;
@@ -15,12 +20,36 @@ export interface AgentContext {
   shop?: string;
   /** 与 `AppEntry` 一致；缺省时由 `getAppEntry()` 推断 */
   appName?: AppEntry;
-  /** Set by agentStream before graph.stream() runs; called by playbooks to stream step progress */
+  /**
+   * 统一进度发射器（原子 Skill 与 Playbook 共用）。
+   * 由 agentStream 在 graph.stream() 前注入，映射为 SSE `skill_progress`。
+   */
+  emitProgress?: EmitSkillProgress;
+  /**
+   * @deprecated 旧的 Playbook 进度回调，保留兼容；内部转发到 emitProgress。
+   */
   emitPlaybookStep?: (playbookName: string, step: string, status: "running" | "completed" | "error") => void;
 }
 
 export interface ToolDefinition {
   name: string;
+  /**
+   * 展示名（中文），用于 admin 能力概览；缺省时回退到 name
+   */
+  displayName?: string;
+  /**
+   * 业务分类，用于 admin 分组
+   */
+  category?: string;
+  /**
+   * 运营闭环环节，用于 admin 配色与定位
+   */
+  stage?: SkillStage;
+  /**
+   * 该原子 Skill 的内部流程步骤声明（可选）。
+   * 单步工具可不填；多阶段工具（如文生图）填写后即可在聊天/Admin 展示流程。
+   */
+  steps?: readonly StepInput[];
   /**
    * 描述该工具的适用场景，用于注释和管理
    */

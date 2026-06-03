@@ -12,7 +12,6 @@ import {
   Table,
   Badge,
   Steps,
-  Divider,
   Tooltip,
 } from "antd";
 import {
@@ -20,7 +19,6 @@ import {
   RobotOutlined,
   ThunderboltOutlined,
   QuestionCircleOutlined,
-  ExclamationCircleOutlined,
 } from "@ant-design/icons";
 import {
   fetchCapabilities,
@@ -28,6 +26,9 @@ import {
   type SkillDef,
   type PlaybookDef,
   type ToolParam,
+  type StepSpec,
+  type StepKind,
+  type SkillStage,
 } from "../api";
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -38,7 +39,37 @@ const CATEGORY_COLORS: Record<string, string> = {
   通知: "cyan",
   基础能力: "default",
   选品上新: "green",
+  未分类: "default",
 };
+
+// 步骤类型 → 颜色 + 文案（与 app 端 STEP_KIND_LABELS 对齐）
+const STEP_KIND_META: Record<StepKind, { color: string; label: string }> = {
+  data: { color: "blue", label: "数据" },
+  compute: { color: "default", label: "计算" },
+  llm: { color: "purple", label: "大模型" },
+  tool: { color: "geekblue", label: "工具" },
+  qc: { color: "orange", label: "质检" },
+  execute: { color: "red", label: "执行" },
+};
+
+const STAGE_LABELS: Record<SkillStage, string> = {
+  dataAlign: "数据对齐",
+  monitor: "监控与发现",
+  diagnose: "问题定位",
+  propose: "方案产出",
+  qc: "质检与风控",
+  execute: "执行",
+  review: "复盘验证",
+};
+
+function StageTag({ stage }: { stage?: SkillStage }) {
+  if (!stage) return null;
+  return (
+    <Tag color="default" style={{ marginLeft: 4 }}>
+      {STAGE_LABELS[stage]}
+    </Tag>
+  );
+}
 
 function ParamTag({ p }: { p: ToolParam }) {
   return (
@@ -50,8 +81,51 @@ function ParamTag({ p }: { p: ToolParam }) {
         <span style={{ color: "#888", fontSize: 11, marginLeft: 4 }}>
           {p.type}
         </span>
+        {p.required && (
+          <span style={{ color: "#d4380d", fontSize: 11, marginLeft: 3 }}>*</span>
+        )}
       </Tag>
     </Tooltip>
+  );
+}
+
+/** 结构化步骤流程图，原子 Skill 与 Playbook 共用 */
+function StepFlow({ steps }: { steps: StepSpec[] }) {
+  if (!steps || steps.length === 0) {
+    return (
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        单步直接执行（无显式流程）
+      </Typography.Text>
+    );
+  }
+  return (
+    <Steps
+      direction="vertical"
+      size="small"
+      current={steps.length}
+      items={steps.map((s) => {
+        const meta = STEP_KIND_META[s.kind] ?? STEP_KIND_META.compute;
+        return {
+          status: "finish" as const,
+          title: (
+            <span>
+              {s.label}
+              <Tag color={meta.color} style={{ marginLeft: 8 }}>
+                {meta.label}
+              </Tag>
+              {s.stage && (
+                <Tag style={{ marginLeft: 0 }}>{STAGE_LABELS[s.stage]}</Tag>
+              )}
+            </span>
+          ),
+          description: s.runningLabel ? (
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              运行时：{s.runningLabel}…
+            </Typography.Text>
+          ) : undefined,
+        };
+      })}
+    />
   );
 }
 
@@ -61,34 +135,21 @@ function SkillCard({ skill }: { skill: SkillDef }) {
       title: "工具名称",
       dataIndex: "name",
       key: "name",
-      width: 220,
+      width: 240,
       render: (v: string) => (
-        <Typography.Text
-          code
-          style={{ fontSize: 12, wordBreak: "break-all" }}
-        >
+        <Typography.Text code style={{ fontSize: 12, wordBreak: "break-all" }}>
           {v}
         </Typography.Text>
       ),
     },
     {
       title: "功能说明",
-      dataIndex: "displayName",
-      key: "displayName",
-      width: 160,
-      render: (v: string, r: { description: string }) => (
-        <div>
-          <Typography.Text strong style={{ fontSize: 13 }}>
-            {v}
-          </Typography.Text>
-          <br />
-          <Typography.Text
-            type="secondary"
-            style={{ fontSize: 12, lineHeight: 1.4 }}
-          >
-            {r.description}
-          </Typography.Text>
-        </div>
+      dataIndex: "description",
+      key: "description",
+      render: (v: string) => (
+        <Typography.Text type="secondary" style={{ fontSize: 12, lineHeight: 1.4 }}>
+          {v}
+        </Typography.Text>
       ),
     },
     {
@@ -121,17 +182,9 @@ function SkillCard({ skill }: { skill: SkillDef }) {
           <Tag color={CATEGORY_COLORS[skill.category] ?? "default"}>
             {skill.category}
           </Tag>
+          <StageTag stage={skill.stage} />
           <Tag color="geekblue">{skill.tools.length} 个工具</Tag>
-          {skill.conditional && (
-            <Tooltip title={skill.conditionalNote}>
-              <Tag
-                icon={<ExclamationCircleOutlined />}
-                color="warning"
-              >
-                条件启用
-              </Tag>
-            </Tooltip>
-          )}
+          {skill.conditional && <Tag color="warning">条件启用</Tag>}
         </div>
       }
       style={{ marginBottom: 12 }}
@@ -139,6 +192,20 @@ function SkillCard({ skill }: { skill: SkillDef }) {
       <Typography.Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
         {skill.description}
       </Typography.Text>
+
+      {skill.steps.length > 0 && (
+        <Row gutter={24} style={{ marginBottom: 12 }}>
+          <Col xs={24} md={10}>
+            <Typography.Text
+              type="secondary"
+              style={{ fontSize: 12, display: "block", marginBottom: 10 }}
+            >
+              内部流程（运行时会在聊天里逐步点亮）
+            </Typography.Text>
+            <StepFlow steps={skill.steps} />
+          </Col>
+        </Row>
+      )}
 
       <Table
         dataSource={skill.tools}
@@ -148,25 +215,6 @@ function SkillCard({ skill }: { skill: SkillDef }) {
         pagination={false}
         bordered={false}
       />
-
-      {skill.emailTemplates && (
-        <>
-          <Divider style={{ margin: "12px 0" }} />
-          <div>
-            <Typography.Text
-              type="secondary"
-              style={{ fontSize: 12, marginRight: 8 }}
-            >
-              支持的邮件模板：
-            </Typography.Text>
-            {skill.emailTemplates.map((t) => (
-              <Tag key={t} style={{ marginBottom: 4 }}>
-                {t}
-              </Tag>
-            ))}
-          </div>
-        </>
-      )}
     </Card>
   );
 }
@@ -180,10 +228,9 @@ function PlaybookCard({ pb }: { pb: PlaybookDef }) {
           <Typography.Text strong style={{ fontSize: 15 }}>
             {pb.displayName}
           </Typography.Text>
-          <Tag color={CATEGORY_COLORS[pb.category] ?? "green"}>
-            {pb.category}
-          </Tag>
+          <Tag color={CATEGORY_COLORS[pb.category] ?? "green"}>{pb.category}</Tag>
           <Tag color="purple">{pb.steps.length} 步</Tag>
+          {pb.conditional && <Tag color="warning">条件启用</Tag>}
         </div>
       }
       style={{ marginBottom: 12 }}
@@ -202,7 +249,6 @@ function PlaybookCard({ pb }: { pb: PlaybookDef }) {
               background: "#f9f9f9",
               borderRadius: 6,
               padding: "10px 14px",
-              marginBottom: 12,
             }}
           >
             <Typography.Text
@@ -216,38 +262,6 @@ function PlaybookCard({ pb }: { pb: PlaybookDef }) {
               {pb.triggerDescription}
             </Typography.Text>
           </div>
-
-          {pb.anomalyRules && (
-            <div>
-              <Typography.Text
-                type="secondary"
-                style={{ fontSize: 12, display: "block", marginBottom: 6 }}
-              >
-                异常检测规则：
-              </Typography.Text>
-              {pb.anomalyRules.map((r) => (
-                <div key={r} style={{ fontSize: 12, color: "#ff4d4f", marginBottom: 2 }}>
-                  · {r}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {pb.completenessChecks && (
-            <div>
-              <Typography.Text
-                type="secondary"
-                style={{ fontSize: 12, display: "block", marginBottom: 6 }}
-              >
-                完整度检查项：
-              </Typography.Text>
-              {pb.completenessChecks.map((c) => (
-                <div key={c} style={{ fontSize: 12, color: "#52c41a", marginBottom: 2 }}>
-                  ✓ {c}
-                </div>
-              ))}
-            </div>
-          )}
         </Col>
 
         <Col xs={24} md={14}>
@@ -255,17 +269,9 @@ function PlaybookCard({ pb }: { pb: PlaybookDef }) {
             type="secondary"
             style={{ fontSize: 12, display: "block", marginBottom: 10 }}
           >
-            执行步骤
+            执行流程
           </Typography.Text>
-          <Steps
-            direction="vertical"
-            size="small"
-            current={pb.steps.length}
-            items={pb.steps.map((s) => ({
-              title: s,
-              status: "finish" as const,
-            }))}
-          />
+          <StepFlow steps={pb.steps} />
         </Col>
       </Row>
     </Card>
@@ -285,12 +291,7 @@ export default function Capabilities() {
   }, []);
 
   if (loading)
-    return (
-      <Spin
-        size="large"
-        style={{ display: "block", margin: "80px auto" }}
-      />
-    );
+    return <Spin size="large" style={{ display: "block", margin: "80px auto" }} />;
   if (error) return <Alert type="error" message={error} />;
   if (!data) return null;
 
@@ -308,6 +309,11 @@ export default function Capabilities() {
         <Tag color="geekblue" style={{ marginLeft: 4 }}>
           {skill.tools.length} 个工具
         </Tag>
+        {skill.steps.length > 0 && (
+          <Tag color="purple" style={{ marginLeft: 4 }}>
+            {skill.steps.length} 步流程
+          </Tag>
+        )}
         {skill.conditional && (
           <Tag color="warning" style={{ marginLeft: 4 }}>
             条件启用
@@ -329,7 +335,7 @@ export default function Capabilities() {
         <Col xs={24} sm={8}>
           <Card>
             <Statistic
-              title="技能组（Skills）"
+              title="原子技能（Skills）"
               value={data.stats.skillCount}
               prefix={<RobotOutlined />}
               suffix="组"
@@ -351,7 +357,7 @@ export default function Capabilities() {
         <Col xs={24} sm={8}>
           <Card>
             <Statistic
-              title="剧本（Playbooks）"
+              title="复合剧本（Playbooks）"
               value={data.stats.playbookCount}
               prefix={<ThunderboltOutlined />}
               suffix="个"
@@ -361,8 +367,32 @@ export default function Capabilities() {
         </Col>
       </Row>
 
-      {/* 技能区块 */}
+      {/* 剧本区块（用户主入口，放前面） */}
       <div style={{ marginBottom: 32 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            marginBottom: 16,
+          }}
+        >
+          <ThunderboltOutlined style={{ color: "#722ed1", fontSize: 16 }} />
+          <Typography.Title level={5} style={{ margin: 0 }}>
+            复合 Skill（Playbook）
+          </Typography.Title>
+          <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+            — 以业务目标为入口，Agent 编排多步骤闭环
+          </Typography.Text>
+        </div>
+
+        {data.playbooks.map((pb) => (
+          <PlaybookCard key={pb.name} pb={pb} />
+        ))}
+      </div>
+
+      {/* 原子技能区块 */}
+      <div>
         <div
           style={{
             display: "flex",
@@ -373,10 +403,10 @@ export default function Capabilities() {
         >
           <ToolOutlined style={{ color: "#1677ff", fontSize: 16 }} />
           <Typography.Title level={5} style={{ margin: 0 }}>
-            原子技能
+            原子 Skill（Atomic）
           </Typography.Title>
           <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-            — Agent 可直接调用的单步工具
+            — 单一职责的能力积木，被 Playbook 编排复用
           </Typography.Text>
         </div>
 
@@ -390,38 +420,12 @@ export default function Capabilities() {
         />
       </div>
 
-      {/* 剧本区块 */}
-      <div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            marginBottom: 16,
-          }}
-        >
-          <ThunderboltOutlined style={{ color: "#722ed1", fontSize: 16 }} />
-          <Typography.Title level={5} style={{ margin: 0 }}>
-            剧本
-          </Typography.Title>
-          <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-            — 多步骤自动化流程，Agent 编排执行
-          </Typography.Text>
-        </div>
-
-        {data.playbooks.map((pb) => (
-          <PlaybookCard key={pb.name} pb={pb} />
-        ))}
-      </div>
-
       {/* 说明 */}
       <Card
         size="small"
         style={{ marginTop: 24, background: "#fafafa", border: "1px solid #f0f0f0" }}
       >
-        <div
-          style={{ display: "flex", gap: 24, flexWrap: "wrap", fontSize: 13 }}
-        >
+        <div style={{ display: "flex", gap: 24, flexWrap: "wrap", fontSize: 13 }}>
           <div>
             <Badge status="success" />
             <Typography.Text type="secondary" style={{ marginLeft: 6 }}>
@@ -435,14 +439,13 @@ export default function Capabilities() {
             </Typography.Text>
           </div>
           <div>
-            <Tag color="geekblue">N 个工具</Tag>
-            <Typography.Text type="secondary" style={{ marginLeft: 6 }}>
-              该技能组包含的原子工具数量
+            <Typography.Text type="secondary">
+              步骤标签颜色对应类型：数据 / 计算 / 大模型 / 工具 / 质检 / 执行
             </Typography.Text>
           </div>
           <div>
             <Typography.Text type="secondary">
-              参数名悬停可查看详细说明
+              本页由注册表自动派生（/api/ai-capabilities），新增 Skill 自动出现
             </Typography.Text>
           </div>
         </div>

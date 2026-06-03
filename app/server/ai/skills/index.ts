@@ -16,13 +16,19 @@ import { productOptimizationSkills } from "./productOptimization";
 
 globalToolRegistry.register({
   name: "shopifyShopInfo",
-  description: "获取 Shopify 商店的基础信息",
+  displayName: "Shopify 店铺数据",
+  category: "店铺运营",
+  stage: "monitor",
+  description: "查询店铺基础信息、销售数据、库存状态及 OAuth 授权范围",
   createTool: ({ admin }) => createShopifyShopInfoTools(admin),
 });
 
 globalToolRegistry.register({
   name: "translationTaskForm",
-  description: "打开翻译任务表单卡片",
+  displayName: "翻译任务",
+  category: "本地化",
+  stage: "execute",
+  description: "打开翻译任务表单卡片，支持商品/合集/页面等批量翻译",
   uiPayloadKey: "translationTaskForm",
   systemPromptExtension:
     "当用户想要创建「翻译任务」「批量翻译商品/页面」或填写目标语言做本地化时，必须调用工具 open_translation_task_form，并从对话中提取尽量准确的 sourceLocale、targetLocale、limitPerType、resourceTypes；不确定的字段可留空让用户在卡片里补全。调用该工具后仍需用一两句话说明接下来可在卡片中确认并提交。禁止在未成功调用 open_translation_task_form 时声称「已为你打开卡片」或「卡片已打开」；若尚未调用该工具，必须先发起工具调用，不要仅用文字描述表单内容来代替卡片。",

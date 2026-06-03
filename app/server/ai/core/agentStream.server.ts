@@ -20,6 +20,7 @@ import {
 } from "../../tokenUsage/index.server";
 import { globalToolRegistry, type AgentContext } from "./toolRegistry.server";
 import { globalPlaybookRegistry } from "./playbookRegistry.server";
+import type { SkillProgressEvent } from "./skillTypes.server";
 import {
   createAgentRunId,
   createRunCollector,
@@ -38,7 +39,7 @@ export type StreamChunk =
   | { type: "text"; content: string }
   | { type: "tool_call"; name: string; args: unknown }
   | { type: "tool_result"; name: string; result: string }
-  | { type: "playbook_step"; playbookName: string; step: string; status: "running" | "completed" | "error" }
+  | { type: "skill_progress"; event: SkillProgressEvent }
   | { type: "error"; message: string }
   | {
       type: "done";
@@ -252,8 +253,17 @@ export async function invokeChatAgentStream(
       };
 
       try {
+        context.emitProgress = (event) => {
+          controller.enqueue({ type: "skill_progress", event });
+        };
+        // 兼容：旧的 emitPlaybookStep 转发到统一进度通道
         context.emitPlaybookStep = (playbookName, step, status) => {
-          controller.enqueue({ type: "playbook_step", playbookName, step, status });
+          context.emitProgress?.({
+            skill: playbookName,
+            stepId: step,
+            label: step,
+            status,
+          });
         };
 
         const lgStream = await graph.stream(

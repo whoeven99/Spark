@@ -3,11 +3,19 @@ import type { ChatMessage, ChatMessageAttachment } from "../../../lib/chatMessag
 import { coerceChatMessageAttachments } from "../../../lib/chatMessage";
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 
+type SkillProgressEvent = {
+  skill: string;
+  stepId: string;
+  label: string;
+  status: "running" | "completed" | "skipped" | "error";
+  detail?: string;
+};
+
 type StreamChunk =
   | { type: "text"; content: string }
   | { type: "tool_call"; name: string; args: unknown }
   | { type: "tool_result"; name: string; result: string }
-  | { type: "playbook_step"; playbookName: string; step: string; status: "running" | "completed" | "error" }
+  | { type: "skill_progress"; event: SkillProgressEvent }
   | { type: "error"; message: string }
   | {
       type: "done";
@@ -23,11 +31,16 @@ type StreamChunk =
       };
     };
 
-export type PlaybookStepProgress = {
-  playbookName: string;
-  step: string;
-  status: "running" | "completed" | "error";
+export type SkillStepProgress = {
+  skill: string;
+  stepId: string;
+  label: string;
+  status: "running" | "completed" | "skipped" | "error";
+  detail?: string;
 };
+
+/** @deprecated 兼容旧名，等价于 SkillStepProgress */
+export type PlaybookStepProgress = SkillStepProgress;
 
 export type ChatStreamFinishPayload = {
   aborted: boolean;
@@ -54,7 +67,7 @@ export function useChatStream() {
   const [streamingTranslationForm, setStreamingTranslationForm] = useState<unknown>();
   const [streamingGenerateCard, setStreamingGenerateCard] = useState(false);
   const [streamingGeneratePayload, setStreamingGeneratePayload] = useState<unknown>();
-  const [playbookSteps, setPlaybookSteps] = useState<PlaybookStepProgress[]>([]);
+  const [skillSteps, setSkillSteps] = useState<SkillStepProgress[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const snapshotRef = useRef<Snapshot>({
     reply: "",
@@ -92,7 +105,7 @@ export function useChatStream() {
       setStreamingTranslationForm(undefined);
       setStreamingGenerateCard(false);
       setStreamingGeneratePayload(undefined);
-      setPlaybookSteps([]);
+      setSkillSteps([]);
 
       const controller = new AbortController();
       abortControllerRef.current = controller;
@@ -107,7 +120,7 @@ export function useChatStream() {
         setStreamingTranslationForm(undefined);
         setStreamingGenerateCard(false);
         setStreamingGeneratePayload(undefined);
-        setPlaybookSteps([]);
+        setSkillSteps([]);
         onFinish?.(payload);
       };
 
@@ -162,18 +175,19 @@ export function useChatStream() {
                   snapshotRef.current.reply = next;
                   return next;
                 });
-              } else if (chunk.type === "playbook_step") {
+              } else if (chunk.type === "skill_progress") {
                 markFirstChunkSeen();
-                setPlaybookSteps((prev) => {
+                const ev = chunk.event;
+                setSkillSteps((prev) => {
                   const idx = prev.findIndex(
-                    (s) => s.playbookName === chunk.playbookName && s.step === chunk.step,
+                    (s) => s.skill === ev.skill && s.stepId === ev.stepId,
                   );
                   if (idx >= 0) {
                     const next = [...prev];
-                    next[idx] = { playbookName: chunk.playbookName, step: chunk.step, status: chunk.status };
+                    next[idx] = { ...ev };
                     return next;
                   }
-                  return [...prev, { playbookName: chunk.playbookName, step: chunk.step, status: chunk.status }];
+                  return [...prev, { ...ev }];
                 });
               } else if (chunk.type === "tool_call") {
                 markFirstChunkSeen();
@@ -306,7 +320,9 @@ export function useChatStream() {
     streamingTranslationForm,
     streamingGenerateCard,
     streamingGeneratePayload,
-    playbookSteps,
+    skillSteps,
+    /** @deprecated 兼容旧名 */
+    playbookSteps: skillSteps,
     sendMessage,
     abort,
   };

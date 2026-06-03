@@ -1,5 +1,6 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import type { AgentContext, ToolDefinition } from "../../core/toolRegistry.server";
+import type { StepSpec } from "../../core/skillTypes.server";
 import { isImageGenerationConfigured } from "../../../imageGeneration/imageGenerationConfig.server";
 import {
   GENERATE_PRODUCT_IMAGE_TOOL_NAME,
@@ -8,6 +9,36 @@ import {
 import { generateProductImageToolSchema } from "./schema";
 import { safeExecuteGenerateProductImageTool } from "./service";
 import { extractChatImageAttachmentsFromMessages } from "../shared/imageAttachmentsExtract";
+
+const IMAGE_GENERATION_SKILL_NAME = "imageGeneration";
+
+/**
+ * 文生图原子 Skill 的内部流程（多阶段进度）。
+ * 这是「原子 Skill 也能在聊天/Admin 展示流程」的样板。
+ */
+export const IMAGE_GENERATION_STEPS: readonly StepSpec[] = [
+  {
+    id: "preparePrompt",
+    label: "准备提示词",
+    kind: "compute",
+    stage: "propose",
+    runningLabel: "正在整理提示词",
+  },
+  {
+    id: "callModel",
+    label: "调用图像模型",
+    kind: "tool",
+    stage: "propose",
+    runningLabel: "正在调用大模型生成图片",
+  },
+  {
+    id: "returnImage",
+    label: "回传图片",
+    kind: "compute",
+    stage: "propose",
+    runningLabel: "正在回传生成结果",
+  },
+];
 
 function isImageGenerationToolEnabled(): boolean {
   const raw = process.env.IMAGE_GENERATION_ENABLED?.trim().toLowerCase();
@@ -26,11 +57,40 @@ export function createGenerateProductImageTool(
     func: async ({ prompt }) => {
       const requestId = crypto.randomUUID();
       const shop = context.shop?.trim() || "unknown-shop";
+
+      const emit = (
+        step: StepSpec,
+        status: "running" | "completed" | "error",
+        detail?: string,
+      ) =>
+        context.emitProgress?.({
+          skill: IMAGE_GENERATION_SKILL_NAME,
+          stepId: step.id,
+          label: status === "running" ? step.runningLabel ?? step.label : step.label,
+          status,
+          detail,
+        });
+
+      const [preparePrompt, callModel, returnImage] = IMAGE_GENERATION_STEPS;
+
+      emit(preparePrompt, "running");
+      emit(preparePrompt, "completed");
+
+      emit(callModel, "running");
       const result = await safeExecuteGenerateProductImageTool({
         requestId,
         shop,
         prompt,
       });
+
+      if (result.success) {
+        emit(callModel, "completed");
+        emit(returnImage, "running");
+        emit(returnImage, "completed");
+      } else {
+        emit(callModel, "error", result.error);
+      }
+
       console.info(
         `${IMAGE_GENERATION_TOOL_LOG_PREFIX} done requestId=${requestId} toolName=${GENERATE_PRODUCT_IMAGE_TOOL_NAME} success=${String(result.success)}`,
       );
@@ -40,7 +100,11 @@ export function createGenerateProductImageTool(
 }
 
 export const imageGenerationToolDefinition: ToolDefinition = {
-  name: "imageGeneration",
+  name: IMAGE_GENERATION_SKILL_NAME,
+  displayName: "文生图",
+  category: "商品优化",
+  stage: "propose",
+  steps: IMAGE_GENERATION_STEPS,
   description: "根据提示词生成商品/营销图片",
   uiPayloadKey: "attachments",
   systemPromptExtension:

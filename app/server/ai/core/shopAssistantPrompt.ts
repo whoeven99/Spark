@@ -1,5 +1,6 @@
 import type { AgentContext, ToolDefinition } from "./toolRegistry.server";
 import type { PlaybookDefinition } from "./playbookRegistry.server";
+import { normalizeSteps } from "./skillTypes.server";
 
 /**
  * 基础店铺对话 Agent 系统提示
@@ -24,7 +25,7 @@ export function buildSkillsTierPrompt(
   const playbookList = activePlaybookDefs
     .map(
       (d) =>
-        `- ${d.displayName}（run_playbook_${d.name}）：${d.triggerDescription} 步骤：${d.steps.join(" → ")}`
+        `- ${d.displayName}（run_playbook_${d.name}）：${d.triggerDescription} 步骤：${normalizeSteps(d.steps).map((s) => s.label).join(" → ")}`
     )
     .join("\n");
 

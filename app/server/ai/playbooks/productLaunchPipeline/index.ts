@@ -290,6 +290,11 @@ export const productLaunchPipelinePlaybook: PlaybookDefinition = {
   category: "merchandising",
   triggerDescription:
     "当用户要上架新商品、检查商品信息是否完整、批量上新或请求上新指引时触发。可提供商品 ID 以获取针对性建议。",
-  steps: ["商品信息检查", "文案建议", "翻译准备", "上架清单"],
+  steps: [
+    { id: "商品信息检查", label: "商品信息检查", kind: "data", stage: "qc", runningLabel: "正在检查商品信息完整度" },
+    { id: "文案建议", label: "文案建议", kind: "llm", stage: "propose", runningLabel: "正在调用大模型生成文案建议" },
+    { id: "翻译准备", label: "翻译准备", kind: "compute", stage: "propose", runningLabel: "正在评估翻译准备" },
+    { id: "上架清单", label: "上架清单", kind: "compute", stage: "qc", runningLabel: "正在生成上架清单" },
+  ],
   run,
 };

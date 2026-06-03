@@ -84,7 +84,10 @@ export function createSendTemplateEmailTool(context: AgentContext): DynamicStruc
 
 export const sendTemplateEmailToolDefinition: ToolDefinition = {
   name: "sendTemplateEmail",
-  description: "向指定收件人发送腾讯 SES 模板邮件",
+  displayName: "模板邮件发送",
+  category: "通知",
+  stage: "execute",
+  description: "通过腾讯 SES 向指定收件人发送预设模板邮件",
   condition: () => isEmailSendReady(loadEmailConfig()),
   systemPromptExtension: `仅当用户明确要求发送邮件、且已确认邮件主题与场景（scenario）时，才调用工具 send_template_email。scenario 只能从以下枚举中选择，禁止猜测或传数字 ID：${buildEmailScenarioCatalog()}。收件人由系统按当前店铺自动解析为商家邮箱，你无需也无法指定收件人；若系统无法解析到邮箱会返回 { ok: false, code: "NO_RECIPIENT" }。若缺少场景信息，先向用户追问，禁止编造「已发送成功」。工具返回 JSON：成功为 { ok: true, requestId }，失败为 { ok: false, code, message }，请据实告知用户。禁止通过工具修改发件人或抄送（from/cc 由系统配置）。templateData 的通用字段（appName、brandName、shopName、shopDomain、occurredAtUtc 等）及安装/卸载时间字段由服务端自动补全；你只需补充该场景特有的业务字段（如 taskName、planName、orderId）。`,
   createTool: (context) => createSendTemplateEmailTool(context),
