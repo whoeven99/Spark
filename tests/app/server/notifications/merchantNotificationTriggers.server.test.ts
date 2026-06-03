@@ -421,6 +421,7 @@ describe("merchant notification triggers", () => {
         expect.objectContaining({
           event: "subscriptionCanceled",
           currentPlanName: "Plan sub-monthly",
+          previousPlanName: "Plan sub-monthly",
           creditAccountChange: expect.objectContaining({
             creditReasonKey: "subscription_canceled",
             creditsBefore: 500_000,

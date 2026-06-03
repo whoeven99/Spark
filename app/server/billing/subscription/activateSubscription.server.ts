@@ -351,6 +351,7 @@ export async function markSubscriptionNonActive(params: {
     appName: params.appName,
     event: "subscriptionCanceled",
     currentPlanName: cancelledPlan?.displayName ?? sub.planKey,
+    previousPlanName: cancelledPlan?.displayName ?? sub.planKey,
     occurredAt: new Date(),
     creditAccountChange: buildCreditAccountChange({
       creditsBefore: cancelCreditsBefore,

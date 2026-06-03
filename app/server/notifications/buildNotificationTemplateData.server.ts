@@ -2,6 +2,7 @@ import {
   getAppEntry,
   getAppHomePath,
   isAppEntryKey,
+  type AppEntry,
 } from "../../config/appEntry.server";
 import {
   defaultRecipientFallback,
@@ -88,11 +89,16 @@ function resolveShopAdminIdentifier(shopDomain: string | undefined): string {
   return normalized;
 }
 
+/** 邮件 Admin 链接 apps 路径段；与内嵌路由 home 可能不一致。 */
+const SHOPIFY_ADMIN_APP_PATH_BY_ENTRY: Partial<Record<AppEntry, string>> = {
+  "product-improve": "ciwi-ai-product-improve",
+};
+
 function resolveAppAdminPath(appKey: string | undefined): string {
   const entry = appKey && isAppEntryKey(appKey) ? appKey : getAppEntry();
-  return getAppHomePath(entry)
-    .split("?")[0]
-    .replace(/^\/+/, "");
+  const mapped = SHOPIFY_ADMIN_APP_PATH_BY_ENTRY[entry];
+  if (mapped) return mapped;
+  return getAppHomePath(entry).split("?")[0].replace(/^\/+/, "");
 }
 
 /**
