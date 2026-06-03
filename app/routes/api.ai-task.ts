@@ -15,15 +15,67 @@ import type {
   ProductImproveTaskResult,
 } from "../lib/aiTaskTypes";
 import { runProductDescriptionRefinement } from "../server/productImprove/services/refineDescriptionService";
+import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
+import { initI18n } from "../i18n";
+
+function translateApiAiTaskErrorMessage(
+  rawMessage: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  const normalized = rawMessage.trim();
+  if (!normalized) {
+    return t("productImproveStage1.serverRequestFailed");
+  }
+  if (normalized === "Invalid request body") {
+    return t("productImproveStage1.serverInvalidRequestBody");
+  }
+  if (normalized === "Task not found") {
+    return t("productImproveStage1.serverTaskNotFound");
+  }
+  if (normalized === "Task is not in reviewable state") {
+    return t("productImproveStage1.serverTaskNotReviewable");
+  }
+  if (normalized === "Task is not in scorable state") {
+    return t("productImproveStage1.serverTaskNotScorable");
+  }
+  if (normalized === "Task is not in refinable state") {
+    return t("productImproveStage1.serverTaskNotRefinable");
+  }
+  if (normalized === "继续 AI 优化前请提供当前草稿和优化说明") {
+    return t("productImproveStage1.refineProvideDraftAndComment");
+  }
+  if (normalized === "AI 优化失败") {
+    return t("productImproveStage1.refineAiGenerationFailed");
+  }
+  if (normalized === "AI 输出结构异常") {
+    return t("productImproveStage1.refineAiOutputInvalid");
+  }
+  if (normalized === "Unknown action") {
+    return t("productImproveStage1.serverUnknownAction");
+  }
+  return rawMessage;
+}
 
 export const action = async ({
   request,
 }: ActionFunctionArgs): Promise<Response> => {
+  const initialLocale = detectRequestLocale(request);
+  const initialI18n = initI18n(initialLocale);
+  const initialT = initialI18n.t.bind(initialI18n);
+
   if (request.method !== "POST") {
-    return Response.json({ error: "Method not allowed" }, { status: 405 });
+    return Response.json(
+      { error: initialT("productImproveStage1.serverMethodNotAllowed") },
+      { status: 405 },
+    );
   }
 
   const { session } = await authenticate.admin(request);
+  const locale = detectRequestLocale(request, {
+    sessionLocale: readShopifySessionLocale(session),
+  });
+  const i18n = initI18n(locale);
+  const t = i18n.t.bind(i18n);
   const shop = session.shop;
 
   const body = (await request.json().catch(() => null)) as {
@@ -37,7 +89,11 @@ export const action = async ({
 
   if (!body || !body.taskId) {
     return Response.json(
-      { success: false, errorCode: 40000, errorMsg: "Invalid request body" },
+      {
+        success: false,
+        errorCode: 40000,
+        errorMsg: t("productImproveStage1.serverInvalidRequestBody"),
+      },
       { status: 400 },
     );
   }
@@ -67,13 +123,17 @@ export const action = async ({
     const task = await getTaskForShop({ taskId: body.taskId, shop });
     if (!task) {
       return Response.json(
-        { success: false, errorCode: 40401, errorMsg: "Task not found" },
+        { success: false, errorCode: 40401, errorMsg: t("productImproveStage1.serverTaskNotFound") },
         { status: 404 },
       );
     }
     if (task.status !== "pending_review" && task.status !== "scored") {
       return Response.json(
-        { success: false, errorCode: 40002, errorMsg: "Task is not in reviewable state" },
+        {
+          success: false,
+          errorCode: 40002,
+          errorMsg: t("productImproveStage1.serverTaskNotReviewable"),
+        },
         { status: 400 },
       );
     }
@@ -89,13 +149,17 @@ export const action = async ({
     const task = await getTaskForShop({ taskId: body.taskId, shop });
     if (!task) {
       return Response.json(
-        { success: false, errorCode: 40401, errorMsg: "Task not found" },
+        { success: false, errorCode: 40401, errorMsg: t("productImproveStage1.serverTaskNotFound") },
         { status: 404 },
       );
     }
     if (task.status !== "pending_review" && task.status !== "scored") {
       return Response.json(
-        { success: false, errorCode: 40003, errorMsg: "Task is not in scorable state" },
+        {
+          success: false,
+          errorCode: 40003,
+          errorMsg: t("productImproveStage1.serverTaskNotScorable"),
+        },
         { status: 400 },
       );
     }
@@ -107,7 +171,7 @@ export const action = async ({
     const task = await getTaskForShop({ taskId: body.taskId, shop });
     if (!task) {
       return Response.json(
-        { success: false, errorCode: 40401, errorMsg: "Task not found" },
+        { success: false, errorCode: 40401, errorMsg: t("productImproveStage1.serverTaskNotFound") },
         { status: 404 },
       );
     }
@@ -118,7 +182,11 @@ export const action = async ({
         task.status !== "applied")
     ) {
       return Response.json(
-        { success: false, errorCode: 40004, errorMsg: "Task is not in refinable state" },
+        {
+          success: false,
+          errorCode: 40004,
+          errorMsg: t("productImproveStage1.serverTaskNotRefinable"),
+        },
         { status: 400 },
       );
     }
@@ -138,7 +206,7 @@ export const action = async ({
         {
           success: false,
           errorCode: 40005,
-          errorMsg: "继续 AI 优化前请提供当前草稿和优化说明",
+          errorMsg: t("productImproveStage1.refineProvideDraftAndComment"),
         },
         { status: 400 },
       );
@@ -148,7 +216,7 @@ export const action = async ({
     await appendLog({
       taskId: body.taskId,
       startedAt,
-      message: "已收到人工优化意见，正在继续调用 AI 调整标题与描述",
+      message: t("productImproveStage1.refineReceivedFeedbackLog"),
     });
 
     const refined = await runProductDescriptionRefinement({
@@ -158,7 +226,7 @@ export const action = async ({
         title: cfg.originalTitle?.trim() || draftTitle,
         text: cfg.originalText?.trim() || draftDescription,
       },
-      targetLanguage: cfg.targetLanguage?.trim() || "简体中文",
+      targetLanguage: cfg.targetLanguage?.trim() || "zh-CN",
       currentTitle: draftTitle,
       currentDescription: draftDescription,
       optimizationComment,
@@ -169,13 +237,15 @@ export const action = async ({
       await appendLog({
         taskId: body.taskId,
         startedAt,
-        message: `AI 继续优化失败：${refined.errorMsg}`,
+        message: t("productImproveStage1.refineFailedLog", {
+          reason: translateApiAiTaskErrorMessage(refined.errorMsg, t),
+        }),
       });
       return Response.json(
         {
           success: false,
           errorCode: refined.errorCode,
-          errorMsg: refined.errorMsg,
+          errorMsg: translateApiAiTaskErrorMessage(refined.errorMsg, t),
         },
         { status: 400 },
       );
@@ -192,13 +262,17 @@ export const action = async ({
       taskId: body.taskId,
       result: nextResult,
       startedAt,
-      finalMessage: "AI 已根据人工意见重新生成文案，请继续审核",
+      finalMessage: t("productImproveStage1.refineCompletedPendingReview"),
     });
     return Response.json({ success: true, taskId: body.taskId, result: nextResult });
   }
 
   return Response.json(
-    { success: false, errorCode: 40000, errorMsg: "Unknown action" },
+    {
+      success: false,
+      errorCode: 40000,
+      errorMsg: t("productImproveStage1.serverUnknownAction"),
+    },
     { status: 400 },
   );
 };

@@ -27,6 +27,28 @@ import {
 import { createBatchWithTask } from "../server/aiTask/aiTaskStore.server";
 import { listRecentTasksForShop } from "../server/aiTask/aiTaskStore.server";
 import { ProductImprovePage } from "./page/ProductImprovePage";
+import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
+import { initI18n } from "../i18n";
+
+function translateActionErrorMessage(
+  rawMessage: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  const normalized = rawMessage.trim();
+  if (!normalized) {
+    return t("productImproveStage1.serverRequestFailed");
+  }
+  if (normalized === "productId 必填") {
+    return t("generate.validationSelectProductId");
+  }
+  if (normalized === "targetLanguage 必填") {
+    return t("generate.validationSelectTargetLanguage");
+  }
+  if (normalized === "请求体不是合法 JSON") {
+    return t("productImproveStage1.serverInvalidJson");
+  }
+  return rawMessage;
+}
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -52,13 +74,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const requestId = crypto.randomUUID();
+  const initialLocale = detectRequestLocale(request);
+  const initialI18n = initI18n(initialLocale);
+  const initialT = initialI18n.t.bind(initialI18n);
   console.info(
     `[ProductImprove][Page Action] requestId=${requestId} method=${request.method}`,
   );
 
   if (request.method !== "POST") {
     return Response.json(
-      { success: false as const, errorCode: 405, errorMsg: "仅支持 POST", taskId: null },
+      {
+        success: false as const,
+        errorCode: 405,
+        errorMsg: initialT("productImproveStage1.serverMethodNotAllowed"),
+        taskId: null,
+      },
       { status: 405 },
     );
   }
@@ -73,7 +103,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       e,
     );
     return Response.json(
-      { success: false as const, errorCode: 400, errorMsg: "请求体不是合法 JSON", taskId: null },
+      {
+        success: false as const,
+        errorCode: 400,
+        errorMsg: initialT("productImproveStage1.serverInvalidJson"),
+        taskId: null,
+      },
       { status: 400 },
     );
   }
@@ -81,13 +116,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const parsed = parseGenerateDescriptionBody(raw);
   if (!parsed.ok) {
     return Response.json(
-      { success: false as const, errorCode: 400, errorMsg: parsed.errorMsg, taskId: null },
+      {
+        success: false as const,
+        errorCode: 400,
+        errorMsg: translateActionErrorMessage(parsed.errorMsg, initialT),
+        taskId: null,
+      },
       { status: 400 },
     );
   }
 
   try {
     const { admin, session } = await authenticate.admin(request);
+    const locale = detectRequestLocale(request, {
+      sessionLocale: readShopifySessionLocale(session),
+    });
+    const i18n = initI18n(locale);
+    const t = i18n.t.bind(i18n);
     const shop = session.shop;
     const appName = getAppEntry();
 
@@ -97,7 +142,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const context = await fetchProductDescriptionContext(admin, parsed.data.productId);
     if (!context) {
       return Response.json(
-        { success: false as const, errorCode: 40401, errorMsg: "未找到对应商品或无权访问", taskId: null },
+        {
+          success: false as const,
+          errorCode: 40401,
+          errorMsg: t("productImproveStage1.serverProductNotFound"),
+          taskId: null,
+        },
         { status: 404 },
       );
     }
@@ -107,7 +157,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     // Get shop info for brand style
     const shopInfo = await fetchShopBasicInfo(admin);
-    const brandStyle = shopInfo?.name || "标准";
+    const brandStyle = shopInfo?.name || t("productImproveStage1.defaultBrandStyle");
 
     const { taskId, batchId } = await createBatchWithTask({
       shop,
@@ -135,6 +185,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     enqueueProductImproveTask({
       taskId,
       shop,
+      locale,
       context,
       targetLanguage: parsed.data.targetLanguage,
       temperature: parsed.data.temperature,
@@ -159,7 +210,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       {
         success: false as const,
         errorCode: 500,
-        errorMsg: error instanceof Error ? error.message : "请求处理失败",
+        errorMsg:
+          error instanceof Error
+            ? translateActionErrorMessage(error.message, initialT)
+            : initialT("productImproveStage1.serverRequestFailed"),
         taskId: null,
       },
       { status: 500 },

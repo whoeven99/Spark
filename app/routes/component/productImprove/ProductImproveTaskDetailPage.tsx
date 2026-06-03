@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { TaskStatusBadge } from "../aiTask/TaskStatusBadge";
 import type {
@@ -41,21 +42,36 @@ function getProductAdminUrl(locationSearch: string, productId: string): string |
   return `https://admin.shopify.com/store/${shop.replace(/\.myshopify\.com$/, "")}/products/${numericId}`;
 }
 
-function formatTaskDate(iso: string): string {
-  return new Date(iso).toLocaleString("zh-CN", {
+function formatTaskDate(iso: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  });
+  }).format(new Date(iso));
 }
 
-function formatActualElapsed(startedAt: string | null, completedAt: string | null): string | null {
+function formatActualElapsed(
+  startedAt: string | null,
+  completedAt: string | null,
+  locale: string,
+): string | null {
   if (!startedAt || !completedAt) return null;
   const elapsedMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
-  const s = Math.floor(elapsedMs / 1000);
-  const m = Math.floor(s / 60);
-  return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
+  const seconds = Math.max(0, Math.floor(elapsedMs / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  const minuteText = new Intl.NumberFormat(locale, {
+    style: "unit",
+    unit: "minute",
+    unitDisplay: "short",
+  }).format(minutes);
+  const secondText = new Intl.NumberFormat(locale, {
+    style: "unit",
+    unit: "second",
+    unitDisplay: "short",
+  }).format(remainingSeconds);
+  return minutes > 0 ? `${minuteText} ${secondText}` : secondText;
 }
 
 function SectionShell(props: {
@@ -90,10 +106,6 @@ function SectionShell(props: {
   );
 }
 
-function formatVariableToken(name: string): string {
-  return `{{${name}}}`;
-}
-
 function readStringField(source: Record<string, unknown> | null | undefined, key: string): string | null {
   const value = source?.[key];
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -104,8 +116,8 @@ function readNumberField(source: Record<string, unknown> | null | undefined, key
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function formatDisplayValue(value: string | number | null | undefined, variableName: string): string {
-  if (value == null || value === "") return formatVariableToken(variableName);
+function formatDisplayValue(value: string | number | null | undefined, fallback: string): string {
+  if (value == null || value === "") return fallback;
   return String(value);
 }
 
@@ -131,7 +143,7 @@ function buildInitialResultRecords(task: AITaskItem): ResultRecord[] {
       reviewNote: result?.reviewNote ?? "",
       optimizationComment: result?.optimizationComment ?? "",
       createdAt: task.completedAt ?? task.createdAt,
-      sourceLabel: "初始生成结果",
+      sourceLabel: "",
       statusNote: null,
       applied: task.status === "applied",
     },
@@ -140,6 +152,10 @@ function buildInitialResultRecords(task: AITaskItem): ResultRecord[] {
 
 function ReviewContentPanel(props: {
   label: string;
+  titleLabel: string;
+  descriptionLabel: string;
+  emptyTitleText: string;
+  emptyDescriptionText: string;
   tone?: "neutral" | "positive";
   title: string;
   description: string;
@@ -229,7 +245,7 @@ function ReviewContentPanel(props: {
               marginBottom: 6,
             }}
           >
-            标题
+            {props.titleLabel}
           </div>
           {props.editable ? (
             <textarea
@@ -249,7 +265,7 @@ function ReviewContentPanel(props: {
                 ...sharedTitleStyle,
               }}
             >
-              {props.title || "（无标题）"}
+              {props.title || props.emptyTitleText}
             </div>
           )}
         </div>
@@ -263,7 +279,7 @@ function ReviewContentPanel(props: {
               marginBottom: 6,
             }}
           >
-            描述
+            {props.descriptionLabel}
           </div>
           {props.editable ? (
             <textarea
@@ -283,7 +299,7 @@ function ReviewContentPanel(props: {
                 ...sharedDescriptionStyle,
               }}
             >
-              {props.description || "（无原始描述）"}
+              {props.description || props.emptyDescriptionText}
             </div>
           )}
         </div>
@@ -298,6 +314,8 @@ export function ProductImproveTaskDetailPage({
   onBack,
   onTaskUpdated,
 }: Props) {
+  const { t, i18n } = useTranslation();
+  const unknownText = t("common.unknown");
   const [localStatus, setLocalStatus] = useState<AITaskStatus>(task.status);
   const [localResult, setLocalResult] = useState<Record<string, unknown> | null>(task.result);
   const [resultRecords, setResultRecords] = useState<ResultRecord[]>(() =>
@@ -319,25 +337,29 @@ export function ProductImproveTaskDetailPage({
 
   const cfg = task.config as Partial<ProductImproveTaskConfig>;
   const extendedConfig = task.config as Record<string, unknown>;
-  const actualElapsed = formatActualElapsed(task.startedAt, task.completedAt);
+  const actualElapsed = formatActualElapsed(task.startedAt, task.completedAt, i18n.language);
   const shortId = task.id.slice(0, 8).toUpperCase();
   const summaryDescription =
     localStatus === "applied"
-      ? "已完成审核与写入，可直接查看结果并返回任务列表。"
-      : "左侧查看原始内容，右侧以结果记录的方式迭代草稿并选择最终应用版本。";
+      ? t("productImproveStage1.detailSummaryApplied")
+      : t("productImproveStage1.detailSummaryReview");
   const itemCount = formatDisplayValue(
     readNumberField(extendedConfig, "itemCount"),
-    "itemCount",
+    unknownText,
   );
   const sourceLanguage = formatDisplayValue(
     readStringField(extendedConfig, "sourceLanguage"),
-    "sourceLanguage",
+    unknownText,
   );
   const brandStyle = formatDisplayValue(
     readStringField(extendedConfig, "brandStyle"),
-    "brandStyle",
+    unknownText,
   );
-  const productLabel = cfg.originalTitle || "Manual Juicer, Small Household Juicer, Squeeze...";
+  const productLabel =
+    cfg.originalTitle ||
+    t("productImproveStage1.productFallbackName", {
+      id: cfg.productId || shortId,
+    });
   const feedbackDialogRef = useRef<HTMLDialogElement | null>(null);
   const activeRecord =
     resultRecords.find((record) => record.id === activeRecordId) ?? resultRecords[0] ?? null;
@@ -360,9 +382,12 @@ export function ProductImproveTaskDetailPage({
   useEffect(() => {
     setLocalResult(task.result);
     const nextRecords = buildInitialResultRecords(task);
+    if (nextRecords[0]) {
+      nextRecords[0].sourceLabel = t("productImproveStage1.recordSourceInitial");
+    }
     setResultRecords(nextRecords);
     setActiveRecordId(nextRecords[0]?.id ?? "");
-  }, [task]);
+  }, [t, task]);
 
   useEffect(() => {
     if (!draftHighlight) return;
@@ -396,7 +421,7 @@ export function ProductImproveTaskDetailPage({
   async function handleApply(record: ResultRecord) {
     const reviewedResult = buildTaskResultFromRecord(record);
     if (!reviewedResult.title || !reviewedResult.description) {
-      setApplyError("请先完成审核并确认标题与描述");
+      setApplyError(t("productImproveStage1.applyValidationCompleteTitleDescription"));
       return;
     }
     setApplying(true);
@@ -413,7 +438,7 @@ export function ProductImproveTaskDetailPage({
       });
       const updateBody = (await updateResp.json()) as { success: boolean; errorMsg?: string };
       if (!updateBody.success) {
-        setApplyError(updateBody.errorMsg ?? "写入 Shopify 失败");
+        setApplyError(updateBody.errorMsg ?? t("productImproveStage1.applyWriteShopifyFailed"));
         return;
       }
       await fetch(`/api/ai-task${locationSearch}`, {
@@ -430,13 +455,13 @@ export function ProductImproveTaskDetailPage({
         prev.map((item) => ({
           ...item,
           applied: item.id === record.id,
-          statusNote: item.id === record.id ? "该版本已被确认为最终写入版本" : item.statusNote,
+          statusNote: item.id === record.id ? t("productImproveStage1.recordStatusApplied") : item.statusNote,
         })),
       );
       setActiveRecordId(record.id);
       handleStatusChange("applied", reviewedResult);
     } catch {
-      setApplyError("应用时发生网络错误");
+      setApplyError(t("productImproveStage1.applyNetworkError"));
     } finally {
       setApplying(false);
     }
@@ -444,22 +469,22 @@ export function ProductImproveTaskDetailPage({
 
   async function handleRefine(): Promise<boolean> {
     if (!feedbackRecordId) {
-      setRefineError("未找到要继续优化的结果记录");
+      setRefineError(t("productImproveStage1.refineRecordMissing"));
       return false;
     }
 
     const sourceRecord = resultRecords.find((record) => record.id === feedbackRecordId);
     if (!sourceRecord) {
-      setRefineError("未找到要继续优化的结果记录");
+      setRefineError(t("productImproveStage1.refineRecordMissing"));
       return false;
     }
 
     if (!sourceRecord.title.trim() || !sourceRecord.description.trim()) {
-      setRefineError("请先补充当前草稿标题和描述");
+      setRefineError(t("productImproveStage1.refineDraftMissing"));
       return false;
     }
     if (!feedbackOptimizationComment.trim()) {
-      setRefineError("请填写希望 AI 继续优化的方向或评论");
+      setRefineError(t("productImproveStage1.refineCommentRequired"));
       return false;
     }
 
@@ -475,8 +500,12 @@ export function ProductImproveTaskDetailPage({
 
     const feedbackSummary = [
       feedbackOptimizationComment.trim(),
-      feedbackScore !== null ? `结果评分：${feedbackScore}/5` : null,
-      feedbackNote.trim() ? `评价补充：${feedbackNote.trim()}` : null,
+      feedbackScore !== null
+        ? t("productImproveStage1.feedbackScoreSummary", { score: feedbackScore })
+        : null,
+      feedbackNote.trim()
+        ? t("productImproveStage1.feedbackNoteSummary", { note: feedbackNote.trim() })
+        : null,
     ]
       .filter(Boolean)
       .join("\n");
@@ -499,7 +528,7 @@ export function ProductImproveTaskDetailPage({
         result?: ProductImproveTaskResult;
       };
       if (!body.success || !body.result) {
-        setRefineError(body.errorMsg ?? "继续 AI 优化失败");
+        setRefineError(body.errorMsg ?? t("productImproveStage1.refineFailed"));
         return false;
       }
 
@@ -514,8 +543,12 @@ export function ProductImproveTaskDetailPage({
         reviewNote: "",
         optimizationComment: "",
         createdAt: new Date().toISOString(),
-        sourceLabel: `基于 V${sourceRecord.version} 的反馈继续优化`,
-        statusNote: `由 V${sourceRecord.version} 的评分与优化意见生成`,
+        sourceLabel: t("productImproveStage1.recordSourceRefined", {
+          version: sourceRecord.version,
+        }),
+        statusNote: t("productImproveStage1.recordStatusGeneratedFromVersion", {
+          version: sourceRecord.version,
+        }),
         applied: false,
       };
 
@@ -528,7 +561,9 @@ export function ProductImproveTaskDetailPage({
                   reviewScore: feedbackScore,
                   reviewNote: feedbackNote,
                   optimizationComment: feedbackOptimizationComment,
-                  statusNote: `已基于该记录生成 V${nextVersion}`,
+                  statusNote: t("productImproveStage1.recordStatusGeneratedVersion", {
+                    version: nextVersion,
+                  }),
                 }
               : record,
           )
@@ -541,7 +576,7 @@ export function ProductImproveTaskDetailPage({
       handleStatusChange("pending_review", body.result);
       return true;
     } catch {
-      setRefineError("继续 AI 优化时发生网络错误");
+      setRefineError(t("productImproveStage1.refineNetworkError"));
       return false;
     } finally {
       setRefining(false);
@@ -596,7 +631,7 @@ export function ProductImproveTaskDetailPage({
                   whiteSpace: "nowrap",
                 }}
               >
-                返回任务列表
+                {t("productImproveStage1.backToTaskList")}
               </button>
               <span
                 style={{
@@ -621,7 +656,7 @@ export function ProductImproveTaskDetailPage({
                 lineHeight: 1.3,
               }}
             >
-              任务摘要
+              {t("productImproveStage1.taskSummaryTitle")}
             </div>
             <div
               style={{
@@ -644,7 +679,9 @@ export function ProductImproveTaskDetailPage({
               fontWeight: 600,
             }}
           >
-            创建时间：{formatTaskDate(task.createdAt)}
+            {t("aiTask.createdAtLabel", {
+              value: formatTaskDate(task.createdAt, i18n.language),
+            })}
           </div>
         </div>
 
@@ -664,14 +701,24 @@ export function ProductImproveTaskDetailPage({
             color: pageColorTokens.textSecondary,
           }}
         >
-          <span>任务详情：</span>
-          <span>{itemCount} 个商品</span>
+          <span>{t("productImproveStage1.taskDetailLabel")}</span>
+          <span>{t("productImproveStage1.itemCountValue", { count: itemCount })}</span>
           <span style={{ color: pageColorTokens.textFootnote }}>|</span>
-          <span>输出 {cfg.targetLanguage ?? "zh-CN"}</span>
+          <span>
+            {t("productImproveStage1.outputLanguageValue", {
+              value: cfg.targetLanguage ?? unknownText,
+            })}
+          </span>
           <span style={{ color: pageColorTokens.textFootnote }}>|</span>
-          <span>语言：{sourceLanguage}</span>
+          <span>{t("productImproveStage1.sourceLanguageValue", { value: sourceLanguage })}</span>
           <span style={{ color: pageColorTokens.textFootnote }}>|</span>
-          <span>品牌风格：{brandStyle}</span>
+          <span>{t("productImproveStage1.brandStyleValue", { value: brandStyle })}</span>
+          {actualElapsed ? (
+            <>
+              <span style={{ color: pageColorTokens.textFootnote }}>|</span>
+              <span>{t("productImproveStage1.actualElapsedValue", { value: actualElapsed })}</span>
+            </>
+          ) : null}
           <span style={{ color: pageColorTokens.textFootnote }}>|</span>
           <span
             style={{
@@ -686,14 +733,14 @@ export function ProductImproveTaskDetailPage({
             }}
             title={productLabel}
           >
-            商品：{productLabel}
+            {t("productImproveStage1.productValue", { value: productLabel })}
           </span>
         </div>
       </div>
 
       <SectionShell
-        title="内容审核"
-        description="左侧查看原始内容，右侧编辑当前选中的结果版本。评分与 AI 优化收纳到记录级弹窗中。"
+        title={t("productImproveStage1.reviewSectionTitle")}
+        description={t("productImproveStage1.reviewSectionDescription")}
       >
         <div
           style={{
@@ -703,14 +750,28 @@ export function ProductImproveTaskDetailPage({
           }}
         >
           <ReviewContentPanel
-            label="原始内容"
+            label={t("productImproveStage1.originalContentLabel")}
+            titleLabel={t("productImproveStage1.titleLabel")}
+            descriptionLabel={t("productImproveStage1.descriptionLabel")}
+            emptyTitleText={t("productImproveStage1.emptyTitle")}
+            emptyDescriptionText={t("productImproveStage1.emptyOriginalDescription")}
             title={cfg.originalTitle ?? ""}
             description={cfg.originalText ?? ""}
           />
 
           <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
             <ReviewContentPanel
-              label={activeRecord ? `创建内容 · V${activeRecord.version}` : "创建内容"}
+              label={
+                activeRecord
+                  ? t("productImproveStage1.generatedContentVersionLabel", {
+                      version: activeRecord.version,
+                    })
+                  : t("productImproveStage1.generatedContentLabel")
+              }
+              titleLabel={t("productImproveStage1.titleLabel")}
+              descriptionLabel={t("productImproveStage1.descriptionLabel")}
+              emptyTitleText={t("productImproveStage1.emptyTitle")}
+              emptyDescriptionText={t("productImproveStage1.emptyDescription")}
               tone="positive"
               title={activeRecord?.title ?? ""}
               description={activeRecord?.description ?? ""}
@@ -745,7 +806,9 @@ export function ProductImproveTaskDetailPage({
                   boxShadow: applying ? "none" : "0 6px 18px rgba(0, 166, 124, 0.18)",
                 }}
               >
-                {applying ? "应用中..." : "应用当前版本"}
+                {applying
+                  ? t("productImproveStage1.applyingCurrentVersion")
+                  : t("productImproveStage1.applyCurrentVersion")}
               </button>
             </div>
           </div>
@@ -768,7 +831,7 @@ export function ProductImproveTaskDetailPage({
           >
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span>✓</span>
-              <span>已写入 Shopify</span>
+              <span>{t("productImproveStage1.appliedToShopify")}</span>
             </div>
             {(() => {
               const url = getProductAdminUrl(locationSearch, cfg.productId ?? "");
@@ -785,7 +848,7 @@ export function ProductImproveTaskDetailPage({
                     textDecoration: "underline",
                   }}
                 >
-                  在 Shopify 后台查看商品 →
+                  {t("productImproveStage1.viewInShopifyAdmin")}
                 </a>
               );
             })()}
@@ -794,8 +857,8 @@ export function ProductImproveTaskDetailPage({
       </SectionShell>
 
       <SectionShell
-        title="结果记录"
-        description="每次评分与 AI 优化都会沉淀为一条记录，新的优化结果会在这里继续新增版本。"
+        title={t("productImproveStage1.resultRecordsTitle")}
+        description={t("productImproveStage1.resultRecordsDescription")}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {resultRecords.map((record) => {
@@ -842,17 +905,17 @@ export function ProductImproveTaskDetailPage({
                     </span>
                     {record.applied ? (
                       <span style={{ fontSize: 12, color: pageColorTokens.brandGreenDark, fontWeight: 700 }}>
-                        已应用
+                        {t("productImproveStage1.recordAppliedTag")}
                       </span>
                     ) : null}
                   </div>
                   <span style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>
-                    {formatTaskDate(record.createdAt)}
+                    {formatTaskDate(record.createdAt, i18n.language)}
                   </span>
                 </div>
 
                 <div style={{ fontSize: 13, fontWeight: 600, color: pageColorTokens.textPrimary }}>
-                  {record.title || "（无标题）"}
+                  {record.title || t("productImproveStage1.emptyTitle")}
                 </div>
                 <div
                   style={{
@@ -865,7 +928,7 @@ export function ProductImproveTaskDetailPage({
                     overflow: "hidden",
                   }}
                 >
-                  {record.description || "（无描述）"}
+                  {record.description || t("productImproveStage1.emptyDescription")}
                 </div>
 
                 <div
@@ -878,10 +941,16 @@ export function ProductImproveTaskDetailPage({
                   }}
                 >
                   <span>
-                    {record.reviewScore !== null ? `结果评分 ${record.reviewScore}/5` : "结果评分未填写"}
+                    {record.reviewScore !== null
+                      ? t("productImproveStage1.recordScoreValue", { score: record.reviewScore })
+                      : t("productImproveStage1.recordScoreEmpty")}
                   </span>
                   <span>
-                    {record.reviewNote.trim() ? `评分说明：${record.reviewNote}` : "评分说明未填写"}
+                    {record.reviewNote.trim()
+                      ? t("productImproveStage1.recordReviewNoteValue", {
+                          note: record.reviewNote,
+                        })
+                      : t("productImproveStage1.recordReviewNoteEmpty")}
                   </span>
                 </div>
 
@@ -910,7 +979,7 @@ export function ProductImproveTaskDetailPage({
                       fontWeight: 600,
                     }}
                   >
-                    评分并继续优化
+                    {t("productImproveStage1.openFeedbackDialog")}
                   </button>
                   <button
                     type="button"
@@ -926,7 +995,9 @@ export function ProductImproveTaskDetailPage({
                       fontWeight: 600,
                     }}
                   >
-                    {isActive ? "正在编辑" : "编辑这一版"}
+                    {isActive
+                      ? t("productImproveStage1.editingThisVersion")
+                      : t("productImproveStage1.editThisVersion")}
                   </button>
                   <button
                     type="button"
@@ -950,7 +1021,7 @@ export function ProductImproveTaskDetailPage({
                       fontWeight: 700,
                     }}
                   >
-                    应用这一版
+                    {t("productImproveStage1.applyThisVersion")}
                   </button>
                 </div>
               </div>
@@ -1017,7 +1088,7 @@ export function ProductImproveTaskDetailPage({
                 marginBottom: "0.35rem",
               }}
             >
-              评分并继续优化
+              {t("productImproveStage1.feedbackDialogTitle")}
             </div>
             <div
               style={{
@@ -1026,7 +1097,7 @@ export function ProductImproveTaskDetailPage({
                 lineHeight: 1.5,
               }}
             >
-              对当前结果版本填写评分与评价，再把这些反馈一起交给 AI 生成新的版本记录。
+              {t("productImproveStage1.feedbackDialogDescription")}
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -1059,7 +1130,7 @@ export function ProductImproveTaskDetailPage({
             onChange={(e) => setFeedbackNote(e.currentTarget.value)}
             disabled={editingLocked}
             rows={4}
-            placeholder="可选：填写评分说明，例如文案准确性、品牌语气、可读性等。"
+            placeholder={t("productImproveStage1.feedbackNotePlaceholder")}
             style={{
               width: "100%",
               boxSizing: "border-box",
@@ -1077,7 +1148,7 @@ export function ProductImproveTaskDetailPage({
             onChange={(e) => setFeedbackOptimizationComment(e.currentTarget.value)}
             disabled={refining || applying}
             rows={5}
-            placeholder="例如：保留当前第一段结构，把语气改得更高级一些，并补充适用场景。"
+            placeholder={t("productImproveStage1.feedbackOptimizationPlaceholder")}
             style={{
               width: "100%",
               boxSizing: "border-box",
@@ -1107,7 +1178,7 @@ export function ProductImproveTaskDetailPage({
                 fontWeight: 600,
               }}
             >
-              取消
+              {t("common.cancel")}
             </button>
             <button
               type="button"
@@ -1132,7 +1203,9 @@ export function ProductImproveTaskDetailPage({
                 fontWeight: 600,
               }}
             >
-              {refining ? "AI 优化中..." : "保存反馈并生成新版本"}
+              {refining
+                ? t("productImproveStage1.refining")
+                : t("productImproveStage1.saveFeedbackAndGenerate")}
             </button>
           </div>
         </div>

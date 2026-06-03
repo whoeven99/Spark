@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { pageColorTokens, pageEmptyStateStyle } from "../../page/pageUiStyles";
 import { ProductImproveTaskCard } from "./ProductImproveTaskCard";
 import { ProductImproveTaskDetailPage } from "./ProductImproveTaskDetailPage";
@@ -36,6 +37,7 @@ export function ProductImproveTaskListPage({
   onTaskDeleted,
   onTaskUpdated,
 }: Props) {
+  const { t } = useTranslation();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [localTasks, setLocalTasks] = useState<AITaskItem[]>(tasks);
   const [viewTab, setViewTab] = useState<TaskViewTab>("current");
@@ -105,8 +107,14 @@ export function ProductImproveTaskListPage({
           >
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {[
-                { key: "current" as const, label: `当前任务 (${currentTasks.length})` },
-                { key: "history" as const, label: `历史任务 (${historyTasks.length})` },
+                {
+                  key: "current" as const,
+                  label: t("productImproveStage1.currentTasksTab", { count: currentTasks.length }),
+                },
+                {
+                  key: "history" as const,
+                  label: t("productImproveStage1.historyTasksTab", { count: historyTasks.length }),
+                },
               ].map((tab) => {
                 const active = viewTab === tab.key;
                 return (
@@ -132,7 +140,7 @@ export function ProductImproveTaskListPage({
               })}
             </div>
             <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
-              历史任务定义为创建时间超过 24 小时的任务。
+              {t("productImproveStage1.historyTasksHint")}
             </div>
           </div>
 
@@ -147,8 +155,8 @@ export function ProductImproveTaskListPage({
             <span style={{ fontSize: 28, lineHeight: 1 }}>📋</span>
             <span style={{ fontSize: 14, color: pageColorTokens.textSecondary }}>
               {viewTab === "current"
-                ? "当前还没有任务。先在配置页创建一次生成任务。"
-                : "暂无超过 24 小时的历史任务记录。"}
+                ? t("productImproveStage1.currentTasksEmpty")
+                : t("productImproveStage1.historyTasksEmpty")}
             </span>
           </div>
         </>
@@ -169,8 +177,14 @@ export function ProductImproveTaskListPage({
           >
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {[
-                { key: "current" as const, label: `当前任务 (${currentTasks.length})` },
-                { key: "history" as const, label: `历史任务 (${historyTasks.length})` },
+                {
+                  key: "current" as const,
+                  label: t("productImproveStage1.currentTasksTab", { count: currentTasks.length }),
+                },
+                {
+                  key: "history" as const,
+                  label: t("productImproveStage1.historyTasksTab", { count: historyTasks.length }),
+                },
               ].map((tab) => {
                 const active = viewTab === tab.key;
                 return (
@@ -196,7 +210,7 @@ export function ProductImproveTaskListPage({
               })}
             </div>
             <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
-              历史任务定义为创建时间超过 24 小时的任务。
+              {t("productImproveStage1.historyTasksHint")}
             </div>
           </div>
 

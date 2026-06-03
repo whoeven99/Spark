@@ -18,24 +18,30 @@ import {
   pendingReviewTask,
 } from "../aiTask/aiTaskLogger.server";
 import { DEFAULT_DESCRIPTION_TEMPERATURE } from "./constants.server";
+import { initI18n } from "../../i18n";
+import { DEFAULT_LOCALE, normalizeLocale } from "../../i18n/config";
 
 const LOG_PREFIX = "[ProductImprove][Async]";
 
 export function enqueueProductImproveTask(params: {
   taskId: string;
   shop: string;
+  locale: string;
   context: ProductDescriptionContext;
   targetLanguage: string;
   temperature?: number;
 }): void {
   void runProductImproveTask(params).catch((e) => {
     const detail = e instanceof Error ? e.message : String(e);
+    const locale = normalizeLocale(params.locale) ?? DEFAULT_LOCALE;
+    const i18n = initI18n(locale);
+    const t = i18n.t.bind(i18n);
     console.error(
       `${LOG_PREFIX} unhandled taskId=${params.taskId} detail=${detail}`,
     );
     void failTask({
       taskId: params.taskId,
-      errorMsg: detail || "商品文案生成任务异常终止",
+      errorMsg: t("productImproveStage1.asyncUnhandledTermination"),
       startedAt: Date.now(),
     });
   });
@@ -44,17 +50,21 @@ export function enqueueProductImproveTask(params: {
 async function runProductImproveTask(params: {
   taskId: string;
   shop: string;
+  locale: string;
   context: ProductDescriptionContext;
   targetLanguage: string;
   temperature?: number;
 }): Promise<void> {
   const startedAt = Date.now();
   const { taskId, shop, context, targetLanguage } = params;
+  const locale = normalizeLocale(params.locale) ?? DEFAULT_LOCALE;
+  const i18n = initI18n(locale);
+  const t = i18n.t.bind(i18n);
 
   console.info(`${LOG_PREFIX} start taskId=${taskId} shop=${shop}`);
 
-  await appendLog({ taskId, startedAt, message: "正在等待执行任务" });
-  await appendLog({ taskId, startedAt, message: "已读取商品的标题、描述和其他信息" });
+  await appendLog({ taskId, startedAt, message: t("productImproveStage1.asyncWaiting") });
+  await appendLog({ taskId, startedAt, message: t("productImproveStage1.asyncContextLoaded") });
 
   const systemPrompt = buildDescriptionSystemPrompt();
   const userPrompt = buildDescriptionUserPrompt(context, targetLanguage);
@@ -62,13 +72,25 @@ async function runProductImproveTask(params: {
 
   let raw: { rawText: string; modelLabel: string; usageMeta?: unknown };
   try {
-    await appendLog({ taskId, startedAt, message: "正在生成新的标题草稿，保证关键词自然出现" });
+    await appendLog({
+      taskId,
+      startedAt,
+      message: t("productImproveStage1.asyncGeneratingTitleDraft"),
+    });
     raw = await invokeDescriptionModels(systemPrompt, userPrompt, temperature, taskId);
-    await appendLog({ taskId, startedAt, message: "正在补充描述段落，准备输出结果摘要" });
+    await appendLog({
+      taskId,
+      startedAt,
+      message: t("productImproveStage1.asyncGeneratingDescriptionDraft"),
+    });
   } catch (e) {
     logDetailedError(`${LOG_PREFIX} taskId=${taskId}`, "invokeDescriptionModels failed", e);
-    const msg = e instanceof Error ? e.message : "模型调用失败";
-    await failTask({ taskId, errorMsg: msg, startedAt, finalMessage: `文案生成失败：${msg}` });
+    await failTask({
+      taskId,
+      errorMsg: t("productImproveStage1.asyncModelInvocationFailed"),
+      startedAt,
+      finalMessage: t("productImproveStage1.asyncModelInvocationFinalMessage"),
+    });
     return;
   }
 
@@ -78,8 +100,12 @@ async function runProductImproveTask(params: {
     description = aiPayload.description;
   } catch (e) {
     logDetailedError(`${LOG_PREFIX} taskId=${taskId}`, "parseAndValidate failed", e);
-    const msg = e instanceof Error ? e.message : "AI 输出结构异常";
-    await failTask({ taskId, errorMsg: msg, startedAt, finalMessage: `输出解析失败：${msg}` });
+    await failTask({
+      taskId,
+      errorMsg: t("productImproveStage1.asyncOutputParseFailed"),
+      startedAt,
+      finalMessage: t("productImproveStage1.asyncOutputParseFinalMessage"),
+    });
     return;
   }
 
@@ -95,7 +121,7 @@ async function runProductImproveTask(params: {
     },
     actualCredits,
     startedAt,
-    finalMessage: "文案已生成，等待审查",
+    finalMessage: t("productImproveStage1.asyncCompletedPendingReview"),
   });
 
   // Record billing

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { TaskStatusBadge } from "./TaskStatusBadge";
 import { LogViewer } from "./LogViewer";
@@ -26,15 +27,15 @@ export function formatActualElapsed(
   return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
 }
 
-function formatTaskDate(iso: string): string {
-  return new Date(iso).toLocaleString("zh-CN", {
+function formatTaskDate(iso: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-  });
+  }).format(new Date(iso));
 }
 
 export function actionButtonStyle(tone: CardAction["tone"], disabled = false) {
@@ -174,6 +175,7 @@ export function AITaskCardShell({
   showLogViewer = false,
   onStatusChange,
 }: Props) {
+  const { i18n, t } = useTranslation();
   const shortId = task.id.slice(0, 8).toUpperCase();
 
   return (
@@ -260,7 +262,7 @@ export function AITaskCardShell({
             paddingTop: 2,
           }}
         >
-          创建时间：{formatTaskDate(task.createdAt)}
+          {t("aiTask.createdAtLabel", { value: formatTaskDate(task.createdAt, i18n.language) })}
         </div>
       </div>
 

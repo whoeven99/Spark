@@ -23,7 +23,6 @@ import {
 
 type PageTab = "config" | "tasks";
 const ESTIMATED_TOKENS = 320;
-const ESTIMATED_DURATION = "1-2 min";
 const footerDividerStyle = {
   color: pageColorTokens.textFootnote,
 };
@@ -265,7 +264,11 @@ export function ProductImprovePage() {
   const confirmSummaryItems = [
     { key: "target", label: t("productImproveStage1.confirmLabelTarget"), value: selectedName ?? "-" },
     { key: "language", label: t("productImproveStage1.taskLanguage"), value: selectedLanguageLabel },
-    { key: "time", label: t("productImproveStage1.estimateTime"), value: ESTIMATED_DURATION },
+    {
+      key: "time",
+      label: t("productImproveStage1.estimateTime"),
+      value: t("productImproveStage1.estimatedDurationValue"),
+    },
     {
       key: "tokens",
       label: t("productImproveStage1.estimateCredits"),
@@ -291,7 +294,7 @@ export function ProductImprovePage() {
         <SegmentedPageTabs
           activeTab={pageTab}
           onTabChange={setPageTab}
-          ariaLabel="商品优化页面导航"
+          ariaLabel={t("productImproveStage1.pageNavAriaLabel")}
           items={[
             { key: "config", label: t("productImproveStage1.tabsConfig") },
             { key: "tasks", label: t("productImproveStage1.tabsTasks"), badgeCount: runningCount },
@@ -347,9 +350,7 @@ export function ProductImprovePage() {
                     disabled={isSubmitting}
                     style={pageSelectStyle(isSubmitting)}
                   >
-                    {localeOptions.length === 0 && (
-                      <option value="zh-CN">Chinese (Simplified) (zh-CN)</option>
-                    )}
+                    {localeOptions.length === 0 && <option value={targetLanguage}>{targetLanguage}</option>}
                     {localeOptions.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
@@ -507,7 +508,7 @@ export function ProductImprovePage() {
               |
             </span>
             <span>
-              Contact Us:{" "}
+              {t("productImproveStage1.contactUsLabel")}{" "}
               <a href="mailto:support@ciwi.ai" style={{ color: "inherit" }}>
                 support@ciwi.ai
               </a>
