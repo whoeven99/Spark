@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
-import { useFetcher, useLoaderData } from "react-router";
+import { useFetcher, useLoaderData, useLocation, useNavigate } from "react-router";
 import type { loader } from "../app.product-improve";
 import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
 import { LanguageSelector } from "../component/common/LanguageSelector";
@@ -40,9 +40,10 @@ export function ProductImprovePage() {
   const shopify = useAppBridge();
   const { t } = useTranslation();
   const loaderData = useLoaderData<typeof loader>();
+  const location = useLocation();
+  const navigate = useNavigate();
   const billing = loaderData.billing;
   const [tasks, setTasks] = useState<AITaskItem[]>(loaderData.recentTasks);
-  const [pageTab, setPageTab] = useState<PageTab>("config");
 
   const shopLocales = loaderData.shopLocales;
   const [selectedProduct, setSelectedProduct] = useState<ProductSelectorSelection | null>(null);
@@ -60,8 +61,28 @@ export function ProductImprovePage() {
     | { success: false; errorMsg: string }
     | undefined;
 
-  const search =
-    typeof window !== "undefined" ? window.location.search : "";
+  const search = location.search;
+  const pageTab: PageTab =
+    new URLSearchParams(search.startsWith("?") ? search.slice(1) : search).get("tab") ===
+    "tasks"
+      ? "tasks"
+      : "config";
+
+  function setPageTab(nextTab: PageTab) {
+    const params = new URLSearchParams(
+      search.startsWith("?") ? search.slice(1) : search,
+    );
+    if (nextTab === "config") {
+      params.delete("tab");
+    } else {
+      params.set("tab", nextTab);
+    }
+    const nextSearch = params.toString();
+    navigate(
+      { search: nextSearch ? `?${nextSearch}` : "" },
+      { replace: true },
+    );
+  }
 
   const runningCount = tasks.filter((task) => task.status === "running").length;
 
