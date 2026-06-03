@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { TaskStatusBadge } from "../aiTask/TaskStatusBadge";
+import { DialogShell } from "../shared/DialogShell";
 import type {
   AITaskItem,
   AITaskStatus,
@@ -360,20 +361,9 @@ export function ProductImproveTaskDetailPage({
     t("productImproveStage1.productFallbackName", {
       id: cfg.productId || shortId,
     });
-  const feedbackDialogRef = useRef<HTMLDialogElement | null>(null);
   const activeRecord =
     resultRecords.find((record) => record.id === activeRecordId) ?? resultRecords[0] ?? null;
   const editingLocked = refining || applying || localStatus === "applied";
-
-  useEffect(() => {
-    const el = feedbackDialogRef.current;
-    if (!el) return;
-    if (feedbackDialogOpen) {
-      if (!el.open) el.showModal();
-    } else if (el.open) {
-      el.close();
-    }
-  }, [feedbackDialogOpen]);
 
   useEffect(() => {
     setLocalStatus(task.status);
@@ -1060,46 +1050,63 @@ export function ProductImproveTaskDetailPage({
         </div>
       ) : null}
 
-      <dialog
-        ref={feedbackDialogRef}
-        onCancel={(e) => {
-          e.preventDefault();
-          if (!editingLocked) setFeedbackDialogOpen(false);
-        }}
-        style={{
-          position: "fixed",
-          inset: 0,
-          margin: "auto",
-          maxWidth: "520px",
-          width: "calc(100% - 2rem)",
-          padding: 0,
-          border: "none",
-          borderRadius: "12px",
-          boxShadow: "0 12px 40px rgba(0,0,0,0.18)",
-        }}
-      >
-        <div style={{ padding: "1.125rem 1.25rem", display: "flex", flexDirection: "column", gap: 14 }}>
-          <div>
-            <div
+      <DialogShell
+        open={feedbackDialogOpen}
+        width={520}
+        closeDisabled={editingLocked}
+        onClose={() => setFeedbackDialogOpen(false)}
+        title={t("productImproveStage1.feedbackDialogTitle")}
+        description={t("productImproveStage1.feedbackDialogDescription")}
+        footer={
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => setFeedbackDialogOpen(false)}
+              disabled={refining}
               style={{
-                fontSize: "1rem",
-                fontWeight: 700,
-                color: pageColorTokens.textPrimary,
-                marginBottom: "0.35rem",
+                padding: "8px 14px",
+                borderRadius: pageColorTokens.radiusControl,
+                background: "#ffffff",
+                color: pageColorTokens.textBody,
+                border: `1px solid ${pageColorTokens.borderSubtle}`,
+                cursor: refining ? "default" : "pointer",
+                fontSize: 13,
+                fontWeight: 600,
               }}
             >
-              {t("productImproveStage1.feedbackDialogTitle")}
-            </div>
-            <div
+              {t("common.cancel")}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void handleRefine().then((ok) => {
+                  if (ok) {
+                    setFeedbackScore(null);
+                    setFeedbackNote("");
+                    setFeedbackOptimizationComment("");
+                  }
+                });
+              }}
+              disabled={refining || applying}
               style={{
-                fontSize: "0.8125rem",
-                color: pageColorTokens.textSecondary,
-                lineHeight: 1.5,
+                padding: "8px 16px",
+                borderRadius: pageColorTokens.radiusControl,
+                background: refining ? pageColorTokens.surfaceMuted : pageColorTokens.surface,
+                color: refining ? pageColorTokens.textSecondary : pageColorTokens.textBody,
+                border: `1px solid ${pageColorTokens.borderSubtle}`,
+                cursor: refining ? "default" : "pointer",
+                fontSize: 13,
+                fontWeight: 600,
               }}
             >
-              {t("productImproveStage1.feedbackDialogDescription")}
-            </div>
+              {refining
+                ? t("productImproveStage1.refining")
+                : t("productImproveStage1.saveFeedbackAndGenerate")}
+            </button>
           </div>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             {[1, 2, 3, 4, 5].map((score) => {
               const active = feedbackScore === score;
@@ -1162,54 +1169,8 @@ export function ProductImproveTaskDetailPage({
               background: "#fff",
             }}
           />
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-            <button
-              type="button"
-              onClick={() => setFeedbackDialogOpen(false)}
-              disabled={refining}
-              style={{
-                padding: "8px 14px",
-                borderRadius: pageColorTokens.radiusControl,
-                background: "#ffffff",
-                color: pageColorTokens.textBody,
-                border: `1px solid ${pageColorTokens.borderSubtle}`,
-                cursor: refining ? "default" : "pointer",
-                fontSize: 13,
-                fontWeight: 600,
-              }}
-            >
-              {t("common.cancel")}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                void handleRefine().then((ok) => {
-                  if (ok) {
-                    setFeedbackScore(null);
-                    setFeedbackNote("");
-                    setFeedbackOptimizationComment("");
-                  }
-                });
-              }}
-              disabled={refining || applying}
-              style={{
-                padding: "8px 16px",
-                borderRadius: pageColorTokens.radiusControl,
-                background: refining ? pageColorTokens.surfaceMuted : pageColorTokens.surface,
-                color: refining ? pageColorTokens.textSecondary : pageColorTokens.textBody,
-                border: `1px solid ${pageColorTokens.borderSubtle}`,
-                cursor: refining ? "default" : "pointer",
-                fontSize: 13,
-                fontWeight: 600,
-              }}
-            >
-              {refining
-                ? t("productImproveStage1.refining")
-                : t("productImproveStage1.saveFeedbackAndGenerate")}
-            </button>
-          </div>
         </div>
-      </dialog>
+      </DialogShell>
     </div>
   );
 }

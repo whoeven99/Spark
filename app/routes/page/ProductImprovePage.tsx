@@ -7,6 +7,7 @@ import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
 import { LanguageSelector } from "../component/common/LanguageSelector";
 import { ProductSelector } from "../component/product/ProductSelector";
 import { ProductImproveTaskListPage } from "../component/productImprove/ProductImproveTaskListPage";
+import { DialogShell } from "../component/shared/DialogShell";
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import type { AITaskItem } from "../../lib/aiTaskTypes";
 import {
@@ -169,19 +170,6 @@ export function ProductImprovePage() {
     estimatedCredits: number;
   } | null>(null);
   const lastHandledTaskIdRef = useRef<string | undefined>();
-  const confirmDialogRef = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    const el = confirmDialogRef.current;
-    if (!el) return;
-    if (confirmOpen) {
-      if (!el.open) {
-        el.showModal();
-      }
-    } else if (el.open) {
-      el.close();
-    }
-  }, [confirmOpen]);
 
   function handleOpenConfirm() {
     if (!productIdForActions) {
@@ -392,81 +380,14 @@ export function ProductImprovePage() {
               </s-stack>
             </PageSurface>
 
-            <dialog
-              ref={confirmDialogRef}
-              onCancel={(e) => {
-                e.preventDefault();
-                if (!isSubmitting) {
-                  setConfirmOpen(false);
-                }
-              }}
-              style={{
-                maxWidth: "460px",
-                width: "calc(100% - 2rem)",
-                padding: 0,
-                border: "none",
-                borderRadius: "12px",
-                boxShadow: "0 12px 40px rgba(0,0,0,0.18)",
-              }}
-            >
-              <div style={{ padding: "1.125rem 1.25rem" }}>
-                <div
-                  style={{
-                    fontSize: "1rem",
-                    fontWeight: 700,
-                    color: pageColorTokens.textPrimary,
-                    marginBottom: "0.45rem",
-                  }}
-                >
-                  {t("productImproveStage1.confirmDialogTitle")}
-                </div>
-                <div
-                  style={{
-                    fontSize: "0.8125rem",
-                    color: pageColorTokens.textSecondary,
-                    lineHeight: 1.5,
-                    marginBottom: "0.9rem",
-                  }}
-                >
-                  {t("productImproveStage1.confirmDialogDesc")}
-                </div>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "8px 16px",
-                    marginBottom: "0.9rem",
-                  }}
-                >
-                  {confirmSummaryItems.map((item) => (
-                    <div key={item.key} style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: "0.6875rem", color: pageColorTokens.textSecondary }}>
-                        {item.label}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "0.8125rem",
-                          color: pageColorTokens.textPrimary,
-                          fontWeight: 600,
-                          marginTop: 3,
-                          wordBreak: "break-word",
-                        }}
-                      >
-                        {item.value}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div
-                  style={{
-                    fontSize: "0.75rem",
-                    color: pageColorTokens.textSecondary,
-                    lineHeight: 1.5,
-                    marginBottom: "1rem",
-                  }}
-                >
-                  {t("productImproveStage1.confirmDialogFootnote")}
-                </div>
+            <DialogShell
+              open={confirmOpen}
+              width={460}
+              closeDisabled={isSubmitting}
+              onClose={() => setConfirmOpen(false)}
+              title={t("productImproveStage1.confirmDialogTitle")}
+              description={t("productImproveStage1.confirmDialogDesc")}
+              footer={
                 <s-stack direction="inline" gap="small">
                   <s-button
                     type="button"
@@ -487,8 +408,44 @@ export function ProductImprovePage() {
                       : t("productImproveStage1.confirmAndCreate")}
                   </s-button>
                 </s-stack>
+              }
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "8px 16px",
+                }}
+              >
+                {confirmSummaryItems.map((item) => (
+                  <div key={item.key} style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: "0.6875rem", color: pageColorTokens.textSecondary }}>
+                      {item.label}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "0.8125rem",
+                        color: pageColorTokens.textPrimary,
+                        fontWeight: 600,
+                        marginTop: 3,
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {item.value}
+                    </div>
+                  </div>
+                ))}
               </div>
-            </dialog>
+              <div
+                style={{
+                  fontSize: "0.75rem",
+                  color: pageColorTokens.textSecondary,
+                  lineHeight: 1.5,
+                }}
+              >
+                {t("productImproveStage1.confirmDialogFootnote")}
+              </div>
+            </DialogShell>
           </>
         )}
 
