@@ -47,6 +47,12 @@ export default function VisitSource() {
   const [page, setPage] = useState(1);
   const pageSize = 50;
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.has("shop")) setShop(params.get("shop") || "");
+    if (params.has("utm")) setUtm(params.get("utm") || "");
+  }, []);
+
   const load = useCallback(() => {
     setLoading(true);
     fetchVisitSources({
