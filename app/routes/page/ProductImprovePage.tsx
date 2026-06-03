@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
-import { useFetcher, useLoaderData, useLocation, useNavigate } from "react-router";
+import { useFetcher, useLoaderData, useLocation } from "react-router";
 import type { loader } from "../app.product-improve";
 import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
 import { LanguageSelector } from "../component/common/LanguageSelector";
@@ -28,15 +28,10 @@ const footerDividerStyle = {
   color: pageColorTokens.textFootnote,
 };
 const footerDockStyle = {
-  position: "fixed" as const,
-  left: "50%",
-  bottom: "16px",
-  transform: "translateX(-50%)",
   display: "flex",
   justifyContent: "center",
-  width: "calc(100% - 32px)",
-  pointerEvents: "none" as const,
-  zIndex: 20,
+  width: "100%",
+  marginTop: "0.5rem",
 };
 const footerContentStyle = {
   display: "flex",
@@ -48,17 +43,34 @@ const footerContentStyle = {
   lineHeight: 1.45,
   color: pageColorTokens.textSecondary,
   textAlign: "center" as const,
-  pointerEvents: "auto" as const,
 };
+
+function readPageTabFromSearch(search: string): PageTab {
+  return new URLSearchParams(search.startsWith("?") ? search.slice(1) : search).get("tab") ===
+    "tasks"
+    ? "tasks"
+    : "config";
+}
+
+function buildSearchWithoutTab(search: string): string {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  params.delete("tab");
+  const serialized = params.toString();
+  return serialized ? `?${serialized}` : "";
+}
 
 export function ProductImprovePage() {
   const shopify = useAppBridge();
   const { t } = useTranslation();
   const loaderData = useLoaderData<typeof loader>();
   const location = useLocation();
-  const navigate = useNavigate();
   const billing = loaderData.billing;
   const [tasks, setTasks] = useState<AITaskItem[]>(loaderData.recentTasks);
+  const [pageTab, setPageTabState] = useState<PageTab>(() =>
+    readPageTabFromSearch(
+      typeof window !== "undefined" ? window.location.search : location.search,
+    ),
+  );
 
   const shopLocales = loaderData.shopLocales;
   const [selectedProduct, setSelectedProduct] = useState<ProductSelectorSelection | null>(null);
@@ -76,28 +88,27 @@ export function ProductImprovePage() {
     | { success: false; errorMsg: string }
     | undefined;
 
-  const search = location.search;
-  const pageTab: PageTab =
-    new URLSearchParams(search.startsWith("?") ? search.slice(1) : search).get("tab") ===
-    "tasks"
-      ? "tasks"
-      : "config";
+  const search = buildSearchWithoutTab(location.search);
 
   function setPageTab(nextTab: PageTab) {
-    const params = new URLSearchParams(
-      search.startsWith("?") ? search.slice(1) : search,
-    );
+    setPageTabState(nextTab);
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
     if (nextTab === "config") {
-      params.delete("tab");
+      url.searchParams.delete("tab");
     } else {
-      params.set("tab", nextTab);
+      url.searchParams.set("tab", nextTab);
     }
-    const nextSearch = params.toString();
-    navigate(
-      { search: nextSearch ? `?${nextSearch}` : "" },
-      { replace: true },
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
     );
   }
+
+  useEffect(() => {
+    setPageTabState(readPageTabFromSearch(location.search));
+  }, [location.search]);
 
   const runningCount = tasks.filter((task) => task.status === "running").length;
 
@@ -264,7 +275,7 @@ export function ProductImprovePage() {
 
   return (
     <s-page heading={t("generate.pageTitle")}>
-      <div style={{ ...pageContentStyle, paddingBottom: "5rem" }}>
+      <div style={pageContentStyle}>
         {billing.billingRequired && !billing.hasAccess ? (
           <s-banner tone="warning">
             {t("billing.lowBalanceWarning")}{" "}
