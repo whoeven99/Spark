@@ -27,7 +27,8 @@
     "turso:migrate:test": "node scripts/turso-migrate.cjs test",
     "turso:migrate:prod": "node scripts/turso-migrate.cjs prod",
     "render:digest": "node scripts/render-daily-log-digest.cjs",
-    "test:render-digest": "node --test scripts/render-log-classify.test.cjs"
+    "test:render-digest": "node --test scripts/render-log-classify.test.cjs",
+    "orders:create": "node scripts/create-test-orders.mjs"
   },
   "type": "module",
   "engines": {

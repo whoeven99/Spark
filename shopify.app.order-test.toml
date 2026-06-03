@@ -1,0 +1,52 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "3a460c00c1352791a16349b628214e60"
+application_url = "https://example.com"
+embedded = true
+name = "order test"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_orders,read_fulfillments,read_inventory,write_products,read_translations,write_translations,read_locales,read_content,read_products,write_orders"
+
+[auth]
+redirect_urls = [ ]
+
+[webhooks]
+api_version = "2026-04"
+
+[[webhooks.subscriptions]]
+topics = ["app/uninstalled"]
+uri = "https://order-monitor-test.onrender.com/webhooks/app/uninstalled"
+
+[[webhooks.subscriptions]]
+topics = ["app/scopes_update"]
+uri = "https://order-monitor-test.onrender.com/webhooks/app/scopes_update"
+
+[[webhooks.subscriptions]]
+topics = ["orders/paid"]
+uri = "https://order-monitor-test.onrender.com/webhooks/orders/paid"
+
+[[webhooks.subscriptions]]
+topics = ["orders/cancelled"]
+uri = "https://order-monitor-test.onrender.com/webhooks/orders/cancelled"
+
+[[webhooks.subscriptions]]
+topics = ["refunds/create"]
+uri = "https://order-monitor-test.onrender.com/webhooks/refunds/create"
+
+[[webhooks.subscriptions]]
+topics = ["fulfillments/create"]
+uri = "https://order-monitor-test.onrender.com/webhooks/fulfillments/create"
+
+[[webhooks.subscriptions]]
+topics = ["fulfillments/update"]
+uri = "https://order-monitor-test.onrender.com/webhooks/fulfillments/update"
+
+[[webhooks.subscriptions]]
+topics = ["inventory_levels/update"]
+uri = "https://order-monitor-test.onrender.com/webhooks/inventory_levels/update"
+
+
+[build]
+automatically_update_urls_on_dev = true
