@@ -91,7 +91,7 @@ function resolveShopAdminIdentifier(shopDomain: string | undefined): string {
 
 /** 邮件 Admin 链接 apps 路径段；与内嵌路由 home 可能不一致。 */
 const SHOPIFY_ADMIN_APP_PATH_BY_ENTRY: Partial<Record<AppEntry, string>> = {
-  "product-improve": "ciwi-ai-product-improve/app/product-improve",
+  "product-improve": "ciwi-image-translation/app/product-improve",
 };
 
 function resolveAppAdminPath(appKey: string | undefined): string {

@@ -7,7 +7,7 @@ const DEFAULT_SUPPORT_EMAIL = MERCHANT_SUPPORT_EMAIL;
 
 /** APP_ENTRY key → 人类可读展示名（优先级低于 NOTIFICATION_APP_NAME 环境变量）。 */
 const APP_ENTRY_DISPLAY_NAMES: Partial<Record<string, string>> = {
-  "product-improve": "Ciwi:ai-Product Improve",
+  "product-improve": "Ciwi.ai: Image & Alt Translate",
 };
 
 function resolveSupportEmail(): string {
