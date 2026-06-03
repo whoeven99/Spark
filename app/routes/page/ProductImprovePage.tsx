@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useFetcher, useLoaderData } from "react-router";
 import type { loader } from "../app.product-improve";
 import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
+import { LanguageSelector } from "../component/common/LanguageSelector";
 import { ProductSelector } from "../component/product/ProductSelector";
 import { ProductImproveTaskListPage } from "../component/productImprove/ProductImproveTaskListPage";
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
@@ -24,6 +25,16 @@ import {
 type PageTab = "config" | "tasks";
 const ESTIMATED_TOKENS = 320;
 const ESTIMATED_DURATION = "1-2 min";
+const footerRowStyle = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "0.75rem",
+  flexWrap: "wrap" as const,
+};
+const footerDividerStyle = {
+  color: pageColorTokens.textFootnote,
+};
 
 export function ProductImprovePage() {
   const shopify = useAppBridge();
@@ -442,7 +453,20 @@ export function ProductImprovePage() {
           />
         )}
 
-        <p style={pageTrustFootnoteStyle}>{t("generate.pageFootnote")}</p>
+        <div style={pageTrustFootnoteStyle}>
+          <div style={footerRowStyle}>
+            <LanguageSelector variant="inline" />
+            <span aria-hidden="true" style={footerDividerStyle}>
+              |
+            </span>
+            <span>
+              Contact Us:{" "}
+              <a href="mailto:support@ciwi.ai" style={{ color: "inherit" }}>
+                support@ciwi.ai
+              </a>
+            </span>
+          </div>
+        </div>
       </div>
     </s-page>
   );
