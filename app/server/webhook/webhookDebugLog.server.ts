@@ -80,13 +80,13 @@ export async function authenticateWebhookLogged(request: Request) {
   return result;
 }
 
-export async function returnWebhookOk(params: {
+export function returnWebhookOk(params: {
   shop: string;
   topic: string;
   init?: ResponseInit;
-}): Promise<Response> {
+}): Response {
   const response = new Response(null, params.init);
-  await logWebhookResponse(response, {
+  void logWebhookResponse(response, {
     shop: params.shop,
     topic: params.topic,
   });

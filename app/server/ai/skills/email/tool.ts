@@ -54,17 +54,11 @@ export function createSendTemplateEmailTool(context: AgentContext): DynamicStruc
         });
       }
 
-      const agentKeyCount = Object.keys(templateData ?? {}).length;
       const enrichedTemplateData = await enrichAgentTemplateData(
         templateId,
         context,
         templateData,
         shopInfo,
-      );
-      const enrichedKeyCount = Object.keys(enrichedTemplateData).length;
-
-      console.info(
-        `${SEND_TEMPLATE_EMAIL_LOG_PREFIX} start requestId=${requestId} scenario=${scenario} templateId=${templateId} templateDataKeyCount=${agentKeyCount}->${enrichedKeyCount}`,
       );
 
       const result = await sendTemplateEmail({
@@ -74,9 +68,6 @@ export function createSendTemplateEmailTool(context: AgentContext): DynamicStruc
         templateData: enrichedTemplateData,
       });
 
-      console.info(
-        `${SEND_TEMPLATE_EMAIL_LOG_PREFIX} done requestId=${requestId} ok=${String(result.ok)}`,
-      );
       return formatToolResult(result);
     },
   });

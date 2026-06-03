@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { getAppEntry } from "../config/appEntry.server";
 import { handleAppPurchaseOneTimeWebhook } from "../server/billing/index.server";
+import { runWebhookWorkInBackground } from "../server/webhook/runWebhookWork.server";
 import {
   authenticateWebhookLogged,
   returnWebhookOk,
@@ -8,16 +9,16 @@ import {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { shop, topic, payload } = await authenticateWebhookLogged(request);
+  const appName = getAppEntry();
 
-  try {
-    await handleAppPurchaseOneTimeWebhook({
+  runWebhookWorkInBackground(
+    handleAppPurchaseOneTimeWebhook({
       shop,
       payload,
-      appName: getAppEntry(),
-    });
-  } catch (error) {
-    console.error("[Billing] app_purchases_one_time/update handler failed:", error);
-  }
+      appName,
+    }),
+    { shop, topic, label: "app_purchases_one_time/update" },
+  );
 
   return returnWebhookOk({ shop, topic });
 };

@@ -30,6 +30,18 @@ describe("buildNotificationTemplateData", () => {
     expect(data.creditUnit).toBe("");
   });
 
+  it("maps product-improve appKey to Shopify admin app path", () => {
+    const data = buildNotificationTemplateData(
+      { ...appConfig, appKey: "product-improve" },
+      {
+        shopDomain: "demo.myshopify.com",
+        occurredAtUtc: "2026-05-28 02:00 UTC",
+      },
+    );
+
+    expect(data.path).toBe("app/ciwi-ai-product-improve");
+  });
+
   it("maps credit account change fields with locale zh-CN", () => {
     const data = buildNotificationTemplateData(
       appConfig,

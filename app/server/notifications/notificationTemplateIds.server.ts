@@ -11,6 +11,16 @@ export const NOTIFICATION_TEMPLATE_IDS = {
   subscriptionStarted: 180503,
 } as const satisfies Record<MerchantNotificationEvent, number>;
 
+/** 腾讯云 agent-*-en 模板 ID（与控制台一致）。 */
+export const NOTIFICATION_TEMPLATE_IDS_EN = {
+  appInstalled: 184217,
+  appUninstalled: 184219,
+  purchaseCreated: 184220,
+  subscriptionCanceled: 184221,
+  subscriptionChanged: 184222,
+  subscriptionStarted: 184223,
+} as const satisfies Record<MerchantNotificationEvent, number>;
+
 const ENV_KEYS: Record<MerchantNotificationEvent, string> = {
   appInstalled: "NOTIFICATION_TEMPLATE_ID_APP_INSTALLED",
   appUninstalled: "NOTIFICATION_TEMPLATE_ID_APP_UNINSTALLED",
@@ -41,12 +51,8 @@ export function resolveNotificationTemplateId(
   locale: NotificationLocale = "zh-CN",
 ): number {
   if (locale === "en") {
-    const enId = parseEnvTemplateId(process.env[ENV_KEYS_EN[event]]);
-    if (enId) return enId;
-
-    console.warn(
-      `[Notification] EN template id not configured for event=${event}; falling back to zh-CN template ${NOTIFICATION_TEMPLATE_IDS[event]}`,
-    );
+    const fromEnv = parseEnvTemplateId(process.env[ENV_KEYS_EN[event]]);
+    return fromEnv ?? NOTIFICATION_TEMPLATE_IDS_EN[event];
   }
 
   const fromEnv = parseEnvTemplateId(process.env[ENV_KEYS[event]]);

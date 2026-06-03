@@ -12,12 +12,18 @@ import {
   loadBillingPageData,
   startSubscriptionCheckout,
   startTokenPackCheckout,
+  syncPendingBillingFromShopify,
 } from "../server/billing/index.server";
 import { BillingPage } from "./page/BillingPage";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const appName = getAppEntry();
+  await syncPendingBillingFromShopify({
+    shop: session.shop,
+    appName,
+    admin,
+  });
   return loadBillingPageData(session.shop, appName);
 };
 

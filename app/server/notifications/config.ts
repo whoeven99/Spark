@@ -1,17 +1,25 @@
-import { loadEmailConfig } from "../email/config/emailConfig.server";
 import { getAppEntry, isAppEntryKey } from "../../config/appEntry.server";
 import type { NotificationAppConfig } from "./types";
+
+import { MERCHANT_SUPPORT_EMAIL } from "../email/templates/emailTemplates.server";
+
+const DEFAULT_SUPPORT_EMAIL = MERCHANT_SUPPORT_EMAIL;
+
+/** APP_ENTRY key → 人类可读展示名（优先级低于 NOTIFICATION_APP_NAME 环境变量）。 */
+const APP_ENTRY_DISPLAY_NAMES: Partial<Record<string, string>> = {
+  "product-improve": "Ciwi.ai: Image & Alt Translate",
+};
+
 function resolveSupportEmail(): string {
-  const fromEnv = process.env.TENCENT_FROM_EMAIL?.trim();
-  if (fromEnv) return fromEnv;
-  const config = loadEmailConfig();
-  return config.tencent?.fromEmail ?? "support@msg.ciwi.ai";
+  return process.env.NOTIFICATION_SUPPORT_EMAIL?.trim() || DEFAULT_SUPPORT_EMAIL;
 }
 
 function buildConfigForAppKey(appKey: string): NotificationAppConfig {
   const entry = isAppEntryKey(appKey) ? appKey : getAppEntry();
   const displayName =
-    process.env.NOTIFICATION_APP_NAME?.trim() || entry;
+    process.env.NOTIFICATION_APP_NAME?.trim() ||
+    APP_ENTRY_DISPLAY_NAMES[entry] ||
+    entry;
 
   return {
     appKey: entry,

@@ -34,6 +34,8 @@ model Session {
   emailVerified Boolean?  @default(false)
   refreshToken        String?
   refreshTokenExpires DateTime?
+  shopName       String?
+  shopOwnerName  String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

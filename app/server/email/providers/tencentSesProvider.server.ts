@@ -1,14 +1,7 @@
 import { ses } from "tencentcloud-sdk-nodejs-ses";
 import type { EmailConfig } from "../config/emailConfig.server";
 import { loadEmailConfig } from "../config/emailConfig.server";
-import { buildSendEmailRequestLog } from "../emailSendLogPayload.server";
-import {
-  EMAIL_LOG,
-  logEmailDetail,
-  logEmailError,
-  logEmailInfo,
-  maskEmailList,
-} from "../emailLog.server";
+import { EMAIL_LOG, logEmailError } from "../emailLog.server";
 import {
   createEmailError,
   EMAIL_ERROR_CODES,
@@ -21,7 +14,6 @@ import type { EmailProvider } from "./emailProvider";
 const PROVIDER_NAME = "tencent";
 
 type SesClient = InstanceType<typeof ses.v20201002.Client>;
-
 let cachedClient: SesClient | null = null;
 let cachedClientKey: string | null = null;
 
@@ -42,7 +34,6 @@ function getSesClient(config: NonNullable<EmailConfig["tencent"]>): SesClient {
     region: config.region,
   });
   cachedClientKey = key;
-  logEmailInfo(EMAIL_LOG.tencent, `SesClient initialized region=${config.region}`);
   return cachedClient;
 }
 
@@ -92,24 +83,9 @@ export function createTencentSesProvider(
         },
       };
 
-      logEmailDetail(EMAIL_LOG.tencent, "before-sdk-call", {
-        region: tencent.region,
-        ...buildSendEmailRequestLog(request),
-        sdkParams: {
-          FromEmailAddress: request.from,
-          Subject: request.subject,
-          Destination: [request.to],
-          Cc: maskEmailList(cc),
-          Template: {
-            TemplateID: request.templateId,
-            TemplateData: templateDataJson,
-          },
-        },
-      });
 
       try {
         const client = getSesClient(tencent);
-        const sdkStartedAt = Date.now();
         const resp = await retryWithTimeout(
           () => client.SendEmail(sendEmailParams),
           {
@@ -127,60 +103,17 @@ export function createTencentSesProvider(
         );
 
         const requestId = resp.RequestId?.trim();
-        const messageId =
-          typeof resp === "object" &&
-          resp !== null &&
-          "MessageId" in resp &&
-          typeof (resp as { MessageId?: string }).MessageId === "string"
-            ? (resp as { MessageId: string }).MessageId
-            : undefined;
-
-        logEmailDetail(EMAIL_LOG.tencent, "after-sdk-call", {
-          sendSuccess: Boolean(requestId),
-          requestId: requestId ?? null,
-          messageId: messageId ?? null,
-          templateId: request.templateId,
-          elapsedMs: Date.now() - sdkStartedAt,
-          responseKeys:
-            typeof resp === "object" && resp !== null
-              ? Object.keys(resp as object)
-              : [],
-        });
-
         if (!requestId) {
+
           return wrapSdkError(
             "Tencent SES response missing RequestId",
             resp,
           );
         }
-
+        
         return { ok: true, requestId, provider: PROVIDER_NAME };
       } catch (error) {
-        const tencentError =
-          typeof error === "object" && error !== null
-            ? {
-                code:
-                  "code" in error
-                    ? String((error as { code?: unknown }).code)
-                    : undefined,
-                requestId:
-                  "requestId" in error
-                    ? String((error as { requestId?: unknown }).requestId)
-                    : undefined,
-              }
-            : undefined;
 
-        logEmailDetail(EMAIL_LOG.tencent, "after-sdk-call", {
-          sendSuccess: false,
-          templateId: request.templateId,
-          tencentError,
-        });
-        logEmailError(
-          EMAIL_LOG.error,
-          "SendEmail failed",
-          error,
-          { templateId: request.templateId, to: request.to },
-        );
         const message =
           error instanceof Error ? error.message : "Tencent SES send failed";
         return wrapSdkError(message, error);
