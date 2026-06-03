@@ -9,6 +9,9 @@ import {
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import { sendTemplateEmailToolDefinition } from "./email/tool";
 import { productOptimizationSkills } from "./productOptimization";
+import { productCatalogSkills } from "./productCatalog";
+import { listMyTasksToolDefinition } from "./taskHistory/tool";
+import { getBillingStatusToolDefinition } from "./billingStatus/tool";
 
 // ==========================================
 // 注册各类核心与扩展 Tools 到全局注册表
@@ -58,4 +61,11 @@ for (const skill of productOptimizationSkills) {
   globalToolRegistry.register(skill);
 }
 
+// 商品目录 Skill 组：商品搜索、商品详情
+for (const skill of productCatalogSkills) {
+  globalToolRegistry.register(skill);
+}
+
+globalToolRegistry.register(listMyTasksToolDefinition);
+globalToolRegistry.register(getBillingStatusToolDefinition);
 globalToolRegistry.register(sendTemplateEmailToolDefinition);
