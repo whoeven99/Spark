@@ -2,6 +2,7 @@ import type {
   ActionFunctionArgs,
   HeadersFunction,
   LoaderFunctionArgs,
+  ShouldRevalidateFunctionArgs,
 } from "react-router";
 import { data, redirect } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -168,6 +169,30 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 export default function AppProductImprove() {
   return <ProductImprovePage />;
+}
+
+function serializeSearchWithoutTab(url: URL): string {
+  const params = new URLSearchParams(url.search);
+  params.delete("tab");
+  return params.toString();
+}
+
+export function shouldRevalidate({
+  currentUrl,
+  nextUrl,
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) {
+  const isSamePath = currentUrl.pathname === nextUrl.pathname;
+  const onlyTabChanged =
+    isSamePath &&
+    serializeSearchWithoutTab(currentUrl) === serializeSearchWithoutTab(nextUrl) &&
+    currentUrl.searchParams.get("tab") !== nextUrl.searchParams.get("tab");
+
+  if (onlyTabChanged) {
+    return false;
+  }
+
+  return defaultShouldRevalidate;
 }
 
 export const headers: HeadersFunction = (headersArgs) => {

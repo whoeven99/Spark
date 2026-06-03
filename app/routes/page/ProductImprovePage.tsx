@@ -19,21 +19,36 @@ import {
   pageHintTextStyle,
   pageLinkHintStyle,
   pageSelectStyle,
-  pageTrustFootnoteStyle,
 } from "./pageUiStyles";
 
 type PageTab = "config" | "tasks";
 const ESTIMATED_TOKENS = 320;
 const ESTIMATED_DURATION = "1-2 min";
-const footerRowStyle = {
+const footerDividerStyle = {
+  color: pageColorTokens.textFootnote,
+};
+const footerDockStyle = {
+  position: "fixed" as const,
+  left: "50%",
+  bottom: "16px",
+  transform: "translateX(-50%)",
+  display: "flex",
+  justifyContent: "center",
+  width: "calc(100% - 32px)",
+  pointerEvents: "none" as const,
+  zIndex: 20,
+};
+const footerContentStyle = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   gap: "0.75rem",
   flexWrap: "wrap" as const,
-};
-const footerDividerStyle = {
-  color: pageColorTokens.textFootnote,
+  fontSize: "0.75rem",
+  lineHeight: 1.45,
+  color: pageColorTokens.textSecondary,
+  textAlign: "center" as const,
+  pointerEvents: "auto" as const,
 };
 
 export function ProductImprovePage() {
@@ -249,7 +264,7 @@ export function ProductImprovePage() {
 
   return (
     <s-page heading={t("generate.pageTitle")}>
-      <div style={pageContentStyle}>
+      <div style={{ ...pageContentStyle, paddingBottom: "5rem" }}>
         {billing.billingRequired && !billing.hasAccess ? (
           <s-banner tone="warning">
             {t("billing.lowBalanceWarning")}{" "}
@@ -474,8 +489,8 @@ export function ProductImprovePage() {
           />
         )}
 
-        <div style={pageTrustFootnoteStyle}>
-          <div style={footerRowStyle}>
+        <div style={footerDockStyle}>
+          <div style={footerContentStyle}>
             <LanguageSelector variant="inline" />
             <span aria-hidden="true" style={footerDividerStyle}>
               |
