@@ -1,13 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
+import { NOTIFICATION_TEMPLATE_IDS } from "../../notifications/notificationTemplateIds.server";
 import { EMAIL_ERROR_CODES } from "../types/emailError";
 import type { EmailProvider } from "../providers/emailProvider";
 import { sendTemplateEmail } from "./emailService.server";
+
+const testTemplateId = NOTIFICATION_TEMPLATE_IDS.appInstalled;
 
 describe("sendTemplateEmail", () => {
   it("returns validation error for invalid email", async () => {
     const result = await sendTemplateEmail(
       {
-        templateId: 137916,
+        templateId: testTemplateId,
         subject: "Test",
         to: "not-an-email",
         templateData: {},
@@ -50,7 +53,7 @@ describe("sendTemplateEmail", () => {
 
     const result = await sendTemplateEmail(
       {
-        templateId: 137916,
+        templateId: testTemplateId,
         subject: "Success",
         to: "user@example.com",
         templateData: { username: "Ada" },
@@ -95,7 +98,7 @@ describe("sendTemplateEmail", () => {
 
     await sendTemplateEmail(
       {
-        templateId: 137916,
+        templateId: testTemplateId,
         subject: "Success",
         to: "user@example.com",
       },

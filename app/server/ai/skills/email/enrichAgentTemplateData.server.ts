@@ -1,5 +1,5 @@
 import { getAppEntry } from "../../../../config/appEntry.server";
-import { EMAIL_TEMPLATE_IDS } from "../../../email/templates/emailTemplates.server";
+import { NOTIFICATION_TEMPLATE_IDS } from "../../../notifications/notificationTemplateIds.server";
 import { buildNotificationDashboardUrl } from "../../../notifications/buildNotificationDashboardUrl.server";
 import { buildNotificationTemplateData } from "../../../notifications/buildNotificationTemplateData.server";
 import {
@@ -74,7 +74,7 @@ function buildBaseVariables(
   const resolvedShop =
     shop || shopInfo?.myshopifyDomain?.trim() || "";
 
-  if (templateId === EMAIL_TEMPLATE_IDS.APP_INSTALL_SUCCESS) {
+  if (templateId === NOTIFICATION_TEMPLATE_IDS.appInstalled) {
     return buildAppInstalledVariables({
       shop: resolvedShop,
       installedAt: now,
@@ -82,7 +82,7 @@ function buildBaseVariables(
     });
   }
 
-  if (templateId === EMAIL_TEMPLATE_IDS.APP_UNINSTALL) {
+  if (templateId === NOTIFICATION_TEMPLATE_IDS.appUninstalled) {
     return buildAppUninstalledVariables({
       shop: resolvedShop,
       uninstalledAt: now,
