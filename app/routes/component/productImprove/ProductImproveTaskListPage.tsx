@@ -7,23 +7,6 @@ import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 
 type TaskViewTab = "current" | "history";
 
-function getTaskPriority(status: AITaskStatus): number {
-  switch (status) {
-    case "pending_review":
-      return 1;
-    case "scored":
-      return 2;
-    case "running":
-      return 3;
-    case "failed":
-      return 4;
-    case "applied":
-      return 5;
-    default:
-      return 6;
-  }
-}
-
 type Props = {
   tasks: AITaskItem[];
   locationSearch: string;
@@ -65,11 +48,9 @@ export function ProductImproveTaskListPage({
     }
   }
 
-  const sorted = [...localTasks].sort((a, b) => {
-    const priorityDiff = getTaskPriority(a.status) - getTaskPriority(b.status);
-    if (priorityDiff !== 0) return priorityDiff;
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  });
+  const sorted = [...localTasks].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   const currentTasks = sorted.filter(
     (task) => new Date(task.createdAt).getTime() >= cutoff,

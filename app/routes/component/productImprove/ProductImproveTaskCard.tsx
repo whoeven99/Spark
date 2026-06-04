@@ -161,7 +161,6 @@ function resolveCardActions(params: {
     case "running":
       return [
         { label: t("productImproveStage1.actionStopTask"), tone: "primary", disabled: true },
-        { label: t("productImproveStage1.actionViewTaskDetail"), tone: "secondary", onClick: onOpenDetail },
         {
           label: deleting ? t("common.deleting") : t("common.delete"),
           tone: "subtle",
