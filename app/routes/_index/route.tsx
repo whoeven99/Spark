@@ -10,7 +10,7 @@ import {
   isEmbeddedAdminEntry,
   resolveShopQueryFromRequest,
 } from "../../server/shopify/embeddedEntry.server";
-import { login } from "../../shopify.server";
+import { login, authenticate } from "../../shopify.server";
 
 import styles from "./styles.module.css";
 
@@ -28,9 +28,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   if (isEmbeddedAdminEntry(request)) {
+    // 尝试让 Shopify 库通过 session token 等方式认证
+    const { session } = await authenticate.admin(request);
+    const targetUrl = new URL(request.url);
+    if (!targetUrl.searchParams.get("shop") && session.shop) {
+      targetUrl.searchParams.set("shop", session.shop);
+    }
     const { home } = getAppEntryConfig();
     const path = isBillingReturnRequest(request) ? BILLING_PAGE_PATH : home;
-    throw redirect(buildEmbeddedAppPath(path, request));
+    throw redirect(buildEmbeddedAppPath(path, new Request(targetUrl.toString(), request)));
   }
 
   return { showForm: Boolean(login) };
