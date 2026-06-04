@@ -29,9 +29,140 @@ import styles from "../component/billing/billingPage.module.css";
 import { pageContentStyle } from "./pageUiStyles";
 
 const EMPTY = "-";
+const MOCK_PLAN_SUFFIX = "_mock";
+
+function clonePlan(plan: PlanRecord, overrides: Partial<PlanRecord>): PlanRecord {
+  return { ...plan, ...overrides };
+}
+
+function createMockPlan(params: {
+  appName: string;
+  planKey: string;
+  billingInterval: "MONTHLY" | "ANNUAL";
+  displayName: string;
+  tokens: number;
+  priceAmount: string;
+  currencyCode: string;
+  trialDays: number | null;
+}): PlanRecord {
+  return {
+    planKey: `${params.planKey}${MOCK_PLAN_SUFFIX}`,
+    appName: params.appName,
+    kind: "SUBSCRIPTION",
+    billingInterval: params.billingInterval,
+    displayName: params.displayName,
+    tokens: params.tokens,
+    priceAmount: params.priceAmount,
+    currencyCode: params.currencyCode,
+    trialDays: params.trialDays,
+    shopifyPlanName: null,
+  };
+}
+
+function isMockVisualPlan(plan: PlanRecord): boolean {
+  return plan.planKey.endsWith(MOCK_PLAN_SUFFIX);
+}
+
+function buildMockBillingPlans(params: {
+  appName: string;
+  trialPlan: PlanRecord | null;
+  subscriptionPlans: PlanRecord[];
+}): { trialPlan: PlanRecord | null; subscriptionPlans: PlanRecord[] } {
+  const currencyCode =
+    params.subscriptionPlans[0]?.currencyCode ?? params.trialPlan?.currencyCode ?? "USD";
+  const baseMonthly = pickSubscriptionPlan(params.subscriptionPlans, "MONTHLY", "base");
+  const baseAnnual = pickSubscriptionPlan(params.subscriptionPlans, "ANNUAL", "base");
+  const proMonthly = pickSubscriptionPlan(params.subscriptionPlans, "MONTHLY", "pro");
+  const proAnnual = pickSubscriptionPlan(params.subscriptionPlans, "ANNUAL", "pro");
+  const premiumMonthly = pickSubscriptionPlan(params.subscriptionPlans, "MONTHLY", "premium");
+  const premiumAnnual = pickSubscriptionPlan(params.subscriptionPlans, "ANNUAL", "premium");
+
+  const trialPlan = params.trialPlan
+    ? clonePlan(params.trialPlan, {
+        displayName: "Free plan",
+        tokens: 10000,
+        priceAmount: "0",
+      })
+    : null;
+
+  const mockedPlans: PlanRecord[] = [];
+
+  if (baseMonthly) {
+    mockedPlans.push(
+      clonePlan(baseMonthly, {
+        displayName: "Basic (Monthly)",
+        tokens: 500000,
+        priceAmount: "9.99",
+        trialDays: 7,
+      }),
+    );
+  }
+  if (baseAnnual) {
+    mockedPlans.push(
+      clonePlan(baseAnnual, {
+        displayName: "Basic (Annual)",
+        tokens: 6500000,
+        priceAmount: "99.99",
+        trialDays: 7,
+      }),
+    );
+  }
+  if (proMonthly) {
+    mockedPlans.push(
+      clonePlan(proMonthly, {
+        displayName: "Pro (Monthly)",
+        tokens: 2500000,
+        priceAmount: "39.99",
+        trialDays: 7,
+      }),
+    );
+  }
+  if (proAnnual) {
+    mockedPlans.push(
+      clonePlan(proAnnual, {
+        displayName: "Pro (Annual)",
+        tokens: 32500000,
+        priceAmount: "399.99",
+        trialDays: 7,
+      }),
+    );
+  }
+
+  mockedPlans.push(
+    premiumMonthly ??
+      createMockPlan({
+        appName: params.appName,
+        planKey: "pi_premium_monthly",
+        billingInterval: "MONTHLY",
+        displayName: "Premium (Monthly)",
+        tokens: 10000000,
+        priceAmount: "99.99",
+        currencyCode,
+        trialDays: 7,
+      }),
+  );
+  mockedPlans.push(
+    premiumAnnual ??
+      createMockPlan({
+        appName: params.appName,
+        planKey: "pi_premium_annual",
+        billingInterval: "ANNUAL",
+        displayName: "Premium (Annual)",
+        tokens: 130000000,
+        priceAmount: "999.99",
+        currencyCode,
+        trialDays: 7,
+      }),
+  );
+
+  return {
+    trialPlan,
+    subscriptionPlans: mockedPlans,
+  };
+}
 
 function compareColumnClass(
-  column: "free" | "base" | "pro",
+  column: string,
   recommendedTier: PlanTier,
 ): string {
   if (column === recommendedTier) return styles.compareColHighlight;
@@ -143,15 +274,100 @@ function resolveToolUsageFeatureLabel(
   }
 }
 
-function PlanFeatureList({ items }: { items: string[] }) {
+type PlanFeatureItem = {
+  text: string;
+  included?: boolean;
+};
+
+function buildFreePlanFeatures(locale: string, tokens: number): PlanFeatureItem[] {
+  const count = tokens.toLocaleString(locale);
+  if (locale.toLowerCase().startsWith("zh")) {
+    return [
+      { text: `一次性免费获得 ${count} 积分` },
+      { text: "仅能使用 Google 模型" },
+    ];
+  }
+  return [
+    { text: `One-time ${count} free credits` },
+    { text: "Google models only" },
+  ];
+}
+
+function buildPaidPlanFeatures(plan: PlanRecord, locale: string): PlanFeatureItem[] {
+  const tier = planTierFromPlanKey(plan.planKey);
+  const count = plan.tokens.toLocaleString(locale);
+  if (locale.toLowerCase().startsWith("zh")) {
+    if (tier === "base") {
+      return [
+        { text: `每周期获得 ${count} 积分` },
+        { text: "支持使用 Google、ChatGPT、Claude 等最新文本模型，不支持图片和视频模型" },
+        { text: "不支持跨 app 使用", included: false },
+        { text: "人工支持" },
+      ];
+    }
+    if (tier === "pro") {
+      return [
+        { text: `每周期获得 ${count} 积分` },
+        { text: "支持使用 Google、ChatGPT、Claude 等最新文本模型" },
+        { text: "支持 ChatGPT Images、Nano Banana 等图片模型，不支持视频模型" },
+        { text: "人工支持" },
+      ];
+    }
+    if (tier === "premium") {
+      return [
+        { text: `每周期获得 ${count} 积分` },
+        { text: "支持使用 Google、ChatGPT、Claude 等最新文本模型" },
+        { text: "支持 ChatGPT Images、Nano Banana 等图片模型" },
+        { text: "支持 Seedance、Sora 等视频模型" },
+        { text: "支持跨 app 使用积分（Ciwi 品牌下 App）" },
+        { text: "支持积分转移（在两个同名商店之间）" },
+        { text: "人工支持" },
+      ];
+    }
+  } else {
+    if (tier === "base") {
+      return [
+        { text: `${count} credits per period` },
+        { text: "Access to latest text models including Google, ChatGPT, and Claude; no image or video models" },
+        { text: "No cross-app credit sharing", included: false },
+        { text: "Human support" },
+      ];
+    }
+    if (tier === "pro") {
+      return [
+        { text: `${count} credits per period` },
+        { text: "Access to latest text models including Google, ChatGPT, and Claude" },
+        { text: "Supports image models such as ChatGPT Images and Nano Banana; no video models" },
+        { text: "Human support" },
+      ];
+    }
+    if (tier === "premium") {
+      return [
+        { text: `${count} credits per period` },
+        { text: "Access to latest text models including Google, ChatGPT, and Claude" },
+        { text: "Supports image models such as ChatGPT Images and Nano Banana" },
+        { text: "Supports video models such as Seedance and Sora" },
+        { text: "Supports cross-app credit usage across Ciwi apps" },
+        { text: "Supports credit transfer between stores with the same name" },
+        { text: "Human support" },
+      ];
+    }
+  }
+  return [{ text: `${count} ${locale.toLowerCase().startsWith("zh") ? "积分" : "credits"}` }];
+}
+
+function PlanFeatureList({ items }: { items: PlanFeatureItem[] }) {
   return (
     <ul className={styles.planFeatures}>
-      {items.map((text) => (
-        <li key={text} className={styles.planFeature}>
-          <span className={styles.checkIcon} aria-hidden>
-            {"\u2713"}
+      {items.map((item) => (
+        <li key={item.text} className={styles.planFeature}>
+          <span
+            className={item.included === false ? styles.minusIcon : styles.checkIcon}
+            aria-hidden
+          >
+            {item.included === false ? "\u2212" : "\u2713"}
           </span>
-          <span>{text}</span>
+          <span>{item.text}</span>
         </li>
       ))}
     </ul>
@@ -166,6 +382,7 @@ function PaidPlanCard({
   isPending,
   isSubmitting,
   submittingMode,
+  mockOnly,
   locale,
   t,
   paidFeatures,
@@ -177,9 +394,10 @@ function PaidPlanCard({
   isPending: boolean;
   isSubmitting: boolean;
   submittingMode: "trial" | "paid" | null;
+  mockOnly: boolean;
   locale: string;
   t: (key: string, options?: Record<string, unknown>) => string;
-  paidFeatures: (plan: PlanRecord) => string[];
+  paidFeatures: (plan: PlanRecord) => PlanFeatureItem[];
 }) {
   const periodSuffix = interval === "ANNUAL" ? t("billing.perYear") : t("billing.perMonth");
   const monthlyEquivalent =
@@ -227,7 +445,12 @@ function PaidPlanCard({
                 <input type="hidden" name="intent" value="subscribe" />
                 <input type="hidden" name="planKey" value={plan.planKey} />
                 <input type="hidden" name="trialMode" value="trial" />
-                <button type="submit" className={styles.planPrimaryCta} disabled={isSubmitting}>
+                <button
+                  type="submit"
+                  className={styles.planPrimaryCta}
+                  disabled={isSubmitting || mockOnly}
+                  title={mockOnly ? "当前为前端 mock 展示，暂不支持结账" : undefined}
+                >
                   {isSubmitting && submittingMode === "trial"
                     ? t("billing.redirectingToCheckout")
                     : t("billing.trialDays", { count: plan.trialDays ?? 0 })}
@@ -241,7 +464,8 @@ function PaidPlanCard({
               <button
                 type="submit"
                 className={hasTrial ? styles.planSecondaryCta : styles.planPrimaryCta}
-                disabled={isSubmitting}
+                disabled={isSubmitting || mockOnly}
+                title={mockOnly ? "当前为前端 mock 展示，暂不支持结账" : undefined}
               >
                 {isSubmitting && submittingMode === "paid"
                   ? t("billing.redirectingToCheckout")
@@ -257,9 +481,10 @@ function PaidPlanCard({
 
 export function BillingPage() {
   const {
+    appName,
     billing,
-    trialPlan,
-    subscriptionPlans,
+    trialPlan: rawTrialPlan,
+    subscriptionPlans: rawSubscriptionPlans,
     tokenPacks,
     usageHistory,
     billingHistory,
@@ -288,11 +513,24 @@ export function BillingPage() {
       : "";
   const { t, i18n } = useTranslation();
   const locale = i18n.language;
+  const mockedBillingPlans = useMemo(
+    () =>
+      buildMockBillingPlans({
+        appName,
+        trialPlan: rawTrialPlan,
+        subscriptionPlans: rawSubscriptionPlans,
+      }),
+    [appName, rawSubscriptionPlans, rawTrialPlan],
+  );
+  const trialPlan = mockedBillingPlans.trialPlan;
+  const subscriptionPlans = mockedBillingPlans.subscriptionPlans;
 
   const baseMonthly = pickSubscriptionPlan(subscriptionPlans, "MONTHLY", "base");
   const baseAnnual = pickSubscriptionPlan(subscriptionPlans, "ANNUAL", "base");
   const proMonthly = pickSubscriptionPlan(subscriptionPlans, "MONTHLY", "pro");
   const proAnnual = pickSubscriptionPlan(subscriptionPlans, "ANNUAL", "pro");
+  const premiumMonthly = pickSubscriptionPlan(subscriptionPlans, "MONTHLY", "premium");
+  const premiumAnnual = pickSubscriptionPlan(subscriptionPlans, "ANNUAL", "premium");
 
   const baseAnnualDiscount = useMemo(() => {
     if (!baseMonthly || !baseAnnual) return null;
@@ -304,7 +542,13 @@ export function BillingPage() {
     return computeAnnualDiscountPercent(proMonthly, proAnnual);
   }, [proMonthly, proAnnual]);
 
-  const headerAnnualDiscount = proAnnualDiscount ?? baseAnnualDiscount;
+  const premiumAnnualDiscount = useMemo(() => {
+    if (!premiumMonthly || !premiumAnnual) return null;
+    return computeAnnualDiscountPercent(premiumMonthly, premiumAnnual);
+  }, [premiumMonthly, premiumAnnual]);
+
+  const headerAnnualDiscount =
+    premiumAnnualDiscount ?? proAnnualDiscount ?? baseAnnualDiscount;
 
   const hasIntervalToggle =
     subscriptionPlans.some((p) => p.billingInterval === "MONTHLY") &&
@@ -318,18 +562,11 @@ export function BillingPage() {
   );
   const [showAccountDetailPage, setShowAccountDetailPage] = useState(false);
 
-  const basePlan = pickSubscriptionPlan(subscriptionPlans, interval, "base");
-  const proPlan = pickSubscriptionPlan(subscriptionPlans, interval, "pro");
   const paidPlansForInterval = useMemo(
     () => listSubscriptionPlansForInterval(subscriptionPlans, interval),
     [subscriptionPlans, interval],
   );
-  const paidPlansToShow = useMemo(() => {
-    if (basePlan || proPlan) {
-      return [basePlan, proPlan].filter((p): p is PlanRecord => Boolean(p));
-    }
-    return paidPlansForInterval;
-  }, [basePlan, proPlan, paidPlansForInterval]);
+  const paidPlansToShow = paidPlansForInterval;
   const sub = billing.subscription;
 
   const showSubscriptionPeriodMeta =
@@ -372,8 +609,7 @@ export function BillingPage() {
     sub?.status === "ACTIVE" || sub?.status === "PENDING"
       ? planTierFromPlanKey(sub.planKey)
       : null;
-  const recommendedTier: PlanTier =
-    currentSubscriptionTier ?? (interval === "MONTHLY" ? "base" : "pro");
+  const recommendedTier: PlanTier = currentSubscriptionTier ?? "base";
   const usageLow = usagePercent >= 85;
 
   if (actionData?.ok && "noopCheckout" in actionData && actionData.noopCheckout) {
@@ -384,25 +620,12 @@ export function BillingPage() {
     shopify.toast.show(actionData.error);
   }
 
-  const trialFeatures = [
-    t("billing.featureTrialTokens", {
-      count: (trialPlan?.tokens ?? 10000).toLocaleString(),
-    }),
-    t("billing.featureGenerateDescription"),
-    t("billing.featureNoSubscription"),
-  ];
+  const trialFeatures = useMemo(
+    () => buildFreePlanFeatures(locale, trialPlan?.tokens ?? 10000),
+    [locale, trialPlan?.tokens],
+  );
 
-  const paidFeatures = (plan: PlanRecord) =>
-    [
-      t("billing.featureTokensPerPeriod", {
-        count: plan.tokens.toLocaleString(),
-      }),
-      plan.trialDays
-        ? t("billing.featureShopifyTrial", { count: plan.trialDays })
-        : null,
-      t("billing.featureGenerateDescription"),
-      t("billing.featurePriority"),
-    ].filter((line): line is string => Boolean(line));
+  const paidFeatures = (plan: PlanRecord) => buildPaidPlanFeatures(plan, locale);
 
   const periodSuffix =
     interval === "ANNUAL" ? t("billing.perYear") : t("billing.perMonth");
@@ -415,44 +638,50 @@ export function BillingPage() {
     [subscriptionPlans, tokenPacks, trialPlan],
   );
 
-  const compareRows: {
-    label: string;
-    free: string;
-    base: string;
-    pro: string;
-  }[] = [
+  const compareRows: { label: string; values: string[] }[] = [
     {
       label:
         interval === "MONTHLY"
           ? t("billing.compareMonthlyPrice")
           : t("billing.compareAnnualPrice"),
-      free: formatPlanPrice("0", trialPlan?.currencyCode ?? "USD", locale),
-      base: basePlan ? formatPlanPriceWithPeriod(basePlan) : EMPTY,
-      pro: proPlan ? formatPlanPriceWithPeriod(proPlan) : EMPTY,
+      values: [
+        formatPlanPrice("0", trialPlan?.currencyCode ?? "USD", locale),
+        ...paidPlansToShow.map((plan) => formatPlanPriceWithPeriod(plan)),
+      ],
     },
     {
       label: t("billing.compareAnnualDiscount"),
-      free: EMPTY,
-      base:
-        baseAnnualDiscount != null
-          ? t("billing.discountPercent", { percent: baseAnnualDiscount })
-          : EMPTY,
-      pro:
-        proAnnualDiscount != null
-          ? t("billing.discountPercent", { percent: proAnnualDiscount })
-          : EMPTY,
+      values: [
+        EMPTY,
+        ...paidPlansToShow.map((plan) => {
+          const tier = planTierFromPlanKey(plan.planKey);
+          const discount =
+            tier === "base"
+              ? baseAnnualDiscount
+              : tier === "pro"
+                ? proAnnualDiscount
+                : tier === "premium"
+                  ? premiumAnnualDiscount
+                  : null;
+          return discount != null
+            ? t("billing.discountPercent", { percent: discount })
+            : EMPTY;
+        }),
+      ],
     },
     {
       label: t("billing.compareTokens"),
-      free: trialPlan?.tokens.toLocaleString() ?? EMPTY,
-      base: basePlan?.tokens.toLocaleString() ?? EMPTY,
-      pro: proPlan?.tokens.toLocaleString() ?? EMPTY,
+      values: [
+        trialPlan?.tokens.toLocaleString() ?? EMPTY,
+        ...paidPlansToShow.map((plan) => plan.tokens.toLocaleString()),
+      ],
     },
     {
       label: t("billing.compareTrialDays"),
-      free: EMPTY,
-      base: basePlan?.trialDays?.toString() ?? EMPTY,
-      pro: proPlan?.trialDays?.toString() ?? EMPTY,
+      values: [
+        EMPTY,
+        ...paidPlansToShow.map((plan) => plan.trialDays?.toString() ?? EMPTY),
+      ],
     },
   ];
 
@@ -816,6 +1045,7 @@ export function BillingPage() {
                     isPending={isPendingSubscriptionPlan(plan.planKey, sub)}
                     isSubmitting={subscribingPlanKey === plan.planKey}
                     submittingMode={subscribingPlanKey === plan.planKey ? subscribingMode : null}
+                    mockOnly={isMockVisualPlan(plan)}
                     locale={locale}
                     t={t}
                     paidFeatures={paidFeatures}
@@ -904,7 +1134,7 @@ export function BillingPage() {
           </section>
         ) : null}
 
-        {basePlan && proPlan ? (
+        {paidPlansToShow.length > 0 ? (
           <section className={styles.compareSection}>
             <h2 className={styles.compareTitle}>{t("billing.compareTitle")}</h2>
             <table className={styles.compareTable}>
@@ -914,25 +1144,29 @@ export function BillingPage() {
                   <th>
                     {t("billing.planFree")}
                   </th>
-                  <th className={compareColumnClass("base", recommendedTier)}>
-                    {normalizePlanDisplayName(basePlan.displayName, basePlan.planKey)}
-                  </th>
-                  <th className={compareColumnClass("pro", recommendedTier)}>
-                    {normalizePlanDisplayName(proPlan.displayName, proPlan.planKey)}
-                  </th>
+                  {paidPlansToShow.map((plan) => {
+                    const tier = planTierFromPlanKey(plan.planKey) ?? plan.planKey;
+                    return (
+                      <th key={plan.planKey} className={compareColumnClass(tier, recommendedTier)}>
+                        {normalizePlanDisplayName(plan.displayName, plan.planKey)}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
                 {compareRows.map((row) => (
                   <tr key={row.label}>
                     <td>{row.label}</td>
-                    <td>{row.free}</td>
-                    <td className={compareColumnClass("base", recommendedTier)}>
-                      {row.base}
-                    </td>
-                    <td className={compareColumnClass("pro", recommendedTier)}>
-                      {row.pro}
-                    </td>
+                    {row.values.map((value, index) => {
+                      const key =
+                        index === 0 ? "free" : (planTierFromPlanKey(paidPlansToShow[index - 1]?.planKey ?? "") ?? paidPlansToShow[index - 1]?.planKey ?? String(index));
+                      return (
+                        <td key={`${row.label}-${key}`} className={compareColumnClass(key, recommendedTier)}>
+                          {value}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>

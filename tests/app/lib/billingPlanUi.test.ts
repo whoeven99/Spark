@@ -37,6 +37,18 @@ const plans: PlanRecord[] = [
     trialDays: 7,
     shopifyPlanName: null,
   },
+  {
+    planKey: "pi_premium_monthly",
+    appName: "product-improve",
+    kind: "SUBSCRIPTION",
+    billingInterval: "MONTHLY",
+    displayName: "Premium (Monthly)",
+    tokens: 10000000,
+    priceAmount: "99.99",
+    currencyCode: "USD",
+    trialDays: 7,
+    shopifyPlanName: null,
+  },
 ];
 
 describe("token usage percent", () => {
@@ -63,6 +75,7 @@ describe("listSubscriptionPlansForInterval", () => {
   it("返回当前周期的全部订阅", () => {
     expect(listSubscriptionPlansForInterval(plans, "MONTHLY").map((p) => p.planKey)).toEqual([
       "pi_base_monthly",
+      "pi_premium_monthly",
     ]);
     expect(listSubscriptionPlansForInterval(plans, "ANNUAL").map((p) => p.planKey)).toEqual([
       "pi_pro_annual",
@@ -87,11 +100,17 @@ describe("plan display labels", () => {
     expect(normalizePlanDisplayName("Base (Monthly)", "gd_base_monthly")).toBe("Basic");
     expect(normalizePlanDisplayName("Pro (Monthly)", "gd_pro_monthly")).toBe("Pro");
     expect(normalizePlanDisplayName("Pro (Annual)", "gd_pro_annual")).toBe("Pro");
+    expect(normalizePlanDisplayName("Premium (Monthly)", "gd_premium_monthly")).toBe(
+      "Premium",
+    );
   });
 
   it("计划标签统一为 xx Plan", () => {
     expect(formatPlanTagLabel("Base (Monthly)", "gd_base_monthly")).toBe("Basic Plan");
     expect(formatPlanTagLabel("Pro (Monthly)", "gd_pro_monthly")).toBe("Pro Plan");
+    expect(formatPlanTagLabel("Premium (Monthly)", "gd_premium_monthly")).toBe(
+      "Premium Plan",
+    );
   });
 
   it("试用账户展示免费计划而不是免费试用", () => {

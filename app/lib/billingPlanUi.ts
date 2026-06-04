@@ -3,11 +3,12 @@ import type { PlanRecord } from "./billingPageTypes";
 export type BillingIntervalView = "MONTHLY" | "ANNUAL";
 
 /** 订阅档位，与 PlanCatalog `planKey` 中段一致（如 `pi_base_monthly`、`gd_pro_annual`）。 */
-export type PlanTier = "base" | "pro";
+export type PlanTier = "base" | "pro" | "premium";
 
 const TIER_PLAN_KEY_SEGMENT: Record<PlanTier, string> = {
   base: "_base_",
   pro: "_pro_",
+  premium: "_premium_",
 };
 
 function stripPlanIntervalSuffix(name: string): string {
@@ -18,6 +19,7 @@ function fallbackPlanNameFromKey(planKey: string): string | null {
   const tier = planTierFromPlanKey(planKey);
   if (tier === "base") return "Basic";
   if (tier === "pro") return "Pro";
+  if (tier === "premium") return "Premium";
   if (planKey.includes("trial")) return "Trial";
   return null;
 }
@@ -26,7 +28,9 @@ export function normalizePlanDisplayName(displayName: string, planKey?: string |
   const stripped = stripPlanIntervalSuffix(displayName);
   if (/^base$/i.test(stripped)) return "Basic";
   if (/^pro$/i.test(stripped)) return "Pro";
+  if (/^premium$/i.test(stripped)) return "Premium";
   if (/^free\s+trial$/i.test(stripped)) return "Trial";
+  if (/^free\s+plan$/i.test(stripped)) return "Free";
   if (stripped.length > 0) return stripped;
   if (planKey) return fallbackPlanNameFromKey(planKey) ?? planKey;
   return displayName;
