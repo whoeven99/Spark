@@ -12,7 +12,6 @@ import { PictureTranslateProvider } from "../component/pictureTranslate/pictureT
 import { usePictureTranslateContext } from "../component/pictureTranslate/pictureTranslateContext";
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import { DialogShell } from "../component/shared/DialogShell";
-import { ImageStudioTaskListPage } from "../component/imageStudio/ImageStudioTaskListPage";
 import {
   PageSectionHeader,
   PageSurface,
@@ -229,16 +228,6 @@ function ImageStudioPageInner({
               </PageSurface>
             </div>
           </>
-        )}
-
-        {navTab === "tasks" && (
-          <ImageStudioTaskListPage
-            tasks={tasks}
-            locationSearch={locationSearch}
-            onTaskDeleted={onTaskDeleted}
-            onTaskUpdated={onTaskUpdated}
-            onTaskCreated={onTaskCreated}
-          />
         )}
 
         <div style={footerDockStyle}>
