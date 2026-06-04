@@ -16,7 +16,10 @@
     "paginationPrev": "Zuruck",
     "paginationNext": "Weiter",
     "paginationPage": "Seite {{page}} von {{totalPages}}",
-    "paginationSummary": "{{count}} Aufgaben insgesamt, Seite {{page}} von {{totalPages}}"
+    "paginationSummary": "{{count}} Aufgaben insgesamt, Seite {{page}} von {{totalPages}}",
+    "durationSeconds": "Ca. {{value}} Sek.",
+    "durationMinutes": "Ca. {{value}} Min.",
+    "durationUnknown": "—"
   },
   "language": {
     "auto": "Automatisch erkennen",
@@ -737,7 +740,6 @@
     "serverProductNotFound": "Produkt nicht gefunden oder Zugriff verweigert",
     "defaultBrandStyle": "Standard",
     "serverRequestFailed": "Anfrageverarbeitung fehlgeschlagen",
-    "estimatedDurationValue": "1-2 Min.",
     "asyncWaiting": "Warte auf den Start der Aufgabe",
     "asyncContextLoaded": "Produkttitel, Beschreibung und weitere Informationen wurden geladen",
     "asyncGeneratingTitleDraft": "Ein neuer Titellentwurf mit natuerlicher Keyword-Platzierung wird erstellt",

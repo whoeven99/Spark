@@ -163,10 +163,16 @@ export function buildPictureTranslateResultBlobPath(params: {
 }
 
 /**
- * 根据已存储的 blobPath 生成可读 URL（带 SAS 或裸 URL）。
- * 对应 picture translate 专属容器，与图片生成容器隔离。
+ * 根据已存储的 blobPath 生成可读 URL。
+ * - 配置了 PICTURE_TRANSLATE_CDN_BASE_URL 时直接拼 CDN URL（无需 SAS，容器须开放公共读）
+ * - 未配置时 fallback 到带 SAS 的 Blob 直连 URL
  */
 export function getPictureTranslateResultImageUrl(blobPath: string): string {
+  const cdnBase = process.env.PICTURE_TRANSLATE_CDN_BASE_URL?.trim().replace(/\/+$/, "");
+  if (cdnBase) {
+    return `${cdnBase}/${blobPath}`;
+  }
+
   const containerName = blobContainerName();
   const conn = blobConnectionString();
   const { accountName } = parseAccountFromConnectionString(conn);

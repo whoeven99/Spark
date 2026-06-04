@@ -16,7 +16,10 @@
     "paginationPrev": "前へ",
     "paginationNext": "次へ",
     "paginationPage": "第 {{page}} / {{totalPages}} ページ",
-    "paginationSummary": "全 {{count}} 件中、第 {{page}} / {{totalPages}} ページ"
+    "paginationSummary": "全 {{count}} 件中、第 {{page}} / {{totalPages}} ページ",
+    "durationSeconds": "約 {{value}} 秒",
+    "durationMinutes": "約 {{value}} 分",
+    "durationUnknown": "—"
   },
   "language": {
     "auto": "自動判定",
@@ -737,7 +740,6 @@
     "serverProductNotFound": "対象の商品が見つからないか、アクセス権がありません",
     "defaultBrandStyle": "標準",
     "serverRequestFailed": "リクエスト処理に失敗しました",
-    "estimatedDurationValue": "1〜2分",
     "asyncWaiting": "タスクの開始を待っています",
     "asyncContextLoaded": "商品タイトル、説明、そのほかの情報を読み込みました",
     "asyncGeneratingTitleDraft": "キーワードが自然に入る新しいタイトル案を生成しています",
