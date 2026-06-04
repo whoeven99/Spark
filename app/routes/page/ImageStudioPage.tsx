@@ -501,8 +501,26 @@ export function ImageStudioPage() {
             : task,
         ),
       );
+
+      if (status === "running") return;
+
+      void (async () => {
+        try {
+          const params = new URLSearchParams(
+            location.search.startsWith("?") ? location.search.slice(1) : location.search,
+          );
+          params.set("taskId", taskId);
+          const resp = await fetch(`/api/ai-task-detail?${params.toString()}`);
+          if (!resp.ok) return;
+          const body = (await resp.json()) as { task?: AITaskItem };
+          if (!body.task) return;
+          setTasks((prev) => prev.map((task) => (task.id === taskId ? body.task! : task)));
+        } catch {
+          // ignore; user can refresh manually
+        }
+      })();
     },
-    [],
+    [location.search],
   );
 
   return (

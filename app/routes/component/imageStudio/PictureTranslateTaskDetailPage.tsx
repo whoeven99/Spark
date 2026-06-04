@@ -175,6 +175,34 @@ export function PictureTranslateTaskDetailPage({
   const shortId = task.id.slice(0, 8).toUpperCase();
 
   useEffect(() => {
+    if (localStatus === "running" && imageUrl) return;
+    if (localStatus === "running") return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const params = new URLSearchParams(
+          locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
+        );
+        params.set("taskId", task.id);
+        const resp = await fetch(`/api/ai-task-detail?${params.toString()}`);
+        if (!resp.ok || cancelled) return;
+        const body = (await resp.json()) as { task?: AITaskItem };
+        if (!body.task || cancelled) return;
+        setLocalStatus(body.task.status);
+        setLocalResult(body.task.result);
+        onTaskUpdated?.(task.id, body.task.status, body.task.result ?? undefined);
+      } catch {
+        // ignore; user can refresh manually
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [imageUrl, localStatus, locationSearch, onTaskUpdated, task.id]);
+
+  useEffect(() => {
     setNextTargetCode(targetCode);
   }, [targetCode]);
 
