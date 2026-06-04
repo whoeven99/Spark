@@ -5,7 +5,6 @@ import { useTranslation } from "react-i18next";
 import type {
   BillingHistoryItem,
   BillingToolUsageItem,
-  BillingUsagePeriodItem,
   PlanRecord,
 } from "../../lib/billingPageTypes";
 import type { loader, action } from "../app.billing";
@@ -193,10 +192,8 @@ function resolveRecommendedTier(currentTier: PlanTier | null): PlanTier | null {
 }
 
 function booleanPlanCapability(locale: string, supported: boolean): string {
-  if (locale.toLowerCase().startsWith("zh")) {
-    return supported ? "支持" : "不支持";
-  }
-  return supported ? "Supported" : "Not supported";
+  void locale;
+  return supported ? "✅" : "❌";
 }
 
 function planCompareValue(
@@ -346,10 +343,38 @@ function resolveToolUsageFeatureLabel(
   }
 }
 
+function resolveLedgerToneClass(
+  entry: RecentLedgerEntry,
+  stylesMap: Record<string, string>,
+): string {
+  if (entry.kind === "usage") return stylesMap.historyToneWarning;
+  return resolveBillingEventToneClass(entry.eventType, stylesMap);
+}
+
 type PlanFeatureItem = {
   text: string;
   included?: boolean;
 };
+
+type RecentLedgerEntry =
+  | {
+      kind: "billing";
+      id: string;
+      createdAt: string;
+      eventType: BillingHistoryItem["eventType"];
+      planKey: string | null;
+      tokensDelta: number | null;
+      usedTokens: number | null;
+    }
+  | {
+      kind: "usage";
+      id: string;
+      createdAt: string;
+      feature: BillingToolUsageItem["feature"];
+      modelKey: string;
+      rawTokens: number;
+      billedTokens: number;
+    };
 
 function buildFreePlanFeatures(locale: string, tokens: number): PlanFeatureItem[] {
   const count = tokens.toLocaleString(locale);
@@ -558,7 +583,6 @@ export function BillingPage() {
     trialPlan: rawTrialPlan,
     subscriptionPlans: rawSubscriptionPlans,
     tokenPacks,
-    usageHistory,
     billingHistory,
     toolUsageHistory,
     showDevCancelSubscription,
@@ -710,6 +734,41 @@ export function BillingPage() {
     () => [trialPlan, ...subscriptionPlans, ...tokenPacks].filter((plan): plan is PlanRecord => Boolean(plan)),
     [subscriptionPlans, tokenPacks, trialPlan],
   );
+  const recentLedgerEntries = useMemo<RecentLedgerEntry[]>(
+    () => {
+      const cutoff = Date.now() - 45 * 24 * 60 * 60 * 1000;
+      return [
+        ...billingHistory.map(
+          (item): RecentLedgerEntry => ({
+            kind: "billing",
+            id: item.id,
+            createdAt: item.createdAt,
+            eventType: item.eventType,
+            planKey: item.planKey,
+            tokensDelta: item.tokensDelta,
+            usedTokens: item.usedTokens,
+          }),
+        ),
+        ...toolUsageHistory.map(
+          (item): RecentLedgerEntry => ({
+            kind: "usage",
+            id: item.id,
+            createdAt: item.createdAt,
+            feature: item.feature,
+            modelKey: item.modelKey,
+            rawTokens: item.rawTokens,
+            billedTokens: item.billedTokens,
+          }),
+        ),
+      ]
+        .filter((item) => new Date(item.createdAt).getTime() >= cutoff)
+        .sort(
+          (left, right) =>
+            new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+        );
+    },
+    [billingHistory, toolUsageHistory],
+  );
 
   const compareRows: { label: string; values: string[] }[] = [
     {
@@ -844,33 +903,47 @@ export function BillingPage() {
             </div>
 
             <div className={styles.accountStack}>
-              <article className={styles.accountCard}>
+              <article className={`${styles.accountCard} ${styles.accountCardCompact}`}>
                 <div className={styles.accountCardHeader}>
                   <h3 className={styles.accountCardTitle}>{t("billing.sectionSubscription")}</h3>
                   <span className={styles.accountCardBadge}>{currentPlanTagLabel}</span>
                 </div>
-                <dl className={styles.accountFacts}>
-                  <div className={styles.accountFact}>
-                    <dt>{t("billing.summarySubscriptionStatus")}</dt>
-                    <dd>
+                <div className={styles.subscriptionSummaryRow}>
+                  <div className={styles.subscriptionStatusBlock}>
+                    <span className={styles.subscriptionStatusLabel}>
+                      {t("billing.summarySubscriptionStatus")}
+                    </span>
+                    <span className={styles.subscriptionStatusValue}>
                       {sub ? t(`billing.status.${sub.status}`) : t("billing.noSubscription")}
-                    </dd>
+                    </span>
                   </div>
-                  <div className={styles.accountFact}>
-                    <dt>{t("billing.summaryCurrentPeriod")}</dt>
-                    <dd>
+                  <div className={styles.subscriptionPeriodBlock}>
+                    <span className={styles.subscriptionStatusLabel}>
+                      {t("billing.summaryCurrentPeriod")}
+                    </span>
+                    <span className={styles.subscriptionPeriodValue}>
                       {sub?.currentPeriodStart && sub?.currentPeriodEnd
                         ? `${formatDate(sub.currentPeriodStart, locale)} - ${formatDate(sub.currentPeriodEnd, locale)}`
                         : EMPTY}
-                    </dd>
+                    </span>
                   </div>
-                  <div className={styles.accountFact}>
+                </div>
+                <dl className={styles.accountFactsCompact}>
+                  <div className={styles.accountFactCompact}>
                     <dt>{t("billing.summaryAvailableCredits")}</dt>
                     <dd>{billing.availableTokens.toLocaleString()}</dd>
                   </div>
-                  <div className={styles.accountFact}>
+                  <div className={styles.accountFactCompact}>
                     <dt>{t("billing.summaryUsedCredits")}</dt>
                     <dd>{billing.usedTokens.toLocaleString()}</dd>
+                  </div>
+                  <div className={styles.accountFactCompact}>
+                    <dt>{locale.toLowerCase().startsWith("zh") ? "已使用占比" : "Usage rate"}</dt>
+                    <dd>{t("billing.usagePercentUsed", { percent: usagePercentDisplay })}</dd>
+                  </div>
+                  <div className={styles.accountFactCompact}>
+                    <dt>{locale.toLowerCase().startsWith("zh") ? "当前计划" : "Current plan"}</dt>
+                    <dd>{currentPlanTagLabel}</dd>
                   </div>
                 </dl>
               </article>
@@ -879,98 +952,78 @@ export function BillingPage() {
                 <div className={styles.accountCardHeader}>
                   <h3 className={styles.accountCardTitle}>{t("billing.historyTitle")}</h3>
                   <span className={styles.accountCardMeta}>
-                    {t("billing.historyCount", {
-                      count: billingHistory.length,
-                    })}
+                    {`${t("billing.historyCount", {
+                      count: recentLedgerEntries.length,
+                    })} · ${locale.toLowerCase().startsWith("zh") ? "最近 45 天" : "Last 45 days"}`}
                   </span>
                 </div>
-                {billingHistory.length > 0 ? (
+                {recentLedgerEntries.length > 0 ? (
                   <div className={styles.historyList}>
-                    {billingHistory.slice(0, 6).map((item) => (
-                      <div key={item.id} className={styles.historyItem}>
+                    {recentLedgerEntries.slice(0, 10).map((item) => (
+                      <div key={`${item.kind}-${item.id}`} className={styles.historyItem}>
                         <div className={styles.historyItemTop}>
                           <span
-                            className={`${styles.historyTone} ${resolveBillingEventToneClass(item.eventType, styles)}`}
+                            className={`${styles.historyTone} ${resolveLedgerToneClass(item, styles)}`}
                           >
-                            {resolveBillingEventLabel(item.eventType, t)}
+                            {item.kind === "billing"
+                              ? resolveBillingEventLabel(item.eventType, t)
+                              : locale.toLowerCase().startsWith("zh")
+                                ? "积分消耗"
+                                : "Credit usage"}
                           </span>
                           <span className={styles.historyTimestamp}>
                             {formatDateTime(item.createdAt, locale)}
                           </span>
                         </div>
                         <div className={styles.historyItemMeta}>
-                          <span>
-                            {t("billing.historyPlanLabel")}:{" "}
-                            {resolvePlanDisplayName(item.planKey, allPlans, t("billing.planFree"))}
-                          </span>
-                          {item.tokensDelta != null ? (
-                            <span
-                              className={
-                                item.tokensDelta >= 0
-                                  ? styles.historyDeltaPositive
-                                  : styles.historyDeltaNegative
-                              }
-                            >
-                              {item.tokensDelta >= 0 ? "+" : ""}
-                              {item.tokensDelta.toLocaleString()} {t("billing.tokenUnit")}
-                            </span>
-                          ) : null}
-                          {item.usedTokens != null ? (
-                            <span>
-                              {t("billing.historyUsedLabel", {
-                                count: item.usedTokens.toLocaleString(),
-                              })}
-                            </span>
-                          ) : null}
+                          {item.kind === "billing" ? (
+                            <>
+                              <span>
+                                {t("billing.historyPlanLabel")}:{" "}
+                                {resolvePlanDisplayName(item.planKey, allPlans, t("billing.planFree"))}
+                              </span>
+                              {item.tokensDelta != null ? (
+                                <span
+                                  className={
+                                    item.tokensDelta >= 0
+                                      ? styles.historyDeltaPositive
+                                      : styles.historyDeltaNegative
+                                  }
+                                >
+                                  {item.tokensDelta >= 0 ? "+" : ""}
+                                  {item.tokensDelta.toLocaleString()} {t("billing.tokenUnit")}
+                                </span>
+                              ) : null}
+                              {item.usedTokens != null ? (
+                                <span>
+                                  {t("billing.historyUsedLabel", {
+                                    count: item.usedTokens.toLocaleString(),
+                                  })}
+                                </span>
+                              ) : null}
+                            </>
+                          ) : (
+                            <>
+                              <span>{resolveToolUsageFeatureLabel(item.feature, t)}</span>
+                              <span>
+                                {locale.toLowerCase().startsWith("zh") ? "模型" : "Model"}:{" "}
+                                {item.modelKey}
+                              </span>
+                              <span className={styles.historyDeltaNegative}>
+                                -{item.billedTokens.toLocaleString()} {t("billing.tokenUnit")}
+                              </span>
+                              <span>
+                                {locale.toLowerCase().startsWith("zh") ? "原始 tokens" : "Raw tokens"}:{" "}
+                                {item.rawTokens.toLocaleString()}
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
                   <div className={styles.emptyPanel}>{t("billing.historyEmpty")}</div>
-                )}
-              </article>
-
-              <article className={styles.accountCard}>
-                <div className={styles.accountCardHeader}>
-                  <h3 className={styles.accountCardTitle}>{t("billing.usageHistoryTitle")}</h3>
-                  <span className={styles.accountCardMeta}>
-                    {t("billing.historyCount", {
-                      count: usageHistory.length,
-                    })}
-                  </span>
-                </div>
-                {usageHistory.length > 0 ? (
-                  <div className={styles.periodList}>
-                    {usageHistory.slice(0, 4).map((item: BillingUsagePeriodItem) => (
-                      <div key={item.id} className={styles.periodItem}>
-                        <div className={styles.periodItemTop}>
-                          <span className={styles.periodPlan}>
-                            {resolvePlanDisplayName(item.planKey, allPlans, t("billing.planFree"))}
-                          </span>
-                          <span className={styles.historyTimestamp}>
-                            {formatDate(item.periodStart, locale)} - {formatDate(item.periodEnd, locale)}
-                          </span>
-                        </div>
-                        <div className={styles.periodStats}>
-                          <span>
-                            {t("billing.periodUsageLabel", {
-                              used: item.usedTokens.toLocaleString(),
-                              total: item.subscriptionTokensAllocated.toLocaleString(),
-                            })}
-                          </span>
-                          <span>
-                            {t("billing.periodCarryLabel", {
-                              purchased: item.purchasedTokensRemaining.toLocaleString(),
-                              trial: item.trialTokensRemaining.toLocaleString(),
-                            })}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className={styles.emptyPanel}>{t("billing.usageHistoryEmpty")}</div>
                 )}
               </article>
             </div>
@@ -1146,11 +1199,6 @@ export function BillingPage() {
               <button type="button" className={styles.freePlanEntryButton}>
                 {isTrialCurrent ? t("billing.currentPlan") : "切换为免费计划"}
               </button>
-              {!isTrialCurrent && trialPlan ? (
-                <p className={styles.freePlanEntryMeta}>
-                  {trialFeatures.map((item) => item.text).join(" · ")}
-                </p>
-              ) : null}
             </div>
           </section>
         ) : null}
