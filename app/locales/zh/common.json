@@ -12,7 +12,11 @@
     "languageSelectorLabel": "语言",
     "delete": "删除",
     "deleting": "删除中…",
-    "viewDetail": "查看详情"
+    "viewDetail": "查看详情",
+    "paginationPrev": "上一页",
+    "paginationNext": "下一页",
+    "paginationPage": "第 {{page}} / {{totalPages}} 页",
+    "paginationSummary": "共 {{count}} 条任务，第 {{page}} / {{totalPages}} 页"
   },
   "language": {
     "auto": "自动识别",

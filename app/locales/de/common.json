@@ -12,7 +12,11 @@
     "languageSelectorLabel": "Sprache",
     "delete": "Löschen",
     "deleting": "Wird gelöscht…",
-    "viewDetail": "Details anzeigen"
+    "viewDetail": "Details anzeigen",
+    "paginationPrev": "Zuruck",
+    "paginationNext": "Weiter",
+    "paginationPage": "Seite {{page}} von {{totalPages}}",
+    "paginationSummary": "{{count}} Aufgaben insgesamt, Seite {{page}} von {{totalPages}}"
   },
   "language": {
     "auto": "Automatisch erkennen",

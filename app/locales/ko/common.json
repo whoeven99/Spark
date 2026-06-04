@@ -12,7 +12,11 @@
     "languageSelectorLabel": "언어",
     "delete": "삭제",
     "deleting": "삭제 중…",
-    "viewDetail": "상세 보기"
+    "viewDetail": "상세 보기",
+    "paginationPrev": "이전",
+    "paginationNext": "다음",
+    "paginationPage": "{{page}} / {{totalPages}} 페이지",
+    "paginationSummary": "총 {{count}}개 작업, {{page}} / {{totalPages}} 페이지"
   },
   "language": {
     "auto": "자동 감지",

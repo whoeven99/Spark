@@ -12,7 +12,11 @@
     "languageSelectorLabel": "Langue",
     "delete": "Supprimer",
     "deleting": "Suppression…",
-    "viewDetail": "Voir les détails"
+    "viewDetail": "Voir les détails",
+    "paginationPrev": "Precedent",
+    "paginationNext": "Suivant",
+    "paginationPage": "Page {{page}} sur {{totalPages}}",
+    "paginationSummary": "{{count}} taches au total, page {{page}} sur {{totalPages}}"
   },
   "language": {
     "auto": "Détection automatique",

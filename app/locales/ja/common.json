@@ -12,7 +12,11 @@
     "languageSelectorLabel": "言語",
     "delete": "削除",
     "deleting": "削除中…",
-    "viewDetail": "詳細を見る"
+    "viewDetail": "詳細を見る",
+    "paginationPrev": "前へ",
+    "paginationNext": "次へ",
+    "paginationPage": "第 {{page}} / {{totalPages}} ページ",
+    "paginationSummary": "全 {{count}} 件中、第 {{page}} / {{totalPages}} ページ"
   },
   "language": {
     "auto": "自動判定",

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens, pageEmptyStateStyle } from "../../page/pageUiStyles";
 import { AITaskPagination } from "../aiTask/AITaskPagination";
@@ -18,6 +18,30 @@ const EMPTY_STATE_MIN_HEIGHT = 320;
 
 function getCacheKey(view: TaskViewTab, page: number): string {
   return `${view}:${page}`;
+}
+
+function readTaskViewFromSearch(search: string, fallback: TaskViewTab): TaskViewTab {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  return params.get("taskView") === "history" ? "history" : fallback;
+}
+
+function readTaskPageFromSearch(search: string): number {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const raw = Number(params.get("taskPage"));
+  if (!Number.isFinite(raw) || raw < 1) return 1;
+  return Math.floor(raw);
+}
+
+function syncTaskListSearch(view: TaskViewTab, page: number) {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  url.searchParams.set("taskView", view);
+  if (page <= 1) {
+    url.searchParams.delete("taskPage");
+  } else {
+    url.searchParams.set("taskPage", String(page));
+  }
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
 type Props = {
@@ -65,9 +89,18 @@ export function ImageStudioTaskListPage({
   onTaskCreated,
 }: Props) {
   const { t } = useTranslation();
+  const initialViewTab = readTaskViewFromSearch(
+    typeof window !== "undefined" ? window.location.search : locationSearch,
+    initialPageData.view,
+  );
+  const initialTaskPage = readTaskPageFromSearch(
+    typeof window !== "undefined" ? window.location.search : locationSearch,
+  );
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [viewTab, setViewTab] = useState<TaskViewTab>(initialPageData.view);
-  const [currentPage, setCurrentPage] = useState<number>(initialPageData.page);
+  const [viewTab, setViewTab] = useState<TaskViewTab>(initialViewTab);
+  const [currentPage, setCurrentPage] = useState<number>(
+    initialViewTab === initialPageData.view ? initialTaskPage : 1,
+  );
   const [loadedPageData, setLoadedPageData] = useState<AITaskListPageData>(initialPageData);
   const [pageCache, setPageCache] = useState<Record<string, AITaskListPageData>>({
     [getCacheKey(initialPageData.view, initialPageData.page)]: initialPageData,
@@ -75,6 +108,12 @@ export function ImageStudioTaskListPage({
   const [loading, setLoading] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const pageSize = loadedPageData.pageSize || initialPageData.pageSize;
+  const listTopRef = useRef<HTMLDivElement | null>(null);
+
+  function scrollListToTop() {
+    if (typeof window === "undefined") return;
+    listTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   useEffect(() => {
     if (viewTab !== "current" || currentPage !== 1) return;
@@ -95,6 +134,10 @@ export function ImageStudioTaskListPage({
       return nextPageData;
     });
   }, [currentPage, initialPageData.pageSize, taskMetrics, tasks, viewTab]);
+
+  useEffect(() => {
+    syncTaskListSearch(viewTab, currentPage);
+  }, [currentPage, viewTab]);
 
   useEffect(() => {
     if (selectedTaskId) return;
@@ -214,6 +257,7 @@ export function ImageStudioTaskListPage({
     }
     setViewTab(nextView);
     setCurrentPage(nextPage);
+    scrollListToTop();
   }
 
   function handlePageChange(nextPage: number) {
@@ -222,6 +266,7 @@ export function ImageStudioTaskListPage({
       setLoading(true);
     }
     setCurrentPage(nextPage);
+    scrollListToTop();
   }
 
   if (selectedTask) {
@@ -238,6 +283,7 @@ export function ImageStudioTaskListPage({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div ref={listTopRef} />
       <div
         style={{
           display: "flex",
