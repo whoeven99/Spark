@@ -11,6 +11,7 @@ import type {
 import type { loader, action } from "../app.billing";
 import {
   computeAnnualDiscountPercent,
+  formatPlanTagLabel,
   formatAnnualMonthlyEquivalent,
   formatPlanPrice,
   formatTokenUsagePercentDisplay,
@@ -18,6 +19,7 @@ import {
   isActiveSubscriptionPlan,
   isPendingSubscriptionPlan,
   listSubscriptionPlansForInterval,
+  normalizePlanDisplayName,
   pickSubscriptionPlan,
   planTierFromPlanKey,
   resolveCurrentPlanLabel,
@@ -68,7 +70,8 @@ function formatDateTime(iso: string, locale: string): string {
 
 function resolvePlanDisplayName(planKey: string | null, plans: PlanRecord[]): string {
   if (!planKey) return EMPTY;
-  return plans.find((plan) => plan.planKey === planKey)?.displayName ?? planKey;
+  const match = plans.find((plan) => plan.planKey === planKey);
+  return normalizePlanDisplayName(match?.displayName ?? planKey, planKey);
 }
 
 function resolveBillingEventLabel(
@@ -180,7 +183,9 @@ function PaidPlanCard({
         <span className={styles.recommendedRibbon}>{t("billing.recommended")}</span>
       ) : null}
       <div className={styles.planCardBody}>
-        <h3 className={styles.planName}>{plan.displayName}</h3>
+        <h3 className={styles.planName}>
+          {normalizePlanDisplayName(plan.displayName, plan.planKey)}
+        </h3>
         <div className={styles.planPriceRow}>
           <span className={styles.planPrice}>
             {formatPlanPrice(plan.priceAmount, plan.currencyCode, locale)}
@@ -303,6 +308,32 @@ export function BillingPage() {
     account: billing.account,
     t,
   });
+  const currentPlanRecord = useMemo(
+    () => subscriptionPlans.find((plan) => plan.planKey === sub?.planKey) ?? null,
+    [sub?.planKey, subscriptionPlans],
+  );
+  const currentPlanTagLabel = useMemo(() => {
+    if (currentPlanRecord) {
+      return formatPlanTagLabel(currentPlanRecord.displayName, currentPlanRecord.planKey);
+    }
+    if (isTrialCurrent) {
+      return formatPlanTagLabel(
+        trialPlan?.displayName ?? t("billing.planFree"),
+        trialPlan?.planKey,
+      );
+    }
+    return formatPlanTagLabel(currentPlanLabel);
+  }, [currentPlanLabel, currentPlanRecord, isTrialCurrent, t, trialPlan?.displayName, trialPlan?.planKey]);
+  const quotaMetaDescription = useMemo(() => {
+    const meta: string[] = [];
+    if (showSubscriptionPeriodMeta && sub?.currentPeriodEnd) {
+      meta.push(`${t("billing.periodEnd")}: ${formatBillingMetaDate(sub.currentPeriodEnd, locale)}`);
+    }
+    if (sub?.trialEndsAt) {
+      meta.push(`${t("billing.trialEnds")}: ${formatBillingMetaDate(sub.trialEndsAt, locale)}`);
+    }
+    return meta.join(" · ");
+  }, [locale, showSubscriptionPeriodMeta, sub?.currentPeriodEnd, sub?.trialEndsAt, t]);
 
   const tokenCapacity = billing.availableTokens;
   const usagePercent = getTokenUsagePercent(billing.usedTokens, tokenCapacity);
@@ -443,7 +474,7 @@ export function BillingPage() {
               <article className={styles.accountCard}>
                 <div className={styles.accountCardHeader}>
                   <h3 className={styles.accountCardTitle}>{t("billing.sectionSubscription")}</h3>
-                  <span className={styles.accountCardBadge}>{currentPlanLabel}</span>
+                  <span className={styles.accountCardBadge}>{currentPlanTagLabel}</span>
                 </div>
                 <dl className={styles.accountFacts}>
                   <div className={styles.accountFact}>
@@ -589,25 +620,13 @@ export function BillingPage() {
         <section className={styles.quotaSection}>
           <div className={styles.usageHeader}>
             <div className={styles.usageHeaderMain}>
-              <h2 className={styles.usageTitle}>{t("billing.quotaTitle")}</h2>
-              <p className={styles.quotaSubtitle}>{t("billing.quotaSubtitle")}</p>
-            </div>
-            <div className={styles.usageHeaderBadge}>
-              {showSubscriptionPeriodMeta && sub ? (
-                <div className={styles.subscriptionMetaList}>
-                  <span className={styles.subscriptionMetaItem}>
-                    {t("billing.periodEnd")}:{" "}
-                    {formatBillingMetaDate(sub.currentPeriodEnd, locale)}
-                  </span>
-                  {sub.trialEndsAt ? (
-                    <span className={styles.subscriptionMetaItem}>
-                      {t("billing.trialEnds")}:{" "}
-                      {formatBillingMetaDate(sub.trialEndsAt, locale)}
-                    </span>
-                  ) : null}
-                </div>
+              <div className={styles.usageTitleRow}>
+                <h2 className={styles.usageTitle}>{t("billing.quotaTitle")}</h2>
+                <span className={styles.planBadge}>{currentPlanTagLabel}</span>
+              </div>
+              {quotaMetaDescription ? (
+                <p className={styles.quotaSubtitle}>{quotaMetaDescription}</p>
               ) : null}
-              <span className={styles.planBadge}>{currentPlanLabel}</span>
             </div>
           </div>
           <div className={styles.usageCard}>
@@ -651,27 +670,6 @@ export function BillingPage() {
                   style={{ width: `${usagePercentForBar}%` }}
                 />
               </div>
-              <div className={styles.poolChips} aria-label={t("billing.sectionUsage")}>
-                <div className={styles.poolChip}>
-                  <span className={styles.poolChipLabel}>{t("billing.poolSubscription")}</span>
-                  <span className={styles.poolChipValue}>
-                    {billing.account.subscriptionTokens.toLocaleString()}
-                  </span>
-                </div>
-                <div className={styles.poolChip}>
-                  <span className={styles.poolChipLabel}>{t("billing.poolPurchased")}</span>
-                  <span className={styles.poolChipValue}>
-                    {billing.account.purchasedTokens.toLocaleString()}
-                  </span>
-                </div>
-                <div className={styles.poolChip}>
-                  <span className={styles.poolChipLabel}>{t("billing.poolTrial")}</span>
-                  <span className={styles.poolChipValue}>
-                    {billing.account.trialTokens.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-              <p className={styles.quotaFootnote}>{t("billing.planBenefitsFootnote")}</p>
             </div>
           </div>
           <div className={styles.quotaFooter}>
@@ -755,7 +753,10 @@ export function BillingPage() {
               >
                 <div className={styles.planCardBody}>
                   <h3 className={styles.planName}>
-                    {trialPlan?.displayName ?? t("billing.planFree")}
+                    {normalizePlanDisplayName(
+                      trialPlan?.displayName ?? t("billing.planFree"),
+                      trialPlan?.planKey,
+                    )}
                   </h3>
                   <div className={styles.planPriceRow}>
                     <span className={styles.planPrice}>
@@ -883,12 +884,17 @@ export function BillingPage() {
               <thead>
                 <tr>
                   <th>{t("billing.compareFeatureCol")}</th>
-                  <th>{trialPlan?.displayName ?? t("billing.planFree")}</th>
+                  <th>
+                    {normalizePlanDisplayName(
+                      trialPlan?.displayName ?? t("billing.planFree"),
+                      trialPlan?.planKey,
+                    )}
+                  </th>
                   <th className={compareColumnClass("base", recommendedTier)}>
-                    {basePlan.displayName}
+                    {normalizePlanDisplayName(basePlan.displayName, basePlan.planKey)}
                   </th>
                   <th className={compareColumnClass("pro", recommendedTier)}>
-                    {proPlan.displayName}
+                    {normalizePlanDisplayName(proPlan.displayName, proPlan.planKey)}
                   </th>
                 </tr>
               </thead>

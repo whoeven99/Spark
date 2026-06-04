@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatPlanTagLabel,
   formatTokenUsagePercentDisplay,
   getTokenUsagePercent,
   isActiveSubscriptionPlan,
   isPendingSubscriptionPlan,
   listSubscriptionPlansForInterval,
+  normalizePlanDisplayName,
   pickSubscriptionPlan,
 } from "../../../app/lib/billingPlanUi";
 import type { PlanRecord } from "../../../app/lib/billingPageTypes";
@@ -76,6 +78,19 @@ describe("pickSubscriptionPlan", () => {
       "pi_pro_annual",
     );
     expect(pickSubscriptionPlan(plans, "ANNUAL", "base")).toBeUndefined();
+  });
+});
+
+describe("plan display labels", () => {
+  it("去掉周期后缀并将 Base 显示为 Basic", () => {
+    expect(normalizePlanDisplayName("Base (Monthly)", "gd_base_monthly")).toBe("Basic");
+    expect(normalizePlanDisplayName("Pro (Monthly)", "gd_pro_monthly")).toBe("Pro");
+    expect(normalizePlanDisplayName("Pro (Annual)", "gd_pro_annual")).toBe("Pro");
+  });
+
+  it("计划标签统一为 xx Plan", () => {
+    expect(formatPlanTagLabel("Base (Monthly)", "gd_base_monthly")).toBe("Basic Plan");
+    expect(formatPlanTagLabel("Pro (Monthly)", "gd_pro_monthly")).toBe("Pro Plan");
   });
 });
 
