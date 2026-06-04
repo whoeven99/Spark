@@ -1260,6 +1260,21 @@
   color: #6d7175;
 }
 
+.historyPagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.85rem;
+}
+
+.historyPaginationText {
+  font-size: 0.75rem;
+  color: #6d7175;
+  font-weight: 600;
+}
+
 .historyTone {
   padding: 0.15rem 0.5rem;
   border-radius: 999px;

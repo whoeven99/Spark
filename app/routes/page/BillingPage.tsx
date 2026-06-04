@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
@@ -376,20 +376,6 @@ type RecentLedgerEntry =
       billedTokens: number;
     };
 
-function buildFreePlanFeatures(locale: string, tokens: number): PlanFeatureItem[] {
-  const count = tokens.toLocaleString(locale);
-  if (locale.toLowerCase().startsWith("zh")) {
-    return [
-      { text: `一次性免费获得 ${count} 积分` },
-      { text: "仅能使用 Google 模型" },
-    ];
-  }
-  return [
-    { text: `One-time ${count} free credits` },
-    { text: "Google models only" },
-  ];
-}
-
 function buildPaidPlanFeatures(plan: PlanRecord, locale: string): PlanFeatureItem[] {
   const tier = planTierFromPlanKey(plan.planKey);
   const count = plan.tokens.toLocaleString(locale);
@@ -657,6 +643,7 @@ export function BillingPage() {
     () => tokenPacks[0]?.planKey ?? "",
   );
   const [showAccountDetailPage, setShowAccountDetailPage] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
 
   const paidPlansForInterval = useMemo(
     () => sortPlansByTier(listSubscriptionPlansForInterval(subscriptionPlans, interval)),
@@ -717,11 +704,6 @@ export function BillingPage() {
     shopify.toast.show(actionData.error);
   }
 
-  const trialFeatures = useMemo(
-    () => buildFreePlanFeatures(locale, trialPlan?.tokens ?? 10000),
-    [locale, trialPlan?.tokens],
-  );
-
   const paidFeatures = (plan: PlanRecord) => buildPaidPlanFeatures(plan, locale);
 
   const periodSuffix =
@@ -769,6 +751,26 @@ export function BillingPage() {
     },
     [billingHistory, toolUsageHistory],
   );
+  const historyPageSize = 10;
+  const totalHistoryPages = Math.max(
+    1,
+    Math.ceil(recentLedgerEntries.length / historyPageSize),
+  );
+  const safeHistoryPage = Math.min(historyPage, totalHistoryPages);
+  const paginatedLedgerEntries = useMemo(
+    () =>
+      recentLedgerEntries.slice(
+        (safeHistoryPage - 1) * historyPageSize,
+        safeHistoryPage * historyPageSize,
+      ),
+    [recentLedgerEntries, safeHistoryPage],
+  );
+
+  useEffect(() => {
+    if (historyPage > totalHistoryPages) {
+      setHistoryPage(totalHistoryPages);
+    }
+  }, [historyPage, totalHistoryPages]);
 
   const compareRows: { label: string; values: string[] }[] = [
     {
@@ -958,8 +960,9 @@ export function BillingPage() {
                   </span>
                 </div>
                 {recentLedgerEntries.length > 0 ? (
-                  <div className={styles.historyList}>
-                    {recentLedgerEntries.slice(0, 10).map((item) => (
+                  <>
+                    <div className={styles.historyList}>
+                      {paginatedLedgerEntries.map((item) => (
                       <div key={`${item.kind}-${item.id}`} className={styles.historyItem}>
                         <div className={styles.historyItemTop}>
                           <span
@@ -1012,16 +1015,42 @@ export function BillingPage() {
                               <span className={styles.historyDeltaNegative}>
                                 -{item.billedTokens.toLocaleString()} {t("billing.tokenUnit")}
                               </span>
-                              <span>
-                                {locale.toLowerCase().startsWith("zh") ? "原始 tokens" : "Raw tokens"}:{" "}
-                                {item.rawTokens.toLocaleString()}
-                              </span>
                             </>
                           )}
                         </div>
                       </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                    {totalHistoryPages > 1 ? (
+                      <div className={styles.historyPagination}>
+                        <button
+                          type="button"
+                          className={styles.secondaryEntryButton}
+                          disabled={safeHistoryPage <= 1}
+                          onClick={() => setHistoryPage((page) => Math.max(1, page - 1))}
+                        >
+                          {locale.toLowerCase().startsWith("zh") ? "上一页" : "Previous"}
+                        </button>
+                        <span className={styles.historyPaginationText}>
+                          {locale.toLowerCase().startsWith("zh")
+                            ? `第 ${safeHistoryPage} / ${totalHistoryPages} 页`
+                            : `Page ${safeHistoryPage} / ${totalHistoryPages}`}
+                        </span>
+                        <button
+                          type="button"
+                          className={styles.secondaryEntryButton}
+                          disabled={safeHistoryPage >= totalHistoryPages}
+                          onClick={() =>
+                            setHistoryPage((page) =>
+                              Math.min(totalHistoryPages, page + 1),
+                            )
+                          }
+                        >
+                          {locale.toLowerCase().startsWith("zh") ? "下一页" : "Next"}
+                        </button>
+                      </div>
+                    ) : null}
+                  </>
                 ) : (
                   <div className={styles.emptyPanel}>{t("billing.historyEmpty")}</div>
                 )}
@@ -1034,11 +1063,15 @@ export function BillingPage() {
   }
 
   return (
-    <s-page
-      heading={t("billing.pageTitle")}
-      style={{ overflow: "visible", height: "auto", minHeight: "auto" }}
-    >
-      <div style={pageContentStyle}>
+    <s-page heading={t("billing.pageTitle")}>
+      <div
+        style={{
+          ...pageContentStyle,
+          overflow: "visible",
+          height: "auto",
+          minHeight: "auto",
+        }}
+      >
         {!billing.hasAccess && billing.billingRequired ? (
           <s-banner tone="warning">{t("billing.lowBalanceWarning")}</s-banner>
         ) : null}
