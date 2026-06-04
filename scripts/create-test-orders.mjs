@@ -1,11 +1,14 @@
 // Usage: npm run orders:create
-// 交互式输入店铺域名 / Admin Access Token / 订单数量，自动批量创建测试订单（test: true, paid）。
+// 交互式创建测试订单（test: true），流程：pending 创建 → orderMarkAsPaid → 等待 webhook → 可选 cancel/refund。
+// 前置：店铺已安装 Order Monitor，webhook 指向可达实例（见 shopify.app.order-monitor-test.toml）。
+// 可选环境变量 SYNC_WAIT_MS（默认 5000）：mark paid 后等待 orders/paid 写入 Turso 的毫秒数。
 
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { randomBytes } from "node:crypto";
 
 const API_VERSION = "2026-07";
+const DEFAULT_SYNC_WAIT_MS = 5000;
 
 const ADDRESSES = [
   { city: "Ottawa", province: "Ontario", province_code: "ON", country: "Canada", country_code: "CA", zip: "K1N5T5" },
@@ -44,6 +47,16 @@ function randomAddress() {
     zip: base.zip,
     phone: "+1-555-0100",
   };
+}
+
+function resolveSyncWaitMs() {
+  const raw = process.env.SYNC_WAIT_MS;
+  if (raw === undefined || raw === "") return DEFAULT_SYNC_WAIT_MS;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`SYNC_WAIT_MS 必须为非负整数，收到: ${raw}`);
+  }
+  return parsed;
 }
 
 function normalizeShop(raw) {
@@ -143,15 +156,67 @@ async function shopifyJson(shop, token, path, init) {
   return text ? JSON.parse(text) : {};
 }
 
+async function shopifyGraphql(shop, token, query, variables) {
+  const res = await shopifyFetch(shop, token, `/graphql.json`, {
+    method: "POST",
+    body: JSON.stringify({ query, variables }),
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`GraphQL HTTP ${res.status}: ${text.slice(0, 400)}`);
+  }
+  const json = JSON.parse(text);
+  if (json.errors?.length) {
+    throw new Error(`GraphQL errors: ${JSON.stringify(json.errors).slice(0, 300)}`);
+  }
+  return json;
+}
+
+async function markOrderAsPaid(shop, token, orderId) {
+  const mutation = `
+    mutation orderMarkAsPaid($input: OrderMarkAsPaidInput!) {
+      orderMarkAsPaid(input: $input) {
+        order {
+          id
+          displayFinancialStatus
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `;
+  const json = await shopifyGraphql(shop, token, mutation, {
+    input: { id: `gid://shopify/Order/${orderId}` },
+  });
+  const result = json?.data?.orderMarkAsPaid;
+  const userErrors = result?.userErrors ?? [];
+  if (userErrors.length > 0) {
+    throw new Error(userErrors.map((e) => e.message).join("; "));
+  }
+  const status = result?.order?.displayFinancialStatus;
+  if (status && status !== "PAID") {
+    throw new Error(`orderMarkAsPaid 后 financial status 为 ${status}，期望 PAID`);
+  }
+}
+
 async function createOrder(shop, token, variantId) {
-  // 所有 4 种状态都以 paid + line_items 起步。后续按需追加 cancel/refund 操作。
+  // 先 pending 创建；由 markOrderAsPaid 产生支付 transaction，触发 orders/paid webhook。
+  const email = randomEmail();
+  const shippingAddress = randomAddress();
   const body = {
     order: {
-      email: randomEmail(),
-      financial_status: "paid",
+      email,
+      financial_status: "pending",
       test: true,
       line_items: [{ variant_id: Number(variantId), quantity: 1 }],
-      shipping_address: randomAddress(),
+      shipping_address: shippingAddress,
+      customer: {
+        email,
+        first_name: shippingAddress.first_name,
+        last_name: shippingAddress.last_name,
+      },
     },
   };
   const json = await shopifyJson(shop, token, `/orders.json`, {
@@ -203,19 +268,24 @@ async function refundOrder(shop, token, orderId) {
   });
 }
 
-async function createOrderWithState(shop, token, variantId, state) {
+async function createOrderWithState(shop, token, variantId, state, syncWaitMs) {
   const order = await createOrder(shop, token, variantId);
   if (!order?.id) return order;
+
+  await markOrderAsPaid(shop, token, order.id);
+  await sleep(syncWaitMs);
+
   if (state === "cancelled") {
     await cancelOrder(shop, token, order.id);
   } else if (state === "refunded") {
     await refundOrder(shop, token, order.id);
   }
-  // "paid" 与 "unfulfilled" 无需额外操作（创建后默认就是 paid + unfulfilled）
+  // "paid" 与 "unfulfilled"：mark paid 后即为 paid + unfulfilled
   return order;
 }
 
 async function main() {
+  const syncWaitMs = resolveSyncWaitMs();
   const rl = createInterface({ input, output });
   try {
     const shopRaw = await rl.question("Store domain (e.g. my-store.myshopify.com): ");
@@ -230,7 +300,8 @@ async function main() {
       throw new Error(`订单数量必须为正整数，收到: ${countRaw}`);
     }
 
-    console.log(`\n→ Fetching first available variant from ${shop} ...`);
+    console.log(`\n→ Webhook 同步等待: ${syncWaitMs}ms (SYNC_WAIT_MS 可调)`);
+    console.log(`→ Fetching first available variant from ${shop} ...`);
     const { productTitle, variantTitle, variantId } = await fetchFirstAvailableVariant(shop, token);
     console.log(`  Using product: ${productTitle} / ${variantTitle} (variant_id=${variantId})\n`);
 
@@ -239,11 +310,12 @@ async function main() {
     for (let i = 1; i <= count; i++) {
       const state = pick(ORDER_STATES);
       try {
-        const order = await createOrderWithState(shop, token, variantId, state);
+        const order = await createOrderWithState(shop, token, variantId, state, syncWaitMs);
         ok++;
         console.log(
           `[${i}/${count}] OK   [${state.padEnd(11)}] order ${order?.name ?? `#${order?.order_number}`} id=${order?.id}`,
         );
+        console.log(`         → marked paid, waited ${syncWaitMs}ms`);
       } catch (err) {
         fail++;
         console.log(`[${i}/${count}] FAIL [${state.padEnd(11)}] ${err?.message ?? err}`);
