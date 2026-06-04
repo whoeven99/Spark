@@ -141,7 +141,7 @@ export function LogViewer({
   const [currentStatus, setCurrentStatus] = useState<AITaskStatus>(status);
   const [logsOpen, setLogsOpen] = useState(defaultLogsOpen ?? status === "running");
   const [elapsed, setElapsed] = useState(() =>
-    Math.floor((Date.now() - startMsRef.current) / 1000),
+    completedAt ? elapsedSecondsBetween(startedAt, completedAt) : 0,
   );
   const logsScrollRef = useRef<HTMLDivElement>(null);
   const isDone = currentStatus !== "running";

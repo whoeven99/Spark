@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { TaskStatusBadge } from "./TaskStatusBadge";
@@ -27,7 +27,7 @@ export function formatActualElapsed(
   return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
 }
 
-function formatTaskDate(iso: string, locale: string): string {
+function formatTaskDate(iso: string, locale: string, timeZone?: string): string {
   return new Intl.DateTimeFormat(locale, {
     year: "numeric",
     month: "2-digit",
@@ -35,6 +35,7 @@ function formatTaskDate(iso: string, locale: string): string {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
+    ...(timeZone ? { timeZone } : {}),
   }).format(new Date(iso));
 }
 
@@ -177,6 +178,15 @@ export function AITaskCardShell({
 }: Props) {
   const { i18n, t } = useTranslation();
   const shortId = task.id.slice(0, 8).toUpperCase();
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  const createdAtText = isHydrated
+    ? formatTaskDate(task.createdAt, i18n.language)
+    : formatTaskDate(task.createdAt, i18n.language, "UTC");
 
   return (
     <div
@@ -262,7 +272,7 @@ export function AITaskCardShell({
             paddingTop: 2,
           }}
         >
-          {t("aiTask.createdAtLabel", { value: formatTaskDate(task.createdAt, i18n.language) })}
+          {t("aiTask.createdAtLabel", { value: createdAtText })}
         </div>
       </div>
 

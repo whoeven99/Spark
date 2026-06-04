@@ -325,9 +325,7 @@ export function ProductImproveTaskCard({
   const extendedConfig = task.config as Record<string, unknown>;
   const extendedResult = task.result as Record<string, unknown> | null;
 
-  const [runningElapsed, setRunningElapsed] = useState<string | null>(() =>
-    task.status === "running" ? formatRunningElapsed(task.startedAt, i18n.language) : null,
-  );
+  const [runningElapsed, setRunningElapsed] = useState<string | null>(null);
 
   useEffect(() => {
     setLocalStatus(task.status);
