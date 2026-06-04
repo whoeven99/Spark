@@ -764,5 +764,13 @@
     "updateValidationTitleRequired": "제목은 필수입니다",
     "updateValidationDescriptionRequired": "설명은 필수입니다",
     "updateShopMismatch": "요청의 상점 정보가 현재 세션과 일치하지 않습니다"
+  },
+  "imageStudio": {
+    "cardPartElapsed": "실행 중 {{value}}",
+    "cardPartCompletedElapsed": "완료, 소요 시간 {{value}}",
+    "cardPartEstimatedCredits": "예상 크레딧 {{value}}",
+    "cardPartUsedCredits": "사용한 크레딧 {{value}}",
+    "cardPartActualCredits": "실제 크레딧 {{value}}",
+    "cardPartFailed": "작업 미완료"
   }
 }

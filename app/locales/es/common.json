@@ -764,5 +764,13 @@
     "updateValidationTitleRequired": "El titulo es obligatorio",
     "updateValidationDescriptionRequired": "La descripcion es obligatoria",
     "updateShopMismatch": "La tienda de la solicitud no coincide con la sesion actual"
+  },
+  "imageStudio": {
+    "cardPartElapsed": "En ejecución {{value}}",
+    "cardPartCompletedElapsed": "Completado en {{value}}",
+    "cardPartEstimatedCredits": "Créditos est.: {{value}}",
+    "cardPartUsedCredits": "Créditos usados: {{value}}",
+    "cardPartActualCredits": "Créditos reales: {{value}}",
+    "cardPartFailed": "Tarea incompleta"
   }
 }

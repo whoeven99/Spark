@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { billingErrorToResponse } from "../billing/index.server";
-import { requireVisualToolBillingAccess } from "../tokenUsage/index.server";
+import { requireVisualToolBillingAccess, DEFAULT_IMAGE_GENERATION_IMAGE_TOKEN_COST } from "../tokenUsage/index.server";
 import { resolveImageGenerationProvider, isImageGenerationConfigured } from "./imageGenerationConfig.server";
 import { enqueueImageGenerationTask } from "./imageGenerationAsync.server";
 import { validateImageGenerationPrompt } from "./imageGenerationExecutor.server";
@@ -110,6 +110,7 @@ export async function executeImageGenerationRequest(params: {
     taskType: "image_generation",
     batchConfig: { description, prompt: trimmedPrompt, imageProvider },
     taskConfig: { description, prompt: trimmedPrompt, imageProvider },
+    estimatedCredits: DEFAULT_IMAGE_GENERATION_IMAGE_TOKEN_COST,
   });
 
   enqueueImageGenerationTask({

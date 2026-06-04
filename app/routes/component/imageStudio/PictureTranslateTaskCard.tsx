@@ -18,11 +18,6 @@ type Props = {
   deleting: boolean;
 };
 
-function formatDisplayValue(value: string | number | null | undefined, fallback: string): string {
-  if (value == null || value === "") return fallback;
-  return String(value);
-}
-
 function readStringField(
   source: Record<string, unknown> | null | undefined,
   key: string,
@@ -154,37 +149,39 @@ export function PictureTranslateTaskCard({
   const result = task.result as Record<string, unknown> | null;
   const sourceCode = readStringField(config, "sourceCode") ?? "auto";
   const targetCode = readStringField(config, "targetCode") ?? "-";
-  const provider = readStringField(result, "provider");
+  const provider =
+    readStringField(result, "provider") ??
+    (config.modelType === 2 ? "volc" : config.modelType === 1 ? "aidge" : null);
   const sourceType = getSourceLabel(readStringField(config, "sourceType"), (key) => t(key));
   const actualElapsed = formatActualElapsed(task.startedAt, task.completedAt);
-  const elapsedLabel = runningElapsed ?? actualElapsed ?? t("common.unknown");
-  const usedCredits = formatDisplayValue(task.actualCredits, t("common.unknown"));
-  const estimatedCredits = formatDisplayValue(task.estimatedCredits, t("common.unknown"));
-  const providerLabel = formatDisplayValue(provider, t("common.unknown"));
-  const errorReason = task.errorMsg ?? t("common.unknown");
+  const elapsedLabel = runningElapsed ?? actualElapsed;
+  const errorReason = task.errorMsg;
 
   const primaryCopy =
     localStatus === "running"
       ? t("imageStudio.cardPrimaryTranslating")
       : localStatus === "failed"
-        ? t("imageStudio.cardPrimaryTranslateFailed", { errorReason })
+        ? t("imageStudio.cardPrimaryTranslateFailed", { errorReason: errorReason ?? "" })
         : t("imageStudio.cardPrimaryTranslateReady");
 
-  const secondaryCopy =
-    localStatus === "running"
-      ? t("imageStudio.cardSecondaryRunning", {
-          elapsedLabel,
-          estimatedCredits,
-        })
-      : localStatus === "failed"
-        ? t("imageStudio.cardSecondaryFailed", {
-            usedCredits,
-            estimatedCredits,
-          })
-        : t("imageStudio.cardSecondaryCompleted", {
-            elapsedLabel,
-            usedCredits,
-          });
+  const secondaryCopy = (() => {
+    if (localStatus === "running") {
+      const parts: string[] = [];
+      if (elapsedLabel) parts.push(t("imageStudio.cardPartElapsed", { value: elapsedLabel }));
+      if (task.estimatedCredits != null) parts.push(t("imageStudio.cardPartEstimatedCredits", { value: task.estimatedCredits }));
+      return parts.join(" | ");
+    }
+    if (localStatus === "failed") {
+      const parts: string[] = [t("imageStudio.cardPartFailed")];
+      if (task.actualCredits != null) parts.push(t("imageStudio.cardPartUsedCredits", { value: task.actualCredits }));
+      if (task.estimatedCredits != null) parts.push(t("imageStudio.cardPartEstimatedCredits", { value: task.estimatedCredits }));
+      return parts.join(" | ");
+    }
+    const parts: string[] = [];
+    if (elapsedLabel) parts.push(t("imageStudio.cardPartCompletedElapsed", { value: elapsedLabel }));
+    if (task.actualCredits != null) parts.push(t("imageStudio.cardPartActualCredits", { value: task.actualCredits }));
+    return parts.join(" | ");
+  })();
 
   const extraBadges = sourceType ? (
     <span
@@ -220,10 +217,18 @@ export function PictureTranslateTaskCard({
         <>
           <span>{t("imageStudio.taskDetailLabel")}</span>
           <span>{t("imageStudio.taskLanguageDirection", { source: sourceCode, target: targetCode })}</span>
-          <span style={{ color: pageColorTokens.textFootnote }}>|</span>
-          <span>{t("imageStudio.detailProvider", { value: providerLabel })}</span>
-          <span style={{ color: pageColorTokens.textFootnote }}>|</span>
-          <span>{t("imageStudio.estimatedCreditsValue", { value: estimatedCredits })}</span>
+          {provider != null && (
+            <>
+              <span style={{ color: pageColorTokens.textFootnote }}>|</span>
+              <span>{t("imageStudio.detailProvider", { value: provider })}</span>
+            </>
+          )}
+          {task.estimatedCredits != null && (
+            <>
+              <span style={{ color: pageColorTokens.textFootnote }}>|</span>
+              <span>{t("imageStudio.estimatedCreditsValue", { value: task.estimatedCredits })}</span>
+            </>
+          )}
         </>
       }
       extraBadges={extraBadges}
