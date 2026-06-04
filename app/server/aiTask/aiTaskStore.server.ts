@@ -2,6 +2,9 @@ import prisma from "../../db.server";
 import { getGeneratedImageReadUrl } from "../imageGeneration/imageGenerationBlob.server";
 import type {
   AITaskItem,
+  AITaskListMetrics,
+  AITaskListPageData,
+  AITaskListView,
   AITaskLogEntry,
   AITaskStatus,
   AITaskType,
@@ -16,6 +19,47 @@ import {
 type PrismaJson = any;
 
 const TASK_LIST_LIMIT = 20;
+const TASK_PAGE_SIZE = 8;
+
+function normalizeTaskPage(page: number | undefined): number {
+  if (!Number.isFinite(page) || !page || page < 1) return 1;
+  return Math.floor(page);
+}
+
+function normalizeTaskPageSize(pageSize: number | undefined): number {
+  if (!Number.isFinite(pageSize) || !pageSize || pageSize < 1) return TASK_PAGE_SIZE;
+  return Math.min(Math.floor(pageSize), TASK_LIST_LIMIT);
+}
+
+function buildTaskTypeWhere(params: {
+  taskType?: AITaskType;
+  taskTypes?: AITaskType[];
+}) {
+  if (params.taskType) {
+    return { taskType: params.taskType };
+  }
+  if (params.taskTypes && params.taskTypes.length > 0) {
+    return { taskType: { in: params.taskTypes } };
+  }
+  return {};
+}
+
+function buildTaskListWhere(params: {
+  shop: string;
+  appName: string;
+  taskType?: AITaskType;
+  taskTypes?: AITaskType[];
+}) {
+  return {
+    shop: params.shop,
+    appName: params.appName,
+    ...buildTaskTypeWhere(params),
+  };
+}
+
+function buildTaskViewWhere(view: AITaskListView, cutoff: Date) {
+  return view === "current" ? { createdAt: { gte: cutoff } } : { createdAt: { lt: cutoff } };
+}
 
 function toAITaskStatus(raw: string): AITaskStatus {
   if (
@@ -246,6 +290,81 @@ export async function listRecentTasksForShop(params: {
     take: params.limit ?? TASK_LIST_LIMIT,
   });
   return rows.map(rowToAITaskItem);
+}
+
+export async function getTaskListMetricsForShop(params: {
+  shop: string;
+  appName: string;
+  taskType?: AITaskType;
+  taskTypes?: AITaskType[];
+}): Promise<AITaskListMetrics> {
+  const baseWhere = buildTaskListWhere(params);
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const [currentCount, historyCount, runningCount] = await Promise.all([
+    prisma.aITask.count({
+      where: {
+        ...baseWhere,
+        createdAt: { gte: cutoff },
+      },
+    }),
+    prisma.aITask.count({
+      where: {
+        ...baseWhere,
+        createdAt: { lt: cutoff },
+      },
+    }),
+    prisma.aITask.count({
+      where: {
+        ...baseWhere,
+        status: "running",
+      },
+    }),
+  ]);
+
+  return {
+    currentCount,
+    historyCount,
+    runningCount,
+    totalCount: currentCount + historyCount,
+  };
+}
+
+export async function listTasksPageForShop(params: {
+  shop: string;
+  appName: string;
+  view: AITaskListView;
+  page?: number;
+  pageSize?: number;
+  taskType?: AITaskType;
+  taskTypes?: AITaskType[];
+}): Promise<AITaskListPageData> {
+  const pageSize = normalizeTaskPageSize(params.pageSize);
+  const requestedPage = normalizeTaskPage(params.page);
+  const baseWhere = buildTaskListWhere(params);
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const metrics = await getTaskListMetricsForShop(params);
+  const totalCount = params.view === "current" ? metrics.currentCount : metrics.historyCount;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const page = Math.min(requestedPage, totalPages);
+  const rows = await prisma.aITask.findMany({
+    where: {
+      ...baseWhere,
+      ...buildTaskViewWhere(params.view, cutoff),
+    },
+    orderBy: { createdAt: "desc" },
+    skip: (page - 1) * pageSize,
+    take: pageSize,
+  });
+
+  return {
+    tasks: rows.map(rowToAITaskItem),
+    view: params.view,
+    page,
+    pageSize,
+    totalCount,
+    totalPages,
+    metrics,
+  };
 }
 
 export async function listTaskLogs(taskId: string): Promise<AITaskLogEntry[]> {

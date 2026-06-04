@@ -25,12 +25,13 @@ const PRODUCT_IMPROVE_STATS: StatDef[] = [
 type Props = {
   tasks: AITaskItem[];
   mode?: "image" | "product_improve";
+  totalCount?: number;
 };
 
-export function TaskListSummary({ tasks, mode = "image" }: Props) {
+export function TaskListSummary({ tasks, mode = "image", totalCount }: Props) {
   const { t } = useTranslation();
   const defs = mode === "product_improve" ? PRODUCT_IMPROVE_STATS : IMAGE_STATS;
-  const total = tasks.length;
+  const total = totalCount ?? tasks.length;
 
   const stats = defs.map((def) => ({
     label:

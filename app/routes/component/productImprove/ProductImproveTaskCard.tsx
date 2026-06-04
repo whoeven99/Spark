@@ -17,7 +17,7 @@ import { translateLegacyProductImproveTaskMessage } from "../../../lib/productIm
 type Props = {
   task: AITaskItem;
   locationSearch: string;
-  onDelete: (taskId: string) => void;
+  onDelete: () => void;
   onOpenDetail: () => void;
   onTaskUpdated?: (taskId: string, status: AITaskStatus, result?: Record<string, unknown>) => void;
   deleting: boolean;
@@ -420,7 +420,7 @@ export function ProductImproveTaskCard({
     status: localStatus,
     creditInsufficient,
     onOpenDetail,
-    onDelete: () => onDelete(task.id),
+    onDelete,
     deleting,
     t,
   });

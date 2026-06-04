@@ -12,7 +12,7 @@ import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 type Props = {
   task: AITaskItem;
   locationSearch: string;
-  onDelete: (taskId: string) => void;
+  onDelete: () => void;
   onOpenDetail: () => void;
   onTaskUpdated?: (taskId: string, status: AITaskStatus, result?: Record<string, unknown>) => void;
   deleting: boolean;
@@ -198,7 +198,7 @@ export function ImageGenerationTaskCard({
   const actions = getActions({
     status: localStatus,
     onOpenDetail,
-    onDelete: () => onDelete(task.id),
+    onDelete,
     deleting,
     t: (key) => t(key),
   });

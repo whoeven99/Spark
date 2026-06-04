@@ -1,9 +1,8 @@
-import { listRecentTasksForShop } from "../aiTask/aiTaskStore.server";
-import type { AITaskItem } from "../../lib/aiTaskTypes";
+import { listTasksPageForShop } from "../aiTask/aiTaskStore.server";
+import type { AITaskListPageData } from "../../lib/aiTaskTypes";
 
 export type ImageStudioPageLoaderData = {
-  imageGenTasks: AITaskItem[];
-  translateTasks: AITaskItem[];
+  initialTaskPage: AITaskListPageData;
 };
 
 export async function loadImageStudioPageData(
@@ -11,13 +10,30 @@ export async function loadImageStudioPageData(
   appName: string,
 ): Promise<ImageStudioPageLoaderData> {
   try {
-    const [imageGenTasks, translateTasks] = await Promise.all([
-      listRecentTasksForShop({ shop, appName, taskType: "image_generation" }),
-      listRecentTasksForShop({ shop, appName, taskType: "picture_translate" }),
-    ]);
-    return { imageGenTasks, translateTasks };
+    const initialTaskPage = await listTasksPageForShop({
+      shop,
+      appName,
+      view: "current",
+      taskTypes: ["image_generation", "picture_translate"],
+    });
+    return { initialTaskPage };
   } catch (e) {
     console.error("[ImageStudio] load tasks failed", e);
-    return { imageGenTasks: [], translateTasks: [] };
+    return {
+      initialTaskPage: {
+        tasks: [],
+        view: "current",
+        page: 1,
+        pageSize: 8,
+        totalCount: 0,
+        totalPages: 1,
+        metrics: {
+          currentCount: 0,
+          historyCount: 0,
+          runningCount: 0,
+          totalCount: 0,
+        },
+      },
+    };
   }
 }

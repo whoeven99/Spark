@@ -1,66 +1,168 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens, pageEmptyStateStyle } from "../../page/pageUiStyles";
+import { AITaskPagination } from "../aiTask/AITaskPagination";
 import { ProductImproveTaskCard } from "./ProductImproveTaskCard";
 import { ProductImproveTaskDetailPage } from "./ProductImproveTaskDetailPage";
-import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
+import type {
+  AITaskItem,
+  AITaskListMetrics,
+  AITaskListPageData,
+  AITaskStatus,
+} from "../../../lib/aiTaskTypes";
 
 type TaskViewTab = "current" | "history";
+const EMPTY_STATE_MIN_HEIGHT = 320;
 
 type Props = {
+  initialPageData: AITaskListPageData;
   tasks: AITaskItem[];
+  taskMetrics: AITaskListMetrics;
   locationSearch: string;
-  onTaskDeleted: (taskId: string) => void;
+  onTaskDeleted: (task: AITaskItem) => void;
   onTaskUpdated?: (taskId: string, status: AITaskStatus, result?: Record<string, unknown>) => void;
 };
 
+async function fetchProductImproveTaskPage(params: {
+  locationSearch: string;
+  view: TaskViewTab;
+  page: number;
+}): Promise<AITaskListPageData> {
+  const query = new URLSearchParams(
+    params.locationSearch.startsWith("?") ? params.locationSearch.slice(1) : params.locationSearch,
+  );
+  query.set("view", params.view);
+  query.set("page", String(params.page));
+  query.append("taskType", "product_improve");
+
+  const response = await fetch(`/api/ai-task-list?${query.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Failed to load task list: ${response.status}`);
+  }
+  return (await response.json()) as AITaskListPageData;
+}
+
 export function ProductImproveTaskListPage({
+  initialPageData,
   tasks,
+  taskMetrics,
   locationSearch,
   onTaskDeleted,
   onTaskUpdated,
 }: Props) {
   const { t } = useTranslation();
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [localTasks, setLocalTasks] = useState<AITaskItem[]>(tasks);
-  const [viewTab, setViewTab] = useState<TaskViewTab>("current");
+  const [viewTab, setViewTab] = useState<TaskViewTab>(initialPageData.view);
+  const [currentPage, setCurrentPage] = useState<number>(initialPageData.page);
+  const [loadedPageData, setLoadedPageData] = useState<AITaskListPageData>(initialPageData);
+  const [loading, setLoading] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   useEffect(() => {
-    setLocalTasks(tasks);
-  }, [tasks]);
+    if (viewTab !== "current" || currentPage !== 1) return;
+    setLoadedPageData((prev) => ({
+      ...prev,
+      tasks,
+      view: "current",
+      page: 1,
+      totalCount: taskMetrics.currentCount,
+      totalPages: Math.max(1, Math.ceil(taskMetrics.currentCount / prev.pageSize)),
+      metrics: taskMetrics,
+    }));
+  }, [currentPage, taskMetrics, tasks, viewTab]);
 
-  async function handleDelete(taskId: string) {
-    setDeletingId(taskId);
+  useEffect(() => {
+    if (selectedTaskId) return;
+    if (viewTab === "current" && currentPage === 1) return;
+
+    let cancelled = false;
+    setLoading(true);
+
+    void fetchProductImproveTaskPage({
+      locationSearch,
+      view: viewTab,
+      page: currentPage,
+    })
+      .then((data) => {
+        if (cancelled) return;
+        setLoadedPageData(data);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setLoadedPageData((prev) => ({
+          ...prev,
+          tasks: [],
+          view: viewTab,
+          page: currentPage,
+          totalCount: viewTab === "current" ? taskMetrics.currentCount : taskMetrics.historyCount,
+          totalPages: Math.max(
+            1,
+            Math.ceil(
+              (viewTab === "current" ? taskMetrics.currentCount : taskMetrics.historyCount) /
+                prev.pageSize,
+            ),
+          ),
+          metrics: taskMetrics,
+        }));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentPage, locationSearch, selectedTaskId, taskMetrics, viewTab]);
+
+  const visibleTasks = useMemo(() => {
+    if (viewTab === "current" && currentPage === 1) {
+      return tasks;
+    }
+    if (loadedPageData.view === viewTab && loadedPageData.page === currentPage) {
+      return loadedPageData.tasks;
+    }
+    return [];
+  }, [currentPage, loadedPageData.page, loadedPageData.tasks, loadedPageData.view, tasks, viewTab]);
+
+  const totalCount = viewTab === "current" ? taskMetrics.currentCount : taskMetrics.historyCount;
+  const totalPages =
+    viewTab === "current" && currentPage === 1
+      ? Math.max(1, Math.ceil(taskMetrics.currentCount / initialPageData.pageSize))
+      : loadedPageData.view === viewTab && loadedPageData.page === currentPage
+        ? loadedPageData.totalPages
+        : Math.max(1, Math.ceil(totalCount / initialPageData.pageSize));
+
+  const selectedTask = selectedTaskId
+    ? visibleTasks.find((task) => task.id === selectedTaskId) ?? null
+    : null;
+
+  async function handleDelete(task: AITaskItem) {
+    setDeletingId(task.id);
     try {
       const resp = await fetch(`/api/ai-task${locationSearch}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "delete", taskId }),
+        body: JSON.stringify({ action: "delete", taskId: task.id }),
       });
       if (resp.ok) {
-        setLocalTasks((prev) => prev.filter((t) => t.id !== taskId));
-        setSelectedTaskId((prev) => (prev === taskId ? null : prev));
-        onTaskDeleted(taskId);
+        if (!(viewTab === "current" && currentPage === 1)) {
+          setLoadedPageData((prev) => ({
+            ...prev,
+            tasks: prev.tasks.filter((item) => item.id !== task.id),
+            totalCount: Math.max(prev.totalCount - 1, 0),
+            totalPages: Math.max(1, Math.ceil(Math.max(prev.totalCount - 1, 0) / prev.pageSize)),
+          }));
+        }
+        setSelectedTaskId((prev) => (prev === task.id ? null : prev));
+        onTaskDeleted(task);
+        if (visibleTasks.length === 1 && currentPage > 1) {
+          setCurrentPage((prev) => prev - 1);
+        }
       }
     } finally {
       setDeletingId(null);
     }
   }
-
-  const sorted = [...localTasks].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  );
-  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-  const currentTasks = sorted.filter(
-    (task) => new Date(task.createdAt).getTime() >= cutoff,
-  );
-  const historyTasks = sorted.filter(
-    (task) => new Date(task.createdAt).getTime() < cutoff,
-  );
-  const visibleTasks = viewTab === "current" ? currentTasks : historyTasks;
-  const selectedTask =
-    (selectedTaskId ? sorted.find((task) => task.id === selectedTaskId) : null) ?? null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -90,11 +192,11 @@ export function ProductImproveTaskListPage({
               {[
                 {
                   key: "current" as const,
-                  label: t("productImproveStage1.currentTasksTab", { count: currentTasks.length }),
+                  label: t("productImproveStage1.currentTasksTab", { count: taskMetrics.currentCount }),
                 },
                 {
                   key: "history" as const,
-                  label: t("productImproveStage1.historyTasksTab", { count: historyTasks.length }),
+                  label: t("productImproveStage1.historyTasksTab", { count: taskMetrics.historyCount }),
                 },
               ].map((tab) => {
                 const active = viewTab === tab.key;
@@ -102,7 +204,10 @@ export function ProductImproveTaskListPage({
                   <button
                     key={tab.key}
                     type="button"
-                    onClick={() => setViewTab(tab.key)}
+                    onClick={() => {
+                      setViewTab(tab.key);
+                      setCurrentPage(1);
+                    }}
                     style={{
                       padding: "0.5rem 0.9rem",
                       borderRadius: 999,
@@ -128,6 +233,7 @@ export function ProductImproveTaskListPage({
           <div
             style={{
               ...pageEmptyStateStyle,
+              minHeight: EMPTY_STATE_MIN_HEIGHT,
               padding: "2.75rem 1.5rem",
               background: "linear-gradient(160deg, #fafafa 0%, #f5f6f8 100%)",
               border: `1px dashed ${pageColorTokens.borderSubtle}`,
@@ -140,6 +246,13 @@ export function ProductImproveTaskListPage({
                 : t("productImproveStage1.historyTasksEmpty")}
             </span>
           </div>
+          <AITaskPagination
+            page={currentPage}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            loading={loading}
+            onPageChange={setCurrentPage}
+          />
         </>
       ) : (
         <>
@@ -160,11 +273,11 @@ export function ProductImproveTaskListPage({
               {[
                 {
                   key: "current" as const,
-                  label: t("productImproveStage1.currentTasksTab", { count: currentTasks.length }),
+                  label: t("productImproveStage1.currentTasksTab", { count: taskMetrics.currentCount }),
                 },
                 {
                   key: "history" as const,
-                  label: t("productImproveStage1.historyTasksTab", { count: historyTasks.length }),
+                  label: t("productImproveStage1.historyTasksTab", { count: taskMetrics.historyCount }),
                 },
               ].map((tab) => {
                 const active = viewTab === tab.key;
@@ -172,7 +285,10 @@ export function ProductImproveTaskListPage({
                   <button
                     key={tab.key}
                     type="button"
-                    onClick={() => setViewTab(tab.key)}
+                    onClick={() => {
+                      setViewTab(tab.key);
+                      setCurrentPage(1);
+                    }}
                     style={{
                       padding: "0.5rem 0.9rem",
                       borderRadius: 999,
@@ -201,13 +317,20 @@ export function ProductImproveTaskListPage({
                 key={task.id}
                 task={task}
                 locationSearch={locationSearch}
-                onDelete={handleDelete}
+                onDelete={() => void handleDelete(task)}
                 onOpenDetail={() => setSelectedTaskId(task.id)}
                 onTaskUpdated={onTaskUpdated}
                 deleting={deletingId === task.id}
               />
             ))}
           </div>
+          <AITaskPagination
+            page={currentPage}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            loading={loading}
+            onPageChange={setCurrentPage}
+          />
         </>
       )}
     </div>

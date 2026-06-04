@@ -65,7 +65,8 @@ export function ProductImprovePage() {
   const loaderData = useLoaderData<typeof loader>();
   const location = useLocation();
   const billing = loaderData.billing;
-  const [tasks, setTasks] = useState<AITaskItem[]>(loaderData.recentTasks);
+  const [tasks, setTasks] = useState<AITaskItem[]>(loaderData.initialTaskPage.tasks);
+  const [taskMetrics, setTaskMetrics] = useState(loaderData.initialTaskPage.metrics);
   const [pageTab, setPageTabState] = useState<PageTab>(() =>
     readPageTabFromSearch(
       typeof window !== "undefined" ? window.location.search : location.search,
@@ -110,14 +111,24 @@ export function ProductImprovePage() {
     setPageTabState(readPageTabFromSearch(location.search));
   }, [location.search]);
 
-  const runningCount = tasks.filter((task) => task.status === "running").length;
+  const runningCount = taskMetrics.runningCount;
+  const taskPageSize = loaderData.initialTaskPage.pageSize;
 
   const localeOptions = shopLocales?.localeOptions ?? [];
 
   const productIdForActions = (selectedProduct?.id ?? productId).trim();
 
-  function handleTaskDeleted(taskId: string) {
-    setTasks((prev) => prev.filter((task) => task.id !== taskId));
+  function handleTaskDeleted(task: AITaskItem) {
+    const isCurrentTask =
+      new Date(task.createdAt).getTime() >= Date.now() - 24 * 60 * 60 * 1000;
+
+    setTasks((prev) => prev.filter((item) => item.id !== task.id));
+    setTaskMetrics((prev) => ({
+      currentCount: Math.max(prev.currentCount - (isCurrentTask ? 1 : 0), 0),
+      historyCount: Math.max(prev.historyCount - (isCurrentTask ? 0 : 1), 0),
+      runningCount: Math.max(prev.runningCount - (task.status === "running" ? 1 : 0), 0),
+      totalCount: Math.max(prev.totalCount - 1, 0),
+    }));
   }
 
   function handleTaskUpdated(
@@ -125,9 +136,15 @@ export function ProductImprovePage() {
     status: AITaskItem["status"],
     result?: Record<string, unknown>,
   ) {
+    let runningDelta = 0;
     setTasks((prev) =>
       prev.map((task) => {
         if (task.id !== taskId) return task;
+        if (task.status === "running" && status !== "running") {
+          runningDelta = -1;
+        } else if (task.status !== "running" && status === "running") {
+          runningDelta = 1;
+        }
         const completedAt =
           status !== "running" && !task.completedAt
             ? new Date().toISOString()
@@ -141,6 +158,12 @@ export function ProductImprovePage() {
         };
       }),
     );
+    if (runningDelta !== 0) {
+      setTaskMetrics((prev) => ({
+        ...prev,
+        runningCount: Math.max(prev.runningCount + runningDelta, 0),
+      }));
+    }
 
     if (status === "running") return;
 
@@ -235,10 +258,16 @@ export function ProductImprovePage() {
       updatedAt: now,
     };
 
-    setTasks((prev) => [optimisticTask, ...prev]);
+    setTasks((prev) => [optimisticTask, ...prev.filter((task) => task.id !== optimisticTask.id)].slice(0, taskPageSize));
+    setTaskMetrics((prev) => ({
+      currentCount: prev.currentCount + 1,
+      historyCount: prev.historyCount,
+      runningCount: prev.runningCount + 1,
+      totalCount: prev.totalCount + 1,
+    }));
     setPageTab("tasks");
     shopify.toast.show(t("productImproveStage1.toastTaskCreated"));
-  }, [fetcher.data, fetcher.state, shopify, t, targetLanguage]);
+  }, [fetcher.data, fetcher.state, shopify, t, targetLanguage, taskPageSize]);
 
   const errorText =
     actionData && !actionData.success ? actionData.errorMsg : null;
@@ -451,7 +480,9 @@ export function ProductImprovePage() {
 
         {pageTab === "tasks" && (
           <ProductImproveTaskListPage
+            initialPageData={loaderData.initialTaskPage}
             tasks={tasks}
+            taskMetrics={taskMetrics}
             locationSearch={search}
             onTaskDeleted={handleTaskDeleted}
             onTaskUpdated={handleTaskUpdated}

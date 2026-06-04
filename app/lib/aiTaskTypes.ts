@@ -11,6 +11,8 @@ export type AITaskStatus =
 
 export type AITaskType = "image_generation" | "picture_translate" | "product_improve";
 
+export type AITaskListView = "current" | "history";
+
 export interface AITaskItem {
   id: string;
   batchId: string;
@@ -29,6 +31,23 @@ export interface AITaskItem {
   errorMsgParams?: AITaskMessageParams;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AITaskListMetrics {
+  currentCount: number;
+  historyCount: number;
+  runningCount: number;
+  totalCount: number;
+}
+
+export interface AITaskListPageData {
+  tasks: AITaskItem[];
+  view: AITaskListView;
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+  metrics: AITaskListMetrics;
 }
 
 export interface AITaskBatchItem {

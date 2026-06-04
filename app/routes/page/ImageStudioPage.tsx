@@ -7,6 +7,7 @@ import type { AITaskItem, AITaskType } from "../../lib/aiTaskTypes";
 import type { ImageStudioPageLoaderData } from "../../server/visualTools/imageStudioPageLoader.server";
 import { LanguageSelector } from "../component/common/LanguageSelector";
 import { ImageGenerationForm } from "../component/imageGeneration/ImageGenerationForm";
+import { ImageStudioTaskListPage } from "../component/imageStudio/ImageStudioTaskListPage";
 import { PictureTranslateForm } from "../component/pictureTranslate/PictureTranslateForm";
 import { PictureTranslateProvider } from "../component/pictureTranslate/pictureTranslateContext";
 import { usePictureTranslateContext } from "../component/pictureTranslate/pictureTranslateContext";
@@ -99,6 +100,8 @@ function buildOptimisticTask(params: {
 
 type InnerProps = {
   tasks: AITaskItem[];
+  taskMetrics: ImageStudioPageLoaderData["initialTaskPage"]["metrics"];
+  initialTaskPage: ImageStudioPageLoaderData["initialTaskPage"];
   navTab: StudioNavTab;
   setNavTab: (tab: StudioNavTab) => void;
   locationSearch: string;
@@ -108,12 +111,14 @@ type InnerProps = {
     taskType: AITaskType,
     optimisticConfig?: Record<string, unknown>,
   ) => void;
-  onTaskDeleted: (taskId: string) => void;
+  onTaskDeleted: (task: AITaskItem) => void;
   onTaskUpdated: (taskId: string, status: AITaskItem["status"], result?: Record<string, unknown>) => void;
 };
 
 function ImageStudioPageInner({
   tasks,
+  taskMetrics,
+  initialTaskPage,
   navTab,
   setNavTab,
   locationSearch,
@@ -138,7 +143,7 @@ function ImageStudioPageInner({
     onTaskCreated,
   });
 
-  const runningCount = tasks.filter((t) => t.status === "running").length;
+  const runningCount = taskMetrics.runningCount;
   const sectionSubtitle =
     navTab === "translate"
       ? t("pictureTranslate.pageSubtitle")
@@ -228,6 +233,18 @@ function ImageStudioPageInner({
               </PageSurface>
             </div>
           </>
+        )}
+
+        {navTab === "tasks" && (
+          <ImageStudioTaskListPage
+            initialPageData={initialTaskPage}
+            tasks={tasks}
+            taskMetrics={taskMetrics}
+            locationSearch={locationSearch}
+            onTaskDeleted={onTaskDeleted}
+            onTaskUpdated={onTaskUpdated}
+            onTaskCreated={onTaskCreated}
+          />
         )}
 
         <div style={footerDockStyle}>
@@ -422,16 +439,15 @@ export function ImageStudioPage() {
   const locationSearch =
     typeof window !== "undefined" ? window.location.search : "";
 
-  const [tasks, setTasks] = useState<AITaskItem[]>(() => [
-    ...loaderData.imageGenTasks,
-    ...loaderData.translateTasks,
-  ]);
+  const [tasks, setTasks] = useState<AITaskItem[]>(() => loaderData.initialTaskPage.tasks);
+  const [taskMetrics, setTaskMetrics] = useState(loaderData.initialTaskPage.metrics);
   const [navTab, setNavTabState] = useState<StudioNavTab>(() =>
     readNavTabFromSearch(typeof window !== "undefined" ? window.location.search : location.search),
   );
   const [lastToolTab, setLastToolTab] = useState<VisualToolsTab>(() =>
     readToolFromSearch(typeof window !== "undefined" ? window.location.search : location.search),
   );
+  const taskPageSize = loaderData.initialTaskPage.pageSize;
 
   useEffect(() => {
     const nextNavTab = readNavTabFromSearch(location.search);
@@ -464,23 +480,50 @@ export function ImageStudioPage() {
         taskType,
         optimisticConfig,
       });
-      setTasks((prev) => [optimisticTask, ...prev]);
+      setTasks((prev) => [optimisticTask, ...prev.filter((task) => task.id !== taskId)].slice(0, taskPageSize));
+      setTaskMetrics((prev) => ({
+        currentCount: prev.currentCount + 1,
+        historyCount: prev.historyCount,
+        runningCount: prev.runningCount + 1,
+        totalCount: prev.totalCount + 1,
+      }));
       setNavTab("tasks");
     },
-    [setNavTab],
+    [setNavTab, taskPageSize],
   );
 
-  const handleTaskDeleted = useCallback((taskId: string) => {
-    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+  const handleTaskDeleted = useCallback((task: AITaskItem) => {
+    const isCurrentTask =
+      new Date(task.createdAt).getTime() >= Date.now() - 24 * 60 * 60 * 1000;
+
+    setTasks((prev) => prev.filter((t) => t.id !== task.id));
+    setTaskMetrics((prev) => ({
+      currentCount: Math.max(prev.currentCount - (isCurrentTask ? 1 : 0), 0),
+      historyCount: Math.max(prev.historyCount - (isCurrentTask ? 0 : 1), 0),
+      runningCount: Math.max(prev.runningCount - (task.status === "running" ? 1 : 0), 0),
+      totalCount: Math.max(prev.totalCount - 1, 0),
+    }));
   }, []);
 
   const handleTaskUpdated = useCallback(
     (taskId: string, status: AITaskItem["status"], result?: Record<string, unknown>) => {
+      let runningDelta = 0;
       setTasks((prev) =>
         prev.map((task) =>
           task.id === taskId
             ? {
                 ...task,
+                ...(task.status === "running" && status !== "running"
+                  ? (() => {
+                      runningDelta = -1;
+                      return {};
+                    })()
+                  : task.status !== "running" && status === "running"
+                    ? (() => {
+                        runningDelta = 1;
+                        return {};
+                      })()
+                    : {}),
                 status,
                 result: result ?? task.result,
                 completedAt:
@@ -490,6 +533,12 @@ export function ImageStudioPage() {
             : task,
         ),
       );
+      if (runningDelta !== 0) {
+        setTaskMetrics((prev) => ({
+          ...prev,
+          runningCount: Math.max(prev.runningCount + runningDelta, 0),
+        }));
+      }
 
       if (status === "running") return;
 
@@ -521,6 +570,8 @@ export function ImageStudioPage() {
     >
       <ImageStudioPageInner
         tasks={tasks}
+        taskMetrics={taskMetrics}
+        initialTaskPage={loaderData.initialTaskPage}
         navTab={navTab}
         setNavTab={setNavTab}
         locationSearch={locationSearch}

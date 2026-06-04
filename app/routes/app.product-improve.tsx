@@ -25,7 +25,7 @@ import {
   toBillingAccessSnapshot,
 } from "../server/billing/index.server";
 import { createBatchWithTask } from "../server/aiTask/aiTaskStore.server";
-import { listRecentTasksForShop } from "../server/aiTask/aiTaskStore.server";
+import { listTasksPageForShop } from "../server/aiTask/aiTaskStore.server";
 import { ProductImprovePage } from "./page/ProductImprovePage";
 import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
 import { initI18n } from "../i18n";
@@ -64,12 +64,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const billing = toBillingAccessSnapshot(
     await loadBillingContext(session.shop, getAppEntry()),
   );
-  const recentTasks = await listRecentTasksForShop({
+  const initialTaskPage = await listTasksPageForShop({
     shop: session.shop,
     appName: getAppEntry(),
+    view: "current",
     taskType: "product_improve",
   });
-  return data({ shopLocales, billing, recentTasks });
+  return data({ shopLocales, billing, initialTaskPage });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
