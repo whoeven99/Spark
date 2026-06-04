@@ -267,7 +267,10 @@ export function useProductImprove(params: UseProductImproveParams) {
           toastShow(t("generate.copyAllEmpty"));
           return;
         }
-        text = buildCopyAllText(title, desc);
+        text = buildCopyAllText(title, desc, {
+          title: t("generate.productTitleLabel"),
+          description: t("generate.productDescriptionLabel"),
+        });
       }
 
       setCopyTarget(kind);

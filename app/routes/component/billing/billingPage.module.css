@@ -21,18 +21,29 @@
   min-width: 0;
 }
 
+.usageTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.usageTitleRow .secondaryEntryButton {
+  margin-left: auto;
+}
+
 .usageTitle {
   margin: 0;
   font-size: 1.125rem;
   font-weight: 600;
-  color: #202223;
+  color: #1f2124;
 }
 
 .quotaSubtitle {
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
   line-height: 1.45;
-  color: #6d7175;
+  color: #5c6066;
   max-width: 36rem;
 }
 
@@ -48,22 +59,21 @@
 
 .planBadge {
   flex-shrink: 0;
-  padding: 0.3rem 0.8rem;
+  padding: 0.28rem 0.72rem;
   border-radius: 999px;
   font-size: 0.8125rem;
-  font-weight: 700;
-  color: #005c46;
-  background: #edfaf5;
-  border: 1px solid rgba(0, 166, 124, 0.18);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  font-weight: 600;
+  color: #1f2124;
+  background: #fafbfb;
+  border: 1px solid #e1e3e5;
 }
 
 .usageCard {
   background: #ffffff;
-  border: 1px solid #e2e5e9;
+  border: 1px solid #e1e3e5;
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 3px 12px rgba(0, 0, 0, 0.04);
 }
 
 .usageMain {
@@ -85,15 +95,15 @@
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 700;
-  color: #005c46;
-  background: #edfaf5;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  color: #2c6ecb;
+  background: #eef4ff;
+  border: 1px solid rgba(44, 110, 203, 0.14);
 }
 
 .usagePercentBadgeLow {
-  color: #7a4f00;
-  background: #fff4e5;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  color: #8a6116;
+  background: #fff7e0;
+  border-color: rgba(185, 137, 0, 0.18);
 }
 
 .quotaRatio {
@@ -106,44 +116,44 @@
 
 .quotaRatioLabel {
   font-size: 0.8125rem;
-  color: #6d7175;
+  color: #5c6066;
 }
 
 .quotaRatioValue {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #202223;
+  color: #1f2124;
   line-height: 1.15;
 }
 
 .quotaRatioSep {
   font-weight: 500;
-  color: #8c9196;
+  color: #7a7f87;
 }
 
 .quotaRatioUnit {
   font-size: 0.8125rem;
-  color: #6d7175;
+  color: #5c6066;
 }
 
 .progressTrack {
   height: 10px;
   border-radius: 999px;
-  background: #e8eaef;
+  background: #ebedf0;
   overflow: hidden;
-  margin-bottom: 0.65rem;
+  margin-bottom: 0;
 }
 
 .progressFill {
   height: 100%;
   border-radius: 999px;
-  background: #00a67c;
+  background: #2c6ecb;
   box-shadow: none;
   transition: width 0.3s ease;
 }
 
 .progressFillLow {
-  background: #f59e0b;
+  background: #b98900;
   box-shadow: none;
 }
 
@@ -206,7 +216,7 @@
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
   line-height: 1.45;
-  color: #6d7175;
+  color: #5c6066;
   max-width: 28rem;
 }
 
@@ -224,7 +234,7 @@
   margin: 0;
   font-size: 1.25rem;
   font-weight: 700;
-  color: #202223;
+  color: #1f2124;
   flex: 1 1 12rem;
   min-width: 0;
   text-align: left;
@@ -253,7 +263,7 @@
   font-size: 0.8125rem;
   font-weight: 500;
   font-family: inherit;
-  color: #6d7175;
+  color: #5c6066;
   cursor: pointer;
   transition:
     background 0.15s ease,
@@ -262,12 +272,12 @@
 }
 
 .intervalOption:hover {
-  color: #202223;
+  color: #1f2124;
 }
 
 .intervalOptionActive {
   background: #fff;
-  color: #202223;
+  color: #1f2124;
   font-weight: 600;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
@@ -276,8 +286,8 @@
   display: inline-block;
   padding: 0.12rem 0.4rem;
   border-radius: 999px;
-  background: #ffea8a;
-  color: #5c4813;
+  background: #fff7e0;
+  color: #8a6116;
   font-size: 0.6875rem;
   font-weight: 600;
   line-height: 1.2;
@@ -312,7 +322,7 @@
 
 .planGrid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 1rem;
   align-items: stretch;
 }
@@ -330,10 +340,10 @@
   display: flex;
   flex-direction: column;
   background: #ffffff;
-  border: 1px solid #e2e5e9;
+  border: 1px solid #e1e3e5;
   border-radius: 14px;
   padding: 1.35rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 3px 12px rgba(0, 0, 0, 0.04);
   transition:
     border-color 0.2s,
     box-shadow 0.2s,
@@ -347,8 +357,8 @@
 }
 
 .planCardRecommended {
-  border-color: #4070f4;
-  box-shadow: 0 0 0 1px rgba(64, 112, 244, 0.22), 0 8px 24px rgba(64, 112, 244, 0.08);
+  border-color: #2c6ecb;
+  box-shadow: 0 0 0 1px rgba(44, 110, 203, 0.2), 0 8px 24px rgba(44, 110, 203, 0.08);
   transform: translateY(-2px);
   background: #ffffff;
 }
@@ -360,9 +370,9 @@
 }
 
 .planCardCurrent {
-  border-color: rgba(0, 166, 124, 0.5);
-  box-shadow: 0 0 0 1px rgba(0, 166, 124, 0.2), 0 4px 16px rgba(0, 166, 124, 0.08);
-  background: #f8fcfa;
+  border-color: #2c6ecb;
+  box-shadow: 0 0 0 1px rgba(44, 110, 203, 0.2), 0 4px 16px rgba(44, 110, 203, 0.08);
+  background: #eef4ff;
 }
 
 .planCardPending {
@@ -377,10 +387,10 @@
   right: 0;
   padding: 0.28rem 0.7rem;
   border-radius: 0 14px 0 9px;
-  background: #eef2ff;
-  border-left: 1px solid rgba(64, 112, 244, 0.18);
-  border-bottom: 1px solid rgba(64, 112, 244, 0.18);
-  color: #2952d8;
+  background: #eef4ff;
+  border-left: 1px solid rgba(44, 110, 203, 0.18);
+  border-bottom: 1px solid rgba(44, 110, 203, 0.18);
+  color: #2c6ecb;
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -391,7 +401,7 @@
   margin: 0 0 0.75rem;
   font-size: 1.125rem;
   font-weight: 700;
-  color: #202223;
+  color: #1f2124;
 }
 
 .planPriceRow {
@@ -405,19 +415,19 @@
 .planPrice {
   font-size: 1.75rem;
   font-weight: 700;
-  color: #202223;
+  color: #1f2124;
 }
 
 .planPriceSuffix {
   font-size: 0.875rem;
-  color: #6d7175;
+  color: #5c6066;
 }
 
 .planPriceMeta {
   margin: -0.5rem 0 0.85rem;
   font-size: 0.75rem;
   line-height: 1.4;
-  color: #6d7175;
+  color: #5c6066;
 }
 
 .planFeatures {
@@ -434,7 +444,7 @@
   margin-bottom: 0.5rem;
   font-size: 0.8125rem;
   line-height: 1.4;
-  color: #303030;
+  color: #1f2124;
 }
 
 .checkIcon {
@@ -443,10 +453,25 @@
   font-weight: 700;
 }
 
+.minusIcon {
+  flex-shrink: 0;
+  color: #7a7f87;
+  font-weight: 700;
+}
+
 .planCta {
   margin-top: auto;
   width: 100%;
   padding-top: 0.25rem;
+}
+
+.planCtaGroup {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.planActionForm {
+  margin: 0;
 }
 
 .planPrimaryCta {
@@ -481,12 +506,46 @@
 }
 
 .planCardRecommended .planPrimaryCta {
-  background: #2952d8;
-  box-shadow: 0 1px 2px rgba(41, 82, 216, 0.28);
+  background: #2c6ecb;
+  box-shadow: 0 1px 2px rgba(44, 110, 203, 0.28);
 }
 
 .planCardRecommended .planPrimaryCta:hover:not(:disabled) {
-  box-shadow: 0 3px 12px rgba(41, 82, 216, 0.28);
+  box-shadow: 0 3px 12px rgba(44, 110, 203, 0.28);
+}
+
+.planSecondaryCta {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.65rem 1rem;
+  border-radius: 9px;
+  border: 1px solid #c9cdd2;
+  background: #ffffff;
+  color: #1f2124;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  line-height: 1.25;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.planSecondaryCta:hover:not(:disabled) {
+  background: #fafbfb;
+  border-color: #2c6ecb;
+  box-shadow: 0 2px 10px rgba(44, 110, 203, 0.08);
+  transform: translateY(-1px);
+}
+
+.planSecondaryCta:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .planPendingCta {
@@ -509,12 +568,45 @@
   box-sizing: border-box;
   padding: 0.625rem 1rem;
   border-radius: 8px;
-  border: 1px solid #b7e0d0;
-  background: #f1f8f5;
-  color: #006e52;
+  border: 1px solid rgba(44, 110, 203, 0.18);
+  background: #eef4ff;
+  color: #2c6ecb;
   font-size: 0.875rem;
   font-weight: 600;
   line-height: 1.25;
+  text-align: center;
+}
+
+.freePlanEntryWrap {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  margin-top: 0.9rem;
+}
+
+.freePlanEntryButton {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: #2c6ecb;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  line-height: 1.4;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.freePlanEntryButton:hover {
+  text-decoration: underline;
+}
+
+.freePlanEntryMeta {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #5c6066;
   text-align: center;
 }
 
@@ -536,18 +628,18 @@
 /* —— 对比表 —— */
 .compareSection {
   background: #ffffff;
-  border: 1px solid #e2e5e9;
+  border: 1px solid #e1e3e5;
   border-radius: 14px;
   padding: 1.25rem;
   overflow-x: auto;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 3px 12px rgba(0, 0, 0, 0.04);
 }
 
 .compareTitle {
   margin: 0 0 1rem;
   font-size: 1.125rem;
   font-weight: 700;
-  color: #202223;
+  color: #1f2124;
 }
 
 .compareTable {
@@ -585,13 +677,13 @@
 }
 
 .compareColHighlight {
-  background: #f5f8ff !important;
+  background: #eef4ff !important;
   font-weight: 700;
-  color: #1a1d1f;
+  color: #1f2124;
 }
 
 .compareTable thead .compareColHighlight {
-  color: #4070f4;
+  color: #2c6ecb;
 }
 
 /* —— 购包 —— */
@@ -601,13 +693,13 @@
 
 .packCard {
   background: #ffffff;
-  border: 1px solid #e2e5e9;
+  border: 1px solid #e1e3e5;
   border-radius: 14px;
   padding: 1.25rem 1.5rem 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 3px 12px rgba(0, 0, 0, 0.04);
 }
 
 .packCardHeader {
@@ -619,20 +711,20 @@
   margin: 0 0 0.35rem;
   font-size: 1.125rem;
   font-weight: 700;
-  color: #202223;
+  color: #1f2124;
 }
 
 .packHint {
   margin: 0;
   font-size: 0.8125rem;
   line-height: 1.45;
-  color: #6d7175;
+  color: #5c6066;
 }
 
 .packOptions {
   display: grid;
   grid-template-columns: repeat(var(--pack-columns, 2), minmax(0, 1fr));
-  gap: 1rem;
+  gap: 0.7rem;
 }
 
 @media (max-width: 640px) {
@@ -646,9 +738,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.15rem;
-  min-height: 7.5rem;
-  padding: 1.15rem 0.75rem;
+  gap: 0.08rem;
+  min-height: 5.8rem;
+  padding: 0.8rem 0.7rem;
   border: 1.5px solid #c8cdd3;
   border-radius: 11px;
   background: #ffffff;
@@ -658,20 +750,20 @@
 }
 
 .packOption:hover {
-  border-color: #00a67c;
-  box-shadow: 0 2px 10px rgba(0, 166, 124, 0.12);
+  border-color: #2c6ecb;
+  box-shadow: 0 2px 10px rgba(44, 110, 203, 0.12);
   transform: translateY(-1px);
 }
 
 .packOptionSelected {
-  border-color: #00a67c;
-  background: #f8fcfa;
-  box-shadow: 0 0 0 1px #00a67c, 0 4px 16px rgba(0, 166, 124, 0.08);
+  border-color: #2c6ecb;
+  background: #eef4ff;
+  box-shadow: 0 0 0 1px #2c6ecb, 0 4px 16px rgba(44, 110, 203, 0.08);
   transform: translateY(-1px);
 }
 
 .packOptionTokens {
-  font-size: 1.25rem;
+  font-size: 1.125rem;
   font-weight: 700;
   color: #202223;
   line-height: 1.2;
@@ -686,10 +778,10 @@
 }
 
 .packOptionPrice {
-  margin-top: 0.35rem;
-  font-size: 0.9rem;
+  margin-top: 0.2rem;
+  font-size: 0.825rem;
   font-weight: 700;
-  color: #00a67c;
+  color: #2c6ecb;
 }
 
 .packCheckoutBar {
@@ -748,6 +840,11 @@
 }
 
 @media (max-width: 520px) {
+  .usageTitleRow .secondaryEntryButton {
+    margin-left: 0;
+    width: 100%;
+  }
+
   .packCheckoutBar {
     flex-direction: column;
     align-items: center;
@@ -762,7 +859,7 @@
 .quotaFooter {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 0.75rem 1rem;
   flex-wrap: wrap;
   margin-top: 0.65rem;
@@ -784,7 +881,7 @@
 .subscriptionMetaItem {
   font-size: 0.75rem;
   line-height: 1.35;
-  color: #6d7175;
+  color: #5c6066;
   white-space: nowrap;
 }
 
@@ -905,14 +1002,14 @@
   margin: 0;
   font-size: 1.125rem;
   font-weight: 700;
-  color: #202223;
+  color: #1f2124;
 }
 
 .sectionSubtitle {
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
   line-height: 1.45;
-  color: #6d7175;
+  color: #5c6066;
   max-width: 40rem;
 }
 
@@ -1004,6 +1101,10 @@
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
+.accountCardCompact {
+  padding: 0.9rem 1rem;
+}
+
 .accountCardHeader {
   display: flex;
   align-items: center;
@@ -1024,11 +1125,11 @@
 .accountCardBadge {
   padding: 0.25rem 0.65rem;
   border-radius: 999px;
-  background: #edfaf5;
-  border: 1px solid rgba(0, 166, 124, 0.18);
-  color: #005c46;
+  background: #fafbfb;
+  border: 1px solid #e1e3e5;
+  color: #1f2124;
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .accountCardMeta {
@@ -1040,6 +1141,64 @@
   margin: 0;
   display: grid;
   gap: 0.75rem;
+}
+
+.subscriptionSummaryRow {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #f1f2f3;
+}
+
+.subscriptionStatusBlock,
+.subscriptionPeriodBlock {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.subscriptionStatusLabel {
+  font-size: 0.7rem;
+  color: #6d7175;
+}
+
+.subscriptionStatusValue,
+.subscriptionPeriodValue {
+  font-size: 0.875rem;
+  color: #202223;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.accountFactsCompact {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem 0.75rem;
+}
+
+.accountFactCompact {
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 10px;
+  background: #fafbfb;
+  border: 1px solid #eceef0;
+}
+
+.accountFactCompact dt {
+  font-size: 0.6875rem;
+  color: #6d7175;
+}
+
+.accountFactCompact dd {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #202223;
+  font-weight: 700;
+  line-height: 1.3;
 }
 
 .accountFact {
@@ -1057,6 +1216,13 @@
   font-size: 0.875rem;
   color: #202223;
   font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .subscriptionSummaryRow,
+  .accountFactsCompact {
+    grid-template-columns: 1fr;
+  }
 }
 
 .historyList,
@@ -1084,6 +1250,20 @@
   flex-wrap: wrap;
 }
 
+.historyMain {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+.historySide {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+  flex-shrink: 0;
+  text-align: right;
+}
+
 .historyItemMeta,
 .periodStats {
   margin-top: 0.45rem;
@@ -1092,6 +1272,21 @@
   flex-wrap: wrap;
   font-size: 0.75rem;
   color: #6d7175;
+}
+
+.historyPagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.85rem;
+}
+
+.historyPaginationText {
+  font-size: 0.75rem;
+  color: #6d7175;
+  font-weight: 600;
 }
 
 .historyTone {
@@ -1133,6 +1328,14 @@
 .historyDeltaNegative {
   color: #8a2712;
   font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .historySide {
+    width: 100%;
+    align-items: flex-start;
+    text-align: left;
+  }
 }
 
 .periodPlan {

@@ -196,6 +196,39 @@ code {
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
+.spark-dialog-shell .ant-modal-close {
+  color: #6b7280;
+}
+
+.spark-dialog-shell__content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.spark-dialog-shell__header,
+.spark-dialog-shell__body,
+.spark-dialog-shell__footer {
+  border: 1px solid #dde1e6;
+  border-radius: 9px;
+  background: #fafafa;
+  padding: 16px;
+}
+
+.spark-dialog-shell__title {
+  color: #1a1d1f;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.spark-dialog-shell__description {
+  margin-top: 8px;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .spark-ant-empty .ant-empty-description {
   color: #6b7280;
 }

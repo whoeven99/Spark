@@ -9,7 +9,7 @@ import {
 import { APP_SUBSCRIPTION_STATUS } from "../types.server";
 
 export const shopifyBillingGateway: BillingGateway = {
-  async createSubscription({ admin, shop, appName, plan, returnUrl }) {
+  async createSubscription({ admin, shop, appName, plan, returnUrl, trialDays }) {
     const name = plan.shopifyPlanName ?? plan.displayName;
     const { confirmationUrl, subscriptionId } = await shopifyCreateSubscription(
       admin,
@@ -19,7 +19,7 @@ export const shopifyBillingGateway: BillingGateway = {
         currencyCode: plan.currencyCode,
         billingInterval: plan.billingInterval,
         returnUrl,
-        trialDays: plan.trialDays,
+        trialDays: trialDays !== undefined ? trialDays : plan.trialDays,
       },
     );
 

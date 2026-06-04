@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { parseAITaskMessage, safeTranslateAITaskMessage } from "../../../lib/aiTaskMessage";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import type {
   AITaskLogEntry,
@@ -6,6 +8,7 @@ import type {
   AITaskStatus,
   AITaskType,
 } from "../../../lib/aiTaskTypes";
+import { translateLegacyProductImproveTaskMessage } from "../../../lib/productImproveTaskMessage";
 
 type Props = {
   taskId: string;
@@ -122,6 +125,7 @@ function parseSSEChunk(buffer: string): {
 
 export function LogViewer({
   taskId,
+  taskType,
   status,
   locationSearch,
   initialLogs = [],
@@ -130,17 +134,43 @@ export function LogViewer({
   defaultLogsOpen,
   onStatusChange,
 }: Props) {
+  const { t } = useTranslation();
   const startMsRef = useRef(resolveStartMs(startedAt));
   const onStatusChangeRef = useRef(onStatusChange);
   const [logs, setLogs] = useState<AITaskLogEntry[]>(initialLogs);
   const [currentStatus, setCurrentStatus] = useState<AITaskStatus>(status);
   const [logsOpen, setLogsOpen] = useState(defaultLogsOpen ?? status === "running");
   const [elapsed, setElapsed] = useState(() =>
-    Math.floor((Date.now() - startMsRef.current) / 1000),
+    completedAt ? elapsedSecondsBetween(startedAt, completedAt) : 0,
   );
   const logsScrollRef = useRef<HTMLDivElement>(null);
   const isDone = currentStatus !== "running";
   const displayLogs = normalizeLogList(logs);
+  const translateLogMessage = useCallback(
+    (message: string, messageKey?: string, messageParams?: Record<string, unknown>) => {
+      if (messageKey) {
+        return safeTranslateAITaskMessage({
+          t,
+          message,
+          messageKey,
+          messageParams,
+        });
+      }
+      const parsed = parseAITaskMessage(message);
+      if (parsed.key) {
+        return safeTranslateAITaskMessage({
+          t,
+          message: parsed.text,
+          messageKey: parsed.key,
+          messageParams: parsed.params,
+        });
+      }
+      return taskType === "product_improve"
+        ? translateLegacyProductImproveTaskMessage(parsed.text, t)
+        : parsed.text;
+    },
+    [t, taskType],
+  );
   const workflowLogs = displayLogs;
   const showWorkflowSteps = !isDone;
   const completedElapsed = Math.max(
@@ -175,6 +205,8 @@ export function LogViewer({
               taskId: event.taskId,
               elapsedSeconds: event.elapsedSeconds,
               message: event.message,
+              messageKey: event.messageKey,
+              messageParams: event.messageParams,
               createdAt: event.createdAt,
             },
           ]),
@@ -453,7 +485,7 @@ export function LogViewer({
                       fontWeight: isLatest ? 600 : 400,
                     }}
                   >
-                    {log.message}
+                    {translateLogMessage(log.message, log.messageKey, log.messageParams)}
                   </span>
                 </div>
               );
@@ -544,7 +576,7 @@ export function LogViewer({
                 >
                   {formatElapsedClock(stepDurationSeconds(displayLogs, index))}
                 </span>
-                <span>{log.message}</span>
+                <span>{translateLogMessage(log.message, log.messageKey, log.messageParams)}</span>
               </div>
             ))}
           </div>

@@ -3,12 +3,44 @@ import type { PlanRecord } from "./billingPageTypes";
 export type BillingIntervalView = "MONTHLY" | "ANNUAL";
 
 /** 订阅档位，与 PlanCatalog `planKey` 中段一致（如 `pi_base_monthly`、`gd_pro_annual`）。 */
-export type PlanTier = "base" | "pro";
+export type PlanTier = "base" | "pro" | "premium";
 
 const TIER_PLAN_KEY_SEGMENT: Record<PlanTier, string> = {
   base: "_base_",
   pro: "_pro_",
+  premium: "_premium_",
 };
+
+function stripPlanIntervalSuffix(name: string): string {
+  return name.replace(/\s*\((Monthly|Annual)\)\s*$/i, "").trim();
+}
+
+function fallbackPlanNameFromKey(planKey: string): string | null {
+  const tier = planTierFromPlanKey(planKey);
+  if (tier === "base") return "Basic";
+  if (tier === "pro") return "Pro";
+  if (tier === "premium") return "Premium";
+  if (planKey.includes("trial")) return "Trial";
+  return null;
+}
+
+export function normalizePlanDisplayName(displayName: string, planKey?: string | null): string {
+  const stripped = stripPlanIntervalSuffix(displayName);
+  if (/^base$/i.test(stripped)) return "Basic";
+  if (/^pro$/i.test(stripped)) return "Pro";
+  if (/^premium$/i.test(stripped)) return "Premium";
+  if (/^free\s+trial$/i.test(stripped)) return "Trial";
+  if (/^free\s+plan$/i.test(stripped)) return "Free";
+  if (stripped.length > 0) return stripped;
+  if (planKey) return fallbackPlanNameFromKey(planKey) ?? planKey;
+  return displayName;
+}
+
+export function formatPlanTagLabel(displayName: string, planKey?: string | null): string {
+  const normalized = normalizePlanDisplayName(displayName, planKey);
+  if (/plan$/i.test(normalized) || /计划$/.test(normalized)) return normalized;
+  return `${normalized} Plan`;
+}
 
 export function formatPlanPrice(
   amount: string,
@@ -147,15 +179,21 @@ export function resolveCurrentPlanLabel(params: {
   const { subscription, trialPlan, subscriptionPlans, account, t } = params;
   if (subscription?.status === "PENDING") {
     const match = subscriptionPlans.find((p) => p.planKey === subscription.planKey);
-    const name = match?.displayName ?? subscription.planKey;
+    const name = normalizePlanDisplayName(
+      match?.displayName ?? subscription.planKey,
+      subscription.planKey,
+    );
     return t("billing.pendingPlanLabel", { plan: name });
   }
   if (subscription?.status === "ACTIVE") {
     const match = subscriptionPlans.find((p) => p.planKey === subscription.planKey);
-    return match?.displayName ?? subscription.planKey;
+    return normalizePlanDisplayName(
+      match?.displayName ?? subscription.planKey,
+      subscription.planKey,
+    );
   }
   if (account.trialTokens > 0 && trialPlan) {
-    return trialPlan.displayName;
+    return t("billing.planFree");
   }
   return t("billing.planFree");
 }

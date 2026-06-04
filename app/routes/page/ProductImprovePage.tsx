@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
-import { useFetcher, useLoaderData } from "react-router";
+import { useFetcher, useLoaderData, useLocation } from "react-router";
 import type { loader } from "../app.product-improve";
 import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
+import { LanguageSelector } from "../component/common/LanguageSelector";
 import { ProductSelector } from "../component/product/ProductSelector";
 import { ProductImproveTaskListPage } from "../component/productImprove/ProductImproveTaskListPage";
+import { DialogShell } from "../component/shared/DialogShell";
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import type { AITaskItem } from "../../lib/aiTaskTypes";
 import {
@@ -18,20 +20,58 @@ import {
   pageHintTextStyle,
   pageLinkHintStyle,
   pageSelectStyle,
-  pageTrustFootnoteStyle,
 } from "./pageUiStyles";
 
 type PageTab = "config" | "tasks";
 const ESTIMATED_TOKENS = 320;
-const ESTIMATED_DURATION = "1-2 min";
+const footerDividerStyle = {
+  color: pageColorTokens.textFootnote,
+};
+const footerDockStyle = {
+  display: "flex",
+  justifyContent: "center",
+  width: "100%",
+  marginTop: "0.5rem",
+};
+const footerContentStyle = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "0.75rem",
+  flexWrap: "wrap" as const,
+  fontSize: "0.75rem",
+  lineHeight: 1.45,
+  color: pageColorTokens.textSecondary,
+  textAlign: "center" as const,
+};
+
+function readPageTabFromSearch(search: string): PageTab {
+  return new URLSearchParams(search.startsWith("?") ? search.slice(1) : search).get("tab") ===
+    "tasks"
+    ? "tasks"
+    : "config";
+}
+
+function buildSearchWithoutTab(search: string): string {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  params.delete("tab");
+  const serialized = params.toString();
+  return serialized ? `?${serialized}` : "";
+}
 
 export function ProductImprovePage() {
   const shopify = useAppBridge();
   const { t } = useTranslation();
   const loaderData = useLoaderData<typeof loader>();
+  const location = useLocation();
   const billing = loaderData.billing;
-  const [tasks, setTasks] = useState<AITaskItem[]>(loaderData.recentTasks);
-  const [pageTab, setPageTab] = useState<PageTab>("config");
+  const [tasks, setTasks] = useState<AITaskItem[]>(loaderData.initialTaskPage.tasks);
+  const [taskMetrics, setTaskMetrics] = useState(loaderData.initialTaskPage.metrics);
+  const [pageTab, setPageTabState] = useState<PageTab>(() =>
+    readPageTabFromSearch(
+      typeof window !== "undefined" ? window.location.search : location.search,
+    ),
+  );
 
   const shopLocales = loaderData.shopLocales;
   const [selectedProduct, setSelectedProduct] = useState<ProductSelectorSelection | null>(null);
@@ -49,17 +89,46 @@ export function ProductImprovePage() {
     | { success: false; errorMsg: string }
     | undefined;
 
-  const search =
-    typeof window !== "undefined" ? window.location.search : "";
+  const search = buildSearchWithoutTab(location.search);
 
-  const runningCount = tasks.filter((task) => task.status === "running").length;
+  function setPageTab(nextTab: PageTab) {
+    setPageTabState(nextTab);
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (nextTab === "config") {
+      url.searchParams.delete("tab");
+    } else {
+      url.searchParams.set("tab", nextTab);
+    }
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+  }
+
+  useEffect(() => {
+    setPageTabState(readPageTabFromSearch(location.search));
+  }, [location.search]);
+
+  const runningCount = taskMetrics.runningCount;
+  const taskPageSize = loaderData.initialTaskPage.pageSize;
 
   const localeOptions = shopLocales?.localeOptions ?? [];
 
   const productIdForActions = (selectedProduct?.id ?? productId).trim();
 
-  function handleTaskDeleted(taskId: string) {
-    setTasks((prev) => prev.filter((task) => task.id !== taskId));
+  function handleTaskDeleted(task: AITaskItem) {
+    const isCurrentTask =
+      new Date(task.createdAt).getTime() >= Date.now() - 24 * 60 * 60 * 1000;
+
+    setTasks((prev) => prev.filter((item) => item.id !== task.id));
+    setTaskMetrics((prev) => ({
+      currentCount: Math.max(prev.currentCount - (isCurrentTask ? 1 : 0), 0),
+      historyCount: Math.max(prev.historyCount - (isCurrentTask ? 0 : 1), 0),
+      runningCount: Math.max(prev.runningCount - (task.status === "running" ? 1 : 0), 0),
+      totalCount: Math.max(prev.totalCount - 1, 0),
+    }));
   }
 
   function handleTaskUpdated(
@@ -67,9 +136,15 @@ export function ProductImprovePage() {
     status: AITaskItem["status"],
     result?: Record<string, unknown>,
   ) {
+    let runningDelta = 0;
     setTasks((prev) =>
       prev.map((task) => {
         if (task.id !== taskId) return task;
+        if (task.status === "running" && status !== "running") {
+          runningDelta = -1;
+        } else if (task.status !== "running" && status === "running") {
+          runningDelta = 1;
+        }
         const completedAt =
           status !== "running" && !task.completedAt
             ? new Date().toISOString()
@@ -83,6 +158,12 @@ export function ProductImprovePage() {
         };
       }),
     );
+    if (runningDelta !== 0) {
+      setTaskMetrics((prev) => ({
+        ...prev,
+        runningCount: Math.max(prev.runningCount + runningDelta, 0),
+      }));
+    }
 
     if (status === "running") return;
 
@@ -112,19 +193,6 @@ export function ProductImprovePage() {
     estimatedCredits: number;
   } | null>(null);
   const lastHandledTaskIdRef = useRef<string | undefined>();
-  const confirmDialogRef = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    const el = confirmDialogRef.current;
-    if (!el) return;
-    if (confirmOpen) {
-      if (!el.open) {
-        el.showModal();
-      }
-    } else if (el.open) {
-      el.close();
-    }
-  }, [confirmOpen]);
 
   function handleOpenConfirm() {
     if (!productIdForActions) {
@@ -190,10 +258,16 @@ export function ProductImprovePage() {
       updatedAt: now,
     };
 
-    setTasks((prev) => [optimisticTask, ...prev]);
+    setTasks((prev) => [optimisticTask, ...prev.filter((task) => task.id !== optimisticTask.id)].slice(0, taskPageSize));
+    setTaskMetrics((prev) => ({
+      currentCount: prev.currentCount + 1,
+      historyCount: prev.historyCount,
+      runningCount: prev.runningCount + 1,
+      totalCount: prev.totalCount + 1,
+    }));
     setPageTab("tasks");
     shopify.toast.show(t("productImproveStage1.toastTaskCreated"));
-  }, [fetcher.data, fetcher.state, shopify, t, targetLanguage]);
+  }, [fetcher.data, fetcher.state, shopify, t, targetLanguage, taskPageSize]);
 
   const errorText =
     actionData && !actionData.success ? actionData.errorMsg : null;
@@ -207,7 +281,11 @@ export function ProductImprovePage() {
   const confirmSummaryItems = [
     { key: "target", label: t("productImproveStage1.confirmLabelTarget"), value: selectedName ?? "-" },
     { key: "language", label: t("productImproveStage1.taskLanguage"), value: selectedLanguageLabel },
-    { key: "time", label: t("productImproveStage1.estimateTime"), value: ESTIMATED_DURATION },
+    {
+      key: "time",
+      label: t("productImproveStage1.estimateTime"),
+      value: t("productImproveStage1.estimatedDurationValue"),
+    },
     {
       key: "tokens",
       label: t("productImproveStage1.estimateCredits"),
@@ -233,7 +311,7 @@ export function ProductImprovePage() {
         <SegmentedPageTabs
           activeTab={pageTab}
           onTabChange={setPageTab}
-          ariaLabel="商品优化页面导航"
+          ariaLabel={t("productImproveStage1.pageNavAriaLabel")}
           items={[
             { key: "config", label: t("productImproveStage1.tabsConfig") },
             { key: "tasks", label: t("productImproveStage1.tabsTasks"), badgeCount: runningCount },
@@ -289,9 +367,7 @@ export function ProductImprovePage() {
                     disabled={isSubmitting}
                     style={pageSelectStyle(isSubmitting)}
                   >
-                    {localeOptions.length === 0 && (
-                      <option value="zh-CN">Chinese (Simplified) (zh-CN)</option>
-                    )}
+                    {localeOptions.length === 0 && <option value={targetLanguage}>{targetLanguage}</option>}
                     {localeOptions.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
@@ -333,81 +409,14 @@ export function ProductImprovePage() {
               </s-stack>
             </PageSurface>
 
-            <dialog
-              ref={confirmDialogRef}
-              onCancel={(e) => {
-                e.preventDefault();
-                if (!isSubmitting) {
-                  setConfirmOpen(false);
-                }
-              }}
-              style={{
-                maxWidth: "460px",
-                width: "calc(100% - 2rem)",
-                padding: 0,
-                border: "none",
-                borderRadius: "12px",
-                boxShadow: "0 12px 40px rgba(0,0,0,0.18)",
-              }}
-            >
-              <div style={{ padding: "1.125rem 1.25rem" }}>
-                <div
-                  style={{
-                    fontSize: "1rem",
-                    fontWeight: 700,
-                    color: pageColorTokens.textPrimary,
-                    marginBottom: "0.45rem",
-                  }}
-                >
-                  {t("productImproveStage1.confirmDialogTitle")}
-                </div>
-                <div
-                  style={{
-                    fontSize: "0.8125rem",
-                    color: pageColorTokens.textSecondary,
-                    lineHeight: 1.5,
-                    marginBottom: "0.9rem",
-                  }}
-                >
-                  {t("productImproveStage1.confirmDialogDesc")}
-                </div>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "8px 16px",
-                    marginBottom: "0.9rem",
-                  }}
-                >
-                  {confirmSummaryItems.map((item) => (
-                    <div key={item.key} style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: "0.6875rem", color: pageColorTokens.textSecondary }}>
-                        {item.label}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "0.8125rem",
-                          color: pageColorTokens.textPrimary,
-                          fontWeight: 600,
-                          marginTop: 3,
-                          wordBreak: "break-word",
-                        }}
-                      >
-                        {item.value}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div
-                  style={{
-                    fontSize: "0.75rem",
-                    color: pageColorTokens.textSecondary,
-                    lineHeight: 1.5,
-                    marginBottom: "1rem",
-                  }}
-                >
-                  {t("productImproveStage1.confirmDialogFootnote")}
-                </div>
+            <DialogShell
+              open={confirmOpen}
+              width={460}
+              closeDisabled={isSubmitting}
+              onClose={() => setConfirmOpen(false)}
+              title={t("productImproveStage1.confirmDialogTitle")}
+              description={t("productImproveStage1.confirmDialogDesc")}
+              footer={
                 <s-stack direction="inline" gap="small">
                   <s-button
                     type="button"
@@ -428,21 +437,72 @@ export function ProductImprovePage() {
                       : t("productImproveStage1.confirmAndCreate")}
                   </s-button>
                 </s-stack>
+              }
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "8px 16px",
+                }}
+              >
+                {confirmSummaryItems.map((item) => (
+                  <div key={item.key} style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: "0.6875rem", color: pageColorTokens.textSecondary }}>
+                      {item.label}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "0.8125rem",
+                        color: pageColorTokens.textPrimary,
+                        fontWeight: 600,
+                        marginTop: 3,
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {item.value}
+                    </div>
+                  </div>
+                ))}
               </div>
-            </dialog>
+              <div
+                style={{
+                  fontSize: "0.75rem",
+                  color: pageColorTokens.textSecondary,
+                  lineHeight: 1.5,
+                }}
+              >
+                {t("productImproveStage1.confirmDialogFootnote")}
+              </div>
+            </DialogShell>
           </>
         )}
 
         {pageTab === "tasks" && (
           <ProductImproveTaskListPage
+            initialPageData={loaderData.initialTaskPage}
             tasks={tasks}
+            taskMetrics={taskMetrics}
             locationSearch={search}
             onTaskDeleted={handleTaskDeleted}
             onTaskUpdated={handleTaskUpdated}
           />
         )}
 
-        <p style={pageTrustFootnoteStyle}>{t("generate.pageFootnote")}</p>
+        <div style={footerDockStyle}>
+          <div style={footerContentStyle}>
+            <LanguageSelector variant="inline" />
+            <span aria-hidden="true" style={footerDividerStyle}>
+              |
+            </span>
+            <span>
+              {t("productImproveStage1.contactUsLabel")}{" "}
+              <a href="mailto:support@ciwi.ai" style={{ color: "inherit" }}>
+                support@ciwi.ai
+              </a>
+            </span>
+          </div>
+        </div>
       </div>
     </s-page>
   );

@@ -87,6 +87,23 @@ export const pageCompactSurfaceStyle: CSSProperties = {
   padding: "0.75rem",
 };
 
+export const pageDialogClassName = "spark-native-dialog";
+
+export function pageDialogStyle(maxWidth: string): CSSProperties {
+  return {
+    position: "fixed",
+    inset: 0,
+    margin: "auto",
+    maxWidth,
+    width: "calc(100% - 2rem)",
+    padding: 0,
+    border: "none",
+    borderRadius: "12px",
+    boxShadow: pageColorTokens.shadowModal,
+    background: pageColorTokens.surface,
+  };
+}
+
 export const pageInnerPanelStyle: CSSProperties = {
   background: pageColorTokens.surfaceSubtle,
   border: `1px solid ${pageColorTokens.borderSubtle}`,

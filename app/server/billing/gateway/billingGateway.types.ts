@@ -18,6 +18,7 @@ export interface BillingGateway {
     appName: string;
     plan: PlanRecord;
     returnUrl: string;
+    trialDays?: number | null;
   }): Promise<CreateSubscriptionResult>;
 
   createOneTimePurchase(params: {
