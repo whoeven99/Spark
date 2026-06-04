@@ -11,6 +11,7 @@ import type {
   AITaskStatus,
   ProductImproveTaskConfig,
 } from "../../../lib/aiTaskTypes";
+import { safeTranslateAITaskMessage } from "../../../lib/aiTaskMessage";
 import { translateLegacyProductImproveTaskMessage } from "../../../lib/productImproveTaskMessage";
 
 type Props = {
@@ -377,7 +378,12 @@ export function ProductImproveTaskCard({
   const usedCredits = formatDisplayValue(task.actualCredits, unknownText);
   const estimatedCredits = formatDisplayValue(task.estimatedCredits, unknownText);
   const errorReason = task.errorMsgKey
-    ? t(task.errorMsgKey, task.errorMsgParams)
+    ? safeTranslateAITaskMessage({
+        t,
+        message: task.errorMsg ?? unknownText,
+        messageKey: task.errorMsgKey,
+        messageParams: task.errorMsgParams,
+      })
     : task.errorMsg
       ? translateLegacyProductImproveTaskMessage(task.errorMsg, t)
       : unknownText;

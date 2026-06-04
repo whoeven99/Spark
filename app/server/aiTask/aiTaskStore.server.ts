@@ -253,13 +253,18 @@ export async function listTaskLogs(taskId: string): Promise<AITaskLogEntry[]> {
     where: { taskId },
     orderBy: { createdAt: "asc" },
   });
-  return rows.map((r) => ({
-    ...parseAITaskMessage(r.message),
-    id: r.id,
-    taskId: r.taskId,
-    elapsedSeconds: r.elapsedSeconds,
-    createdAt: r.createdAt.toISOString(),
-  }));
+  return rows.map((r) => {
+    const parsedMessage = parseAITaskMessage(r.message);
+    return {
+      message: parsedMessage.text,
+      messageKey: parsedMessage.key,
+      messageParams: parsedMessage.params,
+      id: r.id,
+      taskId: r.taskId,
+      elapsedSeconds: r.elapsedSeconds,
+      createdAt: r.createdAt.toISOString(),
+    };
+  });
 }
 
 export async function appendTaskLog(params: {
@@ -277,7 +282,9 @@ export async function appendTaskLog(params: {
   });
   const parsedMessage = parseAITaskMessage(row.message);
   return {
-    ...parsedMessage,
+    message: parsedMessage.text,
+    messageKey: parsedMessage.key,
+    messageParams: parsedMessage.params,
     id: row.id,
     taskId: row.taskId,
     elapsedSeconds: row.elapsedSeconds,

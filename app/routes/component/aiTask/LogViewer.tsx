@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { parseAITaskMessage } from "../../../lib/aiTaskMessage";
+import { parseAITaskMessage, safeTranslateAITaskMessage } from "../../../lib/aiTaskMessage";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import type {
   AITaskLogEntry,
@@ -149,11 +149,21 @@ export function LogViewer({
   const translateLogMessage = useCallback(
     (message: string, messageKey?: string, messageParams?: Record<string, unknown>) => {
       if (messageKey) {
-        return t(messageKey, messageParams);
+        return safeTranslateAITaskMessage({
+          t,
+          message,
+          messageKey,
+          messageParams,
+        });
       }
       const parsed = parseAITaskMessage(message);
       if (parsed.key) {
-        return t(parsed.key, parsed.params);
+        return safeTranslateAITaskMessage({
+          t,
+          message: parsed.text,
+          messageKey: parsed.key,
+          messageParams: parsed.params,
+        });
       }
       return taskType === "product_improve"
         ? translateLegacyProductImproveTaskMessage(parsed.text, t)
@@ -195,6 +205,8 @@ export function LogViewer({
               taskId: event.taskId,
               elapsedSeconds: event.elapsedSeconds,
               message: event.message,
+              messageKey: event.messageKey,
+              messageParams: event.messageParams,
               createdAt: event.createdAt,
             },
           ]),

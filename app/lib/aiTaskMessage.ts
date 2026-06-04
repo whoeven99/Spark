@@ -39,10 +39,7 @@ export function parseAITaskMessage(raw: string | null | undefined): AITaskParsed
     return {
       text: typeof parsed.fallback === "string" ? parsed.fallback : raw,
       key: typeof parsed.key === "string" ? parsed.key : undefined,
-      params:
-        parsed.params && typeof parsed.params === "object" && !Array.isArray(parsed.params)
-          ? (parsed.params as AITaskMessageParams)
-          : undefined,
+      params: sanitizeAITaskMessageParams(parsed.params),
     };
   } catch {
     return { text: raw };
@@ -55,4 +52,41 @@ export function buildAITaskMessage(
   params?: AITaskMessageParams,
 ): AITaskMessageInput {
   return { key, fallback, params };
+}
+
+export function sanitizeAITaskMessageParams(input: unknown): AITaskMessageParams | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
+
+  const sanitized: AITaskMessageParams = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      value === null
+    ) {
+      sanitized[key] = value;
+    }
+  }
+
+  return Object.keys(sanitized).length > 0 ? sanitized : undefined;
+}
+
+export function safeTranslateAITaskMessage(params: {
+  t: (key: string, options?: Record<string, unknown>) => string;
+  message: string;
+  messageKey?: string;
+  messageParams?: unknown;
+}): string {
+  const safeParams = sanitizeAITaskMessageParams(params.messageParams);
+  if (!params.messageKey) return params.message;
+
+  try {
+    const translated = params.t(params.messageKey, safeParams);
+    return typeof translated === "string" && translated.trim()
+      ? translated
+      : params.message;
+  } catch {
+    return params.message;
+  }
 }

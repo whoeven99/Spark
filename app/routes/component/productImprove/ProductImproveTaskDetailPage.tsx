@@ -9,6 +9,7 @@ import type {
   ProductImproveTaskConfig,
   ProductImproveTaskResult,
 } from "../../../lib/aiTaskTypes";
+import { safeTranslateAITaskMessage } from "../../../lib/aiTaskMessage";
 
 type Props = {
   task: AITaskItem;
@@ -428,7 +429,14 @@ export function ProductImproveTaskDetailPage({
       });
       const updateBody = (await updateResp.json()) as { success: boolean; errorMsg?: string };
       if (!updateBody.success) {
-        setApplyError(updateBody.errorMsg ?? t("productImproveStage1.applyWriteShopifyFailed"));
+        setApplyError(
+          updateBody.errorMsg
+            ? safeTranslateAITaskMessage({
+                t,
+                message: updateBody.errorMsg,
+              })
+            : t("productImproveStage1.applyWriteShopifyFailed"),
+        );
         return;
       }
       await fetch(`/api/ai-task${locationSearch}`, {
@@ -518,7 +526,14 @@ export function ProductImproveTaskDetailPage({
         result?: ProductImproveTaskResult;
       };
       if (!body.success || !body.result) {
-        setRefineError(body.errorMsg ?? t("productImproveStage1.refineFailed"));
+        setRefineError(
+          body.errorMsg
+            ? safeTranslateAITaskMessage({
+                t,
+                message: body.errorMsg,
+              })
+            : t("productImproveStage1.refineFailed"),
+        );
         return false;
       }
 
