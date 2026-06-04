@@ -172,6 +172,7 @@ export async function markTaskSucceeded(params: {
   taskId: string;
   result: Record<string, unknown>;
   actualCredits?: number;
+  completedAt?: Date;
 }): Promise<void> {
   await prisma.aITask.update({
     where: { id: params.taskId },
@@ -179,9 +180,21 @@ export async function markTaskSucceeded(params: {
       status: "succeeded",
       result: params.result as unknown as PrismaJson,
       actualCredits: params.actualCredits ?? null,
-      completedAt: new Date(),
+      completedAt: params.completedAt ?? new Date(),
     },
   });
+}
+
+export async function getTaskMeta(taskId: string): Promise<{
+  appName: string;
+  taskType: string;
+  startedAt: Date;
+} | null> {
+  const row = await prisma.aITask.findUnique({
+    where: { id: taskId },
+    select: { appName: true, taskType: true, startedAt: true },
+  });
+  return row ?? null;
 }
 
 export async function markTaskFailed(params: {

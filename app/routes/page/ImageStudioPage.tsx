@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useImageGeneration } from "../../hooks/useImageGeneration";
 import type { AITaskItem, AITaskType } from "../../lib/aiTaskTypes";
 import type { ImageStudioPageLoaderData } from "../../server/visualTools/imageStudioPageLoader.server";
+import { formatEstimatedDuration } from "../../lib/formatDuration";
 import { LanguageSelector } from "../component/common/LanguageSelector";
 import { ImageGenerationForm } from "../component/imageGeneration/ImageGenerationForm";
 import { ImageStudioTaskListPage } from "../component/imageStudio/ImageStudioTaskListPage";
@@ -102,6 +103,7 @@ type InnerProps = {
   tasks: AITaskItem[];
   taskMetrics: ImageStudioPageLoaderData["initialTaskPage"]["metrics"];
   initialTaskPage: ImageStudioPageLoaderData["initialTaskPage"];
+  estimations: ImageStudioPageLoaderData["estimations"];
   navTab: StudioNavTab;
   setNavTab: (tab: StudioNavTab) => void;
   locationSearch: string;
@@ -119,6 +121,7 @@ function ImageStudioPageInner({
   tasks,
   taskMetrics,
   initialTaskPage,
+  estimations,
   navTab,
   setNavTab,
   locationSearch,
@@ -131,6 +134,9 @@ function ImageStudioPageInner({
   const pictureTranslate = usePictureTranslateContext();
   const [generateConfirmOpen, setGenerateConfirmOpen] = useState(false);
   const [translateConfirmOpen, setTranslateConfirmOpen] = useState(false);
+
+  const genDuration = formatEstimatedDuration(estimations.generate.seconds, t);
+  const transDuration = formatEstimatedDuration(estimations.translate.seconds, t);
 
   const toastShow = useCallback(
     (message: string) => shopify.toast.show(message),
@@ -155,17 +161,17 @@ function ImageStudioPageInner({
     const trimmedImageUrl = pictureTranslate.imageUrl.trim();
     const sourceSummary =
       pictureTranslate.selectedSource === "product"
-        ? pictureTranslate.selectedProduct?.title || trimmedImageUrl || t("common.unknown")
+        ? pictureTranslate.selectedProduct?.title || trimmedImageUrl || "—"
         : pictureTranslate.selectedSource === "url"
-          ? trimmedImageUrl || t("common.unknown")
-          : pictureTranslate.imageFileName || t("common.unknown");
+          ? trimmedImageUrl || "—"
+          : pictureTranslate.imageFileName || "—";
 
     return {
       sourceSummary,
       sourceLanguage: pictureTranslate.sourceLanguage,
       targetLanguage: pictureTranslate.targetLanguage,
       sourceType: pictureTranslate.selectedSource,
-      estimatedDuration: t("imageStudio.estimatedTranslateDuration"),
+      estimatedDuration: transDuration,
     };
   }, [
     pictureTranslate.imageFileName,
@@ -174,7 +180,7 @@ function ImageStudioPageInner({
     pictureTranslate.selectedSource,
     pictureTranslate.sourceLanguage,
     pictureTranslate.targetLanguage,
-    t,
+    transDuration,
   ]);
 
   function handleOpenGenerateConfirm() {
@@ -316,12 +322,12 @@ function ImageStudioPageInner({
             {
               key: "time",
               label: t("imageStudio.confirmLabelTime"),
-              value: t("imageStudio.estimatedGenerateDuration"),
+              value: genDuration,
             },
             {
               key: "credit",
               label: t("imageStudio.confirmLabelCredits"),
-              value: t("imageStudio.estimatedCreditsPending"),
+              value: String(estimations.generate.credits),
             },
           ].map((item) => (
             <div key={item.key} style={{ minWidth: 0 }}>
@@ -404,6 +410,11 @@ function ImageStudioPageInner({
               key: "time",
               label: t("imageStudio.confirmLabelTime"),
               value: translateDraft.estimatedDuration,
+            },
+            {
+              key: "credit",
+              label: t("imageStudio.confirmLabelCredits"),
+              value: String(estimations.translate.credits),
             },
           ].map((item) => (
             <div key={item.key} style={{ minWidth: 0 }}>
@@ -572,6 +583,7 @@ export function ImageStudioPage() {
         tasks={tasks}
         taskMetrics={taskMetrics}
         initialTaskPage={loaderData.initialTaskPage}
+        estimations={loaderData.estimations}
         navTab={navTab}
         setNavTab={setNavTab}
         locationSearch={locationSearch}

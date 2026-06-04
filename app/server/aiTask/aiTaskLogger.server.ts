@@ -4,7 +4,9 @@ import {
   markTaskFailed,
   markTaskPendingReview,
   markTaskSucceeded,
+  getTaskMeta,
 } from "./aiTaskStore.server";
+import { updateTaskEstimation } from "./aiTaskEstimation.server";
 import {
   clearTaskSubscribers,
   emitTaskEvent,
@@ -58,10 +60,12 @@ export async function completeTask(params: {
       createdAt: entry.createdAt,
     });
   }
+  const completedAt = new Date();
   await markTaskSucceeded({
     taskId: params.taskId,
     result: params.result,
     actualCredits: params.actualCredits,
+    completedAt,
   });
   emitTaskEvent(params.taskId, {
     type: "status_change",
@@ -70,6 +74,25 @@ export async function completeTask(params: {
     result: params.result,
   });
   clearTaskSubscribers(params.taskId);
+
+  // fire-and-forget: 更新 EWMA 估算，不影响主流程
+  void (async () => {
+    try {
+      const meta = await getTaskMeta(params.taskId);
+      if (!meta) return;
+      const actualSeconds = Math.round(
+        (completedAt.getTime() - meta.startedAt.getTime()) / 1000,
+      );
+      await updateTaskEstimation({
+        appName: meta.appName,
+        taskType: meta.taskType as import("../../lib/aiTaskTypes").AITaskType,
+        actualCredits: params.actualCredits ?? null,
+        actualSeconds,
+      });
+    } catch {
+      // 估算失败不影响任务本身
+    }
+  })();
 }
 
 export async function pendingReviewTask(params: {
