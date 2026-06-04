@@ -3,6 +3,7 @@ import { getAppEntry } from "../../config/appEntry.server";
 import { billingErrorToResponse } from "../billing/index.server";
 import {
   requireVisualToolBillingAccess,
+  DEFAULT_PICTURE_TRANSLATE_TOKEN_COST,
 } from "../tokenUsage/index.server";
 import {
   imageUrlToHost,
@@ -164,6 +165,7 @@ export async function executePictureTranslateRequest(params: {
       targetCode: parsed.targetCode,
       modelType: parsed.modelType,
     },
+    estimatedCredits: DEFAULT_PICTURE_TRANSLATE_TOKEN_COST,
   });
 
   enqueuePictureTranslateTask({

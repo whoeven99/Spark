@@ -62,23 +62,25 @@ export async function requireVisualToolBillingAccess(
 
 /**
  * 图片工具成功完成后按「feature × 模型」系数计入 `Account.usedTokens`。
+ * 返回实际计费积分数（计费未启用时返回 null）。
  */
 export async function recordVisualToolTokenUsage(params: {
   shop: string;
   appName?: string;
   items: BilledTokenUsageItem[];
-}): Promise<void> {
+}): Promise<number | null> {
   const shop = params.shop.trim();
-  if (!shop || params.items.length === 0) return;
+  if (!shop || params.items.length === 0) return null;
 
   const appName = params.appName?.trim() || getAppEntry();
-  if (!isBillingEnabledForApp(appName)) return;
+  if (!isBillingEnabledForApp(appName)) return null;
 
-  await recordBilledTokenUsages({
+  const billedTokens = await recordBilledTokenUsages({
     shop,
     appName,
     items: params.items,
   });
+  return billedTokens;
 }
 
 export function buildPictureTranslateBillingItem(

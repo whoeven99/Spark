@@ -764,5 +764,13 @@
     "updateValidationTitleRequired": "Titel ist erforderlich",
     "updateValidationDescriptionRequired": "Beschreibung ist erforderlich",
     "updateShopMismatch": "Der Shop in der Anfrage stimmt nicht mit der aktuellen Sitzung ueberein"
+  },
+  "imageStudio": {
+    "cardPartElapsed": "Läuft seit {{value}}",
+    "cardPartCompletedElapsed": "Abgeschlossen in {{value}}",
+    "cardPartEstimatedCredits": "Gesch. Punkte: {{value}}",
+    "cardPartUsedCredits": "Verbrauchte Punkte: {{value}}",
+    "cardPartActualCredits": "Tatsächl. Punkte: {{value}}",
+    "cardPartFailed": "Aufgabe unvollständig"
   }
 }

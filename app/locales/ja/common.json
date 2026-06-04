@@ -764,5 +764,13 @@
     "updateValidationTitleRequired": "タイトルは必須です",
     "updateValidationDescriptionRequired": "説明は必須です",
     "updateShopMismatch": "リクエスト内のショップが現在のセッションと一致しません"
+  },
+  "imageStudio": {
+    "cardPartElapsed": "実行中 {{value}}",
+    "cardPartCompletedElapsed": "完了、所要時間 {{value}}",
+    "cardPartEstimatedCredits": "予定クレジット {{value}}",
+    "cardPartUsedCredits": "使用クレジット {{value}}",
+    "cardPartActualCredits": "実際クレジット {{value}}",
+    "cardPartFailed": "タスク未完了"
   }
 }

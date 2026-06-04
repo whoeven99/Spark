@@ -1,5 +1,6 @@
 import prisma from "../../db.server";
 import { getGeneratedImageReadUrl } from "../imageGeneration/imageGenerationBlob.server";
+import { getPictureTranslateResultImageUrl } from "../pictureTranslate/pictureTranslateBlob.server";
 import type {
   AITaskItem,
   AITaskListMetrics,
@@ -76,27 +77,22 @@ function toAITaskStatus(raw: string): AITaskStatus {
   return "failed";
 }
 
-function resolveImageUrl(blobPath: string | null | undefined): string | null {
-  if (!blobPath?.trim()) return null;
-  try {
-    return getGeneratedImageReadUrl(blobPath.trim());
-  } catch {
-    return null;
-  }
-}
-
 function resolveResultImageUrl(
   taskType: string,
   result: Record<string, unknown> | null,
 ): Record<string, unknown> | null {
   if (!result) return null;
   const out = { ...result };
-  if (taskType === "image_generation") {
-    const url = resolveImageUrl(result.blobPath as string | null);
-    if (url) out.imageUrl = url;
-  } else if (taskType === "picture_translate") {
-    const url = resolveImageUrl(result.translatedBlobPath as string | null);
-    if (url) out.imageUrl = url;
+  try {
+    if (taskType === "image_generation") {
+      const blobPath = (result.blobPath as string | null)?.trim();
+      if (blobPath) out.imageUrl = getGeneratedImageReadUrl(blobPath);
+    } else if (taskType === "picture_translate") {
+      const blobPath = (result.translatedBlobPath as string | null)?.trim();
+      if (blobPath) out.imageUrl = getPictureTranslateResultImageUrl(blobPath);
+    }
+  } catch {
+    // URL 生成失败时保持原 result，不影响其他字段
   }
   return out;
 }
