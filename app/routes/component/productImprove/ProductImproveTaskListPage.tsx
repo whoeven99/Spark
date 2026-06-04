@@ -14,6 +14,10 @@ import type {
 type TaskViewTab = "current" | "history";
 const EMPTY_STATE_MIN_HEIGHT = 320;
 
+function getCacheKey(view: TaskViewTab, page: number): string {
+  return `${view}:${page}`;
+}
+
 type Props = {
   initialPageData: AITaskListPageData;
   tasks: AITaskItem[];
@@ -55,24 +59,42 @@ export function ProductImproveTaskListPage({
   const [viewTab, setViewTab] = useState<TaskViewTab>(initialPageData.view);
   const [currentPage, setCurrentPage] = useState<number>(initialPageData.page);
   const [loadedPageData, setLoadedPageData] = useState<AITaskListPageData>(initialPageData);
+  const [pageCache, setPageCache] = useState<Record<string, AITaskListPageData>>({
+    [getCacheKey(initialPageData.view, initialPageData.page)]: initialPageData,
+  });
   const [loading, setLoading] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const pageSize = loadedPageData.pageSize || initialPageData.pageSize;
 
   useEffect(() => {
     if (viewTab !== "current" || currentPage !== 1) return;
-    setLoadedPageData((prev) => ({
-      ...prev,
-      tasks,
-      view: "current",
-      page: 1,
-      totalCount: taskMetrics.currentCount,
-      totalPages: Math.max(1, Math.ceil(taskMetrics.currentCount / prev.pageSize)),
-      metrics: taskMetrics,
-    }));
-  }, [currentPage, taskMetrics, tasks, viewTab]);
+    setLoadedPageData((prev) => {
+      const nextPageData = {
+        ...prev,
+        tasks,
+        view: "current" as const,
+        page: 1,
+        totalCount: taskMetrics.currentCount,
+        totalPages: Math.max(1, Math.ceil(taskMetrics.currentCount / initialPageData.pageSize)),
+        metrics: taskMetrics,
+      };
+      setPageCache((cache) => ({
+        ...cache,
+        [getCacheKey("current", 1)]: nextPageData,
+      }));
+      return nextPageData;
+    });
+  }, [currentPage, initialPageData.pageSize, taskMetrics, tasks, viewTab]);
 
   useEffect(() => {
     if (selectedTaskId) return;
+    const cacheKey = getCacheKey(viewTab, currentPage);
+    const cachedPage = pageCache[cacheKey];
+    if (cachedPage) {
+      setLoadedPageData(cachedPage);
+      setLoading(false);
+      return;
+    }
     if (viewTab === "current" && currentPage === 1) return;
 
     let cancelled = false;
@@ -86,11 +108,14 @@ export function ProductImproveTaskListPage({
       .then((data) => {
         if (cancelled) return;
         setLoadedPageData(data);
+        setPageCache((prev) => ({
+          ...prev,
+          [cacheKey]: data,
+        }));
       })
       .catch(() => {
         if (cancelled) return;
-        setLoadedPageData((prev) => ({
-          ...prev,
+        const fallbackPageData = {
           tasks: [],
           view: viewTab,
           page: currentPage,
@@ -99,10 +124,16 @@ export function ProductImproveTaskListPage({
             1,
             Math.ceil(
               (viewTab === "current" ? taskMetrics.currentCount : taskMetrics.historyCount) /
-                prev.pageSize,
+                pageSize,
             ),
           ),
+          pageSize,
           metrics: taskMetrics,
+        };
+        setLoadedPageData(fallbackPageData);
+        setPageCache((prev) => ({
+          ...prev,
+          [cacheKey]: fallbackPageData,
         }));
       })
       .finally(() => {
@@ -112,7 +143,11 @@ export function ProductImproveTaskListPage({
     return () => {
       cancelled = true;
     };
-  }, [currentPage, locationSearch, selectedTaskId, taskMetrics, viewTab]);
+  }, [currentPage, locationSearch, pageCache, pageSize, selectedTaskId, taskMetrics, viewTab]);
+
+  const hasResolvedPageData =
+    (viewTab === "current" && currentPage === 1) ||
+    (loadedPageData.view === viewTab && loadedPageData.page === currentPage);
 
   const visibleTasks = useMemo(() => {
     if (viewTab === "current" && currentPage === 1) {
@@ -135,6 +170,24 @@ export function ProductImproveTaskListPage({
   const selectedTask = selectedTaskId
     ? visibleTasks.find((task) => task.id === selectedTaskId) ?? null
     : null;
+
+  function handleViewChange(nextView: TaskViewTab) {
+    if (nextView === viewTab) return;
+    const nextPage = 1;
+    if (!pageCache[getCacheKey(nextView, nextPage)]) {
+      setLoading(true);
+    }
+    setViewTab(nextView);
+    setCurrentPage(nextPage);
+  }
+
+  function handlePageChange(nextPage: number) {
+    if (nextPage === currentPage) return;
+    if (!pageCache[getCacheKey(viewTab, nextPage)]) {
+      setLoading(true);
+    }
+    setCurrentPage(nextPage);
+  }
 
   async function handleDelete(task: AITaskItem) {
     setDeletingId(task.id);
@@ -173,6 +226,82 @@ export function ProductImproveTaskListPage({
           onBack={() => setSelectedTaskId(null)}
           onTaskUpdated={onTaskUpdated}
         />
+      ) : loading && !hasResolvedPageData && totalCount > 0 ? (
+        <>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+              padding: "0.5rem",
+              borderRadius: 999,
+              background: pageColorTokens.surfaceMuted,
+              border: `1px solid ${pageColorTokens.borderSubtle}`,
+            }}
+          >
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {[
+                {
+                  key: "current" as const,
+                  label: t("productImproveStage1.currentTasksTab", { count: taskMetrics.currentCount }),
+                },
+                {
+                  key: "history" as const,
+                  label: t("productImproveStage1.historyTasksTab", { count: taskMetrics.historyCount }),
+                },
+              ].map((tab) => {
+                const active = viewTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => handleViewChange(tab.key)}
+                    style={{
+                      padding: "0.5rem 0.9rem",
+                      borderRadius: 999,
+                      border: `1px solid ${active ? pageColorTokens.borderSubtle : "transparent"}`,
+                      background: active ? pageColorTokens.surface : "transparent",
+                      color: active ? pageColorTokens.textPrimary : pageColorTokens.textSecondary,
+                      boxShadow: active ? pageColorTokens.shadowCard : "none",
+                      fontSize: 13,
+                      fontWeight: active ? 700 : 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
+              {t("productImproveStage1.historyTasksHint")}
+            </div>
+          </div>
+
+          <div
+            style={{
+              ...pageEmptyStateStyle,
+              minHeight: EMPTY_STATE_MIN_HEIGHT,
+              padding: "2.75rem 1.5rem",
+              background: "linear-gradient(160deg, #fafafa 0%, #f5f6f8 100%)",
+              border: `1px dashed ${pageColorTokens.borderSubtle}`,
+            }}
+          >
+            <span style={{ fontSize: 28, lineHeight: 1 }}>⏳</span>
+            <span style={{ fontSize: 14, color: pageColorTokens.textSecondary }}>
+              {t("common.loading")}
+            </span>
+          </div>
+          <AITaskPagination
+            page={currentPage}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            loading={loading}
+            onPageChange={handlePageChange}
+          />
+        </>
       ) : visibleTasks.length === 0 ? (
         <>
           <div
@@ -204,10 +333,7 @@ export function ProductImproveTaskListPage({
                   <button
                     key={tab.key}
                     type="button"
-                    onClick={() => {
-                      setViewTab(tab.key);
-                      setCurrentPage(1);
-                    }}
+                    onClick={() => handleViewChange(tab.key)}
                     style={{
                       padding: "0.5rem 0.9rem",
                       borderRadius: 999,
@@ -251,7 +377,7 @@ export function ProductImproveTaskListPage({
             totalPages={totalPages}
             totalCount={totalCount}
             loading={loading}
-            onPageChange={setCurrentPage}
+            onPageChange={handlePageChange}
           />
         </>
       ) : (
@@ -285,10 +411,7 @@ export function ProductImproveTaskListPage({
                   <button
                     key={tab.key}
                     type="button"
-                    onClick={() => {
-                      setViewTab(tab.key);
-                      setCurrentPage(1);
-                    }}
+                    onClick={() => handleViewChange(tab.key)}
                     style={{
                       padding: "0.5rem 0.9rem",
                       borderRadius: 999,
@@ -329,7 +452,7 @@ export function ProductImproveTaskListPage({
             totalPages={totalPages}
             totalCount={totalCount}
             loading={loading}
-            onPageChange={setCurrentPage}
+            onPageChange={handlePageChange}
           />
         </>
       )}

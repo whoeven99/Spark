@@ -19,7 +19,7 @@ import {
 type PrismaJson = any;
 
 const TASK_LIST_LIMIT = 20;
-const TASK_PAGE_SIZE = 8;
+const TASK_PAGE_SIZE = 4;
 
 function normalizeTaskPage(page: number | undefined): number {
   if (!Number.isFinite(page) || !page || page < 1) return 1;

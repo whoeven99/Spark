@@ -24,7 +24,7 @@ export async function loadImageStudioPageData(
         tasks: [],
         view: "current",
         page: 1,
-        pageSize: 8,
+        pageSize: 4,
         totalCount: 0,
         totalPages: 1,
         metrics: {

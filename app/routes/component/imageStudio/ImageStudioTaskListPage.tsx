@@ -9,13 +9,16 @@ import type {
   AITaskStatus,
   AITaskType,
 } from "../../../lib/aiTaskTypes";
-import { TaskListSummary } from "../aiTask/TaskListSummary";
 import { ImageGenerationTaskCard } from "./ImageGenerationTaskCard";
 import { PictureTranslateTaskCard } from "./PictureTranslateTaskCard";
 import { ImageStudioTaskDetailRouter } from "./ImageStudioTaskDetailRouter";
 
 type TaskViewTab = "current" | "history";
 const EMPTY_STATE_MIN_HEIGHT = 320;
+
+function getCacheKey(view: TaskViewTab, page: number): string {
+  return `${view}:${page}`;
+}
 
 type Props = {
   initialPageData: AITaskListPageData;
@@ -66,24 +69,42 @@ export function ImageStudioTaskListPage({
   const [viewTab, setViewTab] = useState<TaskViewTab>(initialPageData.view);
   const [currentPage, setCurrentPage] = useState<number>(initialPageData.page);
   const [loadedPageData, setLoadedPageData] = useState<AITaskListPageData>(initialPageData);
+  const [pageCache, setPageCache] = useState<Record<string, AITaskListPageData>>({
+    [getCacheKey(initialPageData.view, initialPageData.page)]: initialPageData,
+  });
   const [loading, setLoading] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const pageSize = loadedPageData.pageSize || initialPageData.pageSize;
 
   useEffect(() => {
     if (viewTab !== "current" || currentPage !== 1) return;
-    setLoadedPageData((prev) => ({
-      ...prev,
-      tasks,
-      view: "current",
-      page: 1,
-      totalCount: taskMetrics.currentCount,
-      totalPages: Math.max(1, Math.ceil(taskMetrics.currentCount / prev.pageSize)),
-      metrics: taskMetrics,
-    }));
-  }, [currentPage, taskMetrics, tasks, viewTab]);
+    setLoadedPageData((prev) => {
+      const nextPageData = {
+        ...prev,
+        tasks,
+        view: "current" as const,
+        page: 1,
+        totalCount: taskMetrics.currentCount,
+        totalPages: Math.max(1, Math.ceil(taskMetrics.currentCount / initialPageData.pageSize)),
+        metrics: taskMetrics,
+      };
+      setPageCache((cache) => ({
+        ...cache,
+        [getCacheKey("current", 1)]: nextPageData,
+      }));
+      return nextPageData;
+    });
+  }, [currentPage, initialPageData.pageSize, taskMetrics, tasks, viewTab]);
 
   useEffect(() => {
     if (selectedTaskId) return;
+    const cacheKey = getCacheKey(viewTab, currentPage);
+    const cachedPage = pageCache[cacheKey];
+    if (cachedPage) {
+      setLoadedPageData(cachedPage);
+      setLoading(false);
+      return;
+    }
     if (viewTab === "current" && currentPage === 1) return;
 
     let cancelled = false;
@@ -97,11 +118,14 @@ export function ImageStudioTaskListPage({
       .then((data) => {
         if (cancelled) return;
         setLoadedPageData(data);
+        setPageCache((prev) => ({
+          ...prev,
+          [cacheKey]: data,
+        }));
       })
       .catch(() => {
         if (cancelled) return;
-        setLoadedPageData((prev) => ({
-          ...prev,
+        const fallbackPageData = {
           tasks: [],
           view: viewTab,
           page: currentPage,
@@ -110,10 +134,16 @@ export function ImageStudioTaskListPage({
             1,
             Math.ceil(
               (viewTab === "current" ? taskMetrics.currentCount : taskMetrics.historyCount) /
-                prev.pageSize,
+                pageSize,
             ),
           ),
+          pageSize,
           metrics: taskMetrics,
+        };
+        setLoadedPageData(fallbackPageData);
+        setPageCache((prev) => ({
+          ...prev,
+          [cacheKey]: fallbackPageData,
         }));
       })
       .finally(() => {
@@ -123,7 +153,11 @@ export function ImageStudioTaskListPage({
     return () => {
       cancelled = true;
     };
-  }, [currentPage, locationSearch, selectedTaskId, taskMetrics, viewTab]);
+  }, [currentPage, locationSearch, pageCache, pageSize, selectedTaskId, taskMetrics, viewTab]);
+
+  const hasResolvedPageData =
+    (viewTab === "current" && currentPage === 1) ||
+    (loadedPageData.view === viewTab && loadedPageData.page === currentPage);
 
   const visibleTasks = useMemo(() => {
     if (viewTab === "current" && currentPage === 1) {
@@ -172,6 +206,24 @@ export function ImageStudioTaskListPage({
   }
   const selectedTask = selectedTaskId ? visibleTasks.find((task) => task.id === selectedTaskId) ?? null : null;
 
+  function handleViewChange(nextView: TaskViewTab) {
+    if (nextView === viewTab) return;
+    const nextPage = 1;
+    if (!pageCache[getCacheKey(nextView, nextPage)]) {
+      setLoading(true);
+    }
+    setViewTab(nextView);
+    setCurrentPage(nextPage);
+  }
+
+  function handlePageChange(nextPage: number) {
+    if (nextPage === currentPage) return;
+    if (!pageCache[getCacheKey(viewTab, nextPage)]) {
+      setLoading(true);
+    }
+    setCurrentPage(nextPage);
+  }
+
   if (selectedTask) {
     return (
       <ImageStudioTaskDetailRouter
@@ -186,7 +238,6 @@ export function ImageStudioTaskListPage({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <TaskListSummary tasks={visibleTasks} mode="image" totalCount={taskMetrics.totalCount} />
       <div
         style={{
           display: "flex",
@@ -216,10 +267,7 @@ export function ImageStudioTaskListPage({
               <button
                 key={tab.key}
                 type="button"
-                onClick={() => {
-                  setViewTab(tab.key);
-                  setCurrentPage(1);
-                }}
+                onClick={() => handleViewChange(tab.key)}
                 style={{
                   padding: "0.5rem 0.9rem",
                   borderRadius: 999,
@@ -242,7 +290,12 @@ export function ImageStudioTaskListPage({
         </div>
       </div>
 
-      {visibleTasks.length === 0 ? (
+      {loading && !hasResolvedPageData && totalCount > 0 ? (
+        <div style={{ ...pageEmptyStateStyle, minHeight: EMPTY_STATE_MIN_HEIGHT }}>
+          <span style={{ fontSize: 28, lineHeight: 1 }}>⏳</span>
+          <span>{t("common.loading")}</span>
+        </div>
+      ) : visibleTasks.length === 0 ? (
         <div style={{ ...pageEmptyStateStyle, minHeight: EMPTY_STATE_MIN_HEIGHT }}>
           <span style={{ fontSize: 28, lineHeight: 1 }}>🖼️</span>
           <span>
@@ -283,7 +336,7 @@ export function ImageStudioTaskListPage({
         totalPages={totalPages}
         totalCount={totalCount}
         loading={loading}
-        onPageChange={setCurrentPage}
+        onPageChange={handlePageChange}
       />
     </div>
   );
