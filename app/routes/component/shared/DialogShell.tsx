@@ -35,7 +35,7 @@ export function DialogShell({
       footer={null}
       className={["spark-ant-modal", "spark-dialog-shell", className].filter(Boolean).join(" ")}
       destroyOnHidden={destroyOnHidden}
-      maskClosable={!closeDisabled}
+      mask={{ closable: !closeDisabled }}
       closable={!closeDisabled}
       keyboard={!closeDisabled}
       width={width}
