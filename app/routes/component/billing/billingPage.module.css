@@ -28,6 +28,10 @@
   flex-wrap: wrap;
 }
 
+.usageTitleRow .secondaryEntryButton {
+  margin-left: auto;
+}
+
 .usageTitle {
   margin: 0;
   font-size: 1.125rem;
@@ -366,9 +370,9 @@
 }
 
 .planCardCurrent {
-  border-color: rgba(0, 128, 96, 0.35);
-  box-shadow: 0 0 0 1px rgba(0, 128, 96, 0.16), 0 4px 16px rgba(0, 128, 96, 0.08);
-  background: #f7fbf8;
+  border-color: #2c6ecb;
+  box-shadow: 0 0 0 1px rgba(44, 110, 203, 0.2), 0 4px 16px rgba(44, 110, 203, 0.08);
+  background: #eef4ff;
 }
 
 .planCardPending {
@@ -564,12 +568,45 @@
   box-sizing: border-box;
   padding: 0.625rem 1rem;
   border-radius: 8px;
-  border: 1px solid #b7e0d0;
-  background: #f1f8f5;
-  color: #006e52;
+  border: 1px solid rgba(44, 110, 203, 0.18);
+  background: #eef4ff;
+  color: #2c6ecb;
   font-size: 0.875rem;
   font-weight: 600;
   line-height: 1.25;
+  text-align: center;
+}
+
+.freePlanEntryWrap {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  margin-top: 0.9rem;
+}
+
+.freePlanEntryButton {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: #2c6ecb;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  line-height: 1.4;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.freePlanEntryButton:hover {
+  text-decoration: underline;
+}
+
+.freePlanEntryMeta {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #5c6066;
   text-align: center;
 }
 
@@ -687,7 +724,7 @@
 .packOptions {
   display: grid;
   grid-template-columns: repeat(var(--pack-columns, 2), minmax(0, 1fr));
-  gap: 1rem;
+  gap: 0.7rem;
 }
 
 @media (max-width: 640px) {
@@ -701,9 +738,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.15rem;
-  min-height: 7.5rem;
-  padding: 1.15rem 0.75rem;
+  gap: 0.08rem;
+  min-height: 5.8rem;
+  padding: 0.8rem 0.7rem;
   border: 1.5px solid #c8cdd3;
   border-radius: 11px;
   background: #ffffff;
@@ -726,7 +763,7 @@
 }
 
 .packOptionTokens {
-  font-size: 1.25rem;
+  font-size: 1.125rem;
   font-weight: 700;
   color: #202223;
   line-height: 1.2;
@@ -741,8 +778,8 @@
 }
 
 .packOptionPrice {
-  margin-top: 0.35rem;
-  font-size: 0.9rem;
+  margin-top: 0.2rem;
+  font-size: 0.825rem;
   font-weight: 700;
   color: #2c6ecb;
 }
@@ -803,6 +840,11 @@
 }
 
 @media (max-width: 520px) {
+  .usageTitleRow .secondaryEntryButton {
+    margin-left: 0;
+    width: 100%;
+  }
+
   .packCheckoutBar {
     flex-direction: column;
     align-items: center;
@@ -817,7 +859,7 @@
 .quotaFooter {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 0.75rem 1rem;
   flex-wrap: wrap;
   margin-top: 0.65rem;

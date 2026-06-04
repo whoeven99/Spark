@@ -30,6 +30,12 @@ import { pageContentStyle } from "./pageUiStyles";
 
 const EMPTY = "-";
 const MOCK_PLAN_SUFFIX = "_mock";
+const ALL_PLANS_MOCKED = true;
+const PLAN_TIER_ORDER: Record<PlanTier, number> = {
+  base: 0,
+  pro: 1,
+  premium: 2,
+};
 
 function clonePlan(plan: PlanRecord, overrides: Partial<PlanRecord>): PlanRecord {
   return { ...plan, ...overrides };
@@ -163,10 +169,76 @@ function buildMockBillingPlans(params: {
 
 function compareColumnClass(
   column: string,
-  recommendedTier: PlanTier,
+  emphasizedTier: PlanTier | null,
 ): string {
-  if (column === recommendedTier) return styles.compareColHighlight;
+  if (emphasizedTier && column === emphasizedTier) return styles.compareColHighlight;
   return "";
+}
+
+function sortPlansByTier(plans: PlanRecord[]): PlanRecord[] {
+  return [...plans].sort((left, right) => {
+    const leftTier = planTierFromPlanKey(left.planKey);
+    const rightTier = planTierFromPlanKey(right.planKey);
+    const leftRank = leftTier ? PLAN_TIER_ORDER[leftTier] : Number.MAX_SAFE_INTEGER;
+    const rightRank = rightTier ? PLAN_TIER_ORDER[rightTier] : Number.MAX_SAFE_INTEGER;
+    return leftRank - rightRank;
+  });
+}
+
+function resolveRecommendedTier(currentTier: PlanTier | null): PlanTier | null {
+  if (!currentTier) return "pro";
+  if (currentTier === "base") return "pro";
+  if (currentTier === "pro") return "premium";
+  return null;
+}
+
+function booleanPlanCapability(locale: string, supported: boolean): string {
+  if (locale.toLowerCase().startsWith("zh")) {
+    return supported ? "支持" : "不支持";
+  }
+  return supported ? "Supported" : "Not supported";
+}
+
+function planCompareValue(
+  plan: PlanRecord | null,
+  capability:
+    | "credits"
+    | "trial"
+    | "text"
+    | "image"
+    | "video"
+    | "crossApp"
+    | "transfer"
+    | "support",
+  locale: string,
+): string {
+  if (!plan) return EMPTY;
+  const tier = planTierFromPlanKey(plan.planKey);
+  const isZh = locale.toLowerCase().startsWith("zh");
+  switch (capability) {
+    case "credits":
+      return isZh
+        ? `${plan.tokens.toLocaleString(locale)} / 周期`
+        : `${plan.tokens.toLocaleString(locale)} / period`;
+    case "trial":
+      return plan.trialDays ? `${plan.trialDays}` : EMPTY;
+    case "text":
+      return isZh
+        ? "Google、ChatGPT、Claude"
+        : "Google, ChatGPT, Claude";
+    case "image":
+      return booleanPlanCapability(locale, tier === "pro" || tier === "premium");
+    case "video":
+      return booleanPlanCapability(locale, tier === "premium");
+    case "crossApp":
+      return booleanPlanCapability(locale, tier === "premium");
+    case "transfer":
+      return booleanPlanCapability(locale, tier === "premium");
+    case "support":
+      return booleanPlanCapability(locale, true);
+    default:
+      return EMPTY;
+  }
 }
 
 function formatDate(iso: string | null, locale: string): string {
@@ -563,7 +635,7 @@ export function BillingPage() {
   const [showAccountDetailPage, setShowAccountDetailPage] = useState(false);
 
   const paidPlansForInterval = useMemo(
-    () => listSubscriptionPlansForInterval(subscriptionPlans, interval),
+    () => sortPlansByTier(listSubscriptionPlansForInterval(subscriptionPlans, interval)),
     [subscriptionPlans, interval],
   );
   const paidPlansToShow = paidPlansForInterval;
@@ -609,7 +681,8 @@ export function BillingPage() {
     sub?.status === "ACTIVE" || sub?.status === "PENDING"
       ? planTierFromPlanKey(sub.planKey)
       : null;
-  const recommendedTier: PlanTier = currentSubscriptionTier ?? "base";
+  const recommendedTier = resolveRecommendedTier(currentSubscriptionTier);
+  const emphasizedTier = currentSubscriptionTier ?? recommendedTier;
   const usageLow = usagePercent >= 85;
 
   if (actionData?.ok && "noopCheckout" in actionData && actionData.noopCheckout) {
@@ -673,7 +746,7 @@ export function BillingPage() {
       label: t("billing.compareTokens"),
       values: [
         trialPlan?.tokens.toLocaleString() ?? EMPTY,
-        ...paidPlansToShow.map((plan) => plan.tokens.toLocaleString()),
+        ...paidPlansToShow.map((plan) => planCompareValue(plan, "credits", locale)),
       ],
     },
     {
@@ -681,6 +754,48 @@ export function BillingPage() {
       values: [
         EMPTY,
         ...paidPlansToShow.map((plan) => plan.trialDays?.toString() ?? EMPTY),
+      ],
+    },
+    {
+      label: locale.toLowerCase().startsWith("zh") ? "文本模型" : "Text models",
+      values: [
+        locale.toLowerCase().startsWith("zh") ? "仅 Google" : "Google only",
+        ...paidPlansToShow.map((plan) => planCompareValue(plan, "text", locale)),
+      ],
+    },
+    {
+      label: locale.toLowerCase().startsWith("zh") ? "图片模型" : "Image models",
+      values: [
+        booleanPlanCapability(locale, false),
+        ...paidPlansToShow.map((plan) => planCompareValue(plan, "image", locale)),
+      ],
+    },
+    {
+      label: locale.toLowerCase().startsWith("zh") ? "视频模型" : "Video models",
+      values: [
+        booleanPlanCapability(locale, false),
+        ...paidPlansToShow.map((plan) => planCompareValue(plan, "video", locale)),
+      ],
+    },
+    {
+      label: locale.toLowerCase().startsWith("zh") ? "跨 app 使用积分" : "Cross-app credits",
+      values: [
+        booleanPlanCapability(locale, false),
+        ...paidPlansToShow.map((plan) => planCompareValue(plan, "crossApp", locale)),
+      ],
+    },
+    {
+      label: locale.toLowerCase().startsWith("zh") ? "积分转移" : "Credit transfer",
+      values: [
+        booleanPlanCapability(locale, false),
+        ...paidPlansToShow.map((plan) => planCompareValue(plan, "transfer", locale)),
+      ],
+    },
+    {
+      label: locale.toLowerCase().startsWith("zh") ? "人工支持" : "Human support",
+      values: [
+        booleanPlanCapability(locale, false),
+        ...paidPlansToShow.map((plan) => planCompareValue(plan, "support", locale)),
       ],
     },
   ];
@@ -881,6 +996,13 @@ export function BillingPage() {
               <div className={styles.usageTitleRow}>
                 <h2 className={styles.usageTitle}>{t("billing.quotaTitle")}</h2>
                 <span className={styles.planBadge}>{currentPlanTagLabel}</span>
+                <button
+                  type="button"
+                  className={styles.secondaryEntryButton}
+                  onClick={() => setShowAccountDetailPage(true)}
+                >
+                  {t("billing.openAccountDetailPage")}
+                </button>
               </div>
               {quotaMetaDescription ? (
                 <p className={styles.quotaSubtitle}>{quotaMetaDescription}</p>
@@ -931,13 +1053,6 @@ export function BillingPage() {
             </div>
           </div>
           <div className={styles.quotaFooter}>
-            <button
-              type="button"
-              className={styles.secondaryEntryButton}
-              onClick={() => setShowAccountDetailPage(true)}
-            >
-              {t("billing.openAccountDetailPage")}
-            </button>
             {showDevCancelSubscription ? (
               <div className={styles.devCancelBar}>
                 <span className={styles.devCancelBadge}>{t("billing.devEnvBadge")}</span>
@@ -1006,32 +1121,6 @@ export function BillingPage() {
             </div>
 
             <div className={styles.planGrid}>
-              <article
-                className={`${styles.planCard} ${isTrialCurrent ? styles.planCardCurrent : ""}`}
-              >
-                <div className={styles.planCardBody}>
-                  <h3 className={styles.planName}>
-                    {t("billing.planFree")}
-                  </h3>
-                  <div className={styles.planPriceRow}>
-                    <span className={styles.planPrice}>
-                      {formatPlanPrice("0", trialPlan?.currencyCode ?? "USD", locale)}
-                    </span>
-                    <span className={styles.planPriceSuffix}>
-                      {t("billing.perMonth")}
-                    </span>
-                  </div>
-                  <PlanFeatureList items={trialFeatures} />
-                </div>
-                {isTrialCurrent ? (
-                  <div className={styles.planCurrentCta} role="status" aria-current="true">
-                    {t("billing.currentPlan")}
-                  </div>
-                ) : (
-                  <div className={styles.planMutedCta}>{t("billing.planFree")}</div>
-                )}
-              </article>
-
               {paidPlansToShow.map((plan) => {
                 const tier = planTierFromPlanKey(plan.planKey);
                 const isRecommended = tier === recommendedTier;
@@ -1045,13 +1134,23 @@ export function BillingPage() {
                     isPending={isPendingSubscriptionPlan(plan.planKey, sub)}
                     isSubmitting={subscribingPlanKey === plan.planKey}
                     submittingMode={subscribingPlanKey === plan.planKey ? subscribingMode : null}
-                    mockOnly={isMockVisualPlan(plan)}
+                    mockOnly={ALL_PLANS_MOCKED || isMockVisualPlan(plan)}
                     locale={locale}
                     t={t}
                     paidFeatures={paidFeatures}
                   />
                 );
               })}
+            </div>
+            <div className={styles.freePlanEntryWrap}>
+              <button type="button" className={styles.freePlanEntryButton}>
+                {isTrialCurrent ? t("billing.currentPlan") : "切换为免费计划"}
+              </button>
+              {!isTrialCurrent && trialPlan ? (
+                <p className={styles.freePlanEntryMeta}>
+                  {trialFeatures.map((item) => item.text).join(" · ")}
+                </p>
+              ) : null}
             </div>
           </section>
         ) : null}
@@ -1147,7 +1246,7 @@ export function BillingPage() {
                   {paidPlansToShow.map((plan) => {
                     const tier = planTierFromPlanKey(plan.planKey) ?? plan.planKey;
                     return (
-                      <th key={plan.planKey} className={compareColumnClass(tier, recommendedTier)}>
+                      <th key={plan.planKey} className={compareColumnClass(tier, emphasizedTier)}>
                         {normalizePlanDisplayName(plan.displayName, plan.planKey)}
                       </th>
                     );
@@ -1162,7 +1261,7 @@ export function BillingPage() {
                       const key =
                         index === 0 ? "free" : (planTierFromPlanKey(paidPlansToShow[index - 1]?.planKey ?? "") ?? paidPlansToShow[index - 1]?.planKey ?? String(index));
                       return (
-                        <td key={`${row.label}-${key}`} className={compareColumnClass(key, recommendedTier)}>
+                        <td key={`${row.label}-${key}`} className={compareColumnClass(key, emphasizedTier)}>
                           {value}
                         </td>
                       );
