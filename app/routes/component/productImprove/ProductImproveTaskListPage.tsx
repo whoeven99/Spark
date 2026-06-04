@@ -337,7 +337,7 @@ export function ProductImproveTaskListPage({
           >
             <span style={{ fontSize: 28, lineHeight: 1 }}>⏳</span>
             <span style={{ fontSize: 14, color: pageColorTokens.textSecondary }}>
-              {t("common.loading")}
+              Loading...
             </span>
           </div>
           <AITaskPagination

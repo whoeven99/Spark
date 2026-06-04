@@ -77,7 +77,7 @@ export function AITaskPagination({
           }}
         >
           {loading
-            ? t("common.loading")
+            ? "Loading..."
             : t("common.paginationPage", {
                 page,
                 totalPages,
