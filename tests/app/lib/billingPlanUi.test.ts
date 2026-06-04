@@ -8,6 +8,7 @@ import {
   listSubscriptionPlansForInterval,
   normalizePlanDisplayName,
   pickSubscriptionPlan,
+  resolveCurrentPlanLabel,
 } from "../../../app/lib/billingPlanUi";
 import type { PlanRecord } from "../../../app/lib/billingPageTypes";
 
@@ -91,6 +92,18 @@ describe("plan display labels", () => {
   it("计划标签统一为 xx Plan", () => {
     expect(formatPlanTagLabel("Base (Monthly)", "gd_base_monthly")).toBe("Basic Plan");
     expect(formatPlanTagLabel("Pro (Monthly)", "gd_pro_monthly")).toBe("Pro Plan");
+  });
+
+  it("试用账户展示免费计划而不是免费试用", () => {
+    expect(
+      resolveCurrentPlanLabel({
+        subscription: null,
+        trialPlan: plans[0],
+        subscriptionPlans: plans,
+        account: { trialTokens: 1000 },
+        t: (key) => (key === "billing.planFree" ? "免费计划" : key),
+      }),
+    ).toBe("免费计划");
   });
 });
 

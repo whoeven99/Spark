@@ -455,6 +455,15 @@
   padding-top: 0.25rem;
 }
 
+.planCtaGroup {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.planActionForm {
+  margin: 0;
+}
+
 .planPrimaryCta {
   display: block;
   width: 100%;
@@ -493,6 +502,40 @@
 
 .planCardRecommended .planPrimaryCta:hover:not(:disabled) {
   box-shadow: 0 3px 12px rgba(44, 110, 203, 0.28);
+}
+
+.planSecondaryCta {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.65rem 1rem;
+  border-radius: 9px;
+  border: 1px solid #c9cdd2;
+  background: #ffffff;
+  color: #1f2124;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  line-height: 1.25;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.planSecondaryCta:hover:not(:disabled) {
+  background: #fafbfb;
+  border-color: #2c6ecb;
+  box-shadow: 0 2px 10px rgba(44, 110, 203, 0.08);
+  transform: translateY(-1px);
+}
+
+.planSecondaryCta:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .planPendingCta {

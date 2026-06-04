@@ -116,7 +116,8 @@
       "CANCELLED": "Gekündigt",
       "EXPIRED": "Abgelaufen",
       "FROZEN": "Eingefroren"
-    }
+    },
+    "planFree": "Kostenloser Plan"
   },
   "chat": {
     "pageTitle": "Shopify AI Assistant",

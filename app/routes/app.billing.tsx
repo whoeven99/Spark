@@ -28,6 +28,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const form = await request.formData();
   const intent = form.get("intent")?.toString();
   const planKey = form.get("planKey")?.toString();
+  const trialMode = form.get("trialMode")?.toString();
 
   if (!intent) {
     return { ok: false as const, error: "缺少 intent" };
@@ -54,6 +55,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         appName,
         planKey,
         request,
+        trialDays: trialMode === "paid" ? null : undefined,
       });
       if (confirmationUrl) {
         throw shopifyRedirect(confirmationUrl, { target: "_top" });

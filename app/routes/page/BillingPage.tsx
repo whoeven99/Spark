@@ -22,7 +22,6 @@ import {
   normalizePlanDisplayName,
   pickSubscriptionPlan,
   planTierFromPlanKey,
-  resolveCurrentPlanLabel,
   type BillingIntervalView,
   type PlanTier,
 } from "../../lib/billingPlanUi";
@@ -68,9 +67,20 @@ function formatDateTime(iso: string, locale: string): string {
   });
 }
 
-function resolvePlanDisplayName(planKey: string | null, plans: PlanRecord[]): string {
+function resolvePlanDisplayName(
+  planKey: string | null,
+  plans: PlanRecord[],
+  freePlanLabel: string,
+): string {
   if (!planKey) return EMPTY;
   const match = plans.find((plan) => plan.planKey === planKey);
+  if (
+    match?.kind === "INTERNAL_TRIAL" ||
+    /free\s+trial/i.test(match?.displayName ?? "") ||
+    planKey.includes("trial")
+  ) {
+    return freePlanLabel;
+  }
   return normalizePlanDisplayName(match?.displayName ?? planKey, planKey);
 }
 
@@ -155,6 +165,7 @@ function PaidPlanCard({
   isCurrent,
   isPending,
   isSubmitting,
+  submittingMode,
   locale,
   t,
   paidFeatures,
@@ -165,6 +176,7 @@ function PaidPlanCard({
   isCurrent: boolean;
   isPending: boolean;
   isSubmitting: boolean;
+  submittingMode: "trial" | "paid" | null;
   locale: string;
   t: (key: string, options?: Record<string, unknown>) => string;
   paidFeatures: (plan: PlanRecord) => string[];
@@ -172,6 +184,7 @@ function PaidPlanCard({
   const periodSuffix = interval === "ANNUAL" ? t("billing.perYear") : t("billing.perMonth");
   const monthlyEquivalent =
     interval === "ANNUAL" ? formatAnnualMonthlyEquivalent(plan, locale) : null;
+  const hasTrial = Boolean(plan.trialDays && plan.trialDays > 0);
 
   return (
     <article
@@ -208,13 +221,34 @@ function PaidPlanCard({
             {t("billing.pendingConfirmation")}
           </div>
         ) : (
-          <Form method="post">
-            <input type="hidden" name="intent" value="subscribe" />
-            <input type="hidden" name="planKey" value={plan.planKey} />
-            <button type="submit" className={styles.planPrimaryCta} disabled={isSubmitting}>
-              {isSubmitting ? t("billing.redirectingToCheckout") : t("billing.subscribe")}
-            </button>
-          </Form>
+          <div className={styles.planCtaGroup}>
+            {hasTrial ? (
+              <Form method="post" className={styles.planActionForm}>
+                <input type="hidden" name="intent" value="subscribe" />
+                <input type="hidden" name="planKey" value={plan.planKey} />
+                <input type="hidden" name="trialMode" value="trial" />
+                <button type="submit" className={styles.planPrimaryCta} disabled={isSubmitting}>
+                  {isSubmitting && submittingMode === "trial"
+                    ? t("billing.redirectingToCheckout")
+                    : t("billing.trialDays", { count: plan.trialDays ?? 0 })}
+                </button>
+              </Form>
+            ) : null}
+            <Form method="post" className={styles.planActionForm}>
+              <input type="hidden" name="intent" value="subscribe" />
+              <input type="hidden" name="planKey" value={plan.planKey} />
+              <input type="hidden" name="trialMode" value="paid" />
+              <button
+                type="submit"
+                className={hasTrial ? styles.planSecondaryCta : styles.planPrimaryCta}
+                disabled={isSubmitting}
+              >
+                {isSubmitting && submittingMode === "paid"
+                  ? t("billing.redirectingToCheckout")
+                  : t("billing.subscribe")}
+              </button>
+            </Form>
+          </div>
         )}
       </div>
     </article>
@@ -243,6 +277,11 @@ export function BillingPage() {
     navigation.formData?.get("intent") === "subscribe"
       ? String(navigation.formData.get("planKey") ?? "")
       : "";
+  const subscribingMode =
+    navigation.state !== "idle" &&
+    navigation.formData?.get("intent") === "subscribe"
+      ? ((navigation.formData.get("trialMode")?.toString() ?? "trial") as "trial" | "paid")
+      : null;
   const buyingPackKey =
     navigation.state !== "idle" && navigation.formData?.get("intent") === "buy_pack"
       ? String(navigation.formData.get("planKey") ?? "")
@@ -301,13 +340,6 @@ export function BillingPage() {
     sub?.status !== "PENDING" &&
     billing.account.trialTokens > 0;
 
-  const currentPlanLabel = resolveCurrentPlanLabel({
-    subscription: sub,
-    trialPlan,
-    subscriptionPlans,
-    account: billing.account,
-    t,
-  });
   const currentPlanRecord = useMemo(
     () => subscriptionPlans.find((plan) => plan.planKey === sub?.planKey) ?? null,
     [sub?.planKey, subscriptionPlans],
@@ -317,13 +349,10 @@ export function BillingPage() {
       return formatPlanTagLabel(currentPlanRecord.displayName, currentPlanRecord.planKey);
     }
     if (isTrialCurrent) {
-      return formatPlanTagLabel(
-        trialPlan?.displayName ?? t("billing.planFree"),
-        trialPlan?.planKey,
-      );
+      return t("billing.planFree");
     }
-    return formatPlanTagLabel(currentPlanLabel);
-  }, [currentPlanLabel, currentPlanRecord, isTrialCurrent, t, trialPlan?.displayName, trialPlan?.planKey]);
+    return t("billing.planFree");
+  }, [currentPlanRecord, isTrialCurrent, t]);
   const quotaMetaDescription = useMemo(() => {
     const meta: string[] = [];
     if (showSubscriptionPeriodMeta && sub?.currentPeriodEnd) {
@@ -528,7 +557,7 @@ export function BillingPage() {
                         <div className={styles.historyItemMeta}>
                           <span>
                             {t("billing.historyPlanLabel")}:{" "}
-                            {resolvePlanDisplayName(item.planKey, allPlans)}
+                            {resolvePlanDisplayName(item.planKey, allPlans, t("billing.planFree"))}
                           </span>
                           {item.tokensDelta != null ? (
                             <span
@@ -573,7 +602,7 @@ export function BillingPage() {
                       <div key={item.id} className={styles.periodItem}>
                         <div className={styles.periodItemTop}>
                           <span className={styles.periodPlan}>
-                            {resolvePlanDisplayName(item.planKey, allPlans)}
+                            {resolvePlanDisplayName(item.planKey, allPlans, t("billing.planFree"))}
                           </span>
                           <span className={styles.historyTimestamp}>
                             {formatDate(item.periodStart, locale)} - {formatDate(item.periodEnd, locale)}
@@ -753,10 +782,7 @@ export function BillingPage() {
               >
                 <div className={styles.planCardBody}>
                   <h3 className={styles.planName}>
-                    {normalizePlanDisplayName(
-                      trialPlan?.displayName ?? t("billing.planFree"),
-                      trialPlan?.planKey,
-                    )}
+                    {t("billing.planFree")}
                   </h3>
                   <div className={styles.planPriceRow}>
                     <span className={styles.planPrice}>
@@ -789,6 +815,7 @@ export function BillingPage() {
                     isCurrent={isActiveSubscriptionPlan(plan.planKey, sub)}
                     isPending={isPendingSubscriptionPlan(plan.planKey, sub)}
                     isSubmitting={subscribingPlanKey === plan.planKey}
+                    submittingMode={subscribingPlanKey === plan.planKey ? subscribingMode : null}
                     locale={locale}
                     t={t}
                     paidFeatures={paidFeatures}
@@ -885,10 +912,7 @@ export function BillingPage() {
                 <tr>
                   <th>{t("billing.compareFeatureCol")}</th>
                   <th>
-                    {normalizePlanDisplayName(
-                      trialPlan?.displayName ?? t("billing.planFree"),
-                      trialPlan?.planKey,
-                    )}
+                    {t("billing.planFree")}
                   </th>
                   <th className={compareColumnClass("base", recommendedTier)}>
                     {normalizePlanDisplayName(basePlan.displayName, basePlan.planKey)}

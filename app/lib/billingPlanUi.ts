@@ -34,7 +34,7 @@ export function normalizePlanDisplayName(displayName: string, planKey?: string |
 
 export function formatPlanTagLabel(displayName: string, planKey?: string | null): string {
   const normalized = normalizePlanDisplayName(displayName, planKey);
-  if (/plan$/i.test(normalized)) return normalized;
+  if (/plan$/i.test(normalized) || /计划$/.test(normalized)) return normalized;
   return `${normalized} Plan`;
 }
 
@@ -189,7 +189,7 @@ export function resolveCurrentPlanLabel(params: {
     );
   }
   if (account.trialTokens > 0 && trialPlan) {
-    return normalizePlanDisplayName(trialPlan.displayName, trialPlan.planKey);
+    return t("billing.planFree");
   }
   return t("billing.planFree");
 }

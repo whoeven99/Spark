@@ -563,7 +563,8 @@
       "CANCELLED": "Annulé",
       "EXPIRED": "Expiré",
       "FROZEN": "Gelé"
-    }
+    },
+    "planFree": "Plan gratuit"
   },
   "qualityScore": {
     "scoreAction": "Score quality",

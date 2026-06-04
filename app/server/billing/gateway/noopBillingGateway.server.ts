@@ -9,8 +9,10 @@ const NOOP_SUBSCRIPTION_GID = "gid://shopify/AppSubscription/noop";
 const NOOP_PURCHASE_GID_PREFIX = "gid://shopify/AppPurchaseOneTime/noop-";
 
 export const noopBillingGateway: BillingGateway = {
-  async createSubscription({ shop, appName, plan }) {
+  async createSubscription({ shop, appName, plan, trialDays }) {
     const subscriptionId = `${NOOP_SUBSCRIPTION_GID}-${plan.planKey}`;
+    const now = new Date();
+    const effectiveTrialDays = trialDays !== undefined ? trialDays : plan.trialDays;
     const periodEnd = new Date();
     if (plan.billingInterval === "ANNUAL") {
       periodEnd.setUTCFullYear(periodEnd.getUTCFullYear() + 1);
@@ -25,13 +27,17 @@ export const noopBillingGateway: BillingGateway = {
       planKey: plan.planKey,
       billingInterval: plan.billingInterval ?? "MONTHLY",
       tokensPerPeriod: plan.tokens,
+      trialEndsAt:
+        effectiveTrialDays && effectiveTrialDays > 0
+          ? new Date(now.getTime() + effectiveTrialDays * 24 * 60 * 60 * 1000)
+          : null,
       period: {
         planKey: plan.planKey,
         tokensPerPeriod: plan.tokens,
-        currentPeriodStart: new Date(),
+        currentPeriodStart: now,
         currentPeriodEnd: periodEnd,
       },
-      rawPayload: { noop: true },
+      rawPayload: { noop: true, trialDays: effectiveTrialDays ?? 0 },
     });
 
     return {
