@@ -1250,6 +1250,20 @@
   flex-wrap: wrap;
 }
 
+.historyMain {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+.historySide {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+  flex-shrink: 0;
+  text-align: right;
+}
+
 .historyItemMeta,
 .periodStats {
   margin-top: 0.45rem;
@@ -1314,6 +1328,14 @@
 .historyDeltaNegative {
   color: #8a2712;
   font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .historySide {
+    width: 100%;
+    align-items: flex-start;
+    text-align: left;
+  }
 }
 
 .periodPlan {

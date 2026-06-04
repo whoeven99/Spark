@@ -965,89 +965,100 @@ export function BillingPage() {
                       {paginatedLedgerEntries.map((item) => (
                       <div key={`${item.kind}-${item.id}`} className={styles.historyItem}>
                         <div className={styles.historyItemTop}>
-                          <span
-                            className={`${styles.historyTone} ${resolveLedgerToneClass(item, styles)}`}
-                          >
-                            {item.kind === "billing"
-                              ? resolveBillingEventLabel(item.eventType, t)
-                              : locale.toLowerCase().startsWith("zh")
-                                ? "积分消耗"
-                                : "Credit usage"}
-                          </span>
-                          <span className={styles.historyTimestamp}>
-                            {formatDateTime(item.createdAt, locale)}
-                          </span>
-                        </div>
-                        <div className={styles.historyItemMeta}>
-                          {item.kind === "billing" ? (
-                            <>
-                              <span>
-                                {t("billing.historyPlanLabel")}:{" "}
-                                {resolvePlanDisplayName(item.planKey, allPlans, t("billing.planFree"))}
+                          <div className={styles.historyMain}>
+                            <span
+                              className={`${styles.historyTone} ${resolveLedgerToneClass(item, styles)}`}
+                            >
+                              {item.kind === "billing"
+                                ? resolveBillingEventLabel(item.eventType, t)
+                                : locale.toLowerCase().startsWith("zh")
+                                  ? "积分消耗"
+                                  : "Credit usage"}
+                            </span>
+                            <div className={styles.historyItemMeta}>
+                              {item.kind === "billing" ? (
+                                <>
+                                  <span>
+                                    {t("billing.historyPlanLabel")}:{" "}
+                                    {resolvePlanDisplayName(item.planKey, allPlans, t("billing.planFree"))}
+                                  </span>
+                                  {item.usedTokens != null ? (
+                                    <span>
+                                      {t("billing.historyUsedLabel", {
+                                        count: item.usedTokens.toLocaleString(),
+                                      })}
+                                    </span>
+                                  ) : null}
+                                </>
+                              ) : (
+                                <>
+                                  <span>{resolveToolUsageFeatureLabel(item.feature, t)}</span>
+                                  <span>
+                                    {locale.toLowerCase().startsWith("zh") ? "模型" : "Model"}:{" "}
+                                    {item.modelKey}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div className={styles.historySide}>
+                            {item.kind === "billing" && item.tokensDelta != null ? (
+                              <span
+                                className={
+                                  item.tokensDelta >= 0
+                                    ? styles.historyDeltaPositive
+                                    : styles.historyDeltaNegative
+                                }
+                              >
+                                {item.tokensDelta >= 0 ? "+" : ""}
+                                {item.tokensDelta.toLocaleString()} {t("billing.tokenUnit")}
                               </span>
-                              {item.tokensDelta != null ? (
-                                <span
-                                  className={
-                                    item.tokensDelta >= 0
-                                      ? styles.historyDeltaPositive
-                                      : styles.historyDeltaNegative
-                                  }
-                                >
-                                  {item.tokensDelta >= 0 ? "+" : ""}
-                                  {item.tokensDelta.toLocaleString()} {t("billing.tokenUnit")}
-                                </span>
-                              ) : null}
-                              {item.usedTokens != null ? (
-                                <span>
-                                  {t("billing.historyUsedLabel", {
-                                    count: item.usedTokens.toLocaleString(),
-                                  })}
-                                </span>
-                              ) : null}
-                            </>
-                          ) : (
-                            <>
-                              <span>{resolveToolUsageFeatureLabel(item.feature, t)}</span>
-                              <span>
-                                {locale.toLowerCase().startsWith("zh") ? "模型" : "Model"}:{" "}
-                                {item.modelKey}
-                              </span>
+                            ) : item.kind === "usage" ? (
                               <span className={styles.historyDeltaNegative}>
                                 -{item.billedTokens.toLocaleString()} {t("billing.tokenUnit")}
                               </span>
-                            </>
-                          )}
+                            ) : null}
+                            <span className={styles.historyTimestamp}>
+                              {formatDateTime(item.createdAt, locale)}
+                            </span>
+                          </div>
                         </div>
                       </div>
                       ))}
                     </div>
                     {totalHistoryPages > 1 ? (
                       <div className={styles.historyPagination}>
-                        <button
-                          type="button"
-                          className={styles.secondaryEntryButton}
-                          disabled={safeHistoryPage <= 1}
-                          onClick={() => setHistoryPage((page) => Math.max(1, page - 1))}
-                        >
-                          {locale.toLowerCase().startsWith("zh") ? "上一页" : "Previous"}
-                        </button>
+                        {safeHistoryPage > 1 ? (
+                          <button
+                            type="button"
+                            className={styles.secondaryEntryButton}
+                            onClick={() => setHistoryPage((page) => Math.max(1, page - 1))}
+                          >
+                            {locale.toLowerCase().startsWith("zh") ? "上一页" : "Previous"}
+                          </button>
+                        ) : (
+                          <span aria-hidden />
+                        )}
                         <span className={styles.historyPaginationText}>
                           {locale.toLowerCase().startsWith("zh")
                             ? `第 ${safeHistoryPage} / ${totalHistoryPages} 页`
                             : `Page ${safeHistoryPage} / ${totalHistoryPages}`}
                         </span>
-                        <button
-                          type="button"
-                          className={styles.secondaryEntryButton}
-                          disabled={safeHistoryPage >= totalHistoryPages}
-                          onClick={() =>
-                            setHistoryPage((page) =>
-                              Math.min(totalHistoryPages, page + 1),
-                            )
-                          }
-                        >
-                          {locale.toLowerCase().startsWith("zh") ? "下一页" : "Next"}
-                        </button>
+                        {safeHistoryPage < totalHistoryPages ? (
+                          <button
+                            type="button"
+                            className={styles.secondaryEntryButton}
+                            onClick={() =>
+                              setHistoryPage((page) =>
+                                Math.min(totalHistoryPages, page + 1),
+                              )
+                            }
+                          >
+                            {locale.toLowerCase().startsWith("zh") ? "下一页" : "Next"}
+                          </button>
+                        ) : (
+                          <span aria-hidden />
+                        )}
                       </div>
                     ) : null}
                   </>
