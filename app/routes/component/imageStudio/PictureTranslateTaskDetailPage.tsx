@@ -1,15 +1,34 @@
-import { useEffect, useState } from "react";
+import { useAppBridge } from "@shopify/app-bridge-react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
+import { DialogShell } from "../shared/DialogShell";
 import { TaskStatusBadge } from "../aiTask/TaskStatusBadge";
 import { LogViewer } from "../aiTask/LogViewer";
-import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
+import type { AITaskCreateResponse, AITaskItem, AITaskStatus, AITaskType } from "../../../lib/aiTaskTypes";
 
 type Props = {
   task: AITaskItem;
   locationSearch: string;
   onBack: () => void;
   onTaskUpdated?: (taskId: string, status: AITaskStatus, result?: Record<string, unknown>) => void;
+  onTaskCreated?: (
+    taskId: string,
+    batchId: string,
+    taskType: AITaskType,
+    optimisticConfig?: Record<string, unknown>,
+  ) => void;
+};
+
+type TaskRecord = {
+  id: string;
+  version: number;
+  createdAt: string;
+  sourceLabel: string;
+  statusNote: string;
+  previewUrl: string | null;
+  taskId: string;
+  targetCode: string;
 };
 
 function readStringField(
@@ -128,10 +147,17 @@ export function PictureTranslateTaskDetailPage({
   locationSearch,
   onBack,
   onTaskUpdated,
+  onTaskCreated,
 }: Props) {
+  const shopify = useAppBridge();
   const { t, i18n } = useTranslation();
   const [localStatus, setLocalStatus] = useState<AITaskStatus>(task.status);
   const [localResult, setLocalResult] = useState<Record<string, unknown> | null>(task.result);
+  const [taskRecords, setTaskRecords] = useState<TaskRecord[]>([]);
+  const [optimizeDialogOpen, setOptimizeDialogOpen] = useState(false);
+  const [nextTargetCode, setNextTargetCode] = useState("");
+  const [optimizing, setOptimizing] = useState(false);
+  const [optimizeError, setOptimizeError] = useState<string | null>(null);
 
   useEffect(() => {
     setLocalStatus(task.status);
@@ -146,6 +172,102 @@ export function PictureTranslateTaskDetailPage({
   const originalImageUrl = readStringField(config, "imageUrl");
   const actualElapsed = formatActualElapsed(task.startedAt, task.completedAt);
   const modelType = readNumberField(config, "modelType");
+  const shortId = task.id.slice(0, 8).toUpperCase();
+
+  useEffect(() => {
+    setNextTargetCode(targetCode);
+  }, [targetCode]);
+
+  useEffect(() => {
+    setTaskRecords((prev) => {
+      const current: TaskRecord = {
+        id: `${task.id}-current`,
+        version: 1,
+        createdAt: task.createdAt,
+        sourceLabel: t("imageStudio.recordSourceInitial"),
+        statusNote:
+          localStatus === "running"
+            ? t("imageStudio.recordStatusRunning")
+            : localStatus === "failed"
+              ? t("imageStudio.recordStatusFailed")
+              : t("imageStudio.recordStatusReady"),
+        previewUrl: imageUrl,
+        taskId: task.id,
+        targetCode,
+      };
+      const rest = prev.filter((item) => item.id !== current.id);
+      return [current, ...rest];
+    });
+  }, [imageUrl, localStatus, t, targetCode, task.createdAt, task.id]);
+
+  const sortedTaskRecords = useMemo(
+    () => [...taskRecords].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [taskRecords],
+  );
+
+  async function handleOptimize() {
+    const trimmedTarget = nextTargetCode.trim();
+    if (!originalImageUrl) {
+      setOptimizeError(t("imageStudio.optimizeImageSourceMissing"));
+      return;
+    }
+    if (!trimmedTarget) {
+      setOptimizeError(t("imageStudio.optimizeTargetRequired"));
+      return;
+    }
+
+    setOptimizing(true);
+    setOptimizeError(null);
+    try {
+      const res = await fetch(`/api/picture-translate${locationSearch}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageUrl: originalImageUrl,
+          sourceCode,
+          targetCode: trimmedTarget,
+          modelType: modelType ?? 1,
+        }),
+      });
+      const body = (await res.json()) as AITaskCreateResponse;
+      if (!body.success) {
+        setOptimizeError(body.errorMsg || t("imageStudio.optimizeCreateFailed"));
+        return;
+      }
+
+      onTaskCreated?.(body.taskId, body.batchId, "picture_translate", {
+        imageUrl: originalImageUrl,
+        sourceCode,
+        targetCode: trimmedTarget,
+        modelType: modelType ?? 1,
+        sourceTaskId: task.id,
+      });
+      setTaskRecords((prev) =>
+        [
+          {
+            id: `${body.taskId}-derived`,
+            version: prev.length + 1,
+            createdAt: new Date().toISOString(),
+            sourceLabel: t("imageStudio.recordSourceOptimized"),
+            statusNote: t("imageStudio.recordStatusNewTranslateTask", {
+              taskId: body.taskId.slice(0, 8).toUpperCase(),
+              target: trimmedTarget,
+            }),
+            previewUrl: null,
+            taskId: body.taskId,
+            targetCode: trimmedTarget,
+          },
+          ...prev,
+        ],
+      );
+      shopify.toast.show(t("imageStudio.optimizeTaskCreated"));
+      setOptimizeDialogOpen(false);
+    } catch {
+      setOptimizeError(t("imageStudio.optimizeNetworkError"));
+    } finally {
+      setOptimizing(false);
+    }
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -207,12 +329,12 @@ export function PictureTranslateTaskDetailPage({
                   border: `1px solid ${pageColorTokens.borderSubtle}`,
                 }}
               >
-                #{task.id.slice(0, 8).toUpperCase()}
+                #{shortId}
               </span>
               <TaskStatusBadge status={localStatus} />
             </div>
             <div style={{ fontSize: 18, fontWeight: 700, color: pageColorTokens.textPrimary }}>
-              {t("imageStudio.taskGoalTranslate")}
+              {t("imageStudio.taskSummaryTitle")}
             </div>
             <div style={{ fontSize: 13, color: pageColorTokens.textSecondary, marginTop: 6, lineHeight: 1.55 }}>
               {t("imageStudio.pictureTranslateDetailSummary")}
@@ -238,6 +360,7 @@ export function PictureTranslateTaskDetailPage({
             color: pageColorTokens.textSecondary,
           }}
         >
+          <span>{t("imageStudio.taskDetailLabel")}</span>
           <span>{t("imageStudio.taskLanguageDirection", { source: sourceCode, target: targetCode })}</span>
           {provider ? (
             <>
@@ -260,7 +383,7 @@ export function PictureTranslateTaskDetailPage({
         </div>
       </div>
 
-      <Section title={t("imageStudio.detailImageComparison")}>
+      <Section title={t("imageStudio.reviewSectionTitle")}>
         <div
           style={{
             display: "grid",
@@ -269,43 +392,131 @@ export function PictureTranslateTaskDetailPage({
           }}
         >
           <ImagePanel
-            title={t("imageStudio.detailOriginalImage")}
+            title={t("imageStudio.originalContentLabel")}
             src={originalImageUrl}
             emptyText={t("imageStudio.detailNoOriginalImage")}
             alt={t("pictureTranslate.imageSource")}
           />
-          <ImagePanel
-            title={t("imageStudio.detailTranslatedImage")}
-            src={imageUrl}
-            emptyText={
-              localStatus === "failed"
-                ? task.errorMsg ?? t("pictureTranslate.submitFailed")
-                : t("imageStudio.detailNoImage")
-            }
-            alt={t("pictureTranslate.translatedImageAlt")}
-          />
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <ImagePanel
+              title={t("imageStudio.generatedContentLabel")}
+              src={imageUrl}
+              emptyText={
+                localStatus === "failed"
+                  ? task.errorMsg ?? t("pictureTranslate.submitFailed")
+                  : t("imageStudio.detailNoImage")
+              }
+              alt={t("pictureTranslate.translatedImageAlt")}
+            />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => setOptimizeDialogOpen(true)}
+                disabled={optimizing}
+                style={{
+                  padding: "8px 14px",
+                  borderRadius: pageColorTokens.radiusControl,
+                  background: pageColorTokens.brandGreen,
+                  color: "#ffffff",
+                  border: "none",
+                  cursor: optimizing ? "default" : "pointer",
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
+              >
+                {t("imageStudio.actionOptimizeAgain")}
+              </button>
+              {imageUrl ? (
+                <button
+                  type="button"
+                  onClick={() => window.open(imageUrl, "_blank", "noopener,noreferrer")}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: pageColorTokens.radiusControl,
+                    border: `1px solid ${pageColorTokens.borderSubtle}`,
+                    background: "#ffffff",
+                    color: pageColorTokens.textPrimary,
+                    cursor: "pointer",
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  {t("imageGeneration.openImage")}
+                </button>
+              ) : null}
+            </div>
+          </div>
         </div>
-        {imageUrl ? (
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button
-              type="button"
-              onClick={() => window.open(imageUrl, "_blank", "noopener,noreferrer")}
+      </Section>
+
+      <Section title={t("imageStudio.resultRecordsTitle")}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {sortedTaskRecords.map((record) => (
+            <div
+              key={record.id}
               style={{
-                padding: "8px 14px",
-                borderRadius: pageColorTokens.radiusControl,
                 border: `1px solid ${pageColorTokens.borderSubtle}`,
+                borderRadius: pageColorTokens.radiusControl,
                 background: "#ffffff",
-                color: pageColorTokens.textPrimary,
-                cursor: "pointer",
-                fontSize: 12,
-                fontWeight: 600,
+                padding: "0.8rem 0.85rem",
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
               }}
             >
-              {t("imageGeneration.openImage")}
-            </button>
-          </div>
-        ) : null}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 10,
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span
+                    style={{
+                      padding: "0.2rem 0.5rem",
+                      borderRadius: 999,
+                      background: pageColorTokens.surfaceMuted,
+                      color: pageColorTokens.textSecondary,
+                      fontSize: 11,
+                      fontWeight: 700,
+                    }}
+                  >
+                    V{record.version}
+                  </span>
+                  <span style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>{record.sourceLabel}</span>
+                </div>
+                <span style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>
+                  {formatTaskDate(record.createdAt, i18n.language)}
+                </span>
+              </div>
+              <div style={{ fontSize: 13, color: pageColorTokens.textBody, lineHeight: 1.6 }}>
+                {record.statusNote}
+              </div>
+              <div style={{ fontSize: 12, color: pageColorTokens.textSecondary }}>
+                {t("imageStudio.recordTargetLanguageValue", { value: record.targetCode })}
+              </div>
+            </div>
+          ))}
+        </div>
       </Section>
+
+      {optimizeError ? (
+        <div
+          style={{
+            fontSize: 12,
+            color: pageColorTokens.criticalText,
+            background: pageColorTokens.criticalBg,
+            padding: "8px 10px",
+            borderRadius: pageColorTokens.radiusControl,
+            border: "1px solid rgba(220, 38, 38, 0.15)",
+          }}
+        >
+          {optimizeError}
+        </div>
+      ) : null}
 
       {localStatus === "running" ? (
         <LogViewer
@@ -324,6 +535,89 @@ export function PictureTranslateTaskDetailPage({
           }}
         />
       ) : null}
+
+      <DialogShell
+        open={optimizeDialogOpen}
+        width={520}
+        closeDisabled={optimizing}
+        onClose={() => setOptimizeDialogOpen(false)}
+        title={t("imageStudio.optimizeDialogTitle")}
+        description={t("imageStudio.translateOptimizeDialogDescription")}
+        footer={
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => setOptimizeDialogOpen(false)}
+              disabled={optimizing}
+              style={{
+                padding: "8px 14px",
+                borderRadius: pageColorTokens.radiusControl,
+                background: "#ffffff",
+                color: pageColorTokens.textBody,
+                border: `1px solid ${pageColorTokens.borderSubtle}`,
+                cursor: optimizing ? "default" : "pointer",
+                fontSize: 13,
+                fontWeight: 600,
+              }}
+            >
+              {t("common.cancel")}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleOptimize()}
+              disabled={optimizing}
+              style={{
+                padding: "8px 16px",
+                borderRadius: pageColorTokens.radiusControl,
+                background: optimizing ? pageColorTokens.surfaceMuted : pageColorTokens.brandGreen,
+                color: optimizing ? pageColorTokens.textSecondary : "#ffffff",
+                border: "none",
+                cursor: optimizing ? "default" : "pointer",
+                fontSize: 13,
+                fontWeight: 700,
+              }}
+            >
+              {optimizing ? t("imageStudio.optimizing") : t("imageStudio.createOptimizeTask")}
+            </button>
+          </div>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div
+            style={{
+              padding: "0.8rem",
+              borderRadius: pageColorTokens.radiusControl,
+              border: `1px solid ${pageColorTokens.borderSubtle}`,
+              background: pageColorTokens.surfaceSubtle,
+              fontSize: 12,
+              color: pageColorTokens.textSecondary,
+              lineHeight: 1.6,
+            }}
+          >
+            {t("imageStudio.optimizeTranslateSummary", {
+              source: sourceCode,
+              target: targetCode,
+            })}
+          </div>
+          <input
+            value={nextTargetCode}
+            onChange={(event) => setNextTargetCode(event.currentTarget.value)}
+            disabled={optimizing}
+            placeholder={t("imageStudio.optimizeTargetPlaceholder")}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              padding: "0.65rem 0.75rem",
+              borderRadius: pageColorTokens.radiusControl,
+              border: `1px solid ${pageColorTokens.borderInput}`,
+              fontSize: 13,
+              fontFamily: "inherit",
+              lineHeight: 1.55,
+              background: "#fff",
+            }}
+          />
+        </div>
+      </DialogShell>
     </div>
   );
 }

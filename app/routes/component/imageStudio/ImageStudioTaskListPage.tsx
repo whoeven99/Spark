@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens, pageEmptyStateStyle } from "../../page/pageUiStyles";
-import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
+import type { AITaskItem, AITaskStatus, AITaskType } from "../../../lib/aiTaskTypes";
+import { TaskListSummary } from "../aiTask/TaskListSummary";
 import { ImageGenerationTaskCard } from "./ImageGenerationTaskCard";
 import { PictureTranslateTaskCard } from "./PictureTranslateTaskCard";
 import { ImageStudioTaskDetailRouter } from "./ImageStudioTaskDetailRouter";
@@ -13,6 +14,12 @@ type Props = {
   locationSearch: string;
   onTaskDeleted: (taskId: string) => void;
   onTaskUpdated?: (taskId: string, status: AITaskStatus, result?: Record<string, unknown>) => void;
+  onTaskCreated?: (
+    taskId: string,
+    batchId: string,
+    taskType: AITaskType,
+    optimisticConfig?: Record<string, unknown>,
+  ) => void;
 };
 
 export function ImageStudioTaskListPage({
@@ -20,6 +27,7 @@ export function ImageStudioTaskListPage({
   locationSearch,
   onTaskDeleted,
   onTaskUpdated,
+  onTaskCreated,
 }: Props) {
   const { t } = useTranslation();
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -65,12 +73,14 @@ export function ImageStudioTaskListPage({
         locationSearch={locationSearch}
         onBack={() => setSelectedTaskId(null)}
         onTaskUpdated={onTaskUpdated}
+        onTaskCreated={onTaskCreated}
       />
     );
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <TaskListSummary tasks={localTasks} mode="image" />
       <div
         style={{
           display: "flex",

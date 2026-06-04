@@ -5,15 +5,13 @@ import { useTranslation } from "react-i18next";
 import { useImageGeneration } from "../../hooks/useImageGeneration";
 import type { AITaskItem, AITaskType } from "../../lib/aiTaskTypes";
 import type { ImageStudioPageLoaderData } from "../../server/visualTools/imageStudioPageLoader.server";
+import { LanguageSelector } from "../component/common/LanguageSelector";
 import { ImageGenerationForm } from "../component/imageGeneration/ImageGenerationForm";
 import { PictureTranslateForm } from "../component/pictureTranslate/PictureTranslateForm";
 import { PictureTranslateProvider } from "../component/pictureTranslate/pictureTranslateContext";
 import { usePictureTranslateContext } from "../component/pictureTranslate/pictureTranslateContext";
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import { DialogShell } from "../component/shared/DialogShell";
-import type { VisualToolsTab } from "../component/visualTools/VisualToolsTabBar";
-import { VisualToolsTabBar } from "../component/visualTools/VisualToolsTabBar";
-import { TaskListSummary } from "../component/aiTask/TaskListSummary";
 import { ImageStudioTaskListPage } from "../component/imageStudio/ImageStudioTaskListPage";
 import {
   PageSectionHeader,
@@ -21,10 +19,30 @@ import {
   formErrorBoxStyle,
   pageColorTokens,
   pageContentStyle,
-  pageTrustFootnoteStyle,
 } from "./pageUiStyles";
 
-type PageTab = "config" | "tasks";
+type VisualToolsTab = "generate" | "translate";
+type StudioNavTab = VisualToolsTab | "tasks";
+const footerDividerStyle = {
+  color: pageColorTokens.textFootnote,
+};
+const footerDockStyle = {
+  display: "flex",
+  justifyContent: "center",
+  width: "100%",
+  marginTop: "0.5rem",
+};
+const footerContentStyle = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "0.75rem",
+  flexWrap: "wrap" as const,
+  fontSize: "0.75rem",
+  lineHeight: 1.45,
+  color: pageColorTokens.textSecondary,
+  textAlign: "center" as const,
+};
 
 function readToolFromSearch(search: string): VisualToolsTab {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
@@ -34,22 +52,22 @@ function readToolFromSearch(search: string): VisualToolsTab {
   return legacyTab === "translate" ? "translate" : "generate";
 }
 
-function readViewFromSearch(search: string): PageTab {
-  return new URLSearchParams(search.startsWith("?") ? search.slice(1) : search).get("view") ===
-    "tasks"
-    ? "tasks"
-    : "config";
+function readNavTabFromSearch(search: string): StudioNavTab {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  if (params.get("view") === "tasks") return "tasks";
+  return readToolFromSearch(search);
 }
 
-function syncInternalSearch(next: { tool: VisualToolsTab; view: PageTab }) {
+function syncInternalSearch(next: { navTab: StudioNavTab; fallbackTool?: VisualToolsTab }) {
   if (typeof window === "undefined") return;
   const url = new URL(window.location.href);
-  url.searchParams.set("tool", next.tool);
+  const tool = next.navTab === "tasks" ? (next.fallbackTool ?? readToolFromSearch(url.search)) : next.navTab;
+  url.searchParams.set("tool", tool);
   url.searchParams.delete("tab");
-  if (next.view === "config") {
-    url.searchParams.delete("view");
+  if (next.navTab === "tasks") {
+    url.searchParams.set("view", "tasks");
   } else {
-    url.searchParams.set("view", next.view);
+    url.searchParams.delete("view");
   }
   window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
 }
@@ -82,8 +100,8 @@ function buildOptimisticTask(params: {
 
 type InnerProps = {
   tasks: AITaskItem[];
-  pageTab: PageTab;
-  setPageTab: (tab: PageTab) => void;
+  navTab: StudioNavTab;
+  setNavTab: (tab: StudioNavTab) => void;
   locationSearch: string;
   onTaskCreated: (
     taskId: string,
@@ -97,8 +115,8 @@ type InnerProps = {
 
 function ImageStudioPageInner({
   tasks,
-  pageTab,
-  setPageTab,
+  navTab,
+  setNavTab,
   locationSearch,
   onTaskCreated,
   onTaskDeleted,
@@ -106,21 +124,9 @@ function ImageStudioPageInner({
 }: InnerProps) {
   const shopify = useAppBridge();
   const { t } = useTranslation();
-  const location = useLocation();
   const pictureTranslate = usePictureTranslateContext();
-  const [activeToolTab, setActiveToolTabState] = useState<VisualToolsTab>(() =>
-    readToolFromSearch(typeof window !== "undefined" ? window.location.search : location.search),
-  );
   const [generateConfirmOpen, setGenerateConfirmOpen] = useState(false);
   const [translateConfirmOpen, setTranslateConfirmOpen] = useState(false);
-
-  const setActiveToolTab = useCallback(
-    (tab: VisualToolsTab) => {
-      setActiveToolTabState(tab);
-      syncInternalSearch({ tool: tab, view: pageTab });
-    },
-    [pageTab],
-  );
 
   const toastShow = useCallback(
     (message: string) => shopify.toast.show(message),
@@ -133,19 +139,13 @@ function ImageStudioPageInner({
     onTaskCreated,
   });
 
-  useEffect(() => {
-    setActiveToolTabState(readToolFromSearch(location.search));
-  }, [location.search]);
-
-  useEffect(() => {
-    syncInternalSearch({ tool: activeToolTab, view: pageTab });
-  }, [activeToolTab, pageTab]);
-
   const runningCount = tasks.filter((t) => t.status === "running").length;
   const sectionSubtitle =
-    activeToolTab === "translate"
+    navTab === "translate"
       ? t("pictureTranslate.pageSubtitle")
-      : t("imageGeneration.pageSubtitle");
+      : navTab === "generate"
+        ? t("imageGeneration.pageSubtitle")
+        : t("imageStudio.tasksPageSubtitle");
 
   const translateDraft = useMemo(() => {
     const trimmedImageUrl = pictureTranslate.imageUrl.trim();
@@ -192,35 +192,29 @@ function ImageStudioPageInner({
         />
 
         <SegmentedPageTabs
-          activeTab={pageTab}
-          onTabChange={setPageTab}
+          activeTab={navTab}
+          onTabChange={setNavTab}
           ariaLabel={t("imageStudio.pageNavAriaLabel")}
           items={[
-            { key: "config", label: t("imageStudio.tabsConfig") },
+            { key: "generate", label: t("imageStudio.tabGenerate") },
+            { key: "translate", label: t("imageStudio.tabTranslate") },
             { key: "tasks", label: t("imageStudio.tabsTasks"), badgeCount: runningCount },
           ]}
           style={{ margin: "0 0 20px" }}
         />
 
-        {pageTab === "config" && (
+        {navTab !== "tasks" && (
           <>
-            {/* Task summary always visible in config tab */}
-            <TaskListSummary tasks={tasks} mode="image" />
-
-            <VisualToolsTabBar
-              activeTab={activeToolTab}
-              onTabChange={setActiveToolTab}
-            />
             <div style={{ marginTop: 16 }}>
               <PageSurface
                 title={
-                  activeToolTab === "translate"
+                  navTab === "translate"
                     ? t("pictureTranslate.sectionConfig")
                     : t("imageGeneration.sectionConfig")
                 }
                 subtitle={sectionSubtitle}
               >
-                {activeToolTab === "generate" ? (
+                {navTab === "generate" ? (
                   <ImageGenerationForm
                     description={imageGen.description}
                     onDescriptionChange={imageGen.setDescription}
@@ -237,20 +231,30 @@ function ImageStudioPageInner({
           </>
         )}
 
-        {pageTab === "tasks" && (
+        {navTab === "tasks" && (
           <ImageStudioTaskListPage
             tasks={tasks}
             locationSearch={locationSearch}
             onTaskDeleted={onTaskDeleted}
             onTaskUpdated={onTaskUpdated}
+            onTaskCreated={onTaskCreated}
           />
         )}
 
-        <p style={pageTrustFootnoteStyle}>
-          {activeToolTab === "translate"
-            ? t("pictureTranslate.pageFootnote")
-            : t("imageGeneration.pageFootnote")}
-        </p>
+        <div style={footerDockStyle}>
+          <div style={footerContentStyle}>
+            <LanguageSelector variant="inline" />
+            <span aria-hidden="true" style={footerDividerStyle}>
+              |
+            </span>
+            <span>
+              {t("productImproveStage1.contactUsLabel")}{" "}
+              <a href="mailto:support@ciwi.ai" style={{ color: "inherit" }}>
+                support@ciwi.ai
+              </a>
+            </span>
+          </div>
+        </div>
       </div>
 
       <DialogShell
@@ -275,7 +279,7 @@ function ImageStudioPageInner({
               variant="primary"
               onClick={() => {
                 setGenerateConfirmOpen(false);
-                setPageTab("tasks");
+                setNavTab("tasks");
                 void imageGen.submitGenerate();
               }}
               {...(imageGen.isSubmitting ? { disabled: true } : {})}
@@ -354,7 +358,7 @@ function ImageStudioPageInner({
               variant="primary"
               onClick={() => {
                 setTranslateConfirmOpen(false);
-                setPageTab("tasks");
+                setNavTab("tasks");
                 void pictureTranslate.submitTranslate();
               }}
               {...(pictureTranslate.isSubmitting ? { disabled: true } : {})}
@@ -425,6 +429,7 @@ function ImageStudioPageInner({
 export function ImageStudioPage() {
   const shopify = useAppBridge();
   const loaderData = useLoaderData<ImageStudioPageLoaderData>();
+  const location = useLocation();
   const locationSearch =
     typeof window !== "undefined" ? window.location.search : "";
 
@@ -432,22 +437,30 @@ export function ImageStudioPage() {
     ...loaderData.imageGenTasks,
     ...loaderData.translateTasks,
   ]);
-  const location = useLocation();
-  const [pageTab, setPageTabState] = useState<PageTab>(() =>
-    readViewFromSearch(typeof window !== "undefined" ? window.location.search : location.search),
+  const [navTab, setNavTabState] = useState<StudioNavTab>(() =>
+    readNavTabFromSearch(typeof window !== "undefined" ? window.location.search : location.search),
+  );
+  const [lastToolTab, setLastToolTab] = useState<VisualToolsTab>(() =>
+    readToolFromSearch(typeof window !== "undefined" ? window.location.search : location.search),
   );
 
   useEffect(() => {
-    setPageTabState(readViewFromSearch(location.search));
+    const nextNavTab = readNavTabFromSearch(location.search);
+    setNavTabState(nextNavTab);
+    setLastToolTab(readToolFromSearch(location.search));
   }, [location.search]);
 
-  const setPageTab = useCallback((tab: PageTab) => {
-    setPageTabState(tab);
+  const setNavTab = useCallback((tab: StudioNavTab) => {
+    setNavTabState(tab);
+    const nextTool = tab === "tasks" ? lastToolTab : tab;
+    if (tab !== "tasks") {
+      setLastToolTab(tab);
+    }
     syncInternalSearch({
-      tool: readToolFromSearch(typeof window !== "undefined" ? window.location.search : location.search),
-      view: tab,
+      navTab: tab,
+      fallbackTool: nextTool,
     });
-  }, [location.search]);
+  }, [lastToolTab]);
 
   const handleTaskCreated = useCallback(
     (
@@ -463,9 +476,9 @@ export function ImageStudioPage() {
         optimisticConfig,
       });
       setTasks((prev) => [optimisticTask, ...prev]);
-      setPageTab("tasks");
+      setNavTab("tasks");
     },
-    [],
+    [setNavTab],
   );
 
   const handleTaskDeleted = useCallback((taskId: string) => {
@@ -501,8 +514,8 @@ export function ImageStudioPage() {
     >
       <ImageStudioPageInner
         tasks={tasks}
-        pageTab={pageTab}
-        setPageTab={setPageTab}
+        navTab={navTab}
+        setNavTab={setNavTab}
         locationSearch={locationSearch}
         onTaskCreated={handleTaskCreated}
         onTaskDeleted={handleTaskDeleted}

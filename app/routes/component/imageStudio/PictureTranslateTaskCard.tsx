@@ -18,6 +18,11 @@ type Props = {
   deleting: boolean;
 };
 
+function formatDisplayValue(value: string | number | null | undefined, fallback: string): string {
+  if (value == null || value === "") return fallback;
+  return String(value);
+}
+
 function readStringField(
   source: Record<string, unknown> | null | undefined,
   key: string,
@@ -34,10 +39,10 @@ function formatRunningElapsed(startedAt: string | null): string | null {
   return minutes > 0 ? `${minutes}m ${remainingSeconds}s` : `${remainingSeconds}s`;
 }
 
-function getProgressPercent(status: AITaskStatus): number {
+function getProgressPercent(status: AITaskStatus, hasRunningElapsed: boolean): number {
   switch (status) {
     case "running":
-      return 58;
+      return hasRunningElapsed ? 58 : 18;
     case "succeeded":
     case "applied":
     case "pending_review":
@@ -76,21 +81,39 @@ function getActions(params: {
   t: (key: string) => string;
 }): CardAction[] {
   const { status, onOpenDetail, onDelete, deleting, t } = params;
-  const viewLabel =
-    status === "failed" ? t("imageStudio.viewFailureDetail") : t("imageStudio.viewResult");
-  return [
-    {
-      label: viewLabel,
-      tone: status === "running" ? "secondary" : "primary",
-      onClick: onOpenDetail,
-    },
-    {
-      label: deleting ? t("visualHistory.deleting") : t("visualHistory.delete"),
-      tone: "subtle",
-      onClick: onDelete,
-      disabled: deleting,
-    },
-  ];
+  switch (status) {
+    case "running":
+      return [
+        { label: t("imageStudio.actionViewTask"), tone: "secondary", onClick: onOpenDetail },
+        {
+          label: deleting ? t("visualHistory.deleting") : t("visualHistory.delete"),
+          tone: "subtle",
+          onClick: onDelete,
+          disabled: deleting,
+        },
+      ];
+    case "failed":
+      return [
+        { label: t("imageStudio.actionOptimizeAgain"), tone: "primary", onClick: onOpenDetail },
+        { label: t("imageStudio.viewFailureDetail"), tone: "secondary", onClick: onOpenDetail },
+        {
+          label: deleting ? t("visualHistory.deleting") : t("visualHistory.delete"),
+          tone: "subtle",
+          onClick: onDelete,
+          disabled: deleting,
+        },
+      ];
+    default:
+      return [
+        { label: t("imageStudio.actionReviewResult"), tone: "primary", onClick: onOpenDetail },
+        {
+          label: deleting ? t("visualHistory.deleting") : t("visualHistory.delete"),
+          tone: "subtle",
+          onClick: onDelete,
+          disabled: deleting,
+        },
+      ];
+  }
 }
 
 function getSourceLabel(sourceType: string | null, t: (key: string) => string): string | null {
@@ -135,21 +158,49 @@ export function PictureTranslateTaskCard({
   const sourceType = getSourceLabel(readStringField(config, "sourceType"), (key) => t(key));
   const actualElapsed = formatActualElapsed(task.startedAt, task.completedAt);
   const elapsedLabel = runningElapsed ?? actualElapsed ?? t("common.unknown");
+  const usedCredits = formatDisplayValue(task.actualCredits, t("common.unknown"));
+  const estimatedCredits = formatDisplayValue(task.estimatedCredits, t("common.unknown"));
+  const providerLabel = formatDisplayValue(provider, t("common.unknown"));
+  const errorReason = task.errorMsg ?? t("common.unknown");
 
   const primaryCopy =
     localStatus === "running"
-      ? t("imageStudio.pictureTranslateRunning")
+      ? t("imageStudio.cardPrimaryTranslating")
       : localStatus === "failed"
-        ? t("imageStudio.pictureTranslateFailed")
-        : t("imageStudio.pictureTranslateReady");
+        ? t("imageStudio.cardPrimaryTranslateFailed", { errorReason })
+        : t("imageStudio.cardPrimaryTranslateReady");
 
   const secondaryCopy =
-    provider != null
-      ? t("imageStudio.imageTaskSecondaryWithProvider", {
-          elapsed: elapsedLabel,
-          provider,
+    localStatus === "running"
+      ? t("imageStudio.cardSecondaryRunning", {
+          elapsedLabel,
+          estimatedCredits,
         })
-      : t("imageStudio.imageTaskSecondary", { elapsed: elapsedLabel });
+      : localStatus === "failed"
+        ? t("imageStudio.cardSecondaryFailed", {
+            usedCredits,
+            estimatedCredits,
+          })
+        : t("imageStudio.cardSecondaryCompleted", {
+            elapsedLabel,
+            usedCredits,
+          });
+
+  const extraBadges = sourceType ? (
+    <span
+      style={{
+        fontSize: 11,
+        fontWeight: 700,
+        color: pageColorTokens.textSecondary,
+        padding: "0.22rem 0.48rem",
+        borderRadius: 999,
+        background: pageColorTokens.surfaceSubtle,
+        border: `1px solid ${pageColorTokens.borderSubtle}`,
+      }}
+    >
+      {sourceType}
+    </span>
+  ) : null;
 
   const actions = getActions({
     status: localStatus,
@@ -164,27 +215,21 @@ export function PictureTranslateTaskCard({
       task={task}
       locationSearch={locationSearch}
       status={localStatus}
-      title={t("imageStudio.taskGoalTranslate")}
+      title={t("imageStudio.taskGoalTitle", { value: t("imageStudio.taskGoalTranslateShort") })}
       metaLine={
         <>
+          <span>{t("imageStudio.taskDetailLabel")}</span>
           <span>{t("imageStudio.taskLanguageDirection", { source: sourceCode, target: targetCode })}</span>
-          {sourceType ? (
-            <>
-              <span style={{ color: pageColorTokens.textFootnote }}>|</span>
-              <span>{sourceType}</span>
-            </>
-          ) : null}
-          {provider ? (
-            <>
-              <span style={{ color: pageColorTokens.textFootnote }}>|</span>
-              <span>{provider}</span>
-            </>
-          ) : null}
+          <span style={{ color: pageColorTokens.textFootnote }}>|</span>
+          <span>{t("imageStudio.detailProvider", { value: providerLabel })}</span>
+          <span style={{ color: pageColorTokens.textFootnote }}>|</span>
+          <span>{t("imageStudio.estimatedCreditsValue", { value: estimatedCredits })}</span>
         </>
       }
+      extraBadges={extraBadges}
       primaryCopy={primaryCopy}
       secondaryCopy={secondaryCopy}
-      progressPercent={getProgressPercent(localStatus)}
+      progressPercent={getProgressPercent(localStatus, Boolean(runningElapsed))}
       progressBackground={getProgressBackground(localStatus)}
       actions={actions}
       showLogViewer={localStatus === "running"}

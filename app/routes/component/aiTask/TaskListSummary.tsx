@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 
@@ -27,11 +28,23 @@ type Props = {
 };
 
 export function TaskListSummary({ tasks, mode = "image" }: Props) {
+  const { t } = useTranslation();
   const defs = mode === "product_improve" ? PRODUCT_IMPROVE_STATS : IMAGE_STATS;
   const total = tasks.length;
 
   const stats = defs.map((def) => ({
-    label: def.label,
+    label:
+      def.status === "running"
+        ? t("aiTaskSummary.statusRunning")
+        : def.status === "succeeded"
+          ? t("aiTaskSummary.statusSucceeded")
+          : def.status === "pending_review"
+            ? t("aiTaskSummary.statusPendingReview")
+            : def.status === "applied"
+              ? t("aiTaskSummary.statusApplied")
+              : def.status === "scored"
+                ? t("aiTaskSummary.statusScored")
+                : t("aiTaskSummary.statusFailed"),
     count: tasks.filter((t) => t.status === def.status).length,
     activeColor: def.activeColor,
   }));
@@ -66,7 +79,7 @@ export function TaskListSummary({ tasks, mode = "image" }: Props) {
             whiteSpace: "nowrap",
           }}
         >
-          任务列表
+          {t("aiTaskSummary.title")}
         </span>
         {stats.map((stat) => (
           <span
@@ -116,7 +129,7 @@ export function TaskListSummary({ tasks, mode = "image" }: Props) {
           whiteSpace: "nowrap",
         }}
       >
-        共 {total} 个任务
+        {t("aiTaskSummary.total", { count: total })}
       </span>
     </div>
   );
