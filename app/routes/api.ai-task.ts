@@ -17,6 +17,7 @@ import type {
 import { runProductDescriptionRefinement } from "../server/productImprove/services/refineDescriptionService";
 import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
 import { initI18n } from "../i18n";
+import { buildAITaskMessage } from "../lib/aiTaskMessage";
 
 function translateApiAiTaskErrorMessage(
   rawMessage: string,
@@ -76,6 +77,8 @@ export const action = async ({
   });
   const i18n = initI18n(locale);
   const t = i18n.t.bind(i18n);
+  const msg = (key: string, params?: Record<string, string | number | boolean | null>) =>
+    buildAITaskMessage(key, t(key, params), params);
   const shop = session.shop;
 
   const body = (await request.json().catch(() => null)) as {
@@ -216,7 +219,7 @@ export const action = async ({
     await appendLog({
       taskId: body.taskId,
       startedAt,
-      message: t("productImproveStage1.refineReceivedFeedbackLog"),
+      message: msg("productImproveStage1.refineReceivedFeedbackLog"),
     });
 
     const refined = await runProductDescriptionRefinement({
@@ -237,7 +240,7 @@ export const action = async ({
       await appendLog({
         taskId: body.taskId,
         startedAt,
-        message: t("productImproveStage1.refineFailedLog", {
+        message: msg("productImproveStage1.refineFailedLog", {
           reason: translateApiAiTaskErrorMessage(refined.errorMsg, t),
         }),
       });
@@ -262,7 +265,7 @@ export const action = async ({
       taskId: body.taskId,
       result: nextResult,
       startedAt,
-      finalMessage: t("productImproveStage1.refineCompletedPendingReview"),
+      finalMessage: msg("productImproveStage1.refineCompletedPendingReview"),
     });
     return Response.json({ success: true, taskId: body.taskId, result: nextResult });
   }

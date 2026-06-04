@@ -1,3 +1,5 @@
+import type { AITaskMessageParams } from "./aiTaskMessage";
+
 export type AITaskStatus =
   | "running"
   | "succeeded"
@@ -23,6 +25,8 @@ export interface AITaskItem {
   startedAt: string;
   completedAt: string | null;
   errorMsg: string | null;
+  errorMsgKey?: string;
+  errorMsgParams?: AITaskMessageParams;
   createdAt: string;
   updatedAt: string;
 }
@@ -42,13 +46,31 @@ export interface AITaskLogEntry {
   taskId: string;
   elapsedSeconds: number;
   message: string;
+  messageKey?: string;
+  messageParams?: AITaskMessageParams;
   createdAt: string;
 }
 
 export type AITaskSSEEvent =
   | { type: "connected"; taskId: string; existingLogs: AITaskLogEntry[] }
-  | { type: "log"; taskId: string; elapsedSeconds: number; message: string; createdAt: string }
-  | { type: "status_change"; taskId: string; status: AITaskStatus; result?: Record<string, unknown>; errorMsg?: string }
+  | {
+      type: "log";
+      taskId: string;
+      elapsedSeconds: number;
+      message: string;
+      messageKey?: string;
+      messageParams?: AITaskMessageParams;
+      createdAt: string;
+    }
+  | {
+      type: "status_change";
+      taskId: string;
+      status: AITaskStatus;
+      result?: Record<string, unknown>;
+      errorMsg?: string;
+      errorMsgKey?: string;
+      errorMsgParams?: AITaskMessageParams;
+    }
   | { type: "error"; message: string };
 
 export interface ImageGenTaskConfig {

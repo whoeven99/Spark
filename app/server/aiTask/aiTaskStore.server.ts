@@ -6,6 +6,11 @@ import type {
   AITaskStatus,
   AITaskType,
 } from "../../lib/aiTaskTypes";
+import {
+  parseAITaskMessage,
+  serializeAITaskMessage,
+  type AITaskMessageInput,
+} from "../../lib/aiTaskMessage";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PrismaJson = any;
@@ -71,6 +76,7 @@ function rowToAITaskItem(row: {
 }): AITaskItem {
   const result =
     row.result != null ? (row.result as Record<string, unknown>) : null;
+  const parsedError = parseAITaskMessage(row.errorMsg);
   return {
     id: row.id,
     batchId: row.batchId,
@@ -84,7 +90,9 @@ function rowToAITaskItem(row: {
     actualCredits: row.actualCredits,
     startedAt: row.startedAt.toISOString(),
     completedAt: row.completedAt?.toISOString() ?? null,
-    errorMsg: row.errorMsg,
+    errorMsg: parsedError.text || null,
+    errorMsgKey: parsedError.key,
+    errorMsgParams: parsedError.params,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -138,13 +146,14 @@ export async function markTaskSucceeded(params: {
 
 export async function markTaskFailed(params: {
   taskId: string;
-  errorMsg: string;
+  errorMsg: AITaskMessageInput;
 }): Promise<void> {
+  const serializedError = serializeAITaskMessage(params.errorMsg);
   await prisma.aITask.update({
     where: { id: params.taskId },
     data: {
       status: "failed",
-      errorMsg: params.errorMsg.slice(0, 2000),
+      errorMsg: serializedError.slice(0, 2000),
       completedAt: new Date(),
     },
   });
@@ -245,10 +254,10 @@ export async function listTaskLogs(taskId: string): Promise<AITaskLogEntry[]> {
     orderBy: { createdAt: "asc" },
   });
   return rows.map((r) => ({
+    ...parseAITaskMessage(r.message),
     id: r.id,
     taskId: r.taskId,
     elapsedSeconds: r.elapsedSeconds,
-    message: r.message,
     createdAt: r.createdAt.toISOString(),
   }));
 }
@@ -256,20 +265,22 @@ export async function listTaskLogs(taskId: string): Promise<AITaskLogEntry[]> {
 export async function appendTaskLog(params: {
   taskId: string;
   elapsedSeconds: number;
-  message: string;
+  message: AITaskMessageInput;
 }): Promise<AITaskLogEntry> {
+  const serializedMessage = serializeAITaskMessage(params.message);
   const row = await prisma.aITaskLog.create({
     data: {
       taskId: params.taskId,
       elapsedSeconds: params.elapsedSeconds,
-      message: params.message,
+      message: serializedMessage,
     },
   });
+  const parsedMessage = parseAITaskMessage(row.message);
   return {
+    ...parsedMessage,
     id: row.id,
     taskId: row.taskId,
     elapsedSeconds: row.elapsedSeconds,
-    message: row.message,
     createdAt: row.createdAt.toISOString(),
   };
 }

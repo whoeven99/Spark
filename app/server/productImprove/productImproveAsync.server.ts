@@ -20,6 +20,7 @@ import {
 import { DEFAULT_DESCRIPTION_TEMPERATURE } from "./constants.server";
 import { initI18n } from "../../i18n";
 import { DEFAULT_LOCALE, normalizeLocale } from "../../i18n/config";
+import { buildAITaskMessage } from "../../lib/aiTaskMessage";
 
 const LOG_PREFIX = "[ProductImprove][Async]";
 
@@ -41,7 +42,10 @@ export function enqueueProductImproveTask(params: {
     );
     void failTask({
       taskId: params.taskId,
-      errorMsg: t("productImproveStage1.asyncUnhandledTermination"),
+      errorMsg: buildAITaskMessage(
+        "productImproveStage1.asyncUnhandledTermination",
+        t("productImproveStage1.asyncUnhandledTermination"),
+      ),
       startedAt: Date.now(),
     });
   });
@@ -60,11 +64,13 @@ async function runProductImproveTask(params: {
   const locale = normalizeLocale(params.locale) ?? DEFAULT_LOCALE;
   const i18n = initI18n(locale);
   const t = i18n.t.bind(i18n);
+  const msg = (key: string, params?: Record<string, string | number | boolean | null>) =>
+    buildAITaskMessage(key, t(key, params), params);
 
   console.info(`${LOG_PREFIX} start taskId=${taskId} shop=${shop}`);
 
-  await appendLog({ taskId, startedAt, message: t("productImproveStage1.asyncWaiting") });
-  await appendLog({ taskId, startedAt, message: t("productImproveStage1.asyncContextLoaded") });
+  await appendLog({ taskId, startedAt, message: msg("productImproveStage1.asyncWaiting") });
+  await appendLog({ taskId, startedAt, message: msg("productImproveStage1.asyncContextLoaded") });
 
   const systemPrompt = buildDescriptionSystemPrompt();
   const userPrompt = buildDescriptionUserPrompt(context, targetLanguage);
@@ -75,21 +81,21 @@ async function runProductImproveTask(params: {
     await appendLog({
       taskId,
       startedAt,
-      message: t("productImproveStage1.asyncGeneratingTitleDraft"),
+      message: msg("productImproveStage1.asyncGeneratingTitleDraft"),
     });
     raw = await invokeDescriptionModels(systemPrompt, userPrompt, temperature, taskId);
     await appendLog({
       taskId,
       startedAt,
-      message: t("productImproveStage1.asyncGeneratingDescriptionDraft"),
+      message: msg("productImproveStage1.asyncGeneratingDescriptionDraft"),
     });
   } catch (e) {
     logDetailedError(`${LOG_PREFIX} taskId=${taskId}`, "invokeDescriptionModels failed", e);
     await failTask({
       taskId,
-      errorMsg: t("productImproveStage1.asyncModelInvocationFailed"),
+      errorMsg: msg("productImproveStage1.asyncModelInvocationFailed"),
       startedAt,
-      finalMessage: t("productImproveStage1.asyncModelInvocationFinalMessage"),
+      finalMessage: msg("productImproveStage1.asyncModelInvocationFinalMessage"),
     });
     return;
   }
@@ -102,9 +108,9 @@ async function runProductImproveTask(params: {
     logDetailedError(`${LOG_PREFIX} taskId=${taskId}`, "parseAndValidate failed", e);
     await failTask({
       taskId,
-      errorMsg: t("productImproveStage1.asyncOutputParseFailed"),
+      errorMsg: msg("productImproveStage1.asyncOutputParseFailed"),
       startedAt,
-      finalMessage: t("productImproveStage1.asyncOutputParseFinalMessage"),
+      finalMessage: msg("productImproveStage1.asyncOutputParseFinalMessage"),
     });
     return;
   }
@@ -121,7 +127,7 @@ async function runProductImproveTask(params: {
     },
     actualCredits,
     startedAt,
-    finalMessage: t("productImproveStage1.asyncCompletedPendingReview"),
+    finalMessage: msg("productImproveStage1.asyncCompletedPendingReview"),
   });
 
   // Record billing

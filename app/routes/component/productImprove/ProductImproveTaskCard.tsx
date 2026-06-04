@@ -11,6 +11,7 @@ import type {
   AITaskStatus,
   ProductImproveTaskConfig,
 } from "../../../lib/aiTaskTypes";
+import { translateLegacyProductImproveTaskMessage } from "../../../lib/productImproveTaskMessage";
 
 type Props = {
   task: AITaskItem;
@@ -367,12 +368,19 @@ export function ProductImproveTaskCard({
     readStringField(extendedConfig, "brandStyle"),
     unknownText,
   );
-  const currentStepText =
+  const currentStepTextRaw =
     readStringField(extendedResult, "currentStepText") ??
     readStringField(extendedConfig, "currentStepText");
+  const currentStepText = currentStepTextRaw
+    ? translateLegacyProductImproveTaskMessage(currentStepTextRaw, t)
+    : null;
   const usedCredits = formatDisplayValue(task.actualCredits, unknownText);
   const estimatedCredits = formatDisplayValue(task.estimatedCredits, unknownText);
-  const errorReason = task.errorMsg || unknownText;
+  const errorReason = task.errorMsgKey
+    ? t(task.errorMsgKey, task.errorMsgParams)
+    : task.errorMsg
+      ? translateLegacyProductImproveTaskMessage(task.errorMsg, t)
+      : unknownText;
   const actualElapsed =
     task.startedAt && task.completedAt
       ? formatElapsedFromSeconds(

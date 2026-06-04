@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { parseAITaskMessage } from "../../../lib/aiTaskMessage";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import type {
   AITaskLogEntry,
@@ -6,6 +8,7 @@ import type {
   AITaskStatus,
   AITaskType,
 } from "../../../lib/aiTaskTypes";
+import { translateLegacyProductImproveTaskMessage } from "../../../lib/productImproveTaskMessage";
 
 type Props = {
   taskId: string;
@@ -122,6 +125,7 @@ function parseSSEChunk(buffer: string): {
 
 export function LogViewer({
   taskId,
+  taskType,
   status,
   locationSearch,
   initialLogs = [],
@@ -130,6 +134,7 @@ export function LogViewer({
   defaultLogsOpen,
   onStatusChange,
 }: Props) {
+  const { t } = useTranslation();
   const startMsRef = useRef(resolveStartMs(startedAt));
   const onStatusChangeRef = useRef(onStatusChange);
   const [logs, setLogs] = useState<AITaskLogEntry[]>(initialLogs);
@@ -141,6 +146,21 @@ export function LogViewer({
   const logsScrollRef = useRef<HTMLDivElement>(null);
   const isDone = currentStatus !== "running";
   const displayLogs = normalizeLogList(logs);
+  const translateLogMessage = useCallback(
+    (message: string, messageKey?: string, messageParams?: Record<string, unknown>) => {
+      if (messageKey) {
+        return t(messageKey, messageParams);
+      }
+      const parsed = parseAITaskMessage(message);
+      if (parsed.key) {
+        return t(parsed.key, parsed.params);
+      }
+      return taskType === "product_improve"
+        ? translateLegacyProductImproveTaskMessage(parsed.text, t)
+        : parsed.text;
+    },
+    [t, taskType],
+  );
   const workflowLogs = displayLogs;
   const showWorkflowSteps = !isDone;
   const completedElapsed = Math.max(
@@ -453,7 +473,7 @@ export function LogViewer({
                       fontWeight: isLatest ? 600 : 400,
                     }}
                   >
-                    {log.message}
+                    {translateLogMessage(log.message, log.messageKey, log.messageParams)}
                   </span>
                 </div>
               );
@@ -544,7 +564,7 @@ export function LogViewer({
                 >
                   {formatElapsedClock(stepDurationSeconds(displayLogs, index))}
                 </span>
-                <span>{log.message}</span>
+                <span>{translateLogMessage(log.message, log.messageKey, log.messageParams)}</span>
               </div>
             ))}
           </div>
