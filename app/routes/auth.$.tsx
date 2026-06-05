@@ -4,6 +4,7 @@ import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import { buildSessionTokenBounceParamRedirect } from "../server/shopify/sessionTokenBounce.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import { buildEmbeddedAppPath, getAppEntryConfig } from "../config/appEntry.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const recoveredBounceUrl = buildSessionTokenBounceParamRedirect(request);
@@ -25,7 +26,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     console.error("[CommonEvent] recordAppInstalled failed:", error);
   }
 
-  return null;
+  const { home } = getAppEntryConfig();
+  throw redirect(buildEmbeddedAppPath(home, request));
 };
 
 export const headers: HeadersFunction = (headersArgs) => {

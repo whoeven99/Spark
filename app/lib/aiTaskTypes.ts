@@ -1,3 +1,5 @@
+import type { AITaskMessageParams } from "./aiTaskMessage";
+
 export type AITaskStatus =
   | "running"
   | "succeeded"
@@ -8,6 +10,8 @@ export type AITaskStatus =
   | "scored";
 
 export type AITaskType = "image_generation" | "picture_translate" | "product_improve";
+
+export type AITaskListView = "current" | "history";
 
 export interface AITaskItem {
   id: string;
@@ -23,8 +27,27 @@ export interface AITaskItem {
   startedAt: string;
   completedAt: string | null;
   errorMsg: string | null;
+  errorMsgKey?: string;
+  errorMsgParams?: AITaskMessageParams;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AITaskListMetrics {
+  currentCount: number;
+  historyCount: number;
+  runningCount: number;
+  totalCount: number;
+}
+
+export interface AITaskListPageData {
+  tasks: AITaskItem[];
+  view: AITaskListView;
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+  metrics: AITaskListMetrics;
 }
 
 export interface AITaskBatchItem {
@@ -42,13 +65,31 @@ export interface AITaskLogEntry {
   taskId: string;
   elapsedSeconds: number;
   message: string;
+  messageKey?: string;
+  messageParams?: AITaskMessageParams;
   createdAt: string;
 }
 
 export type AITaskSSEEvent =
   | { type: "connected"; taskId: string; existingLogs: AITaskLogEntry[] }
-  | { type: "log"; taskId: string; elapsedSeconds: number; message: string; createdAt: string }
-  | { type: "status_change"; taskId: string; status: AITaskStatus; result?: Record<string, unknown>; errorMsg?: string }
+  | {
+      type: "log";
+      taskId: string;
+      elapsedSeconds: number;
+      message: string;
+      messageKey?: string;
+      messageParams?: AITaskMessageParams;
+      createdAt: string;
+    }
+  | {
+      type: "status_change";
+      taskId: string;
+      status: AITaskStatus;
+      result?: Record<string, unknown>;
+      errorMsg?: string;
+      errorMsgKey?: string;
+      errorMsgParams?: AITaskMessageParams;
+    }
   | { type: "error"; message: string };
 
 export interface ImageGenTaskConfig {

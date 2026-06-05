@@ -14,6 +14,7 @@ export async function startSubscriptionCheckout(params: {
   appName: string;
   planKey: string;
   request: Request;
+  trialDays?: number | null;
 }): Promise<{ confirmationUrl: string | null }> {
   const plan = await getPlanByKey(params.planKey);
   if (plan.appName !== params.appName) {
@@ -36,6 +37,7 @@ export async function startSubscriptionCheckout(params: {
     appName: params.appName,
     plan: plan,
     returnUrl,
+    trialDays: params.trialDays,
   });
 
   return { confirmationUrl: result.confirmationUrl };

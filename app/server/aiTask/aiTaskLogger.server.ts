@@ -1,9 +1,12 @@
+import type { AITaskMessageInput } from "../../lib/aiTaskMessage";
 import {
   appendTaskLog,
   markTaskFailed,
   markTaskPendingReview,
   markTaskSucceeded,
+  getTaskMeta,
 } from "./aiTaskStore.server";
+import { updateTaskEstimation } from "./aiTaskEstimation.server";
 import {
   clearTaskSubscribers,
   emitTaskEvent,
@@ -12,7 +15,7 @@ import {
 export async function appendLog(params: {
   taskId: string;
   startedAt: number;
-  message: string;
+  message: AITaskMessageInput;
 }): Promise<void> {
   const elapsedSeconds = Math.floor((Date.now() - params.startedAt) / 1000);
   const entry = await appendTaskLog({
@@ -25,6 +28,8 @@ export async function appendLog(params: {
     taskId: params.taskId,
     elapsedSeconds: entry.elapsedSeconds,
     message: entry.message,
+    messageKey: entry.messageKey,
+    messageParams: entry.messageParams,
     createdAt: entry.createdAt,
   });
 }
@@ -34,7 +39,7 @@ export async function completeTask(params: {
   result: Record<string, unknown>;
   actualCredits?: number;
   startedAt?: number;
-  finalMessage?: string;
+  finalMessage?: AITaskMessageInput;
 }): Promise<void> {
   if (params.finalMessage) {
     const elapsedSeconds = params.startedAt
@@ -50,13 +55,17 @@ export async function completeTask(params: {
       taskId: params.taskId,
       elapsedSeconds: entry.elapsedSeconds,
       message: entry.message,
+      messageKey: entry.messageKey,
+      messageParams: entry.messageParams,
       createdAt: entry.createdAt,
     });
   }
+  const completedAt = new Date();
   await markTaskSucceeded({
     taskId: params.taskId,
     result: params.result,
     actualCredits: params.actualCredits,
+    completedAt,
   });
   emitTaskEvent(params.taskId, {
     type: "status_change",
@@ -65,6 +74,25 @@ export async function completeTask(params: {
     result: params.result,
   });
   clearTaskSubscribers(params.taskId);
+
+  // fire-and-forget: 更新 EWMA 估算，不影响主流程
+  void (async () => {
+    try {
+      const meta = await getTaskMeta(params.taskId);
+      if (!meta) return;
+      const actualSeconds = Math.round(
+        (completedAt.getTime() - meta.startedAt.getTime()) / 1000,
+      );
+      await updateTaskEstimation({
+        appName: meta.appName,
+        taskType: meta.taskType as import("../../lib/aiTaskTypes").AITaskType,
+        actualCredits: params.actualCredits ?? null,
+        actualSeconds,
+      });
+    } catch {
+      // 估算失败不影响任务本身
+    }
+  })();
 }
 
 export async function pendingReviewTask(params: {
@@ -72,7 +100,7 @@ export async function pendingReviewTask(params: {
   result: Record<string, unknown>;
   actualCredits?: number;
   startedAt?: number;
-  finalMessage?: string;
+  finalMessage?: AITaskMessageInput;
 }): Promise<void> {
   if (params.finalMessage) {
     const elapsedSeconds = params.startedAt
@@ -88,6 +116,8 @@ export async function pendingReviewTask(params: {
       taskId: params.taskId,
       elapsedSeconds: entry.elapsedSeconds,
       message: entry.message,
+      messageKey: entry.messageKey,
+      messageParams: entry.messageParams,
       createdAt: entry.createdAt,
     });
   }
@@ -107,9 +137,9 @@ export async function pendingReviewTask(params: {
 
 export async function failTask(params: {
   taskId: string;
-  errorMsg: string;
+  errorMsg: AITaskMessageInput;
   startedAt: number;
-  finalMessage?: string;
+  finalMessage?: AITaskMessageInput;
 }): Promise<void> {
   if (params.finalMessage) {
     const elapsedSeconds = Math.floor((Date.now() - params.startedAt) / 1000);
@@ -123,6 +153,8 @@ export async function failTask(params: {
       taskId: params.taskId,
       elapsedSeconds: entry.elapsedSeconds,
       message: entry.message,
+      messageKey: entry.messageKey,
+      messageParams: entry.messageParams,
       createdAt: entry.createdAt,
     });
   }
@@ -134,7 +166,13 @@ export async function failTask(params: {
     type: "status_change",
     taskId: params.taskId,
     status: "failed",
-    errorMsg: params.errorMsg,
+    ...(typeof params.errorMsg === "string"
+      ? { errorMsg: params.errorMsg }
+      : {
+          errorMsg: params.errorMsg.fallback,
+          errorMsgKey: params.errorMsg.key,
+          errorMsgParams: params.errorMsg.params,
+        }),
   });
   clearTaskSubscribers(params.taskId);
 }

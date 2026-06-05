@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { elapsedSecondsSince } from "../aiTask/LogViewer";
 import {
   AITaskCardShell,
-  formatActualElapsed,
-  actionButtonStyle,
   type CardAction,
 } from "../aiTask/AITaskCardShell";
 import type {
@@ -12,11 +11,13 @@ import type {
   AITaskStatus,
   ProductImproveTaskConfig,
 } from "../../../lib/aiTaskTypes";
+import { safeTranslateAITaskMessage } from "../../../lib/aiTaskMessage";
+import { translateLegacyProductImproveTaskMessage } from "../../../lib/productImproveTaskMessage";
 
 type Props = {
   task: AITaskItem;
   locationSearch: string;
-  onDelete: (taskId: string) => void;
+  onDelete: () => void;
   onOpenDetail: () => void;
   onTaskUpdated?: (taskId: string, status: AITaskStatus, result?: Record<string, unknown>) => void;
   deleting: boolean;
@@ -24,16 +25,26 @@ type Props = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatRunningElapsed(startedAt: string | null): string | null {
-  const seconds = elapsedSecondsSince(startedAt);
+function formatElapsedFromSeconds(seconds: number, locale: string): string | null {
   if (seconds <= 0) return null;
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  const minuteText = new Intl.NumberFormat(locale, {
+    style: "unit",
+    unit: "minute",
+    unitDisplay: "short",
+  }).format(minutes);
+  const secondText = new Intl.NumberFormat(locale, {
+    style: "unit",
+    unit: "second",
+    unitDisplay: "short",
+  }).format(remainingSeconds);
+  return minutes > 0 ? `${minuteText} ${secondText}` : secondText;
 }
 
-function formatVariableToken(name: string): string {
-  return `{{${name}}}`;
+function formatRunningElapsed(startedAt: string | null, locale: string): string | null {
+  const seconds = elapsedSecondsSince(startedAt);
+  return formatElapsedFromSeconds(seconds, locale);
 }
 
 function readStringField(
@@ -54,9 +65,9 @@ function readNumberField(
 
 function formatDisplayValue(
   value: string | number | null | undefined,
-  variableName: string,
+  fallback: string,
 ): string {
-  if (value == null || value === "") return formatVariableToken(variableName);
+  if (value == null || value === "") return fallback;
   return String(value);
 }
 
@@ -129,56 +140,96 @@ function resolveCardActions(params: {
   onOpenDetail: () => void;
   onDelete: () => void;
   deleting: boolean;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }): CardAction[] {
-  const { status, creditInsufficient, onOpenDetail, onDelete, deleting } = params;
+  const { status, creditInsufficient, onOpenDetail, onDelete, deleting, t } = params;
 
   if (creditInsufficient) {
     return [
-      { label: "充值积分", tone: "primary", disabled: true },
-      { label: "继续任务", tone: "secondary", disabled: true },
-      { label: deleting ? "删除中" : "查看详情", tone: "subtle", onClick: onOpenDetail, disabled: deleting },
+      { label: t("productImproveStage1.actionRechargeCredits"), tone: "primary", disabled: true },
+      { label: t("productImproveStage1.actionResumeTask"), tone: "secondary", disabled: true },
+      {
+        label: deleting ? t("common.deleting") : t("common.viewDetail"),
+        tone: "subtle",
+        onClick: onOpenDetail,
+        disabled: deleting,
+      },
     ];
   }
 
   switch (status) {
     case "running":
       return [
-        { label: "停止任务", tone: "primary", disabled: true },
-        { label: "查看任务详情", tone: "secondary", onClick: onOpenDetail },
-        { label: deleting ? "删除中" : "删除", tone: "subtle", onClick: onDelete, disabled: deleting },
+        { label: t("productImproveStage1.actionStopTask"), tone: "primary", disabled: true },
+        {
+          label: deleting ? t("common.deleting") : t("common.delete"),
+          tone: "subtle",
+          onClick: onDelete,
+          disabled: deleting,
+        },
       ];
     case "pending_review":
     case "succeeded":
       return [
-        { label: "审核结果", tone: "primary", onClick: onOpenDetail },
-        { label: deleting ? "删除中" : "删除", tone: "subtle", onClick: onDelete, disabled: deleting },
+        { label: t("productImproveStage1.actionReviewResult"), tone: "primary", onClick: onOpenDetail },
+        {
+          label: deleting ? t("common.deleting") : t("common.delete"),
+          tone: "subtle",
+          onClick: onDelete,
+          disabled: deleting,
+        },
       ];
     case "scored":
       return [
-        { label: "查看应用结果", tone: "primary", onClick: onOpenDetail },
-        { label: deleting ? "删除中" : "删除", tone: "subtle", onClick: onDelete, disabled: deleting },
+        { label: t("productImproveStage1.actionViewAppliedResult"), tone: "primary", onClick: onOpenDetail },
+        {
+          label: deleting ? t("common.deleting") : t("common.delete"),
+          tone: "subtle",
+          onClick: onDelete,
+          disabled: deleting,
+        },
       ];
     case "applied":
       return [
-        { label: "查看应用结果", tone: "primary", onClick: onOpenDetail },
-        { label: deleting ? "删除中" : "删除", tone: "subtle", onClick: onDelete, disabled: deleting },
+        { label: t("productImproveStage1.actionViewAppliedResult"), tone: "primary", onClick: onOpenDetail },
+        {
+          label: deleting ? t("common.deleting") : t("common.delete"),
+          tone: "subtle",
+          onClick: onDelete,
+          disabled: deleting,
+        },
       ];
     case "failed":
       return [
-        { label: "重新执行", tone: "primary", disabled: true },
-        { label: "查看失败详情", tone: "secondary", onClick: onOpenDetail },
-        { label: deleting ? "删除中" : "删除", tone: "subtle", onClick: onDelete, disabled: deleting },
+        { label: t("productImproveStage1.actionRerunTask"), tone: "primary", disabled: true },
+        { label: t("productImproveStage1.actionViewFailureDetail"), tone: "secondary", onClick: onOpenDetail },
+        {
+          label: deleting ? t("common.deleting") : t("common.delete"),
+          tone: "subtle",
+          onClick: onDelete,
+          disabled: deleting,
+        },
       ];
     case "cancelled":
       return [
-        { label: "重新创建任务", tone: "primary", disabled: true },
-        { label: "查看详情", tone: "secondary", onClick: onOpenDetail },
-        { label: deleting ? "删除中" : "删除", tone: "subtle", onClick: onDelete, disabled: deleting },
+        { label: t("productImproveStage1.actionRecreateTask"), tone: "primary", disabled: true },
+        { label: t("common.viewDetail"), tone: "secondary", onClick: onOpenDetail },
+        {
+          label: deleting ? t("common.deleting") : t("common.delete"),
+          tone: "subtle",
+          onClick: onDelete,
+          disabled: deleting,
+        },
       ];
     default:
       return [
-        { label: "查看详情", tone: "secondary", onClick: onOpenDetail },
-        { label: deleting ? "删除中" : "删除", tone: "subtle", onClick: onDelete, disabled: deleting },
+        { label: t("common.viewDetail"), tone: "secondary", onClick: onOpenDetail },
+        {
+          label: deleting ? t("common.deleting") : t("common.delete"),
+          tone: "subtle",
+          onClick: onDelete,
+          disabled: deleting,
+        },
       ];
   }
 }
@@ -187,35 +238,35 @@ function getPrimaryStatusCopy(params: {
   status: AITaskStatus;
   creditInsufficient: boolean;
   progressPercent: string;
-  completedCount: string;
-  itemCount: string;
   currentStepText: string;
   errorReason: string;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }): string {
-  const { status, creditInsufficient, progressPercent, completedCount, itemCount, currentStepText, errorReason } =
-    params;
+  const { status, creditInsufficient, progressPercent, currentStepText, errorReason, t } = params;
 
   if (creditInsufficient) {
-    return `当前进度 ${progressPercent}%，任务已暂停：当前积分不足，请充值后继续任务。`;
+    return t("productImproveStage1.cardPrimaryCreditInsufficient", { progressPercent });
   }
 
   switch (status) {
     case "running":
-      return `正在生成商品文案，请稍候...`;
+      return currentStepText && !currentStepText.startsWith("{{")
+        ? currentStepText
+        : t("productImproveStage1.cardPrimaryRunning");
     case "pending_review":
-      return `当前进度 100%，任务已完成，等待人工审核生成结果。`;
+      return t("productImproveStage1.cardPrimaryPendingReview");
     case "succeeded":
-      return `当前进度 100%，已完成所有任务。`;
+      return t("productImproveStage1.cardPrimarySucceeded");
     case "scored":
-      return `审核已完成，等待应用审核通过的结果。`;
+      return t("productImproveStage1.cardPrimaryScored");
     case "applied":
-      return `当前进度 100%，审核通过的结果已成功应用。`;
+      return t("productImproveStage1.cardPrimaryApplied");
     case "failed":
-      return `任务执行失败：${errorReason}`;
+      return t("productImproveStage1.cardPrimaryFailed", { errorReason });
     case "cancelled":
-      return `任务已取消，未继续执行后续处理。`;
+      return t("productImproveStage1.cardPrimaryCancelled");
     default:
-      return `当前进度 ${progressPercent}%，任务状态已更新。`;
+      return t("productImproveStage1.cardPrimaryUpdated", { progressPercent });
   }
 }
 
@@ -227,28 +278,33 @@ function getSecondaryStatusCopy(params: {
   estimatedCredits: string;
   completedCount: string;
   itemCount: string;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }): string {
-  const { status, creditInsufficient, elapsedLabel, usedCredits, estimatedCredits, completedCount, itemCount } =
+  const { status, creditInsufficient, elapsedLabel, usedCredits, estimatedCredits, completedCount, itemCount, t } =
     params;
 
   if (creditInsufficient) {
-    return `本次任务耗时：${elapsedLabel}，当前已消耗：${usedCredits} 积分，预计还需：${estimatedCredits} 积分。`;
+    return t("productImproveStage1.cardSecondaryCreditInsufficient", {
+      elapsedLabel,
+      usedCredits,
+      estimatedCredits,
+    });
   }
 
   switch (status) {
     case "running":
-      return `任务执行中，已运行：${elapsedLabel}`;
+      return t("productImproveStage1.cardSecondaryRunning", { elapsedLabel });
     case "pending_review":
     case "succeeded":
     case "scored":
     case "applied":
-      return `本次任务耗时：${elapsedLabel}，任务已消耗：${usedCredits} 积分。`;
+      return t("productImproveStage1.cardSecondaryCompleted", { elapsedLabel, usedCredits });
     case "failed":
-      return `任务在处理第 ${completedCount}/${itemCount} 项时中断，请查看详情后继续处理。`;
+      return t("productImproveStage1.cardSecondaryFailed", { completedCount, itemCount });
     case "cancelled":
-      return `取消前已完成 ${completedCount}/${itemCount} 项处理。`;
+      return t("productImproveStage1.cardSecondaryCancelled", { completedCount, itemCount });
     default:
-      return `预估积分：${estimatedCredits}，实际消耗：${usedCredits}。`;
+      return t("productImproveStage1.cardSecondaryDefault", { estimatedCredits, usedCredits });
   }
 }
 
@@ -262,14 +318,14 @@ export function ProductImproveTaskCard({
   onTaskUpdated,
   deleting,
 }: Props) {
+  const { t, i18n } = useTranslation();
+  const unknownText = t("common.unknown");
   const [localStatus, setLocalStatus] = useState<AITaskStatus>(task.status);
   const cfg = task.config as Partial<ProductImproveTaskConfig>;
   const extendedConfig = task.config as Record<string, unknown>;
   const extendedResult = task.result as Record<string, unknown> | null;
 
-  const [runningElapsed, setRunningElapsed] = useState<string | null>(() =>
-    task.status === "running" ? formatRunningElapsed(task.startedAt) : null,
-  );
+  const [runningElapsed, setRunningElapsed] = useState<string | null>(null);
 
   useEffect(() => {
     setLocalStatus(task.status);
@@ -280,56 +336,75 @@ export function ProductImproveTaskCard({
       setRunningElapsed(null);
       return;
     }
-    const tick = () => setRunningElapsed(formatRunningElapsed(task.startedAt));
+    const tick = () => setRunningElapsed(formatRunningElapsed(task.startedAt, i18n.language));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [localStatus, task.startedAt]);
+  }, [i18n.language, localStatus, task.startedAt]);
 
   const creditInsufficient = inferCreditInsufficient(task);
 
   // ── Computed display values ──
-  const taskGoal = readStringField(extendedConfig, "taskGoal") ?? "生成产品描述";
-  const itemCount = formatDisplayValue(readNumberField(extendedConfig, "itemCount"), "itemCount");
+  const taskGoal = readStringField(extendedConfig, "taskGoal") ?? t("productImproveStage1.defaultTaskGoal");
+  const itemCount = formatDisplayValue(readNumberField(extendedConfig, "itemCount"), unknownText);
   const completedCount = formatDisplayValue(
     readNumberField(extendedResult, "completedCount") ??
       readNumberField(extendedConfig, "completedCount"),
-    "completedCount",
+    unknownText,
   );
+  const progressPercent = getProgressPercent(task, localStatus, runningElapsed);
   const progressPercentValue =
     readNumberField(extendedResult, "progressPercent") ??
     readNumberField(extendedConfig, "progressPercent");
-  const progressPercentText = formatDisplayValue(progressPercentValue, "progressPercent");
+  const progressPercentText = formatDisplayValue(progressPercentValue ?? progressPercent, unknownText);
   const sourceLanguage = formatDisplayValue(
     readStringField(extendedConfig, "sourceLanguage"),
-    "sourceLanguage",
+    unknownText,
   );
-  const targetLanguage = formatDisplayValue(cfg.targetLanguage, "targetLanguage");
+  const targetLanguage = formatDisplayValue(cfg.targetLanguage, unknownText);
   const brandStyle = formatDisplayValue(
     readStringField(extendedConfig, "brandStyle"),
-    "brandStyle",
+    unknownText,
   );
-  const currentStepText = formatDisplayValue(
+  const currentStepTextRaw =
     readStringField(extendedResult, "currentStepText") ??
-      readStringField(extendedConfig, "currentStepText"),
-    "currentStepText",
-  );
-  const usedCredits = formatDisplayValue(task.actualCredits, "usedCredits");
-  const estimatedCredits = formatDisplayValue(task.estimatedCredits, "estimatedCredits");
-  const errorReason = task.errorMsg || formatVariableToken("errorReason");
-  const actualElapsed = formatActualElapsed(task.startedAt, task.completedAt);
-  const elapsedLabel = runningElapsed ?? actualElapsed ?? formatVariableToken("elapsedMinutes");
-
-  const progressPercent = getProgressPercent(task, localStatus, runningElapsed);
+    readStringField(extendedConfig, "currentStepText");
+  const currentStepText = currentStepTextRaw
+    ? translateLegacyProductImproveTaskMessage(currentStepTextRaw, t)
+    : null;
+  const usedCredits = formatDisplayValue(task.actualCredits, unknownText);
+  const estimatedCredits = formatDisplayValue(task.estimatedCredits, unknownText);
+  const errorReason = task.errorMsgKey
+    ? safeTranslateAITaskMessage({
+        t,
+        message: task.errorMsg ?? unknownText,
+        messageKey: task.errorMsgKey,
+        messageParams: task.errorMsgParams,
+      })
+    : task.errorMsg
+      ? translateLegacyProductImproveTaskMessage(task.errorMsg, t)
+      : unknownText;
+  const actualElapsed =
+    task.startedAt && task.completedAt
+      ? formatElapsedFromSeconds(
+          Math.max(
+            0,
+            Math.floor(
+              (new Date(task.completedAt).getTime() - new Date(task.startedAt).getTime()) / 1000,
+            ),
+          ),
+          i18n.language,
+        )
+      : null;
+  const elapsedLabel = runningElapsed ?? actualElapsed ?? unknownText;
   const progressTone = getProgressTone(localStatus);
   const primaryCopy = getPrimaryStatusCopy({
     status: localStatus,
     creditInsufficient,
     progressPercent: progressPercentText,
-    completedCount,
-    itemCount,
-    currentStepText,
+    currentStepText: currentStepText ?? "",
     errorReason,
+    t,
   });
   const secondaryCopy = getSecondaryStatusCopy({
     status: localStatus,
@@ -339,30 +414,32 @@ export function ProductImproveTaskCard({
     estimatedCredits,
     completedCount,
     itemCount,
+    t,
   });
   const actions = resolveCardActions({
     status: localStatus,
     creditInsufficient,
     onOpenDetail,
-    onDelete: () => onDelete(task.id),
+    onDelete,
     deleting,
+    t,
   });
 
   // ── Meta line ──
   const metaLine = (
     <>
-      <span>任务详情：</span>
-      <span>{itemCount} 个商品</span>
+      <span>{t("productImproveStage1.taskDetailLabel")}</span>
+      <span>{t("productImproveStage1.itemCountValue", { count: itemCount })}</span>
       <span style={{ color: pageColorTokens.textFootnote }}>|</span>
-      <span>输出 {targetLanguage}</span>
+      <span>{t("productImproveStage1.outputLanguageValue", { value: targetLanguage })}</span>
       <span style={{ color: pageColorTokens.textFootnote }}>|</span>
-      <span>语言：{sourceLanguage}</span>
+      <span>{t("productImproveStage1.sourceLanguageValue", { value: sourceLanguage })}</span>
       <span style={{ color: pageColorTokens.textFootnote }}>|</span>
-      <span>品牌风格：{brandStyle}</span>
+      <span>{t("productImproveStage1.brandStyleValue", { value: brandStyle })}</span>
       {cfg.productId ? (
         <>
           <span style={{ color: pageColorTokens.textFootnote }}>|</span>
-          <span>产品 ID：{cfg.productId}</span>
+          <span>{t("productImproveStage1.productIdValue", { value: cfg.productId })}</span>
         </>
       ) : null}
       {cfg.originalTitle ? (
@@ -378,7 +455,7 @@ export function ProductImproveTaskCard({
             }}
             title={cfg.originalTitle}
           >
-            商品：{cfg.originalTitle}
+            {t("productImproveStage1.productValue", { value: cfg.originalTitle })}
           </span>
         </>
       ) : null}
@@ -398,7 +475,7 @@ export function ProductImproveTaskCard({
         border: "1px solid rgba(234, 88, 12, 0.16)",
       }}
     >
-      积分不足
+      {t("productImproveStage1.creditInsufficientBadge")}
     </span>
   ) : null;
 
@@ -407,7 +484,7 @@ export function ProductImproveTaskCard({
       task={task}
       locationSearch={locationSearch}
       status={localStatus}
-      title={`任务目标：${taskGoal}`}
+      title={t("productImproveStage1.taskGoalTitle", { value: taskGoal })}
       metaLine={metaLine}
       extraBadges={extraBadges}
       primaryCopy={primaryCopy}

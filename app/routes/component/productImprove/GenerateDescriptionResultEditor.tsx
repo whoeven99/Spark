@@ -1,6 +1,7 @@
-import { Alert, Button, Input, Modal, Space } from "antd";
+import { Alert, Button, Input, Space } from "antd";
 import { useTranslation } from "react-i18next";
 import type { CopyTarget } from "../../../hooks/useProductImprove";
+import { DialogShell } from "../shared/DialogShell";
 
 export type GenerateDescriptionResultEditorProps = {
   variant: "page" | "card";
@@ -132,27 +133,16 @@ export function GenerateDescriptionResultEditor(props: GenerateDescriptionResult
         <div className="mb-3.5">{body}</div>
       )}
 
-      <Modal
+      <DialogShell
         open={saveConfirmOpen}
-        onCancel={() => {
-          if (!isSaving) onSaveCancel();
-        }}
-        footer={null}
-        className="spark-ant-modal"
+        onClose={onSaveCancel}
+        closeDisabled={isSaving}
         destroyOnHidden
-        maskClosable={!isSaving}
         width={420}
-      >
-        <div className="space-y-4">
-          <div className="rounded-app-control border border-app-subtle bg-app-subtle p-4">
-            <div className="text-base font-semibold text-app-text-primary">
-              {t("generate.confirmSaveTitle")}
-            </div>
-            <div className="mt-2 text-sm leading-6 text-app-text-secondary">
-              {t("generate.confirmSaveDesc")}
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-3 rounded-app-control border border-app-subtle bg-app-subtle p-4">
+        title={t("generate.confirmSaveTitle")}
+        description={t("generate.confirmSaveDesc")}
+        footer={
+          <div className="flex flex-wrap gap-3">
             <Button onClick={onSaveCancel} disabled={isSaving}>
               {t("common.cancel")}
             </Button>
@@ -160,8 +150,9 @@ export function GenerateDescriptionResultEditor(props: GenerateDescriptionResult
               {t("generate.confirmSaveAction")}
             </Button>
           </div>
-        </div>
-      </Modal>
+        }
+      >
+      </DialogShell>
     </>
   );
 }

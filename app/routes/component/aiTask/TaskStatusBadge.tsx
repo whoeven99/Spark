@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import type { AITaskStatus } from "../../../lib/aiTaskTypes";
 
@@ -9,47 +10,47 @@ type Props = {
 
 const STATUS_CONFIG: Record<
   AITaskStatus,
-  { label: string; color: string; background: string; border: string; pulse?: boolean }
+  { labelKey: string; color: string; background: string; border: string; pulse?: boolean }
 > = {
   running: {
-    label: "运行中",
+    labelKey: "aiTask.statusRunning",
     color: pageColorTokens.brandBlue,
     background: pageColorTokens.brandBlueLight,
     border: "rgba(64, 112, 244, 0.18)",
     pulse: true,
   },
   succeeded: {
-    label: "已完成",
+    labelKey: "aiTask.statusSucceeded",
     color: pageColorTokens.brandGreenDark,
     background: pageColorTokens.brandGreenLight,
     border: "rgba(0, 166, 124, 0.18)",
   },
   failed: {
-    label: "失败",
+    labelKey: "aiTask.statusFailed",
     color: pageColorTokens.criticalText,
     background: pageColorTokens.criticalBg,
     border: "rgba(220, 38, 38, 0.15)",
   },
   cancelled: {
-    label: "已取消",
+    labelKey: "aiTask.statusCancelled",
     color: pageColorTokens.textSecondary,
     background: pageColorTokens.surfaceMuted,
     border: pageColorTokens.borderSubtle,
   },
   pending_review: {
-    label: "待审查",
+    labelKey: "aiTask.statusPendingReview",
     color: "#d97706",
     background: "#fffbeb",
     border: "rgba(217, 119, 6, 0.18)",
   },
   applied: {
-    label: "已应用",
+    labelKey: "aiTask.statusApplied",
     color: pageColorTokens.brandGreenDark,
     background: pageColorTokens.brandGreenLight,
     border: "rgba(0, 166, 124, 0.18)",
   },
   scored: {
-    label: "评分完成",
+    labelKey: "aiTask.statusScored",
     color: "#7c3aed",
     background: "#f5f3ff",
     border: "rgba(124, 58, 237, 0.16)",
@@ -57,6 +58,7 @@ const STATUS_CONFIG: Record<
 };
 
 export function TaskStatusBadge({ status, size = "small" }: Props) {
+  const { t } = useTranslation();
   const cfg = STATUS_CONFIG[status];
   const fontSize = size === "small" ? 11 : 12;
 
@@ -90,7 +92,7 @@ export function TaskStatusBadge({ status, size = "small" }: Props) {
           }}
         />
       )}
-      {cfg.label}
+      {t(cfg.labelKey)}
     </span>
   );
 }

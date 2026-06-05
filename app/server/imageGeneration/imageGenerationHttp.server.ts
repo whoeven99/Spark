@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { billingErrorToResponse } from "../billing/index.server";
 import { requireVisualToolBillingAccess } from "../tokenUsage/index.server";
+import { getEstimatedCredits } from "../aiTask/aiTaskEstimation.server";
 import { resolveImageGenerationProvider, isImageGenerationConfigured } from "./imageGenerationConfig.server";
 import { enqueueImageGenerationTask } from "./imageGenerationAsync.server";
 import { validateImageGenerationPrompt } from "./imageGenerationExecutor.server";
@@ -104,12 +105,15 @@ export async function executeImageGenerationRequest(params: {
   const imageProvider = resolveImageGenerationProvider() ?? "openai";
   const appName = getAppEntry();
 
+  const estimatedCredits = await getEstimatedCredits(appName, "image_generation");
+
   const { taskId, batchId } = await createBatchWithTask({
     shop: params.sessionShop,
     appName,
     taskType: "image_generation",
     batchConfig: { description, prompt: trimmedPrompt, imageProvider },
     taskConfig: { description, prompt: trimmedPrompt, imageProvider },
+    estimatedCredits,
   });
 
   enqueueImageGenerationTask({

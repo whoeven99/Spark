@@ -35,16 +35,17 @@ export async function recordBilledTokenUsage(
   });
 }
 
+/** 返回实际计费 token 总数（未产生计费时返回 0）。 */
 export async function recordBilledTokenUsages(params: {
   shop: string;
   appName?: string;
   items: BilledTokenUsageItem[];
-}): Promise<void> {
+}): Promise<number> {
   const shop = params.shop.trim();
-  if (!shop || params.items.length === 0) return;
+  if (!shop || params.items.length === 0) return 0;
 
   const appName = params.appName?.trim() || getAppEntry();
-  if (!isBillingEnabledForApp(appName)) return;
+  if (!isBillingEnabledForApp(appName)) return 0;
 
   const billedItems = await Promise.all(
     params.items.map(async (item) => {
@@ -60,10 +61,10 @@ export async function recordBilledTokenUsages(params: {
   );
 
   const positiveItems = billedItems.filter((entry) => entry.billedUsage.totalTokens > 0);
-  if (positiveItems.length <= 0) return;
+  if (positiveItems.length <= 0) return 0;
 
   const usage = sumParsedTokenUsage(positiveItems.map((entry) => entry.billedUsage));
-  if (usage.totalTokens <= 0) return;
+  if (usage.totalTokens <= 0) return 0;
 
   await recordTokenUsage({ shop, appName, usage });
 
@@ -79,4 +80,6 @@ export async function recordBilledTokenUsages(params: {
       outputTokens: entry.billedUsage.outputTokens,
     })),
   });
+
+  return usage.totalTokens;
 }

@@ -178,18 +178,20 @@ export async function executePictureTranslatePipeline(params: {
   }
 
   await params.onStep?.("正在校验语言方向并选择翻译引擎");
-  const routeResult = params.forceModelType
-    ? resolvePictureTranslateProviderForced({
-        modelType: params.forceModelType,
-        sourceLanguage: params.sourceLanguage,
-        targetLanguage: params.targetLanguage,
-        imageExtensionLower: extension,
-      })
-    : resolvePictureTranslateProvider({
-        sourceLanguage: params.sourceLanguage,
-        targetLanguage: params.targetLanguage,
-        imageExtensionLower: extension,
-      });
+  const isAutoSource = !params.sourceLanguage.trim() || params.sourceLanguage.trim() === "auto";
+  const routeResult =
+    params.forceModelType && !isAutoSource
+      ? resolvePictureTranslateProviderForced({
+          modelType: params.forceModelType,
+          sourceLanguage: params.sourceLanguage,
+          targetLanguage: params.targetLanguage,
+          imageExtensionLower: extension,
+        })
+      : resolvePictureTranslateProvider({
+          sourceLanguage: params.sourceLanguage,
+          targetLanguage: params.targetLanguage,
+          imageExtensionLower: extension,
+        });
 
   if (!routeResult.ok) {
     console.info(

@@ -162,6 +162,29 @@ export function buildPictureTranslateResultBlobPath(params: {
   return `picture-translate/${sanitizeShopSegment(params.shop)}/${params.requestId}.jpg`;
 }
 
+/**
+ * 根据已存储的 blobPath 生成可读 URL。
+ * - 配置了 PICTURE_TRANSLATE_CDN_BASE_URL 时直接拼 CDN URL（无需 SAS，容器须开放公共读）
+ * - 未配置时 fallback 到带 SAS 的 Blob 直连 URL
+ */
+export function getPictureTranslateResultImageUrl(blobPath: string): string {
+  const cdnBase = process.env.PICTURE_TRANSLATE_CDN_BASE_URL?.trim().replace(/\/+$/, "");
+  if (cdnBase) {
+    return `${cdnBase}/${blobPath}`;
+  }
+
+  const containerName = blobContainerName();
+  const conn = blobConnectionString();
+  const { accountName } = parseAccountFromConnectionString(conn);
+  const blobUrl = `https://${accountName}.blob.core.windows.net/${containerName}/${blobPath}`;
+
+  const sasTtl = resolvePictureTranslateBlobSasTtlMinutes();
+  if (sasTtl == null) {
+    return blobUrl;
+  }
+  return appendReadSasToBlobUrl({ blobUrl, blobPath, sasTtlMinutes: sasTtl });
+}
+
 export async function uploadPictureTranslateJpegAndGetUrl(params: {
   shop: string;
   jpegBytes: Buffer;
