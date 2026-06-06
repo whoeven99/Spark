@@ -17,6 +17,22 @@ function maskValue(key: string, value: string): string {
   return value.length > 40 ? `${value.slice(0, 40)}…` : value;
 }
 
+type EnvField = [key: string, value: string | undefined, defaultValue?: string];
+
+function formatEnvField([key, value, defaultValue]: EnvField): string {
+  if (value?.trim()) return `${key}=${maskValue(key, value)}`;
+  if (defaultValue) return `${key}=(默认 ${defaultValue})`;
+  return `${key}=❌ 缺失`;
+}
+
+/** 按服务分组打印诊断，ok 表示该服务至少有一种可用配置 */
+function logEnvCheck(service: string, ok: boolean, fields: EnvField[]): void {
+  console.info(`[worker:env]   [${ok ? "✅" : "❌"}] ${service}`);
+  for (const field of fields) {
+    console.info(`[worker:env]       ${formatEnvField(field)}`);
+  }
+}
+
 /** 加载单个 KEY=VALUE 文件，仅设置尚为空的键（不覆盖 Render 已注入的） */
 function loadEnvFile(filePath: string): { applied: string[]; skipped: string[] } {
   const applied: string[] = [];
@@ -70,13 +86,45 @@ export function ensureWorkerEnv(): void {
     }
   }
 
-  // 关键变量诊断
+  // 关键变量诊断（按 worker 实际读取逻辑，含 fallback）
   console.info("[worker:env] ===== 关键变量 =====");
-  const critical = ["COSMOS_ENDPOINT", "COSMOS_KEY", "COSMOS_TRANSLATION_DATABASE_ID", "COSMOS_TRANSLATION_V4_JOBS_CONTAINER", "REDIS_HOSTNAME", "REDIS_PASSWORD", "REDIS_PORT", "AZURE_BLOB_CONNECTION_STRING", "AZURE_BLOB_TRANSLATION_CONTAINER", "BLOB_TRANSLATE_V3_STORAGE_ACCOUNT_NAME", "BLOB_TRANSLATE_V3_STORAGE_ACCOUNT_KEY", "DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL", "DEEPSEEK_MODEL"];
-  for (const k of critical) {
-    const v = process.env[k];
-    console.info(`[worker:env]   ${k}=${v ? maskValue(k, v) : "❌ 缺失"}`);
-  }
+  logEnvCheck("Cosmos", Boolean(process.env.COSMOS_ENDPOINT?.trim() && process.env.COSMOS_KEY?.trim()), [
+    ["COSMOS_ENDPOINT", process.env.COSMOS_ENDPOINT],
+    ["COSMOS_KEY", process.env.COSMOS_KEY],
+    ["COSMOS_TRANSLATION_DATABASE_ID", process.env.COSMOS_TRANSLATION_DATABASE_ID, "translation"],
+    [
+      "COSMOS_TRANSLATION_V4_JOBS_CONTAINER",
+      process.env.COSMOS_TRANSLATION_V4_JOBS_CONTAINER,
+      "translation_v4_jobs",
+    ],
+  ]);
+  const redisUrl = process.env.REDIS_URL?.trim();
+  const redisHost =
+    process.env.REDIS_HOSTNAME?.trim() ||
+    process.env.REDIS_HOST?.trim() ||
+    process.env.REDISCACHEHOSTNAME?.trim();
+  const redisPassword =
+    process.env.REDIS_PASSWORD?.trim() || process.env.REDISCACHEKEY?.trim();
+  logEnvCheck("Redis", Boolean(redisUrl || (redisHost && redisPassword)), redisUrl
+    ? [["REDIS_URL", redisUrl]]
+    : [
+        ["REDIS_HOSTNAME", process.env.REDIS_HOSTNAME],
+        ["REDIS_PASSWORD", process.env.REDIS_PASSWORD],
+        ["REDIS_PORT", process.env.REDIS_PORT, "6380"],
+      ]);
+  const blobConn =
+    process.env.BLOB_TRANSLATE_V3_CONNECTION_STRING?.trim() ||
+    process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
+  logEnvCheck("Blob", Boolean(blobConn), [
+    ["BLOB_TRANSLATE_V3_CONNECTION_STRING", process.env.BLOB_TRANSLATE_V3_CONNECTION_STRING],
+    ["AZURE_BLOB_CONNECTION_STRING", process.env.AZURE_BLOB_CONNECTION_STRING],
+    ["AZURE_BLOB_TRANSLATION_CONTAINER", process.env.AZURE_BLOB_TRANSLATION_CONTAINER, "translation-content"],
+  ]);
+  logEnvCheck("LLM (DeepSeek)", Boolean(process.env.DEEPSEEK_API_KEY?.trim()), [
+    ["DEEPSEEK_API_KEY", process.env.DEEPSEEK_API_KEY],
+    ["DEEPSEEK_BASE_URL", process.env.DEEPSEEK_BASE_URL, "https://api.deepseek.com/v1"],
+    ["DEEPSEEK_MODEL", process.env.DEEPSEEK_MODEL, "deepseek-chat"],
+  ]);
   console.info(`[worker:env] process.env 总键数: ${Object.keys(process.env).length}`);
   console.info("[worker:env] =================");
 
