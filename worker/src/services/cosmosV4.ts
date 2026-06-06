@@ -197,7 +197,9 @@ export async function findPendingJobs(
 }
 
 /** Find jobs stuck in processing states past the stale threshold and reset them. */
-export async function resetStaleJobs(staleMinutes = 10): Promise<void> {
+export async function resetStaleJobs(
+  staleMinutes = Number(process.env.STALE_TIMEOUT_MINUTES) || 30,
+): Promise<void> {
   const threshold = new Date(Date.now() - staleMinutes * 60 * 1000).toISOString();
   const staleMap: Array<[TranslationV4Status, TranslationV4Status]> = [
     ["INITIALIZING", "INIT_QUEUED"],

@@ -6,6 +6,7 @@ import { countFieldUnits } from "../services/llmTranslate.js";
 
 const WORKER_ID = `init-${process.pid}`;
 const CHUNK_SIZE = 50;
+const HEARTBEAT_THROTTLE_MS = 30_000;
 
 export async function runInitWorker(): Promise<void> {
   // Check hint queue first, then fall back to CosmosDB scan
@@ -61,9 +62,19 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
   let totalItems = 0;
   let totalUnits = 0; // node-level total (HTML nodes + plain parts) for progress
 
+  let lastHeartbeatAt = 0;
+  const throttledHeartbeat = async () => {
+    const now = Date.now();
+    if (now - lastHeartbeatAt > HEARTBEAT_THROTTLE_MS) {
+      lastHeartbeatAt = now;
+      await heartbeat(shopName, jobId);
+    }
+  };
+
   try {
     for (const module of job.modules) {
       await heartbeat(shopName, jobId);
+      lastHeartbeatAt = Date.now();
 
       console.log(`[init] fetching module=${module} job=${jobId}`);
       const chunks = await fetchTranslatableResources(
@@ -76,6 +87,7 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
           targetLocale: job.target,
           isCover: job.isCover,
           isHandle: job.isHandle,
+          onPage: throttledHeartbeat,
         },
       );
 
