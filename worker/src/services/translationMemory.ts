@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { getRedis } from "./redisV4.js";
 
 /**
@@ -60,6 +61,68 @@ export async function tmSet(
   if (Buffer.byteLength(value, "utf8") > MAX_VALUE_BYTES) return;
   try {
     await getRedis().set(tmKey(shopName, target, model, digest), value, "EX", ttlSeconds());
+  } catch {
+    // best-effort
+  }
+}
+
+// ─── Value-based secondary TM cache ──────────────────────────────────────────
+//
+// Shopify assigns a unique digest per (resource, field), so two resources
+// that share identical source text get different digests and both miss the
+// digest-keyed cache. A secondary key derived from the content itself lets the
+// TM hit even when digests differ — critical for repeated short values like
+// option names ("Size", "Color") and collection titles that appear across many
+// resources.
+//
+// Scope: plain-text only (HTML is too context-dependent to reuse blindly) and
+// capped at a short length so we never cache long paragraphs by content.
+
+const MAX_VALUE_CACHE_CHARS = 300;
+const VALUE_TM_PREFIX = "tm:v5:val";
+
+function valueHash(sourceText: string, source: string, target: string, model: string): string {
+  return createHash("sha256")
+    .update(`${model}|${source}|${target}|${sourceText}`)
+    .digest("hex")
+    .slice(0, 32);
+}
+
+/**
+ * Look up a translation by source value text (secondary cache, plain text only).
+ * Returns null on miss, disabled, or error.
+ */
+export async function tmGetByValue(
+  sourceText: string,
+  source: string,
+  target: string,
+  model: string,
+): Promise<string | null> {
+  if (isDisabled() || !sourceText || sourceText.length > MAX_VALUE_CACHE_CHARS) return null;
+  try {
+    const key = `${VALUE_TM_PREFIX}:${valueHash(sourceText, source, target, model)}`;
+    return await getRedis().get(key);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Store a translation keyed by source value text (plain text only, short values).
+ * Best-effort; never throws.
+ */
+export async function tmSetByValue(
+  sourceText: string,
+  source: string,
+  target: string,
+  model: string,
+  translatedText: string,
+): Promise<void> {
+  if (isDisabled() || !sourceText || sourceText.length > MAX_VALUE_CACHE_CHARS) return;
+  if (!translatedText) return;
+  try {
+    const key = `${VALUE_TM_PREFIX}:${valueHash(sourceText, source, target, model)}`;
+    await getRedis().set(key, translatedText, "EX", ttlSeconds());
   } catch {
     // best-effort
   }

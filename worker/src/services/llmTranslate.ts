@@ -1,5 +1,5 @@
 import OpenAI, { AzureOpenAI } from "openai";
-import { tmGet, tmSet } from "./translationMemory.js";
+import { tmGet, tmGetByValue, tmSet, tmSetByValue } from "./translationMemory.js";
 import { loadGlossaryLines } from "./glossary.js";
 
 let _openai: OpenAI | null = null;
@@ -210,8 +210,27 @@ const LONG_TEXT_CHUNK_CHARS = 3500;
 // Tags whose content we never translate
 const SKIP_BLOCK_RE = /<(script|style|pre|code)(\s[^>]*)?>[\s\S]*?<\/\1>/gi;
 
+// Attributes that carry user-visible text and should be translated.
+// Handles both double-quoted (common) and single-quoted attribute values.
+const TRANSLATABLE_ATTR_RE = /\b(alt|title|aria-label|placeholder)=("([^"]*)"|(\'([^\']*)\'))/g;
+
+// Attr values we must NOT translate
+const ATTR_URL_RE = /^https?:\/\//;
+// Hash-based filenames like "7910ff297e4-Max-Origin" or bare image filenames
+const ATTR_HASH_FILENAME_RE =
+  /^[a-fA-F0-9]{8,}(-[a-zA-Z0-9]+)*$|^\S+\.(jpg|jpeg|png|gif|bmp|webp|svg|mp4|pdf)$/i;
+
+function isTranslatableAttrValue(value: string): boolean {
+  const v = value.trim();
+  if (!v) return false;
+  if (ATTR_URL_RE.test(v)) return false;
+  if (ATTR_HASH_FILENAME_RE.test(v)) return false;
+  return true;
+}
+
 /**
- * Replaces every visible text node in an HTML string with a numeric placeholder.
+ * Replaces every visible text node AND translatable attribute values (alt, title,
+ * aria-label, placeholder) in an HTML string with numeric placeholders.
  * Returns the rewritten template and the ordered array of extracted texts.
  * Whitespace-only gaps between tags are left in place.
  */
@@ -220,15 +239,29 @@ function extractHtmlTextNodes(html: string): { template: string; texts: string[]
   const skipped = new Map<string, string>();
   let sIdx = 0;
 
-  // Protect non-translatable blocks
+  // Protect non-translatable blocks (script/style/pre/code)
   const withSkips = html.replace(SKIP_BLOCK_RE, (match) => {
     const key = `\x00S${sIdx++}\x00`;
     skipped.set(key, match);
     return key;
   });
 
+  // Extract translatable attribute values before touching text nodes so the
+  // two passes don't interfere (attributes live inside tags, text nodes outside).
+  const withAttrs = withSkips.replace(
+    TRANSLATABLE_ATTR_RE,
+    (_match, attrName: string, _quotedFull: string, dqVal: string, _sqFull: string, sqVal: string) => {
+      const attrValue = dqVal ?? sqVal ?? "";
+      const quote = dqVal !== undefined ? '"' : "'";
+      if (!isTranslatableAttrValue(attrValue)) return _match;
+      const idx = texts.length;
+      texts.push(attrValue.trim());
+      return `${attrName}=${quote}\x00T${idx}\x00${quote}`;
+    },
+  );
+
   // Replace each text node between tags with an indexed marker
-  const template = withSkips.replace(/>([^<]+)</g, (_match, raw: string) => {
+  const template = withAttrs.replace(/>([^<]+)</g, (_match, raw: string) => {
     const trimmed = raw.trim();
     if (!trimmed) return `>${raw}<`;
     const idx = texts.length;
@@ -716,6 +749,20 @@ export async function translateResources(
         continue;
       }
 
+      // Secondary: value-based cache for short plain-text fields.
+      // Handles repeated values that share the same text but have different
+      // Shopify digests (e.g. option names / collection titles across resources).
+      if (klass === "plain") {
+        const cachedByValue = await tmGetByValue(f.value, source, target, cacheModel);
+        if (cachedByValue !== null) {
+          rm.set(f.key, { key: f.key, translatedValue: cachedByValue, digest: f.digest, status: "translated" });
+          // Also populate the digest cache so future lookups skip this path.
+          await tmSet(shopName, target, cacheModel, f.digest, cachedByValue);
+          cacheUnits += countFieldUnits(f.key, f.value);
+          continue;
+        }
+      }
+
       if (klass === "html") {
         const { template, texts } = extractHtmlTextNodes(f.value);
         if (texts.length === 0) {
@@ -774,8 +821,14 @@ export async function translateResources(
       const pieces = plan.parts.map((p) => lookup(plan.order, p) ?? { value: p, status: "fallback" as const });
       const value = pieces.map((p) => p.value).join("");
       const status = pieces.some((p) => p.status === "fallback") ? "fallback" : "translated";
+      const originalValue = plan.parts.join("");
       rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
-      if (status === "translated") await tmSet(shopName, target, plan.cacheModel, plan.digest, value);
+      if (status === "translated") {
+        await tmSet(shopName, target, plan.cacheModel, plan.digest, value);
+        // Populate value-based cache so other resources with identical source text
+        // but different digests get a cache hit without hitting the LLM again.
+        await tmSetByValue(originalValue, source, target, plan.cacheModel, value);
+      }
     } else {
       let anyFallback = false;
       const out = plan.nodeTexts.map((t) => {

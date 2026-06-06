@@ -91,6 +91,12 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
         },
       );
 
+      // No translatable content for this module — skip entirely (no blob, no manifest entry)
+      if (chunks.length === 0) {
+        console.log(`[init] module=${module} 0 items, skipping`);
+        continue;
+      }
+
       for (let i = 0; i < chunks.length; i++) {
         const chunkPath = `${blobPrefix}/init/${module}/chunk-${String(i).padStart(2, "0")}.json`;
         await blobWrite(chunkPath, chunks[i]);

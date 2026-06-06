@@ -34,8 +34,8 @@ function logEnvCheck(service: string, ok: boolean, fields: EnvField[]): void {
 }
 
 /** 加载单个 KEY=VALUE 文件，仅设置尚为空的键（不覆盖 Render 已注入的） */
-function loadEnvFile(filePath: string): { applied: string[]; skipped: string[] } {
-  const applied: string[] = [];
+function loadEnvFile(filePath: string): { appliedCount: number; skipped: string[] } {
+  let appliedCount = 0;
   const skipped: string[] = [];
   try {
     const content = readFileSync(filePath, "utf8");
@@ -52,12 +52,12 @@ function loadEnvFile(filePath: string): { applied: string[]; skipped: string[] }
         continue;
       }
       process.env[key] = value;
-      applied.push(`${key}=${maskValue(key, value)}`);
+      appliedCount++;
     }
   } catch (err) {
     console.error(`[worker:env] 读取 ${filePath} 失败:`, err);
   }
-  return { applied, skipped };
+  return { appliedCount, skipped };
 }
 
 const SECRET_PATHS = [
@@ -75,11 +75,8 @@ export function ensureWorkerEnv(): void {
     const exists = existsSync(p);
     console.info(`[worker:env] 检查 ${p}: ${exists ? "存在" : "不存在"}`);
     if (exists) {
-      const { applied, skipped } = loadEnvFile(p);
-      if (applied.length > 0) {
-        console.info(`[worker:env] 从 ${p} 加载 ${applied.length} 个变量: ${applied.join("; ")}`);
-        anyLoaded = true;
-      }
+      const { appliedCount, skipped } = loadEnvFile(p);
+      if (appliedCount > 0) anyLoaded = true;
       if (skipped.length > 0) {
         console.info(`[worker:env] 跳过 ${skipped.length} 个已有键: ${skipped.join(", ")}`);
       }
@@ -112,12 +109,9 @@ export function ensureWorkerEnv(): void {
         ["REDIS_PASSWORD", process.env.REDIS_PASSWORD],
         ["REDIS_PORT", process.env.REDIS_PORT, "6380"],
       ]);
-  const blobConn =
-    process.env.BLOB_TRANSLATE_V3_CONNECTION_STRING?.trim() ||
-    process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
+  const blobConn = process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
   logEnvCheck("Blob", Boolean(blobConn), [
-    ["BLOB_TRANSLATE_V3_CONNECTION_STRING", process.env.BLOB_TRANSLATE_V3_CONNECTION_STRING],
-    ["AZURE_BLOB_CONNECTION_STRING", process.env.AZURE_BLOB_CONNECTION_STRING],
+    ["AZURE_BLOB_CONNECTION_STRING", blobConn],
     ["AZURE_BLOB_TRANSLATION_CONTAINER", process.env.AZURE_BLOB_TRANSLATION_CONTAINER, "translation-content"],
   ]);
   logEnvCheck("LLM (DeepSeek)", Boolean(process.env.DEEPSEEK_API_KEY?.trim()), [
