@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { LanguageSelector } from "../component/common/LanguageSelector";
 
@@ -258,6 +258,7 @@ function isObjectType(value: ContextTool | null): value is ObjectType {
 export function WorkspaceAppShellPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const [conversationList, setConversationList] = useState<Conversation[]>(initialConversations);
   const [activeConversationId, setActiveConversationId] = useState(initialConversations[0].id);
   const [draftByConversation, setDraftByConversation] = useState<Record<string, string>>({
@@ -271,6 +272,7 @@ export function WorkspaceAppShellPage() {
   );
   const [automationView, setAutomationView] = useState<AutomationView>("configured");
   const [taskFilter, setTaskFilter] = useState<"all" | TaskKind>("all");
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [activeContextTool, setActiveContextTool] = useState<ContextTool | null>("product");
   const [objectQueryByType, setObjectQueryByType] = useState<Record<ObjectType, string>>({
     product: "",
@@ -429,6 +431,17 @@ export function WorkspaceAppShellPage() {
     setDraftByConversation((current: Record<string, string>) => ({ ...current, [activeConversation.id]: "" }));
   };
 
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!accountMenuRef.current?.contains(event.target as Node)) {
+        setAccountMenuOpen(false);
+      }
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, [accountMenuOpen]);
+
   return (
     <div style={shellStyle}>
       <aside style={sidebarStyle}>
@@ -483,27 +496,36 @@ export function WorkspaceAppShellPage() {
           </div>
         </div>
 
-        <div style={sidebarFooterStyle}>
-          <div>
-            <div style={brandTitleStyle}>Cedric hu</div>
-            <div style={brandMetaStyle}>Spark Workspace</div>
-          </div>
-          <div style={footerTagStyle}>在线</div>
+        <div ref={accountMenuRef} style={accountMenuWrapStyle}>
+          {accountMenuOpen ? (
+            <div style={accountMenuStyle}>
+              <div style={accountMenuSectionStyle}>
+                <div style={accountMenuLabelStyle}>语言</div>
+                <LanguageSelector />
+              </div>
+              <button
+                type="button"
+                style={accountMenuItemStyle}
+                onClick={() => {
+                  setAccountMenuOpen(false);
+                  navigate("/app/billing");
+                }}
+              >
+                Billing
+              </button>
+            </div>
+          ) : null}
+          <button type="button" style={sidebarFooterButtonStyle} onClick={() => setAccountMenuOpen((current) => !current)}>
+            <div>
+              <div style={brandTitleStyle}>Cedric hu</div>
+              <div style={brandMetaStyle}>Spark Workspace</div>
+            </div>
+            <div style={footerTagStyle}>在线</div>
+          </button>
         </div>
       </aside>
 
       <main style={contentStyle}>
-        <div style={pageHeaderStyle}>
-          <div>
-            <div style={eyebrowStyle}>Spark Workspace</div>
-            <h1 style={pageTitleStyle}>{panelTitle(activePanel)}</h1>
-            <p style={pageSubtitleStyle}>{panelSubtitle(activePanel)}</p>
-          </div>
-          <div style={headerActionsStyle}>
-            <LanguageSelector />
-          </div>
-        </div>
-
         {activePanel === "dashboard" ? <DashboardPanel /> : null}
         {activePanel === "chat" ? (
           <ChatPanel
@@ -714,6 +736,7 @@ function ChatPanel({
   onClearContext: () => void;
   onSend: () => void;
 }) {
+  const messageListRef = useRef<HTMLDivElement | null>(null);
   const [hoveredTool, setHoveredTool] = useState<ContextTool | null>(null);
   const [activeObjectFilter, setActiveObjectFilter] = useState<Record<ObjectType, ObjectFilterKey>>({
     product: "all",
@@ -773,18 +796,21 @@ function ChatPanel({
     ...(selectedMediaIds.length > 0 ? [{ key: "media" as const, label: `已选择 ${selectedMediaIds.length} 个富媒体` }] : []),
   ];
 
+  useEffect(() => {
+    const element = messageListRef.current;
+    if (!element) return;
+    element.scrollTop = element.scrollHeight;
+  }, [conversation.id, messages.length]);
+
   return (
     <div style={chatLayoutStyle}>
       <section style={{ ...surfaceCardStyle, minHeight: 0 }}>
-        <div style={sectionHeaderStyle}>
-          <div>
-            <div style={sectionTitleStyle}>{conversation.title}</div>
-            <div style={sectionTextStyle}>{conversation.preview}</div>
-          </div>
-          <div style={mutedMetaStyle}>{conversation.updatedAt}</div>
+        <div style={conversationMetaRowStyle}>
+          <span style={conversationMetaTitleStyle}>{conversation.title}</span>
+          <span style={mutedMetaStyle}>{conversation.updatedAt}</span>
         </div>
 
-        <div style={messageListStyle}>
+        <div ref={messageListRef} style={messageListStyle}>
           {messages.map((message, index) => (
             <div key={`${message.time}-${index}`} style={messageWrapStyle(message.role === "user")}>
               <div style={messageMetaStyle}>
@@ -1248,22 +1274,6 @@ function TasksPanel({
   );
 }
 
-function panelTitle(panel: WorkspacePanel) {
-  if (panel === "dashboard") return "经营看板";
-  if (panel === "chat") return "任务工作区";
-  if (panel === "skills") return "常用工具";
-  if (panel === "automation") return "自动化";
-  return "任务列表";
-}
-
-function panelSubtitle(panel: WorkspacePanel) {
-  if (panel === "dashboard") return "默认首页展示店铺经营概况、核心指标、自动化结果和经营建议。";
-  if (panel === "chat") return "工作区通过对象工具栏补充上下文，再承接单次任务创建和继续协作。";
-  if (panel === "skills") return "技能页作为已有 tools 的聚合入口，每个工具进入独立工作流。";
-  if (panel === "automation") return "自动化页聚焦配置、执行历史与模板，不与其他页混排。";
-  return "任务列表统一承载自动化任务和单次任务，再按类型和状态过滤。";
-}
-
 function taskStatusLabel(status: TaskStatus) {
   if (status === "executing") return "执行中";
   if (status === "review_required") return "待审核";
@@ -1308,20 +1318,6 @@ const contentStyle: CSSProperties = {
   gap: 24,
   minWidth: 0,
 };
-
-const pageHeaderStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "space-between",
-  gap: 16,
-  paddingBottom: 18,
-  borderBottom: "1px solid #e1e3e5",
-};
-
-const eyebrowStyle: CSSProperties = { fontSize: 13, fontWeight: 600, color: "#6d7175", marginBottom: 8 };
-const pageTitleStyle: CSSProperties = { margin: 0, fontSize: 28, lineHeight: 1.12, color: "#202223", letterSpacing: "-0.02em" };
-const pageSubtitleStyle: CSSProperties = { margin: "8px 0 0", color: "#61666c", fontSize: 14, lineHeight: 1.6, maxWidth: 720 };
-const headerActionsStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10 };
 
 const brandRowStyle: CSSProperties = {
   display: "flex",
@@ -1406,12 +1402,51 @@ const historyItemStyle = (active: boolean): CSSProperties => ({
 });
 const historyTitleStyle: CSSProperties = { fontSize: 13, fontWeight: 700, color: "#202223" };
 const historyPreviewStyle: CSSProperties = { fontSize: 12, color: "#61666c", lineHeight: 1.5 };
-const sidebarFooterStyle: CSSProperties = {
+const accountMenuWrapStyle: CSSProperties = {
+  position: "relative",
+  paddingTop: 12,
+  borderTop: "1px solid #e1e3e5",
+};
+const sidebarFooterButtonStyle: CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  padding: "12px 10px 0",
-  borderTop: "1px solid #e1e3e5",
+  width: "100%",
+  border: "1px solid transparent",
+  borderRadius: 12,
+  background: "transparent",
+  padding: "10px 10px 0",
+  textAlign: "left",
+  cursor: "pointer",
+};
+const accountMenuStyle: CSSProperties = {
+  position: "absolute",
+  left: 0,
+  right: 0,
+  bottom: "calc(100% + 10px)",
+  display: "flex",
+  flexDirection: "column",
+  gap: 12,
+  padding: 12,
+  borderRadius: 14,
+  border: "1px solid #e1e3e5",
+  background: "#ffffff",
+  boxShadow: "0 16px 36px rgba(15, 23, 42, 0.12)",
+  zIndex: 10,
+};
+const accountMenuSectionStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 8 };
+const accountMenuLabelStyle: CSSProperties = { fontSize: 12, fontWeight: 700, color: "#6d7175" };
+const accountMenuItemStyle: CSSProperties = {
+  width: "100%",
+  border: "1px solid #dfe3e8",
+  borderRadius: 10,
+  background: "#ffffff",
+  color: "#202223",
+  padding: "10px 12px",
+  fontSize: 13,
+  fontWeight: 600,
+  textAlign: "left",
+  cursor: "pointer",
 };
 const footerTagStyle: CSSProperties = { padding: "4px 8px", borderRadius: 999, background: "#e9f7ef", color: "#008060", fontSize: 12, fontWeight: 600 };
 
@@ -1461,8 +1496,18 @@ const barGroupStyle: CSSProperties = { display: "grid", gap: 8 };
 const barTrackStyle: CSSProperties = { height: 10, borderRadius: 999, background: "#f1f2f3", overflow: "hidden" };
 const barFillStyle: CSSProperties = { height: "100%", borderRadius: 999 };
 
-const chatLayoutStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 16, minHeight: 0 };
-const messageListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 14, minHeight: 420 };
+const chatLayoutStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 16, minHeight: 0, alignItems: "start" };
+const conversationMetaRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14 };
+const conversationMetaTitleStyle: CSSProperties = { fontSize: 13, fontWeight: 700, color: "#202223" };
+const messageListStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 14,
+  height: 420,
+  overflowY: "auto",
+  paddingRight: 6,
+  scrollBehavior: "smooth",
+};
 const messageWrapStyle = (isUser: boolean): CSSProperties => ({ display: "flex", flexDirection: "column", alignItems: isUser ? "flex-end" : "flex-start", gap: 6 });
 const messageMetaStyle: CSSProperties = { fontSize: 12, color: "#8c9196" };
 const messageBubbleStyle = (isUser: boolean): CSSProperties => ({
@@ -1475,7 +1520,7 @@ const messageBubbleStyle = (isUser: boolean): CSSProperties => ({
   lineHeight: 1.6,
   color: "#202223",
 });
-const composerBoxStyle: CSSProperties = { marginTop: 18, paddingTop: 18, borderTop: "1px solid #ebedf0" };
+const composerBoxStyle: CSSProperties = { marginTop: 18, paddingTop: 18, borderTop: "1px solid #ebedf0", background: "#ffffff" };
 const textareaStyle: CSSProperties = {
   width: "100%",
   minHeight: 120,
