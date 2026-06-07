@@ -99,7 +99,7 @@ Spark/
 │   │   ├── app._index.tsx       首页（聊天）
 │   │   ├── app.additional.tsx   诊断报告
 │   │   ├── app.translation.tsx  翻译页
-│   │   ├── app.generate-description.tsx  生成描述页
+│   │   ├── app.product-improve.tsx  商品文案优化页
 │   │   ├── app.billing.tsx      订阅与计费页
 │   │   ├── app.image-studio.tsx 图片工具（文生图+图片翻译）
 │   │   ├── api.*.ts             API 端点
@@ -218,11 +218,11 @@ Spark/
 | `/app/_index` | `app/routes/app._index.tsx` | 首页（聊天） |
 | `/app/additional` | `app/routes/app.additional.tsx` | 诊断报告 |
 | `/app/translation` | `app/routes/app.translation.tsx` | 翻译页 |
-| `/app/generate-description` | `app/routes/app.generate-description.tsx` | 生成描述页 |
+| `/app/product-improve` | `app/routes/app.product-improve.tsx` | 商品文案优化页 |
 | `/app/billing` | `app/routes/app.billing.tsx` | 订阅与计费页 |
 | `/app/image-studio` | `app/routes/app.image-studio.tsx` | 图片工具 |
 | `POST /chat-stream` | `app/routes/chat-stream.ts` | 聊天 SSE 流 |
-| `POST /api/generate-description` | `app/routes/api.generate-description.ts` | 生成描述 API |
+| `POST /api/product-improve` | `app/routes/api.product-improve.ts` | 商品文案生成 API |
 | `POST /api/picture-translate` | `app/routes/api.picture-translate.ts` | 整图翻译 API |
 | `GET /api/translate/v3/json-runtime-tasks` | `app/routes/api.translate.v3.json-runtime-tasks.ts` | 翻译任务列表 |
 | `GET /api/translate/v3/json-runtime-task-detail` | `app/routes/api.translate.v3.json-runtime-task-detail.ts` | 翻译任务详情 |
@@ -335,7 +335,7 @@ activateSubscription / applyTokenPackPurchase
 
 ## 计费系统核心
 
-- **启用应用**：`BILLING_ENABLED_APPS` 仅含 `generate-description`；主 App `chat` 不扣 token
+- **启用开关**：`BILLING_ENABLED=false` 时关闭计费；默认启用，`Account.appName` 为 `spark`
 - **网关**：`BILLING_GATEWAY=noop` 时本地生效（开发）；否则走 Shopify Billing GraphQL
 - **Token 池**：`Account.tokenPools` = 订阅赠送 + 购包 - usedTokens
 - **校验**：`hasTokenQuota(account)` 判断余额，生成描述 API 调用前校验
@@ -518,7 +518,7 @@ npm run render:digest          # 生成日报
 
 **计费不工作**
 1. 检查 `BILLING_GATEWAY` 是否为 `noop`（开发）或 Shopify
-2. 查看 `BILLING_ENABLED_APPS` 是否包含对应 App
+2. 查看 `BILLING_ENABLED` 是否为 `false`
 3. 检查 Shopify Billing GraphQL 权限配置
 4. 查看 `hasTokenQuota()` 返回值
 

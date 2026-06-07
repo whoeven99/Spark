@@ -1,19 +1,15 @@
-name: spark - Product Improve Deploy (Prod)
+name: spark - Spark Test Deploy
 
 # 仅手动触发；始终从 master 检出；勾选要执行的任务（可多选）
 on:
   workflow_dispatch:
     inputs:
       publish_render:
-        description: 发布Spark Test
+        description: 发布 Spark Test（Render）
         type: boolean
         default: false
       deploy_admin:
-        description: 发布Admin服务
-        type: boolean
-        default: false
-      sync_shopify:
-        description: 同步 Shopify 配置
+        description: 发布 Admin 服务
         type: boolean
         default: false
 
@@ -28,12 +24,12 @@ jobs:
     steps:
       - name: Require at least one task
         run: |
-          if [ "${{ github.event.inputs.publish_render }}" != "true" ] && [ "${{ github.event.inputs.deploy_admin }}" != "true" ] && [ "${{ github.event.inputs.sync_shopify }}" != "true" ]; then
-            echo "::error::请至少勾选「发布服务」「发布Admin服务」「同步 Shopify 配置」之一"
+          if [ "${{ github.event.inputs.publish_render }}" != "true" ] && [ "${{ github.event.inputs.deploy_admin }}" != "true" ]; then
+            echo "::error::请至少勾选「发布 Spark Test（Render）」或「发布 Admin 服务」之一"
             exit 1
           fi
 
-  deploy_render_product_improve:
+  deploy_render_spark_test:
     name: Trigger Render deploy (Spark Test)
     needs: validate_inputs
     if: ${{ github.event.inputs.publish_render == 'true' }}
@@ -162,7 +158,6 @@ jobs:
           echo "final_status=timeout" >> "$GITHUB_OUTPUT"
           exit 1
 
-      # 文案与 BogdaApps bundleV2 生产 deploy_render 飞书步骤一致（bundle-shopify-deploy-prod.yml）
       - name: Notify Feishu on Render deploy success
         if: success()
         env:
@@ -202,7 +197,7 @@ jobs:
             -d "$PAYLOAD"
 
   deploy_render_admin:
-    name: Trigger Render deploy (Admin Prod)
+    name: Trigger Render deploy (Admin)
     needs: validate_inputs
     if: ${{ github.event.inputs.deploy_admin == 'true' }}
     runs-on: ubuntu-latest
@@ -242,39 +237,3 @@ jobs:
             cat response.json
             exit 1
           fi
-
-
-
-  deploy_shopify_product_improve:
-    name: Shopify app deploy (product-prod.toml)
-    needs: validate_inputs
-    if: ${{ github.event.inputs.sync_shopify == 'true' }}
-    runs-on: ubuntu-latest
-    environment: CommonShopifyRenderConfig
-
-    steps:
-      - name: Checkout master
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: master
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Shopify CLI
-        run: npm install -g @shopify/cli@latest
-
-      - name: Deploy Shopify app config
-        env:
-          SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
-          # 与 shopify.app.product-prod.toml 中 client_id 一致
-          SHOPIFY_API_KEY: b896c10abe3ca220b1efbc333ef41ad1
-        run: shopify app deploy -c shopify.app.product-prod.toml --allow-updates
