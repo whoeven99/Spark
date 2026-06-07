@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { redirect, Form, useLoaderData } from "react-router";
 
-import { buildEmbeddedAppPath, getAppEntryConfig } from "../../config/appEntry.server";
+import { buildEmbeddedAppPath, getAppEntry, getAppEntryConfig } from "../../config/appEntry.server";
 import {
   BILLING_PAGE_PATH,
   isBillingReturnRequest,
@@ -10,7 +10,7 @@ import {
   isEmbeddedAdminEntry,
   resolveShopQueryFromRequest,
 } from "../../server/shopify/embeddedEntry.server";
-import { login } from "../../shopify.server";
+import { login, authenticate } from "../../shopify.server";
 
 import styles from "./styles.module.css";
 
@@ -28,9 +28,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   if (isEmbeddedAdminEntry(request)) {
+    const { session } = await authenticate.admin(request);
+    const targetUrl = new URL(request.url);
+    if (!targetUrl.searchParams.get("shop") && session.shop) {
+      targetUrl.searchParams.set("shop", session.shop);
+    }
     const { home } = getAppEntryConfig();
     const path = isBillingReturnRequest(request) ? BILLING_PAGE_PATH : home;
-    throw redirect(buildEmbeddedAppPath(path, request));
+    throw redirect(buildEmbeddedAppPath(path, new Request(targetUrl.toString(), request)));
+  }
+
+  const appEntry = getAppEntry();
+  if (appEntry !== "chat") {
+    const { home } = getAppEntryConfig();
+    throw redirect(buildEmbeddedAppPath(home, request));
   }
 
   return { showForm: Boolean(login) };
