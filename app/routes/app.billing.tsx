@@ -9,13 +9,27 @@ import {
   BillingError,
   cancelActiveSubscription,
   loadBillingPageData,
+  reconcilePendingTokenPackPurchases,
   startSubscriptionCheckout,
   startTokenPackCheckout,
 } from "../server/billing/index.server";
+import { BILLING_RETURN_QUERY_FLAG } from "../server/billing/buildBillingReturnUrl.server";
 import { BillingPage } from "./page/BillingPage";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
+  const url = new URL(request.url);
+  const chargeId =
+    url.searchParams.get(BILLING_RETURN_QUERY_FLAG) === "1"
+      ? url.searchParams.get("charge_id")
+      : null;
+
+  await reconcilePendingTokenPackPurchases({
+    shop: session.shop,
+    admin,
+    chargeId,
+  });
+
   return loadBillingPageData(session.shop);
 };
 

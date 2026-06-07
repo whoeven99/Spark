@@ -26,4 +26,5 @@ export { cancelActiveSubscription } from "./subscription/cancelActiveSubscriptio
 export { grantProductTrialIfEligible } from "./account/grantTrial.server";
 export { handleAppSubscriptionWebhook } from "./subscription/handleSubscriptionWebhook.server";
 export { handleAppPurchaseOneTimeWebhook } from "./purchase/handlePurchaseWebhook.server";
+export { reconcilePendingTokenPackPurchases } from "./purchase/reconcilePendingTokenPackPurchases.server";
 export { getBillingGateway } from "./gateway/getBillingGateway.server";

@@ -1,7 +1,6 @@
 -- CreateTable
 CREATE TABLE "Session" (
     "id" TEXT NOT NULL PRIMARY KEY,
-    "appName" TEXT NOT NULL DEFAULT 'chat',
     "shop" TEXT NOT NULL,
     "state" TEXT NOT NULL,
     "isOnline" BOOLEAN NOT NULL DEFAULT false,
@@ -45,7 +44,6 @@ CREATE TABLE "AdPlatformCredential" (
 CREATE TABLE "Account" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "shop" TEXT NOT NULL,
-    "appName" TEXT NOT NULL,
     "subscriptionTokens" INTEGER NOT NULL DEFAULT 0,
     "purchasedTokens" INTEGER NOT NULL DEFAULT 0,
     "trialTokens" INTEGER NOT NULL DEFAULT 0,
@@ -57,7 +55,6 @@ CREATE TABLE "Account" (
 -- CreateTable
 CREATE TABLE "PlanCatalog" (
     "planKey" TEXT NOT NULL PRIMARY KEY,
-    "appName" TEXT NOT NULL,
     "kind" TEXT NOT NULL,
     "billingInterval" TEXT,
     "displayName" TEXT NOT NULL,
@@ -76,7 +73,6 @@ CREATE TABLE "PlanCatalog" (
 CREATE TABLE "AppSubscription" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "shop" TEXT NOT NULL,
-    "appName" TEXT NOT NULL,
     "planKey" TEXT NOT NULL,
     "shopifySubscriptionId" TEXT NOT NULL,
     "billingInterval" TEXT NOT NULL,
@@ -90,14 +86,13 @@ CREATE TABLE "AppSubscription" (
     "rawPayload" JSONB,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
-    CONSTRAINT "AppSubscription_shop_appName_fkey" FOREIGN KEY ("shop", "appName") REFERENCES "Account" ("shop", "appName") ON DELETE RESTRICT ON UPDATE CASCADE
+    CONSTRAINT "AppSubscription_shop_fkey" FOREIGN KEY ("shop") REFERENCES "Account" ("shop") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "AccountPeriodUsage" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "shop" TEXT NOT NULL,
-    "appName" TEXT NOT NULL,
     "appSubscriptionId" TEXT NOT NULL,
     "planKey" TEXT NOT NULL,
     "periodStart" DATETIME NOT NULL,
@@ -107,7 +102,7 @@ CREATE TABLE "AccountPeriodUsage" (
     "purchasedTokensRemaining" INTEGER NOT NULL DEFAULT 0,
     "trialTokensRemaining" INTEGER NOT NULL DEFAULT 0,
     "archivedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "AccountPeriodUsage_shop_appName_fkey" FOREIGN KEY ("shop", "appName") REFERENCES "Account" ("shop", "appName") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "AccountPeriodUsage_shop_fkey" FOREIGN KEY ("shop") REFERENCES "Account" ("shop") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "AccountPeriodUsage_appSubscriptionId_fkey" FOREIGN KEY ("appSubscriptionId") REFERENCES "AppSubscription" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
@@ -115,7 +110,6 @@ CREATE TABLE "AccountPeriodUsage" (
 CREATE TABLE "CommonEventLog" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "shop" TEXT NOT NULL,
-    "appName" TEXT NOT NULL,
     "eventType" TEXT NOT NULL,
     "topic" TEXT,
     "referenceId" TEXT,
@@ -125,10 +119,20 @@ CREATE TABLE "CommonEventLog" (
 );
 
 -- CreateTable
+CREATE TABLE "AppVisitSource" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "shop" TEXT NOT NULL,
+    "path" TEXT NOT NULL,
+    "utm" TEXT NOT NULL,
+    "query" TEXT,
+    "referer" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
 CREATE TABLE "BillingLog" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "shop" TEXT NOT NULL,
-    "appName" TEXT NOT NULL,
     "eventType" TEXT NOT NULL,
     "planKey" TEXT,
     "referenceId" TEXT,
@@ -136,23 +140,69 @@ CREATE TABLE "BillingLog" (
     "usedTokens" INTEGER,
     "metadata" JSONB,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "BillingLog_shop_appName_fkey" FOREIGN KEY ("shop", "appName") REFERENCES "Account" ("shop", "appName") ON DELETE RESTRICT ON UPDATE CASCADE
+    CONSTRAINT "BillingLog_shop_fkey" FOREIGN KEY ("shop") REFERENCES "Account" ("shop") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
-CREATE TABLE "ShopVisualJob" (
+CREATE TABLE "ToolTokenUsageLog" (
     "id" TEXT NOT NULL PRIMARY KEY,
-    "requestId" TEXT NOT NULL,
     "shop" TEXT NOT NULL,
-    "kind" TEXT NOT NULL,
-    "status" TEXT NOT NULL,
-    "summary" TEXT NOT NULL,
-    "blobPath" TEXT,
-    "errorMsg" TEXT,
-    "provider" TEXT,
-    "metadata" JSONB,
+    "feature" TEXT NOT NULL,
+    "modelKey" TEXT NOT NULL,
+    "rawTokens" INTEGER NOT NULL,
+    "billedTokens" INTEGER NOT NULL,
+    "inputTokens" INTEGER NOT NULL DEFAULT 0,
+    "outputTokens" INTEGER NOT NULL DEFAULT 0,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "ToolTokenUsageLog_shop_fkey" FOREIGN KEY ("shop") REFERENCES "Account" ("shop") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "AITaskEstimation" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "taskType" TEXT NOT NULL,
+    "ewmaCredits" REAL,
+    "ewmaSeconds" REAL,
+    "sampleCount" INTEGER NOT NULL DEFAULT 0,
     "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "AITaskBatch" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "shop" TEXT NOT NULL,
+    "taskType" TEXT NOT NULL,
+    "config" JSONB NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "AITask" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "shop" TEXT NOT NULL,
+    "taskType" TEXT NOT NULL,
+    "batchId" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "config" JSONB NOT NULL,
+    "result" JSONB,
+    "estimatedCredits" INTEGER,
+    "actualCredits" INTEGER,
+    "startedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "completedAt" DATETIME,
+    "errorMsg" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "AITask_batchId_fkey" FOREIGN KEY ("batchId") REFERENCES "AITaskBatch" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "AITaskLog" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "taskId" TEXT NOT NULL,
+    "elapsedSeconds" INTEGER NOT NULL,
+    "message" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "AITaskLog_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "AITask" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -199,6 +249,7 @@ CREATE TABLE "ShopOrderLineItem" (
     "shop" TEXT NOT NULL,
     "shopifyOrderId" TEXT NOT NULL,
     "lineItemId" TEXT NOT NULL,
+    "inventoryItemId" TEXT,
     "variantId" TEXT,
     "productId" TEXT,
     "title" TEXT NOT NULL,
@@ -227,6 +278,31 @@ CREATE TABLE "ShopRefund" (
 );
 
 -- CreateTable
+CREATE TABLE "ShopRefundLineItem" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "shop" TEXT NOT NULL,
+    "shopifyRefundId" TEXT NOT NULL,
+    "shopifyOrderId" TEXT NOT NULL,
+    "refundLineItemId" TEXT NOT NULL,
+    "lineItemId" TEXT NOT NULL,
+    "inventoryItemId" TEXT,
+    "variantId" TEXT,
+    "productId" TEXT,
+    "title" TEXT,
+    "variantTitle" TEXT,
+    "sku" TEXT,
+    "quantity" INTEGER NOT NULL DEFAULT 0,
+    "subtotal" REAL NOT NULL DEFAULT 0,
+    "totalTax" REAL NOT NULL DEFAULT 0,
+    "reason" TEXT,
+    "restockType" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "syncedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "ShopRefundLineItem_shop_shopifyRefundId_fkey" FOREIGN KEY ("shop", "shopifyRefundId") REFERENCES "ShopRefund" ("shop", "shopifyRefundId") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "ShopRefundLineItem_shop_shopifyOrderId_fkey" FOREIGN KEY ("shop", "shopifyOrderId") REFERENCES "ShopOrder" ("shop", "shopifyOrderId") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- CreateTable
 CREATE TABLE "ShopCustomer" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "shop" TEXT NOT NULL,
@@ -252,6 +328,11 @@ CREATE TABLE "ShopInventoryLevel" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "shop" TEXT NOT NULL,
     "inventoryItemId" TEXT NOT NULL,
+    "variantId" TEXT,
+    "productId" TEXT,
+    "sku" TEXT,
+    "productTitle" TEXT,
+    "variantTitle" TEXT,
     "locationId" TEXT NOT NULL,
     "locationName" TEXT,
     "available" INTEGER NOT NULL DEFAULT 0,
@@ -292,9 +373,29 @@ CREATE TABLE "ShopSyncCheckpoint" (
 );
 
 -- CreateTable
+CREATE TABLE "Conversation" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "shop" TEXT NOT NULL,
+    "title" TEXT NOT NULL DEFAULT '新对话',
+    "preview" TEXT NOT NULL DEFAULT '',
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "Message" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "conversationId" TEXT NOT NULL,
+    "role" TEXT NOT NULL,
+    "content" TEXT NOT NULL,
+    "payloads" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Message_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "Conversation" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateTable
 CREATE TABLE "TokenBillingRule" (
     "ruleKey" TEXT NOT NULL PRIMARY KEY,
-    "appName" TEXT NOT NULL,
     "feature" TEXT NOT NULL,
     "modelKey" TEXT NOT NULL,
     "displayName" TEXT NOT NULL,
@@ -306,7 +407,7 @@ CREATE TABLE "TokenBillingRule" (
 );
 
 -- CreateIndex
-CREATE INDEX "Session_appName_shop_idx" ON "Session"("appName", "shop");
+CREATE INDEX "Session_shop_idx" ON "Session"("shop");
 
 -- CreateIndex
 CREATE INDEX "Suggestion_shop_createdAt_idx" ON "Suggestion"("shop", "createdAt");
@@ -315,13 +416,10 @@ CREATE INDEX "Suggestion_shop_createdAt_idx" ON "Suggestion"("shop", "createdAt"
 CREATE UNIQUE INDEX "AdPlatformCredential_shop_platform_key" ON "AdPlatformCredential"("shop", "platform");
 
 -- CreateIndex
-CREATE INDEX "Account_shop_idx" ON "Account"("shop");
+CREATE UNIQUE INDEX "Account_shop_key" ON "Account"("shop");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Account_shop_appName_key" ON "Account"("shop", "appName");
-
--- CreateIndex
-CREATE INDEX "PlanCatalog_appName_enabled_sortOrder_idx" ON "PlanCatalog"("appName", "enabled", "sortOrder");
+CREATE INDEX "PlanCatalog_enabled_sortOrder_idx" ON "PlanCatalog"("enabled", "sortOrder");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "AppSubscription_shopifySubscriptionId_key" ON "AppSubscription"("shopifySubscriptionId");
@@ -330,16 +428,16 @@ CREATE UNIQUE INDEX "AppSubscription_shopifySubscriptionId_key" ON "AppSubscript
 CREATE INDEX "AppSubscription_status_idx" ON "AppSubscription"("status");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "AppSubscription_shop_appName_key" ON "AppSubscription"("shop", "appName");
+CREATE UNIQUE INDEX "AppSubscription_shop_key" ON "AppSubscription"("shop");
 
 -- CreateIndex
-CREATE INDEX "AccountPeriodUsage_shop_appName_periodEnd_idx" ON "AccountPeriodUsage"("shop", "appName", "periodEnd");
+CREATE INDEX "AccountPeriodUsage_shop_periodEnd_idx" ON "AccountPeriodUsage"("shop", "periodEnd");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "AccountPeriodUsage_appSubscriptionId_periodStart_periodEnd_key" ON "AccountPeriodUsage"("appSubscriptionId", "periodStart", "periodEnd");
 
 -- CreateIndex
-CREATE INDEX "CommonEventLog_shop_appName_createdAt_idx" ON "CommonEventLog"("shop", "appName", "createdAt");
+CREATE INDEX "CommonEventLog_shop_createdAt_idx" ON "CommonEventLog"("shop", "createdAt");
 
 -- CreateIndex
 CREATE INDEX "CommonEventLog_eventType_createdAt_idx" ON "CommonEventLog"("eventType", "createdAt");
@@ -348,7 +446,16 @@ CREATE INDEX "CommonEventLog_eventType_createdAt_idx" ON "CommonEventLog"("event
 CREATE INDEX "CommonEventLog_referenceId_idx" ON "CommonEventLog"("referenceId");
 
 -- CreateIndex
-CREATE INDEX "BillingLog_shop_appName_createdAt_idx" ON "BillingLog"("shop", "appName", "createdAt");
+CREATE INDEX "AppVisitSource_shop_createdAt_idx" ON "AppVisitSource"("shop", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "AppVisitSource_utm_createdAt_idx" ON "AppVisitSource"("utm", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "AppVisitSource_utm_path_idx" ON "AppVisitSource"("utm", "path");
+
+-- CreateIndex
+CREATE INDEX "BillingLog_shop_createdAt_idx" ON "BillingLog"("shop", "createdAt");
 
 -- CreateIndex
 CREATE INDEX "BillingLog_eventType_createdAt_idx" ON "BillingLog"("eventType", "createdAt");
@@ -357,10 +464,28 @@ CREATE INDEX "BillingLog_eventType_createdAt_idx" ON "BillingLog"("eventType", "
 CREATE INDEX "BillingLog_referenceId_idx" ON "BillingLog"("referenceId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "ShopVisualJob_requestId_key" ON "ShopVisualJob"("requestId");
+CREATE INDEX "ToolTokenUsageLog_shop_createdAt_idx" ON "ToolTokenUsageLog"("shop", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "ShopVisualJob_shop_kind_createdAt_idx" ON "ShopVisualJob"("shop", "kind", "createdAt");
+CREATE INDEX "ToolTokenUsageLog_shop_feature_createdAt_idx" ON "ToolTokenUsageLog"("shop", "feature", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "ToolTokenUsageLog_feature_createdAt_idx" ON "ToolTokenUsageLog"("feature", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AITaskEstimation_taskType_key" ON "AITaskEstimation"("taskType");
+
+-- CreateIndex
+CREATE INDEX "AITaskBatch_shop_createdAt_idx" ON "AITaskBatch"("shop", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "AITask_shop_taskType_createdAt_idx" ON "AITask"("shop", "taskType", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "AITask_batchId_idx" ON "AITask"("batchId");
+
+-- CreateIndex
+CREATE INDEX "AITaskLog_taskId_createdAt_idx" ON "AITaskLog"("taskId", "createdAt");
 
 -- CreateIndex
 CREATE INDEX "ShopOrder_shop_createdAt_idx" ON "ShopOrder"("shop", "createdAt");
@@ -384,6 +509,9 @@ CREATE INDEX "ShopOrderLineItem_shop_shopifyOrderId_idx" ON "ShopOrderLineItem"(
 CREATE INDEX "ShopOrderLineItem_shop_sku_idx" ON "ShopOrderLineItem"("shop", "sku");
 
 -- CreateIndex
+CREATE INDEX "ShopOrderLineItem_shop_inventoryItemId_idx" ON "ShopOrderLineItem"("shop", "inventoryItemId");
+
+-- CreateIndex
 CREATE INDEX "ShopOrderLineItem_shop_productId_idx" ON "ShopOrderLineItem"("shop", "productId");
 
 -- CreateIndex
@@ -399,6 +527,24 @@ CREATE INDEX "ShopRefund_shop_processedAt_idx" ON "ShopRefund"("shop", "processe
 CREATE UNIQUE INDEX "ShopRefund_shop_shopifyRefundId_key" ON "ShopRefund"("shop", "shopifyRefundId");
 
 -- CreateIndex
+CREATE INDEX "ShopRefundLineItem_shop_shopifyRefundId_idx" ON "ShopRefundLineItem"("shop", "shopifyRefundId");
+
+-- CreateIndex
+CREATE INDEX "ShopRefundLineItem_shop_shopifyOrderId_idx" ON "ShopRefundLineItem"("shop", "shopifyOrderId");
+
+-- CreateIndex
+CREATE INDEX "ShopRefundLineItem_shop_lineItemId_idx" ON "ShopRefundLineItem"("shop", "lineItemId");
+
+-- CreateIndex
+CREATE INDEX "ShopRefundLineItem_shop_sku_idx" ON "ShopRefundLineItem"("shop", "sku");
+
+-- CreateIndex
+CREATE INDEX "ShopRefundLineItem_shop_reason_idx" ON "ShopRefundLineItem"("shop", "reason");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ShopRefundLineItem_shop_refundLineItemId_key" ON "ShopRefundLineItem"("shop", "refundLineItemId");
+
+-- CreateIndex
 CREATE INDEX "ShopCustomer_shop_email_idx" ON "ShopCustomer"("shop", "email");
 
 -- CreateIndex
@@ -409,6 +555,12 @@ CREATE INDEX "ShopCustomer_shop_lastOrderDate_idx" ON "ShopCustomer"("shop", "la
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ShopCustomer_shop_shopifyCustomerId_key" ON "ShopCustomer"("shop", "shopifyCustomerId");
+
+-- CreateIndex
+CREATE INDEX "ShopInventoryLevel_shop_sku_idx" ON "ShopInventoryLevel"("shop", "sku");
+
+-- CreateIndex
+CREATE INDEX "ShopInventoryLevel_shop_variantId_idx" ON "ShopInventoryLevel"("shop", "variantId");
 
 -- CreateIndex
 CREATE INDEX "ShopInventoryLevel_shop_locationId_idx" ON "ShopInventoryLevel"("shop", "locationId");
@@ -435,7 +587,13 @@ CREATE UNIQUE INDEX "ShopFulfillment_shop_shopifyFulfillmentId_key" ON "ShopFulf
 CREATE UNIQUE INDEX "ShopSyncCheckpoint_shop_resource_key" ON "ShopSyncCheckpoint"("shop", "resource");
 
 -- CreateIndex
-CREATE INDEX "TokenBillingRule_appName_feature_enabled_idx" ON "TokenBillingRule"("appName", "feature", "enabled");
+CREATE INDEX "Conversation_shop_updatedAt_idx" ON "Conversation"("shop", "updatedAt" DESC);
 
 -- CreateIndex
-CREATE UNIQUE INDEX "TokenBillingRule_appName_feature_modelKey_key" ON "TokenBillingRule"("appName", "feature", "modelKey");
+CREATE INDEX "Message_conversationId_createdAt_idx" ON "Message"("conversationId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "TokenBillingRule_feature_enabled_idx" ON "TokenBillingRule"("feature", "enabled");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "TokenBillingRule_feature_modelKey_key" ON "TokenBillingRule"("feature", "modelKey");
