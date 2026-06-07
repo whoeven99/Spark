@@ -7,8 +7,8 @@ type WorkspacePanel = "dashboard" | "chat" | "skills" | "automation" | "tasks";
 type AutomationView = "configured" | "history" | "templates";
 type TaskKind = "automation" | "one_off";
 type TaskStatus = "executing" | "review_required" | "completed" | "failed";
-type ObjectType = "product" | "article" | "order" | "customer";
-type ContextTool = ObjectType | "documents" | "dataSource" | "rules" | "constraints";
+type ObjectType = "product" | "article" | "order";
+type ContextTool = ObjectType | "file" | "media";
 
 type Conversation = {
   id: string;
@@ -61,6 +61,21 @@ type ObjectOption = {
   meta: string;
 };
 
+type LocalFileItem = {
+  id: string;
+  name: string;
+  size: string;
+  note: string;
+};
+
+type RichMediaItem = {
+  id: string;
+  title: string;
+  kind: "url" | "image" | "video";
+  value: string;
+  note: string;
+};
+
 const panelItems: Array<{ key: Exclude<WorkspacePanel, "chat">; label: string; icon: string }> = [
   { key: "dashboard", label: "经营看板", icon: "◫" },
   { key: "skills", label: "技能", icon: "✦" },
@@ -72,7 +87,6 @@ const objectTypeLabels: Record<ObjectType, string> = {
   product: "商品",
   article: "文章",
   order: "订单",
-  customer: "客户",
 };
 
 const objectOptions: Record<ObjectType, ObjectOption[]> = {
@@ -95,28 +109,20 @@ const objectOptions: Record<ObjectType, ObjectOption[]> = {
     { id: "ord-9103", title: "#9103", subtitle: "美国站 / 异常履约", meta: "$119.00 · 超时 16h" },
     { id: "ord-9104", title: "#9104", subtitle: "日本站 / 正常", meta: "$73.00 · 已发货" },
   ],
-  customer: [
-    { id: "cus-301", title: "Emma Wilson", subtitle: "VIP 客户 / 最近 30 天 4 单", meta: "AOV $126 · 订阅邮件" },
-    { id: "cus-302", title: "Sophie Chen", subtitle: "新客户 / 首单未复购", meta: "最近下单 6 天前" },
-    { id: "cus-303", title: "Lucas Martin", subtitle: "退款风险用户", meta: "近 60 天 2 次退款" },
-    { id: "cus-304", title: "Mia Garcia", subtitle: "高活跃 / 多渠道来源", meta: "邮件 + Instagram" },
-  ],
 };
 
-const mockReferenceDocuments = [
-  { id: "doc-1", name: "brand-guideline.pdf", note: "品牌语气、关键词和禁用词规则" },
-  { id: "doc-2", name: "seo-checklist.docx", note: "标题、描述和结构化 SEO 要求" },
+const initialLocalFiles: LocalFileItem[] = [
+  { id: "file-1", name: "brand-guideline.pdf", size: "2.3 MB", note: "品牌语气和禁用词说明" },
+  { id: "file-2", name: "product-seo-rules.docx", size: "540 KB", note: "商品标题与描述 SEO 规范" },
 ];
 
-const mockRules = ["SEO 优化指南", "商品描述规范", "合规禁用词"];
-
-const mockConstraints = [
-  "长度控制在 180-220 字",
-  "保留 HTML 结构和现有要点列表",
-  "避免使用夸张承诺类词汇",
+const initialRichMediaItems: RichMediaItem[] = [
+  { id: "media-1", title: "Summer campaign landing", kind: "url", value: "https://spark-demo.shop/summer", note: "活动落地页 URL" },
+  { id: "media-2", title: "hero-reference.jpg", kind: "image", value: "https://cdn.spark.demo/hero-reference.jpg", note: "主视觉参考图" },
+  { id: "media-3", title: "product-demo.mp4", kind: "video", value: "https://cdn.spark.demo/product-demo.mp4", note: "商品讲解视频" },
 ];
 
-const conversations: Conversation[] = [
+const initialConversations: Conversation[] = [
   {
     id: "conv-001",
     title: "夏季新品文案优化",
@@ -222,12 +228,13 @@ function isWorkspacePanel(value: string | null): value is WorkspacePanel {
 }
 
 function isObjectType(value: ContextTool | null): value is ObjectType {
-  return value === "product" || value === "article" || value === "order" || value === "customer";
+  return value === "product" || value === "article" || value === "order";
 }
 
 export function WorkspaceAppShellPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [activeConversationId, setActiveConversationId] = useState(conversations[0].id);
+  const [conversationList, setConversationList] = useState<Conversation[]>(initialConversations);
+  const [activeConversationId, setActiveConversationId] = useState(initialConversations[0].id);
   const [draftByConversation, setDraftByConversation] = useState<Record<string, string>>({
     "conv-001": "请基于品牌语气和 SEO 规则，补齐这批新品的英文商品描述。",
     "conv-002": "把这次退款异常提炼成可以重复运行的自动化规则。",
@@ -235,7 +242,7 @@ export function WorkspaceAppShellPage() {
     "conv-004": "把日报里最重要的经营变化压缩成 3 条结论。",
   });
   const [messagesByConversation, setMessagesByConversation] = useState<Record<string, Conversation["messages"]>>(
-    Object.fromEntries(conversations.map((conversation) => [conversation.id, conversation.messages])),
+    Object.fromEntries(initialConversations.map((conversation) => [conversation.id, conversation.messages])),
   );
   const [automationView, setAutomationView] = useState<AutomationView>("configured");
   const [taskFilter, setTaskFilter] = useState<"all" | TaskKind>("all");
@@ -244,18 +251,18 @@ export function WorkspaceAppShellPage() {
     product: "",
     article: "",
     order: "",
-    customer: "",
   });
   const [selectedObjectsByType, setSelectedObjectsByType] = useState<Record<ObjectType, string[]>>({
     product: ["prd-1001", "prd-1004"],
     article: [],
     order: [],
-    customer: [],
   });
+  const [localFiles] = useState<LocalFileItem[]>(initialLocalFiles);
+  const [richMediaItems] = useState<RichMediaItem[]>(initialRichMediaItems);
 
   const panelParam = searchParams.get("panel");
   const activePanel: WorkspacePanel = isWorkspacePanel(panelParam) ? panelParam : "dashboard";
-  const activeConversation = conversations.find((item) => item.id === activeConversationId) ?? conversations[0];
+  const activeConversation = conversationList.find((item) => item.id === activeConversationId) ?? conversationList[0];
   const activeMessages = messagesByConversation[activeConversation.id] ?? activeConversation.messages;
   const filteredTasks = useMemo(
     () => (taskFilter === "all" ? initialTasks : initialTasks.filter((task) => task.kind === taskFilter)),
@@ -277,8 +284,39 @@ export function WorkspaceAppShellPage() {
     switchPanel("chat");
   };
 
+  const createConversation = () => {
+    const createdAt = new Date();
+    const timeLabel = `${String(createdAt.getHours()).padStart(2, "0")}:${String(createdAt.getMinutes()).padStart(2, "0")}`;
+    const nextId = `conv-${createdAt.getTime()}`;
+    const newConversation: Conversation = {
+      id: nextId,
+      title: "新对话",
+      updatedAt: "刚刚",
+      preview: "开始描述你的任务目标、对象和约束。",
+      messages: [
+        {
+          role: "assistant",
+          text: "新的对话已经创建。你可以先在下方工具栏补充商品、订单、文章、文件或富媒体，再发送任务需求。",
+          time: timeLabel,
+        },
+      ],
+    };
+
+    setConversationList((current) => [newConversation, ...current].slice(0, 50));
+    setMessagesByConversation((current) => ({
+      ...current,
+      [nextId]: newConversation.messages,
+    }));
+    setDraftByConversation((current) => ({
+      ...current,
+      [nextId]: "",
+    }));
+    setActiveConversationId(nextId);
+    switchPanel("chat");
+  };
+
   const clearContext = () => {
-    setSelectedObjectsByType({ product: [], article: [], order: [], customer: [] });
+    setSelectedObjectsByType({ product: [], article: [], order: [] });
     setActiveContextTool(null);
   };
 
@@ -297,6 +335,25 @@ export function WorkspaceAppShellPage() {
   const sendMessage = () => {
     const content = (draftByConversation[activeConversation.id] ?? "").trim();
     if (!content) return;
+
+    const nextPreview = content.length > 28 ? `${content.slice(0, 28)}...` : content;
+    const nextTitle =
+      activeConversation.title === "新对话"
+        ? (content.length > 18 ? `${content.slice(0, 18)}...` : content)
+        : activeConversation.title;
+
+    setConversationList((current) =>
+      current.map((conversation) =>
+        conversation.id === activeConversation.id
+          ? {
+              ...conversation,
+              title: nextTitle,
+              preview: nextPreview,
+              updatedAt: "刚刚",
+            }
+          : conversation,
+      ),
+    );
     setMessagesByConversation((current: Record<string, Conversation["messages"]>) => ({
       ...current,
       [activeConversation.id]: [
@@ -320,8 +377,8 @@ export function WorkspaceAppShellPage() {
             </div>
           </div>
 
-          <button type="button" style={newTaskButtonStyle} onClick={() => switchPanel("chat")}>
-            + 新建任务
+          <button type="button" style={newTaskButtonStyle} onClick={createConversation}>
+            + 新建对话
           </button>
 
           <div style={navGroupStyle}>
@@ -343,10 +400,10 @@ export function WorkspaceAppShellPage() {
           <div style={sidebarSectionStyle}>
             <div style={sidebarSectionHeadStyle}>
               <span>对话记录</span>
-              <span style={mutedMetaStyle}>{Math.min(conversations.length, 50)} / 50</span>
+              <span style={mutedMetaStyle}>{Math.min(conversationList.length, 50)} / 50</span>
             </div>
             <div style={conversationListStyle}>
-              {conversations.slice(0, 50).map((conversation) => (
+              {conversationList.slice(0, 50).map((conversation) => (
                 <button
                   key={conversation.id}
                   type="button"
@@ -392,6 +449,8 @@ export function WorkspaceAppShellPage() {
             activeContextTool={activeContextTool}
             objectQueryByType={objectQueryByType}
             selectedObjectsByType={selectedObjectsByType}
+            localFiles={localFiles}
+            richMediaItems={richMediaItems}
             onDraftChange={(value) =>
               setDraftByConversation((current: Record<string, string>) => ({
                 ...current,
@@ -543,6 +602,8 @@ function ChatPanel({
   activeContextTool,
   objectQueryByType,
   selectedObjectsByType,
+  localFiles,
+  richMediaItems,
   onDraftChange,
   onContextToolChange,
   onObjectQueryChange,
@@ -556,6 +617,8 @@ function ChatPanel({
   activeContextTool: ContextTool | null;
   objectQueryByType: Record<ObjectType, string>;
   selectedObjectsByType: Record<ObjectType, string[]>;
+  localFiles: LocalFileItem[];
+  richMediaItems: RichMediaItem[];
   onDraftChange: (value: string) => void;
   onContextToolChange: (tool: ContextTool) => void;
   onObjectQueryChange: (type: ObjectType, value: string) => void;
@@ -563,6 +626,7 @@ function ChatPanel({
   onClearContext: () => void;
   onSend: () => void;
 }) {
+  const [hoveredTool, setHoveredTool] = useState<ContextTool | null>(null);
   const totalSelectedObjects = Object.values(selectedObjectsByType).reduce((count, ids) => count + ids.length, 0);
   const activeObjectOptions = isObjectType(activeContextTool)
     ? objectOptions[activeContextTool].filter((item) => {
@@ -571,151 +635,20 @@ function ChatPanel({
         return `${item.title} ${item.subtitle} ${item.meta}`.toLowerCase().includes(query);
       })
     : [];
+  const filledContextCount =
+    (totalSelectedObjects > 0 ? 1 : 0) +
+    (localFiles.length > 0 ? 1 : 0) +
+    (richMediaItems.length > 0 ? 1 : 0);
+  const toolItems: Array<{ key: ContextTool; label: string; icon: string; active: boolean }> = [
+    { key: "product", label: selectedObjectsByType.product.length > 0 ? `商品 ${selectedObjectsByType.product.length}` : "商品", icon: "◫", active: activeContextTool === "product" },
+    { key: "order", label: selectedObjectsByType.order.length > 0 ? `订单 ${selectedObjectsByType.order.length}` : "订单", icon: "◎", active: activeContextTool === "order" },
+    { key: "article", label: selectedObjectsByType.article.length > 0 ? `文章 ${selectedObjectsByType.article.length}` : "文章", icon: "≣", active: activeContextTool === "article" },
+    { key: "file", label: localFiles.length > 0 ? `文件 ${localFiles.length}` : "文件", icon: "↑", active: activeContextTool === "file" },
+    { key: "media", label: richMediaItems.length > 0 ? `富媒体 ${richMediaItems.length}` : "富媒体", icon: "◇", active: activeContextTool === "media" },
+  ];
 
   return (
-    <div style={panelStackStyle}>
-      <section style={surfaceCardStyle}>
-        <div style={sectionHeaderStyle}>
-          <div>
-            <div style={sectionTitleStyle}>任务工作区</div>
-            <div style={sectionTextStyle}>通过顶部工具栏先补充对象和规则，再在下方描述你的任务目标。</div>
-          </div>
-          <button type="button" style={ghostButtonStyle} onClick={onClearContext}>
-            清空上下文
-          </button>
-        </div>
-
-        <div style={toolbarRowStyle}>
-          {(Object.keys(objectTypeLabels) as ObjectType[]).map((type) => (
-            <button
-              key={type}
-              type="button"
-              style={toolbarButtonStyle(activeContextTool === type, selectedObjectsByType[type].length > 0)}
-              onClick={() => onContextToolChange(type)}
-            >
-              {selectedObjectsByType[type].length > 0
-                ? `${objectTypeLabels[type]} ${selectedObjectsByType[type].length}`
-                : `选择${objectTypeLabels[type]}`}
-            </button>
-          ))}
-          <span style={toolbarDividerStyle} />
-          {[
-            ["documents", mockReferenceDocuments.length > 0 ? `参考文档 ${mockReferenceDocuments.length}` : "参考文档"],
-            ["dataSource", "数据源 168 行"],
-            ["rules", `规则 ${mockRules.length}`],
-            ["constraints", "约束"],
-          ].map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              style={toolbarButtonStyle(activeContextTool === key, true)}
-              onClick={() => onContextToolChange(key as ContextTool)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <div style={contextSummaryStyle}>
-          <span style={summaryChipStyle(totalSelectedObjects > 0)}>{totalSelectedObjects > 0 ? `已选对象 ${totalSelectedObjects}` : "未选择对象"}</span>
-          <span style={summaryChipStyle(mockReferenceDocuments.length > 0)}>参考文档 {mockReferenceDocuments.length}</span>
-          <span style={summaryChipStyle(true)}>数据源 products.csv</span>
-          <span style={summaryChipStyle(mockRules.length > 0)}>规则 {mockRules.length}</span>
-          <span style={summaryChipStyle(mockConstraints.length > 0)}>约束已配置</span>
-        </div>
-
-        {isObjectType(activeContextTool) ? (
-          <div style={selectorPanelStyle}>
-            <div style={selectorPanelHeaderStyle}>
-              <div>
-                <div style={sectionTitleSmallStyle}>{objectTypeLabels[activeContextTool]}选择器</div>
-                <div style={sectionTextStyle}>支持搜索、筛选和批量勾选，当前用 mock Shopify 数据演示。</div>
-              </div>
-              <span style={statusBadgeStyle("neutral")}>
-                已选 {selectedObjectsByType[activeContextTool].length}
-              </span>
-            </div>
-            <input
-              value={objectQueryByType[activeContextTool]}
-              onChange={(event) => onObjectQueryChange(activeContextTool, event.target.value)}
-              placeholder={`搜索${objectTypeLabels[activeContextTool]}名称、分类或状态`}
-              style={selectorSearchInputStyle}
-            />
-            <div style={selectorListStyle}>
-              {activeObjectOptions.map((item) => {
-                const checked = selectedObjectsByType[activeContextTool].includes(item.id);
-                return (
-                  <label key={item.id} style={selectorItemStyle(checked)}>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => onToggleObjectSelection(activeContextTool, item.id)}
-                    />
-                    <div style={selectorItemContentStyle}>
-                      <span style={sectionTitleSmallStyle}>{item.title}</span>
-                      <span style={sectionTextStyle}>{item.subtitle}</span>
-                      <span style={mutedMetaStyle}>{item.meta}</span>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-
-        {activeContextTool === "documents" ? (
-          <div style={selectorPanelStyle}>
-            <div style={sectionTitleSmallStyle}>参考文档</div>
-            <div style={listColumnStyle}>
-              {mockReferenceDocuments.map((document) => (
-                <div key={document.id} style={summaryItemStyle}>
-                  <div style={sectionTitleSmallStyle}>{document.name}</div>
-                  <div style={sectionTextStyle}>{document.note}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {activeContextTool === "rules" ? (
-          <div style={selectorPanelStyle}>
-            <div style={sectionTitleSmallStyle}>已启用规则</div>
-            <div style={tagWrapStyle}>
-              {mockRules.map((rule) => (
-                <span key={rule} style={summaryChipStyle(true)}>
-                  {rule}
-                </span>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {activeContextTool === "constraints" ? (
-          <div style={selectorPanelStyle}>
-            <div style={sectionTitleSmallStyle}>当前约束</div>
-            <div style={listColumnStyle}>
-              {mockConstraints.map((item) => (
-                <div key={item} style={summaryItemStyle}>
-                  <div style={sectionTextStyle}>{item}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {activeContextTool === "dataSource" ? (
-          <div style={selectorPanelStyle}>
-            <div style={sectionTitleSmallStyle}>数据源概览</div>
-            <div style={summaryItemStyle}>
-              <div style={sectionTitleSmallStyle}>summer-launch-products.csv</div>
-              <div style={sectionTextStyle}>共 168 行，已映射 SKU、标题、分类、属性和 HTML 描述字段。</div>
-              <div style={mutedMetaStyle}>字段映射：sku / title / category / tags / body_html</div>
-            </div>
-          </div>
-        ) : null}
-      </section>
-
-      <div style={chatLayoutStyle}>
+    <div style={chatLayoutStyle}>
       <section style={{ ...surfaceCardStyle, minHeight: 0 }}>
         <div style={sectionHeaderStyle}>
           <div>
@@ -741,8 +674,104 @@ function ChatPanel({
             value={draft}
             onChange={(event) => onDraftChange(event.target.value)}
             style={textareaStyle}
-            placeholder="继续补充你的任务目标、对象范围和约束要求..."
+            placeholder="继续补充你的任务目标，并结合商品、订单、文章、文件或富媒体上下文..."
           />
+          <div style={toolbarDockStyle}>
+            <div style={toolbarBarStyle}>
+              <div style={toolbarIconGroupStyle}>
+                {toolItems.map((item) => (
+                  <div key={item.key} style={toolbarTriggerWrapStyle}>
+                    <button
+                      type="button"
+                      style={toolbarIconButtonStyle(item.active)}
+                      onClick={() => onContextToolChange(item.key)}
+                      onMouseEnter={() => setHoveredTool(item.key)}
+                      onMouseLeave={() => setHoveredTool((current) => (current === item.key ? null : current))}
+                      title={item.label}
+                    >
+                      <span style={toolbarIconGlyphStyle}>{item.icon}</span>
+                    </button>
+                    {hoveredTool === item.key || item.active ? <span style={toolbarTooltipStyle}>{item.label}</span> : null}
+                  </div>
+                ))}
+              </div>
+              <div style={toolbarStatusGroupStyle}>
+                <span style={toolbarCountStyle}>已补充 {filledContextCount} 项</span>
+                <button type="button" style={toolbarClearStyle} onClick={onClearContext}>
+                  清空
+                </button>
+              </div>
+            </div>
+            {activeContextTool ? (
+              <div style={toolbarPopoverStyle}>
+                {isObjectType(activeContextTool) ? (
+                  <>
+                    <div style={selectorPanelHeaderStyle}>
+                      <div>
+                        <div style={sectionTitleSmallStyle}>{objectTypeLabels[activeContextTool]}选择器</div>
+                        <div style={sectionTextStyle}>在当前对话中批量勾选和筛选对象。</div>
+                      </div>
+                      <span style={statusBadgeStyle("neutral")}>已选 {selectedObjectsByType[activeContextTool].length}</span>
+                    </div>
+                    <input
+                      value={objectQueryByType[activeContextTool]}
+                      onChange={(event) => onObjectQueryChange(activeContextTool, event.target.value)}
+                      placeholder={`搜索${objectTypeLabels[activeContextTool]}名称、分类或状态`}
+                      style={selectorSearchInputStyle}
+                    />
+                    <div style={selectorListCompactStyle}>
+                      {activeObjectOptions.map((item) => {
+                        const checked = selectedObjectsByType[activeContextTool].includes(item.id);
+                        return (
+                          <label key={item.id} style={selectorItemStyle(checked)}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => onToggleObjectSelection(activeContextTool, item.id)}
+                            />
+                            <div style={selectorItemContentStyle}>
+                              <span style={sectionTitleSmallStyle}>{item.title}</span>
+                              <span style={sectionTextStyle}>{item.subtitle}</span>
+                              <span style={mutedMetaStyle}>{item.meta}</span>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : null}
+                {activeContextTool === "file" ? (
+                  <div style={listColumnStyle}>
+                    <div style={mutedMetaStyle}>本地上传文件（mock）</div>
+                    {localFiles.map((file) => (
+                      <div key={file.id} style={summaryItemStyle}>
+                        <div style={sectionTitleSmallStyle}>{file.name}</div>
+                        <div style={sectionTextStyle}>{file.note}</div>
+                        <div style={mutedMetaStyle}>{file.size}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {activeContextTool === "media" ? (
+                  <div style={listColumnStyle}>
+                    <div style={mutedMetaStyle}>富媒体 URL / 图片 / 视频（mock）</div>
+                    {richMediaItems.map((item) => (
+                      <div key={item.id} style={summaryItemStyle}>
+                        <div style={selectorPanelHeaderStyle}>
+                          <div>
+                            <div style={sectionTitleSmallStyle}>{item.title}</div>
+                            <div style={sectionTextStyle}>{item.note}</div>
+                          </div>
+                          <span style={summaryChipStyle(true)}>{item.kind}</span>
+                        </div>
+                        <div style={mutedMetaStyle}>{item.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
           <div style={composerFooterStyle}>
             <span style={sectionTextStyle}>每个会话可以继续沉淀为任务或自动化。</span>
             <div style={buttonRowStyle}>
@@ -767,9 +796,8 @@ function ChatPanel({
                       .join(" / ")
                   : "尚未选择对象",
               ],
-              ["参考资料", "2 份品牌与 SEO 文档"],
-              ["数据源", "summer-launch-products.csv"],
-              ["约束", "保留 HTML / 英文 / SEO 专业语气"],
+              ["本地文件", localFiles.length > 0 ? `${localFiles.length} 个已上传文件` : "尚未添加文件"],
+              ["富媒体", richMediaItems.length > 0 ? `${richMediaItems.length} 个 URL / 图片 / 视频` : "尚未添加富媒体"],
             ].map(([label, value]) => (
               <div key={label} style={keyValueRowStyle}>
                 <span style={mutedMetaStyle}>{label}</span>
@@ -795,7 +823,6 @@ function ChatPanel({
           </div>
         </div>
       </section>
-      </div>
     </div>
   );
 }
@@ -1201,19 +1228,56 @@ const textareaStyle: CSSProperties = {
 const composerFooterStyle: CSSProperties = { marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 };
 const sidePanelStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 16 };
 const keyValueRowStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 4, paddingBottom: 10, borderBottom: "1px solid #f0f1f3" };
-const toolbarRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" };
-const toolbarButtonStyle = (active: boolean, filled: boolean): CSSProperties => ({
-  border: `1px solid ${active ? "#202223" : filled ? "#c9cccf" : "#dfe3e8"}`,
+const toolbarDockStyle: CSSProperties = { marginTop: 12, position: "relative" };
+const toolbarBarStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  flexWrap: "wrap",
+};
+const toolbarIconGroupStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" };
+const toolbarTriggerWrapStyle: CSSProperties = { position: "relative", display: "inline-flex" };
+const toolbarIconButtonStyle = (active: boolean): CSSProperties => ({
+  width: 32,
+  height: 32,
+  display: "inline-grid",
+  placeItems: "center",
+  border: `1px solid ${active ? "#202223" : "#dfe3e8"}`,
   background: active ? "#202223" : "#ffffff",
   color: active ? "#ffffff" : "#202223",
-  borderRadius: 999,
-  padding: "8px 12px",
-  fontSize: 13,
-  fontWeight: 600,
+  borderRadius: 10,
+  padding: 0,
   cursor: "pointer",
 });
-const toolbarDividerStyle: CSSProperties = { width: 1, alignSelf: "stretch", background: "#e1e3e5", minHeight: 28 };
-const contextSummaryStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 14 };
+const toolbarIconGlyphStyle: CSSProperties = { width: 16, textAlign: "center", fontSize: 12, lineHeight: 1 };
+const toolbarTooltipStyle: CSSProperties = {
+  position: "absolute",
+  left: "50%",
+  bottom: "calc(100% + 8px)",
+  transform: "translateX(-50%)",
+  whiteSpace: "nowrap",
+  padding: "4px 8px",
+  borderRadius: 8,
+  background: "#202223",
+  color: "#ffffff",
+  fontSize: 12,
+  fontWeight: 600,
+  boxShadow: "0 8px 20px rgba(0,0,0,0.12)",
+  pointerEvents: "none",
+  zIndex: 2,
+};
+const toolbarStatusGroupStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" };
+const toolbarCountStyle: CSSProperties = { fontSize: 12, color: "#6d7175", fontWeight: 600 };
+const toolbarClearStyle: CSSProperties = {
+  border: "none",
+  background: "transparent",
+  color: "#8a2e0f",
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: "pointer",
+  padding: 0,
+};
 const summaryChipStyle = (active: boolean): CSSProperties => ({
   padding: "6px 10px",
   borderRadius: 999,
@@ -1223,12 +1287,14 @@ const summaryChipStyle = (active: boolean): CSSProperties => ({
   fontSize: 12,
   fontWeight: 600,
 });
-const selectorPanelStyle: CSSProperties = {
-  marginTop: 16,
+const toolbarPopoverStyle: CSSProperties = {
+  marginTop: 14,
   padding: 16,
   borderRadius: 12,
   border: "1px solid #e1e3e5",
-  background: "#fafbfb",
+  background: "#ffffff",
+  boxShadow: "0 12px 28px rgba(0,0,0,0.08)",
+  maxWidth: 460,
 };
 const selectorPanelHeaderStyle: CSSProperties = {
   display: "flex",
@@ -1246,7 +1312,7 @@ const selectorSearchInputStyle: CSSProperties = {
   color: "#202223",
   background: "#ffffff",
 };
-const selectorListStyle: CSSProperties = { display: "grid", gap: 10, marginTop: 14 };
+const selectorListCompactStyle: CSSProperties = { display: "grid", gap: 10, marginTop: 14, maxHeight: 240, overflowY: "auto" };
 const selectorItemStyle = (checked: boolean): CSSProperties => ({
   display: "flex",
   gap: 12,
@@ -1257,7 +1323,6 @@ const selectorItemStyle = (checked: boolean): CSSProperties => ({
   background: checked ? "#ffffff" : "#f6f6f7",
 });
 const selectorItemContentStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 4 };
-const tagWrapStyle: CSSProperties = { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 };
 
 const skillGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16 };
 const skillCardStyle: CSSProperties = { padding: 18, borderRadius: 14, border: "1px solid #e1e3e5", background: "#ffffff", display: "flex", flexDirection: "column", gap: 10 };
