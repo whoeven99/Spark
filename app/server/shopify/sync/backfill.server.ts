@@ -1,7 +1,7 @@
 import prisma from "../../../db.server";
 import { syncOrder } from "./orderSync.server";
 import { syncRefund } from "./refundSync.server";
-import type { ShopifyAdminGraphqlClient } from "../../ai/skills/shopifyInfo/tool";
+import type { ShopifyAdminGraphqlClient } from "../../ai/skills/shopifyInfo/shopifyInfo.tool";
 import type { BackfillResult, ShopifyOrderPayload, ShopifyRefundPayload } from "./types";
 
 const ORDERS_BACKFILL_QUERY = `#graphql

@@ -8,7 +8,7 @@ import {
 import {
   extractTranslationTaskFormFromMessages,
   shouldInjectTranslationTaskFormFallback,
-} from "../../../../../../app/server/ai/skills/translation/extract";
+} from "../../../../../../app/server/ai/skills/translation/translation.extract";
 
 describe("extractTranslationTaskFormFromMessages", () => {
   it("parses ToolMessage with string JSON content", () => {

@@ -1,6 +1,6 @@
 import type { DynamicStructuredTool } from "@langchain/core/tools";
 import type { BaseMessage } from "@langchain/core/messages";
-import type { ShopifyAdminGraphqlClient } from "../skills/shopifyInfo/tool";
+import type { ShopifyAdminGraphqlClient } from "../skills/shopifyInfo/shopifyInfo.tool";
 import { wrapToolWithTokenUsage } from "../../tokenUsage/wrapToolWithTokenUsage.server";
 import type {
   EmitSkillProgress,

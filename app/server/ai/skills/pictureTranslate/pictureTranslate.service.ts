@@ -13,14 +13,14 @@ import {
   PICTURE_TRANSLATE_TOOL_NAME,
   BASE64_MARKER,
   DATA_URL_PREFIX,
-} from "./constants";
+} from "./pictureTranslate.constants";
 import type {
   PictureTranslateInputSummary,
   PictureTranslateResolvedInput,
   PictureTranslateToolFailure,
   PictureTranslateToolResult,
   PictureTranslateToolSuccess,
-} from "./types";
+} from "./pictureTranslate.types";
 
 type ExecutePictureTranslateParams = {
   requestId: string;

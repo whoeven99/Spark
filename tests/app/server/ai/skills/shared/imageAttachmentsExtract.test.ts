@@ -1,8 +1,8 @@
 import { ToolMessage } from "@langchain/core/messages";
 import { describe, expect, it } from "vitest";
 import { extractChatImageAttachmentsFromMessages } from "../../../../../../app/server/ai/skills/shared/imageAttachmentsExtract";
-import { GENERATE_PRODUCT_IMAGE_TOOL_NAME } from "../../../../../../app/server/ai/skills/imageGeneration/constants";
-import { PICTURE_TRANSLATE_TOOL_NAME } from "../../../../../../app/server/ai/skills/pictureTranslate/constants";
+import { GENERATE_PRODUCT_IMAGE_TOOL_NAME } from "../../../../../../app/server/ai/skills/imageGeneration/imageGeneration.constants";
+import { PICTURE_TRANSLATE_TOOL_NAME } from "../../../../../../app/server/ai/skills/pictureTranslate/pictureTranslate.constants";
 
 describe("extractChatImageAttachmentsFromMessages", () => {
   it("extracts generated product image attachment", () => {

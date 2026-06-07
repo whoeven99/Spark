@@ -29,7 +29,8 @@
 - Billing GraphQL 的 `returnUrl` **最多 255 字符**。
 - `buildBillingReturnUrl` 指向 **`/app/billing`**（订阅与按量购包共用），origin 优先用 `SHOPIFY_APP_URL`；query 带 `shop` + `host` + `embedded=1` + `billing_return=1`，**勿**复制 `id_token`。若请求无 `host`，用 `buildShopifyAdminHostParam(shop)` 推导，避免批准后落到登录页。
 - 跳转 Shopify 结账页须用 `authenticate.admin` 返回的 `redirect(url, { target: "_top" })`（嵌入式 exit iframe），勿直接用 React Router `redirect`。
-- 若 Shopify 将商户落到站点根路径 `/` 或 `/app`，`billing_return=1` 会由 `_index` / `app._index` 兜底重定向到计费页，避免回到 `APP_ENTRY` 默认首页。
+- 若 Shopify 将商户落到站点根路径 `/` 或 `/app`，`billing_return=1` 会由 `_index` / `app._index` 兜底重定向到计费页。
+- `buildBillingReturnUrl` 对 `aiassistant-wi7b.onrender.com` / `shopify.app.test.toml` client_id 映射 Admin handle `aiassistant-test`；可通过 `SHOPIFY_ADMIN_APP_HANDLE` 覆盖。
 
 ## 表职责
 
@@ -72,7 +73,7 @@
 | `TOKEN_PACK_INITIATED` | 按量购包待确认 |
 | `TOKEN_PACK_PURCHASED` | 按量购包入账 |
 
-## Webhook（卫星 App toml 已注册）
+## Webhook（`shopify.app.test.toml` 已注册）
 
 - `app_subscriptions/update` → `webhooks.app.subscriptions_update.tsx`
 - `app_purchases_one_time/update` → `webhooks.app.purchases_one_time_update.tsx`
@@ -92,12 +93,12 @@
 
 ## 路由
 
-- `/app/billing`：计费与订阅独立页（`BillingPage`）；`generate-description` App 侧栏含「计费与订阅」入口
-- 生成描述 API / 页面：调用 `requireBillingAccess`
+- `/app/billing`：计费与订阅独立页（`BillingPage`）；主 App 侧栏含「计费与订阅」入口
+- 商品文案优化 API / 页面：调用 `requireBillingAccess`
 
-## 主 App
+## 启用开关
 
-`BILLING_ENABLED_APPS` 仅含 `generate-description`；`chat` 不校验。
+`BILLING_ENABLED=false` 时关闭订阅校验与运营飞书通知；默认启用。
 
 ## Turso 迁移（首选）
 
@@ -107,8 +108,7 @@
 
 ## CommonEventLog 无数据时排查
 
-1. Render / 本地是否设置 `APP_ENTRY=generate-description`（未设则 `appName` 会写成 `chat`）。
-2. 代码是否已部署（含 `app/routes/webhooks.app.uninstalled.tsx` 等）。
-3. 卫星 App 需单独执行 `shopify app deploy -c shopify.app.smart-description.toml`（CI 默认只 deploy `shopify.app.test.toml`）。
-4. Turso 是否有 `CommonEventLog` 表：`npm run turso:migrate:test`。
-5. Render 日志搜 `[CommonEvent]`。
+1. 代码是否已部署到 `aiassistant-wi7b.onrender.com`（含 `app/routes/webhooks.app.uninstalled.tsx` 等）。
+2. Shopify 配置是否已发布：`shopify app deploy -c shopify.app.test.toml`。
+3. Turso 是否有 `CommonEventLog` 表：`npm run turso:migrate:test`。
+4. Render 日志搜 `[CommonEvent]`。

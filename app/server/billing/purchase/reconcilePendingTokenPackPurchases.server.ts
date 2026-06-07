@@ -1,4 +1,4 @@
-import type { ShopifyAdminGraphqlClient } from "../../ai/skills/shopifyInfo/tool";
+import type { ShopifyAdminGraphqlClient } from "../../ai/skills/shopifyInfo/shopifyInfo.tool";
 import prisma from "../../../db.server";
 import { useNoopBillingGateway } from "../constants.server";
 import {

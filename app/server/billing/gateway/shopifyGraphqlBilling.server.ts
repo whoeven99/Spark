@@ -1,4 +1,4 @@
-import type { ShopifyAdminGraphqlClient } from "../../ai/skills/shopifyInfo/tool";
+import type { ShopifyAdminGraphqlClient } from "../../ai/skills/shopifyInfo/shopifyInfo.tool";
 import { BillingError, BILLING_ERROR_CODE } from "../errors.server";
 import { isBillingTestMode } from "../constants.server";
 

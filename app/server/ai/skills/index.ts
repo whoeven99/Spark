@@ -1,17 +1,17 @@
-import { createShopifyShopInfoTools } from "./shopifyInfo/tool";
-import { translationTaskFormTool } from "./translation/tool";
+import { createShopifyShopInfoTools } from "./shopifyInfo/shopifyInfo.tool";
+import { translationTaskFormTool } from "./translation/translation.tool";
 import { globalToolRegistry } from "../core/toolRegistry.server";
 import {
   extractTranslationTaskFormFromMessages,
   shouldInjectTranslationTaskFormFallback,
   defaultTranslationTaskFormPayload,
-} from "./translation/extract";
+} from "./translation/translation.extract";
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
-import { sendTemplateEmailToolDefinition } from "./email/tool";
+import { sendTemplateEmailToolDefinition } from "./email/email.tool";
 import { productOptimizationSkills } from "./productOptimization";
 import { productCatalogSkills } from "./productCatalog";
-import { listMyTasksToolDefinition } from "./taskHistory/tool";
-import { getBillingStatusToolDefinition } from "./billingStatus/tool";
+import { listMyTasksToolDefinition } from "./taskHistory/taskHistory.tool";
+import { getBillingStatusToolDefinition } from "./billingStatus/billingStatus.tool";
 
 // ==========================================
 // 注册各类核心与扩展 Tools 到全局注册表

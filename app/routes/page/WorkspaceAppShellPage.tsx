@@ -16,6 +16,8 @@ import { ProductImproveChatCard } from "../component/chat/ProductImproveChatCard
 import { TranslationTaskChatCard } from "../component/translation/TranslationTaskChatCard";
 import { LanguageSelector } from "../component/common/LanguageSelector";
 import { useChatStream, type ChatStreamFinishPayload, type SkillStepProgress } from "./chat/useChatStream";
+import { ContextWindowIndicator } from "../component/chat/ContextWindowIndicator";
+import { estimateMessagesTokens } from "../../lib/tokenEstimate";
 
 type WorkspacePanel = "dashboard" | "chat" | "skills" | "automation" | "tasks";
 type AutomationView = "configured" | "history" | "templates";
@@ -202,7 +204,7 @@ const dashboardTaskSummary = [
 ];
 
 const skillApps: SkillApp[] = [
-  { id: "s1", title: "商品文案优化", description: "批量生成和优化商品标题、卖点与描述。", status: "最近使用", category: "内容", path: "/app/generate-description" },
+  { id: "s1", title: "商品文案优化", description: "批量生成和优化商品标题、卖点与描述。", status: "最近使用", category: "内容", path: "/app/product-improve" },
   { id: "s2", title: "多语言翻译", description: "支持商品内容、页面文案与术语统一翻译。", status: "可用", category: "翻译", path: "/app/translation" },
   { id: "s3", title: "店铺诊断", description: "汇总经营指标并给出异常原因和建议。", status: "推荐", category: "分析", path: "/app/additional" },
   { id: "s4", title: "图片工具", description: "处理商品图翻译、文生图和素材优化。", status: "可用", category: "视觉", path: "/app/image-studio" },
@@ -939,6 +941,11 @@ function ChatPanel({
   const [newMediaNote, setNewMediaNote] = useState("");
   const [newMediaKind, setNewMediaKind] = useState<RichMediaItem["kind"]>("url");
   const totalSelectedObjects = Object.values(selectedObjectsByType).reduce((count, ids) => count + ids.length, 0);
+  const MAX_CONTEXT_TOKENS = 8000;
+  const contextTokens = useMemo(
+    () => estimateMessagesTokens(messages),
+    [messages],
+  );
   const activeObjectOptions = isObjectType(activeContextTool)
     ? objectOptions[activeContextTool].filter((item) => {
         const query = objectQueryByType[activeContextTool].trim().toLowerCase();
@@ -1158,9 +1165,12 @@ function ChatPanel({
             </div>
           </div>
           <div style={composerFooterStyle}>
-            <span style={sectionTextStyle}>
-              {isStreaming ? "AI Assistant 正在回复，可随时停止。" : <span style={mutedMetaStyle}>Enter 发送，Shift+Enter 换行</span>}
-            </span>
+            <div style={footerLeftStyle}>
+              <span style={sectionTextStyle}>
+                {isStreaming ? "AI Assistant 正在回复，可随时停止。" : <span style={mutedMetaStyle}>Enter 发送，Shift+Enter 换行</span>}
+              </span>
+              <ContextWindowIndicator currentTokens={contextTokens} maxTokens={MAX_CONTEXT_TOKENS} />
+            </div>
             <div style={buttonRowStyle}>
               <button type="button" style={ghostButtonStyle} disabled={isStreaming}>
                 生成任务建议
@@ -1993,6 +2003,7 @@ const textareaStyle: CSSProperties = {
   transition: "border-color 0.15s",
 };
 const composerFooterStyle: CSSProperties = { marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 };
+const footerLeftStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" };
 const sidePanelStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 16 };
 const keyValueRowStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 4, paddingBottom: 10, borderBottom: "1px solid #f0f1f3" };
 const toolbarDockStyle: CSSProperties = { marginTop: 12, position: "relative" };

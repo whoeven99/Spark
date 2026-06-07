@@ -63,7 +63,7 @@ async function fetchProductImproveTaskPage(params: {
   query.set("page", String(params.page));
   query.append("taskType", "product_improve");
 
-  const response = await fetch(`/api/ai-task-list?${query.toString()}`);
+  const response = await fetch(`/api/ai-task?${query.toString()}`);
   if (!response.ok) {
     throw new Error(`Failed to load task list: ${response.status}`);
   }

@@ -2,7 +2,7 @@ import type { ActionFunctionArgs } from "react-router";
 import { HumanMessage } from "@langchain/core/messages";
 import { authenticate } from "../shopify.server";
 import { invokeChatAgentStream, type StreamChunk } from "./ai/core/agentStream.server";
-import { parseClientChatMessages } from "./chatPayload.server";
+import { parseClientChatMessages, buildContextWindow } from "./chatPayload.server";
 import { createLangsmithTracer, isLangsmithAvailable, getTraceUrl } from "./ai/utils/langsmith.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -50,8 +50,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       console.log(`[LangSmith] Streaming chat tracing started: ${getTraceUrl() ?? "enabled"}`);
     }
 
+    const windowedMessages = await buildContextWindow(agentMessages);
+
     const stream = await invokeChatAgentStream({
-      messages: agentMessages,
+      messages: windowedMessages,
       context: {
         admin,
         shop: session?.shop,

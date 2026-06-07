@@ -10,13 +10,11 @@ export const BILLING_PAGE_PATH = "/app/billing";
 export const BILLING_RETURN_QUERY_FLAG = "billing_return";
 
 const ADMIN_APP_IDENTIFIER_BY_API_KEY: Record<string, string> = {
-  "81b68c6dd0b7e1b594b78ddcd202cd09": "desc-test-1",
-  b896c10abe3ca220b1efbc333ef41ad1: "ciwi-image-translation",
+  "940b967eda872dd81f9ffc283e29a013": "aiassistant-test",
 };
 
 const ADMIN_APP_IDENTIFIER_BY_APP_HOST: Record<string, string> = {
-  "smartdescriptiontest.onrender.com": "desc-test-1",
-  "product-improve.onrender.com": "ciwi-image-translation",
+  "aiassistant-wi7b.onrender.com": "aiassistant-test",
 };
 
 export function isBillingReturnRequest(request: Request): boolean {

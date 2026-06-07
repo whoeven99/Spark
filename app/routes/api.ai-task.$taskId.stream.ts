@@ -11,12 +11,11 @@ import type { AITaskSSEEvent } from "../lib/aiTaskTypes";
 
 export const loader = async ({
   request,
+  params,
 }: LoaderFunctionArgs): Promise<Response> => {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
-
-  const url = new URL(request.url);
-  const taskId = url.searchParams.get("taskId");
+  const taskId = params.taskId;
 
   if (!taskId) {
     return Response.json({ error: "Missing taskId" }, { status: 400 });

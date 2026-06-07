@@ -7,8 +7,8 @@ import {
 import {
   GENERATE_PRODUCT_IMAGE_TOOL_NAME,
   IMAGE_GENERATION_TOOL_LOG_PREFIX,
-} from "./constants";
-import type { GenerateProductImageToolResult } from "./types";
+} from "./imageGeneration.constants";
+import type { GenerateProductImageToolResult } from "./imageGeneration.types";
 
 type ExecuteGenerateProductImageParams = {
   requestId: string;

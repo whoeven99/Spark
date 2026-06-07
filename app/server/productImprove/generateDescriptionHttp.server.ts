@@ -3,7 +3,7 @@ import {
   billingErrorToResponse,
   requireBillingAccess,
 } from "../billing/index.server";
-import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/tool";
+import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
 import {
   DEFAULT_DESCRIPTION_TEMPERATURE,
   MAX_DESCRIPTION_TEMPERATURE,
@@ -59,7 +59,7 @@ function jsonBody(
 }
 
 /**
- * 鉴权完成后执行生成逻辑，供 API route 与 `/app/generate-description` action 共用。
+ * 鉴权完成后执行生成逻辑，供 API route 与 `/app/product-improve` action 共用。
  */
 export async function executeGenerateDescriptionRequest(params: {
   requestId: string;

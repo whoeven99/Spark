@@ -3,9 +3,9 @@ import type { AgentContext, ToolDefinition } from "../../core/toolRegistry.serve
 import {
   PICTURE_TRANSLATE_TOOL_NAME,
   PICTURE_TRANSLATE_TOOL_LOG_PREFIX,
-} from "./constants";
-import { pictureTranslateToolSchema, resolvePictureTranslateInput } from "./schema";
-import { safeExecutePictureTranslateTool } from "./service";
+} from "./pictureTranslate.constants";
+import { pictureTranslateToolSchema, resolvePictureTranslateInput } from "./pictureTranslate.schema";
+import { safeExecutePictureTranslateTool } from "./pictureTranslate.service";
 import { extractChatImageAttachmentsFromMessages } from "../shared/imageAttachmentsExtract";
 
 function safeUrlHost(url: string): string {

@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { AgentContext, ToolDefinition } from "../../core/toolRegistry.server";
 import { toProductGid } from "../../../productImprove/productContextFetcher.server";
 import { logDetailedError } from "../../../productImprove/generateDescriptionLog.server";
-import type { ShopifyAdminGraphqlClient } from "../shopifyInfo/tool";
+import type { ShopifyAdminGraphqlClient } from "../shopifyInfo/shopifyInfo.tool";
 
 export const GET_PRODUCT_DETAIL_TOOL_NAME = "get_product_detail";
 const LOG_PREFIX = "[GetProductDetail]";

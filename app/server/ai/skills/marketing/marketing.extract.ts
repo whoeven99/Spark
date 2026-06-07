@@ -1,6 +1,6 @@
 import { ToolMessage } from "@langchain/core/messages";
 import { extractMessageText } from "../../utils/langchainMessageText";
-import { GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME } from "./tool";
+import { GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME } from "./marketing.tool";
 
 export function extractProductImproveCardPayload(messages: unknown[]): unknown {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
