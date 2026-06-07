@@ -5,6 +5,7 @@ import { registerTranslations, type TranslationInput } from "../services/shopify
 import type { TranslationV4Job } from "../services/cosmosV4.js";
 
 const WORKER_ID = `writeback-${process.pid}`;
+const HEARTBEAT_THROTTLE_MS = 30_000;
 
 export async function runWritebackWorker(): Promise<void> {
   const claimed = await claimNextJob();
@@ -59,10 +60,12 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
   let writebackFailed = 0;
   const writebackTotal = job.metrics.writebackTotal || job.metrics.translateDone;
   const failedResources: FailedResource[] = [];
+  let lastHeartbeatAt = 0;
 
   try {
     for (const module of job.modules) {
       await heartbeat(shopName, jobId);
+      lastHeartbeatAt = Date.now();
 
       const translatePaths = await blobListPaths(`${blobPrefix}/translate/${module}/`);
       const chunkPaths = translatePaths.filter((p) => p.endsWith(".json"));
@@ -74,7 +77,11 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
         for (const resource of chunk) {
           if (writtenSet.has(resource.resourceId)) continue;
 
-          await heartbeat(shopName, jobId);
+          const now = Date.now();
+          if (now - lastHeartbeatAt > HEARTBEAT_THROTTLE_MS) {
+            lastHeartbeatAt = now;
+            await heartbeat(shopName, jobId);
+          }
 
           const translations: TranslationInput[] = resource.translations
             .filter((t) => t.translatedValue?.trim() && t.translatedValue !== t.originalValue)

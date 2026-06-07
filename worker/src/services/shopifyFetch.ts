@@ -54,6 +54,8 @@ export type FetchTranslatableOptions = {
   targetLocale: string;
   isCover: boolean;
   isHandle: boolean;
+  /** Called after each paginated API response — use to keep heartbeat alive on long fetches */
+  onPage?: () => Promise<void>;
 };
 
 type TranslatableNode = {
@@ -289,6 +291,7 @@ export async function fetchResourceIdsByQuery(
   module: string,
   limit: number,
   updatedAtAfter?: string,
+  onPage?: () => Promise<void>,
 ): Promise<string[]> {
   const spec = MODULE_ID_QUERY[module];
   if (!spec) return [];
@@ -326,6 +329,7 @@ export async function fetchResourceIdsByQuery(
       if (ids.length >= limit) break;
     }
 
+    if (onPage) await onPage();
     if (!connection.pageInfo.hasNextPage || ids.length >= limit) break;
     after = connection.pageInfo.endCursor;
   }
@@ -347,7 +351,7 @@ async function fetchTranslatableResourcesByType(
 
   while (fetched < limitPerType) {
     const remaining = limitPerType - fetched;
-    const pageSize = Math.min(FETCH_PAGE_SIZE, remaining);
+    const pageSize = Math.min(FETCH_PAGE_SIZE, remaining === Infinity ? FETCH_PAGE_SIZE : remaining);
     const variables: Record<string, unknown> = {
       resourceType: shopifyType,
       first: pageSize,
@@ -374,6 +378,7 @@ async function fetchTranslatableResourcesByType(
     }
 
     fetched += edges.length;
+    if (options.onPage) await options.onPage();
     if (!data.translatableResources.pageInfo.hasNextPage || edges.length === 0) break;
     cursor = data.translatableResources.pageInfo.endCursor;
   }
@@ -390,7 +395,7 @@ async function fetchTranslatableResourcesByIds(
   options: FetchTranslatableOptions,
 ): Promise<TranslatableResource[]> {
   const allResources: TranslatableResource[] = [];
-  const ids = resourceIds.slice(0, limitPerType);
+  const ids = limitPerType === Number.MAX_SAFE_INTEGER ? resourceIds : resourceIds.slice(0, limitPerType);
 
   for (let offset = 0; offset < ids.length && allResources.length < limitPerType; offset += TRANSLATABLE_RESOURCES_BY_IDS_BATCH) {
     const batch = ids.slice(offset, offset + TRANSLATABLE_RESOURCES_BY_IDS_BATCH);
@@ -423,6 +428,7 @@ async function fetchTranslatableResourcesByIds(
         if (resource) allResources.push(resource);
       }
 
+      if (options.onPage) await options.onPage();
       if (
         !data.translatableResourcesByIds.pageInfo.hasNextPage ||
         nodes.length === 0 ||
@@ -434,7 +440,7 @@ async function fetchTranslatableResourcesByIds(
     }
   }
 
-  return allResources.slice(0, limitPerType);
+  return limitPerType === Number.MAX_SAFE_INTEGER ? allResources : allResources.slice(0, limitPerType);
 }
 
 /** Fetch translatable resources for a module, filtered by isCover/isHandle rules. Returns chunked arrays. */
@@ -462,6 +468,7 @@ export async function fetchTranslatableResources(
       module,
       limitPerType,
       updatedAtAfter,
+      options.onPage,
     );
     if (resourceIds.length === 0) return [];
 

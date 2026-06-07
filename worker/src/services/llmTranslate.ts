@@ -1,5 +1,5 @@
 import OpenAI, { AzureOpenAI } from "openai";
-import { tmGet, tmSet } from "./translationMemory.js";
+import { tmGet, tmGetByValue, tmSet, tmSetByValue } from "./translationMemory.js";
 import { loadGlossaryLines } from "./glossary.js";
 
 let _openai: OpenAI | null = null;
@@ -244,8 +244,27 @@ export async function pAll<T, R>(
 // Tags whose content we never translate
 const SKIP_BLOCK_RE = /<(script|style|pre|code)(\s[^>]*)?>[\s\S]*?<\/\1>/gi;
 
+// Attributes that carry user-visible text and should be translated.
+// Handles both double-quoted (common) and single-quoted attribute values.
+const TRANSLATABLE_ATTR_RE = /\b(alt|title|aria-label|placeholder)=("([^"]*)"|(\'([^\']*)\'))/g;
+
+// Attr values we must NOT translate
+const ATTR_URL_RE = /^https?:\/\//;
+// Hash-based filenames like "7910ff297e4-Max-Origin" or bare image filenames
+const ATTR_HASH_FILENAME_RE =
+  /^[a-fA-F0-9]{8,}(-[a-zA-Z0-9]+)*$|^\S+\.(jpg|jpeg|png|gif|bmp|webp|svg|mp4|pdf)$/i;
+
+function isTranslatableAttrValue(value: string): boolean {
+  const v = value.trim();
+  if (!v) return false;
+  if (ATTR_URL_RE.test(v)) return false;
+  if (ATTR_HASH_FILENAME_RE.test(v)) return false;
+  return true;
+}
+
 /**
- * Replaces every visible text node in an HTML string with a numeric placeholder.
+ * Replaces every visible text node AND translatable attribute values (alt, title,
+ * aria-label, placeholder) in an HTML string with numeric placeholders.
  * Returns the rewritten template and the ordered array of extracted texts.
  * Whitespace-only gaps between tags are left in place.
  */
@@ -254,15 +273,29 @@ function extractHtmlTextNodes(html: string): { template: string; texts: string[]
   const skipped = new Map<string, string>();
   let sIdx = 0;
 
-  // Protect non-translatable blocks
+  // Protect non-translatable blocks (script/style/pre/code)
   const withSkips = html.replace(SKIP_BLOCK_RE, (match) => {
     const key = `\x00S${sIdx++}\x00`;
     skipped.set(key, match);
     return key;
   });
 
+  // Extract translatable attribute values before touching text nodes so the
+  // two passes don't interfere (attributes live inside tags, text nodes outside).
+  const withAttrs = withSkips.replace(
+    TRANSLATABLE_ATTR_RE,
+    (_match, attrName: string, _quotedFull: string, dqVal: string, _sqFull: string, sqVal: string) => {
+      const attrValue = dqVal ?? sqVal ?? "";
+      const quote = dqVal !== undefined ? '"' : "'";
+      if (!isTranslatableAttrValue(attrValue)) return _match;
+      const idx = texts.length;
+      texts.push(attrValue.trim());
+      return `${attrName}=${quote}\x00T${idx}\x00${quote}`;
+    },
+  );
+
   // Replace each text node between tags with an indexed marker
-  const template = withSkips.replace(/>([^<]+)</g, (_match, raw: string) => {
+  const template = withAttrs.replace(/>([^<]+)</g, (_match, raw: string) => {
     const trimmed = raw.trim();
     if (!trimmed) return `>${raw}<`;
     const idx = texts.length;
@@ -377,7 +410,7 @@ async function callGoogleTranslate(
  * protection applies to every engine (LLM and Google alike). Returns a map of
  * key → { value, status }; items unresolved by all engines get status "fallback".
  */
-type RoutedResult = { value: string; status: "translated" | "fallback"; engine: Engine | null };
+type RoutedResult = { value: string; status: "translated" | "fallback"; engine: Engine | null; tokens: number };
 
 async function translateItemsRouted(
   items: TranslateItem[],
@@ -387,6 +420,7 @@ async function translateItemsRouted(
   shopName: string,
   order: Engine[],
 ): Promise<{ results: Map<string, RoutedResult>; llmTokens: number }> {
+  // placeholdersByKey: variable tokens (string[]) extracted from each item's value.
   const placeholdersByKey = new Map<string, string[]>();
   const masked = items.map((it) => {
     const { masked: m, tokens } = maskPlaceholders(it.value);
@@ -396,6 +430,7 @@ async function translateItemsRouted(
 
   const collected = new Map<string, string>(); // masked translations
   const engineByKey = new Map<string, Engine>(); // which engine resolved each key
+  const llmTokensByKey = new Map<string, number>(); // LLM API tokens charged per key
   let systemPrompt: string | null = null;
   const tokenAccum = { value: 0 }; // accumulates LLM token usage across all retries
 
@@ -414,8 +449,13 @@ async function translateItemsRouted(
       } catch (e) {
         console.warn(`[route] llm engine error`, e);
       }
-      // Attribute newly-resolved keys to the LLM.
-      for (const i of missing) if (collected.has(i.key) && !engineByKey.has(i.key)) engineByKey.set(i.key, "llm");
+      // Attribute newly-resolved keys to the LLM; distribute tokens evenly across keys.
+      const newlyResolved = missing.filter((i) => collected.has(i.key) && !engineByKey.has(i.key));
+      const tokensEach = newlyResolved.length > 0 ? Math.ceil(tokenAccum.value / newlyResolved.length) : 0;
+      for (const i of newlyResolved) {
+        engineByKey.set(i.key, "llm");
+        llmTokensByKey.set(i.key, tokensEach);
+      }
     } else {
       if (!googleConfigured()) continue;
       for (const batch of batchByChars(missing, MAX_CHARS_PER_BATCH)) {
@@ -440,19 +480,20 @@ async function translateItemsRouted(
     const raw = collected.get(it.key);
     const placeholders = placeholdersByKey.get(it.key) ?? [];
     if (raw === undefined) {
-      result.set(it.key, { value: it.value, status: "fallback", engine: null });
+      result.set(it.key, { value: it.value, status: "fallback", engine: null, tokens: 0 });
       continue;
     }
     const decoded = decodeQuoteEntities(raw);
     if (placeholders.length > 0 && !placeholdersIntact(decoded, placeholders)) {
       console.warn(`[route] placeholder corrupted for key=${it.key}, using original`);
-      result.set(it.key, { value: it.value, status: "fallback", engine: null });
+      result.set(it.key, { value: it.value, status: "fallback", engine: null, tokens: 0 });
       continue;
     }
     result.set(it.key, {
       value: restorePlaceholders(decoded, placeholders),
       status: "translated",
       engine: engineByKey.get(it.key) ?? null,
+      tokens: llmTokensByKey.get(it.key) ?? 0,
     });
   }
   return { results: result, llmTokens: tokenAccum.value };
@@ -568,13 +609,10 @@ async function callLLMOnce(
   aiModel: string,
   systemPrompt: string,
 ): Promise<{ map: Map<string, string>; tokens: number }> {
-  // Build opaque ID ↔ original key mapping to prevent key-confusion swaps.
-  const keyMap = new Map<string, string>(); // opaqueId → original key
-  const payload = items.map((i, idx) => {
-    const opaqueId = `f${idx}`;
-    keyMap.set(opaqueId, i.key);
-    return { key: opaqueId, value: i.value };
-  });
+  // Use opaque IDs (f0, f1, f2…) instead of semantic field names so the model
+  // cannot confuse "title" as a content hint and swap values between keys.
+  const idToKey = new Map(items.map((it, idx) => [`f${idx}`, it.key]));
+  const payload = items.map((it, idx) => ({ key: `f${idx}`, value: it.value }));
 
   const model = resolveModel(aiModel);
   const openai = getOpenAI();
@@ -601,9 +639,8 @@ async function callLLMOnce(
   const map = new Map<string, string>();
   for (const r of parsed) {
     if (typeof r?.key === "string" && typeof r?.translatedValue === "string") {
-      // Map back from opaque ID to original key.
-      const originalKey = keyMap.get(r.key);
-      if (originalKey !== undefined) map.set(originalKey, r.translatedValue);
+      const origKey = idToKey.get(r.key);
+      if (origKey !== undefined) map.set(origKey, r.translatedValue);
     }
   }
   return { map, tokens };
@@ -671,14 +708,15 @@ async function gatherTranslations(
 export type ResourceInput = { resourceId: string; fields: TranslateItem[] };
 export type ResourceResult = { resourceId: string; results: TranslateResult[] };
 /** Per-engine-model tally of how much content each engine translated. */
-export type EngineUsage = Record<string, { units: number; chars: number }>;
+export type EngineUsage = Record<string, { units: number; chars: number; tokens: number }>;
 export type TranslateChunkResult = { resources: ResourceResult[]; usage: EngineUsage };
 
 export function mergeEngineUsage(into: EngineUsage, from: EngineUsage): void {
   for (const [model, u] of Object.entries(from)) {
-    const acc = (into[model] ??= { units: 0, chars: 0 });
+    const acc = (into[model] ??= { units: 0, chars: 0, tokens: 0 });
     acc.units += u.units;
     acc.chars += u.chars;
+    acc.tokens += u.tokens;
   }
 }
 
@@ -774,12 +812,14 @@ export async function translateResources(
     }
   }
 
+  const tmWrites: Promise<void>[] = [];
+
   // 1b. Fire all TM digest lookups in parallel.
   const cacheHits = await Promise.all(
     fieldWorks.map(({ f, cacheModel }) => tmGet(shopName, target, cacheModel, f.digest)),
   );
 
-  // 1c. Process results: hit → credit immediately; miss → add to plan.
+  // 1c. Process results: hit → credit immediately; miss → value cache or add to plan.
   for (let wi = 0; wi < fieldWorks.length; wi++) {
     const { resourceId, f, klass, order, cacheModel } = fieldWorks[wi];
     const rm = resultMaps.get(resourceId)!;
@@ -789,6 +829,18 @@ export async function translateResources(
       cacheUnits += countFieldUnits(f.key, f.value);
       continue;
     }
+
+    // Secondary: value-based cache for short plain-text fields.
+    if (klass === "plain") {
+      const cachedByValue = await tmGetByValue(f.value, source, target, cacheModel);
+      if (cachedByValue !== null) {
+        rm.set(f.key, { key: f.key, translatedValue: cachedByValue, digest: f.digest, status: "translated" });
+        tmWrites.push(tmSet(shopName, target, cacheModel, f.digest, cachedByValue));
+        cacheUnits += countFieldUnits(f.key, f.value);
+        continue;
+      }
+    }
+
     if (klass === "html") {
       const { template, texts } = extractHtmlTextNodes(f.value);
       if (texts.length === 0) {
@@ -827,9 +879,10 @@ export async function translateResources(
         batchUnits += occ.get(text) ?? 1;
         if (v.status === "translated" && v.engine) {
           const model = engineModel(v.engine, aiModel);
-          const acc = (usage[model] ??= { units: 0, chars: 0 });
+          const acc = (usage[model] ??= { units: 0, chars: 0, tokens: 0 });
           acc.units += 1;
           acc.chars += text.length;
+          acc.tokens += v.tokens;
         }
       }
       // Report progress (units + raw LLM tokens) after each batch.
@@ -841,15 +894,18 @@ export async function translateResources(
   const lookup = (order: Engine[], text: string) => translated.get(order.join(","))?.get(text);
 
   // 3. Reconstruct each planned field and cache new translations in parallel.
-  const tmWrites: Promise<void>[] = [];
   for (const plan of plans) {
     const rm = resultMaps.get(plan.resourceId)!;
     if (plan.kind === "plain") {
       const pieces = plan.parts.map((p) => lookup(plan.order, p) ?? { value: p, status: "fallback" as const });
       const value = pieces.map((p) => p.value).join("");
       const status = pieces.some((p) => p.status === "fallback") ? "fallback" : "translated";
+      const originalValue = plan.parts.join("");
       rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
-      if (status === "translated") tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
+      if (status === "translated") {
+        tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
+        tmWrites.push(tmSetByValue(originalValue, source, target, plan.cacheModel, value));
+      }
     } else {
       let anyFallback = false;
       const out = plan.nodeTexts.map((t) => {

@@ -13,8 +13,8 @@
  *   - report.json        aggregate inventory + full-coverage quality flags
  *   - <MODULE>.jsonl      EVERY before/after entry for that module (one per line)
  *
- * Requires the same Blob env as the worker (BLOB_TRANSLATE_V3_CONNECTION_STRING
- * or AZURE_BLOB_CONNECTION_STRING, AZURE_BLOB_TRANSLATION_CONTAINER).
+ * Requires the same Blob env as the worker (AZURE_BLOB_CONNECTION_STRING,
+ * AZURE_BLOB_TRANSLATION_CONTAINER).
  */
 import { writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";

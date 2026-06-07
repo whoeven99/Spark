@@ -4,9 +4,7 @@ let _container: ContainerClient | null = null;
 
 function getContainer(): ContainerClient {
   if (_container) return _container;
-  const conn =
-    process.env.BLOB_TRANSLATE_V3_CONNECTION_STRING?.trim() ||
-    process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
+  const conn = process.env.AZURE_BLOB_CONNECTION_STRING?.trim();
   if (!conn) throw new Error("Blob not configured: set AZURE_BLOB_CONNECTION_STRING");
   const containerName =
     process.env.AZURE_BLOB_TRANSLATION_CONTAINER?.trim() || "translation-content";

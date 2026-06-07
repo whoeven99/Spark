@@ -61,16 +61,17 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   const engineUsage: EngineUsage = {};
   const translateTotal = job.metrics.translateTotal || job.metrics.initTotal;
   const translateUnitTotal = job.metrics.translateUnitTotal || 0;
+  // Record when this translate stage actually started (epoch ms string).
+  const translateStartedAt = Date.now().toString();
 
   if (testMode) {
     console.log(`[translate] TEST MODE: using original values as translations`);
   }
 
-  try {
-    // Record when translation actually started so the UI can show elapsed time.
-    const translateStartedAt = Date.now().toString();
-    await setProgress(jobId, { translateStartedAt });
+  // Write the start timestamp to Redis immediately so the UI can compute elapsed time.
+  await setProgress(jobId, { translateStartedAt });
 
+  try {
     for (const module of job.modules) {
       await heartbeat(shopName, jobId);
 
@@ -210,6 +211,9 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
       ? { provider: "test", model: "test" }
       : resolveEngine(aiModel);
 
+    // liveTokens is already accumulated with the multiplier applied during progress callbacks.
+    const usedTokens = liveTokens;
+
     // Refresh job to get latest metrics
     const latestJob = await getJob(shopName, jobId);
     await updateJob(shopName, jobId, {
@@ -226,7 +230,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         translateUnitDone,
         translateUnitTotal,
         writebackTotal: translateDone,
-        usedTokens: liveTokens,
+        usedTokens,
       },
     });
 

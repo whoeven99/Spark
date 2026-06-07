@@ -1,4 +1,10 @@
-import { MODULE_METAFIELD, MODULE_METAOBJECT } from "./constants.js";
+import {
+  MODULE_METAFIELD,
+  MODULE_METAOBJECT,
+  MODULE_PRODUCT_OPTION,
+  MODULE_PRODUCT_OPTION_VALUE,
+  SHOPIFY_OPTION_SYSTEM_DEFAULTS,
+} from "./constants.js";
 import { translationRuleJudgment } from "./judgeTranslateUtils.js";
 import { passesMetafieldModuleRules } from "./metafieldRules.js";
 import { passesThemeModuleRules } from "./themeRules.js";
@@ -27,6 +33,17 @@ export function shouldIncludeFieldV2(
   const { module, isCover, isHandle } = ctx;
 
   if (isBlankValue(value)) {
+    return false;
+  }
+
+  // PRODUCT_OPTION / PRODUCT_OPTION_VALUE: skip Shopify's auto-generated system
+  // defaults ("Default Title", "Title", "Default"). These are internal Shopify
+  // placeholders for single-variant products and must never be translated —
+  // writing them back in a different locale breaks Shopify's variant system.
+  if (
+    (module === MODULE_PRODUCT_OPTION || module === MODULE_PRODUCT_OPTION_VALUE) &&
+    SHOPIFY_OPTION_SYSTEM_DEFAULTS.has(value.trim())
+  ) {
     return false;
   }
 

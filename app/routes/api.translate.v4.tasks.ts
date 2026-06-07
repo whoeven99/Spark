@@ -53,7 +53,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
   }
 
-  const limitPerType = Math.min(Math.max(Number(body.limitPerType) || 20, 1), 500);
+  // 0 means "fetch all" — no upper cap; any positive value is used as-is (min 1)
+  const rawLimit = Number(body.limitPerType);
+  const limitPerType = rawLimit === 0 ? Number.MAX_SAFE_INTEGER : Math.max(rawLimit || 20, 1);
   const jobId = crypto.randomUUID();
 
   const job = await createV4Job({

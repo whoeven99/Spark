@@ -3,6 +3,19 @@
 export const MODULE_METAFIELD = "METAFIELD";
 export const MODULE_METAOBJECT = "METAOBJECT";
 export const MODULE_ONLINE_STORE_THEME_LOCALE_CONTENT = "ONLINE_STORE_THEME_LOCALE_CONTENT";
+export const MODULE_PRODUCT_OPTION = "PRODUCT_OPTION";
+export const MODULE_PRODUCT_OPTION_VALUE = "PRODUCT_OPTION_VALUE";
+
+/**
+ * Shopify auto-generates these as internal placeholder values for single-variant
+ * products. They are not user-facing and must not be translated — writing them
+ * back in another language can break Shopify's variant system.
+ */
+export const SHOPIFY_OPTION_SYSTEM_DEFAULTS = new Set([
+  "Default Title",
+  "Default",
+  "Title",
+]);
 
 export const NON_TRANSLATABLE_TYPES = new Set([
   "FILE_REFERENCE",

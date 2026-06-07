@@ -49,10 +49,7 @@ function buildServiceStatuses(): ServiceStatus[] {
       name: "Azure Blob Storage",
       category: "core",
       required: false,
-      configured: hasEnv(
-        "BLOB_TRANSLATE_V3_CONNECTION_STRING",
-        "AZURE_BLOB_CONNECTION_STRING",
-      ),
+      configured: hasEnv("AZURE_BLOB_CONNECTION_STRING"),
       note: "翻译内容分块、图片翻译与文生图结果",
       costSignal: "存储容量、请求次数、出网流量",
       rechargeSignal: "存储增长过快、下载/访问费用异常",
