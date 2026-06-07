@@ -98,6 +98,8 @@ function progressFromJob(
       verifyDone: job.metrics.verifyDone,
       verifyFailed: job.metrics.verifyFailed,
       currentModule: null,
+      usedTokens: job.metrics.usedTokens ?? 0,
+      translateStartedAt: null,
     },
   };
 }
@@ -118,6 +120,8 @@ type ProgressData = {
     writebackTotal: number; writebackDone: number; writebackFailed: number;
     verifyTotal: number; verifyDone: number; verifyFailed: number;
     currentModule: string | null;
+    usedTokens?: number;
+    translateStartedAt?: string | null;
   };
 };
 
@@ -408,9 +412,12 @@ export function TranslationV4Page() {
                 />
                 <div style={{ maxWidth: "12rem" }}>
                   <s-text-field
-                    label="每模块数量限制"
+                    label="每模块数量限制（0 = 不限）"
                     value={String(limitPerType)}
-                    onChange={(e) => setLimitPerType(Number(e.currentTarget.value) || 20)}
+                    onChange={(e) => {
+                      const parsed = parseInt(e.currentTarget.value, 10);
+                      setLimitPerType(isNaN(parsed) || parsed < 0 ? 20 : parsed);
+                    }}
                     autocomplete="off"
                   />
                 </div>
@@ -546,7 +553,10 @@ function JobCard({ job, status, progress, onAction }: JobCardProps) {
             )}
           </div>
           <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: 3 }}>
-            {job.id.slice(0, 8)}… · {job.modules.join(", ")} · 每类 {job.limitPerType} 条
+            {job.id.slice(0, 8)}… · {job.modules.join(", ")}
+            {(metrics.usedTokens ?? 0) > 0 && (
+              <> · <span style={{ color: pageColorTokens.brandBlue, fontWeight: 600 }}>{((metrics.usedTokens ?? 0)).toLocaleString()} tokens</span></>
+            )}
           </div>
         </div>
         <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -593,10 +603,84 @@ function JobCard({ job, status, progress, onAction }: JobCardProps) {
         </div>
       )}
 
+      {status === "TRANSLATING" && (
+        <TranslateStatsPanel metrics={metrics} />
+      )}
+
       {isFailed && (progress?.errorMessage ?? job.errorMessage) && (
         <div style={{ ...failErrorStyle, marginTop: "0.5rem" }}>
           [{progress?.errorStage ?? job.errorStage}] {progress?.errorMessage ?? job.errorMessage}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Real-time translation stats panel ──────────────────────────────────────
+
+type TranslateMetricsSnap = {
+  translateUnitDone: number;
+  translateUnitTotal: number;
+  usedTokens?: number;
+  translateStartedAt?: string | null;
+};
+
+function fmtDuration(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return rem === 0 ? `${m}m` : `${m}m ${rem}s`;
+}
+
+function StatItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 80 }}>
+      <span style={{ fontSize: "0.95rem", fontWeight: 700, color: pageColorTokens.textPrimary, lineHeight: 1.2 }}>{value}</span>
+      <span style={{ fontSize: "0.7rem", color: pageColorTokens.textSecondary, marginTop: 2 }}>{label}</span>
+    </div>
+  );
+}
+
+function TranslateStatsPanel({ metrics }: { metrics: TranslateMetricsSnap }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const total = metrics.translateUnitTotal;
+  const done = metrics.translateUnitDone;
+  const ratio = total > 0 && done > 0 ? done / total : 0;
+  const usedTokens = metrics.usedTokens ?? 0;
+  const startedAt = metrics.translateStartedAt ? Number(metrics.translateStartedAt) : null;
+  const elapsedMs = startedAt !== null && !isNaN(startedAt) ? now - startedAt : null;
+  const estRemainingMs = elapsedMs !== null && ratio > 0 ? (elapsedMs / ratio) * (1 - ratio) : null;
+  const estRemainingTokens = ratio > 0 && usedTokens > 0 ? Math.round((usedTokens / ratio) * (1 - ratio)) : null;
+
+  return (
+    <div style={{
+      marginTop: "0.6rem",
+      padding: "0.5rem 0.75rem",
+      borderRadius: 8,
+      background: "linear-gradient(135deg, #f0f4ff 0%, #f5f0ff 100%)",
+      border: `1px solid ${pageColorTokens.border}`,
+      display: "flex",
+      flexWrap: "wrap",
+      gap: "0.5rem 1.25rem",
+      justifyContent: "space-around",
+    }}>
+      {usedTokens > 0 && (
+        <StatItem label="已用 tokens" value={usedTokens.toLocaleString()} />
+      )}
+      {elapsedMs !== null && (
+        <StatItem label="已用时间" value={fmtDuration(elapsedMs)} />
+      )}
+      {estRemainingTokens !== null && (
+        <StatItem label="预估剩余 tokens" value={`~${estRemainingTokens.toLocaleString()}`} />
+      )}
+      {estRemainingMs !== null && (
+        <StatItem label="预估剩余时间" value={`~${fmtDuration(estRemainingMs)}`} />
       )}
     </div>
   );

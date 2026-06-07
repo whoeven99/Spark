@@ -80,7 +80,8 @@ export function TranslationTaskChatCard({
       return;
     }
 
-    const limit = Math.min(200, Math.max(1, Math.floor(Number(limitPerType) || 20)));
+    const parsedLimit = Math.floor(Number(limitPerType));
+    const limit = isNaN(parsedLimit) || parsedLimit < 0 ? 20 : parsedLimit;
 
     setIsSubmitting(true);
     try {
@@ -195,9 +196,10 @@ export function TranslationTaskChatCard({
             <s-text-field
               label={t("translationRuntime.limitPerModule")}
               value={String(limitPerType)}
-              onChange={(e) =>
-                setLimitPerType(Number(e.currentTarget.value) || 20)
-              }
+              onChange={(e) => {
+                const parsed = parseInt(e.currentTarget.value, 10);
+                setLimitPerType(isNaN(parsed) || parsed < 0 ? 20 : parsed);
+              }}
               autocomplete="off"
             />
           </div>
