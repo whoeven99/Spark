@@ -2,9 +2,9 @@ import type { ActionFunctionArgs } from "react-router";
 import { z } from "zod";
 import { authenticate } from "../../shopify.server";
 import { logDetailedError } from "../productImprove/generateDescriptionLog.server";
-import { safeExecutePictureTranslateTool } from "../ai/skills/pictureTranslate/service";
-import { resolvePictureTranslateInput } from "../ai/skills/pictureTranslate/schema";
-import type { PictureTranslateToolResult } from "../ai/skills/pictureTranslate/types";
+import { safeExecutePictureTranslateTool } from "../ai/skills/pictureTranslate/pictureTranslate.service";
+import { resolvePictureTranslateInput } from "../ai/skills/pictureTranslate/pictureTranslate.schema";
+import type { PictureTranslateToolResult } from "../ai/skills/pictureTranslate/pictureTranslate.types";
 
 const LOG_PREFIX = "[PictureTranslateChat]";
 

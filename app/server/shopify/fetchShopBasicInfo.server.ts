@@ -1,4 +1,4 @@
-import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/tool";
+import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
 import {
   formatGraphqlErrors,
   parseAdminGraphqlJson,

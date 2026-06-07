@@ -3,7 +3,7 @@ import {
   billingErrorToResponse,
   requireBillingAccess,
 } from "../billing/index.server";
-import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/tool";
+import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
 import {
   DEFAULT_DESCRIPTION_TEMPERATURE,
   MAX_DESCRIPTION_TEMPERATURE,

@@ -1,4 +1,4 @@
-import type { ActionFunctionArgs } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import {
   deleteTaskForShop,
@@ -6,10 +6,11 @@ import {
   markTaskAppliedWithResult,
   markTaskScored,
   getTaskForShop,
+  listTasksPageForShop,
 } from "../server/aiTask/aiTaskStore.server";
 import { appendLog, pendingReviewTask } from "../server/aiTask/aiTaskLogger.server";
 import { cleanupTaskBlobs } from "../server/aiTask/aiTaskBlobCleanup.server";
-import type { AITaskDeleteResponse } from "../lib/aiTaskTypes";
+import type { AITaskDeleteResponse, AITaskListView, AITaskType } from "../lib/aiTaskTypes";
 import type {
   ProductImproveTaskConfig,
   ProductImproveTaskResult,
@@ -18,6 +19,51 @@ import { runProductDescriptionRefinement } from "../server/productImprove/servic
 import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
 import { initI18n } from "../i18n";
 import { buildAITaskMessage } from "../lib/aiTaskMessage";
+
+const VALID_TASK_TYPES: AITaskType[] = [
+  "product_improve",
+  "image_generation",
+  "picture_translate",
+];
+
+function parseTaskView(raw: string | null): AITaskListView {
+  return raw === "history" ? "history" : "current";
+}
+
+function parsePositiveInt(raw: string | null): number | undefined {
+  if (!raw) return undefined;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 1) return undefined;
+  return Math.floor(value);
+}
+
+function parseTaskTypes(params: URLSearchParams): AITaskType[] {
+  return params.getAll("taskType").filter((value): value is AITaskType =>
+    VALID_TASK_TYPES.includes(value as AITaskType),
+  );
+}
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const url = new URL(request.url);
+  const view = parseTaskView(url.searchParams.get("view"));
+  const page = parsePositiveInt(url.searchParams.get("page"));
+  const pageSize = parsePositiveInt(url.searchParams.get("pageSize"));
+  const taskTypes = parseTaskTypes(url.searchParams);
+  const taskPage = await listTasksPageForShop({
+    shop: session.shop,
+    view,
+    page,
+    pageSize,
+    ...(taskTypes.length === 1
+      ? { taskType: taskTypes[0] }
+      : taskTypes.length > 1
+        ? { taskTypes }
+        : {}),
+  });
+
+  return Response.json(taskPage);
+};
 
 function translateApiAiTaskErrorMessage(
   rawMessage: string,

@@ -67,16 +67,16 @@ function buildStreamUrl(taskId: string, locationSearch: string): string {
   const params = new URLSearchParams(
     locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
   );
-  params.set("taskId", taskId);
-  return `/api/ai-task-stream?${params.toString()}`;
+  params.delete("taskId");
+  return `/api/ai-task/${encodeURIComponent(taskId)}/stream?${params.toString()}`;
 }
 
 function buildDetailUrl(taskId: string, locationSearch: string): string {
   const params = new URLSearchParams(
     locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
   );
-  params.set("taskId", taskId);
-  return `/api/ai-task-detail?${params.toString()}`;
+  params.delete("taskId");
+  return `/api/ai-task/${encodeURIComponent(taskId)}?${params.toString()}`;
 }
 
 function stepDurationSeconds(logs: AITaskLogEntry[], index: number): number {

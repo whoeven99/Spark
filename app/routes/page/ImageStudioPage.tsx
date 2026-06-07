@@ -557,8 +557,8 @@ export function ImageStudioPage() {
           const params = new URLSearchParams(
             location.search.startsWith("?") ? location.search.slice(1) : location.search,
           );
-          params.set("taskId", taskId);
-          const resp = await fetch(`/api/ai-task-detail?${params.toString()}`);
+          params.delete("taskId");
+          const resp = await fetch(`/api/ai-task/${encodeURIComponent(taskId)}?${params.toString()}`);
           if (!resp.ok) return;
           const body = (await resp.json()) as { task?: AITaskItem };
           if (!body.task) return;

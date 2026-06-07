@@ -1,12 +1,12 @@
 import type { ToolDefinition } from "../../core/toolRegistry.server";
-import { createGenerateProductDescriptionTool, GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME } from "../marketing/tool";
+import { createGenerateProductDescriptionTool, GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME } from "../marketing/marketing.tool";
 import {
   extractProductImproveCardPayload,
   hasProductImproveToolCall,
   shouldInjectProductImproveFallback,
-} from "../marketing/extract";
-import { pictureTranslateToolDefinition } from "../pictureTranslate/tool";
-import { imageGenerationToolDefinition } from "../imageGeneration/tool";
+} from "../marketing/marketing.extract";
+import { pictureTranslateToolDefinition } from "../pictureTranslate/pictureTranslate.tool";
+import { imageGenerationToolDefinition } from "../imageGeneration/imageGeneration.tool";
 import { scoreProductQualityToolDefinition } from "./scoreProduct";
 
 const generateProductDescriptionToolDef: ToolDefinition = {

@@ -2,7 +2,7 @@ export {
   createShopifyShopInfoTools,
   createShopifyShopInfoTool,
   type ShopifyAdminGraphqlClient,
-} from "../shopifyInfo/tool";
+} from "../shopifyInfo/shopifyInfo.tool";
 export { timeTool } from "./timeTool";
 export { weatherTool } from "./weatherTool";
 import { timeTool } from "./timeTool";

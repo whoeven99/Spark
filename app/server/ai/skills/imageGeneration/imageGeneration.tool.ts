@@ -5,9 +5,9 @@ import { isImageGenerationConfigured } from "../../../imageGeneration/imageGener
 import {
   GENERATE_PRODUCT_IMAGE_TOOL_NAME,
   IMAGE_GENERATION_TOOL_LOG_PREFIX,
-} from "./constants";
-import { generateProductImageToolSchema } from "./schema";
-import { safeExecuteGenerateProductImageTool } from "./service";
+} from "./imageGeneration.constants";
+import { generateProductImageToolSchema } from "./imageGeneration.schema";
+import { safeExecuteGenerateProductImageTool } from "./imageGeneration.service";
 import { extractChatImageAttachmentsFromMessages } from "../shared/imageAttachmentsExtract";
 
 const IMAGE_GENERATION_SKILL_NAME = "imageGeneration";

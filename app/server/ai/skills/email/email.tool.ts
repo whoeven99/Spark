@@ -8,13 +8,13 @@ import {
   resolveTemplateIdByScenario,
   SEND_TEMPLATE_EMAIL_LOG_PREFIX,
   SEND_TEMPLATE_EMAIL_TOOL_NAME,
-} from "./constants";
+} from "./email.constants";
 import {
   enrichAgentTemplateData,
   loadShopBasicInfoSafe,
   resolveMerchantEmail,
 } from "./enrichAgentTemplateData.server";
-import { sendTemplateEmailToolSchema } from "./schema";
+import { sendTemplateEmailToolSchema } from "./email.schema";
 
 function formatToolResult(result: Awaited<ReturnType<typeof sendTemplateEmail>>): string {
   if (result.ok) {

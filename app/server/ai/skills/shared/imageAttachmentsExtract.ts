@@ -1,8 +1,8 @@
 import { ToolMessage, type BaseMessage } from "@langchain/core/messages";
 import type { ChatMessageAttachment } from "../../../../lib/chatMessage";
 import { extractMessageText } from "../../utils/langchainMessageText";
-import { GENERATE_PRODUCT_IMAGE_TOOL_NAME } from "../imageGeneration/constants";
-import { PICTURE_TRANSLATE_TOOL_NAME } from "../pictureTranslate/constants";
+import { GENERATE_PRODUCT_IMAGE_TOOL_NAME } from "../imageGeneration/imageGeneration.constants";
+import { PICTURE_TRANSLATE_TOOL_NAME } from "../pictureTranslate/pictureTranslate.constants";
 
 const IMAGE_TOOL_NAMES = new Set([
   PICTURE_TRANSLATE_TOOL_NAME,

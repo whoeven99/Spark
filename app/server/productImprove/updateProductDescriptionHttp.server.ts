@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/tool";
+import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
 import type { UpdateProductDescriptionApiResponse } from "../../lib/updateProductDescriptionTypes";
 import { logDetailedError } from "./generateDescriptionLog.server";
 import { updateProductTitleAndDescriptionHtml } from "./services/updateProductDescriptionService";

@@ -1,4 +1,4 @@
-import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/tool";
+import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
 import { logDetailedError } from "./generateDescriptionLog.server";
 
 const LOG_PREFIX = "[ProductContextFetcher]";

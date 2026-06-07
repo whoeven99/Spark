@@ -5,10 +5,9 @@ import {
   listTaskLogs,
 } from "../server/aiTask/aiTaskStore.server";
 
-export const loader = async ({ request }: LoaderFunctionArgs): Promise<Response> => {
+export const loader = async ({ request, params }: LoaderFunctionArgs): Promise<Response> => {
   const { session } = await authenticate.admin(request);
-  const url = new URL(request.url);
-  const taskId = url.searchParams.get("taskId");
+  const taskId = params.taskId;
 
   if (!taskId) {
     return Response.json({ error: "Missing taskId" }, { status: 400 });

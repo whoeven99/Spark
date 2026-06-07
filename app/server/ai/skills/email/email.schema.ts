@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { buildEmailScenarioCatalog, EMAIL_SCENARIO_KEYS } from "./constants";
+import { buildEmailScenarioCatalog, EMAIL_SCENARIO_KEYS } from "./email.constants";
 
 export const sendTemplateEmailToolSchema = z.object({
   subject: z.string().trim().min(1, "subject 必填"),

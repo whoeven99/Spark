@@ -5,7 +5,7 @@ import { toProductGid } from "../../../productImprove/productContextFetcher.serv
 import { invokeDescriptionModels } from "../../../productImprove/descriptionAiClient.server";
 import { logDetailedError } from "../../../productImprove/generateDescriptionLog.server";
 import { DEFAULT_DESCRIPTION_TEMPERATURE } from "../../../productImprove/constants.server";
-import type { ShopifyAdminGraphqlClient } from "../shopifyInfo/tool";
+import type { ShopifyAdminGraphqlClient } from "../shopifyInfo/shopifyInfo.tool";
 import type {
   ProductQualityScoreOutcome,
   ProductQualityScoreData,

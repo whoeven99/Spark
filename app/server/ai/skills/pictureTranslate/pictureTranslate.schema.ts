@@ -2,11 +2,11 @@ import { z } from "zod";
 import {
   DEFAULT_SOURCE_LANGUAGE,
   ERROR_MESSAGES,
-} from "./constants";
+} from "./pictureTranslate.constants";
 import type {
   PictureTranslateResolvedInput,
   PictureTranslateToolInput,
-} from "./types";
+} from "./pictureTranslate.types";
 
 export const pictureTranslateToolSchema = z
   .object({
