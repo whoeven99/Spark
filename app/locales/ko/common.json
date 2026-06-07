@@ -16,7 +16,10 @@
     "paginationPrev": "이전",
     "paginationNext": "다음",
     "paginationPage": "{{page}} / {{totalPages}} 페이지",
-    "paginationSummary": "총 {{count}}개 작업, {{page}} / {{totalPages}} 페이지"
+    "paginationSummary": "총 {{count}}개 작업, {{page}} / {{totalPages}} 페이지",
+    "durationSeconds": "약 {{value}}초",
+    "durationMinutes": "약 {{value}}분",
+    "durationUnknown": "—"
   },
   "language": {
     "auto": "자동 감지",
@@ -737,7 +740,6 @@
     "serverProductNotFound": "해당 상품을 찾을 수 없거나 접근 권한이 없습니다",
     "defaultBrandStyle": "기본",
     "serverRequestFailed": "요청 처리에 실패했습니다",
-    "estimatedDurationValue": "1-2분",
     "asyncWaiting": "작업 시작을 기다리는 중입니다",
     "asyncContextLoaded": "상품 제목, 설명 및 기타 정보를 불러왔습니다",
     "asyncGeneratingTitleDraft": "키워드가 자연스럽게 들어간 새 제목 초안을 생성하는 중입니다",
@@ -764,5 +766,13 @@
     "updateValidationTitleRequired": "제목은 필수입니다",
     "updateValidationDescriptionRequired": "설명은 필수입니다",
     "updateShopMismatch": "요청의 상점 정보가 현재 세션과 일치하지 않습니다"
+  },
+  "imageStudio": {
+    "cardPartElapsed": "실행 중 {{value}}",
+    "cardPartCompletedElapsed": "완료, 소요 시간 {{value}}",
+    "cardPartEstimatedCredits": "예상 크레딧 {{value}}",
+    "cardPartUsedCredits": "사용한 크레딧 {{value}}",
+    "cardPartActualCredits": "실제 크레딧 {{value}}",
+    "cardPartFailed": "작업 미완료"
   }
 }

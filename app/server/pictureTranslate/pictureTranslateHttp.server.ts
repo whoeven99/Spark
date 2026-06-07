@@ -1,9 +1,8 @@
 import { z } from "zod";
 import { getAppEntry } from "../../config/appEntry.server";
 import { billingErrorToResponse } from "../billing/index.server";
-import {
-  requireVisualToolBillingAccess,
-} from "../tokenUsage/index.server";
+import { requireVisualToolBillingAccess } from "../tokenUsage/index.server";
+import { getEstimatedCredits } from "../aiTask/aiTaskEstimation.server";
 import {
   imageUrlToHost,
   isAgentRunLogEnabled,
@@ -148,6 +147,8 @@ export async function executePictureTranslateRequest(params: {
     `${LOG_PREFIX} validated — shop=${sessionShop} modelType=${parsed.modelType} clientRequestId=${clientRequestId} ext=${extensionRaw} source=${sourceForLog} target=${targetForLog}`,
   );
 
+  const estimatedCredits = await getEstimatedCredits(appName, "picture_translate");
+
   const { taskId, batchId } = await createBatchWithTask({
     shop: sessionShop,
     appName,
@@ -164,6 +165,7 @@ export async function executePictureTranslateRequest(params: {
       targetCode: parsed.targetCode,
       modelType: parsed.modelType,
     },
+    estimatedCredits,
   });
 
   enqueuePictureTranslateTask({

@@ -3,6 +3,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import { useFetcher, useLoaderData, useLocation } from "react-router";
 import type { loader } from "../app.product-improve";
+import { formatEstimatedDuration } from "../../lib/formatDuration";
 import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
 import { LanguageSelector } from "../component/common/LanguageSelector";
 import { ProductSelector } from "../component/product/ProductSelector";
@@ -23,7 +24,7 @@ import {
 } from "./pageUiStyles";
 
 type PageTab = "config" | "tasks";
-const ESTIMATED_TOKENS = 320;
+
 const footerDividerStyle = {
   color: pageColorTokens.textFootnote,
 };
@@ -65,6 +66,9 @@ export function ProductImprovePage() {
   const loaderData = useLoaderData<typeof loader>();
   const location = useLocation();
   const billing = loaderData.billing;
+  const ewmaCredits = loaderData.estimatedCredits;
+  const ewmaSeconds = loaderData.estimatedSeconds ?? null;
+  const estimatedDuration = formatEstimatedDuration(ewmaSeconds, t);
   const [tasks, setTasks] = useState<AITaskItem[]>(loaderData.initialTaskPage.tasks);
   const [taskMetrics, setTaskMetrics] = useState(loaderData.initialTaskPage.metrics);
   const [pageTab, setPageTabState] = useState<PageTab>(() =>
@@ -208,7 +212,7 @@ export function ProductImprovePage() {
       productId: productIdForActions,
       targetLanguage,
       originalTitle: selectedProduct?.title ?? "",
-      estimatedCredits: ESTIMATED_TOKENS,
+      estimatedCredits: ewmaCredits,
     };
     setConfirmOpen(false);
     setPageTab("tasks");
@@ -249,7 +253,7 @@ export function ProductImprovePage() {
         brandStyle: data.brandStyle ?? "",
       },
       result: null,
-      estimatedCredits: submitContext?.estimatedCredits ?? ESTIMATED_TOKENS,
+      estimatedCredits: submitContext?.estimatedCredits ?? ewmaCredits,
       actualCredits: null,
       startedAt: now,
       completedAt: null,
@@ -284,12 +288,12 @@ export function ProductImprovePage() {
     {
       key: "time",
       label: t("productImproveStage1.estimateTime"),
-      value: t("productImproveStage1.estimatedDurationValue"),
+      value: estimatedDuration,
     },
     {
       key: "tokens",
       label: t("productImproveStage1.estimateCredits"),
-      value: t("productImproveStage1.estimatedTokenValue", { count: ESTIMATED_TOKENS }),
+      value: t("productImproveStage1.estimatedTokenValue", { count: ewmaCredits }),
     },
   ] as const;
 

@@ -76,17 +76,18 @@ async function runPictureTranslateTask(params: {
     provider: pipeline.provider,
   };
 
-  await completeTask({
-    taskId: params.taskId,
-    result,
-    startedAt,
-    finalMessage: "任务完成",
-  });
-
-  await recordVisualToolTokenUsage({
+  const actualCredits = await recordVisualToolTokenUsage({
     shop: params.shop,
     appName: getAppEntry(),
     items: [buildPictureTranslateBillingItem(pipeline.provider)],
+  });
+
+  await completeTask({
+    taskId: params.taskId,
+    result,
+    actualCredits: actualCredits ?? undefined,
+    startedAt,
+    finalMessage: "任务完成",
   });
 
   console.info(

@@ -26,6 +26,7 @@ import {
 } from "../server/billing/index.server";
 import { createBatchWithTask } from "../server/aiTask/aiTaskStore.server";
 import { listTasksPageForShop } from "../server/aiTask/aiTaskStore.server";
+import { getEstimatedSeconds, getEstimatedCredits } from "../server/aiTask/aiTaskEstimation.server";
 import { ProductImprovePage } from "./page/ProductImprovePage";
 import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
 import { initI18n } from "../i18n";
@@ -64,13 +65,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const billing = toBillingAccessSnapshot(
     await loadBillingContext(session.shop, getAppEntry()),
   );
-  const initialTaskPage = await listTasksPageForShop({
-    shop: session.shop,
-    appName: getAppEntry(),
-    view: "current",
-    taskType: "product_improve",
-  });
-  return data({ shopLocales, billing, initialTaskPage });
+  const appName = getAppEntry();
+  const [initialTaskPage, estimatedSeconds, estimatedCredits] = await Promise.all([
+    listTasksPageForShop({
+      shop: session.shop,
+      appName,
+      view: "current",
+      taskType: "product_improve",
+    }),
+    getEstimatedSeconds(appName, "product_improve"),
+    getEstimatedCredits(appName, "product_improve"),
+  ]);
+  return data({ shopLocales, billing, initialTaskPage, estimatedSeconds, estimatedCredits });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -160,6 +166,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const shopInfo = await fetchShopBasicInfo(admin);
     const brandStyle = shopInfo?.name || t("productImproveStage1.defaultBrandStyle");
 
+    const ewmaCredits = await getEstimatedCredits(appName, "product_improve");
     const { taskId, batchId } = await createBatchWithTask({
       shop,
       appName,
@@ -181,6 +188,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         sourceLanguage,
         brandStyle,
       },
+      estimatedCredits: ewmaCredits,
     });
 
     enqueueProductImproveTask({

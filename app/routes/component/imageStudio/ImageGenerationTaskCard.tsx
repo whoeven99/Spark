@@ -18,11 +18,6 @@ type Props = {
   deleting: boolean;
 };
 
-function formatDisplayValue(value: string | number | null | undefined, fallback: string): string {
-  if (value == null || value === "") return fallback;
-  return String(value);
-}
-
 function readStringField(
   source: Record<string, unknown> | null | undefined,
   key: string,
@@ -150,34 +145,34 @@ export function ImageGenerationTaskCard({
   const provider = readStringField(result, "provider") ?? readStringField(config, "imageProvider");
   const summary = description ?? prompt ?? t("imageGeneration.emptyBeforeSubmit");
   const actualElapsed = formatActualElapsed(task.startedAt, task.completedAt);
-  const elapsedLabel = runningElapsed ?? actualElapsed ?? t("common.unknown");
-  const usedCredits = formatDisplayValue(task.actualCredits, t("common.unknown"));
-  const estimatedCredits = formatDisplayValue(task.estimatedCredits, t("common.unknown"));
-  const providerLabel = formatDisplayValue(provider, t("common.unknown"));
-  const errorReason = task.errorMsg ?? t("common.unknown");
+  const elapsedLabel = runningElapsed ?? actualElapsed;
+  const errorReason = task.errorMsg;
 
   const primaryCopy =
     localStatus === "running"
       ? t("imageStudio.cardPrimaryGenerating")
       : localStatus === "failed"
-        ? t("imageStudio.cardPrimaryGenerationFailed", { errorReason })
+        ? t("imageStudio.cardPrimaryGenerationFailed", { errorReason: errorReason ?? "" })
         : t("imageStudio.cardPrimaryGenerationReady");
 
-  const secondaryCopy =
-    localStatus === "running"
-      ? t("imageStudio.cardSecondaryRunning", {
-          elapsedLabel,
-          estimatedCredits,
-        })
-      : localStatus === "failed"
-        ? t("imageStudio.cardSecondaryFailed", {
-            usedCredits,
-            estimatedCredits,
-          })
-        : t("imageStudio.cardSecondaryCompleted", {
-            elapsedLabel,
-            usedCredits,
-          });
+  const secondaryCopy = (() => {
+    if (localStatus === "running") {
+      const parts: string[] = [];
+      if (elapsedLabel) parts.push(t("imageStudio.cardPartElapsed", { value: elapsedLabel }));
+      if (task.estimatedCredits != null) parts.push(t("imageStudio.cardPartEstimatedCredits", { value: task.estimatedCredits }));
+      return parts.join(" | ");
+    }
+    if (localStatus === "failed") {
+      const parts: string[] = [t("imageStudio.cardPartFailed")];
+      if (task.actualCredits != null) parts.push(t("imageStudio.cardPartUsedCredits", { value: task.actualCredits }));
+      if (task.estimatedCredits != null) parts.push(t("imageStudio.cardPartEstimatedCredits", { value: task.estimatedCredits }));
+      return parts.join(" | ");
+    }
+    const parts: string[] = [];
+    if (elapsedLabel) parts.push(t("imageStudio.cardPartCompletedElapsed", { value: elapsedLabel }));
+    if (task.actualCredits != null) parts.push(t("imageStudio.cardPartActualCredits", { value: task.actualCredits }));
+    return parts.join(" | ");
+  })();
 
   const extraBadges = provider ? (
     <span
@@ -212,9 +207,15 @@ export function ImageGenerationTaskCard({
       metaLine={
         <>
           <span>{t("imageStudio.taskDetailLabel")}</span>
-          <span>{t("imageStudio.detailProvider", { value: providerLabel })}</span>
-          <span style={{ color: pageColorTokens.textFootnote }}>|</span>
-          <span>{t("imageStudio.estimatedCreditsValue", { value: estimatedCredits })}</span>
+          {provider != null && (
+            <span>{t("imageStudio.detailProvider", { value: provider })}</span>
+          )}
+          {task.estimatedCredits != null && (
+            <>
+              <span style={{ color: pageColorTokens.textFootnote }}>|</span>
+              <span>{t("imageStudio.estimatedCreditsValue", { value: task.estimatedCredits })}</span>
+            </>
+          )}
           <span style={{ color: pageColorTokens.textFootnote }}>|</span>
           <span
             style={{

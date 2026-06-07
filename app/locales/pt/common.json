@@ -16,7 +16,10 @@
     "paginationPrev": "Anterior",
     "paginationNext": "Seguinte",
     "paginationPage": "Pagina {{page}} de {{totalPages}}",
-    "paginationSummary": "{{count}} tarefas no total, pagina {{page}} de {{totalPages}}"
+    "paginationSummary": "{{count}} tarefas no total, pagina {{page}} de {{totalPages}}",
+    "durationSeconds": "Cerca de {{value}} s",
+    "durationMinutes": "Cerca de {{value}} min",
+    "durationUnknown": "—"
   },
   "language": {
     "auto": "Detecção automática",
@@ -737,7 +740,6 @@
     "serverProductNotFound": "Produto não encontrado ou acesso negado",
     "defaultBrandStyle": "Padrão",
     "serverRequestFailed": "Falha ao processar a solicitação",
-    "estimatedDurationValue": "1-2 min",
     "asyncWaiting": "Aguardando o inicio da tarefa",
     "asyncContextLoaded": "Titulo, descricao e outros dados do produto foram carregados",
     "asyncGeneratingTitleDraft": "Gerando um novo rascunho de titulo com palavras-chave naturais",
@@ -764,5 +766,13 @@
     "updateValidationTitleRequired": "O titulo e obrigatorio",
     "updateValidationDescriptionRequired": "A descricao e obrigatoria",
     "updateShopMismatch": "A loja da requisicao nao corresponde a sessao atual"
+  },
+  "imageStudio": {
+    "cardPartElapsed": "Em execução {{value}}",
+    "cardPartCompletedElapsed": "Concluído em {{value}}",
+    "cardPartEstimatedCredits": "Créditos est.: {{value}}",
+    "cardPartUsedCredits": "Créditos usados: {{value}}",
+    "cardPartActualCredits": "Créditos reais: {{value}}",
+    "cardPartFailed": "Tarefa incompleta"
   }
 }

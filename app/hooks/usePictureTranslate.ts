@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   filterPictureTranslateSourceLanguages,
   filterPictureTranslateTargetLanguages,
+  selectModelTypeForLanguagePair,
   type PictureTranslateProvider,
 } from "../config/pictureTranslateLanguages";
 import type {
@@ -250,11 +251,12 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
     setFormErrorText("");
 
     try {
+      const modelType = selectModelTypeForLanguagePair(sourceLanguage, targetLanguage);
       const body: Record<string, unknown> = {
         imageUrl: trimmedUrl || undefined,
         sourceCode: sourceLanguage,
         targetCode: targetLanguage,
-        modelType: 1,
+        modelType,
       };
 
       const response = await fetch(`/api/picture-translate${locationSearch}`, {

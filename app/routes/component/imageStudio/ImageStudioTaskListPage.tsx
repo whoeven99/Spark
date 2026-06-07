@@ -339,7 +339,7 @@ export function ImageStudioTaskListPage({
       {loading && !hasResolvedPageData && totalCount > 0 ? (
         <div style={{ ...pageEmptyStateStyle, minHeight: EMPTY_STATE_MIN_HEIGHT }}>
           <span style={{ fontSize: 28, lineHeight: 1 }}>⏳</span>
-          <span>{t("common.loading")}</span>
+          <span>Loading...</span>
         </div>
       ) : visibleTasks.length === 0 ? (
         <div style={{ ...pageEmptyStateStyle, minHeight: EMPTY_STATE_MIN_HEIGHT }}>

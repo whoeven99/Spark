@@ -241,3 +241,78 @@ export function filterPictureTranslateTargetLanguages(params: {
     return language.code.toLowerCase() !== selectedSource;
   });
 }
+
+function normalizeForVolc(code: string): string {
+  return code === "zh-tw" ? "zh-Hant" : code;
+}
+
+function normalizeForAidge(code: string): string {
+  if (code === "zh-Hant" || code === "zh-hant") return "zh-tw";
+  return code;
+}
+
+const VOLCENGINE_SOURCE_SET = new Set<string>(VOLCENGINE_SOURCE_LANGUAGE_CODES_RAW);
+const VOLCENGINE_TARGET_SET = new Set<string>(VOLCENGINE_TARGET_LANGUAGE_CODES_RAW);
+const AIDGE_SOURCE_SET = new Set<string>(AIDGE_SOURCE_LANGUAGE_CODES_RAW);
+const AIDGE_TARGET_SET = new Set<string>(AIDGE_TARGET_LANGUAGE_CODES_RAW);
+
+function isAidgeBaseInputCode(source: string, target: string): boolean {
+  switch (target) {
+    case "zh-tw":
+      return source === "en" || source === "zh";
+    case "el":
+      return source === "tr" || source === "en";
+    case "kk":
+      return source === "zh";
+    default:
+      return true;
+  }
+}
+
+function isVolcLanguagePair(source: string, target: string): boolean {
+  const s = normalizeForVolc(source);
+  const t = normalizeForVolc(target);
+  return VOLCENGINE_SOURCE_SET.has(s) && VOLCENGINE_TARGET_SET.has(t);
+}
+
+function isAidgeLanguagePair(source: string, target: string): boolean {
+  const s = normalizeForAidge(source);
+  const t = normalizeForAidge(target);
+  return (
+    AIDGE_SOURCE_SET.has(s) &&
+    AIDGE_TARGET_SET.has(t) &&
+    isAidgeBaseInputCode(s, t)
+  );
+}
+
+/**
+ * 根据源语言和目标语言选择 modelType。
+ * - modelType 1 = Aidge
+ * - modelType 2 = 火山 (Volcengine)
+ * 优先火山，fallback Aidge。
+ */
+export function selectModelTypeForLanguagePair(
+  sourceLanguage: string,
+  targetLanguage: string,
+): 1 | 2 {
+  const source = sourceLanguage.trim();
+  const target = targetLanguage.trim();
+
+  if (source === "auto" || !source) {
+    const targetVolc = normalizeForVolc(target);
+    if (VOLCENGINE_TARGET_SET.has(targetVolc)) {
+      return 2;
+    }
+    return 1;
+  }
+
+  if (isVolcLanguagePair(source, target)) {
+    return 2;
+  }
+
+  if (isAidgeLanguagePair(source, target)) {
+    return 1;
+  }
+
+  return 2;
+}

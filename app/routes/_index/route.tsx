@@ -28,6 +28,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   if (isEmbeddedAdminEntry(request)) {
+    // 尝试让 Shopify 库通过 session token 等方式认证
     const { session } = await authenticate.admin(request);
     const targetUrl = new URL(request.url);
     if (!targetUrl.searchParams.get("shop") && session.shop) {
@@ -38,6 +39,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw redirect(buildEmbeddedAppPath(path, new Request(targetUrl.toString(), request)));
   }
 
+<<<<<<< HEAD
+=======
+  // 卫星 App：用户在 Shopify Admin 侧边栏点击时本应直接命中 /app/xxx 路径，
+  // 但若 application_url 配错或 OAuth bounce 导致落在根路径 / 上，不应展示登录表单，
+  // 而是直接重定向到 App 首页（让 Shopify 库触发 OAuth 流程）。
+>>>>>>> 163b34395cf92c415a9c96f0e1e6f77cfb2e14f1
   const appEntry = getAppEntry();
   if (appEntry !== "chat") {
     const { home } = getAppEntryConfig();
