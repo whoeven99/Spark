@@ -2,7 +2,7 @@
 
 client_id = "940b967eda872dd81f9ffc283e29a013"
 name = "AiAssistant-Test"
-application_url = "https://aiassistant-wi7b.onrender.com"
+application_url = "https://aiassistant-wi7b.onrender.com/app"
 embedded = true
 
 [webhooks]
@@ -13,7 +13,10 @@ api_version = "2026-07"
 scopes = "read_orders,write_products,read_locales,read_translations,write_translations,read_content"
 
 [auth]
-redirect_urls = [ "https://aiassistant-wi7b.onrender.com/api/auth" ]
+redirect_urls = [
+  "https://aiassistant-wi7b.onrender.com/auth/callback",
+  "https://aiassistant-wi7b.onrender.com/auth/shopify/callback",
+]
 
 [build]
 automatically_update_urls_on_dev = true

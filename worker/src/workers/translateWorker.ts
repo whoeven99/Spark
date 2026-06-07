@@ -6,6 +6,7 @@ import {
   resolveEngine,
   mergeEngineUsage,
   countFieldUnits,
+  pAll,
   type EngineUsage,
   type TranslateItem,
 } from "../services/llmTranslate.js";
@@ -38,6 +39,10 @@ async function claimNextJob(): Promise<TranslationV4Job | null> {
   return null;
 }
 
+// How many chunks within a module may translate concurrently.
+// Override via TRANSLATE_CHUNK_CONCURRENCY env var (default 2).
+const CHUNK_CONCURRENCY = Math.max(1, Number(process.env.TRANSLATE_CHUNK_CONCURRENCY) || 2);
+
 async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   const { shopName, id: jobId, source, target, aiModel, testMode } = job;
   // Engine override (TRANSLATION_AI_MODEL) is applied inside translateBatch.
@@ -47,7 +52,9 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   let translateFailed = 0;
   let translateFallback = 0;
   let translateUnitDone = 0; // node-level progress
+  let liveTokens = 0; // accumulated LLM tokens (after multiplier) for real-time display
   let lastHeartbeatAt = 0;
+  const tokenMultiplier = Math.max(0, Number(process.env.TRANSLATION_TOKEN_MULTIPLIER) || 1);
   // Fields that were translated but fell back to the original value (engine
   // dropped the key / failed). Surfaced to the UI via translate/fallbacks.json.
   const fallbacks: Array<{ resourceId: string; module: string; key: string }> = [];
@@ -60,6 +67,10 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   }
 
   try {
+    // Record when translation actually started so the UI can show elapsed time.
+    const translateStartedAt = Date.now().toString();
+    await setProgress(jobId, { translateStartedAt });
+
     for (const module of job.modules) {
       await heartbeat(shopName, jobId);
 
@@ -67,8 +78,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
       const chunkPaths = initPaths.filter((p) => p.endsWith(".json"));
       const chunkTotal = chunkPaths.length;
 
-      for (let ci = 0; ci < chunkPaths.length; ci++) {
-        const chunkPath = chunkPaths[ci];
+      await pAll(chunkPaths, CHUNK_CONCURRENCY, async (chunkPath, ci) => {
         const chunkIdx = ci + 1; // 1-based for readability
         const chunkStart = performance.now();
 
@@ -96,11 +106,11 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
             translateTotal,
             currentModule: module,
           });
-          continue;
+          return;
         }
 
         const chunk = await blobRead<Array<{ resourceId: string; fields: TranslateItem[] }>>(chunkPath);
-        if (!chunk) continue;
+        if (!chunk) return;
 
         const chunkResourceCount = chunk.length;
         const chunkFieldCount = chunk.reduce((sum, r) => sum + (r.fields?.length ?? 0), 0);
@@ -114,8 +124,9 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         try {
           // Per-batch progress: write Redis every batch (cheap, smooth bar) and
           // heartbeat Cosmos throttled (expensive, just keep-alive).
-          const onProgress = async (deltaUnits: number) => {
+          const onProgress = async (deltaUnits: number, deltaTokens: number) => {
             translateUnitDone += deltaUnits;
+            liveTokens += Math.ceil(deltaTokens * tokenMultiplier);
             await setProgress(jobId, {
               translateDone,
               translateFailed,
@@ -123,6 +134,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
               translateUnitDone,
               translateUnitTotal,
               translateTotal,
+              usedTokens: liveTokens,
               currentModule: module,
             });
             const now = Date.now();
@@ -182,9 +194,10 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
           translateUnitDone,
           translateUnitTotal,
           translateTotal,
+          usedTokens: liveTokens,
           currentModule: module,
         });
-      }
+      });
     }
 
     // Persist the list of fields that fell back to original for UI visibility.
@@ -213,6 +226,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         translateUnitDone,
         translateUnitTotal,
         writebackTotal: translateDone,
+        usedTokens: liveTokens,
       },
     });
 

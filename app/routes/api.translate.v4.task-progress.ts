@@ -45,7 +45,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     verifyTotal: Number(redisProgress.verifyTotal) || job.metrics.verifyTotal,
     verifyDone: Number(redisProgress.verifyDone) || job.metrics.verifyDone,
     verifyFailed: Number(redisProgress.verifyFailed) || job.metrics.verifyFailed,
+    usedTokens: Number(redisProgress.usedTokens) || job.metrics.usedTokens || 0,
     currentModule: redisProgress.currentModule ?? null,
+    translateStartedAt: redisProgress.translateStartedAt ?? null,
     progressUpdatedAt: redisProgress.updatedAt ?? null,
   };
 
