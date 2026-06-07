@@ -1,5 +1,6 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   buildEmbeddedAppPath,
   getAppEntryConfig,
@@ -24,8 +25,26 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return null;
 };
 
+/** 工作台页依赖浏览器环境，SSR 阶段仅输出占位，避免嵌入式 iframe 首屏 500。 */
+function ClientMount({ children }: { children: ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) {
+    return (
+      <div style={{ padding: "1.25rem", color: "#6d7175", fontSize: "0.9rem" }}>
+        Loading…
+      </div>
+    );
+  }
+  return children;
+}
+
 export default function Index() {
-  return <WorkspacePage />;
+  return (
+    <ClientMount>
+      <WorkspacePage />
+    </ClientMount>
+  );
 }
 
 export const headers: HeadersFunction = (headersArgs) => {
