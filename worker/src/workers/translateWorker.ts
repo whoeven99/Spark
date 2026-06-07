@@ -1,3 +1,4 @@
+import { hostname } from "os";
 import { claimJob, updateJob, heartbeat, findPendingJobs, getJob } from "../services/cosmosV4.js";
 import { popHint, pushHint, setProgress } from "../services/redisV4.js";
 import { blobRead, blobWrite, blobListPaths } from "../services/blobV4.js";
@@ -10,11 +11,12 @@ import {
   type EngineUsage,
   type TranslateItem,
 } from "../services/llmTranslate.js";
-
-const HEARTBEAT_THROTTLE_MS = 30_000;
 import type { TranslationV4Job } from "../services/cosmosV4.js";
 
-const WORKER_ID = `translate-${process.pid}`;
+const HEARTBEAT_THROTTLE_MS = 30_000;
+
+/** Scale-out safe: hostname + pid unique across Docker containers sharing pid=1 */
+const WORKER_ID = `translate-${process.env.HOSTNAME ?? hostname()}-${process.pid}`;
 
 export async function runTranslateWorker(): Promise<void> {
   const claimed = await claimNextJob();

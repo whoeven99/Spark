@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { authenticate } from "../shopify.server";
 import { getV4Job } from "../server/translation/v4/cosmosV4Store.server";
+import { mergeV4JobMetrics } from "../server/translation/v4/v4JobProgress.server";
 import { getTranslateRedisClient } from "../server/translation/translateRedis.server";
 
 function progressKey(taskId: string) {
@@ -30,28 +31,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   if (!job) return data({ ok: false, error: "task not found" }, { status: 404 });
 
-  // Merge CosmosDB metrics (source of truth) with Redis real-time counters
-  const merged = {
-    initTotal: Number(redisProgress.initTotal) || job.metrics.initTotal,
-    initDone: Number(redisProgress.initDone) || job.metrics.initDone,
-    translateTotal: Number(redisProgress.translateTotal) || job.metrics.translateTotal,
-    translateDone: Number(redisProgress.translateDone) || job.metrics.translateDone,
-    translateFailed: Number(redisProgress.translateFailed) || job.metrics.translateFailed,
-    translateUnitTotal: Number(redisProgress.translateUnitTotal) || job.metrics.translateUnitTotal || 0,
-    translateUnitDone: Number(redisProgress.translateUnitDone) || job.metrics.translateUnitDone || 0,
-    writebackTotal: Number(redisProgress.writebackTotal) || job.metrics.writebackTotal,
-    writebackDone: Number(redisProgress.writebackDone) || job.metrics.writebackDone,
-    writebackFailed: Number(redisProgress.writebackFailed) || job.metrics.writebackFailed,
-    verifyTotal: Number(redisProgress.verifyTotal) || job.metrics.verifyTotal,
-    verifyDone: Number(redisProgress.verifyDone) || job.metrics.verifyDone,
-    verifyFailed: Number(redisProgress.verifyFailed) || job.metrics.verifyFailed,
-    // usedTokens: prefer Redis (real-time, per-batch) over Cosmos (written only at stage end).
-    usedTokens: Number(redisProgress.usedTokens) || job.metrics.usedTokens || 0,
-    currentModule: redisProgress.currentModule ?? null,
-    // translateStartedAt: epoch ms string written to Redis when translate worker begins.
-    translateStartedAt: redisProgress.translateStartedAt ?? null,
-    progressUpdatedAt: redisProgress.updatedAt ?? null,
-  };
+  const merged = mergeV4JobMetrics(job, redisProgress);
 
   return data({
     ok: true,

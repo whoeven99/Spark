@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { ChatMessage } from "../../../lib/chatMessage";
 import { ChatMessageContent } from "./ChatMessageContent";
@@ -8,6 +8,7 @@ import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard"
 
 type ChatMessagesProps = {
   messages: ChatMessage[];
+  streamingSlot?: ReactNode;
   onTranslationCardSuccess: (
     messageIndex: number,
     detail: { jobId?: string; jobIds?: string[]; message: string },
@@ -20,6 +21,7 @@ type ChatMessagesProps = {
 
 export function ChatMessages({
   messages,
+  streamingSlot,
   onTranslationCardSuccess,
   onPictureTranslateCardSuccess,
 }: ChatMessagesProps) {
@@ -164,6 +166,7 @@ export function ChatMessages({
           </div>
         );
       })}
+      {streamingSlot}
     </s-stack>
   );
 }

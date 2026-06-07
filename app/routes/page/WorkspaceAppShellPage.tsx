@@ -1,5 +1,6 @@
 import type { CSSProperties, KeyboardEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
@@ -11,9 +12,7 @@ import type {
 import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { coerceTranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { ChatMessages } from "../component/chat/ChatMessages";
-import { ChatMessageContent } from "../component/chat/ChatMessageContent";
-import { ProductImproveChatCard } from "../component/chat/ProductImproveChatCard";
-import { TranslationTaskChatCard } from "../component/translation/TranslationTaskChatCard";
+import { StreamingAssistantReply } from "../component/chat/StreamingAssistantReply";
 import { LanguageSelector } from "../component/common/LanguageSelector";
 import { useChatStream, type ChatStreamFinishPayload, type SkillStepProgress } from "./chat/useChatStream";
 import { ContextWindowIndicator } from "../component/chat/ContextWindowIndicator";
@@ -279,13 +278,13 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
   const {
     isStreaming,
-    awaitingFirstChunk,
     streamingText,
     streamingTranslationForm,
     streamingGenerateCard,
     streamingGeneratePayload,
     skillSteps,
     sendMessage: streamConversation,
+    prepareStreaming,
     abort: abortStream,
   } = useChatStream();
   const replyEpochRef = useRef(0);
@@ -309,10 +308,16 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     fetch(`/api/conversations/${activeConversationId}${authQuery}`)
       .then((res) => res.json())
       .then((data: { messages?: unknown[] }) => {
-        setMessagesByConversation((current) => ({
-          ...current,
-          [activeConversationId]: ((data.messages ?? []) as Parameters<typeof dbMessageToUiMessage>[0][]).map(dbMessageToUiMessage),
-        }));
+        setMessagesByConversation((current) => {
+          const existing = current[activeConversationId] ?? [];
+          if (existing.length > 0) {
+            return current;
+          }
+          return {
+            ...current,
+            [activeConversationId]: ((data.messages ?? []) as Parameters<typeof dbMessageToUiMessage>[0][]).map(dbMessageToUiMessage),
+          };
+        });
       })
       .catch((err) => {
         console.error("[WorkspaceAppShellPage] load messages failed:", err);
@@ -419,11 +424,11 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   const sendMessage = async () => {
     if (!activeConversation) return;
     const content = (draftByConversation[activeConversation.id] ?? "").trim();
-    if (!content || isStreaming) return;
+    const conversationId = activeConversation.id;
+    if (!content || streamingConversationId === conversationId) return;
 
     replyEpochRef.current += 1;
     const epoch = replyEpochRef.current;
-    const conversationId = activeConversation.id;
     const priorMessages = messagesByConversation[conversationId] ?? [];
     const nextPreview = content.length > 28 ? `${content.slice(0, 28)}...` : content;
     const isNewTitle = activeConversation.title === "新对话";
@@ -432,27 +437,30 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
       : activeConversation.title;
     const userTime = formatTimeLabel(new Date());
 
-    setConversationList((current) =>
-      current.map((conversation) =>
-        conversation.id === conversationId
-          ? {
-              ...conversation,
-              title: nextTitle,
-              preview: nextPreview,
-              updatedAt: new Date().toISOString(),
-            }
-          : conversation,
-      ),
-    );
-    setMessagesByConversation((current) => ({
-      ...current,
-      [conversationId]: [
-        ...(current[conversationId] ?? []),
-        { role: "user", text: content, time: userTime },
-      ],
-    }));
-    setDraftByConversation((current: Record<string, string>) => ({ ...current, [conversationId]: "" }));
-    setStreamingConversationId(conversationId);
+    flushSync(() => {
+      setStreamingConversationId(conversationId);
+      setConversationList((current) =>
+        current.map((conversation) =>
+          conversation.id === conversationId
+            ? {
+                ...conversation,
+                title: nextTitle,
+                preview: nextPreview,
+                updatedAt: new Date().toISOString(),
+              }
+            : conversation,
+        ),
+      );
+      setMessagesByConversation((current) => ({
+        ...current,
+        [conversationId]: [
+          ...(current[conversationId] ?? []),
+          { role: "user", text: content, time: userTime },
+        ],
+      }));
+      setDraftByConversation((current: Record<string, string>) => ({ ...current, [conversationId]: "" }));
+    });
+    prepareStreaming();
 
     const contextBlock = buildWorkspaceContextBlock({
       selectedObjectsByType,
@@ -472,7 +480,6 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
         url: `/chat-stream${authQuery}`,
         onFinish: (payload) => {
           if (epoch !== replyEpochRef.current) return;
-          setStreamingConversationId(null);
 
           const assistantText =
             payload.httpStatus !== undefined
@@ -481,13 +488,16 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
                 ? "回复已停止。"
                 : payload.reply.trim() || "AI Assistant 未返回有效内容，请重试。";
 
-          setMessagesByConversation((current) => ({
-            ...current,
-            [conversationId]: [
-              ...(current[conversationId] ?? []),
-              buildAssistantWorkspaceMessage(assistantText, payload),
-            ],
-          }));
+          flushSync(() => {
+            setMessagesByConversation((current) => ({
+              ...current,
+              [conversationId]: [
+                ...(current[conversationId] ?? []),
+                buildAssistantWorkspaceMessage(assistantText, payload),
+              ],
+            }));
+            setStreamingConversationId(null);
+          });
 
           // Persist user + assistant messages (fire and forget)
           if (!payload.httpStatus) {
@@ -694,8 +704,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             onClearContext={clearContext}
             onSend={sendMessage}
             isStreaming={isStreaming}
-            showStreamingReply={isStreaming && streamingConversationId === activeConversation.id}
-            awaitingFirstChunk={awaitingFirstChunk}
+            showStreamingReply={streamingConversationId === activeConversation.id}
             streamingText={streamingText}
             streamingTranslationForm={streamingTranslationForm}
             streamingGenerateCard={streamingGenerateCard}
@@ -719,21 +728,6 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
         ) : null}
       </main>
     </div>
-  );
-}
-
-function ThinkingDots() {
-  const [frame, setFrame] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setFrame((f) => (f + 1) % 4), 450);
-    return () => clearInterval(id);
-  }, []);
-  return (
-    <span>
-      正在思考
-      <span style={{ letterSpacing: 2 }}>{"...".slice(0, frame)}</span>
-      <span style={{ opacity: 0, letterSpacing: 2 }}>{"...".slice(frame)}</span>
-    </span>
   );
 }
 
@@ -874,7 +868,6 @@ function ChatPanel({
   onSend,
   isStreaming,
   showStreamingReply,
-  awaitingFirstChunk,
   streamingText,
   streamingTranslationForm,
   streamingGenerateCard,
@@ -908,7 +901,6 @@ function ChatPanel({
   onSend: () => void | Promise<void>;
   isStreaming: boolean;
   showStreamingReply: boolean;
-  awaitingFirstChunk: boolean;
   streamingText: string;
   streamingTranslationForm: unknown;
   streamingGenerateCard: boolean;
@@ -991,10 +983,6 @@ function ChatPanel({
     ...(selectedFileIds.length > 0 ? [{ key: "file" as const, label: `已选择 ${selectedFileIds.length} 个文件` }] : []),
     ...(selectedMediaIds.length > 0 ? [{ key: "media" as const, label: `已选择 ${selectedMediaIds.length} 个富媒体` }] : []),
   ];
-  const streamingTranslationPayload = streamingTranslationForm
-    ? coerceTranslationTaskFormPayload(streamingTranslationForm)
-    : undefined;
-  const streamingProductImprovePayload = streamingGeneratePayload as ProductImproveCardPayload | undefined;
 
   const scrollToBottom = () => {
     if (messageListRef.current) {
@@ -1026,14 +1014,17 @@ function ChatPanel({
   useEffect(() => {
     const element = messageListRef.current;
     if (!element) return;
-    element.scrollTop = element.scrollHeight;
-    setIsScrolledUp(false);
-  }, [conversation.id, messages.length]);
+    setTimeout(() => {
+      if (!messageListRef.current) return;
+      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+      setIsScrolledUp(false);
+    }, 0);
+  }, [conversation.id, messages.length, showStreamingReply]);
 
   useEffect(() => {
     if (!showStreamingReply || isScrolledUp) return;
     scrollToBottom();
-  }, [showStreamingReply, streamingText, isScrolledUp]);
+  }, [showStreamingReply, streamingText, skillSteps.length, isStreaming, isScrolledUp]);
 
   useEffect(() => {
     const ta = textareaRef.current;
@@ -1058,6 +1049,17 @@ function ChatPanel({
           <div ref={messageListRef} style={messageListStyle} onScroll={handleMessageListScroll}>
             <ChatMessages
               messages={messages.map((message) => workspaceMessageToChatMessage(message))}
+              streamingSlot={
+                <StreamingAssistantReply
+                  active={showStreamingReply}
+                  isStreaming={isStreaming}
+                  streamingText={streamingText}
+                  skillSteps={skillSteps}
+                  streamingTranslationForm={streamingTranslationForm}
+                  streamingGenerateCard={streamingGenerateCard}
+                  streamingGeneratePayload={streamingGeneratePayload}
+                />
+              }
               onTranslationCardSuccess={(messageIndex, detail) =>
                 onTranslationCardSuccess(conversation.id, messageIndex, detail)
               }
@@ -1065,46 +1067,6 @@ function ChatPanel({
                 onPictureTranslateCardSuccess(conversation.id, messageIndex, detail)
               }
             />
-            {showStreamingReply ? (
-              <div style={streamingWrapStyle}>
-                <div style={streamingAssistantShellStyle}>
-                  {awaitingFirstChunk && !streamingText && skillSteps.length === 0 ? (
-                    <span style={{ ...sectionTextStyle, fontStyle: "italic" }}><ThinkingDots /></span>
-                  ) : (
-                    <>
-                      {skillSteps.length > 0 ? (
-                        <div style={skillStepsWrapStyle}>
-                          {skillSteps.map((step) => (
-                            <div key={`${step.skill}-${step.stepId}`} style={skillStepLineStyle}>
-                              {step.label}
-                              {step.detail ? ` · ${step.detail}` : ""}
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-                      {streamingText ? <ChatMessageContent content={streamingText} /> : null}
-                      {streamingTranslationPayload ? (
-                        <div style={streamingCardSlotStyle}>
-                          <TranslationTaskChatCard
-                            embedded
-                            initialPayload={streamingTranslationPayload}
-                            onSuccess={() => {}}
-                          />
-                        </div>
-                      ) : null}
-                      {streamingGenerateCard ? (
-                        <div style={streamingCardSlotStyle}>
-                          <ProductImproveChatCard
-                            embedded
-                            initialResult={streamingProductImprovePayload}
-                          />
-                        </div>
-                      ) : null}
-                    </>
-                  )}
-                </div>
-              </div>
-            ) : null}
           </div>
           {isScrolledUp ? (
             <div style={scrollBottomOverlayStyle}>
@@ -1960,31 +1922,7 @@ const messageListStyle: CSSProperties = {
   paddingRight: 6,
   scrollBehavior: "smooth",
 };
-const streamingWrapStyle: CSSProperties = { display: "flex", justifyContent: "flex-start", marginTop: 4 };
-const streamingAssistantShellStyle: CSSProperties = {
-  maxWidth: "min(540px, 96%)",
-  padding: "12px 14px",
-  borderRadius: 14,
-  background: "linear-gradient(180deg, rgba(44, 110, 203, 0.08), rgba(44, 110, 203, 0.02))",
-  border: "1px solid rgba(44, 110, 203, 0.35)",
-  fontSize: 14,
-  lineHeight: 1.6,
-  color: "#202223",
-};
-const streamingCardSlotStyle: CSSProperties = { marginTop: "0.85rem" };
 const composerBoxStyle: CSSProperties = { flexShrink: 0, marginTop: 14, paddingTop: 14, borderTop: "1px solid #ebedf0" };
-const skillStepsWrapStyle: CSSProperties = {
-  marginTop: 10,
-  paddingTop: 10,
-  borderTop: "1px solid #e1e3e5",
-  display: "grid",
-  gap: 4,
-};
-const skillStepLineStyle: CSSProperties = {
-  fontSize: 12,
-  color: "#61666c",
-  lineHeight: 1.5,
-};
 const textareaStyle: CSSProperties = {
   width: "100%",
   minHeight: 96,

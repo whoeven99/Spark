@@ -1,33 +1,55 @@
+import { hostname } from "os";
 import { claimJob, updateJob, heartbeat, findPendingJobs } from "../services/cosmosV4.js";
 import { popHint, pushHint, setProgress } from "../services/redisV4.js";
 import { blobWrite } from "../services/blobV4.js";
 import { fetchTranslatableResources } from "../services/shopifyFetch.js";
-import { countFieldUnits } from "../services/llmTranslate.js";
+import { countFieldUnits, pAll } from "../services/llmTranslate.js";
 
-const WORKER_ID = `init-${process.pid}`;
+/**
+ * Scale-out safe: hostname + pid ensures uniqueness across containers that may
+ * share the same pid (e.g. Node process always starts at pid 1 in Docker).
+ */
+const WORKER_ID = `init-${process.env.HOSTNAME ?? hostname()}-${process.pid}`;
+
 const CHUNK_SIZE = 50;
 const HEARTBEAT_THROTTLE_MS = 30_000;
 
+/**
+ * How many modules to fetch from Shopify in parallel within a single job.
+ * Each module issues independent Shopify API requests; they share the shop's
+ * rate-limit bucket (1000 pts, 50 pts/s restore).  Default 3 keeps total
+ * in-flight requests well within the bucket's safe zone.
+ * Override with INIT_MODULE_CONCURRENCY env var.
+ */
+const MODULE_CONCURRENCY = Math.max(1, Number(process.env.INIT_MODULE_CONCURRENCY) || 3);
+
 export async function runInitWorker(): Promise<void> {
-  // Check hint queue first, then fall back to CosmosDB scan
+  // Drain hint queue first (O(1) Redis pop), then fall back to Cosmos scan.
   const hints = await drainHints();
-  const jobs = hints.length > 0
-    ? (await Promise.all(hints.map((h) => claimJob(h.shopName, h.taskId, "INIT_QUEUED", "INITIALIZING", WORKER_ID)))).filter(Boolean)
-    : (await findPendingJobs("INIT_QUEUED", 3))
-        .map((j) => undefined as never) // claim below
-        .slice(0, 0); // replaced by the next block
+  const pending =
+    hints.length > 0
+      ? (
+          await Promise.all(
+            hints.map((h) =>
+              claimJob(h.shopName, h.taskId, "INIT_QUEUED", "INITIALIZING", WORKER_ID),
+            ),
+          )
+        ).filter((j): j is NonNullable<typeof j> => j !== null)
+      : await claimPendingJobs("INIT_QUEUED", 3);
 
-  const pending = hints.length > 0
-    ? jobs.filter((j) => j !== null)
-    : await claimPendingJobs("INIT_QUEUED", 3);
+  if (pending.length === 0) return;
 
-  for (const job of pending) {
-    if (!job) continue;
-    console.log(`[init] processing job ${job.id} shop=${job.shopName}`);
-    await processInitJob(job.id, job.shopName).catch((e) => {
-      console.error(`[init] job ${job.id} failed`, e);
-    });
-  }
+  // Different shops have independent Shopify rate-limit buckets — run their
+  // init jobs in parallel.  Same-shop jobs are prevented by the single-job
+  // claim (claimJob etag guard ensures each job is owned by exactly one worker
+  // across all scaled-out instances).
+  await Promise.all(
+    pending.map((job) =>
+      processInitJob(job.id, job.shopName).catch((e) => {
+        console.error(`[init] job ${job.id} failed`, e);
+      }),
+    ),
+  );
 }
 
 async function drainHints() {
@@ -45,7 +67,7 @@ async function claimPendingJobs(status: "INIT_QUEUED", limit: number) {
   const claimed = await Promise.all(
     candidates.map((j) => claimJob(j.shopName, j.id, status, "INITIALIZING", WORKER_ID)),
   );
-  return claimed.filter((j) => j !== null);
+  return claimed.filter((j): j is NonNullable<typeof j> => j !== null);
 }
 
 async function processInitJob(jobId: string, shopName: string): Promise<void> {
@@ -59,12 +81,16 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
   await updateJob(shopName, jobId, { blobPrefix, status: "INITIALIZING" });
 
   const manifest: Record<string, { totalItems: number; chunks: number }> = {};
+  // JS is single-threaded: these are mutated synchronously between await
+  // points inside pAll callbacks — safe without a mutex.
   let totalItems = 0;
-  let totalUnits = 0; // node-level total (HTML nodes + plain parts) for progress
+  let totalUnits = 0;
 
   let lastHeartbeatAt = 0;
   const throttledHeartbeat = async () => {
     const now = Date.now();
+    // Synchronous guard update before the async heartbeat call prevents
+    // concurrent pAll callbacks from triggering duplicate heartbeats.
     if (now - lastHeartbeatAt > HEARTBEAT_THROTTLE_MS) {
       lastHeartbeatAt = now;
       await heartbeat(shopName, jobId);
@@ -72,9 +98,12 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
   };
 
   try {
-    for (const module of job.modules) {
-      await heartbeat(shopName, jobId);
-      lastHeartbeatAt = Date.now();
+    // ── Parallel module fetching ─────────────────────────────────────────────
+    // MODULE_CONCURRENCY controls how many Shopify API requests run in
+    // parallel.  shopifyGraphql() handles proactive throttle (extensions.cost)
+    // and 429 retry, so we don't need explicit back-off here.
+    await pAll(job.modules, MODULE_CONCURRENCY, async (module) => {
+      await throttledHeartbeat();
 
       console.log(`[init] fetching module=${module} job=${jobId}`);
       const chunks = await fetchTranslatableResources(
@@ -91,34 +120,43 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
         },
       );
 
-      // No translatable content for this module — skip entirely (no blob, no manifest entry)
       if (chunks.length === 0) {
         console.log(`[init] module=${module} 0 items, skipping`);
-        continue;
+        return;
       }
 
-      for (let i = 0; i < chunks.length; i++) {
-        const chunkPath = `${blobPrefix}/init/${module}/chunk-${String(i).padStart(2, "0")}.json`;
-        await blobWrite(chunkPath, chunks[i]);
-      }
+      // Upload all chunks for this module in parallel — each blob path is
+      // unique so concurrent writes are safe.
+      await Promise.all(
+        chunks.map((chunk, i) =>
+          blobWrite(
+            `${blobPrefix}/init/${module}/chunk-${String(i).padStart(2, "0")}.json`,
+            chunk,
+          ),
+        ),
+      );
 
+      // Compute per-module stats
       const moduleItemCount = chunks.reduce((sum, c) => sum + c.length, 0);
+      let moduleUnits = 0;
       for (const chunk of chunks) {
         for (const r of chunk) {
-          for (const f of r.fields) totalUnits += countFieldUnits(f.key, f.value);
+          for (const f of r.fields) moduleUnits += countFieldUnits(f.key, f.value);
         }
       }
+
+      // Accumulate into shared totals.  These +=  happen synchronously (no
+      // await between read and write) so they are safe despite interleaved
+      // async callbacks in JS's single-threaded event loop.
       manifest[module] = { totalItems: moduleItemCount, chunks: chunks.length };
       totalItems += moduleItemCount;
+      totalUnits += moduleUnits;
 
-      await setProgress(jobId, {
-        initDone: totalItems,
-        currentModule: module,
-      });
+      await setProgress(jobId, { initDone: totalItems, currentModule: module });
+      await throttledHeartbeat();
+    });
 
-      await heartbeat(shopName, jobId);
-    }
-
+    // ── Write manifest and advance status ────────────────────────────────────
     await blobWrite(`${blobPrefix}/manifest.json`, {
       taskId: jobId,
       shopName,
@@ -140,9 +178,12 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
       },
     });
 
-    await setProgress(jobId, { initTotal: totalItems, initDone: totalItems, translateUnitTotal: totalUnits });
+    await setProgress(jobId, {
+      initTotal: totalItems,
+      initDone: totalItems,
+      translateUnitTotal: totalUnits,
+    });
 
-    // Push hint to translate stage for immediate pickup
     await pushHint("translate", { taskId: jobId, shopName });
     console.log(`[init] done job=${jobId} totalItems=${totalItems}`);
   } catch (e) {
