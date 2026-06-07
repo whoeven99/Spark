@@ -564,7 +564,10 @@ async function callLLMOnce(
   aiModel: string,
   systemPrompt: string,
 ): Promise<Map<string, string>> {
-  const payload = items.map((i) => ({ key: i.key, value: i.value }));
+  // Use opaque IDs (f0, f1, f2…) instead of semantic field names so the model
+  // cannot confuse "title" as a content hint and swap values between keys.
+  const idToKey = new Map(items.map((it, idx) => [`f${idx}`, it.key]));
+  const payload = items.map((it, idx) => ({ key: `f${idx}`, value: it.value }));
 
   const model = resolveModel(aiModel);
 
@@ -591,7 +594,8 @@ async function callLLMOnce(
   const map = new Map<string, string>();
   for (const r of parsed) {
     if (typeof r?.key === "string" && typeof r?.translatedValue === "string") {
-      map.set(r.key, r.translatedValue);
+      const origKey = idToKey.get(r.key);
+      if (origKey !== undefined) map.set(origKey, r.translatedValue);
     }
   }
   return map;
