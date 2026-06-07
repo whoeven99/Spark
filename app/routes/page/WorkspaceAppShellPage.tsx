@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { LanguageSelector } from "../component/common/LanguageSelector";
 
 type WorkspacePanel = "dashboard" | "chat" | "skills" | "automation" | "tasks";
@@ -43,6 +43,7 @@ type SkillApp = {
   description: string;
   status: string;
   category: string;
+  path: string;
 };
 
 type AutomationConfiguredItem = {
@@ -212,12 +213,12 @@ const dashboardTaskSummary = [
 ];
 
 const skillApps: SkillApp[] = [
-  { id: "s1", title: "商品文案优化", description: "批量生成和优化商品标题、卖点与描述。", status: "最近使用", category: "内容" },
-  { id: "s2", title: "多语言翻译", description: "支持商品内容、页面文案与术语统一翻译。", status: "可用", category: "翻译" },
-  { id: "s3", title: "店铺诊断", description: "汇总经营指标并给出异常原因和建议。", status: "推荐", category: "分析" },
-  { id: "s4", title: "图片工具", description: "处理商品图翻译、文生图和素材优化。", status: "可用", category: "视觉" },
-  { id: "s5", title: "广告素材建议", description: "结合商品和活动目标生成广告文案建议。", status: "内测", category: "营销" },
-  { id: "s6", title: "邮件运营助手", description: "根据商品和分群生成邮件主题与正文。", status: "可用", category: "运营" },
+  { id: "s1", title: "商品文案优化", description: "批量生成和优化商品标题、卖点与描述。", status: "最近使用", category: "内容", path: "/app/generate-description" },
+  { id: "s2", title: "多语言翻译", description: "支持商品内容、页面文案与术语统一翻译。", status: "可用", category: "翻译", path: "/app/translation" },
+  { id: "s3", title: "店铺诊断", description: "汇总经营指标并给出异常原因和建议。", status: "推荐", category: "分析", path: "/app/additional" },
+  { id: "s4", title: "图片工具", description: "处理商品图翻译、文生图和素材优化。", status: "可用", category: "视觉", path: "/app/image-studio" },
+  { id: "s5", title: "广告素材建议", description: "结合商品和活动目标生成广告文案建议。", status: "内测", category: "营销", path: "/app" },
+  { id: "s6", title: "邮件运营助手", description: "根据商品和分群生成邮件主题与正文。", status: "可用", category: "运营", path: "/app" },
 ];
 
 const automationConfigured: AutomationConfiguredItem[] = [
@@ -255,6 +256,7 @@ function isObjectType(value: ContextTool | null): value is ObjectType {
 }
 
 export function WorkspaceAppShellPage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [conversationList, setConversationList] = useState<Conversation[]>(initialConversations);
   const [activeConversationId, setActiveConversationId] = useState(initialConversations[0].id);
@@ -541,7 +543,7 @@ export function WorkspaceAppShellPage() {
             onSend={sendMessage}
           />
         ) : null}
-        {activePanel === "skills" ? <SkillsPanel /> : null}
+        {activePanel === "skills" ? <SkillsPanel onOpenTool={(path: string) => navigate(path)} /> : null}
         {activePanel === "automation" ? (
           <AutomationPanel activeView={automationView} onChangeView={setAutomationView} />
         ) : null}
@@ -1088,7 +1090,7 @@ function ChatPanel({
   );
 }
 
-function SkillsPanel() {
+function SkillsPanel({ onOpenTool }: { onOpenTool: (path: string) => void }) {
   return (
     <section style={surfaceCardStyle}>
       <div style={sectionHeaderStyle}>
@@ -1100,15 +1102,15 @@ function SkillsPanel() {
       </div>
       <div style={skillGridStyle}>
         {skillApps.map((skill) => (
-          <article key={skill.id} style={skillCardStyle}>
+          <button key={skill.id} type="button" style={skillCardButtonStyle} onClick={() => onOpenTool(skill.path)}>
             <div style={skillCategoryStyle}>{skill.category}</div>
             <div style={sectionTitleSmallStyle}>{skill.title}</div>
             <div style={sectionTextStyle}>{skill.description}</div>
             <div style={skillFooterStyle}>
               <span style={statusBadgeStyle("neutral")}>{skill.status}</span>
-              <button type="button" style={textButtonStyle}>进入</button>
+              <span style={textButtonStyle}>进入</span>
             </div>
-          </article>
+          </button>
         ))}
       </div>
     </section>
@@ -1653,6 +1655,7 @@ const selectorItemContentStyle: CSSProperties = { display: "flex", flexDirection
 
 const skillGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16 };
 const skillCardStyle: CSSProperties = { padding: 18, borderRadius: 14, border: "1px solid #e1e3e5", background: "#ffffff", display: "flex", flexDirection: "column", gap: 10 };
+const skillCardButtonStyle: CSSProperties = { ...skillCardStyle, width: "100%", textAlign: "left", cursor: "pointer" };
 const skillCategoryStyle: CSSProperties = { fontSize: 12, fontWeight: 700, color: "#6d7175" };
 const skillFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 };
 
