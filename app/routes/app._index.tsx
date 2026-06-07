@@ -10,7 +10,7 @@ import {
 } from "../server/billing/buildBillingReturnUrl.server";
 import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { ChatPage } from "./page/ChatPage";
+import { WorkspacePage } from "./page/WorkspacePage";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
@@ -25,7 +25,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export default function Index() {
-  return <ChatPage />;
+  return <WorkspacePage />;
 }
 
 export const headers: HeadersFunction = (headersArgs) => {
