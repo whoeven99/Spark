@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { redirect, Form, useLoaderData } from "react-router";
 
-import { buildEmbeddedAppPath, getAppEntry, getAppEntryConfig } from "../../config/appEntry.server";
+import { buildEmbeddedAppPath, getAppHomePath } from "../../config/appEntry.server";
 import {
   BILLING_PAGE_PATH,
   isBillingReturnRequest,
@@ -18,34 +18,24 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const shop = resolveShopQueryFromRequest(request);
 
+  const home = getAppHomePath();
+
   if (shop) {
     if (!url.searchParams.get("shop")) {
       url.searchParams.set("shop", shop);
     }
-    const { home } = getAppEntryConfig();
     const path = isBillingReturnRequest(request) ? BILLING_PAGE_PATH : home;
     throw redirect(buildEmbeddedAppPath(path, new Request(url.toString(), request)));
   }
 
   if (isEmbeddedAdminEntry(request)) {
-    // 尝试让 Shopify 库通过 session token 等方式认证
     const { session } = await authenticate.admin(request);
     const targetUrl = new URL(request.url);
     if (!targetUrl.searchParams.get("shop") && session.shop) {
       targetUrl.searchParams.set("shop", session.shop);
     }
-    const { home } = getAppEntryConfig();
     const path = isBillingReturnRequest(request) ? BILLING_PAGE_PATH : home;
     throw redirect(buildEmbeddedAppPath(path, new Request(targetUrl.toString(), request)));
-  }
-
-  // 卫星 App：用户在 Shopify Admin 侧边栏点击时本应直接命中 /app/xxx 路径，
-  // 但若 application_url 配错或 OAuth bounce 导致落在根路径 / 上，不应展示登录表单，
-  // 而是直接重定向到 App 首页（让 Shopify 库触发 OAuth 流程）。
-  const appEntry = getAppEntry();
-  if (appEntry !== "chat") {
-    const { home } = getAppEntryConfig();
-    throw redirect(buildEmbeddedAppPath(home, request));
   }
 
   return { showForm: Boolean(login) };

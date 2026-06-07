@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, KeyboardEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
@@ -35,13 +35,14 @@ type WorkspaceConversationMessage = {
   pictureTranslateCard?: boolean;
 };
 
-type Conversation = {
+type ConversationSummary = {
   id: string;
   title: string;
-  updatedAt: string;
   preview: string;
-  messages: WorkspaceConversationMessage[];
+  updatedAt: string;
 };
+
+type Conversation = ConversationSummary;
 
 type TaskRecord = {
   id: string;
@@ -171,43 +172,6 @@ const objectFilterLabels: Record<ObjectType, Array<{ key: ObjectFilterKey; label
   ],
 };
 
-const initialConversations: Conversation[] = [
-  {
-    id: "conv-001",
-    title: "夏季新品文案优化",
-    updatedAt: "刚刚",
-    preview: "批量补齐 168 个新品的商品描述",
-    messages: [
-      { role: "assistant", text: "我已经拿到夏季新品列表。你可以继续补充风格和品牌规则。", time: "09:12" },
-      { role: "user", text: "请优先做 SEO 友好的英文商品描述，并保留原有 HTML 结构。", time: "09:13" },
-      { role: "assistant", text: "收到，我会先生成一份任务建议，方便你确认范围和消耗。", time: "09:14" },
-    ],
-  },
-  {
-    id: "conv-002",
-    title: "退款异常复盘",
-    updatedAt: "18 分钟前",
-    preview: "分析同一 SKU 的退款高峰",
-    messages: [
-      { role: "assistant", text: "当前退款主要集中在美国站同一 SKU，建议先看最近 7 天移动端订单。", time: "08:42" },
-      { role: "user", text: "好，再帮我归纳可以沉淀成自动化监控的规则。", time: "08:44" },
-    ],
-  },
-  {
-    id: "conv-003",
-    title: "日语翻译批次",
-    updatedAt: "1 小时前",
-    preview: "继续处理日语与英语翻译任务",
-    messages: [{ role: "assistant", text: "这批翻译还缺品牌术语表和禁用词说明。", time: "07:21" }],
-  },
-  {
-    id: "conv-004",
-    title: "经营日报生成",
-    updatedAt: "昨天",
-    preview: "检查日报摘要是否可直接发送",
-    messages: [{ role: "assistant", text: "日报草稿已经生成，建议优先突出转化率和退款率波动。", time: "昨天 18:04" }],
-  },
-];
 
 const dashboardMetrics: DashboardMetric[] = [
   { label: "销售额", value: "$12,540", delta: "+8.4%", tone: "positive" },
@@ -280,27 +244,23 @@ function isObjectType(value: ContextTool | null): value is ObjectType {
   return value === "product" || value === "article" || value === "order";
 }
 
-export function WorkspaceAppShellPage() {
+export function WorkspaceAppShellPage({ initialConversationList = [] }: { initialConversationList?: ConversationSummary[] }) {
   const shopify = useAppBridge();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
-  const [conversationList, setConversationList] = useState<Conversation[]>(initialConversations);
-  const [activeConversationId, setActiveConversationId] = useState(initialConversations[0].id);
-  const [draftByConversation, setDraftByConversation] = useState<Record<string, string>>({
-    "conv-001": "请基于品牌语气和 SEO 规则，补齐这批新品的英文商品描述。",
-    "conv-002": "把这次退款异常提炼成可以重复运行的自动化规则。",
-    "conv-003": "继续这批商品的日语翻译，并保留品牌术语。",
-    "conv-004": "把日报里最重要的经营变化压缩成 3 条结论。",
-  });
-  const [messagesByConversation, setMessagesByConversation] = useState<Record<string, WorkspaceConversationMessage[]>>(
-    Object.fromEntries(initialConversations.map((conversation) => [conversation.id, conversation.messages])),
+  const [conversationList, setConversationList] = useState<Conversation[]>(initialConversationList);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(
+    initialConversationList.length > 0 ? initialConversationList[0].id : null,
   );
+  const [draftByConversation, setDraftByConversation] = useState<Record<string, string>>({});
+  const [messagesByConversation, setMessagesByConversation] = useState<Record<string, WorkspaceConversationMessage[]>>({});
+  const loadedConvIdsRef = useRef<Set<string>>(new Set());
   const [automationView, setAutomationView] = useState<AutomationView>("configured");
   const [taskFilter, setTaskFilter] = useState<"all" | TaskKind>("all");
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const [activeContextTool, setActiveContextTool] = useState<ContextTool | null>("product");
+  const [activeContextTool, setActiveContextTool] = useState<ContextTool | null>(null);
   const [objectQueryByType, setObjectQueryByType] = useState<Record<ObjectType, string>>({
     product: "",
     article: "",
@@ -331,12 +291,32 @@ export function WorkspaceAppShellPage() {
 
   const panelParam = searchParams.get("panel");
   const activePanel: WorkspacePanel = isWorkspacePanel(panelParam) ? panelParam : "dashboard";
-  const activeConversation = conversationList.find((item) => item.id === activeConversationId) ?? conversationList[0];
-  const activeMessages = messagesByConversation[activeConversation.id] ?? activeConversation.messages;
+  const activeConversation = conversationList.find((item) => item.id === activeConversationId) ?? null;
+  const activeMessages = activeConversation ? (messagesByConversation[activeConversation.id] ?? []) : [];
   const filteredTasks = useMemo(
     () => (taskFilter === "all" ? initialTasks : initialTasks.filter((task) => task.kind === taskFilter)),
     [taskFilter],
   );
+
+  // Lazy-load messages when switching to a conversation for the first time
+  useEffect(() => {
+    if (!activeConversationId) return;
+    if (loadedConvIdsRef.current.has(activeConversationId)) return;
+    loadedConvIdsRef.current.add(activeConversationId);
+    const authQuery = typeof window !== "undefined" ? window.location.search : "";
+    fetch(`/api/conversations/${activeConversationId}${authQuery}`)
+      .then((res) => res.json())
+      .then((data: { messages?: unknown[] }) => {
+        setMessagesByConversation((current) => ({
+          ...current,
+          [activeConversationId]: ((data.messages ?? []) as Parameters<typeof dbMessageToUiMessage>[0][]).map(dbMessageToUiMessage),
+        }));
+      })
+      .catch((err) => {
+        console.error("[WorkspaceAppShellPage] load messages failed:", err);
+        setMessagesByConversation((current) => ({ ...current, [activeConversationId]: [] }));
+      });
+  }, [activeConversationId]);
 
   const switchPanel = (panel: WorkspacePanel) => {
     const next = new URLSearchParams(searchParams);
@@ -353,35 +333,31 @@ export function WorkspaceAppShellPage() {
     switchPanel("chat");
   };
 
-  const createConversation = () => {
-    const createdAt = new Date();
-    const timeLabel = `${String(createdAt.getHours()).padStart(2, "0")}:${String(createdAt.getMinutes()).padStart(2, "0")}`;
-    const nextId = `conv-${createdAt.getTime()}`;
-    const newConversation: Conversation = {
-      id: nextId,
-      title: "新对话",
-      updatedAt: "刚刚",
-      preview: "开始描述你的任务目标、对象和约束。",
-      messages: [
-        {
-          role: "assistant",
-          text: "新的对话已经创建。你可以先在下方工具栏补充商品、订单、文章、文件或富媒体，再发送任务需求。",
-          time: timeLabel,
-        },
-      ],
-    };
-
-    setConversationList((current) => [newConversation, ...current].slice(0, 50));
-    setMessagesByConversation((current) => ({
-      ...current,
-      [nextId]: newConversation.messages,
-    }));
-    setDraftByConversation((current) => ({
-      ...current,
-      [nextId]: "",
-    }));
-    setActiveConversationId(nextId);
-    switchPanel("chat");
+  const createConversation = async () => {
+    const authQuery = typeof window !== "undefined" ? window.location.search : "";
+    try {
+      const res = await fetch(`/api/conversations${authQuery}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = (await res.json()) as { conversation: ConversationSummary };
+      const conv = data.conversation;
+      const welcomeMsg: WorkspaceConversationMessage = {
+        role: "assistant",
+        text: "新的对话已经创建。你可以先在下方工具栏补充商品、订单、文章、文件或富媒体，再发送任务需求。",
+        time: formatTimeLabel(new Date()),
+      };
+      loadedConvIdsRef.current.add(conv.id);
+      setConversationList((current) => [conv, ...current].slice(0, 50));
+      setMessagesByConversation((current) => ({ ...current, [conv.id]: [welcomeMsg] }));
+      setDraftByConversation((current) => ({ ...current, [conv.id]: "" }));
+      setActiveContextTool(null);
+      setActiveConversationId(conv.id);
+      switchPanel("chat");
+    } catch (err) {
+      console.error("[WorkspaceAppShellPage] create conversation failed:", err);
+    }
   };
 
   const clearContext = () => {
@@ -439,18 +415,19 @@ export function WorkspaceAppShellPage() {
   };
 
   const sendMessage = async () => {
+    if (!activeConversation) return;
     const content = (draftByConversation[activeConversation.id] ?? "").trim();
     if (!content || isStreaming) return;
 
     replyEpochRef.current += 1;
     const epoch = replyEpochRef.current;
     const conversationId = activeConversation.id;
-    const priorMessages = messagesByConversation[conversationId] ?? activeConversation.messages;
+    const priorMessages = messagesByConversation[conversationId] ?? [];
     const nextPreview = content.length > 28 ? `${content.slice(0, 28)}...` : content;
-    const nextTitle =
-      activeConversation.title === "新对话"
-        ? (content.length > 18 ? `${content.slice(0, 18)}...` : content)
-        : activeConversation.title;
+    const isNewTitle = activeConversation.title === "新对话";
+    const nextTitle = isNewTitle
+      ? (content.length > 18 ? `${content.slice(0, 18)}...` : content)
+      : activeConversation.title;
     const userTime = formatTimeLabel(new Date());
 
     setConversationList((current) =>
@@ -460,7 +437,7 @@ export function WorkspaceAppShellPage() {
               ...conversation,
               title: nextTitle,
               preview: nextPreview,
-              updatedAt: "刚刚",
+              updatedAt: new Date().toISOString(),
             }
           : conversation,
       ),
@@ -509,6 +486,23 @@ export function WorkspaceAppShellPage() {
               buildAssistantWorkspaceMessage(assistantText, payload),
             ],
           }));
+
+          // Persist user + assistant messages (fire and forget)
+          if (!payload.httpStatus) {
+            const assistantPayloads = serializeAssistantPayloads(payload);
+            fetch(`/api/conversations/${conversationId}${authQuery}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                messages: [
+                  { role: "user", content },
+                  { role: "assistant", content: assistantText, payloads: assistantPayloads },
+                ],
+                ...(isNewTitle ? { title: nextTitle } : {}),
+                preview: nextPreview,
+              }),
+            }).catch((err) => console.error("[WorkspaceAppShellPage] persist messages failed:", err));
+          }
         },
       });
     } catch (error) {
@@ -623,7 +617,7 @@ export function WorkspaceAppShellPage() {
                 >
                   <span style={historyTitleStyle}>{conversation.title}</span>
                   <span style={historyPreviewStyle}>{conversation.preview}</span>
-                  <span style={mutedMetaStyle}>{conversation.updatedAt}</span>
+                  <span style={mutedMetaStyle}>{formatRelativeTime(conversation.updatedAt)}</span>
                 </button>
               ))}
             </div>
@@ -661,7 +655,7 @@ export function WorkspaceAppShellPage() {
 
       <main style={contentStyle}>
         {activePanel === "dashboard" ? <DashboardPanel /> : null}
-        {activePanel === "chat" ? (
+        {activePanel === "chat" && activeConversation ? (
           <ChatPanel
             conversation={activeConversation}
             messages={activeMessages}
@@ -710,12 +704,8 @@ export function WorkspaceAppShellPage() {
               setStreamingConversationId(null);
               abortStream();
             }}
-            onTranslationCardSuccess={(messageIndex, detail) =>
-              handleTranslationCardSuccess(activeConversation.id, messageIndex, detail)
-            }
-            onPictureTranslateCardSuccess={(messageIndex, detail) =>
-              handlePictureTranslateCardSuccess(activeConversation.id, messageIndex, detail)
-            }
+            onTranslationCardSuccess={handleTranslationCardSuccess}
+            onPictureTranslateCardSuccess={handlePictureTranslateCardSuccess}
           />
         ) : null}
         {activePanel === "skills" ? <SkillsPanel onOpenTool={(path: string) => navigate(path)} /> : null}
@@ -727,6 +717,21 @@ export function WorkspaceAppShellPage() {
         ) : null}
       </main>
     </div>
+  );
+}
+
+function ThinkingDots() {
+  const [frame, setFrame] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setFrame((f) => (f + 1) % 4), 450);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <span>
+      正在思考
+      <span style={{ letterSpacing: 2 }}>{"...".slice(0, frame)}</span>
+      <span style={{ opacity: 0, letterSpacing: 2 }}>{"...".slice(frame)}</span>
+    </span>
   );
 }
 
@@ -920,7 +925,8 @@ function ChatPanel({
   ) => void;
 }) {
   const messageListRef = useRef<HTMLDivElement | null>(null);
-  const [hoveredTool, setHoveredTool] = useState<ContextTool | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [isScrolledUp, setIsScrolledUp] = useState(false);
   const [activeObjectFilter, setActiveObjectFilter] = useState<Record<ObjectType, ObjectFilterKey>>({
     product: "all",
     article: "all",
@@ -983,68 +989,121 @@ function ChatPanel({
     : undefined;
   const streamingProductImprovePayload = streamingGeneratePayload as ProductImproveCardPayload | undefined;
 
+  const scrollToBottom = () => {
+    if (messageListRef.current) {
+      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+    }
+  };
+
+  const handleMessageListScroll = () => {
+    const el = messageListRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    setIsScrolledUp(!atBottom);
+  };
+
+  const handleTextareaKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+    e.preventDefault();
+    void onSend();
+  };
+
+  const focusComposerInput = () => {
+    const ta = textareaRef.current;
+    if (!ta || isStreaming) return;
+    ta.focus();
+    const len = ta.value.length;
+    ta.setSelectionRange(len, len);
+  };
+
   useEffect(() => {
     const element = messageListRef.current;
     if (!element) return;
     element.scrollTop = element.scrollHeight;
+    setIsScrolledUp(false);
   }, [conversation.id, messages.length]);
+
+  useEffect(() => {
+    if (!showStreamingReply || isScrolledUp) return;
+    scrollToBottom();
+  }, [showStreamingReply, streamingText, isScrolledUp]);
+
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${ta.scrollHeight}px`;
+  }, [draft]);
+
+  useEffect(() => {
+    focusComposerInput();
+  }, [conversation.id, isStreaming]);
 
   return (
     <div style={chatLayoutStyle}>
-      <section style={{ ...surfaceCardStyle, minHeight: 0 }}>
+      <section style={{ ...surfaceCardStyle, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={conversationMetaRowStyle}>
           <span style={conversationMetaTitleStyle}>{conversation.title}</span>
           <span style={mutedMetaStyle}>{conversation.updatedAt}</span>
         </div>
 
-        <div ref={messageListRef} style={messageListStyle}>
-          <ChatMessages
-            messages={messages.map((message) => workspaceMessageToChatMessage(message))}
-            onTranslationCardSuccess={(messageIndex, detail) =>
-              onTranslationCardSuccess(conversation.id, messageIndex, detail)
-            }
-            onPictureTranslateCardSuccess={(messageIndex, detail) =>
-              onPictureTranslateCardSuccess(conversation.id, messageIndex, detail)
-            }
-          />
-          {showStreamingReply ? (
-            <div style={streamingWrapStyle}>
-              <div style={streamingAssistantShellStyle}>
-                {awaitingFirstChunk && !streamingText && skillSteps.length === 0 ? (
-                  <span style={sectionTextStyle}>正在思考…</span>
-                ) : (
-                  <>
-                    {skillSteps.length > 0 ? (
-                      <div style={skillStepsWrapStyle}>
-                        {skillSteps.map((step) => (
-                          <div key={`${step.skill}-${step.stepId}`} style={skillStepLineStyle}>
-                            {step.label}
-                            {step.detail ? ` · ${step.detail}` : ""}
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                    {streamingText ? <ChatMessageContent content={streamingText} /> : null}
-                    {streamingTranslationPayload ? (
-                      <div style={streamingCardSlotStyle}>
-                        <TranslationTaskChatCard
-                          embedded
-                          initialPayload={streamingTranslationPayload}
-                          onSuccess={() => {}}
-                        />
-                      </div>
-                    ) : null}
-                    {streamingGenerateCard ? (
-                      <div style={streamingCardSlotStyle}>
-                        <ProductImproveChatCard
-                          embedded
-                          initialResult={streamingProductImprovePayload}
-                        />
-                      </div>
-                    ) : null}
-                  </>
-                )}
+        <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+          <div ref={messageListRef} style={messageListStyle} onScroll={handleMessageListScroll}>
+            <ChatMessages
+              messages={messages.map((message) => workspaceMessageToChatMessage(message))}
+              onTranslationCardSuccess={(messageIndex, detail) =>
+                onTranslationCardSuccess(conversation.id, messageIndex, detail)
+              }
+              onPictureTranslateCardSuccess={(messageIndex, detail) =>
+                onPictureTranslateCardSuccess(conversation.id, messageIndex, detail)
+              }
+            />
+            {showStreamingReply ? (
+              <div style={streamingWrapStyle}>
+                <div style={streamingAssistantShellStyle}>
+                  {awaitingFirstChunk && !streamingText && skillSteps.length === 0 ? (
+                    <span style={{ ...sectionTextStyle, fontStyle: "italic" }}><ThinkingDots /></span>
+                  ) : (
+                    <>
+                      {skillSteps.length > 0 ? (
+                        <div style={skillStepsWrapStyle}>
+                          {skillSteps.map((step) => (
+                            <div key={`${step.skill}-${step.stepId}`} style={skillStepLineStyle}>
+                              {step.label}
+                              {step.detail ? ` · ${step.detail}` : ""}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      {streamingText ? <ChatMessageContent content={streamingText} /> : null}
+                      {streamingTranslationPayload ? (
+                        <div style={streamingCardSlotStyle}>
+                          <TranslationTaskChatCard
+                            embedded
+                            initialPayload={streamingTranslationPayload}
+                            onSuccess={() => {}}
+                          />
+                        </div>
+                      ) : null}
+                      {streamingGenerateCard ? (
+                        <div style={streamingCardSlotStyle}>
+                          <ProductImproveChatCard
+                            embedded
+                            initialResult={streamingProductImprovePayload}
+                          />
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                </div>
               </div>
+            ) : null}
+          </div>
+          {isScrolledUp ? (
+            <div style={scrollBottomOverlayStyle}>
+              <button type="button" style={scrollBottomButtonStyle} onClick={scrollToBottom}>
+                ↓ 查看最新消息
+              </button>
             </div>
           ) : null}
         </div>
@@ -1056,49 +1115,51 @@ function ChatPanel({
                 <span key={item.key} style={selectionBubbleStyle}>
                   <span>{item.label}</span>
                   <button type="button" style={selectionBubbleCloseStyle} onClick={() => onClearToolSelection(item.key)} aria-label={`清空${item.label}`}>
-                    x
+                    ×
                   </button>
                 </span>
               ))}
             </div>
           ) : null}
           <textarea
+            ref={textareaRef}
             value={draft}
             onChange={(event) => onDraftChange(event.target.value)}
+            onKeyDown={handleTextareaKeyDown}
             style={textareaStyle}
             placeholder="继续补充你的任务目标，并结合商品、订单、文章、文件或富媒体上下文..."
             disabled={isStreaming}
+            autoFocus
           />
           <div style={toolbarDockStyle}>
             <div style={toolbarBarStyle}>
               <div style={toolbarIconGroupStyle}>
                 {toolItems.map((item) => (
-                  <div key={item.key} style={toolbarTriggerWrapStyle}>
-                    <button
-                      type="button"
-                      style={toolbarIconButtonStyle(item.active)}
-                      onClick={() => onContextToolChange(item.key)}
-                      onMouseEnter={() => setHoveredTool(item.key)}
-                      onMouseLeave={() => setHoveredTool((current) => (current === item.key ? null : current))}
-                      title={item.label}
-                    >
-                      <span style={toolbarIconGlyphStyle}>{item.icon}</span>
-                    </button>
-                    {hoveredTool === item.key || item.active ? <span style={toolbarTooltipStyle}>{item.label}</span> : null}
-                  </div>
+                  <button
+                    key={item.key}
+                    type="button"
+                    style={toolbarPillButtonStyle(item.active)}
+                    onClick={() => onContextToolChange(item.key)}
+                    title={item.label}
+                  >
+                    <span style={toolbarIconGlyphStyle}>{item.icon}</span>
+                    <span>{item.label}</span>
+                  </button>
                 ))}
               </div>
               <div style={toolbarStatusGroupStyle}>
-                <span style={toolbarCountStyle}>已补充 {filledContextCount} 项</span>
+                {filledContextCount > 0 ? (
+                  <span style={toolbarCountStyle}>已补充 {filledContextCount} 项</span>
+                ) : null}
                 <button type="button" style={toolbarClearStyle} onClick={onClearContext}>
-                  清空
+                  清空上下文
                 </button>
               </div>
             </div>
           </div>
           <div style={composerFooterStyle}>
             <span style={sectionTextStyle}>
-              {isStreaming ? "AI Assistant 正在回复，可随时停止。" : "每个会话可以继续沉淀为任务或自动化。"}
+              {isStreaming ? "AI Assistant 正在回复，可随时停止。" : <span style={mutedMetaStyle}>Enter 发送，Shift+Enter 换行</span>}
             </span>
             <div style={buttonRowStyle}>
               <button type="button" style={ghostButtonStyle} disabled={isStreaming}>
@@ -1142,8 +1203,8 @@ function ChatPanel({
                       : "选择需要附加到这次对话的 URL、图片或视频。"}
                 </div>
               </div>
-              <button type="button" style={toolModalCloseStyle} onClick={onCloseToolPicker}>
-                关闭
+              <button type="button" style={toolModalCloseStyle} onClick={onCloseToolPicker} aria-label="关闭">
+                ✕
               </button>
             </div>
 
@@ -1316,7 +1377,7 @@ function ChatPanel({
         </div>
       ) : null}
 
-      <section style={sidePanelStyle}>
+      <section style={{ ...sidePanelStyle, alignSelf: "start" }}>
         <div style={surfaceCardStyle}>
           <div style={sectionTitleStyle}>当前上下文</div>
           <div style={listColumnStyle}>
@@ -1568,6 +1629,51 @@ function buildAssistantWorkspaceMessage(
 
 function formatTimeLabel(date: Date) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function formatRelativeTime(isoString: string): string {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 1) return "刚刚";
+  if (minutes < 60) return `${minutes} 分钟前`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  if (hours < 48) return "昨天";
+  return `${Math.floor(hours / 24)} 天前`;
+}
+
+function serializeAssistantPayloads(payload: ChatStreamFinishPayload): string | null {
+  const result: Record<string, unknown> = {};
+  if (payload.translationTaskForm) result.translationTaskForm = payload.translationTaskForm;
+  if (payload.attachments?.length) result.attachments = payload.attachments;
+  if (payload.productImproveCard || payload.productImproveCardPayload) {
+    result.productImproveCard = true;
+    if (payload.productImproveCardPayload) result.productImproveCardPayload = payload.productImproveCardPayload;
+  }
+  return Object.keys(result).length > 0 ? JSON.stringify(result) : null;
+}
+
+function dbMessageToUiMessage(msg: {
+  role: string;
+  content: string;
+  payloads: string | null;
+  createdAt: string;
+}): WorkspaceConversationMessage {
+  const extras = msg.payloads ? (JSON.parse(msg.payloads) as Record<string, unknown>) : {};
+  const translationTaskForm = extras.translationTaskForm
+    ? coerceTranslationTaskFormPayload(extras.translationTaskForm)
+    : undefined;
+  return {
+    role: msg.role as "user" | "assistant",
+    text: msg.content,
+    time: formatTimeLabel(new Date(msg.createdAt)),
+    ...(extras.attachments ? { attachments: extras.attachments as ChatMessageAttachment[] } : {}),
+    ...(translationTaskForm ? { translationTaskForm } : {}),
+    ...(extras.productImproveCard ? { productImproveCard: true } : {}),
+    ...(extras.productImproveCardPayload
+      ? { productImproveCardPayload: extras.productImproveCardPayload as ProductImproveCardPayload }
+      : {}),
+  };
 }
 
 function buildWorkspaceContextBlock(params: {
@@ -1832,14 +1938,14 @@ const barGroupStyle: CSSProperties = { display: "grid", gap: 8 };
 const barTrackStyle: CSSProperties = { height: 10, borderRadius: 999, background: "#f1f2f3", overflow: "hidden" };
 const barFillStyle: CSSProperties = { height: "100%", borderRadius: 999 };
 
-const chatLayoutStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 16, minHeight: 0, alignItems: "start" };
-const conversationMetaRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14 };
+const chatLayoutStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 16, height: "calc(100vh - 100px)" };
+const conversationMetaRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12, flexShrink: 0 };
 const conversationMetaTitleStyle: CSSProperties = { fontSize: 13, fontWeight: 700, color: "#202223" };
 const messageListStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 14,
-  height: 420,
+  height: "100%",
   overflowY: "auto",
   paddingRight: 6,
   scrollBehavior: "smooth",
@@ -1856,7 +1962,7 @@ const streamingAssistantShellStyle: CSSProperties = {
   color: "#202223",
 };
 const streamingCardSlotStyle: CSSProperties = { marginTop: "0.85rem" };
-const composerBoxStyle: CSSProperties = { marginTop: 18, paddingTop: 18, borderTop: "1px solid #ebedf0", background: "#ffffff" };
+const composerBoxStyle: CSSProperties = { flexShrink: 0, marginTop: 14, paddingTop: 14, borderTop: "1px solid #ebedf0" };
 const skillStepsWrapStyle: CSSProperties = {
   marginTop: 10,
   paddingTop: 10,
@@ -1871,7 +1977,8 @@ const skillStepLineStyle: CSSProperties = {
 };
 const textareaStyle: CSSProperties = {
   width: "100%",
-  minHeight: 120,
+  minHeight: 96,
+  maxHeight: 320,
   borderRadius: 12,
   border: "1px solid #c9cdd2",
   padding: 14,
@@ -1879,7 +1986,11 @@ const textareaStyle: CSSProperties = {
   lineHeight: 1.6,
   color: "#202223",
   background: "#ffffff",
-  resize: "vertical",
+  resize: "none",
+  overflowY: "auto",
+  boxSizing: "border-box",
+  outline: "none",
+  transition: "border-color 0.15s",
 };
 const composerFooterStyle: CSSProperties = { marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 };
 const sidePanelStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 16 };
@@ -1906,7 +2017,23 @@ const toolbarIconButtonStyle = (active: boolean): CSSProperties => ({
   padding: 0,
   cursor: "pointer",
 });
-const toolbarIconGlyphStyle: CSSProperties = { width: 16, textAlign: "center", fontSize: 12, lineHeight: 1 };
+const toolbarPillButtonStyle = (active: boolean): CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  height: 30,
+  padding: "0 10px",
+  border: `1px solid ${active ? "#202223" : "#dfe3e8"}`,
+  background: active ? "#202223" : "#ffffff",
+  color: active ? "#ffffff" : "#202223",
+  borderRadius: 999,
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: active ? 700 : 600,
+  whiteSpace: "nowrap",
+  transition: "background 0.12s, border-color 0.12s",
+});
+const toolbarIconGlyphStyle: CSSProperties = { fontSize: 11, lineHeight: 1, flexShrink: 0 };
 const toolbarTooltipStyle: CSSProperties = {
   position: "absolute",
   left: "50%",
@@ -1922,6 +2049,29 @@ const toolbarTooltipStyle: CSSProperties = {
   boxShadow: "0 8px 20px rgba(0,0,0,0.12)",
   pointerEvents: "none",
   zIndex: 2,
+};
+const scrollBottomOverlayStyle: CSSProperties = {
+  position: "absolute",
+  bottom: 10,
+  left: 0,
+  right: 0,
+  display: "flex",
+  justifyContent: "center",
+  pointerEvents: "none",
+  zIndex: 2,
+};
+const scrollBottomButtonStyle: CSSProperties = {
+  pointerEvents: "all",
+  border: "1px solid #c9cdd2",
+  borderRadius: 999,
+  background: "#ffffff",
+  color: "#202223",
+  padding: "6px 14px",
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: "pointer",
+  boxShadow: "0 4px 12px rgba(0,0,0,0.10)",
+  whiteSpace: "nowrap",
 };
 const toolbarStatusGroupStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" };
 const toolbarCountStyle: CSSProperties = { fontSize: 12, color: "#6d7175", fontWeight: 600 };
@@ -1987,14 +2137,19 @@ const toolModalHeaderStyle: CSSProperties = {
   marginBottom: 14,
 };
 const toolModalCloseStyle: CSSProperties = {
+  width: 32,
+  height: 32,
+  display: "grid",
+  placeItems: "center",
   border: "1px solid #dfe3e8",
   borderRadius: 10,
-  background: "#ffffff",
-  color: "#202223",
-  fontSize: 13,
-  fontWeight: 600,
-  padding: "8px 12px",
+  background: "#f6f6f7",
+  color: "#6d7175",
+  fontSize: 14,
+  fontWeight: 400,
+  padding: 0,
   cursor: "pointer",
+  flexShrink: 0,
 };
 const filterChipRowStyle: CSSProperties = { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 };
 const mockCreateBoxStyle: CSSProperties = {
@@ -2024,6 +2179,8 @@ const selectFieldStyle: CSSProperties = {
   fontSize: 13,
   color: "#202223",
   background: "#ffffff",
+  cursor: "pointer",
+  appearance: "auto",
 };
 const selectorSearchInputStyle: CSSProperties = {
   width: "100%",

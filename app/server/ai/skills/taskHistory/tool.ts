@@ -4,7 +4,6 @@ import type { AgentContext, ToolDefinition } from "../../core/toolRegistry.serve
 import { listRecentTasksForShop } from "../../../aiTask/aiTaskStore.server";
 import type { AITaskType } from "../../../../lib/aiTaskTypes";
 import { logDetailedError } from "../../../productImprove/generateDescriptionLog.server";
-import { getAppEntry } from "../../../../config/appEntry.server";
 
 export const LIST_MY_TASKS_TOOL_NAME = "list_my_tasks";
 const LOG_PREFIX = "[ListMyTasks]";
@@ -16,7 +15,7 @@ const TASK_TYPE_VALUES = [
 ] as const;
 
 function createListMyTasksTool(context: AgentContext): DynamicStructuredTool {
-  const { shop, appName } = context;
+  const { shop } = context;
   return new DynamicStructuredTool({
     name: LIST_MY_TASKS_TOOL_NAME,
     description:
@@ -45,10 +44,8 @@ function createListMyTasksTool(context: AgentContext): DynamicStructuredTool {
         return JSON.stringify({ ok: false, errorMsg: "无法识别当前店铺" });
       }
       try {
-        const resolvedAppName = appName ?? getAppEntry();
         const tasks = await listRecentTasksForShop({
           shop,
-          appName: resolvedAppName,
           taskType: taskType as AITaskType | undefined,
           limit: limit ?? 10,
         });

@@ -88,14 +88,13 @@ async function readV2Settings() {
 
 async function readPlanCatalog() {
   const result = await getDb().execute(`
-    SELECT planKey, appName, kind, billingInterval, displayName, tokens, priceAmount, currencyCode, enabled, sortOrder
+    SELECT planKey, kind, billingInterval, displayName, tokens, priceAmount, currencyCode, enabled, sortOrder
     FROM PlanCatalog
     WHERE enabled = 1
     ORDER BY sortOrder ASC, planKey ASC
   `);
   return result.rows.map((row) => ({
     planKey: String(row.planKey),
-    appName: String(row.appName),
     kind: String(row.kind),
     billingInterval: row.billingInterval != null ? String(row.billingInterval) : null,
     displayName: String(row.displayName),

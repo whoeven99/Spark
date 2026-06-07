@@ -1,4 +1,3 @@
-import { getAppEntry } from "../../config/appEntry.server";
 import {
   parseUsageMetadata,
   normalizeBillingModelKey,
@@ -135,7 +134,6 @@ async function runProductImproveTask(params: {
     if (usage.totalTokens > 0) {
       await recordBilledTokenUsage({
         shop,
-        appName: getAppEntry(),
         feature: "product_copy",
         modelKey: normalizeBillingModelKey(raw.modelLabel),
         usage,

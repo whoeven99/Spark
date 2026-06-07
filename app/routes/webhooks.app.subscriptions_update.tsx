@@ -1,5 +1,4 @@
 import type { ActionFunctionArgs } from "react-router";
-import { getAppEntry } from "../config/appEntry.server";
 import { handleAppSubscriptionWebhook } from "../server/billing/index.server";
 import {
   authenticateWebhookLogged,
@@ -16,7 +15,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       shop,
       payload,
       admin,
-      appName: getAppEntry(),
     });
   } catch (error) {
     console.error("[Billing] app_subscriptions/update handler failed:", error);

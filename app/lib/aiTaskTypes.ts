@@ -17,7 +17,6 @@ export interface AITaskItem {
   id: string;
   batchId: string;
   shop: string;
-  appName: string;
   taskType: AITaskType;
   status: AITaskStatus;
   config: Record<string, unknown>;
@@ -53,7 +52,6 @@ export interface AITaskListPageData {
 export interface AITaskBatchItem {
   id: string;
   shop: string;
-  appName: string;
   taskType: AITaskType;
   config: Record<string, unknown>;
   createdAt: string;

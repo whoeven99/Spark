@@ -133,6 +133,20 @@ const APP_SUBSCRIPTION_NODE_QUERY = `#graphql
   }
 `;
 
+const APP_PURCHASE_ONE_TIME_NODE_QUERY = `#graphql
+  query AppPurchaseOneTimeNode($id: ID!) {
+    node(id: $id) {
+      ... on AppPurchaseOneTime {
+        id
+        name
+        status
+        createdAt
+        test
+      }
+    }
+  }
+`;
+
 export type ShopifyAppSubscriptionNode = {
   id: string;
   name: string;
@@ -305,6 +319,33 @@ export async function shopifyFetchAppSubscription(
   const data = await runGraphql<{
     node: ShopifyAppSubscriptionNode | null;
   }>(admin, APP_SUBSCRIPTION_NODE_QUERY, { id: subscriptionId });
+
+  return data.node;
+}
+
+export type ShopifyAppPurchaseOneTimeNode = {
+  id: string;
+  name: string;
+  status: string;
+  createdAt: string;
+  test: boolean;
+};
+
+export function toAppPurchaseOneTimeGid(chargeId: string): string {
+  const trimmed = chargeId.trim();
+  if (trimmed.startsWith("gid://")) return trimmed;
+  return `gid://shopify/AppPurchaseOneTime/${trimmed}`;
+}
+
+export async function shopifyFetchAppPurchaseOneTime(
+  admin: ShopifyAdminGraphqlClient,
+  purchaseId: string,
+): Promise<ShopifyAppPurchaseOneTimeNode | null> {
+  const data = await runGraphql<{
+    node: ShopifyAppPurchaseOneTimeNode | null;
+  }>(admin, APP_PURCHASE_ONE_TIME_NODE_QUERY, {
+    id: toAppPurchaseOneTimeGid(purchaseId),
+  });
 
   return data.node;
 }

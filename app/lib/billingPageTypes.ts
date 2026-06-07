@@ -1,7 +1,6 @@
 /** 与 `planCatalog.server` 的 PlanRecord 一致，供客户端组件使用。 */
 export type PlanRecord = {
   planKey: string;
-  appName: string;
   kind: string;
   billingInterval: string | null;
   displayName: string;
@@ -15,7 +14,6 @@ export type PlanRecord = {
 /** 计费页 loader 可序列化快照（避免 Prisma Date 等类型）。 */
 export type BillingPageSnapshot = {
   shop: string;
-  appName: string;
   billingRequired: boolean;
   hasAccess: boolean;
   availableTokens: number;
@@ -68,7 +66,6 @@ export type BillingToolUsageItem = {
 };
 
 export type BillingPageLoaderData = {
-  appName: string;
   billing: BillingPageSnapshot;
   trialPlan: PlanRecord | null;
   subscriptionPlans: PlanRecord[];

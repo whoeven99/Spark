@@ -30,7 +30,6 @@ const mockAdmin = { graphql: vi.fn() };
 const context: AgentContext = {
   admin: mockAdmin as AgentContext["admin"],
   shop: "demo.myshopify.com",
-  appName: "chat",
 };
 
 describe("normalizeAgentTemplateDataKeys", () => {

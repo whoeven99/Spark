@@ -1,4 +1,4 @@
-import { isBillingEnabledForApp } from "../../billing/constants.server";
+import { isBillingEnabled } from "../../billing/constants.server";
 import { getPlanByKey } from "../../billing/plans/planCatalog.server";
 import {
   formatOpsNotifyPrice,
@@ -39,7 +39,7 @@ function buildSubscriptionMessage(
 export async function sendSubscriptionFeishuNotify(
   params: SendSubscriptionFeishuNotifyParams,
 ): Promise<SendFeishuResult> {
-  if (!isBillingEnabledForApp(params.appName)) {
+  if (!isBillingEnabled()) {
     console.info(
       `${LOG} skipped shop=${params.shop} appName=${params.appName} reason=billing_not_enabled`,
     );

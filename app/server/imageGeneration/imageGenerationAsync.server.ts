@@ -1,4 +1,3 @@
-import { getAppEntry } from "../../config/appEntry.server";
 import {
   buildImageGenerateBillingItem,
   buildImagePromptBillingItem,
@@ -127,7 +126,6 @@ async function runImageGenerationTask(params: {
   billingItems.push(buildImageGenerateBillingItem(result.provider));
   const actualCredits = await recordVisualToolTokenUsage({
     shop: params.shop,
-    appName: getAppEntry(),
     items: billingItems,
   });
 

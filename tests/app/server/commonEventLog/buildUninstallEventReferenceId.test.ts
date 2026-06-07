@@ -6,7 +6,6 @@ describe("buildUninstallEventReferenceId", () => {
     expect(
       buildUninstallEventReferenceId({
         shop: "demo.myshopify.com",
-        appName: "chat",
         webhookId: "wh-1",
         sessionId: "offline_demo",
       }),
@@ -17,7 +16,6 @@ describe("buildUninstallEventReferenceId", () => {
     expect(
       buildUninstallEventReferenceId({
         shop: "demo.myshopify.com",
-        appName: "chat",
         sessionId: "offline_demo",
       }),
     ).toBe("uninstall:offline_demo");

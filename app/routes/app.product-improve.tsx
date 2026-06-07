@@ -14,7 +14,6 @@ import { fetchProductDescriptionContext } from "../server/productImprove/product
 import { detectTextLanguage } from "../server/productImprove/detectTextLanguage.server";
 import { enqueueProductImproveTask } from "../server/productImprove/productImproveAsync.server";
 import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
-import { getAppEntry } from "../config/appEntry.server";
 import { buildEmbeddedAppPath } from "../config/appEntry.server";
 import { isBillingReturnRequest } from "../server/billing/buildBillingReturnUrl.server";
 import { BILLING_PAGE_PATH } from "../server/billing/buildBillingReturnUrl.server";
@@ -62,19 +61,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     admin,
     `[PageLoader] shop=${session.shop}`,
   );
-  const billing = toBillingAccessSnapshot(
-    await loadBillingContext(session.shop, getAppEntry()),
-  );
-  const appName = getAppEntry();
+  const billing = toBillingAccessSnapshot(await loadBillingContext(session.shop));
   const [initialTaskPage, estimatedSeconds, estimatedCredits] = await Promise.all([
     listTasksPageForShop({
       shop: session.shop,
-      appName,
       view: "current",
       taskType: "product_improve",
     }),
-    getEstimatedSeconds(appName, "product_improve"),
-    getEstimatedCredits(appName, "product_improve"),
+    getEstimatedSeconds("product_improve"),
+    getEstimatedCredits("product_improve"),
   ]);
   return data({ shopLocales, billing, initialTaskPage, estimatedSeconds, estimatedCredits });
 };
@@ -141,9 +136,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const i18n = initI18n(locale);
     const t = i18n.t.bind(i18n);
     const shop = session.shop;
-    const appName = getAppEntry();
 
-    await requireBillingAccess(shop, appName);
+    await requireBillingAccess(shop);
 
     // Fetch product context synchronously (needs admin client)
     const context = await fetchProductDescriptionContext(admin, parsed.data.productId);
@@ -166,10 +160,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const shopInfo = await fetchShopBasicInfo(admin);
     const brandStyle = shopInfo?.name || t("productImproveStage1.defaultBrandStyle");
 
-    const ewmaCredits = await getEstimatedCredits(appName, "product_improve");
+    const ewmaCredits = await getEstimatedCredits("product_improve");
     const { taskId, batchId } = await createBatchWithTask({
       shop,
-      appName,
       taskType: "product_improve",
       batchConfig: {
         productId: parsed.data.productId,

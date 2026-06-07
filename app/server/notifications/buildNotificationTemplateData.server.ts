@@ -1,8 +1,4 @@
-import {
-  getAppEntry,
-  getAppHomePath,
-  isAppEntryKey,
-} from "../../config/appEntry.server";
+import { getAppHomePath } from "../../config/appEntry.server";
 import {
   defaultRecipientFallback,
   formatBillingPeriod,
@@ -88,11 +84,8 @@ function resolveShopAdminIdentifier(shopDomain: string | undefined): string {
   return normalized;
 }
 
-function resolveAppAdminPath(appKey: string | undefined): string {
-  const entry = appKey && isAppEntryKey(appKey) ? appKey : getAppEntry();
-  return getAppHomePath(entry)
-    .split("?")[0]
-    .replace(/^\/+/, "");
+function resolveAppAdminPath(): string {
+  return getAppHomePath().split("?")[0].replace(/^\/+/, "");
 }
 
 /**
@@ -128,7 +121,7 @@ export function buildNotificationTemplateData(
 
   const data: Record<string, string> = {
     shop_id: resolveShopAdminIdentifier(variables.shopDomain),
-    path: resolveAppAdminPath(appConfig.appKey),
+    path: resolveAppAdminPath(),
     appName,
     brandName,
     recipientName: str(variables.recipientName) || recipientFallback,

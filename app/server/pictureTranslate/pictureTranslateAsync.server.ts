@@ -1,4 +1,3 @@
-import { getAppEntry } from "../../config/appEntry.server";
 import {
   buildPictureTranslateBillingItem,
   recordVisualToolTokenUsage,
@@ -78,7 +77,6 @@ async function runPictureTranslateTask(params: {
 
   const actualCredits = await recordVisualToolTokenUsage({
     shop: params.shop,
-    appName: getAppEntry(),
     items: [buildPictureTranslateBillingItem(pipeline.provider)],
   });
 

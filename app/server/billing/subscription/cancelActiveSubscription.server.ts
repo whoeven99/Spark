@@ -20,7 +20,6 @@ const CANCELLABLE_STATUSES = new Set<string>([
 export async function cancelActiveSubscription(params: {
   admin: ShopifyAdminGraphqlClient;
   shop: string;
-  appName: string;
 }): Promise<void> {
   if (!isBillingDevCancelEnabled()) {
     throw new BillingError(
@@ -31,7 +30,7 @@ export async function cancelActiveSubscription(params: {
   }
 
   const sub = await prisma.appSubscription.findUnique({
-    where: { shop_appName: { shop: params.shop, appName: params.appName } },
+    where: { shop: params.shop },
   });
 
   if (!sub) {
@@ -52,7 +51,6 @@ export async function cancelActiveSubscription(params: {
 
   await markSubscriptionNonActive({
     shop: params.shop,
-    appName: params.appName,
     shopifySubscriptionId: sub.shopifySubscriptionId,
     status: APP_SUBSCRIPTION_STATUS.CANCELLED,
     rawPayload: { source: "dev_cancel_button", noop: useNoopBillingGateway() },

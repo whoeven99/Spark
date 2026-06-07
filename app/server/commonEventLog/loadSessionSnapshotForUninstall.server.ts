@@ -1,4 +1,3 @@
-import { getAppEntry } from "../../config/appEntry.server";
 import prisma from "../../db.server";
 
 const LOG = "[SessionSnapshot]";
@@ -40,7 +39,6 @@ export async function loadSessionSnapshotForUninstall(
   const normalizedShop = shop.trim();
   if (!normalizedShop) return null;
 
-  const appName = getAppEntry();
   const select = {
     shop: true,
     firstName: true,
@@ -63,7 +61,7 @@ export async function loadSessionSnapshotForUninstall(
 
   if (!row) {
     row = await prisma.session.findFirst({
-      where: { shop: normalizedShop, appName },
+      where: { shop: normalizedShop },
       orderBy: { isOnline: "asc" },
       select,
     });
@@ -71,7 +69,7 @@ export async function loadSessionSnapshotForUninstall(
 
   if (!row) {
     console.warn(
-      `${LOG} no session found shop=${normalizedShop} sessionId=${sessionId ?? "(none)"} appName=${appName}`,
+      `${LOG} no session found shop=${normalizedShop} sessionId=${sessionId ?? "(none)"}`,
     );
     return null;
   }

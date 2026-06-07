@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { getAppEntry } from "../../config/appEntry.server";
 import {
   billingErrorToResponse,
   requireBillingAccess,
@@ -71,7 +70,7 @@ export async function executeGenerateDescriptionRequest(params: {
   const { requestId, admin, sessionShop, parsed } = params;
   const routeStart = Date.now();
   const startedAtIso = new Date().toISOString();
-  const appName = getAppEntry();
+  const appName = "spark";
 
   const persistRun = (input: {
     status: "success" | "error";
@@ -144,7 +143,7 @@ export async function executeGenerateDescriptionRequest(params: {
   const temperature = parsed.temperature ?? DEFAULT_DESCRIPTION_TEMPERATURE;
 
   try {
-    await requireBillingAccess(sessionShop, getAppEntry());
+    await requireBillingAccess(sessionShop);
 
     const result = await runProductDescriptionGeneration({
       admin,
@@ -152,10 +151,7 @@ export async function executeGenerateDescriptionRequest(params: {
       targetLanguage: parsed.targetLanguage,
       temperature,
       requestId,
-      tokenContext: {
-        shop: sessionShop,
-        appName: getAppEntry(),
-      },
+      tokenContext: { shop: sessionShop },
     });
 
     const durationMs = Date.now() - routeStart;

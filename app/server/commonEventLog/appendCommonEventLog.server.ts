@@ -4,7 +4,6 @@ import type { CommonEventType } from "./types.server";
 
 export async function appendCommonEventLog(params: {
   shop: string;
-  appName: string;
   eventType: CommonEventType;
   topic?: string;
   referenceId?: string;
@@ -12,14 +11,12 @@ export async function appendCommonEventLog(params: {
   metadata?: Record<string, unknown>;
 }): Promise<void> {
   const shop = params.shop.trim();
-  const appName = params.appName.trim();
-  if (!shop || !appName) return;
+  if (!shop) return;
 
   if (params.referenceId) {
     const existing = await prisma.commonEventLog.findFirst({
       where: {
         shop,
-        appName,
         eventType: params.eventType,
         referenceId: params.referenceId,
       },
@@ -30,7 +27,6 @@ export async function appendCommonEventLog(params: {
   await prisma.commonEventLog.create({
     data: {
       shop,
-      appName,
       eventType: params.eventType,
       topic: params.topic,
       referenceId: params.referenceId,
