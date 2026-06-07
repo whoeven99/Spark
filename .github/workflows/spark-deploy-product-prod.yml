@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       publish_render:
-        description: 发布Product服务
+        description: 发布Spark Test
         type: boolean
         default: false
       deploy_admin:
@@ -34,7 +34,7 @@ jobs:
           fi
 
   deploy_render_product_improve:
-    name: Trigger Render deploy (Product Improve Prod)
+    name: Trigger Render deploy (Spark Test)
     needs: validate_inputs
     if: ${{ github.event.inputs.publish_render == 'true' }}
     runs-on: ubuntu-latest
@@ -47,11 +47,11 @@ jobs:
           fetch-depth: 0
           ref: master
 
-      - name: Deploy to Render (product-improve)
+      - name: Deploy to Render (spark-test)
         id: trigger_render
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_APIKEY }}
-          RENDER_SERVICE_ID: srv-d88llfml51nc73fksm2g
+          RENDER_SERVICE_ID: srv-d7j6ogaqqhas739in900
         run: |
           COMMIT="$(git rev-parse HEAD)"
           echo "Triggering Render deploy for commit: $COMMIT ($(git log -1 --oneline))"
@@ -60,7 +60,7 @@ jobs:
             -H "Content-Type: application/json" \
             -d "{\"commitId\": \"$COMMIT\"}")
           if [ "$RESPONSE" -eq 200 ] || [ "$RESPONSE" -eq 201 ]; then
-            echo "Deploy to product-improve Render triggered successfully. HTTP status: $RESPONSE"
+            echo "Deploy to spark-test Render triggered successfully. HTTP status: $RESPONSE"
             DEPLOY_ID=$(python3 -c "import json;print(json.load(open('response.json')).get('id',''))")
             DEPLOY_STATUS=$(python3 -c "import json;print(json.load(open('response.json')).get('status',''))")
             DEPLOY_URL="https://dashboard.render.com/web/${RENDER_SERVICE_ID}/deploys/${DEPLOY_ID}"
@@ -79,7 +79,7 @@ jobs:
         id: wait_render
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_APIKEY }}
-          RENDER_SERVICE_ID: srv-d88llfml51nc73fksm2g
+          RENDER_SERVICE_ID: srv-d7j6ogaqqhas739in900
           DEPLOY_ID: ${{ steps.trigger_render.outputs.deploy_id }}
           TARGET_COMMIT: ${{ steps.trigger_render.outputs.commit_id }}
         run: |
@@ -172,7 +172,7 @@ jobs:
         run: |
           COMMIT_BODY="$(git log -1 --pretty=%b)"
           PAYLOAD=$(python3 -c 'import json,sys; print(json.dumps({"msg_type":"text","content":{"text":sys.stdin.read()}}, ensure_ascii=False))' <<EOF
-          Product Improve PROD deploy 成功, by ${GITHUB_ACTOR}.
+          Spark Test deploy 成功, by ${GITHUB_ACTOR}.
           最终状态: ${RENDER_FINAL_STATUS}
           发布内容：${COMMIT_BODY}
           EOF
@@ -190,7 +190,7 @@ jobs:
           RENDER_FINAL_STATUS: ${{ steps.wait_render.outputs.final_status }}
         run: |
           PAYLOAD=$(python3 -c 'import json,sys; print(json.dumps({"msg_type":"text","content":{"text":sys.stdin.read()}}, ensure_ascii=False))' <<EOF
-          Product Improve PROD deploy 失败, by ${GITHUB_ACTOR}.
+          Spark Test deploy 失败, by ${GITHUB_ACTOR}.
           最终状态: ${RENDER_FINAL_STATUS}
           Render: ${RENDER_DEPLOY_URL}
           Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
