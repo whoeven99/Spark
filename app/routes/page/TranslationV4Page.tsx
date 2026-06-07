@@ -98,6 +98,7 @@ function progressFromJob(
       verifyDone: job.metrics.verifyDone,
       verifyFailed: job.metrics.verifyFailed,
       currentModule: null,
+      usedTokens: job.metrics.usedTokens ?? 0,
     },
   };
 }
@@ -118,6 +119,7 @@ type ProgressData = {
     writebackTotal: number; writebackDone: number; writebackFailed: number;
     verifyTotal: number; verifyDone: number; verifyFailed: number;
     currentModule: string | null;
+    usedTokens?: number;
   };
 };
 
@@ -410,7 +412,7 @@ export function TranslationV4Page() {
                   <s-text-field
                     label="每模块数量限制"
                     value={String(limitPerType)}
-                    onChange={(e) => setLimitPerType(Number(e.currentTarget.value) || 20)}
+                    onChange={(e) => { const v = parseInt(e.currentTarget.value, 10); setLimitPerType(isNaN(v) || v < 0 ? 20 : v); }}
                     autocomplete="off"
                   />
                 </div>
@@ -546,7 +548,10 @@ function JobCard({ job, status, progress, onAction }: JobCardProps) {
             )}
           </div>
           <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: 3 }}>
-            {job.id.slice(0, 8)}… · {job.modules.join(", ")} · 每类 {job.limitPerType} 条
+            {job.id.slice(0, 8)}… · {job.modules.join(", ")}
+            {(metrics.usedTokens ?? 0) > 0 && (
+              <> · {(metrics.usedTokens!).toLocaleString()} tokens</>
+            )}
           </div>
         </div>
         <div style={{ display: "flex", gap: "0.5rem" }}>

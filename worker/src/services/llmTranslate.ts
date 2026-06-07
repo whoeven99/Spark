@@ -376,7 +376,7 @@ async function callGoogleTranslate(
  * protection applies to every engine (LLM and Google alike). Returns a map of
  * key → { value, status }; items unresolved by all engines get status "fallback".
  */
-type RoutedResult = { value: string; status: "translated" | "fallback"; engine: Engine | null };
+type RoutedResult = { value: string; status: "translated" | "fallback"; engine: Engine | null; tokens: number };
 
 async function translateItemsRouted(
   items: TranslateItem[],
@@ -386,15 +386,17 @@ async function translateItemsRouted(
   shopName: string,
   order: Engine[],
 ): Promise<Map<string, RoutedResult>> {
-  const tokensByKey = new Map<string, string[]>();
+  // placeholdersByKey: variable tokens (string[]) extracted from each item's value.
+  const placeholdersByKey = new Map<string, string[]>();
   const masked = items.map((it) => {
     const { masked: m, tokens } = maskPlaceholders(it.value);
-    tokensByKey.set(it.key, tokens);
+    placeholdersByKey.set(it.key, tokens);
     return { key: it.key, value: m, digest: it.digest };
   });
 
   const collected = new Map<string, string>(); // masked translations
   const engineByKey = new Map<string, Engine>(); // which engine resolved each key
+  const llmTokensByKey = new Map<string, number>(); // LLM API tokens charged per key
   let systemPrompt: string | null = null;
 
   for (const engine of order) {
@@ -407,13 +409,19 @@ async function translateItemsRouted(
         const glossary = await loadGlossaryLines(shopName, target);
         systemPrompt = buildSystemPrompt(target, glossary);
       }
+      const tokenAccum = { value: 0 };
       try {
-        await gatherTranslations(missing, aiModel, systemPrompt, collected);
+        await gatherTranslations(missing, aiModel, systemPrompt, collected, tokenAccum);
       } catch (e) {
         console.warn(`[route] llm engine error`, e);
       }
-      // Attribute newly-resolved keys to the LLM.
-      for (const i of missing) if (collected.has(i.key) && !engineByKey.has(i.key)) engineByKey.set(i.key, "llm");
+      // Attribute newly-resolved keys to the LLM; distribute tokens evenly across keys.
+      const newlyResolved = missing.filter((i) => collected.has(i.key) && !engineByKey.has(i.key));
+      const tokensEach = newlyResolved.length > 0 ? Math.ceil(tokenAccum.value / newlyResolved.length) : 0;
+      for (const i of newlyResolved) {
+        engineByKey.set(i.key, "llm");
+        llmTokensByKey.set(i.key, tokensEach);
+      }
     } else {
       if (!googleConfigured()) continue;
       for (const batch of batchByChars(missing, MAX_CHARS_PER_BATCH)) {
@@ -436,21 +444,22 @@ async function translateItemsRouted(
   const result = new Map<string, RoutedResult>();
   for (const it of items) {
     const raw = collected.get(it.key);
-    const tokens = tokensByKey.get(it.key) ?? [];
+    const placeholders = placeholdersByKey.get(it.key) ?? [];
     if (raw === undefined) {
-      result.set(it.key, { value: it.value, status: "fallback", engine: null });
+      result.set(it.key, { value: it.value, status: "fallback", engine: null, tokens: 0 });
       continue;
     }
     const decoded = decodeQuoteEntities(raw);
-    if (tokens.length > 0 && !placeholdersIntact(decoded, tokens)) {
+    if (placeholders.length > 0 && !placeholdersIntact(decoded, placeholders)) {
       console.warn(`[route] placeholder corrupted for key=${it.key}, using original`);
-      result.set(it.key, { value: it.value, status: "fallback", engine: null });
+      result.set(it.key, { value: it.value, status: "fallback", engine: null, tokens: 0 });
       continue;
     }
     result.set(it.key, {
-      value: restorePlaceholders(decoded, tokens),
+      value: restorePlaceholders(decoded, placeholders),
       status: "translated",
       engine: engineByKey.get(it.key) ?? null,
+      tokens: llmTokensByKey.get(it.key) ?? 0,
     });
   }
   return result;
@@ -563,7 +572,7 @@ async function callLLMOnce(
   items: TranslateItem[],
   aiModel: string,
   systemPrompt: string,
-): Promise<Map<string, string>> {
+): Promise<{ map: Map<string, string>; tokens: number }> {
   // Use opaque IDs (f0, f1, f2…) instead of semantic field names so the model
   // cannot confuse "title" as a content hint and swap values between keys.
   const idToKey = new Map(items.map((it, idx) => [`f${idx}`, it.key]));
@@ -585,6 +594,7 @@ async function callLLMOnce(
   });
 
   const raw = completion.choices[0]?.message?.content ?? "{}";
+  const tokens = completion.usage?.total_tokens ?? 0;
   // JSON.parse throws on malformed output → propagated to caller for retry/splitting.
   const obj = JSON.parse(extractJsonObject(raw)) as { translations?: unknown };
   const parsed = Array.isArray(obj.translations)
@@ -598,7 +608,7 @@ async function callLLMOnce(
       if (origKey !== undefined) map.set(origKey, r.translatedValue);
     }
   }
-  return map;
+  return { map, tokens };
 }
 
 /**
@@ -612,12 +622,14 @@ async function gatherTranslations(
   aiModel: string,
   systemPrompt: string,
   collected: Map<string, string>,
+  tokenAccum: { value: number },
 ): Promise<void> {
   const pend = items.filter((i) => !collected.has(i.key));
   if (pend.length === 0) return;
 
   try {
-    const map = await callLLMOnce(pend, aiModel, systemPrompt);
+    const { map, tokens } = await callLLMOnce(pend, aiModel, systemPrompt);
+    tokenAccum.value += tokens;
     let progressed = false;
     for (const [k, v] of map) {
       if (!collected.has(k)) {
@@ -629,7 +641,7 @@ async function gatherTranslations(
     // Model parsed OK but dropped some keys → retry just those, but only while
     // making progress (avoids looping on a key the model refuses to return).
     if (missing.length > 0 && progressed && missing.length < pend.length) {
-      await gatherTranslations(missing, aiModel, systemPrompt, collected);
+      await gatherTranslations(missing, aiModel, systemPrompt, collected, tokenAccum);
     }
     return;
   } catch (e) {
@@ -637,14 +649,15 @@ async function gatherTranslations(
     if (pend.length > 1) {
       const mid = Math.ceil(pend.length / 2);
       console.warn(`[llm] batch of ${pend.length} unparseable (${msg}); splitting`);
-      await gatherTranslations(pend.slice(0, mid), aiModel, systemPrompt, collected);
-      await gatherTranslations(pend.slice(mid), aiModel, systemPrompt, collected);
+      await gatherTranslations(pend.slice(0, mid), aiModel, systemPrompt, collected, tokenAccum);
+      await gatherTranslations(pend.slice(mid), aiModel, systemPrompt, collected, tokenAccum);
       return;
     }
     // Single item: retry for transient failures, then give up (→ fallback).
     for (let r = 0; r < LEAF_RETRIES; r++) {
       try {
-        const map = await callLLMOnce(pend, aiModel, systemPrompt);
+        const { map, tokens } = await callLLMOnce(pend, aiModel, systemPrompt);
+        tokenAccum.value += tokens;
         for (const [k, v] of map) if (!collected.has(k)) collected.set(k, v);
         if (collected.has(pend[0].key)) return;
       } catch {
@@ -660,14 +673,15 @@ async function gatherTranslations(
 export type ResourceInput = { resourceId: string; fields: TranslateItem[] };
 export type ResourceResult = { resourceId: string; results: TranslateResult[] };
 /** Per-engine-model tally of how much content each engine translated. */
-export type EngineUsage = Record<string, { units: number; chars: number }>;
+export type EngineUsage = Record<string, { units: number; chars: number; tokens: number }>;
 export type TranslateChunkResult = { resources: ResourceResult[]; usage: EngineUsage };
 
 export function mergeEngineUsage(into: EngineUsage, from: EngineUsage): void {
   for (const [model, u] of Object.entries(from)) {
-    const acc = (into[model] ??= { units: 0, chars: 0 });
+    const acc = (into[model] ??= { units: 0, chars: 0, tokens: 0 });
     acc.units += u.units;
     acc.chars += u.chars;
+    acc.tokens += u.tokens;
   }
 }
 
@@ -805,9 +819,10 @@ export async function translateResources(
         batchUnits += occ.get(text) ?? 1;
         if (v.status === "translated" && v.engine) {
           const model = engineModel(v.engine, aiModel);
-          const acc = (usage[model] ??= { units: 0, chars: 0 });
+          const acc = (usage[model] ??= { units: 0, chars: 0, tokens: 0 });
           acc.units += 1;
           acc.chars += text.length;
+          acc.tokens += v.tokens;
         }
       }
       // Report progress (and let the worker heartbeat) after each batch.

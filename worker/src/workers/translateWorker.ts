@@ -197,6 +197,11 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
       ? { provider: "test", model: "test" }
       : resolveEngine(aiModel);
 
+    // Compute billed tokens: sum LLM tokens across all engines × configurable multiplier.
+    const rawLlmTokens = Object.values(engineUsage).reduce((s, u) => s + (u.tokens ?? 0), 0);
+    const multiplier = Math.max(0, Number(process.env.TRANSLATION_TOKEN_MULTIPLIER) || 1);
+    const usedTokens = Math.ceil(rawLlmTokens * multiplier);
+
     // Refresh job to get latest metrics
     const latestJob = await getJob(shopName, jobId);
     await updateJob(shopName, jobId, {
@@ -213,6 +218,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         translateUnitDone,
         translateUnitTotal,
         writebackTotal: translateDone,
+        usedTokens,
       },
     });
 
