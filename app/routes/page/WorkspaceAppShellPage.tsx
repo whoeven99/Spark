@@ -7,6 +7,8 @@ type WorkspacePanel = "dashboard" | "chat" | "skills" | "automation" | "tasks";
 type AutomationView = "configured" | "history" | "templates";
 type TaskKind = "automation" | "one_off";
 type TaskStatus = "executing" | "review_required" | "completed" | "failed";
+type ObjectType = "product" | "article" | "order" | "customer";
+type ContextTool = ObjectType | "documents" | "dataSource" | "rules" | "constraints";
 
 type Conversation = {
   id: string;
@@ -52,12 +54,66 @@ type AutomationConfiguredItem = {
   outcome: string;
 };
 
-const panelItems: Array<{ key: WorkspacePanel; label: string; short: string }> = [
-  { key: "dashboard", label: "经营看板", short: "看板" },
-  { key: "chat", label: "对话", short: "对话" },
-  { key: "skills", label: "技能", short: "技能" },
-  { key: "automation", label: "自动化", short: "自动化" },
-  { key: "tasks", label: "任务列表", short: "任务" },
+type ObjectOption = {
+  id: string;
+  title: string;
+  subtitle: string;
+  meta: string;
+};
+
+const panelItems: Array<{ key: Exclude<WorkspacePanel, "chat">; label: string; icon: string }> = [
+  { key: "dashboard", label: "经营看板", icon: "◫" },
+  { key: "skills", label: "技能", icon: "✦" },
+  { key: "automation", label: "自动化", icon: "↻" },
+  { key: "tasks", label: "任务列表", icon: "≡" },
+];
+
+const objectTypeLabels: Record<ObjectType, string> = {
+  product: "商品",
+  article: "文章",
+  order: "订单",
+  customer: "客户",
+};
+
+const objectOptions: Record<ObjectType, ObjectOption[]> = {
+  product: [
+    { id: "prd-1001", title: "Summer Breeze Dress", subtitle: "女装 / 连衣裙 / 夏季新品", meta: "SKU SB-1001 · 库存 28" },
+    { id: "prd-1002", title: "Cloud Knit Cardigan", subtitle: "女装 / 针织衫 / 低转化", meta: "SKU CK-2020 · 库存 16" },
+    { id: "prd-1003", title: "Travel Mini Bag", subtitle: "配饰 / 包袋 / 高访问", meta: "SKU TB-4402 · 库存 52" },
+    { id: "prd-1004", title: "Linen Resort Shirt", subtitle: "男装 / 衬衫 / 夏季新品", meta: "SKU LR-3011 · 库存 9" },
+    { id: "prd-1005", title: "Weekend Sandals", subtitle: "鞋履 / 凉鞋 / 广告主推", meta: "SKU WS-2201 · 库存 41" },
+  ],
+  article: [
+    { id: "art-201", title: "夏季穿搭趋势指南", subtitle: "Blog / 内容营销 / 已发布", meta: "最近更新 2 天前 · 浏览 1.2k" },
+    { id: "art-202", title: "度假系列面料故事", subtitle: "Blog / 品牌内容 / 草稿", meta: "作者 Luna · 草稿" },
+    { id: "art-203", title: "客户常见尺码问题", subtitle: "Help Center / FAQ", meta: "最近更新 1 周前" },
+    { id: "art-204", title: "新品上市邮件脚本", subtitle: "Campaign / 邮件素材", meta: "最近使用 昨天" },
+  ],
+  order: [
+    { id: "ord-9101", title: "#9101", subtitle: "美国站 / 高客单 / 待发货", meta: "$182.00 · 2 件商品" },
+    { id: "ord-9102", title: "#9102", subtitle: "英国站 / 退款申请", meta: "$64.00 · 退款中" },
+    { id: "ord-9103", title: "#9103", subtitle: "美国站 / 异常履约", meta: "$119.00 · 超时 16h" },
+    { id: "ord-9104", title: "#9104", subtitle: "日本站 / 正常", meta: "$73.00 · 已发货" },
+  ],
+  customer: [
+    { id: "cus-301", title: "Emma Wilson", subtitle: "VIP 客户 / 最近 30 天 4 单", meta: "AOV $126 · 订阅邮件" },
+    { id: "cus-302", title: "Sophie Chen", subtitle: "新客户 / 首单未复购", meta: "最近下单 6 天前" },
+    { id: "cus-303", title: "Lucas Martin", subtitle: "退款风险用户", meta: "近 60 天 2 次退款" },
+    { id: "cus-304", title: "Mia Garcia", subtitle: "高活跃 / 多渠道来源", meta: "邮件 + Instagram" },
+  ],
+};
+
+const mockReferenceDocuments = [
+  { id: "doc-1", name: "brand-guideline.pdf", note: "品牌语气、关键词和禁用词规则" },
+  { id: "doc-2", name: "seo-checklist.docx", note: "标题、描述和结构化 SEO 要求" },
+];
+
+const mockRules = ["SEO 优化指南", "商品描述规范", "合规禁用词"];
+
+const mockConstraints = [
+  "长度控制在 180-220 字",
+  "保留 HTML 结构和现有要点列表",
+  "避免使用夸张承诺类词汇",
 ];
 
 const conversations: Conversation[] = [
@@ -165,6 +221,10 @@ function isWorkspacePanel(value: string | null): value is WorkspacePanel {
   return value === "dashboard" || value === "chat" || value === "skills" || value === "automation" || value === "tasks";
 }
 
+function isObjectType(value: ContextTool | null): value is ObjectType {
+  return value === "product" || value === "article" || value === "order" || value === "customer";
+}
+
 export function WorkspaceAppShellPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeConversationId, setActiveConversationId] = useState(conversations[0].id);
@@ -179,6 +239,19 @@ export function WorkspaceAppShellPage() {
   );
   const [automationView, setAutomationView] = useState<AutomationView>("configured");
   const [taskFilter, setTaskFilter] = useState<"all" | TaskKind>("all");
+  const [activeContextTool, setActiveContextTool] = useState<ContextTool | null>("product");
+  const [objectQueryByType, setObjectQueryByType] = useState<Record<ObjectType, string>>({
+    product: "",
+    article: "",
+    order: "",
+    customer: "",
+  });
+  const [selectedObjectsByType, setSelectedObjectsByType] = useState<Record<ObjectType, string[]>>({
+    product: ["prd-1001", "prd-1004"],
+    article: [],
+    order: [],
+    customer: [],
+  });
 
   const panelParam = searchParams.get("panel");
   const activePanel: WorkspacePanel = isWorkspacePanel(panelParam) ? panelParam : "dashboard";
@@ -202,6 +275,23 @@ export function WorkspaceAppShellPage() {
   const openConversation = (conversationId: string) => {
     setActiveConversationId(conversationId);
     switchPanel("chat");
+  };
+
+  const clearContext = () => {
+    setSelectedObjectsByType({ product: [], article: [], order: [], customer: [] });
+    setActiveContextTool(null);
+  };
+
+  const toggleObjectSelection = (type: ObjectType, objectId: string) => {
+    setSelectedObjectsByType((current) => {
+      const currentIds = current[type];
+      return {
+        ...current,
+        [type]: currentIds.includes(objectId)
+          ? currentIds.filter((id) => id !== objectId)
+          : [...currentIds, objectId],
+      };
+    });
   };
 
   const sendMessage = () => {
@@ -242,8 +332,10 @@ export function WorkspaceAppShellPage() {
                 style={navButtonStyle(activePanel === item.key)}
                 onClick={() => switchPanel(item.key)}
               >
-                <span>{item.label}</span>
-                <span style={navHintStyle}>{item.short}</span>
+                <span style={navLabelStyle}>
+                  <span style={navIconStyle}>{item.icon}</span>
+                  <span>{item.label}</span>
+                </span>
               </button>
             ))}
           </div>
@@ -297,12 +389,26 @@ export function WorkspaceAppShellPage() {
             conversation={activeConversation}
             messages={activeMessages}
             draft={draftByConversation[activeConversation.id] ?? ""}
+            activeContextTool={activeContextTool}
+            objectQueryByType={objectQueryByType}
+            selectedObjectsByType={selectedObjectsByType}
             onDraftChange={(value) =>
               setDraftByConversation((current: Record<string, string>) => ({
                 ...current,
                 [activeConversation.id]: value,
               }))
             }
+            onContextToolChange={(tool) =>
+              setActiveContextTool((current) => (current === tool ? null : tool))
+            }
+            onObjectQueryChange={(type, value) =>
+              setObjectQueryByType((current) => ({
+                ...current,
+                [type]: value,
+              }))
+            }
+            onToggleObjectSelection={toggleObjectSelection}
+            onClearContext={clearContext}
             onSend={sendMessage}
           />
         ) : null}
@@ -434,17 +540,182 @@ function ChatPanel({
   conversation,
   messages,
   draft,
+  activeContextTool,
+  objectQueryByType,
+  selectedObjectsByType,
   onDraftChange,
+  onContextToolChange,
+  onObjectQueryChange,
+  onToggleObjectSelection,
+  onClearContext,
   onSend,
 }: {
   conversation: Conversation;
   messages: Conversation["messages"];
   draft: string;
+  activeContextTool: ContextTool | null;
+  objectQueryByType: Record<ObjectType, string>;
+  selectedObjectsByType: Record<ObjectType, string[]>;
   onDraftChange: (value: string) => void;
+  onContextToolChange: (tool: ContextTool) => void;
+  onObjectQueryChange: (type: ObjectType, value: string) => void;
+  onToggleObjectSelection: (type: ObjectType, objectId: string) => void;
+  onClearContext: () => void;
   onSend: () => void;
 }) {
+  const totalSelectedObjects = Object.values(selectedObjectsByType).reduce((count, ids) => count + ids.length, 0);
+  const activeObjectOptions = isObjectType(activeContextTool)
+    ? objectOptions[activeContextTool].filter((item) => {
+        const query = objectQueryByType[activeContextTool].trim().toLowerCase();
+        if (!query) return true;
+        return `${item.title} ${item.subtitle} ${item.meta}`.toLowerCase().includes(query);
+      })
+    : [];
+
   return (
-    <div style={chatLayoutStyle}>
+    <div style={panelStackStyle}>
+      <section style={surfaceCardStyle}>
+        <div style={sectionHeaderStyle}>
+          <div>
+            <div style={sectionTitleStyle}>任务工作区</div>
+            <div style={sectionTextStyle}>通过顶部工具栏先补充对象和规则，再在下方描述你的任务目标。</div>
+          </div>
+          <button type="button" style={ghostButtonStyle} onClick={onClearContext}>
+            清空上下文
+          </button>
+        </div>
+
+        <div style={toolbarRowStyle}>
+          {(Object.keys(objectTypeLabels) as ObjectType[]).map((type) => (
+            <button
+              key={type}
+              type="button"
+              style={toolbarButtonStyle(activeContextTool === type, selectedObjectsByType[type].length > 0)}
+              onClick={() => onContextToolChange(type)}
+            >
+              {selectedObjectsByType[type].length > 0
+                ? `${objectTypeLabels[type]} ${selectedObjectsByType[type].length}`
+                : `选择${objectTypeLabels[type]}`}
+            </button>
+          ))}
+          <span style={toolbarDividerStyle} />
+          {[
+            ["documents", mockReferenceDocuments.length > 0 ? `参考文档 ${mockReferenceDocuments.length}` : "参考文档"],
+            ["dataSource", "数据源 168 行"],
+            ["rules", `规则 ${mockRules.length}`],
+            ["constraints", "约束"],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              style={toolbarButtonStyle(activeContextTool === key, true)}
+              onClick={() => onContextToolChange(key as ContextTool)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div style={contextSummaryStyle}>
+          <span style={summaryChipStyle(totalSelectedObjects > 0)}>{totalSelectedObjects > 0 ? `已选对象 ${totalSelectedObjects}` : "未选择对象"}</span>
+          <span style={summaryChipStyle(mockReferenceDocuments.length > 0)}>参考文档 {mockReferenceDocuments.length}</span>
+          <span style={summaryChipStyle(true)}>数据源 products.csv</span>
+          <span style={summaryChipStyle(mockRules.length > 0)}>规则 {mockRules.length}</span>
+          <span style={summaryChipStyle(mockConstraints.length > 0)}>约束已配置</span>
+        </div>
+
+        {isObjectType(activeContextTool) ? (
+          <div style={selectorPanelStyle}>
+            <div style={selectorPanelHeaderStyle}>
+              <div>
+                <div style={sectionTitleSmallStyle}>{objectTypeLabels[activeContextTool]}选择器</div>
+                <div style={sectionTextStyle}>支持搜索、筛选和批量勾选，当前用 mock Shopify 数据演示。</div>
+              </div>
+              <span style={statusBadgeStyle("neutral")}>
+                已选 {selectedObjectsByType[activeContextTool].length}
+              </span>
+            </div>
+            <input
+              value={objectQueryByType[activeContextTool]}
+              onChange={(event) => onObjectQueryChange(activeContextTool, event.target.value)}
+              placeholder={`搜索${objectTypeLabels[activeContextTool]}名称、分类或状态`}
+              style={selectorSearchInputStyle}
+            />
+            <div style={selectorListStyle}>
+              {activeObjectOptions.map((item) => {
+                const checked = selectedObjectsByType[activeContextTool].includes(item.id);
+                return (
+                  <label key={item.id} style={selectorItemStyle(checked)}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => onToggleObjectSelection(activeContextTool, item.id)}
+                    />
+                    <div style={selectorItemContentStyle}>
+                      <span style={sectionTitleSmallStyle}>{item.title}</span>
+                      <span style={sectionTextStyle}>{item.subtitle}</span>
+                      <span style={mutedMetaStyle}>{item.meta}</span>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {activeContextTool === "documents" ? (
+          <div style={selectorPanelStyle}>
+            <div style={sectionTitleSmallStyle}>参考文档</div>
+            <div style={listColumnStyle}>
+              {mockReferenceDocuments.map((document) => (
+                <div key={document.id} style={summaryItemStyle}>
+                  <div style={sectionTitleSmallStyle}>{document.name}</div>
+                  <div style={sectionTextStyle}>{document.note}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {activeContextTool === "rules" ? (
+          <div style={selectorPanelStyle}>
+            <div style={sectionTitleSmallStyle}>已启用规则</div>
+            <div style={tagWrapStyle}>
+              {mockRules.map((rule) => (
+                <span key={rule} style={summaryChipStyle(true)}>
+                  {rule}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {activeContextTool === "constraints" ? (
+          <div style={selectorPanelStyle}>
+            <div style={sectionTitleSmallStyle}>当前约束</div>
+            <div style={listColumnStyle}>
+              {mockConstraints.map((item) => (
+                <div key={item} style={summaryItemStyle}>
+                  <div style={sectionTextStyle}>{item}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {activeContextTool === "dataSource" ? (
+          <div style={selectorPanelStyle}>
+            <div style={sectionTitleSmallStyle}>数据源概览</div>
+            <div style={summaryItemStyle}>
+              <div style={sectionTitleSmallStyle}>summer-launch-products.csv</div>
+              <div style={sectionTextStyle}>共 168 行，已映射 SKU、标题、分类、属性和 HTML 描述字段。</div>
+              <div style={mutedMetaStyle}>字段映射：sku / title / category / tags / body_html</div>
+            </div>
+          </div>
+        ) : null}
+      </section>
+
+      <div style={chatLayoutStyle}>
       <section style={{ ...surfaceCardStyle, minHeight: 0 }}>
         <div style={sectionHeaderStyle}>
           <div>
@@ -487,7 +758,15 @@ function ChatPanel({
           <div style={sectionTitleStyle}>当前上下文</div>
           <div style={listColumnStyle}>
             {[
-              ["对象范围", "168 个夏季新品"],
+              [
+                "对象范围",
+                totalSelectedObjects > 0
+                  ? (Object.keys(objectTypeLabels) as ObjectType[])
+                      .filter((type) => selectedObjectsByType[type].length > 0)
+                      .map((type) => `${objectTypeLabels[type]} ${selectedObjectsByType[type].length}`)
+                      .join(" / ")
+                  : "尚未选择对象",
+              ],
               ["参考资料", "2 份品牌与 SEO 文档"],
               ["数据源", "summer-launch-products.csv"],
               ["约束", "保留 HTML / 英文 / SEO 专业语气"],
@@ -516,6 +795,7 @@ function ChatPanel({
           </div>
         </div>
       </section>
+      </div>
     </div>
   );
 }
@@ -680,7 +960,7 @@ function TasksPanel({
 
 function panelTitle(panel: WorkspacePanel) {
   if (panel === "dashboard") return "经营看板";
-  if (panel === "chat") return "对话工作区";
+  if (panel === "chat") return "任务工作区";
   if (panel === "skills") return "常用工具";
   if (panel === "automation") return "自动化";
   return "任务列表";
@@ -688,7 +968,7 @@ function panelTitle(panel: WorkspacePanel) {
 
 function panelSubtitle(panel: WorkspacePanel) {
   if (panel === "dashboard") return "默认首页展示店铺经营概况、核心指标、自动化结果和经营建议。";
-  if (panel === "chat") return "对话页承接单次任务与上下文协作，每个会话都可以继续展开。";
+  if (panel === "chat") return "工作区通过对象工具栏补充上下文，再承接单次任务创建和继续协作。";
   if (panel === "skills") return "技能页作为已有 tools 的聚合入口，每个工具进入独立工作流。";
   if (panel === "automation") return "自动化页聚焦配置、执行历史与模板，不与其他页混排。";
   return "任务列表统一承载自动化任务和单次任务，再按类型和状态过滤。";
@@ -805,7 +1085,18 @@ const navButtonStyle = (active: boolean): CSSProperties => ({
   color: "#202223",
   cursor: "pointer",
 });
-const navHintStyle: CSSProperties = { fontSize: 12, color: "#8c9196" };
+const navLabelStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10 };
+const navIconStyle: CSSProperties = {
+  width: 22,
+  height: 22,
+  borderRadius: 8,
+  display: "grid",
+  placeItems: "center",
+  background: "#f1f2f3",
+  color: "#61666c",
+  fontSize: 12,
+  flexShrink: 0,
+};
 
 const sidebarSectionStyle: CSSProperties = { marginTop: 18, display: "flex", flexDirection: "column", gap: 10, minHeight: 0 };
 const sidebarSectionHeadStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, fontWeight: 700, color: "#6d7175", padding: "0 4px" };
@@ -910,6 +1201,63 @@ const textareaStyle: CSSProperties = {
 const composerFooterStyle: CSSProperties = { marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 };
 const sidePanelStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 16 };
 const keyValueRowStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 4, paddingBottom: 10, borderBottom: "1px solid #f0f1f3" };
+const toolbarRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" };
+const toolbarButtonStyle = (active: boolean, filled: boolean): CSSProperties => ({
+  border: `1px solid ${active ? "#202223" : filled ? "#c9cccf" : "#dfe3e8"}`,
+  background: active ? "#202223" : "#ffffff",
+  color: active ? "#ffffff" : "#202223",
+  borderRadius: 999,
+  padding: "8px 12px",
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: "pointer",
+});
+const toolbarDividerStyle: CSSProperties = { width: 1, alignSelf: "stretch", background: "#e1e3e5", minHeight: 28 };
+const contextSummaryStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 14 };
+const summaryChipStyle = (active: boolean): CSSProperties => ({
+  padding: "6px 10px",
+  borderRadius: 999,
+  border: `1px solid ${active ? "#c9cccf" : "#e1e3e5"}`,
+  background: active ? "#f6f6f7" : "#ffffff",
+  color: active ? "#202223" : "#6d7175",
+  fontSize: 12,
+  fontWeight: 600,
+});
+const selectorPanelStyle: CSSProperties = {
+  marginTop: 16,
+  padding: 16,
+  borderRadius: 12,
+  border: "1px solid #e1e3e5",
+  background: "#fafbfb",
+};
+const selectorPanelHeaderStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 12,
+  marginBottom: 14,
+};
+const selectorSearchInputStyle: CSSProperties = {
+  width: "100%",
+  border: "1px solid #c9cdd2",
+  borderRadius: 10,
+  padding: "10px 12px",
+  fontSize: 14,
+  color: "#202223",
+  background: "#ffffff",
+};
+const selectorListStyle: CSSProperties = { display: "grid", gap: 10, marginTop: 14 };
+const selectorItemStyle = (checked: boolean): CSSProperties => ({
+  display: "flex",
+  gap: 12,
+  alignItems: "flex-start",
+  padding: 12,
+  borderRadius: 12,
+  border: `1px solid ${checked ? "#c9cccf" : "#e1e3e5"}`,
+  background: checked ? "#ffffff" : "#f6f6f7",
+});
+const selectorItemContentStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 4 };
+const tagWrapStyle: CSSProperties = { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 };
 
 const skillGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16 };
 const skillCardStyle: CSSProperties = { padding: 18, borderRadius: 14, border: "1px solid #e1e3e5", background: "#ffffff", display: "flex", flexDirection: "column", gap: 10 };
