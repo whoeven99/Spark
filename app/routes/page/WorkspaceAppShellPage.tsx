@@ -76,6 +76,8 @@ type RichMediaItem = {
   note: string;
 };
 
+type ObjectFilterKey = "all" | "focus" | "draft" | "issue";
+
 const panelItems: Array<{ key: Exclude<WorkspacePanel, "chat">; label: string; icon: string }> = [
   { key: "dashboard", label: "经营看板", icon: "◫" },
   { key: "skills", label: "技能", icon: "✦" },
@@ -121,6 +123,27 @@ const initialRichMediaItems: RichMediaItem[] = [
   { id: "media-2", title: "hero-reference.jpg", kind: "image", value: "https://cdn.spark.demo/hero-reference.jpg", note: "主视觉参考图" },
   { id: "media-3", title: "product-demo.mp4", kind: "video", value: "https://cdn.spark.demo/product-demo.mp4", note: "商品讲解视频" },
 ];
+
+const objectFilterLabels: Record<ObjectType, Array<{ key: ObjectFilterKey; label: string }>> = {
+  product: [
+    { key: "all", label: "全部" },
+    { key: "focus", label: "新品" },
+    { key: "draft", label: "低转化" },
+    { key: "issue", label: "高访问" },
+  ],
+  article: [
+    { key: "all", label: "全部" },
+    { key: "focus", label: "已发布" },
+    { key: "draft", label: "草稿" },
+    { key: "issue", label: "帮助中心" },
+  ],
+  order: [
+    { key: "all", label: "全部" },
+    { key: "focus", label: "待发货" },
+    { key: "draft", label: "退款中" },
+    { key: "issue", label: "异常" },
+  ],
+};
 
 const initialConversations: Conversation[] = [
   {
@@ -257,8 +280,10 @@ export function WorkspaceAppShellPage() {
     article: [],
     order: [],
   });
-  const [localFiles] = useState<LocalFileItem[]>(initialLocalFiles);
-  const [richMediaItems] = useState<RichMediaItem[]>(initialRichMediaItems);
+  const [localFiles, setLocalFiles] = useState<LocalFileItem[]>(initialLocalFiles);
+  const [richMediaItems, setRichMediaItems] = useState<RichMediaItem[]>(initialRichMediaItems);
+  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+  const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
 
   const panelParam = searchParams.get("panel");
   const activePanel: WorkspacePanel = isWorkspacePanel(panelParam) ? panelParam : "dashboard";
@@ -317,7 +342,21 @@ export function WorkspaceAppShellPage() {
 
   const clearContext = () => {
     setSelectedObjectsByType({ product: [], article: [], order: [] });
+    setSelectedFileIds([]);
+    setSelectedMediaIds([]);
     setActiveContextTool(null);
+  };
+
+  const clearToolSelection = (tool: ContextTool) => {
+    if (isObjectType(tool)) {
+      setSelectedObjectsByType((current) => ({ ...current, [tool]: [] }));
+      return;
+    }
+    if (tool === "file") {
+      setSelectedFileIds([]);
+      return;
+    }
+    setSelectedMediaIds([]);
   };
 
   const toggleObjectSelection = (type: ObjectType, objectId: string) => {
@@ -330,6 +369,29 @@ export function WorkspaceAppShellPage() {
           : [...currentIds, objectId],
       };
     });
+  };
+
+  const toggleFileSelection = (fileId: string) => {
+    setSelectedFileIds((current) => (current.includes(fileId) ? current.filter((id) => id !== fileId) : [...current, fileId]));
+  };
+
+  const toggleMediaSelection = (mediaId: string) => {
+    setSelectedMediaIds((current) => (current.includes(mediaId) ? current.filter((id) => id !== mediaId) : [...current, mediaId]));
+  };
+
+  const addLocalFile = (payload: { name: string; note: string }) => {
+    const id = `file-${Date.now()}`;
+    setLocalFiles((current) => [
+      { id, name: payload.name, note: payload.note || "新上传文件", size: "1.1 MB" },
+      ...current,
+    ]);
+    setSelectedFileIds((current) => [id, ...current]);
+  };
+
+  const addRichMediaItem = (payload: { title: string; kind: RichMediaItem["kind"]; value: string; note: string }) => {
+    const id = `media-${Date.now()}`;
+    setRichMediaItems((current) => [{ id, ...payload }, ...current]);
+    setSelectedMediaIds((current) => [id, ...current]);
   };
 
   const sendMessage = () => {
@@ -451,6 +513,8 @@ export function WorkspaceAppShellPage() {
             selectedObjectsByType={selectedObjectsByType}
             localFiles={localFiles}
             richMediaItems={richMediaItems}
+            selectedFileIds={selectedFileIds}
+            selectedMediaIds={selectedMediaIds}
             onDraftChange={(value) =>
               setDraftByConversation((current: Record<string, string>) => ({
                 ...current,
@@ -467,6 +531,12 @@ export function WorkspaceAppShellPage() {
               }))
             }
             onToggleObjectSelection={toggleObjectSelection}
+            onToggleFileSelection={toggleFileSelection}
+            onToggleMediaSelection={toggleMediaSelection}
+            onAddLocalFile={addLocalFile}
+            onAddRichMediaItem={addRichMediaItem}
+            onCloseToolPicker={() => setActiveContextTool(null)}
+            onClearToolSelection={clearToolSelection}
             onClearContext={clearContext}
             onSend={sendMessage}
           />
@@ -604,10 +674,18 @@ function ChatPanel({
   selectedObjectsByType,
   localFiles,
   richMediaItems,
+  selectedFileIds,
+  selectedMediaIds,
   onDraftChange,
   onContextToolChange,
   onObjectQueryChange,
   onToggleObjectSelection,
+  onToggleFileSelection,
+  onToggleMediaSelection,
+  onAddLocalFile,
+  onAddRichMediaItem,
+  onCloseToolPicker,
+  onClearToolSelection,
   onClearContext,
   onSend,
 }: {
@@ -619,14 +697,33 @@ function ChatPanel({
   selectedObjectsByType: Record<ObjectType, string[]>;
   localFiles: LocalFileItem[];
   richMediaItems: RichMediaItem[];
+  selectedFileIds: string[];
+  selectedMediaIds: string[];
   onDraftChange: (value: string) => void;
   onContextToolChange: (tool: ContextTool) => void;
   onObjectQueryChange: (type: ObjectType, value: string) => void;
   onToggleObjectSelection: (type: ObjectType, objectId: string) => void;
+  onToggleFileSelection: (fileId: string) => void;
+  onToggleMediaSelection: (mediaId: string) => void;
+  onAddLocalFile: (payload: { name: string; note: string }) => void;
+  onAddRichMediaItem: (payload: { title: string; kind: RichMediaItem["kind"]; value: string; note: string }) => void;
+  onCloseToolPicker: () => void;
+  onClearToolSelection: (tool: ContextTool) => void;
   onClearContext: () => void;
   onSend: () => void;
 }) {
   const [hoveredTool, setHoveredTool] = useState<ContextTool | null>(null);
+  const [activeObjectFilter, setActiveObjectFilter] = useState<Record<ObjectType, ObjectFilterKey>>({
+    product: "all",
+    article: "all",
+    order: "all",
+  });
+  const [newFileName, setNewFileName] = useState("");
+  const [newFileNote, setNewFileNote] = useState("");
+  const [newMediaTitle, setNewMediaTitle] = useState("");
+  const [newMediaValue, setNewMediaValue] = useState("");
+  const [newMediaNote, setNewMediaNote] = useState("");
+  const [newMediaKind, setNewMediaKind] = useState<RichMediaItem["kind"]>("url");
   const totalSelectedObjects = Object.values(selectedObjectsByType).reduce((count, ids) => count + ids.length, 0);
   const activeObjectOptions = isObjectType(activeContextTool)
     ? objectOptions[activeContextTool].filter((item) => {
@@ -635,16 +732,43 @@ function ChatPanel({
         return `${item.title} ${item.subtitle} ${item.meta}`.toLowerCase().includes(query);
       })
     : [];
+  const filteredObjectOptions = isObjectType(activeContextTool)
+    ? activeObjectOptions.filter((item) => {
+        const filterKey = activeObjectFilter[activeContextTool];
+        if (filterKey === "all") return true;
+        const haystack = `${item.subtitle} ${item.meta}`.toLowerCase();
+        if (activeContextTool === "product") {
+          if (filterKey === "focus") return haystack.includes("夏季新品");
+          if (filterKey === "draft") return haystack.includes("低转化");
+          return haystack.includes("高访问");
+        }
+        if (activeContextTool === "article") {
+          if (filterKey === "focus") return haystack.includes("已发布");
+          if (filterKey === "draft") return haystack.includes("草稿");
+          return haystack.includes("help center");
+        }
+        if (filterKey === "focus") return haystack.includes("待发货");
+        if (filterKey === "draft") return haystack.includes("退款");
+        return haystack.includes("异常");
+      })
+    : [];
   const filledContextCount =
     (totalSelectedObjects > 0 ? 1 : 0) +
-    (localFiles.length > 0 ? 1 : 0) +
-    (richMediaItems.length > 0 ? 1 : 0);
+    (selectedFileIds.length > 0 ? 1 : 0) +
+    (selectedMediaIds.length > 0 ? 1 : 0);
   const toolItems: Array<{ key: ContextTool; label: string; icon: string; active: boolean }> = [
     { key: "product", label: selectedObjectsByType.product.length > 0 ? `商品 ${selectedObjectsByType.product.length}` : "商品", icon: "◫", active: activeContextTool === "product" },
     { key: "order", label: selectedObjectsByType.order.length > 0 ? `订单 ${selectedObjectsByType.order.length}` : "订单", icon: "◎", active: activeContextTool === "order" },
     { key: "article", label: selectedObjectsByType.article.length > 0 ? `文章 ${selectedObjectsByType.article.length}` : "文章", icon: "≣", active: activeContextTool === "article" },
-    { key: "file", label: localFiles.length > 0 ? `文件 ${localFiles.length}` : "文件", icon: "↑", active: activeContextTool === "file" },
-    { key: "media", label: richMediaItems.length > 0 ? `富媒体 ${richMediaItems.length}` : "富媒体", icon: "◇", active: activeContextTool === "media" },
+    { key: "file", label: selectedFileIds.length > 0 ? `文件 ${selectedFileIds.length}` : "文件", icon: "↑", active: activeContextTool === "file" },
+    { key: "media", label: selectedMediaIds.length > 0 ? `富媒体 ${selectedMediaIds.length}` : "富媒体", icon: "◇", active: activeContextTool === "media" },
+  ];
+  const selectedSummaryBubbles: Array<{ key: ContextTool; label: string }> = [
+    ...(selectedObjectsByType.product.length > 0 ? [{ key: "product" as const, label: `已选择 ${selectedObjectsByType.product.length} 个商品` }] : []),
+    ...(selectedObjectsByType.order.length > 0 ? [{ key: "order" as const, label: `已选择 ${selectedObjectsByType.order.length} 个订单` }] : []),
+    ...(selectedObjectsByType.article.length > 0 ? [{ key: "article" as const, label: `已选择 ${selectedObjectsByType.article.length} 篇文章` }] : []),
+    ...(selectedFileIds.length > 0 ? [{ key: "file" as const, label: `已选择 ${selectedFileIds.length} 个文件` }] : []),
+    ...(selectedMediaIds.length > 0 ? [{ key: "media" as const, label: `已选择 ${selectedMediaIds.length} 个富媒体` }] : []),
   ];
 
   return (
@@ -670,6 +794,18 @@ function ChatPanel({
         </div>
 
         <div style={composerBoxStyle}>
+          {selectedSummaryBubbles.length > 0 ? (
+            <div style={selectionBubbleRowStyle}>
+              {selectedSummaryBubbles.map((item) => (
+                <span key={item.key} style={selectionBubbleStyle}>
+                  <span>{item.label}</span>
+                  <button type="button" style={selectionBubbleCloseStyle} onClick={() => onClearToolSelection(item.key)} aria-label={`清空${item.label}`}>
+                    x
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
           <textarea
             value={draft}
             onChange={(event) => onDraftChange(event.target.value)}
@@ -702,75 +838,6 @@ function ChatPanel({
                 </button>
               </div>
             </div>
-            {activeContextTool ? (
-              <div style={toolbarPopoverStyle}>
-                {isObjectType(activeContextTool) ? (
-                  <>
-                    <div style={selectorPanelHeaderStyle}>
-                      <div>
-                        <div style={sectionTitleSmallStyle}>{objectTypeLabels[activeContextTool]}选择器</div>
-                        <div style={sectionTextStyle}>在当前对话中批量勾选和筛选对象。</div>
-                      </div>
-                      <span style={statusBadgeStyle("neutral")}>已选 {selectedObjectsByType[activeContextTool].length}</span>
-                    </div>
-                    <input
-                      value={objectQueryByType[activeContextTool]}
-                      onChange={(event) => onObjectQueryChange(activeContextTool, event.target.value)}
-                      placeholder={`搜索${objectTypeLabels[activeContextTool]}名称、分类或状态`}
-                      style={selectorSearchInputStyle}
-                    />
-                    <div style={selectorListCompactStyle}>
-                      {activeObjectOptions.map((item) => {
-                        const checked = selectedObjectsByType[activeContextTool].includes(item.id);
-                        return (
-                          <label key={item.id} style={selectorItemStyle(checked)}>
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => onToggleObjectSelection(activeContextTool, item.id)}
-                            />
-                            <div style={selectorItemContentStyle}>
-                              <span style={sectionTitleSmallStyle}>{item.title}</span>
-                              <span style={sectionTextStyle}>{item.subtitle}</span>
-                              <span style={mutedMetaStyle}>{item.meta}</span>
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </>
-                ) : null}
-                {activeContextTool === "file" ? (
-                  <div style={listColumnStyle}>
-                    <div style={mutedMetaStyle}>本地上传文件（mock）</div>
-                    {localFiles.map((file) => (
-                      <div key={file.id} style={summaryItemStyle}>
-                        <div style={sectionTitleSmallStyle}>{file.name}</div>
-                        <div style={sectionTextStyle}>{file.note}</div>
-                        <div style={mutedMetaStyle}>{file.size}</div>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-                {activeContextTool === "media" ? (
-                  <div style={listColumnStyle}>
-                    <div style={mutedMetaStyle}>富媒体 URL / 图片 / 视频（mock）</div>
-                    {richMediaItems.map((item) => (
-                      <div key={item.id} style={summaryItemStyle}>
-                        <div style={selectorPanelHeaderStyle}>
-                          <div>
-                            <div style={sectionTitleSmallStyle}>{item.title}</div>
-                            <div style={sectionTextStyle}>{item.note}</div>
-                          </div>
-                          <span style={summaryChipStyle(true)}>{item.kind}</span>
-                        </div>
-                        <div style={mutedMetaStyle}>{item.value}</div>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
           </div>
           <div style={composerFooterStyle}>
             <span style={sectionTextStyle}>每个会话可以继续沉淀为任务或自动化。</span>
@@ -781,6 +848,200 @@ function ChatPanel({
           </div>
         </div>
       </section>
+
+      {activeContextTool ? (
+        <div style={toolModalBackdropStyle} onClick={onCloseToolPicker}>
+          <div style={toolModalCardStyle} onClick={(event) => event.stopPropagation()}>
+            <div style={toolModalHeaderStyle}>
+              <div>
+                <div style={sectionTitleSmallStyle}>
+                  {isObjectType(activeContextTool)
+                    ? `${objectTypeLabels[activeContextTool]}选择器`
+                    : activeContextTool === "file"
+                      ? "文件选择"
+                      : "富媒体选择"}
+                </div>
+                <div style={sectionTextStyle}>
+                  {isObjectType(activeContextTool)
+                    ? "在当前页面弹窗内完成批量勾选和筛选。"
+                    : activeContextTool === "file"
+                      ? "选择需要附加到这次对话的本地文件。"
+                      : "选择需要附加到这次对话的 URL、图片或视频。"}
+                </div>
+              </div>
+              <button type="button" style={toolModalCloseStyle} onClick={onCloseToolPicker}>
+                关闭
+              </button>
+            </div>
+
+            {isObjectType(activeContextTool) ? (
+              <>
+                <input
+                  value={objectQueryByType[activeContextTool]}
+                  onChange={(event) => onObjectQueryChange(activeContextTool, event.target.value)}
+                  placeholder={`搜索${objectTypeLabels[activeContextTool]}名称、分类或状态`}
+                  style={selectorSearchInputStyle}
+                />
+                <div style={filterChipRowStyle}>
+                  {objectFilterLabels[activeContextTool].map((filter) => (
+                    <button
+                      key={filter.key}
+                      type="button"
+                      style={filterChipStyle(activeObjectFilter[activeContextTool] === filter.key)}
+                      onClick={() =>
+                        setActiveObjectFilter((current) => ({
+                          ...current,
+                          [activeContextTool]: filter.key,
+                        }))
+                      }
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+                <div style={selectorListCompactStyle}>
+                  {filteredObjectOptions.map((item) => {
+                    const checked = selectedObjectsByType[activeContextTool].includes(item.id);
+                    return (
+                      <label key={item.id} style={selectorItemStyle(checked)}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => onToggleObjectSelection(activeContextTool, item.id)}
+                        />
+                        <div style={selectorItemContentStyle}>
+                          <span style={sectionTitleSmallStyle}>{item.title}</span>
+                          <span style={sectionTextStyle}>{item.subtitle}</span>
+                          <span style={mutedMetaStyle}>{item.meta}</span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </>
+            ) : null}
+
+            {activeContextTool === "file" ? (
+              <>
+                <div style={mockCreateBoxStyle}>
+                  <input
+                    value={newFileName}
+                    onChange={(event) => setNewFileName(event.target.value)}
+                    placeholder="输入文件名，例如 campaign-brief.pdf"
+                    style={selectorSearchInputStyle}
+                  />
+                  <div style={inlineFieldRowStyle}>
+                    <input
+                      value={newFileNote}
+                      onChange={(event) => setNewFileNote(event.target.value)}
+                      placeholder="补充文件用途说明"
+                      style={compactFieldStyle}
+                    />
+                    <button
+                      type="button"
+                      style={ghostButtonStyle}
+                      onClick={() => {
+                        const name = newFileName.trim();
+                        if (!name) return;
+                        onAddLocalFile({ name, note: newFileNote.trim() });
+                        setNewFileName("");
+                        setNewFileNote("");
+                      }}
+                    >
+                      添加文件
+                    </button>
+                  </div>
+                </div>
+                <div style={selectorListCompactStyle}>
+                  {localFiles.map((file) => {
+                    const checked = selectedFileIds.includes(file.id);
+                    return (
+                      <label key={file.id} style={selectorItemStyle(checked)}>
+                        <input type="checkbox" checked={checked} onChange={() => onToggleFileSelection(file.id)} />
+                        <div style={selectorItemContentStyle}>
+                          <span style={sectionTitleSmallStyle}>{file.name}</span>
+                          <span style={sectionTextStyle}>{file.note}</span>
+                          <span style={mutedMetaStyle}>{file.size}</span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </>
+            ) : null}
+
+            {activeContextTool === "media" ? (
+              <>
+                <div style={mockCreateBoxStyle}>
+                  <div style={inlineFieldRowStyle}>
+                    <select value={newMediaKind} onChange={(event) => setNewMediaKind(event.target.value as RichMediaItem["kind"])} style={selectFieldStyle}>
+                      <option value="url">URL</option>
+                      <option value="image">图片</option>
+                      <option value="video">视频</option>
+                    </select>
+                    <input
+                      value={newMediaTitle}
+                      onChange={(event) => setNewMediaTitle(event.target.value)}
+                      placeholder="输入标题"
+                      style={compactFieldStyle}
+                    />
+                  </div>
+                  <input
+                    value={newMediaValue}
+                    onChange={(event) => setNewMediaValue(event.target.value)}
+                    placeholder="输入 URL 或资源地址"
+                    style={selectorSearchInputStyle}
+                  />
+                  <div style={inlineFieldRowStyle}>
+                    <input
+                      value={newMediaNote}
+                      onChange={(event) => setNewMediaNote(event.target.value)}
+                      placeholder="补充备注"
+                      style={compactFieldStyle}
+                    />
+                    <button
+                      type="button"
+                      style={ghostButtonStyle}
+                      onClick={() => {
+                        const title = newMediaTitle.trim();
+                        const value = newMediaValue.trim();
+                        if (!title || !value) return;
+                        onAddRichMediaItem({
+                          title,
+                          value,
+                          kind: newMediaKind,
+                          note: newMediaNote.trim() || "新添加的富媒体资源",
+                        });
+                        setNewMediaTitle("");
+                        setNewMediaValue("");
+                        setNewMediaNote("");
+                        setNewMediaKind("url");
+                      }}
+                    >
+                      添加资源
+                    </button>
+                  </div>
+                </div>
+                <div style={selectorListCompactStyle}>
+                  {richMediaItems.map((item) => {
+                    const checked = selectedMediaIds.includes(item.id);
+                    return (
+                      <label key={item.id} style={selectorItemStyle(checked)}>
+                        <input type="checkbox" checked={checked} onChange={() => onToggleMediaSelection(item.id)} />
+                        <div style={selectorItemContentStyle}>
+                          <span style={sectionTitleSmallStyle}>{item.title}</span>
+                          <span style={sectionTextStyle}>{item.note}</span>
+                          <span style={mutedMetaStyle}>{item.kind} · {item.value}</span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       <section style={sidePanelStyle}>
         <div style={surfaceCardStyle}>
@@ -796,8 +1057,8 @@ function ChatPanel({
                       .join(" / ")
                   : "尚未选择对象",
               ],
-              ["本地文件", localFiles.length > 0 ? `${localFiles.length} 个已上传文件` : "尚未添加文件"],
-              ["富媒体", richMediaItems.length > 0 ? `${richMediaItems.length} 个 URL / 图片 / 视频` : "尚未添加富媒体"],
+              ["本地文件", selectedFileIds.length > 0 ? `${selectedFileIds.length} 个已选择文件` : "尚未添加文件"],
+              ["富媒体", selectedMediaIds.length > 0 ? `${selectedMediaIds.length} 个已选择 URL / 图片 / 视频` : "尚未添加富媒体"],
             ].map(([label, value]) => (
               <div key={label} style={keyValueRowStyle}>
                 <span style={mutedMetaStyle}>{label}</span>
@@ -1278,30 +1539,96 @@ const toolbarClearStyle: CSSProperties = {
   cursor: "pointer",
   padding: 0,
 };
-const summaryChipStyle = (active: boolean): CSSProperties => ({
-  padding: "6px 10px",
+const selectionBubbleRowStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 };
+const selectionBubbleStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "7px 10px",
   borderRadius: 999,
-  border: `1px solid ${active ? "#c9cccf" : "#e1e3e5"}`,
-  background: active ? "#f6f6f7" : "#ffffff",
-  color: active ? "#202223" : "#6d7175",
+  border: "1px solid #c9cccf",
+  background: "#f6f6f7",
+  color: "#202223",
   fontSize: 12,
   fontWeight: 600,
-});
-const toolbarPopoverStyle: CSSProperties = {
-  marginTop: 14,
-  padding: 16,
-  borderRadius: 12,
+};
+const selectionBubbleCloseStyle: CSSProperties = {
+  width: 18,
+  height: 18,
+  borderRadius: 999,
+  border: "none",
+  background: "#e1e3e5",
+  color: "#202223",
+  fontSize: 11,
+  lineHeight: 1,
+  cursor: "pointer",
+  padding: 0,
+};
+const toolModalBackdropStyle: CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(17, 24, 39, 0.16)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 24,
+  zIndex: 30,
+};
+const toolModalCardStyle: CSSProperties = {
+  width: "min(500px, calc(100vw - 48px))",
+  maxHeight: "min(78vh, 720px)",
+  overflowY: "auto",
+  padding: 18,
+  borderRadius: 16,
   border: "1px solid #e1e3e5",
   background: "#ffffff",
-  boxShadow: "0 12px 28px rgba(0,0,0,0.08)",
-  maxWidth: 460,
+  boxShadow: "0 24px 56px rgba(15, 23, 42, 0.16)",
 };
-const selectorPanelHeaderStyle: CSSProperties = {
+const toolModalHeaderStyle: CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "flex-start",
   gap: 12,
   marginBottom: 14,
+};
+const toolModalCloseStyle: CSSProperties = {
+  border: "1px solid #dfe3e8",
+  borderRadius: 10,
+  background: "#ffffff",
+  color: "#202223",
+  fontSize: 13,
+  fontWeight: 600,
+  padding: "8px 12px",
+  cursor: "pointer",
+};
+const filterChipRowStyle: CSSProperties = { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 };
+const mockCreateBoxStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 10,
+  padding: 12,
+  borderRadius: 12,
+  border: "1px solid #e9eaeb",
+  background: "#fafbfb",
+  marginBottom: 14,
+};
+const inlineFieldRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 10, alignItems: "center" };
+const compactFieldStyle: CSSProperties = {
+  width: "100%",
+  border: "1px solid #c9cdd2",
+  borderRadius: 10,
+  padding: "10px 12px",
+  fontSize: 13,
+  color: "#202223",
+  background: "#ffffff",
+};
+const selectFieldStyle: CSSProperties = {
+  border: "1px solid #c9cdd2",
+  borderRadius: 10,
+  padding: "10px 12px",
+  fontSize: 13,
+  color: "#202223",
+  background: "#ffffff",
 };
 const selectorSearchInputStyle: CSSProperties = {
   width: "100%",
