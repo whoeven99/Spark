@@ -1,9 +1,21 @@
 import type { CSSProperties } from "react";
 import { useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import type { ChatMessage } from "../../lib/chatMessage";
+import { useAppBridge } from "@shopify/app-bridge-react";
+import { useTranslation } from "react-i18next";
+import type {
+  ChatMessage,
+  ChatMessageAttachment,
+  ProductImproveCardPayload,
+} from "../../lib/chatMessage";
+import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
+import { coerceTranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
+import { ChatMessages } from "../component/chat/ChatMessages";
+import { ChatMessageContent } from "../component/chat/ChatMessageContent";
+import { ProductImproveChatCard } from "../component/chat/ProductImproveChatCard";
+import { TranslationTaskChatCard } from "../component/translation/TranslationTaskChatCard";
 import { LanguageSelector } from "../component/common/LanguageSelector";
-import { useChatStream, type SkillStepProgress } from "./chat/useChatStream";
+import { useChatStream, type ChatStreamFinishPayload, type SkillStepProgress } from "./chat/useChatStream";
 
 type WorkspacePanel = "dashboard" | "chat" | "skills" | "automation" | "tasks";
 type AutomationView = "configured" | "history" | "templates";
@@ -12,12 +24,23 @@ type TaskStatus = "executing" | "review_required" | "completed" | "failed";
 type ObjectType = "product" | "article" | "order";
 type ContextTool = ObjectType | "file" | "media";
 
+type WorkspaceConversationMessage = {
+  role: "assistant" | "user";
+  text: string;
+  time: string;
+  attachments?: ChatMessageAttachment[];
+  translationTaskForm?: TranslationTaskFormPayload;
+  productImproveCard?: boolean;
+  productImproveCardPayload?: ProductImproveCardPayload;
+  pictureTranslateCard?: boolean;
+};
+
 type Conversation = {
   id: string;
   title: string;
   updatedAt: string;
   preview: string;
-  messages: Array<{ role: "assistant" | "user"; text: string; time: string }>;
+  messages: WorkspaceConversationMessage[];
 };
 
 type TaskRecord = {
@@ -257,6 +280,8 @@ function isObjectType(value: ContextTool | null): value is ObjectType {
 }
 
 export function WorkspaceAppShellPage() {
+  const shopify = useAppBridge();
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [conversationList, setConversationList] = useState<Conversation[]>(initialConversations);
   const [activeConversationId, setActiveConversationId] = useState(initialConversations[0].id);
@@ -266,7 +291,7 @@ export function WorkspaceAppShellPage() {
     "conv-003": "继续这批商品的日语翻译，并保留品牌术语。",
     "conv-004": "把日报里最重要的经营变化压缩成 3 条结论。",
   });
-  const [messagesByConversation, setMessagesByConversation] = useState<Record<string, Conversation["messages"]>>(
+  const [messagesByConversation, setMessagesByConversation] = useState<Record<string, WorkspaceConversationMessage[]>>(
     Object.fromEntries(initialConversations.map((conversation) => [conversation.id, conversation.messages])),
   );
   const [automationView, setAutomationView] = useState<AutomationView>("configured");
@@ -290,6 +315,9 @@ export function WorkspaceAppShellPage() {
     isStreaming,
     awaitingFirstChunk,
     streamingText,
+    streamingTranslationForm,
+    streamingGenerateCard,
+    streamingGeneratePayload,
     skillSteps,
     sendMessage: streamConversation,
     abort: abortStream,
@@ -433,7 +461,7 @@ export function WorkspaceAppShellPage() {
           : conversation,
       ),
     );
-    setMessagesByConversation((current: Record<string, Conversation["messages"]>) => ({
+    setMessagesByConversation((current) => ({
       ...current,
       [conversationId]: [
         ...(current[conversationId] ?? []),
@@ -451,10 +479,7 @@ export function WorkspaceAppShellPage() {
       richMediaItems,
     });
     const apiMessages: ChatMessage[] = [
-      ...priorMessages.map((message) => ({
-        role: message.role,
-        content: message.text,
-      })),
+      ...priorMessages.map((message) => workspaceMessageToApiMessage(message)),
       { role: "user", content: augmentUserMessage(content, contextBlock) },
     ];
 
@@ -477,7 +502,7 @@ export function WorkspaceAppShellPage() {
             ...current,
             [conversationId]: [
               ...(current[conversationId] ?? []),
-              { role: "assistant", text: assistantText, time: "刚刚" },
+              buildAssistantWorkspaceMessage(assistantText, payload),
             ],
           }));
         },
@@ -494,6 +519,46 @@ export function WorkspaceAppShellPage() {
         ],
       }));
     }
+  };
+
+  const handleTranslationCardSuccess = (
+    conversationId: string,
+    messageIndex: number,
+    detail: { jobId?: string; jobIds?: string[]; message: string },
+  ) => {
+    shopify.toast.show(detail.message || t("chat.translationCreateSuccess"));
+    const ids = detail.jobIds ?? (detail.jobId ? [detail.jobId] : []);
+    setMessagesByConversation((current) => {
+      const existing = current[conversationId] ?? [];
+      const next = existing.map((message, index) =>
+        index === messageIndex && message.role === "assistant"
+          ? {
+              role: "assistant" as const,
+              text: message.text,
+              time: message.time,
+            }
+          : message,
+      );
+      next.push({
+        role: "assistant",
+        text:
+          ids.length > 1
+            ? detail.message
+            : ids.length === 1
+              ? t("chat.translationSubmittedWithId", { jobId: ids[0] })
+              : t("chat.translationSubmitted"),
+        time: "刚刚",
+      });
+      return { ...current, [conversationId]: next };
+    });
+  };
+
+  const handlePictureTranslateCardSuccess = (
+    _conversationId: string,
+    _messageIndex: number,
+    _detail: { taskId: string; batchId: string },
+  ) => {
+    shopify.toast.show(t("pictureTranslate.submitSuccess"));
   };
 
   return (
@@ -612,12 +677,21 @@ export function WorkspaceAppShellPage() {
             showStreamingReply={isStreaming && streamingConversationId === activeConversation.id}
             awaitingFirstChunk={awaitingFirstChunk}
             streamingText={streamingText}
+            streamingTranslationForm={streamingTranslationForm}
+            streamingGenerateCard={streamingGenerateCard}
+            streamingGeneratePayload={streamingGeneratePayload}
             skillSteps={skillSteps}
             onAbortStream={() => {
               replyEpochRef.current += 1;
               setStreamingConversationId(null);
               abortStream();
             }}
+            onTranslationCardSuccess={(messageIndex, detail) =>
+              handleTranslationCardSuccess(activeConversation.id, messageIndex, detail)
+            }
+            onPictureTranslateCardSuccess={(messageIndex, detail) =>
+              handlePictureTranslateCardSuccess(activeConversation.id, messageIndex, detail)
+            }
           />
         ) : null}
         {activePanel === "skills" ? <SkillsPanel /> : null}
@@ -771,11 +845,16 @@ function ChatPanel({
   showStreamingReply,
   awaitingFirstChunk,
   streamingText,
+  streamingTranslationForm,
+  streamingGenerateCard,
+  streamingGeneratePayload,
   skillSteps,
   onAbortStream,
+  onTranslationCardSuccess,
+  onPictureTranslateCardSuccess,
 }: {
   conversation: Conversation;
-  messages: Conversation["messages"];
+  messages: WorkspaceConversationMessage[];
   draft: string;
   activeContextTool: ContextTool | null;
   objectQueryByType: Record<ObjectType, string>;
@@ -800,8 +879,21 @@ function ChatPanel({
   showStreamingReply: boolean;
   awaitingFirstChunk: boolean;
   streamingText: string;
+  streamingTranslationForm: unknown;
+  streamingGenerateCard: boolean;
+  streamingGeneratePayload: unknown;
   skillSteps: SkillStepProgress[];
   onAbortStream: () => void;
+  onTranslationCardSuccess: (
+    conversationId: string,
+    messageIndex: number,
+    detail: { jobId?: string; jobIds?: string[]; message: string },
+  ) => void;
+  onPictureTranslateCardSuccess: (
+    conversationId: string,
+    messageIndex: number,
+    detail: { taskId: string; batchId: string },
+  ) => void;
 }) {
   const [hoveredTool, setHoveredTool] = useState<ContextTool | null>(null);
   const [activeObjectFilter, setActiveObjectFilter] = useState<Record<ObjectType, ObjectFilterKey>>({
@@ -861,6 +953,10 @@ function ChatPanel({
     ...(selectedFileIds.length > 0 ? [{ key: "file" as const, label: `已选择 ${selectedFileIds.length} 个文件` }] : []),
     ...(selectedMediaIds.length > 0 ? [{ key: "media" as const, label: `已选择 ${selectedMediaIds.length} 个富媒体` }] : []),
   ];
+  const streamingTranslationPayload = streamingTranslationForm
+    ? coerceTranslationTaskFormPayload(streamingTranslationForm)
+    : undefined;
+  const streamingProductImprovePayload = streamingGeneratePayload as ProductImproveCardPayload | undefined;
 
   return (
     <div style={chatLayoutStyle}>
@@ -874,33 +970,52 @@ function ChatPanel({
         </div>
 
         <div style={messageListStyle}>
-          {messages.map((message, index) => (
-            <div key={`${message.time}-${index}`} style={messageWrapStyle(message.role === "user")}>
-              <div style={messageMetaStyle}>
-                {message.role === "assistant" ? "AI Assistant" : "你"} · {message.time}
-              </div>
-              <div style={messageBubbleStyle(message.role === "user")}>{message.text}</div>
-            </div>
-          ))}
+          <ChatMessages
+            messages={messages.map((message) => workspaceMessageToChatMessage(message))}
+            onTranslationCardSuccess={(messageIndex, detail) =>
+              onTranslationCardSuccess(conversation.id, messageIndex, detail)
+            }
+            onPictureTranslateCardSuccess={(messageIndex, detail) =>
+              onPictureTranslateCardSuccess(conversation.id, messageIndex, detail)
+            }
+          />
           {showStreamingReply ? (
-            <div style={messageWrapStyle(false)}>
-              <div style={messageMetaStyle}>AI Assistant · 正在回复</div>
-              <div style={streamingBubbleStyle}>
-                {awaitingFirstChunk && !streamingText ? (
+            <div style={streamingWrapStyle}>
+              <div style={streamingAssistantShellStyle}>
+                {awaitingFirstChunk && !streamingText && skillSteps.length === 0 ? (
                   <span style={sectionTextStyle}>正在思考…</span>
                 ) : (
-                  streamingText || "…"
-                )}
-                {skillSteps.length > 0 ? (
-                  <div style={skillStepsWrapStyle}>
-                    {skillSteps.slice(-3).map((step) => (
-                      <div key={`${step.skill}-${step.stepId}`} style={skillStepLineStyle}>
-                        {step.label}
-                        {step.detail ? ` · ${step.detail}` : ""}
+                  <>
+                    {skillSteps.length > 0 ? (
+                      <div style={skillStepsWrapStyle}>
+                        {skillSteps.map((step) => (
+                          <div key={`${step.skill}-${step.stepId}`} style={skillStepLineStyle}>
+                            {step.label}
+                            {step.detail ? ` · ${step.detail}` : ""}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                ) : null}
+                    ) : null}
+                    {streamingText ? <ChatMessageContent content={streamingText} /> : null}
+                    {streamingTranslationPayload ? (
+                      <div style={streamingCardSlotStyle}>
+                        <TranslationTaskChatCard
+                          embedded
+                          initialPayload={streamingTranslationPayload}
+                          onSuccess={() => {}}
+                        />
+                      </div>
+                    ) : null}
+                    {streamingGenerateCard ? (
+                      <div style={streamingCardSlotStyle}>
+                        <ProductImproveChatCard
+                          embedded
+                          initialResult={streamingProductImprovePayload}
+                        />
+                      </div>
+                    ) : null}
+                  </>
+                )}
               </div>
             </div>
           ) : null}
@@ -1376,6 +1491,53 @@ function TasksPanel({
   );
 }
 
+function workspaceMessageToApiMessage(message: WorkspaceConversationMessage): ChatMessage {
+  return { role: message.role, content: message.text };
+}
+
+function workspaceMessageToChatMessage(message: WorkspaceConversationMessage): ChatMessage {
+  if (message.role === "user") {
+    return { role: "user", content: message.text };
+  }
+
+  return {
+    role: "assistant",
+    content: message.text,
+    ...(message.attachments?.length ? { attachments: message.attachments } : {}),
+    ...(message.translationTaskForm ? { translationTaskForm: message.translationTaskForm } : {}),
+    ...(message.productImproveCard || message.productImproveCardPayload
+      ? { productImproveCard: true }
+      : {}),
+    ...(message.productImproveCardPayload
+      ? { productImproveCardPayload: message.productImproveCardPayload }
+      : {}),
+    ...(message.pictureTranslateCard ? { pictureTranslateCard: true } : {}),
+  };
+}
+
+function buildAssistantWorkspaceMessage(
+  text: string,
+  payload: ChatStreamFinishPayload,
+): WorkspaceConversationMessage {
+  const translationTaskForm = payload.translationTaskForm
+    ? coerceTranslationTaskFormPayload(payload.translationTaskForm)
+    : undefined;
+  const hasProductImproveCard =
+    payload.productImproveCard || Boolean(payload.productImproveCardPayload);
+
+  return {
+    role: "assistant",
+    text,
+    time: "刚刚",
+    ...(payload.attachments?.length ? { attachments: payload.attachments } : {}),
+    ...(translationTaskForm ? { translationTaskForm } : {}),
+    ...(hasProductImproveCard ? { productImproveCard: true } : {}),
+    ...(payload.productImproveCardPayload
+      ? { productImproveCardPayload: payload.productImproveCardPayload as ProductImproveCardPayload }
+      : {}),
+  };
+}
+
 function formatTimeLabel(date: Date) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
@@ -1635,31 +1797,19 @@ const barTrackStyle: CSSProperties = { height: 10, borderRadius: 999, background
 const barFillStyle: CSSProperties = { height: "100%", borderRadius: 999 };
 
 const chatLayoutStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 16, minHeight: 0 };
-const messageListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 14, minHeight: 420 };
-const messageWrapStyle = (isUser: boolean): CSSProperties => ({ display: "flex", flexDirection: "column", alignItems: isUser ? "flex-end" : "flex-start", gap: 6 });
-const messageMetaStyle: CSSProperties = { fontSize: 12, color: "#8c9196" };
-const messageBubbleStyle = (isUser: boolean): CSSProperties => ({
-  maxWidth: "78%",
+const messageListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 14, minHeight: 420, overflowY: "auto" };
+const streamingWrapStyle: CSSProperties = { display: "flex", justifyContent: "flex-start", marginTop: 4 };
+const streamingAssistantShellStyle: CSSProperties = {
+  maxWidth: "min(540px, 96%)",
   padding: "12px 14px",
   borderRadius: 14,
-  background: isUser ? "#ffffff" : "#f6f6f7",
-  border: `1px solid ${isUser ? "#c9cccf" : "#e1e3e5"}`,
+  background: "linear-gradient(180deg, rgba(44, 110, 203, 0.08), rgba(44, 110, 203, 0.02))",
+  border: "1px solid rgba(44, 110, 203, 0.35)",
   fontSize: 14,
   lineHeight: 1.6,
   color: "#202223",
-  whiteSpace: "pre-wrap",
-});
-const streamingBubbleStyle: CSSProperties = {
-  maxWidth: "78%",
-  padding: "12px 14px",
-  borderRadius: 14,
-  background: "#f6f6f7",
-  border: "1px solid rgba(64,112,244,0.18)",
-  fontSize: 14,
-  lineHeight: 1.6,
-  color: "#202223",
-  whiteSpace: "pre-wrap",
 };
+const streamingCardSlotStyle: CSSProperties = { marginTop: "0.85rem" };
 const skillStepsWrapStyle: CSSProperties = {
   marginTop: 10,
   paddingTop: 10,
