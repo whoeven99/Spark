@@ -1,9 +1,8 @@
 -- PlanCatalog 种子（turso:migrate 执行；product-improve 使用 pi_* planKey）
-DELETE FROM "PlanCatalog" WHERE "appName" = 'generate-description' OR "planKey" LIKE 'gd_%';
+DELETE FROM "PlanCatalog" WHERE "planKey" LIKE 'gd_%';
 
 INSERT INTO "PlanCatalog" (
     "planKey",
-    "appName",
     "kind",
     "billingInterval",
     "displayName",
@@ -19,7 +18,6 @@ INSERT INTO "PlanCatalog" (
 ) VALUES
     (
         'pi_trial',
-        'product-improve',
         'INTERNAL_TRIAL',
         NULL,
         'Free trial',
@@ -35,7 +33,6 @@ INSERT INTO "PlanCatalog" (
     ),
     (
         'pi_base_monthly',
-        'product-improve',
         'SUBSCRIPTION',
         'MONTHLY',
         'Base (Monthly)',
@@ -51,7 +48,6 @@ INSERT INTO "PlanCatalog" (
     ),
     (
         'pi_base_annual',
-        'product-improve',
         'SUBSCRIPTION',
         'ANNUAL',
         'Base (Annual)',
@@ -67,7 +63,6 @@ INSERT INTO "PlanCatalog" (
     ),
     (
         'pi_pro_monthly',
-        'product-improve',
         'SUBSCRIPTION',
         'MONTHLY',
         'Pro (Monthly)',
@@ -83,7 +78,6 @@ INSERT INTO "PlanCatalog" (
     ),
     (
         'pi_pro_annual',
-        'product-improve',
         'SUBSCRIPTION',
         'ANNUAL',
         'Pro (Annual)',
@@ -99,7 +93,6 @@ INSERT INTO "PlanCatalog" (
     ),
     (
         'pi_pack_100k',
-        'product-improve',
         'ONE_TIME_PACK',
         NULL,
         'Token pack 100K',
@@ -115,7 +108,6 @@ INSERT INTO "PlanCatalog" (
     ),
     (
         'pi_pack_500k',
-        'product-improve',
         'ONE_TIME_PACK',
         NULL,
         'Token pack 500K',
@@ -131,7 +123,6 @@ INSERT INTO "PlanCatalog" (
     ),
     (
         'pi_pack_1m',
-        'product-improve',
         'ONE_TIME_PACK',
         NULL,
         'Token pack 1M',
@@ -147,7 +138,6 @@ INSERT INTO "PlanCatalog" (
     ),
     (
         'pi_pack_2m',
-        'product-improve',
         'ONE_TIME_PACK',
         NULL,
         'Token pack 2M',
@@ -162,7 +152,6 @@ INSERT INTO "PlanCatalog" (
         CURRENT_TIMESTAMP
     )
 ON CONFLICT("planKey") DO UPDATE SET
-    "appName" = excluded."appName",
     "kind" = excluded."kind",
     "billingInterval" = excluded."billingInterval",
     "displayName" = excluded."displayName",

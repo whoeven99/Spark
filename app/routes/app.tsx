@@ -17,10 +17,8 @@ import {
 import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled, recordVisitSource } from "../server/commonEventLog/index.server";
-import { ensureSessionAppName } from "../server/session/sessionManager.server";
 import {
-  getAppEntry,
-  getAppEntryConfig,
+  getAppNavItems,
   type NavItemKey,
 } from "../config/appEntry.server";
 import { sparkAntTheme } from "./component/shared/antdTheme";
@@ -50,29 +48,18 @@ const NAV_ITEMS: Record<
     href: "/app/image-studio",
     labelKey: "nav.imageStudio",
   },
-  "picture-translate": {
-    href: "/app/image-studio?tab=translate",
-    labelKey: "nav.imageStudio",
-  },
-  "generate-image": {
-    href: "/app/image-studio?tab=generate",
-    labelKey: "nav.imageStudio",
-  },
   "order-monitor": { href: "/app/order-monitor", labelKey: "nav.orderMonitor" },
   billing: { href: "/app/billing", labelKey: "nav.billing" },
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const appName = getAppEntry();
 
-  // 入口来源归因：带 utm 的外链首次进入时记一条（fire-and-forget，失败不影响页面）
-  recordVisitSource({ shop: session.shop, appName, request }).catch((error) => {
+  recordVisitSource({ shop: session.shop, request }).catch((error) => {
     console.error("[VisitSource] recordVisitSource failed:", error);
   });
 
   try {
-    await ensureSessionAppName(session.id, appName);
     await recordAppInstalled({
       shop: session.shop,
       sessionId: session.id,
@@ -83,14 +70,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   } catch (error) {
     console.error("[CommonEvent] recordAppInstalled failed:", error);
   }
+
   const locale = detectRequestLocale(request, {
     sessionLocale: readShopifySessionLocale(session),
   });
-  const { nav, home } = getAppEntryConfig();
+  const nav = getAppNavItems();
 
   // eslint-disable-next-line no-undef
-  return { apiKey: process.env.SHOPIFY_API_KEY || "", locale, nav, home };
-}
+  return { apiKey: process.env.SHOPIFY_API_KEY || "", locale, nav };
+};
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   await authenticate.admin(request);

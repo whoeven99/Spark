@@ -4,7 +4,6 @@ import { DEFAULT_DESCRIPTION_TEMPERATURE } from "../../../productImprove/constan
 import { logDetailedError } from "../../../productImprove/generateDescriptionLog.server";
 import { fetchShopLocalesPayload } from "../../../productImprove/shopLocalesFetcher.server";
 import { runProductDescriptionGeneration } from "../../../productImprove/services/generateDescriptionService";
-import { getAppEntry } from "../../../../config/appEntry.server";
 import type { AgentContext } from "../../core/toolRegistry.server";
 
 export const GENERATE_PRODUCT_DESCRIPTION_TOOL_NAME =
@@ -58,10 +57,7 @@ export function createGenerateProductDescriptionTool(context: AgentContext) {
           requestId,
           ...(context.shop
             ? {
-                tokenContext: {
-                  shop: context.shop,
-                  appName: context.appName ?? getAppEntry(),
-                },
+                tokenContext: { shop: context.shop },
               }
             : {}),
         });

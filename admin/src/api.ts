@@ -544,7 +544,6 @@ export function fetchAgentRuns(params?: {
 
 export type BillingRuleRow = {
   ruleKey: string;
-  appName: string;
   feature: string;
   modelKey: string;
   displayName: string;
@@ -561,7 +560,6 @@ export function fetchBillingRules(): Promise<{ rules: BillingRuleRow[] }> {
 }
 
 export function createBillingRule(data: {
-  appName: string;
   feature: string;
   modelKey: string;
   displayName: string;
@@ -627,7 +625,6 @@ export type MonthlyFixedCostItem = {
 
 export type PlanCatalogItem = {
   planKey: string;
-  appName: string;
   kind: string;
   billingInterval: string | null;
   displayName: string;

@@ -1,13 +1,10 @@
 import type { Account } from "../../../generated/prisma";
 import prisma from "../../../db.server";
 
-export async function ensureAccount(
-  shop: string,
-  appName: string,
-): Promise<Account> {
+export async function ensureAccount(shop: string): Promise<Account> {
   return prisma.account.upsert({
-    where: { shop_appName: { shop, appName } },
-    create: { shop, appName },
+    where: { shop },
+    create: { shop },
     update: {},
   });
 }

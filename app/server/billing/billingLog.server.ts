@@ -4,7 +4,6 @@ import type { BillingLogEventType } from "./types.server";
 
 export async function appendBillingLog(params: {
   shop: string;
-  appName: string;
   eventType: BillingLogEventType;
   planKey?: string;
   referenceId?: string;
@@ -13,15 +12,13 @@ export async function appendBillingLog(params: {
   metadata?: Record<string, unknown>;
 }): Promise<void> {
   const shop = params.shop.trim();
-  const appName = params.appName.trim();
-  if (!shop || !appName) return;
+  if (!shop) return;
 
   const existing =
     params.referenceId && params.eventType
       ? await prisma.billingLog.findFirst({
           where: {
             shop,
-            appName,
             eventType: params.eventType,
             referenceId: params.referenceId,
           },
@@ -33,7 +30,6 @@ export async function appendBillingLog(params: {
   await prisma.billingLog.create({
     data: {
       shop,
-      appName,
       eventType: params.eventType,
       planKey: params.planKey,
       referenceId: params.referenceId,

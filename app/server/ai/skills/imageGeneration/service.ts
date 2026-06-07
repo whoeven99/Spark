@@ -1,4 +1,3 @@
-import { getAppEntry } from "../../../../config/appEntry.server";
 import { executeImageGeneration } from "../../../imageGeneration/imageGenerationExecutor.server";
 import { logDetailedError } from "../../../productImprove/generateDescriptionLog.server";
 import {
@@ -40,7 +39,6 @@ export async function executeGenerateProductImageTool(
 
   await recordVisualToolTokenUsage({
     shop: params.shop,
-    appName: getAppEntry(),
     items: [buildImageGenerateBillingItem(result.provider)],
   });
 

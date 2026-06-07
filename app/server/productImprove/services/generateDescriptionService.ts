@@ -1,5 +1,4 @@
 import type { ShopifyAdminGraphqlClient } from "../../ai/skills/shopifyInfo/tool";
-import { getAppEntry } from "../../../config/appEntry.server";
 import {
   parseUsageMetadata,
   normalizeBillingModelKey,
@@ -172,7 +171,6 @@ export async function runProductDescriptionGeneration(params: {
       if (usage.totalTokens > 0) {
         await recordBilledTokenUsage({
           shop: tokenCtx.shop.trim(),
-          appName: tokenCtx.appName?.trim() || getAppEntry(),
           feature: "product_copy",
           modelKey: normalizeBillingModelKey(raw.modelLabel),
           usage,

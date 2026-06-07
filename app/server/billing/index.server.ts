@@ -5,7 +5,7 @@ export {
 } from "./types.server";
 export {
   isBillingDevCancelEnabled,
-  isBillingEnabledForApp,
+  isBillingEnabled,
   isBillingTestMode,
   useNoopBillingGateway,
 } from "./constants.server";

@@ -41,7 +41,6 @@ function clonePlan(plan: PlanRecord, overrides: Partial<PlanRecord>): PlanRecord
 }
 
 function createMockPlan(params: {
-  appName: string;
   planKey: string;
   billingInterval: "MONTHLY" | "ANNUAL";
   displayName: string;
@@ -52,7 +51,6 @@ function createMockPlan(params: {
 }): PlanRecord {
   return {
     planKey: `${params.planKey}${MOCK_PLAN_SUFFIX}`,
-    appName: params.appName,
     kind: "SUBSCRIPTION",
     billingInterval: params.billingInterval,
     displayName: params.displayName,
@@ -69,7 +67,6 @@ function isMockVisualPlan(plan: PlanRecord): boolean {
 }
 
 function buildMockBillingPlans(params: {
-  appName: string;
   trialPlan: PlanRecord | null;
   subscriptionPlans: PlanRecord[];
 }): { trialPlan: PlanRecord | null; subscriptionPlans: PlanRecord[] } {
@@ -136,7 +133,6 @@ function buildMockBillingPlans(params: {
   mockedPlans.push(
     premiumMonthly ??
       createMockPlan({
-        appName: params.appName,
         planKey: "pi_premium_monthly",
         billingInterval: "MONTHLY",
         displayName: "Premium (Monthly)",
@@ -149,7 +145,6 @@ function buildMockBillingPlans(params: {
   mockedPlans.push(
     premiumAnnual ??
       createMockPlan({
-        appName: params.appName,
         planKey: "pi_premium_annual",
         billingInterval: "ANNUAL",
         displayName: "Premium (Annual)",
@@ -564,7 +559,6 @@ function PaidPlanCard({
 
 export function BillingPage() {
   const {
-    appName,
     billing,
     trialPlan: rawTrialPlan,
     subscriptionPlans: rawSubscriptionPlans,
@@ -598,11 +592,10 @@ export function BillingPage() {
   const mockedBillingPlans = useMemo(
     () =>
       buildMockBillingPlans({
-        appName,
         trialPlan: rawTrialPlan,
         subscriptionPlans: rawSubscriptionPlans,
       }),
-    [appName, rawSubscriptionPlans, rawTrialPlan],
+    [rawSubscriptionPlans, rawTrialPlan],
   );
   const trialPlan = mockedBillingPlans.trialPlan;
   const subscriptionPlans = mockedBillingPlans.subscriptionPlans;

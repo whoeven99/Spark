@@ -2,7 +2,6 @@ import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { listTasksPageForShop } from "../server/aiTask/aiTaskStore.server";
 import type { AITaskListView, AITaskType } from "../lib/aiTaskTypes";
-import { getAppEntry } from "../config/appEntry.server";
 
 const VALID_TASK_TYPES: AITaskType[] = [
   "product_improve",
@@ -36,7 +35,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const taskTypes = parseTaskTypes(url.searchParams);
   const taskPage = await listTasksPageForShop({
     shop: session.shop,
-    appName: getAppEntry(),
     view,
     page,
     pageSize,

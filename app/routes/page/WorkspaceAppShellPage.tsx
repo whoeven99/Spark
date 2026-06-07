@@ -300,7 +300,7 @@ export function WorkspaceAppShellPage() {
   const [automationView, setAutomationView] = useState<AutomationView>("configured");
   const [taskFilter, setTaskFilter] = useState<"all" | TaskKind>("all");
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const [activeContextTool, setActiveContextTool] = useState<ContextTool | null>("product");
+  const [activeContextTool, setActiveContextTool] = useState<ContextTool | null>(null);
   const [objectQueryByType, setObjectQueryByType] = useState<Record<ObjectType, string>>({
     product: "",
     article: "",
@@ -380,6 +380,7 @@ export function WorkspaceAppShellPage() {
       ...current,
       [nextId]: "",
     }));
+    setActiveContextTool(null);
     setActiveConversationId(nextId);
     switchPanel("chat");
   };
@@ -1013,10 +1014,17 @@ function ChatPanel({
   };
 
   const handleTextareaKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      void onSend();
-    }
+    if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+    e.preventDefault();
+    void onSend();
+  };
+
+  const focusComposerInput = () => {
+    const ta = textareaRef.current;
+    if (!ta || isStreaming) return;
+    ta.focus();
+    const len = ta.value.length;
+    ta.setSelectionRange(len, len);
   };
 
   useEffect(() => {
@@ -1037,6 +1045,10 @@ function ChatPanel({
     ta.style.height = "auto";
     ta.style.height = `${ta.scrollHeight}px`;
   }, [draft]);
+
+  useEffect(() => {
+    focusComposerInput();
+  }, [conversation.id, isStreaming]);
 
   return (
     <div style={chatLayoutStyle}>
@@ -1128,6 +1140,7 @@ function ChatPanel({
             style={textareaStyle}
             placeholder="继续补充你的任务目标，并结合商品、订单、文章、文件或富媒体上下文..."
             disabled={isStreaming}
+            autoFocus
           />
           <div style={toolbarDockStyle}>
             <div style={toolbarBarStyle}>
@@ -1157,7 +1170,7 @@ function ChatPanel({
           </div>
           <div style={composerFooterStyle}>
             <span style={sectionTextStyle}>
-              {isStreaming ? "AI Assistant 正在回复，可随时停止。" : <span style={mutedMetaStyle}>⌘↵ 或 Ctrl↵ 快速发送</span>}
+              {isStreaming ? "AI Assistant 正在回复，可随时停止。" : <span style={mutedMetaStyle}>Enter 发送，Shift+Enter 换行</span>}
             </span>
             <div style={buttonRowStyle}>
               <button type="button" style={ghostButtonStyle} disabled={isStreaming}>

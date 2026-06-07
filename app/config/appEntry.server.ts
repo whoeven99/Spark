@@ -1,82 +1,28 @@
-export type AppEntry =
+export type NavItemKey =
   | "chat"
   | "diagnosis"
   | "translation-v4"
   | "product-improve"
   | "image-studio"
-  | "picture-translate"
-  | "generate-image"
-  | "order-monitor";
+  | "order-monitor"
+  | "billing";
 
-export type NavItemKey = AppEntry | "billing";
+const ALL_NAV_ITEMS: readonly NavItemKey[] = [
+  "chat",
+  "diagnosis",
+  "translation-v4",
+  "product-improve",
+  "image-studio",
+  "order-monitor",
+  "billing",
+] as const;
 
-type AppEntryConfig = {
-  home: string;
-  nav: readonly NavItemKey[];
-};
-
-const APP_ENTRY_CONFIGS = {
-  chat: {
-    home: "/app",
-    nav: [
-      "chat",
-      "diagnosis",
-      "translation-v4",
-      "product-improve",
-      "image-studio",
-    ],
-  },
-  diagnosis: {
-    home: "/app/additional",
-    nav: ["diagnosis"],
-  },
-  "translation-v4": {
-    home: "/app/translation-v4",
-    nav: ["translation-v4"],
-  },
-  "product-improve": {
-    home: "/app/product-improve",
-    nav: ["product-improve", "image-studio", "billing"],
-  },
-  "image-studio": {
-    home: "/app/image-studio",
-    nav: ["image-studio"],
-  },
-  "picture-translate": {
-    home: "/app/image-studio?tab=translate",
-    nav: ["image-studio"],
-  },
-  "generate-image": {
-    home: "/app/image-studio?tab=generate",
-    nav: ["image-studio"],
-  },
-  "order-monitor": {
-    home: "/app/order-monitor",
-    nav: ["order-monitor", "billing"],
-  },
-} as const satisfies Record<AppEntry, AppEntryConfig>;
-
-function isAppEntry(value: string): value is AppEntry {
-  return value in APP_ENTRY_CONFIGS;
+export function getAppNavItems(): readonly NavItemKey[] {
+  return ALL_NAV_ITEMS;
 }
 
-/** 通过 APP_ENTRY 环境变量切换旗舰 App 与卫星 App 的默认入口。 */
-export function getAppEntry(): AppEntry {
-  const raw = process.env.APP_ENTRY?.trim();
-  if (raw && isAppEntry(raw)) return raw;
-  return "chat";
-}
-
-export function getAppEntryConfig(): AppEntryConfig {
-  return APP_ENTRY_CONFIGS[getAppEntry()];
-}
-
-export function getAppHomePath(entry: AppEntry = getAppEntry()): string {
-  return APP_ENTRY_CONFIGS[entry].home;
-}
-
-export function isAppEntryKey(value: string): value is AppEntry {
-  return isAppEntry(value);
+export function getAppHomePath(): string {
+  return "/app";
 }
 
 /** 嵌入式 Admin 跳转时保留 shop/host/id_token 等查询参数，避免鉴权循环。 */

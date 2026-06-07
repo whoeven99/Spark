@@ -4,7 +4,6 @@ import type {
   LoaderFunctionArgs,
 } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { getAppEntry } from "../config/appEntry.server";
 import { authenticate } from "../shopify.server";
 import {
   BillingError,
@@ -17,14 +16,12 @@ import { BillingPage } from "./page/BillingPage";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const appName = getAppEntry();
-  return loadBillingPageData(session.shop, appName);
+  return loadBillingPageData(session.shop);
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin, session, redirect: shopifyRedirect } =
     await authenticate.admin(request);
-  const appName = getAppEntry();
   const form = await request.formData();
   const intent = form.get("intent")?.toString();
   const planKey = form.get("planKey")?.toString();
@@ -39,7 +36,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       await cancelActiveSubscription({
         admin,
         shop: session.shop,
-        appName,
       });
       return { ok: true as const, cancelled: true as const };
     }
@@ -52,7 +48,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const { confirmationUrl } = await startSubscriptionCheckout({
         admin,
         shop: session.shop,
-        appName,
         planKey,
         request,
         trialDays: trialMode === "paid" ? null : undefined,
@@ -66,7 +61,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const { confirmationUrl } = await startTokenPackCheckout({
         admin,
         shop: session.shop,
-        appName,
         planKey,
         request,
       });
@@ -77,7 +71,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
     return { ok: false as const, error: "未知操作" };
   } catch (error) {
-    // authenticate.admin 的 redirect() 抛出 Response（302），须继续向上抛以完成结账跳转
     if (error instanceof Response) {
       throw error;
     }

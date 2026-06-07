@@ -3,13 +3,12 @@ import { z } from "zod";
 import type { AgentContext, ToolDefinition } from "../../core/toolRegistry.server";
 import { loadBillingContext } from "../../../billing/billingContext.server";
 import { logDetailedError } from "../../../productImprove/generateDescriptionLog.server";
-import { getAppEntry } from "../../../../config/appEntry.server";
 
 export const GET_BILLING_STATUS_TOOL_NAME = "get_billing_status";
 const LOG_PREFIX = "[GetBillingStatus]";
 
 function createGetBillingStatusTool(context: AgentContext): DynamicStructuredTool {
-  const { shop, appName } = context;
+  const { shop } = context;
   return new DynamicStructuredTool({
     name: GET_BILLING_STATUS_TOOL_NAME,
     description:
@@ -22,8 +21,7 @@ function createGetBillingStatusTool(context: AgentContext): DynamicStructuredToo
         return JSON.stringify({ ok: false, errorMsg: "无法识别当前店铺" });
       }
       try {
-        const resolvedAppName = appName ?? getAppEntry();
-        const ctx = await loadBillingContext(shop, resolvedAppName, { grantTrial: false });
+        const ctx = await loadBillingContext(shop, { grantTrial: false });
         console.info(
           `${LOG_PREFIX} done requestId=${requestId} availableTokens=${ctx.availableTokens} hasAccess=${ctx.hasAccess}`,
         );

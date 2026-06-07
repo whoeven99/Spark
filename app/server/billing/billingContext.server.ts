@@ -10,7 +10,7 @@ import {
   getAvailableTokens,
   hasTokenQuota,
 } from "../tokenUsage/accountBalance.server";
-import { isBillingDevCancelEnabled, isBillingEnabledForApp } from "./constants.server";
+import { isBillingEnabled, isBillingDevCancelEnabled } from "./constants.server";
 import { ensureAccount } from "./account/ensureAccount.server";
 import { grantProductTrialIfEligible } from "./account/grantTrial.server";
 import type {
@@ -21,7 +21,7 @@ import type {
   BillingToolUsageItem,
   BillingUsagePeriodItem,
 } from "../../lib/billingPageTypes";
-import { listEnabledPlansForApp, type PlanRecord } from "./plans/planCatalog.server";
+import { listEnabledPlans, type PlanRecord } from "./plans/planCatalog.server";
 import {
   APP_SUBSCRIPTION_STATUS,
   PLAN_CATALOG_KIND,
@@ -71,7 +71,6 @@ function toBillingToolUsageItem(row: ToolTokenUsageLog): BillingToolUsageItem {
 export function toBillingPageSnapshot(ctx: BillingContext): BillingPageSnapshot {
   return {
     shop: ctx.shop,
-    appName: ctx.appName,
     billingRequired: ctx.billingRequired,
     hasAccess: ctx.hasAccess,
     availableTokens: ctx.availableTokens,
@@ -104,22 +103,21 @@ export function toBillingAccessSnapshot(ctx: BillingContext): BillingAccessSnaps
 
 export async function loadBillingPageData(
   shop: string,
-  appName: string,
 ): Promise<BillingPageLoaderData> {
-  const ctx = await loadBillingContext(shop, appName);
+  const ctx = await loadBillingContext(shop);
   const [usageHistoryRows, billingHistoryRows, toolUsageRows] = await Promise.all([
     prisma.accountPeriodUsage.findMany({
-      where: { shop, appName },
+      where: { shop },
       orderBy: { periodEnd: "desc" },
       take: 6,
     }),
     prisma.billingLog.findMany({
-      where: { shop, appName },
+      where: { shop },
       orderBy: { createdAt: "desc" },
       take: 12,
     }),
     prisma.toolTokenUsageLog.findMany({
-      where: { shop, appName },
+      where: { shop },
       orderBy: { createdAt: "desc" },
       take: 20,
     }),
@@ -132,7 +130,6 @@ export async function loadBillingPageData(
       sub.status === APP_SUBSCRIPTION_STATUS.PENDING);
 
   return {
-    appName,
     billing: toBillingPageSnapshot(ctx),
     trialPlan:
       ctx.plans.find((p) => p.kind === PLAN_CATALOG_KIND.INTERNAL_TRIAL) ?? null,
@@ -146,9 +143,9 @@ export async function loadBillingPageData(
     showDevCancelSubscription,
   };
 }
+
 export type BillingContext = {
   shop: string;
-  appName: string;
   billingRequired: boolean;
   hasAccess: boolean;
   availableTokens: number;
@@ -160,29 +157,25 @@ export type BillingContext = {
 
 export async function loadBillingContext(
   shop: string,
-  appName: string,
   options?: { grantTrial?: boolean },
 ): Promise<BillingContext> {
-  if (options?.grantTrial !== false && isBillingEnabledForApp(appName)) {
-    await grantProductTrialIfEligible(shop, appName);
+  if (options?.grantTrial !== false && isBillingEnabled()) {
+    await grantProductTrialIfEligible(shop);
   }
 
-  const account = await ensureAccount(shop, appName);
+  const account = await ensureAccount(shop);
   const subscription = await prisma.appSubscription.findUnique({
-    where: { shop_appName: { shop, appName } },
+    where: { shop },
   });
 
-  const plans = isBillingEnabledForApp(appName)
-    ? await listEnabledPlansForApp(appName)
-    : [];
+  const plans = isBillingEnabled() ? await listEnabledPlans() : [];
 
-  const billingRequired = isBillingEnabledForApp(appName);
+  const billingRequired = isBillingEnabled();
   const availableTokens = getAvailableTokens(account);
   const hasAccess = !billingRequired || hasTokenQuota(account);
 
   return {
     shop,
-    appName,
     billingRequired,
     hasAccess,
     availableTokens,

@@ -5,7 +5,6 @@ import {
   shopifyFetchAppSubscription,
 } from "../gateway/shopifyGraphqlBilling.server";
 import { getPlanByKey } from "../plans/planCatalog.server";
-import { getAppEntry } from "../../../config/appEntry.server";
 import {
   applyActiveSubscription,
   markSubscriptionNonActive,
@@ -36,7 +35,6 @@ export async function handleAppSubscriptionWebhook(params: {
   shop: string;
   payload: unknown;
   admin?: ShopifyAdminGraphqlClient;
-  appName?: string;
 }): Promise<void> {
   const webhookSub = parseWebhookSubscription(params.payload);
   if (!webhookSub?.admin_graphql_api_id) {
@@ -45,7 +43,6 @@ export async function handleAppSubscriptionWebhook(params: {
   }
 
   const shopifySubscriptionId = webhookSub.admin_graphql_api_id;
-  const appName = params.appName ?? getAppEntry();
   const mappedStatus = mapShopifySubscriptionStatus(
     webhookSub.status ?? "UNKNOWN",
   );
@@ -53,7 +50,7 @@ export async function handleAppSubscriptionWebhook(params: {
   let planKey =
     (
       await prisma.appSubscription.findUnique({
-        where: { shop_appName: { shop: params.shop, appName } },
+        where: { shop: params.shop },
       })
     )?.planKey ?? null;
 
@@ -113,7 +110,6 @@ export async function handleAppSubscriptionWebhook(params: {
 
     await applyActiveSubscription({
       shop: params.shop,
-      appName,
       shopifySubscriptionId,
       planKey,
       billingInterval,
@@ -137,17 +133,15 @@ export async function handleAppSubscriptionWebhook(params: {
   ) {
     await markSubscriptionNonActive({
       shop: params.shop,
-      appName,
       shopifySubscriptionId,
       status: mappedStatus,
       rawPayload,
     });
   } else if (mappedStatus === APP_SUBSCRIPTION_STATUS.PENDING) {
     await prisma.appSubscription.upsert({
-      where: { shop_appName: { shop: params.shop, appName } },
+      where: { shop: params.shop },
       create: {
         shop: params.shop,
-        appName,
         planKey: planKey ?? "unknown",
         shopifySubscriptionId,
         billingInterval,

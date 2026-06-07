@@ -84,7 +84,6 @@ function buildOptimisticTask(params: {
     id: params.taskId,
     batchId: params.batchId,
     shop: "",
-    appName: "",
     taskType: params.taskType,
     status: "running",
     config: params.optimisticConfig ?? {},

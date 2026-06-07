@@ -47,13 +47,11 @@ function buildTaskTypeWhere(params: {
 
 function buildTaskListWhere(params: {
   shop: string;
-  appName: string;
   taskType?: AITaskType;
   taskTypes?: AITaskType[];
 }) {
   return {
     shop: params.shop,
-    appName: params.appName,
     ...buildTaskTypeWhere(params),
   };
 }
@@ -101,7 +99,6 @@ function rowToAITaskItem(row: {
   id: string;
   batchId: string;
   shop: string;
-  appName: string;
   taskType: string;
   status: string;
   config: unknown;
@@ -121,7 +118,6 @@ function rowToAITaskItem(row: {
     id: row.id,
     batchId: row.batchId,
     shop: row.shop,
-    appName: row.appName,
     taskType: row.taskType as AITaskType,
     status: toAITaskStatus(row.status),
     config: row.config as Record<string, unknown>,
@@ -140,7 +136,6 @@ function rowToAITaskItem(row: {
 
 export async function createBatchWithTask(params: {
   shop: string;
-  appName: string;
   taskType: AITaskType;
   batchConfig: Record<string, unknown>;
   taskConfig: Record<string, unknown>;
@@ -149,13 +144,11 @@ export async function createBatchWithTask(params: {
   const batch = await prisma.aITaskBatch.create({
     data: {
       shop: params.shop,
-      appName: params.appName,
       taskType: params.taskType,
       config: params.batchConfig as unknown as PrismaJson,
       tasks: {
         create: {
           shop: params.shop,
-          appName: params.appName,
           taskType: params.taskType,
           status: "running",
           config: params.taskConfig as unknown as PrismaJson,
@@ -186,13 +179,12 @@ export async function markTaskSucceeded(params: {
 }
 
 export async function getTaskMeta(taskId: string): Promise<{
-  appName: string;
   taskType: string;
   startedAt: Date;
 } | null> {
   const row = await prisma.aITask.findUnique({
     where: { id: taskId },
-    select: { appName: true, taskType: true, startedAt: true },
+    select: { taskType: true, startedAt: true },
   });
   return row ?? null;
 }
@@ -285,14 +277,12 @@ export async function getTaskForShop(params: {
 
 export async function listRecentTasksForShop(params: {
   shop: string;
-  appName: string;
   taskType?: AITaskType;
   limit?: number;
 }): Promise<AITaskItem[]> {
   const rows = await prisma.aITask.findMany({
     where: {
       shop: params.shop,
-      appName: params.appName,
       ...(params.taskType ? { taskType: params.taskType } : {}),
     },
     orderBy: { createdAt: "desc" },
@@ -303,7 +293,6 @@ export async function listRecentTasksForShop(params: {
 
 export async function getTaskListMetricsForShop(params: {
   shop: string;
-  appName: string;
   taskType?: AITaskType;
   taskTypes?: AITaskType[];
 }): Promise<AITaskListMetrics> {
@@ -340,7 +329,6 @@ export async function getTaskListMetricsForShop(params: {
 
 export async function listTasksPageForShop(params: {
   shop: string;
-  appName: string;
   view: AITaskListView;
   page?: number;
   pageSize?: number;

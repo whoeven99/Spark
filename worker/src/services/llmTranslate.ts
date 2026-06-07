@@ -173,6 +173,85 @@ export type TranslateResult = {
 // These fields must not be translated (Shopify uses them as URL segments)
 const SKIP_KEYS = new Set(["handle"]);
 
+/**
+ * Returns true if `text` appears to already be written in the target language,
+ * meaning it does not need translation.
+ *
+ * Strategy:
+ *  - For English target: if source is a non-Latin script language AND the text
+ *    contains no source-script characters, it is almost certainly already in
+ *    English → skip.  (A zh-CN store's product titled "Standard" is English.)
+ *  - For other targets with a distinctive script (zh, ja, ko, ar, ru, pl, de …):
+ *    skip only when the text already contains target-script characters.
+ *  - Conservative fall-through: return false (always translate) for unknown
+ *    combinations to avoid accidentally suppressing content.
+ *
+ * This correctly handles the common case of a zh-CN store that has mostly
+ * English product data and is being translated to:
+ *   • en  → English content is the target, skip it (saves ~94% of LLM calls)
+ *   • pl  → English content still needs translation to Polish, don't skip
+ */
+export function alreadyInTarget(text: string, source: string, target: string): boolean {
+  const tl = target.toLowerCase().split(/[-_]/)[0];
+  const sl = source.toLowerCase().split(/[-_]/)[0];
+
+  // ── English target ──────────────────────────────────────────────────────────
+  // If source is a CJK / non-Latin language and text has no source-script chars,
+  // the content is already in a Latin-script language (overwhelmingly English).
+  if (tl === "en") {
+    return !containsSourceScript(text, source);
+  }
+
+  // ── Non-Latin script targets ────────────────────────────────────────────────
+  // We can only be sure content is "already translated" if it contains the
+  // target script's characteristic characters.
+  switch (tl) {
+    case "zh": return /[一-鿿㐀-䶿]/u.test(text);
+    case "ja": return /[ぁ-ゖァ-ヶ一-鿿]/u.test(text);
+    case "ko": return /[가-힣ᄀ-ᇿ]/u.test(text);
+    case "ar": return /[؀-ۿ]/u.test(text);
+    case "ru": case "uk": case "bg": return /[Ѐ-ӿ]/u.test(text);
+    case "th": return /[฀-๿]/u.test(text);
+    case "hi": case "mr": case "ne": return /[ऀ-ॿ]/u.test(text);
+    // Latin-script targets with strongly distinctive diacritics
+    case "pl": return /[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/u.test(text);
+    case "de": return /[äöüÄÖÜß]/u.test(text);
+    case "fr": return /[àâçèéêëîïôùûüœÀÂÇÈÉÊËÎÏÔÙÛÜŒ]/u.test(text);
+    case "es": case "pt": return /[áéíóúüñÁÉÍÓÚÜÑãõÃÕ]/u.test(text);
+    case "cs": case "sk": return /[áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]/u.test(text);
+    case "hu": return /[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/u.test(text);
+    case "tr": return /[çğışöüÇĞİŞÖÜ]/u.test(text);
+    case "vi": return /[àáâãèéêìíòóôõùúýăđơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/u.test(text);
+    default: return false; // unknown target → conservative, always translate
+  }
+}
+
+/**
+ * Returns true if `text` contains at least one character from the source
+ * language's script. Used internally by alreadyInTarget.
+ */
+export function containsSourceScript(text: string, source: string): boolean {
+  const lang = source.toLowerCase().split(/[-_]/)[0];
+  switch (lang) {
+    case "zh":
+      return /[一-鿿㐀-䶿]/u.test(text);
+    case "ja":
+      return /[ぁ-ゖァ-ヶ一-鿿]/u.test(text);
+    case "ko":
+      return /[가-힣ᄀ-ᇿ]/u.test(text);
+    case "ar":
+      return /[؀-ۿ]/u.test(text);
+    case "ru": case "uk": case "bg":
+      return /[Ѐ-ӿ]/u.test(text);
+    case "th":
+      return /[฀-๿]/u.test(text);
+    case "hi": case "mr": case "ne":
+      return /[ऀ-ॿ]/u.test(text);
+    default:
+      return true; // unknown source locale → conservative, always translate
+  }
+}
+
 const HTML_TAG_RE = /<\/?[a-z][^>]*>/i;
 
 function isHtml(value: string): boolean {
@@ -839,6 +918,16 @@ export async function translateResources(
         cacheUnits += countFieldUnits(f.key, f.value);
         continue;
       }
+    }
+
+    // Already-in-target check: if the value appears to already be in the target
+    // language, skip it — the LLM would just echo it back unchanged.
+    // For zh-CN→en: English content (no CJK) is skipped (it's already the target).
+    // For zh-CN→pl: English content is NOT skipped (it still needs translation to Polish).
+    if (alreadyInTarget(f.value, source, target)) {
+      rm.set(f.key, { key: f.key, translatedValue: f.value, digest: f.digest, status: "translated" });
+      cacheUnits += countFieldUnits(f.key, f.value);
+      continue;
     }
 
     if (klass === "html") {

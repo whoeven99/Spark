@@ -1,10 +1,8 @@
-import type { AppEntry } from "../../config/appEntry.server";
 import prisma from "../../db.server";
 import type { ParsedTokenUsage } from "./parseUsageMetadata.server";
 
 export type RecordTokenUsageParams = {
   shop: string;
-  appName: AppEntry | string;
   usage: ParsedTokenUsage;
 };
 
@@ -20,17 +18,11 @@ export async function recordTokenUsage(
   const { usage } = params;
   if (usage.totalTokens <= 0) return;
 
-  const appName = String(params.appName).trim();
-  if (!appName) return;
-
   try {
     await prisma.account.upsert({
-      where: {
-        shop_appName: { shop, appName },
-      },
+      where: { shop },
       create: {
         shop,
-        appName,
         subscriptionTokens: 0,
         purchasedTokens: 0,
         trialTokens: 0,

@@ -3,7 +3,6 @@ import { redirect } from "react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   buildEmbeddedAppPath,
-  getAppEntryConfig,
 } from "../config/appEntry.server";
 import {
   BILLING_PAGE_PATH,
@@ -16,10 +15,8 @@ import { WorkspaceAppShellPage } from "./page/WorkspaceAppShellPage";
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
 
-  const { home } = getAppEntryConfig();
-  const targetPath = isBillingReturnRequest(request) ? BILLING_PAGE_PATH : home;
-  if (targetPath !== "/app") {
-    throw redirect(buildEmbeddedAppPath(targetPath, request));
+  if (isBillingReturnRequest(request)) {
+    throw redirect(buildEmbeddedAppPath(BILLING_PAGE_PATH, request));
   }
 
   return null;

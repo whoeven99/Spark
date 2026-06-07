@@ -14,7 +14,6 @@ import {
   createLangsmithTracer,
   getTraceUrl,
 } from "../utils/langsmith.server";
-import { getAppEntry } from "../../../config/appEntry.server";
 import {
   extractTokenUsageFromMessages,
   recordTokenUsage,
@@ -100,7 +99,7 @@ export async function invokeChatAgent(
   const startedAtIso = new Date().toISOString();
   const wallStart = Date.now();
   const shop = context.shop?.trim();
-  const appName = context.appName ?? getAppEntry();
+  const appName = "spark";
   const lastUserTextInput = lastHumanUtterance(agentInputMessages);
 
   const activeDefs = await globalToolRegistry.getActiveToolDefinitions(context);
@@ -157,11 +156,7 @@ export async function invokeChatAgent(
   if (shop) {
     const agentUsage = extractTokenUsageFromMessages(messages);
     if (agentUsage.totalTokens > 0) {
-      await recordTokenUsage({
-        shop,
-        appName,
-        usage: agentUsage,
-      });
+      await recordTokenUsage({ shop, usage: agentUsage });
     }
   }
 

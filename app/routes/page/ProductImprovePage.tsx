@@ -240,7 +240,6 @@ export function ProductImprovePage() {
       id: data.taskId,
       batchId: data.batchId,
       shop: "",
-      appName: "",
       taskType: "product_improve",
       status: "running",
       config: {

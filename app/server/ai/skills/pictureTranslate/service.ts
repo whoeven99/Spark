@@ -1,4 +1,3 @@
-import { getAppEntry } from "../../../../config/appEntry.server";
 import { logDetailedError } from "../../../productImprove/generateDescriptionLog.server";
 import {
   buildPictureTranslateBillingItem,
@@ -288,7 +287,6 @@ export async function executePictureTranslateTool(
   );
   await recordVisualToolTokenUsage({
     shop,
-    appName: getAppEntry(),
     items: [buildPictureTranslateBillingItem(pipeline.provider)],
   });
   return ok(pipeline.imageUrl);

@@ -1,4 +1,3 @@
-import { getAppEntry } from "../../../config/appEntry.server";
 import prisma from "../../../db.server";
 import { getPlanByKey } from "../plans/planCatalog.server";
 import { applyTokenPackPurchase } from "./applyTokenPack.server";
@@ -22,7 +21,6 @@ function parseOneTimePurchase(payload: unknown): WebhookOneTimePurchase | null {
 export async function handleAppPurchaseOneTimeWebhook(params: {
   shop: string;
   payload: unknown;
-  appName?: string;
 }): Promise<void> {
   const purchase = parseOneTimePurchase(params.payload);
   if (!purchase?.admin_graphql_api_id) {
@@ -34,12 +32,10 @@ export async function handleAppPurchaseOneTimeWebhook(params: {
   if (status !== "ACTIVE") return;
 
   const purchaseId = purchase.admin_graphql_api_id;
-  const appName = params.appName ?? getAppEntry();
 
   const pendingLog = await prisma.billingLog.findFirst({
     where: {
       shop: params.shop,
-      appName,
       referenceId: purchaseId,
       eventType: "TOKEN_PACK_INITIATED",
     },
@@ -55,7 +51,6 @@ export async function handleAppPurchaseOneTimeWebhook(params: {
   const plan = await getPlanByKey(planKey);
   await applyTokenPackPurchase({
     shop: params.shop,
-    appName,
     plan,
     shopifyPurchaseId: purchaseId,
     metadata: {
