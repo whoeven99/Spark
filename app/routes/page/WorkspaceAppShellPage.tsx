@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
-import { useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import type {
@@ -68,6 +68,7 @@ type SkillApp = {
   description: string;
   status: string;
   category: string;
+  path: string;
 };
 
 type AutomationConfiguredItem = {
@@ -237,12 +238,12 @@ const dashboardTaskSummary = [
 ];
 
 const skillApps: SkillApp[] = [
-  { id: "s1", title: "商品文案优化", description: "批量生成和优化商品标题、卖点与描述。", status: "最近使用", category: "内容" },
-  { id: "s2", title: "多语言翻译", description: "支持商品内容、页面文案与术语统一翻译。", status: "可用", category: "翻译" },
-  { id: "s3", title: "店铺诊断", description: "汇总经营指标并给出异常原因和建议。", status: "推荐", category: "分析" },
-  { id: "s4", title: "图片工具", description: "处理商品图翻译、文生图和素材优化。", status: "可用", category: "视觉" },
-  { id: "s5", title: "广告素材建议", description: "结合商品和活动目标生成广告文案建议。", status: "内测", category: "营销" },
-  { id: "s6", title: "邮件运营助手", description: "根据商品和分群生成邮件主题与正文。", status: "可用", category: "运营" },
+  { id: "s1", title: "商品文案优化", description: "批量生成和优化商品标题、卖点与描述。", status: "最近使用", category: "内容", path: "/app/generate-description" },
+  { id: "s2", title: "多语言翻译", description: "支持商品内容、页面文案与术语统一翻译。", status: "可用", category: "翻译", path: "/app/translation" },
+  { id: "s3", title: "店铺诊断", description: "汇总经营指标并给出异常原因和建议。", status: "推荐", category: "分析", path: "/app/additional" },
+  { id: "s4", title: "图片工具", description: "处理商品图翻译、文生图和素材优化。", status: "可用", category: "视觉", path: "/app/image-studio" },
+  { id: "s5", title: "广告素材建议", description: "结合商品和活动目标生成广告文案建议。", status: "内测", category: "营销", path: "/app" },
+  { id: "s6", title: "邮件运营助手", description: "根据商品和分群生成邮件主题与正文。", status: "可用", category: "运营", path: "/app" },
 ];
 
 const automationConfigured: AutomationConfiguredItem[] = [
@@ -282,7 +283,9 @@ function isObjectType(value: ContextTool | null): value is ObjectType {
 export function WorkspaceAppShellPage() {
   const shopify = useAppBridge();
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const [conversationList, setConversationList] = useState<Conversation[]>(initialConversations);
   const [activeConversationId, setActiveConversationId] = useState(initialConversations[0].id);
   const [draftByConversation, setDraftByConversation] = useState<Record<string, string>>({
@@ -296,6 +299,7 @@ export function WorkspaceAppShellPage() {
   );
   const [automationView, setAutomationView] = useState<AutomationView>("configured");
   const [taskFilter, setTaskFilter] = useState<"all" | TaskKind>("all");
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [activeContextTool, setActiveContextTool] = useState<ContextTool | null>("product");
   const [objectQueryByType, setObjectQueryByType] = useState<Record<ObjectType, string>>({
     product: "",
@@ -561,6 +565,17 @@ export function WorkspaceAppShellPage() {
     shopify.toast.show(t("pictureTranslate.submitSuccess"));
   };
 
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!accountMenuRef.current?.contains(event.target as Node)) {
+        setAccountMenuOpen(false);
+      }
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, [accountMenuOpen]);
+
   return (
     <div style={shellStyle}>
       <aside style={sidebarStyle}>
@@ -615,27 +630,36 @@ export function WorkspaceAppShellPage() {
           </div>
         </div>
 
-        <div style={sidebarFooterStyle}>
-          <div>
-            <div style={brandTitleStyle}>Cedric hu</div>
-            <div style={brandMetaStyle}>Spark Workspace</div>
-          </div>
-          <div style={footerTagStyle}>在线</div>
+        <div ref={accountMenuRef} style={accountMenuWrapStyle}>
+          {accountMenuOpen ? (
+            <div style={accountMenuStyle}>
+              <div style={accountMenuSectionStyle}>
+                <div style={accountMenuLabelStyle}>语言</div>
+                <LanguageSelector />
+              </div>
+              <button
+                type="button"
+                style={accountMenuItemStyle}
+                onClick={() => {
+                  setAccountMenuOpen(false);
+                  navigate("/app/billing");
+                }}
+              >
+                Billing
+              </button>
+            </div>
+          ) : null}
+          <button type="button" style={sidebarFooterButtonStyle} onClick={() => setAccountMenuOpen((current) => !current)}>
+            <div>
+              <div style={brandTitleStyle}>Cedric hu</div>
+              <div style={brandMetaStyle}>Spark Workspace</div>
+            </div>
+            <div style={footerTagStyle}>在线</div>
+          </button>
         </div>
       </aside>
 
       <main style={contentStyle}>
-        <div style={pageHeaderStyle}>
-          <div>
-            <div style={eyebrowStyle}>Spark Workspace</div>
-            <h1 style={pageTitleStyle}>{panelTitle(activePanel)}</h1>
-            <p style={pageSubtitleStyle}>{panelSubtitle(activePanel)}</p>
-          </div>
-          <div style={headerActionsStyle}>
-            <LanguageSelector />
-          </div>
-        </div>
-
         {activePanel === "dashboard" ? <DashboardPanel /> : null}
         {activePanel === "chat" ? (
           <ChatPanel
@@ -694,7 +718,7 @@ export function WorkspaceAppShellPage() {
             }
           />
         ) : null}
-        {activePanel === "skills" ? <SkillsPanel /> : null}
+        {activePanel === "skills" ? <SkillsPanel onOpenTool={(path: string) => navigate(path)} /> : null}
         {activePanel === "automation" ? (
           <AutomationPanel activeView={automationView} onChangeView={setAutomationView} />
         ) : null}
@@ -895,6 +919,7 @@ function ChatPanel({
     detail: { taskId: string; batchId: string },
   ) => void;
 }) {
+  const messageListRef = useRef<HTMLDivElement | null>(null);
   const [hoveredTool, setHoveredTool] = useState<ContextTool | null>(null);
   const [activeObjectFilter, setActiveObjectFilter] = useState<Record<ObjectType, ObjectFilterKey>>({
     product: "all",
@@ -958,18 +983,21 @@ function ChatPanel({
     : undefined;
   const streamingProductImprovePayload = streamingGeneratePayload as ProductImproveCardPayload | undefined;
 
+  useEffect(() => {
+    const element = messageListRef.current;
+    if (!element) return;
+    element.scrollTop = element.scrollHeight;
+  }, [conversation.id, messages.length]);
+
   return (
     <div style={chatLayoutStyle}>
       <section style={{ ...surfaceCardStyle, minHeight: 0 }}>
-        <div style={sectionHeaderStyle}>
-          <div>
-            <div style={sectionTitleStyle}>{conversation.title}</div>
-            <div style={sectionTextStyle}>{conversation.preview}</div>
-          </div>
-          <div style={mutedMetaStyle}>{conversation.updatedAt}</div>
+        <div style={conversationMetaRowStyle}>
+          <span style={conversationMetaTitleStyle}>{conversation.title}</span>
+          <span style={mutedMetaStyle}>{conversation.updatedAt}</span>
         </div>
 
-        <div style={messageListStyle}>
+        <div ref={messageListRef} style={messageListStyle}>
           <ChatMessages
             messages={messages.map((message) => workspaceMessageToChatMessage(message))}
             onTranslationCardSuccess={(messageIndex, detail) =>
@@ -1333,7 +1361,7 @@ function ChatPanel({
   );
 }
 
-function SkillsPanel() {
+function SkillsPanel({ onOpenTool }: { onOpenTool: (path: string) => void }) {
   return (
     <section style={surfaceCardStyle}>
       <div style={sectionHeaderStyle}>
@@ -1345,15 +1373,15 @@ function SkillsPanel() {
       </div>
       <div style={skillGridStyle}>
         {skillApps.map((skill) => (
-          <article key={skill.id} style={skillCardStyle}>
+          <button key={skill.id} type="button" style={skillCardButtonStyle} onClick={() => onOpenTool(skill.path)}>
             <div style={skillCategoryStyle}>{skill.category}</div>
             <div style={sectionTitleSmallStyle}>{skill.title}</div>
             <div style={sectionTextStyle}>{skill.description}</div>
             <div style={skillFooterStyle}>
               <span style={statusBadgeStyle("neutral")}>{skill.status}</span>
-              <button type="button" style={textButtonStyle}>进入</button>
+              <span style={textButtonStyle}>进入</span>
             </div>
-          </article>
+          </button>
         ))}
       </div>
     </section>
@@ -1582,23 +1610,6 @@ function augmentUserMessage(content: string, contextBlock: string | null) {
   if (!contextBlock) return content;
   return `${contextBlock}\n\n[用户消息]\n${content}`;
 }
-
-function panelTitle(panel: WorkspacePanel) {
-  if (panel === "dashboard") return "经营看板";
-  if (panel === "chat") return "任务工作区";
-  if (panel === "skills") return "常用工具";
-  if (panel === "automation") return "自动化";
-  return "任务列表";
-}
-
-function panelSubtitle(panel: WorkspacePanel) {
-  if (panel === "dashboard") return "默认首页展示店铺经营概况、核心指标、自动化结果和经营建议。";
-  if (panel === "chat") return "工作区通过对象工具栏补充上下文，再承接单次任务创建和继续协作。";
-  if (panel === "skills") return "技能页作为已有 tools 的聚合入口，每个工具进入独立工作流。";
-  if (panel === "automation") return "自动化页聚焦配置、执行历史与模板，不与其他页混排。";
-  return "任务列表统一承载自动化任务和单次任务，再按类型和状态过滤。";
-}
-
 function taskStatusLabel(status: TaskStatus) {
   if (status === "executing") return "执行中";
   if (status === "review_required") return "待审核";
@@ -1643,20 +1654,6 @@ const contentStyle: CSSProperties = {
   gap: 24,
   minWidth: 0,
 };
-
-const pageHeaderStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "space-between",
-  gap: 16,
-  paddingBottom: 18,
-  borderBottom: "1px solid #e1e3e5",
-};
-
-const eyebrowStyle: CSSProperties = { fontSize: 13, fontWeight: 600, color: "#6d7175", marginBottom: 8 };
-const pageTitleStyle: CSSProperties = { margin: 0, fontSize: 28, lineHeight: 1.12, color: "#202223", letterSpacing: "-0.02em" };
-const pageSubtitleStyle: CSSProperties = { margin: "8px 0 0", color: "#61666c", fontSize: 14, lineHeight: 1.6, maxWidth: 720 };
-const headerActionsStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10 };
 
 const brandRowStyle: CSSProperties = {
   display: "flex",
@@ -1741,12 +1738,51 @@ const historyItemStyle = (active: boolean): CSSProperties => ({
 });
 const historyTitleStyle: CSSProperties = { fontSize: 13, fontWeight: 700, color: "#202223" };
 const historyPreviewStyle: CSSProperties = { fontSize: 12, color: "#61666c", lineHeight: 1.5 };
-const sidebarFooterStyle: CSSProperties = {
+const accountMenuWrapStyle: CSSProperties = {
+  position: "relative",
+  paddingTop: 12,
+  borderTop: "1px solid #e1e3e5",
+};
+const sidebarFooterButtonStyle: CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  padding: "12px 10px 0",
-  borderTop: "1px solid #e1e3e5",
+  width: "100%",
+  border: "1px solid transparent",
+  borderRadius: 12,
+  background: "transparent",
+  padding: "10px 10px 0",
+  textAlign: "left",
+  cursor: "pointer",
+};
+const accountMenuStyle: CSSProperties = {
+  position: "absolute",
+  left: 0,
+  right: 0,
+  bottom: "calc(100% + 10px)",
+  display: "flex",
+  flexDirection: "column",
+  gap: 12,
+  padding: 12,
+  borderRadius: 14,
+  border: "1px solid #e1e3e5",
+  background: "#ffffff",
+  boxShadow: "0 16px 36px rgba(15, 23, 42, 0.12)",
+  zIndex: 10,
+};
+const accountMenuSectionStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 8 };
+const accountMenuLabelStyle: CSSProperties = { fontSize: 12, fontWeight: 700, color: "#6d7175" };
+const accountMenuItemStyle: CSSProperties = {
+  width: "100%",
+  border: "1px solid #dfe3e8",
+  borderRadius: 10,
+  background: "#ffffff",
+  color: "#202223",
+  padding: "10px 12px",
+  fontSize: 13,
+  fontWeight: 600,
+  textAlign: "left",
+  cursor: "pointer",
 };
 const footerTagStyle: CSSProperties = { padding: "4px 8px", borderRadius: 999, background: "#e9f7ef", color: "#008060", fontSize: 12, fontWeight: 600 };
 
@@ -1796,8 +1832,18 @@ const barGroupStyle: CSSProperties = { display: "grid", gap: 8 };
 const barTrackStyle: CSSProperties = { height: 10, borderRadius: 999, background: "#f1f2f3", overflow: "hidden" };
 const barFillStyle: CSSProperties = { height: "100%", borderRadius: 999 };
 
-const chatLayoutStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 16, minHeight: 0 };
-const messageListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 14, minHeight: 420, overflowY: "auto" };
+const chatLayoutStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 16, minHeight: 0, alignItems: "start" };
+const conversationMetaRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14 };
+const conversationMetaTitleStyle: CSSProperties = { fontSize: 13, fontWeight: 700, color: "#202223" };
+const messageListStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 14,
+  height: 420,
+  overflowY: "auto",
+  paddingRight: 6,
+  scrollBehavior: "smooth",
+};
 const streamingWrapStyle: CSSProperties = { display: "flex", justifyContent: "flex-start", marginTop: 4 };
 const streamingAssistantShellStyle: CSSProperties = {
   maxWidth: "min(540px, 96%)",
@@ -1810,6 +1856,7 @@ const streamingAssistantShellStyle: CSSProperties = {
   color: "#202223",
 };
 const streamingCardSlotStyle: CSSProperties = { marginTop: "0.85rem" };
+const composerBoxStyle: CSSProperties = { marginTop: 18, paddingTop: 18, borderTop: "1px solid #ebedf0", background: "#ffffff" };
 const skillStepsWrapStyle: CSSProperties = {
   marginTop: 10,
   paddingTop: 10,
@@ -1822,7 +1869,6 @@ const skillStepLineStyle: CSSProperties = {
   color: "#61666c",
   lineHeight: 1.5,
 };
-const composerBoxStyle: CSSProperties = { marginTop: 18, paddingTop: 18, borderTop: "1px solid #ebedf0" };
 const textareaStyle: CSSProperties = {
   width: "100%",
   minHeight: 120,
@@ -2002,6 +2048,7 @@ const selectorItemContentStyle: CSSProperties = { display: "flex", flexDirection
 
 const skillGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16 };
 const skillCardStyle: CSSProperties = { padding: 18, borderRadius: 14, border: "1px solid #e1e3e5", background: "#ffffff", display: "flex", flexDirection: "column", gap: 10 };
+const skillCardButtonStyle: CSSProperties = { ...skillCardStyle, width: "100%", textAlign: "left", cursor: "pointer" };
 const skillCategoryStyle: CSSProperties = { fontSize: 12, fontWeight: 700, color: "#6d7175" };
 const skillFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 };
 
