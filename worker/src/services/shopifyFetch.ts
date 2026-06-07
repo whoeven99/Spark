@@ -78,6 +78,22 @@ const TRANSLATABLE_RESOURCES_BY_IDS_BATCH = 250;
 // gets huge (a single resource is still kept whole, even if it exceeds this).
 const MAX_CHUNK_CHARS = Number(process.env.TRANSLATION_MAX_CHUNK_CHARS?.trim()) || 50_000;
 
+/**
+ * Minimum remaining Shopify GraphQL bucket points before we proactively wait
+ * for the bucket to recover.  Shopify's leaky bucket: capacity 1000 (Plus: 2000),
+ * restore rate 50 pts/s.  Set SHOPIFY_BUCKET_FLOOR=0 to disable.
+ */
+const SHOPIFY_BUCKET_FLOOR = Math.max(
+  0,
+  Number(process.env.SHOPIFY_BUCKET_FLOOR?.trim()) || 200,
+);
+
+type ShopifyThrottleStatus = {
+  maximumAvailable: number;
+  currentlyAvailable: number;
+  restoreRate: number; // points per second
+};
+
 const TRANSLATABLE_RESOURCES_QUERY = `
 query GetTranslatableResources(
   $resourceType: TranslatableResourceType!
@@ -187,11 +203,25 @@ const MODULE_ID_QUERY: Record<string, { gql: string; connectionKey: string }> = 
   COLLECTION: { gql: COLLECTIONS_IDS_QUERY, connectionKey: "collections" },
 };
 
+/**
+ * Execute a Shopify Admin GraphQL request.
+ *
+ * Scale-out safe features:
+ *  - 429 retry: respects the Retry-After header, up to MAX_RETRIES attempts.
+ *    Multiple concurrent workers for the same shop share the same rate-limit
+ *    bucket; back-off prevents thundering-herd amplification.
+ *  - Proactive throttle: reads extensions.cost.throttleStatus from every
+ *    response and inserts a calculated sleep whenever the remaining bucket
+ *    points drop below SHOPIFY_BUCKET_FLOOR.  This keeps parallel module
+ *    fetching (init) and parallel resource writes (writeback) from exhausting
+ *    the bucket before Shopify issues a 429.
+ */
 async function shopifyGraphql(
   shopDomain: string,
   accessToken: string,
   query: string,
   variables: Record<string, unknown>,
+  _retries = 4,
 ): Promise<unknown> {
   const url = `https://${shopDomain}/admin/api/2024-01/graphql.json`;
   const resp = await fetch(url, {
@@ -202,13 +232,44 @@ async function shopifyGraphql(
     },
     body: JSON.stringify({ query, variables }),
   });
+
+  // ── 429: bucket exhausted ─────────────────────────────────────────────────
+  if (resp.status === 429) {
+    if (_retries <= 0) {
+      throw new Error(`Shopify GraphQL 429: rate limited (retries exhausted)`);
+    }
+    const retryAfterSec = Number(resp.headers.get("Retry-After") ?? "2");
+    const waitMs = Math.max(retryAfterSec * 1000, 1_000);
+    console.warn(
+      `[shopifyFetch] 429 on ${shopDomain} — waiting ${waitMs}ms (retries left: ${_retries - 1})`,
+    );
+    await new Promise((r) => setTimeout(r, waitMs));
+    return shopifyGraphql(shopDomain, accessToken, query, variables, _retries - 1);
+  }
+
   if (!resp.ok) {
     throw new Error(`Shopify GraphQL HTTP ${resp.status}: ${await resp.text()}`);
   }
-  const json = (await resp.json()) as { data?: unknown; errors?: unknown[] };
+
+  const json = (await resp.json()) as {
+    data?: unknown;
+    errors?: unknown[];
+    extensions?: { cost?: { throttleStatus?: ShopifyThrottleStatus } };
+  };
+
   if (json.errors?.length) {
     throw new Error(`Shopify GraphQL errors: ${JSON.stringify(json.errors)}`);
   }
+
+  // ── Proactive throttle: sleep before the bucket runs dry ─────────────────
+  const throttle = json.extensions?.cost?.throttleStatus;
+  if (throttle && SHOPIFY_BUCKET_FLOOR > 0 && throttle.currentlyAvailable < SHOPIFY_BUCKET_FLOOR) {
+    const deficit = SHOPIFY_BUCKET_FLOOR - throttle.currentlyAvailable;
+    // restoreRate is points/second; add 200 ms buffer for clock skew
+    const waitMs = Math.ceil((deficit / throttle.restoreRate) * 1_000) + 200;
+    await new Promise((r) => setTimeout(r, waitMs));
+  }
+
   return json.data;
 }
 

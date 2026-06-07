@@ -39,6 +39,7 @@ export type StreamChunk =
   | { type: "tool_call"; name: string; args: unknown }
   | { type: "tool_result"; name: string; result: string }
   | { type: "skill_progress"; event: SkillProgressEvent }
+  | { type: "status"; phase: "thinking" }
   | { type: "error"; message: string }
   | {
       type: "done";
@@ -252,6 +253,8 @@ export async function invokeChatAgentStream(
       };
 
       try {
+        controller.enqueue({ type: "status", phase: "thinking" });
+
         context.emitProgress = (event) => {
           controller.enqueue({ type: "skill_progress", event });
         };
@@ -275,6 +278,7 @@ export async function invokeChatAgentStream(
 
         let lastMessages: BaseMessage[] | undefined;
         const streamContext = { emittedFlags: new Set<string>() };
+        let streamedTextAccum = "";
 
         for await (const item of lgStream) {
           if (!Array.isArray(item) || item.length < 2) continue;
@@ -288,6 +292,7 @@ export async function invokeChatAgentStream(
             if (AIMessageChunk.isInstance(message)) {
               const delta = extractMessageText(message);
               if (delta) {
+                streamedTextAccum += delta;
                 controller.enqueue({ type: "text", content: delta });
               }
             }
@@ -408,6 +413,15 @@ export async function invokeChatAgentStream(
         }
 
         await persistStreamRun({ status: "success", resultMessages });
+
+        if (finalReply.length > streamedTextAccum.length) {
+          const remainder = finalReply.slice(streamedTextAccum.length);
+          if (remainder) {
+            controller.enqueue({ type: "text", content: remainder });
+          }
+        } else if (finalReply && !streamedTextAccum) {
+          controller.enqueue({ type: "text", content: finalReply });
+        }
 
         controller.enqueue({
           type: "done",

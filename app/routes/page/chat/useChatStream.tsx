@@ -16,6 +16,7 @@ type StreamChunk =
   | { type: "tool_call"; name: string; args: unknown }
   | { type: "tool_result"; name: string; result: string }
   | { type: "skill_progress"; event: SkillProgressEvent }
+  | { type: "status"; phase: "thinking" }
   | { type: "error"; message: string }
   | {
       type: "done";
@@ -54,11 +55,26 @@ export type ChatStreamFinishPayload = {
 
 type Snapshot = {
   reply: string;
+  streamedText: string;
   translationTaskForm?: unknown;
   attachments: ChatMessageAttachment[];
   productImproveCard: boolean;
   productImproveCardPayload?: unknown;
 };
+
+export function hasStreamingVisualContent(state: {
+  streamingText: string;
+  skillSteps: SkillStepProgress[];
+  streamingTranslationForm?: unknown;
+  streamingGenerateCard: boolean;
+}): boolean {
+  return Boolean(
+    state.streamingText.trim() ||
+      state.skillSteps.length > 0 ||
+      state.streamingTranslationForm ||
+      state.streamingGenerateCard,
+  );
+}
 
 export function useChatStream() {
   const [isStreaming, setIsStreaming] = useState(false);
@@ -71,6 +87,7 @@ export function useChatStream() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const snapshotRef = useRef<Snapshot>({
     reply: "",
+    streamedText: "",
     translationTaskForm: undefined,
     attachments: [],
     productImproveCard: false,
@@ -80,6 +97,7 @@ export function useChatStream() {
   const resetSnapshot = () => {
     snapshotRef.current = {
       reply: "",
+      streamedText: "",
       translationTaskForm: undefined,
       attachments: [],
       productImproveCard: false,
@@ -172,9 +190,14 @@ export function useChatStream() {
                 markFirstChunkSeen();
                 setStreamingText((prev) => {
                   const next = prev + chunk.content;
+                  snapshotRef.current.streamedText = next;
                   snapshotRef.current.reply = next;
                   return next;
                 });
+              } else if (chunk.type === "status") {
+                if (chunk.phase === "thinking") {
+                  setAwaitingFirstChunk(true);
+                }
               } else if (chunk.type === "skill_progress") {
                 markFirstChunkSeen();
                 const ev = chunk.event;
@@ -237,7 +260,7 @@ export function useChatStream() {
                   setStreamingGeneratePayload(ui.productImproveCardPayload);
                 }
 
-                finalizeOnce({
+                const finishPayload: ChatStreamFinishPayload = {
                   aborted: false,
                   reply,
                   translationTaskForm: snapshotRef.current.translationTaskForm,
@@ -245,7 +268,16 @@ export function useChatStream() {
                   productImproveCard: snapshotRef.current.productImproveCard,
                   productImproveCardPayload:
                     snapshotRef.current.productImproveCardPayload,
-                });
+                };
+
+                const streamed = snapshotRef.current.streamedText;
+                if (reply && reply.length > streamed.length) {
+                  setStreamingText(reply);
+                  snapshotRef.current.streamedText = reply;
+                  requestAnimationFrame(() => finalizeOnce(finishPayload));
+                } else {
+                  finalizeOnce(finishPayload);
+                }
               }
             } catch (e) {
               console.error("Failed to parse chunk", e);

@@ -20,7 +20,7 @@ import {
   buildQuickPrompts,
   quickPromptTones,
 } from "./chat/chatPageConstants";
-import { useChatStream } from "./chat/useChatStream";
+import { useChatStream, hasStreamingVisualContent } from "./chat/useChatStream";
 import {
   pageCompactSurfaceStyle,
   pageColorTokens,
@@ -50,8 +50,9 @@ export function ChatPage() {
   const pictureTranslateQuickPrompt = t("chat.quickPromptPictureTranslate");
   const {
     isStreaming,
-    awaitingFirstChunk,
     streamingText,
+    streamingTranslationForm,
+    streamingGenerateCard,
     sendMessage: streamConversation,
     abort: abortStream,
     skillSteps,
@@ -126,7 +127,7 @@ export function ChatPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isStreaming, awaitingFirstChunk, streamingText]);
+  }, [messages, isStreaming, streamingText, skillSteps.length]);
 
   const sendMessage = async (content: string) => {
     if (isStreaming) return;
@@ -215,6 +216,13 @@ export function ChatPage() {
     shopify.toast.show(t("pictureTranslate.submitSuccess"));
   };
 
+  const hasStreamingContent = hasStreamingVisualContent({
+    streamingText,
+    skillSteps,
+    streamingTranslationForm,
+    streamingGenerateCard,
+  });
+
   return (
     <s-page heading={t("chat.pageTitle")}>
       <s-section heading={t("chat.sectionTitle")}>
@@ -299,12 +307,12 @@ export function ChatPage() {
                           <div style={{ marginBottom: "0.25rem" }}>
                             <s-badge tone="neutral">AI Assistant</s-badge>
                           </div>
-                          <div style={{ marginTop: "0.35rem", minHeight: awaitingFirstChunk ? "3rem" : undefined }}>
-                            {awaitingFirstChunk && skillSteps.length === 0 ? (
+                          <div style={{ marginTop: "0.35rem", minHeight: !hasStreamingContent ? "3rem" : undefined }}>
+                            {!hasStreamingContent ? (
                               <ChatStreamingSkeleton />
-                            ) : skillSteps.length > 0 ? (
-                              <div>
-                                {skillSteps.length > 0 && (
+                            ) : (
+                              <>
+                                {skillSteps.length > 0 ? (
                                   <div
                                     style={{
                                       marginBottom: streamingText ? "0.75rem" : 0,
@@ -315,7 +323,7 @@ export function ChatPage() {
                                     }}
                                   >
                                     <div style={{ fontSize: "0.78rem", color: "rgba(44,110,203,0.8)", marginBottom: "0.4rem", fontWeight: 600 }}>
-                                      ⚡ 正在执行
+                                      正在执行
                                     </div>
                                     <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
                                       {skillSteps.map((s) => (
@@ -334,11 +342,9 @@ export function ChatPage() {
                                       ))}
                                     </div>
                                   </div>
-                                )}
-                                {streamingText && <ChatMessageContent content={streamingText} />}
-                              </div>
-                            ) : (
-                              <ChatMessageContent content={streamingText} />
+                                ) : null}
+                                {streamingText ? <ChatMessageContent content={streamingText} /> : null}
+                              </>
                             )}
                           </div>
                         </s-box>

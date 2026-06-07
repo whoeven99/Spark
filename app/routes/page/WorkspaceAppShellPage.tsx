@@ -15,7 +15,8 @@ import { ChatMessageContent } from "../component/chat/ChatMessageContent";
 import { ProductImproveChatCard } from "../component/chat/ProductImproveChatCard";
 import { TranslationTaskChatCard } from "../component/translation/TranslationTaskChatCard";
 import { LanguageSelector } from "../component/common/LanguageSelector";
-import { useChatStream, type ChatStreamFinishPayload, type SkillStepProgress } from "./chat/useChatStream";
+import { useChatStream, type ChatStreamFinishPayload, type SkillStepProgress, hasStreamingVisualContent } from "./chat/useChatStream";
+import { ChatStreamingSkeleton } from "../component/chat/ChatStreamingSkeleton";
 import { ContextWindowIndicator } from "../component/chat/ContextWindowIndicator";
 import { estimateMessagesTokens } from "../../lib/tokenEstimate";
 
@@ -279,7 +280,6 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
   const {
     isStreaming,
-    awaitingFirstChunk,
     streamingText,
     streamingTranslationForm,
     streamingGenerateCard,
@@ -309,10 +309,16 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     fetch(`/api/conversations/${activeConversationId}${authQuery}`)
       .then((res) => res.json())
       .then((data: { messages?: unknown[] }) => {
-        setMessagesByConversation((current) => ({
-          ...current,
-          [activeConversationId]: ((data.messages ?? []) as Parameters<typeof dbMessageToUiMessage>[0][]).map(dbMessageToUiMessage),
-        }));
+        setMessagesByConversation((current) => {
+          const existing = current[activeConversationId] ?? [];
+          if (existing.length > 0) {
+            return current;
+          }
+          return {
+            ...current,
+            [activeConversationId]: ((data.messages ?? []) as Parameters<typeof dbMessageToUiMessage>[0][]).map(dbMessageToUiMessage),
+          };
+        });
       })
       .catch((err) => {
         console.error("[WorkspaceAppShellPage] load messages failed:", err);
@@ -424,6 +430,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     replyEpochRef.current += 1;
     const epoch = replyEpochRef.current;
     const conversationId = activeConversation.id;
+    setStreamingConversationId(conversationId);
     const priorMessages = messagesByConversation[conversationId] ?? [];
     const nextPreview = content.length > 28 ? `${content.slice(0, 28)}...` : content;
     const isNewTitle = activeConversation.title === "新对话";
@@ -452,7 +459,6 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
       ],
     }));
     setDraftByConversation((current: Record<string, string>) => ({ ...current, [conversationId]: "" }));
-    setStreamingConversationId(conversationId);
 
     const contextBlock = buildWorkspaceContextBlock({
       selectedObjectsByType,
@@ -695,7 +701,6 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             onSend={sendMessage}
             isStreaming={isStreaming}
             showStreamingReply={isStreaming && streamingConversationId === activeConversation.id}
-            awaitingFirstChunk={awaitingFirstChunk}
             streamingText={streamingText}
             streamingTranslationForm={streamingTranslationForm}
             streamingGenerateCard={streamingGenerateCard}
@@ -729,11 +734,31 @@ function ThinkingDots() {
     return () => clearInterval(id);
   }, []);
   return (
-    <span>
-      正在思考
+    <span style={{ fontSize: 14, color: "#61666c" }}>
+      AI Assistant 正在思考
       <span style={{ letterSpacing: 2 }}>{"...".slice(0, frame)}</span>
       <span style={{ opacity: 0, letterSpacing: 2 }}>{"...".slice(frame)}</span>
     </span>
+  );
+}
+
+function StreamingSkillSteps({ steps }: { steps: SkillStepProgress[] }) {
+  if (steps.length === 0) return null;
+  return (
+    <div style={skillStepsWrapStyle}>
+      <div style={skillStepsHeadingStyle}>正在执行</div>
+      {steps.map((step) => (
+        <div key={`${step.skill}-${step.stepId}`} style={skillStepLineStyle}>
+          <span style={skillStepStatusStyle(step.status)}>
+            {step.status === "running" ? "○" : step.status === "completed" ? "✓" : step.status === "error" ? "✗" : "–"}
+          </span>
+          <span>
+            {step.label}
+            {step.detail ? ` · ${step.detail}` : ""}
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -874,7 +899,6 @@ function ChatPanel({
   onSend,
   isStreaming,
   showStreamingReply,
-  awaitingFirstChunk,
   streamingText,
   streamingTranslationForm,
   streamingGenerateCard,
@@ -908,7 +932,6 @@ function ChatPanel({
   onSend: () => void | Promise<void>;
   isStreaming: boolean;
   showStreamingReply: boolean;
-  awaitingFirstChunk: boolean;
   streamingText: string;
   streamingTranslationForm: unknown;
   streamingGenerateCard: boolean;
@@ -995,6 +1018,12 @@ function ChatPanel({
     ? coerceTranslationTaskFormPayload(streamingTranslationForm)
     : undefined;
   const streamingProductImprovePayload = streamingGeneratePayload as ProductImproveCardPayload | undefined;
+  const hasStreamingContent = hasStreamingVisualContent({
+    streamingText,
+    skillSteps,
+    streamingTranslationForm,
+    streamingGenerateCard,
+  });
 
   const scrollToBottom = () => {
     if (messageListRef.current) {
@@ -1033,7 +1062,7 @@ function ChatPanel({
   useEffect(() => {
     if (!showStreamingReply || isScrolledUp) return;
     scrollToBottom();
-  }, [showStreamingReply, streamingText, isScrolledUp]);
+  }, [showStreamingReply, streamingText, skillSteps.length, isScrolledUp]);
 
   useEffect(() => {
     const ta = textareaRef.current;
@@ -1068,20 +1097,17 @@ function ChatPanel({
             {showStreamingReply ? (
               <div style={streamingWrapStyle}>
                 <div style={streamingAssistantShellStyle}>
-                  {awaitingFirstChunk && !streamingText && skillSteps.length === 0 ? (
-                    <span style={{ ...sectionTextStyle, fontStyle: "italic" }}><ThinkingDots /></span>
+                  <div style={streamingAssistantBadgeStyle}>AI Assistant</div>
+                  {!hasStreamingContent ? (
+                    <div style={streamingThinkingWrapStyle}>
+                      <ThinkingDots />
+                      <div style={streamingSkeletonSlotStyle}>
+                        <ChatStreamingSkeleton />
+                      </div>
+                    </div>
                   ) : (
                     <>
-                      {skillSteps.length > 0 ? (
-                        <div style={skillStepsWrapStyle}>
-                          {skillSteps.map((step) => (
-                            <div key={`${step.skill}-${step.stepId}`} style={skillStepLineStyle}>
-                              {step.label}
-                              {step.detail ? ` · ${step.detail}` : ""}
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
+                      <StreamingSkillSteps steps={skillSteps} />
                       {streamingText ? <ChatMessageContent content={streamingText} /> : null}
                       {streamingTranslationPayload ? (
                         <div style={streamingCardSlotStyle}>
@@ -1974,16 +2000,58 @@ const streamingAssistantShellStyle: CSSProperties = {
 const streamingCardSlotStyle: CSSProperties = { marginTop: "0.85rem" };
 const composerBoxStyle: CSSProperties = { flexShrink: 0, marginTop: 14, paddingTop: 14, borderTop: "1px solid #ebedf0" };
 const skillStepsWrapStyle: CSSProperties = {
-  marginTop: 10,
-  paddingTop: 10,
-  borderTop: "1px solid #e1e3e5",
+  marginBottom: 10,
+  padding: "10px 12px",
+  borderRadius: 10,
+  background: "rgba(44, 110, 203, 0.06)",
+  border: "1px solid rgba(44, 110, 203, 0.18)",
   display: "grid",
-  gap: 4,
+  gap: 6,
+};
+const skillStepsHeadingStyle: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "rgba(44, 110, 203, 0.85)",
 };
 const skillStepLineStyle: CSSProperties = {
-  fontSize: 12,
+  display: "flex",
+  alignItems: "flex-start",
+  gap: 8,
+  fontSize: 13,
   color: "#61666c",
   lineHeight: 1.5,
+};
+const skillStepStatusStyle = (status: SkillStepProgress["status"]): CSSProperties => ({
+  width: 14,
+  flexShrink: 0,
+  textAlign: "center",
+  color:
+    status === "running"
+      ? "rgba(44, 110, 203, 0.85)"
+      : status === "completed"
+        ? "#008060"
+        : status === "error"
+          ? "#d72c0d"
+          : "rgba(0, 0, 0, 0.35)",
+});
+const streamingAssistantBadgeStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "2px 8px",
+  borderRadius: 999,
+  fontSize: 12,
+  fontWeight: 600,
+  color: "#2c6ecb",
+  background: "rgba(44, 110, 203, 0.12)",
+  marginBottom: 8,
+};
+const streamingThinkingWrapStyle: CSSProperties = {
+  display: "grid",
+  gap: 10,
+  minHeight: 72,
+};
+const streamingSkeletonSlotStyle: CSSProperties = {
+  paddingTop: 2,
 };
 const textareaStyle: CSSProperties = {
   width: "100%",
