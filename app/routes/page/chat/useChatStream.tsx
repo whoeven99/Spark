@@ -180,13 +180,11 @@ export function useChatStream() {
 
               if (chunk.type === "text") {
                 markFirstChunkSeen();
-                flushSync(() => {
-                  setStreamingText((prev) => {
-                    const next = prev + chunk.content;
-                    snapshotRef.current.streamedText = next;
-                    snapshotRef.current.reply = next;
-                    return next;
-                  });
+                setStreamingText((prev) => {
+                  const next = prev + chunk.content;
+                  snapshotRef.current.streamedText = next;
+                  snapshotRef.current.reply = next;
+                  return next;
                 });
               } else if (chunk.type === "status") {
                 if (chunk.phase === "thinking") {
