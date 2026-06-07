@@ -33,6 +33,7 @@ export default function Layout() {
 
   const allMenuItems = [
     { key: "/", icon: <DashboardOutlined />, label: <Link to="/">概览</Link>, ownerOnly: false },
+    { key: "/workbench", icon: <RobotOutlined />, label: <Link to="/workbench">AI 工作台</Link>, ownerOnly: false },
     { key: "/shops", icon: <ShopOutlined />, label: <Link to="/shops">商店</Link>, ownerOnly: false },
     { key: "/translations", icon: <TranslationOutlined />, label: <Link to="/translations">翻译任务</Link>, ownerOnly: false },
     { key: "/usage", icon: <BarChartOutlined />, label: <Link to="/usage">用量统计</Link>, ownerOnly: false },

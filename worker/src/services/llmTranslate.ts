@@ -199,11 +199,45 @@ export function countFieldUnits(key: string, value: string): number {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-// Max total chars sent to the translation API in one request
-const MAX_CHARS_PER_BATCH = 5000;
+// Max total chars sent to the translation API in one request.
+// Override via TRANSLATE_MAX_CHARS_PER_BATCH env var (default 12000).
+const MAX_CHARS_PER_BATCH = Math.max(
+  500,
+  Number(process.env.TRANSLATE_MAX_CHARS_PER_BATCH) || 12_000,
+);
+// How many batches within a pool may run concurrently.
+// Override via TRANSLATE_BATCH_CONCURRENCY env var (default 3).
+const BATCH_CONCURRENCY = Math.max(1, Number(process.env.TRANSLATE_BATCH_CONCURRENCY) || 3);
+
 // Plain text items longer than this get split before translation
 const LONG_TEXT_THRESHOLD = 4000;
 const LONG_TEXT_CHUNK_CHARS = 3500;
+
+// ─── Concurrency helper ───────────────────────────────────────────────────────
+
+/**
+ * Run `fn` over `items` with at most `concurrency` tasks in-flight at a time.
+ * Preserves ordering in the returned array. Exported so translateWorker can
+ * reuse it for chunk-level parallelism.
+ */
+export async function pAll<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (items.length === 0) return [];
+  if (concurrency <= 1) return Promise.all(items.map((item, i) => fn(item, i)));
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
 
 // ─── HTML text-node extraction ────────────────────────────────────────────────
 
@@ -385,7 +419,7 @@ async function translateItemsRouted(
   aiModel: string,
   shopName: string,
   order: Engine[],
-): Promise<Map<string, RoutedResult>> {
+): Promise<{ results: Map<string, RoutedResult>; llmTokens: number }> {
   // placeholdersByKey: variable tokens (string[]) extracted from each item's value.
   const placeholdersByKey = new Map<string, string[]>();
   const masked = items.map((it) => {
@@ -398,6 +432,7 @@ async function translateItemsRouted(
   const engineByKey = new Map<string, Engine>(); // which engine resolved each key
   const llmTokensByKey = new Map<string, number>(); // LLM API tokens charged per key
   let systemPrompt: string | null = null;
+  const tokenAccum = { value: 0 }; // accumulates LLM token usage across all retries
 
   for (const engine of order) {
     const missing = masked.filter((i) => !collected.has(i.key));
@@ -409,7 +444,6 @@ async function translateItemsRouted(
         const glossary = await loadGlossaryLines(shopName, target);
         systemPrompt = buildSystemPrompt(target, glossary);
       }
-      const tokenAccum = { value: 0 };
       try {
         await gatherTranslations(missing, aiModel, systemPrompt, collected, tokenAccum);
       } catch (e) {
@@ -462,7 +496,7 @@ async function translateItemsRouted(
       tokens: llmTokensByKey.get(it.key) ?? 0,
     });
   }
-  return result;
+  return { results: result, llmTokens: tokenAccum.value };
 }
 
 // Retries for a single (un-splittable) item that fails transiently.
@@ -565,7 +599,9 @@ Return ONLY a JSON object {"translations":[{"key":"<key>","translatedValue":"<te
 }
 
 /**
- * One LLM round-trip. Returns a map of the keys the model actually returned.
+ * One LLM round-trip. Uses opaque numeric IDs (f0, f1, …) in the payload so the
+ * model cannot accidentally swap values based on semantic key names (P1 fix).
+ * Returns a map from original keys → translated values, plus the token count.
  * Throws on unparseable JSON so the caller can retry.
  */
 async function callLLMOnce(
@@ -579,7 +615,6 @@ async function callLLMOnce(
   const payload = items.map((it, idx) => ({ key: `f${idx}`, value: it.value }));
 
   const model = resolveModel(aiModel);
-
   const openai = getOpenAI();
   const completion = await openai.chat.completions.create({
     model,
@@ -593,8 +628,8 @@ async function callLLMOnce(
     timeout: 120_000, // 120s per batch — prevents hanging on unresponsive APIs
   });
 
-  const raw = completion.choices[0]?.message?.content ?? "{}";
   const tokens = completion.usage?.total_tokens ?? 0;
+  const raw = completion.choices[0]?.message?.content ?? "{}";
   // JSON.parse throws on malformed output → propagated to caller for retry/splitting.
   const obj = JSON.parse(extractJsonObject(raw)) as { translations?: unknown };
   const parsed = Array.isArray(obj.translations)
@@ -748,9 +783,23 @@ export async function translateResources(
   let cacheUnits = 0;
 
   // 1. Plan every field: resolve skip/cache directly; collect units to translate.
+  //    TM lookups are fired in parallel across all fields to minimise Redis RTTs.
   for (const res of resources) {
-    const rm = new Map<string, TranslateResult>();
-    resultMaps.set(res.resourceId, rm);
+    resultMaps.set(res.resourceId, new Map<string, TranslateResult>());
+  }
+
+  // 1a. Separate skip fields (no TM needed) from fields that need a cache check.
+  type FieldWork = {
+    resourceId: string;
+    f: TranslateItem;
+    klass: "html" | "plain";
+    order: Engine[];
+    cacheModel: string;
+  };
+  const fieldWorks: FieldWork[] = [];
+
+  for (const res of resources) {
+    const rm = resultMaps.get(res.resourceId)!;
     for (const f of res.fields) {
       const klass = classifyField(f.key, f.value);
       if (klass === "skip") {
@@ -759,50 +808,60 @@ export async function translateResources(
       }
       const order = engineOrderFor(fieldTier(f.key, f.value, klass), aiModel);
       const cacheModel = engineModel(order[0], aiModel);
-
-      const cached = await tmGet(shopName, target, cacheModel, f.digest);
-      if (cached !== null) {
-        rm.set(f.key, { key: f.key, translatedValue: cached, digest: f.digest, status: "translated" });
-        cacheUnits += countFieldUnits(f.key, f.value);
-        continue;
-      }
-
-      // Secondary: value-based cache for short plain-text fields.
-      // Handles repeated values that share the same text but have different
-      // Shopify digests (e.g. option names / collection titles across resources).
-      if (klass === "plain") {
-        const cachedByValue = await tmGetByValue(f.value, source, target, cacheModel);
-        if (cachedByValue !== null) {
-          rm.set(f.key, { key: f.key, translatedValue: cachedByValue, digest: f.digest, status: "translated" });
-          // Also populate the digest cache so future lookups skip this path.
-          await tmSet(shopName, target, cacheModel, f.digest, cachedByValue);
-          cacheUnits += countFieldUnits(f.key, f.value);
-          continue;
-        }
-      }
-
-      if (klass === "html") {
-        const { template, texts } = extractHtmlTextNodes(f.value);
-        if (texts.length === 0) {
-          rm.set(f.key, { key: f.key, translatedValue: f.value, digest: f.digest, status: "translated" });
-          continue;
-        }
-        texts.forEach((t) => addUnit(order, t));
-        plans.push({ kind: "html", resourceId: res.resourceId, key: f.key, digest: f.digest, order, cacheModel, template, nodeTexts: texts });
-      } else {
-        const parts = splitPlainText(f.value);
-        parts.forEach((p) => addUnit(order, p));
-        plans.push({ kind: "plain", resourceId: res.resourceId, key: f.key, digest: f.digest, order, cacheModel, parts });
-      }
+      fieldWorks.push({ resourceId: res.resourceId, f, klass, order, cacheModel });
     }
   }
 
-  // Credit cache hits immediately so the bar reflects them.
+  const tmWrites: Promise<void>[] = [];
+
+  // 1b. Fire all TM digest lookups in parallel.
+  const cacheHits = await Promise.all(
+    fieldWorks.map(({ f, cacheModel }) => tmGet(shopName, target, cacheModel, f.digest)),
+  );
+
+  // 1c. Process results: hit → credit immediately; miss → value cache or add to plan.
+  for (let wi = 0; wi < fieldWorks.length; wi++) {
+    const { resourceId, f, klass, order, cacheModel } = fieldWorks[wi];
+    const rm = resultMaps.get(resourceId)!;
+    const cached = cacheHits[wi];
+    if (cached !== null) {
+      rm.set(f.key, { key: f.key, translatedValue: cached, digest: f.digest, status: "translated" });
+      cacheUnits += countFieldUnits(f.key, f.value);
+      continue;
+    }
+
+    // Secondary: value-based cache for short plain-text fields.
+    if (klass === "plain") {
+      const cachedByValue = await tmGetByValue(f.value, source, target, cacheModel);
+      if (cachedByValue !== null) {
+        rm.set(f.key, { key: f.key, translatedValue: cachedByValue, digest: f.digest, status: "translated" });
+        tmWrites.push(tmSet(shopName, target, cacheModel, f.digest, cachedByValue));
+        cacheUnits += countFieldUnits(f.key, f.value);
+        continue;
+      }
+    }
+
+    if (klass === "html") {
+      const { template, texts } = extractHtmlTextNodes(f.value);
+      if (texts.length === 0) {
+        rm.set(f.key, { key: f.key, translatedValue: f.value, digest: f.digest, status: "translated" });
+        continue;
+      }
+      texts.forEach((t) => addUnit(order, t));
+      plans.push({ kind: "html", resourceId, key: f.key, digest: f.digest, order, cacheModel, template, nodeTexts: texts });
+    } else {
+      const parts = splitPlainText(f.value);
+      parts.forEach((p) => addUnit(order, p));
+      plans.push({ kind: "plain", resourceId, key: f.key, digest: f.digest, order, cacheModel, parts });
+    }
+  }
+
+  // Credit cache hits immediately so the bar reflects them (0 LLM tokens for TM hits).
   if (cacheUnits > 0 && onProgress) await onProgress(cacheUnits, 0);
 
   // 2. Translate unique texts per engine order, in char-bounded batches.
-  //    Aggregate per-engine usage over the unique units actually translated, and
-  //    report progress per batch (by occurrence count) so the bar moves smoothly.
+  //    Up to BATCH_CONCURRENCY batches per pool run in parallel.
+  //    Progress (units + raw LLM tokens) is reported after each batch.
   const usage: EngineUsage = {};
   const translated = new Map<string, Map<string, RoutedResult>>();
   for (const [sig, occ] of pools) {
@@ -810,10 +869,10 @@ export async function translateResources(
     const texts = [...occ.keys()];
     const tmap = new Map<string, RoutedResult>();
     const items: TranslateItem[] = texts.map((t, i) => ({ key: String(i), value: t, digest: "" }));
-    for (const batch of batchByChars(items, MAX_CHARS_PER_BATCH)) {
-      const m = await translateItemsRouted(batch, source, target, aiModel, shopName, order);
-      let batchUnits = 0; // occurrences processed in this batch
-      let batchTokens = 0; // raw LLM tokens used in this batch
+    const batches = batchByChars(items, MAX_CHARS_PER_BATCH);
+    await pAll(batches, BATCH_CONCURRENCY, async (batch) => {
+      const { results: m, llmTokens } = await translateItemsRouted(batch, source, target, aiModel, shopName, order);
+      let batchUnits = 0;
       for (const [k, v] of m) {
         const text = texts[Number(k)];
         tmap.set(text, v);
@@ -824,18 +883,17 @@ export async function translateResources(
           acc.units += 1;
           acc.chars += text.length;
           acc.tokens += v.tokens;
-          batchTokens += v.tokens;
         }
       }
-      // Report progress (and let the worker heartbeat) after each batch.
-      if (onProgress) await onProgress(batchUnits, batchTokens);
-    }
+      // Report progress (units + raw LLM tokens) after each batch.
+      if (onProgress) await onProgress(batchUnits, llmTokens);
+    });
     translated.set(sig, tmap);
   }
 
   const lookup = (order: Engine[], text: string) => translated.get(order.join(","))?.get(text);
 
-  // 3. Reconstruct each planned field and cache new translations.
+  // 3. Reconstruct each planned field and cache new translations in parallel.
   for (const plan of plans) {
     const rm = resultMaps.get(plan.resourceId)!;
     if (plan.kind === "plain") {
@@ -845,10 +903,8 @@ export async function translateResources(
       const originalValue = plan.parts.join("");
       rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
       if (status === "translated") {
-        await tmSet(shopName, target, plan.cacheModel, plan.digest, value);
-        // Populate value-based cache so other resources with identical source text
-        // but different digests get a cache hit without hitting the LLM again.
-        await tmSetByValue(originalValue, source, target, plan.cacheModel, value);
+        tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
+        tmWrites.push(tmSetByValue(originalValue, source, target, plan.cacheModel, value));
       }
     } else {
       let anyFallback = false;
@@ -863,9 +919,10 @@ export async function translateResources(
       const value = restoreHtmlTextNodes(plan.template, out);
       const status = anyFallback ? "fallback" : "translated";
       rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
-      if (status === "translated") await tmSet(shopName, target, plan.cacheModel, plan.digest, value);
+      if (status === "translated") tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
     }
   }
+  if (tmWrites.length > 0) await Promise.all(tmWrites);
 
   // 4. Assemble per-resource results aligned to input field order.
   const out = resources.map((res) => {

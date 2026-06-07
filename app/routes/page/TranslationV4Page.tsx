@@ -559,7 +559,7 @@ function JobCard({ job, status, progress, onAction }: JobCardProps) {
           <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: 3 }}>
             {job.id.slice(0, 8)}… · {job.modules.join(", ")}
             {(metrics.usedTokens ?? 0) > 0 && (
-              <> · {(metrics.usedTokens!).toLocaleString()} tokens</>
+              <> · <span style={{ color: pageColorTokens.brandBlue, fontWeight: 600 }}>{(metrics.usedTokens ?? 0).toLocaleString()} tokens</span></>
             )}
           </div>
         </div>
@@ -668,7 +668,6 @@ function TranslateStatsPanel({ metrics }: { metrics: TranslateMetricsSnap }) {
 
   // Linear extrapolation from current progress ratio.
   const ratio = total > 0 && done > 0 ? done / total : 0;
-  const remainingUnits = Math.max(0, total - done);
   const estRemainingMs = elapsedMs !== null && ratio > 0 ? (elapsedMs / ratio) * (1 - ratio) : null;
   const estRemainingTokens = ratio > 0 && usedTokens > 0 ? Math.round((usedTokens / ratio) * (1 - ratio)) : null;
 
