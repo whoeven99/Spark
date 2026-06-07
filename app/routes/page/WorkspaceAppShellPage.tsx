@@ -1014,8 +1014,11 @@ function ChatPanel({
   useEffect(() => {
     const element = messageListRef.current;
     if (!element) return;
-    element.scrollTop = element.scrollHeight;
-    setIsScrolledUp(false);
+    setTimeout(() => {
+      if (!messageListRef.current) return;
+      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+      setIsScrolledUp(false);
+    }, 0);
   }, [conversation.id, messages.length, showStreamingReply]);
 
   useEffect(() => {
