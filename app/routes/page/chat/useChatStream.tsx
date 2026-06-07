@@ -105,6 +105,17 @@ export function useChatStream() {
     };
   };
 
+  const prepareStreaming = useCallback(() => {
+    setIsStreaming(true);
+    setAwaitingFirstChunk(true);
+    resetSnapshot();
+    setStreamingText("");
+    setStreamingTranslationForm(undefined);
+    setStreamingGenerateCard(false);
+    setStreamingGeneratePayload(undefined);
+    setSkillSteps([]);
+  }, []);
+
   const sendMessage = useCallback(
     async (
       messages: ChatMessage[],
@@ -116,14 +127,7 @@ export function useChatStream() {
       const url = options?.url ?? "/chat-stream";
       const onFinish = options?.onFinish;
 
-      setIsStreaming(true);
-      setAwaitingFirstChunk(true);
-      resetSnapshot();
-      setStreamingText("");
-      setStreamingTranslationForm(undefined);
-      setStreamingGenerateCard(false);
-      setStreamingGeneratePayload(undefined);
-      setSkillSteps([]);
+      prepareStreaming();
 
       const controller = new AbortController();
       abortControllerRef.current = controller;
@@ -338,7 +342,7 @@ export function useChatStream() {
         }
       }
     },
-    [],
+    [prepareStreaming],
   );
 
   const abort = useCallback(() => {
@@ -355,6 +359,7 @@ export function useChatStream() {
     skillSteps,
     /** @deprecated 兼容旧名 */
     playbookSteps: skillSteps,
+    prepareStreaming,
     sendMessage,
     abort,
   };

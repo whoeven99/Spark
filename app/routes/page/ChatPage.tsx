@@ -1,4 +1,3 @@
-import type { CSSProperties } from "react";
 import { useState, useRef, useEffect } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
@@ -10,8 +9,7 @@ import type {
 import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { coerceTranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { ChatMessages } from "../component/chat/ChatMessages";
-import { ChatMessageContent } from "../component/chat/ChatMessageContent";
-import { ChatStreamingSkeleton } from "../component/chat/ChatStreamingSkeleton";
+import { StreamingAssistantReply } from "../component/chat/StreamingAssistantReply";
 import { ChatInput } from "../component/chat/ChatInput";
 import { LanguageSelector } from "../component/common/LanguageSelector";
 import { ChatPageCredentialsChrome } from "./chat/ChatPageCredentialsChrome";
@@ -20,7 +18,7 @@ import {
   buildQuickPrompts,
   quickPromptTones,
 } from "./chat/chatPageConstants";
-import { useChatStream, hasStreamingVisualContent } from "./chat/useChatStream";
+import { useChatStream } from "./chat/useChatStream";
 import {
   pageCompactSurfaceStyle,
   pageColorTokens,
@@ -31,14 +29,6 @@ import {
 
 /** App Bridge 顶栏 + 主栏底部语言条预留高度 */
 const CHAT_PAGE_VIEWPORT_OFFSET_PX = 152;
-
-const streamingAssistantBubbleShellStyle: CSSProperties = {
-  borderRadius: pageColorTokens.radiusCard,
-  borderWidth: 1,
-  borderStyle: "solid",
-  borderColor: "rgba(44, 110, 203, 0.35)",
-  background: `linear-gradient(180deg, rgba(44, 110, 203, 0.08), rgba(44, 110, 203, 0.02))`,
-};
 
 export function ChatPage() {
   const shopify = useAppBridge();
@@ -53,10 +43,13 @@ export function ChatPage() {
     streamingText,
     streamingTranslationForm,
     streamingGenerateCard,
+    streamingGeneratePayload,
     sendMessage: streamConversation,
+    prepareStreaming,
     abort: abortStream,
     skillSteps,
   } = useChatStream();
+  const [awaitingAssistantReply, setAwaitingAssistantReply] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
       role: "assistant",
@@ -127,13 +120,15 @@ export function ChatPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isStreaming, streamingText, skillSteps.length]);
+  }, [messages, isStreaming, awaitingAssistantReply, streamingText, skillSteps.length]);
 
   const sendMessage = async (content: string) => {
-    if (isStreaming) return;
+    if (isStreaming || awaitingAssistantReply) return;
     replyEpochRef.current += 1;
     const epoch = replyEpochRef.current;
     setMessages((prev) => [...prev, { role: "user", content }]);
+    setAwaitingAssistantReply(true);
+    prepareStreaming();
 
     try {
       const authQuery = typeof window !== "undefined" ? window.location.search : "";
@@ -146,6 +141,7 @@ export function ChatPage() {
         url: `/chat-stream${authQuery}`,
         onFinish: (p) => {
           if (epoch !== replyEpochRef.current) return;
+          setAwaitingAssistantReply(false);
           const assistantText =
             p.httpStatus !== undefined
               ? t("chat.requestFailed", { status: p.httpStatus })
@@ -180,6 +176,7 @@ export function ChatPage() {
         },
       });
     } catch {
+      setAwaitingAssistantReply(false);
       shopify.toast.show(t("chat.sendFailed"));
     }
   };
@@ -216,12 +213,7 @@ export function ChatPage() {
     shopify.toast.show(t("pictureTranslate.submitSuccess"));
   };
 
-  const hasStreamingContent = hasStreamingVisualContent({
-    streamingText,
-    skillSteps,
-    streamingTranslationForm,
-    streamingGenerateCard,
-  });
+  const showStreamingReply = isStreaming || awaitingAssistantReply;
 
   return (
     <s-page heading={t("chat.pageTitle")}>
@@ -235,6 +227,7 @@ export function ChatPage() {
             onClick={() => {
               replyEpochRef.current += 1;
               abortStream();
+              setAwaitingAssistantReply(false);
               setMessages([{ role: "assistant", content: firstMessage }]);
               shopify.toast.show(t("chat.newChatStarted"));
             }}
@@ -293,65 +286,15 @@ export function ChatPage() {
                   onTranslationCardSuccess={succeedTranslationCard}
                   onPictureTranslateCardSuccess={succeedPictureTranslateCard}
                 />
-                {isStreaming ? (
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "flex-start",
-                      marginTop: "1rem",
-                    }}
-                  >
-                    <div style={{ maxWidth: "80%" }}>
-                      <div style={streamingAssistantBubbleShellStyle}>
-                        <s-box padding="base" borderRadius="base" background="transparent">
-                          <div style={{ marginBottom: "0.25rem" }}>
-                            <s-badge tone="neutral">AI Assistant</s-badge>
-                          </div>
-                          <div style={{ marginTop: "0.35rem", minHeight: !hasStreamingContent ? "3rem" : undefined }}>
-                            {!hasStreamingContent ? (
-                              <ChatStreamingSkeleton />
-                            ) : (
-                              <>
-                                {skillSteps.length > 0 ? (
-                                  <div
-                                    style={{
-                                      marginBottom: streamingText ? "0.75rem" : 0,
-                                      padding: "0.6rem 0.75rem",
-                                      borderRadius: "8px",
-                                      background: "rgba(44, 110, 203, 0.06)",
-                                      border: "1px solid rgba(44, 110, 203, 0.18)",
-                                    }}
-                                  >
-                                    <div style={{ fontSize: "0.78rem", color: "rgba(44,110,203,0.8)", marginBottom: "0.4rem", fontWeight: 600 }}>
-                                      正在执行
-                                    </div>
-                                    <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                                      {skillSteps.map((s) => (
-                                        <div key={`${s.skill}-${s.stepId}`} style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.82rem" }}>
-                                          {s.status === "running" && (
-                                            <span style={{ display: "inline-block", width: "14px", textAlign: "center", color: "rgba(44,110,203,0.8)" }}>○</span>
-                                          )}
-                                          {s.status === "completed" && <span style={{ color: "#008060", width: "14px", textAlign: "center" }}>✓</span>}
-                                          {s.status === "skipped" && <span style={{ color: "rgba(0,0,0,0.35)", width: "14px", textAlign: "center" }}>–</span>}
-                                          {s.status === "error" && <span style={{ color: "#d72c0d", width: "14px", textAlign: "center" }}>✗</span>}
-                                          <span style={{ color: s.status === "running" ? "inherit" : s.status === "error" ? "#d72c0d" : "rgba(0,0,0,0.55)" }}>
-                                            {s.label}
-                                            {s.detail ? <span style={{ color: "rgba(0,0,0,0.4)", marginLeft: "0.35rem" }}>· {s.detail}</span> : null}
-                                          </span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ) : null}
-                                {streamingText ? <ChatMessageContent content={streamingText} /> : null}
-                              </>
-                            )}
-                          </div>
-                        </s-box>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
+                <StreamingAssistantReply
+                  active={showStreamingReply}
+                  isStreaming={isStreaming}
+                  streamingText={streamingText}
+                  skillSteps={skillSteps}
+                  streamingTranslationForm={streamingTranslationForm}
+                  streamingGenerateCard={streamingGenerateCard}
+                  streamingGeneratePayload={streamingGeneratePayload}
+                />
               </div>
             </div>
           </div>
