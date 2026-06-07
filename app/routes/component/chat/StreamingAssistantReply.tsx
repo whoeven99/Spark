@@ -10,7 +10,7 @@ import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard"
 import {
   hasStreamingVisualContent,
   type SkillStepProgress,
-} from "../../page/chat/useChatStream";
+} from "../../page/chat/chatStreamUtils";
 
 type StreamingAssistantReplyProps = {
   active: boolean;
@@ -22,6 +22,15 @@ type StreamingAssistantReplyProps = {
   streamingGeneratePayload?: unknown;
 };
 
+const assistantBubbleShellStyle: CSSProperties = {
+  borderRadius: "12px",
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "rgba(44, 110, 203, 0.35)",
+  background:
+    "linear-gradient(180deg, rgba(44, 110, 203, 0.08), rgba(44, 110, 203, 0.02))",
+};
+
 function ThinkingDots() {
   const [frame, setFrame] = useState(0);
   useEffect(() => {
@@ -30,7 +39,7 @@ function ThinkingDots() {
   }, []);
   return (
     <span style={thinkingTextStyle}>
-      AI Assistant 正在思考
+      正在思考
       <span style={{ letterSpacing: 2 }}>{"...".slice(0, frame)}</span>
       <span style={{ opacity: 0, letterSpacing: 2 }}>{"...".slice(frame)}</span>
     </span>
@@ -98,79 +107,55 @@ export function StreamingAssistantReply({
     streamingTranslationForm,
     streamingGenerateCard,
   });
+  const hasEmbeddedCard = Boolean(streamingTranslationPayload || streamingGenerateCard);
 
   return (
-    <div style={wrapStyle}>
-      <div style={shellStyle}>
-        <div style={badgeStyle}>AI Assistant</div>
-
-        {!hasContent ? (
-          <div style={thinkingWrapStyle}>
-            <ThinkingDots />
-            <div style={skeletonSlotStyle}>
-              <ChatStreamingSkeleton />
+    <div style={{ display: "flex", justifyContent: "flex-start" }}>
+      <div style={{ maxWidth: hasEmbeddedCard ? "min(540px, 96%)" : "80%", width: "100%" }}>
+        <div style={assistantBubbleShellStyle}>
+          <s-box padding="base" borderRadius="base" background="transparent">
+            <div style={{ marginBottom: "0.25rem" }}>
+              <s-badge tone="neutral">AI Assistant</s-badge>
             </div>
-          </div>
-        ) : null}
+            <div style={{ marginTop: "0.35rem", minHeight: !hasContent ? "3rem" : undefined }}>
+              {!hasContent ? (
+                <div style={thinkingWrapStyle}>
+                  <ThinkingDots />
+                  <ChatStreamingSkeleton />
+                </div>
+              ) : null}
 
-        {skillSteps.length > 0 ? <StreamingSkillSteps steps={skillSteps} /> : null}
+              {skillSteps.length > 0 ? <StreamingSkillSteps steps={skillSteps} /> : null}
 
-        {streamingText ? (
-          <div style={textWrapStyle}>
-            <ChatMessageContent content={streamingText} />
-            {isStreaming ? <StreamingCursor /> : null}
-          </div>
-        ) : null}
+              {streamingText ? (
+                <div style={textWrapStyle}>
+                  <ChatMessageContent content={streamingText} />
+                  {isStreaming ? <StreamingCursor /> : null}
+                </div>
+              ) : null}
 
-        {streamingTranslationPayload ? (
-          <div style={cardSlotStyle}>
-            <TranslationTaskChatCard
-              embedded
-              initialPayload={streamingTranslationPayload as TranslationTaskFormPayload}
-              onSuccess={() => {}}
-            />
-          </div>
-        ) : null}
+              {streamingTranslationPayload ? (
+                <div style={cardSlotStyle}>
+                  <TranslationTaskChatCard
+                    embedded
+                    initialPayload={streamingTranslationPayload as TranslationTaskFormPayload}
+                    onSuccess={() => {}}
+                  />
+                </div>
+              ) : null}
 
-        {streamingGenerateCard ? (
-          <div style={cardSlotStyle}>
-            <ProductImproveChatCard embedded initialResult={streamingProductImprovePayload} />
-          </div>
-        ) : null}
+              {streamingGenerateCard ? (
+                <div style={cardSlotStyle}>
+                  <ProductImproveChatCard embedded initialResult={streamingProductImprovePayload} />
+                </div>
+              ) : null}
+            </div>
+          </s-box>
+        </div>
       </div>
     </div>
   );
 }
-
-const wrapStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "flex-start",
-  marginTop: "1rem",
-};
-
-const shellStyle: CSSProperties = {
-  maxWidth: "min(540px, 96%)",
-  minHeight: 88,
-  padding: "12px 14px",
-  borderRadius: 14,
-  background: "linear-gradient(180deg, rgba(44, 110, 203, 0.08), rgba(44, 110, 203, 0.02))",
-  border: "1px solid rgba(44, 110, 203, 0.35)",
-  fontSize: 14,
-  lineHeight: 1.6,
-  color: "#202223",
-};
-
-const badgeStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  padding: "2px 8px",
-  borderRadius: 999,
-  fontSize: 12,
-  fontWeight: 600,
-  color: "#2c6ecb",
-  background: "rgba(44, 110, 203, 0.12)",
-  marginBottom: 8,
-};
 
 const thinkingWrapStyle: CSSProperties = {
   display: "grid",
@@ -181,10 +166,6 @@ const thinkingTextStyle: CSSProperties = {
   fontSize: 14,
   color: "#61666c",
   fontStyle: "italic",
-};
-
-const skeletonSlotStyle: CSSProperties = {
-  paddingTop: 2,
 };
 
 const textWrapStyle: CSSProperties = {

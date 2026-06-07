@@ -1,5 +1,6 @@
 import type { CSSProperties, KeyboardEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
@@ -423,13 +424,11 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   const sendMessage = async () => {
     if (!activeConversation) return;
     const content = (draftByConversation[activeConversation.id] ?? "").trim();
-    if (!content || isStreaming) return;
+    const conversationId = activeConversation.id;
+    if (!content || streamingConversationId === conversationId) return;
 
     replyEpochRef.current += 1;
     const epoch = replyEpochRef.current;
-    const conversationId = activeConversation.id;
-    setStreamingConversationId(conversationId);
-    prepareStreaming();
     const priorMessages = messagesByConversation[conversationId] ?? [];
     const nextPreview = content.length > 28 ? `${content.slice(0, 28)}...` : content;
     const isNewTitle = activeConversation.title === "新对话";
@@ -438,26 +437,30 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
       : activeConversation.title;
     const userTime = formatTimeLabel(new Date());
 
-    setConversationList((current) =>
-      current.map((conversation) =>
-        conversation.id === conversationId
-          ? {
-              ...conversation,
-              title: nextTitle,
-              preview: nextPreview,
-              updatedAt: new Date().toISOString(),
-            }
-          : conversation,
-      ),
-    );
-    setMessagesByConversation((current) => ({
-      ...current,
-      [conversationId]: [
-        ...(current[conversationId] ?? []),
-        { role: "user", text: content, time: userTime },
-      ],
-    }));
-    setDraftByConversation((current: Record<string, string>) => ({ ...current, [conversationId]: "" }));
+    flushSync(() => {
+      setStreamingConversationId(conversationId);
+      setConversationList((current) =>
+        current.map((conversation) =>
+          conversation.id === conversationId
+            ? {
+                ...conversation,
+                title: nextTitle,
+                preview: nextPreview,
+                updatedAt: new Date().toISOString(),
+              }
+            : conversation,
+        ),
+      );
+      setMessagesByConversation((current) => ({
+        ...current,
+        [conversationId]: [
+          ...(current[conversationId] ?? []),
+          { role: "user", text: content, time: userTime },
+        ],
+      }));
+      setDraftByConversation((current: Record<string, string>) => ({ ...current, [conversationId]: "" }));
+    });
+    prepareStreaming();
 
     const contextBlock = buildWorkspaceContextBlock({
       selectedObjectsByType,
@@ -477,7 +480,6 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
         url: `/chat-stream${authQuery}`,
         onFinish: (payload) => {
           if (epoch !== replyEpochRef.current) return;
-          setStreamingConversationId(null);
 
           const assistantText =
             payload.httpStatus !== undefined
@@ -486,13 +488,16 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
                 ? "回复已停止。"
                 : payload.reply.trim() || "AI Assistant 未返回有效内容，请重试。";
 
-          setMessagesByConversation((current) => ({
-            ...current,
-            [conversationId]: [
-              ...(current[conversationId] ?? []),
-              buildAssistantWorkspaceMessage(assistantText, payload),
-            ],
-          }));
+          flushSync(() => {
+            setMessagesByConversation((current) => ({
+              ...current,
+              [conversationId]: [
+                ...(current[conversationId] ?? []),
+                buildAssistantWorkspaceMessage(assistantText, payload),
+              ],
+            }));
+            setStreamingConversationId(null);
+          });
 
           // Persist user + assistant messages (fire and forget)
           if (!payload.httpStatus) {
@@ -1041,21 +1046,23 @@ function ChatPanel({
           <div ref={messageListRef} style={messageListStyle} onScroll={handleMessageListScroll}>
             <ChatMessages
               messages={messages.map((message) => workspaceMessageToChatMessage(message))}
+              streamingSlot={
+                <StreamingAssistantReply
+                  active={showStreamingReply}
+                  isStreaming={isStreaming}
+                  streamingText={streamingText}
+                  skillSteps={skillSteps}
+                  streamingTranslationForm={streamingTranslationForm}
+                  streamingGenerateCard={streamingGenerateCard}
+                  streamingGeneratePayload={streamingGeneratePayload}
+                />
+              }
               onTranslationCardSuccess={(messageIndex, detail) =>
                 onTranslationCardSuccess(conversation.id, messageIndex, detail)
               }
               onPictureTranslateCardSuccess={(messageIndex, detail) =>
                 onPictureTranslateCardSuccess(conversation.id, messageIndex, detail)
               }
-            />
-            <StreamingAssistantReply
-              active={showStreamingReply}
-              isStreaming={isStreaming}
-              streamingText={streamingText}
-              skillSteps={skillSteps}
-              streamingTranslationForm={streamingTranslationForm}
-              streamingGenerateCard={streamingGenerateCard}
-              streamingGeneratePayload={streamingGeneratePayload}
             />
           </div>
           {isScrolledUp ? (

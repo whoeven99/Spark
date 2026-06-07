@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { flushSync } from "react-dom";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import type {
@@ -127,7 +128,9 @@ export function ChatPage() {
     replyEpochRef.current += 1;
     const epoch = replyEpochRef.current;
     setMessages((prev) => [...prev, { role: "user", content }]);
-    setAwaitingAssistantReply(true);
+    flushSync(() => {
+      setAwaitingAssistantReply(true);
+    });
     prepareStreaming();
 
     try {
@@ -283,17 +286,19 @@ export function ChatPage() {
               <div style={pageSurfaceStyle}>
                 <ChatMessages
                   messages={messages}
+                  streamingSlot={
+                    <StreamingAssistantReply
+                      active={showStreamingReply}
+                      isStreaming={isStreaming}
+                      streamingText={streamingText}
+                      skillSteps={skillSteps}
+                      streamingTranslationForm={streamingTranslationForm}
+                      streamingGenerateCard={streamingGenerateCard}
+                      streamingGeneratePayload={streamingGeneratePayload}
+                    />
+                  }
                   onTranslationCardSuccess={succeedTranslationCard}
                   onPictureTranslateCardSuccess={succeedPictureTranslateCard}
-                />
-                <StreamingAssistantReply
-                  active={showStreamingReply}
-                  isStreaming={isStreaming}
-                  streamingText={streamingText}
-                  skillSteps={skillSteps}
-                  streamingTranslationForm={streamingTranslationForm}
-                  streamingGenerateCard={streamingGenerateCard}
-                  streamingGeneratePayload={streamingGeneratePayload}
                 />
               </div>
             </div>

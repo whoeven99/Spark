@@ -1,7 +1,15 @@
 import { useCallback, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import type { ChatMessage, ChatMessageAttachment } from "../../../lib/chatMessage";
 import { coerceChatMessageAttachments } from "../../../lib/chatMessage";
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
+import {
+  hasStreamingVisualContent,
+  type SkillStepProgress,
+} from "./chatStreamUtils";
+
+export type { SkillStepProgress } from "./chatStreamUtils";
+export { hasStreamingVisualContent } from "./chatStreamUtils";
 
 type SkillProgressEvent = {
   skill: string;
@@ -32,17 +40,6 @@ type StreamChunk =
       };
     };
 
-export type SkillStepProgress = {
-  skill: string;
-  stepId: string;
-  label: string;
-  status: "running" | "completed" | "skipped" | "error";
-  detail?: string;
-};
-
-/** @deprecated 兼容旧名，等价于 SkillStepProgress */
-export type PlaybookStepProgress = SkillStepProgress;
-
 export type ChatStreamFinishPayload = {
   aborted: boolean;
   reply: string;
@@ -62,19 +59,8 @@ type Snapshot = {
   productImproveCardPayload?: unknown;
 };
 
-export function hasStreamingVisualContent(state: {
-  streamingText: string;
-  skillSteps: SkillStepProgress[];
-  streamingTranslationForm?: unknown;
-  streamingGenerateCard: boolean;
-}): boolean {
-  return Boolean(
-    state.streamingText.trim() ||
-      state.skillSteps.length > 0 ||
-      state.streamingTranslationForm ||
-      state.streamingGenerateCard,
-  );
-}
+/** @deprecated 兼容旧名，等价于 SkillStepProgress */
+export type PlaybookStepProgress = SkillStepProgress;
 
 export function useChatStream() {
   const [isStreaming, setIsStreaming] = useState(false);
@@ -106,14 +92,16 @@ export function useChatStream() {
   };
 
   const prepareStreaming = useCallback(() => {
-    setIsStreaming(true);
-    setAwaitingFirstChunk(true);
-    resetSnapshot();
-    setStreamingText("");
-    setStreamingTranslationForm(undefined);
-    setStreamingGenerateCard(false);
-    setStreamingGeneratePayload(undefined);
-    setSkillSteps([]);
+    flushSync(() => {
+      setIsStreaming(true);
+      setAwaitingFirstChunk(true);
+      resetSnapshot();
+      setStreamingText("");
+      setStreamingTranslationForm(undefined);
+      setStreamingGenerateCard(false);
+      setStreamingGeneratePayload(undefined);
+      setSkillSteps([]);
+    });
   }, []);
 
   const sendMessage = useCallback(
@@ -192,11 +180,13 @@ export function useChatStream() {
 
               if (chunk.type === "text") {
                 markFirstChunkSeen();
-                setStreamingText((prev) => {
-                  const next = prev + chunk.content;
-                  snapshotRef.current.streamedText = next;
-                  snapshotRef.current.reply = next;
-                  return next;
+                flushSync(() => {
+                  setStreamingText((prev) => {
+                    const next = prev + chunk.content;
+                    snapshotRef.current.streamedText = next;
+                    snapshotRef.current.reply = next;
+                    return next;
+                  });
                 });
               } else if (chunk.type === "status") {
                 if (chunk.phase === "thinking") {
