@@ -11,7 +11,7 @@ import {
 } from "../server/billing/buildBillingReturnUrl.server";
 import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { WorkspacePage } from "./page/WorkspacePage";
+import { WorkspaceAppShellPage } from "./page/WorkspaceAppShellPage";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
@@ -42,7 +42,7 @@ function ClientMount({ children }: { children: ReactNode }) {
 export default function Index() {
   return (
     <ClientMount>
-      <WorkspacePage />
+      <WorkspaceAppShellPage />
     </ClientMount>
   );
 }
