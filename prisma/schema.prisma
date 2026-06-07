@@ -520,6 +520,34 @@ model ShopSyncCheckpoint {
   @@unique([shop, resource])
 }
 
+/// AI 对话会话（每条对应一个聊天线程）。
+model Conversation {
+  id        String    @id @default(cuid())
+  shop      String
+  title     String    @default("新对话")
+  preview   String    @default("")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  messages  Message[]
+
+  @@index([shop, updatedAt(sort: Desc)])
+}
+
+/// 对话消息（追加写入，不可变）。
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  /// "user" | "assistant"
+  role           String
+  content        String
+  /// JSON: translationTaskForm, attachments, productImproveCard, etc.
+  payloads       String?
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
 /// 业务能力 × 模型/提供商的 token 计费系数（运维在 Turso 维护，种子见 `prisma/token-billing-rule-seed.sql`）。
 model TokenBillingRule {
   ruleKey       String   @id

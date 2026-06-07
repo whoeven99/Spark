@@ -35,13 +35,14 @@ type WorkspaceConversationMessage = {
   pictureTranslateCard?: boolean;
 };
 
-type Conversation = {
+type ConversationSummary = {
   id: string;
   title: string;
-  updatedAt: string;
   preview: string;
-  messages: WorkspaceConversationMessage[];
+  updatedAt: string;
 };
+
+type Conversation = ConversationSummary;
 
 type TaskRecord = {
   id: string;
@@ -171,43 +172,6 @@ const objectFilterLabels: Record<ObjectType, Array<{ key: ObjectFilterKey; label
   ],
 };
 
-const initialConversations: Conversation[] = [
-  {
-    id: "conv-001",
-    title: "夏季新品文案优化",
-    updatedAt: "刚刚",
-    preview: "批量补齐 168 个新品的商品描述",
-    messages: [
-      { role: "assistant", text: "我已经拿到夏季新品列表。你可以继续补充风格和品牌规则。", time: "09:12" },
-      { role: "user", text: "请优先做 SEO 友好的英文商品描述，并保留原有 HTML 结构。", time: "09:13" },
-      { role: "assistant", text: "收到，我会先生成一份任务建议，方便你确认范围和消耗。", time: "09:14" },
-    ],
-  },
-  {
-    id: "conv-002",
-    title: "退款异常复盘",
-    updatedAt: "18 分钟前",
-    preview: "分析同一 SKU 的退款高峰",
-    messages: [
-      { role: "assistant", text: "当前退款主要集中在美国站同一 SKU，建议先看最近 7 天移动端订单。", time: "08:42" },
-      { role: "user", text: "好，再帮我归纳可以沉淀成自动化监控的规则。", time: "08:44" },
-    ],
-  },
-  {
-    id: "conv-003",
-    title: "日语翻译批次",
-    updatedAt: "1 小时前",
-    preview: "继续处理日语与英语翻译任务",
-    messages: [{ role: "assistant", text: "这批翻译还缺品牌术语表和禁用词说明。", time: "07:21" }],
-  },
-  {
-    id: "conv-004",
-    title: "经营日报生成",
-    updatedAt: "昨天",
-    preview: "检查日报摘要是否可直接发送",
-    messages: [{ role: "assistant", text: "日报草稿已经生成，建议优先突出转化率和退款率波动。", time: "昨天 18:04" }],
-  },
-];
 
 const dashboardMetrics: DashboardMetric[] = [
   { label: "销售额", value: "$12,540", delta: "+8.4%", tone: "positive" },
@@ -280,23 +244,19 @@ function isObjectType(value: ContextTool | null): value is ObjectType {
   return value === "product" || value === "article" || value === "order";
 }
 
-export function WorkspaceAppShellPage() {
+export function WorkspaceAppShellPage({ initialConversationList = [] }: { initialConversationList?: ConversationSummary[] }) {
   const shopify = useAppBridge();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
-  const [conversationList, setConversationList] = useState<Conversation[]>(initialConversations);
-  const [activeConversationId, setActiveConversationId] = useState(initialConversations[0].id);
-  const [draftByConversation, setDraftByConversation] = useState<Record<string, string>>({
-    "conv-001": "请基于品牌语气和 SEO 规则，补齐这批新品的英文商品描述。",
-    "conv-002": "把这次退款异常提炼成可以重复运行的自动化规则。",
-    "conv-003": "继续这批商品的日语翻译，并保留品牌术语。",
-    "conv-004": "把日报里最重要的经营变化压缩成 3 条结论。",
-  });
-  const [messagesByConversation, setMessagesByConversation] = useState<Record<string, WorkspaceConversationMessage[]>>(
-    Object.fromEntries(initialConversations.map((conversation) => [conversation.id, conversation.messages])),
+  const [conversationList, setConversationList] = useState<Conversation[]>(initialConversationList);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(
+    initialConversationList.length > 0 ? initialConversationList[0].id : null,
   );
+  const [draftByConversation, setDraftByConversation] = useState<Record<string, string>>({});
+  const [messagesByConversation, setMessagesByConversation] = useState<Record<string, WorkspaceConversationMessage[]>>({});
+  const loadedConvIdsRef = useRef<Set<string>>(new Set());
   const [automationView, setAutomationView] = useState<AutomationView>("configured");
   const [taskFilter, setTaskFilter] = useState<"all" | TaskKind>("all");
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -331,12 +291,32 @@ export function WorkspaceAppShellPage() {
 
   const panelParam = searchParams.get("panel");
   const activePanel: WorkspacePanel = isWorkspacePanel(panelParam) ? panelParam : "dashboard";
-  const activeConversation = conversationList.find((item) => item.id === activeConversationId) ?? conversationList[0];
-  const activeMessages = messagesByConversation[activeConversation.id] ?? activeConversation.messages;
+  const activeConversation = conversationList.find((item) => item.id === activeConversationId) ?? null;
+  const activeMessages = activeConversation ? (messagesByConversation[activeConversation.id] ?? []) : [];
   const filteredTasks = useMemo(
     () => (taskFilter === "all" ? initialTasks : initialTasks.filter((task) => task.kind === taskFilter)),
     [taskFilter],
   );
+
+  // Lazy-load messages when switching to a conversation for the first time
+  useEffect(() => {
+    if (!activeConversationId) return;
+    if (loadedConvIdsRef.current.has(activeConversationId)) return;
+    loadedConvIdsRef.current.add(activeConversationId);
+    const authQuery = typeof window !== "undefined" ? window.location.search : "";
+    fetch(`/api/conversations/${activeConversationId}${authQuery}`)
+      .then((res) => res.json())
+      .then((data: { messages?: unknown[] }) => {
+        setMessagesByConversation((current) => ({
+          ...current,
+          [activeConversationId]: ((data.messages ?? []) as Parameters<typeof dbMessageToUiMessage>[0][]).map(dbMessageToUiMessage),
+        }));
+      })
+      .catch((err) => {
+        console.error("[WorkspaceAppShellPage] load messages failed:", err);
+        setMessagesByConversation((current) => ({ ...current, [activeConversationId]: [] }));
+      });
+  }, [activeConversationId]);
 
   const switchPanel = (panel: WorkspacePanel) => {
     const next = new URLSearchParams(searchParams);
@@ -353,36 +333,31 @@ export function WorkspaceAppShellPage() {
     switchPanel("chat");
   };
 
-  const createConversation = () => {
-    const createdAt = new Date();
-    const timeLabel = `${String(createdAt.getHours()).padStart(2, "0")}:${String(createdAt.getMinutes()).padStart(2, "0")}`;
-    const nextId = `conv-${createdAt.getTime()}`;
-    const newConversation: Conversation = {
-      id: nextId,
-      title: "新对话",
-      updatedAt: "刚刚",
-      preview: "开始描述你的任务目标、对象和约束。",
-      messages: [
-        {
-          role: "assistant",
-          text: "新的对话已经创建。你可以先在下方工具栏补充商品、订单、文章、文件或富媒体，再发送任务需求。",
-          time: timeLabel,
-        },
-      ],
-    };
-
-    setConversationList((current) => [newConversation, ...current].slice(0, 50));
-    setMessagesByConversation((current) => ({
-      ...current,
-      [nextId]: newConversation.messages,
-    }));
-    setDraftByConversation((current) => ({
-      ...current,
-      [nextId]: "",
-    }));
-    setActiveContextTool(null);
-    setActiveConversationId(nextId);
-    switchPanel("chat");
+  const createConversation = async () => {
+    const authQuery = typeof window !== "undefined" ? window.location.search : "";
+    try {
+      const res = await fetch(`/api/conversations${authQuery}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = (await res.json()) as { conversation: ConversationSummary };
+      const conv = data.conversation;
+      const welcomeMsg: WorkspaceConversationMessage = {
+        role: "assistant",
+        text: "新的对话已经创建。你可以先在下方工具栏补充商品、订单、文章、文件或富媒体，再发送任务需求。",
+        time: formatTimeLabel(new Date()),
+      };
+      loadedConvIdsRef.current.add(conv.id);
+      setConversationList((current) => [conv, ...current].slice(0, 50));
+      setMessagesByConversation((current) => ({ ...current, [conv.id]: [welcomeMsg] }));
+      setDraftByConversation((current) => ({ ...current, [conv.id]: "" }));
+      setActiveContextTool(null);
+      setActiveConversationId(conv.id);
+      switchPanel("chat");
+    } catch (err) {
+      console.error("[WorkspaceAppShellPage] create conversation failed:", err);
+    }
   };
 
   const clearContext = () => {
@@ -440,18 +415,19 @@ export function WorkspaceAppShellPage() {
   };
 
   const sendMessage = async () => {
+    if (!activeConversation) return;
     const content = (draftByConversation[activeConversation.id] ?? "").trim();
     if (!content || isStreaming) return;
 
     replyEpochRef.current += 1;
     const epoch = replyEpochRef.current;
     const conversationId = activeConversation.id;
-    const priorMessages = messagesByConversation[conversationId] ?? activeConversation.messages;
+    const priorMessages = messagesByConversation[conversationId] ?? [];
     const nextPreview = content.length > 28 ? `${content.slice(0, 28)}...` : content;
-    const nextTitle =
-      activeConversation.title === "新对话"
-        ? (content.length > 18 ? `${content.slice(0, 18)}...` : content)
-        : activeConversation.title;
+    const isNewTitle = activeConversation.title === "新对话";
+    const nextTitle = isNewTitle
+      ? (content.length > 18 ? `${content.slice(0, 18)}...` : content)
+      : activeConversation.title;
     const userTime = formatTimeLabel(new Date());
 
     setConversationList((current) =>
@@ -461,7 +437,7 @@ export function WorkspaceAppShellPage() {
               ...conversation,
               title: nextTitle,
               preview: nextPreview,
-              updatedAt: "刚刚",
+              updatedAt: new Date().toISOString(),
             }
           : conversation,
       ),
@@ -510,6 +486,23 @@ export function WorkspaceAppShellPage() {
               buildAssistantWorkspaceMessage(assistantText, payload),
             ],
           }));
+
+          // Persist user + assistant messages (fire and forget)
+          if (!payload.httpStatus) {
+            const assistantPayloads = serializeAssistantPayloads(payload);
+            fetch(`/api/conversations/${conversationId}${authQuery}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                messages: [
+                  { role: "user", content },
+                  { role: "assistant", content: assistantText, payloads: assistantPayloads },
+                ],
+                ...(isNewTitle ? { title: nextTitle } : {}),
+                preview: nextPreview,
+              }),
+            }).catch((err) => console.error("[WorkspaceAppShellPage] persist messages failed:", err));
+          }
         },
       });
     } catch (error) {
@@ -624,7 +617,7 @@ export function WorkspaceAppShellPage() {
                 >
                   <span style={historyTitleStyle}>{conversation.title}</span>
                   <span style={historyPreviewStyle}>{conversation.preview}</span>
-                  <span style={mutedMetaStyle}>{conversation.updatedAt}</span>
+                  <span style={mutedMetaStyle}>{formatRelativeTime(conversation.updatedAt)}</span>
                 </button>
               ))}
             </div>
@@ -662,7 +655,7 @@ export function WorkspaceAppShellPage() {
 
       <main style={contentStyle}>
         {activePanel === "dashboard" ? <DashboardPanel /> : null}
-        {activePanel === "chat" ? (
+        {activePanel === "chat" && activeConversation ? (
           <ChatPanel
             conversation={activeConversation}
             messages={activeMessages}
@@ -711,12 +704,8 @@ export function WorkspaceAppShellPage() {
               setStreamingConversationId(null);
               abortStream();
             }}
-            onTranslationCardSuccess={(messageIndex, detail) =>
-              handleTranslationCardSuccess(activeConversation.id, messageIndex, detail)
-            }
-            onPictureTranslateCardSuccess={(messageIndex, detail) =>
-              handlePictureTranslateCardSuccess(activeConversation.id, messageIndex, detail)
-            }
+            onTranslationCardSuccess={handleTranslationCardSuccess}
+            onPictureTranslateCardSuccess={handlePictureTranslateCardSuccess}
           />
         ) : null}
         {activePanel === "skills" ? <SkillsPanel onOpenTool={(path: string) => navigate(path)} /> : null}
@@ -1640,6 +1629,51 @@ function buildAssistantWorkspaceMessage(
 
 function formatTimeLabel(date: Date) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function formatRelativeTime(isoString: string): string {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 1) return "刚刚";
+  if (minutes < 60) return `${minutes} 分钟前`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  if (hours < 48) return "昨天";
+  return `${Math.floor(hours / 24)} 天前`;
+}
+
+function serializeAssistantPayloads(payload: ChatStreamFinishPayload): string | null {
+  const result: Record<string, unknown> = {};
+  if (payload.translationTaskForm) result.translationTaskForm = payload.translationTaskForm;
+  if (payload.attachments?.length) result.attachments = payload.attachments;
+  if (payload.productImproveCard || payload.productImproveCardPayload) {
+    result.productImproveCard = true;
+    if (payload.productImproveCardPayload) result.productImproveCardPayload = payload.productImproveCardPayload;
+  }
+  return Object.keys(result).length > 0 ? JSON.stringify(result) : null;
+}
+
+function dbMessageToUiMessage(msg: {
+  role: string;
+  content: string;
+  payloads: string | null;
+  createdAt: string;
+}): WorkspaceConversationMessage {
+  const extras = msg.payloads ? (JSON.parse(msg.payloads) as Record<string, unknown>) : {};
+  const translationTaskForm = extras.translationTaskForm
+    ? coerceTranslationTaskFormPayload(extras.translationTaskForm)
+    : undefined;
+  return {
+    role: msg.role as "user" | "assistant",
+    text: msg.content,
+    time: formatTimeLabel(new Date(msg.createdAt)),
+    ...(extras.attachments ? { attachments: extras.attachments as ChatMessageAttachment[] } : {}),
+    ...(translationTaskForm ? { translationTaskForm } : {}),
+    ...(extras.productImproveCard ? { productImproveCard: true } : {}),
+    ...(extras.productImproveCardPayload
+      ? { productImproveCardPayload: extras.productImproveCardPayload as ProductImproveCardPayload }
+      : {}),
+  };
 }
 
 function buildWorkspaceContextBlock(params: {
