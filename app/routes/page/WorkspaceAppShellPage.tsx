@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, KeyboardEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
@@ -730,6 +730,21 @@ export function WorkspaceAppShellPage() {
   );
 }
 
+function ThinkingDots() {
+  const [frame, setFrame] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setFrame((f) => (f + 1) % 4), 450);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <span>
+      正在思考
+      <span style={{ letterSpacing: 2 }}>{"...".slice(0, frame)}</span>
+      <span style={{ opacity: 0, letterSpacing: 2 }}>{"...".slice(frame)}</span>
+    </span>
+  );
+}
+
 function DashboardPanel() {
   return (
     <div style={panelStackStyle}>
@@ -920,7 +935,8 @@ function ChatPanel({
   ) => void;
 }) {
   const messageListRef = useRef<HTMLDivElement | null>(null);
-  const [hoveredTool, setHoveredTool] = useState<ContextTool | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [isScrolledUp, setIsScrolledUp] = useState(false);
   const [activeObjectFilter, setActiveObjectFilter] = useState<Record<ObjectType, ObjectFilterKey>>({
     product: "all",
     article: "all",
@@ -983,68 +999,110 @@ function ChatPanel({
     : undefined;
   const streamingProductImprovePayload = streamingGeneratePayload as ProductImproveCardPayload | undefined;
 
+  const scrollToBottom = () => {
+    if (messageListRef.current) {
+      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+    }
+  };
+
+  const handleMessageListScroll = () => {
+    const el = messageListRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    setIsScrolledUp(!atBottom);
+  };
+
+  const handleTextareaKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      void onSend();
+    }
+  };
+
   useEffect(() => {
     const element = messageListRef.current;
     if (!element) return;
     element.scrollTop = element.scrollHeight;
+    setIsScrolledUp(false);
   }, [conversation.id, messages.length]);
+
+  useEffect(() => {
+    if (!showStreamingReply || isScrolledUp) return;
+    scrollToBottom();
+  }, [showStreamingReply, streamingText, isScrolledUp]);
+
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${ta.scrollHeight}px`;
+  }, [draft]);
 
   return (
     <div style={chatLayoutStyle}>
-      <section style={{ ...surfaceCardStyle, minHeight: 0 }}>
+      <section style={{ ...surfaceCardStyle, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={conversationMetaRowStyle}>
           <span style={conversationMetaTitleStyle}>{conversation.title}</span>
           <span style={mutedMetaStyle}>{conversation.updatedAt}</span>
         </div>
 
-        <div ref={messageListRef} style={messageListStyle}>
-          <ChatMessages
-            messages={messages.map((message) => workspaceMessageToChatMessage(message))}
-            onTranslationCardSuccess={(messageIndex, detail) =>
-              onTranslationCardSuccess(conversation.id, messageIndex, detail)
-            }
-            onPictureTranslateCardSuccess={(messageIndex, detail) =>
-              onPictureTranslateCardSuccess(conversation.id, messageIndex, detail)
-            }
-          />
-          {showStreamingReply ? (
-            <div style={streamingWrapStyle}>
-              <div style={streamingAssistantShellStyle}>
-                {awaitingFirstChunk && !streamingText && skillSteps.length === 0 ? (
-                  <span style={sectionTextStyle}>正在思考…</span>
-                ) : (
-                  <>
-                    {skillSteps.length > 0 ? (
-                      <div style={skillStepsWrapStyle}>
-                        {skillSteps.map((step) => (
-                          <div key={`${step.skill}-${step.stepId}`} style={skillStepLineStyle}>
-                            {step.label}
-                            {step.detail ? ` · ${step.detail}` : ""}
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                    {streamingText ? <ChatMessageContent content={streamingText} /> : null}
-                    {streamingTranslationPayload ? (
-                      <div style={streamingCardSlotStyle}>
-                        <TranslationTaskChatCard
-                          embedded
-                          initialPayload={streamingTranslationPayload}
-                          onSuccess={() => {}}
-                        />
-                      </div>
-                    ) : null}
-                    {streamingGenerateCard ? (
-                      <div style={streamingCardSlotStyle}>
-                        <ProductImproveChatCard
-                          embedded
-                          initialResult={streamingProductImprovePayload}
-                        />
-                      </div>
-                    ) : null}
-                  </>
-                )}
+        <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+          <div ref={messageListRef} style={messageListStyle} onScroll={handleMessageListScroll}>
+            <ChatMessages
+              messages={messages.map((message) => workspaceMessageToChatMessage(message))}
+              onTranslationCardSuccess={(messageIndex, detail) =>
+                onTranslationCardSuccess(conversation.id, messageIndex, detail)
+              }
+              onPictureTranslateCardSuccess={(messageIndex, detail) =>
+                onPictureTranslateCardSuccess(conversation.id, messageIndex, detail)
+              }
+            />
+            {showStreamingReply ? (
+              <div style={streamingWrapStyle}>
+                <div style={streamingAssistantShellStyle}>
+                  {awaitingFirstChunk && !streamingText && skillSteps.length === 0 ? (
+                    <span style={{ ...sectionTextStyle, fontStyle: "italic" }}><ThinkingDots /></span>
+                  ) : (
+                    <>
+                      {skillSteps.length > 0 ? (
+                        <div style={skillStepsWrapStyle}>
+                          {skillSteps.map((step) => (
+                            <div key={`${step.skill}-${step.stepId}`} style={skillStepLineStyle}>
+                              {step.label}
+                              {step.detail ? ` · ${step.detail}` : ""}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      {streamingText ? <ChatMessageContent content={streamingText} /> : null}
+                      {streamingTranslationPayload ? (
+                        <div style={streamingCardSlotStyle}>
+                          <TranslationTaskChatCard
+                            embedded
+                            initialPayload={streamingTranslationPayload}
+                            onSuccess={() => {}}
+                          />
+                        </div>
+                      ) : null}
+                      {streamingGenerateCard ? (
+                        <div style={streamingCardSlotStyle}>
+                          <ProductImproveChatCard
+                            embedded
+                            initialResult={streamingProductImprovePayload}
+                          />
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                </div>
               </div>
+            ) : null}
+          </div>
+          {isScrolledUp ? (
+            <div style={scrollBottomOverlayStyle}>
+              <button type="button" style={scrollBottomButtonStyle} onClick={scrollToBottom}>
+                ↓ 查看最新消息
+              </button>
             </div>
           ) : null}
         </div>
@@ -1056,15 +1114,17 @@ function ChatPanel({
                 <span key={item.key} style={selectionBubbleStyle}>
                   <span>{item.label}</span>
                   <button type="button" style={selectionBubbleCloseStyle} onClick={() => onClearToolSelection(item.key)} aria-label={`清空${item.label}`}>
-                    x
+                    ×
                   </button>
                 </span>
               ))}
             </div>
           ) : null}
           <textarea
+            ref={textareaRef}
             value={draft}
             onChange={(event) => onDraftChange(event.target.value)}
+            onKeyDown={handleTextareaKeyDown}
             style={textareaStyle}
             placeholder="继续补充你的任务目标，并结合商品、订单、文章、文件或富媒体上下文..."
             disabled={isStreaming}
@@ -1073,32 +1133,31 @@ function ChatPanel({
             <div style={toolbarBarStyle}>
               <div style={toolbarIconGroupStyle}>
                 {toolItems.map((item) => (
-                  <div key={item.key} style={toolbarTriggerWrapStyle}>
-                    <button
-                      type="button"
-                      style={toolbarIconButtonStyle(item.active)}
-                      onClick={() => onContextToolChange(item.key)}
-                      onMouseEnter={() => setHoveredTool(item.key)}
-                      onMouseLeave={() => setHoveredTool((current) => (current === item.key ? null : current))}
-                      title={item.label}
-                    >
-                      <span style={toolbarIconGlyphStyle}>{item.icon}</span>
-                    </button>
-                    {hoveredTool === item.key || item.active ? <span style={toolbarTooltipStyle}>{item.label}</span> : null}
-                  </div>
+                  <button
+                    key={item.key}
+                    type="button"
+                    style={toolbarPillButtonStyle(item.active)}
+                    onClick={() => onContextToolChange(item.key)}
+                    title={item.label}
+                  >
+                    <span style={toolbarIconGlyphStyle}>{item.icon}</span>
+                    <span>{item.label}</span>
+                  </button>
                 ))}
               </div>
               <div style={toolbarStatusGroupStyle}>
-                <span style={toolbarCountStyle}>已补充 {filledContextCount} 项</span>
+                {filledContextCount > 0 ? (
+                  <span style={toolbarCountStyle}>已补充 {filledContextCount} 项</span>
+                ) : null}
                 <button type="button" style={toolbarClearStyle} onClick={onClearContext}>
-                  清空
+                  清空上下文
                 </button>
               </div>
             </div>
           </div>
           <div style={composerFooterStyle}>
             <span style={sectionTextStyle}>
-              {isStreaming ? "AI Assistant 正在回复，可随时停止。" : "每个会话可以继续沉淀为任务或自动化。"}
+              {isStreaming ? "AI Assistant 正在回复，可随时停止。" : <span style={mutedMetaStyle}>⌘↵ 或 Ctrl↵ 快速发送</span>}
             </span>
             <div style={buttonRowStyle}>
               <button type="button" style={ghostButtonStyle} disabled={isStreaming}>
@@ -1142,8 +1201,8 @@ function ChatPanel({
                       : "选择需要附加到这次对话的 URL、图片或视频。"}
                 </div>
               </div>
-              <button type="button" style={toolModalCloseStyle} onClick={onCloseToolPicker}>
-                关闭
+              <button type="button" style={toolModalCloseStyle} onClick={onCloseToolPicker} aria-label="关闭">
+                ✕
               </button>
             </div>
 
@@ -1316,7 +1375,7 @@ function ChatPanel({
         </div>
       ) : null}
 
-      <section style={sidePanelStyle}>
+      <section style={{ ...sidePanelStyle, alignSelf: "start" }}>
         <div style={surfaceCardStyle}>
           <div style={sectionTitleStyle}>当前上下文</div>
           <div style={listColumnStyle}>
@@ -1832,14 +1891,14 @@ const barGroupStyle: CSSProperties = { display: "grid", gap: 8 };
 const barTrackStyle: CSSProperties = { height: 10, borderRadius: 999, background: "#f1f2f3", overflow: "hidden" };
 const barFillStyle: CSSProperties = { height: "100%", borderRadius: 999 };
 
-const chatLayoutStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 16, minHeight: 0, alignItems: "start" };
-const conversationMetaRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14 };
+const chatLayoutStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 16, height: "calc(100vh - 100px)" };
+const conversationMetaRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12, flexShrink: 0 };
 const conversationMetaTitleStyle: CSSProperties = { fontSize: 13, fontWeight: 700, color: "#202223" };
 const messageListStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 14,
-  height: 420,
+  height: "100%",
   overflowY: "auto",
   paddingRight: 6,
   scrollBehavior: "smooth",
@@ -1856,7 +1915,7 @@ const streamingAssistantShellStyle: CSSProperties = {
   color: "#202223",
 };
 const streamingCardSlotStyle: CSSProperties = { marginTop: "0.85rem" };
-const composerBoxStyle: CSSProperties = { marginTop: 18, paddingTop: 18, borderTop: "1px solid #ebedf0", background: "#ffffff" };
+const composerBoxStyle: CSSProperties = { flexShrink: 0, marginTop: 14, paddingTop: 14, borderTop: "1px solid #ebedf0" };
 const skillStepsWrapStyle: CSSProperties = {
   marginTop: 10,
   paddingTop: 10,
@@ -1871,7 +1930,8 @@ const skillStepLineStyle: CSSProperties = {
 };
 const textareaStyle: CSSProperties = {
   width: "100%",
-  minHeight: 120,
+  minHeight: 96,
+  maxHeight: 320,
   borderRadius: 12,
   border: "1px solid #c9cdd2",
   padding: 14,
@@ -1879,7 +1939,11 @@ const textareaStyle: CSSProperties = {
   lineHeight: 1.6,
   color: "#202223",
   background: "#ffffff",
-  resize: "vertical",
+  resize: "none",
+  overflowY: "auto",
+  boxSizing: "border-box",
+  outline: "none",
+  transition: "border-color 0.15s",
 };
 const composerFooterStyle: CSSProperties = { marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 };
 const sidePanelStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 16 };
@@ -1906,7 +1970,23 @@ const toolbarIconButtonStyle = (active: boolean): CSSProperties => ({
   padding: 0,
   cursor: "pointer",
 });
-const toolbarIconGlyphStyle: CSSProperties = { width: 16, textAlign: "center", fontSize: 12, lineHeight: 1 };
+const toolbarPillButtonStyle = (active: boolean): CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  height: 30,
+  padding: "0 10px",
+  border: `1px solid ${active ? "#202223" : "#dfe3e8"}`,
+  background: active ? "#202223" : "#ffffff",
+  color: active ? "#ffffff" : "#202223",
+  borderRadius: 999,
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: active ? 700 : 600,
+  whiteSpace: "nowrap",
+  transition: "background 0.12s, border-color 0.12s",
+});
+const toolbarIconGlyphStyle: CSSProperties = { fontSize: 11, lineHeight: 1, flexShrink: 0 };
 const toolbarTooltipStyle: CSSProperties = {
   position: "absolute",
   left: "50%",
@@ -1922,6 +2002,29 @@ const toolbarTooltipStyle: CSSProperties = {
   boxShadow: "0 8px 20px rgba(0,0,0,0.12)",
   pointerEvents: "none",
   zIndex: 2,
+};
+const scrollBottomOverlayStyle: CSSProperties = {
+  position: "absolute",
+  bottom: 10,
+  left: 0,
+  right: 0,
+  display: "flex",
+  justifyContent: "center",
+  pointerEvents: "none",
+  zIndex: 2,
+};
+const scrollBottomButtonStyle: CSSProperties = {
+  pointerEvents: "all",
+  border: "1px solid #c9cdd2",
+  borderRadius: 999,
+  background: "#ffffff",
+  color: "#202223",
+  padding: "6px 14px",
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: "pointer",
+  boxShadow: "0 4px 12px rgba(0,0,0,0.10)",
+  whiteSpace: "nowrap",
 };
 const toolbarStatusGroupStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" };
 const toolbarCountStyle: CSSProperties = { fontSize: 12, color: "#6d7175", fontWeight: 600 };
@@ -1987,14 +2090,19 @@ const toolModalHeaderStyle: CSSProperties = {
   marginBottom: 14,
 };
 const toolModalCloseStyle: CSSProperties = {
+  width: 32,
+  height: 32,
+  display: "grid",
+  placeItems: "center",
   border: "1px solid #dfe3e8",
   borderRadius: 10,
-  background: "#ffffff",
-  color: "#202223",
-  fontSize: 13,
-  fontWeight: 600,
-  padding: "8px 12px",
+  background: "#f6f6f7",
+  color: "#6d7175",
+  fontSize: 14,
+  fontWeight: 400,
+  padding: 0,
   cursor: "pointer",
+  flexShrink: 0,
 };
 const filterChipRowStyle: CSSProperties = { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 };
 const mockCreateBoxStyle: CSSProperties = {
@@ -2024,6 +2132,8 @@ const selectFieldStyle: CSSProperties = {
   fontSize: 13,
   color: "#202223",
   background: "#ffffff",
+  cursor: "pointer",
+  appearance: "auto",
 };
 const selectorSearchInputStyle: CSSProperties = {
   width: "100%",
