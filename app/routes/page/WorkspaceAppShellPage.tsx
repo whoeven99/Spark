@@ -1,7 +1,9 @@
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import type { ChatMessage } from "../../lib/chatMessage";
 import { LanguageSelector } from "../component/common/LanguageSelector";
+import { useChatStream, type SkillStepProgress } from "./chat/useChatStream";
 
 type WorkspacePanel = "dashboard" | "chat" | "skills" | "automation" | "tasks";
 type AutomationView = "configured" | "history" | "templates";
@@ -288,6 +290,16 @@ export function WorkspaceAppShellPage() {
   const [richMediaItems, setRichMediaItems] = useState<RichMediaItem[]>(initialRichMediaItems);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
+  const {
+    isStreaming,
+    awaitingFirstChunk,
+    streamingText,
+    skillSteps,
+    sendMessage: streamConversation,
+    abort: abortStream,
+  } = useChatStream();
+  const replyEpochRef = useRef(0);
+  const [streamingConversationId, setStreamingConversationId] = useState<string | null>(null);
 
   const panelParam = searchParams.get("panel");
   const activePanel: WorkspacePanel = isWorkspacePanel(panelParam) ? panelParam : "dashboard";
@@ -398,19 +410,24 @@ export function WorkspaceAppShellPage() {
     setSelectedMediaIds((current) => [id, ...current]);
   };
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     const content = (draftByConversation[activeConversation.id] ?? "").trim();
-    if (!content) return;
+    if (!content || isStreaming) return;
 
+    replyEpochRef.current += 1;
+    const epoch = replyEpochRef.current;
+    const conversationId = activeConversation.id;
+    const priorMessages = messagesByConversation[conversationId] ?? activeConversation.messages;
     const nextPreview = content.length > 28 ? `${content.slice(0, 28)}...` : content;
     const nextTitle =
       activeConversation.title === "新对话"
         ? (content.length > 18 ? `${content.slice(0, 18)}...` : content)
         : activeConversation.title;
+    const userTime = formatTimeLabel(new Date());
 
     setConversationList((current) =>
       current.map((conversation) =>
-        conversation.id === activeConversation.id
+        conversation.id === conversationId
           ? {
               ...conversation,
               title: nextTitle,
@@ -422,13 +439,65 @@ export function WorkspaceAppShellPage() {
     );
     setMessagesByConversation((current: Record<string, Conversation["messages"]>) => ({
       ...current,
-      [activeConversation.id]: [
-        ...(current[activeConversation.id] ?? []),
-        { role: "user", text: content, time: "刚刚" },
-        { role: "assistant", text: "我已经收到你的最新要求。接下来会根据当前上下文整理为任务建议或下一步操作。", time: "刚刚" },
+      [conversationId]: [
+        ...(current[conversationId] ?? []),
+        { role: "user", text: content, time: userTime },
       ],
     }));
-    setDraftByConversation((current: Record<string, string>) => ({ ...current, [activeConversation.id]: "" }));
+    setDraftByConversation((current: Record<string, string>) => ({ ...current, [conversationId]: "" }));
+    setStreamingConversationId(conversationId);
+
+    const contextBlock = buildWorkspaceContextBlock({
+      selectedObjectsByType,
+      selectedFileIds,
+      selectedMediaIds,
+      localFiles,
+      richMediaItems,
+    });
+    const apiMessages: ChatMessage[] = [
+      ...priorMessages.map((message) => ({
+        role: message.role,
+        content: message.text,
+      })),
+      { role: "user", content: augmentUserMessage(content, contextBlock) },
+    ];
+
+    try {
+      const authQuery = typeof window !== "undefined" ? window.location.search : "";
+      await streamConversation(apiMessages, {
+        url: `/chat-stream${authQuery}`,
+        onFinish: (payload) => {
+          if (epoch !== replyEpochRef.current) return;
+          setStreamingConversationId(null);
+
+          const assistantText =
+            payload.httpStatus !== undefined
+              ? `请求失败（${payload.httpStatus}），请稍后重试。`
+              : payload.aborted && !payload.reply.trim()
+                ? "回复已停止。"
+                : payload.reply.trim() || "AI Assistant 未返回有效内容，请重试。";
+
+          setMessagesByConversation((current) => ({
+            ...current,
+            [conversationId]: [
+              ...(current[conversationId] ?? []),
+              { role: "assistant", text: assistantText, time: "刚刚" },
+            ],
+          }));
+        },
+      });
+    } catch (error) {
+      console.error("[WorkspaceAppShellPage] chat stream failed:", error);
+      setStreamingConversationId(null);
+      if (epoch !== replyEpochRef.current) return;
+      setMessagesByConversation((current) => ({
+        ...current,
+        [conversationId]: [
+          ...(current[conversationId] ?? []),
+          { role: "assistant", text: "抱歉，发送失败，请稍后重试。", time: "刚刚" },
+        ],
+      }));
+    }
   };
 
   useEffect(() => {
@@ -563,6 +632,16 @@ export function WorkspaceAppShellPage() {
             onClearToolSelection={clearToolSelection}
             onClearContext={clearContext}
             onSend={sendMessage}
+            isStreaming={isStreaming}
+            showStreamingReply={isStreaming && streamingConversationId === activeConversation.id}
+            awaitingFirstChunk={awaitingFirstChunk}
+            streamingText={streamingText}
+            skillSteps={skillSteps}
+            onAbortStream={() => {
+              replyEpochRef.current += 1;
+              setStreamingConversationId(null);
+              abortStream();
+            }}
           />
         ) : null}
         {activePanel === "skills" ? <SkillsPanel onOpenTool={(path: string) => navigate(path)} /> : null}
@@ -712,6 +791,12 @@ function ChatPanel({
   onClearToolSelection,
   onClearContext,
   onSend,
+  isStreaming,
+  showStreamingReply,
+  awaitingFirstChunk,
+  streamingText,
+  skillSteps,
+  onAbortStream,
 }: {
   conversation: Conversation;
   messages: Conversation["messages"];
@@ -734,7 +819,13 @@ function ChatPanel({
   onCloseToolPicker: () => void;
   onClearToolSelection: (tool: ContextTool) => void;
   onClearContext: () => void;
-  onSend: () => void;
+  onSend: () => void | Promise<void>;
+  isStreaming: boolean;
+  showStreamingReply: boolean;
+  awaitingFirstChunk: boolean;
+  streamingText: string;
+  skillSteps: SkillStepProgress[];
+  onAbortStream: () => void;
 }) {
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const [hoveredTool, setHoveredTool] = useState<ContextTool | null>(null);
@@ -814,11 +905,33 @@ function ChatPanel({
           {messages.map((message, index) => (
             <div key={`${message.time}-${index}`} style={messageWrapStyle(message.role === "user")}>
               <div style={messageMetaStyle}>
-                {message.role === "assistant" ? "Spark AI" : "你"} · {message.time}
+                {message.role === "assistant" ? "AI Assistant" : "你"} · {message.time}
               </div>
               <div style={messageBubbleStyle(message.role === "user")}>{message.text}</div>
             </div>
           ))}
+          {showStreamingReply ? (
+            <div style={messageWrapStyle(false)}>
+              <div style={messageMetaStyle}>AI Assistant · 正在回复</div>
+              <div style={streamingBubbleStyle}>
+                {awaitingFirstChunk && !streamingText ? (
+                  <span style={sectionTextStyle}>正在思考…</span>
+                ) : (
+                  streamingText || "…"
+                )}
+                {skillSteps.length > 0 ? (
+                  <div style={skillStepsWrapStyle}>
+                    {skillSteps.slice(-3).map((step) => (
+                      <div key={`${step.skill}-${step.stepId}`} style={skillStepLineStyle}>
+                        {step.label}
+                        {step.detail ? ` · ${step.detail}` : ""}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div style={composerBoxStyle}>
@@ -839,6 +952,7 @@ function ChatPanel({
             onChange={(event) => onDraftChange(event.target.value)}
             style={textareaStyle}
             placeholder="继续补充你的任务目标，并结合商品、订单、文章、文件或富媒体上下文..."
+            disabled={isStreaming}
           />
           <div style={toolbarDockStyle}>
             <div style={toolbarBarStyle}>
@@ -868,10 +982,26 @@ function ChatPanel({
             </div>
           </div>
           <div style={composerFooterStyle}>
-            <span style={sectionTextStyle}>每个会话可以继续沉淀为任务或自动化。</span>
+            <span style={sectionTextStyle}>
+              {isStreaming ? "AI Assistant 正在回复，可随时停止。" : "每个会话可以继续沉淀为任务或自动化。"}
+            </span>
             <div style={buttonRowStyle}>
-              <button type="button" style={ghostButtonStyle}>生成任务建议</button>
-              <button type="button" style={primaryButtonStyle} onClick={onSend}>发送</button>
+              <button type="button" style={ghostButtonStyle} disabled={isStreaming}>
+                生成任务建议
+              </button>
+              {isStreaming ? (
+                <button type="button" style={ghostButtonStyle} onClick={onAbortStream}>
+                  停止
+                </button>
+              ) : null}
+              <button
+                type="button"
+                style={{ ...primaryButtonStyle, opacity: isStreaming ? 0.6 : 1 }}
+                onClick={() => void onSend()}
+                disabled={isStreaming}
+              >
+                {isStreaming ? "发送中…" : "发送"}
+              </button>
             </div>
           </div>
         </div>
@@ -1274,6 +1404,50 @@ function TasksPanel({
   );
 }
 
+function formatTimeLabel(date: Date) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function buildWorkspaceContextBlock(params: {
+  selectedObjectsByType: Record<ObjectType, string[]>;
+  selectedFileIds: string[];
+  selectedMediaIds: string[];
+  localFiles: LocalFileItem[];
+  richMediaItems: RichMediaItem[];
+}): string | null {
+  const lines: string[] = [];
+
+  for (const type of Object.keys(objectTypeLabels) as ObjectType[]) {
+    const ids = params.selectedObjectsByType[type];
+    if (ids.length === 0) continue;
+    const names = ids.map(
+      (id) => objectOptions[type].find((item) => item.id === id)?.title ?? id,
+    );
+    lines.push(`- ${objectTypeLabels[type]}：${names.join("、")}（共 ${ids.length} 个）`);
+  }
+
+  if (params.selectedFileIds.length > 0) {
+    const names = params.selectedFileIds.map(
+      (id) => params.localFiles.find((item) => item.id === id)?.name ?? id,
+    );
+    lines.push(`- 文件：${names.join("、")}（共 ${params.selectedFileIds.length} 个）`);
+  }
+
+  if (params.selectedMediaIds.length > 0) {
+    const names = params.selectedMediaIds.map(
+      (id) => params.richMediaItems.find((item) => item.id === id)?.title ?? id,
+    );
+    lines.push(`- 富媒体：${names.join("、")}（共 ${params.selectedMediaIds.length} 个）`);
+  }
+
+  if (lines.length === 0) return null;
+  return `[工作台上下文]\n${lines.join("\n")}`;
+}
+
+function augmentUserMessage(content: string, contextBlock: string | null) {
+  if (!contextBlock) return content;
+  return `${contextBlock}\n\n[用户消息]\n${content}`;
+}
 function taskStatusLabel(status: TaskStatus) {
   if (status === "executing") return "执行中";
   if (status === "review_required") return "待审核";
@@ -1519,8 +1693,32 @@ const messageBubbleStyle = (isUser: boolean): CSSProperties => ({
   fontSize: 14,
   lineHeight: 1.6,
   color: "#202223",
+  whiteSpace: "pre-wrap",
 });
 const composerBoxStyle: CSSProperties = { marginTop: 18, paddingTop: 18, borderTop: "1px solid #ebedf0", background: "#ffffff" };
+const streamingBubbleStyle: CSSProperties = {
+  maxWidth: "78%",
+  padding: "12px 14px",
+  borderRadius: 14,
+  background: "#f6f6f7",
+  border: "1px solid rgba(64,112,244,0.18)",
+  fontSize: 14,
+  lineHeight: 1.6,
+  color: "#202223",
+  whiteSpace: "pre-wrap",
+};
+const skillStepsWrapStyle: CSSProperties = {
+  marginTop: 10,
+  paddingTop: 10,
+  borderTop: "1px solid #e1e3e5",
+  display: "grid",
+  gap: 4,
+};
+const skillStepLineStyle: CSSProperties = {
+  fontSize: 12,
+  color: "#61666c",
+  lineHeight: 1.5,
+};
 const textareaStyle: CSSProperties = {
   width: "100%",
   minHeight: 120,
