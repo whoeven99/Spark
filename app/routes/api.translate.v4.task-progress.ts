@@ -47,7 +47,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     verifyFailed: Number(redisProgress.verifyFailed) || job.metrics.verifyFailed,
     currentModule: redisProgress.currentModule ?? null,
     progressUpdatedAt: redisProgress.updatedAt ?? null,
-    usedTokens: job.metrics.usedTokens ?? 0,
+    // usedTokens: prefer Redis (real-time, per-batch) over Cosmos (written only at stage end).
+    usedTokens: Number(redisProgress.usedTokens) || job.metrics.usedTokens || 0,
+    // translateStartedAt: epoch ms string written to Redis when translate worker begins.
+    translateStartedAt: redisProgress.translateStartedAt ?? null,
   };
 
   return data({

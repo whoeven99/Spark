@@ -717,7 +717,7 @@ export async function translateResources(
   aiModel: string,
   testMode: boolean,
   shopName: string,
-  onProgress?: (doneUnitsDelta: number) => Promise<void>,
+  onProgress?: (doneUnitsDelta: number, tokensDelta: number) => Promise<void>,
 ): Promise<TranslateChunkResult> {
   if (testMode) {
     return {
@@ -798,7 +798,7 @@ export async function translateResources(
   }
 
   // Credit cache hits immediately so the bar reflects them.
-  if (cacheUnits > 0 && onProgress) await onProgress(cacheUnits);
+  if (cacheUnits > 0 && onProgress) await onProgress(cacheUnits, 0);
 
   // 2. Translate unique texts per engine order, in char-bounded batches.
   //    Aggregate per-engine usage over the unique units actually translated, and
@@ -813,6 +813,7 @@ export async function translateResources(
     for (const batch of batchByChars(items, MAX_CHARS_PER_BATCH)) {
       const m = await translateItemsRouted(batch, source, target, aiModel, shopName, order);
       let batchUnits = 0; // occurrences processed in this batch
+      let batchTokens = 0; // raw LLM tokens used in this batch
       for (const [k, v] of m) {
         const text = texts[Number(k)];
         tmap.set(text, v);
@@ -823,10 +824,11 @@ export async function translateResources(
           acc.units += 1;
           acc.chars += text.length;
           acc.tokens += v.tokens;
+          batchTokens += v.tokens;
         }
       }
       // Report progress (and let the worker heartbeat) after each batch.
-      if (onProgress) await onProgress(batchUnits);
+      if (onProgress) await onProgress(batchUnits, batchTokens);
     }
     translated.set(sig, tmap);
   }

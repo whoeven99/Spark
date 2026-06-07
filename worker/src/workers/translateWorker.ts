@@ -47,6 +47,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   let translateFailed = 0;
   let translateFallback = 0;
   let translateUnitDone = 0; // node-level progress
+  let liveTokens = 0;        // billed tokens accumulated in real-time
   let lastHeartbeatAt = 0;
   // Fields that were translated but fell back to the original value (engine
   // dropped the key / failed). Surfaced to the UI via translate/fallbacks.json.
@@ -54,10 +55,16 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   const engineUsage: EngineUsage = {};
   const translateTotal = job.metrics.translateTotal || job.metrics.initTotal;
   const translateUnitTotal = job.metrics.translateUnitTotal || 0;
+  const tokenMultiplier = Math.max(0, Number(process.env.TRANSLATION_TOKEN_MULTIPLIER) || 1);
+  // Record when this translate stage actually started (epoch ms string).
+  const translateStartedAt = Date.now().toString();
 
   if (testMode) {
     console.log(`[translate] TEST MODE: using original values as translations`);
   }
+
+  // Write the start timestamp to Redis immediately so the UI can compute elapsed time.
+  await setProgress(jobId, { translateStartedAt });
 
   try {
     for (const module of job.modules) {
@@ -114,8 +121,9 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         try {
           // Per-batch progress: write Redis every batch (cheap, smooth bar) and
           // heartbeat Cosmos throttled (expensive, just keep-alive).
-          const onProgress = async (deltaUnits: number) => {
+          const onProgress = async (deltaUnits: number, deltaTokens: number) => {
             translateUnitDone += deltaUnits;
+            liveTokens += Math.ceil(deltaTokens * tokenMultiplier);
             await setProgress(jobId, {
               translateDone,
               translateFailed,
@@ -124,6 +132,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
               translateUnitTotal,
               translateTotal,
               currentModule: module,
+              usedTokens: liveTokens,
             });
             const now = Date.now();
             if (now - lastHeartbeatAt > HEARTBEAT_THROTTLE_MS) {
@@ -197,10 +206,8 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
       ? { provider: "test", model: "test" }
       : resolveEngine(aiModel);
 
-    // Compute billed tokens: sum LLM tokens across all engines × configurable multiplier.
-    const rawLlmTokens = Object.values(engineUsage).reduce((s, u) => s + (u.tokens ?? 0), 0);
-    const multiplier = Math.max(0, Number(process.env.TRANSLATION_TOKEN_MULTIPLIER) || 1);
-    const usedTokens = Math.ceil(rawLlmTokens * multiplier);
+    // liveTokens is already accumulated with the multiplier applied during progress callbacks.
+    const usedTokens = liveTokens;
 
     // Refresh job to get latest metrics
     const latestJob = await getJob(shopName, jobId);

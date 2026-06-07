@@ -58,6 +58,9 @@ export type TranslationV4Metrics = {
   verifyDone: number;
   verifyFailed: number;
   usedTokens: number;
+  /** Real-time display fields — populated from Redis, not persisted to Cosmos. */
+  currentModule?: string | null;
+  translateStartedAt?: string | null;
 };
 
 export const EMPTY_V4_METRICS: TranslationV4Metrics = {

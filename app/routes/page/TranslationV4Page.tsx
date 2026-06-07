@@ -99,6 +99,7 @@ function progressFromJob(
       verifyFailed: job.metrics.verifyFailed,
       currentModule: null,
       usedTokens: job.metrics.usedTokens ?? 0,
+      translateStartedAt: null,
     },
   };
 }
@@ -120,6 +121,7 @@ type ProgressData = {
     verifyTotal: number; verifyDone: number; verifyFailed: number;
     currentModule: string | null;
     usedTokens?: number;
+    translateStartedAt?: string | null;
   };
 };
 
@@ -605,10 +607,95 @@ function JobCard({ job, status, progress, onAction }: JobCardProps) {
         </div>
       )}
 
+      {status === "TRANSLATING" && (
+        <TranslateStatsPanel metrics={metrics} />
+      )}
+
       {isFailed && (progress?.errorMessage ?? job.errorMessage) && (
         <div style={{ ...failErrorStyle, marginTop: "0.5rem" }}>
           [{progress?.errorStage ?? job.errorStage}] {progress?.errorMessage ?? job.errorMessage}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Translate Stats Panel ────────────────────────────────────────────────────
+
+type TranslateMetricsSnap = {
+  translateUnitDone: number;
+  translateUnitTotal: number;
+  usedTokens?: number;
+  translateStartedAt?: string | null;
+};
+
+function fmtDuration(ms: number): string {
+  if (ms < 0) ms = 0;
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function StatItem({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1px", minWidth: "7rem" }}>
+      <span style={{ fontSize: "0.68rem", color: pageColorTokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        {label}
+      </span>
+      <span style={{ fontSize: "0.82rem", fontWeight: 600, color: pageColorTokens.textPrimary, fontVariantNumeric: "tabular-nums" }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function TranslateStatsPanel({ metrics }: { metrics: TranslateMetricsSnap }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  // Tick every second while panel is mounted.
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const { translateUnitDone: done, translateUnitTotal: total, usedTokens = 0, translateStartedAt } = metrics;
+  const startMs = translateStartedAt ? Number(translateStartedAt) : null;
+  const elapsedMs = startMs && startMs > 0 ? Math.max(0, now - startMs) : null;
+
+  // Linear extrapolation from current progress ratio.
+  const ratio = total > 0 && done > 0 ? done / total : 0;
+  const remainingUnits = Math.max(0, total - done);
+  const estRemainingMs = elapsedMs !== null && ratio > 0 ? (elapsedMs / ratio) * (1 - ratio) : null;
+  const estRemainingTokens = ratio > 0 && usedTokens > 0 ? Math.round((usedTokens / ratio) * (1 - ratio)) : null;
+
+  if (elapsedMs === null && usedTokens === 0) return null;
+
+  return (
+    <div style={{
+      marginTop: "0.6rem",
+      padding: "0.5rem 0.75rem",
+      borderRadius: "6px",
+      background: "rgba(0, 0, 0, 0.03)",
+      border: `1px solid ${pageColorTokens.border}`,
+      display: "flex",
+      flexWrap: "wrap",
+      gap: "0.75rem 1.5rem",
+    }}>
+      {usedTokens > 0 && (
+        <StatItem label="已用 tokens" value={usedTokens.toLocaleString()} />
+      )}
+      {elapsedMs !== null && (
+        <StatItem label="已用时间" value={fmtDuration(elapsedMs)} />
+      )}
+      {estRemainingTokens !== null && (
+        <StatItem label="预估剩余 tokens" value={`~${estRemainingTokens.toLocaleString()}`} />
+      )}
+      {estRemainingMs !== null && (
+        <StatItem label="预估剩余时间" value={`~${fmtDuration(estRemainingMs)}`} />
       )}
     </div>
   );
