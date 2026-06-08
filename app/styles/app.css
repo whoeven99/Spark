@@ -105,6 +105,24 @@ code {
   background: rgba(255, 255, 255, 0.7);
 }
 
+/* Sidebar history row — show delete button on hover */
+.sidebar-history-row .sidebar-history-delete {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.sidebar-history-row:hover .sidebar-history-delete {
+  opacity: 1;
+}
+.sidebar-history-row .sidebar-history-delete:hover {
+  background: #dde1e5 !important;
+  color: #444950 !important;
+  opacity: 1;
+}
+/* Hover background on history item */
+.sidebar-history-row:hover .sidebar-history-item {
+  background: #edeef0;
+}
+
 .spark-segmented-tabs__item:focus-visible {
   outline: none;
   border-color: #2c6ecb;

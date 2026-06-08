@@ -744,7 +744,8 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   return (
     <div style={shellStyle}>
       <aside style={sidebarStyle}>
-        <div>
+        <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+          {/* Brand */}
           <div style={brandRowStyle}>
             <div style={brandBadgeStyle}>S</div>
             <div>
@@ -753,10 +754,13 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             </div>
           </div>
 
+          {/* New conversation */}
           <button type="button" style={newTaskButtonStyle} onClick={createConversation}>
-            + 新建对话
+            <span style={newTaskPlusStyle}>+</span>
+            新建对话
           </button>
 
+          {/* Secondary nav */}
           <div style={navGroupStyle}>
             {panelItems.map((item) => (
               <button
@@ -765,37 +769,38 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
                 style={navButtonStyle(activePanel === item.key)}
                 onClick={() => switchPanel(item.key)}
               >
-                <span style={navLabelStyle}>
-                  <span style={navIconStyle}>{item.icon}</span>
-                  <span>{item.label}</span>
-                </span>
+                <span style={navIconStyle}>{item.icon}</span>
+                <span>{item.label}</span>
               </button>
             ))}
           </div>
 
+          {/* Divider */}
+          <div style={sidebarDividerStyle} />
+
+          {/* Conversation history */}
           <div style={sidebarSectionStyle}>
             <div style={sidebarSectionHeadStyle}>
-              <span>对话记录</span>
+              <span>最近对话</span>
               <span style={mutedMetaStyle}>{Math.min(conversationList.length, 50)} / 50</span>
             </div>
             <div style={conversationListStyle}>
               {conversationList.slice(0, 50).map((conversation) => {
                 const active = activeConversationId === conversation.id;
                 return (
-                  <div key={conversation.id} style={historyRowStyle}>
+                  <div key={conversation.id} className="sidebar-history-row" style={historyRowStyle}>
                     <button
                       type="button"
+                      className="sidebar-history-item"
                       style={historyItemStyle(active)}
                       onClick={() => openConversation(conversation.id)}
+                      title={conversation.title}
                     >
                       <span style={historyTitleStyle}>{conversation.title}</span>
-                      {conversation.preview ? (
-                        <span style={historyPreviewStyle}>{conversation.preview}</span>
-                      ) : null}
-                      <span style={mutedMetaStyle}>{formatRelativeTime(conversation.updatedAt)}</span>
                     </button>
                     <button
                       type="button"
+                      className="sidebar-history-delete"
                       style={historyDeleteButtonStyle}
                       aria-label={`删除对话：${conversation.title}`}
                       title="删除对话"
@@ -2005,6 +2010,10 @@ const sidebarStyle: CSSProperties = {
   borderRight: "1px solid #e1e3e5",
   background: "#f6f6f7",
   gap: 16,
+  height: "100vh",
+  overflow: "hidden",
+  position: "sticky",
+  top: 0,
 };
 
 const contentStyle: CSSProperties = {
@@ -2040,83 +2049,111 @@ const brandTitleStyle: CSSProperties = { fontSize: 14, fontWeight: 700, color: "
 const brandMetaStyle: CSSProperties = { fontSize: 12, color: "#6d7175" };
 
 const newTaskButtonStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 7,
   width: "100%",
-  border: "1px solid #202223",
-  borderRadius: 10,
-  background: "#202223",
-  padding: "11px 12px",
+  border: "none",
+  borderRadius: 8,
+  background: "transparent",
+  padding: "7px 10px",
   textAlign: "left",
-  fontSize: 14,
+  fontSize: 13,
   fontWeight: 600,
-  color: "#ffffff",
+  color: "#202223",
   cursor: "pointer",
+  marginBottom: 2,
+};
+const newTaskPlusStyle: CSSProperties = {
+  fontSize: 17,
+  fontWeight: 300,
+  lineHeight: 1,
+  color: "#6d7175",
 };
 
-const navGroupStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 6, marginTop: 14 };
+const navGroupStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 1 };
 const navButtonStyle = (active: boolean): CSSProperties => ({
   display: "flex",
   alignItems: "center",
-  justifyContent: "space-between",
+  gap: 9,
   width: "100%",
-  border: `1px solid ${active ? "#c9cccf" : "transparent"}`,
-  borderRadius: 10,
-  background: active ? "#ffffff" : "transparent",
-  padding: "10px 12px",
-  fontSize: 14,
-  fontWeight: active ? 700 : 600,
-  color: "#202223",
-  cursor: "pointer",
-});
-const navLabelStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10 };
-const navIconStyle: CSSProperties = {
-  width: 22,
-  height: 22,
+  border: "none",
   borderRadius: 8,
-  display: "grid",
-  placeItems: "center",
-  background: "#f1f2f3",
-  color: "#61666c",
-  fontSize: 12,
+  background: active ? "#e8e9eb" : "transparent",
+  padding: "7px 10px",
+  fontSize: 13,
+  fontWeight: active ? 600 : 500,
+  color: active ? "#202223" : "#444950",
+  cursor: "pointer",
+  textAlign: "left",
+});
+const navIconStyle: CSSProperties = {
+  fontSize: 13,
+  color: "#6d7175",
   flexShrink: 0,
+  width: 16,
+  textAlign: "center",
 };
 
-const sidebarSectionStyle: CSSProperties = { marginTop: 18, display: "flex", flexDirection: "column", gap: 10, minHeight: 0 };
-const sidebarSectionHeadStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, fontWeight: 700, color: "#6d7175", padding: "0 4px" };
-const conversationListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 8, maxHeight: "calc(100vh - 330px)", overflowY: "auto", paddingRight: 2 };
+const sidebarDividerStyle: CSSProperties = {
+  height: 1,
+  background: "#e1e3e5",
+  margin: "10px 2px",
+};
+
+const sidebarSectionStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 2, minHeight: 0, flex: 1 };
+const sidebarSectionHeadStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  fontSize: 11,
+  fontWeight: 600,
+  color: "#8c9196",
+  padding: "4px 10px",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
+const conversationListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 1, overflowY: "auto", paddingRight: 0, flex: 1 };
 const historyRowStyle: CSSProperties = {
   display: "flex",
-  alignItems: "stretch",
-  gap: 4,
+  alignItems: "center",
+  gap: 0,
+  position: "relative",
 };
 const historyItemStyle = (active: boolean): CSSProperties => ({
   display: "flex",
-  flexDirection: "column",
-  gap: 4,
-  alignItems: "flex-start",
+  alignItems: "center",
   flex: 1,
   minWidth: 0,
   textAlign: "left",
-  border: `1px solid ${active ? "#c9cccf" : "transparent"}`,
-  borderRadius: 10,
-  background: active ? "#ffffff" : "#f6f6f7",
-  padding: "10px 12px",
+  border: "none",
+  borderRadius: 8,
+  background: active ? "#e8e9eb" : "transparent",
+  padding: "6px 10px",
   cursor: "pointer",
+  overflow: "hidden",
 });
 const historyDeleteButtonStyle: CSSProperties = {
-  width: 32,
   flexShrink: 0,
-  alignSelf: "center",
-  border: "1px solid transparent",
-  borderRadius: 8,
+  border: "none",
+  borderRadius: 6,
   background: "transparent",
   color: "#8c9196",
-  fontSize: 18,
+  fontSize: 16,
   lineHeight: 1,
   cursor: "pointer",
-  padding: 0,
+  padding: "4px 6px",
 };
-const historyTitleStyle: CSSProperties = { fontSize: 13, fontWeight: 700, color: "#202223" };
-const historyPreviewStyle: CSSProperties = { fontSize: 12, color: "#61666c", lineHeight: 1.5 };
+const historyTitleStyle: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 500,
+  color: "#202223",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  display: "block",
+  width: "100%",
+};
 const accountMenuWrapStyle: CSSProperties = {
   position: "relative",
   paddingTop: 12,
