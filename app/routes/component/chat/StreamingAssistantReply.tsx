@@ -94,6 +94,48 @@ function StreamingSkillSteps({ steps }: { steps: SkillStepProgress[] }) {
   );
 }
 
+function getThinkingProgress(params: {
+  hasContent: boolean;
+  isStreaming: boolean;
+  skillSteps: SkillStepProgress[];
+  hasEmbeddedCard: boolean;
+}) {
+  const { hasContent, isStreaming, skillSteps, hasEmbeddedCard } = params;
+  if (!isStreaming) return 100;
+  if (hasContent) return hasEmbeddedCard ? 88 : 76;
+  if (!skillSteps.length) return 18;
+
+  const completed = skillSteps.filter((step) => step.status === "completed").length;
+  const errored = skillSteps.filter((step) => step.status === "error").length;
+  const base = Math.round(((completed + errored) / skillSteps.length) * 62);
+  return Math.min(84, Math.max(24, 24 + base));
+}
+
+function ThinkingProgressPanel({
+  isStreaming,
+  progressPercent,
+  text,
+  hasContent,
+}: {
+  isStreaming: boolean;
+  progressPercent: number;
+  text: string;
+  hasContent: boolean;
+}) {
+  return (
+    <details style={thinkingBlockStyle} open={isStreaming || !hasContent}>
+      <summary style={thinkingSummaryStyle}>
+        <span>{isStreaming ? "处理过程" : "处理完成"}</span>
+        <span style={thinkingPercentStyle}>{progressPercent}%</span>
+      </summary>
+      <div style={thinkingProgressTrackStyle}>
+        <div style={thinkingProgressBarStyle(progressPercent, isStreaming)} />
+      </div>
+      <div style={thinkingBlockBodyStyle}>{text}</div>
+    </details>
+  );
+}
+
 export function StreamingAssistantReply({
   active,
   isStreaming,
@@ -133,6 +175,12 @@ export function StreamingAssistantReply({
       streamingPictureTranslateCard ||
       streamingImageGenerationCard,
   );
+  const thinkingProgressPercent = getThinkingProgress({
+    hasContent,
+    isStreaming,
+    skillSteps,
+    hasEmbeddedCard,
+  });
 
   return (
     <div style={{ display: "flex", justifyContent: "flex-start" }}>
@@ -143,27 +191,18 @@ export function StreamingAssistantReply({
               <s-badge tone="neutral">AI Assistant</s-badge>
             </div>
             <div style={{ marginTop: "0.35rem", minHeight: !hasContent ? "3rem" : undefined }}>
-              {!hasContent ? (
-                streamingThinkingText ? (
-                  <div style={thinkingBlockStyle}>
-                    <div style={thinkingBlockHeaderStyle}>正在思考…</div>
-                    <div style={thinkingBlockBodyStyle}>{streamingThinkingText}</div>
-                  </div>
-                ) : (
-                  <div style={thinkingWrapStyle}>
-                    <ThinkingDots />
-                    <ChatStreamingSkeleton />
-                  </div>
-                )
-              ) : streamingThinkingText ? (
-                <div style={thinkingDoneStyle}>✓ 思考完成</div>
-              ) : null}
-
-              {hasContent && streamingThinkingText ? (
-                <details style={thinkingBlockStyle}>
-                  <summary style={thinkingBlockHeaderStyle}>处理过程</summary>
-                  <div style={thinkingBlockBodyStyle}>{streamingThinkingText}</div>
-                </details>
+              {streamingThinkingText ? (
+                <ThinkingProgressPanel
+                  isStreaming={isStreaming}
+                  progressPercent={thinkingProgressPercent}
+                  text={streamingThinkingText}
+                  hasContent={hasContent}
+                />
+              ) : !hasContent ? (
+                <div style={thinkingWrapStyle}>
+                  <ThinkingDots />
+                  <ChatStreamingSkeleton />
+                </div>
               ) : null}
 
               {skillSteps.length > 0 ? <StreamingSkillSteps steps={skillSteps} /> : null}
@@ -225,16 +264,49 @@ const thinkingBlockStyle: CSSProperties = {
   borderRadius: 8,
   border: "1px solid rgba(44, 110, 203, 0.2)",
   background: "rgba(44, 110, 203, 0.04)",
-  padding: "8px 12px",
-  marginBottom: 6,
+  padding: "10px 12px",
+  marginBottom: 10,
 };
 
-const thinkingBlockHeaderStyle: CSSProperties = {
+const thinkingSummaryStyle: CSSProperties = {
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
   fontSize: 12,
   fontWeight: 600,
   color: "rgba(44, 110, 203, 0.8)",
-  marginBottom: 6,
+  userSelect: "none",
 };
+
+const thinkingPercentStyle: CSSProperties = {
+  flexShrink: 0,
+  color: "#61666c",
+  fontVariantNumeric: "tabular-nums",
+};
+
+const thinkingProgressTrackStyle: CSSProperties = {
+  position: "relative",
+  height: 6,
+  overflow: "hidden",
+  borderRadius: 999,
+  background: "rgba(44, 110, 203, 0.12)",
+  margin: "9px 0 8px",
+};
+
+const thinkingProgressBarStyle = (
+  percent: number,
+  isStreaming: boolean,
+): CSSProperties => ({
+  width: `${Math.max(0, Math.min(100, percent))}%`,
+  height: "100%",
+  borderRadius: 999,
+  background: isStreaming
+    ? "linear-gradient(90deg, #2c6ecb, #35b486)"
+    : "#008060",
+  transition: "width 240ms ease",
+});
 
 const thinkingBlockBodyStyle: CSSProperties = {
   fontSize: 13,
@@ -244,13 +316,6 @@ const thinkingBlockBodyStyle: CSSProperties = {
   maxHeight: 180,
   overflowY: "auto",
   lineHeight: 1.6,
-};
-
-const thinkingDoneStyle: CSSProperties = {
-  fontSize: 12,
-  color: "#008060",
-  marginBottom: 8,
-  fontWeight: 500,
 };
 
 const thinkingTextStyle: CSSProperties = {
