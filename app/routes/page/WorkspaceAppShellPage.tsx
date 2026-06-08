@@ -943,7 +943,8 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             </div>
             <div style={conversationListStyle}>
               {conversationList.slice(0, 50).map((conversation) => {
-                const active = activeConversationId === conversation.id;
+                const active =
+                  activePanel === "chat" && activeConversationId === conversation.id;
                 return (
                   <div key={conversation.id} className="sidebar-history-row" style={historyRowStyle}>
                     <button

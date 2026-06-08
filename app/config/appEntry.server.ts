@@ -22,8 +22,8 @@ const DEFAULT_APP_SHELL_CONFIG = {
     "translation-v4",
     "product-improve",
     "image-studio",
-    "billing",
     "order-monitor",
+    "billing",
   ],
 } as const satisfies AppShellConfig;
 
