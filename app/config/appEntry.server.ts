@@ -71,6 +71,11 @@ export function getAppEntryConfig(): AppEntryConfig {
   return APP_ENTRY_CONFIGS[getAppEntry()];
 }
 
+/** 当前 APP_ENTRY 对应的嵌入式 App 首页路径（如 /app、/app/product-improve）。 */
+export function getAppHomePath(): string {
+  return getAppEntryConfig().home;
+}
+
 /** 嵌入式 Admin 跳转时保留 shop/host/id_token 等查询参数，避免鉴权循环。 */
 export function buildEmbeddedAppPath(path: string, request: Request): string {
   const url = new URL(request.url);

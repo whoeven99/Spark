@@ -17,12 +17,6 @@ import { detectRequestLocale } from "../i18n/detector.server";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import {
-  refreshShopProfileOnInstall,
-  scheduleEnsureShopProfile,
-} from "../server/shopProfile/index.server";
-import { ensureSessionAppName } from "../server/session/sessionManager.server";
-import {
-  getAppEntry,
   getAppEntryConfig,
   type NavItemKey,
 } from "../config/appEntry.server";
@@ -65,35 +59,16 @@ const NAV_ITEMS: Record<
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session, admin } = await authenticate.admin(request);
-  const appName = getAppEntry();
+  const { session } = await authenticate.admin(request);
 
   try {
-    // 确保 session 的 appName 与当前 APP_ENTRY 一致
-    await ensureSessionAppName(session.id, appName);
-
-    const installRecorded = await recordAppInstalled({
+    await recordAppInstalled({
       shop: session.shop,
       sessionId: session.id,
       scope: session.scope,
       isOnline: session.isOnline,
       source: "app_shell",
     });
-    if (installRecorded) {
-      void refreshShopProfileOnInstall({
-        admin,
-        shop: session.shop,
-        appName,
-      }).catch((error) => {
-        console.error("[ShopProfile] refresh on install failed:", error);
-      });
-    } else {
-      scheduleEnsureShopProfile({
-        admin,
-        shop: session.shop,
-        appName,
-      });
-    }
   } catch (error) {
     console.error("[CommonEvent] recordAppInstalled failed:", error);
   }
