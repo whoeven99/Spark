@@ -1278,7 +1278,7 @@ function ChatPanel({
       <section style={{ ...surfaceCardStyle, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={conversationMetaRowStyle}>
           <span style={conversationMetaTitleStyle}>{conversation.title}</span>
-          <span style={mutedMetaStyle}>{conversation.updatedAt}</span>
+          <span style={mutedMetaStyle}>{formatConversationTimestamp(conversation.updatedAt)}</span>
         </div>
 
         <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
@@ -1671,27 +1671,84 @@ function ChatPanel({
 
       <section style={{ ...sidePanelStyle, alignSelf: "start" }}>
         <div style={surfaceCardStyle}>
-          <div style={sectionTitleStyle}>当前上下文</div>
-          <div style={listColumnStyle}>
-            {[
-              [
-                "对象范围",
-                totalSelectedObjects > 0
-                  ? (Object.keys(objectTypeLabels) as ObjectType[])
-                      .filter((type) => selectedObjectsByType[type].length > 0)
-                      .map((type) => `${objectTypeLabels[type]} ${selectedObjectsByType[type].length}`)
-                      .join(" / ")
-                  : "尚未选择对象",
-              ],
-              ["本地文件", selectedFileIds.length > 0 ? `${selectedFileIds.length} 个已选择文件` : "尚未添加文件"],
-              ["富媒体", selectedMediaIds.length > 0 ? `${selectedMediaIds.length} 个已选择 URL / 图片 / 视频` : "尚未添加富媒体"],
-            ].map(([label, value]) => (
-              <div key={label} style={keyValueRowStyle}>
-                <span style={mutedMetaStyle}>{label}</span>
-                <span style={sectionTextStyle}>{value}</span>
-              </div>
-            ))}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <div style={sectionTitleStyle}>当前上下文</div>
+            {filledContextCount > 0 ? (
+              <button
+                type="button"
+                style={{ fontSize: 11, color: "#6d7175", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                onClick={onClearContext}
+              >
+                清空
+              </button>
+            ) : null}
           </div>
+
+          {/* Products */}
+          {selectedObjectsByType.product.length > 0 ? (
+            <div style={ctxGroupStyle}>
+              <div style={ctxGroupLabelStyle}>商品 · {selectedObjectsByType.product.length} 个</div>
+              {selectedObjectsByType.product.map((item) => (
+                <div key={item.id} style={ctxItemRowStyle}>
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt="" style={ctxThumbStyle} />
+                  ) : (
+                    <div style={ctxThumbPlaceholderStyle}>品</div>
+                  )}
+                  <span style={ctxItemTitleStyle}>{item.title}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Articles */}
+          {selectedObjectsByType.article.length > 0 ? (
+            <div style={ctxGroupStyle}>
+              <div style={ctxGroupLabelStyle}>文章 · {selectedObjectsByType.article.length} 篇</div>
+              {selectedObjectsByType.article.map((item) => (
+                <div key={item.id} style={ctxItemRowStyle}>
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt="" style={ctxThumbStyle} />
+                  ) : (
+                    <div style={ctxThumbPlaceholderStyle}>文</div>
+                  )}
+                  <span style={ctxItemTitleStyle}>{item.title}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Files */}
+          {selectedFileIds.length > 0 ? (
+            <div style={ctxGroupStyle}>
+              <div style={ctxGroupLabelStyle}>文件 · {selectedFileIds.length} 个</div>
+              {selectedFileIds.map((id) => {
+                const file = localFiles.find((f) => f.id === id);
+                if (!file) return null;
+                return (
+                  <div key={id} style={ctxItemRowStyle}>
+                    <div style={ctxFileIconStyle}>↑</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={ctxItemTitleStyle}>{file.name}</div>
+                      {file.note && file.note !== "已上传" ? (
+                        <div style={{ fontSize: 11, color: "#8c9196", marginTop: 1 }}>{file.note}</div>
+                      ) : null}
+                    </div>
+                    {file.uploading ? (
+                      <span style={{ fontSize: 10, color: "#6d7175", flexShrink: 0 }}>上传中…</span>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {/* Empty state */}
+          {totalSelectedObjects === 0 && selectedFileIds.length === 0 ? (
+            <div style={{ fontSize: 13, color: "#8c9196", lineHeight: 1.6 }}>
+              在下方选择商品、文章或上传文件，它们会出现在这里并随消息一起发给 AI。
+            </div>
+          ) : null}
         </div>
 
         <div style={surfaceCardStyle}>
@@ -1902,6 +1959,27 @@ function formatTimeLabel(date: Date) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
+/** 对话更新时间：上海时区，精确到秒（YYYY-MM-DD HH:mm:ss）。 */
+function formatConversationTimestamp(isoString: string): string {
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) {
+    return isoString.slice(0, 19).replace("T", " ");
+  }
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
+}
+
 function formatRelativeTime(isoString: string): string {
   const diff = Date.now() - new Date(isoString).getTime();
   const minutes = Math.floor(diff / 60_000);
@@ -2010,11 +2088,19 @@ function buildWorkspaceContextBlock(params: {
     const items = params.selectedObjectsByType[type];
     if (items.length === 0) continue;
     if (type === "product") {
-      // Include structured product data (id + imageUrl) so AI can use them for batch tasks
+      // Structured product data so AI can extract IDs + images for batch tasks
       lines.push(`- 已选商品（共 ${items.length} 个）：`);
       for (const item of items) {
         const parts = [`  • ${item.title}`, `[ID: ${item.id}]`];
         if (item.imageUrl) parts.push(`[图片: ${item.imageUrl}]`);
+        lines.push(parts.join(" "));
+      }
+    } else if (type === "article") {
+      // Structured article data so AI can extract IDs for batch tasks
+      lines.push(`- 已选文章（共 ${items.length} 个）：`);
+      for (const item of items) {
+        const parts = [`  • ${item.title}`, `[ID: ${item.id}]`];
+        if (item.imageUrl) parts.push(`[封面: ${item.imageUrl}]`);
         lines.push(parts.join(" "));
       }
     } else {
@@ -2024,10 +2110,14 @@ function buildWorkspaceContextBlock(params: {
   }
 
   if (params.selectedFileIds.length > 0) {
-    const names = params.selectedFileIds.map(
-      (id) => params.localFiles.find((item) => item.id === id)?.name ?? id,
-    );
-    lines.push(`- 文件：${names.join("、")}（共 ${params.selectedFileIds.length} 个）`);
+    lines.push(`- 已选文件（共 ${params.selectedFileIds.length} 个）：`);
+    for (const id of params.selectedFileIds) {
+      const file = params.localFiles.find((item) => item.id === id);
+      if (!file) continue;
+      const notePart = file.note && file.note !== "已上传" ? `（${file.note}）` : "";
+      const sizePart = file.charCount ? `，已解析 ${Math.round(file.charCount / 1000)}k 字符` : "";
+      lines.push(`  • ${file.name}${notePart}${sizePart}`);
+    }
   }
 
   if (params.selectedMediaIds.length > 0) {
@@ -2582,3 +2672,65 @@ const statusBadgeStyle = (tone: "positive" | "warning" | "critical" | "neutral")
   fontSize: 12,
   fontWeight: 600,
 });
+
+// ── 当前上下文面板 ───────────────────────────────────────────
+const ctxGroupStyle: CSSProperties = {
+  marginBottom: 12,
+  paddingBottom: 12,
+  borderBottom: "1px solid #f0f1f3",
+};
+const ctxGroupLabelStyle: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#8c9196",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  marginBottom: 6,
+};
+const ctxItemRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "5px 0",
+};
+const ctxThumbStyle: CSSProperties = {
+  width: 28,
+  height: 28,
+  borderRadius: 5,
+  objectFit: "cover",
+  background: "#eceff3",
+  flexShrink: 0,
+};
+const ctxThumbPlaceholderStyle: CSSProperties = {
+  width: 28,
+  height: 28,
+  borderRadius: 5,
+  background: "#eceff3",
+  display: "grid",
+  placeItems: "center",
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#6d7175",
+  flexShrink: 0,
+};
+const ctxFileIconStyle: CSSProperties = {
+  width: 28,
+  height: 28,
+  borderRadius: 5,
+  background: "#eef2ff",
+  display: "grid",
+  placeItems: "center",
+  fontSize: 13,
+  color: "#4070f4",
+  flexShrink: 0,
+};
+const ctxItemTitleStyle: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "#202223",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  flex: 1,
+  minWidth: 0,
+};
