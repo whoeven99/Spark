@@ -42,6 +42,14 @@ function safeProducts(v: unknown): BatchTaskProduct[] {
 }
 
 export function coerceBatchTasksFormPayload(raw: unknown): BatchTasksFormPayload {
+  // LangChain on_tool_start / on_tool_end may pass a JSON string instead of a parsed object
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return { ...DEFAULT_PAYLOAD };
+    }
+  }
   if (!raw || typeof raw !== "object") return { ...DEFAULT_PAYLOAD };
   const r = raw as Record<string, unknown>;
   const taskType =

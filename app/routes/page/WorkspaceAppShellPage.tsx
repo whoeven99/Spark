@@ -257,6 +257,37 @@ const automationTemplates = [
 ];
 
 
+const DRAFT_CONVERSATION_PREFIX = "draft-";
+
+function isDraftConversationId(id: string): boolean {
+  return id.startsWith(DRAFT_CONVERSATION_PREFIX);
+}
+
+function createDraftConversationId(): string {
+  return `${DRAFT_CONVERSATION_PREFIX}${crypto.randomUUID()}`;
+}
+
+function conversationHasUserMessage(
+  messagesByConversation: Record<string, WorkspaceConversationMessage[]>,
+  conversationId: string,
+): boolean {
+  return (messagesByConversation[conversationId] ?? []).some((message) => message.role === "user");
+}
+
+function listEmptyDraftConversationIds(
+  conversations: ConversationSummary[],
+  messagesByConversation: Record<string, WorkspaceConversationMessage[]>,
+  keepConversationId?: string | null,
+): string[] {
+  return conversations
+    .filter((conversation) => {
+      if (keepConversationId && conversation.id === keepConversationId) return false;
+      if (!isDraftConversationId(conversation.id)) return false;
+      return !conversationHasUserMessage(messagesByConversation, conversation.id);
+    })
+    .map((conversation) => conversation.id);
+}
+
 function isWorkspacePanel(value: string | null): value is WorkspacePanel {
   return value === "dashboard" || value === "chat" || value === "skills" || value === "automation" || value === "tasks";
 }
@@ -325,9 +356,76 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   const activeConversation = conversationList.find((item) => item.id === activeConversationId) ?? null;
   const activeMessages = activeConversation ? (messagesByConversation[activeConversation.id] ?? []) : [];
 
+  const removeConversationsFromState = (conversationIds: string[]) => {
+    if (conversationIds.length === 0) return;
+    const removeSet = new Set(conversationIds);
+    for (const id of conversationIds) {
+      loadedConvIdsRef.current.delete(id);
+    }
+    setConversationList((current) => current.filter((item) => !removeSet.has(item.id)));
+    setMessagesByConversation((current) => {
+      const next = { ...current };
+      for (const id of conversationIds) {
+        delete next[id];
+      }
+      return next;
+    });
+    setDraftByConversation((current) => {
+      const next = { ...current };
+      for (const id of conversationIds) {
+        delete next[id];
+      }
+      return next;
+    });
+    setActiveConversationId((current) =>
+      current && removeSet.has(current) ? null : current,
+    );
+  };
+
+  const pruneEmptyDraftConversations = (keepConversationId?: string | null) => {
+    const removedIds = listEmptyDraftConversationIds(
+      conversationList,
+      messagesByConversation,
+      keepConversationId,
+    );
+    removeConversationsFromState(removedIds);
+  };
+
+  const renameConversationInState = (oldId: string, nextConversation: ConversationSummary) => {
+    loadedConvIdsRef.current.delete(oldId);
+    loadedConvIdsRef.current.add(nextConversation.id);
+    setConversationList((current) =>
+      current.map((conversation) =>
+        conversation.id === oldId ? nextConversation : conversation,
+      ),
+    );
+    setMessagesByConversation((current) => {
+      const existing = current[oldId];
+      const next = { ...current };
+      delete next[oldId];
+      if (existing) {
+        next[nextConversation.id] = existing;
+      }
+      return next;
+    });
+    setDraftByConversation((current) => {
+      const existing = current[oldId];
+      const next = { ...current };
+      delete next[oldId];
+      if (existing !== undefined) {
+        next[nextConversation.id] = existing;
+      }
+      return next;
+    });
+    setActiveConversationId((current) =>
+      current === oldId ? nextConversation.id : current,
+    );
+  };
+
   // Lazy-load messages when switching to a conversation for the first time
   useEffect(() => {
     if (!activeConversationId) return;
+    if (isDraftConversationId(activeConversationId)) return;
     if (loadedConvIdsRef.current.has(activeConversationId)) return;
     loadedConvIdsRef.current.add(activeConversationId);
     const authQuery = typeof window !== "undefined" ? window.location.search : "";
@@ -352,6 +450,9 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   }, [activeConversationId]);
 
   const switchPanel = (panel: WorkspacePanel) => {
+    if (panel !== "chat") {
+      pruneEmptyDraftConversations();
+    }
     const next = new URLSearchParams(searchParams);
     if (panel === "dashboard") {
       next.delete("panel");
@@ -362,6 +463,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   };
 
   const openConversation = (conversationId: string) => {
+    pruneEmptyDraftConversations(conversationId);
     setActiveConversationId(conversationId);
     switchPanel("chat");
   };
@@ -369,6 +471,23 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   const removeConversation = async (conversationId: string) => {
     const authQuery = typeof window !== "undefined" ? window.location.search : "";
     try {
+      if (isDraftConversationId(conversationId)) {
+        const wasActive = activeConversationId === conversationId;
+        const nextList = conversationList.filter((item) => item.id !== conversationId);
+        removeConversationsFromState([conversationId]);
+        if (wasActive) {
+          const nextConversation = nextList[0] ?? null;
+          setActiveConversationId(nextConversation?.id ?? null);
+          if (nextConversation) {
+            switchPanel("chat");
+          } else {
+            switchPanel("dashboard");
+          }
+        }
+        shopify.toast.show("对话已删除");
+        return;
+      }
+
       const res = await fetch(`/api/conversations/${conversationId}${authQuery}`, {
         method: "DELETE",
       });
@@ -408,31 +527,27 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     }
   };
 
-  const createConversation = async () => {
-    const authQuery = typeof window !== "undefined" ? window.location.search : "";
-    try {
-      const res = await fetch(`/api/conversations${authQuery}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      const data = (await res.json()) as { conversation: ConversationSummary };
-      const conv = data.conversation;
-      const welcomeMsg: WorkspaceConversationMessage = {
-        role: "assistant",
-        text: "新的对话已经创建。你可以先在下方工具栏补充商品、订单、文章、文件或富媒体，再发送任务需求。",
-        time: formatTimeLabel(new Date()),
-      };
-      loadedConvIdsRef.current.add(conv.id);
-      setConversationList((current) => [conv, ...current].slice(0, 50));
-      setMessagesByConversation((current) => ({ ...current, [conv.id]: [welcomeMsg] }));
-      setDraftByConversation((current) => ({ ...current, [conv.id]: "" }));
-      setActiveContextTool(null);
-      setActiveConversationId(conv.id);
-      switchPanel("chat");
-    } catch (err) {
-      console.error("[WorkspaceAppShellPage] create conversation failed:", err);
-    }
+  const createConversation = () => {
+    pruneEmptyDraftConversations();
+    const now = new Date().toISOString();
+    const conv: ConversationSummary = {
+      id: createDraftConversationId(),
+      title: "新对话",
+      preview: "",
+      updatedAt: now,
+    };
+    const welcomeMsg: WorkspaceConversationMessage = {
+      role: "assistant",
+      text: "新的对话已经创建。你可以先在下方工具栏补充商品、订单、文章、文件或富媒体，再发送任务需求。",
+      time: formatTimeLabel(new Date()),
+    };
+    loadedConvIdsRef.current.add(conv.id);
+    setConversationList((current) => [conv, ...current].slice(0, 50));
+    setMessagesByConversation((current) => ({ ...current, [conv.id]: [welcomeMsg] }));
+    setDraftByConversation((current) => ({ ...current, [conv.id]: "" }));
+    setActiveContextTool(null);
+    setActiveConversationId(conv.id);
+    switchPanel("chat");
   };
 
   const clearContext = () => {
@@ -576,17 +691,41 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   const sendMessage = async () => {
     if (!activeConversation) return;
     const content = (draftByConversation[activeConversation.id] ?? "").trim();
-    const conversationId = activeConversation.id;
-    if (!content || streamingConversationId === conversationId) return;
+    if (!content || streamingConversationId === activeConversation.id) return;
+
+    let conversationId = activeConversation.id;
+    let conversationTitle = activeConversation.title;
+    const priorMessages = messagesByConversation[conversationId] ?? [];
+    if (isDraftConversationId(conversationId)) {
+      const authQuery = typeof window !== "undefined" ? window.location.search : "";
+      try {
+        const res = await fetch(`/api/conversations${authQuery}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!res.ok) {
+          shopify.toast.show("创建对话失败，请稍后重试");
+          return;
+        }
+        const data = (await res.json()) as { conversation: ConversationSummary };
+        renameConversationInState(conversationId, data.conversation);
+        conversationId = data.conversation.id;
+        conversationTitle = data.conversation.title;
+      } catch (err) {
+        console.error("[WorkspaceAppShellPage] persist draft conversation failed:", err);
+        shopify.toast.show("创建对话失败，请稍后重试");
+        return;
+      }
+    }
 
     replyEpochRef.current += 1;
     const epoch = replyEpochRef.current;
-    const priorMessages = messagesByConversation[conversationId] ?? [];
     const nextPreview = content.length > 28 ? `${content.slice(0, 28)}...` : content;
-    const isNewTitle = activeConversation.title === "新对话";
+    const isNewTitle = conversationTitle === "新对话";
     const nextTitle = isNewTitle
       ? (content.length > 18 ? `${content.slice(0, 18)}...` : content)
-      : activeConversation.title;
+      : conversationTitle;
     const userTime = formatTimeLabel(new Date());
 
     flushSync(() => {
