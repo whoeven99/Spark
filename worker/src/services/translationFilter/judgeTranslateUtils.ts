@@ -118,6 +118,11 @@ export function whiteListTranslate(key: string): boolean {
   return WHITELIST_WORDS.some((word) => prefix.endsWith(word));
 }
 
+// CSS/config enum identifiers: all-lowercase ASCII letters/hyphens/underscores,
+// no whitespace, < 20 chars — these are layout/style config values, not UI text.
+const CSS_ENUM_RE = /^[a-z][a-z_-]*$/;
+
 export function metaTranslate(value: string): boolean {
-  return !["left", "right", "top", "bottom"].includes(value);
+  if (value.length < 20 && CSS_ENUM_RE.test(value)) return false;
+  return true;
 }

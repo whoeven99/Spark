@@ -98,6 +98,8 @@ function progressFromJob(
       verifyDone: job.metrics.verifyDone,
       verifyFailed: job.metrics.verifyFailed,
       currentModule: null,
+      usedTokens: job.metrics.usedTokens ?? 0,
+      translateStartedAt: null,
     },
   };
 }
@@ -118,6 +120,8 @@ type ProgressData = {
     writebackTotal: number; writebackDone: number; writebackFailed: number;
     verifyTotal: number; verifyDone: number; verifyFailed: number;
     currentModule: string | null;
+    usedTokens?: number;
+    translateStartedAt?: string | null;
   };
 };
 
@@ -406,15 +410,6 @@ export function TranslationV4Page() {
                   localesIsFallback={localesIsFallback}
                   targetFieldId="translation-v4-target-locale"
                 />
-                <div style={{ maxWidth: "12rem" }}>
-                  <s-text-field
-                    label="每模块数量限制"
-                    value={String(limitPerType)}
-                    onChange={(e) => setLimitPerType(Number(e.currentTarget.value) || 20)}
-                    autocomplete="off"
-                  />
-                </div>
-
                 <TranslationModuleMultiSelect
                   id="translation-v4-modules"
                   values={modules}
@@ -433,24 +428,40 @@ export function TranslationV4Page() {
                   </label>
                 </div>
 
-                {/* Test mode toggle — prominently styled */}
-                <div style={testModeBannerStyle(testMode)}>
-                  <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", cursor: "pointer" }}>
-                    <input
-                      type="checkbox"
-                      checked={testMode}
-                      onChange={(e) => setTestMode(e.target.checked)}
-                      style={{ width: 18, height: 18, cursor: "pointer" }}
-                    />
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: "0.875rem", color: testMode ? "#b54708" : pageColorTokens.textBody }}>
-                        测试模式{testMode ? "（已开启）" : ""}
+                {/* Test-only controls — remove before production launch */}
+                <div style={testEnvPanelStyle(testMode)}>
+                  <div style={{ fontWeight: 600, fontSize: "0.875rem", color: testMode ? "#b54708" : pageColorTokens.textBody }}>
+                    测试环境选项
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: 2, marginBottom: "0.75rem" }}>
+                    以下选项仅用于开发测试，上线后将移除
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={testMode}
+                        onChange={(e) => setTestMode(e.target.checked)}
+                        style={{ width: 18, height: 18, cursor: "pointer" }}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: "0.875rem", color: testMode ? "#b54708" : pageColorTokens.textBody }}>
+                          测试模式{testMode ? "（已开启）" : ""}
+                        </div>
+                        <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: 2 }}>
+                          翻译阶段直接使用原值作为译文，跳过 LLM 调用 — 适合快速测试流程
+                        </div>
                       </div>
-                      <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: 2 }}>
-                        翻译阶段直接使用原值作为译文，跳过 LLM 调用 — 适合快速测试流程
-                      </div>
+                    </label>
+                    <div style={{ maxWidth: "20rem" }}>
+                      <s-text-field
+                        label="每模块数量限制（仅用于测试，上线后删除）"
+                        value={String(limitPerType)}
+                        onChange={(e) => { const v = parseInt(e.currentTarget.value, 10); setLimitPerType(isNaN(v) || v < 0 ? 20 : v); }}
+                        autocomplete="off"
+                      />
                     </div>
-                  </label>
+                  </div>
                 </div>
 
                 {formError && <div style={formErrorBoxStyle}>{formError}</div>}
@@ -546,7 +557,10 @@ function JobCard({ job, status, progress, onAction }: JobCardProps) {
             )}
           </div>
           <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: 3 }}>
-            {job.id.slice(0, 8)}… · {job.modules.join(", ")} · 每类 {job.limitPerType} 条
+            {job.id.slice(0, 8)}… · {job.modules.join(", ")}
+            {(metrics.usedTokens ?? 0) > 0 && (
+              <> · <span style={{ color: pageColorTokens.brandBlue, fontWeight: 600 }}>{(metrics.usedTokens ?? 0).toLocaleString()} tokens</span></>
+            )}
           </div>
         </div>
         <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -593,10 +607,94 @@ function JobCard({ job, status, progress, onAction }: JobCardProps) {
         </div>
       )}
 
+      {status === "TRANSLATING" && (
+        <TranslateStatsPanel metrics={metrics} />
+      )}
+
       {isFailed && (progress?.errorMessage ?? job.errorMessage) && (
         <div style={{ ...failErrorStyle, marginTop: "0.5rem" }}>
           [{progress?.errorStage ?? job.errorStage}] {progress?.errorMessage ?? job.errorMessage}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Translate Stats Panel ────────────────────────────────────────────────────
+
+type TranslateMetricsSnap = {
+  translateUnitDone: number;
+  translateUnitTotal: number;
+  usedTokens?: number;
+  translateStartedAt?: string | null;
+};
+
+function fmtDuration(ms: number): string {
+  if (ms < 0) ms = 0;
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function StatItem({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1px", minWidth: "7rem" }}>
+      <span style={{ fontSize: "0.68rem", color: pageColorTokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        {label}
+      </span>
+      <span style={{ fontSize: "0.82rem", fontWeight: 600, color: pageColorTokens.textPrimary, fontVariantNumeric: "tabular-nums" }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function TranslateStatsPanel({ metrics }: { metrics: TranslateMetricsSnap }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  // Tick every second while panel is mounted.
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const { translateUnitDone: done, translateUnitTotal: total, usedTokens = 0, translateStartedAt } = metrics;
+  const startMs = translateStartedAt ? Number(translateStartedAt) : null;
+  const elapsedMs = startMs && startMs > 0 ? Math.max(0, now - startMs) : null;
+
+  // Linear extrapolation from current progress ratio.
+  const ratio = total > 0 && done > 0 ? done / total : 0;
+  const estRemainingMs = elapsedMs !== null && ratio > 0 ? (elapsedMs / ratio) * (1 - ratio) : null;
+  const estRemainingTokens = ratio > 0 && usedTokens > 0 ? Math.round((usedTokens / ratio) * (1 - ratio)) : null;
+
+  if (elapsedMs === null && usedTokens === 0) return null;
+
+  return (
+    <div style={{
+      marginTop: "0.6rem",
+      padding: "0.5rem 0.75rem",
+      borderRadius: "6px",
+      background: "rgba(0, 0, 0, 0.03)",
+      border: `1px solid ${pageColorTokens.border}`,
+      display: "flex",
+      flexWrap: "wrap",
+      gap: "0.75rem 1.5rem",
+    }}>
+      {usedTokens > 0 && (
+        <StatItem label="已用 tokens" value={usedTokens.toLocaleString()} />
+      )}
+      {elapsedMs !== null && (
+        <StatItem label="已用时间" value={fmtDuration(elapsedMs)} />
+      )}
+      {estRemainingTokens !== null && (
+        <StatItem label="预估剩余 tokens" value={`~${estRemainingTokens.toLocaleString()}`} />
+      )}
+      {estRemainingMs !== null && (
+        <StatItem label="预估剩余时间" value={`~${fmtDuration(estRemainingMs)}`} />
       )}
     </div>
   );
@@ -773,7 +871,7 @@ const checkboxLabelStyle: React.CSSProperties = {
   userSelect: "none",
 };
 
-function testModeBannerStyle(active: boolean): React.CSSProperties {
+function testEnvPanelStyle(active: boolean): React.CSSProperties {
   return {
     padding: "0.8rem 1rem",
     borderRadius: "10px",
@@ -781,7 +879,6 @@ function testModeBannerStyle(active: boolean): React.CSSProperties {
     background: active
       ? "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)"
       : "linear-gradient(135deg, #f5f6f8 0%, #eef0f6 100%)",
-    cursor: "pointer",
     boxShadow: active ? "0 2px 10px rgba(245, 158, 11, 0.2)" : "none",
     transition: "border-color 0.2s, background 0.2s, box-shadow 0.2s",
   };

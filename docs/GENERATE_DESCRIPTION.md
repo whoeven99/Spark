@@ -112,3 +112,18 @@ User Prompt 不直接拼接 Shopify 原始 JSON，而是注入结构化上下文
   "generatedTitle": "",
   "generatedDescription": ""
 }
+
+---
+10. 当前 Spark 落地路径（2026-06）
+
+商品描述生成已并入主 App **商品文案优化** 能力，不再使用独立卫星 App 或 `/app/generate-description` 路由。
+
+| 入口 | 路径 |
+|------|------|
+| 独立页 | `/app/product-improve`（`app/routes/app.product-improve.tsx`） |
+| 生成 API | `POST /api/product-improve` |
+| 写回 Shopify | `POST /api/update-product-description` |
+| 服务端 | `app/server/productImprove/**` |
+| 聊天卡片 | `app/routes/component/chat/ProductImproveChatCard.tsx` |
+
+测试环境：`shopify.app.test.toml` → `https://aiassistant-wi7b.onrender.com`。

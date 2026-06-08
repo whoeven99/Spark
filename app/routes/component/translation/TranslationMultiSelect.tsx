@@ -24,40 +24,49 @@ export type TranslationMultiSelectProps = {
   summaryMode?: "names" | "count";
   /** 超过该数量时摘要改用 count 模式 */
   summaryNameLimit?: number;
+  /** 下拉面板内的列数，>1 时启用紧凑多列布局 */
+  columns?: number;
 };
 
-function panelStyle(): CSSProperties {
+function panelStyle(columns: number): CSSProperties {
   return {
     position: "absolute",
     top: "calc(100% + 4px)",
     left: 0,
     right: 0,
     zIndex: 20,
-    maxHeight: "14rem",
+    maxHeight: "18rem",
     overflowY: "auto",
     borderRadius: pageColorTokens.radiusControl,
     border: `1px solid ${pageColorTokens.border}`,
     background: pageColorTokens.surface,
     boxShadow: "0 4px 16px rgba(0, 0, 0, 0.08)",
-    padding: "0.35rem 0",
+    padding: "0.4rem",
+    ...(columns > 1
+      ? { display: "grid", gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: "2px" }
+      : { padding: "0.35rem 0" }),
   };
 }
 
-function optionRowStyle(selected: boolean, disabled: boolean): CSSProperties {
+function optionRowStyle(selected: boolean, disabled: boolean, compact: boolean): CSSProperties {
   return {
     display: "flex",
     alignItems: "center",
-    gap: "0.5rem",
+    gap: compact ? "0.3rem" : "0.5rem",
     width: "100%",
-    padding: "0.45rem 0.75rem",
-    fontSize: "0.8125rem",
+    padding: compact ? "0.3rem 0.5rem" : "0.45rem 0.75rem",
+    fontSize: compact ? "0.75rem" : "0.8125rem",
     fontWeight: selected ? 600 : 400,
     textAlign: "left",
     border: "none",
-    background: selected ? "rgba(0, 166, 124, 0.08)" : "transparent",
-    color: pageColorTokens.textBody,
+    borderRadius: compact ? "4px" : 0,
+    background: selected ? "rgba(0, 166, 124, 0.10)" : "transparent",
+    color: selected ? pageColorTokens.textPrimary : pageColorTokens.textBody,
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.55 : 1,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
   };
 }
 
@@ -90,6 +99,7 @@ export function TranslationMultiSelect({
   selectionMode = "multiple",
   summaryMode = "names",
   summaryNameLimit = 3,
+  columns = 1,
 }: TranslationMultiSelectProps) {
   const { t } = useTranslation();
   const listboxId = useId();
@@ -189,17 +199,18 @@ export function TranslationMultiSelect({
           role="listbox"
           aria-labelledby={label ? labelId : id}
           aria-multiselectable={selectionMode === "multiple" ? true : undefined}
-          style={panelStyle()}
+          style={panelStyle(columns)}
         >
           {options.map((opt) => {
             const selected = values.includes(opt.value);
+            const compact = columns > 1;
             return (
               <button
                 key={opt.value}
                 type="button"
                 role="option"
                 aria-selected={selected}
-                style={optionRowStyle(selected, disabled)}
+                style={optionRowStyle(selected, disabled, compact)}
                 onClick={() => toggleValue(opt.value)}
               >
                 <input
@@ -210,7 +221,9 @@ export function TranslationMultiSelect({
                   aria-hidden
                   style={{ pointerEvents: "none", flexShrink: 0 }}
                 />
-                <span style={{ lineHeight: 1.35 }}>{opt.label}</span>
+                <span style={{ lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {opt.label}
+                </span>
               </button>
             );
           })}

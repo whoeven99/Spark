@@ -14,7 +14,7 @@ import {
   createLangsmithTracer,
   getTraceUrl,
 } from "../utils/langsmith.server";
-import { getAppEntry } from "../../../config/appEntry.server";
+import { buildContextWindow } from "../../chatPayload.server";
 import {
   extractTokenUsageFromMessages,
   recordTokenUsage,
@@ -95,12 +95,14 @@ export async function invokeChatAgent(
   params: InvokeChatAgentParams,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<InvokeChatAgentResult & { langsmithTraceUrl?: string }> {
-  const { messages: agentInputMessages, context, sessionName } = params;
+  const { messages: rawInputMessages, context, sessionName } = params;
   const runId = createAgentRunId();
   const startedAtIso = new Date().toISOString();
   const wallStart = Date.now();
   const shop = context.shop?.trim();
-  const appName = context.appName ?? getAppEntry();
+  const appName = "spark";
+
+  const agentInputMessages = await buildContextWindow(rawInputMessages);
   const lastUserTextInput = lastHumanUtterance(agentInputMessages);
 
   const activeDefs = await globalToolRegistry.getActiveToolDefinitions(context);
@@ -157,11 +159,7 @@ export async function invokeChatAgent(
   if (shop) {
     const agentUsage = extractTokenUsageFromMessages(messages);
     if (agentUsage.totalTokens > 0) {
-      await recordTokenUsage({
-        shop,
-        appName,
-        usage: agentUsage,
-      });
+      await recordTokenUsage({ shop, usage: agentUsage });
     }
   }
 

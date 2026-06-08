@@ -7,19 +7,17 @@ import { BILLING_LOG_EVENT } from "../types.server";
 
 export async function applyTokenPackPurchase(params: {
   shop: string;
-  appName: string;
   plan: PlanRecord;
   shopifyPurchaseId: string;
   metadata?: Record<string, unknown>;
 }): Promise<void> {
-  const { shop, appName, plan, shopifyPurchaseId } = params;
+  const { shop, plan, shopifyPurchaseId } = params;
 
-  await ensureAccount(shop, appName);
+  await ensureAccount(shop);
 
   const prior = await prisma.billingLog.findFirst({
     where: {
       shop,
-      appName,
       eventType: BILLING_LOG_EVENT.TOKEN_PACK_PURCHASED,
       referenceId: shopifyPurchaseId,
     },
@@ -27,7 +25,7 @@ export async function applyTokenPackPurchase(params: {
   if (prior) return;
 
   await prisma.account.update({
-    where: { shop_appName: { shop, appName } },
+    where: { shop },
     data: {
       purchasedTokens: { increment: plan.tokens },
     },
@@ -35,7 +33,6 @@ export async function applyTokenPackPurchase(params: {
 
   await appendBillingLog({
     shop,
-    appName,
     eventType: BILLING_LOG_EVENT.TOKEN_PACK_PURCHASED,
     planKey: plan.planKey,
     referenceId: shopifyPurchaseId,
@@ -46,14 +43,13 @@ export async function applyTokenPackPurchase(params: {
   try {
     await sendTokenPackFeishuNotify({
       shop,
-      appName,
+      appName: "spark",
       planKey: plan.planKey,
     });
   } catch (error) {
     console.error(
-      `[Billing] token pack feishu notify failed shop=${shop} appName=${appName}:`,
+      `[Billing] token pack feishu notify failed shop=${shop}:`,
       error,
     );
   }
-
 }

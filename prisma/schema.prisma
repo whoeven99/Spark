@@ -17,7 +17,6 @@ datasource db {
 
 model Session {
   id            String    @id
-  appName       String    @default("chat")
   shop          String
   state         String
   isOnline      Boolean   @default(false)
@@ -37,7 +36,7 @@ model Session {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  @@index([appName, shop])
+  @@index([shop])
 }
 
 model Suggestion {
@@ -61,12 +60,10 @@ model AdPlatformCredential {
   @@unique([shop, platform])
 }
 
-/// 店铺在各 App 入口下的账户（token 分池 + 用量）。
+/// 店铺账户（token 分池 + 用量）。
 model Account {
   id                 String   @id @default(cuid())
   shop               String
-  /// 与 `AppEntry` 一致，如 chat、product-improve
-  appName            String
   /// 当前订阅周期套餐 token（周期内不随用量减少；续费刷新）
   subscriptionTokens Int      @default(0)
   /// 按量购买 token（续费结算后写入真实剩余；周期内不随用量减少）
@@ -83,14 +80,12 @@ model Account {
   billingLogs       BillingLog[]
   toolTokenUsageLogs ToolTokenUsageLog[]
 
-  @@unique([shop, appName])
-  @@index([shop])
+  @@unique([shop])
 }
 
 /// 套餐目录（订阅 / 按量包 / 内置试用定义）。
 model PlanCatalog {
   planKey          String   @id
-  appName          String
   /// SUBSCRIPTION | ONE_TIME_PACK | INTERNAL_TRIAL
   kind             String
   /// MONTHLY | ANNUAL；一次性包为 null
@@ -106,14 +101,13 @@ model PlanCatalog {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  @@index([appName, enabled, sortOrder])
+  @@index([enabled, sortOrder])
 }
 
-/// 当前生效的 Shopify 订阅（每 shop + appName 一条）。
+/// 当前生效的 Shopify 订阅（每 shop 一条）。
 model AppSubscription {
   id                     String   @id @default(cuid())
   shop                   String
-  appName                String
   planKey                String
   shopifySubscriptionId  String   @unique
   billingInterval        String
@@ -129,10 +123,10 @@ model AppSubscription {
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
-  account      Account?             @relation(fields: [shop, appName], references: [shop, appName])
+  account      Account?             @relation(fields: [shop], references: [shop])
   periodUsages AccountPeriodUsage[]
 
-  @@unique([shop, appName])
+  @@unique([shop])
   @@index([status])
 }
 
@@ -140,7 +134,6 @@ model AppSubscription {
 model AccountPeriodUsage {
   id                          String   @id @default(cuid())
   shop                        String
-  appName                     String
   appSubscriptionId           String
   planKey                     String
   periodStart                 DateTime
@@ -151,19 +144,17 @@ model AccountPeriodUsage {
   trialTokensRemaining        Int      @default(0)
   archivedAt                  DateTime @default(now())
 
-  account        Account         @relation(fields: [shop, appName], references: [shop, appName])
+  account        Account         @relation(fields: [shop], references: [shop])
   appSubscription AppSubscription @relation(fields: [appSubscriptionId], references: [id])
 
   @@unique([appSubscriptionId, periodStart, periodEnd])
-  @@index([shop, appName, periodEnd])
+  @@index([shop, periodEnd])
 }
 
 /// App 通用事件流水：安装、卸载、scope 变更等（与 BillingLog 计费语义分离）。
 model CommonEventLog {
   id          String   @id @default(cuid())
   shop        String
-  /// 与 `AppEntry` 一致
-  appName     String
   /// APP_INSTALLED | APP_UNINSTALLED | SCOPES_UPDATE
   eventType   String
   /// Shopify webhook topic，如 app/uninstalled
@@ -174,7 +165,7 @@ model CommonEventLog {
   metadata    Json?
   createdAt   DateTime @default(now())
 
-  @@index([shop, appName, createdAt])
+  @@index([shop, createdAt])
   @@index([eventType, createdAt])
   @@index([referenceId])
 }
@@ -184,8 +175,6 @@ model CommonEventLog {
 model AppVisitSource {
   id        String   @id @default(cuid())
   shop      String
-  /// 与 `AppEntry` 一致
-  appName   String
   /// 落地 path，如 /app/product-improve
   path      String
   /// 原始 utm 字符串，如 email（保留原值，不在写入时解析）
@@ -197,7 +186,7 @@ model AppVisitSource {
   createdAt DateTime @default(now())
 
   @@index([shop, createdAt])
-  @@index([appName, utm, createdAt])
+  @@index([utm, createdAt])
   @@index([utm, path])
 }
 
@@ -205,7 +194,6 @@ model AppVisitSource {
 model BillingLog {
   id          String   @id @default(cuid())
   shop        String
-  appName     String
   /// TRIAL_GRANTED | SUBSCRIPTION_ACTIVATED | SUBSCRIPTION_RENEWED | TOKEN_PACK_PURCHASED
   eventType   String
   planKey     String?
@@ -215,9 +203,9 @@ model BillingLog {
   metadata    Json?
   createdAt   DateTime @default(now())
 
-  account Account @relation(fields: [shop, appName], references: [shop, appName])
+  account Account @relation(fields: [shop], references: [shop])
 
-  @@index([shop, appName, createdAt])
+  @@index([shop, createdAt])
   @@index([eventType, createdAt])
   @@index([referenceId])
 }
@@ -226,7 +214,6 @@ model BillingLog {
 model ToolTokenUsageLog {
   id          String   @id @default(cuid())
   shop        String
-  appName     String
   feature     String
   modelKey    String
   rawTokens   Int
@@ -235,17 +222,16 @@ model ToolTokenUsageLog {
   outputTokens Int     @default(0)
   createdAt   DateTime @default(now())
 
-  account Account @relation(fields: [shop, appName], references: [shop, appName])
+  account Account @relation(fields: [shop], references: [shop])
 
-  @@index([shop, appName, createdAt])
-  @@index([shop, appName, feature, createdAt])
+  @@index([shop, createdAt])
+  @@index([shop, feature, createdAt])
   @@index([feature, createdAt])
 }
 
-/// AI 任务耗时 / 积分 EWMA 估算（全局，按 appName × taskType 一条）。
+/// AI 任务耗时 / 积分 EWMA 估算（全局，按 taskType 一条）。
 model AITaskEstimation {
   id           String   @id @default(cuid())
-  appName      String
   /// image_generation | picture_translate | product_improve
   taskType     String
   /// EWMA 预估积分（收敛后替换硬编码默认值）
@@ -256,28 +242,26 @@ model AITaskEstimation {
   sampleCount  Int      @default(0)
   updatedAt    DateTime @updatedAt
 
-  @@unique([appName, taskType])
+  @@unique([taskType])
 }
 
 /// AI 任务批次：一次提交对应一个批次（含单任务）。
 model AITaskBatch {
   id        String   @id @default(uuid())
   shop      String
-  appName   String
   /// image_generation | picture_translate
   taskType  String
   config    Json
   tasks     AITask[]
   createdAt DateTime @default(now())
 
-  @@index([shop, appName, createdAt])
+  @@index([shop, createdAt])
 }
 
 /// AI 任务：每个商品/图片对应一条，归属于某批次。
 model AITask {
   id               String      @id @default(uuid())
   shop             String
-  appName          String
   /// image_generation | picture_translate
   taskType         String
   batchId          String
@@ -295,7 +279,7 @@ model AITask {
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 
-  @@index([shop, appName, taskType, createdAt])
+  @@index([shop, taskType, createdAt])
   @@index([batchId])
 }
 
@@ -538,11 +522,37 @@ model ShopSyncCheckpoint {
   @@unique([shop, resource])
 }
 
+/// AI 对话会话（每条对应一个聊天线程）。
+model Conversation {
+  id        String    @id @default(cuid())
+  shop      String
+  title     String    @default("新对话")
+  preview   String    @default("")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  messages  Message[]
+
+  @@index([shop, updatedAt(sort: Desc)])
+}
+
+/// 对话消息（追加写入，不可变）。
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  /// "user" | "assistant"
+  role           String
+  content        String
+  /// JSON: translationTaskForm, attachments, productImproveCard, etc.
+  payloads       String?
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
 /// 业务能力 × 模型/提供商的 token 计费系数（运维在 Turso 维护，种子见 `prisma/token-billing-rule-seed.sql`）。
 model TokenBillingRule {
   ruleKey       String   @id
-  /// 与 `AppEntry` 一致；`*` 表示所有 App 的兜底规则
-  appName       String
   /// product_copy | image_prompt | image_generate | picture_translate
   feature       String
   /// 模型标识（如 deepseek-chat、volc-translate）；`_default` 为该 feature 下未匹配模型时的兜底
@@ -556,6 +566,6 @@ model TokenBillingRule {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  @@unique([appName, feature, modelKey])
-  @@index([appName, feature, enabled])
+  @@unique([feature, modelKey])
+  @@index([feature, enabled])
 }

@@ -1,5 +1,4 @@
-import { getAppEntry } from "../../config/appEntry.server";
-import { isBillingEnabledForApp } from "../billing/constants.server";
+import { isBillingEnabled } from "../billing/constants.server";
 import { requireBillingAccess } from "../billing/requireBilling.server";
 import {
   DEFAULT_IMAGE_GENERATION_IMAGE_TOKEN_COST,
@@ -10,10 +9,8 @@ import {
   imageGenerationBillingModelKey,
   pictureTranslateBillingModelKey,
 } from "./tokenBillingTypes.server";
-import {
-  recordBilledTokenUsages,
-  type BilledTokenUsageItem,
-} from "./recordBilledTokenUsage.server";
+import { recordBilledTokenUsages } from "./recordBilledTokenUsage.server";
+import type { BilledTokenUsageItem } from "./applyTokenBilling.server";
 
 export {
   DEFAULT_IMAGE_GENERATION_IMAGE_TOKEN_COST,
@@ -51,13 +48,9 @@ export function getImageGenerationImageTokenCost(
   return { inputTokens: 0, outputTokens: 0, totalTokens: total };
 }
 
-export async function requireVisualToolBillingAccess(
-  shop: string,
-  appName?: string,
-): Promise<void> {
-  const resolvedApp = appName?.trim() || getAppEntry();
-  if (!isBillingEnabledForApp(resolvedApp)) return;
-  await requireBillingAccess(shop, resolvedApp);
+export async function requireVisualToolBillingAccess(shop: string): Promise<void> {
+  if (!isBillingEnabled()) return;
+  await requireBillingAccess(shop);
 }
 
 /**
@@ -66,18 +59,15 @@ export async function requireVisualToolBillingAccess(
  */
 export async function recordVisualToolTokenUsage(params: {
   shop: string;
-  appName?: string;
   items: BilledTokenUsageItem[];
 }): Promise<number | null> {
   const shop = params.shop.trim();
   if (!shop || params.items.length === 0) return null;
 
-  const appName = params.appName?.trim() || getAppEntry();
-  if (!isBillingEnabledForApp(appName)) return null;
+  if (!isBillingEnabled()) return null;
 
   const billedTokens = await recordBilledTokenUsages({
     shop,
-    appName,
     items: params.items,
   });
   return billedTokens;

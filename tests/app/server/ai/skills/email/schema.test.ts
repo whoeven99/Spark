@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ZodError } from "zod";
-import { sendTemplateEmailToolSchema } from "../../../../../../app/server/ai/skills/email/schema";
+import { sendTemplateEmailToolSchema } from "../../../../../../app/server/ai/skills/email/email.schema";
 
 describe("sendTemplateEmailToolSchema", () => {
   it("accepts valid input with allowed scenario", () => {

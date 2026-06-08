@@ -1,5 +1,5 @@
 import OpenAI, { AzureOpenAI } from "openai";
-import { tmGet, tmSet } from "./translationMemory.js";
+import { tmGet, tmGetByValue, tmSet, tmSetByValue } from "./translationMemory.js";
 import { loadGlossaryLines } from "./glossary.js";
 
 let _openai: OpenAI | null = null;
@@ -173,6 +173,85 @@ export type TranslateResult = {
 // These fields must not be translated (Shopify uses them as URL segments)
 const SKIP_KEYS = new Set(["handle"]);
 
+/**
+ * Returns true if `text` appears to already be written in the target language,
+ * meaning it does not need translation.
+ *
+ * Strategy:
+ *  - For English target: if source is a non-Latin script language AND the text
+ *    contains no source-script characters, it is almost certainly already in
+ *    English → skip.  (A zh-CN store's product titled "Standard" is English.)
+ *  - For other targets with a distinctive script (zh, ja, ko, ar, ru, pl, de …):
+ *    skip only when the text already contains target-script characters.
+ *  - Conservative fall-through: return false (always translate) for unknown
+ *    combinations to avoid accidentally suppressing content.
+ *
+ * This correctly handles the common case of a zh-CN store that has mostly
+ * English product data and is being translated to:
+ *   • en  → English content is the target, skip it (saves ~94% of LLM calls)
+ *   • pl  → English content still needs translation to Polish, don't skip
+ */
+export function alreadyInTarget(text: string, source: string, target: string): boolean {
+  const tl = target.toLowerCase().split(/[-_]/)[0];
+  const sl = source.toLowerCase().split(/[-_]/)[0];
+
+  // ── English target ──────────────────────────────────────────────────────────
+  // If source is a CJK / non-Latin language and text has no source-script chars,
+  // the content is already in a Latin-script language (overwhelmingly English).
+  if (tl === "en") {
+    return !containsSourceScript(text, source);
+  }
+
+  // ── Non-Latin script targets ────────────────────────────────────────────────
+  // We can only be sure content is "already translated" if it contains the
+  // target script's characteristic characters.
+  switch (tl) {
+    case "zh": return /[一-鿿㐀-䶿]/u.test(text);
+    case "ja": return /[ぁ-ゖァ-ヶ一-鿿]/u.test(text);
+    case "ko": return /[가-힣ᄀ-ᇿ]/u.test(text);
+    case "ar": return /[؀-ۿ]/u.test(text);
+    case "ru": case "uk": case "bg": return /[Ѐ-ӿ]/u.test(text);
+    case "th": return /[฀-๿]/u.test(text);
+    case "hi": case "mr": case "ne": return /[ऀ-ॿ]/u.test(text);
+    // Latin-script targets with strongly distinctive diacritics
+    case "pl": return /[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/u.test(text);
+    case "de": return /[äöüÄÖÜß]/u.test(text);
+    case "fr": return /[àâçèéêëîïôùûüœÀÂÇÈÉÊËÎÏÔÙÛÜŒ]/u.test(text);
+    case "es": case "pt": return /[áéíóúüñÁÉÍÓÚÜÑãõÃÕ]/u.test(text);
+    case "cs": case "sk": return /[áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]/u.test(text);
+    case "hu": return /[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/u.test(text);
+    case "tr": return /[çğışöüÇĞİŞÖÜ]/u.test(text);
+    case "vi": return /[àáâãèéêìíòóôõùúýăđơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/u.test(text);
+    default: return false; // unknown target → conservative, always translate
+  }
+}
+
+/**
+ * Returns true if `text` contains at least one character from the source
+ * language's script. Used internally by alreadyInTarget.
+ */
+export function containsSourceScript(text: string, source: string): boolean {
+  const lang = source.toLowerCase().split(/[-_]/)[0];
+  switch (lang) {
+    case "zh":
+      return /[一-鿿㐀-䶿]/u.test(text);
+    case "ja":
+      return /[ぁ-ゖァ-ヶ一-鿿]/u.test(text);
+    case "ko":
+      return /[가-힣ᄀ-ᇿ]/u.test(text);
+    case "ar":
+      return /[؀-ۿ]/u.test(text);
+    case "ru": case "uk": case "bg":
+      return /[Ѐ-ӿ]/u.test(text);
+    case "th":
+      return /[฀-๿]/u.test(text);
+    case "hi": case "mr": case "ne":
+      return /[ऀ-ॿ]/u.test(text);
+    default:
+      return true; // unknown source locale → conservative, always translate
+  }
+}
+
 const HTML_TAG_RE = /<\/?[a-z][^>]*>/i;
 
 function isHtml(value: string): boolean {
@@ -199,19 +278,72 @@ export function countFieldUnits(key: string, value: string): number {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-// Max total chars sent to the translation API in one request
-const MAX_CHARS_PER_BATCH = 5000;
+// Max total chars sent to the translation API in one request.
+// Override via TRANSLATE_MAX_CHARS_PER_BATCH env var (default 12000).
+const MAX_CHARS_PER_BATCH = Math.max(
+  500,
+  Number(process.env.TRANSLATE_MAX_CHARS_PER_BATCH) || 12_000,
+);
+// How many batches within a pool may run concurrently.
+// Override via TRANSLATE_BATCH_CONCURRENCY env var (default 3).
+const BATCH_CONCURRENCY = Math.max(1, Number(process.env.TRANSLATE_BATCH_CONCURRENCY) || 3);
+
 // Plain text items longer than this get split before translation
 const LONG_TEXT_THRESHOLD = 4000;
 const LONG_TEXT_CHUNK_CHARS = 3500;
+
+// ─── Concurrency helper ───────────────────────────────────────────────────────
+
+/**
+ * Run `fn` over `items` with at most `concurrency` tasks in-flight at a time.
+ * Preserves ordering in the returned array. Exported so translateWorker can
+ * reuse it for chunk-level parallelism.
+ */
+export async function pAll<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (items.length === 0) return [];
+  if (concurrency <= 1) return Promise.all(items.map((item, i) => fn(item, i)));
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
 
 // ─── HTML text-node extraction ────────────────────────────────────────────────
 
 // Tags whose content we never translate
 const SKIP_BLOCK_RE = /<(script|style|pre|code)(\s[^>]*)?>[\s\S]*?<\/\1>/gi;
 
+// Attributes that carry user-visible text and should be translated.
+// Handles both double-quoted (common) and single-quoted attribute values.
+const TRANSLATABLE_ATTR_RE = /\b(alt|title|aria-label|placeholder)=("([^"]*)"|(\'([^\']*)\'))/g;
+
+// Attr values we must NOT translate
+const ATTR_URL_RE = /^https?:\/\//;
+// Hash-based filenames like "7910ff297e4-Max-Origin" or bare image filenames
+const ATTR_HASH_FILENAME_RE =
+  /^[a-fA-F0-9]{8,}(-[a-zA-Z0-9]+)*$|^\S+\.(jpg|jpeg|png|gif|bmp|webp|svg|mp4|pdf)$/i;
+
+function isTranslatableAttrValue(value: string): boolean {
+  const v = value.trim();
+  if (!v) return false;
+  if (ATTR_URL_RE.test(v)) return false;
+  if (ATTR_HASH_FILENAME_RE.test(v)) return false;
+  return true;
+}
+
 /**
- * Replaces every visible text node in an HTML string with a numeric placeholder.
+ * Replaces every visible text node AND translatable attribute values (alt, title,
+ * aria-label, placeholder) in an HTML string with numeric placeholders.
  * Returns the rewritten template and the ordered array of extracted texts.
  * Whitespace-only gaps between tags are left in place.
  */
@@ -220,15 +352,29 @@ function extractHtmlTextNodes(html: string): { template: string; texts: string[]
   const skipped = new Map<string, string>();
   let sIdx = 0;
 
-  // Protect non-translatable blocks
+  // Protect non-translatable blocks (script/style/pre/code)
   const withSkips = html.replace(SKIP_BLOCK_RE, (match) => {
     const key = `\x00S${sIdx++}\x00`;
     skipped.set(key, match);
     return key;
   });
 
+  // Extract translatable attribute values before touching text nodes so the
+  // two passes don't interfere (attributes live inside tags, text nodes outside).
+  const withAttrs = withSkips.replace(
+    TRANSLATABLE_ATTR_RE,
+    (_match, attrName: string, _quotedFull: string, dqVal: string, _sqFull: string, sqVal: string) => {
+      const attrValue = dqVal ?? sqVal ?? "";
+      const quote = dqVal !== undefined ? '"' : "'";
+      if (!isTranslatableAttrValue(attrValue)) return _match;
+      const idx = texts.length;
+      texts.push(attrValue.trim());
+      return `${attrName}=${quote}\x00T${idx}\x00${quote}`;
+    },
+  );
+
   // Replace each text node between tags with an indexed marker
-  const template = withSkips.replace(/>([^<]+)</g, (_match, raw: string) => {
+  const template = withAttrs.replace(/>([^<]+)</g, (_match, raw: string) => {
     const trimmed = raw.trim();
     if (!trimmed) return `>${raw}<`;
     const idx = texts.length;
@@ -343,7 +489,7 @@ async function callGoogleTranslate(
  * protection applies to every engine (LLM and Google alike). Returns a map of
  * key → { value, status }; items unresolved by all engines get status "fallback".
  */
-type RoutedResult = { value: string; status: "translated" | "fallback"; engine: Engine | null };
+type RoutedResult = { value: string; status: "translated" | "fallback"; engine: Engine | null; tokens: number };
 
 async function translateItemsRouted(
   items: TranslateItem[],
@@ -352,17 +498,20 @@ async function translateItemsRouted(
   aiModel: string,
   shopName: string,
   order: Engine[],
-): Promise<Map<string, RoutedResult>> {
-  const tokensByKey = new Map<string, string[]>();
+): Promise<{ results: Map<string, RoutedResult>; llmTokens: number }> {
+  // placeholdersByKey: variable tokens (string[]) extracted from each item's value.
+  const placeholdersByKey = new Map<string, string[]>();
   const masked = items.map((it) => {
     const { masked: m, tokens } = maskPlaceholders(it.value);
-    tokensByKey.set(it.key, tokens);
+    placeholdersByKey.set(it.key, tokens);
     return { key: it.key, value: m, digest: it.digest };
   });
 
   const collected = new Map<string, string>(); // masked translations
   const engineByKey = new Map<string, Engine>(); // which engine resolved each key
+  const llmTokensByKey = new Map<string, number>(); // LLM API tokens charged per key
   let systemPrompt: string | null = null;
+  const tokenAccum = { value: 0 }; // accumulates LLM token usage across all retries
 
   for (const engine of order) {
     const missing = masked.filter((i) => !collected.has(i.key));
@@ -375,12 +524,17 @@ async function translateItemsRouted(
         systemPrompt = buildSystemPrompt(target, glossary);
       }
       try {
-        await gatherTranslations(missing, aiModel, systemPrompt, collected);
+        await gatherTranslations(missing, aiModel, systemPrompt, collected, tokenAccum);
       } catch (e) {
         console.warn(`[route] llm engine error`, e);
       }
-      // Attribute newly-resolved keys to the LLM.
-      for (const i of missing) if (collected.has(i.key) && !engineByKey.has(i.key)) engineByKey.set(i.key, "llm");
+      // Attribute newly-resolved keys to the LLM; distribute tokens evenly across keys.
+      const newlyResolved = missing.filter((i) => collected.has(i.key) && !engineByKey.has(i.key));
+      const tokensEach = newlyResolved.length > 0 ? Math.ceil(tokenAccum.value / newlyResolved.length) : 0;
+      for (const i of newlyResolved) {
+        engineByKey.set(i.key, "llm");
+        llmTokensByKey.set(i.key, tokensEach);
+      }
     } else {
       if (!googleConfigured()) continue;
       for (const batch of batchByChars(missing, MAX_CHARS_PER_BATCH)) {
@@ -403,24 +557,25 @@ async function translateItemsRouted(
   const result = new Map<string, RoutedResult>();
   for (const it of items) {
     const raw = collected.get(it.key);
-    const tokens = tokensByKey.get(it.key) ?? [];
+    const placeholders = placeholdersByKey.get(it.key) ?? [];
     if (raw === undefined) {
-      result.set(it.key, { value: it.value, status: "fallback", engine: null });
+      result.set(it.key, { value: it.value, status: "fallback", engine: null, tokens: 0 });
       continue;
     }
     const decoded = decodeQuoteEntities(raw);
-    if (tokens.length > 0 && !placeholdersIntact(decoded, tokens)) {
+    if (placeholders.length > 0 && !placeholdersIntact(decoded, placeholders)) {
       console.warn(`[route] placeholder corrupted for key=${it.key}, using original`);
-      result.set(it.key, { value: it.value, status: "fallback", engine: null });
+      result.set(it.key, { value: it.value, status: "fallback", engine: null, tokens: 0 });
       continue;
     }
     result.set(it.key, {
-      value: restorePlaceholders(decoded, tokens),
+      value: restorePlaceholders(decoded, placeholders),
       status: "translated",
       engine: engineByKey.get(it.key) ?? null,
+      tokens: llmTokensByKey.get(it.key) ?? 0,
     });
   }
-  return result;
+  return { results: result, llmTokens: tokenAccum.value };
 }
 
 // Retries for a single (un-splittable) item that fails transiently.
@@ -523,18 +678,22 @@ Return ONLY a JSON object {"translations":[{"key":"<key>","translatedValue":"<te
 }
 
 /**
- * One LLM round-trip. Returns a map of the keys the model actually returned.
+ * One LLM round-trip. Uses opaque numeric IDs (f0, f1, …) in the payload so the
+ * model cannot accidentally swap values based on semantic key names (P1 fix).
+ * Returns a map from original keys → translated values, plus the token count.
  * Throws on unparseable JSON so the caller can retry.
  */
 async function callLLMOnce(
   items: TranslateItem[],
   aiModel: string,
   systemPrompt: string,
-): Promise<Map<string, string>> {
-  const payload = items.map((i) => ({ key: i.key, value: i.value }));
+): Promise<{ map: Map<string, string>; tokens: number }> {
+  // Use opaque IDs (f0, f1, f2…) instead of semantic field names so the model
+  // cannot confuse "title" as a content hint and swap values between keys.
+  const idToKey = new Map(items.map((it, idx) => [`f${idx}`, it.key]));
+  const payload = items.map((it, idx) => ({ key: `f${idx}`, value: it.value }));
 
   const model = resolveModel(aiModel);
-
   const openai = getOpenAI();
   const completion = await openai.chat.completions.create({
     model,
@@ -548,6 +707,7 @@ async function callLLMOnce(
     timeout: 120_000, // 120s per batch — prevents hanging on unresponsive APIs
   });
 
+  const tokens = completion.usage?.total_tokens ?? 0;
   const raw = completion.choices[0]?.message?.content ?? "{}";
   // JSON.parse throws on malformed output → propagated to caller for retry/splitting.
   const obj = JSON.parse(extractJsonObject(raw)) as { translations?: unknown };
@@ -558,10 +718,11 @@ async function callLLMOnce(
   const map = new Map<string, string>();
   for (const r of parsed) {
     if (typeof r?.key === "string" && typeof r?.translatedValue === "string") {
-      map.set(r.key, r.translatedValue);
+      const origKey = idToKey.get(r.key);
+      if (origKey !== undefined) map.set(origKey, r.translatedValue);
     }
   }
-  return map;
+  return { map, tokens };
 }
 
 /**
@@ -575,12 +736,14 @@ async function gatherTranslations(
   aiModel: string,
   systemPrompt: string,
   collected: Map<string, string>,
+  tokenAccum: { value: number },
 ): Promise<void> {
   const pend = items.filter((i) => !collected.has(i.key));
   if (pend.length === 0) return;
 
   try {
-    const map = await callLLMOnce(pend, aiModel, systemPrompt);
+    const { map, tokens } = await callLLMOnce(pend, aiModel, systemPrompt);
+    tokenAccum.value += tokens;
     let progressed = false;
     for (const [k, v] of map) {
       if (!collected.has(k)) {
@@ -592,7 +755,7 @@ async function gatherTranslations(
     // Model parsed OK but dropped some keys → retry just those, but only while
     // making progress (avoids looping on a key the model refuses to return).
     if (missing.length > 0 && progressed && missing.length < pend.length) {
-      await gatherTranslations(missing, aiModel, systemPrompt, collected);
+      await gatherTranslations(missing, aiModel, systemPrompt, collected, tokenAccum);
     }
     return;
   } catch (e) {
@@ -600,14 +763,15 @@ async function gatherTranslations(
     if (pend.length > 1) {
       const mid = Math.ceil(pend.length / 2);
       console.warn(`[llm] batch of ${pend.length} unparseable (${msg}); splitting`);
-      await gatherTranslations(pend.slice(0, mid), aiModel, systemPrompt, collected);
-      await gatherTranslations(pend.slice(mid), aiModel, systemPrompt, collected);
+      await gatherTranslations(pend.slice(0, mid), aiModel, systemPrompt, collected, tokenAccum);
+      await gatherTranslations(pend.slice(mid), aiModel, systemPrompt, collected, tokenAccum);
       return;
     }
     // Single item: retry for transient failures, then give up (→ fallback).
     for (let r = 0; r < LEAF_RETRIES; r++) {
       try {
-        const map = await callLLMOnce(pend, aiModel, systemPrompt);
+        const { map, tokens } = await callLLMOnce(pend, aiModel, systemPrompt);
+        tokenAccum.value += tokens;
         for (const [k, v] of map) if (!collected.has(k)) collected.set(k, v);
         if (collected.has(pend[0].key)) return;
       } catch {
@@ -623,14 +787,15 @@ async function gatherTranslations(
 export type ResourceInput = { resourceId: string; fields: TranslateItem[] };
 export type ResourceResult = { resourceId: string; results: TranslateResult[] };
 /** Per-engine-model tally of how much content each engine translated. */
-export type EngineUsage = Record<string, { units: number; chars: number }>;
+export type EngineUsage = Record<string, { units: number; chars: number; tokens: number }>;
 export type TranslateChunkResult = { resources: ResourceResult[]; usage: EngineUsage };
 
 export function mergeEngineUsage(into: EngineUsage, from: EngineUsage): void {
   for (const [model, u] of Object.entries(from)) {
-    const acc = (into[model] ??= { units: 0, chars: 0 });
+    const acc = (into[model] ??= { units: 0, chars: 0, tokens: 0 });
     acc.units += u.units;
     acc.chars += u.chars;
+    acc.tokens += u.tokens;
   }
 }
 
@@ -666,7 +831,7 @@ export async function translateResources(
   aiModel: string,
   testMode: boolean,
   shopName: string,
-  onProgress?: (doneUnitsDelta: number) => Promise<void>,
+  onProgress?: (doneUnitsDelta: number, tokensDelta: number) => Promise<void>,
 ): Promise<TranslateChunkResult> {
   if (testMode) {
     return {
@@ -697,9 +862,23 @@ export async function translateResources(
   let cacheUnits = 0;
 
   // 1. Plan every field: resolve skip/cache directly; collect units to translate.
+  //    TM lookups are fired in parallel across all fields to minimise Redis RTTs.
   for (const res of resources) {
-    const rm = new Map<string, TranslateResult>();
-    resultMaps.set(res.resourceId, rm);
+    resultMaps.set(res.resourceId, new Map<string, TranslateResult>());
+  }
+
+  // 1a. Separate skip fields (no TM needed) from fields that need a cache check.
+  type FieldWork = {
+    resourceId: string;
+    f: TranslateItem;
+    klass: "html" | "plain";
+    order: Engine[];
+    cacheModel: string;
+  };
+  const fieldWorks: FieldWork[] = [];
+
+  for (const res of resources) {
+    const rm = resultMaps.get(res.resourceId)!;
     for (const f of res.fields) {
       const klass = classifyField(f.key, f.value);
       if (klass === "skip") {
@@ -708,36 +887,70 @@ export async function translateResources(
       }
       const order = engineOrderFor(fieldTier(f.key, f.value, klass), aiModel);
       const cacheModel = engineModel(order[0], aiModel);
-
-      const cached = await tmGet(shopName, target, cacheModel, f.digest);
-      if (cached !== null) {
-        rm.set(f.key, { key: f.key, translatedValue: cached, digest: f.digest, status: "translated" });
-        cacheUnits += countFieldUnits(f.key, f.value);
-        continue;
-      }
-
-      if (klass === "html") {
-        const { template, texts } = extractHtmlTextNodes(f.value);
-        if (texts.length === 0) {
-          rm.set(f.key, { key: f.key, translatedValue: f.value, digest: f.digest, status: "translated" });
-          continue;
-        }
-        texts.forEach((t) => addUnit(order, t));
-        plans.push({ kind: "html", resourceId: res.resourceId, key: f.key, digest: f.digest, order, cacheModel, template, nodeTexts: texts });
-      } else {
-        const parts = splitPlainText(f.value);
-        parts.forEach((p) => addUnit(order, p));
-        plans.push({ kind: "plain", resourceId: res.resourceId, key: f.key, digest: f.digest, order, cacheModel, parts });
-      }
+      fieldWorks.push({ resourceId: res.resourceId, f, klass, order, cacheModel });
     }
   }
 
-  // Credit cache hits immediately so the bar reflects them.
-  if (cacheUnits > 0 && onProgress) await onProgress(cacheUnits);
+  const tmWrites: Promise<void>[] = [];
+
+  // 1b. Fire all TM digest lookups in parallel.
+  const cacheHits = await Promise.all(
+    fieldWorks.map(({ f, cacheModel }) => tmGet(shopName, target, cacheModel, f.digest)),
+  );
+
+  // 1c. Process results: hit → credit immediately; miss → value cache or add to plan.
+  for (let wi = 0; wi < fieldWorks.length; wi++) {
+    const { resourceId, f, klass, order, cacheModel } = fieldWorks[wi];
+    const rm = resultMaps.get(resourceId)!;
+    const cached = cacheHits[wi];
+    if (cached !== null) {
+      rm.set(f.key, { key: f.key, translatedValue: cached, digest: f.digest, status: "translated" });
+      cacheUnits += countFieldUnits(f.key, f.value);
+      continue;
+    }
+
+    // Secondary: value-based cache for short plain-text fields.
+    if (klass === "plain") {
+      const cachedByValue = await tmGetByValue(f.value, source, target, cacheModel);
+      if (cachedByValue !== null) {
+        rm.set(f.key, { key: f.key, translatedValue: cachedByValue, digest: f.digest, status: "translated" });
+        tmWrites.push(tmSet(shopName, target, cacheModel, f.digest, cachedByValue));
+        cacheUnits += countFieldUnits(f.key, f.value);
+        continue;
+      }
+    }
+
+    // Already-in-target check: if the value appears to already be in the target
+    // language, skip it — the LLM would just echo it back unchanged.
+    // For zh-CN→en: English content (no CJK) is skipped (it's already the target).
+    // For zh-CN→pl: English content is NOT skipped (it still needs translation to Polish).
+    if (alreadyInTarget(f.value, source, target)) {
+      rm.set(f.key, { key: f.key, translatedValue: f.value, digest: f.digest, status: "translated" });
+      cacheUnits += countFieldUnits(f.key, f.value);
+      continue;
+    }
+
+    if (klass === "html") {
+      const { template, texts } = extractHtmlTextNodes(f.value);
+      if (texts.length === 0) {
+        rm.set(f.key, { key: f.key, translatedValue: f.value, digest: f.digest, status: "translated" });
+        continue;
+      }
+      texts.forEach((t) => addUnit(order, t));
+      plans.push({ kind: "html", resourceId, key: f.key, digest: f.digest, order, cacheModel, template, nodeTexts: texts });
+    } else {
+      const parts = splitPlainText(f.value);
+      parts.forEach((p) => addUnit(order, p));
+      plans.push({ kind: "plain", resourceId, key: f.key, digest: f.digest, order, cacheModel, parts });
+    }
+  }
+
+  // Credit cache hits immediately so the bar reflects them (0 LLM tokens for TM hits).
+  if (cacheUnits > 0 && onProgress) await onProgress(cacheUnits, 0);
 
   // 2. Translate unique texts per engine order, in char-bounded batches.
-  //    Aggregate per-engine usage over the unique units actually translated, and
-  //    report progress per batch (by occurrence count) so the bar moves smoothly.
+  //    Up to BATCH_CONCURRENCY batches per pool run in parallel.
+  //    Progress (units + raw LLM tokens) is reported after each batch.
   const usage: EngineUsage = {};
   const translated = new Map<string, Map<string, RoutedResult>>();
   for (const [sig, occ] of pools) {
@@ -745,37 +958,43 @@ export async function translateResources(
     const texts = [...occ.keys()];
     const tmap = new Map<string, RoutedResult>();
     const items: TranslateItem[] = texts.map((t, i) => ({ key: String(i), value: t, digest: "" }));
-    for (const batch of batchByChars(items, MAX_CHARS_PER_BATCH)) {
-      const m = await translateItemsRouted(batch, source, target, aiModel, shopName, order);
-      let batchUnits = 0; // occurrences processed in this batch
+    const batches = batchByChars(items, MAX_CHARS_PER_BATCH);
+    await pAll(batches, BATCH_CONCURRENCY, async (batch) => {
+      const { results: m, llmTokens } = await translateItemsRouted(batch, source, target, aiModel, shopName, order);
+      let batchUnits = 0;
       for (const [k, v] of m) {
         const text = texts[Number(k)];
         tmap.set(text, v);
         batchUnits += occ.get(text) ?? 1;
         if (v.status === "translated" && v.engine) {
           const model = engineModel(v.engine, aiModel);
-          const acc = (usage[model] ??= { units: 0, chars: 0 });
+          const acc = (usage[model] ??= { units: 0, chars: 0, tokens: 0 });
           acc.units += 1;
           acc.chars += text.length;
+          acc.tokens += v.tokens;
         }
       }
-      // Report progress (and let the worker heartbeat) after each batch.
-      if (onProgress) await onProgress(batchUnits);
-    }
+      // Report progress (units + raw LLM tokens) after each batch.
+      if (onProgress) await onProgress(batchUnits, llmTokens);
+    });
     translated.set(sig, tmap);
   }
 
   const lookup = (order: Engine[], text: string) => translated.get(order.join(","))?.get(text);
 
-  // 3. Reconstruct each planned field and cache new translations.
+  // 3. Reconstruct each planned field and cache new translations in parallel.
   for (const plan of plans) {
     const rm = resultMaps.get(plan.resourceId)!;
     if (plan.kind === "plain") {
       const pieces = plan.parts.map((p) => lookup(plan.order, p) ?? { value: p, status: "fallback" as const });
       const value = pieces.map((p) => p.value).join("");
       const status = pieces.some((p) => p.status === "fallback") ? "fallback" : "translated";
+      const originalValue = plan.parts.join("");
       rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
-      if (status === "translated") await tmSet(shopName, target, plan.cacheModel, plan.digest, value);
+      if (status === "translated") {
+        tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
+        tmWrites.push(tmSetByValue(originalValue, source, target, plan.cacheModel, value));
+      }
     } else {
       let anyFallback = false;
       const out = plan.nodeTexts.map((t) => {
@@ -789,9 +1008,10 @@ export async function translateResources(
       const value = restoreHtmlTextNodes(plan.template, out);
       const status = anyFallback ? "fallback" : "translated";
       rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
-      if (status === "translated") await tmSet(shopName, target, plan.cacheModel, plan.digest, value);
+      if (status === "translated") tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
     }
   }
+  if (tmWrites.length > 0) await Promise.all(tmWrites);
 
   // 4. Assemble per-resource results aligned to input field order.
   const out = resources.map((res) => {

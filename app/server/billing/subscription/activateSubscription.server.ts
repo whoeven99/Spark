@@ -15,7 +15,6 @@ import {
 
 export async function applyActiveSubscription(params: {
   shop: string;
-  appName: string;
   shopifySubscriptionId: string;
   planKey: string;
   billingInterval: string;
@@ -26,7 +25,6 @@ export async function applyActiveSubscription(params: {
 }): Promise<void> {
   const {
     shop,
-    appName,
     shopifySubscriptionId,
     planKey,
     billingInterval,
@@ -36,14 +34,14 @@ export async function applyActiveSubscription(params: {
     rawPayload,
   } = params;
 
-  await ensureAccount(shop, appName);
+  await ensureAccount(shop);
 
   const existing = await prisma.appSubscription.findUnique({
-    where: { shop_appName: { shop, appName } },
+    where: { shop },
   });
 
   const account = await prisma.account.findUniqueOrThrow({
-    where: { shop_appName: { shop, appName } },
+    where: { shop },
   });
 
   const nextPeriodEnd = period.currentPeriodEnd ?? null;
@@ -55,7 +53,6 @@ export async function applyActiveSubscription(params: {
   ) {
     await archivePeriodAndRenew({
       shop,
-      appName,
       subscription: existing,
       account,
       next: {
@@ -73,10 +70,9 @@ export async function applyActiveSubscription(params: {
     existing.shopifySubscriptionId !== shopifySubscriptionId;
 
   await prisma.appSubscription.upsert({
-    where: { shop_appName: { shop, appName } },
+    where: { shop },
     create: {
       shop,
-      appName,
       planKey,
       shopifySubscriptionId,
       billingInterval,
@@ -101,9 +97,8 @@ export async function applyActiveSubscription(params: {
     },
   });
 
-  // 开通 / 升级 / 换套餐：保留 usedTokens；仅周期续费（renewal.server）清零。
   await prisma.account.update({
-    where: { shop_appName: { shop, appName } },
+    where: { shop },
     data: {
       subscriptionTokens: tokensPerPeriod,
     },
@@ -112,7 +107,6 @@ export async function applyActiveSubscription(params: {
   if (wasPending) {
     await appendBillingLog({
       shop,
-      appName,
       eventType: BILLING_LOG_EVENT.SUBSCRIPTION_ACTIVATED,
       planKey,
       referenceId: shopifySubscriptionId,
@@ -123,23 +117,21 @@ export async function applyActiveSubscription(params: {
     try {
       await sendSubscriptionFeishuNotify({
         shop,
-        appName,
+        appName: "spark",
         planKey,
         billingInterval,
       });
     } catch (error) {
       console.error(
-        `[Billing] subscription feishu notify failed shop=${shop} appName=${appName}:`,
+        `[Billing] subscription feishu notify failed shop=${shop}:`,
         error,
       );
     }
-
   }
 }
 
 /**
- * 取消付费订阅：从 `subscriptionTokens` 扣减该套餐周期额度（通常归零）；
- * `trialTokens` / `purchasedTokens` 不在此函数内修改。
+ * 取消付费订阅：从 `subscriptionTokens` 扣减该套餐周期额度（通常归零）。
  */
 export function subscriptionTokensAfterCancel(
   currentSubscriptionTokens: number,
@@ -166,33 +158,29 @@ export function subscriptionTokensAfterCancel(
 
 async function findAppSubscriptionForWebhook(params: {
   shop: string;
-  appName: string;
   shopifySubscriptionId: string;
 }) {
   const byShopifyId = await prisma.appSubscription.findFirst({
     where: {
       shop: params.shop,
-      appName: params.appName,
       shopifySubscriptionId: params.shopifySubscriptionId,
     },
   });
   if (byShopifyId) return byShopifyId;
 
   return prisma.appSubscription.findUnique({
-    where: { shop_appName: { shop: params.shop, appName: params.appName } },
+    where: { shop: params.shop },
   });
 }
 
 export async function markSubscriptionNonActive(params: {
   shop: string;
-  appName: string;
   shopifySubscriptionId: string;
   status: string;
   rawPayload?: Record<string, unknown>;
 }): Promise<void> {
   const sub = await findAppSubscriptionForWebhook({
     shop: params.shop,
-    appName: params.appName,
     shopifySubscriptionId: params.shopifySubscriptionId,
   });
   if (!sub) return;
@@ -214,7 +202,7 @@ export async function markSubscriptionNonActive(params: {
 
   await prisma.$transaction(async (tx) => {
     const account = await tx.account.findUnique({
-      where: { shop_appName: { shop: params.shop, appName: params.appName } },
+      where: { shop: params.shop },
     });
 
     const previousSubscriptionTokens = account?.subscriptionTokens ?? 0;
@@ -227,7 +215,6 @@ export async function markSubscriptionNonActive(params: {
     await tx.billingLog.create({
       data: {
         shop: params.shop,
-        appName: params.appName,
         eventType: BILLING_LOG_EVENT.SUBSCRIPTION_CANCELLED,
         planKey: sub.planKey,
         referenceId: sub.shopifySubscriptionId,
@@ -247,7 +234,7 @@ export async function markSubscriptionNonActive(params: {
 
     if (account) {
       await tx.account.update({
-        where: { shop_appName: { shop: params.shop, appName: params.appName } },
+        where: { shop: params.shop },
         data: { subscriptionTokens: nextSubscriptionTokens },
       });
     }
@@ -260,5 +247,4 @@ export async function markSubscriptionNonActive(params: {
       where: { id: sub.id },
     });
   });
-
 }

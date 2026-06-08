@@ -27,7 +27,6 @@ const FALLBACK_PAGE_DATA: AITaskListPageData = {
 
 export async function loadImageStudioPageData(
   shop: string,
-  appName: string,
 ): Promise<ImageStudioPageLoaderData> {
   const [
     initialTaskPage,
@@ -38,17 +37,16 @@ export async function loadImageStudioPageData(
   ] = await Promise.all([
     listTasksPageForShop({
       shop,
-      appName,
       view: "current",
       taskTypes: ["image_generation", "picture_translate"],
     }).catch((e) => {
       console.error("[ImageStudio] load tasks failed", e);
       return FALLBACK_PAGE_DATA;
     }),
-    getEstimatedSeconds(appName, "image_generation"),
-    getEstimatedCredits(appName, "image_generation"),
-    getEstimatedSeconds(appName, "picture_translate"),
-    getEstimatedCredits(appName, "picture_translate"),
+    getEstimatedSeconds("image_generation"),
+    getEstimatedCredits("image_generation"),
+    getEstimatedSeconds("picture_translate"),
+    getEstimatedCredits("picture_translate"),
   ]);
 
   return {

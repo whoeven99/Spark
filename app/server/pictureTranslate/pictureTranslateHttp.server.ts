@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { getAppEntry } from "../../config/appEntry.server";
 import { billingErrorToResponse } from "../billing/index.server";
 import { requireVisualToolBillingAccess } from "../tokenUsage/index.server";
 import { getEstimatedCredits } from "../aiTask/aiTaskEstimation.server";
@@ -67,7 +66,7 @@ export async function executePictureTranslateRequest(params: {
   const clientRequestId = parsed.requestId?.trim() || requestId;
   const routeStart = Date.now();
   const startedAtIso = new Date().toISOString();
-  const appName = getAppEntry();
+  const appName = "spark";
   const runId = clientRequestId;
 
   const persistRun = (input: {
@@ -115,7 +114,7 @@ export async function executePictureTranslateRequest(params: {
   }
 
   try {
-    await requireVisualToolBillingAccess(sessionShop, appName);
+    await requireVisualToolBillingAccess(sessionShop);
   } catch (error) {
     const billingResponse = billingErrorToResponse(error);
     if (billingResponse) {
@@ -147,11 +146,10 @@ export async function executePictureTranslateRequest(params: {
     `${LOG_PREFIX} validated — shop=${sessionShop} modelType=${parsed.modelType} clientRequestId=${clientRequestId} ext=${extensionRaw} source=${sourceForLog} target=${targetForLog}`,
   );
 
-  const estimatedCredits = await getEstimatedCredits(appName, "picture_translate");
+  const estimatedCredits = await getEstimatedCredits("picture_translate");
 
   const { taskId, batchId } = await createBatchWithTask({
     shop: sessionShop,
-    appName,
     taskType: "picture_translate",
     batchConfig: {
       imageUrl: parsed.imageUrl,

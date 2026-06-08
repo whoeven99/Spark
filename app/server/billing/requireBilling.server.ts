@@ -1,18 +1,12 @@
-import { getAppEntry } from "../../config/appEntry.server";
 import { BillingAccessDeniedError } from "./errors.server";
 import { loadBillingContext, type BillingContext } from "./billingContext.server";
 
-export async function requireBillingAccess(
-  shop: string,
-  appName?: string,
-): Promise<BillingContext> {
-  const resolvedApp = appName ?? getAppEntry();
-  const ctx = await loadBillingContext(shop, resolvedApp);
+export async function requireBillingAccess(shop: string): Promise<BillingContext> {
+  const ctx = await loadBillingContext(shop);
 
   if (!ctx.hasAccess) {
     throw new BillingAccessDeniedError("Token 余额不足或尚未订阅，请前往计费页开通", {
       shop,
-      appName: resolvedApp,
       availableTokens: ctx.availableTokens,
       usedTokens: ctx.usedTokens,
       subscriptionStatus: ctx.subscription?.status ?? null,

@@ -2,18 +2,37 @@
 
 client_id = "940b967eda872dd81f9ffc283e29a013"
 name = "AiAssistant-Test"
-application_url = "https://aiassistant-wi7b.onrender.com"
+application_url = "https://aiassistant-wi7b.onrender.com/app"
 embedded = true
 
 [webhooks]
 api_version = "2026-07"
+
+[[webhooks.subscriptions]]
+topics = ["app_subscriptions/update"]
+uri = "/webhooks/app/subscriptions_update"
+
+[[webhooks.subscriptions]]
+topics = ["app_purchases_one_time/update"]
+uri = "/webhooks/app/purchases_one_time_update"
+
+[[webhooks.subscriptions]]
+topics = ["app/uninstalled"]
+uri = "/webhooks/app/uninstalled"
+
+[[webhooks.subscriptions]]
+topics = ["app/scopes_update"]
+uri = "/webhooks/app/scopes_update"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 scopes = "read_orders,write_products,read_locales,read_translations,write_translations,read_content"
 
 [auth]
-redirect_urls = [ "https://aiassistant-wi7b.onrender.com/api/auth" ]
+redirect_urls = [
+  "https://aiassistant-wi7b.onrender.com/auth/callback",
+  "https://aiassistant-wi7b.onrender.com/auth/shopify/callback",
+]
 
 [build]
 automatically_update_urls_on_dev = true

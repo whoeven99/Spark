@@ -15,7 +15,6 @@ import type { PlanRecord } from "../../../app/lib/billingPageTypes";
 const plans: PlanRecord[] = [
   {
     planKey: "pi_base_monthly",
-    appName: "product-improve",
     kind: "SUBSCRIPTION",
     billingInterval: "MONTHLY",
     displayName: "Base (Monthly)",
@@ -27,7 +26,6 @@ const plans: PlanRecord[] = [
   },
   {
     planKey: "pi_pro_annual",
-    appName: "product-improve",
     kind: "SUBSCRIPTION",
     billingInterval: "ANNUAL",
     displayName: "Pro (Annual)",
@@ -39,7 +37,6 @@ const plans: PlanRecord[] = [
   },
   {
     planKey: "pi_premium_monthly",
-    appName: "product-improve",
     kind: "SUBSCRIPTION",
     billingInterval: "MONTHLY",
     displayName: "Premium (Monthly)",

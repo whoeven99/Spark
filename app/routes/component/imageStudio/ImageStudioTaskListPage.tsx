@@ -72,7 +72,7 @@ async function fetchImageStudioTaskPage(params: {
   query.append("taskType", "image_generation");
   query.append("taskType", "picture_translate");
 
-  const response = await fetch(`/api/ai-task-list?${query.toString()}`);
+  const response = await fetch(`/api/ai-task?${query.toString()}`);
   if (!response.ok) {
     throw new Error(`Failed to load task list: ${response.status}`);
   }

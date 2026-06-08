@@ -5,7 +5,6 @@ import { sendUninstallFeishuNotify } from "../feishu/scenarios/sendUninstallFeis
 import { fetchUninstallFeedbackFromPartner } from "../partner/fetchUninstallFeedbackFromPartner.server";
 
 const LOG = "[AppLifecycle:uninstall]";
-/** 重复 app/uninstalled 投递时跳过邮件/飞书（持久化仍执行） */
 const UNINSTALL_OPS_DEDUP_WINDOW_MS = 10 * 60 * 1000;
 
 export type OnAppUninstalledParams = {
@@ -14,20 +13,17 @@ export type OnAppUninstalledParams = {
   payload: unknown;
   sessionId?: string;
   webhookId?: string;
-  appName: string;
   uninstalledAt: Date;
 };
 
 async function shouldSkipUninstallOpsNotify(params: {
   shop: string;
-  appName: string;
   webhookId?: string;
 }): Promise<boolean> {
   if (params.webhookId) {
     const byWebhook = await prisma.commonEventLog.findFirst({
       where: {
         shop: params.shop,
-        appName: params.appName,
         eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
         referenceId: `uninstall:webhook:${params.webhookId}`,
       },
@@ -39,7 +35,6 @@ async function shouldSkipUninstallOpsNotify(params: {
   const recent = await prisma.commonEventLog.findFirst({
     where: {
       shop: params.shop,
-      appName: params.appName,
       eventType: COMMON_EVENT_TYPE.APP_UNINSTALLED,
       createdAt: { gte: since },
     },
@@ -50,7 +45,7 @@ async function shouldSkipUninstallOpsNotify(params: {
 async function persistAppUninstalled(params: OnAppUninstalledParams): Promise<void> {
   const startedAt = Date.now();
   console.info(
-    `${LOG} persistence-enter shop=${params.shop} appName=${params.appName} topic=${params.topic} sessionId=${params.sessionId ?? "(none)"}`,
+    `${LOG} persistence-enter shop=${params.shop} topic=${params.topic} sessionId=${params.sessionId ?? "(none)"}`,
   );
 
   await handleAppUninstalled({
@@ -70,32 +65,25 @@ async function sendAppUninstalledFeishuNotify(
   params: OnAppUninstalledParams,
 ): Promise<void> {
   const startedAt = Date.now();
-  console.info(
-    `${LOG} feishu-enter shop=${params.shop} appName=${params.appName}`,
-  );
+  console.info(`${LOG} feishu-enter shop=${params.shop}`);
 
   try {
     let feedback: Awaited<
       ReturnType<typeof fetchUninstallFeedbackFromPartner>
     > = null;
     try {
-      console.info(
-        `${LOG} partner-feedback-start shop=${params.shop} appName=${params.appName}`,
-      );
+      console.info(`${LOG} partner-feedback-start shop=${params.shop}`);
       feedback = await fetchUninstallFeedbackFromPartner(params.shop);
       console.info(
-        `${LOG} partner-feedback-end shop=${params.shop} hasFeedback=${Boolean(feedback)} hasReason=${Boolean(feedback?.reason)} hasDescription=${Boolean(feedback?.description)}`,
+        `${LOG} partner-feedback-end shop=${params.shop} hasFeedback=${Boolean(feedback)}`,
       );
     } catch (error) {
-      console.warn(
-        `${LOG} partner-feedback-failed shop=${params.shop}`,
-        error,
-      );
+      console.warn(`${LOG} partner-feedback-failed shop=${params.shop}`, error);
     }
 
     const result = await sendUninstallFeishuNotify({
       shop: params.shop,
-      appName: params.appName,
+      appName: "spark",
       uninstalledAt: params.uninstalledAt,
       uninstallReason: feedback?.reason ?? null,
       uninstallFeedback: feedback?.description ?? null,
@@ -112,31 +100,23 @@ async function sendAppUninstalledFeishuNotify(
   }
 }
 
-/**
- * 卸载：发飞书通知，再写日志并删 Session。
- */
 export async function onAppUninstalled(params: OnAppUninstalledParams): Promise<void> {
   const startedAt = Date.now();
   console.info(
-    `${LOG} enter shop=${params.shop} appName=${params.appName} webhookId=${params.webhookId ?? "(none)"}`,
+    `${LOG} enter shop=${params.shop} webhookId=${params.webhookId ?? "(none)"}`,
   );
 
   const skipOpsNotify = await shouldSkipUninstallOpsNotify({
     shop: params.shop,
-    appName: params.appName,
     webhookId: params.webhookId,
   });
   if (skipOpsNotify) {
-    console.info(
-      `${LOG} ops-notify-skipped shop=${params.shop} appName=${params.appName} reason=duplicate`,
-    );
+    console.info(`${LOG} ops-notify-skipped shop=${params.shop} reason=duplicate`);
   } else {
     await sendAppUninstalledFeishuNotify(params);
   }
 
   await persistAppUninstalled(params);
 
-  console.info(
-    `${LOG} done shop=${params.shop} elapsedMs=${Date.now() - startedAt}`,
-  );
+  console.info(`${LOG} done shop=${params.shop} elapsedMs=${Date.now() - startedAt}`);
 }

@@ -1,7 +1,15 @@
 import { useCallback, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import type { ChatMessage, ChatMessageAttachment } from "../../../lib/chatMessage";
 import { coerceChatMessageAttachments } from "../../../lib/chatMessage";
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
+import {
+  hasStreamingVisualContent,
+  type SkillStepProgress,
+} from "./chatStreamUtils";
+
+export type { SkillStepProgress } from "./chatStreamUtils";
+export { hasStreamingVisualContent } from "./chatStreamUtils";
 
 type SkillProgressEvent = {
   skill: string;
@@ -16,6 +24,7 @@ type StreamChunk =
   | { type: "tool_call"; name: string; args: unknown }
   | { type: "tool_result"; name: string; result: string }
   | { type: "skill_progress"; event: SkillProgressEvent }
+  | { type: "status"; phase: "thinking" }
   | { type: "error"; message: string }
   | {
       type: "done";
@@ -31,17 +40,6 @@ type StreamChunk =
       };
     };
 
-export type SkillStepProgress = {
-  skill: string;
-  stepId: string;
-  label: string;
-  status: "running" | "completed" | "skipped" | "error";
-  detail?: string;
-};
-
-/** @deprecated 兼容旧名，等价于 SkillStepProgress */
-export type PlaybookStepProgress = SkillStepProgress;
-
 export type ChatStreamFinishPayload = {
   aborted: boolean;
   reply: string;
@@ -54,11 +52,15 @@ export type ChatStreamFinishPayload = {
 
 type Snapshot = {
   reply: string;
+  streamedText: string;
   translationTaskForm?: unknown;
   attachments: ChatMessageAttachment[];
   productImproveCard: boolean;
   productImproveCardPayload?: unknown;
 };
+
+/** @deprecated 兼容旧名，等价于 SkillStepProgress */
+export type PlaybookStepProgress = SkillStepProgress;
 
 export function useChatStream() {
   const [isStreaming, setIsStreaming] = useState(false);
@@ -71,6 +73,7 @@ export function useChatStream() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const snapshotRef = useRef<Snapshot>({
     reply: "",
+    streamedText: "",
     translationTaskForm: undefined,
     attachments: [],
     productImproveCard: false,
@@ -80,12 +83,26 @@ export function useChatStream() {
   const resetSnapshot = () => {
     snapshotRef.current = {
       reply: "",
+      streamedText: "",
       translationTaskForm: undefined,
       attachments: [],
       productImproveCard: false,
       productImproveCardPayload: undefined,
     };
   };
+
+  const prepareStreaming = useCallback(() => {
+    flushSync(() => {
+      setIsStreaming(true);
+      setAwaitingFirstChunk(true);
+      resetSnapshot();
+      setStreamingText("");
+      setStreamingTranslationForm(undefined);
+      setStreamingGenerateCard(false);
+      setStreamingGeneratePayload(undefined);
+      setSkillSteps([]);
+    });
+  }, []);
 
   const sendMessage = useCallback(
     async (
@@ -98,14 +115,7 @@ export function useChatStream() {
       const url = options?.url ?? "/chat-stream";
       const onFinish = options?.onFinish;
 
-      setIsStreaming(true);
-      setAwaitingFirstChunk(true);
-      resetSnapshot();
-      setStreamingText("");
-      setStreamingTranslationForm(undefined);
-      setStreamingGenerateCard(false);
-      setStreamingGeneratePayload(undefined);
-      setSkillSteps([]);
+      prepareStreaming();
 
       const controller = new AbortController();
       abortControllerRef.current = controller;
@@ -172,9 +182,14 @@ export function useChatStream() {
                 markFirstChunkSeen();
                 setStreamingText((prev) => {
                   const next = prev + chunk.content;
+                  snapshotRef.current.streamedText = next;
                   snapshotRef.current.reply = next;
                   return next;
                 });
+              } else if (chunk.type === "status") {
+                if (chunk.phase === "thinking") {
+                  setAwaitingFirstChunk(true);
+                }
               } else if (chunk.type === "skill_progress") {
                 markFirstChunkSeen();
                 const ev = chunk.event;
@@ -237,7 +252,7 @@ export function useChatStream() {
                   setStreamingGeneratePayload(ui.productImproveCardPayload);
                 }
 
-                finalizeOnce({
+                const finishPayload: ChatStreamFinishPayload = {
                   aborted: false,
                   reply,
                   translationTaskForm: snapshotRef.current.translationTaskForm,
@@ -245,7 +260,16 @@ export function useChatStream() {
                   productImproveCard: snapshotRef.current.productImproveCard,
                   productImproveCardPayload:
                     snapshotRef.current.productImproveCardPayload,
-                });
+                };
+
+                const streamed = snapshotRef.current.streamedText;
+                if (reply && reply.length > streamed.length) {
+                  setStreamingText(reply);
+                  snapshotRef.current.streamedText = reply;
+                  requestAnimationFrame(() => finalizeOnce(finishPayload));
+                } else {
+                  finalizeOnce(finishPayload);
+                }
               }
             } catch (e) {
               console.error("Failed to parse chunk", e);
@@ -306,7 +330,7 @@ export function useChatStream() {
         }
       }
     },
-    [],
+    [prepareStreaming],
   );
 
   const abort = useCallback(() => {
@@ -323,6 +347,7 @@ export function useChatStream() {
     skillSteps,
     /** @deprecated 兼容旧名 */
     playbookSteps: skillSteps,
+    prepareStreaming,
     sendMessage,
     abort,
   };

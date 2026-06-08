@@ -1,4 +1,4 @@
-import type { ShopifyAdminGraphqlClient } from "../../ai/skills/shopifyInfo/tool";
+import type { ShopifyAdminGraphqlClient } from "../../ai/skills/shopifyInfo/shopifyInfo.tool";
 import type { PlanRecord } from "../plans/planCatalog.server";
 
 export type CreateSubscriptionResult = {
@@ -15,7 +15,6 @@ export interface BillingGateway {
   createSubscription(params: {
     admin: ShopifyAdminGraphqlClient;
     shop: string;
-    appName: string;
     plan: PlanRecord;
     returnUrl: string;
     trialDays?: number | null;
@@ -24,7 +23,6 @@ export interface BillingGateway {
   createOneTimePurchase(params: {
     admin: ShopifyAdminGraphqlClient;
     shop: string;
-    appName: string;
     plan: PlanRecord;
     returnUrl: string;
   }): Promise<CreateOneTimePurchaseResult>;

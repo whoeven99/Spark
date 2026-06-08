@@ -46,11 +46,11 @@ describe("buildBillingReturnUrl", () => {
     );
   });
 
-  it("uses the production app handle when the Admin referer is unavailable", () => {
-    process.env.SHOPIFY_APP_URL = "https://product-improve.onrender.com/app/product-improve";
-    process.env.SHOPIFY_API_KEY = "b896c10abe3ca220b1efbc333ef41ad1";
+  it("uses the Spark Test app handle when the Admin referer is unavailable", () => {
+    process.env.SHOPIFY_APP_URL = "https://aiassistant-wi7b.onrender.com/app";
+    process.env.SHOPIFY_API_KEY = "940b967eda872dd81f9ffc283e29a013";
     const request = new Request(
-      "https://product-improve.onrender.com/app/billing?shop=ciwishop.myshopify.com&host=encoded-host",
+      "https://aiassistant-wi7b.onrender.com/app/billing?shop=ciwishop.myshopify.com&host=encoded-host",
     );
 
     const returnUrl = buildBillingReturnUrl(
@@ -60,7 +60,7 @@ describe("buildBillingReturnUrl", () => {
     );
 
     expect(returnUrl).toBe(
-      "https://admin.shopify.com/store/ciwishop/apps/ciwi-image-translation/app/billing?billing_return=1",
+      "https://admin.shopify.com/store/ciwishop/apps/aiassistant-test/app/billing?billing_return=1",
     );
   });
 

@@ -1,4 +1,3 @@
-import { getAppEntry } from "../../../../config/appEntry.server";
 import { EMAIL_TEMPLATE_IDS } from "../../../email/templates/emailTemplates.server";
 import { buildNotificationDashboardUrl } from "../../../notifications/buildNotificationDashboardUrl.server";
 import { buildNotificationTemplateData } from "../../../notifications/buildNotificationTemplateData.server";
@@ -25,8 +24,8 @@ export function normalizeAgentTemplateDataKeys(
   return normalized;
 }
 
-function resolveAppKey(context: AgentContext): string {
-  return context.appName?.trim() || getAppEntry();
+function resolveAppKey(_context: AgentContext): string {
+  return "spark";
 }
 
 /**
@@ -114,7 +113,7 @@ export async function enrichAgentTemplateData(
   const appKey = resolveAppKey(context);
   const appConfig = getNotificationAppConfig(appKey);
   const dashboardUrl = context.shop?.trim()
-    ? buildNotificationDashboardUrl(context.shop.trim(), appKey)
+    ? buildNotificationDashboardUrl(context.shop.trim())
     : undefined;
   const configWithDashboard = dashboardUrl
     ? { ...appConfig, dashboardUrl }

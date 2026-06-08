@@ -1,7 +1,6 @@
 import type { DynamicStructuredTool } from "@langchain/core/tools";
 import type { BaseMessage } from "@langchain/core/messages";
-import type { AppEntry } from "../../../config/appEntry.server";
-import type { ShopifyAdminGraphqlClient } from "../skills/shopifyInfo/tool";
+import type { ShopifyAdminGraphqlClient } from "../skills/shopifyInfo/shopifyInfo.tool";
 import { wrapToolWithTokenUsage } from "../../tokenUsage/wrapToolWithTokenUsage.server";
 import type {
   EmitSkillProgress,
@@ -18,8 +17,6 @@ export interface AgentContext {
   admin: ShopifyAdminGraphqlClient;
   profile?: UserProfile;
   shop?: string;
-  /** 与 `AppEntry` 一致；缺省时由 `getAppEntry()` 推断 */
-  appName?: AppEntry;
   /**
    * 统一进度发射器（原子 Skill 与 Playbook 共用）。
    * 由 agentStream 在 graph.stream() 前注入，映射为 SSE `skill_progress`。

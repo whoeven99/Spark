@@ -1,11 +1,8 @@
-import type { AppEntry } from "../../config/appEntry.server";
 import { isProductionNodeEnv, isTestNodeEnv } from "../../config/nodeEnv.server";
 
-/** 需要校验订阅 / token 的 App（主 App 暂不启用）。 */
-export const BILLING_ENABLED_APPS = new Set<AppEntry>(["product-improve"]);
-
-export function isBillingEnabledForApp(appName: string): boolean {
-  return BILLING_ENABLED_APPS.has(appName as AppEntry);
+/** 是否启用订阅 / token 校验。默认启用，设 BILLING_ENABLED=false 可关闭。 */
+export function isBillingEnabled(): boolean {
+  return process.env.BILLING_ENABLED?.trim().toLowerCase() !== "false";
 }
 
 export function isBillingTestMode(): boolean {

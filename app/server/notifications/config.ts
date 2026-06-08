@@ -1,6 +1,6 @@
 import { loadEmailConfig } from "../email/config/emailConfig.server";
-import { getAppEntry, isAppEntryKey } from "../../config/appEntry.server";
 import type { NotificationAppConfig } from "./types";
+
 function resolveSupportEmail(): string {
   const fromEnv = process.env.TENCENT_FROM_EMAIL?.trim();
   if (fromEnv) return fromEnv;
@@ -9,12 +9,9 @@ function resolveSupportEmail(): string {
 }
 
 function buildConfigForAppKey(appKey: string): NotificationAppConfig {
-  const entry = isAppEntryKey(appKey) ? appKey : getAppEntry();
-  const displayName =
-    process.env.NOTIFICATION_APP_NAME?.trim() || entry;
-
+  const displayName = process.env.NOTIFICATION_APP_NAME?.trim() || appKey;
   return {
-    appKey: entry,
+    appKey,
     appName: displayName,
     brandName: process.env.NOTIFICATION_BRAND_NAME?.trim() || displayName,
     supportEmail: resolveSupportEmail(),
@@ -23,16 +20,13 @@ function buildConfigForAppKey(appKey: string): NotificationAppConfig {
   };
 }
 
-/** 按 AppEntry 缓存的商户通知配置（进程内构建）。 */
 const configCache = new Map<string, NotificationAppConfig>();
 
 export function getNotificationAppConfig(appKey: string): NotificationAppConfig {
-  const key = isAppEntryKey(appKey) ? appKey : getAppEntry();
-  const cached = configCache.get(key);
+  const cached = configCache.get(appKey);
   if (cached) return cached;
-
-  const config = buildConfigForAppKey(key);
-  configCache.set(key, config);
+  const config = buildConfigForAppKey(appKey);
+  configCache.set(appKey, config);
   return config;
 }
 

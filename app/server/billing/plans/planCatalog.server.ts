@@ -4,7 +4,6 @@ import { PLAN_CATALOG_KIND, type PlanCatalogKind } from "../types.server";
 
 export type PlanRecord = {
   planKey: string;
-  appName: string;
   kind: PlanCatalogKind;
   billingInterval: string | null;
   displayName: string;
@@ -20,7 +19,7 @@ const PLAN_CATALOG_CACHE_TTL_MS = 5 * 60 * 1000;
 
 type CacheEntry<T> = { value: T; expiresAt: number };
 
-const listByAppCache = new Map<string, CacheEntry<PlanRecord[]>>();
+const listCache = new Map<string, CacheEntry<PlanRecord[]>>();
 const planByKeyCache = new Map<string, CacheEntry<PlanRecord>>();
 
 function readCache<T>(map: Map<string, CacheEntry<T>>, key: string): T | undefined {
@@ -42,7 +41,6 @@ function writeCache<T>(map: Map<string, CacheEntry<T>>, key: string, value: T): 
 
 function rowToPlanRecord(row: {
   planKey: string;
-  appName: string;
   kind: string;
   billingInterval: string | null;
   displayName: string;
@@ -54,7 +52,6 @@ function rowToPlanRecord(row: {
 }): PlanRecord {
   return {
     planKey: row.planKey,
-    appName: row.appName,
     kind: row.kind as PlanCatalogKind,
     billingInterval: row.billingInterval,
     displayName: row.displayName,
@@ -68,22 +65,21 @@ function rowToPlanRecord(row: {
 
 /** 测试或种子脚本写入后可使缓存失效。 */
 export function invalidatePlanCatalogCache(): void {
-  listByAppCache.clear();
+  listCache.clear();
   planByKeyCache.clear();
 }
 
-export async function listEnabledPlansForApp(
-  appName: string,
-): Promise<PlanRecord[]> {
-  const cached = readCache(listByAppCache, appName);
+export async function listEnabledPlans(): Promise<PlanRecord[]> {
+  const cacheKey = "all";
+  const cached = readCache(listCache, cacheKey);
   if (cached) return cached;
 
   const rows = await prisma.planCatalog.findMany({
-    where: { appName, enabled: true },
+    where: { enabled: true },
     orderBy: [{ sortOrder: "asc" }, { planKey: "asc" }],
   });
   const plans = rows.map(rowToPlanRecord);
-  writeCache(listByAppCache, appName, plans);
+  writeCache(listCache, cacheKey, plans);
   for (const plan of plans) {
     writeCache(planByKeyCache, plan.planKey, plan);
   }
@@ -107,12 +103,9 @@ export async function getPlanByKey(planKey: string): Promise<PlanRecord> {
   return plan;
 }
 
-export async function getInternalTrialPlan(
-  appName: string,
-): Promise<PlanRecord | null> {
+export async function getInternalTrialPlan(): Promise<PlanRecord | null> {
   const row = await prisma.planCatalog.findFirst({
     where: {
-      appName,
       kind: PLAN_CATALOG_KIND.INTERNAL_TRIAL,
       enabled: true,
     },

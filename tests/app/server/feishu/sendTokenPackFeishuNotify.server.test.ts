@@ -22,7 +22,7 @@ describe("buildTokenPackMessage", () => {
     const message = buildTokenPackMessage(
       {
         shop: "demo.myshopify.com",
-        appName: "product-improve",
+        appName: "spark",
         planKey: "token-pack-10k",
       },
       {
@@ -47,7 +47,6 @@ describe("sendTokenPackFeishuNotify", () => {
 
   beforeEach(() => {
     process.env.FEISHU_ENABLED = "true";
-    process.env.APP_ENTRY = "product-improve";
   });
 
   afterEach(() => {
@@ -61,7 +60,7 @@ describe("sendTokenPackFeishuNotify", () => {
 
     const result = await sendTokenPackFeishuNotify({
       shop: "demo.myshopify.com",
-      appName: "product-improve",
+      appName: "spark",
       planKey: "token-pack-10k",
     });
 
@@ -77,7 +76,7 @@ describe("sendTokenPackFeishuNotify", () => {
 
     const result = await sendTokenPackFeishuNotify({
       shop: "demo.myshopify.com",
-      appName: "product-improve",
+      appName: "spark",
       planKey: "token-pack-10k",
     });
 
@@ -100,17 +99,19 @@ describe("sendTokenPackFeishuNotify", () => {
 
     const result = await sendTokenPackFeishuNotify({
       shop: "demo.myshopify.com",
-      appName: "product-improve",
+      appName: "spark",
       planKey: "token-pack-10k",
     });
 
     expect(result).toEqual({ ok: true, channel: "ops_subscription" });
   });
 
-  it("skips when billing is not enabled for app", async () => {
+  it("skips when billing is disabled", async () => {
+    process.env.BILLING_ENABLED = "false";
+
     const result = await sendTokenPackFeishuNotify({
       shop: "demo.myshopify.com",
-      appName: "spark-zz",
+      appName: "spark",
       planKey: "token-pack-10k",
     });
 

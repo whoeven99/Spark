@@ -58,6 +58,10 @@ export type TranslationV4Metrics = {
   verifyDone: number;
   verifyFailed: number;
   usedTokens: number;
+  /** Set in Redis by the worker when TRANSLATING stage starts (epoch ms string). */
+  translateStartedAt?: string | null;
+  /** Current module being translated (from Redis, not persisted to Cosmos). */
+  currentModule?: string | null;
 };
 
 export const EMPTY_V4_METRICS: TranslationV4Metrics = {

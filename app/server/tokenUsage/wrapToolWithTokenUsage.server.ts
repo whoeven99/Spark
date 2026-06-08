@@ -1,12 +1,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import type { AgentContext } from "../ai/core/toolRegistry.server";
-import { getAppEntry } from "../../config/appEntry.server";
 import { parseUsageMetadata } from "./parseUsageMetadata.server";
 import { recordTokenUsage } from "./recordTokenUsage.server";
-
-function resolveAppName(context: AgentContext): string {
-  return context.appName?.trim() || getAppEntry();
-}
 
 /**
  * 包装 LangChain Tool：在每次调用后尝试记录 token（工具内 LLM 可通过返回值附带 usage）。
@@ -35,11 +30,7 @@ export function wrapToolWithTokenUsage(
       }
 
       if (usage.totalTokens > 0) {
-        await recordTokenUsage({
-          shop,
-          appName: resolveAppName(context),
-          usage,
-        });
+        await recordTokenUsage({ shop, usage });
       }
 
       return result;

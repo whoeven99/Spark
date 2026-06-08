@@ -84,7 +84,6 @@ export async function completeTask(params: {
         (completedAt.getTime() - meta.startedAt.getTime()) / 1000,
       );
       await updateTaskEstimation({
-        appName: meta.appName,
         taskType: meta.taskType as import("../../lib/aiTaskTypes").AITaskType,
         actualCredits: params.actualCredits ?? null,
         actualSeconds,

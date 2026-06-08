@@ -1,5 +1,4 @@
 import type { ActionFunctionArgs } from "react-router";
-import { getAppEntry } from "../config/appEntry.server";
 import { onAppUninstalled } from "../server/appLifecycle/onAppUninstalled.server";
 import {
   authenticateWebhookLogged,
@@ -7,8 +6,6 @@ import {
 } from "../server/webhook/webhookDebugLog.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const appName = getAppEntry();
-
   let shop: string;
   let session: Awaited<
     ReturnType<typeof authenticateWebhookLogged>
@@ -19,7 +16,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     ({ shop, session, topic, payload } = await authenticateWebhookLogged(request));
     console.info(
-      `[Webhook] app/uninstalled authenticated shop=${shop} topic=${topic} sessionId=${session?.id ?? "(none)"} appName=${appName}`,
+      `[Webhook] app/uninstalled authenticated shop=${shop} topic=${topic} sessionId=${session?.id ?? "(none)"}`,
     );
   } catch (error) {
     console.error("[Webhook] app/uninstalled authenticate.webhook failed:", error);
@@ -27,9 +24,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   try {
-    console.info(
-      `[Webhook] before-uninstall-handlers shop=${shop} appName=${appName}`,
-    );
+    console.info(`[Webhook] before-uninstall-handlers shop=${shop}`);
     const webhookId = request.headers.get("X-Shopify-Webhook-Id") ?? undefined;
 
     await onAppUninstalled({
@@ -38,17 +33,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       payload,
       sessionId: session?.id,
       webhookId,
-      appName,
       uninstalledAt: new Date(),
     });
-    console.info(
-      `[Webhook] after-uninstall-handlers shop=${shop}`,
-    );
+    console.info(`[Webhook] after-uninstall-handlers shop=${shop}`);
   } catch (error) {
-    console.error(
-      `[Webhook] uninstall handlers failed shop=${shop} appName=${appName}:`,
-      error,
-    );
+    console.error(`[Webhook] uninstall handlers failed shop=${shop}:`, error);
     throw error;
   }
 

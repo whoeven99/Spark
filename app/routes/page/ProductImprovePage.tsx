@@ -176,8 +176,8 @@ export function ProductImprovePage() {
         const params = new URLSearchParams(
           search.startsWith("?") ? search.slice(1) : search,
         );
-        params.set("taskId", taskId);
-        const resp = await fetch(`/api/ai-task-detail?${params.toString()}`);
+        params.delete("taskId");
+        const resp = await fetch(`/api/ai-task/${encodeURIComponent(taskId)}?${params.toString()}`);
         if (!resp.ok) return;
         const body = (await resp.json()) as { task?: AITaskItem };
         if (!body.task) return;
@@ -240,7 +240,6 @@ export function ProductImprovePage() {
       id: data.taskId,
       batchId: data.batchId,
       shop: "",
-      appName: "",
       taskType: "product_improve",
       status: "running",
       config: {

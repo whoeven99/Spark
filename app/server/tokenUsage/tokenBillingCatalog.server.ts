@@ -8,7 +8,6 @@ import { normalizeBillingModelKey } from "./tokenBillingTypes.server";
 
 export type TokenBillingRuleRecord = {
   ruleKey: string;
-  appName: string;
   feature: TokenBillingFeature;
   modelKey: string;
   displayName: string;
@@ -27,7 +26,6 @@ let cache: CacheEntry | null = null;
 
 function rowToRecord(row: {
   ruleKey: string;
-  appName: string;
   feature: string;
   modelKey: string;
   displayName: string;
@@ -49,7 +47,6 @@ function rowToRecord(row: {
   }
   return {
     ruleKey: row.ruleKey,
-    appName: row.appName,
     feature,
     modelKey: row.modelKey,
     displayName: row.displayName,
@@ -69,7 +66,7 @@ async function loadEnabledRules(): Promise<TokenBillingRuleRecord[]> {
 
   const rows = await prisma.tokenBillingRule.findMany({
     where: { enabled: true },
-    orderBy: [{ appName: "asc" }, { feature: "asc" }, { modelKey: "asc" }],
+    orderBy: [{ feature: "asc" }, { modelKey: "asc" }],
   });
 
   const rules = rows
@@ -82,28 +79,14 @@ async function loadEnabledRules(): Promise<TokenBillingRuleRecord[]> {
 
 function pickRule(
   rules: TokenBillingRuleRecord[],
-  appName: string,
   feature: TokenBillingFeature,
   modelKey: string,
 ): TokenBillingRuleRecord | null {
   const normalizedModel = normalizeBillingModelKey(modelKey);
-  const candidates: Array<{ appName: string; modelKey: string }> = [
-    { appName, modelKey: normalizedModel },
-    { appName, modelKey: "_default" },
-    { appName: "*", modelKey: normalizedModel },
-    { appName: "*", modelKey: "_default" },
-  ];
-
-  for (const key of candidates) {
-    const found = rules.find(
-      (r) =>
-        r.feature === feature &&
-        r.appName === key.appName &&
-        r.modelKey === key.modelKey,
-    );
+  for (const key of [normalizedModel, "_default"]) {
+    const found = rules.find((r) => r.feature === feature && r.modelKey === key);
     if (found) return found;
   }
-
   return null;
 }
 
@@ -124,23 +107,18 @@ function envBaseTokenCost(feature: TokenBillingFeature): number | null {
 }
 
 export async function resolveTokenBillingRule(params: {
-  appName: string;
   feature: TokenBillingFeature;
   modelKey: string;
 }): Promise<ResolvedTokenBillingRule> {
-  const appName = params.appName.trim() || "*";
   const rules = await loadEnabledRules();
-  const rule = pickRule(rules, appName, params.feature, params.modelKey);
+  const rule = pickRule(rules, params.feature, params.modelKey);
   const multiplier = rule?.multiplier ?? 1;
   const baseTokenCost = rule?.baseTokenCost ?? envBaseTokenCost(params.feature);
 
   return { rule, multiplier, baseTokenCost };
 }
 
-/** 运维排查：列出某 App 下已启用的计费规则。 */
-export async function listTokenBillingRulesForApp(
-  appName: string,
-): Promise<TokenBillingRuleRecord[]> {
-  const rules = await loadEnabledRules();
-  return rules.filter((r) => r.appName === appName || r.appName === "*");
+/** 运维排查：列出已启用的计费规则。 */
+export async function listTokenBillingRules(): Promise<TokenBillingRuleRecord[]> {
+  return loadEnabledRules();
 }

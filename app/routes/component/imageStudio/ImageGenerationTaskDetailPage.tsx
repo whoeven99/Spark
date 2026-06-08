@@ -125,8 +125,8 @@ export function ImageGenerationTaskDetailPage({
         const params = new URLSearchParams(
           locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
         );
-        params.set("taskId", task.id);
-        const resp = await fetch(`/api/ai-task-detail?${params.toString()}`);
+        params.delete("taskId");
+        const resp = await fetch(`/api/ai-task/${encodeURIComponent(task.id)}?${params.toString()}`);
         if (!resp.ok || cancelled) return;
         const body = (await resp.json()) as { task?: AITaskItem };
         if (!body.task || cancelled) return;

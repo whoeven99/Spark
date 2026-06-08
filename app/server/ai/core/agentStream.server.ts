@@ -13,7 +13,6 @@ import {
 import { buildShopChatGraph, getShopChatModel } from "./shopChatGraph.server";
 import { polishFinalReply } from "../utils/polishFinalReply";
 import { createLangsmithTracer, getTraceUrl } from "../utils/langsmith.server";
-import { getAppEntry } from "../../../config/appEntry.server";
 import {
   extractTokenUsageFromMessages,
   recordTokenUsage,
@@ -40,6 +39,7 @@ export type StreamChunk =
   | { type: "tool_call"; name: string; args: unknown }
   | { type: "tool_result"; name: string; result: string }
   | { type: "skill_progress"; event: SkillProgressEvent }
+  | { type: "status"; phase: "thinking" }
   | { type: "error"; message: string }
   | {
       type: "done";
@@ -152,7 +152,7 @@ export async function invokeChatAgentStream(
   const startedAtIso = new Date().toISOString();
   const wallStart = Date.now();
   const shop = context.shop?.trim();
-  const appName = context.appName ?? getAppEntry();
+  const appName = "spark";
   const lastUserTextInput = lastHumanUtterance(agentInputMessages);
 
   const tracer = createLangsmithTracer(sessionName ?? `chat-stream-${runId}`);
@@ -253,6 +253,8 @@ export async function invokeChatAgentStream(
       };
 
       try {
+        controller.enqueue({ type: "status", phase: "thinking" });
+
         context.emitProgress = (event) => {
           controller.enqueue({ type: "skill_progress", event });
         };
@@ -276,6 +278,7 @@ export async function invokeChatAgentStream(
 
         let lastMessages: BaseMessage[] | undefined;
         const streamContext = { emittedFlags: new Set<string>() };
+        let streamedTextAccum = "";
 
         for await (const item of lgStream) {
           if (!Array.isArray(item) || item.length < 2) continue;
@@ -289,6 +292,7 @@ export async function invokeChatAgentStream(
             if (AIMessageChunk.isInstance(message)) {
               const delta = extractMessageText(message);
               if (delta) {
+                streamedTextAccum += delta;
                 controller.enqueue({ type: "text", content: delta });
               }
             }
@@ -405,14 +409,19 @@ export async function invokeChatAgentStream(
 
         const agentUsage = extractTokenUsageFromMessages(resultMessages);
         if (shop && agentUsage.totalTokens > 0) {
-          await recordTokenUsage({
-            shop,
-            appName,
-            usage: agentUsage,
-          });
+          await recordTokenUsage({ shop, usage: agentUsage });
         }
 
         await persistStreamRun({ status: "success", resultMessages });
+
+        if (finalReply.length > streamedTextAccum.length) {
+          const remainder = finalReply.slice(streamedTextAccum.length);
+          if (remainder) {
+            controller.enqueue({ type: "text", content: remainder });
+          }
+        } else if (finalReply && !streamedTextAccum) {
+          controller.enqueue({ type: "text", content: finalReply });
+        }
 
         controller.enqueue({
           type: "done",
