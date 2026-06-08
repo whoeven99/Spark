@@ -393,6 +393,13 @@ export default function Todo() {
   );
 }
 
+const COMPACT_SELECT_ARROW_NONE = { suffixIcon: null } as const;
+
+function formatAssigneeLabel(assignee: TodoAssignee | null): string {
+  if (!assignee) return "未分配";
+  return assignee.charAt(0).toUpperCase() + assignee.slice(1);
+}
+
 function TodoCard({
   todo,
   statusRow,
@@ -415,31 +422,18 @@ function TodoCard({
   const [savingEta, setSavingEta] = useState(false);
   const [savingAssignee, setSavingAssignee] = useState(false);
   const currentStatusRow = STATUS_ROWS.find((s) => s.key === todo.status) ?? statusRow;
-  const statusOptions: { value: TodoStatus; label: React.ReactNode }[] = STATUS_ROWS.map((s) => ({
+  const statusOptions = STATUS_ROWS.map((s) => ({
     value: s.key,
-    label: (
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-        <span
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            background: s.color,
-            opacity: 0.85,
-          }}
-        />
-        <span>{s.label}</span>
-      </span>
-    ),
+    label: s.label,
   }));
 
   const assigneeOptions: { value: TodoAssignee | "__none__"; label: React.ReactNode }[] = [
-    { value: "__none__", label: <span style={{ color: "#94a3b8", fontSize: 11 }}>未分配</span> },
+    { value: "__none__", label: <span style={{ color: "#8c9196", fontSize: 12 }}>未分配</span> },
     ...MEMBERS.map((m) => ({
       value: m as TodoAssignee,
       label: (
         <Tag color={ASSIGNEE_COLORS[m]} style={{ margin: 0, fontSize: 11, lineHeight: "18px" }}>
-          {m.charAt(0).toUpperCase() + m.slice(1)}
+          {formatAssigneeLabel(m)}
         </Tag>
       ),
     })),
@@ -463,17 +457,22 @@ function TodoCard({
   return (
     <Card
       size="small"
-      style={{ borderTop: `2px solid ${statusRow.color}`, borderRadius: 6, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
-      styles={{ body: { padding: "10px 12px" } }}
+      style={{
+        border: "1px solid #e3e5e7",
+        borderLeft: `3px solid ${statusRow.color}`,
+        borderRadius: 8,
+        boxShadow: "none",
+        background: "#fff",
+      }}
+      styles={{ body: { padding: "10px 12px 8px" } }}
     >
-      {/* Title + actions */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-        <Typography.Text strong style={{ fontSize: 13, flex: 1, lineHeight: 1.5 }}>
+        <Typography.Text strong style={{ fontSize: 13, flex: 1, lineHeight: 1.45, color: "#202223" }}>
           {todo.title}
         </Typography.Text>
-        <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: 0, flexShrink: 0, opacity: 0.72 }}>
           <Tooltip title="编辑">
-            <Button type="text" size="small" icon={<EditOutlined />} onClick={onEdit} style={{ padding: "0 4px", color: "#8c8c8c" }} />
+            <Button type="text" size="small" icon={<EditOutlined />} onClick={onEdit} style={{ padding: "0 4px", color: "#6d7175" }} />
           </Tooltip>
           <Popconfirm title="确认删除？" onConfirm={onDelete} okText="删除" cancelText="取消">
             <Tooltip title="删除">
@@ -484,52 +483,75 @@ function TodoCard({
       </div>
 
       {todo.description && (
-        <Typography.Text type="secondary" style={{ fontSize: 12, display: "block", marginTop: 4, lineHeight: 1.4 }}>
+        <Typography.Text type="secondary" style={{ fontSize: 12, display: "block", marginTop: 4, lineHeight: 1.45 }}>
           {todo.description}
         </Typography.Text>
       )}
 
-      {/* Priority + status + date */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "nowrap" }}>
-        <Tag style={{ margin: 0, fontSize: 11, color: pri.color, background: pri.bg, borderColor: pri.border }}>{pri.label}</Tag>
-        <div
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          marginTop: 10,
+          paddingTop: 8,
+          borderTop: "1px solid #f1f2f3",
+          flexWrap: "wrap",
+        }}
+      >
+        <Tag
           style={{
-            width: 76,
-            flexShrink: 0,
-            height: 24,
-            border: `1px solid ${currentStatusRow.borderColor}`,
-            background: currentStatusRow.bgColor,
-            borderRadius: 6,
-            display: "flex",
-            alignItems: "center",
-            padding: "0 2px",
+            margin: 0,
+            fontSize: 11,
+            lineHeight: "18px",
+            padding: "0 6px",
+            color: pri.color,
+            background: pri.bg,
+            borderColor: pri.border,
+            borderRadius: 4,
           }}
         >
-          <Select<TodoStatus>
-            size="small"
-            variant="borderless"
-            value={todo.status}
-            onChange={(value) => {
-              if (value !== todo.status) {
-                onMove(todo, value);
-              }
-            }}
-            style={{ width: "100%", fontSize: 11, color: "#334155" }}
-            popupMatchSelectWidth={false}
-            options={statusOptions}
-          />
-        </div>
+          {pri.label}
+        </Tag>
+
+        <Select<TodoStatus>
+          {...COMPACT_SELECT_ARROW_NONE}
+          size="small"
+          variant="borderless"
+          value={todo.status}
+          onChange={(value) => {
+            if (value !== todo.status) {
+              onMove(todo, value);
+            }
+          }}
+          popupMatchSelectWidth={false}
+          options={statusOptions}
+          style={{ minWidth: 56, maxWidth: 72 }}
+          styles={{
+            selector: {
+              padding: "0 6px",
+              height: 22,
+              minHeight: 22,
+              background: currentStatusRow.bgColor,
+              border: `1px solid ${currentStatusRow.borderColor}`,
+              borderRadius: 4,
+              color: currentStatusRow.color,
+              fontSize: 11,
+              fontWeight: 600,
+            },
+          }}
+        />
+
         <div
           style={{
             height: 22,
-            padding: "0 3px",
-            border: "1px solid #cbd5e1",
-            borderRadius: 6,
-            background: "#f8fafc",
+            padding: "0 6px",
+            border: "1px solid #e3e5e7",
+            borderRadius: 4,
+            background: "#fafbfb",
             display: "inline-flex",
             alignItems: "center",
             gap: 2,
-            flexShrink: 0,
           }}
         >
           <InputNumber
@@ -544,50 +566,60 @@ function TodoCard({
             onPressEnter={() => {
               void persistEtaDays(etaDraft);
             }}
-            placeholder="x"
+            placeholder="—"
             min={0}
             precision={0}
             controls={false}
-            style={{ width: 26 }}
+            style={{ width: 24 }}
             variant="borderless"
             disabled={savingEta}
           />
-          <Typography.Text style={{ fontSize: 10, color: "#64748b" }}>days</Typography.Text>
+          <Typography.Text style={{ fontSize: 10, color: "#8c9196" }}>天</Typography.Text>
         </div>
-        <div
-          style={{
-            width: 72,
-            flexShrink: 0,
-            height: 24,
-            border: "1px solid #e2e8f0",
-            borderRadius: 6,
-            background: "#fff",
-            display: "flex",
-            alignItems: "center",
-            padding: "0 2px",
+
+        <Select<TodoAssignee | "__none__">
+          {...COMPACT_SELECT_ARROW_NONE}
+          size="small"
+          variant="borderless"
+          value={todo.assignee ?? "__none__"}
+          disabled={savingAssignee}
+          onChange={async (value) => {
+            const next = value === "__none__" ? null : value;
+            if (next === (todo.assignee ?? null)) return;
+            setSavingAssignee(true);
+            try {
+              await onAssigneeChange(todo, next);
+            } finally {
+              setSavingAssignee(false);
+            }
           }}
-        >
-          <Select<TodoAssignee | "__none__">
-            size="small"
-            variant="borderless"
-            value={todo.assignee ?? "__none__"}
-            disabled={savingAssignee}
-            onChange={async (value) => {
-              const next = value === "__none__" ? null : value;
-              if (next === (todo.assignee ?? null)) return;
-              setSavingAssignee(true);
-              try {
-                await onAssigneeChange(todo, next);
-              } finally {
-                setSavingAssignee(false);
-              }
-            }}
-            style={{ width: "100%", fontSize: 11 }}
-            popupMatchSelectWidth={false}
-            options={assigneeOptions}
-          />
-        </div>
-        <Typography.Text type="secondary" style={{ fontSize: 11, marginLeft: "auto" }}>
+          popupMatchSelectWidth={false}
+          options={assigneeOptions}
+          labelRender={(item) => {
+            const value = item.value as TodoAssignee | "__none__";
+            if (value === "__none__") {
+              return <span style={{ color: "#8c9196", fontSize: 11 }}>未分配</span>;
+            }
+            return (
+              <span style={{ fontSize: 11, fontWeight: 600, color: ASSIGNEE_HEX[value] }}>
+                {formatAssigneeLabel(value)}
+              </span>
+            );
+          }}
+          style={{ minWidth: 64, maxWidth: 80 }}
+          styles={{
+            selector: {
+              padding: "0 6px",
+              height: 22,
+              minHeight: 22,
+              background: "#fff",
+              border: "1px solid #e3e5e7",
+              borderRadius: 4,
+            },
+          }}
+        />
+
+        <Typography.Text type="secondary" style={{ fontSize: 11, marginLeft: "auto", color: "#8c9196" }}>
           {new Date(todo.createdAt).toLocaleDateString("zh-CN")}
         </Typography.Text>
       </div>

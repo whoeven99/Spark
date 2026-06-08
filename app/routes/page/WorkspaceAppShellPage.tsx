@@ -624,14 +624,14 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     setSelectedMediaIds((current) => (current.includes(mediaId) ? current.filter((id) => id !== mediaId) : [...current, mediaId]));
   };
 
-  const addLocalFile = async (payload: { file: File; note: string }) => {
+  const addLocalFile = async (payload: { file: File; note?: string }) => {
     const localId = `file-${Date.now()}`;
     const sizeLabel = payload.file.size > 1024 * 1024
       ? `${(payload.file.size / 1024 / 1024).toFixed(1)} MB`
       : `${Math.round(payload.file.size / 1024)} KB`;
 
     setLocalFiles((current) => [
-      { id: localId, name: payload.file.name, note: payload.note || "已上传", size: sizeLabel, serverId: null, uploading: true },
+      { id: localId, name: payload.file.name, note: payload.note?.trim() || "", size: sizeLabel, serverId: null, uploading: true },
       ...current,
     ]);
     setSelectedFileIds((current) => [localId, ...current]);
@@ -640,7 +640,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
       const authQuery = typeof window !== "undefined" ? window.location.search : "";
       const formData = new FormData();
       formData.append("file", payload.file);
-      formData.append("note", payload.note);
+      formData.append("note", payload.note?.trim() ?? "");
       const res = await fetch(`/api/upload-file${authQuery}`, { method: "POST", body: formData });
       if (!res.ok) {
         const errData = (await res.json().catch(() => ({}))) as { error?: string };
@@ -657,7 +657,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
                 charCount: data.charCount,
                 uploading: false,
                 uploadError: undefined,
-                note: payload.note.trim() || "已上传",
+                note: payload.note?.trim() || "",
               }
             : f,
         ),
@@ -1257,7 +1257,7 @@ function ChatPanel({
   onToggleObjectSelection: (type: ObjectType, object: SelectedShopifyObject) => void;
   onToggleFileSelection: (fileId: string) => void;
   onToggleMediaSelection: (mediaId: string) => void;
-  onAddLocalFile: (payload: { file: File; note: string }) => void;
+  onAddLocalFile: (payload: { file: File; note?: string }) => void;
   onDeleteLocalFile: (localId: string, serverId: string | null) => void;
   onAddRichMediaItem: (payload: { title: string; kind: RichMediaItem["kind"]; value: string; note: string }) => void;
   onCloseToolPicker: () => void;
@@ -1304,7 +1304,7 @@ function ChatPanel({
     order: "all",
   });
   const [newFileObj, setNewFileObj] = useState<File | null>(null);
-  const [newFileNote, setNewFileNote] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [newMediaTitle, setNewMediaTitle] = useState("");
   const [newMediaValue, setNewMediaValue] = useState("");
   const [newMediaNote, setNewMediaNote] = useState("");
@@ -1365,10 +1365,30 @@ function ChatPanel({
         : activeContextTool === "order"
           ? selectedObjectsByType.order.length
           : activeContextTool === "file"
-            ? selectedFileIds.length
+            ? selectedFileIds.length + (newFileObj ? 1 : 0)
             : activeContextTool === "media"
               ? selectedMediaIds.length
               : 0;
+
+  const resetPendingFileSelection = () => {
+    setNewFileObj(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDismissToolPicker = () => {
+    resetPendingFileSelection();
+    onCloseToolPicker();
+  };
+
+  const handleConfirmToolPicker = () => {
+    if (activeContextTool === "file" && newFileObj) {
+      void onAddLocalFile({ file: newFileObj });
+      resetPendingFileSelection();
+    }
+    onCloseToolPicker();
+  };
 
   const selectedSummaryBubbles: Array<{ key: ContextTool; label: string }> = [
     ...(selectedObjectsByType.product.length > 0 ? [{ key: "product" as const, label: `已选择 ${selectedObjectsByType.product.length} 个商品` }] : []),
@@ -1378,9 +1398,17 @@ function ChatPanel({
     ...(selectedMediaIds.length > 0 ? [{ key: "media" as const, label: `已选择 ${selectedMediaIds.length} 个富媒体` }] : []),
   ];
 
-  const scrollToBottom = () => {
-    if (messageListRef.current) {
-      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+  /**
+   * 即时滚到底部（流式期间用，不触发 smooth 动画避免和下一帧的赋值互相打架）。
+   * smooth=true 仅用于用户主动点击"查看最新消息"按钮。
+   */
+  const scrollToBottom = (smooth = false) => {
+    const el = messageListRef.current;
+    if (!el) return;
+    if (smooth) {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    } else {
+      el.scrollTop = el.scrollHeight;
     }
   };
 
@@ -1405,20 +1433,23 @@ function ChatPanel({
     ta.setSelectionRange(len, len);
   };
 
+  // 会话切换、新消息落地、流式气泡首次出现时：等下一帧 DOM 高度稳定后再滚底部
   useEffect(() => {
     const element = messageListRef.current;
     if (!element) return;
-    setTimeout(() => {
+    const raf = requestAnimationFrame(() => {
       if (!messageListRef.current) return;
       messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
       setIsScrolledUp(false);
-    }, 0);
+    });
+    return () => cancelAnimationFrame(raf);
   }, [conversation.id, messages.length, showStreamingReply]);
 
+  // 流式过程中自动追底：思考文字、正文、skill steps 任一增长都触发
   useEffect(() => {
     if (!showStreamingReply || isScrolledUp) return;
-    scrollToBottom();
-  }, [showStreamingReply, streamingText, skillSteps.length, isStreaming, isScrolledUp]);
+    scrollToBottom(); // instant，避免与下一帧 smooth 互相打架
+  }, [showStreamingReply, streamingText, streamingThinkingText, skillSteps.length, isStreaming, isScrolledUp]);
 
   useEffect(() => {
     const ta = textareaRef.current;
@@ -1436,7 +1467,7 @@ function ChatPanel({
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
-      onCloseToolPicker();
+      handleDismissToolPicker();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -1486,7 +1517,7 @@ function ChatPanel({
           </div>
           {isScrolledUp ? (
             <div style={scrollBottomOverlayStyle}>
-              <button type="button" style={scrollBottomButtonStyle} onClick={scrollToBottom}>
+              <button type="button" style={scrollBottomButtonStyle} onClick={() => scrollToBottom(true)}>
                 ↓ 查看最新消息
               </button>
             </div>
@@ -1574,7 +1605,7 @@ function ChatPanel({
       </section>
 
       {activeContextTool ? (
-        <div style={toolModalBackdropStyle} onClick={onCloseToolPicker}>
+        <div style={toolModalBackdropStyle} onClick={handleDismissToolPicker}>
           <div style={toolModalCardStyle} onClick={(event) => event.stopPropagation()}>
             <div style={toolModalHeaderStyle}>
               <div>
@@ -1593,7 +1624,7 @@ function ChatPanel({
                       : "选择需要附加到这次对话的 URL、图片或视频。"}
                 </div>
               </div>
-              <button type="button" style={toolModalCloseStyle} onClick={onCloseToolPicker} aria-label="关闭">
+              <button type="button" style={toolModalCloseStyle} onClick={handleDismissToolPicker} aria-label="关闭">
                 ✕
               </button>
             </div>
@@ -1663,6 +1694,7 @@ function ChatPanel({
               <>
                 <div style={mockCreateBoxStyle}>
                   <input
+                    ref={fileInputRef}
                     type="file"
                     accept=".txt,.md,.pdf,.docx,.csv,.xlsx,.xls,.json"
                     style={selectorSearchInputStyle}
@@ -1671,28 +1703,13 @@ function ChatPanel({
                       setNewFileObj(file);
                     }}
                   />
-                  <div style={inlineFieldRowStyle}>
-                    <input
-                      value={newFileNote}
-                      onChange={(event) => setNewFileNote(event.target.value)}
-                      placeholder="补充文件用途说明（可选）"
-                      style={compactFieldStyle}
-                    />
-                    <button
-                      type="button"
-                      style={ghostButtonStyle}
-                      onClick={() => {
-                        if (!newFileObj) return;
-                        void onAddLocalFile({ file: newFileObj, note: newFileNote.trim() });
-                        setNewFileObj(null);
-                        setNewFileNote("");
-                      }}
-                    >
-                      上传
-                    </button>
-                  </div>
+                  {newFileObj ? (
+                    <div style={{ fontSize: 12, color: "#202223", marginTop: 6 }}>
+                      已选择：{newFileObj.name}
+                    </div>
+                  ) : null}
                   <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
-                    支持：PDF、DOCX、TXT、MD、CSV、XLSX、JSON，最大 10 MB
+                    支持：PDF、DOCX、TXT、MD、CSV、XLSX、JSON，最大 10 MB。选好后点确认即可上传并附加。
                   </div>
                 </div>
                 <div style={selectorListCompactStyle}>
@@ -1712,7 +1729,7 @@ function ChatPanel({
                     </div>
                   ) : null}
                   {!workspaceFilesLoading && !workspaceFilesError && localFiles.length === 0 ? (
-                    <div style={sectionTextStyle}>暂无历史上传文件，可在上方上传后附加到对话。</div>
+                    <div style={sectionTextStyle}>暂无历史上传文件，可在上方选择文件后点确认上传。</div>
                   ) : null}
                   {localFiles.map((file) => {
                     const checked = selectedFileIds.includes(file.id);
@@ -1727,7 +1744,7 @@ function ChatPanel({
                         />
                         <div style={selectorItemContentStyle}>
                           <span style={sectionTitleSmallStyle}>{file.name}</span>
-                          <span style={sectionTextStyle}>{file.note}</span>
+                          {file.note ? <span style={sectionTextStyle}>{file.note}</span> : null}
                           <span style={mutedMetaStyle}>
                             {file.size}
                             {file.uploading ? " · 上传中…" : ""}
@@ -1844,7 +1861,7 @@ function ChatPanel({
                   ? `已选择 ${activeContextSelectionCount} 项，确认后将附加到本次对话`
                   : "勾选后点击确认附加到对话"}
               </span>
-              <button type="button" className="workspace-primary-btn" style={primaryButtonStyle} onClick={onCloseToolPicker}>
+              <button type="button" className="workspace-primary-btn" style={primaryButtonStyle} onClick={handleConfirmToolPicker}>
                 {activeContextSelectionCount > 0 ? `确认（${activeContextSelectionCount}）` : "确认"}
               </button>
             </div>
@@ -1913,7 +1930,7 @@ function ChatPanel({
                     <div style={ctxFileIconStyle}>↑</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={ctxItemTitleStyle}>{file.name}</div>
-                      {file.note && file.note !== "已上传" ? (
+                      {file.note ? (
                         <div style={{ fontSize: 11, color: "#8c9196", marginTop: 1 }}>{file.note}</div>
                       ) : null}
                     </div>
@@ -2295,11 +2312,11 @@ function buildWorkspaceContextBlock(params: {
   }
 
   if (params.selectedFileIds.length > 0) {
-    lines.push(`- 已选文件（共 ${params.selectedFileIds.length} 个）：`);
+    lines.push(`- 已选文件（共 ${params.selectedFileIds.length} 个，文件完整内容已注入系统消息，可直接引用）：`);
     for (const id of params.selectedFileIds) {
       const file = params.localFiles.find((item) => item.id === id);
       if (!file) continue;
-      const notePart = file.note && file.note !== "已上传" ? `（${file.note}）` : "";
+      const notePart = file.note ? `（${file.note}）` : "";
       const sizePart = file.charCount ? `，已解析 ${Math.round(file.charCount / 1000)}k 字符` : "";
       lines.push(`  • ${file.name}${notePart}${sizePart}`);
     }
@@ -2619,7 +2636,9 @@ const messageListStyle: CSSProperties = {
   height: "100%",
   overflowY: "auto",
   paddingRight: 6,
-  scrollBehavior: "smooth",
+  // scrollBehavior intentionally omitted: smooth is applied per-call only for
+  // user-initiated jumps (the "查看最新消息" button). During streaming we use
+  // instant assignment so rapid frames don't fight each other and miss the bottom.
 };
 const composerBoxStyle: CSSProperties = { flexShrink: 0, marginTop: 14, paddingTop: 14, borderTop: "1px solid #ebedf0" };
 const textareaStyle: CSSProperties = {
