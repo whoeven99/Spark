@@ -130,8 +130,7 @@ export async function loadBillingPageData(
 
   return {
     billing: toBillingPageSnapshot(ctx),
-    trialPlan:
-      ctx.plans.find((p) => p.kind === PLAN_CATALOG_KIND.INTERNAL_TRIAL) ?? null,
+    trialPlan: null,
     subscriptionPlans: ctx.plans.filter(
       (p) => p.kind === PLAN_CATALOG_KIND.SUBSCRIPTION,
     ),
@@ -154,12 +153,7 @@ export type BillingContext = {
   plans: PlanRecord[];
 };
 
-export async function loadBillingContext(
-  shop: string,
-  options?: { grantTrial?: boolean },
-): Promise<BillingContext> {
-  // 免费计划已下线，不再自动发放试用积分；存量用户的 trialTokens 保持不变
-  void options;
+export async function loadBillingContext(shop: string): Promise<BillingContext> {
 
   const account = await ensureAccount(shop);
   const subscription = await prisma.appSubscription.findUnique({

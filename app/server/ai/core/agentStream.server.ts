@@ -383,16 +383,54 @@ export async function invokeChatAgentStream(
               }
 
               if (
-                def.name === "generateProductDescription" &&
+                def.name === "productImprove" &&
+                !streamContext.emittedFlags.has("productImproveForm") &&
                 !streamContext.emittedFlags.has("generateProductDescription")
               ) {
+                const rec =
+                  payload && typeof payload === "object"
+                    ? (payload as Record<string, unknown>)
+                    : {};
+                const title = typeof rec.title === "string" ? rec.title.trim() : "";
+                const description =
+                  typeof rec.description === "string" ? rec.description.trim() : "";
+                const isGenerateResult =
+                  rec.ok === true || (Boolean(title) && Boolean(description));
+
+                if (isGenerateResult) {
+                  controller.enqueue({
+                    type: "tool_result",
+                    name: "generate_product_description",
+                    result: JSON.stringify(payload),
+                  });
+                } else {
+                  controller.enqueue({
+                    type: "tool_call",
+                    name: "open_product_improve_form",
+                    args: payload,
+                  });
+                }
+              }
+
+              if (
+                def.name === "pictureTranslateForm" &&
+                !streamContext.emittedFlags.has("pictureTranslateForm")
+              ) {
                 controller.enqueue({
-                  type: "tool_result",
-                  name: "generate_product_description",
-                  result:
-                    typeof payload === "object"
-                      ? JSON.stringify(payload)
-                      : String(payload),
+                  type: "tool_call",
+                  name: "open_picture_translate_form",
+                  args: payload,
+                });
+              }
+
+              if (
+                def.name === "imageGenerationForm" &&
+                !streamContext.emittedFlags.has("imageGenerationForm")
+              ) {
+                controller.enqueue({
+                  type: "tool_call",
+                  name: "open_image_generation_form",
+                  args: payload,
                 });
               }
             }

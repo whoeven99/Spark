@@ -2,7 +2,7 @@ import type { PlanRecord } from "./billingPageTypes";
 
 export type BillingIntervalView = "MONTHLY" | "ANNUAL";
 
-/** 订阅档位，与 PlanCatalog `planKey` 中段一致（如 `pi_base_monthly`、`gd_pro_annual`）。 */
+/** 订阅档位，与 PlanCatalog `planKey` 中段一致（如 `spark_base_monthly`、`spark_pro_annual`）。 */
 export type PlanTier = "base" | "pro" | "premium";
 
 const TIER_PLAN_KEY_SEGMENT: Record<PlanTier, string> = {
@@ -118,6 +118,7 @@ export function formatTokenUsagePercentDisplay(percent: number): string {
 
 export function planTierFromPlanKey(planKey: string): PlanTier | null {
   if (planKey.includes(TIER_PLAN_KEY_SEGMENT.base)) return "base";
+  if (planKey.includes(TIER_PLAN_KEY_SEGMENT.premium)) return "premium";
   if (planKey.includes(TIER_PLAN_KEY_SEGMENT.pro)) return "pro";
   return null;
 }

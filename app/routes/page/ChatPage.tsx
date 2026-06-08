@@ -7,6 +7,8 @@ import type {
   ChatMessageAttachment,
   ProductImproveCardPayload,
 } from "../../lib/chatMessage";
+import type { ImageGenerationFormPayload } from "../../lib/imageGenerationFormPayload";
+import type { PictureTranslateFormPayload } from "../../lib/pictureTranslateFormPayload";
 import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { coerceTranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { ChatMessages } from "../component/chat/ChatMessages";
@@ -45,6 +47,10 @@ export function ChatPage() {
     streamingTranslationForm,
     streamingGenerateCard,
     streamingGeneratePayload,
+    streamingPictureTranslateCard,
+    streamingPictureTranslatePayload,
+    streamingImageGenerationCard,
+    streamingImageGenerationPayload,
     sendMessage: streamConversation,
     prepareStreaming,
     abort: abortStream,
@@ -170,6 +176,20 @@ export function ChatPage() {
                       p.productImproveCardPayload as ProductImproveCardPayload,
                   }
                 : {}),
+              ...(p.pictureTranslateCard ? { pictureTranslateCard: true } : {}),
+              ...(p.pictureTranslateFormPayload
+                ? {
+                    pictureTranslateFormPayload:
+                      p.pictureTranslateFormPayload as PictureTranslateFormPayload,
+                  }
+                : {}),
+              ...(p.imageGenerationCard ? { imageGenerationCard: true } : {}),
+              ...(p.imageGenerationFormPayload
+                ? {
+                    imageGenerationFormPayload:
+                      p.imageGenerationFormPayload as ImageGenerationFormPayload,
+                  }
+                : {}),
             },
           ]);
 
@@ -214,6 +234,13 @@ export function ChatPage() {
     _detail: { taskId: string; batchId: string },
   ) => {
     shopify.toast.show(t("pictureTranslate.submitSuccess"));
+  };
+
+  const succeedImageGenerationCard = (
+    _messageIndex: number,
+    _detail: { taskId: string; batchId: string },
+  ) => {
+    shopify.toast.show(t("imageGeneration.submitSuccess"));
   };
 
   const showStreamingReply = isStreaming || awaitingAssistantReply;
@@ -295,10 +322,15 @@ export function ChatPage() {
                       streamingTranslationForm={streamingTranslationForm}
                       streamingGenerateCard={streamingGenerateCard}
                       streamingGeneratePayload={streamingGeneratePayload}
+                      streamingPictureTranslateCard={streamingPictureTranslateCard}
+                      streamingPictureTranslatePayload={streamingPictureTranslatePayload}
+                      streamingImageGenerationCard={streamingImageGenerationCard}
+                      streamingImageGenerationPayload={streamingImageGenerationPayload}
                     />
                   }
                   onTranslationCardSuccess={succeedTranslationCard}
                   onPictureTranslateCardSuccess={succeedPictureTranslateCard}
+                  onImageGenerationCardSuccess={succeedImageGenerationCard}
                 />
               </div>
             </div>

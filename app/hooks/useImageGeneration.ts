@@ -1,11 +1,13 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { ImageGenerationFormPayload } from "../lib/imageGenerationFormPayload";
 import type { AITaskCreateResponse, AITaskType } from "../lib/aiTaskTypes";
 
 const LOG_PREFIX = "[useImageGeneration]";
 
 export type UseImageGenerationParams = {
   locationSearch: string;
+  initialFormPayload?: ImageGenerationFormPayload;
   toastShow: (message: string) => void;
   onTaskCreated?: (
     taskId: string,
@@ -16,10 +18,12 @@ export type UseImageGenerationParams = {
 };
 
 export function useImageGeneration(params: UseImageGenerationParams) {
-  const { locationSearch, toastShow, onTaskCreated } = params;
+  const { locationSearch, toastShow, onTaskCreated, initialFormPayload } = params;
   const { t } = useTranslation();
 
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(
+    initialFormPayload?.description?.trim() ?? "",
+  );
   const [descriptionErrorText, setDescriptionErrorText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 

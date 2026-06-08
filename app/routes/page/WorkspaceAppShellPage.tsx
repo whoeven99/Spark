@@ -9,6 +9,10 @@ import type {
   ChatMessageAttachment,
   ProductImproveCardPayload,
 } from "../../lib/chatMessage";
+import type { ImageGenerationFormPayload } from "../../lib/imageGenerationFormPayload";
+import { coerceImageGenerationFormPayload } from "../../lib/imageGenerationFormPayload";
+import type { PictureTranslateFormPayload } from "../../lib/pictureTranslateFormPayload";
+import { coercePictureTranslateFormPayload } from "../../lib/pictureTranslateFormPayload";
 import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { coerceTranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { ChatMessages } from "../component/chat/ChatMessages";
@@ -36,6 +40,9 @@ type WorkspaceConversationMessage = {
   productImproveCard?: boolean;
   productImproveCardPayload?: ProductImproveCardPayload;
   pictureTranslateCard?: boolean;
+  pictureTranslateFormPayload?: PictureTranslateFormPayload;
+  imageGenerationCard?: boolean;
+  imageGenerationFormPayload?: ImageGenerationFormPayload;
 };
 
 type ConversationSummary = {
@@ -286,6 +293,10 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     streamingTranslationForm,
     streamingGenerateCard,
     streamingGeneratePayload,
+    streamingPictureTranslateCard,
+    streamingPictureTranslatePayload,
+    streamingImageGenerationCard,
+    streamingImageGenerationPayload,
     skillSteps,
     sendMessage: streamConversation,
     prepareStreaming,
@@ -617,6 +628,14 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     shopify.toast.show(t("pictureTranslate.submitSuccess"));
   };
 
+  const handleImageGenerationCardSuccess = (
+    _conversationId: string,
+    _messageIndex: number,
+    _detail: { taskId: string; batchId: string },
+  ) => {
+    shopify.toast.show(t("imageGeneration.submitSuccess"));
+  };
+
   useEffect(() => {
     if (!accountMenuOpen) return;
     const handlePointerDown = (event: MouseEvent) => {
@@ -770,6 +789,10 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             streamingTranslationForm={streamingTranslationForm}
             streamingGenerateCard={streamingGenerateCard}
             streamingGeneratePayload={streamingGeneratePayload}
+            streamingPictureTranslateCard={streamingPictureTranslateCard}
+            streamingPictureTranslatePayload={streamingPictureTranslatePayload}
+            streamingImageGenerationCard={streamingImageGenerationCard}
+            streamingImageGenerationPayload={streamingImageGenerationPayload}
             skillSteps={skillSteps}
             onAbortStream={() => {
               replyEpochRef.current += 1;
@@ -778,6 +801,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             }}
             onTranslationCardSuccess={handleTranslationCardSuccess}
             onPictureTranslateCardSuccess={handlePictureTranslateCardSuccess}
+            onImageGenerationCardSuccess={handleImageGenerationCardSuccess}
           />
         ) : null}
         {activePanel === "skills" ? <SkillsPanel onOpenTool={(path: string) => navigate(path)} /> : null}
@@ -933,10 +957,15 @@ function ChatPanel({
   streamingTranslationForm,
   streamingGenerateCard,
   streamingGeneratePayload,
+  streamingPictureTranslateCard,
+  streamingPictureTranslatePayload,
+  streamingImageGenerationCard,
+  streamingImageGenerationPayload,
   skillSteps,
   onAbortStream,
   onTranslationCardSuccess,
   onPictureTranslateCardSuccess,
+  onImageGenerationCardSuccess,
 }: {
   conversation: Conversation;
   messages: WorkspaceConversationMessage[];
@@ -966,6 +995,10 @@ function ChatPanel({
   streamingTranslationForm: unknown;
   streamingGenerateCard: boolean;
   streamingGeneratePayload: unknown;
+  streamingPictureTranslateCard: boolean;
+  streamingPictureTranslatePayload: unknown;
+  streamingImageGenerationCard: boolean;
+  streamingImageGenerationPayload: unknown;
   skillSteps: SkillStepProgress[];
   onAbortStream: () => void;
   onTranslationCardSuccess: (
@@ -974,6 +1007,11 @@ function ChatPanel({
     detail: { jobId?: string; jobIds?: string[]; message: string },
   ) => void;
   onPictureTranslateCardSuccess: (
+    conversationId: string,
+    messageIndex: number,
+    detail: { taskId: string; batchId: string },
+  ) => void;
+  onImageGenerationCardSuccess: (
     conversationId: string,
     messageIndex: number,
     detail: { taskId: string; batchId: string },
@@ -1098,6 +1136,17 @@ function ChatPanel({
     focusComposerInput();
   }, [conversation.id, isStreaming]);
 
+  useEffect(() => {
+    if (!activeContextTool) return;
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      onCloseToolPicker();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activeContextTool, onCloseToolPicker]);
+
   return (
     <div style={chatLayoutStyle}>
       <section style={{ ...surfaceCardStyle, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -1119,6 +1168,10 @@ function ChatPanel({
                   streamingTranslationForm={streamingTranslationForm}
                   streamingGenerateCard={streamingGenerateCard}
                   streamingGeneratePayload={streamingGeneratePayload}
+                  streamingPictureTranslateCard={streamingPictureTranslateCard}
+                  streamingPictureTranslatePayload={streamingPictureTranslatePayload}
+                  streamingImageGenerationCard={streamingImageGenerationCard}
+                  streamingImageGenerationPayload={streamingImageGenerationPayload}
                 />
               }
               onTranslationCardSuccess={(messageIndex, detail) =>
@@ -1126,6 +1179,9 @@ function ChatPanel({
               }
               onPictureTranslateCardSuccess={(messageIndex, detail) =>
                 onPictureTranslateCardSuccess(conversation.id, messageIndex, detail)
+              }
+              onImageGenerationCardSuccess={(messageIndex, detail) =>
+                onImageGenerationCardSuccess(conversation.id, messageIndex, detail)
               }
             />
           </div>
@@ -1648,6 +1704,13 @@ function workspaceMessageToChatMessage(message: WorkspaceConversationMessage): C
       ? { productImproveCardPayload: message.productImproveCardPayload }
       : {}),
     ...(message.pictureTranslateCard ? { pictureTranslateCard: true } : {}),
+    ...(message.pictureTranslateFormPayload
+      ? { pictureTranslateFormPayload: message.pictureTranslateFormPayload }
+      : {}),
+    ...(message.imageGenerationCard ? { imageGenerationCard: true } : {}),
+    ...(message.imageGenerationFormPayload
+      ? { imageGenerationFormPayload: message.imageGenerationFormPayload }
+      : {}),
   };
 }
 
@@ -1660,6 +1723,16 @@ function buildAssistantWorkspaceMessage(
     : undefined;
   const hasProductImproveCard =
     payload.productImproveCard || Boolean(payload.productImproveCardPayload);
+  const pictureTranslateFormPayload = payload.pictureTranslateFormPayload
+    ? coercePictureTranslateFormPayload(payload.pictureTranslateFormPayload)
+    : undefined;
+  const hasPictureTranslateCard =
+    payload.pictureTranslateCard || Boolean(pictureTranslateFormPayload);
+  const imageGenerationFormPayload = payload.imageGenerationFormPayload
+    ? coerceImageGenerationFormPayload(payload.imageGenerationFormPayload)
+    : undefined;
+  const hasImageGenerationCard =
+    payload.imageGenerationCard || Boolean(imageGenerationFormPayload);
 
   return {
     role: "assistant",
@@ -1670,6 +1743,14 @@ function buildAssistantWorkspaceMessage(
     ...(hasProductImproveCard ? { productImproveCard: true } : {}),
     ...(payload.productImproveCardPayload
       ? { productImproveCardPayload: payload.productImproveCardPayload as ProductImproveCardPayload }
+      : {}),
+    ...(hasPictureTranslateCard ? { pictureTranslateCard: true } : {}),
+    ...(pictureTranslateFormPayload
+      ? { pictureTranslateFormPayload }
+      : {}),
+    ...(hasImageGenerationCard ? { imageGenerationCard: true } : {}),
+    ...(imageGenerationFormPayload
+      ? { imageGenerationFormPayload }
       : {}),
   };
 }
@@ -1697,6 +1778,22 @@ function serializeAssistantPayloads(payload: ChatStreamFinishPayload): string | 
     result.productImproveCard = true;
     if (payload.productImproveCardPayload) result.productImproveCardPayload = payload.productImproveCardPayload;
   }
+  if (payload.pictureTranslateCard || payload.pictureTranslateFormPayload) {
+    result.pictureTranslateCard = true;
+    if (payload.pictureTranslateFormPayload) {
+      result.pictureTranslateFormPayload = coercePictureTranslateFormPayload(
+        payload.pictureTranslateFormPayload,
+      );
+    }
+  }
+  if (payload.imageGenerationCard || payload.imageGenerationFormPayload) {
+    result.imageGenerationCard = true;
+    if (payload.imageGenerationFormPayload) {
+      result.imageGenerationFormPayload = coerceImageGenerationFormPayload(
+        payload.imageGenerationFormPayload,
+      );
+    }
+  }
   return Object.keys(result).length > 0 ? JSON.stringify(result) : null;
 }
 
@@ -1719,6 +1816,22 @@ function dbMessageToUiMessage(msg: {
     ...(extras.productImproveCard ? { productImproveCard: true } : {}),
     ...(extras.productImproveCardPayload
       ? { productImproveCardPayload: extras.productImproveCardPayload as ProductImproveCardPayload }
+      : {}),
+    ...(extras.pictureTranslateCard ? { pictureTranslateCard: true } : {}),
+    ...(extras.pictureTranslateFormPayload
+      ? {
+          pictureTranslateFormPayload: coercePictureTranslateFormPayload(
+            extras.pictureTranslateFormPayload,
+          ),
+        }
+      : {}),
+    ...(extras.imageGenerationCard ? { imageGenerationCard: true } : {}),
+    ...(extras.imageGenerationFormPayload
+      ? {
+          imageGenerationFormPayload: coerceImageGenerationFormPayload(
+            extras.imageGenerationFormPayload,
+          ),
+        }
       : {}),
   };
 }

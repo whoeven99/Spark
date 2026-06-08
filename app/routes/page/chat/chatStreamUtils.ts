@@ -11,11 +11,15 @@ export function hasStreamingVisualContent(state: {
   skillSteps: SkillStepProgress[];
   streamingTranslationForm?: unknown;
   streamingGenerateCard: boolean;
+  streamingPictureTranslateCard?: boolean;
+  streamingImageGenerationCard?: boolean;
 }): boolean {
   return Boolean(
     state.streamingText.trim() ||
       state.skillSteps.length > 0 ||
       state.streamingTranslationForm ||
-      state.streamingGenerateCard,
+      state.streamingGenerateCard ||
+      state.streamingPictureTranslateCard ||
+      state.streamingImageGenerationCard,
   );
 }

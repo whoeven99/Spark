@@ -2,6 +2,9 @@ import { useCallback, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { ChatMessage, ChatMessageAttachment } from "../../../lib/chatMessage";
 import { coerceChatMessageAttachments } from "../../../lib/chatMessage";
+import { coerceProductImproveFormPayload } from "../../../lib/productImproveFormPayload";
+import { coerceImageGenerationFormPayload } from "../../../lib/imageGenerationFormPayload";
+import { coercePictureTranslateFormPayload } from "../../../lib/pictureTranslateFormPayload";
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import {
   hasStreamingVisualContent,
@@ -35,6 +38,8 @@ type StreamChunk =
         uiPayloads?: {
           translationTaskForm?: unknown;
           productImproveCardPayload?: unknown;
+          pictureTranslateCard?: unknown;
+          imageGenerationCard?: unknown;
           attachments?: unknown;
         };
       };
@@ -47,6 +52,10 @@ export type ChatStreamFinishPayload = {
   attachments?: ChatMessageAttachment[];
   productImproveCard?: boolean;
   productImproveCardPayload?: unknown;
+  pictureTranslateCard?: boolean;
+  pictureTranslateFormPayload?: unknown;
+  imageGenerationCard?: boolean;
+  imageGenerationFormPayload?: unknown;
   httpStatus?: number;
 };
 
@@ -57,7 +66,26 @@ type Snapshot = {
   attachments: ChatMessageAttachment[];
   productImproveCard: boolean;
   productImproveCardPayload?: unknown;
+  pictureTranslateCard: boolean;
+  pictureTranslateFormPayload?: unknown;
+  imageGenerationCard: boolean;
+  imageGenerationFormPayload?: unknown;
 };
+
+function snapshotToFinishPayload(snapshot: Snapshot, aborted: boolean): ChatStreamFinishPayload {
+  return {
+    aborted,
+    reply: snapshot.reply,
+    translationTaskForm: snapshot.translationTaskForm,
+    attachments: snapshot.attachments,
+    productImproveCard: snapshot.productImproveCard,
+    productImproveCardPayload: snapshot.productImproveCardPayload,
+    pictureTranslateCard: snapshot.pictureTranslateCard,
+    pictureTranslateFormPayload: snapshot.pictureTranslateFormPayload,
+    imageGenerationCard: snapshot.imageGenerationCard,
+    imageGenerationFormPayload: snapshot.imageGenerationFormPayload,
+  };
+}
 
 /** @deprecated 兼容旧名，等价于 SkillStepProgress */
 export type PlaybookStepProgress = SkillStepProgress;
@@ -69,6 +97,12 @@ export function useChatStream() {
   const [streamingTranslationForm, setStreamingTranslationForm] = useState<unknown>();
   const [streamingGenerateCard, setStreamingGenerateCard] = useState(false);
   const [streamingGeneratePayload, setStreamingGeneratePayload] = useState<unknown>();
+  const [streamingPictureTranslateCard, setStreamingPictureTranslateCard] = useState(false);
+  const [streamingPictureTranslatePayload, setStreamingPictureTranslatePayload] =
+    useState<unknown>();
+  const [streamingImageGenerationCard, setStreamingImageGenerationCard] = useState(false);
+  const [streamingImageGenerationPayload, setStreamingImageGenerationPayload] =
+    useState<unknown>();
   const [skillSteps, setSkillSteps] = useState<SkillStepProgress[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const snapshotRef = useRef<Snapshot>({
@@ -78,6 +112,10 @@ export function useChatStream() {
     attachments: [],
     productImproveCard: false,
     productImproveCardPayload: undefined,
+    pictureTranslateCard: false,
+    pictureTranslateFormPayload: undefined,
+    imageGenerationCard: false,
+    imageGenerationFormPayload: undefined,
   });
 
   const resetSnapshot = () => {
@@ -88,7 +126,23 @@ export function useChatStream() {
       attachments: [],
       productImproveCard: false,
       productImproveCardPayload: undefined,
+      pictureTranslateCard: false,
+      pictureTranslateFormPayload: undefined,
+      imageGenerationCard: false,
+      imageGenerationFormPayload: undefined,
     };
+  };
+
+  const resetStreamingUi = () => {
+    setStreamingText("");
+    setStreamingTranslationForm(undefined);
+    setStreamingGenerateCard(false);
+    setStreamingGeneratePayload(undefined);
+    setStreamingPictureTranslateCard(false);
+    setStreamingPictureTranslatePayload(undefined);
+    setStreamingImageGenerationCard(false);
+    setStreamingImageGenerationPayload(undefined);
+    setSkillSteps([]);
   };
 
   const prepareStreaming = useCallback(() => {
@@ -96,11 +150,7 @@ export function useChatStream() {
       setIsStreaming(true);
       setAwaitingFirstChunk(true);
       resetSnapshot();
-      setStreamingText("");
-      setStreamingTranslationForm(undefined);
-      setStreamingGenerateCard(false);
-      setStreamingGeneratePayload(undefined);
-      setSkillSteps([]);
+      resetStreamingUi();
     });
   }, []);
 
@@ -126,11 +176,7 @@ export function useChatStream() {
         finalized = true;
         setIsStreaming(false);
         setAwaitingFirstChunk(false);
-        setStreamingText("");
-        setStreamingTranslationForm(undefined);
-        setStreamingGenerateCard(false);
-        setStreamingGeneratePayload(undefined);
-        setSkillSteps([]);
+        resetStreamingUi();
         onFinish?.(payload);
       };
 
@@ -210,6 +256,24 @@ export function useChatStream() {
                   const normalized = coerceTranslationTaskFormPayload(chunk.args);
                   snapshotRef.current.translationTaskForm = normalized;
                   setStreamingTranslationForm(normalized);
+                } else if (chunk.name === "open_product_improve_form") {
+                  const normalized = coerceProductImproveFormPayload(chunk.args);
+                  snapshotRef.current.productImproveCard = true;
+                  snapshotRef.current.productImproveCardPayload = normalized;
+                  setStreamingGenerateCard(true);
+                  setStreamingGeneratePayload(normalized);
+                } else if (chunk.name === "open_picture_translate_form") {
+                  const normalized = coercePictureTranslateFormPayload(chunk.args);
+                  snapshotRef.current.pictureTranslateCard = true;
+                  snapshotRef.current.pictureTranslateFormPayload = normalized;
+                  setStreamingPictureTranslateCard(true);
+                  setStreamingPictureTranslatePayload(normalized);
+                } else if (chunk.name === "open_image_generation_form") {
+                  const normalized = coerceImageGenerationFormPayload(chunk.args);
+                  snapshotRef.current.imageGenerationCard = true;
+                  snapshotRef.current.imageGenerationFormPayload = normalized;
+                  setStreamingImageGenerationCard(true);
+                  setStreamingImageGenerationPayload(normalized);
                 }
               } else if (chunk.type === "tool_result") {
                 markFirstChunkSeen();
@@ -251,16 +315,29 @@ export function useChatStream() {
                   setStreamingGenerateCard(true);
                   setStreamingGeneratePayload(ui.productImproveCardPayload);
                 }
+                if (ui?.pictureTranslateCard) {
+                  const normalized = coercePictureTranslateFormPayload(
+                    ui.pictureTranslateCard,
+                  );
+                  snapshotRef.current.pictureTranslateCard = true;
+                  snapshotRef.current.pictureTranslateFormPayload = normalized;
+                  setStreamingPictureTranslateCard(true);
+                  setStreamingPictureTranslatePayload(normalized);
+                }
+                if (ui?.imageGenerationCard) {
+                  const normalized = coerceImageGenerationFormPayload(
+                    ui.imageGenerationCard,
+                  );
+                  snapshotRef.current.imageGenerationCard = true;
+                  snapshotRef.current.imageGenerationFormPayload = normalized;
+                  setStreamingImageGenerationCard(true);
+                  setStreamingImageGenerationPayload(normalized);
+                }
 
-                const finishPayload: ChatStreamFinishPayload = {
-                  aborted: false,
-                  reply,
-                  translationTaskForm: snapshotRef.current.translationTaskForm,
-                  attachments: snapshotRef.current.attachments,
-                  productImproveCard: snapshotRef.current.productImproveCard,
-                  productImproveCardPayload:
-                    snapshotRef.current.productImproveCardPayload,
-                };
+                const finishPayload = snapshotToFinishPayload(
+                  snapshotRef.current,
+                  false,
+                );
 
                 const streamed = snapshotRef.current.streamedText;
                 if (reply && reply.length > streamed.length) {
@@ -278,55 +355,25 @@ export function useChatStream() {
         }
 
         if (!finalized) {
-          finalizeOnce({
-            aborted: false,
-            reply: snapshotRef.current.reply,
-            translationTaskForm: snapshotRef.current.translationTaskForm,
-            attachments: snapshotRef.current.attachments,
-            productImproveCard: snapshotRef.current.productImproveCard,
-            productImproveCardPayload:
-              snapshotRef.current.productImproveCardPayload,
-          });
+          finalizeOnce(snapshotToFinishPayload(snapshotRef.current, false));
         }
       } catch (e) {
         const aborted = e instanceof Error && e.name === "AbortError";
         if (aborted) {
-          finalizeOnce({
-            aborted: true,
-            reply: snapshotRef.current.reply,
-            translationTaskForm: snapshotRef.current.translationTaskForm,
-            attachments: snapshotRef.current.attachments,
-            productImproveCard: snapshotRef.current.productImproveCard,
-            productImproveCardPayload:
-              snapshotRef.current.productImproveCardPayload,
-          });
+          finalizeOnce(snapshotToFinishPayload(snapshotRef.current, true));
         } else {
           console.error("Stream error", e);
           const fallback = "抱歉，服务暂时不可用，请稍后重试。";
           setStreamingText(fallback);
           snapshotRef.current.reply = fallback;
-          finalizeOnce({
-            aborted: false,
-            reply: fallback,
-            translationTaskForm: snapshotRef.current.translationTaskForm,
-            attachments: snapshotRef.current.attachments,
-            productImproveCard: snapshotRef.current.productImproveCard,
-            productImproveCardPayload:
-              snapshotRef.current.productImproveCardPayload,
-          });
+          finalizeOnce(snapshotToFinishPayload(snapshotRef.current, false));
         }
       } finally {
         abortControllerRef.current = null;
         if (!finalized) {
-          finalizeOnce({
-            aborted: controller.signal.aborted,
-            reply: snapshotRef.current.reply,
-            translationTaskForm: snapshotRef.current.translationTaskForm,
-            attachments: snapshotRef.current.attachments,
-            productImproveCard: snapshotRef.current.productImproveCard,
-            productImproveCardPayload:
-              snapshotRef.current.productImproveCardPayload,
-          });
+          finalizeOnce(
+            snapshotToFinishPayload(snapshotRef.current, controller.signal.aborted),
+          );
         }
       }
     },
@@ -344,6 +391,10 @@ export function useChatStream() {
     streamingTranslationForm,
     streamingGenerateCard,
     streamingGeneratePayload,
+    streamingPictureTranslateCard,
+    streamingPictureTranslatePayload,
+    streamingImageGenerationCard,
+    streamingImageGenerationPayload,
     skillSteps,
     /** @deprecated 兼容旧名 */
     playbookSteps: skillSteps,

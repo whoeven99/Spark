@@ -1,10 +1,14 @@
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
+import type { ImageGenerationFormPayload } from "../../../lib/imageGenerationFormPayload";
+import type { PictureTranslateFormPayload } from "../../../lib/pictureTranslateFormPayload";
 import type { ProductImproveCardPayload } from "../../../lib/chatMessage";
 import type { TranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import { ChatMessageContent } from "./ChatMessageContent";
 import { ChatStreamingSkeleton } from "./ChatStreamingSkeleton";
+import { ImageGenerationChatCard } from "./ImageGenerationChatCard";
+import { PictureTranslateChatCard } from "./PictureTranslateChatCard";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
 import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard";
 import {
@@ -20,6 +24,10 @@ type StreamingAssistantReplyProps = {
   streamingTranslationForm?: unknown;
   streamingGenerateCard: boolean;
   streamingGeneratePayload?: unknown;
+  streamingPictureTranslateCard?: boolean;
+  streamingPictureTranslatePayload?: unknown;
+  streamingImageGenerationCard?: boolean;
+  streamingImageGenerationPayload?: unknown;
 };
 
 const assistantBubbleShellStyle: CSSProperties = {
@@ -93,6 +101,10 @@ export function StreamingAssistantReply({
   streamingTranslationForm,
   streamingGenerateCard,
   streamingGeneratePayload,
+  streamingPictureTranslateCard = false,
+  streamingPictureTranslatePayload,
+  streamingImageGenerationCard = false,
+  streamingImageGenerationPayload,
 }: StreamingAssistantReplyProps) {
   if (!active) return null;
 
@@ -101,13 +113,24 @@ export function StreamingAssistantReply({
     : undefined;
   const streamingProductImprovePayload =
     streamingGeneratePayload as ProductImproveCardPayload | undefined;
+  const streamingPictureTranslateFormPayload =
+    streamingPictureTranslatePayload as PictureTranslateFormPayload | undefined;
+  const streamingImageGenerationFormPayload =
+    streamingImageGenerationPayload as ImageGenerationFormPayload | undefined;
   const hasContent = hasStreamingVisualContent({
     streamingText,
     skillSteps,
     streamingTranslationForm,
     streamingGenerateCard,
+    streamingPictureTranslateCard,
+    streamingImageGenerationCard,
   });
-  const hasEmbeddedCard = Boolean(streamingTranslationPayload || streamingGenerateCard);
+  const hasEmbeddedCard = Boolean(
+    streamingTranslationPayload ||
+      streamingGenerateCard ||
+      streamingPictureTranslateCard ||
+      streamingImageGenerationCard,
+  );
 
   return (
     <div style={{ display: "flex", justifyContent: "flex-start" }}>
@@ -147,6 +170,24 @@ export function StreamingAssistantReply({
               {streamingGenerateCard ? (
                 <div style={cardSlotStyle}>
                   <ProductImproveChatCard embedded initialResult={streamingProductImprovePayload} />
+                </div>
+              ) : null}
+
+              {streamingPictureTranslateCard ? (
+                <div style={cardSlotStyle}>
+                  <PictureTranslateChatCard
+                    embedded
+                    initialFormPayload={streamingPictureTranslateFormPayload}
+                  />
+                </div>
+              ) : null}
+
+              {streamingImageGenerationCard ? (
+                <div style={cardSlotStyle}>
+                  <ImageGenerationChatCard
+                    embedded
+                    initialFormPayload={streamingImageGenerationFormPayload}
+                  />
                 </div>
               ) : null}
             </div>

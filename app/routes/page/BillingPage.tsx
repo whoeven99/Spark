@@ -132,7 +132,7 @@ function buildMockBillingPlans(params: {
   mockedPlans.push(
     premiumMonthly ??
       createMockPlan({
-        planKey: "pi_premium_monthly",
+        planKey: "spark_premium_monthly",
         billingInterval: "MONTHLY",
         displayName: "Premium (Monthly)",
         tokens: 10000000,
@@ -144,7 +144,7 @@ function buildMockBillingPlans(params: {
   mockedPlans.push(
     premiumAnnual ??
       createMockPlan({
-        planKey: "pi_premium_annual",
+        planKey: "spark_premium_annual",
         billingInterval: "ANNUAL",
         displayName: "Premium (Annual)",
         tokens: 130000000,

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { ChatMessage } from "../../../lib/chatMessage";
 import { ChatMessageContent } from "./ChatMessageContent";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
+import { ImageGenerationChatCard } from "./ImageGenerationChatCard";
 import { PictureTranslateChatCard } from "./PictureTranslateChatCard";
 import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard";
 
@@ -17,6 +18,10 @@ type ChatMessagesProps = {
     messageIndex: number,
     detail: { taskId: string; batchId: string },
   ) => void;
+  onImageGenerationCardSuccess?: (
+    messageIndex: number,
+    detail: { taskId: string; batchId: string },
+  ) => void;
 };
 
 export function ChatMessages({
@@ -24,6 +29,7 @@ export function ChatMessages({
   streamingSlot,
   onTranslationCardSuccess,
   onPictureTranslateCardSuccess,
+  onImageGenerationCardSuccess,
 }: ChatMessagesProps) {
   const { t } = useTranslation();
   return (
@@ -35,6 +41,8 @@ export function ChatMessages({
           item.role === "assistant" && Boolean(item.productImproveCard);
         const hasPictureTranslateCard =
           item.role === "assistant" && Boolean(item.pictureTranslateCard);
+        const hasImageGenerationCard =
+          item.role === "assistant" && Boolean(item.imageGenerationCard);
         const imageAttachments =
           item.role === "assistant"
             ? item.attachments?.filter((attachment) => attachment.type === "image") ?? []
@@ -44,6 +52,7 @@ export function ChatMessages({
           hasTranslationCard ||
           hasGenerateDescriptionCard ||
           hasPictureTranslateCard ||
+          hasImageGenerationCard ||
           hasImageAttachments;
 
         const bubbleShellStyle: CSSProperties = {
@@ -154,8 +163,21 @@ export function ChatMessages({
                     <div style={{ marginTop: "0.85rem" }}>
                       <PictureTranslateChatCard
                         embedded
+                        initialFormPayload={item.pictureTranslateFormPayload}
                         onTaskCreated={(taskId, batchId) =>
                           onPictureTranslateCardSuccess(index, { taskId, batchId })
+                        }
+                      />
+                    </div>
+                  ) : null}
+
+                  {hasImageGenerationCard ? (
+                    <div style={{ marginTop: "0.85rem" }}>
+                      <ImageGenerationChatCard
+                        embedded
+                        initialFormPayload={item.imageGenerationFormPayload}
+                        onTaskCreated={(taskId, batchId) =>
+                          onImageGenerationCardSuccess?.(index, { taskId, batchId })
                         }
                       />
                     </div>
