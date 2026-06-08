@@ -1,5 +1,5 @@
 import type { CSSProperties, KeyboardEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
@@ -23,11 +23,10 @@ import { ContextWindowIndicator } from "../component/chat/ContextWindowIndicator
 import { WorkspaceContextObjectPicker } from "../component/chat/WorkspaceContextObjectPicker";
 import { estimateMessagesTokens } from "../../lib/tokenEstimate";
 import type { SelectedShopifyObject } from "../../lib/shopifyObjectTypes";
+import { UnifiedTaskListPage } from "../component/unifiedTaskList/UnifiedTaskListPage";
 
 type WorkspacePanel = "dashboard" | "chat" | "skills" | "automation" | "tasks";
 type AutomationView = "configured" | "history" | "templates";
-type TaskKind = "automation" | "one_off";
-type TaskStatus = "executing" | "review_required" | "completed" | "failed";
 type ObjectType = "product" | "article" | "order";
 type ContextTool = ObjectType | "file" | "media";
 
@@ -54,18 +53,6 @@ type ConversationSummary = {
 };
 
 type Conversation = ConversationSummary;
-
-type TaskRecord = {
-  id: string;
-  title: string;
-  kind: TaskKind;
-  source: string;
-  status: TaskStatus;
-  progress: number;
-  updatedAt: string;
-  summary: string;
-  action: string;
-};
 
 type DashboardMetric = {
   label: string;
@@ -156,10 +143,31 @@ const objectOptions: Record<ObjectType, ObjectOption[]> = {
   ],
 };
 
-const initialLocalFiles: LocalFileItem[] = [
-  { id: "file-1", name: "brand-guideline.pdf", size: "2.3 MB", note: "品牌语气和禁用词说明", serverId: null },
-  { id: "file-2", name: "product-seo-rules.docx", size: "540 KB", note: "商品标题与描述 SEO 规范", serverId: null },
-];
+function formatFileSizeLabel(bytes: number): string {
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+type WorkspaceFileListRecord = {
+  id: string;
+  name: string;
+  originalSize: number;
+  charCount: number;
+  createdAt: string;
+};
+
+function workspaceFileToLocalItem(file: WorkspaceFileListRecord): LocalFileItem {
+  return {
+    id: file.id,
+    serverId: file.id,
+    name: file.name,
+    size: formatFileSizeLabel(file.originalSize),
+    note: "历史上传",
+    charCount: file.charCount,
+  };
+}
 
 const initialRichMediaItems: RichMediaItem[] = [
   { id: "media-1", title: "Summer campaign landing", kind: "url", value: "https://spark-demo.shop/summer", note: "活动落地页 URL" },
@@ -244,13 +252,6 @@ const automationTemplates = [
   { id: "tpl-3", title: "SEO 标题优化批次", detail: "定时扫描表现弱的商品并生成标题优化建议" },
 ];
 
-const initialTasks: TaskRecord[] = [
-  { id: "TASK-241198", title: "每日订单异常巡检", kind: "automation", source: "订单监控", status: "executing", progress: 64, updatedAt: "2 分钟前", summary: "正在扫描退款、超时履约和异常金额订单。", action: "查看运行日志" },
-  { id: "TASK-241190", title: "多语言商品翻译", kind: "one_off", source: "翻译工具", status: "executing", progress: 51, updatedAt: "11 分钟前", summary: "英语与日语翻译已过半，正在写回结果。", action: "查看进度" },
-  { id: "TASK-241177", title: "新品描述补齐", kind: "one_off", source: "AI 对话", status: "review_required", progress: 100, updatedAt: "今天 09:03", summary: "已补齐 24 个新品描述，待人工审核。", action: "进入审核" },
-  { id: "TASK-241160", title: "每日经营简报", kind: "automation", source: "经营看板", status: "completed", progress: 100, updatedAt: "今天 09:00", summary: "已生成日报并同步到 Dashboard。", action: "查看简报" },
-  { id: "TASK-241155", title: "异常订单重跑", kind: "automation", source: "订单监控", status: "failed", progress: 100, updatedAt: "昨天 19:04", summary: "重跑失败，原因是订单数据源响应超时。", action: "重新执行" },
-];
 
 function isWorkspacePanel(value: string | null): value is WorkspacePanel {
   return value === "dashboard" || value === "chat" || value === "skills" || value === "automation" || value === "tasks";
@@ -274,7 +275,6 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   const [messagesByConversation, setMessagesByConversation] = useState<Record<string, WorkspaceConversationMessage[]>>({});
   const loadedConvIdsRef = useRef<Set<string>>(new Set());
   const [automationView, setAutomationView] = useState<AutomationView>("configured");
-  const [taskFilter, setTaskFilter] = useState<"all" | TaskKind>("all");
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [activeContextTool, setActiveContextTool] = useState<ContextTool | null>(null);
   const [objectQueryByType, setObjectQueryByType] = useState<Record<ObjectType, string>>({
@@ -289,7 +289,9 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     article: [],
     order: [],
   });
-  const [localFiles, setLocalFiles] = useState<LocalFileItem[]>(initialLocalFiles);
+  const [localFiles, setLocalFiles] = useState<LocalFileItem[]>([]);
+  const [workspaceFilesLoading, setWorkspaceFilesLoading] = useState(false);
+  const [workspaceFilesError, setWorkspaceFilesError] = useState<string | null>(null);
   const [richMediaItems, setRichMediaItems] = useState<RichMediaItem[]>(initialRichMediaItems);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
@@ -316,10 +318,6 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   const activePanel: WorkspacePanel = isWorkspacePanel(panelParam) ? panelParam : "dashboard";
   const activeConversation = conversationList.find((item) => item.id === activeConversationId) ?? null;
   const activeMessages = activeConversation ? (messagesByConversation[activeConversation.id] ?? []) : [];
-  const filteredTasks = useMemo(
-    () => (taskFilter === "all" ? initialTasks : initialTasks.filter((task) => task.kind === taskFilter)),
-    [taskFilter],
-  );
 
   // Lazy-load messages when switching to a conversation for the first time
   useEffect(() => {
@@ -462,6 +460,40 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     });
   };
 
+  const loadWorkspaceFiles = useCallback(async () => {
+    setWorkspaceFilesLoading(true);
+    setWorkspaceFilesError(null);
+    try {
+      const authQuery = typeof window !== "undefined" ? window.location.search : "";
+      const res = await fetch(`/api/files${authQuery}`);
+      if (!res.ok) {
+        const errData = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(errData.error ?? `加载失败 (${res.status})`);
+      }
+      const data = (await res.json()) as { files: WorkspaceFileListRecord[] };
+      setLocalFiles((current) => {
+        const inFlight = current.filter((file) => file.uploading);
+        const serverItems = data.files.map(workspaceFileToLocalItem);
+        const seen = new Set(serverItems.map((file) => file.id));
+        const recentUploaded = current.filter(
+          (file) => file.serverId && !seen.has(file.serverId) && !file.uploading,
+        );
+        return [...inFlight, ...recentUploaded, ...serverItems];
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setWorkspaceFilesError(msg);
+    } finally {
+      setWorkspaceFilesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeContextTool === "file") {
+      void loadWorkspaceFiles();
+    }
+  }, [activeContextTool, loadWorkspaceFiles]);
+
   const toggleFileSelection = (fileId: string) => {
     setSelectedFileIds((current) => (current.includes(fileId) ? current.filter((id) => id !== fileId) : [...current, fileId]));
   };
@@ -496,9 +528,20 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
       setLocalFiles((current) =>
         current.map((f) =>
           f.id === localId
-            ? { ...f, serverId: data.id, charCount: data.charCount, uploading: false, uploadError: undefined }
+            ? {
+                ...f,
+                id: data.id,
+                serverId: data.id,
+                charCount: data.charCount,
+                uploading: false,
+                uploadError: undefined,
+                note: payload.note.trim() || "已上传",
+              }
             : f,
         ),
+      );
+      setSelectedFileIds((current) =>
+        current.map((id) => (id === localId ? data.id : id)),
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -807,6 +850,9 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             objectQueryByType={objectQueryByType}
             selectedObjectsByType={selectedObjectsByType}
             localFiles={localFiles}
+            workspaceFilesLoading={workspaceFilesLoading}
+            workspaceFilesError={workspaceFilesError}
+            onReloadWorkspaceFiles={loadWorkspaceFiles}
             richMediaItems={richMediaItems}
             selectedFileIds={selectedFileIds}
             selectedMediaIds={selectedMediaIds}
@@ -862,7 +908,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
           <AutomationPanel activeView={automationView} onChangeView={setAutomationView} />
         ) : null}
         {activePanel === "tasks" ? (
-          <TasksPanel tasks={filteredTasks} filter={taskFilter} onFilterChange={setTaskFilter} />
+          <UnifiedTaskListPage locationSearch={typeof window !== "undefined" ? window.location.search : ""} />
         ) : null}
       </main>
     </div>
@@ -947,7 +993,7 @@ function DashboardPanel() {
               <div style={sectionTitleStyle}>AI 自动化执行摘要</div>
               <div style={sectionTextStyle}>今天自动化和单次任务带来的实际产出。</div>
             </div>
-            <div style={mutedMetaStyle}>{initialTasks.length} 个任务</div>
+            <div style={mutedMetaStyle}>今日执行摘要</div>
           </div>
           <div style={listColumnStyle}>
             {dashboardTaskSummary.map((item) => (
@@ -989,6 +1035,9 @@ function ChatPanel({
   objectQueryByType,
   selectedObjectsByType,
   localFiles,
+  workspaceFilesLoading,
+  workspaceFilesError,
+  onReloadWorkspaceFiles,
   richMediaItems,
   selectedFileIds,
   selectedMediaIds,
@@ -1029,6 +1078,9 @@ function ChatPanel({
   objectQueryByType: Record<ObjectType, string>;
   selectedObjectsByType: Record<ObjectType, SelectedShopifyObject[]>;
   localFiles: LocalFileItem[];
+  workspaceFilesLoading: boolean;
+  workspaceFilesError: string | null;
+  onReloadWorkspaceFiles: () => void | Promise<void>;
   richMediaItems: RichMediaItem[];
   selectedFileIds: string[];
   selectedMediaIds: string[];
@@ -1453,6 +1505,24 @@ function ChatPanel({
                   </div>
                 </div>
                 <div style={selectorListCompactStyle}>
+                  {workspaceFilesLoading && localFiles.length === 0 ? (
+                    <div style={sectionTextStyle}>正在加载历史上传…</div>
+                  ) : null}
+                  {workspaceFilesError ? (
+                    <div style={{ ...sectionTextStyle, color: "#d72c0d" }}>
+                      {workspaceFilesError}
+                      <button
+                        type="button"
+                        style={{ ...ghostButtonStyle, marginLeft: 8, padding: "2px 8px", fontSize: 12 }}
+                        onClick={() => void onReloadWorkspaceFiles()}
+                      >
+                        重试
+                      </button>
+                    </div>
+                  ) : null}
+                  {!workspaceFilesLoading && !workspaceFilesError && localFiles.length === 0 ? (
+                    <div style={sectionTextStyle}>暂无历史上传文件，可在上方上传后附加到对话。</div>
+                  ) : null}
                   {localFiles.map((file) => {
                     const checked = selectedFileIds.includes(file.id);
                     const authQuery = typeof window !== "undefined" ? window.location.search : "";
@@ -1471,8 +1541,9 @@ function ChatPanel({
                             {file.size}
                             {file.uploading ? " · 上传中…" : ""}
                             {file.uploadError ? ` · ⚠ ${file.uploadError}` : ""}
-                            {!file.uploading && !file.uploadError && file.serverId ? ` · 已解析 ${file.charCount ? `(${(file.charCount / 1000).toFixed(0)}k 字符)` : ""}` : ""}
-                            {!file.serverId && !file.uploading && !file.uploadError ? " · 示例" : ""}
+                            {!file.uploading && !file.uploadError && file.serverId && file.charCount
+                              ? ` · 已解析 (${(file.charCount / 1000).toFixed(0)}k 字符)`
+                              : ""}
                           </span>
                           {file.serverId && !file.uploading ? (
                             <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
@@ -1718,70 +1789,6 @@ function AutomationPanel({
   );
 }
 
-function TasksPanel({
-  tasks,
-  filter,
-  onFilterChange,
-}: {
-  tasks: TaskRecord[];
-  filter: "all" | TaskKind;
-  onFilterChange: (value: "all" | TaskKind) => void;
-}) {
-  return (
-    <section style={surfaceCardStyle}>
-      <div style={sectionHeaderStyle}>
-        <div>
-          <div style={sectionTitleStyle}>统一任务列表</div>
-          <div style={sectionTextStyle}>自动化任务与单次任务共用总表，再按类型和状态进行筛选。</div>
-        </div>
-        <div style={buttonRowStyle}>
-          {[
-            ["all", "全部"],
-            ["automation", "自动化"],
-            ["one_off", "单次任务"],
-          ].map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              style={filterChipStyle(filter === key)}
-              onClick={() => onFilterChange(key as "all" | TaskKind)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div style={listColumnStyle}>
-        {tasks.map((task) => (
-          <article key={task.id} style={taskCardStyle}>
-            <div style={taskCardTopStyle}>
-              <div>
-                <div style={mutedMetaStyle}>{task.id}</div>
-                <div style={sectionTitleSmallStyle}>{task.title}</div>
-              </div>
-              <div style={buttonRowStyle}>
-                <span style={kindBadgeStyle(task.kind)}>{task.kind === "automation" ? "自动化" : "单次"}</span>
-                <span style={statusBadgeStyle(taskStatusTone(task.status))}>{taskStatusLabel(task.status)}</span>
-              </div>
-            </div>
-            <div style={sectionTextStyle}>{task.summary}</div>
-            <div style={progressTrackStyle}>
-              <div style={{ ...progressFillStyle, width: `${task.progress}%`, background: progressColor(task.status) }} />
-            </div>
-            <div style={taskFooterStyle}>
-              <span style={mutedMetaStyle}>
-                {task.source} · {task.updatedAt}
-              </span>
-              <button type="button" style={textButtonStyle}>{task.action}</button>
-            </div>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function workspaceMessageToApiMessage(message: WorkspaceConversationMessage): ChatMessage {
   return { role: message.role, content: message.text };
 }
@@ -1983,26 +1990,6 @@ function augmentUserMessage(content: string, contextBlock: string | null) {
   if (!contextBlock) return content;
   return `${contextBlock}\n\n[用户消息]\n${content}`;
 }
-function taskStatusLabel(status: TaskStatus) {
-  if (status === "executing") return "执行中";
-  if (status === "review_required") return "待审核";
-  if (status === "completed") return "已完成";
-  return "失败";
-}
-
-function taskStatusTone(status: TaskStatus): "positive" | "warning" | "critical" | "neutral" {
-  if (status === "completed") return "positive";
-  if (status === "executing" || status === "review_required") return "warning";
-  if (status === "failed") return "critical";
-  return "neutral";
-}
-
-function progressColor(status: TaskStatus) {
-  if (status === "completed") return "#008060";
-  if (status === "failed") return "#d82c0d";
-  return "#c05717";
-}
-
 const shellStyle: CSSProperties = {
   minHeight: "100vh",
   display: "grid",
@@ -2499,20 +2486,6 @@ const filterChipStyle = (active: boolean): CSSProperties => ({
   fontSize: 13,
   fontWeight: 600,
   cursor: "pointer",
-});
-const taskCardStyle: CSSProperties = { padding: 16, borderRadius: 14, border: "1px solid #e1e3e5", background: "#ffffff", display: "flex", flexDirection: "column", gap: 12 };
-const taskCardTopStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 };
-const progressTrackStyle: CSSProperties = { height: 8, borderRadius: 999, background: "#e5e7eb", overflow: "hidden" };
-const progressFillStyle: CSSProperties = { height: "100%", borderRadius: 999 };
-const taskFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 };
-
-const kindBadgeStyle = (kind: TaskKind): CSSProperties => ({
-  padding: "4px 10px",
-  borderRadius: 999,
-  background: kind === "automation" ? "#f1f8ff" : "#f1f2f3",
-  color: kind === "automation" ? "#005bd3" : "#61666c",
-  fontSize: 12,
-  fontWeight: 600,
 });
 const statusBadgeStyle = (tone: "positive" | "warning" | "critical" | "neutral"): CSSProperties => ({
   padding: "4px 10px",
