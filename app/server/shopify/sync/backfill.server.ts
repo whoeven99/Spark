@@ -30,6 +30,11 @@ const ORDERS_BACKFILL_QUERY = `#graphql
         totalDiscountsSet { shopMoney { amount } }
         totalTaxSet { shopMoney { amount } }
         totalShippingPriceSet { shopMoney { amount } }
+        shippingLines(first: 10) {
+          nodes {
+            discountedPriceSet { shopMoney { amount } }
+          }
+        }
         sourceName
         landingPageUrl
         referringSite
@@ -75,6 +80,12 @@ const ORDERS_BACKFILL_QUERY = `#graphql
               amountSet { shopMoney { amount } }
             }
           }
+          refundShippingLines(first: 10) {
+            nodes {
+              subtotalAmountSet { shopMoney { amount } }
+              taxAmountSet { shopMoney { amount } }
+            }
+          }
           orderAdjustments(first: 10) {
             nodes {
               id
@@ -108,6 +119,11 @@ type GraphQLOrderNode = {
   totalDiscountsSet: { shopMoney: { amount: string } } | null;
   totalTaxSet: { shopMoney: { amount: string } } | null;
   totalShippingPriceSet: { shopMoney: { amount: string } } | null;
+  shippingLines?: {
+    nodes: Array<{
+      discountedPriceSet: { shopMoney: { amount: string } } | null;
+    }>;
+  } | null;
   sourceName: string | null;
   landingPageUrl: string | null;
   referringSite: string | null;
@@ -153,6 +169,12 @@ type GraphQLOrderNode = {
         amountSet: { shopMoney: { amount: string } };
       }>;
     };
+    refundShippingLines?: {
+      nodes: Array<{
+        subtotalAmountSet: { shopMoney: { amount: string } } | null;
+        taxAmountSet: { shopMoney: { amount: string } } | null;
+      }>;
+    } | null;
     orderAdjustments?: {
       nodes: Array<{
         id: string;
@@ -194,6 +216,11 @@ function mapGraphQLToPayload(node: GraphQLOrderNode): ShopifyOrderPayload {
     total_shipping_price_set: node.totalShippingPriceSet
       ? { shop_money: { amount: node.totalShippingPriceSet.shopMoney.amount } }
       : undefined,
+    shipping_lines: (node.shippingLines?.nodes ?? []).map((line) => ({
+      discounted_price_set: line.discountedPriceSet
+        ? { shop_money: { amount: line.discountedPriceSet.shopMoney.amount } }
+        : undefined,
+    })),
     source_name: node.sourceName,
     landing_site: node.landingPageUrl,
     referring_site: node.referringSite,
@@ -235,19 +262,16 @@ function mapRefundToPayload(
   orderId: number,
 ): ShopifyRefundPayload {
   const refundIdNumeric = parseInt(gidToId(refund.id), 10);
-  // GraphQL OrderAdjustment does not expose REST `kind`. shipping_refund adjustments have null `reason`,
-  // while refund_discrepancy adjustments populate the OrderAdjustmentDiscrepancyReason enum — use that to split.
-  const orderAdjustments = (refund.orderAdjustments?.nodes ?? [])
-    .filter((adj) => adj.reason === null && (adj.amountSet?.shopMoney.amount ?? "0") !== "0")
-    .map((adj) => ({
-      id: parseInt(gidToId(adj.id), 10),
-      order_id: orderId,
-      refund_id: refundIdNumeric,
-      kind: "shipping_refund",
-      amount: adj.amountSet?.shopMoney.amount ?? "0",
-      tax_amount: adj.taxAmountSet?.shopMoney.amount ?? "0",
-      reason: null,
-    }));
+  const refundShippingLines = (refund.refundShippingLines?.nodes ?? []).map(
+    (line) => ({
+      subtotal_amount_set: line.subtotalAmountSet
+        ? { shop_money: { amount: line.subtotalAmountSet.shopMoney.amount } }
+        : undefined,
+      tax_amount_set: line.taxAmountSet
+        ? { shop_money: { amount: line.taxAmountSet.shopMoney.amount } }
+        : undefined,
+    }),
+  );
   return {
     id: refundIdNumeric,
     order_id: orderId,
@@ -262,7 +286,8 @@ function mapRefundToPayload(
       status: t.status.toLowerCase(),
       amount: t.amountSet.shopMoney.amount,
     })),
-    order_adjustments: orderAdjustments,
+    refund_shipping_lines: refundShippingLines,
+    order_adjustments: [],
   };
 }
 

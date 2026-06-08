@@ -4,6 +4,7 @@ import { useLoaderData } from "react-router";
 import { useTranslation } from "react-i18next";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { isFullShippingRefund } from "../server/shopify/sync/refundSyncParse.server";
 import {
   PageMetricCard,
   PageSurface,
@@ -45,6 +46,7 @@ type ShippingRefundRow = {
   processedAt: string;
   originalShipping: string;
   fullRefund: boolean;
+  partialRefund: boolean;
 };
 
 type SlaOrder = {
@@ -487,20 +489,26 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     )
       .sort((a, b) => b.shippingRefundAmount - a.shippingRefundAmount)
       .slice(0, 10)
-      .map((item) => ({
-        orderNumber: item.orderNumber,
-        shippingRefundAmount: item.shippingRefundAmount.toFixed(2),
-        shippingRefundTax: item.shippingRefundTax.toFixed(2),
-        reason:
-          item.reasons.size > 0
-            ? Array.from(item.reasons).join(", ")
-            : "unspecified",
-        processedAt: item.latestProcessedAt.toISOString(),
-        originalShipping: item.originalShipping.toFixed(2),
-        fullRefund:
-          item.originalShipping > 0 &&
-          item.shippingRefundAmount + 0.005 >= item.originalShipping,
-      }));
+      .map((item) => {
+        const fullRefund = isFullShippingRefund(
+          item.shippingRefundAmount,
+          item.shippingRefundTax,
+          item.originalShipping,
+        );
+        return {
+          orderNumber: item.orderNumber,
+          shippingRefundAmount: item.shippingRefundAmount.toFixed(2),
+          shippingRefundTax: item.shippingRefundTax.toFixed(2),
+          reason:
+            item.reasons.size > 0
+              ? Array.from(item.reasons).join(", ")
+              : "unspecified",
+          processedAt: item.latestProcessedAt.toISOString(),
+          originalShipping: item.originalShipping.toFixed(2),
+          fullRefund,
+          partialRefund: item.shippingRefundAmount > 0 && !fullRefund,
+        };
+      });
 
     const fulfilledDurations = fulfilledOrders
       .map((order) => {
@@ -1012,14 +1020,24 @@ export default function OrderMonitorPage() {
                 data.refundGovernance.shippingRefunds.map((item) => (
                   <tr key={`${item.orderNumber}-${item.processedAt}`}>
                     <td style={tdStyle}>{item.orderNumber}</td>
-                    <td style={tdStyle}>{item.shippingRefundAmount}</td>
-                    <td style={tdStyle}>{item.shippingRefundTax}</td>
                     <td style={tdStyle}>
-                      {item.originalShipping}
+                      {item.shippingRefundAmount} {data.metrics.currency}
+                    </td>
+                    <td style={tdStyle}>
+                      {item.shippingRefundTax} {data.metrics.currency}
+                    </td>
+                    <td style={tdStyle}>
+                      {item.originalShipping} {data.metrics.currency}
                       {item.fullRefund ? (
                         <span style={{ marginLeft: "0.4rem" }}>
                           <s-badge tone="success">
                             {t("orderMonitor.shippingRefundFullBadge")}
+                          </s-badge>
+                        </span>
+                      ) : item.partialRefund ? (
+                        <span style={{ marginLeft: "0.4rem" }}>
+                          <s-badge tone="info">
+                            {t("orderMonitor.shippingRefundPartialBadge")}
                           </s-badge>
                         </span>
                       ) : null}

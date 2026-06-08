@@ -1,6 +1,7 @@
 import prisma from "../../../db.server";
 import type { ShopifyOrderPayload } from "./types";
 import { syncCustomer } from "./customerSync.server";
+import { sumDiscountedShippingFromLines } from "./refundSyncParse.server";
 
 function extractUtm(landingSite: string | null): {
   utmSource: string | null;
@@ -35,9 +36,14 @@ export async function syncOrder(
   const subtotalPrice = parseFloat(payload.subtotal_price ?? "0") || 0;
   const totalDiscounts = parseFloat(payload.total_discounts ?? "0") || 0;
   const totalTax = parseFloat(payload.total_tax ?? "0") || 0;
+  const shippingFromLines = sumDiscountedShippingFromLines(
+    payload.shipping_lines ?? [],
+  );
   const totalShipping =
-    parseFloat(payload.total_shipping_price_set?.shop_money?.amount ?? "0") ||
-    0;
+    shippingFromLines > 0
+      ? shippingFromLines
+      : parseFloat(payload.total_shipping_price_set?.shop_money?.amount ?? "0") ||
+        0;
 
   // Check first order
   const previousOrders =

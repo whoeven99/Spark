@@ -915,6 +915,7 @@
     "emptyRefundSku": "本周期暂无退款 SKU 明细。",
     "emptyShippingRefund": "本周期未发生退款邮费。",
     "shippingRefundFullBadge": "全额退",
+    "shippingRefundPartialBadge": "部分退",
     "emptyAbnormalRefund": "未发现异常退款订单。",
     "emptyOverdue": "暂无发货 SLA 超时订单。",
     "emptyUnfulfilled": "暂无未发货提醒。",

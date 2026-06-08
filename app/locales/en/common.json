@@ -915,6 +915,7 @@
     "emptyRefundSku": "No refunded SKU details in this period.",
     "emptyShippingRefund": "No shipping refunds in this period.",
     "shippingRefundFullBadge": "Full refund",
+    "shippingRefundPartialBadge": "Partial refund",
     "emptyAbnormalRefund": "No abnormal refund orders detected.",
     "emptyOverdue": "No SLA overdue orders.",
     "emptyUnfulfilled": "No unfulfilled reminders.",
