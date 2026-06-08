@@ -68,10 +68,10 @@ function normalizeShop(raw) {
   return s;
 }
 
-async function fetchFirstAvailableVariant(shop, token) {
+async function fetchFirstInStockVariant(shop, token) {
   const query = `
     {
-      products(first: 10) {
+      products(first: 100) {
         edges {
           node {
             title
@@ -81,6 +81,7 @@ async function fetchFirstAvailableVariant(shop, token) {
                   id
                   title
                   availableForSale
+                  inventoryQuantity
                 }
               }
             }
@@ -107,13 +108,14 @@ async function fetchFirstAvailableVariant(shop, token) {
     const variants = pEdge?.node?.variants?.edges ?? [];
     for (const vEdge of variants) {
       const v = vEdge?.node;
-      if (v?.availableForSale && v?.id) {
+      const qty = Number(v?.inventoryQuantity ?? 0);
+      if (qty > 0 && v?.id) {
         const numericId = String(v.id).split("/").pop();
-        return { productTitle, variantTitle: v.title ?? "", variantId: numericId };
+        return { productTitle, variantTitle: v.title ?? "", variantId: numericId, inventoryQuantity: qty };
       }
     }
   }
-  throw new Error("店铺无可售 variant（请先在测试店创建一个 availableForSale 的商品）");
+  throw new Error("店铺无有库存 variant（请先在测试店创建一个 inventoryQuantity > 0 的商品）");
 }
 
 const ORDER_STATES = ["paid", "cancelled", "refunded", "unfulfilled"];
@@ -301,9 +303,9 @@ async function main() {
     }
 
     console.log(`\n→ Webhook 同步等待: ${syncWaitMs}ms (SYNC_WAIT_MS 可调)`);
-    console.log(`→ Fetching first available variant from ${shop} ...`);
-    const { productTitle, variantTitle, variantId } = await fetchFirstAvailableVariant(shop, token);
-    console.log(`  Using product: ${productTitle} / ${variantTitle} (variant_id=${variantId})\n`);
+    console.log(`→ Fetching first in-stock variant from ${shop} ...`);
+    const { productTitle, variantTitle, variantId, inventoryQuantity } = await fetchFirstInStockVariant(shop, token);
+    console.log(`  Using product: ${productTitle} / ${variantTitle} (variant_id=${variantId}, qty=${inventoryQuantity})\n`);
 
     let ok = 0;
     let fail = 0;

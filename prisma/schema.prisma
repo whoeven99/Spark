@@ -396,6 +396,8 @@ model ShopRefund {
   shopifyRefundId String
   shopifyOrderId  String
   refundAmount    Float    @default(0)
+  shippingRefundAmount Float @default(0)
+  shippingRefundTax    Float @default(0)
   refundNote      String?
   reason          String?
   processedAt     DateTime

@@ -67,6 +67,17 @@ export interface ShopifyRefundTransaction {
   amount: string;
 }
 
+export interface ShopifyRefundOrderAdjustment {
+  id: number;
+  order_id: number;
+  refund_id: number;
+  /// shipping_refund | refund_discrepancy
+  kind: string;
+  amount: string;
+  tax_amount: string;
+  reason: string | null;
+}
+
 export interface ShopifyRefundPayload {
   id: number;
   order_id: number;
@@ -84,6 +95,7 @@ export interface ShopifyRefundPayload {
     line_item?: ShopifyLineItem | null;
   }>;
   transactions: ShopifyRefundTransaction[];
+  order_adjustments?: ShopifyRefundOrderAdjustment[];
 }
 
 export interface ShopifyInventoryLevelPayload {

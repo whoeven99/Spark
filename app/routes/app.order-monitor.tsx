@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 import { useTranslation } from "react-i18next";
@@ -37,6 +37,16 @@ type AbnormalRefundOrder = {
   processedAt: string;
 };
 
+type ShippingRefundRow = {
+  orderNumber: string;
+  shippingRefundAmount: string;
+  shippingRefundTax: string;
+  reason: string;
+  processedAt: string;
+  originalShipping: string;
+  fullRefund: boolean;
+};
+
 type SlaOrder = {
   orderNumber: string;
   ageHours: string;
@@ -55,6 +65,7 @@ type CarrierIssue = {
 type InventoryRiskItem = {
   sku: string;
   title: string;
+  variantTitle: string;
   available: number;
   salesVelocity: string;
   sellableDays: string;
@@ -91,6 +102,7 @@ type DashboardData = {
     delta: string;
     topSkus: TopRefundSku[];
     abnormalOrders: AbnormalRefundOrder[];
+    shippingRefunds: ShippingRefundRow[];
     suggestions: string[];
   };
   fulfillmentSla: {
@@ -111,7 +123,7 @@ type DashboardData = {
 };
 
 const SLA_HOURS = 48;
-const UNFULFILLED_ALERT_HOURS = 24;
+const SLA_TABLE_INITIAL_ROWS = 6;
 const CARRIER_STALE_DAYS = 7;
 const REFUND_SPIKE_PERCENT_POINTS = 3;
 
@@ -224,6 +236,7 @@ function emptyDashboard(
       delta: "0.0pp",
       topSkus: [],
       abnormalOrders: [],
+      shippingRefunds: [],
       suggestions: [],
     },
     fulfillmentSla: {
@@ -251,6 +264,7 @@ function emptyDashboard(
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
+  console.log("[order-monitor] accessToken:", session.accessToken);
   const shop = session.shop;
   const since30Days = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const previous30Days = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
@@ -434,6 +448,60 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         processedAt: refund.processedAt.toISOString(),
       }));
 
+    // Aggregate shipping refunds by order: a single order may have multiple partial refunds.
+    const shippingRefundByOrder = new Map<
+      string,
+      {
+        orderNumber: string;
+        shippingRefundAmount: number;
+        shippingRefundTax: number;
+        reasons: Set<string>;
+        latestProcessedAt: Date;
+        originalShipping: number;
+      }
+    >();
+    for (const refund of refunds) {
+      if ((refund.shippingRefundAmount ?? 0) <= 0) continue;
+      const key = refund.shopifyOrderId;
+      const current = shippingRefundByOrder.get(key) ?? {
+        orderNumber: refund.order?.orderNumber
+          ? `#${refund.order.orderNumber}`
+          : refund.shopifyOrderId,
+        shippingRefundAmount: 0,
+        shippingRefundTax: 0,
+        reasons: new Set<string>(),
+        latestProcessedAt: refund.processedAt,
+        originalShipping: refund.order?.totalShipping ?? 0,
+      };
+      current.shippingRefundAmount += refund.shippingRefundAmount ?? 0;
+      current.shippingRefundTax += refund.shippingRefundTax ?? 0;
+      const reasonText = refund.reason ?? refund.refundNote;
+      if (reasonText) current.reasons.add(reasonText);
+      if (refund.processedAt > current.latestProcessedAt) {
+        current.latestProcessedAt = refund.processedAt;
+      }
+      shippingRefundByOrder.set(key, current);
+    }
+    const shippingRefunds: ShippingRefundRow[] = Array.from(
+      shippingRefundByOrder.values(),
+    )
+      .sort((a, b) => b.shippingRefundAmount - a.shippingRefundAmount)
+      .slice(0, 10)
+      .map((item) => ({
+        orderNumber: item.orderNumber,
+        shippingRefundAmount: item.shippingRefundAmount.toFixed(2),
+        shippingRefundTax: item.shippingRefundTax.toFixed(2),
+        reason:
+          item.reasons.size > 0
+            ? Array.from(item.reasons).join(", ")
+            : "unspecified",
+        processedAt: item.latestProcessedAt.toISOString(),
+        originalShipping: item.originalShipping.toFixed(2),
+        fullRefund:
+          item.originalShipping > 0 &&
+          item.shippingRefundAmount + 0.005 >= item.originalShipping,
+      }));
+
     const fulfilledDurations = fulfilledOrders
       .map((order) => {
         const shippedAt = order.fulfillments
@@ -455,28 +523,26 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           (fulfillment) => fulfillment.status === "success",
         ),
     );
-    const overdueOrders = pendingOrders
+    const overdueCandidates = pendingOrders
       .filter((order) => hoursBetween(order.createdAt, now) > SLA_HOURS)
-      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
-      .slice(0, 8)
-      .map((order) => ({
-        orderNumber: `#${order.orderNumber}`,
-        ageHours: formatNumber(hoursBetween(order.createdAt, now)),
-        status: order.fulfillmentStatus ?? "unfulfilled",
-        customer: order.customerEmail ?? order.email ?? "N/A",
-      }));
-    const unfulfilledOrders = pendingOrders
-      .filter(
-        (order) => hoursBetween(order.createdAt, now) > UNFULFILLED_ALERT_HOURS,
-      )
-      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
-      .slice(0, 8)
-      .map((order) => ({
-        orderNumber: `#${order.orderNumber}`,
-        ageHours: formatNumber(hoursBetween(order.createdAt, now)),
-        status: order.fulfillmentStatus ?? "unfulfilled",
-        customer: order.customerEmail ?? order.email ?? "N/A",
-      }));
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    const overdueCount = overdueCandidates.length;
+    const overdueOrders = overdueCandidates.map((order) => ({
+      orderNumber: `#${order.orderNumber}`,
+      ageHours: formatNumber(hoursBetween(order.createdAt, now)),
+      status: order.fulfillmentStatus ?? "unfulfilled",
+      customer: order.customerEmail ?? order.email ?? "N/A",
+    }));
+    const unfulfilledCandidates = pendingOrders
+      .filter((order) => hoursBetween(order.createdAt, now) <= SLA_HOURS)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    const unfulfilledCount = unfulfilledCandidates.length;
+    const unfulfilledOrders = unfulfilledCandidates.map((order) => ({
+      orderNumber: `#${order.orderNumber}`,
+      ageHours: formatNumber(hoursBetween(order.createdAt, now)),
+      status: order.fulfillmentStatus ?? "unfulfilled",
+      customer: order.customerEmail ?? order.email ?? "N/A",
+    }));
     const carrierIssues = orders
       .flatMap((order) =>
         order.fulfillments
@@ -503,7 +569,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     const salesByKey = new Map<
       string,
-      { sku: string; title: string; quantity: number; revenue: number }
+      {
+        sku: string;
+        title: string;
+        variantTitle: string | null;
+        quantity: number;
+        revenue: number;
+      }
     >();
     for (const line of orderLineItems) {
       const key =
@@ -511,9 +583,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       const current = salesByKey.get(key) ?? {
         sku: displaySku(line.sku),
         title: line.title,
+        variantTitle: line.variantTitle,
         quantity: 0,
         revenue: 0,
       };
+      if (!current.variantTitle && line.variantTitle) {
+        current.variantTitle = line.variantTitle;
+      }
       current.quantity += line.quantity;
       current.revenue += Math.max(
         0,
@@ -570,6 +646,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         return {
           sku: inventory?.sku ?? sales.sku,
           title: inventory?.title ?? sales.title,
+          variantTitle: sales.variantTitle ?? "—",
           available,
           salesVelocity: formatNumber(velocity, 2),
           sellableDays: Number.isFinite(sellableDays)
@@ -625,14 +702,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       fulfillmentStatus === "risk" ||
       refundStatus === "risk" ||
       inventoryStatus === "risk" ||
-      overdueOrders.length > 0 ||
+      overdueCount > 0 ||
       inventoryItems.some((item) => item.risk === "risk");
     if (!hasRisks) {
       diagnoses.push("orderMonitor.diagAllHealthy");
     } else {
       if (cancelStatus === "risk")
         diagnoses.push("orderMonitor.diagOrderWatch");
-      if (fulfillmentStatus === "risk" || overdueOrders.length > 0) {
+      if (fulfillmentStatus === "risk" || overdueCount > 0) {
         diagnoses.push("orderMonitor.diagFulfillmentRisk");
       }
       if (
@@ -697,12 +774,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         delta: `${refundRateDelta >= 0 ? "+" : ""}${refundRateDelta.toFixed(1)}pp`,
         topSkus,
         abnormalOrders,
+        shippingRefunds,
         suggestions,
       },
       fulfillmentSla: {
         averageHours: formatNumber(averageSlaHours),
-        overdueCount: overdueOrders.length,
-        unfulfilledCount: unfulfilledOrders.length,
+        overdueCount,
+        unfulfilledCount,
         carrierIssueCount: carrierIssues.length,
         overdueOrders,
         unfulfilledOrders,
@@ -911,6 +989,56 @@ export default function OrderMonitorPage() {
             </tbody>
           </table>
 
+          <TableTitle label={t("orderMonitor.shippingRefundTitle")} />
+          <table style={tableStyle}>
+            <thead>
+              <tr>
+                <th style={thStyle}>{t("orderMonitor.colOrder")}</th>
+                <th style={thStyle}>
+                  {t("orderMonitor.colShippingRefundAmount")}
+                </th>
+                <th style={thStyle}>
+                  {t("orderMonitor.colShippingRefundTax")}
+                </th>
+                <th style={thStyle}>
+                  {t("orderMonitor.colOriginalShipping")}
+                </th>
+                <th style={thStyle}>{t("orderMonitor.colReason")}</th>
+                <th style={thStyle}>{t("orderMonitor.colProcessedAt")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.refundGovernance.shippingRefunds.length > 0 ? (
+                data.refundGovernance.shippingRefunds.map((item) => (
+                  <tr key={`${item.orderNumber}-${item.processedAt}`}>
+                    <td style={tdStyle}>{item.orderNumber}</td>
+                    <td style={tdStyle}>{item.shippingRefundAmount}</td>
+                    <td style={tdStyle}>{item.shippingRefundTax}</td>
+                    <td style={tdStyle}>
+                      {item.originalShipping}
+                      {item.fullRefund ? (
+                        <span style={{ marginLeft: "0.4rem" }}>
+                          <s-badge tone="success">
+                            {t("orderMonitor.shippingRefundFullBadge")}
+                          </s-badge>
+                        </span>
+                      ) : null}
+                    </td>
+                    <td style={tdStyle}>{item.reason}</td>
+                    <td style={tdStyle}>
+                      {new Date(item.processedAt).toLocaleString()}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <EmptyRows
+                  colSpan={6}
+                  label={t("orderMonitor.emptyShippingRefund")}
+                />
+              )}
+            </tbody>
+          </table>
+
           <TableTitle label={t("orderMonitor.abnormalRefundOrdersTitle")} />
           <table style={tableStyle}>
             <thead>
@@ -1013,6 +1141,7 @@ export default function OrderMonitorPage() {
               <tr>
                 <th style={thStyle}>{t("orderMonitor.colSku")}</th>
                 <th style={thStyle}>{t("orderMonitor.colProduct")}</th>
+                <th style={thStyle}>{t("orderMonitor.colVariantTitle")}</th>
                 <th style={thStyle}>{t("orderMonitor.colAvailable")}</th>
                 <th style={thStyle}>{t("orderMonitor.colVelocity")}</th>
                 <th style={thStyle}>{t("orderMonitor.colSellableDays")}</th>
@@ -1026,6 +1155,7 @@ export default function OrderMonitorPage() {
                   <tr key={item.sku}>
                     <td style={tdStyle}>{item.sku}</td>
                     <td style={tdStyle}>{item.title}</td>
+                    <td style={tdStyle}>{item.variantTitle}</td>
                     <td style={tdStyle}>{item.available}</td>
                     <td style={tdStyle}>{item.salesVelocity}</td>
                     <td style={tdStyle}>{item.sellableDays}</td>
@@ -1039,7 +1169,7 @@ export default function OrderMonitorPage() {
                 ))
               ) : (
                 <EmptyRows
-                  colSpan={7}
+                  colSpan={8}
                   label={t("orderMonitor.emptyInventoryRisk")}
                 />
               )}
@@ -1094,11 +1224,18 @@ function TableTitle({ label }: { label: string }) {
 function SlaTable({
   rows,
   emptyLabel,
+  initialVisibleRows = SLA_TABLE_INITIAL_ROWS,
 }: {
   rows: SlaOrder[];
   emptyLabel: string;
+  initialVisibleRows?: number;
 }) {
   const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  const hasMore = rows.length > initialVisibleRows;
+  const visibleRows = expanded ? rows : rows.slice(0, initialVisibleRows);
+  const hiddenCount = rows.length - initialVisibleRows;
+
   return (
     <table style={tableStyle}>
       <thead>
@@ -1111,14 +1248,47 @@ function SlaTable({
       </thead>
       <tbody>
         {rows.length > 0 ? (
-          rows.map((item) => (
-            <tr key={`${item.orderNumber}-${item.ageHours}`}>
-              <td style={tdStyle}>{item.orderNumber}</td>
-              <td style={tdStyle}>{item.ageHours}</td>
-              <td style={tdStyle}>{item.status}</td>
-              <td style={tdStyle}>{item.customer}</td>
-            </tr>
-          ))
+          <>
+            {visibleRows.map((item) => (
+              <tr key={`${item.orderNumber}-${item.ageHours}`}>
+                <td style={tdStyle}>{item.orderNumber}</td>
+                <td style={tdStyle}>{item.ageHours}</td>
+                <td style={tdStyle}>{item.status}</td>
+                <td style={tdStyle}>{item.customer}</td>
+              </tr>
+            ))}
+            {!expanded && hasMore ? (
+              <tr>
+                <td
+                  colSpan={4}
+                  style={{
+                    ...tdStyle,
+                    paddingTop: "0.45rem",
+                    paddingBottom: "0.45rem",
+                    textAlign: "center",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setExpanded(true)}
+                    style={{
+                      border: "none",
+                      background: "none",
+                      padding: 0,
+                      color: pageColorTokens.brandBlue,
+                      fontSize: "0.8125rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                      textUnderlineOffset: "2px",
+                    }}
+                  >
+                    {t("orderMonitor.showMore", { count: hiddenCount })}
+                  </button>
+                </td>
+              </tr>
+            ) : null}
+          </>
         ) : (
           <EmptyRows colSpan={4} label={emptyLabel} />
         )}

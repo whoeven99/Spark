@@ -39,6 +39,19 @@ export async function syncRefund(
     .filter((t) => t.kind === "refund" && t.status === "success")
     .reduce((sum, t) => sum + parseMoney(t.amount), 0);
 
+  // Shipping refund amount + tax come from order_adjustments with kind=shipping_refund
+  const shippingAdjustments = (payload.order_adjustments ?? []).filter(
+    (adj) => adj.kind === "shipping_refund",
+  );
+  const shippingRefundAmount = shippingAdjustments.reduce(
+    (sum, adj) => sum + Math.abs(parseMoney(adj.amount)),
+    0,
+  );
+  const shippingRefundTax = shippingAdjustments.reduce(
+    (sum, adj) => sum + Math.abs(parseMoney(adj.tax_amount)),
+    0,
+  );
+
   const refundLineReasons = (payload.refund_line_items ?? [])
     .map((item) => firstNonEmpty(item.reason, item.restock_type))
     .filter(Boolean);
@@ -54,6 +67,8 @@ export async function syncRefund(
       shopifyRefundId,
       shopifyOrderId,
       refundAmount,
+      shippingRefundAmount,
+      shippingRefundTax,
       refundNote: payload.note ?? null,
       reason,
       processedAt: payload.processed_at
@@ -63,6 +78,8 @@ export async function syncRefund(
     },
     update: {
       refundAmount,
+      shippingRefundAmount,
+      shippingRefundTax,
       refundNote: payload.note ?? null,
       reason,
       processedAt: payload.processed_at
