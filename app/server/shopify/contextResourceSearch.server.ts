@@ -508,8 +508,9 @@ function buildConnectionVariables(input: {
   limit?: number;
 }) {
   const limit = Math.min(Math.max(input.limit ?? 20, 1), 50);
-  const isPrev = input.cursor?.startsWith("prev:") ?? false;
-  const rawCursor = input.cursor?.replace(/^prev:/, "") ?? null;
+  const normalizedCursor = input.cursor?.trim() || null;
+  const isPrev = normalizedCursor?.startsWith("prev:") ?? false;
+  const rawCursor = normalizedCursor?.replace(/^prev:/, "") || null;
   return {
     first: isPrev ? null : limit,
     last: isPrev ? limit : null,
