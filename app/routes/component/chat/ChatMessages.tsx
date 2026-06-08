@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { ChatMessage } from "../../../lib/chatMessage";
 import { ChatMessageContent } from "./ChatMessageContent";
+import { ThinkingReview } from "./StreamingThinking";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
 import { ImageGenerationChatCard } from "./ImageGenerationChatCard";
 import { PictureTranslateChatCard } from "./PictureTranslateChatCard";
@@ -99,6 +100,11 @@ export function ChatMessages({
                       {item.role === "assistant" ? "AI Assistant" : "你"}
                     </s-badge>
                   </div>
+                  {item.role === "assistant" && item.thinkingContent ? (
+                    <div style={{ marginBottom: "0.5rem" }}>
+                      <ThinkingReview text={item.thinkingContent} />
+                    </div>
+                  ) : null}
                   <div style={{ marginTop: "0.35rem" }}>
                     {item.role === "assistant" ? (
                       <ChatMessageContent content={item.content} />
