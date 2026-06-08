@@ -206,13 +206,6 @@ export function ChatMessages({
                       />
                     </div>
                   ) : null}
-
-                  {item.role === "assistant" && item.thinkingContent ? (
-                    <details style={thinkingDetailsStyle}>
-                      <summary style={thinkingSummaryStyle}>查看思考过程</summary>
-                      <div style={thinkingContentStyle}>{item.thinkingContent}</div>
-                    </details>
-                  ) : null}
                 </s-box>
               </div>
             </div>
@@ -223,6 +216,34 @@ export function ChatMessages({
     </s-stack>
   );
 }
+
+
+const thinkingDetailsStyle: CSSProperties = {
+  marginTop: 10,
+  borderRadius: 8,
+  border: "1px solid rgba(44, 110, 203, 0.2)",
+  background: "rgba(44, 110, 203, 0.04)",
+  padding: "6px 10px",
+};
+
+const thinkingSummaryStyle: CSSProperties = {
+  cursor: "pointer",
+  fontSize: 12,
+  color: "rgba(44, 110, 203, 0.8)",
+  fontWeight: 500,
+  userSelect: "none",
+};
+
+const thinkingContentStyle: CSSProperties = {
+  marginTop: 8,
+  fontSize: 13,
+  color: "#61666c",
+  fontStyle: "italic",
+  whiteSpace: "pre-wrap",
+  maxHeight: 220,
+  overflowY: "auto",
+  lineHeight: 1.6,
+};
 
 const thinkingDetailsStyle: CSSProperties = {
   marginTop: 10,
