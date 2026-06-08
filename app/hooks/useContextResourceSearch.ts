@@ -53,10 +53,7 @@ export function useContextResourceSearch({
   const [errorText, setErrorText] = useState<string | null>(null);
   const [cursor, setCursor] = useState<string>("");
   const abortRef = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    setCursor("");
-  }, [type, query, filter, sort, direction]);
+  const requestKeyRef = useRef("");
 
   useEffect(() => {
     if (!enabled) {
@@ -65,6 +62,18 @@ export function useContextResourceSearch({
       setIsLoading(false);
       setErrorText(null);
       return;
+    }
+
+    const requestKey = `${type}::${query.trim()}::${filter}::${sort}::${direction}`;
+    const baseRequestChanged = requestKeyRef.current !== requestKey;
+    const effectiveCursor = baseRequestChanged ? "" : cursor;
+    requestKeyRef.current = requestKey;
+
+    if (baseRequestChanged) {
+      setPageInfo(EMPTY_PAGE_INFO);
+      if (cursor) {
+        setCursor("");
+      }
     }
 
     const timer = window.setTimeout(() => {
@@ -81,7 +90,7 @@ export function useContextResourceSearch({
       params.set("filter", filter);
       params.set("sort", sort);
       params.set("direction", direction);
-      if (cursor) params.set("cursor", cursor);
+      if (effectiveCursor) params.set("cursor", effectiveCursor);
       const url = `/api/context-resources/${type}?${params.toString()}`;
 
       void (async () => {

@@ -96,6 +96,16 @@ type LocalFileItem = {
   note: string;
 };
 
+type LocalUploadItem = {
+  id: string;
+  fileName: string;
+  sizeLabel: string;
+  note: string;
+  progress: number;
+  status: "queued" | "uploading" | "success" | "failed";
+  errorText: string | null;
+};
+
 type RichMediaItem = {
   id: string;
   title: string;
@@ -168,6 +178,8 @@ const objectSortOptions: Record<
     { key: "total_price", label: "金额高到低", direction: "desc" },
   ],
 };
+
+const MAX_LOCAL_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 
 
 const dashboardMetrics: DashboardMetric[] = [
@@ -269,6 +281,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     order: [],
   });
   const [localFiles, setLocalFiles] = useState<LocalFileItem[]>(initialLocalFiles);
+  const [localUploadQueue, setLocalUploadQueue] = useState<LocalUploadItem[]>([]);
   const [richMediaItems, setRichMediaItems] = useState<RichMediaItem[]>(initialRichMediaItems);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
@@ -404,13 +417,92 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     setSelectedMediaIds((current) => (current.includes(mediaId) ? current.filter((id) => id !== mediaId) : [...current, mediaId]));
   };
 
-  const addLocalFile = (payload: { name: string; note: string }) => {
+  const addLocalFile = (payload: { name: string; note: string; size: string }) => {
     const id = `file-${Date.now()}`;
     setLocalFiles((current) => [
-      { id, name: payload.name, note: payload.note || "新上传文件", size: "1.1 MB" },
+      { id, name: payload.name, note: payload.note || "新上传文件", size: payload.size },
       ...current,
     ]);
     setSelectedFileIds((current) => [id, ...current]);
+    return id;
+  };
+
+  const addLocalFilesFromDevice = (files: FileList | null, note?: string) => {
+    if (!files?.length) return;
+    const normalizedNote = note?.trim() || "本地上传文件";
+
+    Array.from(files).forEach((file) => {
+      const uploadId = `upload-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const sizeLabel = formatFileSize(file.size);
+      const initialItem: LocalUploadItem = {
+        id: uploadId,
+        fileName: file.name,
+        sizeLabel,
+        note: normalizedNote,
+        progress: 0,
+        status: "queued",
+        errorText: null,
+      };
+
+      setLocalUploadQueue((current) => [initialItem, ...current]);
+
+      if (file.size > MAX_LOCAL_FILE_SIZE_BYTES) {
+        setLocalUploadQueue((current) =>
+          current.map((item) =>
+            item.id === uploadId
+              ? {
+                  ...item,
+                  status: "failed",
+                  progress: 0,
+                  errorText: "文件超过 20 MB，暂不支持上传",
+                }
+              : item,
+          ),
+        );
+        return;
+      }
+
+      const durationMs = Math.min(Math.max(1400, Math.round(file.size / 1200)), 4200);
+      const startedAt = Date.now();
+      const timer = window.setInterval(() => {
+        const elapsed = Date.now() - startedAt;
+        const nextProgress = Math.min(96, Math.round((elapsed / durationMs) * 100));
+        setLocalUploadQueue((current) =>
+          current.map((item) =>
+            item.id === uploadId
+              ? {
+                  ...item,
+                  status: "uploading",
+                  progress: Math.max(item.progress, nextProgress),
+                }
+              : item,
+          ),
+        );
+
+        if (elapsed >= durationMs) {
+          window.clearInterval(timer);
+          const fileId = addLocalFile({
+            name: file.name,
+            note: normalizedNote,
+            size: sizeLabel,
+          });
+          setLocalUploadQueue((current) =>
+            current.map((item) =>
+              item.id === uploadId
+                ? {
+                    ...item,
+                    status: "success",
+                    progress: 100,
+                    note: normalizedNote,
+                    errorText: null,
+                  }
+                : item,
+            ),
+          );
+          setSelectedFileIds((current) => (current.includes(fileId) ? current : [fileId, ...current]));
+        }
+      }, 160);
+    });
   };
 
   const addRichMediaItem = (payload: { title: string; kind: RichMediaItem["kind"]; value: string; note: string }) => {
@@ -674,6 +766,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             objectQueryByType={objectQueryByType}
             selectedObjectsByType={selectedObjectsByType}
             localFiles={localFiles}
+            localUploadQueue={localUploadQueue}
             richMediaItems={richMediaItems}
             selectedFileIds={selectedFileIds}
             selectedMediaIds={selectedMediaIds}
@@ -695,7 +788,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             onToggleObjectSelection={toggleObjectSelection}
             onToggleFileSelection={toggleFileSelection}
             onToggleMediaSelection={toggleMediaSelection}
-            onAddLocalFile={addLocalFile}
+            onAddLocalFilesFromDevice={addLocalFilesFromDevice}
             onAddRichMediaItem={addRichMediaItem}
             onCloseToolPicker={() => setActiveContextTool(null)}
             onClearToolSelection={clearToolSelection}
@@ -849,6 +942,7 @@ function ChatPanel({
   objectQueryByType,
   selectedObjectsByType,
   localFiles,
+  localUploadQueue,
   richMediaItems,
   selectedFileIds,
   selectedMediaIds,
@@ -858,7 +952,7 @@ function ChatPanel({
   onToggleObjectSelection,
   onToggleFileSelection,
   onToggleMediaSelection,
-  onAddLocalFile,
+  onAddLocalFilesFromDevice,
   onAddRichMediaItem,
   onCloseToolPicker,
   onClearToolSelection,
@@ -882,6 +976,7 @@ function ChatPanel({
   objectQueryByType: Record<ObjectType, string>;
   selectedObjectsByType: ContextResourceSelectionMap;
   localFiles: LocalFileItem[];
+  localUploadQueue: LocalUploadItem[];
   richMediaItems: RichMediaItem[];
   selectedFileIds: string[];
   selectedMediaIds: string[];
@@ -891,7 +986,7 @@ function ChatPanel({
   onToggleObjectSelection: (type: ObjectType, item: ContextResourceItem) => void;
   onToggleFileSelection: (fileId: string) => void;
   onToggleMediaSelection: (mediaId: string) => void;
-  onAddLocalFile: (payload: { name: string; note: string }) => void;
+  onAddLocalFilesFromDevice: (files: FileList | null, note?: string) => void;
   onAddRichMediaItem: (payload: { title: string; kind: RichMediaItem["kind"]; value: string; note: string }) => void;
   onCloseToolPicker: () => void;
   onClearToolSelection: (tool: ContextTool) => void;
@@ -929,12 +1024,12 @@ function ChatPanel({
     article: "updated_at:desc",
     order: "created_at:desc",
   });
-  const [newFileName, setNewFileName] = useState("");
   const [newFileNote, setNewFileNote] = useState("");
   const [newMediaTitle, setNewMediaTitle] = useState("");
   const [newMediaValue, setNewMediaValue] = useState("");
   const [newMediaNote, setNewMediaNote] = useState("");
   const [newMediaKind, setNewMediaKind] = useState<RichMediaItem["kind"]>("url");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const totalSelectedObjects = Object.values(selectedObjectsByType).reduce((count, items) => count + items.length, 0);
   const contextPreviewBlock = useMemo(
     () =>
@@ -1304,32 +1399,59 @@ function ChatPanel({
               <>
                 <div style={mockCreateBoxStyle}>
                   <input
-                    value={newFileName}
-                    onChange={(event) => setNewFileName(event.target.value)}
-                    placeholder="输入文件名，例如 campaign-brief.pdf"
-                    style={selectorSearchInputStyle}
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    style={hiddenInputStyle}
+                    onChange={(event) => {
+                      onAddLocalFilesFromDevice(event.target.files, newFileNote);
+                      event.currentTarget.value = "";
+                    }}
                   />
+                  <div style={uploadHeaderRowStyle}>
+                    <div>
+                      <div style={sectionTitleSmallStyle}>从本地上传文件</div>
+                      <div style={sectionTextStyle}>支持一次选择多个文件，上传完成后会自动加入列表并勾选。</div>
+                    </div>
+                    <button
+                      type="button"
+                      style={ghostButtonStyle}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      选择本地文件
+                    </button>
+                  </div>
                   <div style={inlineFieldRowStyle}>
                     <input
                       value={newFileNote}
                       onChange={(event) => setNewFileNote(event.target.value)}
-                      placeholder="补充文件用途说明"
+                      placeholder="补充备注（当前用于后续上传说明）"
                       style={compactFieldStyle}
                     />
-                    <button
-                      type="button"
-                      style={ghostButtonStyle}
-                      onClick={() => {
-                        const name = newFileName.trim();
-                        if (!name) return;
-                        onAddLocalFile({ name, note: newFileNote.trim() });
-                        setNewFileName("");
-                        setNewFileNote("");
-                      }}
-                    >
-                      添加文件
-                    </button>
+                    <span style={mutedMetaStyle}>大小上限 20 MB</span>
                   </div>
+                  {localUploadQueue.length > 0 ? (
+                    <div style={uploadQueueStyle}>
+                      {localUploadQueue.map((item) => (
+                        <div key={item.id} style={uploadQueueItemStyle}>
+                          <div style={resourceItemTopRowStyle}>
+                            <span style={sectionTitleSmallStyle}>{item.fileName}</span>
+                            <span style={uploadStatusPillStyle(item.status)}>{uploadStatusLabel(item.status)}</span>
+                          </div>
+                          <div style={sectionTextStyle}>{item.note}</div>
+                          <div style={mutedMetaStyle}>
+                            {item.sizeLabel}
+                            {item.errorText ? ` · ${item.errorText}` : ""}
+                          </div>
+                          <div style={uploadProgressTrackStyle}>
+                            <div style={uploadProgressFillStyle(item.progress, item.status)} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={pickerInfoBoxStyle("neutral")}>暂未选择本地文件。上传完成后会自动加入下方文件列表，你可以直接发送或取消勾选。</div>
+                  )}
                 </div>
                 <div style={selectorListCompactStyle}>
                   {localFiles.map((file) => {
@@ -1782,6 +1904,20 @@ function normalizeResourceStatus(status: string) {
   return status;
 }
 
+function uploadStatusLabel(status: LocalUploadItem["status"]) {
+  if (status === "queued") return "待上传";
+  if (status === "uploading") return "上传中";
+  if (status === "success") return "已完成";
+  return "失败";
+}
+
+function formatFileSize(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function taskStatusLabel(status: TaskStatus) {
   if (status === "executing") return "执行中";
   if (status === "review_required") return "待审核";
@@ -2199,6 +2335,7 @@ const objectSearchFieldWrapStyle: CSSProperties = { minWidth: 0 };
 const sortFieldWrapStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 6 };
 const filterChipRowStyle: CSSProperties = { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 };
 const resourcePickerHintStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 12, marginTop: 12, marginBottom: 6 };
+const hiddenInputStyle: CSSProperties = { display: "none" };
 const mockCreateBoxStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
@@ -2209,6 +2346,7 @@ const mockCreateBoxStyle: CSSProperties = {
   background: "#fafbfb",
   marginBottom: 14,
 };
+const uploadHeaderRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" };
 const inlineFieldRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 10, alignItems: "center" };
 const compactFieldStyle: CSSProperties = {
   width: "100%",
@@ -2251,6 +2389,16 @@ const selectorItemStyle = (checked: boolean): CSSProperties => ({
 const selectorItemContentStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 4 };
 const resourceItemContentStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 6, minWidth: 0, flex: 1 };
 const resourceItemTopRowStyle: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 };
+const uploadQueueStyle: CSSProperties = { display: "grid", gap: 10, marginTop: 4 };
+const uploadQueueItemStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
+  padding: 12,
+  borderRadius: 12,
+  border: "1px solid #e1e3e5",
+  background: "#ffffff",
+};
 const resourceStatusPillStyle: CSSProperties = {
   padding: "2px 8px",
   borderRadius: 999,
@@ -2261,6 +2409,32 @@ const resourceStatusPillStyle: CSSProperties = {
   fontWeight: 600,
   whiteSpace: "nowrap",
 };
+const uploadStatusPillStyle = (status: LocalUploadItem["status"]): CSSProperties => ({
+  padding: "2px 8px",
+  borderRadius: 999,
+  border: `1px solid ${
+    status === "failed" ? "#ffd2cc" : status === "success" ? "#b7ebd0" : "#dfe3e8"
+  }`,
+  background: status === "failed" ? "#fff1ef" : status === "success" ? "#e9f7ef" : "#f6f6f7",
+  color: status === "failed" ? "#8a2e0f" : status === "success" ? "#008060" : "#44505c",
+  fontSize: 12,
+  fontWeight: 600,
+  whiteSpace: "nowrap",
+});
+const uploadProgressTrackStyle: CSSProperties = {
+  width: "100%",
+  height: 8,
+  borderRadius: 999,
+  background: "#edf1f3",
+  overflow: "hidden",
+};
+const uploadProgressFillStyle = (progress: number, status: LocalUploadItem["status"]): CSSProperties => ({
+  width: `${Math.max(0, Math.min(progress, 100))}%`,
+  height: "100%",
+  borderRadius: 999,
+  background: status === "failed" ? "#d82c0d" : status === "success" ? "#008060" : "#2c6ecb",
+  transition: "width 0.18s ease",
+});
 const resourcePaginationStyle: CSSProperties = { display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 };
 const pickerInfoBoxStyle = (tone: "neutral" | "critical"): CSSProperties => ({
   padding: 12,
