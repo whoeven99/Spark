@@ -1,5 +1,5 @@
 import type { CSSProperties, KeyboardEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
@@ -156,10 +156,31 @@ const objectOptions: Record<ObjectType, ObjectOption[]> = {
   ],
 };
 
-const initialLocalFiles: LocalFileItem[] = [
-  { id: "file-1", name: "brand-guideline.pdf", size: "2.3 MB", note: "品牌语气和禁用词说明", serverId: null },
-  { id: "file-2", name: "product-seo-rules.docx", size: "540 KB", note: "商品标题与描述 SEO 规范", serverId: null },
-];
+function formatFileSizeLabel(bytes: number): string {
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+type WorkspaceFileListRecord = {
+  id: string;
+  name: string;
+  originalSize: number;
+  charCount: number;
+  createdAt: string;
+};
+
+function workspaceFileToLocalItem(file: WorkspaceFileListRecord): LocalFileItem {
+  return {
+    id: file.id,
+    serverId: file.id,
+    name: file.name,
+    size: formatFileSizeLabel(file.originalSize),
+    note: "历史上传",
+    charCount: file.charCount,
+  };
+}
 
 const initialRichMediaItems: RichMediaItem[] = [
   { id: "media-1", title: "Summer campaign landing", kind: "url", value: "https://spark-demo.shop/summer", note: "活动落地页 URL" },
@@ -289,7 +310,9 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     article: [],
     order: [],
   });
-  const [localFiles, setLocalFiles] = useState<LocalFileItem[]>(initialLocalFiles);
+  const [localFiles, setLocalFiles] = useState<LocalFileItem[]>([]);
+  const [workspaceFilesLoading, setWorkspaceFilesLoading] = useState(false);
+  const [workspaceFilesError, setWorkspaceFilesError] = useState<string | null>(null);
   const [richMediaItems, setRichMediaItems] = useState<RichMediaItem[]>(initialRichMediaItems);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
@@ -462,6 +485,40 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     });
   };
 
+  const loadWorkspaceFiles = useCallback(async () => {
+    setWorkspaceFilesLoading(true);
+    setWorkspaceFilesError(null);
+    try {
+      const authQuery = typeof window !== "undefined" ? window.location.search : "";
+      const res = await fetch(`/api/files${authQuery}`);
+      if (!res.ok) {
+        const errData = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(errData.error ?? `加载失败 (${res.status})`);
+      }
+      const data = (await res.json()) as { files: WorkspaceFileListRecord[] };
+      setLocalFiles((current) => {
+        const inFlight = current.filter((file) => file.uploading);
+        const serverItems = data.files.map(workspaceFileToLocalItem);
+        const seen = new Set(serverItems.map((file) => file.id));
+        const recentUploaded = current.filter(
+          (file) => file.serverId && !seen.has(file.serverId) && !file.uploading,
+        );
+        return [...inFlight, ...recentUploaded, ...serverItems];
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setWorkspaceFilesError(msg);
+    } finally {
+      setWorkspaceFilesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeContextTool === "file") {
+      void loadWorkspaceFiles();
+    }
+  }, [activeContextTool, loadWorkspaceFiles]);
+
   const toggleFileSelection = (fileId: string) => {
     setSelectedFileIds((current) => (current.includes(fileId) ? current.filter((id) => id !== fileId) : [...current, fileId]));
   };
@@ -496,9 +553,20 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
       setLocalFiles((current) =>
         current.map((f) =>
           f.id === localId
-            ? { ...f, serverId: data.id, charCount: data.charCount, uploading: false, uploadError: undefined }
+            ? {
+                ...f,
+                id: data.id,
+                serverId: data.id,
+                charCount: data.charCount,
+                uploading: false,
+                uploadError: undefined,
+                note: payload.note.trim() || "已上传",
+              }
             : f,
         ),
+      );
+      setSelectedFileIds((current) =>
+        current.map((id) => (id === localId ? data.id : id)),
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -807,6 +875,9 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             objectQueryByType={objectQueryByType}
             selectedObjectsByType={selectedObjectsByType}
             localFiles={localFiles}
+            workspaceFilesLoading={workspaceFilesLoading}
+            workspaceFilesError={workspaceFilesError}
+            onReloadWorkspaceFiles={loadWorkspaceFiles}
             richMediaItems={richMediaItems}
             selectedFileIds={selectedFileIds}
             selectedMediaIds={selectedMediaIds}
@@ -989,6 +1060,9 @@ function ChatPanel({
   objectQueryByType,
   selectedObjectsByType,
   localFiles,
+  workspaceFilesLoading,
+  workspaceFilesError,
+  onReloadWorkspaceFiles,
   richMediaItems,
   selectedFileIds,
   selectedMediaIds,
@@ -1029,6 +1103,9 @@ function ChatPanel({
   objectQueryByType: Record<ObjectType, string>;
   selectedObjectsByType: Record<ObjectType, SelectedShopifyObject[]>;
   localFiles: LocalFileItem[];
+  workspaceFilesLoading: boolean;
+  workspaceFilesError: string | null;
+  onReloadWorkspaceFiles: () => void | Promise<void>;
   richMediaItems: RichMediaItem[];
   selectedFileIds: string[];
   selectedMediaIds: string[];
@@ -1453,6 +1530,24 @@ function ChatPanel({
                   </div>
                 </div>
                 <div style={selectorListCompactStyle}>
+                  {workspaceFilesLoading && localFiles.length === 0 ? (
+                    <div style={sectionTextStyle}>正在加载历史上传…</div>
+                  ) : null}
+                  {workspaceFilesError ? (
+                    <div style={{ ...sectionTextStyle, color: "#d72c0d" }}>
+                      {workspaceFilesError}
+                      <button
+                        type="button"
+                        style={{ ...ghostButtonStyle, marginLeft: 8, padding: "2px 8px", fontSize: 12 }}
+                        onClick={() => void onReloadWorkspaceFiles()}
+                      >
+                        重试
+                      </button>
+                    </div>
+                  ) : null}
+                  {!workspaceFilesLoading && !workspaceFilesError && localFiles.length === 0 ? (
+                    <div style={sectionTextStyle}>暂无历史上传文件，可在上方上传后附加到对话。</div>
+                  ) : null}
                   {localFiles.map((file) => {
                     const checked = selectedFileIds.includes(file.id);
                     const authQuery = typeof window !== "undefined" ? window.location.search : "";
@@ -1471,8 +1566,9 @@ function ChatPanel({
                             {file.size}
                             {file.uploading ? " · 上传中…" : ""}
                             {file.uploadError ? ` · ⚠ ${file.uploadError}` : ""}
-                            {!file.uploading && !file.uploadError && file.serverId ? ` · 已解析 ${file.charCount ? `(${(file.charCount / 1000).toFixed(0)}k 字符)` : ""}` : ""}
-                            {!file.serverId && !file.uploading && !file.uploadError ? " · 示例" : ""}
+                            {!file.uploading && !file.uploadError && file.serverId && file.charCount
+                              ? ` · 已解析 (${(file.charCount / 1000).toFixed(0)}k 字符)`
+                              : ""}
                           </span>
                           {file.serverId && !file.uploading ? (
                             <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
