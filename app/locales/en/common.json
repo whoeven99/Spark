@@ -10,7 +10,9 @@
     "clearResult": "Clear result",
     "loadingLanguage": "Loading languages...",
     "languageSelectorLabel": "Language",
-    "unknown": "—"
+    "unknown": "—",
+    "delete": "Delete",
+    "deleting": "Deleting..."
   },
   "language": {
     "auto": "Auto detect",

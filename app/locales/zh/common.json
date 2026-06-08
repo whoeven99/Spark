@@ -10,7 +10,9 @@
     "clearResult": "清空结果",
     "loadingLanguage": "加载语言中...",
     "languageSelectorLabel": "语言",
-    "unknown": "—"
+    "unknown": "—",
+    "delete": "删除",
+    "deleting": "删除中…"
   },
   "language": {
     "auto": "自动识别",
