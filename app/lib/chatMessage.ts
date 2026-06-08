@@ -64,4 +64,5 @@ export type ChatMessage =
       imageGenerationCard?: boolean;
       imageGenerationFormPayload?: ImageGenerationFormPayload;
       productImproveCardPayload?: ProductImproveCardPayload;
+      thinkingContent?: string;
     };

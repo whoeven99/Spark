@@ -20,6 +20,7 @@ type StreamingAssistantReplyProps = {
   active: boolean;
   isStreaming: boolean;
   streamingText: string;
+  streamingThinkingText?: string;
   skillSteps: SkillStepProgress[];
   streamingTranslationForm?: unknown;
   streamingGenerateCard: boolean;
@@ -97,6 +98,7 @@ export function StreamingAssistantReply({
   active,
   isStreaming,
   streamingText,
+  streamingThinkingText = "",
   skillSteps,
   streamingTranslationForm,
   streamingGenerateCard,
@@ -142,10 +144,19 @@ export function StreamingAssistantReply({
             </div>
             <div style={{ marginTop: "0.35rem", minHeight: !hasContent ? "3rem" : undefined }}>
               {!hasContent ? (
-                <div style={thinkingWrapStyle}>
-                  <ThinkingDots />
-                  <ChatStreamingSkeleton />
-                </div>
+                streamingThinkingText ? (
+                  <div style={thinkingBlockStyle}>
+                    <div style={thinkingBlockHeaderStyle}>正在思考…</div>
+                    <div style={thinkingBlockBodyStyle}>{streamingThinkingText}</div>
+                  </div>
+                ) : (
+                  <div style={thinkingWrapStyle}>
+                    <ThinkingDots />
+                    <ChatStreamingSkeleton />
+                  </div>
+                )
+              ) : streamingThinkingText ? (
+                <div style={thinkingDoneStyle}>✓ 思考完成</div>
               ) : null}
 
               {skillSteps.length > 0 ? <StreamingSkillSteps steps={skillSteps} /> : null}
@@ -201,6 +212,38 @@ export function StreamingAssistantReply({
 const thinkingWrapStyle: CSSProperties = {
   display: "grid",
   gap: 10,
+};
+
+const thinkingBlockStyle: CSSProperties = {
+  borderRadius: 8,
+  border: "1px solid rgba(44, 110, 203, 0.2)",
+  background: "rgba(44, 110, 203, 0.04)",
+  padding: "8px 12px",
+  marginBottom: 6,
+};
+
+const thinkingBlockHeaderStyle: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "rgba(44, 110, 203, 0.8)",
+  marginBottom: 6,
+};
+
+const thinkingBlockBodyStyle: CSSProperties = {
+  fontSize: 13,
+  color: "#61666c",
+  fontStyle: "italic",
+  whiteSpace: "pre-wrap",
+  maxHeight: 180,
+  overflowY: "auto",
+  lineHeight: 1.6,
+};
+
+const thinkingDoneStyle: CSSProperties = {
+  fontSize: 12,
+  color: "#008060",
+  marginBottom: 8,
+  fontWeight: 500,
 };
 
 const thinkingTextStyle: CSSProperties = {

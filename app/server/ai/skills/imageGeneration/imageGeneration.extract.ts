@@ -5,6 +5,7 @@ import {
   defaultImageGenerationFormPayload,
   isImageGenerationFormToolPayload,
 } from "../../../../lib/imageGenerationFormPayload";
+import { extractUserIntentText } from "../../../../lib/chatCardFallback";
 import { extractMessageText } from "../../utils/langchainMessageText";
 import { OPEN_IMAGE_GENERATION_FORM_TOOL_NAME } from "./imageGeneration.form.tool";
 import { GENERATE_PRODUCT_IMAGE_TOOL_NAME } from "./imageGeneration.constants";
@@ -105,21 +106,24 @@ export function shouldInjectImageGenerationFormFallback(
   lastUserText: string,
   assistantReplyText: string,
 ): boolean {
-  const u = lastUserText.trim();
+  const u = extractUserIntentText(lastUserText);
   const a = assistantReplyText.trim();
   if (!u) return false;
 
   const userWantsCard =
-    /文生图|生成图片|生成图|画一张|绘制|创作.*图|商品主图|场景图|海报|AI配图|image generation|生成卡片/i.test(
+    /文生图|生成.{0,8}图|生成.{0,8}图片|画一张|绘制|创作.{0,6}图|商品主图|场景图|海报|AI.{0,6}图|AI配图|image generation|生成卡片/i.test(
       u,
     );
 
   if (!userWantsCard) return false;
+  if (/^(生成.{0,8}图|生成.{0,8}图片|文生图)[。.!?\s]*$/i.test(u)) return true;
   if (/生成卡片|文生图卡片|打开卡片/i.test(u)) return true;
   if (!a) return false;
 
   const assistantSignals =
-    /卡片|表单|已为你打开|已经为你打开|请确认|在卡片|画面描述/i.test(a);
+    /卡片|表单|已为你打开|已为您打开|已经为你打开|已经为您打开|请确认|在卡片|画面描述|打开.{0,8}卡片/i.test(
+      a,
+    );
   return assistantSignals;
 }
 

@@ -43,6 +43,7 @@ type WorkspaceConversationMessage = {
   pictureTranslateFormPayload?: PictureTranslateFormPayload;
   imageGenerationCard?: boolean;
   imageGenerationFormPayload?: ImageGenerationFormPayload;
+  thinkingContent?: string;
 };
 
 type ConversationSummary = {
@@ -290,6 +291,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   const {
     isStreaming,
     streamingText,
+    streamingThinkingText,
     streamingTranslationForm,
     streamingGenerateCard,
     streamingGeneratePayload,
@@ -786,6 +788,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             isStreaming={isStreaming}
             showStreamingReply={streamingConversationId === activeConversation.id}
             streamingText={streamingText}
+            streamingThinkingText={streamingThinkingText}
             streamingTranslationForm={streamingTranslationForm}
             streamingGenerateCard={streamingGenerateCard}
             streamingGeneratePayload={streamingGeneratePayload}
@@ -954,6 +957,7 @@ function ChatPanel({
   isStreaming,
   showStreamingReply,
   streamingText,
+  streamingThinkingText,
   streamingTranslationForm,
   streamingGenerateCard,
   streamingGeneratePayload,
@@ -992,6 +996,7 @@ function ChatPanel({
   isStreaming: boolean;
   showStreamingReply: boolean;
   streamingText: string;
+  streamingThinkingText?: string;
   streamingTranslationForm: unknown;
   streamingGenerateCard: boolean;
   streamingGeneratePayload: unknown;
@@ -1164,6 +1169,7 @@ function ChatPanel({
                   active={showStreamingReply}
                   isStreaming={isStreaming}
                   streamingText={streamingText}
+                  streamingThinkingText={streamingThinkingText}
                   skillSteps={skillSteps}
                   streamingTranslationForm={streamingTranslationForm}
                   streamingGenerateCard={streamingGenerateCard}
@@ -1703,14 +1709,19 @@ function workspaceMessageToChatMessage(message: WorkspaceConversationMessage): C
     ...(message.productImproveCardPayload
       ? { productImproveCardPayload: message.productImproveCardPayload }
       : {}),
-    ...(message.pictureTranslateCard ? { pictureTranslateCard: true } : {}),
+    ...(message.pictureTranslateCard || message.pictureTranslateFormPayload
+      ? { pictureTranslateCard: true }
+      : {}),
     ...(message.pictureTranslateFormPayload
       ? { pictureTranslateFormPayload: message.pictureTranslateFormPayload }
       : {}),
-    ...(message.imageGenerationCard ? { imageGenerationCard: true } : {}),
+    ...(message.imageGenerationCard || message.imageGenerationFormPayload
+      ? { imageGenerationCard: true }
+      : {}),
     ...(message.imageGenerationFormPayload
       ? { imageGenerationFormPayload: message.imageGenerationFormPayload }
       : {}),
+    ...(message.thinkingContent ? { thinkingContent: message.thinkingContent } : {}),
   };
 }
 
@@ -1752,6 +1763,7 @@ function buildAssistantWorkspaceMessage(
     ...(imageGenerationFormPayload
       ? { imageGenerationFormPayload }
       : {}),
+    ...(payload.thinkingContent ? { thinkingContent: payload.thinkingContent } : {}),
   };
 }
 
@@ -1817,7 +1829,9 @@ function dbMessageToUiMessage(msg: {
     ...(extras.productImproveCardPayload
       ? { productImproveCardPayload: extras.productImproveCardPayload as ProductImproveCardPayload }
       : {}),
-    ...(extras.pictureTranslateCard ? { pictureTranslateCard: true } : {}),
+    ...(extras.pictureTranslateCard || extras.pictureTranslateFormPayload
+      ? { pictureTranslateCard: true }
+      : {}),
     ...(extras.pictureTranslateFormPayload
       ? {
           pictureTranslateFormPayload: coercePictureTranslateFormPayload(
@@ -1825,7 +1839,9 @@ function dbMessageToUiMessage(msg: {
           ),
         }
       : {}),
-    ...(extras.imageGenerationCard ? { imageGenerationCard: true } : {}),
+    ...(extras.imageGenerationCard || extras.imageGenerationFormPayload
+      ? { imageGenerationCard: true }
+      : {}),
     ...(extras.imageGenerationFormPayload
       ? {
           imageGenerationFormPayload: coerceImageGenerationFormPayload(

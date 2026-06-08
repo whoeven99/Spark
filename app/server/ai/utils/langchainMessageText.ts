@@ -1,5 +1,25 @@
 import type { BaseMessage } from "@langchain/core/messages";
 
+/** 从 LangChain BaseMessage 提取 Claude extended thinking 块内容。 */
+export function extractMessageThinking(message: BaseMessage): string {
+  const { content } = message;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((block) => {
+      if (
+        block &&
+        typeof block === "object" &&
+        "type" in block &&
+        (block as { type?: string }).type === "thinking" &&
+        "thinking" in block
+      ) {
+        return String((block as { thinking?: string }).thinking ?? "");
+      }
+      return "";
+    })
+    .join("");
+}
+
 /** 从 LangChain BaseMessage 抽取纯文本（字符串或多模态块中的 text）。 */
 export function extractMessageText(message: BaseMessage): string {
   const { content } = message;

@@ -44,6 +44,7 @@ export function ChatPage() {
   const {
     isStreaming,
     streamingText,
+    streamingThinkingText,
     streamingTranslationForm,
     streamingGenerateCard,
     streamingGeneratePayload,
@@ -190,6 +191,7 @@ export function ChatPage() {
                       p.imageGenerationFormPayload as ImageGenerationFormPayload,
                   }
                 : {}),
+              ...(p.thinkingContent ? { thinkingContent: p.thinkingContent } : {}),
             },
           ]);
 
@@ -318,6 +320,7 @@ export function ChatPage() {
                       active={showStreamingReply}
                       isStreaming={isStreaming}
                       streamingText={streamingText}
+                      streamingThinkingText={streamingThinkingText}
                       skillSteps={skillSteps}
                       streamingTranslationForm={streamingTranslationForm}
                       streamingGenerateCard={streamingGenerateCard}

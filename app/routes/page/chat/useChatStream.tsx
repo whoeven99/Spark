@@ -24,6 +24,7 @@ type SkillProgressEvent = {
 
 type StreamChunk =
   | { type: "text"; content: string }
+  | { type: "thinking"; content: string }
   | { type: "tool_call"; name: string; args: unknown }
   | { type: "tool_result"; name: string; result: string }
   | { type: "skill_progress"; event: SkillProgressEvent }
@@ -48,6 +49,7 @@ type StreamChunk =
 export type ChatStreamFinishPayload = {
   aborted: boolean;
   reply: string;
+  thinkingContent?: string;
   translationTaskForm?: unknown;
   attachments?: ChatMessageAttachment[];
   productImproveCard?: boolean;
@@ -62,6 +64,7 @@ export type ChatStreamFinishPayload = {
 type Snapshot = {
   reply: string;
   streamedText: string;
+  thinkingContent: string;
   translationTaskForm?: unknown;
   attachments: ChatMessageAttachment[];
   productImproveCard: boolean;
@@ -76,6 +79,7 @@ function snapshotToFinishPayload(snapshot: Snapshot, aborted: boolean): ChatStre
   return {
     aborted,
     reply: snapshot.reply,
+    thinkingContent: snapshot.thinkingContent || undefined,
     translationTaskForm: snapshot.translationTaskForm,
     attachments: snapshot.attachments,
     productImproveCard: snapshot.productImproveCard,
@@ -94,6 +98,7 @@ export function useChatStream() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [awaitingFirstChunk, setAwaitingFirstChunk] = useState(false);
   const [streamingText, setStreamingText] = useState("");
+  const [streamingThinkingText, setStreamingThinkingText] = useState("");
   const [streamingTranslationForm, setStreamingTranslationForm] = useState<unknown>();
   const [streamingGenerateCard, setStreamingGenerateCard] = useState(false);
   const [streamingGeneratePayload, setStreamingGeneratePayload] = useState<unknown>();
@@ -108,6 +113,7 @@ export function useChatStream() {
   const snapshotRef = useRef<Snapshot>({
     reply: "",
     streamedText: "",
+    thinkingContent: "",
     translationTaskForm: undefined,
     attachments: [],
     productImproveCard: false,
@@ -122,6 +128,7 @@ export function useChatStream() {
     snapshotRef.current = {
       reply: "",
       streamedText: "",
+      thinkingContent: "",
       translationTaskForm: undefined,
       attachments: [],
       productImproveCard: false,
@@ -135,6 +142,7 @@ export function useChatStream() {
 
   const resetStreamingUi = () => {
     setStreamingText("");
+    setStreamingThinkingText("");
     setStreamingTranslationForm(undefined);
     setStreamingGenerateCard(false);
     setStreamingGeneratePayload(undefined);
@@ -224,7 +232,13 @@ export function useChatStream() {
             try {
               const chunk: StreamChunk = JSON.parse(line.slice(6));
 
-              if (chunk.type === "text") {
+              if (chunk.type === "thinking") {
+                setStreamingThinkingText((prev) => {
+                  const next = prev + chunk.content;
+                  snapshotRef.current.thinkingContent = next;
+                  return next;
+                });
+              } else if (chunk.type === "text") {
                 markFirstChunkSeen();
                 setStreamingText((prev) => {
                   const next = prev + chunk.content;
@@ -396,6 +410,7 @@ export function useChatStream() {
     streamingImageGenerationCard,
     streamingImageGenerationPayload,
     skillSteps,
+    streamingThinkingText,
     /** @deprecated 兼容旧名 */
     playbookSteps: skillSteps,
     prepareStreaming,

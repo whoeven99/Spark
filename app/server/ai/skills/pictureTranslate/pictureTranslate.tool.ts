@@ -4,6 +4,7 @@ import {
   PICTURE_TRANSLATE_TOOL_NAME,
   PICTURE_TRANSLATE_TOOL_LOG_PREFIX,
 } from "./pictureTranslate.constants";
+import { pictureTranslateFormTool } from "./pictureTranslate.form.tool";
 import { pictureTranslateToolSchema, resolvePictureTranslateInput } from "./pictureTranslate.schema";
 import { safeExecutePictureTranslateTool } from "./pictureTranslate.service";
 import { extractChatImageAttachmentsFromMessages } from "../shared/imageAttachmentsExtract";
@@ -50,7 +51,10 @@ export const pictureTranslateToolDefinition: ToolDefinition = {
   uiPayloadKey: "attachments",
   systemPromptExtension:
     "当用户已提供可访问的 HTTPS 图片 URL 或图片 base64，且目标语言明确、要求立即翻译时，调用 picture_translate。若用户尚未选图或需在卡片里确认语言，应调用 open_picture_translate_form 而非本工具。不要用于普通文本翻译、PDF 或纯文本。成功后不要输出 Markdown 图片链接，译图由前端直接渲染；只需简洁说明翻译已完成。",
-  createTool: (context) => createPictureTranslateTool(context),
+  createTool: (context) => [
+    pictureTranslateFormTool,
+    createPictureTranslateTool(context),
+  ],
   extractUIPayload: (messages) =>
     extractChatImageAttachmentsFromMessages(messages),
 };

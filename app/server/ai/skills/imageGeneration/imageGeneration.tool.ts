@@ -6,6 +6,7 @@ import {
   GENERATE_PRODUCT_IMAGE_TOOL_NAME,
   IMAGE_GENERATION_TOOL_LOG_PREFIX,
 } from "./imageGeneration.constants";
+import { imageGenerationFormTool } from "./imageGeneration.form.tool";
 import { generateProductImageToolSchema } from "./imageGeneration.schema";
 import { safeExecuteGenerateProductImageTool } from "./imageGeneration.service";
 import { extractChatImageAttachmentsFromMessages } from "../shared/imageAttachmentsExtract";
@@ -110,7 +111,10 @@ export const imageGenerationToolDefinition: ToolDefinition = {
   systemPromptExtension:
     "当用户已给出完整画面描述且要求立即生成商品图/营销图时，调用 generate_product_image，传入 prompt。若用户需在卡片里确认描述或尚未给出足够画面描述，应调用 open_image_generation_form 而非本工具。成功后用简短中文说明已生成；不要输出 Markdown 图片链接，图片由前端展示。不要与 picture_translate 混用。",
   condition: () => isImageGenerationToolEnabled(),
-  createTool: (context) => createGenerateProductImageTool(context),
+  createTool: (context) => [
+    imageGenerationFormTool,
+    createGenerateProductImageTool(context),
+  ],
   extractUIPayload: (messages) =>
     extractChatImageAttachmentsFromMessages(messages),
 };

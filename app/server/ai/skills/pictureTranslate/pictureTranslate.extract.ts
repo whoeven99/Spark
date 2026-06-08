@@ -5,6 +5,7 @@ import {
   defaultPictureTranslateFormPayload,
   isPictureTranslateFormToolPayload,
 } from "../../../../lib/pictureTranslateFormPayload";
+import { extractUserIntentText } from "../../../../lib/chatCardFallback";
 import { extractMessageText } from "../../utils/langchainMessageText";
 import { OPEN_PICTURE_TRANSLATE_FORM_TOOL_NAME } from "./pictureTranslate.form.tool";
 import { PICTURE_TRANSLATE_TOOL_NAME } from "./pictureTranslate.constants";
@@ -106,7 +107,7 @@ export function shouldInjectPictureTranslateFormFallback(
   lastUserText: string,
   assistantReplyText: string,
 ): boolean {
-  const u = lastUserText.trim();
+  const u = extractUserIntentText(lastUserText);
   const a = assistantReplyText.trim();
   if (!u) return false;
 
@@ -114,11 +115,15 @@ export function shouldInjectPictureTranslateFormFallback(
     /图片翻译|翻译图片|翻译这张图|商品图翻译|截图翻译|picture translate|图片卡片/i.test(u);
 
   if (!userWantsCard) return false;
+
+  if (/^(图片翻译|翻译图片)[。.!?\s]*$/i.test(u)) return true;
   if (/图片卡片|翻译卡片|打开卡片/i.test(u)) return true;
   if (!a) return false;
 
   const assistantSignals =
-    /卡片|表单|已为你打开|已经为你打开|请确认|选择图片|在卡片/i.test(a);
+    /卡片|表单|已为你打开|已为您打开|已经为你打开|已经为您打开|请确认|选择图片|在卡片|打开.{0,8}卡片/i.test(
+      a,
+    );
   return assistantSignals;
 }
 

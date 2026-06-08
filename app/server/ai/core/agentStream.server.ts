@@ -8,6 +8,7 @@ import {
 } from "@langchain/core/messages";
 import {
   extractMessageText,
+  extractMessageThinking,
   extractMessagesContext,
 } from "../utils/langchainMessageText";
 import { buildShopChatGraph, getShopChatModel } from "./shopChatGraph.server";
@@ -31,11 +32,14 @@ import {
   sanitizeHumanInput,
 } from "../../agentRunLog/index.server";
 import { buildReflectionFromRun } from "../../agentRunLog/recentReflection.server";
+import { resolveImageGenerationCardPayload } from "../skills/imageGeneration/imageGeneration.extract";
+import { resolvePictureTranslateCardPayload } from "../skills/pictureTranslate/pictureTranslate.extract";
 import "../skills/index";
 import "../playbooks/index";
 
 export type StreamChunk =
   | { type: "text"; content: string }
+  | { type: "thinking"; content: string }
   | { type: "tool_call"; name: string; args: unknown }
   | { type: "tool_result"; name: string; result: string }
   | { type: "skill_progress"; event: SkillProgressEvent }
@@ -290,6 +294,10 @@ export async function invokeChatAgentStream(
             const tuple = payload as [BaseMessage, Record<string, unknown>];
             const [message] = tuple;
             if (AIMessageChunk.isInstance(message)) {
+              const thinkingDelta = extractMessageThinking(message);
+              if (thinkingDelta) {
+                controller.enqueue({ type: "thinking", content: thinkingDelta });
+              }
               const delta = extractMessageText(message);
               if (delta) {
                 streamedTextAccum += delta;
@@ -441,6 +449,42 @@ export async function invokeChatAgentStream(
             const payload = def.extractUIPayload(resultMessages, lastUserText, finalReply);
             if (payload !== undefined) {
               uiPayloads[def.uiPayloadKey] = payload;
+            }
+          }
+        }
+
+        if (!uiPayloads.pictureTranslateCard) {
+          const pictureTranslatePayload = resolvePictureTranslateCardPayload(
+            resultMessages,
+            lastUserText,
+            finalReply,
+          );
+          if (pictureTranslatePayload) {
+            uiPayloads.pictureTranslateCard = pictureTranslatePayload;
+            if (!streamContext.emittedFlags.has("pictureTranslateForm")) {
+              controller.enqueue({
+                type: "tool_call",
+                name: "open_picture_translate_form",
+                args: pictureTranslatePayload,
+              });
+            }
+          }
+        }
+
+        if (!uiPayloads.imageGenerationCard) {
+          const imageGenerationPayload = resolveImageGenerationCardPayload(
+            resultMessages,
+            lastUserText,
+            finalReply,
+          );
+          if (imageGenerationPayload) {
+            uiPayloads.imageGenerationCard = imageGenerationPayload;
+            if (!streamContext.emittedFlags.has("imageGenerationForm")) {
+              controller.enqueue({
+                type: "tool_call",
+                name: "open_image_generation_form",
+                args: imageGenerationPayload,
+              });
             }
           }
         }
