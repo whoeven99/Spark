@@ -14,6 +14,7 @@ import { PictureTranslateProvider } from "../component/pictureTranslate/pictureT
 import { usePictureTranslateContext } from "../component/pictureTranslate/pictureTranslateContext";
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import { DialogShell } from "../component/shared/DialogShell";
+import { BatchTaskPanel } from "../component/batchTask/BatchTaskPanel";
 import {
   PageSectionHeader,
   PageSurface,
@@ -133,6 +134,7 @@ function ImageStudioPageInner({
   const pictureTranslate = usePictureTranslateContext();
   const [generateConfirmOpen, setGenerateConfirmOpen] = useState(false);
   const [translateConfirmOpen, setTranslateConfirmOpen] = useState(false);
+  const [batchPanelOpen, setBatchPanelOpen] = useState(false);
 
   const genDuration = formatEstimatedDuration(estimations.generate.seconds, t);
   const transDuration = formatEstimatedDuration(estimations.translate.seconds, t);
@@ -237,6 +239,31 @@ function ImageStudioPageInner({
                 )}
               </PageSurface>
             </div>
+
+            {navTab === "translate" && (
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setBatchPanelOpen(true)}
+                  style={{
+                    padding: "0.5rem 1.1rem",
+                    borderRadius: 8,
+                    border: `1px solid #c7d0e8`,
+                    background: "#fff",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    color: "#4070f4",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <span>⚡</span>
+                  批量翻译商品图片
+                </button>
+              </div>
+            )}
           </>
         )}
 
@@ -438,6 +465,14 @@ function ImageStudioPageInner({
           </div>
         ) : null}
       </DialogShell>
+
+      <BatchTaskPanel
+        isOpen={batchPanelOpen}
+        taskType="picture_translate"
+        locationSearch={locationSearch}
+        onClose={() => setBatchPanelOpen(false)}
+        onBatchCreated={() => setNavTab("tasks")}
+      />
     </s-page>
   );
 }
