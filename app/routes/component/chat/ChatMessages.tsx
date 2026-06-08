@@ -244,30 +244,3 @@ const thinkingContentStyle: CSSProperties = {
   overflowY: "auto",
   lineHeight: 1.6,
 };
-
-const thinkingDetailsStyle: CSSProperties = {
-  marginTop: 10,
-  borderRadius: 8,
-  border: "1px solid rgba(44, 110, 203, 0.2)",
-  background: "rgba(44, 110, 203, 0.04)",
-  padding: "6px 10px",
-};
-
-const thinkingSummaryStyle: CSSProperties = {
-  cursor: "pointer",
-  fontSize: 12,
-  color: "rgba(44, 110, 203, 0.8)",
-  fontWeight: 500,
-  userSelect: "none",
-};
-
-const thinkingContentStyle: CSSProperties = {
-  marginTop: 8,
-  fontSize: 13,
-  color: "#61666c",
-  fontStyle: "italic",
-  whiteSpace: "pre-wrap",
-  maxHeight: 220,
-  overflowY: "auto",
-  lineHeight: 1.6,
-};
