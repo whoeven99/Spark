@@ -6,6 +6,7 @@ import { coerceProductImproveFormPayload } from "../../../lib/productImproveForm
 import { coerceImageGenerationFormPayload } from "../../../lib/imageGenerationFormPayload";
 import { coercePictureTranslateFormPayload } from "../../../lib/pictureTranslateFormPayload";
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
+import { coerceBatchTasksFormPayload, type BatchTasksFormPayload } from "../../../lib/batchTasksFormPayload";
 import {
   hasStreamingVisualContent,
   type SkillStepProgress,
@@ -58,6 +59,8 @@ export type ChatStreamFinishPayload = {
   pictureTranslateFormPayload?: unknown;
   imageGenerationCard?: boolean;
   imageGenerationFormPayload?: unknown;
+  batchTasksCard?: boolean;
+  batchTasksFormPayload?: BatchTasksFormPayload;
   httpStatus?: number;
 };
 
@@ -74,6 +77,8 @@ type Snapshot = {
   pictureTranslateFormPayload?: unknown;
   imageGenerationCard: boolean;
   imageGenerationFormPayload?: unknown;
+  batchTasksCard: boolean;
+  batchTasksFormPayload?: BatchTasksFormPayload;
 };
 
 function snapshotToFinishPayload(snapshot: Snapshot, aborted: boolean): ChatStreamFinishPayload {
@@ -89,6 +94,8 @@ function snapshotToFinishPayload(snapshot: Snapshot, aborted: boolean): ChatStre
     pictureTranslateFormPayload: snapshot.pictureTranslateFormPayload,
     imageGenerationCard: snapshot.imageGenerationCard,
     imageGenerationFormPayload: snapshot.imageGenerationFormPayload,
+    batchTasksCard: snapshot.batchTasksCard,
+    batchTasksFormPayload: snapshot.batchTasksFormPayload,
   };
 }
 
@@ -109,6 +116,9 @@ export function useChatStream() {
   const [streamingImageGenerationCard, setStreamingImageGenerationCard] = useState(false);
   const [streamingImageGenerationPayload, setStreamingImageGenerationPayload] =
     useState<unknown>();
+  const [streamingBatchTasksCard, setStreamingBatchTasksCard] = useState(false);
+  const [streamingBatchTasksPayload, setStreamingBatchTasksPayload] =
+    useState<BatchTasksFormPayload | undefined>();
   const [skillSteps, setSkillSteps] = useState<SkillStepProgress[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const snapshotRef = useRef<Snapshot>({
@@ -124,6 +134,8 @@ export function useChatStream() {
     pictureTranslateFormPayload: undefined,
     imageGenerationCard: false,
     imageGenerationFormPayload: undefined,
+    batchTasksCard: false,
+    batchTasksFormPayload: undefined,
   });
 
   const resetSnapshot = () => {
@@ -140,6 +152,8 @@ export function useChatStream() {
       pictureTranslateFormPayload: undefined,
       imageGenerationCard: false,
       imageGenerationFormPayload: undefined,
+      batchTasksCard: false,
+      batchTasksFormPayload: undefined,
     };
   };
 
@@ -153,6 +167,8 @@ export function useChatStream() {
     setStreamingPictureTranslatePayload(undefined);
     setStreamingImageGenerationCard(false);
     setStreamingImageGenerationPayload(undefined);
+    setStreamingBatchTasksCard(false);
+    setStreamingBatchTasksPayload(undefined);
     setSkillSteps([]);
   };
 
@@ -308,6 +324,12 @@ export function useChatStream() {
                   snapshotRef.current.imageGenerationFormPayload = normalized;
                   setStreamingImageGenerationCard(true);
                   setStreamingImageGenerationPayload(normalized);
+                } else if (chunk.name === "open_batch_tasks_form") {
+                  const normalized = coerceBatchTasksFormPayload(chunk.args);
+                  snapshotRef.current.batchTasksCard = true;
+                  snapshotRef.current.batchTasksFormPayload = normalized;
+                  setStreamingBatchTasksCard(true);
+                  setStreamingBatchTasksPayload(normalized);
                 }
               } else if (chunk.type === "tool_result") {
                 markFirstChunkSeen();
@@ -430,6 +452,8 @@ export function useChatStream() {
     streamingPictureTranslatePayload,
     streamingImageGenerationCard,
     streamingImageGenerationPayload,
+    streamingBatchTasksCard,
+    streamingBatchTasksPayload,
     skillSteps,
     streamingThinkingText,
     /** @deprecated 兼容旧名 */

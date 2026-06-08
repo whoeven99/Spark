@@ -5,12 +5,14 @@ import type { PictureTranslateFormPayload } from "../../../lib/pictureTranslateF
 import type { ProductImproveCardPayload } from "../../../lib/chatMessage";
 import type { TranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
+import type { BatchTasksFormPayload } from "../../../lib/batchTasksFormPayload";
 import { ChatMessageContent } from "./ChatMessageContent";
 import { ChatStreamingSkeleton } from "./ChatStreamingSkeleton";
 import { ImageGenerationChatCard } from "./ImageGenerationChatCard";
 import { PictureTranslateChatCard } from "./PictureTranslateChatCard";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
 import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard";
+import { BatchTasksChatCard } from "./BatchTasksChatCard";
 import {
   hasStreamingVisualContent,
   type SkillStepProgress,
@@ -29,6 +31,8 @@ type StreamingAssistantReplyProps = {
   streamingPictureTranslatePayload?: unknown;
   streamingImageGenerationCard?: boolean;
   streamingImageGenerationPayload?: unknown;
+  streamingBatchTasksCard?: boolean;
+  streamingBatchTasksPayload?: BatchTasksFormPayload;
 };
 
 const assistantBubbleShellStyle: CSSProperties = {
@@ -149,6 +153,8 @@ export function StreamingAssistantReply({
   streamingPictureTranslatePayload,
   streamingImageGenerationCard = false,
   streamingImageGenerationPayload,
+  streamingBatchTasksCard = false,
+  streamingBatchTasksPayload,
 }: StreamingAssistantReplyProps) {
   if (!active) return null;
 
@@ -173,7 +179,8 @@ export function StreamingAssistantReply({
     streamingTranslationPayload ||
       streamingGenerateCard ||
       streamingPictureTranslateCard ||
-      streamingImageGenerationCard,
+      streamingImageGenerationCard ||
+      streamingBatchTasksCard,
   );
   const thinkingProgressPercent = getThinkingProgress({
     hasContent,
@@ -244,6 +251,15 @@ export function StreamingAssistantReply({
                   <ImageGenerationChatCard
                     embedded
                     initialFormPayload={streamingImageGenerationFormPayload}
+                  />
+                </div>
+              ) : null}
+
+              {streamingBatchTasksCard ? (
+                <div style={cardSlotStyle}>
+                  <BatchTasksChatCard
+                    embedded
+                    initialPayload={streamingBatchTasksPayload}
                   />
                 </div>
               ) : null}

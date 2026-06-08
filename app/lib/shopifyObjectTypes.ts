@@ -48,4 +48,6 @@ export type ShopifyObjectListApiResponse =
 export type SelectedShopifyObject = {
   id: string;
   title: string;
+  /** 商品/文章的主图 URL（选中时捕获，用于批量图片任务） */
+  imageUrl?: string | null;
 };

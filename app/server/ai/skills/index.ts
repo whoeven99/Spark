@@ -13,6 +13,7 @@ import { productOptimizationSkills } from "./productOptimization";
 import { productCatalogSkills } from "./productCatalog";
 import { listMyTasksToolDefinition } from "./taskHistory/taskHistory.tool";
 import { getBillingStatusToolDefinition } from "./billingStatus/billingStatus.tool";
+import { batchTasksFormSkillDefinition } from "./batchTasks/batchTasks.form.skill";
 
 // ==========================================
 // 注册各类核心与扩展 Tools 到全局注册表
@@ -71,3 +72,4 @@ for (const skill of productCatalogSkills) {
 globalToolRegistry.register(listMyTasksToolDefinition);
 globalToolRegistry.register(getBillingStatusToolDefinition);
 globalToolRegistry.register(sendTemplateEmailToolDefinition);
+globalToolRegistry.register(batchTasksFormSkillDefinition);

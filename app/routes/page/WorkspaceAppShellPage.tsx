@@ -15,6 +15,8 @@ import type { PictureTranslateFormPayload } from "../../lib/pictureTranslateForm
 import { coercePictureTranslateFormPayload } from "../../lib/pictureTranslateFormPayload";
 import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { coerceTranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
+import type { BatchTasksFormPayload } from "../../lib/batchTasksFormPayload";
+import { coerceBatchTasksFormPayload } from "../../lib/batchTasksFormPayload";
 import { ChatMessages } from "../component/chat/ChatMessages";
 import { StreamingAssistantReply } from "../component/chat/StreamingAssistantReply";
 import { LanguageSelector } from "../component/common/LanguageSelector";
@@ -42,6 +44,8 @@ type WorkspaceConversationMessage = {
   pictureTranslateFormPayload?: PictureTranslateFormPayload;
   imageGenerationCard?: boolean;
   imageGenerationFormPayload?: ImageGenerationFormPayload;
+  batchTasksCard?: boolean;
+  batchTasksFormPayload?: BatchTasksFormPayload;
   thinkingContent?: string;
 };
 
@@ -306,6 +310,8 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     streamingPictureTranslatePayload,
     streamingImageGenerationCard,
     streamingImageGenerationPayload,
+    streamingBatchTasksCard,
+    streamingBatchTasksPayload,
     skillSteps,
     sendMessage: streamConversation,
     prepareStreaming,
@@ -897,6 +903,8 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             streamingPictureTranslatePayload={streamingPictureTranslatePayload}
             streamingImageGenerationCard={streamingImageGenerationCard}
             streamingImageGenerationPayload={streamingImageGenerationPayload}
+            streamingBatchTasksCard={streamingBatchTasksCard}
+            streamingBatchTasksPayload={streamingBatchTasksPayload}
             skillSteps={skillSteps}
             onAbortStream={() => {
               replyEpochRef.current += 1;
@@ -1070,6 +1078,8 @@ function ChatPanel({
   streamingPictureTranslatePayload,
   streamingImageGenerationCard,
   streamingImageGenerationPayload,
+  streamingBatchTasksCard,
+  streamingBatchTasksPayload,
   skillSteps,
   onAbortStream,
   onTranslationCardSuccess,
@@ -1113,6 +1123,8 @@ function ChatPanel({
   streamingPictureTranslatePayload: unknown;
   streamingImageGenerationCard: boolean;
   streamingImageGenerationPayload: unknown;
+  streamingBatchTasksCard: boolean;
+  streamingBatchTasksPayload: BatchTasksFormPayload | undefined;
   skillSteps: SkillStepProgress[];
   onAbortStream: () => void;
   onTranslationCardSuccess: (
@@ -1287,6 +1299,8 @@ function ChatPanel({
                   streamingPictureTranslatePayload={streamingPictureTranslatePayload}
                   streamingImageGenerationCard={streamingImageGenerationCard}
                   streamingImageGenerationPayload={streamingImageGenerationPayload}
+                  streamingBatchTasksCard={streamingBatchTasksCard}
+                  streamingBatchTasksPayload={streamingBatchTasksPayload}
                 />
               }
               onTranslationCardSuccess={(messageIndex, detail) =>
@@ -1826,6 +1840,12 @@ function workspaceMessageToChatMessage(message: WorkspaceConversationMessage): C
     ...(message.imageGenerationFormPayload
       ? { imageGenerationFormPayload: message.imageGenerationFormPayload }
       : {}),
+    ...(message.batchTasksCard || message.batchTasksFormPayload
+      ? { batchTasksCard: true }
+      : {}),
+    ...(message.batchTasksFormPayload
+      ? { batchTasksFormPayload: message.batchTasksFormPayload }
+      : {}),
     ...(message.thinkingContent ? { thinkingContent: message.thinkingContent } : {}),
   };
 }
@@ -1849,6 +1869,10 @@ function buildAssistantWorkspaceMessage(
     : undefined;
   const hasImageGenerationCard =
     payload.imageGenerationCard || Boolean(imageGenerationFormPayload);
+  const batchTasksFormPayload = payload.batchTasksFormPayload
+    ? coerceBatchTasksFormPayload(payload.batchTasksFormPayload)
+    : undefined;
+  const hasBatchTasksCard = payload.batchTasksCard || Boolean(batchTasksFormPayload);
 
   return {
     role: "assistant",
@@ -1868,6 +1892,8 @@ function buildAssistantWorkspaceMessage(
     ...(imageGenerationFormPayload
       ? { imageGenerationFormPayload }
       : {}),
+    ...(hasBatchTasksCard ? { batchTasksCard: true } : {}),
+    ...(batchTasksFormPayload ? { batchTasksFormPayload } : {}),
     ...(payload.thinkingContent ? { thinkingContent: payload.thinkingContent } : {}),
   };
 }
@@ -1909,6 +1935,12 @@ function serializeAssistantPayloads(payload: ChatStreamFinishPayload): string | 
       result.imageGenerationFormPayload = coerceImageGenerationFormPayload(
         payload.imageGenerationFormPayload,
       );
+    }
+  }
+  if (payload.batchTasksCard || payload.batchTasksFormPayload) {
+    result.batchTasksCard = true;
+    if (payload.batchTasksFormPayload) {
+      result.batchTasksFormPayload = coerceBatchTasksFormPayload(payload.batchTasksFormPayload);
     }
   }
   return Object.keys(result).length > 0 ? JSON.stringify(result) : null;
@@ -1954,6 +1986,14 @@ function dbMessageToUiMessage(msg: {
           ),
         }
       : {}),
+    ...(extras.batchTasksCard || extras.batchTasksFormPayload
+      ? { batchTasksCard: true }
+      : {}),
+    ...(extras.batchTasksFormPayload
+      ? {
+          batchTasksFormPayload: coerceBatchTasksFormPayload(extras.batchTasksFormPayload),
+        }
+      : {}),
   };
 }
 
@@ -1969,8 +2009,18 @@ function buildWorkspaceContextBlock(params: {
   for (const type of Object.keys(objectTypeLabels) as ObjectType[]) {
     const items = params.selectedObjectsByType[type];
     if (items.length === 0) continue;
-    const names = items.map((item) => item.title || item.id);
-    lines.push(`- ${objectTypeLabels[type]}：${names.join("、")}（共 ${items.length} 个）`);
+    if (type === "product") {
+      // Include structured product data (id + imageUrl) so AI can use them for batch tasks
+      lines.push(`- 已选商品（共 ${items.length} 个）：`);
+      for (const item of items) {
+        const parts = [`  • ${item.title}`, `[ID: ${item.id}]`];
+        if (item.imageUrl) parts.push(`[图片: ${item.imageUrl}]`);
+        lines.push(parts.join(" "));
+      }
+    } else {
+      const names = items.map((item) => item.title || item.id);
+      lines.push(`- ${objectTypeLabels[type]}：${names.join("、")}（共 ${items.length} 个）`);
+    }
   }
 
   if (params.selectedFileIds.length > 0) {

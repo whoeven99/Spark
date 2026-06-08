@@ -145,7 +145,7 @@ export function WorkspaceContextObjectPicker({
               <input
                 type="checkbox"
                 checked={checked}
-                onChange={() => onToggle({ id: item.id, title: item.title })}
+                onChange={() => onToggle({ id: item.id, title: item.title, imageUrl: item.imageUrl ?? null })}
               />
               {item.imageUrl ? (
                 <img src={item.imageUrl} alt="" style={thumbStyle} />
