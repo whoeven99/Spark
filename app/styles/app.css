@@ -105,6 +105,63 @@ code {
   background: rgba(255, 255, 255, 0.7);
 }
 
+/* Workspace shell — Shopify Admin alignment */
+.sidebar-new-chat-btn,
+.workspace-primary-btn {
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+.sidebar-new-chat-btn:hover,
+.workspace-primary-btn:hover:not(:disabled) {
+  background: #006e52 !important;
+  border-color: #006e52 !important;
+}
+.sidebar-new-chat-btn:active,
+.workspace-primary-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  background: #005a42 !important;
+  border-color: #005a42 !important;
+}
+.sidebar-new-chat-btn:focus-visible,
+.workspace-primary-btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(0, 128, 96, 0.28),
+    0 1px 0 rgba(0, 0, 0, 0.05) !important;
+}
+.workspace-primary-btn:disabled {
+  cursor: not-allowed;
+}
+
+.workspace-ghost-btn {
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+.workspace-ghost-btn:hover:not(:disabled) {
+  background: #fafbfb !important;
+  border-color: #aeb4b9 !important;
+}
+.workspace-ghost-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(44, 110, 203, 0.2) !important;
+}
+
+.workspace-nav-btn {
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.workspace-nav-btn:hover:not(.is-active) {
+  background: #f6f6f7 !important;
+}
+
+.workspace-composer-input:focus {
+  border-color: #008060 !important;
+  box-shadow: 0 0 0 1px #008060;
+}
+
 /* Sidebar history row — show delete button on hover */
 .sidebar-history-row .sidebar-history-delete {
   opacity: 0;
@@ -119,8 +176,8 @@ code {
   opacity: 1;
 }
 /* Hover background on history item */
-.sidebar-history-row:hover .sidebar-history-item {
-  background: #edeef0;
+.sidebar-history-row:hover .workspace-history-item:not(.is-active) {
+  background: #f6f6f7 !important;
 }
 
 .spark-segmented-tabs__item:focus-visible {

@@ -19,7 +19,8 @@
     "paginationSummary": "全 {{count}} 件中、第 {{page}} / {{totalPages}} ページ",
     "durationSeconds": "約 {{value}} 秒",
     "durationMinutes": "約 {{value}} 分",
-    "durationUnknown": "—"
+    "durationUnknown": "—",
+    "unknown": "—"
   },
   "language": {
     "auto": "自動判定",

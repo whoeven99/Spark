@@ -19,7 +19,8 @@
     "paginationSummary": "총 {{count}}개 작업, {{page}} / {{totalPages}} 페이지",
     "durationSeconds": "약 {{value}}초",
     "durationMinutes": "약 {{value}}분",
-    "durationUnknown": "—"
+    "durationUnknown": "—",
+    "unknown": "—"
   },
   "language": {
     "auto": "자동 감지",

@@ -906,9 +906,14 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
           </div>
 
           {/* New conversation */}
-          <button type="button" style={newTaskButtonStyle} onClick={createConversation}>
-            <span style={newTaskPlusStyle}>+</span>
-            新建对话
+          <button
+            type="button"
+            className="sidebar-new-chat-btn workspace-primary-btn"
+            style={newChatButtonStyle}
+            onClick={createConversation}
+          >
+            <span style={newChatPlusBadgeStyle}>+</span>
+            <span>新建对话</span>
           </button>
 
           {/* Secondary nav */}
@@ -917,10 +922,11 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
               <button
                 key={item.key}
                 type="button"
+                className={`workspace-nav-btn${activePanel === item.key ? " is-active" : ""}`}
                 style={navButtonStyle(activePanel === item.key)}
                 onClick={() => switchPanel(item.key)}
               >
-                <span style={navIconStyle}>{item.icon}</span>
+                <span style={navIconStyle(activePanel === item.key)}>{item.icon}</span>
                 <span>{item.label}</span>
               </button>
             ))}
@@ -942,12 +948,12 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
                   <div key={conversation.id} className="sidebar-history-row" style={historyRowStyle}>
                     <button
                       type="button"
-                      className="sidebar-history-item"
+                      className={`sidebar-history-item workspace-history-item${active ? " is-active" : ""}`}
                       style={historyItemStyle(active)}
                       onClick={() => openConversation(conversation.id)}
                       title={conversation.title}
                     >
-                      <span style={historyTitleStyle}>{conversation.title}</span>
+                      <span style={historyTitleStyle(active)}>{conversation.title}</span>
                     </button>
                     <button
                       type="button"
@@ -1112,9 +1118,9 @@ function DashboardPanel() {
               <div style={sectionTextStyle}>今天、昨天和 7 天均值的简化对比。</div>
             </div>
             <div style={trendLegendStyle}>
-              <span style={legendItemStyle("#111827")}>Today</span>
-              <span style={legendItemStyle("#94a3b8")}>Yesterday</span>
-              <span style={legendItemStyle("#d1d5db")}>7d Avg</span>
+              <span style={legendItemStyle(shopifyUi.primary)}>Today</span>
+              <span style={legendItemStyle("#47c1af")}>Yesterday</span>
+              <span style={legendItemStyle("#b4e6d3")}>7d Avg</span>
             </div>
           </div>
           <div style={chartStyle}>
@@ -1132,7 +1138,7 @@ function DashboardPanel() {
                         style={{
                           ...barFillStyle,
                           width: `${value}%`,
-                          background: index === 0 ? "#111827" : index === 1 ? "#94a3b8" : "#d1d5db",
+                          background: index === 0 ? shopifyUi.primary : index === 1 ? "#47c1af" : "#b4e6d3",
                         }}
                       />
                     </div>
@@ -1504,6 +1510,7 @@ function ChatPanel({
             value={draft}
             onChange={(event) => onDraftChange(event.target.value)}
             onKeyDown={handleTextareaKeyDown}
+            className="workspace-composer-input"
             style={textareaStyle}
             placeholder="继续补充你的任务目标，并结合商品、订单、文章、文件或富媒体上下文..."
             disabled={isStreaming}
@@ -1543,7 +1550,7 @@ function ChatPanel({
               <ContextWindowIndicator currentTokens={contextTokens} maxTokens={MAX_CONTEXT_TOKENS} />
             </div>
             <div style={buttonRowStyle}>
-              <button type="button" style={ghostButtonStyle} disabled={isStreaming}>
+              <button type="button" className="workspace-ghost-btn" style={ghostButtonStyle} disabled={isStreaming}>
                 生成任务建议
               </button>
               {isStreaming ? (
@@ -1553,6 +1560,7 @@ function ChatPanel({
               ) : null}
               <button
                 type="button"
+                className="workspace-primary-btn"
                 style={{ ...primaryButtonStyle, opacity: isStreaming ? 0.6 : 1 }}
                 onClick={() => void onSend()}
                 disabled={isStreaming}
@@ -1835,7 +1843,7 @@ function ChatPanel({
                   ? `已选择 ${activeContextSelectionCount} 项，确认后将附加到本次对话`
                   : "勾选后点击确认附加到对话"}
               </span>
-              <button type="button" style={primaryButtonStyle} onClick={onCloseToolPicker}>
+              <button type="button" className="workspace-primary-btn" style={primaryButtonStyle} onClick={onCloseToolPicker}>
                 {activeContextSelectionCount > 0 ? `确认（${activeContextSelectionCount}）` : "确认"}
               </button>
             </div>
@@ -1995,7 +2003,7 @@ function AutomationPanel({
         </div>
         <div style={buttonRowStyle}>
           <button type="button" style={ghostButtonStyle}>手动新建</button>
-          <button type="button" style={primaryButtonStyle}>在对话中创建</button>
+          <button type="button" className="workspace-primary-btn" style={primaryButtonStyle}>在对话中创建</button>
         </div>
       </div>
 
@@ -2311,21 +2319,42 @@ function augmentUserMessage(content: string, contextBlock: string | null) {
   if (!contextBlock) return content;
   return `${contextBlock}\n\n[用户消息]\n${content}`;
 }
+
+/** Shopify Admin / Polaris 对齐色板 */
+const shopifyUi = {
+  pageBg: "#f6f6f7",
+  surface: "#ffffff",
+  surfaceSubtle: "#fafbfb",
+  border: "#e1e3e5",
+  borderStrong: "#c9cccf",
+  text: "#1f2124",
+  textSecondary: "#61666c",
+  textMuted: "#8c9196",
+  primary: "#008060",
+  primaryHover: "#006e52",
+  primarySurface: "#e9f7ef",
+  primaryText: "#004c3f",
+  link: "#005bd3",
+  radiusControl: 10,
+  radiusCard: 14,
+  shadowCard: "0 1px 0 rgba(0, 0, 0, 0.05)",
+} as const;
+
 const shellStyle: CSSProperties = {
   minHeight: "100vh",
   display: "grid",
   gridTemplateColumns: "252px minmax(0, 1fr)",
-  background: "#f6f6f7",
+  background: shopifyUi.pageBg,
 };
 
 const sidebarStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   justifyContent: "space-between",
-  padding: "20px 12px 16px",
-  borderRight: "1px solid #e1e3e5",
-  background: "#f6f6f7",
-  gap: 16,
+  padding: "16px 12px",
+  borderRight: `1px solid ${shopifyUi.border}`,
+  background: shopifyUi.surface,
+  gap: 14,
   height: "100vh",
   overflow: "hidden",
   position: "sticky",
@@ -2333,83 +2362,90 @@ const sidebarStyle: CSSProperties = {
 };
 
 const contentStyle: CSSProperties = {
-  padding: "28px 32px 40px",
+  padding: "24px 28px 36px",
   display: "flex",
   flexDirection: "column",
-  gap: 24,
+  gap: 20,
   minWidth: 0,
+  background: shopifyUi.pageBg,
 };
 
 const brandRowStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 12,
-  marginBottom: 18,
-  padding: "8px 10px",
-  borderRadius: 12,
-  border: "1px solid #e1e3e5",
-  background: "#ffffff",
+  marginBottom: 14,
+  padding: "6px 8px",
+  borderRadius: shopifyUi.radiusCard,
 };
 const brandBadgeStyle: CSSProperties = {
   width: 32,
   height: 32,
-  borderRadius: 9,
-  background: "#202223",
+  borderRadius: 8,
+  background: shopifyUi.primary,
   color: "#ffffff",
   display: "grid",
   placeItems: "center",
   fontWeight: 700,
   fontSize: 13,
 };
-const brandTitleStyle: CSSProperties = { fontSize: 14, fontWeight: 700, color: "#202223" };
-const brandMetaStyle: CSSProperties = { fontSize: 12, color: "#6d7175" };
+const brandTitleStyle: CSSProperties = { fontSize: 14, fontWeight: 700, color: shopifyUi.text };
+const brandMetaStyle: CSSProperties = { fontSize: 12, color: shopifyUi.textMuted };
 
-const newTaskButtonStyle: CSSProperties = {
+const newChatButtonStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: 7,
+  justifyContent: "center",
+  gap: 8,
   width: "100%",
-  border: "none",
-  borderRadius: 8,
-  background: "transparent",
-  padding: "7px 10px",
-  textAlign: "left",
+  border: `1px solid ${shopifyUi.primary}`,
+  borderRadius: shopifyUi.radiusControl,
+  background: shopifyUi.primary,
+  padding: "10px 12px",
   fontSize: 13,
   fontWeight: 600,
-  color: "#202223",
+  color: "#ffffff",
   cursor: "pointer",
-  marginBottom: 2,
+  marginBottom: 10,
+  boxShadow: "0 1px 0 rgba(0, 0, 0, 0.05)",
 };
-const newTaskPlusStyle: CSSProperties = {
-  fontSize: 17,
-  fontWeight: 300,
+const newChatPlusBadgeStyle: CSSProperties = {
+  width: 20,
+  height: 20,
+  borderRadius: 6,
+  background: "rgba(255, 255, 255, 0.2)",
+  display: "grid",
+  placeItems: "center",
+  fontSize: 16,
+  fontWeight: 400,
   lineHeight: 1,
-  color: "#6d7175",
+  flexShrink: 0,
 };
 
-const navGroupStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 1 };
+const navGroupStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 2 };
 const navButtonStyle = (active: boolean): CSSProperties => ({
   display: "flex",
   alignItems: "center",
   gap: 9,
   width: "100%",
   border: "none",
-  borderRadius: 8,
-  background: active ? "#e8e9eb" : "transparent",
-  padding: "7px 10px",
+  borderRadius: shopifyUi.radiusControl,
+  background: active ? shopifyUi.primarySurface : "transparent",
+  padding: "8px 10px",
   fontSize: 13,
   fontWeight: active ? 600 : 500,
-  color: active ? "#202223" : "#444950",
+  color: active ? shopifyUi.primaryText : shopifyUi.textSecondary,
   cursor: "pointer",
   textAlign: "left",
+  boxShadow: active ? `inset 3px 0 0 ${shopifyUi.primary}` : "none",
 });
-const navIconStyle: CSSProperties = {
+const navIconStyle = (active: boolean): CSSProperties => ({
   fontSize: 13,
-  color: "#6d7175",
+  color: active ? shopifyUi.primary : shopifyUi.textMuted,
   flexShrink: 0,
   width: 16,
   textAlign: "center",
-};
+});
 
 const sidebarDividerStyle: CSSProperties = {
   height: 1,
@@ -2443,11 +2479,12 @@ const historyItemStyle = (active: boolean): CSSProperties => ({
   minWidth: 0,
   textAlign: "left",
   border: "none",
-  borderRadius: 8,
-  background: active ? "#e8e9eb" : "transparent",
+  borderRadius: shopifyUi.radiusControl,
+  background: active ? shopifyUi.primarySurface : "transparent",
   padding: "6px 10px",
   cursor: "pointer",
   overflow: "hidden",
+  boxShadow: active ? `inset 3px 0 0 ${shopifyUi.primary}` : "none",
 });
 const historyDeleteButtonStyle: CSSProperties = {
   flexShrink: 0,
@@ -2460,16 +2497,16 @@ const historyDeleteButtonStyle: CSSProperties = {
   cursor: "pointer",
   padding: "4px 6px",
 };
-const historyTitleStyle: CSSProperties = {
+const historyTitleStyle = (active: boolean): CSSProperties => ({
   fontSize: 13,
-  fontWeight: 500,
-  color: "#202223",
+  fontWeight: active ? 600 : 500,
+  color: active ? shopifyUi.primaryText : shopifyUi.text,
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
   display: "block",
   width: "100%",
-};
+});
 const accountMenuWrapStyle: CSSProperties = {
   position: "relative",
   paddingTop: 12,
@@ -2516,21 +2553,28 @@ const accountMenuItemStyle: CSSProperties = {
   textAlign: "left",
   cursor: "pointer",
 };
-const footerTagStyle: CSSProperties = { padding: "4px 8px", borderRadius: 999, background: "#e9f7ef", color: "#008060", fontSize: 12, fontWeight: 600 };
+const footerTagStyle: CSSProperties = {
+  padding: "4px 8px",
+  borderRadius: 999,
+  background: shopifyUi.primarySurface,
+  color: shopifyUi.primary,
+  fontSize: 12,
+  fontWeight: 600,
+};
 
 const panelStackStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 20, minWidth: 0 };
 const surfaceCardStyle: CSSProperties = {
-  background: "#ffffff",
-  border: "1px solid #e1e3e5",
-  borderRadius: 14,
-  boxShadow: "0 1px 0 rgba(0,0,0,0.03)",
+  background: shopifyUi.surface,
+  border: `1px solid ${shopifyUi.border}`,
+  borderRadius: shopifyUi.radiusCard,
+  boxShadow: shopifyUi.shadowCard,
   padding: 20,
 };
 const sectionHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 16 };
-const sectionTitleStyle: CSSProperties = { fontSize: 18, fontWeight: 700, color: "#202223", letterSpacing: "-0.01em" };
-const sectionTitleSmallStyle: CSSProperties = { fontSize: 15, fontWeight: 700, color: "#202223" };
-const sectionTextStyle: CSSProperties = { fontSize: 14, color: "#61666c", lineHeight: 1.6 };
-const mutedMetaStyle: CSSProperties = { fontSize: 12, color: "#8c9196" };
+const sectionTitleStyle: CSSProperties = { fontSize: 18, fontWeight: 700, color: shopifyUi.text, letterSpacing: "-0.01em" };
+const sectionTitleSmallStyle: CSSProperties = { fontSize: 15, fontWeight: 700, color: shopifyUi.text };
+const sectionTextStyle: CSSProperties = { fontSize: 14, color: shopifyUi.textSecondary, lineHeight: 1.6 };
+const mutedMetaStyle: CSSProperties = { fontSize: 12, color: shopifyUi.textMuted };
 
 const metricGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16 };
 const metricLabelStyle: CSSProperties = { fontSize: 12, fontWeight: 600, color: "#6d7175" };
@@ -2539,14 +2583,14 @@ const metricDeltaStyle = (tone: DashboardMetric["tone"]): CSSProperties => ({
   marginTop: 8,
   fontSize: 12,
   fontWeight: 600,
-  color: tone === "positive" ? "#008060" : tone === "negative" ? "#8a2e0f" : "#8c9196",
+  color: tone === "positive" ? shopifyUi.primary : tone === "negative" ? "#8a2e0f" : shopifyUi.textMuted,
 });
 
 const twoColumnStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 16 };
 const listColumnStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 12 };
 const summaryItemStyle: CSSProperties = { padding: 14, borderRadius: 12, border: "1px solid #e9eaeb", background: "#ffffff" };
 const suggestionItemStyle: CSSProperties = { display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 0", borderBottom: "1px solid #f1f2f3" };
-const bulletStyle: CSSProperties = { width: 8, height: 8, marginTop: 7, borderRadius: 999, background: "#8c9196", flexShrink: 0 };
+const bulletStyle: CSSProperties = { width: 8, height: 8, marginTop: 7, borderRadius: 999, background: shopifyUi.primary, flexShrink: 0 };
 const alertListStyle: CSSProperties = { display: "grid", gap: 12 };
 const alertItemStyle = (tone: "warning" | "info" | "critical"): CSSProperties => ({
   padding: 14,
@@ -2613,10 +2657,10 @@ const toolbarIconButtonStyle = (active: boolean): CSSProperties => ({
   height: 32,
   display: "inline-grid",
   placeItems: "center",
-  border: `1px solid ${active ? "#202223" : "#dfe3e8"}`,
-  background: active ? "#202223" : "#ffffff",
-  color: active ? "#ffffff" : "#202223",
-  borderRadius: 10,
+  border: `1px solid ${active ? shopifyUi.primary : shopifyUi.border}`,
+  background: active ? shopifyUi.primary : shopifyUi.surface,
+  color: active ? "#ffffff" : shopifyUi.text,
+  borderRadius: shopifyUi.radiusControl,
   padding: 0,
   cursor: "pointer",
 });
@@ -2626,9 +2670,9 @@ const toolbarPillButtonStyle = (active: boolean): CSSProperties => ({
   gap: 5,
   height: 30,
   padding: "0 10px",
-  border: `1px solid ${active ? "#202223" : "#dfe3e8"}`,
-  background: active ? "#202223" : "#ffffff",
-  color: active ? "#ffffff" : "#202223",
+  border: `1px solid ${active ? shopifyUi.primary : shopifyUi.border}`,
+  background: active ? shopifyUi.primarySurface : shopifyUi.surface,
+  color: active ? shopifyUi.primaryText : shopifyUi.text,
   borderRadius: 999,
   cursor: "pointer",
   fontSize: 12,
@@ -2694,9 +2738,9 @@ const selectionBubbleStyle: CSSProperties = {
   gap: 8,
   padding: "7px 10px",
   borderRadius: 999,
-  border: "1px solid #c9cccf",
-  background: "#f6f6f7",
-  color: "#202223",
+  border: `1px solid ${shopifyUi.primary}`,
+  background: shopifyUi.primarySurface,
+  color: shopifyUi.primaryText,
   fontSize: 12,
   fontWeight: 600,
 };
@@ -2822,16 +2866,42 @@ const skillCategoryStyle: CSSProperties = { fontSize: 12, fontWeight: 700, color
 const skillFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 };
 
 const buttonRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10 };
-const primaryButtonStyle: CSSProperties = { border: "1px solid #202223", borderRadius: 10, background: "#202223", color: "#ffffff", padding: "10px 14px", fontSize: 14, fontWeight: 600, cursor: "pointer" };
-const ghostButtonStyle: CSSProperties = { border: "1px solid #c9cdd2", borderRadius: 10, background: "#ffffff", color: "#202223", padding: "10px 14px", fontSize: 14, fontWeight: 600, cursor: "pointer" };
-const textButtonStyle: CSSProperties = { border: "none", background: "transparent", color: "#005bd3", padding: 0, fontSize: 13, fontWeight: 600, cursor: "pointer" };
+const primaryButtonStyle: CSSProperties = {
+  border: `1px solid ${shopifyUi.primary}`,
+  borderRadius: shopifyUi.radiusControl,
+  background: shopifyUi.primary,
+  color: "#ffffff",
+  padding: "10px 14px",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+};
+const ghostButtonStyle: CSSProperties = {
+  border: `1px solid ${shopifyUi.borderStrong}`,
+  borderRadius: shopifyUi.radiusControl,
+  background: shopifyUi.surface,
+  color: shopifyUi.text,
+  padding: "10px 14px",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+};
+const textButtonStyle: CSSProperties = {
+  border: "none",
+  background: "transparent",
+  color: shopifyUi.link,
+  padding: 0,
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: "pointer",
+};
 
 const tabRowStyle: CSSProperties = { display: "flex", gap: 8, marginBottom: 16 };
 const tabButtonStyle = (active: boolean): CSSProperties => ({
-  border: `1px solid ${active ? "#c9cccf" : "#dfe3e8"}`,
-  borderRadius: 10,
-  background: active ? "#ffffff" : "#f6f6f7",
-  color: "#202223",
+  border: `1px solid ${active ? shopifyUi.primary : shopifyUi.border}`,
+  borderRadius: shopifyUi.radiusControl,
+  background: active ? shopifyUi.primarySurface : shopifyUi.pageBg,
+  color: active ? shopifyUi.primaryText : shopifyUi.text,
   padding: "8px 12px",
   fontSize: 13,
   fontWeight: active ? 700 : 600,
@@ -2840,10 +2910,10 @@ const tabButtonStyle = (active: boolean): CSSProperties => ({
 const automationCardStyle: CSSProperties = { padding: 16, borderRadius: 12, border: "1px solid #e1e3e5", background: "#ffffff" };
 
 const filterChipStyle = (active: boolean): CSSProperties => ({
-  border: `1px solid ${active ? "#c9cccf" : "#c9cdd2"}`,
+  border: `1px solid ${active ? shopifyUi.primary : shopifyUi.borderStrong}`,
   borderRadius: 999,
-  background: active ? "#202223" : "#ffffff",
-  color: active ? "#ffffff" : "#202223",
+  background: active ? shopifyUi.primary : shopifyUi.surface,
+  color: active ? "#ffffff" : shopifyUi.text,
   padding: "8px 12px",
   fontSize: 13,
   fontWeight: 600,
@@ -2853,7 +2923,7 @@ const statusBadgeStyle = (tone: "positive" | "warning" | "critical" | "neutral")
   padding: "4px 10px",
   borderRadius: 999,
   background: tone === "positive" ? "#e9f7ef" : tone === "warning" ? "#fff5ea" : tone === "critical" ? "#fff1ef" : "#f1f2f3",
-  color: tone === "positive" ? "#008060" : tone === "warning" ? "#b98900" : tone === "critical" ? "#d72c0d" : "#61666c",
+  color: tone === "positive" ? shopifyUi.primary : tone === "warning" ? "#b98900" : tone === "critical" ? "#d72c0d" : shopifyUi.textSecondary,
   fontSize: 12,
   fontWeight: 600,
 });

@@ -19,7 +19,8 @@
     "paginationSummary": "{{count}} Aufgaben insgesamt, Seite {{page}} von {{totalPages}}",
     "durationSeconds": "Ca. {{value}} Sek.",
     "durationMinutes": "Ca. {{value}} Min.",
-    "durationUnknown": "—"
+    "durationUnknown": "—",
+    "unknown": "—"
   },
   "language": {
     "auto": "Automatisch erkennen",

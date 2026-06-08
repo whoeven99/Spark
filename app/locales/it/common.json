@@ -19,7 +19,8 @@
     "paginationSummary": "{{count}} attivita totali, pagina {{page}} di {{totalPages}}",
     "durationSeconds": "Circa {{value}} s",
     "durationMinutes": "Circa {{value}} min",
-    "durationUnknown": "—"
+    "durationUnknown": "—",
+    "unknown": "—"
   },
   "language": {
     "auto": "Rilevamento automatico",

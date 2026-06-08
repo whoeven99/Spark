@@ -19,7 +19,8 @@
     "paginationSummary": "{{count}} tarefas no total, pagina {{page}} de {{totalPages}}",
     "durationSeconds": "Cerca de {{value}} s",
     "durationMinutes": "Cerca de {{value}} min",
-    "durationUnknown": "—"
+    "durationUnknown": "—",
+    "unknown": "—"
   },
   "language": {
     "auto": "Detecção automática",
