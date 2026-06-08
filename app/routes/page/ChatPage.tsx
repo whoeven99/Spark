@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { flushSync } from "react-dom";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
@@ -118,17 +118,33 @@ export function ChatPage() {
   };
 
   const scrollToBottom = () => {
-    setTimeout(() => {
+    const run = () => {
       const container = messagesContainerRef.current;
       if (container) {
         container.scrollTop = container.scrollHeight;
       }
-    }, 0);
+    };
+    run();
+    requestAnimationFrame(() => {
+      run();
+      requestAnimationFrame(run);
+    });
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     scrollToBottom();
-  }, [messages, isStreaming, awaitingAssistantReply, streamingText, skillSteps.length]);
+  }, [
+    messages,
+    isStreaming,
+    awaitingAssistantReply,
+    streamingText,
+    streamingThinkingText,
+    skillSteps.length,
+    streamingTranslationForm,
+    streamingGenerateCard,
+    streamingPictureTranslateCard,
+    streamingImageGenerationCard,
+  ]);
 
   const sendMessage = async (content: string) => {
     if (isStreaming || awaitingAssistantReply) return;
