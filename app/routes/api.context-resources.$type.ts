@@ -70,7 +70,7 @@ export const loader = async ({
         errorMsg: message,
         response: null,
       },
-      500,
+      200,
     );
   }
 };

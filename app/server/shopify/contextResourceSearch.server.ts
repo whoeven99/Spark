@@ -169,17 +169,17 @@ const ORDER_QUERY = `#graphql
               currencyCode
             }
           }
-          customer {
-            displayName
-          }
-          lineItems(first: 5) {
-            nodes {
-              name
-              quantity
-              variantTitle
-            }
-          }
         }
+      }
+    }
+  }
+`;
+
+const CURRENT_APP_SCOPES_QUERY = `#graphql
+  query CurrentAppScopes {
+    currentAppInstallation {
+      accessScopes {
+        handle
       }
     }
   }
@@ -376,8 +376,7 @@ async function searchOrders(
     cursor: params.cursor,
     limit: params.limit,
   });
-  const response = await admin.graphql(ORDER_QUERY, { variables });
-  const payload = (await response.json()) as {
+  let payload: {
     data?: {
       orders?: {
         pageInfo?: Partial<ContextResourcePageInfo>;
@@ -392,21 +391,20 @@ async function searchOrders(
             totalPriceSet?: {
               shopMoney?: { amount?: string | null; currencyCode?: string | null } | null;
             } | null;
-            customer?: { displayName?: string | null } | null;
-            lineItems?: {
-              nodes?: Array<{
-                name?: string | null;
-                quantity?: number | null;
-                variantTitle?: string | null;
-              }>;
-            } | null;
           };
         }>;
       } | null;
     };
     errors?: Array<{ message?: string }>;
   };
-  ensureGraphqlOk(response.ok, response.status, payload.errors);
+
+  try {
+    const response = await admin.graphql(ORDER_QUERY, { variables });
+    payload = (await response.json()) as typeof payload;
+    ensureGraphqlOk(response.ok, response.status, payload.errors);
+  } catch (error) {
+    throw new Error(await decorateOrderSearchError(admin, error));
+  }
 
   const items: OrderResourceItem[] = (payload.data?.orders?.edges ?? [])
     .map((edge) => {
@@ -416,38 +414,17 @@ async function searchOrders(
       const name = node?.name?.trim() || "未命名订单";
       const amount = node?.totalPriceSet?.shopMoney?.amount ?? null;
       const currencyCode = node?.totalPriceSet?.shopMoney?.currencyCode ?? null;
-      const customerName = node?.customer?.displayName?.trim() || null;
       const createdAt = node?.createdAt?.trim() || null;
       const financialStatus = node?.displayFinancialStatus?.trim() || null;
       const fulfillmentStatus = node?.displayFulfillmentStatus?.trim() || null;
-      const lineItemsSummary = (node?.lineItems?.nodes ?? [])
-        .map((item) => {
-          const title = item?.name?.trim();
-          if (!title) return null;
-          return {
-            title,
-            quantity: typeof item?.quantity === "number" ? item.quantity : 0,
-            variantTitle: item?.variantTitle?.trim() || null,
-          };
-        })
-        .filter(
-          (
-            item,
-          ): item is {
-            title: string;
-            quantity: number;
-            variantTitle: string | null;
-          } => item !== null,
-        );
       return {
         id,
         type: "order",
         title: name,
-        subtitle: [customerName, financialStatus, fulfillmentStatus].filter(Boolean).join(" / ") || "Shopify 订单",
+        subtitle: [financialStatus, fulfillmentStatus].filter(Boolean).join(" / ") || "Shopify 订单",
         meta: [
           amount && currencyCode ? `${amount} ${currencyCode}` : null,
           createdAt ? `创建于 ${formatDate(createdAt)}` : null,
-          lineItemsSummary.length > 0 ? `${lineItemsSummary.length} 个商品` : null,
         ].filter(Boolean).join(" · ") || "暂无更多信息",
         status: financialStatus || fulfillmentStatus,
         imageUrl: null,
@@ -455,13 +432,13 @@ async function searchOrders(
           id,
           name,
           createdAt,
-          customerName,
+          customerName: null,
           totalPrice: amount,
           currencyCode,
           financialStatus,
           fulfillmentStatus,
           tags: (node?.tags ?? []).filter(Boolean),
-          lineItemsSummary,
+          lineItemsSummary: [],
         },
       };
     })
@@ -471,6 +448,46 @@ async function searchOrders(
     items,
     pageInfo: coercePageInfo(payload.data?.orders?.pageInfo),
   };
+}
+
+async function decorateOrderSearchError(
+  admin: ShopifyAdminGraphqlClient,
+  error: unknown,
+) {
+  const message = error instanceof Error && error.message.trim() ? error.message.trim() : "订单查询失败";
+  const lower = message.toLowerCase();
+
+  if (lower.includes("access denied") || lower.includes("unauthorized")) {
+    const scopes = await queryCurrentAppScopes(admin).catch(() => []);
+    const hasReadOrders = scopes.includes("read_orders") || scopes.includes("write_orders");
+    return hasReadOrders
+      ? `当前店铺会话暂时无法读取订单数据。请确认应用已重新授权，且当前店铺允许订单读取。原始错误：${message}`
+      : `当前应用缺少订单读取权限，请确认已授权 read_orders 后重新安装或重新授权应用。原始错误：${message}`;
+  }
+
+  if (lower.includes("60 days")) {
+    return `当前店铺只能读取最近 60 天的订单数据。若需要更早订单，请申请并授权 read_all_orders。原始错误：${message}`;
+  }
+
+  return `订单数据查询失败：${message}`;
+}
+
+async function queryCurrentAppScopes(
+  admin: ShopifyAdminGraphqlClient,
+): Promise<string[]> {
+  const response = await admin.graphql(CURRENT_APP_SCOPES_QUERY);
+  const payload = (await response.json()) as {
+    data?: {
+      currentAppInstallation?: {
+        accessScopes?: Array<{ handle?: string | null }>;
+      } | null;
+    };
+    errors?: Array<{ message?: string }>;
+  };
+  ensureGraphqlOk(response.ok, response.status, payload.errors);
+  return (payload.data?.currentAppInstallation?.accessScopes ?? [])
+    .map((scope) => scope.handle?.trim() ?? "")
+    .filter(Boolean);
 }
 
 function ensureGraphqlOk(ok: boolean, status: number, errors?: Array<{ message?: string }>) {
