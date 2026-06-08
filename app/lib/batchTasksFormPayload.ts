@@ -41,6 +41,16 @@ function safeProducts(v: unknown): BatchTaskProduct[] {
     .filter((p) => p.id !== "");
 }
 
+/** 当 AI 未填入 products 时，用工作台已选商品补全。 */
+export function mergeBatchTasksPayloadWithContext(
+  payload: BatchTasksFormPayload,
+  contextProducts: BatchTaskProduct[],
+): BatchTasksFormPayload {
+  if (payload.products.length > 0) return payload;
+  if (contextProducts.length === 0) return payload;
+  return { ...payload, products: contextProducts };
+}
+
 export function coerceBatchTasksFormPayload(raw: unknown): BatchTasksFormPayload {
   // LangChain on_tool_start / on_tool_end may pass a JSON string instead of a parsed object
   if (typeof raw === "string") {

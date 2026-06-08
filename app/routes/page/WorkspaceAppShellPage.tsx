@@ -17,6 +17,7 @@ import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPa
 import { coerceTranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import type { BatchTasksFormPayload } from "../../lib/batchTasksFormPayload";
 import { coerceBatchTasksFormPayload } from "../../lib/batchTasksFormPayload";
+import { selectedShopifyObjectsToBatchProducts } from "../../lib/workspaceContextProducts";
 import { ChatMessages } from "../component/chat/ChatMessages";
 import { StreamingAssistantReply } from "../component/chat/StreamingAssistantReply";
 import { LanguageSelector } from "../component/common/LanguageSelector";
@@ -771,9 +772,14 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
 
     try {
       const authQuery = typeof window !== "undefined" ? window.location.search : "";
+      const workspaceBatchProducts = selectedShopifyObjectsToBatchProducts(
+        selectedObjectsByType.product,
+      );
+
       await streamConversation(apiMessages, {
         url: `/chat-stream${authQuery}`,
         fileIds: uploadedFileIds,
+        workspaceBatchProducts,
         onFinish: (payload) => {
           if (epoch !== replyEpochRef.current) return;
 
@@ -1302,6 +1308,10 @@ function ChatPanel({
     () => estimateMessagesTokens(messages),
     [messages],
   );
+  const workspaceBatchProducts = useMemo(
+    () => selectedShopifyObjectsToBatchProducts(selectedObjectsByType.product),
+    [selectedObjectsByType.product],
+  );
   const activeObjectOptions = isObjectType(activeContextTool)
     ? objectOptions[activeContextTool].filter((item) => {
         const query = objectQueryByType[activeContextTool].trim().toLowerCase();
@@ -1340,6 +1350,19 @@ function ChatPanel({
     { key: "file", label: selectedFileIds.length > 0 ? `文件 ${selectedFileIds.length}` : "文件", icon: "↑", active: activeContextTool === "file" },
     { key: "media", label: selectedMediaIds.length > 0 ? `富媒体 ${selectedMediaIds.length}` : "富媒体", icon: "◇", active: activeContextTool === "media" },
   ];
+  const activeContextSelectionCount =
+    activeContextTool === "product"
+      ? selectedObjectsByType.product.length
+      : activeContextTool === "article"
+        ? selectedObjectsByType.article.length
+        : activeContextTool === "order"
+          ? selectedObjectsByType.order.length
+          : activeContextTool === "file"
+            ? selectedFileIds.length
+            : activeContextTool === "media"
+              ? selectedMediaIds.length
+              : 0;
+
   const selectedSummaryBubbles: Array<{ key: ContextTool; label: string }> = [
     ...(selectedObjectsByType.product.length > 0 ? [{ key: "product" as const, label: `已选择 ${selectedObjectsByType.product.length} 个商品` }] : []),
     ...(selectedObjectsByType.order.length > 0 ? [{ key: "order" as const, label: `已选择 ${selectedObjectsByType.order.length} 个订单` }] : []),
@@ -1440,6 +1463,7 @@ function ChatPanel({
                   streamingImageGenerationPayload={streamingImageGenerationPayload}
                   streamingBatchTasksCard={streamingBatchTasksCard}
                   streamingBatchTasksPayload={streamingBatchTasksPayload}
+                  workspaceBatchProducts={workspaceBatchProducts}
                 />
               }
               onTranslationCardSuccess={(messageIndex, detail) =>
@@ -1804,6 +1828,17 @@ function ChatPanel({
                 </div>
               </>
             ) : null}
+
+            <div style={toolModalFooterStyle}>
+              <span style={mutedMetaStyle}>
+                {activeContextSelectionCount > 0
+                  ? `已选择 ${activeContextSelectionCount} 项，确认后将附加到本次对话`
+                  : "勾选后点击确认附加到对话"}
+              </span>
+              <button type="button" style={primaryButtonStyle} onClick={onCloseToolPicker}>
+                {activeContextSelectionCount > 0 ? `确认（${activeContextSelectionCount}）` : "确认"}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
@@ -2069,6 +2104,8 @@ function buildAssistantWorkspaceMessage(
     ? coerceBatchTasksFormPayload(payload.batchTasksFormPayload)
     : undefined;
   const hasBatchTasksCard = payload.batchTasksCard || Boolean(batchTasksFormPayload);
+  const suppressProductImprove =
+    hasBatchTasksCard && (batchTasksFormPayload?.products?.length ?? 0) > 0;
 
   return {
     role: "assistant",
@@ -2076,8 +2113,8 @@ function buildAssistantWorkspaceMessage(
     time: "刚刚",
     ...(payload.attachments?.length ? { attachments: payload.attachments } : {}),
     ...(translationTaskForm ? { translationTaskForm } : {}),
-    ...(hasProductImproveCard ? { productImproveCard: true } : {}),
-    ...(payload.productImproveCardPayload
+    ...(hasProductImproveCard && !suppressProductImprove ? { productImproveCard: true } : {}),
+    ...(payload.productImproveCardPayload && !suppressProductImprove
       ? { productImproveCardPayload: payload.productImproveCardPayload as ProductImproveCardPayload }
       : {}),
     ...(hasPictureTranslateCard ? { pictureTranslateCard: true } : {}),
@@ -2701,6 +2738,15 @@ const toolModalHeaderStyle: CSSProperties = {
   alignItems: "flex-start",
   gap: 12,
   marginBottom: 14,
+};
+const toolModalFooterStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  marginTop: 16,
+  paddingTop: 14,
+  borderTop: "1px solid #e1e3e5",
 };
 const toolModalCloseStyle: CSSProperties = {
   width: 32,

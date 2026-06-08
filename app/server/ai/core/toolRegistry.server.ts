@@ -77,7 +77,7 @@ export interface ToolDefinition {
     event: any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     enqueue: (chunk: any) => void,
-    context: { emittedFlags: Set<string> }
+    context: { emittedFlags: Set<string>; lastUserText?: string }
   ) => void;
 
   /**

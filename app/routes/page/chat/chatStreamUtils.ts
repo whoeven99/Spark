@@ -13,6 +13,7 @@ export function hasStreamingVisualContent(state: {
   streamingGenerateCard: boolean;
   streamingPictureTranslateCard?: boolean;
   streamingImageGenerationCard?: boolean;
+  streamingBatchTasksCard?: boolean;
 }): boolean {
   return Boolean(
     state.streamingText.trim() ||
@@ -20,6 +21,7 @@ export function hasStreamingVisualContent(state: {
       state.streamingTranslationForm ||
       state.streamingGenerateCard ||
       state.streamingPictureTranslateCard ||
-      state.streamingImageGenerationCard,
+      state.streamingImageGenerationCard ||
+      state.streamingBatchTasksCard,
   );
 }

@@ -8,9 +8,10 @@
  *   product_improve   — 商品描述批量生成
  *   picture_translate — 商品图片文字批量翻译
  */
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { BatchTaskProduct, BatchTasksFormPayload } from "../../../lib/batchTasksFormPayload";
+import { mergeBatchTasksPayloadWithContext } from "../../../lib/batchTasksFormPayload";
 import {
   filterPictureTranslateSourceLanguages,
   filterPictureTranslateTargetLanguages,
@@ -200,19 +201,46 @@ function DoneState({
 type Props = {
   embedded?: boolean;
   initialPayload?: BatchTasksFormPayload;
+  /** 工作台已选商品；AI payload 为空时用于补全列表 */
+  contextProducts?: BatchTaskProduct[];
   onTasksCreated?: (taskIds: string[]) => void;
 };
 
-export function BatchTasksChatCard({ embedded = false, initialPayload, onTasksCreated }: Props) {
+export function BatchTasksChatCard({
+  embedded = false,
+  initialPayload,
+  contextProducts = [],
+  onTasksCreated,
+}: Props) {
   const { t } = useTranslation();
 
-  const taskType = initialPayload?.taskType ?? "product_improve";
-  const initProducts = initialPayload?.products ?? [];
+  const resolvedPayload = useMemo(
+    () =>
+      mergeBatchTasksPayloadWithContext(
+        initialPayload ?? {
+          taskType: "product_improve",
+          products: [],
+          targetLanguage: "en",
+          sourceLanguage: "auto",
+        },
+        contextProducts,
+      ),
+    [initialPayload, contextProducts],
+  );
+
+  const taskType = resolvedPayload.taskType;
+  const initProducts = resolvedPayload.products;
 
   // Checked product ids
   const [checkedIds, setCheckedIds] = useState<Set<string>>(
     () => new Set(initProducts.map((p) => p.id)),
   );
+
+  useEffect(() => {
+    if (initProducts.length === 0) return;
+    setCheckedIds(new Set(initProducts.map((p) => p.id)));
+  }, [initProducts]);
+
   const toggleProduct = (id: string) =>
     setCheckedIds((prev) => {
       const next = new Set(prev);
@@ -223,10 +251,10 @@ export function BatchTasksChatCard({ embedded = false, initialPayload, onTasksCr
 
   // Language state
   const [targetLanguage, setTargetLanguage] = useState(
-    initialPayload?.targetLanguage ?? (taskType === "picture_translate" ? "zh" : "en"),
+    resolvedPayload.targetLanguage ?? (taskType === "picture_translate" ? "zh" : "en"),
   );
   const [sourceLanguage, setSourceLanguage] = useState(
-    initialPayload?.sourceLanguage ?? "auto",
+    resolvedPayload.sourceLanguage ?? "auto",
   );
 
   const sourceLanguageOptions = useMemo(() => filterPictureTranslateSourceLanguages(null), []);

@@ -38,17 +38,19 @@ export function ChatMessages({
       {messages.map((item, index) => {
         const hasTranslationCard =
           item.role === "assistant" && Boolean(item.translationTaskForm);
+        const hasBatchTasksCard =
+          item.role === "assistant" &&
+          (Boolean(item.batchTasksCard) || Boolean(item.batchTasksFormPayload));
         const hasGenerateDescriptionCard =
-          item.role === "assistant" && Boolean(item.productImproveCard);
+          item.role === "assistant" &&
+          Boolean(item.productImproveCard) &&
+          !hasBatchTasksCard;
         const hasPictureTranslateCard =
           item.role === "assistant" &&
           (Boolean(item.pictureTranslateCard) || Boolean(item.pictureTranslateFormPayload));
         const hasImageGenerationCard =
           item.role === "assistant" &&
           (Boolean(item.imageGenerationCard) || Boolean(item.imageGenerationFormPayload));
-        const hasBatchTasksCard =
-          item.role === "assistant" &&
-          (Boolean(item.batchTasksCard) || Boolean(item.batchTasksFormPayload));
         const imageAttachments =
           item.role === "assistant"
             ? item.attachments?.filter((attachment) => attachment.type === "image") ?? []
@@ -98,12 +100,6 @@ export function ChatMessages({
                     </s-badge>
                   </div>
                   <div style={{ marginTop: "0.35rem" }}>
-                    {item.role === "assistant" && item.thinkingContent ? (
-                      <details style={thinkingDetailsStyle}>
-                        <summary style={thinkingSummaryStyle}>查看思考过程</summary>
-                        <div style={thinkingContentStyle}>{item.thinkingContent}</div>
-                      </details>
-                    ) : null}
                     {item.role === "assistant" ? (
                       <ChatMessageContent content={item.content} />
                     ) : (
@@ -204,6 +200,13 @@ export function ChatMessages({
                       />
                     </div>
                   ) : null}
+
+                  {item.role === "assistant" && item.thinkingContent ? (
+                    <details style={thinkingDetailsStyle}>
+                      <summary style={thinkingSummaryStyle}>查看思考过程</summary>
+                      <div style={thinkingContentStyle}>{item.thinkingContent}</div>
+                    </details>
+                  ) : null}
                 </s-box>
               </div>
             </div>
@@ -216,7 +219,7 @@ export function ChatMessages({
 }
 
 const thinkingDetailsStyle: CSSProperties = {
-  marginBottom: 8,
+  marginTop: 10,
   borderRadius: 8,
   border: "1px solid rgba(44, 110, 203, 0.2)",
   background: "rgba(44, 110, 203, 0.04)",

@@ -1,5 +1,10 @@
 import type { ToolDefinition } from "../../core/toolRegistry.server";
-import { coerceBatchTasksFormPayload } from "../../../../lib/batchTasksFormPayload";
+import {
+  coerceBatchTasksFormPayload,
+  mergeBatchTasksPayloadWithContext,
+} from "../../../../lib/batchTasksFormPayload";
+import { parseWorkspaceProductsFromText } from "../../../../lib/workspaceContextProducts";
+import { resolveBatchTasksFormPayload } from "./batchTasks.extract";
 import {
   OPEN_BATCH_TASKS_FORM_TOOL_NAME,
   batchTasksFormTool,
@@ -20,6 +25,8 @@ export const batchTasksFormSkillDefinition: ToolDefinition = {
 - 禁止声称已创建任务；任务由用户点击确认卡片后才会创建
 - 【优先级】只要上下文有 ≥ 1 个已选商品且用户意图涉及商品处理，本工具优先于 open_product_improve_form（单商品工具）`,
   createTool: () => batchTasksFormTool,
+  extractUIPayload: (messages, lastUserText, assistantReplyRaw) =>
+    resolveBatchTasksFormPayload(messages, lastUserText, assistantReplyRaw),
   onStreamEvent: (ev, enqueue, streamContext) => {
     // Use on_tool_end: ev.output = func() return value = JSON.stringify(payload).
     // This is the most reliable source because:
@@ -37,10 +44,14 @@ export const batchTasksFormSkillDefinition: ToolDefinition = {
         typeof ev.output === "object" && ev.output !== null
           ? ev.output
           : String(ev.output ?? "");
+      const payload = mergeBatchTasksPayloadWithContext(
+        coerceBatchTasksFormPayload(raw),
+        parseWorkspaceProductsFromText(streamContext.lastUserText ?? ""),
+      );
       enqueue({
         type: "tool_call",
         name: ev.name,
-        args: coerceBatchTasksFormPayload(raw),
+        args: payload,
       });
     }
   },

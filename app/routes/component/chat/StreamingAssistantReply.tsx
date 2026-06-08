@@ -5,7 +5,11 @@ import type { PictureTranslateFormPayload } from "../../../lib/pictureTranslateF
 import type { ProductImproveCardPayload } from "../../../lib/chatMessage";
 import type { TranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
-import type { BatchTasksFormPayload } from "../../../lib/batchTasksFormPayload";
+import type {
+  BatchTaskProduct,
+  BatchTasksFormPayload,
+} from "../../../lib/batchTasksFormPayload";
+import { mergeBatchTasksPayloadWithContext } from "../../../lib/batchTasksFormPayload";
 import { ChatMessageContent } from "./ChatMessageContent";
 import { ChatStreamingSkeleton } from "./ChatStreamingSkeleton";
 import { ImageGenerationChatCard } from "./ImageGenerationChatCard";
@@ -33,6 +37,7 @@ type StreamingAssistantReplyProps = {
   streamingImageGenerationPayload?: unknown;
   streamingBatchTasksCard?: boolean;
   streamingBatchTasksPayload?: BatchTasksFormPayload;
+  workspaceBatchProducts?: BatchTaskProduct[];
 };
 
 const assistantBubbleShellStyle: CSSProperties = {
@@ -127,7 +132,7 @@ function ThinkingProgressPanel({
   hasContent: boolean;
 }) {
   return (
-    <details style={thinkingBlockStyle} open={isStreaming || !hasContent}>
+    <details style={thinkingBlockStyle} open={isStreaming}>
       <summary style={thinkingSummaryStyle}>
         <span>{isStreaming ? "处理过程" : "处理完成"}</span>
         <span style={thinkingPercentStyle}>{progressPercent}%</span>
@@ -155,6 +160,7 @@ export function StreamingAssistantReply({
   streamingImageGenerationPayload,
   streamingBatchTasksCard = false,
   streamingBatchTasksPayload,
+  workspaceBatchProducts = [],
 }: StreamingAssistantReplyProps) {
   if (!active) return null;
 
@@ -167,17 +173,23 @@ export function StreamingAssistantReply({
     streamingPictureTranslatePayload as PictureTranslateFormPayload | undefined;
   const streamingImageGenerationFormPayload =
     streamingImageGenerationPayload as ImageGenerationFormPayload | undefined;
+  const streamingBatchTasksResolvedPayload = streamingBatchTasksPayload
+    ? mergeBatchTasksPayloadWithContext(streamingBatchTasksPayload, workspaceBatchProducts)
+    : undefined;
+  const showProductImproveCard =
+    streamingGenerateCard && !streamingBatchTasksCard && workspaceBatchProducts.length < 2;
   const hasContent = hasStreamingVisualContent({
     streamingText,
     skillSteps,
     streamingTranslationForm,
-    streamingGenerateCard,
+    streamingGenerateCard: showProductImproveCard,
     streamingPictureTranslateCard,
     streamingImageGenerationCard,
+    streamingBatchTasksCard,
   });
   const hasEmbeddedCard = Boolean(
     streamingTranslationPayload ||
-      streamingGenerateCard ||
+      showProductImproveCard ||
       streamingPictureTranslateCard ||
       streamingImageGenerationCard ||
       streamingBatchTasksCard,
@@ -198,14 +210,7 @@ export function StreamingAssistantReply({
               <s-badge tone="neutral">AI Assistant</s-badge>
             </div>
             <div style={{ marginTop: "0.35rem", minHeight: !hasContent ? "3rem" : undefined }}>
-              {streamingThinkingText ? (
-                <ThinkingProgressPanel
-                  isStreaming={isStreaming}
-                  progressPercent={thinkingProgressPercent}
-                  text={streamingThinkingText}
-                  hasContent={hasContent}
-                />
-              ) : !hasContent ? (
+              {!hasContent && !streamingThinkingText ? (
                 <div style={thinkingWrapStyle}>
                   <ThinkingDots />
                   <ChatStreamingSkeleton />
@@ -231,7 +236,7 @@ export function StreamingAssistantReply({
                 </div>
               ) : null}
 
-              {streamingGenerateCard ? (
+              {showProductImproveCard ? (
                 <div style={cardSlotStyle}>
                   <ProductImproveChatCard embedded initialResult={streamingProductImprovePayload} />
                 </div>
@@ -259,9 +264,19 @@ export function StreamingAssistantReply({
                 <div style={cardSlotStyle}>
                   <BatchTasksChatCard
                     embedded
-                    initialPayload={streamingBatchTasksPayload}
+                    initialPayload={streamingBatchTasksResolvedPayload}
+                    contextProducts={workspaceBatchProducts}
                   />
                 </div>
+              ) : null}
+
+              {streamingThinkingText ? (
+                <ThinkingProgressPanel
+                  isStreaming={isStreaming}
+                  progressPercent={thinkingProgressPercent}
+                  text={streamingThinkingText}
+                  hasContent={hasContent}
+                />
               ) : null}
             </div>
           </s-box>
@@ -281,7 +296,7 @@ const thinkingBlockStyle: CSSProperties = {
   border: "1px solid rgba(44, 110, 203, 0.2)",
   background: "rgba(44, 110, 203, 0.04)",
   padding: "10px 12px",
-  marginBottom: 10,
+  marginTop: 10,
 };
 
 const thinkingSummaryStyle: CSSProperties = {
