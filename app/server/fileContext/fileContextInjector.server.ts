@@ -27,8 +27,8 @@ export async function buildFileContextBlock(
   if (!sections.length) return null;
 
   return [
-    "【附加文件上下文】",
-    "以下是用户上传的文件内容，请结合文件内容回答用户问题：",
+    "【附加文件上下文】（用户已上传文件，内容已解析为文本，你可直接阅读和分析，无需任何工具）",
+    "以下是文件的完整文本内容，请结合这些内容回答用户问题：",
     ...sections,
   ].join("\n\n");
 }

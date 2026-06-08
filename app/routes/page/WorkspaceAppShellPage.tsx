@@ -2295,7 +2295,7 @@ function buildWorkspaceContextBlock(params: {
   }
 
   if (params.selectedFileIds.length > 0) {
-    lines.push(`- 已选文件（共 ${params.selectedFileIds.length} 个）：`);
+    lines.push(`- 已选文件（共 ${params.selectedFileIds.length} 个，文件完整内容已注入系统消息，可直接引用）：`);
     for (const id of params.selectedFileIds) {
       const file = params.localFiles.find((item) => item.id === id);
       if (!file) continue;
