@@ -34,6 +34,10 @@ import {
 import { buildReflectionFromRun, fetchRecentReflectionSummary } from "../../agentRunLog/recentReflection.server";
 import { resolveImageGenerationCardPayload } from "../skills/imageGeneration/imageGeneration.extract";
 import { resolvePictureTranslateCardPayload } from "../skills/pictureTranslate/pictureTranslate.extract";
+import {
+  resolveBatchTasksFormPayload,
+  shouldSuppressProductImproveForBatch,
+} from "../skills/batchTasks/batchTasks.extract";
 import "../skills/index";
 import "../playbooks/index";
 
@@ -349,7 +353,10 @@ export function invokeChatAgentStream(
         );
 
         let lastMessages: BaseMessage[] | undefined;
-        const streamContext = { emittedFlags: new Set<string>() };
+        const streamContext = {
+          emittedFlags: new Set<string>(),
+          lastUserText: lastUserTextInput,
+        };
         let streamedTextAccum = "";
 
         for await (const item of lgStream) {
@@ -447,7 +454,12 @@ export function invokeChatAgentStream(
           if (def.extractUIPayload && def.uiPayloadKey) {
             const payload = def.extractUIPayload(resultMessages, lastUserText, finalReply);
             if (payload !== undefined) {
-              uiPayloads[def.uiPayloadKey] = payload;
+              const skipProductImprovePayload =
+                def.name === "productImprove" &&
+                shouldSuppressProductImproveForBatch(lastUserText);
+              if (!skipProductImprovePayload) {
+                uiPayloads[def.uiPayloadKey] = payload;
+              }
 
               if (
                 def.name === "translationTaskForm" &&
@@ -461,9 +473,22 @@ export function invokeChatAgentStream(
               }
 
               if (
+                def.name === "batchTasksForm" &&
+                !streamContext.emittedFlags.has("batchTasksForm")
+              ) {
+                controller.enqueue({
+                  type: "tool_call",
+                  name: "open_batch_tasks_form",
+                  args: payload,
+                });
+              }
+
+              if (
                 def.name === "productImprove" &&
+                !shouldSuppressProductImproveForBatch(lastUserText) &&
                 !streamContext.emittedFlags.has("productImproveForm") &&
-                !streamContext.emittedFlags.has("generateProductDescription")
+                !streamContext.emittedFlags.has("generateProductDescription") &&
+                !streamContext.emittedFlags.has("batchTasksForm")
               ) {
                 const rec =
                   payload && typeof payload === "object"
@@ -554,6 +579,24 @@ export function invokeChatAgentStream(
                 type: "tool_call",
                 name: "open_image_generation_form",
                 args: imageGenerationPayload,
+              });
+            }
+          }
+        }
+
+        if (!uiPayloads.batchTasksCard) {
+          const batchTasksPayload = resolveBatchTasksFormPayload(
+            resultMessages,
+            lastUserText,
+            finalReply,
+          );
+          if (batchTasksPayload && batchTasksPayload.products.length > 0) {
+            uiPayloads.batchTasksCard = batchTasksPayload;
+            if (!streamContext.emittedFlags.has("batchTasksForm")) {
+              controller.enqueue({
+                type: "tool_call",
+                name: "open_batch_tasks_form",
+                args: batchTasksPayload,
               });
             }
           }

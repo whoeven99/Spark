@@ -15,6 +15,9 @@ import type { PictureTranslateFormPayload } from "../../lib/pictureTranslateForm
 import { coercePictureTranslateFormPayload } from "../../lib/pictureTranslateFormPayload";
 import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { coerceTranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
+import type { BatchTasksFormPayload } from "../../lib/batchTasksFormPayload";
+import { coerceBatchTasksFormPayload } from "../../lib/batchTasksFormPayload";
+import { selectedShopifyObjectsToBatchProducts } from "../../lib/workspaceContextProducts";
 import { ChatMessages } from "../component/chat/ChatMessages";
 import { StreamingAssistantReply } from "../component/chat/StreamingAssistantReply";
 import { LanguageSelector } from "../component/common/LanguageSelector";
@@ -42,6 +45,8 @@ type WorkspaceConversationMessage = {
   pictureTranslateFormPayload?: PictureTranslateFormPayload;
   imageGenerationCard?: boolean;
   imageGenerationFormPayload?: ImageGenerationFormPayload;
+  batchTasksCard?: boolean;
+  batchTasksFormPayload?: BatchTasksFormPayload;
   thinkingContent?: string;
 };
 
@@ -253,6 +258,37 @@ const automationTemplates = [
 ];
 
 
+const DRAFT_CONVERSATION_PREFIX = "draft-";
+
+function isDraftConversationId(id: string): boolean {
+  return id.startsWith(DRAFT_CONVERSATION_PREFIX);
+}
+
+function createDraftConversationId(): string {
+  return `${DRAFT_CONVERSATION_PREFIX}${crypto.randomUUID()}`;
+}
+
+function conversationHasUserMessage(
+  messagesByConversation: Record<string, WorkspaceConversationMessage[]>,
+  conversationId: string,
+): boolean {
+  return (messagesByConversation[conversationId] ?? []).some((message) => message.role === "user");
+}
+
+function listEmptyDraftConversationIds(
+  conversations: ConversationSummary[],
+  messagesByConversation: Record<string, WorkspaceConversationMessage[]>,
+  keepConversationId?: string | null,
+): string[] {
+  return conversations
+    .filter((conversation) => {
+      if (keepConversationId && conversation.id === keepConversationId) return false;
+      if (!isDraftConversationId(conversation.id)) return false;
+      return !conversationHasUserMessage(messagesByConversation, conversation.id);
+    })
+    .map((conversation) => conversation.id);
+}
+
 function isWorkspacePanel(value: string | null): value is WorkspacePanel {
   return value === "dashboard" || value === "chat" || value === "skills" || value === "automation" || value === "tasks";
 }
@@ -306,6 +342,8 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     streamingPictureTranslatePayload,
     streamingImageGenerationCard,
     streamingImageGenerationPayload,
+    streamingBatchTasksCard,
+    streamingBatchTasksPayload,
     skillSteps,
     sendMessage: streamConversation,
     prepareStreaming,
@@ -319,9 +357,76 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   const activeConversation = conversationList.find((item) => item.id === activeConversationId) ?? null;
   const activeMessages = activeConversation ? (messagesByConversation[activeConversation.id] ?? []) : [];
 
+  const removeConversationsFromState = (conversationIds: string[]) => {
+    if (conversationIds.length === 0) return;
+    const removeSet = new Set(conversationIds);
+    for (const id of conversationIds) {
+      loadedConvIdsRef.current.delete(id);
+    }
+    setConversationList((current) => current.filter((item) => !removeSet.has(item.id)));
+    setMessagesByConversation((current) => {
+      const next = { ...current };
+      for (const id of conversationIds) {
+        delete next[id];
+      }
+      return next;
+    });
+    setDraftByConversation((current) => {
+      const next = { ...current };
+      for (const id of conversationIds) {
+        delete next[id];
+      }
+      return next;
+    });
+    setActiveConversationId((current) =>
+      current && removeSet.has(current) ? null : current,
+    );
+  };
+
+  const pruneEmptyDraftConversations = (keepConversationId?: string | null) => {
+    const removedIds = listEmptyDraftConversationIds(
+      conversationList,
+      messagesByConversation,
+      keepConversationId,
+    );
+    removeConversationsFromState(removedIds);
+  };
+
+  const renameConversationInState = (oldId: string, nextConversation: ConversationSummary) => {
+    loadedConvIdsRef.current.delete(oldId);
+    loadedConvIdsRef.current.add(nextConversation.id);
+    setConversationList((current) =>
+      current.map((conversation) =>
+        conversation.id === oldId ? nextConversation : conversation,
+      ),
+    );
+    setMessagesByConversation((current) => {
+      const existing = current[oldId];
+      const next = { ...current };
+      delete next[oldId];
+      if (existing) {
+        next[nextConversation.id] = existing;
+      }
+      return next;
+    });
+    setDraftByConversation((current) => {
+      const existing = current[oldId];
+      const next = { ...current };
+      delete next[oldId];
+      if (existing !== undefined) {
+        next[nextConversation.id] = existing;
+      }
+      return next;
+    });
+    setActiveConversationId((current) =>
+      current === oldId ? nextConversation.id : current,
+    );
+  };
+
   // Lazy-load messages when switching to a conversation for the first time
   useEffect(() => {
     if (!activeConversationId) return;
+    if (isDraftConversationId(activeConversationId)) return;
     if (loadedConvIdsRef.current.has(activeConversationId)) return;
     loadedConvIdsRef.current.add(activeConversationId);
     const authQuery = typeof window !== "undefined" ? window.location.search : "";
@@ -346,6 +451,9 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   }, [activeConversationId]);
 
   const switchPanel = (panel: WorkspacePanel) => {
+    if (panel !== "chat") {
+      pruneEmptyDraftConversations();
+    }
     const next = new URLSearchParams(searchParams);
     if (panel === "dashboard") {
       next.delete("panel");
@@ -356,6 +464,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   };
 
   const openConversation = (conversationId: string) => {
+    pruneEmptyDraftConversations(conversationId);
     setActiveConversationId(conversationId);
     switchPanel("chat");
   };
@@ -363,6 +472,23 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   const removeConversation = async (conversationId: string) => {
     const authQuery = typeof window !== "undefined" ? window.location.search : "";
     try {
+      if (isDraftConversationId(conversationId)) {
+        const wasActive = activeConversationId === conversationId;
+        const nextList = conversationList.filter((item) => item.id !== conversationId);
+        removeConversationsFromState([conversationId]);
+        if (wasActive) {
+          const nextConversation = nextList[0] ?? null;
+          setActiveConversationId(nextConversation?.id ?? null);
+          if (nextConversation) {
+            switchPanel("chat");
+          } else {
+            switchPanel("dashboard");
+          }
+        }
+        shopify.toast.show("对话已删除");
+        return;
+      }
+
       const res = await fetch(`/api/conversations/${conversationId}${authQuery}`, {
         method: "DELETE",
       });
@@ -402,31 +528,27 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     }
   };
 
-  const createConversation = async () => {
-    const authQuery = typeof window !== "undefined" ? window.location.search : "";
-    try {
-      const res = await fetch(`/api/conversations${authQuery}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      const data = (await res.json()) as { conversation: ConversationSummary };
-      const conv = data.conversation;
-      const welcomeMsg: WorkspaceConversationMessage = {
-        role: "assistant",
-        text: "新的对话已经创建。你可以先在下方工具栏补充商品、订单、文章、文件或富媒体，再发送任务需求。",
-        time: formatTimeLabel(new Date()),
-      };
-      loadedConvIdsRef.current.add(conv.id);
-      setConversationList((current) => [conv, ...current].slice(0, 50));
-      setMessagesByConversation((current) => ({ ...current, [conv.id]: [welcomeMsg] }));
-      setDraftByConversation((current) => ({ ...current, [conv.id]: "" }));
-      setActiveContextTool(null);
-      setActiveConversationId(conv.id);
-      switchPanel("chat");
-    } catch (err) {
-      console.error("[WorkspaceAppShellPage] create conversation failed:", err);
-    }
+  const createConversation = () => {
+    pruneEmptyDraftConversations();
+    const now = new Date().toISOString();
+    const conv: ConversationSummary = {
+      id: createDraftConversationId(),
+      title: "新对话",
+      preview: "",
+      updatedAt: now,
+    };
+    const welcomeMsg: WorkspaceConversationMessage = {
+      role: "assistant",
+      text: "新的对话已经创建。你可以先在下方工具栏补充商品、订单、文章、文件或富媒体，再发送任务需求。",
+      time: formatTimeLabel(new Date()),
+    };
+    loadedConvIdsRef.current.add(conv.id);
+    setConversationList((current) => [conv, ...current].slice(0, 50));
+    setMessagesByConversation((current) => ({ ...current, [conv.id]: [welcomeMsg] }));
+    setDraftByConversation((current) => ({ ...current, [conv.id]: "" }));
+    setActiveContextTool(null);
+    setActiveConversationId(conv.id);
+    switchPanel("chat");
   };
 
   const clearContext = () => {
@@ -570,17 +692,41 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   const sendMessage = async () => {
     if (!activeConversation) return;
     const content = (draftByConversation[activeConversation.id] ?? "").trim();
-    const conversationId = activeConversation.id;
-    if (!content || streamingConversationId === conversationId) return;
+    if (!content || streamingConversationId === activeConversation.id) return;
+
+    let conversationId = activeConversation.id;
+    let conversationTitle = activeConversation.title;
+    const priorMessages = messagesByConversation[conversationId] ?? [];
+    if (isDraftConversationId(conversationId)) {
+      const authQuery = typeof window !== "undefined" ? window.location.search : "";
+      try {
+        const res = await fetch(`/api/conversations${authQuery}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!res.ok) {
+          shopify.toast.show("创建对话失败，请稍后重试");
+          return;
+        }
+        const data = (await res.json()) as { conversation: ConversationSummary };
+        renameConversationInState(conversationId, data.conversation);
+        conversationId = data.conversation.id;
+        conversationTitle = data.conversation.title;
+      } catch (err) {
+        console.error("[WorkspaceAppShellPage] persist draft conversation failed:", err);
+        shopify.toast.show("创建对话失败，请稍后重试");
+        return;
+      }
+    }
 
     replyEpochRef.current += 1;
     const epoch = replyEpochRef.current;
-    const priorMessages = messagesByConversation[conversationId] ?? [];
     const nextPreview = content.length > 28 ? `${content.slice(0, 28)}...` : content;
-    const isNewTitle = activeConversation.title === "新对话";
+    const isNewTitle = conversationTitle === "新对话";
     const nextTitle = isNewTitle
       ? (content.length > 18 ? `${content.slice(0, 18)}...` : content)
-      : activeConversation.title;
+      : conversationTitle;
     const userTime = formatTimeLabel(new Date());
 
     flushSync(() => {
@@ -626,9 +772,14 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
 
     try {
       const authQuery = typeof window !== "undefined" ? window.location.search : "";
+      const workspaceBatchProducts = selectedShopifyObjectsToBatchProducts(
+        selectedObjectsByType.product,
+      );
+
       await streamConversation(apiMessages, {
         url: `/chat-stream${authQuery}`,
         fileIds: uploadedFileIds,
+        workspaceBatchProducts,
         onFinish: (payload) => {
           if (epoch !== replyEpochRef.current) return;
 
@@ -744,7 +895,8 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   return (
     <div style={shellStyle}>
       <aside style={sidebarStyle}>
-        <div>
+        <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+          {/* Brand */}
           <div style={brandRowStyle}>
             <div style={brandBadgeStyle}>S</div>
             <div>
@@ -753,49 +905,60 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             </div>
           </div>
 
-          <button type="button" style={newTaskButtonStyle} onClick={createConversation}>
-            + 新建对话
+          {/* New conversation */}
+          <button
+            type="button"
+            className="sidebar-new-chat-btn workspace-primary-btn"
+            style={newChatButtonStyle}
+            onClick={createConversation}
+          >
+            <span style={newChatPlusBadgeStyle}>+</span>
+            <span>新建对话</span>
           </button>
 
+          {/* Secondary nav */}
           <div style={navGroupStyle}>
             {panelItems.map((item) => (
               <button
                 key={item.key}
                 type="button"
+                className={`workspace-nav-btn${activePanel === item.key ? " is-active" : ""}`}
                 style={navButtonStyle(activePanel === item.key)}
                 onClick={() => switchPanel(item.key)}
               >
-                <span style={navLabelStyle}>
-                  <span style={navIconStyle}>{item.icon}</span>
-                  <span>{item.label}</span>
-                </span>
+                <span style={navIconStyle(activePanel === item.key)}>{item.icon}</span>
+                <span>{item.label}</span>
               </button>
             ))}
           </div>
 
+          {/* Divider */}
+          <div style={sidebarDividerStyle} />
+
+          {/* Conversation history */}
           <div style={sidebarSectionStyle}>
             <div style={sidebarSectionHeadStyle}>
-              <span>对话记录</span>
+              <span>最近对话</span>
               <span style={mutedMetaStyle}>{Math.min(conversationList.length, 50)} / 50</span>
             </div>
             <div style={conversationListStyle}>
               {conversationList.slice(0, 50).map((conversation) => {
-                const active = activeConversationId === conversation.id;
+                const active =
+                  activePanel === "chat" && activeConversationId === conversation.id;
                 return (
-                  <div key={conversation.id} style={historyRowStyle}>
+                  <div key={conversation.id} className="sidebar-history-row" style={historyRowStyle}>
                     <button
                       type="button"
+                      className={`sidebar-history-item workspace-history-item${active ? " is-active" : ""}`}
                       style={historyItemStyle(active)}
                       onClick={() => openConversation(conversation.id)}
+                      title={conversation.title}
                     >
-                      <span style={historyTitleStyle}>{conversation.title}</span>
-                      {conversation.preview ? (
-                        <span style={historyPreviewStyle}>{conversation.preview}</span>
-                      ) : null}
-                      <span style={mutedMetaStyle}>{formatRelativeTime(conversation.updatedAt)}</span>
+                      <span style={historyTitleStyle(active)}>{conversation.title}</span>
                     </button>
                     <button
                       type="button"
+                      className="sidebar-history-delete"
                       style={historyDeleteButtonStyle}
                       aria-label={`删除对话：${conversation.title}`}
                       title="删除对话"
@@ -892,6 +1055,8 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             streamingPictureTranslatePayload={streamingPictureTranslatePayload}
             streamingImageGenerationCard={streamingImageGenerationCard}
             streamingImageGenerationPayload={streamingImageGenerationPayload}
+            streamingBatchTasksCard={streamingBatchTasksCard}
+            streamingBatchTasksPayload={streamingBatchTasksPayload}
             skillSteps={skillSteps}
             onAbortStream={() => {
               replyEpochRef.current += 1;
@@ -954,9 +1119,9 @@ function DashboardPanel() {
               <div style={sectionTextStyle}>今天、昨天和 7 天均值的简化对比。</div>
             </div>
             <div style={trendLegendStyle}>
-              <span style={legendItemStyle("#111827")}>Today</span>
-              <span style={legendItemStyle("#94a3b8")}>Yesterday</span>
-              <span style={legendItemStyle("#d1d5db")}>7d Avg</span>
+              <span style={legendItemStyle(shopifyUi.primary)}>Today</span>
+              <span style={legendItemStyle("#47c1af")}>Yesterday</span>
+              <span style={legendItemStyle("#b4e6d3")}>7d Avg</span>
             </div>
           </div>
           <div style={chartStyle}>
@@ -974,7 +1139,7 @@ function DashboardPanel() {
                         style={{
                           ...barFillStyle,
                           width: `${value}%`,
-                          background: index === 0 ? "#111827" : index === 1 ? "#94a3b8" : "#d1d5db",
+                          background: index === 0 ? shopifyUi.primary : index === 1 ? "#47c1af" : "#b4e6d3",
                         }}
                       />
                     </div>
@@ -1065,6 +1230,8 @@ function ChatPanel({
   streamingPictureTranslatePayload,
   streamingImageGenerationCard,
   streamingImageGenerationPayload,
+  streamingBatchTasksCard,
+  streamingBatchTasksPayload,
   skillSteps,
   onAbortStream,
   onTranslationCardSuccess,
@@ -1108,6 +1275,8 @@ function ChatPanel({
   streamingPictureTranslatePayload: unknown;
   streamingImageGenerationCard: boolean;
   streamingImageGenerationPayload: unknown;
+  streamingBatchTasksCard: boolean;
+  streamingBatchTasksPayload: BatchTasksFormPayload | undefined;
   skillSteps: SkillStepProgress[];
   onAbortStream: () => void;
   onTranslationCardSuccess: (
@@ -1145,6 +1314,10 @@ function ChatPanel({
   const contextTokens = useMemo(
     () => estimateMessagesTokens(messages),
     [messages],
+  );
+  const workspaceBatchProducts = useMemo(
+    () => selectedShopifyObjectsToBatchProducts(selectedObjectsByType.product),
+    [selectedObjectsByType.product],
   );
   const activeObjectOptions = isObjectType(activeContextTool)
     ? objectOptions[activeContextTool].filter((item) => {
@@ -1184,6 +1357,19 @@ function ChatPanel({
     { key: "file", label: selectedFileIds.length > 0 ? `文件 ${selectedFileIds.length}` : "文件", icon: "↑", active: activeContextTool === "file" },
     { key: "media", label: selectedMediaIds.length > 0 ? `富媒体 ${selectedMediaIds.length}` : "富媒体", icon: "◇", active: activeContextTool === "media" },
   ];
+  const activeContextSelectionCount =
+    activeContextTool === "product"
+      ? selectedObjectsByType.product.length
+      : activeContextTool === "article"
+        ? selectedObjectsByType.article.length
+        : activeContextTool === "order"
+          ? selectedObjectsByType.order.length
+          : activeContextTool === "file"
+            ? selectedFileIds.length
+            : activeContextTool === "media"
+              ? selectedMediaIds.length
+              : 0;
+
   const selectedSummaryBubbles: Array<{ key: ContextTool; label: string }> = [
     ...(selectedObjectsByType.product.length > 0 ? [{ key: "product" as const, label: `已选择 ${selectedObjectsByType.product.length} 个商品` }] : []),
     ...(selectedObjectsByType.order.length > 0 ? [{ key: "order" as const, label: `已选择 ${selectedObjectsByType.order.length} 个订单` }] : []),
@@ -1261,7 +1447,7 @@ function ChatPanel({
       <section style={{ ...surfaceCardStyle, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={conversationMetaRowStyle}>
           <span style={conversationMetaTitleStyle}>{conversation.title}</span>
-          <span style={mutedMetaStyle}>{conversation.updatedAt}</span>
+          <span style={mutedMetaStyle}>{formatConversationTimestamp(conversation.updatedAt)}</span>
         </div>
 
         <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
@@ -1282,6 +1468,9 @@ function ChatPanel({
                   streamingPictureTranslatePayload={streamingPictureTranslatePayload}
                   streamingImageGenerationCard={streamingImageGenerationCard}
                   streamingImageGenerationPayload={streamingImageGenerationPayload}
+                  streamingBatchTasksCard={streamingBatchTasksCard}
+                  streamingBatchTasksPayload={streamingBatchTasksPayload}
+                  workspaceBatchProducts={workspaceBatchProducts}
                 />
               }
               onTranslationCardSuccess={(messageIndex, detail) =>
@@ -1322,6 +1511,7 @@ function ChatPanel({
             value={draft}
             onChange={(event) => onDraftChange(event.target.value)}
             onKeyDown={handleTextareaKeyDown}
+            className="workspace-composer-input"
             style={textareaStyle}
             placeholder="继续补充你的任务目标，并结合商品、订单、文章、文件或富媒体上下文..."
             disabled={isStreaming}
@@ -1361,7 +1551,7 @@ function ChatPanel({
               <ContextWindowIndicator currentTokens={contextTokens} maxTokens={MAX_CONTEXT_TOKENS} />
             </div>
             <div style={buttonRowStyle}>
-              <button type="button" style={ghostButtonStyle} disabled={isStreaming}>
+              <button type="button" className="workspace-ghost-btn" style={ghostButtonStyle} disabled={isStreaming}>
                 生成任务建议
               </button>
               {isStreaming ? (
@@ -1371,6 +1561,7 @@ function ChatPanel({
               ) : null}
               <button
                 type="button"
+                className="workspace-primary-btn"
                 style={{ ...primaryButtonStyle, opacity: isStreaming ? 0.6 : 1 }}
                 onClick={() => void onSend()}
                 disabled={isStreaming}
@@ -1646,33 +1837,101 @@ function ChatPanel({
                 </div>
               </>
             ) : null}
+
+            <div style={toolModalFooterStyle}>
+              <span style={mutedMetaStyle}>
+                {activeContextSelectionCount > 0
+                  ? `已选择 ${activeContextSelectionCount} 项，确认后将附加到本次对话`
+                  : "勾选后点击确认附加到对话"}
+              </span>
+              <button type="button" className="workspace-primary-btn" style={primaryButtonStyle} onClick={onCloseToolPicker}>
+                {activeContextSelectionCount > 0 ? `确认（${activeContextSelectionCount}）` : "确认"}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
 
       <section style={{ ...sidePanelStyle, alignSelf: "start" }}>
         <div style={surfaceCardStyle}>
-          <div style={sectionTitleStyle}>当前上下文</div>
-          <div style={listColumnStyle}>
-            {[
-              [
-                "对象范围",
-                totalSelectedObjects > 0
-                  ? (Object.keys(objectTypeLabels) as ObjectType[])
-                      .filter((type) => selectedObjectsByType[type].length > 0)
-                      .map((type) => `${objectTypeLabels[type]} ${selectedObjectsByType[type].length}`)
-                      .join(" / ")
-                  : "尚未选择对象",
-              ],
-              ["本地文件", selectedFileIds.length > 0 ? `${selectedFileIds.length} 个已选择文件` : "尚未添加文件"],
-              ["富媒体", selectedMediaIds.length > 0 ? `${selectedMediaIds.length} 个已选择 URL / 图片 / 视频` : "尚未添加富媒体"],
-            ].map(([label, value]) => (
-              <div key={label} style={keyValueRowStyle}>
-                <span style={mutedMetaStyle}>{label}</span>
-                <span style={sectionTextStyle}>{value}</span>
-              </div>
-            ))}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <div style={sectionTitleStyle}>当前上下文</div>
+            {filledContextCount > 0 ? (
+              <button
+                type="button"
+                style={{ fontSize: 11, color: "#6d7175", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                onClick={onClearContext}
+              >
+                清空
+              </button>
+            ) : null}
           </div>
+
+          {/* Products */}
+          {selectedObjectsByType.product.length > 0 ? (
+            <div style={ctxGroupStyle}>
+              <div style={ctxGroupLabelStyle}>商品 · {selectedObjectsByType.product.length} 个</div>
+              {selectedObjectsByType.product.map((item) => (
+                <div key={item.id} style={ctxItemRowStyle}>
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt="" style={ctxThumbStyle} />
+                  ) : (
+                    <div style={ctxThumbPlaceholderStyle}>品</div>
+                  )}
+                  <span style={ctxItemTitleStyle}>{item.title}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Articles */}
+          {selectedObjectsByType.article.length > 0 ? (
+            <div style={ctxGroupStyle}>
+              <div style={ctxGroupLabelStyle}>文章 · {selectedObjectsByType.article.length} 篇</div>
+              {selectedObjectsByType.article.map((item) => (
+                <div key={item.id} style={ctxItemRowStyle}>
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt="" style={ctxThumbStyle} />
+                  ) : (
+                    <div style={ctxThumbPlaceholderStyle}>文</div>
+                  )}
+                  <span style={ctxItemTitleStyle}>{item.title}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Files */}
+          {selectedFileIds.length > 0 ? (
+            <div style={ctxGroupStyle}>
+              <div style={ctxGroupLabelStyle}>文件 · {selectedFileIds.length} 个</div>
+              {selectedFileIds.map((id) => {
+                const file = localFiles.find((f) => f.id === id);
+                if (!file) return null;
+                return (
+                  <div key={id} style={ctxItemRowStyle}>
+                    <div style={ctxFileIconStyle}>↑</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={ctxItemTitleStyle}>{file.name}</div>
+                      {file.note && file.note !== "已上传" ? (
+                        <div style={{ fontSize: 11, color: "#8c9196", marginTop: 1 }}>{file.note}</div>
+                      ) : null}
+                    </div>
+                    {file.uploading ? (
+                      <span style={{ fontSize: 10, color: "#6d7175", flexShrink: 0 }}>上传中…</span>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {/* Empty state */}
+          {totalSelectedObjects === 0 && selectedFileIds.length === 0 ? (
+            <div style={{ fontSize: 13, color: "#8c9196", lineHeight: 1.6 }}>
+              在下方选择商品、文章或上传文件，它们会出现在这里并随消息一起发给 AI。
+            </div>
+          ) : null}
         </div>
 
         <div style={surfaceCardStyle}>
@@ -1745,7 +2004,7 @@ function AutomationPanel({
         </div>
         <div style={buttonRowStyle}>
           <button type="button" style={ghostButtonStyle}>手动新建</button>
-          <button type="button" style={primaryButtonStyle}>在对话中创建</button>
+          <button type="button" className="workspace-primary-btn" style={primaryButtonStyle}>在对话中创建</button>
         </div>
       </div>
 
@@ -1821,6 +2080,12 @@ function workspaceMessageToChatMessage(message: WorkspaceConversationMessage): C
     ...(message.imageGenerationFormPayload
       ? { imageGenerationFormPayload: message.imageGenerationFormPayload }
       : {}),
+    ...(message.batchTasksCard || message.batchTasksFormPayload
+      ? { batchTasksCard: true }
+      : {}),
+    ...(message.batchTasksFormPayload
+      ? { batchTasksFormPayload: message.batchTasksFormPayload }
+      : {}),
     ...(message.thinkingContent ? { thinkingContent: message.thinkingContent } : {}),
   };
 }
@@ -1844,6 +2109,12 @@ function buildAssistantWorkspaceMessage(
     : undefined;
   const hasImageGenerationCard =
     payload.imageGenerationCard || Boolean(imageGenerationFormPayload);
+  const batchTasksFormPayload = payload.batchTasksFormPayload
+    ? coerceBatchTasksFormPayload(payload.batchTasksFormPayload)
+    : undefined;
+  const hasBatchTasksCard = payload.batchTasksCard || Boolean(batchTasksFormPayload);
+  const suppressProductImprove =
+    hasBatchTasksCard && (batchTasksFormPayload?.products?.length ?? 0) > 0;
 
   return {
     role: "assistant",
@@ -1851,8 +2122,8 @@ function buildAssistantWorkspaceMessage(
     time: "刚刚",
     ...(payload.attachments?.length ? { attachments: payload.attachments } : {}),
     ...(translationTaskForm ? { translationTaskForm } : {}),
-    ...(hasProductImproveCard ? { productImproveCard: true } : {}),
-    ...(payload.productImproveCardPayload
+    ...(hasProductImproveCard && !suppressProductImprove ? { productImproveCard: true } : {}),
+    ...(payload.productImproveCardPayload && !suppressProductImprove
       ? { productImproveCardPayload: payload.productImproveCardPayload as ProductImproveCardPayload }
       : {}),
     ...(hasPictureTranslateCard ? { pictureTranslateCard: true } : {}),
@@ -1863,12 +2134,35 @@ function buildAssistantWorkspaceMessage(
     ...(imageGenerationFormPayload
       ? { imageGenerationFormPayload }
       : {}),
+    ...(hasBatchTasksCard ? { batchTasksCard: true } : {}),
+    ...(batchTasksFormPayload ? { batchTasksFormPayload } : {}),
     ...(payload.thinkingContent ? { thinkingContent: payload.thinkingContent } : {}),
   };
 }
 
 function formatTimeLabel(date: Date) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+/** 对话更新时间：上海时区，精确到秒（YYYY-MM-DD HH:mm:ss）。 */
+function formatConversationTimestamp(isoString: string): string {
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) {
+    return isoString.slice(0, 19).replace("T", " ");
+  }
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
 }
 
 function formatRelativeTime(isoString: string): string {
@@ -1904,6 +2198,12 @@ function serializeAssistantPayloads(payload: ChatStreamFinishPayload): string | 
       result.imageGenerationFormPayload = coerceImageGenerationFormPayload(
         payload.imageGenerationFormPayload,
       );
+    }
+  }
+  if (payload.batchTasksCard || payload.batchTasksFormPayload) {
+    result.batchTasksCard = true;
+    if (payload.batchTasksFormPayload) {
+      result.batchTasksFormPayload = coerceBatchTasksFormPayload(payload.batchTasksFormPayload);
     }
   }
   return Object.keys(result).length > 0 ? JSON.stringify(result) : null;
@@ -1949,6 +2249,14 @@ function dbMessageToUiMessage(msg: {
           ),
         }
       : {}),
+    ...(extras.batchTasksCard || extras.batchTasksFormPayload
+      ? { batchTasksCard: true }
+      : {}),
+    ...(extras.batchTasksFormPayload
+      ? {
+          batchTasksFormPayload: coerceBatchTasksFormPayload(extras.batchTasksFormPayload),
+        }
+      : {}),
   };
 }
 
@@ -1964,15 +2272,37 @@ function buildWorkspaceContextBlock(params: {
   for (const type of Object.keys(objectTypeLabels) as ObjectType[]) {
     const items = params.selectedObjectsByType[type];
     if (items.length === 0) continue;
-    const names = items.map((item) => item.title || item.id);
-    lines.push(`- ${objectTypeLabels[type]}：${names.join("、")}（共 ${items.length} 个）`);
+    if (type === "product") {
+      // Structured product data so AI can extract IDs + images for batch tasks
+      lines.push(`- 已选商品（共 ${items.length} 个）：`);
+      for (const item of items) {
+        const parts = [`  • ${item.title}`, `[ID: ${item.id}]`];
+        if (item.imageUrl) parts.push(`[图片: ${item.imageUrl}]`);
+        lines.push(parts.join(" "));
+      }
+    } else if (type === "article") {
+      // Structured article data so AI can extract IDs for batch tasks
+      lines.push(`- 已选文章（共 ${items.length} 个）：`);
+      for (const item of items) {
+        const parts = [`  • ${item.title}`, `[ID: ${item.id}]`];
+        if (item.imageUrl) parts.push(`[封面: ${item.imageUrl}]`);
+        lines.push(parts.join(" "));
+      }
+    } else {
+      const names = items.map((item) => item.title || item.id);
+      lines.push(`- ${objectTypeLabels[type]}：${names.join("、")}（共 ${items.length} 个）`);
+    }
   }
 
   if (params.selectedFileIds.length > 0) {
-    const names = params.selectedFileIds.map(
-      (id) => params.localFiles.find((item) => item.id === id)?.name ?? id,
-    );
-    lines.push(`- 文件：${names.join("、")}（共 ${params.selectedFileIds.length} 个）`);
+    lines.push(`- 已选文件（共 ${params.selectedFileIds.length} 个）：`);
+    for (const id of params.selectedFileIds) {
+      const file = params.localFiles.find((item) => item.id === id);
+      if (!file) continue;
+      const notePart = file.note && file.note !== "已上传" ? `（${file.note}）` : "";
+      const sizePart = file.charCount ? `，已解析 ${Math.round(file.charCount / 1000)}k 字符` : "";
+      lines.push(`  • ${file.name}${notePart}${sizePart}`);
+    }
   }
 
   if (params.selectedMediaIds.length > 0) {
@@ -1990,133 +2320,194 @@ function augmentUserMessage(content: string, contextBlock: string | null) {
   if (!contextBlock) return content;
   return `${contextBlock}\n\n[用户消息]\n${content}`;
 }
+
+/** Shopify Admin / Polaris 对齐色板 */
+const shopifyUi = {
+  pageBg: "#f6f6f7",
+  surface: "#ffffff",
+  surfaceSubtle: "#fafbfb",
+  border: "#e1e3e5",
+  borderStrong: "#c9cccf",
+  text: "#1f2124",
+  textSecondary: "#61666c",
+  textMuted: "#8c9196",
+  primary: "#008060",
+  primaryHover: "#006e52",
+  primarySurface: "#e9f7ef",
+  primaryText: "#004c3f",
+  link: "#005bd3",
+  radiusControl: 10,
+  radiusCard: 14,
+  shadowCard: "0 1px 0 rgba(0, 0, 0, 0.05)",
+} as const;
+
 const shellStyle: CSSProperties = {
   minHeight: "100vh",
   display: "grid",
   gridTemplateColumns: "252px minmax(0, 1fr)",
-  background: "#f6f6f7",
+  background: shopifyUi.pageBg,
 };
 
 const sidebarStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   justifyContent: "space-between",
-  padding: "20px 12px 16px",
-  borderRight: "1px solid #e1e3e5",
-  background: "#f6f6f7",
-  gap: 16,
+  padding: "16px 12px",
+  borderRight: `1px solid ${shopifyUi.border}`,
+  background: shopifyUi.surface,
+  gap: 14,
+  height: "100vh",
+  overflow: "hidden",
+  position: "sticky",
+  top: 0,
 };
 
 const contentStyle: CSSProperties = {
-  padding: "28px 32px 40px",
+  padding: "24px 28px 36px",
   display: "flex",
   flexDirection: "column",
-  gap: 24,
+  gap: 20,
   minWidth: 0,
+  background: shopifyUi.pageBg,
 };
 
 const brandRowStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 12,
-  marginBottom: 18,
-  padding: "8px 10px",
-  borderRadius: 12,
-  border: "1px solid #e1e3e5",
-  background: "#ffffff",
+  marginBottom: 14,
+  padding: "6px 8px",
+  borderRadius: shopifyUi.radiusCard,
 };
 const brandBadgeStyle: CSSProperties = {
   width: 32,
   height: 32,
-  borderRadius: 9,
-  background: "#202223",
+  borderRadius: 8,
+  background: shopifyUi.primary,
   color: "#ffffff",
   display: "grid",
   placeItems: "center",
   fontWeight: 700,
   fontSize: 13,
 };
-const brandTitleStyle: CSSProperties = { fontSize: 14, fontWeight: 700, color: "#202223" };
-const brandMetaStyle: CSSProperties = { fontSize: 12, color: "#6d7175" };
+const brandTitleStyle: CSSProperties = { fontSize: 14, fontWeight: 700, color: shopifyUi.text };
+const brandMetaStyle: CSSProperties = { fontSize: 12, color: shopifyUi.textMuted };
 
-const newTaskButtonStyle: CSSProperties = {
+const newChatButtonStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
   width: "100%",
-  border: "1px solid #202223",
-  borderRadius: 10,
-  background: "#202223",
-  padding: "11px 12px",
-  textAlign: "left",
-  fontSize: 14,
+  border: `1px solid ${shopifyUi.primary}`,
+  borderRadius: shopifyUi.radiusControl,
+  background: shopifyUi.primary,
+  padding: "10px 12px",
+  fontSize: 13,
   fontWeight: 600,
   color: "#ffffff",
   cursor: "pointer",
+  marginBottom: 10,
+  boxShadow: "0 1px 0 rgba(0, 0, 0, 0.05)",
+};
+const newChatPlusBadgeStyle: CSSProperties = {
+  width: 20,
+  height: 20,
+  borderRadius: 6,
+  background: "rgba(255, 255, 255, 0.2)",
+  display: "grid",
+  placeItems: "center",
+  fontSize: 16,
+  fontWeight: 400,
+  lineHeight: 1,
+  flexShrink: 0,
 };
 
-const navGroupStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 6, marginTop: 14 };
+const navGroupStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 2 };
 const navButtonStyle = (active: boolean): CSSProperties => ({
   display: "flex",
   alignItems: "center",
-  justifyContent: "space-between",
+  gap: 9,
   width: "100%",
-  border: `1px solid ${active ? "#c9cccf" : "transparent"}`,
-  borderRadius: 10,
-  background: active ? "#ffffff" : "transparent",
-  padding: "10px 12px",
-  fontSize: 14,
-  fontWeight: active ? 700 : 600,
-  color: "#202223",
+  border: "none",
+  borderRadius: shopifyUi.radiusControl,
+  background: active ? shopifyUi.primarySurface : "transparent",
+  padding: "8px 10px",
+  fontSize: 13,
+  fontWeight: active ? 600 : 500,
+  color: active ? shopifyUi.primaryText : shopifyUi.textSecondary,
   cursor: "pointer",
+  textAlign: "left",
+  boxShadow: active ? `inset 3px 0 0 ${shopifyUi.primary}` : "none",
 });
-const navLabelStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10 };
-const navIconStyle: CSSProperties = {
-  width: 22,
-  height: 22,
-  borderRadius: 8,
-  display: "grid",
-  placeItems: "center",
-  background: "#f1f2f3",
-  color: "#61666c",
-  fontSize: 12,
+const navIconStyle = (active: boolean): CSSProperties => ({
+  fontSize: 13,
+  color: active ? shopifyUi.primary : shopifyUi.textMuted,
   flexShrink: 0,
+  width: 16,
+  textAlign: "center",
+});
+
+const sidebarDividerStyle: CSSProperties = {
+  height: 1,
+  background: "#e1e3e5",
+  margin: "10px 2px",
 };
 
-const sidebarSectionStyle: CSSProperties = { marginTop: 18, display: "flex", flexDirection: "column", gap: 10, minHeight: 0 };
-const sidebarSectionHeadStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, fontWeight: 700, color: "#6d7175", padding: "0 4px" };
-const conversationListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 8, maxHeight: "calc(100vh - 330px)", overflowY: "auto", paddingRight: 2 };
+const sidebarSectionStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 2, minHeight: 0, flex: 1 };
+const sidebarSectionHeadStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  fontSize: 11,
+  fontWeight: 600,
+  color: "#8c9196",
+  padding: "4px 10px",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
+const conversationListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 1, overflowY: "auto", paddingRight: 0, flex: 1 };
 const historyRowStyle: CSSProperties = {
   display: "flex",
-  alignItems: "stretch",
-  gap: 4,
+  alignItems: "center",
+  gap: 0,
+  position: "relative",
 };
 const historyItemStyle = (active: boolean): CSSProperties => ({
   display: "flex",
-  flexDirection: "column",
-  gap: 4,
-  alignItems: "flex-start",
+  alignItems: "center",
   flex: 1,
   minWidth: 0,
   textAlign: "left",
-  border: `1px solid ${active ? "#c9cccf" : "transparent"}`,
-  borderRadius: 10,
-  background: active ? "#ffffff" : "#f6f6f7",
-  padding: "10px 12px",
+  border: "none",
+  borderRadius: shopifyUi.radiusControl,
+  background: active ? shopifyUi.primarySurface : "transparent",
+  padding: "6px 10px",
   cursor: "pointer",
+  overflow: "hidden",
+  boxShadow: active ? `inset 3px 0 0 ${shopifyUi.primary}` : "none",
 });
 const historyDeleteButtonStyle: CSSProperties = {
-  width: 32,
   flexShrink: 0,
-  alignSelf: "center",
-  border: "1px solid transparent",
-  borderRadius: 8,
+  border: "none",
+  borderRadius: 6,
   background: "transparent",
   color: "#8c9196",
-  fontSize: 18,
+  fontSize: 16,
   lineHeight: 1,
   cursor: "pointer",
-  padding: 0,
+  padding: "4px 6px",
 };
-const historyTitleStyle: CSSProperties = { fontSize: 13, fontWeight: 700, color: "#202223" };
-const historyPreviewStyle: CSSProperties = { fontSize: 12, color: "#61666c", lineHeight: 1.5 };
+const historyTitleStyle = (active: boolean): CSSProperties => ({
+  fontSize: 13,
+  fontWeight: active ? 600 : 500,
+  color: active ? shopifyUi.primaryText : shopifyUi.text,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  display: "block",
+  width: "100%",
+});
 const accountMenuWrapStyle: CSSProperties = {
   position: "relative",
   paddingTop: 12,
@@ -2163,21 +2554,28 @@ const accountMenuItemStyle: CSSProperties = {
   textAlign: "left",
   cursor: "pointer",
 };
-const footerTagStyle: CSSProperties = { padding: "4px 8px", borderRadius: 999, background: "#e9f7ef", color: "#008060", fontSize: 12, fontWeight: 600 };
+const footerTagStyle: CSSProperties = {
+  padding: "4px 8px",
+  borderRadius: 999,
+  background: shopifyUi.primarySurface,
+  color: shopifyUi.primary,
+  fontSize: 12,
+  fontWeight: 600,
+};
 
 const panelStackStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 20, minWidth: 0 };
 const surfaceCardStyle: CSSProperties = {
-  background: "#ffffff",
-  border: "1px solid #e1e3e5",
-  borderRadius: 14,
-  boxShadow: "0 1px 0 rgba(0,0,0,0.03)",
+  background: shopifyUi.surface,
+  border: `1px solid ${shopifyUi.border}`,
+  borderRadius: shopifyUi.radiusCard,
+  boxShadow: shopifyUi.shadowCard,
   padding: 20,
 };
 const sectionHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 16 };
-const sectionTitleStyle: CSSProperties = { fontSize: 18, fontWeight: 700, color: "#202223", letterSpacing: "-0.01em" };
-const sectionTitleSmallStyle: CSSProperties = { fontSize: 15, fontWeight: 700, color: "#202223" };
-const sectionTextStyle: CSSProperties = { fontSize: 14, color: "#61666c", lineHeight: 1.6 };
-const mutedMetaStyle: CSSProperties = { fontSize: 12, color: "#8c9196" };
+const sectionTitleStyle: CSSProperties = { fontSize: 18, fontWeight: 700, color: shopifyUi.text, letterSpacing: "-0.01em" };
+const sectionTitleSmallStyle: CSSProperties = { fontSize: 15, fontWeight: 700, color: shopifyUi.text };
+const sectionTextStyle: CSSProperties = { fontSize: 14, color: shopifyUi.textSecondary, lineHeight: 1.6 };
+const mutedMetaStyle: CSSProperties = { fontSize: 12, color: shopifyUi.textMuted };
 
 const metricGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16 };
 const metricLabelStyle: CSSProperties = { fontSize: 12, fontWeight: 600, color: "#6d7175" };
@@ -2186,14 +2584,14 @@ const metricDeltaStyle = (tone: DashboardMetric["tone"]): CSSProperties => ({
   marginTop: 8,
   fontSize: 12,
   fontWeight: 600,
-  color: tone === "positive" ? "#008060" : tone === "negative" ? "#8a2e0f" : "#8c9196",
+  color: tone === "positive" ? shopifyUi.primary : tone === "negative" ? "#8a2e0f" : shopifyUi.textMuted,
 });
 
 const twoColumnStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 16 };
 const listColumnStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 12 };
 const summaryItemStyle: CSSProperties = { padding: 14, borderRadius: 12, border: "1px solid #e9eaeb", background: "#ffffff" };
 const suggestionItemStyle: CSSProperties = { display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 0", borderBottom: "1px solid #f1f2f3" };
-const bulletStyle: CSSProperties = { width: 8, height: 8, marginTop: 7, borderRadius: 999, background: "#8c9196", flexShrink: 0 };
+const bulletStyle: CSSProperties = { width: 8, height: 8, marginTop: 7, borderRadius: 999, background: shopifyUi.primary, flexShrink: 0 };
 const alertListStyle: CSSProperties = { display: "grid", gap: 12 };
 const alertItemStyle = (tone: "warning" | "info" | "critical"): CSSProperties => ({
   padding: 14,
@@ -2260,10 +2658,10 @@ const toolbarIconButtonStyle = (active: boolean): CSSProperties => ({
   height: 32,
   display: "inline-grid",
   placeItems: "center",
-  border: `1px solid ${active ? "#202223" : "#dfe3e8"}`,
-  background: active ? "#202223" : "#ffffff",
-  color: active ? "#ffffff" : "#202223",
-  borderRadius: 10,
+  border: `1px solid ${active ? shopifyUi.primary : shopifyUi.border}`,
+  background: active ? shopifyUi.primary : shopifyUi.surface,
+  color: active ? "#ffffff" : shopifyUi.text,
+  borderRadius: shopifyUi.radiusControl,
   padding: 0,
   cursor: "pointer",
 });
@@ -2273,9 +2671,9 @@ const toolbarPillButtonStyle = (active: boolean): CSSProperties => ({
   gap: 5,
   height: 30,
   padding: "0 10px",
-  border: `1px solid ${active ? "#202223" : "#dfe3e8"}`,
-  background: active ? "#202223" : "#ffffff",
-  color: active ? "#ffffff" : "#202223",
+  border: `1px solid ${active ? shopifyUi.primary : shopifyUi.border}`,
+  background: active ? shopifyUi.primarySurface : shopifyUi.surface,
+  color: active ? shopifyUi.primaryText : shopifyUi.text,
   borderRadius: 999,
   cursor: "pointer",
   fontSize: 12,
@@ -2341,9 +2739,9 @@ const selectionBubbleStyle: CSSProperties = {
   gap: 8,
   padding: "7px 10px",
   borderRadius: 999,
-  border: "1px solid #c9cccf",
-  background: "#f6f6f7",
-  color: "#202223",
+  border: `1px solid ${shopifyUi.primary}`,
+  background: shopifyUi.primarySurface,
+  color: shopifyUi.primaryText,
   fontSize: 12,
   fontWeight: 600,
 };
@@ -2385,6 +2783,15 @@ const toolModalHeaderStyle: CSSProperties = {
   alignItems: "flex-start",
   gap: 12,
   marginBottom: 14,
+};
+const toolModalFooterStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  marginTop: 16,
+  paddingTop: 14,
+  borderTop: "1px solid #e1e3e5",
 };
 const toolModalCloseStyle: CSSProperties = {
   width: 32,
@@ -2460,16 +2867,42 @@ const skillCategoryStyle: CSSProperties = { fontSize: 12, fontWeight: 700, color
 const skillFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 };
 
 const buttonRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10 };
-const primaryButtonStyle: CSSProperties = { border: "1px solid #202223", borderRadius: 10, background: "#202223", color: "#ffffff", padding: "10px 14px", fontSize: 14, fontWeight: 600, cursor: "pointer" };
-const ghostButtonStyle: CSSProperties = { border: "1px solid #c9cdd2", borderRadius: 10, background: "#ffffff", color: "#202223", padding: "10px 14px", fontSize: 14, fontWeight: 600, cursor: "pointer" };
-const textButtonStyle: CSSProperties = { border: "none", background: "transparent", color: "#005bd3", padding: 0, fontSize: 13, fontWeight: 600, cursor: "pointer" };
+const primaryButtonStyle: CSSProperties = {
+  border: `1px solid ${shopifyUi.primary}`,
+  borderRadius: shopifyUi.radiusControl,
+  background: shopifyUi.primary,
+  color: "#ffffff",
+  padding: "10px 14px",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+};
+const ghostButtonStyle: CSSProperties = {
+  border: `1px solid ${shopifyUi.borderStrong}`,
+  borderRadius: shopifyUi.radiusControl,
+  background: shopifyUi.surface,
+  color: shopifyUi.text,
+  padding: "10px 14px",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+};
+const textButtonStyle: CSSProperties = {
+  border: "none",
+  background: "transparent",
+  color: shopifyUi.link,
+  padding: 0,
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: "pointer",
+};
 
 const tabRowStyle: CSSProperties = { display: "flex", gap: 8, marginBottom: 16 };
 const tabButtonStyle = (active: boolean): CSSProperties => ({
-  border: `1px solid ${active ? "#c9cccf" : "#dfe3e8"}`,
-  borderRadius: 10,
-  background: active ? "#ffffff" : "#f6f6f7",
-  color: "#202223",
+  border: `1px solid ${active ? shopifyUi.primary : shopifyUi.border}`,
+  borderRadius: shopifyUi.radiusControl,
+  background: active ? shopifyUi.primarySurface : shopifyUi.pageBg,
+  color: active ? shopifyUi.primaryText : shopifyUi.text,
   padding: "8px 12px",
   fontSize: 13,
   fontWeight: active ? 700 : 600,
@@ -2478,10 +2911,10 @@ const tabButtonStyle = (active: boolean): CSSProperties => ({
 const automationCardStyle: CSSProperties = { padding: 16, borderRadius: 12, border: "1px solid #e1e3e5", background: "#ffffff" };
 
 const filterChipStyle = (active: boolean): CSSProperties => ({
-  border: `1px solid ${active ? "#c9cccf" : "#c9cdd2"}`,
+  border: `1px solid ${active ? shopifyUi.primary : shopifyUi.borderStrong}`,
   borderRadius: 999,
-  background: active ? "#202223" : "#ffffff",
-  color: active ? "#ffffff" : "#202223",
+  background: active ? shopifyUi.primary : shopifyUi.surface,
+  color: active ? "#ffffff" : shopifyUi.text,
   padding: "8px 12px",
   fontSize: 13,
   fontWeight: 600,
@@ -2491,7 +2924,69 @@ const statusBadgeStyle = (tone: "positive" | "warning" | "critical" | "neutral")
   padding: "4px 10px",
   borderRadius: 999,
   background: tone === "positive" ? "#e9f7ef" : tone === "warning" ? "#fff5ea" : tone === "critical" ? "#fff1ef" : "#f1f2f3",
-  color: tone === "positive" ? "#008060" : tone === "warning" ? "#b98900" : tone === "critical" ? "#d72c0d" : "#61666c",
+  color: tone === "positive" ? shopifyUi.primary : tone === "warning" ? "#b98900" : tone === "critical" ? "#d72c0d" : shopifyUi.textSecondary,
   fontSize: 12,
   fontWeight: 600,
 });
+
+// ── 当前上下文面板 ───────────────────────────────────────────
+const ctxGroupStyle: CSSProperties = {
+  marginBottom: 12,
+  paddingBottom: 12,
+  borderBottom: "1px solid #f0f1f3",
+};
+const ctxGroupLabelStyle: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#8c9196",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  marginBottom: 6,
+};
+const ctxItemRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "5px 0",
+};
+const ctxThumbStyle: CSSProperties = {
+  width: 28,
+  height: 28,
+  borderRadius: 5,
+  objectFit: "cover",
+  background: "#eceff3",
+  flexShrink: 0,
+};
+const ctxThumbPlaceholderStyle: CSSProperties = {
+  width: 28,
+  height: 28,
+  borderRadius: 5,
+  background: "#eceff3",
+  display: "grid",
+  placeItems: "center",
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#6d7175",
+  flexShrink: 0,
+};
+const ctxFileIconStyle: CSSProperties = {
+  width: 28,
+  height: 28,
+  borderRadius: 5,
+  background: "#eef2ff",
+  display: "grid",
+  placeItems: "center",
+  fontSize: 13,
+  color: "#4070f4",
+  flexShrink: 0,
+};
+const ctxItemTitleStyle: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "#202223",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  flex: 1,
+  minWidth: 0,
+};

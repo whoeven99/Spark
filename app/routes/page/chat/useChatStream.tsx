@@ -7,6 +7,12 @@ import { coerceImageGenerationFormPayload } from "../../../lib/imageGenerationFo
 import { coercePictureTranslateFormPayload } from "../../../lib/pictureTranslateFormPayload";
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import {
+  coerceBatchTasksFormPayload,
+  mergeBatchTasksPayloadWithContext,
+  type BatchTaskProduct,
+  type BatchTasksFormPayload,
+} from "../../../lib/batchTasksFormPayload";
+import {
   hasStreamingVisualContent,
   type SkillStepProgress,
 } from "./chatStreamUtils";
@@ -41,10 +47,22 @@ type StreamChunk =
           productImproveCardPayload?: unknown;
           pictureTranslateCard?: unknown;
           imageGenerationCard?: unknown;
+          batchTasksCard?: unknown;
           attachments?: unknown;
         };
       };
     };
+
+function enrichBatchPayload(
+  payload: BatchTasksFormPayload,
+  workspaceProducts?: BatchTaskProduct[],
+): BatchTasksFormPayload {
+  return mergeBatchTasksPayloadWithContext(payload, workspaceProducts ?? []);
+}
+
+function shouldPreferBatchOverProductImprove(workspaceProducts?: BatchTaskProduct[]): boolean {
+  return (workspaceProducts?.length ?? 0) >= 2;
+}
 
 export type ChatStreamFinishPayload = {
   aborted: boolean;
@@ -58,6 +76,8 @@ export type ChatStreamFinishPayload = {
   pictureTranslateFormPayload?: unknown;
   imageGenerationCard?: boolean;
   imageGenerationFormPayload?: unknown;
+  batchTasksCard?: boolean;
+  batchTasksFormPayload?: BatchTasksFormPayload;
   httpStatus?: number;
 };
 
@@ -74,6 +94,8 @@ type Snapshot = {
   pictureTranslateFormPayload?: unknown;
   imageGenerationCard: boolean;
   imageGenerationFormPayload?: unknown;
+  batchTasksCard: boolean;
+  batchTasksFormPayload?: BatchTasksFormPayload;
 };
 
 function snapshotToFinishPayload(snapshot: Snapshot, aborted: boolean): ChatStreamFinishPayload {
@@ -89,6 +111,8 @@ function snapshotToFinishPayload(snapshot: Snapshot, aborted: boolean): ChatStre
     pictureTranslateFormPayload: snapshot.pictureTranslateFormPayload,
     imageGenerationCard: snapshot.imageGenerationCard,
     imageGenerationFormPayload: snapshot.imageGenerationFormPayload,
+    batchTasksCard: snapshot.batchTasksCard,
+    batchTasksFormPayload: snapshot.batchTasksFormPayload,
   };
 }
 
@@ -109,6 +133,9 @@ export function useChatStream() {
   const [streamingImageGenerationCard, setStreamingImageGenerationCard] = useState(false);
   const [streamingImageGenerationPayload, setStreamingImageGenerationPayload] =
     useState<unknown>();
+  const [streamingBatchTasksCard, setStreamingBatchTasksCard] = useState(false);
+  const [streamingBatchTasksPayload, setStreamingBatchTasksPayload] =
+    useState<BatchTasksFormPayload | undefined>();
   const [skillSteps, setSkillSteps] = useState<SkillStepProgress[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const snapshotRef = useRef<Snapshot>({
@@ -124,6 +151,8 @@ export function useChatStream() {
     pictureTranslateFormPayload: undefined,
     imageGenerationCard: false,
     imageGenerationFormPayload: undefined,
+    batchTasksCard: false,
+    batchTasksFormPayload: undefined,
   });
 
   const resetSnapshot = () => {
@@ -140,6 +169,8 @@ export function useChatStream() {
       pictureTranslateFormPayload: undefined,
       imageGenerationCard: false,
       imageGenerationFormPayload: undefined,
+      batchTasksCard: false,
+      batchTasksFormPayload: undefined,
     };
   };
 
@@ -153,6 +184,8 @@ export function useChatStream() {
     setStreamingPictureTranslatePayload(undefined);
     setStreamingImageGenerationCard(false);
     setStreamingImageGenerationPayload(undefined);
+    setStreamingBatchTasksCard(false);
+    setStreamingBatchTasksPayload(undefined);
     setSkillSteps([]);
   };
 
@@ -171,12 +204,15 @@ export function useChatStream() {
       options?: {
         url?: string;
         fileIds?: string[];
+        workspaceBatchProducts?: BatchTaskProduct[];
         onFinish?: (payload: ChatStreamFinishPayload) => void;
       },
     ) => {
       const url = options?.url ?? "/chat-stream";
       const onFinish = options?.onFinish;
       const fileIds = options?.fileIds ?? [];
+      const workspaceBatchProducts = options?.workspaceBatchProducts ?? [];
+      const preferBatchCard = shouldPreferBatchOverProductImprove(workspaceBatchProducts);
 
       prepareStreaming();
 
@@ -291,6 +327,7 @@ export function useChatStream() {
                   snapshotRef.current.translationTaskForm = normalized;
                   setStreamingTranslationForm(normalized);
                 } else if (chunk.name === "open_product_improve_form") {
+                  if (preferBatchCard) break;
                   const normalized = coerceProductImproveFormPayload(chunk.args);
                   snapshotRef.current.productImproveCard = true;
                   snapshotRef.current.productImproveCardPayload = normalized;
@@ -308,6 +345,19 @@ export function useChatStream() {
                   snapshotRef.current.imageGenerationFormPayload = normalized;
                   setStreamingImageGenerationCard(true);
                   setStreamingImageGenerationPayload(normalized);
+                } else if (chunk.name === "open_batch_tasks_form") {
+                  const normalized = enrichBatchPayload(
+                    coerceBatchTasksFormPayload(chunk.args),
+                    workspaceBatchProducts,
+                  );
+                  snapshotRef.current.batchTasksCard = true;
+                  snapshotRef.current.batchTasksFormPayload = normalized;
+                  snapshotRef.current.productImproveCard = false;
+                  snapshotRef.current.productImproveCardPayload = undefined;
+                  setStreamingGenerateCard(false);
+                  setStreamingGeneratePayload(undefined);
+                  setStreamingBatchTasksCard(true);
+                  setStreamingBatchTasksPayload(normalized);
                 }
               } else if (chunk.type === "tool_result") {
                 markFirstChunkSeen();
@@ -343,7 +393,7 @@ export function useChatStream() {
                   snapshotRef.current.attachments =
                     coerceChatMessageAttachments(ui.attachments);
                 }
-                if (ui?.productImproveCardPayload) {
+                if (ui?.productImproveCardPayload && !preferBatchCard) {
                   snapshotRef.current.productImproveCard = true;
                   snapshotRef.current.productImproveCardPayload =
                     ui.productImproveCardPayload;
@@ -367,6 +417,40 @@ export function useChatStream() {
                   snapshotRef.current.imageGenerationFormPayload = normalized;
                   setStreamingImageGenerationCard(true);
                   setStreamingImageGenerationPayload(normalized);
+                }
+                if (ui?.batchTasksCard) {
+                  const normalized = enrichBatchPayload(
+                    coerceBatchTasksFormPayload(ui.batchTasksCard),
+                    workspaceBatchProducts,
+                  );
+                  snapshotRef.current.batchTasksCard = true;
+                  snapshotRef.current.batchTasksFormPayload = normalized;
+                  if (preferBatchCard) {
+                    snapshotRef.current.productImproveCard = false;
+                    snapshotRef.current.productImproveCardPayload = undefined;
+                    setStreamingGenerateCard(false);
+                    setStreamingGeneratePayload(undefined);
+                  }
+                  setStreamingBatchTasksCard(true);
+                  setStreamingBatchTasksPayload(normalized);
+                } else if (preferBatchCard && workspaceBatchProducts.length >= 2) {
+                  const normalized = enrichBatchPayload(
+                    coerceBatchTasksFormPayload({
+                      taskType: "product_improve",
+                      products: [],
+                      targetLanguage: "en",
+                      sourceLanguage: "auto",
+                    }),
+                    workspaceBatchProducts,
+                  );
+                  snapshotRef.current.batchTasksCard = true;
+                  snapshotRef.current.batchTasksFormPayload = normalized;
+                  snapshotRef.current.productImproveCard = false;
+                  snapshotRef.current.productImproveCardPayload = undefined;
+                  setStreamingGenerateCard(false);
+                  setStreamingGeneratePayload(undefined);
+                  setStreamingBatchTasksCard(true);
+                  setStreamingBatchTasksPayload(normalized);
                 }
 
                 const finishPayload = snapshotToFinishPayload(
@@ -430,6 +514,8 @@ export function useChatStream() {
     streamingPictureTranslatePayload,
     streamingImageGenerationCard,
     streamingImageGenerationPayload,
+    streamingBatchTasksCard,
+    streamingBatchTasksPayload,
     skillSteps,
     streamingThinkingText,
     /** @deprecated 兼容旧名 */

@@ -2,10 +2,12 @@ import type { CSSProperties, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { ChatMessage } from "../../../lib/chatMessage";
 import { ChatMessageContent } from "./ChatMessageContent";
+import { ThinkingReview } from "./StreamingThinking";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
 import { ImageGenerationChatCard } from "./ImageGenerationChatCard";
 import { PictureTranslateChatCard } from "./PictureTranslateChatCard";
 import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard";
+import { BatchTasksChatCard } from "./BatchTasksChatCard";
 
 type ChatMessagesProps = {
   messages: ChatMessage[];
@@ -37,8 +39,13 @@ export function ChatMessages({
       {messages.map((item, index) => {
         const hasTranslationCard =
           item.role === "assistant" && Boolean(item.translationTaskForm);
+        const hasBatchTasksCard =
+          item.role === "assistant" &&
+          (Boolean(item.batchTasksCard) || Boolean(item.batchTasksFormPayload));
         const hasGenerateDescriptionCard =
-          item.role === "assistant" && Boolean(item.productImproveCard);
+          item.role === "assistant" &&
+          Boolean(item.productImproveCard) &&
+          !hasBatchTasksCard;
         const hasPictureTranslateCard =
           item.role === "assistant" &&
           (Boolean(item.pictureTranslateCard) || Boolean(item.pictureTranslateFormPayload));
@@ -55,6 +62,7 @@ export function ChatMessages({
           hasGenerateDescriptionCard ||
           hasPictureTranslateCard ||
           hasImageGenerationCard ||
+          hasBatchTasksCard ||
           hasImageAttachments;
 
         const bubbleShellStyle: CSSProperties = {
@@ -92,13 +100,12 @@ export function ChatMessages({
                       {item.role === "assistant" ? "AI Assistant" : "你"}
                     </s-badge>
                   </div>
+                  {item.role === "assistant" && item.thinkingContent ? (
+                    <div style={{ marginBottom: "0.5rem" }}>
+                      <ThinkingReview text={item.thinkingContent} />
+                    </div>
+                  ) : null}
                   <div style={{ marginTop: "0.35rem" }}>
-                    {item.role === "assistant" && item.thinkingContent ? (
-                      <details style={thinkingDetailsStyle}>
-                        <summary style={thinkingSummaryStyle}>查看思考过程</summary>
-                        <div style={thinkingContentStyle}>{item.thinkingContent}</div>
-                      </details>
-                    ) : null}
                     {item.role === "assistant" ? (
                       <ChatMessageContent content={item.content} />
                     ) : (
@@ -190,6 +197,15 @@ export function ChatMessages({
                       />
                     </div>
                   ) : null}
+
+                  {hasBatchTasksCard ? (
+                    <div style={{ marginTop: "0.85rem" }}>
+                      <BatchTasksChatCard
+                        embedded
+                        initialPayload={item.batchTasksFormPayload}
+                      />
+                    </div>
+                  ) : null}
                 </s-box>
               </div>
             </div>
@@ -201,8 +217,9 @@ export function ChatMessages({
   );
 }
 
+
 const thinkingDetailsStyle: CSSProperties = {
-  marginBottom: 8,
+  marginTop: 10,
   borderRadius: 8,
   border: "1px solid rgba(44, 110, 203, 0.2)",
   background: "rgba(44, 110, 203, 0.04)",
