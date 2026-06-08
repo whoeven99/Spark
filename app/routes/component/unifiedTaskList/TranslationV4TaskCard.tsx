@@ -43,36 +43,6 @@ function translationV4StatusLabel(status: TranslationV4Status): string {
   return labels[status] ?? status;
 }
 
-function ratioPercent(done: number, total: number): number | null {
-  if (total <= 0) return null;
-  return Math.min(100, Math.round((done / total) * 100));
-}
-
-function computeV4ProgressPercent(
-  status: TranslationV4Status,
-  metrics: TranslationV4Metrics,
-): number | null {
-  if (status === "COMPLETED") return 100;
-  if (TERMINAL_V4_STATUSES.includes(status)) return null;
-
-  if (["CREATED", "INIT_QUEUED", "INITIALIZING", "INIT_DONE"].includes(status)) {
-    return ratioPercent(metrics.initDone, metrics.initTotal);
-  }
-  if (["TRANSLATE_QUEUED", "TRANSLATING", "TRANSLATE_DONE"].includes(status)) {
-    if (metrics.translateUnitTotal > 0) {
-      return ratioPercent(metrics.translateUnitDone, metrics.translateUnitTotal);
-    }
-    return ratioPercent(metrics.translateDone, metrics.translateTotal);
-  }
-  if (["WRITEBACK_QUEUED", "WRITING_BACK"].includes(status)) {
-    return ratioPercent(metrics.writebackDone, metrics.writebackTotal);
-  }
-  if (["VERIFY_QUEUED", "VERIFYING"].includes(status)) {
-    return ratioPercent(metrics.verifyDone, metrics.verifyTotal);
-  }
-  return null;
-}
-
 function mapV4StatusToAIStatus(status: TranslationV4Status): AITaskStatus {
   if (status === "COMPLETED") return "succeeded";
   if (status === "FAILED") return "failed";
@@ -91,61 +61,15 @@ function formatTaskDate(iso: string): string {
   }).format(new Date(iso));
 }
 
-function formatElapsed(startedAt: string | null, completedAt: string | null): string | null {
-  if (!startedAt) return null;
-  const end = completedAt ? new Date(completedAt) : new Date();
-  const ms = end.getTime() - new Date(startedAt).getTime();
+function formatElapsed(createdAt: string, endAt: string | null): string {
+  const end = endAt ? new Date(endAt) : new Date();
+  const ms = end.getTime() - new Date(createdAt).getTime();
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
-  return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
-}
-
-function getProgressBackground(status: TranslationV4Status): string {
-  if (status === "COMPLETED") {
-    return "linear-gradient(90deg, #00a67c 0%, #00a67c 100%)";
-  }
-  if (status === "FAILED") {
-    return "linear-gradient(90deg, #d97706 0%, #f59e0b 100%)";
-  }
-  if (TERMINAL_V4_STATUSES.includes(status)) {
-    return "linear-gradient(90deg, #9ca3af 0%, #cbd5e1 100%)";
-  }
-  return "linear-gradient(90deg, #00a67c 0%, #35b486 55%, #7ad9a8 100%)";
-}
-
-function buildStageSummary(
-  status: TranslationV4Status,
-  metrics: TranslationV4Metrics,
-): string {
-  const label = translationV4StatusLabel(status);
-  if (
-    status === "TRANSLATING" ||
-    status === "TRANSLATE_QUEUED" ||
-    status === "TRANSLATE_DONE"
-  ) {
-    if (metrics.translateUnitTotal > 0) {
-      return `${label}：${metrics.translateUnitDone} / ${metrics.translateUnitTotal} 单元`;
-    }
-    if (metrics.translateTotal > 0) {
-      return `${label}：${metrics.translateDone} / ${metrics.translateTotal} 项`;
-    }
-  }
-  if (status === "INITIALIZING" || status === "INIT_DONE") {
-    if (metrics.initTotal > 0) {
-      return `${label}：${metrics.initDone} / ${metrics.initTotal} 项`;
-    }
-  }
-  if (status === "WRITING_BACK" || status === "WRITEBACK_QUEUED") {
-    if (metrics.writebackTotal > 0) {
-      return `${label}：${metrics.writebackDone} / ${metrics.writebackTotal} 项`;
-    }
-  }
-  if (status === "VERIFYING" || status === "VERIFY_QUEUED") {
-    if (metrics.verifyTotal > 0) {
-      return `${label}：${metrics.verifyDone} / ${metrics.verifyTotal} 项`;
-    }
-  }
-  return label;
+  const h = Math.floor(m / 60);
+  if (h > 0) return `${h}h ${m % 60}m`;
+  if (m > 0) return `${m}m ${s % 60}s`;
+  return `${s}s`;
 }
 
 function moduleListSummary(modules: string[]): string {
@@ -169,6 +93,211 @@ function moduleListSummary(modules: string[]): string {
   return rest > 0 ? `${shown.join("、")} 等 ${modules.length} 个模块` : shown.join("、");
 }
 
+function buildStageSummary(
+  status: TranslationV4Status,
+  metrics: TranslationV4Metrics,
+): string {
+  const label = translationV4StatusLabel(status);
+  if (["TRANSLATING", "TRANSLATE_QUEUED", "TRANSLATE_DONE"].includes(status)) {
+    if (metrics.translateUnitTotal > 0) {
+      return `${label}：${metrics.translateUnitDone} / ${metrics.translateUnitTotal} 单元`;
+    }
+    if (metrics.translateTotal > 0) {
+      return `${label}：${metrics.translateDone} / ${metrics.translateTotal} 项`;
+    }
+  }
+  if (["INITIALIZING", "INIT_DONE"].includes(status) && metrics.initTotal > 0) {
+    return `${label}：${metrics.initDone} / ${metrics.initTotal} 项`;
+  }
+  if (["WRITING_BACK", "WRITEBACK_QUEUED"].includes(status) && metrics.writebackTotal > 0) {
+    return `${label}：${metrics.writebackDone} / ${metrics.writebackTotal} 项`;
+  }
+  if (["VERIFYING", "VERIFY_QUEUED"].includes(status) && metrics.verifyTotal > 0) {
+    return `${label}：${metrics.verifyDone} / ${metrics.verifyTotal} 项`;
+  }
+  return label;
+}
+
+// ─── Multi-stage progress ─────────────────────────────────────────────────────
+
+type StageState = "completed" | "active" | "pending" | "failed";
+
+type StageRow = {
+  label: string;
+  done: number;
+  total: number;
+  state: StageState;
+};
+
+/**
+ * Determine the state of each stage (init / translate / writeback / verify)
+ * from the current job status + accumulated metrics.
+ */
+function resolveStageStates(
+  status: TranslationV4Status,
+  metrics: TranslationV4Metrics,
+): [StageState, StageState, StageState, StageState] {
+  // ── Active flows ─────────────────────────────────────────────────────────
+  if (status === "COMPLETED") return ["completed", "completed", "completed", "completed"];
+  if (status === "CREATED") return ["pending", "pending", "pending", "pending"];
+  if (status === "INIT_QUEUED" || status === "INITIALIZING") return ["active", "pending", "pending", "pending"];
+  if (status === "INIT_DONE") return ["completed", "pending", "pending", "pending"];
+  if (status === "TRANSLATE_QUEUED" || status === "TRANSLATING") return ["completed", "active", "pending", "pending"];
+  if (status === "TRANSLATE_DONE") return ["completed", "completed", "pending", "pending"];
+  if (status === "WRITEBACK_QUEUED" || status === "WRITING_BACK") return ["completed", "completed", "active", "pending"];
+  if (status === "VERIFY_QUEUED" || status === "VERIFYING") return ["completed", "completed", "completed", "active"];
+
+  // ── Terminal flows: infer from metrics which stages completed ─────────────
+  const failState: StageState = status === "FAILED" ? "failed" : "pending";
+
+  const initDone = metrics.initTotal > 0 && metrics.initDone >= metrics.initTotal;
+  const hasTranslate = metrics.translateTotal > 0 || metrics.translateUnitTotal > 0;
+  const translateDone =
+    (metrics.translateUnitTotal > 0 && metrics.translateUnitDone >= metrics.translateUnitTotal) ||
+    (metrics.translateTotal > 0 && metrics.translateDone >= metrics.translateTotal);
+  const hasWriteback = metrics.writebackTotal > 0;
+  const writebackDone = hasWriteback && metrics.writebackDone >= metrics.writebackTotal;
+  const hasVerify = metrics.verifyTotal > 0;
+  const verifyDone = hasVerify && metrics.verifyDone >= metrics.verifyTotal;
+
+  if (verifyDone) return ["completed", "completed", "completed", "completed"];
+  if (writebackDone || hasVerify) return ["completed", "completed", "completed", failState];
+  if (translateDone || hasWriteback) return ["completed", "completed", failState, "pending"];
+  if (initDone || hasTranslate) return ["completed", failState, "pending", "pending"];
+  return [failState, "pending", "pending", "pending"];
+}
+
+const STAGE_BAR_COLORS: Record<StageState, { bar: string; label: string }> = {
+  completed: { bar: "#00a67c", label: pageColorTokens.brandGreenDark },
+  active: { bar: "#4070f4", label: "#4070f4" },
+  pending: { bar: "#e5e7eb", label: pageColorTokens.textFootnote },
+  failed: { bar: "#d97706", label: pageColorTokens.criticalText },
+};
+
+function stagePercent(row: StageRow): number {
+  if (row.state === "completed") return 100;
+  if (row.state === "pending") return 0;
+  if (row.total <= 0) return row.state === "active" ? 5 : 0; // show tiny sliver when active but no data yet
+  return Math.min(100, Math.round((row.done / row.total) * 100));
+}
+
+function StageProgressRow({ row }: { row: StageRow }) {
+  const colors = STAGE_BAR_COLORS[row.state];
+  const pct = stagePercent(row);
+  const isActive = row.state === "active";
+  const isPending = row.state === "pending";
+
+  const countText =
+    row.total > 0
+      ? `${row.done.toLocaleString()} / ${row.total.toLocaleString()}`
+      : isPending
+        ? "—"
+        : "";
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      {/* Stage label */}
+      <div
+        style={{
+          width: 52,
+          flexShrink: 0,
+          fontSize: 12,
+          fontWeight: isActive ? 700 : 600,
+          color: colors.label,
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+        }}
+      >
+        {isActive && (
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: colors.label,
+              flexShrink: 0,
+              boxShadow: `0 0 0 3px ${colors.label}22`,
+              animation: "pulse 1.4s ease-in-out infinite",
+            }}
+          />
+        )}
+        {row.label}
+      </div>
+
+      {/* Progress bar */}
+      <div
+        style={{
+          flex: 1,
+          height: 6,
+          borderRadius: 999,
+          background: "#f0f0f2",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            width: `${pct}%`,
+            borderRadius: 999,
+            background: isPending ? "#d1d5db" : colors.bar,
+            transition: "width 0.35s ease",
+          }}
+        />
+      </div>
+
+      {/* Count */}
+      <div
+        style={{
+          width: 100,
+          flexShrink: 0,
+          fontSize: 11,
+          color: isPending ? pageColorTokens.textFootnote : colors.label,
+          textAlign: "right",
+          fontVariantNumeric: "tabular-nums",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {countText}
+      </div>
+    </div>
+  );
+}
+
+function MultiStageProgress({
+  status,
+  metrics,
+}: {
+  status: TranslationV4Status;
+  metrics: TranslationV4Metrics;
+}) {
+  const [init, translate, writeback, verify] = resolveStageStates(status, metrics);
+
+  // For translate, prefer unit-level numbers if available
+  const translateDone = metrics.translateUnitTotal > 0 ? metrics.translateUnitDone : metrics.translateDone;
+  const translateTotal = metrics.translateUnitTotal > 0 ? metrics.translateUnitTotal : metrics.translateTotal;
+
+  const rows: StageRow[] = [
+    { label: "初始化", done: metrics.initDone, total: metrics.initTotal, state: init },
+    { label: "翻  译", done: translateDone, total: translateTotal, state: translate },
+    { label: "写  回", done: metrics.writebackDone, total: metrics.writebackTotal, state: writeback },
+    { label: "校  验", done: metrics.verifyDone, total: metrics.verifyTotal, state: verify },
+  ];
+
+  // Only show verify row if there's actual verify data or job reached that stage
+  const showVerify = verify !== "pending" || metrics.verifyTotal > 0;
+
+  const visibleRows = showVerify ? rows : rows.slice(0, 3);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+      {visibleRows.map((row) => (
+        <StageProgressRow key={row.label} row={row} />
+      ))}
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 type Props = {
@@ -176,7 +305,7 @@ type Props = {
 };
 
 export function TranslationV4TaskCard({ job }: Props) {
-  const { i18n } = useTranslation();
+  const { i18n: _i18n } = useTranslation();
   const navigate = useNavigate();
   const [isHydrated, setIsHydrated] = useState(false);
 
@@ -185,22 +314,17 @@ export function TranslationV4TaskCard({ job }: Props) {
   }, []);
 
   const mappedStatus = mapV4StatusToAIStatus(job.status);
-  const progressPercent = computeV4ProgressPercent(job.status, job.metrics) ?? 0;
-  const progressBackground = getProgressBackground(job.status);
-
   const shortId = job.id.slice(0, 8).toUpperCase();
   const isActive = !TERMINAL_V4_STATUSES.includes(job.status) && job.status !== "PAUSED";
+  const isTerminal = TERMINAL_V4_STATUSES.includes(job.status) || job.status === "PAUSED";
 
-  const createdAtText = isHydrated
-    ? formatTaskDate(job.createdAt)
-    : formatTaskDate(job.createdAt);
+  const createdAtText = isHydrated ? formatTaskDate(job.createdAt) : formatTaskDate(job.createdAt);
+  const elapsedLabel = formatElapsed(
+    job.createdAt,
+    isTerminal ? job.updatedAt : null,
+  );
 
-  // Estimate an elapsed start time: use createdAt as proxy since V4 jobs don't store startedAt
-  const elapsedLabel = formatElapsed(job.createdAt, job.status === "COMPLETED" || TERMINAL_V4_STATUSES.includes(job.status) ? job.updatedAt : null);
-
-  const usedCredits = job.metrics.usedTokens > 0
-    ? tokensToCredits(job.metrics.usedTokens)
-    : null;
+  const usedCredits = job.metrics.usedTokens > 0 ? tokensToCredits(job.metrics.usedTokens) : null;
 
   const primaryCopy = isActive
     ? buildStageSummary(job.status, job.metrics)
@@ -208,16 +332,13 @@ export function TranslationV4TaskCard({ job }: Props) {
 
   let primaryCopyColor: string = pageColorTokens.textPrimary;
   if (job.status === "FAILED") primaryCopyColor = pageColorTokens.criticalText;
-  else if (isActive) primaryCopyColor = pageColorTokens.brandBlue;
+  else if (isActive) primaryCopyColor = "#4070f4";
   else if (job.status === "COMPLETED") primaryCopyColor = pageColorTokens.brandGreenDark;
 
   const secondaryParts: string[] = [];
   if (elapsedLabel) secondaryParts.push(`耗时 ${elapsedLabel}`);
   if (usedCredits != null) secondaryParts.push(`消耗 ${usedCredits} 积分`);
-  if (job.metrics.translateDone > 0 && job.metrics.translateTotal > 0) {
-    secondaryParts.push(`翻译 ${job.metrics.translateDone} / ${job.metrics.translateTotal} 项`);
-  }
-  if (job.errorMessage) secondaryParts.push(job.errorMessage.slice(0, 60));
+  if (job.errorMessage) secondaryParts.push(job.errorMessage.slice(0, 80));
   const secondaryCopy = secondaryParts.join(" · ");
 
   function handleViewDetail() {
@@ -243,7 +364,6 @@ export function TranslationV4TaskCard({ job }: Props) {
         display: "flex",
         flexDirection: "column",
         gap: 16,
-        minHeight: 228,
       }}
     >
       {/* ── Header ── */}
@@ -273,7 +393,6 @@ export function TranslationV4TaskCard({ job }: Props) {
               #{shortId}
             </span>
             <TaskStatusBadge status={mappedStatus} />
-            {/* Task type tag */}
             <span
               style={{
                 fontSize: 11,
@@ -350,6 +469,7 @@ export function TranslationV4TaskCard({ job }: Props) {
 
       {/* ── Status section ── */}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {/* Primary copy */}
         <div
           style={{
             fontSize: 15,
@@ -361,6 +481,7 @@ export function TranslationV4TaskCard({ job }: Props) {
           {primaryCopy}
         </div>
 
+        {/* Secondary copy */}
         {secondaryCopy && (
           <div
             style={{
@@ -373,25 +494,17 @@ export function TranslationV4TaskCard({ job }: Props) {
           </div>
         )}
 
-        {/* Progress bar */}
+        {/* ── Multi-stage progress bars ── */}
         <div
           style={{
-            height: 9,
-            borderRadius: 999,
-            background: "#e5e7eb",
-            overflow: "hidden",
-            marginTop: 4,
+            background: pageColorTokens.surfaceMuted,
+            border: `1px solid ${pageColorTokens.borderSubtle}`,
+            borderRadius: 10,
+            padding: "12px 14px",
+            marginTop: 2,
           }}
         >
-          <div
-            style={{
-              height: "100%",
-              width: `${Math.max(0, Math.min(100, progressPercent))}%`,
-              borderRadius: 999,
-              background: progressBackground,
-              transition: "width 0.35s ease",
-            }}
-          />
+          <MultiStageProgress status={job.status} metrics={job.metrics} />
         </div>
 
         {/* Action buttons */}
