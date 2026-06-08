@@ -86,6 +86,8 @@ export function useContextResourceSearch({
       const params = new URLSearchParams(
         locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
       );
+      params.delete("cursor");
+      params.delete("limit");
       params.set("q", query.trim());
       params.set("filter", filter);
       params.set("sort", sort);
