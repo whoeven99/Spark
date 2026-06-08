@@ -65,6 +65,7 @@ type Snapshot = {
   reply: string;
   streamedText: string;
   thinkingContent: string;
+  thinkingNotes: string[];
   translationTaskForm?: unknown;
   attachments: ChatMessageAttachment[];
   productImproveCard: boolean;
@@ -114,6 +115,7 @@ export function useChatStream() {
     reply: "",
     streamedText: "",
     thinkingContent: "",
+    thinkingNotes: [],
     translationTaskForm: undefined,
     attachments: [],
     productImproveCard: false,
@@ -129,6 +131,7 @@ export function useChatStream() {
       reply: "",
       streamedText: "",
       thinkingContent: "",
+      thinkingNotes: [],
       translationTaskForm: undefined,
       attachments: [],
       productImproveCard: false,
@@ -190,6 +193,16 @@ export function useChatStream() {
         onFinish?.(payload);
       };
 
+      const appendThinkingNote = (note: string) => {
+        const trimmed = note.trim();
+        if (!trimmed || snapshotRef.current.thinkingNotes.includes(trimmed)) return;
+        snapshotRef.current.thinkingNotes.push(trimmed);
+        const current = snapshotRef.current.thinkingContent.trim();
+        const next = current ? `${current}\n${trimmed}` : trimmed;
+        snapshotRef.current.thinkingContent = next;
+        setStreamingThinkingText(next);
+      };
+
       try {
         const response = await fetch(url, {
           method: "POST",
@@ -236,7 +249,9 @@ export function useChatStream() {
 
               if (chunk.type === "thinking") {
                 setStreamingThinkingText((prev) => {
-                  const next = prev + chunk.content;
+                  const next = prev
+                    ? `${prev}${chunk.content}`
+                    : chunk.content;
                   snapshotRef.current.thinkingContent = next;
                   return next;
                 });
@@ -251,10 +266,12 @@ export function useChatStream() {
               } else if (chunk.type === "status") {
                 if (chunk.phase === "thinking") {
                   setAwaitingFirstChunk(true);
+                  appendThinkingNote("Analyzing the request");
                 }
               } else if (chunk.type === "skill_progress") {
                 markFirstChunkSeen();
                 const ev = chunk.event;
+                appendThinkingNote(`${ev.label}: ${ev.status}`);
                 setSkillSteps((prev) => {
                   const idx = prev.findIndex(
                     (s) => s.skill === ev.skill && s.stepId === ev.stepId,
@@ -268,6 +285,7 @@ export function useChatStream() {
                 });
               } else if (chunk.type === "tool_call") {
                 markFirstChunkSeen();
+                appendThinkingNote(`Preparing ${chunk.name}`);
                 if (chunk.name === "open_translation_task_form") {
                   const normalized = coerceTranslationTaskFormPayload(chunk.args);
                   snapshotRef.current.translationTaskForm = normalized;
@@ -293,6 +311,7 @@ export function useChatStream() {
                 }
               } else if (chunk.type === "tool_result") {
                 markFirstChunkSeen();
+                appendThinkingNote(`${chunk.name} returned a result`);
                 if (chunk.name === "generate_product_description") {
                   const parsed = JSON.parse(chunk.result) as unknown;
                   snapshotRef.current.productImproveCard = true;

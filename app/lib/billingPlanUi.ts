@@ -170,6 +170,16 @@ export function isPendingSubscriptionPlan(
   return subscription.planKey === planKey && subscription.status === "PENDING";
 }
 
+/** Shopify 订阅处于免费试用期（ACTIVE 且 trialEndsAt 未到期）。 */
+export function isShopifySubscriptionTrialActive(
+  subscription: { status: string; trialEndsAt: string | null } | null,
+  now: Date = new Date(),
+): boolean {
+  if (!subscription || subscription.status !== "ACTIVE") return false;
+  if (!subscription.trialEndsAt) return false;
+  return new Date(subscription.trialEndsAt).getTime() > now.getTime();
+}
+
 export function resolveCurrentPlanLabel(params: {
   subscription: { planKey: string; status: string } | null;
   trialPlan: PlanRecord | null;

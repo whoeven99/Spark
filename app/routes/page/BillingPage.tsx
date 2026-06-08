@@ -17,6 +17,7 @@ import {
   getTokenUsagePercent,
   isActiveSubscriptionPlan,
   isPendingSubscriptionPlan,
+  isShopifySubscriptionTrialActive,
   listSubscriptionPlansForInterval,
   normalizePlanDisplayName,
   pickSubscriptionPlan,
@@ -450,6 +451,7 @@ function PaidPlanCard({
   interval,
   isRecommended,
   isCurrent,
+  isTrialCurrent,
   isPending,
   isSubmitting,
   submittingMode,
@@ -462,6 +464,7 @@ function PaidPlanCard({
   interval: BillingIntervalView;
   isRecommended: boolean;
   isCurrent: boolean;
+  isTrialCurrent: boolean;
   isPending: boolean;
   isSubmitting: boolean;
   submittingMode: "trial" | "paid" | null;
@@ -502,8 +505,14 @@ function PaidPlanCard({
 
       <div className={styles.planCta}>
         {isCurrent ? (
-          <div className={styles.planCurrentCta} role="status" aria-current="true">
-            {t("billing.currentPlan")}
+          <div
+            className={`${styles.planCurrentCta} ${isTrialCurrent ? styles.planCurrentCtaTrial : ""}`}
+            role="status"
+            aria-current="true"
+          >
+            {isTrialCurrent
+              ? t("billing.subscriptionTrialCurrentPlan")
+              : t("billing.currentPlan")}
           </div>
         ) : isPending ? (
           <div className={styles.planPendingCta} role="status">
@@ -641,6 +650,8 @@ export function BillingPage() {
   const showSubscriptionPeriodMeta =
     sub?.status === "ACTIVE" && !!sub.currentPeriodEnd;
 
+  const isSubscriptionTrialActive = isShopifySubscriptionTrialActive(sub);
+
   const isTrialCurrent =
     sub?.status !== "ACTIVE" &&
     sub?.status !== "PENDING" &&
@@ -661,14 +672,46 @@ export function BillingPage() {
   }, [currentPlanRecord, isTrialCurrent, t]);
   const quotaMetaDescription = useMemo(() => {
     const meta: string[] = [];
+    if (isSubscriptionTrialActive && sub?.trialEndsAt) {
+      meta.push(
+        `${t("billing.subscriptionTrialStatus")} · ${t("billing.trialEnds")}: ${formatBillingMetaDate(sub.trialEndsAt, locale)}`,
+      );
+    }
     if (showSubscriptionPeriodMeta && sub?.currentPeriodEnd) {
       meta.push(`${t("billing.periodEnd")}: ${formatBillingMetaDate(sub.currentPeriodEnd, locale)}`);
-    }
-    if (sub?.trialEndsAt) {
+    } else if (!isSubscriptionTrialActive && sub?.trialEndsAt) {
       meta.push(`${t("billing.trialEnds")}: ${formatBillingMetaDate(sub.trialEndsAt, locale)}`);
     }
     return meta.join(" · ");
-  }, [locale, showSubscriptionPeriodMeta, sub?.currentPeriodEnd, sub?.trialEndsAt, t]);
+  }, [
+    isSubscriptionTrialActive,
+    locale,
+    showSubscriptionPeriodMeta,
+    sub?.currentPeriodEnd,
+    sub?.trialEndsAt,
+    t,
+  ]);
+
+  const subscriptionTrialBannerCopy = useMemo(() => {
+    if (!isSubscriptionTrialActive || !sub?.trialEndsAt || !currentPlanRecord) return null;
+    const periodSuffix =
+      currentPlanRecord.billingInterval === "ANNUAL"
+        ? t("billing.perYear")
+        : t("billing.perMonth");
+    return t("billing.subscriptionTrialBanner", {
+      plan: normalizePlanDisplayName(
+        currentPlanRecord.displayName,
+        currentPlanRecord.planKey,
+      ),
+      date: formatBillingMetaDate(sub.trialEndsAt, locale),
+      price: formatPlanPrice(
+        currentPlanRecord.priceAmount,
+        currentPlanRecord.currencyCode,
+        locale,
+      ),
+      period: periodSuffix,
+    });
+  }, [currentPlanRecord, isSubscriptionTrialActive, locale, sub?.trialEndsAt, t]);
 
   const tokenCapacity = billing.availableTokens;
   const usagePercent = getTokenUsagePercent(billing.usedTokens, tokenCapacity);
@@ -864,7 +907,11 @@ export function BillingPage() {
                       {t("billing.summarySubscriptionStatus")}
                     </span>
                     <span className={styles.subscriptionStatusValue}>
-                      {sub ? t(`billing.status.${sub.status}`) : t("billing.noSubscription")}
+                      {sub
+                        ? isSubscriptionTrialActive
+                          ? t("billing.subscriptionTrialStatus")
+                          : t(`billing.status.${sub.status}`)
+                        : t("billing.noSubscription")}
                     </span>
                   </div>
                   <div className={styles.subscriptionPeriodBlock}>
@@ -1034,6 +1081,9 @@ export function BillingPage() {
         {!billing.hasAccess && billing.billingRequired ? (
           <s-banner tone="warning">{t("billing.lowBalanceWarning")}</s-banner>
         ) : null}
+        {subscriptionTrialBannerCopy ? (
+          <s-banner tone="info">{subscriptionTrialBannerCopy}</s-banner>
+        ) : null}
 
         <section className={styles.quotaSection}>
           <div className={styles.usageHeader}>
@@ -1041,6 +1091,9 @@ export function BillingPage() {
               <div className={styles.usageTitleRow}>
                 <h2 className={styles.usageTitle}>{t("billing.quotaTitle")}</h2>
                 <span className={styles.planBadge}>{currentPlanTagLabel}</span>
+                {isSubscriptionTrialActive ? (
+                  <span className={styles.trialBadge}>{t("billing.subscriptionTrialBadge")}</span>
+                ) : null}
                 <button
                   type="button"
                   className={styles.secondaryEntryButton}
@@ -1176,6 +1229,10 @@ export function BillingPage() {
                     interval={interval}
                     isRecommended={isRecommended}
                     isCurrent={isActiveSubscriptionPlan(plan.planKey, sub)}
+                    isTrialCurrent={
+                      isActiveSubscriptionPlan(plan.planKey, sub) &&
+                      isSubscriptionTrialActive
+                    }
                     isPending={isPendingSubscriptionPlan(plan.planKey, sub)}
                     isSubmitting={subscribingPlanKey === plan.planKey}
                     submittingMode={subscribingPlanKey === plan.planKey ? subscribingMode : null}

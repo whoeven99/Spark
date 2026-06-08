@@ -125,12 +125,13 @@ class ToolRegistry {
   }
 
   async getToolsForContext(
-    context: AgentContext
+    context: AgentContext,
+    activeDefs?: ToolDefinition[],
   ): Promise<DynamicStructuredTool[]> {
     const activeTools: DynamicStructuredTool[] = [];
-    const activeDefs = await this.getActiveToolDefinitions(context);
+    const definitions = activeDefs ?? (await this.getActiveToolDefinitions(context));
 
-    for (const def of activeDefs) {
+    for (const def of definitions) {
       try {
         const created = await def.createTool(context);
         const wrap = (tool: DynamicStructuredTool) =>

@@ -159,6 +159,13 @@ export function StreamingAssistantReply({
                 <div style={thinkingDoneStyle}>✓ 思考完成</div>
               ) : null}
 
+              {hasContent && streamingThinkingText ? (
+                <details style={thinkingBlockStyle}>
+                  <summary style={thinkingBlockHeaderStyle}>处理过程</summary>
+                  <div style={thinkingBlockBodyStyle}>{streamingThinkingText}</div>
+                </details>
+              ) : null}
+
               {skillSteps.length > 0 ? <StreamingSkillSteps steps={skillSteps} /> : null}
 
               {streamingText ? (

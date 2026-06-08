@@ -63,7 +63,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         ? await injectFilesIntoMessages(windowedMessages, session.shop, fileIds)
         : windowedMessages;
 
-    const stream = await invokeChatAgentStream({
+    const stream = invokeChatAgentStream({
       messages: messagesWithFiles,
       context: {
         admin,

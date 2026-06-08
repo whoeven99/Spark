@@ -31,11 +31,55 @@ import {
   resolveAgentRunStatus,
   sanitizeHumanInput,
 } from "../../agentRunLog/index.server";
-import { buildReflectionFromRun } from "../../agentRunLog/recentReflection.server";
+import { buildReflectionFromRun, fetchRecentReflectionSummary } from "../../agentRunLog/recentReflection.server";
 import { resolveImageGenerationCardPayload } from "../skills/imageGeneration/imageGeneration.extract";
 import { resolvePictureTranslateCardPayload } from "../skills/pictureTranslate/pictureTranslate.extract";
 import "../skills/index";
 import "../playbooks/index";
+
+// ──────────────────────────────────────────────
+// 轻量内存缓存
+// ──────────────────────────────────────────────
+
+/** 反思摘要缓存：key=shop, value={text, expiresAt} */
+const reflectionCache = new Map<string, { text: string; expiresAt: number }>();
+const REFLECTION_CACHE_TTL_MS = 30_000; // 30 秒
+
+function getCachedReflection(shop: string): string | undefined {
+  const entry = reflectionCache.get(shop);
+  if (!entry) return undefined;
+  if (Date.now() > entry.expiresAt) {
+    reflectionCache.delete(shop);
+    return undefined;
+  }
+  return entry.text;
+}
+
+function setCachedReflection(shop: string, text: string): void {
+  reflectionCache.set(shop, { text, expiresAt: Date.now() + REFLECTION_CACHE_TTL_MS });
+}
+
+/**
+ * 带超时和缓存保护的反思摘要获取。
+ * 超时或失败时静默回退到 undefined，不阻塞聊天流。
+ */
+async function fetchReflectionWithTimeout(shop: string, timeoutMs = 3000): Promise<string | undefined> {
+  const cached = getCachedReflection(shop);
+  if (cached !== undefined) return cached || undefined;
+
+  try {
+    const result = await Promise.race([
+      fetchRecentReflectionSummary(shop),
+      new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), timeoutMs)),
+    ]);
+    const text = result || "";
+    setCachedReflection(shop, text);
+    return text || undefined;
+  } catch {
+    setCachedReflection(shop, "");
+    return undefined;
+  }
+}
 
 export type StreamChunk =
   | { type: "text"; content: string }
@@ -139,114 +183,82 @@ export type InvokeChatAgentStreamParams = {
  * - `messages`：模型 token / 消息块增量
  * - `tools`：工具生命周期事件（映射为 SSE tool_call / tool_result）
  * - `values`：每步完整状态，用于结束时抽取 messages 做表单解析与润色
+ *
+ * ⚡ 性能优化：立即返回 ReadableStream，所有异步 setup 在 stream start 内并行执行，
+ *    首字节发送 "thinking" 状态事件，客户端可立刻展示思考动画。
  */
-export async function invokeChatAgentStream(
+export function invokeChatAgentStream(
   params: InvokeChatAgentStreamParams,
-): Promise<ReadableStream<StreamChunk>> {
+): ReadableStream<StreamChunk> {
   const { messages: agentInputMessages, context, config, sessionName } = params;
 
-  const activeDefs = await globalToolRegistry.getActiveToolDefinitions(context);
-  const atomicTools = await globalToolRegistry.getToolsForContext(context);
-  const activePlaybookDefs = await globalPlaybookRegistry.getActiveDefinitions(context);
-  const playbookTools = await globalPlaybookRegistry.getPlaybookTools(context);
-  const extraTools = [...atomicTools, ...playbookTools];
-  const graph = await buildShopChatGraph(context, extraTools, activeDefs, activePlaybookDefs);
-
+  // ── 同步预计算（不阻塞响应） ──
   const runId = createAgentRunId();
   const startedAtIso = new Date().toISOString();
-  const wallStart = Date.now();
   const shop = context.shop?.trim();
   const appName = "spark";
   const lastUserTextInput = lastHumanUtterance(agentInputMessages);
 
-  const tracer = createLangsmithTracer(sessionName ?? `chat-stream-${runId}`);
-  const runCollector = createRunCollector();
-  const mergedCallbacks = [
-    ...(config?.callbacks
-      ? Array.isArray(config.callbacks)
-        ? config.callbacks
-        : [config.callbacks]
-      : []),
-    tracer,
-    runCollector,
-  ].filter((c): c is NonNullable<typeof c> => c != null);
-
-  const streamConfig: RunnableConfig = {
-    ...config,
-    callbacks: mergedCallbacks,
-    runName: `spark-chat-stream-${runId}`,
-    metadata: {
-      ...(typeof config?.metadata === "object" && config.metadata !== null
-        ? config.metadata
-        : {}),
-      sparkRunId: runId,
-      shop,
-      appName,
-      feature: "chat_stream",
-    },
-  };
-
-  const persistStreamRun = async (params: {
-    status: "success" | "error";
-    resultMessages: BaseMessage[];
-    errorMessage?: string;
-  }) => {
-    if (!shop) {
-      console.warn(
-        `[AgentRunLog] skip chat_stream persist (no shop in context) runId=${runId}`,
-      );
-      return;
-    }
-    if (!isAgentRunLogEnabled()) return;
-    const durationMs = Date.now() - wallStart;
-    const agentUsage = extractTokenUsageFromMessages(params.resultMessages);
-    const tools = extractToolSummariesFromMessages(params.resultMessages);
-    const langsmithRunId = getRootLangsmithRunId(runCollector);
-    await recordAgentRun({
-      runId,
-      shop,
-      appName,
-      feature: "chat_stream",
-      status: resolveAgentRunStatus({
-        explicitStatus: params.status,
-        durationMs,
-      }),
-      startedAt: startedAtIso,
-      durationMs,
-      langsmithRunId,
-      inputSummary: {
-        lastHuman: sanitizeHumanInput(
-          lastHumanUtterance(params.resultMessages) || lastUserTextInput,
-        ),
-      },
-      tools,
-      tokenUsage:
-        agentUsage.totalTokens > 0
-          ? {
-              prompt: agentUsage.inputTokens,
-              completion: agentUsage.outputTokens,
-              total: agentUsage.totalTokens,
-            }
-          : undefined,
-      error: params.errorMessage
-        ? { message: params.errorMessage }
-        : undefined,
-      reflection: buildReflectionFromRun({
-        status: params.status,
-        replyText: params.resultMessages
-          .map((message) => extractMessageText(message))
-          .filter(Boolean)
-          .join("\n"),
-        toolNames: tools.map((tool) => tool.name),
-        errorMessage: params.errorMessage,
-        inputText: lastUserTextInput,
-      }),
-    });
-  };
-
   return new ReadableStream<StreamChunk>({
     async start(controller) {
+      const wallStart = Date.now();
+
+      // ── 立即发送思考状态（首字节延迟最小化） ──
+      controller.enqueue({ type: "status", phase: "thinking" });
+
       const modelName = String(getShopChatModel().model ?? "unknown");
+
+      // ── 并行异步 setup：工具、Playbook、反思摘要 ──
+      const activeDefs = await globalToolRegistry.getActiveToolDefinitions(context);
+      const [
+        atomicTools,
+        activePlaybookDefs,
+        playbookTools,
+        reflectionSummary,
+      ] = await Promise.all([
+        globalToolRegistry.getToolsForContext(context, activeDefs),
+        globalPlaybookRegistry.getActiveDefinitions(context),
+        globalPlaybookRegistry.getPlaybookTools(context),
+        shop ? fetchReflectionWithTimeout(shop) : Promise.resolve(undefined),
+      ]);
+
+      const extraTools = [...atomicTools, ...playbookTools];
+      const graph = await buildShopChatGraph(
+        context,
+        extraTools,
+        activeDefs,
+        activePlaybookDefs,
+        reflectionSummary,
+      );
+
+      // ── tracer / run collector ──
+      const tracer = createLangsmithTracer(sessionName ?? `chat-stream-${runId}`);
+      const runCollector = createRunCollector();
+      const mergedCallbacks = [
+        ...(config?.callbacks
+          ? Array.isArray(config.callbacks)
+            ? config.callbacks
+            : [config.callbacks]
+          : []),
+        tracer,
+        runCollector,
+      ].filter((c): c is NonNullable<typeof c> => c != null);
+
+      const streamConfig: RunnableConfig = {
+        ...config,
+        callbacks: mergedCallbacks,
+        runName: `spark-chat-stream-${runId}`,
+        metadata: {
+          ...(typeof config?.metadata === "object" && config.metadata !== null
+            ? config.metadata
+            : {}),
+          sparkRunId: runId,
+          shop,
+          appName,
+          feature: "chat_stream",
+        },
+      };
+
       const langsmithRunId = () => getRootLangsmithRunId(runCollector);
       const traceMeta = () => {
         const id = langsmithRunId();
@@ -256,9 +268,65 @@ export async function invokeChatAgentStream(
         };
       };
 
-      try {
-        controller.enqueue({ type: "status", phase: "thinking" });
+      const persistStreamRun = async (params: {
+        status: "success" | "error";
+        resultMessages: BaseMessage[];
+        errorMessage?: string;
+      }) => {
+        if (!shop) {
+          console.warn(
+            `[AgentRunLog] skip chat_stream persist (no shop in context) runId=${runId}`,
+          );
+          return;
+        }
+        if (!isAgentRunLogEnabled()) return;
+        const durationMs = Date.now() - wallStart;
+        const agentUsage = extractTokenUsageFromMessages(params.resultMessages);
+        const tools = extractToolSummariesFromMessages(params.resultMessages);
+        const langsmithRunId = getRootLangsmithRunId(runCollector);
+        await recordAgentRun({
+          runId,
+          shop,
+          appName,
+          feature: "chat_stream",
+          status: resolveAgentRunStatus({
+            explicitStatus: params.status,
+            durationMs,
+          }),
+          startedAt: startedAtIso,
+          durationMs,
+          langsmithRunId,
+          inputSummary: {
+            lastHuman: sanitizeHumanInput(
+              lastHumanUtterance(params.resultMessages) || lastUserTextInput,
+            ),
+          },
+          tools,
+          tokenUsage:
+            agentUsage.totalTokens > 0
+              ? {
+                  prompt: agentUsage.inputTokens,
+                  completion: agentUsage.outputTokens,
+                  total: agentUsage.totalTokens,
+                }
+              : undefined,
+          error: params.errorMessage
+            ? { message: params.errorMessage }
+            : undefined,
+          reflection: buildReflectionFromRun({
+            status: params.status,
+            replyText: params.resultMessages
+              .map((message) => extractMessageText(message))
+              .filter(Boolean)
+              .join("\n"),
+            toolNames: tools.map((tool) => tool.name),
+            errorMessage: params.errorMessage,
+            inputText: lastUserTextInput,
+          }),
+        });
+      };
 
+      try {
         context.emitProgress = (event) => {
           controller.enqueue({ type: "skill_progress", event });
         };
@@ -345,7 +413,9 @@ export async function invokeChatAgentStream(
         }
 
         if (!finalReply.trim()) {
-          await persistStreamRun({ status: "success", resultMessages });
+          void persistStreamRun({ status: "success", resultMessages }).catch((err) => {
+            console.error("[AgentRunLog] async persist failed:", err);
+          });
           const fb = await generateFallbackReplyStream(
             lastUserText,
             extractMessagesContext(resultMessages),
@@ -490,11 +560,11 @@ export async function invokeChatAgentStream(
         }
 
         const agentUsage = extractTokenUsageFromMessages(resultMessages);
+        const backgroundWrites: Promise<unknown>[] = [];
         if (shop && agentUsage.totalTokens > 0) {
-          await recordTokenUsage({ shop, usage: agentUsage });
+          backgroundWrites.push(recordTokenUsage({ shop, usage: agentUsage }));
         }
-
-        await persistStreamRun({ status: "success", resultMessages });
+        backgroundWrites.push(persistStreamRun({ status: "success", resultMessages }));
 
         if (finalReply.length > streamedTextAccum.length) {
           const remainder = finalReply.slice(streamedTextAccum.length);
@@ -516,6 +586,13 @@ export async function invokeChatAgentStream(
           },
         });
         controller.close();
+        void Promise.allSettled(backgroundWrites).then((results) => {
+          for (const result of results) {
+            if (result.status === "rejected") {
+              console.error("[ChatStream] background write failed:", result.reason);
+            }
+          }
+        });
       } catch (error) {
         console.error("invokeChatAgentStream:", error);
         const hint =
@@ -524,10 +601,12 @@ export async function invokeChatAgentStream(
             : error instanceof Error
               ? error.message
               : "AI 服务暂时不可用，请稍后重试。";
-        await persistStreamRun({
+        void persistStreamRun({
           status: "error",
           resultMessages: [],
           errorMessage: hint,
+        }).catch((err) => {
+          console.error("[AgentRunLog] async error persist failed:", err);
         });
         controller.enqueue({ type: "error", message: hint });
         controller.enqueue({
