@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { ChatMessage } from "../../../lib/chatMessage";
 import { ChatMessageContent } from "./ChatMessageContent";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
+import { ImageGenerationChatCard } from "./ImageGenerationChatCard";
 import { PictureTranslateChatCard } from "./PictureTranslateChatCard";
 import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard";
 
@@ -17,6 +18,10 @@ type ChatMessagesProps = {
     messageIndex: number,
     detail: { taskId: string; batchId: string },
   ) => void;
+  onImageGenerationCardSuccess?: (
+    messageIndex: number,
+    detail: { taskId: string; batchId: string },
+  ) => void;
 };
 
 export function ChatMessages({
@@ -24,6 +29,7 @@ export function ChatMessages({
   streamingSlot,
   onTranslationCardSuccess,
   onPictureTranslateCardSuccess,
+  onImageGenerationCardSuccess,
 }: ChatMessagesProps) {
   const { t } = useTranslation();
   return (
@@ -34,7 +40,11 @@ export function ChatMessages({
         const hasGenerateDescriptionCard =
           item.role === "assistant" && Boolean(item.productImproveCard);
         const hasPictureTranslateCard =
-          item.role === "assistant" && Boolean(item.pictureTranslateCard);
+          item.role === "assistant" &&
+          (Boolean(item.pictureTranslateCard) || Boolean(item.pictureTranslateFormPayload));
+        const hasImageGenerationCard =
+          item.role === "assistant" &&
+          (Boolean(item.imageGenerationCard) || Boolean(item.imageGenerationFormPayload));
         const imageAttachments =
           item.role === "assistant"
             ? item.attachments?.filter((attachment) => attachment.type === "image") ?? []
@@ -44,6 +54,7 @@ export function ChatMessages({
           hasTranslationCard ||
           hasGenerateDescriptionCard ||
           hasPictureTranslateCard ||
+          hasImageGenerationCard ||
           hasImageAttachments;
 
         const bubbleShellStyle: CSSProperties = {
@@ -82,6 +93,12 @@ export function ChatMessages({
                     </s-badge>
                   </div>
                   <div style={{ marginTop: "0.35rem" }}>
+                    {item.role === "assistant" && item.thinkingContent ? (
+                      <details style={thinkingDetailsStyle}>
+                        <summary style={thinkingSummaryStyle}>查看思考过程</summary>
+                        <div style={thinkingContentStyle}>{item.thinkingContent}</div>
+                      </details>
+                    ) : null}
                     {item.role === "assistant" ? (
                       <ChatMessageContent content={item.content} />
                     ) : (
@@ -154,8 +171,21 @@ export function ChatMessages({
                     <div style={{ marginTop: "0.85rem" }}>
                       <PictureTranslateChatCard
                         embedded
+                        initialFormPayload={item.pictureTranslateFormPayload}
                         onTaskCreated={(taskId, batchId) =>
                           onPictureTranslateCardSuccess(index, { taskId, batchId })
+                        }
+                      />
+                    </div>
+                  ) : null}
+
+                  {hasImageGenerationCard ? (
+                    <div style={{ marginTop: "0.85rem" }}>
+                      <ImageGenerationChatCard
+                        embedded
+                        initialFormPayload={item.imageGenerationFormPayload}
+                        onTaskCreated={(taskId, batchId) =>
+                          onImageGenerationCardSuccess?.(index, { taskId, batchId })
                         }
                       />
                     </div>
@@ -170,3 +200,30 @@ export function ChatMessages({
     </s-stack>
   );
 }
+
+const thinkingDetailsStyle: CSSProperties = {
+  marginBottom: 8,
+  borderRadius: 8,
+  border: "1px solid rgba(44, 110, 203, 0.2)",
+  background: "rgba(44, 110, 203, 0.04)",
+  padding: "6px 10px",
+};
+
+const thinkingSummaryStyle: CSSProperties = {
+  cursor: "pointer",
+  fontSize: 12,
+  color: "rgba(44, 110, 203, 0.8)",
+  fontWeight: 500,
+  userSelect: "none",
+};
+
+const thinkingContentStyle: CSSProperties = {
+  marginTop: 8,
+  fontSize: 13,
+  color: "#61666c",
+  fontStyle: "italic",
+  whiteSpace: "pre-wrap",
+  maxHeight: 220,
+  overflowY: "auto",
+  lineHeight: 1.6,
+};

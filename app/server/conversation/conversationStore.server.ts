@@ -64,6 +64,17 @@ export async function getConversationMessages(conversationId: string, shop: stri
   }));
 }
 
+export async function deleteConversation(conversationId: string, shop: string): Promise<boolean> {
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { shop: true },
+  });
+  if (!conversation || conversation.shop !== shop) return false;
+
+  await prisma.conversation.delete({ where: { id: conversationId } });
+  return true;
+}
+
 export async function appendConversationMessages(params: {
   conversationId: string;
   shop: string;

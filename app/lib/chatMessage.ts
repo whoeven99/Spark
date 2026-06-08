@@ -1,3 +1,5 @@
+import type { ImageGenerationFormPayload } from "./imageGenerationFormPayload";
+import type { PictureTranslateFormPayload } from "./pictureTranslateFormPayload";
 import type { TranslationTaskFormPayload } from "./translationTaskFormPayload";
 
 export type ChatMessageImageAttachment = {
@@ -57,5 +59,10 @@ export type ChatMessage =
       productImproveCard?: boolean;
       /** 为 true 时在气泡内渲染「图片翻译」交互卡片（走 /api/picture-translate-chat）。 */
       pictureTranslateCard?: boolean;
+      pictureTranslateFormPayload?: PictureTranslateFormPayload;
+      /** 为 true 时在气泡内渲染「文生图」交互卡片（走 /api/generate-image）。 */
+      imageGenerationCard?: boolean;
+      imageGenerationFormPayload?: ImageGenerationFormPayload;
       productImproveCardPayload?: ProductImproveCardPayload;
+      thinkingContent?: string;
     };

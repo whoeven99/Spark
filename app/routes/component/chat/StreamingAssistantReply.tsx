@@ -1,10 +1,14 @@
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
+import type { ImageGenerationFormPayload } from "../../../lib/imageGenerationFormPayload";
+import type { PictureTranslateFormPayload } from "../../../lib/pictureTranslateFormPayload";
 import type { ProductImproveCardPayload } from "../../../lib/chatMessage";
 import type { TranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import { ChatMessageContent } from "./ChatMessageContent";
 import { ChatStreamingSkeleton } from "./ChatStreamingSkeleton";
+import { ImageGenerationChatCard } from "./ImageGenerationChatCard";
+import { PictureTranslateChatCard } from "./PictureTranslateChatCard";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
 import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard";
 import {
@@ -16,10 +20,15 @@ type StreamingAssistantReplyProps = {
   active: boolean;
   isStreaming: boolean;
   streamingText: string;
+  streamingThinkingText?: string;
   skillSteps: SkillStepProgress[];
   streamingTranslationForm?: unknown;
   streamingGenerateCard: boolean;
   streamingGeneratePayload?: unknown;
+  streamingPictureTranslateCard?: boolean;
+  streamingPictureTranslatePayload?: unknown;
+  streamingImageGenerationCard?: boolean;
+  streamingImageGenerationPayload?: unknown;
 };
 
 const assistantBubbleShellStyle: CSSProperties = {
@@ -89,10 +98,15 @@ export function StreamingAssistantReply({
   active,
   isStreaming,
   streamingText,
+  streamingThinkingText = "",
   skillSteps,
   streamingTranslationForm,
   streamingGenerateCard,
   streamingGeneratePayload,
+  streamingPictureTranslateCard = false,
+  streamingPictureTranslatePayload,
+  streamingImageGenerationCard = false,
+  streamingImageGenerationPayload,
 }: StreamingAssistantReplyProps) {
   if (!active) return null;
 
@@ -101,13 +115,24 @@ export function StreamingAssistantReply({
     : undefined;
   const streamingProductImprovePayload =
     streamingGeneratePayload as ProductImproveCardPayload | undefined;
+  const streamingPictureTranslateFormPayload =
+    streamingPictureTranslatePayload as PictureTranslateFormPayload | undefined;
+  const streamingImageGenerationFormPayload =
+    streamingImageGenerationPayload as ImageGenerationFormPayload | undefined;
   const hasContent = hasStreamingVisualContent({
     streamingText,
     skillSteps,
     streamingTranslationForm,
     streamingGenerateCard,
+    streamingPictureTranslateCard,
+    streamingImageGenerationCard,
   });
-  const hasEmbeddedCard = Boolean(streamingTranslationPayload || streamingGenerateCard);
+  const hasEmbeddedCard = Boolean(
+    streamingTranslationPayload ||
+      streamingGenerateCard ||
+      streamingPictureTranslateCard ||
+      streamingImageGenerationCard,
+  );
 
   return (
     <div style={{ display: "flex", justifyContent: "flex-start" }}>
@@ -119,10 +144,26 @@ export function StreamingAssistantReply({
             </div>
             <div style={{ marginTop: "0.35rem", minHeight: !hasContent ? "3rem" : undefined }}>
               {!hasContent ? (
-                <div style={thinkingWrapStyle}>
-                  <ThinkingDots />
-                  <ChatStreamingSkeleton />
-                </div>
+                streamingThinkingText ? (
+                  <div style={thinkingBlockStyle}>
+                    <div style={thinkingBlockHeaderStyle}>正在思考…</div>
+                    <div style={thinkingBlockBodyStyle}>{streamingThinkingText}</div>
+                  </div>
+                ) : (
+                  <div style={thinkingWrapStyle}>
+                    <ThinkingDots />
+                    <ChatStreamingSkeleton />
+                  </div>
+                )
+              ) : streamingThinkingText ? (
+                <div style={thinkingDoneStyle}>✓ 思考完成</div>
+              ) : null}
+
+              {hasContent && streamingThinkingText ? (
+                <details style={thinkingBlockStyle}>
+                  <summary style={thinkingBlockHeaderStyle}>处理过程</summary>
+                  <div style={thinkingBlockBodyStyle}>{streamingThinkingText}</div>
+                </details>
               ) : null}
 
               {skillSteps.length > 0 ? <StreamingSkillSteps steps={skillSteps} /> : null}
@@ -149,6 +190,24 @@ export function StreamingAssistantReply({
                   <ProductImproveChatCard embedded initialResult={streamingProductImprovePayload} />
                 </div>
               ) : null}
+
+              {streamingPictureTranslateCard ? (
+                <div style={cardSlotStyle}>
+                  <PictureTranslateChatCard
+                    embedded
+                    initialFormPayload={streamingPictureTranslateFormPayload}
+                  />
+                </div>
+              ) : null}
+
+              {streamingImageGenerationCard ? (
+                <div style={cardSlotStyle}>
+                  <ImageGenerationChatCard
+                    embedded
+                    initialFormPayload={streamingImageGenerationFormPayload}
+                  />
+                </div>
+              ) : null}
             </div>
           </s-box>
         </div>
@@ -160,6 +219,38 @@ export function StreamingAssistantReply({
 const thinkingWrapStyle: CSSProperties = {
   display: "grid",
   gap: 10,
+};
+
+const thinkingBlockStyle: CSSProperties = {
+  borderRadius: 8,
+  border: "1px solid rgba(44, 110, 203, 0.2)",
+  background: "rgba(44, 110, 203, 0.04)",
+  padding: "8px 12px",
+  marginBottom: 6,
+};
+
+const thinkingBlockHeaderStyle: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "rgba(44, 110, 203, 0.8)",
+  marginBottom: 6,
+};
+
+const thinkingBlockBodyStyle: CSSProperties = {
+  fontSize: 13,
+  color: "#61666c",
+  fontStyle: "italic",
+  whiteSpace: "pre-wrap",
+  maxHeight: 180,
+  overflowY: "auto",
+  lineHeight: 1.6,
+};
+
+const thinkingDoneStyle: CSSProperties = {
+  fontSize: 12,
+  color: "#008060",
+  marginBottom: 8,
+  fontWeight: 500,
 };
 
 const thinkingTextStyle: CSSProperties = {

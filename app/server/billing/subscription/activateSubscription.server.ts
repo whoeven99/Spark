@@ -117,9 +117,7 @@ export async function applyActiveSubscription(params: {
     try {
       await sendSubscriptionFeishuNotify({
         shop,
-        appName: "spark",
         planKey,
-        billingInterval,
       });
     } catch (error) {
       console.error(

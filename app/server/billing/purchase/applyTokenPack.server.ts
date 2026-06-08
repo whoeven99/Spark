@@ -43,7 +43,6 @@ export async function applyTokenPackPurchase(params: {
   try {
     await sendTokenPackFeishuNotify({
       shop,
-      appName: "spark",
       planKey: plan.planKey,
     });
   } catch (error) {

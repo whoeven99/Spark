@@ -72,6 +72,10 @@ model Account {
   trialTokens        Int      @default(0)
   /// 本周期累计已用 token（续费清零；续费时用于结算按量包剩余）
   usedTokens         Int      @default(0)
+  /// Shopify 试用期当日已用 token（每日 UTC 0 点重置）
+  trialDailyUsed     Int      @default(0)
+  /// 上次重置 trialDailyUsed 的日期（UTC 0 点）
+  trialDailyResetAt  DateTime?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -518,6 +522,19 @@ model ShopSyncCheckpoint {
   updatedAt    DateTime @updatedAt
 
   @@unique([shop, resource])
+}
+
+/// 工作台上传文件（解析后文本存 Azure Blob，元数据存本表）。
+model WorkspaceFile {
+  id           String   @id @default(cuid())
+  shop         String
+  name         String
+  originalSize Int
+  charCount    Int
+  blobPath     String
+  createdAt    DateTime @default(now())
+
+  @@index([shop, createdAt])
 }
 
 /// AI 对话会话（每条对应一个聊天线程）。

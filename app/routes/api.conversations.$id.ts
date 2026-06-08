@@ -2,6 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import {
   appendConversationMessages,
+  deleteConversation,
   getConversationMessages,
 } from "../server/conversation/conversationStore.server";
 
@@ -12,10 +13,19 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+
+  if (request.method === "DELETE") {
+    const ok = await deleteConversation(params.id!, session.shop);
+    if (!ok) {
+      return Response.json({ error: "Conversation not found" }, { status: 404 });
+    }
+    return Response.json({ ok: true });
+  }
+
   if (request.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
-  const { session } = await authenticate.admin(request);
   const body = (await request.json()) as {
     messages: Array<{ role: string; content: string; payloads?: string | null }>;
     title?: string;

@@ -2,7 +2,7 @@ import type { PlanRecord } from "./billingPageTypes";
 
 export type BillingIntervalView = "MONTHLY" | "ANNUAL";
 
-/** 订阅档位，与 PlanCatalog `planKey` 中段一致（如 `pi_base_monthly`、`gd_pro_annual`）。 */
+/** 订阅档位，与 PlanCatalog `planKey` 中段一致（如 `spark_base_monthly`、`spark_pro_annual`）。 */
 export type PlanTier = "base" | "pro" | "premium";
 
 const TIER_PLAN_KEY_SEGMENT: Record<PlanTier, string> = {
@@ -118,6 +118,7 @@ export function formatTokenUsagePercentDisplay(percent: number): string {
 
 export function planTierFromPlanKey(planKey: string): PlanTier | null {
   if (planKey.includes(TIER_PLAN_KEY_SEGMENT.base)) return "base";
+  if (planKey.includes(TIER_PLAN_KEY_SEGMENT.premium)) return "premium";
   if (planKey.includes(TIER_PLAN_KEY_SEGMENT.pro)) return "pro";
   return null;
 }
@@ -167,6 +168,16 @@ export function isPendingSubscriptionPlan(
 ): boolean {
   if (!subscription) return false;
   return subscription.planKey === planKey && subscription.status === "PENDING";
+}
+
+/** Shopify 订阅处于免费试用期（ACTIVE 且 trialEndsAt 未到期）。 */
+export function isShopifySubscriptionTrialActive(
+  subscription: { status: string; trialEndsAt: string | null } | null,
+  now: Date = new Date(),
+): boolean {
+  if (!subscription || subscription.status !== "ACTIVE") return false;
+  if (!subscription.trialEndsAt) return false;
+  return new Date(subscription.trialEndsAt).getTime() > now.getTime();
 }
 
 export function resolveCurrentPlanLabel(params: {

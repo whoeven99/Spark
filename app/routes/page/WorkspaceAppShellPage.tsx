@@ -9,6 +9,10 @@ import type {
   ChatMessageAttachment,
   ProductImproveCardPayload,
 } from "../../lib/chatMessage";
+import type { ImageGenerationFormPayload } from "../../lib/imageGenerationFormPayload";
+import { coerceImageGenerationFormPayload } from "../../lib/imageGenerationFormPayload";
+import type { PictureTranslateFormPayload } from "../../lib/pictureTranslateFormPayload";
+import { coercePictureTranslateFormPayload } from "../../lib/pictureTranslateFormPayload";
 import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { coerceTranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { ChatMessages } from "../component/chat/ChatMessages";
@@ -16,7 +20,9 @@ import { StreamingAssistantReply } from "../component/chat/StreamingAssistantRep
 import { LanguageSelector } from "../component/common/LanguageSelector";
 import { useChatStream, type ChatStreamFinishPayload, type SkillStepProgress } from "./chat/useChatStream";
 import { ContextWindowIndicator } from "../component/chat/ContextWindowIndicator";
+import { WorkspaceContextObjectPicker } from "../component/chat/WorkspaceContextObjectPicker";
 import { estimateMessagesTokens } from "../../lib/tokenEstimate";
+import type { SelectedShopifyObject } from "../../lib/shopifyObjectTypes";
 
 type WorkspacePanel = "dashboard" | "chat" | "skills" | "automation" | "tasks";
 type AutomationView = "configured" | "history" | "templates";
@@ -34,6 +40,10 @@ type WorkspaceConversationMessage = {
   productImproveCard?: boolean;
   productImproveCardPayload?: ProductImproveCardPayload;
   pictureTranslateCard?: boolean;
+  pictureTranslateFormPayload?: PictureTranslateFormPayload;
+  imageGenerationCard?: boolean;
+  imageGenerationFormPayload?: ImageGenerationFormPayload;
+  thinkingContent?: string;
 };
 
 type ConversationSummary = {
@@ -94,6 +104,10 @@ type LocalFileItem = {
   name: string;
   size: string;
   note: string;
+  /** 服务端上传后返回的真实文件 ID（用于注入 agent 上下文） */
+  serverId: string | null;
+  uploading?: boolean;
+  uploadError?: string;
 };
 
 type RichMediaItem = {
@@ -142,8 +156,8 @@ const objectOptions: Record<ObjectType, ObjectOption[]> = {
 };
 
 const initialLocalFiles: LocalFileItem[] = [
-  { id: "file-1", name: "brand-guideline.pdf", size: "2.3 MB", note: "品牌语气和禁用词说明" },
-  { id: "file-2", name: "product-seo-rules.docx", size: "540 KB", note: "商品标题与描述 SEO 规范" },
+  { id: "file-1", name: "brand-guideline.pdf", size: "2.3 MB", note: "品牌语气和禁用词说明", serverId: null },
+  { id: "file-2", name: "product-seo-rules.docx", size: "540 KB", note: "商品标题与描述 SEO 规范", serverId: null },
 ];
 
 const initialRichMediaItems: RichMediaItem[] = [
@@ -267,8 +281,10 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     article: "",
     order: "",
   });
-  const [selectedObjectsByType, setSelectedObjectsByType] = useState<Record<ObjectType, string[]>>({
-    product: ["prd-1001", "prd-1004"],
+  const [selectedObjectsByType, setSelectedObjectsByType] = useState<
+    Record<ObjectType, SelectedShopifyObject[]>
+  >({
+    product: [],
     article: [],
     order: [],
   });
@@ -279,9 +295,14 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   const {
     isStreaming,
     streamingText,
+    streamingThinkingText,
     streamingTranslationForm,
     streamingGenerateCard,
     streamingGeneratePayload,
+    streamingPictureTranslateCard,
+    streamingPictureTranslatePayload,
+    streamingImageGenerationCard,
+    streamingImageGenerationPayload,
     skillSteps,
     sendMessage: streamConversation,
     prepareStreaming,
@@ -340,6 +361,48 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     switchPanel("chat");
   };
 
+  const removeConversation = async (conversationId: string) => {
+    const authQuery = typeof window !== "undefined" ? window.location.search : "";
+    try {
+      const res = await fetch(`/api/conversations/${conversationId}${authQuery}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        shopify.toast.show("删除对话失败");
+        return;
+      }
+
+      const wasActive = activeConversationId === conversationId;
+      const nextList = conversationList.filter((item) => item.id !== conversationId);
+      setConversationList(nextList);
+      loadedConvIdsRef.current.delete(conversationId);
+      setMessagesByConversation((current) => {
+        const next = { ...current };
+        delete next[conversationId];
+        return next;
+      });
+      setDraftByConversation((current) => {
+        const next = { ...current };
+        delete next[conversationId];
+        return next;
+      });
+
+      if (wasActive) {
+        const nextConversation = nextList[0] ?? null;
+        setActiveConversationId(nextConversation?.id ?? null);
+        if (nextConversation) {
+          switchPanel("chat");
+        } else {
+          switchPanel("dashboard");
+        }
+      }
+      shopify.toast.show("对话已删除");
+    } catch (err) {
+      console.error("[WorkspaceAppShellPage] delete conversation failed:", err);
+      shopify.toast.show("删除对话失败");
+    }
+  };
+
   const createConversation = async () => {
     const authQuery = typeof window !== "undefined" ? window.location.search : "";
     try {
@@ -386,14 +449,14 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     setSelectedMediaIds([]);
   };
 
-  const toggleObjectSelection = (type: ObjectType, objectId: string) => {
+  const toggleObjectSelection = (type: ObjectType, object: SelectedShopifyObject) => {
     setSelectedObjectsByType((current) => {
-      const currentIds = current[type];
+      const currentItems = current[type];
       return {
         ...current,
-        [type]: currentIds.includes(objectId)
-          ? currentIds.filter((id) => id !== objectId)
-          : [...currentIds, objectId],
+        [type]: currentItems.some((item) => item.id === object.id)
+          ? currentItems.filter((item) => item.id !== object.id)
+          : [...currentItems, object],
       };
     });
   };
@@ -406,13 +469,42 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     setSelectedMediaIds((current) => (current.includes(mediaId) ? current.filter((id) => id !== mediaId) : [...current, mediaId]));
   };
 
-  const addLocalFile = (payload: { name: string; note: string }) => {
-    const id = `file-${Date.now()}`;
+  const addLocalFile = async (payload: { file: File; note: string }) => {
+    const localId = `file-${Date.now()}`;
+    const sizeLabel = payload.file.size > 1024 * 1024
+      ? `${(payload.file.size / 1024 / 1024).toFixed(1)} MB`
+      : `${Math.round(payload.file.size / 1024)} KB`;
+
     setLocalFiles((current) => [
-      { id, name: payload.name, note: payload.note || "新上传文件", size: "1.1 MB" },
+      { id: localId, name: payload.file.name, note: payload.note || "已上传", size: sizeLabel, serverId: null, uploading: true },
       ...current,
     ]);
-    setSelectedFileIds((current) => [id, ...current]);
+    setSelectedFileIds((current) => [localId, ...current]);
+
+    try {
+      const authQuery = typeof window !== "undefined" ? window.location.search : "";
+      const formData = new FormData();
+      formData.append("file", payload.file);
+      formData.append("note", payload.note);
+      const res = await fetch(`/api/upload-file${authQuery}`, { method: "POST", body: formData });
+      if (!res.ok) {
+        const errData = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(errData.error ?? `上传失败 (${res.status})`);
+      }
+      const data = (await res.json()) as { id: string };
+      setLocalFiles((current) =>
+        current.map((f) =>
+          f.id === localId ? { ...f, serverId: data.id, uploading: false, uploadError: undefined } : f,
+        ),
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setLocalFiles((current) =>
+        current.map((f) =>
+          f.id === localId ? { ...f, uploading: false, uploadError: msg } : f,
+        ),
+      );
+    }
   };
 
   const addRichMediaItem = (payload: { title: string; kind: RichMediaItem["kind"]; value: string; note: string }) => {
@@ -474,10 +566,15 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
       { role: "user", content: augmentUserMessage(content, contextBlock) },
     ];
 
+    const uploadedFileIds = selectedFileIds
+      .map((id) => localFiles.find((f) => f.id === id)?.serverId)
+      .filter((sid): sid is string => typeof sid === "string");
+
     try {
       const authQuery = typeof window !== "undefined" ? window.location.search : "";
       await streamConversation(apiMessages, {
         url: `/chat-stream${authQuery}`,
+        fileIds: uploadedFileIds,
         onFinish: (payload) => {
           if (epoch !== replyEpochRef.current) return;
 
@@ -571,6 +668,14 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     shopify.toast.show(t("pictureTranslate.submitSuccess"));
   };
 
+  const handleImageGenerationCardSuccess = (
+    _conversationId: string,
+    _messageIndex: number,
+    _detail: { taskId: string; batchId: string },
+  ) => {
+    shopify.toast.show(t("imageGeneration.submitSuccess"));
+  };
+
   useEffect(() => {
     if (!accountMenuOpen) return;
     const handlePointerDown = (event: MouseEvent) => {
@@ -620,18 +725,33 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
               <span style={mutedMetaStyle}>{Math.min(conversationList.length, 50)} / 50</span>
             </div>
             <div style={conversationListStyle}>
-              {conversationList.slice(0, 50).map((conversation) => (
-                <button
-                  key={conversation.id}
-                  type="button"
-                  style={historyItemStyle(activeConversationId === conversation.id)}
-                  onClick={() => openConversation(conversation.id)}
-                >
-                  <span style={historyTitleStyle}>{conversation.title}</span>
-                  <span style={historyPreviewStyle}>{conversation.preview}</span>
-                  <span style={mutedMetaStyle}>{formatRelativeTime(conversation.updatedAt)}</span>
-                </button>
-              ))}
+              {conversationList.slice(0, 50).map((conversation) => {
+                const active = activeConversationId === conversation.id;
+                return (
+                  <div key={conversation.id} style={historyRowStyle}>
+                    <button
+                      type="button"
+                      style={historyItemStyle(active)}
+                      onClick={() => openConversation(conversation.id)}
+                    >
+                      <span style={historyTitleStyle}>{conversation.title}</span>
+                      {conversation.preview ? (
+                        <span style={historyPreviewStyle}>{conversation.preview}</span>
+                      ) : null}
+                      <span style={mutedMetaStyle}>{formatRelativeTime(conversation.updatedAt)}</span>
+                    </button>
+                    <button
+                      type="button"
+                      style={historyDeleteButtonStyle}
+                      aria-label={`删除对话：${conversation.title}`}
+                      title="删除对话"
+                      onClick={() => void removeConversation(conversation.id)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -706,9 +826,14 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             isStreaming={isStreaming}
             showStreamingReply={streamingConversationId === activeConversation.id}
             streamingText={streamingText}
+            streamingThinkingText={streamingThinkingText}
             streamingTranslationForm={streamingTranslationForm}
             streamingGenerateCard={streamingGenerateCard}
             streamingGeneratePayload={streamingGeneratePayload}
+            streamingPictureTranslateCard={streamingPictureTranslateCard}
+            streamingPictureTranslatePayload={streamingPictureTranslatePayload}
+            streamingImageGenerationCard={streamingImageGenerationCard}
+            streamingImageGenerationPayload={streamingImageGenerationPayload}
             skillSteps={skillSteps}
             onAbortStream={() => {
               replyEpochRef.current += 1;
@@ -717,6 +842,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             }}
             onTranslationCardSuccess={handleTranslationCardSuccess}
             onPictureTranslateCardSuccess={handlePictureTranslateCardSuccess}
+            onImageGenerationCardSuccess={handleImageGenerationCardSuccess}
           />
         ) : null}
         {activePanel === "skills" ? <SkillsPanel onOpenTool={(path: string) => navigate(path)} /> : null}
@@ -869,20 +995,26 @@ function ChatPanel({
   isStreaming,
   showStreamingReply,
   streamingText,
+  streamingThinkingText,
   streamingTranslationForm,
   streamingGenerateCard,
   streamingGeneratePayload,
+  streamingPictureTranslateCard,
+  streamingPictureTranslatePayload,
+  streamingImageGenerationCard,
+  streamingImageGenerationPayload,
   skillSteps,
   onAbortStream,
   onTranslationCardSuccess,
   onPictureTranslateCardSuccess,
+  onImageGenerationCardSuccess,
 }: {
   conversation: Conversation;
   messages: WorkspaceConversationMessage[];
   draft: string;
   activeContextTool: ContextTool | null;
   objectQueryByType: Record<ObjectType, string>;
-  selectedObjectsByType: Record<ObjectType, string[]>;
+  selectedObjectsByType: Record<ObjectType, SelectedShopifyObject[]>;
   localFiles: LocalFileItem[];
   richMediaItems: RichMediaItem[];
   selectedFileIds: string[];
@@ -890,10 +1022,10 @@ function ChatPanel({
   onDraftChange: (value: string) => void;
   onContextToolChange: (tool: ContextTool) => void;
   onObjectQueryChange: (type: ObjectType, value: string) => void;
-  onToggleObjectSelection: (type: ObjectType, objectId: string) => void;
+  onToggleObjectSelection: (type: ObjectType, object: SelectedShopifyObject) => void;
   onToggleFileSelection: (fileId: string) => void;
   onToggleMediaSelection: (mediaId: string) => void;
-  onAddLocalFile: (payload: { name: string; note: string }) => void;
+  onAddLocalFile: (payload: { file: File; note: string }) => void;
   onAddRichMediaItem: (payload: { title: string; kind: RichMediaItem["kind"]; value: string; note: string }) => void;
   onCloseToolPicker: () => void;
   onClearToolSelection: (tool: ContextTool) => void;
@@ -902,9 +1034,14 @@ function ChatPanel({
   isStreaming: boolean;
   showStreamingReply: boolean;
   streamingText: string;
+  streamingThinkingText?: string;
   streamingTranslationForm: unknown;
   streamingGenerateCard: boolean;
   streamingGeneratePayload: unknown;
+  streamingPictureTranslateCard: boolean;
+  streamingPictureTranslatePayload: unknown;
+  streamingImageGenerationCard: boolean;
+  streamingImageGenerationPayload: unknown;
   skillSteps: SkillStepProgress[];
   onAbortStream: () => void;
   onTranslationCardSuccess: (
@@ -913,6 +1050,11 @@ function ChatPanel({
     detail: { jobId?: string; jobIds?: string[]; message: string },
   ) => void;
   onPictureTranslateCardSuccess: (
+    conversationId: string,
+    messageIndex: number,
+    detail: { taskId: string; batchId: string },
+  ) => void;
+  onImageGenerationCardSuccess: (
     conversationId: string,
     messageIndex: number,
     detail: { taskId: string; batchId: string },
@@ -926,7 +1068,7 @@ function ChatPanel({
     article: "all",
     order: "all",
   });
-  const [newFileName, setNewFileName] = useState("");
+  const [newFileObj, setNewFileObj] = useState<File | null>(null);
   const [newFileNote, setNewFileNote] = useState("");
   const [newMediaTitle, setNewMediaTitle] = useState("");
   const [newMediaValue, setNewMediaValue] = useState("");
@@ -1037,6 +1179,17 @@ function ChatPanel({
     focusComposerInput();
   }, [conversation.id, isStreaming]);
 
+  useEffect(() => {
+    if (!activeContextTool) return;
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      onCloseToolPicker();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activeContextTool, onCloseToolPicker]);
+
   return (
     <div style={chatLayoutStyle}>
       <section style={{ ...surfaceCardStyle, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -1054,10 +1207,15 @@ function ChatPanel({
                   active={showStreamingReply}
                   isStreaming={isStreaming}
                   streamingText={streamingText}
+                  streamingThinkingText={streamingThinkingText}
                   skillSteps={skillSteps}
                   streamingTranslationForm={streamingTranslationForm}
                   streamingGenerateCard={streamingGenerateCard}
                   streamingGeneratePayload={streamingGeneratePayload}
+                  streamingPictureTranslateCard={streamingPictureTranslateCard}
+                  streamingPictureTranslatePayload={streamingPictureTranslatePayload}
+                  streamingImageGenerationCard={streamingImageGenerationCard}
+                  streamingImageGenerationPayload={streamingImageGenerationPayload}
                 />
               }
               onTranslationCardSuccess={(messageIndex, detail) =>
@@ -1065,6 +1223,9 @@ function ChatPanel({
               }
               onPictureTranslateCardSuccess={(messageIndex, detail) =>
                 onPictureTranslateCardSuccess(conversation.id, messageIndex, detail)
+              }
+              onImageGenerationCardSuccess={(messageIndex, detail) =>
+                onImageGenerationCardSuccess(conversation.id, messageIndex, detail)
               }
             />
           </div>
@@ -1180,24 +1341,36 @@ function ChatPanel({
               </button>
             </div>
 
-            {isObjectType(activeContextTool) ? (
+            {activeContextTool === "product" || activeContextTool === "article" ? (
+              <WorkspaceContextObjectPicker
+                kind={activeContextTool}
+                label={objectTypeLabels[activeContextTool]}
+                query={objectQueryByType[activeContextTool]}
+                onQueryChange={(value) => onObjectQueryChange(activeContextTool, value)}
+                selected={selectedObjectsByType[activeContextTool]}
+                onToggle={(item) => onToggleObjectSelection(activeContextTool, item)}
+                locationSearch={typeof window !== "undefined" ? window.location.search : ""}
+              />
+            ) : null}
+
+            {activeContextTool === "order" ? (
               <>
                 <input
-                  value={objectQueryByType[activeContextTool]}
-                  onChange={(event) => onObjectQueryChange(activeContextTool, event.target.value)}
-                  placeholder={`搜索${objectTypeLabels[activeContextTool]}名称、分类或状态`}
+                  value={objectQueryByType.order}
+                  onChange={(event) => onObjectQueryChange("order", event.target.value)}
+                  placeholder="搜索订单号、站点或状态"
                   style={selectorSearchInputStyle}
                 />
                 <div style={filterChipRowStyle}>
-                  {objectFilterLabels[activeContextTool].map((filter) => (
+                  {objectFilterLabels.order.map((filter) => (
                     <button
                       key={filter.key}
                       type="button"
-                      style={filterChipStyle(activeObjectFilter[activeContextTool] === filter.key)}
+                      style={filterChipStyle(activeObjectFilter.order === filter.key)}
                       onClick={() =>
                         setActiveObjectFilter((current) => ({
                           ...current,
-                          [activeContextTool]: filter.key,
+                          order: filter.key,
                         }))
                       }
                     >
@@ -1207,13 +1380,15 @@ function ChatPanel({
                 </div>
                 <div style={selectorListCompactStyle}>
                   {filteredObjectOptions.map((item) => {
-                    const checked = selectedObjectsByType[activeContextTool].includes(item.id);
+                    const checked = selectedObjectsByType.order.some((selected) => selected.id === item.id);
                     return (
                       <label key={item.id} style={selectorItemStyle(checked)}>
                         <input
                           type="checkbox"
                           checked={checked}
-                          onChange={() => onToggleObjectSelection(activeContextTool, item.id)}
+                          onChange={() =>
+                            onToggleObjectSelection("order", { id: item.id, title: item.title })
+                          }
                         />
                         <div style={selectorItemContentStyle}>
                           <span style={sectionTitleSmallStyle}>{item.title}</span>
@@ -1231,31 +1406,36 @@ function ChatPanel({
               <>
                 <div style={mockCreateBoxStyle}>
                   <input
-                    value={newFileName}
-                    onChange={(event) => setNewFileName(event.target.value)}
-                    placeholder="输入文件名，例如 campaign-brief.pdf"
+                    type="file"
+                    accept=".txt,.md,.pdf,.docx,.csv,.xlsx,.xls,.json"
                     style={selectorSearchInputStyle}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      setNewFileObj(file);
+                    }}
                   />
                   <div style={inlineFieldRowStyle}>
                     <input
                       value={newFileNote}
                       onChange={(event) => setNewFileNote(event.target.value)}
-                      placeholder="补充文件用途说明"
+                      placeholder="补充文件用途说明（可选）"
                       style={compactFieldStyle}
                     />
                     <button
                       type="button"
                       style={ghostButtonStyle}
                       onClick={() => {
-                        const name = newFileName.trim();
-                        if (!name) return;
-                        onAddLocalFile({ name, note: newFileNote.trim() });
-                        setNewFileName("");
+                        if (!newFileObj) return;
+                        void onAddLocalFile({ file: newFileObj, note: newFileNote.trim() });
+                        setNewFileObj(null);
                         setNewFileNote("");
                       }}
                     >
-                      添加文件
+                      上传
                     </button>
+                  </div>
+                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
+                    支持：PDF、DOCX、TXT、MD、CSV、XLSX、JSON，最大 10 MB
                   </div>
                 </div>
                 <div style={selectorListCompactStyle}>
@@ -1263,11 +1443,22 @@ function ChatPanel({
                     const checked = selectedFileIds.includes(file.id);
                     return (
                       <label key={file.id} style={selectorItemStyle(checked)}>
-                        <input type="checkbox" checked={checked} onChange={() => onToggleFileSelection(file.id)} />
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={Boolean(file.uploading)}
+                          onChange={() => onToggleFileSelection(file.id)}
+                        />
                         <div style={selectorItemContentStyle}>
                           <span style={sectionTitleSmallStyle}>{file.name}</span>
                           <span style={sectionTextStyle}>{file.note}</span>
-                          <span style={mutedMetaStyle}>{file.size}</span>
+                          <span style={mutedMetaStyle}>
+                            {file.size}
+                            {file.uploading ? " · 上传中…" : ""}
+                            {file.uploadError ? ` · ⚠ ${file.uploadError}` : ""}
+                            {!file.uploading && !file.uploadError && file.serverId ? " · 已解析" : ""}
+                            {!file.serverId && !file.uploading && !file.uploadError ? " · 示例" : ""}
+                          </span>
                         </div>
                       </label>
                     );
@@ -1572,7 +1763,19 @@ function workspaceMessageToChatMessage(message: WorkspaceConversationMessage): C
     ...(message.productImproveCardPayload
       ? { productImproveCardPayload: message.productImproveCardPayload }
       : {}),
-    ...(message.pictureTranslateCard ? { pictureTranslateCard: true } : {}),
+    ...(message.pictureTranslateCard || message.pictureTranslateFormPayload
+      ? { pictureTranslateCard: true }
+      : {}),
+    ...(message.pictureTranslateFormPayload
+      ? { pictureTranslateFormPayload: message.pictureTranslateFormPayload }
+      : {}),
+    ...(message.imageGenerationCard || message.imageGenerationFormPayload
+      ? { imageGenerationCard: true }
+      : {}),
+    ...(message.imageGenerationFormPayload
+      ? { imageGenerationFormPayload: message.imageGenerationFormPayload }
+      : {}),
+    ...(message.thinkingContent ? { thinkingContent: message.thinkingContent } : {}),
   };
 }
 
@@ -1585,6 +1788,16 @@ function buildAssistantWorkspaceMessage(
     : undefined;
   const hasProductImproveCard =
     payload.productImproveCard || Boolean(payload.productImproveCardPayload);
+  const pictureTranslateFormPayload = payload.pictureTranslateFormPayload
+    ? coercePictureTranslateFormPayload(payload.pictureTranslateFormPayload)
+    : undefined;
+  const hasPictureTranslateCard =
+    payload.pictureTranslateCard || Boolean(pictureTranslateFormPayload);
+  const imageGenerationFormPayload = payload.imageGenerationFormPayload
+    ? coerceImageGenerationFormPayload(payload.imageGenerationFormPayload)
+    : undefined;
+  const hasImageGenerationCard =
+    payload.imageGenerationCard || Boolean(imageGenerationFormPayload);
 
   return {
     role: "assistant",
@@ -1596,6 +1809,15 @@ function buildAssistantWorkspaceMessage(
     ...(payload.productImproveCardPayload
       ? { productImproveCardPayload: payload.productImproveCardPayload as ProductImproveCardPayload }
       : {}),
+    ...(hasPictureTranslateCard ? { pictureTranslateCard: true } : {}),
+    ...(pictureTranslateFormPayload
+      ? { pictureTranslateFormPayload }
+      : {}),
+    ...(hasImageGenerationCard ? { imageGenerationCard: true } : {}),
+    ...(imageGenerationFormPayload
+      ? { imageGenerationFormPayload }
+      : {}),
+    ...(payload.thinkingContent ? { thinkingContent: payload.thinkingContent } : {}),
   };
 }
 
@@ -1622,6 +1844,22 @@ function serializeAssistantPayloads(payload: ChatStreamFinishPayload): string | 
     result.productImproveCard = true;
     if (payload.productImproveCardPayload) result.productImproveCardPayload = payload.productImproveCardPayload;
   }
+  if (payload.pictureTranslateCard || payload.pictureTranslateFormPayload) {
+    result.pictureTranslateCard = true;
+    if (payload.pictureTranslateFormPayload) {
+      result.pictureTranslateFormPayload = coercePictureTranslateFormPayload(
+        payload.pictureTranslateFormPayload,
+      );
+    }
+  }
+  if (payload.imageGenerationCard || payload.imageGenerationFormPayload) {
+    result.imageGenerationCard = true;
+    if (payload.imageGenerationFormPayload) {
+      result.imageGenerationFormPayload = coerceImageGenerationFormPayload(
+        payload.imageGenerationFormPayload,
+      );
+    }
+  }
   return Object.keys(result).length > 0 ? JSON.stringify(result) : null;
 }
 
@@ -1645,11 +1883,31 @@ function dbMessageToUiMessage(msg: {
     ...(extras.productImproveCardPayload
       ? { productImproveCardPayload: extras.productImproveCardPayload as ProductImproveCardPayload }
       : {}),
+    ...(extras.pictureTranslateCard || extras.pictureTranslateFormPayload
+      ? { pictureTranslateCard: true }
+      : {}),
+    ...(extras.pictureTranslateFormPayload
+      ? {
+          pictureTranslateFormPayload: coercePictureTranslateFormPayload(
+            extras.pictureTranslateFormPayload,
+          ),
+        }
+      : {}),
+    ...(extras.imageGenerationCard || extras.imageGenerationFormPayload
+      ? { imageGenerationCard: true }
+      : {}),
+    ...(extras.imageGenerationFormPayload
+      ? {
+          imageGenerationFormPayload: coerceImageGenerationFormPayload(
+            extras.imageGenerationFormPayload,
+          ),
+        }
+      : {}),
   };
 }
 
 function buildWorkspaceContextBlock(params: {
-  selectedObjectsByType: Record<ObjectType, string[]>;
+  selectedObjectsByType: Record<ObjectType, SelectedShopifyObject[]>;
   selectedFileIds: string[];
   selectedMediaIds: string[];
   localFiles: LocalFileItem[];
@@ -1658,12 +1916,10 @@ function buildWorkspaceContextBlock(params: {
   const lines: string[] = [];
 
   for (const type of Object.keys(objectTypeLabels) as ObjectType[]) {
-    const ids = params.selectedObjectsByType[type];
-    if (ids.length === 0) continue;
-    const names = ids.map(
-      (id) => objectOptions[type].find((item) => item.id === id)?.title ?? id,
-    );
-    lines.push(`- ${objectTypeLabels[type]}：${names.join("、")}（共 ${ids.length} 个）`);
+    const items = params.selectedObjectsByType[type];
+    if (items.length === 0) continue;
+    const names = items.map((item) => item.title || item.id);
+    lines.push(`- ${objectTypeLabels[type]}：${names.join("、")}（共 ${items.length} 个）`);
   }
 
   if (params.selectedFileIds.length > 0) {
@@ -1801,12 +2057,18 @@ const navIconStyle: CSSProperties = {
 const sidebarSectionStyle: CSSProperties = { marginTop: 18, display: "flex", flexDirection: "column", gap: 10, minHeight: 0 };
 const sidebarSectionHeadStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, fontWeight: 700, color: "#6d7175", padding: "0 4px" };
 const conversationListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 8, maxHeight: "calc(100vh - 330px)", overflowY: "auto", paddingRight: 2 };
+const historyRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "stretch",
+  gap: 4,
+};
 const historyItemStyle = (active: boolean): CSSProperties => ({
   display: "flex",
   flexDirection: "column",
   gap: 4,
   alignItems: "flex-start",
-  width: "100%",
+  flex: 1,
+  minWidth: 0,
   textAlign: "left",
   border: `1px solid ${active ? "#c9cccf" : "transparent"}`,
   borderRadius: 10,
@@ -1814,6 +2076,19 @@ const historyItemStyle = (active: boolean): CSSProperties => ({
   padding: "10px 12px",
   cursor: "pointer",
 });
+const historyDeleteButtonStyle: CSSProperties = {
+  width: 32,
+  flexShrink: 0,
+  alignSelf: "center",
+  border: "1px solid transparent",
+  borderRadius: 8,
+  background: "transparent",
+  color: "#8c9196",
+  fontSize: 18,
+  lineHeight: 1,
+  cursor: "pointer",
+  padding: 0,
+};
 const historyTitleStyle: CSSProperties = { fontSize: 13, fontWeight: 700, color: "#202223" };
 const historyPreviewStyle: CSSProperties = { fontSize: 12, color: "#61666c", lineHeight: 1.5 };
 const accountMenuWrapStyle: CSSProperties = {
@@ -2069,8 +2344,8 @@ const toolModalBackdropStyle: CSSProperties = {
   zIndex: 30,
 };
 const toolModalCardStyle: CSSProperties = {
-  width: "min(500px, calc(100vw - 48px))",
-  maxHeight: "min(78vh, 720px)",
+  width: "min(720px, calc(100vw - 48px))",
+  maxHeight: "min(82vh, 760px)",
   overflowY: "auto",
   padding: 18,
   borderRadius: 16,

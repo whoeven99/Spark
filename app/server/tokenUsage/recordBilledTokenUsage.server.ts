@@ -1,5 +1,6 @@
 import prisma from "../../db.server";
 import { isBillingEnabled } from "../billing/constants.server";
+import { checkAndIncrementTrialDailyUsage } from "../billing/subscription/trialDailyLimit.server";
 import type { BilledTokenUsageItem } from "./applyTokenBilling.server";
 import { billTokenUsage } from "./applyTokenBilling.server";
 import { recordTokenUsage } from "./recordTokenUsage.server";
@@ -59,6 +60,8 @@ export async function recordBilledTokenUsages(params: {
 
   const usage = sumParsedTokenUsage(positiveItems.map((entry) => entry.billedUsage));
   if (usage.totalTokens <= 0) return 0;
+
+  await checkAndIncrementTrialDailyUsage({ shop, billedTokens: usage.totalTokens });
 
   await recordTokenUsage({ shop, usage });
 

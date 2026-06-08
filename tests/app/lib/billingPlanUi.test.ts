@@ -14,7 +14,7 @@ import type { PlanRecord } from "../../../app/lib/billingPageTypes";
 
 const plans: PlanRecord[] = [
   {
-    planKey: "pi_base_monthly",
+    planKey: "spark_base_monthly",
     kind: "SUBSCRIPTION",
     billingInterval: "MONTHLY",
     displayName: "Base (Monthly)",
@@ -25,7 +25,7 @@ const plans: PlanRecord[] = [
     shopifyPlanName: null,
   },
   {
-    planKey: "pi_pro_annual",
+    planKey: "spark_pro_annual",
     kind: "SUBSCRIPTION",
     billingInterval: "ANNUAL",
     displayName: "Pro (Annual)",
@@ -36,7 +36,7 @@ const plans: PlanRecord[] = [
     shopifyPlanName: null,
   },
   {
-    planKey: "pi_premium_monthly",
+    planKey: "spark_premium_monthly",
     kind: "SUBSCRIPTION",
     billingInterval: "MONTHLY",
     displayName: "Premium (Monthly)",
@@ -71,11 +71,11 @@ describe("token usage percent", () => {
 describe("listSubscriptionPlansForInterval", () => {
   it("返回当前周期的全部订阅", () => {
     expect(listSubscriptionPlansForInterval(plans, "MONTHLY").map((p) => p.planKey)).toEqual([
-      "pi_base_monthly",
-      "pi_premium_monthly",
+      "spark_base_monthly",
+      "spark_premium_monthly",
     ]);
     expect(listSubscriptionPlansForInterval(plans, "ANNUAL").map((p) => p.planKey)).toEqual([
-      "pi_pro_annual",
+      "spark_pro_annual",
     ]);
   });
 });
@@ -83,10 +83,10 @@ describe("listSubscriptionPlansForInterval", () => {
 describe("pickSubscriptionPlan", () => {
   it("按档位与周期选取套餐", () => {
     expect(pickSubscriptionPlan(plans, "MONTHLY", "base")?.planKey).toBe(
-      "pi_base_monthly",
+      "spark_base_monthly",
     );
     expect(pickSubscriptionPlan(plans, "ANNUAL", "pro")?.planKey).toBe(
-      "pi_pro_annual",
+      "spark_pro_annual",
     );
     expect(pickSubscriptionPlan(plans, "ANNUAL", "base")).toBeUndefined();
   });
