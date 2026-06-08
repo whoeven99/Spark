@@ -17,6 +17,13 @@ import { LanguageSelector } from "../component/common/LanguageSelector";
 import { useChatStream, type ChatStreamFinishPayload, type SkillStepProgress } from "./chat/useChatStream";
 import { ContextWindowIndicator } from "../component/chat/ContextWindowIndicator";
 import { estimateMessagesTokens } from "../../lib/tokenEstimate";
+import { useContextResourceSearch } from "../../hooks/useContextResourceSearch";
+import type {
+  ContextResourceItem,
+  ContextResourceSelectionMap,
+  ContextResourceSortDirection,
+  ContextResourceType,
+} from "../../lib/contextResourceTypes";
 
 type WorkspacePanel = "dashboard" | "chat" | "skills" | "automation" | "tasks";
 type AutomationView = "configured" | "history" | "templates";
@@ -82,13 +89,6 @@ type AutomationConfiguredItem = {
   outcome: string;
 };
 
-type ObjectOption = {
-  id: string;
-  title: string;
-  subtitle: string;
-  meta: string;
-};
-
 type LocalFileItem = {
   id: string;
   name: string;
@@ -104,8 +104,6 @@ type RichMediaItem = {
   note: string;
 };
 
-type ObjectFilterKey = "all" | "focus" | "draft" | "issue";
-
 const panelItems: Array<{ key: Exclude<WorkspacePanel, "chat">; label: string; icon: string }> = [
   { key: "dashboard", label: "经营看板", icon: "◫" },
   { key: "skills", label: "技能", icon: "✦" },
@@ -119,28 +117,6 @@ const objectTypeLabels: Record<ObjectType, string> = {
   order: "订单",
 };
 
-const objectOptions: Record<ObjectType, ObjectOption[]> = {
-  product: [
-    { id: "prd-1001", title: "Summer Breeze Dress", subtitle: "女装 / 连衣裙 / 夏季新品", meta: "SKU SB-1001 · 库存 28" },
-    { id: "prd-1002", title: "Cloud Knit Cardigan", subtitle: "女装 / 针织衫 / 低转化", meta: "SKU CK-2020 · 库存 16" },
-    { id: "prd-1003", title: "Travel Mini Bag", subtitle: "配饰 / 包袋 / 高访问", meta: "SKU TB-4402 · 库存 52" },
-    { id: "prd-1004", title: "Linen Resort Shirt", subtitle: "男装 / 衬衫 / 夏季新品", meta: "SKU LR-3011 · 库存 9" },
-    { id: "prd-1005", title: "Weekend Sandals", subtitle: "鞋履 / 凉鞋 / 广告主推", meta: "SKU WS-2201 · 库存 41" },
-  ],
-  article: [
-    { id: "art-201", title: "夏季穿搭趋势指南", subtitle: "Blog / 内容营销 / 已发布", meta: "最近更新 2 天前 · 浏览 1.2k" },
-    { id: "art-202", title: "度假系列面料故事", subtitle: "Blog / 品牌内容 / 草稿", meta: "作者 Luna · 草稿" },
-    { id: "art-203", title: "客户常见尺码问题", subtitle: "Help Center / FAQ", meta: "最近更新 1 周前" },
-    { id: "art-204", title: "新品上市邮件脚本", subtitle: "Campaign / 邮件素材", meta: "最近使用 昨天" },
-  ],
-  order: [
-    { id: "ord-9101", title: "#9101", subtitle: "美国站 / 高客单 / 待发货", meta: "$182.00 · 2 件商品" },
-    { id: "ord-9102", title: "#9102", subtitle: "英国站 / 退款申请", meta: "$64.00 · 退款中" },
-    { id: "ord-9103", title: "#9103", subtitle: "美国站 / 异常履约", meta: "$119.00 · 超时 16h" },
-    { id: "ord-9104", title: "#9104", subtitle: "日本站 / 正常", meta: "$73.00 · 已发货" },
-  ],
-};
-
 const initialLocalFiles: LocalFileItem[] = [
   { id: "file-1", name: "brand-guideline.pdf", size: "2.3 MB", note: "品牌语气和禁用词说明" },
   { id: "file-2", name: "product-seo-rules.docx", size: "540 KB", note: "商品标题与描述 SEO 规范" },
@@ -152,24 +128,44 @@ const initialRichMediaItems: RichMediaItem[] = [
   { id: "media-3", title: "product-demo.mp4", kind: "video", value: "https://cdn.spark.demo/product-demo.mp4", note: "商品讲解视频" },
 ];
 
-const objectFilterLabels: Record<ObjectType, Array<{ key: ObjectFilterKey; label: string }>> = {
+const objectFilterLabels: Record<ObjectType, Array<{ key: string; label: string }>> = {
   product: [
     { key: "all", label: "全部" },
-    { key: "focus", label: "新品" },
-    { key: "draft", label: "低转化" },
-    { key: "issue", label: "高访问" },
+    { key: "active", label: "Active" },
+    { key: "draft", label: "Draft" },
+    { key: "archived", label: "Archived" },
   ],
   article: [
     { key: "all", label: "全部" },
-    { key: "focus", label: "已发布" },
+    { key: "published", label: "已发布" },
     { key: "draft", label: "草稿" },
-    { key: "issue", label: "帮助中心" },
   ],
   order: [
     { key: "all", label: "全部" },
-    { key: "focus", label: "待发货" },
-    { key: "draft", label: "退款中" },
-    { key: "issue", label: "异常" },
+    { key: "paid", label: "已付款" },
+    { key: "unfulfilled", label: "待履约" },
+    { key: "refunded", label: "退款中" },
+  ],
+};
+
+const objectSortOptions: Record<
+  ObjectType,
+  Array<{ key: string; label: string; direction: ContextResourceSortDirection }>
+> = {
+  product: [
+    { key: "updated_at", label: "最近更新", direction: "desc" },
+    { key: "title", label: "标题 A-Z", direction: "asc" },
+    { key: "inventory", label: "库存高到低", direction: "desc" },
+  ],
+  article: [
+    { key: "updated_at", label: "最近更新", direction: "desc" },
+    { key: "published_at", label: "发布时间", direction: "desc" },
+    { key: "title", label: "标题 A-Z", direction: "asc" },
+  ],
+  order: [
+    { key: "created_at", label: "最新创建", direction: "desc" },
+    { key: "processed_at", label: "最近处理", direction: "desc" },
+    { key: "total_price", label: "金额高到低", direction: "desc" },
   ],
 };
 
@@ -267,8 +263,8 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     article: "",
     order: "",
   });
-  const [selectedObjectsByType, setSelectedObjectsByType] = useState<Record<ObjectType, string[]>>({
-    product: ["prd-1001", "prd-1004"],
+  const [selectedObjectsByType, setSelectedObjectsByType] = useState<ContextResourceSelectionMap>({
+    product: [],
     article: [],
     order: [],
   });
@@ -336,6 +332,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   };
 
   const openConversation = (conversationId: string) => {
+    clearContext();
     setActiveConversationId(conversationId);
     switchPanel("chat");
   };
@@ -359,7 +356,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
       setConversationList((current) => [conv, ...current].slice(0, 50));
       setMessagesByConversation((current) => ({ ...current, [conv.id]: [welcomeMsg] }));
       setDraftByConversation((current) => ({ ...current, [conv.id]: "" }));
-      setActiveContextTool(null);
+      clearContext();
       setActiveConversationId(conv.id);
       switchPanel("chat");
     } catch (err) {
@@ -386,14 +383,15 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     setSelectedMediaIds([]);
   };
 
-  const toggleObjectSelection = (type: ObjectType, objectId: string) => {
+  const toggleObjectSelection = (type: ObjectType, item: ContextResourceItem) => {
     setSelectedObjectsByType((current) => {
-      const currentIds = current[type];
+      if (item.type !== type) return current;
+      const currentItems = current[type];
       return {
         ...current,
-        [type]: currentIds.includes(objectId)
-          ? currentIds.filter((id) => id !== objectId)
-          : [...currentIds, objectId],
+        [type]: currentItems.some((currentItem) => currentItem.id === item.id)
+          ? currentItems.filter((currentItem) => currentItem.id !== item.id)
+          : [...currentItems, item],
       };
     });
   };
@@ -882,7 +880,7 @@ function ChatPanel({
   draft: string;
   activeContextTool: ContextTool | null;
   objectQueryByType: Record<ObjectType, string>;
-  selectedObjectsByType: Record<ObjectType, string[]>;
+  selectedObjectsByType: ContextResourceSelectionMap;
   localFiles: LocalFileItem[];
   richMediaItems: RichMediaItem[];
   selectedFileIds: string[];
@@ -890,7 +888,7 @@ function ChatPanel({
   onDraftChange: (value: string) => void;
   onContextToolChange: (tool: ContextTool) => void;
   onObjectQueryChange: (type: ObjectType, value: string) => void;
-  onToggleObjectSelection: (type: ObjectType, objectId: string) => void;
+  onToggleObjectSelection: (type: ObjectType, item: ContextResourceItem) => void;
   onToggleFileSelection: (fileId: string) => void;
   onToggleMediaSelection: (mediaId: string) => void;
   onAddLocalFile: (payload: { name: string; note: string }) => void;
@@ -921,10 +919,15 @@ function ChatPanel({
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [isScrolledUp, setIsScrolledUp] = useState(false);
-  const [activeObjectFilter, setActiveObjectFilter] = useState<Record<ObjectType, ObjectFilterKey>>({
+  const [activeObjectFilter, setActiveObjectFilter] = useState<Record<ObjectType, string>>({
     product: "all",
     article: "all",
     order: "all",
+  });
+  const [activeObjectSort, setActiveObjectSort] = useState<Record<ObjectType, string>>({
+    product: "updated_at:desc",
+    article: "updated_at:desc",
+    order: "created_at:desc",
   });
   const [newFileName, setNewFileName] = useState("");
   const [newFileNote, setNewFileNote] = useState("");
@@ -932,43 +935,49 @@ function ChatPanel({
   const [newMediaValue, setNewMediaValue] = useState("");
   const [newMediaNote, setNewMediaNote] = useState("");
   const [newMediaKind, setNewMediaKind] = useState<RichMediaItem["kind"]>("url");
-  const totalSelectedObjects = Object.values(selectedObjectsByType).reduce((count, ids) => count + ids.length, 0);
+  const totalSelectedObjects = Object.values(selectedObjectsByType).reduce((count, items) => count + items.length, 0);
+  const contextPreviewBlock = useMemo(
+    () =>
+      buildWorkspaceContextBlock({
+        selectedObjectsByType,
+        selectedFileIds,
+        selectedMediaIds,
+        localFiles,
+        richMediaItems,
+      }),
+    [selectedObjectsByType, selectedFileIds, selectedMediaIds, localFiles, richMediaItems],
+  );
   const MAX_CONTEXT_TOKENS = 8000;
   const contextTokens = useMemo(
-    () => estimateMessagesTokens(messages),
-    [messages],
+    () =>
+      estimateMessagesTokens(messages) +
+      (contextPreviewBlock ? estimateMessagesTokens([{ text: contextPreviewBlock }]) : 0),
+    [messages, contextPreviewBlock],
   );
-  const activeObjectOptions = isObjectType(activeContextTool)
-    ? objectOptions[activeContextTool].filter((item) => {
-        const query = objectQueryByType[activeContextTool].trim().toLowerCase();
-        if (!query) return true;
-        return `${item.title} ${item.subtitle} ${item.meta}`.toLowerCase().includes(query);
-      })
-    : [];
-  const filteredObjectOptions = isObjectType(activeContextTool)
-    ? activeObjectOptions.filter((item) => {
-        const filterKey = activeObjectFilter[activeContextTool];
-        if (filterKey === "all") return true;
-        const haystack = `${item.subtitle} ${item.meta}`.toLowerCase();
-        if (activeContextTool === "product") {
-          if (filterKey === "focus") return haystack.includes("夏季新品");
-          if (filterKey === "draft") return haystack.includes("低转化");
-          return haystack.includes("高访问");
-        }
-        if (activeContextTool === "article") {
-          if (filterKey === "focus") return haystack.includes("已发布");
-          if (filterKey === "draft") return haystack.includes("草稿");
-          return haystack.includes("help center");
-        }
-        if (filterKey === "focus") return haystack.includes("待发货");
-        if (filterKey === "draft") return haystack.includes("退款");
-        return haystack.includes("异常");
-      })
-    : [];
+  const activeObjectType: ContextResourceType = isObjectType(activeContextTool) ? activeContextTool : "product";
+  const activeSortValue = activeObjectSort[activeObjectType];
+  const [activeSortKey, activeSortDirection] = activeSortValue.split(":") as [string, ContextResourceSortDirection];
+  const {
+    items: fetchedObjectOptions,
+    pageInfo: objectPageInfo,
+    isLoading: isObjectLoading,
+    errorText: objectErrorText,
+    goToNextPage,
+    goToPreviousPage,
+  } = useContextResourceSearch({
+    enabled: isObjectType(activeContextTool),
+    type: activeObjectType,
+    query: objectQueryByType[activeObjectType],
+    filter: activeObjectFilter[activeObjectType],
+    sort: activeSortKey,
+    direction: activeSortDirection,
+    locationSearch: typeof window !== "undefined" ? window.location.search : "",
+  });
   const filledContextCount =
     (totalSelectedObjects > 0 ? 1 : 0) +
     (selectedFileIds.length > 0 ? 1 : 0) +
     (selectedMediaIds.length > 0 ? 1 : 0);
+  const selectedObjectIds = new Set(selectedObjectsByType[activeObjectType].map((item) => item.id));
   const toolItems: Array<{ key: ContextTool; label: string; icon: string; active: boolean }> = [
     { key: "product", label: selectedObjectsByType.product.length > 0 ? `商品 ${selectedObjectsByType.product.length}` : "商品", icon: "◫", active: activeContextTool === "product" },
     { key: "order", label: selectedObjectsByType.order.length > 0 ? `订单 ${selectedObjectsByType.order.length}` : "订单", icon: "◎", active: activeContextTool === "order" },
@@ -1182,12 +1191,35 @@ function ChatPanel({
 
             {isObjectType(activeContextTool) ? (
               <>
-                <input
-                  value={objectQueryByType[activeContextTool]}
-                  onChange={(event) => onObjectQueryChange(activeContextTool, event.target.value)}
-                  placeholder={`搜索${objectTypeLabels[activeContextTool]}名称、分类或状态`}
-                  style={selectorSearchInputStyle}
-                />
+                <div style={objectToolbarStyle}>
+                  <div style={objectSearchFieldWrapStyle}>
+                    <s-text-field
+                      label={`搜索${objectTypeLabels[activeContextTool]}`}
+                      value={objectQueryByType[activeContextTool]}
+                      onChange={(event) => onObjectQueryChange(activeContextTool, event.currentTarget.value)}
+                      autocomplete="off"
+                    />
+                  </div>
+                  <label style={sortFieldWrapStyle}>
+                    <span style={mutedMetaStyle}>排序</span>
+                    <select
+                      value={activeObjectSort[activeContextTool]}
+                      onChange={(event) =>
+                        setActiveObjectSort((current) => ({
+                          ...current,
+                          [activeContextTool]: event.target.value,
+                        }))
+                      }
+                      style={selectFieldStyle}
+                    >
+                      {objectSortOptions[activeContextTool].map((option) => (
+                        <option key={`${option.key}:${option.direction}`} value={`${option.key}:${option.direction}`}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
                 <div style={filterChipRowStyle}>
                   {objectFilterLabels[activeContextTool].map((filter) => (
                     <button
@@ -1205,24 +1237,65 @@ function ChatPanel({
                     </button>
                   ))}
                 </div>
+                <div style={resourcePickerHintStyle}>
+                  <span style={mutedMetaStyle}>
+                    已连接 Shopify 实时数据，可搜索、筛选并将目标对象直接传给 AI。
+                  </span>
+                  <span style={mutedMetaStyle}>
+                    已选 {selectedObjectsByType[activeContextTool].length} 个
+                  </span>
+                </div>
                 <div style={selectorListCompactStyle}>
-                  {filteredObjectOptions.map((item) => {
-                    const checked = selectedObjectsByType[activeContextTool].includes(item.id);
-                    return (
-                      <label key={item.id} style={selectorItemStyle(checked)}>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => onToggleObjectSelection(activeContextTool, item.id)}
-                        />
-                        <div style={selectorItemContentStyle}>
-                          <span style={sectionTitleSmallStyle}>{item.title}</span>
-                          <span style={sectionTextStyle}>{item.subtitle}</span>
-                          <span style={mutedMetaStyle}>{item.meta}</span>
-                        </div>
-                      </label>
-                    );
-                  })}
+                  {objectErrorText ? (
+                    <div style={pickerInfoBoxStyle("critical")}>{objectErrorText}</div>
+                  ) : null}
+                  {!objectErrorText && isObjectLoading ? (
+                    <div style={pickerInfoBoxStyle("neutral")}>正在加载 Shopify {objectTypeLabels[activeContextTool]}...</div>
+                  ) : null}
+                  {!objectErrorText && !isObjectLoading && fetchedObjectOptions.length === 0 ? (
+                    <div style={pickerInfoBoxStyle("neutral")}>暂无匹配结果，试试调整关键词、筛选器或排序。</div>
+                  ) : null}
+                  {!objectErrorText &&
+                    fetchedObjectOptions.map((item) => {
+                      const checked = selectedObjectIds.has(item.id);
+                      return (
+                        <label key={item.id} style={selectorItemStyle(checked)}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => onToggleObjectSelection(activeContextTool, item)}
+                          />
+                          <div style={resourceItemContentStyle}>
+                            <div style={resourceItemTopRowStyle}>
+                              <span style={sectionTitleSmallStyle}>{item.title}</span>
+                              {item.status ? (
+                                <span style={resourceStatusPillStyle}>{normalizeResourceStatus(item.status)}</span>
+                              ) : null}
+                            </div>
+                            <span style={sectionTextStyle}>{item.subtitle}</span>
+                            <span style={mutedMetaStyle}>{item.meta}</span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                </div>
+                <div style={resourcePaginationStyle}>
+                  <button
+                    type="button"
+                    style={ghostButtonStyle}
+                    onClick={goToPreviousPage}
+                    disabled={!objectPageInfo.hasPreviousPage || isObjectLoading}
+                  >
+                    上一页
+                  </button>
+                  <button
+                    type="button"
+                    style={ghostButtonStyle}
+                    onClick={goToNextPage}
+                    disabled={!objectPageInfo.hasNextPage || isObjectLoading}
+                  >
+                    下一页
+                  </button>
                 </div>
               </>
             ) : null}
@@ -1649,45 +1722,66 @@ function dbMessageToUiMessage(msg: {
 }
 
 function buildWorkspaceContextBlock(params: {
-  selectedObjectsByType: Record<ObjectType, string[]>;
+  selectedObjectsByType: ContextResourceSelectionMap;
   selectedFileIds: string[];
   selectedMediaIds: string[];
   localFiles: LocalFileItem[];
   richMediaItems: RichMediaItem[];
 }): string | null {
-  const lines: string[] = [];
+  const payload: Record<string, unknown> = {};
 
   for (const type of Object.keys(objectTypeLabels) as ObjectType[]) {
-    const ids = params.selectedObjectsByType[type];
-    if (ids.length === 0) continue;
-    const names = ids.map(
-      (id) => objectOptions[type].find((item) => item.id === id)?.title ?? id,
-    );
-    lines.push(`- ${objectTypeLabels[type]}：${names.join("、")}（共 ${ids.length} 个）`);
+    const items = params.selectedObjectsByType[type];
+    if (items.length === 0) continue;
+    payload[type] = items.map((item) => item.promptSummary);
   }
 
   if (params.selectedFileIds.length > 0) {
-    const names = params.selectedFileIds.map(
-      (id) => params.localFiles.find((item) => item.id === id)?.name ?? id,
-    );
-    lines.push(`- 文件：${names.join("、")}（共 ${params.selectedFileIds.length} 个）`);
+    payload.files = params.selectedFileIds.map((id) => {
+      const file = params.localFiles.find((item) => item.id === id);
+      return {
+        id,
+        name: file?.name ?? id,
+        note: file?.note ?? null,
+        size: file?.size ?? null,
+      };
+    });
   }
 
   if (params.selectedMediaIds.length > 0) {
-    const names = params.selectedMediaIds.map(
-      (id) => params.richMediaItems.find((item) => item.id === id)?.title ?? id,
-    );
-    lines.push(`- 富媒体：${names.join("、")}（共 ${params.selectedMediaIds.length} 个）`);
+    payload.richMedia = params.selectedMediaIds.map((id) => {
+      const item = params.richMediaItems.find((media) => media.id === id);
+      return {
+        id,
+        title: item?.title ?? id,
+        kind: item?.kind ?? null,
+        value: item?.value ?? null,
+        note: item?.note ?? null,
+      };
+    });
   }
 
-  if (lines.length === 0) return null;
-  return `[工作台上下文]\n${lines.join("\n")}`;
+  if (Object.keys(payload).length === 0) return null;
+  return [
+    "[工作台目标对象]",
+    "以下对象是用户当前明确指定的目标对象。除非用户明确要求扩大范围，否则请优先围绕这些对象进行分析、生成、比较和回答。",
+    JSON.stringify(payload, null, 2),
+  ].join("\n");
 }
 
 function augmentUserMessage(content: string, contextBlock: string | null) {
   if (!contextBlock) return content;
   return `${contextBlock}\n\n[用户消息]\n${content}`;
 }
+
+function normalizeResourceStatus(status: string) {
+  const normalized = status.toLowerCase();
+  if (normalized === "active" || normalized === "published" || normalized === "paid") return "正常";
+  if (normalized === "draft" || normalized === "unfulfilled") return "待处理";
+  if (normalized === "archived" || normalized === "refunded") return "异常";
+  return status;
+}
+
 function taskStatusLabel(status: TaskStatus) {
   if (status === "executing") return "执行中";
   if (status === "review_required") return "待审核";
@@ -2100,7 +2194,11 @@ const toolModalCloseStyle: CSSProperties = {
   cursor: "pointer",
   flexShrink: 0,
 };
+const objectToolbarStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 160px", gap: 12, alignItems: "end" };
+const objectSearchFieldWrapStyle: CSSProperties = { minWidth: 0 };
+const sortFieldWrapStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 6 };
 const filterChipRowStyle: CSSProperties = { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 };
+const resourcePickerHintStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 12, marginTop: 12, marginBottom: 6 };
 const mockCreateBoxStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
@@ -2151,6 +2249,28 @@ const selectorItemStyle = (checked: boolean): CSSProperties => ({
   background: checked ? "#ffffff" : "#f6f6f7",
 });
 const selectorItemContentStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 4 };
+const resourceItemContentStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 6, minWidth: 0, flex: 1 };
+const resourceItemTopRowStyle: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 };
+const resourceStatusPillStyle: CSSProperties = {
+  padding: "2px 8px",
+  borderRadius: 999,
+  border: "1px solid #dfe3e8",
+  background: "#f6f6f7",
+  color: "#44505c",
+  fontSize: 12,
+  fontWeight: 600,
+  whiteSpace: "nowrap",
+};
+const resourcePaginationStyle: CSSProperties = { display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 };
+const pickerInfoBoxStyle = (tone: "neutral" | "critical"): CSSProperties => ({
+  padding: 12,
+  borderRadius: 12,
+  border: `1px solid ${tone === "critical" ? "#ffd2cc" : "#e1e3e5"}`,
+  background: tone === "critical" ? "#fff1ef" : "#f6f6f7",
+  color: tone === "critical" ? "#8a2e0f" : "#44505c",
+  fontSize: 13,
+  lineHeight: 1.5,
+});
 
 const skillGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16 };
 const skillCardStyle: CSSProperties = { padding: 18, borderRadius: 14, border: "1px solid #e1e3e5", background: "#ffffff", display: "flex", flexDirection: "column", gap: 10 };
