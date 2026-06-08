@@ -18,6 +18,7 @@ import { useShopLocales } from "../../hooks/useShopLocales";
 import { TranslationLocaleFields } from "../component/translation/TranslationLocaleFields";
 import { TranslationModuleMultiSelect } from "../component/translation/TranslationModuleMultiSelect";
 import {
+  PageBackButton,
   PageSurface,
   pageColorTokens,
   pageContentStyle,
@@ -144,7 +145,7 @@ function resolveDisplayStatus(
 
 export function TranslationV4Page() {
   const shopify = useAppBridge();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const loaderData = useLoaderData<typeof loader>();
 
   const query = typeof window !== "undefined" ? window.location.search : "";
@@ -388,6 +389,15 @@ export function TranslationV4Page() {
 
   return (
     <s-page heading="翻译 v4">
+      <div style={pageContentStyle}>
+        <PageBackButton
+          workspaceOnly
+          label={t("common.backToPrevious", {
+            defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回上一页" : "Back",
+          })}
+        />
+      </div>
+
       <div style={pageIntroBannerStyle("translation", { marginBottom: "1.5rem" })}>
         新版翻译系统 — 任务状态持久化，服务重启后自动续跑，支持商品/集合/页面/文章等多模块并行。
       </div>

@@ -25,7 +25,7 @@ import {
   type PlanTier,
 } from "../../lib/billingPlanUi";
 import styles from "../component/billing/billingPage.module.css";
-import { pageContentStyle } from "./pageUiStyles";
+import { PageBackButton, pageContentStyle } from "./pageUiStyles";
 
 const EMPTY = "-";
 const MOCK_PLAN_SUFFIX = "_mock";
@@ -589,6 +589,9 @@ export function BillingPage() {
       : "";
   const { t, i18n } = useTranslation();
   const locale = i18n.language;
+  const backLabel = t("common.backToPrevious", {
+    defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回上一页" : "Back",
+  });
   const mockedBillingPlans = useMemo(
     () =>
       buildMockBillingPlans({
@@ -1076,6 +1079,8 @@ export function BillingPage() {
           minHeight: "auto",
         }}
       >
+        <PageBackButton label={backLabel} workspaceOnly />
+
         {!billing.hasAccess && billing.billingRequired ? (
           <s-banner tone="warning">{t("billing.lowBalanceWarning")}</s-banner>
         ) : null}

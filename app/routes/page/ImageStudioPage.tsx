@@ -15,6 +15,7 @@ import { usePictureTranslateContext } from "../component/pictureTranslate/pictur
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import { DialogShell } from "../component/shared/DialogShell";
 import {
+  PageBackButton,
   PageSectionHeader,
   PageSurface,
   formErrorBoxStyle,
@@ -129,7 +130,7 @@ function ImageStudioPageInner({
   onTaskUpdated,
 }: InnerProps) {
   const shopify = useAppBridge();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const pictureTranslate = usePictureTranslateContext();
   const [generateConfirmOpen, setGenerateConfirmOpen] = useState(false);
   const [translateConfirmOpen, setTranslateConfirmOpen] = useState(false);
@@ -195,6 +196,13 @@ function ImageStudioPageInner({
   return (
     <s-page heading={t("imageStudio.pageTitle")}>
       <div style={pageContentStyle}>
+        <PageBackButton
+          workspaceOnly
+          label={t("common.backToPrevious", {
+            defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回上一页" : "Back",
+          })}
+        />
+
         <PageSectionHeader
           title={t("imageStudio.sectionTitle")}
           subtitle={t("imageStudio.pageSubtitle")}

@@ -344,6 +344,14 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     setSearchParams(next);
   };
 
+  const buildWorkspaceEntryPath = (path: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("panel");
+    next.set("from", "workspace");
+    const serialized = next.toString();
+    return serialized ? `${path}?${serialized}` : path;
+  };
+
   const openConversation = (conversationId: string) => {
     clearContext();
     setActiveConversationId(conversationId);
@@ -738,7 +746,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
                 style={accountMenuItemStyle}
                 onClick={() => {
                   setAccountMenuOpen(false);
-                  navigate("/app/billing");
+                  navigate(buildWorkspaceEntryPath("/app/billing"));
                 }}
               >
                 Billing
@@ -810,7 +818,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             onPictureTranslateCardSuccess={handlePictureTranslateCardSuccess}
           />
         ) : null}
-        {activePanel === "skills" ? <SkillsPanel onOpenTool={(path: string) => navigate(path)} /> : null}
+        {activePanel === "skills" ? <SkillsPanel onOpenTool={(path: string) => navigate(buildWorkspaceEntryPath(path))} /> : null}
         {activePanel === "automation" ? (
           <AutomationPanel activeView={automationView} onChangeView={setAutomationView} />
         ) : null}
