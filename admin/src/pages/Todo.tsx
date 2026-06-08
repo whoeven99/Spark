@@ -209,6 +209,22 @@ export default function Todo() {
     }
   }
 
+  async function updateAssignee(todo: TodoRow, assignee: TodoAssignee | null) {
+    try {
+      await updateTodo(todo.id, {
+        title: todo.title,
+        description: todo.description,
+        assignee,
+        status: todo.status,
+        priority: todo.priority,
+        etaDays: todo.etaDays ?? null,
+      });
+      load();
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
   if (error) return <Alert type="error" message={error} style={{ margin: 24 }} />;
 
   const getTodosFor = (assignee: TodoAssignee | null, status: TodoStatus) =>
@@ -301,6 +317,7 @@ export default function Todo() {
                               onDelete={() => handleDelete(todo.id)}
                               onMove={moveStatus}
                               onEtaDaysChange={updateEtaDays}
+                              onAssigneeChange={updateAssignee}
                             />
                           ))
                         )}
@@ -383,6 +400,7 @@ function TodoCard({
   onDelete,
   onMove,
   onEtaDaysChange,
+  onAssigneeChange,
 }: {
   todo: TodoRow;
   statusRow: typeof STATUS_ROWS[number];
@@ -390,50 +408,42 @@ function TodoCard({
   onDelete: () => void;
   onMove: (todo: TodoRow, status: TodoStatus) => void;
   onEtaDaysChange: (todo: TodoRow, etaDays: number | null) => Promise<void> | void;
+  onAssigneeChange: (todo: TodoRow, assignee: TodoAssignee | null) => Promise<void> | void;
 }) {
   const pri = PRIORITY_CONFIG[todo.priority];
   const [etaDraft, setEtaDraft] = useState<number | null>(todo.etaDays ?? null);
   const [savingEta, setSavingEta] = useState(false);
-  const doingRow = STATUS_ROWS.find((s) => s.key === "doing") ?? STATUS_ROWS[0];
+  const [savingAssignee, setSavingAssignee] = useState(false);
   const currentStatusRow = STATUS_ROWS.find((s) => s.key === todo.status) ?? statusRow;
-  const statusOptionRows = STATUS_ROWS.filter((s) => s.key === "todo" || s.key === "done");
-  const statusOptions: { value: TodoStatus; label: React.ReactNode; disabled?: boolean }[] =
-    todo.status === "doing"
-      ? [doingRow, ...statusOptionRows].map((s) => ({
-          value: s.key,
-          label: (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: s.color,
-                  opacity: 0.85,
-                }}
-              />
-              <span>{s.label}</span>
-            </span>
-          ),
-          disabled: s.key === "doing",
-        }))
-      : statusOptionRows.map((s) => ({
-          value: s.key,
-          label: (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: s.color,
-                  opacity: 0.85,
-                }}
-              />
-              <span>{s.label}</span>
-            </span>
-          ),
-        }));
+  const statusOptions: { value: TodoStatus; label: React.ReactNode }[] = STATUS_ROWS.map((s) => ({
+    value: s.key,
+    label: (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <span
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: s.color,
+            opacity: 0.85,
+          }}
+        />
+        <span>{s.label}</span>
+      </span>
+    ),
+  }));
+
+  const assigneeOptions: { value: TodoAssignee | "__none__"; label: React.ReactNode }[] = [
+    { value: "__none__", label: <span style={{ color: "#94a3b8", fontSize: 11 }}>未分配</span> },
+    ...MEMBERS.map((m) => ({
+      value: m as TodoAssignee,
+      label: (
+        <Tag color={ASSIGNEE_COLORS[m]} style={{ margin: 0, fontSize: 11, lineHeight: "18px" }}>
+          {m.charAt(0).toUpperCase() + m.slice(1)}
+        </Tag>
+      ),
+    })),
+  ];
 
   const normalizeEta = (value: number | null): number | null =>
     value == null || Number.isNaN(value) ? null : Math.max(0, Math.floor(value));
@@ -484,14 +494,15 @@ function TodoCard({
         <Tag style={{ margin: 0, fontSize: 11, color: pri.color, background: pri.bg, borderColor: pri.border }}>{pri.label}</Tag>
         <div
           style={{
-            minWidth: 102,
+            width: 76,
+            flexShrink: 0,
             height: 24,
             border: `1px solid ${currentStatusRow.borderColor}`,
             background: currentStatusRow.bgColor,
             borderRadius: 6,
             display: "flex",
             alignItems: "center",
-            padding: "0 4px",
+            padding: "0 2px",
           }}
         >
           <Select<TodoStatus>
@@ -503,7 +514,7 @@ function TodoCard({
                 onMove(todo, value);
               }
             }}
-            style={{ width: "100%", fontSize: 12, color: "#334155" }}
+            style={{ width: "100%", fontSize: 11, color: "#334155" }}
             popupMatchSelectWidth={false}
             options={statusOptions}
           />
@@ -511,13 +522,13 @@ function TodoCard({
         <div
           style={{
             height: 22,
-            padding: "0 4px",
+            padding: "0 3px",
             border: "1px solid #cbd5e1",
             borderRadius: 6,
             background: "#f8fafc",
             display: "inline-flex",
             alignItems: "center",
-            gap: 4,
+            gap: 2,
             flexShrink: 0,
           }}
         >
@@ -537,11 +548,44 @@ function TodoCard({
             min={0}
             precision={0}
             controls={false}
-            style={{ width: 38 }}
+            style={{ width: 26 }}
             variant="borderless"
             disabled={savingEta}
           />
-          <Typography.Text style={{ fontSize: 11, color: "#64748b" }}>days</Typography.Text>
+          <Typography.Text style={{ fontSize: 10, color: "#64748b" }}>days</Typography.Text>
+        </div>
+        <div
+          style={{
+            width: 72,
+            flexShrink: 0,
+            height: 24,
+            border: "1px solid #e2e8f0",
+            borderRadius: 6,
+            background: "#fff",
+            display: "flex",
+            alignItems: "center",
+            padding: "0 2px",
+          }}
+        >
+          <Select<TodoAssignee | "__none__">
+            size="small"
+            variant="borderless"
+            value={todo.assignee ?? "__none__"}
+            disabled={savingAssignee}
+            onChange={async (value) => {
+              const next = value === "__none__" ? null : value;
+              if (next === (todo.assignee ?? null)) return;
+              setSavingAssignee(true);
+              try {
+                await onAssigneeChange(todo, next);
+              } finally {
+                setSavingAssignee(false);
+              }
+            }}
+            style={{ width: "100%", fontSize: 11 }}
+            popupMatchSelectWidth={false}
+            options={assigneeOptions}
+          />
         </div>
         <Typography.Text type="secondary" style={{ fontSize: 11, marginLeft: "auto" }}>
           {new Date(todo.createdAt).toLocaleDateString("zh-CN")}

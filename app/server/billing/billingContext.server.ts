@@ -12,7 +12,6 @@ import {
 } from "../tokenUsage/accountBalance.server";
 import { isBillingEnabled, isBillingDevCancelEnabled } from "./constants.server";
 import { ensureAccount } from "./account/ensureAccount.server";
-import { grantProductTrialIfEligible } from "./account/grantTrial.server";
 import type {
   BillingAccessSnapshot,
   BillingPageLoaderData,
@@ -159,9 +158,8 @@ export async function loadBillingContext(
   shop: string,
   options?: { grantTrial?: boolean },
 ): Promise<BillingContext> {
-  if (options?.grantTrial !== false && isBillingEnabled()) {
-    await grantProductTrialIfEligible(shop);
-  }
+  // 免费计划已下线，不再自动发放试用积分；存量用户的 trialTokens 保持不变
+  void options;
 
   const account = await ensureAccount(shop);
   const subscription = await prisma.appSubscription.findUnique({
