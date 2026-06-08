@@ -167,11 +167,13 @@ export function useChatStream() {
       messages: ChatMessage[],
       options?: {
         url?: string;
+        fileIds?: string[];
         onFinish?: (payload: ChatStreamFinishPayload) => void;
       },
     ) => {
       const url = options?.url ?? "/chat-stream";
       const onFinish = options?.onFinish;
+      const fileIds = options?.fileIds ?? [];
 
       prepareStreaming();
 
@@ -192,7 +194,7 @@ export function useChatStream() {
         const response = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages }),
+          body: JSON.stringify({ messages, ...(fileIds.length ? { fileIds } : {}) }),
           signal: controller.signal,
         });
 

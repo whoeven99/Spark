@@ -104,6 +104,10 @@ type LocalFileItem = {
   name: string;
   size: string;
   note: string;
+  /** 服务端上传后返回的真实文件 ID（用于注入 agent 上下文） */
+  serverId: string | null;
+  uploading?: boolean;
+  uploadError?: string;
 };
 
 type RichMediaItem = {
@@ -152,8 +156,8 @@ const objectOptions: Record<ObjectType, ObjectOption[]> = {
 };
 
 const initialLocalFiles: LocalFileItem[] = [
-  { id: "file-1", name: "brand-guideline.pdf", size: "2.3 MB", note: "品牌语气和禁用词说明" },
-  { id: "file-2", name: "product-seo-rules.docx", size: "540 KB", note: "商品标题与描述 SEO 规范" },
+  { id: "file-1", name: "brand-guideline.pdf", size: "2.3 MB", note: "品牌语气和禁用词说明", serverId: null },
+  { id: "file-2", name: "product-seo-rules.docx", size: "540 KB", note: "商品标题与描述 SEO 规范", serverId: null },
 ];
 
 const initialRichMediaItems: RichMediaItem[] = [
@@ -465,13 +469,42 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     setSelectedMediaIds((current) => (current.includes(mediaId) ? current.filter((id) => id !== mediaId) : [...current, mediaId]));
   };
 
-  const addLocalFile = (payload: { name: string; note: string }) => {
-    const id = `file-${Date.now()}`;
+  const addLocalFile = async (payload: { file: File; note: string }) => {
+    const localId = `file-${Date.now()}`;
+    const sizeLabel = payload.file.size > 1024 * 1024
+      ? `${(payload.file.size / 1024 / 1024).toFixed(1)} MB`
+      : `${Math.round(payload.file.size / 1024)} KB`;
+
     setLocalFiles((current) => [
-      { id, name: payload.name, note: payload.note || "新上传文件", size: "1.1 MB" },
+      { id: localId, name: payload.file.name, note: payload.note || "已上传", size: sizeLabel, serverId: null, uploading: true },
       ...current,
     ]);
-    setSelectedFileIds((current) => [id, ...current]);
+    setSelectedFileIds((current) => [localId, ...current]);
+
+    try {
+      const authQuery = typeof window !== "undefined" ? window.location.search : "";
+      const formData = new FormData();
+      formData.append("file", payload.file);
+      formData.append("note", payload.note);
+      const res = await fetch(`/api/upload-file${authQuery}`, { method: "POST", body: formData });
+      if (!res.ok) {
+        const errData = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(errData.error ?? `上传失败 (${res.status})`);
+      }
+      const data = (await res.json()) as { id: string };
+      setLocalFiles((current) =>
+        current.map((f) =>
+          f.id === localId ? { ...f, serverId: data.id, uploading: false, uploadError: undefined } : f,
+        ),
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setLocalFiles((current) =>
+        current.map((f) =>
+          f.id === localId ? { ...f, uploading: false, uploadError: msg } : f,
+        ),
+      );
+    }
   };
 
   const addRichMediaItem = (payload: { title: string; kind: RichMediaItem["kind"]; value: string; note: string }) => {
@@ -533,10 +566,15 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
       { role: "user", content: augmentUserMessage(content, contextBlock) },
     ];
 
+    const uploadedFileIds = selectedFileIds
+      .map((id) => localFiles.find((f) => f.id === id)?.serverId)
+      .filter((sid): sid is string => typeof sid === "string");
+
     try {
       const authQuery = typeof window !== "undefined" ? window.location.search : "";
       await streamConversation(apiMessages, {
         url: `/chat-stream${authQuery}`,
+        fileIds: uploadedFileIds,
         onFinish: (payload) => {
           if (epoch !== replyEpochRef.current) return;
 
@@ -987,7 +1025,7 @@ function ChatPanel({
   onToggleObjectSelection: (type: ObjectType, object: SelectedShopifyObject) => void;
   onToggleFileSelection: (fileId: string) => void;
   onToggleMediaSelection: (mediaId: string) => void;
-  onAddLocalFile: (payload: { name: string; note: string }) => void;
+  onAddLocalFile: (payload: { file: File; note: string }) => void;
   onAddRichMediaItem: (payload: { title: string; kind: RichMediaItem["kind"]; value: string; note: string }) => void;
   onCloseToolPicker: () => void;
   onClearToolSelection: (tool: ContextTool) => void;
@@ -1030,7 +1068,7 @@ function ChatPanel({
     article: "all",
     order: "all",
   });
-  const [newFileName, setNewFileName] = useState("");
+  const [newFileObj, setNewFileObj] = useState<File | null>(null);
   const [newFileNote, setNewFileNote] = useState("");
   const [newMediaTitle, setNewMediaTitle] = useState("");
   const [newMediaValue, setNewMediaValue] = useState("");
@@ -1368,31 +1406,36 @@ function ChatPanel({
               <>
                 <div style={mockCreateBoxStyle}>
                   <input
-                    value={newFileName}
-                    onChange={(event) => setNewFileName(event.target.value)}
-                    placeholder="输入文件名，例如 campaign-brief.pdf"
+                    type="file"
+                    accept=".txt,.md,.pdf,.docx,.csv,.xlsx,.xls,.json"
                     style={selectorSearchInputStyle}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      setNewFileObj(file);
+                    }}
                   />
                   <div style={inlineFieldRowStyle}>
                     <input
                       value={newFileNote}
                       onChange={(event) => setNewFileNote(event.target.value)}
-                      placeholder="补充文件用途说明"
+                      placeholder="补充文件用途说明（可选）"
                       style={compactFieldStyle}
                     />
                     <button
                       type="button"
                       style={ghostButtonStyle}
                       onClick={() => {
-                        const name = newFileName.trim();
-                        if (!name) return;
-                        onAddLocalFile({ name, note: newFileNote.trim() });
-                        setNewFileName("");
+                        if (!newFileObj) return;
+                        void onAddLocalFile({ file: newFileObj, note: newFileNote.trim() });
+                        setNewFileObj(null);
                         setNewFileNote("");
                       }}
                     >
-                      添加文件
+                      上传
                     </button>
+                  </div>
+                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
+                    支持：PDF、DOCX、TXT、MD、CSV、XLSX、JSON，最大 10 MB
                   </div>
                 </div>
                 <div style={selectorListCompactStyle}>
@@ -1400,11 +1443,22 @@ function ChatPanel({
                     const checked = selectedFileIds.includes(file.id);
                     return (
                       <label key={file.id} style={selectorItemStyle(checked)}>
-                        <input type="checkbox" checked={checked} onChange={() => onToggleFileSelection(file.id)} />
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={Boolean(file.uploading)}
+                          onChange={() => onToggleFileSelection(file.id)}
+                        />
                         <div style={selectorItemContentStyle}>
                           <span style={sectionTitleSmallStyle}>{file.name}</span>
                           <span style={sectionTextStyle}>{file.note}</span>
-                          <span style={mutedMetaStyle}>{file.size}</span>
+                          <span style={mutedMetaStyle}>
+                            {file.size}
+                            {file.uploading ? " · 上传中…" : ""}
+                            {file.uploadError ? ` · ⚠ ${file.uploadError}` : ""}
+                            {!file.uploading && !file.uploadError && file.serverId ? " · 已解析" : ""}
+                            {!file.serverId && !file.uploading && !file.uploadError ? " · 示例" : ""}
+                          </span>
                         </div>
                       </label>
                     );

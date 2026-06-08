@@ -524,6 +524,19 @@ model ShopSyncCheckpoint {
   @@unique([shop, resource])
 }
 
+/// 工作台上传文件（解析后文本存 Azure Blob，元数据存本表）。
+model WorkspaceFile {
+  id           String   @id @default(cuid())
+  shop         String
+  name         String
+  originalSize Int
+  charCount    Int
+  blobPath     String
+  createdAt    DateTime @default(now())
+
+  @@index([shop, createdAt])
+}
+
 /// AI 对话会话（每条对应一个聊天线程）。
 model Conversation {
   id        String    @id @default(cuid())
