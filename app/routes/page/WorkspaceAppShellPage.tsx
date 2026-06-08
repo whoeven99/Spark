@@ -106,6 +106,7 @@ type LocalFileItem = {
   note: string;
   /** 服务端上传后返回的真实文件 ID（用于注入 agent 上下文） */
   serverId: string | null;
+  charCount?: number;
   uploading?: boolean;
   uploadError?: string;
 };
@@ -491,10 +492,12 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
         const errData = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(errData.error ?? `上传失败 (${res.status})`);
       }
-      const data = (await res.json()) as { id: string };
+      const data = (await res.json()) as { id: string; charCount?: number };
       setLocalFiles((current) =>
         current.map((f) =>
-          f.id === localId ? { ...f, serverId: data.id, uploading: false, uploadError: undefined } : f,
+          f.id === localId
+            ? { ...f, serverId: data.id, charCount: data.charCount, uploading: false, uploadError: undefined }
+            : f,
         ),
       );
     } catch (err) {
@@ -505,6 +508,14 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
         ),
       );
     }
+  };
+
+  const deleteLocalFile = async (localId: string, serverId: string | null) => {
+    setLocalFiles((current) => current.filter((f) => f.id !== localId));
+    setSelectedFileIds((current) => current.filter((id) => id !== localId));
+    if (!serverId) return;
+    const authQuery = typeof window !== "undefined" ? window.location.search : "";
+    await fetch(`/api/files/${serverId}/delete${authQuery}`, { method: "DELETE" }).catch(() => {});
   };
 
   const addRichMediaItem = (payload: { title: string; kind: RichMediaItem["kind"]; value: string; note: string }) => {
@@ -818,6 +829,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             onToggleFileSelection={toggleFileSelection}
             onToggleMediaSelection={toggleMediaSelection}
             onAddLocalFile={addLocalFile}
+            onDeleteLocalFile={deleteLocalFile}
             onAddRichMediaItem={addRichMediaItem}
             onCloseToolPicker={() => setActiveContextTool(null)}
             onClearToolSelection={clearToolSelection}
@@ -987,6 +999,7 @@ function ChatPanel({
   onToggleFileSelection,
   onToggleMediaSelection,
   onAddLocalFile,
+  onDeleteLocalFile,
   onAddRichMediaItem,
   onCloseToolPicker,
   onClearToolSelection,
@@ -1026,6 +1039,7 @@ function ChatPanel({
   onToggleFileSelection: (fileId: string) => void;
   onToggleMediaSelection: (mediaId: string) => void;
   onAddLocalFile: (payload: { file: File; note: string }) => void;
+  onDeleteLocalFile: (localId: string, serverId: string | null) => void;
   onAddRichMediaItem: (payload: { title: string; kind: RichMediaItem["kind"]; value: string; note: string }) => void;
   onCloseToolPicker: () => void;
   onClearToolSelection: (tool: ContextTool) => void;
@@ -1441,6 +1455,7 @@ function ChatPanel({
                 <div style={selectorListCompactStyle}>
                   {localFiles.map((file) => {
                     const checked = selectedFileIds.includes(file.id);
+                    const authQuery = typeof window !== "undefined" ? window.location.search : "";
                     return (
                       <label key={file.id} style={selectorItemStyle(checked)}>
                         <input
@@ -1456,9 +1471,33 @@ function ChatPanel({
                             {file.size}
                             {file.uploading ? " · 上传中…" : ""}
                             {file.uploadError ? ` · ⚠ ${file.uploadError}` : ""}
-                            {!file.uploading && !file.uploadError && file.serverId ? " · 已解析" : ""}
+                            {!file.uploading && !file.uploadError && file.serverId ? ` · 已解析 ${file.charCount ? `(${(file.charCount / 1000).toFixed(0)}k 字符)` : ""}` : ""}
                             {!file.serverId && !file.uploading && !file.uploadError ? " · 示例" : ""}
                           </span>
+                          {file.serverId && !file.uploading ? (
+                            <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                              <a
+                                href={`/api/files/${file.serverId}${authQuery}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ fontSize: 11, color: "rgba(44,110,203,0.8)" }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                下载原始文件
+                              </a>
+                              <button
+                                type="button"
+                                style={{ fontSize: 11, color: "#d72c0d", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  void onDeleteLocalFile(file.id, file.serverId);
+                                }}
+                              >
+                                删除
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
                       </label>
                     );

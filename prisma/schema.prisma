@@ -524,15 +524,19 @@ model ShopSyncCheckpoint {
   @@unique([shop, resource])
 }
 
-/// 工作台上传文件（解析后文本存 Azure Blob，元数据存本表）。
+/// 工作台上传文件（原始文件 + 解析文本均存 Azure Blob，元数据存本表）。
 model WorkspaceFile {
-  id           String   @id @default(cuid())
-  shop         String
-  name         String
-  originalSize Int
-  charCount    Int
-  blobPath     String
-  createdAt    DateTime @default(now())
+  id               String   @id @default(cuid())
+  shop             String
+  name             String
+  mimeType         String   @default("")
+  originalSize     Int
+  charCount        Int
+  /// 解析后文本的 Blob 路径
+  blobPath         String
+  /// 原始文件的 Blob 路径（用于下载）
+  originalBlobPath String   @default("")
+  createdAt        DateTime @default(now())
 
   @@index([shop, createdAt])
 }

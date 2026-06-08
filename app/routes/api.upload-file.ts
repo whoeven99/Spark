@@ -60,7 +60,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       shop,
       fileId,
       name: file.name,
+      mimeType: file.type || "application/octet-stream",
       text: parsed.text,
+      originalBytes: buffer,
       originalSize: file.size,
       charCount: parsed.charCount,
     });
