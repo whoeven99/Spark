@@ -114,6 +114,21 @@ export function ensureWorkerEnv(): void {
     ["AZURE_BLOB_CONNECTION_STRING", blobConn],
     ["AZURE_BLOB_TRANSLATION_CONTAINER", process.env.AZURE_BLOB_TRANSLATION_CONTAINER, "translation-content"],
   ]);
+  const tursoTarget = (process.env.TURSO_TARGET?.trim() || process.env.NODE_ENV || "test").toLowerCase();
+  const tursoTestOk = Boolean(
+    process.env.TURSO_TEST_DATABASE_URL?.trim() && process.env.TURSO_TEST_AUTH_TOKEN?.trim(),
+  );
+  const tursoProdOk = Boolean(
+    process.env.TURSO_PROD_DATABASE_URL?.trim() && process.env.TURSO_PROD_AUTH_TOKEN?.trim(),
+  );
+  logEnvCheck("Turso (Session)", tursoTestOk || tursoProdOk, [
+    ["TURSO_TARGET", process.env.TURSO_TARGET, tursoTarget.includes("prod") ? "prod" : "test"],
+    ["TURSO_TEST_DATABASE_URL", process.env.TURSO_TEST_DATABASE_URL],
+    ["TURSO_TEST_AUTH_TOKEN", process.env.TURSO_TEST_AUTH_TOKEN],
+    ["TURSO_PROD_DATABASE_URL", process.env.TURSO_PROD_DATABASE_URL],
+    ["TURSO_PROD_AUTH_TOKEN", process.env.TURSO_PROD_AUTH_TOKEN],
+  ]);
+
   logEnvCheck("LLM (DeepSeek)", Boolean(process.env.DEEPSEEK_API_KEY?.trim()), [
     ["DEEPSEEK_API_KEY", process.env.DEEPSEEK_API_KEY],
     ["DEEPSEEK_BASE_URL", process.env.DEEPSEEK_BASE_URL, "https://api.deepseek.com"],

@@ -1,4 +1,5 @@
 /** Maps our module names to Shopify's TranslatableResourceType enum values */
+import { getShopAccessToken, invalidateShopAccessTokenCache } from "./shopAccessToken.js";
 import { shouldIncludeFieldV2 } from "./translationFilter.js";
 
 export const MODULE_TO_SHOPIFY_TYPE: Record<string, string> = {
@@ -237,13 +238,21 @@ const MODULE_ID_QUERY: Record<string, { gql: string; connectionKey: string }> = 
  *    fetching (init) and parallel resource writes (writeback) from exhausting
  *    the bucket before Shopify issues a 429.
  */
+type ShopifyGraphqlOpts = {
+  retries?: number;
+  /** 401 后已从 Session 刷新 token 并重试过一次 */
+  tokenRetried?: boolean;
+};
+
 async function shopifyGraphql(
   shopDomain: string,
-  accessToken: string,
+  legacyAccessToken: string,
   query: string,
   variables: Record<string, unknown>,
-  _retries = 4,
+  opts: ShopifyGraphqlOpts = {},
 ): Promise<unknown> {
+  const retries = opts.retries ?? 4;
+  const accessToken = await getShopAccessToken(shopDomain, legacyAccessToken);
   const url = `https://${shopDomain}/admin/api/2024-01/graphql.json`;
   const resp = await fetch(url, {
     method: "POST",
@@ -256,16 +265,34 @@ async function shopifyGraphql(
 
   // ── 429: bucket exhausted ─────────────────────────────────────────────────
   if (resp.status === 429) {
-    if (_retries <= 0) {
+    if (retries <= 0) {
       throw new Error(`Shopify GraphQL 429: rate limited (retries exhausted)`);
     }
     const retryAfterSec = Number(resp.headers.get("Retry-After") ?? "2");
     const waitMs = Math.max(retryAfterSec * 1000, 1_000);
     console.warn(
-      `[shopifyFetch] 429 on ${shopDomain} — waiting ${waitMs}ms (retries left: ${_retries - 1})`,
+      `[shopifyFetch] 429 on ${shopDomain} — waiting ${waitMs}ms (retries left: ${retries - 1})`,
     );
     await new Promise((r) => setTimeout(r, waitMs));
-    return shopifyGraphql(shopDomain, accessToken, query, variables, _retries - 1);
+    return shopifyGraphql(shopDomain, legacyAccessToken, query, variables, {
+      ...opts,
+      retries: retries - 1,
+    });
+  }
+
+  if (resp.status === 401) {
+    const body = await resp.text();
+    if (!opts.tokenRetried) {
+      invalidateShopAccessTokenCache(shopDomain);
+      console.warn(`[shopifyFetch] 401 on ${shopDomain} — reloading token from Session`);
+      return shopifyGraphql(shopDomain, legacyAccessToken, query, variables, {
+        ...opts,
+        tokenRetried: true,
+      });
+    }
+    throw new Error(
+      `Shopify GraphQL HTTP 401: ${body} (请重新打开 App 完成授权)`,
+    );
   }
 
   if (!resp.ok) {
