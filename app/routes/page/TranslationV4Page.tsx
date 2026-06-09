@@ -14,6 +14,10 @@ import {
   type TranslationV4Job,
   type TranslationV4Status,
 } from "../../server/translation/v4/types";
+import {
+  formatV4JobTimeLine,
+  TRANSLATION_V4_UNIT_LABEL,
+} from "../../lib/translationV4Display";
 import { resolveResumeV4JobStatus } from "../../server/translation/v4/resumeV4JobStatus";
 import { useShopLocales } from "../../hooks/useShopLocales";
 import { TranslationLocaleFields } from "../component/translation/TranslationLocaleFields";
@@ -555,6 +559,9 @@ function JobCard({ job, status, progress, onAction }: JobCardProps) {
               <> · <span style={{ color: pageColorTokens.brandBlue, fontWeight: 600 }}>{(metrics.usedTokens ?? 0).toLocaleString()} tokens</span></>
             )}
           </div>
+          <div style={{ fontSize: "0.75rem", color: pageColorTokens.textFootnote, marginTop: 2 }}>
+            {formatV4JobTimeLine(job, status)}
+          </div>
         </div>
         <div style={{ display: "flex", gap: "0.5rem" }}>
           {isActive && (
@@ -582,15 +589,28 @@ function JobCard({ job, status, progress, onAction }: JobCardProps) {
           detailLabel={
             metrics.translateUnitTotal > 0 ? (
               <>
-                资源 {metrics.translateDone}/{metrics.translateTotal} · 节点{" "}
-                <AnimatedNumber value={metrics.translateUnitDone} />/{metrics.translateUnitTotal}
+                {TRANSLATION_V4_UNIT_LABEL}{" "}
+                <AnimatedNumber value={metrics.translateUnitDone} />/
+                {metrics.translateUnitTotal} · {metrics.translateDone}/{metrics.translateTotal}
               </>
             ) : undefined
           }
         />
         <StageBar label="回写" done={metrics.writebackDone} total={metrics.writebackTotal} active={status === "WRITING_BACK"} complete={["VERIFY_QUEUED","VERIFYING","COMPLETED"].includes(status)} failed={metrics.writebackFailed} />
         {(metrics.verifyTotal > 0 || ["VERIFY_QUEUED","VERIFYING"].includes(status)) && (
-          <StageBar label="验证" done={metrics.verifyDone} total={metrics.verifyTotal} active={status === "VERIFYING"} complete={status === "COMPLETED" && metrics.verifyTotal > 0} failed={metrics.verifyFailed} />
+          <StageBar
+            label="验证"
+            done={metrics.verifyDone}
+            total={metrics.verifyTotal}
+            active={status === "VERIFYING"}
+            complete={status === "COMPLETED" && metrics.verifyTotal > 0}
+            failed={metrics.verifyFailed}
+            detailLabel={
+              metrics.writebackTotal > 0 && metrics.verifyTotal < metrics.writebackTotal
+                ? `${metrics.verifyDone}/${metrics.verifyTotal}（有译文变更）`
+                : undefined
+            }
+          />
         )}
       </div>
 
