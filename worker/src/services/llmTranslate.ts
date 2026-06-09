@@ -68,14 +68,26 @@ class EWMA {
   get value(): number { return this._v; }
 }
 
-// ── Rate-limit header names (lowercase; fetch normalises automatically) ──────
+/** Copy fetch Response headers into a lowercase-key record for the pool. */
+function responseHeadersToRecord(response: Response): Record<string, string> {
+  const out: Record<string, string> = {};
+  response.headers.forEach((value, name) => {
+    out[name.toLowerCase()] = value;
+  });
+  return out;
+}
 
-const RL_HEADERS = [
-  "x-ratelimit-limit-requests",   "x-ratelimit-remaining-requests", "x-ratelimit-reset-requests",
-  "x-ratelimit-limit-tokens",     "x-ratelimit-remaining-tokens",   "x-ratelimit-reset-tokens",
-  // bare fallbacks (some providers omit the -requests/-tokens suffix)
-  "x-ratelimit-limit",            "x-ratelimit-remaining",          "x-ratelimit-reset",
-] as const;
+/**
+ * Normalise provider-specific reset headers.
+ * - OpenAI suffixed headers (`x-ratelimit-reset-requests`) → seconds until reset.
+ * - DeepSeek bare `x-ratelimit-reset` → Unix epoch seconds (see user-facing docs).
+ */
+function parseRateLimitResetMs(raw: number | undefined, now: number): number | undefined {
+  if (raw == null || Number.isNaN(raw)) return undefined;
+  if (raw >= 1_000_000_000_000) return raw;
+  if (raw >= 1_000_000_000) return raw * 1_000;
+  return now + raw * 1_000;
+}
 
 /**
  * Hard ceiling on pool concurrency — emergency brake only.
@@ -140,6 +152,19 @@ class LLMKeyPool {
   private readonly _firstResponseLogged = new Set<string>();
   private static readonly QUOTA_LOG_INTERVAL_MS = 10_000;
 
+  // ── Blind AIMD (used when the provider returns no rate-limit headers) ───────
+  /** True once any slot has reported recognised rate-limit headers. */
+  private _hasSeenAnyHeaders = false;
+  /** Successful call counter — drives additive-increase ramp in blind mode. */
+  private _blindSuccesses = 0;
+  /**
+   * Max concurrency per key in blind mode.
+   * Default 8; override with LLM_BLIND_PER_KEY_MAX env var.
+   * With N keys the hard ceiling is N × this value (also bounded by MAX_POOL_CONCURRENCY).
+   */
+  private readonly _blindPerKeyCap =
+    Math.max(1, Number(process.env.LLM_BLIND_PER_KEY_MAX) || 8);
+
   constructor(slots: KeySlot[]) {
     if (slots.length === 0) throw new Error("[llm-pool] no LLM API keys configured");
     this.slots = slots;
@@ -181,21 +206,24 @@ class LLMKeyPool {
           client: slot.client,
           model: slot.model,
           label: slot.label,
-          onThrottle: (waitMs: number) => {
-            slot.throttledUntil = Date.now() + waitMs;
-            slot.stats.throttleCount++;
-            this._recalc(); // immediate backoff
-            console.warn(`[llm-pool] slot ${slot.label} throttled for ${(waitMs / 1_000).toFixed(1)}s`);
-          },
           onResponse: (headers: Record<string, string>, durationMs: number, tokens: number) => {
             const headersApplied = this._applyHeaders(slot, headers);
+            if (headersApplied) this._hasSeenAnyHeaders = true;
             this.latency.update(durationMs);
             if (tokens > 0) this.tokPerReq.update(tokens);
             slot.stats.calls++;
             slot.stats.tokens += tokens;
             slot.stats.totalLatencyMs += Math.round(durationMs);
-            this._logResponseQuota(slot, headersApplied, durationMs, tokens);
+            this._logResponseQuota(slot, headers, headersApplied, durationMs, tokens);
             this._recalc();
+            this._blindOnSuccess(); // no-op once headers are seen
+          },
+          onThrottle: (waitMs: number) => {
+            slot.throttledUntil = Date.now() + waitMs;
+            slot.stats.throttleCount++;
+            this._recalc();
+            this._blindOnThrottle(); // no-op once headers are seen
+            console.warn(`[llm-pool] slot ${slot.label} throttled for ${(waitMs / 1_000).toFixed(1)}s`);
           },
           onError: () => { slot.stats.errors++; },
           release: () => this.sem.release(),
@@ -231,15 +259,17 @@ class LLMKeyPool {
     if (limitReq == null || remReq == null || resetReqS == null) return false; // incomplete headers
 
     const now = Date.now();
+    const resetReqMs = parseRateLimitResetMs(resetReqS, now);
+    const resetTokMs = resetTokS != null
+      ? parseRateLimitResetMs(resetTokS, now)
+      : undefined;
     slot.rateLimit = {
       limitReq,
       remainingReq: remReq,
-      resetReqMs:   now + resetReqS * 1_000,
+      resetReqMs:   resetReqMs ?? (slot.rateLimit?.resetReqMs ?? now + 60_000),
       limitTok:     limitTok  ?? (slot.rateLimit?.limitTok  ?? Infinity),
       remainingTok: remTok    ?? (slot.rateLimit?.remainingTok ?? Infinity),
-      resetTokMs:   resetTokS != null
-        ? now + resetTokS * 1_000
-        : (slot.rateLimit?.resetTokMs ?? now + 60_000),
+      resetTokMs:   resetTokMs ?? (slot.rateLimit?.resetTokMs ?? now + 60_000),
     };
     return true;
   }
@@ -247,6 +277,7 @@ class LLMKeyPool {
   /** Log first response per slot, then quota changes (throttled). */
   private _logResponseQuota(
     slot: KeySlot,
+    allHeaders: Record<string, string>,
     headersApplied: boolean,
     durationMs: number,
     tokens: number,
@@ -254,16 +285,38 @@ class LLMKeyPool {
     if (!this._firstResponseLogged.has(slot.label)) {
       this._firstResponseLogged.add(slot.label);
       if (headersApplied && slot.rateLimit) {
+        const bare = [
+          allHeaders["x-ratelimit-limit"] != null
+            ? `limit=${allHeaders["x-ratelimit-limit"]}`
+            : null,
+          allHeaders["x-ratelimit-remaining"] != null
+            ? `remaining=${allHeaders["x-ratelimit-remaining"]}`
+            : null,
+          allHeaders["x-ratelimit-reset"] != null
+            ? `reset=${allHeaders["x-ratelimit-reset"]}`
+            : null,
+        ].filter(Boolean).join(", ");
         console.log(
           `[llm-pool] ${slot.label} first response — ${formatSlotQuota(slot.rateLimit)}` +
-          ` (${durationMs.toFixed(0)}ms, ${tokens} tok)`,
+          ` (${durationMs.toFixed(0)}ms, ${tokens} tok)` +
+          (bare ? ` [${bare}]` : ""),
         );
         this._lastQuotaSnap.set(slot.label, formatSlotQuota(slot.rateLimit));
         this._quotaLogAt.set(slot.label, Date.now());
       } else {
+        // Scan ALL response headers for anything rate-limit-like so we can diagnose
+        // provider-specific header naming (e.g. DeepSeek may use different names).
+        const rlLike = Object.entries(allHeaders)
+          .filter(([k]) => k.includes("ratelimit") || k.includes("rate-limit") || k.includes("retry-after") || k.includes("x-rds-"))
+          .map(([k, v]) => `  ${k}: ${v}`)
+          .join("\n");
+        const blindCeil = this.slots.length * this._blindPerKeyCap;
         console.log(
-          `[llm-pool] ${slot.label} first response — no X-RateLimit-* headers` +
-          ` (${durationMs.toFixed(0)}ms, ${tokens} tok); pool concurrency stays at ${this.sem.max} until headers arrive`,
+          `[llm-pool] ${slot.label} first response — no recognized rate-limit headers` +
+          ` (${durationMs.toFixed(0)}ms, ${tokens} tok)\n` +
+          (rlLike
+            ? `  rate-limit-like headers found (different names?):\n${rlLike}`
+            : `  no rate-limit-like headers at all — using blind AIMD (target ceil=${blindCeil})`),
         );
       }
       return;
@@ -296,6 +349,47 @@ class LLMKeyPool {
       `[llm-pool] ${slot.label} quota ${reason} — ${snap}, pool concurrency=${this.sem.max}` +
       (lowQuota ? " (low remaining)" : ""),
     );
+  }
+
+  // ── Blind AIMD methods ─────────────────────────────────────────────────────
+  //
+  // Called after every successful response (_blindOnSuccess) and every 429
+  // (_blindOnThrottle).  Both are no-ops once real rate-limit headers have been
+  // seen, because the Little's Law path in _recalc() takes over.
+
+  /**
+   * Additive increase: after every RAMP_STEP successful calls without a 429,
+   * increment the semaphore cap by 1.  The ceiling is slots × _blindPerKeyCap
+   * (default 8 per key, so 24 total with 3 keys).
+   */
+  private _blindOnSuccess(): void {
+    if (this._hasSeenAnyHeaders) return;
+    this._blindSuccesses++;
+    const RAMP_STEP = 2; // add 1 concurrency unit every 2 successful calls
+    const blindCeil = Math.min(this.slots.length * this._blindPerKeyCap, MAX_POOL_CONCURRENCY);
+    if (this._blindSuccesses % RAMP_STEP === 0 && this.sem.max < blindCeil) {
+      const newMax = this.sem.max + 1;
+      this.sem.setMax(newMax);
+      console.log(
+        `[llm-pool] blind ramp → concurrency=${newMax}/${blindCeil}` +
+        ` (${this._blindSuccesses} total successes, no rate-limit headers)`,
+      );
+    }
+  }
+
+  /**
+   * Multiplicative decrease: on a 429, halve the concurrency cap and reset the
+   * success counter so the ramp restarts from the new lower baseline.
+   */
+  private _blindOnThrottle(): void {
+    if (this._hasSeenAnyHeaders) return;
+    const floor  = this.slots.length;          // never go below 1 per slot
+    const newMax = Math.max(floor, Math.floor(this.sem.max * 0.5));
+    this._blindSuccesses = 0;
+    if (newMax !== this.sem.max) {
+      this.sem.setMax(newMax);
+      console.log(`[llm-pool] blind back-off → concurrency=${newMax} (429, ramp reset)`);
+    }
   }
 
   private _quotaSummary(): string {
@@ -1240,7 +1334,8 @@ async function callLLMOnce(
   const t0    = Date.now();
 
   try {
-    // withResponse() exposes the raw fetch Response so we can read headers.
+    // OpenAI SDK: .withResponse() returns parsed body + raw fetch Response (headers).
+    // DeepSeek docs use bare x-ratelimit-limit / remaining / reset on the HTTP response.
     const { data: completion, response } = await acq.client.chat.completions
       .create(
         {
@@ -1256,12 +1351,7 @@ async function callLLMOnce(
       )
       .withResponse();
 
-    // Feed rate-limit headers back to the pool for adaptive concurrency.
-    const rawHeaders: Record<string, string> = {};
-    for (const name of RL_HEADERS) {
-      const v = response.headers.get(name);
-      if (v !== null) rawHeaders[name] = v;
-    }
+    const rawHeaders = responseHeadersToRecord(response);
     const tokens = completion.usage?.total_tokens ?? 0;
     acq.onResponse(rawHeaders, Date.now() - t0, tokens);
 

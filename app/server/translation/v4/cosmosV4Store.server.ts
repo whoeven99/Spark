@@ -173,6 +173,35 @@ export async function updateV4Job(
   }
 }
 
+/**
+ * 幂等抢占「预估样本回写」权：仅当 estimationRecordedAt 尚未置位时，用 etag CAS 置位。
+ * 返回 true 表示本调用抢到了回写权（应记录样本），false 表示已被记录或并发竞争失败。
+ */
+export async function claimEstimationRecording(
+  shopName: string,
+  jobId: string,
+): Promise<boolean> {
+  try {
+    const { resource: existing, etag } = await getContainer()
+      .item(jobId, shopName)
+      .read<TranslationV4Job>();
+    if (!existing || existing.estimationRecordedAt) return false;
+    const updated: TranslationV4Job = {
+      ...existing,
+      estimationRecordedAt: new Date().toISOString(),
+    };
+    await getContainer()
+      .item(jobId, shopName)
+      .replace<TranslationV4Job>(updated, {
+        accessCondition: { type: "IfMatch", condition: etag! },
+      });
+    return true;
+  } catch {
+    // etag 冲突（并发）或读写异常：放弃回写，不影响主流程
+    return false;
+  }
+}
+
 /** Atomically claim a job by moving it from expectedStatus → newStatus using etag. */
 export async function claimV4Job(
   shopName: string,

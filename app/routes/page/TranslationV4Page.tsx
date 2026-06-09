@@ -113,6 +113,8 @@ type ProgressData = {
   errorStage: string | null;
   lastHeartbeat: string | null;
   updatedAt: string;
+  /** 历史学习得到的整任务预估（秒 / token），样本不足时字段为 null。 */
+  estimate?: { seconds: number | null; credits: number | null };
   metrics: {
     initTotal: number; initDone: number;
     translateTotal: number; translateDone: number; translateFailed: number;
@@ -608,7 +610,7 @@ function JobCard({ job, status, progress, onAction }: JobCardProps) {
       )}
 
       {status === "TRANSLATING" && (
-        <TranslateStatsPanel metrics={metrics} />
+        <TranslateStatsPanel metrics={metrics} learnedEstimate={progress?.estimate} />
       )}
 
       {isFailed && (progress?.errorMessage ?? job.errorMessage) && (
@@ -653,7 +655,13 @@ function StatItem({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function TranslateStatsPanel({ metrics }: { metrics: TranslateMetricsSnap }) {
+function TranslateStatsPanel({
+  metrics,
+  learnedEstimate,
+}: {
+  metrics: TranslateMetricsSnap;
+  learnedEstimate?: { seconds: number | null; credits: number | null };
+}) {
   const [now, setNow] = useState(() => Date.now());
 
   // Tick every second while panel is mounted.
@@ -671,7 +679,11 @@ function TranslateStatsPanel({ metrics }: { metrics: TranslateMetricsSnap }) {
   const estRemainingMs = elapsedMs !== null && ratio > 0 ? (elapsedMs / ratio) * (1 - ratio) : null;
   const estRemainingTokens = ratio > 0 && usedTokens > 0 ? Math.round((usedTokens / ratio) * (1 - ratio)) : null;
 
-  if (elapsedMs === null && usedTokens === 0) return null;
+  // 历史学习预估（整任务）：在进度尚不足以外推时尤其有用。
+  const learnedSeconds = learnedEstimate?.seconds ?? null;
+  const learnedCredits = learnedEstimate?.credits ?? null;
+
+  if (elapsedMs === null && usedTokens === 0 && learnedSeconds === null && learnedCredits === null) return null;
 
   return (
     <div style={{
@@ -695,6 +707,12 @@ function TranslateStatsPanel({ metrics }: { metrics: TranslateMetricsSnap }) {
       )}
       {estRemainingMs !== null && (
         <StatItem label="预估剩余时间" value={`~${fmtDuration(estRemainingMs)}`} />
+      )}
+      {learnedCredits !== null && (
+        <StatItem label="历史预估 tokens" value={`~${learnedCredits.toLocaleString()}`} />
+      )}
+      {learnedSeconds !== null && (
+        <StatItem label="历史预估总时长" value={`~${fmtDuration(learnedSeconds * 1000)}`} />
       )}
     </div>
   );

@@ -233,20 +233,22 @@ model ToolTokenUsageLog {
   @@index([feature, createdAt])
 }
 
-/// AI 任务耗时 / 积分 EWMA 估算（全局，按 taskType 一条）。
+/// AI 任务「单位(per-item)成本」EWMA 估算，按 (taskType, bucket) 分桶，随真实运行自校准。
 model AITaskEstimation {
   id           String   @id @default(cuid())
-  /// image_generation | picture_translate | product_improve
+  /// image_generation | picture_translate | product_improve | translation
   taskType     String
-  /// EWMA 预估积分（收敛后替换硬编码默认值）
+  /// 规模特征分桶：如 product_improve 按文本长度、picture_translate 按 modelType、translation 按目标语言。老数据/无特征落 "default"。
+  bucket       String   @default("default")
+  /// EWMA 预估积分（per-item，收敛后替换硬编码默认值）
   ewmaCredits  Float?
-  /// EWMA 预估耗时（秒）
+  /// EWMA 预估耗时（秒，per-item）
   ewmaSeconds  Float?
   /// 已参与统计的样本数（前5条用简单均值 bootstrap）
   sampleCount  Int      @default(0)
   updatedAt    DateTime @updatedAt
 
-  @@unique([taskType])
+  @@unique([taskType, bucket])
 }
 
 /// AI 任务批次：一次提交对应一个批次（含单任务）。

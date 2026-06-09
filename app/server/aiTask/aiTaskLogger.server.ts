@@ -7,6 +7,7 @@ import {
   getTaskMeta,
 } from "./aiTaskStore.server";
 import { updateTaskEstimation } from "./aiTaskEstimation.server";
+import { deriveBucket } from "./estimationBucket";
 import {
   clearTaskSubscribers,
   emitTaskEvent,
@@ -83,8 +84,10 @@ export async function completeTask(params: {
       const actualSeconds = Math.round(
         (completedAt.getTime() - meta.startedAt.getTime()) / 1000,
       );
+      const taskKey = meta.taskType as import("../../lib/aiTaskTypes").AITaskType;
       await updateTaskEstimation({
-        taskType: meta.taskType as import("../../lib/aiTaskTypes").AITaskType,
+        taskKey,
+        bucket: deriveBucket(taskKey, meta.config),
         actualCredits: params.actualCredits ?? null,
         actualSeconds,
       });
