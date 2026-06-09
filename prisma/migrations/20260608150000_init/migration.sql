@@ -269,6 +269,8 @@ CREATE TABLE "ShopRefund" (
     "shopifyRefundId" TEXT NOT NULL,
     "shopifyOrderId" TEXT NOT NULL,
     "refundAmount" REAL NOT NULL DEFAULT 0,
+    "shippingRefundAmount" REAL NOT NULL DEFAULT 0,
+    "shippingRefundTax" REAL NOT NULL DEFAULT 0,
     "refundNote" TEXT,
     "reason" TEXT,
     "processedAt" DATETIME NOT NULL,

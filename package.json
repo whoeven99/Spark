@@ -29,7 +29,8 @@
     "turso:drop-schema:test": "node scripts/turso-drop-schema-tables.cjs test",
     "turso:drop-schema:prod": "node scripts/turso-drop-schema-tables.cjs prod",
     "render:digest": "node scripts/render-daily-log-digest.cjs",
-    "test:render-digest": "node --test scripts/render-log-classify.test.cjs"
+    "test:render-digest": "node --test scripts/render-log-classify.test.cjs",
+    "orders:create": "node scripts/create-test-orders.mjs"
   },
   "type": "module",
   "engines": {
