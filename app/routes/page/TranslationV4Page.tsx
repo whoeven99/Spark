@@ -14,6 +14,11 @@ import {
   type TranslationV4Job,
   type TranslationV4Status,
 } from "../../server/translation/v4/types";
+import {
+  formatV4JobTimeLine,
+  TRANSLATION_V4_UNIT_LABEL,
+} from "../../lib/translationV4Display";
+import { resolveResumeV4JobStatus } from "../../server/translation/v4/resumeV4JobStatus";
 import { useShopLocales } from "../../hooks/useShopLocales";
 import { TranslationLocaleFields } from "../component/translation/TranslationLocaleFields";
 import { TranslationModuleMultiSelect } from "../component/translation/TranslationModuleMultiSelect";
@@ -44,20 +49,6 @@ function stageFromV4Status(status: TranslationV4Status): string {
   if (["WRITEBACK_QUEUED", "WRITING_BACK"].includes(status)) return "WRITEBACK";
   if (["VERIFY_QUEUED", "VERIFYING"].includes(status)) return "VERIFY";
   return "INIT";
-}
-
-/** Aligns with resolveResumeStatus in api.translate.v4.task-action.ts */
-function resolveResumeV4Status(
-  currentStatus: TranslationV4Status,
-  errorStage: string | null,
-): TranslationV4Status | null {
-  if (currentStatus !== "PAUSED" && currentStatus !== "FAILED") return null;
-  switch (errorStage) {
-    case "TRANSLATE": return "TRANSLATE_QUEUED";
-    case "WRITEBACK": return "WRITEBACK_QUEUED";
-    case "VERIFY": return "VERIFY_QUEUED";
-    default: return "INIT_QUEUED";
-  }
 }
 
 type OptimisticActionIntent = "pause" | "cancel" | "resume";
@@ -113,6 +104,8 @@ type ProgressData = {
   errorStage: string | null;
   lastHeartbeat: string | null;
   updatedAt: string;
+  /** 历史学习得到的整任务预估（秒 / token），样本不足时字段为 null。 */
+  estimate?: { seconds: number | null; credits: number | null };
   metrics: {
     initTotal: number; initDone: number;
     translateTotal: number; translateDone: number; translateFailed: number;
@@ -370,7 +363,11 @@ export function TranslationV4Page() {
     }
 
     if (action === "resume") {
-      const resumeStatus = resolveResumeV4Status(job.status, job.errorStage);
+      const resumeStatus = resolveResumeV4JobStatus(
+        job.status,
+        job.errorStage,
+        job.metrics,
+      );
       if (!resumeStatus) {
         shopify.toast.show("无法重试该任务");
         return;
@@ -562,6 +559,9 @@ function JobCard({ job, status, progress, onAction }: JobCardProps) {
               <> · <span style={{ color: pageColorTokens.brandBlue, fontWeight: 600 }}>{(metrics.usedTokens ?? 0).toLocaleString()} tokens</span></>
             )}
           </div>
+          <div style={{ fontSize: "0.75rem", color: pageColorTokens.textFootnote, marginTop: 2 }}>
+            {formatV4JobTimeLine(job, status)}
+          </div>
         </div>
         <div style={{ display: "flex", gap: "0.5rem" }}>
           {isActive && (
@@ -589,15 +589,28 @@ function JobCard({ job, status, progress, onAction }: JobCardProps) {
           detailLabel={
             metrics.translateUnitTotal > 0 ? (
               <>
-                资源 {metrics.translateDone}/{metrics.translateTotal} · 节点{" "}
-                <AnimatedNumber value={metrics.translateUnitDone} />/{metrics.translateUnitTotal}
+                {TRANSLATION_V4_UNIT_LABEL}{" "}
+                <AnimatedNumber value={metrics.translateUnitDone} />/
+                {metrics.translateUnitTotal} · {metrics.translateDone}/{metrics.translateTotal}
               </>
             ) : undefined
           }
         />
         <StageBar label="回写" done={metrics.writebackDone} total={metrics.writebackTotal} active={status === "WRITING_BACK"} complete={["VERIFY_QUEUED","VERIFYING","COMPLETED"].includes(status)} failed={metrics.writebackFailed} />
         {(metrics.verifyTotal > 0 || ["VERIFY_QUEUED","VERIFYING"].includes(status)) && (
-          <StageBar label="验证" done={metrics.verifyDone} total={metrics.verifyTotal} active={status === "VERIFYING"} complete={status === "COMPLETED" && metrics.verifyTotal > 0} failed={metrics.verifyFailed} />
+          <StageBar
+            label="验证"
+            done={metrics.verifyDone}
+            total={metrics.verifyTotal}
+            active={status === "VERIFYING"}
+            complete={status === "COMPLETED" && metrics.verifyTotal > 0}
+            failed={metrics.verifyFailed}
+            detailLabel={
+              metrics.writebackTotal > 0 && metrics.verifyTotal < metrics.writebackTotal
+                ? `${metrics.verifyDone}/${metrics.verifyTotal}（有译文变更）`
+                : undefined
+            }
+          />
         )}
       </div>
 
@@ -608,7 +621,7 @@ function JobCard({ job, status, progress, onAction }: JobCardProps) {
       )}
 
       {status === "TRANSLATING" && (
-        <TranslateStatsPanel metrics={metrics} />
+        <TranslateStatsPanel metrics={metrics} learnedEstimate={progress?.estimate} />
       )}
 
       {isFailed && (progress?.errorMessage ?? job.errorMessage) && (
@@ -653,7 +666,13 @@ function StatItem({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function TranslateStatsPanel({ metrics }: { metrics: TranslateMetricsSnap }) {
+function TranslateStatsPanel({
+  metrics,
+  learnedEstimate,
+}: {
+  metrics: TranslateMetricsSnap;
+  learnedEstimate?: { seconds: number | null; credits: number | null };
+}) {
   const [now, setNow] = useState(() => Date.now());
 
   // Tick every second while panel is mounted.
@@ -671,7 +690,11 @@ function TranslateStatsPanel({ metrics }: { metrics: TranslateMetricsSnap }) {
   const estRemainingMs = elapsedMs !== null && ratio > 0 ? (elapsedMs / ratio) * (1 - ratio) : null;
   const estRemainingTokens = ratio > 0 && usedTokens > 0 ? Math.round((usedTokens / ratio) * (1 - ratio)) : null;
 
-  if (elapsedMs === null && usedTokens === 0) return null;
+  // 历史学习预估（整任务）：在进度尚不足以外推时尤其有用。
+  const learnedSeconds = learnedEstimate?.seconds ?? null;
+  const learnedCredits = learnedEstimate?.credits ?? null;
+
+  if (elapsedMs === null && usedTokens === 0 && learnedSeconds === null && learnedCredits === null) return null;
 
   return (
     <div style={{
@@ -695,6 +718,12 @@ function TranslateStatsPanel({ metrics }: { metrics: TranslateMetricsSnap }) {
       )}
       {estRemainingMs !== null && (
         <StatItem label="预估剩余时间" value={`~${fmtDuration(estRemainingMs)}`} />
+      )}
+      {learnedCredits !== null && (
+        <StatItem label="历史预估 tokens" value={`~${learnedCredits.toLocaleString()}`} />
+      )}
+      {learnedSeconds !== null && (
+        <StatItem label="历史预估总时长" value={`~${fmtDuration(learnedSeconds * 1000)}`} />
       )}
     </div>
   );

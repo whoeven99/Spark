@@ -14,6 +14,7 @@ import { fetchProductDescriptionContext } from "../server/productImprove/product
 import { detectTextLanguage } from "../server/productImprove/detectTextLanguage.server";
 import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
 import { getEstimatedCredits } from "../server/aiTask/aiTaskEstimation.server";
+import { deriveBucket } from "../server/aiTask/estimationBucket";
 import { createBatchWithTask } from "../server/aiTask/aiTaskStore.server";
 import { enqueueProductImproveTask } from "../server/productImprove/productImproveAsync.server";
 import { enqueuePictureTranslateTask } from "../server/pictureTranslate/pictureTranslateAsync.server";
@@ -118,10 +119,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
     }
 
-    const [shopInfo, ewmaCredits] = await Promise.all([
-      fetchShopBasicInfo(admin).catch(() => null),
-      getEstimatedCredits("product_improve"),
-    ]);
+    const shopInfo = await fetchShopBasicInfo(admin).catch(() => null);
     const brandStyle = shopInfo?.name || t("productImproveStage1.defaultBrandStyle");
 
     const taskIds: string[] = [];
@@ -136,6 +134,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           continue;
         }
         const sourceLanguage = detectTextLanguage(context.title + " " + context.text);
+        const bucket = deriveBucket("product_improve", {
+          originalTitle: context.title,
+          originalText: context.text,
+        });
         const { taskId, batchId: _batchId } = await createBatchWithTask({
           shop,
           taskType: "product_improve",
@@ -156,7 +158,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             sourceLanguage,
             brandStyle,
           },
-          estimatedCredits: ewmaCredits,
+          estimatedCredits: await getEstimatedCredits("product_improve", bucket),
         });
         enqueueProductImproveTask({ taskId, shop, locale, context, targetLanguage: body.targetLanguage });
         taskIds.push(taskId);
@@ -187,11 +189,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
   }
 
-  const ewmaCredits = await getEstimatedCredits("picture_translate");
+  const { sourceCode, targetCode, modelType } = body;
+
+  const ewmaCredits = await getEstimatedCredits(
+    "picture_translate",
+    deriveBucket("picture_translate", { modelType }),
+  );
   const taskIds: string[] = [];
   const errors: BatchTaskError[] = [];
-
-  const { sourceCode, targetCode, modelType } = body;
 
   // zh-TW → zh-Hant for Volcano engine (model 2)
   const effectiveTargetCode =

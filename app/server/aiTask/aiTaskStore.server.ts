@@ -181,12 +181,18 @@ export async function markTaskSucceeded(params: {
 export async function getTaskMeta(taskId: string): Promise<{
   taskType: string;
   startedAt: Date;
+  config: Record<string, unknown> | null;
 } | null> {
   const row = await prisma.aITask.findUnique({
     where: { id: taskId },
-    select: { taskType: true, startedAt: true },
+    select: { taskType: true, startedAt: true, config: true },
   });
-  return row ?? null;
+  if (!row) return null;
+  return {
+    taskType: row.taskType,
+    startedAt: row.startedAt,
+    config: (row.config as Record<string, unknown> | null) ?? null,
+  };
 }
 
 export async function markTaskFailed(params: {

@@ -77,7 +77,9 @@ describe("v4JobProgress.server", () => {
       progressUpdatedAt: null,
     });
     expect(summary).toContain(translationV4StatusLabel("TRANSLATING"));
-    expect(summary).toContain("节点 25/100");
+    expect(summary).toContain("子节点 25/100");
+    expect(summary).toContain("5/20");
+    expect(summary).not.toContain("资源");
     expect(summary).toContain("当前模块 PRODUCT");
   });
 });

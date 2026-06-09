@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
@@ -10,6 +9,11 @@ import type {
   TranslationV4Metrics,
   TranslationV4Status,
 } from "../../../server/translation/v4/types";
+import {
+  formatTranslationV4TranslateDetailLocalized,
+  formatV4JobTimeLine,
+  formatV4TaskElapsed,
+} from "../../../lib/translationV4Display";
 import { TERMINAL_V4_STATUSES } from "../../../server/translation/v4/types";
 
 // ─── Token-to-credit conversion ───────────────────────────────────────────────
@@ -48,28 +52,6 @@ function mapV4StatusToAIStatus(status: TranslationV4Status): AITaskStatus {
   if (status === "FAILED") return "failed";
   if (status === "CANCELLED" || status === "PAUSED") return "cancelled";
   return "running";
-}
-
-function formatTaskDate(iso: string): string {
-  return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).format(new Date(iso));
-}
-
-function formatElapsed(createdAt: string, endAt: string | null): string {
-  const end = endAt ? new Date(endAt) : new Date();
-  const ms = end.getTime() - new Date(createdAt).getTime();
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  const h = Math.floor(m / 60);
-  if (h > 0) return `${h}h ${m % 60}m`;
-  if (m > 0) return `${m}m ${s % 60}s`;
-  return `${s}s`;
 }
 
 function moduleListSummary(modules: string[]): string {
@@ -127,6 +109,8 @@ type StageRow = {
   done: number;
   total: number;
   state: StageState;
+  /** 覆盖右侧计数文案（如翻译行展示节点 + 资源数） */
+  countDetail?: string;
 };
 
 /**
@@ -188,11 +172,12 @@ function StageProgressRow({ row }: { row: StageRow }) {
   const isPending = row.state === "pending";
 
   const countText =
-    row.total > 0
+    row.countDetail ??
+    (row.total > 0
       ? `${row.done.toLocaleString()} / ${row.total.toLocaleString()}`
       : isPending
         ? "—"
-        : "";
+        : "");
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -249,7 +234,7 @@ function StageProgressRow({ row }: { row: StageRow }) {
       {/* Count */}
       <div
         style={{
-          width: 100,
+          width: row.countDetail ? 168 : 100,
           flexShrink: 0,
           fontSize: 11,
           color: isPending ? pageColorTokens.textFootnote : colors.label,
@@ -277,11 +262,30 @@ function MultiStageProgress({
   const translateDone = metrics.translateUnitTotal > 0 ? metrics.translateUnitDone : metrics.translateDone;
   const translateTotal = metrics.translateUnitTotal > 0 ? metrics.translateUnitTotal : metrics.translateTotal;
 
+  const translateCountDetail = formatTranslationV4TranslateDetailLocalized(metrics) ?? undefined;
+
+  const verifyCountDetail =
+    metrics.writebackTotal > 0 && metrics.verifyTotal > 0 && metrics.verifyTotal < metrics.writebackTotal
+      ? `${metrics.verifyDone.toLocaleString()}/${metrics.verifyTotal.toLocaleString()}（有译文变更）`
+      : undefined;
+
   const rows: StageRow[] = [
     { label: "初始化", done: metrics.initDone, total: metrics.initTotal, state: init },
-    { label: "翻  译", done: translateDone, total: translateTotal, state: translate },
+    {
+      label: "翻  译",
+      done: translateDone,
+      total: translateTotal,
+      state: translate,
+      countDetail: translateCountDetail,
+    },
     { label: "写  回", done: metrics.writebackDone, total: metrics.writebackTotal, state: writeback },
-    { label: "校  验", done: metrics.verifyDone, total: metrics.verifyTotal, state: verify },
+    {
+      label: "校  验",
+      done: metrics.verifyDone,
+      total: metrics.verifyTotal,
+      state: verify,
+      countDetail: verifyCountDetail,
+    },
   ];
 
   // Only show verify row if there's actual verify data or job reached that stage
@@ -307,19 +311,13 @@ type Props = {
 export function TranslationV4TaskCard({ job }: Props) {
   const { i18n: _i18n } = useTranslation();
   const navigate = useNavigate();
-  const [isHydrated, setIsHydrated] = useState(false);
-
-  useEffect(() => {
-    setIsHydrated(true);
-  }, []);
 
   const mappedStatus = mapV4StatusToAIStatus(job.status);
   const shortId = job.id.slice(0, 8).toUpperCase();
   const isActive = !TERMINAL_V4_STATUSES.includes(job.status) && job.status !== "PAUSED";
   const isTerminal = TERMINAL_V4_STATUSES.includes(job.status) || job.status === "PAUSED";
 
-  const createdAtText = isHydrated ? formatTaskDate(job.createdAt) : formatTaskDate(job.createdAt);
-  const elapsedLabel = formatElapsed(
+  const elapsedLabel = formatV4TaskElapsed(
     job.createdAt,
     isTerminal ? job.updatedAt : null,
   );
@@ -451,16 +449,19 @@ export function TranslationV4TaskCard({ job }: Props) {
           </div>
         </div>
 
-        {/* Creation date */}
+        {/* Task time */}
         <div
           style={{
             flexShrink: 0,
             fontSize: 12,
             color: pageColorTokens.textFootnote,
             paddingTop: 2,
+            textAlign: "right",
+            lineHeight: 1.5,
+            maxWidth: 320,
           }}
         >
-          {`创建于 ${createdAtText}`}
+          {formatV4JobTimeLine(job, job.status)}
         </div>
       </div>
 

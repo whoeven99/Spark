@@ -2,6 +2,7 @@ import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
+import { syncV4JobShopifyTokensFromSession } from "../server/translation/v4/syncV4JobShopifyTokens.server";
 import { buildSessionTokenBounceParamRedirect } from "../server/shopify/sessionTokenBounce.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { buildEmbeddedAppPath, getAppHomePath } from "../config/appEntry.server";
@@ -24,6 +25,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     });
   } catch (error) {
     console.error("[CommonEvent] recordAppInstalled failed:", error);
+  }
+
+  try {
+    await syncV4JobShopifyTokensFromSession(session.shop, session.accessToken);
+  } catch (error) {
+    console.error("[v4:token-sync] auth callback sync failed:", error);
   }
 
   throw redirect(buildEmbeddedAppPath(getAppHomePath(), request));
