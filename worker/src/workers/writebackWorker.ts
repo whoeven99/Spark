@@ -194,25 +194,18 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
       writebackFailed,
     };
 
-    if (writebackFailed > 0) {
-      await blobWrite(failedPath, failedResources);
-      await updateJob(shopName, jobId, {
-        status: "VERIFY_QUEUED",
-        claimedBy: null,
-        metrics: { ...updatedMetrics, verifyTotal: writebackFailed },
-      });
-      await pushHint("verify", { taskId: jobId, shopName });
-      console.log(
-        `[writeback] done job=${jobId} written=${writebackDone} failed=${writebackFailed} → VERIFY_QUEUED`,
-      );
-    } else {
-      await updateJob(shopName, jobId, {
-        status: "COMPLETED",
-        claimedBy: null,
-        metrics: updatedMetrics,
-      });
-      console.log(`[writeback] done job=${jobId} written=${writebackDone}`);
-    }
+    await blobWrite(failedPath, failedResources);
+
+    const verifyTotal = writebackDone + writebackFailed;
+    await updateJob(shopName, jobId, {
+      status: "VERIFY_QUEUED",
+      claimedBy: null,
+      metrics: { ...updatedMetrics, verifyTotal },
+    });
+    await pushHint("verify", { taskId: jobId, shopName });
+    console.log(
+      `[writeback] done job=${jobId} written=${writebackDone} failed=${writebackFailed} → VERIFY_QUEUED (read-back verify ${verifyTotal} resources)`,
+    );
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e);
     await updateJob(shopName, jobId, {

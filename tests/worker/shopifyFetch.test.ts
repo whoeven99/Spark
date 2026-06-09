@@ -2,10 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildInitModuleQueryFilterForTest,
   chunkResourcesForTest,
+  diffResourceTranslations,
   fetchResourceIdsByQuery,
   fetchTranslatableResources,
   ID_BASED_MODULE_QUERY,
   isIdBasedModuleForTest,
+  translationValuesMatch,
 } from "../../worker/src/services/shopifyFetch.js";
 
 type GqlResponse = { data?: unknown; errors?: unknown[] };
@@ -209,5 +211,43 @@ describe("chunkResources — size-aware packing", () => {
     expect(chunks).toHaveLength(2);
     expect(chunks[0][0].resourceId).toBe("1"); // oversized, alone
     expect(chunks[1][0].resourceId).toBe("2");
+  });
+});
+
+describe("writeback translation verify helpers", () => {
+  it("translationValuesMatch trims whitespace", () => {
+    expect(translationValuesMatch("  hello  ", "hello")).toBe(true);
+    expect(translationValuesMatch("a", "b")).toBe(false);
+  });
+
+  it("diffResourceTranslations flags missing, outdated, and value mismatch", () => {
+    const expected = [
+      {
+        locale: "hu",
+        key: "title",
+        value: "Cím",
+        translatableContentDigest: "d1",
+      },
+      {
+        locale: "hu",
+        key: "body_html",
+        value: "<p>Új</p>",
+        translatableContentDigest: "d2",
+      },
+    ];
+
+    const mismatches = diffResourceTranslations(expected, [
+      { key: "title", value: "Cím", outdated: false },
+      { key: "body_html", value: "<p>régi</p>", outdated: true },
+    ]);
+
+    expect(mismatches).toHaveLength(1);
+    expect(mismatches[0].key).toBe("body_html");
+    expect(mismatches[0].outdated).toBe(true);
+
+    const missing = diffResourceTranslations(expected, [
+      { key: "title", value: "wrong", outdated: false },
+    ]);
+    expect(missing.map((m) => m.key).sort()).toEqual(["body_html", "title"]);
   });
 });

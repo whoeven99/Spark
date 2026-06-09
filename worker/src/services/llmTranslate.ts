@@ -116,6 +116,14 @@ type KeySlot = {
 
 // ── Pool ─────────────────────────────────────────────────────────────────────
 
+function formatSlotQuota(rl: SlotRateLimit): string {
+  const tpm =
+    rl.limitTok === Infinity
+      ? "TPM n/a"
+      : `TPM ${rl.remainingTok}/${rl.limitTok}`;
+  return `RPM ${rl.remainingReq}/${rl.limitReq}, ${tpm}`;
+}
+
 class LLMKeyPool {
   private readonly slots: KeySlot[];
   private cursor = 0;
@@ -124,6 +132,13 @@ class LLMKeyPool {
   private readonly latency = new EWMA(3_000);
   /** EWMA of tokens consumed per request. Used for TPM-based concurrency calc. */
   private readonly tokPerReq = new EWMA(1_000);
+  /** Per-slot quota log throttle (epoch ms). */
+  private readonly _quotaLogAt = new Map<string, number>();
+  /** Last logged quota snapshot per slot — skip duplicate lines. */
+  private readonly _lastQuotaSnap = new Map<string, string>();
+  /** Slots that have logged their first successful response. */
+  private readonly _firstResponseLogged = new Set<string>();
+  private static readonly QUOTA_LOG_INTERVAL_MS = 10_000;
 
   constructor(slots: KeySlot[]) {
     if (slots.length === 0) throw new Error("[llm-pool] no LLM API keys configured");
@@ -173,12 +188,13 @@ class LLMKeyPool {
             console.warn(`[llm-pool] slot ${slot.label} throttled for ${(waitMs / 1_000).toFixed(1)}s`);
           },
           onResponse: (headers: Record<string, string>, durationMs: number, tokens: number) => {
-            this._applyHeaders(slot, headers);
+            const headersApplied = this._applyHeaders(slot, headers);
             this.latency.update(durationMs);
             if (tokens > 0) this.tokPerReq.update(tokens);
             slot.stats.calls++;
             slot.stats.tokens += tokens;
             slot.stats.totalLatencyMs += Math.round(durationMs);
+            this._logResponseQuota(slot, headersApplied, durationMs, tokens);
             this._recalc();
           },
           onError: () => { slot.stats.errors++; },
@@ -198,7 +214,7 @@ class LLMKeyPool {
 
   // ── Header parsing ─────────────────────────────────────────────────────────
 
-  private _applyHeaders(slot: KeySlot, h: Record<string, string>): void {
+  private _applyHeaders(slot: KeySlot, h: Record<string, string>): boolean {
     const n = (key: string): number | undefined => {
       const v = h[key];
       return v !== undefined ? Number(v) : undefined;
@@ -212,7 +228,7 @@ class LLMKeyPool {
     const remTok    = n("x-ratelimit-remaining-tokens");
     const resetTokS = n("x-ratelimit-reset-tokens");
 
-    if (limitReq == null || remReq == null || resetReqS == null) return; // incomplete headers
+    if (limitReq == null || remReq == null || resetReqS == null) return false; // incomplete headers
 
     const now = Date.now();
     slot.rateLimit = {
@@ -225,6 +241,69 @@ class LLMKeyPool {
         ? now + resetTokS * 1_000
         : (slot.rateLimit?.resetTokMs ?? now + 60_000),
     };
+    return true;
+  }
+
+  /** Log first response per slot, then quota changes (throttled). */
+  private _logResponseQuota(
+    slot: KeySlot,
+    headersApplied: boolean,
+    durationMs: number,
+    tokens: number,
+  ): void {
+    if (!this._firstResponseLogged.has(slot.label)) {
+      this._firstResponseLogged.add(slot.label);
+      if (headersApplied && slot.rateLimit) {
+        console.log(
+          `[llm-pool] ${slot.label} first response — ${formatSlotQuota(slot.rateLimit)}` +
+          ` (${durationMs.toFixed(0)}ms, ${tokens} tok)`,
+        );
+        this._lastQuotaSnap.set(slot.label, formatSlotQuota(slot.rateLimit));
+        this._quotaLogAt.set(slot.label, Date.now());
+      } else {
+        console.log(
+          `[llm-pool] ${slot.label} first response — no X-RateLimit-* headers` +
+          ` (${durationMs.toFixed(0)}ms, ${tokens} tok); pool concurrency stays at ${this.sem.max} until headers arrive`,
+        );
+      }
+      return;
+    }
+
+    if (headersApplied && slot.rateLimit) {
+      this._maybeLogQuota(slot, "updated");
+    }
+  }
+
+  private _maybeLogQuota(slot: KeySlot, reason: "updated" | "recalc"): void {
+    const rl = slot.rateLimit;
+    if (!rl) return;
+
+    const snap = formatSlotQuota(rl);
+    const now = Date.now();
+    const lastAt = this._quotaLogAt.get(slot.label) ?? 0;
+    const prevSnap = this._lastQuotaSnap.get(slot.label);
+    const lowQuota =
+      rl.limitReq > 0 && rl.remainingReq / rl.limitReq < 0.2 ||
+      (rl.limitTok !== Infinity && rl.limitTok > 0 && rl.remainingTok / rl.limitTok < 0.2);
+    const changed = snap !== prevSnap;
+    const intervalElapsed = now - lastAt >= LLMKeyPool.QUOTA_LOG_INTERVAL_MS;
+
+    if (!changed && !lowQuota && !intervalElapsed) return;
+
+    this._quotaLogAt.set(slot.label, now);
+    this._lastQuotaSnap.set(slot.label, snap);
+    console.log(
+      `[llm-pool] ${slot.label} quota ${reason} — ${snap}, pool concurrency=${this.sem.max}` +
+      (lowQuota ? " (low remaining)" : ""),
+    );
+  }
+
+  private _quotaSummary(): string {
+    const now = Date.now();
+    return this.slots
+      .filter((s) => s.throttledUntil <= now && s.rateLimit)
+      .map((s) => `${s.label}[${formatSlotQuota(s.rateLimit!)}]`)
+      .join("; ") || "no quota headers yet";
   }
 
   // ── Adaptive concurrency (Little's Law) ───────────────────────────────────
@@ -280,9 +359,17 @@ class LLMKeyPool {
       const active = this.slots.filter((s) => s.throttledUntil <= now).length;
       console.log(
         `[llm-pool] concurrency ${this.sem.max} → ${newMax}` +
-        ` (latency=${this.latency.value.toFixed(0)}ms, tok/req=${this.tokPerReq.value.toFixed(0)}, slots=${active}/${this.slots.length})`,
+        ` (latency=${this.latency.value.toFixed(0)}ms, tok/req=${this.tokPerReq.value.toFixed(0)},` +
+        ` active=${active}/${this.slots.length}, ${this._quotaSummary()})`,
       );
       this.sem.setMax(newMax);
+      return;
+    }
+
+    // Concurrency unchanged — still log quota drift on a throttled interval.
+    for (const slot of this.slots) {
+      if (slot.throttledUntil > now || !slot.rateLimit) continue;
+      this._maybeLogQuota(slot, "recalc");
     }
   }
 
