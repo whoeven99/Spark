@@ -3,6 +3,7 @@ import { data } from "react-router";
 import { authenticate } from "../shopify.server";
 import { existsBlockingV4Task } from "../server/translation/v4/activeTaskGuard.server";
 import { createV4Job, listV4Jobs } from "../server/translation/v4/cosmosV4Store.server";
+import { resolveShopAccessTokenForWorker } from "../server/shopify/resolveShopAccessToken.server";
 import { TRANSLATION_V4_MODULES, type TranslationV4Module } from "../server/translation/v4/types";
 import { getTranslateRedisClient } from "../server/translation/translateRedis.server";
 
@@ -57,11 +58,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const rawLimit = Number(body.limitPerType);
   const limitPerType = rawLimit === 0 ? Number.MAX_SAFE_INTEGER : Math.max(rawLimit || 20, 1);
   const jobId = crypto.randomUUID();
+  const shopifyAccessToken =
+    (await resolveShopAccessTokenForWorker(shopName, session.accessToken)) ?? "";
 
   const job = await createV4Job({
     id: jobId,
     shopName,
-    shopifyAccessToken: session.accessToken ?? "",
+    shopifyAccessToken,
     source,
     target,
     modules,

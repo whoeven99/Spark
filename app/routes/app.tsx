@@ -16,6 +16,7 @@ import {
 import { detectRequestLocale } from "../i18n/detector.server";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
+import { syncV4JobShopifyTokensFromSession } from "../server/translation/v4/syncV4JobShopifyTokens.server";
 import {
   getAppEntryConfig,
   type NavItemKey,
@@ -72,6 +73,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   } catch (error) {
     console.error("[CommonEvent] recordAppInstalled failed:", error);
   }
+
+  try {
+    await syncV4JobShopifyTokensFromSession(session.shop, session.accessToken);
+  } catch (error) {
+    console.error("[v4:token-sync] app shell sync failed:", error);
+  }
+
   const locale = detectRequestLocale(request);
   const { nav, home } = getAppEntryConfig();
 

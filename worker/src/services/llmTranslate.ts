@@ -77,6 +77,58 @@ function responseHeadersToRecord(response: Response): Record<string, string> {
   return out;
 }
 
+const LIMIT_HINT_KEY_RE = /limit|rate|quota|throttle|remaining|retry/i;
+const LIMIT_HINT_MAX = 24;
+
+function formatLimitHintValue(value: unknown): string {
+  if (value == null) return String(value);
+  const s = typeof value === "object" ? JSON.stringify(value) : String(value);
+  return s.length > 160 ? `${s.slice(0, 160)}…` : s;
+}
+
+/** Collect limit/rate/quota-related fields from API JSON (headers are logged separately). */
+function collectLimitHints(value: unknown, path = "", out: string[] = [], depth = 0): string[] {
+  if (depth > 8 || out.length >= LIMIT_HINT_MAX) return out;
+  if (value == null) return out;
+
+  if (Array.isArray(value)) {
+    for (let i = 0; i < Math.min(value.length, 6); i++) {
+      collectLimitHints(value[i], `${path}[${i}]`, out, depth + 1);
+    }
+    return out;
+  }
+
+  if (typeof value === "object") {
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      const nextPath = path ? `${path}.${key}` : key;
+      if (LIMIT_HINT_KEY_RE.test(key)) {
+        out.push(`${nextPath}=${formatLimitHintValue(child)}`);
+      }
+      collectLimitHints(child, nextPath, out, depth + 1);
+    }
+  }
+
+  return out;
+}
+
+function formatLimitHintsForLog(hints: string[]): string {
+  if (hints.length === 0) return "";
+  return `\n  limit-related in response body:\n${hints.map((h) => `    ${h}`).join("\n")}`;
+}
+
+function limitLikeHeaderLines(headers: Record<string, string>): string {
+  return Object.entries(headers)
+    .filter(([k]) =>
+      k.includes("ratelimit") ||
+      k.includes("rate-limit") ||
+      k.includes("retry-after") ||
+      k.includes("x-rds-") ||
+      LIMIT_HINT_KEY_RE.test(k),
+    )
+    .map(([k, v]) => `    ${k}: ${v}`)
+    .join("\n");
+}
+
 /**
  * Normalise provider-specific reset headers.
  * - OpenAI suffixed headers (`x-ratelimit-reset-requests`) → seconds until reset.
@@ -117,14 +169,133 @@ type KeySlotStats = {
   errors: number;
 };
 
+type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
+
+/** DeepSeek uses native fetch; Azure/OpenAI keep the OpenAI SDK client. */
+type LlmTransport =
+  | { kind: "openai-sdk"; client: OpenAI }
+  | { kind: "deepseek-fetch"; apiKey: string; chatUrl: string };
+
 type KeySlot = {
-  client: OpenAI;
+  transport: LlmTransport;
   model: string;         // deployment / model id for this slot
   label: string;         // masked label for logs
   throttledUntil: number; // epoch ms; 0 = not throttled
   rateLimit: SlotRateLimit | null;
   stats: KeySlotStats;
 };
+
+/** Thrown by fetch transport on HTTP 429 so the pool can back off. */
+class LlmRateLimitError extends Error {
+  readonly response: Response;
+  constructor(response: Response) {
+    super("LLM rate limited");
+    this.name = "LlmRateLimitError";
+    this.response = response;
+  }
+}
+
+/** Map DEEPSEEK_BASE_URL → POST .../chat/completions (DeepSeek native endpoint). */
+function resolveDeepSeekChatCompletionsUrl(baseURL: string): string {
+  const base = baseURL.trim().replace(/\/+$/, "");
+  if (base.endsWith("/chat/completions")) return base;
+  return `${base}/chat/completions`;
+}
+
+type ChatCompletionInvokeResult = {
+  content: string;
+  tokens: number;
+  response: Response;
+  limitHints: string[];
+};
+
+async function fetchDeepSeekChatCompletion(
+  apiKey: string,
+  chatUrl: string,
+  model: string,
+  messages: ChatMessage[],
+  timeoutMs: number,
+): Promise<ChatCompletionInvokeResult> {
+  const resp = await fetch(chatUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: 0.1,
+      response_format: { type: "json_object" },
+    }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+
+  if (resp.status === 429) {
+    throw new LlmRateLimitError(resp);
+  }
+  if (!resp.ok) {
+    throw new Error(`DeepSeek HTTP ${resp.status}: ${await resp.text()}`);
+  }
+
+  const json = (await resp.json()) as Record<string, unknown> & {
+    choices?: Array<{ message?: { content?: string | null } }>;
+    usage?: { total_tokens?: number };
+    error?: { message?: string };
+  };
+  if (json.error && typeof json.error === "object" && "message" in json.error) {
+    const msg = (json.error as { message?: string }).message;
+    if (msg) throw new Error(`DeepSeek API error: ${msg}`);
+  }
+
+  return {
+    content: json.choices?.[0]?.message?.content ?? "{}",
+    tokens: (json.usage as { total_tokens?: number } | undefined)?.total_tokens ?? 0,
+    response: resp,
+    limitHints: collectLimitHints(json),
+  };
+}
+
+async function invokeChatCompletion(
+  transport: LlmTransport,
+  model: string,
+  messages: ChatMessage[],
+  timeoutMs: number,
+): Promise<ChatCompletionInvokeResult> {
+  if (transport.kind === "deepseek-fetch") {
+    return fetchDeepSeekChatCompletion(
+      transport.apiKey,
+      transport.chatUrl,
+      model,
+      messages,
+      timeoutMs,
+    );
+  }
+
+  const { data: completion, response } = await transport.client.chat.completions
+    .create(
+      {
+        model,
+        messages,
+        temperature: 0.1,
+        response_format: { type: "json_object" },
+      },
+      { timeout: timeoutMs },
+    )
+    .withResponse();
+
+  return {
+    content: completion.choices[0]?.message?.content ?? "{}",
+    tokens: completion.usage?.total_tokens ?? 0,
+    response,
+    limitHints: collectLimitHints(completion as unknown as Record<string, unknown>),
+  };
+}
+
+function retryAfterMsFromResponse(response: Response, fallbackSec = 10): number {
+  const retryAfterSec = Number(response.headers.get("retry-after") ?? String(fallbackSec));
+  return Math.max(retryAfterSec * 1_000, 10_000);
+}
 
 // ── Pool ─────────────────────────────────────────────────────────────────────
 
@@ -186,11 +357,16 @@ class LLMKeyPool {
    * Caller SHOULD call `onResponse()` on success and `onThrottle()` on 429.
    */
   async acquire(): Promise<{
-    client: OpenAI;
+    transport: LlmTransport;
     model: string;
     label: string;
     onThrottle: (waitMs: number) => void;
-    onResponse: (headers: Record<string, string>, durationMs: number, tokens: number) => void;
+    onResponse: (
+      headers: Record<string, string>,
+      durationMs: number,
+      tokens: number,
+      limitHints?: string[],
+    ) => void;
     onError: () => void;
     release: () => void;
   }> {
@@ -203,10 +379,15 @@ class LLMKeyPool {
       if (slot.throttledUntil <= now) {
         this.cursor = (idx + 1) % this.slots.length;
         return {
-          client: slot.client,
+          transport: slot.transport,
           model: slot.model,
           label: slot.label,
-          onResponse: (headers: Record<string, string>, durationMs: number, tokens: number) => {
+          onResponse: (
+            headers: Record<string, string>,
+            durationMs: number,
+            tokens: number,
+            limitHints: string[] = [],
+          ) => {
             const headersApplied = this._applyHeaders(slot, headers);
             if (headersApplied) this._hasSeenAnyHeaders = true;
             this.latency.update(durationMs);
@@ -214,7 +395,7 @@ class LLMKeyPool {
             slot.stats.calls++;
             slot.stats.tokens += tokens;
             slot.stats.totalLatencyMs += Math.round(durationMs);
-            this._logResponseQuota(slot, headers, headersApplied, durationMs, tokens);
+            this._logResponseQuota(slot, headers, headersApplied, durationMs, tokens, limitHints);
             this._recalc();
             this._blindOnSuccess(); // no-op once headers are seen
           },
@@ -281,7 +462,11 @@ class LLMKeyPool {
     headersApplied: boolean,
     durationMs: number,
     tokens: number,
+    limitHints: string[] = [],
   ): void {
+    const headerRlLines = limitLikeHeaderLines(allHeaders);
+    const bodyLimitBlock = formatLimitHintsForLog(limitHints);
+
     if (!this._firstResponseLogged.has(slot.label)) {
       this._firstResponseLogged.add(slot.label);
       if (headersApplied && slot.rateLimit) {
@@ -299,24 +484,21 @@ class LLMKeyPool {
         console.log(
           `[llm-pool] ${slot.label} first response — ${formatSlotQuota(slot.rateLimit)}` +
           ` (${durationMs.toFixed(0)}ms, ${tokens} tok)` +
-          (bare ? ` [${bare}]` : ""),
+          (bare ? ` [${bare}]` : "") +
+          (headerRlLines ? `\n  rate-limit-like headers:\n${headerRlLines}` : "") +
+          bodyLimitBlock,
         );
         this._lastQuotaSnap.set(slot.label, formatSlotQuota(slot.rateLimit));
         this._quotaLogAt.set(slot.label, Date.now());
       } else {
-        // Scan ALL response headers for anything rate-limit-like so we can diagnose
-        // provider-specific header naming (e.g. DeepSeek may use different names).
-        const rlLike = Object.entries(allHeaders)
-          .filter(([k]) => k.includes("ratelimit") || k.includes("rate-limit") || k.includes("retry-after") || k.includes("x-rds-"))
-          .map(([k, v]) => `  ${k}: ${v}`)
-          .join("\n");
         const blindCeil = this.slots.length * this._blindPerKeyCap;
         console.log(
           `[llm-pool] ${slot.label} first response — no recognized rate-limit headers` +
-          ` (${durationMs.toFixed(0)}ms, ${tokens} tok)\n` +
-          (rlLike
-            ? `  rate-limit-like headers found (different names?):\n${rlLike}`
-            : `  no rate-limit-like headers at all — using blind AIMD (target ceil=${blindCeil})`),
+          ` (${durationMs.toFixed(0)}ms, ${tokens} tok)` +
+          (headerRlLines
+            ? `\n  rate-limit-like headers found (different names?):\n${headerRlLines}`
+            : `\n  no rate-limit-like headers at all — using blind AIMD (target ceil=${blindCeil})`) +
+          bodyLimitBlock,
         );
       }
       return;
@@ -504,10 +686,11 @@ function buildKeySlots(provider: Provider): KeySlot[] {
       ? multi.split(",").map((k) => k.trim()).filter(Boolean)
       : single ? [single] : [];
     if (keys.length === 0) throw new Error("DEEPSEEK_API_KEY / DEEPSEEK_API_KEYS required");
-    const baseURL = process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com/v1";
+    const baseURL = process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com";
+    const chatUrl = resolveDeepSeekChatCompletionsUrl(baseURL);
     const model = process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
     return keys.map((apiKey, i) => ({
-      client: new OpenAI({ apiKey, baseURL }),
+      transport: { kind: "deepseek-fetch" as const, apiKey, chatUrl },
       model,
       label: `deepseek-${i + 1}(…${apiKey.slice(-4)})`,
       throttledUntil: 0,
@@ -524,7 +707,10 @@ function buildKeySlots(provider: Provider): KeySlot[] {
     const dep0 = process.env.AZURE_OPENAI_DEPLOYMENT?.trim();
     if (ep0 && key0 && dep0) {
       slots.push({
-        client: new AzureOpenAI({ endpoint: ep0, apiKey: key0, deployment: dep0, apiVersion }),
+        transport: {
+          kind: "openai-sdk",
+          client: new AzureOpenAI({ endpoint: ep0, apiKey: key0, deployment: dep0, apiVersion }),
+        },
         model: dep0, label: `azure-1(${dep0})`, throttledUntil: 0, rateLimit: null, stats: _initStats(),
       });
     }
@@ -539,7 +725,10 @@ function buildKeySlots(provider: Provider): KeySlot[] {
       }
       const av = process.env[`AZURE_OPENAI_API_VERSION_${i}`]?.trim() || apiVersion;
       slots.push({
-        client: new AzureOpenAI({ endpoint: ep, apiKey: key, deployment: dep, apiVersion: av }),
+        transport: {
+          kind: "openai-sdk",
+          client: new AzureOpenAI({ endpoint: ep, apiKey: key, deployment: dep, apiVersion: av }),
+        },
         model: dep, label: `azure-${i}(${dep})`, throttledUntil: 0, rateLimit: null, stats: _initStats(),
       });
     }
@@ -555,7 +744,7 @@ function buildKeySlots(provider: Provider): KeySlot[] {
     : single ? [single] : [];
   if (keys.length === 0) throw new Error("OPENAI_API_KEY / OPENAI_API_KEYS required");
   return keys.map((apiKey, i) => ({
-    client: new OpenAI({ apiKey }),
+    transport: { kind: "openai-sdk" as const, client: new OpenAI({ apiKey }) },
     model: "", label: `openai-${i + 1}(…${apiKey.slice(-4)})`,
     throttledUntil: 0, rateLimit: null, stats: _initStats(),
   }));
@@ -572,6 +761,11 @@ function getPool(): LLMKeyPool {
   if (_pool) return _pool;
   _pool = new LLMKeyPool(buildKeySlots(resolveProvider()));
   return _pool;
+}
+
+/** 仅测试用：切换 provider/env 后重建 key pool */
+export function resetLlmPoolForTests(): void {
+  _pool = null;
 }
 
 // ── Key-stats flush to Redis ─────────────────────────────────────────────────
@@ -1333,30 +1527,23 @@ async function callLLMOnce(
   const model = resolveModel(aiModel, acq.model);
   const t0    = Date.now();
 
+  const messages: ChatMessage[] = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: JSON.stringify(payload) },
+  ];
+
   try {
-    // OpenAI SDK: .withResponse() returns parsed body + raw fetch Response (headers).
-    // DeepSeek docs use bare x-ratelimit-limit / remaining / reset on the HTTP response.
-    const { data: completion, response } = await acq.client.chat.completions
-      .create(
-        {
-          model,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user",   content: JSON.stringify(payload) },
-          ],
-          temperature: 0.1,
-          response_format: { type: "json_object" },
-        },
-        { timeout: 120_000 },
-      )
-      .withResponse();
+    const { content: raw, tokens, response, limitHints } = await invokeChatCompletion(
+      acq.transport,
+      model,
+      messages,
+      120_000,
+    );
 
     const rawHeaders = responseHeadersToRecord(response);
-    const tokens = completion.usage?.total_tokens ?? 0;
-    acq.onResponse(rawHeaders, Date.now() - t0, tokens);
+    acq.onResponse(rawHeaders, Date.now() - t0, tokens, limitHints);
 
     // JSON.parse throws on malformed output → propagated to caller for retry/splitting.
-    const raw    = completion.choices[0]?.message?.content ?? "{}";
     const obj    = JSON.parse(extractJsonObject(raw)) as { translations?: unknown };
     const parsed = Array.isArray(obj.translations)
       ? (obj.translations as Array<{ key?: unknown; translatedValue?: unknown }>)
@@ -1371,7 +1558,9 @@ async function callLLMOnce(
     }
     return { map, tokens };
   } catch (e: unknown) {
-    if (e instanceof RateLimitError) {
+    if (e instanceof LlmRateLimitError) {
+      acq.onThrottle(retryAfterMsFromResponse(e.response));
+    } else if (e instanceof RateLimitError) {
       const eh = e.headers as unknown as { get?: (k: string) => string | null } & Record<string, string>;
       const retryAfterSec = Number(
         (typeof eh?.get === "function" ? eh.get("retry-after") : eh?.["retry-after"]) ?? "10",

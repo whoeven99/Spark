@@ -116,7 +116,7 @@ export function ensureWorkerEnv(): void {
   ]);
   logEnvCheck("LLM (DeepSeek)", Boolean(process.env.DEEPSEEK_API_KEY?.trim()), [
     ["DEEPSEEK_API_KEY", process.env.DEEPSEEK_API_KEY],
-    ["DEEPSEEK_BASE_URL", process.env.DEEPSEEK_BASE_URL, "https://api.deepseek.com/v1"],
+    ["DEEPSEEK_BASE_URL", process.env.DEEPSEEK_BASE_URL, "https://api.deepseek.com"],
     ["DEEPSEEK_MODEL", process.env.DEEPSEEK_MODEL, "deepseek-chat"],
   ]);
   console.info(`[worker:env] process.env 总键数: ${Object.keys(process.env).length}`);

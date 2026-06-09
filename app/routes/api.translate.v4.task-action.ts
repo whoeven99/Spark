@@ -2,6 +2,8 @@ import type { ActionFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { authenticate } from "../shopify.server";
 import { getV4Job, updateV4Job } from "../server/translation/v4/cosmosV4Store.server";
+import { resolveShopAccessTokenForWorker } from "../server/shopify/resolveShopAccessToken.server";
+import { syncV4JobShopifyTokensFromSession } from "../server/translation/v4/syncV4JobShopifyTokens.server";
 import { getTranslateRedisClient } from "../server/translation/translateRedis.server";
 import type { TranslationV4Status } from "../server/translation/v4/types";
 
@@ -51,12 +53,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (!resumeStatus) {
       return data({ ok: false, error: `cannot resume from status ${job.status}` }, { status: 400 });
     }
+
+    await syncV4JobShopifyTokensFromSession(shopName, session.accessToken);
+    const freshToken =
+      (await resolveShopAccessTokenForWorker(shopName, session.accessToken)) ??
+      job.shopifyAccessToken;
+
     // Clear error state and re-queue at the correct stage
     await updateV4Job(shopName, taskId, {
       status: resumeStatus,
       claimedBy: null,
       errorMessage: null,
       errorStage: null,
+      shopifyAccessToken: freshToken,
     });
     // Push hint so worker picks it up immediately
     const hintStage = resumeStatus.replace("_QUEUED", "").toLowerCase();

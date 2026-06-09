@@ -144,6 +144,7 @@ export type UpdateV4JobInput = Partial<
     | "aiModelUsed"
     | "aiProvider"
     | "engineUsage"
+    | "shopifyAccessToken"
   >
 >;
 
