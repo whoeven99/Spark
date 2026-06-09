@@ -1,6 +1,6 @@
 // Usage: npm run orders:create
 // 交互式创建测试订单（test: true），流程：pending 创建 → orderMarkAsPaid → 等待 webhook → 可选 cancel/refund。
-// 前置：店铺已安装 Order Monitor，webhook 指向可达实例（见 shopify.app.order-monitor-test.toml）。
+// 前置：店铺已安装 Order Monitor，webhook 指向可达实例
 // 可选环境变量 SYNC_WAIT_MS（默认 5000）：mark paid 后等待 orders/paid 写入 Turso 的毫秒数。
 
 import { createInterface } from "node:readline/promises";
