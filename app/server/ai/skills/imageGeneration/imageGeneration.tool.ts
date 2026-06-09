@@ -108,7 +108,7 @@ export const imageGenerationToolDefinition: ToolDefinition = {
   description: "根据提示词生成商品/营销图片",
   uiPayloadKey: "attachments",
   systemPromptExtension:
-    "当用户明确要求根据文字描述生成、绘制、创作商品图、营销图、场景图、海报或 AI 配图（且不是翻译已有图片文字）时，调用工具 generate_product_image，传入 prompt（画面描述）。成功后用简短中文说明已生成图片；不要输出 Markdown 图片链接，图片会由前端在聊天内直接展示。若用户未给出足够画面描述，先请其补充风格、主体与背景后再调用。不要与 picture_translate 混用。",
+    "当用户已给出完整画面描述且要求立即生成商品图/营销图时，调用 generate_product_image，传入 prompt。若用户需在卡片里确认描述或尚未给出足够画面描述，应调用 open_image_generation_form 而非本工具。成功后用简短中文说明已生成；不要输出 Markdown 图片链接，图片由前端展示。不要与 picture_translate 混用。",
   condition: () => isImageGenerationToolEnabled(),
   createTool: (context) => createGenerateProductImageTool(context),
   extractUIPayload: (messages) =>

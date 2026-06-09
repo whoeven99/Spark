@@ -21,7 +21,7 @@ function createGetBillingStatusTool(context: AgentContext): DynamicStructuredToo
         return JSON.stringify({ ok: false, errorMsg: "无法识别当前店铺" });
       }
       try {
-        const ctx = await loadBillingContext(shop, { grantTrial: false });
+        const ctx = await loadBillingContext(shop);
         console.info(
           `${LOG_PREFIX} done requestId=${requestId} availableTokens=${ctx.availableTokens} hasAccess=${ctx.hasAccess}`,
         );

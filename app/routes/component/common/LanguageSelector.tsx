@@ -17,13 +17,6 @@ import {
 const LANGUAGE_NATIVE_LABELS: Record<SupportedLocale, string> = {
   en: "English",
   "zh-CN": "中文（简体）",
-  ja: "日本語",
-  ko: "한국어",
-  es: "Español",
-  fr: "Français",
-  de: "Deutsch",
-  it: "Italiano",
-  pt: "Português",
 };
 
 type LanguageSelectorProps = {

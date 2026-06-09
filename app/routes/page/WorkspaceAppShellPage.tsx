@@ -1,5 +1,5 @@
 import type { CSSProperties, KeyboardEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
@@ -9,19 +9,27 @@ import type {
   ChatMessageAttachment,
   ProductImproveCardPayload,
 } from "../../lib/chatMessage";
+import type { ImageGenerationFormPayload } from "../../lib/imageGenerationFormPayload";
+import { coerceImageGenerationFormPayload } from "../../lib/imageGenerationFormPayload";
+import type { PictureTranslateFormPayload } from "../../lib/pictureTranslateFormPayload";
+import { coercePictureTranslateFormPayload } from "../../lib/pictureTranslateFormPayload";
 import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { coerceTranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
+import type { BatchTasksFormPayload } from "../../lib/batchTasksFormPayload";
+import { coerceBatchTasksFormPayload } from "../../lib/batchTasksFormPayload";
+import { selectedShopifyObjectsToBatchProducts } from "../../lib/workspaceContextProducts";
 import { ChatMessages } from "../component/chat/ChatMessages";
 import { StreamingAssistantReply } from "../component/chat/StreamingAssistantReply";
 import { LanguageSelector } from "../component/common/LanguageSelector";
 import { useChatStream, type ChatStreamFinishPayload, type SkillStepProgress } from "./chat/useChatStream";
 import { ContextWindowIndicator } from "../component/chat/ContextWindowIndicator";
+import { WorkspaceContextObjectPicker } from "../component/chat/WorkspaceContextObjectPicker";
 import { estimateMessagesTokens } from "../../lib/tokenEstimate";
+import type { SelectedShopifyObject } from "../../lib/shopifyObjectTypes";
+import { UnifiedTaskListPage } from "../component/unifiedTaskList/UnifiedTaskListPage";
 
 type WorkspacePanel = "dashboard" | "chat" | "skills" | "automation" | "tasks";
 type AutomationView = "configured" | "history" | "templates";
-type TaskKind = "automation" | "one_off";
-type TaskStatus = "executing" | "review_required" | "completed" | "failed";
 type ObjectType = "product" | "article" | "order";
 type ContextTool = ObjectType | "file" | "media";
 
@@ -34,6 +42,12 @@ type WorkspaceConversationMessage = {
   productImproveCard?: boolean;
   productImproveCardPayload?: ProductImproveCardPayload;
   pictureTranslateCard?: boolean;
+  pictureTranslateFormPayload?: PictureTranslateFormPayload;
+  imageGenerationCard?: boolean;
+  imageGenerationFormPayload?: ImageGenerationFormPayload;
+  batchTasksCard?: boolean;
+  batchTasksFormPayload?: BatchTasksFormPayload;
+  thinkingContent?: string;
 };
 
 type ConversationSummary = {
@@ -44,18 +58,6 @@ type ConversationSummary = {
 };
 
 type Conversation = ConversationSummary;
-
-type TaskRecord = {
-  id: string;
-  title: string;
-  kind: TaskKind;
-  source: string;
-  status: TaskStatus;
-  progress: number;
-  updatedAt: string;
-  summary: string;
-  action: string;
-};
 
 type DashboardMetric = {
   label: string;
@@ -94,6 +96,11 @@ type LocalFileItem = {
   name: string;
   size: string;
   note: string;
+  /** 服务端上传后返回的真实文件 ID（用于注入 agent 上下文） */
+  serverId: string | null;
+  charCount?: number;
+  uploading?: boolean;
+  uploadError?: string;
 };
 
 type RichMediaItem = {
@@ -141,10 +148,31 @@ const objectOptions: Record<ObjectType, ObjectOption[]> = {
   ],
 };
 
-const initialLocalFiles: LocalFileItem[] = [
-  { id: "file-1", name: "brand-guideline.pdf", size: "2.3 MB", note: "品牌语气和禁用词说明" },
-  { id: "file-2", name: "product-seo-rules.docx", size: "540 KB", note: "商品标题与描述 SEO 规范" },
-];
+function formatFileSizeLabel(bytes: number): string {
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+type WorkspaceFileListRecord = {
+  id: string;
+  name: string;
+  originalSize: number;
+  charCount: number;
+  createdAt: string;
+};
+
+function workspaceFileToLocalItem(file: WorkspaceFileListRecord): LocalFileItem {
+  return {
+    id: file.id,
+    serverId: file.id,
+    name: file.name,
+    size: formatFileSizeLabel(file.originalSize),
+    note: "历史上传",
+    charCount: file.charCount,
+  };
+}
 
 const initialRichMediaItems: RichMediaItem[] = [
   { id: "media-1", title: "Summer campaign landing", kind: "url", value: "https://spark-demo.shop/summer", note: "活动落地页 URL" },
@@ -229,13 +257,37 @@ const automationTemplates = [
   { id: "tpl-3", title: "SEO 标题优化批次", detail: "定时扫描表现弱的商品并生成标题优化建议" },
 ];
 
-const initialTasks: TaskRecord[] = [
-  { id: "TASK-241198", title: "每日订单异常巡检", kind: "automation", source: "订单监控", status: "executing", progress: 64, updatedAt: "2 分钟前", summary: "正在扫描退款、超时履约和异常金额订单。", action: "查看运行日志" },
-  { id: "TASK-241190", title: "多语言商品翻译", kind: "one_off", source: "翻译工具", status: "executing", progress: 51, updatedAt: "11 分钟前", summary: "英语与日语翻译已过半，正在写回结果。", action: "查看进度" },
-  { id: "TASK-241177", title: "新品描述补齐", kind: "one_off", source: "AI 对话", status: "review_required", progress: 100, updatedAt: "今天 09:03", summary: "已补齐 24 个新品描述，待人工审核。", action: "进入审核" },
-  { id: "TASK-241160", title: "每日经营简报", kind: "automation", source: "经营看板", status: "completed", progress: 100, updatedAt: "今天 09:00", summary: "已生成日报并同步到 Dashboard。", action: "查看简报" },
-  { id: "TASK-241155", title: "异常订单重跑", kind: "automation", source: "订单监控", status: "failed", progress: 100, updatedAt: "昨天 19:04", summary: "重跑失败，原因是订单数据源响应超时。", action: "重新执行" },
-];
+
+const DRAFT_CONVERSATION_PREFIX = "draft-";
+
+function isDraftConversationId(id: string): boolean {
+  return id.startsWith(DRAFT_CONVERSATION_PREFIX);
+}
+
+function createDraftConversationId(): string {
+  return `${DRAFT_CONVERSATION_PREFIX}${crypto.randomUUID()}`;
+}
+
+function conversationHasUserMessage(
+  messagesByConversation: Record<string, WorkspaceConversationMessage[]>,
+  conversationId: string,
+): boolean {
+  return (messagesByConversation[conversationId] ?? []).some((message) => message.role === "user");
+}
+
+function listEmptyDraftConversationIds(
+  conversations: ConversationSummary[],
+  messagesByConversation: Record<string, WorkspaceConversationMessage[]>,
+  keepConversationId?: string | null,
+): string[] {
+  return conversations
+    .filter((conversation) => {
+      if (keepConversationId && conversation.id === keepConversationId) return false;
+      if (!isDraftConversationId(conversation.id)) return false;
+      return !conversationHasUserMessage(messagesByConversation, conversation.id);
+    })
+    .map((conversation) => conversation.id);
+}
 
 function isWorkspacePanel(value: string | null): value is WorkspacePanel {
   return value === "dashboard" || value === "chat" || value === "skills" || value === "automation" || value === "tasks";
@@ -259,7 +311,6 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   const [messagesByConversation, setMessagesByConversation] = useState<Record<string, WorkspaceConversationMessage[]>>({});
   const loadedConvIdsRef = useRef<Set<string>>(new Set());
   const [automationView, setAutomationView] = useState<AutomationView>("configured");
-  const [taskFilter, setTaskFilter] = useState<"all" | TaskKind>("all");
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [activeContextTool, setActiveContextTool] = useState<ContextTool | null>(null);
   const [objectQueryByType, setObjectQueryByType] = useState<Record<ObjectType, string>>({
@@ -267,21 +318,32 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     article: "",
     order: "",
   });
-  const [selectedObjectsByType, setSelectedObjectsByType] = useState<Record<ObjectType, string[]>>({
-    product: ["prd-1001", "prd-1004"],
+  const [selectedObjectsByType, setSelectedObjectsByType] = useState<
+    Record<ObjectType, SelectedShopifyObject[]>
+  >({
+    product: [],
     article: [],
     order: [],
   });
-  const [localFiles, setLocalFiles] = useState<LocalFileItem[]>(initialLocalFiles);
+  const [localFiles, setLocalFiles] = useState<LocalFileItem[]>([]);
+  const [workspaceFilesLoading, setWorkspaceFilesLoading] = useState(false);
+  const [workspaceFilesError, setWorkspaceFilesError] = useState<string | null>(null);
   const [richMediaItems, setRichMediaItems] = useState<RichMediaItem[]>(initialRichMediaItems);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
   const {
     isStreaming,
     streamingText,
+    streamingThinkingText,
     streamingTranslationForm,
     streamingGenerateCard,
     streamingGeneratePayload,
+    streamingPictureTranslateCard,
+    streamingPictureTranslatePayload,
+    streamingImageGenerationCard,
+    streamingImageGenerationPayload,
+    streamingBatchTasksCard,
+    streamingBatchTasksPayload,
     skillSteps,
     sendMessage: streamConversation,
     prepareStreaming,
@@ -294,14 +356,77 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   const activePanel: WorkspacePanel = isWorkspacePanel(panelParam) ? panelParam : "dashboard";
   const activeConversation = conversationList.find((item) => item.id === activeConversationId) ?? null;
   const activeMessages = activeConversation ? (messagesByConversation[activeConversation.id] ?? []) : [];
-  const filteredTasks = useMemo(
-    () => (taskFilter === "all" ? initialTasks : initialTasks.filter((task) => task.kind === taskFilter)),
-    [taskFilter],
-  );
+
+  const removeConversationsFromState = (conversationIds: string[]) => {
+    if (conversationIds.length === 0) return;
+    const removeSet = new Set(conversationIds);
+    for (const id of conversationIds) {
+      loadedConvIdsRef.current.delete(id);
+    }
+    setConversationList((current) => current.filter((item) => !removeSet.has(item.id)));
+    setMessagesByConversation((current) => {
+      const next = { ...current };
+      for (const id of conversationIds) {
+        delete next[id];
+      }
+      return next;
+    });
+    setDraftByConversation((current) => {
+      const next = { ...current };
+      for (const id of conversationIds) {
+        delete next[id];
+      }
+      return next;
+    });
+    setActiveConversationId((current) =>
+      current && removeSet.has(current) ? null : current,
+    );
+  };
+
+  const pruneEmptyDraftConversations = (keepConversationId?: string | null) => {
+    const removedIds = listEmptyDraftConversationIds(
+      conversationList,
+      messagesByConversation,
+      keepConversationId,
+    );
+    removeConversationsFromState(removedIds);
+  };
+
+  const renameConversationInState = (oldId: string, nextConversation: ConversationSummary) => {
+    loadedConvIdsRef.current.delete(oldId);
+    loadedConvIdsRef.current.add(nextConversation.id);
+    setConversationList((current) =>
+      current.map((conversation) =>
+        conversation.id === oldId ? nextConversation : conversation,
+      ),
+    );
+    setMessagesByConversation((current) => {
+      const existing = current[oldId];
+      const next = { ...current };
+      delete next[oldId];
+      if (existing) {
+        next[nextConversation.id] = existing;
+      }
+      return next;
+    });
+    setDraftByConversation((current) => {
+      const existing = current[oldId];
+      const next = { ...current };
+      delete next[oldId];
+      if (existing !== undefined) {
+        next[nextConversation.id] = existing;
+      }
+      return next;
+    });
+    setActiveConversationId((current) =>
+      current === oldId ? nextConversation.id : current,
+    );
+  };
 
   // Lazy-load messages when switching to a conversation for the first time
   useEffect(() => {
     if (!activeConversationId) return;
+    if (isDraftConversationId(activeConversationId)) return;
     if (loadedConvIdsRef.current.has(activeConversationId)) return;
     loadedConvIdsRef.current.add(activeConversationId);
     const authQuery = typeof window !== "undefined" ? window.location.search : "";
@@ -326,6 +451,9 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   }, [activeConversationId]);
 
   const switchPanel = (panel: WorkspacePanel) => {
+    if (panel !== "chat") {
+      pruneEmptyDraftConversations();
+    }
     const next = new URLSearchParams(searchParams);
     if (panel === "dashboard") {
       next.delete("panel");
@@ -336,35 +464,91 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   };
 
   const openConversation = (conversationId: string) => {
+    pruneEmptyDraftConversations(conversationId);
     setActiveConversationId(conversationId);
     switchPanel("chat");
   };
 
-  const createConversation = async () => {
+  const removeConversation = async (conversationId: string) => {
     const authQuery = typeof window !== "undefined" ? window.location.search : "";
     try {
-      const res = await fetch(`/api/conversations${authQuery}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+      if (isDraftConversationId(conversationId)) {
+        const wasActive = activeConversationId === conversationId;
+        const nextList = conversationList.filter((item) => item.id !== conversationId);
+        removeConversationsFromState([conversationId]);
+        if (wasActive) {
+          const nextConversation = nextList[0] ?? null;
+          setActiveConversationId(nextConversation?.id ?? null);
+          if (nextConversation) {
+            switchPanel("chat");
+          } else {
+            switchPanel("dashboard");
+          }
+        }
+        shopify.toast.show("对话已删除");
+        return;
+      }
+
+      const res = await fetch(`/api/conversations/${conversationId}${authQuery}`, {
+        method: "DELETE",
       });
-      const data = (await res.json()) as { conversation: ConversationSummary };
-      const conv = data.conversation;
-      const welcomeMsg: WorkspaceConversationMessage = {
-        role: "assistant",
-        text: "新的对话已经创建。你可以先在下方工具栏补充商品、订单、文章、文件或富媒体，再发送任务需求。",
-        time: formatTimeLabel(new Date()),
-      };
-      loadedConvIdsRef.current.add(conv.id);
-      setConversationList((current) => [conv, ...current].slice(0, 50));
-      setMessagesByConversation((current) => ({ ...current, [conv.id]: [welcomeMsg] }));
-      setDraftByConversation((current) => ({ ...current, [conv.id]: "" }));
-      setActiveContextTool(null);
-      setActiveConversationId(conv.id);
-      switchPanel("chat");
+      if (!res.ok) {
+        shopify.toast.show("删除对话失败");
+        return;
+      }
+
+      const wasActive = activeConversationId === conversationId;
+      const nextList = conversationList.filter((item) => item.id !== conversationId);
+      setConversationList(nextList);
+      loadedConvIdsRef.current.delete(conversationId);
+      setMessagesByConversation((current) => {
+        const next = { ...current };
+        delete next[conversationId];
+        return next;
+      });
+      setDraftByConversation((current) => {
+        const next = { ...current };
+        delete next[conversationId];
+        return next;
+      });
+
+      if (wasActive) {
+        const nextConversation = nextList[0] ?? null;
+        setActiveConversationId(nextConversation?.id ?? null);
+        if (nextConversation) {
+          switchPanel("chat");
+        } else {
+          switchPanel("dashboard");
+        }
+      }
+      shopify.toast.show("对话已删除");
     } catch (err) {
-      console.error("[WorkspaceAppShellPage] create conversation failed:", err);
+      console.error("[WorkspaceAppShellPage] delete conversation failed:", err);
+      shopify.toast.show("删除对话失败");
     }
+  };
+
+  const createConversation = () => {
+    pruneEmptyDraftConversations();
+    const now = new Date().toISOString();
+    const conv: ConversationSummary = {
+      id: createDraftConversationId(),
+      title: "新对话",
+      preview: "",
+      updatedAt: now,
+    };
+    const welcomeMsg: WorkspaceConversationMessage = {
+      role: "assistant",
+      text: "新的对话已经创建。你可以先在下方工具栏补充商品、订单、文章、文件或富媒体，再发送任务需求。",
+      time: formatTimeLabel(new Date()),
+    };
+    loadedConvIdsRef.current.add(conv.id);
+    setConversationList((current) => [conv, ...current].slice(0, 50));
+    setMessagesByConversation((current) => ({ ...current, [conv.id]: [welcomeMsg] }));
+    setDraftByConversation((current) => ({ ...current, [conv.id]: "" }));
+    setActiveContextTool(null);
+    setActiveConversationId(conv.id);
+    switchPanel("chat");
   };
 
   const clearContext = () => {
@@ -386,17 +570,51 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     setSelectedMediaIds([]);
   };
 
-  const toggleObjectSelection = (type: ObjectType, objectId: string) => {
+  const toggleObjectSelection = (type: ObjectType, object: SelectedShopifyObject) => {
     setSelectedObjectsByType((current) => {
-      const currentIds = current[type];
+      const currentItems = current[type];
       return {
         ...current,
-        [type]: currentIds.includes(objectId)
-          ? currentIds.filter((id) => id !== objectId)
-          : [...currentIds, objectId],
+        [type]: currentItems.some((item) => item.id === object.id)
+          ? currentItems.filter((item) => item.id !== object.id)
+          : [...currentItems, object],
       };
     });
   };
+
+  const loadWorkspaceFiles = useCallback(async () => {
+    setWorkspaceFilesLoading(true);
+    setWorkspaceFilesError(null);
+    try {
+      const authQuery = typeof window !== "undefined" ? window.location.search : "";
+      const res = await fetch(`/api/files${authQuery}`);
+      if (!res.ok) {
+        const errData = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(errData.error ?? `加载失败 (${res.status})`);
+      }
+      const data = (await res.json()) as { files: WorkspaceFileListRecord[] };
+      setLocalFiles((current) => {
+        const inFlight = current.filter((file) => file.uploading);
+        const serverItems = data.files.map(workspaceFileToLocalItem);
+        const seen = new Set(serverItems.map((file) => file.id));
+        const recentUploaded = current.filter(
+          (file) => file.serverId && !seen.has(file.serverId) && !file.uploading,
+        );
+        return [...inFlight, ...recentUploaded, ...serverItems];
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setWorkspaceFilesError(msg);
+    } finally {
+      setWorkspaceFilesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeContextTool === "file") {
+      void loadWorkspaceFiles();
+    }
+  }, [activeContextTool, loadWorkspaceFiles]);
 
   const toggleFileSelection = (fileId: string) => {
     setSelectedFileIds((current) => (current.includes(fileId) ? current.filter((id) => id !== fileId) : [...current, fileId]));
@@ -406,13 +624,63 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     setSelectedMediaIds((current) => (current.includes(mediaId) ? current.filter((id) => id !== mediaId) : [...current, mediaId]));
   };
 
-  const addLocalFile = (payload: { name: string; note: string }) => {
-    const id = `file-${Date.now()}`;
+  const addLocalFile = async (payload: { file: File; note?: string }) => {
+    const localId = `file-${Date.now()}`;
+    const sizeLabel = payload.file.size > 1024 * 1024
+      ? `${(payload.file.size / 1024 / 1024).toFixed(1)} MB`
+      : `${Math.round(payload.file.size / 1024)} KB`;
+
     setLocalFiles((current) => [
-      { id, name: payload.name, note: payload.note || "新上传文件", size: "1.1 MB" },
+      { id: localId, name: payload.file.name, note: payload.note?.trim() || "", size: sizeLabel, serverId: null, uploading: true },
       ...current,
     ]);
-    setSelectedFileIds((current) => [id, ...current]);
+    setSelectedFileIds((current) => [localId, ...current]);
+
+    try {
+      const authQuery = typeof window !== "undefined" ? window.location.search : "";
+      const formData = new FormData();
+      formData.append("file", payload.file);
+      formData.append("note", payload.note?.trim() ?? "");
+      const res = await fetch(`/api/upload-file${authQuery}`, { method: "POST", body: formData });
+      if (!res.ok) {
+        const errData = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(errData.error ?? `上传失败 (${res.status})`);
+      }
+      const data = (await res.json()) as { id: string; charCount?: number };
+      setLocalFiles((current) =>
+        current.map((f) =>
+          f.id === localId
+            ? {
+                ...f,
+                id: data.id,
+                serverId: data.id,
+                charCount: data.charCount,
+                uploading: false,
+                uploadError: undefined,
+                note: payload.note?.trim() || "",
+              }
+            : f,
+        ),
+      );
+      setSelectedFileIds((current) =>
+        current.map((id) => (id === localId ? data.id : id)),
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setLocalFiles((current) =>
+        current.map((f) =>
+          f.id === localId ? { ...f, uploading: false, uploadError: msg } : f,
+        ),
+      );
+    }
+  };
+
+  const deleteLocalFile = async (localId: string, serverId: string | null) => {
+    setLocalFiles((current) => current.filter((f) => f.id !== localId));
+    setSelectedFileIds((current) => current.filter((id) => id !== localId));
+    if (!serverId) return;
+    const authQuery = typeof window !== "undefined" ? window.location.search : "";
+    await fetch(`/api/files/${serverId}/delete${authQuery}`, { method: "DELETE" }).catch(() => {});
   };
 
   const addRichMediaItem = (payload: { title: string; kind: RichMediaItem["kind"]; value: string; note: string }) => {
@@ -424,17 +692,41 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   const sendMessage = async () => {
     if (!activeConversation) return;
     const content = (draftByConversation[activeConversation.id] ?? "").trim();
-    const conversationId = activeConversation.id;
-    if (!content || streamingConversationId === conversationId) return;
+    if (!content || streamingConversationId === activeConversation.id) return;
+
+    let conversationId = activeConversation.id;
+    let conversationTitle = activeConversation.title;
+    const priorMessages = messagesByConversation[conversationId] ?? [];
+    if (isDraftConversationId(conversationId)) {
+      const authQuery = typeof window !== "undefined" ? window.location.search : "";
+      try {
+        const res = await fetch(`/api/conversations${authQuery}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!res.ok) {
+          shopify.toast.show("创建对话失败，请稍后重试");
+          return;
+        }
+        const data = (await res.json()) as { conversation: ConversationSummary };
+        renameConversationInState(conversationId, data.conversation);
+        conversationId = data.conversation.id;
+        conversationTitle = data.conversation.title;
+      } catch (err) {
+        console.error("[WorkspaceAppShellPage] persist draft conversation failed:", err);
+        shopify.toast.show("创建对话失败，请稍后重试");
+        return;
+      }
+    }
 
     replyEpochRef.current += 1;
     const epoch = replyEpochRef.current;
-    const priorMessages = messagesByConversation[conversationId] ?? [];
     const nextPreview = content.length > 28 ? `${content.slice(0, 28)}...` : content;
-    const isNewTitle = activeConversation.title === "新对话";
+    const isNewTitle = conversationTitle === "新对话";
     const nextTitle = isNewTitle
       ? (content.length > 18 ? `${content.slice(0, 18)}...` : content)
-      : activeConversation.title;
+      : conversationTitle;
     const userTime = formatTimeLabel(new Date());
 
     flushSync(() => {
@@ -474,10 +766,20 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
       { role: "user", content: augmentUserMessage(content, contextBlock) },
     ];
 
+    const uploadedFileIds = selectedFileIds
+      .map((id) => localFiles.find((f) => f.id === id)?.serverId)
+      .filter((sid): sid is string => typeof sid === "string");
+
     try {
       const authQuery = typeof window !== "undefined" ? window.location.search : "";
+      const workspaceBatchProducts = selectedShopifyObjectsToBatchProducts(
+        selectedObjectsByType.product,
+      );
+
       await streamConversation(apiMessages, {
         url: `/chat-stream${authQuery}`,
+        fileIds: uploadedFileIds,
+        workspaceBatchProducts,
         onFinish: (payload) => {
           if (epoch !== replyEpochRef.current) return;
 
@@ -571,6 +873,14 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     shopify.toast.show(t("pictureTranslate.submitSuccess"));
   };
 
+  const handleImageGenerationCardSuccess = (
+    _conversationId: string,
+    _messageIndex: number,
+    _detail: { taskId: string; batchId: string },
+  ) => {
+    shopify.toast.show(t("imageGeneration.submitSuccess"));
+  };
+
   useEffect(() => {
     if (!accountMenuOpen) return;
     const handlePointerDown = (event: MouseEvent) => {
@@ -585,7 +895,8 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   return (
     <div style={shellStyle}>
       <aside style={sidebarStyle}>
-        <div>
+        <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+          {/* Brand */}
           <div style={brandRowStyle}>
             <div style={brandBadgeStyle}>S</div>
             <div>
@@ -594,44 +905,70 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             </div>
           </div>
 
-          <button type="button" style={newTaskButtonStyle} onClick={createConversation}>
-            + 新建对话
+          {/* New conversation */}
+          <button
+            type="button"
+            className="sidebar-new-chat-btn workspace-primary-btn"
+            style={newChatButtonStyle}
+            onClick={createConversation}
+          >
+            <span style={newChatPlusBadgeStyle}>+</span>
+            <span>新建对话</span>
           </button>
 
+          {/* Secondary nav */}
           <div style={navGroupStyle}>
             {panelItems.map((item) => (
               <button
                 key={item.key}
                 type="button"
+                className={`workspace-nav-btn${activePanel === item.key ? " is-active" : ""}`}
                 style={navButtonStyle(activePanel === item.key)}
                 onClick={() => switchPanel(item.key)}
               >
-                <span style={navLabelStyle}>
-                  <span style={navIconStyle}>{item.icon}</span>
-                  <span>{item.label}</span>
-                </span>
+                <span style={navIconStyle(activePanel === item.key)}>{item.icon}</span>
+                <span>{item.label}</span>
               </button>
             ))}
           </div>
 
+          {/* Divider */}
+          <div style={sidebarDividerStyle} />
+
+          {/* Conversation history */}
           <div style={sidebarSectionStyle}>
             <div style={sidebarSectionHeadStyle}>
-              <span>对话记录</span>
+              <span>最近对话</span>
               <span style={mutedMetaStyle}>{Math.min(conversationList.length, 50)} / 50</span>
             </div>
             <div style={conversationListStyle}>
-              {conversationList.slice(0, 50).map((conversation) => (
-                <button
-                  key={conversation.id}
-                  type="button"
-                  style={historyItemStyle(activeConversationId === conversation.id)}
-                  onClick={() => openConversation(conversation.id)}
-                >
-                  <span style={historyTitleStyle}>{conversation.title}</span>
-                  <span style={historyPreviewStyle}>{conversation.preview}</span>
-                  <span style={mutedMetaStyle}>{formatRelativeTime(conversation.updatedAt)}</span>
-                </button>
-              ))}
+              {conversationList.slice(0, 50).map((conversation) => {
+                const active =
+                  activePanel === "chat" && activeConversationId === conversation.id;
+                return (
+                  <div key={conversation.id} className="sidebar-history-row" style={historyRowStyle}>
+                    <button
+                      type="button"
+                      className={`sidebar-history-item workspace-history-item${active ? " is-active" : ""}`}
+                      style={historyItemStyle(active)}
+                      onClick={() => openConversation(conversation.id)}
+                      title={conversation.title}
+                    >
+                      <span style={historyTitleStyle(active)}>{conversation.title}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="sidebar-history-delete"
+                      style={historyDeleteButtonStyle}
+                      aria-label={`删除对话：${conversation.title}`}
+                      title="删除对话"
+                      onClick={() => void removeConversation(conversation.id)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -676,6 +1013,9 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             objectQueryByType={objectQueryByType}
             selectedObjectsByType={selectedObjectsByType}
             localFiles={localFiles}
+            workspaceFilesLoading={workspaceFilesLoading}
+            workspaceFilesError={workspaceFilesError}
+            onReloadWorkspaceFiles={loadWorkspaceFiles}
             richMediaItems={richMediaItems}
             selectedFileIds={selectedFileIds}
             selectedMediaIds={selectedMediaIds}
@@ -698,6 +1038,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             onToggleFileSelection={toggleFileSelection}
             onToggleMediaSelection={toggleMediaSelection}
             onAddLocalFile={addLocalFile}
+            onDeleteLocalFile={deleteLocalFile}
             onAddRichMediaItem={addRichMediaItem}
             onCloseToolPicker={() => setActiveContextTool(null)}
             onClearToolSelection={clearToolSelection}
@@ -706,9 +1047,16 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             isStreaming={isStreaming}
             showStreamingReply={streamingConversationId === activeConversation.id}
             streamingText={streamingText}
+            streamingThinkingText={streamingThinkingText}
             streamingTranslationForm={streamingTranslationForm}
             streamingGenerateCard={streamingGenerateCard}
             streamingGeneratePayload={streamingGeneratePayload}
+            streamingPictureTranslateCard={streamingPictureTranslateCard}
+            streamingPictureTranslatePayload={streamingPictureTranslatePayload}
+            streamingImageGenerationCard={streamingImageGenerationCard}
+            streamingImageGenerationPayload={streamingImageGenerationPayload}
+            streamingBatchTasksCard={streamingBatchTasksCard}
+            streamingBatchTasksPayload={streamingBatchTasksPayload}
             skillSteps={skillSteps}
             onAbortStream={() => {
               replyEpochRef.current += 1;
@@ -717,6 +1065,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             }}
             onTranslationCardSuccess={handleTranslationCardSuccess}
             onPictureTranslateCardSuccess={handlePictureTranslateCardSuccess}
+            onImageGenerationCardSuccess={handleImageGenerationCardSuccess}
           />
         ) : null}
         {activePanel === "skills" ? <SkillsPanel onOpenTool={(path: string) => navigate(path)} /> : null}
@@ -724,7 +1073,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
           <AutomationPanel activeView={automationView} onChangeView={setAutomationView} />
         ) : null}
         {activePanel === "tasks" ? (
-          <TasksPanel tasks={filteredTasks} filter={taskFilter} onFilterChange={setTaskFilter} />
+          <UnifiedTaskListPage locationSearch={typeof window !== "undefined" ? window.location.search : ""} />
         ) : null}
       </main>
     </div>
@@ -770,9 +1119,9 @@ function DashboardPanel() {
               <div style={sectionTextStyle}>今天、昨天和 7 天均值的简化对比。</div>
             </div>
             <div style={trendLegendStyle}>
-              <span style={legendItemStyle("#111827")}>Today</span>
-              <span style={legendItemStyle("#94a3b8")}>Yesterday</span>
-              <span style={legendItemStyle("#d1d5db")}>7d Avg</span>
+              <span style={legendItemStyle(shopifyUi.primary)}>Today</span>
+              <span style={legendItemStyle("#47c1af")}>Yesterday</span>
+              <span style={legendItemStyle("#b4e6d3")}>7d Avg</span>
             </div>
           </div>
           <div style={chartStyle}>
@@ -790,7 +1139,7 @@ function DashboardPanel() {
                         style={{
                           ...barFillStyle,
                           width: `${value}%`,
-                          background: index === 0 ? "#111827" : index === 1 ? "#94a3b8" : "#d1d5db",
+                          background: index === 0 ? shopifyUi.primary : index === 1 ? "#47c1af" : "#b4e6d3",
                         }}
                       />
                     </div>
@@ -809,7 +1158,7 @@ function DashboardPanel() {
               <div style={sectionTitleStyle}>AI 自动化执行摘要</div>
               <div style={sectionTextStyle}>今天自动化和单次任务带来的实际产出。</div>
             </div>
-            <div style={mutedMetaStyle}>{initialTasks.length} 个任务</div>
+            <div style={mutedMetaStyle}>今日执行摘要</div>
           </div>
           <div style={listColumnStyle}>
             {dashboardTaskSummary.map((item) => (
@@ -851,6 +1200,9 @@ function ChatPanel({
   objectQueryByType,
   selectedObjectsByType,
   localFiles,
+  workspaceFilesLoading,
+  workspaceFilesError,
+  onReloadWorkspaceFiles,
   richMediaItems,
   selectedFileIds,
   selectedMediaIds,
@@ -861,6 +1213,7 @@ function ChatPanel({
   onToggleFileSelection,
   onToggleMediaSelection,
   onAddLocalFile,
+  onDeleteLocalFile,
   onAddRichMediaItem,
   onCloseToolPicker,
   onClearToolSelection,
@@ -869,31 +1222,43 @@ function ChatPanel({
   isStreaming,
   showStreamingReply,
   streamingText,
+  streamingThinkingText,
   streamingTranslationForm,
   streamingGenerateCard,
   streamingGeneratePayload,
+  streamingPictureTranslateCard,
+  streamingPictureTranslatePayload,
+  streamingImageGenerationCard,
+  streamingImageGenerationPayload,
+  streamingBatchTasksCard,
+  streamingBatchTasksPayload,
   skillSteps,
   onAbortStream,
   onTranslationCardSuccess,
   onPictureTranslateCardSuccess,
+  onImageGenerationCardSuccess,
 }: {
   conversation: Conversation;
   messages: WorkspaceConversationMessage[];
   draft: string;
   activeContextTool: ContextTool | null;
   objectQueryByType: Record<ObjectType, string>;
-  selectedObjectsByType: Record<ObjectType, string[]>;
+  selectedObjectsByType: Record<ObjectType, SelectedShopifyObject[]>;
   localFiles: LocalFileItem[];
+  workspaceFilesLoading: boolean;
+  workspaceFilesError: string | null;
+  onReloadWorkspaceFiles: () => void | Promise<void>;
   richMediaItems: RichMediaItem[];
   selectedFileIds: string[];
   selectedMediaIds: string[];
   onDraftChange: (value: string) => void;
   onContextToolChange: (tool: ContextTool) => void;
   onObjectQueryChange: (type: ObjectType, value: string) => void;
-  onToggleObjectSelection: (type: ObjectType, objectId: string) => void;
+  onToggleObjectSelection: (type: ObjectType, object: SelectedShopifyObject) => void;
   onToggleFileSelection: (fileId: string) => void;
   onToggleMediaSelection: (mediaId: string) => void;
-  onAddLocalFile: (payload: { name: string; note: string }) => void;
+  onAddLocalFile: (payload: { file: File; note?: string }) => void;
+  onDeleteLocalFile: (localId: string, serverId: string | null) => void;
   onAddRichMediaItem: (payload: { title: string; kind: RichMediaItem["kind"]; value: string; note: string }) => void;
   onCloseToolPicker: () => void;
   onClearToolSelection: (tool: ContextTool) => void;
@@ -902,9 +1267,16 @@ function ChatPanel({
   isStreaming: boolean;
   showStreamingReply: boolean;
   streamingText: string;
+  streamingThinkingText?: string;
   streamingTranslationForm: unknown;
   streamingGenerateCard: boolean;
   streamingGeneratePayload: unknown;
+  streamingPictureTranslateCard: boolean;
+  streamingPictureTranslatePayload: unknown;
+  streamingImageGenerationCard: boolean;
+  streamingImageGenerationPayload: unknown;
+  streamingBatchTasksCard: boolean;
+  streamingBatchTasksPayload: BatchTasksFormPayload | undefined;
   skillSteps: SkillStepProgress[];
   onAbortStream: () => void;
   onTranslationCardSuccess: (
@@ -913,6 +1285,11 @@ function ChatPanel({
     detail: { jobId?: string; jobIds?: string[]; message: string },
   ) => void;
   onPictureTranslateCardSuccess: (
+    conversationId: string,
+    messageIndex: number,
+    detail: { taskId: string; batchId: string },
+  ) => void;
+  onImageGenerationCardSuccess: (
     conversationId: string,
     messageIndex: number,
     detail: { taskId: string; batchId: string },
@@ -926,8 +1303,8 @@ function ChatPanel({
     article: "all",
     order: "all",
   });
-  const [newFileName, setNewFileName] = useState("");
-  const [newFileNote, setNewFileNote] = useState("");
+  const [newFileObj, setNewFileObj] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [newMediaTitle, setNewMediaTitle] = useState("");
   const [newMediaValue, setNewMediaValue] = useState("");
   const [newMediaNote, setNewMediaNote] = useState("");
@@ -937,6 +1314,10 @@ function ChatPanel({
   const contextTokens = useMemo(
     () => estimateMessagesTokens(messages),
     [messages],
+  );
+  const workspaceBatchProducts = useMemo(
+    () => selectedShopifyObjectsToBatchProducts(selectedObjectsByType.product),
+    [selectedObjectsByType.product],
   );
   const activeObjectOptions = isObjectType(activeContextTool)
     ? objectOptions[activeContextTool].filter((item) => {
@@ -976,6 +1357,39 @@ function ChatPanel({
     { key: "file", label: selectedFileIds.length > 0 ? `文件 ${selectedFileIds.length}` : "文件", icon: "↑", active: activeContextTool === "file" },
     { key: "media", label: selectedMediaIds.length > 0 ? `富媒体 ${selectedMediaIds.length}` : "富媒体", icon: "◇", active: activeContextTool === "media" },
   ];
+  const activeContextSelectionCount =
+    activeContextTool === "product"
+      ? selectedObjectsByType.product.length
+      : activeContextTool === "article"
+        ? selectedObjectsByType.article.length
+        : activeContextTool === "order"
+          ? selectedObjectsByType.order.length
+          : activeContextTool === "file"
+            ? selectedFileIds.length + (newFileObj ? 1 : 0)
+            : activeContextTool === "media"
+              ? selectedMediaIds.length
+              : 0;
+
+  const resetPendingFileSelection = () => {
+    setNewFileObj(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDismissToolPicker = () => {
+    resetPendingFileSelection();
+    onCloseToolPicker();
+  };
+
+  const handleConfirmToolPicker = () => {
+    if (activeContextTool === "file" && newFileObj) {
+      void onAddLocalFile({ file: newFileObj });
+      resetPendingFileSelection();
+    }
+    onCloseToolPicker();
+  };
+
   const selectedSummaryBubbles: Array<{ key: ContextTool; label: string }> = [
     ...(selectedObjectsByType.product.length > 0 ? [{ key: "product" as const, label: `已选择 ${selectedObjectsByType.product.length} 个商品` }] : []),
     ...(selectedObjectsByType.order.length > 0 ? [{ key: "order" as const, label: `已选择 ${selectedObjectsByType.order.length} 个订单` }] : []),
@@ -984,9 +1398,17 @@ function ChatPanel({
     ...(selectedMediaIds.length > 0 ? [{ key: "media" as const, label: `已选择 ${selectedMediaIds.length} 个富媒体` }] : []),
   ];
 
-  const scrollToBottom = () => {
-    if (messageListRef.current) {
-      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+  /**
+   * 即时滚到底部（流式期间用，不触发 smooth 动画避免和下一帧的赋值互相打架）。
+   * smooth=true 仅用于用户主动点击"查看最新消息"按钮。
+   */
+  const scrollToBottom = (smooth = false) => {
+    const el = messageListRef.current;
+    if (!el) return;
+    if (smooth) {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    } else {
+      el.scrollTop = el.scrollHeight;
     }
   };
 
@@ -1011,20 +1433,23 @@ function ChatPanel({
     ta.setSelectionRange(len, len);
   };
 
+  // 会话切换、新消息落地、流式气泡首次出现时：等下一帧 DOM 高度稳定后再滚底部
   useEffect(() => {
     const element = messageListRef.current;
     if (!element) return;
-    setTimeout(() => {
+    const raf = requestAnimationFrame(() => {
       if (!messageListRef.current) return;
       messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
       setIsScrolledUp(false);
-    }, 0);
+    });
+    return () => cancelAnimationFrame(raf);
   }, [conversation.id, messages.length, showStreamingReply]);
 
+  // 流式过程中自动追底：思考文字、正文、skill steps 任一增长都触发
   useEffect(() => {
     if (!showStreamingReply || isScrolledUp) return;
-    scrollToBottom();
-  }, [showStreamingReply, streamingText, skillSteps.length, isStreaming, isScrolledUp]);
+    scrollToBottom(); // instant，避免与下一帧 smooth 互相打架
+  }, [showStreamingReply, streamingText, streamingThinkingText, skillSteps.length, isStreaming, isScrolledUp]);
 
   useEffect(() => {
     const ta = textareaRef.current;
@@ -1037,12 +1462,23 @@ function ChatPanel({
     focusComposerInput();
   }, [conversation.id, isStreaming]);
 
+  useEffect(() => {
+    if (!activeContextTool) return;
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      handleDismissToolPicker();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activeContextTool, onCloseToolPicker]);
+
   return (
     <div style={chatLayoutStyle}>
       <section style={{ ...surfaceCardStyle, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={conversationMetaRowStyle}>
           <span style={conversationMetaTitleStyle}>{conversation.title}</span>
-          <span style={mutedMetaStyle}>{conversation.updatedAt}</span>
+          <span style={mutedMetaStyle}>{formatConversationTimestamp(conversation.updatedAt)}</span>
         </div>
 
         <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
@@ -1054,10 +1490,18 @@ function ChatPanel({
                   active={showStreamingReply}
                   isStreaming={isStreaming}
                   streamingText={streamingText}
+                  streamingThinkingText={streamingThinkingText}
                   skillSteps={skillSteps}
                   streamingTranslationForm={streamingTranslationForm}
                   streamingGenerateCard={streamingGenerateCard}
                   streamingGeneratePayload={streamingGeneratePayload}
+                  streamingPictureTranslateCard={streamingPictureTranslateCard}
+                  streamingPictureTranslatePayload={streamingPictureTranslatePayload}
+                  streamingImageGenerationCard={streamingImageGenerationCard}
+                  streamingImageGenerationPayload={streamingImageGenerationPayload}
+                  streamingBatchTasksCard={streamingBatchTasksCard}
+                  streamingBatchTasksPayload={streamingBatchTasksPayload}
+                  workspaceBatchProducts={workspaceBatchProducts}
                 />
               }
               onTranslationCardSuccess={(messageIndex, detail) =>
@@ -1066,11 +1510,14 @@ function ChatPanel({
               onPictureTranslateCardSuccess={(messageIndex, detail) =>
                 onPictureTranslateCardSuccess(conversation.id, messageIndex, detail)
               }
+              onImageGenerationCardSuccess={(messageIndex, detail) =>
+                onImageGenerationCardSuccess(conversation.id, messageIndex, detail)
+              }
             />
           </div>
           {isScrolledUp ? (
             <div style={scrollBottomOverlayStyle}>
-              <button type="button" style={scrollBottomButtonStyle} onClick={scrollToBottom}>
+              <button type="button" style={scrollBottomButtonStyle} onClick={() => scrollToBottom(true)}>
                 ↓ 查看最新消息
               </button>
             </div>
@@ -1095,6 +1542,7 @@ function ChatPanel({
             value={draft}
             onChange={(event) => onDraftChange(event.target.value)}
             onKeyDown={handleTextareaKeyDown}
+            className="workspace-composer-input"
             style={textareaStyle}
             placeholder="继续补充你的任务目标，并结合商品、订单、文章、文件或富媒体上下文..."
             disabled={isStreaming}
@@ -1134,7 +1582,7 @@ function ChatPanel({
               <ContextWindowIndicator currentTokens={contextTokens} maxTokens={MAX_CONTEXT_TOKENS} />
             </div>
             <div style={buttonRowStyle}>
-              <button type="button" style={ghostButtonStyle} disabled={isStreaming}>
+              <button type="button" className="workspace-ghost-btn" style={ghostButtonStyle} disabled={isStreaming}>
                 生成任务建议
               </button>
               {isStreaming ? (
@@ -1144,6 +1592,7 @@ function ChatPanel({
               ) : null}
               <button
                 type="button"
+                className="workspace-primary-btn"
                 style={{ ...primaryButtonStyle, opacity: isStreaming ? 0.6 : 1 }}
                 onClick={() => void onSend()}
                 disabled={isStreaming}
@@ -1156,7 +1605,7 @@ function ChatPanel({
       </section>
 
       {activeContextTool ? (
-        <div style={toolModalBackdropStyle} onClick={onCloseToolPicker}>
+        <div style={toolModalBackdropStyle} onClick={handleDismissToolPicker}>
           <div style={toolModalCardStyle} onClick={(event) => event.stopPropagation()}>
             <div style={toolModalHeaderStyle}>
               <div>
@@ -1175,29 +1624,41 @@ function ChatPanel({
                       : "选择需要附加到这次对话的 URL、图片或视频。"}
                 </div>
               </div>
-              <button type="button" style={toolModalCloseStyle} onClick={onCloseToolPicker} aria-label="关闭">
+              <button type="button" style={toolModalCloseStyle} onClick={handleDismissToolPicker} aria-label="关闭">
                 ✕
               </button>
             </div>
 
-            {isObjectType(activeContextTool) ? (
+            {activeContextTool === "product" || activeContextTool === "article" ? (
+              <WorkspaceContextObjectPicker
+                kind={activeContextTool}
+                label={objectTypeLabels[activeContextTool]}
+                query={objectQueryByType[activeContextTool]}
+                onQueryChange={(value) => onObjectQueryChange(activeContextTool, value)}
+                selected={selectedObjectsByType[activeContextTool]}
+                onToggle={(item) => onToggleObjectSelection(activeContextTool, item)}
+                locationSearch={typeof window !== "undefined" ? window.location.search : ""}
+              />
+            ) : null}
+
+            {activeContextTool === "order" ? (
               <>
                 <input
-                  value={objectQueryByType[activeContextTool]}
-                  onChange={(event) => onObjectQueryChange(activeContextTool, event.target.value)}
-                  placeholder={`搜索${objectTypeLabels[activeContextTool]}名称、分类或状态`}
+                  value={objectQueryByType.order}
+                  onChange={(event) => onObjectQueryChange("order", event.target.value)}
+                  placeholder="搜索订单号、站点或状态"
                   style={selectorSearchInputStyle}
                 />
                 <div style={filterChipRowStyle}>
-                  {objectFilterLabels[activeContextTool].map((filter) => (
+                  {objectFilterLabels.order.map((filter) => (
                     <button
                       key={filter.key}
                       type="button"
-                      style={filterChipStyle(activeObjectFilter[activeContextTool] === filter.key)}
+                      style={filterChipStyle(activeObjectFilter.order === filter.key)}
                       onClick={() =>
                         setActiveObjectFilter((current) => ({
                           ...current,
-                          [activeContextTool]: filter.key,
+                          order: filter.key,
                         }))
                       }
                     >
@@ -1207,13 +1668,15 @@ function ChatPanel({
                 </div>
                 <div style={selectorListCompactStyle}>
                   {filteredObjectOptions.map((item) => {
-                    const checked = selectedObjectsByType[activeContextTool].includes(item.id);
+                    const checked = selectedObjectsByType.order.some((selected) => selected.id === item.id);
                     return (
                       <label key={item.id} style={selectorItemStyle(checked)}>
                         <input
                           type="checkbox"
                           checked={checked}
-                          onChange={() => onToggleObjectSelection(activeContextTool, item.id)}
+                          onChange={() =>
+                            onToggleObjectSelection("order", { id: item.id, title: item.title })
+                          }
                         />
                         <div style={selectorItemContentStyle}>
                           <span style={sectionTitleSmallStyle}>{item.title}</span>
@@ -1231,43 +1694,89 @@ function ChatPanel({
               <>
                 <div style={mockCreateBoxStyle}>
                   <input
-                    value={newFileName}
-                    onChange={(event) => setNewFileName(event.target.value)}
-                    placeholder="输入文件名，例如 campaign-brief.pdf"
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".txt,.md,.pdf,.docx,.csv,.xlsx,.xls,.json"
                     style={selectorSearchInputStyle}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      setNewFileObj(file);
+                    }}
                   />
-                  <div style={inlineFieldRowStyle}>
-                    <input
-                      value={newFileNote}
-                      onChange={(event) => setNewFileNote(event.target.value)}
-                      placeholder="补充文件用途说明"
-                      style={compactFieldStyle}
-                    />
-                    <button
-                      type="button"
-                      style={ghostButtonStyle}
-                      onClick={() => {
-                        const name = newFileName.trim();
-                        if (!name) return;
-                        onAddLocalFile({ name, note: newFileNote.trim() });
-                        setNewFileName("");
-                        setNewFileNote("");
-                      }}
-                    >
-                      添加文件
-                    </button>
+                  {newFileObj ? (
+                    <div style={{ fontSize: 12, color: "#202223", marginTop: 6 }}>
+                      已选择：{newFileObj.name}
+                    </div>
+                  ) : null}
+                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
+                    支持：PDF、DOCX、TXT、MD、CSV、XLSX、JSON，最大 10 MB。选好后点确认即可上传并附加。
                   </div>
                 </div>
                 <div style={selectorListCompactStyle}>
+                  {workspaceFilesLoading && localFiles.length === 0 ? (
+                    <div style={sectionTextStyle}>正在加载历史上传…</div>
+                  ) : null}
+                  {workspaceFilesError ? (
+                    <div style={{ ...sectionTextStyle, color: "#d72c0d" }}>
+                      {workspaceFilesError}
+                      <button
+                        type="button"
+                        style={{ ...ghostButtonStyle, marginLeft: 8, padding: "2px 8px", fontSize: 12 }}
+                        onClick={() => void onReloadWorkspaceFiles()}
+                      >
+                        重试
+                      </button>
+                    </div>
+                  ) : null}
+                  {!workspaceFilesLoading && !workspaceFilesError && localFiles.length === 0 ? (
+                    <div style={sectionTextStyle}>暂无历史上传文件，可在上方选择文件后点确认上传。</div>
+                  ) : null}
                   {localFiles.map((file) => {
                     const checked = selectedFileIds.includes(file.id);
+                    const authQuery = typeof window !== "undefined" ? window.location.search : "";
                     return (
                       <label key={file.id} style={selectorItemStyle(checked)}>
-                        <input type="checkbox" checked={checked} onChange={() => onToggleFileSelection(file.id)} />
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={Boolean(file.uploading)}
+                          onChange={() => onToggleFileSelection(file.id)}
+                        />
                         <div style={selectorItemContentStyle}>
                           <span style={sectionTitleSmallStyle}>{file.name}</span>
-                          <span style={sectionTextStyle}>{file.note}</span>
-                          <span style={mutedMetaStyle}>{file.size}</span>
+                          {file.note ? <span style={sectionTextStyle}>{file.note}</span> : null}
+                          <span style={mutedMetaStyle}>
+                            {file.size}
+                            {file.uploading ? " · 上传中…" : ""}
+                            {file.uploadError ? ` · ⚠ ${file.uploadError}` : ""}
+                            {!file.uploading && !file.uploadError && file.serverId && file.charCount
+                              ? ` · 已解析 (${(file.charCount / 1000).toFixed(0)}k 字符)`
+                              : ""}
+                          </span>
+                          {file.serverId && !file.uploading ? (
+                            <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                              <a
+                                href={`/api/files/${file.serverId}${authQuery}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ fontSize: 11, color: "rgba(44,110,203,0.8)" }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                下载原始文件
+                              </a>
+                              <button
+                                type="button"
+                                style={{ fontSize: 11, color: "#d72c0d", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  void onDeleteLocalFile(file.id, file.serverId);
+                                }}
+                              >
+                                删除
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
                       </label>
                     );
@@ -1345,33 +1854,101 @@ function ChatPanel({
                 </div>
               </>
             ) : null}
+
+            <div style={toolModalFooterStyle}>
+              <span style={mutedMetaStyle}>
+                {activeContextSelectionCount > 0
+                  ? `已选择 ${activeContextSelectionCount} 项，确认后将附加到本次对话`
+                  : "勾选后点击确认附加到对话"}
+              </span>
+              <button type="button" className="workspace-primary-btn" style={primaryButtonStyle} onClick={handleConfirmToolPicker}>
+                {activeContextSelectionCount > 0 ? `确认（${activeContextSelectionCount}）` : "确认"}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
 
       <section style={{ ...sidePanelStyle, alignSelf: "start" }}>
         <div style={surfaceCardStyle}>
-          <div style={sectionTitleStyle}>当前上下文</div>
-          <div style={listColumnStyle}>
-            {[
-              [
-                "对象范围",
-                totalSelectedObjects > 0
-                  ? (Object.keys(objectTypeLabels) as ObjectType[])
-                      .filter((type) => selectedObjectsByType[type].length > 0)
-                      .map((type) => `${objectTypeLabels[type]} ${selectedObjectsByType[type].length}`)
-                      .join(" / ")
-                  : "尚未选择对象",
-              ],
-              ["本地文件", selectedFileIds.length > 0 ? `${selectedFileIds.length} 个已选择文件` : "尚未添加文件"],
-              ["富媒体", selectedMediaIds.length > 0 ? `${selectedMediaIds.length} 个已选择 URL / 图片 / 视频` : "尚未添加富媒体"],
-            ].map(([label, value]) => (
-              <div key={label} style={keyValueRowStyle}>
-                <span style={mutedMetaStyle}>{label}</span>
-                <span style={sectionTextStyle}>{value}</span>
-              </div>
-            ))}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <div style={sectionTitleStyle}>当前上下文</div>
+            {filledContextCount > 0 ? (
+              <button
+                type="button"
+                style={{ fontSize: 11, color: "#6d7175", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                onClick={onClearContext}
+              >
+                清空
+              </button>
+            ) : null}
           </div>
+
+          {/* Products */}
+          {selectedObjectsByType.product.length > 0 ? (
+            <div style={ctxGroupStyle}>
+              <div style={ctxGroupLabelStyle}>商品 · {selectedObjectsByType.product.length} 个</div>
+              {selectedObjectsByType.product.map((item) => (
+                <div key={item.id} style={ctxItemRowStyle}>
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt="" style={ctxThumbStyle} />
+                  ) : (
+                    <div style={ctxThumbPlaceholderStyle}>品</div>
+                  )}
+                  <span style={ctxItemTitleStyle}>{item.title}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Articles */}
+          {selectedObjectsByType.article.length > 0 ? (
+            <div style={ctxGroupStyle}>
+              <div style={ctxGroupLabelStyle}>文章 · {selectedObjectsByType.article.length} 篇</div>
+              {selectedObjectsByType.article.map((item) => (
+                <div key={item.id} style={ctxItemRowStyle}>
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt="" style={ctxThumbStyle} />
+                  ) : (
+                    <div style={ctxThumbPlaceholderStyle}>文</div>
+                  )}
+                  <span style={ctxItemTitleStyle}>{item.title}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Files */}
+          {selectedFileIds.length > 0 ? (
+            <div style={ctxGroupStyle}>
+              <div style={ctxGroupLabelStyle}>文件 · {selectedFileIds.length} 个</div>
+              {selectedFileIds.map((id) => {
+                const file = localFiles.find((f) => f.id === id);
+                if (!file) return null;
+                return (
+                  <div key={id} style={ctxItemRowStyle}>
+                    <div style={ctxFileIconStyle}>↑</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={ctxItemTitleStyle}>{file.name}</div>
+                      {file.note ? (
+                        <div style={{ fontSize: 11, color: "#8c9196", marginTop: 1 }}>{file.note}</div>
+                      ) : null}
+                    </div>
+                    {file.uploading ? (
+                      <span style={{ fontSize: 10, color: "#6d7175", flexShrink: 0 }}>上传中…</span>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {/* Empty state */}
+          {totalSelectedObjects === 0 && selectedFileIds.length === 0 ? (
+            <div style={{ fontSize: 13, color: "#8c9196", lineHeight: 1.6 }}>
+              在下方选择商品、文章或上传文件，它们会出现在这里并随消息一起发给 AI。
+            </div>
+          ) : null}
         </div>
 
         <div style={surfaceCardStyle}>
@@ -1444,7 +2021,7 @@ function AutomationPanel({
         </div>
         <div style={buttonRowStyle}>
           <button type="button" style={ghostButtonStyle}>手动新建</button>
-          <button type="button" style={primaryButtonStyle}>在对话中创建</button>
+          <button type="button" className="workspace-primary-btn" style={primaryButtonStyle}>在对话中创建</button>
         </div>
       </div>
 
@@ -1488,70 +2065,6 @@ function AutomationPanel({
   );
 }
 
-function TasksPanel({
-  tasks,
-  filter,
-  onFilterChange,
-}: {
-  tasks: TaskRecord[];
-  filter: "all" | TaskKind;
-  onFilterChange: (value: "all" | TaskKind) => void;
-}) {
-  return (
-    <section style={surfaceCardStyle}>
-      <div style={sectionHeaderStyle}>
-        <div>
-          <div style={sectionTitleStyle}>统一任务列表</div>
-          <div style={sectionTextStyle}>自动化任务与单次任务共用总表，再按类型和状态进行筛选。</div>
-        </div>
-        <div style={buttonRowStyle}>
-          {[
-            ["all", "全部"],
-            ["automation", "自动化"],
-            ["one_off", "单次任务"],
-          ].map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              style={filterChipStyle(filter === key)}
-              onClick={() => onFilterChange(key as "all" | TaskKind)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div style={listColumnStyle}>
-        {tasks.map((task) => (
-          <article key={task.id} style={taskCardStyle}>
-            <div style={taskCardTopStyle}>
-              <div>
-                <div style={mutedMetaStyle}>{task.id}</div>
-                <div style={sectionTitleSmallStyle}>{task.title}</div>
-              </div>
-              <div style={buttonRowStyle}>
-                <span style={kindBadgeStyle(task.kind)}>{task.kind === "automation" ? "自动化" : "单次"}</span>
-                <span style={statusBadgeStyle(taskStatusTone(task.status))}>{taskStatusLabel(task.status)}</span>
-              </div>
-            </div>
-            <div style={sectionTextStyle}>{task.summary}</div>
-            <div style={progressTrackStyle}>
-              <div style={{ ...progressFillStyle, width: `${task.progress}%`, background: progressColor(task.status) }} />
-            </div>
-            <div style={taskFooterStyle}>
-              <span style={mutedMetaStyle}>
-                {task.source} · {task.updatedAt}
-              </span>
-              <button type="button" style={textButtonStyle}>{task.action}</button>
-            </div>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function workspaceMessageToApiMessage(message: WorkspaceConversationMessage): ChatMessage {
   return { role: message.role, content: message.text };
 }
@@ -1572,7 +2085,25 @@ function workspaceMessageToChatMessage(message: WorkspaceConversationMessage): C
     ...(message.productImproveCardPayload
       ? { productImproveCardPayload: message.productImproveCardPayload }
       : {}),
-    ...(message.pictureTranslateCard ? { pictureTranslateCard: true } : {}),
+    ...(message.pictureTranslateCard || message.pictureTranslateFormPayload
+      ? { pictureTranslateCard: true }
+      : {}),
+    ...(message.pictureTranslateFormPayload
+      ? { pictureTranslateFormPayload: message.pictureTranslateFormPayload }
+      : {}),
+    ...(message.imageGenerationCard || message.imageGenerationFormPayload
+      ? { imageGenerationCard: true }
+      : {}),
+    ...(message.imageGenerationFormPayload
+      ? { imageGenerationFormPayload: message.imageGenerationFormPayload }
+      : {}),
+    ...(message.batchTasksCard || message.batchTasksFormPayload
+      ? { batchTasksCard: true }
+      : {}),
+    ...(message.batchTasksFormPayload
+      ? { batchTasksFormPayload: message.batchTasksFormPayload }
+      : {}),
+    ...(message.thinkingContent ? { thinkingContent: message.thinkingContent } : {}),
   };
 }
 
@@ -1585,6 +2116,22 @@ function buildAssistantWorkspaceMessage(
     : undefined;
   const hasProductImproveCard =
     payload.productImproveCard || Boolean(payload.productImproveCardPayload);
+  const pictureTranslateFormPayload = payload.pictureTranslateFormPayload
+    ? coercePictureTranslateFormPayload(payload.pictureTranslateFormPayload)
+    : undefined;
+  const hasPictureTranslateCard =
+    payload.pictureTranslateCard || Boolean(pictureTranslateFormPayload);
+  const imageGenerationFormPayload = payload.imageGenerationFormPayload
+    ? coerceImageGenerationFormPayload(payload.imageGenerationFormPayload)
+    : undefined;
+  const hasImageGenerationCard =
+    payload.imageGenerationCard || Boolean(imageGenerationFormPayload);
+  const batchTasksFormPayload = payload.batchTasksFormPayload
+    ? coerceBatchTasksFormPayload(payload.batchTasksFormPayload)
+    : undefined;
+  const hasBatchTasksCard = payload.batchTasksCard || Boolean(batchTasksFormPayload);
+  const suppressProductImprove =
+    hasBatchTasksCard && (batchTasksFormPayload?.products?.length ?? 0) > 0;
 
   return {
     role: "assistant",
@@ -1592,15 +2139,47 @@ function buildAssistantWorkspaceMessage(
     time: "刚刚",
     ...(payload.attachments?.length ? { attachments: payload.attachments } : {}),
     ...(translationTaskForm ? { translationTaskForm } : {}),
-    ...(hasProductImproveCard ? { productImproveCard: true } : {}),
-    ...(payload.productImproveCardPayload
+    ...(hasProductImproveCard && !suppressProductImprove ? { productImproveCard: true } : {}),
+    ...(payload.productImproveCardPayload && !suppressProductImprove
       ? { productImproveCardPayload: payload.productImproveCardPayload as ProductImproveCardPayload }
       : {}),
+    ...(hasPictureTranslateCard ? { pictureTranslateCard: true } : {}),
+    ...(pictureTranslateFormPayload
+      ? { pictureTranslateFormPayload }
+      : {}),
+    ...(hasImageGenerationCard ? { imageGenerationCard: true } : {}),
+    ...(imageGenerationFormPayload
+      ? { imageGenerationFormPayload }
+      : {}),
+    ...(hasBatchTasksCard ? { batchTasksCard: true } : {}),
+    ...(batchTasksFormPayload ? { batchTasksFormPayload } : {}),
+    ...(payload.thinkingContent ? { thinkingContent: payload.thinkingContent } : {}),
   };
 }
 
 function formatTimeLabel(date: Date) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+/** 对话更新时间：上海时区，精确到秒（YYYY-MM-DD HH:mm:ss）。 */
+function formatConversationTimestamp(isoString: string): string {
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) {
+    return isoString.slice(0, 19).replace("T", " ");
+  }
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
 }
 
 function formatRelativeTime(isoString: string): string {
@@ -1621,6 +2200,28 @@ function serializeAssistantPayloads(payload: ChatStreamFinishPayload): string | 
   if (payload.productImproveCard || payload.productImproveCardPayload) {
     result.productImproveCard = true;
     if (payload.productImproveCardPayload) result.productImproveCardPayload = payload.productImproveCardPayload;
+  }
+  if (payload.pictureTranslateCard || payload.pictureTranslateFormPayload) {
+    result.pictureTranslateCard = true;
+    if (payload.pictureTranslateFormPayload) {
+      result.pictureTranslateFormPayload = coercePictureTranslateFormPayload(
+        payload.pictureTranslateFormPayload,
+      );
+    }
+  }
+  if (payload.imageGenerationCard || payload.imageGenerationFormPayload) {
+    result.imageGenerationCard = true;
+    if (payload.imageGenerationFormPayload) {
+      result.imageGenerationFormPayload = coerceImageGenerationFormPayload(
+        payload.imageGenerationFormPayload,
+      );
+    }
+  }
+  if (payload.batchTasksCard || payload.batchTasksFormPayload) {
+    result.batchTasksCard = true;
+    if (payload.batchTasksFormPayload) {
+      result.batchTasksFormPayload = coerceBatchTasksFormPayload(payload.batchTasksFormPayload);
+    }
   }
   return Object.keys(result).length > 0 ? JSON.stringify(result) : null;
 }
@@ -1645,11 +2246,39 @@ function dbMessageToUiMessage(msg: {
     ...(extras.productImproveCardPayload
       ? { productImproveCardPayload: extras.productImproveCardPayload as ProductImproveCardPayload }
       : {}),
+    ...(extras.pictureTranslateCard || extras.pictureTranslateFormPayload
+      ? { pictureTranslateCard: true }
+      : {}),
+    ...(extras.pictureTranslateFormPayload
+      ? {
+          pictureTranslateFormPayload: coercePictureTranslateFormPayload(
+            extras.pictureTranslateFormPayload,
+          ),
+        }
+      : {}),
+    ...(extras.imageGenerationCard || extras.imageGenerationFormPayload
+      ? { imageGenerationCard: true }
+      : {}),
+    ...(extras.imageGenerationFormPayload
+      ? {
+          imageGenerationFormPayload: coerceImageGenerationFormPayload(
+            extras.imageGenerationFormPayload,
+          ),
+        }
+      : {}),
+    ...(extras.batchTasksCard || extras.batchTasksFormPayload
+      ? { batchTasksCard: true }
+      : {}),
+    ...(extras.batchTasksFormPayload
+      ? {
+          batchTasksFormPayload: coerceBatchTasksFormPayload(extras.batchTasksFormPayload),
+        }
+      : {}),
   };
 }
 
 function buildWorkspaceContextBlock(params: {
-  selectedObjectsByType: Record<ObjectType, string[]>;
+  selectedObjectsByType: Record<ObjectType, SelectedShopifyObject[]>;
   selectedFileIds: string[];
   selectedMediaIds: string[];
   localFiles: LocalFileItem[];
@@ -1658,19 +2287,39 @@ function buildWorkspaceContextBlock(params: {
   const lines: string[] = [];
 
   for (const type of Object.keys(objectTypeLabels) as ObjectType[]) {
-    const ids = params.selectedObjectsByType[type];
-    if (ids.length === 0) continue;
-    const names = ids.map(
-      (id) => objectOptions[type].find((item) => item.id === id)?.title ?? id,
-    );
-    lines.push(`- ${objectTypeLabels[type]}：${names.join("、")}（共 ${ids.length} 个）`);
+    const items = params.selectedObjectsByType[type];
+    if (items.length === 0) continue;
+    if (type === "product") {
+      // Structured product data so AI can extract IDs + images for batch tasks
+      lines.push(`- 已选商品（共 ${items.length} 个）：`);
+      for (const item of items) {
+        const parts = [`  • ${item.title}`, `[ID: ${item.id}]`];
+        if (item.imageUrl) parts.push(`[图片: ${item.imageUrl}]`);
+        lines.push(parts.join(" "));
+      }
+    } else if (type === "article") {
+      // Structured article data so AI can extract IDs for batch tasks
+      lines.push(`- 已选文章（共 ${items.length} 个）：`);
+      for (const item of items) {
+        const parts = [`  • ${item.title}`, `[ID: ${item.id}]`];
+        if (item.imageUrl) parts.push(`[封面: ${item.imageUrl}]`);
+        lines.push(parts.join(" "));
+      }
+    } else {
+      const names = items.map((item) => item.title || item.id);
+      lines.push(`- ${objectTypeLabels[type]}：${names.join("、")}（共 ${items.length} 个）`);
+    }
   }
 
   if (params.selectedFileIds.length > 0) {
-    const names = params.selectedFileIds.map(
-      (id) => params.localFiles.find((item) => item.id === id)?.name ?? id,
-    );
-    lines.push(`- 文件：${names.join("、")}（共 ${params.selectedFileIds.length} 个）`);
+    lines.push(`- 已选文件（共 ${params.selectedFileIds.length} 个，文件完整内容已注入系统消息，可直接引用）：`);
+    for (const id of params.selectedFileIds) {
+      const file = params.localFiles.find((item) => item.id === id);
+      if (!file) continue;
+      const notePart = file.note ? `（${file.note}）` : "";
+      const sizePart = file.charCount ? `，已解析 ${Math.round(file.charCount / 1000)}k 字符` : "";
+      lines.push(`  • ${file.name}${notePart}${sizePart}`);
+    }
   }
 
   if (params.selectedMediaIds.length > 0) {
@@ -1688,134 +2337,194 @@ function augmentUserMessage(content: string, contextBlock: string | null) {
   if (!contextBlock) return content;
   return `${contextBlock}\n\n[用户消息]\n${content}`;
 }
-function taskStatusLabel(status: TaskStatus) {
-  if (status === "executing") return "执行中";
-  if (status === "review_required") return "待审核";
-  if (status === "completed") return "已完成";
-  return "失败";
-}
 
-function taskStatusTone(status: TaskStatus): "positive" | "warning" | "critical" | "neutral" {
-  if (status === "completed") return "positive";
-  if (status === "executing" || status === "review_required") return "warning";
-  if (status === "failed") return "critical";
-  return "neutral";
-}
-
-function progressColor(status: TaskStatus) {
-  if (status === "completed") return "#008060";
-  if (status === "failed") return "#d82c0d";
-  return "#c05717";
-}
+/** Shopify Admin / Polaris 对齐色板 */
+const shopifyUi = {
+  pageBg: "#f6f6f7",
+  surface: "#ffffff",
+  surfaceSubtle: "#fafbfb",
+  border: "#e1e3e5",
+  borderStrong: "#c9cccf",
+  text: "#1f2124",
+  textSecondary: "#61666c",
+  textMuted: "#8c9196",
+  primary: "#008060",
+  primaryHover: "#006e52",
+  primarySurface: "#e9f7ef",
+  primaryText: "#004c3f",
+  link: "#005bd3",
+  radiusControl: 10,
+  radiusCard: 14,
+  shadowCard: "0 1px 0 rgba(0, 0, 0, 0.05)",
+} as const;
 
 const shellStyle: CSSProperties = {
   minHeight: "100vh",
   display: "grid",
   gridTemplateColumns: "252px minmax(0, 1fr)",
-  background: "#f6f6f7",
+  background: shopifyUi.pageBg,
 };
 
 const sidebarStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   justifyContent: "space-between",
-  padding: "20px 12px 16px",
-  borderRight: "1px solid #e1e3e5",
-  background: "#f6f6f7",
-  gap: 16,
+  padding: "16px 12px",
+  borderRight: `1px solid ${shopifyUi.border}`,
+  background: shopifyUi.surface,
+  gap: 14,
+  height: "100vh",
+  overflow: "hidden",
+  position: "sticky",
+  top: 0,
 };
 
 const contentStyle: CSSProperties = {
-  padding: "28px 32px 40px",
+  padding: "24px 28px 36px",
   display: "flex",
   flexDirection: "column",
-  gap: 24,
+  gap: 20,
   minWidth: 0,
+  background: shopifyUi.pageBg,
 };
 
 const brandRowStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 12,
-  marginBottom: 18,
-  padding: "8px 10px",
-  borderRadius: 12,
-  border: "1px solid #e1e3e5",
-  background: "#ffffff",
+  marginBottom: 14,
+  padding: "6px 8px",
+  borderRadius: shopifyUi.radiusCard,
 };
 const brandBadgeStyle: CSSProperties = {
   width: 32,
   height: 32,
-  borderRadius: 9,
-  background: "#202223",
+  borderRadius: 8,
+  background: shopifyUi.primary,
   color: "#ffffff",
   display: "grid",
   placeItems: "center",
   fontWeight: 700,
   fontSize: 13,
 };
-const brandTitleStyle: CSSProperties = { fontSize: 14, fontWeight: 700, color: "#202223" };
-const brandMetaStyle: CSSProperties = { fontSize: 12, color: "#6d7175" };
+const brandTitleStyle: CSSProperties = { fontSize: 14, fontWeight: 700, color: shopifyUi.text };
+const brandMetaStyle: CSSProperties = { fontSize: 12, color: shopifyUi.textMuted };
 
-const newTaskButtonStyle: CSSProperties = {
+const newChatButtonStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
   width: "100%",
-  border: "1px solid #202223",
-  borderRadius: 10,
-  background: "#202223",
-  padding: "11px 12px",
-  textAlign: "left",
-  fontSize: 14,
+  border: `1px solid ${shopifyUi.primary}`,
+  borderRadius: shopifyUi.radiusControl,
+  background: shopifyUi.primary,
+  padding: "10px 12px",
+  fontSize: 13,
   fontWeight: 600,
   color: "#ffffff",
   cursor: "pointer",
+  marginBottom: 10,
+  boxShadow: "0 1px 0 rgba(0, 0, 0, 0.05)",
 };
-
-const navGroupStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 6, marginTop: 14 };
-const navButtonStyle = (active: boolean): CSSProperties => ({
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  width: "100%",
-  border: `1px solid ${active ? "#c9cccf" : "transparent"}`,
-  borderRadius: 10,
-  background: active ? "#ffffff" : "transparent",
-  padding: "10px 12px",
-  fontSize: 14,
-  fontWeight: active ? 700 : 600,
-  color: "#202223",
-  cursor: "pointer",
-});
-const navLabelStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10 };
-const navIconStyle: CSSProperties = {
-  width: 22,
-  height: 22,
-  borderRadius: 8,
+const newChatPlusBadgeStyle: CSSProperties = {
+  width: 20,
+  height: 20,
+  borderRadius: 6,
+  background: "rgba(255, 255, 255, 0.2)",
   display: "grid",
   placeItems: "center",
-  background: "#f1f2f3",
-  color: "#61666c",
-  fontSize: 12,
+  fontSize: 16,
+  fontWeight: 400,
+  lineHeight: 1,
   flexShrink: 0,
 };
 
-const sidebarSectionStyle: CSSProperties = { marginTop: 18, display: "flex", flexDirection: "column", gap: 10, minHeight: 0 };
-const sidebarSectionHeadStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, fontWeight: 700, color: "#6d7175", padding: "0 4px" };
-const conversationListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 8, maxHeight: "calc(100vh - 330px)", overflowY: "auto", paddingRight: 2 };
+const navGroupStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 2 };
+const navButtonStyle = (active: boolean): CSSProperties => ({
+  display: "flex",
+  alignItems: "center",
+  gap: 9,
+  width: "100%",
+  border: "none",
+  borderRadius: shopifyUi.radiusControl,
+  background: active ? shopifyUi.primarySurface : "transparent",
+  padding: "8px 10px",
+  fontSize: 13,
+  fontWeight: active ? 600 : 500,
+  color: active ? shopifyUi.primaryText : shopifyUi.textSecondary,
+  cursor: "pointer",
+  textAlign: "left",
+  boxShadow: active ? `inset 3px 0 0 ${shopifyUi.primary}` : "none",
+});
+const navIconStyle = (active: boolean): CSSProperties => ({
+  fontSize: 13,
+  color: active ? shopifyUi.primary : shopifyUi.textMuted,
+  flexShrink: 0,
+  width: 16,
+  textAlign: "center",
+});
+
+const sidebarDividerStyle: CSSProperties = {
+  height: 1,
+  background: "#e1e3e5",
+  margin: "10px 2px",
+};
+
+const sidebarSectionStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 2, minHeight: 0, flex: 1 };
+const sidebarSectionHeadStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  fontSize: 11,
+  fontWeight: 600,
+  color: "#8c9196",
+  padding: "4px 10px",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
+const conversationListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 1, overflowY: "auto", paddingRight: 0, flex: 1 };
+const historyRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 0,
+  position: "relative",
+};
 const historyItemStyle = (active: boolean): CSSProperties => ({
   display: "flex",
-  flexDirection: "column",
-  gap: 4,
-  alignItems: "flex-start",
-  width: "100%",
+  alignItems: "center",
+  flex: 1,
+  minWidth: 0,
   textAlign: "left",
-  border: `1px solid ${active ? "#c9cccf" : "transparent"}`,
-  borderRadius: 10,
-  background: active ? "#ffffff" : "#f6f6f7",
-  padding: "10px 12px",
+  border: "none",
+  borderRadius: shopifyUi.radiusControl,
+  background: active ? shopifyUi.primarySurface : "transparent",
+  padding: "6px 10px",
   cursor: "pointer",
+  overflow: "hidden",
+  boxShadow: active ? `inset 3px 0 0 ${shopifyUi.primary}` : "none",
 });
-const historyTitleStyle: CSSProperties = { fontSize: 13, fontWeight: 700, color: "#202223" };
-const historyPreviewStyle: CSSProperties = { fontSize: 12, color: "#61666c", lineHeight: 1.5 };
+const historyDeleteButtonStyle: CSSProperties = {
+  flexShrink: 0,
+  border: "none",
+  borderRadius: 6,
+  background: "transparent",
+  color: "#8c9196",
+  fontSize: 16,
+  lineHeight: 1,
+  cursor: "pointer",
+  padding: "4px 6px",
+};
+const historyTitleStyle = (active: boolean): CSSProperties => ({
+  fontSize: 13,
+  fontWeight: active ? 600 : 500,
+  color: active ? shopifyUi.primaryText : shopifyUi.text,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  display: "block",
+  width: "100%",
+});
 const accountMenuWrapStyle: CSSProperties = {
   position: "relative",
   paddingTop: 12,
@@ -1862,21 +2571,28 @@ const accountMenuItemStyle: CSSProperties = {
   textAlign: "left",
   cursor: "pointer",
 };
-const footerTagStyle: CSSProperties = { padding: "4px 8px", borderRadius: 999, background: "#e9f7ef", color: "#008060", fontSize: 12, fontWeight: 600 };
+const footerTagStyle: CSSProperties = {
+  padding: "4px 8px",
+  borderRadius: 999,
+  background: shopifyUi.primarySurface,
+  color: shopifyUi.primary,
+  fontSize: 12,
+  fontWeight: 600,
+};
 
 const panelStackStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 20, minWidth: 0 };
 const surfaceCardStyle: CSSProperties = {
-  background: "#ffffff",
-  border: "1px solid #e1e3e5",
-  borderRadius: 14,
-  boxShadow: "0 1px 0 rgba(0,0,0,0.03)",
+  background: shopifyUi.surface,
+  border: `1px solid ${shopifyUi.border}`,
+  borderRadius: shopifyUi.radiusCard,
+  boxShadow: shopifyUi.shadowCard,
   padding: 20,
 };
 const sectionHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 16 };
-const sectionTitleStyle: CSSProperties = { fontSize: 18, fontWeight: 700, color: "#202223", letterSpacing: "-0.01em" };
-const sectionTitleSmallStyle: CSSProperties = { fontSize: 15, fontWeight: 700, color: "#202223" };
-const sectionTextStyle: CSSProperties = { fontSize: 14, color: "#61666c", lineHeight: 1.6 };
-const mutedMetaStyle: CSSProperties = { fontSize: 12, color: "#8c9196" };
+const sectionTitleStyle: CSSProperties = { fontSize: 18, fontWeight: 700, color: shopifyUi.text, letterSpacing: "-0.01em" };
+const sectionTitleSmallStyle: CSSProperties = { fontSize: 15, fontWeight: 700, color: shopifyUi.text };
+const sectionTextStyle: CSSProperties = { fontSize: 14, color: shopifyUi.textSecondary, lineHeight: 1.6 };
+const mutedMetaStyle: CSSProperties = { fontSize: 12, color: shopifyUi.textMuted };
 
 const metricGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16 };
 const metricLabelStyle: CSSProperties = { fontSize: 12, fontWeight: 600, color: "#6d7175" };
@@ -1885,14 +2601,14 @@ const metricDeltaStyle = (tone: DashboardMetric["tone"]): CSSProperties => ({
   marginTop: 8,
   fontSize: 12,
   fontWeight: 600,
-  color: tone === "positive" ? "#008060" : tone === "negative" ? "#8a2e0f" : "#8c9196",
+  color: tone === "positive" ? shopifyUi.primary : tone === "negative" ? "#8a2e0f" : shopifyUi.textMuted,
 });
 
 const twoColumnStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 16 };
 const listColumnStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 12 };
 const summaryItemStyle: CSSProperties = { padding: 14, borderRadius: 12, border: "1px solid #e9eaeb", background: "#ffffff" };
 const suggestionItemStyle: CSSProperties = { display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 0", borderBottom: "1px solid #f1f2f3" };
-const bulletStyle: CSSProperties = { width: 8, height: 8, marginTop: 7, borderRadius: 999, background: "#8c9196", flexShrink: 0 };
+const bulletStyle: CSSProperties = { width: 8, height: 8, marginTop: 7, borderRadius: 999, background: shopifyUi.primary, flexShrink: 0 };
 const alertListStyle: CSSProperties = { display: "grid", gap: 12 };
 const alertItemStyle = (tone: "warning" | "info" | "critical"): CSSProperties => ({
   padding: 14,
@@ -1920,7 +2636,9 @@ const messageListStyle: CSSProperties = {
   height: "100%",
   overflowY: "auto",
   paddingRight: 6,
-  scrollBehavior: "smooth",
+  // scrollBehavior intentionally omitted: smooth is applied per-call only for
+  // user-initiated jumps (the "查看最新消息" button). During streaming we use
+  // instant assignment so rapid frames don't fight each other and miss the bottom.
 };
 const composerBoxStyle: CSSProperties = { flexShrink: 0, marginTop: 14, paddingTop: 14, borderTop: "1px solid #ebedf0" };
 const textareaStyle: CSSProperties = {
@@ -1959,10 +2677,10 @@ const toolbarIconButtonStyle = (active: boolean): CSSProperties => ({
   height: 32,
   display: "inline-grid",
   placeItems: "center",
-  border: `1px solid ${active ? "#202223" : "#dfe3e8"}`,
-  background: active ? "#202223" : "#ffffff",
-  color: active ? "#ffffff" : "#202223",
-  borderRadius: 10,
+  border: `1px solid ${active ? shopifyUi.primary : shopifyUi.border}`,
+  background: active ? shopifyUi.primary : shopifyUi.surface,
+  color: active ? "#ffffff" : shopifyUi.text,
+  borderRadius: shopifyUi.radiusControl,
   padding: 0,
   cursor: "pointer",
 });
@@ -1972,9 +2690,9 @@ const toolbarPillButtonStyle = (active: boolean): CSSProperties => ({
   gap: 5,
   height: 30,
   padding: "0 10px",
-  border: `1px solid ${active ? "#202223" : "#dfe3e8"}`,
-  background: active ? "#202223" : "#ffffff",
-  color: active ? "#ffffff" : "#202223",
+  border: `1px solid ${active ? shopifyUi.primary : shopifyUi.border}`,
+  background: active ? shopifyUi.primarySurface : shopifyUi.surface,
+  color: active ? shopifyUi.primaryText : shopifyUi.text,
   borderRadius: 999,
   cursor: "pointer",
   fontSize: 12,
@@ -2040,9 +2758,9 @@ const selectionBubbleStyle: CSSProperties = {
   gap: 8,
   padding: "7px 10px",
   borderRadius: 999,
-  border: "1px solid #c9cccf",
-  background: "#f6f6f7",
-  color: "#202223",
+  border: `1px solid ${shopifyUi.primary}`,
+  background: shopifyUi.primarySurface,
+  color: shopifyUi.primaryText,
   fontSize: 12,
   fontWeight: 600,
 };
@@ -2069,8 +2787,8 @@ const toolModalBackdropStyle: CSSProperties = {
   zIndex: 30,
 };
 const toolModalCardStyle: CSSProperties = {
-  width: "min(500px, calc(100vw - 48px))",
-  maxHeight: "min(78vh, 720px)",
+  width: "min(720px, calc(100vw - 48px))",
+  maxHeight: "min(82vh, 760px)",
   overflowY: "auto",
   padding: 18,
   borderRadius: 16,
@@ -2084,6 +2802,15 @@ const toolModalHeaderStyle: CSSProperties = {
   alignItems: "flex-start",
   gap: 12,
   marginBottom: 14,
+};
+const toolModalFooterStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  marginTop: 16,
+  paddingTop: 14,
+  borderTop: "1px solid #e1e3e5",
 };
 const toolModalCloseStyle: CSSProperties = {
   width: 32,
@@ -2159,16 +2886,42 @@ const skillCategoryStyle: CSSProperties = { fontSize: 12, fontWeight: 700, color
 const skillFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 };
 
 const buttonRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10 };
-const primaryButtonStyle: CSSProperties = { border: "1px solid #202223", borderRadius: 10, background: "#202223", color: "#ffffff", padding: "10px 14px", fontSize: 14, fontWeight: 600, cursor: "pointer" };
-const ghostButtonStyle: CSSProperties = { border: "1px solid #c9cdd2", borderRadius: 10, background: "#ffffff", color: "#202223", padding: "10px 14px", fontSize: 14, fontWeight: 600, cursor: "pointer" };
-const textButtonStyle: CSSProperties = { border: "none", background: "transparent", color: "#005bd3", padding: 0, fontSize: 13, fontWeight: 600, cursor: "pointer" };
+const primaryButtonStyle: CSSProperties = {
+  border: `1px solid ${shopifyUi.primary}`,
+  borderRadius: shopifyUi.radiusControl,
+  background: shopifyUi.primary,
+  color: "#ffffff",
+  padding: "10px 14px",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+};
+const ghostButtonStyle: CSSProperties = {
+  border: `1px solid ${shopifyUi.borderStrong}`,
+  borderRadius: shopifyUi.radiusControl,
+  background: shopifyUi.surface,
+  color: shopifyUi.text,
+  padding: "10px 14px",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+};
+const textButtonStyle: CSSProperties = {
+  border: "none",
+  background: "transparent",
+  color: shopifyUi.link,
+  padding: 0,
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: "pointer",
+};
 
 const tabRowStyle: CSSProperties = { display: "flex", gap: 8, marginBottom: 16 };
 const tabButtonStyle = (active: boolean): CSSProperties => ({
-  border: `1px solid ${active ? "#c9cccf" : "#dfe3e8"}`,
-  borderRadius: 10,
-  background: active ? "#ffffff" : "#f6f6f7",
-  color: "#202223",
+  border: `1px solid ${active ? shopifyUi.primary : shopifyUi.border}`,
+  borderRadius: shopifyUi.radiusControl,
+  background: active ? shopifyUi.primarySurface : shopifyUi.pageBg,
+  color: active ? shopifyUi.primaryText : shopifyUi.text,
   padding: "8px 12px",
   fontSize: 13,
   fontWeight: active ? 700 : 600,
@@ -2177,34 +2930,82 @@ const tabButtonStyle = (active: boolean): CSSProperties => ({
 const automationCardStyle: CSSProperties = { padding: 16, borderRadius: 12, border: "1px solid #e1e3e5", background: "#ffffff" };
 
 const filterChipStyle = (active: boolean): CSSProperties => ({
-  border: `1px solid ${active ? "#c9cccf" : "#c9cdd2"}`,
+  border: `1px solid ${active ? shopifyUi.primary : shopifyUi.borderStrong}`,
   borderRadius: 999,
-  background: active ? "#202223" : "#ffffff",
-  color: active ? "#ffffff" : "#202223",
+  background: active ? shopifyUi.primary : shopifyUi.surface,
+  color: active ? "#ffffff" : shopifyUi.text,
   padding: "8px 12px",
   fontSize: 13,
   fontWeight: 600,
   cursor: "pointer",
 });
-const taskCardStyle: CSSProperties = { padding: 16, borderRadius: 14, border: "1px solid #e1e3e5", background: "#ffffff", display: "flex", flexDirection: "column", gap: 12 };
-const taskCardTopStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 };
-const progressTrackStyle: CSSProperties = { height: 8, borderRadius: 999, background: "#e5e7eb", overflow: "hidden" };
-const progressFillStyle: CSSProperties = { height: "100%", borderRadius: 999 };
-const taskFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 };
-
-const kindBadgeStyle = (kind: TaskKind): CSSProperties => ({
-  padding: "4px 10px",
-  borderRadius: 999,
-  background: kind === "automation" ? "#f1f8ff" : "#f1f2f3",
-  color: kind === "automation" ? "#005bd3" : "#61666c",
-  fontSize: 12,
-  fontWeight: 600,
-});
 const statusBadgeStyle = (tone: "positive" | "warning" | "critical" | "neutral"): CSSProperties => ({
   padding: "4px 10px",
   borderRadius: 999,
   background: tone === "positive" ? "#e9f7ef" : tone === "warning" ? "#fff5ea" : tone === "critical" ? "#fff1ef" : "#f1f2f3",
-  color: tone === "positive" ? "#008060" : tone === "warning" ? "#b98900" : tone === "critical" ? "#d72c0d" : "#61666c",
+  color: tone === "positive" ? shopifyUi.primary : tone === "warning" ? "#b98900" : tone === "critical" ? "#d72c0d" : shopifyUi.textSecondary,
   fontSize: 12,
   fontWeight: 600,
 });
+
+// ── 当前上下文面板 ───────────────────────────────────────────
+const ctxGroupStyle: CSSProperties = {
+  marginBottom: 12,
+  paddingBottom: 12,
+  borderBottom: "1px solid #f0f1f3",
+};
+const ctxGroupLabelStyle: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#8c9196",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  marginBottom: 6,
+};
+const ctxItemRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "5px 0",
+};
+const ctxThumbStyle: CSSProperties = {
+  width: 28,
+  height: 28,
+  borderRadius: 5,
+  objectFit: "cover",
+  background: "#eceff3",
+  flexShrink: 0,
+};
+const ctxThumbPlaceholderStyle: CSSProperties = {
+  width: 28,
+  height: 28,
+  borderRadius: 5,
+  background: "#eceff3",
+  display: "grid",
+  placeItems: "center",
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#6d7175",
+  flexShrink: 0,
+};
+const ctxFileIconStyle: CSSProperties = {
+  width: 28,
+  height: 28,
+  borderRadius: 5,
+  background: "#eef2ff",
+  display: "grid",
+  placeItems: "center",
+  fontSize: 13,
+  color: "#4070f4",
+  flexShrink: 0,
+};
+const ctxItemTitleStyle: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "#202223",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  flex: 1,
+  minWidth: 0,
+};

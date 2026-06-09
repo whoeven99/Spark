@@ -2,9 +2,12 @@ import type { CSSProperties, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { ChatMessage } from "../../../lib/chatMessage";
 import { ChatMessageContent } from "./ChatMessageContent";
+import { ThinkingReview } from "./StreamingThinking";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
+import { ImageGenerationChatCard } from "./ImageGenerationChatCard";
 import { PictureTranslateChatCard } from "./PictureTranslateChatCard";
 import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard";
+import { BatchTasksChatCard } from "./BatchTasksChatCard";
 
 type ChatMessagesProps = {
   messages: ChatMessage[];
@@ -17,6 +20,10 @@ type ChatMessagesProps = {
     messageIndex: number,
     detail: { taskId: string; batchId: string },
   ) => void;
+  onImageGenerationCardSuccess?: (
+    messageIndex: number,
+    detail: { taskId: string; batchId: string },
+  ) => void;
 };
 
 export function ChatMessages({
@@ -24,6 +31,7 @@ export function ChatMessages({
   streamingSlot,
   onTranslationCardSuccess,
   onPictureTranslateCardSuccess,
+  onImageGenerationCardSuccess,
 }: ChatMessagesProps) {
   const { t } = useTranslation();
   return (
@@ -31,10 +39,19 @@ export function ChatMessages({
       {messages.map((item, index) => {
         const hasTranslationCard =
           item.role === "assistant" && Boolean(item.translationTaskForm);
+        const hasBatchTasksCard =
+          item.role === "assistant" &&
+          (Boolean(item.batchTasksCard) || Boolean(item.batchTasksFormPayload));
         const hasGenerateDescriptionCard =
-          item.role === "assistant" && Boolean(item.productImproveCard);
+          item.role === "assistant" &&
+          Boolean(item.productImproveCard) &&
+          !hasBatchTasksCard;
         const hasPictureTranslateCard =
-          item.role === "assistant" && Boolean(item.pictureTranslateCard);
+          item.role === "assistant" &&
+          (Boolean(item.pictureTranslateCard) || Boolean(item.pictureTranslateFormPayload));
+        const hasImageGenerationCard =
+          item.role === "assistant" &&
+          (Boolean(item.imageGenerationCard) || Boolean(item.imageGenerationFormPayload));
         const imageAttachments =
           item.role === "assistant"
             ? item.attachments?.filter((attachment) => attachment.type === "image") ?? []
@@ -44,6 +61,8 @@ export function ChatMessages({
           hasTranslationCard ||
           hasGenerateDescriptionCard ||
           hasPictureTranslateCard ||
+          hasImageGenerationCard ||
+          hasBatchTasksCard ||
           hasImageAttachments;
 
         const bubbleShellStyle: CSSProperties = {
@@ -81,6 +100,11 @@ export function ChatMessages({
                       {item.role === "assistant" ? "AI Assistant" : "你"}
                     </s-badge>
                   </div>
+                  {item.role === "assistant" && item.thinkingContent ? (
+                    <div style={{ marginBottom: "0.5rem" }}>
+                      <ThinkingReview text={item.thinkingContent} />
+                    </div>
+                  ) : null}
                   <div style={{ marginTop: "0.35rem" }}>
                     {item.role === "assistant" ? (
                       <ChatMessageContent content={item.content} />
@@ -154,9 +178,31 @@ export function ChatMessages({
                     <div style={{ marginTop: "0.85rem" }}>
                       <PictureTranslateChatCard
                         embedded
+                        initialFormPayload={item.pictureTranslateFormPayload}
                         onTaskCreated={(taskId, batchId) =>
                           onPictureTranslateCardSuccess(index, { taskId, batchId })
                         }
+                      />
+                    </div>
+                  ) : null}
+
+                  {hasImageGenerationCard ? (
+                    <div style={{ marginTop: "0.85rem" }}>
+                      <ImageGenerationChatCard
+                        embedded
+                        initialFormPayload={item.imageGenerationFormPayload}
+                        onTaskCreated={(taskId, batchId) =>
+                          onImageGenerationCardSuccess?.(index, { taskId, batchId })
+                        }
+                      />
+                    </div>
+                  ) : null}
+
+                  {hasBatchTasksCard ? (
+                    <div style={{ marginTop: "0.85rem" }}>
+                      <BatchTasksChatCard
+                        embedded
+                        initialPayload={item.batchTasksFormPayload}
                       />
                     </div>
                   ) : null}
@@ -170,3 +216,31 @@ export function ChatMessages({
     </s-stack>
   );
 }
+
+
+const thinkingDetailsStyle: CSSProperties = {
+  marginTop: 10,
+  borderRadius: 8,
+  border: "1px solid rgba(44, 110, 203, 0.2)",
+  background: "rgba(44, 110, 203, 0.04)",
+  padding: "6px 10px",
+};
+
+const thinkingSummaryStyle: CSSProperties = {
+  cursor: "pointer",
+  fontSize: 12,
+  color: "rgba(44, 110, 203, 0.8)",
+  fontWeight: 500,
+  userSelect: "none",
+};
+
+const thinkingContentStyle: CSSProperties = {
+  marginTop: 8,
+  fontSize: 13,
+  color: "#61666c",
+  fontStyle: "italic",
+  whiteSpace: "pre-wrap",
+  maxHeight: 220,
+  overflowY: "auto",
+  lineHeight: 1.6,
+};

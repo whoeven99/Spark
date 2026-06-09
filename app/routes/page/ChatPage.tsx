@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { flushSync } from "react-dom";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
@@ -7,6 +7,8 @@ import type {
   ChatMessageAttachment,
   ProductImproveCardPayload,
 } from "../../lib/chatMessage";
+import type { ImageGenerationFormPayload } from "../../lib/imageGenerationFormPayload";
+import type { PictureTranslateFormPayload } from "../../lib/pictureTranslateFormPayload";
 import type { TranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { coerceTranslationTaskFormPayload } from "../../lib/translationTaskFormPayload";
 import { ChatMessages } from "../component/chat/ChatMessages";
@@ -42,9 +44,14 @@ export function ChatPage() {
   const {
     isStreaming,
     streamingText,
+    streamingThinkingText,
     streamingTranslationForm,
     streamingGenerateCard,
     streamingGeneratePayload,
+    streamingPictureTranslateCard,
+    streamingPictureTranslatePayload,
+    streamingImageGenerationCard,
+    streamingImageGenerationPayload,
     sendMessage: streamConversation,
     prepareStreaming,
     abort: abortStream,
@@ -111,17 +118,33 @@ export function ChatPage() {
   };
 
   const scrollToBottom = () => {
-    setTimeout(() => {
+    const run = () => {
       const container = messagesContainerRef.current;
       if (container) {
         container.scrollTop = container.scrollHeight;
       }
-    }, 0);
+    };
+    run();
+    requestAnimationFrame(() => {
+      run();
+      requestAnimationFrame(run);
+    });
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     scrollToBottom();
-  }, [messages, isStreaming, awaitingAssistantReply, streamingText, skillSteps.length]);
+  }, [
+    messages,
+    isStreaming,
+    awaitingAssistantReply,
+    streamingText,
+    streamingThinkingText,
+    skillSteps.length,
+    streamingTranslationForm,
+    streamingGenerateCard,
+    streamingPictureTranslateCard,
+    streamingImageGenerationCard,
+  ]);
 
   const sendMessage = async (content: string) => {
     if (isStreaming || awaitingAssistantReply) return;
@@ -170,6 +193,21 @@ export function ChatPage() {
                       p.productImproveCardPayload as ProductImproveCardPayload,
                   }
                 : {}),
+              ...(p.pictureTranslateCard ? { pictureTranslateCard: true } : {}),
+              ...(p.pictureTranslateFormPayload
+                ? {
+                    pictureTranslateFormPayload:
+                      p.pictureTranslateFormPayload as PictureTranslateFormPayload,
+                  }
+                : {}),
+              ...(p.imageGenerationCard ? { imageGenerationCard: true } : {}),
+              ...(p.imageGenerationFormPayload
+                ? {
+                    imageGenerationFormPayload:
+                      p.imageGenerationFormPayload as ImageGenerationFormPayload,
+                  }
+                : {}),
+              ...(p.thinkingContent ? { thinkingContent: p.thinkingContent } : {}),
             },
           ]);
 
@@ -214,6 +252,13 @@ export function ChatPage() {
     _detail: { taskId: string; batchId: string },
   ) => {
     shopify.toast.show(t("pictureTranslate.submitSuccess"));
+  };
+
+  const succeedImageGenerationCard = (
+    _messageIndex: number,
+    _detail: { taskId: string; batchId: string },
+  ) => {
+    shopify.toast.show(t("imageGeneration.submitSuccess"));
   };
 
   const showStreamingReply = isStreaming || awaitingAssistantReply;
@@ -291,14 +336,20 @@ export function ChatPage() {
                       active={showStreamingReply}
                       isStreaming={isStreaming}
                       streamingText={streamingText}
+                      streamingThinkingText={streamingThinkingText}
                       skillSteps={skillSteps}
                       streamingTranslationForm={streamingTranslationForm}
                       streamingGenerateCard={streamingGenerateCard}
                       streamingGeneratePayload={streamingGeneratePayload}
+                      streamingPictureTranslateCard={streamingPictureTranslateCard}
+                      streamingPictureTranslatePayload={streamingPictureTranslatePayload}
+                      streamingImageGenerationCard={streamingImageGenerationCard}
+                      streamingImageGenerationPayload={streamingImageGenerationPayload}
                     />
                   }
                   onTranslationCardSuccess={succeedTranslationCard}
                   onPictureTranslateCardSuccess={succeedPictureTranslateCard}
+                  onImageGenerationCardSuccess={succeedImageGenerationCard}
                 />
               </div>
             </div>

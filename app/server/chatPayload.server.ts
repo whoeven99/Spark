@@ -18,6 +18,10 @@ const SUMMARY_THRESHOLD = RECENT_WINDOW_SIZE + 4;
 /** 摘要 prompt 的最大输入字符数（防止 older 部分过大）。 */
 const SUMMARY_INPUT_MAX_CHARS = 6000;
 
+function isContextSummaryEnabled(): boolean {
+  return process.env.CHAT_CONTEXT_SUMMARY_ENABLED === "true";
+}
+
 type RawItem = { role?: unknown; content?: unknown };
 
 /**
@@ -67,7 +71,7 @@ function messagesToPlainText(messages: BaseMessage[]): string {
 }
 
 /**
- * 调用 LLM 为旧消息生成摘要。
+ * 调用 LLM 为旧消息生成摘要（带超时保护，失败时静默回退）。
  * 返回 null 时调用方应 fallback 到硬截断。
  */
 async function summarizeOlderMessages(
@@ -81,12 +85,20 @@ async function summarizeOlderMessages(
     if (!plainText.trim()) return null;
 
     const model = getShopChatModel();
-    const result = await model.invoke([
-      new SystemMessage(
-        "你是一个对话摘要助手。请将以下历史对话压缩为一段简洁的中文摘要（不超过 300 字），保留关键事实、用户意图和已完成的操作。不要添加任何分析或建议。",
+    // 使用较小的 maxTokens 来加速摘要生成
+    const summaryModel = model.bind({ maxTokens: 512 });
+    const result = await Promise.race([
+      summaryModel.invoke([
+        new SystemMessage(
+          "你是一个对话摘要助手。请将以下历史对话压缩为一段简洁的中文摘要（不超过 300 字），保留关键事实、用户意图和已完成的操作。不要添加任何分析或建议。",
+        ),
+        new HumanMessage(plainText),
+      ]),
+      new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), 8000),
       ),
-      new HumanMessage(plainText),
     ]);
+    if (!result) return null;
     const summary = extractMessageText(result).trim();
     return summary || null;
   } catch (e) {
@@ -119,6 +131,10 @@ export async function buildContextWindow(
   const splitAt = messages.length - recentCount;
   const older = messages.slice(0, splitAt);
   const recent = messages.slice(splitAt);
+
+  if (!isContextSummaryEnabled()) {
+    return recent;
+  }
 
   const summary = await summarizeOlderMessages(older);
 

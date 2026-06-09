@@ -76,6 +76,7 @@
 ## Webhook（`shopify.app.test.toml` 已注册）
 
 - `app_subscriptions/update` → `webhooks.app.subscriptions_update.tsx`
+- 订阅批准后若 webhook 未到，计费页 loader 会 `reconcilePendingSubscriptions`（Admin API 核对 PENDING → ACTIVE，与购包 `reconcilePendingTokenPackPurchases` 同理）
 - `app_purchases_one_time/update` → `webhooks.app.purchases_one_time_update.tsx`
 - `app/uninstalled` → `webhooks.app.uninstalled.tsx`（`CommonEventLog`）
 - `app/scopes_update` → `webhooks.app.scopes_update.tsx`（`CommonEventLog`）

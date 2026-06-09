@@ -9,6 +9,7 @@ import {
   BillingError,
   cancelActiveSubscription,
   loadBillingPageData,
+  reconcilePendingSubscriptions,
   reconcilePendingTokenPackPurchases,
   startSubscriptionCheckout,
   startTokenPackCheckout,
@@ -28,6 +29,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     shop: session.shop,
     admin,
     chargeId,
+  });
+  await reconcilePendingSubscriptions({
+    shop: session.shop,
+    admin,
   });
 
   return loadBillingPageData(session.shop);

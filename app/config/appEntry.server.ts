@@ -4,25 +4,36 @@ export type NavItemKey =
   | "translation-v4"
   | "product-improve"
   | "image-studio"
+  | "picture-translate"
+  | "generate-image"
   | "order-monitor"
   | "billing";
 
-const ALL_NAV_ITEMS: readonly NavItemKey[] = [
-  "chat",
-  "diagnosis",
-  "translation-v4",
-  "product-improve",
-  "image-studio",
-  "order-monitor",
-  "billing",
-] as const;
+type AppShellConfig = {
+  home: string;
+  nav: readonly NavItemKey[];
+};
 
-export function getAppNavItems(): readonly NavItemKey[] {
-  return ALL_NAV_ITEMS;
+const DEFAULT_APP_SHELL_CONFIG = {
+  home: "/app",
+  nav: [
+    "chat",
+    "diagnosis",
+    "translation-v4",
+    "product-improve",
+    "image-studio",
+    "order-monitor",
+    "billing",
+  ],
+} as const satisfies AppShellConfig;
+
+export function getAppEntryConfig(): AppShellConfig {
+  return DEFAULT_APP_SHELL_CONFIG;
 }
 
+/** 嵌入式 App 首页路径（工作台 `/app`）。 */
 export function getAppHomePath(): string {
-  return "/app";
+  return DEFAULT_APP_SHELL_CONFIG.home;
 }
 
 /** 嵌入式 Admin 跳转时保留 shop/host/id_token 等查询参数，避免鉴权循环。 */

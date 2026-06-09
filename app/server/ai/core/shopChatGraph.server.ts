@@ -20,6 +20,7 @@ export function getShopChatModel(): ChatOpenAI {
     shopChatModel = new ChatOpenAI({
       model: process.env.DEEPSEEK_MODEL ?? process.env.OPENAI_MODEL ?? "deepseek-chat",
       temperature: 0.2,
+      maxTokens: Number(process.env.AI_MAX_TOKENS) || 4096,
       apiKey,
       configuration: {
         baseURL: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1",
@@ -35,7 +36,8 @@ export async function buildShopChatGraph(
   context: AgentContext,
   extraTools: DynamicStructuredTool[] = [],
   activeDefs: ToolDefinition[] = [],
-  activePlaybookDefs: PlaybookDefinition[] = []
+  activePlaybookDefs: PlaybookDefinition[] = [],
+  preFetchedReflectionSummary?: string,
 ) {
   const model = getShopChatModel();
   const wrappedBaseTools = context.shop?.trim()
@@ -43,9 +45,11 @@ export async function buildShopChatGraph(
     : baseAgentTools;
   const tools = [...wrappedBaseTools, ...extraTools];
 
-  const reflectionSummary = context.shop?.trim()
-    ? await fetchRecentReflectionSummary(context.shop)
-    : undefined;
+  const reflectionSummary = preFetchedReflectionSummary !== undefined
+    ? preFetchedReflectionSummary || undefined
+    : context.shop?.trim()
+      ? await fetchRecentReflectionSummary(context.shop)
+      : undefined;
   const dynamicPrompt = await getPersonalizedSystemPrompt(
     context,
     activeDefs,

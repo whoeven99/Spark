@@ -6,6 +6,7 @@ import {
   selectModelTypeForLanguagePair,
   type PictureTranslateProvider,
 } from "../config/pictureTranslateLanguages";
+import type { PictureTranslateFormPayload } from "../lib/pictureTranslateFormPayload";
 import type {
   PictureTranslateImageSource,
   PictureTranslateLanguageOption,
@@ -22,6 +23,7 @@ export type UsePictureTranslateParams = {
   locationSearch: string;
   toastShow: (message: string) => void;
   mode: "page" | "card";
+  initialFormPayload?: PictureTranslateFormPayload;
   onTaskCreated?: (
     taskId: string,
     batchId: string,
@@ -55,14 +57,15 @@ function safeUrlHost(url: string): string {
 }
 
 export function usePictureTranslate(params: UsePictureTranslateParams) {
-  const { locationSearch, toastShow, onTaskCreated } = params;
+  const { locationSearch, toastShow, onTaskCreated, initialFormPayload } = params;
   const { t } = useTranslation();
 
-  const [imageUrl, setImageUrl] = useState("");
+  const prefilledImageUrl = initialFormPayload?.imageUrl?.trim() ?? "";
+  const [imageUrl, setImageUrl] = useState(prefilledImageUrl);
   const [imageBase64, setImageBase64] = useState<string | undefined>(undefined);
   const [imageFileName, setImageFileName] = useState("");
   const [selectedSource, setSelectedSource] =
-    useState<PictureTranslateImageSource>("upload");
+    useState<PictureTranslateImageSource>(prefilledImageUrl ? "url" : "upload");
   const [productKeyword, setProductKeyword] = useState("");
   const [submittedKeyword, setSubmittedKeyword] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<ProductSearchItem | null>(null);
@@ -70,8 +73,12 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
     url: string;
     altText: string | null;
   } | null>(null);
-  const [sourceLanguage, setSourceLanguage] = useState("auto");
-  const [targetLanguage, setTargetLanguage] = useState("zh");
+  const [sourceLanguage, setSourceLanguage] = useState(
+    initialFormPayload?.sourceLanguage?.trim() || "auto",
+  );
+  const [targetLanguage, setTargetLanguage] = useState(
+    initialFormPayload?.targetLanguage?.trim() || "zh",
+  );
   const [formErrorText, setFormErrorText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
