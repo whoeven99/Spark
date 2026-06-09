@@ -14,6 +14,7 @@ import {
   type TranslationV4Job,
   type TranslationV4Status,
 } from "../../server/translation/v4/types";
+import { resolveResumeV4JobStatus } from "../../server/translation/v4/resumeV4JobStatus";
 import { useShopLocales } from "../../hooks/useShopLocales";
 import { TranslationLocaleFields } from "../component/translation/TranslationLocaleFields";
 import { TranslationModuleMultiSelect } from "../component/translation/TranslationModuleMultiSelect";
@@ -44,20 +45,6 @@ function stageFromV4Status(status: TranslationV4Status): string {
   if (["WRITEBACK_QUEUED", "WRITING_BACK"].includes(status)) return "WRITEBACK";
   if (["VERIFY_QUEUED", "VERIFYING"].includes(status)) return "VERIFY";
   return "INIT";
-}
-
-/** Aligns with resolveResumeStatus in api.translate.v4.task-action.ts */
-function resolveResumeV4Status(
-  currentStatus: TranslationV4Status,
-  errorStage: string | null,
-): TranslationV4Status | null {
-  if (currentStatus !== "PAUSED" && currentStatus !== "FAILED") return null;
-  switch (errorStage) {
-    case "TRANSLATE": return "TRANSLATE_QUEUED";
-    case "WRITEBACK": return "WRITEBACK_QUEUED";
-    case "VERIFY": return "VERIFY_QUEUED";
-    default: return "INIT_QUEUED";
-  }
 }
 
 type OptimisticActionIntent = "pause" | "cancel" | "resume";
@@ -372,7 +359,11 @@ export function TranslationV4Page() {
     }
 
     if (action === "resume") {
-      const resumeStatus = resolveResumeV4Status(job.status, job.errorStage);
+      const resumeStatus = resolveResumeV4JobStatus(
+        job.status,
+        job.errorStage,
+        job.metrics,
+      );
       if (!resumeStatus) {
         shopify.toast.show("无法重试该任务");
         return;
