@@ -133,6 +133,9 @@ export function ensureWorkerEnv(): void {
     ["DEEPSEEK_API_KEY", process.env.DEEPSEEK_API_KEY],
     ["DEEPSEEK_BASE_URL", process.env.DEEPSEEK_BASE_URL, "https://api.deepseek.com"],
     ["DEEPSEEK_MODEL", process.env.DEEPSEEK_MODEL, "deepseek-chat"],
+    ["DEEPSEEK_CONCURRENCY_LIMIT", process.env.DEEPSEEK_CONCURRENCY_LIMIT, "(auto: flash=2500, else=500)"],
+    ["DEEPSEEK_INITIAL_CONCURRENCY", process.env.DEEPSEEK_INITIAL_CONCURRENCY, "(auto: min(32, 10% ceiling))"],
+    ["DEEPSEEK_CONCURRENCY_UTIL", process.env.DEEPSEEK_CONCURRENCY_UTIL, "0.9"],
   ]);
   console.info(`[worker:env] process.env 总键数: ${Object.keys(process.env).length}`);
   console.info("[worker:env] =================");

@@ -4,8 +4,10 @@ import { loadGlossaryLines } from "./glossary.js";
 
 // ─── LLM Key Pool ─────────────────────────────────────────────────────────────
 //
-// Multi-key pool with adaptive concurrency driven by real-time rate-limit
-// response headers.
+// Multi-key pool with adaptive concurrency:
+//   - OpenAI/Azure: X-RateLimit-* headers (Little's Law) or blind AIMD fallback
+//   - DeepSeek: account-level in-flight concurrency per official docs (no quota
+//     headers on 200); optional user_id per shop for scheduling isolation
 //
 // Key pool env vars (comma-separated lists override single-key variants):
 //   DeepSeek  : DEEPSEEK_API_KEYS=sk-key1,sk-key2     (or single DEEPSEEK_API_KEY)
@@ -150,6 +152,52 @@ function parseRateLimitResetMs(raw: number | undefined, now: number): number | u
  */
 const MAX_POOL_CONCURRENCY = Math.max(1, Number(process.env.LLM_MAX_CONCURRENCY) || 512);
 
+// ── DeepSeek concurrency (official docs: account-level in-flight connections) ──
+// https://api-docs.deepseek.com/zh-cn/quick_start/rate_limit
+// deepseek-v4-pro: 500, deepseek-v4-flash: 2500; API keys on the same account share quota.
+
+type PoolLimitMode = "headers" | "deepseek-concurrency" | "blind";
+
+/** Map shop domain → DeepSeek `user_id` ([a-zA-Z0-9\-_]+, max 512). */
+export function sanitizeDeepSeekUserId(shop: string): string {
+  const normalized = shop.trim().toLowerCase().replace(/[^a-zA-Z0-9\-_]/g, "_");
+  const id = normalized.slice(0, 512);
+  return id.length > 0 ? id : "unknown_shop";
+}
+
+/** Per-account concurrent in-flight request cap from DeepSeek docs (overridable). */
+export function resolveDeepSeekAccountConcurrencyLimit(model: string): number {
+  const override = Number(process.env.DEEPSEEK_CONCURRENCY_LIMIT);
+  if (Number.isFinite(override) && override > 0) return Math.floor(override);
+
+  const m = model.trim().toLowerCase();
+  if (m.includes("flash")) return 2500;
+  return 500;
+}
+
+function resolveDeepSeekPoolConcurrency(model: string): {
+  accountLimit: number;
+  ceiling: number;
+  initial: number;
+} {
+  const accountLimit = resolveDeepSeekAccountConcurrencyLimit(model);
+  const util = Math.min(
+    1,
+    Math.max(0.1, Number(process.env.DEEPSEEK_CONCURRENCY_UTIL) || 0.9),
+  );
+  const ceiling = Math.min(
+    MAX_POOL_CONCURRENCY,
+    Math.max(1, Math.floor(accountLimit * util)),
+  );
+  const initialOverride = Number(process.env.DEEPSEEK_INITIAL_CONCURRENCY);
+  const initial = Number.isFinite(initialOverride) && initialOverride > 0
+    ? Math.min(Math.floor(initialOverride), ceiling)
+    : Math.min(Math.max(32, Math.floor(ceiling * 0.1)), ceiling);
+  return { accountLimit, ceiling, initial };
+}
+
+type PoolInitOptions = { provider?: Provider; model?: string };
+
 // ── Slot / Pool types ────────────────────────────────────────────────────────
 
 type SlotRateLimit = {
@@ -215,19 +263,23 @@ async function fetchDeepSeekChatCompletion(
   model: string,
   messages: ChatMessage[],
   timeoutMs: number,
+  userId?: string,
 ): Promise<ChatCompletionInvokeResult> {
+  const body: Record<string, unknown> = {
+    model,
+    messages,
+    temperature: 0.1,
+    response_format: { type: "json_object" },
+  };
+  if (userId) body.user_id = userId;
+
   const resp = await fetch(chatUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: 0.1,
-      response_format: { type: "json_object" },
-    }),
+    body: JSON.stringify(body),
     signal: AbortSignal.timeout(timeoutMs),
   });
 
@@ -261,6 +313,7 @@ async function invokeChatCompletion(
   model: string,
   messages: ChatMessage[],
   timeoutMs: number,
+  deepseekUserId?: string,
 ): Promise<ChatCompletionInvokeResult> {
   if (transport.kind === "deepseek-fetch") {
     return fetchDeepSeekChatCompletion(
@@ -269,6 +322,7 @@ async function invokeChatCompletion(
       model,
       messages,
       timeoutMs,
+      deepseekUserId,
     );
   }
 
@@ -336,15 +390,38 @@ class LLMKeyPool {
   private readonly _blindPerKeyCap =
     Math.max(1, Number(process.env.LLM_BLIND_PER_KEY_MAX) || 8);
 
-  constructor(slots: KeySlot[]) {
+  /** DeepSeek: account-level in-flight cap; OpenAI/Azure: blind or header-driven. */
+  private readonly _limitMode: PoolLimitMode;
+  private _deepseekConcCeiling = 0;
+  private _deepseekRampSuccesses = 0;
+
+  constructor(slots: KeySlot[], options?: PoolInitOptions) {
     if (slots.length === 0) throw new Error("[llm-pool] no LLM API keys configured");
     this.slots = slots;
-    // Start with 1 concurrent request per slot; scales up once we see headers.
-    this.sem = new AdaptiveSemaphore(slots.length);
-    console.log(
-      `[llm-pool] initialised — ${slots.length} slot(s): ${slots.map((s) => s.label).join(", ")}, ` +
-      `initial concurrency=${this.sem.max}, ceiling=${MAX_POOL_CONCURRENCY}`,
-    );
+
+    const provider = options?.provider ?? "openai";
+    const model = options?.model ?? (process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat");
+    const slotLabels = slots.map((s) => s.label).join(", ");
+
+    if (provider === "deepseek") {
+      this._limitMode = "deepseek-concurrency";
+      const cfg = resolveDeepSeekPoolConcurrency(model);
+      this._deepseekConcCeiling = cfg.ceiling;
+      this.sem = new AdaptiveSemaphore(cfg.initial);
+      console.log(
+        `[llm-pool] initialised — ${slots.length} slot(s): ${slotLabels}, ` +
+        `deepseek concurrency mode (model=${model}, accountLimit=${cfg.accountLimit}, ` +
+        `ceiling=${cfg.ceiling}, initial=${cfg.initial}; keys share account quota)`,
+      );
+    } else {
+      this._limitMode = "blind";
+      // Start with 1 concurrent request per slot; scales up once we see headers.
+      this.sem = new AdaptiveSemaphore(slots.length);
+      console.log(
+        `[llm-pool] initialised — ${slots.length} slot(s): ${slotLabels}, ` +
+        `initial concurrency=${this.sem.max}, ceiling=${MAX_POOL_CONCURRENCY}`,
+      );
+    }
   }
 
   get size(): number { return this.slots.length; }
@@ -490,6 +567,13 @@ class LLMKeyPool {
         );
         this._lastQuotaSnap.set(slot.label, formatSlotQuota(slot.rateLimit));
         this._quotaLogAt.set(slot.label, Date.now());
+      } else if (this._limitMode === "deepseek-concurrency") {
+        console.log(
+          `[llm-pool] ${slot.label} first response — deepseek concurrency mode` +
+          ` (${durationMs.toFixed(0)}ms, ${tokens} tok; no quota headers on 200 — expected per DeepSeek docs)` +
+          `\n  pool concurrency=${this.sem.max}/${this._deepseekConcCeiling} (account in-flight limit)` +
+          bodyLimitBlock,
+        );
       } else {
         const blindCeil = this.slots.length * this._blindPerKeyCap;
         console.log(
@@ -545,6 +629,10 @@ class LLMKeyPool {
    * (default 8 per key, so 24 total with 3 keys).
    */
   private _blindOnSuccess(): void {
+    if (this._limitMode === "deepseek-concurrency") {
+      this._deepseekOnSuccess();
+      return;
+    }
     if (this._hasSeenAnyHeaders) return;
     this._blindSuccesses++;
     const RAMP_STEP = 2; // add 1 concurrency unit every 2 successful calls
@@ -563,7 +651,45 @@ class LLMKeyPool {
    * Multiplicative decrease: on a 429, halve the concurrency cap and reset the
    * success counter so the ramp restarts from the new lower baseline.
    */
+  /**
+   * DeepSeek docs: limit = concurrent in-flight requests per account.
+   * Ramp toward documented ceiling; back off on 429.
+   */
+  private _deepseekOnSuccess(): void {
+    if (this._hasSeenAnyHeaders) return;
+    this._deepseekRampSuccesses++;
+    const RAMP_STEP = 8;
+    const RAMP_ADD = 4;
+    if (
+      this._deepseekRampSuccesses % RAMP_STEP === 0 &&
+      this.sem.max < this._deepseekConcCeiling
+    ) {
+      const newMax = Math.min(this._deepseekConcCeiling, this.sem.max + RAMP_ADD);
+      if (newMax !== this.sem.max) {
+        this.sem.setMax(newMax);
+        console.log(
+          `[llm-pool] deepseek ramp → concurrency=${newMax}/${this._deepseekConcCeiling}` +
+          ` (${this._deepseekRampSuccesses} successes)`,
+        );
+      }
+    }
+  }
+
+  private _deepseekOnThrottle(): void {
+    const floor = Math.max(this.slots.length, 4);
+    const newMax = Math.max(floor, Math.floor(this.sem.max * 0.7));
+    this._deepseekRampSuccesses = 0;
+    if (newMax !== this.sem.max) {
+      this.sem.setMax(newMax);
+      console.log(`[llm-pool] deepseek back-off → concurrency=${newMax} (429, account quota)`);
+    }
+  }
+
   private _blindOnThrottle(): void {
+    if (this._limitMode === "deepseek-concurrency") {
+      this._deepseekOnThrottle();
+      return;
+    }
     if (this._hasSeenAnyHeaders) return;
     const floor  = this.slots.length;          // never go below 1 per slot
     const newMax = Math.max(floor, Math.floor(this.sem.max * 0.5));
@@ -596,6 +722,11 @@ class LLMKeyPool {
    * [1, MAX_POOL_CONCURRENCY].
    */
   private _recalc(): void {
+    // DeepSeek 200 responses omit quota headers — concurrency is managed separately.
+    if (this._limitMode === "deepseek-concurrency" && !this._hasSeenAnyHeaders) {
+      return;
+    }
+
     const now = Date.now();
     const latS = this.latency.value / 1_000;    // avg call duration in seconds
     const avgTok = this.tokPerReq.value;         // avg tokens per call
@@ -759,7 +890,9 @@ let _pool: LLMKeyPool | null = null;
 
 function getPool(): LLMKeyPool {
   if (_pool) return _pool;
-  _pool = new LLMKeyPool(buildKeySlots(resolveProvider()));
+  const provider = resolveProvider();
+  const model = resolveModel("");
+  _pool = new LLMKeyPool(buildKeySlots(provider), { provider, model });
   return _pool;
 }
 
@@ -1347,7 +1480,7 @@ async function translateItemsRouted(
         systemPrompt = buildSystemPrompt(target, glossary);
       }
       try {
-        await gatherTranslations(missing, aiModel, systemPrompt, collected, tokenAccum);
+        await gatherTranslations(missing, aiModel, systemPrompt, collected, tokenAccum, shopName);
       } catch (e) {
         console.warn(`[route] llm engine error`, e);
       }
@@ -1518,6 +1651,7 @@ async function callLLMOnce(
   items: TranslateItem[],
   aiModel: string,
   systemPrompt: string,
+  shopName?: string,
 ): Promise<{ map: Map<string, string>; tokens: number }> {
   // Opaque IDs prevent the model from confusing semantic key names with content.
   const idToKey = new Map(items.map((it, idx) => [`f${idx}`, it.key]));
@@ -1533,11 +1667,16 @@ async function callLLMOnce(
   ];
 
   try {
+    const deepseekUserId =
+      acq.transport.kind === "deepseek-fetch" && shopName
+        ? sanitizeDeepSeekUserId(shopName)
+        : undefined;
     const { content: raw, tokens, response, limitHints } = await invokeChatCompletion(
       acq.transport,
       model,
       messages,
       120_000,
+      deepseekUserId,
     );
 
     const rawHeaders = responseHeadersToRecord(response);
@@ -1587,12 +1726,13 @@ async function gatherTranslations(
   systemPrompt: string,
   collected: Map<string, string>,
   tokenAccum: { value: number },
+  shopName?: string,
 ): Promise<void> {
   const pend = items.filter((i) => !collected.has(i.key));
   if (pend.length === 0) return;
 
   try {
-    const { map, tokens } = await callLLMOnce(pend, aiModel, systemPrompt);
+    const { map, tokens } = await callLLMOnce(pend, aiModel, systemPrompt, shopName);
     tokenAccum.value += tokens;
     let progressed = false;
     for (const [k, v] of map) {
@@ -1605,7 +1745,7 @@ async function gatherTranslations(
     // Model parsed OK but dropped some keys → retry just those, but only while
     // making progress (avoids looping on a key the model refuses to return).
     if (missing.length > 0 && progressed && missing.length < pend.length) {
-      await gatherTranslations(missing, aiModel, systemPrompt, collected, tokenAccum);
+      await gatherTranslations(missing, aiModel, systemPrompt, collected, tokenAccum, shopName);
     }
     return;
   } catch (e) {
@@ -1613,14 +1753,14 @@ async function gatherTranslations(
     if (pend.length > 1) {
       const mid = Math.ceil(pend.length / 2);
       console.warn(`[llm] batch of ${pend.length} unparseable (${msg}); splitting`);
-      await gatherTranslations(pend.slice(0, mid), aiModel, systemPrompt, collected, tokenAccum);
-      await gatherTranslations(pend.slice(mid), aiModel, systemPrompt, collected, tokenAccum);
+      await gatherTranslations(pend.slice(0, mid), aiModel, systemPrompt, collected, tokenAccum, shopName);
+      await gatherTranslations(pend.slice(mid), aiModel, systemPrompt, collected, tokenAccum, shopName);
       return;
     }
     // Single item: retry for transient failures, then give up (→ fallback).
     for (let r = 0; r < LEAF_RETRIES; r++) {
       try {
-        const { map, tokens } = await callLLMOnce(pend, aiModel, systemPrompt);
+        const { map, tokens } = await callLLMOnce(pend, aiModel, systemPrompt, shopName);
         tokenAccum.value += tokens;
         for (const [k, v] of map) if (!collected.has(k)) collected.set(k, v);
         if (collected.has(pend[0].key)) return;

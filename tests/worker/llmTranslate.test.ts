@@ -396,9 +396,11 @@ describe("translateBatch — provider selection", () => {
     const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
       model: string;
       response_format: { type: string };
+      user_id: string;
     };
     expect(body.model).toBe("deepseek-v4-flash");
     expect(body.response_format).toEqual({ type: "json_object" });
+    expect(body.user_id).toBe("shop_myshopify_com");
     expect(createMock).not.toHaveBeenCalled();
   });
 });
