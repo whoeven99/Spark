@@ -2900,7 +2900,6 @@ const skillCardButtonDisabledStyle: CSSProperties = {
   opacity: 0.72,
   background: "#fafbfb",
 };
-const disabledTextButtonStyle: CSSProperties = { ...textButtonStyle, color: "#8c9196", cursor: "not-allowed" };
 const skillCategoryStyle: CSSProperties = { fontSize: 12, fontWeight: 700, color: "#6d7175" };
 const skillFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 };
 
@@ -2934,6 +2933,7 @@ const textButtonStyle: CSSProperties = {
   fontWeight: 600,
   cursor: "pointer",
 };
+const disabledTextButtonStyle: CSSProperties = { ...textButtonStyle, color: "#8c9196", cursor: "not-allowed" };
 
 const tabRowStyle: CSSProperties = { display: "flex", gap: 8, marginBottom: 16 };
 const tabButtonStyle = (active: boolean): CSSProperties => ({
