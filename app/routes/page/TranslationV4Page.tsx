@@ -1324,36 +1324,6 @@ const failErrorStyle: React.CSSProperties = {
   wordBreak: "break-word",
 };
 
-const jobMetaGridStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(148px, 1fr))",
-  gap: 10,
-};
-
-const jobMetaItemStyle: React.CSSProperties = {
-  padding: "0.75rem 0.8rem",
-  borderRadius: "10px",
-  background: pageColorTokens.surfaceSubtle,
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
-  display: "flex",
-  flexDirection: "column",
-  gap: 4,
-  minWidth: 0,
-};
-
-const jobMetaLabelStyle: React.CSSProperties = {
-  fontSize: "0.72rem",
-  color: pageColorTokens.textSecondary,
-  fontWeight: 600,
-};
-
-const jobMetaValueStyle: React.CSSProperties = {
-  fontSize: "0.82rem",
-  color: pageColorTokens.textPrimary,
-  lineHeight: 1.45,
-  wordBreak: "break-word",
-};
-
 const jobStageDetailsStyle: React.CSSProperties = {
   borderRadius: "10px",
   background: pageColorTokens.surfaceSubtle,
@@ -1388,30 +1358,7 @@ const jobStageGroupStyle: React.CSSProperties = {
   padding: "0 0.9rem 0.85rem",
 };
 
-const jobInlineNoticeStyle: React.CSSProperties = {
-  padding: "0.65rem 0.8rem",
-  borderRadius: "10px",
-  background: "#fff1e8",
-  border: "1px solid #f3d1b8",
-  color: "#8a420f",
-  fontSize: "0.75rem",
-  fontWeight: 600,
-};
-
-const taskSummaryGridStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-  gap: 12,
-};
-
-const taskSummaryItemStyle: React.CSSProperties = {
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
-  borderRadius: "12px",
-  background: pageColorTokens.surfaceSubtle,
-  padding: "0.85rem 0.95rem",
-};
-
-const taskHintBarStyle: React.CSSProperties = {
+const taskOverviewBarStyle: React.CSSProperties = {
   padding: "0.8rem 0.95rem",
   borderRadius: "12px",
   background: pageColorTokens.surfaceSubtle,
