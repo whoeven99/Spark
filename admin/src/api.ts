@@ -782,3 +782,146 @@ export function updateTodo(
 export function deleteTodo(id: string): Promise<{ ok: boolean }> {
   return apiFetch(`/todos/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
+
+// --- Glossary ---
+
+export type GlossaryTerm = {
+  source: string;
+  doNotTranslate?: boolean;
+  note?: string;
+  translations?: Record<string, string>;
+};
+
+export function fetchGlossary(shopName: string): Promise<{ terms: GlossaryTerm[] }> {
+  return apiFetch(`/glossary/${encodeURIComponent(shopName)}`);
+}
+
+export function saveGlossary(shopName: string, terms: GlossaryTerm[]): Promise<{ ok: boolean }> {
+  return apiFetch(`/glossary/${encodeURIComponent(shopName)}`, {
+    method: "PUT",
+    body: JSON.stringify({ terms }),
+  });
+}
+
+export function importGlossaryCsv(
+  shopName: string,
+  csvText: string,
+  mode: "merge" | "replace" = "merge",
+): Promise<{ ok: boolean; total: number; mode: string }> {
+  return apiFetch(`/glossary/${encodeURIComponent(shopName)}/import`, {
+    method: "POST",
+    body: JSON.stringify({ csv: csvText, mode }),
+  });
+}
+
+export type ParseGlossaryResult = {
+  terms: GlossaryTerm[];
+  truncated: boolean;
+};
+
+export async function parseGlossaryFile(shopName: string, file: File): Promise<ParseGlossaryResult> {
+  const token = getToken();
+  const formData = new FormData();
+  formData.append("file", file);
+  // Do NOT use apiFetch here — it forces Content-Type: application/json which breaks multipart
+  const res = await fetch(`/api/glossary/${encodeURIComponent(shopName)}/parse`, {
+    method: "POST",
+    body: formData,
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(text || res.statusText);
+  }
+  return res.json() as Promise<ParseGlossaryResult>;
+}
+
+// --- Shop Analysis ---
+
+export type ShopAnalysisMetrics = {
+  scannedModules: number;
+  scannedResources: number;
+  analyzedChunks: number;
+  glossaryDraftCount: number;
+};
+
+export type ShopAnalysisStatus =
+  | "SCAN_QUEUED"
+  | "SCANNING"
+  | "ANALYZE_QUEUED"
+  | "ANALYZING"
+  | "COMPLETED"
+  | "FAILED";
+
+export type ShopAnalysisJob = {
+  id: string;
+  shopName: string;
+  status: ShopAnalysisStatus;
+  sourceLanguage: string;
+  modules: string[];
+  triggeredBy: string;
+  claimedBy: string | null;
+  claimedAt: string | null;
+  lastHeartbeat: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+  metrics: ShopAnalysisMetrics;
+  errorMessage: string | null;
+};
+
+export type ShopProfile = {
+  shopName: string;
+  sourceLanguage: string;
+  analyzedAt: string;
+  analyzedJobId: string;
+  industry: string;
+  toneOfVoice: string;
+  targetAudience: string;
+  highFrequencyTerms: string[];
+  styleNotes: string[];
+  translationInstructions: string;
+};
+
+export function triggerShopAnalysis(
+  shopName: string,
+  params: { sourceLanguage?: string; modules?: string[] },
+): Promise<{ ok: boolean; job: ShopAnalysisJob }> {
+  return apiFetch(`/shop-analysis/${encodeURIComponent(shopName)}/trigger`, {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export function fetchAnalysisStatus(shopName: string): Promise<{ job: ShopAnalysisJob | null }> {
+  return apiFetch(`/shop-analysis/${encodeURIComponent(shopName)}/status`);
+}
+
+export function fetchShopProfile(shopName: string): Promise<{ profile: ShopProfile | null }> {
+  return apiFetch(`/shop-analysis/${encodeURIComponent(shopName)}/profile`);
+}
+
+export function saveShopProfile(shopName: string, profile: ShopProfile): Promise<{ ok: boolean }> {
+  return apiFetch(`/shop-analysis/${encodeURIComponent(shopName)}/profile`, {
+    method: "PUT",
+    body: JSON.stringify(profile),
+  });
+}
+
+export function fetchGlossaryDraft(shopName: string): Promise<{
+  terms: GlossaryTerm[];
+  status: string | null;
+  generatedAt?: string;
+}> {
+  return apiFetch(`/shop-analysis/${encodeURIComponent(shopName)}/glossary-draft`);
+}
+
+export function approveGlossaryDraft(
+  shopName: string,
+  mode: "merge" | "replace",
+): Promise<{ ok: boolean; total: number; mode: string }> {
+  return apiFetch(`/shop-analysis/${encodeURIComponent(shopName)}/approve-glossary`, {
+    method: "POST",
+    body: JSON.stringify({ mode }),
+  });
+}

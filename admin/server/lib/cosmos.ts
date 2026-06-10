@@ -28,6 +28,12 @@ export function getAgentRunsContainer(): Container {
   return getClient().database(db).container(container);
 }
 
+export function getShopAnalysisContainer(): Container {
+  const db = getEnv("COSMOS_TRANSLATION_DATABASE_ID", "translation");
+  const container = getEnv("COSMOS_SHOP_ANALYSIS_CONTAINER", "shop_analysis_jobs");
+  return getClient().database(db).container(container);
+}
+
 export function isCosmosConfigured(): boolean {
   return Boolean(
     process.env.COSMOS_ENDPOINT?.trim() && process.env.COSMOS_KEY?.trim(),

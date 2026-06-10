@@ -1,6 +1,7 @@
 import OpenAI, { AzureOpenAI, RateLimitError } from "openai";
 import { tmGet, tmGetByValue, tmSet, tmSetByValue } from "./translationMemory.js";
 import { loadGlossaryLines } from "./glossary.js";
+import { loadShopProfile, buildProfilePromptBlock } from "./shopProfile.js";
 
 // ─── LLM Key Pool ─────────────────────────────────────────────────────────────
 //
@@ -1476,8 +1477,11 @@ async function translateItemsRouted(
     if (engine === "llm") {
       if (!llmConfigured()) continue;
       if (systemPrompt === null) {
-        const glossary = await loadGlossaryLines(shopName, target);
-        systemPrompt = buildSystemPrompt(target, glossary);
+        const [glossary, profile] = await Promise.all([
+          loadGlossaryLines(shopName, target),
+          loadShopProfile(shopName),
+        ]);
+        systemPrompt = buildSystemPrompt(target, glossary, profile ? buildProfilePromptBlock(profile) : "");
       }
       try {
         await gatherTranslations(missing, aiModel, systemPrompt, collected, tokenAccum, shopName);
@@ -1613,11 +1617,12 @@ function placeholdersIntact(text: string, tokens: string[]): boolean {
  * so OpenAI automatic prompt caching applies. The variable payload goes in the
  * user message instead.
  */
-function buildSystemPrompt(target: string, glossaryLines: string[]): string {
+function buildSystemPrompt(target: string, glossaryLines: string[], profileBlock = ""): string {
   const glossaryBlock = glossaryLines.length
     ? `\nGlossary (apply consistently):\n${glossaryLines.join("\n")}\n`
     : "";
-  return `You are a professional e-commerce translator.
+  const shopContextBlock = profileBlock ? `\n${profileBlock}\n` : "";
+  return `You are a professional e-commerce translator.${shopContextBlock}
 Detect the input language automatically and translate the content into "${target}".
 Rules:
 - Be accurate and natural for e-commerce

@@ -42,9 +42,11 @@ export const HINT_KEYS = {
   translate: "translate:v4:hint:translate",
   writeback: "translate:v4:hint:writeback",
   verify: "translate:v4:hint:verify",
+  analysis: "translate:v4:hint:analysis",
 } as const;
 
 export type HintPayload = { taskId: string; shopName: string };
+export type AnalysisHintPayload = { shopName: string; sourceLanguage: string; modules: string[] };
 
 export async function popHint(
   stage: keyof typeof HINT_KEYS,
