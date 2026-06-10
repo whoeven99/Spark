@@ -1,12 +1,4 @@
-/**
- * LLM-based glossary term extractor.
- * Reuses the same API keys as the translate worker (DEEPSEEK_API_KEY / OPENAI_API_KEY /
- * OPENAI_API_KEYS / AZURE_OPENAI_*) — no extra config needed.
- */
-
-import type { GlossaryTerm } from "../routes/glossary.js";
-
-// ── System prompt ─────────────────────────────────────────────────────────────
+import type { GlossaryTerm } from "./glossary.server";
 
 const SYSTEM_PROMPT = `You are a translation glossary extractor for an e-commerce platform.
 
@@ -27,8 +19,6 @@ Rules:
 - Deduplicate: if the same source appears multiple times, merge their translations.
 - Return ONLY the JSON object — no markdown, no explanations.`;
 
-// ── LLM client ────────────────────────────────────────────────────────────────
-
 type LLMConfig = {
   url: string;
   key: string;
@@ -39,39 +29,33 @@ function resolveLLM(): LLMConfig | null {
   const deepseek = (process.env.DEEPSEEK_API_KEYS?.split(",")[0] ?? process.env.DEEPSEEK_API_KEY)?.trim();
   if (deepseek) {
     return {
-      url:   "https://api.deepseek.com/v1/chat/completions",
-      key:   deepseek,
+      url: "https://api.deepseek.com/v1/chat/completions",
+      key: deepseek,
       model: process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat",
     };
   }
   const openai = (process.env.OPENAI_API_KEYS?.split(",")[0] ?? process.env.OPENAI_API_KEY)?.trim();
   if (openai) {
     return {
-      url:   "https://api.openai.com/v1/chat/completions",
-      key:   openai,
+      url: "https://api.openai.com/v1/chat/completions",
+      key: openai,
       model: process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini",
     };
   }
   const azureEndpoint = process.env.AZURE_OPENAI_ENDPOINT?.trim();
-  const azureKey      = process.env.AZURE_OPENAI_API_KEY?.trim();
-  const azureDeploy   = process.env.AZURE_OPENAI_DEPLOYMENT?.trim();
+  const azureKey = process.env.AZURE_OPENAI_API_KEY?.trim();
+  const azureDeploy = process.env.AZURE_OPENAI_DEPLOYMENT?.trim();
   if (azureEndpoint && azureKey && azureDeploy) {
     const apiVersion = process.env.AZURE_OPENAI_API_VERSION?.trim() || "2024-02-01";
     return {
-      url:   `${azureEndpoint}/openai/deployments/${azureDeploy}/chat/completions?api-version=${apiVersion}`,
-      key:   azureKey,
+      url: `${azureEndpoint}/openai/deployments/${azureDeploy}/chat/completions?api-version=${apiVersion}`,
+      key: azureKey,
       model: azureDeploy,
     };
   }
   return null;
 }
 
-// ── Main export ───────────────────────────────────────────────────────────────
-
-/**
- * Send extracted document text to the LLM and return parsed GlossaryTerm[].
- * Throws when no API key is configured or the LLM returns unusable output.
- */
 export async function parseGlossaryWithLLM(documentText: string): Promise<GlossaryTerm[]> {
   const cfg = resolveLLM();
   if (!cfg) {
@@ -90,7 +74,7 @@ export async function parseGlossaryWithLLM(documentText: string): Promise<Glossa
     model: cfg.model,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
-      { role: "user",   content: documentText   },
+      { role: "user", content: documentText },
     ],
     temperature: 0.1,
     response_format: { type: "json_object" },
@@ -102,7 +86,7 @@ export async function parseGlossaryWithLLM(documentText: string): Promise<Glossa
     throw new Error(`LLM API 返回 ${res.status}: ${errBody.slice(0, 200)}`);
   }
 
-  const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+  const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
   const content = data.choices?.[0]?.message?.content ?? "{}";
 
   let parsed: unknown;
@@ -117,7 +101,6 @@ export async function parseGlossaryWithLLM(documentText: string): Promise<Glossa
     throw new Error("LLM 返回格式不符（缺少 terms 数组）");
   }
 
-  // Sanitise: ensure each item at least has a non-empty source string
   return (raw.terms as unknown[]).flatMap((t): GlossaryTerm[] => {
     if (!t || typeof t !== "object") return [];
     const item = t as Record<string, unknown>;

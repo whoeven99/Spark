@@ -20,7 +20,6 @@ import { pricingWorkbenchV2Router } from "./routes/pricingWorkbenchV2.js";
 import { todosRouter } from "./routes/todos.js";
 import { opsChecklistRouter } from "./routes/opsChecklist.js";
 import { visitSourceRouter } from "./routes/visitSource.js";
-import { glossaryRouter } from "./routes/glossary.js";
 import { isProductionNodeEnv } from "./lib/nodeEnv.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -56,7 +55,6 @@ app.use("/api/pricing-workbench", authMiddleware, pricingWorkbenchV2Router);
 app.use("/api/todos", authMiddleware, todosRouter);
 app.use("/api/ops-checklist", authMiddleware, opsChecklistRouter);
 app.use("/api/visit-source", authMiddleware, visitSourceRouter);
-app.use("/api/glossary", authMiddleware, glossaryRouter);
 
 // Serve built frontend in production
 if (IS_PROD) {

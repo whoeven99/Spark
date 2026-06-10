@@ -20,6 +20,7 @@ import {
 } from "../../lib/translationV4Display";
 import { resolveResumeV4JobStatus } from "../../server/translation/v4/resumeV4JobStatus";
 import { useShopLocales } from "../../hooks/useShopLocales";
+import { TranslationGlossaryPanel } from "../component/translation/TranslationGlossaryPanel";
 import { TranslationLocaleFields } from "../component/translation/TranslationLocaleFields";
 import { TranslationModuleMultiSelect } from "../component/translation/TranslationModuleMultiSelect";
 import {
@@ -475,6 +476,8 @@ export function TranslationV4Page() {
                 </div>
               </s-stack>
             </PageSurface>
+
+            <TranslationGlossaryPanel locationSearch={query} />
           </div>
 
           {/* Right: Pipeline legend */}
