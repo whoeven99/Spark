@@ -651,17 +651,10 @@ export function TranslationV4Page() {
                 ]}
               />
 
-              <div style={taskSummaryGridStyle}>
-                <TaskSummaryItem label="当前任务" value={currentJobs.length} />
-                <TaskSummaryItem label="运行中" value={runningCount} tone="progress" />
-                <TaskSummaryItem label="已完成" value={completedCount} tone="success" />
-                <TaskSummaryItem label="需处理" value={attentionCount} tone="warning" />
-              </div>
-
-              <div style={taskHintBarStyle}>
+              <div style={taskOverviewBarStyle}>
                 {taskView === "current"
-                  ? "当前任务包含最近 24 小时内的运行中、已完成、失败或暂停任务。"
-                  : "历史任务指创建时间超过 24 小时的记录，仅保留列表汇总信息。"}
+                  ? `最近 24 小时任务 · 运行中 ${runningCount} · 已完成 ${completedCount} · 需处理 ${attentionCount}`
+                  : `历史任务共 ${historyJobs.length} 条，仅展示批量执行汇总。`}
               </div>
 
               {visibleJobs.length === 0 ? (
@@ -950,6 +943,7 @@ function getSecondaryCopy(
       ? `失败 ${metrics.translateFailed + metrics.writebackFailed + metrics.verifyFailed}`
       : null;
   const tokenPart = metrics.usedTokens > 0 ? `${metrics.usedTokens.toLocaleString()} tokens` : null;
+  const modulePart = metrics.currentModule ? `模块 ${metrics.currentModule}` : null;
 
   if (status === "COMPLETED") {
     return [
@@ -966,6 +960,7 @@ function getSecondaryCopy(
     return [
       `阶段 ${stageLabel(job.errorStage)}`,
       failedPart ?? "暂无失败统计",
+      modulePart,
       updatedLabel ? `更新于 ${updatedLabel}` : null,
     ]
       .filter(Boolean)
@@ -978,18 +973,42 @@ function getSecondaryCopy(
       .join(" · ");
   }
 
-  return [resourcePart, nodePart, failedPart, tokenPart, updatedLabel ? `更新于 ${updatedLabel}` : null]
+  return [resourcePart, nodePart, failedPart, modulePart, tokenPart, updatedLabel ? `更新于 ${updatedLabel}` : null]
     .filter(Boolean)
     .join(" · ");
 }
 
-function JobMetaItem({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div style={jobMetaItemStyle}>
-      <div style={jobMetaLabelStyle}>{label}</div>
-      <div style={jobMetaValueStyle}>{value}</div>
-    </div>
-  );
+function getStageSummaryCopy(
+  status: TranslationV4Status,
+  metrics: ProgressData["metrics"],
+  errorStageValue: string | null,
+): string {
+  if (status === "COMPLETED") {
+    return metrics.verifyTotal > 0
+      ? `阶段完成：初始化、翻译、回写、验证`
+      : `阶段完成：初始化、翻译、回写`;
+  }
+
+  if (status === "FAILED" || status === "PAUSED") {
+    return `当前停留在${stageLabel(errorStageValue)}`;
+  }
+
+  if (status === "INITIALIZING" || status === "INIT_QUEUED" || status === "CREATED") {
+    return `当前阶段：初始化 ${metrics.initDone}/${metrics.initTotal || 0}`;
+  }
+  if (status === "TRANSLATE_QUEUED" || status === "TRANSLATING" || status === "TRANSLATE_DONE") {
+    const done = metrics.translateUnitTotal > 0 ? metrics.translateUnitDone : metrics.translateDone;
+    const total = metrics.translateUnitTotal > 0 ? metrics.translateUnitTotal : metrics.translateTotal;
+    return `当前阶段：翻译 ${done}/${total || 0}`;
+  }
+  if (status === "WRITEBACK_QUEUED" || status === "WRITING_BACK") {
+    return `当前阶段：回写 ${metrics.writebackDone}/${metrics.writebackTotal || 0}`;
+  }
+  if (status === "VERIFY_QUEUED" || status === "VERIFYING") {
+    return `当前阶段：验证 ${metrics.verifyDone}/${metrics.verifyTotal || 0}`;
+  }
+
+  return "查看阶段进度";
 }
 
 function JobCard({ job, status, progress, locationSearch, onAction }: JobCardProps) {
@@ -1021,6 +1040,8 @@ function JobCard({ job, status, progress, locationSearch, onAction }: JobCardPro
   const showVerify = metrics.verifyTotal > 0 || ["VERIFY_QUEUED", "VERIFYING"].includes(status);
   const primaryCopy = getPrimaryCopy(status, metrics, progress?.errorStage ?? job.errorStage);
   const secondaryCopy = getSecondaryCopy(job, status, metrics, progress?.updatedAt ?? job.updatedAt);
+  const stageSummary = getStageSummaryCopy(status, metrics, progress?.errorStage ?? job.errorStage);
+  const defaultOpen = status === "FAILED" || status === "PAUSED";
 
   return (
     <AITaskCardShell
@@ -1035,9 +1056,9 @@ function JobCard({ job, status, progress, locationSearch, onAction }: JobCardPro
           <span style={{ color: pageColorTokens.textFootnote }}>|</span>
           <span>每模块最多 {job.limitPerType} 条</span>
           <span style={{ color: pageColorTokens.textFootnote }}>|</span>
-          <span>{job.isCover ? "覆盖已有翻译" : "保留已有翻译"}</span>
+          <span>模型 {job.aiModelUsed ?? job.aiModel}</span>
           <span style={{ color: pageColorTokens.textFootnote }}>|</span>
-          <span>{job.isHandle ? "翻译 Handle/Slug" : "不翻译 Handle/Slug"}</span>
+          <span>{job.isCover ? "覆盖已有翻译" : "保留已有翻译"}</span>
         </>
       }
       extraBadges={
@@ -1050,84 +1071,55 @@ function JobCard({ job, status, progress, locationSearch, onAction }: JobCardPro
       progressBackground={progressTone.background}
       bodyContent={
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={jobMetaGridStyle}>
-            <JobMetaItem label="模块范围" value={job.modules.join("、")} />
-            <JobMetaItem label="资源进度" value={`${metrics.translateDone}/${metrics.translateTotal}`} />
-            {metrics.translateUnitTotal > 0 ? (
-              <JobMetaItem
-                label="节点进度"
-                value={
-                  <>
-                    <AnimatedNumber value={metrics.translateUnitDone} />/{metrics.translateUnitTotal}
-                  </>
+          <details style={jobStageDetailsStyle} open={defaultOpen}>
+            <summary style={jobStageSummaryStyle}>
+              <span>{stageSummary}</span>
+              <span style={jobStageSummaryHintStyle}>查看阶段进度</span>
+            </summary>
+            <div style={jobStageGroupStyle}>
+              <StageBar
+                label="初始化"
+                done={metrics.initDone}
+                total={metrics.initTotal}
+                active={status === "INITIALIZING"}
+                complete={["INIT_DONE", "TRANSLATE_QUEUED", "TRANSLATING", "TRANSLATE_DONE", "WRITEBACK_QUEUED", "WRITING_BACK", "VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status)}
+              />
+              <StageBar
+                label="翻译"
+                done={metrics.translateUnitTotal > 0 ? metrics.translateUnitDone : metrics.translateDone}
+                total={metrics.translateUnitTotal > 0 ? metrics.translateUnitTotal : metrics.translateTotal}
+                active={status === "TRANSLATING"}
+                complete={["TRANSLATE_DONE", "WRITEBACK_QUEUED", "WRITING_BACK", "VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status)}
+                failed={metrics.translateFailed}
+                detailLabel={
+                  metrics.translateUnitTotal > 0 ? (
+                    <>
+                      资源 {metrics.translateDone}/{metrics.translateTotal} · 节点{" "}
+                      <AnimatedNumber value={metrics.translateUnitDone} />/{metrics.translateUnitTotal}
+                    </>
+                  ) : undefined
                 }
               />
-            ) : null}
-            <JobMetaItem
-              label="模型"
-              value={job.aiModelUsed ?? job.aiModel}
-            />
-            <JobMetaItem
-              label="用量"
-              value={metrics.usedTokens > 0 ? `${metrics.usedTokens.toLocaleString()} tokens` : "暂未产生"}
-            />
-            <JobMetaItem
-              label="失败统计"
-              value={`${metrics.translateFailed + metrics.writebackFailed + metrics.verifyFailed} 条`}
-            />
-          </div>
-
-          <div style={jobStageGroupStyle}>
-            <StageBar
-              label="初始化"
-              done={metrics.initDone}
-              total={metrics.initTotal}
-              active={status === "INITIALIZING"}
-              complete={["INIT_DONE", "TRANSLATE_QUEUED", "TRANSLATING", "TRANSLATE_DONE", "WRITEBACK_QUEUED", "WRITING_BACK", "VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status)}
-            />
-            <StageBar
-              label="翻译"
-              done={metrics.translateUnitTotal > 0 ? metrics.translateUnitDone : metrics.translateDone}
-              total={metrics.translateUnitTotal > 0 ? metrics.translateUnitTotal : metrics.translateTotal}
-              active={status === "TRANSLATING"}
-              complete={["TRANSLATE_DONE", "WRITEBACK_QUEUED", "WRITING_BACK", "VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status)}
-              failed={metrics.translateFailed}
-              detailLabel={
-                metrics.translateUnitTotal > 0 ? (
-                  <>
-                    资源 {metrics.translateDone}/{metrics.translateTotal} · 节点{" "}
-                    <AnimatedNumber value={metrics.translateUnitDone} />/{metrics.translateUnitTotal}
-                  </>
-                ) : undefined
-              }
-            />
-            <StageBar
-              label="回写"
-              done={metrics.writebackDone}
-              total={metrics.writebackTotal}
-              active={status === "WRITING_BACK"}
-              complete={["VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status)}
-              failed={metrics.writebackFailed}
-            />
-            {showVerify ? (
               <StageBar
-                label="验证"
-                done={metrics.verifyDone}
-                total={metrics.verifyTotal}
-                active={status === "VERIFYING"}
-                complete={status === "COMPLETED" && metrics.verifyTotal > 0}
-                failed={metrics.verifyFailed}
+                label="回写"
+                done={metrics.writebackDone}
+                total={metrics.writebackTotal}
+                active={status === "WRITING_BACK"}
+                complete={["VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status)}
+                failed={metrics.writebackFailed}
               />
-            ) : null}
-          </div>
-
-          {metrics.currentModule && ACTIVE_STATUSES.includes(status) ? (
-            <div style={jobInlineNoticeStyle}>
-              当前模块：{metrics.currentModule}
+              {showVerify ? (
+                <StageBar
+                  label="验证"
+                  done={metrics.verifyDone}
+                  total={metrics.verifyTotal}
+                  active={status === "VERIFYING"}
+                  complete={status === "COMPLETED" && metrics.verifyTotal > 0}
+                  failed={metrics.verifyFailed}
+                />
+              ) : null}
             </div>
-          ) : null}
-
-          {status === "TRANSLATING" ? <TranslateStatsPanel metrics={metrics} /> : null}
+          </details>
 
           {(status === "FAILED" || status === "PAUSED") && (progress?.errorMessage ?? job.errorMessage) ? (
             <div style={failErrorStyle}>
@@ -1146,110 +1138,6 @@ function ConfirmSummaryRow({ label, value }: { label: string; value: string }) {
     <div style={confirmRowStyle}>
       <div style={confirmLabelStyle}>{label}</div>
       <div style={confirmValueStyle}>{value}</div>
-    </div>
-  );
-}
-
-function TaskSummaryItem(props: {
-  label: string;
-  value: number;
-  tone?: "default" | "progress" | "success" | "warning";
-}) {
-  const tone = props.tone ?? "default";
-  const color =
-    tone === "progress"
-      ? "#c05717"
-      : tone === "success"
-        ? pageColorTokens.brandGreenDark
-        : tone === "warning"
-          ? "#8a6200"
-          : pageColorTokens.textPrimary;
-
-  return (
-    <div style={taskSummaryItemStyle}>
-      <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary }}>{props.label}</div>
-      <div style={{ fontSize: "1.25rem", fontWeight: 700, color, marginTop: 6 }}>{props.value}</div>
-    </div>
-  );
-}
-
-// ─── Translate Stats Panel ────────────────────────────────────────────────────
-
-type TranslateMetricsSnap = {
-  translateUnitDone: number;
-  translateUnitTotal: number;
-  usedTokens?: number;
-  translateStartedAt?: string | null;
-};
-
-function fmtDuration(ms: number): string {
-  if (ms < 0) ms = 0;
-  const totalSec = Math.floor(ms / 1000);
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
-}
-
-function StatItem({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1px", minWidth: "7rem" }}>
-      <span style={{ fontSize: "0.68rem", color: pageColorTokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-        {label}
-      </span>
-      <span style={{ fontSize: "0.82rem", fontWeight: 600, color: pageColorTokens.textPrimary, fontVariantNumeric: "tabular-nums" }}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function TranslateStatsPanel({ metrics }: { metrics: TranslateMetricsSnap }) {
-  const [now, setNow] = useState(() => Date.now());
-
-  // Tick every second while panel is mounted.
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  const { translateUnitDone: done, translateUnitTotal: total, usedTokens = 0, translateStartedAt } = metrics;
-  const startMs = translateStartedAt ? Number(translateStartedAt) : null;
-  const elapsedMs = startMs && startMs > 0 ? Math.max(0, now - startMs) : null;
-
-  // Linear extrapolation from current progress ratio.
-  const ratio = total > 0 && done > 0 ? done / total : 0;
-  const estRemainingMs = elapsedMs !== null && ratio > 0 ? (elapsedMs / ratio) * (1 - ratio) : null;
-  const estRemainingTokens = ratio > 0 && usedTokens > 0 ? Math.round((usedTokens / ratio) * (1 - ratio)) : null;
-
-  if (elapsedMs === null && usedTokens === 0) return null;
-
-  return (
-    <div
-      style={{
-        padding: "0.75rem 0.85rem",
-        borderRadius: "10px",
-        background: pageColorTokens.surfaceSubtle,
-        border: `1px solid ${pageColorTokens.borderSubtle}`,
-        display: "flex",
-        flexWrap: "wrap",
-        gap: "0.75rem 1.25rem",
-      }}
-    >
-      {usedTokens > 0 && (
-        <StatItem label="已用 tokens" value={usedTokens.toLocaleString()} />
-      )}
-      {elapsedMs !== null && (
-        <StatItem label="已用时间" value={fmtDuration(elapsedMs)} />
-      )}
-      {estRemainingTokens !== null && (
-        <StatItem label="预估剩余 tokens" value={`~${estRemainingTokens.toLocaleString()}`} />
-      )}
-      {estRemainingMs !== null && (
-        <StatItem label="预估剩余时间" value={`~${fmtDuration(estRemainingMs)}`} />
-      )}
     </div>
   );
 }
@@ -1466,14 +1354,38 @@ const jobMetaValueStyle: React.CSSProperties = {
   wordBreak: "break-word",
 };
 
+const jobStageDetailsStyle: React.CSSProperties = {
+  borderRadius: "10px",
+  background: pageColorTokens.surfaceSubtle,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  overflow: "hidden",
+};
+
+const jobStageSummaryStyle: React.CSSProperties = {
+  listStyle: "none",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  padding: "0.8rem 0.9rem",
+  cursor: "pointer",
+  fontSize: "0.78rem",
+  fontWeight: 600,
+  color: pageColorTokens.textPrimary,
+};
+
+const jobStageSummaryHintStyle: React.CSSProperties = {
+  fontSize: "0.74rem",
+  fontWeight: 500,
+  color: pageColorTokens.textSecondary,
+  flexShrink: 0,
+};
+
 const jobStageGroupStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 8,
-  padding: "0.85rem 0.9rem",
-  borderRadius: "10px",
-  background: pageColorTokens.surfaceSubtle,
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  padding: "0 0.9rem 0.85rem",
 };
 
 const jobInlineNoticeStyle: React.CSSProperties = {
