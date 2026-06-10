@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { useLocation, useNavigate } from "react-router";
 
 export const pageColorTokens = {
   textPrimary: "#1a1d1f",
@@ -72,6 +73,22 @@ export const pageContentStyle: CSSProperties = {
   flexDirection: "column",
   gap: "1.5rem",
   maxWidth: "1120px",
+};
+
+export const pageBackButtonStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.45rem",
+  width: "fit-content",
+  padding: "0.55rem 0.85rem",
+  borderRadius: pageColorTokens.radiusControl,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surface,
+  color: pageColorTokens.textBody,
+  fontSize: "0.8125rem",
+  fontWeight: 600,
+  cursor: "pointer",
+  boxShadow: pageColorTokens.shadowCard,
 };
 
 export const pageSurfaceStyle: CSSProperties = {
@@ -425,6 +442,46 @@ export function PageSectionHeader({ title, subtitle, badge }: PageSectionHeaderP
       </div>
       {badge ?? null}
     </div>
+  );
+}
+
+type PageBackButtonProps = {
+  label: string;
+  fallbackPath?: string;
+  preserveSearch?: boolean;
+  workspaceOnly?: boolean;
+  style?: CSSProperties;
+};
+
+export function PageBackButton({
+  label,
+  fallbackPath = "/app",
+  preserveSearch = true,
+  workspaceOnly = false,
+  style,
+}: PageBackButtonProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  if (workspaceOnly && new URLSearchParams(location.search).get("from") !== "workspace") {
+    return null;
+  }
+
+  const handleBack = () => {
+    if (location.key !== "default") {
+      navigate(-1);
+      return;
+    }
+
+    const search = preserveSearch ? location.search : "";
+    navigate(`${fallbackPath}${search}`);
+  };
+
+  return (
+    <button type="button" style={{ ...pageBackButtonStyle, ...style }} onClick={handleBack}>
+      <span aria-hidden="true">←</span>
+      <span>{label}</span>
+    </button>
   );
 }
 

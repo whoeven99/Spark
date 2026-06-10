@@ -3,6 +3,7 @@ import { useLoaderData } from "react-router";
 import { useTranslation } from "react-i18next";
 import { authenticate } from "../shopify.server";
 import {
+  PageBackButton,
   PageMetricCard,
   PageSurface,
   pageAccentBadgeStyle,
@@ -405,7 +406,7 @@ function statusTone(status: "健康" | "关注" | "风险"): "success" | "warnin
 }
 
 export default function AdditionalPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const data = useLoaderData<typeof loader>();
   const resolveStatusText = (status: "健康" | "关注" | "风险") => {
     if (status === "健康") return t("additional.statusHealthy");
@@ -441,6 +442,15 @@ export default function AdditionalPage() {
 
   return (
     <s-page heading={t("additional.pageTitle")}>
+      <div style={pageContentStyle}>
+        <PageBackButton
+          workspaceOnly
+          label={t("common.backToPrevious", {
+            defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回上一页" : "Back",
+          })}
+        />
+      </div>
+
       <div style={pageIntroBannerStyle("diagnosis", { marginBottom: "1.5rem" })}>
         {t("additional.pageIntro")}
       </div>
