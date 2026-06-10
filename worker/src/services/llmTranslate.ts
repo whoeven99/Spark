@@ -1,10 +1,996 @@
-import OpenAI, { AzureOpenAI } from "openai";
+import OpenAI, { AzureOpenAI, RateLimitError } from "openai";
 import { tmGet, tmGetByValue, tmSet, tmSetByValue } from "./translationMemory.js";
 import { loadGlossaryLines } from "./glossary.js";
 
-let _openai: OpenAI | null = null;
+// ─── LLM Key Pool ─────────────────────────────────────────────────────────────
+//
+// Multi-key pool with adaptive concurrency:
+//   - OpenAI/Azure: X-RateLimit-* headers (Little's Law) or blind AIMD fallback
+//   - DeepSeek: account-level in-flight concurrency per official docs (no quota
+//     headers on 200); optional user_id per shop for scheduling isolation
+//
+// Key pool env vars (comma-separated lists override single-key variants):
+//   DeepSeek  : DEEPSEEK_API_KEYS=sk-key1,sk-key2     (or single DEEPSEEK_API_KEY)
+//   OpenAI    : OPENAI_API_KEYS=sk-key1,sk-key2        (or single OPENAI_API_KEY)
+//   Azure     : base slot via AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_API_KEY + AZURE_OPENAI_DEPLOYMENT
+//               extra slots via AZURE_OPENAI_ENDPOINT_2 / _3 … (same suffix pattern)
+//
+// Adaptive concurrency algorithm:
+//   Each successful response carries X-RateLimit-* headers.  The pool reads
+//   remaining/reset for both requests and tokens, computes a per-slot safe
+//   concurrency via Little's Law (concurrency = rate × latency), and updates
+//   an AdaptiveSemaphore that gates callLLMOnce.  On 429 the offending slot is
+//   marked throttled and the semaphore cap is immediately recalculated so the
+//   pipeline backs off without wasted retries.
 
 type Provider = "google" | "deepseek" | "azure" | "openai";
+
+// ── Shared infrastructure ────────────────────────────────────────────────────
+
+/**
+ * Semaphore whose capacity can be raised or lowered at runtime.
+ * Pending acquirers are woken up immediately when capacity increases.
+ */
+class AdaptiveSemaphore {
+  private _max: number;
+  private _inflight = 0;
+  private readonly _waiters: Array<() => void> = [];
+
+  constructor(initial: number) { this._max = Math.max(1, initial); }
+
+  setMax(n: number): void {
+    this._max = Math.max(1, n);
+    this._flush();
+  }
+  get max() { return this._max; }
+  get inflight() { return this._inflight; }
+
+  async acquire(): Promise<void> {
+    if (this._inflight < this._max) { this._inflight++; return; }
+    await new Promise<void>((r) => this._waiters.push(r));
+    this._inflight++;
+  }
+
+  release(): void {
+    this._inflight = Math.max(0, this._inflight - 1);
+    this._flush();
+  }
+
+  private _flush(): void {
+    while (this._waiters.length > 0 && this._inflight < this._max) {
+      this._waiters.shift()!();
+    }
+  }
+}
+
+/** Exponentially-weighted moving average (α = 0.2 by default). */
+class EWMA {
+  constructor(private _v: number, private readonly _a = 0.2) {}
+  update(sample: number): void { this._v = this._a * sample + (1 - this._a) * this._v; }
+  get value(): number { return this._v; }
+}
+
+/** Copy fetch Response headers into a lowercase-key record for the pool. */
+function responseHeadersToRecord(response: Response): Record<string, string> {
+  const out: Record<string, string> = {};
+  response.headers.forEach((value, name) => {
+    out[name.toLowerCase()] = value;
+  });
+  return out;
+}
+
+const LIMIT_HINT_KEY_RE = /limit|rate|quota|throttle|remaining|retry/i;
+const LIMIT_HINT_MAX = 24;
+
+function formatLimitHintValue(value: unknown): string {
+  if (value == null) return String(value);
+  const s = typeof value === "object" ? JSON.stringify(value) : String(value);
+  return s.length > 160 ? `${s.slice(0, 160)}…` : s;
+}
+
+/** Collect limit/rate/quota-related fields from API JSON (headers are logged separately). */
+function collectLimitHints(value: unknown, path = "", out: string[] = [], depth = 0): string[] {
+  if (depth > 8 || out.length >= LIMIT_HINT_MAX) return out;
+  if (value == null) return out;
+
+  if (Array.isArray(value)) {
+    for (let i = 0; i < Math.min(value.length, 6); i++) {
+      collectLimitHints(value[i], `${path}[${i}]`, out, depth + 1);
+    }
+    return out;
+  }
+
+  if (typeof value === "object") {
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      const nextPath = path ? `${path}.${key}` : key;
+      if (LIMIT_HINT_KEY_RE.test(key)) {
+        out.push(`${nextPath}=${formatLimitHintValue(child)}`);
+      }
+      collectLimitHints(child, nextPath, out, depth + 1);
+    }
+  }
+
+  return out;
+}
+
+function formatLimitHintsForLog(hints: string[]): string {
+  if (hints.length === 0) return "";
+  return `\n  limit-related in response body:\n${hints.map((h) => `    ${h}`).join("\n")}`;
+}
+
+function limitLikeHeaderLines(headers: Record<string, string>): string {
+  return Object.entries(headers)
+    .filter(([k]) =>
+      k.includes("ratelimit") ||
+      k.includes("rate-limit") ||
+      k.includes("retry-after") ||
+      k.includes("x-rds-") ||
+      LIMIT_HINT_KEY_RE.test(k),
+    )
+    .map(([k, v]) => `    ${k}: ${v}`)
+    .join("\n");
+}
+
+/**
+ * Normalise provider-specific reset headers.
+ * - OpenAI suffixed headers (`x-ratelimit-reset-requests`) → seconds until reset.
+ * - DeepSeek bare `x-ratelimit-reset` → Unix epoch seconds (see user-facing docs).
+ */
+function parseRateLimitResetMs(raw: number | undefined, now: number): number | undefined {
+  if (raw == null || Number.isNaN(raw)) return undefined;
+  if (raw >= 1_000_000_000_000) return raw;
+  if (raw >= 1_000_000_000) return raw * 1_000;
+  return now + raw * 1_000;
+}
+
+/**
+ * Hard ceiling on pool concurrency — emergency brake only.
+ * Under normal operation the adaptive semaphore stays well below this because
+ * `remaining/reset × latency` is naturally bounded by the API's own capacity.
+ * Only hits in pathological cases (e.g. provider returns wildly optimistic headers).
+ * Not intended as an operational knob; tune key count instead.
+ */
+const MAX_POOL_CONCURRENCY = Math.max(1, Number(process.env.LLM_MAX_CONCURRENCY) || 512);
+
+// ── DeepSeek concurrency (official docs: account-level in-flight connections) ──
+// https://api-docs.deepseek.com/zh-cn/quick_start/rate_limit
+// deepseek-v4-pro: 500, deepseek-v4-flash: 2500; API keys on the same account share quota.
+
+type PoolLimitMode = "headers" | "deepseek-concurrency" | "blind";
+
+/** Map shop domain → DeepSeek `user_id` ([a-zA-Z0-9\-_]+, max 512). */
+export function sanitizeDeepSeekUserId(shop: string): string {
+  const normalized = shop.trim().toLowerCase().replace(/[^a-zA-Z0-9\-_]/g, "_");
+  const id = normalized.slice(0, 512);
+  return id.length > 0 ? id : "unknown_shop";
+}
+
+/** Per-account concurrent in-flight request cap from DeepSeek docs (overridable). */
+export function resolveDeepSeekAccountConcurrencyLimit(model: string): number {
+  const override = Number(process.env.DEEPSEEK_CONCURRENCY_LIMIT);
+  if (Number.isFinite(override) && override > 0) return Math.floor(override);
+
+  const m = model.trim().toLowerCase();
+  if (m.includes("flash")) return 2500;
+  return 500;
+}
+
+function resolveDeepSeekPoolConcurrency(model: string): {
+  accountLimit: number;
+  ceiling: number;
+  initial: number;
+} {
+  const accountLimit = resolveDeepSeekAccountConcurrencyLimit(model);
+  const util = Math.min(
+    1,
+    Math.max(0.1, Number(process.env.DEEPSEEK_CONCURRENCY_UTIL) || 0.9),
+  );
+  const ceiling = Math.min(
+    MAX_POOL_CONCURRENCY,
+    Math.max(1, Math.floor(accountLimit * util)),
+  );
+  const initialOverride = Number(process.env.DEEPSEEK_INITIAL_CONCURRENCY);
+  const initial = Number.isFinite(initialOverride) && initialOverride > 0
+    ? Math.min(Math.floor(initialOverride), ceiling)
+    : Math.min(Math.max(32, Math.floor(ceiling * 0.1)), ceiling);
+  return { accountLimit, ceiling, initial };
+}
+
+type PoolInitOptions = { provider?: Provider; model?: string };
+
+// ── Slot / Pool types ────────────────────────────────────────────────────────
+
+type SlotRateLimit = {
+  limitReq: number;     // max requests per window (RPM equivalent)
+  remainingReq: number; // remaining requests in current window
+  resetReqMs: number;   // epoch ms when the request window resets
+  limitTok: number;     // max tokens per window (TPM equivalent)
+  remainingTok: number;
+  resetTokMs: number;
+};
+
+type KeySlotStats = {
+  calls: number;
+  tokens: number;
+  totalLatencyMs: number;
+  throttleCount: number;
+  errors: number;
+};
+
+type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
+
+/** DeepSeek uses native fetch; Azure/OpenAI keep the OpenAI SDK client. */
+type LlmTransport =
+  | { kind: "openai-sdk"; client: OpenAI }
+  | { kind: "deepseek-fetch"; apiKey: string; chatUrl: string };
+
+type KeySlot = {
+  transport: LlmTransport;
+  model: string;         // deployment / model id for this slot
+  label: string;         // masked label for logs
+  throttledUntil: number; // epoch ms; 0 = not throttled
+  rateLimit: SlotRateLimit | null;
+  stats: KeySlotStats;
+};
+
+/** Thrown by fetch transport on HTTP 429 so the pool can back off. */
+class LlmRateLimitError extends Error {
+  readonly response: Response;
+  constructor(response: Response) {
+    super("LLM rate limited");
+    this.name = "LlmRateLimitError";
+    this.response = response;
+  }
+}
+
+/** Map DEEPSEEK_BASE_URL → POST .../chat/completions (DeepSeek native endpoint). */
+function resolveDeepSeekChatCompletionsUrl(baseURL: string): string {
+  const base = baseURL.trim().replace(/\/+$/, "");
+  if (base.endsWith("/chat/completions")) return base;
+  return `${base}/chat/completions`;
+}
+
+type ChatCompletionInvokeResult = {
+  content: string;
+  tokens: number;
+  response: Response;
+  limitHints: string[];
+};
+
+async function fetchDeepSeekChatCompletion(
+  apiKey: string,
+  chatUrl: string,
+  model: string,
+  messages: ChatMessage[],
+  timeoutMs: number,
+  userId?: string,
+): Promise<ChatCompletionInvokeResult> {
+  const body: Record<string, unknown> = {
+    model,
+    messages,
+    temperature: 0.1,
+    response_format: { type: "json_object" },
+  };
+  if (userId) body.user_id = userId;
+
+  const resp = await fetch(chatUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+
+  if (resp.status === 429) {
+    throw new LlmRateLimitError(resp);
+  }
+  if (!resp.ok) {
+    throw new Error(`DeepSeek HTTP ${resp.status}: ${await resp.text()}`);
+  }
+
+  const json = (await resp.json()) as Record<string, unknown> & {
+    choices?: Array<{ message?: { content?: string | null } }>;
+    usage?: { total_tokens?: number };
+    error?: { message?: string };
+  };
+  if (json.error && typeof json.error === "object" && "message" in json.error) {
+    const msg = (json.error as { message?: string }).message;
+    if (msg) throw new Error(`DeepSeek API error: ${msg}`);
+  }
+
+  return {
+    content: json.choices?.[0]?.message?.content ?? "{}",
+    tokens: (json.usage as { total_tokens?: number } | undefined)?.total_tokens ?? 0,
+    response: resp,
+    limitHints: collectLimitHints(json),
+  };
+}
+
+async function invokeChatCompletion(
+  transport: LlmTransport,
+  model: string,
+  messages: ChatMessage[],
+  timeoutMs: number,
+  deepseekUserId?: string,
+): Promise<ChatCompletionInvokeResult> {
+  if (transport.kind === "deepseek-fetch") {
+    return fetchDeepSeekChatCompletion(
+      transport.apiKey,
+      transport.chatUrl,
+      model,
+      messages,
+      timeoutMs,
+      deepseekUserId,
+    );
+  }
+
+  const { data: completion, response } = await transport.client.chat.completions
+    .create(
+      {
+        model,
+        messages,
+        temperature: 0.1,
+        response_format: { type: "json_object" },
+      },
+      { timeout: timeoutMs },
+    )
+    .withResponse();
+
+  return {
+    content: completion.choices[0]?.message?.content ?? "{}",
+    tokens: completion.usage?.total_tokens ?? 0,
+    response,
+    limitHints: collectLimitHints(completion as unknown as Record<string, unknown>),
+  };
+}
+
+function retryAfterMsFromResponse(response: Response, fallbackSec = 10): number {
+  const retryAfterSec = Number(response.headers.get("retry-after") ?? String(fallbackSec));
+  return Math.max(retryAfterSec * 1_000, 10_000);
+}
+
+// ── Pool ─────────────────────────────────────────────────────────────────────
+
+function formatSlotQuota(rl: SlotRateLimit): string {
+  const tpm =
+    rl.limitTok === Infinity
+      ? "TPM n/a"
+      : `TPM ${rl.remainingTok}/${rl.limitTok}`;
+  return `RPM ${rl.remainingReq}/${rl.limitReq}, ${tpm}`;
+}
+
+class LLMKeyPool {
+  private readonly slots: KeySlot[];
+  private cursor = 0;
+  private readonly sem: AdaptiveSemaphore;
+  /** EWMA of LLM call durations (ms). Seed at 3 s — conservative starting point. */
+  private readonly latency = new EWMA(3_000);
+  /** EWMA of tokens consumed per request. Used for TPM-based concurrency calc. */
+  private readonly tokPerReq = new EWMA(1_000);
+  /** Per-slot quota log throttle (epoch ms). */
+  private readonly _quotaLogAt = new Map<string, number>();
+  /** Last logged quota snapshot per slot — skip duplicate lines. */
+  private readonly _lastQuotaSnap = new Map<string, string>();
+  /** Slots that have logged their first successful response. */
+  private readonly _firstResponseLogged = new Set<string>();
+  private static readonly QUOTA_LOG_INTERVAL_MS = 10_000;
+
+  // ── Blind AIMD (used when the provider returns no rate-limit headers) ───────
+  /** True once any slot has reported recognised rate-limit headers. */
+  private _hasSeenAnyHeaders = false;
+  /** Successful call counter — drives additive-increase ramp in blind mode. */
+  private _blindSuccesses = 0;
+  /**
+   * Max concurrency per key in blind mode.
+   * Default 8; override with LLM_BLIND_PER_KEY_MAX env var.
+   * With N keys the hard ceiling is N × this value (also bounded by MAX_POOL_CONCURRENCY).
+   */
+  private readonly _blindPerKeyCap =
+    Math.max(1, Number(process.env.LLM_BLIND_PER_KEY_MAX) || 8);
+
+  /** DeepSeek: account-level in-flight cap; OpenAI/Azure: blind or header-driven. */
+  private readonly _limitMode: PoolLimitMode;
+  private _deepseekConcCeiling = 0;
+  private _deepseekRampSuccesses = 0;
+
+  constructor(slots: KeySlot[], options?: PoolInitOptions) {
+    if (slots.length === 0) throw new Error("[llm-pool] no LLM API keys configured");
+    this.slots = slots;
+
+    const provider = options?.provider ?? "openai";
+    const model = options?.model ?? (process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat");
+    const slotLabels = slots.map((s) => s.label).join(", ");
+
+    if (provider === "deepseek") {
+      this._limitMode = "deepseek-concurrency";
+      const cfg = resolveDeepSeekPoolConcurrency(model);
+      this._deepseekConcCeiling = cfg.ceiling;
+      this.sem = new AdaptiveSemaphore(cfg.initial);
+      console.log(
+        `[llm-pool] initialised — ${slots.length} slot(s): ${slotLabels}, ` +
+        `deepseek concurrency mode (model=${model}, accountLimit=${cfg.accountLimit}, ` +
+        `ceiling=${cfg.ceiling}, initial=${cfg.initial}; keys share account quota)`,
+      );
+    } else {
+      this._limitMode = "blind";
+      // Start with 1 concurrent request per slot; scales up once we see headers.
+      this.sem = new AdaptiveSemaphore(slots.length);
+      console.log(
+        `[llm-pool] initialised — ${slots.length} slot(s): ${slotLabels}, ` +
+        `initial concurrency=${this.sem.max}, ceiling=${MAX_POOL_CONCURRENCY}`,
+      );
+    }
+  }
+
+  get size(): number { return this.slots.length; }
+
+  /**
+   * Acquire a key slot + semaphore slot for one LLM call.
+   * Blocks if at max concurrency or if all slots are throttled.
+   *
+   * Caller MUST call `release()` in a finally block.
+   * Caller SHOULD call `onResponse()` on success and `onThrottle()` on 429.
+   */
+  async acquire(): Promise<{
+    transport: LlmTransport;
+    model: string;
+    label: string;
+    onThrottle: (waitMs: number) => void;
+    onResponse: (
+      headers: Record<string, string>,
+      durationMs: number,
+      tokens: number,
+      limitHints?: string[],
+    ) => void;
+    onError: () => void;
+    release: () => void;
+  }> {
+    await this.sem.acquire();
+
+    const now = Date.now();
+    for (let i = 0; i < this.slots.length; i++) {
+      const idx = (this.cursor + i) % this.slots.length;
+      const slot = this.slots[idx];
+      if (slot.throttledUntil <= now) {
+        this.cursor = (idx + 1) % this.slots.length;
+        return {
+          transport: slot.transport,
+          model: slot.model,
+          label: slot.label,
+          onResponse: (
+            headers: Record<string, string>,
+            durationMs: number,
+            tokens: number,
+            limitHints: string[] = [],
+          ) => {
+            const headersApplied = this._applyHeaders(slot, headers);
+            if (headersApplied) this._hasSeenAnyHeaders = true;
+            this.latency.update(durationMs);
+            if (tokens > 0) this.tokPerReq.update(tokens);
+            slot.stats.calls++;
+            slot.stats.tokens += tokens;
+            slot.stats.totalLatencyMs += Math.round(durationMs);
+            this._logResponseQuota(slot, headers, headersApplied, durationMs, tokens, limitHints);
+            this._recalc();
+            this._blindOnSuccess(); // no-op once headers are seen
+          },
+          onThrottle: (waitMs: number) => {
+            slot.throttledUntil = Date.now() + waitMs;
+            slot.stats.throttleCount++;
+            this._recalc();
+            this._blindOnThrottle(); // no-op once headers are seen
+            console.warn(`[llm-pool] slot ${slot.label} throttled for ${(waitMs / 1_000).toFixed(1)}s`);
+          },
+          onError: () => { slot.stats.errors++; },
+          release: () => this.sem.release(),
+        };
+      }
+    }
+
+    // All slots throttled: release semaphore, wait for earliest recovery, retry.
+    this.sem.release();
+    const earliest = Math.min(...this.slots.map((s) => s.throttledUntil));
+    const waitMs = Math.max(earliest - now, 200);
+    console.warn(`[llm-pool] all ${this.slots.length} slot(s) throttled — waiting ${(waitMs / 1_000).toFixed(1)}s`);
+    await new Promise((r) => setTimeout(r, waitMs));
+    return this.acquire();
+  }
+
+  // ── Header parsing ─────────────────────────────────────────────────────────
+
+  private _applyHeaders(slot: KeySlot, h: Record<string, string>): boolean {
+    const n = (key: string): number | undefined => {
+      const v = h[key];
+      return v !== undefined ? Number(v) : undefined;
+    };
+
+    // Prefer the more specific -requests/-tokens suffixed form
+    const limitReq  = n("x-ratelimit-limit-requests")    ?? n("x-ratelimit-limit");
+    const remReq    = n("x-ratelimit-remaining-requests") ?? n("x-ratelimit-remaining");
+    const resetReqS = n("x-ratelimit-reset-requests")     ?? n("x-ratelimit-reset");
+    const limitTok  = n("x-ratelimit-limit-tokens");
+    const remTok    = n("x-ratelimit-remaining-tokens");
+    const resetTokS = n("x-ratelimit-reset-tokens");
+
+    if (limitReq == null || remReq == null || resetReqS == null) return false; // incomplete headers
+
+    const now = Date.now();
+    const resetReqMs = parseRateLimitResetMs(resetReqS, now);
+    const resetTokMs = resetTokS != null
+      ? parseRateLimitResetMs(resetTokS, now)
+      : undefined;
+    slot.rateLimit = {
+      limitReq,
+      remainingReq: remReq,
+      resetReqMs:   resetReqMs ?? (slot.rateLimit?.resetReqMs ?? now + 60_000),
+      limitTok:     limitTok  ?? (slot.rateLimit?.limitTok  ?? Infinity),
+      remainingTok: remTok    ?? (slot.rateLimit?.remainingTok ?? Infinity),
+      resetTokMs:   resetTokMs ?? (slot.rateLimit?.resetTokMs ?? now + 60_000),
+    };
+    return true;
+  }
+
+  /** Log first response per slot, then quota changes (throttled). */
+  private _logResponseQuota(
+    slot: KeySlot,
+    allHeaders: Record<string, string>,
+    headersApplied: boolean,
+    durationMs: number,
+    tokens: number,
+    limitHints: string[] = [],
+  ): void {
+    const headerRlLines = limitLikeHeaderLines(allHeaders);
+    const bodyLimitBlock = formatLimitHintsForLog(limitHints);
+
+    if (!this._firstResponseLogged.has(slot.label)) {
+      this._firstResponseLogged.add(slot.label);
+      if (headersApplied && slot.rateLimit) {
+        const bare = [
+          allHeaders["x-ratelimit-limit"] != null
+            ? `limit=${allHeaders["x-ratelimit-limit"]}`
+            : null,
+          allHeaders["x-ratelimit-remaining"] != null
+            ? `remaining=${allHeaders["x-ratelimit-remaining"]}`
+            : null,
+          allHeaders["x-ratelimit-reset"] != null
+            ? `reset=${allHeaders["x-ratelimit-reset"]}`
+            : null,
+        ].filter(Boolean).join(", ");
+        console.log(
+          `[llm-pool] ${slot.label} first response — ${formatSlotQuota(slot.rateLimit)}` +
+          ` (${durationMs.toFixed(0)}ms, ${tokens} tok)` +
+          (bare ? ` [${bare}]` : "") +
+          (headerRlLines ? `\n  rate-limit-like headers:\n${headerRlLines}` : "") +
+          bodyLimitBlock,
+        );
+        this._lastQuotaSnap.set(slot.label, formatSlotQuota(slot.rateLimit));
+        this._quotaLogAt.set(slot.label, Date.now());
+      } else if (this._limitMode === "deepseek-concurrency") {
+        console.log(
+          `[llm-pool] ${slot.label} first response — deepseek concurrency mode` +
+          ` (${durationMs.toFixed(0)}ms, ${tokens} tok; no quota headers on 200 — expected per DeepSeek docs)` +
+          `\n  pool concurrency=${this.sem.max}/${this._deepseekConcCeiling} (account in-flight limit)` +
+          bodyLimitBlock,
+        );
+      } else {
+        const blindCeil = this.slots.length * this._blindPerKeyCap;
+        console.log(
+          `[llm-pool] ${slot.label} first response — no recognized rate-limit headers` +
+          ` (${durationMs.toFixed(0)}ms, ${tokens} tok)` +
+          (headerRlLines
+            ? `\n  rate-limit-like headers found (different names?):\n${headerRlLines}`
+            : `\n  no rate-limit-like headers at all — using blind AIMD (target ceil=${blindCeil})`) +
+          bodyLimitBlock,
+        );
+      }
+      return;
+    }
+
+    if (headersApplied && slot.rateLimit) {
+      this._maybeLogQuota(slot, "updated");
+    }
+  }
+
+  private _maybeLogQuota(slot: KeySlot, reason: "updated" | "recalc"): void {
+    const rl = slot.rateLimit;
+    if (!rl) return;
+
+    const snap = formatSlotQuota(rl);
+    const now = Date.now();
+    const lastAt = this._quotaLogAt.get(slot.label) ?? 0;
+    const prevSnap = this._lastQuotaSnap.get(slot.label);
+    const lowQuota =
+      rl.limitReq > 0 && rl.remainingReq / rl.limitReq < 0.2 ||
+      (rl.limitTok !== Infinity && rl.limitTok > 0 && rl.remainingTok / rl.limitTok < 0.2);
+    const changed = snap !== prevSnap;
+    const intervalElapsed = now - lastAt >= LLMKeyPool.QUOTA_LOG_INTERVAL_MS;
+
+    if (!changed && !lowQuota && !intervalElapsed) return;
+
+    this._quotaLogAt.set(slot.label, now);
+    this._lastQuotaSnap.set(slot.label, snap);
+    console.log(
+      `[llm-pool] ${slot.label} quota ${reason} — ${snap}, pool concurrency=${this.sem.max}` +
+      (lowQuota ? " (low remaining)" : ""),
+    );
+  }
+
+  // ── Blind AIMD methods ─────────────────────────────────────────────────────
+  //
+  // Called after every successful response (_blindOnSuccess) and every 429
+  // (_blindOnThrottle).  Both are no-ops once real rate-limit headers have been
+  // seen, because the Little's Law path in _recalc() takes over.
+
+  /**
+   * Additive increase: after every RAMP_STEP successful calls without a 429,
+   * increment the semaphore cap by 1.  The ceiling is slots × _blindPerKeyCap
+   * (default 8 per key, so 24 total with 3 keys).
+   */
+  private _blindOnSuccess(): void {
+    if (this._limitMode === "deepseek-concurrency") {
+      this._deepseekOnSuccess();
+      return;
+    }
+    if (this._hasSeenAnyHeaders) return;
+    this._blindSuccesses++;
+    const RAMP_STEP = 2; // add 1 concurrency unit every 2 successful calls
+    const blindCeil = Math.min(this.slots.length * this._blindPerKeyCap, MAX_POOL_CONCURRENCY);
+    if (this._blindSuccesses % RAMP_STEP === 0 && this.sem.max < blindCeil) {
+      const newMax = this.sem.max + 1;
+      this.sem.setMax(newMax);
+      console.log(
+        `[llm-pool] blind ramp → concurrency=${newMax}/${blindCeil}` +
+        ` (${this._blindSuccesses} total successes, no rate-limit headers)`,
+      );
+    }
+  }
+
+  /**
+   * Multiplicative decrease: on a 429, halve the concurrency cap and reset the
+   * success counter so the ramp restarts from the new lower baseline.
+   */
+  /**
+   * DeepSeek docs: limit = concurrent in-flight requests per account.
+   * Ramp toward documented ceiling; back off on 429.
+   */
+  private _deepseekOnSuccess(): void {
+    if (this._hasSeenAnyHeaders) return;
+    this._deepseekRampSuccesses++;
+    const RAMP_STEP = 8;
+    const RAMP_ADD = 4;
+    if (
+      this._deepseekRampSuccesses % RAMP_STEP === 0 &&
+      this.sem.max < this._deepseekConcCeiling
+    ) {
+      const newMax = Math.min(this._deepseekConcCeiling, this.sem.max + RAMP_ADD);
+      if (newMax !== this.sem.max) {
+        this.sem.setMax(newMax);
+        console.log(
+          `[llm-pool] deepseek ramp → concurrency=${newMax}/${this._deepseekConcCeiling}` +
+          ` (${this._deepseekRampSuccesses} successes)`,
+        );
+      }
+    }
+  }
+
+  private _deepseekOnThrottle(): void {
+    const floor = Math.max(this.slots.length, 4);
+    const newMax = Math.max(floor, Math.floor(this.sem.max * 0.7));
+    this._deepseekRampSuccesses = 0;
+    if (newMax !== this.sem.max) {
+      this.sem.setMax(newMax);
+      console.log(`[llm-pool] deepseek back-off → concurrency=${newMax} (429, account quota)`);
+    }
+  }
+
+  private _blindOnThrottle(): void {
+    if (this._limitMode === "deepseek-concurrency") {
+      this._deepseekOnThrottle();
+      return;
+    }
+    if (this._hasSeenAnyHeaders) return;
+    const floor  = this.slots.length;          // never go below 1 per slot
+    const newMax = Math.max(floor, Math.floor(this.sem.max * 0.5));
+    this._blindSuccesses = 0;
+    if (newMax !== this.sem.max) {
+      this.sem.setMax(newMax);
+      console.log(`[llm-pool] blind back-off → concurrency=${newMax} (429, ramp reset)`);
+    }
+  }
+
+  private _quotaSummary(): string {
+    const now = Date.now();
+    return this.slots
+      .filter((s) => s.throttledUntil <= now && s.rateLimit)
+      .map((s) => `${s.label}[${formatSlotQuota(s.rateLimit!)}]`)
+      .join("; ") || "no quota headers yet";
+  }
+
+  // ── Adaptive concurrency (Little's Law) ───────────────────────────────────
+
+  /**
+   * Recalculate the safe concurrency ceiling based on current rate-limit state.
+   *
+   * For each active slot:
+   *   safeRPS   = remainingRequests / windowRemainSeconds   (sustainable req/s)
+   *   safeConc  = safeRPS × avgLatencySeconds               (Little's Law)
+   *
+   * Both the requests dimension and the token dimension are evaluated; the
+   * stricter constraint wins.  Results are summed across slots and clamped to
+   * [1, MAX_POOL_CONCURRENCY].
+   */
+  private _recalc(): void {
+    // DeepSeek 200 responses omit quota headers — concurrency is managed separately.
+    if (this._limitMode === "deepseek-concurrency" && !this._hasSeenAnyHeaders) {
+      return;
+    }
+
+    const now = Date.now();
+    const latS = this.latency.value / 1_000;    // avg call duration in seconds
+    const avgTok = this.tokPerReq.value;         // avg tokens per call
+
+    let totalConc = 0;
+    for (const slot of this.slots) {
+      if (slot.throttledUntil > now) continue; // 429'd — skip
+
+      const rl = slot.rateLimit;
+      if (!rl) {
+        totalConc += 1; // no data yet — contribute 1 to avoid starvation
+        continue;
+      }
+
+      // ── Requests dimension ──────────────────────────────────────────────
+      const reqRemainS = Math.max((rl.resetReqMs - now) / 1_000, 0.5);
+      // If the window already reset, treat as full bucket
+      const effRemReq  = rl.resetReqMs <= now ? rl.limitReq : rl.remainingReq;
+      const safeRPS_req = effRemReq / reqRemainS;
+      const concByReq   = safeRPS_req * latS;
+
+      // ── Tokens dimension ────────────────────────────────────────────────
+      const tokRemainS  = Math.max((rl.resetTokMs - now) / 1_000, 0.5);
+      const effRemTok   = rl.resetTokMs <= now ? rl.limitTok : rl.remainingTok;
+      // Safe req/s derived from token budget
+      const safeRPS_tok = effRemTok / tokRemainS / Math.max(avgTok, 100);
+      const concByTok   = safeRPS_tok * latS;
+
+      // Most conservative dimension wins; 0.5 floor so throttled-but-not-zero
+      // slots still contribute fractionally when they recover
+      const slotConc = rl.limitTok === Infinity ? concByReq : Math.min(concByReq, concByTok);
+      totalConc += Math.max(0.5, slotConc);
+    }
+
+    const newMax = Math.max(1, Math.min(MAX_POOL_CONCURRENCY, Math.round(totalConc)));
+    if (newMax !== this.sem.max) {
+      const active = this.slots.filter((s) => s.throttledUntil <= now).length;
+      console.log(
+        `[llm-pool] concurrency ${this.sem.max} → ${newMax}` +
+        ` (latency=${this.latency.value.toFixed(0)}ms, tok/req=${this.tokPerReq.value.toFixed(0)},` +
+        ` active=${active}/${this.slots.length}, ${this._quotaSummary()})`,
+      );
+      this.sem.setMax(newMax);
+      return;
+    }
+
+    // Concurrency unchanged — still log quota drift on a throttled interval.
+    for (const slot of this.slots) {
+      if (slot.throttledUntil > now || !slot.rateLimit) continue;
+      this._maybeLogQuota(slot, "recalc");
+    }
+  }
+
+  // ── Key stats snapshot ─────────────────────────────────────────────────────
+
+  getKeyStats(): Array<{
+    label: string;
+    calls: number;
+    tokens: number;
+    avgLatencyMs: number;
+    throttleCount: number;
+    errors: number;
+    poolConcurrency: number;
+    rateLimit: SlotRateLimit | null;
+  }> {
+    return this.slots.map((slot) => ({
+      label: slot.label,
+      calls: slot.stats.calls,
+      tokens: slot.stats.tokens,
+      avgLatencyMs: slot.stats.calls > 0
+        ? Math.round(slot.stats.totalLatencyMs / slot.stats.calls)
+        : 0,
+      throttleCount: slot.stats.throttleCount,
+      errors: slot.stats.errors,
+      poolConcurrency: this.sem.max,
+      rateLimit: slot.rateLimit,
+    }));
+  }
+}
+
+// ─── Pool construction ────────────────────────────────────────────────────────
+
+function buildKeySlots(provider: Provider): KeySlot[] {
+  if (provider === "deepseek") {
+    const multi = process.env.DEEPSEEK_API_KEYS?.trim();
+    const single = process.env.DEEPSEEK_API_KEY?.trim();
+    const keys = multi
+      ? multi.split(",").map((k) => k.trim()).filter(Boolean)
+      : single ? [single] : [];
+    if (keys.length === 0) throw new Error("DEEPSEEK_API_KEY / DEEPSEEK_API_KEYS required");
+    const baseURL = process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com";
+    const chatUrl = resolveDeepSeekChatCompletionsUrl(baseURL);
+    const model = process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
+    return keys.map((apiKey, i) => ({
+      transport: { kind: "deepseek-fetch" as const, apiKey, chatUrl },
+      model,
+      label: `deepseek-${i + 1}(…${apiKey.slice(-4)})`,
+      throttledUntil: 0,
+      rateLimit: null,
+      stats: _initStats(),
+    }));
+  }
+
+  if (provider === "azure") {
+    const apiVersion = process.env.AZURE_OPENAI_API_VERSION?.trim() || "2024-08-01-preview";
+    const slots: KeySlot[] = [];
+    const ep0  = process.env.AZURE_OPENAI_ENDPOINT?.trim();
+    const key0 = (process.env.AZURE_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY)?.trim();
+    const dep0 = process.env.AZURE_OPENAI_DEPLOYMENT?.trim();
+    if (ep0 && key0 && dep0) {
+      slots.push({
+        transport: {
+          kind: "openai-sdk",
+          client: new AzureOpenAI({ endpoint: ep0, apiKey: key0, deployment: dep0, apiVersion }),
+        },
+        model: dep0, label: `azure-1(${dep0})`, throttledUntil: 0, rateLimit: null, stats: _initStats(),
+      });
+    }
+    for (let i = 2; i <= 20; i++) {
+      const ep  = process.env[`AZURE_OPENAI_ENDPOINT_${i}`]?.trim();
+      const key = process.env[`AZURE_OPENAI_API_KEY_${i}`]?.trim();
+      const dep = process.env[`AZURE_OPENAI_DEPLOYMENT_${i}`]?.trim();
+      if (!ep && !key) break;
+      if (!ep || !key || !dep) {
+        console.warn(`[llm-pool] azure slot ${i} incomplete, skipping`);
+        continue;
+      }
+      const av = process.env[`AZURE_OPENAI_API_VERSION_${i}`]?.trim() || apiVersion;
+      slots.push({
+        transport: {
+          kind: "openai-sdk",
+          client: new AzureOpenAI({ endpoint: ep, apiKey: key, deployment: dep, apiVersion: av }),
+        },
+        model: dep, label: `azure-${i}(${dep})`, throttledUntil: 0, rateLimit: null, stats: _initStats(),
+      });
+    }
+    if (slots.length === 0) throw new Error("No Azure OpenAI credentials configured");
+    return slots;
+  }
+
+  // openai (default)
+  const multi = process.env.OPENAI_API_KEYS?.trim();
+  const single = process.env.OPENAI_API_KEY?.trim();
+  const keys = multi
+    ? multi.split(",").map((k) => k.trim()).filter(Boolean)
+    : single ? [single] : [];
+  if (keys.length === 0) throw new Error("OPENAI_API_KEY / OPENAI_API_KEYS required");
+  return keys.map((apiKey, i) => ({
+    transport: { kind: "openai-sdk" as const, client: new OpenAI({ apiKey }) },
+    model: "", label: `openai-${i + 1}(…${apiKey.slice(-4)})`,
+    throttledUntil: 0, rateLimit: null, stats: _initStats(),
+  }));
+}
+
+/** Zero-fill a fresh slot stats counter. */
+function _initStats(): KeySlotStats {
+  return { calls: 0, tokens: 0, totalLatencyMs: 0, throttleCount: 0, errors: 0 };
+}
+
+let _pool: LLMKeyPool | null = null;
+
+function getPool(): LLMKeyPool {
+  if (_pool) return _pool;
+  const provider = resolveProvider();
+  const model = resolveModel("");
+  _pool = new LLMKeyPool(buildKeySlots(provider), { provider, model });
+  return _pool;
+}
+
+/** 仅测试用：切换 provider/env 后重建 key pool */
+export function resetLlmPoolForTests(): void {
+  _pool = null;
+}
+
+// ── Key-stats flush to Redis ─────────────────────────────────────────────────
+//
+// Called from translateWorker's progress callback (already runs on every batch
+// completion). The module-level timestamp throttles actual Redis writes to
+// once per STAT_FLUSH_INTERVAL_MS regardless of how often callers invoke it.
+// Errors are silently swallowed — stats are strictly best-effort telemetry.
+
+let _lastStatFlush = 0;
+const STAT_FLUSH_INTERVAL_MS = 10_000;
+
+/**
+ * Tracks the cumulative call/token counts as of the previous flush for each
+ * slot, so we can compute per-interval deltas for the history log.
+ */
+const _slotFlushState = new Map<string, { flushedCalls: number; flushedTokens: number }>();
+
+/**
+ * Write the current key-pool stats snapshot to Redis.
+ * Throttled internally to at most one write per 10 seconds.
+ * Safe to call in a hot path (progress callback, etc.).
+ */
+export async function flushKeyStats(): Promise<void> {
+  const now = Date.now();
+  if (now - _lastStatFlush < STAT_FLUSH_INTERVAL_MS) return;
+  _lastStatFlush = now;
+  if (!_pool) return;
+
+  const stats = _pool.getKeyStats();
+  if (stats.length === 0) return;
+
+  try {
+    const { getRedis } = await import("./redisV4.js");
+    const redis = getRedis();
+    const SNAP_TTL = 24 * 3600; // 24 h for current snapshot
+    const LOG_TTL  =  2 * 3600; //  2 h for history log
+    const LOG_MAX  = 180;        // 180 × 10 s = 30 min of history
+    const pipe = redis.pipeline();
+
+    for (const s of stats) {
+      // ── Current snapshot (overwrites previous) ─────────────────────────────
+      const snapKey = `translate:v4:keystat:${s.label}`;
+      const remTok  = s.rateLimit?.remainingTok === Infinity ? -1 : (s.rateLimit?.remainingTok ?? -1);
+      const limTok  = s.rateLimit?.limitTok      === Infinity ? -1 : (s.rateLimit?.limitTok      ?? -1);
+      pipe.hset(snapKey, {
+        label:           s.label,
+        calls:           s.calls,
+        tokens:          s.tokens,
+        avgLatencyMs:    s.avgLatencyMs,
+        throttleCount:   s.throttleCount,
+        errors:          s.errors,
+        poolConcurrency: s.poolConcurrency,
+        limitReq:        s.rateLimit?.limitReq     ?? -1,
+        remainingReq:    s.rateLimit?.remainingReq ?? -1,
+        limitTok:        limTok,
+        remainingTok:    remTok,
+        updatedAt:       now,
+      });
+      pipe.expire(snapKey, SNAP_TTL);
+
+      // ── History log entry (incremental delta + snapshot fields) ────────────
+      // Delta calls/tokens since last flush lets the UI chart throughput over time.
+      const prev = _slotFlushState.get(s.label) ?? { flushedCalls: 0, flushedTokens: 0 };
+      const dCalls  = Math.max(0, s.calls  - prev.flushedCalls);
+      const dTokens = Math.max(0, s.tokens - prev.flushedTokens);
+      _slotFlushState.set(s.label, { flushedCalls: s.calls, flushedTokens: s.tokens });
+
+      // Compact field names keep each entry small (< 100 bytes).
+      const entry = JSON.stringify({
+        t:    now,
+        dC:   dCalls,
+        dT:   dTokens,
+        lat:  s.avgLatencyMs,
+        conc: s.poolConcurrency,
+        rR:   s.rateLimit?.remainingReq ?? -1,
+        lR:   s.rateLimit?.limitReq     ?? -1,
+        rT:   remTok,
+        lT:   limTok,
+      });
+      const logKey = `translate:v4:keystatlog:${s.label}`;
+      pipe.rpush(logKey, entry);
+      pipe.ltrim(logKey, -LOG_MAX, -1); // keep last 30 min
+      pipe.expire(logKey, LOG_TTL);
+    }
+    await pipe.exec();
+  } catch {
+    // Redis unavailable or not configured — stats are best-effort, ignore
+  }
+}
+
+// ─── Provider / model resolution ────────────────────────────────────────────────
 
 /**
  * Resolves the translation engine. `TRANSLATION_AI_MODEL` is an explicit selector:
@@ -16,61 +1002,28 @@ type Provider = "google" | "deepseek" | "azure" | "openai";
  */
 function resolveProvider(aiModel?: string): Provider {
   const envSel = process.env.TRANSLATION_AI_MODEL?.trim().toLowerCase();
-  // Env override wins; otherwise the job's own aiModel can name an engine.
   const sel = envSel || aiModel?.trim().toLowerCase() || "";
   if (sel === "google-translate") return "google";
   if (sel === "deepseek") return "deepseek";
   if (sel === "azure") return "azure";
-  // No explicit engine selected → auto-detect by configured credentials.
   if (!envSel) {
-    if (process.env.DEEPSEEK_API_KEY?.trim()) return "deepseek";
+    if (process.env.DEEPSEEK_API_KEY?.trim() || process.env.DEEPSEEK_API_KEYS?.trim())
+      return "deepseek";
     if (process.env.AZURE_OPENAI_ENDPOINT?.trim()) return "azure";
   }
   return "openai";
 }
 
-/** Returns an OpenAI-compatible client for the active LLM provider. */
-function getOpenAI(): OpenAI {
-  if (_openai) return _openai;
-
-  const provider = resolveProvider();
-
-  if (provider === "deepseek") {
-    const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
-    if (!apiKey) throw new Error("DEEPSEEK_API_KEY is required for DeepSeek translation");
-    const baseURL = process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com/v1";
-    _openai = new OpenAI({ apiKey, baseURL });
-    return _openai;
-  }
-
-  if (provider === "azure") {
-    const endpoint = process.env.AZURE_OPENAI_ENDPOINT?.trim();
-    const apiKey = process.env.AZURE_OPENAI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim();
-    const deployment = process.env.AZURE_OPENAI_DEPLOYMENT?.trim();
-    const apiVersion = process.env.AZURE_OPENAI_API_VERSION?.trim() || "2024-08-01-preview";
-    if (!endpoint) throw new Error("AZURE_OPENAI_ENDPOINT is required for Azure OpenAI translation");
-    if (!apiKey) throw new Error("AZURE_OPENAI_API_KEY is required for Azure OpenAI translation");
-    if (!deployment) throw new Error("AZURE_OPENAI_DEPLOYMENT is required for Azure OpenAI translation");
-    _openai = new AzureOpenAI({ endpoint, apiKey, deployment, apiVersion });
-    return _openai;
-  }
-
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) throw new Error("OPENAI_API_KEY is required for LLM translation");
-  _openai = new OpenAI({ apiKey });
-  return _openai;
-}
-
 /**
- * The model id to send, matching the active provider:
- * DeepSeek → DEEPSEEK_MODEL, Azure → deployment name, OpenAI → job's aiModel.
+ * The model id to send.  For Azure, the per-slot deployment name is used
+ * (set in buildKeySlots); for OpenAI the caller's aiModel param wins.
  */
-function resolveModel(aiModel: string): string {
+function resolveModel(aiModel: string, slotModel?: string): string {
   switch (resolveProvider()) {
     case "deepseek":
-      return process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
+      return slotModel || process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
     case "azure":
-      return process.env.AZURE_OPENAI_DEPLOYMENT?.trim() || aiModel || "gpt-4o-mini";
+      return slotModel || process.env.AZURE_OPENAI_DEPLOYMENT?.trim() || aiModel || "gpt-4o-mini";
     default:
       return aiModel || "gpt-4o-mini";
   }
@@ -92,8 +1045,10 @@ function googleConfigured(): boolean {
 function llmConfigured(): boolean {
   return Boolean(
     process.env.DEEPSEEK_API_KEY?.trim() ||
+      process.env.DEEPSEEK_API_KEYS?.trim() ||
       process.env.AZURE_OPENAI_ENDPOINT?.trim() ||
-      process.env.OPENAI_API_KEY?.trim(),
+      process.env.OPENAI_API_KEY?.trim() ||
+      process.env.OPENAI_API_KEYS?.trim(),
   );
 }
 
@@ -147,10 +1102,12 @@ function engineModel(engine: Engine, aiModel: string): string {
 export function resolveEngine(aiModel: string): { provider: string; model: string } {
   const forced = forcedEngine(aiModel);
   if (forced === "google") return { provider: "google", model: "google-translate" };
-  if (forced === "llm") return { provider: resolveProvider(), model: resolveModel(aiModel) };
+  const provider = resolveProvider();
+  const model = resolveModel(aiModel);
+  if (forced === "llm") return { provider, model };
   const parts: string[] = [];
   if (googleConfigured()) parts.push("google");
-  if (llmConfigured()) parts.push(resolveModel(aiModel));
+  if (llmConfigured()) parts.push(model);
   return { provider: "auto", model: parts.length ? `auto(${parts.join("+")})` : "none" };
 }
 
@@ -284,9 +1241,8 @@ const MAX_CHARS_PER_BATCH = Math.max(
   500,
   Number(process.env.TRANSLATE_MAX_CHARS_PER_BATCH) || 12_000,
 );
-// How many batches within a pool may run concurrently.
-// Override via TRANSLATE_BATCH_CONCURRENCY env var (default 3).
-const BATCH_CONCURRENCY = Math.max(1, Number(process.env.TRANSLATE_BATCH_CONCURRENCY) || 3);
+// Batch fan-out: all batches within a resource pool are launched simultaneously.
+// The pool's AdaptiveSemaphore is the only concurrency gate — no separate knob needed.
 
 // Plain text items longer than this get split before translation
 const LONG_TEXT_THRESHOLD = 4000;
@@ -524,7 +1480,7 @@ async function translateItemsRouted(
         systemPrompt = buildSystemPrompt(target, glossary);
       }
       try {
-        await gatherTranslations(missing, aiModel, systemPrompt, collected, tokenAccum);
+        await gatherTranslations(missing, aiModel, systemPrompt, collected, tokenAccum, shopName);
       } catch (e) {
         console.warn(`[route] llm engine error`, e);
       }
@@ -683,46 +1639,79 @@ Return ONLY a JSON object {"translations":[{"key":"<key>","translatedValue":"<te
  * Returns a map from original keys → translated values, plus the token count.
  * Throws on unparseable JSON so the caller can retry.
  */
+/**
+ * One LLM round-trip via the adaptive key pool.
+ *
+ * Concurrency is gated by the pool's AdaptiveSemaphore, which auto-tunes
+ * after every response based on X-RateLimit-* headers (Little's Law).
+ * On 429 the slot is throttled, the semaphore cap drops, and
+ * gatherTranslations' retry loop picks a fresh slot automatically.
+ */
 async function callLLMOnce(
   items: TranslateItem[],
   aiModel: string,
   systemPrompt: string,
+  shopName?: string,
 ): Promise<{ map: Map<string, string>; tokens: number }> {
-  // Use opaque IDs (f0, f1, f2…) instead of semantic field names so the model
-  // cannot confuse "title" as a content hint and swap values between keys.
+  // Opaque IDs prevent the model from confusing semantic key names with content.
   const idToKey = new Map(items.map((it, idx) => [`f${idx}`, it.key]));
-  const payload = items.map((it, idx) => ({ key: `f${idx}`, value: it.value }));
+  const payload  = items.map((it, idx) => ({ key: `f${idx}`, value: it.value }));
 
-  const model = resolveModel(aiModel);
-  const openai = getOpenAI();
-  const completion = await openai.chat.completions.create({
-    model,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: JSON.stringify(payload) },
-    ],
-    temperature: 0.1,
-    response_format: { type: "json_object" },
-  }, {
-    timeout: 120_000, // 120s per batch — prevents hanging on unresponsive APIs
-  });
+  const acq   = await getPool().acquire();
+  const model = resolveModel(aiModel, acq.model);
+  const t0    = Date.now();
 
-  const tokens = completion.usage?.total_tokens ?? 0;
-  const raw = completion.choices[0]?.message?.content ?? "{}";
-  // JSON.parse throws on malformed output → propagated to caller for retry/splitting.
-  const obj = JSON.parse(extractJsonObject(raw)) as { translations?: unknown };
-  const parsed = Array.isArray(obj.translations)
-    ? (obj.translations as Array<{ key?: unknown; translatedValue?: unknown }>)
-    : [];
+  const messages: ChatMessage[] = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: JSON.stringify(payload) },
+  ];
 
-  const map = new Map<string, string>();
-  for (const r of parsed) {
-    if (typeof r?.key === "string" && typeof r?.translatedValue === "string") {
-      const origKey = idToKey.get(r.key);
-      if (origKey !== undefined) map.set(origKey, r.translatedValue);
+  try {
+    const deepseekUserId =
+      acq.transport.kind === "deepseek-fetch" && shopName
+        ? sanitizeDeepSeekUserId(shopName)
+        : undefined;
+    const { content: raw, tokens, response, limitHints } = await invokeChatCompletion(
+      acq.transport,
+      model,
+      messages,
+      120_000,
+      deepseekUserId,
+    );
+
+    const rawHeaders = responseHeadersToRecord(response);
+    acq.onResponse(rawHeaders, Date.now() - t0, tokens, limitHints);
+
+    // JSON.parse throws on malformed output → propagated to caller for retry/splitting.
+    const obj    = JSON.parse(extractJsonObject(raw)) as { translations?: unknown };
+    const parsed = Array.isArray(obj.translations)
+      ? (obj.translations as Array<{ key?: unknown; translatedValue?: unknown }>)
+      : [];
+
+    const map = new Map<string, string>();
+    for (const r of parsed) {
+      if (typeof r?.key === "string" && typeof r?.translatedValue === "string") {
+        const origKey = idToKey.get(r.key);
+        if (origKey !== undefined) map.set(origKey, r.translatedValue);
+      }
     }
+    return { map, tokens };
+  } catch (e: unknown) {
+    if (e instanceof LlmRateLimitError) {
+      acq.onThrottle(retryAfterMsFromResponse(e.response));
+    } else if (e instanceof RateLimitError) {
+      const eh = e.headers as unknown as { get?: (k: string) => string | null } & Record<string, string>;
+      const retryAfterSec = Number(
+        (typeof eh?.get === "function" ? eh.get("retry-after") : eh?.["retry-after"]) ?? "10",
+      );
+      acq.onThrottle(Math.max(retryAfterSec * 1_000, 10_000));
+    } else {
+      acq.onError(); // count non-throttle errors (timeouts, parse failures, etc.)
+    }
+    throw e;
+  } finally {
+    acq.release(); // always release semaphore slot
   }
-  return { map, tokens };
 }
 
 /**
@@ -737,12 +1726,13 @@ async function gatherTranslations(
   systemPrompt: string,
   collected: Map<string, string>,
   tokenAccum: { value: number },
+  shopName?: string,
 ): Promise<void> {
   const pend = items.filter((i) => !collected.has(i.key));
   if (pend.length === 0) return;
 
   try {
-    const { map, tokens } = await callLLMOnce(pend, aiModel, systemPrompt);
+    const { map, tokens } = await callLLMOnce(pend, aiModel, systemPrompt, shopName);
     tokenAccum.value += tokens;
     let progressed = false;
     for (const [k, v] of map) {
@@ -755,7 +1745,7 @@ async function gatherTranslations(
     // Model parsed OK but dropped some keys → retry just those, but only while
     // making progress (avoids looping on a key the model refuses to return).
     if (missing.length > 0 && progressed && missing.length < pend.length) {
-      await gatherTranslations(missing, aiModel, systemPrompt, collected, tokenAccum);
+      await gatherTranslations(missing, aiModel, systemPrompt, collected, tokenAccum, shopName);
     }
     return;
   } catch (e) {
@@ -763,14 +1753,14 @@ async function gatherTranslations(
     if (pend.length > 1) {
       const mid = Math.ceil(pend.length / 2);
       console.warn(`[llm] batch of ${pend.length} unparseable (${msg}); splitting`);
-      await gatherTranslations(pend.slice(0, mid), aiModel, systemPrompt, collected, tokenAccum);
-      await gatherTranslations(pend.slice(mid), aiModel, systemPrompt, collected, tokenAccum);
+      await gatherTranslations(pend.slice(0, mid), aiModel, systemPrompt, collected, tokenAccum, shopName);
+      await gatherTranslations(pend.slice(mid), aiModel, systemPrompt, collected, tokenAccum, shopName);
       return;
     }
     // Single item: retry for transient failures, then give up (→ fallback).
     for (let r = 0; r < LEAF_RETRIES; r++) {
       try {
-        const { map, tokens } = await callLLMOnce(pend, aiModel, systemPrompt);
+        const { map, tokens } = await callLLMOnce(pend, aiModel, systemPrompt, shopName);
         tokenAccum.value += tokens;
         for (const [k, v] of map) if (!collected.has(k)) collected.set(k, v);
         if (collected.has(pend[0].key)) return;
@@ -949,8 +1939,8 @@ export async function translateResources(
   if (cacheUnits > 0 && onProgress) await onProgress(cacheUnits, 0);
 
   // 2. Translate unique texts per engine order, in char-bounded batches.
-  //    Up to BATCH_CONCURRENCY batches per pool run in parallel.
-  //    Progress (units + raw LLM tokens) is reported after each batch.
+  //    All batches are launched concurrently — the pool's AdaptiveSemaphore
+  //    (driven by X-RateLimit-* headers) is the only throttle.
   const usage: EngineUsage = {};
   const translated = new Map<string, Map<string, RoutedResult>>();
   for (const [sig, occ] of pools) {
@@ -959,7 +1949,7 @@ export async function translateResources(
     const tmap = new Map<string, RoutedResult>();
     const items: TranslateItem[] = texts.map((t, i) => ({ key: String(i), value: t, digest: "" }));
     const batches = batchByChars(items, MAX_CHARS_PER_BATCH);
-    await pAll(batches, BATCH_CONCURRENCY, async (batch) => {
+    await Promise.all(batches.map(async (batch) => {
       const { results: m, llmTokens } = await translateItemsRouted(batch, source, target, aiModel, shopName, order);
       let batchUnits = 0;
       for (const [k, v] of m) {
@@ -974,9 +1964,8 @@ export async function translateResources(
           acc.tokens += v.tokens;
         }
       }
-      // Report progress (units + raw LLM tokens) after each batch.
       if (onProgress) await onProgress(batchUnits, llmTokens);
-    });
+    }));
     translated.set(sig, tmap);
   }
 

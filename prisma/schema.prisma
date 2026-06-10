@@ -72,6 +72,10 @@ model Account {
   trialTokens        Int      @default(0)
   /// 本周期累计已用 token（续费清零；续费时用于结算按量包剩余）
   usedTokens         Int      @default(0)
+  /// Shopify 试用期当日已用 token（每日 UTC 0 点重置）
+  trialDailyUsed     Int      @default(0)
+  /// 上次重置 trialDailyUsed 的日期（UTC 0 点）
+  trialDailyResetAt  DateTime?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -229,20 +233,22 @@ model ToolTokenUsageLog {
   @@index([feature, createdAt])
 }
 
-/// AI 任务耗时 / 积分 EWMA 估算（全局，按 taskType 一条）。
+/// AI 任务「单位(per-item)成本」EWMA 估算，按 (taskType, bucket) 分桶，随真实运行自校准。
 model AITaskEstimation {
   id           String   @id @default(cuid())
-  /// image_generation | picture_translate | product_improve
+  /// image_generation | picture_translate | product_improve | translation
   taskType     String
-  /// EWMA 预估积分（收敛后替换硬编码默认值）
+  /// 规模特征分桶：如 product_improve 按文本长度、picture_translate 按 modelType、translation 按目标语言。老数据/无特征落 "default"。
+  bucket       String   @default("default")
+  /// EWMA 预估积分（per-item，收敛后替换硬编码默认值）
   ewmaCredits  Float?
-  /// EWMA 预估耗时（秒）
+  /// EWMA 预估耗时（秒，per-item）
   ewmaSeconds  Float?
   /// 已参与统计的样本数（前5条用简单均值 bootstrap）
   sampleCount  Int      @default(0)
   updatedAt    DateTime @updatedAt
 
-  @@unique([taskType])
+  @@unique([taskType, bucket])
 }
 
 /// AI 任务批次：一次提交对应一个批次（含单任务）。
@@ -380,6 +386,8 @@ model ShopRefund {
   shopifyRefundId String
   shopifyOrderId  String
   refundAmount    Float    @default(0)
+  shippingRefundAmount Float @default(0)
+  shippingRefundTax    Float @default(0)
   refundNote      String?
   reason          String?
   processedAt     DateTime
@@ -518,6 +526,23 @@ model ShopSyncCheckpoint {
   updatedAt    DateTime @updatedAt
 
   @@unique([shop, resource])
+}
+
+/// 工作台上传文件（原始文件 + 解析文本均存 Azure Blob，元数据存本表）。
+model WorkspaceFile {
+  id               String   @id @default(cuid())
+  shop             String
+  name             String
+  mimeType         String   @default("")
+  originalSize     Int
+  charCount        Int
+  /// 解析后文本的 Blob 路径
+  blobPath         String
+  /// 原始文件的 Blob 路径（用于下载）
+  originalBlobPath String   @default("")
+  createdAt        DateTime @default(now())
+
+  @@index([shop, createdAt])
 }
 
 /// AI 对话会话（每条对应一个聊天线程）。

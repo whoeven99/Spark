@@ -68,6 +68,23 @@
   border: 1px solid #e1e3e5;
 }
 
+.trialBadge {
+  flex-shrink: 0;
+  padding: 0.28rem 0.72rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0d5e4a;
+  background: #e8f5f0;
+  border: 1px solid rgba(13, 94, 74, 0.18);
+}
+
+.planCurrentCtaTrial {
+  border-color: rgba(13, 94, 74, 0.22);
+  background: #e8f5f0;
+  color: #0d5e4a;
+}
+
 .usageCard {
   background: #ffffff;
   border: 1px solid #e1e3e5;

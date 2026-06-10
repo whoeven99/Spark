@@ -1,6 +1,6 @@
 import prisma from "../../../db.server";
 import { BillingError, BILLING_ERROR_CODE } from "../errors.server";
-import { PLAN_CATALOG_KIND, type PlanCatalogKind } from "../types.server";
+import type { PlanCatalogKind } from "../types.server";
 
 export type PlanRecord = {
   planKey: string;
@@ -103,14 +103,3 @@ export async function getPlanByKey(planKey: string): Promise<PlanRecord> {
   return plan;
 }
 
-export async function getInternalTrialPlan(): Promise<PlanRecord | null> {
-  const row = await prisma.planCatalog.findFirst({
-    where: {
-      kind: PLAN_CATALOG_KIND.INTERNAL_TRIAL,
-      enabled: true,
-    },
-    orderBy: { sortOrder: "asc" },
-  });
-  if (!row) return null;
-  return getPlanByKey(row.planKey);
-}

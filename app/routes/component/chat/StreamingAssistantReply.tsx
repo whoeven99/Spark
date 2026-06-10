@@ -1,12 +1,22 @@
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
+import type { ImageGenerationFormPayload } from "../../../lib/imageGenerationFormPayload";
+import type { PictureTranslateFormPayload } from "../../../lib/pictureTranslateFormPayload";
 import type { ProductImproveCardPayload } from "../../../lib/chatMessage";
 import type { TranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
+import type {
+  BatchTaskProduct,
+  BatchTasksFormPayload,
+} from "../../../lib/batchTasksFormPayload";
+import { mergeBatchTasksPayloadWithContext } from "../../../lib/batchTasksFormPayload";
 import { ChatMessageContent } from "./ChatMessageContent";
-import { ChatStreamingSkeleton } from "./ChatStreamingSkeleton";
+import { ThinkingIndicator, ThinkingPanel } from "./StreamingThinking";
+import { ImageGenerationChatCard } from "./ImageGenerationChatCard";
+import { PictureTranslateChatCard } from "./PictureTranslateChatCard";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
 import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard";
+import { BatchTasksChatCard } from "./BatchTasksChatCard";
 import {
   hasStreamingVisualContent,
   type SkillStepProgress,
@@ -16,10 +26,18 @@ type StreamingAssistantReplyProps = {
   active: boolean;
   isStreaming: boolean;
   streamingText: string;
+  streamingThinkingText?: string;
   skillSteps: SkillStepProgress[];
   streamingTranslationForm?: unknown;
   streamingGenerateCard: boolean;
   streamingGeneratePayload?: unknown;
+  streamingPictureTranslateCard?: boolean;
+  streamingPictureTranslatePayload?: unknown;
+  streamingImageGenerationCard?: boolean;
+  streamingImageGenerationPayload?: unknown;
+  streamingBatchTasksCard?: boolean;
+  streamingBatchTasksPayload?: BatchTasksFormPayload;
+  workspaceBatchProducts?: BatchTaskProduct[];
 };
 
 const assistantBubbleShellStyle: CSSProperties = {
@@ -30,21 +48,6 @@ const assistantBubbleShellStyle: CSSProperties = {
   background:
     "linear-gradient(180deg, rgba(44, 110, 203, 0.08), rgba(44, 110, 203, 0.02))",
 };
-
-function ThinkingDots() {
-  const [frame, setFrame] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setFrame((f) => (f + 1) % 4), 450);
-    return () => clearInterval(id);
-  }, []);
-  return (
-    <span style={thinkingTextStyle}>
-      正在思考
-      <span style={{ letterSpacing: 2 }}>{"...".slice(0, frame)}</span>
-      <span style={{ opacity: 0, letterSpacing: 2 }}>{"...".slice(frame)}</span>
-    </span>
-  );
-}
 
 function StreamingCursor() {
   const [visible, setVisible] = useState(true);
@@ -89,10 +92,18 @@ export function StreamingAssistantReply({
   active,
   isStreaming,
   streamingText,
+  streamingThinkingText = "",
   skillSteps,
   streamingTranslationForm,
   streamingGenerateCard,
   streamingGeneratePayload,
+  streamingPictureTranslateCard = false,
+  streamingPictureTranslatePayload,
+  streamingImageGenerationCard = false,
+  streamingImageGenerationPayload,
+  streamingBatchTasksCard = false,
+  streamingBatchTasksPayload,
+  workspaceBatchProducts = [],
 }: StreamingAssistantReplyProps) {
   if (!active) return null;
 
@@ -101,13 +112,31 @@ export function StreamingAssistantReply({
     : undefined;
   const streamingProductImprovePayload =
     streamingGeneratePayload as ProductImproveCardPayload | undefined;
+  const streamingPictureTranslateFormPayload =
+    streamingPictureTranslatePayload as PictureTranslateFormPayload | undefined;
+  const streamingImageGenerationFormPayload =
+    streamingImageGenerationPayload as ImageGenerationFormPayload | undefined;
+  const streamingBatchTasksResolvedPayload = streamingBatchTasksPayload
+    ? mergeBatchTasksPayloadWithContext(streamingBatchTasksPayload, workspaceBatchProducts)
+    : undefined;
+  const showProductImproveCard =
+    streamingGenerateCard && !streamingBatchTasksCard && workspaceBatchProducts.length < 2;
   const hasContent = hasStreamingVisualContent({
     streamingText,
     skillSteps,
     streamingTranslationForm,
-    streamingGenerateCard,
+    streamingGenerateCard: showProductImproveCard,
+    streamingPictureTranslateCard,
+    streamingImageGenerationCard,
+    streamingBatchTasksCard,
   });
-  const hasEmbeddedCard = Boolean(streamingTranslationPayload || streamingGenerateCard);
+  const hasEmbeddedCard = Boolean(
+    streamingTranslationPayload ||
+      showProductImproveCard ||
+      streamingPictureTranslateCard ||
+      streamingImageGenerationCard ||
+      streamingBatchTasksCard,
+  );
 
   return (
     <div style={{ display: "flex", justifyContent: "flex-start" }}>
@@ -118,10 +147,19 @@ export function StreamingAssistantReply({
               <s-badge tone="neutral">AI Assistant</s-badge>
             </div>
             <div style={{ marginTop: "0.35rem", minHeight: !hasContent ? "3rem" : undefined }}>
-              {!hasContent ? (
+              {!hasContent && !streamingThinkingText ? (
                 <div style={thinkingWrapStyle}>
-                  <ThinkingDots />
-                  <ChatStreamingSkeleton />
+                  <ThinkingIndicator />
+                </div>
+              ) : null}
+
+              {streamingThinkingText ? (
+                <div style={thinkingPanelSlotStyle}>
+                  <ThinkingPanel
+                    isStreaming={isStreaming}
+                    text={streamingThinkingText}
+                    answerStarted={Boolean(streamingText) || hasEmbeddedCard}
+                  />
                 </div>
               ) : null}
 
@@ -144,9 +182,37 @@ export function StreamingAssistantReply({
                 </div>
               ) : null}
 
-              {streamingGenerateCard ? (
+              {showProductImproveCard ? (
                 <div style={cardSlotStyle}>
                   <ProductImproveChatCard embedded initialResult={streamingProductImprovePayload} />
+                </div>
+              ) : null}
+
+              {streamingPictureTranslateCard ? (
+                <div style={cardSlotStyle}>
+                  <PictureTranslateChatCard
+                    embedded
+                    initialFormPayload={streamingPictureTranslateFormPayload}
+                  />
+                </div>
+              ) : null}
+
+              {streamingImageGenerationCard ? (
+                <div style={cardSlotStyle}>
+                  <ImageGenerationChatCard
+                    embedded
+                    initialFormPayload={streamingImageGenerationFormPayload}
+                  />
+                </div>
+              ) : null}
+
+              {streamingBatchTasksCard ? (
+                <div style={cardSlotStyle}>
+                  <BatchTasksChatCard
+                    embedded
+                    initialPayload={streamingBatchTasksResolvedPayload}
+                    contextProducts={workspaceBatchProducts}
+                  />
                 </div>
               ) : null}
             </div>
@@ -162,10 +228,8 @@ const thinkingWrapStyle: CSSProperties = {
   gap: 10,
 };
 
-const thinkingTextStyle: CSSProperties = {
-  fontSize: 14,
-  color: "#61666c",
-  fontStyle: "italic",
+const thinkingPanelSlotStyle: CSSProperties = {
+  marginBottom: 10,
 };
 
 const textWrapStyle: CSSProperties = {
@@ -186,8 +250,8 @@ const skillStepsWrapStyle: CSSProperties = {
   marginBottom: 10,
   padding: "10px 12px",
   borderRadius: 10,
-  background: "rgba(44, 110, 203, 0.06)",
-  border: "1px solid rgba(44, 110, 203, 0.18)",
+  background: "rgba(99, 110, 124, 0.05)",
+  border: "1px solid rgba(99, 110, 124, 0.16)",
   display: "grid",
   gap: 6,
 };
@@ -195,7 +259,7 @@ const skillStepsWrapStyle: CSSProperties = {
 const skillStepsHeadingStyle: CSSProperties = {
   fontSize: 12,
   fontWeight: 600,
-  color: "rgba(44, 110, 203, 0.85)",
+  color: "#5c6370",
 };
 
 const skillStepLineStyle: CSSProperties = {

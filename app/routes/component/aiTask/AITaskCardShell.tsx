@@ -324,7 +324,10 @@ export function AITaskCardShell({
             style={{
               height: "100%",
               width: `${Math.max(0, Math.min(100, progressPercent))}%`,
-              borderRadius: 999,
+              // No border-radius on the fill: the container's overflow:hidden + border-radius
+              // clips the fill correctly on both ends. Adding border-radius here creates a
+              // visual concavity at the right edge when width approaches 100%.
+              borderRadius: 0,
               background: progressBackground,
               transition: "width 0.35s ease",
             }}

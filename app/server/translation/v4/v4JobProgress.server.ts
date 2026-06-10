@@ -7,7 +7,10 @@ import {
   type TranslationV4Metrics,
   type TranslationV4Status,
 } from "./types";
+import { formatTranslationV4TranslateDetail } from "../../../lib/translationV4Display";
 import { sameTranslationLocale } from "./localeUtils";
+
+export { formatTranslationV4TranslateDetail } from "../../../lib/translationV4Display";
 
 function progressKey(taskId: string) {
   return `translate:v4:progress:${taskId}`;
@@ -117,16 +120,9 @@ export function buildTranslationV4StageSummary(
 ): string {
   const label = translationV4StatusLabel(status);
   if (status === "TRANSLATING" || status === "TRANSLATE_QUEUED" || status === "TRANSLATE_DONE") {
-    const nodePart =
-      metrics.translateUnitTotal > 0
-        ? `节点 ${metrics.translateUnitDone}/${metrics.translateUnitTotal}`
-        : null;
-    const resourcePart =
-      metrics.translateTotal > 0
-        ? `资源 ${metrics.translateDone}/${metrics.translateTotal}`
-        : null;
+    const translateDetail = formatTranslationV4TranslateDetail(metrics);
     const modulePart = metrics.currentModule ? `当前模块 ${metrics.currentModule}` : null;
-    return [label, nodePart, resourcePart, modulePart].filter(Boolean).join(" · ");
+    return [label, translateDetail, modulePart].filter(Boolean).join(" · ");
   }
 
   if (status === "INITIALIZING" || status === "INIT_QUEUED" || status === "INIT_DONE") {

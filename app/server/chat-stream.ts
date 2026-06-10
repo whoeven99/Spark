@@ -4,6 +4,7 @@ import { authenticate } from "../shopify.server";
 import { invokeChatAgentStream, type StreamChunk } from "./ai/core/agentStream.server";
 import { parseClientChatMessages, buildContextWindow } from "./chatPayload.server";
 import { createLangsmithTracer, isLangsmithAvailable, getTraceUrl } from "./ai/utils/langsmith.server";
+import { injectFilesIntoMessages } from "./fileContext/fileContextInjector.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
@@ -16,6 +17,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const body = (await request.json().catch(() => ({}))) as {
     message?: string;
     messages?: unknown;
+    fileIds?: unknown;
   };
 
   let agentMessages;
@@ -39,21 +41,30 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       : [new HumanMessage("（空消息）")];
   }
 
+  const fileIds: string[] = Array.isArray(body.fileIds)
+    ? body.fileIds.filter((id): id is string => typeof id === "string")
+    : [];
+
   try {
     const { admin, session } = await authenticate.admin(request);
 
     const langsmithTracer = isLangsmithAvailable()
       ? await createLangsmithTracer(`chat-stream-${Date.now()}`)
       : undefined;
-    
+
     if (langsmithTracer) {
       console.log(`[LangSmith] Streaming chat tracing started: ${getTraceUrl() ?? "enabled"}`);
     }
 
     const windowedMessages = await buildContextWindow(agentMessages);
 
-    const stream = await invokeChatAgentStream({
-      messages: windowedMessages,
+    const messagesWithFiles =
+      fileIds.length && session?.shop
+        ? await injectFilesIntoMessages(windowedMessages, session.shop, fileIds)
+        : windowedMessages;
+
+    const stream = invokeChatAgentStream({
+      messages: messagesWithFiles,
       context: {
         admin,
         shop: session?.shop,

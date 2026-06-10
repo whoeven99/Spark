@@ -107,6 +107,8 @@ export type TranslationV4Job = {
   metrics: TranslationV4Metrics;
   errorMessage: string | null;
   errorStage: string | null;
+  /** 完成后，预估自校准样本已回写的时间戳（幂等抢占标记，null=未回写）。 */
+  estimationRecordedAt?: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;

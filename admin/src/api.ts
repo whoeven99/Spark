@@ -162,6 +162,45 @@ export function fetchTranslationJob(
   return apiFetch(`/translations/${encodeURIComponent(jobId)}${qs}`);
 }
 
+export type LLMKeyStats = {
+  label: string;
+  calls: number;
+  tokens: number;
+  avgLatencyMs: number;
+  throttleCount: number;
+  errors: number;
+  poolConcurrency: number;
+  /** -1 = unknown / not reported by provider */
+  limitReq: number;
+  remainingReq: number;
+  limitTok: number;
+  remainingTok: number;
+  /** epoch ms of last Redis write */
+  updatedAt: number;
+};
+
+export function fetchLLMKeyStats(): Promise<{ stats: LLMKeyStats[]; note?: string }> {
+  return apiFetch("/translations/key-stats");
+}
+
+/** One 10-second interval snapshot from the worker's rolling history log. */
+export type LLMKeyHistoryEntry = {
+  t:    number; // epoch ms
+  dC:   number; // delta calls in this interval
+  dT:   number; // delta tokens in this interval
+  lat:  number; // avg latency ms
+  conc: number; // pool concurrency cap
+  rR:   number; // remaining requests quota (-1 = unknown)
+  lR:   number; // limit requests quota
+  rT:   number; // remaining tokens quota
+  lT:   number; // limit tokens quota
+};
+
+export function fetchLLMKeyHistory(label?: string): Promise<{ history: Record<string, LLMKeyHistoryEntry[]> }> {
+  const qs = label ? `?label=${encodeURIComponent(label)}` : "";
+  return apiFetch(`/translations/key-stats/history${qs}`);
+}
+
 export function fetchUsage(search?: string): Promise<{ usage: UsageRow[] }> {
   const q = search ? `?search=${encodeURIComponent(search)}` : "";
   return apiFetch(`/usage${q}`);

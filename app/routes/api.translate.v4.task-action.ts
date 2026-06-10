@@ -2,7 +2,10 @@ import type { ActionFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { authenticate } from "../shopify.server";
 import { getV4Job, updateV4Job } from "../server/translation/v4/cosmosV4Store.server";
+import { resolveShopAccessTokenForWorker } from "../server/shopify/resolveShopAccessToken.server";
+import { syncV4JobShopifyTokensFromSession } from "../server/translation/v4/syncV4JobShopifyTokens.server";
 import { getTranslateRedisClient } from "../server/translation/translateRedis.server";
+import { resolveResumeV4JobStatus } from "../server/translation/v4/resumeV4JobStatus";
 import type { TranslationV4Status } from "../server/translation/v4/types";
 
 const HINT_KEYS: Record<string, string> = {
@@ -47,16 +50,27 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   if (actionType === "resume") {
-    const resumeStatus = resolveResumeStatus(job.status, job.errorStage);
+    const resumeStatus = resolveResumeV4JobStatus(
+      job.status,
+      job.errorStage,
+      job.metrics,
+    );
     if (!resumeStatus) {
       return data({ ok: false, error: `cannot resume from status ${job.status}` }, { status: 400 });
     }
+
+    await syncV4JobShopifyTokensFromSession(shopName, session.accessToken);
+    const freshToken =
+      (await resolveShopAccessTokenForWorker(shopName, session.accessToken)) ??
+      job.shopifyAccessToken;
+
     // Clear error state and re-queue at the correct stage
     await updateV4Job(shopName, taskId, {
       status: resumeStatus,
       claimedBy: null,
       errorMessage: null,
       errorStage: null,
+      shopifyAccessToken: freshToken,
     });
     // Push hint so worker picks it up immediately
     const hintStage = resumeStatus.replace("_QUEUED", "").toLowerCase();
@@ -83,16 +97,3 @@ function stageFromStatus(status: TranslationV4Status): string {
   return "INIT";
 }
 
-/** Map errorStage → correct _QUEUED status for resume. */
-function resolveResumeStatus(
-  currentStatus: TranslationV4Status,
-  errorStage: string | null,
-): TranslationV4Status | null {
-  if (currentStatus !== "PAUSED" && currentStatus !== "FAILED") return null;
-  switch (errorStage) {
-    case "TRANSLATE": return "TRANSLATE_QUEUED";
-    case "WRITEBACK": return "WRITEBACK_QUEUED";
-    case "VERIFY":    return "VERIFY_QUEUED";
-    default:          return "INIT_QUEUED";
-  }
-}

@@ -77,7 +77,7 @@ export interface ToolDefinition {
     event: any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     enqueue: (chunk: any) => void,
-    context: { emittedFlags: Set<string> }
+    context: { emittedFlags: Set<string>; lastUserText?: string }
   ) => void;
 
   /**
@@ -125,12 +125,13 @@ class ToolRegistry {
   }
 
   async getToolsForContext(
-    context: AgentContext
+    context: AgentContext,
+    activeDefs?: ToolDefinition[],
   ): Promise<DynamicStructuredTool[]> {
     const activeTools: DynamicStructuredTool[] = [];
-    const activeDefs = await this.getActiveToolDefinitions(context);
+    const definitions = activeDefs ?? (await this.getActiveToolDefinitions(context));
 
-    for (const def of activeDefs) {
+    for (const def of definitions) {
       try {
         const created = await def.createTool(context);
         const wrap = (tool: DynamicStructuredTool) =>

@@ -15,6 +15,11 @@ import {
   type TranslationV4Job,
   type TranslationV4Status,
 } from "../../server/translation/v4/types";
+import {
+  formatV4JobTimeLine,
+  TRANSLATION_V4_UNIT_LABEL,
+} from "../../lib/translationV4Display";
+import { resolveResumeV4JobStatus } from "../../server/translation/v4/resumeV4JobStatus";
 import { useShopLocales } from "../../hooks/useShopLocales";
 import { LanguageSelector } from "../component/common/LanguageSelector";
 import { DialogShell } from "../component/shared/DialogShell";
@@ -59,20 +64,6 @@ function stageFromV4Status(status: TranslationV4Status): string {
   if (["WRITEBACK_QUEUED", "WRITING_BACK"].includes(status)) return "WRITEBACK";
   if (["VERIFY_QUEUED", "VERIFYING"].includes(status)) return "VERIFY";
   return "INIT";
-}
-
-/** Aligns with resolveResumeStatus in api.translate.v4.task-action.ts */
-function resolveResumeV4Status(
-  currentStatus: TranslationV4Status,
-  errorStage: string | null,
-): TranslationV4Status | null {
-  if (currentStatus !== "PAUSED" && currentStatus !== "FAILED") return null;
-  switch (errorStage) {
-    case "TRANSLATE": return "TRANSLATE_QUEUED";
-    case "WRITEBACK": return "WRITEBACK_QUEUED";
-    case "VERIFY": return "VERIFY_QUEUED";
-    default: return "INIT_QUEUED";
-  }
 }
 
 type OptimisticActionIntent = "pause" | "cancel" | "resume";
@@ -128,6 +119,8 @@ type ProgressData = {
   errorStage: string | null;
   lastHeartbeat: string | null;
   updatedAt: string;
+  /** 历史学习得到的整任务预估（秒 / token），样本不足时字段为 null。 */
+  estimate?: { seconds: number | null; credits: number | null };
   metrics: {
     initTotal: number; initDone: number;
     translateTotal: number; translateDone: number; translateFailed: number;
@@ -560,7 +553,11 @@ export function TranslationV4Page() {
     }
 
     if (action === "resume") {
-      const resumeStatus = resolveResumeV4Status(job.status, job.errorStage);
+      const resumeStatus = resolveResumeV4JobStatus(
+        job.status,
+        job.errorStage,
+        job.metrics,
+      );
       if (!resumeStatus) {
         shopify.toast.show("无法重试该任务");
         return;
@@ -1304,10 +1301,25 @@ function JobCard({
                   active={status === "VERIFYING"}
                   complete={status === "COMPLETED" && metrics.verifyTotal > 0}
                   failed={metrics.verifyFailed}
+                  detailLabel={
+                    metrics.writebackTotal > 0 && metrics.verifyTotal < metrics.writebackTotal
+                      ? `${metrics.verifyDone}/${metrics.verifyTotal}（有译文变更）`
+                      : undefined
+                  }
                 />
               ) : null}
             </div>
           </details>
+
+          {metrics.currentModule && ACTIVE_STATUSES.includes(status) ? (
+            <div style={{ fontSize: "0.75rem", color: pageColorTokens.brandBlue, fontWeight: 600 }}>
+              ▶ 当前模块: {metrics.currentModule}
+            </div>
+          ) : null}
+
+          {status === "TRANSLATING" ? (
+            <TranslateStatsPanel metrics={metrics} learnedEstimate={progress?.estimate} />
+          ) : null}
 
           {(status === "FAILED" || status === "PAUSED") && (progress?.errorMessage ?? job.errorMessage) ? (
             <div style={failErrorStyle}>
@@ -1318,6 +1330,97 @@ function JobCard({
       }
       actions={actions}
     />
+  );
+}
+
+type TranslateMetricsSnap = {
+  translateUnitDone: number;
+  translateUnitTotal: number;
+  usedTokens?: number;
+  translateStartedAt?: string | null;
+};
+
+function fmtDuration(ms: number): string {
+  if (ms < 0) ms = 0;
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function StatItem({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1px", minWidth: "7rem" }}>
+      <span style={{ fontSize: "0.68rem", color: pageColorTokens.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        {label}
+      </span>
+      <span style={{ fontSize: "0.82rem", fontWeight: 600, color: pageColorTokens.textPrimary, fontVariantNumeric: "tabular-nums" }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function TranslateStatsPanel({
+  metrics,
+  learnedEstimate,
+}: {
+  metrics: TranslateMetricsSnap;
+  learnedEstimate?: { seconds: number | null; credits: number | null };
+}) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const { translateUnitDone: done, translateUnitTotal: total, usedTokens = 0, translateStartedAt } = metrics;
+  const startMs = translateStartedAt ? Number(translateStartedAt) : null;
+  const elapsedMs = startMs && startMs > 0 ? Math.max(0, now - startMs) : null;
+
+  const ratio = total > 0 && done > 0 ? done / total : 0;
+  const estRemainingMs = elapsedMs !== null && ratio > 0 ? (elapsedMs / ratio) * (1 - ratio) : null;
+  const estRemainingTokens = ratio > 0 && usedTokens > 0 ? Math.round((usedTokens / ratio) * (1 - ratio)) : null;
+
+  const learnedSeconds = learnedEstimate?.seconds ?? null;
+  const learnedCredits = learnedEstimate?.credits ?? null;
+
+  if (elapsedMs === null && usedTokens === 0 && learnedSeconds === null && learnedCredits === null) return null;
+
+  return (
+    <div style={{
+      marginTop: "0.6rem",
+      padding: "0.5rem 0.75rem",
+      borderRadius: "6px",
+      background: "rgba(0, 0, 0, 0.03)",
+      border: `1px solid ${pageColorTokens.border}`,
+      display: "flex",
+      flexWrap: "wrap",
+      gap: "0.75rem 1.5rem",
+    }}>
+      {usedTokens > 0 && (
+        <StatItem label="已用 tokens" value={usedTokens.toLocaleString()} />
+      )}
+      {elapsedMs !== null && (
+        <StatItem label="已用时间" value={fmtDuration(elapsedMs)} />
+      )}
+      {estRemainingTokens !== null && (
+        <StatItem label="预估剩余 tokens" value={`~${estRemainingTokens.toLocaleString()}`} />
+      )}
+      {estRemainingMs !== null && (
+        <StatItem label="预估剩余时间" value={`~${fmtDuration(estRemainingMs)}`} />
+      )}
+      {learnedCredits !== null && (
+        <StatItem label="历史预估 tokens" value={`~${learnedCredits.toLocaleString()}`} />
+      )}
+      {learnedSeconds !== null && (
+        <StatItem label="历史预估总时长" value={`~${fmtDuration(learnedSeconds * 1000)}`} />
+      )}
+    </div>
   );
 }
 

@@ -177,7 +177,7 @@ Spark/
 │   ├── hooks/                    React 自定义 Hook
 │   ├── lib/                      工具函数、类型定义、常量
 │   ├── i18n/                     国际化配置（i18next）
-│   ├── locales/                  翻译文件（en、ja、ko、zh）
+│   ├── locales/                  翻译文件（en、zh）
 │   ├── db.server.ts              Prisma Client + Turso 连接
 │   ├── shopify.server.ts         Shopify Admin GraphQL 初始化
 │   ├── entry.server.tsx          React Router 服务端入口

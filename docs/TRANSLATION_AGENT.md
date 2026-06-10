@@ -225,19 +225,24 @@ CREATED
 
 ### 阶段 3 — Writeback Worker
 
-**状态迁移**：`WRITEBACK_QUEUED → WRITING_BACK → COMPLETED / VERIFY_QUEUED`
+**状态迁移**：`WRITEBACK_QUEUED → WRITING_BACK → VERIFY_QUEUED`
 
 **执行流程**：
 1. claim job
 2. 读 `{blobPrefix}/writeback/progress.json`（已写回的 resourceId 集合，断点续传用）
 3. 对每个 translate chunk 中的每个 resource（未在 writtenSet 中）：
    - 过滤：`translatedValue.trim() && translatedValue !== originalValue` 的字段
-   - 调 Shopify `translationsRegister` mutation（locale=target）
+   - 调 Shopify `translationsRegister` mutation（**同一 `resourceId` 一次传多条 `TranslationInput`**；字段过多时按 `WRITEBACK_TRANSLATIONS_BATCH` 默认 100、上限 250 分批）
+   - 成功：`userErrors` 为空且 mutation 返回的 `translations` 覆盖全部 key
    - 成功：加入 writtenSet，`writebackDone++`
    - 失败：加入 failedResources，`writebackFailed++`
    - 每 20 条资源持久化一次 `progress.json`（断点续传检查点）
-4. 若有失败：写 `writeback/failed.json`，`status=VERIFY_QUEUED`，`lpush hint:verify`
-5. 无失败：`status=COMPLETED`
+4. 写 `writeback/failed.json`（可为空数组），**一律** `status=VERIFY_QUEUED`，`lpush hint:verify`
+
+**Shopify API**（[translationsRegister](https://shopify.dev/docs/api/admin-graphql/latest/mutations/translationsRegister)）：
+- 同一 resource 支持批量注册多个 `key`（`translations: [TranslationInput!]!`）
+- GraphQL 输入数组通常上限 **250** 条/次；单 resource 还可能触发 `TOO_MANY_KEYS_FOR_RESOURCE`
+- 需 `write_translations` scope；`translatableContentDigest` 必须与 init 阶段 digest 一致
 
 ---
 
@@ -245,12 +250,14 @@ CREATED
 
 **状态迁移**：`VERIFY_QUEUED → VERIFYING → COMPLETED`
 
+**目的**：防止 `translationsRegister` 返回成功但店铺侧未真正落库（历史上有过「API 无 userErrors 但译文未生效」的情况）。
+
 **执行流程**：
 1. claim job
-2. 读 `{blobPrefix}/writeback/failed.json`（writeback 阶段失败的资源）
-3. 对每个失败资源重试 `registerTranslations`
-4. 统计 `verifyDone` / `verifyFailed`，更新 Cosmos metrics
-5. `status=COMPLETED`（无论是否仍有失败，verify 是最终兜底）
+2. 汇总待校验资源：`writeback/progress.json` 中已写回的资源（从 translate blob 取期望译文）+ `writeback/failed.json` 中写回失败的资源
+3. 对每个资源 **`translatableResource` 读回**目标 locale 的 `translations`，与期望逐 key 比对（trim 后相等；`outdated=true` 视为未生效）
+4. 不一致 → 仅对 mismatch 的 key **重试 `registerTranslations`** → 再次读回比对
+5. 统计 `verifyDone` / `verifyFailed`，`status=COMPLETED`（仍有失败也结束，失败数见 metrics）
 
 ---
 

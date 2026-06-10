@@ -12,7 +12,6 @@ import {
 } from "../tokenUsage/accountBalance.server";
 import { isBillingEnabled, isBillingDevCancelEnabled } from "./constants.server";
 import { ensureAccount } from "./account/ensureAccount.server";
-import { grantProductTrialIfEligible } from "./account/grantTrial.server";
 import type {
   BillingAccessSnapshot,
   BillingPageLoaderData,
@@ -131,8 +130,7 @@ export async function loadBillingPageData(
 
   return {
     billing: toBillingPageSnapshot(ctx),
-    trialPlan:
-      ctx.plans.find((p) => p.kind === PLAN_CATALOG_KIND.INTERNAL_TRIAL) ?? null,
+    trialPlan: null,
     subscriptionPlans: ctx.plans.filter(
       (p) => p.kind === PLAN_CATALOG_KIND.SUBSCRIPTION,
     ),
@@ -155,13 +153,7 @@ export type BillingContext = {
   plans: PlanRecord[];
 };
 
-export async function loadBillingContext(
-  shop: string,
-  options?: { grantTrial?: boolean },
-): Promise<BillingContext> {
-  if (options?.grantTrial !== false && isBillingEnabled()) {
-    await grantProductTrialIfEligible(shop);
-  }
+export async function loadBillingContext(shop: string): Promise<BillingContext> {
 
   const account = await ensureAccount(shop);
   const subscription = await prisma.appSubscription.findUnique({

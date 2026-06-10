@@ -7,6 +7,7 @@ import {
   resolveEngine,
   mergeEngineUsage,
   countFieldUnits,
+  flushKeyStats,
   pAll,
   type EngineUsage,
   type TranslateItem,
@@ -41,9 +42,9 @@ async function claimNextJob(): Promise<TranslationV4Job | null> {
   return null;
 }
 
-// How many chunks within a module may translate concurrently.
-// Override via TRANSLATE_CHUNK_CONCURRENCY env var (default 2).
-const CHUNK_CONCURRENCY = Math.max(1, Number(process.env.TRANSLATE_CHUNK_CONCURRENCY) || 2);
+// All chunks within a module are translated concurrently.
+// The pool's AdaptiveSemaphore (driven by X-RateLimit-* headers) gates the
+// actual LLM calls — no separate chunk concurrency knob is needed.
 
 async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   const { shopName, id: jobId, source, target, aiModel, testMode } = job;
@@ -81,7 +82,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
       const chunkPaths = initPaths.filter((p) => p.endsWith(".json"));
       const chunkTotal = chunkPaths.length;
 
-      await pAll(chunkPaths, CHUNK_CONCURRENCY, async (chunkPath, ci) => {
+      await Promise.all(chunkPaths.map(async (chunkPath, ci) => {
         const chunkIdx = ci + 1; // 1-based for readability
         const chunkStart = performance.now();
 
@@ -145,6 +146,8 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
               lastHeartbeatAt = now;
               await heartbeat(shopName, jobId);
             }
+            // Flush LLM key stats to Redis (throttled internally to ~10s intervals).
+            await flushKeyStats();
           };
           const { resources: perResource, usage } = await translateResources(
             resources.map((r) => ({ resourceId: r.resourceId, fields: r.fields })),
@@ -200,7 +203,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
           usedTokens: liveTokens,
           currentModule: module,
         });
-      });
+      }));
     }
 
     // Persist the list of fields that fell back to original for UI visibility.

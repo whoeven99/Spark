@@ -9,6 +9,7 @@ import { LanguageSelector } from "../component/common/LanguageSelector";
 import { ProductSelector } from "../component/product/ProductSelector";
 import { ProductImproveTaskListPage } from "../component/productImprove/ProductImproveTaskListPage";
 import { DialogShell } from "../component/shared/DialogShell";
+import { BatchTaskPanel } from "../component/batchTask/BatchTaskPanel";
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import type { AITaskItem } from "../../lib/aiTaskTypes";
 import {
@@ -86,6 +87,7 @@ export function ProductImprovePage() {
   );
   const [showManualProductId, setShowManualProductId] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [batchPanelOpen, setBatchPanelOpen] = useState(false);
 
   const fetcher = useFetcher();
   const isSubmitting = fetcher.state === "submitting";
@@ -416,6 +418,13 @@ export function ProductImprovePage() {
                       ? t("productImproveStage1.submitting")
                       : t("productImproveStage1.createTaskAction")}
                   </s-button>
+                  <s-button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setBatchPanelOpen(true)}
+                  >
+                    批量生成
+                  </s-button>
                 </s-stack>
               </s-stack>
             </PageSurface>
@@ -515,6 +524,15 @@ export function ProductImprovePage() {
           </div>
         </div>
       </div>
+
+      <BatchTaskPanel
+        isOpen={batchPanelOpen}
+        taskType="product_improve"
+        locationSearch={search}
+        localeOptions={localeOptions}
+        defaultTargetLanguage={shopLocales?.defaultTargetLanguage ?? "zh-CN"}
+        onClose={() => setBatchPanelOpen(false)}
+      />
     </s-page>
   );
 }

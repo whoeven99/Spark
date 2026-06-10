@@ -1,6 +1,7 @@
 import { Router } from "express";
 import type { SqlParameter } from "@azure/cosmos";
 import { getTranslationJobsContainer, isCosmosConfigured } from "../lib/cosmos.js";
+import { getRedis } from "../lib/redis.js";
 import type { TranslationV4Job } from "../types/translation.js";
 
 export const translationsRouter = Router();
@@ -50,6 +51,120 @@ translationsRouter.get("/", async (req, res) => {
       return;
     }
     console.error("[translations]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ── LLM key-pool stats ────────────────────────────────────────────────────────
+// Reads per-key stats written by the translate worker every ~10 s.
+// Must be registered before /:jobId so Express doesn't mistake "key-stats" for a jobId.
+
+export type LLMKeyStatRow = {
+  label: string;
+  calls: number;
+  tokens: number;
+  avgLatencyMs: number;
+  throttleCount: number;
+  errors: number;
+  poolConcurrency: number;
+  limitReq: number;
+  remainingReq: number;
+  limitTok: number;
+  remainingTok: number;
+  updatedAt: number;
+};
+
+translationsRouter.get("/key-stats", async (_req, res) => {
+  const redis = getRedis();
+  if (!redis) {
+    res.json({ stats: [], note: "Redis not configured" });
+    return;
+  }
+  try {
+    const keys = await redis.keys("translate:v4:keystat:*");
+    if (keys.length === 0) {
+      res.json({ stats: [] });
+      return;
+    }
+    const pipeline = redis.pipeline();
+    for (const key of keys) pipeline.hgetall(key);
+    const results = await pipeline.exec();
+
+    const stats: LLMKeyStatRow[] = (results ?? [])
+      .map((r): Record<string, string> | null => r?.[1] as Record<string, string> | null)
+      .filter((h): h is Record<string, string> => !!h && !!h.label)
+      .map((h: Record<string, string>): LLMKeyStatRow => ({
+        label:           h.label,
+        calls:           Number(h.calls           ?? 0),
+        tokens:          Number(h.tokens          ?? 0),
+        avgLatencyMs:    Number(h.avgLatencyMs     ?? 0),
+        throttleCount:   Number(h.throttleCount    ?? 0),
+        errors:          Number(h.errors           ?? 0),
+        poolConcurrency: Number(h.poolConcurrency  ?? 0),
+        limitReq:        Number(h.limitReq         ?? -1),
+        remainingReq:    Number(h.remainingReq     ?? -1),
+        limitTok:        Number(h.limitTok         ?? -1),
+        remainingTok:    Number(h.remainingTok     ?? -1),
+        updatedAt:       Number(h.updatedAt        ?? 0),
+      }))
+      .sort((a: LLMKeyStatRow, b: LLMKeyStatRow) => a.label.localeCompare(b.label));
+
+    res.json({ stats });
+  } catch (err) {
+    console.error("[key-stats]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ── LLM key-pool history ──────────────────────────────────────────────────────
+// Returns the rolling 30-min history log for all (or one) key slot(s).
+// Each entry is one flush snapshot written by the worker every ~10 s.
+
+export type HistoryEntry = {
+  t:    number; // epoch ms
+  dC:   number; // delta calls since last flush
+  dT:   number; // delta tokens since last flush
+  lat:  number; // avg latency ms (EWMA)
+  conc: number; // pool concurrency cap
+  rR:   number; // remaining requests (-1 = unknown)
+  lR:   number; // limit requests
+  rT:   number; // remaining tokens
+  lT:   number; // limit tokens
+};
+
+translationsRouter.get("/key-stats/history", async (req, res) => {
+  const redis = getRedis();
+  if (!redis) {
+    res.json({ history: {} });
+    return;
+  }
+  try {
+    // Optional ?label= filter to fetch only one key's history
+    const labelFilter = (req.query.label as string | undefined)?.trim();
+    const pattern = labelFilter
+      ? `translate:v4:keystatlog:${labelFilter}`
+      : "translate:v4:keystatlog:*";
+    const keys = await redis.keys(pattern);
+
+    if (keys.length === 0) {
+      res.json({ history: {} });
+      return;
+    }
+
+    const pipe = redis.pipeline();
+    for (const k of keys) pipe.lrange(k, 0, -1);
+    const results = await pipe.exec();
+
+    const history: Record<string, HistoryEntry[]> = {};
+    keys.forEach((k, i) => {
+      const label = k.replace("translate:v4:keystatlog:", "");
+      const raw = (results?.[i]?.[1] as string[] | null) ?? [];
+      history[label] = raw.map((s) => JSON.parse(s) as HistoryEntry);
+    });
+
+    res.json({ history });
+  } catch (err) {
+    console.error("[key-stats/history]", err);
     res.status(500).json({ error: String(err) });
   }
 });

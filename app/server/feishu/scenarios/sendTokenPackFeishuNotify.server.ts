@@ -11,7 +11,6 @@ const LOG = "[Feishu][TokenPackOps]";
 
 export type SendTokenPackFeishuNotifyParams = {
   shop: string;
-  appName: string;
   planKey: string;
 };
 
@@ -21,17 +20,14 @@ export function buildTokenPackMessage(
     displayName: string;
     priceAmount: string;
     currencyCode: string;
-    tokens: number;
   },
 ): string {
   return [
     "按量购包成功",
     "",
     `店铺: ${params.shop}`,
-    `App: ${params.appName}`,
-    `套餐: ${plan.displayName} (${params.planKey})`,
-    `价格:  **${formatOpsNotifyPrice(plan.priceAmount, plan.currencyCode)}** `,
-    `Token: ${plan.tokens}`,
+    `套餐: ${plan.displayName}`,
+    `价格: ${formatOpsNotifyPrice(plan.priceAmount, plan.currencyCode)}`,
     `时间: ${formatOpsNotifyTime()}`,
   ].join("\n");
 }
@@ -41,7 +37,7 @@ export async function sendTokenPackFeishuNotify(
 ): Promise<SendFeishuResult> {
   if (!isBillingEnabled()) {
     console.info(
-      `${LOG} skipped shop=${params.shop} appName=${params.appName} reason=billing_not_enabled`,
+      `${LOG} skipped shop=${params.shop} planKey=${params.planKey} reason=billing_not_enabled`,
     );
     return {
       ok: false,
@@ -52,7 +48,7 @@ export async function sendTokenPackFeishuNotify(
   }
 
   console.info(
-    `${LOG} before-send shop=${params.shop} appName=${params.appName} planKey=${params.planKey}`,
+    `${LOG} before-send shop=${params.shop} planKey=${params.planKey}`,
   );
 
   try {
