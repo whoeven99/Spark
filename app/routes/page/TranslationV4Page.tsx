@@ -20,6 +20,7 @@ import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import {
   AITaskCardShell,
   type CardAction,
+  formatActualElapsed,
 } from "../component/aiTask/AITaskCardShell";
 import { TranslationLocaleFields } from "../component/translation/TranslationLocaleFields";
 import { TranslationModuleMultiSelect } from "../component/translation/TranslationModuleMultiSelect";
@@ -263,6 +264,14 @@ export function TranslationV4Page() {
     () => displayJobs.filter((job) => job.status === "FAILED" || job.status === "PAUSED").length,
     [displayJobs],
   );
+  const localeLabelMap = useMemo(() => {
+    const entries = loaderData.shopLocales?.localeOptions?.map((option) => [option.value, option.label] as const) ?? [];
+    return Object.fromEntries([
+      ...entries,
+      ...(sourceLocale && sourceLabel ? ([[sourceLocale, sourceLabel] as const]) : []),
+    ]);
+  }, [loaderData.shopLocales, sourceLabel, sourceLocale]);
+  const displayLanguage = i18n.resolvedLanguage ?? i18n.language ?? "zh-CN";
 
   const refreshJobList = useCallback(async () => {
     const listRes = await fetch(`/api/translate/v4/tasks${withExtraParams(query, { shopName })}`);
@@ -636,54 +645,71 @@ export function TranslationV4Page() {
             </div>
           </div>
         ) : (
-          <PageSurface
-            title="翻译任务"
-            subtitle="查看最近任务与历史记录，并直接在列表中处理暂停、重试或取消。"
-          >
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <SegmentedPageTabs
-                activeTab={taskView}
-                onTabChange={setTaskView}
-                ariaLabel="翻译任务视图切换"
-                items={[
-                  { key: "current", label: "当前任务", badgeCount: currentJobs.length },
-                  { key: "history", label: "历史任务", badgeCount: historyJobs.length },
-                ]}
-              />
+          <div style={taskPageSectionStyle}>
+            <div style={taskPageHeadingStyle}>
+              <div style={taskPageTitleStyle}>翻译任务</div>
+              <div style={taskPageSubtitleStyle}>
+                查看最近任务与历史记录，并直接在列表中处理暂停、重试或取消。
+              </div>
+            </div>
 
-              <div style={taskOverviewBarStyle}>
+            <div style={taskViewSwitchBarStyle}>
+              <div style={taskViewButtonsStyle}>
+                {([
+                  { key: "current" as const, label: `当前任务（${currentJobs.length}）` },
+                  { key: "history" as const, label: `历史任务（${historyJobs.length}）` },
+                ] satisfies Array<{ key: TaskViewTab; label: string }>).map((tab) => {
+                  const active = taskView === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => setTaskView(tab.key)}
+                      style={taskViewButtonStyle(active)}
+                    >
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={taskViewHintStyle}>
                 {taskView === "current"
                   ? `最近 24 小时任务 · 运行中 ${runningCount} · 已完成 ${completedCount} · 需处理 ${attentionCount}`
                   : `历史任务共 ${historyJobs.length} 条，仅展示批量执行汇总。`}
               </div>
-
-              {visibleJobs.length === 0 ? (
-                <div style={pageEmptyStateStyle}>
-                  {taskView === "current" ? "暂无当前翻译任务，先从配置页创建一个。" : "暂无历史任务记录。"}
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                  {visibleJobs
-                    .slice()
-                    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-                    .map((job) => {
-                      const progress = progressMap[job.id];
-                      const status = resolveDisplayStatus(job, progress);
-                      return (
-                        <JobCard
-                          key={job.id}
-                          job={job}
-                          status={status}
-                          progress={progress ?? null}
-                          locationSearch={location.search}
-                          onAction={handleAction}
-                        />
-                      );
-                    })}
-                </div>
-              )}
             </div>
-          </PageSurface>
+
+            {visibleJobs.length === 0 ? (
+              <div style={taskListEmptyStateStyle}>
+                <span style={taskListEmptyIconStyle}>{taskView === "current" ? "📋" : "🗂️"}</span>
+                <span style={taskListEmptyTextStyle}>
+                  {taskView === "current" ? "暂无当前翻译任务，先从配置页创建一个。" : "暂无历史任务记录。"}
+                </span>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {visibleJobs
+                  .slice()
+                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                  .map((job) => {
+                    const progress = progressMap[job.id];
+                    const status = resolveDisplayStatus(job, progress);
+                    return (
+                      <JobCard
+                        key={job.id}
+                        job={job}
+                        status={status}
+                        progress={progress ?? null}
+                        locationSearch={location.search}
+                        onAction={handleAction}
+                          displayLanguage={displayLanguage}
+                          localeLabelMap={localeLabelMap}
+                      />
+                    );
+                  })}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -745,6 +771,8 @@ type JobCardProps = {
   progress: ProgressData | null;
   locationSearch: string;
   onAction: (taskId: string, action: "cancel" | "pause" | "resume") => void | Promise<void>;
+  displayLanguage: string;
+  localeLabelMap: Record<string, string>;
 };
 
 function mapV4StatusToTaskStatus(status: TranslationV4Status): AITaskStatus {
@@ -778,6 +806,66 @@ function formatDateTime(iso: string | null): string | null {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(iso));
+}
+
+function formatElapsedZh(startedAt: string | null, endedAt: string | null): string | null {
+  const elapsed = formatActualElapsed(startedAt, endedAt);
+  if (!elapsed) return null;
+  return elapsed.replace("m ", "分 ").replace("s", "秒");
+}
+
+const LOCALE_NAME_OVERRIDES: Record<string, string> = {
+  "zh-CN": "中文",
+  "zh-TW": "繁体中文",
+  en: "英文",
+  ja: "日文",
+  ko: "韩文",
+  de: "德文",
+  fr: "法文",
+  es: "西班牙文",
+};
+
+function stripLocaleCodeSuffix(label: string): string {
+  return label.replace(/\s*[（(].*?[）)]\s*$/, "").trim();
+}
+
+function formatLocaleDisplayName(
+  localeCode: string,
+  displayLanguage: string,
+  localeLabelMap: Record<string, string>,
+): string {
+  const normalizedCode = localeCode.trim();
+  if (!normalizedCode) return "";
+
+  const override = LOCALE_NAME_OVERRIDES[normalizedCode];
+  if (override) return `${override}(${normalizedCode})`;
+
+  try {
+    const localizedName = new Intl.DisplayNames([displayLanguage || "zh-CN"], {
+      type: "language",
+    }).of(normalizedCode);
+    if (localizedName) {
+      return `${stripLocaleCodeSuffix(localizedName)}(${normalizedCode})`;
+    }
+  } catch {
+    // Ignore Intl fallback errors and continue with label map.
+  }
+
+  const fallbackLabel = localeLabelMap[normalizedCode];
+  if (fallbackLabel) {
+    return `${stripLocaleCodeSuffix(fallbackLabel)}(${normalizedCode})`;
+  }
+
+  return normalizedCode;
+}
+
+function formatJobTargetTitle(
+  sourceLocale: string,
+  targetLocale: string,
+  displayLanguage: string,
+  localeLabelMap: Record<string, string>,
+): string {
+  return `任务目标：${formatLocaleDisplayName(sourceLocale, displayLanguage, localeLabelMap)}翻译为${formatLocaleDisplayName(targetLocale, displayLanguage, localeLabelMap)}`;
 }
 
 function getStageRatio(
@@ -932,50 +1020,23 @@ function getSecondaryCopy(
   metrics: ProgressData["metrics"],
   updatedAt: string,
 ): string {
-  const updatedLabel = formatDateTime(updatedAt);
-  const resourcePart = `资源 ${metrics.translateDone}/${metrics.translateTotal}`;
-  const nodePart =
-    metrics.translateUnitTotal > 0
-      ? `节点 ${metrics.translateUnitDone}/${metrics.translateUnitTotal}`
-      : null;
-  const failedPart =
-    metrics.translateFailed + metrics.writebackFailed + metrics.verifyFailed > 0
-      ? `失败 ${metrics.translateFailed + metrics.writebackFailed + metrics.verifyFailed}`
-      : null;
-  const tokenPart = metrics.usedTokens > 0 ? `${metrics.usedTokens.toLocaleString()} tokens` : null;
-  const modulePart = metrics.currentModule ? `模块 ${metrics.currentModule}` : null;
+  const processedCount = Math.max(
+    metrics.verifyDone,
+    metrics.writebackDone,
+    metrics.translateDone,
+    metrics.initDone,
+  );
+  const elapsedPart = formatElapsedZh(job.claimedAt ?? job.createdAt, updatedAt);
+  const consumedCredits = metrics.usedTokens ?? 0;
 
-  if (status === "COMPLETED") {
-    return [
-      `已完成 ${metrics.translateDone} 个资源`,
-      metrics.verifyTotal > 0 ? `验证 ${metrics.verifyDone}/${metrics.verifyTotal}` : null,
-      tokenPart,
-      updatedLabel ? `更新于 ${updatedLabel}` : null,
-    ]
-      .filter(Boolean)
-      .join(" · ");
-  }
+  const parts = [
+    `本次任务共处理 ${processedCount.toLocaleString()} 条数据`,
+    elapsedPart ? `任务耗时：${elapsedPart}` : null,
+    `任务已消耗：${consumedCredits.toLocaleString()} 积分`,
+  ]
+    .filter(Boolean);
 
-  if (status === "FAILED" || status === "PAUSED") {
-    return [
-      `阶段 ${stageLabel(job.errorStage)}`,
-      failedPart ?? "暂无失败统计",
-      modulePart,
-      updatedLabel ? `更新于 ${updatedLabel}` : null,
-    ]
-      .filter(Boolean)
-      .join(" · ");
-  }
-
-  if (status === "CANCELLED") {
-    return [resourcePart, tokenPart, updatedLabel ? `更新于 ${updatedLabel}` : null]
-      .filter(Boolean)
-      .join(" · ");
-  }
-
-  return [resourcePart, nodePart, failedPart, modulePart, tokenPart, updatedLabel ? `更新于 ${updatedLabel}` : null]
-    .filter(Boolean)
-    .join(" · ");
+  return `${parts.join("，")}。`;
 }
 
 function getStageSummaryCopy(
@@ -1011,7 +1072,15 @@ function getStageSummaryCopy(
   return "查看阶段进度";
 }
 
-function JobCard({ job, status, progress, locationSearch, onAction }: JobCardProps) {
+function JobCard({
+  job,
+  status,
+  progress,
+  locationSearch,
+  onAction,
+  displayLanguage,
+  localeLabelMap,
+}: JobCardProps) {
   const metrics = progress?.metrics ?? job.metrics;
   const taskStatus = mapV4StatusToTaskStatus(status);
   const progressTone = getProgressTone(status);
@@ -1049,7 +1118,7 @@ function JobCard({ job, status, progress, locationSearch, onAction }: JobCardPro
       locationSearch={locationSearch}
       status={taskStatus}
       statusBadge={<StatusBadge status={status} />}
-      title={`任务目标：${job.source} -> ${job.target}`}
+      title={formatJobTargetTitle(job.source, job.target, displayLanguage, localeLabelMap)}
       metaLine={
         <>
           <span>{job.modules.length} 个模块</span>
@@ -1358,13 +1427,82 @@ const jobStageGroupStyle: React.CSSProperties = {
   padding: "0 0.9rem 0.85rem",
 };
 
-const taskOverviewBarStyle: React.CSSProperties = {
-  padding: "0.8rem 0.95rem",
-  borderRadius: "12px",
-  background: pageColorTokens.surfaceSubtle,
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
+const taskPageSectionStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 12,
+};
+
+const taskPageHeadingStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+};
+
+const taskPageTitleStyle: React.CSSProperties = {
+  fontSize: "1rem",
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+};
+
+const taskPageSubtitleStyle: React.CSSProperties = {
   fontSize: "0.8125rem",
   lineHeight: 1.6,
+  color: pageColorTokens.textSecondary,
+};
+
+const taskViewSwitchBarStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  flexWrap: "wrap",
+  padding: "0.5rem",
+  borderRadius: 999,
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+};
+
+const taskViewButtonsStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 6,
+  flexWrap: "wrap",
+};
+
+function taskViewButtonStyle(active: boolean): React.CSSProperties {
+  return {
+    padding: "0.5rem 0.9rem",
+    borderRadius: 999,
+    border: `1px solid ${active ? pageColorTokens.borderSubtle : "transparent"}`,
+    background: active ? pageColorTokens.surface : "transparent",
+    color: active ? pageColorTokens.textPrimary : pageColorTokens.textSecondary,
+    boxShadow: active ? pageColorTokens.shadowCard : "none",
+    fontSize: 13,
+    fontWeight: active ? 700 : 600,
+    cursor: "pointer",
+  };
+}
+
+const taskViewHintStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: pageColorTokens.textSecondary,
+};
+
+const taskListEmptyStateStyle: React.CSSProperties = {
+  ...pageEmptyStateStyle,
+  minHeight: 220,
+  padding: "2.75rem 1.5rem",
+  background: "linear-gradient(160deg, #fafafa 0%, #f5f6f8 100%)",
+  border: `1px dashed ${pageColorTokens.borderSubtle}`,
+};
+
+const taskListEmptyIconStyle: React.CSSProperties = {
+  fontSize: 28,
+  lineHeight: 1,
+};
+
+const taskListEmptyTextStyle: React.CSSProperties = {
+  fontSize: 14,
   color: pageColorTokens.textSecondary,
 };
 
