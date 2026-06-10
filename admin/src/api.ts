@@ -201,6 +201,63 @@ export function fetchLLMKeyHistory(label?: string): Promise<{ history: Record<st
   return apiFetch(`/translations/key-stats/history${qs}`);
 }
 
+// ── Glossary ──────────────────────────────────────────────────────────────────
+
+export type GlossaryTerm = {
+  source: string;
+  translations?: Record<string, string>;
+  doNotTranslate?: boolean;
+  note?: string;
+};
+
+export function fetchGlossary(shopName: string): Promise<{ terms: GlossaryTerm[]; note?: string }> {
+  return apiFetch(`/glossary/${encodeURIComponent(shopName)}`);
+}
+
+export function saveGlossary(shopName: string, terms: GlossaryTerm[]): Promise<{ ok: boolean; count: number }> {
+  return apiFetch(`/glossary/${encodeURIComponent(shopName)}`, {
+    method: "PUT",
+    body: JSON.stringify({ terms }),
+  });
+}
+
+export function importGlossaryCsv(
+  shopName: string,
+  csv: string,
+  mode: "merge" | "replace",
+): Promise<{ ok: boolean; imported: number; total: number; mode: string }> {
+  return apiFetch(`/glossary/${encodeURIComponent(shopName)}/import`, {
+    method: "POST",
+    body: JSON.stringify({ csv, mode }),
+  });
+}
+
+export type ParseGlossaryResult = {
+  terms: GlossaryTerm[];
+  count: number;
+  source: string;
+  truncated: boolean;
+  note?: string;
+};
+
+/** Upload a file to be parsed by LLM into glossary terms (preview only — not saved). */
+export async function parseGlossaryFile(shopName: string, file: File): Promise<ParseGlossaryResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const token = getToken();
+  const res = await fetch(`/api/glossary/${encodeURIComponent(shopName)}/parse`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (res.status === 401) { clearToken(); window.location.reload(); throw new Error("Unauthorized"); }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 export function fetchUsage(search?: string): Promise<{ usage: UsageRow[] }> {
   const q = search ? `?search=${encodeURIComponent(search)}` : "";
   return apiFetch(`/usage${q}`);

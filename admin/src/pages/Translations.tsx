@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   Table,
   Select,
@@ -15,8 +15,24 @@ import {
   Button,
   Collapse,
   Tooltip,
+  Modal,
+  Form,
+  Checkbox,
+  Popconfirm,
+  message,
+  Divider,
+  Radio,
 } from "antd";
-import { SearchOutlined, ReloadOutlined, ApiOutlined } from "@ant-design/icons";
+import {
+  SearchOutlined,
+  ReloadOutlined,
+  ApiOutlined,
+  BookOutlined,
+  PlusOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  UploadOutlined,
+} from "@ant-design/icons";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -35,9 +51,14 @@ import {
   fetchTranslationJob,
   fetchLLMKeyStats,
   fetchLLMKeyHistory,
+  fetchGlossary,
+  saveGlossary,
+  importGlossaryCsv,
+  parseGlossaryFile,
   type TranslationJob,
   type LLMKeyStats,
   type LLMKeyHistoryEntry,
+  type GlossaryTerm,
 } from "../api";
 
 const ACTIVE_STATUSES = new Set([
@@ -226,6 +247,708 @@ function KeyHistoryCharts({ label }: { label: string }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ── Glossary Panel ────────────────────────────────────────────────────────────
+
+/** Client-side merge: imported terms add new locales without overwriting existing ones. */
+function mergeTermsClient(existing: GlossaryTerm[], imported: GlossaryTerm[]): GlossaryTerm[] {
+  const map = new Map(existing.map((t) => [t.source, { ...t }]));
+  for (const imp of imported) {
+    const ex = map.get(imp.source);
+    if (!ex) {
+      map.set(imp.source, imp);
+    } else {
+      if (imp.translations) ex.translations = { ...imp.translations, ...ex.translations };
+      if (!ex.note && imp.note) ex.note = imp.note;
+      if (!ex.doNotTranslate && imp.doNotTranslate) ex.doNotTranslate = true;
+    }
+  }
+  return [...map.values()];
+}
+
+/** Compact display of a term's translations map, e.g. "en: Flash Sale, pl: …" */
+function TranslationsSummary({ translations }: { translations?: Record<string, string> }) {
+  if (!translations || Object.keys(translations).length === 0) {
+    return <Typography.Text type="secondary">—</Typography.Text>;
+  }
+  return (
+    <Typography.Text style={{ fontSize: 12 }}>
+      {Object.entries(translations).map(([loc, val]) => `${loc}: ${val}`).join(" · ")}
+    </Typography.Text>
+  );
+}
+
+/** Modal for editing the translations of a single term (dynamic locale rows). */
+function TranslationsModal({
+  open,
+  term,
+  onSave,
+  onCancel,
+}: {
+  open: boolean;
+  term: GlossaryTerm | null;
+  onSave: (translations: Record<string, string>) => void;
+  onCancel: () => void;
+}) {
+  const [rows, setRows] = useState<Array<{ locale: string; value: string }>>([]);
+
+  useEffect(() => {
+    if (open && term) {
+      const entries = Object.entries(term.translations ?? {});
+      setRows(entries.length ? entries.map(([locale, value]) => ({ locale, value })) : [{ locale: "", value: "" }]);
+    }
+  }, [open, term]);
+
+  const setRow = (i: number, field: "locale" | "value", val: string) => {
+    setRows((prev) => prev.map((r, idx) => idx === i ? { ...r, [field]: val } : r));
+  };
+
+  const handleSave = () => {
+    const result: Record<string, string> = {};
+    for (const row of rows) {
+      const k = row.locale.trim().toLowerCase();
+      const v = row.value.trim();
+      if (k && v) result[k] = v;
+    }
+    onSave(result);
+  };
+
+  return (
+    <Modal
+      title={`编辑翻译对照：「${term?.source ?? ""}」`}
+      open={open}
+      onOk={handleSave}
+      onCancel={onCancel}
+      okText="保存"
+      cancelText="取消"
+      width={500}
+    >
+      <div style={{ marginBottom: 8, color: "#888", fontSize: 12 }}>
+        语言代码格式：en · zh-CN · pl · fr · de · ja · ko…
+      </div>
+      {rows.map((row, i) => (
+        <Space key={i} style={{ display: "flex", marginBottom: 6 }} align="baseline">
+          <Input
+            placeholder="语言代码"
+            value={row.locale}
+            onChange={(e) => setRow(i, "locale", e.target.value)}
+            style={{ width: 100 }}
+          />
+          <Input
+            placeholder="对应翻译"
+            value={row.value}
+            onChange={(e) => setRow(i, "value", e.target.value)}
+            style={{ width: 260 }}
+          />
+          <Button
+            type="text"
+            danger
+            icon={<DeleteOutlined />}
+            size="small"
+            onClick={() => setRows((prev) => prev.filter((_, idx) => idx !== i))}
+          />
+        </Space>
+      ))}
+      <Button
+        type="dashed"
+        size="small"
+        icon={<PlusOutlined />}
+        onClick={() => setRows((prev) => [...prev, { locale: "", value: "" }])}
+        style={{ marginTop: 4 }}
+      >
+        添加语言
+      </Button>
+    </Modal>
+  );
+}
+
+/** Modal for CSV bulk import. */
+function CsvImportModal({
+  open,
+  shopName,
+  onSuccess,
+  onCancel,
+}: {
+  open: boolean;
+  shopName: string;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [csv, setCsv] = useState("");
+  const [mode, setMode] = useState<"merge" | "replace">("merge");
+  const [loading, setLoading] = useState(false);
+
+  const CSV_EXAMPLE = `source,do_not_translate,note,en,zh-CN,pl,fr
+闪购,,,Flash Sale,,,Vente flash
+Acme,true,品牌名,,,,,`;
+
+  const handleImport = async () => {
+    if (!csv.trim()) { message.warning("请粘贴 CSV 内容"); return; }
+    setLoading(true);
+    try {
+      const r = await importGlossaryCsv(shopName, csv, mode);
+      message.success(`导入成功：${r.imported} 条，共 ${r.total} 条术语`);
+      onSuccess();
+    } catch (e) {
+      message.error(String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal
+      title="批量导入 CSV"
+      open={open}
+      onOk={handleImport}
+      onCancel={onCancel}
+      confirmLoading={loading}
+      okText="导入"
+      cancelText="取消"
+      width={640}
+    >
+      <Typography.Paragraph style={{ fontSize: 12, color: "#888", margin: "0 0 8px" }}>
+        CSV 格式：第一行为表头（必须含 <code>source</code> 列），之后每行一条术语。
+        <code>do_not_translate</code> 列填 <code>true</code> 表示不翻译，其余列为语言代码。
+      </Typography.Paragraph>
+      <Input.TextArea
+        rows={5}
+        placeholder={CSV_EXAMPLE}
+        value={csv}
+        onChange={(e) => setCsv(e.target.value)}
+        style={{ fontFamily: "monospace", fontSize: 12, marginBottom: 12 }}
+      />
+      <Space>
+        <span style={{ fontSize: 13 }}>导入模式：</span>
+        <Radio.Group value={mode} onChange={(e) => setMode(e.target.value)}>
+          <Radio value="merge">合并（新术语补充，现有术语不被覆盖）</Radio>
+          <Radio value="replace">替换（清空现有全部术语）</Radio>
+        </Radio.Group>
+      </Space>
+      <Divider style={{ margin: "12px 0 8px" }} />
+      <div style={{ fontSize: 12, color: "#888" }}>
+        格式示例：
+        <pre style={{ background: "#f5f5f5", padding: "6px 8px", borderRadius: 4, marginTop: 4, fontSize: 11 }}>
+          {CSV_EXAMPLE}
+        </pre>
+      </div>
+    </Modal>
+  );
+}
+
+// ── File-parse preview Modal ──────────────────────────────────────────────────
+//
+// Upload any supported file → LLM extracts terms → user reviews + confirms
+
+const SUPPORTED_EXTS = ".xlsx,.xls,.docx,.pdf,.txt,.csv,.json";
+
+function FileParseModal({
+  open,
+  shopName,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  shopName: string;
+  onConfirm: (terms: GlossaryTerm[], mode: "merge" | "replace") => void;
+  onCancel: () => void;
+}) {
+  type ParsedRow = GlossaryTerm & { _selected: boolean; _key: number };
+
+  const [step, setStep] = useState<"upload" | "preview">("upload");
+  const [parsing, setParsing] = useState(false);
+  const [parseNote, setParseNote] = useState("");
+  const [rows, setRows] = useState<ParsedRow[]>([]);
+  const [mode, setMode] = useState<"merge" | "replace">("merge");
+  const [fileName, setFileName] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Reset when modal opens
+  useEffect(() => {
+    if (open) { setStep("upload"); setRows([]); setParseNote(""); setFileName(""); }
+  }, [open]);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
+    setParsing(true);
+    setStep("preview");
+    try {
+      const result = await parseGlossaryFile(shopName, file);
+      const mapped: ParsedRow[] = result.terms.map((t, i) => ({ ...t, _selected: true, _key: i }));
+      setRows(mapped);
+      setParseNote(
+        result.note ??
+        `LLM 从「${result.source}」中识别出 ${result.count} 条术语，请检查后确认添加`,
+      );
+    } catch (err) {
+      message.error(String(err));
+      setStep("upload");
+    } finally {
+      setParsing(false);
+      // Reset file input so the same file can be re-uploaded
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const toggleAll = (checked: boolean) =>
+    setRows((prev) => prev.map((r) => ({ ...r, _selected: checked })));
+
+  const toggleRow = (key: number, checked: boolean) =>
+    setRows((prev) => prev.map((r) => r._key === key ? { ...r, _selected: checked } : r));
+
+  const updateRow = (key: number, patch: Partial<GlossaryTerm>) =>
+    setRows((prev) => prev.map((r) => r._key === key ? { ...r, ...patch } : r));
+
+  const handleConfirm = () => {
+    const selected = rows
+      .filter((r) => r._selected)
+      .map(({ _selected: _s, _key: _k, ...term }) => term);
+    if (selected.length === 0) { message.warning("请至少选择一条术语"); return; }
+    onConfirm(selected, mode);
+  };
+
+  const allSelected = rows.length > 0 && rows.every((r) => r._selected);
+  const selectedCount = rows.filter((r) => r._selected).length;
+
+  const previewColumns = [
+    {
+      title: (
+        <Checkbox
+          checked={allSelected}
+          indeterminate={selectedCount > 0 && !allSelected}
+          onChange={(e) => toggleAll(e.target.checked)}
+        />
+      ),
+      key: "sel",
+      width: 40,
+      render: (_: unknown, row: ParsedRow) => (
+        <Checkbox checked={row._selected} onChange={(e) => toggleRow(row._key, e.target.checked)} />
+      ),
+    },
+    {
+      title: "原文术语",
+      dataIndex: "source",
+      key: "source",
+      width: 180,
+      render: (val: string, row: ParsedRow) => (
+        <Input
+          value={val}
+          size="small"
+          onChange={(e) => updateRow(row._key, { source: e.target.value })}
+          style={{ fontSize: 12 }}
+        />
+      ),
+    },
+    {
+      title: "勿翻译",
+      dataIndex: "doNotTranslate",
+      key: "dnt",
+      width: 60,
+      align: "center" as const,
+      render: (val: boolean | undefined, row: ParsedRow) => (
+        <Checkbox
+          checked={!!val}
+          onChange={(e) => updateRow(row._key, { doNotTranslate: e.target.checked || undefined })}
+        />
+      ),
+    },
+    {
+      title: "备注",
+      dataIndex: "note",
+      key: "note",
+      width: 120,
+      render: (val: string | undefined, row: ParsedRow) => (
+        <Input
+          value={val ?? ""}
+          size="small"
+          placeholder="—"
+          onChange={(e) => updateRow(row._key, { note: e.target.value || undefined })}
+          style={{ fontSize: 12 }}
+        />
+      ),
+    },
+    {
+      title: "翻译对照",
+      key: "tr",
+      render: (_: unknown, row: ParsedRow) => (
+        <TranslationsSummary translations={row.translations} />
+      ),
+    },
+    {
+      key: "del",
+      width: 36,
+      render: (_: unknown, row: ParsedRow) => (
+        <Button
+          type="text"
+          danger
+          size="small"
+          icon={<DeleteOutlined />}
+          onClick={() => setRows((prev) => prev.filter((r) => r._key !== row._key))}
+        />
+      ),
+    },
+  ];
+
+  return (
+    <Modal
+      title="从文件解析术语表"
+      open={open}
+      onCancel={onCancel}
+      width={780}
+      footer={
+        step === "preview" && !parsing ? (
+          <Space style={{ width: "100%", justifyContent: "space-between" }}>
+            <Radio.Group value={mode} onChange={(e) => setMode(e.target.value)} size="small">
+              <Radio value="merge">合并到现有（已有术语不覆盖）</Radio>
+              <Radio value="replace">替换全部</Radio>
+            </Radio.Group>
+            <Space>
+              <Button onClick={onCancel}>取消</Button>
+              <Button type="primary" onClick={handleConfirm} disabled={selectedCount === 0}>
+                确认添加 {selectedCount > 0 ? `(${selectedCount} 条)` : ""}
+              </Button>
+            </Space>
+          </Space>
+        ) : (
+          <Button onClick={onCancel}>取消</Button>
+        )
+      }
+    >
+      {/* Upload step */}
+      {step === "upload" && (
+        <div style={{ textAlign: "center", padding: "32px 0" }}>
+          <div style={{ fontSize: 13, color: "#666", marginBottom: 20 }}>
+            支持格式：<code>.xlsx</code> · <code>.docx</code> · <code>.pdf</code> · <code>.txt</code> · <code>.csv</code>
+            <br />
+            <span style={{ fontSize: 12, color: "#aaa" }}>
+              文件内容由 LLM 自动识别术语对照，最大 10 MB
+            </span>
+          </div>
+          <Button
+            icon={<UploadOutlined />}
+            size="large"
+            type="dashed"
+            onClick={() => fileRef.current?.click()}
+          >
+            点击选择文件
+          </Button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept={SUPPORTED_EXTS}
+            style={{ display: "none" }}
+            onChange={handleFileChange}
+          />
+        </div>
+      )}
+
+      {/* Parsing in progress */}
+      {step === "preview" && parsing && (
+        <div style={{ textAlign: "center", padding: "40px 0" }}>
+          <Spin size="large" />
+          <div style={{ marginTop: 16, color: "#666" }}>
+            正在解析「{fileName}」，LLM 提取术语中…
+          </div>
+        </div>
+      )}
+
+      {/* Preview table */}
+      {step === "preview" && !parsing && (
+        <>
+          {parseNote && (
+            <Alert
+              type="info"
+              message={parseNote}
+              showIcon
+              style={{ marginBottom: 12 }}
+              action={
+                <Button size="small" onClick={() => { setStep("upload"); setRows([]); }}>
+                  重新上传
+                </Button>
+              }
+            />
+          )}
+          <Table
+            dataSource={rows}
+            columns={previewColumns}
+            rowKey="_key"
+            size="small"
+            pagination={false}
+            scroll={{ y: 360, x: true }}
+          />
+          <div style={{ marginTop: 8, fontSize: 12, color: "#aaa" }}>
+            可直接在表格里修改 / 取消勾选不需要的术语，确认后再保存。
+          </div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+function GlossaryPanel() {
+  const [shopInput, setShopInput] = useState("");
+  const [shopName, setShopName] = useState("");
+  const [terms, setTerms] = useState<GlossaryTerm[]>([]);
+  const [dirty, setDirty] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editingTerm, setEditingTerm] = useState<GlossaryTerm | null>(null);
+  const [editingIdx, setEditingIdx] = useState<number>(-1);
+  const [csvModalOpen, setCsvModalOpen] = useState(false);
+  const [fileParseOpen, setFileParseOpen] = useState(false);
+
+  const load = useCallback(async (shop: string) => {
+    if (!shop) return;
+    setLoading(true);
+    try {
+      const r = await fetchGlossary(shop);
+      setTerms(r.terms);
+      setDirty(false);
+      if (r.note) message.info(r.note);
+    } catch (e) {
+      message.error(String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleLoad = () => {
+    const s = shopInput.trim();
+    if (!s) { message.warning("请输入店铺名称"); return; }
+    setShopName(s);
+    load(s);
+  };
+
+  const handleSave = async () => {
+    if (!shopName) return;
+    setSaving(true);
+    try {
+      const r = await saveGlossary(shopName, terms);
+      message.success(`已保存 ${r.count} 条术语`);
+      setDirty(false);
+    } catch (e) {
+      message.error(String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateTerm = (idx: number, patch: Partial<GlossaryTerm>) => {
+    setTerms((prev) => prev.map((t, i) => i === idx ? { ...t, ...patch } : t));
+    setDirty(true);
+  };
+
+  const deleteTerm = (idx: number) => {
+    setTerms((prev) => prev.filter((_, i) => i !== idx));
+    setDirty(true);
+  };
+
+  const addTerm = () => {
+    setTerms((prev) => [...prev, { source: "" }]);
+    setDirty(true);
+  };
+
+  const handleFileParsed = async (parsed: GlossaryTerm[], mode: "merge" | "replace") => {
+    const merged = mode === "replace" ? parsed : mergeTermsClient(terms, parsed);
+    setTerms(merged);
+    setDirty(true);
+    setFileParseOpen(false);
+    message.success(`已将 ${parsed.length} 条术语${mode === "replace" ? "替换" : "合并"}到术语表，点击保存生效`);
+  };
+
+  const openTranslationsEditor = (idx: number) => {
+    setEditingIdx(idx);
+    setEditingTerm(terms[idx]);
+  };
+
+  const saveTranslations = (translations: Record<string, string>) => {
+    if (editingIdx >= 0) {
+      updateTerm(editingIdx, { translations: Object.keys(translations).length ? translations : undefined });
+    }
+    setEditingIdx(-1);
+    setEditingTerm(null);
+  };
+
+  const columns = [
+    {
+      title: "原文术语",
+      dataIndex: "source",
+      key: "source",
+      width: 200,
+      render: (val: string, _: GlossaryTerm, idx: number) => (
+        <Input
+          value={val}
+          size="small"
+          placeholder="输入术语"
+          onChange={(e) => updateTerm(idx, { source: e.target.value })}
+          style={{ fontSize: 13 }}
+        />
+      ),
+    },
+    {
+      title: "勿翻译",
+      dataIndex: "doNotTranslate",
+      key: "doNotTranslate",
+      width: 72,
+      align: "center" as const,
+      render: (val: boolean | undefined, _: GlossaryTerm, idx: number) => (
+        <Checkbox
+          checked={!!val}
+          onChange={(e) => updateTerm(idx, { doNotTranslate: e.target.checked || undefined })}
+        />
+      ),
+    },
+    {
+      title: "备注",
+      dataIndex: "note",
+      key: "note",
+      width: 140,
+      render: (val: string | undefined, _: GlossaryTerm, idx: number) => (
+        <Input
+          value={val ?? ""}
+          size="small"
+          placeholder="品牌名/说明"
+          onChange={(e) => updateTerm(idx, { note: e.target.value || undefined })}
+          style={{ fontSize: 12 }}
+        />
+      ),
+    },
+    {
+      title: "翻译对照",
+      key: "translations",
+      render: (_: unknown, term: GlossaryTerm, idx: number) => (
+        <Space size={4}>
+          <TranslationsSummary translations={term.translations} />
+          <Button
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => openTranslationsEditor(idx)}
+            style={{ padding: "0 4px" }}
+          >
+            编辑
+          </Button>
+        </Space>
+      ),
+    },
+    {
+      title: "",
+      key: "actions",
+      width: 48,
+      render: (_: unknown, __: GlossaryTerm, idx: number) => (
+        <Popconfirm
+          title="删除此术语？"
+          onConfirm={() => deleteTerm(idx)}
+          okText="删除"
+          cancelText="取消"
+          okButtonProps={{ danger: true }}
+        >
+          <Button type="text" danger icon={<DeleteOutlined />} size="small" />
+        </Popconfirm>
+      ),
+    },
+  ];
+
+  return (
+    <Collapse
+      style={{ marginBottom: 16 }}
+      items={[{
+        key: "glossary",
+        label: (
+          <Space>
+            <BookOutlined />
+            <span>术语表管理</span>
+            {shopName && terms.length > 0 && (
+              <Tag color="blue">{shopName} · {terms.length} 条</Tag>
+            )}
+            {dirty && <Tag color="orange">未保存</Tag>}
+          </Space>
+        ),
+        children: (
+          <Spin spinning={loading}>
+            {/* Shop selector */}
+            <Space style={{ marginBottom: 16 }}>
+              <Input
+                placeholder="店铺名称 (shopName)"
+                value={shopInput}
+                onChange={(e) => setShopInput(e.target.value)}
+                onPressEnter={handleLoad}
+                style={{ width: 260 }}
+              />
+              <Button onClick={handleLoad}>加载</Button>
+            </Space>
+
+            {shopName && (
+              <>
+                <Table
+                  dataSource={terms}
+                  columns={columns}
+                  rowKey={(_, idx) => String(idx)}
+                  size="small"
+                  pagination={false}
+                  scroll={{ x: true }}
+                  style={{ marginBottom: 12 }}
+                  locale={{ emptyText: '暂无术语，点击"新增"添加' }}
+                />
+                <Space>
+                  <Button icon={<PlusOutlined />} size="small" onClick={addTerm}>
+                    新增术语
+                  </Button>
+                  <Button icon={<UploadOutlined />} size="small" onClick={() => setCsvModalOpen(true)}>
+                    导入 CSV
+                  </Button>
+                  <Button icon={<UploadOutlined />} size="small" onClick={() => setFileParseOpen(true)}>
+                    上传文件（LLM 解析）
+                  </Button>
+                  <Button
+                    type="primary"
+                    size="small"
+                    loading={saving}
+                    disabled={!dirty}
+                    onClick={handleSave}
+                  >
+                    保存术语表
+                  </Button>
+                  {dirty && (
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      有未保存的改动
+                    </Typography.Text>
+                  )}
+                </Space>
+
+                <div style={{ marginTop: 8, fontSize: 12, color: "#aaa" }}>
+                  保存后 Worker 在数秒内生效（Redis 版本缓存失效）。术语注入到每次翻译的 system prompt 中。
+                </div>
+
+                {/* Modals rendered inside the guarded shopName block */}
+                <TranslationsModal
+                  open={editingIdx >= 0}
+                  term={editingTerm}
+                  onSave={saveTranslations}
+                  onCancel={() => { setEditingIdx(-1); setEditingTerm(null); }}
+                />
+                <CsvImportModal
+                  open={csvModalOpen}
+                  shopName={shopName}
+                  onSuccess={() => { setCsvModalOpen(false); load(shopName); }}
+                  onCancel={() => setCsvModalOpen(false)}
+                />
+                <FileParseModal
+                  open={fileParseOpen}
+                  shopName={shopName}
+                  onConfirm={handleFileParsed}
+                  onCancel={() => setFileParseOpen(false)}
+                />
+              </>
+            )}
+          </Spin>
+        ),
+      }]}
+    />
   );
 }
 
@@ -559,6 +1282,7 @@ export default function Translations() {
 
   return (
     <div>
+      <GlossaryPanel />
       <LLMKeyStatsPanel />
 
       {error && errorLevel === "warning" && (
