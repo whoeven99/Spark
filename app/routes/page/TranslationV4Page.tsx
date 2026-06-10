@@ -30,6 +30,7 @@ import {
   formatActualElapsed,
 } from "../component/aiTask/AITaskCardShell";
 import { TranslationGlossaryPanel } from "../component/translation/TranslationGlossaryPanel";
+import { ShopAnalysisPanel } from "../component/translation/ShopAnalysisPanel";
 import { TranslationLocaleFields } from "../component/translation/TranslationLocaleFields";
 import { TranslationModuleMultiSelect } from "../component/translation/TranslationModuleMultiSelect";
 import type { AITaskItem, AITaskStatus } from "../../lib/aiTaskTypes";
@@ -693,6 +694,7 @@ export function TranslationV4Page() {
               </PageSurface>
 
               <TranslationGlossaryPanel locationSearch={query} />
+              <ShopAnalysisPanel locationSearch={query} />
             </div>
 
             <div style={stickyAsideColumnStyle}>
