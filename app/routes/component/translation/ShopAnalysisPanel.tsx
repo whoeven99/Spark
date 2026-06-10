@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import type { ShopAnalysisJob, ShopProfile } from "../../../server/translation/shopAnalysis.server";
 import type { GlossaryTerm } from "../../../server/translation/glossary.server";
@@ -64,8 +64,15 @@ function statusBg(s: string): string {
 function formatTranslationsSummary(translations?: Record<string, string>): string {
   if (!translations || !Object.keys(translations).length) return "—";
   return Object.entries(translations)
-    .map(([loc, val]) => `${loc}: ${val}`)
+    .map(([loc, val]) => `${loc} → ${val}`)
     .join(" · ");
+}
+
+function formatDraftTermPreview(term: GlossaryTerm): string {
+  if (term.doNotTranslate) return "勿译（保持原文）";
+  const trans = formatTranslationsSummary(term.translations);
+  if (trans !== "—") return trans;
+  return "待补充各语言译法";
 }
 
 export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
@@ -93,6 +100,8 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
   const [draftStatus, setDraftStatus] = useState<string | null>(null);
   const [approveMode, setApproveMode] = useState<"merge" | "replace">("merge");
   const [approvingDraft, setApprovingDraft] = useState(false);
+  const [editingDraftIdx, setEditingDraftIdx] = useState<number | null>(null);
+  const [localeRows, setLocaleRows] = useState<Array<{ locale: string; value: string }>>([]);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -126,6 +135,7 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
       if (payload.ok) {
         setDraftTerms(payload.terms ?? []);
         setDraftStatus(payload.status ?? null);
+        setEditingDraftIdx(null);
       }
     } catch { /* ignore */ }
   }, [locationSearch]);
@@ -204,6 +214,11 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
   };
 
   const handleApproveDraft = async () => {
+    const invalid = draftTerms.some((t) => !t.source.trim());
+    if (invalid) {
+      setError("请填写每条术语的原文，或从草稿中删除空行");
+      return;
+    }
     setApprovingDraft(true);
     setError(null);
     try {
@@ -212,7 +227,7 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mode: approveMode }),
+          body: JSON.stringify({ mode: approveMode, terms: draftTerms }),
         },
       );
       const payload = (await res.json()) as { ok: boolean; total?: number; mode?: string; error?: string };
@@ -226,6 +241,47 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
     } finally {
       setApprovingDraft(false);
     }
+  };
+
+  const updateDraftTerm = (idx: number, patch: Partial<GlossaryTerm>) => {
+    setDraftTerms((prev) => prev.map((t, i) => (i === idx ? { ...t, ...patch } : t)));
+  };
+
+  const removeDraftTerm = (idx: number) => {
+    setDraftTerms((prev) => prev.filter((_, i) => i !== idx));
+    if (editingDraftIdx === idx) setEditingDraftIdx(null);
+    else if (editingDraftIdx !== null && editingDraftIdx > idx) {
+      setEditingDraftIdx(editingDraftIdx - 1);
+    }
+  };
+
+  const openDraftDetail = (idx: number) => {
+    if (editingDraftIdx === idx) {
+      setEditingDraftIdx(null);
+      return;
+    }
+    const term = draftTerms[idx];
+    const entries = Object.entries(term.translations ?? {});
+    setLocaleRows(
+      entries.length
+        ? entries.map(([locale, value]) => ({ locale, value }))
+        : [{ locale: "", value: "" }],
+    );
+    setEditingDraftIdx(idx);
+  };
+
+  const saveDraftTranslations = () => {
+    if (editingDraftIdx === null) return;
+    const result: Record<string, string> = {};
+    for (const row of localeRows) {
+      const k = row.locale.trim().toLowerCase();
+      const v = row.value.trim();
+      if (k && v) result[k] = v;
+    }
+    updateDraftTerm(editingDraftIdx, {
+      translations: Object.keys(result).length ? result : undefined,
+    });
+    setEditingDraftIdx(null);
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -364,44 +420,52 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
                       已运行 {formatActualElapsed(job.createdAt, job.updatedAt)}
                     </div>
                   ) : null}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    <AnalysisStageBar
-                      label="扫描"
-                      done={scanModulesDone(job)}
-                      total={job.modules.length}
-                      active={job.status === "SCANNING"}
-                      complete={["ANALYZE_QUEUED", "ANALYZING", "COMPLETED"].includes(job.status)}
-                      detailLabel={
-                        job.metrics.scannedResources > 0
-                          ? `资源 ${job.metrics.scannedResources} 条`
-                          : undefined
-                      }
-                    />
-                    <AnalysisStageBar
-                      label="分析"
-                      done={job.metrics.analyzedChunks}
-                      total={analysisBatchTotal(job)}
-                      active={job.status === "ANALYZING"}
-                      complete={job.status === "COMPLETED"}
-                      detailLabel={
-                        job.status === "COMPLETED" && job.metrics.glossaryDraftCount > 0
-                          ? `术语草稿 ${job.metrics.glossaryDraftCount} 条`
-                          : undefined
-                      }
-                    />
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {(() => {
+                      const steps = getAnalysisSteps(job);
+                      return (
+                        <>
+                          <AnalysisStepRow
+                            step={1}
+                            title="扫描商店内容"
+                            state={steps.scanState}
+                            caption={steps.scanCaption}
+                            progressPercent={steps.scanProgress}
+                          />
+                          <AnalysisStepRow
+                            step={2}
+                            title="AI 分析"
+                            state={steps.analyzeState}
+                            caption={steps.analyzeCaption}
+                            progressPercent={steps.analyzeProgress}
+                          />
+                        </>
+                      );
+                    })()}
                   </div>
-                  <div style={progressTrackStyle}>
-                    <div
-                      style={{
-                        ...progressFillStyle,
-                        width: `${getAnalysisProgressPercent(job)}%`,
-                        background:
-                          job.status === "COMPLETED"
-                            ? pageColorTokens.brandGreen
-                            : progressFillStyle.background,
-                      }}
-                    />
-                  </div>
+                  {isRunning ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          fontSize: "0.7rem",
+                          color: pageColorTokens.textFootnote,
+                        }}
+                      >
+                        <span>总进度</span>
+                        <span>{getAnalysisProgressPercent(job)}%</span>
+                      </div>
+                      <div style={progressTrackStyle}>
+                        <div
+                          style={{
+                            ...progressFillStyle,
+                            width: `${getAnalysisProgressPercent(job)}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               )}
               {job.status === "FAILED" && job.errorMessage && (
@@ -569,7 +633,7 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
                 )}
               </div>
               <div style={{ ...pageHintTextStyle, marginTop: 0 }}>
-                草稿不会自动生效，需要你确认后才会写入术语表并在翻译中使用。
+                草稿不会自动生效，需要你确认后才会写入术语表并在翻译中使用。点击「查看详情」可编辑各语言固定译法。
               </div>
 
               {/* approve controls */}
@@ -606,27 +670,168 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
               <div
                 style={{
                   ...pageInnerPanelStyle,
-                  maxHeight: "380px",
+                  maxHeight: "480px",
                   overflowY: "auto",
                   padding: "0.75rem",
                   display: "flex",
                   flexDirection: "column",
-                  gap: "0.4rem",
+                  gap: "0.5rem",
                 }}
               >
                 {draftTerms.map((term, idx) => (
-                  <div key={idx} style={draftTermRowStyle}>
-                    <span style={draftTermSourceStyle}>{term.source}</span>
-                    {term.doNotTranslate && (
-                      <span style={dntBadgeStyle}>勿译</span>
-                    )}
-                    <span style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, flex: 1 }}>
-                      {formatTranslationsSummary(term.translations)}
-                    </span>
-                    {term.note && (
-                      <span style={{ fontSize: "0.7rem", color: pageColorTokens.textFootnote }}>
-                        {term.note}
+                  <div
+                    key={idx}
+                    style={{
+                      ...draftTermRowStyle,
+                      flexDirection: "column",
+                      alignItems: "stretch",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "0.5rem",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        width: "100%",
+                      }}
+                    >
+                      <span style={draftTermSourceStyle}>{term.source}</span>
+                      {term.doNotTranslate && (
+                        <span style={dntBadgeStyle}>勿译</span>
+                      )}
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          color: pageColorTokens.textSecondary,
+                          flex: "1 1 160px",
+                        }}
+                      >
+                        {formatDraftTermPreview(term)}
                       </span>
+                      {term.note && (
+                        <span style={draftNoteTagStyle}>{term.note}</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => openDraftDetail(idx)}
+                        style={linkBtnStyle}
+                      >
+                        {editingDraftIdx === idx ? "收起" : "查看详情"}
+                      </button>
+                    </div>
+
+                    {editingDraftIdx === idx && (
+                      <div
+                        style={{
+                          marginTop: "0.55rem",
+                          padding: "0.65rem",
+                          borderRadius: pageColorTokens.radiusControl,
+                          border: `1px solid ${pageColorTokens.borderSubtle}`,
+                          background: pageColorTokens.surface,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.5rem",
+                        }}
+                      >
+                        <div style={pageFieldLabelStyle}>
+                          术语详情 · 「{term.source || "…"}」
+                        </div>
+                        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+                          <input
+                            type="text"
+                            value={term.source}
+                            placeholder="原文术语"
+                            onChange={(e) => updateDraftTerm(idx, { source: e.target.value })}
+                            style={{ ...inputStyle, flex: "1 1 180px", marginTop: 0 }}
+                          />
+                          <label style={checkboxLabelStyle} title="勾选后所有语言均不翻译">
+                            <input
+                              type="checkbox"
+                              checked={!!term.doNotTranslate}
+                              onChange={(e) =>
+                                updateDraftTerm(idx, { doNotTranslate: e.target.checked || undefined })
+                              }
+                            />
+                            勿译
+                          </label>
+                          <input
+                            type="text"
+                            value={term.note ?? ""}
+                            placeholder="分类 / 备注（如 tag、product feature）"
+                            onChange={(e) => updateDraftTerm(idx, { note: e.target.value || undefined })}
+                            style={{ ...inputStyle, flex: "1 1 200px", marginTop: 0 }}
+                          />
+                          <button type="button" onClick={() => removeDraftTerm(idx)} style={dangerBtnStyle}>
+                            从草稿移除
+                          </button>
+                        </div>
+
+                        {!term.doNotTranslate && (
+                          <>
+                            <div style={{ ...pageFieldLabelStyle, marginTop: "0.25rem" }}>
+                              各语言固定译法
+                            </div>
+                            <div style={{ ...pageHintTextStyle, marginTop: 0 }}>
+                              语言代码示例：en · zh-CN · ja · fr。翻译时会按此处配置强制使用对应译法。
+                            </div>
+                            {localeRows.map((row, rowIdx) => (
+                              <div
+                                key={rowIdx}
+                                style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}
+                              >
+                                <input
+                                  type="text"
+                                  value={row.locale}
+                                  placeholder="语言"
+                                  onChange={(e) =>
+                                    setLocaleRows((prev) =>
+                                      prev.map((r, i) =>
+                                        i === rowIdx ? { ...r, locale: e.target.value } : r,
+                                      ),
+                                    )
+                                  }
+                                  style={{ ...inputStyle, width: "6rem", marginTop: 0 }}
+                                />
+                                <input
+                                  type="text"
+                                  value={row.value}
+                                  placeholder="对应翻译"
+                                  onChange={(e) =>
+                                    setLocaleRows((prev) =>
+                                      prev.map((r, i) =>
+                                        i === rowIdx ? { ...r, value: e.target.value } : r,
+                                      ),
+                                    )
+                                  }
+                                  style={{ ...inputStyle, flex: 1, minWidth: "10rem", marginTop: 0 }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setLocaleRows((prev) => prev.filter((_, i) => i !== rowIdx))}
+                                  style={dangerBtnStyle}
+                                >
+                                  移除
+                                </button>
+                              </div>
+                            ))}
+                            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                              <s-button
+                                type="button"
+                                variant="secondary"
+                                onClick={() =>
+                                  setLocaleRows((prev) => [...prev, { locale: "", value: "" }])
+                                }
+                              >
+                                添加语言
+                              </s-button>
+                              <s-button type="button" variant="primary" onClick={saveDraftTranslations}>
+                                保存译法
+                              </s-button>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     )}
                   </div>
                 ))}
@@ -698,73 +903,176 @@ function getAnalysisProgressPercent(job: ShopAnalysisJob): number {
   return 0;
 }
 
-type AnalysisStageBarProps = {
-  label: string;
-  done: number;
-  total: number;
-  active: boolean;
-  complete: boolean;
-  detailLabel?: ReactNode;
+function getAnalysisSteps(job: ShopAnalysisJob): {
+  scanState: AnalysisStepState;
+  analyzeState: AnalysisStepState;
+  scanCaption: string;
+  analyzeCaption: string;
+  scanProgress: number;
+  analyzeProgress: number;
+} {
+  const moduleTotal = Math.max(1, job.modules.length);
+  const moduleDone = scanModulesDone(job);
+  const batchTotal = analysisBatchTotal(job);
+  const batchDone =
+    job.status === "COMPLETED" ? batchTotal : Math.min(batchTotal, job.metrics.analyzedChunks);
+
+  const scanState: AnalysisStepState =
+    job.status === "SCAN_QUEUED" ? "pending" : job.status === "SCANNING" ? "active" : "done";
+
+  const analyzeState: AnalysisStepState = ["SCAN_QUEUED", "SCANNING"].includes(job.status)
+    ? "pending"
+    : job.status === "ANALYZE_QUEUED"
+      ? "active"
+      : job.status === "ANALYZING"
+        ? "active"
+        : job.status === "COMPLETED"
+          ? "done"
+          : "pending";
+
+  const scanCaption =
+    job.metrics.scannedResources > 0
+      ? `${moduleDone}/${moduleTotal} 模块 · ${job.metrics.scannedResources} 条资源`
+      : `${moduleDone}/${moduleTotal} 模块`;
+
+  let analyzeCaption: string;
+  if (job.status === "COMPLETED") {
+    analyzeCaption =
+      job.metrics.glossaryDraftCount > 0
+        ? `${batchTotal}/${batchTotal} 批 · ${job.metrics.glossaryDraftCount} 条术语草稿`
+        : `${batchTotal}/${batchTotal} 批 · 分析完成`;
+  } else if (job.status === "ANALYZE_QUEUED") {
+    analyzeCaption = "等待 Worker 开始分析…";
+  } else if (job.status === "ANALYZING") {
+    analyzeCaption = `${batchDone}/${batchTotal} 批`;
+  } else {
+    analyzeCaption = "等待扫描完成后开始";
+  }
+
+  return {
+    scanState,
+    analyzeState,
+    scanCaption,
+    analyzeCaption,
+    scanProgress: Math.round((moduleDone / moduleTotal) * 100),
+    analyzeProgress: Math.round((batchDone / batchTotal) * 100),
+  };
+}
+
+type AnalysisStepState = "pending" | "active" | "done";
+
+type AnalysisStepRowProps = {
+  step: number;
+  title: string;
+  state: AnalysisStepState;
+  caption: string;
+  progressPercent: number;
 };
 
-function AnalysisStageBar({
-  label,
-  done,
-  total,
-  active,
-  complete,
-  detailLabel,
-}: AnalysisStageBarProps) {
-  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : complete ? 100 : 0;
-  const fillBg = complete
-    ? pageColorTokens.brandGreen
-    : active
-      ? "#c05717"
-      : pageColorTokens.borderInput;
+function AnalysisStepRow({ step, title, state, caption, progressPercent }: AnalysisStepRowProps) {
+  const iconBg =
+    state === "done"
+      ? pageColorTokens.brandGreenLight
+      : state === "active"
+        ? "#fff1e8"
+        : pageColorTokens.surfaceMuted;
+  const iconColor =
+    state === "done"
+      ? pageColorTokens.brandGreenDark
+      : state === "active"
+        ? "#8a420f"
+        : pageColorTokens.textFootnote;
+  const iconBorder =
+    state === "done"
+      ? `${pageColorTokens.brandGreen}55`
+      : state === "active"
+        ? "#c0571755"
+        : pageColorTokens.borderSubtle;
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
-      <span
-        style={{
-          fontSize: "0.75rem",
-          color: pageColorTokens.textSecondary,
-          width: 46,
-          flexShrink: 0,
-          fontWeight: active || complete ? 600 : 500,
-        }}
-      >
-        {label}
-      </span>
+    <div
+      style={{
+        display: "flex",
+        gap: "0.65rem",
+        alignItems: "flex-start",
+        padding: "0.55rem 0.65rem",
+        borderRadius: pageColorTokens.radiusControl,
+        border: `1px solid ${pageColorTokens.borderSubtle}`,
+        background: state === "active" ? pageColorTokens.surfaceEvenRow : pageColorTokens.surface,
+      }}
+    >
       <div
         style={{
-          flex: 1,
-          height: 8,
+          width: 22,
+          height: 22,
           borderRadius: 999,
-          background: pageColorTokens.divider,
-          overflow: "hidden",
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: state === "done" ? "0.7rem" : "0.68rem",
+          fontWeight: 700,
+          color: iconColor,
+          background: iconBg,
+          border: `1px solid ${iconBorder}`,
         }}
+        aria-hidden
       >
+        {state === "done" ? "✓" : step}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
-            width: `${pct}%`,
-            height: "100%",
-            background: fillBg,
-            borderRadius: 999,
-            transition: "width 0.35s ease",
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "0.5rem",
+            alignItems: "baseline",
+            flexWrap: "wrap",
           }}
-        />
+        >
+          <span
+            style={{
+              fontSize: "0.8125rem",
+              fontWeight: state === "pending" ? 500 : 600,
+              color:
+                state === "pending" ? pageColorTokens.textSecondary : pageColorTokens.textPrimary,
+            }}
+          >
+            {title}
+          </span>
+          <span
+            style={{
+              fontSize: "0.75rem",
+              color: pageColorTokens.textSecondary,
+              textAlign: "right",
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {caption}
+          </span>
+        </div>
+        {state === "active" ? (
+          <div
+            style={{
+              marginTop: 6,
+              height: 6,
+              borderRadius: 999,
+              background: pageColorTokens.divider,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                width: `${Math.max(4, progressPercent)}%`,
+                height: "100%",
+                background: "#c05717",
+                borderRadius: 999,
+                transition: "width 0.35s ease",
+              }}
+            />
+          </div>
+        ) : null}
       </div>
-      <span
-        style={{
-          fontSize: "0.75rem",
-          color: pageColorTokens.textSecondary,
-          minWidth: "4.5rem",
-          textAlign: "right",
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
-        {detailLabel ?? `${done}/${total}`}
-      </span>
     </div>
   );
 }
@@ -916,4 +1224,33 @@ const dntBadgeStyle: CSSProperties = {
   color: pageColorTokens.criticalText,
   background: "#fff0ee",
   border: "1px solid #f3cbc5",
+};
+
+const draftNoteTagStyle: CSSProperties = {
+  padding: "0.1rem 0.45rem",
+  borderRadius: 999,
+  fontSize: "0.7rem",
+  color: pageColorTokens.textFootnote,
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+};
+
+const linkBtnStyle: CSSProperties = {
+  background: "none",
+  border: "none",
+  padding: "0.2rem 0.35rem",
+  fontSize: "0.75rem",
+  color: pageColorTokens.brandBlue,
+  cursor: "pointer",
+  textDecoration: "underline",
+  flexShrink: 0,
+};
+
+const dangerBtnStyle: CSSProperties = {
+  background: "none",
+  border: "none",
+  padding: "0.2rem 0.35rem",
+  fontSize: "0.75rem",
+  color: pageColorTokens.criticalText,
+  cursor: "pointer",
 };

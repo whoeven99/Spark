@@ -12,6 +12,7 @@ import {
 import {
   readGlossary,
   saveGlossary,
+  validateGlossaryTerms,
   type GlossaryTerm,
 } from "../server/translation/glossary.server";
 
@@ -37,21 +38,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return data({ ok: false, error: "Method not allowed" }, { status: 405 });
   }
 
-  const body = (await request.json().catch(() => ({}))) as { mode?: string };
+  const body = (await request.json().catch(() => ({}))) as {
+    mode?: string;
+    terms?: unknown;
+  };
   const mode: "merge" | "replace" = body.mode === "replace" ? "replace" : "merge";
 
   try {
     const draft = await readGlossaryDraft(session.shop);
-    if (!draft?.terms?.length) {
+    let approvedTerms: GlossaryTerm[];
+    if (Array.isArray(body.terms) && body.terms.length > 0) {
+      approvedTerms = validateGlossaryTerms(body.terms);
+    } else if (draft?.terms?.length) {
+      approvedTerms = draft.terms;
+    } else {
       return data({ ok: false, error: "没有找到草稿术语表" }, { status: 400 });
     }
 
     let finalTerms: GlossaryTerm[];
     if (mode === "replace") {
-      finalTerms = draft.terms;
+      finalTerms = approvedTerms;
     } else {
       const existing = await readGlossary(session.shop);
-      finalTerms = mergeTerms(existing, draft.terms);
+      finalTerms = mergeTerms(existing, approvedTerms);
     }
 
     await saveGlossary(session.shop, finalTerms);

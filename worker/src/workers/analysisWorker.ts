@@ -321,9 +321,10 @@ Given product fields (titles, descriptions, tags…), return JSON:
 
 Rules:
 - terms: brand names (doNotTranslate:true), product jargon, promo vocabulary, SKU patterns
+- For each term, put fixed target translations in translations{} keyed by locale (en, ja, zh-CN…). Scan titles/descriptions/tags for existing translations in other languages.
+- Put term category (tag, product feature, brand name…) in note only — never use note where a locale translation belongs
 - highFreqTerms: words/phrases that repeat across products (strings only, max 10)
 - styleObs: 1-3 observations about writing style / tone patterns
-- If content appears to already have translations, include them in translations{}
 - Return ONLY the JSON object, no markdown`;
 
 const SYNTHESIS_PROMPT = `You are synthesising a shop profile for an e-commerce translation system.
