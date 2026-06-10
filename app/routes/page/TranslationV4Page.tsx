@@ -21,6 +21,7 @@ import {
 } from "../../lib/translationV4Display";
 import { resolveResumeV4JobStatus } from "../../server/translation/v4/resumeV4JobStatus";
 import { useShopLocales } from "../../hooks/useShopLocales";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { LanguageSelector } from "../component/common/LanguageSelector";
 import { DialogShell } from "../component/shared/DialogShell";
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
@@ -35,8 +36,7 @@ import { TranslationLocaleFields } from "../component/translation/TranslationLoc
 import { TranslationModuleMultiSelect } from "../component/translation/TranslationModuleMultiSelect";
 import type { AITaskItem, AITaskStatus } from "../../lib/aiTaskTypes";
 import {
-  PageBackButton,
-  PageSectionHeader,
+  PageHeaderNav,
   PageSurface,
   pageColorTokens,
   pageContentStyle,
@@ -228,6 +228,7 @@ function estimateTranslationConfirmMetrics(params: {
 export function TranslationV4Page() {
   const shopify = useAppBridge();
   const { t, i18n } = useTranslation();
+  const { isMobile } = useResponsiveLayout();
   const location = useLocation();
   const loaderData = useLoaderData<typeof loader>();
 
@@ -578,13 +579,11 @@ export function TranslationV4Page() {
   return (
     <s-page heading="批量资源翻译">
       <div style={pageContentStyle}>
-        <PageBackButton
+        <PageHeaderNav
           workspaceOnly
-          label={t("common.backToPrevious", {
-            defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回上一页" : "Back",
+          backLabel={t("common.backToPrevious", {
+            defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回工作台" : "Back",
           })}
-        />
-        <PageSectionHeader
           title="批量资源翻译"
           subtitle="面向批量资源的翻译工具。创建任务后会在后台持续执行，并在任务页中以汇总方式展示阶段进度和结果。"
         />
@@ -597,11 +596,13 @@ export function TranslationV4Page() {
             { key: "config", label: "配置页" },
             { key: "tasks", label: "任务页", badgeCount: runningCount },
           ]}
+          density="compact"
+          mobileFullWidth
         />
 
         {pageTab === "config" ? (
-          <div style={twoColumnLayoutStyle}>
-            <div style={twoColumnMainStyle}>
+          <div style={isMobile ? mobileConfigLayoutStyle : twoColumnLayoutStyle}>
+            <div style={isMobile ? mobileConfigMainStyle : twoColumnMainStyle}>
               <PageSurface
                 title="创建翻译任务"
                 subtitle="配置目标语言、翻译模块和执行范围后，再确认创建批处理任务。"
@@ -626,7 +627,7 @@ export function TranslationV4Page() {
                     disabled={isSubmitting}
                   />
 
-                  <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
+                  <div style={isMobile ? mobileCheckboxRowStyle : { display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
                     <label style={checkboxLabelStyle}>
                       <input type="checkbox" checked={isCover} onChange={(e) => setIsCover(e.target.checked)} />
                       <span>覆盖已有翻译</span>
@@ -661,7 +662,7 @@ export function TranslationV4Page() {
                           </div>
                         </div>
                       </label>
-                      <div style={{ maxWidth: "20rem" }}>
+                      <div style={isMobile ? mobileLimitFieldWrapStyle : { maxWidth: "20rem" }}>
                         <s-text-field
                           label="每模块数量限制"
                           value={String(limitPerType)}
@@ -677,7 +678,7 @@ export function TranslationV4Page() {
 
                   {formError ? <div style={formErrorBoxStyle}>{formError}</div> : null}
 
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+                  <div style={isMobile ? mobileConfigFooterStyle : { display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
                     <div style={{ fontSize: "0.8125rem", color: pageColorTokens.textSecondary, lineHeight: 1.6 }}>
                       创建后会按目标语言拆分为独立后台任务，并自动执行初始化、翻译、回写与验证。
                     </div>
@@ -697,7 +698,7 @@ export function TranslationV4Page() {
               <ShopAnalysisPanel locationSearch={query} />
             </div>
 
-            <div style={stickyAsideColumnStyle}>
+            <div style={isMobile ? mobileConfigSideStyle : stickyAsideColumnStyle}>
               <PageSurface
                 title="流程说明"
                 subtitle="翻译任务是批量后台作业，结果会在任务页中以汇总方式展示。"
@@ -720,8 +721,8 @@ export function TranslationV4Page() {
           </div>
         ) : (
           <div style={taskPageSectionStyle}>
-            <div style={taskViewSwitchBarStyle}>
-              <div style={taskViewButtonsStyle}>
+              <div style={isMobile ? mobileTaskViewSwitchBarStyle : taskViewSwitchBarStyle}>
+              <div style={isMobile ? mobileTaskViewButtonsStyle : taskViewButtonsStyle}>
                 {([
                   { key: "current" as const, label: `当前任务（${currentJobs.length}）` },
                   { key: "history" as const, label: `历史任务（${historyJobs.length}）` },
@@ -786,11 +787,11 @@ export function TranslationV4Page() {
           if (!isSubmitting) setConfirmOpen(false);
         }}
         closeDisabled={isSubmitting}
-        width={460}
+        width={isMobile ? 360 : 460}
         title="确认创建翻译任务"
         description="系统会按目标语言拆分批处理任务，并在后台自动执行翻译、回写与验证。"
         footer={
-          <s-stack direction="inline" gap="small">
+          <s-stack direction={isMobile ? "block" : "inline"} gap="small">
             <s-button
               type="button"
               variant="secondary"
@@ -814,7 +815,7 @@ export function TranslationV4Page() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr 1fr",
+              gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
               gap: "8px 16px",
             }}
           >
@@ -1469,6 +1470,7 @@ type StageBarProps = {
 };
 
 function StageBar({ label, done, total, active, complete, failed = 0, detailLabel }: StageBarProps) {
+  const { isMobile } = useResponsiveLayout();
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : (complete ? 100 : 0);
 
   const fillBg = complete
@@ -1478,14 +1480,22 @@ function StageBar({ label, done, total, active, complete, failed = 0, detailLabe
       : pageColorTokens.borderInput;
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
+    <div
+      style={{
+        display: "flex",
+        alignItems: isMobile ? "stretch" : "center",
+        gap: "0.55rem",
+        flexDirection: isMobile ? "column" : "row",
+      }}
+    >
       <span
         style={{
           fontSize: "0.75rem",
           color: pageColorTokens.textSecondary,
-          width: 46,
+          width: isMobile ? "auto" : 46,
           flexShrink: 0,
           fontWeight: active || complete ? 600 : 500,
+          alignSelf: isMobile ? "flex-start" : "auto",
         }}
       >
         {label}
@@ -1513,9 +1523,10 @@ function StageBar({ label, done, total, active, complete, failed = 0, detailLabe
         style={{
           fontSize: "0.75rem",
           color: pageColorTokens.textSecondary,
-          minWidth: detailLabel ? 196 : 84,
+          minWidth: isMobile ? "auto" : detailLabel ? 196 : 84,
+          width: isMobile ? "100%" : "auto",
           flexShrink: 0,
-          textAlign: "right",
+          textAlign: isMobile ? "left" : "right",
         }}
       >
         {detailLabel ?? (total > 0 ? `${done}/${total}` : "等待")}
@@ -1574,6 +1585,50 @@ const checkboxLabelStyle: React.CSSProperties = {
   color: pageColorTokens.textBody,
   cursor: "pointer",
   userSelect: "none",
+};
+
+const mobileConfigLayoutStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "1rem",
+};
+
+const mobileConfigMainStyle: React.CSSProperties = {
+  minWidth: 0,
+};
+
+const mobileConfigSideStyle: React.CSSProperties = {
+  width: "100%",
+  maxWidth: "100%",
+};
+
+const mobileCheckboxRowStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.75rem",
+};
+
+const mobileLimitFieldWrapStyle: React.CSSProperties = {
+  maxWidth: "100%",
+};
+
+const mobileConfigFooterStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "stretch",
+  gap: 12,
+};
+
+const mobileTaskViewSwitchBarStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 10,
+};
+
+const mobileTaskViewButtonsStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: 8,
 };
 
 function testEnvPanelStyle(active: boolean): React.CSSProperties {

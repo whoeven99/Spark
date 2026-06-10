@@ -15,6 +15,7 @@ import { ChatMessages } from "../component/chat/ChatMessages";
 import { StreamingAssistantReply } from "../component/chat/StreamingAssistantReply";
 import { ChatInput } from "../component/chat/ChatInput";
 import { LanguageSelector } from "../component/common/LanguageSelector";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { ChatPageCredentialsChrome } from "./chat/ChatPageCredentialsChrome";
 import {
   buildInitialAssistantMessage,
@@ -36,6 +37,7 @@ const CHAT_PAGE_VIEWPORT_OFFSET_PX = 152;
 export function ChatPage() {
   const shopify = useAppBridge();
   const { t, i18n } = useTranslation();
+  const { isMobile } = useResponsiveLayout();
   const firstMessage = buildInitialAssistantMessage(t);
   const quickPrompts = buildQuickPrompts(t);
   const generateDescriptionQuickPrompt = t("chat.quickPromptGenerateDescription");
@@ -267,7 +269,12 @@ export function ChatPage() {
     <s-page heading={t("chat.pageTitle")}>
       <s-section heading={t("chat.sectionTitle")}>
         <s-stack direction="block" gap="base">
-          <s-stack direction="inline" gap="base" alignItems="center" justifyContent="space-between">
+          <s-stack
+            direction={isMobile ? "block" : "inline"}
+            gap="base"
+            alignItems="center"
+            justifyContent="space-between"
+          >
             <s-badge tone="success">{t("chat.assistantOnline")}</s-badge>
             <s-button
             type="button"
@@ -293,13 +300,13 @@ export function ChatPage() {
             flexDirection: "column",
             height: `calc(100dvh - ${CHAT_PAGE_VIEWPORT_OFFSET_PX}px)`,
             minHeight: `calc(100dvh - ${CHAT_PAGE_VIEWPORT_OFFSET_PX}px)`,
-            gap: "0.75rem",
+              gap: isMobile ? "0.6rem" : "0.75rem",
           }}
         >
-          <div style={pageCompactSurfaceStyle}>
+          <div style={isMobile ? { ...pageCompactSurfaceStyle, padding: "0.75rem" } : pageCompactSurfaceStyle}>
             <s-stack direction="block" gap="none">
               <s-paragraph>{t("chat.quickQuestions")}</s-paragraph>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.25rem" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: isMobile ? "0.35rem" : "0.4rem", marginTop: "0.25rem" }}>
                 {quickPrompts.map((prompt, index) => (
                   <s-button
                     key={prompt}
@@ -328,7 +335,7 @@ export function ChatPage() {
 
           <div style={{ flex: 1, minHeight: 0 }}>
             <div ref={messagesContainerRef} style={{ height: "100%", overflowY: "auto" }}>
-              <div style={pageSurfaceStyle}>
+              <div style={isMobile ? { ...pageSurfaceStyle, padding: "0.9rem" } : pageSurfaceStyle}>
                 <ChatMessages
                   messages={messages}
                   streamingSlot={
@@ -355,7 +362,7 @@ export function ChatPage() {
             </div>
           </div>
 
-          <div style={pageSurfaceStyle}>
+          <div style={isMobile ? { ...pageSurfaceStyle, padding: "0.9rem" } : pageSurfaceStyle}>
             <ChatInput onMessageSend={sendMessage} isSending={isStreaming} onAbort={abortStream} />
           </div>
 

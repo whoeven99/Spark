@@ -25,8 +25,19 @@ import { useChatStream, type ChatStreamFinishPayload, type SkillStepProgress } f
 import { ContextWindowIndicator } from "../component/chat/ContextWindowIndicator";
 import { WorkspaceContextObjectPicker } from "../component/chat/WorkspaceContextObjectPicker";
 import { estimateMessagesTokens } from "../../lib/tokenEstimate";
+<<<<<<< Updated upstream
 import type { SelectedShopifyObject } from "../../lib/shopifyObjectTypes";
 import { UnifiedTaskListPage } from "../component/unifiedTaskList/UnifiedTaskListPage";
+=======
+import { useContextResourceSearch } from "../../hooks/useContextResourceSearch";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import type {
+  ContextResourceItem,
+  ContextResourceSelectionMap,
+  ContextResourceSortDirection,
+  ContextResourceType,
+} from "../../lib/contextResourceTypes";
+>>>>>>> Stashed changes
 
 type WorkspacePanel = "dashboard" | "chat" | "skills" | "automation" | "tasks";
 type AutomationView = "configured" | "history" | "templates";
@@ -302,6 +313,7 @@ function isObjectType(value: ContextTool | null): value is ObjectType {
 export function WorkspaceAppShellPage({ initialConversationList = [] }: { initialConversationList?: ConversationSummary[] }) {
   const shopify = useAppBridge();
   const { t } = useTranslation();
+  const { isMobile } = useResponsiveLayout();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
@@ -314,6 +326,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   const loadedConvIdsRef = useRef<Set<string>>(new Set());
   const [automationView, setAutomationView] = useState<AutomationView>("configured");
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeContextTool, setActiveContextTool] = useState<ContextTool | null>(null);
   const [objectQueryByType, setObjectQueryByType] = useState<Record<ObjectType, string>>({
     product: "",
@@ -463,12 +476,14 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
       next.set("panel", panel);
     }
     setSearchParams(next);
+    if (isMobile) setSidebarOpen(false);
   };
 
   const openConversation = (conversationId: string) => {
     pruneEmptyDraftConversations(conversationId);
     setActiveConversationId(conversationId);
     switchPanel("chat");
+    if (isMobile) setSidebarOpen(false);
   };
 
   const removeConversation = async (conversationId: string) => {
@@ -494,6 +509,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
       const res = await fetch(`/api/conversations/${conversationId}${authQuery}`, {
         method: "DELETE",
       });
+<<<<<<< Updated upstream
       if (!res.ok) {
         shopify.toast.show("删除对话失败");
         return;
@@ -524,6 +540,23 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
         }
       }
       shopify.toast.show("对话已删除");
+=======
+      const data = (await res.json()) as { conversation: ConversationSummary };
+      const conv = data.conversation;
+      const welcomeMsg: WorkspaceConversationMessage = {
+        role: "assistant",
+        text: "新的对话已经创建。你可以先在下方工具栏补充商品、订单、文章、文件或富媒体，再发送任务需求。",
+        time: formatTimeLabel(new Date()),
+      };
+      loadedConvIdsRef.current.add(conv.id);
+      setConversationList((current) => [conv, ...current].slice(0, 50));
+      setMessagesByConversation((current) => ({ ...current, [conv.id]: [welcomeMsg] }));
+      setDraftByConversation((current) => ({ ...current, [conv.id]: "" }));
+      clearContext();
+      setActiveConversationId(conv.id);
+      switchPanel("chat");
+      if (isMobile) setSidebarOpen(false);
+>>>>>>> Stashed changes
     } catch (err) {
       console.error("[WorkspaceAppShellPage] delete conversation failed:", err);
       shopify.toast.show("删除对话失败");
@@ -884,6 +917,12 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   };
 
   useEffect(() => {
+    if (!isMobile) {
+      setSidebarOpen(false);
+    }
+  }, [isMobile]);
+
+  useEffect(() => {
     if (!accountMenuOpen) return;
     const handlePointerDown = (event: MouseEvent) => {
       if (!accountMenuRef.current?.contains(event.target as Node)) {
@@ -894,6 +933,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     return () => window.removeEventListener("pointerdown", handlePointerDown);
   }, [accountMenuOpen]);
 
+<<<<<<< Updated upstream
   return (
     <div style={shellStyle}>
       <aside style={sidebarStyle}>
@@ -905,8 +945,24 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
               <div style={brandTitleStyle}>Spark</div>
               <div style={brandMetaStyle}>Shopify AI Workspace</div>
             </div>
-          </div>
+=======
+  const activePanelLabel = activePanel === "chat"
+    ? activeConversation?.title ?? "新对话"
+    : panelItems.find((item) => item.key === activePanel)?.label ?? "工作台";
 
+  const sidebarContent = (
+    <>
+      <div>
+        <div style={brandRowStyle}>
+          <div style={brandBadgeStyle}>S</div>
+          <div>
+            <div style={brandTitleStyle}>Spark</div>
+            <div style={brandMetaStyle}>Shopify AI Workspace</div>
+>>>>>>> Stashed changes
+          </div>
+        </div>
+
+<<<<<<< Updated upstream
           {/* New conversation */}
           <button
             type="button"
@@ -921,9 +977,39 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
           {/* Secondary nav */}
           <div style={navGroupStyle}>
             {panelItems.map((item) => (
+=======
+        <button type="button" style={newTaskButtonStyle} onClick={createConversation}>
+          + 新建对话
+        </button>
+
+        <div style={navGroupStyle}>
+          {panelItems.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              style={navButtonStyle(activePanel === item.key)}
+              onClick={() => switchPanel(item.key)}
+            >
+              <span style={navLabelStyle}>
+                <span style={navIconStyle}>{item.icon}</span>
+                <span>{item.label}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <div style={sidebarSectionStyle}>
+          <div style={sidebarSectionHeadStyle}>
+            <span>对话记录</span>
+            <span style={mutedMetaStyle}>{Math.min(conversationList.length, 50)} / 50</span>
+          </div>
+          <div style={conversationListStyle}>
+            {conversationList.slice(0, 50).map((conversation) => (
+>>>>>>> Stashed changes
               <button
-                key={item.key}
+                key={conversation.id}
                 type="button"
+<<<<<<< Updated upstream
                 className={`workspace-nav-btn${activePanel === item.key ? " is-active" : ""}`}
                 style={navButtonStyle(activePanel === item.key)}
                 onClick={() => switchPanel(item.key)}
@@ -973,8 +1059,21 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
               })}
             </div>
           </div>
+=======
+                style={historyItemStyle(activeConversationId === conversation.id)}
+                onClick={() => openConversation(conversation.id)}
+              >
+                <span style={historyTitleStyle}>{conversation.title}</span>
+                <span style={historyPreviewStyle}>{conversation.preview}</span>
+                <span style={mutedMetaStyle}>{formatRelativeTime(conversation.updatedAt)}</span>
+              </button>
+            ))}
+          </div>
+>>>>>>> Stashed changes
         </div>
+      </div>
 
+<<<<<<< Updated upstream
         <div ref={accountMenuRef} style={accountMenuWrapStyle}>
           {accountMenuOpen ? (
             <div style={accountMenuStyle}>
@@ -989,22 +1088,83 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
                   setAccountMenuOpen(false);
                   navigate("/app/billing");
                 }}
+=======
+      <div ref={accountMenuRef} style={accountMenuWrapStyle}>
+        {accountMenuOpen ? (
+          <div style={accountMenuStyle}>
+            <div style={accountMenuSectionStyle}>
+              <div style={accountMenuLabelStyle}>语言</div>
+              <LanguageSelector />
+            </div>
+            <button
+              type="button"
+              style={accountMenuItemStyle}
+              onClick={() => {
+                setAccountMenuOpen(false);
+                setSidebarOpen(false);
+                navigate(buildWorkspaceEntryPath("/app/billing"));
+              }}
+            >
+              Billing
+            </button>
+          </div>
+        ) : null}
+        <button type="button" style={sidebarFooterButtonStyle} onClick={() => setAccountMenuOpen((current) => !current)}>
+          <div>
+            <div style={brandTitleStyle}>Cedric hu</div>
+            <div style={brandMetaStyle}>Spark Workspace</div>
+          </div>
+          <div style={footerTagStyle}>在线</div>
+        </button>
+      </div>
+    </>
+  );
+
+  return (
+    <div style={isMobile ? mobileShellStyle : shellStyle}>
+      {isMobile ? (
+        <>
+          <div style={mobileTopBarStyle}>
+            <button
+              type="button"
+              style={mobileTopBarButtonStyle}
+              onClick={() => setSidebarOpen(true)}
+              aria-label="打开导航菜单"
+            >
+              ☰
+            </button>
+            <div style={mobileTopBarTitleWrapStyle}>
+              <div style={brandMetaStyle}>Spark Workspace</div>
+              <div style={mobileTopBarTitleStyle}>{activePanelLabel}</div>
+            </div>
+            <button
+              type="button"
+              style={mobileTopBarButtonStyle}
+              onClick={createConversation}
+              aria-label="新建对话"
+            >
+              ＋
+            </button>
+          </div>
+          {sidebarOpen ? (
+            <div style={mobileSidebarBackdropStyle} onClick={() => setSidebarOpen(false)}>
+              <aside
+                style={{ ...sidebarStyle, ...mobileSidebarStyle }}
+                onClick={(event) => event.stopPropagation()}
+>>>>>>> Stashed changes
               >
-                Billing
-              </button>
+                {sidebarContent}
+              </aside>
             </div>
           ) : null}
-          <button type="button" style={sidebarFooterButtonStyle} onClick={() => setAccountMenuOpen((current) => !current)}>
-            <div>
-              <div style={brandTitleStyle}>Cedric hu</div>
-              <div style={brandMetaStyle}>Spark Workspace</div>
-            </div>
-            <div style={footerTagStyle}>在线</div>
-          </button>
-        </div>
-      </aside>
+        </>
+      ) : (
+        <aside style={sidebarStyle}>
+          {sidebarContent}
+        </aside>
+      )}
 
-      <main style={contentStyle}>
+      <main style={isMobile ? mobileContentStyle : contentStyle}>
         {activePanel === "dashboard" ? <DashboardPanel /> : null}
         {activePanel === "chat" && activeConversation ? (
           <ChatPanel
@@ -1083,11 +1243,13 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
 }
 
 function DashboardPanel() {
+  const { isMobile } = useResponsiveLayout();
+
   return (
     <div style={panelStackStyle}>
-      <div style={metricGridStyle}>
+      <div style={isMobile ? mobileMetricGridStyle : metricGridStyle}>
         {dashboardMetrics.map((metric) => (
-          <article key={metric.label} style={surfaceCardStyle}>
+          <article key={metric.label} style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
             <div style={metricLabelStyle}>{metric.label}</div>
             <div style={metricValueStyle}>{metric.value}</div>
             <div style={metricDeltaStyle(metric.tone)}>{metric.delta}</div>
@@ -1095,9 +1257,9 @@ function DashboardPanel() {
         ))}
       </div>
 
-      <div style={twoColumnStyle}>
-        <section style={surfaceCardStyle}>
-          <div style={sectionHeaderStyle}>
+      <div style={isMobile ? mobileTwoColumnStyle : twoColumnStyle}>
+        <section style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
+          <div style={isMobile ? mobileSectionHeaderStyle : sectionHeaderStyle}>
             <div>
               <div style={sectionTitleStyle}>经营提醒</div>
               <div style={sectionTextStyle}>优先处理影响销售、库存和退款的核心问题。</div>
@@ -1114,16 +1276,23 @@ function DashboardPanel() {
           </div>
         </section>
 
-        <section style={surfaceCardStyle}>
-          <div style={sectionHeaderStyle}>
+        <section style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
+          <div style={isMobile ? mobileSectionHeaderStyle : sectionHeaderStyle}>
             <div>
               <div style={sectionTitleStyle}>关键趋势</div>
               <div style={sectionTextStyle}>今天、昨天和 7 天均值的简化对比。</div>
             </div>
+<<<<<<< Updated upstream
             <div style={trendLegendStyle}>
               <span style={legendItemStyle(shopifyUi.primary)}>Today</span>
               <span style={legendItemStyle("#47c1af")}>Yesterday</span>
               <span style={legendItemStyle("#b4e6d3")}>7d Avg</span>
+=======
+            <div style={isMobile ? mobileTrendLegendStyle : trendLegendStyle}>
+              <span style={legendItemStyle("#111827")}>Today</span>
+              <span style={legendItemStyle("#94a3b8")}>Yesterday</span>
+              <span style={legendItemStyle("#d1d5db")}>7d Avg</span>
+>>>>>>> Stashed changes
             </div>
           </div>
           <div style={chartStyle}>
@@ -1132,7 +1301,7 @@ function DashboardPanel() {
               { label: "订单", values: [72, 68, 61] },
               { label: "转化", values: [49, 54, 57] },
             ].map((group) => (
-              <div key={group.label} style={chartRowStyle}>
+              <div key={group.label} style={isMobile ? mobileChartRowStyle : chartRowStyle}>
                 <div style={chartLabelStyle}>{group.label}</div>
                 <div style={barGroupStyle}>
                   {group.values.map((value, index) => (
@@ -1153,9 +1322,9 @@ function DashboardPanel() {
         </section>
       </div>
 
-      <div style={twoColumnStyle}>
-        <section style={surfaceCardStyle}>
-          <div style={sectionHeaderStyle}>
+      <div style={isMobile ? mobileTwoColumnStyle : twoColumnStyle}>
+        <section style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
+          <div style={isMobile ? mobileSectionHeaderStyle : sectionHeaderStyle}>
             <div>
               <div style={sectionTitleStyle}>AI 自动化执行摘要</div>
               <div style={sectionTextStyle}>今天自动化和单次任务带来的实际产出。</div>
@@ -1172,8 +1341,8 @@ function DashboardPanel() {
           </div>
         </section>
 
-        <section style={surfaceCardStyle}>
-          <div style={sectionHeaderStyle}>
+        <section style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
+          <div style={isMobile ? mobileSectionHeaderStyle : sectionHeaderStyle}>
             <div>
               <div style={sectionTitleStyle}>经营建议</div>
               <div style={sectionTextStyle}>基于当前店铺数据和任务结果生成的建议。</div>
@@ -1297,6 +1466,7 @@ function ChatPanel({
     detail: { taskId: string; batchId: string },
   ) => void;
 }) {
+  const { isMobile } = useResponsiveLayout();
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [isScrolledUp, setIsScrolledUp] = useState(false);
@@ -1476,9 +1646,17 @@ function ChatPanel({
   }, [activeContextTool, onCloseToolPicker]);
 
   return (
-    <div style={chatLayoutStyle}>
-      <section style={{ ...surfaceCardStyle, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={conversationMetaRowStyle}>
+    <div style={isMobile ? mobileChatLayoutStyle : chatLayoutStyle}>
+      <section
+        style={{
+          ...(isMobile ? mobileSurfaceCardStyle : surfaceCardStyle),
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
+        <div style={isMobile ? mobileConversationMetaRowStyle : conversationMetaRowStyle}>
           <span style={conversationMetaTitleStyle}>{conversation.title}</span>
           <span style={mutedMetaStyle}>{formatConversationTimestamp(conversation.updatedAt)}</span>
         </div>
@@ -1526,7 +1704,7 @@ function ChatPanel({
           ) : null}
         </div>
 
-        <div style={composerBoxStyle}>
+        <div style={isMobile ? mobileComposerBoxStyle : composerBoxStyle}>
           {selectedSummaryBubbles.length > 0 ? (
             <div style={selectionBubbleRowStyle}>
               {selectedSummaryBubbles.map((item) => (
@@ -1544,14 +1722,18 @@ function ChatPanel({
             value={draft}
             onChange={(event) => onDraftChange(event.target.value)}
             onKeyDown={handleTextareaKeyDown}
+<<<<<<< Updated upstream
             className="workspace-composer-input"
             style={textareaStyle}
+=======
+            style={isMobile ? mobileTextareaStyle : textareaStyle}
+>>>>>>> Stashed changes
             placeholder="继续补充你的任务目标，并结合商品、订单、文章、文件或富媒体上下文..."
             disabled={isStreaming}
             autoFocus
           />
           <div style={toolbarDockStyle}>
-            <div style={toolbarBarStyle}>
+            <div style={isMobile ? mobileToolbarBarStyle : toolbarBarStyle}>
               <div style={toolbarIconGroupStyle}>
                 {toolItems.map((item) => (
                   <button
@@ -1566,7 +1748,7 @@ function ChatPanel({
                   </button>
                 ))}
               </div>
-              <div style={toolbarStatusGroupStyle}>
+              <div style={isMobile ? mobileToolbarStatusGroupStyle : toolbarStatusGroupStyle}>
                 {filledContextCount > 0 ? (
                   <span style={toolbarCountStyle}>已补充 {filledContextCount} 项</span>
                 ) : null}
@@ -1576,15 +1758,20 @@ function ChatPanel({
               </div>
             </div>
           </div>
-          <div style={composerFooterStyle}>
+          <div style={isMobile ? mobileComposerFooterStyle : composerFooterStyle}>
             <div style={footerLeftStyle}>
               <span style={sectionTextStyle}>
                 {isStreaming ? "AI Assistant 正在回复，可随时停止。" : <span style={mutedMetaStyle}>Enter 发送，Shift+Enter 换行</span>}
               </span>
               <ContextWindowIndicator currentTokens={contextTokens} maxTokens={MAX_CONTEXT_TOKENS} />
             </div>
+<<<<<<< Updated upstream
             <div style={buttonRowStyle}>
               <button type="button" className="workspace-ghost-btn" style={ghostButtonStyle} disabled={isStreaming}>
+=======
+            <div style={isMobile ? mobileButtonRowStyle : buttonRowStyle}>
+              <button type="button" style={ghostButtonStyle} disabled={isStreaming}>
+>>>>>>> Stashed changes
                 生成任务建议
               </button>
               {isStreaming ? (
@@ -1607,8 +1794,13 @@ function ChatPanel({
       </section>
 
       {activeContextTool ? (
+<<<<<<< Updated upstream
         <div style={toolModalBackdropStyle} onClick={handleDismissToolPicker}>
           <div style={toolModalCardStyle} onClick={(event) => event.stopPropagation()}>
+=======
+        <div style={toolModalBackdropStyle} onClick={onCloseToolPicker}>
+          <div style={isMobile ? mobileToolModalCardStyle : toolModalCardStyle} onClick={(event) => event.stopPropagation()}>
+>>>>>>> Stashed changes
             <div style={toolModalHeaderStyle}>
               <div>
                 <div style={sectionTitleSmallStyle}>
@@ -1645,12 +1837,44 @@ function ChatPanel({
 
             {activeContextTool === "order" ? (
               <>
+<<<<<<< Updated upstream
                 <input
                   value={objectQueryByType.order}
                   onChange={(event) => onObjectQueryChange("order", event.target.value)}
                   placeholder="搜索订单号、站点或状态"
                   style={selectorSearchInputStyle}
                 />
+=======
+                <div style={isMobile ? mobileObjectToolbarStyle : objectToolbarStyle}>
+                  <div style={objectSearchFieldWrapStyle}>
+                    <s-text-field
+                      label={`搜索${objectTypeLabels[activeContextTool]}`}
+                      value={objectQueryByType[activeContextTool]}
+                      onChange={(event) => onObjectQueryChange(activeContextTool, event.currentTarget.value)}
+                      autocomplete="off"
+                    />
+                  </div>
+                  <label style={sortFieldWrapStyle}>
+                    <span style={mutedMetaStyle}>排序</span>
+                    <select
+                      value={activeObjectSort[activeContextTool]}
+                      onChange={(event) =>
+                        setActiveObjectSort((current) => ({
+                          ...current,
+                          [activeContextTool]: event.target.value,
+                        }))
+                      }
+                      style={selectFieldStyle}
+                    >
+                      {objectSortOptions[activeContextTool].map((option) => (
+                        <option key={`${option.key}:${option.direction}`} value={`${option.key}:${option.direction}`}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+>>>>>>> Stashed changes
                 <div style={filterChipRowStyle}>
                   {objectFilterLabels.order.map((filter) => (
                     <button
@@ -1705,14 +1929,55 @@ function ChatPanel({
                       setNewFileObj(file);
                     }}
                   />
+<<<<<<< Updated upstream
                   {newFileObj ? (
                     <div style={{ fontSize: 12, color: "#202223", marginTop: 6 }}>
                       已选择：{newFileObj.name}
+=======
+                  <div style={isMobile ? mobileUploadHeaderRowStyle : uploadHeaderRowStyle}>
+                    <div>
+                      <div style={sectionTitleSmallStyle}>从本地上传文件</div>
+                      <div style={sectionTextStyle}>支持一次选择多个文件，上传完成后会自动加入列表并勾选。</div>
+>>>>>>> Stashed changes
                     </div>
                   ) : null}
                   <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
                     支持：PDF、DOCX、TXT、MD、CSV、XLSX、JSON，最大 10 MB。选好后点确认即可上传并附加。
                   </div>
+<<<<<<< Updated upstream
+=======
+                  <div style={isMobile ? mobileInlineFieldRowStyle : inlineFieldRowStyle}>
+                    <input
+                      value={newFileNote}
+                      onChange={(event) => setNewFileNote(event.target.value)}
+                      placeholder="补充备注（当前用于后续上传说明）"
+                      style={compactFieldStyle}
+                    />
+                    <span style={mutedMetaStyle}>大小上限 20 MB</span>
+                  </div>
+                  {localUploadQueue.length > 0 ? (
+                    <div style={uploadQueueStyle}>
+                      {localUploadQueue.map((item) => (
+                        <div key={item.id} style={uploadQueueItemStyle}>
+                          <div style={resourceItemTopRowStyle}>
+                            <span style={sectionTitleSmallStyle}>{item.fileName}</span>
+                            <span style={uploadStatusPillStyle(item.status)}>{uploadStatusLabel(item.status)}</span>
+                          </div>
+                          <div style={sectionTextStyle}>{item.note}</div>
+                          <div style={mutedMetaStyle}>
+                            {item.sizeLabel}
+                            {item.errorText ? ` · ${item.errorText}` : ""}
+                          </div>
+                          <div style={uploadProgressTrackStyle}>
+                            <div style={uploadProgressFillStyle(item.progress, item.status)} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={pickerInfoBoxStyle("neutral")}>暂未选择本地文件。上传完成后会自动加入下方文件列表，你可以直接发送或取消勾选。</div>
+                  )}
+>>>>>>> Stashed changes
                 </div>
                 <div style={selectorListCompactStyle}>
                   {workspaceFilesLoading && localFiles.length === 0 ? (
@@ -1790,7 +2055,7 @@ function ChatPanel({
             {activeContextTool === "media" ? (
               <>
                 <div style={mockCreateBoxStyle}>
-                  <div style={inlineFieldRowStyle}>
+                  <div style={isMobile ? mobileInlineFieldRowStyle : inlineFieldRowStyle}>
                     <select value={newMediaKind} onChange={(event) => setNewMediaKind(event.target.value as RichMediaItem["kind"])} style={selectFieldStyle}>
                       <option value="url">URL</option>
                       <option value="image">图片</option>
@@ -1872,6 +2137,7 @@ function ChatPanel({
       ) : null}
 
       <section style={{ ...sidePanelStyle, alignSelf: "start" }}>
+<<<<<<< Updated upstream
         <div style={surfaceCardStyle}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
             <div style={sectionTitleStyle}>当前上下文</div>
@@ -1884,6 +2150,29 @@ function ChatPanel({
                 清空
               </button>
             ) : null}
+=======
+        <div style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
+          <div style={sectionTitleStyle}>当前上下文</div>
+          <div style={listColumnStyle}>
+            {[
+              [
+                "对象范围",
+                totalSelectedObjects > 0
+                  ? (Object.keys(objectTypeLabels) as ObjectType[])
+                      .filter((type) => selectedObjectsByType[type].length > 0)
+                      .map((type) => `${objectTypeLabels[type]} ${selectedObjectsByType[type].length}`)
+                      .join(" / ")
+                  : "尚未选择对象",
+              ],
+              ["本地文件", selectedFileIds.length > 0 ? `${selectedFileIds.length} 个已选择文件` : "尚未添加文件"],
+              ["富媒体", selectedMediaIds.length > 0 ? `${selectedMediaIds.length} 个已选择 URL / 图片 / 视频` : "尚未添加富媒体"],
+            ].map(([label, value]) => (
+              <div key={label} style={keyValueRowStyle}>
+                <span style={mutedMetaStyle}>{label}</span>
+                <span style={sectionTextStyle}>{value}</span>
+              </div>
+            ))}
+>>>>>>> Stashed changes
           </div>
 
           {/* Products */}
@@ -1953,7 +2242,7 @@ function ChatPanel({
           ) : null}
         </div>
 
-        <div style={surfaceCardStyle}>
+        <div style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
           <div style={sectionTitleStyle}>推荐下一步</div>
           <div style={listColumnStyle}>
             {[
@@ -1974,25 +2263,32 @@ function ChatPanel({
 }
 
 function SkillsPanel({ onOpenTool }: { onOpenTool: (path: string) => void }) {
+  const { isMobile } = useResponsiveLayout();
+
   return (
-    <section style={surfaceCardStyle}>
-      <div style={sectionHeaderStyle}>
+    <section style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
+      <div style={isMobile ? mobileSectionHeaderStyle : sectionHeaderStyle}>
         <div>
           <div style={sectionTitleStyle}>常用工具</div>
           <div style={sectionTextStyle}>将已有 tools 作为可直接进入的应用入口。</div>
         </div>
         <button type="button" style={ghostButtonStyle}>管理排序</button>
       </div>
-      <div style={skillGridStyle}>
+      <div style={isMobile ? mobileSkillGridStyle : skillGridStyle}>
         {skillApps.map((skill) => (
           <button
             key={skill.id}
             type="button"
+<<<<<<< Updated upstream
             style={skill.available ? skillCardButtonStyle : skillCardButtonDisabledStyle}
             disabled={!skill.available}
             onClick={() => {
               if (skill.available) onOpenTool(skill.path);
             }}
+=======
+            style={isMobile ? mobileSkillCardButtonStyle : skillCardButtonStyle}
+            onClick={() => onOpenTool(skill.path)}
+>>>>>>> Stashed changes
           >
             <div style={skillCategoryStyle}>{skill.category}</div>
             <div style={sectionTitleSmallStyle}>{skill.title}</div>
@@ -2017,6 +2313,7 @@ function AutomationPanel({
   activeView: AutomationView;
   onChangeView: (value: AutomationView) => void;
 }) {
+  const { isMobile } = useResponsiveLayout();
   const items =
     activeView === "configured"
       ? automationConfigured
@@ -2025,19 +2322,19 @@ function AutomationPanel({
         : automationTemplates;
 
   return (
-    <section style={surfaceCardStyle}>
-      <div style={sectionHeaderStyle}>
+    <section style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
+      <div style={isMobile ? mobileSectionHeaderStyle : sectionHeaderStyle}>
         <div>
           <div style={sectionTitleStyle}>自动化任务</div>
           <div style={sectionTextStyle}>配置和管理可持续运行的任务流。</div>
         </div>
-        <div style={buttonRowStyle}>
+        <div style={isMobile ? mobileButtonRowStyle : buttonRowStyle}>
           <button type="button" style={ghostButtonStyle}>手动新建</button>
           <button type="button" className="workspace-primary-btn" style={primaryButtonStyle}>在对话中创建</button>
         </div>
       </div>
 
-      <div style={tabRowStyle}>
+      <div style={isMobile ? mobileTabRowStyle : tabRowStyle}>
         {[
           ["configured", "已配置"],
           ["history", "执行历史"],
@@ -2056,8 +2353,8 @@ function AutomationPanel({
 
       <div style={listColumnStyle}>
         {items.map((item) => (
-          <article key={item.id} style={automationCardStyle}>
-            <div style={sectionHeaderStyle}>
+          <article key={item.id} style={isMobile ? mobileAutomationCardStyle : automationCardStyle}>
+            <div style={isMobile ? mobileSectionHeaderStyle : sectionHeaderStyle}>
               <div>
                 <div style={sectionTitleSmallStyle}>{item.title}</div>
                 <div style={sectionTextStyle}>{"schedule" in item ? item.schedule : item.detail}</div>
@@ -2077,6 +2374,79 @@ function AutomationPanel({
   );
 }
 
+<<<<<<< Updated upstream
+=======
+function TasksPanel({
+  tasks,
+  filter,
+  onFilterChange,
+  onTaskAction,
+}: {
+  tasks: TaskRecord[];
+  filter: "all" | TaskKind;
+  onFilterChange: (value: "all" | TaskKind) => void;
+  onTaskAction: (task: TaskRecord) => void;
+}) {
+  const { isMobile } = useResponsiveLayout();
+
+  return (
+    <section style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
+      <div style={isMobile ? mobileSectionHeaderStyle : sectionHeaderStyle}>
+        <div>
+          <div style={sectionTitleStyle}>统一任务列表</div>
+          <div style={sectionTextStyle}>自动化任务与单次任务共用总表，再按类型和状态进行筛选。</div>
+        </div>
+        <div style={isMobile ? mobileButtonRowStyle : buttonRowStyle}>
+          {[
+            ["all", "全部"],
+            ["automation", "自动化"],
+            ["one_off", "单次任务"],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              style={filterChipStyle(filter === key)}
+              onClick={() => onFilterChange(key as "all" | TaskKind)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={listColumnStyle}>
+        {tasks.map((task) => (
+          <article key={task.id} style={isMobile ? mobileTaskCardStyle : taskCardStyle}>
+            <div style={isMobile ? mobileTaskCardTopStyle : taskCardTopStyle}>
+              <div>
+                <div style={mutedMetaStyle}>{task.id}</div>
+                <div style={sectionTitleSmallStyle}>{task.title}</div>
+              </div>
+              <div style={isMobile ? mobileTaskBadgeRowStyle : buttonRowStyle}>
+                <span style={kindBadgeStyle(task.kind)}>{task.kind === "automation" ? "自动化" : "单次"}</span>
+                <span style={statusBadgeStyle(taskStatusTone(task.status))}>{taskStatusLabel(task.status)}</span>
+              </div>
+            </div>
+            <div style={sectionTextStyle}>{task.summary}</div>
+            <div style={progressTrackStyle}>
+              <div style={{ ...progressFillStyle, width: `${task.progress}%`, background: progressColor(task.status) }} />
+            </div>
+            <div style={isMobile ? mobileTaskFooterStyle : taskFooterStyle}>
+              <span style={mutedMetaStyle}>
+                {task.source} · {task.updatedAt}
+              </span>
+              <button type="button" style={textButtonStyle} onClick={() => onTaskAction(task)}>
+                {task.action}
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+>>>>>>> Stashed changes
 function workspaceMessageToApiMessage(message: WorkspaceConversationMessage): ChatMessage {
   return { role: message.role, content: message.text };
 }
@@ -2377,6 +2747,75 @@ const shellStyle: CSSProperties = {
   background: shopifyUi.pageBg,
 };
 
+const mobileShellStyle: CSSProperties = {
+  minHeight: "100vh",
+  display: "flex",
+  flexDirection: "column",
+  background: "#f6f6f7",
+};
+
+const mobileTopBarStyle: CSSProperties = {
+  position: "sticky",
+  top: 0,
+  zIndex: 12,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  padding: "12px 14px",
+  borderBottom: "1px solid #e1e3e5",
+  background: "rgba(246, 246, 247, 0.96)",
+  backdropFilter: "blur(8px)",
+};
+
+const mobileTopBarButtonStyle: CSSProperties = {
+  width: 38,
+  height: 38,
+  borderRadius: 10,
+  border: "1px solid #dfe3e8",
+  background: "#ffffff",
+  color: "#202223",
+  fontSize: 16,
+  fontWeight: 700,
+  display: "grid",
+  placeItems: "center",
+  cursor: "pointer",
+  padding: 0,
+  flexShrink: 0,
+};
+
+const mobileTopBarTitleWrapStyle: CSSProperties = {
+  flex: "1 1 auto",
+  minWidth: 0,
+  display: "flex",
+  flexDirection: "column",
+  gap: 2,
+};
+
+const mobileTopBarTitleStyle: CSSProperties = {
+  fontSize: 14,
+  fontWeight: 700,
+  color: "#202223",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
+const mobileSidebarBackdropStyle: CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(17, 24, 39, 0.22)",
+  zIndex: 20,
+  display: "flex",
+};
+
+const mobileSidebarStyle: CSSProperties = {
+  width: "min(86vw, 320px)",
+  minHeight: "100vh",
+  borderRight: "1px solid #e1e3e5",
+  boxShadow: "0 24px 56px rgba(15, 23, 42, 0.16)",
+};
+
 const sidebarStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
@@ -2398,6 +2837,14 @@ const contentStyle: CSSProperties = {
   gap: 20,
   minWidth: 0,
   background: shopifyUi.pageBg,
+};
+
+const mobileContentStyle: CSSProperties = {
+  padding: "14px 14px 24px",
+  display: "flex",
+  flexDirection: "column",
+  gap: 16,
+  minWidth: 0,
 };
 
 const brandRowStyle: CSSProperties = {
@@ -2600,13 +3047,32 @@ const surfaceCardStyle: CSSProperties = {
   boxShadow: shopifyUi.shadowCard,
   padding: 20,
 };
+const mobileSurfaceCardStyle: CSSProperties = {
+  ...surfaceCardStyle,
+  padding: 14,
+  borderRadius: 12,
+};
 const sectionHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 16 };
+<<<<<<< Updated upstream
 const sectionTitleStyle: CSSProperties = { fontSize: 18, fontWeight: 700, color: shopifyUi.text, letterSpacing: "-0.01em" };
 const sectionTitleSmallStyle: CSSProperties = { fontSize: 15, fontWeight: 700, color: shopifyUi.text };
 const sectionTextStyle: CSSProperties = { fontSize: 14, color: shopifyUi.textSecondary, lineHeight: 1.6 };
 const mutedMetaStyle: CSSProperties = { fontSize: 12, color: shopifyUi.textMuted };
+=======
+const mobileSectionHeaderStyle: CSSProperties = {
+  ...sectionHeaderStyle,
+  flexDirection: "column",
+  gap: 10,
+  marginBottom: 12,
+};
+const sectionTitleStyle: CSSProperties = { fontSize: 18, fontWeight: 700, color: "#202223", letterSpacing: "-0.01em" };
+const sectionTitleSmallStyle: CSSProperties = { fontSize: 15, fontWeight: 700, color: "#202223" };
+const sectionTextStyle: CSSProperties = { fontSize: 14, color: "#61666c", lineHeight: 1.6 };
+const mutedMetaStyle: CSSProperties = { fontSize: 12, color: "#8c9196" };
+>>>>>>> Stashed changes
 
 const metricGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16 };
+const mobileMetricGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 };
 const metricLabelStyle: CSSProperties = { fontSize: 12, fontWeight: 600, color: "#6d7175" };
 const metricValueStyle: CSSProperties = { marginTop: 10, fontSize: 26, fontWeight: 700, color: "#202223", letterSpacing: "-0.02em" };
 const metricDeltaStyle = (tone: DashboardMetric["tone"]): CSSProperties => ({
@@ -2617,6 +3083,7 @@ const metricDeltaStyle = (tone: DashboardMetric["tone"]): CSSProperties => ({
 });
 
 const twoColumnStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 16 };
+const mobileTwoColumnStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr", gap: 12 };
 const listColumnStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 12 };
 const summaryItemStyle: CSSProperties = { padding: 14, borderRadius: 12, border: "1px solid #e9eaeb", background: "#ffffff" };
 const suggestionItemStyle: CSSProperties = { display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 0", borderBottom: "1px solid #f1f2f3" };
@@ -2630,16 +3097,20 @@ const alertItemStyle = (tone: "warning" | "info" | "critical"): CSSProperties =>
 });
 
 const trendLegendStyle: CSSProperties = { display: "flex", gap: 12, alignItems: "center" };
+const mobileTrendLegendStyle: CSSProperties = { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" };
 const legendItemStyle = (color: string): CSSProperties => ({ fontSize: 12, color, fontWeight: 600 });
 const chartStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 16 };
 const chartRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "70px minmax(0, 1fr)", gap: 14, alignItems: "center" };
+const mobileChartRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr", gap: 8, alignItems: "stretch" };
 const chartLabelStyle: CSSProperties = { fontSize: 13, fontWeight: 600, color: "#202223" };
 const barGroupStyle: CSSProperties = { display: "grid", gap: 8 };
 const barTrackStyle: CSSProperties = { height: 10, borderRadius: 999, background: "#f1f2f3", overflow: "hidden" };
 const barFillStyle: CSSProperties = { height: "100%", borderRadius: 999 };
 
 const chatLayoutStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 16, height: "calc(100vh - 100px)" };
+const mobileChatLayoutStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 14, minHeight: "calc(100vh - 110px)" };
 const conversationMetaRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12, flexShrink: 0 };
+const mobileConversationMetaRowStyle: CSSProperties = { ...conversationMetaRowStyle, flexDirection: "column", alignItems: "flex-start", marginBottom: 10 };
 const conversationMetaTitleStyle: CSSProperties = { fontSize: 13, fontWeight: 700, color: "#202223" };
 const messageListStyle: CSSProperties = {
   display: "flex",
@@ -2653,6 +3124,7 @@ const messageListStyle: CSSProperties = {
   // instant assignment so rapid frames don't fight each other and miss the bottom.
 };
 const composerBoxStyle: CSSProperties = { flexShrink: 0, marginTop: 14, paddingTop: 14, borderTop: "1px solid #ebedf0" };
+const mobileComposerBoxStyle: CSSProperties = { ...composerBoxStyle, marginTop: 12, paddingTop: 12 };
 const textareaStyle: CSSProperties = {
   width: "100%",
   minHeight: 96,
@@ -2670,7 +3142,15 @@ const textareaStyle: CSSProperties = {
   outline: "none",
   transition: "border-color 0.15s",
 };
+const mobileTextareaStyle: CSSProperties = {
+  ...textareaStyle,
+  minHeight: 84,
+  padding: 12,
+  fontSize: 13,
+  lineHeight: 1.55,
+};
 const composerFooterStyle: CSSProperties = { marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 };
+const mobileComposerFooterStyle: CSSProperties = { ...composerFooterStyle, flexDirection: "column", alignItems: "stretch" };
 const footerLeftStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" };
 const sidePanelStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 16 };
 const keyValueRowStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 4, paddingBottom: 10, borderBottom: "1px solid #f0f1f3" };
@@ -2681,6 +3161,12 @@ const toolbarBarStyle: CSSProperties = {
   alignItems: "center",
   gap: 12,
   flexWrap: "wrap",
+};
+const mobileToolbarBarStyle: CSSProperties = {
+  ...toolbarBarStyle,
+  flexDirection: "column",
+  alignItems: "stretch",
+  gap: 10,
 };
 const toolbarIconGroupStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" };
 const toolbarTriggerWrapStyle: CSSProperties = { position: "relative", display: "inline-flex" };
@@ -2753,6 +3239,15 @@ const scrollBottomButtonStyle: CSSProperties = {
   whiteSpace: "nowrap",
 };
 const toolbarStatusGroupStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" };
+const mobileToolbarStatusGroupStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+  width: "100%",
+  marginLeft: 0,
+  flexWrap: "wrap",
+};
 const toolbarCountStyle: CSSProperties = { fontSize: 12, color: "#6d7175", fontWeight: 600 };
 const toolbarClearStyle: CSSProperties = {
   border: "none",
@@ -2808,6 +3303,13 @@ const toolModalCardStyle: CSSProperties = {
   background: "#ffffff",
   boxShadow: "0 24px 56px rgba(15, 23, 42, 0.16)",
 };
+const mobileToolModalCardStyle: CSSProperties = {
+  ...toolModalCardStyle,
+  width: "calc(100vw - 24px)",
+  maxHeight: "88vh",
+  padding: 16,
+  borderRadius: 14,
+};
 const toolModalHeaderStyle: CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
@@ -2839,6 +3341,13 @@ const toolModalCloseStyle: CSSProperties = {
   cursor: "pointer",
   flexShrink: 0,
 };
+<<<<<<< Updated upstream
+=======
+const objectToolbarStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 160px", gap: 12, alignItems: "end" };
+const mobileObjectToolbarStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr", gap: 10, alignItems: "stretch" };
+const objectSearchFieldWrapStyle: CSSProperties = { minWidth: 0 };
+const sortFieldWrapStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 6 };
+>>>>>>> Stashed changes
 const filterChipRowStyle: CSSProperties = { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 };
 const mockCreateBoxStyle: CSSProperties = {
   display: "flex",
@@ -2850,7 +3359,13 @@ const mockCreateBoxStyle: CSSProperties = {
   background: "#fafbfb",
   marginBottom: 14,
 };
+<<<<<<< Updated upstream
+=======
+const uploadHeaderRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" };
+const mobileUploadHeaderRowStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 10, alignItems: "stretch" };
+>>>>>>> Stashed changes
 const inlineFieldRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 10, alignItems: "center" };
+const mobileInlineFieldRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr", gap: 10, alignItems: "stretch" };
 const compactFieldStyle: CSSProperties = {
   width: "100%",
   border: "1px solid #c9cdd2",
@@ -2892,18 +3407,24 @@ const selectorItemStyle = (checked: boolean): CSSProperties => ({
 const selectorItemContentStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 4 };
 
 const skillGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16 };
+const mobileSkillGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr", gap: 12 };
 const skillCardStyle: CSSProperties = { padding: 18, borderRadius: 14, border: "1px solid #e1e3e5", background: "#ffffff", display: "flex", flexDirection: "column", gap: 10 };
 const skillCardButtonStyle: CSSProperties = { ...skillCardStyle, width: "100%", textAlign: "left", cursor: "pointer" };
+<<<<<<< Updated upstream
 const skillCardButtonDisabledStyle: CSSProperties = {
   ...skillCardButtonStyle,
   cursor: "not-allowed",
   opacity: 0.72,
   background: "#fafbfb",
 };
+=======
+const mobileSkillCardButtonStyle: CSSProperties = { ...skillCardButtonStyle, padding: 14, borderRadius: 12 };
+>>>>>>> Stashed changes
 const skillCategoryStyle: CSSProperties = { fontSize: 12, fontWeight: 700, color: "#6d7175" };
 const skillFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 };
 
 const buttonRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10 };
+<<<<<<< Updated upstream
 const primaryButtonStyle: CSSProperties = {
   border: `1px solid ${shopifyUi.primary}`,
   borderRadius: shopifyUi.radiusControl,
@@ -2934,8 +3455,15 @@ const textButtonStyle: CSSProperties = {
   cursor: "pointer",
 };
 const disabledTextButtonStyle: CSSProperties = { ...textButtonStyle, color: "#8c9196", cursor: "not-allowed" };
+=======
+const mobileButtonRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr", gap: 8, width: "100%" };
+const primaryButtonStyle: CSSProperties = { border: "1px solid #202223", borderRadius: 10, background: "#202223", color: "#ffffff", padding: "10px 14px", fontSize: 14, fontWeight: 600, cursor: "pointer" };
+const ghostButtonStyle: CSSProperties = { border: "1px solid #c9cdd2", borderRadius: 10, background: "#ffffff", color: "#202223", padding: "10px 14px", fontSize: 14, fontWeight: 600, cursor: "pointer" };
+const textButtonStyle: CSSProperties = { border: "none", background: "transparent", color: "#005bd3", padding: 0, fontSize: 13, fontWeight: 600, cursor: "pointer" };
+>>>>>>> Stashed changes
 
 const tabRowStyle: CSSProperties = { display: "flex", gap: 8, marginBottom: 16 };
+const mobileTabRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr", gap: 8, marginBottom: 14 };
 const tabButtonStyle = (active: boolean): CSSProperties => ({
   border: `1px solid ${active ? shopifyUi.primary : shopifyUi.border}`,
   borderRadius: shopifyUi.radiusControl,
@@ -2947,6 +3475,7 @@ const tabButtonStyle = (active: boolean): CSSProperties => ({
   cursor: "pointer",
 });
 const automationCardStyle: CSSProperties = { padding: 16, borderRadius: 12, border: "1px solid #e1e3e5", background: "#ffffff" };
+const mobileAutomationCardStyle: CSSProperties = { ...automationCardStyle, padding: 14 };
 
 const filterChipStyle = (active: boolean): CSSProperties => ({
   border: `1px solid ${active ? shopifyUi.primary : shopifyUi.borderStrong}`,
@@ -2958,6 +3487,27 @@ const filterChipStyle = (active: boolean): CSSProperties => ({
   fontWeight: 600,
   cursor: "pointer",
 });
+<<<<<<< Updated upstream
+=======
+const taskCardStyle: CSSProperties = { padding: 16, borderRadius: 14, border: "1px solid #e1e3e5", background: "#ffffff", display: "flex", flexDirection: "column", gap: 12 };
+const mobileTaskCardStyle: CSSProperties = { ...taskCardStyle, padding: 14, borderRadius: 12, gap: 10 };
+const taskCardTopStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 };
+const mobileTaskCardTopStyle: CSSProperties = { ...taskCardTopStyle, flexDirection: "column", gap: 10 };
+const progressTrackStyle: CSSProperties = { height: 8, borderRadius: 999, background: "#e5e7eb", overflow: "hidden" };
+const progressFillStyle: CSSProperties = { height: "100%", borderRadius: 999 };
+const taskFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 };
+const mobileTaskFooterStyle: CSSProperties = { ...taskFooterStyle, flexDirection: "column", alignItems: "flex-start", gap: 8 };
+const mobileTaskBadgeRowStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: 8 };
+
+const kindBadgeStyle = (kind: TaskKind): CSSProperties => ({
+  padding: "4px 10px",
+  borderRadius: 999,
+  background: kind === "automation" ? "#f1f8ff" : "#f1f2f3",
+  color: kind === "automation" ? "#005bd3" : "#61666c",
+  fontSize: 12,
+  fontWeight: 600,
+});
+>>>>>>> Stashed changes
 const statusBadgeStyle = (tone: "positive" | "warning" | "critical" | "neutral"): CSSProperties => ({
   padding: "4px 10px",
   borderRadius: 999,

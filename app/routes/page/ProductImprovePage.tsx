@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import { useFetcher, useLoaderData, useLocation } from "react-router";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import type { loader } from "../app.product-improve";
 import { formatEstimatedDuration } from "../../lib/formatDuration";
 import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
@@ -13,8 +14,7 @@ import { BatchTaskPanel } from "../component/batchTask/BatchTaskPanel";
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import type { AITaskItem } from "../../lib/aiTaskTypes";
 import {
-  PageBackButton,
-  PageSectionHeader,
+  PageHeaderNav,
   PageSurface,
   formErrorBoxStyle,
   pageColorTokens,
@@ -65,6 +65,7 @@ function buildSearchWithoutTab(search: string): string {
 export function ProductImprovePage() {
   const shopify = useAppBridge();
   const { t, i18n } = useTranslation();
+  const { isMobile } = useResponsiveLayout();
   const loaderData = useLoaderData<typeof loader>();
   const location = useLocation();
   const billing = loaderData.billing;
@@ -309,14 +310,11 @@ export function ProductImprovePage() {
           </s-banner>
         ) : null}
 
-        <PageBackButton
+        <PageHeaderNav
           workspaceOnly
-          label={t("common.backToPrevious", {
-            defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回上一页" : "Back",
+          backLabel={t("common.backToPrevious", {
+            defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回工作台" : "Back",
           })}
-        />
-
-        <PageSectionHeader
           title={t("generate.sectionTitle")}
           subtitle={t("productImproveStage1.subtitle")}
         />
@@ -329,6 +327,8 @@ export function ProductImprovePage() {
             { key: "config", label: t("productImproveStage1.tabsConfig") },
             { key: "tasks", label: t("productImproveStage1.tabsTasks"), badgeCount: runningCount },
           ]}
+          density="compact"
+          mobileFullWidth
           style={{ margin: "0 0 20px" }}
         />
 
@@ -431,13 +431,13 @@ export function ProductImprovePage() {
 
             <DialogShell
               open={confirmOpen}
-              width={460}
+              width={isMobile ? 360 : 460}
               closeDisabled={isSubmitting}
               onClose={() => setConfirmOpen(false)}
               title={t("productImproveStage1.confirmDialogTitle")}
               description={t("productImproveStage1.confirmDialogDesc")}
               footer={
-                <s-stack direction="inline" gap="small">
+                <s-stack direction={isMobile ? "block" : "inline"} gap="small">
                   <s-button
                     type="button"
                     variant="secondary"
@@ -462,7 +462,7 @@ export function ProductImprovePage() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
+                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
                   gap: "8px 16px",
                 }}
               >

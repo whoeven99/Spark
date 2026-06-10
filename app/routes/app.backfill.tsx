@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { backfillOrders } from "../server/shopify/sync/backfill.server";
@@ -59,6 +60,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function BackfillPage() {
+  const { isMobile } = useResponsiveLayout();
   const { shop, checkpoints, counts } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -68,7 +70,7 @@ export default function BackfillPage() {
     checkpoints.find((c) => c.resource === resource);
 
   return (
-    <div style={{ maxWidth: 640, margin: "40px auto", fontFamily: "sans-serif", padding: "0 20px" }}>
+    <div style={{ maxWidth: 640, margin: "40px auto", fontFamily: "sans-serif", padding: isMobile ? "0 14px" : "0 20px" }}>
       <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>历史数据回补</h1>
       <p style={{ color: "#666", marginBottom: 24, fontSize: 14 }}>
         Shop: <code>{shop}</code>
@@ -76,7 +78,8 @@ export default function BackfillPage() {
 
       <section style={{ marginBottom: 32 }}>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>当前同步状态</h2>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 480 }}>
           <thead>
             <tr style={{ background: "#f5f5f5", textAlign: "left" }}>
               <th style={{ padding: "8px 12px" }}>资源</th>
@@ -111,13 +114,14 @@ export default function BackfillPage() {
             </tr>
           </tbody>
         </table>
+        </div>
       </section>
 
       <section style={{ marginBottom: 32 }}>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>触发回补</h2>
         <Form method="post">
           <input type="hidden" name="resource" value="orders" />
-          <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
+          <div style={{ display: "flex", gap: 12, alignItems: isMobile ? "stretch" : "center", flexDirection: isMobile ? "column" : "row", marginBottom: 16 }}>
             <label style={{ fontSize: 13 }}>
               回溯天数：
               <input
@@ -131,7 +135,7 @@ export default function BackfillPage() {
                   padding: "4px 8px",
                   border: "1px solid #ddd",
                   borderRadius: 4,
-                  width: 80,
+                  width: isMobile ? "100%" : 80,
                 }}
               />
             </label>
@@ -147,6 +151,7 @@ export default function BackfillPage() {
               borderRadius: 4,
               cursor: isSubmitting ? "not-allowed" : "pointer",
               fontSize: 13,
+              width: isMobile ? "100%" : "auto",
             }}
           >
             {isSubmitting ? "同步中..." : "回补订单（含客户/退款）"}
