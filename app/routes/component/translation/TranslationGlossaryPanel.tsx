@@ -16,10 +16,6 @@ type TranslationGlossaryPanelProps = {
 
 type ParsedPreviewRow = GlossaryTerm & { _key: number; _selected: boolean };
 
-const CSV_EXAMPLE = `source,do_not_translate,note,en,zh-CN,pl,fr
-闪购,,,Flash Sale,,,Vente flash
-Acme,true,品牌名,,,,,`;
-
 const FILE_ACCEPT = ".txt,.md,.pdf,.docx,.csv,.xlsx,.xls,.json";
 const FILE_TYPES_LABEL = ".txt / .md / .pdf / .docx / .csv / .xlsx / .json";
 
@@ -54,15 +50,11 @@ export function TranslationGlossaryPanel({ locationSearch }: TranslationGlossary
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(true);
-  const [csvOpen, setCsvOpen] = useState(false);
-  const [fileParseOpen, setFileParseOpen] = useState(false);
-  const [csvText, setCsvText] = useState("");
-  const [csvMode, setCsvMode] = useState<"merge" | "replace">("merge");
-  const [csvImporting, setCsvImporting] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [fileParsing, setFileParsing] = useState(false);
   const [fileParseNote, setFileParseNote] = useState("");
   const [fileParseName, setFileParseName] = useState("");
-  const [fileParseMode, setFileParseMode] = useState<"merge" | "replace">("merge");
+  const [uploadMode, setUploadMode] = useState<"merge" | "replace">("merge");
   const [previewRows, setPreviewRows] = useState<ParsedPreviewRow[]>([]);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [localeRows, setLocaleRows] = useState<Array<{ locale: string; value: string }>>([]);
@@ -136,38 +128,8 @@ export function TranslationGlossaryPanel({ locationSearch }: TranslationGlossary
     }
   };
 
-  const handleCsvImport = async () => {
-    if (!csvText.trim()) {
-      setError("请粘贴 CSV 内容");
-      return;
-    }
-    setCsvImporting(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/translate/v4/glossary${locationSearch}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ csv: csvText, mode: csvMode }),
-      });
-      const payload = (await res.json()) as {
-        ok?: boolean;
-        imported?: number;
-        total?: number;
-        error?: string;
-      };
-      if (!res.ok || !payload.ok) throw new Error(payload.error ?? "导入失败");
-      shopify.toast.show(`导入 ${payload.imported ?? 0} 条，共 ${payload.total ?? 0} 条术语`);
-      setCsvOpen(false);
-      setCsvText("");
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setCsvImporting(false);
-    }
-  };
-
   const handleFileSelected = async (file: File) => {
+    setUploadOpen(true);
     setFileParsing(true);
     setError(null);
     setPreviewRows([]);
@@ -211,11 +173,10 @@ export function TranslationGlossaryPanel({ locationSearch }: TranslationGlossary
       setError("请至少选择一条术语");
       return;
     }
-    const merged = fileParseMode === "replace" ? selected : mergeTermsClient(terms, selected);
+    const merged = uploadMode === "replace" ? selected : mergeTermsClient(terms, selected);
     setTerms(merged);
     setDirty(true);
     setPreviewRows([]);
-    setFileParseOpen(false);
     setFileParseName("");
     setFileParseNote("");
     shopify.toast.show(`已将 ${selected.length} 条术语加入术语表，点击「保存术语表」生效`);
@@ -275,11 +236,8 @@ export function TranslationGlossaryPanel({ locationSearch }: TranslationGlossary
         </button>
         {expanded && (
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            <s-button type="button" variant="secondary" onClick={() => { setCsvOpen((v) => !v); setFileParseOpen(false); }}>
-              {csvOpen ? "关闭 CSV" : "CSV 导入"}
-            </s-button>
-            <s-button type="button" variant="secondary" onClick={() => { setFileParseOpen((v) => !v); setCsvOpen(false); }}>
-              {fileParseOpen ? "关闭文件" : "上传文件"}
+            <s-button type="button" variant="secondary" onClick={() => setUploadOpen((v) => !v)}>
+              {uploadOpen ? "收起上传" : "上传文件"}
             </s-button>
             <s-button type="button" variant="secondary" onClick={addTerm}>
               新增术语
@@ -298,44 +256,11 @@ export function TranslationGlossaryPanel({ locationSearch }: TranslationGlossary
 
       {expanded && (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          <div style={pageHintTextStyle}>
-            品牌名、产品词、固定译法等会在翻译阶段注入 LLM 提示词。保存后 Worker 通常在数秒内生效。
-          </div>
-
-          {csvOpen && (
+          {uploadOpen && (
             <div style={pageInnerPanelStyle}>
-              <div style={pageFieldLabelStyle}>批量导入 CSV</div>
+              <div style={pageFieldLabelStyle}>上传文件批量添加</div>
               <div style={{ ...pageHintTextStyle, marginTop: 0, marginBottom: "0.5rem" }}>
-                表头需含 <code>source</code> 列；<code>do_not_translate</code> 填 true 表示不翻译；其余列为语言代码（en、ja 等）。
-              </div>
-              <textarea
-                value={csvText}
-                onChange={(e) => setCsvText(e.target.value)}
-                placeholder={CSV_EXAMPLE}
-                rows={5}
-                style={textareaStyle}
-              />
-              <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "center", marginTop: "0.5rem" }}>
-                <label style={radioLabelStyle}>
-                  <input type="radio" name="glossary-csv-mode" checked={csvMode === "merge"} onChange={() => setCsvMode("merge")} />
-                  合并（不覆盖已有译法）
-                </label>
-                <label style={radioLabelStyle}>
-                  <input type="radio" name="glossary-csv-mode" checked={csvMode === "replace"} onChange={() => setCsvMode("replace")} />
-                  替换全部并保存
-                </label>
-                <s-button type="button" variant="primary" onClick={handleCsvImport} {...(csvImporting ? { disabled: true } : {})}>
-                  {csvImporting ? "导入中…" : "确认导入"}
-                </s-button>
-              </div>
-            </div>
-          )}
-
-          {fileParseOpen && (
-            <div style={pageInnerPanelStyle}>
-              <div style={pageFieldLabelStyle}>上传文件（LLM 解析）</div>
-              <div style={{ ...pageHintTextStyle, marginTop: 0, marginBottom: "0.5rem" }}>
-                支持 {FILE_TYPES_LABEL}，最大 10 MB。文件内容由 LLM 自动识别术语对照。
+                支持 {FILE_TYPES_LABEL} 等格式，最大 10 MB。CSV、Excel、PDF、Word 等均由 LLM 自动提取术语对照。
               </div>
               <input
                 ref={fileInputRef}
@@ -381,11 +306,11 @@ export function TranslationGlossaryPanel({ locationSearch }: TranslationGlossary
                       全选（{previewSelectedCount}/{previewRows.length}）
                     </label>
                     <label style={radioLabelStyle}>
-                      <input type="radio" name="glossary-file-mode" checked={fileParseMode === "merge"} onChange={() => setFileParseMode("merge")} />
+                      <input type="radio" name="glossary-upload-mode" checked={uploadMode === "merge"} onChange={() => setUploadMode("merge")} />
                       合并到现有
                     </label>
                     <label style={radioLabelStyle}>
-                      <input type="radio" name="glossary-file-mode" checked={fileParseMode === "replace"} onChange={() => setFileParseMode("replace")} />
+                      <input type="radio" name="glossary-upload-mode" checked={uploadMode === "replace"} onChange={() => setUploadMode("replace")} />
                       替换现有列表
                     </label>
                     <s-button type="button" variant="primary" onClick={confirmFileParse}>
@@ -448,7 +373,7 @@ export function TranslationGlossaryPanel({ locationSearch }: TranslationGlossary
             <div style={{ fontSize: "0.875rem", color: pageColorTokens.textSecondary }}>加载术语表…</div>
           ) : terms.length === 0 ? (
             <div style={{ fontSize: "0.875rem", color: pageColorTokens.textSecondary }}>
-              暂无术语。可新增、CSV 导入，或上传品牌指南 / 术语文档由 LLM 解析。
+              暂无术语。可上传术语文档批量识别，或点击「新增术语」逐条添加。
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
@@ -577,12 +502,6 @@ const inputStyle: CSSProperties = {
   fontSize: "0.8125rem",
   color: pageColorTokens.textBody,
   boxSizing: "border-box",
-};
-
-const textareaStyle: CSSProperties = {
-  ...inputStyle,
-  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-  resize: "vertical",
 };
 
 const checkboxLabelStyle: CSSProperties = {
