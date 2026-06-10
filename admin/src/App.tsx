@@ -15,6 +15,7 @@ import PricingWorkbenchV2 from "./pages/PricingWorkbenchV2";
 import Todo from "./pages/Todo";
 import OpsChecklist from "./pages/OpsChecklist";
 import VisitSource from "./pages/VisitSource";
+import PixelLogs from "./pages/PixelLogs";
 import ChatWorkbench from "./pages/Workbench/ChatWorkbench";
 import { useNavigate } from "react-router-dom";
 
@@ -72,6 +73,7 @@ export default function App() {
             <Route path="pricing-workbench" element={<RequireOwner><PricingWorkbenchV2 /></RequireOwner>} />
             <Route path="ops-checklist" element={<OpsChecklist />} />
             <Route path="visit-source" element={<VisitSource />} />
+            <Route path="pixel-logs" element={<RequireOwner><PixelLogs /></RequireOwner>} />
             <Route path="todo" element={<Todo />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

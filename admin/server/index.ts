@@ -20,6 +20,7 @@ import { pricingWorkbenchV2Router } from "./routes/pricingWorkbenchV2.js";
 import { todosRouter } from "./routes/todos.js";
 import { opsChecklistRouter } from "./routes/opsChecklist.js";
 import { visitSourceRouter } from "./routes/visitSource.js";
+import { pixelLogsRouter } from "./routes/pixelLogs.js";
 import { isProductionNodeEnv } from "./lib/nodeEnv.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -55,6 +56,8 @@ app.use("/api/pricing-workbench", authMiddleware, pricingWorkbenchV2Router);
 app.use("/api/todos", authMiddleware, todosRouter);
 app.use("/api/ops-checklist", authMiddleware, opsChecklistRouter);
 app.use("/api/visit-source", authMiddleware, visitSourceRouter);
+// webpixel 日志含 checkout PII（email / 地址），仅 owner 可查
+app.use("/api/pixel-logs", authMiddleware, requireOwner, pixelLogsRouter);
 
 // Serve built frontend in production
 if (IS_PROD) {
