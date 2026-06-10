@@ -1,12 +1,14 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 import { useTranslation } from "react-i18next";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { authenticate } from "../shopify.server";
 import {
-  PageBackButton,
+  PageHeaderNav,
   PageMetricCard,
   PageSurface,
   pageAccentBadgeStyle,
+  mobilePageContentStyle,
   pageContentStyle,
   pageIntroBannerStyle,
   pageSectionHeaderRowStyle,
@@ -407,6 +409,7 @@ function statusTone(status: "健康" | "关注" | "风险"): "success" | "warnin
 
 export default function AdditionalPage() {
   const { t, i18n } = useTranslation();
+  const { isMobile } = useResponsiveLayout();
   const data = useLoaderData<typeof loader>();
   const resolveStatusText = (status: "健康" | "关注" | "风险") => {
     if (status === "健康") return t("additional.statusHealthy");
@@ -442,12 +445,13 @@ export default function AdditionalPage() {
 
   return (
     <s-page heading={t("additional.pageTitle")}>
-      <div style={pageContentStyle}>
-        <PageBackButton
-          workspaceOnly
-          label={t("common.backToPrevious", {
-            defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回上一页" : "Back",
+      <div style={{ ...pageContentStyle, ...(isMobile ? mobilePageContentStyle : null) }}>
+        <PageHeaderNav
+          title={t("additional.pageTitle")}
+          backLabel={t("common.backToPrevious", {
+            defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回工作台" : "Back",
           })}
+          workspaceOnly
         />
       </div>
 
@@ -455,9 +459,15 @@ export default function AdditionalPage() {
         {t("additional.pageIntro")}
       </div>
 
-      <div style={pageContentStyle}>
+      <div style={{ ...pageContentStyle, ...(isMobile ? mobilePageContentStyle : null) }}>
         <section>
-          <div style={pageSectionHeaderRowStyle}>
+          <div
+            style={
+              isMobile
+                ? { ...pageSectionHeaderRowStyle, flexDirection: "column", alignItems: "flex-start", gap: "0.65rem" }
+                : pageSectionHeaderRowStyle
+            }
+          >
             <h2 style={pageSectionMajorTitleStyle}>{t("additional.coreBoard")}</h2>
             <span style={pageAccentBadgeStyle}>
               {t("additional.shopLabel", { value: data.summary.shop })}
@@ -503,7 +513,7 @@ export default function AdditionalPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
             {data.statuses.map((item) => (
               <div key={item.label} style={pageStatusCardStyle}>
-                <s-stack direction="inline" gap="base" alignItems="center">
+                <s-stack direction={isMobile ? "block" : "inline"} gap="base" alignItems="center">
                   <s-badge tone={statusTone(item.status)}>
                     {t(item.label)}：{resolveStatusText(item.status)}
                   </s-badge>

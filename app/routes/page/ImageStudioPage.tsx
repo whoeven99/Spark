@@ -2,6 +2,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLoaderData, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useImageGeneration } from "../../hooks/useImageGeneration";
 import type { AITaskItem, AITaskType } from "../../lib/aiTaskTypes";
 import type { ImageStudioPageLoaderData } from "../../server/visualTools/imageStudioPageLoader.server";
@@ -16,8 +17,7 @@ import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import { DialogShell } from "../component/shared/DialogShell";
 import { BatchTaskPanel } from "../component/batchTask/BatchTaskPanel";
 import {
-  PageBackButton,
-  PageSectionHeader,
+  PageHeaderNav,
   PageSurface,
   formErrorBoxStyle,
   pageColorTokens,
@@ -198,14 +198,11 @@ function ImageStudioPageInner({
   return (
     <s-page heading={t("imageStudio.pageTitle")}>
       <div style={pageContentStyle}>
-        <PageBackButton
+        <PageHeaderNav
           workspaceOnly
-          label={t("common.backToPrevious", {
-            defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回上一页" : "Back",
+          backLabel={t("common.backToPrevious", {
+            defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回工作台" : "Back",
           })}
-        />
-
-        <PageSectionHeader
           title={t("imageStudio.sectionTitle")}
           subtitle={t("imageStudio.pageSubtitle")}
         />
@@ -219,6 +216,8 @@ function ImageStudioPageInner({
             { key: "translate", label: t("imageStudio.tabTranslate") },
             { key: "tasks", label: t("imageStudio.tabsTasks"), badgeCount: runningCount },
           ]}
+          density="compact"
+          mobileFullWidth
           style={{ margin: "0 0 20px" }}
         />
 
@@ -305,13 +304,13 @@ function ImageStudioPageInner({
 
       <DialogShell
         open={generateConfirmOpen}
-        width={460}
+        width={isMobile ? 360 : 460}
         closeDisabled={imageGen.isSubmitting}
         onClose={() => setGenerateConfirmOpen(false)}
         title={t("imageStudio.confirmGenerateTitle")}
         description={t("imageStudio.confirmGenerateDescription")}
         footer={
-          <s-stack direction="inline" gap="small">
+          <s-stack direction={isMobile ? "block" : "inline"} gap="small">
             <s-button
               type="button"
               variant="secondary"
@@ -338,7 +337,7 @@ function ImageStudioPageInner({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
             gap: "8px 16px",
           }}
         >
@@ -384,13 +383,13 @@ function ImageStudioPageInner({
 
       <DialogShell
         open={translateConfirmOpen}
-        width={460}
+        width={isMobile ? 360 : 460}
         closeDisabled={pictureTranslate.isSubmitting}
         onClose={() => setTranslateConfirmOpen(false)}
         title={t("imageStudio.confirmTranslateTitle")}
         description={t("imageStudio.confirmTranslateDescription")}
         footer={
-          <s-stack direction="inline" gap="small">
+          <s-stack direction={isMobile ? "block" : "inline"} gap="small">
             <s-button
               type="button"
               variant="secondary"
@@ -417,7 +416,7 @@ function ImageStudioPageInner({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
             gap: "8px 16px",
           }}
         >
@@ -487,6 +486,7 @@ function ImageStudioPageInner({
 
 export function ImageStudioPage() {
   const shopify = useAppBridge();
+  const { isMobile } = useResponsiveLayout();
   const loaderData = useLoaderData<ImageStudioPageLoaderData>();
   const location = useLocation();
   const locationSearch =

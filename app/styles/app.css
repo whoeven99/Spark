@@ -71,6 +71,7 @@ code {
   border-radius: 20px;
   background: #f3f4f6;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  scroll-snap-type: x proximity;
 }
 
 .spark-segmented-tabs::-webkit-scrollbar {
@@ -98,6 +99,19 @@ code {
     background-color 0.18s ease,
     border-color 0.18s ease,
     box-shadow 0.18s ease;
+  scroll-snap-align: start;
+}
+
+.spark-segmented-tabs.is-compact {
+  gap: 6px;
+  padding: 6px;
+  border-radius: 16px;
+}
+
+.spark-segmented-tabs.is-compact .spark-segmented-tabs__item {
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13px;
 }
 
 .spark-segmented-tabs__item:hover {
@@ -213,10 +227,32 @@ code {
     max-width: calc(100% - 24px);
     margin: 12px 12px 0;
     border-radius: 18px;
+    padding: 6px;
+    gap: 6px;
   }
 
   .spark-segmented-tabs__item {
-    padding: 12px 18px;
+    padding: 10px 14px;
+    border-radius: 13px;
+    font-size: 13px;
+  }
+
+  .spark-segmented-tabs.is-mobile-full {
+    width: calc(100% - 24px);
+    min-width: calc(100% - 24px);
+  }
+
+  .spark-segmented-tabs.is-mobile-full .spark-segmented-tabs__item {
+    flex: 1 1 0;
+    justify-content: center;
+    min-width: max-content;
+  }
+
+  .spark-segmented-tabs__badge {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 10px;
   }
 }
 

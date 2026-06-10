@@ -659,6 +659,80 @@
   color: #1f2124;
 }
 
+.compareCards {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.compareCard {
+  border: 1px solid #e1e3e5;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 0.95rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.compareCardHighlight {
+  border-color: #2c6ecb;
+  background: #f8fbff;
+  box-shadow: 0 0 0 1px rgba(44, 110, 203, 0.14);
+}
+
+.compareCardTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.8rem;
+}
+
+.compareCardTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1f2124;
+}
+
+.compareCardBadge {
+  flex-shrink: 0;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #2c6ecb;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.compareList {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.compareListItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid #f1f2f3;
+}
+
+.compareListItem:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.compareListLabel {
+  font-size: 0.75rem;
+  color: #6d7175;
+}
+
+.compareListValue {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1f2124;
+  line-height: 1.45;
+}
+
 .compareTable {
   width: 100%;
   border-collapse: collapse;
@@ -746,7 +820,19 @@
 
 @media (max-width: 640px) {
   .packOptions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    padding-bottom: 0.15rem;
+  }
+
+  .packOptions::-webkit-scrollbar {
+    height: 5px;
+  }
+
+  .packOptions::-webkit-scrollbar-thumb {
+    background: rgba(107, 114, 128, 0.28);
+    border-radius: 999px;
   }
 }
 
@@ -764,6 +850,13 @@
   cursor: pointer;
   text-align: center;
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+@media (max-width: 640px) {
+  .packOption {
+    flex: 0 0 min(72vw, 220px);
+    scroll-snap-align: start;
+  }
 }
 
 .packOption:hover {
@@ -860,6 +953,15 @@
   .usageTitleRow .secondaryEntryButton {
     margin-left: 0;
     width: 100%;
+  }
+
+  .compareSection {
+    padding: 1rem;
+    overflow: visible;
+  }
+
+  .packCard {
+    padding: 1rem;
   }
 
   .packCheckoutBar {
@@ -1100,6 +1202,13 @@
   margin-bottom: 1rem;
 }
 
+@media (max-width: 640px) {
+  .accountDetailHeader {
+    gap: 0.75rem;
+    margin-bottom: 0.85rem;
+  }
+}
+
 .backLinkButton {
   justify-self: start;
 }
@@ -1298,6 +1407,45 @@
   gap: 0.75rem;
   flex-wrap: wrap;
   margin-top: 0.85rem;
+}
+
+@media (max-width: 640px) {
+  .accountCard,
+  .faqItem {
+    padding: 0.95rem;
+  }
+
+  .accountCardCompact {
+    padding: 0.85rem;
+  }
+
+  .accountCardHeader {
+    align-items: flex-start;
+  }
+
+  .historyItem,
+  .periodItem {
+    padding: 0.75rem;
+  }
+
+  .historySide {
+    align-items: flex-start;
+    text-align: left;
+    width: 100%;
+  }
+
+  .historyPagination {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .historyPagination .secondaryEntryButton {
+    width: 100%;
+  }
+
+  .historyPaginationText {
+    text-align: center;
+  }
 }
 
 .historyPaginationText {
