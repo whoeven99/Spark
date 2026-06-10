@@ -13,6 +13,7 @@ import { BatchTaskPanel } from "../component/batchTask/BatchTaskPanel";
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import type { AITaskItem } from "../../lib/aiTaskTypes";
 import {
+  PageBackButton,
   PageSectionHeader,
   PageSurface,
   formErrorBoxStyle,
@@ -63,7 +64,7 @@ function buildSearchWithoutTab(search: string): string {
 
 export function ProductImprovePage() {
   const shopify = useAppBridge();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const loaderData = useLoaderData<typeof loader>();
   const location = useLocation();
   const billing = loaderData.billing;
@@ -307,6 +308,13 @@ export function ProductImprovePage() {
             <s-link href={`/app/billing${search}`}>{t("billing.openBillingPage")}</s-link>
           </s-banner>
         ) : null}
+
+        <PageBackButton
+          workspaceOnly
+          label={t("common.backToPrevious", {
+            defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回上一页" : "Back",
+          })}
+        />
 
         <PageSectionHeader
           title={t("generate.sectionTitle")}

@@ -115,6 +115,12 @@ type Props = {
   /** CSS background value for the progress bar fill (supports gradients). */
   progressBackground: string;
 
+  /** Optional custom badge element used instead of the default task status badge. */
+  statusBadge?: ReactNode;
+
+  /** Optional extra content rendered between the progress bar and actions. */
+  bodyContent?: ReactNode;
+
   /** Buttons rendered in the bottom-right corner. */
   actions: CardAction[];
 
@@ -172,6 +178,8 @@ export function AITaskCardShell({
   secondaryCopy,
   progressPercent,
   progressBackground,
+  statusBadge,
+  bodyContent,
   actions,
   showLogViewer = false,
   onStatusChange,
@@ -228,7 +236,7 @@ export function AITaskCardShell({
             >
               #{shortId}
             </span>
-            <TaskStatusBadge status={status} />
+            {statusBadge ?? <TaskStatusBadge status={status} />}
             {extraBadges}
           </div>
 
@@ -325,6 +333,8 @@ export function AITaskCardShell({
             }}
           />
         </div>
+
+        {bodyContent ? <div>{bodyContent}</div> : null}
 
         {/* Action buttons */}
         <div

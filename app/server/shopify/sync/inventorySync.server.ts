@@ -1,5 +1,9 @@
 import prisma from "../../../db.server";
 import { unauthenticated } from "../../../shopify.server";
+import {
+  parseInventoryEnrichmentFromGraphql,
+  type InventoryEnrichment,
+} from "./inventorySyncParse.server";
 import type { ShopifyInventoryLevelPayload } from "./types";
 
 const INVENTORY_ITEM_FOR_MONITOR_QUERY = `#graphql
@@ -31,30 +35,24 @@ const INVENTORY_ITEM_FOR_MONITOR_QUERY = `#graphql
   }
 `;
 
-type InventoryEnrichment = {
-  sku: string | null;
-  variantId: string | null;
-  productId: string | null;
-  productTitle: string | null;
-  variantTitle: string | null;
-  locationName: string | null;
-  quantities: {
-    available?: number;
-    committed?: number;
-    incoming?: number;
-    on_hand?: number;
-  };
-};
-
 function gid(resource: string, numericId: string): string {
   return `gid://shopify/${resource}/${numericId}`;
 }
 
-function parseShopifyNumericId(id: string | null | undefined): string | null {
-  if (!id) return null;
-  const lastSegment = id.split("/").pop();
-  return lastSegment?.split("?")[0] ?? null;
-}
+type InventoryItemGraphqlNode = {
+  sku?: string | null;
+  variants?: {
+    nodes?: Array<{
+      id?: string | null;
+      title?: string | null;
+      product?: { id?: string | null; title?: string | null } | null;
+    }>;
+  } | null;
+  inventoryLevel?: {
+    location?: { name?: string | null } | null;
+    quantities?: Array<{ name: string; quantity: number }>;
+  } | null;
+};
 
 async function loadInventoryEnrichment(
   shop: string,
@@ -70,42 +68,28 @@ async function loadInventoryEnrichment(
       },
     });
     const body = (await response.json()) as {
-      data?: {
-        inventoryItem?: {
-          sku?: string | null;
-          variants?: {
-            nodes?: Array<{
-              id?: string | null;
-              title?: string | null;
-              product?: { id?: string | null; title?: string | null } | null;
-            }>;
-          } | null;
-          inventoryLevel?: {
-            location?: { name?: string | null } | null;
-            quantities?: Array<{ name: string; quantity: number }>;
-          } | null;
-        } | null;
-      };
+      data?: { inventoryItem?: InventoryItemGraphqlNode | null };
+      errors?: Array<{ message?: string }>;
     };
-    const inventoryItem = body.data?.inventoryItem;
-    if (!inventoryItem) return null;
-    const variant = inventoryItem.variants?.nodes?.[0] ?? null;
-    const quantities = Object.fromEntries(
-      (inventoryItem.inventoryLevel?.quantities ?? []).map((quantity) => [
-        quantity.name,
-        quantity.quantity,
-      ]),
-    ) as InventoryEnrichment["quantities"];
+    const gqlErrors = body.errors?.map((error) => error.message).filter(Boolean);
+    if (gqlErrors?.length) {
+      console.warn(
+        `[Sync] inventory enrich graphql errors shop=${shop} itemId=${inventoryItemId}: ${gqlErrors.join("；")}`,
+      );
+      return null;
+    }
 
-    return {
-      sku: inventoryItem.sku ?? null,
-      variantId: parseShopifyNumericId(variant?.id),
-      productId: parseShopifyNumericId(variant?.product?.id),
-      productTitle: variant?.product?.title ?? null,
-      variantTitle: variant?.title ?? null,
-      locationName: inventoryItem.inventoryLevel?.location?.name ?? null,
-      quantities,
-    };
+    const enrichment = parseInventoryEnrichmentFromGraphql(
+      body.data?.inventoryItem,
+    );
+    if (!enrichment) {
+      console.warn(
+        `[Sync] inventory enrich empty shop=${shop} itemId=${inventoryItemId}`,
+      );
+      return null;
+    }
+
+    return enrichment;
   } catch (error) {
     console.warn(
       `[Sync] inventory enrich skipped shop=${shop} itemId=${inventoryItemId}:`,
@@ -181,7 +165,9 @@ export async function syncInventoryLevel(
     });
   }
 
+  const enrichedSku = enrichment?.sku ?? "n/a";
+  const enrichedVariantId = enrichment?.variantId ?? "n/a";
   console.info(
-    `[Sync] inventory upserted shop=${shop} itemId=${inventoryItemId} locationId=${locationId} available=${available}`,
+    `[Sync] inventory upserted shop=${shop} itemId=${inventoryItemId} locationId=${locationId} available=${quantities.available ?? available} sku=${enrichedSku} variantId=${enrichedVariantId}`,
   );
 }

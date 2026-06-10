@@ -30,6 +30,11 @@ const ORDERS_BACKFILL_QUERY = `#graphql
         totalDiscountsSet { shopMoney { amount } }
         totalTaxSet { shopMoney { amount } }
         totalShippingPriceSet { shopMoney { amount } }
+        shippingLines(first: 10) {
+          nodes {
+            discountedPriceSet { shopMoney { amount } }
+          }
+        }
         sourceName
         landingPageUrl
         referringSite
@@ -75,6 +80,20 @@ const ORDERS_BACKFILL_QUERY = `#graphql
               amountSet { shopMoney { amount } }
             }
           }
+          refundShippingLines(first: 10) {
+            nodes {
+              subtotalAmountSet { shopMoney { amount } }
+              taxAmountSet { shopMoney { amount } }
+            }
+          }
+          orderAdjustments(first: 10) {
+            nodes {
+              id
+              reason
+              amountSet { shopMoney { amount } }
+              taxAmountSet { shopMoney { amount } }
+            }
+          }
         }
       }
     }
@@ -100,6 +119,11 @@ type GraphQLOrderNode = {
   totalDiscountsSet: { shopMoney: { amount: string } } | null;
   totalTaxSet: { shopMoney: { amount: string } } | null;
   totalShippingPriceSet: { shopMoney: { amount: string } } | null;
+  shippingLines?: {
+    nodes: Array<{
+      discountedPriceSet: { shopMoney: { amount: string } } | null;
+    }>;
+  } | null;
   sourceName: string | null;
   landingPageUrl: string | null;
   referringSite: string | null;
@@ -145,6 +169,20 @@ type GraphQLOrderNode = {
         amountSet: { shopMoney: { amount: string } };
       }>;
     };
+    refundShippingLines?: {
+      nodes: Array<{
+        subtotalAmountSet: { shopMoney: { amount: string } } | null;
+        taxAmountSet: { shopMoney: { amount: string } } | null;
+      }>;
+    } | null;
+    orderAdjustments?: {
+      nodes: Array<{
+        id: string;
+        reason: string | null;
+        amountSet: { shopMoney: { amount: string } } | null;
+        taxAmountSet: { shopMoney: { amount: string } } | null;
+      }>;
+    } | null;
   }>;
 };
 
@@ -178,6 +216,11 @@ function mapGraphQLToPayload(node: GraphQLOrderNode): ShopifyOrderPayload {
     total_shipping_price_set: node.totalShippingPriceSet
       ? { shop_money: { amount: node.totalShippingPriceSet.shopMoney.amount } }
       : undefined,
+    shipping_lines: (node.shippingLines?.nodes ?? []).map((line) => ({
+      discounted_price_set: line.discountedPriceSet
+        ? { shop_money: { amount: line.discountedPriceSet.shopMoney.amount } }
+        : undefined,
+    })),
     source_name: node.sourceName,
     landing_site: node.landingPageUrl,
     referring_site: node.referringSite,
@@ -218,8 +261,19 @@ function mapRefundToPayload(
   refund: GraphQLOrderNode["refunds"][number],
   orderId: number,
 ): ShopifyRefundPayload {
+  const refundIdNumeric = parseInt(gidToId(refund.id), 10);
+  const refundShippingLines = (refund.refundShippingLines?.nodes ?? []).map(
+    (line) => ({
+      subtotal_amount_set: line.subtotalAmountSet
+        ? { shop_money: { amount: line.subtotalAmountSet.shopMoney.amount } }
+        : undefined,
+      tax_amount_set: line.taxAmountSet
+        ? { shop_money: { amount: line.taxAmountSet.shopMoney.amount } }
+        : undefined,
+    }),
+  );
   return {
-    id: parseInt(gidToId(refund.id), 10),
+    id: refundIdNumeric,
     order_id: orderId,
     created_at: refund.createdAt,
     processed_at: refund.createdAt,
@@ -232,6 +286,8 @@ function mapRefundToPayload(
       status: t.status.toLowerCase(),
       amount: t.amountSet.shopMoney.amount,
     })),
+    refund_shipping_lines: refundShippingLines,
+    order_adjustments: [],
   };
 }
 
