@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useLoaderData, useLocation } from "react-router";
 import { createTranslationV4Tasks } from "../../lib/createTranslationV4Tasks";
 import { dedupeTranslationV4JobsByLocalePair } from "../../lib/dedupeTranslationV4JobsByLocalePair";
+import { formatEstimatedDuration } from "../../lib/formatDuration";
 import {
   formatCreateTasksToast,
   resolveValidationErrorMessage,
@@ -15,6 +16,7 @@ import {
   type TranslationV4Status,
 } from "../../server/translation/v4/types";
 import { useShopLocales } from "../../hooks/useShopLocales";
+import { LanguageSelector } from "../component/common/LanguageSelector";
 import { DialogShell } from "../component/shared/DialogShell";
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import {
@@ -199,6 +201,35 @@ function isCurrentJob(job: TranslationV4Job): boolean {
   return new Date(job.createdAt).getTime() >= Date.now() - DAY_MS;
 }
 
+function estimateTranslationConfirmMetrics(params: {
+  targetCount: number;
+  moduleCount: number;
+  limitPerType: number;
+  testMode: boolean;
+}) {
+  const { targetCount, moduleCount, limitPerType, testMode } = params;
+  if (!targetCount || !moduleCount) {
+    return { seconds: null as number | null, credits: null as number | null };
+  }
+
+  if (limitPerType >= Number.MAX_SAFE_INTEGER) {
+    return { seconds: null as number | null, credits: null as number | null };
+  }
+
+  const estimatedItems = Math.max(targetCount * moduleCount * Math.max(limitPerType, 1), 1);
+  if (testMode) {
+    return {
+      seconds: Math.max(Math.round(estimatedItems * 0.2), 5),
+      credits: 0,
+    };
+  }
+
+  return {
+    seconds: Math.max(Math.round(estimatedItems * 1.8), 15),
+    credits: Math.max(Math.round(estimatedItems * 6), 20),
+  };
+}
+
 export function TranslationV4Page() {
   const shopify = useAppBridge();
   const { t, i18n } = useTranslation();
@@ -272,6 +303,50 @@ export function TranslationV4Page() {
     ]);
   }, [loaderData.shopLocales, sourceLabel, sourceLocale]);
   const displayLanguage = i18n.resolvedLanguage ?? i18n.language ?? "zh-CN";
+  const confirmEstimation = useMemo(
+    () =>
+      estimateTranslationConfirmMetrics({
+        targetCount: targetLocales.length,
+        moduleCount: modules.length,
+        limitPerType,
+        testMode,
+      }),
+    [limitPerType, modules.length, targetLocales.length, testMode],
+  );
+  const confirmSummaryItems = useMemo(
+    () => [
+      {
+        key: "direction",
+        label: "翻译方向",
+        value: formatConfirmDirectionSummary(
+          sourceLocale,
+          targetLocales,
+          displayLanguage,
+          localeLabelMap,
+        ),
+      },
+      { key: "modules", label: "翻译内容", value: modules.join("、") },
+      { key: "cover", label: "覆盖规则", value: isCover ? "覆盖已有翻译" : "保留已有翻译" },
+      { key: "handle", label: "Handle 规则", value: isHandle ? "翻译 Handle/Slug" : "不翻译 Handle/Slug" },
+      {
+        key: "estimateTime",
+        label: "预估耗时",
+        value:
+          confirmEstimation.seconds == null
+            ? "随实际数据量变化"
+            : formatEstimatedDuration(confirmEstimation.seconds, t),
+      },
+      {
+        key: "estimateCredits",
+        label: "预估消耗积分",
+        value:
+          confirmEstimation.credits == null
+            ? "随实际数据量变化"
+            : `${confirmEstimation.credits.toLocaleString()} 积分`,
+      },
+    ],
+    [confirmEstimation.credits, confirmEstimation.seconds, displayLanguage, isCover, isHandle, localeLabelMap, modules, sourceLocale, t, targetLocales],
+  );
 
   const refreshJobList = useCallback(async () => {
     const listRes = await fetch(`/api/translate/v4/tasks${withExtraParams(query, { shopName })}`);
@@ -638,9 +713,6 @@ export function TranslationV4Page() {
                     </div>
                   ))}
                 </div>
-                <div style={{ fontSize: "0.8125rem", color: pageColorTokens.textSecondary, lineHeight: 1.6 }}>
-                  由于任务往往涉及大量资源，这里不进入逐条详情审核，而是以任务卡展示阶段进度、失败数和批量结果汇总。
-                </div>
               </PageSurface>
             </div>
           </div>
@@ -719,48 +791,83 @@ export function TranslationV4Page() {
           if (!isSubmitting) setConfirmOpen(false);
         }}
         closeDisabled={isSubmitting}
-        width={560}
+        width={460}
         title="确认创建翻译任务"
         description="系统会按目标语言拆分批处理任务，并在后台自动执行翻译、回写与验证。"
         footer={
-          <div style={confirmFooterStyle}>
-            <button
+          <s-stack direction="inline" gap="small">
+            <s-button
               type="button"
+              variant="secondary"
               onClick={() => setConfirmOpen(false)}
-              disabled={isSubmitting}
-              style={dialogButtonStyle("secondary", isSubmitting)}
+              {...(isSubmitting ? { disabled: true } : {})}
             >
               取消
-            </button>
-            <button
+            </s-button>
+            <s-button
               type="button"
+              variant="primary"
               onClick={() => void handleCreateJob()}
-              disabled={isSubmitting}
-              style={dialogButtonStyle("primary", isSubmitting)}
+              {...(isSubmitting ? { disabled: true } : {})}
             >
               {isSubmitting ? "创建中..." : "确认创建"}
-            </button>
-          </div>
+            </s-button>
+          </s-stack>
         }
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <ConfirmSummaryRow label="任务目标" value="批量翻译 Shopify 资源" />
-          <ConfirmSummaryRow label="目标语言数" value={`${targetLocales.length} 个`} />
-          <ConfirmSummaryRow label="模块范围" value={modules.join("、")} />
-          <ConfirmSummaryRow
-            label="影响范围"
-            value={`${modules.length} 个模块 · 每模块最多 ${limitPerType} 条`}
-          />
-          <ConfirmSummaryRow
-            label="执行选项"
-            value={[
-              isCover ? "覆盖已有翻译" : "保留已有翻译",
-              isHandle ? "翻译 Handle/Slug" : "不翻译 Handle/Slug",
-              testMode ? "测试模式" : "正式模式",
-            ].join(" · ")}
-          />
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "8px 16px",
+            }}
+          >
+            {confirmSummaryItems.map((item) => (
+              <div key={item.key} style={{ minWidth: 0 }}>
+                <div style={{ fontSize: "0.6875rem", color: pageColorTokens.textSecondary }}>
+                  {item.label}
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.8125rem",
+                    color: pageColorTokens.textPrimary,
+                    fontWeight: 600,
+                    marginTop: 3,
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {item.value}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div
+            style={{
+              fontSize: "0.75rem",
+              color: pageColorTokens.textSecondary,
+              lineHeight: 1.5,
+            }}
+          >
+            创建后会按目标语言拆分批处理任务，执行过程中可在任务页直接暂停、继续或取消。
+          </div>
         </div>
       </DialogShell>
+
+      <div style={footerDockStyle}>
+        <div style={footerContentStyle}>
+          <LanguageSelector variant="inline" />
+          <span aria-hidden="true" style={footerDividerStyle}>
+            |
+          </span>
+          <span>
+            {t("productImproveStage1.contactUsLabel")}{" "}
+            <a href="mailto:support@ciwi.ai" style={{ color: "inherit" }}>
+              support@ciwi.ai
+            </a>
+          </span>
+        </div>
+      </div>
     </s-page>
   );
 }
@@ -866,6 +973,25 @@ function formatJobTargetTitle(
   localeLabelMap: Record<string, string>,
 ): string {
   return `任务目标：${formatLocaleDisplayName(sourceLocale, displayLanguage, localeLabelMap)}翻译为${formatLocaleDisplayName(targetLocale, displayLanguage, localeLabelMap)}`;
+}
+
+function formatConfirmDirectionSummary(
+  sourceLocale: string,
+  targetLocales: string[],
+  displayLanguage: string,
+  localeLabelMap: Record<string, string>,
+): string {
+  const sourceDisplay = formatLocaleDisplayName(sourceLocale, displayLanguage, localeLabelMap);
+  if (targetLocales.length === 0) {
+    return `${sourceDisplay} -> 未选择目标语言`;
+  }
+
+  const firstTargetDisplay = formatLocaleDisplayName(targetLocales[0], displayLanguage, localeLabelMap);
+  if (targetLocales.length === 1) {
+    return `${sourceDisplay} -> ${firstTargetDisplay}`;
+  }
+
+  return `${sourceDisplay} -> ${firstTargetDisplay} 等 ${targetLocales.length} 种语言`;
 }
 
 function getStageRatio(
@@ -1202,15 +1328,6 @@ function JobCard({
   );
 }
 
-function ConfirmSummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={confirmRowStyle}>
-      <div style={confirmLabelStyle}>{label}</div>
-      <div style={confirmValueStyle}>{value}</div>
-    </div>
-  );
-}
-
 /**
  * Animates a number toward `value` over ~1s (easeOutCubic) so polled jumps tick
  * up smoothly instead of snapping. Pure client-side tween between poll values.
@@ -1506,56 +1623,25 @@ const taskListEmptyTextStyle: React.CSSProperties = {
   color: pageColorTokens.textSecondary,
 };
 
-const confirmRowStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "92px 1fr",
-  gap: 12,
-  padding: "0.75rem 0.85rem",
-  borderRadius: "10px",
-  background: pageColorTokens.surfaceSubtle,
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
-  alignItems: "start",
+const footerDividerStyle: React.CSSProperties = {
+  color: pageColorTokens.textFootnote,
 };
 
-const confirmLabelStyle: React.CSSProperties = {
-  fontSize: "0.75rem",
-  fontWeight: 700,
-  color: pageColorTokens.textSecondary,
-  paddingTop: 2,
-};
-
-const confirmValueStyle: React.CSSProperties = {
-  fontSize: "0.85rem",
-  color: pageColorTokens.textPrimary,
-  lineHeight: 1.6,
-};
-
-const confirmFooterStyle: React.CSSProperties = {
+const footerDockStyle: React.CSSProperties = {
   display: "flex",
-  justifyContent: "flex-end",
-  gap: 10,
+  justifyContent: "center",
+  width: "100%",
+  marginTop: "0.5rem",
 };
 
-function dialogButtonStyle(
-  tone: "primary" | "secondary",
-  disabled: boolean,
-): React.CSSProperties {
-  return {
-    padding: "0.55rem 1rem",
-    borderRadius: "10px",
-    border:
-      tone === "primary"
-        ? `1px solid ${disabled ? pageColorTokens.border : pageColorTokens.brandGreen}`
-        : `1px solid ${pageColorTokens.border}`,
-    background:
-      tone === "primary"
-        ? disabled
-          ? "#d9dde3"
-          : pageColorTokens.brandGreen
-        : "#ffffff",
-    color: tone === "primary" ? "#ffffff" : pageColorTokens.textPrimary,
-    fontSize: "0.8125rem",
-    fontWeight: 700,
-    cursor: disabled ? "not-allowed" : "pointer",
-  };
-}
+const footerContentStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "0.75rem",
+  flexWrap: "wrap",
+  fontSize: "0.75rem",
+  lineHeight: 1.45,
+  color: pageColorTokens.textSecondary,
+  textAlign: "center",
+};
