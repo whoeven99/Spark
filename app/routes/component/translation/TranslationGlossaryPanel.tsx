@@ -19,6 +19,55 @@ type ParsedPreviewRow = GlossaryTerm & { _key: number; _selected: boolean };
 const FILE_ACCEPT = ".txt,.md,.pdf,.docx,.csv,.xlsx,.xls,.json";
 const FILE_TYPES_LABEL = ".txt / .md / .pdf / .docx / .csv / .xlsx / .json";
 
+const GLOSSARY_EXAMPLES: Array<{
+  source: string;
+  summary: string;
+  note?: string;
+}> = [
+  { source: "闪购", summary: "en → Flash Sale · ja → フラッシュセール", note: "活动词固定译法" },
+  { source: "Acme", summary: "勿译（品牌名保持原文）", note: "勾选「勿译」" },
+  { source: "包邮", summary: "en → Free Shipping", note: "可点「译法」配置多语言" },
+];
+
+function SaveGlossaryBar({
+  saving,
+  onSave,
+}: {
+  saving: boolean;
+  onSave: () => void;
+}) {
+  return (
+    <div style={saveBarStyle}>
+      <span style={{ fontSize: "0.8125rem", color: pageColorTokens.textSecondary }}>
+        有未保存的改动，保存后翻译任务才会使用最新术语表
+      </span>
+      <s-button type="button" variant="primary" onClick={onSave} {...(saving ? { disabled: true } : {})}>
+        {saving ? "保存中…" : "保存术语表"}
+      </s-button>
+    </div>
+  );
+}
+
+function GlossaryExamplePanel() {
+  return (
+    <div style={examplePanelStyle}>
+      <div style={pageFieldLabelStyle}>术语表示例</div>
+      <div style={{ ...pageHintTextStyle, marginTop: 0, marginBottom: "0.65rem" }}>
+        以下为参考格式，不会自动写入。可上传品牌指南/术语文档由 AI 解析，或点「新增术语」逐条填写。
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+        {GLOSSARY_EXAMPLES.map((ex) => (
+          <div key={ex.source} style={exampleRowStyle}>
+            <span style={exampleSourceStyle}>{ex.source}</span>
+            <span style={exampleSummaryStyle}>{ex.summary}</span>
+            {ex.note && <span style={exampleNoteStyle}>{ex.note}</span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function mergeTermsClient(existing: GlossaryTerm[], imported: GlossaryTerm[]): GlossaryTerm[] {
   const map = new Map(existing.map((t) => [t.source, { ...t }]));
   for (const imp of imported) {
@@ -101,6 +150,7 @@ export function TranslationGlossaryPanel({ locationSearch }: TranslationGlossary
   const addTerm = () => {
     setTerms((prev) => [...prev, { source: "" }]);
     setDirty(true);
+    setUploadOpen(false);
   };
 
   const handleSave = async () => {
@@ -179,7 +229,8 @@ export function TranslationGlossaryPanel({ locationSearch }: TranslationGlossary
     setPreviewRows([]);
     setFileParseName("");
     setFileParseNote("");
-    shopify.toast.show(`已将 ${selected.length} 条术语加入术语表，点击「保存术语表」生效`);
+    setUploadOpen(false);
+    shopify.toast.show(`已添加 ${selected.length} 条术语，请保存后生效`);
   };
 
   const openTranslationsEditor = (idx: number) => {
@@ -237,18 +288,10 @@ export function TranslationGlossaryPanel({ locationSearch }: TranslationGlossary
         {expanded && (
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
             <s-button type="button" variant="secondary" onClick={() => setUploadOpen((v) => !v)}>
-              {uploadOpen ? "收起上传" : "上传文件"}
+              {uploadOpen ? "收起" : "上传文件 AI 解析"}
             </s-button>
             <s-button type="button" variant="secondary" onClick={addTerm}>
               新增术语
-            </s-button>
-            <s-button
-              type="button"
-              variant="primary"
-              onClick={handleSave}
-              {...(saving || !dirty ? { disabled: true } : {})}
-            >
-              {saving ? "保存中…" : "保存术语表"}
             </s-button>
           </div>
         )}
@@ -371,12 +414,11 @@ export function TranslationGlossaryPanel({ locationSearch }: TranslationGlossary
 
           {loading ? (
             <div style={{ fontSize: "0.875rem", color: pageColorTokens.textSecondary }}>加载术语表…</div>
-          ) : terms.length === 0 ? (
-            <div style={{ fontSize: "0.875rem", color: pageColorTokens.textSecondary }}>
-              暂无术语。可上传术语文档批量识别，或点击「新增术语」逐条添加。
-            </div>
-          ) : (
+          ) : terms.length === 0 && previewRows.length === 0 ? (
+            <GlossaryExamplePanel />
+          ) : terms.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              <div style={pageFieldLabelStyle}>当前术语（{terms.length} 条）</div>
               {terms.map((term, idx) => (
                 <div key={idx} style={termRowStyle}>
                   <div style={{ display: "grid", gridTemplateColumns: "minmax(120px, 1.2fr) auto minmax(140px, 1fr) auto", gap: "0.5rem", alignItems: "center" }}>
@@ -468,8 +510,9 @@ export function TranslationGlossaryPanel({ locationSearch }: TranslationGlossary
                   )}
                 </div>
               ))}
+              {dirty && <SaveGlossaryBar saving={saving} onSave={() => void handleSave()} />}
             </div>
-          )}
+          ) : null}
         </div>
       )}
     </PageSurface>
@@ -537,4 +580,48 @@ const dangerBtnStyle: CSSProperties = {
   fontSize: "0.75rem",
   color: pageColorTokens.criticalText,
   cursor: "pointer",
+};
+
+const saveBarStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "0.75rem",
+  flexWrap: "wrap",
+  marginTop: "0.75rem",
+  padding: "0.75rem 0.85rem",
+  borderRadius: pageColorTokens.radiusControl,
+  border: `1px solid ${pageColorTokens.brandGreen}`,
+  background: pageColorTokens.brandGreenLight,
+};
+
+const examplePanelStyle: CSSProperties = {
+  ...pageInnerPanelStyle,
+  borderStyle: "dashed",
+};
+
+const exampleRowStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(72px, 0.7fr) minmax(140px, 1.5fr) minmax(100px, 1fr)",
+  gap: "0.5rem",
+  alignItems: "center",
+  padding: "0.45rem 0.55rem",
+  borderRadius: "6px",
+  background: pageColorTokens.surface,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  fontSize: "0.8125rem",
+};
+
+const exampleSourceStyle: CSSProperties = {
+  fontWeight: 600,
+  color: pageColorTokens.textPrimary,
+};
+
+const exampleSummaryStyle: CSSProperties = {
+  color: pageColorTokens.textBody,
+};
+
+const exampleNoteStyle: CSSProperties = {
+  fontSize: "0.75rem",
+  color: pageColorTokens.textSecondary,
 };
