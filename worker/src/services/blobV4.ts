@@ -51,3 +51,12 @@ export async function blobListPaths(prefix: string): Promise<string[]> {
   }
   return paths;
 }
+
+/** Delete a single blob. No-op if it doesn't exist. */
+export async function blobDelete(path: string): Promise<void> {
+  try {
+    await getContainer().getBlockBlobClient(path).deleteIfExists();
+  } catch {
+    // best-effort
+  }
+}

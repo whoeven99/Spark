@@ -782,3 +782,75 @@ export function updateTodo(
 export function deleteTodo(id: string): Promise<{ ok: boolean }> {
   return apiFetch(`/todos/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
+
+// --- Shop Analysis ---
+
+export type ShopAnalysisMetrics = {
+  scannedModules: number;
+  scannedResources: number;
+  analyzedChunks: number;
+  glossaryDraftCount: number;
+};
+
+export type ShopAnalysisStatus =
+  | "SCAN_QUEUED"
+  | "SCANNING"
+  | "ANALYZE_QUEUED"
+  | "ANALYZING"
+  | "COMPLETED"
+  | "FAILED";
+
+export type ShopAnalysisJob = {
+  id: string;
+  shopName: string;
+  status: ShopAnalysisStatus;
+  sourceLanguage: string;
+  modules: string[];
+  triggeredBy: string;
+  claimedBy: string | null;
+  claimedAt: string | null;
+  lastHeartbeat: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+  metrics: ShopAnalysisMetrics;
+  errorMessage: string | null;
+};
+
+export type ShopProfile = {
+  shopName: string;
+  sourceLanguage: string;
+  analyzedAt: string;
+  analyzedJobId: string;
+  industry: string;
+  toneOfVoice: string;
+  targetAudience: string;
+  highFrequencyTerms: string[];
+  styleNotes: string[];
+  translationInstructions: string;
+};
+
+export function triggerShopAnalysis(
+  shopName: string,
+  params: { sourceLanguage?: string; modules?: string[] },
+): Promise<{ ok: boolean; job: ShopAnalysisJob }> {
+  return apiFetch(`/shop-analysis/${encodeURIComponent(shopName)}/trigger`, {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export function fetchAnalysisStatus(shopName: string): Promise<{ job: ShopAnalysisJob | null }> {
+  return apiFetch(`/shop-analysis/${encodeURIComponent(shopName)}/status`);
+}
+
+export function fetchShopProfile(shopName: string): Promise<{ profile: ShopProfile | null }> {
+  return apiFetch(`/shop-analysis/${encodeURIComponent(shopName)}/profile`);
+}
+
+export function saveShopProfile(shopName: string, profile: ShopProfile): Promise<{ ok: boolean }> {
+  return apiFetch(`/shop-analysis/${encodeURIComponent(shopName)}/profile`, {
+    method: "PUT",
+    body: JSON.stringify(profile),
+  });
+}

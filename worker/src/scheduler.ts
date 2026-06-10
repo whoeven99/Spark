@@ -2,12 +2,14 @@ import { runInitWorker } from "./workers/initWorker.js";
 import { runTranslateWorker } from "./workers/translateWorker.js";
 import { runWritebackWorker } from "./workers/writebackWorker.js";
 import { runVerifyWorker } from "./workers/verifyWorker.js";
+import { runAnalysisWorker } from "./workers/analysisWorker.js";
 import { resetStaleJobs } from "./services/cosmosV4.js";
+import { resetStaleAnalysisJobs } from "./services/cosmosAnalysis.js";
 
 const INTERVAL_MS = 30_000;
 const STALE_RESET_INTERVAL_MS = 5 * 60_000;
 
-const ALL_STAGES = ["init", "translate", "writeback", "verify"] as const;
+const ALL_STAGES = ["init", "translate", "writeback", "verify", "analysis"] as const;
 type Stage = (typeof ALL_STAGES)[number];
 
 /**
@@ -38,12 +40,14 @@ export function startScheduler(): void {
     translate: runTranslateWorker,
     writeback: runWritebackWorker,
     verify: runVerifyWorker,
+    analysis: runAnalysisWorker,
   };
 
-  // resetStale always runs: it only moves processing states back to *_QUEUED,
-  // which is harmless even when a stage is gated off.
+  // resetStale always runs — harmless when a stage is disabled.
   safeRun("resetStale", () => resetStaleJobs());
+  safeRun("resetStaleAnalysis", () => resetStaleAnalysisJobs());
   setInterval(() => safeRun("resetStale", () => resetStaleJobs()), STALE_RESET_INTERVAL_MS);
+  setInterval(() => safeRun("resetStaleAnalysis", () => resetStaleAnalysisJobs()), STALE_RESET_INTERVAL_MS);
 
   for (const stage of ALL_STAGES) {
     if (!stages.has(stage)) {
