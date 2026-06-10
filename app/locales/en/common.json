@@ -269,8 +269,8 @@
     "collapse": "Collapse"
   },
   "imageStudio": {
-    "pageTitle": "Image tools",
-    "sectionTitle": "Image tools",
+    "pageTitle": "Image generation and translation",
+    "sectionTitle": "Image generation and translation",
     "pageSubtitle": "Generate product images or translate picture text on one page; history is saved together",
     "tasksPageSubtitle": "Review active and historical image tasks, then open task details to inspect results.",
     "tasksPageFootnote": "The task page keeps active and recently finished image tasks visible; open a card to inspect details and execution logs.",
@@ -472,8 +472,8 @@
     "pageFootnote": "Images are generated asynchronously and stored in the cloud. Return to this page to view Recent generations; they are not written to Shopify automatically."
   },
   "generate": {
-    "pageTitle": "AI product copy",
-    "sectionTitle": "Product copy",
+    "pageTitle": "Product copy generation and optimization",
+    "sectionTitle": "Product copy generation and optimization",
     "intro": "Generate product titles and marketing copy from Shopify product data in your current store. Select a product first; target language defaults to store primary language and can be changed from the dropdown.",
     "formCardTitle": "Generation settings",
     "formCardSubtitle": "Select a product and target language, then generate",

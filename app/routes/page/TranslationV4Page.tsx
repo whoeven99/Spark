@@ -577,7 +577,7 @@ export function TranslationV4Page() {
   };
 
   return (
-    <s-page heading="翻译 v4">
+    <s-page heading="批量资源翻译">
       <div style={pageContentStyle}>
         <PageBackButton
           workspaceOnly
@@ -586,7 +586,7 @@ export function TranslationV4Page() {
           })}
         />
         <PageSectionHeader
-          title="翻译 v4"
+          title="批量资源翻译"
           subtitle="面向批量资源的翻译工具。创建任务后会在后台持续执行，并在任务页中以汇总方式展示阶段进度和结果。"
         />
 
@@ -718,13 +718,6 @@ export function TranslationV4Page() {
           </div>
         ) : (
           <div style={taskPageSectionStyle}>
-            <div style={taskPageHeadingStyle}>
-              <div style={taskPageTitleStyle}>翻译任务</div>
-              <div style={taskPageSubtitleStyle}>
-                查看最近任务与历史记录，并直接在列表中处理暂停、重试或取消。
-              </div>
-            </div>
-
             <div style={taskViewSwitchBarStyle}>
               <div style={taskViewButtonsStyle}>
                 {([
@@ -1548,24 +1541,6 @@ const taskPageSectionStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 12,
-};
-
-const taskPageHeadingStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 4,
-};
-
-const taskPageTitleStyle: React.CSSProperties = {
-  fontSize: "1rem",
-  fontWeight: 700,
-  color: pageColorTokens.textPrimary,
-};
-
-const taskPageSubtitleStyle: React.CSSProperties = {
-  fontSize: "0.8125rem",
-  lineHeight: 1.6,
-  color: pageColorTokens.textSecondary,
 };
 
 const taskViewSwitchBarStyle: React.CSSProperties = {

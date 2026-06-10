@@ -200,8 +200,8 @@
     "imageSourceSummary": "画像ソース"
   },
   "generate": {
-    "pageTitle": "AI 商品コピー",
-    "sectionTitle": "商品コピー",
+    "pageTitle": "商品コピー生成と最適化",
+    "sectionTitle": "商品コピー生成と最適化",
     "intro": "現在のストアの Shopify 商品データからマーケティング説明を生成します。まず商品を選択してください。対象言語はストアの主言語が既定で、ドロップダウンで変更できます。",
     "advancedManualProductId": "詳細：商品 ID を手動入力",
     "productIdLabel": "商品 ID（数字 または gid://shopify/Product/...）",
