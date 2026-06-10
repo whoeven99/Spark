@@ -72,6 +72,7 @@ export const ANALYSIS_RUNNING_STATUSES: ShopAnalysisStatus[] = [
 // ── Cosmos ────────────────────────────────────────────────────────────────────
 
 let _cosmosClient: CosmosClient | null = null;
+let _ensureAnalysisContainerPromise: Promise<Container> | null = null;
 
 function getCosmosClient(): CosmosClient {
   if (!_cosmosClient) {
@@ -83,10 +84,31 @@ function getCosmosClient(): CosmosClient {
   return _cosmosClient;
 }
 
-function getAnalysisContainer(): Container {
-  const db = process.env.COSMOS_TRANSLATION_DATABASE_ID?.trim() || "translation";
-  const container = process.env.COSMOS_SHOP_ANALYSIS_CONTAINER?.trim() || "shop_analysis_jobs";
-  return getCosmosClient().database(db).container(container);
+function shopAnalysisDatabaseId(): string {
+  return process.env.COSMOS_TRANSLATION_DATABASE_ID?.trim() || "translation";
+}
+
+function shopAnalysisContainerId(): string {
+  return process.env.COSMOS_SHOP_ANALYSIS_CONTAINER?.trim() || "shop_analysis_jobs";
+}
+
+/** Ensures translation DB + shop_analysis_jobs container exist (partition key /shopName). */
+async function ensureAnalysisContainer(): Promise<Container> {
+  if (_ensureAnalysisContainerPromise) return _ensureAnalysisContainerPromise;
+
+  _ensureAnalysisContainerPromise = (async () => {
+    const client = getCosmosClient();
+    const { database } = await client.databases.createIfNotExists({
+      id: shopAnalysisDatabaseId(),
+    });
+    const { container } = await database.containers.createIfNotExists({
+      id: shopAnalysisContainerId(),
+      partitionKey: { paths: ["/shopName"] },
+    });
+    return container;
+  })();
+
+  return _ensureAnalysisContainerPromise;
 }
 
 export function isCosmosConfigured(): boolean {
@@ -96,7 +118,8 @@ export function isCosmosConfigured(): boolean {
 export async function getAnalysisJob(shopName: string): Promise<ShopAnalysisJob | null> {
   if (!isCosmosConfigured()) return null;
   try {
-    const { resource } = await getAnalysisContainer()
+    const container = await ensureAnalysisContainer();
+    const { resource } = await container
       .item(shopName, shopName)
       .read<ShopAnalysisJob>();
     return resource ?? null;
@@ -106,7 +129,8 @@ export async function getAnalysisJob(shopName: string): Promise<ShopAnalysisJob 
 }
 
 export async function upsertAnalysisJob(job: ShopAnalysisJob): Promise<void> {
-  await getAnalysisContainer().items.upsert<ShopAnalysisJob>(job);
+  const container = await ensureAnalysisContainer();
+  await container.items.upsert<ShopAnalysisJob>(job);
 }
 
 // ── Blob ──────────────────────────────────────────────────────────────────────

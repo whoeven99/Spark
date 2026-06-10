@@ -34,6 +34,27 @@ export function getShopAnalysisContainer(): Container {
   return getClient().database(db).container(container);
 }
 
+let ensureShopAnalysisContainerPromise: Promise<Container> | null = null;
+
+/** Ensures translation DB + shop_analysis_jobs container exist (partition key /shopName). */
+export async function ensureShopAnalysisContainer(): Promise<Container> {
+  if (ensureShopAnalysisContainerPromise) return ensureShopAnalysisContainerPromise;
+
+  ensureShopAnalysisContainerPromise = (async () => {
+    const dbId = getEnv("COSMOS_TRANSLATION_DATABASE_ID", "translation");
+    const containerId = getEnv("COSMOS_SHOP_ANALYSIS_CONTAINER", "shop_analysis_jobs");
+    const client = getClient();
+    const { database } = await client.databases.createIfNotExists({ id: dbId });
+    const { container } = await database.containers.createIfNotExists({
+      id: containerId,
+      partitionKey: { paths: ["/shopName"] },
+    });
+    return container;
+  })();
+
+  return ensureShopAnalysisContainerPromise;
+}
+
 export function isCosmosConfigured(): boolean {
   return Boolean(
     process.env.COSMOS_ENDPOINT?.trim() && process.env.COSMOS_KEY?.trim(),

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { useAppBridge } from "@shopify/app-bridge-react";
 import type { ShopAnalysisJob, ShopProfile } from "../../../server/translation/shopAnalysis.server";
 import type { GlossaryTerm } from "../../../server/translation/glossary.server";
+import { TranslationModuleMultiSelect } from "./TranslationModuleMultiSelect";
 import {
   PageSurface,
   formErrorBoxStyle,
@@ -17,7 +18,7 @@ type ShopAnalysisPanelProps = {
 
 const RUNNING_STATUSES = new Set(["SCAN_QUEUED", "SCANNING", "ANALYZE_QUEUED", "ANALYZING"]);
 
-const ALL_MODULES = ["product", "collection", "article", "blog", "page", "shop"];
+const SHOP_ANALYSIS_MODULES = ["PRODUCT", "COLLECTION", "ARTICLE", "BLOG", "PAGE", "SHOP"] as const;
 
 const SOURCE_LANGS = [
   { value: "zh-CN", label: "中文简体" },
@@ -67,7 +68,7 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
 
   // Trigger state
   const [sourceLanguage, setSourceLanguage] = useState("zh-CN");
-  const [selectedModules, setSelectedModules] = useState<string[]>(ALL_MODULES);
+  const [selectedModules, setSelectedModules] = useState<string[]>([...SHOP_ANALYSIS_MODULES]);
   const [triggering, setTriggering] = useState(false);
 
   // Job state
@@ -221,12 +222,6 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
     }
   };
 
-  const toggleModule = (m: string) => {
-    setSelectedModules((prev) =>
-      prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m],
-    );
-  };
-
   // ── Render ─────────────────────────────────────────────────────────────────
 
   const headerCount = job
@@ -306,23 +301,14 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
 
             {/* Modules */}
             <div style={{ marginBottom: "0.85rem" }}>
-              <div style={pageFieldLabelStyle}>扫描模块</div>
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.35rem" }}>
-                {ALL_MODULES.map((m) => {
-                  const checked = selectedModules.includes(m);
-                  return (
-                    <label key={m} style={{ ...checkboxLabelStyle, opacity: isRunning ? 0.6 : 1 }}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleModule(m)}
-                        disabled={isRunning || triggering}
-                      />
-                      {m}
-                    </label>
-                  );
-                })}
-              </div>
+              <TranslationModuleMultiSelect
+                id="shop-analysis-modules"
+                label="扫描模块"
+                values={selectedModules}
+                onChange={setSelectedModules}
+                disabled={isRunning || triggering}
+                allowedValues={[...SHOP_ANALYSIS_MODULES]}
+              />
             </div>
 
             <s-button

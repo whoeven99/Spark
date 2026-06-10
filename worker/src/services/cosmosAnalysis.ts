@@ -43,6 +43,7 @@ export type ShopAnalysisJob = {
 // ── Container ─────────────────────────────────────────────────────────────────
 
 let _client: CosmosClient | null = null;
+let _ensureContainerPromise: Promise<Container> | null = null;
 
 function getClient(): CosmosClient {
   if (!_client) {
@@ -54,18 +55,38 @@ function getClient(): CosmosClient {
   return _client;
 }
 
-function getContainer(): Container {
-  const dbId = process.env.COSMOS_TRANSLATION_DATABASE_ID?.trim() || "translation";
-  const containerId =
-    process.env.COSMOS_SHOP_ANALYSIS_CONTAINER?.trim() || "shop_analysis_jobs";
-  return getClient().database(dbId).container(containerId);
+function shopAnalysisDatabaseId(): string {
+  return process.env.COSMOS_TRANSLATION_DATABASE_ID?.trim() || "translation";
+}
+
+function shopAnalysisContainerId(): string {
+  return process.env.COSMOS_SHOP_ANALYSIS_CONTAINER?.trim() || "shop_analysis_jobs";
+}
+
+async function ensureContainer(): Promise<Container> {
+  if (_ensureContainerPromise) return _ensureContainerPromise;
+
+  _ensureContainerPromise = (async () => {
+    const client = getClient();
+    const { database } = await client.databases.createIfNotExists({
+      id: shopAnalysisDatabaseId(),
+    });
+    const { container } = await database.containers.createIfNotExists({
+      id: shopAnalysisContainerId(),
+      partitionKey: { paths: ["/shopName"] },
+    });
+    return container;
+  })();
+
+  return _ensureContainerPromise;
 }
 
 // ── CRUD ──────────────────────────────────────────────────────────────────────
 
 export async function getAnalysisJob(shopName: string): Promise<ShopAnalysisJob | null> {
   try {
-    const { resource } = await getContainer().item(shopName, shopName).read<ShopAnalysisJob>();
+    const container = await ensureContainer();
+    const { resource } = await container.item(shopName, shopName).read<ShopAnalysisJob>();
     return resource ?? null;
   } catch {
     return null;
@@ -74,7 +95,8 @@ export async function getAnalysisJob(shopName: string): Promise<ShopAnalysisJob 
 
 /** Create or overwrite the analysis job for this shop. */
 export async function upsertAnalysisJob(job: ShopAnalysisJob): Promise<ShopAnalysisJob> {
-  const { resource } = await getContainer().items.upsert<ShopAnalysisJob>(job);
+  const container = await ensureContainer();
+  const { resource } = await container.items.upsert<ShopAnalysisJob>(job);
   return resource!;
 }
 
@@ -83,12 +105,13 @@ export async function updateAnalysisJob(
   updates: Partial<Pick<ShopAnalysisJob, "status" | "claimedBy" | "claimedAt" | "lastHeartbeat" | "completedAt" | "metrics" | "errorMessage">>,
 ): Promise<void> {
   try {
-    const { resource: existing, etag } = await getContainer()
+    const container = await ensureContainer();
+    const { resource: existing, etag } = await container
       .item(shopName, shopName)
       .read<ShopAnalysisJob>();
     if (!existing) return;
     const updated: ShopAnalysisJob = { ...existing, ...updates, updatedAt: new Date().toISOString() };
-    await getContainer()
+    await container
       .item(shopName, shopName)
       .replace<ShopAnalysisJob>(updated, { accessCondition: { type: "IfMatch", condition: etag! } });
   } catch (e) {
@@ -108,7 +131,8 @@ export async function claimAnalysisJob(
   workerId: string,
 ): Promise<ShopAnalysisJob | null> {
   try {
-    const { resource: existing, etag } = await getContainer()
+    const container = await ensureContainer();
+    const { resource: existing, etag } = await container
       .item(shopName, shopName)
       .read<ShopAnalysisJob>();
     if (!existing || existing.status !== expectedStatus) return null;
@@ -121,7 +145,7 @@ export async function claimAnalysisJob(
       lastHeartbeat: now,
       updatedAt: now,
     };
-    const { resource: saved } = await getContainer()
+    const { resource: saved } = await container
       .item(shopName, shopName)
       .replace<ShopAnalysisJob>(updated, { accessCondition: { type: "IfMatch", condition: etag! } });
     return saved ?? updated;
@@ -133,7 +157,8 @@ export async function claimAnalysisJob(
 /** Find all jobs in a given status (cross-partition). */
 export async function findAnalysisJobs(status: ShopAnalysisStatus, limit = 5): Promise<ShopAnalysisJob[]> {
   try {
-    const { resources } = await getContainer()
+    const container = await ensureContainer();
+    const { resources } = await container
       .items.query<ShopAnalysisJob>({
         query: "SELECT * FROM c WHERE c.status = @status ORDER BY c.createdAt ASC OFFSET 0 LIMIT @limit",
         parameters: [{ name: "@status", value: status }, { name: "@limit", value: limit }],
@@ -154,7 +179,8 @@ export async function resetStaleAnalysisJobs(staleMinutes = 60): Promise<void> {
   ];
   for (const [processing, reset] of staleMap) {
     try {
-      const { resources } = await getContainer()
+      const container = await ensureContainer();
+      const { resources } = await container
         .items.query<ShopAnalysisJob>({
           query: `SELECT * FROM c WHERE c.status = @s AND (IS_NULL(c.lastHeartbeat) OR c.lastHeartbeat < @t) OFFSET 0 LIMIT 20`,
           parameters: [{ name: "@s", value: processing }, { name: "@t", value: threshold }],

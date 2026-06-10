@@ -14,7 +14,7 @@ import {
   type ShopAnalysisJob,
 } from "../server/translation/shopAnalysis.server";
 
-const DEFAULT_MODULES = ["product", "collection", "article", "blog", "page", "shop"];
+const DEFAULT_MODULES = ["PRODUCT", "COLLECTION", "ARTICLE", "BLOG", "PAGE", "SHOP"];
 
 /** GET → return current job */
 export const loader = async ({ request }: LoaderFunctionArgs) => {

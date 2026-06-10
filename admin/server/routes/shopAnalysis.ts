@@ -10,7 +10,7 @@
  */
 
 import { Router } from "express";
-import { getShopAnalysisContainer, isCosmosConfigured } from "../lib/cosmos.js";
+import { ensureShopAnalysisContainer, isCosmosConfigured } from "../lib/cosmos.js";
 import { blobRead, blobWrite, isBlobConfigured } from "../lib/blob.js";
 import { getRedis } from "../lib/redis.js";
 import type { GlossaryTerm } from "./glossary.js";
@@ -78,7 +78,8 @@ async function bumpRedisKey(key: string): Promise<void> {
 
 async function getJob(shopName: string): Promise<ShopAnalysisJob | null> {
   try {
-    const { resource } = await getShopAnalysisContainer()
+    const container = await ensureShopAnalysisContainer();
+    const { resource } = await container
       .item(shopName, shopName)
       .read<ShopAnalysisJob>();
     return resource ?? null;
@@ -100,7 +101,7 @@ shopAnalysisRouter.post("/:shopName/trigger", async (req, res) => {
   const sourceLanguage: string = (req.body?.sourceLanguage as string | undefined)?.trim() || "zh-CN";
   const modules: string[] = Array.isArray(req.body?.modules) && req.body.modules.length
     ? req.body.modules
-    : ["product", "collection", "article", "blog", "page", "shop"];
+    : ["PRODUCT", "COLLECTION", "ARTICLE", "BLOG", "PAGE", "SHOP"];
 
   try {
     // Check for an already-running job
@@ -128,7 +129,8 @@ shopAnalysisRouter.post("/:shopName/trigger", async (req, res) => {
       errorMessage: null,
     };
 
-    await getShopAnalysisContainer().items.upsert<ShopAnalysisJob>(job);
+    const container = await ensureShopAnalysisContainer();
+    await container.items.upsert<ShopAnalysisJob>(job);
 
     // Push hint so the worker picks it up on next poll cycle
     const redis = getRedis();

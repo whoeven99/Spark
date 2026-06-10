@@ -10,6 +10,8 @@ export type TranslationModuleMultiSelectProps = {
   onChange: (values: string[]) => void;
   disabled?: boolean;
   label?: string;
+  /** When set, only these module values appear in the dropdown. */
+  allowedValues?: string[];
 };
 
 export function TranslationModuleMultiSelect({
@@ -18,9 +20,15 @@ export function TranslationModuleMultiSelect({
   onChange,
   disabled = false,
   label,
+  allowedValues,
 }: TranslationModuleMultiSelectProps) {
   const { t } = useTranslation();
-  const options = useMemo(() => getTranslationModuleOptions(t), [t]);
+  const allOptions = useMemo(() => getTranslationModuleOptions(t), [t]);
+  const options = useMemo(() => {
+    if (!allowedValues?.length) return allOptions;
+    const allowed = new Set(allowedValues);
+    return allOptions.filter((o) => allowed.has(o.value));
+  }, [allOptions, allowedValues]);
   const allValues = useMemo(() => options.map((o) => o.value), [options]);
   const allSelected = values.length === allValues.length;
 
