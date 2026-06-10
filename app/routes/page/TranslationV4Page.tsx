@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
-import { useLoaderData } from "react-router";
+import { useLoaderData, useLocation } from "react-router";
 import { createTranslationV4Tasks } from "../../lib/createTranslationV4Tasks";
 import { dedupeTranslationV4JobsByLocalePair } from "../../lib/dedupeTranslationV4JobsByLocalePair";
 import {
@@ -15,14 +15,22 @@ import {
   type TranslationV4Status,
 } from "../../server/translation/v4/types";
 import { useShopLocales } from "../../hooks/useShopLocales";
+import { DialogShell } from "../component/shared/DialogShell";
+import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
+import {
+  AITaskCardShell,
+  type CardAction,
+} from "../component/aiTask/AITaskCardShell";
 import { TranslationLocaleFields } from "../component/translation/TranslationLocaleFields";
 import { TranslationModuleMultiSelect } from "../component/translation/TranslationModuleMultiSelect";
+import type { AITaskItem, AITaskStatus } from "../../lib/aiTaskTypes";
 import {
   PageBackButton,
+  PageSectionHeader,
   PageSurface,
   pageColorTokens,
   pageContentStyle,
-  pageIntroBannerStyle,
+  pageInnerPanelStyle,
   twoColumnLayoutStyle,
   twoColumnMainStyle,
   stickyAsideColumnStyle,
@@ -31,6 +39,9 @@ import {
 } from "./pageUiStyles";
 
 const POLL_INTERVAL = 1500;
+const DAY_MS = 24 * 60 * 60 * 1000;
+type PageTab = "config" | "tasks";
+type TaskViewTab = "current" | "history";
 const ACTIVE_STATUSES: TranslationV4Status[] = [
   "INIT_QUEUED", "INITIALIZING", "INIT_DONE",
   "TRANSLATE_QUEUED", "TRANSLATING", "TRANSLATE_DONE",
@@ -143,12 +154,61 @@ function resolveDisplayStatus(
   return (progress?.status ?? job.status) as TranslationV4Status;
 }
 
+function readPageTabFromSearch(search: string): PageTab {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  return params.get("page") === "tasks" ? "tasks" : "config";
+}
+
+function readTaskViewFromSearch(search: string): TaskViewTab {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  return params.get("taskView") === "history" ? "history" : "current";
+}
+
+function syncTranslationSearch(pageTab: PageTab, taskView: TaskViewTab) {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (pageTab === "tasks") {
+    url.searchParams.set("page", "tasks");
+    url.searchParams.set("taskView", taskView);
+  } else {
+    url.searchParams.delete("page");
+    url.searchParams.delete("taskView");
+  }
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function buildApiSearch(search: string): string {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  params.delete("page");
+  params.delete("taskView");
+  const serialized = params.toString();
+  return serialized ? `?${serialized}` : "";
+}
+
+function withExtraParams(search: string, paramsObject: Record<string, string>): string {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  for (const [key, value] of Object.entries(paramsObject)) {
+    params.set(key, value);
+  }
+  const serialized = params.toString();
+  return serialized ? `?${serialized}` : "";
+}
+
+function isCurrentJob(job: TranslationV4Job): boolean {
+  return new Date(job.createdAt).getTime() >= Date.now() - DAY_MS;
+}
+
 export function TranslationV4Page() {
   const shopify = useAppBridge();
   const { t, i18n } = useTranslation();
+  const location = useLocation();
   const loaderData = useLoaderData<typeof loader>();
 
-  const query = typeof window !== "undefined" ? window.location.search : "";
+  const initialSearch =
+    typeof window !== "undefined" ? window.location.search : location.search;
+  const [pageTab, setPageTab] = useState<PageTab>(() => readPageTabFromSearch(initialSearch));
+  const [taskView, setTaskView] = useState<TaskViewTab>(() => readTaskViewFromSearch(initialSearch));
+  const query = buildApiSearch(initialSearch);
   const {
     sourceLocale,
     sourceLabel,
@@ -170,6 +230,7 @@ export function TranslationV4Page() {
   const [testMode, setTestMode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const [jobs, setJobs] = useState<TranslationV4Job[]>(loaderData.jobs as TranslationV4Job[]);
   const displayJobs = useMemo(
@@ -181,10 +242,30 @@ export function TranslationV4Page() {
   const optimisticActionRef = useRef<Map<string, OptimisticActionIntent>>(new Map());
 
   const shopName = loaderData.shop;
-  const querySep = query ? "&" : "?";
+  const currentJobs = useMemo(
+    () => displayJobs.filter((job) => isCurrentJob(job)),
+    [displayJobs],
+  );
+  const historyJobs = useMemo(
+    () => displayJobs.filter((job) => !isCurrentJob(job)),
+    [displayJobs],
+  );
+  const visibleJobs = taskView === "current" ? currentJobs : historyJobs;
+  const runningCount = useMemo(
+    () => displayJobs.filter((job) => ACTIVE_STATUSES.includes(job.status)).length,
+    [displayJobs],
+  );
+  const completedCount = useMemo(
+    () => currentJobs.filter((job) => job.status === "COMPLETED").length,
+    [currentJobs],
+  );
+  const attentionCount = useMemo(
+    () => displayJobs.filter((job) => job.status === "FAILED" || job.status === "PAUSED").length,
+    [displayJobs],
+  );
 
   const refreshJobList = useCallback(async () => {
-    const listRes = await fetch(`/api/translate/v4/tasks${query}${querySep}shopName=${shopName}`);
+    const listRes = await fetch(`/api/translate/v4/tasks${withExtraParams(query, { shopName })}`);
     const listPayload = (await listRes.json()) as { ok: boolean; jobs?: TranslationV4Job[] };
     if (listPayload.ok && listPayload.jobs) setJobs(listPayload.jobs);
   }, [query, shopName]);
@@ -256,9 +337,7 @@ export function TranslationV4Page() {
     await Promise.all(
       activeJobIds.map(async (taskId) => {
         try {
-          const res = await fetch(
-            `/api/translate/v4/task-progress${query}${querySep}taskId=${taskId}&shopName=${shopName}`,
-          );
+          const res = await fetch(`/api/translate/v4/task-progress${withExtraParams(query, { taskId, shopName })}`);
           if (!res.ok) return;
           const payload = (await res.json()) as { ok: boolean } & ProgressData;
           if (!payload.ok) return;
@@ -291,19 +370,43 @@ export function TranslationV4Page() {
     };
   }, [pollActiveJobs]);
 
-  const handleCreateJob = async () => {
+  useEffect(() => {
+    syncTranslationSearch(pageTab, taskView);
+  }, [pageTab, taskView]);
+
+  useEffect(() => {
+    setPageTab(readPageTabFromSearch(location.search));
+    setTaskView(readTaskViewFromSearch(location.search));
+  }, [location.search]);
+
+  const validateCreateDraft = () => {
     setFormError(null);
     const source = sourceLocale.trim();
     if (!source) {
       setFormError("源语言加载中，请稍候");
-      return;
+      return false;
+    }
+    if (!targetLocales.length) {
+      setFormError(resolveValidationErrorMessage("validationTargetRequired", t));
+      return false;
     }
     if (!modules.length) {
       setFormError("至少选择一个模块");
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const handleOpenConfirm = () => {
+    if (!validateCreateDraft()) return;
+    setConfirmOpen(true);
+  };
+
+  const handleCreateJob = async () => {
+    setConfirmOpen(false);
     setIsSubmitting(true);
     try {
+      const source = sourceLocale.trim();
       const result = await createTranslationV4Tasks({
         search: query,
         source,
@@ -333,6 +436,8 @@ export function TranslationV4Page() {
 
       if (result.created.length) {
         await refreshJobList();
+        setTaskView("current");
+        setPageTab("tasks");
       } else if (!result.failed.length && !result.validationError) {
         setFormError("创建失败");
       }
@@ -396,146 +501,247 @@ export function TranslationV4Page() {
             defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回上一页" : "Back",
           })}
         />
-      </div>
+        <PageSectionHeader
+          title="翻译 v4"
+          subtitle="面向批量资源的翻译工具。创建任务后会在后台持续执行，并在任务页中以汇总方式展示阶段进度和结果。"
+        />
 
-      <div style={pageIntroBannerStyle("translation", { marginBottom: "1.5rem" })}>
-        新版翻译系统 — 任务状态持久化，服务重启后自动续跑，支持商品/集合/页面/文章等多模块并行。
-      </div>
+        <SegmentedPageTabs
+          activeTab={pageTab}
+          onTabChange={setPageTab}
+          ariaLabel="翻译页模式切换"
+          items={[
+            { key: "config", label: "配置页" },
+            { key: "tasks", label: "任务页", badgeCount: runningCount },
+          ]}
+        />
 
-      <div style={pageContentStyle}>
-        <div style={twoColumnLayoutStyle}>
-          {/* Left: Create form */}
-          <div style={twoColumnMainStyle}>
-            <PageSurface title="创建翻译任务">
-              <s-stack direction="block" gap="base">
-                <TranslationLocaleFields
-                  sourceLocale={sourceLocale}
-                  sourceLabel={sourceLabel}
-                  selectionMode="multiple"
-                  targetLocales={targetLocales}
-                  onTargetLocalesChange={setTargetLocales}
-                  targetOptions={targetOptions}
-                  loading={localesLoading}
-                  disabled={isSubmitting}
-                  localesIsFallback={localesIsFallback}
-                  targetFieldId="translation-v4-target-locale"
-                />
-                <TranslationModuleMultiSelect
-                  id="translation-v4-modules"
-                  values={modules}
-                  onChange={setModules}
-                  disabled={isSubmitting}
-                />
+        {pageTab === "config" ? (
+          <div style={twoColumnLayoutStyle}>
+            <div style={twoColumnMainStyle}>
+              <PageSurface
+                title="创建翻译任务"
+                subtitle="配置目标语言、翻译模块和执行范围后，再确认创建批处理任务。"
+              >
+                <s-stack direction="block" gap="base">
+                  <TranslationLocaleFields
+                    sourceLocale={sourceLocale}
+                    sourceLabel={sourceLabel}
+                    selectionMode="multiple"
+                    targetLocales={targetLocales}
+                    onTargetLocalesChange={setTargetLocales}
+                    targetOptions={targetOptions}
+                    loading={localesLoading}
+                    disabled={isSubmitting}
+                    localesIsFallback={localesIsFallback}
+                    targetFieldId="translation-v4-target-locale"
+                  />
+                  <TranslationModuleMultiSelect
+                    id="translation-v4-modules"
+                    values={modules}
+                    onChange={setModules}
+                    disabled={isSubmitting}
+                  />
 
-                <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
-                  <label style={checkboxLabelStyle}>
-                    <input type="checkbox" checked={isCover} onChange={(e) => setIsCover(e.target.checked)} />
-                    <span>覆盖已有翻译</span>
-                  </label>
-                  <label style={checkboxLabelStyle}>
-                    <input type="checkbox" checked={isHandle} onChange={(e) => setIsHandle(e.target.checked)} />
-                    <span>翻译 Handle/Slug</span>
-                  </label>
-                </div>
-
-                {/* Test-only controls — remove before production launch */}
-                <div style={testEnvPanelStyle(testMode)}>
-                  <div style={{ fontWeight: 600, fontSize: "0.875rem", color: testMode ? "#b54708" : pageColorTokens.textBody }}>
-                    测试环境选项
-                  </div>
-                  <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: 2, marginBottom: "0.75rem" }}>
-                    以下选项仅用于开发测试，上线后将移除
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", cursor: "pointer" }}>
-                      <input
-                        type="checkbox"
-                        checked={testMode}
-                        onChange={(e) => setTestMode(e.target.checked)}
-                        style={{ width: 18, height: 18, cursor: "pointer" }}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: "0.875rem", color: testMode ? "#b54708" : pageColorTokens.textBody }}>
-                          测试模式{testMode ? "（已开启）" : ""}
-                        </div>
-                        <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: 2 }}>
-                          翻译阶段直接使用原值作为译文，跳过 LLM 调用 — 适合快速测试流程
-                        </div>
-                      </div>
+                  <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
+                    <label style={checkboxLabelStyle}>
+                      <input type="checkbox" checked={isCover} onChange={(e) => setIsCover(e.target.checked)} />
+                      <span>覆盖已有翻译</span>
                     </label>
-                    <div style={{ maxWidth: "20rem" }}>
-                      <s-text-field
-                        label="每模块数量限制（仅用于测试，上线后删除）"
-                        value={String(limitPerType)}
-                        onChange={(e) => { const v = parseInt(e.currentTarget.value, 10); setLimitPerType(isNaN(v) || v < 0 ? 20 : v); }}
-                        autocomplete="off"
-                      />
+                    <label style={checkboxLabelStyle}>
+                      <input type="checkbox" checked={isHandle} onChange={(e) => setIsHandle(e.target.checked)} />
+                      <span>翻译 Handle/Slug</span>
+                    </label>
+                  </div>
+
+                  <div style={testEnvPanelStyle(testMode)}>
+                    <div style={{ fontWeight: 600, fontSize: "0.875rem", color: pageColorTokens.textBody }}>
+                      测试环境选项
+                    </div>
+                    <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: 2, marginBottom: "0.75rem" }}>
+                      仅用于联调或流程验证，不影响正式批处理逻辑。
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={testMode}
+                          onChange={(e) => setTestMode(e.target.checked)}
+                          style={{ width: 18, height: 18, cursor: "pointer" }}
+                        />
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: "0.875rem", color: pageColorTokens.textBody }}>
+                            测试模式{testMode ? "（已开启）" : ""}
+                          </div>
+                          <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: 2 }}>
+                            翻译阶段直接使用原值作为译文，跳过 LLM 调用，适合验证任务流转。
+                          </div>
+                        </div>
+                      </label>
+                      <div style={{ maxWidth: "20rem" }}>
+                        <s-text-field
+                          label="每模块数量限制"
+                          value={String(limitPerType)}
+                          onChange={(e) => {
+                            const v = parseInt(e.currentTarget.value, 10);
+                            setLimitPerType(isNaN(v) || v < 0 ? 20 : v);
+                          }}
+                          autocomplete="off"
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {formError && <div style={formErrorBoxStyle}>{formError}</div>}
+                  {formError ? <div style={formErrorBoxStyle}>{formError}</div> : null}
 
-                <div>
-                  <s-button
-                    type="button"
-                    variant="primary"
-                    onClick={handleCreateJob}
-                    {...(isSubmitting ? { disabled: true } : {})}
-                  >
-                    {isSubmitting ? "创建中..." : "创建翻译任务"}
-                  </s-button>
-                </div>
-              </s-stack>
-            </PageSurface>
-          </div>
-
-          {/* Right: Pipeline legend */}
-          <div style={stickyAsideColumnStyle}>
-            <PageSurface title="流程说明">
-              <div style={{ fontSize: "0.8125rem", color: pageColorTokens.textSecondary, lineHeight: 1.6 }}>
-                {[
-                  ["① 初始化", "拉取 Shopify 数据 → Blob"],
-                  ["② 翻译", "读取 Blob → LLM 翻译 → 写回 Blob"],
-                  ["③ 回写", "读取翻译结果 → 写回 Shopify"],
-                  ["④ 验证", "重试回写失败的资源，确保写入完整"],
-                ].map(([step, desc]) => (
-                  <div key={step} style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}>
-                    <span style={{ fontWeight: 600, color: pageColorTokens.textBody, whiteSpace: "nowrap" }}>{step}</span>
-                    <span>{desc}</span>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+                    <div style={{ fontSize: "0.8125rem", color: pageColorTokens.textSecondary, lineHeight: 1.6 }}>
+                      创建后会按目标语言拆分为独立后台任务，并自动执行初始化、翻译、回写与验证。
+                    </div>
+                    <s-button
+                      type="button"
+                      variant="primary"
+                      onClick={handleOpenConfirm}
+                      {...(isSubmitting ? { disabled: true } : {})}
+                    >
+                      {isSubmitting ? "创建中..." : "确认并创建任务"}
+                    </s-button>
                   </div>
-                ))}
-                <div style={{ marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: `1px solid ${pageColorTokens.border}` }}>
-                  Worker 每 30 秒轮询，服务重启后自动续跑。
-                </div>
-              </div>
-            </PageSurface>
-          </div>
-        </div>
-
-        {/* Job list */}
-        <PageSurface title={`任务列表（${displayJobs.length}）`}>
-          {displayJobs.length === 0 ? (
-            <div style={pageEmptyStateStyle}>暂无翻译任务，创建一个开始</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-              {displayJobs.map((job) => {
-                const progress = progressMap[job.id];
-                const status = resolveDisplayStatus(job, progress);
-                return (
-                  <JobCard
-                    key={job.id}
-                    job={job}
-                    status={status}
-                    progress={progress ?? null}
-                    onAction={handleAction}
-                  />
-                );
-              })}
+                </s-stack>
+              </PageSurface>
             </div>
-          )}
-        </PageSurface>
+
+            <div style={stickyAsideColumnStyle}>
+              <PageSurface
+                title="流程说明"
+                subtitle="翻译任务是批量后台作业，结果会在任务页中以汇总方式展示。"
+              >
+                <div style={{ ...pageInnerPanelStyle, display: "flex", flexDirection: "column", gap: 12 }}>
+                  {[
+                    ["① 初始化", "从 Shopify 拉取待翻译资源并准备执行上下文。"],
+                    ["② 翻译", "按模块与目标语言批量生成译文。"],
+                    ["③ 回写", "将翻译结果写回 Shopify 对应资源。"],
+                    ["④ 验证", "对异常写入做补偿重试，提升批处理完整性。"],
+                  ].map(([step, desc]) => (
+                    <div key={step} style={{ display: "flex", gap: "0.65rem" }}>
+                      <span style={{ fontWeight: 600, color: pageColorTokens.textBody, whiteSpace: "nowrap" }}>{step}</span>
+                      <span style={{ fontSize: "0.8125rem", color: pageColorTokens.textSecondary, lineHeight: 1.6 }}>{desc}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: "0.8125rem", color: pageColorTokens.textSecondary, lineHeight: 1.6 }}>
+                  由于任务往往涉及大量资源，这里不进入逐条详情审核，而是以任务卡展示阶段进度、失败数和批量结果汇总。
+                </div>
+              </PageSurface>
+            </div>
+          </div>
+        ) : (
+          <PageSurface
+            title="翻译任务"
+            subtitle="查看最近任务与历史记录，并直接在列表中处理暂停、重试或取消。"
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <SegmentedPageTabs
+                activeTab={taskView}
+                onTabChange={setTaskView}
+                ariaLabel="翻译任务视图切换"
+                items={[
+                  { key: "current", label: "当前任务", badgeCount: currentJobs.length },
+                  { key: "history", label: "历史任务", badgeCount: historyJobs.length },
+                ]}
+              />
+
+              <div style={taskSummaryGridStyle}>
+                <TaskSummaryItem label="当前任务" value={currentJobs.length} />
+                <TaskSummaryItem label="运行中" value={runningCount} tone="progress" />
+                <TaskSummaryItem label="已完成" value={completedCount} tone="success" />
+                <TaskSummaryItem label="需处理" value={attentionCount} tone="warning" />
+              </div>
+
+              <div style={taskHintBarStyle}>
+                {taskView === "current"
+                  ? "当前任务包含最近 24 小时内的运行中、已完成、失败或暂停任务。"
+                  : "历史任务指创建时间超过 24 小时的记录，仅保留列表汇总信息。"}
+              </div>
+
+              {visibleJobs.length === 0 ? (
+                <div style={pageEmptyStateStyle}>
+                  {taskView === "current" ? "暂无当前翻译任务，先从配置页创建一个。" : "暂无历史任务记录。"}
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                  {visibleJobs
+                    .slice()
+                    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                    .map((job) => {
+                      const progress = progressMap[job.id];
+                      const status = resolveDisplayStatus(job, progress);
+                      return (
+                        <JobCard
+                          key={job.id}
+                          job={job}
+                          status={status}
+                          progress={progress ?? null}
+                          locationSearch={location.search}
+                          onAction={handleAction}
+                        />
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          </PageSurface>
+        )}
       </div>
+
+      <DialogShell
+        open={confirmOpen}
+        onClose={() => {
+          if (!isSubmitting) setConfirmOpen(false);
+        }}
+        closeDisabled={isSubmitting}
+        width={560}
+        title="确认创建翻译任务"
+        description="系统会按目标语言拆分批处理任务，并在后台自动执行翻译、回写与验证。"
+        footer={
+          <div style={confirmFooterStyle}>
+            <button
+              type="button"
+              onClick={() => setConfirmOpen(false)}
+              disabled={isSubmitting}
+              style={dialogButtonStyle("secondary", isSubmitting)}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleCreateJob()}
+              disabled={isSubmitting}
+              style={dialogButtonStyle("primary", isSubmitting)}
+            >
+              {isSubmitting ? "创建中..." : "确认创建"}
+            </button>
+          </div>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <ConfirmSummaryRow label="任务目标" value="批量翻译 Shopify 资源" />
+          <ConfirmSummaryRow label="目标语言数" value={`${targetLocales.length} 个`} />
+          <ConfirmSummaryRow label="模块范围" value={modules.join("、")} />
+          <ConfirmSummaryRow
+            label="影响范围"
+            value={`${modules.length} 个模块 · 每模块最多 ${limitPerType} 条`}
+          />
+          <ConfirmSummaryRow
+            label="执行选项"
+            value={[
+              isCover ? "覆盖已有翻译" : "保留已有翻译",
+              isHandle ? "翻译 Handle/Slug" : "不翻译 Handle/Slug",
+              testMode ? "测试模式" : "正式模式",
+            ].join(" · ")}
+          />
+        </div>
+      </DialogShell>
     </s-page>
   );
 }
@@ -544,88 +750,425 @@ type JobCardProps = {
   job: TranslationV4Job;
   status: TranslationV4Status;
   progress: ProgressData | null;
+  locationSearch: string;
   onAction: (taskId: string, action: "cancel" | "pause" | "resume") => void | Promise<void>;
 };
 
-function JobCard({ job, status, progress, onAction }: JobCardProps) {
+function mapV4StatusToTaskStatus(status: TranslationV4Status): AITaskStatus {
+  if (ACTIVE_STATUSES.includes(status) || status === "CREATED") return "running";
+  if (status === "COMPLETED") return "succeeded";
+  if (status === "FAILED") return "failed";
+  if (status === "CANCELLED") return "cancelled";
+  return "pending_review";
+}
+
+function stageLabel(stage: string | null): string {
+  switch (stage) {
+    case "INIT":
+      return "初始化";
+    case "TRANSLATE":
+      return "翻译";
+    case "WRITEBACK":
+      return "回写";
+    case "VERIFY":
+      return "验证";
+    default:
+      return "执行";
+  }
+}
+
+function formatDateTime(iso: string | null): string | null {
+  if (!iso) return null;
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
+}
+
+function getStageRatio(
+  done: number,
+  total: number,
+  complete: boolean,
+  queuedOrActive: boolean,
+): number {
+  if (total > 0) return Math.max(0, Math.min(1, done / total));
+  if (complete) return 1;
+  if (queuedOrActive) return 0.08;
+  return 0;
+}
+
+function getJobProgressPercent(status: TranslationV4Status, metrics: ProgressData["metrics"]) {
+  if (status === "COMPLETED") return 100;
+  if (status === "CANCELLED") return 0;
+
+  const initRatio = getStageRatio(
+    metrics.initDone,
+    metrics.initTotal,
+    ["INIT_DONE", "TRANSLATE_QUEUED", "TRANSLATING", "TRANSLATE_DONE", "WRITEBACK_QUEUED", "WRITING_BACK", "VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status),
+    ["INIT_QUEUED", "INITIALIZING"].includes(status),
+  );
+  const translateRatio = getStageRatio(
+    metrics.translateUnitTotal > 0 ? metrics.translateUnitDone : metrics.translateDone,
+    metrics.translateUnitTotal > 0 ? metrics.translateUnitTotal : metrics.translateTotal,
+    ["TRANSLATE_DONE", "WRITEBACK_QUEUED", "WRITING_BACK", "VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status),
+    ["TRANSLATE_QUEUED", "TRANSLATING"].includes(status),
+  );
+  const writebackRatio = getStageRatio(
+    metrics.writebackDone,
+    metrics.writebackTotal,
+    ["VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status),
+    ["WRITEBACK_QUEUED", "WRITING_BACK"].includes(status),
+  );
+  const includeVerify = metrics.verifyTotal > 0 || ["VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status);
+  const verifyRatio = includeVerify
+    ? getStageRatio(
+        metrics.verifyDone,
+        metrics.verifyTotal,
+        status === "COMPLETED" && metrics.verifyTotal > 0,
+        ["VERIFY_QUEUED", "VERIFYING"].includes(status),
+      )
+    : 0;
+
+  const weighted = includeVerify
+    ? (initRatio + translateRatio + writebackRatio + verifyRatio) / 4
+    : (initRatio + translateRatio + writebackRatio) / 3;
+  const percent = Math.round(weighted * 100);
+
+  if (status === "FAILED" || status === "PAUSED") {
+    return Math.max(percent, 8);
+  }
+  return percent;
+}
+
+function getProgressTone(status: TranslationV4Status): { background: string; text: string } {
+  if (status === "COMPLETED") {
+    return { background: pageColorTokens.brandGreen, text: pageColorTokens.brandGreenDark };
+  }
+  if (status === "FAILED") {
+    return { background: "#d82c0d", text: pageColorTokens.criticalText };
+  }
+  if (status === "PAUSED") {
+    return { background: "#b98900", text: "#8a6200" };
+  }
+  if (status === "CANCELLED") {
+    return { background: "#9ca3af", text: pageColorTokens.textSecondary };
+  }
+  return { background: "#c05717", text: "#8a420f" };
+}
+
+function buildJobActions(
+  job: TranslationV4Job,
+  status: TranslationV4Status,
+  onAction: JobCardProps["onAction"],
+): CardAction[] {
+  const actions: CardAction[] = [];
+
+  if (ACTIVE_STATUSES.includes(status)) {
+    actions.push({
+      label: "暂停",
+      tone: "secondary",
+      onClick: () => void onAction(job.id, "pause"),
+    });
+  }
+
+  if (status === "PAUSED" || status === "FAILED") {
+    actions.push({
+      label: "继续执行",
+      tone: "primary",
+      onClick: () => void onAction(job.id, "resume"),
+    });
+  }
+
+  if (status !== "COMPLETED" && status !== "CANCELLED") {
+    actions.push({
+      label: "取消",
+      tone: "subtle",
+      onClick: () => void onAction(job.id, "cancel"),
+    });
+  }
+
+  return actions;
+}
+
+function getPrimaryCopy(
+  status: TranslationV4Status,
+  metrics: ProgressData["metrics"],
+  errorStageValue: string | null,
+): string {
+  switch (status) {
+    case "CREATED":
+    case "INIT_QUEUED":
+      return "任务已创建，等待进入初始化队列";
+    case "INITIALIZING":
+      return `正在初始化资源 ${metrics.initDone}/${metrics.initTotal || "?"}`;
+    case "INIT_DONE":
+    case "TRANSLATE_QUEUED":
+      return "初始化完成，等待开始翻译";
+    case "TRANSLATING":
+      if (metrics.translateUnitTotal > 0) {
+        return `正在翻译内容节点 ${metrics.translateUnitDone}/${metrics.translateUnitTotal}`;
+      }
+      return `正在翻译资源 ${metrics.translateDone}/${metrics.translateTotal || "?"}`;
+    case "TRANSLATE_DONE":
+    case "WRITEBACK_QUEUED":
+      return "翻译完成，等待回写到 Shopify";
+    case "WRITING_BACK":
+      return `正在回写资源 ${metrics.writebackDone}/${metrics.writebackTotal || "?"}`;
+    case "VERIFY_QUEUED":
+      return "回写完成，等待进入验证";
+    case "VERIFYING":
+      return `正在验证结果 ${metrics.verifyDone}/${metrics.verifyTotal || "?"}`;
+    case "COMPLETED":
+      return "批量翻译已完成";
+    case "FAILED":
+      return `任务执行失败，停留在${stageLabel(errorStageValue)}`;
+    case "PAUSED":
+      return `任务已暂停，当前停留在${stageLabel(errorStageValue)}`;
+    case "CANCELLED":
+      return "任务已取消";
+    default:
+      return "任务状态已更新";
+  }
+}
+
+function getSecondaryCopy(
+  job: TranslationV4Job,
+  status: TranslationV4Status,
+  metrics: ProgressData["metrics"],
+  updatedAt: string,
+): string {
+  const updatedLabel = formatDateTime(updatedAt);
+  const resourcePart = `资源 ${metrics.translateDone}/${metrics.translateTotal}`;
+  const nodePart =
+    metrics.translateUnitTotal > 0
+      ? `节点 ${metrics.translateUnitDone}/${metrics.translateUnitTotal}`
+      : null;
+  const failedPart =
+    metrics.translateFailed + metrics.writebackFailed + metrics.verifyFailed > 0
+      ? `失败 ${metrics.translateFailed + metrics.writebackFailed + metrics.verifyFailed}`
+      : null;
+  const tokenPart = metrics.usedTokens > 0 ? `${metrics.usedTokens.toLocaleString()} tokens` : null;
+
+  if (status === "COMPLETED") {
+    return [
+      `已完成 ${metrics.translateDone} 个资源`,
+      metrics.verifyTotal > 0 ? `验证 ${metrics.verifyDone}/${metrics.verifyTotal}` : null,
+      tokenPart,
+      updatedLabel ? `更新于 ${updatedLabel}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  if (status === "FAILED" || status === "PAUSED") {
+    return [
+      `阶段 ${stageLabel(job.errorStage)}`,
+      failedPart ?? "暂无失败统计",
+      updatedLabel ? `更新于 ${updatedLabel}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  if (status === "CANCELLED") {
+    return [resourcePart, tokenPart, updatedLabel ? `更新于 ${updatedLabel}` : null]
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  return [resourcePart, nodePart, failedPart, tokenPart, updatedLabel ? `更新于 ${updatedLabel}` : null]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function JobMetaItem({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={jobMetaItemStyle}>
+      <div style={jobMetaLabelStyle}>{label}</div>
+      <div style={jobMetaValueStyle}>{value}</div>
+    </div>
+  );
+}
+
+function JobCard({ job, status, progress, locationSearch, onAction }: JobCardProps) {
   const metrics = progress?.metrics ?? job.metrics;
-  const isActive = ACTIVE_STATUSES.includes(status);
-  const isCompleted = status === "COMPLETED";
-  const isFailed = status === "FAILED";
+  const taskStatus = mapV4StatusToTaskStatus(status);
+  const progressTone = getProgressTone(status);
+  const progressPercent = getJobProgressPercent(status, metrics);
+  const translationTask: AITaskItem = {
+    id: job.id,
+    batchId: job.id,
+    shop: job.shopName,
+    taskType: "product_improve",
+    status: taskStatus,
+    config: {},
+    result: null,
+    estimatedCredits: null,
+    actualCredits: metrics.usedTokens ?? null,
+    startedAt: job.claimedAt ?? job.createdAt,
+    completedAt:
+      status === "COMPLETED" || status === "FAILED" || status === "CANCELLED"
+        ? job.updatedAt
+        : null,
+    errorMsg: progress?.errorMessage ?? job.errorMessage,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+  };
+  const actions = buildJobActions(job, status, onAction);
+  const testMode = progress?.testMode ?? job.testMode;
+  const showVerify = metrics.verifyTotal > 0 || ["VERIFY_QUEUED", "VERIFYING"].includes(status);
+  const primaryCopy = getPrimaryCopy(status, metrics, progress?.errorStage ?? job.errorStage);
+  const secondaryCopy = getSecondaryCopy(job, status, metrics, progress?.updatedAt ?? job.updatedAt);
 
   return (
-    <div style={jobCardStyle(status)}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-            <span style={{ fontWeight: 600, fontSize: "0.875rem", color: pageColorTokens.textPrimary }}>
-              {job.source} → {job.target}
-            </span>
-            <StatusBadge status={status} />
-            {(progress?.testMode ?? job.testMode) && (
-              <span style={testModePillStyle}>TEST</span>
-            )}
+    <AITaskCardShell
+      task={translationTask}
+      locationSearch={locationSearch}
+      status={taskStatus}
+      statusBadge={<StatusBadge status={status} />}
+      title={`任务目标：${job.source} -> ${job.target}`}
+      metaLine={
+        <>
+          <span>{job.modules.length} 个模块</span>
+          <span style={{ color: pageColorTokens.textFootnote }}>|</span>
+          <span>每模块最多 {job.limitPerType} 条</span>
+          <span style={{ color: pageColorTokens.textFootnote }}>|</span>
+          <span>{job.isCover ? "覆盖已有翻译" : "保留已有翻译"}</span>
+          <span style={{ color: pageColorTokens.textFootnote }}>|</span>
+          <span>{job.isHandle ? "翻译 Handle/Slug" : "不翻译 Handle/Slug"}</span>
+        </>
+      }
+      extraBadges={
+        testMode ? <span style={testModePillStyle}>测试模式</span> : null
+      }
+      primaryCopy={primaryCopy}
+      primaryCopyColor={progressTone.text}
+      secondaryCopy={secondaryCopy}
+      progressPercent={progressPercent}
+      progressBackground={progressTone.background}
+      bodyContent={
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={jobMetaGridStyle}>
+            <JobMetaItem label="模块范围" value={job.modules.join("、")} />
+            <JobMetaItem label="资源进度" value={`${metrics.translateDone}/${metrics.translateTotal}`} />
+            {metrics.translateUnitTotal > 0 ? (
+              <JobMetaItem
+                label="节点进度"
+                value={
+                  <>
+                    <AnimatedNumber value={metrics.translateUnitDone} />/{metrics.translateUnitTotal}
+                  </>
+                }
+              />
+            ) : null}
+            <JobMetaItem
+              label="模型"
+              value={job.aiModelUsed ?? job.aiModel}
+            />
+            <JobMetaItem
+              label="用量"
+              value={metrics.usedTokens > 0 ? `${metrics.usedTokens.toLocaleString()} tokens` : "暂未产生"}
+            />
+            <JobMetaItem
+              label="失败统计"
+              value={`${metrics.translateFailed + metrics.writebackFailed + metrics.verifyFailed} 条`}
+            />
           </div>
-          <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: 3 }}>
-            {job.id.slice(0, 8)}… · {job.modules.join(", ")}
-            {(metrics.usedTokens ?? 0) > 0 && (
-              <> · <span style={{ color: pageColorTokens.brandBlue, fontWeight: 600 }}>{(metrics.usedTokens ?? 0).toLocaleString()} tokens</span></>
-            )}
+
+          <div style={jobStageGroupStyle}>
+            <StageBar
+              label="初始化"
+              done={metrics.initDone}
+              total={metrics.initTotal}
+              active={status === "INITIALIZING"}
+              complete={["INIT_DONE", "TRANSLATE_QUEUED", "TRANSLATING", "TRANSLATE_DONE", "WRITEBACK_QUEUED", "WRITING_BACK", "VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status)}
+            />
+            <StageBar
+              label="翻译"
+              done={metrics.translateUnitTotal > 0 ? metrics.translateUnitDone : metrics.translateDone}
+              total={metrics.translateUnitTotal > 0 ? metrics.translateUnitTotal : metrics.translateTotal}
+              active={status === "TRANSLATING"}
+              complete={["TRANSLATE_DONE", "WRITEBACK_QUEUED", "WRITING_BACK", "VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status)}
+              failed={metrics.translateFailed}
+              detailLabel={
+                metrics.translateUnitTotal > 0 ? (
+                  <>
+                    资源 {metrics.translateDone}/{metrics.translateTotal} · 节点{" "}
+                    <AnimatedNumber value={metrics.translateUnitDone} />/{metrics.translateUnitTotal}
+                  </>
+                ) : undefined
+              }
+            />
+            <StageBar
+              label="回写"
+              done={metrics.writebackDone}
+              total={metrics.writebackTotal}
+              active={status === "WRITING_BACK"}
+              complete={["VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status)}
+              failed={metrics.writebackFailed}
+            />
+            {showVerify ? (
+              <StageBar
+                label="验证"
+                done={metrics.verifyDone}
+                total={metrics.verifyTotal}
+                active={status === "VERIFYING"}
+                complete={status === "COMPLETED" && metrics.verifyTotal > 0}
+                failed={metrics.verifyFailed}
+              />
+            ) : null}
           </div>
-        </div>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          {isActive && (
-            <s-button type="button" variant="secondary" onClick={() => onAction(job.id, "pause")}>暂停</s-button>
-          )}
-          {(status === "PAUSED" || isFailed) && (
-            <s-button type="button" variant="secondary" onClick={() => onAction(job.id, "resume")}>重试</s-button>
-          )}
-          {!isCompleted && status !== "CANCELLED" && (
-            <s-button type="button" variant="secondary" onClick={() => onAction(job.id, "cancel")}>取消</s-button>
-          )}
-        </div>
-      </div>
 
-      {/* Stage progress bars */}
-      <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-        <StageBar label="初始化" done={metrics.initDone} total={metrics.initTotal} active={status === "INITIALIZING"} complete={["INIT_DONE","TRANSLATE_QUEUED","TRANSLATING","TRANSLATE_DONE","WRITEBACK_QUEUED","WRITING_BACK","VERIFY_QUEUED","VERIFYING","COMPLETED"].includes(status)} />
-        <StageBar
-          label="翻译"
-          done={metrics.translateUnitTotal > 0 ? metrics.translateUnitDone : metrics.translateDone}
-          total={metrics.translateUnitTotal > 0 ? metrics.translateUnitTotal : metrics.translateTotal}
-          active={status === "TRANSLATING"}
-          complete={["TRANSLATE_DONE","WRITEBACK_QUEUED","WRITING_BACK","VERIFY_QUEUED","VERIFYING","COMPLETED"].includes(status)}
-          failed={metrics.translateFailed}
-          detailLabel={
-            metrics.translateUnitTotal > 0 ? (
-              <>
-                资源 {metrics.translateDone}/{metrics.translateTotal} · 节点{" "}
-                <AnimatedNumber value={metrics.translateUnitDone} />/{metrics.translateUnitTotal}
-              </>
-            ) : undefined
-          }
-        />
-        <StageBar label="回写" done={metrics.writebackDone} total={metrics.writebackTotal} active={status === "WRITING_BACK"} complete={["VERIFY_QUEUED","VERIFYING","COMPLETED"].includes(status)} failed={metrics.writebackFailed} />
-        {(metrics.verifyTotal > 0 || ["VERIFY_QUEUED","VERIFYING"].includes(status)) && (
-          <StageBar label="验证" done={metrics.verifyDone} total={metrics.verifyTotal} active={status === "VERIFYING"} complete={status === "COMPLETED" && metrics.verifyTotal > 0} failed={metrics.verifyFailed} />
-        )}
-      </div>
+          {metrics.currentModule && ACTIVE_STATUSES.includes(status) ? (
+            <div style={jobInlineNoticeStyle}>
+              当前模块：{metrics.currentModule}
+            </div>
+          ) : null}
 
-      {metrics.currentModule && isActive && (
-        <div style={{ fontSize: "0.75rem", color: pageColorTokens.brandBlue, marginTop: "0.4rem", fontWeight: 600 }}>
-          ▶ 当前模块: {metrics.currentModule}
+          {status === "TRANSLATING" ? <TranslateStatsPanel metrics={metrics} /> : null}
+
+          {(status === "FAILED" || status === "PAUSED") && (progress?.errorMessage ?? job.errorMessage) ? (
+            <div style={failErrorStyle}>
+              [{progress?.errorStage ?? job.errorStage}] {progress?.errorMessage ?? job.errorMessage}
+            </div>
+          ) : null}
         </div>
-      )}
+      }
+      actions={actions}
+    />
+  );
+}
 
-      {status === "TRANSLATING" && (
-        <TranslateStatsPanel metrics={metrics} />
-      )}
+function ConfirmSummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={confirmRowStyle}>
+      <div style={confirmLabelStyle}>{label}</div>
+      <div style={confirmValueStyle}>{value}</div>
+    </div>
+  );
+}
 
-      {isFailed && (progress?.errorMessage ?? job.errorMessage) && (
-        <div style={{ ...failErrorStyle, marginTop: "0.5rem" }}>
-          [{progress?.errorStage ?? job.errorStage}] {progress?.errorMessage ?? job.errorMessage}
-        </div>
-      )}
+function TaskSummaryItem(props: {
+  label: string;
+  value: number;
+  tone?: "default" | "progress" | "success" | "warning";
+}) {
+  const tone = props.tone ?? "default";
+  const color =
+    tone === "progress"
+      ? "#c05717"
+      : tone === "success"
+        ? pageColorTokens.brandGreenDark
+        : tone === "warning"
+          ? "#8a6200"
+          : pageColorTokens.textPrimary;
+
+  return (
+    <div style={taskSummaryItemStyle}>
+      <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary }}>{props.label}</div>
+      <div style={{ fontSize: "1.25rem", fontWeight: 700, color, marginTop: 6 }}>{props.value}</div>
     </div>
   );
 }
@@ -684,16 +1227,17 @@ function TranslateStatsPanel({ metrics }: { metrics: TranslateMetricsSnap }) {
   if (elapsedMs === null && usedTokens === 0) return null;
 
   return (
-    <div style={{
-      marginTop: "0.6rem",
-      padding: "0.5rem 0.75rem",
-      borderRadius: "6px",
-      background: "rgba(0, 0, 0, 0.03)",
-      border: `1px solid ${pageColorTokens.border}`,
-      display: "flex",
-      flexWrap: "wrap",
-      gap: "0.75rem 1.5rem",
-    }}>
+    <div
+      style={{
+        padding: "0.75rem 0.85rem",
+        borderRadius: "10px",
+        background: pageColorTokens.surfaceSubtle,
+        border: `1px solid ${pageColorTokens.borderSubtle}`,
+        display: "flex",
+        flexWrap: "wrap",
+        gap: "0.75rem 1.25rem",
+      }}
+    >
       {usedTokens > 0 && (
         <StatItem label="已用 tokens" value={usedTokens.toLocaleString()} />
       )}
@@ -753,123 +1297,99 @@ function StageBar({ label, done, total, active, complete, failed = 0, detailLabe
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : (complete ? 100 : 0);
 
   const fillBg = complete
-    ? "linear-gradient(90deg, #00c48c 0%, #00a67c 60%, #007a5a 100%)"
+    ? pageColorTokens.brandGreen
     : active
-    ? "linear-gradient(90deg, #6090ff 0%, #4070f4 60%, #2952d8 100%)"
-    : pageColorTokens.borderInput;
-
-  const fillGlow = complete
-    ? "0 0 10px rgba(0, 166, 124, 0.5)"
-    : active
-    ? "0 0 10px rgba(64, 112, 244, 0.45)"
-    : "none";
+      ? "#c05717"
+      : pageColorTokens.borderInput;
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
-      <span style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, width: 46, flexShrink: 0, fontWeight: active || complete ? 600 : 400 }}>{label}</span>
-      <div style={{ flex: 1, height: 8, borderRadius: 4, background: "linear-gradient(90deg, #e8eaef 0%, #dfe3ea 100%)", overflow: "hidden" }}>
-        <div style={{ width: `${pct}%`, height: "100%", background: fillBg, borderRadius: 4, transition: "width 1.2s ease", boxShadow: fillGlow }} />
+      <span
+        style={{
+          fontSize: "0.75rem",
+          color: pageColorTokens.textSecondary,
+          width: 46,
+          flexShrink: 0,
+          fontWeight: active || complete ? 600 : 500,
+        }}
+      >
+        {label}
+      </span>
+      <div
+        style={{
+          flex: 1,
+          height: 8,
+          borderRadius: 999,
+          background: pageColorTokens.divider,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: `${pct}%`,
+            height: "100%",
+            background: fillBg,
+            borderRadius: 999,
+            transition: "width 0.35s ease",
+          }}
+        />
       </div>
-      <span style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, minWidth: detailLabel ? 196 : 84, flexShrink: 0, textAlign: "right" }}>
+      <span
+        style={{
+          fontSize: "0.75rem",
+          color: pageColorTokens.textSecondary,
+          minWidth: detailLabel ? 196 : 84,
+          flexShrink: 0,
+          textAlign: "right",
+        }}
+      >
         {detailLabel ?? (total > 0 ? `${done}/${total}` : "等待")}
-        {" "}{complete ? <span style={{ color: "#00a67c", fontWeight: 700 }}>✓</span> : active ? <span style={{ color: "#4070f4" }}>⟳</span> : ""}
-        {failed > 0 ? <span style={{ color: "#f59e0b", fontWeight: 600 }}> ⚠{failed}</span> : ""}
+        {" "}
+        {complete ? <span style={{ color: pageColorTokens.brandGreenDark, fontWeight: 700 }}>✓</span> : null}
+        {active ? <span style={{ color: "#8a420f", fontWeight: 600 }}> 进行中</span> : null}
+        {failed > 0 ? <span style={{ color: "#b98900", fontWeight: 600 }}> · 失败 {failed}</span> : null}
       </span>
     </div>
   );
 }
 
 function StatusBadge({ status }: { status: TranslationV4Status }) {
-  const config = STATUS_DISPLAY[status] ?? { label: status, color: "#4b5563", bg: "#f3f4f6" };
+  const config = STATUS_DISPLAY[status] ?? { label: status, color: "#4b5563", bg: "#f3f4f6", border: "#dde1e6" };
   return (
-    <span style={{
-      padding: "0.18rem 0.65rem",
-      borderRadius: 999,
-      fontSize: "0.75rem",
-      fontWeight: 700,
-      color: config.color,
-      background: config.bg,
-      boxShadow: config.shadow ?? "none",
-      letterSpacing: "0.01em",
-    }}>
+    <span
+      style={{
+        padding: "0.18rem 0.65rem",
+        borderRadius: 999,
+        fontSize: "0.75rem",
+        fontWeight: 700,
+        color: config.color,
+        background: config.bg,
+        border: `1px solid ${config.border}`,
+        letterSpacing: "0.01em",
+      }}
+    >
       {config.label}
     </span>
   );
 }
 
-const STATUS_DISPLAY: Partial<Record<TranslationV4Status, { label: string; color: string; bg: string; shadow?: string }>> = {
-  CREATED:         { label: "已创建",    color: "#4b5563", bg: "linear-gradient(135deg, #f3f4f6 0%, #e9ebee 100%)" },
-  INIT_QUEUED:     { label: "等待初始化", color: "#2952d8", bg: "linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%)", shadow: "0 1px 4px rgba(64,112,244,0.18)" },
-  INITIALIZING:    { label: "初始化中",  color: "#1d40c0", bg: "linear-gradient(135deg, #c7d2fe 0%, #a5b4fc 100%)", shadow: "0 1px 6px rgba(64,112,244,0.25)" },
-  INIT_DONE:       { label: "初始化完成", color: "#005c46", bg: "linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)", shadow: "0 1px 4px rgba(0,166,124,0.18)" },
-  TRANSLATE_QUEUED:{ label: "等待翻译",  color: "#2952d8", bg: "linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)", shadow: "0 1px 4px rgba(64,112,244,0.18)" },
-  TRANSLATING:     { label: "翻译中",    color: "#1d40c0", bg: "linear-gradient(135deg, #93c5fd 0%, #60a5fa 100%)", shadow: "0 1px 8px rgba(64,112,244,0.3)" },
-  TRANSLATE_DONE:  { label: "翻译完成",  color: "#005c46", bg: "linear-gradient(135deg, #d1fae5 0%, #6ee7b7 100%)", shadow: "0 1px 4px rgba(0,166,124,0.2)" },
-  WRITEBACK_QUEUED:{ label: "等待回写",  color: "#2952d8", bg: "linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)", shadow: "0 1px 4px rgba(64,112,244,0.18)" },
-  WRITING_BACK:    { label: "回写中",    color: "#1d40c0", bg: "linear-gradient(135deg, #93c5fd 0%, #60a5fa 100%)", shadow: "0 1px 8px rgba(64,112,244,0.3)" },
-  VERIFY_QUEUED:   { label: "等待验证",  color: "#5b21b6", bg: "linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)", shadow: "0 1px 4px rgba(124,92,214,0.2)" },
-  VERIFYING:       { label: "验证中",    color: "#4c1d95", bg: "linear-gradient(135deg, #c4b5fd 0%, #a78bfa 100%)", shadow: "0 1px 8px rgba(124,92,214,0.3)" },
-  COMPLETED:       { label: "已完成",    color: "#005c46", bg: "linear-gradient(135deg, #34d399 0%, #10b981 100%)", shadow: "0 1px 8px rgba(0,166,124,0.35)" },
-  FAILED:          { label: "失败",      color: "#991b1b", bg: "linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)", shadow: "0 1px 4px rgba(220,38,38,0.2)" },
-  PAUSED:          { label: "已暂停",    color: "#7a4f00", bg: "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)", shadow: "0 1px 4px rgba(245,158,11,0.2)" },
-  CANCELLED:       { label: "已取消",    color: "#6b7280", bg: "linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)" },
+const STATUS_DISPLAY: Partial<Record<TranslationV4Status, { label: string; color: string; bg: string; border: string }>> = {
+  CREATED: { label: "已创建", color: pageColorTokens.textSecondary, bg: pageColorTokens.surfaceMuted, border: pageColorTokens.borderSubtle },
+  INIT_QUEUED: { label: "等待初始化", color: "#8a420f", bg: "#fff1e8", border: "#f3d1b8" },
+  INITIALIZING: { label: "初始化中", color: "#8a420f", bg: "#fff1e8", border: "#f3d1b8" },
+  INIT_DONE: { label: "初始化完成", color: pageColorTokens.brandGreenDark, bg: pageColorTokens.brandGreenLight, border: "#ccefe4" },
+  TRANSLATE_QUEUED: { label: "等待翻译", color: "#8a420f", bg: "#fff1e8", border: "#f3d1b8" },
+  TRANSLATING: { label: "翻译中", color: "#8a420f", bg: "#fff1e8", border: "#f3d1b8" },
+  TRANSLATE_DONE: { label: "翻译完成", color: pageColorTokens.brandGreenDark, bg: pageColorTokens.brandGreenLight, border: "#ccefe4" },
+  WRITEBACK_QUEUED: { label: "等待回写", color: "#8a420f", bg: "#fff1e8", border: "#f3d1b8" },
+  WRITING_BACK: { label: "回写中", color: "#8a420f", bg: "#fff1e8", border: "#f3d1b8" },
+  VERIFY_QUEUED: { label: "等待验证", color: "#7c5e10", bg: "#fff7e0", border: "#efdca4" },
+  VERIFYING: { label: "验证中", color: "#7c5e10", bg: "#fff7e0", border: "#efdca4" },
+  COMPLETED: { label: "已完成", color: pageColorTokens.brandGreenDark, bg: pageColorTokens.brandGreenLight, border: "#ccefe4" },
+  FAILED: { label: "失败", color: pageColorTokens.criticalText, bg: "#fff0ee", border: "#f3cbc5" },
+  PAUSED: { label: "已暂停", color: "#7c5e10", bg: "#fff7e0", border: "#efdca4" },
+  CANCELLED: { label: "已取消", color: pageColorTokens.textSecondary, bg: pageColorTokens.surfaceMuted, border: pageColorTokens.borderSubtle },
 };
-
-function jobCardStyle(status: TranslationV4Status): React.CSSProperties {
-  const isActive = ACTIVE_STATUSES.includes(status);
-  const isCompleted = status === "COMPLETED";
-  const isFailed = status === "FAILED";
-  const isPaused = status === "PAUSED";
-
-  if (isActive) {
-    return {
-      padding: "1.1rem 1.2rem",
-      border: "1.5px solid rgba(64, 112, 244, 0.4)",
-      borderRadius: "14px",
-      background: "linear-gradient(160deg, #ffffff 0%, #f3f7ff 100%)",
-      boxShadow: "0 6px 24px rgba(64, 112, 244, 0.14), 0 1px 4px rgba(0,0,0,0.05)",
-      transition: "border-color 0.2s, box-shadow 0.2s",
-    };
-  }
-  if (isCompleted) {
-    return {
-      padding: "1.1rem 1.2rem",
-      border: "1.5px solid rgba(0, 166, 124, 0.35)",
-      borderRadius: "14px",
-      background: "linear-gradient(160deg, #ffffff 0%, #f3fdf8 100%)",
-      boxShadow: "0 4px 16px rgba(0, 166, 124, 0.12), 0 1px 3px rgba(0,0,0,0.04)",
-      transition: "border-color 0.2s, box-shadow 0.2s",
-    };
-  }
-  if (isFailed) {
-    return {
-      padding: "1.1rem 1.2rem",
-      border: "1.5px solid rgba(220, 38, 38, 0.3)",
-      borderRadius: "14px",
-      background: "linear-gradient(160deg, #ffffff 0%, #fff5f5 100%)",
-      boxShadow: "0 4px 14px rgba(220, 38, 38, 0.1), 0 1px 3px rgba(0,0,0,0.04)",
-      transition: "border-color 0.2s, box-shadow 0.2s",
-    };
-  }
-  if (isPaused) {
-    return {
-      padding: "1.1rem 1.2rem",
-      border: "1.5px solid rgba(245, 158, 11, 0.35)",
-      borderRadius: "14px",
-      background: "linear-gradient(160deg, #ffffff 0%, #fffbf0 100%)",
-      boxShadow: "0 4px 14px rgba(245, 158, 11, 0.1), 0 1px 3px rgba(0,0,0,0.04)",
-      transition: "border-color 0.2s, box-shadow 0.2s",
-    };
-  }
-  return {
-    padding: "1.1rem 1.2rem",
-    border: `1px solid ${pageColorTokens.border}`,
-    borderRadius: "14px",
-    background: "linear-gradient(160deg, #ffffff 0%, #f8faff 100%)",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.04)",
-    transition: "border-color 0.2s, box-shadow 0.2s",
-  };
-}
 
 const checkboxLabelStyle: React.CSSProperties = {
   display: "flex",
@@ -895,24 +1415,150 @@ function testEnvPanelStyle(active: boolean): React.CSSProperties {
 }
 
 const testModePillStyle: React.CSSProperties = {
-  padding: "0.12rem 0.5rem",
+  padding: "0.18rem 0.56rem",
   borderRadius: 999,
   fontSize: "0.7rem",
-  fontWeight: 800,
-  letterSpacing: "0.06em",
-  color: "#92400e",
-  background: "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)",
-  border: "1px solid rgba(245, 158, 11, 0.5)",
-  boxShadow: "0 1px 4px rgba(245, 158, 11, 0.25)",
+  fontWeight: 700,
+  letterSpacing: "0.02em",
+  color: "#7c5e10",
+  background: "#fff7e0",
+  border: "1px solid #efdca4",
 };
 
 const failErrorStyle: React.CSSProperties = {
-  padding: "0.45rem 0.7rem",
-  borderRadius: "9px",
-  background: "linear-gradient(135deg, rgba(220,38,38,0.08) 0%, rgba(220,38,38,0.05) 100%)",
-  border: "1px solid rgba(220,38,38,0.2)",
-  color: "#991b1b",
+  padding: "0.65rem 0.8rem",
+  borderRadius: "10px",
+  background: "#fff0ee",
+  border: "1px solid #f3cbc5",
+  color: pageColorTokens.criticalText,
   fontSize: "0.75rem",
+  lineHeight: 1.5,
+  wordBreak: "break-word",
+};
+
+const jobMetaGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(148px, 1fr))",
+  gap: 10,
+};
+
+const jobMetaItemStyle: React.CSSProperties = {
+  padding: "0.75rem 0.8rem",
+  borderRadius: "10px",
+  background: pageColorTokens.surfaceSubtle,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+  minWidth: 0,
+};
+
+const jobMetaLabelStyle: React.CSSProperties = {
+  fontSize: "0.72rem",
+  color: pageColorTokens.textSecondary,
+  fontWeight: 600,
+};
+
+const jobMetaValueStyle: React.CSSProperties = {
+  fontSize: "0.82rem",
+  color: pageColorTokens.textPrimary,
   lineHeight: 1.45,
   wordBreak: "break-word",
 };
+
+const jobStageGroupStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+  padding: "0.85rem 0.9rem",
+  borderRadius: "10px",
+  background: pageColorTokens.surfaceSubtle,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+};
+
+const jobInlineNoticeStyle: React.CSSProperties = {
+  padding: "0.65rem 0.8rem",
+  borderRadius: "10px",
+  background: "#fff1e8",
+  border: "1px solid #f3d1b8",
+  color: "#8a420f",
+  fontSize: "0.75rem",
+  fontWeight: 600,
+};
+
+const taskSummaryGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+  gap: 12,
+};
+
+const taskSummaryItemStyle: React.CSSProperties = {
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  borderRadius: "12px",
+  background: pageColorTokens.surfaceSubtle,
+  padding: "0.85rem 0.95rem",
+};
+
+const taskHintBarStyle: React.CSSProperties = {
+  padding: "0.8rem 0.95rem",
+  borderRadius: "12px",
+  background: pageColorTokens.surfaceSubtle,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  fontSize: "0.8125rem",
+  lineHeight: 1.6,
+  color: pageColorTokens.textSecondary,
+};
+
+const confirmRowStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "92px 1fr",
+  gap: 12,
+  padding: "0.75rem 0.85rem",
+  borderRadius: "10px",
+  background: pageColorTokens.surfaceSubtle,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  alignItems: "start",
+};
+
+const confirmLabelStyle: React.CSSProperties = {
+  fontSize: "0.75rem",
+  fontWeight: 700,
+  color: pageColorTokens.textSecondary,
+  paddingTop: 2,
+};
+
+const confirmValueStyle: React.CSSProperties = {
+  fontSize: "0.85rem",
+  color: pageColorTokens.textPrimary,
+  lineHeight: 1.6,
+};
+
+const confirmFooterStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: 10,
+};
+
+function dialogButtonStyle(
+  tone: "primary" | "secondary",
+  disabled: boolean,
+): React.CSSProperties {
+  return {
+    padding: "0.55rem 1rem",
+    borderRadius: "10px",
+    border:
+      tone === "primary"
+        ? `1px solid ${disabled ? pageColorTokens.border : pageColorTokens.brandGreen}`
+        : `1px solid ${pageColorTokens.border}`,
+    background:
+      tone === "primary"
+        ? disabled
+          ? "#d9dde3"
+          : pageColorTokens.brandGreen
+        : "#ffffff",
+    color: tone === "primary" ? "#ffffff" : pageColorTokens.textPrimary,
+    fontSize: "0.8125rem",
+    fontWeight: 700,
+    cursor: disabled ? "not-allowed" : "pointer",
+  };
+}

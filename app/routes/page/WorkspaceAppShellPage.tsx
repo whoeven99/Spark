@@ -52,6 +52,17 @@ type ConversationSummary = {
 
 type Conversation = ConversationSummary;
 
+type TaskActionTarget =
+  | {
+      type: "panel";
+      panel: WorkspacePanel;
+    }
+  | {
+      type: "route";
+      path: string;
+      params?: Record<string, string>;
+    };
+
 type TaskRecord = {
   id: string;
   title: string;
@@ -62,6 +73,7 @@ type TaskRecord = {
   updatedAt: string;
   summary: string;
   action: string;
+  actionTarget: TaskActionTarget;
 };
 
 type DashboardMetric = {
@@ -238,11 +250,66 @@ const automationTemplates = [
 ];
 
 const initialTasks: TaskRecord[] = [
-  { id: "TASK-241198", title: "每日订单异常巡检", kind: "automation", source: "订单监控", status: "executing", progress: 64, updatedAt: "2 分钟前", summary: "正在扫描退款、超时履约和异常金额订单。", action: "查看运行日志" },
-  { id: "TASK-241190", title: "多语言商品翻译", kind: "one_off", source: "翻译工具", status: "executing", progress: 51, updatedAt: "11 分钟前", summary: "英语与日语翻译已过半，正在写回结果。", action: "查看进度" },
-  { id: "TASK-241177", title: "新品描述补齐", kind: "one_off", source: "AI 对话", status: "review_required", progress: 100, updatedAt: "今天 09:03", summary: "已补齐 24 个新品描述，待人工审核。", action: "进入审核" },
-  { id: "TASK-241160", title: "每日经营简报", kind: "automation", source: "经营看板", status: "completed", progress: 100, updatedAt: "今天 09:00", summary: "已生成日报并同步到 Dashboard。", action: "查看简报" },
-  { id: "TASK-241155", title: "异常订单重跑", kind: "automation", source: "订单监控", status: "failed", progress: 100, updatedAt: "昨天 19:04", summary: "重跑失败，原因是订单数据源响应超时。", action: "重新执行" },
+  {
+    id: "TASK-241198",
+    title: "每日订单异常巡检",
+    kind: "automation",
+    source: "订单监控",
+    status: "executing",
+    progress: 64,
+    updatedAt: "2 分钟前",
+    summary: "正在扫描退款、超时履约和异常金额订单。",
+    action: "查看运行日志",
+    actionTarget: { type: "route", path: "/app/order-monitor" },
+  },
+  {
+    id: "TASK-241190",
+    title: "多语言商品翻译",
+    kind: "one_off",
+    source: "翻译工具",
+    status: "executing",
+    progress: 51,
+    updatedAt: "11 分钟前",
+    summary: "英语与日语翻译已过半，正在写回结果。",
+    action: "查看进度",
+    actionTarget: { type: "route", path: "/app/translation-v4" },
+  },
+  {
+    id: "TASK-241177",
+    title: "新品描述补齐",
+    kind: "one_off",
+    source: "AI 对话",
+    status: "review_required",
+    progress: 100,
+    updatedAt: "今天 09:03",
+    summary: "已补齐 24 个新品描述，待人工审核。",
+    action: "进入审核",
+    actionTarget: { type: "route", path: "/app/product-improve", params: { tab: "tasks" } },
+  },
+  {
+    id: "TASK-241160",
+    title: "每日经营简报",
+    kind: "automation",
+    source: "经营看板",
+    status: "completed",
+    progress: 100,
+    updatedAt: "今天 09:00",
+    summary: "已生成日报并同步到 Dashboard。",
+    action: "查看简报",
+    actionTarget: { type: "panel", panel: "dashboard" },
+  },
+  {
+    id: "TASK-241155",
+    title: "异常订单重跑",
+    kind: "automation",
+    source: "订单监控",
+    status: "failed",
+    progress: 100,
+    updatedAt: "昨天 19:04",
+    summary: "重跑失败，原因是订单数据源响应超时。",
+    action: "重新执行",
+    actionTarget: { type: "route", path: "/app/order-monitor" },
+  },
 ];
 
 function isWorkspacePanel(value: string | null): value is WorkspacePanel {
@@ -344,12 +411,24 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     setSearchParams(next);
   };
 
-  const buildWorkspaceEntryPath = (path: string) => {
+  const buildWorkspaceEntryPath = (path: string, extraParams?: Record<string, string>) => {
     const next = new URLSearchParams(searchParams);
     next.delete("panel");
     next.set("from", "workspace");
+    Object.entries(extraParams ?? {}).forEach(([key, value]) => {
+      next.set(key, value);
+    });
     const serialized = next.toString();
     return serialized ? `${path}?${serialized}` : path;
+  };
+
+  const handleTaskAction = (task: TaskRecord) => {
+    if (task.actionTarget.type === "panel") {
+      switchPanel(task.actionTarget.panel);
+      return;
+    }
+
+    navigate(buildWorkspaceEntryPath(task.actionTarget.path, task.actionTarget.params));
   };
 
   const openConversation = (conversationId: string) => {
@@ -823,7 +902,12 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
           <AutomationPanel activeView={automationView} onChangeView={setAutomationView} />
         ) : null}
         {activePanel === "tasks" ? (
-          <TasksPanel tasks={filteredTasks} filter={taskFilter} onFilterChange={setTaskFilter} />
+          <TasksPanel
+            tasks={filteredTasks}
+            filter={taskFilter}
+            onFilterChange={setTaskFilter}
+            onTaskAction={handleTaskAction}
+          />
         ) : null}
       </main>
     </div>
@@ -1695,10 +1779,12 @@ function TasksPanel({
   tasks,
   filter,
   onFilterChange,
+  onTaskAction,
 }: {
   tasks: TaskRecord[];
   filter: "all" | TaskKind;
   onFilterChange: (value: "all" | TaskKind) => void;
+  onTaskAction: (task: TaskRecord) => void;
 }) {
   return (
     <section style={surfaceCardStyle}>
@@ -1746,7 +1832,9 @@ function TasksPanel({
               <span style={mutedMetaStyle}>
                 {task.source} · {task.updatedAt}
               </span>
-              <button type="button" style={textButtonStyle}>{task.action}</button>
+              <button type="button" style={textButtonStyle} onClick={() => onTaskAction(task)}>
+                {task.action}
+              </button>
             </div>
           </article>
         ))}
