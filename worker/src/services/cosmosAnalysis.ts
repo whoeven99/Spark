@@ -165,7 +165,8 @@ export async function findAnalysisJobs(status: ShopAnalysisStatus, limit = 5): P
       })
       .fetchAll();
     return resources;
-  } catch {
+  } catch (e) {
+    console.warn(`[cosmosAnalysis] findAnalysisJobs(${status}) failed`, e);
     return [];
   }
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import type { ShopAnalysisJob, ShopProfile } from "../../../server/translation/shopAnalysis.server";
 import type { GlossaryTerm } from "../../../server/translation/glossary.server";
@@ -11,12 +11,18 @@ import {
   pageHintTextStyle,
   pageInnerPanelStyle,
 } from "../../page/pageUiStyles";
+import { formatActualElapsed } from "../aiTask/AITaskCardShell";
+
+/** 与 worker ANALYSIS_BATCH_SIZE 默认一致，用于 UI 估算分析批次数 */
+const ANALYSIS_BATCH_SIZE = 15;
 
 type ShopAnalysisPanelProps = {
   locationSearch: string;
 };
 
 const RUNNING_STATUSES = new Set(["SCAN_QUEUED", "SCANNING", "ANALYZE_QUEUED", "ANALYZING"]);
+const QUEUED_STATUSES = new Set(["SCAN_QUEUED", "ANALYZE_QUEUED"]);
+const PROCESSING_STATUSES = new Set(["SCANNING", "ANALYZING"]);
 
 const SHOP_ANALYSIS_MODULES = ["PRODUCT", "COLLECTION", "ARTICLE", "BLOG", "PAGE", "SHOP"] as const;
 
@@ -319,7 +325,13 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
                 ? { disabled: true }
                 : {})}
             >
-              {triggering ? "启动中…" : isRunning ? "分析中…" : "扫描并分析"}
+              {triggering
+                ? "启动中…"
+                : job && QUEUED_STATUSES.has(job.status)
+                  ? "等待 Worker 拉取…"
+                  : job && PROCESSING_STATUSES.has(job.status)
+                    ? "分析中…"
+                    : "扫描并分析"}
             </s-button>
           </div>
 
@@ -343,16 +355,53 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
                 </span>
               </div>
               {(isRunning || job.status === "COMPLETED") && (
-                <div style={{ fontSize: "0.8125rem", color: pageColorTokens.textSecondary }}>
-                  扫描模块 {job.metrics.scannedModules} 个 ·
-                  资源 {job.metrics.scannedResources} 条 ·
-                  分析批次 {job.metrics.analyzedChunks} 次 ·
-                  词条草稿 {job.metrics.glossaryDraftCount} 条
-                </div>
-              )}
-              {isRunning && (
-                <div style={progressTrackStyle}>
-                  <div style={{ ...progressFillStyle, width: resolveProgressWidth(job) }} />
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ fontSize: "0.875rem", fontWeight: 600, color: pageColorTokens.textPrimary }}>
+                    {getAnalysisPrimaryCopy(job)}
+                  </div>
+                  {isRunning && job.updatedAt ? (
+                    <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary }}>
+                      已运行 {formatActualElapsed(job.createdAt, job.updatedAt)}
+                    </div>
+                  ) : null}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <AnalysisStageBar
+                      label="扫描"
+                      done={scanModulesDone(job)}
+                      total={job.modules.length}
+                      active={job.status === "SCANNING"}
+                      complete={["ANALYZE_QUEUED", "ANALYZING", "COMPLETED"].includes(job.status)}
+                      detailLabel={
+                        job.metrics.scannedResources > 0
+                          ? `资源 ${job.metrics.scannedResources} 条`
+                          : undefined
+                      }
+                    />
+                    <AnalysisStageBar
+                      label="分析"
+                      done={job.metrics.analyzedChunks}
+                      total={analysisBatchTotal(job)}
+                      active={job.status === "ANALYZING"}
+                      complete={job.status === "COMPLETED"}
+                      detailLabel={
+                        job.status === "COMPLETED" && job.metrics.glossaryDraftCount > 0
+                          ? `术语草稿 ${job.metrics.glossaryDraftCount} 条`
+                          : undefined
+                      }
+                    />
+                  </div>
+                  <div style={progressTrackStyle}>
+                    <div
+                      style={{
+                        ...progressFillStyle,
+                        width: `${getAnalysisProgressPercent(job)}%`,
+                        background:
+                          job.status === "COMPLETED"
+                            ? pageColorTokens.brandGreen
+                            : progressFillStyle.background,
+                      }}
+                    />
+                  </div>
                 </div>
               )}
               {job.status === "FAILED" && job.errorMessage && (
@@ -594,6 +643,132 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+function scanModulesDone(job: ShopAnalysisJob): number {
+  if (["ANALYZE_QUEUED", "ANALYZING", "COMPLETED"].includes(job.status)) {
+    return job.modules.length;
+  }
+  return job.metrics.scannedModules;
+}
+
+function analysisBatchTotal(job: ShopAnalysisJob): number {
+  if (job.metrics.scannedResources <= 0) return 1;
+  return Math.max(1, Math.ceil(job.metrics.scannedResources / ANALYSIS_BATCH_SIZE));
+}
+
+function getAnalysisPrimaryCopy(job: ShopAnalysisJob): string {
+  const moduleDone = scanModulesDone(job);
+  const moduleTotal = job.modules.length;
+  const batchTotal = analysisBatchTotal(job);
+  const { status, metrics } = job;
+
+  switch (status) {
+    case "SCAN_QUEUED":
+      return "任务已创建，等待 Worker 拉取…";
+    case "SCANNING":
+      return `正在扫描模块 ${moduleDone}/${moduleTotal} · 已采集 ${metrics.scannedResources} 条资源`;
+    case "ANALYZE_QUEUED":
+      return `扫描完成（${moduleTotal} 个模块 · ${metrics.scannedResources} 条资源），等待 AI 分析…`;
+    case "ANALYZING":
+      return `正在 AI 分析 ${metrics.analyzedChunks}/${batchTotal} 批`;
+    case "COMPLETED":
+      return `分析完成 · ${metrics.glossaryDraftCount} 条术语草稿待确认`;
+    case "FAILED":
+      return "分析失败";
+    default:
+      return statusLabel(status);
+  }
+}
+
+function getAnalysisProgressPercent(job: ShopAnalysisJob): number {
+  if (job.status === "COMPLETED") return 100;
+  if (job.status === "FAILED") return 8;
+  if (job.status === "SCAN_QUEUED") return 5;
+
+  const scanRatio =
+    job.modules.length > 0 ? scanModulesDone(job) / job.modules.length : 0;
+  const analyzeRatio = job.metrics.analyzedChunks / analysisBatchTotal(job);
+
+  if (job.status === "SCANNING") {
+    return Math.round(Math.max(8, scanRatio * 48));
+  }
+  if (job.status === "ANALYZE_QUEUED") return 50;
+  if (job.status === "ANALYZING") {
+    return Math.round(50 + Math.min(49, analyzeRatio * 49));
+  }
+  return 0;
+}
+
+type AnalysisStageBarProps = {
+  label: string;
+  done: number;
+  total: number;
+  active: boolean;
+  complete: boolean;
+  detailLabel?: ReactNode;
+};
+
+function AnalysisStageBar({
+  label,
+  done,
+  total,
+  active,
+  complete,
+  detailLabel,
+}: AnalysisStageBarProps) {
+  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : complete ? 100 : 0;
+  const fillBg = complete
+    ? pageColorTokens.brandGreen
+    : active
+      ? "#c05717"
+      : pageColorTokens.borderInput;
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
+      <span
+        style={{
+          fontSize: "0.75rem",
+          color: pageColorTokens.textSecondary,
+          width: 46,
+          flexShrink: 0,
+          fontWeight: active || complete ? 600 : 500,
+        }}
+      >
+        {label}
+      </span>
+      <div
+        style={{
+          flex: 1,
+          height: 8,
+          borderRadius: 999,
+          background: pageColorTokens.divider,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: `${pct}%`,
+            height: "100%",
+            background: fillBg,
+            borderRadius: 999,
+            transition: "width 0.35s ease",
+          }}
+        />
+      </div>
+      <span
+        style={{
+          fontSize: "0.75rem",
+          color: pageColorTokens.textSecondary,
+          minWidth: "4.5rem",
+          textAlign: "right",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {detailLabel ?? `${done}/${total}`}
+      </span>
+    </div>
+  );
+}
+
 function ProfileRow({ label, value }: { label: string; value: string }) {
   if (!value) return null;
   return (
@@ -602,24 +777,6 @@ function ProfileRow({ label, value }: { label: string; value: string }) {
       <span style={{ fontSize: "0.8125rem", color: pageColorTokens.textBody }}>{value}</span>
     </div>
   );
-}
-
-function resolveProgressWidth(job: ShopAnalysisJob): string {
-  if (job.status === "SCAN_QUEUED") return "5%";
-  if (job.status === "SCANNING") {
-    const pct = job.metrics.scannedResources
-      ? Math.min(48, Math.round((job.metrics.scannedModules / Math.max(job.modules.length, 1)) * 48))
-      : 8;
-    return `${pct}%`;
-  }
-  if (job.status === "ANALYZE_QUEUED") return "50%";
-  if (job.status === "ANALYZING") {
-    const analyzed = job.metrics.analyzedChunks;
-    const total = Math.ceil(job.metrics.scannedResources / 15) || 1;
-    const pct = 50 + Math.min(49, Math.round((analyzed / total) * 49));
-    return `${pct}%`;
-  }
-  return "99%";
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────

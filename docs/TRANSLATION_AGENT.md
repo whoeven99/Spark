@@ -44,8 +44,9 @@
 | 文件 | 职责 |
 |---|---|
 | `index.ts` | 入口，注册异常处理，调 startScheduler |
-| `scheduler.ts` | 30s 轮询驱动四个 Worker；5min 重置僵死任务 |
+| `scheduler.ts` | 30s 轮询驱动 init/translate/writeback/verify/**analysis** Worker；5min 重置僵死任务 |
 | `services/cosmosV4.ts` | Worker 侧 Cosmos 操作（与 App 侧逻辑一致，独立副本） |
+| `services/cosmosAnalysis.ts` | 商店扫描分析任务 Cosmos（`shop_analysis_jobs`） |
 | `services/blobV4.ts` | Worker 侧 Blob 读写（JSON 序列化） |
 | `services/redisV4.ts` | Worker 侧 Redis，含 hint 队列和 progress hash |
 | `services/shopifyFetch.ts` | Shopify GraphQL 拉取可翻译资源 + 写回翻译 |
@@ -54,6 +55,7 @@
 | `workers/translateWorker.ts` | 阶段 2：调 LLM 翻译，写 Blob |
 | `workers/writebackWorker.ts` | 阶段 3：把译文写回 Shopify，支持断点续传 |
 | `workers/verifyWorker.ts` | 阶段 4：重试 writeback 失败的资源 |
+| `workers/analysisWorker.ts` | 商店扫描分析：拉取源语言内容 → LLM 生成档案与术语草稿 |
 
 ---
 
@@ -469,7 +471,8 @@ type TranslationTaskFormPayload = {
 | `TRANSLATION_AI_MODEL` | App + Worker | 全局覆盖翻译模型，如 `gpt-4o-mini`、`google-translate` |
 | `TRANSLATION_TM_DISABLED` | Worker | 设为 `"true"` 关闭翻译记忆缓存 |
 | `TRANSLATION_TM_TTL_DAYS` | Worker | 翻译记忆缓存 TTL（天），默认 60 |
-| `WORKER_STAGES` | Worker | 逗号分隔启用的阶段，如 `init,translate`（默认全开）。用于线上质量测试时跳过 writeback/verify，不写回真实店铺 |
+| `WORKER_STAGES` | Worker | 逗号分隔启用的阶段，如 `init,translate,writeback,verify,analysis`（**默认全开**）。若设为 `init,translate` 等未含 `analysis` 的值，**商店扫描分析不会执行**；用于线上质量测试时可跳过 writeback/verify |
+| `COSMOS_SHOP_ANALYSIS_CONTAINER` | App + Worker | 商店扫描分析 Cosmos 容器，默认 `shop_analysis_jobs`（分区键 `/shopName`） |
 | `TRANSLATION_MAX_CHUNK_CHARS` | Worker | init 阶段单个 chunk 的字符总量上限，默认 50000（防止 chunk blob 过大 / 内存过高） |
 
 ---

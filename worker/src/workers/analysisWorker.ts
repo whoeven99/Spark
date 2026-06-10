@@ -48,20 +48,26 @@ const CHUNK_SIZE = 50; // blob chunk size for raw scan data
 // ── Entry ─────────────────────────────────────────────────────────────────────
 
 export async function runAnalysisWorker(): Promise<void> {
-  // 1. Check Redis hint queue first (fast path)
+  // 1. Check Redis hint queue first (fast path) — must claim like initWorker
   const hint = await popAnalysisHint();
   if (hint) {
-    // Ensure a SCAN_QUEUED job exists (idempotent if admin already created it)
-    const existing = await findAnalysisJobs("SCAN_QUEUED", 1);
-    const match = existing.find((j) => j.shopName === hint.shopName);
-    if (match) {
-      await processAnalysisJob(match);
+    const claimed = await claimAnalysisJob(
+      hint.shopName,
+      "SCAN_QUEUED",
+      "SCANNING",
+      ANALYSIS_WORKER_ID,
+    );
+    if (claimed) {
+      await processAnalysisJob(claimed).catch(console.error);
       return;
     }
   }
 
   // 2. Poll Cosmos for queued jobs
   const scanJobs = await findAnalysisJobs("SCAN_QUEUED", 3);
+  if (scanJobs.length > 0) {
+    console.log(`[analysis] polled ${scanJobs.length} SCAN_QUEUED job(s)`);
+  }
   for (const job of scanJobs) {
     const claimed = await claimAnalysisJob(job.shopName, "SCAN_QUEUED", "SCANNING", ANALYSIS_WORKER_ID);
     if (claimed) { await processAnalysisJob(claimed).catch(console.error); return; }
@@ -102,11 +108,12 @@ async function processAnalysisJob(job: ShopAnalysisJob): Promise<void> {
 
   try {
     const token = await getShopAccessToken(shopName);
+    let metrics = { ...job.metrics };
 
     // ── Phase 1: SCANNING ──────────────────────────────────────────────────
     if (job.status === "SCANNING") {
       console.log(`[analysis] scanning shop=${shopName} modules=${job.modules.join(",")}`);
-      let scannedResources = 0;
+      let scannedResources = metrics.scannedResources;
 
       for (let mi = 0; mi < job.modules.length; mi++) {
         const module = job.modules[mi];
@@ -126,7 +133,11 @@ async function processAnalysisJob(job: ShopAnalysisJob): Promise<void> {
             onPage: throttledHeartbeat,
           },
         );
-        if (chunks.length === 0) continue;
+        if (chunks.length === 0) {
+          metrics = { ...metrics, scannedModules: mi + 1, scannedResources };
+          await updateAnalysisJob(shopName, { metrics });
+          continue;
+        }
 
         await Promise.all(
           chunks.map((chunk, i) =>
@@ -134,29 +145,36 @@ async function processAnalysisJob(job: ShopAnalysisJob): Promise<void> {
           ),
         );
         scannedResources += chunks.reduce((s, c) => s + c.length, 0);
-
-        await updateAnalysisJob(shopName, {
-          metrics: { ...job.metrics, scannedModules: mi + 1, scannedResources },
-        });
+        metrics = { ...metrics, scannedModules: mi + 1, scannedResources };
+        await updateAnalysisJob(shopName, { metrics });
       }
 
       console.log(`[analysis] scan done shop=${shopName} resources=${scannedResources}`);
+      metrics = {
+        ...metrics,
+        scannedModules: job.modules.length,
+        scannedResources,
+      };
       await updateAnalysisJob(shopName, {
         status: "ANALYZE_QUEUED",
         claimedBy: null,
-        metrics: { ...job.metrics, scannedResources },
+        metrics,
       });
       // Re-claim immediately for phase 2
       const reclaimed = await claimAnalysisJob(shopName, "ANALYZE_QUEUED", "ANALYZING", ANALYSIS_WORKER_ID);
       if (!reclaimed) return; // another worker picked it up — that's fine
       job = reclaimed;
+      metrics = { ...job.metrics };
     }
 
     // ── Phase 2: ANALYZING ─────────────────────────────────────────────────
     if (job.status === "ANALYZING") {
       console.log(`[analysis] analyzing shop=${shopName}`);
       const { profile, draftTerms, analyzedChunks } =
-        await runLLMAnalysis(shopName, job, throttledHeartbeat);
+        await runLLMAnalysis(shopName, job, throttledHeartbeat, async (done) => {
+          metrics = { ...metrics, analyzedChunks: done };
+          await updateAnalysisJob(shopName, { metrics });
+        });
 
       // Write results
       const fullProfile: ShopProfile = {
@@ -185,7 +203,7 @@ async function processAnalysisJob(job: ShopAnalysisJob): Promise<void> {
         completedAt: new Date().toISOString(),
         claimedBy: null,
         metrics: {
-          ...job.metrics,
+          ...metrics,
           analyzedChunks,
           glossaryDraftCount: draftTerms.length,
         },
@@ -224,6 +242,7 @@ async function runLLMAnalysis(
   shopName: string,
   job: ShopAnalysisJob,
   heartbeat: () => Promise<void>,
+  onBatchDone?: (analyzedChunks: number) => Promise<void>,
 ): Promise<AnalysisResult> {
   // Collect all raw chunk paths
   const allChunkPaths: string[] = [];
@@ -263,6 +282,7 @@ async function runLLMAnalysis(
       accHighFreq.push(...result.highFreqTerms);
       accStyleObs.push(...result.styleObs);
       analyzedChunks++;
+      await onBatchDone?.(analyzedChunks);
     } catch (e) {
       console.warn(`[analysis] batch ${i}-${i + ANALYSIS_BATCH_SIZE} failed`, e);
     }
