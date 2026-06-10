@@ -16,6 +16,7 @@ import {
 import { detectRequestLocale } from "../i18n/detector.server";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
+import { ensureWebPixel } from "../server/webPixel/ensureWebPixel.server";
 import {
   getAppEntryConfig,
   type NavItemKey,
@@ -59,7 +60,7 @@ const NAV_ITEMS: Record<
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
 
   try {
     await recordAppInstalled({
@@ -72,6 +73,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   } catch (error) {
     console.error("[CommonEvent] recordAppInstalled failed:", error);
   }
+
+  // fire-and-forget：失败只记日志，不阻断页面加载（内部带 10 分钟 TTL 防抖）
+  void ensureWebPixel(admin, session.shop);
   const locale = detectRequestLocale(request);
   const { nav, home } = getAppEntryConfig();
 

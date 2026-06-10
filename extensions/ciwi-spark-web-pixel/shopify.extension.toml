@@ -1,0 +1,46 @@
+# Shopify Web Pixel Extension: ciwi-spark-web-pixel
+#
+# UID will be filled by `shopify app deploy` on first deploy. If you need a
+# stable UID locally, run `shopify app generate extension` and copy the value.
+
+name = "ciwi-spark-web-pixel"
+
+type = "web_pixel_extension"
+runtime_context = "strict"
+api_version = "2026-07"
+uid = "c02b3026-a3cc-5663-eed8-593a5648f9ad8993801f"
+
+[customer_privacy]
+analytics = true
+marketing = false
+preferences = false
+sale_of_data = "enabled"
+
+[settings]
+type = "object"
+
+[settings.fields.shopName]
+name = "Shop Name"
+description = "Storefront shop domain, e.g. myshop.myshopify.com"
+type = "single_line_text_field"
+validations = [
+  { name = "min", value = "5" },
+]
+
+[settings.fields.ingestEndpoint]
+name = "Ingest Endpoint"
+description = "Full URL of /api/pixel-ingest on the Spark backend (e.g. https://<tunnel>/api/pixel-ingest)"
+type = "single_line_text_field"
+validations = [
+  { name = "min", value = "10" },
+]
+
+[settings.fields.sampling]
+name = "Sampling (0-100)"
+description = "Percent of events to send. 100 = send all. 0 = disabled."
+type = "single_line_text_field"
+
+[settings.fields.debug]
+name = "Debug"
+description = "Set to true to console.log every event for local debugging"
+type = "single_line_text_field"
