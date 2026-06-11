@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ImageGenerationFormPayload } from "../lib/imageGenerationFormPayload";
 import type { AITaskCreateResponse, AITaskType } from "../lib/aiTaskTypes";
+import { trackFeature } from "../lib/featureTrack";
 
 const LOG_PREFIX = "[useImageGeneration]";
 
@@ -45,6 +46,10 @@ export function useImageGeneration(params: UseImageGenerationParams) {
 
     setIsSubmitting(true);
     console.info(`${LOG_PREFIX} start descriptionLen=${trimmed.length}`);
+
+    trackFeature("image-studio", "generate_image", {
+      descriptionLen: trimmed.length,
+    });
 
     try {
       const res = await fetch(`/api/generate-image${locationSearch}`, {

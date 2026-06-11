@@ -16,6 +16,7 @@
     "start": "node dist/server/index.js"
   },
   "dependencies": {
+    "@alicloud/log": "^1.2.6",
     "@azure/cosmos": "^4.9.3",
     "@azure/storage-blob": "^12.32.0",
     "@libsql/client": "^0.17.3",

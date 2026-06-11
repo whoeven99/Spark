@@ -3,6 +3,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import { useLoaderData, useLocation } from "react-router";
 import { createTranslationV4Tasks } from "../../lib/createTranslationV4Tasks";
+import { trackFeature } from "../../lib/featureTrack";
 import { dedupeTranslationV4JobsByLocalePair } from "../../lib/dedupeTranslationV4JobsByLocalePair";
 import { formatEstimatedDuration } from "../../lib/formatDuration";
 import {
@@ -492,6 +493,11 @@ export function TranslationV4Page() {
     setIsSubmitting(true);
     try {
       const source = sourceLocale.trim();
+      trackFeature("translation-v4", "create_task", {
+        source,
+        targets: targetLocales,
+        modules,
+      });
       const result = await createTranslationV4Tasks({
         search: query,
         source,

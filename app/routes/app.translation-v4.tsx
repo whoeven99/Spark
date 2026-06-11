@@ -10,6 +10,7 @@ import { fetchShopLocalesPayload } from "../server/productImprove/shopLocalesFet
 import { TRANSLATION_V4_MODULES } from "../server/translation/v4/types";
 import { TranslationV4Page } from "./page/TranslationV4Page";
 import { listV4Jobs } from "../server/translation/v4/cosmosV4Store.server";
+import { useFeatureView } from "../lib/featureTrack";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -31,6 +32,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function AppTranslationV4() {
+  useFeatureView("translation-v4");
   return <TranslationV4Page />;
 }
 
