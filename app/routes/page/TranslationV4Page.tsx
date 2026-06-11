@@ -43,6 +43,7 @@ import {
   pageInnerPanelStyle,
   twoColumnLayoutStyle,
   twoColumnMainStyle,
+  twoColumnSideStyle,
   stickyAsideColumnStyle,
   formErrorBoxStyle,
   pageEmptyStateStyle,
@@ -50,7 +51,7 @@ import {
 
 const POLL_INTERVAL = 1500;
 const DAY_MS = 24 * 60 * 60 * 1000;
-type PageTab = "config" | "tasks";
+type PageTab = "config" | "style" | "tasks";
 type TaskViewTab = "current" | "history";
 const ACTIVE_STATUSES: TranslationV4Status[] = [
   "INIT_QUEUED", "INITIALIZING", "INIT_DONE",
@@ -154,7 +155,9 @@ function resolveDisplayStatus(
 
 function readPageTabFromSearch(search: string): PageTab {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
-  return params.get("page") === "tasks" ? "tasks" : "config";
+  if (params.get("page") === "tasks") return "tasks";
+  if (params.get("page") === "style") return "style";
+  return "config";
 }
 
 function readTaskViewFromSearch(search: string): TaskViewTab {
@@ -168,6 +171,9 @@ function syncTranslationSearch(pageTab: PageTab, taskView: TaskViewTab) {
   if (pageTab === "tasks") {
     url.searchParams.set("page", "tasks");
     url.searchParams.set("taskView", taskView);
+  } else if (pageTab === "style") {
+    url.searchParams.set("page", "style");
+    url.searchParams.delete("taskView");
   } else {
     url.searchParams.delete("page");
     url.searchParams.delete("taskView");
@@ -594,6 +600,7 @@ export function TranslationV4Page() {
           ariaLabel="翻译页模式切换"
           items={[
             { key: "config", label: "配置页" },
+            { key: "style", label: "翻译风格" },
             { key: "tasks", label: "任务页", badgeCount: runningCount },
           ]}
           density="compact"
@@ -694,8 +701,6 @@ export function TranslationV4Page() {
                 </s-stack>
               </PageSurface>
 
-              <TranslationGlossaryPanel locationSearch={query} />
-              <ShopAnalysisPanel locationSearch={query} />
             </div>
 
             <div style={isMobile ? mobileConfigSideStyle : stickyAsideColumnStyle}>
@@ -717,6 +722,19 @@ export function TranslationV4Page() {
                   ))}
                 </div>
               </PageSurface>
+            </div>
+          </div>
+        ) : pageTab === "style" ? (
+          <div style={isMobile ? mobileConfigLayoutStyle : twoColumnLayoutStyle}>
+            <div style={isMobile ? mobileConfigMainStyle : twoColumnMainStyle}>
+              <ShopAnalysisPanel
+                locationSearch={query}
+                defaultSourceLanguage={sourceLocale}
+              />
+            </div>
+
+            <div style={isMobile ? mobileConfigSideStyle : twoColumnSideStyle}>
+              <TranslationGlossaryPanel locationSearch={query} />
             </div>
           </div>
         ) : (
