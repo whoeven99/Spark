@@ -503,8 +503,7 @@ export function TranslationGlossaryPanel({
                     </>
                   ) : null}
                 </div>
-              ) : null}
-
+              )}
               {error ? <div style={formErrorBoxStyle}>{error}</div> : null}
 
               {terms.length === 0 && previewRows.length === 0 ? (
