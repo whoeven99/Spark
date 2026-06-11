@@ -9,8 +9,6 @@ export type SinkOptions = {
 
 export type Sink = {
   send: (envelope: PixelEventEnvelope) => Promise<void>;
-  /** 占位：未来用于在 page unload 前 flush 队列。当前是 no-op。 */
-  flushQueue: () => Promise<void>;
 };
 
 function shouldSample(sampling: number): boolean {
@@ -23,7 +21,7 @@ function shouldSample(sampling: number): boolean {
 async function postOnce(endpoint: string, body: string): Promise<Response> {
   return fetch(endpoint, {
     method: "POST",
-    // 用 text/plain 避免 CORS preflight（与 bundleV2 一致），后端会 JSON.parse。
+    // 用 text/plain 避免 CORS preflight，后端会 JSON.parse。
     headers: { "Content-Type": "text/plain;charset=UTF-8" },
     body,
     keepalive: true,
@@ -70,10 +68,6 @@ export function createSink(opts: SinkOptions): Sink {
           console.warn("[ciwi-spark-web-pixel] send retry failed, dropping", err);
         }
       }
-    },
-
-    async flushQueue() {
-      // 未来可接 SendBeacon / IndexedDB 队列。
     },
   };
 }

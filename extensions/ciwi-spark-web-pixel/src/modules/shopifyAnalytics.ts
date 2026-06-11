@@ -1,4 +1,5 @@
 import type { PixelModule } from "../core/moduleRegistry";
+import { buildEnvelope } from "../core/schema";
 
 /**
  * 订阅 Shopify Web Pixels 的**全部标准事件**（`all_standard_events`），

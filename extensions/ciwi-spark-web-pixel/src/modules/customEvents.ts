@@ -1,4 +1,5 @@
 import type { PixelModule } from "../core/moduleRegistry";
+import { buildEnvelope } from "../core/schema";
 
 /**
  * 订阅 Shopify Custom Pixel Events 通道。这是「前端组件主动 dispatch」
