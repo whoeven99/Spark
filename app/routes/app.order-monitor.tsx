@@ -94,6 +94,8 @@ type DashboardData = {
     refundAmount: string;
     refundRate: string;
     fulfillmentRate: string;
+    /** 代理转化率：orders / (orders + abandoned_checkouts)，弃单口径 */
+    conversionRate: string;
     currency: string;
   };
   statuses: Array<{
@@ -208,6 +210,7 @@ function emptyDashboard(
       refundAmount: "orderMonitor.fallbackNoData",
       refundRate: "orderMonitor.fallbackNoData",
       fulfillmentRate: "orderMonitor.fallbackNoData",
+      conversionRate: "orderMonitor.fallbackNoData",
       currency: "",
     },
     statuses: [
@@ -268,9 +271,35 @@ function emptyDashboard(
   };
 }
 
+/** 弃单计数（代理转化率分母用），原「诊断报告」页能力合并至此 */
+const ABANDONED_COUNT_QUERY = `#graphql
+  query AbandonedCheckoutsCount($query: String) {
+    abandonedCheckoutsCount(query: $query) {
+      count
+    }
+  }
+`;
+
+async function queryAbandonedCount(
+  admin: Awaited<ReturnType<typeof authenticate.admin>>["admin"],
+  since: Date,
+): Promise<number> {
+  try {
+    const response = await admin.graphql(ABANDONED_COUNT_QUERY, {
+      variables: { query: `created_at:>=${since.toISOString()}` },
+    });
+    const payload = (await response.json()) as {
+      data?: { abandonedCheckoutsCount?: { count?: number } };
+    };
+    return payload.data?.abandonedCheckoutsCount?.count ?? 0;
+  } catch (error) {
+    console.warn("[order-monitor] abandonedCheckoutsCount failed:", error);
+    return 0;
+  }
+}
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
-  console.log("[order-monitor] accessToken:", session.accessToken);
+  const { admin, session } = await authenticate.admin(request);
   const shop = session.shop;
   const since30Days = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const previous30Days = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
@@ -291,6 +320,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       totalOrdersAllTime,
       mostRecentOrder,
       currencyRow,
+      abandonedCount30d,
     ] = await Promise.all([
       prisma.shopOrder.findMany({
         where: { shop, createdAt: { gte: since30Days } },
@@ -337,6 +367,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         orderBy: { createdAt: "desc" },
         select: { currency: true },
       }),
+      queryAbandonedCount(admin, since30Days),
     ]);
 
     if (totalOrdersAllTime === 0) {
@@ -387,6 +418,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       nonCancelledOrders.length > 0
         ? (fulfilledOrders.length / nonCancelledOrders.length) * 100
         : 0;
+
+    const conversionDenominator = orderCount + abandonedCount30d;
+    const proxyConversionRate =
+      conversionDenominator > 0 ? (orderCount / conversionDenominator) * 100 : 0;
 
     const topSkuMap = new Map<
       string,
@@ -752,6 +787,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         refundAmount: refundAmount.toFixed(2),
         refundRate: formatPercent(refundRate),
         fulfillmentRate: formatPercent(fulfillmentRate),
+        conversionRate: formatPercent(proxyConversionRate),
         currency,
       },
       statuses: [
@@ -950,6 +986,10 @@ export default function OrderMonitorPage() {
               {
                 label: t("orderMonitor.metricFulfillmentRate"),
                 value: resolveMetric(data.metrics.fulfillmentRate),
+              },
+              {
+                label: t("orderMonitor.metricConversionRate"),
+                value: resolveMetric(data.metrics.conversionRate),
               },
             ]}
             footer={t("orderMonitor.updatedAtLabel", { value: data.updatedAt })}

@@ -12,6 +12,14 @@ vi.mock("../../../../../app/server/ai/core/shopChatGraph.server", () => ({
   }),
 }));
 
+// mock 每日诊断快照，避免单测访问真实数据库；hasData=false 走 GraphQL 回退路径
+vi.mock(
+  "../../../../../app/server/operations/dailyInspection.server",
+  () => ({
+    ensureDailySnapshot: vi.fn().mockResolvedValue({ hasData: false }),
+  }),
+);
+
 // ──────────────────────────────────────────────
 // helpers
 // ──────────────────────────────────────────────

@@ -29,16 +29,15 @@ const NAV_ITEMS: Record<
     href: string;
     labelKey:
       | "nav.aiAssistant"
-      | "nav.diagnosis"
       | "nav.translationV4"
       | "nav.productImprove"
       | "nav.imageStudio"
       | "nav.billing"
-      | "nav.orderMonitor";
+      | "nav.orderMonitor"
+      | "nav.dailyOperations";
   }
 > = {
   chat: { href: "/app", labelKey: "nav.aiAssistant" },
-  diagnosis: { href: "/app/additional", labelKey: "nav.diagnosis" },
   "translation-v4": { href: "/app/translation-v4", labelKey: "nav.translationV4" },
   "product-improve": {
     href: "/app/product-improve",
@@ -57,6 +56,10 @@ const NAV_ITEMS: Record<
     labelKey: "nav.imageStudio",
   },
   "order-monitor": { href: "/app/order-monitor", labelKey: "nav.orderMonitor" },
+  "daily-operations": {
+    href: "/app/daily-operations",
+    labelKey: "nav.dailyOperations",
+  },
   billing: { href: "/app/billing", labelKey: "nav.billing" },
 };
 

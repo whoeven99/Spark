@@ -1,12 +1,12 @@
 export type NavItemKey =
   | "chat"
-  | "diagnosis"
   | "translation-v4"
   | "product-improve"
   | "image-studio"
   | "picture-translate"
   | "generate-image"
   | "order-monitor"
+  | "daily-operations"
   | "billing";
 
 type AppShellConfig = {
@@ -18,11 +18,11 @@ const DEFAULT_APP_SHELL_CONFIG = {
   home: "/app",
   nav: [
     "chat",
-    "diagnosis",
     "translation-v4",
     "product-improve",
     "image-studio",
     "order-monitor",
+    "daily-operations",
     "billing",
   ],
 } as const satisfies AppShellConfig;

@@ -1387,9 +1387,6 @@ export function BillingPage() {
                 <thead>
                   <tr>
                     <th>{t("billing.compareFeatureCol")}</th>
-                    <th>
-                      {t("billing.planFree")}
-                    </th>
                     {paidPlansToShow.map((plan) => {
                       const tier = planTierFromPlanKey(plan.planKey) ?? plan.planKey;
                       return (
@@ -1406,7 +1403,9 @@ export function BillingPage() {
                       <td>{row.label}</td>
                       {row.values.map((value, index) => {
                         const key =
-                          index === 0 ? "free" : (planTierFromPlanKey(paidPlansToShow[index - 1]?.planKey ?? "") ?? paidPlansToShow[index - 1]?.planKey ?? String(index));
+                          planTierFromPlanKey(paidPlansToShow[index]?.planKey ?? "") ??
+                          paidPlansToShow[index]?.planKey ??
+                          String(index);
                         return (
                           <td key={`${row.label}-${key}`} className={compareColumnClass(key, emphasizedTier)}>
                             {value}

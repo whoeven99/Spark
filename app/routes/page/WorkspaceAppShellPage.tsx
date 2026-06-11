@@ -26,10 +26,8 @@ import { ContextWindowIndicator } from "../component/chat/ContextWindowIndicator
 import { WorkspaceContextObjectPicker } from "../component/chat/WorkspaceContextObjectPicker";
 import { estimateMessagesTokens } from "../../lib/tokenEstimate";
 import type { SelectedShopifyObject } from "../../lib/shopifyObjectTypes";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import { useContextResourceSearch } from "../../hooks/useContextResourceSearch";
-import type { ContextResourceSortDirection } from "../../lib/contextResourceTypes";
 import { UnifiedTaskListPage } from "../component/unifiedTaskList/UnifiedTaskListPage";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 
 type WorkspacePanel = "dashboard" | "chat" | "skills" | "automation" | "tasks";
 type AutomationView = "configured" | "history" | "templates";
@@ -196,12 +194,12 @@ const dashboardTaskSummary = [
 ];
 
 const skillApps: SkillApp[] = [
-  { id: "s1", title: "商品文案优化", description: "批量生成和优化商品标题、卖点与描述。", status: "最近使用", category: "内容", path: "/app/product-improve" },
-  { id: "s2", title: "多语言翻译", description: "支持商品内容、页面文案与术语统一翻译。", status: "可用", category: "翻译", path: "/app/translation" },
-  { id: "s3", title: "店铺诊断", description: "汇总经营指标并给出异常原因和建议。", status: "推荐", category: "分析", path: "/app/additional" },
-  { id: "s4", title: "图片工具", description: "处理商品图翻译、文生图和素材优化。", status: "可用", category: "视觉", path: "/app/image-studio" },
-  { id: "s5", title: "广告素材建议", description: "结合商品和活动目标生成广告文案建议。", status: "内测", category: "营销", path: "/app" },
-  { id: "s6", title: "邮件运营助手", description: "根据商品和分群生成邮件主题与正文。", status: "可用", category: "运营", path: "/app" },
+  { id: "s1", title: "商品文案优化", description: "批量生成和优化商品标题、卖点与描述。", status: "可用", statusTone: "positive", category: "内容", path: "/app/product-improve", available: true },
+  { id: "s4", title: "图片工具", description: "处理商品图翻译、文生图和素材优化。", status: "可用", statusTone: "positive", category: "视觉", path: "/app/image-studio", available: true },
+  { id: "s2", title: "多语言翻译", description: "支持商品内容、页面文案与术语统一翻译。", status: "可用", statusTone: "positive", category: "翻译", path: "/app/translation-v4", available: true },
+  { id: "s3", title: "每日经营待办", description: "每日巡检经营数据，按四象限生成可执行任务。", status: "可用", statusTone: "positive", category: "分析", path: "/app/daily-operations", available: true },
+  { id: "s5", title: "广告素材建议", description: "结合商品和活动目标生成广告文案建议。", status: "未完成", statusTone: "warning", category: "营销", path: "/app", available: false },
+  { id: "s6", title: "邮件运营助手", description: "根据商品和分群生成邮件主题与正文。", status: "未完成", statusTone: "warning", category: "运营", path: "/app", available: false },
 ];
 
 const automationConfigured: AutomationConfiguredItem[] = [
@@ -490,6 +488,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
         }
       }
       shopify.toast.show("对话已删除");
+      if (isMobile) setSidebarOpen(false);
     } catch (err) {
       console.error("[WorkspaceAppShellPage] delete conversation failed:", err);
       shopify.toast.show("删除对话失败");
@@ -867,10 +866,9 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     return () => window.removeEventListener("pointerdown", handlePointerDown);
   }, [accountMenuOpen]);
 
-  const activePanelLabel =
-    activePanel === "chat"
-      ? activeConversation?.title ?? "新对话"
-      : panelItems.find((item) => item.key === activePanel)?.label ?? "工作台";
+  const activePanelLabel = activePanel === "chat"
+    ? activeConversation?.title ?? "新对话"
+    : panelItems.find((item) => item.key === activePanel)?.label ?? "工作台";
 
   const sidebarContent = (
     <>
@@ -917,7 +915,8 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
           </div>
           <div style={conversationListStyle}>
             {conversationList.slice(0, 50).map((conversation) => {
-              const active = activePanel === "chat" && activeConversationId === conversation.id;
+              const active =
+                activePanel === "chat" && activeConversationId === conversation.id;
               return (
                 <div key={conversation.id} className="sidebar-history-row" style={historyRowStyle}>
                   <button
@@ -1661,30 +1660,12 @@ function ChatPanel({
 
             {activeContextTool === "order" ? (
               <>
-                <div style={isMobile ? mobileObjectToolbarStyle : objectToolbarStyle}>
-                  <div style={objectSearchFieldWrapStyle}>
-                    <s-text-field
-                      label="搜索订单"
-                      value={objectQueryByType.order}
-                      onChange={(event) => onObjectQueryChange("order", event.currentTarget.value)}
-                      autocomplete="off"
-                    />
-                  </div>
-                  <label style={sortFieldWrapStyle}>
-                    <span style={mutedMetaStyle}>排序</span>
-                    <select
-                      value={orderSort}
-                      onChange={(event) => setOrderSort(event.target.value)}
-                      style={selectFieldStyle}
-                    >
-                      {orderSortOptions.map((option) => (
-                        <option key={`${option.key}:${option.direction}`} value={`${option.key}:${option.direction}`}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
+                <input
+                  value={objectQueryByType.order}
+                  onChange={(event) => onObjectQueryChange("order", event.target.value)}
+                  placeholder="搜索订单号、站点或状态"
+                  style={selectorSearchInputStyle}
+                />
                 <div style={filterChipRowStyle}>
                   {orderFilterLabels.map((filter) => (
                     <button
@@ -1939,7 +1920,7 @@ function ChatPanel({
 
       {!isMobile ? (
       <section style={{ ...sidePanelStyle, alignSelf: "start" }}>
-        <div style={surfaceCardStyle}>
+        <div style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
             <div style={sectionTitleStyle}>当前上下文</div>
             {filledContextCount > 0 ? (
@@ -2058,8 +2039,17 @@ function SkillsPanel({ onOpenTool }: { onOpenTool: (path: string) => void }) {
           <button
             key={skill.id}
             type="button"
-            style={isMobile ? mobileSkillCardButtonStyle : skillCardButtonStyle}
-            onClick={() => onOpenTool(skill.path)}
+            style={
+              skill.available
+                ? isMobile
+                  ? mobileSkillCardButtonStyle
+                  : skillCardButtonStyle
+                : skillCardButtonDisabledStyle
+            }
+            disabled={!skill.available}
+            onClick={() => {
+              if (skill.available) onOpenTool(skill.path);
+            }}
           >
             <div style={skillCategoryStyle}>{skill.category}</div>
             <div style={sectionTitleSmallStyle}>{skill.title}</div>
@@ -2141,14 +2131,6 @@ function AutomationPanel({
       </div>
     </section>
   );
-}
-
-function normalizeResourceStatus(status: string) {
-  const normalized = status.toLowerCase();
-  if (normalized === "active" || normalized === "published" || normalized === "paid") return "正常";
-  if (normalized === "draft" || normalized === "unfulfilled") return "待处理";
-  if (normalized === "archived" || normalized === "refunded") return "异常";
-  return status;
 }
 
 function workspaceMessageToApiMessage(message: WorkspaceConversationMessage): ChatMessage {
@@ -3040,33 +3022,6 @@ const toolModalCloseStyle: CSSProperties = {
   flexShrink: 0,
 };
 const filterChipRowStyle: CSSProperties = { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 };
-const objectToolbarStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 160px", gap: 12, alignItems: "end" };
-const mobileObjectToolbarStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr", gap: 10, alignItems: "stretch" };
-const objectSearchFieldWrapStyle: CSSProperties = { minWidth: 0 };
-const sortFieldWrapStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 6 };
-const resourcePickerHintStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 12, marginTop: 12, marginBottom: 6, flexWrap: "wrap" };
-const resourcePaginationStyle: CSSProperties = { display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 };
-const resourceItemContentStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 6, minWidth: 0, flex: 1 };
-const resourceItemTopRowStyle: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 };
-const resourceStatusPillStyle: CSSProperties = {
-  padding: "2px 8px",
-  borderRadius: 999,
-  border: "1px solid #dfe3e8",
-  background: "#f6f6f7",
-  color: "#44505c",
-  fontSize: 12,
-  fontWeight: 600,
-  whiteSpace: "nowrap",
-};
-const pickerInfoBoxStyle = (tone: "neutral" | "critical"): CSSProperties => ({
-  padding: 12,
-  borderRadius: 12,
-  border: `1px solid ${tone === "critical" ? "#ffd2cc" : "#e1e3e5"}`,
-  background: tone === "critical" ? "#fff1ef" : "#f6f6f7",
-  color: tone === "critical" ? "#8a2e0f" : "#44505c",
-  fontSize: 13,
-  lineHeight: 1.5,
-});
 const mockCreateBoxStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
@@ -3122,6 +3077,12 @@ const skillGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "r
 const mobileSkillGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr", gap: 12 };
 const skillCardStyle: CSSProperties = { padding: 18, borderRadius: 14, border: "1px solid #e1e3e5", background: "#ffffff", display: "flex", flexDirection: "column", gap: 10 };
 const skillCardButtonStyle: CSSProperties = { ...skillCardStyle, width: "100%", textAlign: "left", cursor: "pointer" };
+const skillCardButtonDisabledStyle: CSSProperties = {
+  ...skillCardButtonStyle,
+  cursor: "not-allowed",
+  opacity: 0.72,
+  background: "#fafbfb",
+};
 const mobileSkillCardButtonStyle: CSSProperties = { ...skillCardButtonStyle, padding: 14, borderRadius: 12 };
 const skillCategoryStyle: CSSProperties = { fontSize: 12, fontWeight: 700, color: "#6d7175" };
 const skillFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 };
@@ -3157,6 +3118,7 @@ const textButtonStyle: CSSProperties = {
   fontWeight: 600,
   cursor: "pointer",
 };
+const disabledTextButtonStyle: CSSProperties = { ...textButtonStyle, color: "#8c9196", cursor: "not-allowed" };
 
 const tabRowStyle: CSSProperties = { display: "flex", gap: 8, marginBottom: 16 };
 const mobileTabRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr", gap: 8, marginBottom: 14 };
