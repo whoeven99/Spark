@@ -17,6 +17,7 @@ import { detectRequestLocale } from "../i18n/detector.server";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import { ensureWebPixel } from "../server/webPixel/ensureWebPixel.server";
+import { syncV4JobShopifyTokensFromSession } from "../server/translation/v4/syncV4JobShopifyTokens.server";
 import {
   getAppEntryConfig,
   type NavItemKey,
@@ -76,6 +77,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   // fire-and-forget：失败只记日志，不阻断页面加载（内部带 10 分钟 TTL 防抖）
   void ensureWebPixel(admin, session.shop);
+
+  try {
+    await syncV4JobShopifyTokensFromSession(session.shop, session.accessToken);
+  } catch (error) {
+    console.error("[v4:token-sync] app shell sync failed:", error);
+  }
+
   const locale = detectRequestLocale(request);
   const { nav, home } = getAppEntryConfig();
 

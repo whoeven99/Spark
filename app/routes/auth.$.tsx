@@ -3,6 +3,7 @@ import { redirect } from "react-router";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import { ensureWebPixel } from "../server/webPixel/ensureWebPixel.server";
+import { syncV4JobShopifyTokensFromSession } from "../server/translation/v4/syncV4JobShopifyTokens.server";
 import { buildSessionTokenBounceParamRedirect } from "../server/shopify/sessionTokenBounce.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { buildEmbeddedAppPath, getAppHomePath } from "../config/appEntry.server";
@@ -29,6 +30,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   // fire-and-forget：失败只记日志，不阻断 OAuth 跳转
   void ensureWebPixel(admin, session.shop);
+
+  try {
+    await syncV4JobShopifyTokensFromSession(session.shop, session.accessToken);
+  } catch (error) {
+    console.error("[v4:token-sync] auth callback sync failed:", error);
+  }
 
   throw redirect(buildEmbeddedAppPath(getAppHomePath(), request));
 };

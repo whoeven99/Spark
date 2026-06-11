@@ -2,14 +2,17 @@ import { useState, type CSSProperties } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 import { useTranslation } from "react-i18next";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { isFullShippingRefund } from "../server/shopify/sync/refundSyncParse.server";
 import {
+  PageHeaderNav,
   PageMetricCard,
   PageSurface,
   pageAccentBadgeStyle,
   pageColorTokens,
+  mobilePageContentStyle,
   pageContentStyle,
   pageEmptyStateStyle,
   pageIntroBannerStyle,
@@ -834,6 +837,7 @@ function EmptyRows({ colSpan, label }: { colSpan: number; label: string }) {
 
 export default function OrderMonitorPage() {
   const { t } = useTranslation();
+  const { isMobile } = useResponsiveLayout();
   const data = useLoaderData() as DashboardData;
 
   const resolveStatusText = (status: StatusLevel) => {
@@ -884,7 +888,12 @@ export default function OrderMonitorPage() {
         {t("orderMonitor.pageIntro")}
       </div>
 
-      <div style={pageContentStyle}>
+      <div style={{ ...pageContentStyle, ...(isMobile ? mobilePageContentStyle : null) }}>
+        <PageHeaderNav
+          title={t("orderMonitor.pageTitle")}
+          backLabel={t("common.backToPrevious", { defaultValue: "返回工作台" })}
+          workspaceOnly
+        />
         {!data.hasData ? (
           <div style={pageEmptyStateStyle}>
             <span>{t("orderMonitor.emptyState")}</span>
@@ -892,7 +901,13 @@ export default function OrderMonitorPage() {
         ) : null}
 
         <section>
-          <div style={pageSectionHeaderRowStyle}>
+          <div
+            style={
+              isMobile
+                ? { ...pageSectionHeaderRowStyle, flexDirection: "column", alignItems: "flex-start", gap: "0.65rem" }
+                : pageSectionHeaderRowStyle
+            }
+          >
             <h2 style={pageSectionMajorTitleStyle}>
               {t("orderMonitor.coreBoard")}
             </h2>
@@ -945,7 +960,7 @@ export default function OrderMonitorPage() {
           >
             {data.statuses.map((item) => (
               <div key={item.label} style={pageStatusCardStyle}>
-                <s-stack direction="inline" gap="base" alignItems="center">
+                <s-stack direction={isMobile ? "block" : "inline"} gap="base" alignItems="center">
                   <s-badge tone={statusTone(item.status)}>
                     {t(item.label)}: {resolveStatusText(item.status)}
                   </s-badge>
@@ -967,7 +982,7 @@ export default function OrderMonitorPage() {
           })}
         >
           <TableTitle label={t("orderMonitor.topRefundSkuTitle")} />
-          <table style={tableStyle}>
+          <TableWrap><table style={tableStyle}>
             <thead>
               <tr>
                 <th style={thStyle}>{t("orderMonitor.colSku")}</th>
@@ -995,7 +1010,7 @@ export default function OrderMonitorPage() {
                 />
               )}
             </tbody>
-          </table>
+          </table></TableWrap>
 
           <TableTitle label={t("orderMonitor.shippingRefundTitle")} />
           <table style={tableStyle}>
@@ -1058,7 +1073,7 @@ export default function OrderMonitorPage() {
           </table>
 
           <TableTitle label={t("orderMonitor.abnormalRefundOrdersTitle")} />
-          <table style={tableStyle}>
+          <TableWrap><table style={tableStyle}>
             <thead>
               <tr>
                 <th style={thStyle}>{t("orderMonitor.colOrder")}</th>
@@ -1086,7 +1101,7 @@ export default function OrderMonitorPage() {
                 />
               )}
             </tbody>
-          </table>
+          </table></TableWrap>
 
           <s-unordered-list>
             {data.refundGovernance.suggestions.map((line) => (
@@ -1115,7 +1130,7 @@ export default function OrderMonitorPage() {
             emptyLabel={t("orderMonitor.emptyUnfulfilled")}
           />
           <TableTitle label={t("orderMonitor.carrierIssuesTitle")} />
-          <table style={tableStyle}>
+          <TableWrap><table style={tableStyle}>
             <thead>
               <tr>
                 <th style={thStyle}>{t("orderMonitor.colOrder")}</th>
@@ -1143,7 +1158,7 @@ export default function OrderMonitorPage() {
                 />
               )}
             </tbody>
-          </table>
+          </table></TableWrap>
         </PageSurface>
 
         <PageSurface
@@ -1154,7 +1169,7 @@ export default function OrderMonitorPage() {
             currency: data.metrics.currency,
           })}
         >
-          <table style={tableStyle}>
+          <TableWrap><table style={tableStyle}>
             <thead>
               <tr>
                 <th style={thStyle}>{t("orderMonitor.colSku")}</th>
@@ -1192,7 +1207,7 @@ export default function OrderMonitorPage() {
                 />
               )}
             </tbody>
-          </table>
+          </table></TableWrap>
         </PageSurface>
 
         <PageSurface title={t("orderMonitor.conclusionTitle")}>
@@ -1236,6 +1251,20 @@ function TableTitle({ label }: { label: string }) {
     >
       {label}
     </h4>
+  );
+}
+
+function TableWrap({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        width: "100%",
+        overflowX: "auto",
+        WebkitOverflowScrolling: "touch",
+      }}
+    >
+      {children}
+    </div>
   );
 }
 

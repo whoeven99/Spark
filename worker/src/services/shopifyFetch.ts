@@ -1,4 +1,5 @@
 /** Maps our module names to Shopify's TranslatableResourceType enum values */
+import { getShopAccessToken, invalidateShopAccessTokenCache } from "./shopAccessToken.js";
 import { shouldIncludeFieldV2 } from "./translationFilter.js";
 
 export const MODULE_TO_SHOPIFY_TYPE: Record<string, string> = {
@@ -196,6 +197,27 @@ mutation RegisterTranslations($resourceId: ID!, $translations: [TranslationInput
   }
 }`;
 
+const TRANSLATABLE_RESOURCE_BY_ID_QUERY = `
+query GetTranslatableResourceById($resourceId: ID!, $locale: String!) {
+  translatableResource(resourceId: $resourceId) {
+    resourceId
+    translations(locale: $locale) {
+      key
+      value
+      outdated
+    }
+  }
+}`;
+
+/**
+ * Shopify GraphQL input arrays are capped (community/docs: 250 items).
+ * Per-resource field counts can also hit TOO_MANY_KEYS_FOR_RESOURCE — batch conservatively.
+ */
+export const WRITEBACK_TRANSLATIONS_BATCH = Math.min(
+  250,
+  Math.max(1, Number(process.env.WRITEBACK_TRANSLATIONS_BATCH) || 100),
+);
+
 const MODULE_ID_QUERY: Record<string, { gql: string; connectionKey: string }> = {
   PRODUCT: { gql: PRODUCTS_IDS_QUERY, connectionKey: "products" },
   ARTICLE: { gql: ARTICLES_IDS_QUERY, connectionKey: "articles" },
@@ -216,13 +238,21 @@ const MODULE_ID_QUERY: Record<string, { gql: string; connectionKey: string }> = 
  *    fetching (init) and parallel resource writes (writeback) from exhausting
  *    the bucket before Shopify issues a 429.
  */
+type ShopifyGraphqlOpts = {
+  retries?: number;
+  /** 401 后已从 Session 刷新 token 并重试过一次 */
+  tokenRetried?: boolean;
+};
+
 async function shopifyGraphql(
   shopDomain: string,
-  accessToken: string,
+  legacyAccessToken: string,
   query: string,
   variables: Record<string, unknown>,
-  _retries = 4,
+  opts: ShopifyGraphqlOpts = {},
 ): Promise<unknown> {
+  const retries = opts.retries ?? 4;
+  const accessToken = await getShopAccessToken(shopDomain, legacyAccessToken);
   const url = `https://${shopDomain}/admin/api/2024-01/graphql.json`;
   const resp = await fetch(url, {
     method: "POST",
@@ -235,16 +265,34 @@ async function shopifyGraphql(
 
   // ── 429: bucket exhausted ─────────────────────────────────────────────────
   if (resp.status === 429) {
-    if (_retries <= 0) {
+    if (retries <= 0) {
       throw new Error(`Shopify GraphQL 429: rate limited (retries exhausted)`);
     }
     const retryAfterSec = Number(resp.headers.get("Retry-After") ?? "2");
     const waitMs = Math.max(retryAfterSec * 1000, 1_000);
     console.warn(
-      `[shopifyFetch] 429 on ${shopDomain} — waiting ${waitMs}ms (retries left: ${_retries - 1})`,
+      `[shopifyFetch] 429 on ${shopDomain} — waiting ${waitMs}ms (retries left: ${retries - 1})`,
     );
     await new Promise((r) => setTimeout(r, waitMs));
-    return shopifyGraphql(shopDomain, accessToken, query, variables, _retries - 1);
+    return shopifyGraphql(shopDomain, legacyAccessToken, query, variables, {
+      ...opts,
+      retries: retries - 1,
+    });
+  }
+
+  if (resp.status === 401) {
+    const body = await resp.text();
+    if (!opts.tokenRetried) {
+      invalidateShopAccessTokenCache(shopDomain);
+      console.warn(`[shopifyFetch] 401 on ${shopDomain} — reloading token from Session`);
+      return shopifyGraphql(shopDomain, legacyAccessToken, query, variables, {
+        ...opts,
+        tokenRetried: true,
+      });
+    }
+    throw new Error(
+      `Shopify GraphQL HTTP 401: ${body} (请重新打开 App 完成授权)`,
+    );
   }
 
   if (!resp.ok) {
@@ -562,30 +610,162 @@ export type TranslationInput = {
   locale: string;
 };
 
-/** Write translations back to a single Shopify resource. */
+export type TranslationRegisterResult = {
+  success: boolean;
+  userErrors: Array<{ field: string; message: string }>;
+  registeredKeys: string[];
+};
+
+/** Normalize values before comparing writeback vs read-back. */
+export function translationValuesMatch(expected: string, actual: string): boolean {
+  return expected.trim() === actual.trim();
+}
+
+async function registerTranslationsBatch(
+  shopDomain: string,
+  accessToken: string,
+  resourceId: string,
+  translations: TranslationInput[],
+): Promise<TranslationRegisterResult> {
+  const data = (await shopifyGraphql(
+    shopDomain,
+    accessToken,
+    TRANSLATIONS_REGISTER_MUTATION,
+    { resourceId, translations },
+  )) as {
+    translationsRegister: {
+      translations: Array<{ key: string; value: string }>;
+      userErrors: Array<{ field: string; message: string }>;
+    };
+  };
+  const userErrors = data.translationsRegister.userErrors ?? [];
+  const registeredKeys = (data.translationsRegister.translations ?? []).map((t) => t.key);
+  return {
+    success: userErrors.length === 0,
+    userErrors,
+    registeredKeys,
+  };
+}
+
+/**
+ * Write translations back to a single Shopify resource.
+ * Same resourceId accepts multiple fields in one mutation; large field lists are chunked.
+ */
 export async function registerTranslations(
   shopDomain: string,
   accessToken: string,
   resourceId: string,
   translations: TranslationInput[],
-): Promise<{ success: boolean; userErrors: Array<{ field: string; message: string }> }> {
-  try {
-    const data = (await shopifyGraphql(
-      shopDomain,
-      accessToken,
-      TRANSLATIONS_REGISTER_MUTATION,
-      { resourceId, translations },
-    )) as {
-      translationsRegister: {
-        translations: unknown[];
-        userErrors: Array<{ field: string; message: string }>;
-      };
-    };
-    const userErrors = data.translationsRegister.userErrors;
-    return { success: userErrors.length === 0, userErrors };
-  } catch (e) {
-    return { success: false, userErrors: [{ field: "", message: String(e) }] };
+): Promise<TranslationRegisterResult> {
+  if (translations.length === 0) {
+    return { success: true, userErrors: [], registeredKeys: [] };
   }
+
+  const allErrors: Array<{ field: string; message: string }> = [];
+  const allRegisteredKeys: string[] = [];
+
+  try {
+    for (let i = 0; i < translations.length; i += WRITEBACK_TRANSLATIONS_BATCH) {
+      const batch = translations.slice(i, i + WRITEBACK_TRANSLATIONS_BATCH);
+      const result = await registerTranslationsBatch(shopDomain, accessToken, resourceId, batch);
+      allErrors.push(...result.userErrors);
+      allRegisteredKeys.push(...result.registeredKeys);
+      if (!result.success) break;
+    }
+
+    const expectedKeys = new Set(translations.map((t) => t.key));
+    const missingInResponse = [...expectedKeys].filter((k) => !allRegisteredKeys.includes(k));
+
+    return {
+      success: allErrors.length === 0 && missingInResponse.length === 0,
+      userErrors:
+        allErrors.length > 0
+          ? allErrors
+          : missingInResponse.length > 0
+            ? [{
+                field: "translations",
+                message: `translationsRegister returned no rows for keys: ${missingInResponse.join(", ")}`,
+              }]
+            : [],
+      registeredKeys: allRegisteredKeys,
+    };
+  } catch (e) {
+    return {
+      success: false,
+      userErrors: [{ field: "", message: String(e) }],
+      registeredKeys: allRegisteredKeys,
+    };
+  }
+}
+
+export type StoredTranslation = {
+  key: string;
+  value: string;
+  outdated: boolean;
+};
+
+/** Read back translations already stored on Shopify for one resource + locale. */
+export async function fetchResourceTranslations(
+  shopDomain: string,
+  accessToken: string,
+  resourceId: string,
+  locale: string,
+): Promise<StoredTranslation[]> {
+  const data = (await shopifyGraphql(
+    shopDomain,
+    accessToken,
+    TRANSLATABLE_RESOURCE_BY_ID_QUERY,
+    { resourceId, locale },
+  )) as {
+    translatableResource: {
+      translations: Array<{ key: string; value: string; outdated?: boolean | null }>;
+    } | null;
+  };
+
+  const rows = data.translatableResource?.translations ?? [];
+  return rows.map((row) => ({
+    key: row.key,
+    value: row.value ?? "",
+    outdated: Boolean(row.outdated),
+  }));
+}
+
+export type TranslationMismatch = {
+  key: string;
+  expected: string;
+  actual: string;
+  outdated?: boolean;
+};
+
+/** Compare expected writeback payload against Shopify read-back. */
+export function diffResourceTranslations(
+  expected: TranslationInput[],
+  stored: StoredTranslation[],
+): TranslationMismatch[] {
+  const storedByKey = new Map(stored.map((row) => [row.key, row]));
+  const mismatches: TranslationMismatch[] = [];
+
+  for (const exp of expected) {
+    const row = storedByKey.get(exp.key);
+    if (!row) {
+      mismatches.push({ key: exp.key, expected: exp.value, actual: "(missing)" });
+      continue;
+    }
+    if (row.outdated) {
+      mismatches.push({
+        key: exp.key,
+        expected: exp.value,
+        actual: row.value,
+        outdated: true,
+      });
+      continue;
+    }
+    if (!translationValuesMatch(exp.value, row.value)) {
+      mismatches.push({ key: exp.key, expected: exp.value, actual: row.value });
+    }
+  }
+
+  return mismatches;
 }
 
 /** @internal Vitest 用：构建 ID 模块 query filter */

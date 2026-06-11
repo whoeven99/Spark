@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import { TaskStatusBadge } from "./TaskStatusBadge";
 import { LogViewer } from "./LogViewer";
@@ -115,6 +116,12 @@ type Props = {
   /** CSS background value for the progress bar fill (supports gradients). */
   progressBackground: string;
 
+  /** Optional custom badge element used instead of the default task status badge. */
+  statusBadge?: ReactNode;
+
+  /** Optional extra content rendered between the progress bar and actions. */
+  bodyContent?: ReactNode;
+
   /** Buttons rendered in the bottom-right corner. */
   actions: CardAction[];
 
@@ -172,11 +179,14 @@ export function AITaskCardShell({
   secondaryCopy,
   progressPercent,
   progressBackground,
+  statusBadge,
+  bodyContent,
   actions,
   showLogViewer = false,
   onStatusChange,
 }: Props) {
   const { i18n, t } = useTranslation();
+  const { isMobile, isNarrowMobile } = useResponsiveLayout();
   const shortId = task.id.slice(0, 8).toUpperCase();
   const [isHydrated, setIsHydrated] = useState(false);
 
@@ -193,23 +203,24 @@ export function AITaskCardShell({
       style={{
         border: `1px solid ${pageColorTokens.border}`,
         borderRadius: pageColorTokens.radiusCard,
-        padding: "18px 20px 16px",
+        padding: isMobile ? "16px 14px 14px" : "18px 20px 16px",
         background: "#fff",
         boxShadow: pageColorTokens.shadowCard,
         display: "flex",
         flexDirection: "column",
-        gap: 16,
-        minHeight: 228,
+        gap: isMobile ? 14 : 16,
+        minHeight: isMobile ? undefined : 228,
       }}
     >
       {/* ── Header ── */}
       <div
         style={{
           display: "flex",
-          alignItems: "flex-start",
+          alignItems: isMobile ? "stretch" : "flex-start",
           justifyContent: "space-between",
           gap: 12,
-          flexWrap: "wrap",
+          flexWrap: isMobile ? "nowrap" : "wrap",
+          flexDirection: isMobile ? "column" : "row",
         }}
       >
         <div style={{ flex: "1 1 28rem", minWidth: 0 }}>
@@ -228,14 +239,14 @@ export function AITaskCardShell({
             >
               #{shortId}
             </span>
-            <TaskStatusBadge status={status} />
+            {statusBadge ?? <TaskStatusBadge status={status} />}
             {extraBadges}
           </div>
 
           {/* Title */}
           <div
             style={{
-              fontSize: 18,
+              fontSize: isMobile ? 16 : 18,
               fontWeight: 700,
               color: pageColorTokens.textPrimary,
               marginTop: 12,
@@ -249,7 +260,7 @@ export function AITaskCardShell({
           {metaLine ? (
             <div
               style={{
-                fontSize: 13,
+                fontSize: isMobile ? 12 : 13,
                 color: pageColorTokens.textSecondary,
                 display: "flex",
                 gap: 6,
@@ -269,7 +280,8 @@ export function AITaskCardShell({
             flexShrink: 0,
             fontSize: 12,
             color: pageColorTokens.textFootnote,
-            paddingTop: 2,
+            paddingTop: isMobile ? 0 : 2,
+            alignSelf: isMobile ? "flex-start" : "auto",
           }}
         >
           {t("aiTask.createdAtLabel", { value: createdAtText })}
@@ -277,13 +289,13 @@ export function AITaskCardShell({
       </div>
 
       {/* ── Divider ── */}
-      <div style={{ height: 1, background: pageColorTokens.border, margin: "0 -20px" }} />
+      <div style={{ height: 1, background: pageColorTokens.border, margin: isMobile ? "0 -14px" : "0 -20px" }} />
 
       {/* ── Status section ── */}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <div
           style={{
-            fontSize: 15,
+            fontSize: isMobile ? 14 : 15,
             fontWeight: 700,
             color: primaryCopyColor ?? pageColorTokens.textPrimary,
             lineHeight: 1.5,
@@ -326,14 +338,17 @@ export function AITaskCardShell({
           />
         </div>
 
+        {bodyContent ? <div>{bodyContent}</div> : null}
+
         {/* Action buttons */}
         <div
           style={{
             display: "flex",
-            justifyContent: "flex-end",
+            justifyContent: isMobile ? "stretch" : "flex-end",
             gap: 8,
             flexWrap: "wrap",
             marginTop: 2,
+            flexDirection: isNarrowMobile ? "column" : "row",
           }}
         >
           {actions.map((action) => (
@@ -342,7 +357,16 @@ export function AITaskCardShell({
               type="button"
               onClick={action.onClick}
               disabled={action.disabled}
-              style={actionButtonStyle(action.tone, action.disabled)}
+              style={{
+                ...actionButtonStyle(action.tone, action.disabled),
+                ...(isNarrowMobile
+                  ? {
+                      width: "100%",
+                      justifyContent: "center",
+                      display: "inline-flex",
+                    }
+                  : {}),
+              }}
             >
               {action.label}
             </button>

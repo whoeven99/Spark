@@ -44,8 +44,9 @@
 | 文件 | 职责 |
 |---|---|
 | `index.ts` | 入口，注册异常处理，调 startScheduler |
-| `scheduler.ts` | 30s 轮询驱动四个 Worker；5min 重置僵死任务 |
+| `scheduler.ts` | 30s 轮询驱动 init/translate/writeback/verify/**analysis** Worker；5min 重置僵死任务 |
 | `services/cosmosV4.ts` | Worker 侧 Cosmos 操作（与 App 侧逻辑一致，独立副本） |
+| `services/cosmosAnalysis.ts` | 商店扫描分析任务 Cosmos（`shop_analysis_jobs`） |
 | `services/blobV4.ts` | Worker 侧 Blob 读写（JSON 序列化） |
 | `services/redisV4.ts` | Worker 侧 Redis，含 hint 队列和 progress hash |
 | `services/shopifyFetch.ts` | Shopify GraphQL 拉取可翻译资源 + 写回翻译 |
@@ -54,6 +55,7 @@
 | `workers/translateWorker.ts` | 阶段 2：调 LLM 翻译，写 Blob |
 | `workers/writebackWorker.ts` | 阶段 3：把译文写回 Shopify，支持断点续传 |
 | `workers/verifyWorker.ts` | 阶段 4：重试 writeback 失败的资源 |
+| `workers/analysisWorker.ts` | 商店扫描分析：拉取源语言内容 → LLM 生成档案与术语草稿 |
 
 ---
 
@@ -225,19 +227,24 @@ CREATED
 
 ### 阶段 3 — Writeback Worker
 
-**状态迁移**：`WRITEBACK_QUEUED → WRITING_BACK → COMPLETED / VERIFY_QUEUED`
+**状态迁移**：`WRITEBACK_QUEUED → WRITING_BACK → VERIFY_QUEUED`
 
 **执行流程**：
 1. claim job
 2. 读 `{blobPrefix}/writeback/progress.json`（已写回的 resourceId 集合，断点续传用）
 3. 对每个 translate chunk 中的每个 resource（未在 writtenSet 中）：
    - 过滤：`translatedValue.trim() && translatedValue !== originalValue` 的字段
-   - 调 Shopify `translationsRegister` mutation（locale=target）
+   - 调 Shopify `translationsRegister` mutation（**同一 `resourceId` 一次传多条 `TranslationInput`**；字段过多时按 `WRITEBACK_TRANSLATIONS_BATCH` 默认 100、上限 250 分批）
+   - 成功：`userErrors` 为空且 mutation 返回的 `translations` 覆盖全部 key
    - 成功：加入 writtenSet，`writebackDone++`
    - 失败：加入 failedResources，`writebackFailed++`
    - 每 20 条资源持久化一次 `progress.json`（断点续传检查点）
-4. 若有失败：写 `writeback/failed.json`，`status=VERIFY_QUEUED`，`lpush hint:verify`
-5. 无失败：`status=COMPLETED`
+4. 写 `writeback/failed.json`（可为空数组），**一律** `status=VERIFY_QUEUED`，`lpush hint:verify`
+
+**Shopify API**（[translationsRegister](https://shopify.dev/docs/api/admin-graphql/latest/mutations/translationsRegister)）：
+- 同一 resource 支持批量注册多个 `key`（`translations: [TranslationInput!]!`）
+- GraphQL 输入数组通常上限 **250** 条/次；单 resource 还可能触发 `TOO_MANY_KEYS_FOR_RESOURCE`
+- 需 `write_translations` scope；`translatableContentDigest` 必须与 init 阶段 digest 一致
 
 ---
 
@@ -245,12 +252,14 @@ CREATED
 
 **状态迁移**：`VERIFY_QUEUED → VERIFYING → COMPLETED`
 
+**目的**：防止 `translationsRegister` 返回成功但店铺侧未真正落库（历史上有过「API 无 userErrors 但译文未生效」的情况）。
+
 **执行流程**：
 1. claim job
-2. 读 `{blobPrefix}/writeback/failed.json`（writeback 阶段失败的资源）
-3. 对每个失败资源重试 `registerTranslations`
-4. 统计 `verifyDone` / `verifyFailed`，更新 Cosmos metrics
-5. `status=COMPLETED`（无论是否仍有失败，verify 是最终兜底）
+2. 汇总待校验资源：`writeback/progress.json` 中已写回的资源（从 translate blob 取期望译文）+ `writeback/failed.json` 中写回失败的资源
+3. 对每个资源 **`translatableResource` 读回**目标 locale 的 `translations`，与期望逐 key 比对（trim 后相等；`outdated=true` 视为未生效）
+4. 不一致 → 仅对 mismatch 的 key **重试 `registerTranslations`** → 再次读回比对
+5. 统计 `verifyDone` / `verifyFailed`，`status=COMPLETED`（仍有失败也结束，失败数见 metrics）
 
 ---
 
@@ -462,7 +471,8 @@ type TranslationTaskFormPayload = {
 | `TRANSLATION_AI_MODEL` | App + Worker | 全局覆盖翻译模型，如 `gpt-4o-mini`、`google-translate` |
 | `TRANSLATION_TM_DISABLED` | Worker | 设为 `"true"` 关闭翻译记忆缓存 |
 | `TRANSLATION_TM_TTL_DAYS` | Worker | 翻译记忆缓存 TTL（天），默认 60 |
-| `WORKER_STAGES` | Worker | 逗号分隔启用的阶段，如 `init,translate`（默认全开）。用于线上质量测试时跳过 writeback/verify，不写回真实店铺 |
+| `WORKER_STAGES` | Worker | 逗号分隔启用的阶段，如 `init,translate,writeback,verify,analysis`（**默认全开**）。若设为 `init,translate` 等未含 `analysis` 的值，**商店扫描分析不会执行**；用于线上质量测试时可跳过 writeback/verify |
+| `COSMOS_SHOP_ANALYSIS_CONTAINER` | App + Worker | 商店扫描分析 Cosmos 容器，默认 `shop_analysis_jobs`（分区键 `/shopName`） |
 | `TRANSLATION_MAX_CHUNK_CHARS` | Worker | init 阶段单个 chunk 的字符总量上限，默认 50000（防止 chunk blob 过大 / 内存过高） |
 
 ---

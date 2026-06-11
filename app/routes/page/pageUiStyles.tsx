@@ -1,4 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
+import { useLocation, useNavigate } from "react-router";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 
 export const pageColorTokens = {
   textPrimary: "#1a1d1f",
@@ -72,6 +74,82 @@ export const pageContentStyle: CSSProperties = {
   flexDirection: "column",
   gap: "1.5rem",
   maxWidth: "1120px",
+};
+
+export const mobilePageContentStyle: CSSProperties = {
+  gap: "1rem",
+  width: "100%",
+};
+
+export const pageBackButtonStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.45rem",
+  width: "fit-content",
+  padding: "0.55rem 0.85rem",
+  borderRadius: pageColorTokens.radiusControl,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surface,
+  color: pageColorTokens.textBody,
+  fontSize: "0.8125rem",
+  fontWeight: 600,
+  cursor: "pointer",
+  boxShadow: pageColorTokens.shadowCard,
+};
+
+export const pageBackButtonMobileStyle: CSSProperties = {
+  ...pageBackButtonStyle,
+  minHeight: 40,
+  padding: "0.5rem 0.75rem",
+  fontSize: "0.75rem",
+};
+
+export const pageHeaderNavStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: "1rem",
+  flexWrap: "wrap",
+};
+
+export const pageHeaderNavMobileStyle: CSSProperties = {
+  ...pageHeaderNavStyle,
+  gap: "0.75rem",
+  flexDirection: "column",
+};
+
+export const pageHeaderNavMainStyle: CSSProperties = {
+  flex: "1 1 16rem",
+  minWidth: 0,
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.25rem",
+};
+
+export const pageHeaderNavTitleStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "1.375rem",
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+  lineHeight: 1.2,
+};
+
+export const pageHeaderNavTitleMobileStyle: CSSProperties = {
+  ...pageHeaderNavTitleStyle,
+  fontSize: "1.125rem",
+};
+
+export const pageHeaderNavSubtitleStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "0.875rem",
+  lineHeight: 1.55,
+  color: pageColorTokens.textSecondary,
+  maxWidth: "44rem",
+};
+
+export const pageHeaderNavSubtitleMobileStyle: CSSProperties = {
+  ...pageHeaderNavSubtitleStyle,
+  fontSize: "0.8125rem",
 };
 
 export const pageSurfaceStyle: CSSProperties = {
@@ -424,6 +502,128 @@ export function PageSectionHeader({ title, subtitle, badge }: PageSectionHeaderP
         {subtitle ? <p style={pageSectionSubtitleStyle}>{subtitle}</p> : null}
       </div>
       {badge ?? null}
+    </div>
+  );
+}
+
+type PageBackButtonProps = {
+  label: string;
+  fallbackPath?: string;
+  preserveSearch?: boolean;
+  workspaceOnly?: boolean;
+  style?: CSSProperties;
+  returnTo?: string;
+};
+
+function resolveBackDestination(params: {
+  locationKey: string;
+  locationSearch: string;
+  navigate: ReturnType<typeof useNavigate>;
+  fallbackPath: string;
+  preserveSearch: boolean;
+  returnTo?: string;
+}) {
+  if (params.returnTo) {
+    params.navigate(params.returnTo);
+    return;
+  }
+
+  if (params.locationKey !== "default") {
+    params.navigate(-1);
+    return;
+  }
+
+  const search = params.preserveSearch ? params.locationSearch : "";
+  params.navigate(`${params.fallbackPath}${search}`);
+}
+
+export function PageBackButton({
+  label,
+  fallbackPath = "/app",
+  preserveSearch = true,
+  workspaceOnly = false,
+  style,
+  returnTo,
+}: PageBackButtonProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { isMobile } = useResponsiveLayout();
+
+  if (workspaceOnly && new URLSearchParams(location.search).get("from") !== "workspace") {
+    return null;
+  }
+
+  const handleBack = () => {
+    resolveBackDestination({
+      locationKey: location.key,
+      locationSearch: location.search,
+      navigate,
+      fallbackPath,
+      preserveSearch,
+      returnTo,
+    });
+  };
+
+  return (
+    <button
+      type="button"
+      style={{
+        ...(isMobile ? pageBackButtonMobileStyle : pageBackButtonStyle),
+        ...style,
+      }}
+      onClick={handleBack}
+    >
+      <span aria-hidden="true">←</span>
+      <span>{label}</span>
+    </button>
+  );
+}
+
+type PageHeaderNavProps = {
+  title: string;
+  subtitle?: string;
+  backLabel: string;
+  fallbackPath?: string;
+  preserveSearch?: boolean;
+  workspaceOnly?: boolean;
+  returnTo?: string;
+  rightAction?: ReactNode;
+};
+
+export function PageHeaderNav({
+  title,
+  subtitle,
+  backLabel,
+  fallbackPath,
+  preserveSearch,
+  workspaceOnly,
+  returnTo,
+  rightAction,
+}: PageHeaderNavProps) {
+  const { isMobile } = useResponsiveLayout();
+
+  return (
+    <div style={isMobile ? pageHeaderNavMobileStyle : pageHeaderNavStyle}>
+      <div style={pageHeaderNavMainStyle}>
+        <PageBackButton
+          label={backLabel}
+          fallbackPath={fallbackPath}
+          preserveSearch={preserveSearch}
+          workspaceOnly={workspaceOnly}
+          returnTo={returnTo}
+        />
+        <div>
+          <h1 style={isMobile ? pageHeaderNavTitleMobileStyle : pageHeaderNavTitleStyle}>
+            {title}
+          </h1>
+          {subtitle ? (
+            <p style={isMobile ? pageHeaderNavSubtitleMobileStyle : pageHeaderNavSubtitleStyle}>
+              {subtitle}
+            </p>
+          ) : null}
+        </div>
+      </div>
+      {rightAction ?? null}
     </div>
   );
 }

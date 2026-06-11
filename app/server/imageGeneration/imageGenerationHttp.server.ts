@@ -2,6 +2,7 @@ import { z } from "zod";
 import { billingErrorToResponse } from "../billing/index.server";
 import { requireVisualToolBillingAccess } from "../tokenUsage/index.server";
 import { getEstimatedCredits } from "../aiTask/aiTaskEstimation.server";
+import { deriveBucket } from "../aiTask/estimationBucket";
 import { resolveImageGenerationProvider, isImageGenerationConfigured } from "./imageGenerationConfig.server";
 import { enqueueImageGenerationTask } from "./imageGenerationAsync.server";
 import { validateImageGenerationPrompt } from "./imageGenerationExecutor.server";
@@ -103,7 +104,10 @@ export async function executeImageGenerationRequest(params: {
   const description = params.description?.trim() || undefined;
   const imageProvider = resolveImageGenerationProvider() ?? "openai";
 
-  const estimatedCredits = await getEstimatedCredits("image_generation");
+  const estimatedCredits = await getEstimatedCredits(
+    "image_generation",
+    deriveBucket("image_generation", { imageProvider }),
+  );
 
   const { taskId, batchId } = await createBatchWithTask({
     shop: params.sessionShop,

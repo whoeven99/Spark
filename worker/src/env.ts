@@ -94,7 +94,20 @@ export function ensureWorkerEnv(): void {
       process.env.COSMOS_TRANSLATION_V4_JOBS_CONTAINER,
       "translation_v4_jobs",
     ],
+    [
+      "COSMOS_SHOP_ANALYSIS_CONTAINER",
+      process.env.COSMOS_SHOP_ANALYSIS_CONTAINER,
+      "shop_analysis_jobs",
+    ],
   ]);
+  const workerStages = process.env.WORKER_STAGES?.trim();
+  const stagesOk = !workerStages || workerStages.split(",").map((s) => s.trim().toLowerCase()).includes("analysis");
+  logEnvCheck("Worker stages", stagesOk, [
+    ["WORKER_STAGES", workerStages, "init,translate,writeback,verify,analysis (default all)"],
+  ]);
+  if (workerStages && !stagesOk) {
+    console.warn("[worker:env] ⚠️ WORKER_STAGES 未包含 analysis，商店扫描分析任务不会被 Worker 消费");
+  }
   const redisUrl = process.env.REDIS_URL?.trim();
   const redisHost =
     process.env.REDIS_HOSTNAME?.trim() ||
@@ -114,10 +127,28 @@ export function ensureWorkerEnv(): void {
     ["AZURE_BLOB_CONNECTION_STRING", blobConn],
     ["AZURE_BLOB_TRANSLATION_CONTAINER", process.env.AZURE_BLOB_TRANSLATION_CONTAINER, "translation-content"],
   ]);
+  const tursoTarget = (process.env.TURSO_TARGET?.trim() || process.env.NODE_ENV || "test").toLowerCase();
+  const tursoTestOk = Boolean(
+    process.env.TURSO_TEST_DATABASE_URL?.trim() && process.env.TURSO_TEST_AUTH_TOKEN?.trim(),
+  );
+  const tursoProdOk = Boolean(
+    process.env.TURSO_PROD_DATABASE_URL?.trim() && process.env.TURSO_PROD_AUTH_TOKEN?.trim(),
+  );
+  logEnvCheck("Turso (Session)", tursoTestOk || tursoProdOk, [
+    ["TURSO_TARGET", process.env.TURSO_TARGET, tursoTarget.includes("prod") ? "prod" : "test"],
+    ["TURSO_TEST_DATABASE_URL", process.env.TURSO_TEST_DATABASE_URL],
+    ["TURSO_TEST_AUTH_TOKEN", process.env.TURSO_TEST_AUTH_TOKEN],
+    ["TURSO_PROD_DATABASE_URL", process.env.TURSO_PROD_DATABASE_URL],
+    ["TURSO_PROD_AUTH_TOKEN", process.env.TURSO_PROD_AUTH_TOKEN],
+  ]);
+
   logEnvCheck("LLM (DeepSeek)", Boolean(process.env.DEEPSEEK_API_KEY?.trim()), [
     ["DEEPSEEK_API_KEY", process.env.DEEPSEEK_API_KEY],
-    ["DEEPSEEK_BASE_URL", process.env.DEEPSEEK_BASE_URL, "https://api.deepseek.com/v1"],
+    ["DEEPSEEK_BASE_URL", process.env.DEEPSEEK_BASE_URL, "https://api.deepseek.com"],
     ["DEEPSEEK_MODEL", process.env.DEEPSEEK_MODEL, "deepseek-chat"],
+    ["DEEPSEEK_CONCURRENCY_LIMIT", process.env.DEEPSEEK_CONCURRENCY_LIMIT, "(auto: flash=2500, else=500)"],
+    ["DEEPSEEK_INITIAL_CONCURRENCY", process.env.DEEPSEEK_INITIAL_CONCURRENCY, "(auto: min(32, 10% ceiling))"],
+    ["DEEPSEEK_CONCURRENCY_UTIL", process.env.DEEPSEEK_CONCURRENCY_UTIL, "0.9"],
   ]);
   console.info(`[worker:env] process.env 总键数: ${Object.keys(process.env).length}`);
   console.info("[worker:env] =================");

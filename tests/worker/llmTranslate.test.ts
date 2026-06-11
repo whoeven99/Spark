@@ -11,7 +11,9 @@ vi.mock("openai", () => ({
 // Mock translation memory so cache behaviour is controllable per-test.
 vi.mock("../../worker/src/services/translationMemory.js", () => ({
   tmGet: vi.fn(async () => null),
+  tmGetByValue: vi.fn(async () => null),
   tmSet: vi.fn(async () => {}),
+  tmSetByValue: vi.fn(async () => {}),
   tmKey: (s: string, t: string, m: string, d: string) => `tm:v4:${s}:${t}:${m}:${d}`,
 }));
 
@@ -20,7 +22,11 @@ vi.mock("../../worker/src/services/glossary.js", () => ({
   loadGlossaryLines: vi.fn(async () => []),
 }));
 
-import { translateBatch, translateResources } from "../../worker/src/services/llmTranslate.js";
+import {
+  resetLlmPoolForTests,
+  translateBatch,
+  translateResources,
+} from "../../worker/src/services/llmTranslate.js";
 import { tmGet, tmSet } from "../../worker/src/services/translationMemory.js";
 import { loadGlossaryLines } from "../../worker/src/services/glossary.js";
 
@@ -30,12 +36,14 @@ function llmResponse(translations: Array<{ key: string; translatedValue: string 
 
 beforeEach(() => {
   createMock.mockReset();
+  resetLlmPoolForTests();
   vi.mocked(tmGet).mockReset().mockResolvedValue(null);
   vi.mocked(tmSet).mockReset().mockResolvedValue(undefined);
   vi.mocked(loadGlossaryLines).mockReset().mockResolvedValue([]);
   process.env.OPENAI_API_KEY = "test-key";
   delete process.env.TRANSLATION_AI_MODEL;
   delete process.env.DEEPSEEK_API_KEY;
+  delete process.env.DEEPSEEK_API_KEYS;
   delete process.env.DEEPSEEK_MODEL;
   delete process.env.AZURE_OPENAI_ENDPOINT;
   delete process.env.GOOGLE_TRANSLATE_API_KEY;
@@ -352,20 +360,48 @@ describe("translateBatch — cost-tiered engine routing", () => {
 });
 
 describe("translateBatch — provider selection", () => {
-  it("sends DEEPSEEK_MODEL when TRANSLATION_AI_MODEL=deepseek", async () => {
+  it("calls DeepSeek native fetch when TRANSLATION_AI_MODEL=deepseek", async () => {
     process.env.DEEPSEEK_API_KEY = "dk-test";
     process.env.DEEPSEEK_MODEL = "deepseek-v4-flash";
     process.env.TRANSLATION_AI_MODEL = "deepseek";
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Bonjour" }]));
+    resetLlmPoolForTests();
+
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({
+        "x-ratelimit-limit": "500",
+        "x-ratelimit-remaining": "499",
+        "x-ratelimit-reset": "1710000000",
+      }),
+      json: async () => ({
+        ...llmResponse([{ key: "f0", translatedValue: "Bonjour" }]),
+        usage: { total_tokens: 42, prompt_tokens: 10, completion_tokens: 32 },
+      }),
+      text: async () => "",
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
     await translateBatch(
       [{ key: "title", value: "你好", digest: "d1" }],
       "zh-CN",
       "fr",
-      "gpt-4o-mini", // job model is ignored once a provider is selected
+      "gpt-4o-mini",
       false,
       "shop.myshopify.com",
     );
-    expect(createMock.mock.calls[0][0].model).toBe("deepseek-v4-flash");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.deepseek.com/chat/completions");
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+      model: string;
+      response_format: { type: string };
+      user_id: string;
+    };
+    expect(body.model).toBe("deepseek-v4-flash");
+    expect(body.response_format).toEqual({ type: "json_object" });
+    expect(body.user_id).toBe("shop_myshopify_com");
+    expect(createMock).not.toHaveBeenCalled();
   });
 });
 

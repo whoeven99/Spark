@@ -25,8 +25,9 @@ import {
   type BillingIntervalView,
   type PlanTier,
 } from "../../lib/billingPlanUi";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import styles from "../component/billing/billingPage.module.css";
-import { pageContentStyle } from "./pageUiStyles";
+import { PageHeaderNav, mobilePageContentStyle, pageContentStyle } from "./pageUiStyles";
 
 const EMPTY = "-";
 const MOCK_PLAN_SUFFIX = "_mock";
@@ -590,7 +591,11 @@ export function BillingPage() {
       ? String(navigation.formData.get("planKey") ?? "")
       : "";
   const { t, i18n } = useTranslation();
+  const { isMobile } = useResponsiveLayout();
   const locale = i18n.language;
+  const backLabel = t("common.backToPrevious", {
+    defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回上一页" : "Back",
+  });
   const mockedBillingPlans = useMemo(
     () =>
       buildMockBillingPlans({
@@ -851,6 +856,23 @@ export function BillingPage() {
       values: paidPlansToShow.map((plan) => planCompareValue(plan, "support", locale)),
     },
   ];
+  const comparePlanCards = [
+    {
+      key: "free",
+      title: t("billing.planFree"),
+      highlighted: false,
+      values: compareRows.map((row) => ({ label: row.label, value: row.values[0] })),
+    },
+    ...paidPlansToShow.map((plan, index) => {
+      const key = planTierFromPlanKey(plan.planKey) ?? plan.planKey;
+      return {
+        key,
+        title: normalizePlanDisplayName(plan.displayName, plan.planKey),
+        highlighted: emphasizedTier === key,
+        values: compareRows.map((row) => ({ label: row.label, value: row.values[index + 1] })),
+      };
+    }),
+  ];
 
   const selectedPack =
     tokenPacks.find((p) => p.planKey === selectedPackKey) ?? tokenPacks[0];
@@ -877,7 +899,7 @@ export function BillingPage() {
   if (showAccountDetailPage) {
     return (
       <s-page heading={t("billing.accountDetailPageTitle")}>
-        <div style={pageContentStyle}>
+        <div style={{ ...pageContentStyle, ...(isMobile ? mobilePageContentStyle : null) }}>
           <section className={styles.accountDetailPage}>
             <div className={styles.accountDetailHeader}>
               <button
@@ -1078,6 +1100,12 @@ export function BillingPage() {
           minHeight: "auto",
         }}
       >
+        <PageHeaderNav
+          title={t("billing.pageTitle")}
+          backLabel={backLabel}
+          workspaceOnly
+        />
+
         {!billing.hasAccess && billing.billingRequired ? (
           <s-banner tone="warning">{t("billing.lowBalanceWarning")}</s-banner>
         ) : null}
@@ -1328,39 +1356,68 @@ export function BillingPage() {
         {paidPlansToShow.length > 0 ? (
           <section className={styles.compareSection}>
             <h2 className={styles.compareTitle}>{t("billing.compareTitle")}</h2>
-            <table className={styles.compareTable}>
-              <thead>
-                <tr>
-                  <th>{t("billing.compareFeatureCol")}</th>
-                  {paidPlansToShow.map((plan) => {
-                    const tier = planTierFromPlanKey(plan.planKey) ?? plan.planKey;
-                    return (
-                      <th key={plan.planKey} className={compareColumnClass(tier, emphasizedTier)}>
-                        {normalizePlanDisplayName(plan.displayName, plan.planKey)}
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {compareRows.map((row) => (
-                  <tr key={row.label}>
-                    <td>{row.label}</td>
-                    {row.values.map((value, index) => {
-                      const key =
-                        planTierFromPlanKey(paidPlansToShow[index]?.planKey ?? "") ??
-                        paidPlansToShow[index]?.planKey ??
-                        String(index);
+            {isMobile ? (
+              <div className={styles.compareCards}>
+                {comparePlanCards.map((plan) => (
+                  <article
+                    key={plan.key}
+                    className={`${styles.compareCard} ${plan.highlighted ? styles.compareCardHighlight : ""}`}
+                  >
+                    <div className={styles.compareCardTitleRow}>
+                      <h3 className={styles.compareCardTitle}>{plan.title}</h3>
+                      {plan.highlighted ? (
+                        <span className={styles.compareCardBadge}>
+                          {locale.toLowerCase().startsWith("zh") ? "当前推荐" : "Highlighted"}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className={styles.compareList}>
+                      {plan.values.map((item) => (
+                        <div key={`${plan.key}-${item.label}`} className={styles.compareListItem}>
+                          <span className={styles.compareListLabel}>{item.label}</span>
+                          <span className={styles.compareListValue}>{item.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <table className={styles.compareTable}>
+                <thead>
+                  <tr>
+                    <th>{t("billing.compareFeatureCol")}</th>
+                    <th>
+                      {t("billing.planFree")}
+                    </th>
+                    {paidPlansToShow.map((plan) => {
+                      const tier = planTierFromPlanKey(plan.planKey) ?? plan.planKey;
                       return (
-                        <td key={`${row.label}-${key}`} className={compareColumnClass(key, emphasizedTier)}>
-                          {value}
-                        </td>
+                        <th key={plan.planKey} className={compareColumnClass(tier, emphasizedTier)}>
+                          {normalizePlanDisplayName(plan.displayName, plan.planKey)}
+                        </th>
                       );
                     })}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {compareRows.map((row) => (
+                    <tr key={row.label}>
+                      <td>{row.label}</td>
+                      {row.values.map((value, index) => {
+                        const key =
+                          index === 0 ? "free" : (planTierFromPlanKey(paidPlansToShow[index - 1]?.planKey ?? "") ?? paidPlansToShow[index - 1]?.planKey ?? String(index));
+                        return (
+                          <td key={`${row.label}-${key}`} className={compareColumnClass(key, emphasizedTier)}>
+                            {value}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </section>
         ) : null}
 

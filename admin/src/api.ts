@@ -162,6 +162,45 @@ export function fetchTranslationJob(
   return apiFetch(`/translations/${encodeURIComponent(jobId)}${qs}`);
 }
 
+export type LLMKeyStats = {
+  label: string;
+  calls: number;
+  tokens: number;
+  avgLatencyMs: number;
+  throttleCount: number;
+  errors: number;
+  poolConcurrency: number;
+  /** -1 = unknown / not reported by provider */
+  limitReq: number;
+  remainingReq: number;
+  limitTok: number;
+  remainingTok: number;
+  /** epoch ms of last Redis write */
+  updatedAt: number;
+};
+
+export function fetchLLMKeyStats(): Promise<{ stats: LLMKeyStats[]; note?: string }> {
+  return apiFetch("/translations/key-stats");
+}
+
+/** One 10-second interval snapshot from the worker's rolling history log. */
+export type LLMKeyHistoryEntry = {
+  t:    number; // epoch ms
+  dC:   number; // delta calls in this interval
+  dT:   number; // delta tokens in this interval
+  lat:  number; // avg latency ms
+  conc: number; // pool concurrency cap
+  rR:   number; // remaining requests quota (-1 = unknown)
+  lR:   number; // limit requests quota
+  rT:   number; // remaining tokens quota
+  lT:   number; // limit tokens quota
+};
+
+export function fetchLLMKeyHistory(label?: string): Promise<{ history: Record<string, LLMKeyHistoryEntry[]> }> {
+  const qs = label ? `?label=${encodeURIComponent(label)}` : "";
+  return apiFetch(`/translations/key-stats/history${qs}`);
+}
+
 export function fetchUsage(search?: string): Promise<{ usage: UsageRow[] }> {
   const q = search ? `?search=${encodeURIComponent(search)}` : "";
   return apiFetch(`/usage${q}`);
@@ -797,4 +836,76 @@ export function fetchPixelLogs(params: {
   if (params.page) query.set("page", String(params.page));
   if (params.pageSize) query.set("pageSize", String(params.pageSize));
   return apiFetch(`/pixel-logs?${query}`);
+}
+
+// --- Shop Analysis ---
+
+export type ShopAnalysisMetrics = {
+  scannedModules: number;
+  scannedResources: number;
+  analyzedChunks: number;
+  glossaryDraftCount: number;
+};
+
+export type ShopAnalysisStatus =
+  | "SCAN_QUEUED"
+  | "SCANNING"
+  | "ANALYZE_QUEUED"
+  | "ANALYZING"
+  | "COMPLETED"
+  | "FAILED";
+
+export type ShopAnalysisJob = {
+  id: string;
+  shopName: string;
+  status: ShopAnalysisStatus;
+  sourceLanguage: string;
+  modules: string[];
+  triggeredBy: string;
+  claimedBy: string | null;
+  claimedAt: string | null;
+  lastHeartbeat: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+  metrics: ShopAnalysisMetrics;
+  errorMessage: string | null;
+};
+
+export type ShopProfile = {
+  shopName: string;
+  sourceLanguage: string;
+  analyzedAt: string;
+  analyzedJobId: string;
+  industry: string;
+  toneOfVoice: string;
+  targetAudience: string;
+  highFrequencyTerms: string[];
+  styleNotes: string[];
+  translationInstructions: string;
+};
+
+export function triggerShopAnalysis(
+  shopName: string,
+  params: { sourceLanguage?: string; modules?: string[] },
+): Promise<{ ok: boolean; job: ShopAnalysisJob }> {
+  return apiFetch(`/shop-analysis/${encodeURIComponent(shopName)}/trigger`, {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export function fetchAnalysisStatus(shopName: string): Promise<{ job: ShopAnalysisJob | null }> {
+  return apiFetch(`/shop-analysis/${encodeURIComponent(shopName)}/status`);
+}
+
+export function fetchShopProfile(shopName: string): Promise<{ profile: ShopProfile | null }> {
+  return apiFetch(`/shop-analysis/${encodeURIComponent(shopName)}/profile`);
+}
+
+export function saveShopProfile(shopName: string, profile: ShopProfile): Promise<{ ok: boolean }> {
+  return apiFetch(`/shop-analysis/${encodeURIComponent(shopName)}/profile`, {
+    method: "PUT",
+    body: JSON.stringify(profile),
+  });
 }

@@ -18,6 +18,7 @@
   "dependencies": {
     "@alicloud/log": "^1.2.6",
     "@azure/cosmos": "^4.9.3",
+    "@azure/storage-blob": "^12.32.0",
     "@libsql/client": "^0.17.3",
     "@prisma/adapter-libsql": "^6.19.3",
     "@prisma/client": "^6.16.3",
@@ -25,15 +26,21 @@
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "ioredis": "^5.6.1",
+    "mammoth": "^1.12.0",
+    "multer": "^2.1.1",
+    "pdf-parse": "^2.4.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0",
-    "recharts": "^2.15.3"
+    "recharts": "^2.15.3",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.1",
+    "@types/multer": "^2.1.0",
     "@types/node": "^22.10.10",
+    "@types/pdf-parse": "^1.1.5",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
