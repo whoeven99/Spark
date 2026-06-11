@@ -13,6 +13,20 @@ import {
 } from "../server/operations/dailyInspection.server";
 import type { TaskQuadrant } from "../server/operations/diagnosisRules.server";
 import {
+  getShopCostConfig,
+  upsertShopCostConfig,
+  type ShopCostConfigView,
+} from "../server/operations/roi/costConfig.server";
+import { ensureSkuCostsFresh } from "../server/operations/roi/skuCostSync.server";
+import {
+  ensureCustomerValueLayer,
+  type CustomerValueAggregates,
+} from "../server/operations/customerValue.server";
+import {
+  computeChannelRoi,
+  type ChannelRoiResult,
+} from "../server/operations/channelRoi.server";
+import {
   PageHeaderNav,
   PageMetricCard,
   PageSurface,
@@ -26,15 +40,37 @@ import {
   pageAccentBadgeStyle,
 } from "./page/pageUiStyles";
 
+type ValueLayerData = {
+  costConfig: ShopCostConfigView;
+  customers: CustomerValueAggregates;
+  channels: ChannelRoiResult;
+};
+
 type LoaderData =
-  | { ok: true; result: DailyOperationsResult }
+  | { ok: true; result: DailyOperationsResult; value: ValueLayerData | null }
   | { ok: false; error: string };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   try {
     const result = await ensureDailySnapshot(session.shop);
-    return Response.json({ ok: true, result } satisfies LoaderData);
+
+    // 渠道与客户价值层（A 步）：失败不影响诊断与待办主流程
+    let value: ValueLayerData | null = null;
+    try {
+      await ensureSkuCostsFresh(admin, session.shop);
+      const costConfig = await getShopCostConfig(session.shop);
+      const customers = await ensureCustomerValueLayer(
+        session.shop,
+        costConfig.defaultGrossMarginPercent,
+      );
+      const channels = await computeChannelRoi(session.shop, costConfig);
+      value = { costConfig, customers, channels };
+    } catch (error) {
+      console.error("[daily-operations] value layer failed:", error);
+    }
+
+    return Response.json({ ok: true, result, value } satisfies LoaderData);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("[daily-operations] loader failed:", error);
@@ -50,6 +86,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     if (intent === "refresh") {
       await ensureDailySnapshot(session.shop, { force: true });
+      return Response.json({ ok: true });
+    }
+    if (intent === "cost-config") {
+      const num = (name: string) => Number(formData.get(name)?.toString() ?? "");
+      const config = await upsertShopCostConfig(session.shop, {
+        defaultGrossMarginPercent: num("defaultGrossMarginPercent"),
+        paymentFeePercent: num("paymentFeePercent"),
+        paymentFeeFixed: num("paymentFeeFixed"),
+        monthlyFixedCost: num("monthlyFixedCost"),
+      });
+      // 口径变更后按新毛利率重算客户价值层
+      await ensureCustomerValueLayer(session.shop, config.defaultGrossMarginPercent, {
+        force: true,
+      });
       return Response.json({ ok: true });
     }
     if (intent === "task") {
@@ -382,15 +432,20 @@ export default function DailyOperationsPage() {
             <span>{t("dailyOps.emptyState")}</span>
           </div>
         ) : (
-          <DailyOperationsBody
-            result={data.result}
-            isMobile={isMobile}
-            locale={i18n.language}
-            quadrantTitle={quadrantTitle}
-            quadrantDesc={quadrantDesc}
-            statusText={statusText}
-            renderTaskCard={renderTaskCard}
-          />
+          <>
+            <DailyOperationsBody
+              result={data.result}
+              isMobile={isMobile}
+              locale={i18n.language}
+              quadrantTitle={quadrantTitle}
+              quadrantDesc={quadrantDesc}
+              statusText={statusText}
+              renderTaskCard={renderTaskCard}
+            />
+            {data.value ? (
+              <ValueLayerSections value={data.value} isMobile={isMobile} />
+            ) : null}
+          </>
         )}
       </div>
     </s-page>
@@ -700,5 +755,278 @@ function QuadrantCell({
         </div>
       )}
     </div>
+  );
+}
+
+// ──────────────────────────────────────────────
+// 渠道与客户价值层（ROI 归一体系 · A 步）
+// ──────────────────────────────────────────────
+
+const valueTableStyle: CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
+  fontSize: "0.8125rem",
+};
+
+const valueThStyle: CSSProperties = {
+  textAlign: "left",
+  padding: "0.6rem 0.5rem",
+  color: pageColorTokens.textSecondary,
+  borderBottom: `1px solid ${pageColorTokens.borderSubtle}`,
+  fontWeight: 700,
+  whiteSpace: "nowrap",
+};
+
+const valueTdStyle: CSSProperties = {
+  padding: "0.6rem 0.5rem",
+  borderBottom: `1px solid ${pageColorTokens.divider}`,
+  color: pageColorTokens.textBody,
+  verticalAlign: "top",
+  whiteSpace: "nowrap",
+};
+
+const costInputStyle: CSSProperties = {
+  width: "100%",
+  padding: "0.45rem 0.6rem",
+  border: `1px solid ${pageColorTokens.borderInput}`,
+  borderRadius: pageColorTokens.radiusControl,
+  fontSize: "0.875rem",
+};
+
+const costLabelStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.3rem",
+  fontSize: "0.8125rem",
+  color: pageColorTokens.textSecondary,
+  flex: "1 1 160px",
+};
+
+function ValueLayerSections({
+  value,
+  isMobile,
+}: {
+  value: ValueLayerData;
+  isMobile: boolean;
+}) {
+  const { t } = useTranslation();
+  const { customers, channels } = value;
+  const seg = customers.segmentCounts;
+
+  return (
+    <>
+      <section>
+        <h2 style={pageSectionMajorTitleStyle}>{t("dailyOps.valueTitle")}</h2>
+      </section>
+
+      <PageSurface
+        title={t("dailyOps.customerTitle")}
+        subtitle={t("dailyOps.customerSubtitle", {
+          total: customers.payingCustomers,
+        })}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
+          <PageMetricCard
+            metrics={[
+              {
+                label: t("dailyOps.metricRepeatRate"),
+                value: `${customers.repeatPurchaseRate}%`,
+              },
+              {
+                label: t("dailyOps.metricAvgScore"),
+                value: String(customers.averageScore),
+              },
+              {
+                label: t("dailyOps.metricHighValueShare"),
+                value: `${customers.highValueShare}%`,
+              },
+              {
+                label: t("dailyOps.metricAvgLtv"),
+                value: String(customers.averageDynamicLtv),
+                unit: channels.currency,
+              },
+            ]}
+          />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+            <s-badge tone="info">{t("dailyOps.segmentNew")}: {seg.new}</s-badge>
+            <s-badge tone="success">{t("dailyOps.segmentActive")}: {seg.active}</s-badge>
+            <s-badge tone="success">{t("dailyOps.segmentVip")}: {seg.vip}</s-badge>
+            <s-badge tone="warning">{t("dailyOps.segmentAtRisk")}: {seg.at_risk}</s-badge>
+            <s-badge>{t("dailyOps.segmentChurned")}: {seg.churned}</s-badge>
+            <s-badge tone="critical">
+              {t("dailyOps.tagRefundRisk")}: {customers.tagCounts.refund_risk}
+            </s-badge>
+            <s-badge tone="warning">
+              {t("dailyOps.tagDiscountSensitive")}: {customers.tagCounts.discount_sensitive}
+            </s-badge>
+          </div>
+        </div>
+      </PageSurface>
+
+      <PageSurface
+        title={t("dailyOps.channelTitle", { days: channels.windowDays })}
+        subtitle={t("dailyOps.channelSubtitle", {
+          share: channels.attributedRevenueShare,
+        })}
+      >
+        {channels.channels.length === 0 ? (
+          <p style={taskSecondaryTextStyle}>{t("dailyOps.noChannelData")}</p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={valueTableStyle}>
+              <thead>
+                <tr>
+                  <th style={valueThStyle}>{t("dailyOps.colChannel")}</th>
+                  <th style={valueThStyle}>{t("dailyOps.colOrders")}</th>
+                  <th style={valueThStyle}>{t("dailyOps.colRevenue")}</th>
+                  <th style={valueThStyle}>{t("dailyOps.colProfit")}</th>
+                  <th style={valueThStyle}>{t("dailyOps.colMargin")}</th>
+                  <th style={valueThStyle}>{t("dailyOps.colNewShare")}</th>
+                  <th style={valueThStyle}>{t("dailyOps.colRepeatShare")}</th>
+                  <th style={valueThStyle}>{t("dailyOps.colScore")}</th>
+                  <th style={valueThStyle}>{t("dailyOps.colRoi")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {channels.channels.map((channel) => (
+                  <tr key={channel.channelKey}>
+                    <td style={{ ...valueTdStyle, fontWeight: 700 }}>{channel.label}</td>
+                    <td style={valueTdStyle}>{channel.orderCount}</td>
+                    <td style={valueTdStyle}>
+                      {channel.revenue} {channels.currency}
+                    </td>
+                    <td
+                      style={{
+                        ...valueTdStyle,
+                        color:
+                          channel.contributionProfit >= 0 ? "#007a5a" : "#dc2626",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {channel.contributionProfit}
+                    </td>
+                    <td style={valueTdStyle}>
+                      {channel.contributionMarginPercent === null
+                        ? "—"
+                        : `${channel.contributionMarginPercent}%`}
+                    </td>
+                    <td style={valueTdStyle}>{channel.customers.newOrderShare}%</td>
+                    <td style={valueTdStyle}>{channel.customers.repeatCustomerShare}%</td>
+                    <td style={valueTdStyle}>
+                      {channel.customers.averageCustomerValueScore ?? "—"}
+                    </td>
+                    <td style={valueTdStyle}>
+                      <s-badge tone="warning">{t("dailyOps.roiPendingAds")}</s-badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+          {channels.caveats.map((line, index) => (
+            <p key={index} style={{ ...taskSecondaryTextStyle, fontSize: "0.75rem" }}>
+              * {line}
+            </p>
+          ))}
+        </div>
+      </PageSurface>
+
+      <CostConfigCard costConfig={value.costConfig} isMobile={isMobile} />
+    </>
+  );
+}
+
+function CostConfigCard({
+  costConfig,
+  isMobile,
+}: {
+  costConfig: ShopCostConfigView;
+  isMobile: boolean;
+}) {
+  const { t } = useTranslation();
+  const fetcher = useFetcher();
+  const saving = fetcher.state !== "idle";
+
+  return (
+    <PageSurface
+      title={t("dailyOps.costTitle")}
+      subtitle={t("dailyOps.costSubtitle")}
+    >
+      <fetcher.Form method="post">
+        <input type="hidden" name="intent" value="cost-config" />
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "0.9rem",
+            flexDirection: isMobile ? "column" : "row",
+            alignItems: isMobile ? "stretch" : "flex-end",
+          }}
+        >
+          <label style={costLabelStyle}>
+            {t("dailyOps.costMargin")}
+            <input
+              style={costInputStyle}
+              type="number"
+              name="defaultGrossMarginPercent"
+              step="0.1"
+              min="0"
+              max="100"
+              defaultValue={costConfig.defaultGrossMarginPercent}
+            />
+          </label>
+          <label style={costLabelStyle}>
+            {t("dailyOps.costFeePercent")}
+            <input
+              style={costInputStyle}
+              type="number"
+              name="paymentFeePercent"
+              step="0.1"
+              min="0"
+              max="20"
+              defaultValue={costConfig.paymentFeePercent}
+            />
+          </label>
+          <label style={costLabelStyle}>
+            {t("dailyOps.costFeeFixed")}
+            <input
+              style={costInputStyle}
+              type="number"
+              name="paymentFeeFixed"
+              step="0.01"
+              min="0"
+              defaultValue={costConfig.paymentFeeFixed}
+            />
+          </label>
+          <label style={costLabelStyle}>
+            {t("dailyOps.costMonthlyFixed")}
+            <input
+              style={costInputStyle}
+              type="number"
+              name="monthlyFixedCost"
+              step="1"
+              min="0"
+              defaultValue={costConfig.monthlyFixedCost}
+            />
+          </label>
+          <div style={{ flex: "0 0 auto" }}>
+            <s-button
+              type="submit"
+              variant="primary"
+              {...(saving ? { disabled: true } : {})}
+            >
+              {saving ? t("dailyOps.costSaving") : t("dailyOps.costSave")}
+            </s-button>
+          </div>
+        </div>
+      </fetcher.Form>
+      {!costConfig.isConfigured ? (
+        <p style={{ ...taskSecondaryTextStyle, marginTop: "0.6rem" }}>
+          {t("dailyOps.costDefaultHint")}
+        </p>
+      ) : null}
+    </PageSurface>
   );
 }
