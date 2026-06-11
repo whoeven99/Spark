@@ -166,12 +166,6 @@ const orderSortOptions: Array<{ key: string; label: string; direction: ContextRe
   { key: "total_price", label: "金额高到低", direction: "desc" },
 ];
 
-const dashboardTaskSummary = [
-  { title: "商品描述生成", result: "已完成 24 个商品，预计提升搜索匹配度 3%-5%" },
-  { title: "日语翻译", result: "已翻译 42 个商品，准备进入人工审核" },
-  { title: "库存预警", result: "今日已发送 150 条预警通知，覆盖 9 个高销量系列" },
-];
-
 const skillApps: SkillApp[] = [
   { id: "s1", title: "商品文案优化", description: "批量生成和优化商品标题、卖点与描述。", status: "可用", statusTone: "positive", category: "内容", path: "/app/product-improve", available: true },
   { id: "s4", title: "图片工具", description: "处理商品图翻译、文生图和素材优化。", status: "可用", statusTone: "positive", category: "视觉", path: "/app/image-studio", available: true },
@@ -244,13 +238,14 @@ const fallbackDashboardSnapshot: WorkspaceDashboardSnapshot = {
   metrics: [
     { label: "销售额", value: "—", delta: "—", tone: "neutral" },
     { label: "订单数", value: "—", delta: "—", tone: "neutral" },
-    { label: "转化率", value: "待接入", delta: "—", tone: "neutral" },
+    { label: "转化率", value: "—", delta: "—", tone: "neutral", pendingIntegration: true },
     { label: "客单价", value: "—", delta: "—", tone: "neutral" },
     { label: "退款率", value: "—", delta: "—", tone: "neutral" },
     { label: "库存风险 SKU", value: "—", delta: "—", tone: "neutral" },
   ],
   alerts: [],
   suggestions: [],
+  recentTaskSummaries: [],
 };
 
 export function WorkspaceAppShellPage({
@@ -1021,6 +1016,7 @@ export function WorkspaceAppShellPage({
           <DashboardPanel
             snapshot={dashboardSnapshot}
             onOpenDailyOps={() => navigate("/app/daily-operations")}
+            onOpenTasks={() => switchPanel("tasks")}
           />
         ) : null}
         {activePanel === "chat" && activeConversation ? (
@@ -1099,12 +1095,44 @@ export function WorkspaceAppShellPage({
   );
 }
 
+function DashboardSectionTitle({
+  title,
+  pendingIntegration = false,
+}: {
+  title: string;
+  pendingIntegration?: boolean;
+}) {
+  return (
+    <div style={dashboardSectionTitleRowStyle}>
+      <div style={sectionTitleStyle}>{title}</div>
+      {pendingIntegration ? <span style={pendingIntegrationBadgeStyle}>待接入</span> : null}
+    </div>
+  );
+}
+
+function DashboardMetricLabel({
+  label,
+  pendingIntegration = false,
+}: {
+  label: string;
+  pendingIntegration?: boolean;
+}) {
+  return (
+    <div style={dashboardSectionTitleRowStyle}>
+      <div style={metricLabelStyle}>{label}</div>
+      {pendingIntegration ? <span style={pendingIntegrationBadgeSmallStyle}>待接入</span> : null}
+    </div>
+  );
+}
+
 function DashboardPanel({
   snapshot,
   onOpenDailyOps,
+  onOpenTasks,
 }: {
   snapshot: WorkspaceDashboardSnapshot;
   onOpenDailyOps: () => void;
+  onOpenTasks: () => void;
 }) {
   const { isMobile } = useResponsiveLayout();
   const snapshotMeta =
@@ -1125,7 +1153,10 @@ function DashboardPanel({
       <div style={isMobile ? mobileMetricGridStyle : metricGridStyle}>
         {snapshot.metrics.map((metric) => (
           <article key={metric.label} style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
-            <div style={metricLabelStyle}>{metric.label}</div>
+            <DashboardMetricLabel
+              label={metric.label}
+              pendingIntegration={metric.pendingIntegration}
+            />
             <div style={metricValueStyle}>{metric.value}</div>
             <div style={metricDeltaStyle(metric.tone)}>{metric.delta}</div>
           </article>
@@ -1136,7 +1167,7 @@ function DashboardPanel({
         <section style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
           <div style={isMobile ? mobileSectionHeaderStyle : sectionHeaderStyle}>
             <div>
-              <div style={sectionTitleStyle}>经营提醒</div>
+              <DashboardSectionTitle title="经营提醒" />
               <div style={sectionTextStyle}>优先处理影响销售、库存和退款的核心问题。</div>
             </div>
             <button type="button" style={ghostButtonStyle} onClick={onOpenDailyOps}>
@@ -1160,7 +1191,7 @@ function DashboardPanel({
         <section style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
           <div style={isMobile ? mobileSectionHeaderStyle : sectionHeaderStyle}>
             <div>
-              <div style={sectionTitleStyle}>关键趋势</div>
+              <DashboardSectionTitle title="关键趋势" pendingIntegration />
               <div style={sectionTextStyle}>今天、昨天和 7 天均值的简化对比。</div>
             </div>
             <div style={isMobile ? mobileTrendLegendStyle : trendLegendStyle}>
@@ -1200,25 +1231,34 @@ function DashboardPanel({
         <section style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
           <div style={isMobile ? mobileSectionHeaderStyle : sectionHeaderStyle}>
             <div>
-              <div style={sectionTitleStyle}>AI 自动化执行摘要</div>
-              <div style={sectionTextStyle}>今天自动化和单次任务带来的实际产出。</div>
+              <DashboardSectionTitle title="AI 自动化执行摘要" />
+              <div style={sectionTextStyle}>
+                展示任务列表最近记录；Playbook 定时执行
+                <span style={pendingIntegrationBadgeSmallStyle}>待接入</span>
+              </div>
             </div>
-            <div style={mutedMetaStyle}>今日执行摘要</div>
+            <button type="button" style={ghostButtonStyle} onClick={onOpenTasks}>
+              查看任务列表
+            </button>
           </div>
           <div style={listColumnStyle}>
-            {dashboardTaskSummary.map((item) => (
-              <div key={item.title} style={summaryItemStyle}>
-                <div style={sectionTitleSmallStyle}>{item.title}</div>
-                <div style={sectionTextStyle}>{item.result}</div>
-              </div>
-            ))}
+            {snapshot.recentTaskSummaries.length === 0 ? (
+              <div style={sectionTextStyle}>暂无近期任务记录。</div>
+            ) : (
+              snapshot.recentTaskSummaries.map((item) => (
+                <div key={item.id} style={summaryItemStyle}>
+                  <div style={sectionTitleSmallStyle}>{item.title}</div>
+                  <div style={sectionTextStyle}>{item.result}</div>
+                </div>
+              ))
+            )}
           </div>
         </section>
 
         <section style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
           <div style={isMobile ? mobileSectionHeaderStyle : sectionHeaderStyle}>
             <div>
-              <div style={sectionTitleStyle}>经营建议</div>
+              <DashboardSectionTitle title="经营建议" />
               <div style={sectionTextStyle}>基于当前店铺数据和任务结果生成的建议。</div>
             </div>
             <button type="button" style={ghostButtonStyle} onClick={onOpenDailyOps}>
@@ -2868,6 +2908,29 @@ const mutedMetaStyle: CSSProperties = { fontSize: 12, color: shopifyUi.textMuted
 const metricGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16 };
 const mobileMetricGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 };
 const metricLabelStyle: CSSProperties = { fontSize: 12, fontWeight: 600, color: "#6d7175" };
+const dashboardSectionTitleRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  flexWrap: "wrap",
+};
+const pendingIntegrationBadgeStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "2px 8px",
+  borderRadius: 999,
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#6d7175",
+  background: "#f1f2f3",
+  border: "1px dashed #c9cccf",
+  lineHeight: 1.4,
+};
+const pendingIntegrationBadgeSmallStyle: CSSProperties = {
+  ...pendingIntegrationBadgeStyle,
+  fontSize: 10,
+  padding: "1px 6px",
+};
 const metricValueStyle: CSSProperties = { marginTop: 10, fontSize: 26, fontWeight: 700, color: "#202223", letterSpacing: "-0.02em" };
 const metricDeltaStyle = (tone: WorkspaceDashboardMetricTone): CSSProperties => ({
   marginTop: 8,

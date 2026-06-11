@@ -20,6 +20,7 @@ import {
 type PrismaJson = any;
 
 const TASK_LIST_LIMIT = 20;
+const RECENT_TASK_FETCH_LIMIT = 200;
 const TASK_PAGE_SIZE = 4;
 
 function normalizeTaskPage(page: number | undefined): number {
@@ -331,6 +332,19 @@ export async function getTaskListMetricsForShop(params: {
     runningCount,
     totalCount: currentCount + historyCount,
   };
+}
+
+export async function listRecentAITasksForShop(
+  shop: string,
+  limit: number,
+): Promise<AITaskItem[]> {
+  const take = Math.min(Math.max(1, Math.floor(limit)), RECENT_TASK_FETCH_LIMIT);
+  const rows = await prisma.aITask.findMany({
+    where: { shop },
+    orderBy: { updatedAt: "desc" },
+    take,
+  });
+  return rows.map(rowToAITaskItem);
 }
 
 export async function listTasksPageForShop(params: {

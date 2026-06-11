@@ -161,9 +161,10 @@ function buildMetrics(result: DailyOperationsResult): WorkspaceDashboardMetric[]
     },
     {
       label: "转化率",
-      value: "待接入",
+      value: "—",
       delta: "需 Shopify 弃购或 Analytics",
       tone: "neutral",
+      pendingIntegration: true,
     },
     {
       label: "客单价",
@@ -206,13 +207,14 @@ export function emptyWorkspaceDashboardSnapshot(): WorkspaceDashboardSnapshot {
     metrics: [
       { label: "销售额", value: "—", delta: "—", tone: "neutral" },
       { label: "订单数", value: "—", delta: "—", tone: "neutral" },
-      { label: "转化率", value: "待接入", delta: "—", tone: "neutral" },
+      { label: "转化率", value: "—", delta: "—", tone: "neutral", pendingIntegration: true },
       { label: "客单价", value: "—", delta: "—", tone: "neutral" },
       { label: "退款率", value: "—", delta: "—", tone: "neutral" },
       { label: "库存风险 SKU", value: "—", delta: "—", tone: "neutral" },
     ],
     alerts: [],
     suggestions: [EMPTY_ORDER_MESSAGE],
+    recentTaskSummaries: [],
   };
 }
 
@@ -230,5 +232,6 @@ export function buildWorkspaceDashboardFromDailyOps(
     metrics: buildMetrics(result),
     alerts: buildAlerts(result),
     suggestions: buildSuggestions(result),
+    recentTaskSummaries: [],
   };
 }

@@ -86,7 +86,8 @@ describe("buildWorkspaceDashboardFromDailyOps", () => {
     expect(snapshot.hasData).toBe(true);
     expect(snapshot.metrics[0].label).toBe("销售额");
     expect(snapshot.metrics[0].delta).toBe("+20%");
-    expect(snapshot.metrics[2].value).toBe("待接入");
+    expect(snapshot.metrics[2].pendingIntegration).toBe(true);
+    expect(snapshot.metrics[2].value).toBe("—");
     expect(snapshot.metrics[4].value).toBe("5%");
     expect(snapshot.metrics[5].value).toBe("2");
   });

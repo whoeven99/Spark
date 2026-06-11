@@ -17,6 +17,10 @@ import {
   buildWorkspaceDashboardFromDailyOps,
   emptyWorkspaceDashboardSnapshot,
 } from "../server/operations/workspaceDashboard.server";
+import { buildWorkspaceTaskSummaries } from "../server/operations/workspaceTaskSummary.server";
+import { listMergedUnifiedTaskEntries } from "../server/unifiedTask/unifiedTaskList.server";
+
+const DASHBOARD_RECENT_TASK_LIMIT = 5;
 import { useFeatureView } from "../lib/featureTrack";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -29,8 +33,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const conversations = await listConversations(session.shop);
   let dashboardSnapshot = emptyWorkspaceDashboardSnapshot();
   try {
-    const dailyOps = await ensureDailySnapshot(session.shop);
-    dashboardSnapshot = buildWorkspaceDashboardFromDailyOps(dailyOps);
+    const [dailyOps, recentTaskEntries] = await Promise.all([
+      ensureDailySnapshot(session.shop),
+      listMergedUnifiedTaskEntries(session.shop, {
+        limit: DASHBOARD_RECENT_TASK_LIMIT,
+      }),
+    ]);
+    dashboardSnapshot = {
+      ...buildWorkspaceDashboardFromDailyOps(dailyOps),
+      recentTaskSummaries: buildWorkspaceTaskSummaries(recentTaskEntries),
+    };
   } catch (error) {
     console.error("[app._index] dashboard snapshot failed:", error);
   }
