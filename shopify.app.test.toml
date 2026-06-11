@@ -26,7 +26,7 @@ uri = "/webhooks/app/scopes_update"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_orders,write_products,read_locales,read_translations,write_translations,read_content"
+scopes = "read_orders,write_products,read_locales,read_translations,write_translations,read_content,write_pixels,read_customer_events,read_pixels,read_fulfillments,read_inventory,read_locations,read_products"
 
 [auth]
 redirect_urls = [

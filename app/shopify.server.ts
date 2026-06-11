@@ -15,7 +15,6 @@ const shopify = shopifyApp({
   scopes: process.env.SCOPES?.split(","),
   appUrl: process.env.SHOPIFY_APP_URL || "",
   authPathPrefix: "/auth",
-  // 使用统一的 Session 表；appName 由业务层通过 ensureSessionAppName 管理
   sessionStorage: new PrismaSessionStorage(prisma as unknown as PrismaClient, {
     tableName: "Session",
   }),

@@ -72,10 +72,8 @@ type SkillApp = {
   title: string;
   description: string;
   status: string;
-  statusTone?: "positive" | "warning" | "critical" | "neutral";
   category: string;
   path: string;
-  available: boolean;
 };
 
 type AutomationConfiguredItem = {
@@ -87,12 +85,7 @@ type AutomationConfiguredItem = {
   outcome: string;
 };
 
-type ObjectOption = {
-  id: string;
-  title: string;
-  subtitle: string;
-  meta: string;
-};
+type OrderFilterKey = "all" | "paid" | "unfulfilled" | "refunded";
 
 type LocalFileItem = {
   id: string;
@@ -114,8 +107,6 @@ type RichMediaItem = {
   note: string;
 };
 
-type ObjectFilterKey = "all" | "focus" | "draft" | "issue";
-
 const panelItems: Array<{ key: Exclude<WorkspacePanel, "chat">; label: string; icon: string }> = [
   { key: "dashboard", label: "经营看板", icon: "◫" },
   { key: "skills", label: "技能", icon: "✦" },
@@ -127,28 +118,6 @@ const objectTypeLabels: Record<ObjectType, string> = {
   product: "商品",
   article: "文章",
   order: "订单",
-};
-
-const objectOptions: Record<ObjectType, ObjectOption[]> = {
-  product: [
-    { id: "prd-1001", title: "Summer Breeze Dress", subtitle: "女装 / 连衣裙 / 夏季新品", meta: "SKU SB-1001 · 库存 28" },
-    { id: "prd-1002", title: "Cloud Knit Cardigan", subtitle: "女装 / 针织衫 / 低转化", meta: "SKU CK-2020 · 库存 16" },
-    { id: "prd-1003", title: "Travel Mini Bag", subtitle: "配饰 / 包袋 / 高访问", meta: "SKU TB-4402 · 库存 52" },
-    { id: "prd-1004", title: "Linen Resort Shirt", subtitle: "男装 / 衬衫 / 夏季新品", meta: "SKU LR-3011 · 库存 9" },
-    { id: "prd-1005", title: "Weekend Sandals", subtitle: "鞋履 / 凉鞋 / 广告主推", meta: "SKU WS-2201 · 库存 41" },
-  ],
-  article: [
-    { id: "art-201", title: "夏季穿搭趋势指南", subtitle: "Blog / 内容营销 / 已发布", meta: "最近更新 2 天前 · 浏览 1.2k" },
-    { id: "art-202", title: "度假系列面料故事", subtitle: "Blog / 品牌内容 / 草稿", meta: "作者 Luna · 草稿" },
-    { id: "art-203", title: "客户常见尺码问题", subtitle: "Help Center / FAQ", meta: "最近更新 1 周前" },
-    { id: "art-204", title: "新品上市邮件脚本", subtitle: "Campaign / 邮件素材", meta: "最近使用 昨天" },
-  ],
-  order: [
-    { id: "ord-9101", title: "#9101", subtitle: "美国站 / 高客单 / 待发货", meta: "$182.00 · 2 件商品" },
-    { id: "ord-9102", title: "#9102", subtitle: "英国站 / 退款申请", meta: "$64.00 · 退款中" },
-    { id: "ord-9103", title: "#9103", subtitle: "美国站 / 异常履约", meta: "$119.00 · 超时 16h" },
-    { id: "ord-9104", title: "#9104", subtitle: "日本站 / 正常", meta: "$73.00 · 已发货" },
-  ],
 };
 
 function formatFileSizeLabel(bytes: number): string {
@@ -183,27 +152,18 @@ const initialRichMediaItems: RichMediaItem[] = [
   { id: "media-3", title: "product-demo.mp4", kind: "video", value: "https://cdn.spark.demo/product-demo.mp4", note: "商品讲解视频" },
 ];
 
-const objectFilterLabels: Record<ObjectType, Array<{ key: ObjectFilterKey; label: string }>> = {
-  product: [
-    { key: "all", label: "全部" },
-    { key: "focus", label: "新品" },
-    { key: "draft", label: "低转化" },
-    { key: "issue", label: "高访问" },
-  ],
-  article: [
-    { key: "all", label: "全部" },
-    { key: "focus", label: "已发布" },
-    { key: "draft", label: "草稿" },
-    { key: "issue", label: "帮助中心" },
-  ],
-  order: [
-    { key: "all", label: "全部" },
-    { key: "focus", label: "待发货" },
-    { key: "draft", label: "退款中" },
-    { key: "issue", label: "异常" },
-  ],
-};
+const orderFilterLabels: Array<{ key: OrderFilterKey; label: string }> = [
+  { key: "all", label: "全部" },
+  { key: "paid", label: "已付款" },
+  { key: "unfulfilled", label: "待履约" },
+  { key: "refunded", label: "退款中" },
+];
 
+const orderSortOptions: Array<{ key: string; label: string; direction: ContextResourceSortDirection }> = [
+  { key: "created_at", label: "最新创建", direction: "desc" },
+  { key: "processed_at", label: "最近处理", direction: "desc" },
+  { key: "total_price", label: "金额高到低", direction: "desc" },
+];
 
 const dashboardMetrics: DashboardMetric[] = [
   { label: "销售额", value: "$12,540", delta: "+8.4%", tone: "positive" },
@@ -303,10 +263,11 @@ function isObjectType(value: ContextTool | null): value is ObjectType {
 export function WorkspaceAppShellPage({ initialConversationList = [] }: { initialConversationList?: ConversationSummary[] }) {
   const shopify = useAppBridge();
   const { t } = useTranslation();
-  const { isMobile } = useResponsiveLayout();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const { isMobile } = useResponsiveLayout();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [conversationList, setConversationList] = useState<Conversation[]>(initialConversationList);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(
     initialConversationList.length > 0 ? initialConversationList[0].id : null,
@@ -316,7 +277,6 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
   const loadedConvIdsRef = useRef<Set<string>>(new Set());
   const [automationView, setAutomationView] = useState<AutomationView>("configured");
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeContextTool, setActiveContextTool] = useState<ContextTool | null>(null);
   const [objectQueryByType, setObjectQueryByType] = useState<Record<ObjectType, string>>({
     product: "",
@@ -473,7 +433,6 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     pruneEmptyDraftConversations(conversationId);
     setActiveConversationId(conversationId);
     switchPanel("chat");
-    if (isMobile) setSidebarOpen(false);
   };
 
   const removeConversation = async (conversationId: string) => {
@@ -557,6 +516,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     setActiveContextTool(null);
     setActiveConversationId(conv.id);
     switchPanel("chat");
+    if (isMobile) setSidebarOpen(false);
   };
 
   const clearContext = () => {
@@ -1039,7 +999,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
               onClick={createConversation}
               aria-label="新建对话"
             >
-              ＋
+              +
             </button>
           </div>
           {sidebarOpen ? (
@@ -1054,9 +1014,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
           ) : null}
         </>
       ) : (
-        <aside style={sidebarStyle}>
-          {sidebarContent}
-        </aside>
+        <aside style={sidebarStyle}>{sidebarContent}</aside>
       )}
 
       <main style={isMobile ? mobileContentStyle : contentStyle}>
@@ -1358,11 +1316,8 @@ function ChatPanel({
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [isScrolledUp, setIsScrolledUp] = useState(false);
-  const [activeObjectFilter, setActiveObjectFilter] = useState<Record<ObjectType, ObjectFilterKey>>({
-    product: "all",
-    article: "all",
-    order: "all",
-  });
+  const [orderFilter, setOrderFilter] = useState<OrderFilterKey>("all");
+  const [orderSort, setOrderSort] = useState("created_at:desc");
   const [newFileObj, setNewFileObj] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [newMediaTitle, setNewMediaTitle] = useState("");
@@ -1379,33 +1334,27 @@ function ChatPanel({
     () => selectedShopifyObjectsToBatchProducts(selectedObjectsByType.product),
     [selectedObjectsByType.product],
   );
-  const activeObjectOptions = isObjectType(activeContextTool)
-    ? objectOptions[activeContextTool].filter((item) => {
-        const query = objectQueryByType[activeContextTool].trim().toLowerCase();
-        if (!query) return true;
-        return `${item.title} ${item.subtitle} ${item.meta}`.toLowerCase().includes(query);
-      })
-    : [];
-  const filteredObjectOptions = isObjectType(activeContextTool)
-    ? activeObjectOptions.filter((item) => {
-        const filterKey = activeObjectFilter[activeContextTool];
-        if (filterKey === "all") return true;
-        const haystack = `${item.subtitle} ${item.meta}`.toLowerCase();
-        if (activeContextTool === "product") {
-          if (filterKey === "focus") return haystack.includes("夏季新品");
-          if (filterKey === "draft") return haystack.includes("低转化");
-          return haystack.includes("高访问");
-        }
-        if (activeContextTool === "article") {
-          if (filterKey === "focus") return haystack.includes("已发布");
-          if (filterKey === "draft") return haystack.includes("草稿");
-          return haystack.includes("help center");
-        }
-        if (filterKey === "focus") return haystack.includes("待发货");
-        if (filterKey === "draft") return haystack.includes("退款");
-        return haystack.includes("异常");
-      })
-    : [];
+  const [orderSortKey, orderSortDirection] = orderSort.split(":") as [string, ContextResourceSortDirection];
+  const {
+    items: orderSearchResults,
+    pageInfo: orderPageInfo,
+    isLoading: isOrderLoading,
+    errorText: orderErrorText,
+    goToNextPage: goToNextOrderPage,
+    goToPreviousPage: goToPreviousOrderPage,
+  } = useContextResourceSearch({
+    enabled: activeContextTool === "order",
+    type: "order",
+    query: objectQueryByType.order,
+    filter: orderFilter,
+    sort: orderSortKey,
+    direction: orderSortDirection,
+    locationSearch: typeof window !== "undefined" ? window.location.search : "",
+  });
+  const selectedOrderIds = useMemo(
+    () => new Set(selectedObjectsByType.order.map((item) => item.id)),
+    [selectedObjectsByType.order],
+  );
   const filledContextCount =
     (totalSelectedObjects > 0 ? 1 : 0) +
     (selectedFileIds.length > 0 ? 1 : 0) +
@@ -1718,42 +1667,74 @@ function ChatPanel({
                   style={selectorSearchInputStyle}
                 />
                 <div style={filterChipRowStyle}>
-                  {objectFilterLabels.order.map((filter) => (
+                  {orderFilterLabels.map((filter) => (
                     <button
                       key={filter.key}
                       type="button"
-                      style={filterChipStyle(activeObjectFilter.order === filter.key)}
-                      onClick={() =>
-                        setActiveObjectFilter((current) => ({
-                          ...current,
-                          order: filter.key,
-                        }))
-                      }
+                      style={filterChipStyle(orderFilter === filter.key)}
+                      onClick={() => setOrderFilter(filter.key)}
                     >
                       {filter.label}
                     </button>
                   ))}
                 </div>
+                <div style={resourcePickerHintStyle}>
+                  <span style={mutedMetaStyle}>已连接 Shopify 实时数据，可搜索、筛选并将目标订单直接传给 AI。</span>
+                  <span style={mutedMetaStyle}>已选 {selectedObjectsByType.order.length} 个</span>
+                </div>
                 <div style={selectorListCompactStyle}>
-                  {filteredObjectOptions.map((item) => {
-                    const checked = selectedObjectsByType.order.some((selected) => selected.id === item.id);
-                    return (
-                      <label key={item.id} style={selectorItemStyle(checked)}>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() =>
-                            onToggleObjectSelection("order", { id: item.id, title: item.title })
-                          }
-                        />
-                        <div style={selectorItemContentStyle}>
-                          <span style={sectionTitleSmallStyle}>{item.title}</span>
-                          <span style={sectionTextStyle}>{item.subtitle}</span>
-                          <span style={mutedMetaStyle}>{item.meta}</span>
-                        </div>
-                      </label>
-                    );
-                  })}
+                  {orderErrorText ? (
+                    <div style={pickerInfoBoxStyle("critical")}>{orderErrorText}</div>
+                  ) : null}
+                  {!orderErrorText && isOrderLoading ? (
+                    <div style={pickerInfoBoxStyle("neutral")}>正在加载 Shopify 订单...</div>
+                  ) : null}
+                  {!orderErrorText && !isOrderLoading && orderSearchResults.length === 0 ? (
+                    <div style={pickerInfoBoxStyle("neutral")}>暂无匹配结果，试试调整关键词、筛选器或排序。</div>
+                  ) : null}
+                  {!orderErrorText &&
+                    orderSearchResults.map((item) => {
+                      const checked = selectedOrderIds.has(item.id);
+                      return (
+                        <label key={item.id} style={selectorItemStyle(checked)}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() =>
+                              onToggleObjectSelection("order", { id: item.id, title: item.title })
+                            }
+                          />
+                          <div style={resourceItemContentStyle}>
+                            <div style={resourceItemTopRowStyle}>
+                              <span style={sectionTitleSmallStyle}>{item.title}</span>
+                              {item.status ? (
+                                <span style={resourceStatusPillStyle}>{normalizeResourceStatus(item.status)}</span>
+                              ) : null}
+                            </div>
+                            <span style={sectionTextStyle}>{item.subtitle}</span>
+                            <span style={mutedMetaStyle}>{item.meta}</span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                </div>
+                <div style={resourcePaginationStyle}>
+                  <button
+                    type="button"
+                    style={ghostButtonStyle}
+                    onClick={goToPreviousOrderPage}
+                    disabled={!orderPageInfo.hasPreviousPage || isOrderLoading}
+                  >
+                    上一页
+                  </button>
+                  <button
+                    type="button"
+                    style={ghostButtonStyle}
+                    onClick={goToNextOrderPage}
+                    disabled={!orderPageInfo.hasNextPage || isOrderLoading}
+                  >
+                    下一页
+                  </button>
                 </div>
               </>
             ) : null}
@@ -1856,7 +1837,7 @@ function ChatPanel({
             {activeContextTool === "media" ? (
               <>
                 <div style={mockCreateBoxStyle}>
-                  <div style={isMobile ? mobileInlineFieldRowStyle : inlineFieldRowStyle}>
+                  <div style={inlineFieldRowStyle}>
                     <select value={newMediaKind} onChange={(event) => setNewMediaKind(event.target.value as RichMediaItem["kind"])} style={selectFieldStyle}>
                       <option value="url">URL</option>
                       <option value="image">图片</option>
@@ -1937,6 +1918,7 @@ function ChatPanel({
         </div>
       ) : null}
 
+      {!isMobile ? (
       <section style={{ ...sidePanelStyle, alignSelf: "start" }}>
         <div style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
@@ -2019,7 +2001,7 @@ function ChatPanel({
           ) : null}
         </div>
 
-        <div style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
+        <div style={surfaceCardStyle}>
           <div style={sectionTitleStyle}>推荐下一步</div>
           <div style={listColumnStyle}>
             {[
@@ -2035,6 +2017,7 @@ function ChatPanel({
           </div>
         </div>
       </section>
+      ) : null}
     </div>
   );
 }
@@ -2072,10 +2055,8 @@ function SkillsPanel({ onOpenTool }: { onOpenTool: (path: string) => void }) {
             <div style={sectionTitleSmallStyle}>{skill.title}</div>
             <div style={sectionTextStyle}>{skill.description}</div>
             <div style={skillFooterStyle}>
-              <span style={statusBadgeStyle(skill.statusTone ?? "neutral")}>{skill.status}</span>
-              <span style={skill.available ? textButtonStyle : disabledTextButtonStyle}>
-                {skill.available ? "进入" : "敬请期待"}
-              </span>
+              <span style={statusBadgeStyle("neutral")}>{skill.status}</span>
+              <span style={textButtonStyle}>进入</span>
             </div>
           </button>
         ))}
@@ -2132,7 +2113,7 @@ function AutomationPanel({
       <div style={listColumnStyle}>
         {items.map((item) => (
           <article key={item.id} style={isMobile ? mobileAutomationCardStyle : automationCardStyle}>
-            <div style={isMobile ? mobileSectionHeaderStyle : sectionHeaderStyle}>
+            <div style={sectionHeaderStyle}>
               <div>
                 <div style={sectionTitleSmallStyle}>{item.title}</div>
                 <div style={sectionTextStyle}>{"schedule" in item ? item.schedule : item.detail}</div>
@@ -2456,7 +2437,7 @@ const mobileShellStyle: CSSProperties = {
   minHeight: "100vh",
   display: "flex",
   flexDirection: "column",
-  background: "#f6f6f7",
+  background: shopifyUi.pageBg,
 };
 
 const mobileTopBarStyle: CSSProperties = {
@@ -2468,7 +2449,7 @@ const mobileTopBarStyle: CSSProperties = {
   justifyContent: "space-between",
   gap: 12,
   padding: "12px 14px",
-  borderBottom: "1px solid #e1e3e5",
+  borderBottom: `1px solid ${shopifyUi.border}`,
   background: "rgba(246, 246, 247, 0.96)",
   backdropFilter: "blur(8px)",
 };
@@ -2477,9 +2458,9 @@ const mobileTopBarButtonStyle: CSSProperties = {
   width: 38,
   height: 38,
   borderRadius: 10,
-  border: "1px solid #dfe3e8",
-  background: "#ffffff",
-  color: "#202223",
+  border: `1px solid ${shopifyUi.borderStrong}`,
+  background: shopifyUi.surface,
+  color: shopifyUi.text,
   fontSize: 16,
   fontWeight: 700,
   display: "grid",
@@ -2500,7 +2481,7 @@ const mobileTopBarTitleWrapStyle: CSSProperties = {
 const mobileTopBarTitleStyle: CSSProperties = {
   fontSize: 14,
   fontWeight: 700,
-  color: "#202223",
+  color: shopifyUi.text,
   whiteSpace: "nowrap",
   overflow: "hidden",
   textOverflow: "ellipsis",
@@ -2517,7 +2498,7 @@ const mobileSidebarBackdropStyle: CSSProperties = {
 const mobileSidebarStyle: CSSProperties = {
   width: "min(86vw, 320px)",
   minHeight: "100vh",
-  borderRight: "1px solid #e1e3e5",
+  borderRight: `1px solid ${shopifyUi.border}`,
   boxShadow: "0 24px 56px rgba(15, 23, 42, 0.16)",
 };
 
@@ -2550,6 +2531,7 @@ const mobileContentStyle: CSSProperties = {
   flexDirection: "column",
   gap: 16,
   minWidth: 0,
+  flex: 1,
 };
 
 const brandRowStyle: CSSProperties = {
@@ -3004,8 +2986,8 @@ const toolModalCardStyle: CSSProperties = {
 const mobileToolModalCardStyle: CSSProperties = {
   ...toolModalCardStyle,
   width: "calc(100vw - 24px)",
-  maxHeight: "88vh",
-  padding: 16,
+  maxHeight: "calc(100vh - 96px)",
+  padding: 14,
   borderRadius: 14,
 };
 const toolModalHeaderStyle: CSSProperties = {
@@ -3051,7 +3033,6 @@ const mockCreateBoxStyle: CSSProperties = {
   marginBottom: 14,
 };
 const inlineFieldRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 10, alignItems: "center" };
-const mobileInlineFieldRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr", gap: 10, alignItems: "stretch" };
 const compactFieldStyle: CSSProperties = {
   width: "100%",
   border: "1px solid #c9cdd2",

@@ -15,7 +15,12 @@ import {
   startTokenPackCheckout,
 } from "../server/billing/index.server";
 import { BILLING_RETURN_QUERY_FLAG } from "../server/billing/buildBillingReturnUrl.server";
+import {
+  BILLING_PAGE_PATH,
+} from "../server/billing/buildBillingReturnUrl.server";
 import { BillingPage } from "./page/BillingPage";
+import { useFeatureView } from "../lib/featureTrack";
+import { recordFeatureTrack } from "../server/aliyunLog/featureTrack.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
@@ -49,6 +54,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!intent) {
     return { ok: false as const, error: "缺少 intent" };
   }
+
+  // 计费操作走 React Router 原生表单提交，前端无 JS 入口，故在服务端埋点（fire-and-forget）。
+  void recordFeatureTrack({
+    shop: session.shop,
+    feature: "billing",
+    action: intent,
+    path: BILLING_PAGE_PATH,
+    extra: planKey ? { planKey } : undefined,
+  });
 
   try {
     if (intent === "cancel_subscription") {
@@ -104,6 +118,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function AppBilling() {
+  useFeatureView("billing");
   return <BillingPage />;
 }
 

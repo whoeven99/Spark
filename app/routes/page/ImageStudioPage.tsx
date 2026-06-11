@@ -131,6 +131,7 @@ function ImageStudioPageInner({
   onTaskUpdated,
 }: InnerProps) {
   const shopify = useAppBridge();
+  const { isMobile } = useResponsiveLayout();
   const { t, i18n } = useTranslation();
   const pictureTranslate = usePictureTranslateContext();
   const [generateConfirmOpen, setGenerateConfirmOpen] = useState(false);
@@ -486,7 +487,6 @@ function ImageStudioPageInner({
 
 export function ImageStudioPage() {
   const shopify = useAppBridge();
-  const { isMobile } = useResponsiveLayout();
   const loaderData = useLoaderData<ImageStudioPageLoaderData>();
   const location = useLocation();
   const locationSearch =

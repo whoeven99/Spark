@@ -14,6 +14,7 @@ import type {
 import type { ProductSearchItem } from "../lib/productSearchTypes";
 import { useProductSearch } from "./useProductSearch";
 import type { AITaskCreateResponse, AITaskType } from "../lib/aiTaskTypes";
+import { trackFeature } from "../lib/featureTrack";
 
 const LOG_PREFIX = "[usePictureTranslate]";
 const PICTURE_TRANSLATE_PROVIDER: PictureTranslateProvider | null = null;
@@ -265,6 +266,12 @@ export function usePictureTranslate(params: UsePictureTranslateParams) {
         targetCode: targetLanguage,
         modelType,
       };
+
+      trackFeature("image-studio", "picture_translate", {
+        sourceCode: sourceLanguage,
+        targetCode: targetLanguage,
+        modelType,
+      });
 
       const response = await fetch(`/api/picture-translate${locationSearch}`, {
         method: "POST",
