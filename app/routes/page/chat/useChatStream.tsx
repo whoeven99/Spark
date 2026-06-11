@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { ChatMessage, ChatMessageAttachment } from "../../../lib/chatMessage";
 import { coerceChatMessageAttachments } from "../../../lib/chatMessage";
+import { trackFeature } from "../../../lib/featureTrack";
 import { coerceProductImproveFormPayload } from "../../../lib/productImproveFormPayload";
 import { coerceImageGenerationFormPayload } from "../../../lib/imageGenerationFormPayload";
 import { coercePictureTranslateFormPayload } from "../../../lib/pictureTranslateFormPayload";
@@ -213,6 +214,11 @@ export function useChatStream() {
       const fileIds = options?.fileIds ?? [];
       const workspaceBatchProducts = options?.workspaceBatchProducts ?? [];
       const preferBatchCard = shouldPreferBatchOverProductImprove(workspaceBatchProducts);
+
+      trackFeature("chat", "send_message", {
+        fileCount: fileIds.length,
+        batchProductCount: workspaceBatchProducts.length,
+      });
 
       prepareStreaming();
 

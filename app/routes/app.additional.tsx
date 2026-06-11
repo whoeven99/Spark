@@ -15,6 +15,7 @@ import {
   pageSectionMajorTitleStyle,
   pageStatusCardStyle,
 } from "./page/pageUiStyles";
+import { useFeatureView } from "../lib/featureTrack";
 
 const ORDER_METRICS_QUERY = `#graphql
   query OrderMetrics($first: Int!, $after: String, $query: String!) {
@@ -369,7 +370,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       clickInsight: "additional.clickInsight",
     };
 
-    return Response.json(dashboard);
+    return dashboard;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     const fallback: DashboardData = {
@@ -397,7 +398,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ],
       clickInsight: "additional.clickInsight",
     };
-    return Response.json(fallback);
+    return fallback;
   }
 };
 
@@ -411,6 +412,7 @@ export default function AdditionalPage() {
   const { t, i18n } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const data = useLoaderData<typeof loader>();
+  useFeatureView("diagnosis");
   const resolveStatusText = (status: "健康" | "关注" | "风险") => {
     if (status === "健康") return t("additional.statusHealthy");
     if (status === "关注") return t("additional.statusWatch");

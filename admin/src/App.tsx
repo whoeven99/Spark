@@ -16,6 +16,7 @@ import Todo from "./pages/Todo";
 import OpsChecklist from "./pages/OpsChecklist";
 import VisitSource from "./pages/VisitSource";
 import PixelLogs from "./pages/PixelLogs";
+import AppLogs from "./pages/AppLogs";
 import ChatWorkbench from "./pages/Workbench/ChatWorkbench";
 import { useNavigate } from "react-router-dom";
 
@@ -74,6 +75,7 @@ export default function App() {
             <Route path="ops-checklist" element={<OpsChecklist />} />
             <Route path="visit-source" element={<VisitSource />} />
             <Route path="pixel-logs" element={<RequireOwner><PixelLogs /></RequireOwner>} />
+            <Route path="app-logs" element={<AppLogs />} />
             <Route path="todo" element={<Todo />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

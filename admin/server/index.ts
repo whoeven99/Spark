@@ -21,6 +21,7 @@ import { todosRouter } from "./routes/todos.js";
 import { opsChecklistRouter } from "./routes/opsChecklist.js";
 import { visitSourceRouter } from "./routes/visitSource.js";
 import { pixelLogsRouter } from "./routes/pixelLogs.js";
+import { appLogsRouter } from "./routes/appLogs.js";
 import { shopAnalysisRouter } from "./routes/shopAnalysis.js";
 import { isProductionNodeEnv } from "./lib/nodeEnv.js";
 
@@ -59,6 +60,8 @@ app.use("/api/ops-checklist", authMiddleware, opsChecklistRouter);
 app.use("/api/visit-source", authMiddleware, visitSourceRouter);
 // webpixel 日志含 checkout PII（email / 地址），仅 owner 可查
 app.use("/api/pixel-logs", authMiddleware, requireOwner, pixelLogsRouter);
+// App 功能埋点日志（无 checkout PII），所有登录用户可查
+app.use("/api/app-logs", authMiddleware, appLogsRouter);
 app.use("/api/shop-analysis", authMiddleware, shopAnalysisRouter);
 
 // Serve built frontend in production

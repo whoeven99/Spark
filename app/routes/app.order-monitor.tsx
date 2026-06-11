@@ -21,6 +21,7 @@ import {
   pageSectionMajorTitleStyle,
   pageStatusCardStyle,
 } from "./page/pageUiStyles";
+import { useFeatureView } from "../lib/featureTrack";
 
 type StatusLevel = "healthy" | "watch" | "risk";
 
@@ -839,6 +840,7 @@ export default function OrderMonitorPage() {
   const { t } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const data = useLoaderData() as DashboardData;
+  useFeatureView("order-monitor");
 
   const resolveStatusText = (status: StatusLevel) => {
     if (status === "healthy") return t("orderMonitor.statusHealthy");

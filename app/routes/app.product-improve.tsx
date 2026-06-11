@@ -29,6 +29,7 @@ import { getEstimatedSeconds, getEstimatedCredits } from "../server/aiTask/aiTas
 import { ProductImprovePage } from "./page/ProductImprovePage";
 import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
 import { initI18n } from "../i18n";
+import { useFeatureView } from "../lib/featureTrack";
 
 function translateActionErrorMessage(
   rawMessage: string,
@@ -224,6 +225,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function AppProductImprove() {
+  useFeatureView("product-improve");
   return <ProductImprovePage />;
 }
 

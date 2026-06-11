@@ -838,6 +838,63 @@ export function fetchPixelLogs(params: {
   return apiFetch(`/pixel-logs?${query}`);
 }
 
+// --- App Logs（Spark App 功能埋点，阿里云日志） ---
+
+export type AppLogConfig = {
+  configured: boolean;
+  project: string | null;
+  logstore: string | null;
+};
+
+export type AppLogRow = {
+  id: string;
+  /** 毫秒时间戳。 */
+  time: number;
+  event: string;
+  shopName: string;
+  feature: string;
+  action: string;
+  path: string;
+  plan: string;
+  source: string;
+  schemaVersion: string;
+  /** 原始 extra payload JSON 字符串（可能为空）。 */
+  payload: string;
+  extra: Record<string, string>;
+};
+
+export function fetchAppLogConfig(): Promise<AppLogConfig> {
+  return apiFetch("/app-logs/config");
+}
+
+export function fetchAppLogs(params: {
+  shop?: string;
+  feature?: string;
+  action?: string;
+  keyword?: string;
+  from?: number;
+  to?: number;
+  page?: number;
+  pageSize?: number;
+}): Promise<{
+  logs: AppLogRow[];
+  total: number;
+  complete: boolean;
+  project: string;
+  logstore: string;
+}> {
+  const query = new URLSearchParams();
+  if (params.shop) query.set("shop", params.shop);
+  if (params.feature) query.set("feature", params.feature);
+  if (params.action) query.set("action", params.action);
+  if (params.keyword) query.set("keyword", params.keyword);
+  if (params.from) query.set("from", String(params.from));
+  if (params.to) query.set("to", String(params.to));
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("pageSize", String(params.pageSize));
+  return apiFetch(`/app-logs?${query}`);
+}
+
 // --- Shop Analysis ---
 
 export type ShopAnalysisMetrics = {
