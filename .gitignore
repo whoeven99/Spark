@@ -46,3 +46,4 @@ roadmap
 # AI translation quality reports (local, disposable)
 translation-reports/
 .cursor/settings.json
+/docs/tmp

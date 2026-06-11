@@ -1006,6 +1006,7 @@
   },
   "aiTask": {
     "createdAtLabel": "Created: {{value}}",
+    "completedAtLabel": "Completed: {{value}}",
     "statusRunning": "Running",
     "statusSucceeded": "Completed",
     "statusFailed": "Failed",

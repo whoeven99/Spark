@@ -255,7 +255,6 @@ function MatrixUrgencyAxis({
           style={{
             ...axisLabelStyle,
             writingMode: "vertical-rl",
-            transform: "rotate(180deg)",
             padding: "0.35rem 0.25rem",
             borderRadius: pageColorTokens.radiusControl,
             background: pageColorTokens.surfaceMuted,

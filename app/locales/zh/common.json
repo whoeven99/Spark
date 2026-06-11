@@ -1006,6 +1006,7 @@
   },
   "aiTask": {
     "createdAtLabel": "创建于：{{value}}",
+    "completedAtLabel": "结束于：{{value}}",
     "statusRunning": "进行中",
     "statusSucceeded": "已完成",
     "statusFailed": "已失败",
