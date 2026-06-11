@@ -592,3 +592,84 @@ model TokenBillingRule {
   @@unique([feature, modelKey])
   @@index([feature, enabled])
 }
+
+/// 每日经营诊断快照（每店每天一份，docs/DAILY_OPERATIONS_WORKFLOWS.md §11）。
+model OperationDiagnosisSnapshot {
+  id           String   @id @default(cuid())
+  shop         String
+  /// 快照日期（UTC，格式 YYYY-MM-DD）
+  snapshotDate String
+  /// 是否有可诊断数据（店铺尚未回填订单时为 false）
+  hasData      Boolean  @default(true)
+  /// 汇总指标 JSON：订单数/GMV/AOV/退款率/履约率/超时单数等
+  metrics      Json
+  generatedAt  DateTime @default(now())
+
+  items OperationDiagnosisItem[]
+  tasks OperationTask[]
+
+  @@unique([shop, snapshotDate])
+  @@index([shop, generatedAt])
+}
+
+/// 单个诊断项（销售趋势/履约健康/物流异常/退款售后/库存健康）。
+model OperationDiagnosisItem {
+  id         String @id @default(cuid())
+  shop       String
+  snapshotId String
+  /// sales_trend | fulfillment_health | logistics_anomaly | refund_health | inventory_health
+  key        String
+  name       String
+  /// healthy | watch | risk
+  status     String
+  /// 指标明细 JSON
+  metrics    Json
+  /// 证据（字符串数组）
+  evidence   Json
+  /// 推理链（字符串数组）
+  reasoning  Json
+  /// 使用的计算公式（字符串数组）
+  formulas   Json
+
+  snapshot OperationDiagnosisSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@index([shop, key])
+  @@index([snapshotId])
+}
+
+/// 经营待办任务（由诊断规则生成，按紧急/重要四象限组织）。
+model OperationTask {
+  id               String    @id @default(cuid())
+  shop             String
+  snapshotId       String?
+  /// 来源规则键：fulfillment_overdue | logistics_stale | refund_spike | inventory_risk | routine_shipping | sales_decline
+  sourceKey        String
+  /// 去重键（sourceKey + 关联对象），同一问题在 open/in_progress 状态下只保留一条
+  dedupeKey        String
+  title            String
+  /// q1（紧急重要）| q2（紧急不重要）| q3（不紧急重要）| q4（不紧急不重要）
+  quadrant         String
+  /// P0 | P1 | P2
+  priority         String
+  /// open | in_progress | done | ignored | auto_closed
+  status           String    @default("open")
+  /// 触发原因（含证据数字）
+  triggerReason    String
+  /// 关联对象 JSON：订单号 / SKU 列表等
+  relatedObjects   Json
+  /// 建议动作（字符串数组）
+  suggestedActions Json
+  ownerRole        String?
+  /// today | 48h | this_week | backlog
+  dueWindow        String
+  dueAt            DateTime?
+  resolvedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  snapshot OperationDiagnosisSnapshot? @relation(fields: [snapshotId], references: [id])
+
+  @@index([shop, status, quadrant])
+  @@index([shop, dedupeKey, status])
+  @@index([shop, createdAt])
+}

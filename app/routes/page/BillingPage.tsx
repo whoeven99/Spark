@@ -1356,31 +1356,6 @@ export function BillingPage() {
         {paidPlansToShow.length > 0 ? (
           <section className={styles.compareSection}>
             <h2 className={styles.compareTitle}>{t("billing.compareTitle")}</h2>
-<<<<<<< Updated upstream
-            <table className={styles.compareTable}>
-              <thead>
-                <tr>
-                  <th>{t("billing.compareFeatureCol")}</th>
-                  {paidPlansToShow.map((plan) => {
-                    const tier = planTierFromPlanKey(plan.planKey) ?? plan.planKey;
-                    return (
-                      <th key={plan.planKey} className={compareColumnClass(tier, emphasizedTier)}>
-                        {normalizePlanDisplayName(plan.displayName, plan.planKey)}
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {compareRows.map((row) => (
-                  <tr key={row.label}>
-                    <td>{row.label}</td>
-                    {row.values.map((value, index) => {
-                      const key =
-                        planTierFromPlanKey(paidPlansToShow[index]?.planKey ?? "") ??
-                        paidPlansToShow[index]?.planKey ??
-                        String(index);
-=======
             {isMobile ? (
               <div className={styles.compareCards}>
                 {comparePlanCards.map((plan) => (
@@ -1412,12 +1387,8 @@ export function BillingPage() {
                 <thead>
                   <tr>
                     <th>{t("billing.compareFeatureCol")}</th>
-                    <th>
-                      {t("billing.planFree")}
-                    </th>
                     {paidPlansToShow.map((plan) => {
                       const tier = planTierFromPlanKey(plan.planKey) ?? plan.planKey;
->>>>>>> Stashed changes
                       return (
                         <th key={plan.planKey} className={compareColumnClass(tier, emphasizedTier)}>
                           {normalizePlanDisplayName(plan.displayName, plan.planKey)}
@@ -1432,7 +1403,9 @@ export function BillingPage() {
                       <td>{row.label}</td>
                       {row.values.map((value, index) => {
                         const key =
-                          index === 0 ? "free" : (planTierFromPlanKey(paidPlansToShow[index - 1]?.planKey ?? "") ?? paidPlansToShow[index - 1]?.planKey ?? String(index));
+                          planTierFromPlanKey(paidPlansToShow[index]?.planKey ?? "") ??
+                          paidPlansToShow[index]?.planKey ??
+                          String(index);
                         return (
                           <td key={`${row.label}-${key}`} className={compareColumnClass(key, emphasizedTier)}>
                             {value}

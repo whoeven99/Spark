@@ -12,6 +12,7 @@ import { sendTemplateEmailToolDefinition } from "./email/email.tool";
 import { productOptimizationSkills } from "./productOptimization";
 import { productCatalogSkills } from "./productCatalog";
 import { listMyTasksToolDefinition } from "./taskHistory/taskHistory.tool";
+import { dailyOperationsToolDefinition } from "./dailyOperations/dailyOperations.tool";
 import { getBillingStatusToolDefinition } from "./billingStatus/billingStatus.tool";
 import { batchTasksFormSkillDefinition } from "./batchTasks/batchTasks.form.skill";
 
@@ -70,6 +71,7 @@ for (const skill of productCatalogSkills) {
 }
 
 globalToolRegistry.register(listMyTasksToolDefinition);
+globalToolRegistry.register(dailyOperationsToolDefinition);
 globalToolRegistry.register(getBillingStatusToolDefinition);
 globalToolRegistry.register(sendTemplateEmailToolDefinition);
 globalToolRegistry.register(batchTasksFormSkillDefinition);
