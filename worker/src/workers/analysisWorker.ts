@@ -26,6 +26,7 @@ import {
   heartbeatAnalysis,
   findAnalysisJobs,
   ANALYSIS_WORKER_ID,
+  type ShopAnalysisTarget,
   type ShopAnalysisJob,
 } from "../services/cosmosAnalysis.js";
 import {
@@ -92,10 +93,23 @@ async function popAnalysisHint(): Promise<AnalysisHintPayload | null> {
   }
 }
 
+function normalizeAnalysisTarget(target?: ShopAnalysisTarget): ShopAnalysisTarget {
+  return target === "profile" || target === "glossary" ? target : "both";
+}
+
+function shouldGenerateProfile(target: ShopAnalysisTarget): boolean {
+  return target === "profile" || target === "both";
+}
+
+function shouldGenerateGlossary(target: ShopAnalysisTarget): boolean {
+  return target === "glossary" || target === "both";
+}
+
 // ── Main pipeline ─────────────────────────────────────────────────────────────
 
 async function processAnalysisJob(job: ShopAnalysisJob): Promise<void> {
   const { shopName } = job;
+  const target = normalizeAnalysisTarget(job.target);
   let lastHeartbeatAt = 0;
 
   const throttledHeartbeat = async () => {
@@ -112,7 +126,7 @@ async function processAnalysisJob(job: ShopAnalysisJob): Promise<void> {
 
     // ── Phase 1: SCANNING ──────────────────────────────────────────────────
     if (job.status === "SCANNING") {
-      console.log(`[analysis] scanning shop=${shopName} modules=${job.modules.join(",")}`);
+      console.log(`[analysis] scanning shop=${shopName} target=${target} modules=${job.modules.join(",")}`);
       let scannedResources = metrics.scannedResources;
 
       for (let mi = 0; mi < job.modules.length; mi++) {
@@ -169,31 +183,35 @@ async function processAnalysisJob(job: ShopAnalysisJob): Promise<void> {
 
     // ── Phase 2: ANALYZING ─────────────────────────────────────────────────
     if (job.status === "ANALYZING") {
-      console.log(`[analysis] analyzing shop=${shopName}`);
+      console.log(`[analysis] analyzing shop=${shopName} target=${target}`);
       const { profile, draftTerms, analyzedChunks } =
-        await runLLMAnalysis(shopName, job, throttledHeartbeat, async (done) => {
+        await runLLMAnalysis(shopName, job, target, throttledHeartbeat, async (done) => {
           metrics = { ...metrics, analyzedChunks: done };
           await updateAnalysisJob(shopName, { metrics });
         });
 
       // Write results
-      const fullProfile: ShopProfile = {
-        ...profile,
-        shopName,
-        sourceLanguage: job.sourceLanguage,
-        analyzedAt: new Date().toISOString(),
-        analyzedJobId: job.id,
-      };
-      await blobWrite(profileBlobPath(shopName), fullProfile);
-      await blobWrite(glossaryDraftBlobPath(shopName), {
-        status: "draft",
-        generatedAt: new Date().toISOString(),
-        sourceJobId: job.id,
-        terms: draftTerms,
-      });
+      if (profile && shouldGenerateProfile(target)) {
+        const fullProfile: ShopProfile = {
+          ...profile,
+          shopName,
+          sourceLanguage: job.sourceLanguage,
+          analyzedAt: new Date().toISOString(),
+          analyzedJobId: job.id,
+        };
+        await blobWrite(profileBlobPath(shopName), fullProfile);
+      }
+      if (shouldGenerateGlossary(target)) {
+        await blobWrite(glossaryDraftBlobPath(shopName), {
+          status: "draft",
+          generatedAt: new Date().toISOString(),
+          sourceJobId: job.id,
+          terms: draftTerms,
+        });
+      }
 
       // Bump Redis version keys so workers/admin notice immediately
-      await bumpRedisVersion(shopName);
+      await bumpRedisVersion(shopName, target);
 
       // Clean up raw chunks (best-effort)
       await deleteRawChunks(shopName, job.modules);
@@ -205,12 +223,13 @@ async function processAnalysisJob(job: ShopAnalysisJob): Promise<void> {
         metrics: {
           ...metrics,
           analyzedChunks,
-          glossaryDraftCount: draftTerms.length,
+          glossaryDraftCount: shouldGenerateGlossary(target) ? draftTerms.length : 0,
         },
       });
       console.log(
-        `[analysis] done shop=${shopName} profile.industry="${fullProfile.industry}"` +
-        ` glossaryDraft=${draftTerms.length}`,
+        `[analysis] done shop=${shopName} target=${target}` +
+        `${profile ? ` profile.industry="${profile.industry}"` : ""}` +
+        `${shouldGenerateGlossary(target) ? ` glossaryDraft=${draftTerms.length}` : ""}`,
       );
     }
   } catch (e) {
@@ -233,7 +252,7 @@ type ChunkResult = {
 };
 
 type AnalysisResult = {
-  profile: Omit<ShopProfile, "shopName" | "sourceLanguage" | "analyzedAt" | "analyzedJobId">;
+  profile: Omit<ShopProfile, "shopName" | "sourceLanguage" | "analyzedAt" | "analyzedJobId"> | null;
   draftTerms: GlossaryTerm[];
   analyzedChunks: number;
 };
@@ -241,6 +260,7 @@ type AnalysisResult = {
 async function runLLMAnalysis(
   shopName: string,
   job: ShopAnalysisJob,
+  target: ShopAnalysisTarget,
   heartbeat: () => Promise<void>,
   onBatchDone?: (analyzedChunks: number) => Promise<void>,
 ): Promise<AnalysisResult> {
@@ -253,8 +273,8 @@ async function runLLMAnalysis(
 
   if (allChunkPaths.length === 0) {
     return {
-      profile: emptyProfile(),
-      draftTerms: [],
+      profile: shouldGenerateProfile(target) ? emptyProfile() : null,
+      draftTerms: shouldGenerateGlossary(target) ? [] : [],
       analyzedChunks: 0,
     };
   }
@@ -289,18 +309,21 @@ async function runLLMAnalysis(
   }
 
   // De-duplicate accumulations
-  const mergedTerms = mergeTerms(accTerms);
+  const mergedTerms = shouldGenerateGlossary(target) ? mergeTerms(accTerms) : [];
   const topHighFreq = deduplicateTopN(accHighFreq, 30);
   const topStyleObs = deduplicateTopN(accStyleObs, 10);
 
   // Final synthesis call
-  await heartbeat();
-  const profile = await synthesizeProfile({
-    highFreqTerms: topHighFreq,
-    styleObs: topStyleObs,
-    termCount: mergedTerms.length,
-    sampleContent: buildSampleContent(allResources.slice(0, 5)),
-  });
+  let profile: AnalysisResult["profile"] = null;
+  if (shouldGenerateProfile(target)) {
+    await heartbeat();
+    profile = await synthesizeProfile({
+      highFreqTerms: topHighFreq,
+      styleObs: topStyleObs,
+      termCount: mergedTerms.length,
+      sampleContent: buildSampleContent(allResources.slice(0, 5)),
+    });
+  }
 
   return { profile, draftTerms: mergedTerms, analyzedChunks };
 }
@@ -504,13 +527,17 @@ function emptyProfile(): AnalysisResult["profile"] {
   };
 }
 
-async function bumpRedisVersion(shopName: string): Promise<void> {
+async function bumpRedisVersion(shopName: string, target: ShopAnalysisTarget): Promise<void> {
   try {
     const redis = getRedis();
     const now = Date.now().toString();
     const TTL = 7 * 86400;
-    await redis.set(`translate:v4:profile_v:${shopName}`, now, "EX", TTL);
-    await redis.set(`translate:v4:glossary_draft_v:${shopName}`, now, "EX", TTL);
+    if (shouldGenerateProfile(target)) {
+      await redis.set(`translate:v4:profile_v:${shopName}`, now, "EX", TTL);
+    }
+    if (shouldGenerateGlossary(target)) {
+      await redis.set(`translate:v4:glossary_draft_v:${shopName}`, now, "EX", TTL);
+    }
   } catch { /* best-effort */ }
 }
 

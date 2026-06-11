@@ -26,6 +26,8 @@ import { ContextWindowIndicator } from "../component/chat/ContextWindowIndicator
 import { WorkspaceContextObjectPicker } from "../component/chat/WorkspaceContextObjectPicker";
 import { estimateMessagesTokens } from "../../lib/tokenEstimate";
 import type { SelectedShopifyObject } from "../../lib/shopifyObjectTypes";
+import type { ContextResourceSortDirection } from "../../lib/contextResourceTypes";
+import { useContextResourceSearch } from "../../hooks/useContextResourceSearch";
 import { UnifiedTaskListPage } from "../component/unifiedTaskList/UnifiedTaskListPage";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 
@@ -72,8 +74,10 @@ type SkillApp = {
   title: string;
   description: string;
   status: string;
+  statusTone?: "positive" | "warning" | "critical" | "neutral";
   category: string;
   path: string;
+  available: boolean;
 };
 
 type AutomationConfiguredItem = {
@@ -1315,7 +1319,10 @@ function ChatPanel({
   const { isMobile } = useResponsiveLayout();
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const mobileComposerRef = useRef<HTMLDivElement | null>(null);
   const [isScrolledUp, setIsScrolledUp] = useState(false);
+  const [mobileKeyboardInset, setMobileKeyboardInset] = useState(0);
+  const [mobileComposerHeight, setMobileComposerHeight] = useState(0);
   const [orderFilter, setOrderFilter] = useState<OrderFilterKey>("all");
   const [orderSort, setOrderSort] = useState("created_at:desc");
   const [newFileObj, setNewFileObj] = useState<File | null>(null);
@@ -1482,8 +1489,146 @@ function ChatPanel({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [activeContextTool, onCloseToolPicker]);
 
+  useEffect(() => {
+    if (!isMobile) {
+      setMobileKeyboardInset(0);
+      return;
+    }
+    if (typeof window === "undefined") return;
+
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    const updateKeyboardInset = () => {
+      const nextViewport = window.visualViewport;
+      if (!nextViewport) return;
+      const inset = Math.max(
+        0,
+        Math.round(window.innerHeight - nextViewport.height - nextViewport.offsetTop),
+      );
+      setMobileKeyboardInset(inset);
+    };
+
+    updateKeyboardInset();
+    viewport.addEventListener("resize", updateKeyboardInset);
+    viewport.addEventListener("scroll", updateKeyboardInset);
+    window.addEventListener("orientationchange", updateKeyboardInset);
+
+    return () => {
+      viewport.removeEventListener("resize", updateKeyboardInset);
+      viewport.removeEventListener("scroll", updateKeyboardInset);
+      window.removeEventListener("orientationchange", updateKeyboardInset);
+    };
+  }, [isMobile]);
+
+  useEffect(() => {
+    if (!isMobile) {
+      setMobileComposerHeight(0);
+      return;
+    }
+
+    const composerElement = mobileComposerRef.current;
+    if (!composerElement) return;
+
+    const updateComposerHeight = () => {
+      setMobileComposerHeight(Math.ceil(composerElement.getBoundingClientRect().height));
+    };
+
+    updateComposerHeight();
+    if (typeof ResizeObserver === "undefined") return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateComposerHeight();
+    });
+    resizeObserver.observe(composerElement);
+
+    return () => resizeObserver.disconnect();
+  }, [isMobile, draft, selectedSummaryBubbles.length, filledContextCount, isStreaming]);
+
+  const mobileComposerOffset = isMobile ? mobileComposerHeight + 18 : 0;
+  const composerContent = (
+    <div style={isMobile ? mobileFixedComposerCardStyle : undefined}>
+      {selectedSummaryBubbles.length > 0 ? (
+        <div style={selectionBubbleRowStyle}>
+          {selectedSummaryBubbles.map((item) => (
+            <span key={item.key} style={selectionBubbleStyle}>
+              <span>{item.label}</span>
+              <button type="button" style={selectionBubbleCloseStyle} onClick={() => onClearToolSelection(item.key)} aria-label={`清空${item.label}`}>
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <textarea
+        ref={textareaRef}
+        value={draft}
+        onChange={(event) => onDraftChange(event.target.value)}
+        onKeyDown={handleTextareaKeyDown}
+        className="workspace-composer-input"
+        style={isMobile ? mobileTextareaStyle : textareaStyle}
+        placeholder="继续补充你的任务目标，并结合商品、订单、文章、文件或富媒体上下文..."
+        disabled={isStreaming}
+        autoFocus
+      />
+      <div style={toolbarDockStyle}>
+        <div style={isMobile ? mobileToolbarBarStyle : toolbarBarStyle}>
+          <div style={toolbarIconGroupStyle}>
+            {toolItems.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                style={toolbarPillButtonStyle(item.active)}
+                onClick={() => onContextToolChange(item.key)}
+                title={item.label}
+              >
+                <span style={toolbarIconGlyphStyle}>{item.icon}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
+          <div style={isMobile ? mobileToolbarStatusGroupStyle : toolbarStatusGroupStyle}>
+            {filledContextCount > 0 ? (
+              <span style={toolbarCountStyle}>已补充 {filledContextCount} 项</span>
+            ) : null}
+            <button type="button" style={toolbarClearStyle} onClick={onClearContext}>
+              清空上下文
+            </button>
+          </div>
+        </div>
+      </div>
+      <div style={isMobile ? mobileComposerFooterStyle : composerFooterStyle}>
+        <div style={footerLeftStyle}>
+          <span style={sectionTextStyle}>
+            {isStreaming ? "AI Assistant 正在回复，可随时停止。" : <span style={mutedMetaStyle}>Enter 发送，Shift+Enter 换行</span>}
+          </span>
+          <ContextWindowIndicator currentTokens={contextTokens} maxTokens={MAX_CONTEXT_TOKENS} />
+        </div>
+        <div style={isMobile ? mobileButtonRowStyle : buttonRowStyle}>
+          <button type="button" className="workspace-ghost-btn" style={ghostButtonStyle} disabled={isStreaming}>
+            生成任务建议
+          </button>
+          {isStreaming ? (
+            <button type="button" style={ghostButtonStyle} onClick={onAbortStream}>
+              停止
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="workspace-primary-btn"
+            style={{ ...primaryButtonStyle, opacity: isStreaming ? 0.6 : 1 }}
+            onClick={() => void onSend()}
+            disabled={isStreaming}
+          >
+            {isStreaming ? "发送中…" : "发送"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div style={isMobile ? mobileChatLayoutStyle : chatLayoutStyle}>
+    <div style={isMobile ? { ...mobileChatLayoutStyle, paddingBottom: mobileComposerOffset } : chatLayoutStyle}>
       <section
         style={{
           ...(isMobile ? mobileSurfaceCardStyle : surfaceCardStyle),
@@ -1491,6 +1636,11 @@ function ChatPanel({
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
+          ...(isMobile
+            ? {
+                minHeight: `calc(100dvh - ${Math.max(mobileComposerOffset + 168, 320)}px)`,
+              }
+            : {}),
         }}
       >
         <div style={isMobile ? mobileConversationMetaRowStyle : conversationMetaRowStyle}>
@@ -1499,7 +1649,11 @@ function ChatPanel({
         </div>
 
         <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
-          <div ref={messageListRef} style={messageListStyle} onScroll={handleMessageListScroll}>
+          <div
+            ref={messageListRef}
+            style={isMobile ? { ...messageListStyle, paddingBottom: 12 } : messageListStyle}
+            onScroll={handleMessageListScroll}
+          >
             <ChatMessages
               messages={messages.map((message) => workspaceMessageToChatMessage(message))}
               streamingSlot={
@@ -1541,85 +1695,17 @@ function ChatPanel({
           ) : null}
         </div>
 
-        <div style={isMobile ? mobileComposerBoxStyle : composerBoxStyle}>
-          {selectedSummaryBubbles.length > 0 ? (
-            <div style={selectionBubbleRowStyle}>
-              {selectedSummaryBubbles.map((item) => (
-                <span key={item.key} style={selectionBubbleStyle}>
-                  <span>{item.label}</span>
-                  <button type="button" style={selectionBubbleCloseStyle} onClick={() => onClearToolSelection(item.key)} aria-label={`清空${item.label}`}>
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-          ) : null}
-          <textarea
-            ref={textareaRef}
-            value={draft}
-            onChange={(event) => onDraftChange(event.target.value)}
-            onKeyDown={handleTextareaKeyDown}
-            className="workspace-composer-input"
-            style={isMobile ? mobileTextareaStyle : textareaStyle}
-            placeholder="继续补充你的任务目标，并结合商品、订单、文章、文件或富媒体上下文..."
-            disabled={isStreaming}
-            autoFocus
-          />
-          <div style={toolbarDockStyle}>
-            <div style={isMobile ? mobileToolbarBarStyle : toolbarBarStyle}>
-              <div style={toolbarIconGroupStyle}>
-                {toolItems.map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    style={toolbarPillButtonStyle(item.active)}
-                    onClick={() => onContextToolChange(item.key)}
-                    title={item.label}
-                  >
-                    <span style={toolbarIconGlyphStyle}>{item.icon}</span>
-                    <span>{item.label}</span>
-                  </button>
-                ))}
-              </div>
-              <div style={isMobile ? mobileToolbarStatusGroupStyle : toolbarStatusGroupStyle}>
-                {filledContextCount > 0 ? (
-                  <span style={toolbarCountStyle}>已补充 {filledContextCount} 项</span>
-                ) : null}
-                <button type="button" style={toolbarClearStyle} onClick={onClearContext}>
-                  清空上下文
-                </button>
-              </div>
-            </div>
-          </div>
-          <div style={isMobile ? mobileComposerFooterStyle : composerFooterStyle}>
-            <div style={footerLeftStyle}>
-              <span style={sectionTextStyle}>
-                {isStreaming ? "AI Assistant 正在回复，可随时停止。" : <span style={mutedMetaStyle}>Enter 发送，Shift+Enter 换行</span>}
-              </span>
-              <ContextWindowIndicator currentTokens={contextTokens} maxTokens={MAX_CONTEXT_TOKENS} />
-            </div>
-            <div style={isMobile ? mobileButtonRowStyle : buttonRowStyle}>
-              <button type="button" className="workspace-ghost-btn" style={ghostButtonStyle} disabled={isStreaming}>
-                生成任务建议
-              </button>
-              {isStreaming ? (
-                <button type="button" style={ghostButtonStyle} onClick={onAbortStream}>
-                  停止
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="workspace-primary-btn"
-                style={{ ...primaryButtonStyle, opacity: isStreaming ? 0.6 : 1 }}
-                onClick={() => void onSend()}
-                disabled={isStreaming}
-              >
-                {isStreaming ? "发送中…" : "发送"}
-              </button>
-            </div>
-          </div>
-        </div>
+        {!isMobile ? <div style={composerBoxStyle}>{composerContent}</div> : null}
       </section>
+
+      {isMobile ? (
+        <div
+          ref={mobileComposerRef}
+          style={mobileFixedComposerWrapStyle(mobileKeyboardInset)}
+        >
+          {composerContent}
+        </div>
+      ) : null}
 
       {activeContextTool ? (
         <div style={toolModalBackdropStyle} onClick={handleDismissToolPicker}>
@@ -2055,8 +2141,10 @@ function SkillsPanel({ onOpenTool }: { onOpenTool: (path: string) => void }) {
             <div style={sectionTitleSmallStyle}>{skill.title}</div>
             <div style={sectionTextStyle}>{skill.description}</div>
             <div style={skillFooterStyle}>
-              <span style={statusBadgeStyle("neutral")}>{skill.status}</span>
-              <span style={textButtonStyle}>进入</span>
+              <span style={statusBadgeStyle(skill.statusTone ?? "neutral")}>{skill.status}</span>
+              <span style={skill.available ? textButtonStyle : disabledTextButtonStyle}>
+                {skill.available ? "进入" : "敬请期待"}
+              </span>
             </div>
           </button>
         ))}
@@ -2804,7 +2892,23 @@ const messageListStyle: CSSProperties = {
   // instant assignment so rapid frames don't fight each other and miss the bottom.
 };
 const composerBoxStyle: CSSProperties = { flexShrink: 0, marginTop: 14, paddingTop: 14, borderTop: "1px solid #ebedf0" };
-const mobileComposerBoxStyle: CSSProperties = { ...composerBoxStyle, marginTop: 12, paddingTop: 12 };
+const mobileFixedComposerWrapStyle = (keyboardInset: number): CSSProperties => ({
+  position: "fixed",
+  left: 14,
+  right: 14,
+  bottom: `calc(env(safe-area-inset-bottom, 0px) + ${keyboardInset}px)`,
+  zIndex: 24,
+  pointerEvents: "none",
+});
+const mobileFixedComposerCardStyle: CSSProperties = {
+  pointerEvents: "auto",
+  padding: 12,
+  borderRadius: 16,
+  border: "1px solid rgba(201, 205, 210, 0.92)",
+  background: "rgba(255, 255, 255, 0.96)",
+  boxShadow: "0 14px 32px rgba(15, 23, 42, 0.14)",
+  backdropFilter: "blur(12px)",
+};
 const textareaStyle: CSSProperties = {
   width: "100%",
   minHeight: 96,
@@ -3062,6 +3166,45 @@ const selectorSearchInputStyle: CSSProperties = {
   background: "#ffffff",
 };
 const selectorListCompactStyle: CSSProperties = { display: "grid", gap: 10, marginTop: 14, maxHeight: 240, overflowY: "auto" };
+const resourcePickerHintStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  marginTop: 12,
+};
+const pickerInfoBoxStyle = (tone: "critical" | "neutral"): CSSProperties => ({
+  padding: "10px 12px",
+  borderRadius: 10,
+  fontSize: 13,
+  lineHeight: 1.5,
+  ...(tone === "critical"
+    ? { background: "#fff0ee", border: "1px solid #f2b8ae", color: "#8f2f1f" }
+    : { background: "#f6f6f7", border: "1px solid #e1e3e5", color: "#6d7175" }),
+});
+const resourceItemContentStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 4, minWidth: 0 };
+const resourceItemTopRowStyle: CSSProperties = { display: "flex", alignItems: "flex-start", gap: 8 };
+const resourceStatusPillStyle: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  padding: "2px 8px",
+  borderRadius: 999,
+  flexShrink: 0,
+  color: "#475467",
+  background: "#f1f2f4",
+};
+const resourcePaginationStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "flex-end",
+  alignItems: "center",
+  gap: 10,
+  marginTop: 14,
+};
+
+function normalizeResourceStatus(status: string | null | undefined): string {
+  if (!status) return "未知";
+  return status.replace(/_/g, " ");
+}
 const selectorItemStyle = (checked: boolean): CSSProperties => ({
   display: "flex",
   gap: 12,
