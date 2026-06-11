@@ -11,10 +11,15 @@ import {
   upsertAnalysisJob,
   pushAnalysisHint,
   ANALYSIS_RUNNING_STATUSES,
+  type ShopAnalysisTarget,
   type ShopAnalysisJob,
 } from "../server/translation/shopAnalysis.server";
 
 const DEFAULT_MODULES = ["PRODUCT", "COLLECTION", "ARTICLE", "BLOG", "PAGE", "SHOP"];
+
+function normalizeAnalysisTarget(value: unknown): ShopAnalysisTarget {
+  return value === "profile" || value === "glossary" ? value : "both";
+}
 
 /** GET → return current job */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -41,9 +46,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const body = (await request.json().catch(() => ({}))) as {
     sourceLanguage?: string;
     modules?: string[];
+    target?: unknown;
   };
 
   const sourceLanguage = body.sourceLanguage?.trim() || "zh-CN";
+  const target = normalizeAnalysisTarget(body.target);
   const modules =
     Array.isArray(body.modules) && body.modules.length > 0
       ? body.modules
@@ -64,6 +71,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       id: session.shop,
       shopName: session.shop,
       status: "SCAN_QUEUED",
+      target,
       sourceLanguage,
       modules,
       triggeredBy: session.id ?? "user",
@@ -78,7 +86,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     };
 
     await upsertAnalysisJob(job);
-    await pushAnalysisHint(session.shop, sourceLanguage, modules);
+    await pushAnalysisHint(session.shop, sourceLanguage, modules, target);
 
     return data({ ok: true, job });
   } catch (err) {

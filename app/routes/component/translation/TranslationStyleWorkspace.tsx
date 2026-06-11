@@ -17,6 +17,7 @@ type TranslationStyleWorkspaceProps = {
 };
 
 type ProfileListField = "highFrequencyTerms" | "styleNotes";
+type SuggestionTarget = "profile" | "glossary";
 
 function buildEmptyProfile(sourceLanguage: string): ShopProfile {
   return {
@@ -120,7 +121,7 @@ export function TranslationStyleWorkspace({
   const [profileError, setProfileError] = useState<string | null>(null);
   const [glossaryReloadToken, setGlossaryReloadToken] = useState(0);
   const [activeListEditor, setActiveListEditor] = useState<ProfileListField | null>(null);
-  const [aiSuggestionOpen, setAiSuggestionOpen] = useState(false);
+  const [aiSuggestionTarget, setAiSuggestionTarget] = useState<SuggestionTarget | null>(null);
 
   const loadLiveProfile = useCallback(async () => {
     setLoadingProfile(true);
@@ -239,8 +240,8 @@ export function TranslationStyleWorkspace({
     }
   };
 
-  const openAiSuggestion = () => {
-    setAiSuggestionOpen(true);
+  const openAiSuggestion = (target: SuggestionTarget) => {
+    setAiSuggestionTarget(target);
   };
 
   const handleAiSuggestionApplied = () => {
@@ -260,7 +261,7 @@ export function TranslationStyleWorkspace({
                   在这里维护行业、语气风格、目标受众和翻译指令。AI 建议作为内容填充入口，放在编辑流和空状态中按需使用。
                 </p>
               </div>
-              <button type="button" style={secondaryActionButtonStyle} onClick={openAiSuggestion}>
+              <button type="button" style={secondaryActionButtonStyle} onClick={() => openAiSuggestion("profile")}>
                 生成 AI 建议
               </button>
             </div>
@@ -336,7 +337,7 @@ export function TranslationStyleWorkspace({
                         编辑高频词
                       </button>
                       {!profileForm.highFrequencyTerms.filter(Boolean).length ? (
-                        <button type="button" style={ghostSuggestionButtonStyle} onClick={openAiSuggestion}>
+                        <button type="button" style={ghostSuggestionButtonStyle} onClick={() => openAiSuggestion("profile")}>
                           生成填充建议
                         </button>
                       ) : null}
@@ -366,7 +367,7 @@ export function TranslationStyleWorkspace({
                         编辑风格备注
                       </button>
                       {!profileForm.styleNotes.filter(Boolean).length ? (
-                        <button type="button" style={ghostSuggestionButtonStyle} onClick={openAiSuggestion}>
+                        <button type="button" style={ghostSuggestionButtonStyle} onClick={() => openAiSuggestion("profile")}>
                           生成填充建议
                         </button>
                       ) : null}
@@ -391,7 +392,7 @@ export function TranslationStyleWorkspace({
                     </div>
                     <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                       {!liveProfile ? (
-                        <button type="button" style={secondaryActionButtonStyle} onClick={openAiSuggestion}>
+                        <button type="button" style={secondaryActionButtonStyle} onClick={() => openAiSuggestion("profile")}>
                           生成 AI 建议
                         </button>
                       ) : null}
@@ -414,7 +415,7 @@ export function TranslationStyleWorkspace({
             <TranslationGlossaryPanel
               locationSearch={locationSearch}
               reloadToken={glossaryReloadToken}
-              onRequestAiSuggestion={openAiSuggestion}
+              onRequestAiSuggestion={() => openAiSuggestion("glossary")}
             />
           </div>
         </div>
@@ -444,21 +445,25 @@ export function TranslationStyleWorkspace({
         />
       ) : null}
 
-      {aiSuggestionOpen ? (
+      {aiSuggestionTarget ? (
         <div style={overlayBackdropStyle}>
           <div style={suggestionOverlayPanelStyle}>
             <div style={overlayHeaderStyle}>
               <div>
-                <h4 style={overlayTitleStyle}>AI 建议</h4>
+                <h4 style={overlayTitleStyle}>
+                  {aiSuggestionTarget === "profile" ? "商店档案 AI 建议" : "术语表 AI 建议"}
+                </h4>
                 <div style={overlaySubtitleStyle}>
-                  这里会为商店档案和术语表生成可编辑的填充建议；保存或确认生效后会同步回当前页面。
+                  {aiSuggestionTarget === "profile"
+                    ? "这里会生成与商店档案相关的填充建议；保存后会同步回当前页面。"
+                    : "这里会生成与术语表相关的填充建议；确认生效后会同步回当前页面。"}
                 </div>
               </div>
               <button
                 type="button"
                 style={overlayCloseButtonStyle}
                 onClick={() => {
-                  setAiSuggestionOpen(false);
+                  setAiSuggestionTarget(null);
                   handleAiSuggestionApplied();
                 }}
               >
@@ -468,6 +473,7 @@ export function TranslationStyleWorkspace({
             <ShopAnalysisPanel
               locationSearch={locationSearch}
               defaultSourceLanguage={sourceLocale}
+              target={aiSuggestionTarget}
               onApplied={handleAiSuggestionApplied}
             />
           </div>

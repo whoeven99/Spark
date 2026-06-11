@@ -18,10 +18,13 @@ export type ShopAnalysisStatus =
   | "COMPLETED"
   | "FAILED";
 
+export type ShopAnalysisTarget = "profile" | "glossary" | "both";
+
 export type ShopAnalysisJob = {
   id: string;          // = shopName
   shopName: string;
   status: ShopAnalysisStatus;
+  target?: ShopAnalysisTarget;
   sourceLanguage: string;
   modules: string[];
   triggeredBy: string;

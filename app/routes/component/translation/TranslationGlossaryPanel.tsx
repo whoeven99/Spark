@@ -267,11 +267,6 @@ export function TranslationGlossaryPanel({
 
   const previewSelectedCount = previewRows.filter((r) => r._selected).length;
   const previewAllSelected = previewRows.length > 0 && previewRows.every((r) => r._selected);
-  const activeTermsCount = terms.filter((term) => term.source.trim()).length;
-  const doNotTranslateCount = terms.filter((term) => term.doNotTranslate).length;
-  const translatedCount = terms.filter(
-    (term) => !term.doNotTranslate && term.translations && Object.keys(term.translations).length,
-  ).length;
   const totalEditorPages = Math.max(1, Math.ceil(terms.length / GLOSSARY_PAGE_SIZE));
   const pagedTerms = useMemo(
     () =>
@@ -315,21 +310,6 @@ export function TranslationGlossaryPanel({
           </div>
         </div>
 
-        <div style={summaryGridStyle}>
-          <div style={summaryStatStyle}>
-            <div style={summaryStatLabelStyle}>有效术语</div>
-            <div style={summaryStatValueStyle}>{activeTermsCount}</div>
-          </div>
-          <div style={summaryStatStyle}>
-            <div style={summaryStatLabelStyle}>勿译项</div>
-            <div style={summaryStatValueStyle}>{doNotTranslateCount}</div>
-          </div>
-          <div style={summaryStatStyle}>
-            <div style={summaryStatLabelStyle}>已配译法</div>
-            <div style={summaryStatValueStyle}>{translatedCount}</div>
-          </div>
-        </div>
-
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "0.9rem" }}>
           {error && <div style={formErrorBoxStyle}>{error}</div>}
           {loading ? (
@@ -341,9 +321,6 @@ export function TranslationGlossaryPanel({
                 <div style={{ ...pageHintTextStyle, marginTop: 0 }}>
                   术语表为空时，可先生成一版 AI 建议，再进入编辑页确认或调整。
                 </div>
-                <s-button type="button" variant="secondary" onClick={onRequestAiSuggestion}>
-                  生成 AI 建议
-                </s-button>
               </div>
             </div>
           ) : (
@@ -673,33 +650,6 @@ const headerRowStyle: CSSProperties = {
 const titleStyle: CSSProperties = {
   fontWeight: 700,
   fontSize: "1rem",
-  color: pageColorTokens.textPrimary,
-};
-
-const summaryGridStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-  gap: "0.75rem",
-};
-
-const summaryStatStyle: CSSProperties = {
-  padding: "0.8rem 0.9rem",
-  borderRadius: "12px",
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
-  background: pageColorTokens.surfaceMuted,
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.25rem",
-};
-
-const summaryStatLabelStyle: CSSProperties = {
-  fontSize: "0.75rem",
-  color: pageColorTokens.textSecondary,
-};
-
-const summaryStatValueStyle: CSSProperties = {
-  fontSize: "1.1rem",
-  fontWeight: 700,
   color: pageColorTokens.textPrimary,
 };
 

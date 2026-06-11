@@ -46,7 +46,12 @@ export const HINT_KEYS = {
 } as const;
 
 export type HintPayload = { taskId: string; shopName: string };
-export type AnalysisHintPayload = { shopName: string; sourceLanguage: string; modules: string[] };
+export type AnalysisHintPayload = {
+  shopName: string;
+  sourceLanguage: string;
+  modules: string[];
+  target?: "profile" | "glossary" | "both";
+};
 
 export async function popHint(
   stage: keyof typeof HINT_KEYS,
