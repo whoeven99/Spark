@@ -777,6 +777,24 @@ const valueThStyle: CSSProperties = {
   whiteSpace: "nowrap",
 };
 
+const valueGroupThStyle: CSSProperties = {
+  textAlign: "left",
+  padding: "0.5rem 0.5rem",
+  color: pageColorTokens.textBody,
+  borderBottom: `2px solid ${pageColorTokens.border}`,
+  borderRight: `1px solid ${pageColorTokens.divider}`,
+  fontWeight: 800,
+  fontSize: "0.75rem",
+  whiteSpace: "nowrap",
+  background: pageColorTokens.surfaceMuted,
+};
+
+const groupHeadInnerStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.4rem",
+};
+
 const valueTdStyle: CSSProperties = {
   padding: "0.6rem 0.5rem",
   borderBottom: `1px solid ${pageColorTokens.divider}`,
@@ -802,6 +820,144 @@ const costLabelStyle: CSSProperties = {
   flex: "1 1 160px",
 };
 
+// ── 数据来源标签（区分真实 / 估算 / 待接入占位） ──────────
+type DataSource = "real" | "estimated" | "pending";
+
+const dataSourceTone: Record<DataSource, "success" | "warning" | "neutral"> = {
+  real: "success",
+  estimated: "warning",
+  pending: "neutral",
+};
+
+function SourceTag({ source }: { source: DataSource }) {
+  const { t } = useTranslation();
+  const label =
+    source === "real"
+      ? t("dailyOps.sourceReal")
+      : source === "estimated"
+        ? t("dailyOps.sourceEstimated")
+        : t("dailyOps.sourcePending");
+  const tip =
+    source === "real"
+      ? t("dailyOps.sourceRealTip")
+      : source === "estimated"
+        ? t("dailyOps.sourceEstimatedTip")
+        : t("dailyOps.sourcePendingTip");
+  return (
+    <s-badge tone={dataSourceTone[source]}>
+      <span title={tip}>{label}</span>
+    </s-badge>
+  );
+}
+
+const layerCardStyle = (accent: string): CSSProperties => ({
+  flex: "1 1 200px",
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  borderLeft: `4px solid ${accent}`,
+  borderRadius: pageColorTokens.radiusControl,
+  padding: "0.7rem 0.85rem",
+  background: "#fff",
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.4rem",
+});
+
+const layerTitleStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "0.875rem",
+  fontWeight: 800,
+  color: pageColorTokens.textBody,
+};
+
+function LayerLegend() {
+  const { t } = useTranslation();
+  const layers: Array<{ accent: string; title: string; desc: string; source: DataSource }> = [
+    {
+      accent: "#007a5a",
+      title: t("dailyOps.layerRevenue"),
+      desc: t("dailyOps.layerRevenueDesc"),
+      source: "real",
+    },
+    {
+      accent: "#ea580c",
+      title: t("dailyOps.layerProfit"),
+      desc: t("dailyOps.layerProfitDesc"),
+      source: "estimated",
+    },
+    {
+      accent: "#6b7280",
+      title: t("dailyOps.layerInvestment"),
+      desc: t("dailyOps.layerInvestmentDesc"),
+      source: "pending",
+    },
+  ];
+  return (
+    <PageSurface title={t("dailyOps.layerLegendTitle")}>
+      <p style={{ ...taskSecondaryTextStyle, marginTop: 0, marginBottom: "0.75rem" }}>
+        {t("dailyOps.layerLegendIntro")}
+      </p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
+        {layers.map((layer) => (
+          <div key={layer.title} style={layerCardStyle(layer.accent)}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+              <h4 style={layerTitleStyle}>{layer.title}</h4>
+              <SourceTag source={layer.source} />
+            </div>
+            <p style={{ ...taskSecondaryTextStyle, margin: 0 }}>{layer.desc}</p>
+          </div>
+        ))}
+      </div>
+    </PageSurface>
+  );
+}
+
+function InvestmentLayerCard() {
+  const { t } = useTranslation();
+  const items = [
+    t("dailyOps.investmentAdSpend"),
+    t("dailyOps.investmentSeoCost"),
+    t("dailyOps.investmentToolCost"),
+  ];
+  return (
+    <PageSurface
+      title={t("dailyOps.investmentTitle")}
+      subtitle={t("dailyOps.investmentSubtitle")}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.5rem",
+          marginBottom: "0.75rem",
+        }}
+      >
+        <SourceTag source="pending" />
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+        {items.map((item) => (
+          <div
+            key={item}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.45rem",
+              padding: "0.5rem 0.75rem",
+              border: `1px dashed ${pageColorTokens.border}`,
+              borderRadius: pageColorTokens.radiusControl,
+              fontSize: "0.8125rem",
+              color: pageColorTokens.textSecondary,
+              background: pageColorTokens.surfaceMuted,
+            }}
+          >
+            <span>{item}</span>
+            <s-badge tone="neutral">{t("dailyOps.investmentNotConnected")}</s-badge>
+          </div>
+        ))}
+      </div>
+    </PageSurface>
+  );
+}
+
 function ValueLayerSections({
   value,
   isMobile,
@@ -819,12 +975,17 @@ function ValueLayerSections({
         <h2 style={pageSectionMajorTitleStyle}>{t("dailyOps.valueTitle")}</h2>
       </section>
 
+      <LayerLegend />
+
       <PageSurface
         title={t("dailyOps.customerTitle")}
         subtitle={t("dailyOps.customerSubtitle", {
           total: customers.payingCustomers,
         })}
       >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+          <SourceTag source="estimated" />
+        </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
           <PageMetricCard
             metrics={[
@@ -876,6 +1037,31 @@ function ValueLayerSections({
             <table style={valueTableStyle}>
               <thead>
                 <tr>
+                  <th style={valueGroupThStyle} colSpan={2}>
+                    {t("dailyOps.groupBasic")}
+                  </th>
+                  <th style={valueGroupThStyle} colSpan={1}>
+                    <span style={groupHeadInnerStyle}>
+                      {t("dailyOps.layerRevenue")} <SourceTag source="real" />
+                    </span>
+                  </th>
+                  <th style={valueGroupThStyle} colSpan={2}>
+                    <span style={groupHeadInnerStyle}>
+                      {t("dailyOps.layerProfit")} <SourceTag source="estimated" />
+                    </span>
+                  </th>
+                  <th style={valueGroupThStyle} colSpan={3}>
+                    <span style={groupHeadInnerStyle}>
+                      {t("dailyOps.groupCustomerQuality")} <SourceTag source="estimated" />
+                    </span>
+                  </th>
+                  <th style={valueGroupThStyle} colSpan={1}>
+                    <span style={groupHeadInnerStyle}>
+                      {t("dailyOps.layerInvestment")} <SourceTag source="pending" />
+                    </span>
+                  </th>
+                </tr>
+                <tr>
                   <th style={valueThStyle}>{t("dailyOps.colChannel")}</th>
                   <th style={valueThStyle}>{t("dailyOps.colOrders")}</th>
                   <th style={valueThStyle}>{t("dailyOps.colRevenue")}</th>
@@ -916,7 +1102,7 @@ function ValueLayerSections({
                       {channel.customers.averageCustomerValueScore ?? "—"}
                     </td>
                     <td style={valueTdStyle}>
-                      <s-badge tone="warning">{t("dailyOps.roiPendingAds")}</s-badge>
+                      <s-badge tone="neutral">{t("dailyOps.roiPendingAds")}</s-badge>
                     </td>
                   </tr>
                 ))}
@@ -932,6 +1118,8 @@ function ValueLayerSections({
           ))}
         </div>
       </PageSurface>
+
+      <InvestmentLayerCard />
 
       <CostConfigCard costConfig={value.costConfig} isMobile={isMobile} />
     </>
