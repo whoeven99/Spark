@@ -17,6 +17,8 @@ import { PictureTranslateChatCard } from "./PictureTranslateChatCard";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
 import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard";
 import { BatchTasksChatCard } from "./BatchTasksChatCard";
+import { TaskProposalCard } from "./TaskProposalCard";
+import type { TaskProposalPayload } from "../../../lib/taskProposalPayload";
 import {
   hasStreamingVisualContent,
   type SkillStepProgress,
@@ -37,6 +39,7 @@ type StreamingAssistantReplyProps = {
   streamingImageGenerationPayload?: unknown;
   streamingBatchTasksCard?: boolean;
   streamingBatchTasksPayload?: BatchTasksFormPayload;
+  streamingTaskProposal?: TaskProposalPayload;
   workspaceBatchProducts?: BatchTaskProduct[];
 };
 
@@ -103,6 +106,7 @@ export function StreamingAssistantReply({
   streamingImageGenerationPayload,
   streamingBatchTasksCard = false,
   streamingBatchTasksPayload,
+  streamingTaskProposal,
   workspaceBatchProducts = [],
 }: StreamingAssistantReplyProps) {
   if (!active) return null;
@@ -120,7 +124,11 @@ export function StreamingAssistantReply({
     ? mergeBatchTasksPayloadWithContext(streamingBatchTasksPayload, workspaceBatchProducts)
     : undefined;
   const showProductImproveCard =
-    streamingGenerateCard && !streamingBatchTasksCard && workspaceBatchProducts.length < 2;
+    streamingGenerateCard &&
+    !streamingBatchTasksCard &&
+    !streamingTaskProposal &&
+    workspaceBatchProducts.length < 2;
+  const showBatchTasksCard = streamingBatchTasksCard && !streamingTaskProposal;
   const hasContent = hasStreamingVisualContent({
     streamingText,
     skillSteps,
@@ -128,14 +136,16 @@ export function StreamingAssistantReply({
     streamingGenerateCard: showProductImproveCard,
     streamingPictureTranslateCard,
     streamingImageGenerationCard,
-    streamingBatchTasksCard,
+    streamingBatchTasksCard: showBatchTasksCard,
+    streamingTaskProposal,
   });
   const hasEmbeddedCard = Boolean(
     streamingTranslationPayload ||
       showProductImproveCard ||
       streamingPictureTranslateCard ||
       streamingImageGenerationCard ||
-      streamingBatchTasksCard,
+      showBatchTasksCard ||
+      streamingTaskProposal,
   );
 
   return (
@@ -206,11 +216,21 @@ export function StreamingAssistantReply({
                 </div>
               ) : null}
 
-              {streamingBatchTasksCard ? (
+              {showBatchTasksCard ? (
                 <div style={cardSlotStyle}>
                   <BatchTasksChatCard
                     embedded
                     initialPayload={streamingBatchTasksResolvedPayload}
+                    contextProducts={workspaceBatchProducts}
+                  />
+                </div>
+              ) : null}
+
+              {streamingTaskProposal ? (
+                <div style={cardSlotStyle}>
+                  <TaskProposalCard
+                    embedded
+                    proposal={streamingTaskProposal}
                     contextProducts={workspaceBatchProducts}
                   />
                 </div>

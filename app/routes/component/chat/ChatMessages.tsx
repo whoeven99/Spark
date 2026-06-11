@@ -8,6 +8,7 @@ import { ImageGenerationChatCard } from "./ImageGenerationChatCard";
 import { PictureTranslateChatCard } from "./PictureTranslateChatCard";
 import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard";
 import { BatchTasksChatCard } from "./BatchTasksChatCard";
+import { TaskProposalCard } from "./TaskProposalCard";
 
 type ChatMessagesProps = {
   messages: ChatMessage[];
@@ -39,13 +40,17 @@ export function ChatMessages({
       {messages.map((item, index) => {
         const hasTranslationCard =
           item.role === "assistant" && Boolean(item.translationTaskForm);
+        const hasTaskProposalCard =
+          item.role === "assistant" && Boolean(item.taskProposal);
         const hasBatchTasksCard =
           item.role === "assistant" &&
+          !hasTaskProposalCard &&
           (Boolean(item.batchTasksCard) || Boolean(item.batchTasksFormPayload));
         const hasGenerateDescriptionCard =
           item.role === "assistant" &&
           Boolean(item.productImproveCard) &&
-          !hasBatchTasksCard;
+          !hasBatchTasksCard &&
+          !hasTaskProposalCard;
         const hasPictureTranslateCard =
           item.role === "assistant" &&
           (Boolean(item.pictureTranslateCard) || Boolean(item.pictureTranslateFormPayload));
@@ -63,6 +68,7 @@ export function ChatMessages({
           hasPictureTranslateCard ||
           hasImageGenerationCard ||
           hasBatchTasksCard ||
+          hasTaskProposalCard ||
           hasImageAttachments;
 
         const bubbleShellStyle: CSSProperties = {
@@ -204,6 +210,12 @@ export function ChatMessages({
                         embedded
                         initialPayload={item.batchTasksFormPayload}
                       />
+                    </div>
+                  ) : null}
+
+                  {hasTaskProposalCard && item.role === "assistant" && item.taskProposal ? (
+                    <div style={{ marginTop: "0.85rem" }}>
+                      <TaskProposalCard embedded proposal={item.taskProposal} />
                     </div>
                   ) : null}
                 </s-box>

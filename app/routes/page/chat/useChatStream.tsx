@@ -14,6 +14,12 @@ import {
   type BatchTasksFormPayload,
 } from "../../../lib/batchTasksFormPayload";
 import {
+  buildBatchProductImproveProposal,
+  coerceTaskProposalPayload,
+  mergeTaskProposalTargets,
+  type TaskProposalPayload,
+} from "../../../lib/taskProposalPayload";
+import {
   hasStreamingVisualContent,
   type SkillStepProgress,
 } from "./chatStreamUtils";
@@ -35,6 +41,7 @@ type StreamChunk =
   | { type: "tool_call"; name: string; args: unknown }
   | { type: "tool_result"; name: string; result: string }
   | { type: "skill_progress"; event: SkillProgressEvent }
+  | { type: "task_proposal"; payload: unknown }
   | { type: "status"; phase: "thinking" }
   | { type: "error"; message: string }
   | {
@@ -49,6 +56,7 @@ type StreamChunk =
           pictureTranslateCard?: unknown;
           imageGenerationCard?: unknown;
           batchTasksCard?: unknown;
+          taskProposal?: unknown;
           attachments?: unknown;
         };
       };
@@ -79,6 +87,7 @@ export type ChatStreamFinishPayload = {
   imageGenerationFormPayload?: unknown;
   batchTasksCard?: boolean;
   batchTasksFormPayload?: BatchTasksFormPayload;
+  taskProposal?: TaskProposalPayload;
   httpStatus?: number;
 };
 
@@ -97,6 +106,7 @@ type Snapshot = {
   imageGenerationFormPayload?: unknown;
   batchTasksCard: boolean;
   batchTasksFormPayload?: BatchTasksFormPayload;
+  taskProposal?: TaskProposalPayload;
 };
 
 function snapshotToFinishPayload(snapshot: Snapshot, aborted: boolean): ChatStreamFinishPayload {
@@ -114,6 +124,7 @@ function snapshotToFinishPayload(snapshot: Snapshot, aborted: boolean): ChatStre
     imageGenerationFormPayload: snapshot.imageGenerationFormPayload,
     batchTasksCard: snapshot.batchTasksCard,
     batchTasksFormPayload: snapshot.batchTasksFormPayload,
+    taskProposal: snapshot.taskProposal,
   };
 }
 
@@ -137,6 +148,8 @@ export function useChatStream() {
   const [streamingBatchTasksCard, setStreamingBatchTasksCard] = useState(false);
   const [streamingBatchTasksPayload, setStreamingBatchTasksPayload] =
     useState<BatchTasksFormPayload | undefined>();
+  const [streamingTaskProposal, setStreamingTaskProposal] =
+    useState<TaskProposalPayload | undefined>();
   const [skillSteps, setSkillSteps] = useState<SkillStepProgress[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const snapshotRef = useRef<Snapshot>({
@@ -154,6 +167,7 @@ export function useChatStream() {
     imageGenerationFormPayload: undefined,
     batchTasksCard: false,
     batchTasksFormPayload: undefined,
+    taskProposal: undefined,
   });
 
   const resetSnapshot = () => {
@@ -172,6 +186,7 @@ export function useChatStream() {
       imageGenerationFormPayload: undefined,
       batchTasksCard: false,
       batchTasksFormPayload: undefined,
+      taskProposal: undefined,
     };
   };
 
@@ -187,6 +202,7 @@ export function useChatStream() {
     setStreamingImageGenerationPayload(undefined);
     setStreamingBatchTasksCard(false);
     setStreamingBatchTasksPayload(undefined);
+    setStreamingTaskProposal(undefined);
     setSkillSteps([]);
   };
 
@@ -310,6 +326,24 @@ export function useChatStream() {
                   setAwaitingFirstChunk(true);
                   appendThinkingNote("Analyzing the request");
                 }
+              } else if (chunk.type === "task_proposal") {
+                markFirstChunkSeen();
+                const proposal = coerceTaskProposalPayload(chunk.payload);
+                if (proposal) {
+                  const merged = mergeTaskProposalTargets(proposal, workspaceBatchProducts);
+                  snapshotRef.current.taskProposal = merged;
+                  // 通用提案卡替代单商品/旧批量卡片
+                  snapshotRef.current.productImproveCard = false;
+                  snapshotRef.current.productImproveCardPayload = undefined;
+                  snapshotRef.current.batchTasksCard = false;
+                  snapshotRef.current.batchTasksFormPayload = undefined;
+                  setStreamingGenerateCard(false);
+                  setStreamingGeneratePayload(undefined);
+                  setStreamingBatchTasksCard(false);
+                  setStreamingBatchTasksPayload(undefined);
+                  setStreamingTaskProposal(merged);
+                  appendThinkingNote(`已生成任务确认卡片：${merged.title}`);
+                }
               } else if (chunk.type === "skill_progress") {
                 markFirstChunkSeen();
                 const ev = chunk.event;
@@ -399,7 +433,23 @@ export function useChatStream() {
                   snapshotRef.current.attachments =
                     coerceChatMessageAttachments(ui.attachments);
                 }
-                if (ui?.productImproveCardPayload && !preferBatchCard) {
+                if (ui?.taskProposal) {
+                  const proposal = coerceTaskProposalPayload(ui.taskProposal);
+                  if (proposal && !snapshotRef.current.taskProposal) {
+                    const merged = mergeTaskProposalTargets(proposal, workspaceBatchProducts);
+                    snapshotRef.current.taskProposal = merged;
+                    snapshotRef.current.productImproveCard = false;
+                    snapshotRef.current.productImproveCardPayload = undefined;
+                    setStreamingGenerateCard(false);
+                    setStreamingGeneratePayload(undefined);
+                    setStreamingTaskProposal(merged);
+                  }
+                }
+                if (
+                  ui?.productImproveCardPayload &&
+                  !preferBatchCard &&
+                  !snapshotRef.current.taskProposal
+                ) {
                   snapshotRef.current.productImproveCard = true;
                   snapshotRef.current.productImproveCardPayload =
                     ui.productImproveCardPayload;
@@ -439,24 +489,21 @@ export function useChatStream() {
                   }
                   setStreamingBatchTasksCard(true);
                   setStreamingBatchTasksPayload(normalized);
-                } else if (preferBatchCard && workspaceBatchProducts.length >= 2) {
-                  const normalized = enrichBatchPayload(
-                    coerceBatchTasksFormPayload({
-                      taskType: "product_improve",
-                      products: [],
-                      targetLanguage: "en",
-                      sourceLanguage: "auto",
-                    }),
-                    workspaceBatchProducts,
-                  );
-                  snapshotRef.current.batchTasksCard = true;
-                  snapshotRef.current.batchTasksFormPayload = normalized;
+                } else if (
+                  preferBatchCard &&
+                  workspaceBatchProducts.length >= 2 &&
+                  !snapshotRef.current.taskProposal
+                ) {
+                  // 工作台已选 ≥2 个商品但服务端未发卡片：客户端兜底合成通用提案卡
+                  const proposal = buildBatchProductImproveProposal({
+                    products: workspaceBatchProducts,
+                  });
+                  snapshotRef.current.taskProposal = proposal;
                   snapshotRef.current.productImproveCard = false;
                   snapshotRef.current.productImproveCardPayload = undefined;
                   setStreamingGenerateCard(false);
                   setStreamingGeneratePayload(undefined);
-                  setStreamingBatchTasksCard(true);
-                  setStreamingBatchTasksPayload(normalized);
+                  setStreamingTaskProposal(proposal);
                 }
 
                 const finishPayload = snapshotToFinishPayload(
@@ -522,6 +569,7 @@ export function useChatStream() {
     streamingImageGenerationPayload,
     streamingBatchTasksCard,
     streamingBatchTasksPayload,
+    streamingTaskProposal,
     skillSteps,
     streamingThinkingText,
     /** @deprecated 兼容旧名 */

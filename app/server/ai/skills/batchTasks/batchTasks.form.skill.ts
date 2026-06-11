@@ -9,6 +9,7 @@ import {
   OPEN_BATCH_TASKS_FORM_TOOL_NAME,
   batchTasksFormTool,
 } from "./batchTasks.form.tool";
+import { taskProposalFromBatchTasksPayload } from "../../../../lib/taskProposalPayload";
 
 export const batchTasksFormSkillDefinition: ToolDefinition = {
   name: "batchTasksForm",
@@ -48,11 +49,17 @@ export const batchTasksFormSkillDefinition: ToolDefinition = {
         coerceBatchTasksFormPayload(raw),
         parseWorkspaceProductsFromText(streamContext.lastUserText ?? ""),
       );
-      enqueue({
-        type: "tool_call",
-        name: ev.name,
-        args: payload,
-      });
+      // product_improve 走通用 TaskProposal 协议；picture_translate 留旧卡片（阶段 4 迁移）
+      const proposal = taskProposalFromBatchTasksPayload(payload);
+      if (proposal) {
+        enqueue({ type: "task_proposal", payload: proposal });
+      } else {
+        enqueue({
+          type: "tool_call",
+          name: ev.name,
+          args: payload,
+        });
+      }
     }
   },
 };

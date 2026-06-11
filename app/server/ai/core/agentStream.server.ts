@@ -38,6 +38,11 @@ import {
   resolveBatchTasksFormPayload,
   shouldSuppressProductImproveForBatch,
 } from "../skills/batchTasks/batchTasks.extract";
+import {
+  taskProposalFromBatchTasksPayload,
+  type TaskProposalPayload,
+} from "../../../lib/taskProposalPayload";
+import { coerceBatchTasksFormPayload } from "../../../lib/batchTasksFormPayload";
 import "../skills/index";
 import "../playbooks/index";
 
@@ -91,6 +96,7 @@ export type StreamChunk =
   | { type: "tool_call"; name: string; args: unknown }
   | { type: "tool_result"; name: string; result: string }
   | { type: "skill_progress"; event: SkillProgressEvent }
+  | { type: "task_proposal"; payload: TaskProposalPayload }
   | { type: "status"; phase: "thinking" }
   | { type: "error"; message: string }
   | {
@@ -472,15 +478,25 @@ export function invokeChatAgentStream(
                 });
               }
 
-              if (
-                def.name === "batchTasksForm" &&
-                !streamContext.emittedFlags.has("batchTasksForm")
-              ) {
-                controller.enqueue({
-                  type: "tool_call",
-                  name: "open_batch_tasks_form",
-                  args: payload,
-                });
+              if (def.name === "batchTasksForm") {
+                // product_improve 走通用 TaskProposal 协议；picture_translate 留旧卡片（阶段 4 迁移）。
+                // uiPayloads 键转换始终执行；流式 chunk 仅在 skill 未发过时补发。
+                const batchPayload = coerceBatchTasksFormPayload(payload);
+                const proposal = taskProposalFromBatchTasksPayload(batchPayload);
+                const alreadyEmitted = streamContext.emittedFlags.has("batchTasksForm");
+                if (proposal) {
+                  delete uiPayloads.batchTasksCard;
+                  uiPayloads.taskProposal = proposal;
+                  if (!alreadyEmitted) {
+                    controller.enqueue({ type: "task_proposal", payload: proposal });
+                  }
+                } else if (!alreadyEmitted) {
+                  controller.enqueue({
+                    type: "tool_call",
+                    name: "open_batch_tasks_form",
+                    args: payload,
+                  });
+                }
               }
 
               if (
@@ -584,20 +600,28 @@ export function invokeChatAgentStream(
           }
         }
 
-        if (!uiPayloads.batchTasksCard) {
+        if (!uiPayloads.batchTasksCard && !uiPayloads.taskProposal) {
           const batchTasksPayload = resolveBatchTasksFormPayload(
             resultMessages,
             lastUserText,
             finalReply,
           );
           if (batchTasksPayload && batchTasksPayload.products.length > 0) {
-            uiPayloads.batchTasksCard = batchTasksPayload;
-            if (!streamContext.emittedFlags.has("batchTasksForm")) {
-              controller.enqueue({
-                type: "tool_call",
-                name: "open_batch_tasks_form",
-                args: batchTasksPayload,
-              });
+            const proposal = taskProposalFromBatchTasksPayload(batchTasksPayload);
+            if (proposal) {
+              uiPayloads.taskProposal = proposal;
+              if (!streamContext.emittedFlags.has("batchTasksForm")) {
+                controller.enqueue({ type: "task_proposal", payload: proposal });
+              }
+            } else {
+              uiPayloads.batchTasksCard = batchTasksPayload;
+              if (!streamContext.emittedFlags.has("batchTasksForm")) {
+                controller.enqueue({
+                  type: "tool_call",
+                  name: "open_batch_tasks_form",
+                  args: batchTasksPayload,
+                });
+              }
             }
           }
         }
