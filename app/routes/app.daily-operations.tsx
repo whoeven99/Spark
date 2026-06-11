@@ -88,11 +88,55 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 const QUADRANTS: TaskQuadrant[] = ["q1", "q2", "q3", "q4"];
 
+/** 矩阵展示顺序：左上 Q3（重要不紧急）、右上 Q1（重要且紧急）、左下 Q4、右下 Q2 */
+const MATRIX_ORDER: TaskQuadrant[] = ["q3", "q1", "q4", "q2"];
+
 const quadrantAccentColors: Record<TaskQuadrant, string> = {
   q1: "#dc2626",
   q2: "#ea580c",
   q3: "#4070f4",
   q4: "#6b7280",
+};
+
+const quadrantTintColors: Record<TaskQuadrant, string> = {
+  q1: "rgba(220, 38, 38, 0.04)",
+  q2: "rgba(234, 88, 12, 0.04)",
+  q3: "rgba(64, 112, 244, 0.04)",
+  q4: "rgba(107, 114, 128, 0.04)",
+};
+
+const quadrantCellStyle = (quadrant: TaskQuadrant): CSSProperties => ({
+  border: `1px solid ${pageColorTokens.border}`,
+  borderTop: `4px solid ${quadrantAccentColors[quadrant]}`,
+  borderRadius: pageColorTokens.radiusCard,
+  background: `linear-gradient(180deg, ${quadrantTintColors[quadrant]} 0%, #ffffff 60%)`,
+  padding: "0.9rem 1rem",
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.7rem",
+  minHeight: "200px",
+});
+
+const quadrantCountBadgeStyle = (quadrant: TaskQuadrant): CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minWidth: "1.5rem",
+  height: "1.5rem",
+  padding: "0 0.4rem",
+  borderRadius: "999px",
+  background: quadrantAccentColors[quadrant],
+  color: "#fff",
+  fontSize: "0.75rem",
+  fontWeight: 700,
+});
+
+const axisLabelStyle: CSSProperties = {
+  fontSize: "0.75rem",
+  fontWeight: 700,
+  letterSpacing: "0.12em",
+  color: pageColorTokens.textSecondary,
+  userSelect: "none",
 };
 
 const taskCardStyle = (quadrant: TaskQuadrant): CSSProperties => ({
@@ -517,26 +561,141 @@ function DailyOperationsBody({
       <section>
         <h2 style={pageSectionMajorTitleStyle}>{t("dailyOps.todoTitle")}</h2>
       </section>
-      {QUADRANTS.map((quadrant) => {
-        const tasks = tasksByQuadrant.get(quadrant) ?? [];
-        return (
-          <PageSurface
-            key={quadrant}
-            title={quadrantTitle(quadrant)}
-            subtitle={quadrantDesc(quadrant)}
+      {isMobile ? (
+        // 移动端：矩阵太挤，按 Q1→Q4 优先级单列堆叠
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          {QUADRANTS.map((quadrant) => (
+            <QuadrantCell
+              key={quadrant}
+              quadrant={quadrant}
+              title={quadrantTitle(quadrant)}
+              desc={quadrantDesc(quadrant)}
+              tasks={tasksByQuadrant.get(quadrant) ?? []}
+              emptyLabel={t("dailyOps.noTasks")}
+              renderTaskCard={renderTaskCard}
+            />
+          ))}
+        </div>
+      ) : (
+        // 桌面端：2×2 艾森豪威尔矩阵，纵轴=重要程度、横轴=紧急程度
+        <div style={{ display: "flex", gap: "0.6rem" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "1.4rem",
+            }}
           >
-            {tasks.length === 0 ? (
-              <p style={taskSecondaryTextStyle}>{t("dailyOps.noTasks")}</p>
-            ) : (
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
-              >
-                {tasks.map(renderTaskCard)}
-              </div>
-            )}
-          </PageSurface>
-        );
-      })}
+            <span
+              style={{
+                ...axisLabelStyle,
+                writingMode: "vertical-rl",
+                transform: "rotate(180deg)",
+              }}
+            >
+              {t("dailyOps.axisImportance")} →
+            </span>
+          </div>
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.6rem",
+            }}
+          >
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "0.75rem",
+                alignItems: "stretch",
+              }}
+            >
+              {MATRIX_ORDER.map((quadrant) => (
+                <QuadrantCell
+                  key={quadrant}
+                  quadrant={quadrant}
+                  title={quadrantTitle(quadrant)}
+                  desc={quadrantDesc(quadrant)}
+                  tasks={tasksByQuadrant.get(quadrant) ?? []}
+                  emptyLabel={t("dailyOps.noTasks")}
+                  renderTaskCard={renderTaskCard}
+                />
+              ))}
+            </div>
+            <div style={{ ...axisLabelStyle, textAlign: "center" }}>
+              {t("dailyOps.axisUrgency")} →
+            </div>
+          </div>
+        </div>
+      )}
     </>
+  );
+}
+
+function QuadrantCell({
+  quadrant,
+  title,
+  desc,
+  tasks,
+  emptyLabel,
+  renderTaskCard,
+}: {
+  quadrant: TaskQuadrant;
+  title: string;
+  desc: string;
+  tasks: OperationTaskView[];
+  emptyLabel: string;
+  renderTaskCard: (task: OperationTaskView) => ReactNode;
+}) {
+  const activeCount = tasks.filter((task) =>
+    ["open", "in_progress"].includes(task.status),
+  ).length;
+  return (
+    <div style={quadrantCellStyle(quadrant)}>
+      <div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "0.5rem",
+          }}
+        >
+          <h3
+            style={{
+              margin: 0,
+              fontSize: "0.9375rem",
+              fontWeight: 800,
+              color: quadrantAccentColors[quadrant],
+            }}
+          >
+            {title}
+          </h3>
+          <span style={quadrantCountBadgeStyle(quadrant)}>{activeCount}</span>
+        </div>
+        <p style={{ ...taskSecondaryTextStyle, marginTop: "0.25rem" }}>{desc}</p>
+      </div>
+      {tasks.length === 0 ? (
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: pageColorTokens.textSecondary,
+            fontSize: "0.8125rem",
+          }}
+        >
+          {emptyLabel}
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          {tasks.map(renderTaskCard)}
+        </div>
+      )}
+    </div>
   );
 }
