@@ -12,6 +12,15 @@ import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { WorkspaceAppShellPage } from "./page/WorkspaceAppShellPage";
 import { listConversations } from "../server/conversation/conversationStore.server";
+import { ensureDailySnapshot } from "../server/operations/dailyInspection.server";
+import {
+  buildWorkspaceDashboardFromDailyOps,
+  emptyWorkspaceDashboardSnapshot,
+} from "../server/operations/workspaceDashboard.server";
+import { buildWorkspaceTaskSummaries } from "../server/operations/workspaceTaskSummary.server";
+import { listMergedUnifiedTaskEntries } from "../server/unifiedTask/unifiedTaskList.server";
+
+const DASHBOARD_RECENT_TASK_LIMIT = 5;
 import { useFeatureView } from "../lib/featureTrack";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -22,7 +31,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const conversations = await listConversations(session.shop);
-  return { conversations };
+  let dashboardSnapshot = emptyWorkspaceDashboardSnapshot();
+  try {
+    const [dailyOps, recentTaskEntries] = await Promise.all([
+      ensureDailySnapshot(session.shop),
+      listMergedUnifiedTaskEntries(session.shop, {
+        limit: DASHBOARD_RECENT_TASK_LIMIT,
+      }),
+    ]);
+    dashboardSnapshot = {
+      ...buildWorkspaceDashboardFromDailyOps(dailyOps),
+      recentTaskSummaries: buildWorkspaceTaskSummaries(recentTaskEntries),
+    };
+  } catch (error) {
+    console.error("[app._index] dashboard snapshot failed:", error);
+  }
+
+  return { conversations, dashboardSnapshot };
 };
 
 /** 工作台页依赖浏览器环境，SSR 阶段仅输出占位，避免嵌入式 iframe 首屏 500。 */
@@ -44,7 +69,10 @@ export default function Index() {
   useFeatureView("chat");
   return (
     <ClientMount>
-      <WorkspaceAppShellPage initialConversationList={data?.conversations ?? []} />
+      <WorkspaceAppShellPage
+        initialConversationList={data?.conversations ?? []}
+        dashboardSnapshot={data?.dashboardSnapshot}
+      />
     </ClientMount>
   );
 }

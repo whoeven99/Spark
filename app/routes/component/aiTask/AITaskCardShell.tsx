@@ -198,6 +198,13 @@ export function AITaskCardShell({
     ? formatTaskDate(task.createdAt, i18n.language)
     : formatTaskDate(task.createdAt, i18n.language, "UTC");
 
+  const completedAtText =
+    task.completedAt != null
+      ? isHydrated
+        ? formatTaskDate(task.completedAt, i18n.language)
+        : formatTaskDate(task.completedAt, i18n.language, "UTC")
+      : null;
+
   return (
     <div
       style={{
@@ -274,7 +281,7 @@ export function AITaskCardShell({
           ) : null}
         </div>
 
-        {/* Creation date */}
+        {/* Task timestamps */}
         <div
           style={{
             flexShrink: 0,
@@ -282,9 +289,14 @@ export function AITaskCardShell({
             color: pageColorTokens.textFootnote,
             paddingTop: isMobile ? 0 : 2,
             alignSelf: isMobile ? "flex-start" : "auto",
+            textAlign: isMobile ? "left" : "right",
+            lineHeight: 1.5,
           }}
         >
-          {t("aiTask.createdAtLabel", { value: createdAtText })}
+          <div>{t("aiTask.createdAtLabel", { value: createdAtText })}</div>
+          {completedAtText ? (
+            <div>{t("aiTask.completedAtLabel", { value: completedAtText })}</div>
+          ) : null}
         </div>
       </div>
 

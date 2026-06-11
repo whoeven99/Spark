@@ -1257,8 +1257,6 @@ function JobCard({
         <>
           <span>{job.modules.length} 个模块</span>
           <span style={{ color: pageColorTokens.textFootnote }}>|</span>
-          <span>每模块最多 {job.limitPerType} 条</span>
-          <span style={{ color: pageColorTokens.textFootnote }}>|</span>
           <span>模型 {job.aiModelUsed ?? job.aiModel}</span>
           <span style={{ color: pageColorTokens.textFootnote }}>|</span>
           <span>{job.isCover ? "覆盖已有翻译" : "保留已有翻译"}</span>
