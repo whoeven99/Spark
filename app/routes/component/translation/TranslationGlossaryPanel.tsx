@@ -12,6 +12,7 @@ import {
 
 type TranslationGlossaryPanelProps = {
   locationSearch: string;
+  reloadToken?: number;
 };
 
 type ParsedPreviewRow = GlossaryTerm & { _key: number; _selected: boolean };
@@ -90,7 +91,10 @@ function formatTranslationsSummary(translations?: Record<string, string>): strin
     .join(" · ");
 }
 
-export function TranslationGlossaryPanel({ locationSearch }: TranslationGlossaryPanelProps) {
+export function TranslationGlossaryPanel({
+  locationSearch,
+  reloadToken = 0,
+}: TranslationGlossaryPanelProps) {
   const shopify = useAppBridge();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [terms, setTerms] = useState<GlossaryTerm[]>([]);
@@ -134,7 +138,7 @@ export function TranslationGlossaryPanel({ locationSearch }: TranslationGlossary
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, reloadToken]);
 
   const updateTerm = (idx: number, patch: Partial<GlossaryTerm>) => {
     setTerms((prev) => prev.map((t, i) => (i === idx ? { ...t, ...patch } : t)));

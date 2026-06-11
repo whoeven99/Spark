@@ -30,8 +30,7 @@ import {
   type CardAction,
   formatActualElapsed,
 } from "../component/aiTask/AITaskCardShell";
-import { TranslationGlossaryPanel } from "../component/translation/TranslationGlossaryPanel";
-import { ShopAnalysisPanel } from "../component/translation/ShopAnalysisPanel";
+import { TranslationStyleWorkspace } from "../component/translation/TranslationStyleWorkspace";
 import { TranslationLocaleFields } from "../component/translation/TranslationLocaleFields";
 import { TranslationModuleMultiSelect } from "../component/translation/TranslationModuleMultiSelect";
 import type { AITaskItem, AITaskStatus } from "../../lib/aiTaskTypes";
@@ -725,18 +724,7 @@ export function TranslationV4Page() {
             </div>
           </div>
         ) : pageTab === "style" ? (
-          <div style={isMobile ? mobileConfigLayoutStyle : twoColumnLayoutStyle}>
-            <div style={isMobile ? mobileConfigMainStyle : twoColumnMainStyle}>
-              <ShopAnalysisPanel
-                locationSearch={query}
-                defaultSourceLanguage={sourceLocale}
-              />
-            </div>
-
-            <div style={isMobile ? mobileConfigSideStyle : twoColumnSideStyle}>
-              <TranslationGlossaryPanel locationSearch={query} />
-            </div>
-          </div>
+          <TranslationStyleWorkspace locationSearch={query} sourceLocale={sourceLocale} />
         ) : (
           <div style={taskPageSectionStyle}>
               <div style={isMobile ? mobileTaskViewSwitchBarStyle : taskViewSwitchBarStyle}>
