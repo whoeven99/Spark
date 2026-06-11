@@ -122,6 +122,21 @@ function shallowProfileEquals(a: ShopProfile, b: ShopProfile): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+function renderLineItems(items: string[], emptyText: string) {
+  if (!items.length) {
+    return <div style={lineItemEmptyStyle}>{emptyText}</div>;
+  }
+  return (
+    <div style={lineItemListStyle}>
+      {items.map((item, index) => (
+        <div key={`${item}-${index}`} style={lineItemRowStyle}>
+          {item}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function TranslationStyleWorkspace({
   locationSearch,
   sourceLocale,
@@ -328,7 +343,7 @@ export function TranslationStyleWorkspace({
     };
     setProfileForm(nextForm);
     setProfileDirty(!liveProfile || !shallowProfileEquals(nextForm, liveProfile));
-    shopify.toast.show("已应用到商店档案表单，请保存后生效");
+    shopify.toast.show("已回填到商店档案表单，请保存后生效");
   };
 
   const handleApplyGlossary = async () => {
@@ -394,8 +409,8 @@ export function TranslationStyleWorkspace({
               <div style={pageHintTextStyle}>加载商店档案中…</div>
             ) : (
               <>
-                <div style={isMobile ? mobileFormGridStyle : formGridStyle}>
-                  <div>
+                <div style={formStackStyle}>
+                  <div style={fieldBlockStyle}>
                     <div style={pageFieldLabelStyle}>行业</div>
                     <input
                       type="text"
@@ -405,7 +420,7 @@ export function TranslationStyleWorkspace({
                       placeholder="例如：美妆护肤 / 家居用品 / 宠物用品"
                     />
                   </div>
-                  <div>
+                  <div style={fieldBlockStyle}>
                     <div style={pageFieldLabelStyle}>语气风格</div>
                     <input
                       type="text"
@@ -415,7 +430,7 @@ export function TranslationStyleWorkspace({
                       placeholder="例如：简洁专业、轻松友好"
                     />
                   </div>
-                  <div style={fullWidthStyle}>
+                  <div style={fieldBlockStyle}>
                     <div style={pageFieldLabelStyle}>目标受众</div>
                     <input
                       type="text"
@@ -425,33 +440,44 @@ export function TranslationStyleWorkspace({
                       placeholder="例如：北美年轻女性、精品咖啡爱好者"
                     />
                   </div>
-                  <div>
-                    <div style={pageFieldLabelStyle}>高频词（每行一个）</div>
+                  <div style={listFieldCardStyle}>
+                    <div style={listFieldHeaderStyle}>
+                      <div style={pageFieldLabelStyle}>高频词</div>
+                      <div style={listFieldHintStyle}>每行输入一个高频词</div>
+                    </div>
                     <textarea
-                      rows={4}
+                      rows={3}
                       value={profileForm.highFrequencyTerms.join("\n")}
                       onChange={(e) => handleProfileListChange("highFrequencyTerms", e.target.value)}
-                      style={textareaStyle}
+                      style={listTextareaStyle}
+                      placeholder={"品牌名\n核心卖点\n固定活动词"}
                     />
+                    {renderLineItems(profileForm.highFrequencyTerms, "当前暂无高频词")}
                   </div>
-                  <div>
-                    <div style={pageFieldLabelStyle}>风格备注（每行一条）</div>
+                  <div style={listFieldCardStyle}>
+                    <div style={listFieldHeaderStyle}>
+                      <div style={pageFieldLabelStyle}>风格备注</div>
+                      <div style={listFieldHintStyle}>每行输入一条风格备注</div>
+                    </div>
                     <textarea
-                      rows={4}
+                      rows={3}
                       value={profileForm.styleNotes.join("\n")}
                       onChange={(e) => handleProfileListChange("styleNotes", e.target.value)}
-                      style={textareaStyle}
+                      style={listTextareaStyle}
+                      placeholder={"避免直译\n保持品牌调性\n优先使用简洁短句"}
                     />
+                    {renderLineItems(profileForm.styleNotes, "当前暂无风格备注")}
                   </div>
-                  <div style={fullWidthStyle}>
+                  <div style={fieldBlockStyle}>
                     <div style={pageFieldLabelStyle}>翻译指令</div>
                     <textarea
-                      rows={5}
+                      rows={3}
                       value={profileForm.translationInstructions}
                       onChange={(e) =>
                         handleProfileFieldChange("translationInstructions", e.target.value)
                       }
                       style={textareaStyle}
+                      placeholder="例如：优先保留品牌表达，不要过度营销化，保持可读性与自然度。"
                     />
                   </div>
                 </div>
@@ -476,10 +502,12 @@ export function TranslationStyleWorkspace({
           </div>
         </PageSurface>
 
-        <TranslationGlossaryPanel
-          locationSearch={locationSearch}
-          reloadToken={glossaryReloadToken}
-        />
+        <div style={glossaryPanelWrapStyle}>
+          <TranslationGlossaryPanel
+            locationSearch={locationSearch}
+            reloadToken={glossaryReloadToken}
+          />
+        </div>
       </div>
 
       <div style={isMobile ? mobileAsideStyle : aiAsideStyle}>
@@ -644,6 +672,9 @@ const mobileLayoutStyle: CSSProperties = {
 
 const mobileMainStyle: CSSProperties = {
   minWidth: 0,
+  display: "flex",
+  flexDirection: "column",
+  gap: "1.25rem",
 };
 
 const mobileAsideStyle: CSSProperties = {
@@ -693,19 +724,16 @@ const metaBarStyle: CSSProperties = {
   color: pageColorTokens.textSecondary,
 };
 
-const formGridStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: "0.85rem 1rem",
+const formStackStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.95rem",
 };
 
-const mobileFormGridStyle: CSSProperties = {
-  ...formGridStyle,
-  gridTemplateColumns: "1fr",
-};
-
-const fullWidthStyle: CSSProperties = {
-  gridColumn: "1 / -1",
+const fieldBlockStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.38rem",
 };
 
 const inputStyle: CSSProperties = {
@@ -723,6 +751,64 @@ const textareaStyle: CSSProperties = {
   resize: "vertical",
   fontFamily: "inherit",
   lineHeight: 1.55,
+  minHeight: "4.8rem",
+  maxHeight: "6.8rem",
+};
+
+const listTextareaStyle: CSSProperties = {
+  ...textareaStyle,
+  minHeight: "5rem",
+  maxHeight: "6.8rem",
+  background: "#fcfdfd",
+};
+
+const listFieldCardStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.65rem",
+  padding: "0.9rem 1rem",
+  borderRadius: "12px",
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: "linear-gradient(180deg, #f8fbfb 0%, #ffffff 100%)",
+  boxShadow: "0 8px 22px rgba(15, 23, 42, 0.04)",
+};
+
+const listFieldHeaderStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "0.6rem",
+  flexWrap: "wrap",
+};
+
+const listFieldHintStyle: CSSProperties = {
+  fontSize: "0.75rem",
+  color: pageColorTokens.textSecondary,
+};
+
+const lineItemListStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.45rem",
+};
+
+const lineItemRowStyle: CSSProperties = {
+  padding: "0.5rem 0.65rem",
+  borderRadius: "10px",
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surface,
+  fontSize: "0.8125rem",
+  lineHeight: 1.5,
+  color: pageColorTokens.textPrimary,
+};
+
+const lineItemEmptyStyle: CSSProperties = {
+  padding: "0.55rem 0.65rem",
+  borderRadius: "10px",
+  border: `1px dashed ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surfaceMuted,
+  fontSize: "0.75rem",
+  color: pageColorTokens.textSecondary,
 };
 
 const footerRowStyle: CSSProperties = {
@@ -731,6 +817,10 @@ const footerRowStyle: CSSProperties = {
   justifyContent: "space-between",
   gap: "0.75rem",
   flexWrap: "wrap",
+};
+
+const glossaryPanelWrapStyle: CSSProperties = {
+  marginTop: "0.45rem",
 };
 
 const sectionHeaderRowStyle: CSSProperties = {
