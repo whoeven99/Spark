@@ -88,8 +88,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 const QUADRANTS: TaskQuadrant[] = ["q1", "q2", "q3", "q4"];
 
-/** 矩阵展示顺序：左上 Q3（重要不紧急）、右上 Q1（重要且紧急）、左下 Q4、右下 Q2 */
-const MATRIX_ORDER: TaskQuadrant[] = ["q3", "q1", "q4", "q2"];
+/**
+ * 矩阵展示顺序：Q1 Q2 / Q3 Q4。
+ * 纵轴=紧急程度（上紧急下不紧急），横轴=重要程度（左重要右不重要）。
+ */
+const MATRIX_ORDER: TaskQuadrant[] = ["q1", "q2", "q3", "q4"];
 
 const quadrantAccentColors: Record<TaskQuadrant, string> = {
   q1: "#dc2626",
@@ -594,7 +597,7 @@ function DailyOperationsBody({
                 transform: "rotate(180deg)",
               }}
             >
-              {t("dailyOps.axisImportance")} →
+              {t("dailyOps.axisUrgency")} →
             </span>
           </div>
           <div
@@ -626,7 +629,7 @@ function DailyOperationsBody({
               ))}
             </div>
             <div style={{ ...axisLabelStyle, textAlign: "center" }}>
-              {t("dailyOps.axisUrgency")} →
+              ← {t("dailyOps.axisImportance")}
             </div>
           </div>
         </div>

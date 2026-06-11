@@ -28,7 +28,6 @@ const NAV_ITEMS: Record<
     href: string;
     labelKey:
       | "nav.aiAssistant"
-      | "nav.diagnosis"
       | "nav.translationV4"
       | "nav.productImprove"
       | "nav.imageStudio"
@@ -38,7 +37,6 @@ const NAV_ITEMS: Record<
   }
 > = {
   chat: { href: "/app", labelKey: "nav.aiAssistant" },
-  diagnosis: { href: "/app/additional", labelKey: "nav.diagnosis" },
   "translation-v4": { href: "/app/translation-v4", labelKey: "nav.translationV4" },
   "product-improve": {
     href: "/app/product-improve",
