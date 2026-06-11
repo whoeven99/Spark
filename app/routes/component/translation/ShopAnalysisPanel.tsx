@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
-import type { ShopAnalysisJob, ShopProfile } from "../../../server/translation/shopAnalysis.server";
+import type {
+  ShopAnalysisJob,
+  ShopAnalysisTarget,
+  ShopProfile,
+} from "../../../server/translation/shopAnalysis.server";
 import type { GlossaryTerm } from "../../../server/translation/glossary.server";
-import { TranslationModuleMultiSelect } from "./TranslationModuleMultiSelect";
 import {
   PageSurface,
   formErrorBoxStyle,
@@ -18,6 +21,9 @@ const ANALYSIS_BATCH_SIZE = 15;
 
 type ShopAnalysisPanelProps = {
   locationSearch: string;
+  defaultSourceLanguage: string;
+  target: Exclude<ShopAnalysisTarget, "both">;
+  onApplied?: () => void;
 };
 
 const RUNNING_STATUSES = new Set(["SCAN_QUEUED", "SCANNING", "ANALYZE_QUEUED", "ANALYZING"]);
@@ -75,13 +81,45 @@ function formatDraftTermPreview(term: GlossaryTerm): string {
   return "待补充各语言译法";
 }
 
-export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
+function normalizeJobTarget(target?: ShopAnalysisTarget): ShopAnalysisTarget {
+  return target === "profile" || target === "glossary" ? target : "both";
+}
+
+function jobMatchesTarget(job: ShopAnalysisJob, target: Exclude<ShopAnalysisTarget, "both">): boolean {
+  const jobTarget = normalizeJobTarget(job.target);
+  return jobTarget === "both" || jobTarget === target;
+}
+
+function targetLabel(target: Exclude<ShopAnalysisTarget, "both">): string {
+  return target === "profile" ? "商店档案" : "术语表";
+}
+
+function targetTitle(target: Exclude<ShopAnalysisTarget, "both">): string {
+  return target === "profile" ? "商店档案 AI 建议" : "术语表 AI 建议";
+}
+
+function targetSubtitle(target: Exclude<ShopAnalysisTarget, "both">): string {
+  return target === "profile"
+    ? "基于店铺内容生成商店档案建议，确认后再应用到正式配置。"
+    : "基于店铺内容生成术语表建议，确认后再应用到正式配置。";
+}
+
+function targetIntro(target: Exclude<ShopAnalysisTarget, "both">, sourceLanguage: string): string {
+  return target === "profile"
+    ? `AI 会基于当前源语言 ${sourceLanguage} 扫描商品、集合、博客、页面和商店信息，生成可编辑的商店档案建议。`
+    : `AI 会基于当前源语言 ${sourceLanguage} 扫描商品、集合、博客、页面和商店信息，生成可编辑的术语表建议。`;
+}
+
+export function ShopAnalysisPanel({
+  locationSearch,
+  defaultSourceLanguage,
+  target,
+  onApplied,
+}: ShopAnalysisPanelProps) {
   const shopify = useAppBridge();
-  const [expanded, setExpanded] = useState(false);
 
   // Trigger state
-  const [sourceLanguage, setSourceLanguage] = useState("zh-CN");
-  const [selectedModules, setSelectedModules] = useState<string[]>([...SHOP_ANALYSIS_MODULES]);
+  const [sourceLanguage, setSourceLanguage] = useState(defaultSourceLanguage || "zh-CN");
   const [triggering, setTriggering] = useState(false);
 
   // Job state
@@ -105,7 +143,14 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
 
   const [error, setError] = useState<string | null>(null);
 
+  const relevantJob = job && jobMatchesTarget(job, target) ? job : null;
   const isRunning = Boolean(job && RUNNING_STATUSES.has(job.status));
+  const relevantJobRunning = Boolean(relevantJob && RUNNING_STATUSES.has(relevantJob.status));
+  const hasProfile = Boolean(profile);
+
+  useEffect(() => {
+    setSourceLanguage(defaultSourceLanguage || "zh-CN");
+  }, [defaultSourceLanguage]);
 
   const loadJob = useCallback(async () => {
     try {
@@ -140,14 +185,11 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
     } catch { /* ignore */ }
   }, [locationSearch]);
 
-  // Initial load when panel opens
   useEffect(() => {
-    if (!expanded) return;
     void loadJob();
     void loadProfile();
     void loadDraft();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded]);
+  }, [loadDraft, loadJob, loadProfile]);
 
   // Poll while running
   useEffect(() => {
@@ -175,7 +217,7 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
       const res = await fetch(`/api/translate/v4/shop-analysis${locationSearch}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourceLanguage, modules: selectedModules }),
+        body: JSON.stringify({ sourceLanguage, modules: [...SHOP_ANALYSIS_MODULES], target }),
       });
       const payload = (await res.json()) as { ok: boolean; job?: ShopAnalysisJob; error?: string };
       if (!res.ok || !payload.ok) {
@@ -183,7 +225,7 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
         return;
       }
       setJob(payload.job ?? null);
-      shopify.toast.show("商店扫描分析已启动");
+      shopify.toast.show(`已开始生成${targetLabel(target)}建议`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -205,7 +247,8 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
       if (!res.ok || !payload.ok) { setError(payload.error ?? "保存失败"); return; }
       setProfile(profileDraft);
       setEditingProfile(false);
-      shopify.toast.show("商店档案已保存，下次翻译时生效");
+      onApplied?.();
+      shopify.toast.show("建议已保存到商店档案，下次翻译时生效");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -233,6 +276,7 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
       const payload = (await res.json()) as { ok: boolean; total?: number; mode?: string; error?: string };
       if (!res.ok || !payload.ok) { setError(payload.error ?? "操作失败"); return; }
       setDraftTerms([]);
+      onApplied?.();
       shopify.toast.show(
         `已将 ${payload.total ?? 0} 条术语${payload.mode === "replace" ? "替换" : "合并"}到术语表`,
       );
@@ -286,113 +330,57 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
-  const headerCount = job
-    ? ` · ${statusLabel(job.status)}`
-    : jobLoaded
-      ? " · 暂未运行"
-      : "";
-
   return (
-    <PageSurface>
-      {/* Header row */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "0.75rem",
-          marginBottom: expanded ? "1.25rem" : 0,
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          style={headerToggleStyle}
-        >
-          <span style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary }}>
-            {expanded ? "▼" : "▶"}
-          </span>
-          商店扫描分析
-          <span style={{ fontWeight: 500, fontSize: "0.8125rem", color: pageColorTokens.textSecondary }}>
-            {headerCount}
-          </span>
-        </button>
+    <PageSurface
+      title={targetTitle(target)}
+      subtitle={targetSubtitle(target)}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+        <div style={actionRowStyle}>
+          <div style={{ ...pageHintTextStyle, marginTop: 0 }}>
+            {targetIntro(target, sourceLanguage)}
+          </div>
+          <s-button
+            type="button"
+            variant="secondary"
+            onClick={() => void handleTrigger()}
+            {...(isRunning || triggering ? { disabled: true } : {})}
+          >
+            {triggering
+              ? "生成中…"
+              : relevantJob && QUEUED_STATUSES.has(relevantJob.status)
+                ? "等待 Worker 拉取…"
+                : relevantJob && PROCESSING_STATUSES.has(relevantJob.status)
+                  ? "建议生成中…"
+                  : "生成建议"}
+          </s-button>
+        </div>
 
-        {job && (
+        {isRunning && !relevantJob ? (
+          <div style={{ ...pageHintTextStyle, marginTop: 0 }}>
+            当前有其他 AI 建议任务正在运行，需等待完成后再发起本卡片的建议生成。
+          </div>
+        ) : null}
+
+        {relevantJob && (
           <span
             style={{
+              alignSelf: "flex-start",
               padding: "0.18rem 0.65rem",
               borderRadius: 999,
               fontSize: "0.75rem",
               fontWeight: 700,
-              color: statusColor(job.status),
-              background: statusBg(job.status),
-              border: `1px solid ${statusColor(job.status)}33`,
+              color: statusColor(relevantJob.status),
+              background: statusBg(relevantJob.status),
+              border: `1px solid ${statusColor(relevantJob.status)}33`,
             }}
           >
-            {statusLabel(job.status)}
+            {statusLabel(relevantJob.status)}
           </span>
         )}
-      </div>
-
-      {!expanded ? null : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-
-          {/* ── 触发区域 ─────────────────────────────────────────── */}
-          <div style={pageInnerPanelStyle}>
-            <div style={pageFieldLabelStyle}>扫描并分析商店内容</div>
-            <div style={{ ...pageHintTextStyle, marginTop: 0, marginBottom: "0.85rem" }}>
-              扫描源语言内容，AI 自动生成商店档案（行业、风格、高频词）和术语表草稿，
-              审核确认后注入每次翻译的 System Prompt。
-            </div>
-
-            {/* Source language */}
-            <div style={{ marginBottom: "0.75rem" }}>
-              <div style={pageFieldLabelStyle}>源语言</div>
-              <select
-                value={sourceLanguage}
-                onChange={(e) => setSourceLanguage(e.target.value)}
-                style={selectStyle}
-                disabled={isRunning || triggering}
-              >
-                {SOURCE_LANGS.map((l) => (
-                  <option key={l.value} value={l.value}>{l.label} ({l.value})</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Modules */}
-            <div style={{ marginBottom: "0.85rem" }}>
-              <TranslationModuleMultiSelect
-                id="shop-analysis-modules"
-                label="扫描模块"
-                values={selectedModules}
-                onChange={setSelectedModules}
-                disabled={isRunning || triggering}
-                allowedValues={[...SHOP_ANALYSIS_MODULES]}
-              />
-            </div>
-
-            <s-button
-              type="button"
-              variant="primary"
-              onClick={() => void handleTrigger()}
-              {...(isRunning || triggering || selectedModules.length === 0
-                ? { disabled: true }
-                : {})}
-            >
-              {triggering
-                ? "启动中…"
-                : job && QUEUED_STATUSES.has(job.status)
-                  ? "等待 Worker 拉取…"
-                  : job && PROCESSING_STATUSES.has(job.status)
-                    ? "分析中…"
-                    : "扫描并分析"}
-            </s-button>
-          </div>
 
           {/* ── 任务状态 ─────────────────────────────────────────── */}
-          {job && (
+          {relevantJob && (
             <div style={{ ...pageInnerPanelStyle, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
               <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
                 <span style={{ ...pageFieldLabelStyle, marginBottom: 0 }}>任务状态</span>
@@ -402,27 +390,27 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
                     borderRadius: 999,
                     fontSize: "0.75rem",
                     fontWeight: 700,
-                    color: statusColor(job.status),
-                    background: statusBg(job.status),
-                    border: `1px solid ${statusColor(job.status)}33`,
+                    color: statusColor(relevantJob.status),
+                    background: statusBg(relevantJob.status),
+                    border: `1px solid ${statusColor(relevantJob.status)}33`,
                   }}
                 >
-                  {statusLabel(job.status)}
+                  {statusLabel(relevantJob.status)}
                 </span>
               </div>
-              {(isRunning || job.status === "COMPLETED") && (
+              {(relevantJobRunning || relevantJob.status === "COMPLETED") && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <div style={{ fontSize: "0.875rem", fontWeight: 600, color: pageColorTokens.textPrimary }}>
-                    {getAnalysisPrimaryCopy(job)}
+                    {getAnalysisPrimaryCopy(relevantJob, target)}
                   </div>
-                  {isRunning && job.updatedAt ? (
+                  {relevantJobRunning && relevantJob.updatedAt ? (
                     <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary }}>
-                      已运行 {formatActualElapsed(job.createdAt, job.updatedAt)}
+                      已运行 {formatActualElapsed(relevantJob.createdAt, relevantJob.updatedAt)}
                     </div>
                   ) : null}
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {(() => {
-                      const steps = getAnalysisSteps(job);
+                      const steps = getAnalysisSteps(relevantJob);
                       return (
                         <>
                           <AnalysisStepRow
@@ -443,7 +431,7 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
                       );
                     })()}
                   </div>
-                  {isRunning ? (
+                  {relevantJobRunning ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                       <div
                         style={{
@@ -454,13 +442,13 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
                         }}
                       >
                         <span>总进度</span>
-                        <span>{getAnalysisProgressPercent(job)}%</span>
+                        <span>{getAnalysisProgressPercent(relevantJob)}%</span>
                       </div>
                       <div style={progressTrackStyle}>
                         <div
                           style={{
                             ...progressFillStyle,
-                            width: `${getAnalysisProgressPercent(job)}%`,
+                            width: `${getAnalysisProgressPercent(relevantJob)}%`,
                           }}
                         />
                       </div>
@@ -468,217 +456,235 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
                   ) : null}
                 </div>
               )}
-              {job.status === "FAILED" && job.errorMessage && (
-                <div style={errorBoxStyle}>{job.errorMessage}</div>
+              {relevantJob.status === "FAILED" && relevantJob.errorMessage && (
+                <div style={errorBoxStyle}>{relevantJob.errorMessage}</div>
               )}
               <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary }}>
-                触发时间：{new Date(job.createdAt).toLocaleString("zh-CN")} ·
-                更新：{new Date(job.updatedAt).toLocaleString("zh-CN")}
+                触发时间：{new Date(relevantJob.createdAt).toLocaleString("zh-CN")} ·
+                更新：{new Date(relevantJob.updatedAt).toLocaleString("zh-CN")}
               </div>
             </div>
           )}
 
           {/* ── 商店档案 ─────────────────────────────────────────── */}
-          {profile && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
-                <div style={pageFieldLabelStyle}>商店档案</div>
-                {!editingProfile && (
-                  <s-button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => { setProfileDraft({ ...profile }); setEditingProfile(true); }}
-                  >
-                    编辑
-                  </s-button>
-                )}
-              </div>
+          {target !== "glossary" ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+              <div style={pageFieldLabelStyle}>档案内容</div>
+              {hasProfile && !editingProfile ? (
+                <s-button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setProfileDraft(profile ? { ...profile } : null);
+                    setEditingProfile(true);
+                  }}
+                >
+                  编辑
+                </s-button>
+              ) : null}
+            </div>
+            {hasProfile ? (
               <div style={{ ...pageHintTextStyle, marginTop: 0 }}>
-                分析时间：{new Date(profile.analyzedAt).toLocaleString("zh-CN")}
+                分析时间：{new Date(profile!.analyzedAt).toLocaleString("zh-CN")}
                 {" · "}已注入每次翻译的 System Prompt
               </div>
+            ) : (
+              <div style={{ ...pageHintTextStyle, marginTop: 0 }}>
+                暂无商店档案。可点击右上角「生成建议」先生成一份初稿，再按需手动编辑。
+              </div>
+            )}
 
-              {editingProfile && profileDraft ? (
-                <div style={{ ...pageInnerPanelStyle, display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                  {(
-                    [
-                      { field: "industry" as const, label: "行业", multiline: false },
-                      { field: "toneOfVoice" as const, label: "语气风格", multiline: false },
-                      { field: "targetAudience" as const, label: "目标受众", multiline: false },
-                    ] as const
-                  ).map(({ field, label }) => (
-                    <div key={field}>
-                      <div style={pageFieldLabelStyle}>{label}</div>
-                      <input
-                        type="text"
-                        value={profileDraft[field]}
-                        onChange={(e) => setProfileDraft({ ...profileDraft, [field]: e.target.value })}
-                        style={inputStyle}
-                      />
+            {editingProfile && profileDraft ? (
+              <div style={{ ...pageInnerPanelStyle, display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                {(
+                  [
+                    { field: "industry" as const, label: "行业", multiline: false },
+                    { field: "toneOfVoice" as const, label: "语气风格", multiline: false },
+                    { field: "targetAudience" as const, label: "目标受众", multiline: false },
+                  ] as const
+                ).map(({ field, label }) => (
+                  <div key={field}>
+                    <div style={pageFieldLabelStyle}>{label}</div>
+                    <input
+                      type="text"
+                      value={profileDraft[field]}
+                      onChange={(e) => setProfileDraft({ ...profileDraft, [field]: e.target.value })}
+                      style={inputStyle}
+                    />
+                  </div>
+                ))}
+                <div>
+                  <div style={pageFieldLabelStyle}>高频词（每行一个）</div>
+                  <textarea
+                    rows={3}
+                    value={profileDraft.highFrequencyTerms.join("\n")}
+                    onChange={(e) =>
+                      setProfileDraft({
+                        ...profileDraft,
+                        highFrequencyTerms: e.target.value.split("\n").filter(Boolean),
+                      })
+                    }
+                    style={textareaStyle}
+                  />
+                </div>
+                <div>
+                  <div style={pageFieldLabelStyle}>风格备注（每行一条）</div>
+                  <textarea
+                    rows={3}
+                    value={profileDraft.styleNotes.join("\n")}
+                    onChange={(e) =>
+                      setProfileDraft({
+                        ...profileDraft,
+                        styleNotes: e.target.value.split("\n").filter(Boolean),
+                      })
+                    }
+                    style={textareaStyle}
+                  />
+                </div>
+                <div>
+                  <div style={pageFieldLabelStyle}>翻译指令（注入系统 Prompt）</div>
+                  <textarea
+                    rows={4}
+                    value={profileDraft.translationInstructions}
+                    onChange={(e) =>
+                      setProfileDraft({ ...profileDraft, translationInstructions: e.target.value })
+                    }
+                    style={textareaStyle}
+                  />
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <s-button
+                    type="button"
+                    variant="primary"
+                    onClick={() => void handleSaveProfile()}
+                    {...(savingProfile ? { disabled: true } : {})}
+                  >
+                    {savingProfile ? "保存中…" : "保存"}
+                  </s-button>
+                  <s-button type="button" variant="secondary" onClick={() => setEditingProfile(false)}>
+                    取消
+                  </s-button>
+                </div>
+              </div>
+            ) : hasProfile ? (
+              <div style={pageInnerPanelStyle}>
+                <ProfileRow label="行业" value={profile!.industry} />
+                <ProfileRow label="语气风格" value={profile!.toneOfVoice} />
+                <ProfileRow label="目标受众" value={profile!.targetAudience} />
+                {profile!.highFrequencyTerms.length > 0 && (
+                  <div style={profileRowStyle}>
+                    <span style={profileLabelStyle}>高频词</span>
+                    <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+                      {profile!.highFrequencyTerms.map((t) => (
+                        <span key={t} style={tagStyle}>{t}</span>
+                      ))}
                     </div>
-                  ))}
-                  <div>
-                    <div style={pageFieldLabelStyle}>高频词（每行一个）</div>
-                    <textarea
-                      rows={3}
-                      value={profileDraft.highFrequencyTerms.join("\n")}
-                      onChange={(e) =>
-                        setProfileDraft({
-                          ...profileDraft,
-                          highFrequencyTerms: e.target.value.split("\n").filter(Boolean),
-                        })
-                      }
-                      style={textareaStyle}
-                    />
                   </div>
-                  <div>
-                    <div style={pageFieldLabelStyle}>风格备注（每行一条）</div>
-                    <textarea
-                      rows={3}
-                      value={profileDraft.styleNotes.join("\n")}
-                      onChange={(e) =>
-                        setProfileDraft({
-                          ...profileDraft,
-                          styleNotes: e.target.value.split("\n").filter(Boolean),
-                        })
-                      }
-                      style={textareaStyle}
-                    />
+                )}
+                {profile!.styleNotes.length > 0 && (
+                  <div style={profileRowStyle}>
+                    <span style={profileLabelStyle}>风格备注</span>
+                    <ul style={{ margin: 0, paddingLeft: "1.25rem" }}>
+                      {profile!.styleNotes.map((n, i) => (
+                        <li key={i} style={{ fontSize: "0.8125rem", color: pageColorTokens.textBody }}>
+                          {n}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                  <div>
-                    <div style={pageFieldLabelStyle}>翻译指令（注入系统 Prompt）</div>
-                    <textarea
-                      rows={4}
-                      value={profileDraft.translationInstructions}
-                      onChange={(e) =>
-                        setProfileDraft({ ...profileDraft, translationInstructions: e.target.value })
-                      }
-                      style={textareaStyle}
-                    />
+                )}
+                {profile!.translationInstructions && (
+                  <div style={profileRowStyle}>
+                    <span style={profileLabelStyle}>翻译指令</span>
+                    <pre
+                      style={{
+                        margin: 0,
+                        fontSize: "0.75rem",
+                        color: pageColorTokens.textBody,
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word",
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      {profile!.translationInstructions}
+                    </pre>
                   </div>
-                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                )}
+              </div>
+            ) : (
+              <div style={emptyPromptStyle}>
+                <div style={{ fontSize: "0.875rem", fontWeight: 600, color: pageColorTokens.textPrimary }}>
+                  还没有可用的商店档案建议
+                </div>
+                <div style={{ fontSize: "0.8125rem", color: pageColorTokens.textSecondary, lineHeight: 1.6 }}>
+                  先让 AI 生成一版行业、语气风格、目标受众和翻译指令建议，再按业务需求做微调。
+                </div>
+              </div>
+            )}
+          </div>
+          ) : null}
+
+          {/* ── 术语草稿 ─────────────────────────────────────────── */}
+          {target !== "profile" ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+              {draftTerms.length > 0 ? (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+                    <div style={pageFieldLabelStyle}>
+                      术语建议（{draftTerms.length} 条，待确认）
+                    </div>
+                    {draftStatus && (
+                      <span style={{ ...pageHintTextStyle, marginTop: 0 }}>
+                        状态：{draftStatus}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ ...pageHintTextStyle, marginTop: 0 }}>
+                    草稿不会自动生效，需要你确认后才会写入术语表并在翻译中使用。点击「查看详情」可编辑各语言固定译法。
+                  </div>
+
+                  <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
+                    <label style={radioLabelStyle}>
+                      <input
+                        type="radio"
+                        name="approve-mode"
+                        checked={approveMode === "merge"}
+                        onChange={() => setApproveMode("merge")}
+                      />
+                      合并到现有术语表
+                    </label>
+                    <label style={radioLabelStyle}>
+                      <input
+                        type="radio"
+                        name="approve-mode"
+                        checked={approveMode === "replace"}
+                        onChange={() => setApproveMode("replace")}
+                      />
+                      替换现有术语表
+                    </label>
                     <s-button
                       type="button"
                       variant="primary"
-                      onClick={() => void handleSaveProfile()}
-                      {...(savingProfile ? { disabled: true } : {})}
+                      onClick={() => void handleApproveDraft()}
+                      {...(approvingDraft ? { disabled: true } : {})}
                     >
-                      {savingProfile ? "保存中…" : "保存"}
-                    </s-button>
-                    <s-button type="button" variant="secondary" onClick={() => setEditingProfile(false)}>
-                      取消
+                      {approvingDraft ? "写入中…" : `确认生效（${draftTerms.length} 条）`}
                     </s-button>
                   </div>
-                </div>
-              ) : (
-                <div style={pageInnerPanelStyle}>
-                  <ProfileRow label="行业" value={profile.industry} />
-                  <ProfileRow label="语气风格" value={profile.toneOfVoice} />
-                  <ProfileRow label="目标受众" value={profile.targetAudience} />
-                  {profile.highFrequencyTerms.length > 0 && (
-                    <div style={profileRowStyle}>
-                      <span style={profileLabelStyle}>高频词</span>
-                      <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-                        {profile.highFrequencyTerms.map((t) => (
-                          <span key={t} style={tagStyle}>{t}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {profile.styleNotes.length > 0 && (
-                    <div style={profileRowStyle}>
-                      <span style={profileLabelStyle}>风格备注</span>
-                      <ul style={{ margin: 0, paddingLeft: "1.25rem" }}>
-                        {profile.styleNotes.map((n, i) => (
-                          <li key={i} style={{ fontSize: "0.8125rem", color: pageColorTokens.textBody }}>
-                            {n}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {profile.translationInstructions && (
-                    <div style={profileRowStyle}>
-                      <span style={profileLabelStyle}>翻译指令</span>
-                      <pre
-                        style={{
-                          margin: 0,
-                          fontSize: "0.75rem",
-                          color: pageColorTokens.textBody,
-                          whiteSpace: "pre-wrap",
-                          wordBreak: "break-word",
-                          fontFamily: "inherit",
-                        }}
-                      >
-                        {profile.translationInstructions}
-                      </pre>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
 
-          {/* ── 术语草稿 ─────────────────────────────────────────── */}
-          {draftTerms.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                <div style={pageFieldLabelStyle}>
-                  术语表草稿（{draftTerms.length} 条，待确认）
-                </div>
-                {draftStatus && (
-                  <span style={{ ...pageHintTextStyle, marginTop: 0 }}>
-                    状态：{draftStatus}
-                  </span>
-                )}
-              </div>
-              <div style={{ ...pageHintTextStyle, marginTop: 0 }}>
-                草稿不会自动生效，需要你确认后才会写入术语表并在翻译中使用。点击「查看详情」可编辑各语言固定译法。
-              </div>
-
-              {/* approve controls */}
-              <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
-                <label style={radioLabelStyle}>
-                  <input
-                    type="radio"
-                    name="approve-mode"
-                    checked={approveMode === "merge"}
-                    onChange={() => setApproveMode("merge")}
-                  />
-                  合并到现有术语表
-                </label>
-                <label style={radioLabelStyle}>
-                  <input
-                    type="radio"
-                    name="approve-mode"
-                    checked={approveMode === "replace"}
-                    onChange={() => setApproveMode("replace")}
-                  />
-                  替换现有术语表
-                </label>
-                <s-button
-                  type="button"
-                  variant="primary"
-                  onClick={() => void handleApproveDraft()}
-                  {...(approvingDraft ? { disabled: true } : {})}
-                >
-                  {approvingDraft ? "写入中…" : `确认生效（${draftTerms.length} 条）`}
-                </s-button>
-              </div>
-
-              {/* preview table */}
-              <div
-                style={{
-                  ...pageInnerPanelStyle,
-                  maxHeight: "480px",
-                  overflowY: "auto",
-                  padding: "0.75rem",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.5rem",
-                }}
-              >
-                {draftTerms.map((term, idx) => (
+                  <div
+                    style={{
+                      ...pageInnerPanelStyle,
+                      maxHeight: "480px",
+                      overflowY: "auto",
+                      padding: "0.75rem",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    {draftTerms.map((term, idx) => (
                   <div
                     key={idx}
                     style={{
@@ -834,14 +840,24 @@ export function ShopAnalysisPanel({ locationSearch }: ShopAnalysisPanelProps) {
                       </div>
                     )}
                   </div>
-                ))}
-              </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div style={emptyPromptStyle}>
+                  <div style={{ fontSize: "0.875rem", fontWeight: 600, color: pageColorTokens.textPrimary }}>
+                    还没有可用的术语建议
+                  </div>
+                  <div style={{ fontSize: "0.8125rem", color: pageColorTokens.textSecondary, lineHeight: 1.6 }}>
+                    点击上方「生成建议」后，AI 会提取品牌名、固定译法和高频业务词，供你确认后写入术语表。
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          ) : null}
 
           {error && <div style={formErrorBoxStyle}>{error}</div>}
-        </div>
-      )}
+      </div>
     </PageSurface>
   );
 }
@@ -860,25 +876,31 @@ function analysisBatchTotal(job: ShopAnalysisJob): number {
   return Math.max(1, Math.ceil(job.metrics.scannedResources / ANALYSIS_BATCH_SIZE));
 }
 
-function getAnalysisPrimaryCopy(job: ShopAnalysisJob): string {
+function getAnalysisPrimaryCopy(
+  job: ShopAnalysisJob,
+  target: Exclude<ShopAnalysisTarget, "both">,
+): string {
   const moduleDone = scanModulesDone(job);
   const moduleTotal = job.modules.length;
   const batchTotal = analysisBatchTotal(job);
   const { status, metrics } = job;
+  const targetName = targetLabel(target);
 
   switch (status) {
     case "SCAN_QUEUED":
-      return "任务已创建，等待 Worker 拉取…";
+      return `${targetName}建议任务已创建，等待 Worker 拉取…`;
     case "SCANNING":
-      return `正在扫描模块 ${moduleDone}/${moduleTotal} · 已采集 ${metrics.scannedResources} 条资源`;
+      return `正在为${targetName}扫描模块 ${moduleDone}/${moduleTotal} · 已采集 ${metrics.scannedResources} 条资源`;
     case "ANALYZE_QUEUED":
-      return `扫描完成（${moduleTotal} 个模块 · ${metrics.scannedResources} 条资源），等待 AI 分析…`;
+      return `扫描完成（${moduleTotal} 个模块 · ${metrics.scannedResources} 条资源），等待生成${targetName}建议…`;
     case "ANALYZING":
-      return `正在 AI 分析 ${metrics.analyzedChunks}/${batchTotal} 批`;
+      return `正在生成${targetName}建议 ${metrics.analyzedChunks}/${batchTotal} 批`;
     case "COMPLETED":
-      return `分析完成 · ${metrics.glossaryDraftCount} 条术语草稿待确认`;
+      return target === "profile"
+        ? "商店档案建议已生成，可直接检查并保存"
+        : `术语建议已生成 · ${metrics.glossaryDraftCount} 条待确认`;
     case "FAILED":
-      return "分析失败";
+      return `${targetName}建议生成失败`;
     default:
       return statusLabel(status);
   }
@@ -1089,31 +1111,20 @@ function ProfileRow({ label, value }: { label: string; value: string }) {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const headerToggleStyle: CSSProperties = {
+const actionRowStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: "0.4rem",
-  background: "none",
-  border: "none",
-  padding: 0,
-  cursor: "pointer",
-  font: "inherit",
-  fontWeight: 700,
-  fontSize: "1rem",
-  color: pageColorTokens.textPrimary,
+  justifyContent: "space-between",
+  gap: "0.75rem",
+  flexWrap: "wrap",
 };
 
-const selectStyle: CSSProperties = {
-  marginTop: "0.35rem",
-  padding: "0.45rem 0.65rem",
-  fontSize: "0.875rem",
-  borderRadius: pageColorTokens.radiusControl,
-  border: `1px solid ${pageColorTokens.borderInput}`,
-  background: pageColorTokens.surface,
-  color: pageColorTokens.textBody,
-  width: "100%",
-  maxWidth: "260px",
-  boxSizing: "border-box",
+const emptyPromptStyle: CSSProperties = {
+  ...pageInnerPanelStyle,
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.45rem",
+  borderStyle: "dashed",
 };
 
 const inputStyle: CSSProperties = {

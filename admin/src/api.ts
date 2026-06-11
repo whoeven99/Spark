@@ -783,6 +783,118 @@ export function deleteTodo(id: string): Promise<{ ok: boolean }> {
   return apiFetch(`/todos/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
+// --- Pixel Logs（webpixel 阿里云日志，owner only） ---
+
+export type PixelLogConfig = {
+  configured: boolean;
+  project: string | null;
+  logstore: string | null;
+};
+
+export type PixelLogRow = {
+  id: string;
+  /** 毫秒时间戳。 */
+  time: number;
+  event: string;
+  shopName: string;
+  clientId: string;
+  source: string;
+  productId: string;
+  schemaVersion: string;
+  /** 原始 payload JSON 字符串（可能为空）。 */
+  payload: string;
+  extra: Record<string, string>;
+};
+
+export function fetchPixelLogConfig(): Promise<PixelLogConfig> {
+  return apiFetch("/pixel-logs/config");
+}
+
+export function fetchPixelLogs(params: {
+  shop?: string;
+  clientId?: string;
+  event?: string;
+  keyword?: string;
+  from?: number;
+  to?: number;
+  page?: number;
+  pageSize?: number;
+}): Promise<{
+  logs: PixelLogRow[];
+  total: number;
+  complete: boolean;
+  project: string;
+  logstore: string;
+}> {
+  const query = new URLSearchParams();
+  if (params.shop) query.set("shop", params.shop);
+  if (params.clientId) query.set("clientId", params.clientId);
+  if (params.event) query.set("event", params.event);
+  if (params.keyword) query.set("keyword", params.keyword);
+  if (params.from) query.set("from", String(params.from));
+  if (params.to) query.set("to", String(params.to));
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("pageSize", String(params.pageSize));
+  return apiFetch(`/pixel-logs?${query}`);
+}
+
+// --- App Logs（Spark App 功能埋点，阿里云日志） ---
+
+export type AppLogConfig = {
+  configured: boolean;
+  project: string | null;
+  logstore: string | null;
+};
+
+export type AppLogRow = {
+  id: string;
+  /** 毫秒时间戳。 */
+  time: number;
+  event: string;
+  shopName: string;
+  feature: string;
+  action: string;
+  path: string;
+  plan: string;
+  source: string;
+  schemaVersion: string;
+  /** 原始 extra payload JSON 字符串（可能为空）。 */
+  payload: string;
+  extra: Record<string, string>;
+};
+
+export function fetchAppLogConfig(): Promise<AppLogConfig> {
+  return apiFetch("/app-logs/config");
+}
+
+export function fetchAppLogs(params: {
+  shop?: string;
+  feature?: string;
+  action?: string;
+  keyword?: string;
+  from?: number;
+  to?: number;
+  page?: number;
+  pageSize?: number;
+}): Promise<{
+  logs: AppLogRow[];
+  total: number;
+  complete: boolean;
+  project: string;
+  logstore: string;
+}> {
+  const query = new URLSearchParams();
+  if (params.shop) query.set("shop", params.shop);
+  if (params.feature) query.set("feature", params.feature);
+  if (params.action) query.set("action", params.action);
+  if (params.keyword) query.set("keyword", params.keyword);
+  if (params.from) query.set("from", String(params.from));
+  if (params.to) query.set("to", String(params.to));
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("pageSize", String(params.pageSize));
+  return apiFetch(`/app-logs?${query}`);
+}
+
 // --- Shop Analysis ---
 
 export type ShopAnalysisMetrics = {

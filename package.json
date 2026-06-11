@@ -37,6 +37,7 @@
     "node": ">=20.19 <22 || >=22.12"
   },
   "dependencies": {
+    "@alicloud/log": "^1.2.6",
     "@azure/cosmos": "^4.9.3",
     "@azure/storage-blob": "^12.31.0",
     "@langchain/core": "^1.1.44",

@@ -27,10 +27,13 @@ export type ShopAnalysisStatus =
   | "COMPLETED"
   | "FAILED";
 
+export type ShopAnalysisTarget = "profile" | "glossary" | "both";
+
 export type ShopAnalysisJob = {
   id: string;
   shopName: string;
   status: ShopAnalysisStatus;
+  target?: ShopAnalysisTarget;
   sourceLanguage: string;
   modules: string[];
   triggeredBy: string;
@@ -206,11 +209,12 @@ export async function pushAnalysisHint(
   shopName: string,
   sourceLanguage: string,
   modules: string[],
+  target: ShopAnalysisTarget,
 ): Promise<void> {
   try {
     await getTranslateRedisClient().rpush(
       "translate:v4:hint:analysis",
-      JSON.stringify({ shopName, sourceLanguage, modules }),
+      JSON.stringify({ shopName, sourceLanguage, modules, target }),
     );
   } catch { /* best-effort */ }
 }

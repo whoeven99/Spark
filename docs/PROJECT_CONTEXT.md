@@ -228,6 +228,8 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
   - `SCOPES`
   - `SHOPIFY_APP_URL`
   - `SHOP_CUSTOM_DOMAIN`（可选）
+- Web Pixel 自动配置（`app/server/webPixel/ensureWebPixel.server.ts`，OAuth 回调 / 进入 `/app` 时幂等执行）：
+  - `PIXEL_INGEST_ENDPOINT`（可选）：像素上报地址；未设时回退 `SHOPIFY_APP_URL` + `/api/pixel-ingest`，二者均缺则跳过自动配置
 - AI 模型侧：
   - `DEEPSEEK_API_KEY`（优先）或 `OPENAI_API_KEY`
   - `DEEPSEEK_MODEL` / `OPENAI_MODEL`（可选）
