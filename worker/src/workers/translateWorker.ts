@@ -12,6 +12,7 @@ import {
   type EngineUsage,
   type TranslateItem,
 } from "../services/llmTranslate.js";
+import { QpsLogger } from "../services/qpsLogger.js";
 import type { TranslationV4Job } from "../services/cosmosV4.js";
 
 const HEARTBEAT_THROTTLE_MS = 30_000;
@@ -66,6 +67,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   const translateUnitTotal = job.metrics.translateUnitTotal || 0;
   // Record when this translate stage actually started (epoch ms string).
   const translateStartedAt = Date.now().toString();
+  const qps = new QpsLogger(jobId, shopName, "TRANSLATE");
 
   if (testMode) {
     console.log(`[translate] TEST MODE: using original values as translations`);
@@ -148,6 +150,8 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
             }
             // Flush LLM key stats to Redis (throttled internally to ~10s intervals).
             await flushKeyStats();
+            // QPS logger flush is throttled by its own 30s interval.
+            qps.flush().catch(() => {});
           };
           const { resources: perResource, usage } = await translateResources(
             resources.map((r) => ({ resourceId: r.resourceId, fields: r.fields })),
@@ -252,5 +256,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
       claimedBy: null,
     });
     console.error(`[translate] failed job=${jobId}`, e);
+  } finally {
+    qps.stop();
   }
 }

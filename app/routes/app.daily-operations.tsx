@@ -192,6 +192,135 @@ const axisLabelStyle: CSSProperties = {
   userSelect: "none",
 };
 
+const axisHintStyle: CSSProperties = {
+  fontSize: "0.6875rem",
+  fontWeight: 600,
+  color: pageColorTokens.textSecondary,
+  lineHeight: 1.2,
+  userSelect: "none",
+};
+
+const matrixAxisLineStyle: CSSProperties = {
+  background: pageColorTokens.borderSubtle,
+  borderRadius: 999,
+};
+
+function MatrixUrgencyAxis({
+  label,
+  highLabel,
+  lowLabel,
+}: {
+  label: string;
+  highLabel: string;
+  lowLabel: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "0.35rem",
+        width: "2.75rem",
+        alignSelf: "stretch",
+        padding: "0.15rem 0",
+      }}
+      aria-hidden
+    >
+      <span style={axisHintStyle}>{highLabel}</span>
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          position: "relative",
+          width: "100%",
+          minHeight: 140,
+        }}
+      >
+        <div
+          style={{
+            ...matrixAxisLineStyle,
+            position: "absolute",
+            left: "50%",
+            top: 4,
+            bottom: 4,
+            width: 2,
+            transform: "translateX(-50%)",
+          }}
+        />
+        <span
+          style={{
+            ...axisLabelStyle,
+            writingMode: "vertical-rl",
+            transform: "rotate(180deg)",
+            padding: "0.35rem 0.25rem",
+            borderRadius: pageColorTokens.radiusControl,
+            background: pageColorTokens.surfaceMuted,
+            border: `1px solid ${pageColorTokens.borderSubtle}`,
+            lineHeight: 1.35,
+          }}
+        >
+          {label}
+        </span>
+      </div>
+      <span style={axisHintStyle}>{lowLabel}</span>
+    </div>
+  );
+}
+
+function MatrixImportanceAxis({
+  label,
+  highLabel,
+  lowLabel,
+}: {
+  label: string;
+  highLabel: string;
+  lowLabel: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "auto 1fr auto",
+        alignItems: "center",
+        gap: "0.55rem",
+        paddingTop: "0.15rem",
+      }}
+      aria-hidden
+    >
+      <span style={axisHintStyle}>{highLabel}</span>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "0.45rem",
+          minWidth: 0,
+        }}
+      >
+        <div style={{ ...matrixAxisLineStyle, flex: 1, height: 2 }} />
+        <span
+          style={{
+            ...axisLabelStyle,
+            padding: "0.2rem 0.55rem",
+            borderRadius: pageColorTokens.radiusControl,
+            background: pageColorTokens.surfaceMuted,
+            border: `1px solid ${pageColorTokens.borderSubtle}`,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {label}
+        </span>
+        <div style={{ ...matrixAxisLineStyle, flex: 1, height: 2 }} />
+      </div>
+      <span style={axisHintStyle}>{lowLabel}</span>
+    </div>
+  );
+}
+
 const taskCardStyle = (quadrant: TaskQuadrant): CSSProperties => ({
   border: `1px solid ${pageColorTokens.border}`,
   borderLeft: `4px solid ${quadrantAccentColors[quadrant]}`,
@@ -635,32 +764,20 @@ function DailyOperationsBody({
           ))}
         </div>
       ) : (
-        // 桌面端：2×2 艾森豪威尔矩阵，纵轴=重要程度、横轴=紧急程度
-        <div style={{ display: "flex", gap: "0.6rem" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: "1.4rem",
-            }}
-          >
-            <span
-              style={{
-                ...axisLabelStyle,
-                writingMode: "vertical-rl",
-                transform: "rotate(180deg)",
-              }}
-            >
-              {t("dailyOps.axisUrgency")} →
-            </span>
-          </div>
+        // 桌面端：2×2 艾森豪威尔矩阵，纵轴=紧急程度、横轴=重要程度
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "stretch" }}>
+          <MatrixUrgencyAxis
+            label={t("dailyOps.axisUrgency")}
+            highLabel={t("dailyOps.axisUrgencyHigh")}
+            lowLabel={t("dailyOps.axisUrgencyLow")}
+          />
           <div
             style={{
               flex: 1,
               display: "flex",
               flexDirection: "column",
-              gap: "0.6rem",
+              gap: "0.55rem",
+              minWidth: 0,
             }}
           >
             <div
@@ -683,9 +800,11 @@ function DailyOperationsBody({
                 />
               ))}
             </div>
-            <div style={{ ...axisLabelStyle, textAlign: "center" }}>
-              ← {t("dailyOps.axisImportance")}
-            </div>
+            <MatrixImportanceAxis
+              label={t("dailyOps.axisImportance")}
+              highLabel={t("dailyOps.axisImportanceHigh")}
+              lowLabel={t("dailyOps.axisImportanceLow")}
+            />
           </div>
         </div>
       )}

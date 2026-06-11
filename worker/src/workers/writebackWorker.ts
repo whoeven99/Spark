@@ -4,6 +4,7 @@ import { popHint, pushHint, setProgress } from "../services/redisV4.js";
 import { blobRead, blobListPaths, blobWrite } from "../services/blobV4.js";
 import { registerTranslations, type TranslationInput } from "../services/shopifyFetch.js";
 import { pAll } from "../services/llmTranslate.js";
+import { QpsLogger } from "../services/qpsLogger.js";
 import type { TranslationV4Job } from "../services/cosmosV4.js";
 
 /**
@@ -98,6 +99,7 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
   const writebackTotal = job.metrics.writebackTotal || job.metrics.translateDone;
   const failedResources: FailedResource[] = [];
   let lastHeartbeatAt = 0;
+  const qps = new QpsLogger(jobId, shopName, "WRITEBACK");
 
   try {
     // ── Phase 1: Collect all pending resources ────────────────────────────────
@@ -215,5 +217,7 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
       claimedBy: null,
     });
     console.error(`[writeback] failed job=${jobId}`, e);
+  } finally {
+    qps.stop();
   }
 }
