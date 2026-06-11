@@ -18,6 +18,7 @@ const ANALYSIS_BATCH_SIZE = 15;
 type ShopAnalysisPanelProps = {
   locationSearch: string;
   defaultSourceLanguage: string;
+  onApplied?: () => void;
 };
 
 const RUNNING_STATUSES = new Set(["SCAN_QUEUED", "SCANNING", "ANALYZE_QUEUED", "ANALYZING"]);
@@ -78,6 +79,7 @@ function formatDraftTermPreview(term: GlossaryTerm): string {
 export function ShopAnalysisPanel({
   locationSearch,
   defaultSourceLanguage,
+  onApplied,
 }: ShopAnalysisPanelProps) {
   const shopify = useAppBridge();
 
@@ -186,7 +188,7 @@ export function ShopAnalysisPanel({
         return;
       }
       setJob(payload.job ?? null);
-      shopify.toast.show("已开始使用 AI 生成商店档案和术语草稿");
+      shopify.toast.show("已开始生成商店档案和术语建议");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -208,7 +210,8 @@ export function ShopAnalysisPanel({
       if (!res.ok || !payload.ok) { setError(payload.error ?? "保存失败"); return; }
       setProfile(profileDraft);
       setEditingProfile(false);
-      shopify.toast.show("商店档案已保存，下次翻译时生效");
+      onApplied?.();
+      shopify.toast.show("建议已保存到商店档案，下次翻译时生效");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -236,6 +239,7 @@ export function ShopAnalysisPanel({
       const payload = (await res.json()) as { ok: boolean; total?: number; mode?: string; error?: string };
       if (!res.ok || !payload.ok) { setError(payload.error ?? "操作失败"); return; }
       setDraftTerms([]);
+      onApplied?.();
       shopify.toast.show(
         `已将 ${payload.total ?? 0} 条术语${payload.mode === "replace" ? "替换" : "合并"}到术语表`,
       );
@@ -291,13 +295,13 @@ export function ShopAnalysisPanel({
 
   return (
     <PageSurface
-      title="商店档案"
-      subtitle="沉淀品牌行业、语气风格、受众和翻译指令。可使用 AI 根据商店内容自动生成初稿。"
+      title="AI 建议生成"
+      subtitle="基于店铺内容生成商店档案建议和术语建议，确认后再应用到正式配置。"
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
         <div style={actionRowStyle}>
           <div style={{ ...pageHintTextStyle, marginTop: 0 }}>
-            AI 会基于当前源语言 {sourceLanguage} 扫描商品、集合、博客、页面和商店信息，生成商店档案与术语草稿。
+            AI 会基于当前源语言 {sourceLanguage} 扫描商品、集合、博客、页面和商店信息，生成可编辑的商店档案建议和术语建议。
           </div>
           <s-button
             type="button"
@@ -310,8 +314,8 @@ export function ShopAnalysisPanel({
               : job && QUEUED_STATUSES.has(job.status)
                 ? "等待 Worker 拉取…"
                 : job && PROCESSING_STATUSES.has(job.status)
-                  ? "AI 生成中…"
-                  : "使用 AI 生成"}
+                  ? "建议生成中…"
+                  : "生成建议"}
           </s-button>
         </div>
 
@@ -443,7 +447,7 @@ export function ShopAnalysisPanel({
               </div>
             ) : (
               <div style={{ ...pageHintTextStyle, marginTop: 0 }}>
-                暂无商店档案。可点击右上角「使用 AI 生成」先生成一份初稿，再按需手动编辑。
+                暂无商店档案。可点击右上角「生成建议」先生成一份初稿，再按需手动编辑。
               </div>
             )}
 
@@ -567,10 +571,10 @@ export function ShopAnalysisPanel({
             ) : (
               <div style={emptyPromptStyle}>
                 <div style={{ fontSize: "0.875rem", fontWeight: 600, color: pageColorTokens.textPrimary }}>
-                  还没有可用的商店档案
+                  还没有可用的商店档案建议
                 </div>
                 <div style={{ fontSize: "0.8125rem", color: pageColorTokens.textSecondary, lineHeight: 1.6 }}>
-                  先让 AI 扫描一次商店内容，生成行业、语气风格、目标受众和翻译指令，再按业务需求做微调。
+                  先让 AI 生成一版行业、语气风格、目标受众和翻译指令建议，再按业务需求做微调。
                 </div>
               </div>
             )}
@@ -581,7 +585,7 @@ export function ShopAnalysisPanel({
             <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
                 <div style={pageFieldLabelStyle}>
-                  AI 术语草稿（{draftTerms.length} 条，待确认）
+                  术语建议（{draftTerms.length} 条，待确认）
                 </div>
                 {draftStatus && (
                   <span style={{ ...pageHintTextStyle, marginTop: 0 }}>
