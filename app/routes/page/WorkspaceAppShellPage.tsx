@@ -25,19 +25,9 @@ import { useChatStream, type ChatStreamFinishPayload, type SkillStepProgress } f
 import { ContextWindowIndicator } from "../component/chat/ContextWindowIndicator";
 import { WorkspaceContextObjectPicker } from "../component/chat/WorkspaceContextObjectPicker";
 import { estimateMessagesTokens } from "../../lib/tokenEstimate";
-<<<<<<< Updated upstream
 import type { SelectedShopifyObject } from "../../lib/shopifyObjectTypes";
 import { UnifiedTaskListPage } from "../component/unifiedTaskList/UnifiedTaskListPage";
-=======
-import { useContextResourceSearch } from "../../hooks/useContextResourceSearch";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import type {
-  ContextResourceItem,
-  ContextResourceSelectionMap,
-  ContextResourceSortDirection,
-  ContextResourceType,
-} from "../../lib/contextResourceTypes";
->>>>>>> Stashed changes
 
 type WorkspacePanel = "dashboard" | "chat" | "skills" | "automation" | "tasks";
 type AutomationView = "configured" | "history" | "templates";
@@ -509,7 +499,6 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
       const res = await fetch(`/api/conversations/${conversationId}${authQuery}`, {
         method: "DELETE",
       });
-<<<<<<< Updated upstream
       if (!res.ok) {
         shopify.toast.show("删除对话失败");
         return;
@@ -540,23 +529,7 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
         }
       }
       shopify.toast.show("对话已删除");
-=======
-      const data = (await res.json()) as { conversation: ConversationSummary };
-      const conv = data.conversation;
-      const welcomeMsg: WorkspaceConversationMessage = {
-        role: "assistant",
-        text: "新的对话已经创建。你可以先在下方工具栏补充商品、订单、文章、文件或富媒体，再发送任务需求。",
-        time: formatTimeLabel(new Date()),
-      };
-      loadedConvIdsRef.current.add(conv.id);
-      setConversationList((current) => [conv, ...current].slice(0, 50));
-      setMessagesByConversation((current) => ({ ...current, [conv.id]: [welcomeMsg] }));
-      setDraftByConversation((current) => ({ ...current, [conv.id]: "" }));
-      clearContext();
-      setActiveConversationId(conv.id);
-      switchPanel("chat");
       if (isMobile) setSidebarOpen(false);
->>>>>>> Stashed changes
     } catch (err) {
       console.error("[WorkspaceAppShellPage] delete conversation failed:", err);
       shopify.toast.show("删除对话失败");
@@ -933,53 +906,29 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
     return () => window.removeEventListener("pointerdown", handlePointerDown);
   }, [accountMenuOpen]);
 
-<<<<<<< Updated upstream
-  return (
-    <div style={shellStyle}>
-      <aside style={sidebarStyle}>
-        <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
-          {/* Brand */}
-          <div style={brandRowStyle}>
-            <div style={brandBadgeStyle}>S</div>
-            <div>
-              <div style={brandTitleStyle}>Spark</div>
-              <div style={brandMetaStyle}>Shopify AI Workspace</div>
-            </div>
-=======
   const activePanelLabel = activePanel === "chat"
     ? activeConversation?.title ?? "新对话"
     : panelItems.find((item) => item.key === activePanel)?.label ?? "工作台";
 
   const sidebarContent = (
     <>
-      <div>
+      <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
         <div style={brandRowStyle}>
           <div style={brandBadgeStyle}>S</div>
           <div>
             <div style={brandTitleStyle}>Spark</div>
             <div style={brandMetaStyle}>Shopify AI Workspace</div>
->>>>>>> Stashed changes
           </div>
         </div>
 
-<<<<<<< Updated upstream
-          {/* New conversation */}
-          <button
-            type="button"
-            className="sidebar-new-chat-btn workspace-primary-btn"
-            style={newChatButtonStyle}
-            onClick={createConversation}
-          >
-            <span style={newChatPlusBadgeStyle}>+</span>
-            <span>新建对话</span>
-          </button>
-
-          {/* Secondary nav */}
-          <div style={navGroupStyle}>
-            {panelItems.map((item) => (
-=======
-        <button type="button" style={newTaskButtonStyle} onClick={createConversation}>
-          + 新建对话
+        <button
+          type="button"
+          className="sidebar-new-chat-btn workspace-primary-btn"
+          style={newChatButtonStyle}
+          onClick={createConversation}
+        >
+          <span style={newChatPlusBadgeStyle}>+</span>
+          <span>新建对话</span>
         </button>
 
         <div style={navGroupStyle}>
@@ -987,108 +936,55 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
             <button
               key={item.key}
               type="button"
+              className={`workspace-nav-btn${activePanel === item.key ? " is-active" : ""}`}
               style={navButtonStyle(activePanel === item.key)}
               onClick={() => switchPanel(item.key)}
             >
-              <span style={navLabelStyle}>
-                <span style={navIconStyle}>{item.icon}</span>
-                <span>{item.label}</span>
-              </span>
+              <span style={navIconStyle(activePanel === item.key)}>{item.icon}</span>
+              <span>{item.label}</span>
             </button>
           ))}
         </div>
 
+        <div style={sidebarDividerStyle} />
+
         <div style={sidebarSectionStyle}>
           <div style={sidebarSectionHeadStyle}>
-            <span>对话记录</span>
+            <span>最近对话</span>
             <span style={mutedMetaStyle}>{Math.min(conversationList.length, 50)} / 50</span>
           </div>
           <div style={conversationListStyle}>
-            {conversationList.slice(0, 50).map((conversation) => (
->>>>>>> Stashed changes
-              <button
-                key={conversation.id}
-                type="button"
-<<<<<<< Updated upstream
-                className={`workspace-nav-btn${activePanel === item.key ? " is-active" : ""}`}
-                style={navButtonStyle(activePanel === item.key)}
-                onClick={() => switchPanel(item.key)}
-              >
-                <span style={navIconStyle(activePanel === item.key)}>{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
+            {conversationList.slice(0, 50).map((conversation) => {
+              const active =
+                activePanel === "chat" && activeConversationId === conversation.id;
+              return (
+                <div key={conversation.id} className="sidebar-history-row" style={historyRowStyle}>
+                  <button
+                    type="button"
+                    className={`sidebar-history-item workspace-history-item${active ? " is-active" : ""}`}
+                    style={historyItemStyle(active)}
+                    onClick={() => openConversation(conversation.id)}
+                    title={conversation.title}
+                  >
+                    <span style={historyTitleStyle(active)}>{conversation.title}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="sidebar-history-delete"
+                    style={historyDeleteButtonStyle}
+                    aria-label={`删除对话：${conversation.title}`}
+                    title="删除对话"
+                    onClick={() => void removeConversation(conversation.id)}
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
           </div>
-
-          {/* Divider */}
-          <div style={sidebarDividerStyle} />
-
-          {/* Conversation history */}
-          <div style={sidebarSectionStyle}>
-            <div style={sidebarSectionHeadStyle}>
-              <span>最近对话</span>
-              <span style={mutedMetaStyle}>{Math.min(conversationList.length, 50)} / 50</span>
-            </div>
-            <div style={conversationListStyle}>
-              {conversationList.slice(0, 50).map((conversation) => {
-                const active =
-                  activePanel === "chat" && activeConversationId === conversation.id;
-                return (
-                  <div key={conversation.id} className="sidebar-history-row" style={historyRowStyle}>
-                    <button
-                      type="button"
-                      className={`sidebar-history-item workspace-history-item${active ? " is-active" : ""}`}
-                      style={historyItemStyle(active)}
-                      onClick={() => openConversation(conversation.id)}
-                      title={conversation.title}
-                    >
-                      <span style={historyTitleStyle(active)}>{conversation.title}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="sidebar-history-delete"
-                      style={historyDeleteButtonStyle}
-                      aria-label={`删除对话：${conversation.title}`}
-                      title="删除对话"
-                      onClick={() => void removeConversation(conversation.id)}
-                    >
-                      ×
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-=======
-                style={historyItemStyle(activeConversationId === conversation.id)}
-                onClick={() => openConversation(conversation.id)}
-              >
-                <span style={historyTitleStyle}>{conversation.title}</span>
-                <span style={historyPreviewStyle}>{conversation.preview}</span>
-                <span style={mutedMetaStyle}>{formatRelativeTime(conversation.updatedAt)}</span>
-              </button>
-            ))}
-          </div>
->>>>>>> Stashed changes
         </div>
       </div>
 
-<<<<<<< Updated upstream
-        <div ref={accountMenuRef} style={accountMenuWrapStyle}>
-          {accountMenuOpen ? (
-            <div style={accountMenuStyle}>
-              <div style={accountMenuSectionStyle}>
-                <div style={accountMenuLabelStyle}>语言</div>
-                <LanguageSelector />
-              </div>
-              <button
-                type="button"
-                style={accountMenuItemStyle}
-                onClick={() => {
-                  setAccountMenuOpen(false);
-                  navigate("/app/billing");
-                }}
-=======
       <div ref={accountMenuRef} style={accountMenuWrapStyle}>
         {accountMenuOpen ? (
           <div style={accountMenuStyle}>
@@ -1101,8 +997,8 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
               style={accountMenuItemStyle}
               onClick={() => {
                 setAccountMenuOpen(false);
-                setSidebarOpen(false);
-                navigate(buildWorkspaceEntryPath("/app/billing"));
+                if (isMobile) setSidebarOpen(false);
+                navigate("/app/billing");
               }}
             >
               Billing
@@ -1151,7 +1047,6 @@ export function WorkspaceAppShellPage({ initialConversationList = [] }: { initia
               <aside
                 style={{ ...sidebarStyle, ...mobileSidebarStyle }}
                 onClick={(event) => event.stopPropagation()}
->>>>>>> Stashed changes
               >
                 {sidebarContent}
               </aside>
@@ -1282,17 +1177,10 @@ function DashboardPanel() {
               <div style={sectionTitleStyle}>关键趋势</div>
               <div style={sectionTextStyle}>今天、昨天和 7 天均值的简化对比。</div>
             </div>
-<<<<<<< Updated upstream
-            <div style={trendLegendStyle}>
+            <div style={isMobile ? mobileTrendLegendStyle : trendLegendStyle}>
               <span style={legendItemStyle(shopifyUi.primary)}>Today</span>
               <span style={legendItemStyle("#47c1af")}>Yesterday</span>
               <span style={legendItemStyle("#b4e6d3")}>7d Avg</span>
-=======
-            <div style={isMobile ? mobileTrendLegendStyle : trendLegendStyle}>
-              <span style={legendItemStyle("#111827")}>Today</span>
-              <span style={legendItemStyle("#94a3b8")}>Yesterday</span>
-              <span style={legendItemStyle("#d1d5db")}>7d Avg</span>
->>>>>>> Stashed changes
             </div>
           </div>
           <div style={chartStyle}>
@@ -1722,12 +1610,8 @@ function ChatPanel({
             value={draft}
             onChange={(event) => onDraftChange(event.target.value)}
             onKeyDown={handleTextareaKeyDown}
-<<<<<<< Updated upstream
             className="workspace-composer-input"
-            style={textareaStyle}
-=======
             style={isMobile ? mobileTextareaStyle : textareaStyle}
->>>>>>> Stashed changes
             placeholder="继续补充你的任务目标，并结合商品、订单、文章、文件或富媒体上下文..."
             disabled={isStreaming}
             autoFocus
@@ -1765,13 +1649,8 @@ function ChatPanel({
               </span>
               <ContextWindowIndicator currentTokens={contextTokens} maxTokens={MAX_CONTEXT_TOKENS} />
             </div>
-<<<<<<< Updated upstream
-            <div style={buttonRowStyle}>
-              <button type="button" className="workspace-ghost-btn" style={ghostButtonStyle} disabled={isStreaming}>
-=======
             <div style={isMobile ? mobileButtonRowStyle : buttonRowStyle}>
-              <button type="button" style={ghostButtonStyle} disabled={isStreaming}>
->>>>>>> Stashed changes
+              <button type="button" className="workspace-ghost-btn" style={ghostButtonStyle} disabled={isStreaming}>
                 生成任务建议
               </button>
               {isStreaming ? (
@@ -1794,13 +1673,8 @@ function ChatPanel({
       </section>
 
       {activeContextTool ? (
-<<<<<<< Updated upstream
         <div style={toolModalBackdropStyle} onClick={handleDismissToolPicker}>
-          <div style={toolModalCardStyle} onClick={(event) => event.stopPropagation()}>
-=======
-        <div style={toolModalBackdropStyle} onClick={onCloseToolPicker}>
           <div style={isMobile ? mobileToolModalCardStyle : toolModalCardStyle} onClick={(event) => event.stopPropagation()}>
->>>>>>> Stashed changes
             <div style={toolModalHeaderStyle}>
               <div>
                 <div style={sectionTitleSmallStyle}>
@@ -1837,44 +1711,12 @@ function ChatPanel({
 
             {activeContextTool === "order" ? (
               <>
-<<<<<<< Updated upstream
                 <input
                   value={objectQueryByType.order}
                   onChange={(event) => onObjectQueryChange("order", event.target.value)}
                   placeholder="搜索订单号、站点或状态"
                   style={selectorSearchInputStyle}
                 />
-=======
-                <div style={isMobile ? mobileObjectToolbarStyle : objectToolbarStyle}>
-                  <div style={objectSearchFieldWrapStyle}>
-                    <s-text-field
-                      label={`搜索${objectTypeLabels[activeContextTool]}`}
-                      value={objectQueryByType[activeContextTool]}
-                      onChange={(event) => onObjectQueryChange(activeContextTool, event.currentTarget.value)}
-                      autocomplete="off"
-                    />
-                  </div>
-                  <label style={sortFieldWrapStyle}>
-                    <span style={mutedMetaStyle}>排序</span>
-                    <select
-                      value={activeObjectSort[activeContextTool]}
-                      onChange={(event) =>
-                        setActiveObjectSort((current) => ({
-                          ...current,
-                          [activeContextTool]: event.target.value,
-                        }))
-                      }
-                      style={selectFieldStyle}
-                    >
-                      {objectSortOptions[activeContextTool].map((option) => (
-                        <option key={`${option.key}:${option.direction}`} value={`${option.key}:${option.direction}`}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
->>>>>>> Stashed changes
                 <div style={filterChipRowStyle}>
                   {objectFilterLabels.order.map((filter) => (
                     <button
@@ -1929,55 +1771,14 @@ function ChatPanel({
                       setNewFileObj(file);
                     }}
                   />
-<<<<<<< Updated upstream
                   {newFileObj ? (
                     <div style={{ fontSize: 12, color: "#202223", marginTop: 6 }}>
                       已选择：{newFileObj.name}
-=======
-                  <div style={isMobile ? mobileUploadHeaderRowStyle : uploadHeaderRowStyle}>
-                    <div>
-                      <div style={sectionTitleSmallStyle}>从本地上传文件</div>
-                      <div style={sectionTextStyle}>支持一次选择多个文件，上传完成后会自动加入列表并勾选。</div>
->>>>>>> Stashed changes
                     </div>
                   ) : null}
                   <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
                     支持：PDF、DOCX、TXT、MD、CSV、XLSX、JSON，最大 10 MB。选好后点确认即可上传并附加。
                   </div>
-<<<<<<< Updated upstream
-=======
-                  <div style={isMobile ? mobileInlineFieldRowStyle : inlineFieldRowStyle}>
-                    <input
-                      value={newFileNote}
-                      onChange={(event) => setNewFileNote(event.target.value)}
-                      placeholder="补充备注（当前用于后续上传说明）"
-                      style={compactFieldStyle}
-                    />
-                    <span style={mutedMetaStyle}>大小上限 20 MB</span>
-                  </div>
-                  {localUploadQueue.length > 0 ? (
-                    <div style={uploadQueueStyle}>
-                      {localUploadQueue.map((item) => (
-                        <div key={item.id} style={uploadQueueItemStyle}>
-                          <div style={resourceItemTopRowStyle}>
-                            <span style={sectionTitleSmallStyle}>{item.fileName}</span>
-                            <span style={uploadStatusPillStyle(item.status)}>{uploadStatusLabel(item.status)}</span>
-                          </div>
-                          <div style={sectionTextStyle}>{item.note}</div>
-                          <div style={mutedMetaStyle}>
-                            {item.sizeLabel}
-                            {item.errorText ? ` · ${item.errorText}` : ""}
-                          </div>
-                          <div style={uploadProgressTrackStyle}>
-                            <div style={uploadProgressFillStyle(item.progress, item.status)} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div style={pickerInfoBoxStyle("neutral")}>暂未选择本地文件。上传完成后会自动加入下方文件列表，你可以直接发送或取消勾选。</div>
-                  )}
->>>>>>> Stashed changes
                 </div>
                 <div style={selectorListCompactStyle}>
                   {workspaceFilesLoading && localFiles.length === 0 ? (
@@ -2137,8 +1938,7 @@ function ChatPanel({
       ) : null}
 
       <section style={{ ...sidePanelStyle, alignSelf: "start" }}>
-<<<<<<< Updated upstream
-        <div style={surfaceCardStyle}>
+        <div style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
             <div style={sectionTitleStyle}>当前上下文</div>
             {filledContextCount > 0 ? (
@@ -2150,29 +1950,6 @@ function ChatPanel({
                 清空
               </button>
             ) : null}
-=======
-        <div style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
-          <div style={sectionTitleStyle}>当前上下文</div>
-          <div style={listColumnStyle}>
-            {[
-              [
-                "对象范围",
-                totalSelectedObjects > 0
-                  ? (Object.keys(objectTypeLabels) as ObjectType[])
-                      .filter((type) => selectedObjectsByType[type].length > 0)
-                      .map((type) => `${objectTypeLabels[type]} ${selectedObjectsByType[type].length}`)
-                      .join(" / ")
-                  : "尚未选择对象",
-              ],
-              ["本地文件", selectedFileIds.length > 0 ? `${selectedFileIds.length} 个已选择文件` : "尚未添加文件"],
-              ["富媒体", selectedMediaIds.length > 0 ? `${selectedMediaIds.length} 个已选择 URL / 图片 / 视频` : "尚未添加富媒体"],
-            ].map(([label, value]) => (
-              <div key={label} style={keyValueRowStyle}>
-                <span style={mutedMetaStyle}>{label}</span>
-                <span style={sectionTextStyle}>{value}</span>
-              </div>
-            ))}
->>>>>>> Stashed changes
           </div>
 
           {/* Products */}
@@ -2279,16 +2056,17 @@ function SkillsPanel({ onOpenTool }: { onOpenTool: (path: string) => void }) {
           <button
             key={skill.id}
             type="button"
-<<<<<<< Updated upstream
-            style={skill.available ? skillCardButtonStyle : skillCardButtonDisabledStyle}
+            style={
+              skill.available
+                ? isMobile
+                  ? mobileSkillCardButtonStyle
+                  : skillCardButtonStyle
+                : skillCardButtonDisabledStyle
+            }
             disabled={!skill.available}
             onClick={() => {
               if (skill.available) onOpenTool(skill.path);
             }}
-=======
-            style={isMobile ? mobileSkillCardButtonStyle : skillCardButtonStyle}
-            onClick={() => onOpenTool(skill.path)}
->>>>>>> Stashed changes
           >
             <div style={skillCategoryStyle}>{skill.category}</div>
             <div style={sectionTitleSmallStyle}>{skill.title}</div>
@@ -2374,79 +2152,6 @@ function AutomationPanel({
   );
 }
 
-<<<<<<< Updated upstream
-=======
-function TasksPanel({
-  tasks,
-  filter,
-  onFilterChange,
-  onTaskAction,
-}: {
-  tasks: TaskRecord[];
-  filter: "all" | TaskKind;
-  onFilterChange: (value: "all" | TaskKind) => void;
-  onTaskAction: (task: TaskRecord) => void;
-}) {
-  const { isMobile } = useResponsiveLayout();
-
-  return (
-    <section style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
-      <div style={isMobile ? mobileSectionHeaderStyle : sectionHeaderStyle}>
-        <div>
-          <div style={sectionTitleStyle}>统一任务列表</div>
-          <div style={sectionTextStyle}>自动化任务与单次任务共用总表，再按类型和状态进行筛选。</div>
-        </div>
-        <div style={isMobile ? mobileButtonRowStyle : buttonRowStyle}>
-          {[
-            ["all", "全部"],
-            ["automation", "自动化"],
-            ["one_off", "单次任务"],
-          ].map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              style={filterChipStyle(filter === key)}
-              onClick={() => onFilterChange(key as "all" | TaskKind)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div style={listColumnStyle}>
-        {tasks.map((task) => (
-          <article key={task.id} style={isMobile ? mobileTaskCardStyle : taskCardStyle}>
-            <div style={isMobile ? mobileTaskCardTopStyle : taskCardTopStyle}>
-              <div>
-                <div style={mutedMetaStyle}>{task.id}</div>
-                <div style={sectionTitleSmallStyle}>{task.title}</div>
-              </div>
-              <div style={isMobile ? mobileTaskBadgeRowStyle : buttonRowStyle}>
-                <span style={kindBadgeStyle(task.kind)}>{task.kind === "automation" ? "自动化" : "单次"}</span>
-                <span style={statusBadgeStyle(taskStatusTone(task.status))}>{taskStatusLabel(task.status)}</span>
-              </div>
-            </div>
-            <div style={sectionTextStyle}>{task.summary}</div>
-            <div style={progressTrackStyle}>
-              <div style={{ ...progressFillStyle, width: `${task.progress}%`, background: progressColor(task.status) }} />
-            </div>
-            <div style={isMobile ? mobileTaskFooterStyle : taskFooterStyle}>
-              <span style={mutedMetaStyle}>
-                {task.source} · {task.updatedAt}
-              </span>
-              <button type="button" style={textButtonStyle} onClick={() => onTaskAction(task)}>
-                {task.action}
-              </button>
-            </div>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
->>>>>>> Stashed changes
 function workspaceMessageToApiMessage(message: WorkspaceConversationMessage): ChatMessage {
   return { role: message.role, content: message.text };
 }
@@ -3053,23 +2758,16 @@ const mobileSurfaceCardStyle: CSSProperties = {
   borderRadius: 12,
 };
 const sectionHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 16 };
-<<<<<<< Updated upstream
-const sectionTitleStyle: CSSProperties = { fontSize: 18, fontWeight: 700, color: shopifyUi.text, letterSpacing: "-0.01em" };
-const sectionTitleSmallStyle: CSSProperties = { fontSize: 15, fontWeight: 700, color: shopifyUi.text };
-const sectionTextStyle: CSSProperties = { fontSize: 14, color: shopifyUi.textSecondary, lineHeight: 1.6 };
-const mutedMetaStyle: CSSProperties = { fontSize: 12, color: shopifyUi.textMuted };
-=======
 const mobileSectionHeaderStyle: CSSProperties = {
   ...sectionHeaderStyle,
   flexDirection: "column",
   gap: 10,
   marginBottom: 12,
 };
-const sectionTitleStyle: CSSProperties = { fontSize: 18, fontWeight: 700, color: "#202223", letterSpacing: "-0.01em" };
-const sectionTitleSmallStyle: CSSProperties = { fontSize: 15, fontWeight: 700, color: "#202223" };
-const sectionTextStyle: CSSProperties = { fontSize: 14, color: "#61666c", lineHeight: 1.6 };
-const mutedMetaStyle: CSSProperties = { fontSize: 12, color: "#8c9196" };
->>>>>>> Stashed changes
+const sectionTitleStyle: CSSProperties = { fontSize: 18, fontWeight: 700, color: shopifyUi.text, letterSpacing: "-0.01em" };
+const sectionTitleSmallStyle: CSSProperties = { fontSize: 15, fontWeight: 700, color: shopifyUi.text };
+const sectionTextStyle: CSSProperties = { fontSize: 14, color: shopifyUi.textSecondary, lineHeight: 1.6 };
+const mutedMetaStyle: CSSProperties = { fontSize: 12, color: shopifyUi.textMuted };
 
 const metricGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16 };
 const mobileMetricGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 };
@@ -3341,13 +3039,6 @@ const toolModalCloseStyle: CSSProperties = {
   cursor: "pointer",
   flexShrink: 0,
 };
-<<<<<<< Updated upstream
-=======
-const objectToolbarStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 160px", gap: 12, alignItems: "end" };
-const mobileObjectToolbarStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr", gap: 10, alignItems: "stretch" };
-const objectSearchFieldWrapStyle: CSSProperties = { minWidth: 0 };
-const sortFieldWrapStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 6 };
->>>>>>> Stashed changes
 const filterChipRowStyle: CSSProperties = { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 };
 const mockCreateBoxStyle: CSSProperties = {
   display: "flex",
@@ -3359,11 +3050,6 @@ const mockCreateBoxStyle: CSSProperties = {
   background: "#fafbfb",
   marginBottom: 14,
 };
-<<<<<<< Updated upstream
-=======
-const uploadHeaderRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" };
-const mobileUploadHeaderRowStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 10, alignItems: "stretch" };
->>>>>>> Stashed changes
 const inlineFieldRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 10, alignItems: "center" };
 const mobileInlineFieldRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr", gap: 10, alignItems: "stretch" };
 const compactFieldStyle: CSSProperties = {
@@ -3410,21 +3096,18 @@ const skillGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "r
 const mobileSkillGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr", gap: 12 };
 const skillCardStyle: CSSProperties = { padding: 18, borderRadius: 14, border: "1px solid #e1e3e5", background: "#ffffff", display: "flex", flexDirection: "column", gap: 10 };
 const skillCardButtonStyle: CSSProperties = { ...skillCardStyle, width: "100%", textAlign: "left", cursor: "pointer" };
-<<<<<<< Updated upstream
 const skillCardButtonDisabledStyle: CSSProperties = {
   ...skillCardButtonStyle,
   cursor: "not-allowed",
   opacity: 0.72,
   background: "#fafbfb",
 };
-=======
 const mobileSkillCardButtonStyle: CSSProperties = { ...skillCardButtonStyle, padding: 14, borderRadius: 12 };
->>>>>>> Stashed changes
 const skillCategoryStyle: CSSProperties = { fontSize: 12, fontWeight: 700, color: "#6d7175" };
 const skillFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 };
 
 const buttonRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 10 };
-<<<<<<< Updated upstream
+const mobileButtonRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr", gap: 8, width: "100%" };
 const primaryButtonStyle: CSSProperties = {
   border: `1px solid ${shopifyUi.primary}`,
   borderRadius: shopifyUi.radiusControl,
@@ -3455,12 +3138,6 @@ const textButtonStyle: CSSProperties = {
   cursor: "pointer",
 };
 const disabledTextButtonStyle: CSSProperties = { ...textButtonStyle, color: "#8c9196", cursor: "not-allowed" };
-=======
-const mobileButtonRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr", gap: 8, width: "100%" };
-const primaryButtonStyle: CSSProperties = { border: "1px solid #202223", borderRadius: 10, background: "#202223", color: "#ffffff", padding: "10px 14px", fontSize: 14, fontWeight: 600, cursor: "pointer" };
-const ghostButtonStyle: CSSProperties = { border: "1px solid #c9cdd2", borderRadius: 10, background: "#ffffff", color: "#202223", padding: "10px 14px", fontSize: 14, fontWeight: 600, cursor: "pointer" };
-const textButtonStyle: CSSProperties = { border: "none", background: "transparent", color: "#005bd3", padding: 0, fontSize: 13, fontWeight: 600, cursor: "pointer" };
->>>>>>> Stashed changes
 
 const tabRowStyle: CSSProperties = { display: "flex", gap: 8, marginBottom: 16 };
 const mobileTabRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr", gap: 8, marginBottom: 14 };
@@ -3487,27 +3164,6 @@ const filterChipStyle = (active: boolean): CSSProperties => ({
   fontWeight: 600,
   cursor: "pointer",
 });
-<<<<<<< Updated upstream
-=======
-const taskCardStyle: CSSProperties = { padding: 16, borderRadius: 14, border: "1px solid #e1e3e5", background: "#ffffff", display: "flex", flexDirection: "column", gap: 12 };
-const mobileTaskCardStyle: CSSProperties = { ...taskCardStyle, padding: 14, borderRadius: 12, gap: 10 };
-const taskCardTopStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 };
-const mobileTaskCardTopStyle: CSSProperties = { ...taskCardTopStyle, flexDirection: "column", gap: 10 };
-const progressTrackStyle: CSSProperties = { height: 8, borderRadius: 999, background: "#e5e7eb", overflow: "hidden" };
-const progressFillStyle: CSSProperties = { height: "100%", borderRadius: 999 };
-const taskFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 };
-const mobileTaskFooterStyle: CSSProperties = { ...taskFooterStyle, flexDirection: "column", alignItems: "flex-start", gap: 8 };
-const mobileTaskBadgeRowStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: 8 };
-
-const kindBadgeStyle = (kind: TaskKind): CSSProperties => ({
-  padding: "4px 10px",
-  borderRadius: 999,
-  background: kind === "automation" ? "#f1f8ff" : "#f1f2f3",
-  color: kind === "automation" ? "#005bd3" : "#61666c",
-  fontSize: 12,
-  fontWeight: 600,
-});
->>>>>>> Stashed changes
 const statusBadgeStyle = (tone: "positive" | "warning" | "critical" | "neutral"): CSSProperties => ({
   padding: "4px 10px",
   borderRadius: 999,

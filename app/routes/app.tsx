@@ -33,7 +33,8 @@ const NAV_ITEMS: Record<
       | "nav.productImprove"
       | "nav.imageStudio"
       | "nav.billing"
-      | "nav.orderMonitor";
+      | "nav.orderMonitor"
+      | "nav.dailyOperations";
   }
 > = {
   chat: { href: "/app", labelKey: "nav.aiAssistant" },
@@ -56,6 +57,10 @@ const NAV_ITEMS: Record<
     labelKey: "nav.imageStudio",
   },
   "order-monitor": { href: "/app/order-monitor", labelKey: "nav.orderMonitor" },
+  "daily-operations": {
+    href: "/app/daily-operations",
+    labelKey: "nav.dailyOperations",
+  },
   billing: { href: "/app/billing", labelKey: "nav.billing" },
 };
 

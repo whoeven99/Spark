@@ -7,6 +7,7 @@ export type NavItemKey =
   | "picture-translate"
   | "generate-image"
   | "order-monitor"
+  | "daily-operations"
   | "billing";
 
 type AppShellConfig = {
@@ -23,6 +24,7 @@ const DEFAULT_APP_SHELL_CONFIG = {
     "product-improve",
     "image-studio",
     "order-monitor",
+    "daily-operations",
     "billing",
   ],
 } as const satisfies AppShellConfig;
