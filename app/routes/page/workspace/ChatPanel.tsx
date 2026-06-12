@@ -18,6 +18,8 @@ import type {
   Conversation,
   WorkspaceConversationMessage,
 } from "./types";
+import type { AITaskStatus } from "../../../lib/aiTaskTypes";
+import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import type { WorkspaceContextController } from "./useWorkspaceContext";
 import {
   buttonRowStyle,
@@ -74,8 +76,9 @@ export function ChatPanel({
   onSend,
   onAbortStream,
   onTranslationCardSuccess,
-  onPictureTranslateCardSuccess,
-  onImageGenerationCardSuccess,
+  onAiTaskUpdated,
+  onOpenTasks,
+  onTaskProposalExecuted,
 }: {
   conversation: Conversation;
   messages: WorkspaceConversationMessage[];
@@ -91,16 +94,15 @@ export function ChatPanel({
     messageIndex: number,
     detail: { jobId?: string; jobIds?: string[]; message: string },
   ) => void;
-  onPictureTranslateCardSuccess: (
+  onAiTaskUpdated: (
     conversationId: string,
-    messageIndex: number,
-    detail: { taskId: string; batchId: string },
+    taskId: string,
+    status: AITaskStatus,
+    result?: Record<string, unknown>,
   ) => void;
-  onImageGenerationCardSuccess: (
-    conversationId: string,
-    messageIndex: number,
-    detail: { taskId: string; batchId: string },
-  ) => void;
+  onOpenTasks: () => void;
+  /** TaskProposal 执行成功：向对话追加「任务已开始」新一轮 */
+  onTaskProposalExecuted: (conversationId: string, run: TaskRunPayload) => void;
 }) {
   const { isMobile } = useResponsiveLayout();
   const messageListRef = useRef<HTMLDivElement | null>(null);
@@ -117,10 +119,6 @@ export function ChatPanel({
     streamingTranslationForm,
     streamingGenerateCard,
     streamingGeneratePayload,
-    streamingPictureTranslateCard,
-    streamingPictureTranslatePayload,
-    streamingImageGenerationCard,
-    streamingImageGenerationPayload,
     streamingTaskProposal,
     skillSteps,
   } = stream;
@@ -414,23 +412,23 @@ export function ChatPanel({
                   streamingTranslationForm={streamingTranslationForm}
                   streamingGenerateCard={streamingGenerateCard}
                   streamingGeneratePayload={streamingGeneratePayload}
-                  streamingPictureTranslateCard={streamingPictureTranslateCard}
-                  streamingPictureTranslatePayload={streamingPictureTranslatePayload}
-                  streamingImageGenerationCard={streamingImageGenerationCard}
-                  streamingImageGenerationPayload={streamingImageGenerationPayload}
                   streamingTaskProposal={streamingTaskProposal}
                   workspaceBatchProducts={workspaceBatchProducts}
                   workspaceProductQuery={objectQuerySelectionByType.product}
+                  onTaskProposalExecuted={(run) =>
+                    onTaskProposalExecuted(conversation.id, run)
+                  }
                 />
               }
               onTranslationCardSuccess={(messageIndex, detail) =>
                 onTranslationCardSuccess(conversation.id, messageIndex, detail)
               }
-              onPictureTranslateCardSuccess={(messageIndex, detail) =>
-                onPictureTranslateCardSuccess(conversation.id, messageIndex, detail)
+              onAiTaskUpdated={(taskId, status, result) =>
+                onAiTaskUpdated(conversation.id, taskId, status, result)
               }
-              onImageGenerationCardSuccess={(messageIndex, detail) =>
-                onImageGenerationCardSuccess(conversation.id, messageIndex, detail)
+              onOpenTasks={onOpenTasks}
+              onTaskProposalExecuted={(run) =>
+                onTaskProposalExecuted(conversation.id, run)
               }
             />
           </div>

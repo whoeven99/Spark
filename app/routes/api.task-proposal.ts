@@ -109,9 +109,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const i18n = initI18n(locale);
   const t = i18n.t.bind(i18n);
 
-  // 显式 ID 优先；否则按圈定条件在执行期重新求值
+  // 显式 ID 优先；否则按圈定条件在执行期重新求值；无目标对象技能允许空 targets
   let targets = body.targets;
-  if (targets.length === 0) {
+  if (targets.length === 0 && !handler.allowEmptyTargets) {
     if (!body.targetsQuery) {
       return data(
         { ok: false, error: "至少选择 1 个对象，或提供圈定条件" },

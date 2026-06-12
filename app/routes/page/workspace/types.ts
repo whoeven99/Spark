@@ -1,12 +1,12 @@
 /** WorkspaceAppShellPage 拆分出的共享类型与类型守卫。 */
+import type { AITaskItem } from "../../../lib/aiTaskTypes";
 import type {
   ChatMessageAttachment,
   ProductImproveCardPayload,
 } from "../../../lib/chatMessage";
-import type { ImageGenerationFormPayload } from "../../../lib/imageGenerationFormPayload";
-import type { PictureTranslateFormPayload } from "../../../lib/pictureTranslateFormPayload";
 import type { TranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import type { TaskProposalPayload } from "../../../lib/taskProposalPayload";
+import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 
 export type WorkspacePanel = "dashboard" | "chat" | "skills" | "automation" | "tasks";
 export type AutomationView = "configured" | "history" | "templates";
@@ -39,11 +39,9 @@ export type WorkspaceConversationMessage = {
   translationTaskForm?: TranslationTaskFormPayload;
   productImproveCard?: boolean;
   productImproveCardPayload?: ProductImproveCardPayload;
-  pictureTranslateCard?: boolean;
-  pictureTranslateFormPayload?: PictureTranslateFormPayload;
-  imageGenerationCard?: boolean;
-  imageGenerationFormPayload?: ImageGenerationFormPayload;
   taskProposal?: TaskProposalPayload;
+  taskRun?: TaskRunPayload;
+  aiTask?: AITaskItem;
   thinkingContent?: string;
 };
 

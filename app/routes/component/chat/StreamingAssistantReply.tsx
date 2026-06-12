@@ -1,19 +1,16 @@
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
-import type { ImageGenerationFormPayload } from "../../../lib/imageGenerationFormPayload";
-import type { PictureTranslateFormPayload } from "../../../lib/pictureTranslateFormPayload";
 import type { ProductImproveCardPayload } from "../../../lib/chatMessage";
 import type { TranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import type { BatchTaskProduct } from "../../../lib/batchTasksFormPayload";
 import { ChatMessageContent } from "./ChatMessageContent";
 import { ThinkingIndicator, ThinkingPanel } from "./StreamingThinking";
-import { ImageGenerationChatCard } from "./ImageGenerationChatCard";
-import { PictureTranslateChatCard } from "./PictureTranslateChatCard";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
 import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard";
 import { TaskProposalCard } from "./TaskProposalCard";
 import type { TaskProposalPayload } from "../../../lib/taskProposalPayload";
+import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
 import {
   hasStreamingVisualContent,
@@ -29,14 +26,12 @@ type StreamingAssistantReplyProps = {
   streamingTranslationForm?: unknown;
   streamingGenerateCard: boolean;
   streamingGeneratePayload?: unknown;
-  streamingPictureTranslateCard?: boolean;
-  streamingPictureTranslatePayload?: unknown;
-  streamingImageGenerationCard?: boolean;
-  streamingImageGenerationPayload?: unknown;
   streamingTaskProposal?: TaskProposalPayload;
   workspaceBatchProducts?: BatchTaskProduct[];
   /** 工作台按条件圈定的商品 query（TaskProposal 兜底 targets 用） */
   workspaceProductQuery?: ObjectQuerySelection | null;
+  /** TaskProposal 执行成功（向对话追加「任务已开始」新一轮） */
+  onTaskProposalExecuted?: (run: TaskRunPayload) => void;
 };
 
 const assistantBubbleShellStyle: CSSProperties = {
@@ -96,13 +91,10 @@ export function StreamingAssistantReply({
   streamingTranslationForm,
   streamingGenerateCard,
   streamingGeneratePayload,
-  streamingPictureTranslateCard = false,
-  streamingPictureTranslatePayload,
-  streamingImageGenerationCard = false,
-  streamingImageGenerationPayload,
   streamingTaskProposal,
   workspaceBatchProducts = [],
   workspaceProductQuery = null,
+  onTaskProposalExecuted,
 }: StreamingAssistantReplyProps) {
   if (!active) return null;
 
@@ -111,10 +103,6 @@ export function StreamingAssistantReply({
     : undefined;
   const streamingProductImprovePayload =
     streamingGeneratePayload as ProductImproveCardPayload | undefined;
-  const streamingPictureTranslateFormPayload =
-    streamingPictureTranslatePayload as PictureTranslateFormPayload | undefined;
-  const streamingImageGenerationFormPayload =
-    streamingImageGenerationPayload as ImageGenerationFormPayload | undefined;
   const showProductImproveCard =
     streamingGenerateCard &&
     !streamingTaskProposal &&
@@ -124,15 +112,11 @@ export function StreamingAssistantReply({
     skillSteps,
     streamingTranslationForm,
     streamingGenerateCard: showProductImproveCard,
-    streamingPictureTranslateCard,
-    streamingImageGenerationCard,
     streamingTaskProposal,
   });
   const hasEmbeddedCard = Boolean(
     streamingTranslationPayload ||
       showProductImproveCard ||
-      streamingPictureTranslateCard ||
-      streamingImageGenerationCard ||
       streamingTaskProposal,
   );
 
@@ -186,24 +170,6 @@ export function StreamingAssistantReply({
                 </div>
               ) : null}
 
-              {streamingPictureTranslateCard ? (
-                <div style={cardSlotStyle}>
-                  <PictureTranslateChatCard
-                    embedded
-                    initialFormPayload={streamingPictureTranslateFormPayload}
-                  />
-                </div>
-              ) : null}
-
-              {streamingImageGenerationCard ? (
-                <div style={cardSlotStyle}>
-                  <ImageGenerationChatCard
-                    embedded
-                    initialFormPayload={streamingImageGenerationFormPayload}
-                  />
-                </div>
-              ) : null}
-
               {streamingTaskProposal ? (
                 <div style={cardSlotStyle}>
                   <TaskProposalCard
@@ -211,6 +177,7 @@ export function StreamingAssistantReply({
                     proposal={streamingTaskProposal}
                     contextProducts={workspaceBatchProducts}
                     contextProductQuery={workspaceProductQuery}
+                    onExecuted={onTaskProposalExecuted}
                   />
                 </div>
               ) : null}

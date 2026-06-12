@@ -22,10 +22,13 @@ import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopify
 import {
   BATCH_PICTURE_TRANSLATE_SKILL_ID,
   BATCH_PRODUCT_IMPROVE_SKILL_ID,
+  IMAGE_GENERATION_SKILL_ID,
   type TaskProposalExecuteError,
   type TaskProposalTarget,
 } from "../../lib/taskProposalPayload";
 import { selectModelTypeForLanguagePair } from "../../config/pictureTranslateLanguages";
+import { executeImageGenerationRequest } from "../imageGeneration/imageGenerationHttp.server";
+import { resolveImageGenerationProvider } from "../imageGeneration/imageGenerationConfig.server";
 
 export const TASK_PROPOSAL_MAX_TARGETS = 20;
 
@@ -49,6 +52,8 @@ export type TaskProposalExecuteResult = {
 
 export type TaskProposalSkillHandler = {
   skillId: string;
+  /** 无目标对象技能（targets.kind === "none"）：允许 targets 为空直接执行 */
+  allowEmptyTargets?: boolean;
   estimate: (args: { params: Record<string, string> }) => Promise<TaskProposalEstimateResult>;
   execute: (args: {
     admin: ShopifyAdminGraphqlClient;
@@ -164,9 +169,46 @@ const batchPictureTranslateHandler: TaskProposalSkillHandler = {
   },
 };
 
+const imageGenerationHandler: TaskProposalSkillHandler = {
+  skillId: IMAGE_GENERATION_SKILL_ID,
+  allowEmptyTargets: true,
+  estimate: async () => {
+    const imageProvider = resolveImageGenerationProvider() ?? "openai";
+    const bucket = deriveBucket("image_generation", { imageProvider });
+    const [credits, seconds] = await Promise.all([
+      getEstimatedCredits("image_generation", bucket),
+      getEstimatedSeconds("image_generation", bucket),
+    ]);
+    return {
+      perItemCredits: credits > 0 ? credits : null,
+      perItemSeconds: seconds,
+    };
+  },
+  // 计费校验由 executeImageGenerationRequest 内部完成（402 → BillingError）
+  execute: async ({ shop, params }) => {
+    const description = params.description?.trim();
+    if (!description) {
+      throw new Error("请填写图片描述");
+    }
+    const result = await executeImageGenerationRequest({
+      requestId: `task-proposal-${Date.now()}`,
+      sessionShop: shop,
+      description,
+    });
+    if (result.status === 402) {
+      throw new TaskProposalBillingError();
+    }
+    if (!result.body.success) {
+      throw new Error(result.body.errorMsg || "图片生成任务创建失败");
+    }
+    return { taskIds: [result.body.taskId], errors: [] };
+  },
+};
+
 const handlers = new Map<string, TaskProposalSkillHandler>([
   [batchProductImproveHandler.skillId, batchProductImproveHandler],
   [batchPictureTranslateHandler.skillId, batchPictureTranslateHandler],
+  [imageGenerationHandler.skillId, imageGenerationHandler],
 ]);
 
 export function getTaskProposalSkillHandler(

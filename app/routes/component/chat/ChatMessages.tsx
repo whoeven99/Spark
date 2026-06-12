@@ -4,10 +4,12 @@ import type { ChatMessage } from "../../../lib/chatMessage";
 import { ChatMessageContent } from "./ChatMessageContent";
 import { ThinkingReview } from "./StreamingThinking";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
-import { ImageGenerationChatCard } from "./ImageGenerationChatCard";
-import { PictureTranslateChatCard } from "./PictureTranslateChatCard";
 import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard";
 import { TaskProposalCard } from "./TaskProposalCard";
+import { TaskRunChatCard } from "./TaskRunChatCard";
+import type { TaskRunPayload } from "../../../lib/taskRunPayload";
+import { ChatEmbeddedAiTaskCard } from "./ChatEmbeddedAiTaskCard";
+import type { AITaskStatus } from "../../../lib/aiTaskTypes";
 
 type ChatMessagesProps = {
   messages: ChatMessage[];
@@ -16,24 +18,27 @@ type ChatMessagesProps = {
     messageIndex: number,
     detail: { jobId?: string; jobIds?: string[]; message: string },
   ) => void;
-  onPictureTranslateCardSuccess: (
-    messageIndex: number,
-    detail: { taskId: string; batchId: string },
+  onAiTaskUpdated?: (
+    taskId: string,
+    status: AITaskStatus,
+    result?: Record<string, unknown>,
   ) => void;
-  onImageGenerationCardSuccess?: (
-    messageIndex: number,
-    detail: { taskId: string; batchId: string },
-  ) => void;
+  onOpenTasks?: () => void;
+  /** TaskProposal 执行成功（工作台据此向对话追加「任务已开始」新一轮） */
+  onTaskProposalExecuted?: (run: TaskRunPayload) => void;
 };
 
 export function ChatMessages({
   messages,
   streamingSlot,
   onTranslationCardSuccess,
-  onPictureTranslateCardSuccess,
-  onImageGenerationCardSuccess,
+  onAiTaskUpdated,
+  onOpenTasks,
+  onTaskProposalExecuted,
 }: ChatMessagesProps) {
   const { t } = useTranslation();
+  const locationSearch =
+    typeof window !== "undefined" ? window.location.search : "";
   return (
     <s-stack direction="block" gap="base">
       {messages.map((item, index) => {
@@ -45,12 +50,8 @@ export function ChatMessages({
           item.role === "assistant" &&
           Boolean(item.productImproveCard) &&
           !hasTaskProposalCard;
-        const hasPictureTranslateCard =
-          item.role === "assistant" &&
-          (Boolean(item.pictureTranslateCard) || Boolean(item.pictureTranslateFormPayload));
-        const hasImageGenerationCard =
-          item.role === "assistant" &&
-          (Boolean(item.imageGenerationCard) || Boolean(item.imageGenerationFormPayload));
+        const hasAiTaskCard = item.role === "assistant" && Boolean(item.aiTask);
+        const hasTaskRunCard = item.role === "assistant" && Boolean(item.taskRun);
         const imageAttachments =
           item.role === "assistant"
             ? item.attachments?.filter((attachment) => attachment.type === "image") ?? []
@@ -59,9 +60,9 @@ export function ChatMessages({
         const hasEmbeddedCard =
           hasTranslationCard ||
           hasGenerateDescriptionCard ||
-          hasPictureTranslateCard ||
-          hasImageGenerationCard ||
           hasTaskProposalCard ||
+          hasTaskRunCard ||
+          hasAiTaskCard ||
           hasImageAttachments;
 
         const bubbleShellStyle: CSSProperties = {
@@ -173,33 +174,34 @@ export function ChatMessages({
                     </div>
                   ) : null}
 
-                  {hasPictureTranslateCard ? (
-                    <div style={{ marginTop: "0.85rem" }}>
-                      <PictureTranslateChatCard
-                        embedded
-                        initialFormPayload={item.pictureTranslateFormPayload}
-                        onTaskCreated={(taskId, batchId) =>
-                          onPictureTranslateCardSuccess(index, { taskId, batchId })
-                        }
-                      />
-                    </div>
-                  ) : null}
-
-                  {hasImageGenerationCard ? (
-                    <div style={{ marginTop: "0.85rem" }}>
-                      <ImageGenerationChatCard
-                        embedded
-                        initialFormPayload={item.imageGenerationFormPayload}
-                        onTaskCreated={(taskId, batchId) =>
-                          onImageGenerationCardSuccess?.(index, { taskId, batchId })
-                        }
-                      />
-                    </div>
-                  ) : null}
-
                   {hasTaskProposalCard && item.role === "assistant" && item.taskProposal ? (
                     <div style={{ marginTop: "0.85rem" }}>
-                      <TaskProposalCard embedded proposal={item.taskProposal} />
+                      <TaskProposalCard
+                        embedded
+                        proposal={item.taskProposal}
+                        onExecuted={onTaskProposalExecuted}
+                      />
+                    </div>
+                  ) : null}
+
+                  {hasTaskRunCard && item.role === "assistant" && item.taskRun ? (
+                    <div style={{ marginTop: "0.85rem" }}>
+                      <TaskRunChatCard
+                        run={item.taskRun}
+                        locationSearch={locationSearch}
+                        onOpenTasks={onOpenTasks}
+                      />
+                    </div>
+                  ) : null}
+
+                  {hasAiTaskCard && item.role === "assistant" && item.aiTask ? (
+                    <div style={{ marginTop: "0.85rem" }}>
+                      <ChatEmbeddedAiTaskCard
+                        task={item.aiTask}
+                        locationSearch={locationSearch}
+                        onOpenTasks={onOpenTasks}
+                        onTaskUpdated={onAiTaskUpdated}
+                      />
                     </div>
                   ) : null}
                 </s-box>

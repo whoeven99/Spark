@@ -187,13 +187,17 @@ export const PRODUCT_IMPROVE_LANGUAGE_OPTIONS: Array<{ value: string; label: str
 /**
  * 客户端兜底合并：AI 没填 targets 时，用工作台已选商品（或按条件圈定）补全。
  * 优先级：proposal 自带 items > 工作台手动勾选 > 工作台按条件圈定（query）。
+ * 图片翻译类提案补全时，无主图的商品自动标记不可执行。
  */
 export function mergeTaskProposalTargets(
   proposal: TaskProposalPayload,
   contextProducts: Array<{ id: string; title: string; imageUrl?: string | null }>,
   contextProductQuery?: ObjectQuerySelection | null,
 ): TaskProposalPayload {
+  // 无目标对象的技能（如文生图）不做上下文兜底
+  if (proposal.targets.kind === "none") return proposal;
   if (proposal.targets.items.length > 0 || proposal.targets.query) return proposal;
+  const requiresImage = proposal.skillId === BATCH_PICTURE_TRANSLATE_SKILL_ID;
   if (contextProducts.length > 0) {
     return {
       ...proposal,
@@ -203,6 +207,7 @@ export function mergeTaskProposalTargets(
           id: p.id,
           title: p.title,
           imageUrl: p.imageUrl ?? null,
+          ...(requiresImage && !p.imageUrl ? { disabledReason: "无主图" } : {}),
         })),
       },
     };
@@ -238,6 +243,31 @@ export function taskProposalFromBatchTasksPayload(payload: {
     products: payload.products,
     targetLanguage: payload.targetLanguage,
   });
+}
+
+// ─── 文生图（无目标对象技能：targets.kind === "none"，确认参数后直接执行） ────
+
+export const IMAGE_GENERATION_SKILL_ID = "image_generation";
+
+/** 文生图表单 → 提案（旧 open_image_generation_form 卡片的替代）。 */
+export function buildImageGenerationProposal(form: { description?: string }): TaskProposalPayload {
+  return {
+    version: TASK_PROPOSAL_VERSION,
+    proposalId: `tp-${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Date.now()}`,
+    skillId: IMAGE_GENERATION_SKILL_ID,
+    title: "AI 生成商品图片",
+    summary: "根据描述生成一张商品图片，完成后可在任务列表查看与应用。",
+    targets: { kind: "none", items: [] },
+    params: [
+      {
+        key: "description",
+        label: "图片描述",
+        type: "text",
+        value: form.description?.trim() ?? "",
+        placeholder: "描述想要的图片，如：白底极简风格的陶瓷马克杯",
+      },
+    ],
+  };
 }
 
 // ─── 批量图片翻译（阶段 4 第二个走通协议的 Skill） ───────────────────────────
@@ -316,6 +346,41 @@ export function buildBatchPictureTranslateProposal(args: {
       },
     ],
   };
+}
+
+/**
+ * 单图翻译表单 → 提案（旧 open_picture_translate_form 卡片的替代）。
+ * imageUrl 缺失时 targets 为空，由 mergeTaskProposalTargets 用工作台上下文兜底。
+ */
+export function buildSinglePictureTranslateProposal(form: {
+  imageUrl?: string;
+  sourceLanguage?: string;
+  targetLanguage?: string;
+}): TaskProposalPayload {
+  return buildBatchPictureTranslateProposal({
+    products: form.imageUrl
+      ? [{ id: form.imageUrl, title: "对话中的图片", imageUrl: form.imageUrl }]
+      : [],
+    sourceLanguage: form.sourceLanguage,
+    targetLanguage: form.targetLanguage,
+  });
+}
+
+/**
+ * 单商品描述表单 → 提案（旧 open_product_improve_form 卡片的替代）。
+ * productId 缺失时 targets 为空，由工作台上下文兜底。
+ */
+export function buildSingleProductImproveProposal(form: {
+  productId?: string;
+  title?: string;
+  targetLanguage?: string;
+}): TaskProposalPayload {
+  return buildBatchProductImproveProposal({
+    products: form.productId?.trim()
+      ? [{ id: form.productId.trim(), title: form.title?.trim() || "商品" }]
+      : [],
+    targetLanguage: form.targetLanguage,
+  });
 }
 
 /** 由批量商品列表构造「批量商品描述生成」提案（服务端发射 / 客户端工作台兜底共用）。 */

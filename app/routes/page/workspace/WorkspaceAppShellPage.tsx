@@ -8,6 +8,7 @@ import { flushSync } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
+import type { AITaskStatus } from "../../../lib/aiTaskTypes";
 import type { ChatMessage } from "../../../lib/chatMessage";
 import { LanguageSelector } from "../../component/common/LanguageSelector";
 import { UnifiedTaskListPage } from "../../component/unifiedTaskList/UnifiedTaskListPage";
@@ -24,6 +25,7 @@ import {
   dbMessageToUiMessage,
   formatTimeLabel,
   serializeAssistantPayloads,
+  serializeWorkspaceMessagePayloads,
   workspaceMessageToApiMessage,
 } from "./messageTransforms";
 import {
@@ -34,6 +36,7 @@ import {
   type WorkspaceConversationMessage,
   type WorkspacePanel,
 } from "./types";
+import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import { useWorkspaceContext } from "./useWorkspaceContext";
 import {
   accountMenuItemStyle,
@@ -522,20 +525,78 @@ export function WorkspaceAppShellPage({
     });
   };
 
-  const handlePictureTranslateCardSuccess = (
-    _conversationId: string,
-    _messageIndex: number,
-    _detail: { taskId: string; batchId: string },
-  ) => {
-    shopify.toast.show(t("pictureTranslate.submitSuccess"));
+  /**
+   * TaskProposal 确认执行成功：向对话追加一轮「开始执行」交互
+   * （用户侧指令 + 助手侧 TaskRunChatCard），并落库持久化。
+   */
+  const handleTaskProposalExecuted = (conversationId: string, run: TaskRunPayload) => {
+    const userText = `开始执行：${run.title}（${run.taskIds.length} 个任务）`;
+    const assistantText =
+      run.errors.length > 0
+        ? `已创建 ${run.taskIds.length} 个任务（${run.errors.length} 个对象创建失败），进度见下方卡片与任务列表。`
+        : `已创建 ${run.taskIds.length} 个任务，进度见下方卡片与任务列表。`;
+    const userMessage: WorkspaceConversationMessage = {
+      role: "user",
+      text: userText,
+      time: "刚刚",
+    };
+    const assistantMessage: WorkspaceConversationMessage = {
+      role: "assistant",
+      text: assistantText,
+      time: "刚刚",
+      taskRun: run,
+    };
+
+    setMessagesByConversation((current) => ({
+      ...current,
+      [conversationId]: [...(current[conversationId] ?? []), userMessage, assistantMessage],
+    }));
+
+    const authQuery = typeof window !== "undefined" ? window.location.search : "";
+    fetch(`/api/conversations/${conversationId}${authQuery}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [
+          { role: "user", content: userText },
+          {
+            role: "assistant",
+            content: assistantText,
+            payloads: serializeWorkspaceMessagePayloads(assistantMessage),
+          },
+        ],
+        preview: userText,
+      }),
+    }).catch((err) =>
+      console.error("[WorkspaceAppShellPage] persist task run messages failed:", err),
+    );
   };
 
-  const handleImageGenerationCardSuccess = (
-    _conversationId: string,
-    _messageIndex: number,
-    _detail: { taskId: string; batchId: string },
+  const handleAiTaskUpdated = (
+    conversationId: string,
+    taskId: string,
+    status: AITaskStatus,
+    result?: Record<string, unknown>,
   ) => {
-    shopify.toast.show(t("imageGeneration.submitSuccess"));
+    setMessagesByConversation((current) => ({
+      ...current,
+      [conversationId]: (current[conversationId] ?? []).map((message) => {
+        if (message.aiTask?.id !== taskId) return message;
+        return {
+          ...message,
+          aiTask: {
+            ...message.aiTask,
+            status,
+            result: result ?? message.aiTask.result,
+            completedAt:
+              status !== "running" && !message.aiTask.completedAt
+                ? new Date().toISOString()
+                : message.aiTask.completedAt,
+            updatedAt: new Date().toISOString(),
+          },
+        };
+      }),
+    }));
   };
 
   useEffect(() => {
@@ -735,8 +796,9 @@ export function WorkspaceAppShellPage({
               abortStream();
             }}
             onTranslationCardSuccess={handleTranslationCardSuccess}
-            onPictureTranslateCardSuccess={handlePictureTranslateCardSuccess}
-            onImageGenerationCardSuccess={handleImageGenerationCardSuccess}
+            onAiTaskUpdated={handleAiTaskUpdated}
+            onOpenTasks={() => switchPanel("tasks")}
+            onTaskProposalExecuted={handleTaskProposalExecuted}
           />
         ) : null}
         {activePanel === "skills" ? <SkillsPanel onOpenTool={(path: string) => navigate(path)} /> : null}

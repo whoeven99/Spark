@@ -16,6 +16,7 @@ import { mergeTaskProposalTargets } from "../../../lib/taskProposalPayload";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
 import { describeObjectQuery } from "../../../lib/objectQuerySpec";
 import type { BatchTaskProduct } from "../../../lib/batchTasksFormPayload";
+import { buildTaskRunPayload, type TaskRunPayload } from "../../../lib/taskRunPayload";
 import { pageColorTokens } from "../../page/pageUiStyles";
 
 // ─── Styles（与 BatchTasksChatCard 视觉对齐） ────────────────────────────────
@@ -250,6 +251,8 @@ type Props = {
   /** 工作台按条件圈定的商品 query；items 与手动选择都为空时兜底 */
   contextProductQuery?: ObjectQuerySelection | null;
   onTasksCreated?: (taskIds: string[]) => void;
+  /** 执行成功后回调（工作台用于向对话追加「任务已开始」新一轮） */
+  onExecuted?: (run: TaskRunPayload) => void;
 };
 
 export function TaskProposalCard({
@@ -258,6 +261,7 @@ export function TaskProposalCard({
   contextProducts = [],
   contextProductQuery = null,
   onTasksCreated,
+  onExecuted,
 }: Props) {
   const resolved = useMemo(
     () => mergeTaskProposalTargets(proposal, contextProducts, contextProductQuery),
@@ -267,6 +271,8 @@ export function TaskProposalCard({
   /** 按条件圈定模式：无具体 items 时按 query 执行（服务端重新求值） */
   const targetsQuery = targets.length === 0 ? (resolved.targets.query ?? null) : null;
   const queryCount = targetsQuery?.matchCount ?? null;
+  /** 无目标对象技能（如文生图）：确认参数后直接执行一次 */
+  const targetless = resolved.targets.kind === "none";
 
   const [checkedIds, setCheckedIds] = useState<Set<string>>(
     () => new Set(targets.filter((t) => !t.disabledReason).map((t) => t.id)),
@@ -325,9 +331,10 @@ export function TaskProposalCard({
   const selectedTargets = targets.filter(
     (t) => checkedIds.has(t.id) && !t.disabledReason,
   );
-  const canSubmit = (selectedTargets.length > 0 || targetsQuery !== null) && !submitting && !done;
-  /** 估算/文案用的目标数量：query 模式用圈定时的匹配数快照 */
-  const effectiveCount = targetsQuery ? (queryCount ?? 0) : selectedTargets.length;
+  const canSubmit =
+    (targetless || selectedTargets.length > 0 || targetsQuery !== null) && !submitting && !done;
+  /** 估算/文案用的目标数量：query 模式用圈定时的匹配数快照；无目标技能恒为 1 */
+  const effectiveCount = targetless ? 1 : targetsQuery ? (queryCount ?? 0) : selectedTargets.length;
 
   const toggleTarget = (target: TaskProposalTarget) => {
     if (target.disabledReason) return;
@@ -375,7 +382,22 @@ export function TaskProposalCard({
       if (json.ok) {
         setDoneCreated(json.created);
         setDoneErrors(json.errors);
-        if (json.taskIds.length > 0) onTasksCreated?.(json.taskIds);
+        if (json.taskIds.length > 0) {
+          onTasksCreated?.(json.taskIds);
+          onExecuted?.(
+            buildTaskRunPayload({
+              skillId: resolved.skillId,
+              title: resolved.title,
+              taskIds: json.taskIds,
+              errors: json.errors.map((e) => ({ targetId: e.targetId, error: e.error })),
+              paramsSummary: resolved.params.map((field) => {
+                const value = paramValues[field.key] ?? field.value;
+                const optionLabel = field.options?.find((o) => o.value === value)?.label;
+                return `${field.label}：${optionLabel ?? value}`;
+              }),
+            }),
+          );
+        }
       } else {
         setDoneCreated(0);
         setDoneErrors([{ index: 0, targetId: "", error: json.error }]);
@@ -389,7 +411,7 @@ export function TaskProposalCard({
       setSubmitting(false);
       setDone(true);
     }
-  }, [canSubmit, resolved.skillId, paramValues, selectedTargets, targetsQuery, onTasksCreated]);
+  }, [canSubmit, resolved, paramValues, selectedTargets, targetsQuery, onTasksCreated, onExecuted]);
 
   const targetKindLabel =
     resolved.targets.kind === "products"
@@ -419,18 +441,24 @@ export function TaskProposalCard({
         <span style={{ fontSize: 12, color: pageColorTokens.textSecondary, flex: 1 }}>
           {done
             ? "已提交"
-            : targets.length > 0
-              ? `${targets.length} 个${targetKindLabel} · 确认后批量创建`
-              : targetsQuery
-                ? `按条件圈定${queryCount != null ? ` · 约 ${queryCount} 个${targetKindLabel}` : ""} · 执行时重新求值`
-                : "等待补充操作对象"}
+            : targetless
+              ? "确认参数后开始执行"
+              : targets.length > 0
+                ? `${targets.length} 个${targetKindLabel} · 确认后批量创建`
+                : targetsQuery
+                  ? `按条件圈定${queryCount != null ? ` · 约 ${queryCount} 个${targetKindLabel}` : ""} · 执行时重新求值`
+                  : "等待补充操作对象"}
         </span>
       </div>
 
       {done ? (
         <DoneState
           created={doneCreated}
-          total={targetsQuery ? doneCreated + doneErrors.length : selectedTargets.length}
+          total={
+            targetsQuery || targetless
+              ? doneCreated + doneErrors.length
+              : selectedTargets.length
+          }
           errors={doneErrors}
         />
       ) : (
@@ -502,7 +530,7 @@ export function TaskProposalCard({
                   })}
                 </div>
               </div>
-            ) : targetsQuery ? (
+            ) : targetless ? null : targetsQuery ? (
               <div
                 style={{
                   fontSize: 12,
@@ -589,11 +617,13 @@ export function TaskProposalCard({
                 flex: 1,
               }}
             >
-              {targetsQuery
-                ? `将按条件创建任务${queryCount != null ? `（约 ${queryCount} 个）` : ""}`
-                : selectedTargets.length === 0
-                  ? "请至少勾选 1 个对象"
-                  : `将创建 ${selectedTargets.length} 个任务`}
+              {targetless
+                ? "将创建 1 个任务"
+                : targetsQuery
+                  ? `将按条件创建任务${queryCount != null ? `（约 ${queryCount} 个）` : ""}`
+                  : selectedTargets.length === 0
+                    ? "请至少勾选 1 个对象"
+                    : `将创建 ${selectedTargets.length} 个任务`}
             </span>
             <button
               type="button"
@@ -603,9 +633,11 @@ export function TaskProposalCard({
             >
               {submitting
                 ? "创建中…"
-                : targetsQuery
-                  ? "按条件确认创建"
-                  : `确认创建 ${selectedTargets.length} 个任务`}
+                : targetless
+                  ? "确认开始执行"
+                  : targetsQuery
+                    ? "按条件确认创建"
+                    : `确认创建 ${selectedTargets.length} 个任务`}
             </button>
           </div>
         </>

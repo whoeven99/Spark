@@ -9,9 +9,12 @@ import { coercePictureTranslateFormPayload } from "../../../lib/pictureTranslate
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import { coerceBatchTasksFormPayload } from "../../../lib/batchTasksFormPayload";
 import {
+  buildImageGenerationProposal,
+  buildSinglePictureTranslateProposal,
   coerceTaskProposalPayload,
   taskProposalFromBatchTasksPayload,
 } from "../../../lib/taskProposalPayload";
+import { coerceTaskRunPayload } from "../../../lib/taskRunPayload";
 import type { SelectedShopifyObject } from "../../../lib/shopifyObjectTypes";
 import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
 import {
@@ -52,19 +55,9 @@ export function workspaceMessageToChatMessage(message: WorkspaceConversationMess
     ...(message.productImproveCardPayload
       ? { productImproveCardPayload: message.productImproveCardPayload }
       : {}),
-    ...(message.pictureTranslateCard || message.pictureTranslateFormPayload
-      ? { pictureTranslateCard: true }
-      : {}),
-    ...(message.pictureTranslateFormPayload
-      ? { pictureTranslateFormPayload: message.pictureTranslateFormPayload }
-      : {}),
-    ...(message.imageGenerationCard || message.imageGenerationFormPayload
-      ? { imageGenerationCard: true }
-      : {}),
-    ...(message.imageGenerationFormPayload
-      ? { imageGenerationFormPayload: message.imageGenerationFormPayload }
-      : {}),
     ...(message.taskProposal ? { taskProposal: message.taskProposal } : {}),
+    ...(message.taskRun ? { taskRun: message.taskRun } : {}),
+    ...(message.aiTask ? { aiTask: message.aiTask } : {}),
     ...(message.thinkingContent ? { thinkingContent: message.thinkingContent } : {}),
   };
 }
@@ -78,16 +71,6 @@ export function buildAssistantWorkspaceMessage(
     : undefined;
   const hasProductImproveCard =
     payload.productImproveCard || Boolean(payload.productImproveCardPayload);
-  const pictureTranslateFormPayload = payload.pictureTranslateFormPayload
-    ? coercePictureTranslateFormPayload(payload.pictureTranslateFormPayload)
-    : undefined;
-  const hasPictureTranslateCard =
-    payload.pictureTranslateCard || Boolean(pictureTranslateFormPayload);
-  const imageGenerationFormPayload = payload.imageGenerationFormPayload
-    ? coerceImageGenerationFormPayload(payload.imageGenerationFormPayload)
-    : undefined;
-  const hasImageGenerationCard =
-    payload.imageGenerationCard || Boolean(imageGenerationFormPayload);
 
   return {
     role: "assistant",
@@ -98,14 +81,6 @@ export function buildAssistantWorkspaceMessage(
     ...(hasProductImproveCard ? { productImproveCard: true } : {}),
     ...(payload.productImproveCardPayload
       ? { productImproveCardPayload: payload.productImproveCardPayload as ProductImproveCardPayload }
-      : {}),
-    ...(hasPictureTranslateCard ? { pictureTranslateCard: true } : {}),
-    ...(pictureTranslateFormPayload
-      ? { pictureTranslateFormPayload }
-      : {}),
-    ...(hasImageGenerationCard ? { imageGenerationCard: true } : {}),
-    ...(imageGenerationFormPayload
-      ? { imageGenerationFormPayload }
       : {}),
     ...(payload.taskProposal ? { taskProposal: payload.taskProposal } : {}),
     ...(payload.thinkingContent ? { thinkingContent: payload.thinkingContent } : {}),
@@ -145,25 +120,28 @@ export function serializeAssistantPayloads(payload: ChatStreamFinishPayload): st
     result.productImproveCard = true;
     if (payload.productImproveCardPayload) result.productImproveCardPayload = payload.productImproveCardPayload;
   }
-  if (payload.pictureTranslateCard || payload.pictureTranslateFormPayload) {
-    result.pictureTranslateCard = true;
-    if (payload.pictureTranslateFormPayload) {
-      result.pictureTranslateFormPayload = coercePictureTranslateFormPayload(
-        payload.pictureTranslateFormPayload,
-      );
-    }
-  }
-  if (payload.imageGenerationCard || payload.imageGenerationFormPayload) {
-    result.imageGenerationCard = true;
-    if (payload.imageGenerationFormPayload) {
-      result.imageGenerationFormPayload = coerceImageGenerationFormPayload(
-        payload.imageGenerationFormPayload,
-      );
-    }
-  }
   if (payload.taskProposal) {
     result.taskProposal = payload.taskProposal;
   }
+  return Object.keys(result).length > 0 ? JSON.stringify(result) : null;
+}
+
+export function serializeWorkspaceMessagePayloads(
+  message: WorkspaceConversationMessage,
+): string | null {
+  const result: Record<string, unknown> = {};
+  if (message.translationTaskForm) result.translationTaskForm = message.translationTaskForm;
+  if (message.attachments?.length) result.attachments = message.attachments;
+  if (message.productImproveCard || message.productImproveCardPayload) {
+    result.productImproveCard = true;
+    if (message.productImproveCardPayload) {
+      result.productImproveCardPayload = message.productImproveCardPayload;
+    }
+  }
+  if (message.taskProposal) result.taskProposal = message.taskProposal;
+  if (message.taskRun) result.taskRun = message.taskRun;
+  if (message.aiTask) result.aiTask = message.aiTask;
+  if (message.thinkingContent) result.thinkingContent = message.thinkingContent;
   return Object.keys(result).length > 0 ? JSON.stringify(result) : null;
 }
 
@@ -187,27 +165,7 @@ export function dbMessageToUiMessage(msg: {
     ...(extras.productImproveCardPayload
       ? { productImproveCardPayload: extras.productImproveCardPayload as ProductImproveCardPayload }
       : {}),
-    ...(extras.pictureTranslateCard || extras.pictureTranslateFormPayload
-      ? { pictureTranslateCard: true }
-      : {}),
-    ...(extras.pictureTranslateFormPayload
-      ? {
-          pictureTranslateFormPayload: coercePictureTranslateFormPayload(
-            extras.pictureTranslateFormPayload,
-          ),
-        }
-      : {}),
-    ...(extras.imageGenerationCard || extras.imageGenerationFormPayload
-      ? { imageGenerationCard: true }
-      : {}),
-    ...(extras.imageGenerationFormPayload
-      ? {
-          imageGenerationFormPayload: coerceImageGenerationFormPayload(
-            extras.imageGenerationFormPayload,
-          ),
-        }
-      : {}),
-    // taskProposal 优先；旧 batchTasksFormPayload（历史落库消息）统一转为通用提案卡
+    // taskProposal 优先；旧批量/单图翻译/文生图卡片（历史落库消息）统一转为通用提案卡
     ...(() => {
       if (extras.taskProposal) {
         const proposal = coerceTaskProposalPayload(extras.taskProposal);
@@ -219,8 +177,32 @@ export function dbMessageToUiMessage(msg: {
         );
         if (proposal) return { taskProposal: proposal };
       }
+      if (extras.pictureTranslateCard || extras.pictureTranslateFormPayload) {
+        return {
+          taskProposal: buildSinglePictureTranslateProposal(
+            coercePictureTranslateFormPayload(extras.pictureTranslateFormPayload ?? {}),
+          ),
+        };
+      }
+      if (extras.imageGenerationCard || extras.imageGenerationFormPayload) {
+        return {
+          taskProposal: buildImageGenerationProposal(
+            coerceImageGenerationFormPayload(extras.imageGenerationFormPayload ?? {}),
+          ),
+        };
+      }
       return {};
     })(),
+    ...(() => {
+      const run = extras.taskRun ? coerceTaskRunPayload(extras.taskRun) : null;
+      return run ? { taskRun: run } : {};
+    })(),
+    ...(extras.aiTask && typeof extras.aiTask === "object"
+      ? { aiTask: extras.aiTask as WorkspaceConversationMessage["aiTask"] }
+      : {}),
+    ...(typeof extras.thinkingContent === "string"
+      ? { thinkingContent: extras.thinkingContent }
+      : {}),
   };
 }
 
