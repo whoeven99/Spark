@@ -6,6 +6,14 @@ import { createTranslationV4Tasks } from "../../lib/createTranslationV4Tasks";
 import { trackFeature } from "../../lib/featureTrack";
 import { dedupeTranslationV4JobsByLocalePair } from "../../lib/dedupeTranslationV4JobsByLocalePair";
 import { formatEstimatedDuration } from "../../lib/formatDuration";
+import { getTranslationModuleLabel } from "../../lib/translationModuleLabels";
+import {
+  AUTOMATION_FREQUENCY_OPTIONS,
+  persistTranslationAutomationItems,
+  readTranslationAutomationItems,
+  type AutomationFrequency,
+  type TranslationAutomationItem,
+} from "../../lib/translationV4Automation";
 import {
   formatCreateTasksToast,
   resolveValidationErrorMessage,
@@ -279,6 +287,47 @@ function estimateTranslationConfirmMetrics(params: {
   };
 }
 
+function formatAutomationFrequencyLabel(frequency: AutomationFrequency): string {
+  return (
+    AUTOMATION_FREQUENCY_OPTIONS.find((option) => option.value === frequency)?.label ?? "1 天 / 次"
+  );
+}
+
+function formatAutomationTargetsSummary(
+  automation: TranslationAutomationItem,
+  displayLanguage: string,
+  localeLabelMap: Record<string, string>,
+): string {
+  const sourceDisplay = formatLocaleDisplayName(
+    automation.source,
+    displayLanguage,
+    localeLabelMap,
+  );
+  if (!automation.targets.length) {
+    return `${sourceDisplay} -> 暂无目标语言`;
+  }
+  const firstTarget = formatLocaleDisplayName(
+    automation.targets[0],
+    displayLanguage,
+    localeLabelMap,
+  );
+  if (automation.targets.length === 1) {
+    return `${sourceDisplay} -> ${firstTarget}`;
+  }
+  return `${sourceDisplay} -> ${firstTarget} 等 ${automation.targets.length} 种语言`;
+}
+
+function formatAutomationModulesSummary(
+  modules: string[],
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  if (!modules.length) return "未选择模块";
+  if (modules.length <= 3) {
+    return modules.map((module) => getTranslationModuleLabel(module, t)).join("、");
+  }
+  return `${getTranslationModuleLabel(modules[0], t)} 等 ${modules.length} 个模块`;
+}
+
 export function TranslationV4Page() {
   const shopify = useAppBridge();
   const { t, i18n } = useTranslation();
@@ -315,6 +364,10 @@ export function TranslationV4Page() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(false);
+  const [automationModules, setAutomationModules] = useState<string[]>([]);
+  const [automationFrequency, setAutomationFrequency] = useState<AutomationFrequency>("DAILY");
+  const [automationItems, setAutomationItems] = useState<TranslationAutomationItem[]>([]);
   const [setupGuideVisible, setSetupGuideVisible] = useState(true);
   const [setupGuideState, setSetupGuideState] = useState<SetupGuideState>({
     loading: true,
@@ -360,6 +413,10 @@ export function TranslationV4Page() {
     ]);
   }, [loaderData.shopLocales, sourceLabel, sourceLocale]);
   const displayLanguage = i18n.resolvedLanguage ?? i18n.language ?? "zh-CN";
+  const automationModulesSummary = useMemo(
+    () => formatAutomationModulesSummary(automationModules, t),
+    [automationModules, t],
+  );
   const confirmEstimation = useMemo(
     () =>
       estimateTranslationConfirmMetrics({
@@ -401,8 +458,36 @@ export function TranslationV4Page() {
             ? "随实际数据量变化"
             : `${confirmEstimation.credits.toLocaleString()} 积分`,
       },
+      ...(autoUpdateEnabled
+        ? [
+            {
+              key: "automationModules",
+              label: "自动更新模块",
+              value: automationModulesSummary,
+            },
+            {
+              key: "automationSchedule",
+              label: "更新时机",
+              value: formatAutomationFrequencyLabel(automationFrequency),
+            },
+          ]
+        : []),
     ],
-    [confirmEstimation.credits, confirmEstimation.seconds, displayLanguage, isCover, isHandle, localeLabelMap, modules, sourceLocale, t, targetLocales],
+    [
+      autoUpdateEnabled,
+      automationFrequency,
+      automationModulesSummary,
+      confirmEstimation.credits,
+      confirmEstimation.seconds,
+      displayLanguage,
+      isCover,
+      isHandle,
+      localeLabelMap,
+      modules,
+      sourceLocale,
+      t,
+      targetLocales,
+    ],
   );
   const styleSetupComplete = setupGuideState.profileReady && setupGuideState.glossaryReady;
   const translationSetupComplete = useMemo(
@@ -457,6 +542,18 @@ export function TranslationV4Page() {
     const hidden = window.localStorage.getItem(setupGuideStorageKey) === "1";
     if (hidden) setSetupGuideVisible(false);
   }, [setupGuideStorageKey]);
+
+  useEffect(() => {
+    setAutomationItems(readTranslationAutomationItems(shopName));
+  }, [shopName]);
+
+  const saveAutomationItems = useCallback(
+    (items: TranslationAutomationItem[]) => {
+      setAutomationItems(items);
+      persistTranslationAutomationItems(shopName, items);
+    },
+    [shopName],
+  );
 
   const applyOptimisticPatch = useCallback(
     (taskId: string, job: TranslationV4Job, patch: OptimisticJobPatch) => {
@@ -582,6 +679,10 @@ export function TranslationV4Page() {
       setFormError("至少选择一个模块");
       return false;
     }
+    if (autoUpdateEnabled && !automationModules.length) {
+      setFormError("请至少选择一个自动更新模块");
+      return false;
+    }
     return true;
   };
 
@@ -628,6 +729,22 @@ export function TranslationV4Page() {
       }
 
       if (result.created.length) {
+        if (autoUpdateEnabled) {
+          const now = new Date().toISOString();
+          const createdTargets = result.created.map((item) => item.target);
+          const automation: TranslationAutomationItem = {
+            id: crypto.randomUUID(),
+            shopName,
+            source,
+            targets: createdTargets.length ? createdTargets : [...targetLocales],
+            modules: [...automationModules],
+            frequency: automationFrequency,
+            createdAt: now,
+            lastTriggeredAt: now,
+          };
+          saveAutomationItems([automation, ...automationItems]);
+          shopify.toast.show("已保存自动更新规则");
+        }
         await refreshJobList();
         setTaskView("current");
         setPageTab("tasks");
@@ -821,6 +938,65 @@ export function TranslationV4Page() {
                     disabled={isSubmitting}
                   />
 
+                  <div style={automationPanelStyle(autoUpdateEnabled)}>
+                    <label style={automationToggleLabelStyle}>
+                      <input
+                        type="checkbox"
+                        checked={autoUpdateEnabled}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setAutoUpdateEnabled(checked);
+                          if (checked && automationModules.length === 0) {
+                            setAutomationModules(modules);
+                          }
+                        }}
+                      />
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <span style={{ fontWeight: 600, color: pageColorTokens.textBody }}>
+                          自动更新翻译
+                        </span>
+                        <span style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, lineHeight: 1.5 }}>
+                          开启后会在当前店铺保存一条自动化规则。本次确认仍会立即创建一次翻译任务。
+                        </span>
+                      </div>
+                    </label>
+
+                    {autoUpdateEnabled ? (
+                      <div style={automationFieldsWrapStyle(isMobile)}>
+                        <TranslationModuleMultiSelect
+                          id="translation-v4-automation-modules"
+                          values={automationModules}
+                          onChange={setAutomationModules}
+                          disabled={isSubmitting}
+                          label="自动更新模块"
+                        />
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          <span style={{ fontSize: "0.8125rem", color: pageColorTokens.textBody, fontWeight: 600 }}>
+                            更新时机
+                          </span>
+                          <div style={automationFrequencyGridStyle(isMobile)}>
+                            {AUTOMATION_FREQUENCY_OPTIONS.map((option) => {
+                              const active = automationFrequency === option.value;
+                              return (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  style={automationFrequencyButtonStyle(active)}
+                                  onClick={() => setAutomationFrequency(option.value)}
+                                >
+                                  {option.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <span style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, lineHeight: 1.5 }}>
+                            自动化列表会记录这条规则；后续定时执行逻辑可按该规则扩展。
+                          </span>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
                   <div style={isMobile ? mobileCheckboxRowStyle : { display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
                     <label style={checkboxLabelStyle}>
                       <input type="checkbox" checked={isCover} onChange={(e) => setIsCover(e.target.checked)} />
@@ -915,7 +1091,66 @@ export function TranslationV4Page() {
           <TranslationStyleWorkspace locationSearch={query} sourceLocale={sourceLocale} />
         ) : (
           <div style={taskPageSectionStyle}>
-              <div style={isMobile ? mobileTaskViewSwitchBarStyle : taskViewSwitchBarStyle}>
+            <PageSurface
+              title="自动化列表"
+              subtitle="展示当前店铺已保存的自动更新翻译规则。开启自动更新后，这里会新增对应的自动化任务。"
+            >
+              {automationItems.length === 0 ? (
+                <div style={automationEmptyStateStyle}>
+                  暂无自动更新规则。创建翻译任务时勾选“自动更新翻译”后，会在这里展示。
+                </div>
+              ) : (
+                <div style={automationListStyle(isMobile)}>
+                  {automationItems
+                    .slice()
+                    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                    .map((automation) => (
+                      <article key={automation.id} style={automationCardStyle}>
+                        <div style={automationCardHeaderStyle}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+                            <div style={automationCardTitleStyle}>自动更新翻译</div>
+                            <div style={automationCardMetaStyle}>
+                              {formatAutomationTargetsSummary(
+                                automation,
+                                displayLanguage,
+                                localeLabelMap,
+                              )}
+                            </div>
+                          </div>
+                          <div style={automationCardBadgeRowStyle}>
+                            <span style={automationStatusBadgeStyle}>已启用</span>
+                            <span style={automationScheduleBadgeStyle}>
+                              {formatAutomationFrequencyLabel(automation.frequency)}
+                            </span>
+                          </div>
+                        </div>
+                        <div style={automationCardBodyStyle}>
+                          <div style={automationInfoRowStyle}>
+                            <span style={automationInfoLabelStyle}>自动更新模块</span>
+                            <span style={automationInfoValueStyle}>
+                              {formatAutomationModulesSummary(automation.modules, t)}
+                            </span>
+                          </div>
+                          <div style={automationInfoRowStyle}>
+                            <span style={automationInfoLabelStyle}>最近执行</span>
+                            <span style={automationInfoValueStyle}>
+                              {formatDateTime(automation.lastTriggeredAt) ?? "刚刚创建"}
+                            </span>
+                          </div>
+                          <div style={automationInfoRowStyle}>
+                            <span style={automationInfoLabelStyle}>规则创建时间</span>
+                            <span style={automationInfoValueStyle}>
+                              {formatDateTime(automation.createdAt) ?? "刚刚"}
+                            </span>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                </div>
+              )}
+            </PageSurface>
+
+            <div style={isMobile ? mobileTaskViewSwitchBarStyle : taskViewSwitchBarStyle}>
               <div style={isMobile ? mobileTaskViewButtonsStyle : taskViewButtonsStyle}>
                 {([
                   { key: "current" as const, label: `当前任务（${currentJobs.length}）` },
@@ -1779,6 +2014,54 @@ const checkboxLabelStyle: React.CSSProperties = {
   userSelect: "none",
 };
 
+function automationPanelStyle(active: boolean): React.CSSProperties {
+  return {
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+    padding: "0.9rem 1rem",
+    borderRadius: "12px",
+    border: `1px solid ${active ? pageColorTokens.brandBlue : pageColorTokens.borderSubtle}`,
+    background: active ? "#f7faff" : pageColorTokens.surfaceSubtle,
+  };
+}
+
+const automationToggleLabelStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "0.75rem",
+  cursor: "pointer",
+};
+
+function automationFieldsWrapStyle(isMobile: boolean): React.CSSProperties {
+  return {
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.2fr) minmax(0, 0.9fr)",
+    gap: 12,
+  };
+}
+
+function automationFrequencyGridStyle(isMobile: boolean): React.CSSProperties {
+  return {
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, minmax(0, 1fr))",
+    gap: 8,
+  };
+}
+
+function automationFrequencyButtonStyle(active: boolean): React.CSSProperties {
+  return {
+    border: `1px solid ${active ? pageColorTokens.brandBlue : pageColorTokens.borderSubtle}`,
+    background: active ? pageColorTokens.brandBlueLight : pageColorTokens.surface,
+    color: active ? pageColorTokens.brandBlueDark : pageColorTokens.textBody,
+    borderRadius: pageColorTokens.radiusControl,
+    padding: "0.6rem 0.75rem",
+    fontSize: "0.8125rem",
+    fontWeight: active ? 700 : 600,
+    cursor: "pointer",
+  };
+}
+
 const setupGuideHeaderStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "flex-start",
@@ -2070,6 +2353,109 @@ const taskListEmptyIconStyle: React.CSSProperties = {
 const taskListEmptyTextStyle: React.CSSProperties = {
   fontSize: 14,
   color: pageColorTokens.textSecondary,
+};
+
+function automationListStyle(isMobile: boolean): React.CSSProperties {
+  return {
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+    gap: 12,
+  };
+}
+
+const automationCardStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 12,
+  padding: "1rem",
+  borderRadius: "12px",
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surface,
+};
+
+const automationCardHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: 12,
+  flexWrap: "wrap",
+};
+
+const automationCardTitleStyle: React.CSSProperties = {
+  fontSize: "0.9375rem",
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+  lineHeight: 1.35,
+};
+
+const automationCardMetaStyle: React.CSSProperties = {
+  fontSize: "0.8125rem",
+  color: pageColorTokens.textSecondary,
+  lineHeight: 1.5,
+};
+
+const automationCardBadgeRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+const automationStatusBadgeStyle: React.CSSProperties = {
+  padding: "0.2rem 0.55rem",
+  borderRadius: 999,
+  border: "1px solid #ccefe4",
+  background: pageColorTokens.brandGreenLight,
+  color: pageColorTokens.brandGreenDark,
+  fontSize: "0.72rem",
+  fontWeight: 700,
+};
+
+const automationScheduleBadgeStyle: React.CSSProperties = {
+  padding: "0.2rem 0.55rem",
+  borderRadius: 999,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surfaceMuted,
+  color: pageColorTokens.textBody,
+  fontSize: "0.72rem",
+  fontWeight: 700,
+};
+
+const automationCardBodyStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+};
+
+const automationInfoRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: 12,
+};
+
+const automationInfoLabelStyle: React.CSSProperties = {
+  fontSize: "0.75rem",
+  color: pageColorTokens.textSecondary,
+  minWidth: "5.5rem",
+};
+
+const automationInfoValueStyle: React.CSSProperties = {
+  fontSize: "0.8125rem",
+  color: pageColorTokens.textBody,
+  fontWeight: 600,
+  lineHeight: 1.5,
+  textAlign: "right",
+};
+
+const automationEmptyStateStyle: React.CSSProperties = {
+  padding: "1rem",
+  borderRadius: "12px",
+  border: `1px dashed ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surfaceSubtle,
+  color: pageColorTokens.textSecondary,
+  fontSize: "0.8125rem",
+  lineHeight: 1.6,
 };
 
 const footerDividerStyle: React.CSSProperties = {
