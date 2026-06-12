@@ -673,3 +673,68 @@ model OperationTask {
   @@index([shop, dedupeKey, status])
   @@index([shop, createdAt])
 }
+
+/// 店铺成本口径配置（ROI 核算用，docs/DAILY_OPERATIONS_WORKFLOWS.md §8.8 成本完整度）。
+model ShopCostConfig {
+  id   String @id @default(cuid())
+  shop String @unique
+  /// 默认毛利率（%），无逐 SKU 成本时的兜底口径
+  defaultGrossMarginPercent Float    @default(60)
+  /// 支付手续费率（%）
+  paymentFeePercent         Float    @default(2.9)
+  /// 单笔支付固定手续费
+  paymentFeeFixed           Float    @default(0.3)
+  /// 月度固定投入（内容/工具/人力），用于后续投入成本分摊
+  monthlyFixedCost          Float    @default(0)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+}
+
+/// SKU 单位成本（同步自 Shopify inventoryItem.unitCost，逐 SKU COGS）。
+model ShopSkuCost {
+  id              String   @id @default(cuid())
+  shop            String
+  inventoryItemId String
+  variantId       String?
+  sku             String?
+  unitCost        Float
+  currency        String?
+  syncedAt        DateTime @default(now())
+
+  @@unique([shop, inventoryItemId])
+  @@index([shop, sku])
+}
+
+/// 客户价值快照（最新状态，每日巡检懒刷新；§8.5.1 客户动态计价）。
+model ShopCustomerValue {
+  id                    String    @id @default(cuid())
+  shop                  String
+  shopifyCustomerId     String
+  /// new | active | vip | at_risk | churned
+  segment               String
+  /// 风险标签数组：refund_risk | discount_sensitive
+  tags                  Json
+  ordersCount           Int       @default(0)
+  totalSpent            Float     @default(0)
+  /// 历史贡献利润（毛利率近似口径）
+  realizedGrossProfit   Float     @default(0)
+  /// 规则近似的未来贡献利润
+  predictedFutureProfit Float     @default(0)
+  dynamicLtv            Float     @default(0)
+  /// 0-100 综合管理分（§8.5.10）
+  customerValueScore    Float     @default(0)
+  refundAmount          Float     @default(0)
+  /// 客户退款率（退款额/消费额，%）
+  refundRate            Float     @default(0)
+  /// 折扣订单占比（%）
+  discountOrderShare    Float     @default(0)
+  daysSinceLastOrder    Int?
+  firstOrderAt          DateTime?
+  lastOrderAt           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([shop, shopifyCustomerId])
+  @@index([shop, segment])
+  @@index([shop, customerValueScore])
+}

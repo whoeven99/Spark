@@ -923,6 +923,11 @@ const _slotFlushState = new Map<string, { flushedCalls: number; flushedTokens: n
  * Throttled internally to at most one write per 10 seconds.
  * Safe to call in a hot path (progress callback, etc.).
  */
+/** Synchronous snapshot of LLM key pool stats. Returns [] if pool not yet initialised. */
+export function getLlmPoolStats(): ReturnType<LLMKeyPool["getKeyStats"]> {
+  return _pool?.getKeyStats() ?? [];
+}
+
 export async function flushKeyStats(): Promise<void> {
   const now = Date.now();
   if (now - _lastStatFlush < STAT_FLUSH_INTERVAL_MS) return;

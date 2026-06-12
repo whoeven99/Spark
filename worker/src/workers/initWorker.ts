@@ -4,6 +4,7 @@ import { popHint, pushHint, setProgress } from "../services/redisV4.js";
 import { blobWrite } from "../services/blobV4.js";
 import { fetchTranslatableResources } from "../services/shopifyFetch.js";
 import { countFieldUnits, pAll } from "../services/llmTranslate.js";
+import { QpsLogger } from "../services/qpsLogger.js";
 
 /**
  * Scale-out safe: hostname + pid ensures uniqueness across containers that may
@@ -96,6 +97,8 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
       await heartbeat(shopName, jobId);
     }
   };
+
+  const qps = new QpsLogger(jobId, shopName, "INIT");
 
   try {
     // ── Parallel module fetching ─────────────────────────────────────────────
@@ -195,5 +198,7 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
       claimedBy: null,
     });
     console.error(`[init] failed job=${jobId}`, e);
+  } finally {
+    qps.stop();
   }
 }

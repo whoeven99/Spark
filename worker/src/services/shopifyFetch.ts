@@ -238,6 +238,45 @@ const MODULE_ID_QUERY: Record<string, { gql: string; connectionKey: string }> = 
  *    fetching (init) and parallel resource writes (writeback) from exhausting
  *    the bucket before Shopify issues a 429.
  */
+// ── Per-shop Shopify call stats (for QPS logging) ────────────────────────────
+
+export type ShopifyCallStats = {
+  calls: number;
+  retries429: number;
+  proactiveWaitMs: number;
+  lastBucketAvailable: number | null;
+  lastBucketMax: number | null;
+};
+
+const _shopifyStats = new Map<string, ShopifyCallStats>();
+
+function _getOrInitStats(shopDomain: string): ShopifyCallStats {
+  let s = _shopifyStats.get(shopDomain);
+  if (!s) {
+    s = { calls: 0, retries429: 0, proactiveWaitMs: 0, lastBucketAvailable: null, lastBucketMax: null };
+    _shopifyStats.set(shopDomain, s);
+  }
+  return s;
+}
+
+/** Snapshot of Shopify call stats for a shop since last reset. */
+export function getShopifyCallStats(shopDomain: string): ShopifyCallStats {
+  const s = _shopifyStats.get(shopDomain);
+  return s
+    ? { ...s }
+    : { calls: 0, retries429: 0, proactiveWaitMs: 0, lastBucketAvailable: null, lastBucketMax: null };
+}
+
+/** Reset call counters for a shop (keep bucket status). */
+export function resetShopifyCallStats(shopDomain: string): void {
+  const s = _shopifyStats.get(shopDomain);
+  if (s) {
+    s.calls = 0;
+    s.retries429 = 0;
+    s.proactiveWaitMs = 0;
+  }
+}
+
 type ShopifyGraphqlOpts = {
   retries?: number;
   /** 401 后已从 Session 刷新 token 并重试过一次 */
@@ -265,6 +304,7 @@ async function shopifyGraphql(
 
   // ── 429: bucket exhausted ─────────────────────────────────────────────────
   if (resp.status === 429) {
+    _getOrInitStats(shopDomain).retries429++;
     if (retries <= 0) {
       throw new Error(`Shopify GraphQL 429: rate limited (retries exhausted)`);
     }
@@ -309,12 +349,21 @@ async function shopifyGraphql(
     throw new Error(`Shopify GraphQL errors: ${JSON.stringify(json.errors)}`);
   }
 
-  // ── Proactive throttle: sleep before the bucket runs dry ─────────────────
+  // ── Record call + bucket status ─────────────────────────────────────────
+  const stat = _getOrInitStats(shopDomain);
+  stat.calls++;
   const throttle = json.extensions?.cost?.throttleStatus;
+  if (throttle) {
+    stat.lastBucketAvailable = throttle.currentlyAvailable;
+    stat.lastBucketMax = throttle.maximumAvailable;
+  }
+
+  // ── Proactive throttle: sleep before the bucket runs dry ─────────────────
   if (throttle && SHOPIFY_BUCKET_FLOOR > 0 && throttle.currentlyAvailable < SHOPIFY_BUCKET_FLOOR) {
     const deficit = SHOPIFY_BUCKET_FLOOR - throttle.currentlyAvailable;
     // restoreRate is points/second; add 200 ms buffer for clock skew
     const waitMs = Math.ceil((deficit / throttle.restoreRate) * 1_000) + 200;
+    stat.proactiveWaitMs += waitMs;
     await new Promise((r) => setTimeout(r, waitMs));
   }
 
