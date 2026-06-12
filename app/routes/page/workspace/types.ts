@@ -45,6 +45,22 @@ export type WorkspaceConversationMessage = {
   thinkingContent?: string;
 };
 
+/** 侧栏「本会话任务」的批次条目（从消息流的 taskRun / 历史 aiTask 派生） */
+export type ConversationTaskRunEntry = {
+  runId: string;
+  title: string;
+  taskIds: string[];
+  errorCount: number;
+  paramsSummary: string[];
+  startedAt: string;
+};
+
+export const aiTaskTypeLabels: Record<string, string> = {
+  picture_translate: "图片翻译",
+  image_generation: "AI 生成商品图片",
+  product_improve: "商品描述生成",
+};
+
 export type ConversationSummary = {
   id: string;
   title: string;

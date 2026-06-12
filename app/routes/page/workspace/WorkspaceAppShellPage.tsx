@@ -3,7 +3,7 @@
  * 各面板见同目录 DashboardPanel / ChatPanel / SkillsPanel / AutomationPanel，
  * 对话上下文状态统一在 useWorkspaceContext。
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
@@ -77,12 +77,189 @@ import {
   sidebarStyle,
 } from "./styles";
 
-const panelItems: Array<{ key: Exclude<WorkspacePanel, "chat">; label: string; icon: string }> = [
-  { key: "dashboard", label: "经营看板", icon: "◫" },
-  { key: "skills", label: "技能", icon: "✦" },
-  { key: "automation", label: "自动化", icon: "↻" },
-  { key: "tasks", label: "任务列表", icon: "≡" },
+function NavIcon({ name }: { name: Exclude<WorkspacePanel, "chat"> }) {
+  const common = {
+    width: 15,
+    height: 15,
+    viewBox: "0 0 14 14",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.4,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+  if (name === "dashboard") {
+    return (
+      <svg {...common} aria-hidden="true">
+        <rect x="1.2" y="1.2" width="4.8" height="4.8" rx="1.2" />
+        <rect x="8" y="1.2" width="4.8" height="4.8" rx="1.2" />
+        <rect x="1.2" y="8" width="4.8" height="4.8" rx="1.2" />
+        <rect x="8" y="8" width="4.8" height="4.8" rx="1.2" />
+      </svg>
+    );
+  }
+  if (name === "skills") {
+    return (
+      <svg {...common} aria-hidden="true">
+        <path d="M7 1.4 L8.4 5.6 L12.6 7 L8.4 8.4 L7 12.6 L5.6 8.4 L1.4 7 L5.6 5.6 Z" />
+      </svg>
+    );
+  }
+  if (name === "automation") {
+    return (
+      <svg {...common} aria-hidden="true">
+        <path d="M12.4 7a5.4 5.4 0 1 1-1.7-3.9" />
+        <path d="M12.6 1.6 v2.5 h-2.5" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...common} aria-hidden="true">
+      <path d="M1.4 3.2 l1 1 l1.7-2" />
+      <path d="M6.4 3.4 h6.2" />
+      <path d="M1.4 8.4 l1 1 l1.7-2" />
+      <path d="M6.4 8.6 h6.2" />
+      <path d="M6.4 12.4 h6.2" />
+    </svg>
+  );
+}
+
+const panelItems: Array<{ key: Exclude<WorkspacePanel, "chat">; label: string }> = [
+  { key: "dashboard", label: "经营看板" },
+  { key: "skills", label: "技能" },
+  { key: "automation", label: "自动化" },
+  { key: "tasks", label: "任务列表" },
 ];
+
+// ── 左栏会话列表：时间分组与相对时间 ─────────────────────────────────────────
+
+/** 账户展示名（与左栏底部既有硬编码保持一处定义；待接入真实用户信息） */
+const ACCOUNT_DISPLAY_NAME = "Cedric hu";
+
+const CONVERSATION_GROUP_ORDER = ["今天", "昨天", "7 天内", "更早"] as const;
+
+function conversationGroupLabel(iso: string): (typeof CONVERSATION_GROUP_ORDER)[number] {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "更早";
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const t = date.getTime();
+  if (t >= startOfToday) return "今天";
+  if (t >= startOfToday - 24 * 60 * 60 * 1000) return "昨天";
+  if (t >= startOfToday - 6 * 24 * 60 * 60 * 1000) return "7 天内";
+  return "更早";
+}
+
+const WEEKDAY_LABELS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+
+function conversationTimeLabel(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const group = conversationGroupLabel(iso);
+  if (group === "今天") {
+    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  }
+  if (group === "昨天") return "昨天";
+  if (group === "7 天内") return WEEKDAY_LABELS[date.getDay()];
+  return `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+const conversationGroupLabelStyle = {
+  fontSize: 11,
+  color: "#8c9196",
+  padding: "8px 10px 2px",
+} as const;
+
+const conversationTimeStyle = {
+  fontSize: 10,
+  color: "#8c9196",
+  flexShrink: 0,
+  marginLeft: 6,
+} as const;
+
+const conversationSearchInputStyle = {
+  width: "100%",
+  border: "1px solid #e1e3e5",
+  borderRadius: 8,
+  padding: "5px 10px",
+  fontSize: 12,
+  color: "#202223",
+  background: "#ffffff",
+  marginBottom: 6,
+  boxSizing: "border-box",
+} as const;
+
+const navBadgeStyle = {
+  marginLeft: "auto",
+  fontSize: 10,
+  fontWeight: 700,
+  padding: "0px 6px",
+  borderRadius: 999,
+  background: "rgba(64,112,244,0.12)",
+  color: "#2c4fc4",
+  flexShrink: 0,
+} as const;
+
+const navDotStyle = {
+  marginLeft: "auto",
+  width: 7,
+  height: 7,
+  borderRadius: "50%",
+  background: "#f0a01d",
+  flexShrink: 0,
+} as const;
+
+const collapseToggleStyle = {
+  marginLeft: "auto",
+  width: 24,
+  height: 24,
+  borderRadius: 6,
+  border: "1px solid #e1e3e5",
+  background: "#ffffff",
+  color: "#6d7175",
+  fontSize: 12,
+  cursor: "pointer",
+  display: "grid",
+  placeItems: "center",
+  flexShrink: 0,
+} as const;
+
+const collapsedIconButtonStyle = (active: boolean) =>
+  ({
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    border: `1px solid ${active ? "rgba(0,128,96,0.4)" : "#e1e3e5"}`,
+    background: active ? "rgba(0,128,96,0.08)" : "#ffffff",
+    color: active ? "#008060" : "#5f6368",
+    cursor: "pointer",
+    display: "grid",
+    placeItems: "center",
+    position: "relative",
+    flexShrink: 0,
+  }) as const;
+
+const collapsedDotStyle = (color: string) =>
+  ({
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 7,
+    height: 7,
+    borderRadius: "50%",
+    background: color,
+  }) as const;
+
+const sidebarQuotaRowStyle = {
+  borderTop: "1px solid rgba(225,227,229,0.6)",
+  marginTop: 8,
+  padding: "8px 10px 0",
+  fontSize: 11,
+  color: "#8c9196",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+} as const;
 
 const DRAFT_CONVERSATION_PREFIX = "draft-";
 
@@ -152,6 +329,120 @@ export function WorkspaceAppShellPage({
   const [messagesByConversation, setMessagesByConversation] = useState<Record<string, WorkspaceConversationMessage[]>>({});
   const loadedConvIdsRef = useRef<Set<string>>(new Set());
   const [automationView, setAutomationView] = useState<AutomationView>("configured");
+  const [runningTaskCount, setRunningTaskCount] = useState(0);
+  const [conversationSearch, setConversationSearch] = useState("");
+  // 置顶与折叠均为本机偏好（localStorage），不进数据库
+  const pinnedStorageKey = useMemo(() => {
+    const shop =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("shop") ?? "default"
+        : "default";
+    return `spark-pinned-conversations:${shop}`;
+  }, []);
+  const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = window.localStorage.getItem(pinnedStorageKey);
+      const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+      return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+    } catch {
+      return [];
+    }
+  });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("spark-sidebar-collapsed") === "1";
+  });
+  const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+
+  const togglePinned = (conversationId: string) => {
+    setPinnedIds((current) => {
+      const next = current.includes(conversationId)
+        ? current.filter((id) => id !== conversationId)
+        : [conversationId, ...current];
+      try {
+        window.localStorage.setItem(pinnedStorageKey, JSON.stringify(next));
+      } catch {
+        // localStorage 不可用时置顶仅本次会话生效
+      }
+      return next;
+    });
+  };
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed((current) => {
+      try {
+        window.localStorage.setItem("spark-sidebar-collapsed", current ? "0" : "1");
+      } catch {
+        // ignore
+      }
+      return !current;
+    });
+  };
+
+  const startRenameConversation = (conversationId: string, currentTitle: string) => {
+    setRenamingConversationId(conversationId);
+    setRenameDraft(currentTitle);
+  };
+
+  const commitRenameConversation = async () => {
+    const conversationId = renamingConversationId;
+    if (!conversationId) return;
+    const nextTitle = renameDraft.trim();
+    setRenamingConversationId(null);
+    const existing = conversationList.find((item) => item.id === conversationId);
+    if (!existing || !nextTitle || nextTitle === existing.title) return;
+
+    setConversationList((current) =>
+      current.map((item) => (item.id === conversationId ? { ...item, title: nextTitle } : item)),
+    );
+    if (isDraftConversationId(conversationId)) return;
+    const authQuery = typeof window !== "undefined" ? window.location.search : "";
+    try {
+      const res = await fetch(`/api/conversations/${conversationId}${authQuery}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: [], title: nextTitle }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      console.error("[WorkspaceAppShellPage] rename conversation failed:", err);
+      shopify.toast.show("重命名失败");
+      setConversationList((current) =>
+        current.map((item) =>
+          item.id === conversationId ? { ...item, title: existing.title } : item,
+        ),
+      );
+    }
+  };
+
+  // 任务列表导航徽章：30s 轮询全局进行中任务数（确认执行后做乐观更新）
+  useEffect(() => {
+    let cancelled = false;
+    const fetchRunningCount = async () => {
+      try {
+        const authQuery = typeof window !== "undefined" ? window.location.search : "";
+        const params = new URLSearchParams(
+          authQuery.startsWith("?") ? authQuery.slice(1) : authQuery,
+        );
+        params.set("view", "current");
+        params.set("pageSize", "1");
+        const res = await fetch(`/api/ai-task?${params.toString()}`);
+        if (!res.ok) return;
+        const data = (await res.json()) as { metrics?: { runningCount?: number } };
+        if (!cancelled) setRunningTaskCount(data.metrics?.runningCount ?? 0);
+      } catch {
+        // 静默失败，下个周期重试
+      }
+    };
+    void fetchRunningCount();
+    const timer = window.setInterval(() => void fetchRunningCount(), 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const workspaceContext = useWorkspaceContext();
   const stream = useChatStream();
@@ -338,6 +629,18 @@ export function WorkspaceAppShellPage({
   };
 
   const createConversation = () => {
+    // 已存在空会话（草稿或落库的"新对话"）时直接复用，避免列表里堆积重复空会话
+    const existingEmpty = conversationList.find(
+      (conversation) =>
+        conversation.title === "新对话" &&
+        !conversation.preview?.trim() &&
+        !(messagesByConversation[conversation.id] ?? []).some((m) => m.role === "user"),
+    );
+    if (existingEmpty) {
+      openConversation(existingEmpty.id);
+      if (isMobile) setSidebarOpen(false);
+      return;
+    }
     pruneEmptyDraftConversations();
     const now = new Date().toISOString();
     const conv: ConversationSummary = {
@@ -530,6 +833,8 @@ export function WorkspaceAppShellPage({
    * （用户侧指令 + 助手侧 TaskRunChatCard），并落库持久化。
    */
   const handleTaskProposalExecuted = (conversationId: string, run: TaskRunPayload) => {
+    // 导航徽章乐观更新（30s 轮询会校正）
+    setRunningTaskCount((current) => current + run.taskIds.length);
     const userText = `开始执行：${run.title}（${run.taskIds.length} 个任务）`;
     const assistantText =
       run.errors.length > 0
@@ -625,10 +930,21 @@ export function WorkspaceAppShellPage({
       <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
         <div style={brandRowStyle}>
           <div style={brandBadgeStyle}>S</div>
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={brandTitleStyle}>Spark</div>
             <div style={brandMetaStyle}>Shopify AI Workspace</div>
           </div>
+          {!isMobile ? (
+            <button
+              type="button"
+              style={collapseToggleStyle}
+              onClick={toggleSidebarCollapsed}
+              title="折叠侧栏"
+              aria-label="折叠侧栏"
+            >
+              «
+            </button>
+          ) : null}
         </div>
 
         <button
@@ -650,8 +966,18 @@ export function WorkspaceAppShellPage({
               style={navButtonStyle(activePanel === item.key)}
               onClick={() => switchPanel(item.key)}
             >
-              <span style={navIconStyle(activePanel === item.key)}>{item.icon}</span>
+              <span style={{ ...navIconStyle(activePanel === item.key), display: "inline-flex", alignItems: "center" }}>
+                <NavIcon name={item.key} />
+              </span>
               <span>{item.label}</span>
+              {item.key === "tasks" && runningTaskCount > 0 ? (
+                <span style={navBadgeStyle} title={`${runningTaskCount} 个任务进行中`}>
+                  {runningTaskCount}
+                </span>
+              ) : null}
+              {item.key === "dashboard" && dashboardSnapshot.automation?.status === "attention" ? (
+                <span style={navDotStyle} title="今日巡检发现需关注项" />
+              ) : null}
             </button>
           ))}
         </div>
@@ -661,36 +987,151 @@ export function WorkspaceAppShellPage({
         <div style={sidebarSectionStyle}>
           <div style={sidebarSectionHeadStyle}>
             <span>最近对话</span>
-            <span style={mutedMetaStyle}>{Math.min(conversationList.length, 50)} / 50</span>
           </div>
+          <input
+            value={conversationSearch}
+            onChange={(event) => setConversationSearch(event.target.value)}
+            placeholder="搜索对话"
+            style={conversationSearchInputStyle}
+          />
           <div style={conversationListStyle}>
-            {conversationList.slice(0, 50).map((conversation) => {
-              const active =
-                activePanel === "chat" && activeConversationId === conversation.id;
-              return (
-                <div key={conversation.id} className="sidebar-history-row" style={historyRowStyle}>
-                  <button
-                    type="button"
-                    className={`sidebar-history-item workspace-history-item${active ? " is-active" : ""}`}
-                    style={historyItemStyle(active)}
-                    onClick={() => openConversation(conversation.id)}
-                    title={conversation.title}
+            {(() => {
+              const keyword = conversationSearch.trim().toLowerCase();
+              const filtered = conversationList
+                .slice(0, 50)
+                .filter(
+                  (conversation) =>
+                    !keyword ||
+                    conversation.title.toLowerCase().includes(keyword) ||
+                    conversation.preview.toLowerCase().includes(keyword),
+                );
+              if (filtered.length === 0) {
+                return (
+                  <div style={{ fontSize: 12, color: "#8c9196", padding: "8px 10px" }}>
+                    {keyword ? "没有匹配的对话" : "暂无对话"}
+                  </div>
+                );
+              }
+              const pinnedSet = new Set(pinnedIds);
+              const pinned = filtered.filter((conversation) => pinnedSet.has(conversation.id));
+              const rest = filtered.filter((conversation) => !pinnedSet.has(conversation.id));
+              const groups = new Map<string, typeof filtered>();
+              if (pinned.length > 0) groups.set("置顶", pinned);
+              for (const conversation of rest) {
+                const label = conversationGroupLabel(conversation.updatedAt);
+                const bucket = groups.get(label);
+                if (bucket) bucket.push(conversation);
+                else groups.set(label, [conversation]);
+              }
+              const renderRow = (conversation: ConversationSummary) => {
+                const active =
+                  activePanel === "chat" && activeConversationId === conversation.id;
+                const isPinned = pinnedSet.has(conversation.id);
+                const isRenaming = renamingConversationId === conversation.id;
+                return (
+                  <div
+                    key={conversation.id}
+                    className="sidebar-history-row"
+                    style={historyRowStyle}
                   >
-                    <span style={historyTitleStyle(active)}>{conversation.title}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="sidebar-history-delete"
-                    style={historyDeleteButtonStyle}
-                    aria-label={`删除对话：${conversation.title}`}
-                    title="删除对话"
-                    onClick={() => void removeConversation(conversation.id)}
-                  >
-                    ×
-                  </button>
-                </div>
-              );
-            })}
+                    {isRenaming ? (
+                      <input
+                        autoFocus
+                        value={renameDraft}
+                        onChange={(event) => setRenameDraft(event.target.value)}
+                        onBlur={() => void commitRenameConversation()}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                            event.preventDefault();
+                            void commitRenameConversation();
+                          } else if (event.key === "Escape") {
+                            setRenamingConversationId(null);
+                          }
+                        }}
+                        style={{ ...conversationSearchInputStyle, marginBottom: 0, flex: 1 }}
+                      />
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className={`sidebar-history-item workspace-history-item${active ? " is-active" : ""}`}
+                          style={historyItemStyle(active)}
+                          onClick={() => openConversation(conversation.id)}
+                          title={conversation.title}
+                        >
+                          <span
+                            style={{
+                              ...historyTitleStyle(active),
+                              width: undefined,
+                              flex: 1,
+                              minWidth: 0,
+                            }}
+                          >
+                            {conversation.title}
+                          </span>
+                          <span style={conversationTimeStyle}>
+                            {conversationTimeLabel(conversation.updatedAt)}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className="sidebar-history-delete"
+                          style={{
+                            ...historyDeleteButtonStyle,
+                            fontSize: 12,
+                            ...(isPinned ? { opacity: 1, color: "#9a5b00" } : {}),
+                          }}
+                          aria-label={isPinned ? "取消置顶" : "置顶对话"}
+                          title={isPinned ? "取消置顶" : "置顶对话"}
+                          onClick={() => togglePinned(conversation.id)}
+                        >
+                          {isPinned ? "★" : "☆"}
+                        </button>
+                        <button
+                          type="button"
+                          className="sidebar-history-delete"
+                          style={{ ...historyDeleteButtonStyle, fontSize: 11 }}
+                          aria-label={`重命名对话：${conversation.title}`}
+                          title="重命名"
+                          onClick={() => startRenameConversation(conversation.id, conversation.title)}
+                        >
+                          ✎
+                        </button>
+                        <button
+                          type="button"
+                          className="sidebar-history-delete"
+                          style={historyDeleteButtonStyle}
+                          aria-label={`删除对话：${conversation.title}`}
+                          title="删除对话"
+                          onClick={() => void removeConversation(conversation.id)}
+                        >
+                          ×
+                        </button>
+                      </>
+                    )}
+                  </div>
+                );
+              };
+              return ["置顶", ...CONVERSATION_GROUP_ORDER]
+                .filter((label) => groups.has(label))
+                .map((label) => (
+                  <div key={label}>
+                    <div style={conversationGroupLabelStyle}>{label}</div>
+                    {groups.get(label)!.map(renderRow)}
+                  </div>
+                ));
+            })()}
+          </div>
+          <div style={sidebarQuotaRowStyle}>
+            <span>
+              对话{" "}
+              {Math.min(
+                conversationList.filter((conversation) => conversation.preview?.trim()).length,
+                50,
+              )}
+              /50
+            </span>
+            {runningTaskCount > 0 ? <span>任务进行中 {runningTaskCount}</span> : null}
           </div>
         </div>
       </div>
@@ -717,7 +1158,7 @@ export function WorkspaceAppShellPage({
         ) : null}
         <button type="button" style={sidebarFooterButtonStyle} onClick={() => setAccountMenuOpen((current) => !current)}>
           <div>
-            <div style={brandTitleStyle}>Cedric hu</div>
+            <div style={brandTitleStyle}>{ACCOUNT_DISPLAY_NAME}</div>
             <div style={brandMetaStyle}>Spark Workspace</div>
           </div>
           <div style={footerTagStyle}>在线</div>
@@ -726,8 +1167,79 @@ export function WorkspaceAppShellPage({
     </>
   );
 
+  const collapsedSidebarContent = (
+    <>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, flex: 1, minHeight: 0 }}>
+        <div style={brandBadgeStyle}>S</div>
+        <button
+          type="button"
+          style={collapsedIconButtonStyle(false)}
+          onClick={toggleSidebarCollapsed}
+          title="展开侧栏"
+          aria-label="展开侧栏"
+        >
+          »
+        </button>
+        <button
+          type="button"
+          style={{
+            ...collapsedIconButtonStyle(false),
+            background: "#008060",
+            color: "#ffffff",
+            border: "1px solid #008060",
+            fontSize: 18,
+          }}
+          onClick={createConversation}
+          title="新建对话"
+          aria-label="新建对话"
+        >
+          +
+        </button>
+        <div style={{ height: 1, width: 28, background: "#e1e3e5", margin: "2px 0" }} />
+        {panelItems.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            style={collapsedIconButtonStyle(activePanel === item.key)}
+            onClick={() => switchPanel(item.key)}
+            title={item.label}
+            aria-label={item.label}
+          >
+            <NavIcon name={item.key} />
+            {item.key === "tasks" && runningTaskCount > 0 ? (
+              <span style={collapsedDotStyle("#4070f4")} title={`${runningTaskCount} 个任务进行中`} />
+            ) : null}
+            {item.key === "dashboard" && dashboardSnapshot.automation?.status === "attention" ? (
+              <span style={collapsedDotStyle("#f0a01d")} title="今日巡检发现需关注项" />
+            ) : null}
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        style={{ ...collapsedIconButtonStyle(false), borderRadius: "50%" }}
+        onClick={toggleSidebarCollapsed}
+        title="展开侧栏查看账户"
+        aria-label="展开侧栏查看账户"
+      >
+        {ACCOUNT_DISPLAY_NAME.slice(0, 1).toUpperCase()}
+      </button>
+    </>
+  );
+
   return (
-    <div style={isMobile ? mobileShellStyle : shellStyle}>
+    <div
+      style={
+        isMobile
+          ? mobileShellStyle
+          : {
+              ...shellStyle,
+              gridTemplateColumns: sidebarCollapsed
+                ? "64px minmax(0, 1fr)"
+                : "252px minmax(0, 1fr)",
+            }
+      }
+    >
       {isMobile ? (
         <>
           <div style={mobileTopBarStyle}>
@@ -764,7 +1276,15 @@ export function WorkspaceAppShellPage({
           ) : null}
         </>
       ) : (
-        <aside style={sidebarStyle}>{sidebarContent}</aside>
+        <aside
+          style={
+            sidebarCollapsed
+              ? { ...sidebarStyle, padding: "16px 10px", alignItems: "center" }
+              : sidebarStyle
+          }
+        >
+          {sidebarCollapsed ? collapsedSidebarContent : sidebarContent}
+        </aside>
       )}
 
       <main style={isMobile ? mobileContentStyle : contentStyle}>

@@ -39,16 +39,29 @@ export function TaskRunChatCard({
   run,
   locationSearch,
   onOpenTasks,
+  tasksById,
 }: {
   run: TaskRunPayload;
   locationSearch: string;
   onOpenTasks?: () => void;
+  /** 由外部（ChatPanel 统一轮询）提供任务状态时，卡片不再自行轮询 */
+  tasksById?: Record<string, AITaskItem>;
 }) {
-  const [matchedTasks, setMatchedTasks] = useState<AITaskItem[]>([]);
+  const [selfPolledTasks, setSelfPolledTasks] = useState<AITaskItem[]>([]);
   const taskIdSet = useMemo(() => new Set(run.taskIds), [run.taskIds]);
+  const externallyManaged = tasksById !== undefined;
+  const matchedTasks = useMemo(
+    () =>
+      externallyManaged
+        ? run.taskIds
+            .map((id) => tasksById?.[id])
+            .filter((task): task is AITaskItem => Boolean(task))
+        : selfPolledTasks,
+    [externallyManaged, run.taskIds, tasksById, selfPolledTasks],
+  );
 
   useEffect(() => {
-    if (run.taskIds.length === 0) return;
+    if (externallyManaged || run.taskIds.length === 0) return;
     let cancelled = false;
     let timer: number | undefined;
     const startedPollingAt = Date.now();
@@ -65,7 +78,7 @@ export function TaskRunChatCard({
         const data = (await res.json()) as { tasks?: AITaskItem[] };
         if (cancelled) return;
         const matched = (data.tasks ?? []).filter((task) => taskIdSet.has(task.id));
-        setMatchedTasks(matched);
+        setSelfPolledTasks(matched);
         const allTerminal =
           matched.length > 0 && matched.every((task) => task.status !== "running");
         if (allTerminal || Date.now() - startedPollingAt > MAX_POLL_MS) return;
@@ -84,7 +97,7 @@ export function TaskRunChatCard({
       cancelled = true;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [run.taskIds, taskIdSet, locationSearch]);
+  }, [run.taskIds, taskIdSet, locationSearch, externallyManaged]);
 
   const agg = aggregate(matchedTasks.map((task) => task.status));
   const inProgress = agg.known > 0 && agg.running > 0;

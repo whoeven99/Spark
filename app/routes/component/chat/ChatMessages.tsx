@@ -9,7 +9,7 @@ import { TaskProposalCard } from "./TaskProposalCard";
 import { TaskRunChatCard } from "./TaskRunChatCard";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import { ChatEmbeddedAiTaskCard } from "./ChatEmbeddedAiTaskCard";
-import type { AITaskStatus } from "../../../lib/aiTaskTypes";
+import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 
 type ChatMessagesProps = {
   messages: ChatMessage[];
@@ -26,6 +26,8 @@ type ChatMessagesProps = {
   onOpenTasks?: () => void;
   /** TaskProposal 执行成功（工作台据此向对话追加「任务已开始」新一轮） */
   onTaskProposalExecuted?: (run: TaskRunPayload) => void;
+  /** 会话级任务状态（ChatPanel 统一轮询）；提供时 TaskRunChatCard 不再自行轮询 */
+  tasksById?: Record<string, AITaskItem>;
 };
 
 export function ChatMessages({
@@ -35,6 +37,7 @@ export function ChatMessages({
   onAiTaskUpdated,
   onOpenTasks,
   onTaskProposalExecuted,
+  tasksById,
 }: ChatMessagesProps) {
   const { t } = useTranslation();
   const locationSearch =
@@ -82,6 +85,9 @@ export function ChatMessages({
         return (
           <div
             key={`${item.role}-${index}`}
+            {...(item.role === "assistant" && item.taskRun
+              ? { "data-task-run-id": item.taskRun.runId }
+              : {})}
             style={{
               display: "flex",
               justifyContent:
@@ -190,6 +196,7 @@ export function ChatMessages({
                         run={item.taskRun}
                         locationSearch={locationSearch}
                         onOpenTasks={onOpenTasks}
+                        tasksById={tasksById}
                       />
                     </div>
                   ) : null}

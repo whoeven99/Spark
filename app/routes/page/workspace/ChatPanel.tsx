@@ -13,14 +13,17 @@ import {
   formatConversationTimestamp,
   workspaceMessageToChatMessage,
 } from "./messageTransforms";
-import type {
-  ContextTool,
-  Conversation,
-  WorkspaceConversationMessage,
+import {
+  aiTaskTypeLabels,
+  type ContextTool,
+  type Conversation,
+  type ConversationTaskRunEntry,
+  type WorkspaceConversationMessage,
 } from "./types";
 import type { AITaskStatus } from "../../../lib/aiTaskTypes";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 import type { WorkspaceContextController } from "./useWorkspaceContext";
+import { useConversationTaskStatuses } from "./useConversationTaskStatuses";
 import {
   buttonRowStyle,
   chatLayoutStyle,
@@ -141,6 +144,48 @@ export function ChatPanel({
     () => estimateMessagesTokens(messages),
     [messages],
   );
+
+  // ── 本会话任务概览：从消息流派生执行批次（taskRun + 历史 aiTask），统一轮询状态 ──
+  const conversationRuns = useMemo<ConversationTaskRunEntry[]>(() => {
+    const runs: ConversationTaskRunEntry[] = [];
+    for (const message of messages) {
+      if (message.taskRun) {
+        runs.push({
+          runId: message.taskRun.runId,
+          title: message.taskRun.title,
+          taskIds: message.taskRun.taskIds,
+          errorCount: message.taskRun.errors.length,
+          paramsSummary: message.taskRun.paramsSummary,
+          startedAt: message.taskRun.startedAt,
+        });
+      } else if (message.aiTask) {
+        runs.push({
+          runId: message.aiTask.id,
+          title: aiTaskTypeLabels[message.aiTask.taskType] ?? message.aiTask.taskType,
+          taskIds: [message.aiTask.id],
+          errorCount: 0,
+          paramsSummary: [],
+          startedAt: message.aiTask.createdAt,
+        });
+      }
+    }
+    return runs.reverse();
+  }, [messages]);
+
+  const conversationTaskIds = useMemo(
+    () => conversationRuns.flatMap((run) => run.taskIds),
+    [conversationRuns],
+  );
+
+  const locationSearch = typeof window !== "undefined" ? window.location.search : "";
+  const { tasksById } = useConversationTaskStatuses(conversationTaskIds, locationSearch);
+
+  const locateRun = (runId: string) => {
+    const el = messageListRef.current?.querySelector(
+      `[data-task-run-id="${typeof CSS !== "undefined" ? CSS.escape(runId) : runId}"]`,
+    );
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
 
   const queryToolLabel = (type: "product" | "article", base: string) => {
     const manualCount = selectedObjectsByType[type].length;
@@ -430,6 +475,7 @@ export function ChatPanel({
               onTaskProposalExecuted={(run) =>
                 onTaskProposalExecuted(conversation.id, run)
               }
+              tasksById={tasksById}
             />
           </div>
           {isScrolledUp ? (
@@ -455,7 +501,15 @@ export function ChatPanel({
 
       <ContextToolModal context={context} />
 
-      {!isMobile ? <ChatContextSidebar context={context} /> : null}
+      {!isMobile ? (
+        <ChatContextSidebar
+          context={context}
+          taskRuns={conversationRuns}
+          tasksById={tasksById}
+          onOpenTasks={onOpenTasks}
+          onLocateRun={locateRun}
+        />
+      ) : null}
     </div>
   );
 }
