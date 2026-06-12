@@ -51,6 +51,7 @@ import {
 
 const POLL_INTERVAL = 1500;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const SETUP_GUIDE_HIDDEN_STORAGE_KEY = "translation-v4-setup-guide-hidden";
 type PageTab = "config" | "style" | "tasks";
 type TaskViewTab = "current" | "history";
 const ACTIVE_STATUSES: TranslationV4Status[] = [
@@ -135,6 +136,53 @@ type ProgressData = {
     translateStartedAt?: string | null;
   };
 };
+
+type SetupGuideProfile = {
+  industry?: string;
+  toneOfVoice?: string;
+  targetAudience?: string;
+  highFrequencyTerms?: string[];
+  styleNotes?: string[];
+  translationInstructions?: string;
+};
+
+type SetupGuideState = {
+  loading: boolean;
+  profileReady: boolean;
+  glossaryReady: boolean;
+};
+
+function hasSetupGuideProfileContent(profile: SetupGuideProfile | null | undefined): boolean {
+  if (!profile) return false;
+  return Boolean(
+    profile.industry?.trim() ||
+      profile.toneOfVoice?.trim() ||
+      profile.targetAudience?.trim() ||
+      profile.translationInstructions?.trim() ||
+      profile.highFrequencyTerms?.some((item) => item.trim()) ||
+      profile.styleNotes?.some((item) => item.trim()),
+  );
+}
+
+function hasSetupGuideGlossaryContent(
+  terms: Array<{ source?: string | null }> | null | undefined,
+): boolean {
+  return (terms ?? []).some((term) => term.source?.trim());
+}
+
+function getSetupGuideStepOneDescription(state: SetupGuideState): string {
+  if (state.loading) return "正在检查当前店铺的翻译风格与术语表配置。";
+  if (state.profileReady && state.glossaryReady) {
+    return "已检测到商店档案与术语表，后续翻译任务会自动使用这些翻译约束。";
+  }
+  if (state.profileReady) {
+    return "已保存商店翻译风格，仍需补充术语表后再用于正式批量翻译。";
+  }
+  if (state.glossaryReady) {
+    return "已保存术语表，建议继续补充商店翻译风格以统一语气与表达。";
+  }
+  return "先在「翻译风格」中保存商店档案并维护术语表，后续翻译任务会自动使用这些约束。";
+}
 
 /** job.status 为暂停/终端态时以 Cosmos 列表为准，避免陈旧 poll 覆盖 UI */
 function resolveDisplayStatus(
@@ -237,6 +285,8 @@ export function TranslationV4Page() {
   const { isMobile } = useResponsiveLayout();
   const location = useLocation();
   const loaderData = useLoaderData<typeof loader>();
+  const shopName = loaderData.shop;
+  const setupGuideStorageKey = `${SETUP_GUIDE_HIDDEN_STORAGE_KEY}:${shopName}`;
 
   const initialSearch =
     typeof window !== "undefined" ? window.location.search : location.search;
@@ -265,6 +315,12 @@ export function TranslationV4Page() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [setupGuideVisible, setSetupGuideVisible] = useState(true);
+  const [setupGuideState, setSetupGuideState] = useState<SetupGuideState>({
+    loading: true,
+    profileReady: false,
+    glossaryReady: false,
+  });
 
   const [jobs, setJobs] = useState<TranslationV4Job[]>(loaderData.jobs as TranslationV4Job[]);
   const displayJobs = useMemo(
@@ -275,7 +331,6 @@ export function TranslationV4Page() {
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const optimisticActionRef = useRef<Map<string, OptimisticActionIntent>>(new Map());
 
-  const shopName = loaderData.shop;
   const currentJobs = useMemo(
     () => displayJobs.filter((job) => isCurrentJob(job)),
     [displayJobs],
@@ -349,12 +404,59 @@ export function TranslationV4Page() {
     ],
     [confirmEstimation.credits, confirmEstimation.seconds, displayLanguage, isCover, isHandle, localeLabelMap, modules, sourceLocale, t, targetLocales],
   );
+  const styleSetupComplete = setupGuideState.profileReady && setupGuideState.glossaryReady;
+  const translationSetupComplete = useMemo(
+    () => displayJobs.some((job) => job.status === "COMPLETED"),
+    [displayJobs],
+  );
+  const setupGuideCompletedCount =
+    (styleSetupComplete ? 1 : 0) + (translationSetupComplete ? 1 : 0);
+
+  const refreshSetupGuide = useCallback(async () => {
+    setSetupGuideState((prev) => ({ ...prev, loading: true }));
+    try {
+      const [profileRes, glossaryRes] = await Promise.all([
+        fetch(`/api/translate/v4/shop-analysis/profile${query}`),
+        fetch(`/api/translate/v4/glossary${query}`),
+      ]);
+      const [profilePayload, glossaryPayload] = await Promise.all([
+        profileRes.json() as Promise<{ ok?: boolean; profile?: SetupGuideProfile | null }>,
+        glossaryRes.json() as Promise<{ ok?: boolean; terms?: Array<{ source?: string | null }> }>,
+      ]);
+      setSetupGuideState({
+        loading: false,
+        profileReady: profileRes.ok && profilePayload.ok
+          ? hasSetupGuideProfileContent(profilePayload.profile)
+          : false,
+        glossaryReady: glossaryRes.ok && glossaryPayload.ok
+          ? hasSetupGuideGlossaryContent(glossaryPayload.terms)
+          : false,
+      });
+    } catch {
+      setSetupGuideState({
+        loading: false,
+        profileReady: false,
+        glossaryReady: false,
+      });
+    }
+  }, [query]);
 
   const refreshJobList = useCallback(async () => {
     const listRes = await fetch(`/api/translate/v4/tasks${withExtraParams(query, { shopName })}`);
     const listPayload = (await listRes.json()) as { ok: boolean; jobs?: TranslationV4Job[] };
     if (listPayload.ok && listPayload.jobs) setJobs(listPayload.jobs);
   }, [query, shopName]);
+
+  useEffect(() => {
+    if (!setupGuideVisible) return;
+    void refreshSetupGuide();
+  }, [pageTab, refreshSetupGuide, setupGuideVisible]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hidden = window.localStorage.getItem(setupGuideStorageKey) === "1";
+    if (hidden) setSetupGuideVisible(false);
+  }, [setupGuideStorageKey]);
 
   const applyOptimisticPatch = useCallback(
     (taskId: string, job: TranslationV4Job, patch: OptimisticJobPatch) => {
@@ -598,6 +700,86 @@ export function TranslationV4Page() {
           title="批量资源翻译"
           subtitle="面向批量资源的翻译工具。创建任务后会在后台持续执行，并在任务页中以汇总方式展示阶段进度和结果。"
         />
+
+        {setupGuideVisible ? (
+          <PageSurface>
+            <div style={setupGuideHeaderStyle}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+                <h3 style={setupGuideTitleStyle}>Setup guide</h3>
+                <p style={setupGuideSubtitleStyle}>
+                  先完成翻译风格与术语表初始化，再开始批量翻译全站内容。
+                </p>
+              </div>
+              <div style={setupGuideHeaderActionsStyle}>
+                <span style={setupGuideProgressStyle(setupGuideCompletedCount === 2)}>
+                  {setupGuideState.loading
+                    ? "Checking..."
+                    : `${setupGuideCompletedCount} / 2 completed`}
+                </span>
+                <button
+                  type="button"
+                  style={setupGuideCloseButtonStyle}
+                  onClick={() => {
+                    setSetupGuideVisible(false);
+                    if (typeof window !== "undefined") {
+                      window.localStorage.setItem(setupGuideStorageKey, "1");
+                    }
+                  }}
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+
+            <div style={setupGuideListStyle(isMobile)}>
+              <div style={setupGuideStepStyle(styleSetupComplete)}>
+                <div style={setupGuideStepMainStyle}>
+                  <span aria-hidden="true" style={setupGuideStepIconStyle(styleSetupComplete)}>
+                    {styleSetupComplete ? "✓" : "1"}
+                  </span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+                    <div style={setupGuideStepTitleStyle}>
+                      初始化并创建商店翻译风格和术语表
+                    </div>
+                    <div style={setupGuideStepDescriptionStyle}>
+                      {getSetupGuideStepOneDescription(setupGuideState)}
+                    </div>
+                  </div>
+                </div>
+                <s-button
+                  type="button"
+                  variant={styleSetupComplete ? "secondary" : "primary"}
+                  onClick={() => setPageTab("style")}
+                >
+                  {styleSetupComplete ? "查看配置" : "去设置"}
+                </s-button>
+              </div>
+
+              <div style={setupGuideStepStyle(translationSetupComplete)}>
+                <div style={setupGuideStepMainStyle}>
+                  <span aria-hidden="true" style={setupGuideStepIconStyle(translationSetupComplete)}>
+                    {translationSetupComplete ? "✓" : "2"}
+                  </span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+                    <div style={setupGuideStepTitleStyle}>翻译全站内容</div>
+                    <div style={setupGuideStepDescriptionStyle}>
+                      {translationSetupComplete
+                        ? "已检测到完成的批量翻译任务，可继续创建新任务或查看任务页中的执行记录。"
+                        : "回到配置页选择目标语言与翻译模块，创建批量任务开始翻译全站内容。"}
+                    </div>
+                  </div>
+                </div>
+                <s-button
+                  type="button"
+                  variant={translationSetupComplete ? "secondary" : "primary"}
+                  onClick={() => setPageTab("config")}
+                >
+                  {translationSetupComplete ? "继续翻译" : "去翻译"}
+                </s-button>
+              </div>
+            </div>
+          </PageSurface>
+        ) : null}
 
         <SegmentedPageTabs
           activeTab={pageTab}
@@ -1597,6 +1779,125 @@ const checkboxLabelStyle: React.CSSProperties = {
   color: pageColorTokens.textBody,
   cursor: "pointer",
   userSelect: "none",
+};
+
+const setupGuideHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: 12,
+  flexWrap: "wrap",
+  marginBottom: "1rem",
+};
+
+const setupGuideHeaderActionsStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+const setupGuideTitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: "1rem",
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+  lineHeight: 1.3,
+};
+
+const setupGuideSubtitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: "0.8125rem",
+  lineHeight: 1.5,
+  color: pageColorTokens.textSecondary,
+};
+
+function setupGuideProgressStyle(completed: boolean): React.CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "0.3rem 0.7rem",
+    borderRadius: 999,
+    fontSize: "0.75rem",
+    fontWeight: 700,
+    color: completed ? pageColorTokens.brandGreenDark : pageColorTokens.textSecondary,
+    background: completed ? pageColorTokens.brandGreenLight : pageColorTokens.surfaceMuted,
+    border: `1px solid ${completed ? "#ccefe4" : pageColorTokens.borderSubtle}`,
+    whiteSpace: "nowrap",
+  };
+}
+
+const setupGuideCloseButtonStyle: React.CSSProperties = {
+  appearance: "none",
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surface,
+  color: pageColorTokens.textSecondary,
+  borderRadius: 999,
+  padding: "0.3rem 0.7rem",
+  fontSize: "0.75rem",
+  fontWeight: 600,
+  lineHeight: 1.2,
+  cursor: "pointer",
+};
+
+function setupGuideListStyle(isMobile: boolean): React.CSSProperties {
+  return {
+    display: "flex",
+    flexDirection: "column",
+    gap: isMobile ? 10 : 12,
+  };
+}
+
+function setupGuideStepStyle(completed: boolean): React.CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+    padding: "0.95rem 1rem",
+    borderRadius: 12,
+    border: `1px solid ${completed ? "#ccefe4" : pageColorTokens.borderSubtle}`,
+    background: completed ? "#f8fffc" : pageColorTokens.surfaceSubtle,
+    flexWrap: "wrap",
+  };
+}
+
+const setupGuideStepMainStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: 12,
+  flex: "1 1 360px",
+  minWidth: 0,
+};
+
+function setupGuideStepIconStyle(completed: boolean): React.CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 24,
+    height: 24,
+    borderRadius: "50%",
+    flexShrink: 0,
+    fontSize: "0.8125rem",
+    fontWeight: 800,
+    color: completed ? "#ffffff" : pageColorTokens.textSecondary,
+    background: completed ? "#111827" : pageColorTokens.surface,
+    border: `1px solid ${completed ? "#111827" : pageColorTokens.border}`,
+  };
+}
+
+const setupGuideStepTitleStyle: React.CSSProperties = {
+  fontSize: "0.9375rem",
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+  lineHeight: 1.4,
+};
+
+const setupGuideStepDescriptionStyle: React.CSSProperties = {
+  fontSize: "0.8125rem",
+  lineHeight: 1.55,
+  color: pageColorTokens.textSecondary,
 };
 
 const mobileConfigLayoutStyle: React.CSSProperties = {
