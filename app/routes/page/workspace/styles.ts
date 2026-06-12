@@ -25,7 +25,7 @@ export const shopifyUi = {
 export const shellStyle: CSSProperties = {
   minHeight: "100vh",
   display: "grid",
-  gridTemplateColumns: "252px minmax(0, 1fr)",
+  gridTemplateColumns: "220px minmax(0, 1fr)",
   background: shopifyUi.pageBg,
 };
 

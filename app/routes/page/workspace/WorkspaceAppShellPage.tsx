@@ -209,6 +209,40 @@ const navDotStyle = {
   flexShrink: 0,
 } as const;
 
+const conversationMenuStyle = {
+  position: "absolute",
+  top: "100%",
+  right: 0,
+  zIndex: 30,
+  background: "#ffffff",
+  border: "1px solid #e1e3e5",
+  borderRadius: 10,
+  boxShadow: "0 6px 20px rgba(0,0,0,0.1)",
+  padding: 4,
+  minWidth: 112,
+  display: "flex",
+  flexDirection: "column",
+} as const;
+
+const conversationMenuItemStyle = (danger = false) =>
+  ({
+    textAlign: "left",
+    border: "none",
+    background: "none",
+    borderRadius: 6,
+    padding: "6px 10px",
+    fontSize: 12,
+    color: danger ? "#d72c0d" : "#202223",
+    cursor: "pointer",
+  }) as const;
+
+const pinnedStarStyle = {
+  fontSize: 10,
+  color: "#f0a01d",
+  flexShrink: 0,
+  marginRight: 4,
+} as const;
+
 const collapseToggleStyle = {
   marginLeft: "auto",
   width: 24,
@@ -355,6 +389,19 @@ export function WorkspaceAppShellPage({
   });
   const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
+  const [conversationMenuId, setConversationMenuId] = useState<string | null>(null);
+
+  // 会话 ··· 菜单：点击菜单外任意处关闭
+  useEffect(() => {
+    if (!conversationMenuId) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest(".sidebar-conv-menu")) return;
+      setConversationMenuId(null);
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [conversationMenuId]);
 
   const togglePinned = (conversationId: string) => {
     setPinnedIds((current) => {
@@ -1059,6 +1106,11 @@ export function WorkspaceAppShellPage({
                           onClick={() => openConversation(conversation.id)}
                           title={conversation.title}
                         >
+                          {isPinned ? (
+                            <span style={pinnedStarStyle} aria-label="已置顶">
+                              ★
+                            </span>
+                          ) : null}
                           <span
                             style={{
                               ...historyTitleStyle(active),
@@ -1073,40 +1125,59 @@ export function WorkspaceAppShellPage({
                             {conversationTimeLabel(conversation.updatedAt)}
                           </span>
                         </button>
-                        <button
-                          type="button"
-                          className="sidebar-history-delete"
-                          style={{
-                            ...historyDeleteButtonStyle,
-                            fontSize: 12,
-                            ...(isPinned ? { opacity: 1, color: "#9a5b00" } : {}),
-                          }}
-                          aria-label={isPinned ? "取消置顶" : "置顶对话"}
-                          title={isPinned ? "取消置顶" : "置顶对话"}
-                          onClick={() => togglePinned(conversation.id)}
-                        >
-                          {isPinned ? "★" : "☆"}
-                        </button>
-                        <button
-                          type="button"
-                          className="sidebar-history-delete"
-                          style={{ ...historyDeleteButtonStyle, fontSize: 11 }}
-                          aria-label={`重命名对话：${conversation.title}`}
-                          title="重命名"
-                          onClick={() => startRenameConversation(conversation.id, conversation.title)}
-                        >
-                          ✎
-                        </button>
-                        <button
-                          type="button"
-                          className="sidebar-history-delete"
-                          style={historyDeleteButtonStyle}
-                          aria-label={`删除对话：${conversation.title}`}
-                          title="删除对话"
-                          onClick={() => void removeConversation(conversation.id)}
-                        >
-                          ×
-                        </button>
+                        <div className="sidebar-conv-menu" style={{ position: "relative" }}>
+                          <button
+                            type="button"
+                            className="sidebar-history-delete"
+                            style={{
+                              ...historyDeleteButtonStyle,
+                              ...(conversationMenuId === conversation.id ? { opacity: 1 } : {}),
+                            }}
+                            aria-label={`对话操作：${conversation.title}`}
+                            title="更多操作"
+                            onClick={() =>
+                              setConversationMenuId((current) =>
+                                current === conversation.id ? null : conversation.id,
+                              )
+                            }
+                          >
+                            ⋯
+                          </button>
+                          {conversationMenuId === conversation.id ? (
+                            <div style={conversationMenuStyle}>
+                              <button
+                                type="button"
+                                style={conversationMenuItemStyle()}
+                                onClick={() => {
+                                  togglePinned(conversation.id);
+                                  setConversationMenuId(null);
+                                }}
+                              >
+                                {isPinned ? "取消置顶" : "置顶"}
+                              </button>
+                              <button
+                                type="button"
+                                style={conversationMenuItemStyle()}
+                                onClick={() => {
+                                  startRenameConversation(conversation.id, conversation.title);
+                                  setConversationMenuId(null);
+                                }}
+                              >
+                                重命名
+                              </button>
+                              <button
+                                type="button"
+                                style={conversationMenuItemStyle(true)}
+                                onClick={() => {
+                                  setConversationMenuId(null);
+                                  void removeConversation(conversation.id);
+                                }}
+                              >
+                                删除
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
                       </>
                     )}
                   </div>
@@ -1236,7 +1307,7 @@ export function WorkspaceAppShellPage({
               ...shellStyle,
               gridTemplateColumns: sidebarCollapsed
                 ? "64px minmax(0, 1fr)"
-                : "252px minmax(0, 1fr)",
+                : "220px minmax(0, 1fr)",
             }
       }
     >
