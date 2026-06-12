@@ -738,3 +738,20 @@ model ShopCustomerValue {
   @@index([shop, segment])
   @@index([shop, customerValueScore])
 }
+
+/// 图片替换映射：整图翻译完成后自动写入，供 Theme App Extension 前台替换 <img> src 使用。
+model ImageMapping {
+  id             String   @id @default(cuid())
+  shop           String
+  /// 原图 URL（前台 <img> src，Shopify CDN URL）
+  sourceUrl      String
+  /// 译图 Azure Blob 路径（不存 SAS URL，代理时动态生成）
+  targetBlobPath String
+  sourceCode     String
+  targetCode     String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([shop, sourceUrl, targetCode])
+  @@index([shop, targetCode])
+}

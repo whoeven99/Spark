@@ -5,6 +5,7 @@
     "build": "react-router build",
     "dev": "shopify app dev",
     "dev:yw": "shopify app dev -c shopify.app.yw.toml",
+    "dev:spark-zz": "shopify app dev -c shopify.app.spark-zz.toml",
     "config:link": "shopify app config link",
     "generate": "shopify app generate",
     "deploy": "shopify app deploy",

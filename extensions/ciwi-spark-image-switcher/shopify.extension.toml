@@ -1,0 +1,11 @@
+api_version = "2026-07"
+uid = "3dc80ed7-5a0a-53a3-f6c4-1d754aab57a586bb8263"
+
+[[extensions]]
+  name = "Ciwi Spark Image Switcher"
+  handle = "ciwi-spark-image-switcher"
+  type = "theme"
+
+  [[extensions.targeting]]
+    module = "./blocks/image-switcher.liquid"
+    target = "body"

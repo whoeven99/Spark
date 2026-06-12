@@ -9,6 +9,7 @@ name = "spark_zz"
 automatically_update_urls_on_dev = true
 include_config_on_deploy = true
 
+
 [webhooks] 
 api_version = "2026-07"
 
@@ -51,6 +52,13 @@ uri = "/webhooks/fulfillments/create"
 [[webhooks.subscriptions]]
 topics = ["fulfillments/update"]
 uri = "/webhooks/fulfillments/update"
+
+# 店面前台图片替换：Theme Extension JS 通过 /a/ciwi-spark 拉取映射。
+# dev 时 automatically_update_urls_on_dev 会把 host 换成 CLI tunnel。
+[app_proxy]
+  url = "https://example.com/api/image-proxy"
+  subpath = "ciwi-spark"
+  prefix = "a"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes

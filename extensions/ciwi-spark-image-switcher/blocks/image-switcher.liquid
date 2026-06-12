@@ -1,0 +1,17 @@
+{% comment %}
+  Ciwi Spark Image Switcher — 无可见 UI，仅执行图片替换逻辑。
+  JS 读取以下 hidden input 后，向 App Proxy 拉取当前语言的图片映射，
+  再通过 IntersectionObserver 静默替换页面中的 <img> src。
+{% endcomment %}
+
+<input id="ciwi_shop_domain" type="hidden" value="{{ shop.permanent_domain }}">
+<input id="ciwi_language_code" type="hidden" value="{{ localization.language.iso_code }}">
+
+<script type="module" src="{{ 'ciwi-image-switcher.js' | asset_url }}"></script>
+
+{% schema %}
+{
+  "name": "Ciwi Image Switcher",
+  "target": "body"
+}
+{% endschema %}
