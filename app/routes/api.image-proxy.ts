@@ -9,11 +9,23 @@ import { listImageMappingsByShopAndLanguage } from "../server/imageMapping/image
 
 const LOG_PREFIX = "[ImageProxy]";
 
-export async function loader({ request }: LoaderFunctionArgs) {
-  // 验证 Shopify App Proxy HMAC 签名
-  await authenticate.public.appProxy(request);
+function isResponse(value: unknown): value is Response {
+  return value instanceof Response;
+}
 
+export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
+  console.info(`${LOG_PREFIX} incoming ${request.method} ${url.pathname}`);
+
+  try {
+    await authenticate.public.appProxy(request);
+  } catch (e) {
+    const status = isResponse(e) ? e.status : 500;
+    const detail = e instanceof Error ? e.message : "app proxy auth failed";
+    console.error(`${LOG_PREFIX} auth failed status=${status}`, e);
+    return Response.json({ ok: false, error: detail }, { status: status === 401 ? 401 : 403 });
+  }
+
   const shop = url.searchParams.get("shop")?.trim();
   const language = url.searchParams.get("language")?.trim();
 
