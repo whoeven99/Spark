@@ -14,6 +14,7 @@ import {
   TaskProposalBillingError,
   TASK_PROPOSAL_MAX_TARGETS,
 } from "../server/taskProposal/taskProposalSkills.server";
+import { resolveObjectQueryTargets } from "../server/shopify/shopifyObjectList.server";
 import type {
   TaskProposalEstimateResponse,
   TaskProposalExecuteResponse,
@@ -29,6 +30,15 @@ const estimateSchema = z.object({
   params: paramsSchema.default({}),
 });
 
+/** 按条件圈定（阶段 2）：执行时由服务端重新求值为具体对象，不固化 ID */
+const targetsQuerySchema = z.object({
+  kind: z.enum(["product", "article"]),
+  keyword: z.string().max(120).optional(),
+  status: z.enum(["all", "active", "draft", "archived", "published"]).optional(),
+  tag: z.string().max(80).optional(),
+  maxInventory: z.number().int().min(0).optional(),
+});
+
 const executeSchema = z.object({
   intent: z.literal("execute"),
   skillId: z.string().min(1),
@@ -41,8 +51,9 @@ const executeSchema = z.object({
         imageUrl: z.string().nullable().optional(),
       }),
     )
-    .min(1, "至少选择 1 个对象")
-    .max(TASK_PROPOSAL_MAX_TARGETS, `最多一次执行 ${TASK_PROPOSAL_MAX_TARGETS} 个对象`),
+    .max(TASK_PROPOSAL_MAX_TARGETS, `最多一次执行 ${TASK_PROPOSAL_MAX_TARGETS} 个对象`)
+    .default([]),
+  targetsQuery: targetsQuerySchema.optional(),
 });
 
 const requestSchema = z.discriminatedUnion("intent", [estimateSchema, executeSchema]);
@@ -98,6 +109,46 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const i18n = initI18n(locale);
   const t = i18n.t.bind(i18n);
 
+  // 显式 ID 优先；否则按圈定条件在执行期重新求值
+  let targets = body.targets;
+  if (targets.length === 0) {
+    if (!body.targetsQuery) {
+      return data(
+        { ok: false, error: "至少选择 1 个对象，或提供圈定条件" },
+        { status: 400 },
+      );
+    }
+    try {
+      const resolved = await resolveObjectQueryTargets(
+        admin,
+        body.targetsQuery,
+        TASK_PROPOSAL_MAX_TARGETS,
+      );
+      if (resolved.overflow) {
+        return data<TaskProposalExecuteResponse>(
+          {
+            ok: false,
+            error: `当前条件匹配数超过单次执行上限（${TASK_PROPOSAL_MAX_TARGETS} 个），请收紧条件后重试`,
+          },
+          { status: 400 },
+        );
+      }
+      if (resolved.targets.length === 0) {
+        return data<TaskProposalExecuteResponse>(
+          { ok: false, error: "当前条件未匹配到任何对象，请调整条件后重试" },
+          { status: 400 },
+        );
+      }
+      targets = resolved.targets;
+    } catch (e) {
+      console.error("[TaskProposal] resolve targetsQuery failed:", e);
+      return data<TaskProposalExecuteResponse>(
+        { ok: false, error: "按条件求值失败，请稍后重试" },
+        { status: 500 },
+      );
+    }
+  }
+
   try {
     const result = await handler.execute({
       admin,
@@ -105,7 +156,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       locale,
       t,
       params: body.params,
-      targets: body.targets,
+      targets,
     });
     return data<TaskProposalExecuteResponse>({
       ok: true,

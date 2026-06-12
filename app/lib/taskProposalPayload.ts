@@ -12,6 +12,15 @@
  *   估算          → POST /api/task-proposal { intent: "estimate", skillId, params }
  */
 
+import {
+  coerceObjectQuerySelection,
+  type ObjectQuerySelection,
+} from "./objectQuerySpec";
+import {
+  filterPictureTranslateSourceLanguages,
+  filterPictureTranslateTargetLanguages,
+} from "../config/pictureTranslateLanguages";
+
 export const TASK_PROPOSAL_VERSION = 1;
 
 /** schema 驱动的参数字段：value 内联在字段里，前端按 type 渲染控件。 */
@@ -45,6 +54,11 @@ export type TaskProposalPayload = {
   targets: {
     kind: TaskProposalTargetKind;
     items: TaskProposalTarget[];
+    /**
+     * 按条件圈定（阶段 2）：与 items 互斥优先级低于 items。
+     * 有 query 且 items 为空时，执行端按条件重新求值（不固化 ID）。
+     */
+    query?: ObjectQuerySelection;
   };
   params: TaskProposalField[];
 };
@@ -136,13 +150,18 @@ export function coerceTaskProposalPayload(raw: unknown): TaskProposalPayload | n
   const items = Array.isArray(targetsRaw.items)
     ? targetsRaw.items.map(coerceTarget).filter((t): t is TaskProposalTarget => t !== null)
     : [];
+  const targetsQuery = coerceObjectQuerySelection(targetsRaw.query);
   return {
     version: TASK_PROPOSAL_VERSION,
     proposalId: safeString(r.proposalId, `tp-${Date.now()}`),
     skillId,
     title: safeString(r.title, "任务确认"),
     ...(safeString(r.summary) ? { summary: safeString(r.summary) } : {}),
-    targets: { kind: coerceTargetKind(targetsRaw.kind), items },
+    targets: {
+      kind: coerceTargetKind(targetsRaw.kind),
+      items,
+      ...(targetsQuery ? { query: targetsQuery } : {}),
+    },
     params: Array.isArray(r.params)
       ? r.params.map(coerceField).filter((f): f is TaskProposalField => f !== null)
       : [],
@@ -166,42 +185,137 @@ export const PRODUCT_IMPROVE_LANGUAGE_OPTIONS: Array<{ value: string; label: str
 ];
 
 /**
- * 客户端兜底合并：AI 没填 targets 时，用工作台已选商品补全。
- * 与旧 mergeBatchTasksPayloadWithContext 同语义。
+ * 客户端兜底合并：AI 没填 targets 时，用工作台已选商品（或按条件圈定）补全。
+ * 优先级：proposal 自带 items > 工作台手动勾选 > 工作台按条件圈定（query）。
  */
 export function mergeTaskProposalTargets(
   proposal: TaskProposalPayload,
   contextProducts: Array<{ id: string; title: string; imageUrl?: string | null }>,
+  contextProductQuery?: ObjectQuerySelection | null,
 ): TaskProposalPayload {
-  if (proposal.targets.items.length > 0 || contextProducts.length === 0) return proposal;
-  return {
-    ...proposal,
-    targets: {
-      ...proposal.targets,
-      items: contextProducts.map((p) => ({
-        id: p.id,
-        title: p.title,
-        imageUrl: p.imageUrl ?? null,
-      })),
-    },
-  };
+  if (proposal.targets.items.length > 0 || proposal.targets.query) return proposal;
+  if (contextProducts.length > 0) {
+    return {
+      ...proposal,
+      targets: {
+        ...proposal.targets,
+        items: contextProducts.map((p) => ({
+          id: p.id,
+          title: p.title,
+          imageUrl: p.imageUrl ?? null,
+        })),
+      },
+    };
+  }
+  if (contextProductQuery && contextProductQuery.kind === "product") {
+    return {
+      ...proposal,
+      targets: { ...proposal.targets, query: contextProductQuery },
+    };
+  }
+  return proposal;
 }
 
 /**
- * 旧 BatchTasksFormPayload → TaskProposal 转换。
- * 仅 product_improve 走新协议（picture_translate 留在旧卡片，阶段 4 迁移）。
+ * 旧 BatchTasksFormPayload → TaskProposal 转换（阶段 4 起两种任务类型都走新协议）。
  * products 允许为空：客户端会用工作台已选商品补全 targets。
  */
 export function taskProposalFromBatchTasksPayload(payload: {
   taskType: string;
   products: Array<{ id: string; title: string; imageUrl?: string | null }>;
   targetLanguage?: string;
+  sourceLanguage?: string;
 }): TaskProposalPayload | null {
+  if (payload.taskType === "picture_translate") {
+    return buildBatchPictureTranslateProposal({
+      products: payload.products,
+      sourceLanguage: payload.sourceLanguage,
+      targetLanguage: payload.targetLanguage,
+    });
+  }
   if (payload.taskType !== "product_improve") return null;
   return buildBatchProductImproveProposal({
     products: payload.products,
     targetLanguage: payload.targetLanguage,
   });
+}
+
+// ─── 批量图片翻译（阶段 4 第二个走通协议的 Skill） ───────────────────────────
+
+export const BATCH_PICTURE_TRANSLATE_SKILL_ID = "batch_picture_translate";
+
+/** 语言代码 → 中文显示名（Intl.DisplayNames，失败时回退 code 本身） */
+function pictureTranslateLanguageLabel(code: string): string {
+  if (code === "auto") return "自动检测";
+  try {
+    return new Intl.DisplayNames(["zh-CN"], { type: "language" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
+export const PICTURE_TRANSLATE_SOURCE_OPTIONS: Array<{ value: string; label: string }> =
+  filterPictureTranslateSourceLanguages(null).map((language) => ({
+    value: language.code,
+    label: pictureTranslateLanguageLabel(language.code),
+  }));
+
+export const PICTURE_TRANSLATE_TARGET_OPTIONS: Array<{ value: string; label: string }> =
+  filterPictureTranslateTargetLanguages({ sourceLanguage: "auto", provider: null }).map(
+    (language) => ({
+      value: language.code,
+      label: pictureTranslateLanguageLabel(language.code),
+    }),
+  );
+
+/** 由批量商品列表构造「批量翻译商品图片」提案。无主图的商品标记为不可执行。 */
+export function buildBatchPictureTranslateProposal(args: {
+  products: Array<{ id: string; title: string; imageUrl?: string | null }>;
+  sourceLanguage?: string;
+  targetLanguage?: string;
+}): TaskProposalPayload {
+  const sourceLanguage =
+    args.sourceLanguage &&
+    PICTURE_TRANSLATE_SOURCE_OPTIONS.some((o) => o.value === args.sourceLanguage)
+      ? args.sourceLanguage
+      : "auto";
+  const targetLanguage =
+    args.targetLanguage &&
+    PICTURE_TRANSLATE_TARGET_OPTIONS.some((o) => o.value === args.targetLanguage)
+      ? args.targetLanguage
+      : "zh";
+  return {
+    version: TASK_PROPOSAL_VERSION,
+    proposalId: `tp-${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Date.now()}`,
+    skillId: BATCH_PICTURE_TRANSLATE_SKILL_ID,
+    title: "批量翻译商品图片",
+    summary: "为每个勾选商品的主图创建一个图片翻译任务，完成后可在任务列表逐个审核应用。",
+    targets: {
+      kind: "products",
+      items: args.products.map((p) => ({
+        id: p.id,
+        title: p.title,
+        imageUrl: p.imageUrl ?? null,
+        ...(p.imageUrl ? {} : { disabledReason: "无主图" }),
+      })),
+    },
+    params: [
+      {
+        key: "sourceLanguage",
+        label: "源语言",
+        type: "select",
+        value: sourceLanguage,
+        options: PICTURE_TRANSLATE_SOURCE_OPTIONS,
+      },
+      {
+        key: "targetLanguage",
+        label: "目标语言",
+        type: "select",
+        value: targetLanguage,
+        options: PICTURE_TRANSLATE_TARGET_OPTIONS,
+      },
+    ],
+  };
 }
 
 /** 由批量商品列表构造「批量商品描述生成」提案（服务端发射 / 客户端工作台兜底共用）。 */

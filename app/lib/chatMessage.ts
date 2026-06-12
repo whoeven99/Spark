@@ -1,4 +1,3 @@
-import type { BatchTasksFormPayload } from "./batchTasksFormPayload";
 import type { ImageGenerationFormPayload } from "./imageGenerationFormPayload";
 import type { PictureTranslateFormPayload } from "./pictureTranslateFormPayload";
 import type { TaskProposalPayload } from "./taskProposalPayload";
@@ -65,9 +64,6 @@ export type ChatMessage =
       /** 为 true 时在气泡内渲染「文生图」交互卡片（走 /api/generate-image）。 */
       imageGenerationCard?: boolean;
       imageGenerationFormPayload?: ImageGenerationFormPayload;
-      /** 为 true 时在气泡内渲染「批量任务确认」卡片（走 /api/batch-ai-tasks）。 */
-      batchTasksCard?: boolean;
-      batchTasksFormPayload?: BatchTasksFormPayload;
       /** 通用任务确认卡片（TaskProposal 协议，走 /api/task-proposal）。 */
       taskProposal?: TaskProposalPayload;
       productImproveCardPayload?: ProductImproveCardPayload;

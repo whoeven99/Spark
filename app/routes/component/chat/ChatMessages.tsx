@@ -7,7 +7,6 @@ import { ProductImproveChatCard } from "./ProductImproveChatCard";
 import { ImageGenerationChatCard } from "./ImageGenerationChatCard";
 import { PictureTranslateChatCard } from "./PictureTranslateChatCard";
 import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard";
-import { BatchTasksChatCard } from "./BatchTasksChatCard";
 import { TaskProposalCard } from "./TaskProposalCard";
 
 type ChatMessagesProps = {
@@ -42,14 +41,9 @@ export function ChatMessages({
           item.role === "assistant" && Boolean(item.translationTaskForm);
         const hasTaskProposalCard =
           item.role === "assistant" && Boolean(item.taskProposal);
-        const hasBatchTasksCard =
-          item.role === "assistant" &&
-          !hasTaskProposalCard &&
-          (Boolean(item.batchTasksCard) || Boolean(item.batchTasksFormPayload));
         const hasGenerateDescriptionCard =
           item.role === "assistant" &&
           Boolean(item.productImproveCard) &&
-          !hasBatchTasksCard &&
           !hasTaskProposalCard;
         const hasPictureTranslateCard =
           item.role === "assistant" &&
@@ -67,7 +61,6 @@ export function ChatMessages({
           hasGenerateDescriptionCard ||
           hasPictureTranslateCard ||
           hasImageGenerationCard ||
-          hasBatchTasksCard ||
           hasTaskProposalCard ||
           hasImageAttachments;
 
@@ -200,15 +193,6 @@ export function ChatMessages({
                         onTaskCreated={(taskId, batchId) =>
                           onImageGenerationCardSuccess?.(index, { taskId, batchId })
                         }
-                      />
-                    </div>
-                  ) : null}
-
-                  {hasBatchTasksCard ? (
-                    <div style={{ marginTop: "0.85rem" }}>
-                      <BatchTasksChatCard
-                        embedded
-                        initialPayload={item.batchTasksFormPayload}
                       />
                     </div>
                   ) : null}

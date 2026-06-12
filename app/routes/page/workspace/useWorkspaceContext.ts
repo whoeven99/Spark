@@ -4,13 +4,17 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { SelectedShopifyObject } from "../../../lib/shopifyObjectTypes";
+import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
 import { selectedShopifyObjectsToBatchProducts } from "../../../lib/workspaceContextProducts";
 import { buildWorkspaceContextBlock } from "./messageTransforms";
 import {
   isObjectType,
+  isQueryableObjectType,
   type ContextTool,
+  type FileRole,
   type LocalFileItem,
   type ObjectType,
+  type QueryableObjectType,
   type RichMediaItem,
 } from "./types";
 
@@ -60,12 +64,20 @@ export function useWorkspaceContext() {
     article: [],
     order: [],
   });
+  const [objectQuerySelectionByType, setObjectQuerySelectionByType] = useState<
+    Record<QueryableObjectType, ObjectQuerySelection | null>
+  >({
+    product: null,
+    article: null,
+  });
   const [localFiles, setLocalFiles] = useState<LocalFileItem[]>([]);
   const [workspaceFilesLoading, setWorkspaceFilesLoading] = useState(false);
   const [workspaceFilesError, setWorkspaceFilesError] = useState<string | null>(null);
   const [richMediaItems, setRichMediaItems] = useState<RichMediaItem[]>(initialRichMediaItems);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
+  const [fileRolesById, setFileRolesById] = useState<Record<string, FileRole>>({});
+  const [constraints, setConstraints] = useState<string[]>([]);
 
   const toggleContextTool = useCallback((tool: ContextTool) => {
     setActiveContextTool((current) => (current === tool ? null : tool));
@@ -77,18 +89,28 @@ export function useWorkspaceContext() {
 
   const clearContext = useCallback(() => {
     setSelectedObjectsByType({ product: [], article: [], order: [] });
+    setObjectQuerySelectionByType({ product: null, article: null });
     setSelectedFileIds([]);
     setSelectedMediaIds([]);
+    setFileRolesById({});
+    setConstraints([]);
     setActiveContextTool(null);
   }, []);
 
   const clearToolSelection = useCallback((tool: ContextTool) => {
     if (isObjectType(tool)) {
       setSelectedObjectsByType((current) => ({ ...current, [tool]: [] }));
+      if (isQueryableObjectType(tool)) {
+        setObjectQuerySelectionByType((current) => ({ ...current, [tool]: null }));
+      }
       return;
     }
     if (tool === "file") {
       setSelectedFileIds([]);
+      return;
+    }
+    if (tool === "constraint") {
+      setConstraints([]);
       return;
     }
     setSelectedMediaIds([]);
@@ -108,6 +130,39 @@ export function useWorkspaceContext() {
           : [...currentItems, object],
       };
     });
+    // 手动勾选与按条件圈定互斥：动了手动选择就放弃该类型的 query
+    if (isQueryableObjectType(type)) {
+      setObjectQuerySelectionByType((current) =>
+        current[type] ? { ...current, [type]: null } : current,
+      );
+    }
+  }, []);
+
+  /** 按条件圈定（与手动勾选互斥：保存 query 时清空该类型的手动选择）。传 null 取消圈定。 */
+  const setObjectQuerySelection = useCallback(
+    (type: QueryableObjectType, selection: ObjectQuerySelection | null) => {
+      setObjectQuerySelectionByType((current) => ({ ...current, [type]: selection }));
+      if (selection) {
+        setSelectedObjectsByType((current) =>
+          current[type].length > 0 ? { ...current, [type]: [] } : current,
+        );
+      }
+    },
+    [],
+  );
+
+  const setFileRole = useCallback((fileId: string, role: FileRole) => {
+    setFileRolesById((current) => ({ ...current, [fileId]: role }));
+  }, []);
+
+  const addConstraint = useCallback((text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setConstraints((current) => (current.includes(trimmed) ? current : [...current, trimmed]));
+  }, []);
+
+  const removeConstraint = useCallback((text: string) => {
+    setConstraints((current) => current.filter((item) => item !== text));
   }, []);
 
   const loadWorkspaceFiles = useCallback(async () => {
@@ -193,6 +248,11 @@ export function useWorkspaceContext() {
       setSelectedFileIds((current) =>
         current.map((id) => (id === localId ? data.id : id)),
       );
+      setFileRolesById((current) => {
+        if (!(localId in current)) return current;
+        const { [localId]: role, ...rest } = current;
+        return { ...rest, [data.id]: role };
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setLocalFiles((current) =>
@@ -222,10 +282,16 @@ export function useWorkspaceContext() {
     [selectedObjectsByType],
   );
 
+  const totalQuerySelections = useMemo(
+    () => Object.values(objectQuerySelectionByType).filter(Boolean).length,
+    [objectQuerySelectionByType],
+  );
+
   const filledContextCount =
-    (totalSelectedObjects > 0 ? 1 : 0) +
+    (totalSelectedObjects > 0 || totalQuerySelections > 0 ? 1 : 0) +
     (selectedFileIds.length > 0 ? 1 : 0) +
-    (selectedMediaIds.length > 0 ? 1 : 0);
+    (selectedMediaIds.length > 0 ? 1 : 0) +
+    (constraints.length > 0 ? 1 : 0);
 
   /** 已上传成功的服务端文件 ID（用于 chat-stream 注入文件内容） */
   const uploadedFileIds = useMemo(
@@ -245,12 +311,24 @@ export function useWorkspaceContext() {
     () =>
       buildWorkspaceContextBlock({
         selectedObjectsByType,
+        objectQuerySelectionByType,
         selectedFileIds,
         selectedMediaIds,
         localFiles,
         richMediaItems,
+        fileRolesById,
+        constraints,
       }),
-    [selectedObjectsByType, selectedFileIds, selectedMediaIds, localFiles, richMediaItems],
+    [
+      selectedObjectsByType,
+      objectQuerySelectionByType,
+      selectedFileIds,
+      selectedMediaIds,
+      localFiles,
+      richMediaItems,
+      fileRolesById,
+      constraints,
+    ],
   );
 
   return {
@@ -261,6 +339,14 @@ export function useWorkspaceContext() {
     setObjectQuery,
     selectedObjectsByType,
     toggleObjectSelection,
+    objectQuerySelectionByType,
+    setObjectQuerySelection,
+    fileRolesById,
+    setFileRole,
+    constraints,
+    addConstraint,
+    removeConstraint,
+    totalQuerySelections,
     localFiles,
     workspaceFilesLoading,
     workspaceFilesError,

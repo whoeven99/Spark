@@ -436,6 +436,7 @@ export function WorkspaceAppShellPage({
         url: `/chat-stream${authQuery}`,
         fileIds: workspaceContext.uploadedFileIds,
         workspaceBatchProducts: workspaceContext.workspaceBatchProducts,
+        workspaceProductQuery: workspaceContext.objectQuerySelectionByType.product,
         onFinish: (payload) => {
           if (epoch !== replyEpochRef.current) return;
 
@@ -740,7 +741,19 @@ export function WorkspaceAppShellPage({
         ) : null}
         {activePanel === "skills" ? <SkillsPanel onOpenTool={(path: string) => navigate(path)} /> : null}
         {activePanel === "automation" ? (
-          <AutomationPanel activeView={automationView} onChangeView={setAutomationView} />
+          <AutomationPanel
+            activeView={automationView}
+            onChangeView={setAutomationView}
+            onRunInChat={(prompt: string) => {
+              if (activeConversation) {
+                setDraftByConversation((current: Record<string, string>) => ({
+                  ...current,
+                  [activeConversation.id]: prompt,
+                }));
+              }
+              switchPanel("chat");
+            }}
+          />
         ) : null}
         {activePanel === "tasks" ? (
           <UnifiedTaskListPage locationSearch={typeof window !== "undefined" ? window.location.search : ""} />

@@ -178,17 +178,39 @@ export function DashboardPanel({
           <div style={isMobile ? mobileSectionHeaderStyle : sectionHeaderStyle}>
             <div>
               <DashboardSectionTitle title="AI 自动化执行摘要" />
-              <div style={sectionTextStyle}>
-                展示任务列表最近记录；Playbook 定时执行
-                <span style={pendingIntegrationBadgeSmallStyle}>待接入</span>
-              </div>
+              <div style={sectionTextStyle}>每日巡检与任务列表的最近执行记录。</div>
             </div>
             <button type="button" style={ghostButtonStyle} onClick={onOpenTasks}>
               查看任务列表
             </button>
           </div>
           <div style={listColumnStyle}>
-            {snapshot.recentTaskSummaries.length === 0 ? (
+            {snapshot.automation ? (
+              <div style={summaryItemStyle}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={sectionTitleSmallStyle}>{snapshot.automation.title}</span>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: "1px 8px",
+                      borderRadius: 999,
+                      color: snapshot.automation.status === "healthy" ? "#0f5132" : "#9a5b00",
+                      background: snapshot.automation.status === "healthy" ? "#e9f7ef" : "#fff7e0",
+                    }}
+                  >
+                    {snapshot.automation.status === "healthy" ? "正常" : "关注中"}
+                  </span>
+                </div>
+                <div style={sectionTextStyle}>{snapshot.automation.detail}</div>
+                {snapshot.automation.lastRunAt ? (
+                  <div style={mutedMetaStyle}>
+                    最近执行：{new Date(snapshot.automation.lastRunAt).toLocaleString("zh-CN", { hour12: false })}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {snapshot.recentTaskSummaries.length === 0 && !snapshot.automation ? (
               <div style={sectionTextStyle}>暂无近期任务记录。</div>
             ) : (
               snapshot.recentTaskSummaries.map((item) => (

@@ -121,8 +121,6 @@ export function ChatPanel({
     streamingPictureTranslatePayload,
     streamingImageGenerationCard,
     streamingImageGenerationPayload,
-    streamingBatchTasksCard,
-    streamingBatchTasksPayload,
     streamingTaskProposal,
     skillSteps,
   } = stream;
@@ -131,6 +129,8 @@ export function ChatPanel({
     activeContextTool,
     toggleContextTool,
     selectedObjectsByType,
+    objectQuerySelectionByType,
+    constraints,
     selectedFileIds,
     selectedMediaIds,
     filledContextCount,
@@ -144,20 +144,32 @@ export function ChatPanel({
     [messages],
   );
 
+  const queryToolLabel = (type: "product" | "article", base: string) => {
+    const manualCount = selectedObjectsByType[type].length;
+    if (manualCount > 0) return `${base} ${manualCount}`;
+    const query = objectQuerySelectionByType[type];
+    if (query) return query.matchCount != null ? `${base} 条件·${query.matchCount}` : `${base} 条件`;
+    return base;
+  };
+
   const toolItems: Array<{ key: ContextTool; label: string; icon: string; active: boolean }> = [
-    { key: "product", label: selectedObjectsByType.product.length > 0 ? `商品 ${selectedObjectsByType.product.length}` : "商品", icon: "◫", active: activeContextTool === "product" },
+    { key: "product", label: queryToolLabel("product", "商品"), icon: "◫", active: activeContextTool === "product" },
     { key: "order", label: selectedObjectsByType.order.length > 0 ? `订单 ${selectedObjectsByType.order.length}` : "订单", icon: "◎", active: activeContextTool === "order" },
-    { key: "article", label: selectedObjectsByType.article.length > 0 ? `文章 ${selectedObjectsByType.article.length}` : "文章", icon: "≣", active: activeContextTool === "article" },
+    { key: "article", label: queryToolLabel("article", "文章"), icon: "≣", active: activeContextTool === "article" },
     { key: "file", label: selectedFileIds.length > 0 ? `文件 ${selectedFileIds.length}` : "文件", icon: "↑", active: activeContextTool === "file" },
     { key: "media", label: selectedMediaIds.length > 0 ? `富媒体 ${selectedMediaIds.length}` : "富媒体", icon: "◇", active: activeContextTool === "media" },
+    { key: "constraint", label: constraints.length > 0 ? `约束 ${constraints.length}` : "约束", icon: "⚐", active: activeContextTool === "constraint" },
   ];
 
   const selectedSummaryBubbles: Array<{ key: ContextTool; label: string }> = [
     ...(selectedObjectsByType.product.length > 0 ? [{ key: "product" as const, label: `已选择 ${selectedObjectsByType.product.length} 个商品` }] : []),
+    ...(objectQuerySelectionByType.product ? [{ key: "product" as const, label: `按条件圈定商品${objectQuerySelectionByType.product.matchCount != null ? `（约 ${objectQuerySelectionByType.product.matchCount} 个）` : ""}` }] : []),
     ...(selectedObjectsByType.order.length > 0 ? [{ key: "order" as const, label: `已选择 ${selectedObjectsByType.order.length} 个订单` }] : []),
     ...(selectedObjectsByType.article.length > 0 ? [{ key: "article" as const, label: `已选择 ${selectedObjectsByType.article.length} 篇文章` }] : []),
+    ...(objectQuerySelectionByType.article ? [{ key: "article" as const, label: `按条件圈定文章${objectQuerySelectionByType.article.matchCount != null ? `（约 ${objectQuerySelectionByType.article.matchCount} 篇）` : ""}` }] : []),
     ...(selectedFileIds.length > 0 ? [{ key: "file" as const, label: `已选择 ${selectedFileIds.length} 个文件` }] : []),
     ...(selectedMediaIds.length > 0 ? [{ key: "media" as const, label: `已选择 ${selectedMediaIds.length} 个富媒体` }] : []),
+    ...(constraints.length > 0 ? [{ key: "constraint" as const, label: `约束 ${constraints.length} 条` }] : []),
   ];
 
   /**
@@ -406,10 +418,9 @@ export function ChatPanel({
                   streamingPictureTranslatePayload={streamingPictureTranslatePayload}
                   streamingImageGenerationCard={streamingImageGenerationCard}
                   streamingImageGenerationPayload={streamingImageGenerationPayload}
-                  streamingBatchTasksCard={streamingBatchTasksCard}
-                  streamingBatchTasksPayload={streamingBatchTasksPayload}
                   streamingTaskProposal={streamingTaskProposal}
                   workspaceBatchProducts={workspaceBatchProducts}
+                  workspaceProductQuery={objectQuerySelectionByType.product}
                 />
               }
               onTranslationCardSuccess={(messageIndex, detail) =>

@@ -479,23 +479,16 @@ export function invokeChatAgentStream(
               }
 
               if (def.name === "batchTasksForm") {
-                // product_improve 走通用 TaskProposal 协议；picture_translate 留旧卡片（阶段 4 迁移）。
+                // 两种批量任务（product_improve / picture_translate）均走通用 TaskProposal 协议。
                 // uiPayloads 键转换始终执行；流式 chunk 仅在 skill 未发过时补发。
                 const batchPayload = coerceBatchTasksFormPayload(payload);
                 const proposal = taskProposalFromBatchTasksPayload(batchPayload);
-                const alreadyEmitted = streamContext.emittedFlags.has("batchTasksForm");
                 if (proposal) {
                   delete uiPayloads.batchTasksCard;
                   uiPayloads.taskProposal = proposal;
-                  if (!alreadyEmitted) {
+                  if (!streamContext.emittedFlags.has("batchTasksForm")) {
                     controller.enqueue({ type: "task_proposal", payload: proposal });
                   }
-                } else if (!alreadyEmitted) {
-                  controller.enqueue({
-                    type: "tool_call",
-                    name: "open_batch_tasks_form",
-                    args: payload,
-                  });
                 }
               }
 
@@ -612,15 +605,6 @@ export function invokeChatAgentStream(
               uiPayloads.taskProposal = proposal;
               if (!streamContext.emittedFlags.has("batchTasksForm")) {
                 controller.enqueue({ type: "task_proposal", payload: proposal });
-              }
-            } else {
-              uiPayloads.batchTasksCard = batchTasksPayload;
-              if (!streamContext.emittedFlags.has("batchTasksForm")) {
-                controller.enqueue({
-                  type: "tool_call",
-                  name: "open_batch_tasks_form",
-                  args: batchTasksPayload,
-                });
               }
             }
           }

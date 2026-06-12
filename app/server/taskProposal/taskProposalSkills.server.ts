@@ -11,14 +11,21 @@ import {
   getEstimatedCredits,
   getEstimatedSeconds,
 } from "../aiTask/aiTaskEstimation.server";
-import { createProductImproveBatchTasks } from "../aiTask/batchTaskCreate.server";
+import { deriveBucket } from "../aiTask/estimationBucket";
+import {
+  createPictureTranslateBatchTasks,
+  createProductImproveBatchTasks,
+} from "../aiTask/batchTaskCreate.server";
 import { requireBillingAccess } from "../billing/index.server";
+import { requireVisualToolBillingAccess } from "../tokenUsage/index.server";
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
 import {
+  BATCH_PICTURE_TRANSLATE_SKILL_ID,
   BATCH_PRODUCT_IMPROVE_SKILL_ID,
   type TaskProposalExecuteError,
   type TaskProposalTarget,
 } from "../../lib/taskProposalPayload";
+import { selectModelTypeForLanguagePair } from "../../config/pictureTranslateLanguages";
 
 export const TASK_PROPOSAL_MAX_TARGETS = 20;
 
@@ -94,8 +101,72 @@ const batchProductImproveHandler: TaskProposalSkillHandler = {
   },
 };
 
+const batchPictureTranslateHandler: TaskProposalSkillHandler = {
+  skillId: BATCH_PICTURE_TRANSLATE_SKILL_ID,
+  // 桶按语言对推导出的 modelType 区分（volc / aidge 成本差异大）
+  estimate: async ({ params }) => {
+    const modelType = selectModelTypeForLanguagePair(
+      params.sourceLanguage?.trim() || "auto",
+      params.targetLanguage?.trim() || "zh",
+    );
+    const bucket = deriveBucket("picture_translate", { modelType });
+    const [credits, seconds] = await Promise.all([
+      getEstimatedCredits("picture_translate", bucket),
+      getEstimatedSeconds("picture_translate", bucket),
+    ]);
+    return {
+      perItemCredits: credits > 0 ? credits : null,
+      perItemSeconds: seconds,
+    };
+  },
+  execute: async ({ shop, params, targets }) => {
+    try {
+      await requireVisualToolBillingAccess(shop);
+    } catch {
+      throw new TaskProposalBillingError();
+    }
+    const sourceCode = params.sourceLanguage?.trim() || "auto";
+    const targetCode = params.targetLanguage?.trim() || "zh";
+    const modelType = selectModelTypeForLanguagePair(sourceCode, targetCode);
+
+    // 无主图的目标直接报为 per-item 错误（卡片端已默认不勾选，这里兜底）
+    const errors: TaskProposalExecuteError[] = [];
+    const items: Array<{ productId: string; imageUrl: string }> = [];
+    targets.forEach((target, index) => {
+      if (target.imageUrl) {
+        items.push({ productId: target.id, imageUrl: target.imageUrl });
+      } else {
+        errors.push({ index, targetId: target.id, error: `「${target.title}」无主图，已跳过` });
+      }
+    });
+    if (items.length === 0) {
+      return { taskIds: [], errors };
+    }
+
+    const result = await createPictureTranslateBatchTasks({
+      shop,
+      sourceCode,
+      targetCode,
+      modelType,
+      items,
+    });
+    return {
+      taskIds: result.taskIds,
+      errors: [
+        ...errors,
+        ...result.errors.map((e) => ({
+          index: e.index,
+          targetId: e.productId,
+          error: e.error,
+        })),
+      ],
+    };
+  },
+};
+
 const handlers = new Map<string, TaskProposalSkillHandler>([
   [batchProductImproveHandler.skillId, batchProductImproveHandler],
+  [batchPictureTranslateHandler.skillId, batchPictureTranslateHandler],
 ]);
 
 export function getTaskProposalSkillHandler(

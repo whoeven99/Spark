@@ -7,7 +7,17 @@ import { WorkspaceContextObjectPicker } from "../../component/chat/WorkspaceCont
 import { useContextResourceSearch } from "../../../hooks/useContextResourceSearch";
 import type { ContextResourceSortDirection } from "../../../lib/contextResourceTypes";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
-import { isObjectType, objectTypeLabels, type OrderFilterKey, type RichMediaItem } from "./types";
+import { ObjectQueryBuilder } from "./ObjectQueryBuilder";
+import {
+  fileRoleDescriptions,
+  fileRoleLabels,
+  isObjectType,
+  isQueryableObjectType,
+  objectTypeLabels,
+  type FileRole,
+  type OrderFilterKey,
+  type RichMediaItem,
+} from "./types";
 import type { WorkspaceContextController } from "./useWorkspaceContext";
 import {
   compactFieldStyle,
@@ -46,6 +56,19 @@ const orderFilterLabels: Array<{ key: OrderFilterKey; label: string }> = [
   { key: "refunded", label: "退款中" },
 ];
 
+const CONSTRAINT_PRESETS = [
+  "不修改商品价格",
+  "不改动已发布的内容，仅生成草稿",
+  "保持品牌语气一致",
+  "标题不超过 60 个字符",
+  "不删除任何现有内容",
+];
+
+const FILE_ROLE_OPTIONS = (Object.keys(fileRoleLabels) as FileRole[]).map((role) => ({
+  value: role,
+  label: fileRoleLabels[role],
+}));
+
 function normalizeResourceStatus(status: string | null | undefined): string {
   if (!status) return "未知";
   return status.replace(/_/g, " ");
@@ -60,6 +83,13 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
     setObjectQuery,
     selectedObjectsByType,
     toggleObjectSelection,
+    objectQuerySelectionByType,
+    setObjectQuerySelection,
+    fileRolesById,
+    setFileRole,
+    constraints,
+    addConstraint,
+    removeConstraint,
     localFiles,
     workspaceFilesLoading,
     workspaceFilesError,
@@ -76,6 +106,8 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
 
   const [orderFilter, setOrderFilter] = useState<OrderFilterKey>("all");
   const orderSort = "created_at:desc";
+  const [selectionMode, setSelectionMode] = useState<"manual" | "query">("manual");
+  const [newConstraintText, setNewConstraintText] = useState("");
   const [newFileObj, setNewFileObj] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [newMediaTitle, setNewMediaTitle] = useState("");
@@ -104,16 +136,29 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
 
   const activeContextSelectionCount =
     activeContextTool === "product"
-      ? selectedObjectsByType.product.length
+      ? selectedObjectsByType.product.length ||
+        (objectQuerySelectionByType.product ? (objectQuerySelectionByType.product.matchCount ?? 1) : 0)
       : activeContextTool === "article"
-        ? selectedObjectsByType.article.length
+        ? selectedObjectsByType.article.length ||
+          (objectQuerySelectionByType.article ? (objectQuerySelectionByType.article.matchCount ?? 1) : 0)
         : activeContextTool === "order"
           ? selectedObjectsByType.order.length
           : activeContextTool === "file"
             ? selectedFileIds.length + (newFileObj ? 1 : 0)
             : activeContextTool === "media"
               ? selectedMediaIds.length
-              : 0;
+              : activeContextTool === "constraint"
+                ? constraints.length
+                : 0;
+
+  // 打开商品/文章弹窗时：已有圈定条件则默认进入「按条件」模式
+  useEffect(() => {
+    if (isQueryableObjectType(activeContextTool)) {
+      setSelectionMode(objectQuerySelectionByType[activeContextTool] ? "query" : "manual");
+    }
+    setNewConstraintText("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeContextTool]);
 
   const resetPendingFileSelection = () => {
     setNewFileObj(null);
@@ -159,14 +204,18 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
                 ? `${objectTypeLabels[activeContextTool]}选择器`
                 : activeContextTool === "file"
                   ? "文件选择"
-                  : "富媒体选择"}
+                  : activeContextTool === "constraint"
+                    ? "约束条件"
+                    : "富媒体选择"}
             </div>
             <div style={sectionTextStyle}>
               {isObjectType(activeContextTool)
-                ? "在当前页面弹窗内完成批量勾选和筛选。"
+                ? "逐个勾选，或按条件圈定（执行时重新求值）。"
                 : activeContextTool === "file"
-                  ? "选择需要附加到这次对话的本地文件。"
-                  : "选择需要附加到这次对话的 URL、图片或视频。"}
+                  ? "选择附加文件，并标注其角色（参考/数据/风格）。"
+                  : activeContextTool === "constraint"
+                    ? "设定 AI 执行任务时必须遵守的边界。"
+                    : "选择需要附加到这次对话的 URL、图片或视频。"}
             </div>
           </div>
           <button type="button" style={toolModalCloseStyle} onClick={handleDismiss} aria-label="关闭">
@@ -175,15 +224,48 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
         </div>
 
         {activeContextTool === "product" || activeContextTool === "article" ? (
-          <WorkspaceContextObjectPicker
-            kind={activeContextTool}
-            label={objectTypeLabels[activeContextTool]}
-            query={objectQueryByType[activeContextTool]}
-            onQueryChange={(value) => setObjectQuery(activeContextTool, value)}
-            selected={selectedObjectsByType[activeContextTool]}
-            onToggle={(item) => toggleObjectSelection(activeContextTool, item)}
-            locationSearch={typeof window !== "undefined" ? window.location.search : ""}
-          />
+          <>
+            <div style={filterChipRowStyle}>
+              <button
+                type="button"
+                style={filterChipStyle(selectionMode === "manual")}
+                onClick={() => setSelectionMode("manual")}
+              >
+                逐个勾选
+              </button>
+              <button
+                type="button"
+                style={filterChipStyle(selectionMode === "query")}
+                onClick={() => setSelectionMode("query")}
+              >
+                按条件圈定
+                {objectQuerySelectionByType[activeContextTool] ? " ✓" : ""}
+              </button>
+            </div>
+            {selectionMode === "manual" ? (
+              <WorkspaceContextObjectPicker
+                kind={activeContextTool}
+                label={objectTypeLabels[activeContextTool]}
+                query={objectQueryByType[activeContextTool]}
+                onQueryChange={(value) => setObjectQuery(activeContextTool, value)}
+                selected={selectedObjectsByType[activeContextTool]}
+                onToggle={(item) => toggleObjectSelection(activeContextTool, item)}
+                locationSearch={typeof window !== "undefined" ? window.location.search : ""}
+              />
+            ) : (
+              <ObjectQueryBuilder
+                key={activeContextTool}
+                type={activeContextTool}
+                selection={objectQuerySelectionByType[activeContextTool]}
+                onSave={(selection) => {
+                  setObjectQuerySelection(activeContextTool, selection);
+                  closeContextTool();
+                }}
+                onClear={() => setObjectQuerySelection(activeContextTool, null)}
+                locationSearch={typeof window !== "undefined" ? window.location.search : ""}
+              />
+            )}
+          </>
         ) : null}
 
         {activeContextTool === "order" ? (
@@ -330,6 +412,27 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
                           ? ` · 已解析 (${(file.charCount / 1000).toFixed(0)}k 字符)`
                           : ""}
                       </span>
+                      {checked && !file.uploading ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                          <span style={{ fontSize: 11, color: "#6d7175", flexShrink: 0 }}>角色</span>
+                          <select
+                            value={fileRolesById[file.id] ?? "reference"}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => setFileRole(file.id, e.target.value as FileRole)}
+                            style={{ ...selectFieldStyle, padding: "2px 6px", fontSize: 11 }}
+                            title={fileRoleDescriptions[fileRolesById[file.id] ?? "reference"]}
+                          >
+                            {FILE_ROLE_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                          <span style={{ fontSize: 10, color: "#94a3b8" }}>
+                            {fileRoleDescriptions[fileRolesById[file.id] ?? "reference"]}
+                          </span>
+                        </div>
+                      ) : null}
                       {file.serverId && !file.uploading ? (
                         <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                           <a
@@ -428,6 +531,91 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
                   </label>
                 );
               })}
+            </div>
+          </>
+        ) : null}
+
+        {activeContextTool === "constraint" ? (
+          <>
+            <div style={pickerInfoBoxStyle("neutral")}>
+              约束会随每条消息发给 AI，作为执行任务时必须遵守的边界。点击预设或输入自定义约束。
+            </div>
+            <div style={filterChipRowStyle}>
+              {CONSTRAINT_PRESETS.map((preset) => {
+                const active = constraints.includes(preset);
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    style={filterChipStyle(active)}
+                    onClick={() => (active ? removeConstraint(preset) : addConstraint(preset))}
+                  >
+                    {preset}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ ...inlineFieldRowStyle, marginTop: 12 }}>
+              <input
+                value={newConstraintText}
+                onChange={(event) => setNewConstraintText(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+                  event.preventDefault();
+                  addConstraint(newConstraintText);
+                  setNewConstraintText("");
+                }}
+                placeholder="自定义约束，如：描述不超过 200 字"
+                style={compactFieldStyle}
+              />
+              <button
+                type="button"
+                style={ghostButtonStyle}
+                onClick={() => {
+                  addConstraint(newConstraintText);
+                  setNewConstraintText("");
+                }}
+              >
+                添加
+              </button>
+            </div>
+            <div style={selectorListCompactStyle}>
+              {constraints.length === 0 ? (
+                <div style={sectionTextStyle}>尚未添加约束。</div>
+              ) : (
+                constraints.map((constraint) => (
+                  <div
+                    key={constraint}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 10,
+                      padding: "8px 12px",
+                      borderRadius: 8,
+                      border: "1px solid #e1e3e5",
+                      background: "#ffffff",
+                    }}
+                  >
+                    <span style={{ ...sectionTextStyle, flex: 1 }}>{constraint}</span>
+                    <button
+                      type="button"
+                      style={{
+                        fontSize: 12,
+                        color: "#d72c0d",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: 0,
+                        flexShrink: 0,
+                      }}
+                      onClick={() => removeConstraint(constraint)}
+                    >
+                      移除
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
           </>
         ) : null}
