@@ -2,11 +2,7 @@ import { createShopifyShopInfoTools } from "./shopifyInfo/shopifyInfo.tool";
 import { translationTaskFormTool } from "./translation/translation.tool";
 import { createTranslationQueryTool } from "./translation/translation.query.tool";
 import { globalToolRegistry } from "../core/toolRegistry.server";
-import {
-  extractTranslationTaskFormFromMessages,
-  shouldInjectTranslationTaskFormFallback,
-  defaultTranslationTaskFormPayload,
-} from "./translation/translation.extract";
+import { extractTranslationTaskFormFromMessages } from "./translation/translation.extract";
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import { sendTemplateEmailToolDefinition } from "./email/email.tool";
 import { productOptimizationSkills } from "./productOptimization";
@@ -50,14 +46,7 @@ globalToolRegistry.register({
       });
     }
   },
-  extractUIPayload: (messages, lastUserText, assistantReplyRaw) => {
-    const fromTool = extractTranslationTaskFormFromMessages(messages);
-    if (fromTool) return fromTool;
-    if (shouldInjectTranslationTaskFormFallback(lastUserText, assistantReplyRaw)) {
-      return defaultTranslationTaskFormPayload();
-    }
-    return undefined;
-  },
+  extractUIPayload: (messages) => extractTranslationTaskFormFromMessages(messages),
 });
 
 // 商品优化 Skill 组：文案生成、图片翻译、图片生成、质量评分

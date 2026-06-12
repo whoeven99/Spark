@@ -27,7 +27,7 @@ export const batchTasksFormSkillDefinition: ToolDefinition = {
 - 【优先级】只要上下文有 ≥ 1 个已选商品且用户意图涉及商品处理，本工具优先于 open_product_improve_form（单商品工具）`,
   createTool: () => batchTasksFormTool,
   extractUIPayload: (messages, lastUserText, assistantReplyRaw) =>
-    resolveBatchTasksFormPayload(messages, lastUserText, assistantReplyRaw),
+    resolveBatchTasksFormPayload(messages, lastUserText),
   onStreamEvent: (ev, enqueue, streamContext) => {
     // Use on_tool_end: ev.output = func() return value = JSON.stringify(payload).
     // This is the most reliable source because:

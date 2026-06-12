@@ -29,12 +29,5 @@ export const imageGenerationFormToolDefinition: ToolDefinition = {
       });
     }
   },
-  extractUIPayload: (messages, lastUserText, assistantReplyRaw) => {
-    const payload = resolveImageGenerationCardPayload(
-      messages,
-      lastUserText,
-      assistantReplyRaw,
-    );
-    return payload ?? undefined;
-  },
+  extractUIPayload: (messages) => resolveImageGenerationCardPayload(messages),
 };

@@ -1,5 +1,4 @@
 import { ToolMessage } from "@langchain/core/messages";
-import { extractUserIntentText } from "../../../../lib/chatCardFallback";
 import {
   coerceBatchTasksFormPayload,
   mergeBatchTasksPayloadWithContext,
@@ -68,48 +67,22 @@ export function shouldSuppressProductImproveForBatch(lastUserText: string): bool
   return workspaceSelectedProductCount(lastUserText) >= 2;
 }
 
-export function shouldInjectBatchTasksFormFallback(
-  lastUserText: string,
-  assistantReplyText: string,
-): boolean {
-  const workspaceProducts = parseWorkspaceProductsFromText(lastUserText);
-  if (workspaceProducts.length < 2) return false;
-
-  const intent = extractUserIntentText(lastUserText);
-  if (!intent) return false;
-
-  const userWantsBatch =
-    /批量|这些商品|已选|多个商品|全部商品|描述生成|生成描述|优化描述|商品描述|商品文案|product description/i.test(
-      intent,
-    );
-  if (!userWantsBatch) return false;
-
-  const assistant = assistantReplyText.trim();
-  if (!assistant) return true;
-
-  const assistantSignals =
-    /批量|卡片|确认|已为你|已为您|准备好|open_batch|任务|描述生成/i.test(assistant);
-  return assistantSignals;
-}
-
 export function resolveBatchTasksFormPayload(
   messages: unknown[],
   lastUserText: string,
-  assistantReplyRaw: string,
 ): BatchTasksFormPayload | undefined {
   const fromTool = extractBatchTasksFormFromMessages(messages, lastUserText);
   if (fromTool && fromTool.products.length > 0) return fromTool;
 
-  if (
-    hasBatchTasksFormToolCall(messages) ||
-    shouldInjectBatchTasksFormFallback(lastUserText, assistantReplyRaw)
-  ) {
-    const base = fromTool ?? coerceBatchTasksFormPayload({
-      taskType: "product_improve",
-      products: [],
-      targetLanguage: "en",
-      sourceLanguage: "auto",
-    });
+  if (hasBatchTasksFormToolCall(messages)) {
+    const base =
+      fromTool ??
+      coerceBatchTasksFormPayload({
+        taskType: "product_improve",
+        products: [],
+        targetLanguage: "en",
+        sourceLanguage: "auto",
+      });
     const enriched = enrichFromWorkspaceContext(base, lastUserText);
     if (enriched.products.length > 0) return enriched;
   }

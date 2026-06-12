@@ -32,12 +32,14 @@ import {
   sanitizeHumanInput,
 } from "../../agentRunLog/index.server";
 import { buildReflectionFromRun, fetchRecentReflectionSummary } from "../../agentRunLog/recentReflection.server";
-import { resolveImageGenerationCardPayload } from "../skills/imageGeneration/imageGeneration.extract";
-import { resolvePictureTranslateCardPayload } from "../skills/pictureTranslate/pictureTranslate.extract";
 import {
-  resolveBatchTasksFormPayload,
   shouldSuppressProductImproveForBatch,
 } from "../skills/batchTasks/batchTasks.extract";
+import {
+  hasAnyChatCardInUiPayloads,
+  reconcileReplyWithChatCards,
+  resolveMissingChatCardsWithLlm,
+} from "./resolveChatCardIntent.server";
 import {
   taskProposalFromBatchTasksPayload,
   type TaskProposalPayload,
@@ -557,56 +559,25 @@ export function invokeChatAgentStream(
           }
         }
 
-        if (!uiPayloads.pictureTranslateCard) {
-          const pictureTranslatePayload = resolvePictureTranslateCardPayload(
-            resultMessages,
-            lastUserText,
-            finalReply,
-          );
-          if (pictureTranslatePayload) {
-            uiPayloads.pictureTranslateCard = pictureTranslatePayload;
-            if (!streamContext.emittedFlags.has("pictureTranslateForm")) {
-              controller.enqueue({
-                type: "tool_call",
-                name: "open_picture_translate_form",
-                args: pictureTranslatePayload,
-              });
+        if (!hasAnyChatCardInUiPayloads(uiPayloads)) {
+          try {
+            const llmResolution = await resolveMissingChatCardsWithLlm({
+              messages: resultMessages,
+              lastUserText,
+              assistantReply: finalReply,
+              existingUiPayloads: uiPayloads,
+              emittedFlags: streamContext.emittedFlags,
+            });
+            Object.assign(uiPayloads, llmResolution.uiPayloads);
+            for (const chunk of llmResolution.streamChunks) {
+              controller.enqueue(chunk);
             }
-          }
-        }
-
-        if (!uiPayloads.imageGenerationCard) {
-          const imageGenerationPayload = resolveImageGenerationCardPayload(
-            resultMessages,
-            lastUserText,
-            finalReply,
-          );
-          if (imageGenerationPayload) {
-            uiPayloads.imageGenerationCard = imageGenerationPayload;
-            if (!streamContext.emittedFlags.has("imageGenerationForm")) {
-              controller.enqueue({
-                type: "tool_call",
-                name: "open_image_generation_form",
-                args: imageGenerationPayload,
-              });
+            if (llmResolution.adjustedReply) {
+              finalReply = llmResolution.adjustedReply;
             }
-          }
-        }
-
-        if (!uiPayloads.batchTasksCard && !uiPayloads.taskProposal) {
-          const batchTasksPayload = resolveBatchTasksFormPayload(
-            resultMessages,
-            lastUserText,
-            finalReply,
-          );
-          if (batchTasksPayload && batchTasksPayload.products.length > 0) {
-            const proposal = taskProposalFromBatchTasksPayload(batchTasksPayload);
-            if (proposal) {
-              uiPayloads.taskProposal = proposal;
-              if (!streamContext.emittedFlags.has("batchTasksForm")) {
-                controller.enqueue({ type: "task_proposal", payload: proposal });
-              }
-            }
+          } catch (err) {
+            console.error("[ChatStream] LLM chat card resolution failed:", err);
+            finalReply = reconcileReplyWithChatCards(finalReply, uiPayloads);
           }
         }
 
