@@ -17,7 +17,6 @@ import OpsChecklist from "./pages/OpsChecklist";
 import VisitSource from "./pages/VisitSource";
 import PixelLogs from "./pages/PixelLogs";
 import AppLogs from "./pages/AppLogs";
-import ChatWorkbench from "./pages/Workbench/ChatWorkbench";
 import { useNavigate } from "react-router-dom";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -63,7 +62,6 @@ export default function App() {
             }
           >
             <Route index element={<IndexRedirect />} />
-            <Route path="workbench" element={<ChatWorkbench />} />
             <Route path="shops" element={<Shops />} />
             <Route path="translations" element={<Translations />} />
             <Route path="usage" element={<Usage />} />

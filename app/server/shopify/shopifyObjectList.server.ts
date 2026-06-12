@@ -8,6 +8,7 @@ import type {
   ShopifyObjectSort,
   ShopifyObjectStatusFilter,
 } from "../../lib/shopifyObjectTypes";
+import type { ObjectQuerySpec } from "../../lib/objectQuerySpec";
 
 const LOG_PREFIX = "[ShopifyObjectList]";
 const DEFAULT_PAGE_SIZE = 20;
@@ -140,9 +141,15 @@ function productStatusTone(status: string | null | undefined): ShopifyObjectItem
   return "neutral";
 }
 
+function escapeSearchTerm(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
 function buildProductListQuery(
   keyword: string,
   statusFilter: ShopifyObjectStatusFilter,
+  tag?: string,
+  maxInventory?: number,
 ): string | null {
   const parts: string[] = [];
   const titleQuery = buildProductTitleSearchQuery(keyword);
@@ -150,6 +157,10 @@ function buildProductListQuery(
   if (statusFilter === "active") parts.push("status:ACTIVE");
   if (statusFilter === "draft") parts.push("status:DRAFT");
   if (statusFilter === "archived") parts.push("status:ARCHIVED");
+  if (tag?.trim()) parts.push(`tag:"${escapeSearchTerm(tag.trim())}"`);
+  if (typeof maxInventory === "number" && Number.isFinite(maxInventory) && maxInventory >= 0) {
+    parts.push(`inventory_total:<=${Math.floor(maxInventory)}`);
+  }
   if (parts.length === 0) return null;
   return parts.join(" AND ");
 }
@@ -203,12 +214,19 @@ export async function listShopifyProducts(
     sort?: ShopifyObjectSort;
     after?: string | null;
     first?: number;
+    tag?: string;
+    maxInventory?: number;
   },
 ): Promise<{ items: ShopifyObjectItem[]; pageInfo: ShopifyObjectPageInfo }> {
   const first = clampPageSize(params.first);
   const statusFilter = params.statusFilter ?? "all";
   const sort = resolveSort(params.sort ?? "updated_desc");
-  const query = buildProductListQuery(params.keyword ?? "", statusFilter);
+  const query = buildProductListQuery(
+    params.keyword ?? "",
+    statusFilter,
+    params.tag,
+    params.maxInventory,
+  );
 
   try {
     const payload = await runGraphql<ProductListResponse>(admin, PRODUCT_LIST_QUERY, {
@@ -314,8 +332,115 @@ export async function listShopifyObjects(
     sort?: ShopifyObjectSort;
     after?: string | null;
     first?: number;
+    tag?: string;
+    maxInventory?: number;
   },
 ): Promise<{ items: ShopifyObjectItem[]; pageInfo: ShopifyObjectPageInfo }> {
   if (kind === "product") return listShopifyProducts(admin, params);
   return listShopifyArticles(admin, params);
+}
+
+// ─── 按条件计数 / 执行期求值（阶段 2：query 形态对象选择） ─────────────────────
+
+const PRODUCT_COUNT_QUERY = `#graphql
+  query ShopifyProductCount($query: String) {
+    productsCount(query: $query) {
+      count
+    }
+  }
+`;
+
+const ARTICLE_COUNT_QUERY = `#graphql
+  query ShopifyArticleCount($query: String) {
+    articlesCount(query: $query) {
+      count
+    }
+  }
+`;
+
+type CountResponse = {
+  data?: {
+    productsCount?: { count?: number | null } | null;
+    articlesCount?: { count?: number | null } | null;
+  };
+};
+
+function specToListParams(spec: ObjectQuerySpec): {
+  keyword?: string;
+  statusFilter: ShopifyObjectStatusFilter;
+  tag?: string;
+  maxInventory?: number;
+} {
+  return {
+    keyword: spec.keyword,
+    statusFilter: spec.status ?? "all",
+    ...(spec.kind === "product" ? { tag: spec.tag, maxInventory: spec.maxInventory } : {}),
+  };
+}
+
+/** 按条件统计匹配数。计数失败不阻塞（返回 null，由调用方降级展示）。 */
+export async function countShopifyObjects(
+  admin: ShopifyAdminGraphqlClient,
+  spec: ObjectQuerySpec,
+): Promise<number | null> {
+  const query =
+    spec.kind === "product"
+      ? buildProductListQuery(spec.keyword ?? "", spec.status ?? "all", spec.tag, spec.maxInventory)
+      : buildArticleListQuery(spec.keyword ?? "", spec.status ?? "all");
+  try {
+    const payload = await runGraphql<CountResponse>(
+      admin,
+      spec.kind === "product" ? PRODUCT_COUNT_QUERY : ARTICLE_COUNT_QUERY,
+      { query },
+    );
+    const count =
+      spec.kind === "product"
+        ? payload.data?.productsCount?.count
+        : payload.data?.articlesCount?.count;
+    return typeof count === "number" && count >= 0 ? count : null;
+  } catch (error) {
+    logDetailedError(LOG_PREFIX, "countShopifyObjects failed", error);
+    return null;
+  }
+}
+
+export type ResolvedQueryTarget = {
+  id: string;
+  title: string;
+  imageUrl: string | null;
+};
+
+/**
+ * 执行期按条件求值为具体对象列表（TaskProposal execute / Playbook 定时执行用）。
+ * 最多取 maxTargets 个；overflow 表示实际匹配数超过上限（取了 maxTargets+1 探测）。
+ */
+export async function resolveObjectQueryTargets(
+  admin: ShopifyAdminGraphqlClient,
+  spec: ObjectQuerySpec,
+  maxTargets: number,
+): Promise<{ targets: ResolvedQueryTarget[]; overflow: boolean }> {
+  const listParams = specToListParams(spec);
+  const collected: ResolvedQueryTarget[] = [];
+  let after: string | null = null;
+  let overflow = false;
+
+  while (collected.length <= maxTargets) {
+    const pageSize = Math.min(MAX_PAGE_SIZE, maxTargets + 1 - collected.length);
+    const { items, pageInfo } = await listShopifyObjects(admin, spec.kind, {
+      ...listParams,
+      after,
+      first: pageSize,
+    });
+    for (const item of items) {
+      collected.push({ id: item.id, title: item.title, imageUrl: item.imageUrl });
+    }
+    if (!pageInfo.hasNextPage || !pageInfo.endCursor || items.length === 0) break;
+    after = pageInfo.endCursor;
+  }
+
+  if (collected.length > maxTargets) {
+    overflow = true;
+    collected.length = maxTargets;
+  }
+  return { targets: collected, overflow };
 }

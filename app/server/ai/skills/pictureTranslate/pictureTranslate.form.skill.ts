@@ -29,12 +29,5 @@ export const pictureTranslateFormToolDefinition: ToolDefinition = {
       });
     }
   },
-  extractUIPayload: (messages, lastUserText, assistantReplyRaw) => {
-    const payload = resolvePictureTranslateCardPayload(
-      messages,
-      lastUserText,
-      assistantReplyRaw,
-    );
-    return payload ?? undefined;
-  },
+  extractUIPayload: (messages) => resolvePictureTranslateCardPayload(messages),
 };

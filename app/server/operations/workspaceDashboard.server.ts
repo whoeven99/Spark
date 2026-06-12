@@ -218,6 +218,20 @@ export function emptyWorkspaceDashboardSnapshot(): WorkspaceDashboardSnapshot {
   };
 }
 
+function buildAutomationSummary(result: DailyOperationsResult) {
+  const riskCount = result.items.filter((item) => item.status === "risk").length;
+  const watchCount = result.items.filter((item) => item.status === "watch").length;
+  const openTaskCount = result.tasks.filter(
+    (task) => task.status === "open" || task.status === "in_progress",
+  ).length;
+  return {
+    title: "每日经营巡检",
+    lastRunAt: result.generatedAt ?? null,
+    status: riskCount > 0 ? ("attention" as const) : ("healthy" as const),
+    detail: `诊断 ${result.items.length} 项（风险 ${riskCount} / 关注 ${watchCount}）· ${openTaskCount} 条待办进行中`,
+  };
+}
+
 export function buildWorkspaceDashboardFromDailyOps(
   result: DailyOperationsResult,
 ): WorkspaceDashboardSnapshot {
@@ -233,5 +247,6 @@ export function buildWorkspaceDashboardFromDailyOps(
     alerts: buildAlerts(result),
     suggestions: buildSuggestions(result),
     recentTaskSummaries: [],
+    automation: buildAutomationSummary(result),
   };
 }

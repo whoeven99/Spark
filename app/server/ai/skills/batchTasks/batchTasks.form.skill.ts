@@ -9,6 +9,7 @@ import {
   OPEN_BATCH_TASKS_FORM_TOOL_NAME,
   batchTasksFormTool,
 } from "./batchTasks.form.tool";
+import { taskProposalFromBatchTasksPayload } from "../../../../lib/taskProposalPayload";
 
 export const batchTasksFormSkillDefinition: ToolDefinition = {
   name: "batchTasksForm",
@@ -26,7 +27,7 @@ export const batchTasksFormSkillDefinition: ToolDefinition = {
 - 【优先级】只要上下文有 ≥ 1 个已选商品且用户意图涉及商品处理，本工具优先于 open_product_improve_form（单商品工具）`,
   createTool: () => batchTasksFormTool,
   extractUIPayload: (messages, lastUserText, assistantReplyRaw) =>
-    resolveBatchTasksFormPayload(messages, lastUserText, assistantReplyRaw),
+    resolveBatchTasksFormPayload(messages, lastUserText),
   onStreamEvent: (ev, enqueue, streamContext) => {
     // Use on_tool_end: ev.output = func() return value = JSON.stringify(payload).
     // This is the most reliable source because:
@@ -48,11 +49,17 @@ export const batchTasksFormSkillDefinition: ToolDefinition = {
         coerceBatchTasksFormPayload(raw),
         parseWorkspaceProductsFromText(streamContext.lastUserText ?? ""),
       );
-      enqueue({
-        type: "tool_call",
-        name: ev.name,
-        args: payload,
-      });
+      // product_improve 走通用 TaskProposal 协议；picture_translate 留旧卡片（阶段 4 迁移）
+      const proposal = taskProposalFromBatchTasksPayload(payload);
+      if (proposal) {
+        enqueue({ type: "task_proposal", payload: proposal });
+      } else {
+        enqueue({
+          type: "tool_call",
+          name: ev.name,
+          args: payload,
+        });
+      }
     }
   },
 };

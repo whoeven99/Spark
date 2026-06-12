@@ -10,7 +10,7 @@ import {
 } from "../server/billing/buildBillingReturnUrl.server";
 import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { WorkspaceAppShellPage } from "./page/WorkspaceAppShellPage";
+import { WorkspaceAppShellPage } from "./page/workspace/WorkspaceAppShellPage";
 import { listConversations } from "../server/conversation/conversationStore.server";
 import { ensureDailySnapshot } from "../server/operations/dailyInspection.server";
 import {
