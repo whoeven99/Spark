@@ -1,12 +1,33 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the OpenAI client so no network calls happen.
+//
+// The production code calls `client.chat.completions.create(args, opts).withResponse()`,
+// which in the real SDK returns `{ data: completion, response }`. We therefore wrap
+// `createMock` (the per-test-configurable spy) in a `create` that forwards its args to
+// `createMock` — so `createMock.mock.calls[...]` and `mockResolvedValueOnce` /
+// `mockRejectedValue` keep working — and exposes `.withResponse()` resolving to
+// `{ data: <the mocked completion>, response: <a real Response with .headers> }`.
 const createMock = vi.fn();
-vi.mock("openai", () => ({
-  default: class {
-    chat = { completions: { create: createMock } };
-  },
-}));
+vi.mock("openai", () => {
+  class MockOpenAI {
+    chat = {
+      completions: {
+        create: (...args: unknown[]) => ({
+          withResponse: async () => ({
+            data: await createMock(...args),
+            response: new Response(null),
+          }),
+        }),
+      },
+    };
+  }
+  return {
+    default: MockOpenAI,
+    AzureOpenAI: MockOpenAI,
+    RateLimitError: class RateLimitError extends Error {},
+  };
+});
 
 // Mock translation memory so cache behaviour is controllable per-test.
 vi.mock("../../worker/src/services/translationMemory.js", () => ({
@@ -116,7 +137,7 @@ describe("translateBatch — translation memory", () => {
   });
 
   it("caches newly translated fields", async () => {
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Hello" }]));
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "f0", translatedValue: "Hello" }]));
     await translateBatch(
       [{ key: "title", value: "你好", digest: "d1" }],
       "zh-CN",
@@ -151,7 +172,7 @@ describe("translateBatch — retry & fallback", () => {
   it("recovers after a malformed JSON response on the first attempt", async () => {
     createMock
       .mockResolvedValueOnce({ choices: [{ message: { content: "not json{" } }] })
-      .mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Hello" }]));
+      .mockResolvedValueOnce(llmResponse([{ key: "f0", translatedValue: "Hello" }]));
     const out = await translateBatch(
       [{ key: "title", value: "你好", digest: "d1" }],
       "zh-CN",
@@ -167,8 +188,8 @@ describe("translateBatch — retry & fallback", () => {
   it("splits the batch to isolate the item that breaks the JSON", async () => {
     createMock
       .mockResolvedValueOnce({ choices: [{ message: { content: "{bad json" } }] }) // whole batch → throw
-      .mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "A-fr" }])) // split → unique text 甲
-      .mockResolvedValueOnce(llmResponse([{ key: "1", translatedValue: "B-fr" }])); // split → unique text 乙
+      .mockResolvedValueOnce(llmResponse([{ key: "f0", translatedValue: "A-fr" }])) // split → unique text 甲
+      .mockResolvedValueOnce(llmResponse([{ key: "f0", translatedValue: "B-fr" }])); // split → single item re-indexed to f0
     const out = await translateBatch(
       [
         { key: "a", value: "甲", digest: "d1" },
@@ -189,7 +210,7 @@ describe("translateBatch — retry & fallback", () => {
 
 describe("translateBatch — prompt structure (caching-friendly)", () => {
   it("sends static instructions in system and only the payload in user", async () => {
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Hello" }]));
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "f0", translatedValue: "Hello" }]));
     await translateBatch(
       [{ key: "title", value: "你好", digest: "d1" }],
       "zh-CN",
@@ -211,7 +232,7 @@ describe("translateBatch — prompt structure (caching-friendly)", () => {
 
   it("injects glossary lines into the system prompt", async () => {
     vi.mocked(loadGlossaryLines).mockResolvedValueOnce([`- Translate "闪购" as "Flash Sale".`]);
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Flash Sale" }]));
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "f0", translatedValue: "Flash Sale" }]));
     await translateBatch(
       [{ key: "title", value: "闪购", digest: "d1" }],
       "zh-CN",
@@ -231,8 +252,8 @@ describe("translateResources — chunk batching & dedup", () => {
   it("batches fields from multiple resources into one call", async () => {
     createMock.mockResolvedValueOnce(
       llmResponse([
-        { key: "0", translatedValue: "A-en" },
-        { key: "1", translatedValue: "B-en" },
+        { key: "f0", translatedValue: "A-en" },
+        { key: "f1", translatedValue: "B-en" },
       ]),
     );
     const out = await translateResources(
@@ -256,7 +277,7 @@ describe("translateResources — chunk batching & dedup", () => {
   });
 
   it("dedups identical text across resources (translated once, reused)", async () => {
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Once" }]));
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "f0", translatedValue: "Once" }]));
     const out = await translateResources(
       [
         { resourceId: "r1", fields: [{ key: "title", value: "重复", digest: "d1" }] },
@@ -278,14 +299,14 @@ describe("translateResources — chunk batching & dedup", () => {
   it("attributes usage to each engine in a mixed chunk", async () => {
     process.env.GOOGLE_TRANSLATE_API_KEY = "gk";
     mockGoogleFetch({ "短": "Short-G" });
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Body-LLM" }]));
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "f0", translatedValue: "Body-LLM" }]));
     const out = await translateResources(
       [
         {
           resourceId: "r1",
           fields: [
             { key: "title", value: "短", digest: "d1" }, // trivial → Google
-            { key: "body_html", value: "<p>Hello</p>", digest: "d2" }, // rich → LLM
+            { key: "body_html", value: "<p>你好世界</p>", digest: "d2" }, // rich (source-script) → LLM
           ],
         },
       ],
@@ -324,7 +345,7 @@ describe("translateBatch — cost-tiered engine routing", () => {
   it("routes rich content (HTML) to the LLM", async () => {
     process.env.GOOGLE_TRANSLATE_API_KEY = "gk";
     const f = mockGoogleFetch();
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Bonjour" }]));
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "f0", translatedValue: "Bonjour" }]));
     const out = await translateBatch(
       [{ key: "body_html", value: "<p>Hello</p>", digest: "d1" }],
       "zh-CN",
@@ -344,7 +365,7 @@ describe("translateBatch — cost-tiered engine routing", () => {
       throw new Error("google down");
     });
     vi.stubGlobal("fetch", f);
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Hello-LLM" }]));
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "f0", translatedValue: "Hello-LLM" }]));
     const out = await translateBatch(
       [{ key: "title", value: "你好", digest: "d1" }],
       "zh-CN",
@@ -407,7 +428,7 @@ describe("translateBatch — provider selection", () => {
 
 describe("translateBatch — HTML entity & whitespace cleanup", () => {
   it("decodes escaped quotes/apostrophes in plain fields", async () => {
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: `dis &quot;salut&quot; l&#39;ami` }]));
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "f0", translatedValue: `dis &quot;salut&quot; l&#39;ami` }]));
     const out = await translateBatch(
       [{ key: "title", value: "打招呼", digest: "d1" }],
       "zh-CN",
@@ -420,7 +441,7 @@ describe("translateBatch — HTML entity & whitespace cleanup", () => {
   });
 
   it("does NOT decode &amp; / &lt; / &gt; (keeps HTML well-formed)", async () => {
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Tom &amp; Jerry &lt;3 &gt;" }]));
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "f0", translatedValue: "Tom &amp; Jerry &lt;3 &gt;" }]));
     const out = await translateBatch(
       [{ key: "title", value: "汤姆", digest: "d1" }],
       "zh-CN",
@@ -434,7 +455,7 @@ describe("translateBatch — HTML entity & whitespace cleanup", () => {
 
   it("trims model-injected whitespace and decodes entities in HTML nodes", async () => {
     // node index "0" is the text "Hello"; model returns it padded + escaped.
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: `  Bonjour l&#39;ami  ` }]));
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "f0", translatedValue: `  Bonjour l&#39;ami  ` }]));
     const out = await translateBatch(
       [{ key: "body_html", value: "<p>Hello</p>", digest: "d1" }],
       "zh-CN",
@@ -449,7 +470,7 @@ describe("translateBatch — HTML entity & whitespace cleanup", () => {
 
 describe("translateBatch — placeholder masking", () => {
   it("masks variables before sending and restores them verbatim", async () => {
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "Retourné ⟦0⟧ articles" }]));
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "f0", translatedValue: "Retourné ⟦0⟧ articles" }]));
     const out = await translateBatch(
       [{ key: "body", value: "Returned {{quantity}} items", digest: "d1" }],
       "zh-CN",
@@ -467,7 +488,7 @@ describe("translateBatch — placeholder masking", () => {
   });
 
   it("masks [bracket] vars but leaves markdown links alone", async () => {
-    createMock.mockResolvedValueOnce(llmResponse([{ key: "0", translatedValue: "X ⟦0⟧ Y [docs](url)" }]));
+    createMock.mockResolvedValueOnce(llmResponse([{ key: "f0", translatedValue: "X ⟦0⟧ Y [docs](url)" }]));
     const out = await translateBatch(
       [{ key: "body", value: "Buy [qty] see [docs](url)", digest: "d1" }],
       "zh-CN",
@@ -484,7 +505,7 @@ describe("translateBatch — placeholder masking", () => {
 
   it("falls back to the original if the model corrupts a placeholder sentinel", async () => {
     // Model translated inside the token instead of preserving the sentinel.
-    createMock.mockResolvedValue(llmResponse([{ key: "0", translatedValue: "Retourné {{quantité}} articles" }]));
+    createMock.mockResolvedValue(llmResponse([{ key: "f0", translatedValue: "Retourné {{quantité}} articles" }]));
     const out = await translateBatch(
       [{ key: "body", value: "Returned {{quantity}} items", digest: "d1" }],
       "zh-CN",

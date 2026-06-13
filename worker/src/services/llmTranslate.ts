@@ -176,7 +176,7 @@ export function resolveDeepSeekAccountConcurrencyLimit(model: string): number {
   return 500;
 }
 
-function resolveDeepSeekPoolConcurrency(model: string): {
+export function resolveDeepSeekPoolConcurrency(model: string): {
   accountLimit: number;
   ceiling: number;
   initial: number;
@@ -191,9 +191,15 @@ function resolveDeepSeekPoolConcurrency(model: string): {
     Math.max(1, Math.floor(accountLimit * util)),
   );
   const initialOverride = Number(process.env.DEEPSEEK_INITIAL_CONCURRENCY);
+  // Start aggressively: the account in-flight limit is large (500 pro / 2500
+  // flash) and the per-request latency is high (~40s), so a timid initial of a
+  // few dozen leaves most of the pipeline serialised while the +1-per-2-calls
+  // ramp slowly catches up. Begin near 40% of the safe ceiling (floor 128) —
+  // still well under the account limit, and on jobs with few large batches it
+  // means we parallelise from the first wave instead of never ramping at all.
   const initial = Number.isFinite(initialOverride) && initialOverride > 0
     ? Math.min(Math.floor(initialOverride), ceiling)
-    : Math.min(Math.max(32, Math.floor(ceiling * 0.1)), ceiling);
+    : Math.min(Math.max(128, Math.floor(ceiling * 0.4)), ceiling);
   return { accountLimit, ceiling, initial };
 }
 
@@ -1070,8 +1076,12 @@ function forcedEngine(aiModel?: string): Engine | null {
 // Plain fields at or above this length are treated as "rich" content.
 const SHORT_PLAIN_THRESHOLD = 80;
 
-function fieldTier(key: string, value: string, klass: "skip" | "html" | "plain"): "trivial" | "rich" {
-  if (klass === "html") return "rich";
+function fieldTier(
+  key: string,
+  value: string,
+  klass: "skip" | "html" | "json" | "plain",
+): "trivial" | "rich" {
+  if (klass === "html" || klass === "json") return "rich";
   if (key === "meta_description") return "rich";
   return value.length >= SHORT_PLAIN_THRESHOLD ? "rich" : "trivial";
 }
@@ -1221,8 +1231,11 @@ function isHtml(value: string): boolean {
   return HTML_TAG_RE.test(value);
 }
 
-export function classifyField(key: string, value?: string): "skip" | "html" | "plain" {
+export function classifyField(key: string, value?: string): "skip" | "html" | "json" | "plain" {
   if (SKIP_KEYS.has(key)) return "skip";
+  // JSON must be detected before HTML: a JSON blob can contain an HTML string in
+  // one of its leaves, which would otherwise trip the isHtml() check.
+  if (value !== undefined && tryParseJsonContainer(value) !== undefined) return "json";
   if (value !== undefined && isHtml(value)) return "html";
   return "plain";
 }
@@ -1236,6 +1249,13 @@ export function countFieldUnits(key: string, value: string): number {
   const klass = classifyField(key, value);
   if (klass === "skip") return 0;
   if (klass === "html") return extractHtmlTextNodes(value).texts.length;
+  if (klass === "json") {
+    const root = tryParseJsonContainer(value);
+    if (root === undefined) return splitPlainText(value).length;
+    const leaves: string[] = [];
+    collectJsonLeaves(root, leaves);
+    return leaves.length;
+  }
   return splitPlainText(value).length;
 }
 
@@ -1355,6 +1375,82 @@ function extractHtmlTextNodes(html: string): { template: string; texts: string[]
 
 function restoreHtmlTextNodes(template: string, translations: string[]): string {
   return template.replace(/\x00T(\d+)\x00/g, (_, idx) => translations[Number(idx)] ?? "");
+}
+
+// ─── JSON leaf extraction ──────────────────────────────────────────────────────
+//
+// Metafield values are frequently JSON config blobs (theme settings, cart copy,
+// language-switcher config…). Translating the whole blob as one opaque string is
+// bad three ways: (a) a 30KB+ value is a single huge request that strands the
+// tail of a job; (b) splitPlainText would cut it at word boundaries and corrupt
+// the JSON → fallback; (c) the model rewrites structural tokens it shouldn't
+// ("center" → "zentriert"). Instead we parse the JSON, translate only the
+// human-readable string leaves as independent units, and re-serialise.
+
+type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
+
+const JSON_HEX_RE = /^#[0-9a-fA-F]{3,8}$/;
+const JSON_NUMBERISH_RE = /^[+-]?\d+(\.\d+)?$/;
+// Lowercase single tokens with no whitespace are overwhelmingly CSS/layout enums
+// or config keys ("center", "flex", "bottom_right", "dropdown_vertical") — never
+// user-facing copy, which is Capitalised or multi-word. Skipping them keeps the
+// JSON's structural values intact and avoids over-translation.
+const JSON_TOKEN_RE = /^[a-z][a-z0-9_+./:-]*$/;
+
+/** True if a JSON string leaf looks like human-readable copy worth translating. */
+function isTranslatableJsonLeaf(s: string): boolean {
+  const v = s.trim();
+  if (!v) return false;
+  if (ATTR_URL_RE.test(v)) return false;          // urls
+  if (JSON_HEX_RE.test(v)) return false;          // hex colours (#fff, #000000)
+  if (JSON_NUMBERISH_RE.test(v)) return false;    // numeric strings
+  if (JSON_TOKEN_RE.test(v)) return false;        // lowercase enum / key tokens
+  if (ATTR_HASH_FILENAME_RE.test(v)) return false; // hash filenames / image names
+  return /\p{L}/u.test(v);                         // require at least one letter
+}
+
+/** Parse only JSON objects/arrays; returns undefined for anything else. */
+function tryParseJsonContainer(value: string): JsonValue | undefined {
+  const t = value.trim();
+  if (t.length < 2) return undefined;
+  const c = t[0];
+  if (c !== "{" && c !== "[") return undefined;
+  try {
+    const parsed = JSON.parse(t) as JsonValue;
+    if (parsed !== null && typeof parsed === "object") return parsed;
+  } catch {
+    /* not JSON — caller falls back to plain handling */
+  }
+  return undefined;
+}
+
+/** Collect translatable string leaves in deterministic DFS order (with repeats). */
+function collectJsonLeaves(node: JsonValue, out: string[]): void {
+  if (typeof node === "string") {
+    if (isTranslatableJsonLeaf(node)) out.push(node);
+    return;
+  }
+  if (Array.isArray(node)) {
+    for (const v of node) collectJsonLeaves(v, out);
+    return;
+  }
+  if (node !== null && typeof node === "object") {
+    for (const k of Object.keys(node)) collectJsonLeaves(node[k], out);
+  }
+}
+
+/** Rebuild the JSON tree, swapping each translatable leaf for its translation. */
+function rebuildJson(node: JsonValue, translated: Map<string, string>): JsonValue {
+  if (typeof node === "string") {
+    return isTranslatableJsonLeaf(node) ? translated.get(node) ?? node : node;
+  }
+  if (Array.isArray(node)) return node.map((v) => rebuildJson(v, translated));
+  if (node !== null && typeof node === "object") {
+    const out: { [k: string]: JsonValue } = {};
+    for (const k of Object.keys(node)) out[k] = rebuildJson(node[k], translated);
+    return out;
+  }
+  return node;
 }
 
 // ─── Plain text splitting ─────────────────────────────────────────────────────
@@ -1809,6 +1905,7 @@ type FieldPlan = {
 } & (
   | { kind: "plain"; parts: string[] }
   | { kind: "html"; template: string; nodeTexts: string[] }
+  | { kind: "json"; root: JsonValue; leaves: string[] }
 );
 
 /**
@@ -1861,6 +1958,11 @@ export async function translateResources(
   // Units resolved without hitting an engine (cache hits) — credited immediately.
   let cacheUnits = 0;
 
+  // Opt-in: skip fields that contain none of the source-language script.
+  const skipNonSourceScript = /^(1|true|yes)$/i.test(
+    process.env.TRANSLATE_SKIP_NON_SOURCE_SCRIPT ?? "",
+  );
+
   // 1. Plan every field: resolve skip/cache directly; collect units to translate.
   //    TM lookups are fired in parallel across all fields to minimise Redis RTTs.
   for (const res of resources) {
@@ -1871,7 +1973,7 @@ export async function translateResources(
   type FieldWork = {
     resourceId: string;
     f: TranslateItem;
-    klass: "html" | "plain";
+    klass: "html" | "json" | "plain";
     order: Engine[];
     cacheModel: string;
   };
@@ -1924,7 +2026,17 @@ export async function translateResources(
     // language, skip it — the LLM would just echo it back unchanged.
     // For zh-CN→en: English content (no CJK) is skipped (it's already the target).
     // For zh-CN→pl: English content is NOT skipped (it still needs translation to Polish).
-    if (alreadyInTarget(f.value, source, target)) {
+    //
+    // Opt-in TRANSLATE_SKIP_NON_SOURCE_SCRIPT extends this: when the operator
+    // knows the store's real source language, any field that contains none of
+    // the source script is treated as already-done and skipped (saves the tokens
+    // otherwise spent re-translating non-source content). Off by default because
+    // for a mixed-language store with a non-English target, skipping non-source
+    // content would leave it untranslated.
+    if (
+      alreadyInTarget(f.value, source, target) ||
+      (skipNonSourceScript && !containsSourceScript(f.value, source))
+    ) {
       rm.set(f.key, { key: f.key, translatedValue: f.value, digest: f.digest, status: "translated" });
       cacheUnits += countFieldUnits(f.key, f.value);
       continue;
@@ -1938,6 +2050,24 @@ export async function translateResources(
       }
       texts.forEach((t) => addUnit(order, t));
       plans.push({ kind: "html", resourceId, key: f.key, digest: f.digest, order, cacheModel, template, nodeTexts: texts });
+    } else if (klass === "json") {
+      const root = tryParseJsonContainer(f.value);
+      const leaves: string[] = [];
+      if (root !== undefined) collectJsonLeaves(root, leaves);
+      if (root === undefined) {
+        // Re-classified between init and here, or unparseable now — fall back to
+        // plain handling so the field is still translated, just not structurally.
+        const parts = splitPlainText(f.value);
+        parts.forEach((p) => addUnit(order, p));
+        plans.push({ kind: "plain", resourceId, key: f.key, digest: f.digest, order, cacheModel, parts });
+      } else if (leaves.length === 0) {
+        // Pure structural/config JSON with no human-readable copy — keep verbatim.
+        rm.set(f.key, { key: f.key, translatedValue: f.value, digest: f.digest, status: "translated" });
+        continue;
+      } else {
+        leaves.forEach((t) => addUnit(order, t));
+        plans.push({ kind: "json", resourceId, key: f.key, digest: f.digest, order, cacheModel, root, leaves });
+      }
     } else {
       const parts = splitPlainText(f.value);
       parts.forEach((p) => addUnit(order, p));
@@ -1994,7 +2124,7 @@ export async function translateResources(
         tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
         tmWrites.push(tmSetByValue(originalValue, source, target, plan.cacheModel, value));
       }
-    } else {
+    } else if (plan.kind === "html") {
       let anyFallback = false;
       const out = plan.nodeTexts.map((t) => {
         const r = lookup(plan.order, t);
@@ -2005,6 +2135,24 @@ export async function translateResources(
         return r.value.trim(); // template already preserves surrounding whitespace
       });
       const value = restoreHtmlTextNodes(plan.template, out);
+      const status = anyFallback ? "fallback" : "translated";
+      rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
+      if (status === "translated") tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
+    } else {
+      // json: map each unique leaf to its translation, rebuild the tree, re-serialise.
+      let anyFallback = false;
+      const tmap = new Map<string, string>();
+      for (const t of plan.leaves) {
+        if (tmap.has(t)) continue;
+        const r = lookup(plan.order, t);
+        if (!r || r.status === "fallback") {
+          anyFallback = true;
+          tmap.set(t, t);
+        } else {
+          tmap.set(t, r.value.trim());
+        }
+      }
+      const value = JSON.stringify(rebuildJson(plan.root, tmap));
       const status = anyFallback ? "fallback" : "translated";
       rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
       if (status === "translated") tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));

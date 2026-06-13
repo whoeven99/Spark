@@ -1,6 +1,6 @@
 # 翻译任务质量检查指南
 
-**用途**：当用户说「检查翻译任务质量」「这次翻译质量怎么样」并附上 **任务 ID** 和/或 **完整 job JSON** 时，Agent 必须按本文档执行分析，不得凭印象猜测。
+**用途**：当用户说「检查翻译任务质量」「这次翻译质量怎么样」并附上 **任务 ID** 和/或 **完整 job JSON** 时，Agent 必须按本文档执行分析，不得凭印象猜测。**每次质量检查都默认顺带查询 QPS 速率并给用户画一张 QPS 图**（见第 6 节；日志过 7 天 TTL 才跳过）。
 
 **相关文档**：流水线与存储结构见 [`docs/TRANSLATION_AGENT.md`](./TRANSLATION_AGENT.md)；离线聚合报告见 `worker/src/scripts/exportTranslationReport.ts`。
 
@@ -18,7 +18,7 @@ Agent 收到后：
 
 1. 从 job JSON 提取 `id`、`shopName`、`source`、`target`、`status`、`metrics`、`engineUsage`、`aiModelUsed`、`errorMessage` 等。
 2. 若用户只给了 jobId 前缀，用 Blob 脚本或 `exportTranslationReport` 反查 `shopName`。
-3. 按下方步骤跑命令、算指标、抽查样本，最后输出结构化结论（见「报告输出格式」）。
+3. 按下方步骤跑命令、算指标、抽查样本，**并跑 QPS 汇总+出图**，最后输出结构化结论（见「报告输出格式」）。
 
 ---
 
@@ -29,10 +29,19 @@ Agent 收到后：
 | 项目路径 | `C:\repo\Spark` |
 | Blob 检查脚本 | `node scripts/blob-inspect-translation.mjs <jobId>` |
 | 离线质量报告 | `cd worker && npx tsx src/scripts/exportTranslationReport.ts <shopName> <taskId>` |
+| 质量指标扫描 | `node scripts/qps-quality-scan.mjs <jobId>`（全量算 noSrc/toTarget/fallback/unchanged + METAFIELD 枚举误翻） |
+| QPS 原始日志 | `node scripts/qps-fetch.cjs <jobId>`（Cosmos 原始快照，调试用） |
+| QPS 汇总+出图数据 | `node scripts/qps-summary.cjs <jobId>`（分阶段汇总 + 时间序列 + 写 `scripts/qps-data.json`） |
 | Azure 连接串 | 项目根 `.env` 中的 `AZURE_BLOB_CONNECTION_STRING` |
 | Blob 容器 | `AZURE_BLOB_TRANSLATION_CONTAINER`（默认 `translation-content`） |
+| Cosmos 连接 | 项目根 `.env` 中的 `COSMOS_ENDPOINT` / `COSMOS_KEY`（QPS 脚本用） |
+| QPS 容器 | `COSMOS_QPS_LOGS_CONTAINER`（默认 `translation_v4_qps_logs`，**7 天 TTL**） |
 
-**前置**：确保 `.env` 已配置 `AZURE_BLOB_CONNECTION_STRING`，否则脚本会报错退出。
+**前置**：
+
+- Blob 类脚本需 `.env` 的 `AZURE_BLOB_CONNECTION_STRING`。
+- QPS 类脚本需 `.env` 的 `COSMOS_ENDPOINT` + `COSMOS_KEY`。
+- QPS 日志 **7 天自动过期**：超过 7 天的旧任务查不到速率数据，此时跳过出图并在报告中注明「QPS 日志已过期」。
 
 ---
 
@@ -218,6 +227,51 @@ npx tsx src/scripts/exportTranslationReport.ts <shopName> <taskId>
 
 ---
 
+### 6. QPS 速率分析与出图（**每次质量检查必做**）
+
+> 数据来自 Cosmos `translation_v4_qps_logs`，由 worker 的 `QpsLogger` 每 30s / 阶段切换 / 收尾各写一条快照。**每次检查翻译质量都要顺带跑这一步并给用户画一张 QPS 图**（除非日志已过 7 天 TTL）。
+
+#### 6.1 拉数据
+
+```bash
+# 分阶段汇总（INIT/TRANSLATE/WRITEBACK/VERIFY）+ 时间序列，并写 scripts/qps-data.json
+node scripts/qps-summary.cjs <jobId>
+
+# 需要原始快照排查时
+node scripts/qps-fetch.cjs <jobId>
+```
+
+`qps-summary.cjs` 输出两块：
+
+- `=== PER STAGE ===`：每阶段 `windows / totalDur / shopifyCalls(peak,429) / llmCalls(peak) / tokens / avgLat / throttle / err / bucketMin`
+- `=== TIMESERIES ===`：逐快照 CSV（`t,stage,sQps,sCalls,s429,bucket,lQps,lCalls,lTok,lLatMs,lConc,lThr,lErr`）
+
+并把**出图就绪的紧凑数组**写到 `scripts/qps-data.json`（字段：`t`秒 / `st`阶段 / `sq`Shopify QPS / `lq`LLM QPS / `tok` / `lat`ms / `conc`并发 / `bkt`桶余量 / `err`）。
+
+#### 6.2 出图（用 visualize widget）
+
+读 `scripts/qps-data.json`，用图表 widget 画**双轴时间线**：
+
+- X 轴：分钟（`t/60`）
+- 左 Y 轴：`sq`（Shopify calls/s，虚线）+ `lq`（LLM calls/s，实线）
+- 右 Y 轴：`conc`（LLM 并发）
+- 背景按 `st` 分四个阶段色带（INIT / TRANSLATE / WRITEBACK / VERIFY）
+- 顶部指标卡：总时长、LLM 峰值、Shopify 峰值、429 次数
+
+#### 6.3 从 QPS 能读出的结论（写进报告）
+
+| 信号 | 看哪个字段 | 含义 |
+|---|---|---|
+| 是否被限流 | `s429` / `throttle` | >0 说明撞到 Shopify/LLM 限速；全 0 = 余量充足 |
+| 翻译是否延迟瓶颈 | `avgLat` | 单请求 40s+ 且 `lq` 长期很低 = 卡在每个请求的延迟，不是数量 |
+| 并发是否喂得满 | `conc` vs 实际 `lCalls` | 允许并发远高于在途请求数 = 调度喂不饱，可提速 |
+| Shopify 写回压力 | `bucket`（桶余量） | 逼近 0 但无 429 = 安全；触 0 + 429 = 需降并发 |
+| 阶段耗时占比 | PER STAGE 的 `totalDur` / 时间轴跨度 | 定位最大头阶段（通常 TRANSLATE） |
+
+> 注意：PER STAGE 的 `totalDur` 是「有活动的窗口时长之和」，不是墙钟；阶段墙钟用时间轴里该阶段 `t` 的首尾差。任务级真实墙钟另见 job 的 `stageTimings`（worker 记录的每阶段 start/end）。
+
+---
+
 ## 报告输出格式
 
 Agent 完成分析后，用以下结构回复用户（中文）：
@@ -242,6 +296,11 @@ Agent 完成分析后，用以下结构回复用户（中文）：
 - 分条列出：模块、resourceId、key、原文→译文、问题类型
 - METAFIELD enum 误翻单独一小节（如有）
 
+### QPS / 速率（附图）
+- 嵌入 QPS 双轴时间线图（见 6.2）
+- 一句话结论：是否被限流（429/throttle）、瓶颈在延迟还是数量、并发是否喂满、各阶段耗时占比
+- 若 QPS 日志已过 7 天 TTL：注明「速率数据已过期，跳过出图」
+
 ### 结论与建议
 - 一句话总评：可发布 / 需返工 / 任务未完成
 - 可操作建议：改 source、补术语表、重跑 writeback、调模型等
@@ -264,6 +323,13 @@ node scripts/blob-inspect-translation.mjs <jobId> METAFIELD 0
 
 # 全量质量报告（需 shopName）
 cd worker && npx tsx src/scripts/exportTranslationReport.ts <shopName> <taskId>
+
+# 质量指标一把梭（noSrc/toTarget/fallback/unchanged + 枚举误翻）
+node scripts/qps-quality-scan.mjs <jobId>
+
+# QPS：分阶段汇总 + 写 scripts/qps-data.json（再用图表 widget 出图）
+node scripts/qps-summary.cjs <jobId>
+node scripts/qps-fetch.cjs <jobId>   # 原始快照，排查用
 ```
 
 ---
@@ -274,6 +340,7 @@ cd worker && npx tsx src/scripts/exportTranslationReport.ts <shopName> <taskId>
 - [ ] 运行 `blob-inspect-translation.mjs <jobId>` 拿 manifest 与 fallbacks
 - [ ] 抽查至少 2 个模块的 chunk 对照
 - [ ] 终态任务优先跑 `exportTranslationReport` 拿全量 flags
-- [ ] 计算 `noSrc/total` 与 `toTarget/needTranslate`（用 `llmTranslate.ts` 脚本逻辑，勿目测）
+- [ ] 计算 `noSrc/total` 与 `toTarget/needTranslate`（跑 `qps-quality-scan.mjs`，勿目测）
 - [ ] 检查 METAFIELD 与技术字段误翻
-- [ ] 按「报告输出格式」给用户结论，标明任务是否已完成
+- [ ] **跑 `qps-summary.cjs <jobId>` 并用 `scripts/qps-data.json` 给用户画 QPS 双轴图**（日志过 7 天则注明跳过）
+- [ ] 按「报告输出格式」给用户结论（含 QPS 附图小节），标明任务是否已完成

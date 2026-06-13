@@ -47,3 +47,4 @@ roadmap
 translation-reports/
 .cursor/settings.json
 /docs/tmp
+scripts/qps-data.json

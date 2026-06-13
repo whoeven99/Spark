@@ -36,6 +36,28 @@ export type TranslationV4Metrics = {
   usedTokens: number;
 };
 
+/** Pipeline stages, in execution order. */
+export type StageName = "INIT" | "TRANSLATE" | "WRITEBACK" | "VERIFY";
+
+/** Wall-clock span a worker spent in one stage. endedAt is null while running. */
+export type StageTiming = { startedAt: string; endedAt: string | null };
+
+export type StageTimings = Partial<Record<StageName, StageTiming>>;
+
+/**
+ * Merge a single stage's timing into the existing map. Each stage runs
+ * sequentially (gated by status), so the claimed job already carries prior
+ * stages' timings — spreading them keeps the full history.
+ */
+export function withStageTiming(
+  existing: StageTimings | null | undefined,
+  stage: StageName,
+  startedAt: string,
+  endedAt: string | null,
+): StageTimings {
+  return { ...(existing ?? {}), [stage]: { startedAt, endedAt } };
+}
+
 export type TranslationV4Job = {
   id: string;
   shopName: string;
@@ -59,6 +81,8 @@ export type TranslationV4Job = {
   lastHeartbeat: string | null;
   blobPrefix: string;
   metrics: TranslationV4Metrics;
+  /** Per-stage wall-clock spans, written by each worker. Absent on older jobs. */
+  stageTimings?: StageTimings | null;
   errorMessage: string | null;
   errorStage: string | null;
   createdBy: string;
@@ -146,6 +170,7 @@ export async function updateJob(
       | "aiModelUsed"
       | "aiProvider"
       | "engineUsage"
+      | "stageTimings"
     >
   >,
 ): Promise<void> {

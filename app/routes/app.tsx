@@ -2,6 +2,7 @@ import type {
   ActionFunctionArgs,
   HeadersFunction,
   LoaderFunctionArgs,
+  ShouldRevalidateFunctionArgs,
 } from "react-router";
 import { Outlet, useLoaderData, useRouteError } from "react-router";
 import { useTranslation } from "react-i18next";
@@ -63,35 +64,68 @@ const NAV_ITEMS: Record<
   billing: { href: "/app/billing", labelKey: "nav.billing" },
 };
 
+/** 同一进程内每个 shop 的 V4 token 同步间隔，避免重复打 Cosmos。 */
+const V4_TOKEN_SYNC_TTL_MS = 10 * 60 * 1000;
+const lastV4TokenSyncAt = new Map<string, number>();
+
+function scheduleV4TokenSync(shop: string, accessToken?: string | null) {
+  const now = Date.now();
+  const last = lastV4TokenSyncAt.get(shop) ?? 0;
+  if (now - last < V4_TOKEN_SYNC_TTL_MS) return;
+  lastV4TokenSyncAt.set(shop, now);
+
+  void syncV4JobShopifyTokensFromSession(shop, accessToken).catch((error) => {
+    console.error("[v4:token-sync] app shell sync failed:", error);
+  });
+}
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
 
-  try {
-    await recordAppInstalled({
-      shop: session.shop,
-      sessionId: session.id,
-      scope: session.scope,
-      isOnline: session.isOnline,
-      source: "app_shell",
-    });
-  } catch (error) {
+  // fire-and-forget：不阻断页面切换（幂等 + 日志短路）
+  void recordAppInstalled({
+    shop: session.shop,
+    sessionId: session.id,
+    scope: session.scope,
+    isOnline: session.isOnline,
+    source: "app_shell",
+  }).catch((error) => {
     console.error("[CommonEvent] recordAppInstalled failed:", error);
-  }
+  });
 
   // fire-and-forget：失败只记日志，不阻断页面加载（内部带 10 分钟 TTL 防抖）
   void ensureWebPixel(admin, session.shop);
 
-  try {
-    await syncV4JobShopifyTokensFromSession(session.shop, session.accessToken);
-  } catch (error) {
-    console.error("[v4:token-sync] app shell sync failed:", error);
-  }
+  scheduleV4TokenSync(session.shop, session.accessToken);
 
   const locale = detectRequestLocale(request);
   const { nav, home } = getAppEntryConfig();
 
   // eslint-disable-next-line no-undef
   return { apiKey: process.env.SHOPIFY_API_KEY || "", locale, nav, home };
+};
+
+/** /app 子页面之间切换时不重跑壳层 loader，避免重复鉴权副作用与 Cosmos 同步。 */
+export function shouldRevalidate({
+  currentUrl,
+  nextUrl,
+  formAction,
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) {
+  if (formAction?.includes("/app")) {
+    return defaultShouldRevalidate;
+  }
+
+  const isAppChildNavigation =
+    currentUrl.pathname.startsWith("/app") &&
+    nextUrl.pathname.startsWith("/app") &&
+    currentUrl.pathname !== nextUrl.pathname;
+
+  if (isAppChildNavigation) {
+    return false;
+  }
+
+  return defaultShouldRevalidate;
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {

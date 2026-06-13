@@ -4,13 +4,20 @@ import type {
   LoaderFunctionArgs,
 } from "react-router";
 import { data } from "react-router";
+import { lazy, Suspense } from "react";
 import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { fetchShopLocalesPayload } from "../server/productImprove/shopLocalesFetcher.server";
 import { TRANSLATION_V4_MODULES } from "../server/translation/v4/types";
-import { TranslationV4Page } from "./page/TranslationV4Page";
 import { listV4Jobs } from "../server/translation/v4/cosmosV4Store.server";
 import { useFeatureView } from "../lib/featureTrack";
+import { RoutePageFallback } from "./component/RoutePageFallback";
+
+const TranslationV4Page = lazy(() =>
+  import("./page/TranslationV4Page").then((m) => ({
+    default: m.TranslationV4Page,
+  })),
+);
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -33,7 +40,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 export default function AppTranslationV4() {
   useFeatureView("translation-v4");
-  return <TranslationV4Page />;
+  return (
+    <Suspense fallback={<RoutePageFallback />}>
+      <TranslationV4Page />
+    </Suspense>
+  );
 }
 
 export const headers: HeadersFunction = (headersArgs) => {

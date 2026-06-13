@@ -13,6 +13,7 @@ import {
 import type { loader } from "../app.translation-v4";
 import {
   TERMINAL_V4_STATUSES,
+  type StageName,
   type TranslationV4Job,
   type TranslationV4Status,
 } from "../../server/translation/v4/types";
@@ -1216,6 +1217,13 @@ function JobCard({
   localeLabelMap,
 }: JobCardProps) {
   const metrics = progress?.metrics ?? job.metrics;
+  // Per-stage wall-clock durations (worker-recorded). Null until a stage ends,
+  // and absent entirely on jobs created before stageTimings existed.
+  const stageTimings = job.stageTimings;
+  const stageDuration = (stage: StageName): string | null => {
+    const t = stageTimings?.[stage];
+    return t?.endedAt ? formatElapsedZh(t.startedAt, t.endedAt) : null;
+  };
   const taskStatus = mapV4StatusToTaskStatus(status);
   const progressTone = getProgressTone(status);
   const progressPercent = getJobProgressPercent(status, metrics);
@@ -1284,6 +1292,7 @@ function JobCard({
                 total={metrics.initTotal}
                 active={status === "INITIALIZING"}
                 complete={["INIT_DONE", "TRANSLATE_QUEUED", "TRANSLATING", "TRANSLATE_DONE", "WRITEBACK_QUEUED", "WRITING_BACK", "VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status)}
+                durationLabel={stageDuration("INIT")}
               />
               <StageBar
                 label="翻译"
@@ -1300,6 +1309,7 @@ function JobCard({
                     </>
                   ) : undefined
                 }
+                durationLabel={stageDuration("TRANSLATE")}
               />
               <StageBar
                 label="回写"
@@ -1308,6 +1318,7 @@ function JobCard({
                 active={status === "WRITING_BACK"}
                 complete={["VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status)}
                 failed={metrics.writebackFailed}
+                durationLabel={stageDuration("WRITEBACK")}
               />
               {showVerify ? (
                 <StageBar
@@ -1322,6 +1333,7 @@ function JobCard({
                       ? `${metrics.verifyDone}/${metrics.verifyTotal}（有译文变更）`
                       : undefined
                   }
+                  durationLabel={stageDuration("VERIFY")}
                 />
               ) : null}
             </div>
@@ -1477,9 +1489,11 @@ type StageBarProps = {
   failed?: number;
   /** Overrides the "done/total" number text (e.g. to show both resources and nodes). */
   detailLabel?: ReactNode;
+  /** Wall-clock time this stage took (e.g. "3分 12秒"), shown muted at the end. */
+  durationLabel?: string | null;
 };
 
-function StageBar({ label, done, total, active, complete, failed = 0, detailLabel }: StageBarProps) {
+function StageBar({ label, done, total, active, complete, failed = 0, detailLabel, durationLabel }: StageBarProps) {
   const { isMobile } = useResponsiveLayout();
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : (complete ? 100 : 0);
 
@@ -1544,6 +1558,9 @@ function StageBar({ label, done, total, active, complete, failed = 0, detailLabe
         {complete ? <span style={{ color: pageColorTokens.brandGreenDark, fontWeight: 700 }}>✓</span> : null}
         {active ? <span style={{ color: "#8a420f", fontWeight: 600 }}> 进行中</span> : null}
         {failed > 0 ? <span style={{ color: "#b98900", fontWeight: 600 }}> · 失败 {failed}</span> : null}
+        {durationLabel ? (
+          <span style={{ color: pageColorTokens.textFootnote, fontWeight: 500 }}> · 耗时 {durationLabel}</span>
+        ) : null}
       </span>
     </div>
   );

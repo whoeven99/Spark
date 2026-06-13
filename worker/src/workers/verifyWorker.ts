@@ -1,5 +1,5 @@
 import { hostname } from "os";
-import { claimJob, updateJob, heartbeat, findPendingJobs, getJob } from "../services/cosmosV4.js";
+import { claimJob, updateJob, heartbeat, findPendingJobs, getJob, withStageTiming } from "../services/cosmosV4.js";
 import { popHint, setProgress } from "../services/redisV4.js";
 import { blobRead, blobListPaths } from "../services/blobV4.js";
 import {
@@ -119,6 +119,7 @@ async function processVerifyJob(job: TranslationV4Job): Promise<void> {
 
   await setProgress(jobId, { verifyTotal, verifyDone, verifyFailed, currentModule: "VERIFY" });
 
+  const stageStartedAt = new Date().toISOString(); // ISO span start for stageTimings
   const qps = new QpsLogger(jobId, shopName, "VERIFY");
 
   try {
@@ -176,6 +177,12 @@ async function processVerifyJob(job: TranslationV4Job): Promise<void> {
     await updateJob(shopName, jobId, {
       status: "COMPLETED",
       claimedBy: null,
+      stageTimings: withStageTiming(
+        latestJob?.stageTimings ?? job.stageTimings,
+        "VERIFY",
+        stageStartedAt,
+        new Date().toISOString(),
+      ),
       metrics: {
         ...(latestJob?.metrics ?? job.metrics),
         verifyTotal,
@@ -192,6 +199,7 @@ async function processVerifyJob(job: TranslationV4Job): Promise<void> {
       errorMessage,
       errorStage: "VERIFY",
       claimedBy: null,
+      stageTimings: withStageTiming(job.stageTimings, "VERIFY", stageStartedAt, new Date().toISOString()),
     });
     console.error(`[verify] failed job=${jobId}`, e);
   } finally {
