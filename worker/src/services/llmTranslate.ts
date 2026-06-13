@@ -1,4 +1,3 @@
-import OpenAI, { AzureOpenAI, RateLimitError } from "openai";
 import { tmGet, tmGetByValue, tmSet, tmSetByValue } from "./translationMemory.js";
 import { loadGlossaryLines } from "./glossary.js";
 import { loadShopProfile, buildProfilePromptBlock } from "./shopProfile.js";
@@ -12,9 +11,7 @@ import { loadShopProfile, buildProfilePromptBlock } from "./shopProfile.js";
 //
 // Key pool env vars (comma-separated lists override single-key variants):
 //   DeepSeek  : DEEPSEEK_API_KEYS=sk-key1,sk-key2     (or single DEEPSEEK_API_KEY)
-//   OpenAI    : OPENAI_API_KEYS=sk-key1,sk-key2        (or single OPENAI_API_KEY)
-//   Azure     : base slot via AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_API_KEY + AZURE_OPENAI_DEPLOYMENT
-//               extra slots via AZURE_OPENAI_ENDPOINT_2 / _3 … (same suffix pattern)
+//   Model     : DEEPSEEK_MODEL (default deepseek-chat)
 //
 // Adaptive concurrency algorithm:
 //   Each successful response carries X-RateLimit-* headers.  The pool reads
@@ -24,9 +21,7 @@ import { loadShopProfile, buildProfilePromptBlock } from "./shopProfile.js";
 //   marked throttled and the semaphore cap is immediately recalculated so the
 //   pipeline backs off without wasted retries.
 
-type Provider = "google" | "deepseek" | "azure" | "openai";
-
-// ── Shared infrastructure ────────────────────────────────────────────────────
+type PoolInitOptions = { model?: string };
 
 /**
  * Semaphore whose capacity can be raised or lowered at runtime.
@@ -176,7 +171,7 @@ export function resolveDeepSeekAccountConcurrencyLimit(model: string): number {
   return 500;
 }
 
-function resolveDeepSeekPoolConcurrency(model: string): {
+export function resolveDeepSeekPoolConcurrency(model: string): {
   accountLimit: number;
   ceiling: number;
   initial: number;
@@ -191,13 +186,17 @@ function resolveDeepSeekPoolConcurrency(model: string): {
     Math.max(1, Math.floor(accountLimit * util)),
   );
   const initialOverride = Number(process.env.DEEPSEEK_INITIAL_CONCURRENCY);
+  // Start aggressively: the account in-flight limit is large (500 pro / 2500
+  // flash) and the per-request latency is high (~40s), so a timid initial of a
+  // few dozen leaves most of the pipeline serialised while the +1-per-2-calls
+  // ramp slowly catches up. Begin near 40% of the safe ceiling (floor 128) —
+  // still well under the account limit, and on jobs with few large batches it
+  // means we parallelise from the first wave instead of never ramping at all.
   const initial = Number.isFinite(initialOverride) && initialOverride > 0
     ? Math.min(Math.floor(initialOverride), ceiling)
-    : Math.min(Math.max(32, Math.floor(ceiling * 0.1)), ceiling);
+    : Math.min(Math.max(128, Math.floor(ceiling * 0.4)), ceiling);
   return { accountLimit, ceiling, initial };
 }
-
-type PoolInitOptions = { provider?: Provider; model?: string };
 
 // ── Slot / Pool types ────────────────────────────────────────────────────────
 
@@ -220,10 +219,7 @@ type KeySlotStats = {
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
-/** DeepSeek uses native fetch; Azure/OpenAI keep the OpenAI SDK client. */
-type LlmTransport =
-  | { kind: "openai-sdk"; client: OpenAI }
-  | { kind: "deepseek-fetch"; apiKey: string; chatUrl: string };
+type LlmTransport = { kind: "deepseek-fetch"; apiKey: string; chatUrl: string };
 
 type KeySlot = {
   transport: LlmTransport;
@@ -316,35 +312,14 @@ async function invokeChatCompletion(
   timeoutMs: number,
   deepseekUserId?: string,
 ): Promise<ChatCompletionInvokeResult> {
-  if (transport.kind === "deepseek-fetch") {
-    return fetchDeepSeekChatCompletion(
-      transport.apiKey,
-      transport.chatUrl,
-      model,
-      messages,
-      timeoutMs,
-      deepseekUserId,
-    );
-  }
-
-  const { data: completion, response } = await transport.client.chat.completions
-    .create(
-      {
-        model,
-        messages,
-        temperature: 0.1,
-        response_format: { type: "json_object" },
-      },
-      { timeout: timeoutMs },
-    )
-    .withResponse();
-
-  return {
-    content: completion.choices[0]?.message?.content ?? "{}",
-    tokens: completion.usage?.total_tokens ?? 0,
-    response,
-    limitHints: collectLimitHints(completion as unknown as Record<string, unknown>),
-  };
+  return fetchDeepSeekChatCompletion(
+    transport.apiKey,
+    transport.chatUrl,
+    model,
+    messages,
+    timeoutMs,
+    deepseekUserId,
+  );
 }
 
 function retryAfterMsFromResponse(response: Response, fallbackSec = 10): number {
@@ -391,7 +366,7 @@ class LLMKeyPool {
   private readonly _blindPerKeyCap =
     Math.max(1, Number(process.env.LLM_BLIND_PER_KEY_MAX) || 8);
 
-  /** DeepSeek: account-level in-flight cap; OpenAI/Azure: blind or header-driven. */
+  /** DeepSeek: account-level in-flight cap. */
   private readonly _limitMode: PoolLimitMode;
   private _deepseekConcCeiling = 0;
   private _deepseekRampSuccesses = 0;
@@ -400,29 +375,18 @@ class LLMKeyPool {
     if (slots.length === 0) throw new Error("[llm-pool] no LLM API keys configured");
     this.slots = slots;
 
-    const provider = options?.provider ?? "openai";
     const model = options?.model ?? (process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat");
     const slotLabels = slots.map((s) => s.label).join(", ");
 
-    if (provider === "deepseek") {
-      this._limitMode = "deepseek-concurrency";
-      const cfg = resolveDeepSeekPoolConcurrency(model);
-      this._deepseekConcCeiling = cfg.ceiling;
-      this.sem = new AdaptiveSemaphore(cfg.initial);
-      console.log(
-        `[llm-pool] initialised — ${slots.length} slot(s): ${slotLabels}, ` +
-        `deepseek concurrency mode (model=${model}, accountLimit=${cfg.accountLimit}, ` +
-        `ceiling=${cfg.ceiling}, initial=${cfg.initial}; keys share account quota)`,
-      );
-    } else {
-      this._limitMode = "blind";
-      // Start with 1 concurrent request per slot; scales up once we see headers.
-      this.sem = new AdaptiveSemaphore(slots.length);
-      console.log(
-        `[llm-pool] initialised — ${slots.length} slot(s): ${slotLabels}, ` +
-        `initial concurrency=${this.sem.max}, ceiling=${MAX_POOL_CONCURRENCY}`,
-      );
-    }
+    this._limitMode = "deepseek-concurrency";
+    const cfg = resolveDeepSeekPoolConcurrency(model);
+    this._deepseekConcCeiling = cfg.ceiling;
+    this.sem = new AdaptiveSemaphore(cfg.initial);
+    console.log(
+      `[llm-pool] initialised — ${slots.length} slot(s): ${slotLabels}, ` +
+      `deepseek concurrency mode (model=${model}, accountLimit=${cfg.accountLimit}, ` +
+      `ceiling=${cfg.ceiling}, initial=${cfg.initial}; keys share account quota)`,
+    );
   }
 
   get size(): number { return this.slots.length; }
@@ -810,75 +774,23 @@ class LLMKeyPool {
 
 // ─── Pool construction ────────────────────────────────────────────────────────
 
-function buildKeySlots(provider: Provider): KeySlot[] {
-  if (provider === "deepseek") {
-    const multi = process.env.DEEPSEEK_API_KEYS?.trim();
-    const single = process.env.DEEPSEEK_API_KEY?.trim();
-    const keys = multi
-      ? multi.split(",").map((k) => k.trim()).filter(Boolean)
-      : single ? [single] : [];
-    if (keys.length === 0) throw new Error("DEEPSEEK_API_KEY / DEEPSEEK_API_KEYS required");
-    const baseURL = process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com";
-    const chatUrl = resolveDeepSeekChatCompletionsUrl(baseURL);
-    const model = process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
-    return keys.map((apiKey, i) => ({
-      transport: { kind: "deepseek-fetch" as const, apiKey, chatUrl },
-      model,
-      label: `deepseek-${i + 1}(…${apiKey.slice(-4)})`,
-      throttledUntil: 0,
-      rateLimit: null,
-      stats: _initStats(),
-    }));
-  }
-
-  if (provider === "azure") {
-    const apiVersion = process.env.AZURE_OPENAI_API_VERSION?.trim() || "2024-08-01-preview";
-    const slots: KeySlot[] = [];
-    const ep0  = process.env.AZURE_OPENAI_ENDPOINT?.trim();
-    const key0 = (process.env.AZURE_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY)?.trim();
-    const dep0 = process.env.AZURE_OPENAI_DEPLOYMENT?.trim();
-    if (ep0 && key0 && dep0) {
-      slots.push({
-        transport: {
-          kind: "openai-sdk",
-          client: new AzureOpenAI({ endpoint: ep0, apiKey: key0, deployment: dep0, apiVersion }),
-        },
-        model: dep0, label: `azure-1(${dep0})`, throttledUntil: 0, rateLimit: null, stats: _initStats(),
-      });
-    }
-    for (let i = 2; i <= 20; i++) {
-      const ep  = process.env[`AZURE_OPENAI_ENDPOINT_${i}`]?.trim();
-      const key = process.env[`AZURE_OPENAI_API_KEY_${i}`]?.trim();
-      const dep = process.env[`AZURE_OPENAI_DEPLOYMENT_${i}`]?.trim();
-      if (!ep && !key) break;
-      if (!ep || !key || !dep) {
-        console.warn(`[llm-pool] azure slot ${i} incomplete, skipping`);
-        continue;
-      }
-      const av = process.env[`AZURE_OPENAI_API_VERSION_${i}`]?.trim() || apiVersion;
-      slots.push({
-        transport: {
-          kind: "openai-sdk",
-          client: new AzureOpenAI({ endpoint: ep, apiKey: key, deployment: dep, apiVersion: av }),
-        },
-        model: dep, label: `azure-${i}(${dep})`, throttledUntil: 0, rateLimit: null, stats: _initStats(),
-      });
-    }
-    if (slots.length === 0) throw new Error("No Azure OpenAI credentials configured");
-    return slots;
-  }
-
-  // openai (default)
-  const multi = process.env.OPENAI_API_KEYS?.trim();
-  const single = process.env.OPENAI_API_KEY?.trim();
+function buildKeySlots(): KeySlot[] {
+  const multi = process.env.DEEPSEEK_API_KEYS?.trim();
+  const single = process.env.DEEPSEEK_API_KEY?.trim();
   const keys = multi
     ? multi.split(",").map((k) => k.trim()).filter(Boolean)
     : single ? [single] : [];
-  if (keys.length === 0) throw new Error("OPENAI_API_KEY / OPENAI_API_KEYS required");
+  if (keys.length === 0) throw new Error("DEEPSEEK_API_KEY / DEEPSEEK_API_KEYS required");
+  const baseURL = process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com";
+  const chatUrl = resolveDeepSeekChatCompletionsUrl(baseURL);
+  const model = process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
   return keys.map((apiKey, i) => ({
-    transport: { kind: "openai-sdk" as const, client: new OpenAI({ apiKey }) },
-    model: "", label: `openai-${i + 1}(…${apiKey.slice(-4)})`,
-    throttledUntil: 0, rateLimit: null, stats: _initStats(),
+    transport: { kind: "deepseek-fetch" as const, apiKey, chatUrl },
+    model,
+    label: `deepseek-${i + 1}(…${apiKey.slice(-4)})`,
+    throttledUntil: 0,
+    rateLimit: null,
+    stats: _initStats(),
   }));
 }
 
@@ -891,9 +803,8 @@ let _pool: LLMKeyPool | null = null;
 
 function getPool(): LLMKeyPool {
   if (_pool) return _pool;
-  const provider = resolveProvider();
-  const model = resolveModel("");
-  _pool = new LLMKeyPool(buildKeySlots(provider), { provider, model });
+  const model = resolveModel();
+  _pool = new LLMKeyPool(buildKeySlots(), { model });
   return _pool;
 }
 
@@ -996,51 +907,17 @@ export async function flushKeyStats(): Promise<void> {
   }
 }
 
-// ─── Provider / model resolution ────────────────────────────────────────────────
+// ─── Model resolution ───────────────────────────────────────────────────────────
 
-/**
- * Resolves the translation engine. `TRANSLATION_AI_MODEL` is an explicit selector:
- *   - "google-translate" → Google Translate (machine translation, not LLM)
- *   - "deepseek"         → DeepSeek
- *   - "azure"            → Azure OpenAI
- *   - "" (unset)         → auto-detect by env presence: DeepSeek → Azure → OpenAI
- *   - any other value    → OpenAI, using that string as the model id
- */
-function resolveProvider(aiModel?: string): Provider {
-  const envSel = process.env.TRANSLATION_AI_MODEL?.trim().toLowerCase();
-  const sel = envSel || aiModel?.trim().toLowerCase() || "";
-  if (sel === "google-translate") return "google";
-  if (sel === "deepseek") return "deepseek";
-  if (sel === "azure") return "azure";
-  if (!envSel) {
-    if (process.env.DEEPSEEK_API_KEY?.trim() || process.env.DEEPSEEK_API_KEYS?.trim())
-      return "deepseek";
-    if (process.env.AZURE_OPENAI_ENDPOINT?.trim()) return "azure";
-  }
-  return "openai";
-}
-
-/**
- * The model id to send.  For Azure, the per-slot deployment name is used
- * (set in buildKeySlots); for OpenAI the caller's aiModel param wins.
- */
-function resolveModel(aiModel: string, slotModel?: string): string {
-  switch (resolveProvider()) {
-    case "deepseek":
-      return slotModel || process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
-    case "azure":
-      return slotModel || process.env.AZURE_OPENAI_DEPLOYMENT?.trim() || aiModel || "gpt-4o-mini";
-    default:
-      return aiModel || "gpt-4o-mini";
-  }
+/** DeepSeek model id from DEEPSEEK_MODEL (slot override wins when set). */
+function resolveModel(slotModel?: string): string {
+  return slotModel || process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
 }
 
 // ─── Engine router ──────────────────────────────────────────────────────────────
 //
-// Two engine *families*: "llm" (DeepSeek/Azure/OpenAI, chosen by resolveProvider)
-// and "google" (Google Translate). When TRANSLATION_AI_MODEL forces one, that one
-// is used for everything. Otherwise cost-tiered routing applies: cheap/short
-// fields prefer Google, rich content prefers the LLM, with cross-engine fallback.
+// Two engine *families*: "llm" (DeepSeek) and "google" (Google Translate).
+// Cost-tiered routing applies unless the job requests google-translate only.
 
 type Engine = "llm" | "google";
 
@@ -1051,18 +928,12 @@ function googleConfigured(): boolean {
 function llmConfigured(): boolean {
   return Boolean(
     process.env.DEEPSEEK_API_KEY?.trim() ||
-      process.env.DEEPSEEK_API_KEYS?.trim() ||
-      process.env.AZURE_OPENAI_ENDPOINT?.trim() ||
-      process.env.OPENAI_API_KEY?.trim() ||
-      process.env.OPENAI_API_KEYS?.trim(),
+      process.env.DEEPSEEK_API_KEYS?.trim(),
   );
 }
 
 /** A single forced engine family, or null when auto-routing should apply. */
 function forcedEngine(aiModel?: string): Engine | null {
-  const env = process.env.TRANSLATION_AI_MODEL?.trim().toLowerCase();
-  if (env) return env === "google-translate" ? "google" : "llm";
-  // Env unset → route, except a legacy job-level google-translate request.
   if (aiModel?.trim().toLowerCase() === "google-translate") return "google";
   return null;
 }
@@ -1070,8 +941,12 @@ function forcedEngine(aiModel?: string): Engine | null {
 // Plain fields at or above this length are treated as "rich" content.
 const SHORT_PLAIN_THRESHOLD = 80;
 
-function fieldTier(key: string, value: string, klass: "skip" | "html" | "plain"): "trivial" | "rich" {
-  if (klass === "html") return "rich";
+function fieldTier(
+  key: string,
+  value: string,
+  klass: "skip" | "html" | "json" | "plain",
+): "trivial" | "rich" {
+  if (klass === "html" || klass === "json") return "rich";
   if (key === "meta_description") return "rich";
   return value.length >= SHORT_PLAIN_THRESHOLD ? "rich" : "trivial";
 }
@@ -1097,8 +972,8 @@ function engineOrderFor(tier: "trivial" | "rich", aiModel?: string): Engine[] {
 }
 
 /** The model/label recorded for a chosen engine (used for TM cache + Cosmos). */
-function engineModel(engine: Engine, aiModel: string): string {
-  return engine === "google" ? "google-translate" : resolveModel(aiModel);
+function engineModel(engine: Engine, _aiModel: string): string {
+  return engine === "google" ? "google-translate" : resolveModel();
 }
 
 /**
@@ -1108,9 +983,7 @@ function engineModel(engine: Engine, aiModel: string): string {
 export function resolveEngine(aiModel: string): { provider: string; model: string } {
   const forced = forcedEngine(aiModel);
   if (forced === "google") return { provider: "google", model: "google-translate" };
-  const provider = resolveProvider();
-  const model = resolveModel(aiModel);
-  if (forced === "llm") return { provider, model };
+  const model = resolveModel();
   const parts: string[] = [];
   if (googleConfigured()) parts.push("google");
   if (llmConfigured()) parts.push(model);
@@ -1221,8 +1094,11 @@ function isHtml(value: string): boolean {
   return HTML_TAG_RE.test(value);
 }
 
-export function classifyField(key: string, value?: string): "skip" | "html" | "plain" {
+export function classifyField(key: string, value?: string): "skip" | "html" | "json" | "plain" {
   if (SKIP_KEYS.has(key)) return "skip";
+  // JSON must be detected before HTML: a JSON blob can contain an HTML string in
+  // one of its leaves, which would otherwise trip the isHtml() check.
+  if (value !== undefined && tryParseJsonContainer(value) !== undefined) return "json";
   if (value !== undefined && isHtml(value)) return "html";
   return "plain";
 }
@@ -1236,16 +1112,30 @@ export function countFieldUnits(key: string, value: string): number {
   const klass = classifyField(key, value);
   if (klass === "skip") return 0;
   if (klass === "html") return extractHtmlTextNodes(value).texts.length;
+  if (klass === "json") {
+    const root = tryParseJsonContainer(value);
+    if (root === undefined) return splitPlainText(value).length;
+    const leaves: string[] = [];
+    collectJsonLeaves(root, leaves);
+    return leaves.length;
+  }
   return splitPlainText(value).length;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 // Max total chars sent to the translation API in one request.
-// Override via TRANSLATE_MAX_CHARS_PER_BATCH env var (default 12000).
+// Override via TRANSLATE_MAX_CHARS_PER_BATCH env var (default 4000).
+//
+// Smaller batches trade a few extra requests (cheap — DeepSeek/OpenAI prompt
+// caching makes the repeated system prompt nearly free) for much lower per-request
+// latency and far better fan-out: a big field's many units split into several
+// short parallel requests instead of one ~40s monolith. Combined with the high
+// chunk concurrency in translateWorker, this collapses the "few large slow
+// requests" tail that otherwise dominates the back half of a job.
 const MAX_CHARS_PER_BATCH = Math.max(
   500,
-  Number(process.env.TRANSLATE_MAX_CHARS_PER_BATCH) || 12_000,
+  Number(process.env.TRANSLATE_MAX_CHARS_PER_BATCH) || 4_000,
 );
 // Batch fan-out: all batches within a resource pool are launched simultaneously.
 // The pool's AdaptiveSemaphore is the only concurrency gate — no separate knob needed.
@@ -1355,6 +1245,82 @@ function extractHtmlTextNodes(html: string): { template: string; texts: string[]
 
 function restoreHtmlTextNodes(template: string, translations: string[]): string {
   return template.replace(/\x00T(\d+)\x00/g, (_, idx) => translations[Number(idx)] ?? "");
+}
+
+// ─── JSON leaf extraction ──────────────────────────────────────────────────────
+//
+// Metafield values are frequently JSON config blobs (theme settings, cart copy,
+// language-switcher config…). Translating the whole blob as one opaque string is
+// bad three ways: (a) a 30KB+ value is a single huge request that strands the
+// tail of a job; (b) splitPlainText would cut it at word boundaries and corrupt
+// the JSON → fallback; (c) the model rewrites structural tokens it shouldn't
+// ("center" → "zentriert"). Instead we parse the JSON, translate only the
+// human-readable string leaves as independent units, and re-serialise.
+
+type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
+
+const JSON_HEX_RE = /^#[0-9a-fA-F]{3,8}$/;
+const JSON_NUMBERISH_RE = /^[+-]?\d+(\.\d+)?$/;
+// Lowercase single tokens with no whitespace are overwhelmingly CSS/layout enums
+// or config keys ("center", "flex", "bottom_right", "dropdown_vertical") — never
+// user-facing copy, which is Capitalised or multi-word. Skipping them keeps the
+// JSON's structural values intact and avoids over-translation.
+const JSON_TOKEN_RE = /^[a-z][a-z0-9_+./:-]*$/;
+
+/** True if a JSON string leaf looks like human-readable copy worth translating. */
+function isTranslatableJsonLeaf(s: string): boolean {
+  const v = s.trim();
+  if (!v) return false;
+  if (ATTR_URL_RE.test(v)) return false;          // urls
+  if (JSON_HEX_RE.test(v)) return false;          // hex colours (#fff, #000000)
+  if (JSON_NUMBERISH_RE.test(v)) return false;    // numeric strings
+  if (JSON_TOKEN_RE.test(v)) return false;        // lowercase enum / key tokens
+  if (ATTR_HASH_FILENAME_RE.test(v)) return false; // hash filenames / image names
+  return /\p{L}/u.test(v);                         // require at least one letter
+}
+
+/** Parse only JSON objects/arrays; returns undefined for anything else. */
+function tryParseJsonContainer(value: string): JsonValue | undefined {
+  const t = value.trim();
+  if (t.length < 2) return undefined;
+  const c = t[0];
+  if (c !== "{" && c !== "[") return undefined;
+  try {
+    const parsed = JSON.parse(t) as JsonValue;
+    if (parsed !== null && typeof parsed === "object") return parsed;
+  } catch {
+    /* not JSON — caller falls back to plain handling */
+  }
+  return undefined;
+}
+
+/** Collect translatable string leaves in deterministic DFS order (with repeats). */
+function collectJsonLeaves(node: JsonValue, out: string[]): void {
+  if (typeof node === "string") {
+    if (isTranslatableJsonLeaf(node)) out.push(node);
+    return;
+  }
+  if (Array.isArray(node)) {
+    for (const v of node) collectJsonLeaves(v, out);
+    return;
+  }
+  if (node !== null && typeof node === "object") {
+    for (const k of Object.keys(node)) collectJsonLeaves(node[k], out);
+  }
+}
+
+/** Rebuild the JSON tree, swapping each translatable leaf for its translation. */
+function rebuildJson(node: JsonValue, translated: Map<string, string>): JsonValue {
+  if (typeof node === "string") {
+    return isTranslatableJsonLeaf(node) ? translated.get(node) ?? node : node;
+  }
+  if (Array.isArray(node)) return node.map((v) => rebuildJson(v, translated));
+  if (node !== null && typeof node === "object") {
+    const out: { [k: string]: JsonValue } = {};
+    for (const k of Object.keys(node)) out[k] = rebuildJson(node[k], translated);
+    return out;
+  }
+  return node;
 }
 
 // ─── Plain text splitting ─────────────────────────────────────────────────────
@@ -1668,7 +1634,7 @@ async function callLLMOnce(
   const payload  = items.map((it, idx) => ({ key: `f${idx}`, value: it.value }));
 
   const acq   = await getPool().acquire();
-  const model = resolveModel(aiModel, acq.model);
+  const model = resolveModel(acq.model);
   const t0    = Date.now();
 
   const messages: ChatMessage[] = [
@@ -1709,12 +1675,6 @@ async function callLLMOnce(
   } catch (e: unknown) {
     if (e instanceof LlmRateLimitError) {
       acq.onThrottle(retryAfterMsFromResponse(e.response));
-    } else if (e instanceof RateLimitError) {
-      const eh = e.headers as unknown as { get?: (k: string) => string | null } & Record<string, string>;
-      const retryAfterSec = Number(
-        (typeof eh?.get === "function" ? eh.get("retry-after") : eh?.["retry-after"]) ?? "10",
-      );
-      acq.onThrottle(Math.max(retryAfterSec * 1_000, 10_000));
     } else {
       acq.onError(); // count non-throttle errors (timeouts, parse failures, etc.)
     }
@@ -1809,6 +1769,7 @@ type FieldPlan = {
 } & (
   | { kind: "plain"; parts: string[] }
   | { kind: "html"; template: string; nodeTexts: string[] }
+  | { kind: "json"; root: JsonValue; leaves: string[] }
 );
 
 /**
@@ -1820,8 +1781,8 @@ type FieldPlan = {
  *  - Dedup: each unique (engine-order, text) is translated once and reused
  *    everywhere it occurs in the chunk.
  *
- * Engine selection: TRANSLATION_AI_MODEL forces one engine; otherwise cost-tiered
- * routing (Google for short/simple, LLM for rich) with cross-engine fallback.
+ * Engine selection: cost-tiered routing (Google for short/simple, DeepSeek for rich)
+ * with cross-engine fallback, unless the job sets aiModel=google-translate.
  * Placeholders are masked across all engines; TM cache keyed by tier model.
  */
 export async function translateResources(
@@ -1861,6 +1822,11 @@ export async function translateResources(
   // Units resolved without hitting an engine (cache hits) — credited immediately.
   let cacheUnits = 0;
 
+  // Opt-in: skip fields that contain none of the source-language script.
+  const skipNonSourceScript = /^(1|true|yes)$/i.test(
+    process.env.TRANSLATE_SKIP_NON_SOURCE_SCRIPT ?? "",
+  );
+
   // 1. Plan every field: resolve skip/cache directly; collect units to translate.
   //    TM lookups are fired in parallel across all fields to minimise Redis RTTs.
   for (const res of resources) {
@@ -1871,7 +1837,7 @@ export async function translateResources(
   type FieldWork = {
     resourceId: string;
     f: TranslateItem;
-    klass: "html" | "plain";
+    klass: "html" | "json" | "plain";
     order: Engine[];
     cacheModel: string;
   };
@@ -1924,7 +1890,17 @@ export async function translateResources(
     // language, skip it — the LLM would just echo it back unchanged.
     // For zh-CN→en: English content (no CJK) is skipped (it's already the target).
     // For zh-CN→pl: English content is NOT skipped (it still needs translation to Polish).
-    if (alreadyInTarget(f.value, source, target)) {
+    //
+    // Opt-in TRANSLATE_SKIP_NON_SOURCE_SCRIPT extends this: when the operator
+    // knows the store's real source language, any field that contains none of
+    // the source script is treated as already-done and skipped (saves the tokens
+    // otherwise spent re-translating non-source content). Off by default because
+    // for a mixed-language store with a non-English target, skipping non-source
+    // content would leave it untranslated.
+    if (
+      alreadyInTarget(f.value, source, target) ||
+      (skipNonSourceScript && !containsSourceScript(f.value, source))
+    ) {
       rm.set(f.key, { key: f.key, translatedValue: f.value, digest: f.digest, status: "translated" });
       cacheUnits += countFieldUnits(f.key, f.value);
       continue;
@@ -1938,6 +1914,24 @@ export async function translateResources(
       }
       texts.forEach((t) => addUnit(order, t));
       plans.push({ kind: "html", resourceId, key: f.key, digest: f.digest, order, cacheModel, template, nodeTexts: texts });
+    } else if (klass === "json") {
+      const root = tryParseJsonContainer(f.value);
+      const leaves: string[] = [];
+      if (root !== undefined) collectJsonLeaves(root, leaves);
+      if (root === undefined) {
+        // Re-classified between init and here, or unparseable now — fall back to
+        // plain handling so the field is still translated, just not structurally.
+        const parts = splitPlainText(f.value);
+        parts.forEach((p) => addUnit(order, p));
+        plans.push({ kind: "plain", resourceId, key: f.key, digest: f.digest, order, cacheModel, parts });
+      } else if (leaves.length === 0) {
+        // Pure structural/config JSON with no human-readable copy — keep verbatim.
+        rm.set(f.key, { key: f.key, translatedValue: f.value, digest: f.digest, status: "translated" });
+        continue;
+      } else {
+        leaves.forEach((t) => addUnit(order, t));
+        plans.push({ kind: "json", resourceId, key: f.key, digest: f.digest, order, cacheModel, root, leaves });
+      }
     } else {
       const parts = splitPlainText(f.value);
       parts.forEach((p) => addUnit(order, p));
@@ -1994,7 +1988,7 @@ export async function translateResources(
         tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
         tmWrites.push(tmSetByValue(originalValue, source, target, plan.cacheModel, value));
       }
-    } else {
+    } else if (plan.kind === "html") {
       let anyFallback = false;
       const out = plan.nodeTexts.map((t) => {
         const r = lookup(plan.order, t);
@@ -2005,6 +1999,24 @@ export async function translateResources(
         return r.value.trim(); // template already preserves surrounding whitespace
       });
       const value = restoreHtmlTextNodes(plan.template, out);
+      const status = anyFallback ? "fallback" : "translated";
+      rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
+      if (status === "translated") tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
+    } else {
+      // json: map each unique leaf to its translation, rebuild the tree, re-serialise.
+      let anyFallback = false;
+      const tmap = new Map<string, string>();
+      for (const t of plan.leaves) {
+        if (tmap.has(t)) continue;
+        const r = lookup(plan.order, t);
+        if (!r || r.status === "fallback") {
+          anyFallback = true;
+          tmap.set(t, t);
+        } else {
+          tmap.set(t, r.value.trim());
+        }
+      }
+      const value = JSON.stringify(rebuildJson(plan.root, tmap));
       const status = anyFallback ? "fallback" : "translated";
       rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
       if (status === "translated") tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));

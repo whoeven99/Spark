@@ -3,6 +3,7 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
+import { lazy, Suspense } from "react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import {
@@ -18,9 +19,13 @@ import { BILLING_RETURN_QUERY_FLAG } from "../server/billing/buildBillingReturnU
 import {
   BILLING_PAGE_PATH,
 } from "../server/billing/buildBillingReturnUrl.server";
-import { BillingPage } from "./page/BillingPage";
 import { useFeatureView } from "../lib/featureTrack";
 import { recordFeatureTrack } from "../server/aliyunLog/featureTrack.server";
+import { RoutePageFallback } from "./component/RoutePageFallback";
+
+const BillingPage = lazy(() =>
+  import("./page/BillingPage").then((m) => ({ default: m.BillingPage })),
+);
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
@@ -30,15 +35,25 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ? url.searchParams.get("charge_id")
       : null;
 
-  await reconcilePendingTokenPackPurchases({
-    shop: session.shop,
-    admin,
-    chargeId,
-  });
-  await reconcilePendingSubscriptions({
-    shop: session.shop,
-    admin,
-  });
+  const reconcileWork = Promise.all([
+    reconcilePendingTokenPackPurchases({
+      shop: session.shop,
+      admin,
+      chargeId,
+    }),
+    reconcilePendingSubscriptions({
+      shop: session.shop,
+      admin,
+    }),
+  ]);
+
+  if (chargeId) {
+    await reconcileWork;
+  } else {
+    void reconcileWork.catch((error) => {
+      console.error("[Billing] background reconcile failed:", error);
+    });
+  }
 
   return loadBillingPageData(session.shop);
 };
@@ -119,7 +134,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 export default function AppBilling() {
   useFeatureView("billing");
-  return <BillingPage />;
+  return (
+    <Suspense fallback={<RoutePageFallback />}>
+      <BillingPage />
+    </Suspense>
+  );
 }
 
 export const headers: HeadersFunction = (headersArgs) => {

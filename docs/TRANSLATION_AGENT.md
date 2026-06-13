@@ -157,8 +157,8 @@ CREATED
 
 **翻译引擎路由**：
 - `testMode=true` → 直接返回 `原文 - test`（跳过 API 调用）
-- `aiModel="google-translate"` 或 `TRANSLATION_AI_MODEL=google-translate` → Google Translate API
-- 其他 → 走 LLM（OpenAI 兼容）`chat.completions.create`，`temperature=0.1`
+- `aiModel="google-translate"` → Google Translate API
+- 其他 → 走 DeepSeek `chat/completions`（`DEEPSEEK_MODEL`，默认 `deepseek-chat`），`temperature=0.1`
 
 **Chunk 级批量 + 去重**（`translateResources`）：
 - worker 现在**每个 chunk 调一次 `translateResources`**(不再逐 resource),把整 chunk 所有待翻单元(短字段 / HTML 文本节点 / 长文切片)**跨资源合并**后按引擎大批翻译,大幅减少调用次数(对慢的 DeepSeek 尤其关键)。
@@ -168,14 +168,12 @@ CREATED
 
 **引擎路由(成本分级 + 失败级联)**（`engineOrderFor` / `translateItemsRouted`）：
 
-两个引擎家族:**llm**(DeepSeek/Azure/OpenAI,由 `resolveProvider` 按 env 选具体 provider)和 **google**(Google Translate)。是否纳入候选按 env 探测(配了对应 key 才算可用)。
+两个引擎家族:**llm**(DeepSeek)和 **google**(Google Translate)。是否纳入候选按 env 探测(配了对应 key 才算可用)。
 
-- `TRANSLATION_AI_MODEL` 设值 → **锁定单一引擎**(不路由):
-  - `google-translate` → 只用 Google
-  - `deepseek` / `azure` / `openai` / 任意模型名 → 只用 LLM(具体 provider 由 `resolveProvider` 决定)
-- `TRANSLATION_AI_MODEL` **留空** → **成本分级自动路由**:
-  - 短/简单字段(plain 且 `<80` 字符、非 `meta_description`)→ **Google 优先**,失败级联 LLM
-  - 富文本(html、`meta_description`、长 plain)→ **LLM 优先**,失败级联 Google
+- `aiModel="google-translate"` → **锁定 Google**
+- 其他 → **成本分级自动路由**:
+  - 短/简单字段(plain 且 `<80` 字符、非 `meta_description`)→ **Google 优先**,失败级联 DeepSeek
+  - 富文本(html、`meta_description`、长 plain)→ **DeepSeek 优先**,失败级联 Google
 - **失败级联**:主引擎失败(JSON 坏 / API 错 / 占位符损坏)→ 自动换候选列表里的下一个引擎;全失败才回退原文标 `fallback`。
 
 > 占位符掩码、实体清理对**所有引擎**生效(在 `translateItemsRouted` 统一处理)。TM 缓存按字段 tier 的主引擎模型名隔离。job 的 `aiModel="google-translate"` 仍向后兼容锁 Google。
@@ -310,8 +308,8 @@ CREATED
 | `source` | string | 源语言，如 `zh-CN` |
 | `target` | string | 目标语言，如 `en` |
 | `modules` | TranslationV4Module[] | 待翻译模块 |
-| `aiModel` | string | **请求的**翻译模型（创建任务时填，默认 `gpt-4o-mini`） |
-| `aiModelUsed` | string \| null | **实际使用的**模型（worker 翻译完写入真实值，如 `deepseek-v4-flash`、Azure deployment、`gpt-4o-mini`、`google-translate`、testMode 时 `test`） |
+| `aiModel` | string | **请求的**翻译模型（创建任务时填，默认 `DEEPSEEK_MODEL` 或 `deepseek-chat`） |
+| `aiModelUsed` | string \| null | **实际使用的**模型（worker 翻译完写入真实值，如 `deepseek-v4-flash`、`google-translate`、testMode 时 `test`） |
 | `aiProvider` | string \| null | 实际引擎：`deepseek` / `azure` / `openai` / `google` / `auto`(路由) / `test` |
 | `engineUsage` | `{[model]:{units,chars}}` \| null | **按引擎汇总**:每个引擎/模型翻译了多少 units(去重后的文本单元)+ chars(源字符)。多引擎路由时看这个,如 `{"google-translate":{units:120,chars:3400},"deepseek-v4-pro":{units:38,chars:51000}}` |
 | `limitPerType` | number | 每个模块最多翻译条目数（1–500） |
@@ -345,12 +343,12 @@ CREATED
   "isCover": false,
   "isHandle": false,
   "testMode": false,
-  "aiModel": "gpt-4o-mini"
+  "aiModel": "deepseek-chat"
 }
 ```
 
 - `limitPerType` 上下限：1–500，默认 20
-- `aiModel` 默认取 `TRANSLATION_AI_MODEL` 环境变量，再退回 `gpt-4o-mini`
+- `aiModel` 默认取 `DEEPSEEK_MODEL` 环境变量，再退回 `deepseek-chat`
 - 创建后同步 `lpush translate:v4:hint:init`
 
 ### GET `/api/translate/v4/tasks?shopName=` — 列表
@@ -459,16 +457,10 @@ type TranslationTaskFormPayload = {
 | `REDIS_PASSWORD` / `REDISCACHEKEY` | App + Worker | Redis 密码 |
 | `REDIS_PORT` | App + Worker | Redis 端口，默认 `6380` |
 | `REDIS_TLS` | App + Worker | 设为 `"false"` 关闭 TLS（Azure Cache 默认开启） |
-| `OPENAI_API_KEY` | Worker | OpenAI API 密钥（官方） |
-| `AZURE_OPENAI_ENDPOINT` | Worker | 设置后翻译走 Azure OpenAI（如 `https://xxx.openai.azure.com`） |
-| `AZURE_OPENAI_API_KEY` | Worker | Azure OpenAI 密钥（缺省回退 `OPENAI_API_KEY`） |
-| `AZURE_OPENAI_DEPLOYMENT` | Worker | Azure 部署名（即实际路由的模型，必填于 Azure 模式） |
-| `AZURE_OPENAI_API_VERSION` | Worker | Azure API 版本，默认 `2024-08-01-preview` |
-| `DEEPSEEK_API_KEY` | Worker | 设置后翻译走 DeepSeek（优先级高于 Azure/OpenAI） |
-| `DEEPSEEK_MODEL` | Worker | DeepSeek 模型，如 `deepseek-v4-flash` |
-| `DEEPSEEK_BASE_URL` | Worker | DeepSeek 端点，默认 `https://api.deepseek.com/v1` |
-| `GOOGLE_TRANSLATE_API_KEY` | Worker | Google Translate API 密钥 |
-| `TRANSLATION_AI_MODEL` | App + Worker | 全局覆盖翻译模型，如 `gpt-4o-mini`、`google-translate` |
+| `DEEPSEEK_API_KEY` | Worker | DeepSeek API 密钥（翻译 LLM 与分析 LLM 均使用） |
+| `DEEPSEEK_MODEL` | Worker | DeepSeek 模型，如 `deepseek-v4-flash`（默认 `deepseek-chat`） |
+| `DEEPSEEK_BASE_URL` | Worker | DeepSeek 端点，默认 `https://api.deepseek.com` |
+| `GOOGLE_TRANSLATE_API_KEY` | Worker | Google Translate API 密钥（短字段成本路由可选） |
 | `TRANSLATION_TM_DISABLED` | Worker | 设为 `"true"` 关闭翻译记忆缓存 |
 | `TRANSLATION_TM_TTL_DAYS` | Worker | 翻译记忆缓存 TTL（天），默认 60 |
 | `WORKER_STAGES` | Worker | 逗号分隔启用的阶段，如 `init,translate,writeback,verify,analysis`（**默认全开**）。若设为 `init,translate` 等未含 `analysis` 的值，**商店扫描分析不会执行**；用于线上质量测试时可跳过 writeback/verify |

@@ -1,4 +1,4 @@
-name: spark - Spark Test Deploy
+name: spark - Spark Deploy
 
 # 仅手动触发；始终从 master 检出；勾选要执行的任务（可多选）
 on:
