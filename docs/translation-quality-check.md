@@ -30,6 +30,7 @@ Agent 收到后：
 | Blob 检查脚本 | `node scripts/blob-inspect-translation.mjs <jobId>` |
 | 离线质量报告 | `cd worker && npx tsx src/scripts/exportTranslationReport.ts <shopName> <taskId>` |
 | 质量指标扫描 | `node scripts/qps-quality-scan.mjs <jobId>`（全量算 noSrc/toTarget/fallback/unchanged + METAFIELD 枚举误翻） |
+| 大字段诊断 | `node scripts/qps-bigfields.mjs <jobId>`（扫描 init chunk，按字符长度分桶并列出 Top 20 最大字段） |
 | QPS 原始日志 | `node scripts/qps-fetch.cjs <jobId>`（Cosmos 原始快照，调试用） |
 | QPS 汇总+出图数据 | `node scripts/qps-summary.cjs <jobId>`（分阶段汇总 + 时间序列 + 写 `scripts/qps-data.json`） |
 | Azure 连接串 | 项目根 `.env` 中的 `AZURE_BLOB_CONNECTION_STRING` |
@@ -88,6 +89,23 @@ node scripts/blob-inspect-translation.mjs <jobId>
 - `Fallbacks`：`translate/fallbacks.json` 条数与样例（引擎回退原文）
 
 无参数运行可列出所有 job，用于匹配 jobId 前缀。
+
+#### 2.1 大字段分布（可选，排查慢翻 / 高 token）
+
+当 TRANSLATE 阶段耗时或 token 异常偏高时，跑：
+
+```bash
+node scripts/qps-bigfields.mjs <jobId>
+```
+
+输出：
+
+- `total fields`：init 阶段纳入的字段总数
+- `size buckets`：按字符长度分桶（`<1k` / `1-3k` / `3-6k` / `6-12k` / `>12k`）
+- `fields >=6000 chars`：超长字段数量（易触发长文切片、拉高 LLM 延迟与 token）
+- `top 20 largest`：模块、`key`、`resourceId`、字符数
+
+**解读**：`>12k` 或 Top 20 里大量 `body_html` / `METAFIELD` 超长 JSON → 优先抽查这些 resource；与 QPS 图里 TRANSLATE 高延迟、`lq` 偏低对照。
 
 ---
 
@@ -327,6 +345,9 @@ cd worker && npx tsx src/scripts/exportTranslationReport.ts <shopName> <taskId>
 # 质量指标一把梭（noSrc/toTarget/fallback/unchanged + 枚举误翻）
 node scripts/qps-quality-scan.mjs <jobId>
 
+# 大字段分布（init 阶段 Top 20 最大字段，排查慢翻/高 token）
+node scripts/qps-bigfields.mjs <jobId>
+
 # QPS：分阶段汇总 + 写 scripts/qps-data.json（再用图表 widget 出图）
 node scripts/qps-summary.cjs <jobId>
 node scripts/qps-fetch.cjs <jobId>   # 原始快照，排查用
@@ -341,6 +362,7 @@ node scripts/qps-fetch.cjs <jobId>   # 原始快照，排查用
 - [ ] 抽查至少 2 个模块的 chunk 对照
 - [ ] 终态任务优先跑 `exportTranslationReport` 拿全量 flags
 - [ ] 计算 `noSrc/total` 与 `toTarget/needTranslate`（跑 `qps-quality-scan.mjs`，勿目测）
+- [ ] TRANSLATE 慢或 token 偏高时，跑 `qps-bigfields.mjs` 看大字段分布
 - [ ] 检查 METAFIELD 与技术字段误翻
 - [ ] **跑 `qps-summary.cjs <jobId>` 并用 `scripts/qps-data.json` 给用户画 QPS 双轴图**（日志过 7 天则注明跳过）
 - [ ] 按「报告输出格式」给用户结论（含 QPS 附图小节），标明任务是否已完成

@@ -95,8 +95,13 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
     }
 
     // Cap chunks processed simultaneously to bound blob reads + in-memory pools;
-    // actual LLM call concurrency is governed separately by the pool semaphore.
-    const CHUNK_CONCURRENCY = Math.max(1, Number(process.env.TRANSLATE_CHUNK_CONCURRENCY) || 24);
+    // actual LLM call concurrency is governed separately by the pool semaphore
+    // (~0.9× the account in-flight limit), so this only needs to be high enough
+    // that the slow "long-pole" chunks (those holding a 30KB+ metafield / long
+    // body_html) are all in flight at once instead of queuing behind a low cap.
+    // 64 keeps near-every chunk active for typical stores while the pool still
+    // protects the API from overload.
+    const CHUNK_CONCURRENCY = Math.max(1, Number(process.env.TRANSLATE_CHUNK_CONCURRENCY) || 64);
 
     await pAll(work, CHUNK_CONCURRENCY, async ({ module, chunkPath, chunkIdx, chunkTotal }) => {
       {

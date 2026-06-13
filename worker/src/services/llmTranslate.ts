@@ -1262,10 +1262,17 @@ export function countFieldUnits(key: string, value: string): number {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 // Max total chars sent to the translation API in one request.
-// Override via TRANSLATE_MAX_CHARS_PER_BATCH env var (default 12000).
+// Override via TRANSLATE_MAX_CHARS_PER_BATCH env var (default 4000).
+//
+// Smaller batches trade a few extra requests (cheap — DeepSeek/OpenAI prompt
+// caching makes the repeated system prompt nearly free) for much lower per-request
+// latency and far better fan-out: a big field's many units split into several
+// short parallel requests instead of one ~40s monolith. Combined with the high
+// chunk concurrency in translateWorker, this collapses the "few large slow
+// requests" tail that otherwise dominates the back half of a job.
 const MAX_CHARS_PER_BATCH = Math.max(
   500,
-  Number(process.env.TRANSLATE_MAX_CHARS_PER_BATCH) || 12_000,
+  Number(process.env.TRANSLATE_MAX_CHARS_PER_BATCH) || 4_000,
 );
 // Batch fan-out: all batches within a resource pool are launched simultaneously.
 // The pool's AdaptiveSemaphore is the only concurrency gate — no separate knob needed.
