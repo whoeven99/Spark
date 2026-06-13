@@ -1,4 +1,3 @@
-import OpenAI, { AzureOpenAI, RateLimitError } from "openai";
 import { tmGet, tmGetByValue, tmSet, tmSetByValue } from "./translationMemory.js";
 import { loadGlossaryLines } from "./glossary.js";
 import { loadShopProfile, buildProfilePromptBlock } from "./shopProfile.js";
@@ -12,9 +11,7 @@ import { loadShopProfile, buildProfilePromptBlock } from "./shopProfile.js";
 //
 // Key pool env vars (comma-separated lists override single-key variants):
 //   DeepSeek  : DEEPSEEK_API_KEYS=sk-key1,sk-key2     (or single DEEPSEEK_API_KEY)
-//   OpenAI    : OPENAI_API_KEYS=sk-key1,sk-key2        (or single OPENAI_API_KEY)
-//   Azure     : base slot via AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_API_KEY + AZURE_OPENAI_DEPLOYMENT
-//               extra slots via AZURE_OPENAI_ENDPOINT_2 / _3 … (same suffix pattern)
+//   Model     : DEEPSEEK_MODEL (default deepseek-chat)
 //
 // Adaptive concurrency algorithm:
 //   Each successful response carries X-RateLimit-* headers.  The pool reads
@@ -24,9 +21,7 @@ import { loadShopProfile, buildProfilePromptBlock } from "./shopProfile.js";
 //   marked throttled and the semaphore cap is immediately recalculated so the
 //   pipeline backs off without wasted retries.
 
-type Provider = "google" | "deepseek" | "azure" | "openai";
-
-// ── Shared infrastructure ────────────────────────────────────────────────────
+type PoolInitOptions = { model?: string };
 
 /**
  * Semaphore whose capacity can be raised or lowered at runtime.
@@ -203,8 +198,6 @@ export function resolveDeepSeekPoolConcurrency(model: string): {
   return { accountLimit, ceiling, initial };
 }
 
-type PoolInitOptions = { provider?: Provider; model?: string };
-
 // ── Slot / Pool types ────────────────────────────────────────────────────────
 
 type SlotRateLimit = {
@@ -226,10 +219,7 @@ type KeySlotStats = {
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
-/** DeepSeek uses native fetch; Azure/OpenAI keep the OpenAI SDK client. */
-type LlmTransport =
-  | { kind: "openai-sdk"; client: OpenAI }
-  | { kind: "deepseek-fetch"; apiKey: string; chatUrl: string };
+type LlmTransport = { kind: "deepseek-fetch"; apiKey: string; chatUrl: string };
 
 type KeySlot = {
   transport: LlmTransport;
@@ -322,35 +312,14 @@ async function invokeChatCompletion(
   timeoutMs: number,
   deepseekUserId?: string,
 ): Promise<ChatCompletionInvokeResult> {
-  if (transport.kind === "deepseek-fetch") {
-    return fetchDeepSeekChatCompletion(
-      transport.apiKey,
-      transport.chatUrl,
-      model,
-      messages,
-      timeoutMs,
-      deepseekUserId,
-    );
-  }
-
-  const { data: completion, response } = await transport.client.chat.completions
-    .create(
-      {
-        model,
-        messages,
-        temperature: 0.1,
-        response_format: { type: "json_object" },
-      },
-      { timeout: timeoutMs },
-    )
-    .withResponse();
-
-  return {
-    content: completion.choices[0]?.message?.content ?? "{}",
-    tokens: completion.usage?.total_tokens ?? 0,
-    response,
-    limitHints: collectLimitHints(completion as unknown as Record<string, unknown>),
-  };
+  return fetchDeepSeekChatCompletion(
+    transport.apiKey,
+    transport.chatUrl,
+    model,
+    messages,
+    timeoutMs,
+    deepseekUserId,
+  );
 }
 
 function retryAfterMsFromResponse(response: Response, fallbackSec = 10): number {
@@ -397,7 +366,7 @@ class LLMKeyPool {
   private readonly _blindPerKeyCap =
     Math.max(1, Number(process.env.LLM_BLIND_PER_KEY_MAX) || 8);
 
-  /** DeepSeek: account-level in-flight cap; OpenAI/Azure: blind or header-driven. */
+  /** DeepSeek: account-level in-flight cap. */
   private readonly _limitMode: PoolLimitMode;
   private _deepseekConcCeiling = 0;
   private _deepseekRampSuccesses = 0;
@@ -406,29 +375,18 @@ class LLMKeyPool {
     if (slots.length === 0) throw new Error("[llm-pool] no LLM API keys configured");
     this.slots = slots;
 
-    const provider = options?.provider ?? "openai";
     const model = options?.model ?? (process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat");
     const slotLabels = slots.map((s) => s.label).join(", ");
 
-    if (provider === "deepseek") {
-      this._limitMode = "deepseek-concurrency";
-      const cfg = resolveDeepSeekPoolConcurrency(model);
-      this._deepseekConcCeiling = cfg.ceiling;
-      this.sem = new AdaptiveSemaphore(cfg.initial);
-      console.log(
-        `[llm-pool] initialised — ${slots.length} slot(s): ${slotLabels}, ` +
-        `deepseek concurrency mode (model=${model}, accountLimit=${cfg.accountLimit}, ` +
-        `ceiling=${cfg.ceiling}, initial=${cfg.initial}; keys share account quota)`,
-      );
-    } else {
-      this._limitMode = "blind";
-      // Start with 1 concurrent request per slot; scales up once we see headers.
-      this.sem = new AdaptiveSemaphore(slots.length);
-      console.log(
-        `[llm-pool] initialised — ${slots.length} slot(s): ${slotLabels}, ` +
-        `initial concurrency=${this.sem.max}, ceiling=${MAX_POOL_CONCURRENCY}`,
-      );
-    }
+    this._limitMode = "deepseek-concurrency";
+    const cfg = resolveDeepSeekPoolConcurrency(model);
+    this._deepseekConcCeiling = cfg.ceiling;
+    this.sem = new AdaptiveSemaphore(cfg.initial);
+    console.log(
+      `[llm-pool] initialised — ${slots.length} slot(s): ${slotLabels}, ` +
+      `deepseek concurrency mode (model=${model}, accountLimit=${cfg.accountLimit}, ` +
+      `ceiling=${cfg.ceiling}, initial=${cfg.initial}; keys share account quota)`,
+    );
   }
 
   get size(): number { return this.slots.length; }
@@ -816,75 +774,23 @@ class LLMKeyPool {
 
 // ─── Pool construction ────────────────────────────────────────────────────────
 
-function buildKeySlots(provider: Provider): KeySlot[] {
-  if (provider === "deepseek") {
-    const multi = process.env.DEEPSEEK_API_KEYS?.trim();
-    const single = process.env.DEEPSEEK_API_KEY?.trim();
-    const keys = multi
-      ? multi.split(",").map((k) => k.trim()).filter(Boolean)
-      : single ? [single] : [];
-    if (keys.length === 0) throw new Error("DEEPSEEK_API_KEY / DEEPSEEK_API_KEYS required");
-    const baseURL = process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com";
-    const chatUrl = resolveDeepSeekChatCompletionsUrl(baseURL);
-    const model = process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
-    return keys.map((apiKey, i) => ({
-      transport: { kind: "deepseek-fetch" as const, apiKey, chatUrl },
-      model,
-      label: `deepseek-${i + 1}(…${apiKey.slice(-4)})`,
-      throttledUntil: 0,
-      rateLimit: null,
-      stats: _initStats(),
-    }));
-  }
-
-  if (provider === "azure") {
-    const apiVersion = process.env.AZURE_OPENAI_API_VERSION?.trim() || "2024-08-01-preview";
-    const slots: KeySlot[] = [];
-    const ep0  = process.env.AZURE_OPENAI_ENDPOINT?.trim();
-    const key0 = (process.env.AZURE_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY)?.trim();
-    const dep0 = process.env.AZURE_OPENAI_DEPLOYMENT?.trim();
-    if (ep0 && key0 && dep0) {
-      slots.push({
-        transport: {
-          kind: "openai-sdk",
-          client: new AzureOpenAI({ endpoint: ep0, apiKey: key0, deployment: dep0, apiVersion }),
-        },
-        model: dep0, label: `azure-1(${dep0})`, throttledUntil: 0, rateLimit: null, stats: _initStats(),
-      });
-    }
-    for (let i = 2; i <= 20; i++) {
-      const ep  = process.env[`AZURE_OPENAI_ENDPOINT_${i}`]?.trim();
-      const key = process.env[`AZURE_OPENAI_API_KEY_${i}`]?.trim();
-      const dep = process.env[`AZURE_OPENAI_DEPLOYMENT_${i}`]?.trim();
-      if (!ep && !key) break;
-      if (!ep || !key || !dep) {
-        console.warn(`[llm-pool] azure slot ${i} incomplete, skipping`);
-        continue;
-      }
-      const av = process.env[`AZURE_OPENAI_API_VERSION_${i}`]?.trim() || apiVersion;
-      slots.push({
-        transport: {
-          kind: "openai-sdk",
-          client: new AzureOpenAI({ endpoint: ep, apiKey: key, deployment: dep, apiVersion: av }),
-        },
-        model: dep, label: `azure-${i}(${dep})`, throttledUntil: 0, rateLimit: null, stats: _initStats(),
-      });
-    }
-    if (slots.length === 0) throw new Error("No Azure OpenAI credentials configured");
-    return slots;
-  }
-
-  // openai (default)
-  const multi = process.env.OPENAI_API_KEYS?.trim();
-  const single = process.env.OPENAI_API_KEY?.trim();
+function buildKeySlots(): KeySlot[] {
+  const multi = process.env.DEEPSEEK_API_KEYS?.trim();
+  const single = process.env.DEEPSEEK_API_KEY?.trim();
   const keys = multi
     ? multi.split(",").map((k) => k.trim()).filter(Boolean)
     : single ? [single] : [];
-  if (keys.length === 0) throw new Error("OPENAI_API_KEY / OPENAI_API_KEYS required");
+  if (keys.length === 0) throw new Error("DEEPSEEK_API_KEY / DEEPSEEK_API_KEYS required");
+  const baseURL = process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com";
+  const chatUrl = resolveDeepSeekChatCompletionsUrl(baseURL);
+  const model = process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
   return keys.map((apiKey, i) => ({
-    transport: { kind: "openai-sdk" as const, client: new OpenAI({ apiKey }) },
-    model: "", label: `openai-${i + 1}(…${apiKey.slice(-4)})`,
-    throttledUntil: 0, rateLimit: null, stats: _initStats(),
+    transport: { kind: "deepseek-fetch" as const, apiKey, chatUrl },
+    model,
+    label: `deepseek-${i + 1}(…${apiKey.slice(-4)})`,
+    throttledUntil: 0,
+    rateLimit: null,
+    stats: _initStats(),
   }));
 }
 
@@ -897,9 +803,8 @@ let _pool: LLMKeyPool | null = null;
 
 function getPool(): LLMKeyPool {
   if (_pool) return _pool;
-  const provider = resolveProvider();
-  const model = resolveModel("");
-  _pool = new LLMKeyPool(buildKeySlots(provider), { provider, model });
+  const model = resolveModel();
+  _pool = new LLMKeyPool(buildKeySlots(), { model });
   return _pool;
 }
 
@@ -1002,51 +907,17 @@ export async function flushKeyStats(): Promise<void> {
   }
 }
 
-// ─── Provider / model resolution ────────────────────────────────────────────────
+// ─── Model resolution ───────────────────────────────────────────────────────────
 
-/**
- * Resolves the translation engine. `TRANSLATION_AI_MODEL` is an explicit selector:
- *   - "google-translate" → Google Translate (machine translation, not LLM)
- *   - "deepseek"         → DeepSeek
- *   - "azure"            → Azure OpenAI
- *   - "" (unset)         → auto-detect by env presence: DeepSeek → Azure → OpenAI
- *   - any other value    → OpenAI, using that string as the model id
- */
-function resolveProvider(aiModel?: string): Provider {
-  const envSel = process.env.TRANSLATION_AI_MODEL?.trim().toLowerCase();
-  const sel = envSel || aiModel?.trim().toLowerCase() || "";
-  if (sel === "google-translate") return "google";
-  if (sel === "deepseek") return "deepseek";
-  if (sel === "azure") return "azure";
-  if (!envSel) {
-    if (process.env.DEEPSEEK_API_KEY?.trim() || process.env.DEEPSEEK_API_KEYS?.trim())
-      return "deepseek";
-    if (process.env.AZURE_OPENAI_ENDPOINT?.trim()) return "azure";
-  }
-  return "openai";
-}
-
-/**
- * The model id to send.  For Azure, the per-slot deployment name is used
- * (set in buildKeySlots); for OpenAI the caller's aiModel param wins.
- */
-function resolveModel(aiModel: string, slotModel?: string): string {
-  switch (resolveProvider()) {
-    case "deepseek":
-      return slotModel || process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
-    case "azure":
-      return slotModel || process.env.AZURE_OPENAI_DEPLOYMENT?.trim() || aiModel || "gpt-4o-mini";
-    default:
-      return aiModel || "gpt-4o-mini";
-  }
+/** DeepSeek model id from DEEPSEEK_MODEL (slot override wins when set). */
+function resolveModel(slotModel?: string): string {
+  return slotModel || process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
 }
 
 // ─── Engine router ──────────────────────────────────────────────────────────────
 //
-// Two engine *families*: "llm" (DeepSeek/Azure/OpenAI, chosen by resolveProvider)
-// and "google" (Google Translate). When TRANSLATION_AI_MODEL forces one, that one
-// is used for everything. Otherwise cost-tiered routing applies: cheap/short
-// fields prefer Google, rich content prefers the LLM, with cross-engine fallback.
+// Two engine *families*: "llm" (DeepSeek) and "google" (Google Translate).
+// Cost-tiered routing applies unless the job requests google-translate only.
 
 type Engine = "llm" | "google";
 
@@ -1057,18 +928,12 @@ function googleConfigured(): boolean {
 function llmConfigured(): boolean {
   return Boolean(
     process.env.DEEPSEEK_API_KEY?.trim() ||
-      process.env.DEEPSEEK_API_KEYS?.trim() ||
-      process.env.AZURE_OPENAI_ENDPOINT?.trim() ||
-      process.env.OPENAI_API_KEY?.trim() ||
-      process.env.OPENAI_API_KEYS?.trim(),
+      process.env.DEEPSEEK_API_KEYS?.trim(),
   );
 }
 
 /** A single forced engine family, or null when auto-routing should apply. */
 function forcedEngine(aiModel?: string): Engine | null {
-  const env = process.env.TRANSLATION_AI_MODEL?.trim().toLowerCase();
-  if (env) return env === "google-translate" ? "google" : "llm";
-  // Env unset → route, except a legacy job-level google-translate request.
   if (aiModel?.trim().toLowerCase() === "google-translate") return "google";
   return null;
 }
@@ -1107,8 +972,8 @@ function engineOrderFor(tier: "trivial" | "rich", aiModel?: string): Engine[] {
 }
 
 /** The model/label recorded for a chosen engine (used for TM cache + Cosmos). */
-function engineModel(engine: Engine, aiModel: string): string {
-  return engine === "google" ? "google-translate" : resolveModel(aiModel);
+function engineModel(engine: Engine, _aiModel: string): string {
+  return engine === "google" ? "google-translate" : resolveModel();
 }
 
 /**
@@ -1118,9 +983,7 @@ function engineModel(engine: Engine, aiModel: string): string {
 export function resolveEngine(aiModel: string): { provider: string; model: string } {
   const forced = forcedEngine(aiModel);
   if (forced === "google") return { provider: "google", model: "google-translate" };
-  const provider = resolveProvider();
-  const model = resolveModel(aiModel);
-  if (forced === "llm") return { provider, model };
+  const model = resolveModel();
   const parts: string[] = [];
   if (googleConfigured()) parts.push("google");
   if (llmConfigured()) parts.push(model);
@@ -1771,7 +1634,7 @@ async function callLLMOnce(
   const payload  = items.map((it, idx) => ({ key: `f${idx}`, value: it.value }));
 
   const acq   = await getPool().acquire();
-  const model = resolveModel(aiModel, acq.model);
+  const model = resolveModel(acq.model);
   const t0    = Date.now();
 
   const messages: ChatMessage[] = [
@@ -1812,12 +1675,6 @@ async function callLLMOnce(
   } catch (e: unknown) {
     if (e instanceof LlmRateLimitError) {
       acq.onThrottle(retryAfterMsFromResponse(e.response));
-    } else if (e instanceof RateLimitError) {
-      const eh = e.headers as unknown as { get?: (k: string) => string | null } & Record<string, string>;
-      const retryAfterSec = Number(
-        (typeof eh?.get === "function" ? eh.get("retry-after") : eh?.["retry-after"]) ?? "10",
-      );
-      acq.onThrottle(Math.max(retryAfterSec * 1_000, 10_000));
     } else {
       acq.onError(); // count non-throttle errors (timeouts, parse failures, etc.)
     }
@@ -1924,8 +1781,8 @@ type FieldPlan = {
  *  - Dedup: each unique (engine-order, text) is translated once and reused
  *    everywhere it occurs in the chunk.
  *
- * Engine selection: TRANSLATION_AI_MODEL forces one engine; otherwise cost-tiered
- * routing (Google for short/simple, LLM for rich) with cross-engine fallback.
+ * Engine selection: cost-tiered routing (Google for short/simple, DeepSeek for rich)
+ * with cross-engine fallback, unless the job sets aiModel=google-translate.
  * Placeholders are masked across all engines; TM cache keyed by tier model.
  */
 export async function translateResources(

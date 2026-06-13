@@ -74,6 +74,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     lastHeartbeat: job.lastHeartbeat,
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
+    stageTimings: job.stageTimings ?? null,
     metrics: merged,
   });
 };

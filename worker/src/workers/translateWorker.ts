@@ -49,7 +49,7 @@ async function claimNextJob(): Promise<TranslationV4Job | null> {
 
 async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   const { shopName, id: jobId, source, target, aiModel, testMode } = job;
-  // Engine override (TRANSLATION_AI_MODEL) is applied inside translateBatch.
+  // Engine routing (Google vs DeepSeek) is applied inside translateBatch.
   const blobPrefix = job.blobPrefix || `tasks/v4/${shopName}/${jobId}`;
 
   let translateDone = 0;
