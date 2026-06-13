@@ -198,6 +198,21 @@ function readTaskViewFromSearch(search: string): TaskViewTab {
   return params.get("taskView") === "history" ? "history" : "current";
 }
 
+function readExpandedJobIdsFromSearch(search: string): string[] {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const raw = params.get("expandJob")?.trim();
+  if (!raw) return [];
+  return raw.split(",").map((id) => id.trim()).filter(Boolean);
+}
+
+function clearExpandJobFromSearch() {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("expandJob")) return;
+  url.searchParams.delete("expandJob");
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
 function syncTranslationSearch(pageTab: PageTab, taskView: TaskViewTab) {
   if (typeof window === "undefined") return;
   const url = new URL(window.location.href);
@@ -211,7 +226,23 @@ function syncTranslationSearch(pageTab: PageTab, taskView: TaskViewTab) {
     url.searchParams.delete("page");
     url.searchParams.delete("taskView");
   }
+  url.searchParams.delete("expandJob");
   window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function isStageDetailsDefaultOpen(status: TranslationV4Status): boolean {
+  return status === "FAILED" || status === "PAUSED";
+}
+
+function resolveStageDetailsOpen(
+  jobId: string,
+  status: TranslationV4Status,
+  stageDetailsOpenByJobId: Record<string, boolean>,
+): boolean {
+  if (jobId in stageDetailsOpenByJobId) {
+    return stageDetailsOpenByJobId[jobId];
+  }
+  return isStageDetailsDefaultOpen(status);
 }
 
 function buildApiSearch(search: string): string {
@@ -306,8 +337,15 @@ export function TranslationV4Page() {
     [jobs],
   );
   const [progressMap, setProgressMap] = useState<Record<string, ProgressData>>({});
+  const [stageDetailsOpenByJobId, setStageDetailsOpenByJobId] = useState<Record<string, boolean>>(() => {
+    const initialExpandedJobIds = readExpandedJobIdsFromSearch(initialSearch);
+    return Object.fromEntries(initialExpandedJobIds.map((jobId) => [jobId, true]));
+  });
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const optimisticActionRef = useRef<Map<string, OptimisticActionIntent>>(new Map());
+  const scrollToJobIdRef = useRef<string | null>(
+    readExpandedJobIdsFromSearch(initialSearch)[0] ?? null,
+  );
 
   const shopName = loaderData.shop;
   const currentJobs = useMemo(
@@ -501,6 +539,47 @@ export function TranslationV4Page() {
     setTaskView(readTaskViewFromSearch(location.search));
   }, [location.search]);
 
+  useEffect(() => {
+    const expandedJobIds = readExpandedJobIdsFromSearch(location.search);
+    if (!expandedJobIds.length) return;
+    setStageDetailsOpenByJobId((current) => {
+      const next = { ...current };
+      for (const jobId of expandedJobIds) {
+        next[jobId] = true;
+      }
+      return next;
+    });
+    scrollToJobIdRef.current = expandedJobIds[0];
+    setPageTab("tasks");
+    setTaskView("current");
+    clearExpandJobFromSearch();
+  }, [location.search]);
+
+  useEffect(() => {
+    const jobId = scrollToJobIdRef.current;
+    if (pageTab !== "tasks" || !jobId) return;
+    const el = document.getElementById(`translation-v4-job-${jobId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollToJobIdRef.current = null;
+  }, [pageTab, visibleJobs, jobs, stageDetailsOpenByJobId]);
+
+  const expandStageDetailsForJobs = useCallback((jobIds: string[]) => {
+    if (!jobIds.length) return;
+    setStageDetailsOpenByJobId((current) => {
+      const next = { ...current };
+      for (const jobId of jobIds) {
+        next[jobId] = true;
+      }
+      return next;
+    });
+    scrollToJobIdRef.current = jobIds[0];
+  }, []);
+
+  const handleStageDetailsOpenChange = useCallback((jobId: string, open: boolean) => {
+    setStageDetailsOpenByJobId((current) => ({ ...current, [jobId]: open }));
+  }, []);
+
   const validateCreateDraft = () => {
     setFormError(null);
     const source = sourceLocale.trim();
@@ -563,6 +642,8 @@ export function TranslationV4Page() {
 
       if (result.created.length) {
         await refreshJobList();
+        const createdJobIds = result.created.map((entry) => entry.jobId);
+        expandStageDetailsForJobs(createdJobIds);
         setTaskView("current");
         setPageTab("tasks");
       } else if (!result.failed.length && !result.validationError) {
@@ -819,8 +900,14 @@ export function TranslationV4Page() {
                         locationSearch={location.search}
                         onAction={handleAction}
                         onOpenReview={setReviewJob}
-                          displayLanguage={displayLanguage}
-                          localeLabelMap={localeLabelMap}
+                        displayLanguage={displayLanguage}
+                        localeLabelMap={localeLabelMap}
+                        stageDetailsOpen={resolveStageDetailsOpen(
+                          job.id,
+                          status,
+                          stageDetailsOpenByJobId,
+                        )}
+                        onStageDetailsOpenChange={handleStageDetailsOpenChange}
                       />
                     );
                   })}
@@ -939,6 +1026,8 @@ type JobCardProps = {
   onOpenReview: (job: TranslationV4Job) => void;
   displayLanguage: string;
   localeLabelMap: Record<string, string>;
+  stageDetailsOpen: boolean;
+  onStageDetailsOpenChange: (jobId: string, open: boolean) => void;
 };
 
 function mapV4StatusToTaskStatus(status: TranslationV4Status): AITaskStatus {
@@ -1177,7 +1266,7 @@ function getJobProgressPercent(status: TranslationV4Status, metrics: ProgressDat
     ? getStageRatio(
         metrics.verifyDone,
         metrics.verifyTotal,
-        status === "COMPLETED" && metrics.verifyTotal > 0,
+        false,
         ["VERIFY_QUEUED", "VERIFYING"].includes(status),
       )
     : 0;
@@ -1369,6 +1458,8 @@ function JobCard({
   onOpenReview,
   displayLanguage,
   localeLabelMap,
+  stageDetailsOpen,
+  onStageDetailsOpenChange,
 }: JobCardProps) {
   const metrics = resolveCardMetrics(job, progress, status);
   const stageTimings = progress?.stageTimings ?? job.stageTimings;
@@ -1410,9 +1501,9 @@ function JobCard({
     isLive ? liveNowIso : updatedAt,
   );
   const stageSummary = getStageSummaryCopy(status, metrics, progress?.errorStage ?? job.errorStage);
-  const defaultOpen = status === "FAILED" || status === "PAUSED";
 
   return (
+    <div id={`translation-v4-job-${job.id}`}>
     <AITaskCardShell
       task={translationTask}
       locationSearch={locationSearch}
@@ -1438,7 +1529,11 @@ function JobCard({
       progressBackground={progressTone.background}
       bodyContent={
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <details style={jobStageDetailsStyle} open={defaultOpen}>
+          <details
+            style={jobStageDetailsStyle}
+            open={stageDetailsOpen}
+            onToggle={(event) => onStageDetailsOpenChange(job.id, event.currentTarget.open)}
+          >
             <summary style={jobStageSummaryStyle}>
               <span>{stageSummary}</span>
               <span style={jobStageSummaryHintStyle}>查看阶段进度</span>
@@ -1516,6 +1611,7 @@ function JobCard({
       }
       actions={actions}
     />
+    </div>
   );
 }
 
