@@ -246,7 +246,7 @@ export function TranslationReviewDialog({
     <DialogShell
       open={open}
       onClose={onClose}
-      width={920}
+      width={1180}
       title="写回详情对账"
       description={
         <span>
@@ -310,15 +310,15 @@ export function TranslationReviewDialog({
         ) : null}
 
         {/* 表格 */}
-        <div style={{ maxHeight: 460, overflow: "auto", border: `1px solid ${pageColorTokens.border}`, borderRadius: 8 }}>
+        <div style={{ maxHeight: "62vh", overflow: "auto", border: `1px solid ${pageColorTokens.border}`, borderRadius: 8 }}>
           <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
             <thead>
               <tr>
-                <th style={{ ...headCellStyle, width: "16%" }}>字段 / 模块</th>
-                <th style={{ ...headCellStyle, width: "26%" }}>源值</th>
-                <th style={{ ...headCellStyle, width: "28%" }}>期望译文</th>
-                <th style={{ ...headCellStyle, width: "22%" }}>Shopify 实际值</th>
-                <th style={{ ...headCellStyle, width: "8%" }}>状态</th>
+                <th style={{ ...headCellStyle, width: "13%" }}>字段 / 模块</th>
+                <th style={{ ...headCellStyle, width: "24%" }}>源值</th>
+                <th style={{ ...headCellStyle, width: "27%" }}>期望译文</th>
+                <th style={{ ...headCellStyle, width: "27%" }}>Shopify 实际值</th>
+                <th style={{ ...headCellStyle, width: "9%" }}>状态</th>
               </tr>
             </thead>
             <tbody>
