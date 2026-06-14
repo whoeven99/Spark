@@ -48,6 +48,8 @@ import {
   calcPlanMargins,
   calcProbePricing,
   calcTotals,
+  planFeatureMarginMatrix,
+  suggestVolumeLadder,
   type FeatureCalcRow,
   type FeatureScenario,
   type GlobalAssumptions,
@@ -145,6 +147,10 @@ export default function PricingWorkbenchV2() {
   const [newFixedName, setNewFixedName] = useState("");
   const [newFixedAmount, setNewFixedAmount] = useState(100);
 
+  const [maxPremiumPct, setMaxPremiumPct] = useState(100);
+  /** 阶梯调价的承保成本/1M credits；null = 跟随混合成本 */
+  const [underwriteOverride, setUnderwriteOverride] = useState<number | null>(null);
+
   const fixedMonthly = useMemo(
     () => fixedCosts.filter((c) => c.enabled).reduce((s, c) => s + c.amountUsd, 0),
     [fixedCosts],
@@ -180,6 +186,43 @@ export default function PricingWorkbenchV2() {
   const planMargins = useMemo(
     () => calcPlanMargins(plans, assumptions, totals),
     [plans, assumptions, totals],
+  );
+
+  const matrix = useMemo(
+    () =>
+      planFeatureMarginMatrix(
+        plans.map((p) => ({
+          planKey: p.planKey,
+          displayName: p.displayName,
+          kind: p.kind,
+          billingInterval: p.billingInterval,
+          priceAmount: p.priceAmount,
+          tokens: p.tokens,
+        })),
+        featureRows,
+        assumptions,
+      ),
+    [plans, featureRows, assumptions],
+  );
+
+  const underwriteCost = underwriteOverride ?? matrix.blendedCostPerMCredits;
+
+  const ladder = useMemo(
+    () =>
+      suggestVolumeLadder(
+        plans.map((p) => ({
+          planKey: p.planKey,
+          displayName: p.displayName,
+          kind: p.kind,
+          billingInterval: p.billingInterval,
+          priceAmount: p.priceAmount,
+          tokens: p.tokens,
+        })),
+        underwriteCost,
+        assumptions,
+        maxPremiumPct,
+      ),
+    [plans, underwriteCost, assumptions, maxPremiumPct],
   );
 
   const orphanRules = useMemo(
@@ -987,6 +1030,209 @@ export default function PricingWorkbenchV2() {
     </Space>
   );
 
+  const marginTab = (
+    <Space direction="vertical" size={16} style={{ width: "100%" }}>
+      <Card title="套餐 × 能力 毛利热力表">
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="若用户把该套餐额度全部用在某能力上的毛利率"
+          description={`统一标尺：$ / 100 万 credits。绿≥目标(${targetGrossMarginPct}%) · 黄=接近 · 红=不达标/亏本。「混合」列按上方各能力月调用量加权（综合成本 ${USD(
+            matrix.blendedCostPerMCredits,
+            2,
+          )}/1M credits）。`}
+        />
+        <Table
+          size="small"
+          pagination={false}
+          scroll={{ x: 900 }}
+          rowKey="planKey"
+          dataSource={matrix.plans}
+          columns={[
+            {
+              title: "套餐",
+              width: 200,
+              fixed: "left" as const,
+              render: (_: unknown, p) => (
+                <Space direction="vertical" size={0}>
+                  <Space size={4}>
+                    <Typography.Text strong>{p.displayName}</Typography.Text>
+                    <Tag color={p.kind === "SUBSCRIPTION" ? "green" : "orange"}>
+                      {p.kind === "SUBSCRIPTION" ? "订阅" : "按量包"}
+                    </Tag>
+                  </Space>
+                  <Typography.Text type="secondary" style={{ fontSize: 10 }}>
+                    {NUM(p.credits)} credits · 售价 {USD(p.salePerMCredits, 2)}/1M
+                  </Typography.Text>
+                </Space>
+              ),
+            },
+            ...matrix.features.map((f) => ({
+              title: (
+                <Tooltip title={`成本 ${USD(f.costPerMCredits, 2)}/1M credits`}>
+                  <span>{f.name}</span>
+                </Tooltip>
+              ),
+              width: 92,
+              align: "center" as const,
+              render: (_: unknown, p: { planKey: string }) => {
+                const pct = matrix.cells[p.planKey]?.[f.id] ?? 0;
+                return (
+                  <Typography.Text
+                    strong
+                    style={{ color: marginColor(pct, targetGrossMarginPct) }}
+                  >
+                    {pct.toFixed(0)}%
+                  </Typography.Text>
+                );
+              },
+            })),
+            {
+              title: "混合",
+              width: 92,
+              align: "center" as const,
+              render: (_: unknown, p) => {
+                const pct = matrix.blendedMarginByPlan[p.planKey] ?? 0;
+                return (
+                  <Badge
+                    color={marginColor(pct, targetGrossMarginPct)}
+                    text={`${pct.toFixed(0)}%`}
+                  />
+                );
+              },
+            },
+            {
+              title: (
+                <Tooltip title="该套餐每 100 万 credits 允许的最高模型成本（达标线）">
+                  <span>成本上限/1M</span>
+                </Tooltip>
+              ),
+              width: 110,
+              align: "right" as const,
+              render: (_: unknown, p) => USD(p.costCeilingPerMCredits, 2),
+            },
+          ]}
+        />
+      </Card>
+
+      <Card title="阶梯调价建议（保利润 + 越大越划算）">
+        <Row gutter={[24, 16]} align="middle" style={{ marginBottom: 12 }}>
+          <Col xs={24} md={8}>
+            <Typography.Text type="secondary">承保成本/1M credits</Typography.Text>
+            <Space.Compact style={{ width: "100%", marginTop: 4 }}>
+              <InputNumber
+                style={{ width: "100%" }}
+                min={0}
+                step={0.5}
+                precision={2}
+                value={underwriteCost}
+                onChange={(n) => setUnderwriteOverride(Number(n ?? 0))}
+              />
+              <Button onClick={() => setUnderwriteOverride(null)}>跟随混合</Button>
+            </Space.Compact>
+            <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+              {underwriteOverride == null
+                ? `当前=混合成本 ${USD(matrix.blendedCostPerMCredits, 2)}`
+                : "手动覆盖；点「跟随混合」恢复"}
+            </Typography.Text>
+          </Col>
+          <Col xs={12} md={6}>
+            <Typography.Text type="secondary">最小档溢价 (%)</Typography.Text>
+            <InputNumber
+              style={{ width: "100%", marginTop: 4 }}
+              min={0}
+              max={400}
+              step={10}
+              value={maxPremiumPct}
+              onChange={(n) => setMaxPremiumPct(Number(n ?? 0))}
+            />
+          </Col>
+          <Col xs={24} md={10}>
+            <Alert
+              type="success"
+              showIcon
+              message="最大套餐 = 刚好达标的地板价，越小的套餐溢价越高"
+              description="每档毛利率都 ≥ 目标，且越大的套餐每 credit 越便宜（量大优惠）。"
+            />
+          </Col>
+        </Row>
+        <Table
+          size="small"
+          pagination={false}
+          scroll={{ x: 980 }}
+          rowKey="planKey"
+          dataSource={ladder}
+          columns={[
+            {
+              title: "套餐",
+              width: 170,
+              fixed: "left" as const,
+              render: (_: unknown, r) => (
+                <Space size={4}>
+                  <Typography.Text strong>{r.displayName}</Typography.Text>
+                  <Tag color={r.kind === "SUBSCRIPTION" ? "green" : "orange"}>
+                    {r.kind === "SUBSCRIPTION" ? "订阅" : "包"}
+                  </Tag>
+                </Space>
+              ),
+            },
+            { title: "credits", width: 100, render: (_: unknown, r) => NUM(r.credits) },
+            {
+              title: "现价",
+              width: 130,
+              render: (_: unknown, r) => (
+                <Space direction="vertical" size={0}>
+                  <span>{USD(r.currentPriceUsd)}</span>
+                  <Typography.Text type="secondary" style={{ fontSize: 10 }}>
+                    {USD(r.currentSalePerMCredits, 2)}/1M
+                  </Typography.Text>
+                </Space>
+              ),
+            },
+            {
+              title: "建议价",
+              width: 130,
+              render: (_: unknown, r) => (
+                <Space direction="vertical" size={0}>
+                  <Typography.Text strong>{USD(r.suggestedPriceUsd)}</Typography.Text>
+                  <Typography.Text type="secondary" style={{ fontSize: 10 }}>
+                    {USD(r.suggestedSalePerMCredits, 2)}/1M
+                  </Typography.Text>
+                </Space>
+              ),
+            },
+            {
+              title: "建议毛利",
+              width: 90,
+              align: "center" as const,
+              render: (_: unknown, r) => (
+                <Badge
+                  color={marginColor(r.suggestedMarginPct, targetGrossMarginPct)}
+                  text={`${r.suggestedMarginPct.toFixed(0)}%`}
+                />
+              ),
+            },
+            {
+              title: (
+                <Tooltip title="相对同类最小套餐，每 credit 便宜多少">
+                  <span>量大优惠</span>
+                </Tooltip>
+              ),
+              width: 90,
+              align: "center" as const,
+              render: (_: unknown, r) => (
+                <Tag color={r.discountVsSmallestPct > 0 ? "green" : "default"}>
+                  -{r.discountVsSmallestPct.toFixed(0)}%
+                </Tag>
+              ),
+            },
+          ]}
+        />
+      </Card>
+    </Space>
+  );
+
   if (loading) {
     return (
       <div style={{ textAlign: "center", padding: 80 }}>
@@ -1053,6 +1299,7 @@ export default function PricingWorkbenchV2() {
           },
           { key: "capabilities", label: "能力与计费", children: capabilitiesTab },
           { key: "plans", label: "套餐对照", children: plansTab },
+          { key: "margin", label: "毛利热力 & 调价", children: marginTab },
         ]}
       />
 

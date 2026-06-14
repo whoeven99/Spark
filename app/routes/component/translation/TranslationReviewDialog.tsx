@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { DialogShell } from "../shared/DialogShell";
 import { pageColorTokens } from "../../page/pageUiStyles";
@@ -130,33 +130,94 @@ export function TranslationReviewDialog({
   const [payload, setPayload] = useState<ReviewPayload | null>(null);
   const [page, setPage] = useState(1);
   const [moduleFilter, setModuleFilter] = useState("");
-  const [onlyMismatch, setOnlyMismatch] = useState(true);
+  const [onlyMismatch, setOnlyMismatch] = useState(false);
   const [editing, setEditing] = useState<Record<string, string>>({});
   const [savingKey, setSavingKey] = useState<string | null>(null);
+  const pageCacheRef = useRef<Map<string, ReviewPayload>>(new Map());
+  const prefetchingKeysRef = useRef<Set<string>>(new Set());
+  const requestSeqRef = useRef(0);
 
   const fieldId = (resourceId: string, key: string) => `${resourceId}::${key}`;
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params: Record<string, string> = { taskId, shopName, page: String(page) };
+  const cacheKeyForPage = useCallback(
+    (targetPage: number) =>
+      JSON.stringify({
+        apiSearch,
+        taskId,
+        shopName,
+        moduleFilter,
+        page: targetPage,
+      }),
+    [apiSearch, moduleFilter, shopName, taskId],
+  );
+
+  const fetchReviewPayload = useCallback(
+    async (targetPage: number): Promise<ReviewPayload> => {
+      const params: Record<string, string> = { taskId, shopName, page: String(targetPage) };
       if (moduleFilter) params.module = moduleFilter;
       const res = await fetch(`/api/translate/v4/review${withParams(apiSearch, params)}`);
       const json = (await res.json()) as ReviewPayload;
       if (!res.ok || !json.ok) {
-        setError(json.error || "加载失败");
-        setPayload(null);
-      } else {
-        setPayload(json);
+        throw new Error(json.error || "加载失败");
       }
-    } catch {
-      setError("请求失败，请重试");
+      return json;
+    },
+    [apiSearch, moduleFilter, shopName, taskId],
+  );
+
+  const prefetchPage = useCallback(
+    (targetPage: number, totalPages: number) => {
+      if (!open || targetPage > totalPages) return;
+      const key = cacheKeyForPage(targetPage);
+      if (pageCacheRef.current.has(key) || prefetchingKeysRef.current.has(key)) return;
+      prefetchingKeysRef.current.add(key);
+      void fetchReviewPayload(targetPage)
+        .then((json) => {
+          pageCacheRef.current.set(key, json);
+        })
+        .catch(() => {
+          // 预取失败不影响当前页，用户翻页时会走正常加载。
+        })
+        .finally(() => {
+          prefetchingKeysRef.current.delete(key);
+        });
+    },
+    [cacheKeyForPage, fetchReviewPayload, open],
+  );
+
+  const load = useCallback(async (force = false) => {
+    const key = cacheKeyForPage(page);
+    if (!force) {
+      const cached = pageCacheRef.current.get(key);
+      if (cached) {
+        setError(null);
+        setPayload(cached);
+        setLoading(false);
+        prefetchPage((cached.page ?? page) + 1, cached.totalPages ?? 1);
+        return;
+      }
+    }
+
+    const seq = requestSeqRef.current + 1;
+    requestSeqRef.current = seq;
+    setLoading(true);
+    setError(null);
+    try {
+      const json = await fetchReviewPayload(page);
+      pageCacheRef.current.set(key, json);
+      if (requestSeqRef.current !== seq) return;
+      setPayload(json);
+      prefetchPage((json.page ?? page) + 1, json.totalPages ?? 1);
+    } catch (err) {
+      if (requestSeqRef.current !== seq) return;
+      setError(err instanceof Error ? err.message : "请求失败，请重试");
       setPayload(null);
     } finally {
-      setLoading(false);
+      if (requestSeqRef.current === seq) {
+        setLoading(false);
+      }
     }
-  }, [apiSearch, moduleFilter, page, shopName, taskId]);
+  }, [cacheKeyForPage, fetchReviewPayload, page, prefetchPage]);
 
   useEffect(() => {
     if (open) void load();
@@ -167,8 +228,11 @@ export function TranslationReviewDialog({
     if (!open) {
       setPage(1);
       setModuleFilter("");
+      setOnlyMismatch(false);
       setEditing({});
       setPayload(null);
+      pageCacheRef.current.clear();
+      prefetchingKeysRef.current.clear();
     }
   }, [open]);
 
@@ -216,6 +280,7 @@ export function TranslationReviewDialog({
             ),
           };
         });
+        pageCacheRef.current.clear();
         setEditing((prev) => {
           const next = { ...prev };
           delete next[id];
@@ -289,7 +354,7 @@ export function TranslationReviewDialog({
           </label>
           <button
             type="button"
-            onClick={() => void load()}
+            onClick={() => void load(true)}
             disabled={loading}
             style={{
               marginLeft: "auto",

@@ -137,6 +137,7 @@ const REVIEW_METRICS: Array<{
   { key: "refundRate30d", label: "30 天退款率(%)", lowerIsBetter: true },
   { key: "riskSkuCount", label: "高风险库存 SKU", lowerIsBetter: true },
   { key: "salesAmount7d", label: "近 7 天销售额", lowerIsBetter: false },
+  { key: "sessions7d", label: "近 7 天会话数", lowerIsBetter: false },
 ];
 
 async function buildReview(

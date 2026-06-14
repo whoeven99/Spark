@@ -684,6 +684,7 @@ export function WorkspaceAppShellPage({
         !(messagesByConversation[conversation.id] ?? []).some((m) => m.role === "user"),
     );
     if (existingEmpty) {
+      workspaceContext.clearContext();
       openConversation(existingEmpty.id);
       if (isMobile) setSidebarOpen(false);
       return;
@@ -705,7 +706,7 @@ export function WorkspaceAppShellPage({
     setConversationList((current) => [conv, ...current].slice(0, 50));
     setMessagesByConversation((current) => ({ ...current, [conv.id]: [welcomeMsg] }));
     setDraftByConversation((current) => ({ ...current, [conv.id]: "" }));
-    workspaceContext.closeContextTool();
+    workspaceContext.clearContext();
     setActiveConversationId(conv.id);
     switchPanel("chat");
     if (isMobile) setSidebarOpen(false);
@@ -850,6 +851,18 @@ export function WorkspaceAppShellPage({
   ) => {
     shopify.toast.show(detail.message || t("chat.translationCreateSuccess"));
     const ids = detail.jobIds ?? (detail.jobId ? [detail.jobId] : []);
+    if (ids.length) {
+      const params = new URLSearchParams(
+        typeof window !== "undefined"
+          ? window.location.search.startsWith("?")
+            ? window.location.search.slice(1)
+            : window.location.search
+          : "",
+      );
+      params.set("page", "tasks");
+      params.set("expandJob", ids.join(","));
+      navigate(`/app/translation-v4?${params.toString()}`);
+    }
     setMessagesByConversation((current) => {
       const existing = current[conversationId] ?? [];
       const next = existing.map((message, index) =>
