@@ -388,7 +388,7 @@ export function ShopAnalysisPanel({
           >
             {statusLabel(relevantJob.status)}
           </span>
-        )}
+        ) : null}
 
           {/* ── 任务状态 ─────────────────────────────────────────── */}
           {relevantJob && !isProfileTarget ? (
@@ -475,7 +475,7 @@ export function ShopAnalysisPanel({
                 更新：{new Date(relevantJob.updatedAt).toLocaleString("zh-CN")}
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* ── 商店档案 ─────────────────────────────────────────── */}
           {target !== "glossary" ? (

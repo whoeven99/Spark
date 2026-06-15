@@ -1087,6 +1087,19 @@ export function TranslationV4Page() {
                           disabled={isSubmitting}
                           label="自动更新模块"
                         />
+                        <div style={automationOrderPanelStyle}>
+                          <span style={automationSectionLabelStyle}>模块顺序</span>
+                          <span style={automationSectionHintStyle}>
+                            自动更新会按照下面的模块顺序依次处理。
+                          </span>
+                          <div style={automationModuleOrderWrapStyle}>
+                            {automationModules.map((module, index) => (
+                              <span key={`${module}-${index}`} style={automationModuleOrderTagStyle}>
+                                {index + 1}. {t(`translationRuntime.modules.${module}`)}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                           <span style={{ fontSize: "0.8125rem", color: pageColorTokens.textBody, fontWeight: 600 }}>
                             更新时机
@@ -2306,9 +2319,10 @@ const automationToggleLabelStyle: React.CSSProperties = {
 
 function automationFieldsWrapStyle(isMobile: boolean): React.CSSProperties {
   return {
-    display: "grid",
-    gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.2fr) minmax(0, 0.9fr)",
+    display: "flex",
+    flexDirection: "column",
     gap: 12,
+    width: "100%",
   };
 }
 
@@ -2319,6 +2333,46 @@ function automationFrequencyGridStyle(isMobile: boolean): React.CSSProperties {
     gap: 8,
   };
 }
+
+const automationSectionLabelStyle: React.CSSProperties = {
+  fontSize: "0.8125rem",
+  color: pageColorTokens.textBody,
+  fontWeight: 600,
+};
+
+const automationSectionHintStyle: React.CSSProperties = {
+  fontSize: "0.75rem",
+  color: pageColorTokens.textSecondary,
+  lineHeight: 1.5,
+};
+
+const automationOrderPanelStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+  padding: "0.8rem 0.9rem",
+  borderRadius: "10px",
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surface,
+};
+
+const automationModuleOrderWrapStyle: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 8,
+};
+
+const automationModuleOrderTagStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "0.28rem 0.6rem",
+  borderRadius: "999px",
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surfaceSubtle,
+  color: pageColorTokens.textBody,
+  fontSize: "0.75rem",
+  fontWeight: 600,
+};
 
 function automationFrequencyButtonStyle(active: boolean): React.CSSProperties {
   return {
