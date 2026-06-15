@@ -161,39 +161,6 @@ function pickRedirectTargets(json) {
 }
 
 /**
- * 根据 GeoIP 建议计算是否需要切换国家；语言由映射表决定，不依赖 GeoIP 语言建议。
- * 同国家的语言修正由调用方 IP-4d 通过映射表独立处理。
- * @param {ReturnType<typeof getCurrentLocalization>} current
- * @param {object} json  browsing_context_suggestions 响应
- * @param {Map<string, string>} [marketMap]  country → language 绑定映射表
- */
-function resolveLocalizationTargets(current, json, marketMap = new Map()) {
-  const { country: suggestedCountry } = pickRedirectTargets(json);
-
-  const countryChanged =
-    Boolean(suggestedCountry) &&
-    normalizeCountryCode(suggestedCountry) !== current.country;
-
-  if (!countryChanged) {
-    // 国家未变：语言修正交由 IP-4d 市场映射路径处理，不基于 GeoIP 语言建议触发跳转
-    return { shouldRedirect: false, countryChanged: false, suggestedCountry };
-  }
-
-  // 国家需要切换：语言由映射表决定；无映射则省略 language_code，让 Shopify Markets 应用目标市场默认语言
-  const targetCountryCode = normalizeCountryCode(suggestedCountry);
-  const mappedLanguage = lookupMarketLanguage(targetCountryCode, marketMap);
-
-  return {
-    shouldRedirect: true,
-    targetCountry: suggestedCountry,
-    targetLanguage: mappedLanguage,
-    omitLanguage: !mappedLanguage,
-    countryChanged: true,
-    mappedLanguage,
-  };
-}
-
-/**
  * 提交 /localization 切换国家与语言。
  * 对齐 Shopify 官方实现：动态创建独立表单 + form.submit()（非 requestSubmit）。
  * /localization 不需要 authenticity_token；复用主题表单会被 <localization-form> 拦截。
@@ -266,7 +233,55 @@ function submitLocalization(countryCode, languageCode, options = {}) {
 }
 
 /**
- * IP 地区跳转主逻辑。
+ * 依据映射表纠正当前市场的语言（阶段 B）。
+ * 不受 7 天国家跳转缓存限制；用 sessionStorage 按「国家/源语言->目标语言」组合防循环，
+ * 因此跨市场场景（先切国家、reload 后语言才可用）也能收敛到目标语言。
+ * @returns {boolean} 是否已触发跳转（页面即将刷新）
+ */
+function runLanguageCorrection(current, marketMap) {
+  if (marketMap.size === 0) return false;
+
+  const mappedLanguage = lookupMarketLanguage(current.country, marketMap);
+  if (!mappedLanguage || languagesMatch(mappedLanguage, current.language)) {
+    return false;
+  }
+
+  const attemptKey = `${current.country}/${current.language}->${mappedLanguage}`;
+  let alreadyTried = false;
+  try {
+    alreadyTried =
+      sessionStorage.getItem(LANG_MARKET_DEFAULT_ATTEMPT_KEY) === attemptKey;
+  } catch {
+    // sessionStorage 不可用时按未尝试处理
+  }
+  if (alreadyTried) {
+    logSkip("[IP-4d]", `本会话已尝试过该语言修正（${attemptKey}），跳过防循环`);
+    return false;
+  }
+  try {
+    sessionStorage.setItem(LANG_MARKET_DEFAULT_ATTEMPT_KEY, attemptKey);
+  } catch {
+    // ignore
+  }
+
+  logRedirect("[IP-4d] 市场映射：纠正语言", {
+    country: current.country,
+    from: current.language,
+    to: mappedLanguage,
+  });
+  // 国家不变，仅切语言；此时已身处目标市场，目标语言可用，Shopify 会采纳
+  submitLocalization(current.submitCountry, mappedLanguage, {
+    omitLanguage: false,
+  });
+  return true;
+}
+
+/**
+ * IP 地区跳转主逻辑，分两阶段：
+ *   阶段 A 国家跳转：受 7 天缓存限制（每设备 7 天最多自动切一次国家）。
+ *   阶段 B 语言纠正：不受缓存限制，依映射表把语言对齐到目标市场绑定语言。
+ * 跨市场时目标语言在源市场不可用，Shopify 会丢弃 language_code 只切国家；
+ * 故先在阶段 A 切国家，reload 后再由阶段 B 纠正语言，两次刷新内收敛。
  * 返回 true 表示已触发跳转（页面即将刷新），调用方可提前终止后续操作。
  */
 async function runIpRedirect() {
@@ -276,9 +291,8 @@ async function runIpRedirect() {
     enabled: isIpRedirectEnabled(),
     designMode: document.documentElement.hasAttribute("shopify-design-mode"),
     bot: isLikelyBot(),
-    cache: hasIpRedirectCache(),
+    countryRedirectCached: hasIpRedirectCache(),
     marketMapSize: marketMap.size,
-    marketMapEntries: marketMap.size > 0 ? Object.fromEntries(marketMap) : null,
   });
 
   if (!isIpRedirectEnabled()) {
@@ -294,128 +308,67 @@ async function runIpRedirect() {
     logSkip("[IP-1]", "主题编辑器预览模式（shopify-design-mode）");
     return false;
   }
-  if (hasIpRedirectCache()) {
-    logSkip("[IP-1]", "近期已跳转过（localStorage ciwi_ip_redirect_ts）");
-    return false;
-  }
 
   const current = getCurrentLocalization();
   logStep("[IP-2] 当前 localization", current);
 
-  try {
-    const root = window.Shopify?.routes?.root ?? "/";
-    const params = new URLSearchParams({
-      "country[enabled]": "true",
-      "country[exclude]": current.excludeCountry,
-    });
-    const suggestUrl = `${root}browsing_context_suggestions.json?${params}`;
-    logStep("[IP-3] 请求 GeoIP 建议", { url: suggestUrl });
-    const resp = await fetch(suggestUrl);
-    if (!resp.ok) {
-      logSkip("[IP-3]", `browsing_context_suggestions 返回 ${resp.status}`);
-      return false;
-    }
-
-    const json = await resp.json();
-    logStep("[IP-3] GeoIP 响应", json);
-    const { country: suggestedCountry } = pickRedirectTargets(json);
-    logRedirect("[IP-3b] 解析跳转目标", {
-      suggestedCountry,
-      fromSuggestions: Boolean(json?.suggestions?.[0]?.parts),
-      detectedCountry: json?.detected_values?.country?.handle ?? "",
-    });
-
-    if (!json?.suggestions?.length && !json?.detected_values?.country?.handle) {
-      logSkip("[IP-4]", "Shopify 未返回国家建议（可能 IP 与当前 localization 一致）", {
-        detected: json?.detected_values,
+  // ── 阶段 A：国家跳转（仅在 7 天缓存未命中时检测，命中则跳过 GeoIP 请求） ──
+  if (!hasIpRedirectCache()) {
+    try {
+      const root = window.Shopify?.routes?.root ?? "/";
+      const params = new URLSearchParams({
+        "country[enabled]": "true",
+        "country[exclude]": current.excludeCountry,
       });
-      // 即使 GeoIP 无国家建议，仍需检查市场映射语言（见 IP-4d）
-    }
+      const suggestUrl = `${root}browsing_context_suggestions.json?${params}`;
+      logStep("[IP-3] 请求 GeoIP 建议", { url: suggestUrl });
+      const resp = await fetch(suggestUrl);
+      if (resp.ok) {
+        const json = await resp.json();
+        logStep("[IP-3] GeoIP 响应", json);
+        const { country: suggestedCountry } = pickRedirectTargets(json);
+        logRedirect("[IP-3b] 解析跳转目标", {
+          suggestedCountry,
+          detectedCountry: json?.detected_values?.country?.handle ?? "",
+        });
 
-    let targets = resolveLocalizationTargets(current, json, marketMap);
-
-    // IP-4d：当前国家已在映射表中但语言不符（如 JP/zh-CN → JP/ja）→ 触发语言修正。
-    // 语言修正完全由映射表决定，不依赖 GeoIP 语言建议。
-    if (!targets.shouldRedirect && marketMap.size > 0) {
-      const mappedLanguage = lookupMarketLanguage(current.country, marketMap);
-      if (mappedLanguage && !languagesMatch(mappedLanguage, current.language)) {
-        const attemptKey = `${current.country}/${current.language}/map`;
-        let alreadyTried = false;
-        try {
-          alreadyTried =
-            sessionStorage.getItem(LANG_MARKET_DEFAULT_ATTEMPT_KEY) === attemptKey;
-        } catch {
-          // ignore
-        }
-
-        if (alreadyTried) {
-          logSkip(
-            "[IP-4d]",
-            `本轮会话已尝试过市场映射语言修正（${attemptKey}），跳过`,
-          );
-        } else {
-          try {
-            sessionStorage.setItem(LANG_MARKET_DEFAULT_ATTEMPT_KEY, attemptKey);
-          } catch {
-            // ignore
-          }
-          targets = {
-            shouldRedirect: true,
-            targetCountry: current.submitCountry,
-            targetLanguage: mappedLanguage,
-            omitLanguage: false,
-            countryChanged: false,
-            mappedLanguage,
-          };
-          logRedirect("[IP-4d] 市场绑定映射：触发语言修正", {
-            country: current.country,
-            currentLanguage: current.language,
-            mappedLanguage,
-            attemptKey,
+        if (
+          suggestedCountry &&
+          normalizeCountryCode(suggestedCountry) !== current.country
+        ) {
+          const mappedLanguage = lookupMarketLanguage(suggestedCountry, marketMap);
+          logRedirect("[IP-4] 国家需切换（阶段 A）", {
+            from: current.country,
+            to: normalizeCountryCode(suggestedCountry),
+            mappedLanguage: mappedLanguage || "(无映射→市场默认)",
           });
+          // 跨市场提交目标市场专属语言时，Shopify 可能忽略 language_code 而落到市场默认语言；
+          // 这属预期，reload 后由阶段 B 依映射表纠正。
+          submitLocalization(suggestedCountry, mappedLanguage, {
+            omitLanguage: !mappedLanguage,
+          });
+          return true;
         }
+      } else {
+        logSkip("[IP-3]", `browsing_context_suggestions 返回 ${resp.status}`);
       }
+    } catch (e) {
+      console.warn(`${LOG} [IP-ERR] GeoIP 国家检测异常：`, e);
     }
-
-    logRedirect("[IP-4b] 解析提交目标", {
-      ...targets,
-      currentCountry: current.country,
-      currentLanguage: current.language,
-    });
-
-    if (!targets.shouldRedirect) {
-      logSkip("[IP-4]", "建议与当前 localization 实质相同", {
-        suggestedCountry: targets.suggestedCountry,
-        currentCountry: current.country,
-        currentLanguage: current.language,
-      });
-      return false;
-    }
-
-    const toLanguageLabel = targets.omitLanguage
-      ? "市场默认"
-      : normalizeLanguageCode(targets.targetLanguage);
-
-    logRedirect("[IP-5] 触发跳转", {
-      from: `${current.country}/${current.language}`,
-      to: `${normalizeCountryCode(targets.targetCountry)}/${toLanguageLabel}`,
-      countryChanged: targets.countryChanged,
-      omitLanguage: targets.omitLanguage,
-    });
-    const submitResult = submitLocalization(
-      targets.targetCountry,
-      targets.targetLanguage,
-      { omitLanguage: targets.omitLanguage },
-    );
-    if (!submitResult.ok) {
-      logRedirect("[IP-5-ERR] localization 提交失败", submitResult);
-      return false;
-    }
-    return true;
-  } catch (e) {
-    console.warn(`${LOG} [IP-ERR] 跳转异常：`, e);
-    return false;
+  } else {
+    logStep("[IP-3] 跳过 GeoIP 国家检测（7 天缓存命中），仅检查语言映射");
   }
+
+  // ── 阶段 B：语言纠正（不受 7 天缓存限制，确保国家切换后语言能被对齐） ──
+  if (runLanguageCorrection(current, marketMap)) {
+    return true;
+  }
+
+  logSkip("[IP-4]", "无需跳转：国家与语言均已符合建议/映射", {
+    currentCountry: current.country,
+    currentLanguage: current.language,
+  });
+  return false;
 }
 
 function getShopDomain() {
@@ -646,7 +599,7 @@ function observeAndReplace(map) {
 
 async function main() {
   console.info(
-    `${LOG} 启动 v${"2026-06-15c"} | debug=${isDebug()} | 开启调试：localStorage.setItem("ciwi_debug","1")`,
+    `${LOG} 启动 v${"2026-06-15d"} | debug=${isDebug()} | 开启调试：localStorage.setItem("ciwi_debug","1")`,
   );
   logStep("[0] 环境", {
     shop: getShopDomain(),
