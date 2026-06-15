@@ -1,17 +1,39 @@
 {% comment %}
-  Ciwi Spark Image Switcher — 无可见 UI，仅执行图片替换逻辑。
-  JS 读取以下 hidden input 后，向 App Proxy 拉取当前语言的图片映射，
-  再通过 IntersectionObserver 静默替换页面中的 <img> src。
+  Ciwi Spark Image Switcher — 无可见 UI，执行两项功能：
+  1. IP 地区跳转：通过 browsing_context_suggestions.json 检测访客地区，
+     若与当前 localization 不同，则 POST /localization 切换国家/语言。
+  2. 图片替换：向 App Proxy 拉取当前语言的图片映射，
+     再通过 IntersectionObserver 静默替换页面中的 <img> src。
 {% endcomment %}
 
 <input id="ciwi_shop_domain" type="hidden" value="{{ shop.permanent_domain }}">
 <input id="ciwi_language_code" type="hidden" value="{{ localization.language.iso_code }}">
+<input id="ciwi_country_code" type="hidden" value="{{ localization.country.iso_code }}">
+<input id="ciwi_ip_redirect_enabled" type="hidden" value="{{ block.settings.ip_redirect_enabled }}">
+
+{% comment %}备用 localization 表单（含 form_type / return_to）；JS 优先用动态表单 submit()。{% endcomment %}
+{% form 'localization', id: 'ciwi_localization_form', class: 'ciwi-localization-form-hidden', return_to: request.path %}
+{% endform %}
+<style>#ciwi_localization_form{display:none!important}</style>
 
 <script type="module" src="{{ 'ciwi-image-switcher.js' | asset_url }}"></script>
 
 {% schema %}
 {
   "name": "Ciwi Image Switcher",
-  "target": "body"
+  "target": "body",
+  "settings": [
+    {
+      "type": "header",
+      "content": "IP 地区自动跳转"
+    },
+    {
+      "type": "checkbox",
+      "id": "ip_redirect_enabled",
+      "label": "启用 IP 地区跳转",
+      "info": "根据访客 IP 自动切换店铺国家与语言，每台设备 7 天内只跳转一次。",
+      "default": true
+    }
+  ]
 }
 {% endschema %}

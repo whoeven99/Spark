@@ -29,7 +29,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const shop = url.searchParams.get("shop")?.trim();
   const language = url.searchParams.get("language")?.trim();
 
+  console.info(
+    `${LOG_PREFIX} incoming shop=${shop ?? "-"} language=${language ?? "-"} path=${url.pathname}`,
+  );
+
+  // 验证 Shopify App Proxy HMAC 签名
+  try {
+    await authenticate.public.appProxy(request);
+  } catch (e) {
+    const status = e instanceof Response ? e.status : 500;
+    console.error(`${LOG_PREFIX} appProxy auth failed status=${status} shop=${shop}`, e);
+    return Response.json(
+      { ok: false, error: "app proxy authentication failed" },
+      { status: status === 400 ? 400 : 401 },
+    );
+  }
+
   if (!shop || !language) {
+    console.warn(`${LOG_PREFIX} missing params shop=${shop} language=${language}`);
     return Response.json(
       { ok: false, error: "missing shop or language" },
       { status: 400 },
@@ -43,7 +60,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
 
     console.info(
-      `${LOG_PREFIX} shop=${shop} language=${language} count=${mappings.length}`,
+      `${LOG_PREFIX} ok shop=${shop} language=${language} count=${mappings.length}`,
     );
 
     return Response.json(
