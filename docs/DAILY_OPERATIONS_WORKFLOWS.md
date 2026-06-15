@@ -116,56 +116,80 @@ else:
 
 今日洞察建议按以下顺序展示：
 
-1. `重点商店指标`
+1. `经营摘要`
 2. `关键风险环境`
 3. `AI 数据洞察`
 4. `待办事项`
 
-#### 4.1.1 重点商店指标
+首页原则不是“把所有解释都铺开”，而是：
 
-至少包含以下 5 组：
+- 首页做 `索引与优先级判断`
+- 详情页做 `证据、对象与动作展开`
+- 首页少描述、多状态、多数量、多入口
+- 详情页少摘要、多对象列表、多异常证据、多关联任务
 
-- 流量指标
-- 客单指标
-- 转化率指标
-- 成本指标
-- ROI 指标
+#### 4.1.1 经营摘要
 
-每组指标建议展示：
+首页只保留一个统一的 `经营摘要` 模块，不再同时出现“每日经营待办总览”“快照信息块”“上次快照对比块”等重复摘要层。
 
-- 当前值
-- 对比昨日或上期变化
-- 异常方向
-- 一句简短说明
+经营摘要建议聚合以下内容：
 
-ROI 相关必须优先展示：
+- 近 7 天销售额
+- 增长率或异常方向
+- 风险环境数量
+- 洞察数量
+- 进行中任务数量
+- 快照日期与生成时间
+- 对比上次快照的简短结论
 
-- `短期 ROI`
-- `长期 ROI`
-- `客户价值修正 ROI`
+经营摘要不负责完整解释，只负责回答：
+
+- 今天整体经营是否异常
+- 今天需要优先进入哪一类详情页
+- 今天是否有明显恶化或改善
 
 #### 4.1.2 关键风险环境
 
-每个风险环境用一张卡片展示，卡片至少包含：
+关键风险环境首页建议改为 `风险列表`，而不是一组解释型卡片。
+
+每一行建议只保留：
 
 - 当前状态：`健康 / 关注 / 风险`
 - 1 个核心失败率或异常率
-- 1 句风险解释
-- 1 个主入口动作
+- 1 个受影响对象数
+- 1 句简短结果判断
+- `查看详情`
+
+例如：
+
+- `库存管理 | 风险 | 低库存 SKU 12 个 | 预计影响未来 7 天销售 | 查看详情`
+- `物流履约 | 关注 | 超时发货 8 单 | 2 个承运商异常 | 查看详情`
+- `售后退款 | 风险 | 退款率 6.8% | 异常订单 14 笔 | 查看详情`
+
+首页不展开大量解释文案，详细的原因、证据和异常对象都放到详情页。
 
 #### 4.1.3 AI 数据洞察
 
-AI 洞察区不重复展示诊断项，而应输出：
+AI 洞察区首页建议改为 `洞察列表`，不再展示大段 evidence 与 reasoning。
+
+每条洞察首页只展示：
 
 - 可验证的猜测
-- 关键证据
 - 置信度
-- 推荐优化方向
+- 关联指标
 - 关联任务数
+- `查看详情`
+
+例如：
+
+- `退款上升主要集中在 3 个 SKU | 高置信 | 退款率 | 关联任务 2`
+- `转化下滑可能与支付异常有关 | 中置信 | 转化率 / 支付失败率 | 关联任务 1`
+
+首页优先展示“结论级信息”，完整证据链、推理链与关联对象放到详情页或 risk detail 的指定锚点中查看。
 
 #### 4.1.4 待办事项
 
-待办事项区改成任务工作台，不以四象限矩阵作为主视图。
+待办事项首页建议改为 `任务列表`，不再默认展示重卡片和大量说明文字。
 
 建议 tab：
 
@@ -184,6 +208,18 @@ AI 洞察区不重复展示诊断项，而应输出：
 
 同状态下再按时间排序。
 
+每条任务首页只展示：
+
+- 任务标题
+- 当前状态
+- 目标指标
+- 预估收益
+- 优先级或截止窗口
+- `交给 AI`
+- `查看详情`
+
+首页不需要展开完整的触发原因、推理链、建议动作和 ROI 说明，这些内容应进入任务详情页查看。
+
 ### 4.2 所有洞察
 
 所有洞察以列表形式呈现完整任务池，支持筛选器：
@@ -195,6 +231,8 @@ AI 洞察区不重复展示诊断项，而应输出：
 - 影响指标
 - 预估效果
 
+所有洞察页仍以列表为主，但也应遵循“列表负责索引，详情负责展开”的原则，不在列表页承载过多解释性内容。
+
 ### 4.3 四象限在页面中的角色
 
 四象限仍然是任务优先级的基础模型，但默认不再作为页面主视图，而是：
@@ -203,7 +241,721 @@ AI 洞察区不重复展示诊断项，而应输出：
 - 用于筛选器与统计概览
 - 用于解释为什么某项任务需要今天处理
 
-### 4.4 任务卡信息要求
+### 4.4 首页与详情页分工
+
+后续改版建议统一采用：
+
+- `首页 list-first`
+- `详情页 object-first`
+
+两者的职责拆分如下：
+
+#### 首页负责
+
+- 告诉用户今天哪里有问题
+- 告诉用户哪些事情值得马上点进去
+- 用状态、数量、核心指标组织优先级
+- 控制信息密度，减少解释性段落
+
+#### 详情页负责
+
+- 展开异常对象列表
+- 展开证据与推理
+- 展开指标变化和时间分布
+- 展开关联任务与建议动作
+- 提供继续交给 AI 的上下文
+
+#### 首页不应该承载
+
+- 大段 evidence / reasoning
+- 完整对象清单
+- 多层解释性文案
+- 大量历史对比细节
+
+#### 详情页必须承载
+
+- `对象列表`
+- `异常证据`
+- `关联任务`
+- `建议动作`
+- `进一步分析入口`
+
+### 4.5 风险环境详情页
+
+每个风险环境详情页建议统一结构：
+
+1. `顶部摘要`
+2. `异常对象列表`
+3. `指标变化`
+4. `原因判断`
+5. `建议动作`
+6. `关联任务`
+
+重点不是继续堆抽象指标，而是从“率”进入“对象”。
+
+例如退款详情页至少应能看到：
+
+- 异常退款订单列表
+- 退款金额
+- 退款原因聚类
+- 涉及商品
+- 是否与物流、质量、描述不符有关
+
+例如物流详情页至少应能看到：
+
+- 超时未发货订单
+- 轨迹停滞订单
+- 承运商聚类
+- 区域分布
+- 是否正在推高售后与退款
+
+例如库存详情页至少应能看到：
+
+- 风险 SKU 列表
+- 可售天数
+- 预计销售损失
+- 在途库存与补货建议
+
+### 4.6 洞察详情页
+
+洞察详情页可以先不独立做成很多页面，第一阶段建议复用 risk detail，通过：
+
+- `detail=risk`
+- `tab=insights`
+- `insight=<insightKey>`
+
+来定位到某条洞察。
+
+每条洞察详情至少应展开：
+
+- 洞察摘要
+- 关键证据
+- 推理链
+- 影响指标
+- 关联风险环境
+- 关联任务
+- 交给 AI 分析
+
+### 4.7 任务详情页
+
+任务详情页建议统一承载：
+
+- 任务目标
+- 来源问题
+- 影响指标
+- 预估收益
+- ROI 影响
+- 建议动作步骤
+- 相关对象列表
+- 执行记录
+- AI 上下文入口
+
+首页任务列表只做任务索引，任务详情页才负责完整说明。
+
+### 4.8 第一阶段优先详情页
+
+为了避免范围过大，建议第一阶段优先补齐以下详情页对象视图：
+
+1. `退款详情`
+2. `物流详情`
+3. `库存详情`
+4. `任务详情`
+
+原因：
+
+- 这三类问题最容易直接落到订单或 SKU 对象
+- 也最能体现“首页看索引，详情看对象”的改版价值
+- 能为 AI 提供最具体的上下文
+
+### 4.9 详情页字段设计
+
+本节定义第一阶段详情页建议采用的字段结构。目标不是约束最终数据库表结构，而是统一前后端在详情页层的 `view model`。
+
+统一原则：
+
+- 字段按 `summary / metrics / objects / reasoning / tasks / actions` 六层组织
+- 列表字段优先返回可直接渲染的展示值，减少前端二次拼装
+- 对象列表必须支持分页、筛选和排序
+- AI 上下文必须来自详情页 view model，而不是来自散乱字段拼接
+
+#### 4.9.1 通用详情页结构
+
+```ts
+type DetailPageBase<TObject, TMetric, TTaskRef> = {
+  key: string;
+  title: string;
+  status: "healthy" | "watch" | "risk";
+  source: "real" | "estimated" | "pending";
+  snapshotDate: string;
+  generatedAt: string;
+  summary: {
+    primaryValue: string;
+    secondaryValue?: string;
+    affectedCount?: number;
+    summaryText: string;
+  };
+  metrics: TMetric[];
+  objects: TObject[];
+  reasoning: {
+    evidence: string[];
+    reasoning: string[];
+    confidence?: "high" | "medium" | "low";
+  };
+  relatedTasks: TTaskRef[];
+  actions: Array<{
+    key: string;
+    label: string;
+    type: "detail" | "task" | "ai" | "external";
+  }>;
+};
+```
+
+说明：
+
+- `summary` 用于详情页顶部摘要
+- `metrics` 用于趋势、口径和对比
+- `objects` 用于异常对象列表
+- `reasoning` 用于规则解释和 AI 猜测
+- `relatedTasks` 用于承接现有任务系统
+- `actions` 用于跳转、批量处理和交给 AI
+
+#### 4.9.2 退款详情页字段
+
+退款详情页建议视图模型：
+
+```ts
+type RefundDetailMetric = {
+  key: string;
+  label: string;
+  current: number | string | null;
+  previous?: number | string | null;
+  delta?: number | null;
+  unit?: "%" | "count" | "currency";
+};
+
+type RefundIssueOrder = {
+  orderId: string;
+  orderName: string;
+  createdAt: string;
+  customerName?: string | null;
+  productTitles: string[];
+  skuIds: string[];
+  refundAmount: number;
+  refundReasonLabel?: string | null;
+  refundStatus: string;
+  fulfillmentStatus?: string | null;
+  logisticsStatus?: string | null;
+  riskTags: string[];
+};
+
+type RefundDetailView = DetailPageBase<
+  RefundIssueOrder,
+  RefundDetailMetric,
+  TaskReference
+> & {
+  clusters: Array<{
+    key: string;
+    label: string;
+    orderCount: number;
+    refundAmount: number;
+  }>;
+  relatedProducts: Array<{
+    productId: string;
+    title: string;
+    refundOrderCount: number;
+    refundAmount: number;
+  }>;
+};
+```
+
+退款详情页至少需要支持以下筛选：
+
+- 退款原因
+- 商品 / SKU
+- 时间范围
+- 退款状态
+- 是否伴随物流异常
+
+退款详情页首页对象区建议默认展示：
+
+- 退款金额最高的订单
+- 最近 24 小时新增退款订单
+- 重复出现的高风险 SKU
+
+#### 4.9.3 物流详情页字段
+
+物流详情页建议视图模型：
+
+```ts
+type LogisticsDetailMetric = {
+  key: string;
+  label: string;
+  current: number | string | null;
+  previous?: number | string | null;
+  delta?: number | null;
+  unit?: "%" | "count" | "hours";
+};
+
+type LogisticsIssueOrder = {
+  orderId: string;
+  orderName: string;
+  fulfillmentCreatedAt?: string | null;
+  trackingNumber?: string | null;
+  carrierName?: string | null;
+  destinationRegion?: string | null;
+  issueType: "overdue_fulfillment" | "tracking_stale" | "delivery_failed" | "returned";
+  issueAgeHours?: number | null;
+  logisticsStatus?: string | null;
+  refundLinked?: boolean;
+  riskTags: string[];
+};
+
+type LogisticsDetailView = DetailPageBase<
+  LogisticsIssueOrder,
+  LogisticsDetailMetric,
+  TaskReference
+> & {
+  carrierBreakdown: Array<{
+    carrierName: string;
+    issueOrderCount: number;
+    staleRate?: number | null;
+    deliveryFailRate?: number | null;
+  }>;
+  regionBreakdown: Array<{
+    region: string;
+    issueOrderCount: number;
+  }>;
+};
+```
+
+物流详情页至少需要支持以下筛选：
+
+- 问题类型
+- 承运商
+- 区域
+- 是否已退款
+- 异常时长
+
+物流详情页对象区建议默认展示：
+
+- 超时最久的订单
+- 最近新出现的轨迹停滞订单
+- 同一承运商集中异常的订单组
+
+#### 4.9.4 库存详情页字段
+
+库存详情页建议视图模型：
+
+```ts
+type InventoryDetailMetric = {
+  key: string;
+  label: string;
+  current: number | string | null;
+  previous?: number | string | null;
+  delta?: number | null;
+  unit?: "days" | "count" | "currency";
+};
+
+type InventoryRiskSku = {
+  skuId: string;
+  productId?: string | null;
+  title: string;
+  skuCode?: string | null;
+  onHand: number;
+  available: number;
+  reserved?: number | null;
+  inbound?: number | null;
+  dailySalesVelocity?: number | null;
+  sellableDays?: number | null;
+  estimatedRevenueLoss?: number | null;
+  riskTags: string[];
+};
+
+type InventoryDetailView = DetailPageBase<
+  InventoryRiskSku,
+  InventoryDetailMetric,
+  TaskReference
+> & {
+  warehouseBreakdown?: Array<{
+    warehouseName: string;
+    riskSkuCount: number;
+    lowStockCount: number;
+  }>;
+  replenishmentSuggestions: Array<{
+    skuId: string;
+    title: string;
+    suggestedQuantity?: number | null;
+    suggestedAction: "replenish" | "transfer" | "pause_ads" | "limit_sales";
+  }>;
+};
+```
+
+库存详情页至少需要支持以下筛选：
+
+- 低库存 / 缺货 / 滞销
+- 仓库
+- 商品分类
+- 可售天数范围
+- 是否存在在途库存
+
+库存详情页对象区建议默认展示：
+
+- 可售天数最低的 SKU
+- 预计损失最高的 SKU
+- 有补货建议的 SKU
+
+#### 4.9.5 任务详情页字段
+
+任务详情页建议视图模型：
+
+```ts
+type TaskReferenceObject = {
+  type: "order" | "sku" | "product" | "channel" | "customer_segment" | "carrier";
+  id: string;
+  label: string;
+  meta?: string;
+};
+
+type TaskExecutionRecord = {
+  at: string;
+  actor: string;
+  action: string;
+  note?: string;
+};
+
+type TaskDetailView = {
+  id: string;
+  title: string;
+  status: "open" | "in_progress" | "done" | "ignored" | "auto_closed";
+  priority: "P0" | "P1" | "P2";
+  quadrant: "q1" | "q2" | "q3" | "q4";
+  sourceType: "rule" | "ai" | "hybrid";
+  sourceKey: string;
+  sourceTitle: string;
+  objective: string;
+  impactMetrics: string[];
+  estimatedLiftPercent?: number | null;
+  roiImpactSummary?: string | null;
+  whyNow?: string | null;
+  triggerReason: string;
+  suggestedActions: string[];
+  ownerRole?: string | null;
+  dueWindow?: "today" | "48h" | "this_week" | "backlog" | null;
+  relatedObjects: TaskReferenceObject[];
+  evidence: string[];
+  reasoning: string[];
+  executionRecords: TaskExecutionRecord[];
+  aiContextPayload?: unknown;
+};
+```
+
+任务详情页建议分成以下区块：
+
+- `任务摘要`
+- `来源问题`
+- `影响指标与预估收益`
+- `建议动作步骤`
+- `关联对象`
+- `执行记录`
+- `交给 AI`
+
+#### 4.9.6 TaskReference 统一结构
+
+为了保证风险详情页和任务详情页之间可以稳定联动，建议统一任务引用结构：
+
+```ts
+type TaskReference = {
+  id: string;
+  title: string;
+  status: "open" | "in_progress" | "done";
+  priority: "P0" | "P1" | "P2";
+  quadrant: "q1" | "q2" | "q3" | "q4";
+  objective?: string | null;
+};
+```
+
+#### 4.9.7 详情页对象列表通用字段
+
+所有详情页的对象列表建议统一具备以下展示能力：
+
+- 主键标识
+- 展示名称
+- 主异常标签
+- 影响值
+- 当前状态
+- 最近更新时间
+- 进入对象详情或后台链接的入口
+
+这样可以减少前端在不同详情页重复发明表格结构。
+
+#### 4.9.8 详情页与 AI 上下文映射
+
+详情页 view model 应天然可序列化为 AI 上下文，建议统一映射为：
+
+```ts
+type DetailAiContext = {
+  detailKey: string;
+  summary: string;
+  metrics: Array<{ key: string; value: string | number | null }>;
+  topObjects: Array<{ id: string; label: string; issue: string }>;
+  evidence: string[];
+  reasoning: string[];
+  relatedTasks: Array<{ id: string; title: string; status: string }>;
+};
+```
+
+这样从退款详情、物流详情、库存详情进入 AI 时，可以直接把：
+
+- 顶部摘要
+- 核心指标
+- Top N 异常对象
+- 证据与推理
+- 关联任务
+
+统一传给 AI，而不需要每个详情页单独重新组织 prompt。
+
+### 4.10 详情页交互设计
+
+详情页交互不应再做成“另一份长报告页”，而应做成：
+
+- `summary-first`
+- `tab-driven`
+- `object-centric`
+- `action-oriented`
+
+换句话说，详情页要优先帮助用户：
+
+1. 快速看懂问题
+2. 快速定位对象
+3. 快速转成动作
+
+#### 4.10.1 进入方式
+
+详情页建议支持以下进入方式：
+
+- 从首页风险列表进入
+- 从首页洞察列表进入
+- 从首页任务列表进入
+- 从任务详情反向进入来源问题详情
+- 从 AI 结果或工作台消息进入对应详情
+
+推荐 URL 结构：
+
+```text
+/app/daily-operations?detail=refund
+/app/daily-operations?detail=logistics
+/app/daily-operations?detail=inventory
+/app/daily-operations?detail=task&id=<taskId>
+```
+
+如果需要深链接定位，建议继续附加：
+
+```text
+&tab=objects
+&insight=<insightKey>
+&object=<objectId>
+&task=<taskId>
+```
+
+这样可以支持：
+
+- 首页点某一行后直接进入对应 tab
+- 从任务详情反向高亮来源问题
+- 从洞察跳转后直接定位对应对象或洞察块
+
+#### 4.10.2 顶部摘要区
+
+每个详情页顶部建议使用紧凑摘要区，固定展示：
+
+- 标题
+- 当前状态
+- 核心指标
+- 受影响对象数
+- 快照日期 / 生成时间
+- 主动作按钮
+
+主动作按钮建议最多 2 个：
+
+- `生成任务` 或 `查看已有任务`
+- `交给 AI`
+
+摘要区目标是让用户在 3 秒内知道：
+
+- 现在看的是什么问题
+- 严重程度如何
+- 影响范围多大
+- 下一步能做什么
+
+#### 4.10.3 页内导航
+
+详情页内部建议采用轻量 tabs，而不是默认铺满整个长页面。
+
+推荐统一 tab 结构：
+
+- `对象`
+- `指标`
+- `原因`
+- `任务`
+
+不同详情页可按业务稍作变化：
+
+- 退款详情：`异常订单 / 指标变化 / 原因分析 / 关联任务`
+- 物流详情：`异常订单 / 承运商与区域 / 原因分析 / 关联任务`
+- 库存详情：`风险 SKU / 库存指标 / 补货建议 / 关联任务`
+- 任务详情：`任务摘要 / 关联对象 / 执行记录 / AI 上下文`
+
+交互原则：
+
+- 默认落在 `对象` tab
+- 点击 tab 不重置已选择的对象和筛选器
+- URL 应同步当前 tab，便于刷新和分享
+
+#### 4.10.4 对象列表区
+
+对象列表区是详情页的主区域，而不是附属区域。
+
+对象列表建议支持：
+
+- 搜索
+- 筛选
+- 排序
+- 行点击展开
+- 批量选择
+- 批量动作
+
+推荐使用 `master-detail` 模式：
+
+- 主区展示对象列表
+- 点击对象后，在下方或侧边展示对象详情
+
+不建议第一阶段为每一条对象都跳出独立页面。
+
+对象列表默认排序原则：
+
+- 风险程度高优先
+- 影响值大优先
+- 最近新增优先
+
+对象列表默认筛选状态应保留在 URL 或页面状态中，避免用户返回后重新筛选。
+
+#### 4.10.5 原因与证据区
+
+证据与推理区建议采用折叠式或分组式结构，不做成长篇文案。
+
+推荐拆成两段：
+
+- `看到什么`
+- `为什么这样判断`
+
+其中：
+
+- `看到什么` 只放事实
+- `为什么这样判断` 放规则推理与 AI 猜测
+
+建议字段映射如下：
+
+- `看到什么` -> metrics + clusters + top objects
+- `为什么这样判断` -> evidence + reasoning + confidence
+
+第一阶段建议支持：
+
+- 展开更多证据
+- 展开更多推理
+- 一键复制给 AI
+
+#### 4.10.6 关联任务与动作区
+
+详情页必须直接承接动作，而不是停留在分析结果上。
+
+动作区建议支持：
+
+- `创建任务`
+- `查看已有任务`
+- `交给 AI`
+- `标记已处理` 或 `加入待办`
+
+如果已经有关联任务，建议优先显示：
+
+- 进行中的任务
+- 高优先级任务
+- 最近更新任务
+
+每条关联任务至少展示：
+
+- 标题
+- 状态
+- 优先级
+- 最近更新时间
+- 进入任务详情入口
+
+#### 4.10.7 交给 AI 的交互
+
+详情页比首页更适合作为 `交给 AI` 的触发点，因为上下文更完整。
+
+点击 `交给 AI` 后建议执行：
+
+1. 读取当前详情页 `DetailAiContext`
+2. 附带当前筛选器状态
+3. 取 Top N 对象
+4. 附加 evidence / reasoning / relatedTasks
+5. 打开新对话并预填草稿，不自动发送
+
+默认预填内容建议包含：
+
+- 当前详情页摘要
+- 核心指标
+- 已选对象或 Top N 对象
+- 证据与推理摘要
+- 已有任务摘要
+- 用户当前筛选条件
+
+这样 AI 能直接回答：
+
+- 如何判断根因
+- 如何拆任务
+- 如何排序处理
+- 是否需要批量动作
+
+#### 4.10.8 返回与联动
+
+详情页与首页应保持双向联动。
+
+建议支持：
+
+- 从首页进入详情页时保留来源上下文
+- 从详情页返回首页时保留滚动位置
+- 从详情页进入任务详情后，可再回到原详情页位置
+- 从任务详情反向回到来源问题详情
+
+建议保留的状态包括：
+
+- 当前 detail
+- 当前 tab
+- 当前筛选器
+- 当前高亮对象
+- 当前高亮洞察 / 任务
+
+#### 4.10.9 第一阶段交互范围
+
+为了控制复杂度，第一阶段详情页交互建议只做：
+
+- 顶部摘要区
+- 页内 tabs
+- 对象列表
+- 基础筛选 / 排序
+- 证据与推理展开
+- 关联任务区
+- `交给 AI`
+
+第二阶段再补：
+
+- 批量选择
+- 批量动作
+- 侧边详情面板
+- URL 深链接高亮
+- 更复杂的复合筛选器
+
+### 4.11 任务卡信息要求
 
 每个任务卡建议至少包含：
 

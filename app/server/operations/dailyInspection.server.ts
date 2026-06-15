@@ -2,6 +2,7 @@ import prisma from "../../db.server";
 import {
   computeOperationsDiagnosis,
   type DiagnosisItemResult,
+  type OperationsDiagnosis,
   type OperationsSummaryMetrics,
 } from "./diagnosis.server";
 import {
@@ -110,6 +111,8 @@ export type DailyOperationsOverview = {
   conversionRate7d: number | null;
 };
 
+export type DailyOperationsDetail = OperationsDiagnosis["detail"];
+
 export type DailyOperationsResult = {
   shop: string;
   snapshotDate: string;
@@ -117,6 +120,7 @@ export type DailyOperationsResult = {
   hasData: boolean;
   metrics: OperationsSummaryMetrics;
   overview: DailyOperationsOverview;
+  detail: DailyOperationsDetail;
   environments: DailyOperationsEnvironment[];
   insights: DailyOperationsInsight[];
   items: DiagnosisItemResult[];
@@ -533,9 +537,10 @@ export async function ensureDailySnapshot(
   });
 
   if (existing && !options?.force) {
-    const [tasks, review] = await Promise.all([
+    const [tasks, review, diagnosis] = await Promise.all([
       listOperationTasks(shop),
       buildReview(shop, existing.metrics as OperationsSummaryMetrics, now),
+      computeOperationsDiagnosis(shop, now),
     ]);
     const items = existing.items.map(toItemResult);
     const metrics = existing.metrics as OperationsSummaryMetrics;
@@ -546,6 +551,7 @@ export async function ensureDailySnapshot(
       hasData: existing.hasData,
       metrics,
       overview: buildOverview(metrics, items, tasks),
+      detail: diagnosis.detail,
       environments: buildEnvironments(metrics, items),
       insights: buildInsights(items, tasks),
       items,
@@ -597,6 +603,7 @@ export async function ensureDailySnapshot(
     hasData: diagnosis.hasData,
     metrics: diagnosis.summaryMetrics,
     overview: buildOverview(diagnosis.summaryMetrics, diagnosis.items, tasks),
+    detail: diagnosis.detail,
     environments: buildEnvironments(diagnosis.summaryMetrics, diagnosis.items),
     insights: buildInsights(diagnosis.items, tasks),
     items: diagnosis.items,
