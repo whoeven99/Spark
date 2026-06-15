@@ -44,6 +44,14 @@ const IP_REDIRECT_CACHE_KEY = "ciwi_ip_redirect_ts";
 const LANG_MARKET_DEFAULT_ATTEMPT_KEY = "ciwi_lang_market_default_attempt";
 const IP_REDIRECT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 天
 
+/**
+ * 内置兜底「国家→语言」映射。
+ * 当主题块设置 language_market_map 为空（如 block 早于 schema default 添加、商家清空等）时启用，
+ * 保证 IP 跳转仍按国家对齐语言，与 image-switcher.liquid 的 default 保持一致。
+ */
+const DEFAULT_LANGUAGE_MARKET_MAP =
+  "AF:fa,AX:sv,AL:sq,DZ:ar,AD:ca,AO:pt,AI:en,AG:en,AR:es,AM:hy,AW:nl,AC:en,AU:en,AT:de,AZ:az,BS:en,BH:ar,BD:bn,BB:en,BY:ru,BE:nl,BZ:en,BJ:fr,BM:en,BT:en,BO:es,BA:sr,BW:en,BV:nb,BR:pt-BR,IO:en,BN:ms,BG:bg,BF:fr,BI:fr,KH:en,CA:en,CV:pt,BQ:nl,KY:en,CF:fr,TD:fr,CL:es,CN:zh-CN,CX:en,CC:en,CO:es,KM:ar,CG:fr,CD:fr,CK:en,CR:es,HR:hr,CU:es,CW:nl,CY:el,CZ:cs,CI:fr,DK:da,DJ:fr,DM:en,DO:es,EC:es,EG:ar,SV:es,GQ:es,ER:ar,EE:et,SZ:en,ET:en,FK:en,FO:da,FJ:en,FI:fi,FR:fr,GF:fr,PF:fr,TF:fr,GA:fr,GM:en,GE:ka,DE:de,GH:en,GI:en,GR:el,GL:da,GD:en,GP:fr,GT:es,GG:en,GN:fr,GW:pt,GY:en,HT:fr,HM:en,VA:it,HN:es,HK:zh-TW,HU:hu,IS:en,IN:hi,ID:id,IR:fa,IQ:ar,IE:en,IM:en,IL:he,IT:it,JM:en,JP:ja,JE:en,JO:ar,KZ:ru,KE:en,KI:en,KP:ko,XK:sq,KW:ar,KG:ru,LA:en,LV:lv,LB:ar,LS:en,LR:en,LY:ar,LI:de,LT:lt,LU:fr,MO:zh-TW,MG:fr,MW:en,MY:ms,MV:en,ML:fr,MT:mt,MQ:fr,MR:ar,MU:fr,YT:fr,MX:es,MD:ro,MC:fr,MN:en,ME:sr,MS:en,MA:ar,MZ:pt,MM:en,NA:en,NR:en,NP:en,NL:nl,AN:nl,NC:fr,NZ:en,NI:es,NE:fr,NG:en,NU:en,NF:en,MK:mk,NO:nb,OM:ar,PK:ur,PS:ar,PA:es,PG:en,PY:es,PE:es,PH:fil,PN:en,PL:pl,PT:pt,QA:ar,CM:fr,RE:fr,RO:ro,RU:ru,RW:fr,BL:fr,SH:en,KN:en,LC:en,MF:fr,PM:fr,WS:en,SM:it,ST:pt,SA:ar,SN:fr,RS:sr,SC:fr,SL:en,SG:en,SX:nl,SK:sk,SI:sl,SB:en,SO:ar,ZA:en,GS:en,KR:ko,SS:en,ES:es,LK:en,VC:en,SD:ar,SR:nl,SJ:nb,SE:sv,CH:de,SY:ar,TW:zh-TW,TJ:ru,TZ:en,TH:th,TL:pt,TG:fr,TK:en,TO:en,TT:en,TA:en,TN:ar,TR:tr,TM:ru,TC:en,TV:en,UG:en,UA:uk,AE:ar,GB:en,US:en,UM:en,UY:es,UZ:ru,VU:fr,VE:es,VN:vi,VG:en,WF:fr,EH:ar,YE:ar,ZM:en,ZW:en";
+
 /** 已知爬虫 UA 关键词，命中则跳过 IP 检测，避免频繁触发重定向。 */
 const BOT_UA_KEYWORDS = [
   "bot", "spider", "crawl", "slurp", "bingbot", "googlebot",
@@ -78,13 +86,8 @@ function languagesMatch(a, b) {
   return left.split("-")[0] === right.split("-")[0];
 }
 
-/**
- * 解析主题设置中的语言-市场绑定映射表。
- * 格式：JP:ja,KR:ko,FR:fr  大小写不敏感，结果 key=大写国家码，value=小写语言码。
- * @returns {Map<string, string>}
- */
-function getLanguageMarketMap() {
-  const raw = document.getElementById("ciwi_language_market_map")?.value?.trim() ?? "";
+/** 解析「国家:语言」字符串为 Map（key 大写国家码，value 小写语言码）。 */
+function parseLanguageMarketMap(raw) {
   const map = new Map();
   if (!raw) return map;
   for (const pair of raw.split(",")) {
@@ -94,6 +97,31 @@ function getLanguageMarketMap() {
     const language = pair.slice(idx + 1).trim().toLowerCase();
     if (country && language) map.set(country, language);
   }
+  return map;
+}
+
+/**
+ * 获取语言-市场绑定映射表。
+ * 优先用主题块设置；设置为空时回退到内置 DEFAULT_LANGUAGE_MARKET_MAP，避免商家未填导致语言不切换。
+ * 格式：JP:ja,KR:ko,FR:fr  大小写不敏感。
+ * @returns {Map<string, string>}
+ */
+function getLanguageMarketMap() {
+  const raw = document.getElementById("ciwi_language_market_map")?.value?.trim() ?? "";
+  let map = parseLanguageMarketMap(raw);
+  let source = "theme-setting";
+
+  if (map.size === 0) {
+    map = parseLanguageMarketMap(DEFAULT_LANGUAGE_MARKET_MAP);
+    source = raw ? "fallback(setting-unparseable)" : "fallback(setting-empty)";
+  }
+
+  logRedirect("[IP-MAP] 语言-市场映射加载", {
+    source,
+    rawLength: raw.length,
+    size: map.size,
+    JP: map.get("JP") ?? "(无)",
+  });
   return map;
 }
 
@@ -239,10 +267,22 @@ function submitLocalization(countryCode, languageCode, options = {}) {
  * @returns {boolean} 是否已触发跳转（页面即将刷新）
  */
 function runLanguageCorrection(current, marketMap) {
-  if (marketMap.size === 0) return false;
+  if (marketMap.size === 0) {
+    logSkip("[IP-4d]", "映射表为空，无法纠正语言");
+    return false;
+  }
 
   const mappedLanguage = lookupMarketLanguage(current.country, marketMap);
-  if (!mappedLanguage || languagesMatch(mappedLanguage, current.language)) {
+  if (!mappedLanguage) {
+    logSkip("[IP-4d]", `当前国家「${current.country}」未配置映射语言，保持现状`);
+    return false;
+  }
+  if (languagesMatch(mappedLanguage, current.language)) {
+    logRedirect("[IP-4d] 语言已符合映射，无需纠正", {
+      country: current.country,
+      language: current.language,
+      mappedLanguage,
+    });
     return false;
   }
 
@@ -599,7 +639,7 @@ function observeAndReplace(map) {
 
 async function main() {
   console.info(
-    `${LOG} 启动 v${"2026-06-15d"} | debug=${isDebug()} | 开启调试：localStorage.setItem("ciwi_debug","1")`,
+    `${LOG} 启动 v${"2026-06-15e"} | debug=${isDebug()} | 开启调试：localStorage.setItem("ciwi_debug","1")`,
   );
   logStep("[0] 环境", {
     shop: getShopDomain(),
