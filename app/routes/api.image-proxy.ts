@@ -1,6 +1,7 @@
 /**
  * App Proxy 端点：供店面前台 Theme Extension JS 查询图片替换映射。
- * 店面访问 URL：https://{shop}.myshopify.com/a/ciwi-spark
+ * 店面访问 URL：https://{shop}.myshopify.com/a/{subpath}
+ * subpath 由各 app toml 配置：test → ciwi-spark，spark-zz → ciwi-spark-zz。
  * Shopify 将请求代理至此路由，并附加 HMAC 签名供鉴权。
  */
 import type { LoaderFunctionArgs } from "react-router";
@@ -15,34 +16,20 @@ function isResponse(value: unknown): value is Response {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
-  console.info(`${LOG_PREFIX} incoming ${request.method} ${url.pathname}`);
+  const shop = url.searchParams.get("shop")?.trim();
+  const language = url.searchParams.get("language")?.trim();
+
+  console.info(
+    `${LOG_PREFIX} incoming ${request.method} ${url.pathname} shop=${shop ?? "-"} language=${language ?? "-"}`,
+  );
 
   try {
     await authenticate.public.appProxy(request);
   } catch (e) {
     const status = isResponse(e) ? e.status : 500;
     const detail = e instanceof Error ? e.message : "app proxy auth failed";
-    console.error(`${LOG_PREFIX} auth failed status=${status}`, e);
+    console.error(`${LOG_PREFIX} auth failed status=${status} shop=${shop ?? "-"}`, e);
     return Response.json({ ok: false, error: detail }, { status: status === 401 ? 401 : 403 });
-  }
-
-  const shop = url.searchParams.get("shop")?.trim();
-  const language = url.searchParams.get("language")?.trim();
-
-  console.info(
-    `${LOG_PREFIX} incoming shop=${shop ?? "-"} language=${language ?? "-"} path=${url.pathname}`,
-  );
-
-  // 验证 Shopify App Proxy HMAC 签名
-  try {
-    await authenticate.public.appProxy(request);
-  } catch (e) {
-    const status = e instanceof Response ? e.status : 500;
-    console.error(`${LOG_PREFIX} appProxy auth failed status=${status} shop=${shop}`, e);
-    return Response.json(
-      { ok: false, error: "app proxy authentication failed" },
-      { status: status === 400 ? 400 : 401 },
-    );
   }
 
   if (!shop || !language) {

@@ -52,7 +52,7 @@ uri = "/webhooks/fulfillments/create"
 topics = ["fulfillments/update"]
 uri = "/webhooks/fulfillments/update"
 
-# 店面前台图片替换：Theme Extension JS 通过 /a/ciwi-spark 拉取映射。
+# 店面前台图片替换：Theme Extension JS 通过 /a/ciwi-spark-zz 拉取映射。
 # dev 时 automatically_update_urls_on_dev 会把 host 换成 CLI tunnel。
 # dev 时 CLI 会把 url 换成 tunnel。勿指向 Render（Render 用的是 AiAssistant-Test 密钥）。
 [app_proxy]

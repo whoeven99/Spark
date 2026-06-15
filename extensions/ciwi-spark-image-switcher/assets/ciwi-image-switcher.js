@@ -4,7 +4,7 @@
  *   1. IP 地区跳转：通过 Shopify browsing_context_suggestions.json 检测访客地区，
  *      与当前 localization 不同时 POST /localization 静默切换国家/语言。
  *   2. 图片替换：按访客语言静默替换页面 <img> 的 src/srcset，无可见 UI。
- *      数据来源：App Proxy (/a/ciwi-spark?shop=…&language=…)
+ *      数据来源：App Proxy (/a/{subpath}?shop=…&language=…)，subpath 由主题块设置注入，须与 shopify.app.*.toml 一致。
  *
  * 调试：控制台执行 localStorage.setItem("ciwi_debug","1") 后刷新；
  *       或 URL 加 ?ciwi_debug=1。关闭：localStorage.removeItem("ciwi_debug")
@@ -523,6 +523,12 @@ function getLanguageCode() {
   return document.getElementById("ciwi_language_code")?.value?.trim() ?? "";
 }
 
+/** 与 shopify.app.*.toml [app_proxy] subpath 一致，由 Liquid 块设置注入。 */
+function getAppProxySubpath() {
+  const raw = document.getElementById("ciwi_app_proxy_subpath")?.value?.trim();
+  return raw || "ciwi-spark";
+}
+
 /** 从 URL 路径取文件名（不含 query），兼容店面 /cdn/shop/files/ 与 admin CDN。 */
 function extractFileName(url) {
   if (!url) return "";
@@ -613,7 +619,8 @@ async function fetchMappings(shop, language) {
     return cached;
   }
 
-  const url = `/a/ciwi-spark?shop=${encodeURIComponent(shop)}&language=${encodeURIComponent(language)}`;
+  const subpath = getAppProxySubpath();
+  const url = `/a/${subpath}?shop=${encodeURIComponent(shop)}&language=${encodeURIComponent(language)}`;
   logStep("[IMG-2] 请求 App Proxy", { url });
   const resp = await fetch(url, { headers: { Accept: "application/json" } });
   const contentType = resp.headers.get("content-type") ?? "";
@@ -742,6 +749,7 @@ async function main() {
     shop: getShopDomain(),
     language: getLanguageCode(),
     country: getCountryCode(),
+    appProxySubpath: getAppProxySubpath(),
     ipRedirectEnabled: isIpRedirectEnabled(),
     designMode: document.documentElement.hasAttribute("shopify-design-mode"),
     shopifyCountry: window.Shopify?.country,
