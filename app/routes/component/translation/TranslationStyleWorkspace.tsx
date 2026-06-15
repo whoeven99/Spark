@@ -639,16 +639,14 @@ export function TranslationStyleWorkspace({
         <div style={overlayBackdropStyle}>
           <div style={suggestionOverlayPanelStyle}>
             <div style={overlayHeaderStyle}>
-              <div>
-                <h4 style={overlayTitleStyle}>
-                  {aiSuggestionTarget === "profile" ? "商店档案 AI 建议" : "术语表 AI 建议"}
-                </h4>
-                <div style={overlaySubtitleStyle}>
-                  {aiSuggestionTarget === "profile"
-                    ? "这里会生成与商店档案相关的填充建议；保存后会同步回当前页面。"
-                    : "这里会生成与术语表相关的填充建议；确认生效后会同步回当前页面。"}
+              {aiSuggestionTarget === "profile" ? <div /> : (
+                <div>
+                  <h4 style={overlayTitleStyle}>术语表 AI 建议</h4>
+                  <div style={overlaySubtitleStyle}>
+                    这里会生成与术语表相关的填充建议；确认生效后会同步回当前页面。
+                  </div>
                 </div>
-              </div>
+              )}
               <button
                 type="button"
                 style={overlayCloseButtonStyle}
@@ -664,7 +662,12 @@ export function TranslationStyleWorkspace({
               locationSearch={locationSearch}
               defaultSourceLanguage={sourceLocale}
               target={aiSuggestionTarget}
-              onApplied={handleAiSuggestionApplied}
+              onApplied={() => {
+                handleAiSuggestionApplied();
+                if (aiSuggestionTarget === "profile") {
+                  setAiSuggestionTarget(null);
+                }
+              }}
             />
           </div>
         </div>
