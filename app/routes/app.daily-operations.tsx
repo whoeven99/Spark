@@ -1,6 +1,7 @@
+import { useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { useFetcher, useLoaderData, useRevalidator } from "react-router";
+import { useFetcher, useLoaderData, useNavigate, useRevalidator } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { authenticate } from "../shopify.server";
@@ -34,7 +35,6 @@ import {
   mobilePageContentStyle,
   pageContentStyle,
   pageEmptyStateStyle,
-  pageIntroBannerStyle,
   pageSectionHeaderRowStyle,
   pageSectionMajorTitleStyle,
   pageAccentBadgeStyle,
@@ -321,15 +321,32 @@ function MatrixImportanceAxis({
 }
 
 const taskCardStyle = (quadrant: TaskQuadrant): CSSProperties => ({
-  border: `1px solid ${pageColorTokens.border}`,
-  borderLeft: `4px solid ${quadrantAccentColors[quadrant]}`,
-  borderRadius: pageColorTokens.radiusControl,
-  padding: "0.9rem 1rem",
-  background: "#fff",
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  borderLeft: `3px solid ${quadrantAccentColors[quadrant]}`,
+  borderRadius: pageColorTokens.radiusCard,
+  padding: "1rem",
+  background: pageColorTokens.surface,
+  boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)",
   display: "flex",
   flexDirection: "column",
-  gap: "0.6rem",
+  gap: "0.75rem",
 });
+
+const taskCardStateStyle = (status: string): CSSProperties => {
+  if (status === "done") {
+    return {
+      background: "#f9fbfa",
+      borderColor: "#dbe7e1",
+    };
+  }
+  if (status === "in_progress") {
+    return {
+      background: "#fcfcfe",
+      boxShadow: "0 0 0 1px rgba(44, 110, 203, 0.08), 0 2px 6px rgba(44, 110, 203, 0.05)",
+    };
+  }
+  return {};
+};
 
 const taskTitleStyle: CSSProperties = {
   margin: 0,
@@ -379,13 +396,543 @@ function diagnosisTone(status: string): "success" | "warning" | "critical" {
   return "critical";
 }
 
+type InsightsView = "today" | "all";
+type TodayTaskTab = "all" | "q1" | "q3" | "in_progress" | "done";
+type InsightEffect = "revenue" | "conversion" | "efficiency" | "retention";
+
+type RiskEnvironmentCard = {
+  key: string;
+  title: string;
+  status: "healthy" | "watch" | "risk";
+  source: DataSource;
+  primaryMetric: string;
+  secondaryMetric: string;
+  summary: string;
+};
+
+type TaskPresentation = {
+  objective: string;
+  impactMetric: string;
+  estimatedLift: string;
+  roiImpact: string;
+  effect: InsightEffect;
+};
+
+const segmentedNavWrapStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.4rem",
+  padding: "0.25rem",
+  borderRadius: "999px",
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+};
+
+const segmentedNavButtonStyle = (active: boolean): CSSProperties => ({
+  border: `1px solid ${active ? pageColorTokens.border : "transparent"}`,
+  borderRadius: "999px",
+  padding: "0.48rem 0.9rem",
+  cursor: "pointer",
+  fontSize: "0.8125rem",
+  fontWeight: 700,
+  color: active ? pageColorTokens.textPrimary : pageColorTokens.textSecondary,
+  background: active ? pageColorTokens.surface : "transparent",
+  boxShadow: active ? "0 1px 2px rgba(0, 0, 0, 0.04)" : "none",
+});
+
+const insightCardStyle: CSSProperties = {
+  border: `1px solid ${pageColorTokens.border}`,
+  borderRadius: pageColorTokens.radiusCard,
+  background: pageColorTokens.surface,
+  padding: "1rem",
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.5rem",
+};
+
+const pillGroupStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "0.45rem",
+};
+
+const pillButtonStyle = (active: boolean): CSSProperties => ({
+  borderRadius: "999px",
+  border: `1px solid ${active ? pageColorTokens.border : pageColorTokens.borderSubtle}`,
+  padding: "0.42rem 0.78rem",
+  cursor: "pointer",
+  background: active ? pageColorTokens.surface : pageColorTokens.surfaceMuted,
+  color: active ? pageColorTokens.textPrimary : pageColorTokens.textSecondary,
+  fontSize: "0.75rem",
+  fontWeight: 700,
+  boxShadow: active ? "0 1px 2px rgba(0, 0, 0, 0.04)" : "none",
+});
+
+const insightListStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.75rem",
+};
+
+const riskCardStyle = (status: "healthy" | "watch" | "risk"): CSSProperties => ({
+  border: `1px solid ${pageColorTokens.border}`,
+  borderTop: `3px solid ${
+    status === "healthy" ? "#15803d" : status === "watch" ? "#d97706" : "#dc2626"
+  }`,
+  borderRadius: pageColorTokens.radiusCard,
+  background: pageColorTokens.surface,
+  padding: "1rem",
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.5rem",
+  minHeight: "168px",
+});
+
+const sectionDescriptionStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "0.875rem",
+  color: pageColorTokens.textSecondary,
+  lineHeight: 1.55,
+};
+
+const toolbarSurfaceStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.65rem",
+  padding: "0.8rem 0.9rem",
+  borderRadius: pageColorTokens.radiusControl,
+  border: `1px solid ${pageColorTokens.border}`,
+  background: pageColorTokens.surfaceMuted,
+};
+
+const toolbarLabelStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "0.75rem",
+  fontWeight: 700,
+  color: pageColorTokens.textSecondary,
+  letterSpacing: "0.01em",
+};
+
+const metricValueStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "1.375rem",
+  fontWeight: 700,
+  lineHeight: 1.2,
+  color: pageColorTokens.textPrimary,
+};
+
+const metricMetaRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "0.5rem",
+  flexWrap: "wrap",
+};
+
+const subtleInlineStatStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.35rem",
+  padding: "0.25rem 0.5rem",
+  borderRadius: "999px",
+  background: pageColorTokens.surfaceMuted,
+  color: pageColorTokens.textSecondary,
+  fontSize: "0.75rem",
+  fontWeight: 600,
+};
+
+const quietPanelStyle: CSSProperties = {
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  borderRadius: pageColorTokens.radiusControl,
+  background: pageColorTokens.surfaceMuted,
+  padding: "0.7rem 0.8rem",
+};
+
+const taskInfoGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: "0.55rem",
+};
+
+const taskInfoItemStyle: CSSProperties = {
+  ...quietPanelStyle,
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.2rem",
+};
+
+const taskInfoLabelStyle: CSSProperties = {
+  fontSize: "0.75rem",
+  fontWeight: 700,
+  color: pageColorTokens.textSecondary,
+};
+
+const taskActionsRowStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "0.5rem",
+  paddingTop: "0.15rem",
+};
+
+const reviewDeltaCardStyle: CSSProperties = {
+  padding: "0.6rem 0.85rem",
+  border: `1px solid ${pageColorTokens.border}`,
+  borderRadius: pageColorTokens.radiusControl,
+  fontSize: "0.8125rem",
+  color: pageColorTokens.textBody,
+  background: pageColorTokens.surface,
+};
+
+const overviewHeroStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1.8fr) minmax(260px, 1fr)",
+  gap: "1rem",
+  alignItems: "stretch",
+};
+
+const overviewHeroMainStyle: CSSProperties = {
+  border: `1px solid ${pageColorTokens.border}`,
+  borderRadius: pageColorTokens.radiusCard,
+  background: pageColorTokens.surface,
+  padding: "1rem 1.1rem",
+  boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)",
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.8rem",
+};
+
+const overviewHeroAsideStyle: CSSProperties = {
+  ...overviewHeroMainStyle,
+  background: pageColorTokens.surfaceMuted,
+};
+
+const overviewMiniGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gap: "0.7rem",
+};
+
+const overviewMiniItemStyle: CSSProperties = {
+  padding: "0.7rem 0.75rem",
+  borderRadius: pageColorTokens.radiusControl,
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.25rem",
+};
+
+const overviewMiniLabelStyle: CSSProperties = {
+  fontSize: "0.75rem",
+  fontWeight: 700,
+  color: pageColorTokens.textSecondary,
+};
+
+const overviewMiniValueStyle: CSSProperties = {
+  fontSize: "1rem",
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+};
+
+const valueCardSectionStyle: CSSProperties = {
+  border: `1px solid ${pageColorTokens.border}`,
+  borderRadius: pageColorTokens.radiusCard,
+  background: pageColorTokens.surface,
+  padding: "1rem",
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.85rem",
+};
+
+const customerTagWrapStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "0.45rem",
+  padding: "0.75rem 0.8rem",
+  borderRadius: pageColorTokens.radiusControl,
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+};
+
+const channelTableWrapStyle: CSSProperties = {
+  overflowX: "auto",
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  borderRadius: pageColorTokens.radiusControl,
+  background: pageColorTokens.surface,
+};
+
+const caveatPanelStyle: CSSProperties = {
+  marginTop: "0.75rem",
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.3rem",
+  padding: "0.75rem 0.8rem",
+  borderRadius: pageColorTokens.radiusControl,
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+};
+
+const costFormWrapStyle: CSSProperties = {
+  padding: "0.85rem 0.9rem",
+  borderRadius: pageColorTokens.radiusControl,
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+};
+
+function formatDeltaPrefix(value: number | null) {
+  if (value === null) return "—";
+  return `${value >= 0 ? "+" : ""}${value}`;
+}
+
+function taskStatusRank(status: string) {
+  switch (status) {
+    case "in_progress":
+      return 0;
+    case "open":
+      return 1;
+    case "done":
+      return 2;
+    case "ignored":
+      return 3;
+    default:
+      return 4;
+  }
+}
+
+function inferTaskPresentation(
+  task: OperationTaskView,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): TaskPresentation {
+  if (
+    task.sourceKey === "fulfillment_overdue" ||
+    task.sourceKey === "logistics_stale" ||
+    task.sourceKey === "routine_shipping"
+  ) {
+    return {
+      objective: t("dailyOps.taskObjectiveFulfillment"),
+      impactMetric: t("dailyOps.taskMetricFulfillment"),
+      estimatedLift: t("dailyOps.taskLiftFulfillment"),
+      roiImpact: t("dailyOps.taskRoiFulfillment"),
+      effect: "efficiency",
+    };
+  }
+  if (task.sourceKey === "refund_spike") {
+    return {
+      objective: t("dailyOps.taskObjectiveRefund"),
+      impactMetric: t("dailyOps.taskMetricRefund"),
+      estimatedLift: t("dailyOps.taskLiftRefund"),
+      roiImpact: t("dailyOps.taskRoiRefund"),
+      effect: "retention",
+    };
+  }
+  if (
+    task.sourceKey === "inventory_risk" ||
+    task.sourceKey === "inventory_replenish_plan"
+  ) {
+    return {
+      objective: t("dailyOps.taskObjectiveInventory"),
+      impactMetric: t("dailyOps.taskMetricInventory"),
+      estimatedLift: t("dailyOps.taskLiftInventory"),
+      roiImpact: t("dailyOps.taskRoiInventory"),
+      effect: "revenue",
+    };
+  }
+  return {
+    objective: t("dailyOps.taskObjectiveTraffic"),
+    impactMetric: t("dailyOps.taskMetricTraffic"),
+    estimatedLift: t("dailyOps.taskLiftTraffic"),
+    roiImpact: t("dailyOps.taskRoiTraffic"),
+    effect: task.sourceKey === "sales_decline" ? "revenue" : "conversion",
+  };
+}
+
+function buildTaskPrompt(
+  task: OperationTaskView,
+  presentation: TaskPresentation,
+  taskStatusText: string,
+  dueWindowText: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  const actionLines =
+    task.suggestedActions.length > 0
+      ? task.suggestedActions.map((action) => `- ${action}`).join("\n")
+      : `- ${t("dailyOps.taskNoSuggestedActions")}`;
+  return [
+    t("dailyOps.taskPromptHeader"),
+    `${t("dailyOps.taskPromptTitle")}：${task.title}`,
+    `${t("dailyOps.taskPromptStatus")}：${taskStatusText}`,
+    `${t("dailyOps.taskPromptReason")}：${task.triggerReason}`,
+    `${t("dailyOps.taskPromptObjective")}：${presentation.objective}`,
+    `${t("dailyOps.taskPromptMetric")}：${presentation.impactMetric}`,
+    `${t("dailyOps.taskPromptLift")}：${presentation.estimatedLift}`,
+    `${t("dailyOps.taskPromptRoi")}：${presentation.roiImpact}`,
+    `${t("dailyOps.taskPromptDue")}：${dueWindowText}`,
+    task.ownerRole
+      ? `${t("dailyOps.taskPromptOwner")}：${task.ownerRole}`
+      : `${t("dailyOps.taskPromptOwner")}：${t("dailyOps.taskPromptOwnerUnknown")}`,
+    `${t("dailyOps.taskPromptActions")}：\n${actionLines}`,
+    "",
+    t("dailyOps.taskPromptInstruction"),
+  ].join("\n");
+}
+
+function buildRiskEnvironmentCards(
+  result: DailyOperationsResult,
+  value: ValueLayerData | null,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): RiskEnvironmentCard[] {
+  const metrics = result.metrics;
+  const findItem = (key: string) => result.items.find((item) => item.key === key);
+  const inventory = findItem("inventory_health");
+  const logistics = findItem("logistics_anomaly");
+  const fulfillment = findItem("fulfillment_health");
+  const refund = findItem("refund_health");
+  const conversion = findItem("conversion_health");
+  const topChannel = value?.channels.channels
+    .slice()
+    .sort((a, b) => b.contributionProfit - a.contributionProfit)[0];
+  const hasPositiveChannel = (value?.channels.channels ?? []).some(
+    (channel) => channel.contributionProfit > 0,
+  );
+
+  return [
+    {
+      key: "new-arrivals",
+      title: t("dailyOps.riskEnvNewArrivals"),
+      status: "watch",
+      source: "pending",
+      primaryMetric: t("dailyOps.riskMetricPending"),
+      secondaryMetric: t("dailyOps.riskMetricNewArrivalPending"),
+      summary: t("dailyOps.riskSummaryNewArrivals"),
+    },
+    {
+      key: "inventory",
+      title: t("dailyOps.riskEnvInventory"),
+      status: inventory?.status ?? "watch",
+      source: "real",
+      primaryMetric: t("dailyOps.riskMetricInventoryValue", {
+        count: metrics.riskSkuCount,
+      }),
+      secondaryMetric: t("dailyOps.riskMetricInventoryLoss", {
+        amount: metrics.estimatedInventoryLoss,
+        currency: metrics.currency,
+      }),
+      summary: inventory?.reasoning[0] ?? t("dailyOps.riskSummaryInventoryFallback"),
+    },
+    {
+      key: "fulfillment",
+      title: t("dailyOps.riskEnvFulfillment"),
+      status:
+        fulfillment?.status === "risk" || logistics?.status === "risk"
+          ? "risk"
+          : fulfillment?.status === "watch" || logistics?.status === "watch"
+            ? "watch"
+            : "healthy",
+      source: "real",
+      primaryMetric: t("dailyOps.riskMetricFulfillmentValue", {
+        overdue: metrics.overdueOrderCount,
+        carrier: metrics.carrierIssueCount,
+      }),
+      secondaryMetric: t("dailyOps.riskMetricFulfillmentRate", {
+        value: metrics.fulfillmentRate30d,
+      }),
+      summary:
+        logistics?.reasoning[0] ??
+        fulfillment?.reasoning[0] ??
+        t("dailyOps.riskSummaryFulfillmentFallback"),
+    },
+    {
+      key: "payments",
+      title: t("dailyOps.riskEnvPayments"),
+      status: "watch",
+      source: "pending",
+      primaryMetric: t("dailyOps.riskMetricPending"),
+      secondaryMetric: t("dailyOps.riskMetricPaymentPending"),
+      summary: t("dailyOps.riskSummaryPayments"),
+    },
+    {
+      key: "risk-control",
+      title: t("dailyOps.riskEnvRiskControl"),
+      status: "watch",
+      source: "pending",
+      primaryMetric: t("dailyOps.riskMetricPending"),
+      secondaryMetric: t("dailyOps.riskMetricRiskControlPending"),
+      summary: t("dailyOps.riskSummaryRiskControl"),
+    },
+    {
+      key: "after-sales",
+      title: t("dailyOps.riskEnvAfterSales"),
+      status: refund?.status ?? "watch",
+      source: "real",
+      primaryMetric: t("dailyOps.riskMetricRefundValue", {
+        value: metrics.refundRate30d,
+      }),
+      secondaryMetric: t("dailyOps.riskMetricRefundDelta", {
+        value: formatDeltaPrefix(metrics.refundRateDelta),
+      }),
+      summary: refund?.reasoning[0] ?? t("dailyOps.riskSummaryRefundFallback"),
+    },
+    {
+      key: "conversion",
+      title: t("dailyOps.riskEnvConversion"),
+      status: conversion?.status ?? "watch",
+      source: metrics.hasPixelData ? "real" : "pending",
+      primaryMetric: metrics.hasPixelData
+        ? t("dailyOps.riskMetricConversionValue", {
+            value: metrics.conversionRate7d ?? "—",
+          })
+        : t("dailyOps.metricNotConnected"),
+      secondaryMetric: metrics.hasPixelData
+        ? t("dailyOps.riskMetricTrafficValue", {
+            value: formatDeltaPrefix(metrics.trafficChangeRate),
+          })
+        : t("dailyOps.riskMetricPixelPending"),
+      summary:
+        conversion?.reasoning[0] ??
+        t(
+          metrics.hasPixelData
+            ? "dailyOps.riskSummaryConversionFallback"
+            : "dailyOps.riskSummaryConversionPending",
+        ),
+    },
+    {
+      key: "roi",
+      title: t("dailyOps.riskEnvRoi"),
+      status: value
+        ? hasPositiveChannel
+          ? "healthy"
+          : "watch"
+        : "watch",
+      source: value ? "estimated" : "pending",
+      primaryMetric: value
+        ? t("dailyOps.riskMetricRoiValue", {
+            value: topChannel?.contributionProfit ?? "—",
+            currency: value.channels.currency,
+          })
+        : t("dailyOps.riskMetricPending"),
+      secondaryMetric: value
+        ? t("dailyOps.riskMetricRoiChannel", {
+            channel: topChannel?.label ?? t("dailyOps.riskMetricNoChannel"),
+          })
+        : t("dailyOps.riskMetricRoiPending"),
+      summary: value
+        ? t("dailyOps.riskSummaryRoi", {
+            channel: topChannel?.label ?? t("dailyOps.riskMetricNoChannel"),
+          })
+        : t("dailyOps.riskSummaryRoiPending"),
+    },
+  ];
+}
+
 export default function DailyOperationsPage() {
   const { t, i18n } = useTranslation();
   const { isMobile } = useResponsiveLayout();
   const data = useLoaderData() as LoaderData;
   const fetcher = useFetcher();
   const revalidator = useRevalidator();
+  const navigate = useNavigate();
   const busy = fetcher.state !== "idle" || revalidator.state !== "idle";
+  const [insightsView, setInsightsView] = useState<InsightsView>("today");
 
   const statusText = (status: string) => {
     switch (status) {
@@ -440,10 +987,15 @@ export default function DailyOperationsPage() {
 
   const renderTaskCard = (task: OperationTaskView) => {
     const closed = ["done", "ignored", "auto_closed"].includes(task.status);
+    const presentation = inferTaskPresentation(task, t);
     return (
       <div
         key={task.id}
-        style={{ ...taskCardStyle(task.quadrant), ...(closed ? { opacity: 0.62 } : null) }}
+        style={{
+          ...taskCardStyle(task.quadrant),
+          ...taskCardStateStyle(task.status),
+          ...(closed ? { opacity: 0.72 } : null),
+        }}
       >
         <s-stack direction={isMobile ? "block" : "inline"} gap="small" alignItems="center">
           <s-badge tone={priorityTone(task.priority)}>{task.priority}</s-badge>
@@ -455,8 +1007,26 @@ export default function DailyOperationsPage() {
           <strong>{t("dailyOps.triggerReasonLabel")}：</strong>
           {task.triggerReason}
         </p>
+        <div style={{ ...taskInfoGridStyle, ...(isMobile ? { gridTemplateColumns: "1fr" } : null) }}>
+          <div style={taskInfoItemStyle}>
+            <span style={taskInfoLabelStyle}>{t("dailyOps.taskObjectiveLabel")}</span>
+            <span style={taskMetaTextStyle}>{presentation.objective}</span>
+          </div>
+          <div style={taskInfoItemStyle}>
+            <span style={taskInfoLabelStyle}>{t("dailyOps.taskImpactMetricLabel")}</span>
+            <span style={taskMetaTextStyle}>{presentation.impactMetric}</span>
+          </div>
+          <div style={taskInfoItemStyle}>
+            <span style={taskInfoLabelStyle}>{t("dailyOps.taskEstimatedLiftLabel")}</span>
+            <span style={taskMetaTextStyle}>{presentation.estimatedLift}</span>
+          </div>
+          <div style={taskInfoItemStyle}>
+            <span style={taskInfoLabelStyle}>{t("dailyOps.taskRoiImpactLabel")}</span>
+            <span style={taskSecondaryTextStyle}>{presentation.roiImpact}</span>
+          </div>
+        </div>
         {task.suggestedActions.length > 0 ? (
-          <div>
+          <div style={quietPanelStyle}>
             <p style={{ ...taskSecondaryTextStyle, marginBottom: "0.2rem" }}>
               {t("dailyOps.suggestedActionsLabel")}
             </p>
@@ -472,7 +1042,34 @@ export default function DailyOperationsPage() {
             {t("dailyOps.ownerLabel", { value: task.ownerRole })}
           </p>
         ) : null}
-        <s-stack direction="inline" gap="small">
+        <div style={taskActionsRowStyle}>
+          <s-button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              const params = new URLSearchParams(
+                typeof window !== "undefined"
+                  ? window.location.search.startsWith("?")
+                    ? window.location.search.slice(1)
+                    : window.location.search
+                  : "",
+              );
+              params.set("panel", "chat");
+              params.set(
+                "prefillTaskPrompt",
+                buildTaskPrompt(
+                  task,
+                  presentation,
+                  taskStatusText(task.status),
+                  dueWindowText(task.dueWindow),
+                  t,
+                ),
+              );
+              navigate(`/app?${params.toString()}`);
+            }}
+          >
+            {t("dailyOps.actionSendToAi")}
+          </s-button>
           {task.status === "open" ? (
             <>
               <s-button
@@ -521,17 +1118,13 @@ export default function DailyOperationsPage() {
               {t("dailyOps.actionReopen")}
             </s-button>
           ) : null}
-        </s-stack>
+        </div>
       </div>
     );
   };
 
   return (
     <s-page heading={t("dailyOps.pageTitle")}>
-      <div style={pageIntroBannerStyle("diagnosis", { marginBottom: "1.5rem" })}>
-        {t("dailyOps.pageIntro")}
-      </div>
-
       <div
         style={{ ...pageContentStyle, ...(isMobile ? mobilePageContentStyle : null) }}
       >
@@ -563,6 +1156,9 @@ export default function DailyOperationsPage() {
           <>
             <DailyOperationsBody
               result={data.result}
+              value={data.value}
+              insightsView={insightsView}
+              onChangeInsightsView={setInsightsView}
               isMobile={isMobile}
               locale={i18n.language}
               quadrantTitle={quadrantTitle}
@@ -582,6 +1178,9 @@ export default function DailyOperationsPage() {
 
 function DailyOperationsBody({
   result,
+  value,
+  insightsView,
+  onChangeInsightsView,
   isMobile,
   locale,
   quadrantTitle,
@@ -590,6 +1189,9 @@ function DailyOperationsBody({
   renderTaskCard,
 }: {
   result: DailyOperationsResult;
+  value: ValueLayerData | null;
+  insightsView: InsightsView;
+  onChangeInsightsView: (view: InsightsView) => void;
   isMobile: boolean;
   locale: string;
   quadrantTitle: (q: TaskQuadrant) => string;
@@ -598,6 +1200,10 @@ function DailyOperationsBody({
   renderTaskCard: (task: OperationTaskView) => ReactNode;
 }) {
   const { t } = useTranslation();
+  const [todayTaskTab, setTodayTaskTab] = useState<TodayTaskTab>("all");
+  const [allStatusFilter, setAllStatusFilter] = useState("all");
+  const [allQuadrantFilter, setAllQuadrantFilter] = useState("all");
+  const [allEffectFilter, setAllEffectFilter] = useState("all");
   const m = result.metrics;
   const hasPixelData = m.hasPixelData;
   const sessionsValue = hasPixelData
@@ -611,12 +1217,51 @@ function DailyOperationsBody({
     m.salesGrowthRate === null
       ? t("dailyOps.metricNoBaseline")
       : `${m.salesGrowthRate >= 0 ? "+" : ""}${m.salesGrowthRate}%`;
-
-  const tasksByQuadrant = new Map<TaskQuadrant, OperationTaskView[]>();
-  for (const q of QUADRANTS) tasksByQuadrant.set(q, []);
-  for (const task of result.tasks) {
-    tasksByQuadrant.get(task.quadrant)?.push(task);
-  }
+  const sortedTasks = useMemo(
+    () =>
+      [...result.tasks].sort((left, right) => {
+        const rankDiff = taskStatusRank(left.status) - taskStatusRank(right.status);
+        if (rankDiff !== 0) return rankDiff;
+        const leftTime = new Date(left.resolvedAt ?? left.createdAt).getTime();
+        const rightTime = new Date(right.resolvedAt ?? right.createdAt).getTime();
+        return rightTime - leftTime;
+      }),
+    [result.tasks],
+  );
+  const riskCards = useMemo(
+    () => buildRiskEnvironmentCards(result, value, t),
+    [result, value, t],
+  );
+  const diagnosisInsights = useMemo(
+    () => result.items.filter((item) => item.status !== "healthy"),
+    [result.items],
+  );
+  const todayTasks = useMemo(() => {
+    if (todayTaskTab === "q1") return sortedTasks.filter((task) => task.quadrant === "q1");
+    if (todayTaskTab === "q3") return sortedTasks.filter((task) => task.quadrant === "q3");
+    if (todayTaskTab === "in_progress") {
+      return sortedTasks.filter((task) => task.status === "in_progress");
+    }
+    if (todayTaskTab === "done") {
+      return sortedTasks.filter((task) => task.status === "done");
+    }
+    return sortedTasks;
+  }, [sortedTasks, todayTaskTab]);
+  const allInsightTasks = useMemo(
+    () =>
+      sortedTasks.filter((task) => {
+        if (allStatusFilter !== "all" && task.status !== allStatusFilter) return false;
+        if (allQuadrantFilter !== "all" && task.quadrant !== allQuadrantFilter) return false;
+        if (
+          allEffectFilter !== "all" &&
+          inferTaskPresentation(task, t).effect !== allEffectFilter
+        ) {
+          return false;
+        }
+        return true;
+      }),
+    [allEffectFilter, allQuadrantFilter, allStatusFilter, sortedTasks, t],
+  );
 
   return (
     <>
@@ -633,95 +1278,411 @@ function DailyOperationsBody({
               : pageSectionHeaderRowStyle
           }
         >
-          <h2 style={pageSectionMajorTitleStyle}>{t("dailyOps.coreBoard")}</h2>
-          <span style={pageAccentBadgeStyle}>
-            {t("dailyOps.snapshotDateLabel", { date: result.snapshotDate })}
-          </span>
+          <div style={segmentedNavWrapStyle}>
+            <button
+              type="button"
+              style={segmentedNavButtonStyle(insightsView === "today")}
+              onClick={() => onChangeInsightsView("today")}
+            >
+              {t("dailyOps.todayInsights")}
+            </button>
+            <button
+              type="button"
+              style={segmentedNavButtonStyle(insightsView === "all")}
+              onClick={() => onChangeInsightsView("all")}
+            >
+              {t("dailyOps.allInsights")}
+            </button>
+          </div>
         </div>
-        <PageMetricCard
-          accent={t("dailyOps.shopLabel", { value: result.shop })}
-          metrics={[
-            {
-              label: t("dailyOps.metricSales7d"),
-              value: String(m.salesAmount7d),
-              unit: m.currency,
-            },
-            { label: t("dailyOps.metricGrowth"), value: growthLabel },
-            {
-              label: t("dailyOps.metricPendingOrders"),
-              value: String(m.pendingOrderCount),
-            },
-            {
-              label: t("dailyOps.metricOverdue"),
-              value: String(m.overdueOrderCount),
-            },
-            {
-              label: t("dailyOps.metricCarrierIssues"),
-              value: String(m.carrierIssueCount),
-            },
-            {
-              label: t("dailyOps.metricRefundRate"),
-              value: `${m.refundRate30d}%`,
-            },
-            {
-              label: t("dailyOps.metricRiskSkus"),
-              value: String(m.riskSkuCount),
-            },
-            {
-              label: t("dailyOps.metricSessions7d"),
-              value: sessionsValue,
-            },
-            {
-              label: t("dailyOps.metricConversion7d"),
-              value: conversionValue,
-            },
-          ]}
-          footer={t("dailyOps.generatedAtLabel", {
-            value: new Date(result.generatedAt).toLocaleString(locale),
-          })}
-        />
+        <div style={{ ...overviewHeroStyle, ...(isMobile ? { gridTemplateColumns: "1fr" } : null) }}>
+          <div style={overviewHeroMainStyle}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+              <h2 style={pageSectionMajorTitleStyle}>{t("dailyOps.pageTitle")}</h2>
+              <p style={sectionDescriptionStyle}>{t("dailyOps.pageSubtitle")}</p>
+            </div>
+            <div
+              style={{
+                ...overviewMiniGridStyle,
+                ...(isMobile ? { gridTemplateColumns: "1fr 1fr" } : null),
+              }}
+            >
+              <div style={overviewMiniItemStyle}>
+                <span style={overviewMiniLabelStyle}>{t("dailyOps.metricSales7d")}</span>
+                <span style={overviewMiniValueStyle}>
+                  {m.salesAmount7d} {m.currency}
+                </span>
+              </div>
+              <div style={overviewMiniItemStyle}>
+                <span style={overviewMiniLabelStyle}>{t("dailyOps.metricGrowth")}</span>
+                <span style={overviewMiniValueStyle}>{growthLabel}</span>
+              </div>
+              <div style={overviewMiniItemStyle}>
+                <span style={overviewMiniLabelStyle}>{t("dailyOps.taskStatusInProgress")}</span>
+                <span style={overviewMiniValueStyle}>
+                  {sortedTasks.filter((task) => task.status === "in_progress").length}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div style={overviewHeroAsideStyle}>
+            <span style={pageAccentBadgeStyle}>
+              {t("dailyOps.snapshotDateLabel", { date: result.snapshotDate })}
+            </span>
+            <p style={sectionDescriptionStyle}>{t("dailyOps.pageIntro")}</p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem" }}>
+              <span style={subtleInlineStatStyle}>
+                {t("dailyOps.metricOverdue")}: {m.overdueOrderCount}
+              </span>
+              <span style={subtleInlineStatStyle}>
+                {t("dailyOps.metricCarrierIssues")}: {m.carrierIssueCount}
+              </span>
+              <span style={subtleInlineStatStyle}>
+                {t("dailyOps.metricRiskSkus")}: {m.riskSkuCount}
+              </span>
+            </div>
+          </div>
+        </div>
+        {insightsView === "today" ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <PageSurface
+              title={t("dailyOps.keyMetricsTitle")}
+              subtitle={t("dailyOps.keyMetricsSubtitle", { shop: result.shop })}
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+                  gap: "0.9rem",
+                }}
+              >
+                <div style={insightCardStyle}>
+                  <div style={metricMetaRowStyle}>
+                    <span style={subtleInlineStatStyle}>{t("dailyOps.metricGroupTraffic")}</span>
+                    <span style={taskSecondaryTextStyle}>
+                      {t("dailyOps.metricTrafficChange", {
+                        value:
+                          m.trafficChangeRate === null
+                            ? t("dailyOps.metricNoBaseline")
+                            : `${formatDeltaPrefix(m.trafficChangeRate)}%`,
+                      })}
+                    </span>
+                  </div>
+                  <h3 style={metricValueStyle}>{sessionsValue}</h3>
+                  <p style={taskMetaTextStyle}>{t("dailyOps.metricTrafficHint")}</p>
+                </div>
+                <div style={insightCardStyle}>
+                  <div style={metricMetaRowStyle}>
+                    <span style={subtleInlineStatStyle}>{t("dailyOps.metricGroupAov")}</span>
+                    <span style={taskSecondaryTextStyle}>
+                      {t("dailyOps.metricAovPrev", { value: m.aovPrev7d })}
+                    </span>
+                  </div>
+                  <h3 style={metricValueStyle}>
+                    {m.aov7d} {m.currency}
+                  </h3>
+                  <p style={taskMetaTextStyle}>{t("dailyOps.metricAovHint")}</p>
+                </div>
+                <div style={insightCardStyle}>
+                  <div style={metricMetaRowStyle}>
+                    <span style={subtleInlineStatStyle}>{t("dailyOps.metricGroupConversion")}</span>
+                    <span style={taskSecondaryTextStyle}>
+                      {t("dailyOps.metricConversionPrev", {
+                        value:
+                          m.conversionRatePrev7d === null
+                            ? t("dailyOps.metricNoBaseline")
+                            : `${m.conversionRatePrev7d}%`,
+                      })}
+                    </span>
+                  </div>
+                  <h3 style={metricValueStyle}>{conversionValue}</h3>
+                  <p style={taskMetaTextStyle}>{t("dailyOps.metricConversionHint")}</p>
+                </div>
+                <div style={insightCardStyle}>
+                  <div style={metricMetaRowStyle}>
+                    <span style={subtleInlineStatStyle}>{t("dailyOps.metricGroupCost")}</span>
+                    <span style={taskSecondaryTextStyle}>
+                      {t("dailyOps.metricRefundDeltaShort", {
+                        value: `${formatDeltaPrefix(m.refundRateDelta)}pp`,
+                      })}
+                    </span>
+                  </div>
+                  <h3 style={metricValueStyle}>{`${m.refundRate30d}%`}</h3>
+                  <p style={taskMetaTextStyle}>{t("dailyOps.metricCostHint")}</p>
+                </div>
+                <div style={insightCardStyle}>
+                  <div style={metricMetaRowStyle}>
+                    <span style={subtleInlineStatStyle}>{t("dailyOps.metricGroupShortRoi")}</span>
+                    <span style={taskSecondaryTextStyle}>{t("dailyOps.metricSales7d")}</span>
+                  </div>
+                  <h3 style={metricValueStyle}>{growthLabel}</h3>
+                  <p style={taskSecondaryTextStyle}>{t("dailyOps.metricShortRoiHintLine1")}</p>
+                  <p style={taskMetaTextStyle}>{t("dailyOps.metricShortRoiHintLine2")}</p>
+                </div>
+                <div style={insightCardStyle}>
+                  <div style={metricMetaRowStyle}>
+                    <span style={subtleInlineStatStyle}>{t("dailyOps.metricGroupLongRoi")}</span>
+                    <span style={taskSecondaryTextStyle}>{t("dailyOps.customerTitle")}</span>
+                  </div>
+                  <h3 style={metricValueStyle}>
+                    {value
+                      ? `${value.customers.averageDynamicLtv} ${m.currency}`
+                      : t("dailyOps.metricNotConnected")}
+                  </h3>
+                  <p style={taskSecondaryTextStyle}>{t("dailyOps.metricLongRoiHintLine1")}</p>
+                  <p style={taskMetaTextStyle}>{t("dailyOps.metricLongRoiHintLine2")}</p>
+                </div>
+              </div>
+              <p style={{ ...taskSecondaryTextStyle, marginTop: "0.75rem" }}>
+                {t("dailyOps.generatedAtLabel", {
+                  value: new Date(result.generatedAt).toLocaleString(locale),
+                })}
+              </p>
+            </PageSurface>
+
+            <PageSurface
+              title={t("dailyOps.riskEnvironmentTitle")}
+              subtitle={t("dailyOps.riskEnvironmentSubtitle")}
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+                  gap: "0.75rem",
+                }}
+              >
+                {riskCards.map((card) => (
+                  <div key={card.key} style={riskCardStyle(card.status)}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <h3 style={taskTitleStyle}>{card.title}</h3>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                        <SourceTag source={card.source} />
+                        <s-badge tone={diagnosisTone(card.status)}>{statusText(card.status)}</s-badge>
+                      </div>
+                    </div>
+                    <p style={taskMetaTextStyle}>{card.primaryMetric}</p>
+                    <p style={taskSecondaryTextStyle}>{card.secondaryMetric}</p>
+                    <p style={{ ...taskMetaTextStyle, marginTop: "0.1rem" }}>{card.summary}</p>
+                  </div>
+                ))}
+              </div>
+            </PageSurface>
+
+            <PageSurface
+              title={t("dailyOps.dataInsightsTitle")}
+              subtitle={t("dailyOps.dataInsightsSubtitle")}
+            >
+              {diagnosisInsights.length === 0 ? (
+                <p style={taskSecondaryTextStyle}>{t("dailyOps.dataInsightsEmpty")}</p>
+              ) : (
+                <div style={insightListStyle}>
+                  {diagnosisInsights.map((item) => (
+                    <div key={item.key} style={insightCardStyle}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "0.5rem",
+                        }}
+                      >
+                        <h3 style={taskTitleStyle}>{item.name}</h3>
+                        <s-badge tone={diagnosisTone(item.status)}>{statusText(item.status)}</s-badge>
+                      </div>
+                      {item.evidence.map((line, index) => (
+                        <p key={`e-${item.key}-${index}`} style={taskSecondaryTextStyle}>
+                          {line}
+                        </p>
+                      ))}
+                      {item.reasoning.slice(0, 2).map((line, index) => (
+                        <p key={`r-${item.key}-${index}`} style={taskMetaTextStyle}>
+                          {line}
+                        </p>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </PageSurface>
+
+            <PageSurface
+              title={t("dailyOps.taskWorkbenchTitle")}
+              subtitle={t("dailyOps.taskWorkbenchSubtitle")}
+            >
+              <div style={toolbarSurfaceStyle}>
+                <p style={toolbarLabelStyle}>{t("dailyOps.taskWorkbenchTitle")}</p>
+                <div style={pillGroupStyle}>
+                  {[
+                    ["all", t("dailyOps.taskTabAll")],
+                    ["q1", t("dailyOps.taskTabImportantUrgent")],
+                    ["q3", t("dailyOps.taskTabImportant")],
+                    ["in_progress", t("dailyOps.taskTabInProgress")],
+                    ["done", t("dailyOps.taskTabDone")],
+                  ].map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      style={pillButtonStyle(todayTaskTab === key)}
+                      onClick={() => setTodayTaskTab(key as TodayTaskTab)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.75rem",
+                  marginTop: "0.9rem",
+                }}
+              >
+                {todayTasks.length === 0 ? (
+                  <div style={pageEmptyStateStyle}>{t("dailyOps.noTasks")}</div>
+                ) : (
+                  todayTasks.map(renderTaskCard)
+                )}
+              </div>
+            </PageSurface>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <PageSurface
+              title={t("dailyOps.allInsightsTitle")}
+              subtitle={t("dailyOps.allInsightsSubtitle")}
+            >
+              <div style={toolbarSurfaceStyle}>
+                <div>
+                  <p style={toolbarLabelStyle}>{t("dailyOps.filterStatusAll")}</p>
+                  <div style={{ ...pillGroupStyle, marginTop: "0.4rem" }}>
+                    {[
+                      ["all", t("dailyOps.filterStatusAll")],
+                      ["open", t("dailyOps.taskStatusOpen")],
+                      ["in_progress", t("dailyOps.taskStatusInProgress")],
+                      ["done", t("dailyOps.taskStatusDone")],
+                    ].map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        style={pillButtonStyle(allStatusFilter === key)}
+                        onClick={() => setAllStatusFilter(key)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p style={toolbarLabelStyle}>{t("dailyOps.filterQuadrantAll")}</p>
+                  <div style={{ ...pillGroupStyle, marginTop: "0.4rem" }}>
+                    {[
+                      ["all", t("dailyOps.filterQuadrantAll")],
+                      ["q1", quadrantTitle("q1")],
+                      ["q2", quadrantTitle("q2")],
+                      ["q3", quadrantTitle("q3")],
+                      ["q4", quadrantTitle("q4")],
+                    ].map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        style={pillButtonStyle(allQuadrantFilter === key)}
+                        onClick={() => setAllQuadrantFilter(key)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p style={toolbarLabelStyle}>{t("dailyOps.filterEffectAll")}</p>
+                  <div style={{ ...pillGroupStyle, marginTop: "0.4rem" }}>
+                    {[
+                      ["all", t("dailyOps.filterEffectAll")],
+                      ["revenue", t("dailyOps.filterEffectRevenue")],
+                      ["conversion", t("dailyOps.filterEffectConversion")],
+                      ["efficiency", t("dailyOps.filterEffectEfficiency")],
+                      ["retention", t("dailyOps.filterEffectRetention")],
+                    ].map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        style={pillButtonStyle(allEffectFilter === key)}
+                        onClick={() => setAllEffectFilter(key)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.75rem",
+                  marginTop: "0.9rem",
+                }}
+              >
+                {allInsightTasks.length === 0 ? (
+                  <div style={pageEmptyStateStyle}>{t("dailyOps.filterEmpty")}</div>
+                ) : (
+                  allInsightTasks.map(renderTaskCard)
+                )}
+              </div>
+            </PageSurface>
+
+            <PageSurface
+              title={t("dailyOps.healthTitle")}
+              subtitle={t("dailyOps.healthSubtitle")}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                {result.items.map((item) => (
+                  <div
+                    key={item.key}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.35rem",
+                      padding: "0.75rem 0.9rem",
+                      border: `1px solid ${pageColorTokens.borderSubtle}`,
+                      borderRadius: pageColorTokens.radiusControl,
+                    }}
+                  >
+                    <s-stack direction={isMobile ? "block" : "inline"} gap="small" alignItems="center">
+                      <s-badge tone={diagnosisTone(item.status)}>
+                        {item.name}: {statusText(item.status)}
+                      </s-badge>
+                    </s-stack>
+                    {item.evidence.map((line, index) => (
+                      <p key={`e-all-${item.key}-${index}`} style={taskSecondaryTextStyle}>
+                        {line}
+                      </p>
+                    ))}
+                    {item.reasoning.map((line, index) => (
+                      <p key={`r-all-${item.key}-${index}`} style={taskMetaTextStyle}>
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </PageSurface>
+          </div>
+        )}
         {!hasPixelData ? (
           <p style={{ ...taskSecondaryTextStyle, marginTop: "0.55rem" }}>
             {t("dailyOps.pixelNotConnectedHint")}
           </p>
         ) : null}
       </section>
-
-      <PageSurface title={t("dailyOps.healthTitle")}>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          {result.items.map((item) => (
-            <div
-              key={item.key}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.35rem",
-                padding: "0.75rem 0.9rem",
-                border: `1px solid ${pageColorTokens.borderSubtle}`,
-                borderRadius: pageColorTokens.radiusControl,
-              }}
-            >
-              <s-stack direction={isMobile ? "block" : "inline"} gap="small" alignItems="center">
-                <s-badge tone={diagnosisTone(item.status)}>
-                  {item.name}: {statusText(item.status)}
-                </s-badge>
-              </s-stack>
-              {item.evidence.map((line, index) => (
-                <p key={`e-${index}`} style={taskSecondaryTextStyle}>
-                  {line}
-                </p>
-              ))}
-              {item.status !== "healthy"
-                ? item.reasoning.map((line, index) => (
-                    <p key={`r-${index}`} style={taskMetaTextStyle}>
-                      {line}
-                    </p>
-                  ))
-                : null}
-            </div>
-          ))}
-        </div>
-      </PageSurface>
 
       {result.review ? (
         <PageSurface
@@ -734,14 +1695,7 @@ function DailyOperationsBody({
             {result.review.deltas.map((delta) => (
               <div
                 key={delta.key}
-                style={{
-                  padding: "0.55rem 0.8rem",
-                  border: `1px solid ${pageColorTokens.borderSubtle}`,
-                  borderRadius: pageColorTokens.radiusControl,
-                  fontSize: "0.8125rem",
-                  color: pageColorTokens.textBody,
-                  background: "#fff",
-                }}
+                style={reviewDeltaCardStyle}
               >
                 <strong>{delta.label}</strong>: {delta.previous} → {delta.current}{" "}
                 <s-badge
@@ -764,70 +1718,6 @@ function DailyOperationsBody({
           </div>
         </PageSurface>
       ) : null}
-
-      <section>
-        <h2 style={pageSectionMajorTitleStyle}>{t("dailyOps.todoTitle")}</h2>
-      </section>
-      {isMobile ? (
-        // 移动端：矩阵太挤，按 Q1→Q4 优先级单列堆叠
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          {QUADRANTS.map((quadrant) => (
-            <QuadrantCell
-              key={quadrant}
-              quadrant={quadrant}
-              title={quadrantTitle(quadrant)}
-              desc={quadrantDesc(quadrant)}
-              tasks={tasksByQuadrant.get(quadrant) ?? []}
-              emptyLabel={t("dailyOps.noTasks")}
-              renderTaskCard={renderTaskCard}
-            />
-          ))}
-        </div>
-      ) : (
-        // 桌面端：2×2 艾森豪威尔矩阵，纵轴=紧急程度、横轴=重要程度
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "stretch" }}>
-          <MatrixUrgencyAxis
-            label={t("dailyOps.axisUrgency")}
-            highLabel={t("dailyOps.axisUrgencyHigh")}
-            lowLabel={t("dailyOps.axisUrgencyLow")}
-          />
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.55rem",
-              minWidth: 0,
-            }}
-          >
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "0.75rem",
-                alignItems: "stretch",
-              }}
-            >
-              {MATRIX_ORDER.map((quadrant) => (
-                <QuadrantCell
-                  key={quadrant}
-                  quadrant={quadrant}
-                  title={quadrantTitle(quadrant)}
-                  desc={quadrantDesc(quadrant)}
-                  tasks={tasksByQuadrant.get(quadrant) ?? []}
-                  emptyLabel={t("dailyOps.noTasks")}
-                  renderTaskCard={renderTaskCard}
-                />
-              ))}
-            </div>
-            <MatrixImportanceAxis
-              label={t("dailyOps.axisImportance")}
-              highLabel={t("dailyOps.axisImportanceHigh")}
-              lowLabel={t("dailyOps.axisImportanceLow")}
-            />
-          </div>
-        </div>
-      )}
     </>
   );
 }
@@ -905,6 +1795,7 @@ const valueTableStyle: CSSProperties = {
   width: "100%",
   borderCollapse: "collapse",
   fontSize: "0.8125rem",
+  background: pageColorTokens.surface,
 };
 
 const valueThStyle: CSSProperties = {
@@ -935,7 +1826,7 @@ const groupHeadInnerStyle: CSSProperties = {
 };
 
 const valueTdStyle: CSSProperties = {
-  padding: "0.6rem 0.5rem",
+  padding: "0.72rem 0.6rem",
   borderBottom: `1px solid ${pageColorTokens.divider}`,
   color: pageColorTokens.textBody,
   verticalAlign: "top",
@@ -991,14 +1882,14 @@ function SourceTag({ source }: { source: DataSource }) {
 
 const layerCardStyle = (accent: string): CSSProperties => ({
   flex: "1 1 200px",
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
-  borderLeft: `4px solid ${accent}`,
-  borderRadius: pageColorTokens.radiusControl,
-  padding: "0.7rem 0.85rem",
-  background: "#fff",
+  border: `1px solid ${pageColorTokens.border}`,
+  borderTop: `3px solid ${accent}`,
+  borderRadius: pageColorTokens.radiusCard,
+  padding: "0.85rem 0.95rem",
+  background: pageColorTokens.surface,
   display: "flex",
   flexDirection: "column",
-  gap: "0.4rem",
+  gap: "0.45rem",
 });
 
 const layerTitleStyle: CSSProperties = {
@@ -1111,7 +2002,10 @@ function ValueLayerSections({
   return (
     <>
       <section>
-        <h2 style={pageSectionMajorTitleStyle}>{t("dailyOps.valueTitle")}</h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+          <h2 style={pageSectionMajorTitleStyle}>{t("dailyOps.valueTitle")}</h2>
+          <p style={sectionDescriptionStyle}>{t("dailyOps.valueSubtitle")}</p>
+        </div>
       </section>
 
       <LayerLegend />
@@ -1125,7 +2019,7 @@ function ValueLayerSections({
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
           <SourceTag source="estimated" />
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
+        <div style={valueCardSectionStyle}>
           <PageMetricCard
             metrics={[
               {
@@ -1147,7 +2041,7 @@ function ValueLayerSections({
               },
             ]}
           />
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+          <div style={customerTagWrapStyle}>
             <s-badge tone="info">{t("dailyOps.segmentNew")}: {seg.new}</s-badge>
             <s-badge tone="success">{t("dailyOps.segmentActive")}: {seg.active}</s-badge>
             <s-badge tone="success">{t("dailyOps.segmentVip")}: {seg.vip}</s-badge>
@@ -1172,7 +2066,7 @@ function ValueLayerSections({
         {channels.channels.length === 0 ? (
           <p style={taskSecondaryTextStyle}>{t("dailyOps.noChannelData")}</p>
         ) : (
-          <div style={{ overflowX: "auto" }}>
+          <div style={channelTableWrapStyle}>
             <table style={valueTableStyle}>
               <thead>
                 <tr>
@@ -1249,7 +2143,7 @@ function ValueLayerSections({
             </table>
           </div>
         )}
-        <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+        <div style={caveatPanelStyle}>
           {channels.caveats.map((line, index) => (
             <p key={index} style={{ ...taskSecondaryTextStyle, fontSize: "0.75rem" }}>
               * {line}
@@ -1285,6 +2179,7 @@ function CostConfigCard({
         <input type="hidden" name="intent" value="cost-config" />
         <div
           style={{
+            ...costFormWrapStyle,
             display: "flex",
             flexWrap: "wrap",
             gap: "0.9rem",

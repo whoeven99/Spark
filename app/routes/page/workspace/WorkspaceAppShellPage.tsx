@@ -362,6 +362,7 @@ export function WorkspaceAppShellPage({
   const [draftByConversation, setDraftByConversation] = useState<Record<string, string>>({});
   const [messagesByConversation, setMessagesByConversation] = useState<Record<string, WorkspaceConversationMessage[]>>({});
   const loadedConvIdsRef = useRef<Set<string>>(new Set());
+  const processedPrefillPromptRef = useRef<string | null>(null);
   const [automationView, setAutomationView] = useState<AutomationView>("configured");
   const [runningTaskCount, setRunningTaskCount] = useState(0);
   const [conversationSearch, setConversationSearch] = useState("");
@@ -675,7 +676,14 @@ export function WorkspaceAppShellPage({
     }
   };
 
-  const createConversation = () => {
+  const createConversation = (options?: {
+    draft?: string;
+    assistantText?: string;
+  }) => {
+    const nextDraft = options?.draft ?? "";
+    const assistantText =
+      options?.assistantText ??
+      "新的对话已经创建。你可以先在下方工具栏补充商品、订单、文章、文件或富媒体，再发送任务需求。";
     // 已存在空会话（草稿或落库的"新对话"）时直接复用，避免列表里堆积重复空会话
     const existingEmpty = conversationList.find(
       (conversation) =>
@@ -685,6 +693,7 @@ export function WorkspaceAppShellPage({
     );
     if (existingEmpty) {
       workspaceContext.clearContext();
+      setDraftByConversation((current) => ({ ...current, [existingEmpty.id]: nextDraft }));
       openConversation(existingEmpty.id);
       if (isMobile) setSidebarOpen(false);
       return;
@@ -699,18 +708,32 @@ export function WorkspaceAppShellPage({
     };
     const welcomeMsg: WorkspaceConversationMessage = {
       role: "assistant",
-      text: "新的对话已经创建。你可以先在下方工具栏补充商品、订单、文章、文件或富媒体，再发送任务需求。",
+      text: assistantText,
       time: formatTimeLabel(new Date()),
     };
     loadedConvIdsRef.current.add(conv.id);
     setConversationList((current) => [conv, ...current].slice(0, 50));
     setMessagesByConversation((current) => ({ ...current, [conv.id]: [welcomeMsg] }));
-    setDraftByConversation((current) => ({ ...current, [conv.id]: "" }));
+    setDraftByConversation((current) => ({ ...current, [conv.id]: nextDraft }));
     workspaceContext.clearContext();
     setActiveConversationId(conv.id);
     switchPanel("chat");
     if (isMobile) setSidebarOpen(false);
   };
+
+  useEffect(() => {
+    const prefillPrompt = searchParams.get("prefillTaskPrompt");
+    if (!prefillPrompt) return;
+    if (processedPrefillPromptRef.current === prefillPrompt) return;
+    processedPrefillPromptRef.current = prefillPrompt;
+    createConversation({
+      draft: prefillPrompt,
+      assistantText: "已根据经营任务生成新对话，你可以直接发送或继续补充上下文。",
+    });
+    const next = new URLSearchParams(searchParams);
+    next.delete("prefillTaskPrompt");
+    setSearchParams(next);
+  }, [searchParams, setSearchParams]);
 
   const sendMessage = async () => {
     if (!activeConversation) return;
