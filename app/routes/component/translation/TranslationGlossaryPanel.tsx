@@ -14,6 +14,8 @@ type TranslationGlossaryPanelProps = {
   locationSearch: string;
   reloadToken?: number;
   onRequestAiSuggestion?: () => void;
+  mode?: "summary" | "full-editor";
+  onBack?: () => void;
 };
 
 type ParsedPreviewRow = GlossaryTerm & { _key: number; _selected: boolean };
@@ -97,8 +99,11 @@ export function TranslationGlossaryPanel({
   locationSearch,
   reloadToken = 0,
   onRequestAiSuggestion,
+  mode = "summary",
+  onBack,
 }: TranslationGlossaryPanelProps) {
   const shopify = useAppBridge();
+  const isFullEditorMode = mode === "full-editor";
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [terms, setTerms] = useState<GlossaryTerm[]>([]);
   const [dirty, setDirty] = useState(false);
@@ -283,6 +288,302 @@ export function TranslationGlossaryPanel({
     setEditorPage((prev) => Math.min(prev, totalEditorPages));
   }, [totalEditorPages]);
 
+  const renderEditorBody = () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+      {uploadOpen && (
+        <div style={pageInnerPanelStyle}>
+          <div style={pageFieldLabelStyle}>上传文件批量添加</div>
+          <div style={{ ...pageHintTextStyle, marginTop: 0, marginBottom: "0.5rem" }}>
+            支持 {FILE_TYPES_LABEL} 等格式，最大 10 MB。CSV、Excel、PDF、Word 等均由 LLM 自动提取术语对照。
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={FILE_ACCEPT}
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleFileSelected(file);
+            }}
+          />
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+            <s-button
+              type="button"
+              variant="secondary"
+              onClick={() => fileInputRef.current?.click()}
+              {...(fileParsing ? { disabled: true } : {})}
+            >
+              {fileParsing ? "LLM 解析中…" : "选择文件"}
+            </s-button>
+            {fileParseName && !fileParsing ? (
+              <span style={{ fontSize: "0.8125rem", color: pageColorTokens.textSecondary }}>{fileParseName}</span>
+            ) : null}
+          </div>
+
+          {fileParseNote && previewRows.length > 0 ? (
+            <div style={{ ...pageHintTextStyle, marginTop: "0.75rem", color: pageColorTokens.textBody }}>
+              {fileParseNote}
+            </div>
+          ) : null}
+
+          {previewRows.length > 0 ? (
+            <>
+              <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "center", marginTop: "0.75rem" }}>
+                <label style={checkboxLabelStyle}>
+                  <input
+                    type="checkbox"
+                    checked={previewAllSelected}
+                    onChange={(e) =>
+                      setPreviewRows((prev) => prev.map((r) => ({ ...r, _selected: e.target.checked })))
+                    }
+                  />
+                  全选（{previewSelectedCount}/{previewRows.length}）
+                </label>
+                <label style={radioLabelStyle}>
+                  <input type="radio" name="glossary-upload-mode" checked={uploadMode === "merge"} onChange={() => setUploadMode("merge")} />
+                  合并到现有
+                </label>
+                <label style={radioLabelStyle}>
+                  <input type="radio" name="glossary-upload-mode" checked={uploadMode === "replace"} onChange={() => setUploadMode("replace")} />
+                  替换现有列表
+                </label>
+                <s-button type="button" variant="primary" onClick={confirmFileParse}>
+                  确认添加（{previewSelectedCount} 条）
+                </s-button>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem", marginTop: "0.75rem", maxHeight: "320px", overflowY: "auto" }}>
+                {previewRows.map((row) => (
+                  <div key={row._key} style={previewRowStyle}>
+                    <label style={checkboxLabelStyle}>
+                      <input
+                        type="checkbox"
+                        checked={row._selected}
+                        onChange={(e) =>
+                          setPreviewRows((prev) =>
+                            prev.map((r) => (r._key === row._key ? { ...r, _selected: e.target.checked } : r)),
+                          )
+                        }
+                      />
+                    </label>
+                    <input
+                      type="text"
+                      value={row.source}
+                      onChange={(e) =>
+                        setPreviewRows((prev) =>
+                          prev.map((r) => (r._key === row._key ? { ...r, source: e.target.value } : r)),
+                        )
+                      }
+                      style={{ ...inputStyle, flex: "1 1 140px" }}
+                    />
+                    <label style={checkboxLabelStyle}>
+                      <input
+                        type="checkbox"
+                        checked={!!row.doNotTranslate}
+                        onChange={(e) =>
+                          setPreviewRows((prev) =>
+                            prev.map((r) =>
+                              r._key === row._key ? { ...r, doNotTranslate: e.target.checked || undefined } : r,
+                            ),
+                          )
+                        }
+                      />
+                      勿译
+                    </label>
+                    <span style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, flex: "2 1 180px" }}>
+                      {formatTranslationsSummary(row.translations)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
+      {error ? <div style={formErrorBoxStyle}>{error}</div> : null}
+
+      {terms.length === 0 && previewRows.length === 0 ? (
+        <GlossaryExamplePanel />
+      ) : terms.length > 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          <div style={editorListHeaderStyle}>
+            <div style={pageFieldLabelStyle}>
+              当前术语（{terms.length} 条）
+            </div>
+            <div style={editorPagerMetaStyle}>
+              第 {editorPage} / {totalEditorPages} 页
+            </div>
+          </div>
+          {pagedTerms.map(({ term, idx }) => (
+            <div key={idx} style={termRowStyle}>
+              <div style={termCardHeaderStyle}>
+                <div style={termFieldBlockStyle}>
+                  <div style={miniLabelStyle}>原文术语</div>
+                  <input
+                    type="text"
+                    value={term.source}
+                    placeholder="输入原文术语"
+                    onChange={(e) => updateTerm(idx, { source: e.target.value })}
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={termActionRowStyle}>
+                  <button type="button" onClick={() => openTranslationsEditor(idx)} style={linkBtnStyle}>
+                    译法
+                  </button>
+                  <button type="button" onClick={() => deleteTerm(idx)} style={dangerBtnStyle}>
+                    删除
+                  </button>
+                </div>
+              </div>
+              <div style={termCardMetaStyle}>
+                <div style={termFieldBlockStyle}>
+                  <div style={miniLabelStyle}>备注</div>
+                  <input
+                    type="text"
+                    value={term.note ?? ""}
+                    placeholder="补充适用场景、限制说明等"
+                    onChange={(e) => updateTerm(idx, { note: e.target.value || undefined })}
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={toggleCardStyle}>
+                  <span style={miniLabelStyle}>翻译规则</span>
+                  <label style={checkboxLabelStyle} title="勾选后所有语言均不翻译">
+                    <input
+                      type="checkbox"
+                      checked={!!term.doNotTranslate}
+                      onChange={(e) => updateTerm(idx, { doNotTranslate: e.target.checked || undefined })}
+                    />
+                    勿译
+                  </label>
+                </div>
+              </div>
+              {!term.doNotTranslate ? (
+                <div style={translationsSummaryCardStyle}>
+                  <div style={miniLabelStyle}>当前译法</div>
+                  <div style={translationsSummaryTextStyle}>{formatTranslationsSummary(term.translations)}</div>
+                </div>
+              ) : null}
+              {editingIdx === idx ? (
+                <div style={{ ...pageInnerPanelStyle, marginTop: "0.5rem" }}>
+                  <div style={pageFieldLabelStyle}>各语言译法 · 「{term.source || "…"}」</div>
+                  <div style={{ ...pageHintTextStyle, marginTop: 0 }}>语言代码示例：en · zh-CN · ja · fr</div>
+                  {localeRows.map((row, rowIdx) => (
+                    <div key={rowIdx} style={{ display: "flex", gap: "0.5rem", marginTop: "0.4rem", flexWrap: "wrap" }}>
+                      <input
+                        type="text"
+                        value={row.locale}
+                        placeholder="语言"
+                        onChange={(e) =>
+                          setLocaleRows((prev) =>
+                            prev.map((r, i) => (i === rowIdx ? { ...r, locale: e.target.value } : r)),
+                          )
+                        }
+                        style={{ ...inputStyle, width: "6rem" }}
+                      />
+                      <input
+                        type="text"
+                        value={row.value}
+                        placeholder="对应翻译"
+                        onChange={(e) =>
+                          setLocaleRows((prev) =>
+                            prev.map((r, i) => (i === rowIdx ? { ...r, value: e.target.value } : r)),
+                          )
+                        }
+                        style={{ ...inputStyle, flex: 1, minWidth: "10rem" }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setLocaleRows((prev) => prev.filter((_, i) => i !== rowIdx))}
+                        style={dangerBtnStyle}
+                      >
+                        移除
+                      </button>
+                    </div>
+                  ))}
+                  <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.6rem", flexWrap: "wrap" }}>
+                    <s-button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setLocaleRows((prev) => [...prev, { locale: "", value: "" }])}
+                    >
+                      添加语言
+                    </s-button>
+                    <s-button type="button" variant="primary" onClick={saveTranslations}>
+                      确定
+                    </s-button>
+                    <s-button type="button" variant="secondary" onClick={() => setEditingIdx(null)}>
+                      取消
+                    </s-button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ))}
+          {terms.length > GLOSSARY_PAGE_SIZE ? (
+            <div style={editorPagerRowStyle}>
+              <div style={editorPagerMetaStyle}>
+                每页 {GLOSSARY_PAGE_SIZE} 条，共 {terms.length} 条
+              </div>
+              <div style={editorPagerButtonsStyle}>
+                <button
+                  type="button"
+                  style={pagerButtonStyle(editorPage === 1)}
+                  onClick={() => setEditorPage((prev) => Math.max(1, prev - 1))}
+                  disabled={editorPage === 1}
+                >
+                  上一页
+                </button>
+                <button
+                  type="button"
+                  style={pagerButtonStyle(editorPage === totalEditorPages)}
+                  onClick={() => setEditorPage((prev) => Math.min(totalEditorPages, prev + 1))}
+                  disabled={editorPage === totalEditorPages}
+                >
+                  下一页
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {dirty ? <SaveGlossaryBar saving={saving} onSave={() => void handleSave()} /> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+
+  if (isFullEditorMode) {
+    return (
+      <PageSurface>
+        <div style={editorHeaderStyle}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", minWidth: 0 }}>
+            {onBack ? (
+              <button type="button" style={backButtonStyle} onClick={onBack}>
+                返回翻译风格列表
+              </button>
+            ) : null}
+            <div style={titleStyle}>编辑术语表</div>
+            <div style={{ ...pageHintTextStyle, marginTop: 0 }}>
+              在这里维护全部术语，并可按需使用 AI 生成建议或上传文件批量解析。
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <s-button type="button" variant="secondary" onClick={onRequestAiSuggestion}>
+              生成 AI 建议
+            </s-button>
+            <s-button type="button" variant="secondary" onClick={() => setUploadOpen((v) => !v)}>
+              {uploadOpen ? "收起上传区" : "上传文件 AI 解析"}
+            </s-button>
+            <s-button type="button" variant="secondary" onClick={addTerm}>
+              新增术语
+            </s-button>
+          </div>
+        </div>
+        {renderEditorBody()}
+      </PageSurface>
+    );
+  }
+
   return (
     <>
       <PageSurface>
@@ -370,267 +671,7 @@ export function TranslationGlossaryPanel({
               </div>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-              {uploadOpen && (
-                <div style={pageInnerPanelStyle}>
-                  <div style={pageFieldLabelStyle}>上传文件批量添加</div>
-                  <div style={{ ...pageHintTextStyle, marginTop: 0, marginBottom: "0.5rem" }}>
-                    支持 {FILE_TYPES_LABEL} 等格式，最大 10 MB。CSV、Excel、PDF、Word 等均由 LLM 自动提取术语对照。
-                  </div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept={FILE_ACCEPT}
-                    style={{ display: "none" }}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) void handleFileSelected(file);
-                    }}
-                  />
-                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-                    <s-button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => fileInputRef.current?.click()}
-                      {...(fileParsing ? { disabled: true } : {})}
-                    >
-                      {fileParsing ? "LLM 解析中…" : "选择文件"}
-                    </s-button>
-                    {fileParseName && !fileParsing ? (
-                      <span style={{ fontSize: "0.8125rem", color: pageColorTokens.textSecondary }}>{fileParseName}</span>
-                    ) : null}
-                  </div>
-
-                  {fileParseNote && previewRows.length > 0 ? (
-                    <div style={{ ...pageHintTextStyle, marginTop: "0.75rem", color: pageColorTokens.textBody }}>
-                      {fileParseNote}
-                    </div>
-                  ) : null}
-
-                  {previewRows.length > 0 ? (
-                    <>
-                      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "center", marginTop: "0.75rem" }}>
-                        <label style={checkboxLabelStyle}>
-                          <input
-                            type="checkbox"
-                            checked={previewAllSelected}
-                            onChange={(e) =>
-                              setPreviewRows((prev) => prev.map((r) => ({ ...r, _selected: e.target.checked })))
-                            }
-                          />
-                          全选（{previewSelectedCount}/{previewRows.length}）
-                        </label>
-                        <label style={radioLabelStyle}>
-                          <input type="radio" name="glossary-upload-mode" checked={uploadMode === "merge"} onChange={() => setUploadMode("merge")} />
-                          合并到现有
-                        </label>
-                        <label style={radioLabelStyle}>
-                          <input type="radio" name="glossary-upload-mode" checked={uploadMode === "replace"} onChange={() => setUploadMode("replace")} />
-                          替换现有列表
-                        </label>
-                        <s-button type="button" variant="primary" onClick={confirmFileParse}>
-                          确认添加（{previewSelectedCount} 条）
-                        </s-button>
-                      </div>
-
-                      <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem", marginTop: "0.75rem", maxHeight: "320px", overflowY: "auto" }}>
-                        {previewRows.map((row) => (
-                          <div key={row._key} style={previewRowStyle}>
-                            <label style={checkboxLabelStyle}>
-                              <input
-                                type="checkbox"
-                                checked={row._selected}
-                                onChange={(e) =>
-                                  setPreviewRows((prev) =>
-                                    prev.map((r) => (r._key === row._key ? { ...r, _selected: e.target.checked } : r)),
-                                  )
-                                }
-                              />
-                            </label>
-                            <input
-                              type="text"
-                              value={row.source}
-                              onChange={(e) =>
-                                setPreviewRows((prev) =>
-                                  prev.map((r) => (r._key === row._key ? { ...r, source: e.target.value } : r)),
-                                )
-                              }
-                              style={{ ...inputStyle, flex: "1 1 140px" }}
-                            />
-                            <label style={checkboxLabelStyle}>
-                              <input
-                                type="checkbox"
-                                checked={!!row.doNotTranslate}
-                                onChange={(e) =>
-                                  setPreviewRows((prev) =>
-                                    prev.map((r) =>
-                                      r._key === row._key ? { ...r, doNotTranslate: e.target.checked || undefined } : r,
-                                    ),
-                                  )
-                                }
-                              />
-                              勿译
-                            </label>
-                            <span style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, flex: "2 1 180px" }}>
-                              {formatTranslationsSummary(row.translations)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  ) : null}
-                </div>
-              )}
-              {error ? <div style={formErrorBoxStyle}>{error}</div> : null}
-
-              {terms.length === 0 && previewRows.length === 0 ? (
-                <GlossaryExamplePanel />
-              ) : terms.length > 0 ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                  <div style={editorListHeaderStyle}>
-                    <div style={pageFieldLabelStyle}>
-                      当前术语（{terms.length} 条）
-                    </div>
-                    <div style={editorPagerMetaStyle}>
-                      第 {editorPage} / {totalEditorPages} 页
-                    </div>
-                  </div>
-                  {pagedTerms.map(({ term, idx }) => (
-                    <div key={idx} style={termRowStyle}>
-                      <div style={termCardHeaderStyle}>
-                        <div style={termFieldBlockStyle}>
-                          <div style={miniLabelStyle}>原文术语</div>
-                          <input
-                            type="text"
-                            value={term.source}
-                            placeholder="输入原文术语"
-                            onChange={(e) => updateTerm(idx, { source: e.target.value })}
-                            style={inputStyle}
-                          />
-                        </div>
-                        <div style={termActionRowStyle}>
-                          <button type="button" onClick={() => openTranslationsEditor(idx)} style={linkBtnStyle}>
-                            译法
-                          </button>
-                          <button type="button" onClick={() => deleteTerm(idx)} style={dangerBtnStyle}>
-                            删除
-                          </button>
-                        </div>
-                      </div>
-                      <div style={termCardMetaStyle}>
-                        <div style={termFieldBlockStyle}>
-                          <div style={miniLabelStyle}>备注</div>
-                          <input
-                            type="text"
-                            value={term.note ?? ""}
-                            placeholder="补充适用场景、限制说明等"
-                            onChange={(e) => updateTerm(idx, { note: e.target.value || undefined })}
-                            style={inputStyle}
-                          />
-                        </div>
-                        <div style={toggleCardStyle}>
-                          <span style={miniLabelStyle}>翻译规则</span>
-                          <label style={checkboxLabelStyle} title="勾选后所有语言均不翻译">
-                            <input
-                              type="checkbox"
-                              checked={!!term.doNotTranslate}
-                              onChange={(e) => updateTerm(idx, { doNotTranslate: e.target.checked || undefined })}
-                            />
-                            勿译
-                          </label>
-                        </div>
-                      </div>
-                      {!term.doNotTranslate ? (
-                        <div style={translationsSummaryCardStyle}>
-                          <div style={miniLabelStyle}>当前译法</div>
-                          <div style={translationsSummaryTextStyle}>{formatTranslationsSummary(term.translations)}</div>
-                        </div>
-                      ) : null}
-                      {editingIdx === idx ? (
-                        <div style={{ ...pageInnerPanelStyle, marginTop: "0.5rem" }}>
-                          <div style={pageFieldLabelStyle}>各语言译法 · 「{term.source || "…"}」</div>
-                          <div style={{ ...pageHintTextStyle, marginTop: 0 }}>语言代码示例：en · zh-CN · ja · fr</div>
-                          {localeRows.map((row, rowIdx) => (
-                            <div key={rowIdx} style={{ display: "flex", gap: "0.5rem", marginTop: "0.4rem", flexWrap: "wrap" }}>
-                              <input
-                                type="text"
-                                value={row.locale}
-                                placeholder="语言"
-                                onChange={(e) =>
-                                  setLocaleRows((prev) =>
-                                    prev.map((r, i) => (i === rowIdx ? { ...r, locale: e.target.value } : r)),
-                                  )
-                                }
-                                style={{ ...inputStyle, width: "6rem" }}
-                              />
-                              <input
-                                type="text"
-                                value={row.value}
-                                placeholder="对应翻译"
-                                onChange={(e) =>
-                                  setLocaleRows((prev) =>
-                                    prev.map((r, i) => (i === rowIdx ? { ...r, value: e.target.value } : r)),
-                                  )
-                                }
-                                style={{ ...inputStyle, flex: 1, minWidth: "10rem" }}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setLocaleRows((prev) => prev.filter((_, i) => i !== rowIdx))}
-                                style={dangerBtnStyle}
-                              >
-                                移除
-                              </button>
-                            </div>
-                          ))}
-                          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.6rem", flexWrap: "wrap" }}>
-                            <s-button
-                              type="button"
-                              variant="secondary"
-                              onClick={() => setLocaleRows((prev) => [...prev, { locale: "", value: "" }])}
-                            >
-                              添加语言
-                            </s-button>
-                            <s-button type="button" variant="primary" onClick={saveTranslations}>
-                              确定
-                            </s-button>
-                            <s-button type="button" variant="secondary" onClick={() => setEditingIdx(null)}>
-                              取消
-                            </s-button>
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  ))}
-                  {terms.length > GLOSSARY_PAGE_SIZE ? (
-                    <div style={editorPagerRowStyle}>
-                      <div style={editorPagerMetaStyle}>
-                        每页 {GLOSSARY_PAGE_SIZE} 条，共 {terms.length} 条
-                      </div>
-                      <div style={editorPagerButtonsStyle}>
-                        <button
-                          type="button"
-                          style={pagerButtonStyle(editorPage === 1)}
-                          onClick={() => setEditorPage((prev) => Math.max(1, prev - 1))}
-                          disabled={editorPage === 1}
-                        >
-                          上一页
-                        </button>
-                        <button
-                          type="button"
-                          style={pagerButtonStyle(editorPage === totalEditorPages)}
-                          onClick={() => setEditorPage((prev) => Math.min(totalEditorPages, prev + 1))}
-                          disabled={editorPage === totalEditorPages}
-                        >
-                          下一页
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                  {dirty ? <SaveGlossaryBar saving={saving} onSave={() => void handleSave()} /> : null}
-                </div>
-              ) : null}
-            </div>
+            {renderEditorBody()}
           </div>
         </div>
       ) : null}
@@ -739,6 +780,17 @@ const editorHeaderStyle: CSSProperties = {
   gap: "0.8rem",
   flexWrap: "wrap",
   marginBottom: "1rem",
+};
+
+const backButtonStyle: CSSProperties = {
+  alignSelf: "flex-start",
+  border: "none",
+  background: "transparent",
+  color: pageColorTokens.brandBlue,
+  cursor: "pointer",
+  padding: 0,
+  fontSize: "0.8125rem",
+  fontWeight: 600,
 };
 
 function pagerButtonStyle(disabled: boolean): CSSProperties {
