@@ -145,21 +145,58 @@ function isIpRedirectEnabled() {
   return document.getElementById("ciwi_ip_redirect_enabled")?.value === "true";
 }
 
-function hasIpRedirectCache() {
+/**
+ * 读取上次自动跳转记录：{ country, ts }。
+ * 旧版本仅存纯时间戳字符串，解析失败时按「无记录」处理，从而触发重新检测。
+ * @returns {{ country: string, ts: number } | null}
+ */
+function readIpRedirectCache() {
   try {
     const raw = localStorage.getItem(IP_REDIRECT_CACHE_KEY);
-    if (!raw) return false;
-    return Date.now() - Number(raw) < IP_REDIRECT_CACHE_TTL_MS;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (
+      parsed &&
+      typeof parsed.country === "string" &&
+      typeof parsed.ts === "number"
+    ) {
+      return { country: normalizeCountryCode(parsed.country), ts: parsed.ts };
+    }
+    return null;
   } catch {
-    return false;
+    return null;
   }
 }
 
-function setIpRedirectCache() {
+/** 记录本次自动跳转的目标国家与时间，用于「同一国家 7 天内防重复跳转」。 */
+function setIpRedirectCache(country) {
   try {
-    localStorage.setItem(IP_REDIRECT_CACHE_KEY, String(Date.now()));
+    localStorage.setItem(
+      IP_REDIRECT_CACHE_KEY,
+      JSON.stringify({ country: normalizeCountryCode(country), ts: Date.now() }),
+    );
   } catch {
     // localStorage 不可用时静默忽略
+  }
+}
+
+/**
+ * 同一目标国家是否在 7 天 TTL 内已自动跳转过 → 防重复跳转。
+ * 目标国家不同（如换 VPN 到新地区）时返回 false，立即放行重新跳转。
+ */
+function isRedirectThrottledForCountry(targetCountry) {
+  const cache = readIpRedirectCache();
+  if (!cache) return false;
+  if (cache.country !== normalizeCountryCode(targetCountry)) return false;
+  return Date.now() - cache.ts < IP_REDIRECT_CACHE_TTL_MS;
+}
+
+/** 国家变化时清除语言纠正标记，避免阶段 B 被上一国家的旧标记阻止。 */
+function clearLanguageCorrectionMarker() {
+  try {
+    sessionStorage.removeItem(LANG_MARKET_DEFAULT_ATTEMPT_KEY);
+  } catch {
+    // sessionStorage 不可用时静默忽略
   }
 }
 
@@ -254,7 +291,6 @@ function submitLocalization(countryCode, languageCode, options = {}) {
     fieldNames: Object.keys(fields),
   });
 
-  setIpRedirectCache();
   // form.submit() 触发完整页面 POST 导航，不会被主题的 submit 事件处理器拦截
   form.submit();
   return { ok: true, method: "dynamic-form-submit" };
@@ -318,7 +354,9 @@ function runLanguageCorrection(current, marketMap) {
 
 /**
  * IP 地区跳转主逻辑，分两阶段：
- *   阶段 A 国家跳转：受 7 天缓存限制（每设备 7 天最多自动切一次国家）。
+ *   阶段 A 国家跳转：每次访问都向 GeoIP 检测国家；缓存记录「上次跳转的目标国家」，
+ *     仅当「检测国家 === 上次跳转国家」且仍在 7 天 TTL 内时才跳过（同国防重复跳转）。
+ *     换地区（检测到新国家）时无视 TTL，立即重新跳转。
  *   阶段 B 语言纠正：不受缓存限制，依映射表把语言对齐到目标市场绑定语言。
  * 跨市场时目标语言在源市场不可用，Shopify 会丢弃 language_code 只切国家；
  * 故先在阶段 A 切国家，reload 后再由阶段 B 纠正语言，两次刷新内收敛。
@@ -331,7 +369,7 @@ async function runIpRedirect() {
     enabled: isIpRedirectEnabled(),
     designMode: document.documentElement.hasAttribute("shopify-design-mode"),
     bot: isLikelyBot(),
-    countryRedirectCached: hasIpRedirectCache(),
+    lastRedirectCountry: readIpRedirectCache()?.country ?? "(无)",
     marketMapSize: marketMap.size,
   });
 
@@ -352,36 +390,44 @@ async function runIpRedirect() {
   const current = getCurrentLocalization();
   logStep("[IP-2] 当前 localization", current);
 
-  // ── 阶段 A：国家跳转（仅在 7 天缓存未命中时检测，命中则跳过 GeoIP 请求） ──
-  if (!hasIpRedirectCache()) {
-    try {
-      const root = window.Shopify?.routes?.root ?? "/";
-      const params = new URLSearchParams({
-        "country[enabled]": "true",
-        "country[exclude]": current.excludeCountry,
+  // ── 阶段 A：国家跳转（每次访问都检测，按「检测国家 vs 当前国家」决定是否跳转） ──
+  try {
+    const root = window.Shopify?.routes?.root ?? "/";
+    const params = new URLSearchParams({
+      "country[enabled]": "true",
+      "country[exclude]": current.excludeCountry,
+    });
+    const suggestUrl = `${root}browsing_context_suggestions.json?${params}`;
+    logStep("[IP-3] 请求 GeoIP 建议", { url: suggestUrl });
+    const resp = await fetch(suggestUrl);
+    if (resp.ok) {
+      const json = await resp.json();
+      logStep("[IP-3] GeoIP 响应", json);
+      const { country: suggestedCountry } = pickRedirectTargets(json);
+      const targetCountry = normalizeCountryCode(suggestedCountry);
+      logRedirect("[IP-3b] 解析跳转目标", {
+        suggestedCountry,
+        detectedCountry: json?.detected_values?.country?.handle ?? "",
       });
-      const suggestUrl = `${root}browsing_context_suggestions.json?${params}`;
-      logStep("[IP-3] 请求 GeoIP 建议", { url: suggestUrl });
-      const resp = await fetch(suggestUrl);
-      if (resp.ok) {
-        const json = await resp.json();
-        logStep("[IP-3] GeoIP 响应", json);
-        const { country: suggestedCountry } = pickRedirectTargets(json);
-        logRedirect("[IP-3b] 解析跳转目标", {
-          suggestedCountry,
-          detectedCountry: json?.detected_values?.country?.handle ?? "",
-        });
 
-        if (
-          suggestedCountry &&
-          normalizeCountryCode(suggestedCountry) !== current.country
-        ) {
+      if (targetCountry && targetCountry !== current.country) {
+        // 同一目标国家 7 天内已自动跳过 → 防重复跳转（如 Shopify 持续建议异国），转入阶段 B
+        if (isRedirectThrottledForCountry(targetCountry)) {
+          logSkip("[IP-4]", `7 天内已自动跳转到「${targetCountry}」，防重复，转入语言纠正`, {
+            from: current.country,
+            to: targetCountry,
+          });
+        } else {
           const mappedLanguage = lookupMarketLanguage(suggestedCountry, marketMap);
           logRedirect("[IP-4] 国家需切换（阶段 A）", {
             from: current.country,
-            to: normalizeCountryCode(suggestedCountry),
+            to: targetCountry,
             mappedLanguage: mappedLanguage || "(无映射→市场默认)",
           });
+          // 国家变化：清除语言纠正标记，确保 reload 后阶段 B 能重新对齐新市场语言
+          clearLanguageCorrectionMarker();
+          // 先写缓存再提交（form.submit 触发整页导航，之后代码不再执行）
+          setIpRedirectCache(targetCountry);
           // 跨市场提交目标市场专属语言时，Shopify 可能忽略 language_code 而落到市场默认语言；
           // 这属预期，reload 后由阶段 B 依映射表纠正。
           submitLocalization(suggestedCountry, mappedLanguage, {
@@ -390,13 +436,15 @@ async function runIpRedirect() {
           return true;
         }
       } else {
-        logSkip("[IP-3]", `browsing_context_suggestions 返回 ${resp.status}`);
+        logStep("[IP-3c] 检测国家与当前一致，无需切换国家", {
+          country: current.country,
+        });
       }
-    } catch (e) {
-      console.warn(`${LOG} [IP-ERR] GeoIP 国家检测异常：`, e);
+    } else {
+      logSkip("[IP-3]", `browsing_context_suggestions 返回 ${resp.status}`);
     }
-  } else {
-    logStep("[IP-3] 跳过 GeoIP 国家检测（7 天缓存命中），仅检查语言映射");
+  } catch (e) {
+    console.warn(`${LOG} [IP-ERR] GeoIP 国家检测异常：`, e);
   }
 
   // ── 阶段 B：语言纠正（不受 7 天缓存限制，确保国家切换后语言能被对齐） ──
@@ -639,7 +687,7 @@ function observeAndReplace(map) {
 
 async function main() {
   console.info(
-    `${LOG} 启动 v${"2026-06-15e"} | debug=${isDebug()} | 开启调试：localStorage.setItem("ciwi_debug","1")`,
+    `${LOG} 启动 v${"2026-06-15f"} | debug=${isDebug()} | 开启调试：localStorage.setItem("ciwi_debug","1")`,
   );
   logStep("[0] 环境", {
     shop: getShopDomain(),
