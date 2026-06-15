@@ -78,15 +78,38 @@ function languagesMatch(a, b) {
   return left.split("-")[0] === right.split("-")[0];
 }
 
+/**
+ * 解析主题设置中的语言-市场绑定映射表。
+ * 格式：JP:ja,KR:ko,FR:fr  大小写不敏感，结果 key=大写国家码，value=小写语言码。
+ * @returns {Map<string, string>}
+ */
+function getLanguageMarketMap() {
+  const raw = document.getElementById("ciwi_language_market_map")?.value?.trim() ?? "";
+  const map = new Map();
+  if (!raw) return map;
+  for (const pair of raw.split(",")) {
+    const idx = pair.indexOf(":");
+    if (idx === -1) continue;
+    const country = pair.slice(0, idx).trim().toUpperCase();
+    const language = pair.slice(idx + 1).trim().toLowerCase();
+    if (country && language) map.set(country, language);
+  }
+  return map;
+}
+
+/** 在市场绑定映射表中查询目标国家对应的语言，未命中返回空字符串。 */
+function lookupMarketLanguage(countryCode, marketMap) {
+  if (!countryCode || !marketMap.size) return "";
+  return marketMap.get(normalizeCountryCode(countryCode)) ?? "";
+}
+
 /** 与 Shopify 官方示例一致：优先 window.Shopify，回退 hidden input。 */
 function getCurrentLocalization() {
   return {
     country: normalizeCountryCode(window.Shopify?.country ?? getCountryCode()),
     language: normalizeLanguageCode(window.Shopify?.language ?? getLanguageCode()),
     excludeCountry: window.Shopify?.country ?? getCountryCode(),
-    excludeLanguage: window.Shopify?.language ?? getLanguageCode(),
     submitCountry: getCountryCode(),
-    submitLanguage: getLanguageCode(),
   };
 }
 
@@ -129,120 +152,44 @@ function findAuthenticityToken() {
   );
 }
 
-/** 诊断用：主题是否自带 localization 表单（Dawn 的 <localization-form> 会拦截 requestSubmit）。 */
-function findThemeLocalizationForm() {
-  return (
-    document.querySelector("#ciwi_localization_form") ||
-    document.querySelector("form.shopify-localization-form") ||
-    document.querySelector("localization-form form") ||
-    document.querySelector("#localization_form") ||
-    document.querySelector('form[action$="/localization"]') ||
-    document.querySelector('form[action*="/localization"]')
-  );
-}
-
-/** 从 GeoIP 响应提取建议的国家/语言（优先 suggestions，回退 detected_values）。 */
+/** 从 GeoIP 响应提取建议的目标国家（优先 suggestions，回退 detected_values）。 */
 function pickRedirectTargets(json) {
   const parts = json?.suggestions?.[0]?.parts;
   return {
     country: parts?.country?.handle ?? json?.detected_values?.country?.handle ?? "",
-    language: parts?.language?.handle ?? json?.detected_values?.language?.handle ?? "",
   };
 }
 
-/** 从 GeoIP 响应提取语言线索（handle 优先，其次 detected_values）。 */
-function extractLanguageHint(json) {
-  const langPart = json?.suggestions?.[0]?.parts?.language;
-  if (langPart?.handle) return langPart.handle;
-  if (json?.detected_values?.language?.handle) {
-    return json.detected_values.language.handle;
-  }
-  return "";
-}
-
-/** GeoIP 检测国与当前店面国家是否一致。 */
-function countryMatchesGeoIp(currentCountry, json) {
-  const detected = json?.detected_values?.country?.handle ?? "";
-  return (
-    Boolean(detected) &&
-    normalizeCountryCode(detected) === normalizeCountryCode(currentCountry)
-  );
-}
-
 /**
- * 国家切换时解析目标语言。
- * 不能回退到访客当前语言（否则会只换货币不换语言，如 JP + 仍保留 zh-CN）。
+ * 根据 GeoIP 建议计算是否需要切换国家；语言由映射表决定，不依赖 GeoIP 语言建议。
+ * 同国家的语言修正由调用方 IP-4d 通过映射表独立处理。
+ * @param {ReturnType<typeof getCurrentLocalization>} current
+ * @param {object} json  browsing_context_suggestions 响应
+ * @param {Map<string, string>} [marketMap]  country → language 绑定映射表
  */
-function resolveLanguageForCountryChange(json, currentLanguage) {
-  const langPart = json?.suggestions?.[0]?.parts?.language;
-  const suggested =
-    langPart?.handle ?? json?.detected_values?.language?.handle ?? "";
-
-  if (suggested && !languagesMatch(suggested, currentLanguage)) {
-    return { language: suggested.trim(), omitLanguage: false };
-  }
-
-  // 建议语言与当前相同，或 API 未返回语言 → 省略 language_code，由 Shopify Markets 应用该国默认语言
-  return { language: "", omitLanguage: true };
-}
-
-/**
- * 根据 GeoIP 建议与当前 localization 计算最终提交目标。
- */
-function resolveLocalizationTargets(current, json) {
-  const { country: suggestedCountry, language: suggestedLanguage } =
-    pickRedirectTargets(json);
-  const languageHint = extractLanguageHint(json);
-  const effectiveLanguage = suggestedLanguage || languageHint;
+function resolveLocalizationTargets(current, json, marketMap = new Map()) {
+  const { country: suggestedCountry } = pickRedirectTargets(json);
 
   const countryChanged =
     Boolean(suggestedCountry) &&
     normalizeCountryCode(suggestedCountry) !== current.country;
-  const languageChanged =
-    Boolean(effectiveLanguage) &&
-    !languagesMatch(effectiveLanguage, current.language);
 
-  // 国家已与 GeoIP 一致，仅需切换语言（如 JP/zh-cn → JP/ja）。
-  const languageOnlyFix =
-    countryMatchesGeoIp(current.country, json) &&
-    !countryChanged &&
-    languageChanged;
-
-  if (!countryChanged && !languageChanged && !languageOnlyFix) {
-    return {
-      shouldRedirect: false,
-      countryChanged,
-      languageChanged,
-      languageOnlyFix: false,
-      suggestedCountry,
-      suggestedLanguage: effectiveLanguage,
-    };
+  if (!countryChanged) {
+    // 国家未变：语言修正交由 IP-4d 市场映射路径处理，不基于 GeoIP 语言建议触发跳转
+    return { shouldRedirect: false, countryChanged: false, suggestedCountry };
   }
 
-  const targetCountry = suggestedCountry || current.submitCountry;
-  let targetLanguage = "";
-  let omitLanguage = false;
-
-  if (languageChanged) {
-    targetLanguage = effectiveLanguage.trim();
-  } else if (countryChanged) {
-    const resolved = resolveLanguageForCountryChange(json, current.language);
-    targetLanguage = resolved.language;
-    omitLanguage = resolved.omitLanguage;
-  } else if (languageOnlyFix) {
-    targetLanguage = effectiveLanguage.trim();
-  }
+  // 国家需要切换：语言由映射表决定；无映射则省略 language_code，让 Shopify Markets 应用目标市场默认语言
+  const targetCountryCode = normalizeCountryCode(suggestedCountry);
+  const mappedLanguage = lookupMarketLanguage(targetCountryCode, marketMap);
 
   return {
     shouldRedirect: true,
-    targetCountry,
-    targetLanguage,
-    omitLanguage,
-    countryChanged,
-    languageChanged,
-    languageOnlyFix,
-    suggestedCountry,
-    suggestedLanguage: effectiveLanguage,
+    targetCountry: suggestedCountry,
+    targetLanguage: mappedLanguage,
+    omitLanguage: !mappedLanguage,
+    countryChanged: true,
+    mappedLanguage,
   };
 }
 
@@ -268,7 +215,6 @@ function submitLocalization(countryCode, languageCode, options = {}) {
     targetLanguage: omitLanguage ? "(omit → 市场默认)" : targetLanguage,
     omitLanguage,
     hasToken: Boolean(token),
-    themeFormFound: Boolean(findThemeLocalizationForm()),
   });
 
   if (!document.body) {
@@ -324,11 +270,15 @@ function submitLocalization(countryCode, languageCode, options = {}) {
  * 返回 true 表示已触发跳转（页面即将刷新），调用方可提前终止后续操作。
  */
 async function runIpRedirect() {
+  const marketMap = getLanguageMarketMap();
+
   logStep("[IP-1] 开始检测", {
     enabled: isIpRedirectEnabled(),
     designMode: document.documentElement.hasAttribute("shopify-design-mode"),
     bot: isLikelyBot(),
     cache: hasIpRedirectCache(),
+    marketMapSize: marketMap.size,
+    marketMapEntries: marketMap.size > 0 ? Object.fromEntries(marketMap) : null,
   });
 
   if (!isIpRedirectEnabled()) {
@@ -357,8 +307,6 @@ async function runIpRedirect() {
     const params = new URLSearchParams({
       "country[enabled]": "true",
       "country[exclude]": current.excludeCountry,
-      "language[enabled]": "true",
-      "language[exclude]": current.excludeLanguage,
     });
     const suggestUrl = `${root}browsing_context_suggestions.json?${params}`;
     logStep("[IP-3] 请求 GeoIP 建议", { url: suggestUrl });
@@ -370,105 +318,62 @@ async function runIpRedirect() {
 
     const json = await resp.json();
     logStep("[IP-3] GeoIP 响应", json);
-    const { country: suggestedCountry, language: suggestedLanguage } =
-      pickRedirectTargets(json);
+    const { country: suggestedCountry } = pickRedirectTargets(json);
     logRedirect("[IP-3b] 解析跳转目标", {
       suggestedCountry,
-      suggestedLanguage,
       fromSuggestions: Boolean(json?.suggestions?.[0]?.parts),
       detectedCountry: json?.detected_values?.country?.handle ?? "",
-      detectedLanguage: json?.detected_values?.language?.handle ?? "",
     });
 
     if (!json?.suggestions?.length && !json?.detected_values?.country?.handle) {
-      logSkip("[IP-4]", "Shopify 未返回国家/语言建议（可能 IP 与当前 localization 一致）", {
+      logSkip("[IP-4]", "Shopify 未返回国家建议（可能 IP 与当前 localization 一致）", {
         detected: json?.detected_values,
       });
-      return false;
+      // 即使 GeoIP 无国家建议，仍需检查市场映射语言（见 IP-4d）
     }
 
-    let targets = resolveLocalizationTargets(current, json);
-    let langSupplementalTried = false;
-    let langSupplementalOk = false;
-    let langSupplementalJson = null;
+    let targets = resolveLocalizationTargets(current, json, marketMap);
 
-    // 国家已对齐但语言未切换（典型：上次只切了 JP 货币仍留 zh-CN）→ 专项请求语言建议
-    if (
-      !targets.shouldRedirect &&
-      countryMatchesGeoIp(current.country, json)
-    ) {
-      langSupplementalTried = true;
-      const langParams = new URLSearchParams({
-        "language[enabled]": "true",
-        "language[exclude]": current.excludeLanguage,
-      });
-      const langUrl = `${root}browsing_context_suggestions.json?${langParams}`;
-      logStep("[IP-3c] 国家已对齐，专项请求语言建议", { url: langUrl });
-      const langResp = await fetch(langUrl);
-      if (langResp.ok) {
-        langSupplementalOk = true;
-        langSupplementalJson = await langResp.json();
-        logStep("[IP-3c] 语言专项响应", langSupplementalJson);
-        targets = resolveLocalizationTargets(current, {
-          ...langSupplementalJson,
-          detected_values: {
-            ...(json.detected_values ?? {}),
-            ...(langSupplementalJson.detected_values ?? {}),
-          },
-        });
-      }
-    }
-
-    // 兜底：专项 API 未返回语言建议（HTTP 失败或成功但无 language.handle）
-    // → 省略 language_code 提交，由 Shopify Markets 应用该国市场默认语言
-    // 注：Shopify browsing_context_suggestions 依赖浏览器 Accept-Language，
-    //     中文用户访问日本店时浏览器语言是 zh-CN，Shopify 不会主动建议切日语，
-    //     需要主动触发此兜底来切换到市场默认语言（如 JP → ja）。
-    const langSupplementalHasHint = Boolean(
-      langSupplementalJson && extractLanguageHint(langSupplementalJson),
-    );
-    if (
-      !targets.shouldRedirect &&
-      countryMatchesGeoIp(current.country, json) &&
-      langSupplementalTried &&
-      (!langSupplementalOk || !langSupplementalHasHint)
-    ) {
-      const attemptKey = `${current.country}/${current.language}`;
-      let alreadyTried = false;
-      try {
-        alreadyTried =
-          sessionStorage.getItem(LANG_MARKET_DEFAULT_ATTEMPT_KEY) === attemptKey;
-      } catch {
-        // ignore
-      }
-
-      if (alreadyTried) {
-        logSkip(
-          "[IP-4c]",
-          `本轮会话已尝试过市场默认语言（${attemptKey}），跳过避免重复提交`,
-        );
-      } else {
+    // IP-4d：当前国家已在映射表中但语言不符（如 JP/zh-CN → JP/ja）→ 触发语言修正。
+    // 语言修正完全由映射表决定，不依赖 GeoIP 语言建议。
+    if (!targets.shouldRedirect && marketMap.size > 0) {
+      const mappedLanguage = lookupMarketLanguage(current.country, marketMap);
+      if (mappedLanguage && !languagesMatch(mappedLanguage, current.language)) {
+        const attemptKey = `${current.country}/${current.language}/map`;
+        let alreadyTried = false;
         try {
-          sessionStorage.setItem(LANG_MARKET_DEFAULT_ATTEMPT_KEY, attemptKey);
+          alreadyTried =
+            sessionStorage.getItem(LANG_MARKET_DEFAULT_ATTEMPT_KEY) === attemptKey;
         } catch {
           // ignore
         }
-        targets = {
-          shouldRedirect: true,
-          targetCountry: current.submitCountry,
-          targetLanguage: "",
-          omitLanguage: true,
-          countryChanged: false,
-          languageChanged: false,
-          languageOnlyFix: true,
-          suggestedCountry: "",
-          suggestedLanguage: "",
-        };
-        logRedirect("[IP-4c] 兜底：语言专项 API 无建议，省略 language_code 切换市场默认语言", {
-          attemptKey,
-          langSupplementalOk,
-          langSupplementalHasHint,
-        });
+
+        if (alreadyTried) {
+          logSkip(
+            "[IP-4d]",
+            `本轮会话已尝试过市场映射语言修正（${attemptKey}），跳过`,
+          );
+        } else {
+          try {
+            sessionStorage.setItem(LANG_MARKET_DEFAULT_ATTEMPT_KEY, attemptKey);
+          } catch {
+            // ignore
+          }
+          targets = {
+            shouldRedirect: true,
+            targetCountry: current.submitCountry,
+            targetLanguage: mappedLanguage,
+            omitLanguage: false,
+            countryChanged: false,
+            mappedLanguage,
+          };
+          logRedirect("[IP-4d] 市场绑定映射：触发语言修正", {
+            country: current.country,
+            currentLanguage: current.language,
+            mappedLanguage,
+            attemptKey,
+          });
+        }
       }
     }
 
@@ -481,7 +386,6 @@ async function runIpRedirect() {
     if (!targets.shouldRedirect) {
       logSkip("[IP-4]", "建议与当前 localization 实质相同", {
         suggestedCountry: targets.suggestedCountry,
-        suggestedLanguage: targets.suggestedLanguage,
         currentCountry: current.country,
         currentLanguage: current.language,
       });
@@ -496,7 +400,6 @@ async function runIpRedirect() {
       from: `${current.country}/${current.language}`,
       to: `${normalizeCountryCode(targets.targetCountry)}/${toLanguageLabel}`,
       countryChanged: targets.countryChanged,
-      languageChanged: targets.languageChanged,
       omitLanguage: targets.omitLanguage,
     });
     const submitResult = submitLocalization(
@@ -743,7 +646,7 @@ function observeAndReplace(map) {
 
 async function main() {
   console.info(
-    `${LOG} 启动 v${"2026-06-12g"} | debug=${isDebug()} | 开启调试：localStorage.setItem("ciwi_debug","1")`,
+    `${LOG} 启动 v${"2026-06-15c"} | debug=${isDebug()} | 开启调试：localStorage.setItem("ciwi_debug","1")`,
   );
   logStep("[0] 环境", {
     shop: getShopDomain(),
