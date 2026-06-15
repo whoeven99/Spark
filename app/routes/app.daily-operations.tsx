@@ -15,6 +15,8 @@ import {
   ensureDailySnapshot,
   updateOperationTaskStatus,
   type DailyOperationsResult,
+  type DailyOperationsEnvironment,
+  type DailyOperationsInsight,
   type OperationTaskAction,
   type OperationTaskView,
 } from "../server/operations/dailyInspection.server";
@@ -400,6 +402,15 @@ function diagnosisTone(status: string): "success" | "warning" | "critical" {
   if (status === "healthy") return "success";
   if (status === "watch") return "warning";
   return "critical";
+}
+
+function insightConfidenceLabel(
+  confidence: DailyOperationsInsight["confidence"],
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  if (confidence === "high") return t("dailyOps.confidenceHigh");
+  if (confidence === "medium") return t("dailyOps.confidenceMedium");
+  return t("dailyOps.confidenceLow");
 }
 
 type InsightsView = "today" | "all";
@@ -851,151 +862,117 @@ function buildTaskPrompt(
 }
 
 function buildRiskEnvironmentCards(
-  result: DailyOperationsResult,
-  value: ValueLayerData | null,
+  environments: DailyOperationsEnvironment[],
   t: (key: string, options?: Record<string, unknown>) => string,
 ): RiskEnvironmentCard[] {
-  const metrics = result.metrics;
-  const findItem = (key: string) => result.items.find((item) => item.key === key);
-  const inventory = findItem("inventory_health");
-  const logistics = findItem("logistics_anomaly");
-  const fulfillment = findItem("fulfillment_health");
-  const refund = findItem("refund_health");
-  const conversion = findItem("conversion_health");
-  const topChannel = value?.channels.channels
-    .slice()
-    .sort((a, b) => b.contributionProfit - a.contributionProfit)[0];
-  const hasPositiveChannel = (value?.channels.channels ?? []).some(
-    (channel) => channel.contributionProfit > 0,
-  );
-
-  return [
-    {
-      key: "new-arrivals",
-      title: t("dailyOps.riskEnvNewArrivals"),
-      status: "watch",
-      source: "pending",
-      primaryMetric: t("dailyOps.riskMetricPending"),
-      secondaryMetric: t("dailyOps.riskMetricNewArrivalPending"),
-      summary: t("dailyOps.riskSummaryNewArrivals"),
-    },
-    {
-      key: "inventory",
-      title: t("dailyOps.riskEnvInventory"),
-      status: inventory?.status ?? "watch",
-      source: "real",
-      primaryMetric: t("dailyOps.riskMetricInventoryValue", {
-        count: metrics.riskSkuCount,
-      }),
-      secondaryMetric: t("dailyOps.riskMetricInventoryLoss", {
-        amount: metrics.estimatedInventoryLoss,
-        currency: metrics.currency,
-      }),
-      summary: inventory?.reasoning[0] ?? t("dailyOps.riskSummaryInventoryFallback"),
-    },
-    {
-      key: "fulfillment",
-      title: t("dailyOps.riskEnvFulfillment"),
-      status:
-        fulfillment?.status === "risk" || logistics?.status === "risk"
-          ? "risk"
-          : fulfillment?.status === "watch" || logistics?.status === "watch"
-            ? "watch"
-            : "healthy",
-      source: "real",
-      primaryMetric: t("dailyOps.riskMetricFulfillmentValue", {
-        overdue: metrics.overdueOrderCount,
-        carrier: metrics.carrierIssueCount,
-      }),
-      secondaryMetric: t("dailyOps.riskMetricFulfillmentRate", {
-        value: metrics.fulfillmentRate30d,
-      }),
-      summary:
-        logistics?.reasoning[0] ??
-        fulfillment?.reasoning[0] ??
-        t("dailyOps.riskSummaryFulfillmentFallback"),
-    },
-    {
-      key: "payments",
-      title: t("dailyOps.riskEnvPayments"),
-      status: "watch",
-      source: "pending",
-      primaryMetric: t("dailyOps.riskMetricPending"),
-      secondaryMetric: t("dailyOps.riskMetricPaymentPending"),
-      summary: t("dailyOps.riskSummaryPayments"),
-    },
-    {
-      key: "risk-control",
-      title: t("dailyOps.riskEnvRiskControl"),
-      status: "watch",
-      source: "pending",
+  return environments.map((environment) => {
+    if (environment.key === "inventory") {
+      return {
+        key: environment.key,
+        title: t(environment.titleKey),
+        status: environment.status,
+        source: environment.source,
+        primaryMetric: t("dailyOps.riskMetricInventoryValue", {
+          count: environment.metrics.riskSkuCount ?? 0,
+        }),
+        secondaryMetric: t("dailyOps.riskMetricInventoryLoss", {
+          amount: environment.metrics.estimatedInventoryLoss ?? 0,
+          currency: environment.metrics.currency ?? "",
+        }),
+        summary: environment.summary,
+      };
+    }
+    if (environment.key === "fulfillment") {
+      return {
+        key: environment.key,
+        title: t(environment.titleKey),
+        status: environment.status,
+        source: environment.source,
+        primaryMetric: t("dailyOps.riskMetricFulfillmentValue", {
+          overdue: environment.metrics.overdueOrderCount ?? 0,
+          carrier: environment.metrics.carrierIssueCount ?? 0,
+        }),
+        secondaryMetric: t("dailyOps.riskMetricFulfillmentRate", {
+          value: environment.metrics.fulfillmentRate30d ?? 0,
+        }),
+        summary: environment.summary,
+      };
+    }
+    if (environment.key === "after-sales") {
+      return {
+        key: environment.key,
+        title: t(environment.titleKey),
+        status: environment.status,
+        source: environment.source,
+        primaryMetric: t("dailyOps.riskMetricRefundValue", {
+          value: environment.metrics.refundRate30d ?? 0,
+        }),
+        secondaryMetric: t("dailyOps.riskMetricRefundDelta", {
+          value: formatDeltaPrefix(
+            typeof environment.metrics.refundRateDelta === "number"
+              ? environment.metrics.refundRateDelta
+              : null,
+          ),
+        }),
+        summary: environment.summary,
+      };
+    }
+    if (environment.key === "conversion") {
+      const hasPixelData = environment.metrics.hasPixelData === 1;
+      return {
+        key: environment.key,
+        title: t(environment.titleKey),
+        status: environment.status,
+        source: environment.source,
+        primaryMetric: hasPixelData
+          ? t("dailyOps.riskMetricConversionValue", {
+              value: environment.metrics.conversionRate7d ?? "—",
+            })
+          : t("dailyOps.metricNotConnected"),
+        secondaryMetric: hasPixelData
+          ? t("dailyOps.riskMetricTrafficValue", {
+              value: formatDeltaPrefix(
+                typeof environment.metrics.trafficChangeRate === "number"
+                  ? environment.metrics.trafficChangeRate
+                  : null,
+              ),
+            })
+          : t("dailyOps.riskMetricPixelPending"),
+        summary: environment.summary,
+      };
+    }
+    if (environment.key === "new-arrivals") {
+      return {
+        key: environment.key,
+        title: t(environment.titleKey),
+        status: environment.status,
+        source: environment.source,
+        primaryMetric: t("dailyOps.riskMetricPending"),
+        secondaryMetric: t("dailyOps.riskMetricNewArrivalPending"),
+        summary: environment.summary,
+      };
+    }
+    if (environment.key === "payments") {
+      return {
+        key: environment.key,
+        title: t(environment.titleKey),
+        status: environment.status,
+        source: environment.source,
+        primaryMetric: t("dailyOps.riskMetricPending"),
+        secondaryMetric: t("dailyOps.riskMetricPaymentPending"),
+        summary: environment.summary,
+      };
+    }
+    return {
+      key: environment.key,
+      title: t(environment.titleKey),
+      status: environment.status,
+      source: environment.source,
       primaryMetric: t("dailyOps.riskMetricPending"),
       secondaryMetric: t("dailyOps.riskMetricRiskControlPending"),
-      summary: t("dailyOps.riskSummaryRiskControl"),
-    },
-    {
-      key: "after-sales",
-      title: t("dailyOps.riskEnvAfterSales"),
-      status: refund?.status ?? "watch",
-      source: "real",
-      primaryMetric: t("dailyOps.riskMetricRefundValue", {
-        value: metrics.refundRate30d,
-      }),
-      secondaryMetric: t("dailyOps.riskMetricRefundDelta", {
-        value: formatDeltaPrefix(metrics.refundRateDelta),
-      }),
-      summary: refund?.reasoning[0] ?? t("dailyOps.riskSummaryRefundFallback"),
-    },
-    {
-      key: "conversion",
-      title: t("dailyOps.riskEnvConversion"),
-      status: conversion?.status ?? "watch",
-      source: metrics.hasPixelData ? "real" : "pending",
-      primaryMetric: metrics.hasPixelData
-        ? t("dailyOps.riskMetricConversionValue", {
-            value: metrics.conversionRate7d ?? "—",
-          })
-        : t("dailyOps.metricNotConnected"),
-      secondaryMetric: metrics.hasPixelData
-        ? t("dailyOps.riskMetricTrafficValue", {
-            value: formatDeltaPrefix(metrics.trafficChangeRate),
-          })
-        : t("dailyOps.riskMetricPixelPending"),
-      summary:
-        conversion?.reasoning[0] ??
-        t(
-          metrics.hasPixelData
-            ? "dailyOps.riskSummaryConversionFallback"
-            : "dailyOps.riskSummaryConversionPending",
-        ),
-    },
-    {
-      key: "roi",
-      title: t("dailyOps.riskEnvRoi"),
-      status: value
-        ? hasPositiveChannel
-          ? "healthy"
-          : "watch"
-        : "watch",
-      source: value ? "estimated" : "pending",
-      primaryMetric: value
-        ? t("dailyOps.riskMetricRoiValue", {
-            value: topChannel?.contributionProfit ?? "—",
-            currency: value.channels.currency,
-          })
-        : t("dailyOps.riskMetricPending"),
-      secondaryMetric: value
-        ? t("dailyOps.riskMetricRoiChannel", {
-            channel: topChannel?.label ?? t("dailyOps.riskMetricNoChannel"),
-          })
-        : t("dailyOps.riskMetricRoiPending"),
-      summary: value
-        ? t("dailyOps.riskSummaryRoi", {
-            channel: topChannel?.label ?? t("dailyOps.riskMetricNoChannel"),
-          })
-        : t("dailyOps.riskSummaryRoiPending"),
-    },
-  ];
+      summary: environment.summary,
+    };
+  });
 }
 
 export default function DailyOperationsPage() {
@@ -1277,7 +1254,6 @@ export default function DailyOperationsPage() {
             ) : (
               <DailyOperationsBody
                 result={data.result}
-                value={data.value}
                 insightsView={insightsView}
                 onChangeInsightsView={setInsightsView}
                 isMobile={isMobile}
@@ -1298,7 +1274,6 @@ export default function DailyOperationsPage() {
 
 function DailyOperationsBody({
   result,
-  value,
   insightsView,
   onChangeInsightsView,
   isMobile,
@@ -1310,7 +1285,6 @@ function DailyOperationsBody({
   onOpenDetail,
 }: {
   result: DailyOperationsResult;
-  value: ValueLayerData | null;
   insightsView: InsightsView;
   onChangeInsightsView: (view: InsightsView) => void;
   isMobile: boolean;
@@ -1327,18 +1301,19 @@ function DailyOperationsBody({
   const [allQuadrantFilter, setAllQuadrantFilter] = useState("all");
   const [allEffectFilter, setAllEffectFilter] = useState("all");
   const m = result.metrics;
-  const hasPixelData = m.hasPixelData;
-  const sessionsValue = hasPixelData
-    ? String(m.sessions7d)
+  const overview = result.overview;
+  const hasPixelData = overview.hasPixelData;
+  const sessionsValue = overview.sessions7d !== null
+    ? String(overview.sessions7d)
     : t("dailyOps.metricNotConnected");
   const conversionValue =
-    hasPixelData && m.conversionRate7d !== null
-      ? `${m.conversionRate7d}%`
+    overview.conversionRate7d !== null
+      ? `${overview.conversionRate7d}%`
       : t("dailyOps.metricNotConnected");
   const growthLabel =
-    m.salesGrowthRate === null
+    overview.salesGrowthRate === null
       ? t("dailyOps.metricNoBaseline")
-      : `${m.salesGrowthRate >= 0 ? "+" : ""}${m.salesGrowthRate}%`;
+      : `${overview.salesGrowthRate >= 0 ? "+" : ""}${overview.salesGrowthRate}%`;
   const sortedTasks = useMemo(
     () =>
       [...result.tasks].sort((left, right) => {
@@ -1351,15 +1326,10 @@ function DailyOperationsBody({
     [result.tasks],
   );
   const riskCards = useMemo(
-    () => buildRiskEnvironmentCards(result, value, t),
-    [result, value, t],
+    () => buildRiskEnvironmentCards(result.environments, t),
+    [result.environments, t],
   );
-  const diagnosisInsights = useMemo(
-    () => result.items.filter((item) => item.status !== "healthy"),
-    [result.items],
-  );
-  const activeRiskCount = riskCards.filter((card) => card.status === "risk").length;
-  const watchRiskCount = riskCards.filter((card) => card.status === "watch").length;
+  const diagnosisInsights = result.insights;
   const todayTasks = useMemo(() => {
     if (todayTaskTab === "q1") return sortedTasks.filter((task) => task.quadrant === "q1");
     if (todayTaskTab === "q3") return sortedTasks.filter((task) => task.quadrant === "q3");
@@ -1476,84 +1446,151 @@ function DailyOperationsBody({
               <div
                 style={{
                   ...summaryGridStyle,
-                  ...(isMobile ? { gridTemplateColumns: "1fr" } : null),
+                  ...(isMobile ? { gridTemplateColumns: "1fr 1fr" } : null),
                 }}
               >
                 <div style={summaryCardStyle}>
                   <div style={metricMetaRowStyle}>
-                    <span style={subtleInlineStatStyle}>{t("dailyOps.keyMetricsTitle")}</span>
+                    <span style={subtleInlineStatStyle}>{t("dailyOps.metricSales7d")}</span>
                     <span style={taskSecondaryTextStyle}>{t("dailyOps.summaryCondensed")}</span>
                   </div>
-                  <ul style={summaryListStyle}>
-                    <li style={summaryListItemStyle}>{t("dailyOps.metricSales7d")}: {m.salesAmount7d} {m.currency}</li>
-                    <li style={summaryListItemStyle}>{t("dailyOps.metricGroupTraffic")}: {sessionsValue}</li>
-                    <li style={summaryListItemStyle}>{t("dailyOps.metricGroupConversion")}: {conversionValue}</li>
-                    <li style={summaryListItemStyle}>{t("dailyOps.metricGroupLongRoi")}: {value ? `${value.customers.averageDynamicLtv} ${m.currency}` : t("dailyOps.metricNotConnected")}</li>
-                  </ul>
-                  <div style={detailActionRowStyle}>
-                    <span style={taskSecondaryTextStyle}>
-                      {t("dailyOps.generatedAtLabel", {
-                        value: new Date(result.generatedAt).toLocaleString(locale),
-                      })}
-                    </span>
-                    <s-button type="button" variant="secondary" onClick={() => onOpenDetail("performance")}>
-                      {t("dailyOps.viewDetail")}
-                    </s-button>
-                  </div>
+                  <span style={overviewMiniValueStyle}>
+                    {overview.salesAmount7d} {overview.currency}
+                  </span>
+                  <span style={summaryListItemStyle}>
+                    {t("dailyOps.metricGrowth")}: {growthLabel}
+                  </span>
                 </div>
-
                 <div style={summaryCardStyle}>
                   <div style={metricMetaRowStyle}>
                     <span style={subtleInlineStatStyle}>{t("dailyOps.riskEnvironmentTitle")}</span>
-                    <span style={taskSecondaryTextStyle}>
-                      {t("dailyOps.riskSummaryCounts", { risk: activeRiskCount, watch: watchRiskCount })}
-                    </span>
+                    <span style={taskSecondaryTextStyle}>{t("dailyOps.statusRisk")}</span>
                   </div>
-                  <ul style={summaryListStyle}>
-                    <li style={summaryListItemStyle}>{t("dailyOps.metricOverdue")}: {m.overdueOrderCount}</li>
-                    <li style={summaryListItemStyle}>{t("dailyOps.metricCarrierIssues")}: {m.carrierIssueCount}</li>
-                    <li style={summaryListItemStyle}>{t("dailyOps.metricRefundRate")}: {m.refundRate30d}%</li>
-                    <li style={summaryListItemStyle}>{t("dailyOps.dataInsightsTitle")}: {diagnosisInsights.length}</li>
-                  </ul>
-                  <div style={detailActionRowStyle}>
-                    <span style={taskSecondaryTextStyle}>{t("dailyOps.riskDetailHint")}</span>
-                    <s-button type="button" variant="secondary" onClick={() => onOpenDetail("risk")}>
-                      {t("dailyOps.viewDetail")}
-                    </s-button>
-                  </div>
+                  <span style={overviewMiniValueStyle}>{overview.activeRiskCount}</span>
+                  <span style={summaryListItemStyle}>
+                    {t("dailyOps.riskSummaryCounts", {
+                      risk: overview.activeRiskCount,
+                      watch: overview.watchRiskCount,
+                    })}
+                  </span>
                 </div>
-
                 <div style={summaryCardStyle}>
                   <div style={metricMetaRowStyle}>
-                    <span style={subtleInlineStatStyle}>{t("dailyOps.valueTitle")}</span>
-                    <span style={taskSecondaryTextStyle}>
-                      {value ? t("dailyOps.sourceEstimated") : t("dailyOps.metricNotConnected")}
-                    </span>
+                    <span style={subtleInlineStatStyle}>{t("dailyOps.dataInsightsTitle")}</span>
+                    <span style={taskSecondaryTextStyle}>{t("dailyOps.detailTabInsights")}</span>
                   </div>
-                  <ul style={summaryListStyle}>
-                    <li style={summaryListItemStyle}>
-                      {t("dailyOps.customerTitle")}: {value ? `${value.customers.averageDynamicLtv} ${m.currency}` : t("dailyOps.metricNotConnected")}
-                    </li>
-                    <li style={summaryListItemStyle}>
-                      {t("dailyOps.channelTitle", { days: value?.channels.windowDays ?? 30 })}
-                    </li>
-                    <li style={summaryListItemStyle}>
-                      {t("dailyOps.costTitle")}: {t("dailyOps.summaryCostHint")}
-                    </li>
-                  </ul>
-                  <div style={detailActionRowStyle}>
-                    <span style={taskSecondaryTextStyle}>{t("dailyOps.valueSubtitle")}</span>
-                    <s-button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => onOpenDetail("value")}
-                      {...(!value ? { disabled: true } : {})}
-                    >
-                      {t("dailyOps.viewDetail")}
-                    </s-button>
+                  <span style={overviewMiniValueStyle}>{overview.insightCount}</span>
+                  <span style={summaryListItemStyle}>{t("dailyOps.dataInsightsSubtitle")}</span>
+                </div>
+                <div style={summaryCardStyle}>
+                  <div style={metricMetaRowStyle}>
+                    <span style={subtleInlineStatStyle}>{t("dailyOps.taskWorkbenchTitle")}</span>
+                    <span style={taskSecondaryTextStyle}>{t("dailyOps.taskTabInProgress")}</span>
                   </div>
+                  <span style={overviewMiniValueStyle}>{overview.inProgressTaskCount}</span>
+                  <span style={summaryListItemStyle}>
+                    {t("dailyOps.taskSummaryCounts", {
+                      open: overview.openTaskCount,
+                      done: overview.doneTaskCount,
+                    })}
+                  </span>
                 </div>
               </div>
+              <div style={detailActionRowStyle}>
+                <span style={taskSecondaryTextStyle}>
+                  {t("dailyOps.generatedAtLabel", {
+                    value: new Date(result.generatedAt).toLocaleString(locale),
+                  })}
+                </span>
+                <s-button type="button" variant="secondary" onClick={() => onOpenDetail("performance")}>
+                  {t("dailyOps.viewDetail")}
+                </s-button>
+              </div>
+            </PageSurface>
+
+            <PageSurface
+              title={t("dailyOps.riskEnvironmentTitle")}
+              subtitle={t("dailyOps.riskEnvironmentSubtitle")}
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+                  gap: "0.75rem",
+                }}
+              >
+                {riskCards.map((card) => (
+                  <div key={card.key} style={riskCardStyle(card.status)}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <h3 style={taskTitleStyle}>{card.title}</h3>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                        <SourceTag source={card.source} />
+                        <s-badge tone={diagnosisTone(card.status)}>{statusText(card.status)}</s-badge>
+                      </div>
+                    </div>
+                    <p style={taskMetaTextStyle}>{card.primaryMetric}</p>
+                    <p style={taskSecondaryTextStyle}>{card.secondaryMetric}</p>
+                    <p style={{ ...taskMetaTextStyle, marginTop: "0.1rem" }}>{card.summary}</p>
+                  </div>
+                ))}
+              </div>
+              <div style={detailActionRowStyle}>
+                <span style={taskSecondaryTextStyle}>{t("dailyOps.riskDetailHint")}</span>
+                <s-button type="button" variant="secondary" onClick={() => onOpenDetail("risk")}>
+                  {t("dailyOps.viewDetail")}
+                </s-button>
+              </div>
+            </PageSurface>
+
+            <PageSurface
+              title={t("dailyOps.dataInsightsTitle")}
+              subtitle={t("dailyOps.dataInsightsSubtitle")}
+            >
+              {diagnosisInsights.length === 0 ? (
+                <p style={taskSecondaryTextStyle}>{t("dailyOps.dataInsightsEmpty")}</p>
+              ) : (
+                <div style={insightListStyle}>
+                  {diagnosisInsights.map((item) => (
+                    <div key={item.key} style={insightCardStyle}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "0.5rem",
+                        }}
+                      >
+                        <h3 style={taskTitleStyle}>{item.title}</h3>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                          <s-badge tone={diagnosisTone(item.status)}>{statusText(item.status)}</s-badge>
+                          <s-badge>{insightConfidenceLabel(item.confidence, t)}</s-badge>
+                        </div>
+                      </div>
+                      <p style={taskMetaTextStyle}>{item.summary}</p>
+                      {item.evidence.map((line, index) => (
+                        <p key={`${item.key}-e-${index}`} style={taskSecondaryTextStyle}>
+                          {line}
+                        </p>
+                      ))}
+                      {item.reasoning.map((line, index) => (
+                        <p key={`${item.key}-r-${index}`} style={taskMetaTextStyle}>
+                          {line}
+                        </p>
+                      ))}
+                      <p style={taskSecondaryTextStyle}>
+                        {t("dailyOps.insightTaskCount", { count: item.taskCount })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </PageSurface>
 
             <PageSurface
@@ -1762,8 +1799,8 @@ function DailyOperationsDetail({
     m.salesGrowthRate === null
       ? t("dailyOps.metricNoBaseline")
       : `${m.salesGrowthRate >= 0 ? "+" : ""}${m.salesGrowthRate}%`;
-  const riskCards = buildRiskEnvironmentCards(result, value, t);
-  const diagnosisInsights = result.items.filter((item) => item.status !== "healthy");
+  const riskCards = buildRiskEnvironmentCards(result.environments, t);
+  const diagnosisInsights = result.insights;
   const [performanceTab, setPerformanceTab] = useState<"metrics" | "review">("metrics");
   const [riskTab, setRiskTab] = useState<"environment" | "insights" | "health">("environment");
   const [valueTab, setValueTab] = useState<"framework" | "customers" | "channels" | "cost">(
@@ -2049,9 +2086,13 @@ function DailyOperationsDetail({
                         gap: "0.5rem",
                       }}
                     >
-                      <h3 style={taskTitleStyle}>{item.name}</h3>
-                      <s-badge tone={diagnosisTone(item.status)}>{statusText(item.status)}</s-badge>
+                      <h3 style={taskTitleStyle}>{item.title}</h3>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                        <s-badge tone={diagnosisTone(item.status)}>{statusText(item.status)}</s-badge>
+                        <s-badge>{insightConfidenceLabel(item.confidence, t)}</s-badge>
+                      </div>
                     </div>
+                    <p style={taskMetaTextStyle}>{item.summary}</p>
                     {item.evidence.map((line, index) => (
                       <p key={`e-${item.key}-${index}`} style={taskSecondaryTextStyle}>
                         {line}
@@ -2062,6 +2103,9 @@ function DailyOperationsDetail({
                         {line}
                       </p>
                     ))}
+                    <p style={taskSecondaryTextStyle}>
+                      {t("dailyOps.insightTaskCount", { count: item.taskCount })}
+                    </p>
                   </div>
                 ))}
               </div>
