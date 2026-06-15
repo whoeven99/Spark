@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../../shopify.server";
-import { listShopifyObjects } from "./shopifyObjectList.server";
+import { countShopifyObjects, listShopifyObjects } from "./shopifyObjectList.server";
 import type {
   ShopifyObjectKind,
   ShopifyObjectListApiResponse,
@@ -9,6 +9,7 @@ import type {
 } from "../../lib/shopifyObjectTypes";
 
 const MAX_KEYWORD_LEN = 120;
+const MAX_TAG_LEN = 80;
 
 function json(body: ShopifyObjectListApiResponse, status: number): Response {
   return Response.json(body, { status });
@@ -44,6 +45,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const sort = parseSort(url.searchParams.get("sort"));
   const after = url.searchParams.get("after")?.trim() || null;
   const shopParam = url.searchParams.get("shop")?.trim();
+  const tag = url.searchParams.get("tag")?.trim().slice(0, MAX_TAG_LEN) || undefined;
+  const maxInvRaw = url.searchParams.get("maxInv")?.trim();
+  const maxInventory =
+    maxInvRaw && /^\d+$/.test(maxInvRaw) ? Number(maxInvRaw) : undefined;
+  const withCount = url.searchParams.get("withCount") === "1";
 
   if (!kind) {
     return json(
@@ -84,20 +90,33 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       );
     }
 
-    const result = await listShopifyObjects(admin, kind, {
-      keyword: rawQ,
-      statusFilter,
-      sort,
-      after,
-      first: 20,
-    });
+    const [result, count] = await Promise.all([
+      listShopifyObjects(admin, kind, {
+        keyword: rawQ,
+        statusFilter,
+        sort,
+        after,
+        first: 20,
+        tag,
+        maxInventory,
+      }),
+      withCount
+        ? countShopifyObjects(admin, {
+            kind,
+            keyword: rawQ || undefined,
+            status: statusFilter,
+            tag,
+            maxInventory,
+          })
+        : Promise.resolve(undefined),
+    ]);
 
     return json(
       {
         success: true,
         errorCode: 0,
         errorMsg: "",
-        response: result,
+        response: { ...result, ...(withCount ? { count: count ?? null } : {}) },
       },
       200,
     );

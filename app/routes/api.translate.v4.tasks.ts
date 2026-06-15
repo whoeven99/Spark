@@ -68,7 +68,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     source,
     target,
     modules,
-    aiModel: body.aiModel?.trim() || process.env.TRANSLATION_AI_MODEL?.trim() || "gpt-4o-mini",
+    aiModel: body.aiModel?.trim() || process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat",
     limitPerType,
     isCover: body.isCover ?? false,
     isHandle: body.isHandle ?? false,

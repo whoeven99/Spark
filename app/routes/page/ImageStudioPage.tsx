@@ -4,6 +4,7 @@ import { useLoaderData, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useImageGeneration } from "../../hooks/useImageGeneration";
+import { buildOptimisticAiTask } from "../../lib/buildOptimisticAiTask";
 import type { AITaskItem, AITaskType } from "../../lib/aiTaskTypes";
 import type { ImageStudioPageLoaderData } from "../../server/visualTools/imageStudioPageLoader.server";
 import { formatEstimatedDuration } from "../../lib/formatDuration";
@@ -76,30 +77,6 @@ function syncInternalSearch(next: { navTab: StudioNavTab; fallbackTool?: VisualT
   window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
-function buildOptimisticTask(params: {
-  taskId: string;
-  batchId: string;
-  taskType: AITaskType;
-  optimisticConfig?: Record<string, unknown>;
-}): AITaskItem {
-  const now = new Date().toISOString();
-  return {
-    id: params.taskId,
-    batchId: params.batchId,
-    shop: "",
-    taskType: params.taskType,
-    status: "running",
-    config: params.optimisticConfig ?? {},
-    result: null,
-    estimatedCredits: null,
-    actualCredits: null,
-    startedAt: now,
-    completedAt: null,
-    errorMsg: null,
-    createdAt: now,
-    updatedAt: now,
-  };
-}
 
 type InnerProps = {
   tasks: AITaskItem[];
@@ -536,7 +513,7 @@ export function ImageStudioPage() {
       taskType: AITaskType = "image_generation",
       optimisticConfig?: Record<string, unknown>,
     ) => {
-      const optimisticTask = buildOptimisticTask({
+      const optimisticTask = buildOptimisticAiTask({
         taskId,
         batchId,
         taskType,

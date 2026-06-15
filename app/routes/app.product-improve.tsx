@@ -5,6 +5,7 @@ import type {
   ShouldRevalidateFunctionArgs,
 } from "react-router";
 import { data, redirect } from "react-router";
+import { lazy, Suspense } from "react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { parseGenerateDescriptionBody } from "../server/productImprove/generateDescriptionHttp.server";
@@ -26,10 +27,16 @@ import {
 import { createBatchWithTask } from "../server/aiTask/aiTaskStore.server";
 import { listTasksPageForShop } from "../server/aiTask/aiTaskStore.server";
 import { getEstimatedSeconds, getEstimatedCredits } from "../server/aiTask/aiTaskEstimation.server";
-import { ProductImprovePage } from "./page/ProductImprovePage";
 import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
 import { initI18n } from "../i18n";
 import { useFeatureView } from "../lib/featureTrack";
+import { RoutePageFallback } from "./component/RoutePageFallback";
+
+const ProductImprovePage = lazy(() =>
+  import("./page/ProductImprovePage").then((m) => ({
+    default: m.ProductImprovePage,
+  })),
+);
 
 function translateActionErrorMessage(
   rawMessage: string,
@@ -226,7 +233,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 export default function AppProductImprove() {
   useFeatureView("product-improve");
-  return <ProductImprovePage />;
+  return (
+    <Suspense fallback={<RoutePageFallback />}>
+      <ProductImprovePage />
+    </Suspense>
+  );
 }
 
 function serializeSearchWithoutTab(url: URL): string {

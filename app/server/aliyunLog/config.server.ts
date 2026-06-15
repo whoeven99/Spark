@@ -23,15 +23,7 @@ function readEnv(name: string): string {
   return process.env[name]?.trim() ?? "";
 }
 
-export function isAliyunLogEnabled(): boolean {
-  const v = readEnv("ALIYUN_LOG_ENABLED").toLowerCase();
-  // 默认启用；显式 false / 0 / off 关闭。
-  if (!v) return true;
-  return !(v === "false" || v === "0" || v === "off" || v === "no");
-}
-
 export function isAliyunLogConfigured(): boolean {
-  if (!isAliyunLogEnabled()) return false;
   return Boolean(
     readEnv("ALIBABA_CLOUD_ACCESS_KEY_ID") &&
       readEnv("ALIBABA_CLOUD_ACCESS_KEY_SECRET") &&

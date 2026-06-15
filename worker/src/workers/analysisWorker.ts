@@ -368,39 +368,20 @@ Create a concise shop profile in JSON:
 Return ONLY the JSON object, no markdown.`;
 
 async function callAnalysisLLM(systemPrompt: string, userContent: string): Promise<string> {
-  const deepseek = (process.env.DEEPSEEK_API_KEYS?.split(",")[0] ?? process.env.DEEPSEEK_API_KEY)?.trim();
-  const openai = (process.env.OPENAI_API_KEYS?.split(",")[0] ?? process.env.OPENAI_API_KEY)?.trim();
-
-  let url: string, key: string, model: string;
-  const isAzure = Boolean(process.env.AZURE_OPENAI_ENDPOINT?.trim() && !deepseek && !openai);
-
-  if (deepseek) {
-    url = "https://api.deepseek.com/v1/chat/completions";
-    key = deepseek;
-    model = process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
-  } else if (openai) {
-    url = "https://api.openai.com/v1/chat/completions";
-    key = openai;
-    model = "gpt-4o-mini";
-  } else if (isAzure) {
-    const endpoint = process.env.AZURE_OPENAI_ENDPOINT!.trim();
-    const deploy = process.env.AZURE_OPENAI_DEPLOYMENT?.trim() || "gpt-4o-mini";
-    const ver = process.env.AZURE_OPENAI_API_VERSION?.trim() || "2024-02-01";
-    url = `${endpoint}/openai/deployments/${deploy}/chat/completions?api-version=${ver}`;
-    key = process.env.AZURE_OPENAI_API_KEY!.trim();
-    model = deploy;
-  } else {
-    throw new Error("No LLM API key configured for analysis");
+  const key = (process.env.DEEPSEEK_API_KEYS?.split(",")[0] ?? process.env.DEEPSEEK_API_KEY)?.trim();
+  if (!key) {
+    throw new Error("DEEPSEEK_API_KEY required for analysis");
   }
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(isAzure ? { "api-key": key } : { Authorization: `Bearer ${key}` }),
-  };
+  const url = "https://api.deepseek.com/v1/chat/completions";
+  const model = process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
 
   const res = await fetch(url, {
     method: "POST",
-    headers,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${key}`,
+    },
     body: JSON.stringify({
       model,
       messages: [

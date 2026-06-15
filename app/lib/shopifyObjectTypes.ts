@@ -31,6 +31,8 @@ export type ShopifyObjectListSuccessBody = {
   response: {
     items: ShopifyObjectItem[];
     pageInfo: ShopifyObjectPageInfo;
+    /** withCount=1 时返回的条件匹配总数（计数失败时为 null） */
+    count?: number | null;
   };
 };
 

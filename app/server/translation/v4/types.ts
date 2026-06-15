@@ -64,6 +64,14 @@ export type TranslationV4Metrics = {
   currentModule?: string | null;
 };
 
+/** Pipeline stages, in execution order. Mirrors the worker's StageName. */
+export type StageName = "INIT" | "TRANSLATE" | "WRITEBACK" | "VERIFY";
+
+/** Wall-clock span a worker spent in one stage. endedAt is null while running. */
+export type StageTiming = { startedAt: string; endedAt: string | null };
+
+export type StageTimings = Partial<Record<StageName, StageTiming>>;
+
 export const EMPTY_V4_METRICS: TranslationV4Metrics = {
   initTotal: 0,
   initDone: 0,
@@ -105,6 +113,8 @@ export type TranslationV4Job = {
   lastHeartbeat: string | null;
   blobPrefix: string;
   metrics: TranslationV4Metrics;
+  /** Per-stage wall-clock spans, written by each worker. Absent on older jobs. */
+  stageTimings?: StageTimings | null;
   errorMessage: string | null;
   errorStage: string | null;
   /** 完成后，预估自校准样本已回写的时间戳（幂等抢占标记，null=未回写）。 */

@@ -1,5 +1,5 @@
 import { hostname } from "os";
-import { claimJob, updateJob, heartbeat, findPendingJobs, getJob } from "../services/cosmosV4.js";
+import { claimJob, updateJob, heartbeat, findPendingJobs, getJob, withStageTiming } from "../services/cosmosV4.js";
 import { popHint, pushHint, setProgress } from "../services/redisV4.js";
 import { blobRead, blobWrite, blobListPaths } from "../services/blobV4.js";
 import {
@@ -49,7 +49,7 @@ async function claimNextJob(): Promise<TranslationV4Job | null> {
 
 async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   const { shopName, id: jobId, source, target, aiModel, testMode } = job;
-  // Engine override (TRANSLATION_AI_MODEL) is applied inside translateBatch.
+  // Engine routing (Google vs DeepSeek) is applied inside translateBatch.
   const blobPrefix = job.blobPrefix || `tasks/v4/${shopName}/${jobId}`;
 
   let translateDone = 0;
@@ -67,6 +67,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   const translateUnitTotal = job.metrics.translateUnitTotal || 0;
   // Record when this translate stage actually started (epoch ms string).
   const translateStartedAt = Date.now().toString();
+  const stageStartedAt = new Date().toISOString(); // ISO span start for stageTimings
   const qps = new QpsLogger(jobId, shopName, "TRANSLATE");
 
   if (testMode) {
@@ -77,15 +78,33 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   await setProgress(jobId, { translateStartedAt });
 
   try {
+    // Flatten every chunk of every module into one work list. Previously modules
+    // ran strictly one-after-another (only chunks *within* a module overlapped),
+    // so many small single-chunk modules each ate a full ~40s LLM round-trip in
+    // series. With all chunks in one pool the LLM pool's AdaptiveSemaphore — not
+    // the module boundary — is the only thing gating throughput.
+    type ChunkWork = { module: string; chunkPath: string; chunkIdx: number; chunkTotal: number };
+    const work: ChunkWork[] = [];
     for (const module of job.modules) {
       await heartbeat(shopName, jobId);
-
       const initPaths = await blobListPaths(`${blobPrefix}/init/${module}/`);
       const chunkPaths = initPaths.filter((p) => p.endsWith(".json"));
-      const chunkTotal = chunkPaths.length;
+      chunkPaths.forEach((chunkPath, ci) =>
+        work.push({ module, chunkPath, chunkIdx: ci + 1, chunkTotal: chunkPaths.length }),
+      );
+    }
 
-      await Promise.all(chunkPaths.map(async (chunkPath, ci) => {
-        const chunkIdx = ci + 1; // 1-based for readability
+    // Cap chunks processed simultaneously to bound blob reads + in-memory pools;
+    // actual LLM call concurrency is governed separately by the pool semaphore
+    // (~0.9× the account in-flight limit), so this only needs to be high enough
+    // that the slow "long-pole" chunks (those holding a 30KB+ metafield / long
+    // body_html) are all in flight at once instead of queuing behind a low cap.
+    // 64 keeps near-every chunk active for typical stores while the pool still
+    // protects the API from overload.
+    const CHUNK_CONCURRENCY = Math.max(1, Number(process.env.TRANSLATE_CHUNK_CONCURRENCY) || 64);
+
+    await pAll(work, CHUNK_CONCURRENCY, async ({ module, chunkPath, chunkIdx, chunkTotal }) => {
+      {
         const chunkStart = performance.now();
 
         await heartbeat(shopName, jobId);
@@ -207,8 +226,8 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
           usedTokens: liveTokens,
           currentModule: module,
         });
-      }));
-    }
+      }
+    });
 
     // Persist the list of fields that fell back to original for UI visibility.
     if (fallbacks.length > 0) {
@@ -231,6 +250,12 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
       aiModelUsed: engine.model,
       aiProvider: engine.provider,
       engineUsage,
+      stageTimings: withStageTiming(
+        latestJob?.stageTimings ?? job.stageTimings,
+        "TRANSLATE",
+        stageStartedAt,
+        new Date().toISOString(),
+      ),
       metrics: {
         ...(latestJob?.metrics ?? job.metrics),
         translateDone,
@@ -254,6 +279,12 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
       errorMessage,
       errorStage: "TRANSLATE",
       claimedBy: null,
+      stageTimings: withStageTiming(
+        job.stageTimings,
+        "TRANSLATE",
+        stageStartedAt,
+        new Date().toISOString(),
+      ),
     });
     console.error(`[translate] failed job=${jobId}`, e);
   } finally {

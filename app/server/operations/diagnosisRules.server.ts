@@ -12,7 +12,8 @@ import {
  * 诊断 → 任务转换规则（docs/DAILY_OPERATIONS_WORKFLOWS.md §9 首批规则）。
  *
  * 规则以声明式数组组织，后续可平移到数据库规则表。
- * 阶段一覆盖：超时履约、物流异常、退款异常、库存止损、常规发货、销售趋势。
+ * 阶段一覆盖：超时履约、物流异常、退款异常、库存止损、常规发货、销售趋势、
+ * 流量/转化异常止损（工作流 5，依赖 Web Pixel 漏斗数据）。
  */
 
 export type TaskQuadrant = "q1" | "q2" | "q3" | "q4";
@@ -182,6 +183,59 @@ const RULES: RuleDefinition[] = [
           "先区分流量下滑还是转化下滑，再定位渠道 / 商品 / 支付环节",
         ],
         ownerRole: "运营",
+        dueWindow: isRisk ? "today" : "this_week",
+      };
+    },
+  },
+  {
+    key: "traffic_conversion_drop",
+    evaluate: (d) => {
+      const traffic = findItem(d, "traffic_anomaly");
+      const conversion = findItem(d, "conversion_health");
+      const trafficBad = traffic && traffic.status !== "healthy";
+      const conversionBad = conversion && conversion.status !== "healthy";
+      if (!trafficBad && !conversionBad) return null;
+      const isRisk =
+        traffic?.status === "risk" || conversion?.status === "risk";
+      const m = d.summaryMetrics;
+      const reasonParts = [
+        trafficBad && m.trafficChangeRate !== null
+          ? `近 7 天会话数环比 ${m.trafficChangeRate}%`
+          : null,
+        conversionBad && m.conversionRate7d !== null
+          ? `会话转化率 ${m.conversionRate7d}%（上期 ${m.conversionRatePrev7d ?? "—"}%）`
+          : null,
+      ].filter(Boolean);
+      // 推理结论合并去重（来自流量/转化两项的归因建议）。
+      const actions = Array.from(
+        new Set([
+          ...(traffic?.reasoning ?? []),
+          ...(conversion?.reasoning ?? []),
+          "先区分流量端还是站内转化问题，再定位渠道 / 商品页 / 支付链路",
+        ]),
+      );
+      return {
+        sourceKey: "traffic_conversion_drop",
+        dedupeKey: "traffic_conversion_drop",
+        title: trafficBad && conversionBad
+          ? "排查流量与转化同步下滑"
+          : trafficBad
+            ? "排查流量异常下滑"
+            : "排查转化率下滑",
+        quadrant: isRisk ? "q1" : "q3",
+        priority: isRisk ? "P1" : "P2",
+        triggerReason: reasonParts.join("；") || "流量或转化漏斗出现下滑",
+        relatedObjects: {
+          sessions7d: m.sessions7d,
+          sessionsPrev7d: m.sessionsPrev7d,
+          trafficChangeRate: m.trafficChangeRate,
+          conversionRate7d: m.conversionRate7d,
+          conversionRatePrev7d: m.conversionRatePrev7d,
+          trafficMetrics: traffic?.metrics ?? null,
+          conversionMetrics: conversion?.metrics ?? null,
+        },
+        suggestedActions: actions,
+        ownerRole: "运营/投放",
         dueWindow: isRisk ? "today" : "this_week",
       };
     },

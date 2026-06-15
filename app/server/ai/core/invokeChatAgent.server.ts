@@ -31,6 +31,11 @@ import {
   sanitizeHumanInput,
 } from "../../agentRunLog/index.server";
 import { buildReflectionFromRun } from "../../agentRunLog/recentReflection.server";
+import {
+  hasAnyChatCardInUiPayloads,
+  reconcileReplyWithChatCards,
+  resolveMissingChatCardsWithLlm,
+} from "./resolveChatCardIntent.server";
 import "../skills/index";
 
 export type InvokeChatAgentResult = {
@@ -39,13 +44,13 @@ export type InvokeChatAgentResult = {
   uiPayloads?: Record<string, any>;
 };
 
-function collectUIPayloads(
+async function collectUIPayloads(
   activeDefs: Awaited<ReturnType<typeof globalToolRegistry.getActiveToolDefinitions>>,
   messages: BaseMessage[],
   lastUserText: string,
   reply: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Record<string, any> {
+): Promise<{ payloads: Record<string, any>; reply: string }> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const payloads: Record<string, any> = {};
   for (const def of activeDefs) {
@@ -56,7 +61,27 @@ function collectUIPayloads(
       }
     }
   }
-  return payloads;
+
+  let adjustedReply = reply;
+  if (!hasAnyChatCardInUiPayloads(payloads)) {
+    try {
+      const llmResolution = await resolveMissingChatCardsWithLlm({
+        messages,
+        lastUserText,
+        assistantReply: reply,
+        existingUiPayloads: payloads,
+      });
+      Object.assign(payloads, llmResolution.uiPayloads);
+      if (llmResolution.adjustedReply) {
+        adjustedReply = llmResolution.adjustedReply;
+      }
+    } catch (err) {
+      console.error("[invokeChatAgent] LLM chat card resolution failed:", err);
+      adjustedReply = reconcileReplyWithChatCards(reply, payloads);
+    }
+  }
+
+  return { payloads, reply: adjustedReply };
 }
 
 function lastHumanUtterance(messages: BaseMessage[]): string {
@@ -220,9 +245,10 @@ export async function invokeChatAgent(
       const text = extractMessageText(msg).trim();
       if (text) {
         await writeRunLog("success");
+        const collected = await collectUIPayloads(activeDefs, messages, lastUserText, text);
         return {
-          reply: polishFinalReply(text),
-          uiPayloads: collectUIPayloads(activeDefs, messages, lastUserText, text),
+          reply: polishFinalReply(collected.reply),
+          uiPayloads: collected.payloads,
           ...(langsmithTraceUrl ? { langsmithTraceUrl } : {}),
         };
       }
@@ -236,9 +262,15 @@ export async function invokeChatAgent(
     );
     if (fallbackText) {
       await writeRunLog("success");
+      const collected = await collectUIPayloads(
+        activeDefs,
+        messages,
+        lastUserText,
+        fallbackText,
+      );
       return {
-        reply: polishFinalReply(fallbackText),
-        uiPayloads: collectUIPayloads(activeDefs, messages, lastUserText, fallbackText),
+        reply: polishFinalReply(collected.reply),
+        uiPayloads: collected.payloads,
         ...(langsmithTraceUrl ? { langsmithTraceUrl } : {}),
       };
     }
@@ -250,9 +282,15 @@ export async function invokeChatAgent(
     "我暂时没拿到工具结果，但可以继续帮你分析。你可以换个问法，或告诉我你想要的数据范围（例如最近 7 天销售额/订单数/转化率）。";
 
   await writeRunLog("success");
+  const collected = await collectUIPayloads(
+    activeDefs,
+    messages,
+    lastUserText,
+    defaultReply,
+  );
   return {
-    reply: defaultReply,
-    uiPayloads: collectUIPayloads(activeDefs, messages, lastUserText, defaultReply),
+    reply: collected.reply,
+    uiPayloads: collected.payloads,
     ...(langsmithTraceUrl ? { langsmithTraceUrl } : {}),
   };
 }

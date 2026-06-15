@@ -599,6 +599,14 @@ function DailyOperationsBody({
 }) {
   const { t } = useTranslation();
   const m = result.metrics;
+  const hasPixelData = m.hasPixelData;
+  const sessionsValue = hasPixelData
+    ? String(m.sessions7d)
+    : t("dailyOps.metricNotConnected");
+  const conversionValue =
+    hasPixelData && m.conversionRate7d !== null
+      ? `${m.conversionRate7d}%`
+      : t("dailyOps.metricNotConnected");
   const growthLabel =
     m.salesGrowthRate === null
       ? t("dailyOps.metricNoBaseline")
@@ -659,11 +667,24 @@ function DailyOperationsBody({
               label: t("dailyOps.metricRiskSkus"),
               value: String(m.riskSkuCount),
             },
+            {
+              label: t("dailyOps.metricSessions7d"),
+              value: sessionsValue,
+            },
+            {
+              label: t("dailyOps.metricConversion7d"),
+              value: conversionValue,
+            },
           ]}
           footer={t("dailyOps.generatedAtLabel", {
             value: new Date(result.generatedAt).toLocaleString(locale),
           })}
         />
+        {!hasPixelData ? (
+          <p style={{ ...taskSecondaryTextStyle, marginTop: "0.55rem" }}>
+            {t("dailyOps.pixelNotConnectedHint")}
+          </p>
+        ) : null}
       </section>
 
       <PageSurface title={t("dailyOps.healthTitle")}>

@@ -21,6 +21,24 @@ Spark is an embedded Shopify app with 3 deployable services:
 | Dev (main) | `npm run dev` | Requires Shopify CLI auth (`shopify app dev`) |
 | Dev (admin) | `cd admin && npm run dev` | No external deps needed to start |
 
+### Feishu 文档读取约定（强制）
+
+当用户在对话中贴出飞书文档链接（如 `https://*.feishu.cn/wiki/...` 或 `https://*.feishu.cn/docx/...`），默认先用仓库脚本读取文档正文，再进行分析，不要仅基于截图或链接标题推断内容。
+
+- 环境变量（放在根目录 `.env`）：
+  - `FEISHU_APP_ID`
+  - `FEISHU_APP_SECRET`
+- 统一命令：
+  - `node scripts/fetch-feishu-doc.mjs "<飞书链接>"`
+- 需要落盘时：
+  - `node scripts/fetch-feishu-doc.mjs "<飞书链接>" --out ./docs/tmp/<name>.md`
+- 成功判定：
+  - 命令退出码为 `0`，且输出包含文档标题/正文内容。
+- 失败排查顺序：
+  1. 检查 `FEISHU_APP_ID/FEISHU_APP_SECRET` 是否存在且无多余空格。
+  2. 确认飞书应用已发布并安装到对应企业。
+  3. 确认应用具备 Wiki/Docx 读取权限，且目标文档已授权给该应用。
+
 ### Database Setup (Prisma)
 
 - Prisma client generates to `app/generated/prisma/` (custom output path).

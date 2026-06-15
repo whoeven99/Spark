@@ -1,6 +1,6 @@
-import type { BatchTasksFormPayload } from "./batchTasksFormPayload";
-import type { ImageGenerationFormPayload } from "./imageGenerationFormPayload";
-import type { PictureTranslateFormPayload } from "./pictureTranslateFormPayload";
+import type { AITaskItem } from "./aiTaskTypes";
+import type { TaskProposalPayload } from "./taskProposalPayload";
+import type { TaskRunPayload } from "./taskRunPayload";
 import type { TranslationTaskFormPayload } from "./translationTaskFormPayload";
 
 export type ChatMessageImageAttachment = {
@@ -56,17 +56,14 @@ export type ChatMessage =
       content: string;
       attachments?: ChatMessageAttachment[];
       translationTaskForm?: TranslationTaskFormPayload;
-      /** 为 true 时在气泡内渲染「商品描述生成」交互卡片（走 /api/product-improve）。 */
+      /** 为 true 时在气泡内渲染「商品描述生成结果」卡片（即时生成结果展示/应用）。 */
       productImproveCard?: boolean;
-      /** 为 true 时在气泡内渲染「图片翻译」交互卡片（走 /api/picture-translate-chat）。 */
-      pictureTranslateCard?: boolean;
-      pictureTranslateFormPayload?: PictureTranslateFormPayload;
-      /** 为 true 时在气泡内渲染「文生图」交互卡片（走 /api/generate-image）。 */
-      imageGenerationCard?: boolean;
-      imageGenerationFormPayload?: ImageGenerationFormPayload;
-      /** 为 true 时在气泡内渲染「批量任务确认」卡片（走 /api/batch-ai-tasks）。 */
-      batchTasksCard?: boolean;
-      batchTasksFormPayload?: BatchTasksFormPayload;
+      /** 通用任务确认卡片（TaskProposal 协议，走 /api/task-proposal）。 */
+      taskProposal?: TaskProposalPayload;
+      /** 「任务已开始」回执卡片（TaskProposal 执行成功后追加的新对话轮）。 */
+      taskRun?: TaskRunPayload;
       productImproveCardPayload?: ProductImproveCardPayload;
+      /** 提交后在气泡内展示运行态任务卡片（文生图 / 图片翻译等）。 */
+      aiTask?: AITaskItem;
       thinkingContent?: string;
     };

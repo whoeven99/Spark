@@ -14,8 +14,7 @@
     "@azure/cosmos": "^4.9.3",
     "@azure/storage-blob": "^12.31.0",
     "@libsql/client": "^0.17.3",
-    "ioredis": "^5.10.1",
-    "openai": "^4.100.0"
+    "ioredis": "^5.10.1"
   },
   "devDependencies": {
     "@types/node": "^22.18.8",
