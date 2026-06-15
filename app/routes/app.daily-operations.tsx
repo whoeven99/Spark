@@ -1,7 +1,13 @@
 import { useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { useFetcher, useLoaderData, useNavigate, useRevalidator } from "react-router";
+import {
+  useFetcher,
+  useLoaderData,
+  useNavigate,
+  useRevalidator,
+  useSearchParams,
+} from "react-router";
 import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { authenticate } from "../shopify.server";
@@ -399,6 +405,7 @@ function diagnosisTone(status: string): "success" | "warning" | "critical" {
 type InsightsView = "today" | "all";
 type TodayTaskTab = "all" | "q1" | "q3" | "in_progress" | "done";
 type InsightEffect = "revenue" | "conversion" | "efficiency" | "retention";
+type DetailSection = "performance" | "risk" | "value";
 
 type RiskEnvironmentCard = {
   key: string;
@@ -679,6 +686,73 @@ const costFormWrapStyle: CSSProperties = {
   border: `1px solid ${pageColorTokens.borderSubtle}`,
 };
 
+const summaryGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gap: "0.9rem",
+};
+
+const summaryCardStyle: CSSProperties = {
+  border: `1px solid ${pageColorTokens.border}`,
+  borderRadius: pageColorTokens.radiusCard,
+  background: pageColorTokens.surface,
+  padding: "1rem",
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.7rem",
+  boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)",
+};
+
+const summaryListStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.35rem",
+  margin: 0,
+};
+
+const summaryListItemStyle: CSSProperties = {
+  fontSize: "0.8125rem",
+  color: pageColorTokens.textBody,
+  lineHeight: 1.5,
+};
+
+const detailActionRowStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "0.75rem",
+  flexWrap: "wrap",
+  marginTop: "0.15rem",
+};
+
+const detailHeroGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gap: "0.9rem",
+};
+
+const detailHeroCardStyle: CSSProperties = {
+  ...summaryCardStyle,
+  padding: "0.9rem 1rem",
+  gap: "0.45rem",
+};
+
+const detailTabsWrapStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "0.5rem",
+  padding: "0.7rem 0.8rem",
+  borderRadius: pageColorTokens.radiusControl,
+  border: `1px solid ${pageColorTokens.border}`,
+  background: pageColorTokens.surfaceMuted,
+};
+
+const detailSectionStackStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "1rem",
+};
+
 function formatDeltaPrefix(value: number | null) {
   if (value === null) return "—";
   return `${value >= 0 ? "+" : ""}${value}`;
@@ -931,8 +1005,10 @@ export default function DailyOperationsPage() {
   const fetcher = useFetcher();
   const revalidator = useRevalidator();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const busy = fetcher.state !== "idle" || revalidator.state !== "idle";
   const [insightsView, setInsightsView] = useState<InsightsView>("today");
+  const detailSection = (searchParams.get("detail") as DetailSection | null) ?? null;
 
   const statusText = (status: string) => {
     switch (status) {
@@ -983,6 +1059,18 @@ export default function DailyOperationsPage() {
 
   const submitRefresh = () => {
     fetcher.submit({ intent: "refresh" }, { method: "post" });
+  };
+
+  const openDetail = (section: DetailSection) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("detail", section);
+    setSearchParams(next);
+  };
+
+  const closeDetail = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("detail");
+    setSearchParams(next);
   };
 
   const renderTaskCard = (task: OperationTaskView) => {
@@ -1124,23 +1212,45 @@ export default function DailyOperationsPage() {
   };
 
   return (
-    <s-page heading={t("dailyOps.pageTitle")}>
+    <s-page
+      heading={
+        detailSection
+          ? t(`dailyOps.detailTitle.${detailSection}` as const)
+          : t("dailyOps.pageTitle")
+      }
+    >
       <div
         style={{ ...pageContentStyle, ...(isMobile ? mobilePageContentStyle : null) }}
       >
         <PageHeaderNav
-          title={t("dailyOps.pageTitle")}
-          backLabel={t("common.backToPrevious", { defaultValue: "返回工作台" })}
-          workspaceOnly
+          title={
+            detailSection
+              ? t(`dailyOps.detailTitle.${detailSection}` as const)
+              : t("dailyOps.pageTitle")
+          }
+          subtitle={detailSection ? t(`dailyOps.detailSubtitle.${detailSection}` as const) : undefined}
+          backLabel={
+            detailSection
+              ? t("dailyOps.backToOverview")
+              : t("common.backToPrevious", { defaultValue: "返回工作台" })
+          }
+          {...(detailSection ? { fallbackPath: "/app/daily-operations" } : { workspaceOnly: true })}
           rightAction={
-            <s-button
-              type="button"
-              variant="secondary"
-              onClick={submitRefresh}
-              {...(busy ? { disabled: true } : {})}
-            >
-              {busy ? t("dailyOps.refreshing") : t("dailyOps.refresh")}
-            </s-button>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              {detailSection ? (
+                <s-button type="button" variant="tertiary" onClick={closeDetail}>
+                  {t("dailyOps.backToOverview")}
+                </s-button>
+              ) : null}
+              <s-button
+                type="button"
+                variant="secondary"
+                onClick={submitRefresh}
+                {...(busy ? { disabled: true } : {})}
+              >
+                {busy ? t("dailyOps.refreshing") : t("dailyOps.refresh")}
+              </s-button>
+            </div>
           }
         />
 
@@ -1154,21 +1264,31 @@ export default function DailyOperationsPage() {
           </div>
         ) : (
           <>
-            <DailyOperationsBody
-              result={data.result}
-              value={data.value}
-              insightsView={insightsView}
-              onChangeInsightsView={setInsightsView}
-              isMobile={isMobile}
-              locale={i18n.language}
-              quadrantTitle={quadrantTitle}
-              quadrantDesc={quadrantDesc}
-              statusText={statusText}
-              renderTaskCard={renderTaskCard}
-            />
-            {data.value ? (
-              <ValueLayerSections value={data.value} isMobile={isMobile} />
-            ) : null}
+            {detailSection ? (
+              <DailyOperationsDetail
+                key={detailSection}
+                detailSection={detailSection}
+                result={data.result}
+                value={data.value}
+                isMobile={isMobile}
+                locale={i18n.language}
+                statusText={statusText}
+              />
+            ) : (
+              <DailyOperationsBody
+                result={data.result}
+                value={data.value}
+                insightsView={insightsView}
+                onChangeInsightsView={setInsightsView}
+                isMobile={isMobile}
+                locale={i18n.language}
+                quadrantTitle={quadrantTitle}
+                quadrantDesc={quadrantDesc}
+                statusText={statusText}
+                renderTaskCard={renderTaskCard}
+                onOpenDetail={openDetail}
+              />
+            )}
           </>
         )}
       </div>
@@ -1187,6 +1307,7 @@ function DailyOperationsBody({
   quadrantDesc,
   statusText,
   renderTaskCard,
+  onOpenDetail,
 }: {
   result: DailyOperationsResult;
   value: ValueLayerData | null;
@@ -1198,6 +1319,7 @@ function DailyOperationsBody({
   quadrantDesc: (q: TaskQuadrant) => string;
   statusText: (status: string) => string;
   renderTaskCard: (task: OperationTaskView) => ReactNode;
+  onOpenDetail: (section: DetailSection) => void;
 }) {
   const { t } = useTranslation();
   const [todayTaskTab, setTodayTaskTab] = useState<TodayTaskTab>("all");
@@ -1236,6 +1358,8 @@ function DailyOperationsBody({
     () => result.items.filter((item) => item.status !== "healthy"),
     [result.items],
   );
+  const activeRiskCount = riskCards.filter((card) => card.status === "risk").length;
+  const watchRiskCount = riskCards.filter((card) => card.status === "watch").length;
   const todayTasks = useMemo(() => {
     if (todayTaskTab === "q1") return sortedTasks.filter((task) => task.quadrant === "q1");
     if (todayTaskTab === "q3") return sortedTasks.filter((task) => task.quadrant === "q3");
@@ -1346,170 +1470,90 @@ function DailyOperationsBody({
         {insightsView === "today" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             <PageSurface
-              title={t("dailyOps.keyMetricsTitle")}
-              subtitle={t("dailyOps.keyMetricsSubtitle", { shop: result.shop })}
+              title={t("dailyOps.summaryTitle")}
+              subtitle={t("dailyOps.summarySubtitle")}
             >
               <div
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
-                  gap: "0.9rem",
+                  ...summaryGridStyle,
+                  ...(isMobile ? { gridTemplateColumns: "1fr" } : null),
                 }}
               >
-                <div style={insightCardStyle}>
+                <div style={summaryCardStyle}>
                   <div style={metricMetaRowStyle}>
-                    <span style={subtleInlineStatStyle}>{t("dailyOps.metricGroupTraffic")}</span>
+                    <span style={subtleInlineStatStyle}>{t("dailyOps.keyMetricsTitle")}</span>
+                    <span style={taskSecondaryTextStyle}>{t("dailyOps.summaryCondensed")}</span>
+                  </div>
+                  <ul style={summaryListStyle}>
+                    <li style={summaryListItemStyle}>{t("dailyOps.metricSales7d")}: {m.salesAmount7d} {m.currency}</li>
+                    <li style={summaryListItemStyle}>{t("dailyOps.metricGroupTraffic")}: {sessionsValue}</li>
+                    <li style={summaryListItemStyle}>{t("dailyOps.metricGroupConversion")}: {conversionValue}</li>
+                    <li style={summaryListItemStyle}>{t("dailyOps.metricGroupLongRoi")}: {value ? `${value.customers.averageDynamicLtv} ${m.currency}` : t("dailyOps.metricNotConnected")}</li>
+                  </ul>
+                  <div style={detailActionRowStyle}>
                     <span style={taskSecondaryTextStyle}>
-                      {t("dailyOps.metricTrafficChange", {
-                        value:
-                          m.trafficChangeRate === null
-                            ? t("dailyOps.metricNoBaseline")
-                            : `${formatDeltaPrefix(m.trafficChangeRate)}%`,
+                      {t("dailyOps.generatedAtLabel", {
+                        value: new Date(result.generatedAt).toLocaleString(locale),
                       })}
                     </span>
+                    <s-button type="button" variant="secondary" onClick={() => onOpenDetail("performance")}>
+                      {t("dailyOps.viewDetail")}
+                    </s-button>
                   </div>
-                  <h3 style={metricValueStyle}>{sessionsValue}</h3>
-                  <p style={taskMetaTextStyle}>{t("dailyOps.metricTrafficHint")}</p>
                 </div>
-                <div style={insightCardStyle}>
-                  <div style={metricMetaRowStyle}>
-                    <span style={subtleInlineStatStyle}>{t("dailyOps.metricGroupAov")}</span>
-                    <span style={taskSecondaryTextStyle}>
-                      {t("dailyOps.metricAovPrev", { value: m.aovPrev7d })}
-                    </span>
-                  </div>
-                  <h3 style={metricValueStyle}>
-                    {m.aov7d} {m.currency}
-                  </h3>
-                  <p style={taskMetaTextStyle}>{t("dailyOps.metricAovHint")}</p>
-                </div>
-                <div style={insightCardStyle}>
-                  <div style={metricMetaRowStyle}>
-                    <span style={subtleInlineStatStyle}>{t("dailyOps.metricGroupConversion")}</span>
-                    <span style={taskSecondaryTextStyle}>
-                      {t("dailyOps.metricConversionPrev", {
-                        value:
-                          m.conversionRatePrev7d === null
-                            ? t("dailyOps.metricNoBaseline")
-                            : `${m.conversionRatePrev7d}%`,
-                      })}
-                    </span>
-                  </div>
-                  <h3 style={metricValueStyle}>{conversionValue}</h3>
-                  <p style={taskMetaTextStyle}>{t("dailyOps.metricConversionHint")}</p>
-                </div>
-                <div style={insightCardStyle}>
-                  <div style={metricMetaRowStyle}>
-                    <span style={subtleInlineStatStyle}>{t("dailyOps.metricGroupCost")}</span>
-                    <span style={taskSecondaryTextStyle}>
-                      {t("dailyOps.metricRefundDeltaShort", {
-                        value: `${formatDeltaPrefix(m.refundRateDelta)}pp`,
-                      })}
-                    </span>
-                  </div>
-                  <h3 style={metricValueStyle}>{`${m.refundRate30d}%`}</h3>
-                  <p style={taskMetaTextStyle}>{t("dailyOps.metricCostHint")}</p>
-                </div>
-                <div style={insightCardStyle}>
-                  <div style={metricMetaRowStyle}>
-                    <span style={subtleInlineStatStyle}>{t("dailyOps.metricGroupShortRoi")}</span>
-                    <span style={taskSecondaryTextStyle}>{t("dailyOps.metricSales7d")}</span>
-                  </div>
-                  <h3 style={metricValueStyle}>{growthLabel}</h3>
-                  <p style={taskSecondaryTextStyle}>{t("dailyOps.metricShortRoiHintLine1")}</p>
-                  <p style={taskMetaTextStyle}>{t("dailyOps.metricShortRoiHintLine2")}</p>
-                </div>
-                <div style={insightCardStyle}>
-                  <div style={metricMetaRowStyle}>
-                    <span style={subtleInlineStatStyle}>{t("dailyOps.metricGroupLongRoi")}</span>
-                    <span style={taskSecondaryTextStyle}>{t("dailyOps.customerTitle")}</span>
-                  </div>
-                  <h3 style={metricValueStyle}>
-                    {value
-                      ? `${value.customers.averageDynamicLtv} ${m.currency}`
-                      : t("dailyOps.metricNotConnected")}
-                  </h3>
-                  <p style={taskSecondaryTextStyle}>{t("dailyOps.metricLongRoiHintLine1")}</p>
-                  <p style={taskMetaTextStyle}>{t("dailyOps.metricLongRoiHintLine2")}</p>
-                </div>
-              </div>
-              <p style={{ ...taskSecondaryTextStyle, marginTop: "0.75rem" }}>
-                {t("dailyOps.generatedAtLabel", {
-                  value: new Date(result.generatedAt).toLocaleString(locale),
-                })}
-              </p>
-            </PageSurface>
 
-            <PageSurface
-              title={t("dailyOps.riskEnvironmentTitle")}
-              subtitle={t("dailyOps.riskEnvironmentSubtitle")}
-            >
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
-                  gap: "0.75rem",
-                }}
-              >
-                {riskCards.map((card) => (
-                  <div key={card.key} style={riskCardStyle(card.status)}>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: "0.5rem",
-                      }}
+                <div style={summaryCardStyle}>
+                  <div style={metricMetaRowStyle}>
+                    <span style={subtleInlineStatStyle}>{t("dailyOps.riskEnvironmentTitle")}</span>
+                    <span style={taskSecondaryTextStyle}>
+                      {t("dailyOps.riskSummaryCounts", { risk: activeRiskCount, watch: watchRiskCount })}
+                    </span>
+                  </div>
+                  <ul style={summaryListStyle}>
+                    <li style={summaryListItemStyle}>{t("dailyOps.metricOverdue")}: {m.overdueOrderCount}</li>
+                    <li style={summaryListItemStyle}>{t("dailyOps.metricCarrierIssues")}: {m.carrierIssueCount}</li>
+                    <li style={summaryListItemStyle}>{t("dailyOps.metricRefundRate")}: {m.refundRate30d}%</li>
+                    <li style={summaryListItemStyle}>{t("dailyOps.dataInsightsTitle")}: {diagnosisInsights.length}</li>
+                  </ul>
+                  <div style={detailActionRowStyle}>
+                    <span style={taskSecondaryTextStyle}>{t("dailyOps.riskDetailHint")}</span>
+                    <s-button type="button" variant="secondary" onClick={() => onOpenDetail("risk")}>
+                      {t("dailyOps.viewDetail")}
+                    </s-button>
+                  </div>
+                </div>
+
+                <div style={summaryCardStyle}>
+                  <div style={metricMetaRowStyle}>
+                    <span style={subtleInlineStatStyle}>{t("dailyOps.valueTitle")}</span>
+                    <span style={taskSecondaryTextStyle}>
+                      {value ? t("dailyOps.sourceEstimated") : t("dailyOps.metricNotConnected")}
+                    </span>
+                  </div>
+                  <ul style={summaryListStyle}>
+                    <li style={summaryListItemStyle}>
+                      {t("dailyOps.customerTitle")}: {value ? `${value.customers.averageDynamicLtv} ${m.currency}` : t("dailyOps.metricNotConnected")}
+                    </li>
+                    <li style={summaryListItemStyle}>
+                      {t("dailyOps.channelTitle", { days: value?.channels.windowDays ?? 30 })}
+                    </li>
+                    <li style={summaryListItemStyle}>
+                      {t("dailyOps.costTitle")}: {t("dailyOps.summaryCostHint")}
+                    </li>
+                  </ul>
+                  <div style={detailActionRowStyle}>
+                    <span style={taskSecondaryTextStyle}>{t("dailyOps.valueSubtitle")}</span>
+                    <s-button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => onOpenDetail("value")}
+                      {...(!value ? { disabled: true } : {})}
                     >
-                      <h3 style={taskTitleStyle}>{card.title}</h3>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                        <SourceTag source={card.source} />
-                        <s-badge tone={diagnosisTone(card.status)}>{statusText(card.status)}</s-badge>
-                      </div>
-                    </div>
-                    <p style={taskMetaTextStyle}>{card.primaryMetric}</p>
-                    <p style={taskSecondaryTextStyle}>{card.secondaryMetric}</p>
-                    <p style={{ ...taskMetaTextStyle, marginTop: "0.1rem" }}>{card.summary}</p>
+                      {t("dailyOps.viewDetail")}
+                    </s-button>
                   </div>
-                ))}
-              </div>
-            </PageSurface>
-
-            <PageSurface
-              title={t("dailyOps.dataInsightsTitle")}
-              subtitle={t("dailyOps.dataInsightsSubtitle")}
-            >
-              {diagnosisInsights.length === 0 ? (
-                <p style={taskSecondaryTextStyle}>{t("dailyOps.dataInsightsEmpty")}</p>
-              ) : (
-                <div style={insightListStyle}>
-                  {diagnosisInsights.map((item) => (
-                    <div key={item.key} style={insightCardStyle}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: "0.5rem",
-                        }}
-                      >
-                        <h3 style={taskTitleStyle}>{item.name}</h3>
-                        <s-badge tone={diagnosisTone(item.status)}>{statusText(item.status)}</s-badge>
-                      </div>
-                      {item.evidence.map((line, index) => (
-                        <p key={`e-${item.key}-${index}`} style={taskSecondaryTextStyle}>
-                          {line}
-                        </p>
-                      ))}
-                      {item.reasoning.slice(0, 2).map((line, index) => (
-                        <p key={`r-${item.key}-${index}`} style={taskMetaTextStyle}>
-                          {line}
-                        </p>
-                      ))}
-                    </div>
-                  ))}
                 </div>
-              )}
+              </div>
             </PageSurface>
 
             <PageSurface
@@ -1637,42 +1681,11 @@ function DailyOperationsBody({
                   allInsightTasks.map(renderTaskCard)
                 )}
               </div>
-            </PageSurface>
-
-            <PageSurface
-              title={t("dailyOps.healthTitle")}
-              subtitle={t("dailyOps.healthSubtitle")}
-            >
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                {result.items.map((item) => (
-                  <div
-                    key={item.key}
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "0.35rem",
-                      padding: "0.75rem 0.9rem",
-                      border: `1px solid ${pageColorTokens.borderSubtle}`,
-                      borderRadius: pageColorTokens.radiusControl,
-                    }}
-                  >
-                    <s-stack direction={isMobile ? "block" : "inline"} gap="small" alignItems="center">
-                      <s-badge tone={diagnosisTone(item.status)}>
-                        {item.name}: {statusText(item.status)}
-                      </s-badge>
-                    </s-stack>
-                    {item.evidence.map((line, index) => (
-                      <p key={`e-all-${item.key}-${index}`} style={taskSecondaryTextStyle}>
-                        {line}
-                      </p>
-                    ))}
-                    {item.reasoning.map((line, index) => (
-                      <p key={`r-all-${item.key}-${index}`} style={taskMetaTextStyle}>
-                        {line}
-                      </p>
-                    ))}
-                  </div>
-                ))}
+              <div style={detailActionRowStyle}>
+                <span style={taskSecondaryTextStyle}>{t("dailyOps.allInsightsDetailHint")}</span>
+                <s-button type="button" variant="secondary" onClick={() => onOpenDetail("risk")}>
+                  {t("dailyOps.viewHealthDetail")}
+                </s-button>
               </div>
             </PageSurface>
           </div>
@@ -1684,7 +1697,7 @@ function DailyOperationsBody({
         ) : null}
       </section>
 
-      {result.review ? (
+      {result.review && insightsView === "today" ? (
         <PageSurface
           title={t("dailyOps.reviewTitle", { date: result.review.previousDate })}
           subtitle={t("dailyOps.reviewResolved", {
@@ -1719,6 +1732,438 @@ function DailyOperationsBody({
         </PageSurface>
       ) : null}
     </>
+  );
+}
+
+function DailyOperationsDetail({
+  detailSection,
+  result,
+  value,
+  isMobile,
+  locale,
+  statusText,
+}: {
+  detailSection: DetailSection;
+  result: DailyOperationsResult;
+  value: ValueLayerData | null;
+  isMobile: boolean;
+  locale: string;
+  statusText: (status: string) => string;
+}) {
+  const { t } = useTranslation();
+  const m = result.metrics;
+  const hasPixelData = m.hasPixelData;
+  const sessionsValue = hasPixelData ? String(m.sessions7d) : t("dailyOps.metricNotConnected");
+  const conversionValue =
+    hasPixelData && m.conversionRate7d !== null
+      ? `${m.conversionRate7d}%`
+      : t("dailyOps.metricNotConnected");
+  const growthLabel =
+    m.salesGrowthRate === null
+      ? t("dailyOps.metricNoBaseline")
+      : `${m.salesGrowthRate >= 0 ? "+" : ""}${m.salesGrowthRate}%`;
+  const riskCards = buildRiskEnvironmentCards(result, value, t);
+  const diagnosisInsights = result.items.filter((item) => item.status !== "healthy");
+  const [performanceTab, setPerformanceTab] = useState<"metrics" | "review">("metrics");
+  const [riskTab, setRiskTab] = useState<"environment" | "insights" | "health">("environment");
+  const [valueTab, setValueTab] = useState<"framework" | "customers" | "channels" | "cost">(
+    "framework",
+  );
+
+  if (detailSection === "performance") {
+    return (
+      <div style={detailSectionStackStyle}>
+        <div
+          style={{
+            ...detailHeroGridStyle,
+            ...(isMobile ? { gridTemplateColumns: "1fr" } : null),
+          }}
+        >
+          <div style={detailHeroCardStyle}>
+            <span style={overviewMiniLabelStyle}>{t("dailyOps.metricSales7d")}</span>
+            <span style={overviewMiniValueStyle}>
+              {m.salesAmount7d} {m.currency}
+            </span>
+            <span style={taskSecondaryTextStyle}>
+              {t("dailyOps.metricGrowth")}: {growthLabel}
+            </span>
+          </div>
+          <div style={detailHeroCardStyle}>
+            <span style={overviewMiniLabelStyle}>{t("dailyOps.metricGroupConversion")}</span>
+            <span style={overviewMiniValueStyle}>{conversionValue}</span>
+            <span style={taskSecondaryTextStyle}>
+              {t("dailyOps.metricGroupTraffic")}: {sessionsValue}
+            </span>
+          </div>
+          <div style={detailHeroCardStyle}>
+            <span style={overviewMiniLabelStyle}>{t("dailyOps.detailHeroReview")}</span>
+            <span style={overviewMiniValueStyle}>{result.review?.resolvedTaskCount ?? 0}</span>
+            <span style={taskSecondaryTextStyle}>
+              {t("dailyOps.reviewResolved", { count: result.review?.resolvedTaskCount ?? 0 })}
+            </span>
+          </div>
+        </div>
+        <div style={detailTabsWrapStyle}>
+          {[
+            ["metrics", t("dailyOps.detailTabMetrics")],
+            ["review", t("dailyOps.detailTabReview")],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              style={pillButtonStyle(performanceTab === key)}
+              onClick={() => setPerformanceTab(key as "metrics" | "review")}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {performanceTab === "metrics" ? (
+          <PageSurface
+            title={t("dailyOps.keyMetricsTitle")}
+            subtitle={t("dailyOps.keyMetricsSubtitle", { shop: result.shop })}
+          >
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+                gap: "0.9rem",
+              }}
+            >
+              <div style={insightCardStyle}>
+                <div style={metricMetaRowStyle}>
+                  <span style={subtleInlineStatStyle}>{t("dailyOps.metricGroupTraffic")}</span>
+                  <span style={taskSecondaryTextStyle}>
+                    {t("dailyOps.metricTrafficChange", {
+                      value:
+                        m.trafficChangeRate === null
+                          ? t("dailyOps.metricNoBaseline")
+                          : `${formatDeltaPrefix(m.trafficChangeRate)}%`,
+                    })}
+                  </span>
+                </div>
+                <h3 style={metricValueStyle}>{sessionsValue}</h3>
+                <p style={taskMetaTextStyle}>{t("dailyOps.metricTrafficHint")}</p>
+              </div>
+              <div style={insightCardStyle}>
+                <div style={metricMetaRowStyle}>
+                  <span style={subtleInlineStatStyle}>{t("dailyOps.metricGroupAov")}</span>
+                  <span style={taskSecondaryTextStyle}>
+                    {t("dailyOps.metricAovPrev", { value: m.aovPrev7d })}
+                  </span>
+                </div>
+                <h3 style={metricValueStyle}>
+                  {m.aov7d} {m.currency}
+                </h3>
+                <p style={taskMetaTextStyle}>{t("dailyOps.metricAovHint")}</p>
+              </div>
+              <div style={insightCardStyle}>
+                <div style={metricMetaRowStyle}>
+                  <span style={subtleInlineStatStyle}>{t("dailyOps.metricGroupConversion")}</span>
+                  <span style={taskSecondaryTextStyle}>
+                    {t("dailyOps.metricConversionPrev", {
+                      value:
+                        m.conversionRatePrev7d === null
+                          ? t("dailyOps.metricNoBaseline")
+                          : `${m.conversionRatePrev7d}%`,
+                    })}
+                  </span>
+                </div>
+                <h3 style={metricValueStyle}>{conversionValue}</h3>
+                <p style={taskMetaTextStyle}>{t("dailyOps.metricConversionHint")}</p>
+              </div>
+              <div style={insightCardStyle}>
+                <div style={metricMetaRowStyle}>
+                  <span style={subtleInlineStatStyle}>{t("dailyOps.metricGroupCost")}</span>
+                  <span style={taskSecondaryTextStyle}>
+                    {t("dailyOps.metricRefundDeltaShort", {
+                      value: `${formatDeltaPrefix(m.refundRateDelta)}pp`,
+                    })}
+                  </span>
+                </div>
+                <h3 style={metricValueStyle}>{`${m.refundRate30d}%`}</h3>
+                <p style={taskMetaTextStyle}>{t("dailyOps.metricCostHint")}</p>
+              </div>
+              <div style={insightCardStyle}>
+                <div style={metricMetaRowStyle}>
+                  <span style={subtleInlineStatStyle}>{t("dailyOps.metricGroupShortRoi")}</span>
+                  <span style={taskSecondaryTextStyle}>{t("dailyOps.metricSales7d")}</span>
+                </div>
+                <h3 style={metricValueStyle}>{growthLabel}</h3>
+                <p style={taskSecondaryTextStyle}>{t("dailyOps.metricShortRoiHintLine1")}</p>
+                <p style={taskMetaTextStyle}>{t("dailyOps.metricShortRoiHintLine2")}</p>
+              </div>
+              <div style={insightCardStyle}>
+                <div style={metricMetaRowStyle}>
+                  <span style={subtleInlineStatStyle}>{t("dailyOps.metricGroupLongRoi")}</span>
+                  <span style={taskSecondaryTextStyle}>{t("dailyOps.customerTitle")}</span>
+                </div>
+                <h3 style={metricValueStyle}>
+                  {value
+                    ? `${value.customers.averageDynamicLtv} ${m.currency}`
+                    : t("dailyOps.metricNotConnected")}
+                </h3>
+                <p style={taskSecondaryTextStyle}>{t("dailyOps.metricLongRoiHintLine1")}</p>
+                <p style={taskMetaTextStyle}>{t("dailyOps.metricLongRoiHintLine2")}</p>
+              </div>
+            </div>
+            <p style={{ ...taskSecondaryTextStyle, marginTop: "0.75rem" }}>
+              {t("dailyOps.generatedAtLabel", {
+                value: new Date(result.generatedAt).toLocaleString(locale),
+              })}
+            </p>
+          </PageSurface>
+        ) : result.review ? (
+          <PageSurface
+            title={t("dailyOps.reviewTitle", { date: result.review.previousDate })}
+            subtitle={t("dailyOps.reviewResolved", {
+              count: result.review.resolvedTaskCount,
+            })}
+          >
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
+              {result.review.deltas.map((delta) => (
+                <div key={delta.key} style={reviewDeltaCardStyle}>
+                  <strong>{delta.label}</strong>: {delta.previous} → {delta.current}{" "}
+                  <s-badge
+                    tone={
+                      delta.improved === null
+                        ? "info"
+                        : delta.improved
+                          ? "success"
+                          : "critical"
+                    }
+                  >
+                    {delta.improved === null
+                      ? t("dailyOps.reviewFlat")
+                      : delta.improved
+                        ? t("dailyOps.reviewImproved")
+                        : t("dailyOps.reviewWorsened")}
+                  </s-badge>
+                </div>
+              ))}
+            </div>
+          </PageSurface>
+        ) : (
+          <div style={pageEmptyStateStyle}>
+            <span>{t("dailyOps.reviewUnavailable")}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (detailSection === "risk") {
+    return (
+      <div style={detailSectionStackStyle}>
+        <div
+          style={{
+            ...detailHeroGridStyle,
+            ...(isMobile ? { gridTemplateColumns: "1fr" } : null),
+          }}
+        >
+          <div style={detailHeroCardStyle}>
+            <span style={overviewMiniLabelStyle}>{t("dailyOps.riskEnvironmentTitle")}</span>
+            <span style={overviewMiniValueStyle}>
+              {riskCards.filter((card) => card.status === "risk").length}
+            </span>
+            <span style={taskSecondaryTextStyle}>{t("dailyOps.detailRiskCritical")}</span>
+          </div>
+          <div style={detailHeroCardStyle}>
+            <span style={overviewMiniLabelStyle}>{t("dailyOps.dataInsightsTitle")}</span>
+            <span style={overviewMiniValueStyle}>{diagnosisInsights.length}</span>
+            <span style={taskSecondaryTextStyle}>{t("dailyOps.detailRiskInsights")}</span>
+          </div>
+          <div style={detailHeroCardStyle}>
+            <span style={overviewMiniLabelStyle}>{t("dailyOps.healthTitle")}</span>
+            <span style={overviewMiniValueStyle}>{result.items.length}</span>
+            <span style={taskSecondaryTextStyle}>{t("dailyOps.detailRiskHealth")}</span>
+          </div>
+        </div>
+        <div style={detailTabsWrapStyle}>
+          {[
+            ["environment", t("dailyOps.detailTabEnvironment")],
+            ["insights", t("dailyOps.detailTabInsights")],
+            ["health", t("dailyOps.detailTabHealth")],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              style={pillButtonStyle(riskTab === key)}
+              onClick={() => setRiskTab(key as "environment" | "insights" | "health")}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {riskTab === "environment" ? (
+          <PageSurface
+            title={t("dailyOps.riskEnvironmentTitle")}
+            subtitle={t("dailyOps.riskEnvironmentSubtitle")}
+          >
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+                gap: "0.75rem",
+              }}
+            >
+              {riskCards.map((card) => (
+                <div key={card.key} style={riskCardStyle(card.status)}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    <h3 style={taskTitleStyle}>{card.title}</h3>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <SourceTag source={card.source} />
+                      <s-badge tone={diagnosisTone(card.status)}>{statusText(card.status)}</s-badge>
+                    </div>
+                  </div>
+                  <p style={taskMetaTextStyle}>{card.primaryMetric}</p>
+                  <p style={taskSecondaryTextStyle}>{card.secondaryMetric}</p>
+                  <p style={{ ...taskMetaTextStyle, marginTop: "0.1rem" }}>{card.summary}</p>
+                </div>
+              ))}
+            </div>
+          </PageSurface>
+        ) : riskTab === "insights" ? (
+          <PageSurface
+            title={t("dailyOps.dataInsightsTitle")}
+            subtitle={t("dailyOps.dataInsightsSubtitle")}
+          >
+            {diagnosisInsights.length === 0 ? (
+              <p style={taskSecondaryTextStyle}>{t("dailyOps.dataInsightsEmpty")}</p>
+            ) : (
+              <div style={insightListStyle}>
+                {diagnosisInsights.map((item) => (
+                  <div key={item.key} style={insightCardStyle}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <h3 style={taskTitleStyle}>{item.name}</h3>
+                      <s-badge tone={diagnosisTone(item.status)}>{statusText(item.status)}</s-badge>
+                    </div>
+                    {item.evidence.map((line, index) => (
+                      <p key={`e-${item.key}-${index}`} style={taskSecondaryTextStyle}>
+                        {line}
+                      </p>
+                    ))}
+                    {item.reasoning.map((line, index) => (
+                      <p key={`r-${item.key}-${index}`} style={taskMetaTextStyle}>
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </PageSurface>
+        ) : (
+          <PageSurface
+            title={t("dailyOps.healthTitle")}
+            subtitle={t("dailyOps.healthSubtitle")}
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              {result.items.map((item) => (
+                <div
+                  key={item.key}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.35rem",
+                    padding: "0.75rem 0.9rem",
+                    border: `1px solid ${pageColorTokens.borderSubtle}`,
+                    borderRadius: pageColorTokens.radiusControl,
+                  }}
+                >
+                  <s-stack direction={isMobile ? "block" : "inline"} gap="small" alignItems="center">
+                    <s-badge tone={diagnosisTone(item.status)}>
+                      {item.name}: {statusText(item.status)}
+                    </s-badge>
+                  </s-stack>
+                  {item.evidence.map((line, index) => (
+                    <p key={`e-all-${item.key}-${index}`} style={taskSecondaryTextStyle}>
+                      {line}
+                    </p>
+                  ))}
+                  {item.reasoning.map((line, index) => (
+                    <p key={`r-all-${item.key}-${index}`} style={taskMetaTextStyle}>
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </PageSurface>
+        )}
+      </div>
+    );
+  }
+
+  return value ? (
+    <div style={detailSectionStackStyle}>
+      <div
+        style={{
+          ...detailHeroGridStyle,
+          ...(isMobile ? { gridTemplateColumns: "1fr" } : null),
+        }}
+      >
+        <div style={detailHeroCardStyle}>
+          <span style={overviewMiniLabelStyle}>{t("dailyOps.customerTitle")}</span>
+          <span style={overviewMiniValueStyle}>
+            {value.customers.averageDynamicLtv} {value.channels.currency}
+          </span>
+          <span style={taskSecondaryTextStyle}>{t("dailyOps.metricAvgLtv")}</span>
+        </div>
+        <div style={detailHeroCardStyle}>
+          <span style={overviewMiniLabelStyle}>
+            {t("dailyOps.channelTitle", { days: value.channels.windowDays })}
+          </span>
+          <span style={overviewMiniValueStyle}>{value.channels.channels.length}</span>
+          <span style={taskSecondaryTextStyle}>{t("dailyOps.detailValueChannels")}</span>
+        </div>
+        <div style={detailHeroCardStyle}>
+          <span style={overviewMiniLabelStyle}>{t("dailyOps.costTitle")}</span>
+          <span style={overviewMiniValueStyle}>
+            {value.costConfig.defaultGrossMarginPercent}%
+          </span>
+          <span style={taskSecondaryTextStyle}>{t("dailyOps.detailValueCost")}</span>
+        </div>
+      </div>
+      <div style={detailTabsWrapStyle}>
+        {[
+          ["framework", t("dailyOps.detailTabFramework")],
+          ["customers", t("dailyOps.detailTabCustomers")],
+          ["channels", t("dailyOps.detailTabChannels")],
+          ["cost", t("dailyOps.detailTabCost")],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            style={pillButtonStyle(valueTab === key)}
+            onClick={() =>
+              setValueTab(key as "framework" | "customers" | "channels" | "cost")
+            }
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <ValueLayerSections value={value} isMobile={isMobile} activeTab={valueTab} />
+    </div>
+  ) : (
+    <div style={pageEmptyStateStyle}>
+      <span>{t("dailyOps.valueUnavailable")}</span>
+    </div>
   );
 }
 
@@ -1991,9 +2436,11 @@ function InvestmentLayerCard() {
 function ValueLayerSections({
   value,
   isMobile,
+  activeTab = "framework",
 }: {
   value: ValueLayerData;
   isMobile: boolean;
+  activeTab?: "framework" | "customers" | "channels" | "cost";
 }) {
   const { t } = useTranslation();
   const { customers, channels } = value;
@@ -2008,153 +2455,158 @@ function ValueLayerSections({
         </div>
       </section>
 
-      <LayerLegend />
+      {activeTab === "framework" ? <LayerLegend /> : null}
 
-      <PageSurface
-        title={t("dailyOps.customerTitle")}
-        subtitle={t("dailyOps.customerSubtitle", {
-          total: customers.payingCustomers,
-        })}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
-          <SourceTag source="estimated" />
-        </div>
-        <div style={valueCardSectionStyle}>
-          <PageMetricCard
-            metrics={[
-              {
-                label: t("dailyOps.metricRepeatRate"),
-                value: `${customers.repeatPurchaseRate}%`,
-              },
-              {
-                label: t("dailyOps.metricAvgScore"),
-                value: String(customers.averageScore),
-              },
-              {
-                label: t("dailyOps.metricHighValueShare"),
-                value: `${customers.highValueShare}%`,
-              },
-              {
-                label: t("dailyOps.metricAvgLtv"),
-                value: String(customers.averageDynamicLtv),
-                unit: channels.currency,
-              },
-            ]}
-          />
-          <div style={customerTagWrapStyle}>
-            <s-badge tone="info">{t("dailyOps.segmentNew")}: {seg.new}</s-badge>
-            <s-badge tone="success">{t("dailyOps.segmentActive")}: {seg.active}</s-badge>
-            <s-badge tone="success">{t("dailyOps.segmentVip")}: {seg.vip}</s-badge>
-            <s-badge tone="warning">{t("dailyOps.segmentAtRisk")}: {seg.at_risk}</s-badge>
-            <s-badge>{t("dailyOps.segmentChurned")}: {seg.churned}</s-badge>
-            <s-badge tone="critical">
-              {t("dailyOps.tagRefundRisk")}: {customers.tagCounts.refund_risk}
-            </s-badge>
-            <s-badge tone="warning">
-              {t("dailyOps.tagDiscountSensitive")}: {customers.tagCounts.discount_sensitive}
-            </s-badge>
+      {(activeTab === "framework" || activeTab === "customers") ? (
+        <PageSurface
+          title={t("dailyOps.customerTitle")}
+          subtitle={t("dailyOps.customerSubtitle", {
+            total: customers.payingCustomers,
+          })}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+            <SourceTag source="estimated" />
           </div>
-        </div>
-      </PageSurface>
+          <div style={valueCardSectionStyle}>
+            <PageMetricCard
+              metrics={[
+                {
+                  label: t("dailyOps.metricRepeatRate"),
+                  value: `${customers.repeatPurchaseRate}%`,
+                },
+                {
+                  label: t("dailyOps.metricAvgScore"),
+                  value: String(customers.averageScore),
+                },
+                {
+                  label: t("dailyOps.metricHighValueShare"),
+                  value: `${customers.highValueShare}%`,
+                },
+                {
+                  label: t("dailyOps.metricAvgLtv"),
+                  value: String(customers.averageDynamicLtv),
+                  unit: channels.currency,
+                },
+              ]}
+            />
+            <div style={customerTagWrapStyle}>
+              <s-badge tone="info">{t("dailyOps.segmentNew")}: {seg.new}</s-badge>
+              <s-badge tone="success">{t("dailyOps.segmentActive")}: {seg.active}</s-badge>
+              <s-badge tone="success">{t("dailyOps.segmentVip")}: {seg.vip}</s-badge>
+              <s-badge tone="warning">{t("dailyOps.segmentAtRisk")}: {seg.at_risk}</s-badge>
+              <s-badge>{t("dailyOps.segmentChurned")}: {seg.churned}</s-badge>
+              <s-badge tone="critical">
+                {t("dailyOps.tagRefundRisk")}: {customers.tagCounts.refund_risk}
+              </s-badge>
+              <s-badge tone="warning">
+                {t("dailyOps.tagDiscountSensitive")}: {customers.tagCounts.discount_sensitive}
+              </s-badge>
+            </div>
+          </div>
+        </PageSurface>
+      ) : null}
 
-      <PageSurface
-        title={t("dailyOps.channelTitle", { days: channels.windowDays })}
-        subtitle={t("dailyOps.channelSubtitle", {
-          share: channels.attributedRevenueShare,
-        })}
-      >
-        {channels.channels.length === 0 ? (
-          <p style={taskSecondaryTextStyle}>{t("dailyOps.noChannelData")}</p>
-        ) : (
-          <div style={channelTableWrapStyle}>
-            <table style={valueTableStyle}>
-              <thead>
-                <tr>
-                  <th style={valueGroupThStyle} colSpan={2}>
-                    {t("dailyOps.groupBasic")}
-                  </th>
-                  <th style={valueGroupThStyle} colSpan={1}>
-                    <span style={groupHeadInnerStyle}>
-                      {t("dailyOps.layerRevenue")} <SourceTag source="real" />
-                    </span>
-                  </th>
-                  <th style={valueGroupThStyle} colSpan={2}>
-                    <span style={groupHeadInnerStyle}>
-                      {t("dailyOps.layerProfit")} <SourceTag source="estimated" />
-                    </span>
-                  </th>
-                  <th style={valueGroupThStyle} colSpan={3}>
-                    <span style={groupHeadInnerStyle}>
-                      {t("dailyOps.groupCustomerQuality")} <SourceTag source="estimated" />
-                    </span>
-                  </th>
-                  <th style={valueGroupThStyle} colSpan={1}>
-                    <span style={groupHeadInnerStyle}>
-                      {t("dailyOps.layerInvestment")} <SourceTag source="pending" />
-                    </span>
-                  </th>
-                </tr>
-                <tr>
-                  <th style={valueThStyle}>{t("dailyOps.colChannel")}</th>
-                  <th style={valueThStyle}>{t("dailyOps.colOrders")}</th>
-                  <th style={valueThStyle}>{t("dailyOps.colRevenue")}</th>
-                  <th style={valueThStyle}>{t("dailyOps.colProfit")}</th>
-                  <th style={valueThStyle}>{t("dailyOps.colMargin")}</th>
-                  <th style={valueThStyle}>{t("dailyOps.colNewShare")}</th>
-                  <th style={valueThStyle}>{t("dailyOps.colRepeatShare")}</th>
-                  <th style={valueThStyle}>{t("dailyOps.colScore")}</th>
-                  <th style={valueThStyle}>{t("dailyOps.colRoi")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {channels.channels.map((channel) => (
-                  <tr key={channel.channelKey}>
-                    <td style={{ ...valueTdStyle, fontWeight: 700 }}>{channel.label}</td>
-                    <td style={valueTdStyle}>{channel.orderCount}</td>
-                    <td style={valueTdStyle}>
-                      {channel.revenue} {channels.currency}
-                    </td>
-                    <td
-                      style={{
-                        ...valueTdStyle,
-                        color:
-                          channel.contributionProfit >= 0 ? "#007a5a" : "#dc2626",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {channel.contributionProfit}
-                    </td>
-                    <td style={valueTdStyle}>
-                      {channel.contributionMarginPercent === null
-                        ? "—"
-                        : `${channel.contributionMarginPercent}%`}
-                    </td>
-                    <td style={valueTdStyle}>{channel.customers.newOrderShare}%</td>
-                    <td style={valueTdStyle}>{channel.customers.repeatCustomerShare}%</td>
-                    <td style={valueTdStyle}>
-                      {channel.customers.averageCustomerValueScore ?? "—"}
-                    </td>
-                    <td style={valueTdStyle}>
-                      <s-badge tone="neutral">{t("dailyOps.roiPendingAds")}</s-badge>
-                    </td>
+      {(activeTab === "framework" || activeTab === "channels") ? (
+        <PageSurface
+          title={t("dailyOps.channelTitle", { days: channels.windowDays })}
+          subtitle={t("dailyOps.channelSubtitle", {
+            share: channels.attributedRevenueShare,
+          })}
+        >
+          {channels.channels.length === 0 ? (
+            <p style={taskSecondaryTextStyle}>{t("dailyOps.noChannelData")}</p>
+          ) : (
+            <div style={channelTableWrapStyle}>
+              <table style={valueTableStyle}>
+                <thead>
+                  <tr>
+                    <th style={valueGroupThStyle} colSpan={2}>
+                      {t("dailyOps.groupBasic")}
+                    </th>
+                    <th style={valueGroupThStyle} colSpan={1}>
+                      <span style={groupHeadInnerStyle}>
+                        {t("dailyOps.layerRevenue")} <SourceTag source="real" />
+                      </span>
+                    </th>
+                    <th style={valueGroupThStyle} colSpan={2}>
+                      <span style={groupHeadInnerStyle}>
+                        {t("dailyOps.layerProfit")} <SourceTag source="estimated" />
+                      </span>
+                    </th>
+                    <th style={valueGroupThStyle} colSpan={3}>
+                      <span style={groupHeadInnerStyle}>
+                        {t("dailyOps.groupCustomerQuality")} <SourceTag source="estimated" />
+                      </span>
+                    </th>
+                    <th style={valueGroupThStyle} colSpan={1}>
+                      <span style={groupHeadInnerStyle}>
+                        {t("dailyOps.layerInvestment")} <SourceTag source="pending" />
+                      </span>
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                  <tr>
+                    <th style={valueThStyle}>{t("dailyOps.colChannel")}</th>
+                    <th style={valueThStyle}>{t("dailyOps.colOrders")}</th>
+                    <th style={valueThStyle}>{t("dailyOps.colRevenue")}</th>
+                    <th style={valueThStyle}>{t("dailyOps.colProfit")}</th>
+                    <th style={valueThStyle}>{t("dailyOps.colMargin")}</th>
+                    <th style={valueThStyle}>{t("dailyOps.colNewShare")}</th>
+                    <th style={valueThStyle}>{t("dailyOps.colRepeatShare")}</th>
+                    <th style={valueThStyle}>{t("dailyOps.colScore")}</th>
+                    <th style={valueThStyle}>{t("dailyOps.colRoi")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {channels.channels.map((channel) => (
+                    <tr key={channel.channelKey}>
+                      <td style={{ ...valueTdStyle, fontWeight: 700 }}>{channel.label}</td>
+                      <td style={valueTdStyle}>{channel.orderCount}</td>
+                      <td style={valueTdStyle}>
+                        {channel.revenue} {channels.currency}
+                      </td>
+                      <td
+                        style={{
+                          ...valueTdStyle,
+                          color:
+                            channel.contributionProfit >= 0 ? "#007a5a" : "#dc2626",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {channel.contributionProfit}
+                      </td>
+                      <td style={valueTdStyle}>
+                        {channel.contributionMarginPercent === null
+                          ? "—"
+                          : `${channel.contributionMarginPercent}%`}
+                      </td>
+                      <td style={valueTdStyle}>{channel.customers.newOrderShare}%</td>
+                      <td style={valueTdStyle}>{channel.customers.repeatCustomerShare}%</td>
+                      <td style={valueTdStyle}>
+                        {channel.customers.averageCustomerValueScore ?? "—"}
+                      </td>
+                      <td style={valueTdStyle}>
+                        <s-badge tone="neutral">{t("dailyOps.roiPendingAds")}</s-badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div style={caveatPanelStyle}>
+            {channels.caveats.map((line, index) => (
+              <p key={index} style={{ ...taskSecondaryTextStyle, fontSize: "0.75rem" }}>
+                * {line}
+              </p>
+            ))}
           </div>
-        )}
-        <div style={caveatPanelStyle}>
-          {channels.caveats.map((line, index) => (
-            <p key={index} style={{ ...taskSecondaryTextStyle, fontSize: "0.75rem" }}>
-              * {line}
-            </p>
-          ))}
-        </div>
-      </PageSurface>
+        </PageSurface>
+      ) : null}
 
-      <InvestmentLayerCard />
-
-      <CostConfigCard costConfig={value.costConfig} isMobile={isMobile} />
+      {activeTab === "framework" ? <InvestmentLayerCard /> : null}
+      {(activeTab === "framework" || activeTab === "cost") ? (
+        <CostConfigCard costConfig={value.costConfig} isMobile={isMobile} />
+      ) : null}
     </>
   );
 }
