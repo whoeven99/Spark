@@ -1,5 +1,5 @@
 import { hostname } from "os";
-import { claimJob, updateJob, heartbeat, findPendingJobs } from "../services/cosmosV4.js";
+import { claimJob, updateJob, heartbeat, findPendingJobs, withStageTiming } from "../services/cosmosV4.js";
 import { popHint, pushHint, setProgress } from "../services/redisV4.js";
 import { blobWrite } from "../services/blobV4.js";
 import { fetchTranslatableResources } from "../services/shopifyFetch.js";
@@ -81,6 +81,7 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
 
   await updateJob(shopName, jobId, { blobPrefix, status: "INITIALIZING" });
 
+  const stageStartedAt = new Date().toISOString(); // ISO span start for stageTimings
   const manifest: Record<string, { totalItems: number; chunks: number }> = {};
   // JS is single-threaded: these are mutated synchronously between await
   // points inside pAll callbacks — safe without a mutex.
@@ -172,6 +173,12 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
     await updateJob(shopName, jobId, {
       status: "TRANSLATE_QUEUED",
       claimedBy: null,
+      stageTimings: withStageTiming(
+        job.stageTimings,
+        "INIT",
+        stageStartedAt,
+        new Date().toISOString(),
+      ),
       metrics: {
         ...job.metrics,
         initTotal: totalItems,
@@ -196,6 +203,7 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
       errorMessage,
       errorStage: "INIT",
       claimedBy: null,
+      stageTimings: withStageTiming(job.stageTimings, "INIT", stageStartedAt, new Date().toISOString()),
     });
     console.error(`[init] failed job=${jobId}`, e);
   } finally {

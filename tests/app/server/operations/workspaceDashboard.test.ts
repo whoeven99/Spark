@@ -36,6 +36,12 @@ function baseResult(overrides: Partial<DailyOperationsResult> = {}): DailyOperat
       watchSkuCount: 4,
       estimatedInventoryLoss: 120,
       currency: "USD",
+      hasPixelData: false,
+      sessions7d: 0,
+      sessionsPrev7d: 0,
+      trafficChangeRate: null,
+      conversionRate7d: null,
+      conversionRatePrev7d: null,
     },
     items: [
       {

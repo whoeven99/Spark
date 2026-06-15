@@ -3,6 +3,7 @@
  *
  * 批量创建 AI 任务（商品描述生成 或 图片翻译）。
  * 每条记录独立创建，部分失败不影响其余条目。
+ * 创建逻辑在 server/aiTask/batchTaskCreate.server.ts，与 /api/task-proposal 共用。
  */
 import type { ActionFunctionArgs } from "react-router";
 import { data } from "react-router";
@@ -10,14 +11,10 @@ import { z } from "zod";
 import { authenticate } from "../shopify.server";
 import { requireBillingAccess } from "../server/billing/index.server";
 import { requireVisualToolBillingAccess } from "../server/tokenUsage/index.server";
-import { fetchProductDescriptionContext } from "../server/productImprove/productContextFetcher.server";
-import { detectTextLanguage } from "../server/productImprove/detectTextLanguage.server";
-import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
-import { getEstimatedCredits } from "../server/aiTask/aiTaskEstimation.server";
-import { deriveBucket } from "../server/aiTask/estimationBucket";
-import { createBatchWithTask } from "../server/aiTask/aiTaskStore.server";
-import { enqueueProductImproveTask } from "../server/productImprove/productImproveAsync.server";
-import { enqueuePictureTranslateTask } from "../server/pictureTranslate/pictureTranslateAsync.server";
+import {
+  createPictureTranslateBatchTasks,
+  createProductImproveBatchTasks,
+} from "../server/aiTask/batchTaskCreate.server";
 import { detectRequestLocale, readShopifySessionLocale } from "../i18n/detector.server";
 import { initI18n } from "../i18n";
 
@@ -119,63 +116,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
     }
 
-    const shopInfo = await fetchShopBasicInfo(admin).catch(() => null);
-    const brandStyle = shopInfo?.name || t("productImproveStage1.defaultBrandStyle");
-
-    const taskIds: string[] = [];
-    const errors: BatchTaskError[] = [];
-
-    for (let i = 0; i < body.productIds.length; i++) {
-      const productId = body.productIds[i];
-      try {
-        const context = await fetchProductDescriptionContext(admin, productId);
-        if (!context) {
-          errors.push({ index: i, productId, error: t("productImproveStage1.serverProductNotFound") });
-          continue;
-        }
-        const sourceLanguage = detectTextLanguage(context.title + " " + context.text);
-        const bucket = deriveBucket("product_improve", {
-          originalTitle: context.title,
-          originalText: context.text,
-        });
-        const { taskId, batchId: _batchId } = await createBatchWithTask({
-          shop,
-          taskType: "product_improve",
-          batchConfig: {
-            productId,
-            targetLanguage: body.targetLanguage,
-            originalTitle: context.title,
-            itemCount: 1,
-            sourceLanguage,
-            brandStyle,
-          },
-          taskConfig: {
-            productId,
-            targetLanguage: body.targetLanguage,
-            originalTitle: context.title,
-            originalText: context.text,
-            itemCount: 1,
-            sourceLanguage,
-            brandStyle,
-          },
-          estimatedCredits: await getEstimatedCredits("product_improve", bucket),
-        });
-        enqueueProductImproveTask({ taskId, shop, locale, context, targetLanguage: body.targetLanguage });
-        taskIds.push(taskId);
-      } catch (e) {
-        errors.push({
-          index: i,
-          productId,
-          error: e instanceof Error ? e.message : "创建失败",
-        });
-      }
-    }
+    const result = await createProductImproveBatchTasks({
+      admin,
+      shop,
+      locale,
+      targetLanguage: body.targetLanguage,
+      productIds: body.productIds,
+      productNotFoundMessage: t("productImproveStage1.serverProductNotFound"),
+      defaultBrandStyle: t("productImproveStage1.defaultBrandStyle"),
+    });
 
     return data<BatchAITasksResponse>({
       ok: true,
-      created: taskIds.length,
-      taskIds,
-      errors,
+      created: result.taskIds.length,
+      taskIds: result.taskIds,
+      errors: result.errors,
     });
   }
 
@@ -189,61 +144,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
   }
 
-  const { sourceCode, targetCode, modelType } = body;
-
-  const ewmaCredits = await getEstimatedCredits(
-    "picture_translate",
-    deriveBucket("picture_translate", { modelType }),
-  );
-  const taskIds: string[] = [];
-  const errors: BatchTaskError[] = [];
-
-  // zh-TW → zh-Hant for Volcano engine (model 2)
-  const effectiveTargetCode =
-    modelType === 2 && targetCode === "zh-TW" ? "zh-Hant" : targetCode;
-
-  for (let i = 0; i < body.items.length; i++) {
-    const item = body.items[i];
-    try {
-      const { taskId } = await createBatchWithTask({
-        shop,
-        taskType: "picture_translate",
-        batchConfig: {
-          imageUrl: item.imageUrl,
-          sourceCode,
-          targetCode: effectiveTargetCode,
-          modelType,
-        },
-        taskConfig: {
-          imageUrl: item.imageUrl,
-          sourceCode,
-          targetCode: effectiveTargetCode,
-          modelType,
-        },
-        estimatedCredits: ewmaCredits,
-      });
-      enqueuePictureTranslateTask({
-        taskId,
-        shop,
-        imageUrl: item.imageUrl,
-        sourceCode,
-        targetCode: effectiveTargetCode,
-        modelType,
-      });
-      taskIds.push(taskId);
-    } catch (e) {
-      errors.push({
-        index: i,
-        productId: item.productId,
-        error: e instanceof Error ? e.message : "创建失败",
-      });
-    }
-  }
+  const result = await createPictureTranslateBatchTasks({
+    shop,
+    sourceCode: body.sourceCode,
+    targetCode: body.targetCode,
+    modelType: body.modelType,
+    items: body.items,
+  });
 
   return data<BatchAITasksResponse>({
     ok: true,
-    created: taskIds.length,
-    taskIds,
-    errors,
+    created: result.taskIds.length,
+    taskIds: result.taskIds,
+    errors: result.errors,
   });
 };

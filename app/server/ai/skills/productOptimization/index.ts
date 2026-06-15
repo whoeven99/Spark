@@ -58,7 +58,7 @@ const productImproveSkillDef: ToolDefinition = {
     }
   },
   extractUIPayload: (messages, lastUserText, assistantReplyRaw) =>
-    resolveProductImproveCardPayload(messages, lastUserText, assistantReplyRaw),
+    resolveProductImproveCardPayload(messages),
 };
 
 /**

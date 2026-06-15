@@ -9,10 +9,19 @@ import { coercePictureTranslateFormPayload } from "../../../lib/pictureTranslate
 import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import {
   coerceBatchTasksFormPayload,
-  mergeBatchTasksPayloadWithContext,
   type BatchTaskProduct,
-  type BatchTasksFormPayload,
 } from "../../../lib/batchTasksFormPayload";
+import {
+  buildBatchProductImproveProposal,
+  buildImageGenerationProposal,
+  buildSinglePictureTranslateProposal,
+  buildSingleProductImproveProposal,
+  coerceTaskProposalPayload,
+  mergeTaskProposalTargets,
+  taskProposalFromBatchTasksPayload,
+  type TaskProposalPayload,
+} from "../../../lib/taskProposalPayload";
+import type { ObjectQuerySelection } from "../../../lib/objectQuerySpec";
 import {
   hasStreamingVisualContent,
   type SkillStepProgress,
@@ -35,6 +44,7 @@ type StreamChunk =
   | { type: "tool_call"; name: string; args: unknown }
   | { type: "tool_result"; name: string; result: string }
   | { type: "skill_progress"; event: SkillProgressEvent }
+  | { type: "task_proposal"; payload: unknown }
   | { type: "status"; phase: "thinking" }
   | { type: "error"; message: string }
   | {
@@ -49,17 +59,11 @@ type StreamChunk =
           pictureTranslateCard?: unknown;
           imageGenerationCard?: unknown;
           batchTasksCard?: unknown;
+          taskProposal?: unknown;
           attachments?: unknown;
         };
       };
     };
-
-function enrichBatchPayload(
-  payload: BatchTasksFormPayload,
-  workspaceProducts?: BatchTaskProduct[],
-): BatchTasksFormPayload {
-  return mergeBatchTasksPayloadWithContext(payload, workspaceProducts ?? []);
-}
 
 function shouldPreferBatchOverProductImprove(workspaceProducts?: BatchTaskProduct[]): boolean {
   return (workspaceProducts?.length ?? 0) >= 2;
@@ -73,12 +77,7 @@ export type ChatStreamFinishPayload = {
   attachments?: ChatMessageAttachment[];
   productImproveCard?: boolean;
   productImproveCardPayload?: unknown;
-  pictureTranslateCard?: boolean;
-  pictureTranslateFormPayload?: unknown;
-  imageGenerationCard?: boolean;
-  imageGenerationFormPayload?: unknown;
-  batchTasksCard?: boolean;
-  batchTasksFormPayload?: BatchTasksFormPayload;
+  taskProposal?: TaskProposalPayload;
   httpStatus?: number;
 };
 
@@ -91,12 +90,7 @@ type Snapshot = {
   attachments: ChatMessageAttachment[];
   productImproveCard: boolean;
   productImproveCardPayload?: unknown;
-  pictureTranslateCard: boolean;
-  pictureTranslateFormPayload?: unknown;
-  imageGenerationCard: boolean;
-  imageGenerationFormPayload?: unknown;
-  batchTasksCard: boolean;
-  batchTasksFormPayload?: BatchTasksFormPayload;
+  taskProposal?: TaskProposalPayload;
 };
 
 function snapshotToFinishPayload(snapshot: Snapshot, aborted: boolean): ChatStreamFinishPayload {
@@ -108,12 +102,7 @@ function snapshotToFinishPayload(snapshot: Snapshot, aborted: boolean): ChatStre
     attachments: snapshot.attachments,
     productImproveCard: snapshot.productImproveCard,
     productImproveCardPayload: snapshot.productImproveCardPayload,
-    pictureTranslateCard: snapshot.pictureTranslateCard,
-    pictureTranslateFormPayload: snapshot.pictureTranslateFormPayload,
-    imageGenerationCard: snapshot.imageGenerationCard,
-    imageGenerationFormPayload: snapshot.imageGenerationFormPayload,
-    batchTasksCard: snapshot.batchTasksCard,
-    batchTasksFormPayload: snapshot.batchTasksFormPayload,
+    taskProposal: snapshot.taskProposal,
   };
 }
 
@@ -128,15 +117,8 @@ export function useChatStream() {
   const [streamingTranslationForm, setStreamingTranslationForm] = useState<unknown>();
   const [streamingGenerateCard, setStreamingGenerateCard] = useState(false);
   const [streamingGeneratePayload, setStreamingGeneratePayload] = useState<unknown>();
-  const [streamingPictureTranslateCard, setStreamingPictureTranslateCard] = useState(false);
-  const [streamingPictureTranslatePayload, setStreamingPictureTranslatePayload] =
-    useState<unknown>();
-  const [streamingImageGenerationCard, setStreamingImageGenerationCard] = useState(false);
-  const [streamingImageGenerationPayload, setStreamingImageGenerationPayload] =
-    useState<unknown>();
-  const [streamingBatchTasksCard, setStreamingBatchTasksCard] = useState(false);
-  const [streamingBatchTasksPayload, setStreamingBatchTasksPayload] =
-    useState<BatchTasksFormPayload | undefined>();
+  const [streamingTaskProposal, setStreamingTaskProposal] =
+    useState<TaskProposalPayload | undefined>();
   const [skillSteps, setSkillSteps] = useState<SkillStepProgress[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const snapshotRef = useRef<Snapshot>({
@@ -148,12 +130,7 @@ export function useChatStream() {
     attachments: [],
     productImproveCard: false,
     productImproveCardPayload: undefined,
-    pictureTranslateCard: false,
-    pictureTranslateFormPayload: undefined,
-    imageGenerationCard: false,
-    imageGenerationFormPayload: undefined,
-    batchTasksCard: false,
-    batchTasksFormPayload: undefined,
+    taskProposal: undefined,
   });
 
   const resetSnapshot = () => {
@@ -166,12 +143,7 @@ export function useChatStream() {
       attachments: [],
       productImproveCard: false,
       productImproveCardPayload: undefined,
-      pictureTranslateCard: false,
-      pictureTranslateFormPayload: undefined,
-      imageGenerationCard: false,
-      imageGenerationFormPayload: undefined,
-      batchTasksCard: false,
-      batchTasksFormPayload: undefined,
+      taskProposal: undefined,
     };
   };
 
@@ -181,12 +153,7 @@ export function useChatStream() {
     setStreamingTranslationForm(undefined);
     setStreamingGenerateCard(false);
     setStreamingGeneratePayload(undefined);
-    setStreamingPictureTranslateCard(false);
-    setStreamingPictureTranslatePayload(undefined);
-    setStreamingImageGenerationCard(false);
-    setStreamingImageGenerationPayload(undefined);
-    setStreamingBatchTasksCard(false);
-    setStreamingBatchTasksPayload(undefined);
+    setStreamingTaskProposal(undefined);
     setSkillSteps([]);
   };
 
@@ -206,6 +173,8 @@ export function useChatStream() {
         url?: string;
         fileIds?: string[];
         workspaceBatchProducts?: BatchTaskProduct[];
+        /** 工作台按条件圈定的商品 query（TaskProposal 兜底 targets 用） */
+        workspaceProductQuery?: ObjectQuerySelection | null;
         onFinish?: (payload: ChatStreamFinishPayload) => void;
       },
     ) => {
@@ -213,7 +182,24 @@ export function useChatStream() {
       const onFinish = options?.onFinish;
       const fileIds = options?.fileIds ?? [];
       const workspaceBatchProducts = options?.workspaceBatchProducts ?? [];
+      const workspaceProductQuery = options?.workspaceProductQuery ?? null;
       const preferBatchCard = shouldPreferBatchOverProductImprove(workspaceBatchProducts);
+
+      /** 应用通用提案卡（合并工作台上下文，并替换单商品即时卡） */
+      const applyTaskProposal = (proposal: TaskProposalPayload | null) => {
+        if (!proposal) return;
+        const merged = mergeTaskProposalTargets(
+          proposal,
+          workspaceBatchProducts,
+          workspaceProductQuery,
+        );
+        snapshotRef.current.taskProposal = merged;
+        snapshotRef.current.productImproveCard = false;
+        snapshotRef.current.productImproveCardPayload = undefined;
+        setStreamingGenerateCard(false);
+        setStreamingGeneratePayload(undefined);
+        setStreamingTaskProposal(merged);
+      };
 
       trackFeature("chat", "send_message", {
         fileCount: fileIds.length,
@@ -310,6 +296,13 @@ export function useChatStream() {
                   setAwaitingFirstChunk(true);
                   appendThinkingNote("Analyzing the request");
                 }
+              } else if (chunk.type === "task_proposal") {
+                markFirstChunkSeen();
+                const proposal = coerceTaskProposalPayload(chunk.payload);
+                if (proposal) {
+                  applyTaskProposal(proposal);
+                  appendThinkingNote(`已生成任务确认卡片：${proposal.title}`);
+                }
               } else if (chunk.type === "skill_progress") {
                 markFirstChunkSeen();
                 const ev = chunk.event;
@@ -333,37 +326,31 @@ export function useChatStream() {
                   snapshotRef.current.translationTaskForm = normalized;
                   setStreamingTranslationForm(normalized);
                 } else if (chunk.name === "open_product_improve_form") {
-                  if (preferBatchCard) break;
-                  const normalized = coerceProductImproveFormPayload(chunk.args);
-                  snapshotRef.current.productImproveCard = true;
-                  snapshotRef.current.productImproveCardPayload = normalized;
-                  setStreamingGenerateCard(true);
-                  setStreamingGeneratePayload(normalized);
-                } else if (chunk.name === "open_picture_translate_form") {
-                  const normalized = coercePictureTranslateFormPayload(chunk.args);
-                  snapshotRef.current.pictureTranslateCard = true;
-                  snapshotRef.current.pictureTranslateFormPayload = normalized;
-                  setStreamingPictureTranslateCard(true);
-                  setStreamingPictureTranslatePayload(normalized);
-                } else if (chunk.name === "open_image_generation_form") {
-                  const normalized = coerceImageGenerationFormPayload(chunk.args);
-                  snapshotRef.current.imageGenerationCard = true;
-                  snapshotRef.current.imageGenerationFormPayload = normalized;
-                  setStreamingImageGenerationCard(true);
-                  setStreamingImageGenerationPayload(normalized);
-                } else if (chunk.name === "open_batch_tasks_form") {
-                  const normalized = enrichBatchPayload(
-                    coerceBatchTasksFormPayload(chunk.args),
-                    workspaceBatchProducts,
+                  // 表单态统一转通用提案卡；即时生成结果（generate_product_description）保留旧卡
+                  applyTaskProposal(
+                    buildSingleProductImproveProposal(
+                      coerceProductImproveFormPayload(chunk.args),
+                    ),
                   );
-                  snapshotRef.current.batchTasksCard = true;
-                  snapshotRef.current.batchTasksFormPayload = normalized;
-                  snapshotRef.current.productImproveCard = false;
-                  snapshotRef.current.productImproveCardPayload = undefined;
-                  setStreamingGenerateCard(false);
-                  setStreamingGeneratePayload(undefined);
-                  setStreamingBatchTasksCard(true);
-                  setStreamingBatchTasksPayload(normalized);
+                } else if (chunk.name === "open_picture_translate_form") {
+                  applyTaskProposal(
+                    buildSinglePictureTranslateProposal(
+                      coercePictureTranslateFormPayload(chunk.args),
+                    ),
+                  );
+                } else if (chunk.name === "open_image_generation_form") {
+                  applyTaskProposal(
+                    buildImageGenerationProposal(
+                      coerceImageGenerationFormPayload(chunk.args),
+                    ),
+                  );
+                } else if (chunk.name === "open_batch_tasks_form") {
+                  // 旧服务端兼容：批量卡片 chunk 统一转为通用 TaskProposal
+                  applyTaskProposal(
+                    taskProposalFromBatchTasksPayload(
+                      coerceBatchTasksFormPayload(chunk.args),
+                    ),
+                  );
                 }
               } else if (chunk.type === "tool_result") {
                 markFirstChunkSeen();
@@ -399,64 +386,68 @@ export function useChatStream() {
                   snapshotRef.current.attachments =
                     coerceChatMessageAttachments(ui.attachments);
                 }
-                if (ui?.productImproveCardPayload && !preferBatchCard) {
-                  snapshotRef.current.productImproveCard = true;
-                  snapshotRef.current.productImproveCardPayload =
-                    ui.productImproveCardPayload;
-                  setStreamingGenerateCard(true);
-                  setStreamingGeneratePayload(ui.productImproveCardPayload);
+                if (ui?.taskProposal && !snapshotRef.current.taskProposal) {
+                  applyTaskProposal(coerceTaskProposalPayload(ui.taskProposal));
                 }
-                if (ui?.pictureTranslateCard) {
-                  const normalized = coercePictureTranslateFormPayload(
-                    ui.pictureTranslateCard,
-                  );
-                  snapshotRef.current.pictureTranslateCard = true;
-                  snapshotRef.current.pictureTranslateFormPayload = normalized;
-                  setStreamingPictureTranslateCard(true);
-                  setStreamingPictureTranslatePayload(normalized);
-                }
-                if (ui?.imageGenerationCard) {
-                  const normalized = coerceImageGenerationFormPayload(
-                    ui.imageGenerationCard,
-                  );
-                  snapshotRef.current.imageGenerationCard = true;
-                  snapshotRef.current.imageGenerationFormPayload = normalized;
-                  setStreamingImageGenerationCard(true);
-                  setStreamingImageGenerationPayload(normalized);
-                }
-                if (ui?.batchTasksCard) {
-                  const normalized = enrichBatchPayload(
-                    coerceBatchTasksFormPayload(ui.batchTasksCard),
-                    workspaceBatchProducts,
-                  );
-                  snapshotRef.current.batchTasksCard = true;
-                  snapshotRef.current.batchTasksFormPayload = normalized;
-                  if (preferBatchCard) {
-                    snapshotRef.current.productImproveCard = false;
-                    snapshotRef.current.productImproveCardPayload = undefined;
-                    setStreamingGenerateCard(false);
-                    setStreamingGeneratePayload(undefined);
+                if (
+                  ui?.productImproveCardPayload &&
+                  !preferBatchCard &&
+                  !snapshotRef.current.taskProposal
+                ) {
+                  // 已生成结果保留旧结果卡；表单态转通用提案卡
+                  const rec = ui.productImproveCardPayload as Record<string, unknown>;
+                  const isResult =
+                    rec.ok === true ||
+                    (typeof rec.title === "string" &&
+                      rec.title.trim() !== "" &&
+                      typeof rec.description === "string" &&
+                      rec.description.trim() !== "");
+                  if (isResult) {
+                    snapshotRef.current.productImproveCard = true;
+                    snapshotRef.current.productImproveCardPayload =
+                      ui.productImproveCardPayload;
+                    setStreamingGenerateCard(true);
+                    setStreamingGeneratePayload(ui.productImproveCardPayload);
+                  } else {
+                    applyTaskProposal(
+                      buildSingleProductImproveProposal(
+                        coerceProductImproveFormPayload(rec),
+                      ),
+                    );
                   }
-                  setStreamingBatchTasksCard(true);
-                  setStreamingBatchTasksPayload(normalized);
-                } else if (preferBatchCard && workspaceBatchProducts.length >= 2) {
-                  const normalized = enrichBatchPayload(
-                    coerceBatchTasksFormPayload({
-                      taskType: "product_improve",
-                      products: [],
-                      targetLanguage: "en",
-                      sourceLanguage: "auto",
-                    }),
-                    workspaceBatchProducts,
+                }
+                if (ui?.pictureTranslateCard && !snapshotRef.current.taskProposal) {
+                  applyTaskProposal(
+                    buildSinglePictureTranslateProposal(
+                      coercePictureTranslateFormPayload(ui.pictureTranslateCard),
+                    ),
                   );
-                  snapshotRef.current.batchTasksCard = true;
-                  snapshotRef.current.batchTasksFormPayload = normalized;
-                  snapshotRef.current.productImproveCard = false;
-                  snapshotRef.current.productImproveCardPayload = undefined;
-                  setStreamingGenerateCard(false);
-                  setStreamingGeneratePayload(undefined);
-                  setStreamingBatchTasksCard(true);
-                  setStreamingBatchTasksPayload(normalized);
+                }
+                if (ui?.imageGenerationCard && !snapshotRef.current.taskProposal) {
+                  applyTaskProposal(
+                    buildImageGenerationProposal(
+                      coerceImageGenerationFormPayload(ui.imageGenerationCard),
+                    ),
+                  );
+                }
+                if (ui?.batchTasksCard && !snapshotRef.current.taskProposal) {
+                  // 旧服务端 uiPayloads 兼容：batchTasksCard 统一转为通用 TaskProposal
+                  applyTaskProposal(
+                    taskProposalFromBatchTasksPayload(
+                      coerceBatchTasksFormPayload(ui.batchTasksCard),
+                    ),
+                  );
+                } else if (
+                  ((preferBatchCard && workspaceBatchProducts.length >= 2) ||
+                    workspaceProductQuery != null) &&
+                  !snapshotRef.current.taskProposal
+                ) {
+                  // 工作台已选 ≥2 个商品（或按条件圈定）但服务端未发卡片：客户端兜底合成通用提案卡
+                  applyTaskProposal(
+                    buildBatchProductImproveProposal({
+                      products: workspaceBatchProducts,
+                    }),
+                  );
                 }
 
                 const finishPayload = snapshotToFinishPayload(
@@ -516,12 +507,7 @@ export function useChatStream() {
     streamingTranslationForm,
     streamingGenerateCard,
     streamingGeneratePayload,
-    streamingPictureTranslateCard,
-    streamingPictureTranslatePayload,
-    streamingImageGenerationCard,
-    streamingImageGenerationPayload,
-    streamingBatchTasksCard,
-    streamingBatchTasksPayload,
+    streamingTaskProposal,
     skillSteps,
     streamingThinkingText,
     /** @deprecated 兼容旧名 */

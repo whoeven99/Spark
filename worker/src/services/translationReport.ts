@@ -12,7 +12,7 @@ export type ReportEntry = {
 
 export type FieldStat = {
   key: string;
-  klass: "skip" | "html" | "plain";
+  klass: "skip" | "html" | "json" | "plain";
   count: number;
   fallback: number;
   /** translated === original (excluding skip fields), i.e. suspected not-translated */

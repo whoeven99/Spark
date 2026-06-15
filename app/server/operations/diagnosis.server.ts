@@ -1,9 +1,17 @@
 import prisma from "../../db.server";
+import {
+  buildFunnelMetrics,
+  loadPixelFunnel as defaultLoadPixelFunnel,
+  type PixelFunnelCounts,
+  type PixelFunnelLoader,
+} from "../aliyunLog/pixelQuery.server";
 
 /**
  * 每日经营诊断计算层（docs/DAILY_OPERATIONS_WORKFLOWS.md §7 / §10.1）。
  *
- * 纯计算：从已同步的 Shop* 表读取数据，输出结构化诊断项（含证据/公式/推理链），
+ * 主体为纯计算：从已同步的 Shop* 表读取订单/退款/库存/履约数据，输出结构化诊断项
+ * （含证据/公式/推理链）。流量波动（§7.2）与转化率（§7.3）额外从 Web Pixel 写入
+ * 阿里云 SLS 的事件聚合而来，加载器可注入、缺失时静默降级。
  * 不落库、不生成任务。落库与任务化见 dailyInspection.server.ts / diagnosisRules.server.ts。
  */
 
@@ -24,6 +32,11 @@ export const SELLABLE_DAYS_WATCH = 14;
 /** 7 天销售额环比下滑超过该比例（%）进入关注/风险 */
 export const SALES_DECLINE_WATCH_PERCENT = -5;
 export const SALES_DECLINE_RISK_PERCENT = -20;
+/** 会话数 / 转化率环比下滑超过该比例（%）进入关注/风险（流量与转化共用） */
+export const TRAFFIC_DECLINE_WATCH_PERCENT = -20;
+export const TRAFFIC_DECLINE_RISK_PERCENT = -40;
+/** 漏斗某环节比率环比相对下滑超过该比例（%）视为该环节显著恶化 */
+export const FUNNEL_STAGE_DROP_PERCENT = -15;
 
 // ──────────────────────────────────────────────
 // 类型
@@ -33,6 +46,8 @@ export type DiagnosisStatus = "healthy" | "watch" | "risk";
 
 export type DiagnosisKey =
   | "sales_trend"
+  | "traffic_anomaly"
+  | "conversion_health"
   | "fulfillment_health"
   | "logistics_anomaly"
   | "refund_health"
@@ -118,6 +133,16 @@ export type OperationsSummaryMetrics = {
   watchSkuCount: number;
   estimatedInventoryLoss: number;
   currency: string;
+  /** Web Pixel 是否有可用漏斗数据（未接入 / 未配置 SLS 时为 false） */
+  hasPixelData: boolean;
+  /** 近 7 天会话数（page_viewed 独立访客），无数据为 0 */
+  sessions7d: number;
+  sessionsPrev7d: number;
+  /** 会话数环比（%），无上期基线为 null */
+  trafficChangeRate: number | null;
+  /** 近 7 天会话转化率（%），无数据为 null */
+  conversionRate7d: number | null;
+  conversionRatePrev7d: number | null;
 };
 
 export type OperationsDiagnosis = {
@@ -185,6 +210,12 @@ function emptyDiagnosis(shop: string, now: Date): OperationsDiagnosis {
       watchSkuCount: 0,
       estimatedInventoryLoss: 0,
       currency: "USD",
+      hasPixelData: false,
+      sessions7d: 0,
+      sessionsPrev7d: 0,
+      trafficChangeRate: null,
+      conversionRate7d: null,
+      conversionRatePrev7d: null,
     },
     items: [],
     detail: {
@@ -205,7 +236,9 @@ function emptyDiagnosis(shop: string, now: Date): OperationsDiagnosis {
 export async function computeOperationsDiagnosis(
   shop: string,
   now: Date = new Date(),
+  options?: { loadPixelFunnel?: PixelFunnelLoader },
 ): Promise<OperationsDiagnosis> {
+  const loadPixelFunnel = options?.loadPixelFunnel ?? defaultLoadPixelFunnel;
   const since7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const since14Days = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
   const since30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -261,6 +294,17 @@ export async function computeOperationsDiagnosis(
   }
 
   const currency = currencyRow?.currency ?? "USD";
+
+  // ── Web Pixel 漏斗（流量 §7.2 / 转化 §7.3），缺失时静默降级 ──
+  const pixelWindows = await loadPixelFunnel(shop, {
+    currentFrom: since7Days,
+    currentTo: now,
+    prevFrom: since14Days,
+    prevTo: since7Days,
+  });
+  const pixelCurrent = pixelWindows?.current ?? null;
+  const pixelPrevious = pixelWindows?.previous ?? null;
+
   const nonCancelledOrders = orders.filter((o) => o.status !== "cancelled");
   const cancelledCount = orders.length - nonCancelledOrders.length;
 
@@ -571,6 +615,136 @@ export async function computeOperationsDiagnosis(
     });
   }
 
+  // ── Web Pixel 漏斗指标（流量 / 转化）──
+  const pixelMetricsCurrent = pixelCurrent ? buildFunnelMetrics(pixelCurrent) : null;
+  const pixelMetricsPrevious = pixelPrevious ? buildFunnelMetrics(pixelPrevious) : null;
+  const sessions7d = pixelCurrent?.sessions ?? 0;
+  const sessionsPrev7d = pixelPrevious?.sessions ?? 0;
+  const trafficChangeRate =
+    sessionsPrev7d > 0
+      ? round(((sessions7d - sessionsPrev7d) / sessionsPrev7d) * 100, 1)
+      : null;
+  const conversionRate7d = pixelMetricsCurrent?.conversionRate ?? null;
+  const conversionRatePrev7d = pixelMetricsPrevious?.conversionRate ?? null;
+  const hasPixelData = pixelCurrent !== null;
+
+  // 相对环比变化（%），分母无效时为 null。
+  const relChange = (cur: number | null, prev: number | null): number | null =>
+    prev !== null && prev > 0 && cur !== null ? ((cur - prev) / prev) * 100 : null;
+
+  // 2. 流量波动（文档 §7.2）
+  if (pixelCurrent) {
+    let status: DiagnosisStatus = "healthy";
+    const reasoning: string[] = [];
+    if (trafficChangeRate !== null) {
+      if (trafficChangeRate < TRAFFIC_DECLINE_RISK_PERCENT) {
+        status = "risk";
+      } else if (trafficChangeRate < TRAFFIC_DECLINE_WATCH_PERCENT) {
+        status = "watch";
+      }
+      if (status !== "healthy") {
+        const convDrop = relChange(conversionRate7d, conversionRatePrev7d);
+        if (convDrop !== null && convDrop > TRAFFIC_DECLINE_WATCH_PERCENT) {
+          reasoning.push(
+            "会话数下滑但转化率基本稳定，优先归因为流量端（渠道/广告/SEO）问题",
+          );
+        } else {
+          reasoning.push(
+            "会话数明显下滑，优先排查各获客渠道（广告/自然搜索/社媒）流量来源",
+          );
+        }
+        reasoning.push("渠道级流量拆分待接入 referrer/UTM 归因后细化");
+      } else if (trafficChangeRate >= 5) {
+        reasoning.push("近 7 天会话数环比增长，流量健康");
+      } else {
+        reasoning.push("近 7 天会话数环比基本持平");
+      }
+    } else {
+      reasoning.push("无上一周期会话基线，仅观察当前周期绝对值");
+    }
+    items.push({
+      key: "traffic_anomaly",
+      name: "流量波动",
+      status,
+      metrics: {
+        sessions7d,
+        sessionsPrev7d,
+        pageViews7d: pixelCurrent.pageViews,
+        trafficChangeRate,
+      },
+      evidence: [
+        `近 7 天会话数 ${sessions7d}（上一周期 ${sessionsPrev7d}）` +
+          (trafficChangeRate === null ? "" : `，环比 ${trafficChangeRate}%`),
+        `近 7 天页面浏览量 ${pixelCurrent.pageViews}`,
+      ],
+      reasoning,
+      formulas: [
+        "sessions = approx_distinct(clientId) where event = page_viewed",
+        "traffic_change_rate = (sessions_cur - sessions_prev) / sessions_prev * 100",
+      ],
+    });
+
+    // 3. 转化率（文档 §7.3）
+    {
+      const m = pixelMetricsCurrent!;
+      const prev = pixelMetricsPrevious;
+      const convDrop = relChange(m.conversionRate, prev?.conversionRate ?? null);
+      const atcDrop = relChange(m.addToCartRate, prev?.addToCartRate ?? null);
+      const payDrop = relChange(m.paymentRate, prev?.paymentRate ?? null);
+      let cStatus: DiagnosisStatus = "healthy";
+      const cReasoning: string[] = [];
+      if (convDrop !== null) {
+        if (convDrop < TRAFFIC_DECLINE_RISK_PERCENT) cStatus = "risk";
+        else if (convDrop < TRAFFIC_DECLINE_WATCH_PERCENT) cStatus = "watch";
+      }
+      if (cStatus !== "healthy") {
+        if (atcDrop !== null && atcDrop < FUNNEL_STAGE_DROP_PERCENT) {
+          cReasoning.push(
+            "加购率明显下滑，优先排查商品页、价格、运费与信任要素",
+          );
+        } else if (payDrop !== null && payDrop < FUNNEL_STAGE_DROP_PERCENT) {
+          cReasoning.push("支付成功率下滑，优先排查支付链路与结账流程");
+        } else {
+          cReasoning.push(
+            "会话转化率下滑但加购/支付未见明显恶化，排查落地页与商品详情转化",
+          );
+        }
+        if (trafficChangeRate !== null && trafficChangeRate >= TRAFFIC_DECLINE_WATCH_PERCENT) {
+          cReasoning.push("流量基本稳定，问题集中在站内转化环节");
+        }
+      } else if (m.conversionRate === null) {
+        cReasoning.push("会话或结账数据不足，暂无法计算转化率");
+      } else {
+        cReasoning.push("转化漏斗各环节环比稳定");
+      }
+      items.push({
+        key: "conversion_health",
+        name: "转化率",
+        status: cStatus,
+        metrics: {
+          conversionRate: m.conversionRate,
+          conversionRatePrev: prev?.conversionRate ?? null,
+          addToCartRate: m.addToCartRate,
+          checkoutRate: m.checkoutRate,
+          paymentRate: m.paymentRate,
+          checkoutStarted7d: pixelCurrent.checkoutStarted,
+          checkoutCompleted7d: pixelCurrent.checkoutCompleted,
+        },
+        evidence: [
+          `会话转化率 ${m.conversionRate ?? "—"}%` +
+            (prev?.conversionRate != null ? `（上期 ${prev.conversionRate}%）` : ""),
+          `加购率 ${m.addToCartRate ?? "—"}%，结账完成率 ${m.checkoutRate ?? "—"}%，支付成功率 ${m.paymentRate ?? "—"}%`,
+        ],
+        reasoning: cReasoning,
+        formulas: [
+          "conversion_rate = checkout_completed / sessions * 100",
+          "checkout_rate = checkout_completed / checkout_started * 100",
+          "payment_rate = checkout_completed / payment_info_submitted * 100",
+        ],
+      });
+    }
+  }
+
   // 2. 履约健康（文档 §7.4）
   {
     const overdueShare =
@@ -774,6 +948,12 @@ export async function computeOperationsDiagnosis(
       watchSkuCount,
       estimatedInventoryLoss,
       currency,
+      hasPixelData,
+      sessions7d,
+      sessionsPrev7d,
+      trafficChangeRate,
+      conversionRate7d,
+      conversionRatePrev7d,
     },
     items,
     detail: {

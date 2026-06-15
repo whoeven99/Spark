@@ -21,6 +21,8 @@ import {
 import type { loader } from "../app.translation-v4";
 import {
   TERMINAL_V4_STATUSES,
+  type StageName,
+  type StageTimings,
   type TranslationV4Job,
   type TranslationV4Status,
 } from "../../server/translation/v4/types";
@@ -42,6 +44,7 @@ import {
 import { TranslationStyleWorkspace } from "../component/translation/TranslationStyleWorkspace";
 import { TranslationLocaleFields } from "../component/translation/TranslationLocaleFields";
 import { TranslationModuleMultiSelect } from "../component/translation/TranslationModuleMultiSelect";
+import { TranslationReviewDialog } from "../component/translation/TranslationReviewDialog";
 import type { AITaskItem, AITaskStatus } from "../../lib/aiTaskTypes";
 import {
   PageHeaderNav,
@@ -101,6 +104,7 @@ function progressFromJob(
     errorStage,
     lastHeartbeat: job.lastHeartbeat,
     updatedAt: job.updatedAt,
+    stageTimings: job.stageTimings ?? null,
     metrics: {
       initTotal: job.metrics.initTotal,
       initDone: job.metrics.initDone,
@@ -131,6 +135,7 @@ type ProgressData = {
   errorStage: string | null;
   lastHeartbeat: string | null;
   updatedAt: string;
+  stageTimings?: StageTimings | null;
   /** 历史学习得到的整任务预估（秒 / token），样本不足时字段为 null。 */
   estimate?: { seconds: number | null; credits: number | null };
   metrics: {
@@ -209,6 +214,34 @@ function resolveDisplayStatus(
   return (progress?.status ?? job.status) as TranslationV4Status;
 }
 
+function mergeJobWithProgress(job: TranslationV4Job, progress: ProgressData): TranslationV4Job {
+  return {
+    ...job,
+    status: progress.status,
+    updatedAt: progress.updatedAt,
+    stageTimings: progress.stageTimings ?? job.stageTimings,
+    errorMessage: progress.errorMessage,
+    errorStage: progress.errorStage,
+    metrics: {
+      ...job.metrics,
+      initTotal: progress.metrics.initTotal,
+      initDone: progress.metrics.initDone,
+      translateTotal: progress.metrics.translateTotal,
+      translateDone: progress.metrics.translateDone,
+      translateFailed: progress.metrics.translateFailed,
+      translateUnitTotal: progress.metrics.translateUnitTotal,
+      translateUnitDone: progress.metrics.translateUnitDone,
+      writebackTotal: progress.metrics.writebackTotal,
+      writebackDone: progress.metrics.writebackDone,
+      writebackFailed: progress.metrics.writebackFailed,
+      verifyTotal: progress.metrics.verifyTotal,
+      verifyDone: progress.metrics.verifyDone,
+      verifyFailed: progress.metrics.verifyFailed,
+      usedTokens: progress.metrics.usedTokens ?? job.metrics.usedTokens,
+    },
+  };
+}
+
 function readPageTabFromSearch(search: string): PageTab {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   if (params.get("page") === "tasks") return "tasks";
@@ -219,6 +252,21 @@ function readPageTabFromSearch(search: string): PageTab {
 function readTaskViewFromSearch(search: string): TaskViewTab {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   return params.get("taskView") === "history" ? "history" : "current";
+}
+
+function readExpandedJobIdsFromSearch(search: string): string[] {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const raw = params.get("expandJob")?.trim();
+  if (!raw) return [];
+  return raw.split(",").map((id) => id.trim()).filter(Boolean);
+}
+
+function clearExpandJobFromSearch() {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("expandJob")) return;
+  url.searchParams.delete("expandJob");
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
 function syncTranslationSearch(pageTab: PageTab, taskView: TaskViewTab) {
@@ -234,7 +282,23 @@ function syncTranslationSearch(pageTab: PageTab, taskView: TaskViewTab) {
     url.searchParams.delete("page");
     url.searchParams.delete("taskView");
   }
+  url.searchParams.delete("expandJob");
   window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function isStageDetailsDefaultOpen(status: TranslationV4Status): boolean {
+  return status === "FAILED" || status === "PAUSED";
+}
+
+function resolveStageDetailsOpen(
+  jobId: string,
+  status: TranslationV4Status,
+  stageDetailsOpenByJobId: Record<string, boolean>,
+): boolean {
+  if (jobId in stageDetailsOpenByJobId) {
+    return stageDetailsOpenByJobId[jobId];
+  }
+  return isStageDetailsDefaultOpen(status);
 }
 
 function buildApiSearch(search: string): string {
@@ -375,14 +439,22 @@ export function TranslationV4Page() {
     glossaryReady: false,
   });
 
+  const [reviewJob, setReviewJob] = useState<TranslationV4Job | null>(null);
   const [jobs, setJobs] = useState<TranslationV4Job[]>(loaderData.jobs as TranslationV4Job[]);
   const displayJobs = useMemo(
     () => dedupeTranslationV4JobsByLocalePair(jobs),
     [jobs],
   );
   const [progressMap, setProgressMap] = useState<Record<string, ProgressData>>({});
+  const [stageDetailsOpenByJobId, setStageDetailsOpenByJobId] = useState<Record<string, boolean>>(() => {
+    const initialExpandedJobIds = readExpandedJobIdsFromSearch(initialSearch);
+    return Object.fromEntries(initialExpandedJobIds.map((jobId) => [jobId, true]));
+  });
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const optimisticActionRef = useRef<Map<string, OptimisticActionIntent>>(new Map());
+  const scrollToJobIdRef = useRef<string | null>(
+    readExpandedJobIdsFromSearch(initialSearch)[0] ?? null,
+  );
 
   const currentJobs = useMemo(
     () => displayJobs.filter((job) => isCurrentJob(job)),
@@ -612,10 +684,12 @@ export function TranslationV4Page() {
     [query, shopName, refreshJobList, shopify],
   );
 
-  // Poll active jobs
+  // Poll active jobs (progress API carries fresh updatedAt + stageTimings from Cosmos)
   const pollActiveJobs = useCallback(async () => {
     const activeJobIds = jobs
-      .filter((j) => ACTIVE_STATUSES.includes(j.status as TranslationV4Status))
+      .filter((j) =>
+        ACTIVE_STATUSES.includes(resolveDisplayStatus(j, progressMap[j.id])),
+      )
       .map((j) => j.id);
     if (!activeJobIds.length) return;
 
@@ -639,14 +713,14 @@ export function TranslationV4Page() {
 
           setProgressMap((prev) => ({ ...prev, [taskId]: payload }));
           setJobs((prev) =>
-            prev.map((j) => (j.id === taskId ? { ...j, status: payload.status } : j)),
+            prev.map((j) => (j.id === taskId ? mergeJobWithProgress(j, payload) : j)),
           );
         } catch {
           // ignore
         }
       }),
     );
-  }, [jobs, query, shopName]);
+  }, [jobs, progressMap, query, shopName]);
 
   useEffect(() => {
     pollTimerRef.current = setInterval(pollActiveJobs, POLL_INTERVAL);
@@ -663,6 +737,47 @@ export function TranslationV4Page() {
     setPageTab(readPageTabFromSearch(location.search));
     setTaskView(readTaskViewFromSearch(location.search));
   }, [location.search]);
+
+  useEffect(() => {
+    const expandedJobIds = readExpandedJobIdsFromSearch(location.search);
+    if (!expandedJobIds.length) return;
+    setStageDetailsOpenByJobId((current) => {
+      const next = { ...current };
+      for (const jobId of expandedJobIds) {
+        next[jobId] = true;
+      }
+      return next;
+    });
+    scrollToJobIdRef.current = expandedJobIds[0];
+    setPageTab("tasks");
+    setTaskView("current");
+    clearExpandJobFromSearch();
+  }, [location.search]);
+
+  useEffect(() => {
+    const jobId = scrollToJobIdRef.current;
+    if (pageTab !== "tasks" || !jobId) return;
+    const el = document.getElementById(`translation-v4-job-${jobId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollToJobIdRef.current = null;
+  }, [pageTab, visibleJobs, jobs, stageDetailsOpenByJobId]);
+
+  const expandStageDetailsForJobs = useCallback((jobIds: string[]) => {
+    if (!jobIds.length) return;
+    setStageDetailsOpenByJobId((current) => {
+      const next = { ...current };
+      for (const jobId of jobIds) {
+        next[jobId] = true;
+      }
+      return next;
+    });
+    scrollToJobIdRef.current = jobIds[0];
+  }, []);
+
+  const handleStageDetailsOpenChange = useCallback((jobId: string, open: boolean) => {
+    setStageDetailsOpenByJobId((current) => ({ ...current, [jobId]: open }));
+  }, []);
 
   const validateCreateDraft = () => {
     setFormError(null);
@@ -746,6 +861,8 @@ export function TranslationV4Page() {
           shopify.toast.show("已保存自动更新规则");
         }
         await refreshJobList();
+        const createdJobIds = result.created.map((entry) => entry.jobId);
+        expandStageDetailsForJobs(createdJobIds);
         setTaskView("current");
         setPageTab("tasks");
       } else if (!result.failed.length && !result.validationError) {
@@ -1199,8 +1316,15 @@ export function TranslationV4Page() {
                         progress={progress ?? null}
                         locationSearch={location.search}
                         onAction={handleAction}
-                          displayLanguage={displayLanguage}
-                          localeLabelMap={localeLabelMap}
+                        onOpenReview={setReviewJob}
+                        displayLanguage={displayLanguage}
+                        localeLabelMap={localeLabelMap}
+                        stageDetailsOpen={resolveStageDetailsOpen(
+                          job.id,
+                          status,
+                          stageDetailsOpenByJobId,
+                        )}
+                        onStageDetailsOpenChange={handleStageDetailsOpenChange}
                       />
                     );
                   })}
@@ -1279,6 +1403,19 @@ export function TranslationV4Page() {
         </div>
       </DialogShell>
 
+      <TranslationReviewDialog
+        open={reviewJob !== null}
+        onClose={() => setReviewJob(null)}
+        taskId={reviewJob?.id ?? ""}
+        shopName={shopName}
+        apiSearch={query}
+        directionLabel={
+          reviewJob
+            ? `${formatLocaleDisplayName(reviewJob.source, displayLanguage, localeLabelMap)} → ${formatLocaleDisplayName(reviewJob.target, displayLanguage, localeLabelMap)}`
+            : ""
+        }
+      />
+
       <div style={footerDockStyle}>
         <div style={footerContentStyle}>
           <LanguageSelector variant="inline" />
@@ -1303,8 +1440,11 @@ type JobCardProps = {
   progress: ProgressData | null;
   locationSearch: string;
   onAction: (taskId: string, action: "cancel" | "pause" | "resume") => void | Promise<void>;
+  onOpenReview: (job: TranslationV4Job) => void;
   displayLanguage: string;
   localeLabelMap: Record<string, string>;
+  stageDetailsOpen: boolean;
+  onStageDetailsOpenChange: (jobId: string, open: boolean) => void;
 };
 
 function mapV4StatusToTaskStatus(status: TranslationV4Status): AITaskStatus {
@@ -1344,6 +1484,91 @@ function formatElapsedZh(startedAt: string | null, endedAt: string | null): stri
   const elapsed = formatActualElapsed(startedAt, endedAt);
   if (!elapsed) return null;
   return elapsed.replace("m ", "分 ").replace("s", "秒");
+}
+
+function useLiveNowIso(enabled: boolean): string {
+  const [now, setNow] = useState(() => new Date().toISOString());
+  useEffect(() => {
+    if (!enabled) return;
+    setNow(new Date().toISOString());
+    const id = setInterval(() => setNow(new Date().toISOString()), 1000);
+    return () => clearInterval(id);
+  }, [enabled]);
+  return now;
+}
+
+function isStageActiveForStatus(stage: StageName, status: TranslationV4Status): boolean {
+  switch (stage) {
+    case "INIT":
+      return status === "INIT_QUEUED" || status === "INITIALIZING";
+    case "TRANSLATE":
+      return status === "TRANSLATE_QUEUED" || status === "TRANSLATING";
+    case "WRITEBACK":
+      return status === "WRITEBACK_QUEUED" || status === "WRITING_BACK";
+    case "VERIFY":
+      return status === "VERIFY_QUEUED" || status === "VERIFYING";
+    default: {
+      const _exhaustive: never = stage;
+      return _exhaustive;
+    }
+  }
+}
+
+function parseProgressTimestamp(value: string | null | undefined): string | null {
+  if (!value?.trim()) return null;
+  if (/^\d+$/.test(value.trim())) {
+    return new Date(Number(value)).toISOString();
+  }
+  return value;
+}
+
+function inferStageStartIso(
+  stage: StageName,
+  stageTimings: StageTimings | null | undefined,
+  job: Pick<TranslationV4Job, "claimedAt" | "createdAt">,
+  metrics: Pick<ProgressData["metrics"], "translateStartedAt">,
+): string | null {
+  const recorded = stageTimings?.[stage]?.startedAt;
+  if (recorded) return recorded;
+
+  switch (stage) {
+    case "INIT":
+      return job.claimedAt ?? job.createdAt;
+    case "TRANSLATE":
+      return (
+        parseProgressTimestamp(metrics.translateStartedAt ?? null) ??
+        stageTimings?.INIT?.endedAt ??
+        job.claimedAt ??
+        job.createdAt
+      );
+    case "WRITEBACK":
+      return stageTimings?.TRANSLATE?.endedAt ?? null;
+    case "VERIFY":
+      return stageTimings?.WRITEBACK?.endedAt ?? null;
+    default: {
+      const _exhaustive: never = stage;
+      return _exhaustive;
+    }
+  }
+}
+
+function formatStageDurationLabel(
+  stage: StageName,
+  status: TranslationV4Status,
+  stageTimings: StageTimings | null | undefined,
+  job: Pick<TranslationV4Job, "claimedAt" | "createdAt">,
+  metrics: ProgressData["metrics"],
+  liveNowIso: string,
+): string | null {
+  const timing = stageTimings?.[stage];
+  if (timing?.endedAt) {
+    return formatElapsedZh(timing.startedAt, timing.endedAt);
+  }
+  if (isStageActiveForStatus(stage, status)) {
+    const start = inferStageStartIso(stage, stageTimings, job, metrics);
+    if (start) return formatElapsedZh(start, liveNowIso);
+  }
+  return null;
 }
 
 const LOCALE_NAME_OVERRIDES: Record<string, string> = {
@@ -1458,7 +1683,7 @@ function getJobProgressPercent(status: TranslationV4Status, metrics: ProgressDat
     ? getStageRatio(
         metrics.verifyDone,
         metrics.verifyTotal,
-        status === "COMPLETED" && metrics.verifyTotal > 0,
+        false,
         ["VERIFY_QUEUED", "VERIFYING"].includes(status),
       )
     : 0;
@@ -1494,8 +1719,17 @@ function buildJobActions(
   job: TranslationV4Job,
   status: TranslationV4Status,
   onAction: JobCardProps["onAction"],
+  onOpenReview: JobCardProps["onOpenReview"],
 ): CardAction[] {
   const actions: CardAction[] = [];
+
+  if (status === "COMPLETED") {
+    actions.push({
+      label: "查看写回详情",
+      tone: "secondary",
+      onClick: () => onOpenReview(job),
+    });
+  }
 
   if (ACTIVE_STATUSES.includes(status)) {
     actions.push({
@@ -1623,16 +1857,34 @@ function getStageSummaryCopy(
   return "查看阶段进度";
 }
 
+function resolveCardMetrics(
+  job: TranslationV4Job,
+  progress: ProgressData | null,
+  status: TranslationV4Status,
+): ProgressData["metrics"] {
+  if (progress?.metrics) return progress.metrics;
+  return progressFromJob(job, status, job.errorStage).metrics;
+}
+
 function JobCard({
   job,
   status,
   progress,
   locationSearch,
   onAction,
+  onOpenReview,
   displayLanguage,
   localeLabelMap,
+  stageDetailsOpen,
+  onStageDetailsOpenChange,
 }: JobCardProps) {
-  const metrics = progress?.metrics ?? job.metrics;
+  const metrics = resolveCardMetrics(job, progress, status);
+  const stageTimings = progress?.stageTimings ?? job.stageTimings;
+  const updatedAt = progress?.updatedAt ?? job.updatedAt;
+  const isLive = ACTIVE_STATUSES.includes(status);
+  const liveNowIso = useLiveNowIso(isLive);
+  const stageDuration = (stage: StageName): string | null =>
+    formatStageDurationLabel(stage, status, stageTimings, job, metrics, liveNowIso);
   const taskStatus = mapV4StatusToTaskStatus(status);
   const progressTone = getProgressTone(status);
   const progressPercent = getJobProgressPercent(status, metrics);
@@ -1649,21 +1901,26 @@ function JobCard({
     startedAt: job.claimedAt ?? job.createdAt,
     completedAt:
       status === "COMPLETED" || status === "FAILED" || status === "CANCELLED"
-        ? job.updatedAt
+        ? updatedAt
         : null,
     errorMsg: progress?.errorMessage ?? job.errorMessage,
     createdAt: job.createdAt,
-    updatedAt: job.updatedAt,
+    updatedAt,
   };
-  const actions = buildJobActions(job, status, onAction);
+  const actions = buildJobActions(job, status, onAction, onOpenReview);
   const testMode = progress?.testMode ?? job.testMode;
   const showVerify = metrics.verifyTotal > 0 || ["VERIFY_QUEUED", "VERIFYING"].includes(status);
   const primaryCopy = getPrimaryCopy(status, metrics, progress?.errorStage ?? job.errorStage);
-  const secondaryCopy = getSecondaryCopy(job, status, metrics, progress?.updatedAt ?? job.updatedAt);
+  const secondaryCopy = getSecondaryCopy(
+    job,
+    status,
+    metrics,
+    isLive ? liveNowIso : updatedAt,
+  );
   const stageSummary = getStageSummaryCopy(status, metrics, progress?.errorStage ?? job.errorStage);
-  const defaultOpen = status === "FAILED" || status === "PAUSED";
 
   return (
+    <div id={`translation-v4-job-${job.id}`}>
     <AITaskCardShell
       task={translationTask}
       locationSearch={locationSearch}
@@ -1689,7 +1946,11 @@ function JobCard({
       progressBackground={progressTone.background}
       bodyContent={
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <details style={jobStageDetailsStyle} open={defaultOpen}>
+          <details
+            style={jobStageDetailsStyle}
+            open={stageDetailsOpen}
+            onToggle={(event) => onStageDetailsOpenChange(job.id, event.currentTarget.open)}
+          >
             <summary style={jobStageSummaryStyle}>
               <span>{stageSummary}</span>
               <span style={jobStageSummaryHintStyle}>查看阶段进度</span>
@@ -1701,6 +1962,7 @@ function JobCard({
                 total={metrics.initTotal}
                 active={status === "INITIALIZING"}
                 complete={["INIT_DONE", "TRANSLATE_QUEUED", "TRANSLATING", "TRANSLATE_DONE", "WRITEBACK_QUEUED", "WRITING_BACK", "VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status)}
+                durationLabel={stageDuration("INIT")}
               />
               <StageBar
                 label="翻译"
@@ -1717,6 +1979,7 @@ function JobCard({
                     </>
                   ) : undefined
                 }
+                durationLabel={stageDuration("TRANSLATE")}
               />
               <StageBar
                 label="回写"
@@ -1725,6 +1988,7 @@ function JobCard({
                 active={status === "WRITING_BACK"}
                 complete={["VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status)}
                 failed={metrics.writebackFailed}
+                durationLabel={stageDuration("WRITEBACK")}
               />
               {showVerify ? (
                 <StageBar
@@ -1739,6 +2003,7 @@ function JobCard({
                       ? `${metrics.verifyDone}/${metrics.verifyTotal}（有译文变更）`
                       : undefined
                   }
+                  durationLabel={stageDuration("VERIFY")}
                 />
               ) : null}
             </div>
@@ -1763,6 +2028,7 @@ function JobCard({
       }
       actions={actions}
     />
+    </div>
   );
 }
 
@@ -1894,9 +2160,11 @@ type StageBarProps = {
   failed?: number;
   /** Overrides the "done/total" number text (e.g. to show both resources and nodes). */
   detailLabel?: ReactNode;
+  /** Wall-clock time this stage took (e.g. "3分 12秒"), shown muted at the end. */
+  durationLabel?: string | null;
 };
 
-function StageBar({ label, done, total, active, complete, failed = 0, detailLabel }: StageBarProps) {
+function StageBar({ label, done, total, active, complete, failed = 0, detailLabel, durationLabel }: StageBarProps) {
   const { isMobile } = useResponsiveLayout();
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : (complete ? 100 : 0);
 
@@ -1961,6 +2229,9 @@ function StageBar({ label, done, total, active, complete, failed = 0, detailLabe
         {complete ? <span style={{ color: pageColorTokens.brandGreenDark, fontWeight: 700 }}>✓</span> : null}
         {active ? <span style={{ color: "#8a420f", fontWeight: 600 }}> 进行中</span> : null}
         {failed > 0 ? <span style={{ color: "#b98900", fontWeight: 600 }}> · 失败 {failed}</span> : null}
+        {durationLabel ? (
+          <span style={{ color: pageColorTokens.textFootnote, fontWeight: 500 }}> · 耗时 {durationLabel}</span>
+        ) : null}
       </span>
     </div>
   );
