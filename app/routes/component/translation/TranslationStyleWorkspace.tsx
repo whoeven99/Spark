@@ -835,7 +835,7 @@ const overlayBackdropStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  padding: "1.25rem",
+  padding: "0.9rem",
   zIndex: 80,
 };
 
@@ -859,17 +859,17 @@ const suggestionOverlayPanelStyle: CSSProperties = {
   borderRadius: "20px",
   background: "#ffffff",
   boxShadow: "0 24px 60px rgba(15, 23, 42, 0.18)",
-  padding: "1rem",
+  padding: "0.8rem 0.9rem",
   display: "flex",
   flexDirection: "column",
-  gap: "1rem",
+  gap: "0.75rem",
 };
 
 const overlayHeaderStyle: CSSProperties = {
   display: "flex",
   alignItems: "flex-start",
   justifyContent: "space-between",
-  gap: "0.8rem",
+  gap: "0.65rem",
 };
 
 const overlayTitleStyle: CSSProperties = {
@@ -880,7 +880,7 @@ const overlayTitleStyle: CSSProperties = {
 };
 
 const overlaySubtitleStyle: CSSProperties = {
-  marginTop: "0.3rem",
+  marginTop: "0.2rem",
   fontSize: "0.8125rem",
   color: pageColorTokens.textSecondary,
   lineHeight: 1.5,
@@ -892,7 +892,7 @@ const overlayCloseButtonStyle: CSSProperties = {
   color: pageColorTokens.textBody,
   cursor: "pointer",
   fontSize: "0.8125rem",
-  padding: "0.45rem 0.75rem",
+  padding: "0.35rem 0.65rem",
   borderRadius: "999px",
 };
 

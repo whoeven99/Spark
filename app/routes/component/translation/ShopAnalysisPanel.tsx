@@ -344,27 +344,29 @@ export function ShopAnalysisPanel({
 
   return (
     <PageSurface {...(isProfileTarget ? {} : { title: targetTitle(target), subtitle: targetSubtitle(target) })}>
-      <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
         <div style={isProfileTarget ? compactActionRowStyle : actionRowStyle}>
           {!isProfileTarget ? (
             <div style={{ ...pageHintTextStyle, marginTop: 0 }}>
               {targetIntro(target, sourceLanguage)}
             </div>
           ) : null}
-          <s-button
-            type="button"
-            variant="secondary"
-            onClick={() => void handleTrigger()}
-            {...(isRunning || triggering ? { disabled: true } : {})}
-          >
-            {triggering
-              ? "生成中…"
-              : relevantJob && QUEUED_STATUSES.has(relevantJob.status)
-                ? "等待 Worker 拉取…"
-                : relevantJob && PROCESSING_STATUSES.has(relevantJob.status)
-                  ? "建议生成中…"
-                  : "生成建议"}
-          </s-button>
+          {!isProfileTarget ? (
+            <s-button
+              type="button"
+              variant="secondary"
+              onClick={() => void handleTrigger()}
+              {...(isRunning || triggering ? { disabled: true } : {})}
+            >
+              {triggering
+                ? "生成中…"
+                : relevantJob && QUEUED_STATUSES.has(relevantJob.status)
+                  ? "等待 Worker 拉取…"
+                  : relevantJob && PROCESSING_STATUSES.has(relevantJob.status)
+                    ? "建议生成中…"
+                    : "生成建议"}
+            </s-button>
+          ) : null}
         </div>
 
         {isRunning && !relevantJob ? (
@@ -582,7 +584,7 @@ export function ShopAnalysisPanel({
                     style={textareaStyle}
                   />
                 </div>
-                <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: "0.4rem", justifyContent: "flex-end", flexWrap: "wrap", marginTop: "0.1rem" }}>
                   <s-button
                     type="button"
                     variant="primary"
@@ -1153,6 +1155,7 @@ const actionRowStyle: CSSProperties = {
 const compactActionRowStyle: CSSProperties = {
   display: "flex",
   justifyContent: "flex-end",
+  minHeight: 0,
 };
 
 const emptyPromptStyle: CSSProperties = {
@@ -1165,8 +1168,8 @@ const emptyPromptStyle: CSSProperties = {
 
 const inputStyle: CSSProperties = {
   width: "100%",
-  marginTop: "0.25rem",
-  padding: "0.4rem 0.55rem",
+  marginTop: "0.15rem",
+  padding: "0.35rem 0.5rem",
   borderRadius: "6px",
   border: `1px solid ${pageColorTokens.borderInput}`,
   fontSize: "0.8125rem",
@@ -1239,45 +1242,46 @@ const profileLabelStyle: CSSProperties = {
 const fieldStackStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  gap: "0.35rem",
+  gap: "0.25rem",
 };
 
 const aiProfileEditorStyle: CSSProperties = {
   ...pageInnerPanelStyle,
   display: "flex",
   flexDirection: "column",
-  gap: "0.85rem",
-  border: "1px solid #0f5c48",
-  background: "linear-gradient(180deg, #f4fbf8 0%, #ffffff 100%)",
-  boxShadow: "0 10px 28px rgba(15, 92, 72, 0.08)",
+  gap: "0.6rem",
+  border: "none",
+  background: "transparent",
+  boxShadow: "none",
+  padding: 0,
 };
 
 const aiListCardStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  gap: "0.55rem",
-  padding: "0.8rem 0.9rem",
-  borderRadius: pageColorTokens.radiusControl,
-  border: "1px solid #0f5c48",
-  background: "#f8fcfa",
+  gap: "0.35rem",
+  padding: 0,
+  borderRadius: 0,
+  border: "none",
+  background: "transparent",
 };
 
 const aiChipWrapStyle: CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
-  gap: "0.4rem",
+  gap: "0.3rem",
 };
 
 const aiChipStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
-  padding: "0.22rem 0.55rem",
+  padding: "0.18rem 0.45rem",
   borderRadius: "999px",
-  fontSize: "0.75rem",
+  fontSize: "0.72rem",
   fontWeight: 600,
-  color: "#0f5c48",
-  background: "#ebf7f1",
-  border: "1px solid #0f5c48",
+  color: pageColorTokens.textBody,
+  background: pageColorTokens.surfaceMuted,
+  border: "none",
 };
 
 const tagStyle: CSSProperties = {
