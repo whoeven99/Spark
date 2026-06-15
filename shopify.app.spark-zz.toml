@@ -7,7 +7,6 @@ name = "spark_zz"
 
 [build]
 automatically_update_urls_on_dev = true
-include_config_on_deploy = true
 
 
 [webhooks] 
@@ -58,7 +57,7 @@ uri = "/webhooks/fulfillments/update"
 # dev 时 CLI 会把 url 换成 tunnel。勿指向 Render（Render 用的是 AiAssistant-Test 密钥）。
 [app_proxy]
   url = "https://example.com/api/image-proxy"
-  subpath = "ciwi-spark"
+  subpath = "ciwi-spark-zz"
   prefix = "a"
 
 [access_scopes]
