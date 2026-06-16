@@ -132,8 +132,16 @@ export type DailyOperationsResult = {
   review: DailyReview | null;
 };
 
-function toDateKey(date: Date): string {
-  return date.toISOString().slice(0, 10);
+const DEFAULT_SNAPSHOT_TIMEZONE = "UTC";
+
+/** 按店铺时区生成 YYYY-MM-DD 快照键（与商户感知的「今日」一致）。 */
+function toDateKey(date: Date, timeZone: string = DEFAULT_SNAPSHOT_TIMEZONE): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
 function toTaskView(task: {
@@ -480,9 +488,11 @@ async function buildReview(
   shop: string,
   todayMetrics: OperationsSummaryMetrics,
   now: Date,
+  timeZone: string = DEFAULT_SNAPSHOT_TIMEZONE,
 ): Promise<DailyReview | null> {
+  const todayKey = toDateKey(now, timeZone);
   const previous = await prisma.operationDiagnosisSnapshot.findFirst({
-    where: { shop, snapshotDate: { lt: toDateKey(now) }, hasData: true },
+    where: { shop, snapshotDate: { lt: todayKey }, hasData: true },
     orderBy: { snapshotDate: "desc" },
   });
   if (!previous) return null;
@@ -612,10 +622,12 @@ export async function ensureDailySnapshot(
     force?: boolean;
     now?: Date;
     shopifyAdmin?: ShopifyAdminGraphqlClient;
+    timeZone?: string;
   },
 ): Promise<DailyOperationsResult> {
   const now = options?.now ?? new Date();
-  const dateKey = toDateKey(now);
+  const timeZone = options?.timeZone ?? DEFAULT_SNAPSHOT_TIMEZONE;
+  const dateKey = toDateKey(now, timeZone);
 
   const existing = await prisma.operationDiagnosisSnapshot.findUnique({
     where: { shop_snapshotDate: { shop, snapshotDate: dateKey } },
@@ -625,7 +637,7 @@ export async function ensureDailySnapshot(
   if (existing && !options?.force) {
     const [tasks, review, diagnosis] = await Promise.all([
       listOperationTasks(shop),
-      buildReview(shop, existing.metrics as OperationsSummaryMetrics, now),
+      buildReview(shop, existing.metrics as OperationsSummaryMetrics, now, timeZone),
       computeOperationsDiagnosis(shop, now, {
         shopifyAdmin: options?.shopifyAdmin,
       }),
@@ -683,7 +695,7 @@ export async function ensureDailySnapshot(
 
   const [tasks, review] = await Promise.all([
     listOperationTasks(shop),
-    buildReview(shop, diagnosis.summaryMetrics, now),
+    buildReview(shop, diagnosis.summaryMetrics, now, timeZone),
   ]);
 
   return {

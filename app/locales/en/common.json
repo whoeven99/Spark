@@ -578,6 +578,7 @@
     "refreshing": "Inspecting…",
     "snapshotDateLabel": "Snapshot date: {{date}}",
     "generatedAtLabel": "Generated at: {{value}}",
+    "dataUpdatedAtLabel": "Updated: {{value}}",
     "shopLabel": "Shop: {{value}}",
     "coreBoard": "Today's core metrics",
     "emptyState": "No order data yet. New orders sync automatically; run the backfill page to import historical orders first.",

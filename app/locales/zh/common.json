@@ -578,6 +578,7 @@
     "refreshing": "巡检中…",
     "snapshotDateLabel": "快照日期：{{date}}",
     "generatedAtLabel": "生成时间：{{value}}",
+    "dataUpdatedAtLabel": "数据更新：{{value}}",
     "shopLabel": "店铺：{{value}}",
     "coreBoard": "今日核心指标",
     "emptyState": "暂无订单数据，无法生成诊断。新订单会自动同步，历史订单请先在补录页执行回填。",
