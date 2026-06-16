@@ -398,6 +398,23 @@ function priorityLabel(
   return t("dailyOps.priorityLow");
 }
 
+function effectTone(effect: InsightEffect): "success" | "info" | "warning" | "critical" {
+  if (effect === "revenue") return "success";
+  if (effect === "conversion") return "info";
+  if (effect === "efficiency") return "warning";
+  return "critical";
+}
+
+function effectLabel(
+  effect: InsightEffect,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  if (effect === "revenue") return t("dailyOps.filterEffectRevenue");
+  if (effect === "conversion") return t("dailyOps.filterEffectConversion");
+  if (effect === "efficiency") return t("dailyOps.filterEffectEfficiency");
+  return t("dailyOps.filterEffectRetention");
+}
+
 function statusTone(
   status: string,
 ): "success" | "warning" | "critical" | "info" {
@@ -1458,7 +1475,6 @@ export default function DailyOperationsPage() {
               ? t(`dailyOps.detailTitle.${detailSection}` as const)
               : t("dailyOps.pageTitle")
           }
-          subtitle={detailSection ? t(`dailyOps.detailSubtitle.${detailSection}` as const) : undefined}
           backLabel={
             detailSection
               ? t("dailyOps.backToOverview")
@@ -1588,7 +1604,7 @@ function DailyOperationsBody({
   const { t } = useTranslation();
   const [todayTaskTab, setTodayTaskTab] = useState<TodayTaskTab>("all");
   const [allStatusFilter, setAllStatusFilter] = useState("all");
-  const [allQuadrantFilter, setAllQuadrantFilter] = useState("all");
+  const [allPriorityFilter, setAllPriorityFilter] = useState("all");
   const [allEffectFilter, setAllEffectFilter] = useState("all");
   const overview = result.overview;
   const hasPixelData = overview.hasPixelData;
@@ -1666,7 +1682,7 @@ function DailyOperationsBody({
     () =>
       sortedTasks.filter((task) => {
         if (allStatusFilter !== "all" && task.status !== allStatusFilter) return false;
-        if (allQuadrantFilter !== "all" && task.quadrant !== allQuadrantFilter) return false;
+        if (allPriorityFilter !== "all" && task.priority !== allPriorityFilter) return false;
         if (
           allEffectFilter !== "all" &&
           inferTaskPresentation(task, t).effect !== allEffectFilter
@@ -1675,7 +1691,7 @@ function DailyOperationsBody({
         }
         return true;
       }),
-    [allEffectFilter, allQuadrantFilter, allStatusFilter, sortedTasks, t],
+    [allEffectFilter, allPriorityFilter, allStatusFilter, sortedTasks, t],
   );
 
   const renderTaskListRow = (task: OperationTaskView) => {
@@ -1693,6 +1709,7 @@ function DailyOperationsBody({
         <div style={listRowMainStyle}>
           <div style={{ ...listRowMetaStyle, gap: "0.35rem" }}>
             <s-badge tone={priorityTone(task.priority)}>{priorityLabel(task.priority, t)}</s-badge>
+            <s-badge tone={effectTone(presentation.effect)}>{effectLabel(presentation.effect, t)}</s-badge>
             <s-badge tone={statusTone(task.status)}>{taskStatusText(task.status)}</s-badge>
           </div>
           <h3 style={taskTitleStyle}>{task.title}</h3>
@@ -1793,7 +1810,6 @@ function DailyOperationsBody({
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             <PageSurface
               title={t("dailyOps.summaryTitle")}
-              subtitle={t("dailyOps.summarySubtitle")}
             >
               <div
                 style={{
@@ -1850,7 +1866,6 @@ function DailyOperationsBody({
                     <span style={subtleInlineStatStyle}>{t("dailyOps.dataInsightsTitle")}</span>
                   </div>
                   <span style={overviewMiniValueStyle}>{overview.insightCount}</span>
-                  <span style={summaryListItemStyle}>{t("dailyOps.summaryInsightHint")}</span>
                 </div>
                 <div style={summaryCardStyle}>
                   <div style={metricMetaRowStyle}>
@@ -1920,7 +1935,6 @@ function DailyOperationsBody({
                 </div>
               ) : null}
               <div style={detailActionRowStyle}>
-                <span style={taskSecondaryTextStyle}>{t("dailyOps.pageSubtitle")}</span>
                 <s-button type="button" variant="secondary" onClick={() => onOpenDetail("performance")}>
                   {t("dailyOps.viewDetail")}
                 </s-button>
@@ -1929,7 +1943,6 @@ function DailyOperationsBody({
 
             <PageSurface
               title={t("dailyOps.monitoringTitle")}
-              subtitle={t("dailyOps.monitoringSubtitle")}
             >
               {riskCards.length === 0 ? (
                 <div style={pageEmptyStateStyle}>{t("dailyOps.monitoringEmpty")}</div>
@@ -2048,7 +2061,6 @@ function DailyOperationsBody({
                 </div>
               )}
               <div style={detailActionRowStyle}>
-                <span style={taskSecondaryTextStyle}>{t("dailyOps.monitoringDetailHint")}</span>
                 <s-button type="button" variant="secondary" onClick={() => onOpenDetail("risk")}>
                   {t("dailyOps.viewDetail")}
                 </s-button>
@@ -2099,7 +2111,6 @@ function DailyOperationsBody({
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             <PageSurface
               title={t("dailyOps.allInsightsTitle")}
-              subtitle={t("dailyOps.allInsightsSubtitle")}
             >
               <div style={toolbarSurfaceStyle}>
                 <div
@@ -2138,23 +2149,22 @@ function DailyOperationsBody({
                       ...(isMobile ? { flexDirection: "column", alignItems: "stretch", flex: "1 1 100%" } : null),
                     }}
                   >
-                    <label htmlFor="all-insights-quadrant" style={toolbarLabelStyle}>
-                      {t("dailyOps.filterQuadrantAll")}
+                    <label htmlFor="all-insights-priority" style={toolbarLabelStyle}>
+                      {t("dailyOps.filterPriorityAll")}
                     </label>
                     <select
-                      id="all-insights-quadrant"
+                      id="all-insights-priority"
                       style={{
                         ...filterSelectStyle,
                         ...(isMobile ? { width: "100%", minWidth: 0 } : null),
                       }}
-                      value={allQuadrantFilter}
-                      onChange={(event) => setAllQuadrantFilter(event.target.value)}
+                      value={allPriorityFilter}
+                      onChange={(event) => setAllPriorityFilter(event.target.value)}
                     >
-                      <option value="all">{t("dailyOps.filterQuadrantAll")}</option>
-                      <option value="q1">{quadrantLabel("q1", t)}</option>
-                      <option value="q2">{quadrantLabel("q2", t)}</option>
-                      <option value="q3">{quadrantLabel("q3", t)}</option>
-                      <option value="q4">{quadrantLabel("q4", t)}</option>
+                      <option value="all">{t("dailyOps.filterPriorityAll")}</option>
+                      <option value="P0">{t("dailyOps.priorityHigh")}</option>
+                      <option value="P1">{t("dailyOps.priorityMedium")}</option>
+                      <option value="P2">{t("dailyOps.priorityLow")}</option>
                     </select>
                   </div>
                   <div
@@ -2193,7 +2203,7 @@ function DailyOperationsBody({
                       variant="tertiary"
                       onClick={() => {
                         setAllStatusFilter("all");
-                        setAllQuadrantFilter("all");
+                        setAllPriorityFilter("all");
                         setAllEffectFilter("all");
                       }}
                       {...(isMobile ? { style: { width: "100%" } } : {})}
@@ -2216,12 +2226,6 @@ function DailyOperationsBody({
                 ) : (
                   allInsightTasks.map(renderTaskListRow)
                 )}
-              </div>
-              <div style={detailActionRowStyle}>
-                <span style={taskSecondaryTextStyle}>{t("dailyOps.allInsightsDetailHint")}</span>
-                <s-button type="button" variant="secondary" onClick={() => onOpenDetail("risk")}>
-                  {t("dailyOps.viewHealthDetail")}
-                </s-button>
               </div>
             </PageSurface>
           </div>
@@ -3149,7 +3153,6 @@ function DailyOperationsDetail({
                 ) : (
                   <div style={{ ...relatedObjectWrapStyle, marginTop: "0.9rem" }}>
                     <strong>{t("dailyOps.detailRelatedObjectsEmpty")}</strong>
-                    <p style={taskSecondaryTextStyle}>{t("dailyOps.detailRelatedObjectsHint")}</p>
                   </div>
                 )}
                 {selectedEnvironmentTasks.length > 0 ? (
@@ -3330,7 +3333,6 @@ function DailyOperationsDetail({
                 ) : (
                   <div style={{ ...relatedObjectWrapStyle, marginTop: "0.9rem" }}>
                     <strong>{t("dailyOps.detailRelatedObjectsEmpty")}</strong>
-                    <p style={taskSecondaryTextStyle}>{t("dailyOps.detailInsightObjectsHint")}</p>
                   </div>
                 )}
                 {selectedInsightEnvironmentCards.length > 0 ? (
