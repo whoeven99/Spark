@@ -1399,10 +1399,6 @@ export default function DailyOperationsPage() {
     }
   };
 
-  const quadrantTitle = (q: TaskQuadrant) => t(`dailyOps.quadrant${q.toUpperCase()}`);
-  const quadrantDesc = (q: TaskQuadrant) =>
-    t(`dailyOps.quadrant${q.toUpperCase()}Desc`);
-
   const submitTaskAction = (taskId: string, taskAction: OperationTaskAction) => {
     fetcher.submit({ intent: "task", taskId, taskAction }, { method: "post" });
   };
@@ -1433,15 +1429,6 @@ export default function DailyOperationsPage() {
     setSearchParams(next);
   };
 
-  const closeDetail = () => {
-    const next = new URLSearchParams(searchParams);
-    next.delete("detail");
-    next.delete("riskTab");
-    next.delete("environmentKey");
-    next.delete("insightKey");
-    next.delete("taskId");
-    setSearchParams(next);
-  };
   const detailReturnTo = useMemo(() => {
     if (!detailSection) return undefined;
     const next = new URLSearchParams(searchParams);
@@ -1603,7 +1590,6 @@ function DailyOperationsBody({
   const [allStatusFilter, setAllStatusFilter] = useState("all");
   const [allQuadrantFilter, setAllQuadrantFilter] = useState("all");
   const [allEffectFilter, setAllEffectFilter] = useState("all");
-  const m = result.metrics;
   const overview = result.overview;
   const hasPixelData = overview.hasPixelData;
   const sessionsValue = overview.sessions7d !== null
@@ -2165,10 +2151,10 @@ function DailyOperationsBody({
                       onChange={(event) => setAllQuadrantFilter(event.target.value)}
                     >
                       <option value="all">{t("dailyOps.filterQuadrantAll")}</option>
-                      <option value="q1">{quadrantTitle("q1")}</option>
-                      <option value="q2">{quadrantTitle("q2")}</option>
-                      <option value="q3">{quadrantTitle("q3")}</option>
-                      <option value="q4">{quadrantTitle("q4")}</option>
+                      <option value="q1">{quadrantLabel("q1", t)}</option>
+                      <option value="q2">{quadrantLabel("q2", t)}</option>
+                      <option value="q3">{quadrantLabel("q3", t)}</option>
+                      <option value="q4">{quadrantLabel("q4", t)}</option>
                     </select>
                   </div>
                   <div
@@ -3478,7 +3464,9 @@ function DailyOperationsDetail({
           subtitle={selectedTask.triggerReason}
           badges={
             <>
-              <s-badge tone={priorityTone(selectedTask.priority)}>{selectedTask.priority}</s-badge>
+              <s-badge tone={priorityTone(selectedTask.priority)}>
+                {priorityLabel(selectedTask.priority, t)}
+              </s-badge>
               <s-badge tone={statusTone(selectedTask.status)}>
                 {taskStatusText(selectedTask.status)}
               </s-badge>
@@ -3511,7 +3499,9 @@ function DailyOperationsDetail({
         />
         <PageSurface title={selectedTask.title} subtitle={selectedTask.triggerReason}>
           <div style={{ ...listRowMetaStyle, marginBottom: "0.8rem" }}>
-            <s-badge tone={priorityTone(selectedTask.priority)}>{selectedTask.priority}</s-badge>
+            <s-badge tone={priorityTone(selectedTask.priority)}>
+              {priorityLabel(selectedTask.priority, t)}
+            </s-badge>
             <s-badge tone={statusTone(selectedTask.status)}>
               {taskStatusText(selectedTask.status)}
             </s-badge>
