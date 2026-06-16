@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import {
@@ -462,7 +462,6 @@ function quadrantLabel(
 }
 
 type InsightsView = "today" | "all";
-type TodayTaskTab = "all" | "q1" | "q3" | "in_progress" | "done";
 type InsightEffect = "revenue" | "conversion" | "efficiency" | "retention";
 type DetailSection = "performance" | "risk" | "value" | "task";
 
@@ -551,19 +550,6 @@ const insightCardStyle: CSSProperties = {
   gap: "0.5rem",
 };
 
-const pillGroupStyle: CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "0.45rem",
-};
-
-const horizontalChipRailStyle: CSSProperties = {
-  display: "flex",
-  gap: "0.5rem",
-  overflowX: "auto",
-  paddingBottom: "0.15rem",
-  scrollbarWidth: "thin",
-};
 
 const pillButtonStyle = (active: boolean): CSSProperties => ({
   borderRadius: "999px",
@@ -1400,6 +1386,244 @@ function DetailStatStrip({
   );
 }
 
+// ── 任务工作台：四象限分组 + 单主操作 + 溢出菜单 ──
+
+type TaskMenuItem = {
+  key: string;
+  label: string;
+  onClick: () => void;
+  tone?: "default" | "critical";
+  disabled?: boolean;
+};
+
+const overflowMenuTriggerStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: "2rem",
+  height: "2rem",
+  borderRadius: pageColorTokens.radiusControl,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surface,
+  color: pageColorTokens.textSecondary,
+  cursor: "pointer",
+  fontSize: "1.1rem",
+  lineHeight: 1,
+};
+
+const overflowMenuPopoverStyle: CSSProperties = {
+  position: "absolute",
+  top: "calc(100% + 0.3rem)",
+  right: 0,
+  zIndex: 30,
+  minWidth: "10rem",
+  padding: "0.35rem",
+  borderRadius: pageColorTokens.radiusControl,
+  border: `1px solid ${pageColorTokens.border}`,
+  background: pageColorTokens.surface,
+  boxShadow: pageColorTokens.shadowCardStrong,
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.15rem",
+};
+
+const overflowMenuItemStyle = (tone: "default" | "critical"): CSSProperties => ({
+  display: "block",
+  width: "100%",
+  textAlign: "left",
+  padding: "0.5rem 0.6rem",
+  borderRadius: pageColorTokens.radiusControl,
+  border: "none",
+  background: "transparent",
+  cursor: "pointer",
+  fontSize: "0.8125rem",
+  fontWeight: 600,
+  color: tone === "critical" ? pageColorTokens.critical : pageColorTokens.textBody,
+});
+
+function TaskOverflowMenu({ items, ariaLabel }: { items: TaskMenuItem[]; ariaLabel: string }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointer = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", handlePointer);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handlePointer);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div ref={containerRef} style={{ position: "relative", flex: "0 0 auto" }}>
+      <button
+        type="button"
+        aria-label={ariaLabel}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        style={overflowMenuTriggerStyle}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        ⋯
+      </button>
+      {open ? (
+        <div role="menu" style={overflowMenuPopoverStyle}>
+          {items.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              role="menuitem"
+              style={{
+                ...overflowMenuItemStyle(item.tone ?? "default"),
+                ...(item.disabled ? { opacity: 0.5, cursor: "not-allowed" } : null),
+              }}
+              onClick={() => {
+                if (item.disabled) return;
+                setOpen(false);
+                item.onClick();
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+const quadrantGroupHeaderStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "0.6rem",
+  padding: "0.1rem 0.1rem 0",
+};
+
+const quadrantDotStyle = (quadrant: TaskQuadrant): CSSProperties => ({
+  width: "0.6rem",
+  height: "0.6rem",
+  borderRadius: "50%",
+  background: quadrantAccentColors[quadrant],
+  flex: "0 0 auto",
+});
+
+const closedToggleStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.4rem",
+  padding: "0.5rem 0.2rem",
+  border: "none",
+  background: "transparent",
+  cursor: "pointer",
+  fontSize: "0.8125rem",
+  fontWeight: 600,
+  color: pageColorTokens.textSecondary,
+};
+
+// ── 今日概要：带状态色 + 趋势箭头的指标卡 ──
+
+const metricAccentColors = {
+  positive: pageColorTokens.brandGreen,
+  negative: pageColorTokens.critical,
+  warning: "#d97706",
+  info: pageColorTokens.brandBlue,
+  neutral: pageColorTokens.borderSubtle,
+} as const;
+
+function SummaryMetricCard({
+  label,
+  value,
+  accent,
+  hint,
+  hintColor,
+  arrow,
+}: {
+  label: string;
+  value: ReactNode;
+  accent: string;
+  hint?: ReactNode;
+  hintColor?: string;
+  arrow?: "up" | "down";
+}) {
+  return (
+    <div style={{ ...summaryCardStyle, borderLeft: `3px solid ${accent}` }}>
+      <div style={metricMetaRowStyle}>
+        <span style={subtleInlineStatStyle}>{label}</span>
+      </div>
+      <span style={overviewMiniValueStyle}>{value}</span>
+      {hint != null ? (
+        <span
+          style={{
+            ...summaryListItemStyle,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.25rem",
+            ...(hintColor ? { color: hintColor, fontWeight: 600 } : null),
+          }}
+        >
+          {arrow ? <span aria-hidden="true">{arrow === "up" ? "↑" : "↓"}</span> : null}
+          {hint}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+// ── 经营监控：红绿灯雷达 + 行内展开 ──
+
+const radarStatusColors: Record<"healthy" | "watch" | "risk", string> = {
+  healthy: "#15803d",
+  watch: "#d97706",
+  risk: "#dc2626",
+};
+
+const radarListStyle: CSSProperties = {
+  border: `1px solid ${pageColorTokens.border}`,
+  borderRadius: pageColorTokens.radiusCard,
+  background: pageColorTokens.surface,
+  overflow: "hidden",
+};
+
+const radarRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "0.7rem",
+  width: "100%",
+  padding: "0.75rem 0.9rem",
+  border: "none",
+  borderTop: `1px solid ${pageColorTokens.divider}`,
+  background: "transparent",
+  cursor: "pointer",
+  textAlign: "left",
+};
+
+const radarDotStyle = (color: string): CSSProperties => ({
+  width: "0.6rem",
+  height: "0.6rem",
+  borderRadius: "50%",
+  background: color,
+  flex: "0 0 auto",
+});
+
+const radarExpandBodyStyle: CSSProperties = {
+  padding: "0.4rem 0.9rem 0.95rem",
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.75rem",
+  background: pageColorTokens.surfaceMuted,
+};
+
 export default function DailyOperationsPage() {
   const { t, i18n } = useTranslation();
   const { isMobile } = useResponsiveLayout();
@@ -1642,7 +1866,7 @@ function DailyOperationsBody({
   busy: boolean;
 }) {
   const { t } = useTranslation();
-  const [todayTaskTab, setTodayTaskTab] = useState<TodayTaskTab>("all");
+  const [showClosed, setShowClosed] = useState(false);
   const [allStatusFilter, setAllStatusFilter] = useState("all");
   const [allPriorityFilter, setAllPriorityFilter] = useState("all");
   const [allEffectFilter, setAllEffectFilter] = useState("all");
@@ -1675,49 +1899,45 @@ function DailyOperationsBody({
     [result.environments, t],
   );
   const diagnosisInsights = result.insights;
-  const [selectedMonitoringEnvironmentKey, setSelectedMonitoringEnvironmentKey] = useState<string | null>(
-    () => result.environments[0]?.key ?? null,
-  );
+  const [expandedEnvKey, setExpandedEnvKey] = useState<string | null>(null);
   const reviewImprovedCount =
     result.review?.deltas.filter((delta) => delta.improved === true).length ?? 0;
   const reviewWorsenedCount =
     result.review?.deltas.filter((delta) => delta.improved === false).length ?? 0;
   useEffect(() => {
-    if (riskCards.length === 0) {
-      setSelectedMonitoringEnvironmentKey(null);
-      return;
+    if (expandedEnvKey && !riskCards.some((card) => card.key === expandedEnvKey)) {
+      setExpandedEnvKey(null);
     }
-    if (
-      !selectedMonitoringEnvironmentKey ||
-      !riskCards.some((card) => card.key === selectedMonitoringEnvironmentKey)
-    ) {
-      setSelectedMonitoringEnvironmentKey(riskCards[0]?.key ?? null);
+  }, [riskCards, expandedEnvKey]);
+  const insightsForEnvironment = (environmentKey: string) =>
+    diagnosisInsights.filter((item) =>
+      (item.environmentKeys as string[]).includes(environmentKey),
+    );
+  const tasksForEnvironment = (environmentKey: string) =>
+    sortedTasks.filter((task) =>
+      (environmentTaskSourceKeys[environmentKey] ?? []).includes(task.sourceKey),
+    );
+  const activeTasksByQuadrant = useMemo(() => {
+    const groups: Record<TaskQuadrant, OperationTaskView[]> = { q1: [], q2: [], q3: [], q4: [] };
+    for (const task of sortedTasks) {
+      if (["done", "ignored", "auto_closed"].includes(task.status)) continue;
+      (groups[task.quadrant] ?? groups.q4).push(task);
     }
-  }, [riskCards, selectedMonitoringEnvironmentKey]);
-  const selectedMonitoringCard =
-    riskCards.find((card) => card.key === selectedMonitoringEnvironmentKey) ?? riskCards[0] ?? null;
-  const selectedMonitoringEnvironment = selectedMonitoringCard
-    ? result.environments.find((environment) => environment.key === selectedMonitoringCard.key) ?? null
-    : null;
-  const monitoringInsights = selectedMonitoringEnvironment
-    ? diagnosisInsights.filter((item) => item.environmentKeys.includes(selectedMonitoringEnvironment.key))
-    : [];
-  const monitoringTasks = selectedMonitoringEnvironment
-    ? sortedTasks.filter((task) =>
-        (environmentTaskSourceKeys[selectedMonitoringEnvironment.key] ?? []).includes(task.sourceKey),
-      )
-    : [];
-  const todayTasks = useMemo(() => {
-    if (todayTaskTab === "q1") return sortedTasks.filter((task) => task.quadrant === "q1");
-    if (todayTaskTab === "q3") return sortedTasks.filter((task) => task.quadrant === "q3");
-    if (todayTaskTab === "in_progress") {
-      return sortedTasks.filter((task) => task.status === "in_progress");
-    }
-    if (todayTaskTab === "done") {
-      return sortedTasks.filter((task) => task.status === "done");
-    }
-    return sortedTasks;
-  }, [sortedTasks, todayTaskTab]);
+    return groups;
+  }, [sortedTasks]);
+  const closedTasks = useMemo(
+    () =>
+      sortedTasks.filter((task) =>
+        ["done", "ignored", "auto_closed"].includes(task.status),
+      ),
+    [sortedTasks],
+  );
+  const activeTaskCount = QUADRANTS.reduce(
+    (sum, quadrant) => sum + activeTasksByQuadrant[quadrant].length,
+    0,
+  );
+  const closedDoneCount = closedTasks.filter((task) => task.status === "done").length;
+  const closedIgnoredCount = closedTasks.length - closedDoneCount;
   const allInsightTasks = useMemo(
     () =>
       sortedTasks.filter((task) => {
@@ -1737,6 +1957,35 @@ function DailyOperationsBody({
   const renderTaskListRow = (task: OperationTaskView) => {
     const presentation = inferTaskPresentation(task, t);
     const closed = ["done", "ignored", "auto_closed"].includes(task.status);
+    const menuItems: TaskMenuItem[] = [
+      {
+        key: "ai",
+        label: t("dailyOps.actionSendToAi"),
+        onClick: () => onSendTaskToAi(task, presentation),
+      },
+      {
+        key: "detail",
+        label: t("dailyOps.viewDetail"),
+        onClick: () => onOpenDetail("task", { taskId: task.id }),
+      },
+    ];
+    if (task.status === "open" || task.status === "in_progress") {
+      menuItems.push({
+        key: "ignore",
+        label: t("dailyOps.actionIgnore"),
+        tone: "critical",
+        disabled: busy,
+        onClick: () => onSubmitTaskAction(task.id, "ignore"),
+      });
+    }
+    if (closed) {
+      menuItems.push({
+        key: "reopen",
+        label: t("dailyOps.actionReopen"),
+        disabled: busy,
+        onClick: () => onSubmitTaskAction(task.id, "reopen"),
+      });
+    }
     return (
       <div
         key={task.id}
@@ -1759,26 +2008,13 @@ function DailyOperationsBody({
         </div>
         <div
           style={{
-            ...listRowActionsStyle,
-            flexDirection: "column",
-            alignItems: isMobile ? "stretch" : "flex-end",
-            justifyContent: "flex-start",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            justifyContent: isMobile ? "flex-start" : "flex-end",
+            flex: "0 0 auto",
           }}
         >
-          <s-button
-            type="button"
-            variant="secondary"
-            onClick={() => onSendTaskToAi(task, presentation)}
-          >
-            {t("dailyOps.actionSendToAi")}
-          </s-button>
-          <s-button
-            type="button"
-            variant="tertiary"
-            onClick={() => onOpenDetail("task", { taskId: task.id })}
-          >
-            {t("dailyOps.viewDetail")}
-          </s-button>
           {task.status === "open" ? (
             <s-button
               type="button"
@@ -1788,8 +2024,7 @@ function DailyOperationsBody({
             >
               {t("dailyOps.actionStart")}
             </s-button>
-          ) : null}
-          {task.status === "in_progress" ? (
+          ) : task.status === "in_progress" ? (
             <s-button
               type="button"
               variant="primary"
@@ -1799,16 +2034,7 @@ function DailyOperationsBody({
               {t("dailyOps.actionDone")}
             </s-button>
           ) : null}
-          {closed ? (
-            <s-button
-              type="button"
-              variant="tertiary"
-              onClick={() => onSubmitTaskAction(task.id, "reopen")}
-              {...(busy ? { disabled: true } : {})}
-            >
-              {t("dailyOps.actionReopen")}
-            </s-button>
-          ) : null}
+          <TaskOverflowMenu items={menuItems} ariaLabel={t("dailyOps.taskMoreActions")} />
         </div>
       </div>
     );
@@ -1875,47 +2101,65 @@ function DailyOperationsBody({
                   ...(isMobile ? { gridTemplateColumns: "1fr 1fr" } : null),
                 }}
               >
-                <div style={summaryCardStyle}>
-                  <div style={metricMetaRowStyle}>
-                    <span style={subtleInlineStatStyle}>{t("dailyOps.metricSales7d")}</span>
-                  </div>
-                  <span style={overviewMiniValueStyle}>
-                    {overview.salesAmount7d} {overview.currency}
-                  </span>
-                  <span style={summaryListItemStyle}>
-                    {t("dailyOps.metricGrowth")}: {growthLabel}
-                  </span>
-                </div>
-                <div style={summaryCardStyle}>
-                  <div style={metricMetaRowStyle}>
-                    <span style={subtleInlineStatStyle}>{t("dailyOps.monitoringTitle")}</span>
-                  </div>
-                  <span style={overviewMiniValueStyle}>{overview.activeRiskCount}</span>
-                  <span style={summaryListItemStyle}>
-                    {t("dailyOps.monitoringSummaryCounts", {
-                      risk: overview.activeRiskCount,
-                      watch: overview.watchRiskCount,
-                    })}
-                  </span>
-                </div>
-                <div style={summaryCardStyle}>
-                  <div style={metricMetaRowStyle}>
-                    <span style={subtleInlineStatStyle}>{t("dailyOps.dataInsightsTitle")}</span>
-                  </div>
-                  <span style={overviewMiniValueStyle}>{overview.insightCount}</span>
-                </div>
-                <div style={summaryCardStyle}>
-                  <div style={metricMetaRowStyle}>
-                    <span style={subtleInlineStatStyle}>{t("dailyOps.taskWorkbenchTitle")}</span>
-                  </div>
-                  <span style={overviewMiniValueStyle}>{overview.inProgressTaskCount}</span>
-                  <span style={summaryListItemStyle}>
-                    {t("dailyOps.taskSummaryCounts", {
-                      open: overview.openTaskCount,
-                      done: overview.doneTaskCount,
-                    })}
-                  </span>
-                </div>
+                <SummaryMetricCard
+                  label={t("dailyOps.metricSales7d")}
+                  value={`${overview.salesAmount7d} ${overview.currency}`}
+                  accent={
+                    overview.salesGrowthRate === null
+                      ? metricAccentColors.neutral
+                      : overview.salesGrowthRate >= 0
+                        ? metricAccentColors.positive
+                        : metricAccentColors.negative
+                  }
+                  hint={`${t("dailyOps.metricGrowth")}: ${growthLabel}`}
+                  {...(overview.salesGrowthRate === null
+                    ? {}
+                    : overview.salesGrowthRate >= 0
+                      ? { hintColor: metricAccentColors.positive, arrow: "up" as const }
+                      : { hintColor: metricAccentColors.negative, arrow: "down" as const })}
+                />
+                <SummaryMetricCard
+                  label={t("dailyOps.monitoringTitle")}
+                  value={overview.activeRiskCount}
+                  accent={
+                    overview.activeRiskCount > 0
+                      ? metricAccentColors.negative
+                      : overview.watchRiskCount > 0
+                        ? metricAccentColors.warning
+                        : metricAccentColors.positive
+                  }
+                  hint={t("dailyOps.monitoringSummaryCounts", {
+                    risk: overview.activeRiskCount,
+                    watch: overview.watchRiskCount,
+                  })}
+                  {...(overview.activeRiskCount > 0
+                    ? { hintColor: metricAccentColors.negative }
+                    : overview.watchRiskCount > 0
+                      ? { hintColor: metricAccentColors.warning }
+                      : {})}
+                />
+                <SummaryMetricCard
+                  label={t("dailyOps.dataInsightsTitle")}
+                  value={overview.insightCount}
+                  accent={
+                    overview.insightCount > 0
+                      ? metricAccentColors.info
+                      : metricAccentColors.neutral
+                  }
+                />
+                <SummaryMetricCard
+                  label={t("dailyOps.taskWorkbenchTitle")}
+                  value={overview.inProgressTaskCount}
+                  accent={
+                    overview.inProgressTaskCount > 0
+                      ? metricAccentColors.info
+                      : metricAccentColors.neutral
+                  }
+                  hint={t("dailyOps.taskSummaryCounts", {
+                    open: overview.openTaskCount,
+                    done: overview.doneTaskCount,
+                  })}
+                />
               </div>
               {result.review ? (
                 <div
@@ -1984,164 +2228,274 @@ function DailyOperationsBody({
               {riskCards.length === 0 ? (
                 <div style={pageEmptyStateStyle}>{t("dailyOps.monitoringEmpty")}</div>
               ) : (
-                <div style={detailSectionStackStyle}>
-                  <div style={horizontalChipRailStyle}>
-                    {riskCards.map((card) => (
-                      <button
-                        key={card.key}
-                        type="button"
-                        style={{
-                          ...pillButtonStyle(selectedMonitoringCard?.key === card.key),
-                          flex: "0 0 auto",
-                        }}
-                        onClick={() => setSelectedMonitoringEnvironmentKey(card.key)}
-                      >
-                        {card.title}
-                      </button>
-                    ))}
-                  </div>
-                  {selectedMonitoringCard ? (
-                    <div style={detailFocusCardStyle}>
-                      <div style={monitoringInsightHeaderStyle}>
-                        <div style={listRowMainStyle}>
-                          <div style={listRowMetaStyle}>
-                            <SourceTag source={selectedMonitoringCard.source} />
-                            <s-badge tone={diagnosisTone(selectedMonitoringCard.status)}>
-                              {statusText(selectedMonitoringCard.status)}
-                            </s-badge>
-                          </div>
-                          <h3 style={taskTitleStyle}>{selectedMonitoringCard.title}</h3>
-                          <p style={taskSecondaryTextStyle}>{selectedMonitoringCard.summary}</p>
-                        </div>
-                      </div>
-                      <div
-                        style={{
-                          ...detailInfoGridStyle,
-                          ...(isMobile ? { gridTemplateColumns: "1fr" } : null),
-                        }}
-                      >
-                        <div style={detailInfoCardStyle}>
-                          <span style={detailInfoLabelStyle}>{t("dailyOps.metricPrimary")}</span>
-                          <span style={detailInfoValueStyle}>{selectedMonitoringCard.primaryMetric}</span>
-                        </div>
-                        <div style={detailInfoCardStyle}>
-                          <span style={detailInfoLabelStyle}>{t("dailyOps.metricSecondary")}</span>
-                          <span style={detailInfoValueStyle}>{selectedMonitoringCard.secondaryMetric}</span>
-                        </div>
-                        <div style={detailInfoCardStyle}>
-                          <span style={detailInfoLabelStyle}>{t("dailyOps.monitoringInsightsTitle")}</span>
-                          <span style={detailInfoValueStyle}>{monitoringInsights.length}</span>
-                        </div>
-                        <div style={detailInfoCardStyle}>
-                          <span style={detailInfoLabelStyle}>{t("dailyOps.relatedTasksLabel")}</span>
-                          <span style={detailInfoValueStyle}>{monitoringTasks.length}</span>
-                        </div>
-                      </div>
-                      <div style={relatedObjectWrapStyle}>
-                        <div style={monitoringInsightHeaderStyle}>
-                          <strong>{t("dailyOps.monitoringInsightsTitle")}</strong>
-                          <span style={taskSecondaryTextStyle}>
-                            {t("dailyOps.monitoringTaskCount", { count: monitoringTasks.length })}
-                          </span>
-                        </div>
-                        {monitoringInsights.length === 0 ? (
-                          <p style={taskSecondaryTextStyle}>{t("dailyOps.monitoringInsightsEmpty")}</p>
-                        ) : (
-                          <div style={listSectionStyle}>
-                            {monitoringInsights.slice(0, 3).map((item) => (
-                              <div
-                                key={item.key}
+                <div style={radarListStyle}>
+                  {riskCards.map((card, index) => {
+                    const expanded = expandedEnvKey === card.key;
+                    const dotColor =
+                      radarStatusColors[card.status] ?? pageColorTokens.textFootnote;
+                    const envInsights = insightsForEnvironment(card.key);
+                    const envTasks = tasksForEnvironment(card.key);
+                    return (
+                      <div key={card.key}>
+                        <button
+                          type="button"
+                          aria-expanded={expanded}
+                          style={{
+                            ...radarRowStyle,
+                            ...(index === 0 ? { borderTop: "none" } : null),
+                            ...(expanded
+                              ? { background: pageColorTokens.surfaceMuted }
+                              : null),
+                          }}
+                          onClick={() => setExpandedEnvKey(expanded ? null : card.key)}
+                        >
+                          <span style={radarDotStyle(dotColor)} />
+                          <span
+                            style={{
+                              flex: 1,
+                              minWidth: 0,
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "0.15rem",
+                            }}
+                          >
+                            <span
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              <strong
                                 style={{
-                                  ...listRowStyle,
-                                  ...(isMobile ? { gridTemplateColumns: "1fr" } : null),
+                                  fontSize: "0.875rem",
+                                  color: pageColorTokens.textPrimary,
                                 }}
                               >
-                                <div style={listRowMainStyle}>
-                                  <div style={listRowMetaStyle}>
-                                    <s-badge tone={diagnosisTone(item.status)}>{statusText(item.status)}</s-badge>
-                                    <s-badge>{insightConfidenceLabel(item.confidence, t)}</s-badge>
-                                  </div>
-                                  <h3 style={taskTitleStyle}>{item.title}</h3>
-                                </div>
-                                <div style={listRowValueStackStyle}>
-                                  <span style={taskMetaTextStyle}>{item.summary}</span>
-                                  <span style={taskSecondaryTextStyle}>
-                                    {t("dailyOps.insightTaskCount", { count: item.taskCount })}
-                                  </span>
-                                </div>
-                                <div
-                                  style={{
-                                    ...listRowActionsStyle,
-                                    ...(isMobile ? { justifyContent: "flex-start" } : null),
-                                  }}
-                                >
-                                  <s-button
-                                    type="button"
-                                    variant="tertiary"
-                                    onClick={() =>
-                                      onOpenDetail("risk", {
-                                        riskTab: "insights",
-                                        insightKey: item.key,
-                                      })
-                                    }
-                                  >
-                                    {t("dailyOps.viewDetail")}
-                                  </s-button>
-                                </div>
+                                {card.title}
+                              </strong>
+                              <s-badge tone={diagnosisTone(card.status)}>
+                                {statusText(card.status)}
+                              </s-badge>
+                            </span>
+                            <span style={{ ...taskSecondaryTextStyle, fontSize: "0.75rem" }}>
+                              {card.primaryMetric}
+                            </span>
+                          </span>
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              color: pageColorTokens.textFootnote,
+                              fontSize: "0.85rem",
+                              flex: "0 0 auto",
+                            }}
+                          >
+                            {expanded ? "▾" : "▸"}
+                          </span>
+                        </button>
+                        {expanded ? (
+                          <div style={radarExpandBodyStyle}>
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              <SourceTag source={card.source} />
+                              <span style={taskSecondaryTextStyle}>{card.summary}</span>
+                            </div>
+                            <div
+                              style={{
+                                ...detailInfoGridStyle,
+                                ...(isMobile ? { gridTemplateColumns: "1fr" } : null),
+                              }}
+                            >
+                              <div style={detailInfoCardStyle}>
+                                <span style={detailInfoLabelStyle}>{t("dailyOps.metricPrimary")}</span>
+                                <span style={detailInfoValueStyle}>{card.primaryMetric}</span>
                               </div>
-                            ))}
+                              <div style={detailInfoCardStyle}>
+                                <span style={detailInfoLabelStyle}>{t("dailyOps.metricSecondary")}</span>
+                                <span style={detailInfoValueStyle}>{card.secondaryMetric}</span>
+                              </div>
+                              <div style={detailInfoCardStyle}>
+                                <span style={detailInfoLabelStyle}>{t("dailyOps.monitoringInsightsTitle")}</span>
+                                <span style={detailInfoValueStyle}>{envInsights.length}</span>
+                              </div>
+                              <div style={detailInfoCardStyle}>
+                                <span style={detailInfoLabelStyle}>{t("dailyOps.relatedTasksLabel")}</span>
+                                <span style={detailInfoValueStyle}>{envTasks.length}</span>
+                              </div>
+                            </div>
+                            {envInsights.length === 0 ? (
+                              <p style={taskSecondaryTextStyle}>{t("dailyOps.monitoringInsightsEmpty")}</p>
+                            ) : (
+                              <div style={listSectionStyle}>
+                                {envInsights.slice(0, 3).map((item) => (
+                                  <div
+                                    key={item.key}
+                                    style={{
+                                      ...listRowStyle,
+                                      ...(isMobile ? { gridTemplateColumns: "1fr" } : null),
+                                    }}
+                                  >
+                                    <div style={listRowMainStyle}>
+                                      <div style={listRowMetaStyle}>
+                                        <s-badge tone={diagnosisTone(item.status)}>{statusText(item.status)}</s-badge>
+                                        <s-badge>{insightConfidenceLabel(item.confidence, t)}</s-badge>
+                                      </div>
+                                      <h3 style={taskTitleStyle}>{item.title}</h3>
+                                    </div>
+                                    <div style={listRowValueStackStyle}>
+                                      <span style={taskMetaTextStyle}>{item.summary}</span>
+                                      <span style={taskSecondaryTextStyle}>
+                                        {t("dailyOps.insightTaskCount", { count: item.taskCount })}
+                                      </span>
+                                    </div>
+                                    <div
+                                      style={{
+                                        ...listRowActionsStyle,
+                                        ...(isMobile ? { justifyContent: "flex-start" } : null),
+                                      }}
+                                    >
+                                      <s-button
+                                        type="button"
+                                        variant="tertiary"
+                                        onClick={() =>
+                                          onOpenDetail("risk", {
+                                            riskTab: "insights",
+                                            insightKey: item.key,
+                                          })
+                                        }
+                                      >
+                                        {t("dailyOps.viewDetail")}
+                                      </s-button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <div>
+                              <s-button
+                                type="button"
+                                variant="secondary"
+                                onClick={() =>
+                                  onOpenDetail("risk", {
+                                    riskTab: "environment",
+                                    environmentKey: card.key,
+                                  })
+                                }
+                              >
+                                {t("dailyOps.viewDetail")}
+                              </s-button>
+                            </div>
                           </div>
-                        )}
+                        ) : null}
                       </div>
-                    </div>
-                  ) : null}
+                    );
+                  })}
                 </div>
               )}
-              <div style={detailActionRowStyle}>
-                <s-button type="button" variant="secondary" onClick={() => onOpenDetail("risk")}>
-                  {t("dailyOps.viewDetail")}
-                </s-button>
-              </div>
             </PageSurface>
 
             <PageSurface
               title={t("dailyOps.taskWorkbenchTitle")}
               subtitle={t("dailyOps.taskWorkbenchSubtitle")}
             >
-              <div style={toolbarSurfaceStyle}>
-                <div style={pillGroupStyle}>
-                  {[
-                    ["all", t("dailyOps.taskTabAll")],
-                    ["q1", t("dailyOps.taskTabImportantUrgent")],
-                    ["q3", t("dailyOps.taskTabImportant")],
-                    ["in_progress", t("dailyOps.taskTabInProgress")],
-                    ["done", t("dailyOps.taskTabDone")],
-                  ].map(([key, label]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      style={pillButtonStyle(todayTaskTab === key)}
-                      onClick={() => setTodayTaskTab(key as TodayTaskTab)}
+              {activeTaskCount === 0 && closedTasks.length === 0 ? (
+                <div style={pageEmptyStateStyle}>{t("dailyOps.noTasks")}</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                  {activeTaskCount === 0 ? (
+                    <div style={pageEmptyStateStyle}>{t("dailyOps.noTasks")}</div>
+                  ) : (
+                    QUADRANTS.filter(
+                      (quadrant) => activeTasksByQuadrant[quadrant].length > 0,
+                    ).map((quadrant) => (
+                      <div
+                        key={quadrant}
+                        style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}
+                      >
+                        <div style={quadrantGroupHeaderStyle}>
+                          <span style={quadrantDotStyle(quadrant)} />
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "0.1rem",
+                              flex: 1,
+                              minWidth: 0,
+                            }}
+                          >
+                            <strong
+                              style={{
+                                fontSize: "0.875rem",
+                                color: pageColorTokens.textPrimary,
+                              }}
+                            >
+                              {quadrantLabel(quadrant, t)}
+                            </strong>
+                            <span
+                              style={{
+                                fontSize: "0.75rem",
+                                color: pageColorTokens.textSecondary,
+                                lineHeight: 1.4,
+                              }}
+                            >
+                              {t(`dailyOps.quadrant${quadrant.toUpperCase()}Desc`)}
+                            </span>
+                          </div>
+                          <span style={quadrantCountBadgeStyle(quadrant)}>
+                            {activeTasksByQuadrant[quadrant].length}
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "0.75rem",
+                          }}
+                        >
+                          {activeTasksByQuadrant[quadrant].map(renderTaskListRow)}
+                        </div>
+                      </div>
+                    ))
+                  )}
+
+                  {closedTasks.length > 0 ? (
+                    <div
+                      style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}
                     >
-                      {label}
-                    </button>
-                  ))}
+                      <button
+                        type="button"
+                        style={closedToggleStyle}
+                        onClick={() => setShowClosed((prev) => !prev)}
+                        aria-expanded={showClosed}
+                      >
+                        <span aria-hidden="true">{showClosed ? "▾" : "▸"}</span>
+                        {t("dailyOps.taskClosedSection", {
+                          done: closedDoneCount,
+                          ignored: closedIgnoredCount,
+                        })}
+                      </button>
+                      {showClosed ? (
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "0.75rem",
+                          }}
+                        >
+                          {closedTasks.map(renderTaskListRow)}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.75rem",
-                  marginTop: "0.9rem",
-                }}
-              >
-                {todayTasks.length === 0 ? (
-                  <div style={pageEmptyStateStyle}>{t("dailyOps.noTasks")}</div>
-                ) : (
-                  todayTasks.map(renderTaskListRow)
-                )}
-              </div>
+              )}
             </PageSurface>
           </div>
         ) : (
