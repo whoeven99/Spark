@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
+import type { GlossaryTerm } from "../../../server/translation/glossary.server";
 import type { ShopProfile } from "../../../server/translation/shopAnalysis.server";
 import { ShopAnalysisPanel } from "./ShopAnalysisPanel";
 import { TranslationGlossaryPanel } from "./TranslationGlossaryPanel";
@@ -18,6 +19,7 @@ type TranslationStyleWorkspaceProps = {
 
 type ProfileListField = "highFrequencyTerms" | "styleNotes";
 type SuggestionTarget = "profile" | "glossary";
+type WorkspacePage = "overview" | "profile" | "glossary";
 
 function buildEmptyProfile(sourceLanguage: string): ShopProfile {
   return {
@@ -40,6 +42,38 @@ function getEditableLineItems(items: string[]): string[] {
 
 function formatSummaryCount(count: number, unit: string): string {
   return count > 0 ? `共 ${count} ${unit}` : `暂无${unit}`;
+}
+
+function resolveWorkspacePage(locationSearch: string): WorkspacePage {
+  const params = new URLSearchParams(locationSearch);
+  const editor = params.get("styleEditor");
+  return editor === "profile" || editor === "glossary" ? editor : "overview";
+}
+
+function syncWorkspacePage(page: WorkspacePage) {
+  if (typeof window === "undefined") return;
+  const nextUrl = new URL(window.location.href);
+  if (page === "overview") {
+    nextUrl.searchParams.delete("styleEditor");
+  } else {
+    nextUrl.searchParams.set("styleEditor", page);
+  }
+  window.history.replaceState(null, "", nextUrl.toString());
+}
+
+function truncateText(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength).trim()}...`;
+}
+
+function formatGlossaryPreview(term: GlossaryTerm): string {
+  if (term.doNotTranslate) return "勿译";
+  const entries = Object.entries(term.translations ?? {});
+  if (!entries.length) return "待补充译法";
+  return entries
+    .slice(0, 2)
+    .map(([locale, text]) => `${locale} → ${text}`)
+    .join(" · ");
 }
 
 function LineItemsEditorOverlay({
@@ -113,12 +147,16 @@ export function TranslationStyleWorkspace({
 }: TranslationStyleWorkspaceProps) {
   const shopify = useAppBridge();
 
+  const [activePage, setActivePage] = useState<WorkspacePage>(() => resolveWorkspacePage(locationSearch));
   const [liveProfile, setLiveProfile] = useState<ShopProfile | null>(null);
   const [profileForm, setProfileForm] = useState<ShopProfile>(() => buildEmptyProfile(sourceLocale));
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileDirty, setProfileDirty] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [glossaryTerms, setGlossaryTerms] = useState<GlossaryTerm[]>([]);
+  const [loadingGlossary, setLoadingGlossary] = useState(true);
+  const [glossaryError, setGlossaryError] = useState<string | null>(null);
   const [glossaryReloadToken, setGlossaryReloadToken] = useState(0);
   const [activeListEditor, setActiveListEditor] = useState<ProfileListField | null>(null);
   const [aiSuggestionTarget, setAiSuggestionTarget] = useState<SuggestionTarget | null>(null);
@@ -143,6 +181,33 @@ export function TranslationStyleWorkspace({
   useEffect(() => {
     void loadLiveProfile();
   }, [loadLiveProfile]);
+
+  const loadGlossary = useCallback(async () => {
+    setLoadingGlossary(true);
+    try {
+      const res = await fetch(`/api/translate/v4/glossary${locationSearch}`);
+      const payload = (await res.json()) as {
+        ok?: boolean;
+        terms?: GlossaryTerm[];
+        error?: string;
+      };
+      if (!res.ok || !payload.ok) throw new Error(payload.error ?? "加载术语表失败");
+      setGlossaryError(null);
+      setGlossaryTerms(payload.terms ?? []);
+    } catch (err) {
+      setGlossaryError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoadingGlossary(false);
+    }
+  }, [locationSearch]);
+
+  useEffect(() => {
+    void loadGlossary();
+  }, [loadGlossary, glossaryReloadToken]);
+
+  useEffect(() => {
+    syncWorkspacePage(activePage);
+  }, [activePage]);
 
   useEffect(() => {
     const nextEmptyProfile = buildEmptyProfile(sourceLocale);
@@ -245,179 +310,304 @@ export function TranslationStyleWorkspace({
   };
 
   const handleAiSuggestionApplied = () => {
+    setProfileDirty(false);
     void loadLiveProfile();
+    void loadGlossary();
     setGlossaryReloadToken((prev) => prev + 1);
   };
+
+  const handleOpenPage = (page: WorkspacePage) => {
+    setActivePage(page);
+  };
+
+  const handleBackToOverview = () => {
+    void loadLiveProfile();
+    void loadGlossary();
+    setActivePage("overview");
+  };
+
+  const profileSummaryItems = [
+    profileForm.industry?.trim() ? `行业：${profileForm.industry.trim()}` : null,
+    profileForm.toneOfVoice?.trim() ? `语气：${profileForm.toneOfVoice.trim()}` : null,
+    profileForm.targetAudience?.trim() ? `受众：${profileForm.targetAudience.trim()}` : null,
+    profileForm.highFrequencyTerms.filter(Boolean).length
+      ? `高频词 ${profileForm.highFrequencyTerms.filter(Boolean).length} 项`
+      : null,
+    profileForm.styleNotes.filter(Boolean).length
+      ? `风格备注 ${profileForm.styleNotes.filter(Boolean).length} 条`
+      : null,
+  ].filter(Boolean) as string[];
+
+  const profileInstructionPreview = profileForm.translationInstructions.trim()
+    ? truncateText(profileForm.translationInstructions.trim(), 96)
+    : "";
+
+  const glossaryPreviewTerms = glossaryTerms.slice(0, 4);
+  const glossaryConfiguredCount = glossaryTerms.filter((term) => term.source?.trim()).length;
 
   return (
     <>
       <div style={singleColumnLayoutStyle}>
         <div style={mainColumnStyle}>
-          <PageSurface>
-            <div style={surfaceHeaderStyle}>
-              <div style={{ flex: "1 1 auto", minWidth: 0 }}>
-                <h3 style={surfaceTitleStyle}>商店档案</h3>
-                <p style={surfaceSubtitleStyle}>
-                  在这里维护行业、语气风格、目标受众和翻译指令。AI 建议作为内容填充入口，放在编辑流和空状态中按需使用。
-                </p>
-              </div>
-              <button type="button" style={secondaryActionButtonStyle} onClick={() => openAiSuggestion("profile")}>
-                生成 AI 建议
-              </button>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
-              <div style={metaBarStyle}>
-                <span>源语言：{sourceLocale || profileForm.sourceLanguage || "zh-CN"}</span>
-                <span>
-                  当前状态：
-                  {liveProfile?.analyzedAt
-                    ? `已应用 · ${new Date(liveProfile.analyzedAt).toLocaleString("zh-CN")}`
-                    : "未保存"}
-                </span>
+          {activePage === "overview" ? (
+            <PageSurface>
+              <div style={surfaceHeaderStyle}>
+                <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+                  <h3 style={surfaceTitleStyle}>翻译风格</h3>
+                  <p style={surfaceSubtitleStyle}>
+                    商店档案和术语表都改为列表化摘要展示。先在这里快速浏览配置状态，再进入对应编辑页维护完整内容。
+                  </p>
+                </div>
               </div>
 
-              {loadingProfile ? (
-                <div style={pageHintTextStyle}>加载商店档案中…</div>
-              ) : (
-                <>
-                  <div style={formStackStyle}>
-                    <div style={fieldBlockStyle}>
-                      <div style={pageFieldLabelStyle}>行业</div>
-                      <input
-                        type="text"
-                        value={profileForm.industry}
-                        onChange={(e) => handleProfileFieldChange("industry", e.target.value)}
-                        style={inputStyle}
-                        placeholder="例如：美妆护肤 / 家居用品 / 宠物用品"
-                      />
+              <div style={overviewListStyle}>
+                <div style={overviewItemStyle}>
+                  <div style={overviewMainStyle}>
+                    <div style={overviewTitleRowStyle}>
+                      <div style={overviewTitleStyle}>商店档案</div>
+                      <span style={statusBadgeStyle(Boolean(liveProfile?.analyzedAt || profileSummaryItems.length))}>
+                        {profileDirty
+                          ? "编辑中"
+                          : liveProfile?.analyzedAt || profileSummaryItems.length
+                            ? "已配置"
+                            : "未配置"}
+                      </span>
                     </div>
-                    <div style={fieldBlockStyle}>
-                      <div style={pageFieldLabelStyle}>语气风格</div>
-                      <input
-                        type="text"
-                        value={profileForm.toneOfVoice}
-                        onChange={(e) => handleProfileFieldChange("toneOfVoice", e.target.value)}
-                        style={inputStyle}
-                        placeholder="例如：简洁专业、轻松友好"
-                      />
+                    <div style={overviewMetaStyle}>
+                      <span>源语言：{sourceLocale || profileForm.sourceLanguage || "zh-CN"}</span>
+                      <span>
+                        {liveProfile?.analyzedAt
+                          ? `最近更新：${new Date(liveProfile.analyzedAt).toLocaleString("zh-CN")}`
+                          : "尚未保存正式档案"}
+                      </span>
                     </div>
-                    <div style={fieldBlockStyle}>
-                      <div style={pageFieldLabelStyle}>目标受众</div>
-                      <input
-                        type="text"
-                        value={profileForm.targetAudience}
-                        onChange={(e) => handleProfileFieldChange("targetAudience", e.target.value)}
-                        style={inputStyle}
-                        placeholder="例如：北美年轻女性、精品咖啡爱好者"
-                      />
-                    </div>
-                    <div style={listFieldCardStyle}>
-                      <div style={listFieldHeaderStyle}>
-                        <div style={pageFieldLabelStyle}>高频词</div>
-                        <div style={listFieldHintStyle}>
-                          {formatSummaryCount(profileForm.highFrequencyTerms.filter(Boolean).length, "项")}
+                    {loadingProfile ? (
+                      <div style={pageHintTextStyle}>加载商店档案中…</div>
+                    ) : (
+                      <>
+                        <div style={overviewSummaryStyle}>
+                          {profileSummaryItems.length > 0 ? (
+                            profileSummaryItems.map((item) => (
+                              <span key={item} style={summaryPreviewChipStyle}>
+                                {item}
+                              </span>
+                            ))
+                          ) : (
+                            <span style={summaryPreviewEmptyStyle}>尚未填写行业、语气、受众等摘要信息</span>
+                          )}
                         </div>
-                      </div>
-                      <div style={summaryPreviewListStyle}>
-                        {profileForm.highFrequencyTerms.filter(Boolean).slice(0, 3).map((item, index) => (
-                          <div key={`high-frequency-preview-${index}`} style={summaryPreviewChipStyle}>
-                            {item}
+                        {profileInstructionPreview ? (
+                          <div style={overviewInstructionStyle}>翻译指令：{profileInstructionPreview}</div>
+                        ) : null}
+                        {profileError ? <div style={formErrorBoxStyle}>{profileError}</div> : null}
+                      </>
+                    )}
+                  </div>
+                  <div style={overviewActionStyle}>
+                    <button type="button" style={listActionButtonStyle} onClick={() => handleOpenPage("profile")}>
+                      编辑
+                    </button>
+                  </div>
+                </div>
+
+                <div style={overviewItemStyle}>
+                  <div style={overviewMainStyle}>
+                    <div style={overviewTitleRowStyle}>
+                      <div style={overviewTitleStyle}>术语表</div>
+                      <span style={statusBadgeStyle(glossaryConfiguredCount > 0)}>
+                        {glossaryConfiguredCount > 0 ? `已配置 ${glossaryConfiguredCount} 条` : "未配置"}
+                      </span>
+                    </div>
+                    <div style={overviewMetaStyle}>
+                      <span>摘要展示前 4 条术语</span>
+                      <span>{loadingGlossary ? "正在同步术语表..." : `当前共 ${glossaryTerms.length} 条`}</span>
+                    </div>
+                    {loadingGlossary ? (
+                      <div style={pageHintTextStyle}>加载术语表中…</div>
+                    ) : glossaryError ? (
+                      <div style={formErrorBoxStyle}>{glossaryError}</div>
+                    ) : glossaryPreviewTerms.length > 0 ? (
+                      <div style={overviewGlossaryListStyle}>
+                        {glossaryPreviewTerms.map((term, index) => (
+                          <div key={`${term.source || "term"}-${index}`} style={overviewGlossaryItemStyle}>
+                            <span style={overviewGlossarySourceStyle}>{term.source || "未命名术语"}</span>
+                            <span style={overviewGlossaryValueStyle}>{formatGlossaryPreview(term)}</span>
                           </div>
                         ))}
-                        {!profileForm.highFrequencyTerms.filter(Boolean).length ? (
-                          <div style={summaryPreviewEmptyStyle}>尚未添加高频词</div>
-                        ) : null}
                       </div>
-                      <button
-                        type="button"
-                        style={summaryEditButtonStyle}
-                        onClick={() => setActiveListEditor("highFrequencyTerms")}
-                      >
-                        编辑高频词
-                      </button>
-                      {!profileForm.highFrequencyTerms.filter(Boolean).length ? (
-                        <button type="button" style={ghostSuggestionButtonStyle} onClick={() => openAiSuggestion("profile")}>
-                          生成填充建议
-                        </button>
-                      ) : null}
-                    </div>
-                    <div style={listFieldCardStyle}>
-                      <div style={listFieldHeaderStyle}>
-                        <div style={pageFieldLabelStyle}>风格备注</div>
-                        <div style={listFieldHintStyle}>
-                          {formatSummaryCount(profileForm.styleNotes.filter(Boolean).length, "条")}
-                        </div>
+                    ) : (
+                      <div style={summaryPreviewEmptyStyle}>术语表为空，可在编辑页中手动维护或使用 AI 生成建议</div>
+                    )}
+                  </div>
+                  <div style={overviewActionStyle}>
+                    <button type="button" style={listActionButtonStyle} onClick={() => handleOpenPage("glossary")}>
+                      编辑
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </PageSurface>
+          ) : null}
+
+          {activePage === "profile" ? (
+            <PageSurface>
+              <div style={surfaceHeaderStyle}>
+                <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+                  <button type="button" style={backButtonStyle} onClick={handleBackToOverview}>
+                    返回翻译风格列表
+                  </button>
+                  <h3 style={surfaceTitleStyle}>编辑商店档案</h3>
+                  <p style={surfaceSubtitleStyle}>
+                    在这里维护行业、语气风格、目标受众和翻译指令。右上角可直接使用 AI 生成建议，再按业务需要微调后保存。
+                  </p>
+                </div>
+                <button type="button" style={secondaryActionButtonStyle} onClick={() => openAiSuggestion("profile")}>
+                  生成 AI 建议
+                </button>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
+                <div style={metaBarStyle}>
+                  <span>源语言：{sourceLocale || profileForm.sourceLanguage || "zh-CN"}</span>
+                  <span>
+                    当前状态：
+                    {profileDirty
+                      ? "有未保存改动"
+                      : liveProfile?.analyzedAt
+                        ? `已应用 · ${new Date(liveProfile.analyzedAt).toLocaleString("zh-CN")}`
+                        : "未保存"}
+                  </span>
+                </div>
+
+                {loadingProfile ? (
+                  <div style={pageHintTextStyle}>加载商店档案中…</div>
+                ) : (
+                  <>
+                    <div style={formStackStyle}>
+                      <div style={fieldBlockStyle}>
+                        <div style={pageFieldLabelStyle}>行业</div>
+                        <input
+                          type="text"
+                          value={profileForm.industry}
+                          onChange={(e) => handleProfileFieldChange("industry", e.target.value)}
+                          style={inputStyle}
+                          placeholder="例如：美妆护肤 / 家居用品 / 宠物用品"
+                        />
                       </div>
-                      <div style={summaryPreviewListStyle}>
-                        {profileForm.styleNotes.filter(Boolean).slice(0, 3).map((item, index) => (
-                          <div key={`style-note-preview-${index}`} style={summaryPreviewChipStyle}>
-                            {item}
+                      <div style={fieldBlockStyle}>
+                        <div style={pageFieldLabelStyle}>语气风格</div>
+                        <input
+                          type="text"
+                          value={profileForm.toneOfVoice}
+                          onChange={(e) => handleProfileFieldChange("toneOfVoice", e.target.value)}
+                          style={inputStyle}
+                          placeholder="例如：简洁专业、轻松友好"
+                        />
+                      </div>
+                      <div style={fieldBlockStyle}>
+                        <div style={pageFieldLabelStyle}>目标受众</div>
+                        <input
+                          type="text"
+                          value={profileForm.targetAudience}
+                          onChange={(e) => handleProfileFieldChange("targetAudience", e.target.value)}
+                          style={inputStyle}
+                          placeholder="例如：北美年轻女性、精品咖啡爱好者"
+                        />
+                      </div>
+                      <div style={listFieldCardStyle}>
+                        <div style={listFieldHeaderStyle}>
+                          <div style={pageFieldLabelStyle}>高频词</div>
+                          <div style={listFieldHintStyle}>
+                            {formatSummaryCount(profileForm.highFrequencyTerms.filter(Boolean).length, "项")}
                           </div>
-                        ))}
-                        {!profileForm.styleNotes.filter(Boolean).length ? (
-                          <div style={summaryPreviewEmptyStyle}>尚未添加风格备注</div>
-                        ) : null}
+                        </div>
+                        <div style={summaryPreviewListStyle}>
+                          {profileForm.highFrequencyTerms.filter(Boolean).slice(0, 4).map((item, index) => (
+                            <div key={`high-frequency-preview-${index}`} style={summaryPreviewChipStyle}>
+                              {item}
+                            </div>
+                          ))}
+                          {!profileForm.highFrequencyTerms.filter(Boolean).length ? (
+                            <div style={summaryPreviewEmptyStyle}>尚未添加高频词</div>
+                          ) : null}
+                        </div>
+                        <button
+                          type="button"
+                          style={summaryEditButtonStyle}
+                          onClick={() => setActiveListEditor("highFrequencyTerms")}
+                        >
+                          编辑高频词
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        style={summaryEditButtonStyle}
-                        onClick={() => setActiveListEditor("styleNotes")}
-                      >
-                        编辑风格备注
-                      </button>
-                      {!profileForm.styleNotes.filter(Boolean).length ? (
-                        <button type="button" style={ghostSuggestionButtonStyle} onClick={() => openAiSuggestion("profile")}>
-                          生成填充建议
+                      <div style={listFieldCardStyle}>
+                        <div style={listFieldHeaderStyle}>
+                          <div style={pageFieldLabelStyle}>风格备注</div>
+                          <div style={listFieldHintStyle}>
+                            {formatSummaryCount(profileForm.styleNotes.filter(Boolean).length, "条")}
+                          </div>
+                        </div>
+                        <div style={summaryPreviewListStyle}>
+                          {profileForm.styleNotes.filter(Boolean).slice(0, 4).map((item, index) => (
+                            <div key={`style-note-preview-${index}`} style={summaryPreviewChipStyle}>
+                              {item}
+                            </div>
+                          ))}
+                          {!profileForm.styleNotes.filter(Boolean).length ? (
+                            <div style={summaryPreviewEmptyStyle}>尚未添加风格备注</div>
+                          ) : null}
+                        </div>
+                        <button
+                          type="button"
+                          style={summaryEditButtonStyle}
+                          onClick={() => setActiveListEditor("styleNotes")}
+                        >
+                          编辑风格备注
                         </button>
-                      ) : null}
+                      </div>
+                      <div style={fieldBlockStyle}>
+                        <div style={pageFieldLabelStyle}>翻译指令</div>
+                        <textarea
+                          rows={4}
+                          value={profileForm.translationInstructions}
+                          onChange={(e) => handleProfileFieldChange("translationInstructions", e.target.value)}
+                          style={textareaStyle}
+                          placeholder="例如：优先保留品牌表达，不要过度营销化，保持可读性与自然度。"
+                        />
+                      </div>
                     </div>
-                    <div style={fieldBlockStyle}>
-                      <div style={pageFieldLabelStyle}>翻译指令</div>
-                      <textarea
-                        rows={3}
-                        value={profileForm.translationInstructions}
-                        onChange={(e) => handleProfileFieldChange("translationInstructions", e.target.value)}
-                        style={textareaStyle}
-                        placeholder="例如：优先保留品牌表达，不要过度营销化，保持可读性与自然度。"
-                      />
-                    </div>
-                  </div>
 
-                  {profileError ? <div style={formErrorBoxStyle}>{profileError}</div> : null}
+                    {profileError ? <div style={formErrorBoxStyle}>{profileError}</div> : null}
 
-                  <div style={footerRowStyle}>
-                    <div style={{ ...pageHintTextStyle, marginTop: 0 }}>
-                      高频词和风格备注在本页以摘要形式展示，点击对应编辑入口可进入完整编辑界面维护内容。
+                    <div style={footerRowStyle}>
+                      <div style={{ ...pageHintTextStyle, marginTop: 0 }}>
+                        这里保留字段摘要和快捷编辑入口；若需要快速起稿，可先用 AI 生成建议，再按你的品牌表达做修改。
+                      </div>
+                      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                        <s-button
+                          type="button"
+                          variant="primary"
+                          onClick={() => void handleSaveProfile()}
+                          {...(savingProfile ? { disabled: true } : {})}
+                        >
+                          {savingProfile ? "保存中…" : profileDirty ? "保存商店档案" : "重新保存商店档案"}
+                        </s-button>
+                      </div>
                     </div>
-                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                      {!liveProfile ? (
-                        <button type="button" style={secondaryActionButtonStyle} onClick={() => openAiSuggestion("profile")}>
-                          生成 AI 建议
-                        </button>
-                      ) : null}
-                      <s-button
-                        type="button"
-                        variant="primary"
-                        onClick={() => void handleSaveProfile()}
-                        {...(savingProfile ? { disabled: true } : {})}
-                      >
-                        {savingProfile ? "保存中…" : profileDirty ? "保存商店档案" : "重新保存商店档案"}
-                      </s-button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </PageSurface>
+                  </>
+                )}
+              </div>
+            </PageSurface>
+          ) : null}
 
-          <div style={glossaryPanelWrapStyle}>
+          {activePage === "glossary" ? (
             <TranslationGlossaryPanel
               locationSearch={locationSearch}
               reloadToken={glossaryReloadToken}
               onRequestAiSuggestion={() => openAiSuggestion("glossary")}
+              mode="full-editor"
+              onBack={handleBackToOverview}
             />
-          </div>
+          ) : null}
         </div>
       </div>
 
@@ -449,16 +639,14 @@ export function TranslationStyleWorkspace({
         <div style={overlayBackdropStyle}>
           <div style={suggestionOverlayPanelStyle}>
             <div style={overlayHeaderStyle}>
-              <div>
-                <h4 style={overlayTitleStyle}>
-                  {aiSuggestionTarget === "profile" ? "商店档案 AI 建议" : "术语表 AI 建议"}
-                </h4>
-                <div style={overlaySubtitleStyle}>
-                  {aiSuggestionTarget === "profile"
-                    ? "这里会生成与商店档案相关的填充建议；保存后会同步回当前页面。"
-                    : "这里会生成与术语表相关的填充建议；确认生效后会同步回当前页面。"}
+              {aiSuggestionTarget === "profile" ? <div /> : (
+                <div>
+                  <h4 style={overlayTitleStyle}>术语表 AI 建议</h4>
+                  <div style={overlaySubtitleStyle}>
+                    这里会生成与术语表相关的填充建议；确认生效后会同步回当前页面。
+                  </div>
                 </div>
-              </div>
+              )}
               <button
                 type="button"
                 style={overlayCloseButtonStyle}
@@ -474,7 +662,12 @@ export function TranslationStyleWorkspace({
               locationSearch={locationSearch}
               defaultSourceLanguage={sourceLocale}
               target={aiSuggestionTarget}
-              onApplied={handleAiSuggestionApplied}
+              onApplied={() => {
+                handleAiSuggestionApplied();
+                if (aiSuggestionTarget === "profile") {
+                  setAiSuggestionTarget(null);
+                }
+              }}
             />
           </div>
         </div>
@@ -642,7 +835,7 @@ const overlayBackdropStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  padding: "1.25rem",
+  padding: "0.9rem",
   zIndex: 80,
 };
 
@@ -666,17 +859,17 @@ const suggestionOverlayPanelStyle: CSSProperties = {
   borderRadius: "20px",
   background: "#ffffff",
   boxShadow: "0 24px 60px rgba(15, 23, 42, 0.18)",
-  padding: "1rem",
+  padding: "0.8rem 0.9rem",
   display: "flex",
   flexDirection: "column",
-  gap: "1rem",
+  gap: "0.75rem",
 };
 
 const overlayHeaderStyle: CSSProperties = {
   display: "flex",
   alignItems: "flex-start",
   justifyContent: "space-between",
-  gap: "0.8rem",
+  gap: "0.65rem",
 };
 
 const overlayTitleStyle: CSSProperties = {
@@ -687,7 +880,7 @@ const overlayTitleStyle: CSSProperties = {
 };
 
 const overlaySubtitleStyle: CSSProperties = {
-  marginTop: "0.3rem",
+  marginTop: "0.2rem",
   fontSize: "0.8125rem",
   color: pageColorTokens.textSecondary,
   lineHeight: 1.5,
@@ -699,7 +892,7 @@ const overlayCloseButtonStyle: CSSProperties = {
   color: pageColorTokens.textBody,
   cursor: "pointer",
   fontSize: "0.8125rem",
-  padding: "0.45rem 0.75rem",
+  padding: "0.35rem 0.65rem",
   borderRadius: "999px",
 };
 
@@ -765,4 +958,136 @@ const footerRowStyle: CSSProperties = {
 
 const glossaryPanelWrapStyle: CSSProperties = {
   marginTop: "0.45rem",
+};
+
+const overviewListStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.9rem",
+};
+
+const overviewItemStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) auto",
+  gap: "1rem",
+  alignItems: "flex-start",
+  padding: "1rem",
+  borderRadius: "14px",
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: "linear-gradient(180deg, #fbfdfd 0%, #ffffff 100%)",
+  boxShadow: "0 8px 22px rgba(15, 23, 42, 0.04)",
+};
+
+const overviewMainStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.55rem",
+  minWidth: 0,
+};
+
+const overviewActionStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-end",
+};
+
+const overviewTitleRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "0.55rem",
+  flexWrap: "wrap",
+};
+
+const overviewTitleStyle: CSSProperties = {
+  fontSize: "0.95rem",
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+};
+
+const overviewMetaStyle: CSSProperties = {
+  display: "flex",
+  gap: "0.75rem",
+  flexWrap: "wrap",
+  fontSize: "0.75rem",
+  color: pageColorTokens.textSecondary,
+};
+
+const overviewSummaryStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "0.45rem",
+};
+
+const overviewInstructionStyle: CSSProperties = {
+  fontSize: "0.8125rem",
+  color: pageColorTokens.textBody,
+  lineHeight: 1.55,
+};
+
+const overviewGlossaryListStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.5rem",
+};
+
+const overviewGlossaryItemStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(120px, 0.8fr) minmax(0, 1.4fr)",
+  gap: "0.75rem",
+  alignItems: "center",
+  padding: "0.55rem 0.7rem",
+  borderRadius: "10px",
+  background: pageColorTokens.surface,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+};
+
+const overviewGlossarySourceStyle: CSSProperties = {
+  fontSize: "0.8125rem",
+  fontWeight: 600,
+  color: pageColorTokens.textPrimary,
+  wordBreak: "break-word",
+};
+
+const overviewGlossaryValueStyle: CSSProperties = {
+  fontSize: "0.75rem",
+  color: pageColorTokens.textSecondary,
+  wordBreak: "break-word",
+};
+
+function statusBadgeStyle(active: boolean): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "0.22rem 0.55rem",
+    borderRadius: "999px",
+    fontSize: "0.75rem",
+    fontWeight: 600,
+    color: active ? pageColorTokens.brandGreenDark : pageColorTokens.textSecondary,
+    background: active ? pageColorTokens.brandGreenLight : pageColorTokens.surfaceMuted,
+    border: `1px solid ${active ? pageColorTokens.brandGreen : pageColorTokens.borderSubtle}`,
+  };
+}
+
+const listActionButtonStyle: CSSProperties = {
+  border: "none",
+  background: pageColorTokens.surfaceMuted,
+  color: pageColorTokens.textBody,
+  cursor: "pointer",
+  fontSize: "0.8125rem",
+  fontWeight: 600,
+  padding: "0.55rem 0.9rem",
+  borderRadius: "999px",
+  minWidth: "4.5rem",
+};
+
+const backButtonStyle: CSSProperties = {
+  alignSelf: "flex-start",
+  border: "none",
+  background: "transparent",
+  color: pageColorTokens.brandBlue,
+  cursor: "pointer",
+  padding: 0,
+  marginBottom: "0.5rem",
+  fontSize: "0.8125rem",
+  fontWeight: 600,
 };
