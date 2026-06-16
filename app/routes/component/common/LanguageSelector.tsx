@@ -31,6 +31,7 @@ export function LanguageSelector({
   const { i18n, t } = useTranslation();
   const { setLocale, isSyncingLocale } = useLocaleActions();
   const isInline = variant === "inline";
+  const stableA11yLabel = "Language selector";
 
   return (
     <div
@@ -44,13 +45,17 @@ export function LanguageSelector({
           : languageSelectorBarStyle
       }
       role="group"
-      aria-label={t("common.languageSelectorLabel")}
+      aria-label={stableA11yLabel}
+      suppressHydrationWarning
     >
       {!isInline ? (
-        <span style={languageSelectorLabelStyle}>{t("common.languageSelectorLabel")}</span>
+        <span style={languageSelectorLabelStyle} suppressHydrationWarning>
+          {t("common.languageSelectorLabel")}
+        </span>
       ) : null}
       <select
         id="spark-language-selector"
+        aria-label={stableA11yLabel}
         value={isSupportedLocale(i18n.language) ? i18n.language : locale}
         onChange={(event) => {
           const next = normalizeLocale(event.target.value);

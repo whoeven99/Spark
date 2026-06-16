@@ -21,6 +21,7 @@ type TranslationGlossaryPanelProps = {
 
 type ParsedPreviewRow = GlossaryTerm & { _key: number; _selected: boolean };
 type LocaleRow = { locale: string; value: string };
+type EditingTarget = number | "new" | null;
 type TermEditDraft = {
   source: string;
   note: string;
@@ -139,9 +140,10 @@ export function TranslationGlossaryPanel({
   const [parseFeedback, setParseFeedback] = useState<ParseFeedback | null>(null);
   const [uploadMode, setUploadMode] = useState<"merge" | "replace">("merge");
   const [previewRows, setPreviewRows] = useState<ParsedPreviewRow[]>([]);
-  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editingIdx, setEditingIdx] = useState<EditingTarget>(null);
   const [termEditDraft, setTermEditDraft] = useState<TermEditDraft | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [returnToEditorAfterUpload, setReturnToEditorAfterUpload] = useState(false);
   const [editorPage, setEditorPage] = useState(1);
 
   const load = useCallback(async () => {
@@ -187,18 +189,14 @@ export function TranslationGlossaryPanel({
   };
 
   const addTerm = () => {
-    const nextIndex = terms.length;
-    setTerms((prev) => [...prev, { source: "" }]);
-    setDirty(true);
     setUploadOpen(false);
-    setEditorPage(Math.max(1, Math.ceil((terms.length + 1) / GLOSSARY_PAGE_SIZE)));
     setTermEditDraft({
       source: "",
       note: "",
       doNotTranslate: false,
       localeRows: [{ locale: "", value: "" }],
     });
-    setEditingIdx(nextIndex);
+    setEditingIdx("new");
   };
 
   const handleSave = async () => {
@@ -227,9 +225,14 @@ export function TranslationGlossaryPanel({
   };
 
   const openUploadDialog = () => {
+    const shouldReturnToEditor = !isFullEditorMode && editorOpen;
     setUploadDialogError(null);
     setSelectedUploadFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    setReturnToEditorAfterUpload(shouldReturnToEditor);
+    if (shouldReturnToEditor) {
+      setEditorOpen(false);
+    }
     setUploadOpen(true);
   };
 
@@ -239,6 +242,10 @@ export function TranslationGlossaryPanel({
     setSelectedUploadFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     setUploadOpen(false);
+    if (returnToEditorAfterUpload) {
+      setEditorOpen(true);
+      setReturnToEditorAfterUpload(false);
+    }
   };
 
   const handleParseSelectedFile = async () => {
@@ -286,6 +293,10 @@ export function TranslationGlossaryPanel({
       });
       setUploadOpen(false);
       setSelectedUploadFile(null);
+      if (returnToEditorAfterUpload) {
+        setEditorOpen(true);
+        setReturnToEditorAfterUpload(false);
+      }
       shopify.toast.show(validation.ok ? "文件解析完成" : "文件格式不合法，请重新上传");
     } catch (err) {
       setUploadDialogError(err instanceof Error ? err.message : String(err));
@@ -343,19 +354,28 @@ export function TranslationGlossaryPanel({
       const v = row.value.trim();
       if (k && v) result[k] = v;
     }
-    setTerms((prev) =>
-      prev.map((term, idx) =>
-        idx === editingIdx
-          ? {
-              ...term,
-              source: termEditDraft.source,
-              note: termEditDraft.note.trim() || undefined,
-              doNotTranslate: termEditDraft.doNotTranslate || undefined,
-              translations: Object.keys(result).length ? result : undefined,
-            }
-          : term,
-      ),
-    );
+    const nextTerm: GlossaryTerm = {
+      source: termEditDraft.source,
+      note: termEditDraft.note.trim() || undefined,
+      doNotTranslate: termEditDraft.doNotTranslate || undefined,
+      translations: Object.keys(result).length ? result : undefined,
+    };
+
+    if (editingIdx === "new") {
+      setTerms((prev) => [...prev, nextTerm]);
+      setEditorPage(Math.max(1, Math.ceil((terms.length + 1) / GLOSSARY_PAGE_SIZE)));
+    } else {
+      setTerms((prev) =>
+        prev.map((term, idx) =>
+          idx === editingIdx
+            ? {
+                ...term,
+                ...nextTerm,
+              }
+            : term,
+        ),
+      );
+    }
     setDirty(true);
     closeTermEditor();
   };
@@ -664,7 +684,7 @@ export function TranslationGlossaryPanel({
       open={editingIdx !== null && termEditDraft !== null}
       onClose={closeTermEditor}
       width={760}
-      title="编辑规则"
+      title={editingIdx === "new" ? "新增术语" : "编辑规则"}
       description={
         termEditDraft
           ? `${termEditDraft.source || "未填写原文"} · ${getRuleDescription(termEditDraft.doNotTranslate)}`
@@ -676,7 +696,7 @@ export function TranslationGlossaryPanel({
             取消
           </s-button>
           <s-button type="button" variant="primary" onClick={saveTermEditor}>
-            确定
+            {editingIdx === "new" ? "确认新增" : "确定"}
           </s-button>
         </div>
       }

@@ -7,6 +7,7 @@ type DialogShellProps = {
   closeDisabled?: boolean;
   width?: number;
   title: ReactNode;
+  accessibilityLabel?: string;
   description?: ReactNode;
   children?: ReactNode;
   footer?: ReactNode;
@@ -20,12 +21,16 @@ export function DialogShell({
   closeDisabled = false,
   width = 460,
   title,
+  accessibilityLabel,
   description,
   children,
   footer,
   destroyOnHidden = true,
   className,
 }: DialogShellProps) {
+  const resolvedAccessibilityLabel =
+    accessibilityLabel ?? (typeof title === "string" ? title : undefined);
+
   return (
     <Modal
       open={open}
@@ -39,6 +44,7 @@ export function DialogShell({
       closable={!closeDisabled}
       keyboard={!closeDisabled}
       width={width}
+      aria-label={resolvedAccessibilityLabel}
     >
       <div className="spark-dialog-shell__content">
         <div className="spark-dialog-shell__header">
