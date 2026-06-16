@@ -866,10 +866,10 @@ const detailTabsWrapStyle: CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
   gap: "0.5rem",
-  padding: "0.7rem 0.8rem",
+  padding: "0.55rem 0.65rem",
   borderRadius: pageColorTokens.radiusControl,
-  border: `1px solid ${pageColorTokens.border}`,
-  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surface,
 };
 
 const detailSectionStackStyle: CSSProperties = {
@@ -916,6 +916,35 @@ const detailInfoValueStyle: CSSProperties = {
   color: pageColorTokens.textBody,
 };
 
+const inlineMetricSummaryStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "0.55rem 1rem",
+  padding: "0.7rem 0.8rem",
+  borderRadius: pageColorTokens.radiusControl,
+  border: `1px solid ${pageColorTokens.divider}`,
+  background: pageColorTokens.surface,
+};
+
+const inlineMetricItemStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "baseline",
+  gap: "0.35rem",
+  flexWrap: "wrap",
+};
+
+const inlineMetricKeyStyle: CSSProperties = {
+  fontSize: "0.75rem",
+  fontWeight: 700,
+  color: pageColorTokens.textSecondary,
+};
+
+const inlineMetricValueStyle: CSSProperties = {
+  fontSize: "0.875rem",
+  fontWeight: 700,
+  color: pageColorTokens.textPrimary,
+};
+
 const detailTableStackStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
@@ -931,13 +960,13 @@ const monitoringInsightHeaderStyle: CSSProperties = {
 };
 
 const detailContextHeaderStyle: CSSProperties = {
-  padding: "0.9rem 1rem",
+  padding: "1.05rem 1.1rem",
   borderRadius: pageColorTokens.radiusControl,
   border: `1px solid ${pageColorTokens.borderSubtle}`,
-  background: pageColorTokens.surfaceMuted,
+  background: pageColorTokens.surface,
   display: "flex",
   flexDirection: "column",
-  gap: "0.75rem",
+  gap: "0.95rem",
 };
 
 const detailContextTitleStyle: CSSProperties = {
@@ -1360,6 +1389,63 @@ function DetailStatStrip({
   );
 }
 
+function TaskStateButtons({
+  task,
+  busy,
+  onSubmitTaskAction,
+  align = "flex-end",
+}: {
+  task: OperationTaskView;
+  busy: boolean;
+  onSubmitTaskAction: (taskId: string, action: OperationTaskAction) => void;
+  align?: CSSProperties["alignItems"];
+}) {
+  const { t } = useTranslation();
+  const closed = ["done", "ignored", "auto_closed"].includes(task.status);
+
+  return (
+    <div
+      style={{
+        ...listRowActionsStyle,
+        flexDirection: "column",
+        alignItems: align,
+        justifyContent: "flex-start",
+      }}
+    >
+      {task.status === "open" ? (
+        <s-button
+          type="button"
+          variant="primary"
+          onClick={() => onSubmitTaskAction(task.id, "start")}
+          {...(busy ? { disabled: true } : {})}
+        >
+          {t("dailyOps.actionStart")}
+        </s-button>
+      ) : null}
+      {task.status === "in_progress" ? (
+        <s-button
+          type="button"
+          variant="primary"
+          onClick={() => onSubmitTaskAction(task.id, "done")}
+          {...(busy ? { disabled: true } : {})}
+        >
+          {t("dailyOps.actionDone")}
+        </s-button>
+      ) : null}
+      {closed ? (
+        <s-button
+          type="button"
+          variant="tertiary"
+          onClick={() => onSubmitTaskAction(task.id, "reopen")}
+          {...(busy ? { disabled: true } : {})}
+        >
+          {t("dailyOps.actionReopen")}
+        </s-button>
+      ) : null}
+    </div>
+  );
+}
+
 export default function DailyOperationsPage() {
   const { t, i18n } = useTranslation();
   const { isMobile } = useResponsiveLayout();
@@ -1732,43 +1818,12 @@ function DailyOperationsBody({
           >
             {t("dailyOps.actionSendToAi")}
           </s-button>
-          <s-button
-            type="button"
-            variant="tertiary"
-            onClick={() => onOpenDetail("task", { taskId: task.id })}
-          >
-            {t("dailyOps.viewDetail")}
-          </s-button>
-          {task.status === "open" ? (
-            <s-button
-              type="button"
-              variant="primary"
-              onClick={() => onSubmitTaskAction(task.id, "start")}
-              {...(busy ? { disabled: true } : {})}
-            >
-              {t("dailyOps.actionStart")}
-            </s-button>
-          ) : null}
-          {task.status === "in_progress" ? (
-            <s-button
-              type="button"
-              variant="primary"
-              onClick={() => onSubmitTaskAction(task.id, "done")}
-              {...(busy ? { disabled: true } : {})}
-            >
-              {t("dailyOps.actionDone")}
-            </s-button>
-          ) : null}
-          {closed ? (
-            <s-button
-              type="button"
-              variant="tertiary"
-              onClick={() => onSubmitTaskAction(task.id, "reopen")}
-              {...(busy ? { disabled: true } : {})}
-            >
-              {t("dailyOps.actionReopen")}
-            </s-button>
-          ) : null}
+          <TaskStateButtons
+            task={task}
+            busy={busy}
+            onSubmitTaskAction={onSubmitTaskAction}
+            align={isMobile ? "stretch" : "flex-end"}
+          />
         </div>
       </div>
     );
@@ -1977,28 +2032,15 @@ function DailyOperationsBody({
                           <p style={taskSecondaryTextStyle}>{selectedMonitoringCard.summary}</p>
                         </div>
                       </div>
-                      <div
-                        style={{
-                          ...detailInfoGridStyle,
-                          ...(isMobile ? { gridTemplateColumns: "1fr" } : null),
-                        }}
-                      >
-                        <div style={detailInfoCardStyle}>
-                          <span style={detailInfoLabelStyle}>{t("dailyOps.metricPrimary")}</span>
-                          <span style={detailInfoValueStyle}>{selectedMonitoringCard.primaryMetric}</span>
-                        </div>
-                        <div style={detailInfoCardStyle}>
-                          <span style={detailInfoLabelStyle}>{t("dailyOps.metricSecondary")}</span>
-                          <span style={detailInfoValueStyle}>{selectedMonitoringCard.secondaryMetric}</span>
-                        </div>
-                        <div style={detailInfoCardStyle}>
-                          <span style={detailInfoLabelStyle}>{t("dailyOps.monitoringInsightsTitle")}</span>
-                          <span style={detailInfoValueStyle}>{monitoringInsights.length}</span>
-                        </div>
-                        <div style={detailInfoCardStyle}>
-                          <span style={detailInfoLabelStyle}>{t("dailyOps.relatedTasksLabel")}</span>
-                          <span style={detailInfoValueStyle}>{monitoringTasks.length}</span>
-                        </div>
+                      <div style={inlineMetricSummaryStyle}>
+                        <span style={inlineMetricItemStyle}>
+                          <span style={inlineMetricKeyStyle}>{t("dailyOps.metricPrimary")}</span>
+                          <span style={inlineMetricValueStyle}>{selectedMonitoringCard.primaryMetric}</span>
+                        </span>
+                        <span style={inlineMetricItemStyle}>
+                          <span style={inlineMetricKeyStyle}>{t("dailyOps.metricSecondary")}</span>
+                          <span style={inlineMetricValueStyle}>{selectedMonitoringCard.secondaryMetric}</span>
+                        </span>
                       </div>
                       <div style={relatedObjectWrapStyle}>
                         <div style={monitoringInsightHeaderStyle}>
@@ -2012,12 +2054,21 @@ function DailyOperationsBody({
                         ) : (
                           <div style={listSectionStyle}>
                             {monitoringInsights.slice(0, 3).map((item) => (
-                              <div
+                              <button
                                 key={item.key}
+                                type="button"
                                 style={{
                                   ...listRowStyle,
-                                  ...(isMobile ? { gridTemplateColumns: "1fr" } : null),
+                                  gridTemplateColumns: "minmax(0, 1fr)",
+                                  cursor: "pointer",
+                                  textAlign: "left",
                                 }}
+                                onClick={() =>
+                                  onOpenDetail("risk", {
+                                    riskTab: "insights",
+                                    insightKey: item.key,
+                                  })
+                                }
                               >
                                 <div style={listRowMainStyle}>
                                   <div style={listRowMetaStyle}>
@@ -2032,26 +2083,7 @@ function DailyOperationsBody({
                                     {t("dailyOps.insightTaskCount", { count: item.taskCount })}
                                   </span>
                                 </div>
-                                <div
-                                  style={{
-                                    ...listRowActionsStyle,
-                                    ...(isMobile ? { justifyContent: "flex-start" } : null),
-                                  }}
-                                >
-                                  <s-button
-                                    type="button"
-                                    variant="tertiary"
-                                    onClick={() =>
-                                      onOpenDetail("risk", {
-                                        riskTab: "insights",
-                                        insightKey: item.key,
-                                      })
-                                    }
-                                  >
-                                    {t("dailyOps.viewDetail")}
-                                  </s-button>
-                                </div>
-                              </div>
+                              </button>
                             ))}
                           </div>
                         )}
@@ -2335,6 +2367,30 @@ function DailyOperationsDetail({
         (environmentTaskSourceKeys[selectedEnvironment.key] ?? []).includes(task.sourceKey),
       )
     : [];
+  const renderLinkedTaskRow = (task: OperationTaskView) => (
+    <div
+      key={task.id}
+      style={{
+        ...listRowStyle,
+        gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) auto",
+      }}
+    >
+      <div style={listRowMainStyle}>
+        <div style={{ ...listRowMetaStyle, gap: "0.35rem" }}>
+          <s-badge tone={priorityTone(task.priority)}>{priorityLabel(task.priority, t)}</s-badge>
+          <s-badge tone={statusTone(task.status)}>{taskStatusText(task.status)}</s-badge>
+        </div>
+        <h3 style={taskTitleStyle}>{task.title}</h3>
+        <p style={taskSecondaryTextStyle}>{task.triggerReason}</p>
+      </div>
+      <TaskStateButtons
+        task={task}
+        busy={busy}
+        onSubmitTaskAction={onSubmitTaskAction}
+        align={isMobile ? "stretch" : "flex-end"}
+      />
+    </div>
+  );
   const selectedEnvironmentSections = useMemo<DetailTableSection<any>[]>(() => {
     if (!selectedEnvironment) return [];
     switch (selectedEnvironment.key) {
@@ -2777,13 +2833,6 @@ function DailyOperationsDetail({
       : riskTab === "insights"
         ? selectedInsight?.title ?? t("dailyOps.dataInsightsTitle")
         : t("dailyOps.healthTitle");
-  const riskContextSubtitle =
-    riskTab === "environment"
-      ? selectedEnvironment?.summary ??
-        (selectedEnvironmentCard ? selectedEnvironmentCard.summary : t("dailyOps.detailRiskSelectEnvironment"))
-      : riskTab === "insights"
-        ? selectedInsight?.summary ?? t("dailyOps.detailRiskSelectInsight")
-        : t("dailyOps.healthSubtitle");
   const valueTabs: DetailNavTab[] = [
     {
       key: "framework",
@@ -3007,7 +3056,6 @@ function DailyOperationsDetail({
         <DetailContextHeader
           sectionLabel={t("dailyOps.detailTitle.risk")}
           title={riskContextTitle}
-          subtitle={riskContextSubtitle}
           badges={
             riskTab === "environment" && selectedEnvironmentCard ? (
               <>
@@ -3023,48 +3071,23 @@ function DailyOperationsDetail({
                 </s-badge>
                 <s-badge>{insightConfidenceLabel(selectedInsight.confidence, t)}</s-badge>
               </>
-            ) : (
-              <s-badge tone="info">{result.items.length}</s-badge>
-            )
+            ) : null
           }
           tabs={riskTabs}
         />
-        <DetailStatStrip
-          isMobile={isMobile}
-          items={[
-            {
-              key: "risk",
-              label: t("dailyOps.riskEnvironmentTitle"),
-              value: riskCards.filter((card) => card.status === "risk").length,
-              hint: t("dailyOps.detailRiskCritical"),
-            },
-            {
-              key: "insights",
-              label: t("dailyOps.dataInsightsTitle"),
-              value: diagnosisInsights.length,
-              hint: t("dailyOps.detailRiskInsights"),
-            },
-            {
-              key: "health",
-              label: t("dailyOps.healthTitle"),
-              value: result.items.length,
-              hint: t("dailyOps.detailRiskHealth"),
-            },
-          ]}
-        />
         {riskTab === "environment" ? (
           <div style={detailSectionStackStyle}>
-            <PageSurface
-              title={t("dailyOps.riskEnvironmentTitle")}
-              subtitle={t("dailyOps.riskEnvironmentSubtitle")}
-            >
+            <PageSurface title={t("dailyOps.riskEnvironmentTitle")}>
               <div style={listSectionStyle}>
                 {orderedRiskCards.map((card) => (
-                  <div
+                  <button
                     key={card.key}
+                    type="button"
                     style={{
                       ...listRowStyle,
-                      ...(isMobile ? { gridTemplateColumns: "1fr" } : null),
+                      gridTemplateColumns: "minmax(0, 1fr)",
+                      cursor: "pointer",
+                      textAlign: "left",
                       ...(card.key === selectedEnvironmentKey
                         ? {
                             borderColor: pageColorTokens.borderStrong,
@@ -3072,6 +3095,12 @@ function DailyOperationsDetail({
                           }
                         : null),
                     }}
+                    onClick={() =>
+                      onOpenDetail("risk", {
+                        riskTab: "environment",
+                        environmentKey: card.key,
+                      })
+                    }
                   >
                     <div style={listRowMainStyle}>
                       <div style={listRowMetaStyle}>
@@ -3080,39 +3109,23 @@ function DailyOperationsDetail({
                       </div>
                       <h3 style={taskTitleStyle}>{card.title}</h3>
                       <p style={taskSecondaryTextStyle}>{card.summary}</p>
+                      <div style={inlineMetricSummaryStyle}>
+                        <span style={inlineMetricItemStyle}>
+                          <span style={inlineMetricKeyStyle}>{t("dailyOps.metricPrimary")}</span>
+                          <span style={inlineMetricValueStyle}>{card.primaryMetric}</span>
+                        </span>
+                        <span style={inlineMetricItemStyle}>
+                          <span style={inlineMetricKeyStyle}>{t("dailyOps.metricSecondary")}</span>
+                          <span style={inlineMetricValueStyle}>{card.secondaryMetric}</span>
+                        </span>
+                      </div>
                     </div>
-                    <div style={listRowValueStackStyle}>
-                      <span style={taskMetaTextStyle}>{card.primaryMetric}</span>
-                      <span style={taskSecondaryTextStyle}>{card.secondaryMetric}</span>
-                    </div>
-                    <div
-                      style={{
-                        ...listRowActionsStyle,
-                        ...(isMobile ? { justifyContent: "flex-start" } : null),
-                      }}
-                    >
-                      <s-button
-                        type="button"
-                        variant="tertiary"
-                        onClick={() =>
-                          onOpenDetail("risk", {
-                            riskTab: "environment",
-                            environmentKey: card.key,
-                          })
-                        }
-                      >
-                        {t("dailyOps.viewDetail")}
-                      </s-button>
-                    </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </PageSurface>
             {selectedEnvironmentCard ? (
-              <PageSurface
-                title={selectedEnvironmentCard.title}
-                subtitle={selectedEnvironment?.summary ?? selectedEnvironmentCard.summary}
-              >
+              <PageSurface title={selectedEnvironmentCard.title}>
                 <div style={detailFocusCardStyle}>
                   <div style={listRowMetaStyle}>
                     <SourceTag source={selectedEnvironmentCard.source} />
@@ -3120,28 +3133,18 @@ function DailyOperationsDetail({
                       {statusText(selectedEnvironmentCard.status)}
                     </s-badge>
                   </div>
-                  <div
-                    style={{
-                      ...detailInfoGridStyle,
-                      ...(isMobile ? { gridTemplateColumns: "1fr" } : null),
-                    }}
-                  >
-                    <div style={detailInfoCardStyle}>
-                      <span style={detailInfoLabelStyle}>{t("dailyOps.metricPrimary")}</span>
-                      <span style={detailInfoValueStyle}>{selectedEnvironmentCard.primaryMetric}</span>
-                    </div>
-                    <div style={detailInfoCardStyle}>
-                      <span style={detailInfoLabelStyle}>{t("dailyOps.metricSecondary")}</span>
-                      <span style={detailInfoValueStyle}>{selectedEnvironmentCard.secondaryMetric}</span>
-                    </div>
-                    <div style={detailInfoCardStyle}>
-                      <span style={detailInfoLabelStyle}>{t("dailyOps.dataInsightsTitle")}</span>
-                      <span style={detailInfoValueStyle}>{selectedEnvironmentInsights.length}</span>
-                    </div>
-                    <div style={detailInfoCardStyle}>
-                      <span style={detailInfoLabelStyle}>{t("dailyOps.taskWorkbenchTitle")}</span>
-                      <span style={detailInfoValueStyle}>{selectedEnvironmentTasks.length}</span>
-                    </div>
+                  <p style={taskSecondaryTextStyle}>
+                    {selectedEnvironment?.summary ?? selectedEnvironmentCard.summary}
+                  </p>
+                  <div style={inlineMetricSummaryStyle}>
+                    <span style={inlineMetricItemStyle}>
+                      <span style={inlineMetricKeyStyle}>{t("dailyOps.metricPrimary")}</span>
+                      <span style={inlineMetricValueStyle}>{selectedEnvironmentCard.primaryMetric}</span>
+                    </span>
+                    <span style={inlineMetricItemStyle}>
+                      <span style={inlineMetricKeyStyle}>{t("dailyOps.metricSecondary")}</span>
+                      <span style={inlineMetricValueStyle}>{selectedEnvironmentCard.secondaryMetric}</span>
+                    </span>
                   </div>
                 </div>
                 {selectedEnvironmentSections.length > 0 ? (
@@ -3158,59 +3161,34 @@ function DailyOperationsDetail({
                 {selectedEnvironmentTasks.length > 0 ? (
                   <div style={{ ...relatedObjectWrapStyle, marginTop: "0.9rem" }}>
                     <strong>{t("dailyOps.relatedTasksLabel")}</strong>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-                      {selectedEnvironmentTasks.slice(0, 4).map((task) => (
-                        <button
-                          key={task.id}
-                          type="button"
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            gap: "0.75rem",
-                            padding: "0.65rem 0.75rem",
-                            borderRadius: pageColorTokens.radiusControl,
-                            border: `1px solid ${pageColorTokens.borderSubtle}`,
-                            background: pageColorTokens.surface,
-                            cursor: "pointer",
-                            textAlign: "left",
-                          }}
-                          onClick={() => onOpenDetail("task", { taskId: task.id })}
-                        >
-                          <span style={taskMetaTextStyle}>{task.title}</span>
-                          <s-badge tone={statusTone(task.status)}>
-                            {taskStatusText(task.status)}
-                          </s-badge>
-                        </button>
-                      ))}
+                    <div style={listSectionStyle}>
+                      {selectedEnvironmentTasks.slice(0, 4).map(renderLinkedTaskRow)}
                     </div>
                   </div>
                 ) : null}
               </PageSurface>
             ) : (
-              <PageSurface
-                title={t("dailyOps.detailRelatedObjectsTitle")}
-                subtitle={t("dailyOps.detailRiskSelectEnvironment")}
-              >
+              <PageSurface title={t("dailyOps.detailRelatedObjectsTitle")}>
                 <div style={pageEmptyStateStyle}>{t("dailyOps.detailRiskSelectEnvironment")}</div>
               </PageSurface>
             )}
           </div>
         ) : riskTab === "insights" ? (
           <div style={detailSectionStackStyle}>
-            <PageSurface
-              title={t("dailyOps.dataInsightsTitle")}
-              subtitle={t("dailyOps.dataInsightsSubtitle")}
-            >
+            <PageSurface title={t("dailyOps.dataInsightsTitle")}>
               {orderedInsights.length === 0 ? (
                 <p style={taskSecondaryTextStyle}>{t("dailyOps.dataInsightsEmpty")}</p>
               ) : (
                 <div style={listSectionStyle}>
                   {orderedInsights.map((item) => (
-                    <div
+                    <button
                       key={item.key}
+                      type="button"
                       style={{
-                        ...insightCardStyle,
+                        ...listRowStyle,
+                        gridTemplateColumns: "minmax(0, 1fr)",
+                        cursor: "pointer",
+                        textAlign: "left",
                         ...(item.key === selectedInsightKey
                           ? {
                               borderColor: pageColorTokens.borderStrong,
@@ -3218,63 +3196,31 @@ function DailyOperationsDetail({
                             }
                           : null),
                       }}
+                      onClick={() =>
+                        onOpenDetail("risk", {
+                          riskTab: "insights",
+                          insightKey: item.key,
+                        })
+                      }
                     >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: "0.5rem",
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <h3 style={taskTitleStyle}>{item.title}</h3>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                      <div style={listRowMainStyle}>
+                        <div style={{ ...listRowMetaStyle, gap: "0.4rem" }}>
                           <s-badge tone={diagnosisTone(item.status)}>{statusText(item.status)}</s-badge>
                           <s-badge>{insightConfidenceLabel(item.confidence, t)}</s-badge>
                         </div>
-                      </div>
-                      <p style={taskMetaTextStyle}>{item.summary}</p>
-                      <div style={quietPanelStyle}>
-                        {item.evidence.map((line, index) => (
-                          <p key={`e-${item.key}-${index}`} style={taskSecondaryTextStyle}>
-                            {line}
-                          </p>
-                        ))}
-                      </div>
-                      {item.reasoning.length > 0 ? (
-                        <div style={quietPanelStyle}>
-                          {item.reasoning.map((line, index) => (
-                            <p key={`r-${item.key}-${index}`} style={taskMetaTextStyle}>
-                              {line}
-                            </p>
-                          ))}
-                        </div>
-                      ) : null}
-                      <div style={detailActionRowStyle}>
+                        <h3 style={taskTitleStyle}>{item.title}</h3>
+                        <p style={taskSecondaryTextStyle}>{item.summary}</p>
                         <span style={taskSecondaryTextStyle}>
                           {t("dailyOps.insightTaskCount", { count: item.taskCount })}
                         </span>
-                        <s-button
-                          type="button"
-                          variant="tertiary"
-                          onClick={() =>
-                            onOpenDetail("risk", {
-                              riskTab: "insights",
-                              insightKey: item.key,
-                            })
-                          }
-                        >
-                          {t("dailyOps.viewDetail")}
-                        </s-button>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
             </PageSurface>
             {selectedInsight ? (
-              <PageSurface title={selectedInsight.title} subtitle={selectedInsight.summary}>
+              <PageSurface title={selectedInsight.title}>
                 <div style={detailFocusCardStyle}>
                   <div style={listRowMetaStyle}>
                     <s-badge tone={diagnosisTone(selectedInsight.status)}>
@@ -3282,28 +3228,24 @@ function DailyOperationsDetail({
                     </s-badge>
                     <s-badge>{insightConfidenceLabel(selectedInsight.confidence, t)}</s-badge>
                   </div>
-                  <div
-                    style={{
-                      ...detailInfoGridStyle,
-                      ...(isMobile ? { gridTemplateColumns: "1fr" } : null),
-                    }}
-                  >
-                    <div style={detailInfoCardStyle}>
-                      <span style={detailInfoLabelStyle}>{t("dailyOps.relatedObjectsLabel")}</span>
-                      <span style={detailInfoValueStyle}>
+                  <p style={taskSecondaryTextStyle}>{selectedInsight.summary}</p>
+                  <div style={inlineMetricSummaryStyle}>
+                    <span style={inlineMetricItemStyle}>
+                      <span style={inlineMetricKeyStyle}>{t("dailyOps.relatedObjectsLabel")}</span>
+                      <span style={inlineMetricValueStyle}>
                         {selectedInsightSections.length > 0
                           ? selectedInsightSections.reduce((sum, section) => sum + section.rows.length, 0)
                           : "—"}
                       </span>
-                    </div>
-                    <div style={detailInfoCardStyle}>
-                      <span style={detailInfoLabelStyle}>{t("dailyOps.relatedTasksLabel")}</span>
-                      <span style={detailInfoValueStyle}>{selectedInsightTasks.length}</span>
-                    </div>
-                    <div style={detailInfoCardStyle}>
-                      <span style={detailInfoLabelStyle}>{t("dailyOps.riskEnvironmentTitle")}</span>
-                      <span style={detailInfoValueStyle}>{selectedInsightEnvironmentCards.length}</span>
-                    </div>
+                    </span>
+                    <span style={inlineMetricItemStyle}>
+                      <span style={inlineMetricKeyStyle}>{t("dailyOps.relatedTasksLabel")}</span>
+                      <span style={inlineMetricValueStyle}>{selectedInsightTasks.length}</span>
+                    </span>
+                    <span style={inlineMetricItemStyle}>
+                      <span style={inlineMetricKeyStyle}>{t("dailyOps.riskEnvironmentTitle")}</span>
+                      <span style={inlineMetricValueStyle}>{selectedInsightEnvironmentCards.length}</span>
+                    </span>
                   </div>
                 </div>
                 <div style={{ ...relatedObjectWrapStyle, marginTop: "0.9rem" }}>
@@ -3372,49 +3314,20 @@ function DailyOperationsDetail({
                 {selectedInsightTasks.length > 0 ? (
                   <div style={{ ...relatedObjectWrapStyle, marginTop: "0.9rem" }}>
                     <strong>{t("dailyOps.relatedTasksLabel")}</strong>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-                      {selectedInsightTasks.slice(0, 4).map((task) => (
-                        <button
-                          key={task.id}
-                          type="button"
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            gap: "0.75rem",
-                            padding: "0.65rem 0.75rem",
-                            borderRadius: pageColorTokens.radiusControl,
-                            border: `1px solid ${pageColorTokens.borderSubtle}`,
-                            background: pageColorTokens.surface,
-                            cursor: "pointer",
-                            textAlign: "left",
-                          }}
-                          onClick={() => onOpenDetail("task", { taskId: task.id })}
-                        >
-                          <span style={taskMetaTextStyle}>{task.title}</span>
-                          <s-badge tone={statusTone(task.status)}>
-                            {taskStatusText(task.status)}
-                          </s-badge>
-                        </button>
-                      ))}
+                    <div style={listSectionStyle}>
+                      {selectedInsightTasks.slice(0, 4).map(renderLinkedTaskRow)}
                     </div>
                   </div>
                 ) : null}
               </PageSurface>
             ) : (
-              <PageSurface
-                title={t("dailyOps.detailRelatedObjectsTitle")}
-                subtitle={t("dailyOps.detailRiskSelectInsight")}
-              >
+              <PageSurface title={t("dailyOps.detailRelatedObjectsTitle")}>
                 <div style={pageEmptyStateStyle}>{t("dailyOps.detailRiskSelectInsight")}</div>
               </PageSurface>
             )}
           </div>
         ) : (
-          <PageSurface
-            title={t("dailyOps.healthTitle")}
-            subtitle={t("dailyOps.healthSubtitle")}
-          >
+          <PageSurface title={t("dailyOps.healthTitle")}>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
               {result.items.map((item) => (
                 <div
