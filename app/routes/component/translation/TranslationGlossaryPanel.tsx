@@ -187,10 +187,18 @@ export function TranslationGlossaryPanel({
   };
 
   const addTerm = () => {
+    const nextIndex = terms.length;
     setTerms((prev) => [...prev, { source: "" }]);
     setDirty(true);
     setUploadOpen(false);
     setEditorPage(Math.max(1, Math.ceil((terms.length + 1) / GLOSSARY_PAGE_SIZE)));
+    setTermEditDraft({
+      source: "",
+      note: "",
+      doNotTranslate: false,
+      localeRows: [{ locale: "", value: "" }],
+    });
+    setEditingIdx(nextIndex);
   };
 
   const handleSave = async () => {
@@ -527,13 +535,7 @@ export function TranslationGlossaryPanel({
                 <div key={idx} style={termRowStyle}>
                   <div style={termGridRowStyle}>
                     <div style={termTableCellStyle}>
-                      <input
-                        type="text"
-                        value={term.source ?? ""}
-                        placeholder="原文"
-                        onChange={(e) => updateTerm(idx, { source: e.target.value })}
-                        style={tableInputStyle}
-                      />
+                      <div style={tableTextStyle}>{term.source?.trim() || "未填写原文"}</div>
                     </div>
                     <div style={termTableCellStyle}>
                       <div style={tableTextStyle}>{getRuleDescription(term.doNotTranslate)}</div>
@@ -549,7 +551,7 @@ export function TranslationGlossaryPanel({
                     <div style={termTableCellStyle}>
                       <div style={operationRowStyle}>
                         <button type="button" onClick={() => openTermEditor(idx)} style={actionButtonStyle}>
-                          编辑译文
+                          编辑
                         </button>
                         <button type="button" onClick={() => deleteTerm(idx)} style={dangerActionButtonStyle}>
                           删除
@@ -590,32 +592,293 @@ export function TranslationGlossaryPanel({
     </div>
   );
 
-  if (isFullEditorMode) {
-    return (
-      <PageSurface>
-        <div style={editorHeaderStyle}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", minWidth: 0 }}>
-            {onBack ? (
-              <button type="button" style={backButtonStyle} onClick={onBack}>
-                返回翻译风格列表
-              </button>
-            ) : null}
-            <div style={titleStyle}>编辑术语表</div>
+  const uploadDialog = (
+    <DialogShell
+      open={uploadOpen}
+      onClose={closeUploadDialog}
+      width={720}
+      title="上传文件"
+      description="选择文件后解析术语内容，解析结果会回到当前页面展示并校验是否合法。"
+      footer={
+        <div style={modalFooterStyle}>
+          <s-button type="button" variant="secondary" onClick={closeUploadDialog} {...(fileParsing ? { disabled: true } : {})}>
+            取消
+          </s-button>
+          <s-button
+            type="button"
+            variant="primary"
+            onClick={() => void handleParseSelectedFile()}
+            {...(!selectedUploadFile || fileParsing ? { disabled: true } : {})}
+          >
+            {fileParsing ? "解析中…" : "解析文件"}
+          </s-button>
+        </div>
+      }
+    >
+      <div style={uploadDialogContentStyle}>
+        <div style={uploadExamplePanelStyle}>
+          <div style={pageFieldLabelStyle}>支持格式与规则</div>
+          <div style={{ ...pageHintTextStyle, marginTop: "0.35rem" }}>
+            支持 {FILE_TYPES_LABEL}，单个文件最大 10 MB。建议一行一个术语，包含原文与目标译文；若文件内容过长，系统会自动截断并提示分批上传。
           </div>
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            <s-button type="button" variant="secondary" onClick={onRequestAiSuggestion}>
-              生成 AI 建议
-            </s-button>
-            <s-button type="button" variant="secondary" onClick={openUploadDialog}>
-              上传文件
-            </s-button>
-            <s-button type="button" variant="secondary" onClick={addTerm}>
-              新增术语
-            </s-button>
+          <div style={uploadRulesListStyle}>
+            <div>示例 1：`原文,英文译文,日文译文`</div>
+            <div>示例 2：`source: Spark`、`en: Spark`、`ja: Spark`</div>
+            <div>示例 3：原文与多语言译文分列整理，避免混入大段说明文字。</div>
           </div>
         </div>
-        {renderEditorBody()}
-      </PageSurface>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={FILE_ACCEPT}
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const file = e.target.files?.[0] ?? null;
+            setSelectedUploadFile(file);
+            setUploadDialogError(null);
+          }}
+        />
+
+        <div style={uploadSelectRowStyle}>
+          <s-button
+            type="button"
+            variant="secondary"
+            onClick={() => fileInputRef.current?.click()}
+            {...(fileParsing ? { disabled: true } : {})}
+          >
+            选择文件
+          </s-button>
+          <div style={uploadFileMetaStyle}>
+            {selectedUploadFile ? `已选择：${selectedUploadFile.name}` : "请选择要解析的术语文件"}
+          </div>
+        </div>
+
+        {uploadDialogError ? <div style={formErrorBoxStyle}>{uploadDialogError}</div> : null}
+      </div>
+    </DialogShell>
+  );
+
+  const termEditorDialog = (
+    <DialogShell
+      open={editingIdx !== null && termEditDraft !== null}
+      onClose={closeTermEditor}
+      width={760}
+      title="编辑规则"
+      description={
+        termEditDraft
+          ? `${termEditDraft.source || "未填写原文"} · ${getRuleDescription(termEditDraft.doNotTranslate)}`
+          : undefined
+      }
+      footer={
+        <div style={modalFooterStyle}>
+          <s-button type="button" variant="secondary" onClick={closeTermEditor}>
+            取消
+          </s-button>
+          <s-button type="button" variant="primary" onClick={saveTermEditor}>
+            确定
+          </s-button>
+        </div>
+      }
+    >
+      {termEditDraft ? (
+        <div style={termEditFormStyle}>
+          <div style={fieldStackStyle}>
+            <div style={pageFieldLabelStyle}>原文</div>
+            <input
+              type="text"
+              value={termEditDraft.source}
+              placeholder="请输入原文"
+              onChange={(e) =>
+                setTermEditDraft((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        source: e.target.value,
+                      }
+                    : prev,
+                )
+              }
+              style={inputStyle}
+            />
+          </div>
+
+          <div style={fieldStackStyle}>
+            <div style={pageFieldLabelStyle}>规则</div>
+            <div style={rulePanelStyle}>
+              <div style={ruleSummaryStyle}>
+                <span style={ruleSummaryBadgeStyle}>
+                  {getRuleDescription(termEditDraft.doNotTranslate)}
+                </span>
+                <span style={termEditMetaStyle}>
+                  {termEditDraft.doNotTranslate
+                    ? "当前术语会在全部语言下保持原文。"
+                    : `当前已配置 ${countConfiguredLocales(
+                        Object.fromEntries(
+                          termEditDraft.localeRows
+                            .map((row) => [row.locale.trim().toLowerCase(), row.value.trim()])
+                            .filter(([locale, value]) => locale && value),
+                        ),
+                      )} 个目标语言译文。`}
+                </span>
+              </div>
+
+              <label style={checkboxLabelStyle}>
+                <input
+                  type="checkbox"
+                  checked={termEditDraft.doNotTranslate}
+                  onChange={(e) =>
+                    setTermEditDraft((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            doNotTranslate: e.target.checked,
+                          }
+                        : prev,
+                    )
+                  }
+                />
+                保持原文，不参与翻译
+              </label>
+            </div>
+          </div>
+
+          {!termEditDraft.doNotTranslate ? (
+            <div style={fieldStackStyle}>
+              <div style={pageFieldLabelStyle}>目标译文</div>
+              <div style={termEditMetaStyle}>按语言分别填写目标译文，保存后会应用到对应语言的翻译结果。</div>
+              <div style={localeEditorPanelStyle}>
+              {termEditDraft.localeRows.map((row, rowIdx) => (
+                <div key={rowIdx} style={localeEditRowStyle}>
+                  <input
+                    type="text"
+                    value={row.locale}
+                    placeholder="语言"
+                    onChange={(e) =>
+                      setTermEditDraft((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              localeRows: prev.localeRows.map((item, index) =>
+                                index === rowIdx ? { ...item, locale: e.target.value } : item,
+                              ),
+                            }
+                          : prev,
+                      )
+                    }
+                    style={{ ...inputStyle, width: "7rem" }}
+                  />
+                  <input
+                    type="text"
+                    value={row.value}
+                    placeholder="目标译文"
+                    onChange={(e) =>
+                      setTermEditDraft((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              localeRows: prev.localeRows.map((item, index) =>
+                                index === rowIdx ? { ...item, value: e.target.value } : item,
+                              ),
+                            }
+                          : prev,
+                      )
+                    }
+                    style={{ ...inputStyle, flex: 1, minWidth: "12rem" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setTermEditDraft((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              localeRows: prev.localeRows.filter((_, index) => index !== rowIdx),
+                            }
+                          : prev,
+                      )
+                    }
+                    style={dangerBtnStyle}
+                  >
+                    删除
+                  </button>
+                </div>
+              ))}
+              <div style={termActionRowStyle}>
+                <s-button
+                  type="button"
+                  variant="secondary"
+                  onClick={() =>
+                    setTermEditDraft((prev) =>
+                      prev
+                        ? { ...prev, localeRows: [...prev.localeRows, { locale: "", value: "" }] }
+                        : prev,
+                    )
+                  }
+                >
+                  添加语言
+                </s-button>
+              </div>
+              </div>
+            </div>
+          ) : (
+            <div style={emptyCompactStateStyle}>当前规则会保持原文，目标译文默认使用原文内容。</div>
+          )}
+
+          <div style={fieldStackStyle}>
+            <div style={pageFieldLabelStyle}>备注</div>
+            <input
+              type="text"
+              value={termEditDraft.note}
+              placeholder="可选，填写分类或补充说明"
+              onChange={(e) =>
+                setTermEditDraft((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        note: e.target.value,
+                      }
+                    : prev,
+                )
+              }
+              style={inputStyle}
+            />
+          </div>
+        </div>
+      ) : null}
+    </DialogShell>
+  );
+
+  if (isFullEditorMode) {
+    return (
+      <>
+        <PageSurface>
+          <div style={editorHeaderStyle}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", minWidth: 0 }}>
+              {onBack ? (
+                <button type="button" style={backButtonStyle} onClick={onBack}>
+                  返回翻译风格列表
+                </button>
+              ) : null}
+              <div style={titleStyle}>编辑术语表</div>
+            </div>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <s-button type="button" variant="secondary" onClick={onRequestAiSuggestion}>
+                生成 AI 建议
+              </s-button>
+              <s-button type="button" variant="secondary" onClick={openUploadDialog}>
+                上传文件
+              </s-button>
+              <s-button type="button" variant="secondary" onClick={addTerm}>
+                新增术语
+              </s-button>
+            </div>
+          </div>
+          {renderEditorBody()}
+        </PageSurface>
+        {uploadDialog}
+        {termEditorDialog}
+      </>
     );
   }
 
@@ -698,192 +961,8 @@ export function TranslationGlossaryPanel({
         </div>
       ) : null}
 
-      <DialogShell
-        open={uploadOpen}
-        onClose={closeUploadDialog}
-        width={720}
-        title="上传文件"
-        description="选择文件后解析术语内容，解析结果会回到当前页面展示并校验是否合法。"
-        footer={
-          <div style={modalFooterStyle}>
-            <s-button type="button" variant="secondary" onClick={closeUploadDialog} {...(fileParsing ? { disabled: true } : {})}>
-              取消
-            </s-button>
-            <s-button
-              type="button"
-              variant="primary"
-              onClick={() => void handleParseSelectedFile()}
-              {...(!selectedUploadFile || fileParsing ? { disabled: true } : {})}
-            >
-              {fileParsing ? "解析中…" : "解析文件"}
-            </s-button>
-          </div>
-        }
-      >
-        <div style={uploadDialogContentStyle}>
-          <div style={uploadExamplePanelStyle}>
-            <div style={pageFieldLabelStyle}>支持格式与规则</div>
-            <div style={{ ...pageHintTextStyle, marginTop: "0.35rem" }}>
-              支持 {FILE_TYPES_LABEL}，单个文件最大 10 MB。建议一行一个术语，包含原文与目标译文；若文件内容过长，系统会自动截断并提示分批上传。
-            </div>
-            <div style={uploadRulesListStyle}>
-              <div>示例 1：`原文,英文译文,日文译文`</div>
-              <div>示例 2：`source: Spark`、`en: Spark`、`ja: Spark`</div>
-              <div>示例 3：原文与多语言译文分列整理，避免混入大段说明文字。</div>
-            </div>
-          </div>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={FILE_ACCEPT}
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const file = e.target.files?.[0] ?? null;
-              setSelectedUploadFile(file);
-              setUploadDialogError(null);
-            }}
-          />
-
-          <div style={uploadSelectRowStyle}>
-            <s-button
-              type="button"
-              variant="secondary"
-              onClick={() => fileInputRef.current?.click()}
-              {...(fileParsing ? { disabled: true } : {})}
-            >
-              选择文件
-            </s-button>
-            <div style={uploadFileMetaStyle}>
-              {selectedUploadFile ? `已选择：${selectedUploadFile.name}` : "请选择要解析的术语文件"}
-            </div>
-          </div>
-
-          {uploadDialogError ? <div style={formErrorBoxStyle}>{uploadDialogError}</div> : null}
-        </div>
-      </DialogShell>
-
-      <DialogShell
-        open={editingIdx !== null && termEditDraft !== null}
-        onClose={closeTermEditor}
-        width={760}
-        title="编辑译文"
-        description={
-          termEditDraft
-            ? `${termEditDraft.source || "未填写原文"} · ${getRuleDescription(termEditDraft.doNotTranslate)}`
-            : undefined
-        }
-        footer={
-          <div style={modalFooterStyle}>
-            <s-button type="button" variant="secondary" onClick={closeTermEditor}>
-              取消
-            </s-button>
-            <s-button type="button" variant="primary" onClick={saveTermEditor}>
-              确定
-            </s-button>
-          </div>
-        }
-      >
-        {termEditDraft ? (
-          <div style={termEditFormStyle}>
-            <label style={checkboxLabelStyle}>
-              <input
-                type="checkbox"
-                checked={termEditDraft.doNotTranslate}
-                onChange={(e) =>
-                  setTermEditDraft((prev) =>
-                    prev
-                      ? {
-                          ...prev,
-                          doNotTranslate: e.target.checked,
-                        }
-                      : prev,
-                  )
-                }
-              />
-              保持原文，不参与翻译
-            </label>
-
-            {!termEditDraft.doNotTranslate ? (
-              <div style={localeEditorPanelStyle}>
-                {termEditDraft.localeRows.map((row, rowIdx) => (
-                  <div key={rowIdx} style={localeEditRowStyle}>
-                    <input
-                      type="text"
-                      value={row.locale}
-                      placeholder="语言"
-                      onChange={(e) =>
-                        setTermEditDraft((prev) =>
-                          prev
-                            ? {
-                                ...prev,
-                                localeRows: prev.localeRows.map((item, index) =>
-                                  index === rowIdx ? { ...item, locale: e.target.value } : item,
-                                ),
-                              }
-                            : prev,
-                        )
-                      }
-                      style={{ ...inputStyle, width: "7rem" }}
-                    />
-                    <input
-                      type="text"
-                      value={row.value}
-                      placeholder="目标译文"
-                      onChange={(e) =>
-                        setTermEditDraft((prev) =>
-                          prev
-                            ? {
-                                ...prev,
-                                localeRows: prev.localeRows.map((item, index) =>
-                                  index === rowIdx ? { ...item, value: e.target.value } : item,
-                                ),
-                              }
-                            : prev,
-                        )
-                      }
-                      style={{ ...inputStyle, flex: 1, minWidth: "12rem" }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setTermEditDraft((prev) =>
-                          prev
-                            ? {
-                                ...prev,
-                                localeRows: prev.localeRows.filter((_, index) => index !== rowIdx),
-                              }
-                            : prev,
-                        )
-                      }
-                      style={dangerBtnStyle}
-                    >
-                      删除
-                    </button>
-                  </div>
-                ))}
-                <div style={termActionRowStyle}>
-                  <s-button
-                    type="button"
-                    variant="secondary"
-                    onClick={() =>
-                      setTermEditDraft((prev) =>
-                        prev
-                          ? { ...prev, localeRows: [...prev.localeRows, { locale: "", value: "" }] }
-                          : prev,
-                      )
-                    }
-                  >
-                    添加语言
-                  </s-button>
-                </div>
-              </div>
-            ) : (
-              <div style={emptyCompactStateStyle}>当前规则会保持原文，目标译文默认使用原文内容。</div>
-            )}
-          </div>
-        ) : null}
-      </DialogShell>
+      {uploadDialog}
+      {termEditorDialog}
     </>
   );
 }
@@ -1252,6 +1331,35 @@ const termEditMetaStyle: CSSProperties = {
   marginTop: "0.25rem",
   fontSize: "0.75rem",
   color: pageColorTokens.textSecondary,
+};
+
+const rulePanelStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.75rem",
+  padding: "0.85rem 0.9rem",
+  borderRadius: "12px",
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surfaceSubtle,
+};
+
+const ruleSummaryStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.4rem",
+};
+
+const ruleSummaryBadgeStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  alignSelf: "flex-start",
+  padding: "0.28rem 0.6rem",
+  borderRadius: "999px",
+  background: pageColorTokens.surface,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  color: pageColorTokens.textPrimary,
+  fontSize: "0.75rem",
+  fontWeight: 600,
 };
 
 const localeEditorPanelStyle: CSSProperties = {

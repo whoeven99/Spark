@@ -1447,23 +1447,25 @@ export function TranslationV4Page() {
                               </div>
                             </div>
 
-                            <div style={automationInfoRowStyle}>
-                              <span style={automationInfoLabelStyle}>当前频率</span>
-                              <span style={automationInfoValueStyle}>
-                                {formatAutomationFrequencyLabel(automation.frequency)}
-                              </span>
-                            </div>
-                            <div style={automationInfoRowStyle}>
-                              <span style={automationInfoLabelStyle}>最近执行</span>
-                              <span style={automationInfoValueStyle}>
-                                {formatDateTime(automation.lastTriggeredAt) ?? "尚未执行"}
-                              </span>
-                            </div>
-                            <div style={automationInfoRowStyle}>
-                              <span style={automationInfoLabelStyle}>规则创建时间</span>
-                              <span style={automationInfoValueStyle}>
-                                {formatDateTime(automation.createdAt) ?? "刚刚"}
-                              </span>
+                            <div style={automationInfoGridStyle(isMobile)}>
+                              <div style={automationInfoPanelStyle}>
+                                <span style={automationInfoLabelStyle}>当前频率</span>
+                                <span style={automationInfoValueStyle}>
+                                  {formatAutomationFrequencyLabel(automation.frequency)}
+                                </span>
+                              </div>
+                              <div style={automationInfoPanelStyle}>
+                                <span style={automationInfoLabelStyle}>最近执行</span>
+                                <span style={automationInfoValueStyle}>
+                                  {formatDateTime(automation.lastTriggeredAt) ?? "尚未执行"}
+                                </span>
+                              </div>
+                              <div style={automationInfoPanelStyle}>
+                                <span style={automationInfoLabelStyle}>规则创建时间</span>
+                                <span style={automationInfoValueStyle}>
+                                  {formatDateTime(automation.createdAt) ?? "刚刚"}
+                                </span>
+                              </div>
                             </div>
                           </div>
 
@@ -2995,7 +2997,7 @@ const taskListEmptyTextStyle: React.CSSProperties = {
 function automationListStyle(isMobile: boolean): React.CSSProperties {
   return {
     display: "grid",
-    gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+    gridTemplateColumns: "1fr",
     gap: 12,
   };
 }
@@ -3003,6 +3005,7 @@ function automationListStyle(isMobile: boolean): React.CSSProperties {
 const automationCardStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
+  width: "100%",
   gap: 12,
   padding: "1rem",
   borderRadius: "12px",
@@ -3059,20 +3062,31 @@ function automationStatusBadgeStyle(enabled: boolean): React.CSSProperties {
 const automationCardBodyStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  gap: 8,
+  gap: 12,
 };
 
-const automationInfoRowStyle: React.CSSProperties = {
+function automationInfoGridStyle(isMobile: boolean): React.CSSProperties {
+  return {
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+    gap: 12,
+  };
+}
+
+const automationInfoPanelStyle: React.CSSProperties = {
   display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "space-between",
-  gap: 12,
+  flexDirection: "column",
+  gap: 6,
+  padding: "0.8rem 0.9rem",
+  borderRadius: "12px",
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surfaceSubtle,
+  minWidth: 0,
 };
 
 const automationInfoLabelStyle: React.CSSProperties = {
   fontSize: "0.75rem",
   color: pageColorTokens.textSecondary,
-  minWidth: "5.5rem",
 };
 
 const automationInfoValueStyle: React.CSSProperties = {
@@ -3080,7 +3094,8 @@ const automationInfoValueStyle: React.CSSProperties = {
   color: pageColorTokens.textBody,
   fontWeight: 600,
   lineHeight: 1.5,
-  textAlign: "right",
+  textAlign: "left",
+  overflowWrap: "anywhere",
 };
 
 const automationEmptyStateStyle: React.CSSProperties = {
