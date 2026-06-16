@@ -43,6 +43,7 @@ import {
 } from "../component/aiTask/AITaskCardShell";
 import { TranslationStyleWorkspace } from "../component/translation/TranslationStyleWorkspace";
 import { TranslationLocaleFields } from "../component/translation/TranslationLocaleFields";
+import { TranslationMultiSelect } from "../component/translation/TranslationMultiSelect";
 import { TranslationModuleMultiSelect } from "../component/translation/TranslationModuleMultiSelect";
 import { TranslationReviewDialog } from "../component/translation/TranslationReviewDialog";
 import type { AITaskItem, AITaskStatus } from "../../lib/aiTaskTypes";
@@ -52,6 +53,7 @@ import {
   pageColorTokens,
   pageContentStyle,
   pageInnerPanelStyle,
+  pageSelectStyle,
   twoColumnLayoutStyle,
   twoColumnMainStyle,
   twoColumnSideStyle,
@@ -627,6 +629,64 @@ export function TranslationV4Page() {
     [shopName],
   );
 
+  const updateAutomationItem = useCallback(
+    (
+      automationId: string,
+      patch: Partial<Pick<TranslationAutomationItem, "targets" | "modules" | "frequency" | "enabled">>,
+    ) => {
+      saveAutomationItems(
+        automationItems.map((item) =>
+          item.id === automationId ? { ...item, ...patch } : item,
+        ),
+      );
+    },
+    [automationItems, saveAutomationItems],
+  );
+
+  const handleAutomationFrequencyChange = useCallback(
+    (automationId: string, frequency: AutomationFrequency) => {
+      updateAutomationItem(automationId, { frequency });
+    },
+    [updateAutomationItem],
+  );
+
+  const handleAutomationTargetsChange = useCallback(
+    (automationId: string, targets: string[]) => {
+      updateAutomationItem(automationId, { targets });
+    },
+    [updateAutomationItem],
+  );
+
+  const handleAutomationModulesChange = useCallback(
+    (automationId: string, modules: string[]) => {
+      updateAutomationItem(automationId, { modules });
+    },
+    [updateAutomationItem],
+  );
+
+  const handleAutomationEnabledChange = useCallback(
+    (automationId: string, enabled: boolean) => {
+      updateAutomationItem(automationId, { enabled });
+      shopify.toast.show(enabled ? "已启用自动翻译规则" : "已停用自动翻译规则");
+    },
+    [shopify, updateAutomationItem],
+  );
+
+  const handleAutomationDelete = useCallback(
+    (automationId: string) => {
+      saveAutomationItems(automationItems.filter((item) => item.id !== automationId));
+      shopify.toast.show("已删除自动翻译规则");
+    },
+    [automationItems, saveAutomationItems, shopify],
+  );
+
+  const handleOpenAutomationConfig = useCallback(() => {
+    setPageTab("config");
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, []);
+
   const applyOptimisticPatch = useCallback(
     (taskId: string, job: TranslationV4Job, patch: OptimisticJobPatch) => {
       const errorStage =
@@ -854,6 +914,7 @@ export function TranslationV4Page() {
             targets: createdTargets.length ? createdTargets : [...targetLocales],
             modules: [...automationModules],
             frequency: automationFrequency,
+            enabled: true,
             createdAt: now,
             lastTriggeredAt: now,
           };
@@ -1218,16 +1279,27 @@ export function TranslationV4Page() {
             </div>
           </div>
         ) : pageTab === "style" ? (
-          <TranslationStyleWorkspace locationSearch={query} sourceLocale={sourceLocale} />
-        ) : (
           <div style={taskPageSectionStyle}>
+            <TranslationStyleWorkspace locationSearch={query} sourceLocale={sourceLocale} />
+
             <PageSurface
-              title="自动化列表"
-              subtitle="展示当前店铺已保存的自动更新翻译规则。开启自动更新后，这里会新增对应的自动化任务。"
+              title="翻译设置"
+              subtitle="管理当前店铺的自动翻译规则。新规则可在配置页创建翻译任务时启用“自动更新翻译”后生成。"
             >
+              <div style={translationSettingsHeaderStyle(isMobile)}>
+                <div style={translationSettingsSummaryStyle}>
+                  {automationItems.length > 0
+                    ? `当前已保存 ${automationItems.length} 条自动翻译规则`
+                    : "当前还没有自动翻译规则"}
+                </div>
+                <s-button type="button" variant="secondary" onClick={handleOpenAutomationConfig}>
+                  去配置页新增规则
+                </s-button>
+              </div>
+
               {automationItems.length === 0 ? (
                 <div style={automationEmptyStateStyle}>
-                  暂无自动更新规则。创建翻译任务时勾选“自动更新翻译”后，会在这里展示。
+                  暂无自动翻译规则。你可以在配置页创建翻译任务时开启“自动更新翻译”，并保存为后续可复用的自动翻译规则。
                 </div>
               ) : (
                 <div style={automationListStyle(isMobile)}>
@@ -1238,7 +1310,7 @@ export function TranslationV4Page() {
                       <article key={automation.id} style={automationCardStyle}>
                         <div style={automationCardHeaderStyle}>
                           <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-                            <div style={automationCardTitleStyle}>自动更新翻译</div>
+                            <div style={automationCardTitleStyle}>自动翻译规则</div>
                             <div style={automationCardMetaStyle}>
                               {formatAutomationTargetsSummary(
                                 automation,
@@ -1248,17 +1320,66 @@ export function TranslationV4Page() {
                             </div>
                           </div>
                           <div style={automationCardBadgeRowStyle}>
-                            <span style={automationStatusBadgeStyle}>已启用</span>
-                            <span style={automationScheduleBadgeStyle}>
-                              {formatAutomationFrequencyLabel(automation.frequency)}
+                            <span style={automationStatusBadgeStyle(Boolean(automation.enabled))}>
+                              {automation.enabled ? "已启用" : "已停用"}
                             </span>
                           </div>
                         </div>
+
                         <div style={automationCardBodyStyle}>
+                          <div style={automationManageRowStyle(isMobile)}>
+                            <div style={automationManageFieldStyle}>
+                              <span style={automationSectionLabelStyle}>启用状态</span>
+                              <div style={automationStatusHelpStyle}>
+                                控制该规则是否继续参与自动翻译。
+                              </div>
+                            </div>
+                            <s-button
+                              type="button"
+                              variant={automation.enabled ? "secondary" : "primary"}
+                              onClick={() =>
+                                handleAutomationEnabledChange(
+                                  automation.id,
+                                  !Boolean(automation.enabled),
+                                )}
+                            >
+                              {automation.enabled ? "停用规则" : "启用规则"}
+                            </s-button>
+                          </div>
+
+                          <div style={automationControlsGridStyle(isMobile)}>
+                            <div style={automationManageFieldStyle}>
+                              <TranslationMultiSelect
+                                id={`translation-automation-targets-${automation.id}`}
+                                label="自动更新语言"
+                                options={targetOptions}
+                                values={automation.targets}
+                                onChange={(values) =>
+                                  handleAutomationTargetsChange(automation.id, values)
+                                }
+                                disabled={!automation.enabled}
+                                summaryMode="count"
+                                columns={2}
+                              />
+                            </div>
+
+                            <div style={automationManageFieldStyle}>
+                              <TranslationModuleMultiSelect
+                                id={`translation-automation-modules-${automation.id}`}
+                                label="自动更新模块"
+                                values={automation.modules}
+                                onChange={(values) =>
+                                  handleAutomationModulesChange(automation.id, values)
+                                }
+                                disabled={!automation.enabled}
+                              />
+                            </div>
+                          </div>
+
                           <div style={automationInfoRowStyle}>
-                            <span style={automationInfoLabelStyle}>自动更新模块</span>
+                            <span style={automationInfoLabelStyle}>当前频率</span>
                             <span style={automationInfoValueStyle}>
-                              {formatAutomationModulesSummary(automation.modules, t)}
+                              {formatAutomationFrequencyLabel(automation.frequency)}
                             </span>
                           </div>
                           <div style={automationInfoRowStyle}>
@@ -1274,12 +1395,45 @@ export function TranslationV4Page() {
                             </span>
                           </div>
                         </div>
+
+                        <div style={automationManageRowStyle(isMobile)}>
+                          <div style={automationManageFieldStyle}>
+                            <span style={automationSectionLabelStyle}>执行频率</span>
+                            <select
+                              value={automation.frequency}
+                              onChange={(event) =>
+                                handleAutomationFrequencyChange(
+                                  automation.id,
+                                  event.target.value as AutomationFrequency,
+                                )}
+                              disabled={!automation.enabled}
+                              style={automationSelectStyle}
+                            >
+                              {AUTOMATION_FREQUENCY_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <s-button
+                            type="button"
+                            variant="secondary"
+                            tone="critical"
+                            onClick={() => handleAutomationDelete(automation.id)}
+                          >
+                            删除规则
+                          </s-button>
+                        </div>
                       </article>
                     ))}
                 </div>
               )}
             </PageSurface>
-
+          </div>
+        ) : (
+          <div style={taskPageSectionStyle}>
             <div style={isMobile ? mobileTaskViewSwitchBarStyle : taskViewSwitchBarStyle}>
               <div style={isMobile ? mobileTaskViewButtonsStyle : taskViewButtonsStyle}>
                 {([
@@ -2726,25 +2880,23 @@ const automationCardBadgeRowStyle: React.CSSProperties = {
   flexWrap: "wrap",
 };
 
-const automationStatusBadgeStyle: React.CSSProperties = {
-  padding: "0.2rem 0.55rem",
-  borderRadius: 999,
-  border: "1px solid #ccefe4",
-  background: pageColorTokens.brandGreenLight,
-  color: pageColorTokens.brandGreenDark,
-  fontSize: "0.72rem",
-  fontWeight: 700,
-};
-
-const automationScheduleBadgeStyle: React.CSSProperties = {
-  padding: "0.2rem 0.55rem",
-  borderRadius: 999,
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
-  background: pageColorTokens.surfaceMuted,
-  color: pageColorTokens.textBody,
-  fontSize: "0.72rem",
-  fontWeight: 700,
-};
+function automationStatusBadgeStyle(enabled: boolean): React.CSSProperties {
+  return {
+    padding: "0.2rem 0.55rem",
+    borderRadius: 999,
+    border: enabled
+      ? "1px solid #ccefe4"
+      : `1px solid ${pageColorTokens.borderSubtle}`,
+    background: enabled
+      ? pageColorTokens.brandGreenLight
+      : pageColorTokens.surfaceMuted,
+    color: enabled
+      ? pageColorTokens.brandGreenDark
+      : pageColorTokens.textSecondary,
+    fontSize: "0.72rem",
+    fontWeight: 700,
+  };
+}
 
 const automationCardBodyStyle: React.CSSProperties = {
   display: "flex",
@@ -2781,6 +2933,64 @@ const automationEmptyStateStyle: React.CSSProperties = {
   color: pageColorTokens.textSecondary,
   fontSize: "0.8125rem",
   lineHeight: 1.6,
+};
+
+function translationSettingsHeaderStyle(isMobile: boolean): React.CSSProperties {
+  return {
+    display: "flex",
+    alignItems: isMobile ? "stretch" : "center",
+    justifyContent: "space-between",
+    gap: 12,
+    flexDirection: isMobile ? "column" : "row",
+    marginBottom: 12,
+  };
+}
+
+const translationSettingsSummaryStyle: React.CSSProperties = {
+  fontSize: "0.8125rem",
+  color: pageColorTokens.textSecondary,
+  lineHeight: 1.6,
+};
+
+function automationManageRowStyle(isMobile: boolean): React.CSSProperties {
+  return {
+    display: "flex",
+    alignItems: isMobile ? "stretch" : "flex-end",
+    justifyContent: "space-between",
+    gap: 12,
+    flexDirection: isMobile ? "column" : "row",
+    paddingTop: 4,
+    borderTop: `1px solid ${pageColorTokens.borderSubtle}`,
+  };
+}
+
+const automationManageFieldStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
+  minWidth: "12rem",
+  flex: "1 1 12rem",
+};
+
+const automationStatusHelpStyle: React.CSSProperties = {
+  fontSize: "0.75rem",
+  color: pageColorTokens.textSecondary,
+  lineHeight: 1.5,
+};
+
+function automationControlsGridStyle(isMobile: boolean): React.CSSProperties {
+  return {
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr",
+    gap: 12,
+    paddingBottom: 4,
+  };
+}
+
+const automationSelectStyle: React.CSSProperties = {
+  ...pageSelectStyle(),
+  marginTop: 0,
+  minWidth: 0,
 };
 
 const footerDividerStyle: React.CSSProperties = {

@@ -7,6 +7,7 @@ export type TranslationAutomationItem = {
   targets: string[];
   modules: string[];
   frequency: AutomationFrequency;
+  enabled?: boolean;
   createdAt: string;
   lastTriggeredAt: string;
 };
@@ -52,6 +53,15 @@ export function isTranslationAutomationItem(value: unknown): value is Translatio
   );
 }
 
+function normalizeTranslationAutomationItem(
+  item: TranslationAutomationItem,
+): TranslationAutomationItem {
+  return {
+    ...item,
+    enabled: item.enabled ?? true,
+  };
+}
+
 export function readTranslationAutomationItems(
   shopName: string,
   storage: ReadStorage | null = resolveBrowserStorage(),
@@ -62,7 +72,7 @@ export function readTranslationAutomationItems(
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isTranslationAutomationItem);
+    return parsed.filter(isTranslationAutomationItem).map(normalizeTranslationAutomationItem);
   } catch {
     return [];
   }
