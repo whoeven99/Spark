@@ -42,6 +42,13 @@ function baseResult(overrides: Partial<DailyOperationsResult> = {}): DailyOperat
       trafficChangeRate: null,
       conversionRate7d: null,
       conversionRatePrev7d: null,
+      paymentAttempts7d: 0,
+      paymentSuccessful7d: 0,
+      paymentSuccessRate7d: null,
+      paymentFailureCount7d: 0,
+      draftProductCount: 0,
+      noImagesProductCount: 0,
+      noDescriptionProductCount: 0,
     },
     items: [
       {

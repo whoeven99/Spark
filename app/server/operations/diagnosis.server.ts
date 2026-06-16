@@ -5,6 +5,11 @@ import {
   type PixelFunnelCounts,
   type PixelFunnelLoader,
 } from "../aliyunLog/pixelQuery.server";
+import {
+  loadProductOperations as defaultLoadProductOperations,
+  type ProductOperationsData,
+  type ShopifyAdminGraphqlClient,
+} from "./productOperationsQuery.server";
 
 /**
  * 每日经营诊断计算层（docs/DAILY_OPERATIONS_WORKFLOWS.md §7 / §10.1）。
@@ -37,6 +42,9 @@ export const TRAFFIC_DECLINE_WATCH_PERCENT = -20;
 export const TRAFFIC_DECLINE_RISK_PERCENT = -40;
 /** 漏斗某环节比率环比相对下滑超过该比例（%）视为该环节显著恶化 */
 export const FUNNEL_STAGE_DROP_PERCENT = -15;
+/** 支付成功率低于该值（%）视为关注 / 风险 */
+export const PAYMENT_SUCCESS_WATCH_PERCENT = 90;
+export const PAYMENT_SUCCESS_RISK_PERCENT = 70;
 
 // ──────────────────────────────────────────────
 // 类型
@@ -48,6 +56,7 @@ export type DiagnosisKey =
   | "sales_trend"
   | "traffic_anomaly"
   | "conversion_health"
+  | "product_operations"
   | "fulfillment_health"
   | "logistics_anomaly"
   | "refund_health"
@@ -143,6 +152,15 @@ export type OperationsSummaryMetrics = {
   /** 近 7 天会话转化率（%），无数据为 null */
   conversionRate7d: number | null;
   conversionRatePrev7d: number | null;
+  /** 支付相关 */
+  paymentAttempts7d: number;
+  paymentSuccessful7d: number;
+  paymentSuccessRate7d: number | null;
+  paymentFailureCount7d: number;
+  /** 商品运营 */
+  draftProductCount: number;
+  noImagesProductCount: number;
+  noDescriptionProductCount: number;
 };
 
 export type OperationsDiagnosis = {
@@ -216,6 +234,13 @@ function emptyDiagnosis(shop: string, now: Date): OperationsDiagnosis {
       trafficChangeRate: null,
       conversionRate7d: null,
       conversionRatePrev7d: null,
+      paymentAttempts7d: 0,
+      paymentSuccessful7d: 0,
+      paymentSuccessRate7d: null,
+      paymentFailureCount7d: 0,
+      draftProductCount: 0,
+      noImagesProductCount: 0,
+      noDescriptionProductCount: 0,
     },
     items: [],
     detail: {
@@ -236,9 +261,13 @@ function emptyDiagnosis(shop: string, now: Date): OperationsDiagnosis {
 export async function computeOperationsDiagnosis(
   shop: string,
   now: Date = new Date(),
-  options?: { loadPixelFunnel?: PixelFunnelLoader },
+  options?: {
+    loadPixelFunnel?: PixelFunnelLoader;
+    shopifyAdmin?: ShopifyAdminGraphqlClient;
+  },
 ): Promise<OperationsDiagnosis> {
   const loadPixelFunnel = options?.loadPixelFunnel ?? defaultLoadPixelFunnel;
+  const shopifyAdmin = options?.shopifyAdmin ?? null;
   const since7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const since14Days = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
   const since30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -304,6 +333,26 @@ export async function computeOperationsDiagnosis(
   });
   const pixelCurrent = pixelWindows?.current ?? null;
   const pixelPrevious = pixelWindows?.previous ?? null;
+
+  // ── 商品运营状态（§7.9 商品运营诊断）──
+  const productOpsData = await defaultLoadProductOperations(shopifyAdmin);
+
+  // ── 支付链路统计（§7.3 转化率补充）──
+  // 从订单的 financialStatus 推断：pending/authorized → 支付尝试但未完成，paid 及以上 → 成功
+  const orders7dForPayment = orders.filter((o) => o.createdAt >= since7Days);
+  const paymentAttempts7d = orders7dForPayment.filter(
+    (o) => o.status !== "cancelled" && o.financialStatus !== null,
+  ).length;
+  const paymentSuccessful7d = orders7dForPayment.filter(
+    (o) => o.status !== "cancelled" && (o.financialStatus === "paid" || o.financialStatus?.includes("paid")),
+  ).length;
+  const paymentFailureCount7d = orders7dForPayment.filter(
+    (o) => o.status !== "cancelled" && ["voided", "pending", "authorized"].includes(o.financialStatus ?? ""),
+  ).length;
+  const paymentSuccessRate7d =
+    paymentAttempts7d > 0
+      ? round((paymentSuccessful7d / paymentAttempts7d) * 100, 1)
+      : null;
 
   const nonCancelledOrders = orders.filter((o) => o.status !== "cancelled");
   const cancelledCount = orders.length - nonCancelledOrders.length;
@@ -684,7 +733,7 @@ export async function computeOperationsDiagnosis(
       ],
     });
 
-    // 3. 转化率（文档 §7.3）
+    // 3. 转化率（文档 §7.3）— 包含 Web Pixel 漏斗或本地支付数据
     {
       const m = pixelMetricsCurrent!;
       const prev = pixelMetricsPrevious;
@@ -697,7 +746,19 @@ export async function computeOperationsDiagnosis(
         if (convDrop < TRAFFIC_DECLINE_RISK_PERCENT) cStatus = "risk";
         else if (convDrop < TRAFFIC_DECLINE_WATCH_PERCENT) cStatus = "watch";
       }
-      if (cStatus !== "healthy") {
+      // 补充：支付成功率警告（独立于 Pixel 漏斗）
+      if (paymentSuccessRate7d !== null && paymentSuccessRate7d < PAYMENT_SUCCESS_RISK_PERCENT) {
+        cStatus = "risk";
+        cReasoning.push(
+          `支付成功率仅 ${paymentSuccessRate7d}%（目标 ≥ ${PAYMENT_SUCCESS_WATCH_PERCENT}%），支付链路障碍显著`,
+        );
+      } else if (paymentSuccessRate7d !== null && paymentSuccessRate7d < PAYMENT_SUCCESS_WATCH_PERCENT) {
+        if (cStatus !== "risk") cStatus = "watch";
+        cReasoning.push(
+          `支付成功率 ${paymentSuccessRate7d}%，略低于预期，需关注支付流程`,
+        );
+      }
+      if (cStatus !== "healthy" && !cReasoning.some(r => r.includes("支付"))) {
         if (atcDrop !== null && atcDrop < FUNNEL_STAGE_DROP_PERCENT) {
           cReasoning.push(
             "加购率明显下滑，优先排查商品页、价格、运费与信任要素",
@@ -712,9 +773,9 @@ export async function computeOperationsDiagnosis(
         if (trafficChangeRate !== null && trafficChangeRate >= TRAFFIC_DECLINE_WATCH_PERCENT) {
           cReasoning.push("流量基本稳定，问题集中在站内转化环节");
         }
-      } else if (m.conversionRate === null) {
+      } else if (m.conversionRate === null && paymentSuccessRate7d === null) {
         cReasoning.push("会话或结账数据不足，暂无法计算转化率");
-      } else {
+      } else if (cStatus === "healthy") {
         cReasoning.push("转化漏斗各环节环比稳定");
       }
       items.push({
@@ -727,6 +788,9 @@ export async function computeOperationsDiagnosis(
           addToCartRate: m.addToCartRate,
           checkoutRate: m.checkoutRate,
           paymentRate: m.paymentRate,
+          paymentSuccessRate: paymentSuccessRate7d,
+          paymentAttempts: paymentAttempts7d,
+          paymentSuccessful: paymentSuccessful7d,
           checkoutStarted7d: pixelCurrent.checkoutStarted,
           checkoutCompleted7d: pixelCurrent.checkoutCompleted,
         },
@@ -734,15 +798,82 @@ export async function computeOperationsDiagnosis(
           `会话转化率 ${m.conversionRate ?? "—"}%` +
             (prev?.conversionRate != null ? `（上期 ${prev.conversionRate}%）` : ""),
           `加购率 ${m.addToCartRate ?? "—"}%，结账完成率 ${m.checkoutRate ?? "—"}%，支付成功率 ${m.paymentRate ?? "—"}%`,
-        ],
+          paymentAttempts7d > 0 ? `订单支付成功率 ${paymentSuccessRate7d ?? "—"}%（${paymentSuccessful7d}/${paymentAttempts7d}）` : "",
+        ].filter(Boolean),
         reasoning: cReasoning,
         formulas: [
           "conversion_rate = checkout_completed / sessions * 100",
           "checkout_rate = checkout_completed / checkout_started * 100",
           "payment_rate = checkout_completed / payment_info_submitted * 100",
+          "payment_success_rate = count(orders where financialStatus='paid*') / count(non_cancelled_orders) * 100",
         ],
       });
     }
+  }
+
+  // 4. 商品运营（文档 §7.9）
+  if (productOpsData) {
+    let pStatus: DiagnosisStatus = "healthy";
+    const pReasoning: string[] = [];
+    const totalIssues = productOpsData.draftProductCount +
+      productOpsData.noImagesProductCount +
+      productOpsData.noDescriptionProductCount;
+
+    if (productOpsData.draftProductCount > 5) {
+      pStatus = "risk";
+      pReasoning.push(
+        `有 ${productOpsData.draftProductCount} 个商品仍处于草稿（DRAFT）状态，占用库存但未上架，优先处理`,
+      );
+    } else if (productOpsData.draftProductCount > 0) {
+      pStatus = "watch";
+      pReasoning.push(
+        `有 ${productOpsData.draftProductCount} 个商品草稿待上架，需要完成审核流程`,
+      );
+    }
+
+    if (productOpsData.noImagesProductCount > 0) {
+      if (pStatus !== "risk") pStatus = pStatus === "watch" ? "watch" : "watch";
+      pReasoning.push(
+        `${productOpsData.noImagesProductCount} 个商品缺少图片，影响转化率，需补充视觉素材`,
+      );
+    }
+
+    if (productOpsData.noDescriptionProductCount > 0) {
+      if (pStatus !== "risk" && pStatus !== "watch") pStatus = "watch";
+      pReasoning.push(
+        `${productOpsData.noDescriptionProductCount} 个商品缺少描述，提高买家疑虑风险`,
+      );
+    }
+
+    if (pStatus === "healthy") {
+      pReasoning.push("商品信息完整度良好，无待处理项");
+    } else {
+      pReasoning.push("建议优先通过自动化工具补充素材或触发商品改进任务");
+    }
+
+    items.push({
+      key: "product_operations",
+      name: "商品运营",
+      status: pStatus,
+      metrics: {
+        draftProductCount: productOpsData.draftProductCount,
+        noImagesProductCount: productOpsData.noImagesProductCount,
+        noDescriptionProductCount: productOpsData.noDescriptionProductCount,
+        totalIssues,
+      },
+      evidence: [
+        `DRAFT 商品 ${productOpsData.draftProductCount} 个，缺图 ${productOpsData.noImagesProductCount} 个，缺描述 ${productOpsData.noDescriptionProductCount} 个`,
+        totalIssues === 0
+          ? "所有商品均已上架且素材完整"
+          : `共 ${totalIssues} 个商品需要处理`,
+      ],
+      reasoning: pReasoning,
+      formulas: [
+        "draft_count = count(products where status = 'DRAFT')",
+        "no_images_count = count(products where status = 'ACTIVE' and images.length = 0)",
+        "no_description_count = count(products where status = 'ACTIVE' and description is empty)",
+      ],
+    });
   }
 
   // 2. 履约健康（文档 §7.4）
@@ -954,6 +1085,13 @@ export async function computeOperationsDiagnosis(
       trafficChangeRate,
       conversionRate7d,
       conversionRatePrev7d,
+      paymentAttempts7d,
+      paymentSuccessful7d,
+      paymentSuccessRate7d,
+      paymentFailureCount7d,
+      draftProductCount: productOpsData?.draftProductCount ?? 0,
+      noImagesProductCount: productOpsData?.noImagesProductCount ?? 0,
+      noDescriptionProductCount: productOpsData?.noDescriptionProductCount ?? 0,
     },
     items,
     detail: {
