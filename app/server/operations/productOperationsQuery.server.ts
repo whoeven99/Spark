@@ -57,6 +57,13 @@ const PRODUCTS_OPERATIONS_QUERY = `#graphql
   }
 `;
 
+type ProductNode = {
+  title: string;
+  status: string;
+  images: { nodes: Array<{ id: string }> };
+  description: string | null;
+};
+
 /**
  * 查询商品运营状态。**纯函数**拆离，便于单测。
  */
@@ -82,6 +89,53 @@ export function parseProductOperationsRows(
   };
 }
 
+async function fetchProductsByQuery(
+  client: ShopifyAdminGraphqlClient,
+  query: string,
+  maxPages = 5,
+): Promise<ProductNode[]> {
+  const nodes: ProductNode[] = [];
+  let after: string | undefined;
+
+  for (let page = 0; page < maxPages; page += 1) {
+    const response = await client.graphql(PRODUCTS_OPERATIONS_QUERY, {
+      variables: { first: 50, after, query },
+    });
+
+    if (!response.ok) {
+      console.warn(
+        `[productOps] GraphQL query failed (status=${response.status}, query=${query})`,
+      );
+      break;
+    }
+
+    const payload = (await response.json()) as {
+      data?: {
+        products?: {
+          nodes: ProductNode[];
+          pageInfo: { hasNextPage: boolean; endCursor: string };
+        };
+      };
+      errors?: Array<{ message: string }>;
+    };
+
+    if (payload.errors?.length) {
+      console.warn(`[productOps] GraphQL errors:`, payload.errors);
+      break;
+    }
+
+    const pageNodes = payload.data?.products?.nodes ?? [];
+    nodes.push(...pageNodes);
+
+    const hasNextPage = payload.data?.products?.pageInfo?.hasNextPage;
+    const endCursor = payload.data?.products?.pageInfo?.endCursor;
+    if (!hasNextPage || !endCursor) break;
+    after = endCursor;
+  }
+
+  return nodes;
+}
+
 /**
  * 查询单次请求的商品运营数据。配置缺失 / 查询异常 → 返回 null（静默降级）。
  */
@@ -89,66 +143,31 @@ export async function queryProductOperations(
   client: ShopifyAdminGraphqlClient,
 ): Promise<ProductOperationsData | null> {
   try {
-    const draftProducts: Array<{ title: string }> = [];
+    const draftNodes = await fetchProductsByQuery(client, "status:DRAFT");
+    const activeNodes = await fetchProductsByQuery(client, "status:ACTIVE");
+
+    const draftProducts = draftNodes
+      .filter((product) => product.status === "DRAFT")
+      .map((product) => ({ title: product.title }));
+
     const noImagesProducts: Array<{ title: string }> = [];
     const noDescriptionProducts: Array<{ title: string }> = [];
 
-    let after: string | undefined;
-    let iterCount = 0;
-    const maxIterations = 5; // 最多查 5 页（即 250 个商品）
-
-    while (iterCount < maxIterations) {
-      // 第一轮查 DRAFT，第二轮查其他条件
-      const query = iterCount === 0 ? `status:DRAFT` : `status:ACTIVE`;
-      const response = await client.graphql(PRODUCTS_OPERATIONS_QUERY, {
-        variables: { first: 50, after, query },
-      });
-
-      if (!response.ok) {
-        console.warn(`[productOps] GraphQL query failed (status=${response.status})`);
-        break;
+    for (const product of activeNodes) {
+      if (product.status !== "ACTIVE") continue;
+      if (!product.images?.nodes?.length) {
+        noImagesProducts.push({ title: product.title });
       }
-
-      type ProductNode = {
-        title: string;
-        status: string;
-        images: { nodes: Array<{ id: string }> };
-        description: string | null;
-      };
-
-      const payload = (await response.json()) as {
-        data?: { products?: { nodes: ProductNode[]; pageInfo: { hasNextPage: boolean; endCursor: string } } };
-        errors?: Array<{ message: string }>;
-      };
-
-      if (payload.errors?.length) {
-        console.warn(`[productOps] GraphQL errors:`, payload.errors);
-        break;
+      if (!product.description || product.description.trim().length === 0) {
+        noDescriptionProducts.push({ title: product.title });
       }
-
-      const products = payload.data?.products?.nodes ?? [];
-      for (const p of products) {
-        if (p.status === "DRAFT") {
-          draftProducts.push({ title: p.title });
-        } else {
-          // ACTIVE 商品：检查图片和描述
-          if (!p.images?.nodes?.length) {
-            noImagesProducts.push({ title: p.title });
-          }
-          if (!p.description || p.description.trim().length === 0) {
-            noDescriptionProducts.push({ title: p.title });
-          }
-        }
-      }
-
-      const hasNextPage = payload.data?.products?.pageInfo?.hasNextPage;
-      const endCursor = payload.data?.products?.pageInfo?.endCursor;
-      if (!hasNextPage || !endCursor) break;
-      after = endCursor;
-      iterCount += 1;
     }
 
-    return parseProductOperationsRows(draftProducts, noImagesProducts, noDescriptionProducts);
+    return parseProductOperationsRows(
+      draftProducts,
+      noImagesProducts,
+      noDescriptionProducts,
+    );
   } catch (err) {
     console.warn(`[productOps] query failed:`, err);
     return null;
