@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import {
@@ -502,6 +502,14 @@ const pillGroupStyle: CSSProperties = {
   gap: "0.45rem",
 };
 
+const horizontalChipRailStyle: CSSProperties = {
+  display: "flex",
+  gap: "0.5rem",
+  overflowX: "auto",
+  paddingBottom: "0.15rem",
+  scrollbarWidth: "thin",
+};
+
 const pillButtonStyle = (active: boolean): CSSProperties => ({
   borderRadius: "999px",
   border: `1px solid ${active ? pageColorTokens.border : pageColorTokens.borderSubtle}`,
@@ -868,6 +876,14 @@ const detailTableStackStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: "0.9rem",
+};
+
+const monitoringInsightHeaderStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "0.75rem",
+  flexWrap: "wrap",
 };
 
 const relatedObjectWrapStyle: CSSProperties = {
@@ -1507,10 +1523,38 @@ function DailyOperationsBody({
     [result.environments, t],
   );
   const diagnosisInsights = result.insights;
+  const [selectedMonitoringEnvironmentKey, setSelectedMonitoringEnvironmentKey] = useState<string | null>(
+    () => result.environments[0]?.key ?? null,
+  );
   const reviewImprovedCount =
     result.review?.deltas.filter((delta) => delta.improved === true).length ?? 0;
   const reviewWorsenedCount =
     result.review?.deltas.filter((delta) => delta.improved === false).length ?? 0;
+  useEffect(() => {
+    if (riskCards.length === 0) {
+      setSelectedMonitoringEnvironmentKey(null);
+      return;
+    }
+    if (
+      !selectedMonitoringEnvironmentKey ||
+      !riskCards.some((card) => card.key === selectedMonitoringEnvironmentKey)
+    ) {
+      setSelectedMonitoringEnvironmentKey(riskCards[0]?.key ?? null);
+    }
+  }, [riskCards, selectedMonitoringEnvironmentKey]);
+  const selectedMonitoringCard =
+    riskCards.find((card) => card.key === selectedMonitoringEnvironmentKey) ?? riskCards[0] ?? null;
+  const selectedMonitoringEnvironment = selectedMonitoringCard
+    ? result.environments.find((environment) => environment.key === selectedMonitoringCard.key) ?? null
+    : null;
+  const monitoringInsights = selectedMonitoringEnvironment
+    ? diagnosisInsights.filter((item) => item.environmentKeys.includes(selectedMonitoringEnvironment.key))
+    : [];
+  const monitoringTasks = selectedMonitoringEnvironment
+    ? sortedTasks.filter((task) =>
+        (environmentTaskSourceKeys[selectedMonitoringEnvironment.key] ?? []).includes(task.sourceKey),
+      )
+    : [];
   const todayTasks = useMemo(() => {
     if (todayTaskTab === "q1") return sortedTasks.filter((task) => task.quadrant === "q1");
     if (todayTaskTab === "q3") return sortedTasks.filter((task) => task.quadrant === "q3");
@@ -1707,12 +1751,12 @@ function DailyOperationsBody({
                 </div>
                 <div style={summaryCardStyle}>
                   <div style={metricMetaRowStyle}>
-                    <span style={subtleInlineStatStyle}>{t("dailyOps.riskEnvironmentTitle")}</span>
+                    <span style={subtleInlineStatStyle}>{t("dailyOps.monitoringTitle")}</span>
                     <span style={taskSecondaryTextStyle}>{t("dailyOps.statusRisk")}</span>
                   </div>
                   <span style={overviewMiniValueStyle}>{overview.activeRiskCount}</span>
                   <span style={summaryListItemStyle}>
-                    {t("dailyOps.riskSummaryCounts", {
+                    {t("dailyOps.monitoringSummaryCounts", {
                       risk: overview.activeRiskCount,
                       watch: overview.watchRiskCount,
                     })}
@@ -1721,10 +1765,10 @@ function DailyOperationsBody({
                 <div style={summaryCardStyle}>
                   <div style={metricMetaRowStyle}>
                     <span style={subtleInlineStatStyle}>{t("dailyOps.dataInsightsTitle")}</span>
-                    <span style={taskSecondaryTextStyle}>{t("dailyOps.detailTabInsights")}</span>
+                    <span style={taskSecondaryTextStyle}>{t("dailyOps.monitoringRelatedLabel")}</span>
                   </div>
                   <span style={overviewMiniValueStyle}>{overview.insightCount}</span>
-                  <span style={summaryListItemStyle}>{t("dailyOps.dataInsightsSubtitle")}</span>
+                  <span style={summaryListItemStyle}>{t("dailyOps.summaryInsightHint")}</span>
                 </div>
                 <div style={summaryCardStyle}>
                   <div style={metricMetaRowStyle}>
@@ -1740,6 +1784,42 @@ function DailyOperationsBody({
                   </span>
                 </div>
               </div>
+              {result.review ? (
+                <div style={{ ...quietPanelStyle, marginTop: "0.9rem" }}>
+                  <div style={monitoringInsightHeaderStyle}>
+                    <strong>{t("dailyOps.summaryReviewTitle")}</strong>
+                    <span style={taskSecondaryTextStyle}>
+                      {t("dailyOps.summaryReviewInline", {
+                        date: result.review.previousDate,
+                        improved: reviewImprovedCount,
+                        worsened: reviewWorsenedCount,
+                      })}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem", marginTop: "0.7rem" }}>
+                    {result.review.deltas.map((delta) => (
+                      <div key={delta.key} style={reviewDeltaCardStyle}>
+                        <strong>{delta.label}</strong>: {delta.previous} → {delta.current}{" "}
+                        <s-badge
+                          tone={
+                            delta.improved === null
+                              ? "info"
+                              : delta.improved
+                                ? "success"
+                                : "critical"
+                          }
+                        >
+                          {delta.improved === null
+                            ? t("dailyOps.reviewFlat")
+                            : delta.improved
+                              ? t("dailyOps.reviewImproved")
+                              : t("dailyOps.reviewWorsened")}
+                        </s-badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <div style={detailActionRowStyle}>
                 <span style={taskSecondaryTextStyle}>{t("dailyOps.pageSubtitle")}</span>
                 <s-button type="button" variant="secondary" onClick={() => onOpenDetail("performance")}>
@@ -1749,111 +1829,155 @@ function DailyOperationsBody({
             </PageSurface>
 
             <PageSurface
-              title={t("dailyOps.riskEnvironmentTitle")}
-              subtitle={t("dailyOps.riskEnvironmentSubtitle")}
+              title={t("dailyOps.monitoringTitle")}
+              subtitle={t("dailyOps.monitoringSubtitle")}
             >
-              <div style={listSectionStyle}>
-                {riskCards.map((card) => (
+              {riskCards.length === 0 ? (
+                <div style={pageEmptyStateStyle}>{t("dailyOps.monitoringEmpty")}</div>
+              ) : (
+                <div style={detailSectionStackStyle}>
                   <div
-                    key={card.key}
                     style={{
-                      ...listRowStyle,
-                      ...(isMobile ? { gridTemplateColumns: "1fr" } : null),
+                      ...horizontalChipRailStyle,
+                      ...(isMobile ? { marginBottom: "0.1rem" } : null),
                     }}
                   >
-                    <div style={listRowMainStyle}>
-                      <div style={listRowMetaStyle}>
-                        <SourceTag source={card.source} />
-                        <s-badge tone={diagnosisTone(card.status)}>{statusText(card.status)}</s-badge>
-                      </div>
-                      <h3 style={taskTitleStyle}>{card.title}</h3>
-                    </div>
-                    <div style={listRowValueStackStyle}>
-                      <span style={taskMetaTextStyle}>{card.primaryMetric}</span>
-                      <span style={taskSecondaryTextStyle}>{card.secondaryMetric}</span>
-                    </div>
-                    <div
-                      style={{
-                        ...listRowActionsStyle,
-                        ...(isMobile ? { justifyContent: "flex-start" } : null),
-                      }}
-                    >
-                      <s-button
+                    {riskCards.map((card) => (
+                      <button
+                        key={card.key}
                         type="button"
-                        variant="tertiary"
-                        onClick={() =>
-                          onOpenDetail("risk", {
-                            riskTab: "environment",
-                            environmentKey: card.key,
-                          })
-                        }
+                        style={{
+                          ...pillButtonStyle(selectedMonitoringCard?.key === card.key),
+                          flex: "0 0 auto",
+                        }}
+                        onClick={() => setSelectedMonitoringEnvironmentKey(card.key)}
                       >
-                        {t("dailyOps.viewDetail")}
-                      </s-button>
-                    </div>
+                        {card.title}
+                      </button>
+                    ))}
                   </div>
-                ))}
-              </div>
+                  {selectedMonitoringCard ? (
+                    <div style={detailFocusCardStyle}>
+                      <div style={monitoringInsightHeaderStyle}>
+                        <div style={listRowMainStyle}>
+                          <div style={listRowMetaStyle}>
+                            <SourceTag source={selectedMonitoringCard.source} />
+                            <s-badge tone={diagnosisTone(selectedMonitoringCard.status)}>
+                              {statusText(selectedMonitoringCard.status)}
+                            </s-badge>
+                          </div>
+                          <h3 style={taskTitleStyle}>{selectedMonitoringCard.title}</h3>
+                          <p style={taskSecondaryTextStyle}>{selectedMonitoringCard.summary}</p>
+                        </div>
+                        <div
+                          style={{
+                            ...listRowActionsStyle,
+                            ...(isMobile ? { justifyContent: "flex-start", width: "100%" } : null),
+                          }}
+                        >
+                          <s-button
+                            type="button"
+                            variant="tertiary"
+                            onClick={() =>
+                              onOpenDetail("risk", {
+                                riskTab: "environment",
+                                environmentKey: selectedMonitoringCard.key,
+                              })
+                            }
+                          >
+                            {t("dailyOps.viewDetail")}
+                          </s-button>
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          ...detailInfoGridStyle,
+                          ...(isMobile ? { gridTemplateColumns: "1fr" } : null),
+                        }}
+                      >
+                        <div style={detailInfoCardStyle}>
+                          <span style={detailInfoLabelStyle}>{t("dailyOps.metricPrimary")}</span>
+                          <span style={detailInfoValueStyle}>{selectedMonitoringCard.primaryMetric}</span>
+                        </div>
+                        <div style={detailInfoCardStyle}>
+                          <span style={detailInfoLabelStyle}>{t("dailyOps.metricSecondary")}</span>
+                          <span style={detailInfoValueStyle}>{selectedMonitoringCard.secondaryMetric}</span>
+                        </div>
+                        <div style={detailInfoCardStyle}>
+                          <span style={detailInfoLabelStyle}>{t("dailyOps.dataInsightsTitle")}</span>
+                          <span style={detailInfoValueStyle}>{monitoringInsights.length}</span>
+                        </div>
+                        <div style={detailInfoCardStyle}>
+                          <span style={detailInfoLabelStyle}>{t("dailyOps.taskWorkbenchTitle")}</span>
+                          <span style={detailInfoValueStyle}>{monitoringTasks.length}</span>
+                        </div>
+                      </div>
+                      <div style={relatedObjectWrapStyle}>
+                        <div style={monitoringInsightHeaderStyle}>
+                          <strong>{t("dailyOps.monitoringInsightsTitle")}</strong>
+                          <span style={taskSecondaryTextStyle}>
+                            {t("dailyOps.monitoringTaskCount", { count: monitoringTasks.length })}
+                          </span>
+                        </div>
+                        {monitoringInsights.length === 0 ? (
+                          <p style={taskSecondaryTextStyle}>{t("dailyOps.monitoringInsightsEmpty")}</p>
+                        ) : (
+                          <div style={listSectionStyle}>
+                            {monitoringInsights.slice(0, 3).map((item) => (
+                              <div
+                                key={item.key}
+                                style={{
+                                  ...listRowStyle,
+                                  ...(isMobile ? { gridTemplateColumns: "1fr" } : null),
+                                }}
+                              >
+                                <div style={listRowMainStyle}>
+                                  <div style={listRowMetaStyle}>
+                                    <s-badge tone={diagnosisTone(item.status)}>{statusText(item.status)}</s-badge>
+                                    <s-badge>{insightConfidenceLabel(item.confidence, t)}</s-badge>
+                                  </div>
+                                  <h3 style={taskTitleStyle}>{item.title}</h3>
+                                </div>
+                                <div style={listRowValueStackStyle}>
+                                  <span style={taskMetaTextStyle}>{item.summary}</span>
+                                  <span style={taskSecondaryTextStyle}>
+                                    {t("dailyOps.insightTaskCount", { count: item.taskCount })}
+                                  </span>
+                                </div>
+                                <div
+                                  style={{
+                                    ...listRowActionsStyle,
+                                    ...(isMobile ? { justifyContent: "flex-start" } : null),
+                                  }}
+                                >
+                                  <s-button
+                                    type="button"
+                                    variant="tertiary"
+                                    onClick={() =>
+                                      onOpenDetail("risk", {
+                                        riskTab: "insights",
+                                        insightKey: item.key,
+                                      })
+                                    }
+                                  >
+                                    {t("dailyOps.viewDetail")}
+                                  </s-button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
               <div style={detailActionRowStyle}>
-                <span style={taskSecondaryTextStyle}>{t("dailyOps.riskDetailHint")}</span>
+                <span style={taskSecondaryTextStyle}>{t("dailyOps.monitoringDetailHint")}</span>
                 <s-button type="button" variant="secondary" onClick={() => onOpenDetail("risk")}>
                   {t("dailyOps.viewDetail")}
                 </s-button>
               </div>
-            </PageSurface>
-
-            <PageSurface
-              title={t("dailyOps.dataInsightsTitle")}
-              subtitle={t("dailyOps.dataInsightsSubtitle")}
-            >
-              {diagnosisInsights.length === 0 ? (
-                <p style={taskSecondaryTextStyle}>{t("dailyOps.dataInsightsEmpty")}</p>
-              ) : (
-                <div style={listSectionStyle}>
-                  {diagnosisInsights.map((item) => (
-                    <div
-                      key={item.key}
-                      style={{
-                        ...listRowStyle,
-                        ...(isMobile ? { gridTemplateColumns: "1fr" } : null),
-                      }}
-                    >
-                      <div style={listRowMainStyle}>
-                        <div style={listRowMetaStyle}>
-                          <s-badge tone={diagnosisTone(item.status)}>{statusText(item.status)}</s-badge>
-                          <s-badge>{insightConfidenceLabel(item.confidence, t)}</s-badge>
-                        </div>
-                        <h3 style={taskTitleStyle}>{item.title}</h3>
-                      </div>
-                      <div style={listRowValueStackStyle}>
-                        <span style={taskMetaTextStyle}>{item.summary}</span>
-                        <span style={taskSecondaryTextStyle}>
-                          {t("dailyOps.insightTaskCount", { count: item.taskCount })}
-                        </span>
-                      </div>
-                      <div
-                        style={{
-                          ...listRowActionsStyle,
-                          ...(isMobile ? { justifyContent: "flex-start" } : null),
-                        }}
-                      >
-                        <s-button
-                          type="button"
-                          variant="tertiary"
-                          onClick={() =>
-                            onOpenDetail("risk", {
-                              riskTab: "insights",
-                              insightKey: item.key,
-                            })
-                          }
-                        >
-                          {t("dailyOps.viewDetail")}
-                        </s-button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </PageSurface>
 
             <PageSurface
@@ -2035,40 +2159,6 @@ function DailyOperationsBody({
         ) : null}
       </section>
 
-      {result.review && insightsView === "today" ? (
-        <PageSurface
-          title={t("dailyOps.reviewTitle", { date: result.review.previousDate })}
-          subtitle={t("dailyOps.reviewResolved", {
-            count: result.review.resolvedTaskCount,
-          })}
-        >
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
-            {result.review.deltas.map((delta) => (
-              <div
-                key={delta.key}
-                style={reviewDeltaCardStyle}
-              >
-                <strong>{delta.label}</strong>: {delta.previous} → {delta.current}{" "}
-                <s-badge
-                  tone={
-                    delta.improved === null
-                      ? "info"
-                      : delta.improved
-                        ? "success"
-                        : "critical"
-                  }
-                >
-                  {delta.improved === null
-                    ? t("dailyOps.reviewFlat")
-                    : delta.improved
-                      ? t("dailyOps.reviewImproved")
-                      : t("dailyOps.reviewWorsened")}
-                </s-badge>
-              </div>
-            ))}
-          </div>
-        </PageSurface>
-      ) : null}
     </>
   );
 }
