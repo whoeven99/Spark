@@ -434,6 +434,12 @@ export function TranslationV4Page() {
   const [automationModules, setAutomationModules] = useState<string[]>([]);
   const [automationFrequency, setAutomationFrequency] = useState<AutomationFrequency>("DAILY");
   const [automationItems, setAutomationItems] = useState<TranslationAutomationItem[]>([]);
+  const [automationDialogOpen, setAutomationDialogOpen] = useState(false);
+  const [automationDraftTargets, setAutomationDraftTargets] = useState<string[]>([]);
+  const [automationDraftModules, setAutomationDraftModules] = useState<string[]>([]);
+  const [automationDraftFrequency, setAutomationDraftFrequency] = useState<AutomationFrequency>("DAILY");
+  const [automationDraftEnabled, setAutomationDraftEnabled] = useState(true);
+  const [automationDraftError, setAutomationDraftError] = useState<string | null>(null);
   const [setupGuideVisible, setSetupGuideVisible] = useState(true);
   const [setupGuideState, setSetupGuideState] = useState<SetupGuideState>({
     loading: true,
@@ -680,12 +686,65 @@ export function TranslationV4Page() {
     [automationItems, saveAutomationItems, shopify],
   );
 
-  const handleOpenAutomationConfig = useCallback(() => {
-    setPageTab("config");
-    if (typeof window !== "undefined") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+  const handleOpenAutomationDialog = useCallback(() => {
+    const defaultTargets =
+      targetLocales.length > 0
+        ? [...targetLocales]
+        : targetOptions
+            .map((option) => option.value)
+            .filter((value) => value !== sourceLocale)
+            .slice(0, 1);
+    const defaultModules =
+      automationModules.length > 0
+        ? [...automationModules]
+        : modules.length > 0
+          ? [...modules]
+          : ["PRODUCT", "COLLECTION", "PAGE", "ARTICLE"];
+    setAutomationDraftTargets(defaultTargets);
+    setAutomationDraftModules(defaultModules);
+    setAutomationDraftFrequency(automationFrequency);
+    setAutomationDraftEnabled(true);
+    setAutomationDraftError(null);
+    setAutomationDialogOpen(true);
+  }, [automationFrequency, automationModules, modules, sourceLocale, targetLocales, targetOptions]);
+
+  const handleCreateAutomationRule = useCallback(() => {
+    if (!automationDraftTargets.length) {
+      setAutomationDraftError("请至少选择一个自动更新语言");
+      return;
     }
-  }, []);
+    if (!automationDraftModules.length) {
+      setAutomationDraftError("请至少选择一个自动更新模块");
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const automation: TranslationAutomationItem = {
+      id: crypto.randomUUID(),
+      shopName,
+      source: sourceLocale || "zh-CN",
+      targets: [...automationDraftTargets],
+      modules: [...automationDraftModules],
+      frequency: automationDraftFrequency,
+      enabled: automationDraftEnabled,
+      createdAt: now,
+      lastTriggeredAt: "",
+    };
+    saveAutomationItems([automation, ...automationItems]);
+    setAutomationDialogOpen(false);
+    setAutomationDraftError(null);
+    shopify.toast.show("已新增自动翻译规则");
+  }, [
+    automationDraftEnabled,
+    automationDraftFrequency,
+    automationDraftModules,
+    automationDraftTargets,
+    automationItems,
+    saveAutomationItems,
+    shopName,
+    shopify,
+    sourceLocale,
+  ]);
 
   const applyOptimisticPatch = useCallback(
     (taskId: string, job: TranslationV4Job, patch: OptimisticJobPatch) => {
@@ -1292,14 +1351,19 @@ export function TranslationV4Page() {
                     ? `当前已保存 ${automationItems.length} 条自动翻译规则`
                     : "当前还没有自动翻译规则"}
                 </div>
-                <s-button type="button" variant="secondary" onClick={handleOpenAutomationConfig}>
-                  去配置页新增规则
+                <s-button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleOpenAutomationDialog}
+                  {...(localesLoading ? { disabled: true } : {})}
+                >
+                  新增配置规则
                 </s-button>
               </div>
 
               {automationItems.length === 0 ? (
                 <div style={automationEmptyStateStyle}>
-                  暂无自动翻译规则。你可以在配置页创建翻译任务时开启“自动更新翻译”，并保存为后续可复用的自动翻译规则。
+                  暂无自动翻译规则。点击右上角“新增配置规则”，即可在当前页面直接完成语言、模块与频次设置。
                 </div>
               ) : (
                 <div style={automationListStyle(isMobile)}>
@@ -1385,7 +1449,7 @@ export function TranslationV4Page() {
                           <div style={automationInfoRowStyle}>
                             <span style={automationInfoLabelStyle}>最近执行</span>
                             <span style={automationInfoValueStyle}>
-                              {formatDateTime(automation.lastTriggeredAt) ?? "刚刚创建"}
+                              {formatDateTime(automation.lastTriggeredAt) ?? "尚未执行"}
                             </span>
                           </div>
                           <div style={automationInfoRowStyle}>
@@ -1567,6 +1631,92 @@ export function TranslationV4Page() {
           >
             创建后会按目标语言拆分批处理任务，执行过程中可在任务页直接暂停、继续或取消。
           </div>
+        </div>
+      </DialogShell>
+
+      <DialogShell
+        open={automationDialogOpen}
+        onClose={() => {
+          setAutomationDialogOpen(false);
+          setAutomationDraftError(null);
+        }}
+        width={isMobile ? 360 : 560}
+        title="新增自动翻译规则"
+        description="在当前页面完成自动更新语言、模块与频次配置，保存后即可加入自动翻译设置列表。"
+        footer={
+          <s-stack direction={isMobile ? "block" : "inline"} gap="small">
+            <s-button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setAutomationDialogOpen(false);
+                setAutomationDraftError(null);
+              }}
+            >
+              取消
+            </s-button>
+            <s-button
+              type="button"
+              variant="primary"
+              onClick={handleCreateAutomationRule}
+            >
+              保存规则
+            </s-button>
+          </s-stack>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={automationManageRowStyle(isMobile)}>
+            <div style={automationManageFieldStyle}>
+              <span style={automationSectionLabelStyle}>启用状态</span>
+              <div style={automationStatusHelpStyle}>
+                新建规则默认可立即生效，你也可以先保存为停用状态。
+              </div>
+            </div>
+            <s-button
+              type="button"
+              variant={automationDraftEnabled ? "secondary" : "primary"}
+              onClick={() => setAutomationDraftEnabled((value) => !value)}
+            >
+              {automationDraftEnabled ? "保存为已启用" : "保存为已停用"}
+            </s-button>
+          </div>
+
+          <TranslationMultiSelect
+            id="translation-automation-draft-targets"
+            label="自动更新语言"
+            options={targetOptions}
+            values={automationDraftTargets}
+            onChange={setAutomationDraftTargets}
+            summaryMode="count"
+            columns={2}
+          />
+
+          <TranslationModuleMultiSelect
+            id="translation-automation-draft-modules"
+            label="自动更新模块"
+            values={automationDraftModules}
+            onChange={setAutomationDraftModules}
+          />
+
+          <div style={automationManageFieldStyle}>
+            <span style={automationSectionLabelStyle}>执行频率</span>
+            <select
+              value={automationDraftFrequency}
+              onChange={(event) =>
+                setAutomationDraftFrequency(event.target.value as AutomationFrequency)
+              }
+              style={automationSelectStyle}
+            >
+              {AUTOMATION_FREQUENCY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {automationDraftError ? <div style={formErrorBoxStyle}>{automationDraftError}</div> : null}
         </div>
       </DialogShell>
 
