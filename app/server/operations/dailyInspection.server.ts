@@ -195,6 +195,7 @@ const INSIGHT_TASK_SOURCE_KEYS: Record<
   sales_trend: ["sales_decline"],
   traffic_anomaly: ["traffic_conversion_drop"],
   conversion_health: ["traffic_conversion_drop"],
+  product_operations: ["product_incomplete"],
   fulfillment_health: ["fulfillment_overdue", "routine_shipping"],
   logistics_anomaly: ["logistics_stale"],
   refund_health: ["refund_spike"],
@@ -208,6 +209,7 @@ const INSIGHT_ENVIRONMENT_KEYS: Record<
   sales_trend: ["conversion"],
   traffic_anomaly: ["conversion"],
   conversion_health: ["conversion"],
+  product_operations: ["new-arrivals"],
   fulfillment_health: ["fulfillment"],
   logistics_anomaly: ["fulfillment"],
   refund_health: ["after-sales"],
@@ -261,6 +263,7 @@ function buildEnvironments(
   const refund = findItem("refund_health");
   const conversion = findItem("conversion_health");
   const traffic = findItem("traffic_anomaly");
+  const products = findItem("product_operations");
 
   const fulfillmentStatus: DiagnosisItemResult["status"] =
     fulfillment?.status === "risk" || logistics?.status === "risk"
@@ -273,10 +276,18 @@ function buildEnvironments(
     {
       key: "new-arrivals",
       titleKey: "dailyOps.riskEnvNewArrivals",
-      status: "watch",
-      source: "pending",
-      summary: "待接入上新计划、上架结果和信息完整度后，再判断新品是否在首日出现卡点。",
-      metrics: {},
+      status: products?.status ?? "watch",
+      source: products ? "real" : "pending",
+      summary:
+        products?.reasoning[0] ??
+        "待接入上新计划、上架结果和信息完整度后，再判断新品是否在首日出现卡点。",
+      metrics: products
+        ? {
+            draftProductCount: metrics.draftProductCount,
+            noImagesProductCount: metrics.noImagesProductCount,
+            noDescriptionProductCount: metrics.noDescriptionProductCount,
+          }
+        : {},
     },
     {
       key: "inventory",

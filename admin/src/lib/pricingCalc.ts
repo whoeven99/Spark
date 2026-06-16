@@ -288,6 +288,7 @@ export function costPerMillionCredits(row: FeatureCalcRow): number {
   return (row.costPerCallUsd / row.billedTokensPerCall) * PER_MILLION;
 }
 
+export type PlanCreditEconomics = {
   planKey: string;
   displayName: string;
   kind: string;
