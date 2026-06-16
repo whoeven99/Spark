@@ -67,6 +67,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const SETUP_GUIDE_HIDDEN_STORAGE_KEY = "translation-v4-setup-guide-hidden";
 type PageTab = "config" | "style" | "tasks";
 type TaskViewTab = "current" | "history";
+type StyleWorkspacePage = "overview" | "profile" | "glossary";
 const ACTIVE_STATUSES: TranslationV4Status[] = [
   "INIT_QUEUED", "INITIALIZING", "INIT_DONE",
   "TRANSLATE_QUEUED", "TRANSLATING", "TRANSLATE_DONE",
@@ -440,6 +441,7 @@ export function TranslationV4Page() {
   const [automationDraftFrequency, setAutomationDraftFrequency] = useState<AutomationFrequency>("DAILY");
   const [automationDraftEnabled, setAutomationDraftEnabled] = useState(true);
   const [automationDraftError, setAutomationDraftError] = useState<string | null>(null);
+  const [styleWorkspacePage, setStyleWorkspacePage] = useState<StyleWorkspacePage>("overview");
   const [setupGuideVisible, setSetupGuideVisible] = useState(true);
   const [setupGuideState, setSetupGuideState] = useState<SetupGuideState>({
     loading: true,
@@ -1339,162 +1341,168 @@ export function TranslationV4Page() {
           </div>
         ) : pageTab === "style" ? (
           <div style={taskPageSectionStyle}>
-            <TranslationStyleWorkspace locationSearch={query} sourceLocale={sourceLocale} />
+            <TranslationStyleWorkspace
+              locationSearch={query}
+              sourceLocale={sourceLocale}
+              onPageChange={setStyleWorkspacePage}
+            />
 
-            <PageSurface
-              title="翻译设置"
-              subtitle="管理当前店铺的自动翻译规则。新规则可在配置页创建翻译任务时启用“自动更新翻译”后生成。"
-            >
-              <div style={translationSettingsHeaderStyle(isMobile)}>
-                <div style={translationSettingsSummaryStyle}>
-                  {automationItems.length > 0
-                    ? `当前已保存 ${automationItems.length} 条自动翻译规则`
-                    : "当前还没有自动翻译规则"}
+            {styleWorkspacePage === "overview" ? (
+              <PageSurface
+                title="翻译设置"
+                subtitle="管理当前店铺的自动翻译规则，并在当前页面完成语言、模块与频次配置。"
+              >
+                <div style={translationSettingsHeaderStyle(isMobile)}>
+                  <div style={translationSettingsSummaryStyle}>
+                    {automationItems.length > 0
+                      ? `当前已保存 ${automationItems.length} 条自动翻译规则`
+                      : "当前还没有自动翻译规则"}
+                  </div>
+                  <s-button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleOpenAutomationDialog}
+                    {...(localesLoading ? { disabled: true } : {})}
+                  >
+                    新增配置规则
+                  </s-button>
                 </div>
-                <s-button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleOpenAutomationDialog}
-                  {...(localesLoading ? { disabled: true } : {})}
-                >
-                  新增配置规则
-                </s-button>
-              </div>
 
-              {automationItems.length === 0 ? (
-                <div style={automationEmptyStateStyle}>
-                  暂无自动翻译规则。点击右上角“新增配置规则”，即可在当前页面直接完成语言、模块与频次设置。
-                </div>
-              ) : (
-                <div style={automationListStyle(isMobile)}>
-                  {automationItems
-                    .slice()
-                    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-                    .map((automation) => (
-                      <article key={automation.id} style={automationCardStyle}>
-                        <div style={automationCardHeaderStyle}>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-                            <div style={automationCardTitleStyle}>自动翻译规则</div>
-                            <div style={automationCardMetaStyle}>
-                              {formatAutomationTargetsSummary(
-                                automation,
-                                displayLanguage,
-                                localeLabelMap,
-                              )}
-                            </div>
-                          </div>
-                          <div style={automationCardBadgeRowStyle}>
-                            <span style={automationStatusBadgeStyle(Boolean(automation.enabled))}>
-                              {automation.enabled ? "已启用" : "已停用"}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div style={automationCardBodyStyle}>
-                          <div style={automationManageRowStyle(isMobile)}>
-                            <div style={automationManageFieldStyle}>
-                              <span style={automationSectionLabelStyle}>启用状态</span>
-                              <div style={automationStatusHelpStyle}>
-                                控制该规则是否继续参与自动翻译。
+                {automationItems.length === 0 ? (
+                  <div style={automationEmptyStateStyle}>
+                    暂无自动翻译规则。点击右上角“新增配置规则”，即可在当前页面直接完成语言、模块与频次设置。
+                  </div>
+                ) : (
+                  <div style={automationListStyle(isMobile)}>
+                    {automationItems
+                      .slice()
+                      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                      .map((automation) => (
+                        <article key={automation.id} style={automationCardStyle}>
+                          <div style={automationCardHeaderStyle}>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+                              <div style={automationCardTitleStyle}>自动翻译规则</div>
+                              <div style={automationCardMetaStyle}>
+                                {formatAutomationTargetsSummary(
+                                  automation,
+                                  displayLanguage,
+                                  localeLabelMap,
+                                )}
                               </div>
                             </div>
+                            <div style={automationCardBadgeRowStyle}>
+                              <span style={automationStatusBadgeStyle(Boolean(automation.enabled))}>
+                                {automation.enabled ? "已启用" : "已停用"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div style={automationCardBodyStyle}>
+                            <div style={automationManageRowStyle(isMobile)}>
+                              <div style={automationManageFieldStyle}>
+                                <span style={automationSectionLabelStyle}>启用状态</span>
+                                <div style={automationStatusHelpStyle}>
+                                  控制该规则是否继续参与自动翻译。
+                                </div>
+                              </div>
+                              <s-button
+                                type="button"
+                                variant={automation.enabled ? "secondary" : "primary"}
+                                onClick={() =>
+                                  handleAutomationEnabledChange(
+                                    automation.id,
+                                    !Boolean(automation.enabled),
+                                  )}
+                              >
+                                {automation.enabled ? "停用规则" : "启用规则"}
+                              </s-button>
+                            </div>
+
+                            <div style={automationControlsGridStyle(isMobile)}>
+                              <div style={automationManageFieldStyle}>
+                                <TranslationMultiSelect
+                                  id={`translation-automation-targets-${automation.id}`}
+                                  label="自动更新语言"
+                                  options={targetOptions}
+                                  values={automation.targets}
+                                  onChange={(values) =>
+                                    handleAutomationTargetsChange(automation.id, values)
+                                  }
+                                  disabled={!automation.enabled}
+                                  summaryMode="count"
+                                  columns={2}
+                                />
+                              </div>
+
+                              <div style={automationManageFieldStyle}>
+                                <TranslationModuleMultiSelect
+                                  id={`translation-automation-modules-${automation.id}`}
+                                  label="自动更新模块"
+                                  values={automation.modules}
+                                  onChange={(values) =>
+                                    handleAutomationModulesChange(automation.id, values)
+                                  }
+                                  disabled={!automation.enabled}
+                                />
+                              </div>
+                            </div>
+
+                            <div style={automationInfoRowStyle}>
+                              <span style={automationInfoLabelStyle}>当前频率</span>
+                              <span style={automationInfoValueStyle}>
+                                {formatAutomationFrequencyLabel(automation.frequency)}
+                              </span>
+                            </div>
+                            <div style={automationInfoRowStyle}>
+                              <span style={automationInfoLabelStyle}>最近执行</span>
+                              <span style={automationInfoValueStyle}>
+                                {formatDateTime(automation.lastTriggeredAt) ?? "尚未执行"}
+                              </span>
+                            </div>
+                            <div style={automationInfoRowStyle}>
+                              <span style={automationInfoLabelStyle}>规则创建时间</span>
+                              <span style={automationInfoValueStyle}>
+                                {formatDateTime(automation.createdAt) ?? "刚刚"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div style={automationManageRowStyle(isMobile)}>
+                            <div style={automationManageFieldStyle}>
+                              <span style={automationSectionLabelStyle}>执行频率</span>
+                              <select
+                                value={automation.frequency}
+                                onChange={(event) =>
+                                  handleAutomationFrequencyChange(
+                                    automation.id,
+                                    event.target.value as AutomationFrequency,
+                                  )}
+                                disabled={!automation.enabled}
+                                style={automationSelectStyle}
+                              >
+                                {AUTOMATION_FREQUENCY_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
                             <s-button
                               type="button"
-                              variant={automation.enabled ? "secondary" : "primary"}
-                              onClick={() =>
-                                handleAutomationEnabledChange(
-                                  automation.id,
-                                  !Boolean(automation.enabled),
-                                )}
+                              variant="secondary"
+                              tone="critical"
+                              onClick={() => handleAutomationDelete(automation.id)}
                             >
-                              {automation.enabled ? "停用规则" : "启用规则"}
+                              删除规则
                             </s-button>
                           </div>
-
-                          <div style={automationControlsGridStyle(isMobile)}>
-                            <div style={automationManageFieldStyle}>
-                              <TranslationMultiSelect
-                                id={`translation-automation-targets-${automation.id}`}
-                                label="自动更新语言"
-                                options={targetOptions}
-                                values={automation.targets}
-                                onChange={(values) =>
-                                  handleAutomationTargetsChange(automation.id, values)
-                                }
-                                disabled={!automation.enabled}
-                                summaryMode="count"
-                                columns={2}
-                              />
-                            </div>
-
-                            <div style={automationManageFieldStyle}>
-                              <TranslationModuleMultiSelect
-                                id={`translation-automation-modules-${automation.id}`}
-                                label="自动更新模块"
-                                values={automation.modules}
-                                onChange={(values) =>
-                                  handleAutomationModulesChange(automation.id, values)
-                                }
-                                disabled={!automation.enabled}
-                              />
-                            </div>
-                          </div>
-
-                          <div style={automationInfoRowStyle}>
-                            <span style={automationInfoLabelStyle}>当前频率</span>
-                            <span style={automationInfoValueStyle}>
-                              {formatAutomationFrequencyLabel(automation.frequency)}
-                            </span>
-                          </div>
-                          <div style={automationInfoRowStyle}>
-                            <span style={automationInfoLabelStyle}>最近执行</span>
-                            <span style={automationInfoValueStyle}>
-                              {formatDateTime(automation.lastTriggeredAt) ?? "尚未执行"}
-                            </span>
-                          </div>
-                          <div style={automationInfoRowStyle}>
-                            <span style={automationInfoLabelStyle}>规则创建时间</span>
-                            <span style={automationInfoValueStyle}>
-                              {formatDateTime(automation.createdAt) ?? "刚刚"}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div style={automationManageRowStyle(isMobile)}>
-                          <div style={automationManageFieldStyle}>
-                            <span style={automationSectionLabelStyle}>执行频率</span>
-                            <select
-                              value={automation.frequency}
-                              onChange={(event) =>
-                                handleAutomationFrequencyChange(
-                                  automation.id,
-                                  event.target.value as AutomationFrequency,
-                                )}
-                              disabled={!automation.enabled}
-                              style={automationSelectStyle}
-                            >
-                              {AUTOMATION_FREQUENCY_OPTIONS.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <s-button
-                            type="button"
-                            variant="secondary"
-                            tone="critical"
-                            onClick={() => handleAutomationDelete(automation.id)}
-                          >
-                            删除规则
-                          </s-button>
-                        </div>
-                      </article>
-                    ))}
-                </div>
-              )}
-            </PageSurface>
+                        </article>
+                      ))}
+                  </div>
+                )}
+              </PageSurface>
+            ) : null}
           </div>
         ) : (
           <div style={taskPageSectionStyle}>

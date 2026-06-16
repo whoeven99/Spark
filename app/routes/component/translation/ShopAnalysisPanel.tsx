@@ -24,6 +24,7 @@ type ShopAnalysisPanelProps = {
   defaultSourceLanguage: string;
   target: Exclude<ShopAnalysisTarget, "both">;
   onApplied?: () => void;
+  embedded?: boolean;
 };
 
 const RUNNING_STATUSES = new Set(["SCAN_QUEUED", "SCANNING", "ANALYZE_QUEUED", "ANALYZING"]);
@@ -115,6 +116,7 @@ export function ShopAnalysisPanel({
   defaultSourceLanguage,
   target,
   onApplied,
+  embedded = false,
 }: ShopAnalysisPanelProps) {
   const shopify = useAppBridge();
   const isProfileTarget = target === "profile";
@@ -342,11 +344,10 @@ export function ShopAnalysisPanel({
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
-  return (
-    <PageSurface {...(isProfileTarget ? {} : { title: targetTitle(target), subtitle: targetSubtitle(target) })}>
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+  const content = (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
         <div style={isProfileTarget ? compactActionRowStyle : actionRowStyle}>
-          {!isProfileTarget ? (
+          {!isProfileTarget && !embedded ? (
             <div style={{ ...pageHintTextStyle, marginTop: 0 }}>
               {targetIntro(target, sourceLanguage)}
             </div>
@@ -718,161 +719,153 @@ export function ShopAnalysisPanel({
                     }}
                   >
                     {draftTerms.map((term, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      ...draftTermRowStyle,
-                      flexDirection: "column",
-                      alignItems: "stretch",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "0.5rem",
-                        alignItems: "center",
-                        flexWrap: "wrap",
-                        width: "100%",
-                      }}
-                    >
-                      <span style={draftTermSourceStyle}>{term.source}</span>
-                      {term.doNotTranslate && (
-                        <span style={dntBadgeStyle}>勿译</span>
-                      )}
-                      <span
-                        style={{
-                          fontSize: "0.75rem",
-                          color: pageColorTokens.textSecondary,
-                          flex: "1 1 160px",
-                        }}
-                      >
-                        {formatDraftTermPreview(term)}
-                      </span>
-                      {term.note && (
-                        <span style={draftNoteTagStyle}>{term.note}</span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => openDraftDetail(idx)}
-                        style={linkBtnStyle}
-                      >
-                        {editingDraftIdx === idx ? "收起" : "查看详情"}
-                      </button>
-                    </div>
-
-                    {editingDraftIdx === idx && (
                       <div
+                        key={idx}
                         style={{
-                          marginTop: "0.55rem",
-                          padding: "0.65rem",
-                          borderRadius: pageColorTokens.radiusControl,
-                          border: `1px solid ${pageColorTokens.borderSubtle}`,
-                          background: pageColorTokens.surface,
-                          display: "flex",
+                          ...draftTermRowStyle,
                           flexDirection: "column",
-                          gap: "0.5rem",
+                          alignItems: "stretch",
                         }}
                       >
-                        <div style={pageFieldLabelStyle}>
-                          术语详情 · 「{term.source || "…"}」
-                        </div>
-                        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-                          <input
-                            type="text"
-                            value={term.source}
-                            placeholder="原文术语"
-                            onChange={(e) => updateDraftTerm(idx, { source: e.target.value })}
-                            style={{ ...inputStyle, flex: "1 1 180px", marginTop: 0 }}
-                          />
-                          <label style={checkboxLabelStyle} title="勾选后所有语言均不翻译">
-                            <input
-                              type="checkbox"
-                              checked={!!term.doNotTranslate}
-                              onChange={(e) =>
-                                updateDraftTerm(idx, { doNotTranslate: e.target.checked || undefined })
-                              }
-                            />
-                            勿译
-                          </label>
-                          <input
-                            type="text"
-                            value={term.note ?? ""}
-                            placeholder="分类 / 备注（如 tag、product feature）"
-                            onChange={(e) => updateDraftTerm(idx, { note: e.target.value || undefined })}
-                            style={{ ...inputStyle, flex: "1 1 200px", marginTop: 0 }}
-                          />
-                          <button type="button" onClick={() => removeDraftTerm(idx)} style={dangerBtnStyle}>
-                            从草稿移除
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "0.5rem",
+                            alignItems: "center",
+                            flexWrap: "wrap",
+                            width: "100%",
+                          }}
+                        >
+                          <span style={draftTermSourceStyle}>{term.source}</span>
+                          {term.doNotTranslate ? <span style={dntBadgeStyle}>勿译</span> : null}
+                          <span
+                            style={{
+                              fontSize: "0.75rem",
+                              color: pageColorTokens.textSecondary,
+                              flex: "1 1 160px",
+                            }}
+                          >
+                            {formatDraftTermPreview(term)}
+                          </span>
+                          {term.note ? <span style={draftNoteTagStyle}>{term.note}</span> : null}
+                          <button type="button" onClick={() => openDraftDetail(idx)} style={linkBtnStyle}>
+                            {editingDraftIdx === idx ? "收起" : "查看详情"}
                           </button>
                         </div>
 
-                        {!term.doNotTranslate && (
-                          <>
-                            <div style={{ ...pageFieldLabelStyle, marginTop: "0.25rem" }}>
-                              各语言固定译法
+                        {editingDraftIdx === idx ? (
+                          <div
+                            style={{
+                              marginTop: "0.55rem",
+                              padding: "0.65rem",
+                              borderRadius: pageColorTokens.radiusControl,
+                              border: `1px solid ${pageColorTokens.borderSubtle}`,
+                              background: pageColorTokens.surface,
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "0.5rem",
+                            }}
+                          >
+                            <div style={pageFieldLabelStyle}>
+                              术语详情 · 「{term.source || "…"}」
                             </div>
-                            <div style={{ ...pageHintTextStyle, marginTop: 0 }}>
-                              语言代码示例：en · zh-CN · ja · fr。翻译时会按此处配置强制使用对应译法。
-                            </div>
-                            {localeRows.map((row, rowIdx) => (
-                              <div
-                                key={rowIdx}
-                                style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}
-                              >
+                            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+                              <input
+                                type="text"
+                                value={term.source}
+                                placeholder="原文术语"
+                                onChange={(e) => updateDraftTerm(idx, { source: e.target.value })}
+                                style={{ ...inputStyle, flex: "1 1 180px", marginTop: 0 }}
+                              />
+                              <label style={checkboxLabelStyle} title="勾选后所有语言均不翻译">
                                 <input
-                                  type="text"
-                                  value={row.locale}
-                                  placeholder="语言"
+                                  type="checkbox"
+                                  checked={!!term.doNotTranslate}
                                   onChange={(e) =>
-                                    setLocaleRows((prev) =>
-                                      prev.map((r, i) =>
-                                        i === rowIdx ? { ...r, locale: e.target.value } : r,
-                                      ),
-                                    )
+                                    updateDraftTerm(idx, { doNotTranslate: e.target.checked || undefined })
                                   }
-                                  style={{ ...inputStyle, width: "6rem", marginTop: 0 }}
                                 />
-                                <input
-                                  type="text"
-                                  value={row.value}
-                                  placeholder="对应翻译"
-                                  onChange={(e) =>
-                                    setLocaleRows((prev) =>
-                                      prev.map((r, i) =>
-                                        i === rowIdx ? { ...r, value: e.target.value } : r,
-                                      ),
-                                    )
-                                  }
-                                  style={{ ...inputStyle, flex: 1, minWidth: "10rem", marginTop: 0 }}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => setLocaleRows((prev) => prev.filter((_, i) => i !== rowIdx))}
-                                  style={dangerBtnStyle}
-                                >
-                                  移除
-                                </button>
-                              </div>
-                            ))}
-                            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                              <s-button
-                                type="button"
-                                variant="secondary"
-                                onClick={() =>
-                                  setLocaleRows((prev) => [...prev, { locale: "", value: "" }])
-                                }
-                              >
-                                添加语言
-                              </s-button>
-                              <s-button type="button" variant="primary" onClick={saveDraftTranslations}>
-                                保存译法
-                              </s-button>
+                                勿译
+                              </label>
+                              <input
+                                type="text"
+                                value={term.note ?? ""}
+                                placeholder="分类 / 备注（如 tag、product feature）"
+                                onChange={(e) => updateDraftTerm(idx, { note: e.target.value || undefined })}
+                                style={{ ...inputStyle, flex: "1 1 200px", marginTop: 0 }}
+                              />
+                              <button type="button" onClick={() => removeDraftTerm(idx)} style={dangerBtnStyle}>
+                                从草稿移除
+                              </button>
                             </div>
-                          </>
-                        )}
+
+                            {!term.doNotTranslate ? (
+                              <>
+                                <div style={{ ...pageFieldLabelStyle, marginTop: "0.25rem" }}>
+                                  各语言固定译法
+                                </div>
+                                <div style={{ ...pageHintTextStyle, marginTop: 0 }}>
+                                  语言代码示例：en · zh-CN · ja · fr。翻译时会按此处配置强制使用对应译法。
+                                </div>
+                                {localeRows.map((row, rowIdx) => (
+                                  <div
+                                    key={rowIdx}
+                                    style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}
+                                  >
+                                    <input
+                                      type="text"
+                                      value={row.locale}
+                                      placeholder="语言"
+                                      onChange={(e) =>
+                                        setLocaleRows((prev) =>
+                                          prev.map((r, i) =>
+                                            i === rowIdx ? { ...r, locale: e.target.value } : r,
+                                          ),
+                                        )
+                                      }
+                                      style={{ ...inputStyle, width: "6rem", marginTop: 0 }}
+                                    />
+                                    <input
+                                      type="text"
+                                      value={row.value}
+                                      placeholder="对应翻译"
+                                      onChange={(e) =>
+                                        setLocaleRows((prev) =>
+                                          prev.map((r, i) =>
+                                            i === rowIdx ? { ...r, value: e.target.value } : r,
+                                          ),
+                                        )
+                                      }
+                                      style={{ ...inputStyle, flex: 1, minWidth: "10rem", marginTop: 0 }}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => setLocaleRows((prev) => prev.filter((_, i) => i !== rowIdx))}
+                                      style={dangerBtnStyle}
+                                    >
+                                      移除
+                                    </button>
+                                  </div>
+                                ))}
+                                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                                  <s-button
+                                    type="button"
+                                    variant="secondary"
+                                    onClick={() =>
+                                      setLocaleRows((prev) => [...prev, { locale: "", value: "" }])
+                                    }
+                                  >
+                                    添加语言
+                                  </s-button>
+                                  <s-button type="button" variant="primary" onClick={saveDraftTranslations}>
+                                    保存译法
+                                  </s-button>
+                                </div>
+                              </>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
-                    )}
-                  </div>
                     ))}
                   </div>
                 </>
@@ -891,6 +884,15 @@ export function ShopAnalysisPanel({
 
           {error && <div style={formErrorBoxStyle}>{error}</div>}
       </div>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
+  return (
+    <PageSurface {...(isProfileTarget ? {} : { title: targetTitle(target), subtitle: targetSubtitle(target) })}>
+      {content}
     </PageSurface>
   );
 }

@@ -15,6 +15,7 @@ import {
 type TranslationStyleWorkspaceProps = {
   locationSearch: string;
   sourceLocale: string;
+  onPageChange?: (page: WorkspacePage) => void;
 };
 
 type ProfileListField = "highFrequencyTerms" | "styleNotes";
@@ -144,6 +145,7 @@ function LineItemsEditorOverlay({
 export function TranslationStyleWorkspace({
   locationSearch,
   sourceLocale,
+  onPageChange,
 }: TranslationStyleWorkspaceProps) {
   const shopify = useAppBridge();
 
@@ -208,6 +210,10 @@ export function TranslationStyleWorkspace({
   useEffect(() => {
     syncWorkspacePage(activePage);
   }, [activePage]);
+
+  useEffect(() => {
+    onPageChange?.(activePage);
+  }, [activePage, onPageChange]);
 
   useEffect(() => {
     const nextEmptyProfile = buildEmptyProfile(sourceLocale);
@@ -639,14 +645,11 @@ export function TranslationStyleWorkspace({
         <div style={overlayBackdropStyle}>
           <div style={suggestionOverlayPanelStyle}>
             <div style={overlayHeaderStyle}>
-              {aiSuggestionTarget === "profile" ? <div /> : (
-                <div>
-                  <h4 style={overlayTitleStyle}>术语表 AI 建议</h4>
-                  <div style={overlaySubtitleStyle}>
-                    这里会生成与术语表相关的填充建议；确认生效后会同步回当前页面。
-                  </div>
-                </div>
-              )}
+              <div>
+                <h4 style={overlayTitleStyle}>
+                  {aiSuggestionTarget === "profile" ? "商店档案 AI 建议" : "术语表 AI 建议"}
+                </h4>
+              </div>
               <button
                 type="button"
                 style={overlayCloseButtonStyle}
@@ -662,6 +665,7 @@ export function TranslationStyleWorkspace({
               locationSearch={locationSearch}
               defaultSourceLanguage={sourceLocale}
               target={aiSuggestionTarget}
+              embedded={aiSuggestionTarget === "glossary"}
               onApplied={() => {
                 handleAiSuggestionApplied();
                 if (aiSuggestionTarget === "profile") {

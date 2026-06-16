@@ -355,7 +355,7 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".txt,.md,.pdf,.docx,.csv,.xlsx,.xls,.json"
+                accept=".txt,.md,.csv,.json"
                 style={selectorSearchInputStyle}
                 onChange={(event) => {
                   const file = event.target.files?.[0] ?? null;
@@ -368,7 +368,7 @@ export function ContextToolModal({ context }: { context: WorkspaceContextControl
                 </div>
               ) : null}
               <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
-                支持：PDF、DOCX、TXT、MD、CSV、XLSX、JSON，最大 10 MB。选好后点确认即可上传并附加。
+                支持：TXT、MD、CSV、JSON，最大 10 MB。选好后点确认即可上传并附加。
               </div>
             </div>
             <div style={selectorListCompactStyle}>
