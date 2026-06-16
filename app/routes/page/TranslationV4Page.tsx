@@ -50,6 +50,7 @@ import {
   PageHeaderNav,
   PageSurface,
   pageColorTokens,
+  statusColorTokens,
   pageContentStyle,
   pageInnerPanelStyle,
   twoColumnLayoutStyle,
@@ -614,6 +615,16 @@ export function TranslationV4Page() {
     const hidden = window.localStorage.getItem(setupGuideStorageKey) === "1";
     if (hidden) setSetupGuideVisible(false);
   }, [setupGuideStorageKey]);
+
+  // Auto-hide setup guide when both steps are completed (per-shop, persisted)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (setupGuideState.loading) return;
+    if (!setupGuideVisible) return;
+    if (setupGuideCompletedCount < 2) return;
+    setSetupGuideVisible(false);
+    window.localStorage.setItem(setupGuideStorageKey, "1");
+  }, [setupGuideCompletedCount, setupGuideState.loading, setupGuideVisible, setupGuideStorageKey]);
 
   useEffect(() => {
     setAutomationItems(readTranslationAutomationItems(shopName));
@@ -1300,9 +1311,23 @@ export function TranslationV4Page() {
                 })}
               </div>
               <div style={taskViewHintStyle}>
-                {taskView === "current"
-                  ? `最近 24 小时任务 · 运行中 ${runningCount} · 已完成 ${completedCount} · 需处理 ${attentionCount}`
-                  : `历史任务共 ${historyJobs.length} 条，仅展示批量执行汇总。`}
+                {taskView === "current" ? (
+                  <div style={taskViewBadgesStyle}>
+                    <span style={taskViewBadgeStyle(statusColorTokens.blueActiveBg, statusColorTokens.blueActiveText)}>
+                      运行中 {runningCount}
+                    </span>
+                    <span style={taskViewBadgeStyle(statusColorTokens.successBg, statusColorTokens.successText)}>
+                      已完成 {completedCount}
+                    </span>
+                    {attentionCount > 0 ? (
+                      <span style={taskViewBadgeStyle(statusColorTokens.warningBg, statusColorTokens.warningText)}>
+                        需处理 {attentionCount}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : (
+                  `历史任务共 ${historyJobs.length} 条，仅展示批量执行汇总。`
+                )}
               </div>
             </div>
 
@@ -1714,18 +1739,18 @@ function getJobProgressPercent(status: TranslationV4Status, metrics: ProgressDat
 
 function getProgressTone(status: TranslationV4Status): { background: string; text: string } {
   if (status === "COMPLETED") {
-    return { background: pageColorTokens.brandGreen, text: pageColorTokens.brandGreenDark };
+    return { background: statusColorTokens.successBar, text: statusColorTokens.successText };
   }
   if (status === "FAILED") {
-    return { background: "#d82c0d", text: pageColorTokens.criticalText };
+    return { background: statusColorTokens.failedBar, text: statusColorTokens.failedText };
   }
   if (status === "PAUSED") {
-    return { background: "#b98900", text: "#8a6200" };
+    return { background: statusColorTokens.warningBar, text: statusColorTokens.warningText };
   }
   if (status === "CANCELLED") {
-    return { background: "#9ca3af", text: pageColorTokens.textSecondary };
+    return { background: statusColorTokens.cancelledBar, text: statusColorTokens.cancelledText };
   }
-  return { background: "#c05717", text: "#8a420f" };
+  return { background: statusColorTokens.activeBar, text: statusColorTokens.activeText };
 }
 
 function buildJobActions(
@@ -2182,9 +2207,9 @@ function StageBar({ label, done, total, active, complete, failed = 0, detailLabe
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : (complete ? 100 : 0);
 
   const fillBg = complete
-    ? pageColorTokens.brandGreen
+    ? statusColorTokens.successBar
     : active
-      ? "#c05717"
+      ? statusColorTokens.activeBar
       : pageColorTokens.borderInput;
 
   return (
@@ -2239,9 +2264,9 @@ function StageBar({ label, done, total, active, complete, failed = 0, detailLabe
       >
         {detailLabel ?? (total > 0 ? `${done}/${total}` : "等待")}
         {" "}
-        {complete ? <span style={{ color: pageColorTokens.brandGreenDark, fontWeight: 700 }}>✓</span> : null}
-        {active ? <span style={{ color: "#8a420f", fontWeight: 600 }}> 进行中</span> : null}
-        {failed > 0 ? <span style={{ color: "#b98900", fontWeight: 600 }}> · 失败 {failed}</span> : null}
+        {complete ? <span style={{ color: statusColorTokens.successText, fontWeight: 700 }}>✓</span> : null}
+        {active ? <span style={{ color: statusColorTokens.activeText, fontWeight: 600 }}> 进行中</span> : null}
+        {failed > 0 ? <span style={{ color: statusColorTokens.warningBar, fontWeight: 600 }}> · 失败 {failed}</span> : null}
         {durationLabel ? (
           <span style={{ color: pageColorTokens.textFootnote, fontWeight: 500 }}> · 耗时 {durationLabel}</span>
         ) : null}
@@ -2251,7 +2276,7 @@ function StageBar({ label, done, total, active, complete, failed = 0, detailLabe
 }
 
 function StatusBadge({ status }: { status: TranslationV4Status }) {
-  const config = STATUS_DISPLAY[status] ?? { label: status, color: "#4b5563", bg: "#f3f4f6", border: "#dde1e6" };
+  const config = STATUS_DISPLAY[status] ?? { label: status, color: pageColorTokens.textMuted, bg: pageColorTokens.surfaceMuted, border: pageColorTokens.borderSubtle };
   return (
     <span
       style={{
@@ -2271,21 +2296,21 @@ function StatusBadge({ status }: { status: TranslationV4Status }) {
 }
 
 const STATUS_DISPLAY: Partial<Record<TranslationV4Status, { label: string; color: string; bg: string; border: string }>> = {
-  CREATED: { label: "已创建", color: pageColorTokens.textSecondary, bg: pageColorTokens.surfaceMuted, border: pageColorTokens.borderSubtle },
-  INIT_QUEUED: { label: "等待初始化", color: "#8a420f", bg: "#fff1e8", border: "#f3d1b8" },
-  INITIALIZING: { label: "初始化中", color: "#8a420f", bg: "#fff1e8", border: "#f3d1b8" },
-  INIT_DONE: { label: "初始化完成", color: pageColorTokens.brandGreenDark, bg: pageColorTokens.brandGreenLight, border: "#ccefe4" },
-  TRANSLATE_QUEUED: { label: "等待翻译", color: "#8a420f", bg: "#fff1e8", border: "#f3d1b8" },
-  TRANSLATING: { label: "翻译中", color: "#8a420f", bg: "#fff1e8", border: "#f3d1b8" },
-  TRANSLATE_DONE: { label: "翻译完成", color: pageColorTokens.brandGreenDark, bg: pageColorTokens.brandGreenLight, border: "#ccefe4" },
-  WRITEBACK_QUEUED: { label: "等待回写", color: "#8a420f", bg: "#fff1e8", border: "#f3d1b8" },
-  WRITING_BACK: { label: "回写中", color: "#8a420f", bg: "#fff1e8", border: "#f3d1b8" },
-  VERIFY_QUEUED: { label: "等待验证", color: "#7c5e10", bg: "#fff7e0", border: "#efdca4" },
-  VERIFYING: { label: "验证中", color: "#7c5e10", bg: "#fff7e0", border: "#efdca4" },
-  COMPLETED: { label: "已完成", color: pageColorTokens.brandGreenDark, bg: pageColorTokens.brandGreenLight, border: "#ccefe4" },
-  FAILED: { label: "失败", color: pageColorTokens.criticalText, bg: "#fff0ee", border: "#f3cbc5" },
-  PAUSED: { label: "已暂停", color: "#7c5e10", bg: "#fff7e0", border: "#efdca4" },
-  CANCELLED: { label: "已取消", color: pageColorTokens.textSecondary, bg: pageColorTokens.surfaceMuted, border: pageColorTokens.borderSubtle },
+  CREATED: { label: "已创建", color: statusColorTokens.cancelledText, bg: statusColorTokens.cancelledBg, border: statusColorTokens.cancelledBorder },
+  INIT_QUEUED: { label: "等待初始化", color: statusColorTokens.activeText, bg: statusColorTokens.activeBg, border: statusColorTokens.activeBorder },
+  INITIALIZING: { label: "初始化中", color: statusColorTokens.activeText, bg: statusColorTokens.activeBg, border: statusColorTokens.activeBorder },
+  INIT_DONE: { label: "初始化完成", color: statusColorTokens.successText, bg: statusColorTokens.successBg, border: statusColorTokens.successBorder },
+  TRANSLATE_QUEUED: { label: "等待翻译", color: statusColorTokens.activeText, bg: statusColorTokens.activeBg, border: statusColorTokens.activeBorder },
+  TRANSLATING: { label: "翻译中", color: statusColorTokens.activeText, bg: statusColorTokens.activeBg, border: statusColorTokens.activeBorder },
+  TRANSLATE_DONE: { label: "翻译完成", color: statusColorTokens.successText, bg: statusColorTokens.successBg, border: statusColorTokens.successBorder },
+  WRITEBACK_QUEUED: { label: "等待回写", color: statusColorTokens.activeText, bg: statusColorTokens.activeBg, border: statusColorTokens.activeBorder },
+  WRITING_BACK: { label: "回写中", color: statusColorTokens.activeText, bg: statusColorTokens.activeBg, border: statusColorTokens.activeBorder },
+  VERIFY_QUEUED: { label: "等待验证", color: statusColorTokens.warningText, bg: statusColorTokens.warningBg, border: statusColorTokens.warningBorder },
+  VERIFYING: { label: "验证中", color: statusColorTokens.warningText, bg: statusColorTokens.warningBg, border: statusColorTokens.warningBorder },
+  COMPLETED: { label: "已完成", color: statusColorTokens.successText, bg: statusColorTokens.successBg, border: statusColorTokens.successBorder },
+  FAILED: { label: "失败", color: statusColorTokens.failedText, bg: statusColorTokens.failedBg, border: statusColorTokens.failedBorder },
+  PAUSED: { label: "已暂停", color: statusColorTokens.warningText, bg: statusColorTokens.warningBg, border: statusColorTokens.warningBorder },
+  CANCELLED: { label: "已取消", color: statusColorTokens.cancelledText, bg: statusColorTokens.cancelledBg, border: statusColorTokens.cancelledBorder },
 };
 
 const checkboxLabelStyle: React.CSSProperties = {
@@ -2306,7 +2331,7 @@ function automationPanelStyle(active: boolean): React.CSSProperties {
     padding: "0.9rem 1rem",
     borderRadius: "12px",
     border: `1px solid ${active ? pageColorTokens.brandBlue : pageColorTokens.borderSubtle}`,
-    background: active ? "#f7faff" : pageColorTokens.surfaceSubtle,
+    background: active ? pageColorTokens.brandBlueLight : pageColorTokens.surfaceSubtle,
   };
 }
 
@@ -2426,9 +2451,9 @@ function setupGuideProgressStyle(completed: boolean): React.CSSProperties {
     borderRadius: 999,
     fontSize: "0.75rem",
     fontWeight: 700,
-    color: completed ? pageColorTokens.brandGreenDark : pageColorTokens.textSecondary,
-    background: completed ? pageColorTokens.brandGreenLight : pageColorTokens.surfaceMuted,
-    border: `1px solid ${completed ? "#ccefe4" : pageColorTokens.borderSubtle}`,
+    color: completed ? statusColorTokens.successText : pageColorTokens.textSecondary,
+    background: completed ? statusColorTokens.successBg : pageColorTokens.surfaceMuted,
+    border: `1px solid ${completed ? statusColorTokens.successBorder : pageColorTokens.borderSubtle}`,
     whiteSpace: "nowrap",
   };
 }
@@ -2462,7 +2487,7 @@ function setupGuideStepStyle(completed: boolean): React.CSSProperties {
     gap: 16,
     padding: "0.95rem 1rem",
     borderRadius: 12,
-    border: `1px solid ${completed ? "#ccefe4" : pageColorTokens.borderSubtle}`,
+    border: `1px solid ${completed ? statusColorTokens.successBorder : pageColorTokens.borderSubtle}`,
     background: completed ? "#f8fffc" : pageColorTokens.surfaceSubtle,
     flexWrap: "wrap",
   };
@@ -2488,8 +2513,8 @@ function setupGuideStepIconStyle(completed: boolean): React.CSSProperties {
     fontSize: "0.8125rem",
     fontWeight: 800,
     color: completed ? "#ffffff" : pageColorTokens.textSecondary,
-    background: completed ? "#111827" : pageColorTokens.surface,
-    border: `1px solid ${completed ? "#111827" : pageColorTokens.border}`,
+    background: completed ? pageColorTokens.textPrimary : pageColorTokens.surface,
+    border: `1px solid ${completed ? pageColorTokens.textPrimary : pageColorTokens.border}`,
   };
 }
 
@@ -2554,7 +2579,7 @@ function testEnvPanelStyle(active: boolean): React.CSSProperties {
   return {
     padding: "0.8rem 1rem",
     borderRadius: "10px",
-    border: `2px solid ${active ? "#f59e0b" : pageColorTokens.border}`,
+    border: `2px solid ${active ? statusColorTokens.warningBar : pageColorTokens.border}`,
     background: active
       ? "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)"
       : "linear-gradient(135deg, #f5f6f8 0%, #eef0f6 100%)",
@@ -2569,17 +2594,17 @@ const testModePillStyle: React.CSSProperties = {
   fontSize: "0.7rem",
   fontWeight: 700,
   letterSpacing: "0.02em",
-  color: "#7c5e10",
-  background: "#fff7e0",
-  border: "1px solid #efdca4",
+  color: statusColorTokens.warningText,
+  background: statusColorTokens.warningBg,
+  border: `1px solid ${statusColorTokens.warningBorder}`,
 };
 
 const failErrorStyle: React.CSSProperties = {
   padding: "0.65rem 0.8rem",
   borderRadius: "10px",
-  background: "#fff0ee",
-  border: "1px solid #f3cbc5",
-  color: pageColorTokens.criticalText,
+  background: statusColorTokens.failedBg,
+  border: `1px solid ${statusColorTokens.failedBorder}`,
+  color: statusColorTokens.failedText,
   fontSize: "0.75rem",
   lineHeight: 1.5,
   wordBreak: "break-word",
@@ -2662,6 +2687,30 @@ const taskViewHintStyle: React.CSSProperties = {
   color: pageColorTokens.textSecondary,
 };
 
+const taskViewBadgesStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+function taskViewBadgeStyle(bg: string, color: string): React.CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "0.25rem 0.6rem",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 700,
+    color,
+    background: bg,
+    border: `1px solid ${color}22`,
+    whiteSpace: "nowrap",
+    fontVariantNumeric: "tabular-nums",
+  };
+}
+
 const taskListEmptyStateStyle: React.CSSProperties = {
   ...pageEmptyStateStyle,
   minHeight: 220,
@@ -2729,9 +2778,9 @@ const automationCardBadgeRowStyle: React.CSSProperties = {
 const automationStatusBadgeStyle: React.CSSProperties = {
   padding: "0.2rem 0.55rem",
   borderRadius: 999,
-  border: "1px solid #ccefe4",
-  background: pageColorTokens.brandGreenLight,
-  color: pageColorTokens.brandGreenDark,
+  border: `1px solid ${statusColorTokens.successBorder}`,
+  background: statusColorTokens.successBg,
+  color: statusColorTokens.successText,
   fontSize: "0.72rem",
   fontWeight: 700,
 };
