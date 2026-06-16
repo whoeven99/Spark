@@ -4,6 +4,7 @@ import {
   type DiagnosisItemResult,
   type OperationsDiagnosis,
   type OperationsSummaryMetrics,
+  type ShopifyAdminGraphqlClient,
 } from "./diagnosis.server";
 import {
   dueWindowToDate,
@@ -537,7 +538,11 @@ async function syncTasks(
  */
 export async function ensureDailySnapshot(
   shop: string,
-  options?: { force?: boolean; now?: Date },
+  options?: {
+    force?: boolean;
+    now?: Date;
+    shopifyAdmin?: ShopifyAdminGraphqlClient;
+  },
 ): Promise<DailyOperationsResult> {
   const now = options?.now ?? new Date();
   const dateKey = toDateKey(now);
@@ -551,7 +556,9 @@ export async function ensureDailySnapshot(
     const [tasks, review, diagnosis] = await Promise.all([
       listOperationTasks(shop),
       buildReview(shop, existing.metrics as OperationsSummaryMetrics, now),
-      computeOperationsDiagnosis(shop, now),
+      computeOperationsDiagnosis(shop, now, {
+        shopifyAdmin: options?.shopifyAdmin,
+      }),
     ]);
     const items = existing.items.map(toItemResult);
     const metrics = existing.metrics as OperationsSummaryMetrics;
@@ -571,7 +578,9 @@ export async function ensureDailySnapshot(
     };
   }
 
-  const diagnosis = await computeOperationsDiagnosis(shop, now);
+  const diagnosis = await computeOperationsDiagnosis(shop, now, {
+    shopifyAdmin: options?.shopifyAdmin,
+  });
 
   if (existing) {
     // force 重算：级联删除旧诊断项，任务保留（snapshotId 置空后重新挂接）

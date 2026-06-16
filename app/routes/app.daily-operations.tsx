@@ -61,7 +61,9 @@ type LoaderData =
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   try {
-    const result = await ensureDailySnapshot(session.shop);
+    const result = await ensureDailySnapshot(session.shop, {
+      shopifyAdmin: admin,
+    });
 
     // 渠道与客户价值层（A 步）：失败不影响诊断与待办主流程
     let value: ValueLayerData | null = null;
