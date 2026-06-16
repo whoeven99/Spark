@@ -11,6 +11,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { authenticate } from "../shopify.server";
+import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
 import {
   ensureDailySnapshot,
   updateOperationTaskStatus,
@@ -58,10 +59,21 @@ type LoaderData =
   | { ok: true; result: DailyOperationsResult; value: ValueLayerData | null }
   | { ok: false; error: string };
 
+async function loadDailySnapshotOptions(admin: Awaited<ReturnType<typeof authenticate.admin>>["admin"]) {
+  const shopInfo = await fetchShopBasicInfo(admin);
+  return {
+    shopifyAdmin: admin,
+    timeZone: shopInfo?.ianaTimezone ?? "UTC",
+  };
+}
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   try {
-    const result = await ensureDailySnapshot(session.shop);
+    const result = await ensureDailySnapshot(
+      session.shop,
+      await loadDailySnapshotOptions(admin),
+    );
 
     // 渠道与客户价值层（A 步）：失败不影响诊断与待办主流程
     let value: ValueLayerData | null = null;
@@ -87,13 +99,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = formData.get("intent")?.toString();
 
   try {
     if (intent === "refresh") {
-      await ensureDailySnapshot(session.shop, { force: true });
+      await ensureDailySnapshot(session.shop, {
+        force: true,
+        ...(await loadDailySnapshotOptions(admin)),
+      });
       return Response.json({ ok: true });
     }
     if (intent === "cost-config") {
@@ -1136,24 +1151,49 @@ function buildRiskEnvironmentCards(
       };
     }
     if (environment.key === "new-arrivals") {
+      const hasProductOps = environment.source === "real";
+      const draftCount = Number(environment.metrics.draftProductCount ?? 0);
+      const noImagesCount = Number(environment.metrics.noImagesProductCount ?? 0);
+      const noDescCount = Number(environment.metrics.noDescriptionProductCount ?? 0);
+      const issueCount = draftCount + noImagesCount + noDescCount;
       return {
         key: environment.key,
         title: t(environment.titleKey),
         status: environment.status,
         source: environment.source,
-        primaryMetric: t("dailyOps.riskMetricPending"),
-        secondaryMetric: t("dailyOps.riskMetricNewArrivalPending"),
+        primaryMetric: hasProductOps
+          ? t("dailyOps.riskMetricNewArrivalValue", {
+              draft: draftCount,
+              noImages: noImagesCount,
+              noDesc: noDescCount,
+            })
+          : t("dailyOps.riskMetricPending"),
+        secondaryMetric: hasProductOps
+          ? t("dailyOps.riskMetricNewArrivalIssues", { count: issueCount })
+          : t("dailyOps.riskMetricNewArrivalPending"),
         summary: environment.summary,
       };
     }
     if (environment.key === "payments") {
+      const hasPaymentData = environment.source === "real";
+      const paymentRate = environment.metrics.paymentSuccessRate7d;
       return {
         key: environment.key,
         title: t(environment.titleKey),
         status: environment.status,
         source: environment.source,
-        primaryMetric: t("dailyOps.riskMetricPending"),
-        secondaryMetric: t("dailyOps.riskMetricPaymentPending"),
+        primaryMetric: hasPaymentData
+          ? t("dailyOps.riskMetricPaymentValue", {
+              value: paymentRate ?? "—",
+            })
+          : t("dailyOps.riskMetricPending"),
+        secondaryMetric: hasPaymentData
+          ? t("dailyOps.riskMetricPaymentFailures", {
+              count: environment.metrics.paymentFailureCount7d ?? 0,
+              successful: environment.metrics.paymentSuccessful7d ?? 0,
+              attempts: environment.metrics.paymentAttempts7d ?? 0,
+            })
+          : t("dailyOps.riskMetricPaymentPending"),
         summary: environment.summary,
       };
     }
@@ -1823,10 +1863,7 @@ function DailyOperationsBody({
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
                   <span style={pageAccentBadgeStyle}>
-                    {t("dailyOps.snapshotDateLabel", { date: result.snapshotDate })}
-                  </span>
-                  <span style={taskSecondaryTextStyle}>
-                    {t("dailyOps.generatedAtLabel", {
+                    {t("dailyOps.dataUpdatedAtLabel", {
                       value: new Date(result.generatedAt).toLocaleString(locale),
                     })}
                   </span>
@@ -2820,7 +2857,7 @@ function DailyOperationsDetail({
           subtitle={t("dailyOps.keyMetricsSubtitle", { shop: result.shop })}
           badges={
             <s-badge tone="info">
-              {t("dailyOps.generatedAtLabel", {
+              {t("dailyOps.dataUpdatedAtLabel", {
                 value: new Date(result.generatedAt).toLocaleString(locale),
               })}
             </s-badge>
@@ -2945,7 +2982,7 @@ function DailyOperationsDetail({
             </div>
             <div style={{ ...detailActionRowStyle, marginTop: "0.75rem" }}>
               <span style={taskSecondaryTextStyle}>
-                {t("dailyOps.generatedAtLabel", {
+                {t("dailyOps.dataUpdatedAtLabel", {
                   value: new Date(result.generatedAt).toLocaleString(locale),
                 })}
               </span>

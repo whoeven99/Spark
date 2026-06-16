@@ -158,6 +158,7 @@ export type OperationsSummaryMetrics = {
   paymentSuccessRate7d: number | null;
   paymentFailureCount7d: number;
   /** 商品运营 */
+  hasProductOpsData: boolean;
   draftProductCount: number;
   noImagesProductCount: number;
   noDescriptionProductCount: number;
@@ -238,6 +239,7 @@ function emptyDiagnosis(shop: string, now: Date): OperationsDiagnosis {
       paymentSuccessful7d: 0,
       paymentSuccessRate7d: null,
       paymentFailureCount7d: 0,
+      hasProductOpsData: false,
       draftProductCount: 0,
       noImagesProductCount: 0,
       noDescriptionProductCount: 0,
@@ -1089,6 +1091,7 @@ export async function computeOperationsDiagnosis(
       paymentSuccessful7d,
       paymentSuccessRate7d,
       paymentFailureCount7d,
+      hasProductOpsData: productOpsData !== null,
       draftProductCount: productOpsData?.draftProductCount ?? 0,
       noImagesProductCount: productOpsData?.noImagesProductCount ?? 0,
       noDescriptionProductCount: productOpsData?.noDescriptionProductCount ?? 0,

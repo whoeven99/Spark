@@ -82,9 +82,11 @@ export function DashboardPanel({
 }) {
   const { isMobile } = useResponsiveLayout();
   const snapshotMeta =
-    snapshot.hasData && snapshot.snapshotDate
-      ? `快照 ${snapshot.snapshotDate}${snapshot.generatedAt ? ` · 更新 ${new Date(snapshot.generatedAt).toLocaleString()}` : ""}`
-      : null;
+    snapshot.hasData && snapshot.generatedAt
+      ? `更新于 ${new Date(snapshot.generatedAt).toLocaleString()}`
+      : snapshot.hasData && snapshot.snapshotDate
+        ? `快照 ${snapshot.snapshotDate}`
+        : null;
 
   return (
     <div style={panelStackStyle}>

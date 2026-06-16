@@ -1,10 +1,14 @@
 import prisma from "../../db.server";
 import {
   computeOperationsDiagnosis,
+  PAYMENT_SUCCESS_RISK_PERCENT,
+  PAYMENT_SUCCESS_WATCH_PERCENT,
   type DiagnosisItemResult,
+  type DiagnosisStatus,
   type OperationsDiagnosis,
   type OperationsSummaryMetrics,
 } from "./diagnosis.server";
+import type { ShopifyAdminGraphqlClient } from "./productOperationsQuery.server";
 import {
   dueWindowToDate,
   evaluateDiagnosisRules,
@@ -128,8 +132,16 @@ export type DailyOperationsResult = {
   review: DailyReview | null;
 };
 
-function toDateKey(date: Date): string {
-  return date.toISOString().slice(0, 10);
+const DEFAULT_SNAPSHOT_TIMEZONE = "UTC";
+
+/** 按店铺时区生成 YYYY-MM-DD 快照键（与商户感知的「今日」一致）。 */
+function toDateKey(date: Date, timeZone: string = DEFAULT_SNAPSHOT_TIMEZONE): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
 function toTaskView(task: {
@@ -251,6 +263,64 @@ function buildOverview(
   };
 }
 
+function deriveProductOpsStatus(metrics: OperationsSummaryMetrics): DiagnosisStatus {
+  if (metrics.draftProductCount > 5) return "risk";
+  const totalIssues =
+    metrics.draftProductCount +
+    metrics.noImagesProductCount +
+    metrics.noDescriptionProductCount;
+  if (totalIssues > 0) return "watch";
+  return "healthy";
+}
+
+function buildProductOpsSummary(
+  metrics: OperationsSummaryMetrics,
+  products: DiagnosisItemResult | undefined,
+): string {
+  if (products?.reasoning[0]) return products.reasoning[0];
+  if (!metrics.hasProductOpsData) {
+    return "待接入上新计划、上架结果和信息完整度后，再判断新品是否在首日出现卡点。";
+  }
+  const parts: string[] = [];
+  if (metrics.draftProductCount > 0) {
+    parts.push(`${metrics.draftProductCount} 个商品草稿待上架`);
+  }
+  if (metrics.noImagesProductCount > 0) {
+    parts.push(`${metrics.noImagesProductCount} 个商品缺少图片`);
+  }
+  if (metrics.noDescriptionProductCount > 0) {
+    parts.push(`${metrics.noDescriptionProductCount} 个商品缺少描述`);
+  }
+  if (parts.length === 0) return "商品信息完整度良好，无待处理项";
+  return `${parts.join("；")}，建议优先补齐素材后再观察转化。`;
+}
+
+function derivePaymentStatus(metrics: OperationsSummaryMetrics): DiagnosisStatus {
+  if (metrics.paymentAttempts7d <= 0 || metrics.paymentSuccessRate7d === null) {
+    return "watch";
+  }
+  if (metrics.paymentSuccessRate7d < PAYMENT_SUCCESS_RISK_PERCENT) return "risk";
+  if (metrics.paymentSuccessRate7d < PAYMENT_SUCCESS_WATCH_PERCENT) return "watch";
+  return "healthy";
+}
+
+function buildPaymentSummary(metrics: OperationsSummaryMetrics): string {
+  if (metrics.paymentAttempts7d <= 0) {
+    return "近 7 天暂无足够订单，暂无法评估支付链路。";
+  }
+  const rate = metrics.paymentSuccessRate7d;
+  if (rate !== null && rate < PAYMENT_SUCCESS_RISK_PERCENT) {
+    return `近 7 天支付成功率仅 ${rate}%（${metrics.paymentSuccessful7d}/${metrics.paymentAttempts7d}），支付链路存在显著障碍，优先排查结账流程。`;
+  }
+  if (rate !== null && rate < PAYMENT_SUCCESS_WATCH_PERCENT) {
+    return `近 7 天支付成功率 ${rate}%，略低于预期，需关注支付流程与失败订单。`;
+  }
+  if (metrics.paymentFailureCount7d > 0) {
+    return `近 7 天支付成功率 ${rate ?? "—"}%，仍有 ${metrics.paymentFailureCount7d} 笔未成功支付需跟进。`;
+  }
+  return `近 7 天支付成功率 ${rate ?? "—"}%，支付链路运行正常。`;
+}
+
 function buildEnvironments(
   metrics: OperationsSummaryMetrics,
   items: DiagnosisItemResult[],
@@ -264,6 +334,8 @@ function buildEnvironments(
   const conversion = findItem("conversion_health");
   const traffic = findItem("traffic_anomaly");
   const products = findItem("product_operations");
+  const hasProductOps = Boolean(products) || metrics.hasProductOpsData;
+  const hasPaymentData = metrics.paymentAttempts7d > 0;
 
   const fulfillmentStatus: DiagnosisItemResult["status"] =
     fulfillment?.status === "risk" || logistics?.status === "risk"
@@ -276,12 +348,10 @@ function buildEnvironments(
     {
       key: "new-arrivals",
       titleKey: "dailyOps.riskEnvNewArrivals",
-      status: products?.status ?? "watch",
-      source: products ? "real" : "pending",
-      summary:
-        products?.reasoning[0] ??
-        "待接入上新计划、上架结果和信息完整度后，再判断新品是否在首日出现卡点。",
-      metrics: products
+      status: products?.status ?? deriveProductOpsStatus(metrics),
+      source: hasProductOps ? "real" : "pending",
+      summary: buildProductOpsSummary(metrics, products),
+      metrics: hasProductOps
         ? {
             draftProductCount: metrics.draftProductCount,
             noImagesProductCount: metrics.noImagesProductCount,
@@ -319,10 +389,19 @@ function buildEnvironments(
     {
       key: "payments",
       titleKey: "dailyOps.riskEnvPayments",
-      status: "watch",
-      source: "pending",
-      summary: "待接入支付失败率、支付页跳失率和支付方式异常后，再把支付链路纳入日常监控。",
-      metrics: {},
+      status: derivePaymentStatus(metrics),
+      source: hasPaymentData ? "real" : "pending",
+      summary: hasPaymentData
+        ? buildPaymentSummary(metrics)
+        : "近 7 天暂无足够订单，暂无法评估支付链路。",
+      metrics: hasPaymentData
+        ? {
+            paymentSuccessRate7d: metrics.paymentSuccessRate7d,
+            paymentAttempts7d: metrics.paymentAttempts7d,
+            paymentSuccessful7d: metrics.paymentSuccessful7d,
+            paymentFailureCount7d: metrics.paymentFailureCount7d,
+          }
+        : {},
     },
     {
       key: "risk-control",
@@ -409,9 +488,11 @@ async function buildReview(
   shop: string,
   todayMetrics: OperationsSummaryMetrics,
   now: Date,
+  timeZone: string = DEFAULT_SNAPSHOT_TIMEZONE,
 ): Promise<DailyReview | null> {
+  const todayKey = toDateKey(now, timeZone);
   const previous = await prisma.operationDiagnosisSnapshot.findFirst({
-    where: { shop, snapshotDate: { lt: toDateKey(now) }, hasData: true },
+    where: { shop, snapshotDate: { lt: todayKey }, hasData: true },
     orderBy: { snapshotDate: "desc" },
   });
   if (!previous) return null;
@@ -537,10 +618,16 @@ async function syncTasks(
  */
 export async function ensureDailySnapshot(
   shop: string,
-  options?: { force?: boolean; now?: Date },
+  options?: {
+    force?: boolean;
+    now?: Date;
+    shopifyAdmin?: ShopifyAdminGraphqlClient;
+    timeZone?: string;
+  },
 ): Promise<DailyOperationsResult> {
   const now = options?.now ?? new Date();
-  const dateKey = toDateKey(now);
+  const timeZone = options?.timeZone ?? DEFAULT_SNAPSHOT_TIMEZONE;
+  const dateKey = toDateKey(now, timeZone);
 
   const existing = await prisma.operationDiagnosisSnapshot.findUnique({
     where: { shop_snapshotDate: { shop, snapshotDate: dateKey } },
@@ -550,8 +637,10 @@ export async function ensureDailySnapshot(
   if (existing && !options?.force) {
     const [tasks, review, diagnosis] = await Promise.all([
       listOperationTasks(shop),
-      buildReview(shop, existing.metrics as OperationsSummaryMetrics, now),
-      computeOperationsDiagnosis(shop, now),
+      buildReview(shop, existing.metrics as OperationsSummaryMetrics, now, timeZone),
+      computeOperationsDiagnosis(shop, now, {
+        shopifyAdmin: options?.shopifyAdmin,
+      }),
     ]);
     const items = existing.items.map(toItemResult);
     const metrics = existing.metrics as OperationsSummaryMetrics;
@@ -571,7 +660,9 @@ export async function ensureDailySnapshot(
     };
   }
 
-  const diagnosis = await computeOperationsDiagnosis(shop, now);
+  const diagnosis = await computeOperationsDiagnosis(shop, now, {
+    shopifyAdmin: options?.shopifyAdmin,
+  });
 
   if (existing) {
     // force 重算：级联删除旧诊断项，任务保留（snapshotId 置空后重新挂接）
@@ -604,7 +695,7 @@ export async function ensureDailySnapshot(
 
   const [tasks, review] = await Promise.all([
     listOperationTasks(shop),
-    buildReview(shop, diagnosis.summaryMetrics, now),
+    buildReview(shop, diagnosis.summaryMetrics, now, timeZone),
   ]);
 
   return {
