@@ -5,6 +5,11 @@ import prisma from "../../db.server";
 // with Meta/Google Ads OAuth records that are stored elsewhere.
 const META_CATALOG_PLATFORM = "meta_catalog";
 const GOOGLE_MERCHANT_PLATFORM = "google_merchant";
+const GOOGLE_ADS_PLATFORM = "google";
+// Transient records holding freshly-exchanged OAuth tokens while the merchant
+// picks which account to connect (multi-account selection flow).
+const GMC_PENDING_PLATFORM = "google_merchant_pending";
+const ADS_PENDING_PLATFORM = "google_ads_pending";
 
 export type FacebookCatalogCredential = {
   accessToken: string;
@@ -137,6 +142,122 @@ export async function setGoogleMerchantCredential(
     merchantId,
   });
 }
+
+// ─── Google Ads (OAuth) ─────────────────────────────────────────────────────
+// Stored on the shared `google` platform record. The OAuth flow writes tokens +
+// the selected customerId; clientId/clientSecret/developerToken are app-level
+// (read from env at request time), so they are not persisted per shop here.
+
+export type GoogleAdsCredential = {
+  accessToken: string;
+  refreshToken?: string;
+  customerId: string;
+  updatedAt: string;
+};
+
+export async function getGoogleAdsCredential(
+  shop: string,
+): Promise<GoogleAdsCredential | null> {
+  const record = await readPlatformCredential(shop, GOOGLE_ADS_PLATFORM);
+  if (!record) return null;
+  const accessToken = String(record.data.accessToken ?? "");
+  const customerId = String(record.data.customerId ?? "");
+  if (!accessToken || !customerId) return null;
+  return {
+    accessToken,
+    refreshToken:
+      typeof record.data.refreshToken === "string" ? record.data.refreshToken : undefined,
+    customerId,
+    updatedAt: record.updatedAt.toISOString(),
+  };
+}
+
+export async function setGoogleAdsCredential(
+  shop: string,
+  payload: Pick<GoogleAdsCredential, "accessToken" | "refreshToken" | "customerId">,
+): Promise<void> {
+  const accessToken = payload.accessToken.trim();
+  const customerId = payload.customerId.trim();
+  if (!accessToken || !customerId) {
+    throw new Error("Google Ads accessToken and customerId are required");
+  }
+  // Merge with any existing manual config fields so we don't drop them.
+  const existing = await readPlatformCredential(shop, GOOGLE_ADS_PLATFORM);
+  await writePlatformCredential(shop, GOOGLE_ADS_PLATFORM, {
+    ...(existing?.data ?? {}),
+    accessToken,
+    refreshToken: payload.refreshToken?.trim() || existing?.data.refreshToken || null,
+    customerId,
+  });
+}
+
+// ─── Pending OAuth selection (multi-account) ─────────────────────────────────
+
+export type PendingOAuthTokens = {
+  accessToken: string;
+  refreshToken?: string;
+  clientId?: string;
+  clientSecret?: string;
+  accounts: Array<{ id: string; name?: string; formatted?: string }>;
+};
+
+async function setPending(
+  shop: string,
+  platform: string,
+  payload: PendingOAuthTokens,
+): Promise<void> {
+  await writePlatformCredential(shop, platform, {
+    accessToken: payload.accessToken,
+    refreshToken: payload.refreshToken ?? null,
+    clientId: payload.clientId ?? null,
+    clientSecret: payload.clientSecret ?? null,
+    accounts: payload.accounts,
+  });
+}
+
+async function getPending(
+  shop: string,
+  platform: string,
+): Promise<PendingOAuthTokens | null> {
+  const record = await readPlatformCredential(shop, platform);
+  if (!record) return null;
+  const accessToken = String(record.data.accessToken ?? "");
+  if (!accessToken) return null;
+  return {
+    accessToken,
+    refreshToken:
+      typeof record.data.refreshToken === "string" ? record.data.refreshToken : undefined,
+    clientId: typeof record.data.clientId === "string" ? record.data.clientId : undefined,
+    clientSecret:
+      typeof record.data.clientSecret === "string" ? record.data.clientSecret : undefined,
+    accounts: Array.isArray(record.data.accounts)
+      ? (record.data.accounts as PendingOAuthTokens["accounts"])
+      : [],
+  };
+}
+
+async function clearPending(shop: string, platform: string): Promise<void> {
+  await prisma.adPlatformCredential
+    .delete({ where: { shop_platform: { shop, platform } } })
+    .catch(() => undefined);
+}
+
+export const setGoogleMerchantPending = (shop: string, payload: PendingOAuthTokens) =>
+  setPending(shop, GMC_PENDING_PLATFORM, payload);
+export const getGoogleMerchantPending = (shop: string) =>
+  getPending(shop, GMC_PENDING_PLATFORM);
+export const clearGoogleMerchantPending = (shop: string) =>
+  clearPending(shop, GMC_PENDING_PLATFORM);
+
+export const setGoogleAdsPending = (shop: string, payload: PendingOAuthTokens) =>
+  setPending(shop, ADS_PENDING_PLATFORM, payload);
+export const getGoogleAdsPending = (shop: string) => getPending(shop, ADS_PENDING_PLATFORM);
+export const clearGoogleAdsPending = (shop: string) => clearPending(shop, ADS_PENDING_PLATFORM);
+
+export const deleteGoogleMerchantCredential = (shop: string) =>
+  clearPending(shop, GOOGLE_MERCHANT_PLATFORM);
+export const deleteGoogleAdsCredential = (shop: string) =>
+  clearPending(shop, GOOGLE_ADS_PLATFORM);
 
 export function maskTokenTail(value: string | null | undefined): string {
   if (!value) return "";

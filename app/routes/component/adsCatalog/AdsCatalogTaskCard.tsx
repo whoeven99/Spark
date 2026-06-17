@@ -18,6 +18,7 @@ type Props = {
   locationSearch: string;
   onDelete: () => void;
   onOpenDetail: () => void;
+  onOpenReview?: () => void;
   onTaskUpdated?: (
     taskId: string,
     status: AITaskStatus,
@@ -83,6 +84,7 @@ export function AdsCatalogTaskCard({
   locationSearch,
   onDelete,
   onOpenDetail,
+  onOpenReview,
   onTaskUpdated,
   deleting,
 }: Props) {
@@ -146,16 +148,48 @@ export function AdsCatalogTaskCard({
         },
       ];
     }
-    return [
+    const base: CardAction[] = [
       { label: t("common.viewDetail"), tone: "primary", onClick: onOpenDetail },
-      {
-        label: deleting ? t("common.deleting") : t("common.delete"),
-        tone: "subtle",
-        onClick: onDelete,
-        disabled: deleting,
-      },
     ];
-  }, [deleting, effectiveStatus, onDelete, onOpenDetail, t]);
+    if (result?.gmcReview && onOpenReview) {
+      base.push({
+        label: t("adsCatalog.reviewViewDetail"),
+        tone: "secondary",
+        onClick: onOpenReview,
+      });
+    }
+    base.push({
+      label: deleting ? t("common.deleting") : t("common.delete"),
+      tone: "subtle",
+      onClick: onDelete,
+      disabled: deleting,
+    });
+    return base;
+  }, [deleting, effectiveStatus, onDelete, onOpenDetail, onOpenReview, result, t]);
+
+  const reviewBadge = useMemo(() => {
+    const review = result?.gmcReview;
+    if (!review) return null;
+    if (review.disapproved > 0) {
+      return (
+        <span style={{ color: "#c0392b", fontSize: 12, fontWeight: 600 }}>
+          {t("adsCatalog.reviewBadge", { count: review.disapproved })}
+        </span>
+      );
+    }
+    if (review.pending > 0) {
+      return (
+        <span style={{ color: "#a36a00", fontSize: 12 }}>
+          {t("adsCatalog.reviewPendingBadge", { count: review.pending })}
+        </span>
+      );
+    }
+    return (
+      <span style={{ color: "#0f7a52", fontSize: 12 }}>
+        {t("adsCatalog.reviewApprovedBadge", { count: review.approved })}
+      </span>
+    );
+  }, [result, t]);
 
   return (
     <AITaskCardShell
@@ -176,6 +210,7 @@ export function AdsCatalogTaskCard({
           {new Intl.DateTimeFormat(i18n.language).format(new Date(task.createdAt))}
         </span>
       }
+      extraBadges={reviewBadge}
       primaryCopy={primaryCopy}
       secondaryCopy={secondaryCopy}
       progressPercent={getProgressPercent(task, effectiveStatus)}

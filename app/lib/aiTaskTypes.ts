@@ -143,12 +143,31 @@ export interface AdsCatalogSyncTaskConfig {
   totalProducts: number;
 }
 
+export interface AdsCatalogGmcReviewSummary {
+  checked: number;
+  approved: number;
+  disapproved: number;
+  pending: number;
+  accountSuspended: boolean;
+  checkedAt: string;
+  products: Array<{
+    offerId: string;
+    title: string | null;
+    status: string;
+    issues: Array<{ code: string; servability: string; description: string }>;
+  }>;
+}
+
 export interface AdsCatalogSyncTaskResult {
   platform: AdsCatalogPlatform;
   totalProcessed: number;
   succeeded: number;
   failed: number;
+  /** 校验阶段被跳过的硬错误商品数（仅 Google）。 */
+  skippedByValidation?: number;
   errors: Array<{ productId: string; reason: string }>;
+  /** 同步后即时拉取的 GMC 审核状态摘要（仅 Google）。 */
+  gmcReview?: AdsCatalogGmcReviewSummary;
 }
 
 export type AITaskCreateResponse =

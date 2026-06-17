@@ -60,6 +60,24 @@ model AdPlatformCredential {
   @@unique([shop, platform])
 }
 
+/// GMC 商品审核状态缓存（同步后即时查 / 30 分钟延迟查 / 每日 cron 写入）。
+model GmcProductStatus {
+  id               String   @id @default(cuid())
+  shop             String
+  merchantId       String
+  offerId          String
+  shopifyProductId String?
+  title            String?
+  status           String
+  issues           Json?
+  checkedAt        DateTime
+  updatedAt        DateTime @updatedAt
+
+  @@unique([shop, offerId])
+  @@index([shop, status])
+  @@index([shop, merchantId])
+}
+
 /// 店铺账户（token 分池 + 用量）。
 model Account {
   id                 String   @id @default(cuid())

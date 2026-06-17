@@ -9,39 +9,27 @@ import {
   pageContentStyle,
   pageFieldLabelStyle,
   pageHintTextStyle,
-  pageSelectStyle,
 } from "./pageUiStyles";
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import { AdsCatalogTaskCard } from "../component/adsCatalog/AdsCatalogTaskCard";
 import { AdsCatalogTaskDetailPage } from "../component/adsCatalog/AdsCatalogTaskDetailPage";
+import { GoogleConnectPanels } from "../component/adsCatalog/GoogleConnectPanels";
+import {
+  GoogleFeedFilters,
+  parseList,
+  type GoogleFiltersValue,
+} from "../component/adsCatalog/GoogleFeedFilters";
+import { GmcValidationReport } from "../component/adsCatalog/GmcValidationReport";
+import { GmcReviewDetailModal } from "../component/adsCatalog/GmcReviewDetailModal";
+import type {
+  CredentialsView,
+  FeedValidationReportView,
+  GmcReviewProductView,
+} from "../component/adsCatalog/types";
 import type { AITaskItem, AITaskStatus } from "../../lib/aiTaskTypes";
 
 type Tab = "sync" | "credentials" | "tasks";
 type Platform = "facebook" | "google";
-
-interface CredentialsView {
-  facebook: {
-    configured: boolean;
-    updatedAt: string | null;
-    fields: {
-      accessTokenMasked: string;
-      catalogId: string;
-      businessId: string;
-      apiVersion: string;
-    };
-  };
-  google: {
-    configured: boolean;
-    updatedAt: string | null;
-    fields: {
-      accessTokenMasked: string;
-      refreshTokenMasked: string;
-      clientIdMasked: string;
-      clientSecretMasked: string;
-      merchantId: string;
-    };
-  };
-}
 
 const sectionStyle = {
   border: `1px solid ${pageColorTokens.border}`,
@@ -85,23 +73,43 @@ const buttonSecondary = {
   cursor: "pointer",
 };
 
+const DEFAULT_FILTERS: GoogleFiltersValue = {
+  tags: "",
+  productTypes: "",
+  vendors: "",
+  inStockOnly: false,
+  contentLanguage: "en",
+  targetCountry: "US",
+  googleProductCategory: "",
+};
+
+interface GoogleStatusData {
+  ok?: boolean;
+  accountSuspended?: boolean;
+  products?: GmcReviewProductView[];
+  lastCheckedAt?: string | null;
+  adsLink?: { bound: boolean; customerId: string | null; linked: boolean | null };
+}
+
 export function AdsCatalogPage() {
   const { t, i18n } = useTranslation();
   const location = useLocation();
   const loaderData = useLoaderData<typeof loader>();
   const revalidator = useRevalidator();
+  const credentials = loaderData.credentials as unknown as CredentialsView;
 
   const [tab, setTab] = useState<Tab>("sync");
-  const [platform, setPlatform] = useState<Platform>("facebook");
+  const [platform, setPlatform] = useState<Platform>("google");
   const [productIdsRaw, setProductIdsRaw] = useState("");
-  const [contentLanguage, setContentLanguage] = useState("en");
-  const [targetCountry, setTargetCountry] = useState("US");
+  const [filters, setFilters] = useState<GoogleFiltersValue>(DEFAULT_FILTERS);
   const [tasks, setTasks] = useState<AITaskItem[]>(loaderData.initialTaskPage.tasks);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [previewItems, setPreviewItems] = useState<unknown[] | null>(null);
-  const [credentials, setCredentials] = useState<CredentialsView>(loaderData.credentials);
+  const [fbPreview, setFbPreview] = useState<unknown[] | null>(null);
+  const [googleReport, setGoogleReport] = useState<FeedValidationReportView | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [authBanner, setAuthBanner] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
 
   const syncFetcher = useFetcher<{
     success?: boolean;
@@ -112,30 +120,81 @@ export function AdsCatalogPage() {
   const previewFetcher = useFetcher<{
     ok?: boolean;
     error?: string;
+    platform?: Platform;
     preview?: unknown[];
+    report?: FeedValidationReportView;
     total?: number;
   }>();
-  const [credSavingPlatform, setCredSavingPlatform] = useState<Platform | null>(null);
-  const [credSaveError, setCredSaveError] = useState<string | null>(null);
-  const [credSaveOk, setCredSaveOk] = useState(false);
+  const statusFetcher = useFetcher<GoogleStatusData>();
+  const [refreshingStatus, setRefreshingStatus] = useState(false);
 
-  // Drain sync result → refresh tasks
+  const productIds = useMemo(
+    () =>
+      productIdsRaw
+        .split(/[,\n\s]+/)
+        .map((s) => s.trim())
+        .filter(Boolean),
+    [productIdsRaw],
+  );
+
+  const googleStatus = statusFetcher.data;
+  const accountSuspended = Boolean(googleStatus?.accountSuspended);
+  const adsLink = googleStatus?.adsLink ?? null;
+  const reviewProducts = googleStatus?.products ?? [];
+  const disapprovedCount = reviewProducts.filter((p) => p.status === "disapproved").length;
+
+  // Load GMC status (suspension banner, ads link, review list) on mount.
+  useEffect(() => {
+    statusFetcher.load(`/api/ads-catalog/google-status${location.search}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Surface OAuth callback outcome and route to the right tab.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const gmc = params.get("gmcAuth");
+    const ads = params.get("adsAuth");
+    const reason = params.get("reason");
+    if (gmc === "select" || ads === "select") {
+      setTab("credentials");
+      revalidator.revalidate();
+    } else if (gmc === "success" || ads === "success") {
+      setAuthBanner({ tone: "ok", text: t("adsCatalog.authSuccess") });
+      setTab("credentials");
+      revalidator.revalidate();
+    } else if (gmc === "error" || ads === "error") {
+      setAuthBanner({ tone: "error", text: reason || t("adsCatalog.authError") });
+      setTab("credentials");
+    } else if (gmc === "cancelled" || ads === "cancelled") {
+      setAuthBanner({ tone: "error", text: t("adsCatalog.authCancelled") });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
   useEffect(() => {
     if (syncFetcher.state === "idle" && syncFetcher.data?.success) {
       setTab("tasks");
       revalidator.revalidate();
+      statusFetcher.load(`/api/ads-catalog/google-status${location.search}`);
     }
-  }, [revalidator, syncFetcher.data, syncFetcher.state]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncFetcher.data, syncFetcher.state]);
 
-  // Drain preview
   useEffect(() => {
     if (previewFetcher.state === "idle" && previewFetcher.data) {
       if (previewFetcher.data.ok) {
         setPreviewError(null);
-        setPreviewItems(previewFetcher.data.preview ?? []);
+        if (previewFetcher.data.platform === "google") {
+          setGoogleReport(previewFetcher.data.report ?? null);
+          setFbPreview(null);
+        } else {
+          setFbPreview(previewFetcher.data.preview ?? []);
+          setGoogleReport(null);
+        }
       } else {
         setPreviewError(previewFetcher.data.error ?? "Preview failed");
-        setPreviewItems(null);
+        setGoogleReport(null);
+        setFbPreview(null);
       }
     }
   }, [previewFetcher.data, previewFetcher.state]);
@@ -149,39 +208,33 @@ export function AdsCatalogPage() {
     [selectedTaskId, tasks],
   );
 
-  const productIds = useMemo(
-    () =>
-      productIdsRaw
-        .split(/[,\n\s]+/)
-        .map((s) => s.trim())
-        .filter(Boolean),
-    [productIdsRaw],
-  );
-
   const credentialReady =
-    platform === "facebook" ? credentials.facebook.configured : credentials.google.configured;
+    platform === "facebook"
+      ? credentials.facebook.configured
+      : credentials.googleMerchant.connected;
 
-  function handleSync() {
+  function buildSyncBody(): Record<string, unknown> {
     const body: Record<string, unknown> = { platform };
     if (productIds.length > 0) body.productIds = productIds;
     if (platform === "google") {
-      body.contentLanguage = contentLanguage;
-      body.targetCountry = targetCountry;
+      body.contentLanguage = filters.contentLanguage;
+      body.targetCountry = filters.targetCountry;
+      if (filters.googleProductCategory.trim()) {
+        body.googleProductCategory = filters.googleProductCategory.trim();
+      }
+      body.filters = {
+        tags: parseList(filters.tags),
+        productTypes: parseList(filters.productTypes),
+        vendors: parseList(filters.vendors),
+        inStockOnly: filters.inStockOnly,
+      };
     }
-    syncFetcher.submit(body, {
-      method: "POST",
-      encType: "application/json",
-      action: `/api/ads-catalog/sync${location.search}`,
-    });
+    return body;
   }
 
   function handlePreview() {
-    const body: Record<string, unknown> = { platform, limit: 5 };
-    if (productIds.length > 0) body.productIds = productIds.slice(0, 20);
-    if (platform === "google") {
-      body.contentLanguage = contentLanguage;
-      body.targetCountry = targetCountry;
-    }
+    const body = buildSyncBody();
+    body.limit = 5;
     setPreviewError(null);
     previewFetcher.submit(body, {
       method: "POST",
@@ -190,12 +243,36 @@ export function AdsCatalogPage() {
     });
   }
 
+  function handleSync() {
+    if (platform === "google" && googleReport) {
+      if (googleReport.hasErrors > 0) {
+        const proceed = window.confirm(
+          t("adsCatalog.confirmErrors", {
+            errors: googleReport.hasErrors,
+            ok: googleReport.totalProducts - googleReport.hasErrors,
+          }),
+        );
+        if (!proceed) return;
+      } else if (googleReport.hasWarnings > 0) {
+        const proceed = window.confirm(
+          t("adsCatalog.confirmWarnings", { warnings: googleReport.hasWarnings }),
+        );
+        if (!proceed) return;
+      }
+    }
+    syncFetcher.submit(buildSyncBody(), {
+      method: "POST",
+      encType: "application/json",
+      action: `/api/ads-catalog/sync${location.search}`,
+    });
+  }
+
   function handleTaskUpdated(taskId: string, status: AITaskStatus, result?: Record<string, unknown>) {
     setTasks((prev) =>
-      prev.map((t) =>
-        t.id === taskId
-          ? { ...t, status, result: (result as AITaskItem["result"]) ?? t.result }
-          : t,
+      prev.map((tk) =>
+        tk.id === taskId
+          ? { ...tk, status, result: (result as AITaskItem["result"]) ?? tk.result }
+          : tk,
       ),
     );
   }
@@ -218,45 +295,59 @@ export function AdsCatalogPage() {
     }
   }
 
-  async function handleCredentialSubmit(payload: Record<string, unknown>) {
-    const platform = payload.platform as Platform | undefined;
-    setCredSavingPlatform(platform ?? null);
-    setCredSaveError(null);
-    setCredSaveOk(false);
+  async function handleRefreshStatus() {
+    setRefreshingStatus(true);
     try {
-      const response = await fetch(`/api/ads-catalog/credentials${location.search}`, {
+      await fetch(`/api/ads-catalog/google-status${location.search}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(payload),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
       });
-      const data = (await response.json().catch(() => ({}))) as {
-        ok?: boolean;
-        error?: string;
-        facebook?: CredentialsView["facebook"];
-        google?: CredentialsView["google"];
-      };
-      if (!response.ok || !data.ok) {
-        setCredSaveError(data.error ?? t("adsCatalog.credSaveFailed"));
-        return;
-      }
-      if (data.facebook && data.google) {
-        setCredentials({ facebook: data.facebook, google: data.google });
-      }
-      setCredSaveOk(true);
-    } catch (e) {
-      setCredSaveError(e instanceof Error ? e.message : String(e));
+      statusFetcher.load(`/api/ads-catalog/google-status${location.search}`);
     } finally {
-      setCredSavingPlatform(null);
+      setRefreshingStatus(false);
     }
   }
 
   return (
-    <PageSurface
-      title={t("adsCatalog.pageTitle")}
-      subtitle={t("adsCatalog.pageSubtitle")}
-    >
+    <PageSurface title={t("adsCatalog.pageTitle")} subtitle={t("adsCatalog.pageSubtitle")}>
       <PageHeaderNav />
       <div style={pageContentStyle}>
+        {accountSuspended && (
+          <div
+            style={{
+              background: "#fdecec",
+              color: "#c0392b",
+              padding: "12px 16px",
+              borderRadius: pageColorTokens.radiusControl,
+              fontSize: 13,
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              alignItems: "center",
+            }}
+          >
+            {t("adsCatalog.accountSuspendedBanner")}
+            <a href="https://merchants.google.com/" target="_blank" rel="noreferrer" style={{ color: "#c0392b", fontWeight: 700 }}>
+              {t("adsCatalog.goToGmc")}
+            </a>
+          </div>
+        )}
+
+        {authBanner && (
+          <div
+            style={{
+              background: authBanner.tone === "ok" ? pageColorTokens.brandGreenLight : "#fdecec",
+              color: authBanner.tone === "ok" ? pageColorTokens.brandGreenDeep : "#c0392b",
+              padding: "10px 14px",
+              borderRadius: pageColorTokens.radiusControl,
+              fontSize: 13,
+            }}
+          >
+            {authBanner.text}
+          </div>
+        )}
+
         <SegmentedPageTabs
           activeTab={tab}
           onTabChange={setTab}
@@ -280,27 +371,25 @@ export function AdsCatalogPage() {
               <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
                 <button
                   type="button"
-                  onClick={() => setPlatform("facebook")}
-                  style={platform === "facebook" ? buttonPrimary : buttonSecondary}
-                >
-                  {t("adsCatalog.platformFacebook")}
-                </button>
-                <button
-                  type="button"
                   onClick={() => setPlatform("google")}
                   style={platform === "google" ? buttonPrimary : buttonSecondary}
                 >
                   {t("adsCatalog.platformGoogle")}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setPlatform("facebook")}
+                  style={platform === "facebook" ? buttonPrimary : buttonSecondary}
+                >
+                  {t("adsCatalog.platformFacebook")}
+                </button>
               </div>
             </div>
 
             <div>
-              <label style={pageFieldLabelStyle}>
-                {t("adsCatalog.fieldProductIds")}
-              </label>
+              <label style={pageFieldLabelStyle}>{t("adsCatalog.fieldProductIds")}</label>
               <textarea
-                rows={3}
+                rows={2}
                 value={productIdsRaw}
                 onChange={(e) => setProductIdsRaw(e.target.value)}
                 placeholder={t("adsCatalog.fieldProductIdsPlaceholder")}
@@ -310,40 +399,7 @@ export function AdsCatalogPage() {
             </div>
 
             {platform === "google" && (
-              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
-                <div>
-                  <label style={pageFieldLabelStyle}>
-                    {t("adsCatalog.fieldContentLanguage")}
-                  </label>
-                  <select
-                    value={contentLanguage}
-                    onChange={(e) => setContentLanguage(e.target.value)}
-                    style={{ ...pageSelectStyle, marginTop: 6 }}
-                  >
-                    {["en", "zh-CN", "es", "fr", "de", "ja", "pt-BR"].map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label style={pageFieldLabelStyle}>
-                    {t("adsCatalog.fieldTargetCountry")}
-                  </label>
-                  <select
-                    value={targetCountry}
-                    onChange={(e) => setTargetCountry(e.target.value)}
-                    style={{ ...pageSelectStyle, marginTop: 6 }}
-                  >
-                    {["US", "GB", "CA", "AU", "DE", "FR", "JP", "BR"].map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              <GoogleFeedFilters value={filters} onChange={setFilters} />
             )}
 
             {!credentialReady && (
@@ -388,65 +444,59 @@ export function AdsCatalogPage() {
             </div>
 
             {previewError && (
-              <div
-                style={{
-                  background: pageColorTokens.criticalBg,
-                  color: pageColorTokens.criticalText,
-                  padding: 10,
-                  borderRadius: pageColorTokens.radiusControl,
-                  fontSize: 13,
-                }}
-              >
-                {previewError}
-              </div>
+              <div style={errorBoxStyle}>{previewError}</div>
             )}
-            {previewItems && previewItems.length > 0 && (
-              <pre
-                style={{
-                  background: pageColorTokens.surfaceMuted,
-                  border: `1px solid ${pageColorTokens.border}`,
-                  borderRadius: pageColorTokens.radiusControl,
-                  padding: 12,
-                  fontSize: 12,
-                  maxHeight: 320,
-                  overflow: "auto",
-                }}
-              >
-                {JSON.stringify(previewItems, null, 2)}
-              </pre>
+            {googleReport && <GmcValidationReport report={googleReport} />}
+            {fbPreview && fbPreview.length > 0 && (
+              <pre style={previewPreStyle}>{JSON.stringify(fbPreview, null, 2)}</pre>
             )}
             {syncFetcher.data?.errorMsg && (
-              <div
-                style={{
-                  background: pageColorTokens.criticalBg,
-                  color: pageColorTokens.criticalText,
-                  padding: 10,
-                  borderRadius: pageColorTokens.radiusControl,
-                  fontSize: 13,
-                }}
-              >
-                {syncFetcher.data.errorMsg}
-              </div>
+              <div style={errorBoxStyle}>{syncFetcher.data.errorMsg}</div>
             )}
           </div>
         )}
 
         {tab === "credentials" && (
-          <CredentialsTab
-            credentials={credentials}
-            onSubmit={(payload) => {
-              void handleCredentialSubmit(payload);
-            }}
-            savingPlatform={credSavingPlatform}
-            saveError={credSaveError}
-            saveOk={credSaveOk}
-            t={t}
-            languageCode={i18n.language}
-          />
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <GoogleConnectPanels
+              credentials={credentials}
+              adsLink={adsLink}
+              locationSearch={location.search}
+              languageCode={i18n.language}
+              onChanged={() => {
+                revalidator.revalidate();
+                statusFetcher.load(`/api/ads-catalog/google-status${location.search}`);
+              }}
+            />
+            <FacebookCredentialPanel
+              credentials={credentials}
+              locationSearch={location.search}
+              languageCode={i18n.language}
+              onSaved={() => revalidator.revalidate()}
+            />
+          </div>
         )}
 
         {tab === "tasks" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {disapprovedCount > 0 && (
+              <div
+                style={{
+                  ...sectionStyle,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}
+              >
+                <span style={{ color: "#c0392b", fontWeight: 600, fontSize: 13 }}>
+                  {t("adsCatalog.reviewBadge", { count: disapprovedCount })}
+                </span>
+                <button type="button" style={buttonSecondary} onClick={() => setReviewOpen(true)}>
+                  {t("common.viewDetail")}
+                </button>
+              </div>
+            )}
             {selectedTask ? (
               <AdsCatalogTaskDetailPage
                 task={selectedTask}
@@ -455,9 +505,7 @@ export function AdsCatalogPage() {
               />
             ) : tasks.length === 0 ? (
               <div style={{ ...sectionStyle, alignItems: "center", textAlign: "center" }}>
-                <p style={{ color: pageColorTokens.textSecondary }}>
-                  {t("adsCatalog.tasksEmpty")}
-                </p>
+                <p style={{ color: pageColorTokens.textSecondary }}>{t("adsCatalog.tasksEmpty")}</p>
               </div>
             ) : (
               tasks.map((task) => (
@@ -467,6 +515,7 @@ export function AdsCatalogPage() {
                   locationSearch={location.search}
                   onDelete={() => void handleDelete(task.id)}
                   onOpenDetail={() => setSelectedTaskId(task.id)}
+                  onOpenReview={() => setReviewOpen(true)}
                   onTaskUpdated={handleTaskUpdated}
                   deleting={deletingId === task.id}
                 />
@@ -475,203 +524,143 @@ export function AdsCatalogPage() {
           </div>
         )}
       </div>
+
+      {reviewOpen && (
+        <GmcReviewDetailModal
+          products={reviewProducts}
+          lastCheckedAt={googleStatus?.lastCheckedAt ?? null}
+          refreshing={refreshingStatus}
+          onRefresh={() => void handleRefreshStatus()}
+          onClose={() => setReviewOpen(false)}
+        />
+      )}
     </PageSurface>
   );
 }
 
-// ─── Credentials tab ────────────────────────────────────────────────────────
+const errorBoxStyle: CSSProperties = {
+  background: pageColorTokens.criticalBg,
+  color: pageColorTokens.criticalText,
+  padding: 10,
+  borderRadius: pageColorTokens.radiusControl,
+  fontSize: 13,
+};
 
-function actionButtonStyle(
-  tone: "primary" | "secondary",
-  disabled: boolean,
-): CSSProperties {
-  const base = tone === "primary" ? buttonPrimary : buttonSecondary;
-  return {
-    ...base,
-    opacity: disabled ? 0.55 : 1,
-    cursor: disabled ? "not-allowed" : "pointer",
-  };
-}
+const previewPreStyle: CSSProperties = {
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.border}`,
+  borderRadius: pageColorTokens.radiusControl,
+  padding: 12,
+  fontSize: 12,
+  maxHeight: 320,
+  overflow: "auto",
+};
 
-function CredentialsTab(props: {
+// ─── Facebook credential panel (manual, unchanged behavior) ──────────────────
+
+function FacebookCredentialPanel(props: {
   credentials: CredentialsView;
-  onSubmit: (payload: Record<string, unknown>) => void;
-  savingPlatform: Platform | null;
-  saveError?: string | null;
-  saveOk?: boolean;
-  t: (key: string, options?: Record<string, unknown>) => string;
+  locationSearch: string;
   languageCode: string;
+  onSaved: () => void;
 }) {
-  const { credentials, onSubmit, savingPlatform, saveError, saveOk, t, languageCode } = props;
+  const { credentials, locationSearch, languageCode, onSaved } = props;
+  const { t } = useTranslation();
   const [fb, setFb] = useState({
     accessToken: "",
     catalogId: credentials.facebook.fields.catalogId,
     businessId: credentials.facebook.fields.businessId,
     apiVersion: credentials.facebook.fields.apiVersion,
   });
-  const [gg, setGg] = useState({
-    accessToken: "",
-    refreshToken: "",
-    clientId: "",
-    clientSecret: "",
-    merchantId: credentials.google.fields.merchantId,
-  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
+
+  async function submit(verify: boolean) {
+    setSaving(true);
+    setError(null);
+    setOk(false);
+    try {
+      const resp = await fetch(`/api/ads-catalog/credentials${locationSearch}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ platform: "facebook", verify, facebook: fb }),
+      });
+      const data = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!resp.ok || !data.ok) {
+        setError(data.error ?? t("adsCatalog.credSaveFailed"));
+        return;
+      }
+      setOk(true);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={sectionStyle}>
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
-          {t("adsCatalog.credFacebookTitle")}
-        </h3>
-        <p style={pageHintTextStyle}>{t("adsCatalog.credFacebookHint")}</p>
-        {credentials.facebook.configured && (
-          <div style={pageHintTextStyle}>
-            {t("adsCatalog.credCurrent", {
-              token: credentials.facebook.fields.accessTokenMasked,
-              catalogId: credentials.facebook.fields.catalogId,
-              updatedAt: credentials.facebook.updatedAt
-                ? new Intl.DateTimeFormat(languageCode).format(
-                    new Date(credentials.facebook.updatedAt),
-                  )
-                : "—",
-            })}
-          </div>
-        )}
-        <input
-          style={inputStyle}
-          placeholder={t("adsCatalog.credAccessTokenPlaceholder")}
-          value={fb.accessToken}
-          onChange={(e) => setFb({ ...fb, accessToken: e.target.value })}
-        />
-        <input
-          style={inputStyle}
-          placeholder={t("adsCatalog.credCatalogIdPlaceholder")}
-          value={fb.catalogId}
-          onChange={(e) => setFb({ ...fb, catalogId: e.target.value })}
-        />
-        <input
-          style={inputStyle}
-          placeholder={t("adsCatalog.credBusinessIdPlaceholder")}
-          value={fb.businessId}
-          onChange={(e) => setFb({ ...fb, businessId: e.target.value })}
-        />
-        <input
-          style={inputStyle}
-          placeholder={t("adsCatalog.credApiVersionPlaceholder")}
-          value={fb.apiVersion}
-          onChange={(e) => setFb({ ...fb, apiVersion: e.target.value })}
-        />
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            disabled={savingPlatform !== null}
-            style={actionButtonStyle("primary", savingPlatform !== null)}
-            onClick={() => onSubmit({ platform: "facebook", verify: true, facebook: fb })}
-          >
-            {savingPlatform === "facebook"
-              ? t("adsCatalog.credSaving")
-              : t("adsCatalog.credSaveAndVerify")}
-          </button>
-          <button
-            type="button"
-            disabled={savingPlatform !== null}
-            style={actionButtonStyle("secondary", savingPlatform !== null)}
-            onClick={() => onSubmit({ platform: "facebook", verify: false, facebook: fb })}
-          >
-            {savingPlatform === "facebook"
-              ? t("adsCatalog.credSaving")
-              : t("adsCatalog.credSave")}
-          </button>
-        </div>
-      </div>
-
-      <div style={sectionStyle}>
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
-          {t("adsCatalog.credGoogleTitle")}
-        </h3>
-        <p style={pageHintTextStyle}>{t("adsCatalog.credGoogleHint")}</p>
-        {credentials.google.configured && (
-          <div style={pageHintTextStyle}>
-            {t("adsCatalog.credCurrentGoogle", {
-              token: credentials.google.fields.accessTokenMasked,
-              merchantId: credentials.google.fields.merchantId,
-              updatedAt: credentials.google.updatedAt
-                ? new Intl.DateTimeFormat(languageCode).format(
-                    new Date(credentials.google.updatedAt),
-                  )
-                : "—",
-            })}
-          </div>
-        )}
-        <input
-          style={inputStyle}
-          placeholder={t("adsCatalog.credAccessTokenPlaceholder")}
-          value={gg.accessToken}
-          onChange={(e) => setGg({ ...gg, accessToken: e.target.value })}
-        />
-        <input
-          style={inputStyle}
-          placeholder={t("adsCatalog.credMerchantIdPlaceholder")}
-          value={gg.merchantId}
-          onChange={(e) => setGg({ ...gg, merchantId: e.target.value })}
-        />
-        <input
-          style={inputStyle}
-          placeholder={t("adsCatalog.credRefreshTokenPlaceholder")}
-          value={gg.refreshToken}
-          onChange={(e) => setGg({ ...gg, refreshToken: e.target.value })}
-        />
-        <input
-          style={inputStyle}
-          placeholder={t("adsCatalog.credClientIdPlaceholder")}
-          value={gg.clientId}
-          onChange={(e) => setGg({ ...gg, clientId: e.target.value })}
-        />
-        <input
-          style={inputStyle}
-          placeholder={t("adsCatalog.credClientSecretPlaceholder")}
-          value={gg.clientSecret}
-          onChange={(e) => setGg({ ...gg, clientSecret: e.target.value })}
-          type="password"
-        />
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            disabled={savingPlatform !== null}
-            style={actionButtonStyle("primary", savingPlatform !== null)}
-            onClick={() => onSubmit({ platform: "google", verify: true, google: gg })}
-          >
-            {savingPlatform === "google"
-              ? t("adsCatalog.credSaving")
-              : t("adsCatalog.credSaveAndVerify")}
-          </button>
-          <button
-            type="button"
-            disabled={savingPlatform !== null}
-            style={actionButtonStyle("secondary", savingPlatform !== null)}
-            onClick={() => onSubmit({ platform: "google", verify: false, google: gg })}
-          >
-            {savingPlatform === "google"
-              ? t("adsCatalog.credSaving")
-              : t("adsCatalog.credSave")}
-          </button>
-        </div>
-      </div>
-
-      {saveError && (
-        <div
-          style={{
-            background: pageColorTokens.criticalBg,
-            color: pageColorTokens.criticalText,
-            padding: 10,
-            borderRadius: pageColorTokens.radiusControl,
-            fontSize: 13,
-          }}
-        >
-          {saveError}
+    <div style={sectionStyle}>
+      <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
+        {t("adsCatalog.credFacebookTitle")}
+      </h3>
+      <p style={pageHintTextStyle}>{t("adsCatalog.credFacebookHint")}</p>
+      {credentials.facebook.configured && (
+        <div style={pageHintTextStyle}>
+          {t("adsCatalog.credCurrent", {
+            token: credentials.facebook.fields.accessTokenMasked,
+            catalogId: credentials.facebook.fields.catalogId,
+            updatedAt: credentials.facebook.updatedAt
+              ? new Intl.DateTimeFormat(languageCode).format(new Date(credentials.facebook.updatedAt))
+              : "—",
+          })}
         </div>
       )}
-      {saveOk && (
+      <input
+        style={inputStyle}
+        placeholder={t("adsCatalog.credAccessTokenPlaceholder")}
+        value={fb.accessToken}
+        onChange={(e) => setFb({ ...fb, accessToken: e.target.value })}
+      />
+      <input
+        style={inputStyle}
+        placeholder={t("adsCatalog.credCatalogIdPlaceholder")}
+        value={fb.catalogId}
+        onChange={(e) => setFb({ ...fb, catalogId: e.target.value })}
+      />
+      <input
+        style={inputStyle}
+        placeholder={t("adsCatalog.credBusinessIdPlaceholder")}
+        value={fb.businessId}
+        onChange={(e) => setFb({ ...fb, businessId: e.target.value })}
+      />
+      <input
+        style={inputStyle}
+        placeholder={t("adsCatalog.credApiVersionPlaceholder")}
+        value={fb.apiVersion}
+        onChange={(e) => setFb({ ...fb, apiVersion: e.target.value })}
+      />
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <button
+          type="button"
+          disabled={saving}
+          style={{ ...buttonPrimary, opacity: saving ? 0.55 : 1 }}
+          onClick={() => void submit(true)}
+        >
+          {saving ? t("adsCatalog.credSaving") : t("adsCatalog.credSaveAndVerify")}
+        </button>
+        <button
+          type="button"
+          disabled={saving}
+          style={{ ...buttonSecondary, opacity: saving ? 0.55 : 1 }}
+          onClick={() => void submit(false)}
+        >
+          {saving ? t("adsCatalog.credSaving") : t("adsCatalog.credSave")}
+        </button>
+      </div>
+      {error && <div style={errorBoxStyle}>{error}</div>}
+      {ok && (
         <div
           style={{
             background: pageColorTokens.brandGreenLight,

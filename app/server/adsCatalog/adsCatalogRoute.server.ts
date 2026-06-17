@@ -18,6 +18,15 @@ const SyncRequestSchema = z.object({
   productIds: z.array(z.string().min(1)).max(250).optional().nullable(),
   contentLanguage: z.string().min(2).max(8).optional(),
   targetCountry: z.string().min(2).max(4).optional(),
+  googleProductCategory: z.string().max(64).optional(),
+  filters: z
+    .object({
+      tags: z.array(z.string()).optional(),
+      productTypes: z.array(z.string()).optional(),
+      vendors: z.array(z.string()).optional(),
+      inStockOnly: z.boolean().optional(),
+    })
+    .optional(),
 });
 
 export type AdsCatalogSyncResponse =
@@ -70,10 +79,18 @@ export async function handleAdsCatalogSyncAction(request: Request): Promise<Resp
     parsed.data.productIds && parsed.data.productIds.length > 0
       ? parsed.data.productIds
       : null;
+  const filters = parsed.data.filters ?? {};
 
   const [shopInfo, products] = await Promise.all([
     fetchShopBasicInfo(admin),
-    fetchProductsForCatalog(admin, { productIds, maxProducts: 250 }),
+    fetchProductsForCatalog(admin, {
+      productIds,
+      tags: filters.tags,
+      productTypes: filters.productTypes,
+      vendors: filters.vendors,
+      inStockOnly: filters.inStockOnly,
+      maxProducts: 250,
+    }),
   ]);
 
   if (products.length === 0) {
@@ -118,6 +135,7 @@ export async function handleAdsCatalogSyncAction(request: Request): Promise<Resp
     products,
     googleContentLanguage: parsed.data.contentLanguage,
     googleTargetCountry: parsed.data.targetCountry,
+    googleProductCategory: parsed.data.googleProductCategory,
   };
   enqueueAdsCatalogSync(enqueueParams);
 

@@ -9,9 +9,13 @@ import { authenticate } from "../shopify.server";
 import { listTasksPageForShop } from "../server/aiTask/aiTaskStore.server";
 import {
   getFacebookCatalogCredential,
+  getGoogleAdsCredential,
+  getGoogleAdsPending,
   getGoogleMerchantCredential,
+  getGoogleMerchantPending,
   maskTokenTail,
 } from "../server/adsCatalog/credentialStore.server";
+import { formatCustomerId } from "../server/adsCatalog/googleOAuth.server";
 import { useFeatureView } from "../lib/featureTrack";
 import { RoutePageFallback } from "./component/RoutePageFallback";
 
@@ -22,7 +26,7 @@ const AdsCatalogPage = lazy(() =>
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
 
-  const [initialTaskPage, fb, gg] = await Promise.all([
+  const [initialTaskPage, fb, gg, gmcPending, ads, adsPending] = await Promise.all([
     listTasksPageForShop({
       shop: session.shop,
       view: "current",
@@ -30,6 +34,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }),
     getFacebookCatalogCredential(session.shop),
     getGoogleMerchantCredential(session.shop),
+    getGoogleMerchantPending(session.shop),
+    getGoogleAdsCredential(session.shop),
+    getGoogleAdsPending(session.shop),
   ]);
 
   return Response.json({
@@ -45,16 +52,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           apiVersion: fb?.apiVersion ?? "",
         },
       },
-      google: {
-        configured: Boolean(gg),
+      googleMerchant: {
+        connected: Boolean(gg),
+        merchantId: gg?.merchantId ?? "",
         updatedAt: gg?.updatedAt ?? null,
-        fields: {
-          accessTokenMasked: gg ? maskTokenTail(gg.accessToken) : "",
-          refreshTokenMasked: gg?.refreshToken ? maskTokenTail(gg.refreshToken) : "",
-          clientIdMasked: gg?.clientId ? maskTokenTail(gg.clientId) : "",
-          clientSecretMasked: gg?.clientSecret ? maskTokenTail(gg.clientSecret) : "",
-          merchantId: gg?.merchantId ?? "",
-        },
+        pendingAccounts: gmcPending?.accounts ?? [],
+      },
+      googleAds: {
+        connected: Boolean(ads),
+        customerId: ads?.customerId ?? "",
+        customerIdFormatted: ads ? formatCustomerId(ads.customerId) : "",
+        updatedAt: ads?.updatedAt ?? null,
+        pendingAccounts: adsPending?.accounts ?? [],
       },
     },
   });

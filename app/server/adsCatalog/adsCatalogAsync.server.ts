@@ -8,7 +8,11 @@ import type {
 } from "../../lib/aiTaskTypes";
 import type { RawShopifyProductForCatalog } from "./productFetcher.server";
 import { mapShopifyToFacebook } from "./mappers/shopifyToFacebook";
-import { mapShopifyToGoogle } from "./mappers/shopifyToGoogle";
+import { mapShopifyVariantsToGoogle } from "./mappers/shopifyToGoogle";
+import {
+  validateProductsForGoogle,
+  collectErrorProductIds,
+} from "./validators/googleProductValidator";
 import { upsertFacebookCatalogItems } from "./clients/facebookGraphClient.server";
 import {
   refreshGoogleAccessToken,
@@ -19,6 +23,10 @@ import {
   getGoogleMerchantCredential,
   setGoogleMerchantCredential,
 } from "./credentialStore.server";
+import {
+  checkGmcProductStatuses,
+  scheduleGmcStatusCheck,
+} from "./gmcStatusChecker.server";
 
 const LOG_PREFIX = "[AdsCatalog][Async]";
 
@@ -33,6 +41,7 @@ export interface EnqueueAdsCatalogSyncParams {
   products: RawShopifyProductForCatalog[];
   googleContentLanguage?: string;
   googleTargetCountry?: string;
+  googleProductCategory?: string;
 }
 
 export function enqueueAdsCatalogSync(params: EnqueueAdsCatalogSyncParams): void {
@@ -88,6 +97,7 @@ async function runAdsCatalogSync(params: EnqueueAdsCatalogSyncParams): Promise<v
       startedAt,
       contentLanguage: params.googleContentLanguage ?? "en",
       targetCountry: params.googleTargetCountry ?? "US",
+      googleProductCategory: params.googleProductCategory,
       msg,
     });
   }
@@ -175,6 +185,7 @@ async function runGoogleSync(params: {
   brand?: string;
   contentLanguage: string;
   targetCountry: string;
+  googleProductCategory?: string;
   products: RawShopifyProductForCatalog[];
   msg: MsgFn;
 }): Promise<void> {
@@ -206,24 +217,42 @@ async function runGoogleSync(params: {
     }
   }
 
+  // Attach the全店统一 Google 类目 so the validator/mapper see it consistently.
+  const enrichedProducts = params.products.map((p) => ({
+    ...p,
+    googleProductCategory: params.googleProductCategory ?? p.googleProductCategory ?? null,
+  }));
+
+  // 同步前再次校验，跳过硬性错误商品。
+  const report = validateProductsForGoogle(enrichedProducts);
+  const errorIds = collectErrorProductIds(report);
+  const errors: AdsCatalogSyncTaskResult["errors"] = [];
+  for (const result of report.products) {
+    if (result.status === "error") {
+      const reason = result.issues.find((i) => i.level === "error")?.message ?? "validation error";
+      errors.push({ productId: result.productId, reason });
+    }
+  }
+
   await appendLog({
     taskId: params.taskId,
     startedAt: params.startedAt,
     message: params.msg("adsCatalog.asyncMappingProducts"),
   });
 
-  const errors: AdsCatalogSyncTaskResult["errors"] = [];
   const products = [];
-  for (const product of params.products) {
-    const mapped = mapShopifyToGoogle(product, {
+  for (const product of enrichedProducts) {
+    if (errorIds.has(product.id)) continue;
+    const mapped = mapShopifyVariantsToGoogle(product, {
       shopDomain: params.shopDomain,
       contentLanguage: params.contentLanguage,
       targetCountry: params.targetCountry,
       defaultCurrency: params.defaultCurrency,
       brand: params.brand,
+      googleProductCategory: params.googleProductCategory,
     });
     if (mapped.ok) {
-      products.push(mapped.product);
+      products.push(...mapped.products);
     } else {
       errors.push({ productId: mapped.productId, reason: mapped.reason });
     }
@@ -246,11 +275,46 @@ async function runGoogleSync(params: {
 
   const result: AdsCatalogSyncTaskResult = {
     platform: "google",
-    totalProcessed: params.products.length,
+    totalProcessed: products.length,
     succeeded: apiResult.totalProcessed,
     failed: errors.length,
+    skippedByValidation: errorIds.size,
     errors,
   };
+
+  // 同步完成后立即查一次 GMC 审核状态（best-effort，不阻断任务结果）。
+  if (apiResult.totalProcessed > 0) {
+    try {
+      const review = await checkGmcProductStatuses({
+        shop: params.shop,
+        merchantId: credential.merchantId,
+        accessToken: credential.accessToken,
+      });
+      result.gmcReview = {
+        checked: review.checked,
+        approved: review.approved,
+        disapproved: review.disapproved,
+        pending: review.pending,
+        accountSuspended: review.accountSuspended,
+        checkedAt: new Date().toISOString(),
+        products: review.products.slice(0, 250).map((p) => ({
+          offerId: p.offerId,
+          title: p.title,
+          status: p.status,
+          issues: p.issues.map((i) => ({
+            code: i.code,
+            servability: i.servability,
+            description: i.description,
+          })),
+        })),
+      };
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      console.error(`${LOG_PREFIX} immediate GMC status check failed taskId=${params.taskId} ${detail}`);
+    }
+    // 30 分钟后再查一次（进程内延迟任务）。
+    scheduleGmcStatusCheck({ shop: params.shop, delayMs: 30 * 60 * 1000 });
+  }
 
   await finishAdsCatalogSync({
     taskId: params.taskId,

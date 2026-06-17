@@ -1,0 +1,34 @@
+import type { LoaderFunctionArgs } from "react-router";
+import { redirect } from "react-router";
+import { authenticate } from "../shopify.server";
+import {
+  buildAuthUrl,
+  createOAuthState,
+  getGoogleOAuthClient,
+  getRedirectUri,
+} from "../server/adsCatalog/googleOAuth.server";
+
+const CALLBACK_PATH = "/ads/google-ads/callback";
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const source = new URL(request.url);
+  const host = source.searchParams.get("host") ?? "";
+
+  const { clientId } = getGoogleOAuthClient();
+  if (!clientId) {
+    const target = new URL("/app/ads-catalog", process.env.SHOPIFY_APP_URL || source.origin);
+    if (host) target.searchParams.set("host", host);
+    target.searchParams.set("adsAuth", "error");
+    target.searchParams.set("reason", "缺少 GOOGLE_OAUTH_CLIENT_ID 环境变量");
+    return redirect(target.toString());
+  }
+
+  const state = createOAuthState(session.shop, "ads", host);
+  const authUrl = buildAuthUrl({
+    flow: "ads",
+    state,
+    redirectUri: getRedirectUri(CALLBACK_PATH),
+  });
+  return redirect(authUrl);
+};
