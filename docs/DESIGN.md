@@ -142,6 +142,20 @@ components:
       background: "#d82c0d"
       text: "#ffffff"
       border: "#d82c0d"
+  ai_assist:
+    card_trigger:
+      height: "28px"
+      radius: "10px"
+      tone: "secondary_or_subtle"
+    field_trigger:
+      size: "28px"
+      radius: "10px"
+      tone: "subtle_icon"
+    suggestion_modal:
+      width: "640px-760px"
+      base: "Neutral overlay with clear title, suggestion body, preview comparison, and apply actions"
+    suggestion_copy:
+      base: "Inline suggestion block below field or section, neutral surface, restrained border"
   surface_card:
     base: "White or near-white surface, subtle border, light shadow"
     do_not: "Use heavy gradients or tinted cards as the default container"
@@ -767,6 +781,82 @@ Text defaults:
 - drawer title uses `card_title` + `text.primary`
 - drawer helper text uses `body_small` or `meta`
 
+### AI assist triggers
+
+- `AI Assist` is one shared capability with different trigger shapes based on object scope
+- Object-level assist should look explicit and discoverable
+- Field-level assist should stay lightweight and local
+- Trigger styling should never compete with the page's true primary action
+
+Default trigger rules:
+
+- **Card Assist Trigger**
+  - position: card header right side
+  - style: compact `secondary` or `subtle` button
+  - label: short explicit label such as `AI Improve` or `AI Suggestion`
+  - use case: optimize the whole card object, not one field
+- **Section Assist Trigger**
+  - position: section header right side
+  - style: compact button or compact icon-plus-label trigger
+  - use case: optimize a grouped content block such as notes, list items, or long instructions
+- **Field Assist Trigger**
+  - position: field label row right side or trailing side inside the field shell
+  - style: small icon button with tooltip
+  - tooltip: explicit copy such as `AI improve this field`
+  - use case: optimize one field without breaking the current editing flow
+
+Visual defaults:
+
+- card assist trigger should usually use `28px` compact button height
+- field assist trigger should usually use a `28px` square icon button
+- default trigger radius should align with control radius at `10px`
+- card assist triggers should prefer neutral border/button treatments over colored fills
+- field assist icons should remain subtle and low-emphasis until hover/focus
+
+Avoid:
+
+- using primary green fills for AI assist triggers by default
+- placing multiple same-level AI triggers in the same compact header area
+- using unlabeled decorative sparkles as the only affordance for object-level assist
+
+### Suggestion surfaces
+
+- Object-level AI results should use a dedicated suggestion surface
+- Field-level AI results should use a lightweight inline suggestion surface
+- Result surfaces should support review before apply; they must not auto-overwrite content
+
+Default result rules:
+
+- **Suggestion Modal**
+  - used for card-level or object-level results
+  - should feel like a focused review modal, not a new page shell
+  - should support summary, suggested content, comparison, and apply actions
+  - width should generally remain in the `640px` to `760px` range
+- **Suggestion Copy**
+  - used for field-level or lightweight section-level suggestions
+  - should render inline below the field or below the section header
+  - should read as a bounded suggestion block, not as error feedback
+  - should support `replace`, `insert`, `regenerate`, and `dismiss`
+
+Text defaults:
+
+- suggestion modal title uses `card_title`
+- suggestion modal helper text uses `body_small` or `meta`
+- suggestion copy label uses `meta` or `badge_label`
+- suggestion copy body uses `body` or `body_small`
+
+Visual defaults:
+
+- suggestion modal should use neutral surfaces, restrained border, and standard overlay elevation
+- suggestion copy should use `surface.secondary` or `surface.subtle` with `border.subtle`
+- suggestion copy should not use strong semantic success/warning fills unless the state itself carries that meaning
+
+Avoid:
+
+- using toast-like banners as the main suggestion container
+- returning long object-level AI content as a tiny inline hint below a field
+- turning field-level suggestion blocks into heavy modal workflows by default
+
 ### Lists and tables
 
 - Use list rows when repeated items are primarily scanned vertically
@@ -779,6 +869,15 @@ Rules:
 - Do not switch between row-style and card-style for the same data set without a strong semantic reason
 - Dense operational data should prefer list/table clarity over oversized cards
 - Repeated metadata should align consistently so scanning is predictable
+- Tables should not default to per-cell AI assist triggers; complex assist belongs in detail editors
+
+Object-type reminders:
+
+- `Summary Row` should read as an entry row, not as a mini editor
+- `Rule Card` should read as an operational object card, not as a full editor
+- `Simple Form` should keep field controls primary and AI assist secondary
+- `AI Suggestion Editor` should foreground suggested content rather than status chrome
+- `Detail Editor` may host richer AI assist than the summary list or table entry that launched it
 
 ### Empty, loading, and feedback states
 
