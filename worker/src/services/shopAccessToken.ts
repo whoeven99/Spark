@@ -72,10 +72,18 @@ async function loadTokenFromSession(shop: string): Promise<string | null> {
 export async function getShopAccessToken(
   shop: string,
   legacyFallback?: string,
+  preferLegacy = false,
 ): Promise<string> {
   const normalizedShop = shop.trim();
   if (!normalizedShop) {
     throw new Error(`${LOG} shop is required`);
+  }
+
+  // 外部来源任务（如 TsFrontend）：该 shop 的 Session 不在本服务的 Turso 里，
+  // 直接用 job 快照里的 token，跳过 Turso 查询与共享缓存（避免命中其它 app 的 token）。
+  if (preferLegacy) {
+    const legacy = normalizeEnv(legacyFallback);
+    if (legacy) return legacy;
   }
 
   const cached = tokenCache.get(normalizedShop);

@@ -1,5 +1,5 @@
 import { hostname } from "os";
-import { claimJob, updateJob, heartbeat, findPendingJobs, getJob, withStageTiming } from "../services/cosmosV4.js";
+import { claimJob, updateJob, heartbeat, findPendingJobs, getJob, withStageTiming, prefersStoredToken } from "../services/cosmosV4.js";
 import { popHint, pushHint, setProgress } from "../services/redisV4.js";
 import { blobRead, blobListPaths, blobWrite } from "../services/blobV4.js";
 import { registerTranslations, type TranslationInput } from "../services/shopifyFetch.js";
@@ -158,6 +158,7 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
         job.shopifyAccessToken,
         resource.resourceId,
         translations,
+        prefersStoredToken(job),
       );
 
       if (result.success) {

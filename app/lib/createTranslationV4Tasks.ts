@@ -9,6 +9,7 @@ export type CreateTranslationV4TasksParams = {
   source: string;
   targets: string[];
   modules: string[];
+  aiModel?: string;
   limitPerType: number;
   isCover?: boolean;
   isHandle?: boolean;
@@ -83,6 +84,7 @@ export async function createTranslationV4Tasks(
   const baseBody = {
     source,
     modules: params.modules,
+    ...(params.aiModel ? { aiModel: params.aiModel } : {}),
     limitPerType: params.limitPerType,
     ...(params.isCover !== undefined ? { isCover: params.isCover } : {}),
     ...(params.isHandle !== undefined ? { isHandle: params.isHandle } : {}),

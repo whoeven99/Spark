@@ -1,5 +1,5 @@
 import { hostname } from "os";
-import { claimJob, updateJob, heartbeat, findPendingJobs, withStageTiming } from "../services/cosmosV4.js";
+import { claimJob, updateJob, heartbeat, findPendingJobs, withStageTiming, prefersStoredToken } from "../services/cosmosV4.js";
 import { popHint, pushHint, setProgress } from "../services/redisV4.js";
 import { blobWrite } from "../services/blobV4.js";
 import { fetchTranslatableResources } from "../services/shopifyFetch.js";
@@ -121,6 +121,7 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
           isCover: job.isCover,
           isHandle: job.isHandle,
           onPage: throttledHeartbeat,
+          preferLegacyToken: prefersStoredToken(job),
         },
       );
 

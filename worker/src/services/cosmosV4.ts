@@ -92,6 +92,17 @@ export type TranslationV4Job = {
   updatedAt: string;
 };
 
+/** 任务来源：来自 TSF 独立前端的任务。 */
+export const TS_FRONTEND_TASK_SOURCE = "TsFrontend";
+
+/**
+ * 该任务的 Shopify token 是否应直接取 job 快照（跳过 Turso Session 查询）。
+ * 外部来源（如 TsFrontend）的 shop Session 不在本服务的 Turso 里，必须用 job 里存的 token。
+ */
+export function prefersStoredToken(job: Pick<TranslationV4Job, "taskSource">): boolean {
+  return job.taskSource === TS_FRONTEND_TASK_SOURCE;
+}
+
 let _client: CosmosClient | null = null;
 
 function getClient(): CosmosClient {

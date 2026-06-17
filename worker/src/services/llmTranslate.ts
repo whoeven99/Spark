@@ -909,9 +909,27 @@ export async function flushKeyStats(): Promise<void> {
 
 // ─── Model resolution ───────────────────────────────────────────────────────────
 
-/** DeepSeek model id from DEEPSEEK_MODEL (slot override wins when set). */
-function resolveModel(slotModel?: string): string {
-  return slotModel || process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
+/** DeepSeek 模型 id 白名单（含将弃用的旧名）。 */
+const KNOWN_DEEPSEEK_MODELS = new Set([
+  "deepseek-v4-flash",
+  "deepseek-v4-pro",
+  "deepseek-chat",
+  "deepseek-reasoner",
+]);
+
+/** 是否为可直接发送的 DeepSeek 模型 id。 */
+function isDeepSeekModelId(s?: string): boolean {
+  return KNOWN_DEEPSEEK_MODELS.has((s ?? "").trim().toLowerCase());
+}
+
+/**
+ * 解析实际发送给 DeepSeek 的模型 id：优先用任务自带的 `aiModel`（前提是已知 DeepSeek 模型），
+ * 否则回退 `DEEPSEEK_MODEL` env（默认 deepseek-chat）。非 DeepSeek 值（如 "google-translate"）被忽略。
+ */
+function resolveModel(preferred?: string): string {
+  const p = (preferred ?? "").trim();
+  if (isDeepSeekModelId(p)) return p;
+  return process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
 }
 
 // ─── Engine router ──────────────────────────────────────────────────────────────
@@ -972,8 +990,8 @@ function engineOrderFor(tier: "trivial" | "rich", aiModel?: string): Engine[] {
 }
 
 /** The model/label recorded for a chosen engine (used for TM cache + Cosmos). */
-function engineModel(engine: Engine, _aiModel: string): string {
-  return engine === "google" ? "google-translate" : resolveModel();
+function engineModel(engine: Engine, aiModel: string): string {
+  return engine === "google" ? "google-translate" : resolveModel(aiModel);
 }
 
 /**
@@ -983,7 +1001,7 @@ function engineModel(engine: Engine, _aiModel: string): string {
 export function resolveEngine(aiModel: string): { provider: string; model: string } {
   const forced = forcedEngine(aiModel);
   if (forced === "google") return { provider: "google", model: "google-translate" };
-  const model = resolveModel();
+  const model = resolveModel(aiModel);
   const parts: string[] = [];
   if (googleConfigured()) parts.push("google");
   if (llmConfigured()) parts.push(model);
@@ -1634,7 +1652,8 @@ async function callLLMOnce(
   const payload  = items.map((it, idx) => ({ key: `f${idx}`, value: it.value }));
 
   const acq   = await getPool().acquire();
-  const model = resolveModel(acq.model);
+  // 任务自带的 aiModel 优先（已知 DeepSeek 模型时），否则回退 env。
+  const model = resolveModel(aiModel) || acq.model;
   const t0    = Date.now();
 
   const messages: ChatMessage[] = [

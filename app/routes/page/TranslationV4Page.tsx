@@ -421,6 +421,7 @@ export function TranslationV4Page() {
   });
 
   const [modules, setModules] = useState<string[]>(["PRODUCT", "COLLECTION", "PAGE", "ARTICLE"]);
+  const [aiModel, setAiModel] = useState("deepseek-v4-flash");
   const [limitPerType, setLimitPerType] = useState(20);
   const [isCover, setIsCover] = useState(false);
   const [isHandle, setIsHandle] = useState(false);
@@ -821,6 +822,7 @@ export function TranslationV4Page() {
         source,
         targets: targetLocales,
         modules,
+        aiModel,
         limitPerType,
         isCover,
         isHandle,
@@ -1136,6 +1138,17 @@ export function TranslationV4Page() {
                       <input type="checkbox" checked={isHandle} onChange={(e) => setIsHandle(e.target.checked)} />
                       <span>翻译 Handle/Slug</span>
                     </label>
+                  </div>
+
+                  <div style={{ maxWidth: "20rem" }}>
+                    <s-select
+                      label="AI 模型"
+                      value={aiModel}
+                      onChange={(e) => setAiModel(e.currentTarget.value)}
+                    >
+                      <s-option value="deepseek-v4-flash">deepseek-v4-flash</s-option>
+                      <s-option value="deepseek-v4-pro">deepseek-v4-pro</s-option>
+                    </s-select>
                   </div>
 
                   <div style={testEnvPanelStyle(testMode)}>
