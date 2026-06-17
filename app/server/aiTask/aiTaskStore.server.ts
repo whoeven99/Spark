@@ -199,6 +199,7 @@ export async function getTaskMeta(taskId: string): Promise<{
 export async function markTaskFailed(params: {
   taskId: string;
   errorMsg: AITaskMessageInput;
+  result?: Record<string, unknown>;
 }): Promise<void> {
   const serializedError = serializeAITaskMessage(params.errorMsg);
   await prisma.aITask.update({
@@ -207,6 +208,7 @@ export async function markTaskFailed(params: {
       status: "failed",
       errorMsg: serializedError.slice(0, 2000),
       completedAt: new Date(),
+      ...(params.result ? { result: params.result as PrismaJson } : {}),
     },
   });
 }

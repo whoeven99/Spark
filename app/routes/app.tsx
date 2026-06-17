@@ -35,7 +35,8 @@ const NAV_ITEMS: Record<
       | "nav.imageStudio"
       | "nav.billing"
       | "nav.orderMonitor"
-      | "nav.dailyOperations";
+      | "nav.dailyOperations"
+      | "nav.adsCatalog";
   }
 > = {
   chat: { href: "/app", labelKey: "nav.aiAssistant" },
@@ -60,6 +61,10 @@ const NAV_ITEMS: Record<
   "daily-operations": {
     href: "/app/daily-operations",
     labelKey: "nav.dailyOperations",
+  },
+  "ads-catalog": {
+    href: "/app/ads-catalog",
+    labelKey: "nav.adsCatalog",
   },
   billing: { href: "/app/billing", labelKey: "nav.billing" },
 };

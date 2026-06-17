@@ -7,6 +7,7 @@ export type NavItemKey =
   | "generate-image"
   | "order-monitor"
   | "daily-operations"
+  | "ads-catalog"
   | "billing";
 
 type AppShellConfig = {
@@ -23,6 +24,7 @@ const DEFAULT_APP_SHELL_CONFIG = {
     "image-studio",
     "order-monitor",
     "daily-operations",
+    "ads-catalog",
     "billing",
   ],
 } as const satisfies AppShellConfig;

@@ -9,7 +9,11 @@ export type AITaskStatus =
   | "applied"
   | "scored";
 
-export type AITaskType = "image_generation" | "picture_translate" | "product_improve";
+export type AITaskType =
+  | "image_generation"
+  | "picture_translate"
+  | "product_improve"
+  | "ads_catalog_sync";
 
 export type AITaskListView = "current" | "history";
 
@@ -129,6 +133,22 @@ export interface ProductImproveTaskResult {
   reviewScore?: number;
   reviewNote?: string;
   optimizationComment?: string;
+}
+
+export type AdsCatalogPlatform = "facebook" | "google";
+
+export interface AdsCatalogSyncTaskConfig {
+  platform: AdsCatalogPlatform;
+  productIds: string[] | null; // null = all
+  totalProducts: number;
+}
+
+export interface AdsCatalogSyncTaskResult {
+  platform: AdsCatalogPlatform;
+  totalProcessed: number;
+  succeeded: number;
+  failed: number;
+  errors: Array<{ productId: string; reason: string }>;
 }
 
 export type AITaskCreateResponse =
