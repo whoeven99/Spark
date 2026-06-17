@@ -75,6 +75,8 @@ export type TranslationV4Job = {
   isCover: boolean;
   isHandle: boolean;
   testMode: boolean;
+  /** 任务来源标识（如 "Ciwi-Translator-Task"）。旧任务可能缺省。 */
+  taskSource?: string | null;
   status: TranslationV4Status;
   claimedBy: string | null;
   claimedAt: string | null;
