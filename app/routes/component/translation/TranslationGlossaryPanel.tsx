@@ -1347,6 +1347,12 @@ const termEditFormStyle: CSSProperties = {
   gap: "0.9rem",
 };
 
+const fieldStackStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.45rem",
+};
+
 const termEditMetaStyle: CSSProperties = {
   marginTop: "0.25rem",
   fontSize: "0.75rem",
