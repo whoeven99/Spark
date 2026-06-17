@@ -42,6 +42,55 @@ export const pageColorTokens = {
   mutedBg: "rgba(107, 114, 128, 0.08)",
 } as const;
 
+/**
+ * Status color tokens — centralized palette for task/job status badges,
+ * progress bars, and stage indicators across TranslationV4, ProductImprove, etc.
+ *
+ * Three semantic families:
+ *  - active:  "in-progress" states (initializing, translating, writing back)
+ *  - warning: amber-toned states (verifying, paused)
+ *  - success: completed / done states
+ *  - failed:  error / critical states
+ *  - cancelled: inactive / cancelled states
+ */
+export const statusColorTokens = {
+  // ── Active / In-progress (burnt orange) ──
+  activeText: "#8a420f",
+  activeBg: "#fff1e8",
+  activeBorder: "#f3d1b8",
+  activeBar: "#c05717",
+
+  // ── Warning / Amber (verify, paused) ──
+  warningText: "#7c5e10",
+  warningBg: "#fff7e0",
+  warningBorder: "#efdca4",
+  warningBar: "#b98900",
+
+  // ── Completed / Success (brand green) ──
+  successText: pageColorTokens.brandGreenDark,
+  successBg: pageColorTokens.brandGreenLight,
+  successBorder: "#ccefe4",
+  successBar: pageColorTokens.brandGreen,
+
+  // ── Failed / Error (critical red) ──
+  failedText: pageColorTokens.criticalText,
+  failedBg: "#fff0ee",
+  failedBorder: "#f3cbc5",
+  failedBar: "#d82c0d",
+  failedStageBar: "#d97706",
+
+  // ── Cancelled / Inactive (muted gray) ──
+  cancelledText: pageColorTokens.textSecondary,
+  cancelledBg: pageColorTokens.surfaceMuted,
+  cancelledBorder: pageColorTokens.borderSubtle,
+  cancelledBar: "#9ca3af",
+
+  // ── Blue accent (used in TaskCard for active primaryCopy + stage bar) ──
+  blueActiveText: "#4070f4",
+  blueActiveBg: "#eef2ff",
+  blueActiveBorder: "rgba(99,102,241,0.18)",
+} as const;
+
 /** §3.2 双栏布局 */
 export const twoColumnLayoutStyle: CSSProperties = {
   display: "flex",
