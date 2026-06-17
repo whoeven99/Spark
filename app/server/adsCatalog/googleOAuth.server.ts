@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { formatOutboundNetworkError } from "../common/outboundError.server";
+import { buildShopifyAdminHostParam } from "../billing/buildBillingReturnUrl.server";
 
 export const GOOGLE_OAUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
 export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -48,6 +49,24 @@ export function getRedirectUri(path: string): string {
   const base =
     readEnv("GOOGLE_OAUTH_REDIRECT_BASE") || readEnv("SHOPIFY_APP_URL");
   return `${base.replace(/\/$/, "")}${path}`;
+}
+
+/** Google OAuth 完成后跳回嵌入式应用（需 shop + host + embedded，否则落到 /auth/login）。 */
+export function buildGoogleOAuthReturnUrl(params: {
+  shop: string;
+  host?: string;
+  query?: Record<string, string>;
+}): string {
+  const base =
+    readEnv("GOOGLE_OAUTH_REDIRECT_BASE") || readEnv("SHOPIFY_APP_URL") || "https://example.com";
+  const target = new URL("/app/ads-catalog", base.replace(/\/$/, "") || base);
+  target.searchParams.set("shop", params.shop);
+  target.searchParams.set("embedded", "1");
+  target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));
+  for (const [key, value] of Object.entries(params.query ?? {})) {
+    target.searchParams.set(key, value);
+  }
+  return target.toString();
 }
 
 // ─── Signed, stateless OAuth `state` ─────────────────────────────────────────
