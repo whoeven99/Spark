@@ -1679,7 +1679,7 @@ export function TranslationV4Page() {
         }
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={automationManageRowStyle(isMobile)}>
+          <div style={automationSectionRowStyle(isMobile)}>
             <div style={automationManageFieldStyle}>
               <span style={automationSectionLabelStyle}>启用状态</span>
               <div style={automationStatusHelpStyle}>
