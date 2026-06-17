@@ -838,6 +838,38 @@ const summaryCardStyle: CSSProperties = {
   gap: "0.45rem",
 };
 
+const summaryDateBadgeStyle: CSSProperties = {
+  fontSize: "0.8125rem",
+  fontWeight: 600,
+  color: pageColorTokens.textBody,
+  background: pageColorTokens.surfaceMuted,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  borderRadius: 999,
+  padding: "0.25rem 0.65rem",
+  whiteSpace: "nowrap",
+};
+
+const summaryTimeStyle: CSSProperties = {
+  fontSize: "0.75rem",
+  color: pageColorTokens.textSecondary,
+  whiteSpace: "nowrap",
+};
+
+const summaryRefreshButtonStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.3rem",
+  padding: "0.3rem 0.65rem",
+  borderRadius: 999,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surface,
+  color: pageColorTokens.textBody,
+  fontSize: "0.75rem",
+  fontWeight: 600,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
 const summaryListStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
@@ -1483,20 +1515,8 @@ export default function DailyOperationsPage() {
     if (extra?.environmentKey) next.set("environmentKey", extra.environmentKey);
     if (extra?.insightKey) next.set("insightKey", extra.insightKey);
     if (extra?.taskId) next.set("taskId", extra.taskId);
-    setSearchParams(next);
+    setSearchParams(next, { replace: false });
   };
-
-  const detailReturnTo = useMemo(() => {
-    if (!detailSection) return undefined;
-    const next = new URLSearchParams(searchParams);
-    next.delete("detail");
-    next.delete("riskTab");
-    next.delete("environmentKey");
-    next.delete("insightKey");
-    next.delete("taskId");
-    const query = next.toString();
-    return `/app/daily-operations${query ? `?${query}` : ""}`;
-  }, [detailSection, searchParams]);
 
   return (
     <s-page
@@ -1521,20 +1541,8 @@ export default function DailyOperationsPage() {
               : t("common.backToPrevious", { defaultValue: "返回工作台" })
           }
           {...(detailSection
-            ? { fallbackPath: "/app/daily-operations", returnTo: detailReturnTo }
+            ? { fallbackPath: "/app/daily-operations" }
             : { workspaceOnly: true })}
-          rightAction={
-            <div style={{ display: "flex", gap: "0.5rem" }}>
-              <s-button
-                type="button"
-                variant="secondary"
-                onClick={submitRefresh}
-                {...(busy ? { disabled: true } : {})}
-              >
-                {busy ? t("dailyOps.refreshing") : t("dailyOps.refresh")}
-              </s-button>
-            </div>
-          }
         />
 
         {!data.ok ? (
@@ -1549,7 +1557,6 @@ export default function DailyOperationsPage() {
           <>
             {detailSection ? (
               <DailyOperationsDetail
-                key={detailSection}
                 detailSection={detailSection}
                 result={data.result}
                 value={data.value}
@@ -1598,6 +1605,7 @@ export default function DailyOperationsPage() {
                 }}
                 onOpenDetail={openDetail}
                 onSubmitTaskAction={submitTaskAction}
+                onRefresh={submitRefresh}
                 busy={busy}
               />
             )}
@@ -1639,6 +1647,7 @@ function DailyOperationsBody({
     }>,
   ) => void;
   onSubmitTaskAction: (taskId: string, action: OperationTaskAction) => void;
+  onRefresh: () => void;
   busy: boolean;
 }) {
   const { t } = useTranslation();
@@ -1861,12 +1870,27 @@ function DailyOperationsBody({
                   marginBottom: "0.9rem",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
-                  <span style={pageAccentBadgeStyle}>
-                    {t("dailyOps.dataUpdatedAtLabel", {
-                      value: new Date(result.generatedAt).toLocaleString(locale),
+                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+                  <span style={summaryDateBadgeStyle}>
+                    {t("dailyOps.snapshotDateLabel", { date: result.snapshotDate })}
+                  </span>
+                  <span style={summaryTimeStyle}>
+                    {t("dailyOps.generatedAtLabel", {
+                      value: new Date(result.generatedAt).toLocaleTimeString(locale, {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      }),
                     })}
                   </span>
+                  <button
+                    type="button"
+                    onClick={onRefresh}
+                    disabled={busy}
+                    style={summaryRefreshButtonStyle}
+                  >
+                    {busy ? "⟳" : "⟳"}
+                    <span>{busy ? t("dailyOps.refreshing") : t("dailyOps.refresh")}</span>
+                  </button>
                 </div>
               </div>
               <div
