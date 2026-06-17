@@ -170,6 +170,30 @@ export function buildAuthUrl(params: {
   return `${GOOGLE_OAUTH_BASE}?${query.toString()}`;
 }
 
+/** 在嵌入式 iframe 内通过 API 鉴权后生成 Google 授权 URL（避免 _top 跳转丢失 session）。 */
+export function buildGoogleOAuthStartUrl(params: {
+  flow: OAuthFlow;
+  shop: string;
+  host?: string;
+  requestOrigin: string;
+}): { ok: true; authUrl: string } | { ok: false; error: string } {
+  const { clientId } = getGoogleOAuthClient();
+  if (!clientId) {
+    return { ok: false, error: "缺少 GOOGLE_OAUTH_CLIENT_ID 环境变量" };
+  }
+
+  const callbackPath =
+    params.flow === "gmc" ? "/ads/google-merchant/callback" : "/ads/google-ads/callback";
+  const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
+  const state = createOAuthState(params.shop, params.flow, params.host ?? "", appOrigin);
+  const authUrl = buildAuthUrl({
+    flow: params.flow,
+    state,
+    redirectUri: getRedirectUri(callbackPath, params.requestOrigin),
+  });
+  return { ok: true, authUrl };
+}
+
 export async function exchangeCodeForTokens(
   code: string,
   redirectUri: string,

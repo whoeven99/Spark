@@ -58,9 +58,33 @@ export function GoogleConnectPanels({
   const gmc = credentials.googleMerchant;
   const ads = credentials.googleAds;
 
-  function openOAuth(path: string) {
-    const url = `${path}${locationSearch}`;
-    window.open(url, "_top");
+  function openOAuth(kind: "gmc" | "ads") {
+    const apiPath =
+      kind === "gmc"
+        ? "/api/ads-catalog/google-merchant-auth-url"
+        : "/api/ads-catalog/google-ads-auth-url";
+    void (async () => {
+      setBusy(true);
+      try {
+        const resp = await fetch(`${apiPath}${locationSearch}`, {
+          headers: { Accept: "application/json" },
+        });
+        const data = (await resp.json().catch(() => ({}))) as {
+          ok?: boolean;
+          authUrl?: string;
+          error?: string;
+        };
+        if (!resp.ok || !data.authUrl) {
+          alert(data.error ?? t("adsCatalog.authError"));
+          return;
+        }
+        window.open(data.authUrl, "_top");
+      } catch (e) {
+        alert(e instanceof Error ? e.message : t("adsCatalog.authError"));
+      } finally {
+        setBusy(false);
+      }
+    })();
   }
 
   async function post(path: string, body: Record<string, unknown>) {
@@ -102,7 +126,7 @@ export function GoogleConnectPanels({
               </div>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button type="button" style={secondaryBtn} onClick={() => openOAuth("/app/ads/google-merchant/start")}>
+              <button type="button" style={secondaryBtn} onClick={() => openOAuth("gmc")}>
                 {t("adsCatalog.gmcReauth")}
               </button>
               <button
@@ -128,7 +152,7 @@ export function GoogleConnectPanels({
           <>
             <p style={pageHintTextStyle}>{t("adsCatalog.gmcConnectHint")}</p>
             <div>
-              <button type="button" style={primaryBtn} onClick={() => openOAuth("/app/ads/google-merchant/start")}>
+              <button type="button" style={primaryBtn} onClick={() => openOAuth("gmc")}>
                 {t("adsCatalog.gmcConnect")}
               </button>
             </div>
@@ -163,7 +187,7 @@ export function GoogleConnectPanels({
               </div>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button type="button" style={secondaryBtn} onClick={() => openOAuth("/app/ads/google-ads/start")}>
+              <button type="button" style={secondaryBtn} onClick={() => openOAuth("ads")}>
                 {t("adsCatalog.adsChange")}
               </button>
               <button
@@ -189,7 +213,7 @@ export function GoogleConnectPanels({
           <>
             <p style={pageHintTextStyle}>{t("adsCatalog.adsConnectHint")}</p>
             <div>
-              <button type="button" style={primaryBtn} onClick={() => openOAuth("/app/ads/google-ads/start")}>
+              <button type="button" style={primaryBtn} onClick={() => openOAuth("ads")}>
                 {t("adsCatalog.adsConnect")}
               </button>
             </div>
