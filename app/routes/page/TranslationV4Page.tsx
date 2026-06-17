@@ -1678,55 +1678,73 @@ export function TranslationV4Page() {
           </s-stack>
         }
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={automationSectionRowStyle(isMobile)}>
+        <div style={automationDialogFormStyle}>
+          <div style={automationDialogBooleanFieldStyle(isMobile)}>
             <div style={automationManageFieldStyle}>
-              <span style={automationSectionLabelStyle}>启用状态</span>
+              <span style={automationSectionLabelStyle}>创建后立即启用</span>
               <div style={automationStatusHelpStyle}>
-                新建规则默认可立即生效，你也可以先保存为停用状态。
+                关闭后规则会被保存，但不会立即参与自动翻译。你可以稍后在规则列表中再启用。
               </div>
             </div>
-            <s-button
-              type="button"
-              variant={automationDraftEnabled ? "secondary" : "primary"}
-              onClick={() => setAutomationDraftEnabled((value) => !value)}
-            >
-              {automationDraftEnabled ? "保存为已启用" : "保存为已停用"}
-            </s-button>
+            <label style={automationSwitchFieldStyle}>
+              <input
+                type="checkbox"
+                role="switch"
+                aria-checked={automationDraftEnabled}
+                checked={automationDraftEnabled}
+                onChange={(event) => setAutomationDraftEnabled(event.target.checked)}
+                style={automationSwitchInputStyle}
+              />
+              <span aria-hidden="true" style={automationSwitchTrackStyle(automationDraftEnabled)}>
+                <span style={automationSwitchThumbStyle(automationDraftEnabled)} />
+              </span>
+              <span style={automationSwitchTextStyle(automationDraftEnabled)}>
+                {automationDraftEnabled ? "已启用" : "已停用"}
+              </span>
+            </label>
           </div>
 
-          <TranslationMultiSelect
-            id="translation-automation-draft-targets"
-            label="自动更新语言"
-            options={targetOptions}
-            values={automationDraftTargets}
-            onChange={setAutomationDraftTargets}
-            summaryMode="count"
-            columns={2}
-          />
+          <div style={automationDialogFieldStyle}>
+            <TranslationMultiSelect
+              id="translation-automation-draft-targets"
+              label="自动更新语言"
+              options={targetOptions}
+              values={automationDraftTargets}
+              onChange={setAutomationDraftTargets}
+              summaryMode="count"
+              columns={2}
+            />
+          </div>
 
-          <TranslationModuleMultiSelect
-            id="translation-automation-draft-modules"
-            label="自动更新模块"
-            values={automationDraftModules}
-            onChange={setAutomationDraftModules}
-          />
+          <div style={automationDialogFieldStyle}>
+            <TranslationModuleMultiSelect
+              id="translation-automation-draft-modules"
+              label="自动更新模块"
+              values={automationDraftModules}
+              onChange={setAutomationDraftModules}
+            />
+          </div>
 
-          <div style={automationManageFieldStyle}>
-            <span style={automationSectionLabelStyle}>执行频率</span>
-            <select
-              value={automationDraftFrequency}
-              onChange={(event) =>
-                setAutomationDraftFrequency(event.target.value as AutomationFrequency)
-              }
-              style={automationSelectStyle}
-            >
-              {AUTOMATION_FREQUENCY_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+          <div style={automationDialogFieldStyle}>
+            <div style={automationManageFieldStyle}>
+              <span style={automationSectionLabelStyle}>执行频率</span>
+              <span style={automationStatusHelpStyle}>
+                保存后会立即应用到当前规则的触发节奏。
+              </span>
+              <select
+                value={automationDraftFrequency}
+                onChange={(event) =>
+                  setAutomationDraftFrequency(event.target.value as AutomationFrequency)
+                }
+                style={automationSelectStyle}
+              >
+                {AUTOMATION_FREQUENCY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {automationDraftError ? <div style={formErrorBoxStyle}>{automationDraftError}</div> : null}
@@ -3040,6 +3058,86 @@ function automationSectionRowStyle(isMobile: boolean): React.CSSProperties {
     justifyContent: "space-between",
     gap: 12,
     flexDirection: isMobile ? "column" : "row",
+  };
+}
+
+const automationDialogFormStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 12,
+};
+
+function automationDialogBooleanFieldStyle(isMobile: boolean): React.CSSProperties {
+  return {
+    display: "flex",
+    alignItems: isMobile ? "stretch" : "center",
+    justifyContent: "space-between",
+    gap: 12,
+    flexDirection: isMobile ? "column" : "row",
+    padding: "0.25rem 0",
+  };
+}
+
+const automationDialogFieldStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+};
+
+const automationSwitchFieldStyle: React.CSSProperties = {
+  position: "relative",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 10,
+  cursor: "pointer",
+  userSelect: "none",
+  flexShrink: 0,
+};
+
+const automationSwitchInputStyle: React.CSSProperties = {
+  position: "absolute",
+  opacity: 0,
+  inset: 0,
+  width: "100%",
+  height: "100%",
+  margin: 0,
+  cursor: "pointer",
+};
+
+function automationSwitchTrackStyle(enabled: boolean): React.CSSProperties {
+  return {
+    position: "relative",
+    display: "inline-flex",
+    alignItems: "center",
+    width: 40,
+    height: 24,
+    borderRadius: 999,
+    background: enabled ? pageColorTokens.brandGreen : "#d1d5db",
+    transition: "background 0.2s ease",
+    flexShrink: 0,
+  };
+}
+
+function automationSwitchThumbStyle(enabled: boolean): React.CSSProperties {
+  return {
+    position: "absolute",
+    top: 3,
+    left: enabled ? 19 : 3,
+    width: 18,
+    height: 18,
+    borderRadius: "50%",
+    background: "#ffffff",
+    boxShadow: "0 1px 2px rgba(15, 23, 42, 0.18)",
+    transition: "left 0.2s ease",
+  };
+}
+
+function automationSwitchTextStyle(enabled: boolean): React.CSSProperties {
+  return {
+    fontSize: "0.8125rem",
+    fontWeight: 600,
+    color: enabled ? pageColorTokens.textPrimary : pageColorTokens.textSecondary,
+    whiteSpace: "nowrap",
   };
 }
 

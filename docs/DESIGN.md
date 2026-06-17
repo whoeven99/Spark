@@ -781,6 +781,44 @@ Text defaults:
 - drawer title uses `card_title` + `text.primary`
 - drawer helper text uses `body_small` or `meta`
 
+Dialog structure defaults:
+
+- dialog header owns title, helper text, close affordance, and top-level task framing
+- dialog body owns the actual content flow; it should not re-create a second shell
+- dialog footer owns cancel, confirm, save, apply, and close actions
+- footer separation should usually be expressed with a top divider, not a heavy nested card
+
+Dialog type defaults:
+
+- **Dialog Confirm**
+  - keep the body compact and summary-oriented
+  - avoid nested panels unless a warning block is required
+  - footer should usually contain one primary action and one secondary action
+- **Dialog Form**
+  - body should primarily read as a stacked form, not as a rule card or detail card
+  - ordinary fields should sit directly in the form flow without extra heavy panel wrappers
+  - use section panels only when the form truly contains grouped summaries, warnings, or auxiliary previews
+- **Suggestion Modal**
+  - may use one or two restrained sections for summary, comparison, or proposed content
+  - should not visually resemble a full page shell with repeated card surfaces
+- **Dialog Table / Editor**
+  - may use a toolbar, table shell, pagination zone, and footer
+  - sectioning may be stronger than `Dialog Form`, but should still stay within one overlay hierarchy
+
+Field control defaults in dialogs:
+
+- boolean fields should prefer switch controls over action-like buttons
+- enum fields should prefer selects or segmented controls when the option count is small
+- action buttons should only represent explicit actions, not persistent field state
+- compact utility actions such as `Refresh`, `Upload`, `Regenerate`, or `Edit` may use button treatments
+
+Avoid:
+
+- wrapping dialog title/description inside another card-like container
+- wrapping footer actions inside another rounded panel that reads like a second overlay
+- using buttons to represent long-lived boolean state such as `enabled`, `sync`, or `default on`
+- stacking multiple heavy bordered panels for ordinary short forms
+
 ### AI assist triggers
 
 - `AI Assist` is one shared capability with different trigger shapes based on object scope

@@ -342,16 +342,22 @@ code {
 .spark-dialog-shell__content {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 0;
 }
 
-.spark-dialog-shell__header,
-.spark-dialog-shell__body,
+.spark-dialog-shell__header {
+  padding: 4px 0 16px;
+}
+
+.spark-dialog-shell__body {
+  padding: 0 0 16px;
+}
+
 .spark-dialog-shell__footer {
-  border: 1px solid #dde1e6;
-  border-radius: 9px;
-  background: #fafafa;
-  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 0 0;
+  border-top: 1px solid #e5e7eb;
 }
 
 .spark-dialog-shell__title {
