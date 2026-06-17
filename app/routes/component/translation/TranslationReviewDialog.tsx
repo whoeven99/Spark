@@ -321,11 +321,22 @@ export function TranslationReviewDialog({
             : ""}
         </span>
       }
+      footer={
+        <div style={dialogFooterStyle}>
+          <div style={dialogFooterMetaStyle}>
+            {job
+              ? `验证阶段读回校验：成功 ${job.verifyDone} · 失败 ${job.verifyFailed}。本页对账为实时查询 Shopify 的最新结果。`
+              : "对账结果为实时读取 Shopify 当前线上译文。"}
+          </div>
+          <s-button type="button" variant="secondary" onClick={onClose}>
+            关闭
+          </s-button>
+        </div>
+      }
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 280 }}>
-        {/* 工具栏 */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.75rem", color: pageColorTokens.textBody }}>
+      <div style={reviewDialogBodyStyle}>
+        <div style={reviewToolbarStyle}>
+          <label style={toolbarControlLabelStyle}>
             模块
             <select
               value={moduleFilter}
@@ -333,12 +344,7 @@ export function TranslationReviewDialog({
                 setModuleFilter(e.target.value);
                 setPage(1);
               }}
-              style={{
-                fontSize: "0.75rem",
-                padding: "4px 8px",
-                borderRadius: 6,
-                border: `1px solid ${pageColorTokens.borderInput}`,
-              }}
+              style={toolbarSelectStyle}
             >
               <option value="">全部</option>
               {(payload?.moduleOptions ?? []).map((m) => (
@@ -348,34 +354,22 @@ export function TranslationReviewDialog({
               ))}
             </select>
           </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.75rem", color: pageColorTokens.textBody, cursor: "pointer" }}>
+          <label style={toolbarCheckboxLabelStyle}>
             <input type="checkbox" checked={onlyMismatch} onChange={(e) => setOnlyMismatch(e.target.checked)} />
             只看异常字段
           </label>
-          <button
-            type="button"
-            onClick={() => void load(true)}
-            disabled={loading}
-            style={{
-              marginLeft: "auto",
-              fontSize: "0.75rem",
-              padding: "4px 12px",
-              borderRadius: 6,
-              border: `1px solid ${pageColorTokens.borderInput}`,
-              background: pageColorTokens.surface,
-              cursor: loading ? "default" : "pointer",
-            }}
-          >
-            {loading ? "刷新中..." : "刷新"}
-          </button>
+          <div style={toolbarActionGroupStyle}>
+            <button type="button" onClick={() => void load(true)} disabled={loading} style={toolbarGhostButtonStyle(loading)}>
+              {loading ? "刷新中..." : "刷新"}
+            </button>
+          </div>
         </div>
 
         {error ? (
-          <div style={{ fontSize: "0.8125rem", color: pageColorTokens.criticalText, padding: "8px 0" }}>{error}</div>
+          <div style={errorBannerStyle}>{error}</div>
         ) : null}
 
-        {/* 表格 */}
-        <div style={{ maxHeight: "62vh", overflow: "auto", border: `1px solid ${pageColorTokens.border}`, borderRadius: 8 }}>
+        <div style={reviewTableShellStyle}>
           <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
             <thead>
               <tr>
@@ -427,14 +421,7 @@ export function TranslationReviewDialog({
                               value={editing[id]}
                               onChange={(e) => setEditing((p) => ({ ...p, [id]: e.target.value }))}
                               rows={3}
-                              style={{
-                                width: "100%",
-                                fontSize: "0.75rem",
-                                padding: 6,
-                                borderRadius: 6,
-                                border: `1px solid ${pageColorTokens.borderInput}`,
-                                resize: "vertical",
-                              }}
+                              style={reviewTextareaStyle}
                             />
                           ) : (
                             f.translatedValue
@@ -444,23 +431,15 @@ export function TranslationReviewDialog({
                           {f.shopifyValue ?? "（线上无此译文）"}
                         </td>
                         <td style={cellStyle}>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
+                          <div style={statusActionStackStyle}>
                             <StatusPill status={f.status} />
                             {isEditing ? (
-                              <div style={{ display: "flex", gap: 6 }}>
+                              <div style={inlineActionRowStyle}>
                                 <button
                                   type="button"
                                   disabled={savingKey === id}
                                   onClick={() => void handleRewrite(row.resourceId, f.key, editing[id])}
-                                  style={{
-                                    fontSize: "0.6875rem",
-                                    padding: "2px 8px",
-                                    borderRadius: 6,
-                                    border: "none",
-                                    background: pageColorTokens.brandBlue,
-                                    color: "#fff",
-                                    cursor: savingKey === id ? "default" : "pointer",
-                                  }}
+                                  style={inlinePrimaryActionStyle(savingKey === id)}
                                 >
                                   {savingKey === id ? "写回中..." : "重新写回"}
                                 </button>
@@ -474,14 +453,7 @@ export function TranslationReviewDialog({
                                       return n;
                                     })
                                   }
-                                  style={{
-                                    fontSize: "0.6875rem",
-                                    padding: "2px 8px",
-                                    borderRadius: 6,
-                                    border: `1px solid ${pageColorTokens.borderInput}`,
-                                    background: pageColorTokens.surface,
-                                    cursor: "pointer",
-                                  }}
+                                  style={inlineSecondaryActionStyle(savingKey === id)}
                                 >
                                   取消
                                 </button>
@@ -490,14 +462,7 @@ export function TranslationReviewDialog({
                               <button
                                 type="button"
                                 onClick={() => setEditing((p) => ({ ...p, [id]: f.translatedValue }))}
-                                style={{
-                                  fontSize: "0.6875rem",
-                                  padding: "2px 8px",
-                                  borderRadius: 6,
-                                  border: `1px solid ${pageColorTokens.borderInput}`,
-                                  background: pageColorTokens.surface,
-                                  cursor: "pointer",
-                                }}
+                                style={inlineSecondaryActionStyle(false)}
                               >
                                 编辑
                               </button>
@@ -513,9 +478,8 @@ export function TranslationReviewDialog({
           </table>
         </div>
 
-        {/* 分页 */}
         {totalPages > 1 ? (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, fontSize: "0.75rem" }}>
+          <div style={reviewPagerStyle}>
             <button
               type="button"
               disabled={page <= 1 || loading}
@@ -524,7 +488,7 @@ export function TranslationReviewDialog({
             >
               上一页
             </button>
-            <span style={{ color: pageColorTokens.textSecondary }}>
+            <span style={reviewPagerMetaStyle}>
               第 {payload?.page ?? page} / {totalPages} 页
             </span>
             <button
@@ -537,22 +501,185 @@ export function TranslationReviewDialog({
             </button>
           </div>
         ) : null}
-
-        {job ? (
-          <div style={{ fontSize: "0.6875rem", color: pageColorTokens.textFootnote }}>
-            验证阶段读回校验：成功 {job.verifyDone} · 失败 {job.verifyFailed}。本页对账为实时查询 Shopify 的最新结果。
-          </div>
-        ) : null}
       </div>
     </DialogShell>
   );
 }
 
+const reviewDialogBodyStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 12,
+  minHeight: 280,
+};
+
+const reviewToolbarStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+  flexWrap: "wrap",
+  padding: "0.75rem 0.85rem",
+  borderRadius: 12,
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surfaceSubtle,
+};
+
+const toolbarControlLabelStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  fontSize: "0.75rem",
+  fontWeight: 600,
+  color: pageColorTokens.textBody,
+};
+
+const toolbarCheckboxLabelStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  fontSize: "0.75rem",
+  color: pageColorTokens.textBody,
+  cursor: "pointer",
+};
+
+const toolbarSelectStyle: React.CSSProperties = {
+  fontSize: "0.75rem",
+  minHeight: 32,
+  padding: "6px 10px",
+  borderRadius: 10,
+  border: `1px solid ${pageColorTokens.borderInput}`,
+  background: pageColorTokens.surface,
+  color: pageColorTokens.textBody,
+};
+
+const toolbarActionGroupStyle: React.CSSProperties = {
+  marginLeft: "auto",
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+function toolbarGhostButtonStyle(disabled: boolean): React.CSSProperties {
+  return {
+    fontSize: "0.75rem",
+    fontWeight: 600,
+    minHeight: 32,
+    padding: "6px 12px",
+    borderRadius: 10,
+    border: `1px solid ${pageColorTokens.borderInput}`,
+    background: pageColorTokens.surface,
+    color: disabled ? pageColorTokens.textFootnote : pageColorTokens.textBody,
+    cursor: disabled ? "default" : "pointer",
+  };
+}
+
+const errorBannerStyle: React.CSSProperties = {
+  fontSize: "0.8125rem",
+  color: pageColorTokens.criticalText,
+  padding: "0.75rem 0.85rem",
+  borderRadius: 12,
+  border: `1px solid ${pageColorTokens.criticalText}22`,
+  background: "#fff0ee",
+};
+
+const reviewTableShellStyle: React.CSSProperties = {
+  maxHeight: "62vh",
+  overflow: "auto",
+  border: `1px solid ${pageColorTokens.border}`,
+  borderRadius: 12,
+  background: pageColorTokens.surface,
+};
+
+const reviewTextareaStyle: React.CSSProperties = {
+  width: "100%",
+  fontSize: "0.75rem",
+  minHeight: 72,
+  padding: "8px 10px",
+  borderRadius: 10,
+  border: `1px solid ${pageColorTokens.borderInput}`,
+  resize: "vertical",
+  color: pageColorTokens.textBody,
+  background: pageColorTokens.surface,
+  boxSizing: "border-box",
+};
+
+const statusActionStackStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
+  alignItems: "flex-start",
+};
+
+const inlineActionRowStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 6,
+  flexWrap: "wrap",
+};
+
+function inlinePrimaryActionStyle(disabled: boolean): React.CSSProperties {
+  return {
+    fontSize: "0.6875rem",
+    fontWeight: 600,
+    minHeight: 28,
+    padding: "4px 10px",
+    borderRadius: 8,
+    border: "none",
+    background: disabled ? "#7dc9b3" : pageColorTokens.brandGreen,
+    color: "#fff",
+    cursor: disabled ? "default" : "pointer",
+  };
+}
+
+function inlineSecondaryActionStyle(disabled: boolean): React.CSSProperties {
+  return {
+    fontSize: "0.6875rem",
+    fontWeight: 600,
+    minHeight: 28,
+    padding: "4px 10px",
+    borderRadius: 8,
+    border: `1px solid ${pageColorTokens.borderInput}`,
+    background: pageColorTokens.surface,
+    color: disabled ? pageColorTokens.textFootnote : pageColorTokens.textBody,
+    cursor: disabled ? "default" : "pointer",
+  };
+}
+
+const reviewPagerStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 12,
+  fontSize: "0.75rem",
+  paddingTop: 4,
+};
+
+const reviewPagerMetaStyle: React.CSSProperties = {
+  color: pageColorTokens.textSecondary,
+};
+
+const dialogFooterStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  flexWrap: "wrap",
+};
+
+const dialogFooterMetaStyle: React.CSSProperties = {
+  fontSize: "0.75rem",
+  color: pageColorTokens.textFootnote,
+  lineHeight: 1.5,
+  minWidth: 0,
+  flex: "1 1 16rem",
+};
+
 function pagerBtnStyle(disabled: boolean): React.CSSProperties {
   return {
     fontSize: "0.75rem",
-    padding: "4px 12px",
-    borderRadius: 6,
+    fontWeight: 600,
+    minHeight: 32,
+    padding: "6px 12px",
+    borderRadius: 10,
     border: `1px solid ${pageColorTokens.borderInput}`,
     background: pageColorTokens.surface,
     color: disabled ? pageColorTokens.textFootnote : pageColorTokens.textBody,

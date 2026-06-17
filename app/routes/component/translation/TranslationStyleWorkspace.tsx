@@ -4,6 +4,7 @@ import type { GlossaryTerm } from "../../../server/translation/glossary.server";
 import type { ShopProfile } from "../../../server/translation/shopAnalysis.server";
 import { ShopAnalysisPanel } from "./ShopAnalysisPanel";
 import { TranslationGlossaryPanel } from "./TranslationGlossaryPanel";
+import { DialogShell } from "../shared/DialogShell";
 import {
   PageSurface,
   formErrorBoxStyle,
@@ -97,48 +98,46 @@ function LineItemsEditorOverlay({
   const editableItems = getEditableLineItems(items);
 
   return (
-    <div style={overlayBackdropStyle}>
-      <div style={overlayPanelStyle}>
-        <div style={overlayHeaderStyle}>
-          <div>
-            <h4 style={overlayTitleStyle}>{title}</h4>
-            <div style={overlaySubtitleStyle}>{subtitle}</div>
-          </div>
-          <button type="button" style={overlayCloseButtonStyle} onClick={onClose}>
-            完成
-          </button>
-        </div>
-
-        <div style={overlayListStyle}>
-          {editableItems.map((item, index) => (
-            <div key={`${title}-${index}`} style={overlayListRowStyle}>
-              <span style={overlayIndexStyle}>{index + 1}</span>
-              <input
-                type="text"
-                value={item}
-                onChange={(e) => onChangeItem(index, e.target.value)}
-                style={overlayInputStyle}
-                placeholder="请输入内容"
-              />
-              <button
-                type="button"
-                style={lineEditorActionStyle}
-                onClick={() => onRemoveItem(index)}
-                disabled={editableItems.length <= 1 && !item}
-              >
-                删除
-              </button>
-            </div>
-          ))}
-        </div>
-
-        <div style={overlayFooterStyle}>
+    <DialogShell
+      open
+      onClose={onClose}
+      width={760}
+      title={title}
+      description={subtitle}
+      footer={
+        <div style={dialogFooterActionsStyle}>
           <button type="button" style={lineEditorAddButtonStyle} onClick={onAddItem}>
             + 新增一行
           </button>
+          <s-button type="button" variant="secondary" onClick={onClose}>
+            完成
+          </s-button>
         </div>
+      }
+    >
+      <div style={overlayListStyle}>
+        {editableItems.map((item, index) => (
+          <div key={`${title}-${index}`} style={overlayListRowStyle}>
+            <span style={overlayIndexStyle}>{index + 1}</span>
+            <input
+              type="text"
+              value={item}
+              onChange={(e) => onChangeItem(index, e.target.value)}
+              style={overlayInputStyle}
+              placeholder="请输入内容"
+            />
+            <button
+              type="button"
+              style={lineEditorActionStyle}
+              onClick={() => onRemoveItem(index)}
+              disabled={editableItems.length <= 1 && !item}
+            >
+              删除
+            </button>
+          </div>
+        ))}
       </div>
-    </div>
+    </DialogShell>
   );
 }
 
@@ -322,6 +321,11 @@ export function TranslationStyleWorkspace({
     setGlossaryReloadToken((prev) => prev + 1);
   };
 
+  const handleCloseAiSuggestion = () => {
+    setAiSuggestionTarget(null);
+    handleAiSuggestionApplied();
+  };
+
   const handleOpenPage = (page: WorkspacePage) => {
     setActivePage(page);
   };
@@ -467,9 +471,9 @@ export function TranslationStyleWorkspace({
                     在这里维护行业、语气风格、目标受众和翻译指令。右上角可直接使用 AI 生成建议，再按业务需要微调后保存。
                   </p>
                 </div>
-                <button type="button" style={secondaryActionButtonStyle} onClick={() => openAiSuggestion("profile")}>
+                <s-button type="button" variant="secondary" onClick={() => openAiSuggestion("profile")}>
                   生成 AI 建议
-                </button>
+                </s-button>
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
@@ -491,7 +495,10 @@ export function TranslationStyleWorkspace({
                   <>
                     <div style={formStackStyle}>
                       <div style={fieldBlockStyle}>
-                        <div style={pageFieldLabelStyle}>行业</div>
+                        <div style={fieldHeaderStyle}>
+                          <div style={pageFieldLabelStyle}>行业</div>
+                          <div style={fieldHelpTextStyle}>用于限定商品表达和翻译语境，例如美妆、家居、宠物用品。</div>
+                        </div>
                         <input
                           type="text"
                           value={profileForm.industry}
@@ -501,7 +508,10 @@ export function TranslationStyleWorkspace({
                         />
                       </div>
                       <div style={fieldBlockStyle}>
-                        <div style={pageFieldLabelStyle}>语气风格</div>
+                        <div style={fieldHeaderStyle}>
+                          <div style={pageFieldLabelStyle}>语气风格</div>
+                          <div style={fieldHelpTextStyle}>描述品牌表达方式，例如简洁专业、轻松友好、克制理性。</div>
+                        </div>
                         <input
                           type="text"
                           value={profileForm.toneOfVoice}
@@ -511,7 +521,10 @@ export function TranslationStyleWorkspace({
                         />
                       </div>
                       <div style={fieldBlockStyle}>
-                        <div style={pageFieldLabelStyle}>目标受众</div>
+                        <div style={fieldHeaderStyle}>
+                          <div style={pageFieldLabelStyle}>目标受众</div>
+                          <div style={fieldHelpTextStyle}>帮助 AI 判断文案面向的人群和使用场景。</div>
+                        </div>
                         <input
                           type="text"
                           value={profileForm.targetAudience}
@@ -522,9 +535,21 @@ export function TranslationStyleWorkspace({
                       </div>
                       <div style={listFieldCardStyle}>
                         <div style={listFieldHeaderStyle}>
-                          <div style={pageFieldLabelStyle}>高频词</div>
-                          <div style={listFieldHintStyle}>
-                            {formatSummaryCount(profileForm.highFrequencyTerms.filter(Boolean).length, "项")}
+                          <div style={fieldHeaderStyle}>
+                            <div style={pageFieldLabelStyle}>高频词</div>
+                            <div style={fieldHelpTextStyle}>维护品牌名、固定卖点、活动词等应优先保留或统一表达的词语。</div>
+                          </div>
+                          <div style={listFieldMetaStyle}>
+                            <div style={listFieldHintStyle}>
+                              {formatSummaryCount(profileForm.highFrequencyTerms.filter(Boolean).length, "项")}
+                            </div>
+                            <s-button
+                              type="button"
+                              variant="secondary"
+                              onClick={() => setActiveListEditor("highFrequencyTerms")}
+                            >
+                              编辑高频词
+                            </s-button>
                           </div>
                         </div>
                         <div style={summaryPreviewListStyle}>
@@ -537,19 +562,24 @@ export function TranslationStyleWorkspace({
                             <div style={summaryPreviewEmptyStyle}>尚未添加高频词</div>
                           ) : null}
                         </div>
-                        <button
-                          type="button"
-                          style={summaryEditButtonStyle}
-                          onClick={() => setActiveListEditor("highFrequencyTerms")}
-                        >
-                          编辑高频词
-                        </button>
                       </div>
                       <div style={listFieldCardStyle}>
                         <div style={listFieldHeaderStyle}>
-                          <div style={pageFieldLabelStyle}>风格备注</div>
-                          <div style={listFieldHintStyle}>
-                            {formatSummaryCount(profileForm.styleNotes.filter(Boolean).length, "条")}
+                          <div style={fieldHeaderStyle}>
+                            <div style={pageFieldLabelStyle}>风格备注</div>
+                            <div style={fieldHelpTextStyle}>补充不应过度营销、句式偏好、品牌调性限制等规则。</div>
+                          </div>
+                          <div style={listFieldMetaStyle}>
+                            <div style={listFieldHintStyle}>
+                              {formatSummaryCount(profileForm.styleNotes.filter(Boolean).length, "条")}
+                            </div>
+                            <s-button
+                              type="button"
+                              variant="secondary"
+                              onClick={() => setActiveListEditor("styleNotes")}
+                            >
+                              编辑风格备注
+                            </s-button>
                           </div>
                         </div>
                         <div style={summaryPreviewListStyle}>
@@ -562,16 +592,12 @@ export function TranslationStyleWorkspace({
                             <div style={summaryPreviewEmptyStyle}>尚未添加风格备注</div>
                           ) : null}
                         </div>
-                        <button
-                          type="button"
-                          style={summaryEditButtonStyle}
-                          onClick={() => setActiveListEditor("styleNotes")}
-                        >
-                          编辑风格备注
-                        </button>
                       </div>
                       <div style={fieldBlockStyle}>
-                        <div style={pageFieldLabelStyle}>翻译指令</div>
+                        <div style={fieldHeaderStyle}>
+                          <div style={pageFieldLabelStyle}>翻译指令</div>
+                          <div style={fieldHelpTextStyle}>这里的内容会进入翻译提示词，用于约束整体表达、术语和语气。</div>
+                        </div>
                         <textarea
                           rows={4}
                           value={profileForm.translationInstructions}
@@ -642,25 +668,14 @@ export function TranslationStyleWorkspace({
       ) : null}
 
       {aiSuggestionTarget ? (
-        <div style={overlayBackdropStyle}>
-          <div style={suggestionOverlayPanelStyle}>
-            <div style={overlayHeaderStyle}>
-              <div>
-                <h4 style={overlayTitleStyle}>
-                  {aiSuggestionTarget === "profile" ? "商店档案 AI 建议" : "术语表 AI 建议"}
-                </h4>
-              </div>
-              <button
-                type="button"
-                style={overlayCloseButtonStyle}
-                onClick={() => {
-                  setAiSuggestionTarget(null);
-                  handleAiSuggestionApplied();
-                }}
-              >
-                关闭
-              </button>
-            </div>
+        <DialogShell
+          open
+          onClose={handleCloseAiSuggestion}
+          width={1120}
+          title={aiSuggestionTarget === "profile" ? "商店档案 AI 建议" : "术语表 AI 建议"}
+          description="AI 会结合当前店铺上下文生成建议内容；请先检查和调整，再决定是否应用。"
+        >
+          <div style={suggestionDialogBodyStyle}>
             <ShopAnalysisPanel
               locationSearch={locationSearch}
               defaultSourceLanguage={sourceLocale}
@@ -674,7 +689,7 @@ export function TranslationStyleWorkspace({
               }}
             />
           </div>
-        </div>
+        </DialogShell>
       ) : null}
     </>
   );
@@ -739,17 +754,31 @@ const formStackStyle: CSSProperties = {
 const fieldBlockStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  gap: "0.38rem",
+  gap: "0.45rem",
+};
+
+const fieldHeaderStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.2rem",
+};
+
+const fieldHelpTextStyle: CSSProperties = {
+  fontSize: "0.75rem",
+  color: pageColorTokens.textSecondary,
+  lineHeight: 1.5,
 };
 
 const inputStyle: CSSProperties = {
   width: "100%",
-  padding: "0.5rem 0.65rem",
-  borderRadius: pageColorTokens.radiusControl,
+  minHeight: 36,
+  padding: "0.45rem 0.65rem",
+  borderRadius: "10px",
   border: `1px solid ${pageColorTokens.borderInput}`,
   fontSize: "0.875rem",
   color: pageColorTokens.textBody,
   boxSizing: "border-box",
+  background: pageColorTokens.surface,
 };
 
 const textareaStyle: CSSProperties = {
@@ -757,8 +786,8 @@ const textareaStyle: CSSProperties = {
   resize: "vertical",
   fontFamily: "inherit",
   lineHeight: 1.55,
-  minHeight: "4.8rem",
-  maxHeight: "6.8rem",
+  minHeight: "5.5rem",
+  maxHeight: "8rem",
 };
 
 const listFieldCardStyle: CSSProperties = {
@@ -768,15 +797,21 @@ const listFieldCardStyle: CSSProperties = {
   padding: "0.9rem 1rem",
   borderRadius: "12px",
   border: `1px solid ${pageColorTokens.borderSubtle}`,
-  background: "linear-gradient(180deg, #f8fbfb 0%, #ffffff 100%)",
-  boxShadow: "0 8px 22px rgba(15, 23, 42, 0.04)",
+  background: pageColorTokens.surfaceSubtle,
 };
 
 const listFieldHeaderStyle: CSSProperties = {
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "space-between",
   gap: "0.6rem",
+  flexWrap: "wrap",
+};
+
+const listFieldMetaStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "0.5rem",
   flexWrap: "wrap",
 };
 
@@ -803,101 +838,6 @@ const summaryPreviewChipStyle: CSSProperties = {
 const summaryPreviewEmptyStyle: CSSProperties = {
   fontSize: "0.75rem",
   color: pageColorTokens.textSecondary,
-};
-
-const summaryEditButtonStyle: CSSProperties = {
-  alignSelf: "flex-start",
-  border: "none",
-  background: pageColorTokens.surfaceMuted,
-  color: pageColorTokens.textBody,
-  cursor: "pointer",
-  fontSize: "0.8125rem",
-  padding: "0.45rem 0.7rem",
-  borderRadius: "999px",
-};
-
-const ghostSuggestionButtonStyle: CSSProperties = {
-  ...summaryEditButtonStyle,
-  background: "transparent",
-  border: `1px dashed ${pageColorTokens.borderSubtle}`,
-};
-
-const secondaryActionButtonStyle: CSSProperties = {
-  border: "none",
-  background: pageColorTokens.surfaceMuted,
-  color: pageColorTokens.textBody,
-  cursor: "pointer",
-  fontSize: "0.8125rem",
-  padding: "0.5rem 0.8rem",
-  borderRadius: "999px",
-};
-
-const overlayBackdropStyle: CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(15, 23, 42, 0.24)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "0.9rem",
-  zIndex: 80,
-};
-
-const overlayPanelStyle: CSSProperties = {
-  width: "min(760px, 100%)",
-  maxHeight: "80vh",
-  overflow: "auto",
-  borderRadius: "20px",
-  background: "#ffffff",
-  boxShadow: "0 24px 60px rgba(15, 23, 42, 0.18)",
-  padding: "1rem",
-  display: "flex",
-  flexDirection: "column",
-  gap: "1rem",
-};
-
-const suggestionOverlayPanelStyle: CSSProperties = {
-  width: "min(1120px, 100%)",
-  maxHeight: "88vh",
-  overflow: "auto",
-  borderRadius: "20px",
-  background: "#ffffff",
-  boxShadow: "0 24px 60px rgba(15, 23, 42, 0.18)",
-  padding: "0.8rem 0.9rem",
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.75rem",
-};
-
-const overlayHeaderStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "space-between",
-  gap: "0.65rem",
-};
-
-const overlayTitleStyle: CSSProperties = {
-  margin: 0,
-  fontSize: "1rem",
-  fontWeight: 700,
-  color: pageColorTokens.textPrimary,
-};
-
-const overlaySubtitleStyle: CSSProperties = {
-  marginTop: "0.2rem",
-  fontSize: "0.8125rem",
-  color: pageColorTokens.textSecondary,
-  lineHeight: 1.5,
-};
-
-const overlayCloseButtonStyle: CSSProperties = {
-  border: "none",
-  background: pageColorTokens.surfaceMuted,
-  color: pageColorTokens.textBody,
-  cursor: "pointer",
-  fontSize: "0.8125rem",
-  padding: "0.35rem 0.65rem",
-  borderRadius: "999px",
 };
 
 const overlayListStyle: CSSProperties = {
@@ -947,9 +887,20 @@ const lineEditorAddButtonStyle: CSSProperties = {
   borderRadius: "999px",
 };
 
-const overlayFooterStyle: CSSProperties = {
+const dialogFooterActionsStyle: CSSProperties = {
   display: "flex",
-  justifyContent: "flex-start",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "0.75rem",
+  flexWrap: "wrap",
+};
+
+const suggestionDialogBodyStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.75rem",
+  maxHeight: "72vh",
+  overflow: "auto",
 };
 
 const footerRowStyle: CSSProperties = {

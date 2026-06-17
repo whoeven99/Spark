@@ -1398,7 +1398,7 @@ export function TranslationV4Page() {
                           </div>
 
                           <div style={automationCardBodyStyle}>
-                            <div style={automationManageRowStyle(isMobile)}>
+                            <div style={automationSectionRowStyle(isMobile)}>
                               <div style={automationManageFieldStyle}>
                                 <span style={automationSectionLabelStyle}>启用状态</span>
                                 <div style={automationStatusHelpStyle}>
@@ -1419,7 +1419,7 @@ export function TranslationV4Page() {
                             </div>
 
                             <div style={automationControlsGridStyle(isMobile)}>
-                              <div style={automationManageFieldStyle}>
+                              <div style={automationFieldPanelStyle}>
                                 <TranslationMultiSelect
                                   id={`translation-automation-targets-${automation.id}`}
                                   label="自动更新语言"
@@ -1434,7 +1434,7 @@ export function TranslationV4Page() {
                                 />
                               </div>
 
-                              <div style={automationManageFieldStyle}>
+                              <div style={automationFieldPanelStyle}>
                                 <TranslationModuleMultiSelect
                                   id={`translation-automation-modules-${automation.id}`}
                                   label="自动更新模块"
@@ -1467,29 +1467,37 @@ export function TranslationV4Page() {
                                 </span>
                               </div>
                             </div>
+
+                            <div style={automationFieldPanelStyle}>
+                              <div style={automationManageFieldStyle}>
+                                <span style={automationSectionLabelStyle}>执行频率</span>
+                                <span style={automationStatusHelpStyle}>
+                                  调整自动翻译任务的触发节奏，保存后会立即更新当前规则。
+                                </span>
+                                <select
+                                  value={automation.frequency}
+                                  onChange={(event) =>
+                                    handleAutomationFrequencyChange(
+                                      automation.id,
+                                      event.target.value as AutomationFrequency,
+                                    )}
+                                  disabled={!automation.enabled}
+                                  style={automationSelectStyle}
+                                >
+                                  {AUTOMATION_FREQUENCY_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
                           </div>
 
-                          <div style={automationManageRowStyle(isMobile)}>
-                            <div style={automationManageFieldStyle}>
-                              <span style={automationSectionLabelStyle}>执行频率</span>
-                              <select
-                                value={automation.frequency}
-                                onChange={(event) =>
-                                  handleAutomationFrequencyChange(
-                                    automation.id,
-                                    event.target.value as AutomationFrequency,
-                                  )}
-                                disabled={!automation.enabled}
-                                style={automationSelectStyle}
-                              >
-                                {AUTOMATION_FREQUENCY_OPTIONS.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
+                          <div style={automationCardFooterStyle(isMobile)}>
+                            <div style={automationFooterHintStyle}>
+                              删除会移除该规则对象，不影响已完成的历史翻译任务记录。
                             </div>
-
                             <s-button
                               type="button"
                               variant="secondary"
@@ -1508,25 +1516,20 @@ export function TranslationV4Page() {
           </div>
         ) : (
           <div style={taskPageSectionStyle}>
-            <div style={isMobile ? mobileTaskViewSwitchBarStyle : taskViewSwitchBarStyle}>
-              <div style={isMobile ? mobileTaskViewButtonsStyle : taskViewButtonsStyle}>
-                {([
-                  { key: "current" as const, label: `当前任务（${currentJobs.length}）` },
-                  { key: "history" as const, label: `历史任务（${historyJobs.length}）` },
-                ] satisfies Array<{ key: TaskViewTab; label: string }>).map((tab) => {
-                  const active = taskView === tab.key;
-                  return (
-                    <button
-                      key={tab.key}
-                      type="button"
-                      onClick={() => setTaskView(tab.key)}
-                      style={taskViewButtonStyle(active)}
-                    >
-                      {tab.label}
-                    </button>
-                  );
-                })}
-              </div>
+            <div style={taskViewSwitchShellStyle}>
+              <SegmentedPageTabs
+                activeTab={taskView}
+                onTabChange={setTaskView}
+                ariaLabel="翻译任务视图切换"
+                className="spark-segmented-tabs--secondary-level"
+                items={[
+                  { key: "current", label: "当前任务", badgeCount: currentJobs.length },
+                  { key: "history", label: "历史任务", badgeCount: historyJobs.length },
+                ] satisfies Array<{ key: TaskViewTab; label: string; badgeCount: number }>}
+                density="compact"
+                mobileFullWidth
+                style={{ margin: 0 }}
+              />
               <div style={taskViewHintStyle}>
                 {taskView === "current"
                   ? `最近 24 小时任务 · 运行中 ${runningCount} · 已完成 ${completedCount} · 需处理 ${attentionCount}`
@@ -2852,16 +2855,10 @@ const mobileConfigFooterStyle: React.CSSProperties = {
   gap: 12,
 };
 
-const mobileTaskViewSwitchBarStyle: React.CSSProperties = {
+const taskViewSwitchShellStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 10,
-};
-
-const mobileTaskViewButtonsStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: 8,
 };
 
 function testEnvPanelStyle(active: boolean): React.CSSProperties {
@@ -2939,38 +2936,6 @@ const taskPageSectionStyle: React.CSSProperties = {
   gap: 12,
 };
 
-const taskViewSwitchBarStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 12,
-  flexWrap: "wrap",
-  padding: "0.5rem",
-  borderRadius: 999,
-  background: pageColorTokens.surfaceMuted,
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
-};
-
-const taskViewButtonsStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 6,
-  flexWrap: "wrap",
-};
-
-function taskViewButtonStyle(active: boolean): React.CSSProperties {
-  return {
-    padding: "0.5rem 0.9rem",
-    borderRadius: 999,
-    border: `1px solid ${active ? pageColorTokens.borderSubtle : "transparent"}`,
-    background: active ? pageColorTokens.surface : "transparent",
-    color: active ? pageColorTokens.textPrimary : pageColorTokens.textSecondary,
-    boxShadow: active ? pageColorTokens.shadowCard : "none",
-    fontSize: 13,
-    fontWeight: active ? 700 : 600,
-    cursor: "pointer",
-  };
-}
-
 const taskViewHintStyle: React.CSSProperties = {
   fontSize: 12,
   color: pageColorTokens.textSecondary,
@@ -3006,11 +2971,12 @@ const automationCardStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   width: "100%",
-  gap: 12,
+  gap: 14,
   padding: "1rem",
-  borderRadius: "12px",
+  borderRadius: "14px",
   border: `1px solid ${pageColorTokens.borderSubtle}`,
   background: pageColorTokens.surface,
+  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
 };
 
 const automationCardHeaderStyle: React.CSSProperties = {
@@ -3019,6 +2985,8 @@ const automationCardHeaderStyle: React.CSSProperties = {
   justifyContent: "space-between",
   gap: 12,
   flexWrap: "wrap",
+  paddingBottom: 12,
+  borderBottom: `1px solid ${pageColorTokens.borderSubtle}`,
 };
 
 const automationCardTitleStyle: React.CSSProperties = {
@@ -3065,6 +3033,16 @@ const automationCardBodyStyle: React.CSSProperties = {
   gap: 12,
 };
 
+function automationSectionRowStyle(isMobile: boolean): React.CSSProperties {
+  return {
+    display: "flex",
+    alignItems: isMobile ? "stretch" : "flex-end",
+    justifyContent: "space-between",
+    gap: 12,
+    flexDirection: isMobile ? "column" : "row",
+  };
+}
+
 function automationInfoGridStyle(isMobile: boolean): React.CSSProperties {
   return {
     display: "grid",
@@ -3078,6 +3056,14 @@ const automationInfoPanelStyle: React.CSSProperties = {
   flexDirection: "column",
   gap: 6,
   padding: "0.8rem 0.9rem",
+  borderRadius: "12px",
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  background: pageColorTokens.surfaceSubtle,
+  minWidth: 0,
+};
+
+const automationFieldPanelStyle: React.CSSProperties = {
+  padding: "0.85rem 0.9rem",
   borderRadius: "12px",
   border: `1px solid ${pageColorTokens.borderSubtle}`,
   background: pageColorTokens.surfaceSubtle,
@@ -3125,14 +3111,14 @@ const translationSettingsSummaryStyle: React.CSSProperties = {
   lineHeight: 1.6,
 };
 
-function automationManageRowStyle(isMobile: boolean): React.CSSProperties {
+function automationCardFooterStyle(isMobile: boolean): React.CSSProperties {
   return {
     display: "flex",
-    alignItems: isMobile ? "stretch" : "flex-end",
+    alignItems: isMobile ? "stretch" : "center",
     justifyContent: "space-between",
     gap: 12,
     flexDirection: isMobile ? "column" : "row",
-    paddingTop: 4,
+    paddingTop: 12,
     borderTop: `1px solid ${pageColorTokens.borderSubtle}`,
   };
 }
@@ -3149,6 +3135,14 @@ const automationStatusHelpStyle: React.CSSProperties = {
   fontSize: "0.75rem",
   color: pageColorTokens.textSecondary,
   lineHeight: 1.5,
+};
+
+const automationFooterHintStyle: React.CSSProperties = {
+  fontSize: "0.75rem",
+  color: pageColorTokens.textSecondary,
+  lineHeight: 1.5,
+  minWidth: 0,
+  flex: "1 1 16rem",
 };
 
 function automationControlsGridStyle(isMobile: boolean): React.CSSProperties {

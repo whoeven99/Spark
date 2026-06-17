@@ -345,7 +345,7 @@ export function ShopAnalysisPanel({
   // ── Render ─────────────────────────────────────────────────────────────────
 
   const content = (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+    <div style={suggestionEditorShellStyle}>
         <div style={isProfileTarget ? compactActionRowStyle : actionRowStyle}>
           {!isProfileTarget && !embedded ? (
             <div style={{ ...pageHintTextStyle, marginTop: 0 }}>
@@ -377,25 +377,7 @@ export function ShopAnalysisPanel({
         ) : null}
 
         {relevantJob && !isProfileTarget ? (
-          <span
-            style={{
-              alignSelf: "flex-start",
-              padding: "0.18rem 0.65rem",
-              borderRadius: 999,
-              fontSize: "0.75rem",
-              fontWeight: 700,
-              color: statusColor(relevantJob.status),
-              background: statusBg(relevantJob.status),
-              border: `1px solid ${statusColor(relevantJob.status)}33`,
-            }}
-          >
-            {statusLabel(relevantJob.status)}
-          </span>
-        ) : null}
-
-          {/* ── 任务状态 ─────────────────────────────────────────── */}
-          {relevantJob && !isProfileTarget ? (
-            <div style={{ ...pageInnerPanelStyle, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            <div style={suggestionStatusPanelStyle}>
               <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
                 <span style={{ ...pageFieldLabelStyle, marginBottom: 0 }}>任务状态</span>
                 <span
@@ -482,7 +464,7 @@ export function ShopAnalysisPanel({
 
           {/* ── 商店档案 ─────────────────────────────────────────── */}
           {target !== "glossary" ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+          <div style={suggestionContentSectionStyle}>
             {!isProfileTarget ? (
               <>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
@@ -514,7 +496,7 @@ export function ShopAnalysisPanel({
             ) : null}
 
             {editingProfile && profileDraft ? (
-              <div style={isProfileTarget ? aiProfileEditorStyle : { ...pageInnerPanelStyle, display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              <div style={isProfileTarget ? aiProfileEditorStyle : suggestionEditorPanelStyle}>
                 {(
                   [
                     { field: "industry" as const, label: "行业", multiline: false },
@@ -602,7 +584,7 @@ export function ShopAnalysisPanel({
                 </div>
               </div>
             ) : hasProfile ? (
-              <div style={pageInnerPanelStyle}>
+              <div style={suggestionReadPanelStyle}>
                 <ProfileRow label="行业" value={profile!.industry} />
                 <ProfileRow label="语气风格" value={profile!.toneOfVoice} />
                 <ProfileRow label="目标受众" value={profile!.targetAudience} />
@@ -661,7 +643,7 @@ export function ShopAnalysisPanel({
 
           {/* ── 术语草稿 ─────────────────────────────────────────── */}
           {target !== "profile" ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+            <div style={suggestionContentSectionStyle}>
               {draftTerms.length > 0 ? (
                 <>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
@@ -707,17 +689,7 @@ export function ShopAnalysisPanel({
                     </s-button>
                   </div>
 
-                  <div
-                    style={{
-                      ...pageInnerPanelStyle,
-                      maxHeight: "480px",
-                      overflowY: "auto",
-                      padding: "0.75rem",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "0.5rem",
-                    }}
-                  >
+                  <div style={suggestionReadPanelListStyle}>
                     {draftTerms.map((term, idx) => (
                       <div
                         key={idx}
@@ -1158,6 +1130,48 @@ const compactActionRowStyle: CSSProperties = {
   display: "flex",
   justifyContent: "flex-end",
   minHeight: 0,
+};
+
+const suggestionEditorShellStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.9rem",
+};
+
+const suggestionStatusPanelStyle: CSSProperties = {
+  ...pageInnerPanelStyle,
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.5rem",
+  background: pageColorTokens.surfaceSubtle,
+};
+
+const suggestionContentSectionStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.65rem",
+};
+
+const suggestionEditorPanelStyle: CSSProperties = {
+  ...pageInnerPanelStyle,
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.75rem",
+};
+
+const suggestionReadPanelStyle: CSSProperties = {
+  ...pageInnerPanelStyle,
+  background: pageColorTokens.surface,
+};
+
+const suggestionReadPanelListStyle: CSSProperties = {
+  ...pageInnerPanelStyle,
+  maxHeight: "480px",
+  overflowY: "auto",
+  padding: "0.75rem",
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.5rem",
 };
 
 const emptyPromptStyle: CSSProperties = {

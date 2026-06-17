@@ -114,6 +114,34 @@ code {
   font-size: 13px;
 }
 
+.spark-segmented-tabs.spark-segmented-tabs--secondary-level {
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: #fafbfb;
+  border-color: #ebedf0;
+  box-shadow: none;
+}
+
+.spark-segmented-tabs.spark-segmented-tabs--secondary-level .spark-segmented-tabs__item {
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.spark-segmented-tabs.spark-segmented-tabs--secondary-level .spark-segmented-tabs__item.is-active {
+  border-color: #e1e3e5;
+  box-shadow: none;
+}
+
+.spark-segmented-tabs.spark-segmented-tabs--secondary-level .spark-segmented-tabs__badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 10px;
+}
+
 .spark-segmented-tabs__item:hover {
   color: #1f2124;
   background: rgba(255, 255, 255, 0.7);

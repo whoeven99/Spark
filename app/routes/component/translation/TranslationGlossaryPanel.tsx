@@ -937,12 +937,21 @@ export function TranslationGlossaryPanel({
             <div style={emptyCompactStateStyle}>暂无术语，点击“编辑术语表”开始新增。</div>
           ) : (
             <div style={summaryPanelStyle}>
-              <div style={pageFieldLabelStyle}>摘要预览</div>
-              <div style={summaryTermsListStyle}>
+              <div style={summaryPreviewHeaderStyle}>
+                <div style={pageFieldLabelStyle}>摘要预览</div>
+                <div style={summaryPreviewMetaStyle}>展示前 6 条术语摘要，完整维护请进入详情编辑器</div>
+              </div>
+              <div style={summaryPreviewTableStyle}>
+                <div style={summaryPreviewRowHeaderStyle}>
+                  <span style={summaryPreviewHeaderCellStyle}>原文</span>
+                  <span style={summaryPreviewHeaderCellStyle}>规则</span>
+                  <span style={summaryPreviewHeaderCellStyle}>目标译文</span>
+                </div>
                 {terms.slice(0, 6).map((term, index) => (
-                  <div key={`${term.source}-${index}`} style={summaryTermChipStyle}>
-                    <span style={{ fontWeight: 600, color: pageColorTokens.textPrimary }}>{term.source || "未命名术语"}</span>
-                    <span style={{ color: pageColorTokens.textSecondary }}>
+                  <div key={`${term.source}-${index}`} style={summaryPreviewRowStyle}>
+                    <span style={summaryPreviewPrimaryCellStyle}>{term.source || "未命名术语"}</span>
+                    <span style={summaryPreviewBodyCellStyle}>{getRuleDescription(term.doNotTranslate)}</span>
+                    <span style={summaryPreviewBodyCellStyle}>
                       {term.doNotTranslate ? (term.source || "不翻译") : formatTranslationsSummary(term.translations)}
                     </span>
                   </div>
@@ -954,13 +963,15 @@ export function TranslationGlossaryPanel({
       </PageSurface>
 
       {editorOpen ? (
-        <div style={overlayBackdropStyle}>
-          <div style={editorPanelStyle}>
-            <div style={editorHeaderStyle}>
-              <div>
-                <div style={titleStyle}>编辑术语表</div>
-              </div>
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <DialogShell
+          open
+          onClose={() => setEditorOpen(false)}
+          width={1100}
+          title="编辑术语表"
+          description="术语表主体以表格方式展示；复杂编辑在详情编辑器中完成。"
+          footer={
+            <div style={glossaryEditorDialogFooterStyle}>
+              <div style={glossaryEditorDialogActionsStyle}>
                 <s-button type="button" variant="secondary" onClick={onRequestAiSuggestion}>
                   生成 AI 建议
                 </s-button>
@@ -970,15 +981,15 @@ export function TranslationGlossaryPanel({
                 <s-button type="button" variant="secondary" onClick={addTerm}>
                   新增术语
                 </s-button>
-                <s-button type="button" variant="secondary" onClick={() => setEditorOpen(false)}>
-                  完成
-                </s-button>
               </div>
+              <s-button type="button" variant="secondary" onClick={() => setEditorOpen(false)}>
+                完成
+              </s-button>
             </div>
-
-            {renderEditorBody()}
-          </div>
-        </div>
+          }
+        >
+          <div style={glossaryEditorDialogBodyStyle}>{renderEditorBody()}</div>
+        </DialogShell>
       ) : null}
 
       {uploadDialog}
@@ -1048,10 +1059,66 @@ const editorPagerButtonsStyle: CSSProperties = {
   flexWrap: "wrap",
 };
 
-const summaryTermsListStyle: CSSProperties = {
+const summaryPreviewHeaderStyle: CSSProperties = {
   display: "flex",
-  flexWrap: "wrap",
-  gap: "0.55rem",
+  flexDirection: "column",
+  gap: "0.35rem",
+};
+
+const summaryPreviewMetaStyle: CSSProperties = {
+  fontSize: "0.75rem",
+  color: pageColorTokens.textSecondary,
+  lineHeight: 1.5,
+};
+
+const summaryPreviewTableStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 0,
+  borderRadius: "12px",
+  border: `1px solid ${pageColorTokens.borderSubtle}`,
+  overflow: "hidden",
+  background: pageColorTokens.surface,
+};
+
+const summaryPreviewRowHeaderStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) 150px minmax(0, 1.3fr)",
+  gap: "0.75rem",
+  padding: "0.7rem 0.85rem",
+  background: pageColorTokens.surfaceSubtle,
+  borderBottom: `1px solid ${pageColorTokens.borderSubtle}`,
+};
+
+const summaryPreviewHeaderCellStyle: CSSProperties = {
+  fontSize: "0.75rem",
+  fontWeight: 700,
+  color: pageColorTokens.textSecondary,
+  minWidth: 0,
+};
+
+const summaryPreviewRowStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) 150px minmax(0, 1.3fr)",
+  gap: "0.75rem",
+  padding: "0.75rem 0.85rem",
+  borderBottom: `1px solid ${pageColorTokens.borderSubtle}`,
+  alignItems: "center",
+};
+
+const summaryPreviewPrimaryCellStyle: CSSProperties = {
+  fontSize: "0.8125rem",
+  fontWeight: 600,
+  color: pageColorTokens.textPrimary,
+  minWidth: 0,
+  overflowWrap: "anywhere",
+};
+
+const summaryPreviewBodyCellStyle: CSSProperties = {
+  fontSize: "0.8125rem",
+  color: pageColorTokens.textBody,
+  minWidth: 0,
+  overflowWrap: "anywhere",
 };
 
 const parseResultHeaderStyle: CSSProperties = {
@@ -1068,38 +1135,6 @@ const parseResultMetaStyle: CSSProperties = {
   lineHeight: 1.6,
 };
 
-const summaryTermChipStyle: CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.15rem",
-  padding: "0.55rem 0.7rem",
-  borderRadius: "12px",
-  background: pageColorTokens.surface,
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
-  minWidth: "140px",
-};
-
-const overlayBackdropStyle: CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(15, 23, 42, 0.24)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "1rem",
-  zIndex: 80,
-};
-
-const editorPanelStyle: CSSProperties = {
-  width: "min(1100px, 100%)",
-  maxHeight: "86vh",
-  overflow: "auto",
-  borderRadius: "20px",
-  background: "#ffffff",
-  boxShadow: "0 24px 60px rgba(15, 23, 42, 0.18)",
-  padding: "1rem",
-};
-
 const editorHeaderStyle: CSSProperties = {
   display: "flex",
   alignItems: "flex-start",
@@ -1107,6 +1142,25 @@ const editorHeaderStyle: CSSProperties = {
   gap: "0.8rem",
   flexWrap: "wrap",
   marginBottom: "1rem",
+};
+
+const glossaryEditorDialogBodyStyle: CSSProperties = {
+  maxHeight: "72vh",
+  overflow: "auto",
+};
+
+const glossaryEditorDialogFooterStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "0.75rem",
+  flexWrap: "wrap",
+};
+
+const glossaryEditorDialogActionsStyle: CSSProperties = {
+  display: "flex",
+  gap: "0.5rem",
+  flexWrap: "wrap",
 };
 
 const backButtonStyle: CSSProperties = {

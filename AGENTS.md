@@ -91,6 +91,15 @@ Optional services (app works partially without): Cosmos DB, Azure Blob, Redis, D
 
 **关键约定**：改代码前必先读对应的 `docs/` 文档（translation、generateDescription、billing 等）。改代码后必须 `npm run test && npm run build` 通过。**admin 项目改动后必须进入 `admin/` 目录运行 `npm run build` 检查编译错误**。
 
+**新增页面 / 模块强制审查**：每次新增页面、子页面、编辑器、卡片类型、表格类型、弹窗、抽屉或新的模块级 UI 时，必须先对照 [`docs/INTERACTION_DESIGN.md`](docs/INTERACTION_DESIGN.md) 与 [`docs/DESIGN.md`](docs/DESIGN.md) 做一次审查，明确：
+
+- 该内容属于哪一种页面类型与内容对象类型
+- 该交互应使用页面、弹窗、抽屉还是详情编辑器
+- 该对象是否已有符合规范的共享类型、共享组件或既定视觉约束
+- 是否需要接入 `AI Assist`，以及应使用对象级 `Suggestion Modal` 还是字段级 `Suggestion Copy`
+
+如果当前需求找不到对应的内容对象类型、交互类型、视觉类型或 AI Assist 承载方式，**不得自行发明新的页面模式或组件语义**；必须先明确告知用户当前规范没有对应类型，并请求用户提供方案后再继续实现。
+
 **新增 Skill / Tool 前必读**：[`docs/ROADMAP.md`](docs/ROADMAP.md) — 包含全部规划中的原子 Skill、优先级、实现路径和所需新增 Shopify Scope，避免重复造轮子或遗漏依赖。
 
 ---
@@ -483,6 +492,7 @@ import {
 | **Agent 运行摘要** | `docs/agent-run-log.md` | 改 Agent 日志记录前 |
 | **工具交互规范** | `docs/INTERACTION_DESIGN.md` | 改 tools 页面流程与任务交互前 |
 | **设计系统规范** | `docs/DESIGN.md` | 改前端组件前 |
+| **新增页面 / 模块审查** | `docs/INTERACTION_DESIGN.md` + `docs/DESIGN.md` | 每次新增页面、模块级 UI、内容对象类型、AI Assist 入口前 |
 
 ---
 
@@ -545,6 +555,8 @@ npm run render:digest          # 生成日报
 ## 改动前检查清单
 
 - ✅ 改代码前，读对应的 `docs/` 文档（如有）
+- ✅ **新增页面 / 模块前，必须先用 `docs/INTERACTION_DESIGN.md` 与 `docs/DESIGN.md` 审查页面类型、内容对象类型、交互承载方式、视觉约束、AI Assist 形态**
+- ✅ **如果规范中没有对应类型，不得自行发明；必须先告诉用户“当前规范无对应类型”，等待用户提供方案**
 - ✅ 只改需求相关文件，避免无关重构
 - ✅ 改后运行：`npm run lint && npm run typecheck && npm run test`
 - ✅ **改后必须 `npm run build && npm run test` 通过**
@@ -553,5 +565,5 @@ npm run render:digest          # 生成日报
 
 ---
 
-*最后更新：2026-05-30*
+*最后更新：2026-06-17*
 *本文档由 Agent 在每次对话时自动加载，用于快速定位文件、理解项目结构、改进代码改动准确性*
