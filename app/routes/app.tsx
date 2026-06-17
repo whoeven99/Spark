@@ -23,6 +23,7 @@ import {
   getAppEntryConfig,
   type NavItemKey,
 } from "../config/appEntry.server";
+import { SupportChatWidget } from "./component/SupportChatWidget";
 
 const NAV_ITEMS: Record<
   NavItemKey,
@@ -159,6 +160,7 @@ export default function App() {
       <AppProvider embedded apiKey={apiKey}>
         <AppNav nav={nav} />
         <Outlet />
+        <SupportChatWidget />
       </AppProvider>
     </AppI18nProvider>
   );

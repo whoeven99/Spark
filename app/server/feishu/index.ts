@@ -12,3 +12,5 @@ export { sendSubscriptionFeishuNotify } from "./scenarios/sendSubscriptionFeishu
 export type { SendSubscriptionFeishuNotifyParams } from "./scenarios/sendSubscriptionFeishuNotify.server";
 export { sendTokenPackFeishuNotify } from "./scenarios/sendTokenPackFeishuNotify.server";
 export type { SendTokenPackFeishuNotifyParams } from "./scenarios/sendTokenPackFeishuNotify.server";
+export { sendSupportMessageFeishuNotify } from "./scenarios/sendSupportMessageFeishuNotify.server";
+export type { SendSupportMessageFeishuNotifyParams } from "./scenarios/sendSupportMessageFeishuNotify.server";

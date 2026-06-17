@@ -23,6 +23,7 @@ import { visitSourceRouter } from "./routes/visitSource.js";
 import { pixelLogsRouter } from "./routes/pixelLogs.js";
 import { appLogsRouter } from "./routes/appLogs.js";
 import { shopAnalysisRouter } from "./routes/shopAnalysis.js";
+import { supportRouter } from "./routes/support.js";
 import { isProductionNodeEnv } from "./lib/nodeEnv.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -63,6 +64,8 @@ app.use("/api/pixel-logs", authMiddleware, requireOwner, pixelLogsRouter);
 // App 功能埋点日志（无 checkout PII），所有登录用户可查
 app.use("/api/app-logs", authMiddleware, appLogsRouter);
 app.use("/api/shop-analysis", authMiddleware, shopAnalysisRouter);
+// 人工客服会话：所有登录运营可见可回复
+app.use("/api/support", authMiddleware, supportRouter);
 
 // Serve built frontend in production
 if (IS_PROD) {
