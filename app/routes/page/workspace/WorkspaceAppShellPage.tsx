@@ -344,9 +344,13 @@ const fallbackDashboardSnapshot: WorkspaceDashboardSnapshot = {
 export function WorkspaceAppShellPage({
   initialConversationList = [],
   dashboardSnapshot = fallbackDashboardSnapshot,
+  currentPlanLabel = "付费计划",
+  accountEmail = "",
 }: {
   initialConversationList?: ConversationSummary[];
   dashboardSnapshot?: WorkspaceDashboardSnapshot;
+  currentPlanLabel?: string;
+  accountEmail?: string;
 }) {
   const shopify = useAppBridge();
   const { t } = useTranslation();
@@ -1008,6 +1012,12 @@ export function WorkspaceAppShellPage({
     ? activeConversation?.title ?? "新对话"
     : panelItems.find((item) => item.key === activePanel)?.label ?? "工作台";
 
+  const openBillingPage = () => {
+    setAccountMenuOpen(false);
+    if (isMobile) setSidebarOpen(false);
+    navigate("/app/billing");
+  };
+
   const sidebarContent = (
     <>
       <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
@@ -1246,29 +1256,35 @@ export function WorkspaceAppShellPage({
       <div ref={accountMenuRef} style={accountMenuWrapStyle}>
         {accountMenuOpen ? (
           <div style={accountMenuStyle}>
+            <div style={accountMenuLabelStyle}>设置</div>
             <div style={accountMenuSectionStyle}>
-              <div style={accountMenuLabelStyle}>语言</div>
-              <LanguageSelector />
+              <LanguageSelector variant="panel" />
             </div>
             <button
               type="button"
               style={accountMenuItemStyle}
-              onClick={() => {
-                setAccountMenuOpen(false);
-                if (isMobile) setSidebarOpen(false);
-                navigate("/app/billing");
-              }}
+              onClick={openBillingPage}
             >
-              Billing
+              管理套餐
             </button>
           </div>
         ) : null}
         <button type="button" style={sidebarFooterButtonStyle} onClick={() => setAccountMenuOpen((current) => !current)}>
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={brandTitleStyle}>{ACCOUNT_DISPLAY_NAME}</div>
-            <div style={brandMetaStyle}>Spark Workspace</div>
+            <div
+              style={{
+                ...brandMetaStyle,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+              title={accountEmail || undefined}
+            >
+              {accountEmail}
+            </div>
           </div>
-          <div style={footerTagStyle}>在线</div>
+          <div style={footerTagStyle}>{currentPlanLabel}</div>
         </button>
       </div>
     </>

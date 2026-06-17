@@ -21,7 +21,7 @@ const LANGUAGE_NATIVE_LABELS: Record<SupportedLocale, string> = {
 
 type LanguageSelectorProps = {
   locale?: SupportedLocale;
-  variant?: "bar" | "inline";
+  variant?: "bar" | "inline" | "panel";
 };
 
 export function LanguageSelector({
@@ -31,6 +31,7 @@ export function LanguageSelector({
   const { i18n, t } = useTranslation();
   const { setLocale, isSyncingLocale } = useLocaleActions();
   const isInline = variant === "inline";
+  const isPanel = variant === "panel";
   const stableA11yLabel = "Language selector";
 
   return (
@@ -41,14 +42,23 @@ export function LanguageSelector({
               display: "inline-flex",
               alignItems: "center",
               gap: "0.5rem",
+              minWidth: 0,
             }
-          : languageSelectorBarStyle
+          : isPanel
+            ? {
+                ...languageSelectorBarStyle,
+                width: "100%",
+                minWidth: 0,
+                marginTop: 0,
+                padding: "0.75rem",
+              }
+            : languageSelectorBarStyle
       }
       role="group"
       aria-label={stableA11yLabel}
       suppressHydrationWarning
     >
-      {!isInline ? (
+      {!isInline && !isPanel ? (
         <span style={languageSelectorLabelStyle} suppressHydrationWarning>
           {t("common.languageSelectorLabel")}
         </span>
@@ -70,8 +80,22 @@ export function LanguageSelector({
                 ...pageSelectCompactStyle(isSyncingLocale),
                 minWidth: "8.5rem",
                 maxWidth: "12rem",
+                width: "100%",
+                boxSizing: "border-box",
               }
-            : pageSelectCompactStyle(isSyncingLocale)
+            : isPanel
+              ? {
+                  ...pageSelectCompactStyle(isSyncingLocale),
+                  width: "100%",
+                  minWidth: 0,
+                  maxWidth: "100%",
+                  flex: "1 1 auto",
+                  boxSizing: "border-box",
+                }
+              : {
+                  ...pageSelectCompactStyle(isSyncingLocale),
+                  boxSizing: "border-box",
+              }
         }
       >
         {SUPPORTED_LOCALES.map((item) => (

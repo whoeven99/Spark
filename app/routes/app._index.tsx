@@ -8,6 +8,7 @@ import {
   BILLING_PAGE_PATH,
   isBillingReturnRequest,
 } from "../server/billing/buildBillingReturnUrl.server";
+import { loadBillingContext } from "../server/billing/index.server";
 import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { listConversations } from "../server/conversation/conversationStore.server";
@@ -17,6 +18,7 @@ import {
   emptyWorkspaceDashboardSnapshot,
 } from "../server/operations/workspaceDashboard.server";
 import { buildWorkspaceTaskSummaries } from "../server/operations/workspaceTaskSummary.server";
+import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
 import { listMergedUnifiedTaskEntries } from "../server/unifiedTask/unifiedTaskList.server";
 import { useFeatureView } from "../lib/featureTrack";
 import { RoutePageFallback } from "./component/RoutePageFallback";
@@ -30,13 +32,31 @@ const WorkspaceAppShellPage = lazy(() =>
 );
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
 
   if (isBillingReturnRequest(request)) {
     throw redirect(buildEmbeddedAppPath(BILLING_PAGE_PATH, request));
   }
 
-  const conversations = await listConversations(session.shop);
+  const [conversations, billingContext, shopBasicInfo] = await Promise.all([
+    listConversations(session.shop),
+    loadBillingContext(session.shop),
+    fetchShopBasicInfo(admin).catch((error) => {
+      console.error("[app._index] fetch shop basic info failed:", error);
+      return null;
+    }),
+  ]);
+  const currentPlanLabel = billingContext.subscription
+    ? (
+        billingContext.plans.find((plan) => plan.planKey === billingContext.subscription?.planKey)
+          ?.displayName ?? billingContext.subscription.planKey
+      )
+    : "未订阅";
+  const accountEmail =
+    shopBasicInfo?.contactEmail?.trim() ||
+    shopBasicInfo?.email?.trim() ||
+    session.shop;
+
   let dashboardSnapshot = emptyWorkspaceDashboardSnapshot();
   try {
     const [dailyOps, recentTaskEntries] = await Promise.all([
@@ -53,7 +73,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     console.error("[app._index] dashboard snapshot failed:", error);
   }
 
-  return { conversations, dashboardSnapshot };
+  return { conversations, dashboardSnapshot, currentPlanLabel, accountEmail };
 };
 
 /** 工作台页依赖浏览器环境，SSR 阶段仅输出占位，避免嵌入式 iframe 首屏 500。 */
@@ -75,6 +95,8 @@ export default function Index() {
         <WorkspaceAppShellPage
           initialConversationList={data?.conversations ?? []}
           dashboardSnapshot={data?.dashboardSnapshot}
+          currentPlanLabel={data?.currentPlanLabel}
+          accountEmail={data?.accountEmail}
         />
       </Suspense>
     </ClientMount>

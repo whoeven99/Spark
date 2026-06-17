@@ -316,10 +316,15 @@ export const accountMenuItemStyle: CSSProperties = {
 export const footerTagStyle: CSSProperties = {
   padding: "4px 8px",
   borderRadius: 999,
-  background: shopifyUi.primarySurface,
-  color: shopifyUi.primary,
+  background: "#f1f2f3",
+  color: shopifyUi.textSecondary,
+  border: `1px solid ${shopifyUi.border}`,
   fontSize: 12,
   fontWeight: 600,
+  maxWidth: "9rem",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
 };
 
 export const panelStackStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 20, minWidth: 0 };
