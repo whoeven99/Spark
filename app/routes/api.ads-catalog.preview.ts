@@ -37,14 +37,44 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
   }
 
-  const { admin, session } = await authenticate.admin(request);
-  const filters = parsed.data.filters ?? {};
-  const productIds =
-    parsed.data.productIds && parsed.data.productIds.length > 0
-      ? parsed.data.productIds
-      : null;
+  try {
+    const { admin, session } = await authenticate.admin(request);
+    const filters = parsed.data.filters ?? {};
+    const productIds =
+      parsed.data.productIds && parsed.data.productIds.length > 0
+        ? parsed.data.productIds
+        : null;
 
-  if (parsed.data.platform === "facebook") {
+    if (parsed.data.platform === "facebook") {
+      const [shopInfo, products] = await Promise.all([
+        fetchShopBasicInfo(admin),
+        fetchProductsForCatalog(admin, {
+          productIds,
+          tags: filters.tags,
+          productTypes: filters.productTypes,
+          vendors: filters.vendors,
+          inStockOnly: filters.inStockOnly,
+          maxProducts: parsed.data.limit ?? 5,
+        }),
+      ]);
+      const shopDomain =
+        shopInfo?.primaryDomainHost ?? shopInfo?.myshopifyDomain ?? session.shop;
+      const items = products.map((p) =>
+        mapShopifyToFacebook(p, {
+          shopDomain,
+          defaultCurrency: shopInfo?.currencyCode ?? undefined,
+          brand: shopInfo?.name ?? undefined,
+        }),
+      );
+      return Response.json({
+        ok: true,
+        platform: "facebook" as const,
+        total: products.length,
+        preview: items,
+      });
+    }
+
+    // Google: fetch the full filtered set (max 250) and run validation.
     const [shopInfo, products] = await Promise.all([
       fetchShopBasicInfo(admin),
       fetchProductsForCatalog(admin, {
@@ -53,66 +83,43 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         productTypes: filters.productTypes,
         vendors: filters.vendors,
         inStockOnly: filters.inStockOnly,
-        maxProducts: parsed.data.limit ?? 5,
+        maxProducts: 250,
       }),
     ]);
+
     const shopDomain =
       shopInfo?.primaryDomainHost ?? shopInfo?.myshopifyDomain ?? session.shop;
-    const items = products.map((p) =>
-      mapShopifyToFacebook(p, {
+    const googleProductCategory = parsed.data.googleProductCategory?.trim() || undefined;
+    const enriched = products.map((p) => ({
+      ...p,
+      googleProductCategory: googleProductCategory ?? p.googleProductCategory ?? null,
+    }));
+
+    const report = validateProductsForGoogle(enriched);
+
+    // A small mapped sample to help the merchant eyeball the payload shape.
+    const sample = enriched.slice(0, parsed.data.limit ?? 5).map((p) =>
+      mapShopifyToGoogle(p, {
         shopDomain,
+        contentLanguage: parsed.data.contentLanguage ?? "en",
+        targetCountry: parsed.data.targetCountry ?? "US",
         defaultCurrency: shopInfo?.currencyCode ?? undefined,
         brand: shopInfo?.name ?? undefined,
+        googleProductCategory,
       }),
     );
+
     return Response.json({
       ok: true,
-      platform: "facebook" as const,
+      platform: "google" as const,
       total: products.length,
-      preview: items,
+      report,
+      preview: sample,
     });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to load product preview";
+    console.error("[AdsCatalog][Preview]", message, error);
+    return Response.json({ ok: false, error: message }, { status: 500 });
   }
-
-  // Google: fetch the full filtered set (max 250) and run validation.
-  const [shopInfo, products] = await Promise.all([
-    fetchShopBasicInfo(admin),
-    fetchProductsForCatalog(admin, {
-      productIds,
-      tags: filters.tags,
-      productTypes: filters.productTypes,
-      vendors: filters.vendors,
-      inStockOnly: filters.inStockOnly,
-      maxProducts: 250,
-    }),
-  ]);
-
-  const shopDomain =
-    shopInfo?.primaryDomainHost ?? shopInfo?.myshopifyDomain ?? session.shop;
-  const googleProductCategory = parsed.data.googleProductCategory?.trim() || undefined;
-  const enriched = products.map((p) => ({
-    ...p,
-    googleProductCategory: googleProductCategory ?? p.googleProductCategory ?? null,
-  }));
-
-  const report = validateProductsForGoogle(enriched);
-
-  // A small mapped sample to help the merchant eyeball the payload shape.
-  const sample = enriched.slice(0, parsed.data.limit ?? 5).map((p) =>
-    mapShopifyToGoogle(p, {
-      shopDomain,
-      contentLanguage: parsed.data.contentLanguage ?? "en",
-      targetCountry: parsed.data.targetCountry ?? "US",
-      defaultCurrency: shopInfo?.currencyCode ?? undefined,
-      brand: shopInfo?.name ?? undefined,
-      googleProductCategory,
-    }),
-  );
-
-  return Response.json({
-    ok: true,
-    platform: "google" as const,
-    total: products.length,
-    report,
-    preview: sample,
-  });
 };

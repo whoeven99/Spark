@@ -34,11 +34,9 @@ const PRODUCTS_QUERY = `#graphql
                 barcode
                 price
                 compareAtPrice
-                inventoryQuantity
-                availableForSale
-                inventoryItem {
-                  inventoryPolicy
-                }
+              inventoryQuantity
+              availableForSale
+              inventoryPolicy
               }
             }
           }
@@ -100,7 +98,7 @@ interface RawVariantNode {
   compareAtPrice?: string | null;
   inventoryQuantity?: number | null;
   availableForSale?: boolean | null;
-  inventoryItem?: { inventoryPolicy?: string | null } | null;
+  inventoryPolicy?: string | null;
 }
 
 interface RawEdge {
@@ -136,7 +134,7 @@ function mapVariant(node: RawVariantNode): RawVariantForCatalog {
     compareAtPrice: node.compareAtPrice ?? null,
     inventoryQuantity: node.inventoryQuantity ?? null,
     availableForSale: node.availableForSale ?? false,
-    inventoryPolicy: normalizeInventoryPolicy(node.inventoryItem?.inventoryPolicy),
+    inventoryPolicy: normalizeInventoryPolicy(node.inventoryPolicy),
   };
 }
 
