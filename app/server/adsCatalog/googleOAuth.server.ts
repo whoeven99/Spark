@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { formatOutboundNetworkError } from "../common/outboundError.server";
-import { buildShopifyAdminHostParam } from "../billing/buildBillingReturnUrl.server";
+import { buildShopifyAdminHostParam, buildAdminEmbeddedAppReturnUrl } from "../billing/buildBillingReturnUrl.server";
 
 export const GOOGLE_OAUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
 export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -45,20 +45,38 @@ export function getGoogleAdsDeveloperToken(): string {
 }
 
 /** Resolve the absolute redirect URI for a given OAuth callback path. */
-export function getRedirectUri(path: string): string {
+export function getRedirectUri(path: string, requestOrigin?: string): string {
   const base =
-    readEnv("GOOGLE_OAUTH_REDIRECT_BASE") || readEnv("SHOPIFY_APP_URL");
+    readEnv("GOOGLE_OAUTH_REDIRECT_BASE") ||
+    readEnv("SHOPIFY_APP_URL") ||
+    requestOrigin;
+  if (!base) {
+    throw new Error("无法解析 Google OAuth redirect_uri：请配置 SHOPIFY_APP_URL 或 GOOGLE_OAUTH_REDIRECT_BASE");
+  }
   return `${base.replace(/\/$/, "")}${path}`;
 }
 
-/** Google OAuth 完成后跳回嵌入式应用（需 shop + host + embedded，否则落到 /auth/login）。 */
+/** Google OAuth 完成后跳回嵌入式应用（优先 admin.shopify.com，避免 shop: null）。 */
 export function buildGoogleOAuthReturnUrl(params: {
   shop: string;
   host?: string;
+  appOrigin?: string;
   query?: Record<string, string>;
+  request?: Request;
 }): string {
+  const adminUrl = buildAdminEmbeddedAppReturnUrl({
+    path: "/app/ads-catalog",
+    shop: params.shop,
+    request: params.request,
+    query: params.query,
+  });
+  if (adminUrl) return adminUrl;
+
   const base =
-    readEnv("GOOGLE_OAUTH_REDIRECT_BASE") || readEnv("SHOPIFY_APP_URL") || "https://example.com";
+    params.appOrigin ||
+    readEnv("GOOGLE_OAUTH_REDIRECT_BASE") ||
+    readEnv("SHOPIFY_APP_URL") ||
+    "https://example.com";
   const target = new URL("/app/ads-catalog", base.replace(/\/$/, "") || base);
   target.searchParams.set("shop", params.shop);
   target.searchParams.set("embedded", "1");
@@ -78,11 +96,17 @@ function stateSecret(): string {
   return process.env.SHOPIFY_API_SECRET || "spark-google-oauth";
 }
 
-export function createOAuthState(shop: string, flow: OAuthFlow, host = ""): string {
+export function createOAuthState(
+  shop: string,
+  flow: OAuthFlow,
+  host = "",
+  appOrigin = "",
+): string {
   const payload = JSON.stringify({
     shop,
     flow,
     host,
+    appOrigin: appOrigin.replace(/\/$/, ""),
     nonce: crypto.randomBytes(8).toString("hex"),
     ts: Date.now(),
   });
@@ -94,7 +118,7 @@ export function createOAuthState(shop: string, flow: OAuthFlow, host = ""): stri
 export function verifyOAuthState(
   state: string,
   maxAgeMs = 15 * 60 * 1000,
-): { shop: string; flow: OAuthFlow; host: string } | null {
+): { shop: string; flow: OAuthFlow; host: string; appOrigin: string } | null {
   const [encoded, sig] = state.split(".");
   if (!encoded || !sig) return null;
   const expected = crypto
@@ -109,11 +133,17 @@ export function verifyOAuthState(
       shop?: string;
       flow?: OAuthFlow;
       host?: string;
+      appOrigin?: string;
       ts?: number;
     };
     if (!payload.shop || (payload.flow !== "gmc" && payload.flow !== "ads")) return null;
     if (typeof payload.ts !== "number" || Date.now() - payload.ts > maxAgeMs) return null;
-    return { shop: payload.shop, flow: payload.flow, host: payload.host ?? "" };
+    return {
+      shop: payload.shop,
+      flow: payload.flow,
+      host: payload.host ?? "",
+      appOrigin: payload.appOrigin ?? "",
+    };
   } catch {
     return null;
   }

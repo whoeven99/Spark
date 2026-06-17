@@ -106,14 +106,33 @@ function buildAdminEmbeddedBillingReturnUrl(
   request: Request,
   shop: string,
 ): string | null {
-  const appIdentifier = resolveAdminAppIdentifier(request);
+  return buildAdminEmbeddedAppReturnUrl({
+    path,
+    shop,
+    request,
+    query: { [BILLING_RETURN_QUERY_FLAG]: "1" },
+  });
+}
+
+/** 外部 OAuth 等整页跳转后，经 admin.shopify.com 回到嵌入式应用（避免 shop: null → /auth/login）。 */
+export function buildAdminEmbeddedAppReturnUrl(params: {
+  path: string;
+  shop: string;
+  request?: Request;
+  query?: Record<string, string>;
+}): string | null {
+  const appIdentifier = resolveAdminAppIdentifier(
+    params.request ?? new Request("https://example.com"),
+  );
   if (!appIdentifier) return null;
 
   const url = new URL(
-    `/store/${shopifyAdminStoreHandle(shop)}/apps/${encodeURIComponent(appIdentifier)}${path}`,
+    `/store/${shopifyAdminStoreHandle(params.shop)}/apps/${encodeURIComponent(appIdentifier)}${params.path}`,
     "https://admin.shopify.com",
   );
-  url.searchParams.set(BILLING_RETURN_QUERY_FLAG, "1");
+  for (const [key, value] of Object.entries(params.query ?? {})) {
+    url.searchParams.set(key, value);
+  }
   return url.toString();
 }
 
