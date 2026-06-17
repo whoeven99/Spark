@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
-import { pageColorTokens, statusColorTokens } from "../../page/pageUiStyles";
+import { pageColorTokens } from "../../page/pageUiStyles";
 import { TaskStatusBadge } from "../aiTask/TaskStatusBadge";
 import { actionButtonStyle } from "../aiTask/AITaskCardShell";
 import type { AITaskStatus } from "../../../lib/aiTaskTypes";
@@ -152,10 +152,10 @@ function resolveStageStates(
 }
 
 const STAGE_BAR_COLORS: Record<StageState, { bar: string; label: string }> = {
-  completed: { bar: statusColorTokens.successBar, label: statusColorTokens.successText },
-  active: { bar: statusColorTokens.blueActiveText, label: statusColorTokens.blueActiveText },
+  completed: { bar: "#00a67c", label: pageColorTokens.brandGreenDark },
+  active: { bar: "#4070f4", label: "#4070f4" },
   pending: { bar: "#e5e7eb", label: pageColorTokens.textFootnote },
-  failed: { bar: statusColorTokens.failedStageBar, label: statusColorTokens.failedText },
+  failed: { bar: "#d97706", label: pageColorTokens.criticalText },
 };
 
 function stagePercent(row: StageRow): number {
@@ -329,9 +329,9 @@ export function TranslationV4TaskCard({ job }: Props) {
     : translationV4StatusLabel(job.status);
 
   let primaryCopyColor: string = pageColorTokens.textPrimary;
-  if (job.status === "FAILED") primaryCopyColor = statusColorTokens.failedText;
-  else if (isActive) primaryCopyColor = statusColorTokens.blueActiveText;
-  else if (job.status === "COMPLETED") primaryCopyColor = statusColorTokens.successText;
+  if (job.status === "FAILED") primaryCopyColor = pageColorTokens.criticalText;
+  else if (isActive) primaryCopyColor = "#4070f4";
+  else if (job.status === "COMPLETED") primaryCopyColor = pageColorTokens.brandGreenDark;
 
   const secondaryParts: string[] = [];
   if (elapsedLabel) secondaryParts.push(`耗时 ${elapsedLabel}`);
@@ -395,11 +395,11 @@ export function TranslationV4TaskCard({ job }: Props) {
               style={{
                 fontSize: 11,
                 fontWeight: 600,
-                color: statusColorTokens.blueActiveText,
+                color: "#6366f1",
                 padding: "0.22rem 0.48rem",
                 borderRadius: 999,
-                background: statusColorTokens.blueActiveBg,
-                border: `1px solid ${statusColorTokens.blueActiveBorder}`,
+                background: "#eef2ff",
+                border: "1px solid rgba(99,102,241,0.18)",
               }}
             >
               翻译 v4
@@ -443,7 +443,7 @@ export function TranslationV4TaskCard({ job }: Props) {
             {job.testMode && (
               <>
                 <span style={{ color: pageColorTokens.textFootnote }}>·</span>
-                <span style={{ color: statusColorTokens.failedStageBar }}>测试模式</span>
+                <span style={{ color: "#d97706" }}>测试模式</span>
               </>
             )}
           </div>
