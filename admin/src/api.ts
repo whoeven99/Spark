@@ -966,3 +966,66 @@ export function saveShopProfile(shopName: string, profile: ShopProfile): Promise
     body: JSON.stringify(profile),
   });
 }
+
+// --- Support（人工客服会话） ---
+
+export type SupportConversationRow = {
+  id: string;
+  shop: string;
+  contactEmail: string | null;
+  shopEmail: string | null;
+  status: string;
+  lastMessage: string;
+  lastMessageAt: string;
+  unreadForOps: number;
+  unreadForShop: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SupportMessageRow = {
+  id: string;
+  sender: string; // "shop" | "ops"
+  senderName: string | null;
+  content: string;
+  createdAt: string;
+};
+
+export function fetchSupportConversations(params?: {
+  status?: string;
+  search?: string;
+}): Promise<{ conversations: SupportConversationRow[] }> {
+  const query = new URLSearchParams();
+  if (params?.status) query.set("status", params.status);
+  if (params?.search) query.set("search", params.search);
+  const qs = query.toString();
+  return apiFetch(`/support${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchSupportConversation(shop: string): Promise<{
+  conversation: SupportConversationRow;
+  messages: SupportMessageRow[];
+}> {
+  return apiFetch(`/support/${encodeURIComponent(shop)}`);
+}
+
+export function replySupport(
+  shop: string,
+  content: string,
+  senderName?: string,
+): Promise<{ ok: boolean; id: string; createdAt: string }> {
+  return apiFetch(`/support/${encodeURIComponent(shop)}/reply`, {
+    method: "POST",
+    body: JSON.stringify({ content, senderName }),
+  });
+}
+
+export function setSupportStatus(
+  shop: string,
+  status: "open" | "closed",
+): Promise<{ ok: boolean }> {
+  return apiFetch(`/support/${encodeURIComponent(shop)}/status`, {
+    method: "POST",
+    body: JSON.stringify({ status }),
+  });
+}

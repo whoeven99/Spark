@@ -4,6 +4,7 @@ import type { FeishuChannel } from "./feishuTypes.server";
 export const CHANNEL_ENV: Record<FeishuChannel, string> = {
   ops_uninstall: "FEISHU_WEBHOOK_URL_UNINSTALL",
   ops_subscription: "FEISHU_WEBHOOK_URL_SUBSCRIPTION",
+  ops_support: "FEISHU_WEBHOOK_URL_SUPPORT",
 };
 
 function parseBoolean(value: string | undefined, defaultValue: boolean): boolean {

@@ -17,6 +17,7 @@ import OpsChecklist from "./pages/OpsChecklist";
 import VisitSource from "./pages/VisitSource";
 import PixelLogs from "./pages/PixelLogs";
 import AppLogs from "./pages/AppLogs";
+import Support from "./pages/Support";
 import { useNavigate } from "react-router-dom";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -74,6 +75,7 @@ export default function App() {
             <Route path="visit-source" element={<VisitSource />} />
             <Route path="pixel-logs" element={<RequireOwner><PixelLogs /></RequireOwner>} />
             <Route path="app-logs" element={<AppLogs />} />
+            <Route path="support" element={<Support />} />
             <Route path="todo" element={<Todo />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

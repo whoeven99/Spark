@@ -705,6 +705,48 @@ model ShopSkuCost {
   @@index([shop, sku])
 }
 
+/// 人工客服会话（一店一会话；商家 ↔ 运营）。卸载后靠 shopEmail/contactEmail 兜底联系。
+model SupportConversation {
+  id            String   @id @default(cuid())
+  shop          String
+  /// 商家在聊天框主动留下的联系邮箱（可覆盖账户邮箱）
+  contactEmail  String?
+  /// Session.email 快照（开聊即写，卸载 session 被清后仍可联系）
+  shopEmail     String?
+  /// open | closed
+  status        String   @default("open")
+  /// 最近一条消息预览
+  lastMessage   String   @default("")
+  lastMessageAt DateTime @default(now())
+  /// 商家发出、运营尚未查看的条数
+  unreadForOps  Int      @default(0)
+  /// 运营发出、商家尚未查看的条数
+  unreadForShop Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  messages      SupportMessage[]
+
+  @@unique([shop])
+  @@index([status, lastMessageAt])
+}
+
+/// 客服消息（追加写，不可变）。
+model SupportMessage {
+  id             String              @id @default(cuid())
+  conversationId String
+  /// "shop" | "ops"（预留 "ai"）
+  sender         String
+  /// 运营发送者标识（哪个客服回的）
+  senderName     String?
+  content        String
+  /// 预留：附件/图片等 JSON
+  payloads       String?
+  createdAt      DateTime            @default(now())
+  conversation   SupportConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
 /// 客户价值快照（最新状态，每日巡检懒刷新；§8.5.1 客户动态计价）。
 model ShopCustomerValue {
   id                    String    @id @default(cuid())

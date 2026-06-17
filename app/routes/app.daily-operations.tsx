@@ -11,7 +11,6 @@ import {
 import { useTranslation } from "react-i18next";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { authenticate } from "../shopify.server";
-import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
 import {
   ensureDailySnapshot,
   updateOperationTaskStatus,
@@ -59,21 +58,10 @@ type LoaderData =
   | { ok: true; result: DailyOperationsResult; value: ValueLayerData | null }
   | { ok: false; error: string };
 
-async function loadDailySnapshotOptions(admin: Awaited<ReturnType<typeof authenticate.admin>>["admin"]) {
-  const shopInfo = await fetchShopBasicInfo(admin);
-  return {
-    shopifyAdmin: admin,
-    timeZone: shopInfo?.ianaTimezone ?? "UTC",
-  };
-}
-
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   try {
-    const result = await ensureDailySnapshot(
-      session.shop,
-      await loadDailySnapshotOptions(admin),
-    );
+    const result = await ensureDailySnapshot(session.shop);
 
     // 渠道与客户价值层（A 步）：失败不影响诊断与待办主流程
     let value: ValueLayerData | null = null;
@@ -99,16 +87,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = formData.get("intent")?.toString();
 
   try {
     if (intent === "refresh") {
-      await ensureDailySnapshot(session.shop, {
-        force: true,
-        ...(await loadDailySnapshotOptions(admin)),
-      });
+      await ensureDailySnapshot(session.shop, { force: true });
       return Response.json({ ok: true });
     }
     if (intent === "cost-config") {
@@ -838,38 +823,6 @@ const summaryCardStyle: CSSProperties = {
   gap: "0.45rem",
 };
 
-const summaryDateBadgeStyle: CSSProperties = {
-  fontSize: "0.8125rem",
-  fontWeight: 600,
-  color: pageColorTokens.textBody,
-  background: pageColorTokens.surfaceMuted,
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
-  borderRadius: 999,
-  padding: "0.25rem 0.65rem",
-  whiteSpace: "nowrap",
-};
-
-const summaryTimeStyle: CSSProperties = {
-  fontSize: "0.75rem",
-  color: pageColorTokens.textSecondary,
-  whiteSpace: "nowrap",
-};
-
-const summaryRefreshButtonStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "0.3rem",
-  padding: "0.3rem 0.65rem",
-  borderRadius: 999,
-  border: `1px solid ${pageColorTokens.borderSubtle}`,
-  background: pageColorTokens.surface,
-  color: pageColorTokens.textBody,
-  fontSize: "0.75rem",
-  fontWeight: 600,
-  cursor: "pointer",
-  whiteSpace: "nowrap",
-};
-
 const summaryListStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
@@ -1183,49 +1136,24 @@ function buildRiskEnvironmentCards(
       };
     }
     if (environment.key === "new-arrivals") {
-      const hasProductOps = environment.source === "real";
-      const draftCount = Number(environment.metrics.draftProductCount ?? 0);
-      const noImagesCount = Number(environment.metrics.noImagesProductCount ?? 0);
-      const noDescCount = Number(environment.metrics.noDescriptionProductCount ?? 0);
-      const issueCount = draftCount + noImagesCount + noDescCount;
       return {
         key: environment.key,
         title: t(environment.titleKey),
         status: environment.status,
         source: environment.source,
-        primaryMetric: hasProductOps
-          ? t("dailyOps.riskMetricNewArrivalValue", {
-              draft: draftCount,
-              noImages: noImagesCount,
-              noDesc: noDescCount,
-            })
-          : t("dailyOps.riskMetricPending"),
-        secondaryMetric: hasProductOps
-          ? t("dailyOps.riskMetricNewArrivalIssues", { count: issueCount })
-          : t("dailyOps.riskMetricNewArrivalPending"),
+        primaryMetric: t("dailyOps.riskMetricPending"),
+        secondaryMetric: t("dailyOps.riskMetricNewArrivalPending"),
         summary: environment.summary,
       };
     }
     if (environment.key === "payments") {
-      const hasPaymentData = environment.source === "real";
-      const paymentRate = environment.metrics.paymentSuccessRate7d;
       return {
         key: environment.key,
         title: t(environment.titleKey),
         status: environment.status,
         source: environment.source,
-        primaryMetric: hasPaymentData
-          ? t("dailyOps.riskMetricPaymentValue", {
-              value: paymentRate ?? "—",
-            })
-          : t("dailyOps.riskMetricPending"),
-        secondaryMetric: hasPaymentData
-          ? t("dailyOps.riskMetricPaymentFailures", {
-              count: environment.metrics.paymentFailureCount7d ?? 0,
-              successful: environment.metrics.paymentSuccessful7d ?? 0,
-              attempts: environment.metrics.paymentAttempts7d ?? 0,
-            })
-          : t("dailyOps.riskMetricPaymentPending"),
+        primaryMetric: t("dailyOps.riskMetricPending"),
+        secondaryMetric: t("dailyOps.riskMetricPaymentPending"),
         summary: environment.summary,
       };
     }
@@ -1515,8 +1443,20 @@ export default function DailyOperationsPage() {
     if (extra?.environmentKey) next.set("environmentKey", extra.environmentKey);
     if (extra?.insightKey) next.set("insightKey", extra.insightKey);
     if (extra?.taskId) next.set("taskId", extra.taskId);
-    setSearchParams(next, { replace: false });
+    setSearchParams(next);
   };
+
+  const detailReturnTo = useMemo(() => {
+    if (!detailSection) return undefined;
+    const next = new URLSearchParams(searchParams);
+    next.delete("detail");
+    next.delete("riskTab");
+    next.delete("environmentKey");
+    next.delete("insightKey");
+    next.delete("taskId");
+    const query = next.toString();
+    return `/app/daily-operations${query ? `?${query}` : ""}`;
+  }, [detailSection, searchParams]);
 
   return (
     <s-page
@@ -1541,8 +1481,20 @@ export default function DailyOperationsPage() {
               : t("common.backToPrevious", { defaultValue: "返回工作台" })
           }
           {...(detailSection
-            ? { fallbackPath: "/app/daily-operations" }
+            ? { fallbackPath: "/app/daily-operations", returnTo: detailReturnTo }
             : { workspaceOnly: true })}
+          rightAction={
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <s-button
+                type="button"
+                variant="secondary"
+                onClick={submitRefresh}
+                {...(busy ? { disabled: true } : {})}
+              >
+                {busy ? t("dailyOps.refreshing") : t("dailyOps.refresh")}
+              </s-button>
+            </div>
+          }
         />
 
         {!data.ok ? (
@@ -1557,6 +1509,7 @@ export default function DailyOperationsPage() {
           <>
             {detailSection ? (
               <DailyOperationsDetail
+                key={detailSection}
                 detailSection={detailSection}
                 result={data.result}
                 value={data.value}
@@ -1605,7 +1558,6 @@ export default function DailyOperationsPage() {
                 }}
                 onOpenDetail={openDetail}
                 onSubmitTaskAction={submitTaskAction}
-                onRefresh={submitRefresh}
                 busy={busy}
               />
             )}
@@ -1647,7 +1599,6 @@ function DailyOperationsBody({
     }>,
   ) => void;
   onSubmitTaskAction: (taskId: string, action: OperationTaskAction) => void;
-  onRefresh: () => void;
   busy: boolean;
 }) {
   const { t } = useTranslation();
@@ -1870,27 +1821,15 @@ function DailyOperationsBody({
                   marginBottom: "0.9rem",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
-                  <span style={summaryDateBadgeStyle}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
+                  <span style={pageAccentBadgeStyle}>
                     {t("dailyOps.snapshotDateLabel", { date: result.snapshotDate })}
                   </span>
-                  <span style={summaryTimeStyle}>
+                  <span style={taskSecondaryTextStyle}>
                     {t("dailyOps.generatedAtLabel", {
-                      value: new Date(result.generatedAt).toLocaleTimeString(locale, {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      }),
+                      value: new Date(result.generatedAt).toLocaleString(locale),
                     })}
                   </span>
-                  <button
-                    type="button"
-                    onClick={onRefresh}
-                    disabled={busy}
-                    style={summaryRefreshButtonStyle}
-                  >
-                    {busy ? "⟳" : "⟳"}
-                    <span>{busy ? t("dailyOps.refreshing") : t("dailyOps.refresh")}</span>
-                  </button>
                 </div>
               </div>
               <div
@@ -2881,7 +2820,7 @@ function DailyOperationsDetail({
           subtitle={t("dailyOps.keyMetricsSubtitle", { shop: result.shop })}
           badges={
             <s-badge tone="info">
-              {t("dailyOps.dataUpdatedAtLabel", {
+              {t("dailyOps.generatedAtLabel", {
                 value: new Date(result.generatedAt).toLocaleString(locale),
               })}
             </s-badge>
@@ -3006,7 +2945,7 @@ function DailyOperationsDetail({
             </div>
             <div style={{ ...detailActionRowStyle, marginTop: "0.75rem" }}>
               <span style={taskSecondaryTextStyle}>
-                {t("dailyOps.dataUpdatedAtLabel", {
+                {t("dailyOps.generatedAtLabel", {
                   value: new Date(result.generatedAt).toLocaleString(locale),
                 })}
               </span>
