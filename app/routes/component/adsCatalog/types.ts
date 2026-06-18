@@ -44,6 +44,13 @@ export interface CredentialsView {
       apiVersion: string;
     };
   };
+  meta: {
+    connected: boolean;
+    catalogId: string;
+    businessId: string;
+    updatedAt: string | null;
+    pendingCatalogs: Array<{ id: string; name?: string; businessId?: string }>;
+  };
   googleMerchant: {
     connected: boolean;
     merchantId: string;

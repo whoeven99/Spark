@@ -19,6 +19,8 @@ export interface GoogleFiltersValue {
 type Props = {
   value: GoogleFiltersValue;
   onChange: (next: GoogleFiltersValue) => void;
+  /** 是否展示 Google 专属字段（内容语言 / 目标国家 / Google 类目）。默认展示。 */
+  showGoogleFields?: boolean;
 };
 
 const inputStyle = {
@@ -38,7 +40,7 @@ export function parseList(raw: string): string[] {
     .filter(Boolean);
 }
 
-export function GoogleFeedFilters({ value, onChange }: Props) {
+export function GoogleFeedFilters({ value, onChange, showGoogleFields = true }: Props) {
   const { t } = useTranslation();
   const set = (patch: Partial<GoogleFiltersValue>) => onChange({ ...value, ...patch });
 
@@ -85,47 +87,51 @@ export function GoogleFeedFilters({ value, onChange }: Props) {
         {t("adsCatalog.filterInStockOnly")}
       </label>
 
-      <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
-        <div>
-          <label style={pageFieldLabelStyle}>{t("adsCatalog.fieldContentLanguage")}</label>
-          <select
-            value={value.contentLanguage}
-            onChange={(e) => set({ contentLanguage: e.target.value })}
-            style={{ ...pageSelectStyle, marginTop: 6 }}
-          >
-            {["en", "zh-CN", "es", "fr", "de", "ja", "pt-BR"].map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label style={pageFieldLabelStyle}>{t("adsCatalog.fieldTargetCountry")}</label>
-          <select
-            value={value.targetCountry}
-            onChange={(e) => set({ targetCountry: e.target.value })}
-            style={{ ...pageSelectStyle, marginTop: 6 }}
-          >
-            {["US", "GB", "CA", "AU", "DE", "FR", "JP", "BR"].map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+      {showGoogleFields && (
+        <>
+          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
+            <div>
+              <label style={pageFieldLabelStyle}>{t("adsCatalog.fieldContentLanguage")}</label>
+              <select
+                value={value.contentLanguage}
+                onChange={(e) => set({ contentLanguage: e.target.value })}
+                style={{ ...pageSelectStyle, marginTop: 6 }}
+              >
+                {["en", "zh-CN", "es", "fr", "de", "ja", "pt-BR"].map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={pageFieldLabelStyle}>{t("adsCatalog.fieldTargetCountry")}</label>
+              <select
+                value={value.targetCountry}
+                onChange={(e) => set({ targetCountry: e.target.value })}
+                style={{ ...pageSelectStyle, marginTop: 6 }}
+              >
+                {["US", "GB", "CA", "AU", "DE", "FR", "JP", "BR"].map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-      <div>
-        <label style={pageFieldLabelStyle}>{t("adsCatalog.filterGoogleCategory")}</label>
-        <input
-          style={inputStyle}
-          value={value.googleProductCategory}
-          onChange={(e) => set({ googleProductCategory: e.target.value })}
-          placeholder={t("adsCatalog.filterGoogleCategoryPlaceholder")}
-        />
-        <p style={pageHintTextStyle}>{t("adsCatalog.filterGoogleCategoryHint")}</p>
-      </div>
+          <div>
+            <label style={pageFieldLabelStyle}>{t("adsCatalog.filterGoogleCategory")}</label>
+            <input
+              style={inputStyle}
+              value={value.googleProductCategory}
+              onChange={(e) => set({ googleProductCategory: e.target.value })}
+              placeholder={t("adsCatalog.filterGoogleCategoryPlaceholder")}
+            />
+            <p style={pageHintTextStyle}>{t("adsCatalog.filterGoogleCategoryHint")}</p>
+          </div>
+        </>
+      )}
     </div>
   );
 }

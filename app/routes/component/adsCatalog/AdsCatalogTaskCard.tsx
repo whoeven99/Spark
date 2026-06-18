@@ -151,7 +151,7 @@ export function AdsCatalogTaskCard({
     const base: CardAction[] = [
       { label: t("common.viewDetail"), tone: "primary", onClick: onOpenDetail },
     ];
-    if (result?.gmcReview && onOpenReview) {
+    if ((result?.gmcReview || result?.metaReview) && onOpenReview) {
       base.push({
         label: t("adsCatalog.reviewViewDetail"),
         tone: "secondary",
@@ -168,7 +168,7 @@ export function AdsCatalogTaskCard({
   }, [deleting, effectiveStatus, onDelete, onOpenDetail, onOpenReview, result, t]);
 
   const reviewBadge = useMemo(() => {
-    const review = result?.gmcReview;
+    const review = result?.gmcReview ?? result?.metaReview;
     if (!review) return null;
     if (review.disapproved > 0) {
       return (

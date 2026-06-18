@@ -78,6 +78,24 @@ model GmcProductStatus {
   @@index([shop, merchantId])
 }
 
+/// Meta（Facebook）Catalog 商品审核状态缓存（同步后即时查 / 30 分钟延迟查 / 每日 cron 写入）。
+model MetaProductStatus {
+  id               String   @id @default(cuid())
+  shop             String
+  catalogId        String
+  retailerId       String
+  shopifyProductId String?
+  title            String?
+  status           String
+  issues           Json?
+  checkedAt        DateTime
+  updatedAt        DateTime @updatedAt
+
+  @@unique([shop, retailerId])
+  @@index([shop, status])
+  @@index([shop, catalogId])
+}
+
 /// 店铺账户（token 分池 + 用量）。
 model Account {
   id                 String   @id @default(cuid())

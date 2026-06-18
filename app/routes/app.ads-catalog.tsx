@@ -13,6 +13,7 @@ import {
   getGoogleAdsPending,
   getGoogleMerchantCredential,
   getGoogleMerchantPending,
+  getMetaCatalogPending,
   maskTokenTail,
 } from "../server/adsCatalog/credentialStore.server";
 import { formatCustomerId } from "../server/adsCatalog/googleOAuth.server";
@@ -26,18 +27,20 @@ const AdsCatalogPage = lazy(() =>
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
 
-  const [initialTaskPage, fb, gg, gmcPending, ads, adsPending] = await Promise.all([
-    listTasksPageForShop({
-      shop: session.shop,
-      view: "current",
-      taskType: "ads_catalog_sync",
-    }),
-    getFacebookCatalogCredential(session.shop),
-    getGoogleMerchantCredential(session.shop),
-    getGoogleMerchantPending(session.shop),
-    getGoogleAdsCredential(session.shop),
-    getGoogleAdsPending(session.shop),
-  ]);
+  const [initialTaskPage, fb, gg, gmcPending, ads, adsPending, metaPending] =
+    await Promise.all([
+      listTasksPageForShop({
+        shop: session.shop,
+        view: "current",
+        taskType: "ads_catalog_sync",
+      }),
+      getFacebookCatalogCredential(session.shop),
+      getGoogleMerchantCredential(session.shop),
+      getGoogleMerchantPending(session.shop),
+      getGoogleAdsCredential(session.shop),
+      getGoogleAdsPending(session.shop),
+      getMetaCatalogPending(session.shop),
+    ]);
 
   return Response.json({
     initialTaskPage,
@@ -51,6 +54,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           businessId: fb?.businessId ?? "",
           apiVersion: fb?.apiVersion ?? "",
         },
+      },
+      meta: {
+        connected: Boolean(fb),
+        catalogId: fb?.catalogId ?? "",
+        businessId: fb?.businessId ?? "",
+        updatedAt: fb?.updatedAt ?? null,
+        pendingCatalogs:
+          metaPending?.accounts.map((a) => ({
+            id: a.id,
+            name: a.name,
+            businessId: a.businessId,
+          })) ?? [],
       },
       googleMerchant: {
         connected: Boolean(gg),

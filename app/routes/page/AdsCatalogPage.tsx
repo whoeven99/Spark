@@ -15,6 +15,7 @@ import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import { AdsCatalogTaskCard } from "../component/adsCatalog/AdsCatalogTaskCard";
 import { AdsCatalogTaskDetailPage } from "../component/adsCatalog/AdsCatalogTaskDetailPage";
 import { GoogleConnectPanels } from "../component/adsCatalog/GoogleConnectPanels";
+import { MetaConnectPanels } from "../component/adsCatalog/MetaConnectPanels";
 import {
   GoogleFeedFilters,
   parseList,
@@ -87,6 +88,7 @@ const DEFAULT_FILTERS: GoogleFiltersValue = {
 interface GoogleStatusData {
   ok?: boolean;
   accountSuspended?: boolean;
+  accountRestricted?: boolean;
   products?: GmcReviewProductView[];
   lastCheckedAt?: string | null;
   adsLink?: { bound: boolean; customerId: string | null; linked: boolean | null };
@@ -111,6 +113,7 @@ export function AdsCatalogPage() {
   const [fbPreview, setFbPreview] = useState<unknown[] | null>(null);
   const [googleReport, setGoogleReport] = useState<FeedValidationReportView | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewPlatform, setReviewPlatform] = useState<Platform>("google");
   const [authBanner, setAuthBanner] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [previewPlatform, setPreviewPlatform] = useState<Platform | null>(null);
 
@@ -129,6 +132,7 @@ export function AdsCatalogPage() {
     total?: number;
   }>();
   const statusFetcher = useFetcher<GoogleStatusData>();
+  const metaStatusFetcher = useFetcher<GoogleStatusData>();
   const [refreshingStatus, setRefreshingStatus] = useState(false);
 
   const productIds = useMemo(
@@ -146,9 +150,23 @@ export function AdsCatalogPage() {
   const reviewProducts = googleStatus?.products ?? [];
   const disapprovedCount = reviewProducts.filter((p) => p.status === "disapproved").length;
 
-  // Load GMC status (suspension banner, ads link, review list) on mount.
+  const metaStatus = metaStatusFetcher.data;
+  const metaAccountRestricted = Boolean(metaStatus?.accountRestricted);
+  const metaReviewProducts = metaStatus?.products ?? [];
+  const metaDisapprovedCount = metaReviewProducts.filter((p) => p.status === "disapproved").length;
+
+  // Products / last-checked time shown in the review modal depend on which
+  // platform's task (or banner) opened it.
+  const activeReviewProducts = reviewPlatform === "facebook" ? metaReviewProducts : reviewProducts;
+  const activeLastChecked =
+    reviewPlatform === "facebook"
+      ? metaStatus?.lastCheckedAt ?? null
+      : googleStatus?.lastCheckedAt ?? null;
+
+  // Load GMC + Meta catalog status (suspension banner, ads link, review list) on mount.
   useEffect(() => {
     statusFetcher.load(`/api/ads-catalog/google-status${locationSearch}`);
+    metaStatusFetcher.load(`/api/ads-catalog/meta-status${locationSearch}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -157,18 +175,19 @@ export function AdsCatalogPage() {
     const params = new URLSearchParams(location.search);
     const gmc = params.get("gmcAuth");
     const ads = params.get("adsAuth");
+    const meta = params.get("metaAuth");
     const reason = params.get("reason");
-    if (gmc === "select" || ads === "select") {
+    if (gmc === "select" || ads === "select" || meta === "select") {
       setTab("credentials");
       revalidator.revalidate();
-    } else if (gmc === "success" || ads === "success") {
+    } else if (gmc === "success" || ads === "success" || meta === "success") {
       setAuthBanner({ tone: "ok", text: t("adsCatalog.authSuccess") });
       setTab("credentials");
       revalidator.revalidate();
-    } else if (gmc === "error" || ads === "error") {
+    } else if (gmc === "error" || ads === "error" || meta === "error") {
       setAuthBanner({ tone: "error", text: reason || t("adsCatalog.authError") });
       setTab("credentials");
-    } else if (gmc === "cancelled" || ads === "cancelled") {
+    } else if (gmc === "cancelled" || ads === "cancelled" || meta === "cancelled") {
       setAuthBanner({ tone: "error", text: t("adsCatalog.authCancelled") });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -179,6 +198,7 @@ export function AdsCatalogPage() {
       setTab("tasks");
       revalidator.revalidate();
       statusFetcher.load(`/api/ads-catalog/google-status${locationSearch}`);
+      metaStatusFetcher.load(`/api/ads-catalog/meta-status${locationSearch}`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncFetcher.data, syncFetcher.state]);
@@ -227,24 +247,25 @@ export function AdsCatalogPage() {
 
   const credentialReady =
     platform === "facebook"
-      ? credentials.facebook.configured
+      ? credentials.meta.connected || credentials.facebook.configured
       : credentials.googleMerchant.connected;
 
   function buildSyncBody(): Record<string, unknown> {
     const body: Record<string, unknown> = { platform };
     if (productIds.length > 0) body.productIds = productIds;
+    // 筛选条件对两个平台都生效（生成对应平台的 feed）。
+    body.filters = {
+      tags: parseList(filters.tags),
+      productTypes: parseList(filters.productTypes),
+      vendors: parseList(filters.vendors),
+      inStockOnly: filters.inStockOnly,
+    };
     if (platform === "google") {
       body.contentLanguage = filters.contentLanguage;
       body.targetCountry = filters.targetCountry;
       if (filters.googleProductCategory.trim()) {
         body.googleProductCategory = filters.googleProductCategory.trim();
       }
-      body.filters = {
-        tags: parseList(filters.tags),
-        productTypes: parseList(filters.productTypes),
-        vendors: parseList(filters.vendors),
-        inStockOnly: filters.inStockOnly,
-      };
     }
     return body;
   }
@@ -313,14 +334,22 @@ export function AdsCatalogPage() {
   }
 
   async function handleRefreshStatus() {
+    const endpoint =
+      reviewPlatform === "facebook"
+        ? "/api/ads-catalog/meta-status"
+        : "/api/ads-catalog/google-status";
     setRefreshingStatus(true);
     try {
-      await fetch(`/api/ads-catalog/google-status${locationSearch}`, {
+      await fetch(`${endpoint}${locationSearch}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
-      statusFetcher.load(`/api/ads-catalog/google-status${locationSearch}`);
+      if (reviewPlatform === "facebook") {
+        metaStatusFetcher.load(`${endpoint}${locationSearch}`);
+      } else {
+        statusFetcher.load(`${endpoint}${locationSearch}`);
+      }
     } finally {
       setRefreshingStatus(false);
     }
@@ -347,6 +376,32 @@ export function AdsCatalogPage() {
             {t("adsCatalog.accountSuspendedBanner")}
             <a href="https://merchants.google.com/" target="_blank" rel="noreferrer" style={{ color: "#c0392b", fontWeight: 700 }}>
               {t("adsCatalog.goToGmc")}
+            </a>
+          </div>
+        )}
+
+        {metaAccountRestricted && (
+          <div
+            style={{
+              background: "#fdecec",
+              color: "#c0392b",
+              padding: "12px 16px",
+              borderRadius: pageColorTokens.radiusControl,
+              fontSize: 13,
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              alignItems: "center",
+            }}
+          >
+            {t("adsCatalog.metaAccountRestrictedBanner")}
+            <a
+              href="https://business.facebook.com/commerce"
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: "#c0392b", fontWeight: 700 }}
+            >
+              {t("adsCatalog.goToMetaCommerce")}
             </a>
           </div>
         )}
@@ -415,9 +470,11 @@ export function AdsCatalogPage() {
               <p style={pageHintTextStyle}>{t("adsCatalog.fieldProductIdsHint")}</p>
             </div>
 
-            {platform === "google" && (
-              <GoogleFeedFilters value={filters} onChange={setFilters} />
-            )}
+            <GoogleFeedFilters
+              value={filters}
+              onChange={setFilters}
+              showGoogleFields={platform === "google"}
+            />
 
             {!credentialReady && (
               <div
@@ -487,6 +544,15 @@ export function AdsCatalogPage() {
                 statusFetcher.load(`/api/ads-catalog/google-status${locationSearch}`);
               }}
             />
+            <MetaConnectPanels
+              credentials={credentials}
+              locationSearch={locationSearch}
+              languageCode={i18n.language}
+              onChanged={() => {
+                revalidator.revalidate();
+                metaStatusFetcher.load(`/api/ads-catalog/meta-status${locationSearch}`);
+              }}
+            />
             <FacebookCredentialPanel
               credentials={credentials}
               locationSearch={locationSearch}
@@ -509,9 +575,45 @@ export function AdsCatalogPage() {
                 }}
               >
                 <span style={{ color: "#c0392b", fontWeight: 600, fontSize: 13 }}>
+                  {t("adsCatalog.platformGoogle")}
+                  {" · "}
                   {t("adsCatalog.reviewBadge", { count: disapprovedCount })}
                 </span>
-                <button type="button" style={buttonSecondary} onClick={() => setReviewOpen(true)}>
+                <button
+                  type="button"
+                  style={buttonSecondary}
+                  onClick={() => {
+                    setReviewPlatform("google");
+                    setReviewOpen(true);
+                  }}
+                >
+                  {t("common.viewDetail")}
+                </button>
+              </div>
+            )}
+            {metaDisapprovedCount > 0 && (
+              <div
+                style={{
+                  ...sectionStyle,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}
+              >
+                <span style={{ color: "#c0392b", fontWeight: 600, fontSize: 13 }}>
+                  {t("adsCatalog.platformFacebook")}
+                  {" · "}
+                  {t("adsCatalog.reviewBadge", { count: metaDisapprovedCount })}
+                </span>
+                <button
+                  type="button"
+                  style={buttonSecondary}
+                  onClick={() => {
+                    setReviewPlatform("facebook");
+                    setReviewOpen(true);
+                  }}
+                >
                   {t("common.viewDetail")}
                 </button>
               </div>
@@ -534,7 +636,14 @@ export function AdsCatalogPage() {
                   locationSearch={locationSearch}
                   onDelete={() => void handleDelete(task.id)}
                   onOpenDetail={() => setSelectedTaskId(task.id)}
-                  onOpenReview={() => setReviewOpen(true)}
+                  onOpenReview={() => {
+                    const taskPlatform =
+                      (task.config as Record<string, unknown>)?.platform === "google"
+                        ? "google"
+                        : "facebook";
+                    setReviewPlatform(taskPlatform);
+                    setReviewOpen(true);
+                  }}
                   onTaskUpdated={handleTaskUpdated}
                   deleting={deletingId === task.id}
                 />
@@ -546,8 +655,8 @@ export function AdsCatalogPage() {
 
       {reviewOpen && (
         <GmcReviewDetailModal
-          products={reviewProducts}
-          lastCheckedAt={googleStatus?.lastCheckedAt ?? null}
+          products={activeReviewProducts}
+          lastCheckedAt={activeLastChecked}
           refreshing={refreshingStatus}
           onRefresh={() => void handleRefreshStatus()}
           onClose={() => setReviewOpen(false)}

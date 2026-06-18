@@ -27,6 +27,10 @@ import {
   checkGmcProductStatuses,
   scheduleGmcStatusCheck,
 } from "./gmcStatusChecker.server";
+import {
+  checkMetaCatalogStatuses,
+  scheduleMetaCatalogStatusCheck,
+} from "./metaCatalogStatusChecker.server";
 
 const LOG_PREFIX = "[AdsCatalog][Async]";
 
@@ -167,6 +171,42 @@ async function runFacebookSync(params: {
     failed: errors.length,
     errors,
   };
+
+  // 同步完成后立即查一次 Meta Catalog 审核状态（best-effort，不阻断任务结果）。
+  if (apiResult.totalProcessed > 0) {
+    try {
+      const review = await checkMetaCatalogStatuses({
+        shop: params.shop,
+        catalogId: credential.catalogId,
+        accessToken: credential.accessToken,
+      });
+      result.metaReview = {
+        checked: review.checked,
+        approved: review.approved,
+        disapproved: review.disapproved,
+        pending: review.pending,
+        accountRestricted: review.accountRestricted,
+        checkedAt: new Date().toISOString(),
+        products: review.products.slice(0, 250).map((p) => ({
+          offerId: p.offerId,
+          title: p.title,
+          status: p.status,
+          issues: p.issues.map((i) => ({
+            code: i.code,
+            servability: i.servability,
+            description: i.description,
+          })),
+        })),
+      };
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      console.error(
+        `${LOG_PREFIX} immediate Meta status check failed taskId=${params.taskId} ${detail}`,
+      );
+    }
+    // 30 分钟后再查一次（进程内延迟任务）。
+    scheduleMetaCatalogStatusCheck({ shop: params.shop, delayMs: 30 * 60 * 1000 });
+  }
 
   await finishAdsCatalogSync({
     taskId: params.taskId,

@@ -10,6 +10,9 @@ const GOOGLE_ADS_PLATFORM = "google";
 // picks which account to connect (multi-account selection flow).
 const GMC_PENDING_PLATFORM = "google_merchant_pending";
 const ADS_PENDING_PLATFORM = "google_ads_pending";
+// Transient record holding a freshly-exchanged Meta long-lived token while the
+// merchant picks which catalog to connect (multi-catalog selection flow).
+const META_CATALOG_PENDING_PLATFORM = "meta_catalog_pending";
 
 export type FacebookCatalogCredential = {
   accessToken: string;
@@ -193,12 +196,20 @@ export async function setGoogleAdsCredential(
 
 // ─── Pending OAuth selection (multi-account) ─────────────────────────────────
 
+export type PendingOAuthAccount = {
+  id: string;
+  name?: string;
+  formatted?: string;
+  /** Meta catalog 所属的 Business ID（用于建立凭证）。 */
+  businessId?: string;
+};
+
 export type PendingOAuthTokens = {
   accessToken: string;
   refreshToken?: string;
   clientId?: string;
   clientSecret?: string;
-  accounts: Array<{ id: string; name?: string; formatted?: string }>;
+  accounts: PendingOAuthAccount[];
 };
 
 async function setPending(
@@ -254,10 +265,19 @@ export const setGoogleAdsPending = (shop: string, payload: PendingOAuthTokens) =
 export const getGoogleAdsPending = (shop: string) => getPending(shop, ADS_PENDING_PLATFORM);
 export const clearGoogleAdsPending = (shop: string) => clearPending(shop, ADS_PENDING_PLATFORM);
 
+export const setMetaCatalogPending = (shop: string, payload: PendingOAuthTokens) =>
+  setPending(shop, META_CATALOG_PENDING_PLATFORM, payload);
+export const getMetaCatalogPending = (shop: string) =>
+  getPending(shop, META_CATALOG_PENDING_PLATFORM);
+export const clearMetaCatalogPending = (shop: string) =>
+  clearPending(shop, META_CATALOG_PENDING_PLATFORM);
+
 export const deleteGoogleMerchantCredential = (shop: string) =>
   clearPending(shop, GOOGLE_MERCHANT_PLATFORM);
 export const deleteGoogleAdsCredential = (shop: string) =>
   clearPending(shop, GOOGLE_ADS_PLATFORM);
+export const deleteFacebookCatalogCredential = (shop: string) =>
+  clearPending(shop, META_CATALOG_PLATFORM);
 
 export function maskTokenTail(value: string | null | undefined): string {
   if (!value) return "";

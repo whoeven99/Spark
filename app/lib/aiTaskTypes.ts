@@ -158,6 +158,23 @@ export interface AdsCatalogGmcReviewSummary {
   }>;
 }
 
+/** Meta（Facebook）Catalog 同步后拉取的商品审核状态摘要。 */
+export interface AdsCatalogMetaReviewSummary {
+  checked: number;
+  approved: number;
+  disapproved: number;
+  pending: number;
+  /** Catalog / 商务账户级被限制或封禁。 */
+  accountRestricted: boolean;
+  checkedAt: string;
+  products: Array<{
+    offerId: string;
+    title: string | null;
+    status: string;
+    issues: Array<{ code: string; servability: string; description: string }>;
+  }>;
+}
+
 export interface AdsCatalogSyncTaskResult {
   platform: AdsCatalogPlatform;
   totalProcessed: number;
@@ -168,6 +185,8 @@ export interface AdsCatalogSyncTaskResult {
   errors: Array<{ productId: string; reason: string }>;
   /** 同步后即时拉取的 GMC 审核状态摘要（仅 Google）。 */
   gmcReview?: AdsCatalogGmcReviewSummary;
+  /** 同步后即时拉取的 Meta Catalog 审核状态摘要（仅 Facebook）。 */
+  metaReview?: AdsCatalogMetaReviewSummary;
 }
 
 export type AITaskCreateResponse =
