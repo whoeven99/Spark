@@ -27,11 +27,16 @@ interface MetaProductItem {
   retailer_id?: string;
   name?: string;
   review_status?: string;
+  capability_to_review_status?: unknown;
+  review_rejection_reasons?: unknown;
   errors?: Array<{ message?: string; type?: string; severity?: string }>;
 }
 
-function normalizeStatus(raw: string | undefined): MetaProductReview["status"] {
-  switch ((raw ?? "").toLowerCase()) {
+/** Map a single Meta review token to our normalized status. */
+export function normalizeMetaReviewToken(
+  raw: string | undefined,
+): MetaProductReview["status"] | null {
+  switch ((raw ?? "").trim().toLowerCase()) {
     case "approved":
       return "approved";
     case "rejected":
@@ -40,9 +45,93 @@ function normalizeStatus(raw: string | undefined): MetaProductReview["status"] {
       return "pending";
     case "outdated":
       return "expiring";
+    case "no_review":
+      return "pending";
     default:
-      return "unknown";
+      return null;
   }
+}
+
+/** Flatten Meta capability_to_review_status into raw status tokens. */
+export function collectCapabilityReviewStatuses(raw: unknown): string[] {
+  const out: string[] = [];
+  if (!Array.isArray(raw)) return out;
+  for (const entry of raw) {
+    if (typeof entry === "string") {
+      out.push(entry);
+      continue;
+    }
+    if (!entry || typeof entry !== "object") continue;
+    const record = entry as Record<string, unknown>;
+    if (typeof record.value === "string") {
+      out.push(record.value);
+      continue;
+    }
+    if (typeof record.status === "string") {
+      out.push(record.status);
+      continue;
+    }
+    for (const val of Object.values(record)) {
+      if (typeof val === "string") out.push(val);
+    }
+  }
+  return out;
+}
+
+/**
+ * Meta list API often omits legacy review_status; capability_to_review_status
+ * and review_rejection_reasons are the reliable sources.
+ */
+export function deriveMetaProductReviewStatus(item: {
+  review_status?: string;
+  capability_to_review_status?: unknown;
+  review_rejection_reasons?: unknown;
+  errors?: Array<{ message?: string; type?: string; severity?: string }>;
+}): MetaProductReview["status"] {
+  const fromReview = normalizeMetaReviewToken(item.review_status);
+  if (fromReview) return fromReview;
+
+  const capabilityStatuses = collectCapabilityReviewStatuses(
+    item.capability_to_review_status,
+  ).map((s) => s.toUpperCase());
+  if (capabilityStatuses.includes("REJECTED")) return "disapproved";
+  if (capabilityStatuses.includes("PENDING")) return "pending";
+  if (capabilityStatuses.includes("NO_REVIEW")) return "pending";
+  if (capabilityStatuses.includes("OUTDATED")) return "expiring";
+  if (capabilityStatuses.includes("APPROVED")) return "approved";
+
+  const rejectionReasons = Array.isArray(item.review_rejection_reasons)
+    ? item.review_rejection_reasons.filter(
+        (r): r is string => typeof r === "string" && r.trim().length > 0,
+      )
+    : [];
+  if (rejectionReasons.length > 0) return "disapproved";
+
+  if ((item.errors ?? []).length > 0) return "pending";
+
+  return "unknown";
+}
+
+function collectMetaIssues(item: MetaProductItem): MetaProductReview["issues"] {
+  const issues: MetaProductReview["issues"] = [];
+  for (const e of item.errors ?? []) {
+    issues.push({
+      code: e.type ?? "unknown",
+      servability: e.severity ?? "unknown",
+      description: e.message ?? "",
+    });
+  }
+  if (Array.isArray(item.review_rejection_reasons)) {
+    for (const reason of item.review_rejection_reasons) {
+      if (typeof reason !== "string" || !reason.trim()) continue;
+      issues.push({
+        code: "rejection_reason",
+        servability: "disapproved",
+        description: reason,
+      });
+    }
+  }
+  return issues;
 }
 
 async function fetchCatalogProducts(params: {
@@ -52,7 +141,10 @@ async function fetchCatalogProducts(params: {
   const out: MetaProductReview[] = [];
   let nextUrl: string | null = (() => {
     const url = new URL(`${META_GRAPH_BASE}/${encodeURIComponent(params.catalogId)}/products`);
-    url.searchParams.set("fields", "id,retailer_id,name,review_status,errors");
+    url.searchParams.set(
+      "fields",
+      "id,retailer_id,name,review_status,capability_to_review_status,review_rejection_reasons,errors",
+    );
     url.searchParams.set("limit", "200");
     url.searchParams.set("access_token", params.accessToken);
     return url.toString();
@@ -73,12 +165,8 @@ async function fetchCatalogProducts(params: {
       out.push({
         offerId,
         title: item.name ?? null,
-        status: normalizeStatus(item.review_status),
-        issues: (item.errors ?? []).map((e) => ({
-          code: e.type ?? "unknown",
-          servability: e.severity ?? "unknown",
-          description: e.message ?? "",
-        })),
+        status: deriveMetaProductReviewStatus(item),
+        issues: collectMetaIssues(item),
       });
     }
     nextUrl = json.paging?.next ?? null;

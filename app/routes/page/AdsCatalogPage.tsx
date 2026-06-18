@@ -655,6 +655,7 @@ export function AdsCatalogPage() {
 
       {reviewOpen && (
         <GmcReviewDetailModal
+          platform={reviewPlatform}
           products={activeReviewProducts}
           lastCheckedAt={activeLastChecked}
           refreshing={refreshingStatus}

@@ -1324,6 +1324,7 @@
     "confirmErrors": "有 {{errors}} 个商品存在必填字段缺失，将被自动跳过，其余 {{ok}} 个正常同步。是否继续？",
     "confirmWarnings": "有 {{warnings}} 个商品可能存在质量问题，可能在 GMC 审核中被拒绝。是否继续同步？",
     "reviewModalTitle": "GMC 审核详情",
+    "metaReviewModalTitle": "Meta Catalog 审核详情",
     "reviewEmpty": "暂无审核状态，请先同步商品目录。",
     "reviewColTitle": "商品名称",
     "reviewColStatus": "状态",

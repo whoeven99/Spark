@@ -3,6 +3,7 @@ import { pageColorTokens } from "../../page/pageUiStyles";
 import type { GmcReviewProductView } from "./types";
 
 type Props = {
+  platform: "facebook" | "google";
   products: GmcReviewProductView[];
   lastCheckedAt: string | null;
   refreshing: boolean;
@@ -20,12 +21,15 @@ function statusBadge(status: string): { label: string; bg: string; color: string
       return { label: "⏳ 审核中", bg: "#fff6e6", color: "#a36a00" };
     case "expiring":
       return { label: "⌛ 即将过期", bg: "#fff6e6", color: "#a36a00" };
+    case "unknown":
+      return { label: "❓ 状态未知", bg: "#eef0f3", color: "#475569" };
     default:
       return { label: status, bg: "#eef0f3", color: "#475569" };
   }
 }
 
 export function GmcReviewDetailModal({
+  platform,
   products,
   lastCheckedAt,
   refreshing,
@@ -33,6 +37,10 @@ export function GmcReviewDetailModal({
   onClose,
 }: Props) {
   const { t, i18n } = useTranslation();
+  const modalTitle =
+    platform === "facebook"
+      ? t("adsCatalog.metaReviewModalTitle")
+      : t("adsCatalog.reviewModalTitle");
 
   return (
     <div
@@ -72,7 +80,7 @@ export function GmcReviewDetailModal({
           }}
         >
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
-            {t("adsCatalog.reviewModalTitle")}
+            {modalTitle}
           </h3>
           <button
             type="button"

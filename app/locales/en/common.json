@@ -1324,6 +1324,7 @@
     "confirmErrors": "{{errors}} products are missing required fields and will be skipped. The other {{ok}} will sync normally. Continue?",
     "confirmWarnings": "{{warnings}} products may have quality issues and could be rejected during GMC review. Continue with sync?",
     "reviewModalTitle": "GMC review details",
+    "metaReviewModalTitle": "Meta Catalog review details",
     "reviewEmpty": "No review status yet. Sync your catalog first.",
     "reviewColTitle": "Product",
     "reviewColStatus": "Status",

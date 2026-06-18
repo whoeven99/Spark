@@ -25,10 +25,18 @@ export interface GmcCheckResult {
   products: GmcProductReview[];
 }
 
+interface ProductStatusDestination {
+  destination?: string;
+  status?: string;
+  approvedCountries?: string[];
+  pendingCountries?: string[];
+  disapprovedCountries?: string[];
+}
+
 interface ProductStatusResource {
   productId?: string;
   title?: string;
-  destinationStatuses?: Array<{ destination?: string; status?: string }>;
+  destinationStatuses?: ProductStatusDestination[];
   itemLevelIssues?: Array<{
     code?: string;
     servability?: string;
@@ -44,14 +52,36 @@ function deriveOfferId(productId: string | undefined): string {
   return parts.length >= 4 ? parts.slice(3).join(":") : productId;
 }
 
+/** GMC v2.1 often omits deprecated destinationStatuses.status; use country arrays. */
+export function normalizeDestinationReviewStatus(
+  destination: ProductStatusDestination,
+): GmcProductReview["status"] | null {
+  const legacy = (destination.status ?? "").toLowerCase();
+  if (legacy === "disapproved" || legacy === "rejected") return "disapproved";
+  if (legacy === "pending") return "pending";
+  if (legacy === "expiring" || legacy === "outdated") return "expiring";
+  if (legacy === "approved") return "approved";
+
+  if ((destination.disapprovedCountries?.length ?? 0) > 0) return "disapproved";
+  if ((destination.pendingCountries?.length ?? 0) > 0) return "pending";
+  if ((destination.approvedCountries?.length ?? 0) > 0) return "approved";
+  return null;
+}
+
 function normalizeStatus(resource: ProductStatusResource): GmcProductReview["status"] {
-  const statuses = (resource.destinationStatuses ?? []).map((d) =>
-    (d.status ?? "").toLowerCase(),
-  );
+  const statuses = (resource.destinationStatuses ?? [])
+    .map(normalizeDestinationReviewStatus)
+    .filter((s): s is GmcProductReview["status"] => s != null);
   if (statuses.includes("disapproved")) return "disapproved";
   if (statuses.includes("pending")) return "pending";
   if (statuses.includes("expiring")) return "expiring";
-  if (statuses.some((s) => s === "approved")) return "approved";
+  if (statuses.includes("approved")) return "approved";
+
+  const issues = resource.itemLevelIssues ?? [];
+  if (issues.some((i) => (i.servability ?? "").toLowerCase() === "disapproved")) {
+    return "disapproved";
+  }
+  if (issues.length > 0) return "pending";
   return "unknown";
 }
 
