@@ -9,6 +9,7 @@ import {
   type SupportedLocale,
   normalizeLocale,
 } from "./config";
+import { buildAppActionUrl } from "../lib/embeddedLocationSearch";
 
 type Props = {
   locale: SupportedLocale;
@@ -34,7 +35,7 @@ export function AppI18nProvider({ locale, children }: Props) {
       if (!stored) {
         localeFetcher.submit(
           { locale: target },
-          { method: "post", action: "/app?setLocale=1" },
+          { method: "post", action: buildAppActionUrl("/app", { setLocale: "1" }) },
         );
       }
     }
@@ -61,7 +62,7 @@ export function useLocaleActions() {
     }
     localeFetcher.submit(
       { locale: nextLocale },
-      { method: "post", action: "/app?setLocale=1" },
+      { method: "post", action: buildAppActionUrl("/app", { setLocale: "1" }) },
     );
   };
 

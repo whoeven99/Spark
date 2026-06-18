@@ -4,7 +4,7 @@ import type {
   LoaderFunctionArgs,
   ShouldRevalidateFunctionArgs,
 } from "react-router";
-import { Outlet, useLoaderData, useRouteError } from "react-router";
+import { Outlet, useLoaderData, useLocation, useRouteError } from "react-router";
 import { useTranslation } from "react-i18next";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
@@ -23,6 +23,10 @@ import {
   getAppEntryConfig,
   type NavItemKey,
 } from "../config/appEntry.server";
+import {
+  appendEmbeddedSearchToPath,
+  resolveEmbeddedLocationSearch,
+} from "../lib/embeddedLocationSearch";
 
 const NAV_ITEMS: Record<
   NavItemKey,
@@ -171,12 +175,18 @@ export default function App() {
 
 function AppNav({ nav }: { nav: readonly NavItemKey[] }) {
   const { t } = useTranslation();
+  const location = useLocation();
+  const embeddedSearch = resolveEmbeddedLocationSearch(location.search);
+
   return (
     <s-app-nav>
       {nav.map((item) => {
         const config = NAV_ITEMS[item];
         return (
-          <s-link key={item} href={config.href}>
+          <s-link
+            key={item}
+            href={appendEmbeddedSearchToPath(config.href, embeddedSearch)}
+          >
             {t(config.labelKey)}
           </s-link>
         );

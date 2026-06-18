@@ -29,6 +29,14 @@ export interface GoogleMerchantProduct {
   productTypes?: string[];
   additionalImageLinks?: string[];
   itemGroupId?: string;
+  /** GMC [color] 属性，来自 Shopify 变体选项 Color/颜色。服装类必填。 */
+  color?: string;
+  /** GMC [size] 属性，来自 Shopify 变体选项 Size/尺码。服装类必填。 */
+  size?: string;
+  /** GMC [gender] 属性，支持 male / female / unisex。服装类必填。 */
+  gender?: "male" | "female" | "unisex";
+  /** GMC [age_group] 属性，支持 newborn / infant / toddler / kids / adult。服装类必填。 */
+  ageGroup?: "newborn" | "infant" | "toddler" | "kids" | "adult";
 }
 
 export interface MapGoogleContext {
@@ -192,6 +200,10 @@ export function mapShopifyVariantsToGoogle(
       productTypes: product.productType ? [product.productType] : undefined,
       additionalImageLinks: additional.length > 0 ? additional : undefined,
       itemGroupId: isMulti ? productNumericId : undefined,
+      color: variant.color ?? undefined,
+      size: variant.size ?? undefined,
+      gender: (product.gender as GoogleMerchantProduct["gender"]) ?? undefined,
+      ageGroup: (product.ageGroup as GoogleMerchantProduct["ageGroup"]) ?? undefined,
     };
   });
 

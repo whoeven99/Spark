@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useFetcher, useLoaderData, useLocation, useRevalidator } from "react-router";
+import { useEmbeddedLocationSearch } from "../../hooks/useEmbeddedLocationSearch";
 import { useTranslation } from "react-i18next";
 import type { loader } from "../app.ads-catalog";
 import {
@@ -94,6 +95,7 @@ interface GoogleStatusData {
 export function AdsCatalogPage() {
   const { t, i18n } = useTranslation();
   const location = useLocation();
+  const locationSearch = useEmbeddedLocationSearch();
   const loaderData = useLoaderData<typeof loader>();
   const revalidator = useRevalidator();
   const credentials = loaderData.credentials as unknown as CredentialsView;
@@ -110,6 +112,7 @@ export function AdsCatalogPage() {
   const [googleReport, setGoogleReport] = useState<FeedValidationReportView | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [authBanner, setAuthBanner] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const [previewPlatform, setPreviewPlatform] = useState<Platform | null>(null);
 
   const syncFetcher = useFetcher<{
     success?: boolean;
@@ -145,7 +148,7 @@ export function AdsCatalogPage() {
 
   // Load GMC status (suspension banner, ads link, review list) on mount.
   useEffect(() => {
-    statusFetcher.load(`/api/ads-catalog/google-status${location.search}`);
+    statusFetcher.load(`/api/ads-catalog/google-status${locationSearch}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -175,16 +178,21 @@ export function AdsCatalogPage() {
     if (syncFetcher.state === "idle" && syncFetcher.data?.success) {
       setTab("tasks");
       revalidator.revalidate();
-      statusFetcher.load(`/api/ads-catalog/google-status${location.search}`);
+      statusFetcher.load(`/api/ads-catalog/google-status${locationSearch}`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncFetcher.data, syncFetcher.state]);
 
   useEffect(() => {
     if (previewFetcher.state === "idle" && previewFetcher.data) {
+      const responsePlatform = previewFetcher.data.platform ?? platform;
+      // 忽略与当前选中平台不一致的响应（例如切换平台后迟到的 Google 预览）。
+      if (responsePlatform !== platform) return;
+
       if (previewFetcher.data.ok) {
         setPreviewError(null);
-        if (previewFetcher.data.platform === "google") {
+        setPreviewPlatform(responsePlatform);
+        if (responsePlatform === "google") {
           setGoogleReport(previewFetcher.data.report ?? null);
           setFbPreview(null);
         } else {
@@ -193,15 +201,24 @@ export function AdsCatalogPage() {
         }
       } else {
         setPreviewError(previewFetcher.data.error ?? "Preview failed");
+        setPreviewPlatform(null);
         setGoogleReport(null);
         setFbPreview(null);
       }
     }
-  }, [previewFetcher.data, previewFetcher.state]);
+  }, [previewFetcher.data, previewFetcher.state, platform]);
 
   useEffect(() => {
     setTasks(loaderData.initialTaskPage.tasks);
   }, [loaderData.initialTaskPage.tasks]);
+
+  // 切换平台时清空另一平台的预览结果，避免 Google 校验报告残留在 Facebook 下。
+  useEffect(() => {
+    setPreviewError(null);
+    setPreviewPlatform(null);
+    setGoogleReport(null);
+    setFbPreview(null);
+  }, [platform]);
 
   const selectedTask = useMemo(
     () => tasks.find((task) => task.id === selectedTaskId) ?? null,
@@ -239,7 +256,7 @@ export function AdsCatalogPage() {
     previewFetcher.submit(body, {
       method: "POST",
       encType: "application/json",
-      action: `/api/ads-catalog/preview${location.search}`,
+      action: `/api/ads-catalog/preview${locationSearch}`,
     });
   }
 
@@ -263,7 +280,7 @@ export function AdsCatalogPage() {
     syncFetcher.submit(buildSyncBody(), {
       method: "POST",
       encType: "application/json",
-      action: `/api/ads-catalog/sync${location.search}`,
+      action: `/api/ads-catalog/sync${locationSearch}`,
     });
   }
 
@@ -280,7 +297,7 @@ export function AdsCatalogPage() {
   async function handleDelete(taskId: string) {
     setDeletingId(taskId);
     try {
-      const resp = await fetch(`/api/ai-task${location.search}`, {
+      const resp = await fetch(`/api/ai-task${locationSearch}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "delete", taskId }),
@@ -298,12 +315,12 @@ export function AdsCatalogPage() {
   async function handleRefreshStatus() {
     setRefreshingStatus(true);
     try {
-      await fetch(`/api/ads-catalog/google-status${location.search}`, {
+      await fetch(`/api/ads-catalog/google-status${locationSearch}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
-      statusFetcher.load(`/api/ads-catalog/google-status${location.search}`);
+      statusFetcher.load(`/api/ads-catalog/google-status${locationSearch}`);
     } finally {
       setRefreshingStatus(false);
     }
@@ -446,8 +463,10 @@ export function AdsCatalogPage() {
             {previewError && (
               <div style={errorBoxStyle}>{previewError}</div>
             )}
-            {googleReport && <GmcValidationReport report={googleReport} />}
-            {fbPreview && fbPreview.length > 0 && (
+            {platform === "google" && previewPlatform === "google" && googleReport && (
+              <GmcValidationReport report={googleReport} />
+            )}
+            {platform === "facebook" && previewPlatform === "facebook" && fbPreview && fbPreview.length > 0 && (
               <pre style={previewPreStyle}>{JSON.stringify(fbPreview, null, 2)}</pre>
             )}
             {syncFetcher.data?.errorMsg && (
@@ -461,16 +480,16 @@ export function AdsCatalogPage() {
             <GoogleConnectPanels
               credentials={credentials}
               adsLink={adsLink}
-              locationSearch={location.search}
+              locationSearch={locationSearch}
               languageCode={i18n.language}
               onChanged={() => {
                 revalidator.revalidate();
-                statusFetcher.load(`/api/ads-catalog/google-status${location.search}`);
+                statusFetcher.load(`/api/ads-catalog/google-status${locationSearch}`);
               }}
             />
             <FacebookCredentialPanel
               credentials={credentials}
-              locationSearch={location.search}
+              locationSearch={locationSearch}
               languageCode={i18n.language}
               onSaved={() => revalidator.revalidate()}
             />
@@ -500,7 +519,7 @@ export function AdsCatalogPage() {
             {selectedTask ? (
               <AdsCatalogTaskDetailPage
                 task={selectedTask}
-                locationSearch={location.search}
+                locationSearch={locationSearch}
                 onBack={() => setSelectedTaskId(null)}
               />
             ) : tasks.length === 0 ? (
@@ -512,7 +531,7 @@ export function AdsCatalogPage() {
                 <AdsCatalogTaskCard
                   key={task.id}
                   task={task}
-                  locationSearch={location.search}
+                  locationSearch={locationSearch}
                   onDelete={() => void handleDelete(task.id)}
                   onOpenDetail={() => setSelectedTaskId(task.id)}
                   onOpenReview={() => setReviewOpen(true)}

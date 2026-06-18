@@ -1,4 +1,8 @@
 import { useEffect } from "react";
+import {
+  cacheEmbeddedSearch,
+  resolveEmbeddedLocationSearch,
+} from "./embeddedLocationSearch";
 
 /**
  * 前端功能埋点工具（嵌入式 App）。
@@ -32,7 +36,9 @@ export function trackFeature(
   if (typeof window === "undefined") return;
   if (!feature || !action) return;
 
-  const search = window.location.search ?? "";
+  const rawSearch = window.location.search ?? "";
+  cacheEmbeddedSearch(rawSearch);
+  const search = resolveEmbeddedLocationSearch(rawSearch);
   const path = window.location.pathname ?? "";
 
   const payload = JSON.stringify({ feature, action, path, extra });

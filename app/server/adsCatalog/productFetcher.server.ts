@@ -37,6 +37,10 @@ const PRODUCTS_QUERY = `#graphql
               inventoryQuantity
               availableForSale
               inventoryPolicy
+              selectedOptions {
+                name
+                value
+              }
               }
             }
           }
@@ -58,6 +62,10 @@ export interface RawVariantForCatalog {
   inventoryQuantity: number | null;
   availableForSale: boolean;
   inventoryPolicy: InventoryPolicy;
+  /** 从变体选项 "Color" / "Colour" / "颜色" 提取，供 GMC [color] 属性使用。 */
+  color: string | null;
+  /** 从变体选项 "Size" / "尺码" / "尺寸" 提取，供 GMC [size] 属性使用。 */
+  size: string | null;
 }
 
 export interface RawShopifyProductForCatalog {
@@ -87,6 +95,16 @@ export interface RawShopifyProductForCatalog {
   shopifyCategory?: { id: string; name: string; fullName: string } | null;
   // Filled in by the sync context (全店统一设置)，校验器据此判断是否缺少标准类目。
   googleProductCategory?: string | null;
+  /**
+   * 从商品 tags 中提取的 GMC gender 值（male / female / unisex）。
+   * 支持 "gender:male" 或裸标签 "male" / "female" / "unisex" 两种写法。
+   */
+  gender: string | null;
+  /**
+   * 从商品 tags 中提取的 GMC age_group 值（newborn / infant / toddler / kids / adult）。
+   * 支持 "age_group:adult" 或裸标签两种写法。
+   */
+  ageGroup: string | null;
 }
 
 interface RawVariantNode {
@@ -99,6 +117,7 @@ interface RawVariantNode {
   inventoryQuantity?: number | null;
   availableForSale?: boolean | null;
   inventoryPolicy?: string | null;
+  selectedOptions?: Array<{ name: string; value: string }> | null;
 }
 
 interface RawEdge {
@@ -124,7 +143,49 @@ function normalizeInventoryPolicy(value: string | null | undefined): InventoryPo
   return value === "CONTINUE" ? "CONTINUE" : "DENY";
 }
 
+/**
+ * 从 selectedOptions 中按候选名称列表（不区分大小写）取出第一个匹配的选项值。
+ * 用于提取颜色（Color/颜色）和尺码（Size/尺码）。
+ */
+function extractOptionValue(
+  options: Array<{ name: string; value: string }> | null | undefined,
+  candidateNames: string[],
+): string | null {
+  if (!options?.length) return null;
+  const lowerNames = candidateNames.map((n) => n.toLowerCase());
+  const match = options.find((o) => lowerNames.includes(o.name.toLowerCase()));
+  return match?.value ?? null;
+}
+
+const COLOR_OPTION_NAMES = ["color", "colour", "颜色", "色", "颜色/color"];
+const SIZE_OPTION_NAMES = ["size", "尺码", "尺寸", "尺量", "型号", "size/尺码"];
+
+/** 从商品 tags 提取 GMC gender 合法值，支持 "gender:male" 和裸标签两种写法。 */
+function extractGenderFromTags(tags: string[]): string | null {
+  const valid = new Set(["male", "female", "unisex"]);
+  for (const tag of tags) {
+    const lower = tag.toLowerCase().trim();
+    const prefixed = lower.match(/^gender:(male|female|unisex)$/);
+    if (prefixed) return prefixed[1];
+    if (valid.has(lower)) return lower;
+  }
+  return null;
+}
+
+/** 从商品 tags 提取 GMC age_group 合法值，支持 "age_group:adult" 和裸标签两种写法。 */
+function extractAgeGroupFromTags(tags: string[]): string | null {
+  const valid = new Set(["newborn", "infant", "toddler", "kids", "adult"]);
+  for (const tag of tags) {
+    const lower = tag.toLowerCase().trim();
+    const prefixed = lower.match(/^age_group:(newborn|infant|toddler|kids|adult)$/);
+    if (prefixed) return prefixed[1];
+    if (valid.has(lower)) return lower;
+  }
+  return null;
+}
+
 function mapVariant(node: RawVariantNode): RawVariantForCatalog {
+  const opts = node.selectedOptions ?? null;
   return {
     id: node.id,
     title: node.title ?? "",
@@ -135,6 +196,8 @@ function mapVariant(node: RawVariantNode): RawVariantForCatalog {
     inventoryQuantity: node.inventoryQuantity ?? null,
     availableForSale: node.availableForSale ?? false,
     inventoryPolicy: normalizeInventoryPolicy(node.inventoryPolicy),
+    color: extractOptionValue(opts, COLOR_OPTION_NAMES),
+    size: extractOptionValue(opts, SIZE_OPTION_NAMES),
   };
 }
 
@@ -167,6 +230,8 @@ function mapEdge(edge: RawEdge): RawShopifyProductForCatalog {
     variantCount: variants.length,
     variants,
     shopifyCategory: node.category ?? null,
+    gender: extractGenderFromTags(Array.isArray(node.tags) ? node.tags : []),
+    ageGroup: extractAgeGroupFromTags(Array.isArray(node.tags) ? node.tags : []),
   };
 }
 
