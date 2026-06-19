@@ -16,15 +16,22 @@ function nowIso(): string {
 const PREVIEW_LEN = 120;
 const MAX_REPLY_LEN = 4000;
 
+/** 来源：默认 spark（Spark 自身商家会话）；翻译v4 页传 translate-v4。 */
+function resolveSource(req: { query: Record<string, unknown> }): string {
+  const raw = (req.query.source as string | undefined)?.trim();
+  return raw || "spark";
+}
+
 /** 会话列表：可按 status / 关键字（shop / 邮箱）过滤，未读多的优先。 */
 supportRouter.get("/", async (req, res) => {
   try {
     const db = getDb();
     const status = (req.query.status as string | undefined)?.trim();
     const search = (req.query.search as string | undefined)?.trim();
+    const source = resolveSource(req);
 
-    const where: string[] = [];
-    const args: string[] = [];
+    const where: string[] = ["source = ?"];
+    const args: string[] = [source];
     if (status && status !== "all") {
       where.push("status = ?");
       args.push(status);
@@ -58,12 +65,13 @@ supportRouter.get("/:shop", async (req, res) => {
   try {
     const db = getDb();
     const shop = req.params.shop;
+    const source = resolveSource(req);
 
     const convResult = await db.execute({
       sql: `SELECT id, shop, contactEmail, shopEmail, status, lastMessage,
                    lastMessageAt, unreadForOps, unreadForShop, createdAt, updatedAt
-            FROM SupportConversation WHERE shop = ? LIMIT 1`,
-      args: [shop],
+            FROM SupportConversation WHERE shop = ? AND source = ? LIMIT 1`,
+      args: [shop, source],
     });
     const conversation = convResult.rows[0];
     if (!conversation) {
@@ -79,8 +87,8 @@ supportRouter.get("/:shop", async (req, res) => {
 
     if (Number(conversation.unreadForOps ?? 0) > 0) {
       await db.execute({
-        sql: "UPDATE SupportConversation SET unreadForOps = 0, updatedAt = ? WHERE shop = ?",
-        args: [nowIso(), shop],
+        sql: "UPDATE SupportConversation SET unreadForOps = 0, updatedAt = ? WHERE shop = ? AND source = ?",
+        args: [nowIso(), shop, source],
       });
       conversation.unreadForOps = 0;
     }
@@ -97,6 +105,7 @@ supportRouter.post("/:shop/reply", async (req, res) => {
   try {
     const db = getDb();
     const shop = req.params.shop;
+    const source = resolveSource(req);
     const content = String(req.body?.content ?? "").trim().slice(0, MAX_REPLY_LEN);
     const senderName = req.body?.senderName
       ? String(req.body.senderName).slice(0, 60)
@@ -107,8 +116,8 @@ supportRouter.post("/:shop/reply", async (req, res) => {
     }
 
     const convResult = await db.execute({
-      sql: "SELECT id FROM SupportConversation WHERE shop = ? LIMIT 1",
-      args: [shop],
+      sql: "SELECT id FROM SupportConversation WHERE shop = ? AND source = ? LIMIT 1",
+      args: [shop, source],
     });
     const conversation = convResult.rows[0];
     if (!conversation) {
@@ -127,8 +136,8 @@ supportRouter.post("/:shop/reply", async (req, res) => {
       sql: `UPDATE SupportConversation
             SET lastMessage = ?, lastMessageAt = ?, unreadForShop = unreadForShop + 1,
                 unreadForOps = 0, status = 'open', updatedAt = ?
-            WHERE shop = ?`,
-      args: [content.slice(0, PREVIEW_LEN), now, now, shop],
+            WHERE shop = ? AND source = ?`,
+      args: [content.slice(0, PREVIEW_LEN), now, now, shop, source],
     });
 
     res.json({ ok: true, id: messageId, createdAt: now });
@@ -143,14 +152,15 @@ supportRouter.post("/:shop/status", async (req, res) => {
   try {
     const db = getDb();
     const shop = req.params.shop;
+    const source = resolveSource(req);
     const status = String(req.body?.status ?? "");
     if (status !== "open" && status !== "closed") {
       res.status(400).json({ error: "status must be open|closed" });
       return;
     }
     await db.execute({
-      sql: "UPDATE SupportConversation SET status = ?, updatedAt = ? WHERE shop = ?",
-      args: [status, nowIso(), shop],
+      sql: "UPDATE SupportConversation SET status = ?, updatedAt = ? WHERE shop = ? AND source = ?",
+      args: [status, nowIso(), shop, source],
     });
     res.json({ ok: true });
   } catch (err) {

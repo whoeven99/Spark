@@ -709,6 +709,8 @@ model ShopSkuCost {
 model SupportConversation {
   id            String   @id @default(cuid())
   shop          String
+  /// 会话来源：spark（Spark 自身商家）| translate-v4（tsf 翻译v4）
+  source        String   @default("spark")
   /// 商家在聊天框主动留下的联系邮箱（可覆盖账户邮箱）
   contactEmail  String?
   /// Session.email 快照（开聊即写，卸载 session 被清后仍可联系）
@@ -726,7 +728,7 @@ model SupportConversation {
   updatedAt     DateTime @updatedAt
   messages      SupportMessage[]
 
-  @@unique([shop])
+  @@unique([shop, source])
   @@index([status, lastMessageAt])
 }
 
