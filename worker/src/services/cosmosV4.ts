@@ -166,6 +166,15 @@ export async function claimJob(
   }
 }
 
+function isCosmosPreconditionFailed(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: number }).code === 412
+  );
+}
+
 export async function updateJob(
   shopName: string,
   jobId: string,
@@ -187,23 +196,32 @@ export async function updateJob(
     >
   >,
 ): Promise<void> {
-  try {
-    const { resource: existing, etag } = await getContainer()
-      .item(jobId, shopName)
-      .read<TranslationV4Job>();
-    if (!existing) return;
-    const updated: TranslationV4Job = {
-      ...existing,
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    };
-    await getContainer()
-      .item(jobId, shopName)
-      .replace<TranslationV4Job>(updated, {
-        accessCondition: { type: "IfMatch", condition: etag! },
-      });
-  } catch (e) {
-    console.warn(`[cosmosV4] updateJob failed ${jobId}`, e);
+  const maxAttempts = 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const { resource: existing, etag } = await getContainer()
+        .item(jobId, shopName)
+        .read<TranslationV4Job>();
+      if (!existing) return;
+      const updated: TranslationV4Job = {
+        ...existing,
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      };
+      await getContainer()
+        .item(jobId, shopName)
+        .replace<TranslationV4Job>(updated, {
+          accessCondition: { type: "IfMatch", condition: etag! },
+        });
+      return;
+    } catch (e) {
+      if (isCosmosPreconditionFailed(e) && attempt < maxAttempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 40 * (attempt + 1)));
+        continue;
+      }
+      console.warn(`[cosmosV4] updateJob failed ${jobId}`, e);
+      return;
+    }
   }
 }
 

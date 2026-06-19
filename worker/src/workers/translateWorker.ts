@@ -60,11 +60,15 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   // Engine routing (Google vs DeepSeek) is applied inside translateBatch.
   const blobPrefix = job.blobPrefix || `tasks/v4/${shopName}/${jobId}`;
 
+  // Resume: restore token counter from persisted metrics (skip path adds progress counters).
+  const latestAtStart = await getJob(shopName, jobId);
+  const persistedUsedTokens = latestAtStart?.metrics.usedTokens ?? job.metrics.usedTokens ?? 0;
+
   let translateDone = 0;
   let translateFailed = 0;
   let translateFallback = 0;
   let translateUnitDone = 0; // node-level progress
-  let liveTokens = 0; // accumulated LLM tokens (after multiplier) for real-time display
+  let liveTokens = persistedUsedTokens; // accumulated LLM tokens (after multiplier)
   let lastHeartbeatAt = 0;
   const tokenMultiplier = Math.max(0, Number(process.env.TRANSLATION_TOKEN_MULTIPLIER) || 1);
   // Fields that were translated but fell back to the original value (engine
@@ -310,9 +314,6 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
       ? { provider: "test", model: "test" }
       : resolveEngine(aiModel);
 
-    // liveTokens is already accumulated with the multiplier applied during progress callbacks.
-    const usedTokens = liveTokens;
-
     // 被中断（手动暂停/取消 或 额度不足）：持久化已完成进度后停在 TRANSLATE，
     // 不进入回写。补额度/解除暂停后由 resume 重新入队，跳过已翻译 chunk 续跑。
     if (abort.tripped) {
@@ -335,7 +336,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
           translateFallback,
           translateUnitDone,
           translateUnitTotal,
-          usedTokens,
+          usedTokens: Math.max(liveTokens, latestAbort?.metrics.usedTokens ?? 0),
         },
       });
       await clearControl(jobId); // 消费掉控制信号，避免 resume 后立即再次暂停
@@ -347,6 +348,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
 
     // Refresh job to get latest metrics
     const latestJob = await getJob(shopName, jobId);
+    const usedTokens = Math.max(liveTokens, latestJob?.metrics.usedTokens ?? 0);
     await updateJob(shopName, jobId, {
       status: "WRITEBACK_QUEUED",
       claimedBy: null,

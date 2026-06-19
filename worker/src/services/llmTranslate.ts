@@ -1175,6 +1175,32 @@ const MAX_CHARS_PER_BATCH = Math.max(
   500,
   Number(process.env.TRANSLATE_MAX_CHARS_PER_BATCH) || 4_000,
 );
+/** Max items per LLM request — avoids 80+ key payloads that routinely hit the timeout. */
+const MAX_ITEMS_PER_BATCH = Math.max(
+  1,
+  Number(process.env.TRANSLATE_MAX_ITEMS_PER_BATCH) || 25,
+);
+const LLM_TIMEOUT_BASE_MS = Math.max(
+  60_000,
+  Number(process.env.TRANSLATE_LLM_TIMEOUT_MS) || 120_000,
+);
+const LLM_TIMEOUT_PER_ITEM_MS = Math.max(
+  500,
+  Number(process.env.TRANSLATE_LLM_TIMEOUT_PER_ITEM_MS) || 2_000,
+);
+const LLM_TIMEOUT_MAX_MS = Math.max(
+  LLM_TIMEOUT_BASE_MS,
+  Number(process.env.TRANSLATE_LLM_TIMEOUT_MAX_MS) || 300_000,
+);
+
+/** Scale timeout with batch size so large (but capped) batches get more wall clock. */
+export function llmTimeoutMsForBatch(itemCount: number): number {
+  const n = Math.max(1, itemCount);
+  return Math.min(
+    LLM_TIMEOUT_MAX_MS,
+    LLM_TIMEOUT_BASE_MS + Math.max(0, n - 1) * LLM_TIMEOUT_PER_ITEM_MS,
+  );
+}
 // Batch fan-out: all batches within a resource pool are launched simultaneously.
 // The pool's AdaptiveSemaphore is the only concurrency gate — no separate knob needed.
 
@@ -1399,14 +1425,21 @@ function splitPlainText(text: string): string[] {
 
 // ─── Char-based batching ──────────────────────────────────────────────────────
 
-function batchByChars(items: TranslateItem[], maxChars: number): TranslateItem[][] {
+function batchByChars(
+  items: TranslateItem[],
+  maxChars: number,
+  maxItems = MAX_ITEMS_PER_BATCH,
+): TranslateItem[][] {
   const batches: TranslateItem[][] = [];
   let current: TranslateItem[] = [];
   let currentChars = 0;
 
   for (const item of items) {
     const len = item.value.length;
-    if (current.length > 0 && currentChars + len > maxChars) {
+    if (
+      current.length > 0 &&
+      (currentChars + len > maxChars || current.length >= maxItems)
+    ) {
       batches.push(current);
       current = [];
       currentChars = 0;
@@ -1694,7 +1727,7 @@ async function callLLMOnce(
       acq.transport,
       model,
       messages,
-      120_000,
+      llmTimeoutMsForBatch(items.length),
       deepseekUserId,
     );
 
@@ -1744,6 +1777,17 @@ async function gatherTranslations(
 ): Promise<void> {
   const pend = items.filter((i) => !collected.has(i.key));
   if (pend.length === 0) return;
+
+  // Proactively split before calling the API — avoids burning a full timeout on 80+ keys.
+  if (pend.length > MAX_ITEMS_PER_BATCH) {
+    const mid = Math.ceil(pend.length / 2);
+    console.log(
+      `[llm] batch of ${pend.length} items exceeds cap ${MAX_ITEMS_PER_BATCH}; splitting proactively`,
+    );
+    await gatherTranslations(pend.slice(0, mid), aiModel, systemPrompt, collected, tokenAccum, shopName);
+    await gatherTranslations(pend.slice(mid), aiModel, systemPrompt, collected, tokenAccum, shopName);
+    return;
+  }
 
   try {
     const { map, tokens } = await callLLMOnce(pend, aiModel, systemPrompt, shopName);
