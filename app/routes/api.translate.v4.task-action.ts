@@ -35,6 +35,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (actionType === "cancel") {
     await updateV4Job(shopName, taskId, { status: "CANCELLED", claimedBy: null });
+    await setV4Control(taskId, "cancel"); // 让正在运行的阶段中途即时取消
     return data({ ok: true, status: "CANCELLED" });
   }
 
@@ -46,6 +47,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       claimedBy: null,
       errorStage: pauseStage,
     });
+    await setV4Control(taskId, "pause"); // 让正在运行的阶段中途即时暂停
     return data({ ok: true, status: "PAUSED" });
   }
 
@@ -72,6 +74,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       errorStage: null,
       shopifyAccessToken: freshToken,
     });
+    await clearV4Control(taskId); // 清除暂停/取消控制键，避免 resume 后立即再次中断
     // Push hint so worker picks it up immediately
     const hintStage = resumeStatus.replace("_QUEUED", "").toLowerCase();
     const hintKey = HINT_KEYS[hintStage];
@@ -87,6 +90,27 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   return data({ ok: false, error: "unknown action" }, { status: 400 });
 };
+
+/** 运行时控制键：worker 在阶段中途读取后优雅暂停/取消。 */
+function v4ControlKey(taskId: string): string {
+  return `translate:v4:control:${taskId}`;
+}
+
+async function setV4Control(taskId: string, action: "pause" | "cancel"): Promise<void> {
+  try {
+    await getTranslateRedisClient().set(v4ControlKey(taskId), action, "EX", 24 * 3600);
+  } catch {
+    // 控制键为尽力而为；即便失败，阶段结束后仍会依据 Cosmos 状态停止
+  }
+}
+
+async function clearV4Control(taskId: string): Promise<void> {
+  try {
+    await getTranslateRedisClient().del(v4ControlKey(taskId));
+  } catch {
+    // non-fatal
+  }
+}
 
 /** Determine pipeline stage from current status (used when pausing). */
 function stageFromStatus(status: TranslationV4Status): string {

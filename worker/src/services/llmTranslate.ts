@@ -932,6 +932,26 @@ function resolveModel(preferred?: string): string {
   return process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
 }
 
+// ─── Per-shop quota concurrency gate ─────────────────────────────────────────
+// 按 shopName 限流：相同 shop 的 LLM 调用共用一个闸（与全局限流池叠加 min），
+// 不同 shop 互不影响。默认容量极大(不限)，仅当额度逻辑显式 setShopQuotaCap 时收紧。
+// 额度越少 → cap 越小 → 在飞批次越少 → 最大透支被锁死。
+const _shopQuotaGates = new Map<string, AdaptiveSemaphore>();
+
+function getShopQuotaGate(shop: string): AdaptiveSemaphore {
+  let g = _shopQuotaGates.get(shop);
+  if (!g) {
+    g = new AdaptiveSemaphore(MAX_POOL_CONCURRENCY);
+    _shopQuotaGates.set(shop, g);
+  }
+  return g;
+}
+
+/** 由额度逻辑调用：设置某 shop 的 LLM 并发上限（最小 1；硬停由调用方 abort 负责）。 */
+export function setShopQuotaCap(shop: string, cap: number): void {
+  getShopQuotaGate(shop).setMax(cap);
+}
+
 // ─── Engine router ──────────────────────────────────────────────────────────────
 //
 // Two engine *families*: "llm" (DeepSeek) and "google" (Google Translate).
@@ -1651,6 +1671,10 @@ async function callLLMOnce(
   const idToKey = new Map(items.map((it, idx) => [`f${idx}`, it.key]));
   const payload  = items.map((it, idx) => ({ key: `f${idx}`, value: it.value }));
 
+  // 按 shop 的额度并发闸：与全局限流池叠加，额度越少该 shop 并发越低。
+  const quotaGate = shopName ? getShopQuotaGate(shopName) : null;
+  if (quotaGate) await quotaGate.acquire();
+
   const acq   = await getPool().acquire();
   // 任务自带的 aiModel 优先（已知 DeepSeek 模型时），否则回退 env。
   const model = resolveModel(aiModel) || acq.model;
@@ -1699,7 +1723,8 @@ async function callLLMOnce(
     }
     throw e;
   } finally {
-    acq.release(); // always release semaphore slot
+    acq.release(); // always release pool semaphore slot
+    if (quotaGate) quotaGate.release(); // release per-shop quota gate
   }
 }
 

@@ -1,6 +1,13 @@
 import { hostname } from "os";
 import { claimJob, updateJob, heartbeat, findPendingJobs, getJob, withStageTiming } from "../services/cosmosV4.js";
-import { popHint, pushHint, setProgress } from "../services/redisV4.js";
+import { popHint, pushHint, setProgress, readControl, clearControl } from "../services/redisV4.js";
+import {
+  deductTsfQuota,
+  getTsfRemaining,
+  quotaEnforceEnabled,
+  quotaConcurrencyCap,
+  quotaTokenMultiplier,
+} from "../services/tsfQuota.js";
 import { blobRead, blobWrite, blobListPaths } from "../services/blobV4.js";
 import {
   translateResources,
@@ -9,6 +16,7 @@ import {
   countFieldUnits,
   flushKeyStats,
   pAll,
+  setShopQuotaCap,
   type EngineUsage,
   type TranslateItem,
 } from "../services/llmTranslate.js";
@@ -77,6 +85,47 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   // Write the start timestamp to Redis immediately so the UI can compute elapsed time.
   await setProgress(jobId, { translateStartedAt });
 
+  // ── 中断信号 ──────────────────────────────────────────────────────────────
+  // 外部手动暂停/取消（Redis 控制键）或额度耗尽（quota 申请失败）都汇入这里，
+  // chunk 入口与 onProgress 检查到后优雅停止：不再起新 chunk，已在飞的自然跑完。
+  const abort: { tripped: boolean; action: "pause" | "cancel"; reason: string } = {
+    tripped: false,
+    action: "pause",
+    reason: "",
+  };
+  let lastControlCheckAt = 0;
+  const CONTROL_CHECK_THROTTLE_MS = 4000;
+  const tripAbort = (action: "pause" | "cancel", reason: string) => {
+    if (abort.tripped) return;
+    abort.tripped = true;
+    abort.action = action;
+    abort.reason = reason;
+  };
+  /** 读取外部控制键（节流），命中则置位 abort。 */
+  const checkControl = async (force = false): Promise<void> => {
+    if (abort.tripped) return;
+    const now = Date.now();
+    if (!force && now - lastControlCheckAt < CONTROL_CHECK_THROTTLE_MS) return;
+    lastControlCheckAt = now;
+    const ctrl = await readControl(jobId);
+    if (ctrl === "pause") tripAbort("pause", "已手动暂停");
+    else if (ctrl === "cancel") tripAbort("cancel", "已取消");
+  };
+  // 是否对本任务做额度校验：TsFrontend 默认开启（QUOTA_ENFORCE=false 可关），其它来源关闭。
+  const enforceQuota = quotaEnforceEnabled(job.taskSource) && !testMode;
+  const quotaMult = quotaTokenMultiplier();
+
+  // 进入翻译前先按当前剩余额度设定该 shop 的并发上限（额度少→并发低）。
+  // 剩余已 <=0 则直接暂停，一个 LLM 都不发。
+  if (enforceQuota) {
+    const remaining0 = await getTsfRemaining(shopName);
+    if (remaining0 <= 0) {
+      tripAbort("pause", "额度不足，已自动暂停");
+    } else {
+      setShopQuotaCap(shopName, quotaConcurrencyCap(remaining0));
+    }
+  }
+
   try {
     // Flatten every chunk of every module into one work list. Previously modules
     // ran strictly one-after-another (only chunks *within* a module overlapped),
@@ -108,6 +157,10 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         const chunkStart = performance.now();
 
         await heartbeat(shopName, jobId);
+
+        // 中断检查：外部手动暂停/取消 → 不再处理新 chunk。
+        await checkControl();
+        if (abort.tripped) return;
 
         // Resume: skip chunks already translated in a prior run
         const translatePath = chunkPath.replace(`${blobPrefix}/init/`, `${blobPrefix}/translate/`);
@@ -145,6 +198,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         );
 
         const resources = chunk.filter((r) => r.fields?.length);
+
         const translatedChunk = [];
         try {
           // Per-batch progress: write Redis every batch (cheap, smooth bar) and
@@ -171,6 +225,23 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
             await flushKeyStats();
             // QPS logger flush is throttled by its own 30s interval.
             qps.flush().catch(() => {});
+            // 中途响应外部暂停/取消（节流读取控制键）。
+            await checkControl();
+
+            // 额度：每批按真实 token×系数 事后实扣，并据剩余额度动态调该 shop 并发上限。
+            // 剩余为负 → 暂停（已在飞的调用继续完成，可接受）。
+            if (enforceQuota && deltaTokens > 0) {
+              const charge = Math.ceil(deltaTokens * quotaMult);
+              const { ok, remaining } = await deductTsfQuota(shopName, charge);
+              if (!ok) {
+                // 额度服务异常：停止扩张并暂停，避免无账本超用。
+                setShopQuotaCap(shopName, 1);
+                tripAbort("pause", "额度服务异常，已自动暂停");
+              } else {
+                setShopQuotaCap(shopName, quotaConcurrencyCap(remaining));
+                if (remaining < 0) tripAbort("pause", "额度不足，已自动暂停");
+              }
+            }
           };
           const { resources: perResource, usage } = await translateResources(
             resources.map((r) => ({ resourceId: r.resourceId, fields: r.fields })),
@@ -241,6 +312,38 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
 
     // liveTokens is already accumulated with the multiplier applied during progress callbacks.
     const usedTokens = liveTokens;
+
+    // 被中断（手动暂停/取消 或 额度不足）：持久化已完成进度后停在 TRANSLATE，
+    // 不进入回写。补额度/解除暂停后由 resume 重新入队，跳过已翻译 chunk 续跑。
+    if (abort.tripped) {
+      const latestAbort = await getJob(shopName, jobId);
+      await updateJob(shopName, jobId, {
+        status: abort.action === "cancel" ? "CANCELLED" : "PAUSED",
+        claimedBy: null,
+        errorStage: "TRANSLATE",
+        errorMessage: abort.action === "cancel" ? null : abort.reason,
+        stageTimings: withStageTiming(
+          latestAbort?.stageTimings ?? job.stageTimings,
+          "TRANSLATE",
+          stageStartedAt,
+          new Date().toISOString(),
+        ),
+        metrics: {
+          ...(latestAbort?.metrics ?? job.metrics),
+          translateDone,
+          translateFailed,
+          translateFallback,
+          translateUnitDone,
+          translateUnitTotal,
+          usedTokens,
+        },
+      });
+      await clearControl(jobId); // 消费掉控制信号，避免 resume 后立即再次暂停
+      console.log(
+        `[translate] job=${jobId} 已${abort.action === "cancel" ? "取消" : "暂停"}（${abort.reason}）done=${translateDone}/${translateTotal}`,
+      );
+      return;
+    }
 
     // Refresh job to get latest metrics
     const latestJob = await getJob(shopName, jobId);

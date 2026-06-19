@@ -82,6 +82,47 @@ export function progressKey(taskId: string): string {
   return `translate:v4:progress:${taskId}`;
 }
 
+/**
+ * 任务运行时的外部控制键。外部（TSF/Spark 前端、运营、或额度耗尽逻辑）写入
+ * "pause" / "cancel"，worker 在阶段中途的检查点读取后优雅中断。
+ */
+export function controlKey(taskId: string): string {
+  return `translate:v4:control:${taskId}`;
+}
+
+export type V4Control = "pause" | "cancel" | null;
+
+/** 读取任务的外部控制指令（无则 null）。 */
+export async function readControl(taskId: string): Promise<V4Control> {
+  try {
+    const v = await getRedis().get(controlKey(taskId));
+    return v === "pause" || v === "cancel" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 设置外部控制指令（TTL 1 天，避免残留）。 */
+export async function setControl(
+  taskId: string,
+  action: "pause" | "cancel",
+): Promise<void> {
+  try {
+    await getRedis().set(controlKey(taskId), action, "EX", 24 * 3600);
+  } catch {
+    // best-effort
+  }
+}
+
+/** 清除控制指令（resume / 任务收尾时调用）。 */
+export async function clearControl(taskId: string): Promise<void> {
+  try {
+    await getRedis().del(controlKey(taskId));
+  } catch {
+    // best-effort
+  }
+}
+
 export async function setProgress(
   taskId: string,
   fields: Record<string, string | number>,
