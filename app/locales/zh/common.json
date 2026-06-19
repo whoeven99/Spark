@@ -22,22 +22,6 @@
     "paginationPage": "第 {{page}} / {{totalPages}} 页",
     "paginationNext": "下一页"
   },
-  "support": {
-    "buttonAria": "打开在线客服",
-    "title": "在线客服",
-    "greeting": "你好！有什么可以帮你？我们通常几小时内回复。",
-    "placeholder": "输入消息…",
-    "empty": "还没有消息，发条消息开始对话吧。",
-    "opsDefaultName": "客服",
-    "youLabel": "我",
-    "emailPrompt": "留个邮箱，即使你离开我们也能联系到你。",
-    "emailPlaceholder": "your@email.com",
-    "emailSave": "保存邮箱",
-    "emailSaved": "已保存，谢谢！",
-    "emailInvalid": "请输入有效的邮箱。",
-    "sendError": "发送失败，请重试。",
-    "closed": "该会话已关闭。"
-  },
   "language": {
     "auto": "自动识别",
     "af": "南非语",

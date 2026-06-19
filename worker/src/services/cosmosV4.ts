@@ -75,6 +75,8 @@ export type TranslationV4Job = {
   isCover: boolean;
   isHandle: boolean;
   testMode: boolean;
+  /** 任务来源标识（如 "Ciwi-Translator-Task"）。旧任务可能缺省。 */
+  taskSource?: string | null;
   status: TranslationV4Status;
   claimedBy: string | null;
   claimedAt: string | null;
@@ -89,6 +91,17 @@ export type TranslationV4Job = {
   createdAt: string;
   updatedAt: string;
 };
+
+/** 任务来源：来自 TSF 独立前端的任务。 */
+export const TS_FRONTEND_TASK_SOURCE = "TsFrontend";
+
+/**
+ * 该任务的 Shopify token 是否应直接取 job 快照（跳过 Turso Session 查询）。
+ * 外部来源（如 TsFrontend）的 shop Session 不在本服务的 Turso 里，必须用 job 里存的 token。
+ */
+export function prefersStoredToken(job: Pick<TranslationV4Job, "taskSource">): boolean {
+  return job.taskSource === TS_FRONTEND_TASK_SOURCE;
+}
 
 let _client: CosmosClient | null = null;
 
@@ -153,6 +166,15 @@ export async function claimJob(
   }
 }
 
+function isCosmosPreconditionFailed(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: number }).code === 412
+  );
+}
+
 export async function updateJob(
   shopName: string,
   jobId: string,
@@ -174,23 +196,32 @@ export async function updateJob(
     >
   >,
 ): Promise<void> {
-  try {
-    const { resource: existing, etag } = await getContainer()
-      .item(jobId, shopName)
-      .read<TranslationV4Job>();
-    if (!existing) return;
-    const updated: TranslationV4Job = {
-      ...existing,
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    };
-    await getContainer()
-      .item(jobId, shopName)
-      .replace<TranslationV4Job>(updated, {
-        accessCondition: { type: "IfMatch", condition: etag! },
-      });
-  } catch (e) {
-    console.warn(`[cosmosV4] updateJob failed ${jobId}`, e);
+  const maxAttempts = 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const { resource: existing, etag } = await getContainer()
+        .item(jobId, shopName)
+        .read<TranslationV4Job>();
+      if (!existing) return;
+      const updated: TranslationV4Job = {
+        ...existing,
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      };
+      await getContainer()
+        .item(jobId, shopName)
+        .replace<TranslationV4Job>(updated, {
+          accessCondition: { type: "IfMatch", condition: etag! },
+        });
+      return;
+    } catch (e) {
+      if (isCosmosPreconditionFailed(e) && attempt < maxAttempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 40 * (attempt + 1)));
+        continue;
+      }
+      console.warn(`[cosmosV4] updateJob failed ${jobId}`, e);
+      return;
+    }
   }
 }
 

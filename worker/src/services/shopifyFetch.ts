@@ -57,6 +57,8 @@ export type FetchTranslatableOptions = {
   isHandle: boolean;
   /** Called after each paginated API response — use to keep heartbeat alive on long fetches */
   onPage?: () => Promise<void>;
+  /** 外部来源任务（如 TsFrontend）：直接用 job token，跳过 Turso Session 查询 */
+  preferLegacyToken?: boolean;
 };
 
 type TranslatableNode = {
@@ -281,6 +283,8 @@ type ShopifyGraphqlOpts = {
   retries?: number;
   /** 401 后已从 Session 刷新 token 并重试过一次 */
   tokenRetried?: boolean;
+  /** 外部来源任务（如 TsFrontend）：直接用传入 token，跳过 Turso Session 查询 */
+  preferLegacyToken?: boolean;
 };
 
 async function shopifyGraphql(
@@ -291,7 +295,11 @@ async function shopifyGraphql(
   opts: ShopifyGraphqlOpts = {},
 ): Promise<unknown> {
   const retries = opts.retries ?? 4;
-  const accessToken = await getShopAccessToken(shopDomain, legacyAccessToken);
+  const accessToken = await getShopAccessToken(
+    shopDomain,
+    legacyAccessToken,
+    opts.preferLegacyToken ?? false,
+  );
   const url = `https://${shopDomain}/admin/api/2024-01/graphql.json`;
   const resp = await fetch(url, {
     method: "POST",
@@ -450,6 +458,7 @@ export async function fetchResourceIdsByQuery(
   limit: number,
   updatedAtAfter?: string,
   onPage?: () => Promise<void>,
+  preferLegacyToken = false,
 ): Promise<string[]> {
   const spec = MODULE_ID_QUERY[module];
   if (!spec) return [];
@@ -471,6 +480,7 @@ export async function fetchResourceIdsByQuery(
       accessToken,
       spec.gql,
       variables,
+      { preferLegacyToken },
     )) as Record<
       string,
       {
@@ -522,6 +532,7 @@ async function fetchTranslatableResourcesByType(
       accessToken,
       TRANSLATABLE_RESOURCES_QUERY,
       variables,
+      { preferLegacyToken: options.preferLegacyToken ?? false },
     )) as {
       translatableResources: {
         edges: Array<{ node: TranslatableNode }>;
@@ -572,6 +583,7 @@ async function fetchTranslatableResourcesByIds(
         accessToken,
         TRANSLATABLE_RESOURCES_BY_IDS_QUERY,
         variables,
+        { preferLegacyToken: options.preferLegacyToken ?? false },
       )) as {
         translatableResourcesByIds: {
           nodes: TranslatableNode[];
@@ -627,6 +639,7 @@ export async function fetchTranslatableResources(
       limitPerType,
       updatedAtAfter,
       options.onPage,
+      options.preferLegacyToken ?? false,
     );
     if (resourceIds.length === 0) return [];
 
@@ -675,12 +688,14 @@ async function registerTranslationsBatch(
   accessToken: string,
   resourceId: string,
   translations: TranslationInput[],
+  preferLegacyToken = false,
 ): Promise<TranslationRegisterResult> {
   const data = (await shopifyGraphql(
     shopDomain,
     accessToken,
     TRANSLATIONS_REGISTER_MUTATION,
     { resourceId, translations },
+    { preferLegacyToken },
   )) as {
     translationsRegister: {
       translations: Array<{ key: string; value: string }>;
@@ -705,6 +720,7 @@ export async function registerTranslations(
   accessToken: string,
   resourceId: string,
   translations: TranslationInput[],
+  preferLegacyToken = false,
 ): Promise<TranslationRegisterResult> {
   if (translations.length === 0) {
     return { success: true, userErrors: [], registeredKeys: [] };
@@ -716,7 +732,7 @@ export async function registerTranslations(
   try {
     for (let i = 0; i < translations.length; i += WRITEBACK_TRANSLATIONS_BATCH) {
       const batch = translations.slice(i, i + WRITEBACK_TRANSLATIONS_BATCH);
-      const result = await registerTranslationsBatch(shopDomain, accessToken, resourceId, batch);
+      const result = await registerTranslationsBatch(shopDomain, accessToken, resourceId, batch, preferLegacyToken);
       allErrors.push(...result.userErrors);
       allRegisteredKeys.push(...result.registeredKeys);
       if (!result.success) break;
@@ -759,12 +775,14 @@ export async function fetchResourceTranslations(
   accessToken: string,
   resourceId: string,
   locale: string,
+  preferLegacyToken = false,
 ): Promise<StoredTranslation[]> {
   const data = (await shopifyGraphql(
     shopDomain,
     accessToken,
     TRANSLATABLE_RESOURCE_BY_ID_QUERY,
     { resourceId, locale },
+    { preferLegacyToken },
   )) as {
     translatableResource: {
       translations: Array<{ key: string; value: string; outdated?: boolean | null }>;

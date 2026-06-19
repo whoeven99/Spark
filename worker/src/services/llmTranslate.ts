@@ -909,9 +909,47 @@ export async function flushKeyStats(): Promise<void> {
 
 // ─── Model resolution ───────────────────────────────────────────────────────────
 
-/** DeepSeek model id from DEEPSEEK_MODEL (slot override wins when set). */
-function resolveModel(slotModel?: string): string {
-  return slotModel || process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
+/** DeepSeek 模型 id 白名单（含将弃用的旧名）。 */
+const KNOWN_DEEPSEEK_MODELS = new Set([
+  "deepseek-v4-flash",
+  "deepseek-v4-pro",
+  "deepseek-chat",
+  "deepseek-reasoner",
+]);
+
+/** 是否为可直接发送的 DeepSeek 模型 id。 */
+function isDeepSeekModelId(s?: string): boolean {
+  return KNOWN_DEEPSEEK_MODELS.has((s ?? "").trim().toLowerCase());
+}
+
+/**
+ * 解析实际发送给 DeepSeek 的模型 id：优先用任务自带的 `aiModel`（前提是已知 DeepSeek 模型），
+ * 否则回退 `DEEPSEEK_MODEL` env（默认 deepseek-chat）。非 DeepSeek 值（如 "google-translate"）被忽略。
+ */
+function resolveModel(preferred?: string): string {
+  const p = (preferred ?? "").trim();
+  if (isDeepSeekModelId(p)) return p;
+  return process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
+}
+
+// ─── Per-shop quota concurrency gate ─────────────────────────────────────────
+// 按 shopName 限流：相同 shop 的 LLM 调用共用一个闸（与全局限流池叠加 min），
+// 不同 shop 互不影响。默认容量极大(不限)，仅当额度逻辑显式 setShopQuotaCap 时收紧。
+// 额度越少 → cap 越小 → 在飞批次越少 → 最大透支被锁死。
+const _shopQuotaGates = new Map<string, AdaptiveSemaphore>();
+
+function getShopQuotaGate(shop: string): AdaptiveSemaphore {
+  let g = _shopQuotaGates.get(shop);
+  if (!g) {
+    g = new AdaptiveSemaphore(MAX_POOL_CONCURRENCY);
+    _shopQuotaGates.set(shop, g);
+  }
+  return g;
+}
+
+/** 由额度逻辑调用：设置某 shop 的 LLM 并发上限（最小 1；硬停由调用方 abort 负责）。 */
+export function setShopQuotaCap(shop: string, cap: number): void {
+  getShopQuotaGate(shop).setMax(cap);
 }
 
 // ─── Engine router ──────────────────────────────────────────────────────────────
@@ -972,8 +1010,8 @@ function engineOrderFor(tier: "trivial" | "rich", aiModel?: string): Engine[] {
 }
 
 /** The model/label recorded for a chosen engine (used for TM cache + Cosmos). */
-function engineModel(engine: Engine, _aiModel: string): string {
-  return engine === "google" ? "google-translate" : resolveModel();
+function engineModel(engine: Engine, aiModel: string): string {
+  return engine === "google" ? "google-translate" : resolveModel(aiModel);
 }
 
 /**
@@ -983,7 +1021,7 @@ function engineModel(engine: Engine, _aiModel: string): string {
 export function resolveEngine(aiModel: string): { provider: string; model: string } {
   const forced = forcedEngine(aiModel);
   if (forced === "google") return { provider: "google", model: "google-translate" };
-  const model = resolveModel();
+  const model = resolveModel(aiModel);
   const parts: string[] = [];
   if (googleConfigured()) parts.push("google");
   if (llmConfigured()) parts.push(model);
@@ -1137,6 +1175,32 @@ const MAX_CHARS_PER_BATCH = Math.max(
   500,
   Number(process.env.TRANSLATE_MAX_CHARS_PER_BATCH) || 4_000,
 );
+/** Max items per LLM request — avoids 80+ key payloads that routinely hit the timeout. */
+const MAX_ITEMS_PER_BATCH = Math.max(
+  1,
+  Number(process.env.TRANSLATE_MAX_ITEMS_PER_BATCH) || 25,
+);
+const LLM_TIMEOUT_BASE_MS = Math.max(
+  60_000,
+  Number(process.env.TRANSLATE_LLM_TIMEOUT_MS) || 120_000,
+);
+const LLM_TIMEOUT_PER_ITEM_MS = Math.max(
+  500,
+  Number(process.env.TRANSLATE_LLM_TIMEOUT_PER_ITEM_MS) || 2_000,
+);
+const LLM_TIMEOUT_MAX_MS = Math.max(
+  LLM_TIMEOUT_BASE_MS,
+  Number(process.env.TRANSLATE_LLM_TIMEOUT_MAX_MS) || 300_000,
+);
+
+/** Scale timeout with batch size so large (but capped) batches get more wall clock. */
+export function llmTimeoutMsForBatch(itemCount: number): number {
+  const n = Math.max(1, itemCount);
+  return Math.min(
+    LLM_TIMEOUT_MAX_MS,
+    LLM_TIMEOUT_BASE_MS + Math.max(0, n - 1) * LLM_TIMEOUT_PER_ITEM_MS,
+  );
+}
 // Batch fan-out: all batches within a resource pool are launched simultaneously.
 // The pool's AdaptiveSemaphore is the only concurrency gate — no separate knob needed.
 
@@ -1361,14 +1425,21 @@ function splitPlainText(text: string): string[] {
 
 // ─── Char-based batching ──────────────────────────────────────────────────────
 
-function batchByChars(items: TranslateItem[], maxChars: number): TranslateItem[][] {
+function batchByChars(
+  items: TranslateItem[],
+  maxChars: number,
+  maxItems = MAX_ITEMS_PER_BATCH,
+): TranslateItem[][] {
   const batches: TranslateItem[][] = [];
   let current: TranslateItem[] = [];
   let currentChars = 0;
 
   for (const item of items) {
     const len = item.value.length;
-    if (current.length > 0 && currentChars + len > maxChars) {
+    if (
+      current.length > 0 &&
+      (currentChars + len > maxChars || current.length >= maxItems)
+    ) {
       batches.push(current);
       current = [];
       currentChars = 0;
@@ -1633,8 +1704,13 @@ async function callLLMOnce(
   const idToKey = new Map(items.map((it, idx) => [`f${idx}`, it.key]));
   const payload  = items.map((it, idx) => ({ key: `f${idx}`, value: it.value }));
 
+  // 按 shop 的额度并发闸：与全局限流池叠加，额度越少该 shop 并发越低。
+  const quotaGate = shopName ? getShopQuotaGate(shopName) : null;
+  if (quotaGate) await quotaGate.acquire();
+
   const acq   = await getPool().acquire();
-  const model = resolveModel(acq.model);
+  // 任务自带的 aiModel 优先（已知 DeepSeek 模型时），否则回退 env。
+  const model = resolveModel(aiModel) || acq.model;
   const t0    = Date.now();
 
   const messages: ChatMessage[] = [
@@ -1651,7 +1727,7 @@ async function callLLMOnce(
       acq.transport,
       model,
       messages,
-      120_000,
+      llmTimeoutMsForBatch(items.length),
       deepseekUserId,
     );
 
@@ -1680,7 +1756,8 @@ async function callLLMOnce(
     }
     throw e;
   } finally {
-    acq.release(); // always release semaphore slot
+    acq.release(); // always release pool semaphore slot
+    if (quotaGate) quotaGate.release(); // release per-shop quota gate
   }
 }
 
@@ -1700,6 +1777,17 @@ async function gatherTranslations(
 ): Promise<void> {
   const pend = items.filter((i) => !collected.has(i.key));
   if (pend.length === 0) return;
+
+  // Proactively split before calling the API — avoids burning a full timeout on 80+ keys.
+  if (pend.length > MAX_ITEMS_PER_BATCH) {
+    const mid = Math.ceil(pend.length / 2);
+    console.log(
+      `[llm] batch of ${pend.length} items exceeds cap ${MAX_ITEMS_PER_BATCH}; splitting proactively`,
+    );
+    await gatherTranslations(pend.slice(0, mid), aiModel, systemPrompt, collected, tokenAccum, shopName);
+    await gatherTranslations(pend.slice(mid), aiModel, systemPrompt, collected, tokenAccum, shopName);
+    return;
+  }
 
   try {
     const { map, tokens } = await callLLMOnce(pend, aiModel, systemPrompt, shopName);

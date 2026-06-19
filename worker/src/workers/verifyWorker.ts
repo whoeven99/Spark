@@ -1,5 +1,5 @@
 import { hostname } from "os";
-import { claimJob, updateJob, heartbeat, findPendingJobs, getJob, withStageTiming } from "../services/cosmosV4.js";
+import { claimJob, updateJob, heartbeat, findPendingJobs, getJob, withStageTiming, prefersStoredToken } from "../services/cosmosV4.js";
 import { popHint, setProgress } from "../services/redisV4.js";
 import { blobRead, blobListPaths } from "../services/blobV4.js";
 import {
@@ -128,7 +128,7 @@ async function processVerifyJob(job: TranslationV4Job): Promise<void> {
 
       let mismatches = diffResourceTranslations(
         translations,
-        await fetchResourceTranslations(shopName, job.shopifyAccessToken, resourceId, target),
+        await fetchResourceTranslations(shopName, job.shopifyAccessToken, resourceId, target, prefersStoredToken(job)),
       );
 
       if (mismatches.length > 0) {
@@ -143,6 +143,7 @@ async function processVerifyJob(job: TranslationV4Job): Promise<void> {
           job.shopifyAccessToken,
           resourceId,
           retryPayload,
+          prefersStoredToken(job),
         );
         if (!writeResult.success) {
           verifyFailed++;
@@ -156,7 +157,7 @@ async function processVerifyJob(job: TranslationV4Job): Promise<void> {
 
         mismatches = diffResourceTranslations(
           translations,
-          await fetchResourceTranslations(shopName, job.shopifyAccessToken, resourceId, target),
+          await fetchResourceTranslations(shopName, job.shopifyAccessToken, resourceId, target, prefersStoredToken(job)),
         );
       }
 
