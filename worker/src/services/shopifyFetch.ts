@@ -63,7 +63,7 @@ export type FetchTranslatableOptions = {
 
 type TranslatableNode = {
   resourceId: string;
-  translations: Array<{ key: string; outdated?: boolean | null }>;
+  translations: Array<{ key: string; value?: string | null; outdated?: boolean | null }>;
   translatableContent: Array<{
     key: string;
     value: string;
@@ -110,6 +110,7 @@ query GetTranslatableResources(
         resourceId
         translations(locale: $locale) {
           key
+          value
           outdated
         }
         translatableContent {
@@ -135,6 +136,7 @@ query GetTranslatableResourcesByIds($resourceIds: [ID!]!, $first: Int, $after: S
       resourceId
       translations(locale: $locale) {
         key
+        value
         outdated
       }
       translatableContent {

@@ -61,7 +61,7 @@ async function listJsonBlobPaths(prefix: string): Promise<string[]> {
 /** 仅保留进入写回范围的字段：非空且与原文不同（对齐 writeback/verify 的过滤）。 */
 function inScopeFields(item: TranslatedItem): ReviewField[] {
   return item.translations
-    .filter((t) => t.translatedValue?.trim() && t.translatedValue !== t.originalValue)
+    .filter((t) => t.translatedValue?.trim())
     .map((t) => ({
       key: t.key,
       originalValue: t.originalValue,

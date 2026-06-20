@@ -19,7 +19,7 @@ query CountTranslatableResources(
   translatableResources(resourceType: $resourceType, first: $first, after: $after) {
     edges {
       node {
-        translations(locale: $locale) { key outdated }
+        translations(locale: $locale) { key value outdated }
         translatableContent { key value type }
       }
     }
@@ -32,7 +32,7 @@ const PAGE_SIZE = 250;
 export type ModuleCount = { total: number; translated: number };
 
 type Node = {
-  translations?: Array<{ key: string; outdated?: boolean | null }> | null;
+  translations?: Array<{ key: string; value?: string | null; outdated?: boolean | null }> | null;
   translatableContent?: Array<{ key: string; value: string; type?: string | null }> | null;
 };
 
@@ -40,7 +40,9 @@ function hasCurrentTranslation(
   translations: Node["translations"],
   key: string,
 ): boolean {
-  return (translations ?? []).some((t) => t.key === key && t.outdated !== true);
+  return (translations ?? []).some(
+    (t) => t.key === key && t.outdated !== true && (t.value?.trim() ?? "") !== "",
+  );
 }
 
 /**

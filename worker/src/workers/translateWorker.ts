@@ -270,6 +270,19 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
               }
             }
           };
+          const onResourceDone = async () => {
+            translateDone++;
+            await setProgress(jobId, {
+              translateDone,
+              translateFailed,
+              translateFallback,
+              translateUnitDone,
+              translateUnitTotal,
+              translateTotal,
+              usedTokens: liveTokens,
+              currentModule: module,
+            });
+          };
           const { resources: perResource, usage } = await translateResources(
             resources.map((r) => ({ resourceId: r.resourceId, fields: r.fields })),
             source,
@@ -278,6 +291,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
             testMode,
             shopName,
             onProgress,
+            onResourceDone,
           );
           mergeEngineUsage(engineUsage, usage);
           for (const { resourceId, results } of perResource) {
@@ -298,7 +312,6 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
                 fallbacks.push({ resourceId, module, key: r.key });
               }
             }
-            translateDone++;
           }
         } catch (e) {
           translateFailed += resources.length;

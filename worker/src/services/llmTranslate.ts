@@ -1860,6 +1860,71 @@ type FieldPlan = {
   | { kind: "json"; root: JsonValue; leaves: string[] }
 );
 
+type LookupFn = (order: Engine[], text: string) => RoutedResult | undefined;
+
+function planTextsReady(plan: FieldPlan, lookup: LookupFn): boolean {
+  const texts =
+    plan.kind === "plain"
+      ? plan.parts
+      : plan.kind === "html"
+        ? plan.nodeTexts
+        : [...new Set(plan.leaves)];
+  return texts.every((t) => lookup(plan.order, t) !== undefined);
+}
+
+function reconstructPlan(
+  plan: FieldPlan,
+  rm: Map<string, TranslateResult>,
+  lookup: LookupFn,
+  tmWrites: Promise<void>[],
+  shopName: string,
+  target: string,
+  source: string,
+): void {
+  if (plan.kind === "plain") {
+    const pieces = plan.parts.map((p) => lookup(plan.order, p) ?? { value: p, status: "fallback" as const });
+    const value = pieces.map((p) => p.value).join("");
+    const status = pieces.some((p) => p.status === "fallback") ? "fallback" : "translated";
+    const originalValue = plan.parts.join("");
+    rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
+    if (status === "translated") {
+      tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
+      tmWrites.push(tmSetByValue(originalValue, source, target, plan.cacheModel, value));
+    }
+  } else if (plan.kind === "html") {
+    let anyFallback = false;
+    const out = plan.nodeTexts.map((t) => {
+      const r = lookup(plan.order, t);
+      if (!r || r.status === "fallback") {
+        anyFallback = true;
+        return t;
+      }
+      return r.value.trim();
+    });
+    const value = restoreHtmlTextNodes(plan.template, out);
+    const status = anyFallback ? "fallback" : "translated";
+    rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
+    if (status === "translated") tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
+  } else {
+    let anyFallback = false;
+    const tmap = new Map<string, string>();
+    for (const t of plan.leaves) {
+      if (tmap.has(t)) continue;
+      const r = lookup(plan.order, t);
+      if (!r || r.status === "fallback") {
+        anyFallback = true;
+        tmap.set(t, t);
+      } else {
+        tmap.set(t, r.value.trim());
+      }
+    }
+    const value = JSON.stringify(rebuildJson(plan.root, tmap));
+    const status = anyFallback ? "fallback" : "translated";
+    rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
+    if (status === "translated") tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
+  }
+}
+
 /**
  * Translate every field across a whole chunk of resources in one pass.
  *
@@ -1881,20 +1946,22 @@ export async function translateResources(
   testMode: boolean,
   shopName: string,
   onProgress?: (doneUnitsDelta: number, tokensDelta: number) => Promise<void>,
+  onResourceDone?: () => Promise<void>,
 ): Promise<TranslateChunkResult> {
   if (testMode) {
-    return {
-      resources: resources.map((res) => ({
-        resourceId: res.resourceId,
-        results: res.fields.map((f) => ({
-          key: f.key,
-          translatedValue: `${f.value} - test`,
-          digest: f.digest,
-          status: "translated" as const,
-        })),
+    const out = resources.map((res) => ({
+      resourceId: res.resourceId,
+      results: res.fields.map((f) => ({
+        key: f.key,
+        translatedValue: `${f.value} - test`,
+        digest: f.digest,
+        status: "translated" as const,
       })),
-      usage: {},
-    };
+    }));
+    if (onResourceDone) {
+      for (let i = 0; i < resources.length; i++) await onResourceDone();
+    }
+    return { resources: out, usage: {} };
   }
 
   const resultMaps = new Map<string, Map<string, TranslateResult>>();
@@ -2030,6 +2097,37 @@ export async function translateResources(
   // Credit cache hits immediately so the bar reflects them (0 LLM tokens for TM hits).
   if (cacheUnits > 0 && onProgress) await onProgress(cacheUnits, 0);
 
+  const plansByResource = new Map<string, FieldPlan[]>();
+  for (const plan of plans) {
+    const list = plansByResource.get(plan.resourceId) ?? [];
+    list.push(plan);
+    plansByResource.set(plan.resourceId, list);
+  }
+
+  const reconstructedResources = new Set<string>();
+
+  const finishReadyResources = async (lookup: LookupFn) => {
+    for (const res of resources) {
+      if (reconstructedResources.has(res.resourceId)) continue;
+      const resourcePlans = plansByResource.get(res.resourceId);
+      if (!resourcePlans) {
+        reconstructedResources.add(res.resourceId);
+        if (onResourceDone) await onResourceDone();
+        continue;
+      }
+      if (!resourcePlans.every((plan) => planTextsReady(plan, lookup))) continue;
+      const rm = resultMaps.get(res.resourceId)!;
+      for (const plan of resourcePlans) {
+        reconstructPlan(plan, rm, lookup, tmWrites, shopName, target, source);
+      }
+      reconstructedResources.add(res.resourceId);
+      if (onResourceDone) await onResourceDone();
+    }
+  };
+
+  // Resources fully resolved in step 1 (skip/cache only) count immediately.
+  await finishReadyResources(() => undefined);
+
   // 2. Translate unique texts per engine order, in char-bounded batches.
   //    All batches are launched concurrently — the pool's AdaptiveSemaphore
   //    (driven by X-RateLimit-* headers) is the only throttle.
@@ -2056,60 +2154,15 @@ export async function translateResources(
           acc.tokens += v.tokens;
         }
       }
+      translated.set(sig, tmap);
       if (onProgress) await onProgress(batchUnits, llmTokens);
+      const lookup: LookupFn = (planOrder, text) => translated.get(planOrder.join(","))?.get(text);
+      await finishReadyResources(lookup);
     }));
-    translated.set(sig, tmap);
   }
 
-  const lookup = (order: Engine[], text: string) => translated.get(order.join(","))?.get(text);
-
-  // 3. Reconstruct each planned field and cache new translations in parallel.
-  for (const plan of plans) {
-    const rm = resultMaps.get(plan.resourceId)!;
-    if (plan.kind === "plain") {
-      const pieces = plan.parts.map((p) => lookup(plan.order, p) ?? { value: p, status: "fallback" as const });
-      const value = pieces.map((p) => p.value).join("");
-      const status = pieces.some((p) => p.status === "fallback") ? "fallback" : "translated";
-      const originalValue = plan.parts.join("");
-      rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
-      if (status === "translated") {
-        tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
-        tmWrites.push(tmSetByValue(originalValue, source, target, plan.cacheModel, value));
-      }
-    } else if (plan.kind === "html") {
-      let anyFallback = false;
-      const out = plan.nodeTexts.map((t) => {
-        const r = lookup(plan.order, t);
-        if (!r || r.status === "fallback") {
-          anyFallback = true;
-          return t;
-        }
-        return r.value.trim(); // template already preserves surrounding whitespace
-      });
-      const value = restoreHtmlTextNodes(plan.template, out);
-      const status = anyFallback ? "fallback" : "translated";
-      rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
-      if (status === "translated") tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
-    } else {
-      // json: map each unique leaf to its translation, rebuild the tree, re-serialise.
-      let anyFallback = false;
-      const tmap = new Map<string, string>();
-      for (const t of plan.leaves) {
-        if (tmap.has(t)) continue;
-        const r = lookup(plan.order, t);
-        if (!r || r.status === "fallback") {
-          anyFallback = true;
-          tmap.set(t, t);
-        } else {
-          tmap.set(t, r.value.trim());
-        }
-      }
-      const value = JSON.stringify(rebuildJson(plan.root, tmap));
-      const status = anyFallback ? "fallback" : "translated";
-      rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
-      if (status === "translated") tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
-    }
-  }
+  const lookup: LookupFn = (planOrder, text) => translated.get(planOrder.join(","))?.get(text);
+  await finishReadyResources(lookup);
   if (tmWrites.length > 0) await Promise.all(tmWrites);
 
   // 4. Assemble per-resource results aligned to input field order.

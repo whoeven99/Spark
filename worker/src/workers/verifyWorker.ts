@@ -62,7 +62,7 @@ function toTranslationInputs(
   targetLocale: string,
 ): TranslationInput[] {
   return resource.translations
-    .filter((t) => t.translatedValue?.trim() && t.translatedValue !== t.originalValue)
+    .filter((t) => t.translatedValue?.trim())
     .map((t) => ({
       locale: targetLocale,
       key: t.key,

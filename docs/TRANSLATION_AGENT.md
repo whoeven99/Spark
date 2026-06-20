@@ -231,7 +231,7 @@ CREATED
 1. claim job
 2. 读 `{blobPrefix}/writeback/progress.json`（已写回的 resourceId 集合，断点续传用）
 3. 对每个 translate chunk 中的每个 resource（未在 writtenSet 中）：
-   - 过滤：`translatedValue.trim() && translatedValue !== originalValue` 的字段
+   - 过滤：`translatedValue.trim()` 非空的字段（与原文相同也写回，避免目标语言栏空白）
    - 调 Shopify `translationsRegister` mutation（**同一 `resourceId` 一次传多条 `TranslationInput`**；字段过多时按 `WRITEBACK_TRANSLATIONS_BATCH` 默认 100、上限 250 分批）
    - 成功：`userErrors` 为空且 mutation 返回的 `translations` 覆盖全部 key
    - 成功：加入 writtenSet，`writebackDone++`

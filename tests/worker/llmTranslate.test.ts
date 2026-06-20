@@ -306,6 +306,32 @@ describe("translateResources — chunk batching & dedup", () => {
     expect(out.usage[LLM_MODEL].units).toBe(1);
   });
 
+  it("calls onResourceDone once per resource as each finishes", async () => {
+    mockFetch({
+      deepseek: [
+        llmResponse([{ key: "f0", translatedValue: "A-en" }]),
+        llmResponse([{ key: "f0", translatedValue: "B-en" }]),
+      ],
+    });
+    let doneCount = 0;
+    await translateResources(
+      [
+        { resourceId: "r1", fields: [{ key: "title", value: "甲甲", digest: "d1" }] },
+        { resourceId: "r2", fields: [{ key: "title", value: "乙乙", digest: "d2" }] },
+      ],
+      "zh-CN",
+      "en",
+      LLM_MODEL,
+      false,
+      "shop.myshopify.com",
+      undefined,
+      async () => {
+        doneCount++;
+      },
+    );
+    expect(doneCount).toBe(2);
+  });
+
   it("attributes usage to each engine in a mixed chunk", async () => {
     process.env.GOOGLE_TRANSLATE_API_KEY = "gk";
     const fetchMock = mockFetch({
