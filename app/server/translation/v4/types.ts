@@ -106,7 +106,6 @@ export type TranslationV4Job = {
   limitPerType: number;
   isCover: boolean;
   isHandle: boolean;
-  testMode: boolean;
   status: TranslationV4Status;
   claimedBy: string | null;
   claimedAt: string | null;

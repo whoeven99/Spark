@@ -67,10 +67,31 @@ function mockFetch(options: {
       };
     }
     const payload = dsQueue.shift() ?? llmResponse([]);
+    // DeepSeek now streams: emit the payload as SSE so the worker's stream parser
+    // (idle-timeout based) sees content deltas + a final usage chunk + [DONE].
+    const p = payload as {
+      choices?: Array<{ message?: { content?: string } }>;
+      usage?: { total_tokens?: number };
+      error?: { message?: string };
+    };
+    const content = p?.choices?.[0]?.message?.content ?? "{}";
+    const tokens = p?.usage?.total_tokens ?? 0;
+    const sse =
+      (p?.error ? `data: ${JSON.stringify({ error: p.error })}\n\n` : "") +
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n` +
+      `data: ${JSON.stringify({ choices: [{ delta: {} }], usage: { total_tokens: tokens } })}\n\n` +
+      `data: [DONE]\n\n`;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(sse));
+        controller.close();
+      },
+    });
     return {
       ok: true,
       status: 200,
       headers: new Headers(),
+      body,
       json: async () => payload,
       text: async () => JSON.stringify(payload),
     };
@@ -91,24 +112,6 @@ function llmMessagesFromFetch(fetchMock: ReturnType<typeof vi.fn>) {
   return body.messages;
 }
 
-describe("translateBatch — testMode", () => {
-  it("returns originals with status 'translated' and never calls the engine", async () => {
-    const fetchMock = mockFetch({});
-    const out = await translateBatch(
-      [{ key: "title", value: "你好", digest: "d1" }],
-      "zh-CN",
-      "en",
-      LLM_MODEL,
-      true,
-      "shop.myshopify.com",
-    );
-    expect(out).toEqual([
-      { key: "title", translatedValue: "你好 - test", digest: "d1", status: "translated" },
-    ]);
-    expect(deepSeekCalls(fetchMock)).toHaveLength(0);
-  });
-});
-
 describe("translateBatch — skip fields", () => {
   it("returns handle unchanged without translating", async () => {
     const fetchMock = mockFetch({});
@@ -117,7 +120,6 @@ describe("translateBatch — skip fields", () => {
       "zh-CN",
       "en",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
     expect(out[0]).toEqual({ key: "handle", translatedValue: "my-handle", digest: "d1", status: "translated" });
@@ -135,7 +137,6 @@ describe("translateBatch — translation memory", () => {
       "zh-CN",
       "en",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
     expect(out[0]).toEqual({ key: "title", translatedValue: "Hello (cached)", digest: "d1", status: "translated" });
@@ -149,7 +150,6 @@ describe("translateBatch — translation memory", () => {
       "zh-CN",
       "en",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
     expect(tmSet).toHaveBeenCalledWith("shop.myshopify.com", "en", LLM_MODEL, "d1", "Hello");
@@ -165,7 +165,6 @@ describe("translateBatch — retry & fallback", () => {
       "zh-CN",
       "en",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
     expect(out[0]).toEqual({ key: "title", translatedValue: "你好", digest: "d1", status: "fallback" });
@@ -185,7 +184,6 @@ describe("translateBatch — retry & fallback", () => {
       "zh-CN",
       "en",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
     expect(out[0]).toEqual({ key: "title", translatedValue: "Hello", digest: "d1", status: "translated" });
@@ -208,7 +206,6 @@ describe("translateBatch — retry & fallback", () => {
       "zh-CN",
       "fr",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
     const byKey = Object.fromEntries(out.map((r) => [r.key, r.translatedValue]));
@@ -226,7 +223,6 @@ describe("translateBatch — prompt structure (caching-friendly)", () => {
       "zh-CN",
       "en",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
     const messages = llmMessagesFromFetch(fetchMock);
@@ -247,7 +243,6 @@ describe("translateBatch — prompt structure (caching-friendly)", () => {
       "zh-CN",
       "en",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
     const messages = llmMessagesFromFetch(fetchMock);
@@ -275,7 +270,6 @@ describe("translateResources — chunk batching & dedup", () => {
       "zh-CN",
       "en",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
     expect(out.resources[0].results[0].translatedValue).toBe("A-en");
@@ -297,7 +291,6 @@ describe("translateResources — chunk batching & dedup", () => {
       "zh-CN",
       "en",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
     expect(out.resources.map((r) => r.results[0].translatedValue)).toEqual(["Once", "Once", "Once"]);
@@ -322,7 +315,6 @@ describe("translateResources — chunk batching & dedup", () => {
       "zh-CN",
       "en",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
       undefined,
       async () => {
@@ -351,7 +343,6 @@ describe("translateResources — chunk batching & dedup", () => {
       "zh-CN",
       "en",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
     expect(out.usage["google-translate"].units).toBe(1);
@@ -369,7 +360,6 @@ describe("translateBatch — cost-tiered engine routing", () => {
       "zh-CN",
       "en",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
     expect(out[0].translatedValue).toBe("Hello-G");
@@ -389,7 +379,6 @@ describe("translateBatch — cost-tiered engine routing", () => {
       "zh-CN",
       "fr",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
     expect(out[0].translatedValue).toBe("<p>Bonjour</p>");
@@ -408,7 +397,6 @@ describe("translateBatch — cost-tiered engine routing", () => {
       "zh-CN",
       "en",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
     expect(fetchMock.mock.calls.some(([url]) => url.includes("translation.googleapis.com"))).toBe(true);
@@ -436,7 +424,6 @@ describe("translateBatch — DeepSeek provider", () => {
       "zh-CN",
       "fr",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
 
@@ -461,7 +448,6 @@ describe("translateBatch — HTML entity & whitespace cleanup", () => {
       "zh-CN",
       "fr",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
     expect(out[0].translatedValue).toBe(`dis "salut" l'ami`);
@@ -474,7 +460,6 @@ describe("translateBatch — HTML entity & whitespace cleanup", () => {
       "zh-CN",
       "en",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
     expect(out[0].translatedValue).toBe("Tom &amp; Jerry &lt;3 &gt;");
@@ -487,7 +472,6 @@ describe("translateBatch — HTML entity & whitespace cleanup", () => {
       "zh-CN",
       "fr",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
     expect(out[0].translatedValue).toBe(`<p>Bonjour l'ami</p>`);
@@ -502,7 +486,6 @@ describe("translateBatch — placeholder masking", () => {
       "zh-CN",
       "fr",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
     const userMsg = llmMessagesFromFetch(fetchMock)[1].content;
@@ -518,7 +501,6 @@ describe("translateBatch — placeholder masking", () => {
       "zh-CN",
       "fr",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
     const userMsg = llmMessagesFromFetch(fetchMock)[1].content;
@@ -534,7 +516,6 @@ describe("translateBatch — placeholder masking", () => {
       "zh-CN",
       "fr",
       LLM_MODEL,
-      false,
       "shop.myshopify.com",
     );
     expect(out[0].status).toBe("fallback");

@@ -35,7 +35,12 @@ export function formatV4JobTimeLine(
   status: TranslationV4Status,
 ): string {
   const created = formatV4TaskDate(job.createdAt);
-  const isTerminal = TERMINAL_V4_STATUSES.includes(status) || status === "PAUSED";
+
+  if (status === "PAUSED" || status === "CANCELLED") {
+    return `创建于 ${created}`;
+  }
+
+  const isTerminal = TERMINAL_V4_STATUSES.includes(status);
   const elapsed = formatV4TaskElapsed(job.createdAt, isTerminal ? job.updatedAt : null);
 
   if (status === "COMPLETED") {

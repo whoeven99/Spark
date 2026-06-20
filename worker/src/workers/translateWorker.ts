@@ -279,6 +279,39 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
     }
   }
 
+  // ── 额度累积扣减 ──────────────────────────────────────────────────────────────
+  // 原来每批都同步 HTTP 扣一次 Java 额度（在批完成的关键路径上）。高并发下这是大量
+  // 并发往返 + 每批额外延迟。改为：内存累积欠账，攒到阈值才扣一次；阈值≈一次 perCall
+  // 成本，保证并发上限(quotaConcurrencyCap)仍按每个 call 量级及时收紧，透支可控。
+  // 任务收尾(成功/中断)再 flush 一次结清尾款。
+  const QUOTA_FLUSH_CHARGE = Math.max(
+    1,
+    Number(process.env.TRANSLATE_QUOTA_FLUSH_CHARGE) || 15_000,
+  );
+  let pendingQuotaCharge = 0;
+  const flushQuota = async (): Promise<void> => {
+    if (!enforceQuota) return;
+    let charge = 0;
+    await runExclusive(async () => {
+      charge = pendingQuotaCharge;
+      pendingQuotaCharge = 0;
+    });
+    if (charge <= 0) return;
+    const { ok, remaining } = await deductTsfQuota(shopName, charge);
+    if (!ok) {
+      setShopQuotaCap(shopName, 1);
+      tripAbort("pause", "额度服务异常，已自动暂停");
+      return;
+    }
+    const cap = quotaConcurrencyCap(remaining);
+    setShopQuotaCap(shopName, cap);
+    if (remaining < 0) tripAbort("pause", "额度不足，已自动暂停");
+    await setProgress(jobId, {
+      quotaRemaining: String(remaining),
+      quotaConcurrencyCap: String(cap),
+    });
+  };
+
   try {
     // Flatten every chunk of every module into one work list. Previously modules
     // ran strictly one-after-another (only chunks *within* a module overlapped),
@@ -355,9 +388,15 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
 
         try {
           const onProgress = async (deltaUnits: number, deltaTokens: number) => {
+            let shouldFlushQuota = false;
             await runExclusive(async () => {
               translateUnitDone += deltaUnits;
               liveTokens += Math.ceil(deltaTokens * tokenMultiplier);
+              // 累积额度欠账；攒够一次 perCall 量级再扣（见 flushQuota）。
+              if (enforceQuota && deltaTokens > 0) {
+                pendingQuotaCharge += Math.ceil(deltaTokens * quotaMult);
+                if (pendingQuotaCharge >= QUOTA_FLUSH_CHARGE) shouldFlushQuota = true;
+              }
             });
             await setProgress(jobId, {
               translateDone,
@@ -378,35 +417,35 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
             qps.flush().catch(() => {});
             await checkControl();
 
-            if (enforceQuota && deltaTokens > 0) {
-              const charge = Math.ceil(deltaTokens * quotaMult);
-              const { ok, remaining } = await deductTsfQuota(shopName, charge);
-              if (!ok) {
-                setShopQuotaCap(shopName, 1);
-                tripAbort("pause", "额度服务异常，已自动暂停");
-              } else {
-                const cap = quotaConcurrencyCap(remaining);
-                setShopQuotaCap(shopName, cap);
-                if (remaining < 0) tripAbort("pause", "额度不足，已自动暂停");
-                await setProgress(jobId, {
-                  quotaRemaining: String(remaining),
-                  quotaConcurrencyCap: String(cap),
-                });
-              }
-            }
+            if (shouldFlushQuota) await flushQuota();
           };
 
           const onResourceDone = async ({ resourceId, results }: TranslatedResourceOutput) => {
+            // 在锁内「认领」资源（去重），但把真正的 blob 写盘放到锁外并发执行——
+            // 否则 64 个并发 chunk 的 checkpoint 写盘会全部串行走同一条 runExclusive 链。
+            let claimedItem: TranslatedResourceItem | undefined;
             await runExclusive(async () => {
               if (checkpointedThisRun.has(resourceId) || checkpointIds.has(resourceId)) return;
               const orig = chunkResources.find((r) => r.resourceId === resourceId);
               if (!orig) return;
+              checkpointedThisRun.add(resourceId); // 立即认领，防止并发重复写
+              claimedItem = toTranslatedResourceItem(resourceId, results, orig.fields);
+            });
+            const item = claimedItem;
+            if (!item) return;
 
-              const item = toTranslatedResourceItem(resourceId, results, orig.fields);
-              await writeTranslatedResourceBlob(blobPrefix, module, item);
-              checkpointedThisRun.add(resourceId);
+            try {
+              await writeTranslatedResourceBlob(blobPrefix, module, item); // 锁外并发 I/O
+            } catch (e) {
+              // 写失败 → 撤销认领，允许后续重试重新 checkpoint
+              await runExclusive(async () => {
+                checkpointedThisRun.delete(resourceId);
+              });
+              throw e;
+            }
+
+            await runExclusive(async () => {
               translateDone++;
-
               for (const r of results) {
                 if (r.status === "fallback") {
                   translateFallback++;
@@ -470,6 +509,9 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         });
       }
     });
+
+    // 结清累积的额度欠账（无论正常跑完还是中断，尾款都要扣）。
+    await flushQuota();
 
     // Persist the list of fields that fell back to original for UI visibility.
     if (fallbacks.length > 0) {

@@ -240,6 +240,20 @@ class LlmRateLimitError extends Error {
   }
 }
 
+/**
+ * Thrown when a streaming completion stalls (no token for the idle window) or
+ * exceeds the hard cap. Distinct from a parse error so callers can react
+ * differently: a timeout means "too slow / stuck", not "poison data to isolate".
+ */
+class LlmTimeoutError extends Error {
+  readonly kind: "idle" | "hard";
+  constructor(kind: "idle" | "hard") {
+    super(`LLM stream ${kind} timeout`);
+    this.name = "LlmTimeoutError";
+    this.kind = kind;
+  }
+}
+
 /** Map DEEPSEEK_BASE_URL → POST .../chat/completions (DeepSeek native endpoint). */
 function resolveDeepSeekChatCompletionsUrl(baseURL: string): string {
   const base = baseURL.trim().replace(/\/+$/, "");
@@ -262,47 +276,111 @@ async function fetchDeepSeekChatCompletion(
   timeoutMs: number,
   userId?: string,
 ): Promise<ChatCompletionInvokeResult> {
+  // Stream the completion so a slow-but-progressing response is NOT killed:
+  // the timeout is on the *idle gap* between tokens, not the total wall clock.
+  // A truly stuck connection still trips (idle), and a runaway response trips the
+  // hard cap. This recovers the compute otherwise lost when a non-streaming
+  // request is aborted at 90% done and re-sent from scratch.
   const body: Record<string, unknown> = {
     model,
     messages,
     temperature: 0.1,
     response_format: { type: "json_object" },
+    stream: true,
+    stream_options: { include_usage: true },
   };
   if (userId) body.user_id = userId;
 
-  const resp = await fetch(chatUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-
-  if (resp.status === 429) {
-    throw new LlmRateLimitError(resp);
-  }
-  if (!resp.ok) {
-    throw new Error(`DeepSeek HTTP ${resp.status}: ${await resp.text()}`);
-  }
-
-  const json = (await resp.json()) as Record<string, unknown> & {
-    choices?: Array<{ message?: { content?: string | null } }>;
-    usage?: { total_tokens?: number };
-    error?: { message?: string };
+  const controller = new AbortController();
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  const armIdle = () => {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(
+      () => controller.abort(new LlmTimeoutError("idle")),
+      LLM_IDLE_TIMEOUT_MS,
+    );
   };
-  if (json.error && typeof json.error === "object" && "message" in json.error) {
-    const msg = (json.error as { message?: string }).message;
-    if (msg) throw new Error(`DeepSeek API error: ${msg}`);
-  }
+  const hardTimer = setTimeout(
+    () => controller.abort(new LlmTimeoutError("hard")),
+    timeoutMs,
+  );
+  armIdle();
 
-  return {
-    content: json.choices?.[0]?.message?.content ?? "{}",
-    tokens: (json.usage as { total_tokens?: number } | undefined)?.total_tokens ?? 0,
-    response: resp,
-    limitHints: collectLimitHints(json),
-  };
+  try {
+    const resp = await fetch(chatUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    if (resp.status === 429) {
+      throw new LlmRateLimitError(resp);
+    }
+    if (!resp.ok) {
+      throw new Error(`DeepSeek HTTP ${resp.status}: ${await resp.text()}`);
+    }
+    if (!resp.body) {
+      throw new Error("DeepSeek stream: empty response body");
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let content = "";
+    let tokens = 0;
+    let apiErrorMsg: string | undefined;
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      armIdle(); // got bytes → reset the idle window
+      buffer += decoder.decode(value, { stream: true });
+
+      let nl: number;
+      while ((nl = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim();
+        if (data === "" || data === "[DONE]") continue;
+        try {
+          const evt = JSON.parse(data) as {
+            choices?: Array<{ delta?: { content?: string | null }; message?: { content?: string | null } }>;
+            usage?: { total_tokens?: number };
+            error?: { message?: string };
+          };
+          if (evt.error?.message) apiErrorMsg = evt.error.message;
+          const delta = evt.choices?.[0]?.delta?.content ?? evt.choices?.[0]?.message?.content;
+          if (typeof delta === "string") content += delta;
+          if (evt.usage?.total_tokens) tokens = evt.usage.total_tokens;
+        } catch {
+          // partial/keepalive line — wait for more bytes
+        }
+      }
+    }
+
+    if (apiErrorMsg) throw new Error(`DeepSeek API error: ${apiErrorMsg}`);
+
+    return {
+      content: content || "{}",
+      tokens,
+      response: resp,
+      limitHints: [], // body hints unavailable when streaming; headers still logged separately
+    };
+  } catch (e) {
+    // fetch/reader rejects with the abort reason → surface our typed timeout.
+    if (controller.signal.aborted && controller.signal.reason instanceof LlmTimeoutError) {
+      throw controller.signal.reason;
+    }
+    throw e;
+  } finally {
+    if (idleTimer) clearTimeout(idleTimer);
+    clearTimeout(hardTimer);
+  }
 }
 
 async function invokeChatCompletion(
@@ -1149,7 +1227,8 @@ export function classifyField(key: string, value?: string): "skip" | "html" | "j
 export function countFieldUnits(key: string, value: string): number {
   const klass = classifyField(key, value);
   if (klass === "skip") return 0;
-  if (klass === "html") return extractHtmlTextNodes(value).texts.length;
+  if (klass === "html")
+    return htmlNodePartsOf(value).nodeParts.reduce((n, parts) => n + parts.length, 0);
   if (klass === "json") {
     const root = tryParseJsonContainer(value);
     if (root === undefined) return splitPlainText(value).length;
@@ -1191,6 +1270,26 @@ const LLM_TIMEOUT_PER_ITEM_MS = Math.max(
 const LLM_TIMEOUT_MAX_MS = Math.max(
   LLM_TIMEOUT_BASE_MS,
   Number(process.env.TRANSLATE_LLM_TIMEOUT_MAX_MS) || 300_000,
+);
+/**
+ * Idle (stall) window for streaming: abort if no token arrives for this long.
+ * This — not the total cap — is the primary stuck-detector now that responses
+ * stream. Default 40s: generous enough for a slow first token, tight enough to
+ * fail a hung connection fast instead of waiting out the full hard cap.
+ */
+const LLM_IDLE_TIMEOUT_MS = Math.max(
+  10_000,
+  Number(process.env.TRANSLATE_LLM_IDLE_TIMEOUT_MS) || 40_000,
+);
+/** On timeout, re-chunk a large batch straight to this size (skip the slow 25→12→6 cascade). */
+const TIMEOUT_RESPLIT_SIZE = Math.max(
+  1,
+  Number(process.env.TRANSLATE_TIMEOUT_RESPLIT_SIZE) || 5,
+);
+/** Base backoff between single-item leaf retries (grows linearly per attempt). */
+const LEAF_RETRY_BACKOFF_MS = Math.max(
+  0,
+  Number(process.env.TRANSLATE_LEAF_RETRY_BACKOFF_MS) || 1_000,
 );
 
 /** Scale timeout with batch size so large (but capped) batches get more wall clock. */
@@ -1311,6 +1410,20 @@ function restoreHtmlTextNodes(template: string, translations: string[]): string 
   return template.replace(/\x00T(\d+)\x00/g, (_, idx) => translations[Number(idx)] ?? "");
 }
 
+/**
+ * HTML text nodes, with any oversized node further split into parts (same as plain
+ * text). Without this a single huge paragraph/description node is one un-splittable
+ * unit: if its translation times out it can only fall back to the original. Each
+ * marker maps to a list of parts; the node's translation is the parts joined back.
+ */
+function htmlNodePartsOf(value: string): { template: string; nodeParts: string[][] } {
+  const { template, texts } = extractHtmlTextNodes(value);
+  const nodeParts = texts.map((t) =>
+    t.length > LONG_TEXT_THRESHOLD ? splitPlainText(t) : [t],
+  );
+  return { template, nodeParts };
+}
+
 // ─── JSON leaf extraction ──────────────────────────────────────────────────────
 //
 // Metafield values are frequently JSON config blobs (theme settings, cart copy,
@@ -1424,6 +1537,12 @@ function splitPlainText(text: string): string[] {
 }
 
 // ─── Char-based batching ──────────────────────────────────────────────────────
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
 
 function batchByChars(
   items: TranslateItem[],
@@ -1808,15 +1927,33 @@ async function gatherTranslations(
     return;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    const isTimeout = e instanceof LlmTimeoutError;
     if (pend.length > 1) {
+      // Timeout ≠ poison data. Halving a timed-out batch re-pays the base timeout
+      // at every level (25→12→6→3…). Instead jump straight to small chunks so each
+      // retry is fast. Parse errors keep the binary split (isolates the bad item).
+      if (isTimeout && pend.length > TIMEOUT_RESPLIT_SIZE) {
+        console.warn(
+          `[llm] batch of ${pend.length} timed out (${msg}); re-chunking to ${TIMEOUT_RESPLIT_SIZE}`,
+        );
+        for (const chunk of chunkArray(pend, TIMEOUT_RESPLIT_SIZE)) {
+          await gatherTranslations(chunk, aiModel, systemPrompt, collected, tokenAccum, shopName);
+        }
+        return;
+      }
       const mid = Math.ceil(pend.length / 2);
-      console.warn(`[llm] batch of ${pend.length} unparseable (${msg}); splitting`);
+      console.warn(
+        `[llm] batch of ${pend.length} ${isTimeout ? "timed out" : "unparseable"} (${msg}); splitting`,
+      );
       await gatherTranslations(pend.slice(0, mid), aiModel, systemPrompt, collected, tokenAccum, shopName);
       await gatherTranslations(pend.slice(mid), aiModel, systemPrompt, collected, tokenAccum, shopName);
       return;
     }
-    // Single item: retry for transient failures, then give up (→ fallback).
+    // Single item: retry transient failures with backoff, then give up (→ fallback).
     for (let r = 0; r < LEAF_RETRIES; r++) {
+      if (LEAF_RETRY_BACKOFF_MS > 0) {
+        await new Promise((res) => setTimeout(res, LEAF_RETRY_BACKOFF_MS * (r + 1)));
+      }
       try {
         const { map, tokens } = await callLLMOnce(pend, aiModel, systemPrompt, shopName);
         tokenAccum.value += tokens;
@@ -1856,7 +1993,7 @@ type FieldPlan = {
   cacheModel: string;
 } & (
   | { kind: "plain"; parts: string[] }
-  | { kind: "html"; template: string; nodeTexts: string[] }
+  | { kind: "html"; template: string; nodeParts: string[][] }
   | { kind: "json"; root: JsonValue; leaves: string[] }
 );
 
@@ -1867,7 +2004,7 @@ function planTextsReady(plan: FieldPlan, lookup: LookupFn): boolean {
     plan.kind === "plain"
       ? plan.parts
       : plan.kind === "html"
-        ? plan.nodeTexts
+        ? plan.nodeParts.flat()
         : [...new Set(plan.leaves)];
   return texts.every((t) => lookup(plan.order, t) !== undefined);
 }
@@ -1893,13 +2030,18 @@ function reconstructPlan(
     }
   } else if (plan.kind === "html") {
     let anyFallback = false;
-    const out = plan.nodeTexts.map((t) => {
-      const r = lookup(plan.order, t);
-      if (!r || r.status === "fallback") {
-        anyFallback = true;
-        return t;
-      }
-      return r.value.trim();
+    // Each marker = its parts joined back. A single oversized node was split into
+    // several parts; rejoin them (preserving inner boundaries) for that marker.
+    const out = plan.nodeParts.map((parts) => {
+      const pieces = parts.map((p) => {
+        const r = lookup(plan.order, p);
+        if (!r || r.status === "fallback") {
+          anyFallback = true;
+          return p;
+        }
+        return r.value;
+      });
+      return pieces.join("").trim();
     });
     const value = restoreHtmlTextNodes(plan.template, out);
     const status = anyFallback ? "fallback" : "translated";
@@ -2054,13 +2196,13 @@ export async function translateResources(
     }
 
     if (klass === "html") {
-      const { template, texts } = extractHtmlTextNodes(f.value);
-      if (texts.length === 0) {
+      const { template, nodeParts } = htmlNodePartsOf(f.value);
+      if (nodeParts.length === 0) {
         rm.set(f.key, { key: f.key, translatedValue: f.value, digest: f.digest, status: "translated" });
         continue;
       }
-      texts.forEach((t) => addUnit(order, t));
-      plans.push({ kind: "html", resourceId, key: f.key, digest: f.digest, order, cacheModel, template, nodeTexts: texts });
+      nodeParts.forEach((parts) => parts.forEach((p) => addUnit(order, p)));
+      plans.push({ kind: "html", resourceId, key: f.key, digest: f.digest, order, cacheModel, template, nodeParts });
     } else if (klass === "json") {
       const root = tryParseJsonContainer(f.value);
       const leaves: string[] = [];

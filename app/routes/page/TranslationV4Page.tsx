@@ -97,7 +97,6 @@ function progressFromJob(
 ): ProgressData {
   return {
     status,
-    testMode: job.testMode,
     source: job.source,
     target: job.target,
     errorMessage: job.errorMessage,
@@ -128,7 +127,6 @@ function progressFromJob(
 
 type ProgressData = {
   status: TranslationV4Status;
-  testMode: boolean;
   source: string;
   target: string;
   errorMessage: string | null;
@@ -326,9 +324,8 @@ function estimateTranslationConfirmMetrics(params: {
   targetCount: number;
   moduleCount: number;
   limitPerType: number;
-  testMode: boolean;
 }) {
-  const { targetCount, moduleCount, limitPerType, testMode } = params;
+  const { targetCount, moduleCount, limitPerType } = params;
   if (!targetCount || !moduleCount) {
     return { seconds: null as number | null, credits: null as number | null };
   }
@@ -338,12 +335,6 @@ function estimateTranslationConfirmMetrics(params: {
   }
 
   const estimatedItems = Math.max(targetCount * moduleCount * Math.max(limitPerType, 1), 1);
-  if (testMode) {
-    return {
-      seconds: Math.max(Math.round(estimatedItems * 0.2), 5),
-      credits: 0,
-    };
-  }
 
   return {
     seconds: Math.max(Math.round(estimatedItems * 1.8), 15),
@@ -425,7 +416,6 @@ export function TranslationV4Page() {
   const [limitPerType, setLimitPerType] = useState(20);
   const [isCover, setIsCover] = useState(false);
   const [isHandle, setIsHandle] = useState(false);
-  const [testMode, setTestMode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -496,9 +486,8 @@ export function TranslationV4Page() {
         targetCount: targetLocales.length,
         moduleCount: modules.length,
         limitPerType,
-        testMode,
       }),
-    [limitPerType, modules.length, targetLocales.length, testMode],
+    [limitPerType, modules.length, targetLocales.length],
   );
   const confirmSummaryItems = useMemo(
     () => [
@@ -826,7 +815,6 @@ export function TranslationV4Page() {
         limitPerType,
         isCover,
         isHandle,
-        testMode,
         targetOptions,
       });
 
@@ -1151,42 +1139,16 @@ export function TranslationV4Page() {
                     </s-select>
                   </div>
 
-                  <div style={testEnvPanelStyle(testMode)}>
-                    <div style={{ fontWeight: 600, fontSize: "0.875rem", color: pageColorTokens.textBody }}>
-                      测试环境选项
-                    </div>
-                    <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: 2, marginBottom: "0.75rem" }}>
-                      仅用于联调或流程验证，不影响正式批处理逻辑。
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                      <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", cursor: "pointer" }}>
-                        <input
-                          type="checkbox"
-                          checked={testMode}
-                          onChange={(e) => setTestMode(e.target.checked)}
-                          style={{ width: 18, height: 18, cursor: "pointer" }}
-                        />
-                        <div>
-                          <div style={{ fontWeight: 600, fontSize: "0.875rem", color: pageColorTokens.textBody }}>
-                            测试模式{testMode ? "（已开启）" : ""}
-                          </div>
-                          <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: 2 }}>
-                            翻译阶段直接使用原值作为译文，跳过 LLM 调用，适合验证任务流转。
-                          </div>
-                        </div>
-                      </label>
-                      <div style={isMobile ? mobileLimitFieldWrapStyle : { maxWidth: "20rem" }}>
-                        <s-text-field
-                          label="每模块数量限制"
-                          value={String(limitPerType)}
-                          onChange={(e) => {
-                            const v = parseInt(e.currentTarget.value, 10);
-                            setLimitPerType(isNaN(v) || v < 0 ? 20 : v);
-                          }}
-                          autocomplete="off"
-                        />
-                      </div>
-                    </div>
+                  <div style={isMobile ? mobileLimitFieldWrapStyle : { maxWidth: "20rem" }}>
+                    <s-text-field
+                      label="每模块数量限制"
+                      value={String(limitPerType)}
+                      onChange={(e) => {
+                        const v = parseInt(e.currentTarget.value, 10);
+                        setLimitPerType(isNaN(v) || v < 0 ? 20 : v);
+                      }}
+                      autocomplete="off"
+                    />
                   </div>
 
                   {formError ? <div style={formErrorBoxStyle}>{formError}</div> : null}
@@ -1586,6 +1548,7 @@ function formatStageDurationLabel(
   metrics: ProgressData["metrics"],
   liveNowIso: string,
 ): string | null {
+  if (status === "PAUSED" || status === "CANCELLED") return null;
   const timing = stageTimings?.[stage];
   if (timing?.endedAt) {
     return formatElapsedZh(timing.startedAt, timing.endedAt);
@@ -1837,7 +1800,10 @@ function getSecondaryCopy(
     metrics.translateDone,
     metrics.initDone,
   );
-  const elapsedPart = formatElapsedZh(job.claimedAt ?? job.createdAt, updatedAt);
+  const elapsedPart =
+    status === "PAUSED" || status === "CANCELLED"
+      ? null
+      : formatElapsedZh(job.claimedAt ?? job.createdAt, updatedAt);
   const consumedCredits = metrics.usedTokens ?? 0;
 
   const parts = [
@@ -1934,7 +1900,6 @@ function JobCard({
     updatedAt,
   };
   const actions = buildJobActions(job, status, onAction, onOpenReview);
-  const testMode = progress?.testMode ?? job.testMode;
   const showVerify = metrics.verifyTotal > 0 || ["VERIFY_QUEUED", "VERIFYING"].includes(status);
   const primaryCopy = getPrimaryCopy(status, metrics, progress?.errorStage ?? job.errorStage);
   const secondaryCopy = getSecondaryCopy(
@@ -1961,9 +1926,6 @@ function JobCard({
           <span style={{ color: pageColorTokens.textFootnote }}>|</span>
           <span>{job.isCover ? "覆盖已有翻译" : "保留已有翻译"}</span>
         </>
-      }
-      extraBadges={
-        testMode ? <span style={testModePillStyle}>测试模式</span> : null
       }
       primaryCopy={primaryCopy}
       primaryCopyColor={progressTone.text}
@@ -2571,30 +2533,6 @@ const mobileTaskViewButtonsStyle: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
   gap: 8,
-};
-
-function testEnvPanelStyle(active: boolean): React.CSSProperties {
-  return {
-    padding: "0.8rem 1rem",
-    borderRadius: "10px",
-    border: `2px solid ${active ? "#f59e0b" : pageColorTokens.border}`,
-    background: active
-      ? "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)"
-      : "linear-gradient(135deg, #f5f6f8 0%, #eef0f6 100%)",
-    boxShadow: active ? "0 2px 10px rgba(245, 158, 11, 0.2)" : "none",
-    transition: "border-color 0.2s, background 0.2s, box-shadow 0.2s",
-  };
-}
-
-const testModePillStyle: React.CSSProperties = {
-  padding: "0.18rem 0.56rem",
-  borderRadius: 999,
-  fontSize: "0.7rem",
-  fontWeight: 700,
-  letterSpacing: "0.02em",
-  color: "#7c5e10",
-  background: "#fff7e0",
-  border: "1px solid #efdca4",
 };
 
 const failErrorStyle: React.CSSProperties = {

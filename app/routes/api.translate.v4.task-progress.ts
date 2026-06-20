@@ -63,7 +63,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     taskId,
     estimate,
     status: job.status,
-    testMode: job.testMode,
     source: job.source,
     target: job.target,
     modules: job.modules,

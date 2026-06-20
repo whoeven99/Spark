@@ -331,10 +331,10 @@ export function TranslationV4TaskCard({ job }: Props) {
   const isActive = !TERMINAL_V4_STATUSES.includes(job.status) && job.status !== "PAUSED";
   const isTerminal = TERMINAL_V4_STATUSES.includes(job.status) || job.status === "PAUSED";
 
-  const elapsedLabel = formatV4TaskElapsed(
-    job.createdAt,
-    isTerminal ? job.updatedAt : null,
-  );
+  const showElapsed = job.status !== "PAUSED" && job.status !== "CANCELLED";
+  const elapsedLabel = showElapsed
+    ? formatV4TaskElapsed(job.createdAt, isTerminal ? job.updatedAt : null)
+    : null;
 
   const usedCredits = job.metrics.usedTokens > 0 ? tokensToCredits(job.metrics.usedTokens) : null;
 
@@ -452,12 +452,6 @@ export function TranslationV4TaskCard({ job }: Props) {
               <>
                 <span style={{ color: pageColorTokens.textFootnote }}>·</span>
                 <span>{job.aiModel}</span>
-              </>
-            )}
-            {job.testMode && (
-              <>
-                <span style={{ color: pageColorTokens.textFootnote }}>·</span>
-                <span style={{ color: "#d97706" }}>测试模式</span>
               </>
             )}
           </div>
