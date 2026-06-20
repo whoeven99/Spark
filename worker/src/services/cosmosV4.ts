@@ -230,6 +230,29 @@ export async function updateJob(
   }
 }
 
+/** Count jobs currently in TRANSLATE for a shop (used to fair-share LLM concurrency). */
+export async function countShopTranslatingJobs(shopName: string): Promise<number> {
+  try {
+    const { resources } = await getContainer()
+      .items.query<number>(
+        {
+          query:
+            "SELECT VALUE COUNT(1) FROM c WHERE c.shopName = @shopName AND c.status = @status",
+          parameters: [
+            { name: "@shopName", value: shopName },
+            { name: "@status", value: "TRANSLATING" },
+          ],
+        },
+        { partitionKey: shopName },
+      )
+      .fetchAll();
+    const n = resources[0];
+    return typeof n === "number" && n > 0 ? n : 1;
+  } catch {
+    return 1;
+  }
+}
+
 /** Heartbeat: update lastHeartbeat timestamp to signal the job is still alive. */
 export async function heartbeat(shopName: string, jobId: string): Promise<void> {
   await updateJob(shopName, jobId, { lastHeartbeat: new Date().toISOString() });
