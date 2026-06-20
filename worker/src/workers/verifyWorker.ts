@@ -2,7 +2,8 @@ import { hostname } from "os";
 import { claimJob, updateJob, heartbeat, findPendingJobs, getJob, withStageTiming, prefersStoredToken } from "../services/cosmosV4.js";
 import { popHint, setProgress, setItemsCount } from "../services/redisV4.js";
 import { computeModuleCount } from "../services/itemsCount.js";
-import { blobRead, blobListPaths } from "../services/blobV4.js";
+import { blobRead } from "../services/blobV4.js";
+import { loadTranslatedItemsForJob } from "../services/translateBlobIO.js";
 import {
   registerTranslations,
   fetchResourceTranslations,
@@ -85,20 +86,12 @@ async function collectVerifyTargets(job: TranslationV4Job): Promise<VerifyTarget
     }
   }
 
-  for (const module of job.modules) {
-    const translatePaths = await blobListPaths(`${blobPrefix}/translate/${module}/`);
-    const chunkPaths = translatePaths.filter((p) => p.endsWith(".json"));
-    for (const chunkPath of chunkPaths) {
-      const chunk = await blobRead<TranslatedItem[]>(chunkPath);
-      if (!chunk) continue;
-      for (const resource of chunk) {
-        if (byId.has(resource.resourceId)) continue;
-        if (!writtenIds.has(resource.resourceId)) continue;
-        const translations = toTranslationInputs(resource, target);
-        if (translations.length > 0) {
-          byId.set(resource.resourceId, translations);
-        }
-      }
+  for (const { resource } of await loadTranslatedItemsForJob(blobPrefix, job.modules)) {
+    if (byId.has(resource.resourceId)) continue;
+    if (!writtenIds.has(resource.resourceId)) continue;
+    const translations = toTranslationInputs(resource, target);
+    if (translations.length > 0) {
+      byId.set(resource.resourceId, translations);
     }
   }
 

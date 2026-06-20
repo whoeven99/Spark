@@ -2,7 +2,7 @@
 
 **用途**：当用户说「检查翻译任务质量」「这次翻译质量怎么样」并附上 **任务 ID** 和/或 **完整 job JSON** 时，Agent 必须按本文档执行分析，不得凭印象猜测。**每次质量检查都默认顺带查询 QPS 速率并给用户画一张 QPS 图**（见第 6 节；日志过 7 天 TTL 才跳过）。
 
-**相关文档**：流水线与存储结构见 [`docs/TRANSLATION_AGENT.md`](./TRANSLATION_AGENT.md)；离线聚合报告见 `worker/src/scripts/exportTranslationReport.ts`。
+**相关文档**：流水线与存储结构见 [`docs/TRANSLATION_AGENT.md`](./TRANSLATION_AGENT.md)；**迭代 Playbook（一键诊断）**见 [`docs/translation-playbook.md`](./translation-playbook.md)；离线聚合报告见 `worker/src/scripts/exportTranslationReport.ts`。
 
 ---
 

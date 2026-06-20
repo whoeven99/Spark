@@ -1,7 +1,8 @@
 import { hostname } from "os";
 import { claimJob, updateJob, heartbeat, findPendingJobs, getJob, withStageTiming, prefersStoredToken } from "../services/cosmosV4.js";
 import { popHint, pushHint, setProgress } from "../services/redisV4.js";
-import { blobRead, blobListPaths, blobWrite } from "../services/blobV4.js";
+import { blobRead, blobWrite } from "../services/blobV4.js";
+import { loadTranslatedItemsForJob } from "../services/translateBlobIO.js";
 import { registerTranslations, type TranslationInput } from "../services/shopifyFetch.js";
 import { filterWritebackFields } from "../services/writebackFields.js";
 import { pAll } from "../services/llmTranslate.js";
@@ -108,17 +109,9 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
     // Blob listing + reads are sequential here (fast, not the throughput bottleneck).
     // Resources already in writtenSet are skipped — supports crash-resume.
     const pendingResources: PendingResource[] = [];
-    for (const module of job.modules) {
-      const translatePaths = await blobListPaths(`${blobPrefix}/translate/${module}/`);
-      const chunkPaths = translatePaths.filter((p) => p.endsWith(".json"));
-      for (const chunkPath of chunkPaths) {
-        const chunk = await blobRead<TranslatedItem[]>(chunkPath);
-        if (!chunk) continue;
-        for (const resource of chunk) {
-          if (!writtenSet.has(resource.resourceId)) {
-            pendingResources.push({ resource, module });
-          }
-        }
+    for (const { module, resource } of await loadTranslatedItemsForJob(blobPrefix, job.modules)) {
+      if (!writtenSet.has(resource.resourceId)) {
+        pendingResources.push({ resource, module });
       }
     }
 

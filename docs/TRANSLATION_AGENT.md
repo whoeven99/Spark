@@ -391,7 +391,7 @@ cd worker && npx tsx src/scripts/exportTranslationReport.ts <shopName> <taskId> 
 
 输出：每模块的字段 key 清单（classify、条数、平均长度、fallback/unchanged/empty 计数）+ 质量红旗（fallback、疑似漏翻 unchanged、空译文、长度比异常、HTML 标签数不一致、占位符丢失）+ 每类抽样。分析逻辑在 `worker/src/services/translationReport.ts`（纯函数，已覆盖单测）。
 
-**线上质量测试流程**：设 `WORKER_STAGES=init,translate` 跑任务（不写回店铺）→ 跑本脚本读 blob → 据报告优化 prompt/过滤/术语表。
+**线上质量测试流程**：设 `WORKER_STAGES=init,translate` 跑任务（不写回店铺）→ `npm run translation:check -- <jobId> --wait` 或跑 `exportTranslationReport` → 据报告优化 prompt/过滤/术语表。完整迭代见 [`docs/translation-playbook.md`](./translation-playbook.md)。
 
 ---
 

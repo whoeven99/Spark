@@ -1938,6 +1938,11 @@ function reconstructPlan(
  * with cross-engine fallback, unless the job sets aiModel=google-translate.
  * Placeholders are masked across all engines; TM cache keyed by tier model.
  */
+export type TranslatedResourceOutput = {
+  resourceId: string;
+  results: TranslateResult[];
+};
+
 export async function translateResources(
   resources: ResourceInput[],
   source: string,
@@ -1946,8 +1951,12 @@ export async function translateResources(
   testMode: boolean,
   shopName: string,
   onProgress?: (doneUnitsDelta: number, tokensDelta: number) => Promise<void>,
-  onResourceDone?: () => Promise<void>,
+  onResourceDone?: (resource: TranslatedResourceOutput) => Promise<void>,
+  shouldAbort?: () => boolean | Promise<boolean>,
 ): Promise<TranslateChunkResult> {
+  const abortRequested = async (): Promise<boolean> =>
+    shouldAbort ? Boolean(await shouldAbort()) : false;
+
   if (testMode) {
     const out = resources.map((res) => ({
       resourceId: res.resourceId,
@@ -1959,7 +1968,10 @@ export async function translateResources(
       })),
     }));
     if (onResourceDone) {
-      for (let i = 0; i < resources.length; i++) await onResourceDone();
+      for (const res of out) {
+        if (await abortRequested()) break;
+        await onResourceDone(res);
+      }
     }
     return { resources: out, usage: {} };
   }
@@ -2106,23 +2118,43 @@ export async function translateResources(
 
   const reconstructedResources = new Set<string>();
 
-  const finishReadyResources = async (lookup: LookupFn) => {
-    for (const res of resources) {
-      if (reconstructedResources.has(res.resourceId)) continue;
-      const resourcePlans = plansByResource.get(res.resourceId);
-      if (!resourcePlans) {
+  const buildResourceOutput = (res: ResourceInput): TranslatedResourceOutput => {
+    const rm = resultMaps.get(res.resourceId)!;
+    return {
+      resourceId: res.resourceId,
+      results: res.fields.map(
+        (f) =>
+          rm.get(f.key) ?? {
+            key: f.key,
+            translatedValue: f.value,
+            digest: f.digest,
+            status: "fallback" as const,
+          },
+      ),
+    };
+  };
+
+  let finishLock: Promise<void> = Promise.resolve();
+  const finishReadyResources = async (lookup: LookupFn): Promise<void> => {
+    await (finishLock = finishLock.then(async () => {
+      if (await abortRequested()) return;
+      for (const res of resources) {
+        if (reconstructedResources.has(res.resourceId)) continue;
+        const resourcePlans = plansByResource.get(res.resourceId);
+        if (!resourcePlans) {
+          reconstructedResources.add(res.resourceId);
+          if (onResourceDone) await onResourceDone(buildResourceOutput(res));
+          continue;
+        }
+        if (!resourcePlans.every((plan) => planTextsReady(plan, lookup))) continue;
+        const rm = resultMaps.get(res.resourceId)!;
+        for (const plan of resourcePlans) {
+          reconstructPlan(plan, rm, lookup, tmWrites, shopName, target, source);
+        }
         reconstructedResources.add(res.resourceId);
-        if (onResourceDone) await onResourceDone();
-        continue;
+        if (onResourceDone) await onResourceDone(buildResourceOutput(res));
       }
-      if (!resourcePlans.every((plan) => planTextsReady(plan, lookup))) continue;
-      const rm = resultMaps.get(res.resourceId)!;
-      for (const plan of resourcePlans) {
-        reconstructPlan(plan, rm, lookup, tmWrites, shopName, target, source);
-      }
-      reconstructedResources.add(res.resourceId);
-      if (onResourceDone) await onResourceDone();
-    }
+    }));
   };
 
   // Resources fully resolved in step 1 (skip/cache only) count immediately.
@@ -2140,6 +2172,7 @@ export async function translateResources(
     const items: TranslateItem[] = texts.map((t, i) => ({ key: String(i), value: t, digest: "" }));
     const batches = batchByChars(items, MAX_CHARS_PER_BATCH);
     await Promise.all(batches.map(async (batch) => {
+      if (await abortRequested()) return;
       const { results: m, llmTokens } = await translateItemsRouted(batch, source, target, aiModel, shopName, order);
       let batchUnits = 0;
       for (const [k, v] of m) {
