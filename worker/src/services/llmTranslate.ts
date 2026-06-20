@@ -1948,7 +1948,6 @@ export async function translateResources(
   source: string,
   target: string,
   aiModel: string,
-  testMode: boolean,
   shopName: string,
   onProgress?: (doneUnitsDelta: number, tokensDelta: number) => Promise<void>,
   onResourceDone?: (resource: TranslatedResourceOutput) => Promise<void>,
@@ -1956,25 +1955,6 @@ export async function translateResources(
 ): Promise<TranslateChunkResult> {
   const abortRequested = async (): Promise<boolean> =>
     shouldAbort ? Boolean(await shouldAbort()) : false;
-
-  if (testMode) {
-    const out = resources.map((res) => ({
-      resourceId: res.resourceId,
-      results: res.fields.map((f) => ({
-        key: f.key,
-        translatedValue: `${f.value} - test`,
-        digest: f.digest,
-        status: "translated" as const,
-      })),
-    }));
-    if (onResourceDone) {
-      for (const res of out) {
-        if (await abortRequested()) break;
-        await onResourceDone(res);
-      }
-    }
-    return { resources: out, usage: {} };
-  }
 
   const resultMaps = new Map<string, Map<string, TranslateResult>>();
   const plans: FieldPlan[] = [];
@@ -2220,7 +2200,6 @@ export async function translateBatch(
   source: string,
   target: string,
   aiModel: string,
-  testMode: boolean,
   shopName: string,
 ): Promise<TranslateResult[]> {
   const { resources } = await translateResources(
@@ -2228,7 +2207,6 @@ export async function translateBatch(
     source,
     target,
     aiModel,
-    testMode,
     shopName,
   );
   return resources[0].results;

@@ -3,10 +3,11 @@ import { claimJob, updateJob, heartbeat, findPendingJobs, getJob, withStageTimin
 import { popHint, pushHint, setProgress, readControl, clearControl, getProgress } from "../services/redisV4.js";
 import {
   deductTsfQuota,
-  getTsfRemaining,
+  getTsfRemainingWithRetry,
   quotaEnforceEnabled,
   quotaConcurrencyCap,
   quotaTokenMultiplier,
+  resolveQuotaSeedCap,
 } from "../services/tsfQuota.js";
 import { blobRead, blobWrite, blobListPaths } from "../services/blobV4.js";
 import {
@@ -95,7 +96,7 @@ function toTranslatedResourceItem(
 export async function runTranslateWorker(): Promise<void> {
   const claimed = await claimNextJob();
   if (!claimed) return;
-  console.log(`[translate] processing job=${claimed.id} testMode=${claimed.testMode}`);
+  console.log(`[translate] processing job=${claimed.id}`);
   await processTranslateJob(claimed).catch((e) => {
     console.error(`[translate] job ${claimed.id} failed`, e);
   });
@@ -120,7 +121,7 @@ async function claimNextJob(): Promise<TranslationV4Job | null> {
 // actual LLM calls — no separate chunk concurrency knob is needed.
 
 async function processTranslateJob(job: TranslationV4Job): Promise<void> {
-  const { shopName, id: jobId, source, target, aiModel, testMode } = job;
+  const { shopName, id: jobId, source, target, aiModel } = job;
   // Engine routing (Google vs DeepSeek) is applied inside translateBatch.
   const blobPrefix = job.blobPrefix || `tasks/v4/${shopName}/${jobId}`;
 
@@ -156,10 +157,6 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   const translateStartedAt = Date.now().toString();
   const stageStartedAt = new Date().toISOString(); // ISO span start for stageTimings
   const qps = new QpsLogger(jobId, shopName, "TRANSLATE");
-
-  if (testMode) {
-    console.log(`[translate] TEST MODE: using original values as translations`);
-  }
 
   // Write the start timestamp to Redis immediately so the UI can compute elapsed time.
   await setProgress(jobId, {
@@ -258,17 +255,27 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
     return abort.tripped;
   };
   // 是否对本任务做额度校验：TsFrontend 默认开启（QUOTA_ENFORCE=false 可关），其它来源关闭。
-  const enforceQuota = quotaEnforceEnabled(job.taskSource) && !testMode;
+  const enforceQuota = quotaEnforceEnabled(job.taskSource);
   const quotaMult = quotaTokenMultiplier();
 
   // 进入翻译前先按当前剩余额度设定该 shop 的并发上限（额度少→并发低）。
-  // 剩余已 <=0 则直接暂停，一个 LLM 都不发。
+  // 续跑时若额度查询抖动，回退 Redis 中上次扣减后的 remaining，避免并发被 seed 到 1。
   if (enforceQuota) {
-    const remaining0 = await getTsfRemaining(shopName);
-    if (remaining0 <= 0) {
+    const fallbackRemaining = Number(redisProgressAtStart.quotaRemaining) || undefined;
+    const queriedRemaining = await getTsfRemainingWithRetry(shopName);
+    const { remaining: quotaRemaining, cap: quotaCap, usedFallback } = resolveQuotaSeedCap(
+      queriedRemaining,
+      fallbackRemaining,
+    );
+    if (quotaRemaining <= 0) {
       tripAbort("pause", "额度不足，已自动暂停");
     } else {
-      setShopQuotaCap(shopName, quotaConcurrencyCap(remaining0));
+      setShopQuotaCap(shopName, quotaCap);
+      console.log(
+        `[translate] job=${jobId} quota seed remaining=${quotaRemaining} concurrencyCap=${quotaCap}` +
+          `${usedFallback ? " (redis fallback)" : ""}` +
+          ` durableDone=${durableDone}/${translateTotal}`,
+      );
     }
   }
 
@@ -378,8 +385,13 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
                 setShopQuotaCap(shopName, 1);
                 tripAbort("pause", "额度服务异常，已自动暂停");
               } else {
-                setShopQuotaCap(shopName, quotaConcurrencyCap(remaining));
+                const cap = quotaConcurrencyCap(remaining);
+                setShopQuotaCap(shopName, cap);
                 if (remaining < 0) tripAbort("pause", "额度不足，已自动暂停");
+                await setProgress(jobId, {
+                  quotaRemaining: String(remaining),
+                  quotaConcurrencyCap: String(cap),
+                });
               }
             }
           };
@@ -420,7 +432,6 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
             source,
             target,
             aiModel,
-            testMode,
             shopName,
             onProgress,
             onResourceDone,
@@ -466,9 +477,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
     }
 
     // Record the engine actually used (real data — job.aiModel is only the request).
-    const engine = testMode
-      ? { provider: "test", model: "test" }
-      : resolveEngine(aiModel);
+    const engine = resolveEngine(aiModel);
 
     // 被中断（手动暂停/取消 或 额度不足）：持久化已完成进度后停在 TRANSLATE，
     // 不进入回写。补额度/解除暂停后由 resume 重新入队，跳过已翻译 chunk 续跑。

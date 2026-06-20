@@ -32,6 +32,25 @@ describe("tsfQuota URL normalization", () => {
   });
 });
 
+describe("quotaConcurrencyCap", () => {
+  it("returns 1 when remaining is below per-call cost", async () => {
+    const { quotaConcurrencyCap } = await import("../../worker/src/services/tsfQuota.js");
+    expect(quotaConcurrencyCap(100)).toBe(1);
+    expect(quotaConcurrencyCap(15000)).toBe(1);
+    expect(quotaConcurrencyCap(30000)).toBe(2);
+  });
+});
+
+describe("resolveQuotaSeedCap", () => {
+  it("falls back to redis remaining when query returns failure sentinel", async () => {
+    const { resolveQuotaSeedCap } = await import("../../worker/src/services/tsfQuota.js");
+    const r = resolveQuotaSeedCap(1, 500_000);
+    expect(r.usedFallback).toBe(true);
+    expect(r.remaining).toBe(500_000);
+    expect(r.cap).toBe(33);
+  });
+});
+
 describe("llmTimeoutMsForBatch", () => {
   beforeEach(() => {
     delete process.env.TRANSLATE_LLM_TIMEOUT_MS;
