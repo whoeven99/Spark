@@ -104,11 +104,29 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   };
   let lastControlCheckAt = 0;
   const CONTROL_CHECK_THROTTLE_MS = 4000;
+  /** 额度/手动暂停时立刻写 Redis + Cosmos，避免 UI 长时间仍显示「翻译中」。 */
+  const persistAbortSoon = (action: "pause" | "cancel", reason: string) => {
+    void (async () => {
+      try {
+        await setProgress(jobId, { pausePending: "1", pauseReason: reason });
+        if (action === "cancel") return;
+        await updateJob(shopName, jobId, {
+          status: "PAUSED",
+          claimedBy: null,
+          errorStage: "TRANSLATE",
+          errorMessage: reason,
+        });
+      } catch (e) {
+        console.warn(`[translate] persist abort failed job=${jobId}`, e);
+      }
+    })();
+  };
   const tripAbort = (action: "pause" | "cancel", reason: string) => {
     if (abort.tripped) return;
     abort.tripped = true;
     abort.action = action;
     abort.reason = reason;
+    persistAbortSoon(action, reason);
   };
   /** 读取外部控制键（节流），命中则置位 abort。 */
   const checkControl = async (force = false): Promise<void> => {
