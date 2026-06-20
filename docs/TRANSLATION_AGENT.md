@@ -109,10 +109,10 @@ CREATED
 
 | 模块 | Shopify query |
 |------|----------------|
-| PRODUCT | （无，拉全部） |
-| COLLECTION | `published_status:published` |
-| PAGE | `published_status:published` |
-| ARTICLE | `published_status:published` |
+| PRODUCT | （无，拉全部含草稿） |
+| COLLECTION | （无，拉全部含草稿） |
+| PAGE | （无，拉全部含草稿） |
+| ARTICLE | （无，拉全部含草稿） |
 
 **创建任务互斥**：`POST /api/translate/v4/tasks` 在写入 Cosmos 前检查同 `shopName + source + target` 是否已有 `ACTIVE_V4_STATUSES` 中的任务；有则返回 **409**。`PAUSED` / `COMPLETED` / `FAILED` / `CANCELLED` 允许新建。
 
