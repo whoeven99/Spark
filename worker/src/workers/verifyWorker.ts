@@ -9,6 +9,7 @@ import {
   diffResourceTranslations,
   type TranslationInput,
 } from "../services/shopifyFetch.js";
+import { filterWritebackFields } from "../services/writebackFields.js";
 import { QpsLogger } from "../services/qpsLogger.js";
 import type { TranslationV4Job } from "../services/cosmosV4.js";
 
@@ -61,9 +62,7 @@ function toTranslationInputs(
   resource: TranslatedItem,
   targetLocale: string,
 ): TranslationInput[] {
-  return resource.translations
-    .filter((t) => t.translatedValue?.trim())
-    .map((t) => ({
+  return filterWritebackFields(resource.translations).map((t) => ({
       locale: targetLocale,
       key: t.key,
       value: t.translatedValue,
@@ -176,8 +175,20 @@ async function processVerifyJob(job: TranslationV4Job): Promise<void> {
     }
 
     const latestJob = await getJob(shopName, jobId);
+    const mergedMetrics = {
+      ...(latestJob?.metrics ?? job.metrics),
+      verifyTotal,
+      verifyDone,
+      verifyFailed,
+    };
+    const wroteAnything =
+      (mergedMetrics.writebackDone ?? 0) > 0 || verifyDone > 0;
     await updateJob(shopName, jobId, {
-      status: "COMPLETED",
+      status: wroteAnything ? "COMPLETED" : "FAILED",
+      errorStage: wroteAnything ? undefined : "WRITEBACK",
+      errorMessage: wroteAnything
+        ? undefined
+        : "写回未成功：全部资源均未写入 Shopify（请查看 worker 日志或写回详情）",
       claimedBy: null,
       stageTimings: withStageTiming(
         latestJob?.stageTimings ?? job.stageTimings,
@@ -185,12 +196,7 @@ async function processVerifyJob(job: TranslationV4Job): Promise<void> {
         stageStartedAt,
         new Date().toISOString(),
       ),
-      metrics: {
-        ...(latestJob?.metrics ?? job.metrics),
-        verifyTotal,
-        verifyDone,
-        verifyFailed,
-      },
+      metrics: mergedMetrics,
     });
 
     // 任务完成后刷新汇总页统计缓存（TsFrontend 专用，TSF 汇总页直接读）。非致命。

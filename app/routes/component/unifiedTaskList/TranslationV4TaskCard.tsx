@@ -122,7 +122,21 @@ function resolveStageStates(
   metrics: TranslationV4Metrics,
 ): [StageState, StageState, StageState, StageState] {
   // ── Active flows ─────────────────────────────────────────────────────────
-  if (status === "COMPLETED") return ["completed", "completed", "completed", "completed"];
+  if (status === "COMPLETED" || status === "FAILED") {
+    const init = "completed" as const;
+    const translate = "completed" as const;
+    const writebackStage: StageState =
+      metrics.writebackTotal > 0 && metrics.writebackDone === 0 && metrics.writebackFailed > 0
+        ? "failed"
+        : "completed";
+    const verifyStage: StageState =
+      metrics.verifyTotal > 0 && metrics.verifyDone === 0 && metrics.verifyFailed > 0
+        ? "failed"
+        : writebackStage === "failed"
+          ? "failed"
+          : "completed";
+    return [init, translate, writebackStage, verifyStage];
+  }
   if (status === "CREATED") return ["pending", "pending", "pending", "pending"];
   if (status === "INIT_QUEUED" || status === "INITIALIZING") return ["active", "pending", "pending", "pending"];
   if (status === "INIT_DONE") return ["completed", "pending", "pending", "pending"];

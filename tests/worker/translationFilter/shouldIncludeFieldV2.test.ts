@@ -73,4 +73,16 @@ describe("shouldIncludeFieldV2", () => {
     expect(shouldIncludeFieldV2(handle, [], { ...ctx, isHandle: false })).toBe(false);
     expect(shouldIncludeFieldV2(handle, [], { ...ctx, isHandle: true })).toBe(true);
   });
+
+  it("includes HTML body_html with inline px styles", () => {
+    const body = {
+      key: "body_html",
+      value: '<p style="font-size:16px">Long article body with CSS.</p>',
+      type: "HTML",
+    };
+    expect(shouldIncludeFieldV2(body, [{ key: "title", outdated: false, value: "PL title" }], {
+      ...ctx,
+      module: "ARTICLE",
+    })).toBe(true);
+  });
 });

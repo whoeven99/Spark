@@ -257,7 +257,7 @@ CREATED
 2. 汇总待校验资源：`writeback/progress.json` 中已写回的资源（从 translate blob 取期望译文）+ `writeback/failed.json` 中写回失败的资源
 3. 对每个资源 **`translatableResource` 读回**目标 locale 的 `translations`，与期望逐 key 比对（trim 后相等；`outdated=true` 视为未生效）
 4. 不一致 → 仅对 mismatch 的 key **重试 `registerTranslations`** → 再次读回比对
-5. 统计 `verifyDone` / `verifyFailed`，`status=COMPLETED`（仍有失败也结束，失败数见 metrics）
+5. 统计 `verifyDone` / `verifyFailed`；若 `writebackDone=0` 且全部写回失败 → `FAILED`（`errorStage=WRITEBACK`），否则 `COMPLETED`（部分失败见 metrics）
 
 ---
 

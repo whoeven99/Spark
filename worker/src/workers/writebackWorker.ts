@@ -3,6 +3,7 @@ import { claimJob, updateJob, heartbeat, findPendingJobs, getJob, withStageTimin
 import { popHint, pushHint, setProgress } from "../services/redisV4.js";
 import { blobRead, blobListPaths, blobWrite } from "../services/blobV4.js";
 import { registerTranslations, type TranslationInput } from "../services/shopifyFetch.js";
+import { filterWritebackFields } from "../services/writebackFields.js";
 import { pAll } from "../services/llmTranslate.js";
 import { QpsLogger } from "../services/qpsLogger.js";
 import type { TranslationV4Job } from "../services/cosmosV4.js";
@@ -137,8 +138,7 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
         await heartbeat(shopName, jobId);
       }
 
-      const translations: TranslationInput[] = resource.translations
-        .filter((t) => t.translatedValue?.trim())
+      const translations: TranslationInput[] = filterWritebackFields(resource.translations)
         .map((t) => ({
           locale: target,
           key: t.key,

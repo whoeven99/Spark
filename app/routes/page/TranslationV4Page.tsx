@@ -2012,7 +2012,7 @@ function JobCard({
                 done={metrics.writebackDone}
                 total={metrics.writebackTotal}
                 active={status === "WRITING_BACK"}
-                complete={["VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status)}
+                complete={["VERIFY_QUEUED", "VERIFYING", "COMPLETED", "FAILED"].includes(status) && !(metrics.writebackFailed > 0 && metrics.writebackDone === 0)}
                 failed={metrics.writebackFailed}
                 durationLabel={stageDuration("WRITEBACK")}
               />
@@ -2022,7 +2022,7 @@ function JobCard({
                   done={metrics.verifyDone}
                   total={metrics.verifyTotal}
                   active={status === "VERIFYING"}
-                  complete={status === "COMPLETED" && metrics.verifyTotal > 0}
+                  complete={status === "COMPLETED" && !(metrics.verifyFailed > 0 && metrics.verifyDone === 0)}
                   failed={metrics.verifyFailed}
                   detailLabel={
                     metrics.writebackTotal > 0 && metrics.verifyTotal < metrics.writebackTotal
@@ -2192,13 +2192,23 @@ type StageBarProps = {
 
 function StageBar({ label, done, total, active, complete, failed = 0, detailLabel, durationLabel }: StageBarProps) {
   const { isMobile } = useResponsiveLayout();
-  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : (complete ? 100 : 0);
+  const stageFailed = failed > 0 && done === 0;
+  const pct =
+    total > 0
+      ? Math.min(100, Math.round((done / total) * 100))
+      : stageFailed
+        ? 100
+        : complete
+          ? 100
+          : 0;
 
-  const fillBg = complete
-    ? pageColorTokens.brandGreen
-    : active
-      ? "#c05717"
-      : pageColorTokens.borderInput;
+  const fillBg = stageFailed
+    ? "#d82c0d"
+    : complete
+      ? pageColorTokens.brandGreen
+      : active
+        ? "#c05717"
+        : pageColorTokens.borderInput;
 
   return (
     <div
