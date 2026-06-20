@@ -1,6 +1,6 @@
 import { hostname } from "os";
 import { claimJob, updateJob, heartbeat, findPendingJobs, getJob, withStageTiming } from "../services/cosmosV4.js";
-import { popHint, pushHint, setProgress, readControl, clearControl } from "../services/redisV4.js";
+import { popHint, pushHint, setProgress, readControl, clearControl, getProgress } from "../services/redisV4.js";
 import {
   deductTsfQuota,
   getTsfRemaining,
@@ -60,9 +60,14 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   // Engine routing (Google vs DeepSeek) is applied inside translateBatch.
   const blobPrefix = job.blobPrefix || `tasks/v4/${shopName}/${jobId}`;
 
-  // Resume: restore token counter from persisted metrics (skip path adds progress counters).
+  // Resume: restore token counter from Cosmos + Redis (412 on pause may leave Cosmos stale).
   const latestAtStart = await getJob(shopName, jobId);
-  const persistedUsedTokens = latestAtStart?.metrics.usedTokens ?? job.metrics.usedTokens ?? 0;
+  const redisProgressAtStart = await getProgress(jobId);
+  const redisUsedTokensAtStart = Number(redisProgressAtStart.usedTokens) || 0;
+  const persistedUsedTokens = Math.max(
+    latestAtStart?.metrics.usedTokens ?? job.metrics.usedTokens ?? 0,
+    redisUsedTokensAtStart,
+  );
 
   let translateDone = 0;
   let translateFailed = 0;
@@ -318,6 +323,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
     // 不进入回写。补额度/解除暂停后由 resume 重新入队，跳过已翻译 chunk 续跑。
     if (abort.tripped) {
       const latestAbort = await getJob(shopName, jobId);
+      const redisUsedOnAbort = Number((await getProgress(jobId)).usedTokens) || 0;
       await updateJob(shopName, jobId, {
         status: abort.action === "cancel" ? "CANCELLED" : "PAUSED",
         claimedBy: null,
@@ -336,7 +342,11 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
           translateFallback,
           translateUnitDone,
           translateUnitTotal,
-          usedTokens: Math.max(liveTokens, latestAbort?.metrics.usedTokens ?? 0),
+          usedTokens: Math.max(
+            liveTokens,
+            latestAbort?.metrics.usedTokens ?? 0,
+            redisUsedOnAbort,
+          ),
         },
       });
       await clearControl(jobId); // 消费掉控制信号，避免 resume 后立即再次暂停
@@ -348,7 +358,12 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
 
     // Refresh job to get latest metrics
     const latestJob = await getJob(shopName, jobId);
-    const usedTokens = Math.max(liveTokens, latestJob?.metrics.usedTokens ?? 0);
+    const redisUsedOnComplete = Number((await getProgress(jobId)).usedTokens) || 0;
+    const usedTokens = Math.max(
+      liveTokens,
+      latestJob?.metrics.usedTokens ?? 0,
+      redisUsedOnComplete,
+    );
     await updateJob(shopName, jobId, {
       status: "WRITEBACK_QUEUED",
       claimedBy: null,

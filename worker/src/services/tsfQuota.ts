@@ -62,10 +62,15 @@ type QuotaBaseResponse = {
   response: TokenQuotaVO | null;
 };
 
-/** 额度服务 base（去掉尾部斜杠）。 */
+/** 额度服务 base（去掉尾部斜杠；缺协议时补 https://）。 */
 function quotaBase(): string | null {
-  const base = process.env.TSF_SERVER_URL?.trim();
-  return base ? base.replace(/\/+$/, "") : null;
+  let base = process.env.TSF_SERVER_URL?.trim();
+  if (!base) return null;
+  base = base.replace(/\/+$/, "");
+  if (!/^https?:\/\//i.test(base)) {
+    base = `https://${base}`;
+  }
+  return base;
 }
 
 /**

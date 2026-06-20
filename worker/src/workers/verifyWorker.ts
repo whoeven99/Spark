@@ -1,6 +1,7 @@
 import { hostname } from "os";
 import { claimJob, updateJob, heartbeat, findPendingJobs, getJob, withStageTiming, prefersStoredToken } from "../services/cosmosV4.js";
-import { popHint, setProgress } from "../services/redisV4.js";
+import { popHint, setProgress, setItemsCount } from "../services/redisV4.js";
+import { computeModuleCount } from "../services/itemsCount.js";
 import { blobRead, blobListPaths } from "../services/blobV4.js";
 import {
   registerTranslations,
@@ -191,6 +192,26 @@ async function processVerifyJob(job: TranslationV4Job): Promise<void> {
         verifyFailed,
       },
     });
+
+    // 任务完成后刷新汇总页统计缓存（TsFrontend 专用，TSF 汇总页直接读）。非致命。
+    if (prefersStoredToken(job) && job.shopifyAccessToken) {
+      for (const module of job.modules) {
+        try {
+          const count = await computeModuleCount(
+            shopName,
+            job.shopifyAccessToken,
+            module,
+            job.target,
+          );
+          await setItemsCount(shopName, job.target, module, count);
+          console.log(
+            `[verify] items_count job=${jobId} ${module} ${count.translated}/${count.total} stored`,
+          );
+        } catch (e) {
+          console.error(`[verify] items_count job=${jobId} ${module} failed:`, e);
+        }
+      }
+    }
 
     console.log(`[verify] done job=${jobId} verified=${verifyDone} failed=${verifyFailed}`);
   } catch (e) {
