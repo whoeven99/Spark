@@ -86,6 +86,11 @@ export type TranslationV4Job = {
   stageTimings?: StageTimings | null;
   errorMessage: string | null;
   errorStage: string | null;
+  /**
+   * 翻译中途被暂停/取消时：先把已翻译的写回 Shopify，再据此决定写回完成后的终态
+   * （"pause"→PAUSED 可续译，"cancel"→CANCELLED）。普通写回为 null/缺省。
+   */
+  pauseAfterWriteback?: "pause" | "cancel" | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -192,6 +197,7 @@ export async function updateJob(
       | "aiProvider"
       | "engineUsage"
       | "stageTimings"
+      | "pauseAfterWriteback"
     >
   >,
 ): Promise<void> {

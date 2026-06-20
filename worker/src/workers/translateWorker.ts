@@ -180,18 +180,16 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   };
   let lastControlCheckAt = 0;
   const CONTROL_CHECK_THROTTLE_MS = 4000;
-  /** 额度/手动暂停时立刻写 Redis + Cosmos，避免 UI 长时间仍显示「翻译中」。 */
-  const persistAbortSoon = (action: "pause" | "cancel", reason: string) => {
+  /**
+   * 暂停/取消触发后立刻写 Redis「暂停待落盘」信号（UI 据此显示「正在暂停…」）。
+   * 不再乐观地把 Cosmos 设成 PAUSED —— 真正的终态由 abort 块在在飞批次收尾后落定
+   * （已翻译 >0 → WRITEBACK_QUEUED 先写回 → PAUSED/CANCELLED；否则直接终态）。
+   * 这样状态单调推进，避免 PAUSED 闪现导致「继续」按钮提前出现又消失。
+   */
+  const persistAbortSoon = (_action: "pause" | "cancel", reason: string) => {
     void (async () => {
       try {
         await setProgress(jobId, { pausePending: "1", pauseReason: reason });
-        if (action === "cancel") return;
-        await updateJob(shopName, jobId, {
-          status: "PAUSED",
-          claimedBy: null,
-          errorStage: "TRANSLATE",
-          errorMessage: reason,
-        });
       } catch (e) {
         console.warn(`[translate] persist abort failed job=${jobId}`, e);
       }
@@ -521,8 +519,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
     // Record the engine actually used (real data — job.aiModel is only the request).
     const engine = resolveEngine(aiModel);
 
-    // 被中断（手动暂停/取消 或 额度不足）：持久化已完成进度后停在 TRANSLATE，
-    // 不进入回写。补额度/解除暂停后由 resume 重新入队，跳过已翻译 chunk 续跑。
+    // 被中断（手动暂停/取消 或 额度不足）。
     if (abort.tripped) {
       const latestAbort = await getJob(shopName, jobId);
       if (latestAbort?.claimedBy !== WORKER_ID) {
@@ -530,34 +527,61 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         return;
       }
       const redisUsedOnAbort = Number((await getProgress(jobId)).usedTokens) || 0;
+      const metricsOnAbort = {
+        ...(latestAbort?.metrics ?? job.metrics),
+        translateDone,
+        translateFailed,
+        translateFallback,
+        translateUnitDone,
+        translateUnitTotal,
+        usedTokens: Math.max(
+          liveTokens,
+          latestAbort?.metrics.usedTokens ?? 0,
+          redisUsedOnAbort,
+        ),
+      };
+      const timingsOnAbort = withStageTiming(
+        latestAbort?.stageTimings ?? job.stageTimings,
+        "TRANSLATE",
+        stageStartedAt,
+        new Date().toISOString(),
+      );
+
+      // 已翻译出内容 → 先把已翻译的写回 Shopify（珍惜已完成的工作）；写回完成后
+      // 由 writebackWorker 据 pauseAfterWriteback 收尾：pause→PAUSED(可续译)、cancel→CANCELLED。
+      // 写回期间状态为 WRITING_BACK，前端「继续」自然禁用，直到写回结束。
+      if (translateDone > 0) {
+        await updateJob(shopName, jobId, {
+          status: "WRITEBACK_QUEUED",
+          claimedBy: null,
+          pauseAfterWriteback: abort.action,
+          errorStage: null,
+          errorMessage: abort.action === "pause" ? abort.reason : null,
+          stageTimings: timingsOnAbort,
+          metrics: metricsOnAbort,
+        });
+        await clearControl(jobId); // 消费控制信号，避免写回后 resume 立即再次暂停
+        // 清掉「暂停待落盘」标记：现在是 WRITING_BACK 主动写回，不是 paused-pending。
+        await setProgress(jobId, { pausePending: "0", pauseReason: "" });
+        await pushHint("writeback", { taskId: jobId, shopName });
+        console.log(
+          `[translate] job=${jobId} ${abort.action}→先写回已翻译（${abort.reason}）done=${translateDone}/${translateTotal}`,
+        );
+        return;
+      }
+
+      // 还没翻译出任何内容 → 直接终态，无需写回。补额度/解除暂停后 resume 重新入队续译。
       await updateJob(shopName, jobId, {
         status: abort.action === "cancel" ? "CANCELLED" : "PAUSED",
         claimedBy: null,
         errorStage: "TRANSLATE",
         errorMessage: abort.action === "cancel" ? null : abort.reason,
-        stageTimings: withStageTiming(
-          latestAbort?.stageTimings ?? job.stageTimings,
-          "TRANSLATE",
-          stageStartedAt,
-          new Date().toISOString(),
-        ),
-        metrics: {
-          ...(latestAbort?.metrics ?? job.metrics),
-          translateDone,
-          translateFailed,
-          translateFallback,
-          translateUnitDone,
-          translateUnitTotal,
-          usedTokens: Math.max(
-            liveTokens,
-            latestAbort?.metrics.usedTokens ?? 0,
-            redisUsedOnAbort,
-          ),
-        },
+        stageTimings: timingsOnAbort,
+        metrics: metricsOnAbort,
       });
-      await clearControl(jobId); // 消费掉控制信号，避免 resume 后立即再次暂停
+      await clearControl(jobId);
       console.log(
-        `[translate] job=${jobId} 已${abort.action === "cancel" ? "取消" : "暂停"}（${abort.reason}）done=${translateDone}/${translateTotal}`,
+        `[translate] job=${jobId} 已${abort.action === "cancel" ? "取消" : "暂停"}（${abort.reason}）done=0`,
       );
       return;
     }
@@ -573,6 +597,9 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
     await updateJob(shopName, jobId, {
       status: "WRITEBACK_QUEUED",
       claimedBy: null,
+      // 正常跑完的写回，清掉可能残留的暂停意图（防上次 pause-写回失败留下的脏标记
+      // 把这次正常写回误判成「暂停写回」）。
+      pauseAfterWriteback: null,
       aiModelUsed: engine.model,
       aiProvider: engine.provider,
       engineUsage,

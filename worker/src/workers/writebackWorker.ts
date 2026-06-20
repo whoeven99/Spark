@@ -194,15 +194,39 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
     await blobWrite(failedPath, failedResources);
 
     const verifyTotal = writebackDone + writebackFailed;
+    const writebackTiming = withStageTiming(
+      latestJob?.stageTimings ?? job.stageTimings,
+      "WRITEBACK",
+      stageStartedAt,
+      new Date().toISOString(),
+    );
+
+    // 本次写回是「暂停/取消时先写回已翻译」触发的 → 写回完成后据意图收尾，不进入校验。
+    const pauseIntent = latestJob?.pauseAfterWriteback ?? job.pauseAfterWriteback;
+    if (pauseIntent === "pause" || pauseIntent === "cancel") {
+      await updateJob(shopName, jobId, {
+        status: pauseIntent === "cancel" ? "CANCELLED" : "PAUSED",
+        claimedBy: null,
+        // pause：errorStage=TRANSLATE，resume 时重新入队翻译续译剩余资源。
+        errorStage: pauseIntent === "pause" ? "TRANSLATE" : null,
+        errorMessage:
+          pauseIntent === "pause"
+            ? (latestJob?.errorMessage ?? job.errorMessage)
+            : null,
+        pauseAfterWriteback: null, // 消费意图
+        stageTimings: writebackTiming,
+        metrics: updatedMetrics,
+      });
+      console.log(
+        `[writeback] done job=${jobId} written=${writebackDone} failed=${writebackFailed} → ${pauseIntent === "cancel" ? "CANCELLED" : "PAUSED"}（暂停/取消时已写回已翻译）`,
+      );
+      return;
+    }
+
     await updateJob(shopName, jobId, {
       status: "VERIFY_QUEUED",
       claimedBy: null,
-      stageTimings: withStageTiming(
-        latestJob?.stageTimings ?? job.stageTimings,
-        "WRITEBACK",
-        stageStartedAt,
-        new Date().toISOString(),
-      ),
+      stageTimings: writebackTiming,
       metrics: { ...updatedMetrics, verifyTotal },
     });
     await pushHint("verify", { taskId: jobId, shopName });
@@ -216,6 +240,7 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
       errorMessage,
       errorStage: "WRITEBACK",
       claimedBy: null,
+      pauseAfterWriteback: null, // 清掉暂停意图，避免下次写回被误判
       stageTimings: withStageTiming(job.stageTimings, "WRITEBACK", stageStartedAt, new Date().toISOString()),
     });
     console.error(`[writeback] failed job=${jobId}`, e);
