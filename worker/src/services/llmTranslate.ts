@@ -148,6 +148,25 @@ function parseRateLimitResetMs(raw: number | undefined, now: number): number | u
  */
 const MAX_POOL_CONCURRENCY = Math.max(1, Number(process.env.LLM_MAX_CONCURRENCY) || 512);
 
+// ── Congestion-guard thresholds (latency / timeout-rate aware backoff) ─────────
+// DeepSeek 200s carry no quota headers, so the pool can't read RPM/TPM pressure
+// and never sees a 429 — the only pre-existing backoff trigger. Without a brake
+// the concurrency ramps monotonically to MAX_POOL_CONCURRENCY and pegs there,
+// pushing per-request latency past the stream timeouts and into a self-inflicted
+// timeout storm. Instead we treat *rising latency* and *timeouts* as the
+// congestion signal and shed concurrency (same multiplicative cut as a 429) so
+// the pool settles at the throughput knee.
+/** Above this avg latency (ms) → congested, shed concurrency. */
+const LLM_LATENCY_HIGH_MS = Math.max(5_000, Number(process.env.TRANSLATE_LLM_LATENCY_HIGH_MS) || 22_000);
+/** Resume ramping only once avg latency is back under this (ms) — hysteresis. */
+const LLM_LATENCY_OK_MS = Math.max(2_000, Number(process.env.TRANSLATE_LLM_LATENCY_OK_MS) || 15_000);
+/** Recent timeout rate (EWMA, 0..1) above this → shed concurrency. */
+const LLM_TIMEOUT_RATE_HIGH = Math.min(1, Math.max(0.01, Number(process.env.TRANSLATE_LLM_TIMEOUT_RATE_HIGH) || 0.1));
+/** Min gap between successive soft backoffs (ms) — let the cut take effect first. */
+const SOFT_BACKOFF_MIN_INTERVAL_MS = Math.max(500, Number(process.env.TRANSLATE_SOFT_BACKOFF_MIN_INTERVAL_MS) || 3_000);
+/** Multiplicative factor applied on each backoff (soft latency/timeout or 429). */
+const BACKOFF_FACTOR = 0.7;
+
 // ── DeepSeek concurrency (official docs: account-level in-flight connections) ──
 // https://api-docs.deepseek.com/zh-cn/quick_start/rate_limit
 // deepseek-v4-pro: 500, deepseek-v4-flash: 2500; API keys on the same account share quota.
@@ -186,15 +205,17 @@ export function resolveDeepSeekPoolConcurrency(model: string): {
     Math.max(1, Math.floor(accountLimit * util)),
   );
   const initialOverride = Number(process.env.DEEPSEEK_INITIAL_CONCURRENCY);
-  // Start aggressively: the account in-flight limit is large (500 pro / 2500
-  // flash) and the per-request latency is high (~40s), so a timid initial of a
-  // few dozen leaves most of the pipeline serialised while the +1-per-2-calls
-  // ramp slowly catches up. Begin near 40% of the safe ceiling (floor 128) —
-  // still well under the account limit, and on jobs with few large batches it
-  // means we parallelise from the first wave instead of never ramping at all.
+  // Start conservatively and let the latency-aware ramp find the throughput knee.
+  // The account in-flight limit is large (500 pro / 2500 flash), but a single
+  // slow endpoint saturates long before that: opening at ~40% of the ceiling
+  // (≈205 for flash) drove per-request latency to 40s+ and a timeout storm.
+  // Begin near 12% of the safe ceiling (floor 48) — high enough to parallelise
+  // the first wave, low enough that the congestion guard (high latency / timeout
+  // rate → shed concurrency) can keep us off the cliff while the +4-per-8-success
+  // ramp climbs only while latency stays comfortably low.
   const initial = Number.isFinite(initialOverride) && initialOverride > 0
     ? Math.min(Math.floor(initialOverride), ceiling)
-    : Math.min(Math.max(128, Math.floor(ceiling * 0.4)), ceiling);
+    : Math.min(Math.max(48, Math.floor(ceiling * 0.12)), ceiling);
   return { accountLimit, ceiling, initial };
 }
 
@@ -214,7 +235,8 @@ type KeySlotStats = {
   tokens: number;
   totalLatencyMs: number;
   throttleCount: number;
-  errors: number;
+  errors: number;               // total failed call attempts (any kind, incl. retried-then-recovered)
+  errorsByKind: LlmErrorTally;  // same total, split by cause for telemetry
 };
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
@@ -252,6 +274,27 @@ class LlmTimeoutError extends Error {
     this.name = "LlmTimeoutError";
     this.kind = kind;
   }
+}
+
+/** Coarse classification of a non-throttle LLM call failure (telemetry + backoff). */
+export type LlmErrorKind = "timeout" | "parse" | "http" | "api" | "other";
+
+/** Per-kind tally of failed call attempts. */
+export type LlmErrorTally = { timeout: number; parse: number; http: number; api: number; other: number };
+
+function _emptyErrorTally(): LlmErrorTally {
+  return { timeout: 0, parse: 0, http: 0, api: 0, other: 0 };
+}
+
+/** Bucket a thrown error so we can tell "endpoint too slow" from "bad data" from "5xx". */
+function classifyLlmError(e: unknown): LlmErrorKind {
+  if (e instanceof LlmTimeoutError) return "timeout";
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/^DeepSeek HTTP \d/.test(msg)) return "http";
+  if (/empty response body/i.test(msg)) return "http";
+  if (/DeepSeek API error/i.test(msg)) return "api";
+  if (e instanceof SyntaxError || /json|unexpected token|no json object/i.test(msg)) return "parse";
+  return "other";
 }
 
 /** Map DEEPSEEK_BASE_URL → POST .../chat/completions (DeepSeek native endpoint). */
@@ -455,6 +498,12 @@ class LLMKeyPool {
   private readonly _limitMode: PoolLimitMode;
   private _deepseekConcCeiling = 0;
   private _deepseekRampSuccesses = 0;
+  /** EWMA of recent timeout occurrences (1=timeout, 0=ok). Congestion signal. */
+  private readonly _timeoutRate = new EWMA(0, 0.1);
+  /** Epoch ms of last soft backoff — rate-limits successive cuts. */
+  private _lastSoftBackoffAt = 0;
+  /** Pool-level count of fields that exhausted retries and fell back to original. */
+  private _terminalFallbacks = 0;
 
   constructor(slots: KeySlot[], options?: PoolInitOptions) {
     if (slots.length === 0) throw new Error("[llm-pool] no LLM API keys configured");
@@ -494,7 +543,7 @@ class LLMKeyPool {
       tokens: number,
       limitHints?: string[],
     ) => void;
-    onError: () => void;
+    onError: (kind: LlmErrorKind) => void;
     release: () => void;
   }> {
     await this.sem.acquire();
@@ -533,7 +582,11 @@ class LLMKeyPool {
             this._blindOnThrottle(); // no-op once headers are seen
             console.warn(`[llm-pool] slot ${slot.label} throttled for ${(waitMs / 1_000).toFixed(1)}s`);
           },
-          onError: () => { slot.stats.errors++; },
+          onError: (kind: LlmErrorKind) => {
+            slot.stats.errors++;
+            slot.stats.errorsByKind[kind]++;
+            this._onAttemptError(kind);
+          },
           release: () => this.sem.release(),
         };
       }
@@ -707,6 +760,24 @@ class LLMKeyPool {
    */
   private _deepseekOnSuccess(): void {
     if (this._hasSeenAnyHeaders) return;
+    this._timeoutRate.update(0); // a success decays the recent-timeout rate
+
+    // ── Congestion guard ───────────────────────────────────────────────────────
+    // DeepSeek never 429s here, so latency + timeouts are the only pressure
+    // signals. If either is high, shed concurrency instead of ramping — this is
+    // what stops the monotonic climb to the ceiling that caused the timeout storm.
+    if (this.latency.value > LLM_LATENCY_HIGH_MS) {
+      this._softBackoff("high latency");
+      return;
+    }
+    if (this._timeoutRate.value > LLM_TIMEOUT_RATE_HIGH) {
+      this._softBackoff("timeout rate");
+      return;
+    }
+    // Hysteresis: only ramp up once latency is comfortably below the target, so
+    // we don't oscillate right at the knee.
+    if (this.latency.value > LLM_LATENCY_OK_MS) return;
+
     this._deepseekRampSuccesses++;
     const RAMP_STEP = 8;
     const RAMP_ADD = 4;
@@ -719,15 +790,61 @@ class LLMKeyPool {
         this.sem.setMax(newMax);
         console.log(
           `[llm-pool] deepseek ramp → concurrency=${newMax}/${this._deepseekConcCeiling}` +
-          ` (${this._deepseekRampSuccesses} successes)`,
+          ` (${this._deepseekRampSuccesses} successes, latency=${this.latency.value.toFixed(0)}ms)`,
         );
       }
     }
   }
 
+  /** Feed a failed attempt into the congestion guard. Timeouts drive the brake. */
+  private _onAttemptError(kind: LlmErrorKind): void {
+    if (this._limitMode !== "deepseek-concurrency" || this._hasSeenAnyHeaders) return;
+    // A timed-out request never reaches onResponse, so its (huge) latency is NOT
+    // in the latency EWMA — the timeout rate is the only signal that catches it.
+    this._timeoutRate.update(kind === "timeout" ? 1 : 0);
+    if (kind === "timeout" && this._timeoutRate.value > LLM_TIMEOUT_RATE_HIGH) {
+      this._softBackoff("timeout rate");
+    }
+  }
+
+  /** Multiplicative concurrency cut from a soft (latency/timeout) congestion signal. */
+  private _softBackoff(reason: string): void {
+    const now = Date.now();
+    if (now - this._lastSoftBackoffAt < SOFT_BACKOFF_MIN_INTERVAL_MS) return;
+    this._lastSoftBackoffAt = now;
+    const floor = Math.max(this.slots.length, 4);
+    const newMax = Math.max(floor, Math.floor(this.sem.max * BACKOFF_FACTOR));
+    this._deepseekRampSuccesses = 0;
+    if (newMax !== this.sem.max) {
+      this.sem.setMax(newMax);
+      console.warn(
+        `[llm-pool] soft back-off → concurrency=${newMax} (${reason}; ` +
+        `latency=${this.latency.value.toFixed(0)}ms, timeoutRate=${(this._timeoutRate.value * 100).toFixed(0)}%)`,
+      );
+    }
+  }
+
+  /** Record fields that exhausted retries and fell back to the original text. */
+  recordTerminalFallback(n = 1): void {
+    this._terminalFallbacks += Math.max(0, n);
+  }
+
+  /** Aggregate failed-attempt counts by cause + terminal fallbacks across slots. */
+  getErrorBreakdown(): { byKind: LlmErrorTally; terminalFallbacks: number } {
+    const byKind = _emptyErrorTally();
+    for (const slot of this.slots) {
+      byKind.timeout += slot.stats.errorsByKind.timeout;
+      byKind.parse   += slot.stats.errorsByKind.parse;
+      byKind.http    += slot.stats.errorsByKind.http;
+      byKind.api     += slot.stats.errorsByKind.api;
+      byKind.other   += slot.stats.errorsByKind.other;
+    }
+    return { byKind, terminalFallbacks: this._terminalFallbacks };
+  }
+
   private _deepseekOnThrottle(): void {
     const floor = Math.max(this.slots.length, 4);
-    const newMax = Math.max(floor, Math.floor(this.sem.max * 0.7));
+    const newMax = Math.max(floor, Math.floor(this.sem.max * BACKOFF_FACTOR));
     this._deepseekRampSuccesses = 0;
     if (newMax !== this.sem.max) {
       this.sem.setMax(newMax);
@@ -839,6 +956,7 @@ class LLMKeyPool {
     avgLatencyMs: number;
     throttleCount: number;
     errors: number;
+    errorsByKind: LlmErrorTally;
     poolConcurrency: number;
     rateLimit: SlotRateLimit | null;
   }> {
@@ -851,6 +969,7 @@ class LLMKeyPool {
         : 0,
       throttleCount: slot.stats.throttleCount,
       errors: slot.stats.errors,
+      errorsByKind: { ...slot.stats.errorsByKind },
       poolConcurrency: this.sem.max,
       rateLimit: slot.rateLimit,
     }));
@@ -881,7 +1000,14 @@ function buildKeySlots(): KeySlot[] {
 
 /** Zero-fill a fresh slot stats counter. */
 function _initStats(): KeySlotStats {
-  return { calls: 0, tokens: 0, totalLatencyMs: 0, throttleCount: 0, errors: 0 };
+  return {
+    calls: 0,
+    tokens: 0,
+    totalLatencyMs: 0,
+    throttleCount: 0,
+    errors: 0,
+    errorsByKind: _emptyErrorTally(),
+  };
 }
 
 let _pool: LLMKeyPool | null = null;
@@ -922,6 +1048,16 @@ const _slotFlushState = new Map<string, { flushedCalls: number; flushedTokens: n
 /** Synchronous snapshot of LLM key pool stats. Returns [] if pool not yet initialised. */
 export function getLlmPoolStats(): ReturnType<LLMKeyPool["getKeyStats"]> {
   return _pool?.getKeyStats() ?? [];
+}
+
+/** Aggregate failed-attempt counts by cause + terminal fallbacks. For QPS telemetry. */
+export function getLlmErrorBreakdown(): { byKind: LlmErrorTally; terminalFallbacks: number } {
+  return _pool?.getErrorBreakdown() ?? { byKind: _emptyErrorTally(), terminalFallbacks: 0 };
+}
+
+/** Record that `n` fields exhausted retries and fell back to the original text. */
+export function recordLlmTerminalFallback(n = 1): void {
+  _pool?.recordTerminalFallback(n);
 }
 
 export async function flushKeyStats(): Promise<void> {
@@ -1913,7 +2049,9 @@ async function callLLMOnce(
     if (e instanceof LlmRateLimitError) {
       acq.onThrottle(retryAfterMsFromResponse(e.response));
     } else {
-      acq.onError(); // count non-throttle errors (timeouts, parse failures, etc.)
+      // Count + classify non-throttle failures (timeout / parse / http / api).
+      // Timeouts also feed the congestion guard so concurrency sheds under load.
+      acq.onError(classifyLlmError(e));
     }
     throw e;
   } finally {
@@ -2005,6 +2143,10 @@ async function gatherTranslations(
         // keep retrying up to the cap
       }
     }
+    // Terminal: this field exhausted retries and will fall back to the original.
+    // Recorded separately from per-attempt errors so telemetry can tell
+    // "wasted attempts that recovered" from "user-visible fallbacks".
+    getPool().recordTerminalFallback(1);
     console.warn(`[llm] item ${pend[0].key} failed after retries (${msg}); using original`);
   }
 }
