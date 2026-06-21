@@ -877,8 +877,11 @@ class LLMKeyPool {
   }
 
   /**
-   * Timed recovery: if no recent timeouts, add +RECOVERY_RAMP_ADD on an interval
-   * even when latency-based ramp is inhibited (common when stuck at soft floor).
+   * Timed recovery: if no recent timeouts, add concurrency on an interval.
+   * Recovery speed adapts to conditions — fast when healthy, cautious when near
+   * the ceiling or when latency is elevated. This ensures the pool climbs back
+   * from a backoff-induced floor without waiting for the success-count ramp
+   * (which stalls when concurrency is very low and successes are sparse).
    */
   private _maybeTimedRecovery(now = Date.now()): void {
     if (this.sem.max >= this._deepseekConcCeiling) return;
@@ -887,14 +890,34 @@ class LLMKeyPool {
     if (this._timeoutRate.value > LLM_TIMEOUT_RATE_HIGH / 2) return;
 
     this._lastTimedRecoveryAt = now;
-    const newMax = Math.min(this._deepseekConcCeiling, this.sem.max + RECOVERY_RAMP_ADD);
+
+    const lat = this.latency.value;
+    const gap = this._deepseekConcCeiling - this.sem.max;
+    const isQuiet = this._timeoutRate.value === 0;
+
+    // Adaptive recovery step: bigger when we're far below ceiling with clean
+    // conditions; smaller when approaching the knee or latency is elevated.
+    let add: number;
+    if (isQuiet && lat < 3000 && gap > 60) {
+      add = Math.max(RECOVERY_RAMP_ADD, Math.ceil(gap / 3));   // fast catch-up: recover ~1/3 of gap
+    } else if (isQuiet && lat < 6000) {
+      add = RECOVERY_RAMP_ADD * 2;                              // healthy: +8 per tick
+    } else if (lat < 10000) {
+      add = RECOVERY_RAMP_ADD;                                   // normal: +4 per tick
+    } else {
+      add = Math.max(1, Math.floor(RECOVERY_RAMP_ADD / 2));     // cautious: +2 per tick
+    }
+
+    const newMax = Math.min(this._deepseekConcCeiling, this.sem.max + add);
     if (newMax === this.sem.max) return;
     this.sem.setMax(newMax);
+
     const quietSec =
       this._lastTimeoutAt > 0 ? Math.round((now - this._lastTimeoutAt) / 1000) : null;
     console.log(
       `[llm-pool] timed recovery → concurrency=${newMax}/${this._deepseekConcCeiling}` +
-      ` (+${RECOVERY_RAMP_ADD}, timeoutRate=${(this._timeoutRate.value * 100).toFixed(0)}%` +
+      ` (+${add}, timeoutRate=${(this._timeoutRate.value * 100).toFixed(0)}%` +
+      `, latency=${lat.toFixed(0)}ms` +
       `${quietSec != null ? `, quiet=${quietSec}s` : ""})`,
     );
   }
