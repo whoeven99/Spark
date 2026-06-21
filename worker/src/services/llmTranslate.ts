@@ -160,10 +160,10 @@ const MAX_POOL_CONCURRENCY = Math.max(1, Number(process.env.LLM_MAX_CONCURRENCY)
 const LLM_TIMEOUT_RATE_HIGH = Math.min(1, Math.max(0.01, Number(process.env.TRANSLATE_LLM_TIMEOUT_RATE_HIGH) || 0.25));
 /** Avg latency above this → hold concurrency steady (no ramp). Does NOT trigger backoff. */
 const RAMP_LATENCY_INHIBIT_MS = Math.max(
-  15_000,
+  10_000,
   Number(process.env.TRANSLATE_RAMP_LATENCY_INHIBIT_MS) ||
     Number(process.env.TRANSLATE_LLM_LATENCY_HIGH_MS) ||
-    35_000,
+    15_000,
 );
 /** Min gap between successive soft backoffs (ms) — let the cut take effect first. */
 const SOFT_BACKOFF_MIN_INTERVAL_MS = Math.max(500, Number(process.env.TRANSLATE_SOFT_BACKOFF_MIN_INTERVAL_MS) || 3_000);
@@ -782,19 +782,37 @@ class LLMKeyPool {
     if (this._timeoutRate.value > LLM_TIMEOUT_RATE_HIGH / 2) return;
     if (this.latency.value > RAMP_LATENCY_INHIBIT_MS) return;
 
+    // ── Adaptive ramp: add amount decays as latency climbs; step count scales
+    //     with current concurrency so the ramp naturally plateaus at the knee.
+    //     Produces a sigmoid-shaped QPS curve instead of spike-then-crash.
+    const lat = this.latency.value;
+    let rampAdd: number;
+    if (lat < 3000)       rampAdd = 8;   // fast climb — plenty of headroom
+    else if (lat < 6000)  rampAdd = 4;   // normal
+    else if (lat < 10000) rampAdd = 2;   // slow — approaching the knee
+    else if (lat < 15000) rampAdd = 1;   // crawl — near capacity
+    else                  rampAdd = 0;   // hold — already at inhibit threshold
+
+    if (rampAdd === 0) return;
+
+    // Ramp step grows with concurrency: at higher concurrency, require more
+    // successful calls between increments to avoid overshooting the knee.
+    //   conc=32 → step≈8  (fast initial ramp)
+    //   conc=64 → step≈16 (moderate)
+    //   conc=96 → step≈24 (slow, deliberate)
+    const rampStep = Math.max(4, Math.ceil(this.sem.max / 4));
+
     this._deepseekRampSuccesses++;
-    const RAMP_STEP = 8;
-    const RAMP_ADD = 4;
     if (
-      this._deepseekRampSuccesses % RAMP_STEP === 0 &&
+      this._deepseekRampSuccesses % rampStep === 0 &&
       this.sem.max < this._deepseekConcCeiling
     ) {
-      const newMax = Math.min(this._deepseekConcCeiling, this.sem.max + RAMP_ADD);
+      const newMax = Math.min(this._deepseekConcCeiling, this.sem.max + rampAdd);
       if (newMax !== this.sem.max) {
         this.sem.setMax(newMax);
         console.log(
           `[llm-pool] deepseek ramp → concurrency=${newMax}/${this._deepseekConcCeiling}` +
-          ` (${this._deepseekRampSuccesses} successes, latency=${this.latency.value.toFixed(0)}ms)`,
+          ` (${this._deepseekRampSuccesses} successes, latency=${lat.toFixed(0)}ms, add=${rampAdd}, step=${rampStep})`,
         );
       }
     }
