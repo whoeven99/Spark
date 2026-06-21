@@ -293,11 +293,12 @@ async function fetchDeepSeekChatCompletion(
 
   const controller = new AbortController();
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  let gotContent = false; // 收到首个 content token 前用宽松窗口，之后用收紧 idle 窗口
   const armIdle = () => {
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(
       () => controller.abort(new LlmTimeoutError("idle")),
-      LLM_IDLE_TIMEOUT_MS,
+      gotContent ? LLM_IDLE_TIMEOUT_MS : LLM_FIRST_TOKEN_TIMEOUT_MS,
     );
   };
   const hardTimer = setTimeout(
@@ -355,7 +356,13 @@ async function fetchDeepSeekChatCompletion(
           };
           if (evt.error?.message) apiErrorMsg = evt.error.message;
           const delta = evt.choices?.[0]?.delta?.content ?? evt.choices?.[0]?.message?.content;
-          if (typeof delta === "string") content += delta;
+          if (typeof delta === "string" && delta.length > 0) {
+            content += delta;
+            if (!gotContent) {
+              gotContent = true; // 开始吐字 → 收紧空闲窗口（中途卡死更快发现）
+              armIdle();
+            }
+          }
           if (evt.usage?.total_tokens) tokens = evt.usage.total_tokens;
         } catch {
           // partial/keepalive line — wait for more bytes
@@ -1259,6 +1266,26 @@ const MAX_ITEMS_PER_BATCH = Math.max(
   1,
   Number(process.env.TRANSLATE_MAX_ITEMS_PER_BATCH) || 25,
 );
+/** Rich (HTML/JSON/LLM-first) pools use smaller batches — fewer keys per request, less idle-timeout tail. */
+const RICH_MAX_CHARS_PER_BATCH = Math.max(
+  500,
+  Number(process.env.TRANSLATE_RICH_MAX_CHARS_PER_BATCH) || 2_000,
+);
+const RICH_MAX_ITEMS_PER_BATCH = Math.max(
+  1,
+  Number(process.env.TRANSLATE_RICH_MAX_ITEMS_PER_BATCH) || 8,
+);
+
+/** LLM-first engine order ⇒ rich tier (HTML/JSON/long plain). Google-first ⇒ trivial. */
+export function resolveBatchLimits(order: Engine[]): {
+  maxChars: number;
+  maxItems: number;
+} {
+  if (order[0] === "llm") {
+    return { maxChars: RICH_MAX_CHARS_PER_BATCH, maxItems: RICH_MAX_ITEMS_PER_BATCH };
+  }
+  return { maxChars: MAX_CHARS_PER_BATCH, maxItems: MAX_ITEMS_PER_BATCH };
+}
 const LLM_TIMEOUT_BASE_MS = Math.max(
   60_000,
   Number(process.env.TRANSLATE_LLM_TIMEOUT_MS) || 120_000,
@@ -1281,10 +1308,19 @@ const LLM_IDLE_TIMEOUT_MS = Math.max(
   10_000,
   Number(process.env.TRANSLATE_LLM_IDLE_TIMEOUT_MS) || 40_000,
 );
+/**
+ * 「等首个 token」的宽松窗口。高并发下 DeepSeek 会把请求排队，首字延迟可达数十秒——
+ * 此时请求**还没开始吐字**就被流中空闲超时砍掉会触发大量无谓的二分/重试/刷屏。
+ * 给首 token 单独留更长时间（默认 90s）；一旦开始吐字再切到收紧的 idle 窗口。
+ */
+const LLM_FIRST_TOKEN_TIMEOUT_MS = Math.max(
+  LLM_IDLE_TIMEOUT_MS,
+  Number(process.env.TRANSLATE_LLM_FIRST_TOKEN_TIMEOUT_MS) || 90_000,
+);
 /** On timeout, re-chunk a large batch straight to this size (skip the slow 25→12→6 cascade). */
 const TIMEOUT_RESPLIT_SIZE = Math.max(
   1,
-  Number(process.env.TRANSLATE_TIMEOUT_RESPLIT_SIZE) || 5,
+  Number(process.env.TRANSLATE_TIMEOUT_RESPLIT_SIZE) || 3,
 );
 /** Base backoff between single-item leaf retries (grows linearly per attempt). */
 const LEAF_RETRY_BACKOFF_MS = Math.max(
@@ -1303,9 +1339,15 @@ export function llmTimeoutMsForBatch(itemCount: number): number {
 // Batch fan-out: all batches within a resource pool are launched simultaneously.
 // The pool's AdaptiveSemaphore is the only concurrency gate — no separate knob needed.
 
-// Plain text items longer than this get split before translation
-const LONG_TEXT_THRESHOLD = 4000;
-const LONG_TEXT_CHUNK_CHARS = 3500;
+// Plain text / HTML text nodes longer than this get split before translation.
+const LONG_TEXT_THRESHOLD = Math.max(
+  500,
+  Number(process.env.TRANSLATE_LONG_TEXT_THRESHOLD) || 3_000,
+);
+const LONG_TEXT_CHUNK_CHARS = Math.max(
+  400,
+  Number(process.env.TRANSLATE_LONG_TEXT_CHUNK_CHARS) || 2_500,
+);
 
 // ─── Concurrency helper ───────────────────────────────────────────────────────
 
@@ -2292,7 +2334,8 @@ export async function translateResources(
     const texts = [...occ.keys()];
     const tmap = new Map<string, RoutedResult>();
     const items: TranslateItem[] = texts.map((t, i) => ({ key: String(i), value: t, digest: "" }));
-    const batches = batchByChars(items, MAX_CHARS_PER_BATCH);
+    const { maxChars, maxItems } = resolveBatchLimits(order);
+    const batches = batchByChars(items, maxChars, maxItems);
     await Promise.all(batches.map(async (batch) => {
       if (await abortRequested()) return;
       const { results: m, llmTokens } = await translateItemsRouted(batch, source, target, aiModel, shopName, order);

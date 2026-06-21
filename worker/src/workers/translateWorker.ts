@@ -1,5 +1,14 @@
 import { hostname } from "os";
-import { claimJob, updateJob, heartbeat, findPendingJobs, getJob, withStageTiming, countShopTranslatingJobs } from "../services/cosmosV4.js";
+import {
+  claimJob,
+  updateJob,
+  heartbeat,
+  findPendingJobs,
+  getJob,
+  withStageTiming,
+  countShopTranslatingJobs,
+  findTranslateQueuedJobsForShop,
+} from "../services/cosmosV4.js";
 import { popHint, pushHint, setProgress, readControl, clearControl, getProgress } from "../services/redisV4.js";
 import {
   deductTsfQuota,
@@ -8,7 +17,6 @@ import {
   quotaConcurrencyCap,
   quotaTokenMultiplier,
   resolveQuotaSeedCap,
-  shareCapAmongJobs,
 } from "../services/tsfQuota.js";
 import { blobRead, blobWrite, blobListPaths } from "../services/blobV4.js";
 import {
@@ -103,15 +111,58 @@ export async function runTranslateWorker(): Promise<void> {
   });
 }
 
+async function wakeNextTranslateForShop(shopName: string): Promise<void> {
+  if ((await countShopTranslatingJobs(shopName)) > 0) return;
+  const [next] = await findTranslateQueuedJobsForShop(shopName, 1);
+  if (!next) return;
+  await pushHint("translate", { taskId: next.id, shopName });
+  console.log(
+    `[translate] shop=${shopName} slot free → queued next job=${next.id} ${next.source}->${next.target}`,
+  );
+}
+
+/**
+ * 同 shop 同一时间只允许一个 TRANSLATING（初始化可并行，翻译串行）。
+ * 返回 null 表示该 shop 已有任务在译，或 claim 失败。
+ */
+async function tryClaimTranslateJob(
+  shopName: string,
+  taskId: string,
+): Promise<TranslationV4Job | null> {
+  if ((await countShopTranslatingJobs(shopName)) > 0) {
+    return null;
+  }
+  const job = await claimJob(
+    shopName,
+    taskId,
+    "TRANSLATE_QUEUED",
+    "TRANSLATING",
+    WORKER_ID,
+  );
+  if (!job) return null;
+  const active = await countShopTranslatingJobs(shopName);
+  if (active > 1) {
+    await updateJob(shopName, job.id, { status: "TRANSLATE_QUEUED", claimedBy: null });
+    console.log(
+      `[translate] yield duplicate claim job=${job.id} shop=${shopName} (${active} TRANSLATING)`,
+    );
+    return null;
+  }
+  return job;
+}
+
 async function claimNextJob(): Promise<TranslationV4Job | null> {
   const hint = await popHint("translate");
   if (hint) {
-    const job = await claimJob(hint.shopName, hint.taskId, "TRANSLATE_QUEUED", "TRANSLATING", WORKER_ID);
+    const job = await tryClaimTranslateJob(hint.shopName, hint.taskId);
     if (job) return job;
+    // shop 已有任务在译 —— 把 hint 放回队列，等当前任务结束后 wakeNext 再拾取
+    await pushHint("translate", hint);
+    return null;
   }
-  const candidates = await findPendingJobs("TRANSLATE_QUEUED", 3);
+  const candidates = await findPendingJobs("TRANSLATE_QUEUED", 10);
   for (const candidate of candidates) {
-    const job = await claimJob(candidate.shopName, candidate.id, "TRANSLATE_QUEUED", "TRANSLATING", WORKER_ID);
+    const job = await tryClaimTranslateJob(candidate.shopName, candidate.id);
     if (job) return job;
   }
   return null;
@@ -257,17 +308,6 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   const enforceQuota = quotaEnforceEnabled(job.taskSource);
   const quotaMult = quotaTokenMultiplier();
 
-  /** 同 shop 并行翻译任务数 → 均分 LLM 闸与 chunk 并发，避免多语言同时跑时互相阻塞。 */
-  const countActiveTranslateJobs = async (): Promise<number> =>
-    Math.max(1, await countShopTranslatingJobs(shopName));
-
-  const applySharedShopCap = async (baseCap: number): Promise<number> => {
-    const activeJobs = await countActiveTranslateJobs();
-    const sharedCap = shareCapAmongJobs(baseCap, activeJobs);
-    setShopQuotaCap(shopName, sharedCap);
-    return sharedCap;
-  };
-
   // 进入翻译前先按当前剩余额度设定该 shop 的并发上限（额度少→并发低）。
   // 续跑时若额度查询抖动，回退 Redis 中上次扣减后的 remaining，避免并发被 seed 到 1。
   if (enforceQuota) {
@@ -280,23 +320,11 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
     if (quotaRemaining <= 0) {
       tripAbort("pause", "额度不足，已自动暂停");
     } else {
-      const activeJobs = await countActiveTranslateJobs();
-      const sharedCap = await applySharedShopCap(quotaCap);
+      setShopQuotaCap(shopName, quotaCap);
       console.log(
-        `[translate] job=${jobId} quota seed remaining=${quotaRemaining} concurrencyCap=${sharedCap}` +
-          ` (base=${quotaCap} activeJobs=${activeJobs})` +
+        `[translate] job=${jobId} quota seed remaining=${quotaRemaining} concurrencyCap=${quotaCap}` +
           `${usedFallback ? " (redis fallback)" : ""}` +
           ` durableDone=${durableDone}/${translateTotal}`,
-      );
-    }
-  } else {
-    const activeJobs = await countActiveTranslateJobs();
-    const sharedCap = await applySharedShopCap(
-      Math.max(1, Number(process.env.QUOTA_MAX_CONCURRENCY) || 128),
-    );
-    if (activeJobs > 1) {
-      console.log(
-        `[translate] job=${jobId} shared concurrencyCap=${sharedCap} activeJobs=${activeJobs}`,
       );
     }
   }
@@ -326,11 +354,11 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
       return;
     }
     const cap = quotaConcurrencyCap(remaining);
-    const sharedCap = await applySharedShopCap(cap);
+    setShopQuotaCap(shopName, cap);
     if (remaining < 0) tripAbort("pause", "额度不足，已自动暂停");
     await setProgress(jobId, {
       quotaRemaining: String(remaining),
-      quotaConcurrencyCap: String(sharedCap),
+      quotaConcurrencyCap: String(cap),
     });
   };
 
@@ -358,23 +386,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
     // body_html) are all in flight at once instead of queuing behind a low cap.
     // 64 keeps near-every chunk active for typical stores while the pool still
     // protects the API from overload.
-    const baseChunkConcurrency = Math.max(
-      1,
-      Number(process.env.TRANSLATE_CHUNK_CONCURRENCY) || 64,
-    );
-    const activeJobsForChunks = await countActiveTranslateJobs();
-    const CHUNK_CONCURRENCY = Math.max(
-      4,
-      Math.min(
-        baseChunkConcurrency,
-        shareCapAmongJobs(baseChunkConcurrency, activeJobsForChunks),
-      ),
-    );
-    if (activeJobsForChunks > 1) {
-      console.log(
-        `[translate] job=${jobId} chunkConcurrency=${CHUNK_CONCURRENCY} activeJobs=${activeJobsForChunks}`,
-      );
-    }
+    const CHUNK_CONCURRENCY = Math.max(1, Number(process.env.TRANSLATE_CHUNK_CONCURRENCY) || 64);
 
     await pAll(work, CHUNK_CONCURRENCY, async ({ module, chunkPath, chunkIdx, chunkTotal }) => {
       {
@@ -690,5 +702,8 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
     console.error(`[translate] failed job=${jobId}`, e);
   } finally {
     qps.stop();
+    await wakeNextTranslateForShop(shopName).catch((e) => {
+      console.warn(`[translate] wakeNext failed shop=${shopName}`, e);
+    });
   }
 }

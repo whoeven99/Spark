@@ -247,9 +247,35 @@ export async function countShopTranslatingJobs(shopName: string): Promise<number
       )
       .fetchAll();
     const n = resources[0];
-    return typeof n === "number" && n > 0 ? n : 1;
+    return typeof n === "number" && n > 0 ? n : 0;
   } catch {
-    return 1;
+    return 0;
+  }
+}
+
+/** Oldest TRANSLATE_QUEUED jobs for a shop (serial translate queue). */
+export async function findTranslateQueuedJobsForShop(
+  shopName: string,
+  limit = 1,
+): Promise<TranslationV4Job[]> {
+  try {
+    const { resources } = await getContainer()
+      .items.query<TranslationV4Job>(
+        {
+          query:
+            "SELECT * FROM c WHERE c.shopName = @shopName AND c.status = @status ORDER BY c.createdAt ASC OFFSET 0 LIMIT @limit",
+          parameters: [
+            { name: "@shopName", value: shopName },
+            { name: "@status", value: "TRANSLATE_QUEUED" },
+            { name: "@limit", value: limit },
+          ],
+        },
+        { partitionKey: shopName },
+      )
+      .fetchAll();
+    return resources;
+  } catch {
+    return [];
   }
 }
 

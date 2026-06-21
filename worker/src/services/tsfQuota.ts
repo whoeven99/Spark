@@ -48,12 +48,6 @@ export function quotaConcurrencyCap(remaining: number): number {
   return 1;
 }
 
-/** 同 shop 多任务并行时，把 LLM 并发上限均分，避免互相饿死（chunk 排队 10min+）。 */
-export function shareCapAmongJobs(baseCap: number, activeJobs: number): number {
-  const n = Math.max(1, activeJobs);
-  return Math.max(1, Math.floor(baseCap / n));
-}
-
 /** TSF 额度服务 BaseResponse<TokenQuotaVO>。 */
 type TokenQuotaVO = {
   shopName: string;
