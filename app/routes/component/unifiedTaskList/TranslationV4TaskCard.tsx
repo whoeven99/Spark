@@ -329,12 +329,14 @@ export function TranslationV4TaskCard({ job }: Props) {
   const mappedStatus = mapV4StatusToAIStatus(job.status);
   const shortId = job.id.slice(0, 8).toUpperCase();
   const isActive = !TERMINAL_V4_STATUSES.includes(job.status) && job.status !== "PAUSED";
-  const isTerminal = TERMINAL_V4_STATUSES.includes(job.status) || job.status === "PAUSED";
 
-  const showElapsed = job.status !== "PAUSED" && job.status !== "CANCELLED";
-  const elapsedLabel = showElapsed
-    ? formatV4TaskElapsed(job.createdAt, isTerminal ? job.updatedAt : null)
-    : null;
+  const freezeEnd =
+    job.status === "PAUSED" ||
+    job.status === "CANCELLED" ||
+    TERMINAL_V4_STATUSES.includes(job.status)
+      ? job.updatedAt
+      : null;
+  const elapsedLabel = formatV4TaskElapsed(job.createdAt, freezeEnd);
 
   const usedCredits = job.metrics.usedTokens > 0 ? tokensToCredits(job.metrics.usedTokens) : null;
 

@@ -35,19 +35,19 @@ export function formatV4JobTimeLine(
   status: TranslationV4Status,
 ): string {
   const created = formatV4TaskDate(job.createdAt);
-
-  if (status === "PAUSED" || status === "CANCELLED") {
-    return `创建于 ${created}`;
-  }
-
   const isTerminal = TERMINAL_V4_STATUSES.includes(status);
-  const elapsed = formatV4TaskElapsed(job.createdAt, isTerminal ? job.updatedAt : null);
+  const freezeEnd =
+    isTerminal || status === "PAUSED" || status === "CANCELLED" ? job.updatedAt : null;
+  const elapsed = formatV4TaskElapsed(job.createdAt, freezeEnd);
 
   if (status === "COMPLETED") {
     return `创建于 ${created} · 完成于 ${formatV4TaskDate(job.updatedAt)} · 耗时 ${elapsed}`;
   }
-  if (isTerminal) {
+  if (status === "CANCELLED" || (isTerminal && status !== "COMPLETED")) {
     return `创建于 ${created} · 耗时 ${elapsed}`;
+  }
+  if (status === "PAUSED") {
+    return `创建于 ${created} · 已运行 ${elapsed}`;
   }
   return `创建于 ${created} · 已运行 ${elapsed}`;
 }

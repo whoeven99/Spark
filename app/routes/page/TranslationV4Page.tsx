@@ -1546,16 +1546,19 @@ function formatStageDurationLabel(
   stageTimings: StageTimings | null | undefined,
   job: Pick<TranslationV4Job, "claimedAt" | "createdAt">,
   metrics: ProgressData["metrics"],
-  liveNowIso: string,
+  endIso: string,
+  errorStage: string | null,
 ): string | null {
-  if (status === "PAUSED" || status === "CANCELLED") return null;
   const timing = stageTimings?.[stage];
   if (timing?.endedAt) {
     return formatElapsedZh(timing.startedAt, timing.endedAt);
   }
-  if (isStageActiveForStatus(stage, status)) {
+  const pausedStage = errorStage?.trim().toUpperCase() as StageName | undefined;
+  const showFrozen =
+    (status === "PAUSED" || status === "CANCELLED") && pausedStage === stage;
+  if (showFrozen || isStageActiveForStatus(stage, status)) {
     const start = inferStageStartIso(stage, stageTimings, job, metrics);
-    if (start) return formatElapsedZh(start, liveNowIso);
+    if (start) return formatElapsedZh(start, endIso);
   }
   return null;
 }
@@ -1800,10 +1803,7 @@ function getSecondaryCopy(
     metrics.translateDone,
     metrics.initDone,
   );
-  const elapsedPart =
-    status === "PAUSED" || status === "CANCELLED"
-      ? null
-      : formatElapsedZh(job.claimedAt ?? job.createdAt, updatedAt);
+  const elapsedPart = formatElapsedZh(job.claimedAt ?? job.createdAt, updatedAt);
   const consumedCredits = metrics.usedTokens ?? 0;
 
   const parts = [
@@ -1875,8 +1875,10 @@ function JobCard({
   const updatedAt = progress?.updatedAt ?? job.updatedAt;
   const isLive = ACTIVE_STATUSES.includes(status);
   const liveNowIso = useLiveNowIso(isLive);
+  const endIso = isLive ? liveNowIso : updatedAt;
+  const errorStage = progress?.errorStage ?? job.errorStage;
   const stageDuration = (stage: StageName): string | null =>
-    formatStageDurationLabel(stage, status, stageTimings, job, metrics, liveNowIso);
+    formatStageDurationLabel(stage, status, stageTimings, job, metrics, endIso, errorStage);
   const taskStatus = mapV4StatusToTaskStatus(status);
   const progressTone = getProgressTone(status);
   const progressPercent = getJobProgressPercent(status, metrics);
