@@ -28,10 +28,10 @@ export function quotaEnforceEnabled(taskSource?: string | null): boolean {
   return process.env.QUOTA_ENFORCE?.trim().toLowerCase() !== "false";
 }
 
-/** 翻译系数：实际消耗 token × 此系数 = 扣减的额度量。默认 1.5。 */
+/** 翻译系数：实际消耗 token × 此系数 = 扣减的额度量。默认 1（与 API 返回 token 1:1）。 */
 export function quotaTokenMultiplier(): number {
   const v = Number(process.env.QUOTA_TOKEN_MULTIPLIER);
-  return Number.isFinite(v) && v > 0 ? v : 1.5;
+  return Number.isFinite(v) && v > 0 ? v : 1;
 }
 
 /**

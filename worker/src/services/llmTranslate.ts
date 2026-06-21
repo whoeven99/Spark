@@ -177,15 +177,15 @@ const TIMEOUT_RATE_HALF_LIFE_MS = Math.max(
   5_000,
   Number(process.env.TRANSLATE_TIMEOUT_RATE_HALF_LIFE_MS) || 30_000,
 );
-/** If no timeout for this long, allow timed concurrency recovery (+RECOVERY_RAMP_ADD). */
+/** If no timeout for this long, allow timed concurrency recovery. */
 const RECOVERY_NO_TIMEOUT_MS = Math.max(
-  3_000,
-  Number(process.env.TRANSLATE_RECOVERY_NO_TIMEOUT_MS) || 12_000,
+  2_000,
+  Number(process.env.TRANSLATE_RECOVERY_NO_TIMEOUT_MS) || 8_000,
 );
-/** Min interval between timed +N recovery steps. */
+/** Min interval between timed recovery ticks. */
 const RECOVERY_RAMP_INTERVAL_MS = Math.max(
-  5_000,
-  Number(process.env.TRANSLATE_RECOVERY_RAMP_INTERVAL_MS) || 15_000,
+  3_000,
+  Number(process.env.TRANSLATE_RECOVERY_RAMP_INTERVAL_MS) || 10_000,
 );
 /** Concurrency added on each timed recovery tick. */
 const RECOVERY_RAMP_ADD = Math.max(1, Number(process.env.TRANSLATE_RECOVERY_RAMP_ADD) || 4);
@@ -895,17 +895,19 @@ class LLMKeyPool {
     const gap = this._deepseekConcCeiling - this.sem.max;
     const isQuiet = this._timeoutRate.value === 0;
 
-    // Adaptive recovery step: bigger when we're far below ceiling with clean
-    // conditions; smaller when approaching the knee or latency is elevated.
+    // Adaptive recovery step — timeout rate is the only true safety signal.
+    // High latency without timeouts means "slow but healthy": safe to push more.
     let add: number;
-    if (isQuiet && lat < 3000 && gap > 60) {
-      add = Math.max(RECOVERY_RAMP_ADD, Math.ceil(gap / 3));   // fast catch-up: recover ~1/3 of gap
-    } else if (isQuiet && lat < 6000) {
-      add = RECOVERY_RAMP_ADD * 2;                              // healthy: +8 per tick
+    if (isQuiet && lat < 3000 && gap > 40) {
+      add = Math.max(RECOVERY_RAMP_ADD * 2, Math.ceil(gap / 2));   // fast catch-up
+    } else if (isQuiet && lat < 8000) {
+      add = RECOVERY_RAMP_ADD * 3;                                  // aggressive: +12
+    } else if (isQuiet) {
+      add = RECOVERY_RAMP_ADD * 2;                                  // quiet but slow: +8
     } else if (lat < 10000) {
-      add = RECOVERY_RAMP_ADD;                                   // normal: +4 per tick
+      add = RECOVERY_RAMP_ADD;                                      // normal: +4
     } else {
-      add = Math.max(1, Math.floor(RECOVERY_RAMP_ADD / 2));     // cautious: +2 per tick
+      add = Math.max(1, Math.floor(RECOVERY_RAMP_ADD / 2));        // cautious: +2
     }
 
     const newMax = Math.min(this._deepseekConcCeiling, this.sem.max + add);
