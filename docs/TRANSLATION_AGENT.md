@@ -109,10 +109,10 @@ CREATED
 
 | 模块 | Shopify query |
 |------|----------------|
-| PRODUCT | （无，拉全部） |
-| COLLECTION | `published_status:published` |
-| PAGE | `published_status:published` |
-| ARTICLE | `published_status:published` |
+| PRODUCT | （无，拉全部含草稿） |
+| COLLECTION | （无，拉全部含草稿） |
+| PAGE | （无，拉全部含草稿） |
+| ARTICLE | （无，拉全部含草稿） |
 
 **创建任务互斥**：`POST /api/translate/v4/tasks` 在写入 Cosmos 前检查同 `shopName + source + target` 是否已有 `ACTIVE_V4_STATUSES` 中的任务；有则返回 **409**。`PAUSED` / `COMPLETED` / `FAILED` / `CANCELLED` 允许新建。
 
@@ -231,7 +231,7 @@ CREATED
 1. claim job
 2. 读 `{blobPrefix}/writeback/progress.json`（已写回的 resourceId 集合，断点续传用）
 3. 对每个 translate chunk 中的每个 resource（未在 writtenSet 中）：
-   - 过滤：`translatedValue.trim() && translatedValue !== originalValue` 的字段
+   - 过滤：`translatedValue.trim()` 非空的字段（与原文相同也写回，避免目标语言栏空白）
    - 调 Shopify `translationsRegister` mutation（**同一 `resourceId` 一次传多条 `TranslationInput`**；字段过多时按 `WRITEBACK_TRANSLATIONS_BATCH` 默认 100、上限 250 分批）
    - 成功：`userErrors` 为空且 mutation 返回的 `translations` 覆盖全部 key
    - 成功：加入 writtenSet，`writebackDone++`
@@ -257,7 +257,7 @@ CREATED
 2. 汇总待校验资源：`writeback/progress.json` 中已写回的资源（从 translate blob 取期望译文）+ `writeback/failed.json` 中写回失败的资源
 3. 对每个资源 **`translatableResource` 读回**目标 locale 的 `translations`，与期望逐 key 比对（trim 后相等；`outdated=true` 视为未生效）
 4. 不一致 → 仅对 mismatch 的 key **重试 `registerTranslations`** → 再次读回比对
-5. 统计 `verifyDone` / `verifyFailed`，`status=COMPLETED`（仍有失败也结束，失败数见 metrics）
+5. 统计 `verifyDone` / `verifyFailed`；若 `writebackDone=0` 且全部写回失败 → `FAILED`（`errorStage=WRITEBACK`），否则 `COMPLETED`（部分失败见 metrics）
 
 ---
 
@@ -391,7 +391,7 @@ cd worker && npx tsx src/scripts/exportTranslationReport.ts <shopName> <taskId> 
 
 输出：每模块的字段 key 清单（classify、条数、平均长度、fallback/unchanged/empty 计数）+ 质量红旗（fallback、疑似漏翻 unchanged、空译文、长度比异常、HTML 标签数不一致、占位符丢失）+ 每类抽样。分析逻辑在 `worker/src/services/translationReport.ts`（纯函数，已覆盖单测）。
 
-**线上质量测试流程**：设 `WORKER_STAGES=init,translate` 跑任务（不写回店铺）→ 跑本脚本读 blob → 据报告优化 prompt/过滤/术语表。
+**线上质量测试流程**：设 `WORKER_STAGES=init,translate` 跑任务（不写回店铺）→ `npm run translation:check -- <jobId> --wait` 或跑 `exportTranslationReport` → 据报告优化 prompt/过滤/术语表。完整迭代见 [`docs/translation-playbook.md`](./translation-playbook.md)。
 
 ---
 

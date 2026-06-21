@@ -6,6 +6,7 @@ export type TranslatableContentInput = {
 
 export type ExistingTranslation = {
   key: string;
+  value?: string | null;
   outdated?: boolean | null;
 };
 

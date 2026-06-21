@@ -76,6 +76,10 @@ export default function App() {
             <Route path="pixel-logs" element={<RequireOwner><PixelLogs /></RequireOwner>} />
             <Route path="app-logs" element={<AppLogs />} />
             <Route path="support" element={<Support />} />
+            <Route
+              path="translate-v4-support"
+              element={<Support source="translate-v4" title="翻译v4 客服" />}
+            />
             <Route path="todo" element={<Todo />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

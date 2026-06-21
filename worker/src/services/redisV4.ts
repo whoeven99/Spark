@@ -151,3 +151,32 @@ export async function getProgress(
     return {};
   }
 }
+
+/**
+ * 汇总页统计缓存键。TSF 汇总页直接读此 hash（field=module，value=JSON）。
+ * 由 worker 任务完成时写入，TSF 缺失时现算并回写。
+ */
+export function itemsCountKey(shopName: string, locale: string): string {
+  return `tsf:items_count:${shopName}:${locale}`;
+}
+
+/** 写入某 module 的统计（total/translated），随 hash 续期 TTL。 */
+export async function setItemsCount(
+  shopName: string,
+  locale: string,
+  module: string,
+  value: { total: number; translated: number },
+): Promise<void> {
+  try {
+    const redis = getRedis();
+    const key = itemsCountKey(shopName, locale);
+    await redis.hset(
+      key,
+      module,
+      JSON.stringify({ ...value, updatedAt: new Date().toISOString() }),
+    );
+    await redis.expire(key, PROGRESS_TTL);
+  } catch {
+    // best-effort
+  }
+}

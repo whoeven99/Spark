@@ -27,7 +27,6 @@ function job(
     limitPerType: 20,
     isCover: false,
     isHandle: false,
-    testMode: false,
     status: "COMPLETED",
     claimedBy: null,
     claimedAt: null,

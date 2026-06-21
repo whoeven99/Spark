@@ -1,13 +1,16 @@
 import { hostname } from "os";
 import { claimJob, updateJob, heartbeat, findPendingJobs, getJob, withStageTiming, prefersStoredToken } from "../services/cosmosV4.js";
-import { popHint, setProgress } from "../services/redisV4.js";
-import { blobRead, blobListPaths } from "../services/blobV4.js";
+import { popHint, setProgress, setItemsCount } from "../services/redisV4.js";
+import { computeModuleCount } from "../services/itemsCount.js";
+import { blobRead } from "../services/blobV4.js";
+import { loadTranslatedItemsForJob } from "../services/translateBlobIO.js";
 import {
   registerTranslations,
   fetchResourceTranslations,
   diffResourceTranslations,
   type TranslationInput,
 } from "../services/shopifyFetch.js";
+import { filterWritebackFields } from "../services/writebackFields.js";
 import { QpsLogger } from "../services/qpsLogger.js";
 import type { TranslationV4Job } from "../services/cosmosV4.js";
 
@@ -60,9 +63,7 @@ function toTranslationInputs(
   resource: TranslatedItem,
   targetLocale: string,
 ): TranslationInput[] {
-  return resource.translations
-    .filter((t) => t.translatedValue?.trim() && t.translatedValue !== t.originalValue)
-    .map((t) => ({
+  return filterWritebackFields(resource.translations).map((t) => ({
       locale: targetLocale,
       key: t.key,
       value: t.translatedValue,
@@ -85,20 +86,12 @@ async function collectVerifyTargets(job: TranslationV4Job): Promise<VerifyTarget
     }
   }
 
-  for (const module of job.modules) {
-    const translatePaths = await blobListPaths(`${blobPrefix}/translate/${module}/`);
-    const chunkPaths = translatePaths.filter((p) => p.endsWith(".json"));
-    for (const chunkPath of chunkPaths) {
-      const chunk = await blobRead<TranslatedItem[]>(chunkPath);
-      if (!chunk) continue;
-      for (const resource of chunk) {
-        if (byId.has(resource.resourceId)) continue;
-        if (!writtenIds.has(resource.resourceId)) continue;
-        const translations = toTranslationInputs(resource, target);
-        if (translations.length > 0) {
-          byId.set(resource.resourceId, translations);
-        }
-      }
+  for (const { resource } of await loadTranslatedItemsForJob(blobPrefix, job.modules)) {
+    if (byId.has(resource.resourceId)) continue;
+    if (!writtenIds.has(resource.resourceId)) continue;
+    const translations = toTranslationInputs(resource, target);
+    if (translations.length > 0) {
+      byId.set(resource.resourceId, translations);
     }
   }
 
@@ -175,8 +168,20 @@ async function processVerifyJob(job: TranslationV4Job): Promise<void> {
     }
 
     const latestJob = await getJob(shopName, jobId);
+    const mergedMetrics = {
+      ...(latestJob?.metrics ?? job.metrics),
+      verifyTotal,
+      verifyDone,
+      verifyFailed,
+    };
+    const wroteAnything =
+      (mergedMetrics.writebackDone ?? 0) > 0 || verifyDone > 0;
     await updateJob(shopName, jobId, {
-      status: "COMPLETED",
+      status: wroteAnything ? "COMPLETED" : "FAILED",
+      errorStage: wroteAnything ? undefined : "WRITEBACK",
+      errorMessage: wroteAnything
+        ? undefined
+        : "写回未成功：全部资源均未写入 Shopify（请查看 worker 日志或写回详情）",
       claimedBy: null,
       stageTimings: withStageTiming(
         latestJob?.stageTimings ?? job.stageTimings,
@@ -184,13 +189,28 @@ async function processVerifyJob(job: TranslationV4Job): Promise<void> {
         stageStartedAt,
         new Date().toISOString(),
       ),
-      metrics: {
-        ...(latestJob?.metrics ?? job.metrics),
-        verifyTotal,
-        verifyDone,
-        verifyFailed,
-      },
+      metrics: mergedMetrics,
     });
+
+    // 任务完成后刷新汇总页统计缓存（TsFrontend 专用，TSF 汇总页直接读）。非致命。
+    if (prefersStoredToken(job) && job.shopifyAccessToken) {
+      for (const module of job.modules) {
+        try {
+          const count = await computeModuleCount(
+            shopName,
+            job.shopifyAccessToken,
+            module,
+            job.target,
+          );
+          await setItemsCount(shopName, job.target, module, count);
+          console.log(
+            `[verify] items_count job=${jobId} ${module} ${count.translated}/${count.total} stored`,
+          );
+        } catch (e) {
+          console.error(`[verify] items_count job=${jobId} ${module} failed:`, e);
+        }
+      }
+    }
 
     console.log(`[verify] done job=${jobId} verified=${verifyDone} failed=${verifyFailed}`);
   } catch (e) {

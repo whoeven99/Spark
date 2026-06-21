@@ -13,9 +13,15 @@ import {
 } from "./constants.js";
 import { matchesRejectRule } from "./rejectRules.js";
 
+const HTML_TAG_RE = /<\/?[a-z][^>]*>/i;
+
+function isHtmlContent(value: string): boolean {
+  return HTML_TAG_RE.test(value);
+}
+
 /**
  * General rules (JudgeTranslateUtils.translationRuleJudgment).
- * PHASE2: HTML early-return and key=value+JSON pass are deferred.
+ * HTML/Rich-text bodies skip scalar heuristics (px/url/hash) that target theme tokens.
  */
 export function translationRuleJudgment(key: string, value: string): boolean {
   if (value == null || value.trim() === "") {
@@ -32,7 +38,9 @@ export function translationRuleJudgment(key: string, value: string): boolean {
     return false;
   }
 
-  // PHASE2: isHtml(value) → return true
+  if (isHtmlContent(value)) {
+    return true;
+  }
 
   if (/\d+px\b/.test(value)) {
     return false;

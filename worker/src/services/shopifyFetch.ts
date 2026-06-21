@@ -32,12 +32,12 @@ export const MODULE_TO_SHOPIFY_TYPE: Record<string, string> = {
 /** PRODUCT/ARTICLE/PAGE/COLLECTION 先拉 ID 再走 translatableResourcesByIds */
 export const ID_BASED_MODULES = ["PRODUCT", "ARTICLE", "PAGE", "COLLECTION"] as const;
 
-/** Init 阶段 Shopify Admin query 筛选（硬编码，对齐 Spring 默认语义） */
+/** Init 阶段 Shopify Admin query 筛选（空 = 含未发布，与 PRODUCT 一致） */
 export const ID_BASED_MODULE_QUERY: Record<string, string> = {
   PRODUCT: "",
-  COLLECTION: "published_status:published",
-  PAGE: "published_status:published",
-  ARTICLE: "published_status:published",
+  COLLECTION: "",
+  PAGE: "",
+  ARTICLE: "",
 };
 
 export type TranslatableField = {
@@ -63,7 +63,7 @@ export type FetchTranslatableOptions = {
 
 type TranslatableNode = {
   resourceId: string;
-  translations: Array<{ key: string; outdated?: boolean | null }>;
+  translations: Array<{ key: string; value?: string | null; outdated?: boolean | null }>;
   translatableContent: Array<{
     key: string;
     value: string;
@@ -110,6 +110,7 @@ query GetTranslatableResources(
         resourceId
         translations(locale: $locale) {
           key
+          value
           outdated
         }
         translatableContent {
@@ -135,6 +136,7 @@ query GetTranslatableResourcesByIds($resourceIds: [ID!]!, $first: Int, $after: S
       resourceId
       translations(locale: $locale) {
         key
+        value
         outdated
       }
       translatableContent {

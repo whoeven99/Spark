@@ -11,7 +11,7 @@
 
 import { CosmosClient, type Container } from "@azure/cosmos";
 import { getShopifyCallStats, resetShopifyCallStats } from "./shopifyFetch.js";
-import { getLlmPoolStats } from "./llmTranslate.js";
+import { getLlmPoolStats, getLlmErrorBreakdown, type LlmErrorTally } from "./llmTranslate.js";
 
 export type QpsStage = "INIT" | "TRANSLATE" | "WRITEBACK" | "VERIFY";
 
@@ -37,7 +37,9 @@ export type QpsSnapshot = {
     avgLatencyMs: number;
     throttleCount: number;
     concurrency: number;
-    errors: number;
+    errors: number;                  // failed attempts this window (any kind)
+    errorsByKind: LlmErrorTally;     // same total, split by cause
+    terminalFallbacks: number;       // fields that exhausted retries → original kept
   } | null;
 };
 
@@ -96,6 +98,8 @@ export class QpsLogger {
   private _llmBaseTokens = 0;
   private _llmBaseThrottle = 0;
   private _llmBaseErrors = 0;
+  private _llmBaseErrKind: LlmErrorTally = { timeout: 0, parse: 0, http: 0, api: 0, other: 0 };
+  private _llmBaseTerminal = 0;
 
   constructor(jobId: string, shopName: string, stage: QpsStage = "INIT") {
     this.jobId = jobId;
@@ -174,6 +178,9 @@ export class QpsLogger {
     this._llmBaseTokens   = stats.reduce((s, k) => s + k.tokens, 0);
     this._llmBaseThrottle = stats.reduce((s, k) => s + k.throttleCount, 0);
     this._llmBaseErrors   = stats.reduce((s, k) => s + k.errors, 0);
+    const brk = getLlmErrorBreakdown();
+    this._llmBaseErrKind  = { ...brk.byKind };
+    this._llmBaseTerminal = brk.terminalFallbacks;
   }
 
   private _takeLlmDelta(durationSec: number): QpsSnapshot["llm"] {
@@ -195,10 +202,22 @@ export class QpsLogger {
     const dThrottle = Math.max(0, totalThrottle - this._llmBaseThrottle);
     const dErrors   = Math.max(0, totalErrors   - this._llmBaseErrors);
 
+    const brk = getLlmErrorBreakdown();
+    const dErrKind: LlmErrorTally = {
+      timeout: Math.max(0, brk.byKind.timeout - this._llmBaseErrKind.timeout),
+      parse:   Math.max(0, brk.byKind.parse   - this._llmBaseErrKind.parse),
+      http:    Math.max(0, brk.byKind.http    - this._llmBaseErrKind.http),
+      api:     Math.max(0, brk.byKind.api     - this._llmBaseErrKind.api),
+      other:   Math.max(0, brk.byKind.other   - this._llmBaseErrKind.other),
+    };
+    const dTerminal = Math.max(0, brk.terminalFallbacks - this._llmBaseTerminal);
+
     this._llmBaseCalls    = totalCalls;
     this._llmBaseTokens   = totalTokens;
     this._llmBaseThrottle = totalThrottle;
     this._llmBaseErrors   = totalErrors;
+    this._llmBaseErrKind  = { ...brk.byKind };
+    this._llmBaseTerminal = brk.terminalFallbacks;
 
     return {
       calls:         dCalls,
@@ -208,6 +227,8 @@ export class QpsLogger {
       throttleCount: dThrottle,
       concurrency,
       errors:        dErrors,
+      errorsByKind:  dErrKind,
+      terminalFallbacks: dTerminal,
     };
   }
 }

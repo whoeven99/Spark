@@ -8,6 +8,37 @@ import {
 /** 翻译进度里「字段/HTML 片段」级计数的展示名 */
 export const TRANSLATION_V4_UNIT_LABEL = "子节点";
 
+type TranslateProgressMetrics = Pick<
+  TranslationV4Metrics,
+  "translateDone" | "translateTotal" | "translateUnitDone" | "translateUnitTotal"
+>;
+
+/** 翻译阶段进度条/百分比：有子节点总数时按节点，否则回退到资源数。 */
+export function resolveTranslateProgressCounts(metrics: TranslateProgressMetrics): {
+  done: number;
+  total: number;
+  useUnits: boolean;
+} {
+  if (metrics.translateUnitTotal > 0) {
+    return {
+      done: metrics.translateUnitDone,
+      total: metrics.translateUnitTotal,
+      useUnits: true,
+    };
+  }
+  return {
+    done: metrics.translateDone,
+    total: metrics.translateTotal,
+    useUnits: false,
+  };
+}
+
+export function translateProgressPercent(metrics: TranslateProgressMetrics): number | null {
+  const { done, total } = resolveTranslateProgressCounts(metrics);
+  if (total <= 0) return null;
+  return Math.min(100, Math.round((done / total) * 100));
+}
+
 export function formatV4TaskDate(iso: string): string {
   return new Intl.DateTimeFormat("zh-CN", {
     year: "numeric",
@@ -35,14 +66,19 @@ export function formatV4JobTimeLine(
   status: TranslationV4Status,
 ): string {
   const created = formatV4TaskDate(job.createdAt);
-  const isTerminal = TERMINAL_V4_STATUSES.includes(status) || status === "PAUSED";
-  const elapsed = formatV4TaskElapsed(job.createdAt, isTerminal ? job.updatedAt : null);
+  const isTerminal = TERMINAL_V4_STATUSES.includes(status);
+  const freezeEnd =
+    isTerminal || status === "PAUSED" || status === "CANCELLED" ? job.updatedAt : null;
+  const elapsed = formatV4TaskElapsed(job.createdAt, freezeEnd);
 
   if (status === "COMPLETED") {
     return `创建于 ${created} · 完成于 ${formatV4TaskDate(job.updatedAt)} · 耗时 ${elapsed}`;
   }
-  if (isTerminal) {
+  if (status === "CANCELLED" || (isTerminal && status !== "COMPLETED")) {
     return `创建于 ${created} · 耗时 ${elapsed}`;
+  }
+  if (status === "PAUSED") {
+    return `创建于 ${created} · 已运行 ${elapsed}`;
   }
   return `创建于 ${created} · 已运行 ${elapsed}`;
 }

@@ -30,7 +30,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     limitPerType?: number;
     isCover?: boolean;
     isHandle?: boolean;
-    testMode?: boolean;
     aiModel?: string;
   };
 
@@ -72,7 +71,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     limitPerType,
     isCover: body.isCover ?? false,
     isHandle: body.isHandle ?? false,
-    testMode: body.testMode ?? false,
     status: "INIT_QUEUED",
     blobPrefix: `tasks/v4/${shopName}/${jobId}`,
     createdBy: shopName,
@@ -85,6 +83,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // non-fatal
   }
 
-  console.log(`[v4] job created id=${jobId} shop=${shopName} ${source}→${target} modules=${modules.join(",")} testMode=${job.testMode}`);
-  return data({ ok: true, jobId: job.id, testMode: job.testMode });
+  console.log(`[v4] job created id=${jobId} shop=${shopName} ${source}→${target} modules=${modules.join(",")}`);
+  return data({ ok: true, jobId: job.id });
 };

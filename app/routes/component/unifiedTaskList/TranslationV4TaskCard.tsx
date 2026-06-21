@@ -122,7 +122,21 @@ function resolveStageStates(
   metrics: TranslationV4Metrics,
 ): [StageState, StageState, StageState, StageState] {
   // ── Active flows ─────────────────────────────────────────────────────────
-  if (status === "COMPLETED") return ["completed", "completed", "completed", "completed"];
+  if (status === "COMPLETED" || status === "FAILED") {
+    const init = "completed" as const;
+    const translate = "completed" as const;
+    const writebackStage: StageState =
+      metrics.writebackTotal > 0 && metrics.writebackDone === 0 && metrics.writebackFailed > 0
+        ? "failed"
+        : "completed";
+    const verifyStage: StageState =
+      metrics.verifyTotal > 0 && metrics.verifyDone === 0 && metrics.verifyFailed > 0
+        ? "failed"
+        : writebackStage === "failed"
+          ? "failed"
+          : "completed";
+    return [init, translate, writebackStage, verifyStage];
+  }
   if (status === "CREATED") return ["pending", "pending", "pending", "pending"];
   if (status === "INIT_QUEUED" || status === "INITIALIZING") return ["active", "pending", "pending", "pending"];
   if (status === "INIT_DONE") return ["completed", "pending", "pending", "pending"];
@@ -315,12 +329,14 @@ export function TranslationV4TaskCard({ job }: Props) {
   const mappedStatus = mapV4StatusToAIStatus(job.status);
   const shortId = job.id.slice(0, 8).toUpperCase();
   const isActive = !TERMINAL_V4_STATUSES.includes(job.status) && job.status !== "PAUSED";
-  const isTerminal = TERMINAL_V4_STATUSES.includes(job.status) || job.status === "PAUSED";
 
-  const elapsedLabel = formatV4TaskElapsed(
-    job.createdAt,
-    isTerminal ? job.updatedAt : null,
-  );
+  const freezeEnd =
+    job.status === "PAUSED" ||
+    job.status === "CANCELLED" ||
+    TERMINAL_V4_STATUSES.includes(job.status)
+      ? job.updatedAt
+      : null;
+  const elapsedLabel = formatV4TaskElapsed(job.createdAt, freezeEnd);
 
   const usedCredits = job.metrics.usedTokens > 0 ? tokensToCredits(job.metrics.usedTokens) : null;
 
@@ -438,12 +454,6 @@ export function TranslationV4TaskCard({ job }: Props) {
               <>
                 <span style={{ color: pageColorTokens.textFootnote }}>·</span>
                 <span>{job.aiModel}</span>
-              </>
-            )}
-            {job.testMode && (
-              <>
-                <span style={{ color: pageColorTokens.textFootnote }}>·</span>
-                <span style={{ color: "#d97706" }}>测试模式</span>
               </>
             )}
           </div>

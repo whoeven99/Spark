@@ -55,15 +55,34 @@ describe("shouldIncludeFieldV2", () => {
     ).toBe(false);
   });
 
-  it("excludes when outdated is not true and isCover false", () => {
-    expect(shouldIncludeFieldV2(base, [{ key: "title", outdated: false }], ctx)).toBe(false);
-    expect(shouldIncludeFieldV2(base, [{ key: "title", outdated: null }], ctx)).toBe(false);
+  it("excludes when non-empty translation exists and outdated is not true", () => {
+    expect(
+      shouldIncludeFieldV2(base, [{ key: "title", outdated: false, value: "Istniejący" }], ctx),
+    ).toBe(false);
+    expect(shouldIncludeFieldV2(base, [{ key: "title", outdated: null, value: "X" }], ctx)).toBe(false);
     expect(shouldIncludeFieldV2(base, [{ key: "title", outdated: true }], ctx)).toBe(true);
+  });
+
+  it("includes when translation key exists but value is empty", () => {
+    expect(shouldIncludeFieldV2(base, [{ key: "title", outdated: false, value: "" }], ctx)).toBe(true);
+    expect(shouldIncludeFieldV2(base, [{ key: "title", outdated: false }], ctx)).toBe(true);
   });
 
   it("includes URI handle only when isHandle", () => {
     const handle = { key: "handle", value: "my-product", type: "URI" };
     expect(shouldIncludeFieldV2(handle, [], { ...ctx, isHandle: false })).toBe(false);
     expect(shouldIncludeFieldV2(handle, [], { ...ctx, isHandle: true })).toBe(true);
+  });
+
+  it("includes HTML body_html with inline px styles", () => {
+    const body = {
+      key: "body_html",
+      value: '<p style="font-size:16px">Long article body with CSS.</p>',
+      type: "HTML",
+    };
+    expect(shouldIncludeFieldV2(body, [{ key: "title", outdated: false, value: "PL title" }], {
+      ...ctx,
+      module: "ARTICLE",
+    })).toBe(true);
   });
 });

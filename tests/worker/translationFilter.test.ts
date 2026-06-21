@@ -13,13 +13,28 @@ describe("shouldIncludeField", () => {
     ).toBe(false);
   });
 
-  it("isCover=false skips field when translation exists and outdated=false", () => {
+  it("isCover=false skips field when non-empty translation exists and outdated=false", () => {
+    expect(
+      shouldIncludeField(baseField, [{ key: "title", outdated: false, value: "Cześć" }], {
+        isCover: false,
+        isHandle: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("isCover=false includes field when translation key exists but value is empty", () => {
+    expect(
+      shouldIncludeField(baseField, [{ key: "title", outdated: false, value: "" }], {
+        isCover: false,
+        isHandle: false,
+      }),
+    ).toBe(true);
     expect(
       shouldIncludeField(baseField, [{ key: "title", outdated: false }], {
         isCover: false,
         isHandle: false,
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("isCover=false includes field when translation outdated=true", () => {
@@ -33,7 +48,7 @@ describe("shouldIncludeField", () => {
 
   it("isCover=false excludes field when translation outdated is null (aligns V2 !outdated)", () => {
     expect(
-      shouldIncludeField(baseField, [{ key: "title", outdated: null }], {
+      shouldIncludeField(baseField, [{ key: "title", outdated: null, value: "X" }], {
         isCover: false,
         isHandle: false,
       }),

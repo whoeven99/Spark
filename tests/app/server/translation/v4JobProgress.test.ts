@@ -22,7 +22,6 @@ function baseJob(overrides: Partial<TranslationV4Job> = {}): TranslationV4Job {
     limitPerType: 20,
     isCover: false,
     isHandle: false,
-    testMode: false,
     status: "TRANSLATING",
     claimedBy: "worker-1",
     claimedAt: null,

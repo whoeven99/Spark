@@ -74,7 +74,6 @@ export type TranslationV4Job = {
   limitPerType: number;
   isCover: boolean;
   isHandle: boolean;
-  testMode: boolean;
   /** 任务来源标识（如 "Ciwi-Translator-Task"）。旧任务可能缺省。 */
   taskSource?: string | null;
   status: TranslationV4Status;
@@ -87,6 +86,11 @@ export type TranslationV4Job = {
   stageTimings?: StageTimings | null;
   errorMessage: string | null;
   errorStage: string | null;
+  /**
+   * 翻译中途被暂停/取消时：先把已翻译的写回 Shopify，再据此决定写回完成后的终态
+   * （"pause"→PAUSED 可续译，"cancel"→CANCELLED）。普通写回为 null/缺省。
+   */
+  pauseAfterWriteback?: "pause" | "cancel" | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -193,6 +197,7 @@ export async function updateJob(
       | "aiProvider"
       | "engineUsage"
       | "stageTimings"
+      | "pauseAfterWriteback"
     >
   >,
 ): Promise<void> {
@@ -225,6 +230,55 @@ export async function updateJob(
   }
 }
 
+/** Count jobs currently in TRANSLATE for a shop (used to fair-share LLM concurrency). */
+export async function countShopTranslatingJobs(shopName: string): Promise<number> {
+  try {
+    const { resources } = await getContainer()
+      .items.query<number>(
+        {
+          query:
+            "SELECT VALUE COUNT(1) FROM c WHERE c.shopName = @shopName AND c.status = @status",
+          parameters: [
+            { name: "@shopName", value: shopName },
+            { name: "@status", value: "TRANSLATING" },
+          ],
+        },
+        { partitionKey: shopName },
+      )
+      .fetchAll();
+    const n = resources[0];
+    return typeof n === "number" && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Oldest TRANSLATE_QUEUED jobs for a shop (serial translate queue). */
+export async function findTranslateQueuedJobsForShop(
+  shopName: string,
+  limit = 1,
+): Promise<TranslationV4Job[]> {
+  try {
+    const { resources } = await getContainer()
+      .items.query<TranslationV4Job>(
+        {
+          query:
+            "SELECT * FROM c WHERE c.shopName = @shopName AND c.status = @status ORDER BY c.createdAt ASC OFFSET 0 LIMIT @limit",
+          parameters: [
+            { name: "@shopName", value: shopName },
+            { name: "@status", value: "TRANSLATE_QUEUED" },
+            { name: "@limit", value: limit },
+          ],
+        },
+        { partitionKey: shopName },
+      )
+      .fetchAll();
+    return resources;
+  } catch {
+    return [];
+  }
+}
+
 /** Heartbeat: update lastHeartbeat timestamp to signal the job is still alive. */
 export async function heartbeat(shopName: string, jobId: string): Promise<void> {
   await updateJob(shopName, jobId, { lastHeartbeat: new Date().toISOString() });
@@ -254,7 +308,7 @@ export async function findPendingJobs(
 
 /** Find jobs stuck in processing states past the stale threshold and reset them. */
 export async function resetStaleJobs(
-  staleMinutes = Number(process.env.STALE_TIMEOUT_MINUTES) || 30,
+  staleMinutes = Number(process.env.STALE_TIMEOUT_MINUTES) || 10,
 ): Promise<void> {
   const threshold = new Date(Date.now() - staleMinutes * 60 * 1000).toISOString();
   const staleMap: Array<[TranslationV4Status, TranslationV4Status]> = [

@@ -63,6 +63,7 @@ class AdaptiveSemaphore {
 class EWMA {
   constructor(private _v: number, private readonly _a = 0.2) {}
   update(sample: number): void { this._v = this._a * sample + (1 - this._a) * this._v; }
+  setValue(v: number): void { this._v = v; }
   get value(): number { return this._v; }
 }
 
@@ -148,6 +149,47 @@ function parseRateLimitResetMs(raw: number | undefined, now: number): number | u
  */
 const MAX_POOL_CONCURRENCY = Math.max(1, Number(process.env.LLM_MAX_CONCURRENCY) || 512);
 
+// ── Congestion-guard thresholds (timeout-rate driven backoff) ──────────────────
+// DeepSeek 200s carry no quota headers and never 429 here, so the pool needs its
+// own pressure signal. The right signal is the TIMEOUT RATE — requests dying
+// before they finish — NOT absolute latency: big HTML/JSON batches legitimately
+// take 20–30s per request, so an absolute-latency brake just serialised the job
+// at the floor while latency stayed high anyway. We back off (same multiplicative
+// cut as a 429) when timeouts climb. High avg latency under load is expected (queueing
+// at the provider) — use it only to stop ramping, never to shed concurrency.
+/** Recent timeout rate (EWMA, 0..1) above this → shed concurrency. Primary brake. */
+const LLM_TIMEOUT_RATE_HIGH = Math.min(1, Math.max(0.01, Number(process.env.TRANSLATE_LLM_TIMEOUT_RATE_HIGH) || 0.25));
+/** Avg latency above this → hold concurrency steady (no ramp). Does NOT trigger backoff. */
+const RAMP_LATENCY_INHIBIT_MS = Math.max(
+  10_000,
+  Number(process.env.TRANSLATE_RAMP_LATENCY_INHIBIT_MS) ||
+    Number(process.env.TRANSLATE_LLM_LATENCY_HIGH_MS) ||
+    15_000,
+);
+/** Min gap between successive soft backoffs (ms) — let the cut take effect first. */
+const SOFT_BACKOFF_MIN_INTERVAL_MS = Math.max(500, Number(process.env.TRANSLATE_SOFT_BACKOFF_MIN_INTERVAL_MS) || 3_000);
+/** Multiplicative factor applied on each backoff (soft latency/timeout or 429). */
+const BACKOFF_FACTOR = 0.7;
+/** Soft back-off floor — stay above serial crawl (was 4, too easy to stall). */
+const SOFT_BACKOFF_FLOOR = Math.max(1, Number(process.env.TRANSLATE_SOFT_BACKOFF_FLOOR) || 16);
+/** Half-life for timeout-rate decay when no new timeouts (wall clock, not success count). */
+const TIMEOUT_RATE_HALF_LIFE_MS = Math.max(
+  5_000,
+  Number(process.env.TRANSLATE_TIMEOUT_RATE_HALF_LIFE_MS) || 30_000,
+);
+/** If no timeout for this long, allow timed concurrency recovery. */
+const RECOVERY_NO_TIMEOUT_MS = Math.max(
+  2_000,
+  Number(process.env.TRANSLATE_RECOVERY_NO_TIMEOUT_MS) || 8_000,
+);
+/** Min interval between timed recovery ticks. */
+const RECOVERY_RAMP_INTERVAL_MS = Math.max(
+  3_000,
+  Number(process.env.TRANSLATE_RECOVERY_RAMP_INTERVAL_MS) || 10_000,
+);
+/** Concurrency added on each timed recovery tick. */
+const RECOVERY_RAMP_ADD = Math.max(1, Number(process.env.TRANSLATE_RECOVERY_RAMP_ADD) || 4);
+
 // ── DeepSeek concurrency (official docs: account-level in-flight connections) ──
 // https://api-docs.deepseek.com/zh-cn/quick_start/rate_limit
 // deepseek-v4-pro: 500, deepseek-v4-flash: 2500; API keys on the same account share quota.
@@ -179,22 +221,24 @@ export function resolveDeepSeekPoolConcurrency(model: string): {
   const accountLimit = resolveDeepSeekAccountConcurrencyLimit(model);
   const util = Math.min(
     1,
-    Math.max(0.1, Number(process.env.DEEPSEEK_CONCURRENCY_UTIL) || 0.9),
+    Math.max(0.1, Number(process.env.DEEPSEEK_CONCURRENCY_UTIL) || 0.45),
   );
   const ceiling = Math.min(
     MAX_POOL_CONCURRENCY,
     Math.max(1, Math.floor(accountLimit * util)),
   );
   const initialOverride = Number(process.env.DEEPSEEK_INITIAL_CONCURRENCY);
-  // Start aggressively: the account in-flight limit is large (500 pro / 2500
-  // flash) and the per-request latency is high (~40s), so a timid initial of a
-  // few dozen leaves most of the pipeline serialised while the +1-per-2-calls
-  // ramp slowly catches up. Begin near 40% of the safe ceiling (floor 128) —
-  // still well under the account limit, and on jobs with few large batches it
-  // means we parallelise from the first wave instead of never ramping at all.
+  // Start conservatively and let the latency-aware ramp find the throughput knee.
+  // The account in-flight limit is large (500 pro / 2500 flash), but a single
+  // slow endpoint saturates long before that: opening at ~40% of the ceiling
+  // (≈205 for flash) drove per-request latency to 40s+ and a timeout storm.
+  // Begin near 6% of the safe ceiling (floor 48) — high enough to parallelise
+  // the first wave, low enough that the congestion guard (high latency / timeout
+// rate → shed concurrency) can keep us off the cliff while success-based ramp and
+// timed recovery (+4 / 15s when quiet) climb back from the soft floor (16).
   const initial = Number.isFinite(initialOverride) && initialOverride > 0
     ? Math.min(Math.floor(initialOverride), ceiling)
-    : Math.min(Math.max(128, Math.floor(ceiling * 0.4)), ceiling);
+    : Math.min(Math.max(48, Math.floor(ceiling * 0.06)), ceiling);
   return { accountLimit, ceiling, initial };
 }
 
@@ -214,7 +258,8 @@ type KeySlotStats = {
   tokens: number;
   totalLatencyMs: number;
   throttleCount: number;
-  errors: number;
+  errors: number;               // total failed call attempts (any kind, incl. retried-then-recovered)
+  errorsByKind: LlmErrorTally;  // same total, split by cause for telemetry
 };
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
@@ -240,6 +285,41 @@ class LlmRateLimitError extends Error {
   }
 }
 
+/**
+ * Thrown when a streaming completion stalls (no token for the idle window) or
+ * exceeds the hard cap. Distinct from a parse error so callers can react
+ * differently: a timeout means "too slow / stuck", not "poison data to isolate".
+ */
+class LlmTimeoutError extends Error {
+  readonly kind: "first-token" | "idle" | "hard";
+  constructor(kind: "first-token" | "idle" | "hard") {
+    super(`LLM stream ${kind} timeout`);
+    this.name = "LlmTimeoutError";
+    this.kind = kind;
+  }
+}
+
+/** Coarse classification of a non-throttle LLM call failure (telemetry + backoff). */
+export type LlmErrorKind = "timeout" | "parse" | "http" | "api" | "other";
+
+/** Per-kind tally of failed call attempts. */
+export type LlmErrorTally = { timeout: number; parse: number; http: number; api: number; other: number };
+
+function _emptyErrorTally(): LlmErrorTally {
+  return { timeout: 0, parse: 0, http: 0, api: 0, other: 0 };
+}
+
+/** Bucket a thrown error so we can tell "endpoint too slow" from "bad data" from "5xx". */
+function classifyLlmError(e: unknown): LlmErrorKind {
+  if (e instanceof LlmTimeoutError) return "timeout";
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/^DeepSeek HTTP \d/.test(msg)) return "http";
+  if (/empty response body/i.test(msg)) return "http";
+  if (/DeepSeek API error/i.test(msg)) return "api";
+  if (e instanceof SyntaxError || /json|unexpected token|no json object/i.test(msg)) return "parse";
+  return "other";
+}
+
 /** Map DEEPSEEK_BASE_URL → POST .../chat/completions (DeepSeek native endpoint). */
 function resolveDeepSeekChatCompletionsUrl(baseURL: string): string {
   const base = baseURL.trim().replace(/\/+$/, "");
@@ -260,49 +340,121 @@ async function fetchDeepSeekChatCompletion(
   model: string,
   messages: ChatMessage[],
   timeoutMs: number,
+  firstTokenTimeoutMs: number,
   userId?: string,
 ): Promise<ChatCompletionInvokeResult> {
+  // Stream the completion so a slow-but-progressing response is NOT killed:
+  // the timeout is on the *idle gap* between tokens, not the total wall clock.
+  // A truly stuck connection still trips (idle), and a runaway response trips the
+  // hard cap. This recovers the compute otherwise lost when a non-streaming
+  // request is aborted at 90% done and re-sent from scratch.
   const body: Record<string, unknown> = {
     model,
     messages,
     temperature: 0.1,
     response_format: { type: "json_object" },
+    stream: true,
+    stream_options: { include_usage: true },
   };
   if (userId) body.user_id = userId;
 
-  const resp = await fetch(chatUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-
-  if (resp.status === 429) {
-    throw new LlmRateLimitError(resp);
-  }
-  if (!resp.ok) {
-    throw new Error(`DeepSeek HTTP ${resp.status}: ${await resp.text()}`);
-  }
-
-  const json = (await resp.json()) as Record<string, unknown> & {
-    choices?: Array<{ message?: { content?: string | null } }>;
-    usage?: { total_tokens?: number };
-    error?: { message?: string };
+  const controller = new AbortController();
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  let gotContent = false; // 收到首个 content token 前用宽松窗口，之后用收紧 idle 窗口
+  const armIdle = () => {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(
+      () => controller.abort(new LlmTimeoutError(gotContent ? "idle" : "first-token")),
+      gotContent ? LLM_IDLE_TIMEOUT_MS : firstTokenTimeoutMs,
+    );
   };
-  if (json.error && typeof json.error === "object" && "message" in json.error) {
-    const msg = (json.error as { message?: string }).message;
-    if (msg) throw new Error(`DeepSeek API error: ${msg}`);
-  }
+  const hardTimer = setTimeout(
+    () => controller.abort(new LlmTimeoutError("hard")),
+    timeoutMs,
+  );
+  armIdle();
 
-  return {
-    content: json.choices?.[0]?.message?.content ?? "{}",
-    tokens: (json.usage as { total_tokens?: number } | undefined)?.total_tokens ?? 0,
-    response: resp,
-    limitHints: collectLimitHints(json),
-  };
+  try {
+    const resp = await fetch(chatUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    if (resp.status === 429) {
+      throw new LlmRateLimitError(resp);
+    }
+    if (!resp.ok) {
+      throw new Error(`DeepSeek HTTP ${resp.status}: ${await resp.text()}`);
+    }
+    if (!resp.body) {
+      throw new Error("DeepSeek stream: empty response body");
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let content = "";
+    let tokens = 0;
+    let apiErrorMsg: string | undefined;
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      armIdle(); // got bytes → reset the idle window
+      buffer += decoder.decode(value, { stream: true });
+
+      let nl: number;
+      while ((nl = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim();
+        if (data === "" || data === "[DONE]") continue;
+        try {
+          const evt = JSON.parse(data) as {
+            choices?: Array<{ delta?: { content?: string | null }; message?: { content?: string | null } }>;
+            usage?: { total_tokens?: number };
+            error?: { message?: string };
+          };
+          if (evt.error?.message) apiErrorMsg = evt.error.message;
+          const delta = evt.choices?.[0]?.delta?.content ?? evt.choices?.[0]?.message?.content;
+          if (typeof delta === "string" && delta.length > 0) {
+            content += delta;
+            if (!gotContent) {
+              gotContent = true; // 开始吐字 → 收紧空闲窗口（中途卡死更快发现）
+              armIdle();
+            }
+          }
+          if (evt.usage?.total_tokens) tokens = evt.usage.total_tokens;
+        } catch {
+          // partial/keepalive line — wait for more bytes
+        }
+      }
+    }
+
+    if (apiErrorMsg) throw new Error(`DeepSeek API error: ${apiErrorMsg}`);
+
+    return {
+      content: content || "{}",
+      tokens,
+      response: resp,
+      limitHints: [], // body hints unavailable when streaming; headers still logged separately
+    };
+  } catch (e) {
+    // fetch/reader rejects with the abort reason → surface our typed timeout.
+    if (controller.signal.aborted && controller.signal.reason instanceof LlmTimeoutError) {
+      throw controller.signal.reason;
+    }
+    throw e;
+  } finally {
+    if (idleTimer) clearTimeout(idleTimer);
+    clearTimeout(hardTimer);
+  }
 }
 
 async function invokeChatCompletion(
@@ -310,6 +462,7 @@ async function invokeChatCompletion(
   model: string,
   messages: ChatMessage[],
   timeoutMs: number,
+  firstTokenTimeoutMs: number,
   deepseekUserId?: string,
 ): Promise<ChatCompletionInvokeResult> {
   return fetchDeepSeekChatCompletion(
@@ -318,6 +471,7 @@ async function invokeChatCompletion(
     model,
     messages,
     timeoutMs,
+    firstTokenTimeoutMs,
     deepseekUserId,
   );
 }
@@ -370,6 +524,18 @@ class LLMKeyPool {
   private readonly _limitMode: PoolLimitMode;
   private _deepseekConcCeiling = 0;
   private _deepseekRampSuccesses = 0;
+  /** EWMA of recent timeout occurrences (1=timeout, 0=ok). Congestion signal. */
+  private readonly _timeoutRate = new EWMA(0, 0.1);
+  /** Wall-clock anchor for time-based timeout-rate decay (not success-driven). */
+  private _timeoutRateDecayedAt = Date.now();
+  /** Epoch ms of last LLM timeout — drives timed recovery. */
+  private _lastTimeoutAt = 0;
+  /** Epoch ms of last timed +N recovery step. */
+  private _lastTimedRecoveryAt = 0;
+  /** Epoch ms of last soft backoff — rate-limits successive cuts. */
+  private _lastSoftBackoffAt = 0;
+  /** Pool-level count of fields that exhausted retries and fell back to original. */
+  private _terminalFallbacks = 0;
 
   constructor(slots: KeySlot[], options?: PoolInitOptions) {
     if (slots.length === 0) throw new Error("[llm-pool] no LLM API keys configured");
@@ -409,7 +575,7 @@ class LLMKeyPool {
       tokens: number,
       limitHints?: string[],
     ) => void;
-    onError: () => void;
+    onError: (kind: LlmErrorKind) => void;
     release: () => void;
   }> {
     await this.sem.acquire();
@@ -448,7 +614,11 @@ class LLMKeyPool {
             this._blindOnThrottle(); // no-op once headers are seen
             console.warn(`[llm-pool] slot ${slot.label} throttled for ${(waitMs / 1_000).toFixed(1)}s`);
           },
-          onError: () => { slot.stats.errors++; },
+          onError: (kind: LlmErrorKind) => {
+            slot.stats.errors++;
+            slot.stats.errorsByKind[kind]++;
+            this._onAttemptError(kind);
+          },
           release: () => this.sem.release(),
         };
       }
@@ -622,27 +792,190 @@ class LLMKeyPool {
    */
   private _deepseekOnSuccess(): void {
     if (this._hasSeenAnyHeaders) return;
+    const now = Date.now();
+    this._applyTimeoutRateTimeDecay(now);
+    this._maybeTimedRecovery(now);
+
+    // ── Congestion guard (timeout-rate driven) ────────────────────────────────
+    // Brake on timeouts, not on absolute latency: a slow-but-completing endpoint
+    // (big HTML batches at 60–120s under load) is fine and should keep its
+    // concurrency. High latency only stops the ramp — shedding on latency alone
+    // caused a death spiral (concurrency 77→4 while timeoutRate stayed 0%).
+    if (this._timeoutRate.value > LLM_TIMEOUT_RATE_HIGH) {
+      this._softBackoff("timeout rate");
+      return;
+    }
+    // Ramp up only while timeouts are rare (well under the brake threshold), so
+    // we grow when requests are completing cleanly and hold steady near the knee.
+    if (this._timeoutRate.value > LLM_TIMEOUT_RATE_HIGH / 2) return;
+    if (this.latency.value > RAMP_LATENCY_INHIBIT_MS) return;
+
+    // ── Adaptive ramp: add amount decays as latency climbs; step count scales
+    //     with current concurrency so the ramp naturally plateaus at the knee.
+    //     Produces a sigmoid-shaped QPS curve instead of spike-then-crash.
+    const lat = this.latency.value;
+    let rampAdd: number;
+    if (lat < 3000)       rampAdd = 8;   // fast climb — plenty of headroom
+    else if (lat < 6000)  rampAdd = 4;   // normal
+    else if (lat < 10000) rampAdd = 2;   // slow — approaching the knee
+    else if (lat < 15000) rampAdd = 1;   // crawl — near capacity
+    else                  rampAdd = 0;   // hold — already at inhibit threshold
+
+    if (rampAdd === 0) return;
+
+    // Ramp step grows with concurrency: at higher concurrency, require more
+    // successful calls between increments to avoid overshooting the knee.
+    //   conc=32 → step≈8  (fast initial ramp)
+    //   conc=64 → step≈16 (moderate)
+    //   conc=96 → step≈24 (slow, deliberate)
+    const rampStep = Math.max(4, Math.ceil(this.sem.max / 4));
+
     this._deepseekRampSuccesses++;
-    const RAMP_STEP = 8;
-    const RAMP_ADD = 4;
     if (
-      this._deepseekRampSuccesses % RAMP_STEP === 0 &&
+      this._deepseekRampSuccesses % rampStep === 0 &&
       this.sem.max < this._deepseekConcCeiling
     ) {
-      const newMax = Math.min(this._deepseekConcCeiling, this.sem.max + RAMP_ADD);
+      const newMax = Math.min(this._deepseekConcCeiling, this.sem.max + rampAdd);
       if (newMax !== this.sem.max) {
         this.sem.setMax(newMax);
         console.log(
           `[llm-pool] deepseek ramp → concurrency=${newMax}/${this._deepseekConcCeiling}` +
-          ` (${this._deepseekRampSuccesses} successes)`,
+          ` (${this._deepseekRampSuccesses} successes, latency=${lat.toFixed(0)}ms, add=${rampAdd}, step=${rampStep})`,
         );
       }
     }
   }
 
+  /** Feed a failed attempt into the congestion guard. Timeouts drive the brake. */
+  private _onAttemptError(kind: LlmErrorKind): void {
+    if (this._limitMode !== "deepseek-concurrency" || this._hasSeenAnyHeaders) return;
+    const now = Date.now();
+    // A timed-out request never reaches onResponse, so its (huge) latency is NOT
+    // in the latency EWMA — the timeout rate is the only signal that catches it.
+    this._applyTimeoutRateTimeDecay(now);
+    if (kind === "timeout") {
+      this._timeoutRate.update(1);
+      this._lastTimeoutAt = now;
+      this._timeoutRateDecayedAt = now;
+    }
+    if (kind === "timeout" && this._timeoutRate.value > LLM_TIMEOUT_RATE_HIGH) {
+      this._softBackoff("timeout rate");
+    }
+  }
+
+  /**
+   * Decay timeout-rate EWMA toward 0 on wall clock — avoids staying "guilty" at
+   * floor 4 when successes are sparse (40s+ latency) and success-count decay stalls.
+   */
+  private _applyTimeoutRateTimeDecay(now = Date.now()): void {
+    const elapsed = now - this._timeoutRateDecayedAt;
+    if (elapsed <= 0) return;
+    const factor = Math.pow(0.5, elapsed / TIMEOUT_RATE_HALF_LIFE_MS);
+    if (factor >= 0.999) return;
+    this._timeoutRate.setValue(this._timeoutRate.value * factor);
+    this._timeoutRateDecayedAt = now;
+  }
+
+  /**
+   * Timed recovery: if no recent timeouts, add concurrency on an interval.
+   * Recovery speed adapts to conditions — fast when healthy, cautious when near
+   * the ceiling or when latency is elevated. This ensures the pool climbs back
+   * from a backoff-induced floor without waiting for the success-count ramp
+   * (which stalls when concurrency is very low and successes are sparse).
+   */
+  private _maybeTimedRecovery(now = Date.now()): void {
+    if (this.sem.max >= this._deepseekConcCeiling) return;
+    if (now - this._lastTimedRecoveryAt < RECOVERY_RAMP_INTERVAL_MS) return;
+    if (this._lastTimeoutAt > 0 && now - this._lastTimeoutAt < RECOVERY_NO_TIMEOUT_MS) return;
+    if (this._timeoutRate.value > LLM_TIMEOUT_RATE_HIGH / 2) return;
+
+    this._lastTimedRecoveryAt = now;
+
+    const lat = this.latency.value;
+    const gap = this._deepseekConcCeiling - this.sem.max;
+    const isQuiet = this._timeoutRate.value === 0;
+
+    // Adaptive recovery step — timeout rate is the only true safety signal.
+    // High latency without timeouts means "slow but healthy": safe to push more.
+    let add: number;
+    if (isQuiet && lat < 3000 && gap > 40) {
+      add = Math.max(RECOVERY_RAMP_ADD * 2, Math.ceil(gap / 2));   // fast catch-up
+    } else if (isQuiet && lat < 8000) {
+      add = RECOVERY_RAMP_ADD * 3;                                  // aggressive: +12
+    } else if (isQuiet) {
+      add = RECOVERY_RAMP_ADD * 2;                                  // quiet but slow: +8
+    } else if (lat < 10000) {
+      add = RECOVERY_RAMP_ADD;                                      // normal: +4
+    } else {
+      add = Math.max(1, Math.floor(RECOVERY_RAMP_ADD / 2));        // cautious: +2
+    }
+
+    const newMax = Math.min(this._deepseekConcCeiling, this.sem.max + add);
+    if (newMax === this.sem.max) return;
+    this.sem.setMax(newMax);
+
+    const quietSec =
+      this._lastTimeoutAt > 0 ? Math.round((now - this._lastTimeoutAt) / 1000) : null;
+    console.log(
+      `[llm-pool] timed recovery → concurrency=${newMax}/${this._deepseekConcCeiling}` +
+      ` (+${add}, timeoutRate=${(this._timeoutRate.value * 100).toFixed(0)}%` +
+      `, latency=${lat.toFixed(0)}ms` +
+      `${quietSec != null ? `, quiet=${quietSec}s` : ""})`,
+    );
+  }
+
+  /** Multiplicative concurrency cut from a soft (latency/timeout) congestion signal. */
+  private _softBackoff(reason: string): void {
+    const now = Date.now();
+    if (now - this._lastSoftBackoffAt < SOFT_BACKOFF_MIN_INTERVAL_MS) return;
+    this._lastSoftBackoffAt = now;
+    const floor = Math.max(this.slots.length, SOFT_BACKOFF_FLOOR);
+    const newMax = Math.max(floor, Math.floor(this.sem.max * BACKOFF_FACTOR));
+    this._deepseekRampSuccesses = 0;
+    if (newMax !== this.sem.max) {
+      this.sem.setMax(newMax);
+      console.warn(
+        `[llm-pool] soft back-off → concurrency=${newMax} (${reason}; ` +
+        `latency=${this.latency.value.toFixed(0)}ms, timeoutRate=${(this._timeoutRate.value * 100).toFixed(0)}%)`,
+      );
+    }
+  }
+
+  /**
+   * Adaptive "wait for first token" budget (ms). When the endpoint is slow or
+   * queued, the first token legitimately takes longer; being patient here turns
+   * a premature abort + retry (which wastes work AND adds load) into a slow
+   * success. Scales with observed latency, clamped to a sane floor/ceiling.
+   */
+  firstTokenBudgetMs(): number {
+    const fromLatency = this.latency.value * LLM_FIRST_TOKEN_LATENCY_FACTOR;
+    return Math.min(
+      LLM_FIRST_TOKEN_TIMEOUT_MAX_MS,
+      Math.max(LLM_FIRST_TOKEN_TIMEOUT_MS, Math.round(fromLatency)),
+    );
+  }
+
+  /** Record fields that exhausted retries and fell back to the original text. */
+  recordTerminalFallback(n = 1): void {
+    this._terminalFallbacks += Math.max(0, n);
+  }
+
+  /** Aggregate failed-attempt counts by cause + terminal fallbacks across slots. */
+  getErrorBreakdown(): { byKind: LlmErrorTally; terminalFallbacks: number } {
+    const byKind = _emptyErrorTally();
+    for (const slot of this.slots) {
+      byKind.timeout += slot.stats.errorsByKind.timeout;
+      byKind.parse   += slot.stats.errorsByKind.parse;
+      byKind.http    += slot.stats.errorsByKind.http;
+      byKind.api     += slot.stats.errorsByKind.api;
+      byKind.other   += slot.stats.errorsByKind.other;
+    }
+    return { byKind, terminalFallbacks: this._terminalFallbacks };
+  }
+
   private _deepseekOnThrottle(): void {
-    const floor = Math.max(this.slots.length, 4);
-    const newMax = Math.max(floor, Math.floor(this.sem.max * 0.7));
+    const floor = Math.max(this.slots.length, SOFT_BACKOFF_FLOOR);
+    const newMax = Math.max(floor, Math.floor(this.sem.max * BACKOFF_FACTOR));
     this._deepseekRampSuccesses = 0;
     if (newMax !== this.sem.max) {
       this.sem.setMax(newMax);
@@ -754,6 +1087,7 @@ class LLMKeyPool {
     avgLatencyMs: number;
     throttleCount: number;
     errors: number;
+    errorsByKind: LlmErrorTally;
     poolConcurrency: number;
     rateLimit: SlotRateLimit | null;
   }> {
@@ -766,6 +1100,7 @@ class LLMKeyPool {
         : 0,
       throttleCount: slot.stats.throttleCount,
       errors: slot.stats.errors,
+      errorsByKind: { ...slot.stats.errorsByKind },
       poolConcurrency: this.sem.max,
       rateLimit: slot.rateLimit,
     }));
@@ -796,7 +1131,14 @@ function buildKeySlots(): KeySlot[] {
 
 /** Zero-fill a fresh slot stats counter. */
 function _initStats(): KeySlotStats {
-  return { calls: 0, tokens: 0, totalLatencyMs: 0, throttleCount: 0, errors: 0 };
+  return {
+    calls: 0,
+    tokens: 0,
+    totalLatencyMs: 0,
+    throttleCount: 0,
+    errors: 0,
+    errorsByKind: _emptyErrorTally(),
+  };
 }
 
 let _pool: LLMKeyPool | null = null;
@@ -837,6 +1179,16 @@ const _slotFlushState = new Map<string, { flushedCalls: number; flushedTokens: n
 /** Synchronous snapshot of LLM key pool stats. Returns [] if pool not yet initialised. */
 export function getLlmPoolStats(): ReturnType<LLMKeyPool["getKeyStats"]> {
   return _pool?.getKeyStats() ?? [];
+}
+
+/** Aggregate failed-attempt counts by cause + terminal fallbacks. For QPS telemetry. */
+export function getLlmErrorBreakdown(): { byKind: LlmErrorTally; terminalFallbacks: number } {
+  return _pool?.getErrorBreakdown() ?? { byKind: _emptyErrorTally(), terminalFallbacks: 0 };
+}
+
+/** Record that `n` fields exhausted retries and fell back to the original text. */
+export function recordLlmTerminalFallback(n = 1): void {
+  _pool?.recordTerminalFallback(n);
 }
 
 export async function flushKeyStats(): Promise<void> {
@@ -1149,7 +1501,8 @@ export function classifyField(key: string, value?: string): "skip" | "html" | "j
 export function countFieldUnits(key: string, value: string): number {
   const klass = classifyField(key, value);
   if (klass === "skip") return 0;
-  if (klass === "html") return extractHtmlTextNodes(value).texts.length;
+  if (klass === "html")
+    return htmlNodePartsOf(value).nodeParts.reduce((n, parts) => n + parts.length, 0);
   if (klass === "json") {
     const root = tryParseJsonContainer(value);
     if (root === undefined) return splitPlainText(value).length;
@@ -1163,7 +1516,7 @@ export function countFieldUnits(key: string, value: string): number {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 // Max total chars sent to the translation API in one request.
-// Override via TRANSLATE_MAX_CHARS_PER_BATCH env var (default 4000).
+// Override via TRANSLATE_MAX_CHARS_PER_BATCH env var (default 3000).
 //
 // Smaller batches trade a few extra requests (cheap — DeepSeek/OpenAI prompt
 // caching makes the repeated system prompt nearly free) for much lower per-request
@@ -1173,24 +1526,89 @@ export function countFieldUnits(key: string, value: string): number {
 // requests" tail that otherwise dominates the back half of a job.
 const MAX_CHARS_PER_BATCH = Math.max(
   500,
-  Number(process.env.TRANSLATE_MAX_CHARS_PER_BATCH) || 4_000,
+  Number(process.env.TRANSLATE_MAX_CHARS_PER_BATCH) || 3_000,
 );
 /** Max items per LLM request — avoids 80+ key payloads that routinely hit the timeout. */
 const MAX_ITEMS_PER_BATCH = Math.max(
   1,
   Number(process.env.TRANSLATE_MAX_ITEMS_PER_BATCH) || 25,
 );
+/** Rich (HTML/JSON/LLM-first) pools use smaller batches — fewer keys per request, less idle-timeout tail. */
+const RICH_MAX_CHARS_PER_BATCH = Math.max(
+  500,
+  Number(process.env.TRANSLATE_RICH_MAX_CHARS_PER_BATCH) || 1_500,
+);
+const RICH_MAX_ITEMS_PER_BATCH = Math.max(
+  1,
+  Number(process.env.TRANSLATE_RICH_MAX_ITEMS_PER_BATCH) || 8,
+);
+
+/** LLM-first engine order ⇒ rich tier (HTML/JSON/long plain). Google-first ⇒ trivial. */
+export function resolveBatchLimits(order: Engine[]): {
+  maxChars: number;
+  maxItems: number;
+} {
+  if (order[0] === "llm") {
+    return { maxChars: RICH_MAX_CHARS_PER_BATCH, maxItems: RICH_MAX_ITEMS_PER_BATCH };
+  }
+  return { maxChars: MAX_CHARS_PER_BATCH, maxItems: MAX_ITEMS_PER_BATCH };
+}
+// ── LLM timeouts (defaults tuned lenient for diagnosis — override via env in prod) ──
+// Total wall-clock hard cap: base + per-item scaling, capped at MAX.
 const LLM_TIMEOUT_BASE_MS = Math.max(
   60_000,
-  Number(process.env.TRANSLATE_LLM_TIMEOUT_MS) || 120_000,
+  Number(process.env.TRANSLATE_LLM_TIMEOUT_MS) || 300_000,
 );
 const LLM_TIMEOUT_PER_ITEM_MS = Math.max(
   500,
-  Number(process.env.TRANSLATE_LLM_TIMEOUT_PER_ITEM_MS) || 2_000,
+  Number(process.env.TRANSLATE_LLM_TIMEOUT_PER_ITEM_MS) || 5_000,
 );
 const LLM_TIMEOUT_MAX_MS = Math.max(
   LLM_TIMEOUT_BASE_MS,
-  Number(process.env.TRANSLATE_LLM_TIMEOUT_MAX_MS) || 300_000,
+  Number(process.env.TRANSLATE_LLM_TIMEOUT_MAX_MS) || 600_000,
+);
+/** Streaming idle: no token for this long after generation started → abort. */
+const LLM_IDLE_TIMEOUT_MS = Math.max(
+  10_000,
+  Number(process.env.TRANSLATE_LLM_IDLE_TIMEOUT_MS) || 300_000,
+);
+/**
+ * 「等首个 token」窗口下限；实际上限由 `firstTokenBudgetMs()` 自适应，不超过
+ * `LLM_FIRST_TOKEN_TIMEOUT_MAX_MS`。默认与 idle 对齐，避免排队中被过早砍掉。
+ */
+const LLM_FIRST_TOKEN_TIMEOUT_MS = Math.max(
+  LLM_IDLE_TIMEOUT_MS,
+  Number(process.env.TRANSLATE_LLM_FIRST_TOKEN_TIMEOUT_MS) || 180_000,
+);
+/** Multiplier on observed avg latency for the adaptive first-token budget. */
+const LLM_FIRST_TOKEN_LATENCY_FACTOR = Math.max(
+  1,
+  Number(process.env.TRANSLATE_LLM_FIRST_TOKEN_LATENCY_FACTOR) || 6,
+);
+/** Hard ceiling on the adaptive first-token wait (ms). */
+const LLM_FIRST_TOKEN_TIMEOUT_MAX_MS = Math.max(
+  LLM_FIRST_TOKEN_TIMEOUT_MS,
+  Number(process.env.TRANSLATE_LLM_FIRST_TOKEN_TIMEOUT_MAX_MS) || 300_000,
+);
+/** On timeout, re-chunk a large batch straight to this size (skip the slow cascade). */
+const TIMEOUT_RESPLIT_SIZE = Math.max(
+  1,
+  Number(process.env.TRANSLATE_TIMEOUT_RESPLIT_SIZE) || 3,
+);
+/** First-token timeouts: same-batch retries before re-chunking (queue drain). */
+const FIRST_TOKEN_DRAIN_RETRIES = Math.max(
+  0,
+  Number(process.env.TRANSLATE_FIRST_TOKEN_DRAIN_RETRIES) || 3,
+);
+/** Drain delay before a first-token same-batch retry (lets the server queue clear). */
+const FIRST_TOKEN_DRAIN_MS = Math.max(
+  0,
+  Number(process.env.TRANSLATE_FIRST_TOKEN_DRAIN_MS) || 5_000,
+);
+/** Base backoff between single-item leaf retries (grows linearly per attempt). */
+const LEAF_RETRY_BACKOFF_MS = Math.max(
+  0,
+  Number(process.env.TRANSLATE_LEAF_RETRY_BACKOFF_MS) || 2_000,
 );
 
 /** Scale timeout with batch size so large (but capped) batches get more wall clock. */
@@ -1204,9 +1622,15 @@ export function llmTimeoutMsForBatch(itemCount: number): number {
 // Batch fan-out: all batches within a resource pool are launched simultaneously.
 // The pool's AdaptiveSemaphore is the only concurrency gate — no separate knob needed.
 
-// Plain text items longer than this get split before translation
-const LONG_TEXT_THRESHOLD = 4000;
-const LONG_TEXT_CHUNK_CHARS = 3500;
+// Plain text / HTML text nodes longer than this get split before translation.
+const LONG_TEXT_THRESHOLD = Math.max(
+  500,
+  Number(process.env.TRANSLATE_LONG_TEXT_THRESHOLD) || 3_000,
+);
+const LONG_TEXT_CHUNK_CHARS = Math.max(
+  400,
+  Number(process.env.TRANSLATE_LONG_TEXT_CHUNK_CHARS) || 2_500,
+);
 
 // ─── Concurrency helper ───────────────────────────────────────────────────────
 
@@ -1309,6 +1733,20 @@ function extractHtmlTextNodes(html: string): { template: string; texts: string[]
 
 function restoreHtmlTextNodes(template: string, translations: string[]): string {
   return template.replace(/\x00T(\d+)\x00/g, (_, idx) => translations[Number(idx)] ?? "");
+}
+
+/**
+ * HTML text nodes, with any oversized node further split into parts (same as plain
+ * text). Without this a single huge paragraph/description node is one un-splittable
+ * unit: if its translation times out it can only fall back to the original. Each
+ * marker maps to a list of parts; the node's translation is the parts joined back.
+ */
+function htmlNodePartsOf(value: string): { template: string; nodeParts: string[][] } {
+  const { template, texts } = extractHtmlTextNodes(value);
+  const nodeParts = texts.map((t) =>
+    t.length > LONG_TEXT_THRESHOLD ? splitPlainText(t) : [t],
+  );
+  return { template, nodeParts };
 }
 
 // ─── JSON leaf extraction ──────────────────────────────────────────────────────
@@ -1424,6 +1862,12 @@ function splitPlainText(text: string): string[] {
 }
 
 // ─── Char-based batching ──────────────────────────────────────────────────────
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
 
 function batchByChars(
   items: TranslateItem[],
@@ -1581,7 +2025,10 @@ async function translateItemsRouted(
 }
 
 // Retries for a single (un-splittable) item that fails transiently.
-const LEAF_RETRIES = 2;
+const LEAF_RETRIES = Math.max(
+  1,
+  Number(process.env.TRANSLATE_LEAF_RETRIES) || 5,
+);
 
 /**
  * Pull the JSON object out of a model response that may be wrapped in markdown
@@ -1728,6 +2175,7 @@ async function callLLMOnce(
       model,
       messages,
       llmTimeoutMsForBatch(items.length),
+      getPool().firstTokenBudgetMs(),
       deepseekUserId,
     );
 
@@ -1752,7 +2200,9 @@ async function callLLMOnce(
     if (e instanceof LlmRateLimitError) {
       acq.onThrottle(retryAfterMsFromResponse(e.response));
     } else {
-      acq.onError(); // count non-throttle errors (timeouts, parse failures, etc.)
+      // Count + classify non-throttle failures (timeout / parse / http / api).
+      // Timeouts also feed the congestion guard so concurrency sheds under load.
+      acq.onError(classifyLlmError(e));
     }
     throw e;
   } finally {
@@ -1774,6 +2224,7 @@ async function gatherTranslations(
   collected: Map<string, string>,
   tokenAccum: { value: number },
   shopName?: string,
+  firstTokenRetriesLeft = FIRST_TOKEN_DRAIN_RETRIES,
 ): Promise<void> {
   const pend = items.filter((i) => !collected.has(i.key));
   if (pend.length === 0) return;
@@ -1808,15 +2259,53 @@ async function gatherTranslations(
     return;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    const timeoutKind = e instanceof LlmTimeoutError ? e.kind : null;
+    const isTimeout = timeoutKind !== null;
     if (pend.length > 1) {
+      // First-token timeout = the request sat queued server-side before emitting
+      // anything. Re-chunking into MORE requests makes the queue worse and re-sends
+      // the same work as more calls. The congestion guard has already cut
+      // concurrency on this timeout; wait a beat for the queue to drain, then retry
+      // the SAME batch. Only fall through to re-chunk if it times out again.
+      if (timeoutKind === "first-token" && firstTokenRetriesLeft > 0) {
+        console.warn(
+          `[llm] batch of ${pend.length} timed out waiting for first token; ` +
+          `draining ${(FIRST_TOKEN_DRAIN_MS / 1_000).toFixed(1)}s then retrying same batch ` +
+          `(${firstTokenRetriesLeft} retr${firstTokenRetriesLeft === 1 ? "y" : "ies"} left)`,
+        );
+        if (FIRST_TOKEN_DRAIN_MS > 0) {
+          await new Promise((res) => setTimeout(res, FIRST_TOKEN_DRAIN_MS));
+        }
+        await gatherTranslations(
+          pend, aiModel, systemPrompt, collected, tokenAccum, shopName, firstTokenRetriesLeft - 1,
+        );
+        return;
+      }
+      // Timeout ≠ poison data. Halving a timed-out batch re-pays the base timeout
+      // at every level (25→12→6→3…). Instead jump straight to small chunks so each
+      // retry is fast. Parse errors keep the binary split (isolates the bad item).
+      if (isTimeout && pend.length > TIMEOUT_RESPLIT_SIZE) {
+        console.warn(
+          `[llm] batch of ${pend.length} timed out (${msg}); re-chunking to ${TIMEOUT_RESPLIT_SIZE}`,
+        );
+        for (const chunk of chunkArray(pend, TIMEOUT_RESPLIT_SIZE)) {
+          await gatherTranslations(chunk, aiModel, systemPrompt, collected, tokenAccum, shopName);
+        }
+        return;
+      }
       const mid = Math.ceil(pend.length / 2);
-      console.warn(`[llm] batch of ${pend.length} unparseable (${msg}); splitting`);
+      console.warn(
+        `[llm] batch of ${pend.length} ${isTimeout ? "timed out" : "unparseable"} (${msg}); splitting`,
+      );
       await gatherTranslations(pend.slice(0, mid), aiModel, systemPrompt, collected, tokenAccum, shopName);
       await gatherTranslations(pend.slice(mid), aiModel, systemPrompt, collected, tokenAccum, shopName);
       return;
     }
-    // Single item: retry for transient failures, then give up (→ fallback).
+    // Single item: retry transient failures with backoff, then give up (→ fallback).
     for (let r = 0; r < LEAF_RETRIES; r++) {
+      if (LEAF_RETRY_BACKOFF_MS > 0) {
+        await new Promise((res) => setTimeout(res, LEAF_RETRY_BACKOFF_MS * (r + 1)));
+      }
       try {
         const { map, tokens } = await callLLMOnce(pend, aiModel, systemPrompt, shopName);
         tokenAccum.value += tokens;
@@ -1826,6 +2315,10 @@ async function gatherTranslations(
         // keep retrying up to the cap
       }
     }
+    // Terminal: this field exhausted retries and will fall back to the original.
+    // Recorded separately from per-attempt errors so telemetry can tell
+    // "wasted attempts that recovered" from "user-visible fallbacks".
+    getPool().recordTerminalFallback(1);
     console.warn(`[llm] item ${pend[0].key} failed after retries (${msg}); using original`);
   }
 }
@@ -1856,9 +2349,79 @@ type FieldPlan = {
   cacheModel: string;
 } & (
   | { kind: "plain"; parts: string[] }
-  | { kind: "html"; template: string; nodeTexts: string[] }
+  | { kind: "html"; template: string; nodeParts: string[][] }
   | { kind: "json"; root: JsonValue; leaves: string[] }
 );
+
+type LookupFn = (order: Engine[], text: string) => RoutedResult | undefined;
+
+function planTextsReady(plan: FieldPlan, lookup: LookupFn): boolean {
+  const texts =
+    plan.kind === "plain"
+      ? plan.parts
+      : plan.kind === "html"
+        ? plan.nodeParts.flat()
+        : [...new Set(plan.leaves)];
+  return texts.every((t) => lookup(plan.order, t) !== undefined);
+}
+
+function reconstructPlan(
+  plan: FieldPlan,
+  rm: Map<string, TranslateResult>,
+  lookup: LookupFn,
+  tmWrites: Promise<void>[],
+  shopName: string,
+  target: string,
+  source: string,
+): void {
+  if (plan.kind === "plain") {
+    const pieces = plan.parts.map((p) => lookup(plan.order, p) ?? { value: p, status: "fallback" as const });
+    const value = pieces.map((p) => p.value).join("");
+    const status = pieces.some((p) => p.status === "fallback") ? "fallback" : "translated";
+    const originalValue = plan.parts.join("");
+    rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
+    if (status === "translated") {
+      tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
+      tmWrites.push(tmSetByValue(originalValue, source, target, plan.cacheModel, value));
+    }
+  } else if (plan.kind === "html") {
+    let anyFallback = false;
+    // Each marker = its parts joined back. A single oversized node was split into
+    // several parts; rejoin them (preserving inner boundaries) for that marker.
+    const out = plan.nodeParts.map((parts) => {
+      const pieces = parts.map((p) => {
+        const r = lookup(plan.order, p);
+        if (!r || r.status === "fallback") {
+          anyFallback = true;
+          return p;
+        }
+        return r.value;
+      });
+      return pieces.join("").trim();
+    });
+    const value = restoreHtmlTextNodes(plan.template, out);
+    const status = anyFallback ? "fallback" : "translated";
+    rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
+    if (status === "translated") tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
+  } else {
+    let anyFallback = false;
+    const tmap = new Map<string, string>();
+    for (const t of plan.leaves) {
+      if (tmap.has(t)) continue;
+      const r = lookup(plan.order, t);
+      if (!r || r.status === "fallback") {
+        anyFallback = true;
+        tmap.set(t, t);
+      } else {
+        tmap.set(t, r.value.trim());
+      }
+    }
+    const value = JSON.stringify(rebuildJson(plan.root, tmap));
+    const status = anyFallback ? "fallback" : "translated";
+    rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
+    if (status === "translated") tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
+  }
+}
 
 /**
  * Translate every field across a whole chunk of resources in one pass.
@@ -1873,29 +2436,23 @@ type FieldPlan = {
  * with cross-engine fallback, unless the job sets aiModel=google-translate.
  * Placeholders are masked across all engines; TM cache keyed by tier model.
  */
+export type TranslatedResourceOutput = {
+  resourceId: string;
+  results: TranslateResult[];
+};
+
 export async function translateResources(
   resources: ResourceInput[],
   source: string,
   target: string,
   aiModel: string,
-  testMode: boolean,
   shopName: string,
   onProgress?: (doneUnitsDelta: number, tokensDelta: number) => Promise<void>,
+  onResourceDone?: (resource: TranslatedResourceOutput) => Promise<void>,
+  shouldAbort?: () => boolean | Promise<boolean>,
 ): Promise<TranslateChunkResult> {
-  if (testMode) {
-    return {
-      resources: resources.map((res) => ({
-        resourceId: res.resourceId,
-        results: res.fields.map((f) => ({
-          key: f.key,
-          translatedValue: `${f.value} - test`,
-          digest: f.digest,
-          status: "translated" as const,
-        })),
-      })),
-      usage: {},
-    };
-  }
+  const abortRequested = async (): Promise<boolean> =>
+    shouldAbort ? Boolean(await shouldAbort()) : false;
 
   const resultMaps = new Map<string, Map<string, TranslateResult>>();
   const plans: FieldPlan[] = [];
@@ -1995,13 +2552,13 @@ export async function translateResources(
     }
 
     if (klass === "html") {
-      const { template, texts } = extractHtmlTextNodes(f.value);
-      if (texts.length === 0) {
+      const { template, nodeParts } = htmlNodePartsOf(f.value);
+      if (nodeParts.length === 0) {
         rm.set(f.key, { key: f.key, translatedValue: f.value, digest: f.digest, status: "translated" });
         continue;
       }
-      texts.forEach((t) => addUnit(order, t));
-      plans.push({ kind: "html", resourceId, key: f.key, digest: f.digest, order, cacheModel, template, nodeTexts: texts });
+      nodeParts.forEach((parts) => parts.forEach((p) => addUnit(order, p)));
+      plans.push({ kind: "html", resourceId, key: f.key, digest: f.digest, order, cacheModel, template, nodeParts });
     } else if (klass === "json") {
       const root = tryParseJsonContainer(f.value);
       const leaves: string[] = [];
@@ -2030,6 +2587,57 @@ export async function translateResources(
   // Credit cache hits immediately so the bar reflects them (0 LLM tokens for TM hits).
   if (cacheUnits > 0 && onProgress) await onProgress(cacheUnits, 0);
 
+  const plansByResource = new Map<string, FieldPlan[]>();
+  for (const plan of plans) {
+    const list = plansByResource.get(plan.resourceId) ?? [];
+    list.push(plan);
+    plansByResource.set(plan.resourceId, list);
+  }
+
+  const reconstructedResources = new Set<string>();
+
+  const buildResourceOutput = (res: ResourceInput): TranslatedResourceOutput => {
+    const rm = resultMaps.get(res.resourceId)!;
+    return {
+      resourceId: res.resourceId,
+      results: res.fields.map(
+        (f) =>
+          rm.get(f.key) ?? {
+            key: f.key,
+            translatedValue: f.value,
+            digest: f.digest,
+            status: "fallback" as const,
+          },
+      ),
+    };
+  };
+
+  let finishLock: Promise<void> = Promise.resolve();
+  const finishReadyResources = async (lookup: LookupFn): Promise<void> => {
+    await (finishLock = finishLock.then(async () => {
+      if (await abortRequested()) return;
+      for (const res of resources) {
+        if (reconstructedResources.has(res.resourceId)) continue;
+        const resourcePlans = plansByResource.get(res.resourceId);
+        if (!resourcePlans) {
+          reconstructedResources.add(res.resourceId);
+          if (onResourceDone) await onResourceDone(buildResourceOutput(res));
+          continue;
+        }
+        if (!resourcePlans.every((plan) => planTextsReady(plan, lookup))) continue;
+        const rm = resultMaps.get(res.resourceId)!;
+        for (const plan of resourcePlans) {
+          reconstructPlan(plan, rm, lookup, tmWrites, shopName, target, source);
+        }
+        reconstructedResources.add(res.resourceId);
+        if (onResourceDone) await onResourceDone(buildResourceOutput(res));
+      }
+    }));
+  };
+
+  // Resources fully resolved in step 1 (skip/cache only) count immediately.
+  await finishReadyResources(() => undefined);
+
   // 2. Translate unique texts per engine order, in char-bounded batches.
   //    All batches are launched concurrently — the pool's AdaptiveSemaphore
   //    (driven by X-RateLimit-* headers) is the only throttle.
@@ -2040,8 +2648,10 @@ export async function translateResources(
     const texts = [...occ.keys()];
     const tmap = new Map<string, RoutedResult>();
     const items: TranslateItem[] = texts.map((t, i) => ({ key: String(i), value: t, digest: "" }));
-    const batches = batchByChars(items, MAX_CHARS_PER_BATCH);
+    const { maxChars, maxItems } = resolveBatchLimits(order);
+    const batches = batchByChars(items, maxChars, maxItems);
     await Promise.all(batches.map(async (batch) => {
+      if (await abortRequested()) return;
       const { results: m, llmTokens } = await translateItemsRouted(batch, source, target, aiModel, shopName, order);
       let batchUnits = 0;
       for (const [k, v] of m) {
@@ -2056,60 +2666,15 @@ export async function translateResources(
           acc.tokens += v.tokens;
         }
       }
+      translated.set(sig, tmap);
       if (onProgress) await onProgress(batchUnits, llmTokens);
+      const lookup: LookupFn = (planOrder, text) => translated.get(planOrder.join(","))?.get(text);
+      await finishReadyResources(lookup);
     }));
-    translated.set(sig, tmap);
   }
 
-  const lookup = (order: Engine[], text: string) => translated.get(order.join(","))?.get(text);
-
-  // 3. Reconstruct each planned field and cache new translations in parallel.
-  for (const plan of plans) {
-    const rm = resultMaps.get(plan.resourceId)!;
-    if (plan.kind === "plain") {
-      const pieces = plan.parts.map((p) => lookup(plan.order, p) ?? { value: p, status: "fallback" as const });
-      const value = pieces.map((p) => p.value).join("");
-      const status = pieces.some((p) => p.status === "fallback") ? "fallback" : "translated";
-      const originalValue = plan.parts.join("");
-      rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
-      if (status === "translated") {
-        tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
-        tmWrites.push(tmSetByValue(originalValue, source, target, plan.cacheModel, value));
-      }
-    } else if (plan.kind === "html") {
-      let anyFallback = false;
-      const out = plan.nodeTexts.map((t) => {
-        const r = lookup(plan.order, t);
-        if (!r || r.status === "fallback") {
-          anyFallback = true;
-          return t;
-        }
-        return r.value.trim(); // template already preserves surrounding whitespace
-      });
-      const value = restoreHtmlTextNodes(plan.template, out);
-      const status = anyFallback ? "fallback" : "translated";
-      rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
-      if (status === "translated") tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
-    } else {
-      // json: map each unique leaf to its translation, rebuild the tree, re-serialise.
-      let anyFallback = false;
-      const tmap = new Map<string, string>();
-      for (const t of plan.leaves) {
-        if (tmap.has(t)) continue;
-        const r = lookup(plan.order, t);
-        if (!r || r.status === "fallback") {
-          anyFallback = true;
-          tmap.set(t, t);
-        } else {
-          tmap.set(t, r.value.trim());
-        }
-      }
-      const value = JSON.stringify(rebuildJson(plan.root, tmap));
-      const status = anyFallback ? "fallback" : "translated";
-      rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
-      if (status === "translated") tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
-    }
-  }
+  const lookup: LookupFn = (planOrder, text) => translated.get(planOrder.join(","))?.get(text);
+  await finishReadyResources(lookup);
   if (tmWrites.length > 0) await Promise.all(tmWrites);
 
   // 4. Assemble per-resource results aligned to input field order.
@@ -2134,7 +2699,6 @@ export async function translateBatch(
   source: string,
   target: string,
   aiModel: string,
-  testMode: boolean,
   shopName: string,
 ): Promise<TranslateResult[]> {
   const { resources } = await translateResources(
@@ -2142,7 +2706,6 @@ export async function translateBatch(
     source,
     target,
     aiModel,
-    testMode,
     shopName,
   );
   return resources[0].results;

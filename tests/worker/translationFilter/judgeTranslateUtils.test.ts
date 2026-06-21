@@ -36,6 +36,12 @@ describe("translationRuleJudgment", () => {
     expect(translationRuleJudgment("k", "Hello world")).toBe(true);
     expect(translationRuleJudgment("k", "这是一个商品标题")).toBe(true);
   });
+
+  it("allows HTML bodies even when inline styles contain px units", () => {
+    const html =
+      '<div style="font-size:16px"><h2>Core Key</h2><p>NinescapeLand playground equipment.</p></div>';
+    expect(translationRuleJudgment("body_html", html)).toBe(true);
+  });
 });
 
 describe("shouldTranslateThemeKey", () => {

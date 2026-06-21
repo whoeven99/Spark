@@ -58,10 +58,15 @@ async function listJsonBlobPaths(prefix: string): Promise<string[]> {
   return paths;
 }
 
-/** 仅保留进入写回范围的字段：非空且与原文不同（对齐 writeback/verify 的过滤）。 */
+/** 进入写回范围的字段：非空；handle 与原文相同时跳过（Shopify 会拒写）。 */
 function inScopeFields(item: TranslatedItem): ReviewField[] {
   return item.translations
-    .filter((t) => t.translatedValue?.trim() && t.translatedValue !== t.originalValue)
+    .filter((t) => {
+      const translated = t.translatedValue?.trim();
+      if (!translated) return false;
+      if (t.key === "handle" && translated === (t.originalValue ?? "").trim()) return false;
+      return true;
+    })
     .map((t) => ({
       key: t.key,
       originalValue: t.originalValue,

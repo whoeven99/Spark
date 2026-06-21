@@ -28,6 +28,7 @@ import {
 } from "../../server/translation/v4/types";
 import {
   formatV4JobTimeLine,
+  resolveTranslateProgressCounts,
   TRANSLATION_V4_UNIT_LABEL,
 } from "../../lib/translationV4Display";
 import { resolveResumeV4JobStatus } from "../../server/translation/v4/resumeV4JobStatus";
@@ -97,7 +98,6 @@ function progressFromJob(
 ): ProgressData {
   return {
     status,
-    testMode: job.testMode,
     source: job.source,
     target: job.target,
     errorMessage: job.errorMessage,
@@ -128,7 +128,6 @@ function progressFromJob(
 
 type ProgressData = {
   status: TranslationV4Status;
-  testMode: boolean;
   source: string;
   target: string;
   errorMessage: string | null;
@@ -229,8 +228,14 @@ function mergeJobWithProgress(job: TranslationV4Job, progress: ProgressData): Tr
       translateTotal: progress.metrics.translateTotal,
       translateDone: progress.metrics.translateDone,
       translateFailed: progress.metrics.translateFailed,
-      translateUnitTotal: progress.metrics.translateUnitTotal,
-      translateUnitDone: progress.metrics.translateUnitDone,
+      translateUnitTotal: Math.max(
+        progress.metrics.translateUnitTotal ?? 0,
+        job.metrics.translateUnitTotal ?? 0,
+      ),
+      translateUnitDone: Math.max(
+        progress.metrics.translateUnitDone ?? 0,
+        job.metrics.translateUnitDone ?? 0,
+      ),
       writebackTotal: progress.metrics.writebackTotal,
       writebackDone: progress.metrics.writebackDone,
       writebackFailed: progress.metrics.writebackFailed,
@@ -326,9 +331,8 @@ function estimateTranslationConfirmMetrics(params: {
   targetCount: number;
   moduleCount: number;
   limitPerType: number;
-  testMode: boolean;
 }) {
-  const { targetCount, moduleCount, limitPerType, testMode } = params;
+  const { targetCount, moduleCount, limitPerType } = params;
   if (!targetCount || !moduleCount) {
     return { seconds: null as number | null, credits: null as number | null };
   }
@@ -338,12 +342,6 @@ function estimateTranslationConfirmMetrics(params: {
   }
 
   const estimatedItems = Math.max(targetCount * moduleCount * Math.max(limitPerType, 1), 1);
-  if (testMode) {
-    return {
-      seconds: Math.max(Math.round(estimatedItems * 0.2), 5),
-      credits: 0,
-    };
-  }
 
   return {
     seconds: Math.max(Math.round(estimatedItems * 1.8), 15),
@@ -425,7 +423,6 @@ export function TranslationV4Page() {
   const [limitPerType, setLimitPerType] = useState(20);
   const [isCover, setIsCover] = useState(false);
   const [isHandle, setIsHandle] = useState(false);
-  const [testMode, setTestMode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -496,9 +493,8 @@ export function TranslationV4Page() {
         targetCount: targetLocales.length,
         moduleCount: modules.length,
         limitPerType,
-        testMode,
       }),
-    [limitPerType, modules.length, targetLocales.length, testMode],
+    [limitPerType, modules.length, targetLocales.length],
   );
   const confirmSummaryItems = useMemo(
     () => [
@@ -826,7 +822,6 @@ export function TranslationV4Page() {
         limitPerType,
         isCover,
         isHandle,
-        testMode,
         targetOptions,
       });
 
@@ -1151,42 +1146,16 @@ export function TranslationV4Page() {
                     </s-select>
                   </div>
 
-                  <div style={testEnvPanelStyle(testMode)}>
-                    <div style={{ fontWeight: 600, fontSize: "0.875rem", color: pageColorTokens.textBody }}>
-                      测试环境选项
-                    </div>
-                    <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: 2, marginBottom: "0.75rem" }}>
-                      仅用于联调或流程验证，不影响正式批处理逻辑。
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                      <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", cursor: "pointer" }}>
-                        <input
-                          type="checkbox"
-                          checked={testMode}
-                          onChange={(e) => setTestMode(e.target.checked)}
-                          style={{ width: 18, height: 18, cursor: "pointer" }}
-                        />
-                        <div>
-                          <div style={{ fontWeight: 600, fontSize: "0.875rem", color: pageColorTokens.textBody }}>
-                            测试模式{testMode ? "（已开启）" : ""}
-                          </div>
-                          <div style={{ fontSize: "0.75rem", color: pageColorTokens.textSecondary, marginTop: 2 }}>
-                            翻译阶段直接使用原值作为译文，跳过 LLM 调用，适合验证任务流转。
-                          </div>
-                        </div>
-                      </label>
-                      <div style={isMobile ? mobileLimitFieldWrapStyle : { maxWidth: "20rem" }}>
-                        <s-text-field
-                          label="每模块数量限制"
-                          value={String(limitPerType)}
-                          onChange={(e) => {
-                            const v = parseInt(e.currentTarget.value, 10);
-                            setLimitPerType(isNaN(v) || v < 0 ? 20 : v);
-                          }}
-                          autocomplete="off"
-                        />
-                      </div>
-                    </div>
+                  <div style={isMobile ? mobileLimitFieldWrapStyle : { maxWidth: "20rem" }}>
+                    <s-text-field
+                      label="每模块数量限制"
+                      value={String(limitPerType)}
+                      onChange={(e) => {
+                        const v = parseInt(e.currentTarget.value, 10);
+                        setLimitPerType(isNaN(v) || v < 0 ? 20 : v);
+                      }}
+                      autocomplete="off"
+                    />
                   </div>
 
                   {formError ? <div style={formErrorBoxStyle}>{formError}</div> : null}
@@ -1584,15 +1553,19 @@ function formatStageDurationLabel(
   stageTimings: StageTimings | null | undefined,
   job: Pick<TranslationV4Job, "claimedAt" | "createdAt">,
   metrics: ProgressData["metrics"],
-  liveNowIso: string,
+  endIso: string,
+  errorStage: string | null,
 ): string | null {
   const timing = stageTimings?.[stage];
   if (timing?.endedAt) {
     return formatElapsedZh(timing.startedAt, timing.endedAt);
   }
-  if (isStageActiveForStatus(stage, status)) {
+  const pausedStage = errorStage?.trim().toUpperCase() as StageName | undefined;
+  const showFrozen =
+    (status === "PAUSED" || status === "CANCELLED") && pausedStage === stage;
+  if (showFrozen || isStageActiveForStatus(stage, status)) {
     const start = inferStageStartIso(stage, stageTimings, job, metrics);
-    if (start) return formatElapsedZh(start, liveNowIso);
+    if (start) return formatElapsedZh(start, endIso);
   }
   return null;
 }
@@ -1692,9 +1665,10 @@ function getJobProgressPercent(status: TranslationV4Status, metrics: ProgressDat
     ["INIT_DONE", "TRANSLATE_QUEUED", "TRANSLATING", "TRANSLATE_DONE", "WRITEBACK_QUEUED", "WRITING_BACK", "VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status),
     ["INIT_QUEUED", "INITIALIZING"].includes(status),
   );
+  const translateProgress = resolveTranslateProgressCounts(metrics);
   const translateRatio = getStageRatio(
-    metrics.translateUnitTotal > 0 ? metrics.translateUnitDone : metrics.translateDone,
-    metrics.translateUnitTotal > 0 ? metrics.translateUnitTotal : metrics.translateTotal,
+    translateProgress.done,
+    translateProgress.total,
     ["TRANSLATE_DONE", "WRITEBACK_QUEUED", "WRITING_BACK", "VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status),
     ["TRANSLATE_QUEUED", "TRANSLATING"].includes(status),
   );
@@ -1869,8 +1843,7 @@ function getStageSummaryCopy(
     return `当前阶段：初始化 ${metrics.initDone}/${metrics.initTotal || 0}`;
   }
   if (status === "TRANSLATE_QUEUED" || status === "TRANSLATING" || status === "TRANSLATE_DONE") {
-    const done = metrics.translateUnitTotal > 0 ? metrics.translateUnitDone : metrics.translateDone;
-    const total = metrics.translateUnitTotal > 0 ? metrics.translateUnitTotal : metrics.translateTotal;
+    const { done, total } = resolveTranslateProgressCounts(metrics);
     return `当前阶段：翻译 ${done}/${total || 0}`;
   }
   if (status === "WRITEBACK_QUEUED" || status === "WRITING_BACK") {
@@ -1905,12 +1878,15 @@ function JobCard({
   onStageDetailsOpenChange,
 }: JobCardProps) {
   const metrics = resolveCardMetrics(job, progress, status);
+  const translateProgress = resolveTranslateProgressCounts(metrics);
   const stageTimings = progress?.stageTimings ?? job.stageTimings;
   const updatedAt = progress?.updatedAt ?? job.updatedAt;
   const isLive = ACTIVE_STATUSES.includes(status);
   const liveNowIso = useLiveNowIso(isLive);
+  const endIso = isLive ? liveNowIso : updatedAt;
+  const errorStage = progress?.errorStage ?? job.errorStage;
   const stageDuration = (stage: StageName): string | null =>
-    formatStageDurationLabel(stage, status, stageTimings, job, metrics, liveNowIso);
+    formatStageDurationLabel(stage, status, stageTimings, job, metrics, endIso, errorStage);
   const taskStatus = mapV4StatusToTaskStatus(status);
   const progressTone = getProgressTone(status);
   const progressPercent = getJobProgressPercent(status, metrics);
@@ -1934,7 +1910,6 @@ function JobCard({
     updatedAt,
   };
   const actions = buildJobActions(job, status, onAction, onOpenReview);
-  const testMode = progress?.testMode ?? job.testMode;
   const showVerify = metrics.verifyTotal > 0 || ["VERIFY_QUEUED", "VERIFYING"].includes(status);
   const primaryCopy = getPrimaryCopy(status, metrics, progress?.errorStage ?? job.errorStage);
   const secondaryCopy = getSecondaryCopy(
@@ -1961,9 +1936,6 @@ function JobCard({
           <span style={{ color: pageColorTokens.textFootnote }}>|</span>
           <span>{job.isCover ? "覆盖已有翻译" : "保留已有翻译"}</span>
         </>
-      }
-      extraBadges={
-        testMode ? <span style={testModePillStyle}>测试模式</span> : null
       }
       primaryCopy={primaryCopy}
       primaryCopyColor={progressTone.text}
@@ -1992,8 +1964,8 @@ function JobCard({
               />
               <StageBar
                 label="翻译"
-                done={metrics.translateUnitTotal > 0 ? metrics.translateUnitDone : metrics.translateDone}
-                total={metrics.translateUnitTotal > 0 ? metrics.translateUnitTotal : metrics.translateTotal}
+                done={translateProgress.done}
+                total={translateProgress.total}
                 active={status === "TRANSLATING"}
                 complete={["TRANSLATE_DONE", "WRITEBACK_QUEUED", "WRITING_BACK", "VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status)}
                 failed={metrics.translateFailed}
@@ -2012,7 +1984,7 @@ function JobCard({
                 done={metrics.writebackDone}
                 total={metrics.writebackTotal}
                 active={status === "WRITING_BACK"}
-                complete={["VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status)}
+                complete={["VERIFY_QUEUED", "VERIFYING", "COMPLETED", "FAILED"].includes(status) && !(metrics.writebackFailed > 0 && metrics.writebackDone === 0)}
                 failed={metrics.writebackFailed}
                 durationLabel={stageDuration("WRITEBACK")}
               />
@@ -2022,7 +1994,7 @@ function JobCard({
                   done={metrics.verifyDone}
                   total={metrics.verifyTotal}
                   active={status === "VERIFYING"}
-                  complete={status === "COMPLETED" && metrics.verifyTotal > 0}
+                  complete={status === "COMPLETED" && !(metrics.verifyFailed > 0 && metrics.verifyDone === 0)}
                   failed={metrics.verifyFailed}
                   detailLabel={
                     metrics.writebackTotal > 0 && metrics.verifyTotal < metrics.writebackTotal
@@ -2192,13 +2164,23 @@ type StageBarProps = {
 
 function StageBar({ label, done, total, active, complete, failed = 0, detailLabel, durationLabel }: StageBarProps) {
   const { isMobile } = useResponsiveLayout();
-  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : (complete ? 100 : 0);
+  const stageFailed = failed > 0 && done === 0;
+  const pct =
+    total > 0
+      ? Math.min(100, Math.round((done / total) * 100))
+      : stageFailed
+        ? 100
+        : complete
+          ? 100
+          : 0;
 
-  const fillBg = complete
-    ? pageColorTokens.brandGreen
-    : active
-      ? "#c05717"
-      : pageColorTokens.borderInput;
+  const fillBg = stageFailed
+    ? "#d82c0d"
+    : complete
+      ? pageColorTokens.brandGreen
+      : active
+        ? "#c05717"
+        : pageColorTokens.borderInput;
 
   return (
     <div
@@ -2561,30 +2543,6 @@ const mobileTaskViewButtonsStyle: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
   gap: 8,
-};
-
-function testEnvPanelStyle(active: boolean): React.CSSProperties {
-  return {
-    padding: "0.8rem 1rem",
-    borderRadius: "10px",
-    border: `2px solid ${active ? "#f59e0b" : pageColorTokens.border}`,
-    background: active
-      ? "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)"
-      : "linear-gradient(135deg, #f5f6f8 0%, #eef0f6 100%)",
-    boxShadow: active ? "0 2px 10px rgba(245, 158, 11, 0.2)" : "none",
-    transition: "border-color 0.2s, background 0.2s, box-shadow 0.2s",
-  };
-}
-
-const testModePillStyle: React.CSSProperties = {
-  padding: "0.18rem 0.56rem",
-  borderRadius: 999,
-  fontSize: "0.7rem",
-  fontWeight: 700,
-  letterSpacing: "0.02em",
-  color: "#7c5e10",
-  background: "#fff7e0",
-  border: "1px solid #efdca4",
 };
 
 const failErrorStyle: React.CSSProperties = {

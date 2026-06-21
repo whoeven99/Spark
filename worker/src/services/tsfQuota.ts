@@ -28,10 +28,10 @@ export function quotaEnforceEnabled(taskSource?: string | null): boolean {
   return process.env.QUOTA_ENFORCE?.trim().toLowerCase() !== "false";
 }
 
-/** 翻译系数：实际消耗 token × 此系数 = 扣减的额度量。默认 1.5。 */
+/** 翻译系数：实际消耗 token × 此系数 = 扣减的额度量。默认 1（与 API 返回 token 1:1）。 */
 export function quotaTokenMultiplier(): number {
   const v = Number(process.env.QUOTA_TOKEN_MULTIPLIER);
-  return Number.isFinite(v) && v > 0 ? v : 1.5;
+  return Number.isFinite(v) && v > 0 ? v : 1;
 }
 
 /**
@@ -62,10 +62,15 @@ type QuotaBaseResponse = {
   response: TokenQuotaVO | null;
 };
 
-/** 额度服务 base（去掉尾部斜杠）。 */
+/** 额度服务 base（去掉尾部斜杠；缺协议时补 https://）。 */
 function quotaBase(): string | null {
-  const base = process.env.TSF_SERVER_URL?.trim();
-  return base ? base.replace(/\/+$/, "") : null;
+  let base = process.env.TSF_SERVER_URL?.trim();
+  if (!base) return null;
+  base = base.replace(/\/+$/, "");
+  if (!/^https?:\/\//i.test(base)) {
+    base = `https://${base}`;
+  }
+  return base;
 }
 
 /**
@@ -74,23 +79,55 @@ function quotaBase(): string | null {
  * 查询失败 → 保守返回 1（从并发 1 起步，由首次扣减纠正），不直接掐断任务。
  */
 export async function getTsfRemaining(shop: string): Promise<number> {
+  return getTsfRemainingWithRetry(shop, 1);
+}
+
+/** 带重试的额度查询；续跑时避免一次抖动就把并发 seed 到 1。 */
+export async function getTsfRemainingWithRetry(
+  shop: string,
+  attempts = 3,
+): Promise<number> {
   // 调用方（worker）已按来源决定是否启用；此处仅在未配置后端时降级为「无限」。
   const base = quotaBase();
   if (!base) return Number.MAX_SAFE_INTEGER;
 
-  try {
-    const url = `${base}/quota/query?shopName=${encodeURIComponent(shop)}`;
-    const resp = await fetch(url, { method: "GET" });
-    const data = (await resp.json()) as QuotaBaseResponse;
-    if (!data?.success || !data.response) {
-      console.warn(`[tsfQuota] query not ok shop=${shop}: ${data?.errorMsg ?? resp.status}`);
-      return 1;
+  const maxAttempts = Math.max(1, attempts);
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const url = `${base}/quota/query?shopName=${encodeURIComponent(shop)}`;
+      const resp = await fetch(url, { method: "GET" });
+      const data = (await resp.json()) as QuotaBaseResponse;
+      if (!data?.success || !data.response) {
+        console.warn(
+          `[tsfQuota] query not ok shop=${shop}: ${data?.errorMsg ?? resp.status} (attempt ${i + 1}/${maxAttempts})`,
+        );
+      } else {
+        return data.response.remaining;
+      }
+    } catch (err) {
+      console.error(`[tsfQuota] query error shop=${shop} (attempt ${i + 1}/${maxAttempts}):`, err);
     }
-    return data.response.remaining;
-  } catch (err) {
-    console.error(`[tsfQuota] query error shop=${shop}:`, err);
-    return 1;
+    if (i < maxAttempts - 1) {
+      await new Promise((r) => setTimeout(r, 200 * (i + 1)));
+    }
   }
+  return 1;
+}
+
+/**
+ * 续跑时 seed 并发上限：优先实时查询，失败则回退 Redis 里上次扣减后的 remaining。
+ */
+export function resolveQuotaSeedCap(
+  remaining: number,
+  fallbackRemaining?: number,
+): { remaining: number; cap: number; usedFallback: boolean } {
+  let effective = remaining;
+  let usedFallback = false;
+  if (effective <= 1 && fallbackRemaining != null && fallbackRemaining > 1) {
+    effective = fallbackRemaining;
+    usedFallback = true;
+  }
+  return { remaining: effective, cap: quotaConcurrencyCap(effective), usedFallback };
 }
 
 /**

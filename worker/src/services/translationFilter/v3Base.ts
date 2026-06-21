@@ -29,7 +29,7 @@ export function passesV3TypeAndHandleRules(
   return true;
 }
 
-/** Aligns with V2: skip when translation exists and outdated is not true */
+/** Aligns with V2: skip when a non-empty translation exists and outdated is not true */
 export function passesCoverAndOutdatedRules(
   translations: ExistingTranslation[] | undefined,
   key: string,
@@ -39,10 +39,14 @@ export function passesCoverAndOutdatedRules(
     return true;
   }
   const keyTranslation = translations.find((t) => key != null && key === t.key);
-  if (keyTranslation != null && keyTranslation.outdated !== true) {
-    return false;
+  if (keyTranslation == null || keyTranslation.outdated === true) {
+    return true;
   }
-  return true;
+  // Shopify may return a translation key with an empty value — treat as missing.
+  if (isBlankValue(keyTranslation.value)) {
+    return true;
+  }
+  return false;
 }
 
 export function shouldIncludeFieldV3(

@@ -7,8 +7,16 @@ const LOG = "[Feishu][SupportMsg]";
 const CONTENT_MAX_LENGTH = 500;
 const FIELD_FALLBACK = "（未提供）";
 
+/** 来源中文展示名 + admin 回复页路径。 */
+const SOURCE_META: Record<string, { label: string; adminPath: string }> = {
+  spark: { label: "Spark", adminPath: "/support" },
+  "translate-v4": { label: "翻译v4", adminPath: "/translate-v4-support" },
+};
+
 export type SendSupportMessageFeishuNotifyParams = {
   shop: string;
+  /** 会话来源：spark | translate-v4 */
+  source?: string;
   /** 商家发来的消息内容 */
   content: string;
   /** 商家在聊天框主动留的联系邮箱 */
@@ -28,10 +36,10 @@ function truncate(value: string | null | undefined, maxLength: number): string {
 }
 
 /** Admin 客服会话页地址（未配置 ADMIN_BASE_URL 时退化为纯文字引导）。 */
-function resolveAdminSupportUrl(): string | null {
+function resolveAdminSupportUrl(adminPath: string): string | null {
   const base = process.env.ADMIN_BASE_URL?.trim();
   if (!base) return null;
-  return `${base.replace(/\/+$/, "")}/support`;
+  return `${base.replace(/\/+$/, "")}${adminPath}`;
 }
 
 export function buildSupportMessageNotify(
@@ -39,11 +47,13 @@ export function buildSupportMessageNotify(
 ): string {
   const contact = params.contactEmail?.trim();
   const shopEmail = params.shopEmail?.trim();
-  const adminUrl = resolveAdminSupportUrl();
+  const meta = SOURCE_META[params.source ?? "spark"] ?? SOURCE_META.spark;
+  const adminUrl = resolveAdminSupportUrl(meta.adminPath);
 
   const lines = [
     "💬 收到新的客服消息",
     "",
+    `来源: ${meta.label}`,
     `店铺: ${params.shop}`,
     `联系邮箱: ${truncate(contact || shopEmail, 200)}${contact ? "" : shopEmail ? "（账户邮箱）" : ""}`,
     `消息: ${truncate(params.content, CONTENT_MAX_LENGTH)}`,
@@ -55,8 +65,8 @@ export function buildSupportMessageNotify(
   lines.push("");
   lines.push(
     adminUrl
-      ? `👉 请到 Admin 客服会话回复：${adminUrl}`
-      : "👉 请到 Admin「客服会话」页面回复",
+      ? `👉 请到 Admin「${meta.label} 客服」回复：${adminUrl}`
+      : `👉 请到 Admin「${meta.label} 客服」页面回复`,
   );
   return lines.join("\n");
 }

@@ -36,7 +36,13 @@ function formatTime(iso: string): string {
   return d.toLocaleString();
 }
 
-export default function Support() {
+export default function Support({
+  source = "spark",
+  title = "客服会话",
+}: {
+  source?: string;
+  title?: string;
+} = {}) {
   const [conversations, setConversations] = useState<SupportConversationRow[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -57,6 +63,7 @@ export default function Support() {
       const { conversations: rows } = await fetchSupportConversations({
         status: statusFilter,
         search: search.trim() || undefined,
+        source,
       });
       setConversations(rows);
     } catch (e) {
@@ -64,17 +71,23 @@ export default function Support() {
     } finally {
       setLoadingList(false);
     }
-  }, [statusFilter, search]);
+  }, [statusFilter, search, source]);
 
-  const loadThread = useCallback(async (shop: string) => {
-    try {
-      const { conversation, messages: msgs } = await fetchSupportConversation(shop);
-      setActiveConv(conversation);
-      setMessages(msgs);
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
+  const loadThread = useCallback(
+    async (shop: string) => {
+      try {
+        const { conversation, messages: msgs } = await fetchSupportConversation(
+          shop,
+          source,
+        );
+        setActiveConv(conversation);
+        setMessages(msgs);
+      } catch (e) {
+        console.error(e);
+      }
+    },
+    [source],
+  );
 
   // 列表轮询
   useEffect(() => {
@@ -113,7 +126,7 @@ export default function Support() {
     if (!content || !activeShop || sending) return;
     setSending(true);
     try {
-      await replySupport(activeShop, content, opsName.trim() || undefined);
+      await replySupport(activeShop, content, opsName.trim() || undefined, source);
       if (opsName.trim()) localStorage.setItem(OPS_NAME_KEY, opsName.trim());
       setDraft("");
       await loadThread(activeShop);
@@ -123,24 +136,24 @@ export default function Support() {
     } finally {
       setSending(false);
     }
-  }, [draft, activeShop, sending, opsName, loadThread, loadList]);
+  }, [draft, activeShop, sending, opsName, loadThread, loadList, source]);
 
   const handleToggleStatus = useCallback(async () => {
     if (!activeShop || !activeConv) return;
     const next = activeConv.status === "closed" ? "open" : "closed";
     try {
-      await setSupportStatus(activeShop, next);
+      await setSupportStatus(activeShop, next, source);
       await loadThread(activeShop);
       void loadList();
     } catch (e) {
       antdMessage.error(`操作失败：${String(e)}`);
     }
-  }, [activeShop, activeConv, loadThread, loadList]);
+  }, [activeShop, activeConv, loadThread, loadList, source]);
 
   return (
     <div>
       <Typography.Title level={4} style={{ marginTop: 0 }}>
-        客服会话
+        {title}
       </Typography.Title>
       <div style={{ display: "flex", gap: 16, height: "calc(100vh - 200px)" }}>
         {/* 左侧：收件箱 */}

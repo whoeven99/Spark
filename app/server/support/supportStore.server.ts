@@ -19,6 +19,9 @@ export type SupportConversationDTO = {
   messages: SupportMessageDTO[];
 };
 
+/** 会话来源默认值（Spark 自身商家端）。tsf 翻译v4 传入 "translate-v4"。 */
+const DEFAULT_SOURCE = "spark";
+
 const MAX_MESSAGE_LEN = 4000;
 const PREVIEW_LEN = 120;
 
@@ -58,9 +61,10 @@ export async function getConversationForShop(
   shop: string,
   shopEmail: string | null,
   options: { markSeen?: boolean } = {},
+  source: string = DEFAULT_SOURCE,
 ): Promise<SupportConversationDTO> {
   let conversation = await prisma.supportConversation.findUnique({
-    where: { shop },
+    where: { shop_source: { shop, source } },
   });
 
   if (!conversation) {
@@ -70,7 +74,7 @@ export async function getConversationForShop(
   // Shopify 账户邮箱可能变化，保持快照最新（卸载兜底用）
   if (shopEmail && conversation.shopEmail !== shopEmail) {
     conversation = await prisma.supportConversation.update({
-      where: { shop },
+      where: { shop_source: { shop, source } },
       data: { shopEmail },
     });
   }
@@ -78,7 +82,7 @@ export async function getConversationForShop(
   // 仅当商家真正查看面板（markSeen）时才清运营未读；后台拉徽标时不清。
   if (options.markSeen && conversation.unreadForShop > 0) {
     await prisma.supportConversation.update({
-      where: { shop },
+      where: { shop_source: { shop, source } },
       data: { unreadForShop: 0 },
     });
     conversation.unreadForShop = 0;
@@ -104,13 +108,14 @@ export async function appendShopMessage(
   shop: string,
   rawContent: string,
   shopEmail: string | null,
+  source: string = DEFAULT_SOURCE,
 ): Promise<SupportMessageDTO> {
   const content = rawContent.trim().slice(0, MAX_MESSAGE_LEN);
   if (!content) throw new Error("消息内容不能为空");
 
   const conversation = await prisma.supportConversation.upsert({
-    where: { shop },
-    create: { shop, shopEmail: shopEmail || null },
+    where: { shop_source: { shop, source } },
+    create: { shop, source, shopEmail: shopEmail || null },
     update: shopEmail ? { shopEmail } : {},
   });
 
@@ -119,7 +124,7 @@ export async function appendShopMessage(
   });
 
   const updated = await prisma.supportConversation.update({
-    where: { shop },
+    where: { shop_source: { shop, source } },
     data: {
       lastMessage: content.slice(0, PREVIEW_LEN),
       lastMessageAt: message.createdAt,
@@ -131,6 +136,7 @@ export async function appendShopMessage(
   // fire-and-forget：飞书通知运营有新消息，失败只记日志，不阻断发送
   void sendSupportMessageFeishuNotify({
     shop,
+    source,
     content,
     contactEmail: updated.contactEmail,
     shopEmail: updated.shopEmail,
@@ -148,11 +154,17 @@ export async function setContactEmail(
   shop: string,
   rawEmail: string,
   shopEmail: string | null,
+  source: string = DEFAULT_SOURCE,
 ): Promise<void> {
   const email = rawEmail.trim().slice(0, 320);
   await prisma.supportConversation.upsert({
-    where: { shop },
-    create: { shop, contactEmail: email || null, shopEmail: shopEmail || null },
+    where: { shop_source: { shop, source } },
+    create: {
+      shop,
+      source,
+      contactEmail: email || null,
+      shopEmail: shopEmail || null,
+    },
     update: { contactEmail: email || null },
   });
 }

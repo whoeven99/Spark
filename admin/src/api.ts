@@ -994,27 +994,35 @@ export type SupportMessageRow = {
 export function fetchSupportConversations(params?: {
   status?: string;
   search?: string;
+  source?: string;
 }): Promise<{ conversations: SupportConversationRow[] }> {
   const query = new URLSearchParams();
   if (params?.status) query.set("status", params.status);
   if (params?.search) query.set("search", params.search);
+  if (params?.source) query.set("source", params.source);
   const qs = query.toString();
   return apiFetch(`/support${qs ? `?${qs}` : ""}`);
 }
 
-export function fetchSupportConversation(shop: string): Promise<{
+export function fetchSupportConversation(
+  shop: string,
+  source?: string,
+): Promise<{
   conversation: SupportConversationRow;
   messages: SupportMessageRow[];
 }> {
-  return apiFetch(`/support/${encodeURIComponent(shop)}`);
+  const qs = source ? `?source=${encodeURIComponent(source)}` : "";
+  return apiFetch(`/support/${encodeURIComponent(shop)}${qs}`);
 }
 
 export function replySupport(
   shop: string,
   content: string,
   senderName?: string,
+  source?: string,
 ): Promise<{ ok: boolean; id: string; createdAt: string }> {
-  return apiFetch(`/support/${encodeURIComponent(shop)}/reply`, {
+  const qs = source ? `?source=${encodeURIComponent(source)}` : "";
+  return apiFetch(`/support/${encodeURIComponent(shop)}/reply${qs}`, {
     method: "POST",
     body: JSON.stringify({ content, senderName }),
   });
@@ -1023,8 +1031,10 @@ export function replySupport(
 export function setSupportStatus(
   shop: string,
   status: "open" | "closed",
+  source?: string,
 ): Promise<{ ok: boolean }> {
-  return apiFetch(`/support/${encodeURIComponent(shop)}/status`, {
+  const qs = source ? `?source=${encodeURIComponent(source)}` : "";
+  return apiFetch(`/support/${encodeURIComponent(shop)}/status${qs}`, {
     method: "POST",
     body: JSON.stringify({ status }),
   });

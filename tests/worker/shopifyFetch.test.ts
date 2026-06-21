@@ -36,18 +36,18 @@ describe("shopifyFetch init routing", () => {
     vi.unstubAllGlobals();
   });
 
-  it("hardcodes published query for ARTICLE/PAGE/COLLECTION", () => {
-    expect(ID_BASED_MODULE_QUERY.ARTICLE).toBe("published_status:published");
-    expect(ID_BASED_MODULE_QUERY.PAGE).toBe("published_status:published");
-    expect(ID_BASED_MODULE_QUERY.COLLECTION).toBe("published_status:published");
+  it("uses empty query for all id-based modules (includes unpublished)", () => {
+    expect(ID_BASED_MODULE_QUERY.ARTICLE).toBe("");
+    expect(ID_BASED_MODULE_QUERY.PAGE).toBe("");
+    expect(ID_BASED_MODULE_QUERY.COLLECTION).toBe("");
     expect(ID_BASED_MODULE_QUERY.PRODUCT).toBe("");
   });
 
   it("buildInitModuleQueryFilter appends updated_at when provided", () => {
-    expect(buildInitModuleQueryFilterForTest("ARTICLE")).toBe("published_status:published");
+    expect(buildInitModuleQueryFilterForTest("ARTICLE")).toBeNull();
     expect(buildInitModuleQueryFilterForTest("PRODUCT")).toBeNull();
     expect(buildInitModuleQueryFilterForTest("ARTICLE", "2026-01-01T00:00:00.000Z")).toBe(
-      "published_status:published AND updated_at:>'2026-01-01T00:00:00.000Z'",
+      "updated_at:>'2026-01-01T00:00:00.000Z'",
     );
   });
 
@@ -56,14 +56,14 @@ describe("shopifyFetch init routing", () => {
     expect(isIdBasedModuleForTest("MENU")).toBe(false);
   });
 
-  it("fetchResourceIdsByQuery uses articles query with published filter", async () => {
+  it("fetchResourceIdsByQuery uses articles query without published filter", async () => {
     const calls: Array<Record<string, unknown>> = [];
     vi.stubGlobal(
       "fetch",
       mockFetch(({ query, variables }) => {
         calls.push({ query, variables });
         expect(query).toContain("articles(");
-        expect(variables.query).toBe("published_status:published");
+        expect(variables.query).toBeUndefined();
         return {
           articles: {
             edges: [{ node: { id: "gid://shopify/Article/1" } }],

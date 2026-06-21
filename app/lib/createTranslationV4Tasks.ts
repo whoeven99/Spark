@@ -13,7 +13,6 @@ export type CreateTranslationV4TasksParams = {
   limitPerType: number;
   isCover?: boolean;
   isHandle?: boolean;
-  testMode?: boolean;
   /** 用于单测注入 fetch */
   fetchFn?: typeof fetch;
   targetOptions?: ShopLocaleOption[];
@@ -88,7 +87,6 @@ export async function createTranslationV4Tasks(
     limitPerType: params.limitPerType,
     ...(params.isCover !== undefined ? { isCover: params.isCover } : {}),
     ...(params.isHandle !== undefined ? { isHandle: params.isHandle } : {}),
-    ...(params.testMode !== undefined ? { testMode: params.testMode } : {}),
   };
 
   const settled = await Promise.allSettled(
