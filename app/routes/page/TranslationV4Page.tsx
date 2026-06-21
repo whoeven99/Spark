@@ -28,6 +28,7 @@ import {
 } from "../../server/translation/v4/types";
 import {
   formatV4JobTimeLine,
+  resolveTranslateProgressCounts,
   TRANSLATION_V4_UNIT_LABEL,
 } from "../../lib/translationV4Display";
 import { resolveResumeV4JobStatus } from "../../server/translation/v4/resumeV4JobStatus";
@@ -227,8 +228,14 @@ function mergeJobWithProgress(job: TranslationV4Job, progress: ProgressData): Tr
       translateTotal: progress.metrics.translateTotal,
       translateDone: progress.metrics.translateDone,
       translateFailed: progress.metrics.translateFailed,
-      translateUnitTotal: progress.metrics.translateUnitTotal,
-      translateUnitDone: progress.metrics.translateUnitDone,
+      translateUnitTotal: Math.max(
+        progress.metrics.translateUnitTotal ?? 0,
+        job.metrics.translateUnitTotal ?? 0,
+      ),
+      translateUnitDone: Math.max(
+        progress.metrics.translateUnitDone ?? 0,
+        job.metrics.translateUnitDone ?? 0,
+      ),
       writebackTotal: progress.metrics.writebackTotal,
       writebackDone: progress.metrics.writebackDone,
       writebackFailed: progress.metrics.writebackFailed,
@@ -1658,9 +1665,10 @@ function getJobProgressPercent(status: TranslationV4Status, metrics: ProgressDat
     ["INIT_DONE", "TRANSLATE_QUEUED", "TRANSLATING", "TRANSLATE_DONE", "WRITEBACK_QUEUED", "WRITING_BACK", "VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status),
     ["INIT_QUEUED", "INITIALIZING"].includes(status),
   );
+  const translateProgress = resolveTranslateProgressCounts(metrics);
   const translateRatio = getStageRatio(
-    metrics.translateUnitTotal > 0 ? metrics.translateUnitDone : metrics.translateDone,
-    metrics.translateUnitTotal > 0 ? metrics.translateUnitTotal : metrics.translateTotal,
+    translateProgress.done,
+    translateProgress.total,
     ["TRANSLATE_DONE", "WRITEBACK_QUEUED", "WRITING_BACK", "VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status),
     ["TRANSLATE_QUEUED", "TRANSLATING"].includes(status),
   );
@@ -1835,8 +1843,7 @@ function getStageSummaryCopy(
     return `当前阶段：初始化 ${metrics.initDone}/${metrics.initTotal || 0}`;
   }
   if (status === "TRANSLATE_QUEUED" || status === "TRANSLATING" || status === "TRANSLATE_DONE") {
-    const done = metrics.translateUnitTotal > 0 ? metrics.translateUnitDone : metrics.translateDone;
-    const total = metrics.translateUnitTotal > 0 ? metrics.translateUnitTotal : metrics.translateTotal;
+    const { done, total } = resolveTranslateProgressCounts(metrics);
     return `当前阶段：翻译 ${done}/${total || 0}`;
   }
   if (status === "WRITEBACK_QUEUED" || status === "WRITING_BACK") {
@@ -1871,6 +1878,7 @@ function JobCard({
   onStageDetailsOpenChange,
 }: JobCardProps) {
   const metrics = resolveCardMetrics(job, progress, status);
+  const translateProgress = resolveTranslateProgressCounts(metrics);
   const stageTimings = progress?.stageTimings ?? job.stageTimings;
   const updatedAt = progress?.updatedAt ?? job.updatedAt;
   const isLive = ACTIVE_STATUSES.includes(status);
@@ -1956,8 +1964,8 @@ function JobCard({
               />
               <StageBar
                 label="翻译"
-                done={metrics.translateUnitTotal > 0 ? metrics.translateUnitDone : metrics.translateDone}
-                total={metrics.translateUnitTotal > 0 ? metrics.translateUnitTotal : metrics.translateTotal}
+                done={translateProgress.done}
+                total={translateProgress.total}
                 active={status === "TRANSLATING"}
                 complete={["TRANSLATE_DONE", "WRITEBACK_QUEUED", "WRITING_BACK", "VERIFY_QUEUED", "VERIFYING", "COMPLETED"].includes(status)}
                 failed={metrics.translateFailed}

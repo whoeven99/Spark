@@ -63,6 +63,7 @@ class AdaptiveSemaphore {
 class EWMA {
   constructor(private _v: number, private readonly _a = 0.2) {}
   update(sample: number): void { this._v = this._a * sample + (1 - this._a) * this._v; }
+  setValue(v: number): void { this._v = v; }
   get value(): number { return this._v; }
 }
 
@@ -169,6 +170,25 @@ const RAMP_LATENCY_INHIBIT_MS = Math.max(
 const SOFT_BACKOFF_MIN_INTERVAL_MS = Math.max(500, Number(process.env.TRANSLATE_SOFT_BACKOFF_MIN_INTERVAL_MS) || 3_000);
 /** Multiplicative factor applied on each backoff (soft latency/timeout or 429). */
 const BACKOFF_FACTOR = 0.7;
+/** Soft back-off floor — stay above serial crawl (was 4, too easy to stall). */
+const SOFT_BACKOFF_FLOOR = Math.max(1, Number(process.env.TRANSLATE_SOFT_BACKOFF_FLOOR) || 16);
+/** Half-life for timeout-rate decay when no new timeouts (wall clock, not success count). */
+const TIMEOUT_RATE_HALF_LIFE_MS = Math.max(
+  5_000,
+  Number(process.env.TRANSLATE_TIMEOUT_RATE_HALF_LIFE_MS) || 30_000,
+);
+/** If no timeout for this long, allow timed concurrency recovery (+RECOVERY_RAMP_ADD). */
+const RECOVERY_NO_TIMEOUT_MS = Math.max(
+  3_000,
+  Number(process.env.TRANSLATE_RECOVERY_NO_TIMEOUT_MS) || 12_000,
+);
+/** Min interval between timed +N recovery steps. */
+const RECOVERY_RAMP_INTERVAL_MS = Math.max(
+  5_000,
+  Number(process.env.TRANSLATE_RECOVERY_RAMP_INTERVAL_MS) || 15_000,
+);
+/** Concurrency added on each timed recovery tick. */
+const RECOVERY_RAMP_ADD = Math.max(1, Number(process.env.TRANSLATE_RECOVERY_RAMP_ADD) || 4);
 
 // ── DeepSeek concurrency (official docs: account-level in-flight connections) ──
 // https://api-docs.deepseek.com/zh-cn/quick_start/rate_limit
@@ -214,8 +234,8 @@ export function resolveDeepSeekPoolConcurrency(model: string): {
   // (≈205 for flash) drove per-request latency to 40s+ and a timeout storm.
   // Begin near 6% of the safe ceiling (floor 48) — high enough to parallelise
   // the first wave, low enough that the congestion guard (high latency / timeout
-  // rate → shed concurrency) can keep us off the cliff while the +4-per-8-success
-  // ramp climbs only while latency stays comfortably low.
+// rate → shed concurrency) can keep us off the cliff while success-based ramp and
+// timed recovery (+4 / 15s when quiet) climb back from the soft floor (16).
   const initial = Number.isFinite(initialOverride) && initialOverride > 0
     ? Math.min(Math.floor(initialOverride), ceiling)
     : Math.min(Math.max(48, Math.floor(ceiling * 0.06)), ceiling);
@@ -506,6 +526,12 @@ class LLMKeyPool {
   private _deepseekRampSuccesses = 0;
   /** EWMA of recent timeout occurrences (1=timeout, 0=ok). Congestion signal. */
   private readonly _timeoutRate = new EWMA(0, 0.1);
+  /** Wall-clock anchor for time-based timeout-rate decay (not success-driven). */
+  private _timeoutRateDecayedAt = Date.now();
+  /** Epoch ms of last LLM timeout — drives timed recovery. */
+  private _lastTimeoutAt = 0;
+  /** Epoch ms of last timed +N recovery step. */
+  private _lastTimedRecoveryAt = 0;
   /** Epoch ms of last soft backoff — rate-limits successive cuts. */
   private _lastSoftBackoffAt = 0;
   /** Pool-level count of fields that exhausted retries and fell back to original. */
@@ -766,7 +792,9 @@ class LLMKeyPool {
    */
   private _deepseekOnSuccess(): void {
     if (this._hasSeenAnyHeaders) return;
-    this._timeoutRate.update(0); // a success decays the recent-timeout rate
+    const now = Date.now();
+    this._applyTimeoutRateTimeDecay(now);
+    this._maybeTimedRecovery(now);
 
     // ── Congestion guard (timeout-rate driven) ────────────────────────────────
     // Brake on timeouts, not on absolute latency: a slow-but-completing endpoint
@@ -821,12 +849,54 @@ class LLMKeyPool {
   /** Feed a failed attempt into the congestion guard. Timeouts drive the brake. */
   private _onAttemptError(kind: LlmErrorKind): void {
     if (this._limitMode !== "deepseek-concurrency" || this._hasSeenAnyHeaders) return;
+    const now = Date.now();
     // A timed-out request never reaches onResponse, so its (huge) latency is NOT
     // in the latency EWMA — the timeout rate is the only signal that catches it.
-    this._timeoutRate.update(kind === "timeout" ? 1 : 0);
+    this._applyTimeoutRateTimeDecay(now);
+    if (kind === "timeout") {
+      this._timeoutRate.update(1);
+      this._lastTimeoutAt = now;
+      this._timeoutRateDecayedAt = now;
+    }
     if (kind === "timeout" && this._timeoutRate.value > LLM_TIMEOUT_RATE_HIGH) {
       this._softBackoff("timeout rate");
     }
+  }
+
+  /**
+   * Decay timeout-rate EWMA toward 0 on wall clock — avoids staying "guilty" at
+   * floor 4 when successes are sparse (40s+ latency) and success-count decay stalls.
+   */
+  private _applyTimeoutRateTimeDecay(now = Date.now()): void {
+    const elapsed = now - this._timeoutRateDecayedAt;
+    if (elapsed <= 0) return;
+    const factor = Math.pow(0.5, elapsed / TIMEOUT_RATE_HALF_LIFE_MS);
+    if (factor >= 0.999) return;
+    this._timeoutRate.setValue(this._timeoutRate.value * factor);
+    this._timeoutRateDecayedAt = now;
+  }
+
+  /**
+   * Timed recovery: if no recent timeouts, add +RECOVERY_RAMP_ADD on an interval
+   * even when latency-based ramp is inhibited (common when stuck at soft floor).
+   */
+  private _maybeTimedRecovery(now = Date.now()): void {
+    if (this.sem.max >= this._deepseekConcCeiling) return;
+    if (now - this._lastTimedRecoveryAt < RECOVERY_RAMP_INTERVAL_MS) return;
+    if (this._lastTimeoutAt > 0 && now - this._lastTimeoutAt < RECOVERY_NO_TIMEOUT_MS) return;
+    if (this._timeoutRate.value > LLM_TIMEOUT_RATE_HIGH / 2) return;
+
+    this._lastTimedRecoveryAt = now;
+    const newMax = Math.min(this._deepseekConcCeiling, this.sem.max + RECOVERY_RAMP_ADD);
+    if (newMax === this.sem.max) return;
+    this.sem.setMax(newMax);
+    const quietSec =
+      this._lastTimeoutAt > 0 ? Math.round((now - this._lastTimeoutAt) / 1000) : null;
+    console.log(
+      `[llm-pool] timed recovery → concurrency=${newMax}/${this._deepseekConcCeiling}` +
+      ` (+${RECOVERY_RAMP_ADD}, timeoutRate=${(this._timeoutRate.value * 100).toFixed(0)}%` +
+      `${quietSec != null ? `, quiet=${quietSec}s` : ""})`,
+    );
   }
 
   /** Multiplicative concurrency cut from a soft (latency/timeout) congestion signal. */
@@ -834,7 +904,7 @@ class LLMKeyPool {
     const now = Date.now();
     if (now - this._lastSoftBackoffAt < SOFT_BACKOFF_MIN_INTERVAL_MS) return;
     this._lastSoftBackoffAt = now;
-    const floor = Math.max(this.slots.length, 4);
+    const floor = Math.max(this.slots.length, SOFT_BACKOFF_FLOOR);
     const newMax = Math.max(floor, Math.floor(this.sem.max * BACKOFF_FACTOR));
     this._deepseekRampSuccesses = 0;
     if (newMax !== this.sem.max) {
@@ -879,7 +949,7 @@ class LLMKeyPool {
   }
 
   private _deepseekOnThrottle(): void {
-    const floor = Math.max(this.slots.length, 4);
+    const floor = Math.max(this.slots.length, SOFT_BACKOFF_FLOOR);
     const newMax = Math.max(floor, Math.floor(this.sem.max * BACKOFF_FACTOR));
     this._deepseekRampSuccesses = 0;
     if (newMax !== this.sem.max) {
