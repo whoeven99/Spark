@@ -54,7 +54,7 @@ for (const name of names) {
   }
   if (!data) continue;
   const s = stats[mod] || (stats[mod] = { total:0, noSrc:0, need:0, toTarget:0, fb:0, unch:0 });
-  for (const r of data) {
+  for (const r of (Array.isArray(data) ? data : [data])) {
     for (const t of (r.translations ?? [])) {
       if (SKIP_KEYS.has(t.key)) continue;
       const orig = t.originalValue ?? "";

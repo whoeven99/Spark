@@ -1454,14 +1454,14 @@ const LLM_TIMEOUT_MAX_MS = Math.max(
   Number(process.env.TRANSLATE_LLM_TIMEOUT_MAX_MS) || 300_000,
 );
 /**
- * Idle (stall) window for streaming: abort if no token arrives for this long.
- * This — not the total cap — is the primary stuck-detector now that responses
- * stream. Default 40s: generous enough for a slow first token, tight enough to
- * fail a hung connection fast instead of waiting out the full hard cap.
+ * Idle (stall) window for streaming: abort if no token arrives for this long
+ * after the first content token (or between subsequent tokens). Default 120s:
+ * rich HTML/JSON batches can pause between token bursts longer than 40s under
+ * load without being truly stuck; still well below the wall-clock hard cap.
  */
 const LLM_IDLE_TIMEOUT_MS = Math.max(
   10_000,
-  Number(process.env.TRANSLATE_LLM_IDLE_TIMEOUT_MS) || 40_000,
+  Number(process.env.TRANSLATE_LLM_IDLE_TIMEOUT_MS) || 120_000,
 );
 /**
  * 「等首个 token」窗口的**下限**。高并发下 DeepSeek 会把请求排队，首字延迟可达数十秒——
