@@ -148,20 +148,18 @@ function parseRateLimitResetMs(raw: number | undefined, now: number): number | u
  */
 const MAX_POOL_CONCURRENCY = Math.max(1, Number(process.env.LLM_MAX_CONCURRENCY) || 512);
 
-// ── Congestion-guard thresholds (latency / timeout-rate aware backoff) ─────────
-// DeepSeek 200s carry no quota headers, so the pool can't read RPM/TPM pressure
-// and never sees a 429 — the only pre-existing backoff trigger. Without a brake
-// the concurrency ramps monotonically to MAX_POOL_CONCURRENCY and pegs there,
-// pushing per-request latency past the stream timeouts and into a self-inflicted
-// timeout storm. Instead we treat *rising latency* and *timeouts* as the
-// congestion signal and shed concurrency (same multiplicative cut as a 429) so
-// the pool settles at the throughput knee.
-/** Above this avg latency (ms) → congested, shed concurrency. */
-const LLM_LATENCY_HIGH_MS = Math.max(5_000, Number(process.env.TRANSLATE_LLM_LATENCY_HIGH_MS) || 22_000);
-/** Resume ramping only once avg latency is back under this (ms) — hysteresis. */
-const LLM_LATENCY_OK_MS = Math.max(2_000, Number(process.env.TRANSLATE_LLM_LATENCY_OK_MS) || 15_000);
-/** Recent timeout rate (EWMA, 0..1) above this → shed concurrency. */
-const LLM_TIMEOUT_RATE_HIGH = Math.min(1, Math.max(0.01, Number(process.env.TRANSLATE_LLM_TIMEOUT_RATE_HIGH) || 0.1));
+// ── Congestion-guard thresholds (timeout-rate driven backoff) ──────────────────
+// DeepSeek 200s carry no quota headers and never 429 here, so the pool needs its
+// own pressure signal. The right signal is the TIMEOUT RATE — requests dying
+// before they finish — NOT absolute latency: big HTML/JSON batches legitimately
+// take 20–30s per request, so an absolute-latency brake just serialised the job
+// at the floor while latency stayed high anyway. We back off (same multiplicative
+// cut as a 429) when timeouts climb, and keep absolute latency only as a far-away
+// emergency brake for pathological stalls.
+/** Recent timeout rate (EWMA, 0..1) above this → shed concurrency. Primary brake. */
+const LLM_TIMEOUT_RATE_HIGH = Math.min(1, Math.max(0.01, Number(process.env.TRANSLATE_LLM_TIMEOUT_RATE_HIGH) || 0.15));
+/** Emergency-only avg-latency ceiling (ms). Far above natural big-batch latency. */
+const LLM_LATENCY_HIGH_MS = Math.max(30_000, Number(process.env.TRANSLATE_LLM_LATENCY_HIGH_MS) || 75_000);
 /** Min gap between successive soft backoffs (ms) — let the cut take effect first. */
 const SOFT_BACKOFF_MIN_INTERVAL_MS = Math.max(500, Number(process.env.TRANSLATE_SOFT_BACKOFF_MIN_INTERVAL_MS) || 3_000);
 /** Multiplicative factor applied on each backoff (soft latency/timeout or 429). */
@@ -268,8 +266,8 @@ class LlmRateLimitError extends Error {
  * differently: a timeout means "too slow / stuck", not "poison data to isolate".
  */
 class LlmTimeoutError extends Error {
-  readonly kind: "idle" | "hard";
-  constructor(kind: "idle" | "hard") {
+  readonly kind: "first-token" | "idle" | "hard";
+  constructor(kind: "first-token" | "idle" | "hard") {
     super(`LLM stream ${kind} timeout`);
     this.name = "LlmTimeoutError";
     this.kind = kind;
@@ -317,6 +315,7 @@ async function fetchDeepSeekChatCompletion(
   model: string,
   messages: ChatMessage[],
   timeoutMs: number,
+  firstTokenTimeoutMs: number,
   userId?: string,
 ): Promise<ChatCompletionInvokeResult> {
   // Stream the completion so a slow-but-progressing response is NOT killed:
@@ -340,8 +339,8 @@ async function fetchDeepSeekChatCompletion(
   const armIdle = () => {
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(
-      () => controller.abort(new LlmTimeoutError("idle")),
-      gotContent ? LLM_IDLE_TIMEOUT_MS : LLM_FIRST_TOKEN_TIMEOUT_MS,
+      () => controller.abort(new LlmTimeoutError(gotContent ? "idle" : "first-token")),
+      gotContent ? LLM_IDLE_TIMEOUT_MS : firstTokenTimeoutMs,
     );
   };
   const hardTimer = setTimeout(
@@ -438,6 +437,7 @@ async function invokeChatCompletion(
   model: string,
   messages: ChatMessage[],
   timeoutMs: number,
+  firstTokenTimeoutMs: number,
   deepseekUserId?: string,
 ): Promise<ChatCompletionInvokeResult> {
   return fetchDeepSeekChatCompletion(
@@ -446,6 +446,7 @@ async function invokeChatCompletion(
     model,
     messages,
     timeoutMs,
+    firstTokenTimeoutMs,
     deepseekUserId,
   );
 }
@@ -762,21 +763,21 @@ class LLMKeyPool {
     if (this._hasSeenAnyHeaders) return;
     this._timeoutRate.update(0); // a success decays the recent-timeout rate
 
-    // ── Congestion guard ───────────────────────────────────────────────────────
-    // DeepSeek never 429s here, so latency + timeouts are the only pressure
-    // signals. If either is high, shed concurrency instead of ramping — this is
-    // what stops the monotonic climb to the ceiling that caused the timeout storm.
-    if (this.latency.value > LLM_LATENCY_HIGH_MS) {
-      this._softBackoff("high latency");
-      return;
-    }
+    // ── Congestion guard (timeout-rate driven) ────────────────────────────────
+    // Brake on timeouts, not on absolute latency: a slow-but-completing endpoint
+    // (big batches at 20–30s) is fine and should keep its concurrency. Only a
+    // pathological latency triggers the emergency brake.
     if (this._timeoutRate.value > LLM_TIMEOUT_RATE_HIGH) {
       this._softBackoff("timeout rate");
       return;
     }
-    // Hysteresis: only ramp up once latency is comfortably below the target, so
-    // we don't oscillate right at the knee.
-    if (this.latency.value > LLM_LATENCY_OK_MS) return;
+    if (this.latency.value > LLM_LATENCY_HIGH_MS) {
+      this._softBackoff("emergency latency");
+      return;
+    }
+    // Ramp up only while timeouts are rare (well under the brake threshold), so
+    // we grow when requests are completing cleanly and hold steady near the knee.
+    if (this._timeoutRate.value > LLM_TIMEOUT_RATE_HIGH / 2) return;
 
     this._deepseekRampSuccesses++;
     const RAMP_STEP = 8;
@@ -822,6 +823,20 @@ class LLMKeyPool {
         `latency=${this.latency.value.toFixed(0)}ms, timeoutRate=${(this._timeoutRate.value * 100).toFixed(0)}%)`,
       );
     }
+  }
+
+  /**
+   * Adaptive "wait for first token" budget (ms). When the endpoint is slow or
+   * queued, the first token legitimately takes longer; being patient here turns
+   * a premature abort + retry (which wastes work AND adds load) into a slow
+   * success. Scales with observed latency, clamped to a sane floor/ceiling.
+   */
+  firstTokenBudgetMs(): number {
+    const fromLatency = this.latency.value * LLM_FIRST_TOKEN_LATENCY_FACTOR;
+    return Math.min(
+      LLM_FIRST_TOKEN_TIMEOUT_MAX_MS,
+      Math.max(LLM_FIRST_TOKEN_TIMEOUT_MS, Math.round(fromLatency)),
+    );
   }
 
   /** Record fields that exhausted retries and fell back to the original text. */
@@ -1422,9 +1437,13 @@ export function resolveBatchLimits(order: Engine[]): {
   }
   return { maxChars: MAX_CHARS_PER_BATCH, maxItems: MAX_ITEMS_PER_BATCH };
 }
+// Total wall-clock hard cap base. Raised to 180s so a patient first-token wait
+// (adaptive, up to LLM_FIRST_TOKEN_TIMEOUT_MAX_MS) plus the streaming generation
+// fits under the cap — otherwise the hard timer fires mid-generation and we abort
+// work that was about to finish. The idle detector still catches true stalls fast.
 const LLM_TIMEOUT_BASE_MS = Math.max(
   60_000,
-  Number(process.env.TRANSLATE_LLM_TIMEOUT_MS) || 120_000,
+  Number(process.env.TRANSLATE_LLM_TIMEOUT_MS) || 180_000,
 );
 const LLM_TIMEOUT_PER_ITEM_MS = Math.max(
   500,
@@ -1445,18 +1464,39 @@ const LLM_IDLE_TIMEOUT_MS = Math.max(
   Number(process.env.TRANSLATE_LLM_IDLE_TIMEOUT_MS) || 40_000,
 );
 /**
- * 「等首个 token」的宽松窗口。高并发下 DeepSeek 会把请求排队，首字延迟可达数十秒——
- * 此时请求**还没开始吐字**就被流中空闲超时砍掉会触发大量无谓的二分/重试/刷屏。
- * 给首 token 单独留更长时间（默认 90s）；一旦开始吐字再切到收紧的 idle 窗口。
+ * 「等首个 token」窗口的**下限**。高并发下 DeepSeek 会把请求排队，首字延迟可达数十秒——
+ * 此时请求**还没开始吐字**就被砍掉会触发大量无谓的二分/重试/刷屏。实际窗口由
+ * `LLMKeyPool.firstTokenBudgetMs()` 按观测延迟自适应放大(慢就更耐心),在此下限与
+ * `LLM_FIRST_TOKEN_TIMEOUT_MAX_MS` 之间取值;一旦开始吐字再切到收紧的 idle 窗口。
  */
 const LLM_FIRST_TOKEN_TIMEOUT_MS = Math.max(
   LLM_IDLE_TIMEOUT_MS,
   Number(process.env.TRANSLATE_LLM_FIRST_TOKEN_TIMEOUT_MS) || 90_000,
 );
+/** Multiplier on observed avg latency for the adaptive first-token budget. */
+const LLM_FIRST_TOKEN_LATENCY_FACTOR = Math.max(
+  1,
+  Number(process.env.TRANSLATE_LLM_FIRST_TOKEN_LATENCY_FACTOR) || 4,
+);
+/** Hard ceiling on the adaptive first-token wait (ms). Stays under the wall-clock cap. */
+const LLM_FIRST_TOKEN_TIMEOUT_MAX_MS = Math.max(
+  LLM_FIRST_TOKEN_TIMEOUT_MS,
+  Number(process.env.TRANSLATE_LLM_FIRST_TOKEN_TIMEOUT_MAX_MS) || 150_000,
+);
 /** On timeout, re-chunk a large batch straight to this size (skip the slow 25→12→6 cascade). */
 const TIMEOUT_RESPLIT_SIZE = Math.max(
   1,
   Number(process.env.TRANSLATE_TIMEOUT_RESPLIT_SIZE) || 3,
+);
+/** First-token timeouts: how many times to drain + retry the SAME batch before re-chunking. */
+const FIRST_TOKEN_DRAIN_RETRIES = Math.max(
+  0,
+  Number(process.env.TRANSLATE_FIRST_TOKEN_DRAIN_RETRIES) || 1,
+);
+/** Drain delay before a first-token same-batch retry (lets the server queue clear). */
+const FIRST_TOKEN_DRAIN_MS = Math.max(
+  0,
+  Number(process.env.TRANSLATE_FIRST_TOKEN_DRAIN_MS) || 3_000,
 );
 /** Base backoff between single-item leaf retries (grows linearly per attempt). */
 const LEAF_RETRY_BACKOFF_MS = Math.max(
@@ -1878,7 +1918,10 @@ async function translateItemsRouted(
 }
 
 // Retries for a single (un-splittable) item that fails transiently.
-const LEAF_RETRIES = 2;
+const LEAF_RETRIES = Math.max(
+  1,
+  Number(process.env.TRANSLATE_LEAF_RETRIES) || 3,
+);
 
 /**
  * Pull the JSON object out of a model response that may be wrapped in markdown
@@ -2025,6 +2068,7 @@ async function callLLMOnce(
       model,
       messages,
       llmTimeoutMsForBatch(items.length),
+      getPool().firstTokenBudgetMs(),
       deepseekUserId,
     );
 
@@ -2073,6 +2117,7 @@ async function gatherTranslations(
   collected: Map<string, string>,
   tokenAccum: { value: number },
   shopName?: string,
+  firstTokenRetriesLeft = FIRST_TOKEN_DRAIN_RETRIES,
 ): Promise<void> {
   const pend = items.filter((i) => !collected.has(i.key));
   if (pend.length === 0) return;
@@ -2107,8 +2152,28 @@ async function gatherTranslations(
     return;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    const isTimeout = e instanceof LlmTimeoutError;
+    const timeoutKind = e instanceof LlmTimeoutError ? e.kind : null;
+    const isTimeout = timeoutKind !== null;
     if (pend.length > 1) {
+      // First-token timeout = the request sat queued server-side before emitting
+      // anything. Re-chunking into MORE requests makes the queue worse and re-sends
+      // the same work as more calls. The congestion guard has already cut
+      // concurrency on this timeout; wait a beat for the queue to drain, then retry
+      // the SAME batch. Only fall through to re-chunk if it times out again.
+      if (timeoutKind === "first-token" && firstTokenRetriesLeft > 0) {
+        console.warn(
+          `[llm] batch of ${pend.length} timed out waiting for first token; ` +
+          `draining ${(FIRST_TOKEN_DRAIN_MS / 1_000).toFixed(1)}s then retrying same batch ` +
+          `(${firstTokenRetriesLeft} retr${firstTokenRetriesLeft === 1 ? "y" : "ies"} left)`,
+        );
+        if (FIRST_TOKEN_DRAIN_MS > 0) {
+          await new Promise((res) => setTimeout(res, FIRST_TOKEN_DRAIN_MS));
+        }
+        await gatherTranslations(
+          pend, aiModel, systemPrompt, collected, tokenAccum, shopName, firstTokenRetriesLeft - 1,
+        );
+        return;
+      }
       // Timeout ≠ poison data. Halving a timed-out batch re-pays the base timeout
       // at every level (25→12→6→3…). Instead jump straight to small chunks so each
       // retry is fast. Parse errors keep the binary split (isolates the bad item).
