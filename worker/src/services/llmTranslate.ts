@@ -154,12 +154,17 @@ const MAX_POOL_CONCURRENCY = Math.max(1, Number(process.env.LLM_MAX_CONCURRENCY)
 // before they finish — NOT absolute latency: big HTML/JSON batches legitimately
 // take 20–30s per request, so an absolute-latency brake just serialised the job
 // at the floor while latency stayed high anyway. We back off (same multiplicative
-// cut as a 429) when timeouts climb, and keep absolute latency only as a far-away
-// emergency brake for pathological stalls.
+// cut as a 429) when timeouts climb. High avg latency under load is expected (queueing
+// at the provider) — use it only to stop ramping, never to shed concurrency.
 /** Recent timeout rate (EWMA, 0..1) above this → shed concurrency. Primary brake. */
-const LLM_TIMEOUT_RATE_HIGH = Math.min(1, Math.max(0.01, Number(process.env.TRANSLATE_LLM_TIMEOUT_RATE_HIGH) || 0.45));
-/** Emergency-only avg-latency ceiling (ms). Far above natural big-batch latency. */
-const LLM_LATENCY_HIGH_MS = Math.max(30_000, Number(process.env.TRANSLATE_LLM_LATENCY_HIGH_MS) || 180_000);
+const LLM_TIMEOUT_RATE_HIGH = Math.min(1, Math.max(0.01, Number(process.env.TRANSLATE_LLM_TIMEOUT_RATE_HIGH) || 0.25));
+/** Avg latency above this → hold concurrency steady (no ramp). Does NOT trigger backoff. */
+const RAMP_LATENCY_INHIBIT_MS = Math.max(
+  15_000,
+  Number(process.env.TRANSLATE_RAMP_LATENCY_INHIBIT_MS) ||
+    Number(process.env.TRANSLATE_LLM_LATENCY_HIGH_MS) ||
+    35_000,
+);
 /** Min gap between successive soft backoffs (ms) — let the cut take effect first. */
 const SOFT_BACKOFF_MIN_INTERVAL_MS = Math.max(500, Number(process.env.TRANSLATE_SOFT_BACKOFF_MIN_INTERVAL_MS) || 3_000);
 /** Multiplicative factor applied on each backoff (soft latency/timeout or 429). */
@@ -196,7 +201,7 @@ export function resolveDeepSeekPoolConcurrency(model: string): {
   const accountLimit = resolveDeepSeekAccountConcurrencyLimit(model);
   const util = Math.min(
     1,
-    Math.max(0.1, Number(process.env.DEEPSEEK_CONCURRENCY_UTIL) || 0.9),
+    Math.max(0.1, Number(process.env.DEEPSEEK_CONCURRENCY_UTIL) || 0.45),
   );
   const ceiling = Math.min(
     MAX_POOL_CONCURRENCY,
@@ -207,13 +212,13 @@ export function resolveDeepSeekPoolConcurrency(model: string): {
   // The account in-flight limit is large (500 pro / 2500 flash), but a single
   // slow endpoint saturates long before that: opening at ~40% of the ceiling
   // (≈205 for flash) drove per-request latency to 40s+ and a timeout storm.
-  // Begin near 12% of the safe ceiling (floor 48) — high enough to parallelise
+  // Begin near 6% of the safe ceiling (floor 48) — high enough to parallelise
   // the first wave, low enough that the congestion guard (high latency / timeout
   // rate → shed concurrency) can keep us off the cliff while the +4-per-8-success
   // ramp climbs only while latency stays comfortably low.
   const initial = Number.isFinite(initialOverride) && initialOverride > 0
     ? Math.min(Math.floor(initialOverride), ceiling)
-    : Math.min(Math.max(48, Math.floor(ceiling * 0.12)), ceiling);
+    : Math.min(Math.max(48, Math.floor(ceiling * 0.06)), ceiling);
   return { accountLimit, ceiling, initial };
 }
 
@@ -765,19 +770,17 @@ class LLMKeyPool {
 
     // ── Congestion guard (timeout-rate driven) ────────────────────────────────
     // Brake on timeouts, not on absolute latency: a slow-but-completing endpoint
-    // (big batches at 20–30s) is fine and should keep its concurrency. Only a
-    // pathological latency triggers the emergency brake.
+    // (big HTML batches at 60–120s under load) is fine and should keep its
+    // concurrency. High latency only stops the ramp — shedding on latency alone
+    // caused a death spiral (concurrency 77→4 while timeoutRate stayed 0%).
     if (this._timeoutRate.value > LLM_TIMEOUT_RATE_HIGH) {
       this._softBackoff("timeout rate");
-      return;
-    }
-    if (this.latency.value > LLM_LATENCY_HIGH_MS) {
-      this._softBackoff("emergency latency");
       return;
     }
     // Ramp up only while timeouts are rare (well under the brake threshold), so
     // we grow when requests are completing cleanly and hold steady near the knee.
     if (this._timeoutRate.value > LLM_TIMEOUT_RATE_HIGH / 2) return;
+    if (this.latency.value > RAMP_LATENCY_INHIBIT_MS) return;
 
     this._deepseekRampSuccesses++;
     const RAMP_STEP = 8;
@@ -1400,7 +1403,7 @@ export function countFieldUnits(key: string, value: string): number {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 // Max total chars sent to the translation API in one request.
-// Override via TRANSLATE_MAX_CHARS_PER_BATCH env var (default 4000).
+// Override via TRANSLATE_MAX_CHARS_PER_BATCH env var (default 3000).
 //
 // Smaller batches trade a few extra requests (cheap — DeepSeek/OpenAI prompt
 // caching makes the repeated system prompt nearly free) for much lower per-request
@@ -1410,7 +1413,7 @@ export function countFieldUnits(key: string, value: string): number {
 // requests" tail that otherwise dominates the back half of a job.
 const MAX_CHARS_PER_BATCH = Math.max(
   500,
-  Number(process.env.TRANSLATE_MAX_CHARS_PER_BATCH) || 4_000,
+  Number(process.env.TRANSLATE_MAX_CHARS_PER_BATCH) || 3_000,
 );
 /** Max items per LLM request — avoids 80+ key payloads that routinely hit the timeout. */
 const MAX_ITEMS_PER_BATCH = Math.max(
@@ -1420,7 +1423,7 @@ const MAX_ITEMS_PER_BATCH = Math.max(
 /** Rich (HTML/JSON/LLM-first) pools use smaller batches — fewer keys per request, less idle-timeout tail. */
 const RICH_MAX_CHARS_PER_BATCH = Math.max(
   500,
-  Number(process.env.TRANSLATE_RICH_MAX_CHARS_PER_BATCH) || 2_000,
+  Number(process.env.TRANSLATE_RICH_MAX_CHARS_PER_BATCH) || 1_500,
 );
 const RICH_MAX_ITEMS_PER_BATCH = Math.max(
   1,
