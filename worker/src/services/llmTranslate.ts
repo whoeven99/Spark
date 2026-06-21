@@ -157,9 +157,9 @@ const MAX_POOL_CONCURRENCY = Math.max(1, Number(process.env.LLM_MAX_CONCURRENCY)
 // cut as a 429) when timeouts climb, and keep absolute latency only as a far-away
 // emergency brake for pathological stalls.
 /** Recent timeout rate (EWMA, 0..1) above this → shed concurrency. Primary brake. */
-const LLM_TIMEOUT_RATE_HIGH = Math.min(1, Math.max(0.01, Number(process.env.TRANSLATE_LLM_TIMEOUT_RATE_HIGH) || 0.15));
+const LLM_TIMEOUT_RATE_HIGH = Math.min(1, Math.max(0.01, Number(process.env.TRANSLATE_LLM_TIMEOUT_RATE_HIGH) || 0.45));
 /** Emergency-only avg-latency ceiling (ms). Far above natural big-batch latency. */
-const LLM_LATENCY_HIGH_MS = Math.max(30_000, Number(process.env.TRANSLATE_LLM_LATENCY_HIGH_MS) || 75_000);
+const LLM_LATENCY_HIGH_MS = Math.max(30_000, Number(process.env.TRANSLATE_LLM_LATENCY_HIGH_MS) || 180_000);
 /** Min gap between successive soft backoffs (ms) — let the cut take effect first. */
 const SOFT_BACKOFF_MIN_INTERVAL_MS = Math.max(500, Number(process.env.TRANSLATE_SOFT_BACKOFF_MIN_INTERVAL_MS) || 3_000);
 /** Multiplicative factor applied on each backoff (soft latency/timeout or 429). */
@@ -1437,71 +1437,62 @@ export function resolveBatchLimits(order: Engine[]): {
   }
   return { maxChars: MAX_CHARS_PER_BATCH, maxItems: MAX_ITEMS_PER_BATCH };
 }
-// Total wall-clock hard cap base. Raised to 180s so a patient first-token wait
-// (adaptive, up to LLM_FIRST_TOKEN_TIMEOUT_MAX_MS) plus the streaming generation
-// fits under the cap — otherwise the hard timer fires mid-generation and we abort
-// work that was about to finish. The idle detector still catches true stalls fast.
+// ── LLM timeouts (defaults tuned lenient for diagnosis — override via env in prod) ──
+// Total wall-clock hard cap: base + per-item scaling, capped at MAX.
 const LLM_TIMEOUT_BASE_MS = Math.max(
   60_000,
-  Number(process.env.TRANSLATE_LLM_TIMEOUT_MS) || 180_000,
+  Number(process.env.TRANSLATE_LLM_TIMEOUT_MS) || 300_000,
 );
 const LLM_TIMEOUT_PER_ITEM_MS = Math.max(
   500,
-  Number(process.env.TRANSLATE_LLM_TIMEOUT_PER_ITEM_MS) || 2_000,
+  Number(process.env.TRANSLATE_LLM_TIMEOUT_PER_ITEM_MS) || 5_000,
 );
 const LLM_TIMEOUT_MAX_MS = Math.max(
   LLM_TIMEOUT_BASE_MS,
-  Number(process.env.TRANSLATE_LLM_TIMEOUT_MAX_MS) || 300_000,
+  Number(process.env.TRANSLATE_LLM_TIMEOUT_MAX_MS) || 600_000,
 );
-/**
- * Idle (stall) window for streaming: abort if no token arrives for this long
- * after the first content token (or between subsequent tokens). Default 120s:
- * rich HTML/JSON batches can pause between token bursts longer than 40s under
- * load without being truly stuck; still well below the wall-clock hard cap.
- */
+/** Streaming idle: no token for this long after generation started → abort. */
 const LLM_IDLE_TIMEOUT_MS = Math.max(
   10_000,
-  Number(process.env.TRANSLATE_LLM_IDLE_TIMEOUT_MS) || 120_000,
+  Number(process.env.TRANSLATE_LLM_IDLE_TIMEOUT_MS) || 300_000,
 );
 /**
- * 「等首个 token」窗口的**下限**。高并发下 DeepSeek 会把请求排队，首字延迟可达数十秒——
- * 此时请求**还没开始吐字**就被砍掉会触发大量无谓的二分/重试/刷屏。实际窗口由
- * `LLMKeyPool.firstTokenBudgetMs()` 按观测延迟自适应放大(慢就更耐心),在此下限与
- * `LLM_FIRST_TOKEN_TIMEOUT_MAX_MS` 之间取值;一旦开始吐字再切到收紧的 idle 窗口。
+ * 「等首个 token」窗口下限；实际上限由 `firstTokenBudgetMs()` 自适应，不超过
+ * `LLM_FIRST_TOKEN_TIMEOUT_MAX_MS`。默认与 idle 对齐，避免排队中被过早砍掉。
  */
 const LLM_FIRST_TOKEN_TIMEOUT_MS = Math.max(
   LLM_IDLE_TIMEOUT_MS,
-  Number(process.env.TRANSLATE_LLM_FIRST_TOKEN_TIMEOUT_MS) || 90_000,
+  Number(process.env.TRANSLATE_LLM_FIRST_TOKEN_TIMEOUT_MS) || 180_000,
 );
 /** Multiplier on observed avg latency for the adaptive first-token budget. */
 const LLM_FIRST_TOKEN_LATENCY_FACTOR = Math.max(
   1,
-  Number(process.env.TRANSLATE_LLM_FIRST_TOKEN_LATENCY_FACTOR) || 4,
+  Number(process.env.TRANSLATE_LLM_FIRST_TOKEN_LATENCY_FACTOR) || 6,
 );
-/** Hard ceiling on the adaptive first-token wait (ms). Stays under the wall-clock cap. */
+/** Hard ceiling on the adaptive first-token wait (ms). */
 const LLM_FIRST_TOKEN_TIMEOUT_MAX_MS = Math.max(
   LLM_FIRST_TOKEN_TIMEOUT_MS,
-  Number(process.env.TRANSLATE_LLM_FIRST_TOKEN_TIMEOUT_MAX_MS) || 150_000,
+  Number(process.env.TRANSLATE_LLM_FIRST_TOKEN_TIMEOUT_MAX_MS) || 300_000,
 );
-/** On timeout, re-chunk a large batch straight to this size (skip the slow 25→12→6 cascade). */
+/** On timeout, re-chunk a large batch straight to this size (skip the slow cascade). */
 const TIMEOUT_RESPLIT_SIZE = Math.max(
   1,
   Number(process.env.TRANSLATE_TIMEOUT_RESPLIT_SIZE) || 3,
 );
-/** First-token timeouts: how many times to drain + retry the SAME batch before re-chunking. */
+/** First-token timeouts: same-batch retries before re-chunking (queue drain). */
 const FIRST_TOKEN_DRAIN_RETRIES = Math.max(
   0,
-  Number(process.env.TRANSLATE_FIRST_TOKEN_DRAIN_RETRIES) || 1,
+  Number(process.env.TRANSLATE_FIRST_TOKEN_DRAIN_RETRIES) || 3,
 );
 /** Drain delay before a first-token same-batch retry (lets the server queue clear). */
 const FIRST_TOKEN_DRAIN_MS = Math.max(
   0,
-  Number(process.env.TRANSLATE_FIRST_TOKEN_DRAIN_MS) || 3_000,
+  Number(process.env.TRANSLATE_FIRST_TOKEN_DRAIN_MS) || 5_000,
 );
 /** Base backoff between single-item leaf retries (grows linearly per attempt). */
 const LEAF_RETRY_BACKOFF_MS = Math.max(
   0,
-  Number(process.env.TRANSLATE_LEAF_RETRY_BACKOFF_MS) || 1_000,
+  Number(process.env.TRANSLATE_LEAF_RETRY_BACKOFF_MS) || 2_000,
 );
 
 /** Scale timeout with batch size so large (but capped) batches get more wall clock. */
@@ -1920,7 +1911,7 @@ async function translateItemsRouted(
 // Retries for a single (un-splittable) item that fails transiently.
 const LEAF_RETRIES = Math.max(
   1,
-  Number(process.env.TRANSLATE_LEAF_RETRIES) || 3,
+  Number(process.env.TRANSLATE_LEAF_RETRIES) || 5,
 );
 
 /**
