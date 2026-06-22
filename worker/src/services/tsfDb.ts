@@ -68,6 +68,33 @@ export async function getOfflineAccessTokenFromTsf(shop: string): Promise<string
   return token ? String(token) : null;
 }
 
+export type TsfGlossaryRow = {
+  sourceText: string;
+  targetText: string;
+  rangeCode: string | null;
+  caseSensitive: boolean;
+};
+
+/**
+ * 从 TSF Turso 读该店适用于 target 的术语表。
+ * 过滤口径与 Java GlossaryService.getGlossaryDoByShopName 一致：rangeCode == target 或 "ALL"。
+ */
+export async function loadGlossaryRowsFromTsf(
+  shop: string,
+  target: string,
+): Promise<TsfGlossaryRow[]> {
+  const rs = await getTsfDb().execute({
+    sql: "SELECT sourceText, targetText, rangeCode, caseSensitive FROM Glossary WHERE shop = ? AND (rangeCode = ? OR rangeCode = 'ALL' OR rangeCode IS NULL)",
+    args: [shop, target],
+  });
+  return rs.rows.map((r) => ({
+    sourceText: String(r.sourceText ?? ""),
+    targetText: String(r.targetText ?? ""),
+    rangeCode: r.rangeCode != null ? String(r.rangeCode) : null,
+    caseSensitive: Number(r.caseSensitive) === 1,
+  }));
+}
+
 function parseTargets(raw: unknown): string[] {
   if (raw == null) return [];
   try {
