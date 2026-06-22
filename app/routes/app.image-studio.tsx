@@ -10,9 +10,16 @@ const ImageStudioPage = lazy(() =>
   import("./page/ImageStudioPage").then((m) => ({ default: m.ImageStudioPage })),
 );
 
+function resolveImageSwitcherAppEmbedId(): string | null {
+  const explicit = process.env.IMAGE_SWITCHER_APP_EMBED_ID?.trim();
+  if (explicit) return explicit;
+  // shopify app dev 会注入 SHOPIFY_API_KEY，切换 toml 时无需再手动配 IMAGE_SWITCHER_APP_EMBED_ID
+  return process.env.SHOPIFY_API_KEY?.trim() || null;
+}
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  return loadImageStudioPageData(session.shop);
+  return loadImageStudioPageData(session.shop, resolveImageSwitcherAppEmbedId());
 };
 
 export default function AppImageStudio() {

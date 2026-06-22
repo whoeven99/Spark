@@ -13,6 +13,10 @@ export type ImageStudioPageLoaderData = {
     generate: TaskTypeEstimation;
     translate: TaskTypeEstimation;
   };
+  /** 当前店铺域名，供 ImageSwitcherBanner 生成主题编辑器链接。 */
+  shop: string;
+  /** IMAGE_SWITCHER_APP_EMBED_ID 环境变量值，未配置时为 null。 */
+  appEmbedId: string | null;
 };
 
 const FALLBACK_PAGE_DATA: AITaskListPageData = {
@@ -27,6 +31,7 @@ const FALLBACK_PAGE_DATA: AITaskListPageData = {
 
 export async function loadImageStudioPageData(
   shop: string,
+  appEmbedId: string | null,
 ): Promise<ImageStudioPageLoaderData> {
   const [
     initialTaskPage,
@@ -55,5 +60,7 @@ export async function loadImageStudioPageData(
       generate: { seconds: genSeconds, credits: genCredits },
       translate: { seconds: transSeconds, credits: transCredits },
     },
+    shop,
+    appEmbedId,
   };
 }
