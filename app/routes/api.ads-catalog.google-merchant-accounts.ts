@@ -5,6 +5,7 @@ import {
   getGoogleMerchantPending,
   setGoogleMerchantCredential,
 } from "../server/adsCatalog/credentialStore.server";
+import { registerGmcNotificationSubscription } from "../server/adsCatalog/gmcNotifications.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -45,6 +46,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     merchantId,
   });
   await clearGoogleMerchantPending(session.shop);
+
+  // Best-effort: register Merchant Notifications subscription (non-blocking)
+  void registerGmcNotificationSubscription({
+    shop: session.shop,
+    merchantId,
+    accessToken: pending.accessToken,
+  }).catch(() => undefined);
 
   return Response.json({ ok: true, merchantId });
 };

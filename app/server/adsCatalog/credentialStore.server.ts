@@ -33,6 +33,8 @@ export type GoogleMerchantCredential = {
   clientId?: string;
   clientSecret?: string;
   merchantId: string;
+  /** Merchant Notifications API subscription name, e.g. "accounts/123/notificationsubscriptions/456". */
+  subscriptionName?: string;
   updatedAt: string;
 };
 
@@ -124,6 +126,10 @@ export async function getGoogleMerchantCredential(
         ? record.data.clientSecret
         : undefined,
     merchantId,
+    subscriptionName:
+      typeof record.data.subscriptionName === "string"
+        ? record.data.subscriptionName
+        : undefined,
     updatedAt: record.updatedAt.toISOString(),
   };
 }
@@ -146,6 +152,23 @@ export async function setGoogleMerchantCredential(
     clientId: payload.clientId?.trim() || null,
     clientSecret: payload.clientSecret?.trim() || null,
     merchantId,
+  });
+}
+
+/**
+ * Persist the Merchant Notifications API subscription name without touching
+ * other credential fields (e.g. access/refresh tokens).
+ * No-ops silently when no GMC credential exists yet.
+ */
+export async function setGmcSubscriptionName(
+  shop: string,
+  subscriptionName: string,
+): Promise<void> {
+  const existing = await readPlatformCredential(shop, GOOGLE_MERCHANT_PLATFORM);
+  if (!existing) return;
+  await writePlatformCredential(shop, GOOGLE_MERCHANT_PLATFORM, {
+    ...existing.data,
+    subscriptionName,
   });
 }
 

@@ -5,7 +5,9 @@ import {
   clearGoogleMerchantPending,
   deleteGoogleAdsCredential,
   deleteGoogleMerchantCredential,
+  getGoogleMerchantCredential,
 } from "../server/adsCatalog/credentialStore.server";
+import { unregisterGmcNotificationSubscription } from "../server/adsCatalog/gmcNotifications.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
@@ -15,6 +17,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const body = (await request.json().catch(() => ({}))) as { target?: "gmc" | "ads" };
 
   if (body.target === "gmc") {
+    // Best-effort: unregister Merchant Notifications subscription before clearing credentials
+    const credential = await getGoogleMerchantCredential(session.shop);
+    if (credential?.subscriptionName) {
+      await unregisterGmcNotificationSubscription({
+        shop: session.shop,
+        subscriptionName: credential.subscriptionName,
+        accessToken: credential.accessToken,
+      });
+    }
     await deleteGoogleMerchantCredential(session.shop);
     await clearGoogleMerchantPending(session.shop);
   } else if (body.target === "ads") {

@@ -13,6 +13,7 @@ import {
   setGoogleMerchantPending,
   clearGoogleMerchantPending,
 } from "../server/adsCatalog/credentialStore.server";
+import { registerGmcNotificationSubscription } from "../server/adsCatalog/gmcNotifications.server";
 
 const CALLBACK_PATH = "/ads/google-merchant/callback";
 
@@ -81,6 +82,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         clientSecret,
         merchantId: accounts[0].merchantId,
       });
+      // Best-effort: register Merchant Notifications subscription (non-blocking)
+      void registerGmcNotificationSubscription({
+        shop,
+        merchantId: accounts[0].merchantId,
+        accessToken: tokens.accessToken,
+      }).catch(() => undefined);
       return appRedirect(request, shop, host, appOrigin, {
         gmcAuth: "success",
         merchantId: accounts[0].merchantId,
