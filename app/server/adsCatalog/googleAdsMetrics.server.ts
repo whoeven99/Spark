@@ -9,11 +9,14 @@ import {
   getGoogleAdsCredential,
   setGoogleAdsCredential,
 } from "./credentialStore.server";
-import { getGoogleOAuthClient, getGoogleAdsDeveloperToken } from "./googleOAuth.server";
+import {
+  getGoogleOAuthClient,
+  getGoogleAdsDeveloperToken,
+  googleAdsApiUrl,
+} from "./googleOAuth.server";
 import { refreshGoogleAccessToken } from "./clients/googleMerchantClient.server";
 import { formatOutboundNetworkError } from "../common/outboundError.server";
 
-const GOOGLE_ADS_API_VERSION = "v17";
 const LOG_PREFIX = "[AdsCatalog][GoogleAdsMetrics]";
 
 export interface GoogleAdsCampaignMetrics {
@@ -80,7 +83,7 @@ async function executeGaqlQuery(params: {
   query: string;
 }): Promise<GaqlRow[]> {
   const cleanId = params.customerId.replace(/\D/g, "");
-  const url = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${cleanId}/googleAds:searchStream`;
+  const url = googleAdsApiUrl(`/customers/${cleanId}/googleAds:searchStream`);
 
   let response: Response;
   try {

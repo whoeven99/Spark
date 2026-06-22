@@ -8,6 +8,15 @@ export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 export const GMC_SCOPE = "https://www.googleapis.com/auth/content";
 export const ADS_SCOPE = "https://www.googleapis.com/auth/adwords";
 
+/** Google Ads REST API 主版本（v17 已于 2025-06-04 下线，请求会返回 404）。 */
+export const GOOGLE_ADS_API_VERSION = "v24";
+
+function googleAdsApiUrl(path: string): string {
+  return `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}${path}`;
+}
+
+export { googleAdsApiUrl };
+
 export type OAuthFlow = "gmc" | "ads";
 
 export interface OAuthTokens {
@@ -263,15 +272,12 @@ export async function getAdsCustomers(
   developerToken: string,
 ): Promise<AdsCustomer[]> {
   try {
-    const response = await fetch(
-      "https://googleads.googleapis.com/v17/customers:listAccessibleCustomers",
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "developer-token": developerToken,
-        },
+    const response = await fetch(googleAdsApiUrl("/customers:listAccessibleCustomers"), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "developer-token": developerToken,
       },
-    );
+    });
     const json = (await response.json().catch(() => ({}))) as {
       resourceNames?: string[];
       error?: { message?: string };
@@ -307,7 +313,7 @@ export async function getMerchantCenterLinkStatus(params: {
 }): Promise<{ linked: boolean; links: Array<{ merchantId: string; status: string }> }> {
   const customerDigits = params.customerId.replace(/\D/g, "");
   const response = await fetch(
-    `https://googleads.googleapis.com/v17/customers/${customerDigits}/merchantCenterLinks`,
+    googleAdsApiUrl(`/customers/${customerDigits}/merchantCenterLinks`),
     {
       headers: {
         Authorization: `Bearer ${params.accessToken}`,
