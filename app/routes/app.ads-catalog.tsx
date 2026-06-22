@@ -3,6 +3,7 @@ import type {
   LoaderFunctionArgs,
   ShouldRevalidateFunctionArgs,
 } from "react-router";
+import { data } from "react-router";
 import { lazy, Suspense } from "react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
@@ -14,6 +15,8 @@ import {
   getGoogleMerchantCredential,
   getGoogleMerchantPending,
   getMetaCatalogPending,
+  getTiktokCatalogCredential,
+  getTiktokCatalogPending,
   maskTokenTail,
 } from "../server/adsCatalog/credentialStore.server";
 import { formatCustomerId } from "../server/adsCatalog/googleOAuth.server";
@@ -27,7 +30,7 @@ const AdsCatalogPage = lazy(() =>
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
 
-  const [initialTaskPage, fb, gg, gmcPending, ads, adsPending, metaPending] =
+  const [initialTaskPage, fb, gg, gmcPending, ads, adsPending, metaPending, tiktok, tiktokPending] =
     await Promise.all([
       listTasksPageForShop({
         shop: session.shop,
@@ -40,9 +43,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       getGoogleAdsCredential(session.shop),
       getGoogleAdsPending(session.shop),
       getMetaCatalogPending(session.shop),
+      getTiktokCatalogCredential(session.shop),
+      getTiktokCatalogPending(session.shop),
     ]);
 
-  return Response.json({
+  return data({
     initialTaskPage,
     credentials: {
       facebook: {
@@ -79,6 +84,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         customerIdFormatted: ads ? formatCustomerId(ads.customerId) : "",
         updatedAt: ads?.updatedAt ?? null,
         pendingAccounts: adsPending?.accounts ?? [],
+      },
+      tiktok: {
+        connected: Boolean(tiktok),
+        catalogId: tiktok?.catalogId ?? "",
+        advertiserId: tiktok?.advertiserId ?? "",
+        updatedAt: tiktok?.updatedAt ?? null,
+        pendingCatalogs:
+          tiktokPending?.accounts.map((a) => ({
+            id: a.id,
+            name: a.name,
+            businessId: a.businessId,
+          })) ?? [],
       },
     },
   });

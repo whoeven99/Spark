@@ -135,7 +135,7 @@ export interface ProductImproveTaskResult {
   optimizationComment?: string;
 }
 
-export type AdsCatalogPlatform = "facebook" | "google";
+export type AdsCatalogPlatform = "facebook" | "google" | "tiktok";
 
 export interface AdsCatalogSyncTaskConfig {
   platform: AdsCatalogPlatform;

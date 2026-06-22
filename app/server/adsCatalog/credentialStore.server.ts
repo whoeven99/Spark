@@ -6,6 +6,7 @@ import prisma from "../../db.server";
 const META_CATALOG_PLATFORM = "meta_catalog";
 const GOOGLE_MERCHANT_PLATFORM = "google_merchant";
 const GOOGLE_ADS_PLATFORM = "google";
+const TIKTOK_CATALOG_PLATFORM = "tiktok_catalog";
 // Transient records holding freshly-exchanged OAuth tokens while the merchant
 // picks which account to connect (multi-account selection flow).
 const GMC_PENDING_PLATFORM = "google_merchant_pending";
@@ -13,6 +14,8 @@ const ADS_PENDING_PLATFORM = "google_ads_pending";
 // Transient record holding a freshly-exchanged Meta long-lived token while the
 // merchant picks which catalog to connect (multi-catalog selection flow).
 const META_CATALOG_PENDING_PLATFORM = "meta_catalog_pending";
+// Transient record for TikTok catalog selection.
+const TIKTOK_CATALOG_PENDING_PLATFORM = "tiktok_catalog_pending";
 
 export type FacebookCatalogCredential = {
   accessToken: string;
@@ -278,6 +281,63 @@ export const deleteGoogleAdsCredential = (shop: string) =>
   clearPending(shop, GOOGLE_ADS_PLATFORM);
 export const deleteFacebookCatalogCredential = (shop: string) =>
   clearPending(shop, META_CATALOG_PLATFORM);
+
+// ─── TikTok Catalog ──────────────────────────────────────────────────────────
+
+export type TiktokCatalogCredential = {
+  accessToken: string;
+  advertiserId: string;
+  catalogId: string;
+  catalogName?: string;
+  updatedAt: string;
+};
+
+export async function getTiktokCatalogCredential(
+  shop: string,
+): Promise<TiktokCatalogCredential | null> {
+  const record = await readPlatformCredential(shop, TIKTOK_CATALOG_PLATFORM);
+  if (!record) return null;
+  const accessToken = String(record.data.accessToken ?? "");
+  const advertiserId = String(record.data.advertiserId ?? "");
+  const catalogId = String(record.data.catalogId ?? "");
+  if (!accessToken || !advertiserId || !catalogId) return null;
+  return {
+    accessToken,
+    advertiserId,
+    catalogId,
+    catalogName:
+      typeof record.data.catalogName === "string" ? record.data.catalogName : undefined,
+    updatedAt: record.updatedAt.toISOString(),
+  };
+}
+
+export async function setTiktokCatalogCredential(
+  shop: string,
+  payload: Pick<TiktokCatalogCredential, "accessToken" | "advertiserId" | "catalogId" | "catalogName">,
+): Promise<void> {
+  const accessToken = payload.accessToken.trim();
+  const advertiserId = payload.advertiserId.trim();
+  const catalogId = payload.catalogId.trim();
+  if (!accessToken || !advertiserId || !catalogId) {
+    throw new Error("TikTok catalog accessToken, advertiserId, and catalogId are required");
+  }
+  await writePlatformCredential(shop, TIKTOK_CATALOG_PLATFORM, {
+    accessToken,
+    advertiserId,
+    catalogId,
+    catalogName: payload.catalogName?.trim() || null,
+  });
+}
+
+export const deleteTiktokCatalogCredential = (shop: string) =>
+  clearPending(shop, TIKTOK_CATALOG_PLATFORM);
+
+export const setTiktokCatalogPending = (shop: string, payload: PendingOAuthTokens) =>
+  setPending(shop, TIKTOK_CATALOG_PENDING_PLATFORM, payload);
+export const getTiktokCatalogPending = (shop: string) =>
+  getPending(shop, TIKTOK_CATALOG_PENDING_PLATFORM);
+export const clearTiktokCatalogPending = (shop: string) =>
+  clearPending(shop, TIKTOK_CATALOG_PENDING_PLATFORM);
 
 export function maskTokenTail(value: string | null | undefined): string {
   if (!value) return "";

@@ -1336,6 +1336,19 @@
     "reviewBadge": "{{count}} 个商品未通过 GMC 审核",
     "reviewPendingBadge": "{{count}} 个商品审核中",
     "reviewApprovedBadge": "{{count}} 个商品已通过",
-    "reviewViewDetail": "查看审核详情"
+    "reviewViewDetail": "查看审核详情",
+    "platformTiktok": "TikTok",
+    "tiktokPanelTitle": "TikTok for Business 商品目录",
+    "tiktokConnected": "✅ 已连接",
+    "tiktokCatalogId": "目录 ID：{{id}}",
+    "tiktokAdvertiserId": "广告主 ID：{{id}}",
+    "tiktokUpdatedAt": "Token 更新时间：{{time}}",
+    "tiktokReauth": "重新授权",
+    "tiktokDisconnect": "断开连接",
+    "tiktokConnect": "通过 TikTok for Business 连接",
+    "tiktokConnectHint": "授权 Spark 访问您的 TikTok for Business 商品目录，无需手动填写 Token。",
+    "tiktokSelectCatalog": "发现多个商品目录，请选择要连接的目录：",
+    "asyncTiktokMissingCredential": "TikTok 目录凭证缺失 — 请在「凭证」标签页中完成连接",
+    "asyncPushingTiktok": "正在将 {{count}} 个商品推送到 TikTok 目录"
   }
 }

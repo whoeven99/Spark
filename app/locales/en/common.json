@@ -1336,6 +1336,19 @@
     "reviewBadge": "{{count}} products failed GMC review",
     "reviewPendingBadge": "{{count}} products under review",
     "reviewApprovedBadge": "{{count}} products approved",
-    "reviewViewDetail": "View review"
+    "reviewViewDetail": "View review",
+    "platformTiktok": "TikTok",
+    "tiktokPanelTitle": "TikTok for Business Catalog",
+    "tiktokConnected": "✅ Connected",
+    "tiktokCatalogId": "Catalog ID: {{id}}",
+    "tiktokAdvertiserId": "Advertiser ID: {{id}}",
+    "tiktokUpdatedAt": "Token updated: {{time}}",
+    "tiktokReauth": "Re-authorize",
+    "tiktokDisconnect": "Disconnect",
+    "tiktokConnect": "Connect with TikTok for Business",
+    "tiktokConnectHint": "Authorize Spark to access your TikTok for Business product catalog via TikTok sign-in. No manual token entry required.",
+    "tiktokSelectCatalog": "Multiple catalogs were found. Choose the one to connect:",
+    "asyncTiktokMissingCredential": "TikTok catalog credential missing — connect it under the Credentials tab",
+    "asyncPushingTiktok": "Pushing {{count}} items to TikTok Catalog"
   }
 }

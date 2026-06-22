@@ -9,6 +9,7 @@ import type {
 import type { RawShopifyProductForCatalog } from "./productFetcher.server";
 import { mapShopifyToFacebook } from "./mappers/shopifyToFacebook";
 import { mapShopifyVariantsToGoogle } from "./mappers/shopifyToGoogle";
+import { mapShopifyToTiktok } from "./mappers/shopifyToTiktok";
 import {
   validateProductsForGoogle,
   collectErrorProductIds,
@@ -18,9 +19,11 @@ import {
   refreshGoogleAccessToken,
   upsertGoogleMerchantProducts,
 } from "./clients/googleMerchantClient.server";
+import { upsertTiktokCatalogItems } from "./clients/tiktokCatalogClient.server";
 import {
   getFacebookCatalogCredential,
   getGoogleMerchantCredential,
+  getTiktokCatalogCredential,
   setGoogleMerchantCredential,
 } from "./credentialStore.server";
 import {
@@ -94,6 +97,8 @@ async function runAdsCatalogSync(params: EnqueueAdsCatalogSyncParams): Promise<v
 
   if (platform === "facebook") {
     await runFacebookSync({ ...params, taskId, startedAt, msg });
+  } else if (platform === "tiktok") {
+    await runTiktokSync({ ...params, taskId, startedAt, msg });
   } else {
     await runGoogleSync({
       ...params,
@@ -355,6 +360,79 @@ async function runGoogleSync(params: {
     // 30 分钟后再查一次（进程内延迟任务）。
     scheduleGmcStatusCheck({ shop: params.shop, delayMs: 30 * 60 * 1000 });
   }
+
+  await finishAdsCatalogSync({
+    taskId: params.taskId,
+    startedAt: params.startedAt,
+    result,
+    msg: params.msg,
+  });
+}
+
+async function runTiktokSync(params: {
+  taskId: string;
+  startedAt: number;
+  shop: string;
+  shopDomain: string;
+  defaultCurrency?: string;
+  brand?: string;
+  products: RawShopifyProductForCatalog[];
+  msg: MsgFn;
+}): Promise<void> {
+  const credential = await getTiktokCatalogCredential(params.shop);
+  if (!credential) {
+    await failTask({
+      taskId: params.taskId,
+      startedAt: params.startedAt,
+      errorMsg: params.msg("adsCatalog.asyncTiktokMissingCredential"),
+    });
+    return;
+  }
+
+  await appendLog({
+    taskId: params.taskId,
+    startedAt: params.startedAt,
+    message: params.msg("adsCatalog.asyncMappingProducts"),
+  });
+
+  const errors: AdsCatalogSyncTaskResult["errors"] = [];
+  const items = [];
+  for (const product of params.products) {
+    const mapped = mapShopifyToTiktok(product, {
+      shopDomain: params.shopDomain,
+      defaultCurrency: params.defaultCurrency,
+      brand: params.brand,
+    });
+    if (mapped.ok) {
+      items.push(mapped.item);
+    } else {
+      errors.push({ productId: mapped.productId, reason: mapped.reason });
+    }
+  }
+
+  await appendLog({
+    taskId: params.taskId,
+    startedAt: params.startedAt,
+    message: params.msg("adsCatalog.asyncPushingTiktok", { count: items.length }),
+  });
+
+  const apiResult = await upsertTiktokCatalogItems({
+    accessToken: credential.accessToken,
+    advertiserId: credential.advertiserId,
+    catalogId: credential.catalogId,
+    items,
+  });
+  for (const err of apiResult.errors) {
+    errors.push({ productId: err.id, reason: err.reason });
+  }
+
+  const result: AdsCatalogSyncTaskResult = {
+    platform: "tiktok",
+    totalProcessed: params.products.length,
+    succeeded: apiResult.totalProcessed,
+    failed: errors.length,
+    errors,
+  };
 
   await finishAdsCatalogSync({
     taskId: params.taskId,

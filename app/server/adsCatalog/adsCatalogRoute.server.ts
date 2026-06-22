@@ -14,7 +14,7 @@ import { fetchProductsForCatalog } from "./productFetcher.server";
 const TASK_TYPE: AITaskType = "ads_catalog_sync";
 
 const SyncRequestSchema = z.object({
-  platform: z.enum(["facebook", "google"]),
+  platform: z.enum(["facebook", "google", "tiktok"]),
   productIds: z.array(z.string().min(1)).max(250).optional().nullable(),
   contentLanguage: z.string().min(2).max(8).optional(),
   targetCountry: z.string().min(2).max(4).optional(),
@@ -34,7 +34,7 @@ export type AdsCatalogSyncResponse =
       success: true;
       taskId: string;
       batchId: string;
-      platform: "facebook" | "google";
+      platform: "facebook" | "google" | "tiktok";
       productCount: number;
     }
   | { success: false; errorCode: number; errorMsg: string };

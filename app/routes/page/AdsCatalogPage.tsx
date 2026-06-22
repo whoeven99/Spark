@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { useFetcher, useLoaderData, useLocation, useRevalidator } from "react-router";
+import { useFetcher, useLoaderData, useLocation, useRevalidator, type SubmitTarget } from "react-router";
 import { useEmbeddedLocationSearch } from "../../hooks/useEmbeddedLocationSearch";
 import { useTranslation } from "react-i18next";
-import type { loader } from "../app.ads-catalog";
 import {
   PageHeaderNav,
   PageSurface,
@@ -16,6 +15,7 @@ import { AdsCatalogTaskCard } from "../component/adsCatalog/AdsCatalogTaskCard";
 import { AdsCatalogTaskDetailPage } from "../component/adsCatalog/AdsCatalogTaskDetailPage";
 import { GoogleConnectPanels } from "../component/adsCatalog/GoogleConnectPanels";
 import { MetaConnectPanels } from "../component/adsCatalog/MetaConnectPanels";
+import { TiktokConnectPanels } from "../component/adsCatalog/TiktokConnectPanels";
 import {
   GoogleFeedFilters,
   parseList,
@@ -24,14 +24,15 @@ import {
 import { GmcValidationReport } from "../component/adsCatalog/GmcValidationReport";
 import { GmcReviewDetailModal } from "../component/adsCatalog/GmcReviewDetailModal";
 import type {
-  CredentialsView,
+  AdsCatalogPageLoaderData,
+  AdsCatalogSyncRequestBody,
   FeedValidationReportView,
   GmcReviewProductView,
 } from "../component/adsCatalog/types";
 import type { AITaskItem, AITaskStatus } from "../../lib/aiTaskTypes";
 
 type Tab = "sync" | "credentials" | "tasks";
-type Platform = "facebook" | "google";
+type Platform = "facebook" | "google" | "tiktok";
 
 const sectionStyle = {
   border: `1px solid ${pageColorTokens.border}`,
@@ -98,9 +99,9 @@ export function AdsCatalogPage() {
   const { t, i18n } = useTranslation();
   const location = useLocation();
   const locationSearch = useEmbeddedLocationSearch();
-  const loaderData = useLoaderData<typeof loader>();
+  const loaderData = useLoaderData<AdsCatalogPageLoaderData>();
   const revalidator = useRevalidator();
-  const credentials = loaderData.credentials as unknown as CredentialsView;
+  const credentials = loaderData.credentials;
 
   const [tab, setTab] = useState<Tab>("sync");
   const [platform, setPlatform] = useState<Platform>("google");
@@ -113,7 +114,7 @@ export function AdsCatalogPage() {
   const [fbPreview, setFbPreview] = useState<unknown[] | null>(null);
   const [googleReport, setGoogleReport] = useState<FeedValidationReportView | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
-  const [reviewPlatform, setReviewPlatform] = useState<Platform>("google");
+  const [reviewPlatform, setReviewPlatform] = useState<"facebook" | "google">("google");
   const [authBanner, setAuthBanner] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [previewPlatform, setPreviewPlatform] = useState<Platform | null>(null);
 
@@ -176,18 +177,19 @@ export function AdsCatalogPage() {
     const gmc = params.get("gmcAuth");
     const ads = params.get("adsAuth");
     const meta = params.get("metaAuth");
+    const tiktok = params.get("tiktokAuth");
     const reason = params.get("reason");
-    if (gmc === "select" || ads === "select" || meta === "select") {
+    if (gmc === "select" || ads === "select" || meta === "select" || tiktok === "select") {
       setTab("credentials");
       revalidator.revalidate();
-    } else if (gmc === "success" || ads === "success" || meta === "success") {
+    } else if (gmc === "success" || ads === "success" || meta === "success" || tiktok === "success") {
       setAuthBanner({ tone: "ok", text: t("adsCatalog.authSuccess") });
       setTab("credentials");
       revalidator.revalidate();
-    } else if (gmc === "error" || ads === "error" || meta === "error") {
+    } else if (gmc === "error" || ads === "error" || meta === "error" || tiktok === "error") {
       setAuthBanner({ tone: "error", text: reason || t("adsCatalog.authError") });
       setTab("credentials");
-    } else if (gmc === "cancelled" || ads === "cancelled" || meta === "cancelled") {
+    } else if (gmc === "cancelled" || ads === "cancelled" || meta === "cancelled" || tiktok === "cancelled") {
       setAuthBanner({ tone: "error", text: t("adsCatalog.authCancelled") });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -202,6 +204,8 @@ export function AdsCatalogPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncFetcher.data, syncFetcher.state]);
+
+  // TikTok does not yet have a dedicated status endpoint; revalidate loader on sync success.
 
   useEffect(() => {
     if (previewFetcher.state === "idle" && previewFetcher.data) {
@@ -247,11 +251,13 @@ export function AdsCatalogPage() {
 
   const credentialReady =
     platform === "facebook"
-      ? credentials.meta.connected || credentials.facebook.configured
-      : credentials.googleMerchant.connected;
+      ? credentials.meta.connected
+      : platform === "tiktok"
+        ? credentials.tiktok.connected
+        : credentials.googleMerchant.connected;
 
-  function buildSyncBody(): Record<string, unknown> {
-    const body: Record<string, unknown> = { platform };
+  function buildSyncBody(): AdsCatalogSyncRequestBody {
+    const body: AdsCatalogSyncRequestBody = { platform, filters: { tags: [], productTypes: [], vendors: [], inStockOnly: false } };
     if (productIds.length > 0) body.productIds = productIds;
     // 筛选条件对两个平台都生效（生成对应平台的 feed）。
     body.filters = {
@@ -274,7 +280,7 @@ export function AdsCatalogPage() {
     const body = buildSyncBody();
     body.limit = 5;
     setPreviewError(null);
-    previewFetcher.submit(body, {
+    previewFetcher.submit(body as unknown as SubmitTarget, {
       method: "POST",
       encType: "application/json",
       action: `/api/ads-catalog/preview${locationSearch}`,
@@ -298,7 +304,7 @@ export function AdsCatalogPage() {
         if (!proceed) return;
       }
     }
-    syncFetcher.submit(buildSyncBody(), {
+    syncFetcher.submit(buildSyncBody() as unknown as SubmitTarget, {
       method: "POST",
       encType: "application/json",
       action: `/api/ads-catalog/sync${locationSearch}`,
@@ -356,8 +362,15 @@ export function AdsCatalogPage() {
   }
 
   return (
-    <PageSurface title={t("adsCatalog.pageTitle")} subtitle={t("adsCatalog.pageSubtitle")}>
-      <PageHeaderNav />
+    <PageSurface>
+      <PageHeaderNav
+        workspaceOnly
+        backLabel={t("common.backToPrevious", {
+          defaultValue: i18n.language.toLowerCase().startsWith("zh") ? "返回工作台" : "Back",
+        })}
+        title={t("adsCatalog.pageTitle")}
+        subtitle={t("adsCatalog.pageSubtitle")}
+      />
       <div style={pageContentStyle}>
         {accountSuspended && (
           <div
@@ -440,7 +453,7 @@ export function AdsCatalogPage() {
 
             <div>
               <label style={pageFieldLabelStyle}>{t("adsCatalog.fieldPlatform")}</label>
-              <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
+              <div style={{ display: "flex", gap: 12, marginTop: 6, flexWrap: "wrap" }}>
                 <button
                   type="button"
                   onClick={() => setPlatform("google")}
@@ -454,6 +467,13 @@ export function AdsCatalogPage() {
                   style={platform === "facebook" ? buttonPrimary : buttonSecondary}
                 >
                   {t("adsCatalog.platformFacebook")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPlatform("tiktok")}
+                  style={platform === "tiktok" ? buttonPrimary : buttonSecondary}
+                >
+                  {t("adsCatalog.platformTiktok")}
                 </button>
               </div>
             </div>
@@ -553,11 +573,13 @@ export function AdsCatalogPage() {
                 metaStatusFetcher.load(`/api/ads-catalog/meta-status${locationSearch}`);
               }}
             />
-            <FacebookCredentialPanel
+            <TiktokConnectPanels
               credentials={credentials}
               locationSearch={locationSearch}
               languageCode={i18n.language}
-              onSaved={() => revalidator.revalidate()}
+              onChanged={() => {
+                revalidator.revalidate();
+              }}
             />
           </div>
         )}
@@ -637,10 +659,13 @@ export function AdsCatalogPage() {
                   onDelete={() => void handleDelete(task.id)}
                   onOpenDetail={() => setSelectedTaskId(task.id)}
                   onOpenReview={() => {
+                    const rawPlatform = (task.config as Record<string, unknown>)?.platform;
                     const taskPlatform =
-                      (task.config as Record<string, unknown>)?.platform === "google"
+                      rawPlatform === "google"
                         ? "google"
-                        : "facebook";
+                        : rawPlatform === "facebook"
+                          ? "facebook"
+                          : "facebook";
                     setReviewPlatform(taskPlatform);
                     setReviewOpen(true);
                   }}
@@ -653,7 +678,7 @@ export function AdsCatalogPage() {
         )}
       </div>
 
-      {reviewOpen && (
+      {reviewOpen && (reviewPlatform === "google" || reviewPlatform === "facebook") && (
         <GmcReviewDetailModal
           platform={reviewPlatform}
           products={activeReviewProducts}
@@ -684,124 +709,3 @@ const previewPreStyle: CSSProperties = {
   maxHeight: 320,
   overflow: "auto",
 };
-
-// ─── Facebook credential panel (manual, unchanged behavior) ──────────────────
-
-function FacebookCredentialPanel(props: {
-  credentials: CredentialsView;
-  locationSearch: string;
-  languageCode: string;
-  onSaved: () => void;
-}) {
-  const { credentials, locationSearch, languageCode, onSaved } = props;
-  const { t } = useTranslation();
-  const [fb, setFb] = useState({
-    accessToken: "",
-    catalogId: credentials.facebook.fields.catalogId,
-    businessId: credentials.facebook.fields.businessId,
-    apiVersion: credentials.facebook.fields.apiVersion,
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [ok, setOk] = useState(false);
-
-  async function submit(verify: boolean) {
-    setSaving(true);
-    setError(null);
-    setOk(false);
-    try {
-      const resp = await fetch(`/api/ads-catalog/credentials${locationSearch}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ platform: "facebook", verify, facebook: fb }),
-      });
-      const data = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (!resp.ok || !data.ok) {
-        setError(data.error ?? t("adsCatalog.credSaveFailed"));
-        return;
-      }
-      setOk(true);
-      onSaved();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div style={sectionStyle}>
-      <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
-        {t("adsCatalog.credFacebookTitle")}
-      </h3>
-      <p style={pageHintTextStyle}>{t("adsCatalog.credFacebookHint")}</p>
-      {credentials.facebook.configured && (
-        <div style={pageHintTextStyle}>
-          {t("adsCatalog.credCurrent", {
-            token: credentials.facebook.fields.accessTokenMasked,
-            catalogId: credentials.facebook.fields.catalogId,
-            updatedAt: credentials.facebook.updatedAt
-              ? new Intl.DateTimeFormat(languageCode).format(new Date(credentials.facebook.updatedAt))
-              : "—",
-          })}
-        </div>
-      )}
-      <input
-        style={inputStyle}
-        placeholder={t("adsCatalog.credAccessTokenPlaceholder")}
-        value={fb.accessToken}
-        onChange={(e) => setFb({ ...fb, accessToken: e.target.value })}
-      />
-      <input
-        style={inputStyle}
-        placeholder={t("adsCatalog.credCatalogIdPlaceholder")}
-        value={fb.catalogId}
-        onChange={(e) => setFb({ ...fb, catalogId: e.target.value })}
-      />
-      <input
-        style={inputStyle}
-        placeholder={t("adsCatalog.credBusinessIdPlaceholder")}
-        value={fb.businessId}
-        onChange={(e) => setFb({ ...fb, businessId: e.target.value })}
-      />
-      <input
-        style={inputStyle}
-        placeholder={t("adsCatalog.credApiVersionPlaceholder")}
-        value={fb.apiVersion}
-        onChange={(e) => setFb({ ...fb, apiVersion: e.target.value })}
-      />
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <button
-          type="button"
-          disabled={saving}
-          style={{ ...buttonPrimary, opacity: saving ? 0.55 : 1 }}
-          onClick={() => void submit(true)}
-        >
-          {saving ? t("adsCatalog.credSaving") : t("adsCatalog.credSaveAndVerify")}
-        </button>
-        <button
-          type="button"
-          disabled={saving}
-          style={{ ...buttonSecondary, opacity: saving ? 0.55 : 1 }}
-          onClick={() => void submit(false)}
-        >
-          {saving ? t("adsCatalog.credSaving") : t("adsCatalog.credSave")}
-        </button>
-      </div>
-      {error && <div style={errorBoxStyle}>{error}</div>}
-      {ok && (
-        <div
-          style={{
-            background: pageColorTokens.brandGreenLight,
-            color: pageColorTokens.brandGreenDeep,
-            padding: 10,
-            borderRadius: pageColorTokens.radiusControl,
-            fontSize: 13,
-          }}
-        >
-          {t("adsCatalog.credSavedOk")}
-        </div>
-      )}
-    </div>
-  );
-}
