@@ -45,14 +45,23 @@ export type AutoTranslateShop = {
 
 /** 自动扫描用：已迁移到 TSF 且开了自动翻译的店。 */
 export async function listAutoTranslateShops(): Promise<AutoTranslateShop[]> {
+  // 按语言精确取：已迁移店 + 该语言开了自动翻译（ShopTargetLocale）
   const rs = await getTsfDb().execute(
-    "SELECT shop, primaryLocale, targets FROM ShopTranslationSettings WHERE autoTranslate = 1 AND migratedToTsf = 1",
+    `SELECT s.shop AS shop, s.primaryLocale AS primaryLocale, t.locale AS target
+     FROM ShopTranslationSettings s
+     JOIN ShopTargetLocale t ON t.shop = s.shop
+     WHERE s.migratedToTsf = 1 AND t.autoTranslate = 1 AND t.status = 1`,
   );
-  return rs.rows.map((r) => ({
-    shop: String(r.shop),
-    primaryLocale: String(r.primaryLocale),
-    targets: parseTargets(r.targets),
-  }));
+  const byShop = new Map<string, AutoTranslateShop>();
+  for (const r of rs.rows) {
+    const shop = String(r.shop);
+    const primaryLocale = String(r.primaryLocale);
+    const target = String(r.target);
+    const entry = byShop.get(shop) ?? { shop, primaryLocale, targets: [] };
+    entry.targets.push(target);
+    byShop.set(shop, entry);
+  }
+  return [...byShop.values()];
 }
 
 /**
@@ -84,7 +93,7 @@ export async function loadGlossaryRowsFromTsf(
   target: string,
 ): Promise<TsfGlossaryRow[]> {
   const rs = await getTsfDb().execute({
-    sql: "SELECT sourceText, targetText, rangeCode, caseSensitive FROM Glossary WHERE shop = ? AND (rangeCode = ? OR rangeCode = 'ALL' OR rangeCode IS NULL)",
+    sql: "SELECT sourceText, targetText, rangeCode, caseSensitive FROM Glossary WHERE shop = ? AND status = 1 AND (rangeCode = ? OR rangeCode = 'ALL' OR rangeCode IS NULL)",
     args: [shop, target],
   });
   return rs.rows.map((r) => ({
@@ -95,12 +104,3 @@ export async function loadGlossaryRowsFromTsf(
   }));
 }
 
-function parseTargets(raw: unknown): string[] {
-  if (raw == null) return [];
-  try {
-    const parsed = JSON.parse(String(raw));
-    return Array.isArray(parsed) ? parsed.map((x) => String(x)) : [];
-  } catch {
-    return [];
-  }
-}
