@@ -23,6 +23,7 @@ import {
 } from "../component/adsCatalog/GoogleFeedFilters";
 import { GmcValidationReport } from "../component/adsCatalog/GmcValidationReport";
 import { GmcReviewDetailModal } from "../component/adsCatalog/GmcReviewDetailModal";
+import { GoogleAdsMetricsPanel, type CampaignMetricsRow } from "../component/adsCatalog/GoogleAdsMetricsPanel";
 import type {
   AdsCatalogPageLoaderData,
   AdsCatalogSyncRequestBody,
@@ -117,6 +118,21 @@ export function AdsCatalogPage() {
   const [reviewPlatform, setReviewPlatform] = useState<"facebook" | "google">("google");
   const [authBanner, setAuthBanner] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [previewPlatform, setPreviewPlatform] = useState<Platform | null>(null);
+
+  const [googleAdsMetrics, setGoogleAdsMetrics] = useState<{
+    campaigns: CampaignMetricsRow[];
+    currencyCode: string | null;
+    customerId: string;
+  } | null>(null);
+  const [googleAdsMetricsError, setGoogleAdsMetricsError] = useState<string | null>(null);
+  const metricsFetcher = useFetcher<{
+    ok?: boolean;
+    reason?: string;
+    message?: string;
+    campaigns?: CampaignMetricsRow[];
+    currencyCode?: string | null;
+    customerId?: string;
+  }>();
 
   const syncFetcher = useFetcher<{
     success?: boolean;
@@ -233,15 +249,34 @@ export function AdsCatalogPage() {
   }, [previewFetcher.data, previewFetcher.state, platform]);
 
   useEffect(() => {
+    if (metricsFetcher.state === "idle" && metricsFetcher.data) {
+      if (metricsFetcher.data.ok) {
+        setGoogleAdsMetrics({
+          campaigns: metricsFetcher.data.campaigns ?? [],
+          currencyCode: metricsFetcher.data.currencyCode ?? null,
+          customerId: metricsFetcher.data.customerId ?? "",
+        });
+        setGoogleAdsMetricsError(null);
+      } else {
+        setGoogleAdsMetricsError(metricsFetcher.data.message ?? t("adsCatalog.metricsFetchError"));
+        setGoogleAdsMetrics(null);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metricsFetcher.data, metricsFetcher.state]);
+
+  useEffect(() => {
     setTasks(loaderData.initialTaskPage.tasks);
   }, [loaderData.initialTaskPage.tasks]);
 
-  // 切换平台时清空另一平台的预览结果，避免 Google 校验报告残留在 Facebook 下。
+  // 切换平台时清空另一平台的预览结果和广告指标，避免残留。
   useEffect(() => {
     setPreviewError(null);
     setPreviewPlatform(null);
     setGoogleReport(null);
     setFbPreview(null);
+    setGoogleAdsMetrics(null);
+    setGoogleAdsMetricsError(null);
   }, [platform]);
 
   const selectedTask = useMemo(
@@ -337,6 +372,12 @@ export function AdsCatalogPage() {
     } finally {
       setDeletingId(null);
     }
+  }
+
+  function handleFetchGoogleAdsMetrics() {
+    setGoogleAdsMetrics(null);
+    setGoogleAdsMetricsError(null);
+    metricsFetcher.load(`/api/ads-catalog/google-ads-metrics${locationSearch}`);
   }
 
   async function handleRefreshStatus() {
@@ -510,7 +551,7 @@ export function AdsCatalogPage() {
               </div>
             )}
 
-            <div style={{ display: "flex", gap: 12 }}>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               <button
                 type="button"
                 onClick={handlePreview}
@@ -535,6 +576,23 @@ export function AdsCatalogPage() {
                   ? t("adsCatalog.actionSyncing")
                   : t("adsCatalog.actionSync")}
               </button>
+              {platform === "google" && (
+                <button
+                  type="button"
+                  onClick={handleFetchGoogleAdsMetrics}
+                  disabled={!credentials.googleAds.connected || metricsFetcher.state !== "idle"}
+                  style={{
+                    ...buttonSecondary,
+                    opacity: !credentials.googleAds.connected ? 0.6 : 1,
+                    cursor: !credentials.googleAds.connected ? "not-allowed" : "pointer",
+                  }}
+                  title={!credentials.googleAds.connected ? t("adsCatalog.metricsAdsNotConnected") : undefined}
+                >
+                  {metricsFetcher.state === "loading"
+                    ? t("adsCatalog.actionFetchingMetrics")
+                    : t("adsCatalog.actionFetchMetrics")}
+                </button>
+              )}
             </div>
 
             {previewError && (
@@ -548,6 +606,16 @@ export function AdsCatalogPage() {
             )}
             {syncFetcher.data?.errorMsg && (
               <div style={errorBoxStyle}>{syncFetcher.data.errorMsg}</div>
+            )}
+            {googleAdsMetricsError && (
+              <div style={errorBoxStyle}>{googleAdsMetricsError}</div>
+            )}
+            {platform === "google" && googleAdsMetrics && (
+              <GoogleAdsMetricsPanel
+                campaigns={googleAdsMetrics.campaigns}
+                currencyCode={googleAdsMetrics.currencyCode}
+                customerId={googleAdsMetrics.customerId}
+              />
             )}
           </div>
         )}
