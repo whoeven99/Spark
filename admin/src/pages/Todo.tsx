@@ -50,9 +50,9 @@ const ASSIGNEE_HEX: Record<TodoAssignee, string> = {
 };
 
 const PRIORITY_CONFIG: Record<TodoPriority, { color: string; bg: string; border: string; label: string }> = {
-  high:   { color: "#fff",     bg: "#f5222d", border: "#f5222d", label: "高" },
-  medium: { color: "#fff",     bg: "#fa8c16", border: "#fa8c16", label: "中" },
-  low:    { color: "#8c8c8c",  bg: "#f5f5f5", border: "#d9d9d9", label: "低" },
+  high:   { color: "#dc2626",  bg: "#fef2f2", border: "#fecaca", label: "高" },
+  medium: { color: "#d97706",  bg: "#fffbeb", border: "#fde68a", label: "中" },
+  low:    { color: "#6b7280",  bg: "#f9fafb", border: "#e5e7eb", label: "低" },
 };
 
 function renderPriorityTag(priority: TodoPriority): React.ReactNode {
@@ -227,6 +227,13 @@ export default function Todo() {
 
   if (error) return <Alert type="error" message={error} style={{ margin: 24 }} />;
 
+  const stats = useCallback(() => {
+    const doing = todos.filter((t) => t.status === "doing").length;
+    const todo = todos.filter((t) => t.status === "todo").length;
+    const done = todos.filter((t) => t.status === "done").length;
+    return { doing, todo, done, total: todos.length };
+  }, [todos])();
+
   const getTodosFor = (assignee: TodoAssignee | null, status: TodoStatus) =>
     todos.filter((t) => (assignee ? t.assignee === assignee : t.assignee === null) && t.status === status);
 
@@ -237,10 +244,41 @@ export default function Todo() {
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+      <style>{`
+        .todo-card:hover .todo-card-actions { opacity: 1 !important; }
+        .todo-card:hover .todo-card-actions button:hover { color: #1f2124 !important; background: #f3f4f6; }
+      `}</style>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>Team Todo</Typography.Title>
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建</Button>
       </div>
+
+      {todos.length > 0 && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+          {([
+            { key: "doing", label: "进行中", color: "#ea580c", bg: "#fff7ed", border: "#fed7aa" },
+            { key: "todo",  label: "待办",   color: "#475569", bg: "#f1f5f9", border: "#cbd5e1" },
+            { key: "done",  label: "已完成", color: "#059669", bg: "#ecfdf5", border: "#a7f3d0" },
+          ] as const).map((s) => (
+            <div
+              key={s.key}
+              style={{
+                flex: 1, background: s.bg, border: `1px solid ${s.border}`,
+                borderRadius: 10, padding: "10px 14px", textAlign: "center",
+              }}
+            >
+              <div style={{ fontSize: 11, color: s.color, fontWeight: 600 }}>{s.label}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: s.color, marginTop: 2 }}>
+                {stats[s.key as "doing" | "todo" | "done"]}
+              </div>
+            </div>
+          ))}
+          <div style={{ flex: 1, background: "#f8f9fa", border: "1px solid #e5e7eb", borderRadius: 10, padding: "10px 14px", textAlign: "center" }}>
+            <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 600 }}>总计</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: "#1f2124", marginTop: 2 }}>{stats.total}</div>
+          </div>
+        </div>
+      )}
 
       <Spin spinning={loading}>
         {STATUS_ROWS.map((statusRow) => {
@@ -278,7 +316,7 @@ export default function Todo() {
                 gridTemplateColumns: `repeat(${COLS.length}, 1fr)`,
                 border: `1px solid ${statusRow.borderColor}`,
                 borderTop: "none",
-                borderRadius: "0 0 6px 6px",
+                borderRadius: "0 0 8px 8px",
                 overflow: "hidden",
               }}>
                 {COLS.map((col, colIdx) => {
@@ -289,21 +327,19 @@ export default function Todo() {
                       style={{
                         padding: "12px 10px",
                         borderRight: colIdx < COLS.length - 1 ? `1px solid ${statusRow.borderColor}` : "none",
-                        background: "#fff",
+                        background: items.length === 0 ? "#fafbfb" : "#fff",
                         minHeight: 80,
                       }}
                     >
-                      {/* Column header — only on first status row */}
-                      {statusRow.key === "doing" && (
-                        <div style={{ textAlign: "center", marginBottom: 10 }}>
-                          <Tag
-                            color={col.color}
-                            style={{ fontSize: 12, padding: "3px 14px", fontWeight: 600, letterSpacing: 0.5 }}
-                          >
-                            {col.label}
-                          </Tag>
-                        </div>
-                      )}
+                      {/* Column header */}
+                      <div style={{ textAlign: "center", marginBottom: 10 }}>
+                        <Tag
+                          color={col.color}
+                          style={{ fontSize: 11, padding: "2px 12px", fontWeight: 600, letterSpacing: 0.3 }}
+                        >
+                          {col.label}
+                        </Tag>
+                      </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         {items.length === 0 ? (
                           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={false} style={{ margin: "8px 0" }} />
@@ -345,7 +381,7 @@ export default function Todo() {
             <Input placeholder="Todo 标题" />
           </Form.Item>
           <Form.Item name="description" label="描述">
-            <Input.TextArea rows={3} placeholder="可选描述" />
+            <Input.TextArea autoSize={{ minRows: 3, maxRows: 12 }} placeholder="可选描述" />
           </Form.Item>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <Form.Item name="assignee" label="负责人">
@@ -457,12 +493,22 @@ function TodoCard({
   return (
     <Card
       size="small"
+      className="todo-card"
       style={{
-        border: "1px solid #e3e5e7",
-        borderLeft: `3px solid ${statusRow.color}`,
+        border: `1px solid ${pri.border}`,
+        borderLeft: `3px solid ${pri.color}`,
         borderRadius: 8,
-        boxShadow: "none",
+        boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
         background: "#fff",
+        transition: "box-shadow 0.15s, border-color 0.15s",
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.boxShadow = "0 3px 12px rgba(0,0,0,0.08)";
+        (e.currentTarget as HTMLElement).style.borderColor = "#d0d3d7";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.boxShadow = "0 1px 2px rgba(0,0,0,0.04)";
+        (e.currentTarget as HTMLElement).style.borderColor = pri.border;
       }}
       styles={{ body: { padding: "10px 12px 8px" } }}
     >
@@ -470,9 +516,9 @@ function TodoCard({
         <Typography.Text strong style={{ fontSize: 13, flex: 1, lineHeight: 1.45, color: "#202223" }}>
           {todo.title}
         </Typography.Text>
-        <div style={{ display: "flex", gap: 0, flexShrink: 0, opacity: 0.72 }}>
+        <div className="todo-card-actions" style={{ display: "flex", gap: 0, flexShrink: 0, opacity: 0, transition: "opacity 0.12s" }}>
           <Tooltip title="编辑">
-            <Button type="text" size="small" icon={<EditOutlined />} onClick={onEdit} style={{ padding: "0 4px", color: "#6d7175" }} />
+            <Button type="text" size="small" icon={<EditOutlined />} onClick={onEdit} style={{ padding: "0 4px", color: "#9ca3af" }} />
           </Tooltip>
           <Popconfirm title="确认删除？" onConfirm={onDelete} okText="删除" cancelText="取消">
             <Tooltip title="删除">
@@ -483,7 +529,19 @@ function TodoCard({
       </div>
 
       {todo.description && (
-        <Typography.Text type="secondary" style={{ fontSize: 12, display: "block", marginTop: 4, lineHeight: 1.45 }}>
+        <Typography.Text
+          type="secondary"
+          style={{
+            fontSize: 11,
+            marginTop: 4,
+            lineHeight: 1.5,
+            color: "#6b7280",
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          } as React.CSSProperties}
+        >
           {todo.description}
         </Typography.Text>
       )}
