@@ -64,7 +64,7 @@ export interface RawVariantForCatalog {
   inventoryPolicy: InventoryPolicy;
   /** 从变体选项 "Color" / "Colour" / "颜色" 提取，供 GMC [color] 属性使用。 */
   color: string | null;
-  /** 从变体选项 "Size" / "尺码" / "尺寸" 提取，供 GMC [size] 属性使用。 */
+  /** 从变体选项 "Size" / "尺码" / "尺寸" 提取，供 GMC [sizes] 属性使用。 */
   size: string | null;
 }
 
