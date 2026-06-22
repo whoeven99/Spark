@@ -142,6 +142,15 @@ export function ensureWorkerEnv(): void {
     ["TURSO_PROD_AUTH_TOKEN", process.env.TURSO_PROD_AUTH_TOKEN],
   ]);
 
+  const tsfTursoOk = Boolean(
+    process.env.TSF_TURSO_DATABASE_URL?.trim()?.startsWith("libsql://") &&
+      process.env.TSF_TURSO_AUTH_TOKEN?.trim(),
+  );
+  logEnvCheck("Turso (TSF 翻译配置)", tsfTursoOk, [
+    ["TSF_TURSO_DATABASE_URL", process.env.TSF_TURSO_DATABASE_URL],
+    ["TSF_TURSO_AUTH_TOKEN", process.env.TSF_TURSO_AUTH_TOKEN],
+  ]);
+
   logEnvCheck("LLM (DeepSeek)", Boolean(process.env.DEEPSEEK_API_KEY?.trim()), [
     ["DEEPSEEK_API_KEY", process.env.DEEPSEEK_API_KEY],
     ["DEEPSEEK_BASE_URL", process.env.DEEPSEEK_BASE_URL, "https://api.deepseek.com"],

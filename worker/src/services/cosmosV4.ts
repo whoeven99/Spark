@@ -99,12 +99,117 @@ export type TranslationV4Job = {
 /** 任务来源：来自 TSF 独立前端的任务。 */
 export const TS_FRONTEND_TASK_SOURCE = "TsFrontend";
 
+/** 任务来源：worker 定时扫描自动创建的「自动更新」任务（isCover=false）。 */
+export const TSF_AUTO_TASK_SOURCE = "TsFrontend-Auto";
+
 /**
  * 该任务的 Shopify token 是否应直接取 job 快照（跳过 Turso Session 查询）。
- * 外部来源（如 TsFrontend）的 shop Session 不在本服务的 Turso 里，必须用 job 里存的 token。
+ * 外部来源（TsFrontend / 自动任务）的 shop Session 不在本服务的 Turso 里，必须用 job 里存的 token。
  */
 export function prefersStoredToken(job: Pick<TranslationV4Job, "taskSource">): boolean {
-  return job.taskSource === TS_FRONTEND_TASK_SOURCE;
+  return (
+    job.taskSource === TS_FRONTEND_TASK_SOURCE ||
+    job.taskSource === TSF_AUTO_TASK_SOURCE
+  );
+}
+
+/** 全零指标，新建任务用。 */
+export const EMPTY_V4_METRICS: TranslationV4Metrics = {
+  initTotal: 0,
+  initDone: 0,
+  translateTotal: 0,
+  translateDone: 0,
+  translateFailed: 0,
+  translateFallback: 0,
+  translateUnitTotal: 0,
+  translateUnitDone: 0,
+  writebackTotal: 0,
+  writebackDone: 0,
+  writebackFailed: 0,
+  verifyTotal: 0,
+  verifyDone: 0,
+  verifyFailed: 0,
+  usedTokens: 0,
+};
+
+/** 进行中（非终态）状态，用于创建前互斥判断。 */
+const ACTIVE_V4_STATUSES: TranslationV4Status[] = [
+  "CREATED",
+  "INIT_QUEUED",
+  "INITIALIZING",
+  "INIT_DONE",
+  "TRANSLATE_QUEUED",
+  "TRANSLATING",
+  "TRANSLATE_DONE",
+  "WRITEBACK_QUEUED",
+  "WRITING_BACK",
+  "VERIFY_QUEUED",
+  "VERIFYING",
+];
+
+type CreateJobInput = Omit<
+  TranslationV4Job,
+  | "metrics"
+  | "claimedBy"
+  | "claimedAt"
+  | "lastHeartbeat"
+  | "errorMessage"
+  | "errorStage"
+  | "stageTimings"
+  | "createdAt"
+  | "updatedAt"
+  | "aiModelUsed"
+  | "aiProvider"
+  | "engineUsage"
+>;
+
+/** 新建一个 v4 任务文档（upsert）。 */
+export async function createJob(input: CreateJobInput): Promise<TranslationV4Job> {
+  const now = new Date().toISOString();
+  const doc: TranslationV4Job = {
+    ...input,
+    metrics: { ...EMPTY_V4_METRICS },
+    aiModelUsed: null,
+    aiProvider: null,
+    engineUsage: null,
+    claimedBy: null,
+    claimedAt: null,
+    lastHeartbeat: null,
+    errorMessage: null,
+    errorStage: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await getContainer().items.upsert(doc);
+  return doc;
+}
+
+/** 同 shop + target 是否已有进行中的任务（避免自动扫描重复建任务）。 */
+export async function hasActiveJobForTarget(
+  shopName: string,
+  source: string,
+  target: string,
+): Promise<boolean> {
+  try {
+    const { resources } = await getContainer()
+      .items.query<number>(
+        {
+          query:
+            "SELECT VALUE COUNT(1) FROM c WHERE c.shopName = @shopName AND c.source = @source AND c.target = @target AND ARRAY_CONTAINS(@statuses, c.status)",
+          parameters: [
+            { name: "@shopName", value: shopName },
+            { name: "@source", value: source },
+            { name: "@target", value: target },
+            { name: "@statuses", value: ACTIVE_V4_STATUSES },
+          ],
+        },
+        { partitionKey: shopName },
+      )
+      .fetchAll();
+    return (resources[0] ?? 0) > 0;
+  } catch {
+    return false;
+  }
 }
 
 let _client: CosmosClient | null = null;

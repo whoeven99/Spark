@@ -5,9 +5,13 @@ import { runVerifyWorker } from "./workers/verifyWorker.js";
 import { runAnalysisWorker } from "./workers/analysisWorker.js";
 import { resetStaleJobs } from "./services/cosmosV4.js";
 import { resetStaleAnalysisJobs } from "./services/cosmosAnalysis.js";
+import { runAutoTranslateScan } from "./services/autoTranslate.js";
 
 const INTERVAL_MS = 30_000;
 const STALE_RESET_INTERVAL_MS = 5 * 60_000;
+/** 自动翻译扫描间隔（默认 1 小时，可用 AUTO_TRANSLATE_INTERVAL_MS 覆盖）。 */
+const AUTO_TRANSLATE_INTERVAL_MS =
+  Number(process.env.AUTO_TRANSLATE_INTERVAL_MS) || 60 * 60_000;
 
 const ALL_STAGES = ["init", "translate", "writeback", "verify", "analysis"] as const;
 type Stage = (typeof ALL_STAGES)[number];
@@ -48,6 +52,17 @@ export function startScheduler(): void {
   safeRun("resetStaleAnalysis", () => resetStaleAnalysisJobs());
   setInterval(() => safeRun("resetStale", () => resetStaleJobs()), STALE_RESET_INTERVAL_MS);
   setInterval(() => safeRun("resetStaleAnalysis", () => resetStaleAnalysisJobs()), STALE_RESET_INTERVAL_MS);
+
+  // 自动翻译扫描：定时为开启自动翻译的店创建增量任务（gated by init stage）。
+  if (stages.has("init")) {
+    safeRun("autoTranslate", () => runAutoTranslateScan());
+    setInterval(
+      () => safeRun("autoTranslate", () => runAutoTranslateScan()),
+      AUTO_TRANSLATE_INTERVAL_MS,
+    );
+  } else {
+    console.log('[scheduler] init stage 关闭，跳过 autoTranslate 扫描');
+  }
 
   for (const stage of ALL_STAGES) {
     if (!stages.has(stage)) {

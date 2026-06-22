@@ -6,6 +6,7 @@ import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Shops from "./pages/Shops";
 import Translations from "./pages/Translations";
+import AutoTranslations from "./pages/AutoTranslations";
 import Usage from "./pages/Usage";
 import Capabilities from "./pages/Capabilities";
 import Subscriptions from "./pages/Subscriptions";
@@ -65,6 +66,7 @@ export default function App() {
             <Route index element={<IndexRedirect />} />
             <Route path="shops" element={<Shops />} />
             <Route path="translations" element={<Translations />} />
+            <Route path="auto-translations" element={<AutoTranslations />} />
             <Route path="usage" element={<Usage />} />
             <Route path="subscriptions" element={<Subscriptions />} />
             <Route path="revenue" element={<RequireOwner><Revenue /></RequireOwner>} />
