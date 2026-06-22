@@ -1,6 +1,5 @@
 export type NavItemKey =
   | "chat"
-  | "translation-v4"
   | "product-improve"
   | "image-studio"
   | "picture-translate"
@@ -18,7 +17,6 @@ const DEFAULT_APP_SHELL_CONFIG = {
   home: "/app",
   nav: [
     "chat",
-    "translation-v4",
     "product-improve",
     "image-studio",
     "order-monitor",
