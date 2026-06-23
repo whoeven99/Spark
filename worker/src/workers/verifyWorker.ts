@@ -2,6 +2,7 @@ import { hostname } from "os";
 import { claimJob, updateJob, heartbeat, findPendingJobs, getJob, withStageTiming, prefersStoredToken } from "../services/cosmosV4.js";
 import { popHint, setProgress, setItemsCount } from "../services/redisV4.js";
 import { computeModuleCount } from "../services/itemsCount.js";
+import { runShopifyAdaptive, getShopifyCap } from "../services/shopifyConcurrency.js";
 import { blobRead } from "../services/blobV4.js";
 import { loadTranslatedItemsForJob } from "../services/translateBlobIO.js";
 import {
@@ -115,8 +116,11 @@ async function processVerifyJob(job: TranslationV4Job): Promise<void> {
   const stageStartedAt = new Date().toISOString(); // ISO span start for stageTimings
   const qps = new QpsLogger(jobId, shopName, "VERIFY");
 
+  console.log(`[verify] job=${jobId} concurrency=${getShopifyCap(shopName)}(adaptive)`);
+
   try {
-    for (const { resourceId, translations } of targets) {
+    // 自适应并发：逐资源读回校验 + 必要时重写；并发随 Shopify throttleStatus 增减。
+    await runShopifyAdaptive(shopName, targets, async ({ resourceId, translations }) => {
       await heartbeat(shopName, jobId);
 
       let mismatches = diffResourceTranslations(
@@ -145,7 +149,7 @@ async function processVerifyJob(job: TranslationV4Job): Promise<void> {
             writeResult.userErrors,
           );
           await setProgress(jobId, { verifyDone, verifyFailed, verifyTotal });
-          continue;
+          return;
         }
 
         mismatches = diffResourceTranslations(
@@ -165,7 +169,7 @@ async function processVerifyJob(job: TranslationV4Job): Promise<void> {
       }
 
       await setProgress(jobId, { verifyDone, verifyFailed, verifyTotal });
-    }
+    });
 
     const latestJob = await getJob(shopName, jobId);
     const mergedMetrics = {

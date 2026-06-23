@@ -247,7 +247,7 @@ npx tsx src/scripts/exportTranslationReport.ts <shopName> <taskId>
 
 ### 6. QPS 速率分析与出图（**每次质量检查必做**）
 
-> 数据来自 Cosmos `translation_v4_qps_logs`，由 worker 的 `QpsLogger` 每 30s / 阶段切换 / 收尾各写一条快照。**每次检查翻译质量都要顺带跑这一步并给用户画一张 QPS 图**（除非日志已过 7 天 TTL）。
+> 数据来自 Cosmos `translation_v4_qps_logs`：**每个 job 一条文档**（`id = jobId`），`windows[]` 按 30s / 阶段切换 / 收尾追加快照。**每次检查翻译质量都要顺带跑这一步并给用户画一张 QPS 图**（除非日志已过 7 天 TTL）。
 
 #### 6.1 拉数据
 
@@ -255,7 +255,7 @@ npx tsx src/scripts/exportTranslationReport.ts <shopName> <taskId>
 # 分阶段汇总（INIT/TRANSLATE/WRITEBACK/VERIFY）+ 时间序列，并写 scripts/qps-data.json
 node scripts/qps-summary.cjs <jobId>
 
-# 需要原始快照排查时
+# 需要原始 job 文档（含 windows[]）排查时
 node scripts/qps-fetch.cjs <jobId>
 ```
 

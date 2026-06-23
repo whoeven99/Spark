@@ -1,4 +1,4 @@
-// Quick fetch of QPS snapshots for a job from Cosmos
+// Fetch the per-job QPS log document from Cosmos (one doc per jobId).
 require("dotenv").config();
 const { CosmosClient } = require("@azure/cosmos");
 
@@ -12,9 +12,10 @@ const { CosmosClient } = require("@azure/cosmos");
   const dbId = process.env.COSMOS_TRANSLATION_DATABASE_ID || "translation";
   const containerId = process.env.COSMOS_QPS_LOGS_CONTAINER || "translation_v4_qps_logs";
   const container = client.database(dbId).container(containerId);
-  const { resources } = await container.items.query({
-    query: "SELECT * FROM c WHERE c.jobId = @j ORDER BY c.timestamp ASC",
-    parameters: [{ name: "@j", value: jobId }],
-  }, { partitionKey: jobId }).fetchAll();
-  console.log(JSON.stringify(resources, null, 2));
+  const { resource } = await container.item(jobId, jobId).read();
+  if (!resource) {
+    console.error(`no QPS log found for job ${jobId}`);
+    process.exit(1);
+  }
+  console.log(JSON.stringify(resource, null, 2));
 })().catch((e) => { console.error(e.message); process.exit(1); });
