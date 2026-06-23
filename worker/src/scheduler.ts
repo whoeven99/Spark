@@ -7,7 +7,11 @@ import { resetStaleJobs } from "./services/cosmosV4.js";
 import { resetStaleAnalysisJobs } from "./services/cosmosAnalysis.js";
 import { runAutoTranslateScan } from "./services/autoTranslate.js";
 
-const INTERVAL_MS = 30_000;
+/** 各 stage 轮询间隔；hint 队列有任务时仍靠上一阶段 wake 立即触发。 */
+const POLL_INTERVAL_MS = Math.max(
+  500,
+  Number(process.env.WORKER_POLL_INTERVAL_MS) || 2_000,
+);
 const STALE_RESET_INTERVAL_MS = 5 * 60_000;
 /** 自动翻译扫描间隔（默认 1 小时，可用 AUTO_TRANSLATE_INTERVAL_MS 覆盖）。 */
 const AUTO_TRANSLATE_INTERVAL_MS =
@@ -37,7 +41,7 @@ function safeRun(name: string, fn: () => Promise<void>): void {
 
 export function startScheduler(): void {
   const stages = enabledStages();
-  console.log(`[scheduler] starting translation v4 workers (stages: ${[...stages].join(",")})`);
+  console.log(`[scheduler] starting translation v4 workers (stages: ${[...stages].join(",")}, poll=${POLL_INTERVAL_MS}ms)`);
 
   const runners: Record<Stage, () => Promise<void>> = {
     init: runInitWorker,
@@ -71,6 +75,6 @@ export function startScheduler(): void {
     }
     const run = runners[stage];
     safeRun(stage, run);
-    setInterval(() => safeRun(stage, run), INTERVAL_MS);
+    setInterval(() => safeRun(stage, run), POLL_INTERVAL_MS);
   }
 }

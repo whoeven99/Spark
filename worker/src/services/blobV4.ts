@@ -1,6 +1,7 @@
 import { BlobServiceClient, type ContainerClient } from "@azure/storage-blob";
 
 let _container: ContainerClient | null = null;
+let _containerReady: Promise<void> | null = null;
 
 function getContainer(): ContainerClient {
   if (_container) return _container;
@@ -12,7 +13,22 @@ function getContainer(): ContainerClient {
   return _container;
 }
 
+/** 首次写入前确保容器存在（幂等）。 */
+async function ensureContainer(): Promise<void> {
+  if (!_containerReady) {
+    _containerReady = getContainer()
+      .createIfNotExists()
+      .then(() => undefined)
+      .catch((err) => {
+        _containerReady = null;
+        throw err;
+      });
+  }
+  await _containerReady;
+}
+
 export async function blobWrite(path: string, content: unknown): Promise<void> {
+  await ensureContainer();
   const text = JSON.stringify(content, null, 2);
   const client = getContainer().getBlockBlobClient(path);
   await client.upload(text, Buffer.byteLength(text, "utf8"), {

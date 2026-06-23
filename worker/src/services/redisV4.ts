@@ -1,13 +1,39 @@
 import IORedis from "ioredis";
 
 let _redis: IORedis | undefined;
+let _lastRedisErrorLogAt = 0;
+
+const REDIS_COMMON_OPTIONS = {
+  maxRetriesPerRequest: 2,
+  connectTimeout: 10_000,
+  retryStrategy: (times: number) => Math.min(times * 500, 5_000),
+} as const;
+
+function attachRedisListeners(redis: IORedis): void {
+  redis.on("error", (err: Error) => {
+    const now = Date.now();
+    if (now - _lastRedisErrorLogAt < 60_000) return;
+    _lastRedisErrorLogAt = now;
+    console.error(`[redisV4] connection error: ${err.message}`);
+  });
+  redis.on("connect", () => {
+    console.info("[redisV4] connected");
+  });
+  redis.on("reconnecting", () => {
+    const now = Date.now();
+    if (now - _lastRedisErrorLogAt < 60_000) return;
+    _lastRedisErrorLogAt = now;
+    console.warn("[redisV4] reconnecting…");
+  });
+}
 
 export function getRedis(): IORedis {
   if (_redis) return _redis;
 
   const url = process.env.REDIS_URL?.trim();
   if (url) {
-    _redis = new IORedis(url, { maxRetriesPerRequest: 2, connectTimeout: 10_000 });
+    _redis = new IORedis(url, REDIS_COMMON_OPTIONS);
+    attachRedisListeners(_redis);
     return _redis;
   }
 
@@ -31,10 +57,22 @@ export function getRedis(): IORedis {
     port,
     password,
     tls: useTls ? {} : undefined,
-    maxRetriesPerRequest: 2,
-    connectTimeout: 10_000,
+    ...REDIS_COMMON_OPTIONS,
   });
+  attachRedisListeners(_redis);
   return _redis;
+}
+
+/** 启动时探测 Redis 连通性（不阻塞 worker 调度）。 */
+export async function pingRedis(): Promise<boolean> {
+  try {
+    const pong = await getRedis().ping();
+    return pong === "PONG";
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[redisV4] ping failed: ${message}`);
+    return false;
+  }
 }
 
 export const HINT_KEYS = {
@@ -166,7 +204,7 @@ export async function setItemsCount(
   locale: string,
   module: string,
   value: { total: number; translated: number },
-): Promise<void> {
+): Promise<boolean> {
   try {
     const redis = getRedis();
     const key = itemsCountKey(shopName, locale);
@@ -176,7 +214,8 @@ export async function setItemsCount(
       JSON.stringify({ ...value, updatedAt: new Date().toISOString() }),
     );
     await redis.expire(key, PROGRESS_TTL);
+    return true;
   } catch {
-    // best-effort
+    return false;
   }
 }

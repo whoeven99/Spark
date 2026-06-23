@@ -41,6 +41,7 @@ import {
 } from "../services/llmTranslate.js";
 import { QpsLogger } from "../services/qpsLogger.js";
 import type { TranslationV4Job } from "../services/cosmosV4.js";
+import { runWritebackWorker } from "./writebackWorker.js";
 
 const HEARTBEAT_THROTTLE_MS = 30_000;
 
@@ -116,8 +117,17 @@ async function wakeNextTranslateForShop(shopName: string): Promise<void> {
   const [next] = await findTranslateQueuedJobsForShop(shopName, 1);
   if (!next) return;
   await pushHint("translate", { taskId: next.id, shopName });
+  void runTranslateWorker().catch((e) =>
+    console.error(`[translate] wake next failed shop=${shopName}`, e),
+  );
   console.log(
     `[translate] shop=${shopName} slot free → queued next job=${next.id} ${next.source}->${next.target}`,
+  );
+}
+
+function wakeWritebackWorker(jobId: string): void {
+  void runWritebackWorker().catch((e) =>
+    console.error(`[translate] wake writeback failed job=${jobId}`, e),
   );
 }
 
@@ -624,6 +634,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         // 清掉「暂停待落盘」标记：现在是 WRITING_BACK 主动写回，不是 paused-pending。
         await setProgress(jobId, { pausePending: "0", pauseReason: "" });
         await pushHint("writeback", { taskId: jobId, shopName });
+        wakeWritebackWorker(jobId);
         console.log(
           `[translate] job=${jobId} ${abort.action}→先写回已翻译（${abort.reason}）done=${translateDone}/${translateTotal}`,
         );
@@ -682,6 +693,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
     });
 
     await pushHint("writeback", { taskId: jobId, shopName });
+    wakeWritebackWorker(jobId);
     console.log(
       `[translate] done job=${jobId} done=${translateDone} failed=${translateFailed} fallback=${translateFallback}`,
     );

@@ -9,8 +9,19 @@ function normalize(value: string): string {
   return v;
 }
 
+function maskRedisUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const auth = parsed.password || parsed.username ? "***@" : "";
+    return `${parsed.protocol}//${auth}${parsed.host}${parsed.pathname}`;
+  } catch {
+    return url.length > 40 ? `${url.slice(0, 40)}…` : url;
+  }
+}
+
 function maskValue(key: string, value: string): string {
   if (!value) return "(空)";
+  if (key === "REDIS_URL") return maskRedisUrl(value);
   if (/token|secret|key|password|auth/i.test(key)) {
     return `(已设置,len=${value.length})`;
   }

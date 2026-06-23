@@ -276,12 +276,13 @@ export async function claimJob(
 }
 
 function isCosmosPreconditionFailed(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code?: number }).code === 412
-  );
+  if (typeof err !== "object" || err === null) return false;
+  const e = err as { code?: number | string; statusCode?: number; message?: string };
+  if (e.code === 412 || e.statusCode === 412 || e.code === "PreconditionFailed") {
+    return true;
+  }
+  const message = e.message ?? "";
+  return /precondition/i.test(message);
 }
 
 export async function updateJob(
@@ -306,7 +307,7 @@ export async function updateJob(
     >
   >,
 ): Promise<void> {
-  const maxAttempts = 3;
+  const maxAttempts = 5;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       const { resource: existing, etag } = await getContainer()
@@ -326,7 +327,7 @@ export async function updateJob(
       return;
     } catch (e) {
       if (isCosmosPreconditionFailed(e) && attempt < maxAttempts - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 40 * (attempt + 1)));
+        await new Promise((resolve) => setTimeout(resolve, 50 * 2 ** attempt));
         continue;
       }
       console.warn(`[cosmosV4] updateJob failed ${jobId}`, e);

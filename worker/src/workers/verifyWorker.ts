@@ -202,10 +202,16 @@ async function processVerifyJob(job: TranslationV4Job): Promise<void> {
             module,
             job.target,
           );
-          await setItemsCount(shopName, job.target, module, count);
-          console.log(
-            `[verify] items_count job=${jobId} ${module} ${count.translated}/${count.total} stored`,
-          );
+          const stored = await setItemsCount(shopName, job.target, module, count);
+          if (stored) {
+            console.log(
+              `[verify] items_count job=${jobId} ${module} ${count.translated}/${count.total} stored`,
+            );
+          } else {
+            console.warn(
+              `[verify] items_count job=${jobId} ${module} ${count.translated}/${count.total} redis unavailable`,
+            );
+          }
         } catch (e) {
           console.error(`[verify] items_count job=${jobId} ${module} failed:`, e);
         }
