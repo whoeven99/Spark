@@ -102,6 +102,8 @@ export type TranslationJob = {
     writebackFailed: number;
     usedTokens: number;
   };
+  taskSource?: string | null;
+  isCover?: boolean;
   errorMessage: string | null;
   errorStage: string | null;
   createdAt: string;
@@ -144,14 +146,30 @@ export function fetchShopEvents(
 export function fetchTranslations(params?: {
   status?: string;
   shop?: string;
+  source?: string;
   limit?: number;
 }): Promise<{ jobs: TranslationJob[]; total: number }> {
   const query = new URLSearchParams();
   if (params?.status) query.set("status", params.status);
   if (params?.shop) query.set("shop", params.shop);
+  if (params?.source) query.set("source", params.source);
   if (params?.limit) query.set("limit", String(params.limit));
   const qs = query.toString();
   return apiFetch(`/translations${qs ? `?${qs}` : ""}`);
+}
+
+/** worker 自动翻译任务来源标识。 */
+export const AUTO_TASK_SOURCE = "TsFrontend-Auto";
+
+export type AutoTranslationSummary = {
+  byStatus: Record<string, number>;
+  total: number;
+  createdToday: number;
+  note?: string;
+};
+
+export function fetchAutoTranslationSummary(): Promise<AutoTranslationSummary> {
+  return apiFetch("/translations/auto/summary");
 }
 
 export function fetchTranslationJob(

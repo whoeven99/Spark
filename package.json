@@ -31,7 +31,8 @@
     "render:digest": "node scripts/render-daily-log-digest.cjs",
     "test:render-digest": "node --test scripts/render-log-classify.test.cjs",
     "orders:create": "node scripts/create-test-orders.mjs",
-    "translation:check": "node scripts/translation-playbook-check.mjs"
+    "translation:check": "node scripts/translation-playbook-check.mjs",
+    "deploy:test": "node scripts/deploy-test-render.mjs"
   },
   "type": "module",
   "engines": {

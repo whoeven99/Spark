@@ -1,6 +1,7 @@
 import { hostname } from "os";
 import { claimJob, updateJob, heartbeat, findPendingJobs, withStageTiming, prefersStoredToken } from "../services/cosmosV4.js";
 import { popHint, pushHint, setProgress } from "../services/redisV4.js";
+import { runTranslateWorker } from "./translateWorker.js";
 import { blobWrite } from "../services/blobV4.js";
 import { fetchTranslatableResources } from "../services/shopifyFetch.js";
 import { countFieldUnits, pAll } from "../services/llmTranslate.js";
@@ -196,6 +197,9 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
     });
 
     await pushHint("translate", { taskId: jobId, shopName });
+    void runTranslateWorker().catch((e) =>
+      console.error(`[init] wake translate failed job=${jobId}`, e),
+    );
     console.log(`[init] done job=${jobId} totalItems=${totalItems}`);
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e);

@@ -6,6 +6,9 @@ import type { TranslationV4Job } from "../types/translation.js";
 
 export const translationsRouter = Router();
 
+/** 自动翻译任务来源标识（与 worker cosmosV4.ts TSF_AUTO_TASK_SOURCE 保持一致）。 */
+const AUTO_TASK_SOURCE = "TsFrontend-Auto";
+
 translationsRouter.get("/", async (req, res) => {
   if (!isCosmosConfigured()) {
     res.json({ jobs: [], total: 0, note: "Cosmos not configured" });
@@ -16,10 +19,11 @@ translationsRouter.get("/", async (req, res) => {
     const container = getTranslationJobsContainer();
     const status = (req.query.status as string | undefined)?.trim();
     const shop = (req.query.shop as string | undefined)?.trim();
+    const source = (req.query.source as string | undefined)?.trim();
     const limit = Math.min(Number(req.query.limit ?? 100), 500);
 
     let query =
-      "SELECT c.id, c.shopName, c.source, c.target, c.modules, c.status, c.aiModel, c.metrics, c.errorMessage, c.errorStage, c.createdAt, c.updatedAt, c.claimedBy FROM c";
+      "SELECT c.id, c.shopName, c.source, c.target, c.modules, c.status, c.aiModel, c.metrics, c.taskSource, c.isCover, c.errorMessage, c.errorStage, c.createdAt, c.updatedAt, c.claimedBy FROM c";
     const params: SqlParameter[] = [];
     const conditions: string[] = [];
 
@@ -30,6 +34,10 @@ translationsRouter.get("/", async (req, res) => {
     if (shop) {
       conditions.push("c.shopName = @shop");
       params.push({ name: "@shop", value: shop });
+    }
+    if (source) {
+      conditions.push("c.taskSource = @source");
+      params.push({ name: "@source", value: source });
     }
     if (conditions.length) {
       query += " WHERE " + conditions.join(" AND ");
@@ -165,6 +173,55 @@ translationsRouter.get("/key-stats/history", async (req, res) => {
     res.json({ history });
   } catch (err) {
     console.error("[key-stats/history]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ── 自动翻译任务汇总 ─────────────────────────────────────────────────────────
+// 一眼看过去：各状态计数 + 今日新建数。必须注册在 /:jobId 之前。
+translationsRouter.get("/auto/summary", async (_req, res) => {
+  if (!isCosmosConfigured()) {
+    res.json({ byStatus: {}, total: 0, createdToday: 0, note: "Cosmos not configured" });
+    return;
+  }
+  try {
+    const container = getTranslationJobsContainer();
+
+    const { resources: statusRows } = await container.items
+      .query<{ status: string; n: number }>({
+        query:
+          "SELECT c.status, COUNT(1) AS n FROM c WHERE c.taskSource = @auto GROUP BY c.status",
+        parameters: [{ name: "@auto", value: AUTO_TASK_SOURCE }],
+      })
+      .fetchAll();
+
+    const byStatus: Record<string, number> = {};
+    let total = 0;
+    for (const r of statusRows) {
+      byStatus[r.status] = r.n;
+      total += r.n;
+    }
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const { resources: todayRows } = await container.items
+      .query<number>({
+        query:
+          "SELECT VALUE COUNT(1) FROM c WHERE c.taskSource = @auto AND c.createdAt >= @start",
+        parameters: [
+          { name: "@auto", value: AUTO_TASK_SOURCE },
+          { name: "@start", value: todayStart.toISOString() },
+        ],
+      })
+      .fetchAll();
+
+    res.json({ byStatus, total, createdToday: todayRows[0] ?? 0 });
+  } catch (err) {
+    if (String(err).includes("Owner resource does not exist")) {
+      res.json({ byStatus: {}, total: 0, createdToday: 0, note: "翻译任务容器不存在或无访问权限" });
+      return;
+    }
+    console.error("[translations/auto/summary]", err);
     res.status(500).json({ error: String(err) });
   }
 });

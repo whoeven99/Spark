@@ -5,9 +5,17 @@ import { runVerifyWorker } from "./workers/verifyWorker.js";
 import { runAnalysisWorker } from "./workers/analysisWorker.js";
 import { resetStaleJobs } from "./services/cosmosV4.js";
 import { resetStaleAnalysisJobs } from "./services/cosmosAnalysis.js";
+import { runAutoTranslateScan } from "./services/autoTranslate.js";
 
-const INTERVAL_MS = 30_000;
+/** 各 stage 轮询间隔；hint 队列有任务时仍靠上一阶段 wake 立即触发。 */
+const POLL_INTERVAL_MS = Math.max(
+  500,
+  Number(process.env.WORKER_POLL_INTERVAL_MS) || 2_000,
+);
 const STALE_RESET_INTERVAL_MS = 5 * 60_000;
+/** 自动翻译扫描间隔（默认 1 小时，可用 AUTO_TRANSLATE_INTERVAL_MS 覆盖）。 */
+const AUTO_TRANSLATE_INTERVAL_MS =
+  Number(process.env.AUTO_TRANSLATE_INTERVAL_MS) || 60 * 60_000;
 
 const ALL_STAGES = ["init", "translate", "writeback", "verify", "analysis"] as const;
 type Stage = (typeof ALL_STAGES)[number];
@@ -33,7 +41,7 @@ function safeRun(name: string, fn: () => Promise<void>): void {
 
 export function startScheduler(): void {
   const stages = enabledStages();
-  console.log(`[scheduler] starting translation v4 workers (stages: ${[...stages].join(",")})`);
+  console.log(`[scheduler] starting translation v4 workers (stages: ${[...stages].join(",")}, poll=${POLL_INTERVAL_MS}ms)`);
 
   const runners: Record<Stage, () => Promise<void>> = {
     init: runInitWorker,
@@ -49,6 +57,17 @@ export function startScheduler(): void {
   setInterval(() => safeRun("resetStale", () => resetStaleJobs()), STALE_RESET_INTERVAL_MS);
   setInterval(() => safeRun("resetStaleAnalysis", () => resetStaleAnalysisJobs()), STALE_RESET_INTERVAL_MS);
 
+  // 自动翻译扫描：定时为开启自动翻译的店创建增量任务（gated by init stage）。
+  if (stages.has("init")) {
+    safeRun("autoTranslate", () => runAutoTranslateScan());
+    setInterval(
+      () => safeRun("autoTranslate", () => runAutoTranslateScan()),
+      AUTO_TRANSLATE_INTERVAL_MS,
+    );
+  } else {
+    console.log('[scheduler] init stage 关闭，跳过 autoTranslate 扫描');
+  }
+
   for (const stage of ALL_STAGES) {
     if (!stages.has(stage)) {
       console.log(`[scheduler] stage "${stage}" disabled by WORKER_STAGES`);
@@ -56,6 +75,6 @@ export function startScheduler(): void {
     }
     const run = runners[stage];
     safeRun(stage, run);
-    setInterval(() => safeRun(stage, run), INTERVAL_MS);
+    setInterval(() => safeRun(stage, run), POLL_INTERVAL_MS);
   }
 }

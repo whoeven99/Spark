@@ -8,6 +8,7 @@ import { filterWritebackFields } from "../services/writebackFields.js";
 import { pAll } from "../services/llmTranslate.js";
 import { QpsLogger } from "../services/qpsLogger.js";
 import type { TranslationV4Job } from "../services/cosmosV4.js";
+import { runVerifyWorker } from "./verifyWorker.js";
 
 /**
  * Scale-out safe: hostname + pid is unique across containers even when every
@@ -230,6 +231,9 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
       metrics: { ...updatedMetrics, verifyTotal },
     });
     await pushHint("verify", { taskId: jobId, shopName });
+    void runVerifyWorker().catch((e) =>
+      console.error(`[writeback] wake verify failed job=${jobId}`, e),
+    );
     console.log(
       `[writeback] done job=${jobId} written=${writebackDone} failed=${writebackFailed} → VERIFY_QUEUED (read-back verify ${verifyTotal} resources)`,
     );

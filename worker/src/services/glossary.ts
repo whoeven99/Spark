@@ -1,19 +1,13 @@
-import { blobRead } from "./blobV4.js";
+import { hasTsfDbCredentials, loadGlossaryRowsFromTsf } from "./tsfDb.js";
 
 /**
- * Per-shop glossary — brand names, product terms, and do-not-translate words
- * injected into the translation system prompt so wording stays consistent.
+ * Per-shop glossary injected into the translation system prompt so wording
+ * stays consistent.
  *
- * Stored in Blob at `glossary/{shopName}.json`:
- * {
- *   "terms": [
- *     { "source": "闪购", "translations": { "en": "Flash Sale", "fr": "Vente flash" } },
- *     { "source": "Acme", "doNotTranslate": true, "note": "brand" }
- *   ]
- * }
+ * Source of truth: TSF Prisma/Turso `Glossary` table (迁移自旧 Java 术语表)。
+ * 适用范围过滤与 Java GlossaryService 一致：rangeCode == target 或 "ALL"。
  *
- * The produced lines are sorted deterministically so the system prompt prefix is
- * byte-stable across batches → OpenAI automatic prompt caching can kick in.
+ * 产出的行做了确定性排序，使系统提示词前缀字节稳定 → 命中 LLM 的 prompt 缓存。
  */
 
 export type GlossaryTerm = {
@@ -23,89 +17,40 @@ export type GlossaryTerm = {
   note?: string;
 };
 
-export type GlossaryFile = {
-  terms: GlossaryTerm[];
-};
-
 type CacheEntry = {
   lines: string[];
   expiresAt: number;
-  /** Glossary version (Redis timestamp) when this entry was populated. */
-  version: number;
 };
 const cache = new Map<string, CacheEntry>();
 const TTL_MS = 5 * 60_000;
 
-/** Redis key written by the admin server whenever the glossary is saved. */
-function glossaryVersionKey(shopName: string): string {
-  return `translate:v4:glossary_v:${shopName}`;
-}
-
-/** Current glossary version from Redis; returns 0 when Redis is unavailable. */
-async function getGlossaryVersion(shopName: string): Promise<number> {
-  try {
-    const { getRedis } = await import("./redisV4.js");
-    const redis = getRedis();
-    const v = await redis.get(glossaryVersionKey(shopName));
-    return v ? Number(v) : 0;
-  } catch {
-    return 0;
-  }
-}
-
-function glossaryPath(shopName: string): string {
-  return `glossary/${shopName}.json`;
-}
-
 /**
- * Returns deterministic, sorted glossary instruction lines for a shop + target
- * locale. Empty array when there is no glossary.
- *
- * Cache strategy:
- *  1. Check Redis `glossary_v:{shopName}` — a timestamp bumped by the admin UI on every save.
- *  2. If the Redis version is newer than the cached entry, bust and reload from Blob.
- *  3. Otherwise serve from in-process cache (TTL 5 min), so hot batches skip the Blob read.
- *
- * Net effect: glossary edits in the admin UI take effect within seconds on running workers.
- * Never throws.
+ * 返回某店 + target 语言的术语表指令行（从 TSF Turso 读）。
+ * 无术语表或 TSF 未配置时返回空数组。进程内缓存 5 分钟。永不抛错。
  */
 export async function loadGlossaryLines(shopName: string, target: string): Promise<string[]> {
   const cacheKey = `${shopName}::${target}`;
   const now = Date.now();
   const cached = cache.get(cacheKey);
-
-  if (cached && cached.expiresAt > now) {
-    // Fast path: still within TTL window — check version lazily only if Redis is quick.
-    const latestVersion = await getGlossaryVersion(shopName);
-    if (latestVersion <= cached.version) return cached.lines; // not updated since last load
-    // Admin saved a newer glossary — fall through to reload
-  }
+  if (cached && cached.expiresAt > now) return cached.lines;
 
   let lines: string[] = [];
-  let version = 0;
   try {
-    version = await getGlossaryVersion(shopName);
-    const file = await blobRead<GlossaryFile>(glossaryPath(shopName));
-    const terms = file?.terms ?? [];
-    const collected: string[] = [];
-    for (const term of terms) {
-      if (!term?.source) continue;
-      if (term.doNotTranslate) {
-        collected.push(`- Keep "${term.source}" unchanged (do not translate).`);
-        continue;
-      }
-      const translated = term.translations?.[target];
-      if (translated) {
-        collected.push(`- Translate "${term.source}" as "${translated}".`);
-      }
+    if (hasTsfDbCredentials()) {
+      const rows = await loadGlossaryRowsFromTsf(shopName, target);
+      lines = rows
+        .filter((r) => r.sourceText && r.targetText)
+        .map((r) => `- Translate "${r.sourceText}" as "${r.targetText}".`)
+        // 去重 + 确定性排序，保持系统提示词前缀字节稳定（利于 prompt 缓存）。
+        .filter((line, i, arr) => arr.indexOf(line) === i)
+        .sort();
     }
-    // Deterministic order keeps the system prompt prefix byte-stable for prompt caching.
-    lines = collected.sort();
-  } catch {
+  } catch (err) {
+    console.error(`[glossary] 读取 TSF 术语表失败 shop=${shopName}:`, err);
     lines = [];
   }
 
-  cache.set(cacheKey, { lines, expiresAt: now + TTL_MS, version });
+  cache.set(cacheKey, { lines, expiresAt: now + TTL_MS });
   return lines;
 }
 

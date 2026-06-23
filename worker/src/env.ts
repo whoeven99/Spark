@@ -9,8 +9,19 @@ function normalize(value: string): string {
   return v;
 }
 
+function maskRedisUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const auth = parsed.password || parsed.username ? "***@" : "";
+    return `${parsed.protocol}//${auth}${parsed.host}${parsed.pathname}`;
+  } catch {
+    return url.length > 40 ? `${url.slice(0, 40)}…` : url;
+  }
+}
+
 function maskValue(key: string, value: string): string {
   if (!value) return "(空)";
+  if (key === "REDIS_URL") return maskRedisUrl(value);
   if (/token|secret|key|password|auth/i.test(key)) {
     return `(已设置,len=${value.length})`;
   }
@@ -140,6 +151,15 @@ export function ensureWorkerEnv(): void {
     ["TURSO_TEST_AUTH_TOKEN", process.env.TURSO_TEST_AUTH_TOKEN],
     ["TURSO_PROD_DATABASE_URL", process.env.TURSO_PROD_DATABASE_URL],
     ["TURSO_PROD_AUTH_TOKEN", process.env.TURSO_PROD_AUTH_TOKEN],
+  ]);
+
+  const tsfTursoOk = Boolean(
+    process.env.TSF_TURSO_DATABASE_URL?.trim()?.startsWith("libsql://") &&
+      process.env.TSF_TURSO_AUTH_TOKEN?.trim(),
+  );
+  logEnvCheck("Turso (TSF 翻译配置)", tsfTursoOk, [
+    ["TSF_TURSO_DATABASE_URL", process.env.TSF_TURSO_DATABASE_URL],
+    ["TSF_TURSO_AUTH_TOKEN", process.env.TSF_TURSO_AUTH_TOKEN],
   ]);
 
   logEnvCheck("LLM (DeepSeek)", Boolean(process.env.DEEPSEEK_API_KEY?.trim()), [
