@@ -336,6 +336,55 @@ export async function updateJob(
   }
 }
 
+/** Count jobs currently in INIT for a shop (serial init queue per shop). */
+export async function countShopInitializingJobs(shopName: string): Promise<number> {
+  try {
+    const { resources } = await getContainer()
+      .items.query<number>(
+        {
+          query:
+            "SELECT VALUE COUNT(1) FROM c WHERE c.shopName = @shopName AND c.status = @status",
+          parameters: [
+            { name: "@shopName", value: shopName },
+            { name: "@status", value: "INITIALIZING" },
+          ],
+        },
+        { partitionKey: shopName },
+      )
+      .fetchAll();
+    const n = resources[0];
+    return typeof n === "number" && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Oldest INIT_QUEUED jobs for a shop (serial init queue). */
+export async function findInitQueuedJobsForShop(
+  shopName: string,
+  limit = 1,
+): Promise<TranslationV4Job[]> {
+  try {
+    const { resources } = await getContainer()
+      .items.query<TranslationV4Job>(
+        {
+          query:
+            "SELECT * FROM c WHERE c.shopName = @shopName AND c.status = @status ORDER BY c.createdAt ASC OFFSET 0 LIMIT @limit",
+          parameters: [
+            { name: "@shopName", value: shopName },
+            { name: "@status", value: "INIT_QUEUED" },
+            { name: "@limit", value: limit },
+          ],
+        },
+        { partitionKey: shopName },
+      )
+      .fetchAll();
+    return resources;
+  } catch {
+    return [];
+  }
+}
+
 /** Count jobs currently in TRANSLATE for a shop (used to fair-share LLM concurrency). */
 export async function countShopTranslatingJobs(shopName: string): Promise<number> {
   try {

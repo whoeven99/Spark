@@ -5,7 +5,7 @@ import { blobRead, blobWrite } from "../services/blobV4.js";
 import { loadTranslatedItemsForJob } from "../services/translateBlobIO.js";
 import { registerTranslations, type TranslationInput } from "../services/shopifyFetch.js";
 import { filterWritebackFields } from "../services/writebackFields.js";
-import { pAll } from "../services/llmTranslate.js";
+import { runShopifyAdaptive, getShopifyCap } from "../services/shopifyConcurrency.js";
 import { QpsLogger } from "../services/qpsLogger.js";
 import type { TranslationV4Job } from "../services/cosmosV4.js";
 import { runVerifyWorker } from "./verifyWorker.js";
@@ -18,13 +18,7 @@ const WORKER_ID = `writeback-${process.env.HOSTNAME ?? hostname()}-${process.pid
 
 const HEARTBEAT_THROTTLE_MS = 30_000;
 
-/**
- * How many translationsRegister mutations to fire in parallel per job.
- * Shopify's bucket (1000 pts, 50 pts/s restore) handles this comfortably;
- * shopifyGraphql() throttles proactively and retries on 429.
- * Override with WRITEBACK_CONCURRENCY env var.
- */
-const WRITEBACK_CONCURRENCY = Math.max(1, Number(process.env.WRITEBACK_CONCURRENCY) || 3);
+// 写回并发由 shopifyConcurrency 的自适应控制器决定（按 Shopify throttleStatus AIMD）。
 
 export async function runWritebackWorker(): Promise<void> {
   const claimed = await claimNextJob();
@@ -117,13 +111,12 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
     }
 
     console.log(
-      `[writeback] job=${jobId} pending=${pendingResources.length} concurrency=${WRITEBACK_CONCURRENCY}`,
+      `[writeback] job=${jobId} pending=${pendingResources.length} concurrency=${getShopifyCap(shopDomain)}(adaptive)`,
     );
 
-    // ── Phase 2: Parallel writeback ───────────────────────────────────────────
-    // shopifyGraphql() handles proactive throttle (extensions.cost) and 429
-    // retry automatically — no additional back-off logic needed here.
-    await pAll(pendingResources, WRITEBACK_CONCURRENCY, async ({ resource, module }) => {
+    // ── Phase 2: Adaptive parallel writeback ──────────────────────────────────
+    // 并发随 Shopify throttleStatus 自适应；shopifyGraphql() 仍做 floor 降速 + 429 重试。
+    await runShopifyAdaptive(shopDomain, pendingResources, async ({ resource, module }) => {
       // Throttled heartbeat: the synchronous `lastHeartbeatAt = now` update
       // prevents concurrent callbacks from firing duplicate heartbeats.
       const now = Date.now();

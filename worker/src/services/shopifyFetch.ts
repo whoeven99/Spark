@@ -1,6 +1,7 @@
 /** Maps our module names to Shopify's TranslatableResourceType enum values */
 import { getShopAccessToken, invalidateShopAccessTokenCache } from "./shopAccessToken.js";
 import { shouldIncludeFieldV2 } from "./translationFilter.js";
+import { noteShopifyThrottle } from "./shopifyConcurrency.js";
 
 export const MODULE_TO_SHOPIFY_TYPE: Record<string, string> = {
   PRODUCT: "PRODUCT",
@@ -315,6 +316,7 @@ async function shopifyGraphql(
   // ── 429: bucket exhausted ─────────────────────────────────────────────────
   if (resp.status === 429) {
     _getOrInitStats(shopDomain).retries429++;
+    noteShopifyThrottle(shopDomain, null, true); // 乘性减并发
     if (retries <= 0) {
       throw new Error(`Shopify GraphQL 429: rate limited (retries exhausted)`);
     }
@@ -367,6 +369,8 @@ async function shopifyGraphql(
     stat.lastBucketAvailable = throttle.currentlyAvailable;
     stat.lastBucketMax = throttle.maximumAvailable;
   }
+  // 喂给自适应并发控制器：桶富余则加并发，紧张则减。
+  noteShopifyThrottle(shopDomain, throttle, false);
 
   // ── Proactive throttle: sleep before the bucket runs dry ─────────────────
   if (throttle && SHOPIFY_BUCKET_FLOOR > 0 && throttle.currentlyAvailable < SHOPIFY_BUCKET_FLOOR) {

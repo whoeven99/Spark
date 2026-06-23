@@ -1,5 +1,15 @@
 import { hostname } from "os";
-import { claimJob, updateJob, heartbeat, findPendingJobs, withStageTiming, prefersStoredToken } from "../services/cosmosV4.js";
+import {
+  claimJob,
+  updateJob,
+  heartbeat,
+  findPendingJobs,
+  withStageTiming,
+  prefersStoredToken,
+  countShopInitializingJobs,
+  findInitQueuedJobsForShop,
+  type TranslationV4Job,
+} from "../services/cosmosV4.js";
 import { popHint, pushHint, setProgress } from "../services/redisV4.js";
 import { runTranslateWorker } from "./translateWorker.js";
 import { blobWrite } from "../services/blobV4.js";
@@ -26,50 +36,72 @@ const HEARTBEAT_THROTTLE_MS = 30_000;
 const MODULE_CONCURRENCY = Math.max(1, Number(process.env.INIT_MODULE_CONCURRENCY) || 3);
 
 export async function runInitWorker(): Promise<void> {
-  // Drain hint queue first (O(1) Redis pop), then fall back to Cosmos scan.
-  const hints = await drainHints();
-  const pending =
-    hints.length > 0
-      ? (
-          await Promise.all(
-            hints.map((h) =>
-              claimJob(h.shopName, h.taskId, "INIT_QUEUED", "INITIALIZING", WORKER_ID),
-            ),
-          )
-        ).filter((j): j is NonNullable<typeof j> => j !== null)
-      : await claimPendingJobs("INIT_QUEUED", 3);
+  const claimed = await claimNextInitJob();
+  if (!claimed) return;
+  console.log(`[init] processing job=${claimed.id} shop=${claimed.shopName}`);
+  await processInitJob(claimed.id, claimed.shopName).catch((e) => {
+    console.error(`[init] job ${claimed.id} failed`, e);
+  });
+}
 
-  if (pending.length === 0) return;
-
-  // Different shops have independent Shopify rate-limit buckets — run their
-  // init jobs in parallel.  Same-shop jobs are prevented by the single-job
-  // claim (claimJob etag guard ensures each job is owned by exactly one worker
-  // across all scaled-out instances).
-  await Promise.all(
-    pending.map((job) =>
-      processInitJob(job.id, job.shopName).catch((e) => {
-        console.error(`[init] job ${job.id} failed`, e);
-      }),
-    ),
+async function wakeNextInitForShop(shopName: string): Promise<void> {
+  if ((await countShopInitializingJobs(shopName)) > 0) return;
+  const [next] = await findInitQueuedJobsForShop(shopName, 1);
+  if (!next) return;
+  await pushHint("init", { taskId: next.id, shopName });
+  void runInitWorker().catch((e) =>
+    console.error(`[init] wake next failed shop=${shopName}`, e),
+  );
+  console.log(
+    `[init] shop=${shopName} slot free → queued next job=${next.id} ${next.source}->${next.target}`,
   );
 }
 
-async function drainHints() {
-  const hints = [];
-  for (let i = 0; i < 5; i++) {
-    const h = await popHint("init");
-    if (!h) break;
-    hints.push(h);
+/**
+ * 同 shop 同一时间只允许一个 INITIALIZING（不同 target 共享 Shopify rate-limit bucket）。
+ * 返回 null 表示该 shop 已有 INIT 在跑，或 claim 失败。
+ */
+async function tryClaimInitJob(
+  shopName: string,
+  taskId: string,
+): Promise<TranslationV4Job | null> {
+  if ((await countShopInitializingJobs(shopName)) > 0) {
+    return null;
   }
-  return hints;
+  const job = await claimJob(
+    shopName,
+    taskId,
+    "INIT_QUEUED",
+    "INITIALIZING",
+    WORKER_ID,
+  );
+  if (!job) return null;
+  const active = await countShopInitializingJobs(shopName);
+  if (active > 1) {
+    await updateJob(shopName, job.id, { status: "INIT_QUEUED", claimedBy: null });
+    console.log(
+      `[init] yield duplicate claim job=${job.id} shop=${shopName} (${active} INITIALIZING)`,
+    );
+    return null;
+  }
+  return job;
 }
 
-async function claimPendingJobs(status: "INIT_QUEUED", limit: number) {
-  const candidates = await findPendingJobs(status, limit);
-  const claimed = await Promise.all(
-    candidates.map((j) => claimJob(j.shopName, j.id, status, "INITIALIZING", WORKER_ID)),
-  );
-  return claimed.filter((j): j is NonNullable<typeof j> => j !== null);
+async function claimNextInitJob(): Promise<TranslationV4Job | null> {
+  const hint = await popHint("init");
+  if (hint) {
+    const job = await tryClaimInitJob(hint.shopName, hint.taskId);
+    if (job) return job;
+    // shop 已有 INIT 在跑 —— 把 hint 放回队列，等当前任务结束后 wakeNext 再拾取
+    await pushHint("init", hint);
+    return null;
+  }
+  const candidates = await findPendingJobs("INIT_QUEUED", 10);
+  for (const candidate of candidates) {
+    const job = await tryClaimInitJob(candidate.shopName, candidate.id);
+    if (job) return job;
+  }
+  return null;
 }
 
 async function processInitJob(jobId: string, shopName: string): Promise<void> {
@@ -213,5 +245,8 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
     console.error(`[init] failed job=${jobId}`, e);
   } finally {
     qps.stop();
+    await wakeNextInitForShop(shopName).catch((e) => {
+      console.warn(`[init] wakeNext failed shop=${shopName}`, e);
+    });
   }
 }

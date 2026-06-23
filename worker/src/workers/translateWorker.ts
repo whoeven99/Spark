@@ -474,7 +474,6 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
               await heartbeat(shopName, jobId);
             }
             await flushKeyStats();
-            qps.flush().catch(() => {});
             await checkControl();
 
             if (shouldFlushQuota) await flushQuota();
