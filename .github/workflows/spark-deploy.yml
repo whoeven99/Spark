@@ -1,4 +1,4 @@
-name: spark - Spark Deploy
+name: Spark Deploy
 
 # 仅手动触发；始终从 master 检出；勾选要执行的任务（可多选）
 on:
@@ -10,6 +10,18 @@ on:
         default: false
       deploy_admin:
         description: 发布 Admin 服务
+        type: boolean
+        default: false
+      deploy_admin_test:
+        description: 发布 Admin Test
+        type: boolean
+        default: false
+      deploy_worker_test:
+        description: 发布 Worker Test
+        type: boolean
+        default: false
+      deploy_worker_prod:
+        description: 发布 Worker PROD
         type: boolean
         default: false
 
@@ -24,8 +36,12 @@ jobs:
     steps:
       - name: Require at least one task
         run: |
-          if [ "${{ github.event.inputs.publish_render }}" != "true" ] && [ "${{ github.event.inputs.deploy_admin }}" != "true" ]; then
-            echo "::error::请至少勾选「发布 Spark Test（Render）」或「发布 Admin 服务」之一"
+          if [ "${{ github.event.inputs.publish_render }}" != "true" ] \
+            && [ "${{ github.event.inputs.deploy_admin }}" != "true" ] \
+            && [ "${{ github.event.inputs.deploy_admin_test }}" != "true" ] \
+            && [ "${{ github.event.inputs.deploy_worker_test }}" != "true" ] \
+            && [ "${{ github.event.inputs.deploy_worker_prod }}" != "true" ]; then
+            echo "::error::请至少勾选一个发布任务"
             exit 1
           fi
 
@@ -237,3 +253,162 @@ jobs:
             cat response.json
             exit 1
           fi
+
+  deploy_render_admin_test:
+    name: Trigger Render deploy (Admin Test)
+    needs: validate_inputs
+    if: ${{ github.event.inputs.deploy_admin_test == 'true' }}
+    runs-on: ubuntu-latest
+    environment: CommonShopifyRenderConfig
+
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: master
+
+      - name: Deploy to Render (admin-test)
+        id: trigger_render
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_APIKEY }}
+          RENDER_SERVICE_ID: srv-d8p9g9rsq97s73fr1b1g
+          RENDER_DASHBOARD_KIND: web
+        run: bash .github/scripts/render-deploy-and-wait.sh
+
+      - name: Notify Feishu on Render deploy success
+        if: success()
+        env:
+          FEISHU_WEBHOOK_URL: https://open.feishu.cn/open-apis/bot/v2/hook/c3b2d5cb-291b-43f4-b0ac-658a18eb5636
+          RENDER_FINAL_STATUS: ${{ steps.trigger_render.outputs.final_status }}
+        run: |
+          COMMIT_BODY="$(git log -1 --pretty=%b)"
+          PAYLOAD=$(python3 -c 'import json,sys; print(json.dumps({"msg_type":"text","content":{"text":sys.stdin.read()}}, ensure_ascii=False))' <<EOF
+          Admin Test deploy 成功, by ${GITHUB_ACTOR}.
+          最终状态: ${RENDER_FINAL_STATUS}
+          发布内容：${COMMIT_BODY}
+          EOF
+          )
+          curl -sS -X POST "$FEISHU_WEBHOOK_URL" -H "Content-Type: application/json" -d "$PAYLOAD"
+
+      - name: Notify Feishu on Render deploy failure
+        if: failure()
+        env:
+          FEISHU_WEBHOOK_URL: https://open.feishu.cn/open-apis/bot/v2/hook/c3b2d5cb-291b-43f4-b0ac-658a18eb5636
+          RENDER_DEPLOY_URL: ${{ steps.trigger_render.outputs.deploy_url }}
+          RENDER_FINAL_STATUS: ${{ steps.trigger_render.outputs.final_status }}
+        run: |
+          PAYLOAD=$(python3 -c 'import json,sys; print(json.dumps({"msg_type":"text","content":{"text":sys.stdin.read()}}, ensure_ascii=False))' <<EOF
+          Admin Test deploy 失败, by ${GITHUB_ACTOR}.
+          最终状态: ${RENDER_FINAL_STATUS}
+          Render: ${RENDER_DEPLOY_URL}
+          Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+          )
+          curl -sS -X POST "$FEISHU_WEBHOOK_URL" -H "Content-Type: application/json" -d "$PAYLOAD"
+
+  deploy_render_worker_test:
+    name: Trigger Render deploy (Worker Test)
+    needs: validate_inputs
+    if: ${{ github.event.inputs.deploy_worker_test == 'true' }}
+    runs-on: ubuntu-latest
+    environment: CommonShopifyRenderConfig
+
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: master
+
+      - name: Deploy to Render (worker-test)
+        id: trigger_render
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_APIKEY }}
+          RENDER_SERVICE_ID: srv-d88p1fmq1p3s73f5trv0
+          RENDER_DASHBOARD_KIND: worker
+        run: bash .github/scripts/render-deploy-and-wait.sh
+
+      - name: Notify Feishu on Render deploy success
+        if: success()
+        env:
+          FEISHU_WEBHOOK_URL: https://open.feishu.cn/open-apis/bot/v2/hook/c3b2d5cb-291b-43f4-b0ac-658a18eb5636
+          RENDER_FINAL_STATUS: ${{ steps.trigger_render.outputs.final_status }}
+        run: |
+          COMMIT_BODY="$(git log -1 --pretty=%b)"
+          PAYLOAD=$(python3 -c 'import json,sys; print(json.dumps({"msg_type":"text","content":{"text":sys.stdin.read()}}, ensure_ascii=False))' <<EOF
+          Worker Test deploy 成功, by ${GITHUB_ACTOR}.
+          最终状态: ${RENDER_FINAL_STATUS}
+          发布内容：${COMMIT_BODY}
+          EOF
+          )
+          curl -sS -X POST "$FEISHU_WEBHOOK_URL" -H "Content-Type: application/json" -d "$PAYLOAD"
+
+      - name: Notify Feishu on Render deploy failure
+        if: failure()
+        env:
+          FEISHU_WEBHOOK_URL: https://open.feishu.cn/open-apis/bot/v2/hook/c3b2d5cb-291b-43f4-b0ac-658a18eb5636
+          RENDER_DEPLOY_URL: ${{ steps.trigger_render.outputs.deploy_url }}
+          RENDER_FINAL_STATUS: ${{ steps.trigger_render.outputs.final_status }}
+        run: |
+          PAYLOAD=$(python3 -c 'import json,sys; print(json.dumps({"msg_type":"text","content":{"text":sys.stdin.read()}}, ensure_ascii=False))' <<EOF
+          Worker Test deploy 失败, by ${GITHUB_ACTOR}.
+          最终状态: ${RENDER_FINAL_STATUS}
+          Render: ${RENDER_DEPLOY_URL}
+          Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+          )
+          curl -sS -X POST "$FEISHU_WEBHOOK_URL" -H "Content-Type: application/json" -d "$PAYLOAD"
+
+  deploy_render_worker_prod:
+    name: Trigger Render deploy (Worker PROD)
+    needs: validate_inputs
+    if: ${{ github.event.inputs.deploy_worker_prod == 'true' }}
+    runs-on: ubuntu-latest
+    environment: CommonShopifyRenderConfig
+
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: master
+
+      - name: Deploy to Render (worker-prod)
+        id: trigger_render
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_APIKEY }}
+          RENDER_SERVICE_ID: srv-d8sqas4vikkc73f5nbog
+          RENDER_DASHBOARD_KIND: worker
+        run: bash .github/scripts/render-deploy-and-wait.sh
+
+      - name: Notify Feishu on Render deploy success
+        if: success()
+        env:
+          FEISHU_WEBHOOK_URL: https://open.feishu.cn/open-apis/bot/v2/hook/c3b2d5cb-291b-43f4-b0ac-658a18eb5636
+          RENDER_FINAL_STATUS: ${{ steps.trigger_render.outputs.final_status }}
+        run: |
+          COMMIT_BODY="$(git log -1 --pretty=%b)"
+          PAYLOAD=$(python3 -c 'import json,sys; print(json.dumps({"msg_type":"text","content":{"text":sys.stdin.read()}}, ensure_ascii=False))' <<EOF
+          Worker PROD deploy 成功, by ${GITHUB_ACTOR}.
+          最终状态: ${RENDER_FINAL_STATUS}
+          发布内容：${COMMIT_BODY}
+          EOF
+          )
+          curl -sS -X POST "$FEISHU_WEBHOOK_URL" -H "Content-Type: application/json" -d "$PAYLOAD"
+
+      - name: Notify Feishu on Render deploy failure
+        if: failure()
+        env:
+          FEISHU_WEBHOOK_URL: https://open.feishu.cn/open-apis/bot/v2/hook/c3b2d5cb-291b-43f4-b0ac-658a18eb5636
+          RENDER_DEPLOY_URL: ${{ steps.trigger_render.outputs.deploy_url }}
+          RENDER_FINAL_STATUS: ${{ steps.trigger_render.outputs.final_status }}
+        run: |
+          PAYLOAD=$(python3 -c 'import json,sys; print(json.dumps({"msg_type":"text","content":{"text":sys.stdin.read()}}, ensure_ascii=False))' <<EOF
+          Worker PROD deploy 失败, by ${GITHUB_ACTOR}.
+          最终状态: ${RENDER_FINAL_STATUS}
+          Render: ${RENDER_DEPLOY_URL}
+          Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+          )
+          curl -sS -X POST "$FEISHU_WEBHOOK_URL" -H "Content-Type: application/json" -d "$PAYLOAD"
