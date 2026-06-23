@@ -1,6 +1,9 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { fetchGoogleAdsMetrics } from "../server/adsCatalog/googleAdsMetrics.server";
+import { formatOutboundErrorLog } from "../server/common/outboundError.server";
+
+const LOG_PREFIX = "[AdsCatalog][GoogleAdsMetrics]";
 
 /**
  * GET /api/ads-catalog/google-ads-metrics
@@ -23,7 +26,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return Response.json({ ok: true, ...result });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    console.error("[AdsCatalog][GoogleAdsMetrics] API 错误:", message);
+    console.error(
+      `${LOG_PREFIX} API loader failed shop=${session.shop} ${formatOutboundErrorLog(e)}`,
+    );
+    if (e instanceof Error && e.stack) {
+      console.error(`${LOG_PREFIX} API loader stack shop=${session.shop} ${e.stack}`);
+    }
     return Response.json({ ok: false, reason: "api_error", message }, { status: 500 });
   }
 };

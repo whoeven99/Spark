@@ -181,6 +181,8 @@ export type GoogleAdsCredential = {
   accessToken: string;
   refreshToken?: string;
   customerId: string;
+  /** MCC 场景下访问子账户所需的经理账户 ID；直连账户与 customerId 相同。 */
+  loginCustomerId?: string;
   updatedAt: string;
 };
 
@@ -197,13 +199,20 @@ export async function getGoogleAdsCredential(
     refreshToken:
       typeof record.data.refreshToken === "string" ? record.data.refreshToken : undefined,
     customerId,
+    loginCustomerId:
+      typeof record.data.loginCustomerId === "string"
+        ? record.data.loginCustomerId
+        : undefined,
     updatedAt: record.updatedAt.toISOString(),
   };
 }
 
 export async function setGoogleAdsCredential(
   shop: string,
-  payload: Pick<GoogleAdsCredential, "accessToken" | "refreshToken" | "customerId">,
+  payload: Pick<
+    GoogleAdsCredential,
+    "accessToken" | "refreshToken" | "customerId" | "loginCustomerId"
+  >,
 ): Promise<void> {
   const accessToken = payload.accessToken.trim();
   const customerId = payload.customerId.trim();
@@ -217,6 +226,11 @@ export async function setGoogleAdsCredential(
     accessToken,
     refreshToken: payload.refreshToken?.trim() || existing?.data.refreshToken || null,
     customerId,
+    loginCustomerId:
+      payload.loginCustomerId?.trim() ||
+      (typeof existing?.data.loginCustomerId === "string"
+        ? existing.data.loginCustomerId
+        : null),
   });
 }
 

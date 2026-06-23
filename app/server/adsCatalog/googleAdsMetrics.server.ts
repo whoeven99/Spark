@@ -12,12 +12,38 @@ import {
 import {
   getGoogleOAuthClient,
   getGoogleAdsDeveloperToken,
-  googleAdsApiUrl,
 } from "./googleOAuth.server";
+import {
+  buildGoogleAdsHeaders,
+  googleAdsApiUrl,
+  normalizeCustomerId,
+  parseGoogleAdsError,
+  resolveLoginCustomerId,
+} from "./googleAdsApi.server";
 import { refreshGoogleAccessToken } from "./clients/googleMerchantClient.server";
-import { formatOutboundNetworkError } from "../common/outboundError.server";
+import {
+  formatOutboundErrorLog,
+  formatOutboundNetworkError,
+} from "../common/outboundError.server";
 
 const LOG_PREFIX = "[AdsCatalog][GoogleAdsMetrics]";
+
+function logMetricsError(
+  step: string,
+  shop: string,
+  error: unknown,
+  context?: Record<string, string | undefined>,
+): void {
+  const ctx = Object.entries(context ?? {})
+    .filter(([, value]) => value)
+    .map(([key, value]) => `${key}=${value}`)
+    .join(" ");
+  const suffix = ctx ? ` ${ctx}` : "";
+  console.error(`${LOG_PREFIX} step=${step} shop=${shop}${suffix} ${formatOutboundErrorLog(error)}`);
+  if (error instanceof Error && error.stack) {
+    console.error(`${LOG_PREFIX} step=${step} shop=${shop} stack=${error.stack}`);
+  }
+}
 
 export interface GoogleAdsCampaignMetrics {
   campaignId: string;
@@ -80,9 +106,10 @@ async function executeGaqlQuery(params: {
   accessToken: string;
   developerToken: string;
   customerId: string;
+  loginCustomerId: string;
   query: string;
 }): Promise<GaqlRow[]> {
-  const cleanId = params.customerId.replace(/\D/g, "");
+  const cleanId = normalizeCustomerId(params.customerId);
   const url = googleAdsApiUrl(`/customers/${cleanId}/googleAds:searchStream`);
 
   let response: Response;
@@ -90,27 +117,30 @@ async function executeGaqlQuery(params: {
     response = await fetch(url, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${params.accessToken}`,
-        "developer-token": params.developerToken,
+        ...buildGoogleAdsHeaders({
+          accessToken: params.accessToken,
+          developerToken: params.developerToken,
+          loginCustomerId: params.loginCustomerId,
+        }),
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ query: params.query }),
     });
   } catch (e) {
-    throw new Error(`Google Ads API 网络请求失败: ${formatOutboundNetworkError(e)}`);
+    console.error(
+      `${LOG_PREFIX} step=gaql_fetch customerId=${cleanId} loginCustomerId=${params.loginCustomerId} url=${url} ${formatOutboundErrorLog(e)}`,
+    );
+    throw new Error(`Google Ads API 网络请求失败: ${formatOutboundNetworkError(e)}`, {
+      cause: e,
+    });
   }
 
   const text = await response.text();
   if (!response.ok) {
-    let msg = `HTTP ${response.status}`;
-    try {
-      const err = JSON.parse(text) as {
-        error?: { message?: string; details?: Array<{ errors?: Array<{ message?: string }> }> };
-      };
-      msg = err.error?.message ?? msg;
-    } catch {
-      // ignore parse error
-    }
+    const msg = parseGoogleAdsError(text, response.status);
+    console.error(
+      `${LOG_PREFIX} step=gaql_http customerId=${cleanId} loginCustomerId=${params.loginCustomerId} status=${response.status} body=${text.slice(0, 500)}`,
+    );
     throw new Error(`Google Ads API 错误: ${msg}`);
   }
 
@@ -135,19 +165,30 @@ async function maybeRefreshAdsToken(shop: string): Promise<string | null> {
   if (!cred?.refreshToken) return cred?.accessToken ?? null;
 
   const { clientId, clientSecret } = getGoogleOAuthClient();
-  if (!clientId || !clientSecret) return cred.accessToken;
+  if (!clientId || !clientSecret) {
+    console.warn(
+      `${LOG_PREFIX} step=refresh_token shop=${shop} skipped=missing_oauth_client using_stored_access_token`,
+    );
+    return cred.accessToken;
+  }
 
   const refreshed = await refreshGoogleAccessToken({
     clientId,
     clientSecret,
     refreshToken: cred.refreshToken,
   });
-  if (!refreshed) return cred.accessToken;
+  if (!refreshed) {
+    console.warn(
+      `${LOG_PREFIX} step=refresh_token shop=${shop} customerId=${cred.customerId} result=failed using_stored_access_token`,
+    );
+    return cred.accessToken;
+  }
 
   await setGoogleAdsCredential(shop, {
     accessToken: refreshed.accessToken,
     refreshToken: cred.refreshToken,
     customerId: cred.customerId,
+    loginCustomerId: cred.loginCustomerId,
   });
 
   return refreshed.accessToken;
@@ -161,20 +202,67 @@ async function maybeRefreshAdsToken(shop: string): Promise<string | null> {
 export async function fetchGoogleAdsMetrics(
   shop: string,
 ): Promise<GoogleAdsMetricsResult | null> {
+  console.info(`${LOG_PREFIX} step=start shop=${shop}`);
+
   const developerToken = getGoogleAdsDeveloperToken();
   if (!developerToken) {
-    console.warn(`${LOG_PREFIX} 缺少 GOOGLE_ADS_DEVELOPER_TOKEN，跳过指标查询`);
+    console.warn(`${LOG_PREFIX} step=config shop=${shop} missing=GOOGLE_ADS_DEVELOPER_TOKEN`);
     return null;
   }
 
-  const cred = await getGoogleAdsCredential(shop);
+  let cred;
+  try {
+    cred = await getGoogleAdsCredential(shop);
+  } catch (e) {
+    logMetricsError("load_credential", shop, e);
+    throw e;
+  }
   if (!cred) {
-    console.info(`${LOG_PREFIX} 店铺 ${shop} 未绑定 Google Ads 账户`);
+    console.info(`${LOG_PREFIX} step=load_credential shop=${shop} result=not_bound`);
     return null;
   }
+
+  console.info(
+    `${LOG_PREFIX} step=load_credential shop=${shop} customerId=${cred.customerId} hasLoginCustomerId=${Boolean(cred.loginCustomerId)} hasRefreshToken=${Boolean(cred.refreshToken)}`,
+  );
 
   const accessToken = await maybeRefreshAdsToken(shop) ?? cred.accessToken;
   const customerId = cred.customerId;
+
+  let loginCustomerId =
+    cred.loginCustomerId?.trim() || normalizeCustomerId(customerId);
+  if (!cred.loginCustomerId) {
+    console.info(
+      `${LOG_PREFIX} step=resolve_login_customer_id shop=${shop} customerId=${customerId} reason=missing_stored_login_customer_id`,
+    );
+    try {
+      loginCustomerId = await resolveLoginCustomerId({
+        accessToken,
+        developerToken,
+        customerId,
+      });
+    } catch (e) {
+      logMetricsError("resolve_login_customer_id", shop, e, { customerId });
+      throw e;
+    }
+    console.info(
+      `${LOG_PREFIX} step=resolve_login_customer_id shop=${shop} customerId=${customerId} loginCustomerId=${loginCustomerId}`,
+    );
+    try {
+      await setGoogleAdsCredential(shop, {
+        accessToken,
+        refreshToken: cred.refreshToken,
+        customerId,
+        loginCustomerId,
+      });
+    } catch (e) {
+      logMetricsError("persist_login_customer_id", shop, e, {
+        customerId,
+        loginCustomerId,
+      });
+      throw e;
+    }
+  }
 
   const query = `
     SELECT
@@ -198,11 +286,24 @@ export async function fetchGoogleAdsMetrics(
 
   let rows: GaqlRow[];
   try {
-    rows = await executeGaqlQuery({ accessToken, developerToken, customerId, query });
+    console.info(
+      `${LOG_PREFIX} step=gaql_query shop=${shop} customerId=${customerId} loginCustomerId=${loginCustomerId}`,
+    );
+    rows = await executeGaqlQuery({
+      accessToken,
+      developerToken,
+      customerId,
+      loginCustomerId,
+      query,
+    });
   } catch (e) {
-    console.error(`${LOG_PREFIX} GAQL 查询失败:`, e);
+    logMetricsError("gaql_query", shop, e, { customerId, loginCustomerId });
     throw e;
   }
+
+  console.info(
+    `${LOG_PREFIX} step=done shop=${shop} customerId=${customerId} campaignCount=${rows.length}`,
+  );
 
   let currencyCode: string | null = null;
   const campaigns: GoogleAdsCampaignMetrics[] = rows.map((row) => {

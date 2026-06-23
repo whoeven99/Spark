@@ -5,6 +5,10 @@ import {
   getGoogleAdsPending,
   setGoogleAdsCredential,
 } from "../server/adsCatalog/credentialStore.server";
+import {
+  getGoogleAdsDeveloperToken,
+} from "../server/adsCatalog/googleOAuth.server";
+import { resolveLoginCustomerId, normalizeCustomerId } from "../server/adsCatalog/googleAdsApi.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -34,10 +38,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return Response.json({ ok: false, error: "customerId 不在授权账号列表中" }, { status: 400 });
   }
 
+  const developerToken = getGoogleAdsDeveloperToken();
+  let loginCustomerId = normalizeCustomerId(customerId);
+  if (developerToken) {
+    loginCustomerId = await resolveLoginCustomerId({
+      accessToken: pending.accessToken,
+      developerToken,
+      customerId,
+      accessibleCustomerIds: pending.accounts.map((a) => a.id),
+    });
+  }
+
   await setGoogleAdsCredential(session.shop, {
     accessToken: pending.accessToken,
     refreshToken: pending.refreshToken,
     customerId,
+    loginCustomerId,
   });
   await clearGoogleAdsPending(session.shop);
 

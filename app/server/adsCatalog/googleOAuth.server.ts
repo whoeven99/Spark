@@ -1,21 +1,19 @@
 import crypto from "node:crypto";
 import { formatOutboundNetworkError } from "../common/outboundError.server";
 import { buildShopifyAdminHostParam, buildAdminEmbeddedAppReturnUrl } from "../billing/buildBillingReturnUrl.server";
+import {
+  buildGoogleAdsHeaders,
+  googleAdsApiUrl,
+  normalizeCustomerId,
+} from "./googleAdsApi.server";
+
+export { googleAdsApiUrl, GOOGLE_ADS_API_VERSION } from "./googleAdsApi.server";
 
 export const GOOGLE_OAUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
 export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
 export const GMC_SCOPE = "https://www.googleapis.com/auth/content";
 export const ADS_SCOPE = "https://www.googleapis.com/auth/adwords";
-
-/** Google Ads REST API 主版本（v17 已于 2025-06-04 下线，请求会返回 404）。 */
-export const GOOGLE_ADS_API_VERSION = "v24";
-
-function googleAdsApiUrl(path: string): string {
-  return `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}${path}`;
-}
-
-export { googleAdsApiUrl };
 
 export type OAuthFlow = "gmc" | "ads";
 
@@ -309,16 +307,18 @@ export async function getMerchantCenterLinkStatus(params: {
   accessToken: string;
   developerToken: string;
   customerId: string;
+  loginCustomerId?: string;
   merchantId?: string;
 }): Promise<{ linked: boolean; links: Array<{ merchantId: string; status: string }> }> {
-  const customerDigits = params.customerId.replace(/\D/g, "");
+  const customerDigits = normalizeCustomerId(params.customerId);
   const response = await fetch(
     googleAdsApiUrl(`/customers/${customerDigits}/merchantCenterLinks`),
     {
-      headers: {
-        Authorization: `Bearer ${params.accessToken}`,
-        "developer-token": params.developerToken,
-      },
+      headers: buildGoogleAdsHeaders({
+        accessToken: params.accessToken,
+        developerToken: params.developerToken,
+        loginCustomerId: params.loginCustomerId ?? params.customerId,
+      }),
     },
   );
   const json = (await response.json().catch(() => ({}))) as {

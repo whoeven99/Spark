@@ -1,5 +1,5 @@
 import type { GoogleMerchantProduct } from "../mappers/shopifyToGoogle";
-import { formatOutboundNetworkError } from "../../common/outboundError.server";
+import { formatOutboundErrorLog, formatOutboundNetworkError } from "../../common/outboundError.server";
 
 const GMC_BASE = "https://shoppingcontent.googleapis.com/content/v2.1";
 const CUSTOM_BATCH_CHUNK = 100;
@@ -166,7 +166,10 @@ export async function refreshGoogleAccessToken(params: {
       accessToken: json.access_token,
       expiresIn: json.expires_in ?? 3600,
     };
-  } catch {
+  } catch (e) {
+    console.warn(
+      `[AdsCatalog][GoogleOAuth] refresh_access_token failed ${formatOutboundErrorLog(e)}`,
+    );
     return null;
   }
 }

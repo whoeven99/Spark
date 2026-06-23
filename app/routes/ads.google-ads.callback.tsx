@@ -9,6 +9,7 @@ import {
   getRedirectUri,
   verifyOAuthState,
 } from "../server/adsCatalog/googleOAuth.server";
+import { resolveLoginCustomerId } from "../server/adsCatalog/googleAdsApi.server";
 import {
   setGoogleAdsCredential,
   setGoogleAdsPending,
@@ -80,11 +81,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
 
     if (customers.length === 1) {
+      const customerId = customers[0].customerId;
+      const loginCustomerId = await resolveLoginCustomerId({
+        accessToken: tokens.accessToken,
+        developerToken,
+        customerId,
+        accessibleCustomerIds: customers.map((c) => c.customerId),
+      });
       await clearGoogleAdsPending(shop);
       await setGoogleAdsCredential(shop, {
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
-        customerId: customers[0].customerId,
+        customerId,
+        loginCustomerId,
       });
       return appRedirect(request, shop, host, appOrigin, {
         adsAuth: "success",

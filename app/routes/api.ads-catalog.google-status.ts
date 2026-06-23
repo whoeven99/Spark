@@ -66,6 +66,7 @@ async function readAdsLink(shop: string): Promise<{
         accessToken: ads.accessToken,
         developerToken,
         customerId: ads.customerId,
+        loginCustomerId: ads.loginCustomerId ?? ads.customerId,
         merchantId: gmc.merchantId,
       });
       linked = status.linked;
