@@ -11,6 +11,7 @@ import {
   getOfflineAccessTokenFromTsf,
 } from "./tsfDb.js";
 import { AUTO_TRANSLATE_V4_MODULES } from "./moduleCatalog.js";
+import { setAutoScanLastAt } from "./redisV4.js";
 
 /** 自动任务默认模块（对齐 v2 TaskService.AUTO_TRANSLATE_MAP）。 */
 const AUTO_MODULES = [...AUTO_TRANSLATE_V4_MODULES];
@@ -33,6 +34,7 @@ export async function runAutoTranslateScan(): Promise<void> {
   const shops = await listAutoTranslateShops();
   if (shops.length === 0) {
     console.log("[autoTranslate] 无开启自动翻译的店");
+    await setAutoScanLastAt(new Date().toISOString());
     return;
   }
 
@@ -93,4 +95,5 @@ export async function runAutoTranslateScan(): Promise<void> {
   console.log(
     `[autoTranslate] 扫描完成：店=${shops.length} 新建=${created} 跳过(已有进行中)=${skipped}`,
   );
+  await setAutoScanLastAt(new Date().toISOString());
 }

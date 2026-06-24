@@ -186,6 +186,45 @@ export async function createJob(input: CreateJobInput): Promise<TranslationV4Job
   return doc;
 }
 
+/** 删除任务文档（partition key = shopName）。不存在视为成功。 */
+export async function deleteJob(shopName: string, jobId: string): Promise<void> {
+  try {
+    await getContainer().item(jobId, shopName).delete();
+  } catch (err) {
+    const code = (err as { code?: number })?.code;
+    if (code !== 404) throw err;
+  }
+}
+
+type StaleEmptyAutoJob = Pick<
+  TranslationV4Job,
+  "id" | "shopName" | "blobPrefix" | "taskSource" | "status" | "metrics" | "updatedAt"
+>;
+
+/** 查询待清理的 0 条已完成自动任务（跨 partition，限量）。 */
+export async function findStaleEmptyAutoJobs(
+  cutoffIso: string,
+  limit: number,
+): Promise<StaleEmptyAutoJob[]> {
+  try {
+    const { resources } = await getContainer()
+      .items.query<StaleEmptyAutoJob>({
+        query:
+          "SELECT c.id, c.shopName, c.blobPrefix, c.taskSource, c.status, c.metrics, c.updatedAt FROM c WHERE c.taskSource = @src AND c.status = 'COMPLETED' AND c.metrics.initTotal = 0 AND c.metrics.translateTotal = 0 AND c.updatedAt < @cutoff ORDER BY c.updatedAt ASC OFFSET 0 LIMIT @limit",
+        parameters: [
+          { name: "@src", value: TSF_AUTO_TASK_SOURCE },
+          { name: "@cutoff", value: cutoffIso },
+          { name: "@limit", value: limit },
+        ],
+      })
+      .fetchAll();
+    return resources ?? [];
+  } catch (err) {
+    console.error("[cosmosV4] findStaleEmptyAutoJobs failed:", err);
+    return [];
+  }
+}
+
 /** 同 shop + target 是否已有进行中的任务（避免自动扫描重复建任务）。 */
 export async function hasActiveJobForTarget(
   shopName: string,
