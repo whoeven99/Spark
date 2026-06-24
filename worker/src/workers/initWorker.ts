@@ -35,6 +35,67 @@ const HEARTBEAT_THROTTLE_MS = 30_000;
  */
 const MODULE_CONCURRENCY = Math.max(1, Number(process.env.INIT_MODULE_CONCURRENCY) || 3);
 
+const INIT_MAX_REQUEUE = Math.max(0, Number(process.env.INIT_MAX_REQUEUE) || 5);
+
+function isRecoverableInitError(message: string): boolean {
+  return /THROTTLED|429|rate limit/i.test(message);
+}
+
+async function completeEmptyInitJob(
+  job: TranslationV4Job,
+  jobId: string,
+  shopName: string,
+  blobPrefix: string,
+  stageStartedAt: string,
+  manifest: Record<string, { totalItems: number; chunks: number }>,
+): Promise<void> {
+  await blobWrite(`${blobPrefix}/manifest.json`, {
+    taskId: jobId,
+    shopName,
+    source: job.source,
+    target: job.target,
+    modules: manifest,
+    createdAt: new Date().toISOString(),
+    empty: true,
+  });
+
+  await updateJob(shopName, jobId, {
+    status: "COMPLETED",
+    claimedBy: null,
+    errorMessage: null,
+    errorStage: null,
+    stageTimings: withStageTiming(job.stageTimings, "INIT", stageStartedAt, new Date().toISOString()),
+    metrics: {
+      ...job.metrics,
+      initTotal: 0,
+      initDone: 0,
+      translateTotal: 0,
+      translateDone: 0,
+      translateUnitTotal: 0,
+      translateUnitDone: 0,
+      writebackTotal: 0,
+      writebackDone: 0,
+      verifyTotal: 0,
+      verifyDone: 0,
+    },
+  });
+
+  await setProgress(jobId, {
+    initTotal: 0,
+    initDone: 0,
+    translateUnitTotal: 0,
+    translateUnitDone: 0,
+    writebackTotal: 0,
+    writebackDone: 0,
+    verifyTotal: 0,
+    verifyDone: 0,
+  });
+
+  console.log(
+    `[init] done job=${jobId} totalItems=0 — 无待翻译增量（可能已全部译完或非覆盖模式无 outdated 字段）→ COMPLETED`,
+  );
+}
+
 export async function runInitWorker(): Promise<void> {
   const claimed = await claimNextInitJob();
   if (!claimed) return;
@@ -179,7 +240,7 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
       let moduleUnits = 0;
       for (const chunk of chunks) {
         for (const r of chunk) {
-          for (const f of r.fields) moduleUnits += countFieldUnits(f.key, f.value);
+          for (const f of r.fields) moduleUnits += countFieldUnits(f.key, f.value, f.shopifyType);
         }
       }
 
@@ -203,6 +264,11 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
       modules: manifest,
       createdAt: new Date().toISOString(),
     });
+
+    if (totalItems === 0) {
+      await completeEmptyInitJob(job, jobId, shopName, blobPrefix, stageStartedAt, manifest);
+      return;
+    }
 
     await updateJob(shopName, jobId, {
       status: "TRANSLATE_QUEUED",
@@ -235,6 +301,30 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
     console.log(`[init] done job=${jobId} totalItems=${totalItems}`);
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e);
+    const initRequeues = job.metrics?.initRequeues ?? 0;
+    if (isRecoverableInitError(errorMessage) && initRequeues < INIT_MAX_REQUEUE) {
+      const next = initRequeues + 1;
+      await updateJob(shopName, jobId, {
+        status: "INIT_QUEUED",
+        claimedBy: null,
+        errorStage: null,
+        errorMessage: `INIT 限流，已自动重试 (${next}/${INIT_MAX_REQUEUE})`,
+        metrics: { ...job.metrics, initRequeues: next },
+        stageTimings: withStageTiming(job.stageTimings, "INIT", stageStartedAt, new Date().toISOString()),
+      });
+      const delayMs = Math.min(60_000, 3_000 * next);
+      console.warn(
+        `[init] throttled job=${jobId} requeue in ${delayMs}ms (${next}/${INIT_MAX_REQUEUE})`,
+      );
+      setTimeout(() => {
+        void pushHint("init", { taskId: jobId, shopName }).then(() =>
+          runInitWorker().catch((err) =>
+            console.error(`[init] requeue wake failed job=${jobId}`, err),
+          ),
+        );
+      }, delayMs);
+      return;
+    }
     await updateJob(shopName, jobId, {
       status: "FAILED",
       errorMessage,

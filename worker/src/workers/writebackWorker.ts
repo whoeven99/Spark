@@ -101,8 +101,10 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
 
   try {
     // ── Phase 1: Collect all pending resources ────────────────────────────────
-    // Blob listing + reads are sequential here (fast, not the throughput bottleneck).
-    // Resources already in writtenSet are skipped — supports crash-resume.
+    // 大任务下这里要从 Blob 并发读上千个已译资源，可能耗时若干秒；先打一次心跳，
+    // 避免准备期间被 stale-reset 误判成"卡死"而被其它 worker 接管。
+    // 已在 writtenSet 的资源跳过 —— 支持崩溃续跑。
+    await heartbeat(shopName, jobId);
     const pendingResources: PendingResource[] = [];
     for (const { module, resource } of await loadTranslatedItemsForJob(blobPrefix, job.modules)) {
       if (!writtenSet.has(resource.resourceId)) {

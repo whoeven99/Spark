@@ -5,10 +5,11 @@ import {
   SUSPICIOUS2_PATTERN,
 } from "./constants.js";
 import { metaTranslate } from "./judgeTranslateUtils.js";
+import { tryParseJsonContainer } from "../jsonExtractRules.js";
+import { canTranslateMetafieldJson } from "./metafieldJsonJudge.js";
 
 /**
  * METAFIELD branch (TranslateV2Service.needTranslate).
- * PHASE2: JSON value / canTranslateMetafieldJson* deferred — non-JSON-type JSON strings may pass.
  */
 export function passesMetafieldModuleRules(
   module: string,
@@ -43,7 +44,9 @@ export function passesMetafieldModuleRules(
     return false;
   }
 
-  // PHASE2: JsonUtils.isJson(value) || type === "JSON" → canTranslateMetafieldJsonByConfig
+  if (tryParseJsonContainer(value) !== undefined || type === "JSON") {
+    return canTranslateMetafieldJson(value, type);
+  }
 
   return true;
 }

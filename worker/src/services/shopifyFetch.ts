@@ -45,6 +45,8 @@ export type TranslatableField = {
   key: string;
   value: string;
   digest: string;
+  /** Shopify translatableContent.type — required for METAFIELD JSON/LIST routing. */
+  shopifyType?: string;
 };
 
 export type TranslatableResource = {
@@ -358,6 +360,33 @@ async function shopifyGraphql(
   };
 
   if (json.errors?.length) {
+    const throttled = json.errors.some(
+      (e) =>
+        typeof e === "object" &&
+        e !== null &&
+        (e as { extensions?: { code?: string } }).extensions?.code === "THROTTLED",
+    );
+    if (throttled) {
+      _getOrInitStats(shopDomain).retries429++;
+      noteShopifyThrottle(shopDomain, json.extensions?.cost?.throttleStatus ?? null, true);
+      if (retries > 0) {
+        const throttle = json.extensions?.cost?.throttleStatus;
+        const waitMs =
+          throttle && throttle.restoreRate > 0
+            ? Math.ceil(
+                (Math.max(SHOPIFY_BUCKET_FLOOR, 100) / throttle.restoreRate) * 1_000,
+              ) + 500
+            : Math.max(2_000, (5 - retries) * 1_500);
+        console.warn(
+          `[shopifyFetch] THROTTLED on ${shopDomain} — waiting ${waitMs}ms (retries left: ${retries - 1})`,
+        );
+        await new Promise((r) => setTimeout(r, waitMs));
+        return shopifyGraphql(shopDomain, legacyAccessToken, query, variables, {
+          ...opts,
+          retries: retries - 1,
+        });
+      }
+    }
     throw new Error(`Shopify GraphQL errors: ${JSON.stringify(json.errors)}`);
   }
 
@@ -417,7 +446,12 @@ function mapNodeToResource(
         },
       ),
     )
-    .map((f) => ({ key: f.key, value: f.value, digest: f.digest }));
+    .map((f) => ({
+      key: f.key,
+      value: f.value,
+      digest: f.digest,
+      shopifyType: f.type ?? undefined,
+    }));
 
   if (fields.length === 0) return null;
   return { resourceId: node.resourceId, fields };

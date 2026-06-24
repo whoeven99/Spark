@@ -34,6 +34,8 @@ export type TranslationV4Metrics = {
   verifyDone: number;
   verifyFailed: number;
   usedTokens: number;
+  /** INIT 因限流等可恢复错误重新入队次数 */
+  initRequeues?: number;
 };
 
 /** Pipeline stages, in execution order. */

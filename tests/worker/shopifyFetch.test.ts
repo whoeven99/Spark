@@ -250,4 +250,51 @@ describe("writeback translation verify helpers", () => {
     ]);
     expect(missing.map((m) => m.key).sort()).toEqual(["body_html", "title"]);
   });
+
+  it("retries GraphQL THROTTLED body errors before failing", async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        calls++;
+        if (calls === 1) {
+          return {
+            ok: true,
+            json: async () => ({
+              errors: [{ message: "Throttled", extensions: { code: "THROTTLED" } }],
+              extensions: {
+                cost: {
+                  throttleStatus: {
+                    currentlyAvailable: 0,
+                    maximumAvailable: 1000,
+                    restoreRate: 1000,
+                  },
+                },
+              },
+            }),
+          } as Response;
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            data: {
+              articles: {
+                edges: [],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          }),
+        };
+      }),
+    );
+
+    const ids = await fetchResourceIdsByQuery(
+      "demo.myshopify.com",
+      "token",
+      "ARTICLE",
+      5,
+    );
+    expect(calls).toBe(2);
+    expect(ids).toEqual([]);
+  });
 });
