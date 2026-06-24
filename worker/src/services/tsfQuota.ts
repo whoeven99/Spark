@@ -7,7 +7,7 @@
  *   - 剩余为负 → worker 暂停任务（已在飞的调用继续翻译并扣除，可接受）。
  * 这样额度越少并发越低，最大透支被锁在「在飞批次 × 每批 token」内。
  *
- * 启用规则：**TsFrontend 来源默认开启**，QUOTA_ENFORCE=false 可显式关闭；其它来源始终关闭。
+ * 启用规则：**TsFrontend / TsFrontend-Auto 来源默认开启**，QUOTA_ENFORCE=false 可显式关闭；其它来源始终关闭。
  * 未配置 TSF_SERVER_URL 时降级为「额度无限」（no-op），不影响现网。
  */
 
@@ -18,13 +18,24 @@ export type QuotaDeductResult = {
   remaining: number;
 };
 
+import {
+  TSF_AUTO_TASK_SOURCE,
+  TS_FRONTEND_TASK_SOURCE,
+} from "./cosmosV4.js";
+
+/** TSF 手动 + 自动翻译任务来源（均扣 TSF 额度池）。 */
+const TSF_QUOTA_TASK_SOURCES = new Set([
+  TS_FRONTEND_TASK_SOURCE,
+  TSF_AUTO_TASK_SOURCE,
+]);
+
 /**
  * 是否对该来源的任务启用额度控制。
- * 规则：**TsFrontend 默认开启**；`QUOTA_ENFORCE=false` 可显式关闭；
+ * 规则：**TsFrontend / TsFrontend-Auto 默认开启**；`QUOTA_ENFORCE=false` 可显式关闭；
  * 其它来源始终关闭（本控制器是 TSF 专属，扣的是 TSF 额度池）。
  */
 export function quotaEnforceEnabled(taskSource?: string | null): boolean {
-  if (taskSource !== "TsFrontend") return false;
+  if (!taskSource || !TSF_QUOTA_TASK_SOURCES.has(taskSource)) return false;
   return process.env.QUOTA_ENFORCE?.trim().toLowerCase() !== "false";
 }
 

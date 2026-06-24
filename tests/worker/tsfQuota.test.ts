@@ -32,6 +32,33 @@ describe("tsfQuota URL normalization", () => {
   });
 });
 
+describe("quotaEnforceEnabled", () => {
+  beforeEach(() => {
+    delete process.env.QUOTA_ENFORCE;
+  });
+
+  it("enables quota for TsFrontend and TsFrontend-Auto by default", async () => {
+    const { quotaEnforceEnabled } = await import("../../worker/src/services/tsfQuota.js");
+    expect(quotaEnforceEnabled("TsFrontend")).toBe(true);
+    expect(quotaEnforceEnabled("TsFrontend-Auto")).toBe(true);
+  });
+
+  it("disables when QUOTA_ENFORCE=false", async () => {
+    process.env.QUOTA_ENFORCE = "false";
+    vi.resetModules();
+    const { quotaEnforceEnabled } = await import("../../worker/src/services/tsfQuota.js");
+    expect(quotaEnforceEnabled("TsFrontend")).toBe(false);
+    expect(quotaEnforceEnabled("TsFrontend-Auto")).toBe(false);
+  });
+
+  it("does not enforce for Spark-native or missing taskSource", async () => {
+    const { quotaEnforceEnabled } = await import("../../worker/src/services/tsfQuota.js");
+    expect(quotaEnforceEnabled(null)).toBe(false);
+    expect(quotaEnforceEnabled(undefined)).toBe(false);
+    expect(quotaEnforceEnabled("Ciwi-Translator-Task")).toBe(false);
+  });
+});
+
 describe("quotaConcurrencyCap", () => {
   it("returns 1 when remaining is below per-call cost", async () => {
     const { quotaConcurrencyCap } = await import("../../worker/src/services/tsfQuota.js");
