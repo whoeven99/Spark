@@ -464,17 +464,54 @@ export async function findPendingJobs(
 }
 
 /** Find jobs stuck in processing states past the stale threshold and reset them. */
+/** 处理中状态 → 重新入队状态。stale-reset 与优雅停机释放都用它。 */
+const PROCESSING_TO_QUEUED: Array<[TranslationV4Status, TranslationV4Status]> = [
+  ["INITIALIZING", "INIT_QUEUED"],
+  ["TRANSLATING", "TRANSLATE_QUEUED"],
+  ["WRITING_BACK", "WRITEBACK_QUEUED"],
+  ["VERIFYING", "VERIFY_QUEUED"],
+];
+
+/**
+ * 优雅停机：把本进程（claimedBy 以 host+pid 后缀结尾）正在处理中的任务，
+ * 立刻重新入队（claimedBy=null），让新部署的 worker 马上接着跑，不必等 10 分钟 stale-reset。
+ * 覆盖全部 4 个阶段。返回释放数量。
+ */
+export async function releaseJobsClaimedBySuffix(claimSuffix: string): Promise<number> {
+  let released = 0;
+  for (const [processingStatus, resetStatus] of PROCESSING_TO_QUEUED) {
+    try {
+      const { resources } = await getContainer()
+        .items.query<TranslationV4Job>({
+          query:
+            "SELECT * FROM c WHERE c.status = @status AND IS_DEFINED(c.claimedBy) AND ENDSWITH(c.claimedBy, @suffix) OFFSET 0 LIMIT 50",
+          parameters: [
+            { name: "@status", value: processingStatus },
+            { name: "@suffix", value: claimSuffix },
+          ],
+        })
+        .fetchAll();
+      for (const job of resources) {
+        await updateJob(job.shopName, job.id, {
+          status: resetStatus,
+          claimedBy: null,
+          claimedAt: null,
+        }).catch(() => {});
+        released++;
+        console.log(`[shutdown] release ${job.id} ${processingStatus} → ${resetStatus}`);
+      }
+    } catch (e) {
+      console.warn(`[shutdown] release error for ${processingStatus}`, e);
+    }
+  }
+  return released;
+}
+
 export async function resetStaleJobs(
   staleMinutes = Number(process.env.STALE_TIMEOUT_MINUTES) || 10,
 ): Promise<void> {
   const threshold = new Date(Date.now() - staleMinutes * 60 * 1000).toISOString();
-  const staleMap: Array<[TranslationV4Status, TranslationV4Status]> = [
-    ["INITIALIZING", "INIT_QUEUED"],
-    ["TRANSLATING", "TRANSLATE_QUEUED"],
-    ["WRITING_BACK", "WRITEBACK_QUEUED"],
-    ["VERIFYING", "VERIFY_QUEUED"],
-  ];
-  for (const [processingStatus, resetStatus] of staleMap) {
+  for (const [processingStatus, resetStatus] of PROCESSING_TO_QUEUED) {
     try {
       const { resources } = await getContainer()
         .items.query<TranslationV4Job>({

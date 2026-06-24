@@ -10,9 +10,10 @@ import {
   listAutoTranslateShops,
   getOfflineAccessTokenFromTsf,
 } from "./tsfDb.js";
+import { AUTO_TRANSLATE_V4_MODULES } from "./moduleCatalog.js";
 
-/** 自动任务默认翻译的模块（与前端手动任务默认一致）。 */
-const AUTO_MODULES = ["PRODUCT", "COLLECTION", "PAGE", "ARTICLE"];
+/** 自动任务默认模块（对齐 v2 TaskService.AUTO_TRANSLATE_MAP）。 */
+const AUTO_MODULES = [...AUTO_TRANSLATE_V4_MODULES];
 
 function autoAiModel(): string {
   return process.env.DEEPSEEK_MODEL?.trim() || "deepseek-v4-flash";

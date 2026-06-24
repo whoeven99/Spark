@@ -1,5 +1,7 @@
+import { hostname } from "node:os";
 import { ensureWorkerEnv } from "./env.js";
 import { pingRedis } from "./services/redisV4.js";
+import { releaseJobsClaimedBySuffix } from "./services/cosmosV4.js";
 import { startScheduler } from "./scheduler.js";
 
 // 最早执行：加载 Render Secret File + 诊断
@@ -18,5 +20,29 @@ process.on("unhandledRejection", (reason) => {
 process.on("uncaughtException", (err) => {
   console.error("[worker] uncaughtException", err);
 });
+
+// ── 优雅停机 ──────────────────────────────────────────────────────────────────
+// 各 worker 的 claimedBy 形如 `${stage}-${host}-${pid}`，本进程统一以此后缀结尾。
+// 收到 SIGTERM（Render 重新部署）时，把本进程在飞的任务重新入队，新 worker 立即接管，
+// 不必等 10 分钟 stale-reset。带 8s 超时兜底，保证在 SIGKILL 前退出。
+const CLAIM_SUFFIX = `-${process.env.HOSTNAME ?? hostname()}-${process.pid}`;
+let shuttingDown = false;
+async function gracefulShutdown(signal: string): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[worker] ${signal} 收到，释放在飞任务（suffix=${CLAIM_SUFFIX}）…`);
+  try {
+    const released = await Promise.race([
+      releaseJobsClaimedBySuffix(CLAIM_SUFFIX),
+      new Promise<number>((r) => setTimeout(() => r(-1), 8_000)),
+    ]);
+    console.log(`[worker] 已释放 ${released} 个在飞任务，退出`);
+  } catch (e) {
+    console.error("[worker] 优雅停机释放失败", e);
+  }
+  process.exit(0);
+}
+process.on("SIGTERM", () => void gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => void gracefulShutdown("SIGINT"));
 
 startScheduler();
