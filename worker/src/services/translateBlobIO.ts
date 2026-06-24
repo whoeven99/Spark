@@ -49,18 +49,43 @@ export async function readTranslatedResourceBlob(
 }
 
 /** Resource IDs with incremental checkpoints under a module. */
+/** 每资源一个 blob，按资源数量做并发读，避免写回 Phase 1 串行读上千个 blob 卡几分钟。 */
+const BLOB_READ_CONCURRENCY = Math.max(
+  1,
+  Number(process.env.BLOB_READ_CONCURRENCY) || 32,
+);
+
+async function mapConcurrent<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const workers = Array.from(
+    { length: Math.max(1, Math.min(limit, items.length)) },
+    async () => {
+      while (next < items.length) {
+        const i = next++;
+        results[i] = await fn(items[i]);
+      }
+    },
+  );
+  await Promise.all(workers);
+  return results;
+}
+
 export async function listTranslatedResourceIds(
   blobPrefix: string,
   module: string,
 ): Promise<Set<string>> {
   const prefix = `${blobPrefix}/translate/${module}/${RESOURCES_DIR}/`;
-  const paths = await blobListPaths(prefix);
+  const paths = (await blobListPaths(prefix)).filter((p) => p.endsWith(".json"));
+  const items = await mapConcurrent(paths, BLOB_READ_CONCURRENCY, (path) =>
+    blobRead<TranslatedResourceItem>(path),
+  );
   const ids = new Set<string>();
-  for (const path of paths) {
-    if (!path.endsWith(".json")) continue;
-    const item = await blobRead<TranslatedResourceItem>(path);
-    if (item?.resourceId) ids.add(item.resourceId);
-  }
+  for (const item of items) if (item?.resourceId) ids.add(item.resourceId);
   return ids;
 }
 
@@ -74,17 +99,21 @@ export async function loadTranslatedItemsForModule(
 ): Promise<TranslatedResourceItem[]> {
   const byId = new Map<string, TranslatedResourceItem>();
 
+  // 并发读每资源 blob（数量大，是写回启动慢的主因）。
   const resourcePrefix = `${blobPrefix}/translate/${module}/${RESOURCES_DIR}/`;
-  for (const path of await blobListPaths(resourcePrefix)) {
-    if (!path.endsWith(".json")) continue;
-    const item = await blobRead<TranslatedResourceItem>(path);
-    if (item?.resourceId) byId.set(item.resourceId, item);
-  }
+  const resPaths = (await blobListPaths(resourcePrefix)).filter((p) => p.endsWith(".json"));
+  const resItems = await mapConcurrent(resPaths, BLOB_READ_CONCURRENCY, (path) =>
+    blobRead<TranslatedResourceItem>(path),
+  );
+  for (const item of resItems) if (item?.resourceId) byId.set(item.resourceId, item);
 
+  // 旧版整块 chunk（数量少），同样并发读。
   const modulePrefix = `${blobPrefix}/translate/${module}/`;
-  for (const path of await blobListPaths(modulePrefix)) {
-    if (!isLegacyChunkPath(path)) continue;
-    const chunk = await blobRead<TranslatedResourceItem[]>(path);
+  const chunkPaths = (await blobListPaths(modulePrefix)).filter(isLegacyChunkPath);
+  const chunks = await mapConcurrent(chunkPaths, BLOB_READ_CONCURRENCY, (path) =>
+    blobRead<TranslatedResourceItem[]>(path),
+  );
+  for (const chunk of chunks) {
     if (!chunk) continue;
     for (const item of chunk) {
       if (item?.resourceId && !byId.has(item.resourceId)) {

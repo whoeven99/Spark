@@ -215,6 +215,22 @@ export type TranslationContentPage = {
   note?: string;
 };
 
+export type TranslationContentModule = {
+  module: string;
+  count: number;
+  hasContent: boolean;
+};
+
+export function fetchTranslationContentModules(params: {
+  jobId: string;
+  shop?: string;
+}): Promise<{ modules: TranslationContentModule[]; note?: string }> {
+  const qs = params.shop ? `?shop=${encodeURIComponent(params.shop)}` : "";
+  return apiFetch(
+    `/translations/${encodeURIComponent(params.jobId)}/content/modules${qs}`,
+  );
+}
+
 export function fetchTranslationContent(params: {
   jobId: string;
   shop?: string;

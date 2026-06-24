@@ -244,6 +244,67 @@ type BlobTranslatedResource = {
   }>;
 };
 
+// 列出该任务「确有翻译内容」的模块（仅列 blob 文件名，不下载内容）。
+translationsRouter.get("/:jobId/content/modules", async (req, res) => {
+  if (!isCosmosConfigured()) {
+    res.status(503).json({ error: "Cosmos not configured" });
+    return;
+  }
+  if (!isBlobConfigured()) {
+    res.json({ modules: [], note: "Blob 未配置" });
+    return;
+  }
+  try {
+    const container = getTranslationJobsContainer();
+    const { jobId } = req.params;
+    const shop = (req.query.shop as string | undefined)?.trim();
+
+    type JobLite = Pick<TranslationV4Job, "id" | "modules"> & { blobPrefix?: string };
+    let job: JobLite | null = null;
+    if (shop) {
+      const { resource } = await container.item(jobId, shop).read<JobLite>();
+      job = resource ?? null;
+    } else {
+      const { resources } = await container.items
+        .query<JobLite>({
+          query: "SELECT c.id, c.modules, c.blobPrefix FROM c WHERE c.id = @id",
+          parameters: [{ name: "@id", value: jobId }],
+        })
+        .fetchAll();
+      job = resources[0] ?? null;
+    }
+    if (!job) {
+      res.status(404).json({ error: "Job not found" });
+      return;
+    }
+
+    const blobPrefix = job.blobPrefix;
+    const modules = job.modules ?? [];
+    if (!blobPrefix) {
+      res.json({ modules: [], note: "该任务无 blobPrefix（可能为旧任务）" });
+      return;
+    }
+
+    const out = await Promise.all(
+      modules.map(async (module) => {
+        const paths = await blobListPaths(`${blobPrefix}/translate/${module}/`);
+        const count = paths.filter(
+          (p) => p.endsWith(".json") && p.includes("/resources/"),
+        ).length;
+        const legacy = paths.filter(
+          (p) => p.endsWith(".json") && !p.includes("/resources/"),
+        ).length;
+        return { module, count, hasContent: count > 0 || legacy > 0 };
+      }),
+    );
+
+    res.json({ modules: out.filter((m) => m.hasContent) });
+  } catch (err) {
+    console.error("[translations/:id/content/modules]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 translationsRouter.get("/:jobId/content", async (req, res) => {
   if (!isCosmosConfigured()) {
     res.status(503).json({ error: "Cosmos not configured" });

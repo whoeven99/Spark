@@ -1,6 +1,14 @@
 import { tmGet, tmGetByValue, tmSet, tmSetByValue } from "./translationMemory.js";
 import { loadGlossaryLines } from "./glossary.js";
 import { loadShopProfile, buildProfilePromptBlock } from "./shopProfile.js";
+import {
+  applyJsonSlotTranslations,
+  extractJsonTextSlots,
+  isListFormat,
+  tryParseJsonContainer,
+  type JsonTextSlot,
+  type JsonValue,
+} from "./jsonExtractRules.js";
 
 // ─── LLM Key Pool ─────────────────────────────────────────────────────────────
 //
@@ -1334,9 +1342,9 @@ const SHORT_PLAIN_THRESHOLD = 80;
 function fieldTier(
   key: string,
   value: string,
-  klass: "skip" | "html" | "json" | "plain",
+  klass: "skip" | "html" | "json" | "list" | "plain",
 ): "trivial" | "rich" {
-  if (klass === "html" || klass === "json") return "rich";
+  if (klass === "html" || klass === "json" || klass === "list") return "rich";
   if (key === "meta_description") return "rich";
   return value.length >= SHORT_PLAIN_THRESHOLD ? "rich" : "trivial";
 }
@@ -1384,6 +1392,8 @@ export type TranslateItem = {
   key: string;
   value: string;
   digest: string;
+  /** Shopify translatableContent.type from INIT blob. */
+  shopifyType?: string;
 };
 
 export type TranslateResult = {
@@ -1484,13 +1494,54 @@ function isHtml(value: string): boolean {
   return HTML_TAG_RE.test(value);
 }
 
-export function classifyField(key: string, value?: string): "skip" | "html" | "json" | "plain" {
+export function classifyField(
+  key: string,
+  value?: string,
+  shopifyType?: string,
+): "skip" | "html" | "json" | "list" | "plain" {
   if (SKIP_KEYS.has(key)) return "skip";
-  // JSON must be detected before HTML: a JSON blob can contain an HTML string in
-  // one of its leaves, which would otherwise trip the isHtml() check.
-  if (value !== undefined && tryParseJsonContainer(value) !== undefined) return "json";
+  if (value !== undefined) {
+    if (shopifyType === "LIST_SINGLE_LINE_TEXT_FIELD" && isListFormat(value)) {
+      return "list";
+    }
+    if (tryParseJsonContainer(value) !== undefined) return "json";
+  }
   if (value !== undefined && isHtml(value)) return "html";
   return "plain";
+}
+
+function countJsonRuleUnits(value: string): number {
+  const root = tryParseJsonContainer(value);
+  if (root === undefined) return 0;
+  const slots = extractJsonTextSlots(root);
+  let units = 0;
+  for (const slot of slots) {
+    if (slot.isHtml) {
+      units += htmlNodePartsOf(slot.text).nodeParts.reduce((n, parts) => n + parts.length, 0);
+    } else {
+      units += 1;
+    }
+  }
+  return units;
+}
+
+function countListUnits(value: string): number {
+  try {
+    const list = JSON.parse(value) as Array<string | null>;
+    if (!Array.isArray(list)) return 0;
+    let units = 0;
+    for (const el of list) {
+      if (!el) continue;
+      if (isHtml(el)) {
+        units += htmlNodePartsOf(el).nodeParts.reduce((n, parts) => n + parts.length, 0);
+      } else {
+        units += 1;
+      }
+    }
+    return units;
+  } catch {
+    return 0;
+  }
 }
 
 /**
@@ -1498,18 +1549,17 @@ export function classifyField(key: string, value?: string): "skip" | "html" | "j
  * count, plain → split-part count, skip → 0. Used for node-level progress so the
  * total computed at init matches what translate processes.
  */
-export function countFieldUnits(key: string, value: string): number {
-  const klass = classifyField(key, value);
+export function countFieldUnits(key: string, value: string, shopifyType?: string): number {
+  const klass = classifyField(key, value, shopifyType);
   if (klass === "skip") return 0;
   if (klass === "html")
     return htmlNodePartsOf(value).nodeParts.reduce((n, parts) => n + parts.length, 0);
   if (klass === "json") {
-    const root = tryParseJsonContainer(value);
-    if (root === undefined) return splitPlainText(value).length;
-    const leaves: string[] = [];
-    collectJsonLeaves(root, leaves);
-    return leaves.length;
+    const units = countJsonRuleUnits(value);
+    if (units > 0) return units;
+    return 0;
   }
+  if (klass === "list") return countListUnits(value);
   return splitPlainText(value).length;
 }
 
@@ -1749,81 +1799,10 @@ function htmlNodePartsOf(value: string): { template: string; nodeParts: string[]
   return { template, nodeParts };
 }
 
-// ─── JSON leaf extraction ──────────────────────────────────────────────────────
+// ─── JSON rule extraction ─────────────────────────────────────────────────────
 //
-// Metafield values are frequently JSON config blobs (theme settings, cart copy,
-// language-switcher config…). Translating the whole blob as one opaque string is
-// bad three ways: (a) a 30KB+ value is a single huge request that strands the
-// tail of a job; (b) splitPlainText would cut it at word boundaries and corrupt
-// the JSON → fallback; (c) the model rewrites structural tokens it shouldn't
-// ("center" → "zentriert"). Instead we parse the JSON, translate only the
-// human-readable string leaves as independent units, and re-serialise.
-
-type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
-
-const JSON_HEX_RE = /^#[0-9a-fA-F]{3,8}$/;
-const JSON_NUMBERISH_RE = /^[+-]?\d+(\.\d+)?$/;
-// Lowercase single tokens with no whitespace are overwhelmingly CSS/layout enums
-// or config keys ("center", "flex", "bottom_right", "dropdown_vertical") — never
-// user-facing copy, which is Capitalised or multi-word. Skipping them keeps the
-// JSON's structural values intact and avoids over-translation.
-const JSON_TOKEN_RE = /^[a-z][a-z0-9_+./:-]*$/;
-
-/** True if a JSON string leaf looks like human-readable copy worth translating. */
-function isTranslatableJsonLeaf(s: string): boolean {
-  const v = s.trim();
-  if (!v) return false;
-  if (ATTR_URL_RE.test(v)) return false;          // urls
-  if (JSON_HEX_RE.test(v)) return false;          // hex colours (#fff, #000000)
-  if (JSON_NUMBERISH_RE.test(v)) return false;    // numeric strings
-  if (JSON_TOKEN_RE.test(v)) return false;        // lowercase enum / key tokens
-  if (ATTR_HASH_FILENAME_RE.test(v)) return false; // hash filenames / image names
-  return /\p{L}/u.test(v);                         // require at least one letter
-}
-
-/** Parse only JSON objects/arrays; returns undefined for anything else. */
-function tryParseJsonContainer(value: string): JsonValue | undefined {
-  const t = value.trim();
-  if (t.length < 2) return undefined;
-  const c = t[0];
-  if (c !== "{" && c !== "[") return undefined;
-  try {
-    const parsed = JSON.parse(t) as JsonValue;
-    if (parsed !== null && typeof parsed === "object") return parsed;
-  } catch {
-    /* not JSON — caller falls back to plain handling */
-  }
-  return undefined;
-}
-
-/** Collect translatable string leaves in deterministic DFS order (with repeats). */
-function collectJsonLeaves(node: JsonValue, out: string[]): void {
-  if (typeof node === "string") {
-    if (isTranslatableJsonLeaf(node)) out.push(node);
-    return;
-  }
-  if (Array.isArray(node)) {
-    for (const v of node) collectJsonLeaves(v, out);
-    return;
-  }
-  if (node !== null && typeof node === "object") {
-    for (const k of Object.keys(node)) collectJsonLeaves(node[k], out);
-  }
-}
-
-/** Rebuild the JSON tree, swapping each translatable leaf for its translation. */
-function rebuildJson(node: JsonValue, translated: Map<string, string>): JsonValue {
-  if (typeof node === "string") {
-    return isTranslatableJsonLeaf(node) ? translated.get(node) ?? node : node;
-  }
-  if (Array.isArray(node)) return node.map((v) => rebuildJson(v, translated));
-  if (node !== null && typeof node === "object") {
-    const out: { [k: string]: JsonValue } = {};
-    for (const k of Object.keys(node)) out[k] = rebuildJson(node[k], translated);
-    return out;
-  }
-  return node;
-}
+// Metafield JSON uses configured path/type rules (Java JsonTranslateStrategyService)
+// via jsonExtractRules.ts — not heuristic DFS over all string leaves.
 
 // ─── Plain text splitting ─────────────────────────────────────────────────────
 
@@ -2340,6 +2319,16 @@ export function mergeEngineUsage(into: EngineUsage, from: EngineUsage): void {
   }
 }
 
+type JsonSlotPlan = JsonTextSlot & {
+  htmlPlan?: { template: string; nodeParts: string[][] };
+};
+
+type ListElementPlan = {
+  index: number;
+  text: string;
+  htmlPlan?: { template: string; nodeParts: string[][] };
+};
+
 // Reconstruction plan for a field whose translation spans one or more text units.
 type FieldPlan = {
   resourceId: string;
@@ -2350,8 +2339,27 @@ type FieldPlan = {
 } & (
   | { kind: "plain"; parts: string[] }
   | { kind: "html"; template: string; nodeParts: string[][] }
-  | { kind: "json"; root: JsonValue; leaves: string[] }
+  | { kind: "json"; originalValue: string; root: JsonValue; slotPlans: JsonSlotPlan[] }
+  | { kind: "list"; originalValue: string; elements: ListElementPlan[] }
 );
+
+function jsonPlanTexts(plan: Extract<FieldPlan, { kind: "json" }>): string[] {
+  const texts: string[] = [];
+  for (const slot of plan.slotPlans) {
+    if (slot.htmlPlan) texts.push(...slot.htmlPlan.nodeParts.flat());
+    else texts.push(slot.text);
+  }
+  return texts;
+}
+
+function listPlanTexts(plan: Extract<FieldPlan, { kind: "list" }>): string[] {
+  const texts: string[] = [];
+  for (const el of plan.elements) {
+    if (el.htmlPlan) texts.push(...el.htmlPlan.nodeParts.flat());
+    else texts.push(el.text);
+  }
+  return texts;
+}
 
 type LookupFn = (order: Engine[], text: string) => RoutedResult | undefined;
 
@@ -2361,7 +2369,9 @@ function planTextsReady(plan: FieldPlan, lookup: LookupFn): boolean {
       ? plan.parts
       : plan.kind === "html"
         ? plan.nodeParts.flat()
-        : [...new Set(plan.leaves)];
+        : plan.kind === "json"
+          ? jsonPlanTexts(plan)
+          : listPlanTexts(plan);
   return texts.every((t) => lookup(plan.order, t) !== undefined);
 }
 
@@ -2403,20 +2413,67 @@ function reconstructPlan(
     const status = anyFallback ? "fallback" : "translated";
     rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
     if (status === "translated") tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
-  } else {
+  } else if (plan.kind === "json") {
     let anyFallback = false;
     const tmap = new Map<string, string>();
-    for (const t of plan.leaves) {
-      if (tmap.has(t)) continue;
-      const r = lookup(plan.order, t);
-      if (!r || r.status === "fallback") {
-        anyFallback = true;
-        tmap.set(t, t);
+    for (const slot of plan.slotPlans) {
+      if (slot.htmlPlan) {
+        const out = slot.htmlPlan.nodeParts.map((parts) => {
+          const pieces = parts.map((p) => {
+            const r = lookup(plan.order, p);
+            if (!r || r.status === "fallback") {
+              anyFallback = true;
+              return p;
+            }
+            return r.value;
+          });
+          return pieces.join("").trim();
+        });
+        tmap.set(slot.text, restoreHtmlTextNodes(slot.htmlPlan.template, out));
       } else {
-        tmap.set(t, r.value.trim());
+        const r = lookup(plan.order, slot.text);
+        if (!r || r.status === "fallback") {
+          anyFallback = true;
+          tmap.set(slot.text, slot.text);
+        } else {
+          tmap.set(slot.text, r.value.trim());
+        }
       }
     }
-    const value = JSON.stringify(rebuildJson(plan.root, tmap));
+    applyJsonSlotTranslations(plan.slotPlans, tmap);
+    const value = JSON.stringify(plan.root);
+    const status = anyFallback ? "fallback" : "translated";
+    rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
+    if (status === "translated") tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
+  } else {
+    let anyFallback = false;
+    const list = JSON.parse(plan.originalValue) as Array<string | null>;
+    const result = [...list];
+    for (const el of plan.elements) {
+      if (el.htmlPlan) {
+        const out = el.htmlPlan.nodeParts.map((parts) => {
+          const pieces = parts.map((p) => {
+            const r = lookup(plan.order, p);
+            if (!r || r.status === "fallback") {
+              anyFallback = true;
+              return p;
+            }
+            return r.value;
+          });
+          return pieces.join("").trim();
+        });
+        result[el.index] = restoreHtmlTextNodes(el.htmlPlan.template, out);
+      } else {
+        const r = lookup(plan.order, el.text);
+        if (!r || r.status === "fallback") {
+          anyFallback = true;
+          result[el.index] = el.text;
+        } else {
+          result[el.index] = r.value.trim();
+        }
+      }
+    }
+    const value = JSON.stringify(result);
     const status = anyFallback ? "fallback" : "translated";
     rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
     if (status === "translated") tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
@@ -2482,7 +2539,7 @@ export async function translateResources(
   type FieldWork = {
     resourceId: string;
     f: TranslateItem;
-    klass: "html" | "json" | "plain";
+    klass: "html" | "json" | "list" | "plain";
     order: Engine[];
     cacheModel: string;
   };
@@ -2491,7 +2548,7 @@ export async function translateResources(
   for (const res of resources) {
     const rm = resultMaps.get(res.resourceId)!;
     for (const f of res.fields) {
-      const klass = classifyField(f.key, f.value);
+      const klass = classifyField(f.key, f.value, f.shopifyType);
       if (klass === "skip") {
         rm.set(f.key, { key: f.key, translatedValue: f.value, digest: f.digest, status: "translated" });
         continue;
@@ -2516,7 +2573,7 @@ export async function translateResources(
     const cached = cacheHits[wi];
     if (cached !== null) {
       rm.set(f.key, { key: f.key, translatedValue: cached, digest: f.digest, status: "translated" });
-      cacheUnits += countFieldUnits(f.key, f.value);
+      cacheUnits += countFieldUnits(f.key, f.value, f.shopifyType);
       continue;
     }
 
@@ -2526,7 +2583,7 @@ export async function translateResources(
       if (cachedByValue !== null) {
         rm.set(f.key, { key: f.key, translatedValue: cachedByValue, digest: f.digest, status: "translated" });
         tmWrites.push(tmSet(shopName, target, cacheModel, f.digest, cachedByValue));
-        cacheUnits += countFieldUnits(f.key, f.value);
+        cacheUnits += countFieldUnits(f.key, f.value, f.shopifyType);
         continue;
       }
     }
@@ -2547,7 +2604,7 @@ export async function translateResources(
       (skipNonSourceScript && !containsSourceScript(f.value, source))
     ) {
       rm.set(f.key, { key: f.key, translatedValue: f.value, digest: f.digest, status: "translated" });
-      cacheUnits += countFieldUnits(f.key, f.value);
+      cacheUnits += countFieldUnits(f.key, f.value, f.shopifyType);
       continue;
     }
 
@@ -2561,22 +2618,73 @@ export async function translateResources(
       plans.push({ kind: "html", resourceId, key: f.key, digest: f.digest, order, cacheModel, template, nodeParts });
     } else if (klass === "json") {
       const root = tryParseJsonContainer(f.value);
-      const leaves: string[] = [];
-      if (root !== undefined) collectJsonLeaves(root, leaves);
       if (root === undefined) {
-        // Re-classified between init and here, or unparseable now — fall back to
-        // plain handling so the field is still translated, just not structurally.
         const parts = splitPlainText(f.value);
         parts.forEach((p) => addUnit(order, p));
         plans.push({ kind: "plain", resourceId, key: f.key, digest: f.digest, order, cacheModel, parts });
-      } else if (leaves.length === 0) {
-        // Pure structural/config JSON with no human-readable copy — keep verbatim.
+      } else {
+        const slots = extractJsonTextSlots(root);
+        if (slots.length === 0) {
+          rm.set(f.key, { key: f.key, translatedValue: f.value, digest: f.digest, status: "translated" });
+          continue;
+        }
+        const slotPlans: JsonSlotPlan[] = [];
+        for (const slot of slots) {
+          if (slot.isHtml) {
+            const { template, nodeParts } = htmlNodePartsOf(slot.text);
+            if (nodeParts.length === 0) {
+              slotPlans.push({ ...slot });
+              continue;
+            }
+            nodeParts.forEach((parts) => parts.forEach((p) => addUnit(order, p)));
+            slotPlans.push({ ...slot, htmlPlan: { template, nodeParts } });
+          } else {
+            addUnit(order, slot.text);
+            slotPlans.push({ ...slot });
+          }
+        }
+        plans.push({
+          kind: "json",
+          resourceId,
+          key: f.key,
+          digest: f.digest,
+          order,
+          cacheModel,
+          originalValue: f.value,
+          root,
+          slotPlans,
+        });
+      }
+    } else if (klass === "list") {
+      const list = JSON.parse(f.value) as Array<string | null>;
+      const elements: ListElementPlan[] = [];
+      for (let i = 0; i < list.length; i++) {
+        const el = list[i];
+        if (!el) continue;
+        if (isHtml(el)) {
+          const { template, nodeParts } = htmlNodePartsOf(el);
+          if (nodeParts.length === 0) continue;
+          nodeParts.forEach((parts) => parts.forEach((p) => addUnit(order, p)));
+          elements.push({ index: i, text: el, htmlPlan: { template, nodeParts } });
+        } else {
+          addUnit(order, el);
+          elements.push({ index: i, text: el });
+        }
+      }
+      if (elements.length === 0) {
         rm.set(f.key, { key: f.key, translatedValue: f.value, digest: f.digest, status: "translated" });
         continue;
-      } else {
-        leaves.forEach((t) => addUnit(order, t));
-        plans.push({ kind: "json", resourceId, key: f.key, digest: f.digest, order, cacheModel, root, leaves });
       }
+      plans.push({
+        kind: "list",
+        resourceId,
+        key: f.key,
+        digest: f.digest,
+        order,
+        cacheModel,
+        originalValue: f.value,
+        elements,
+      });
     } else {
       const parts = splitPlainText(f.value);
       parts.forEach((p) => addUnit(order, p));

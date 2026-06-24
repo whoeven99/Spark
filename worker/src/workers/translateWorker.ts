@@ -78,7 +78,7 @@ async function countUnitsForCheckpointedResources(
       for (const resource of chunk) {
         if (!doneIds.has(resource.resourceId)) continue;
         for (const field of resource.fields ?? []) {
-          units += countFieldUnits(field.key, field.value);
+          units += countFieldUnits(field.key, field.value, field.shopifyType);
         }
       }
     }

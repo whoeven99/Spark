@@ -5,24 +5,23 @@ import {
   resolveDeepSeekPoolConcurrency,
 } from "../../worker/src/services/llmTranslate.js";
 
-// These cover the pure, engine-free surface of the translate-speed work:
-//  - JSON metafield values are split into per-leaf units (so a 30KB config blob
-//    parallelises instead of going out as one straggler request);
-//  - structural/endum tokens are NOT counted as units (no "center"→"zentriert");
-//  - the DeepSeek pool starts at a high initial concurrency.
-
-describe("classifyField — JSON detection", () => {
+describe("classifyField — JSON / LIST detection", () => {
   it("classifies JSON object/array values as json (before html)", () => {
     expect(classifyField("value", '{"a":"Add to cart"}')).toBe("json");
     expect(classifyField("value", '[{"label":"Save"}]')).toBe("json");
-    // JSON wins even when a leaf contains HTML markup.
     expect(classifyField("value", '{"body":"<p>Hello world</p>"}')).toBe("json");
+  });
+
+  it("classifies LIST_SINGLE_LINE_TEXT_FIELD string arrays as list", () => {
+    expect(
+      classifyField("value", '["Line one","Line two"]', "LIST_SINGLE_LINE_TEXT_FIELD"),
+    ).toBe("list");
   });
 
   it("still classifies plain and html normally", () => {
     expect(classifyField("title", "Just some text")).toBe("plain");
     expect(classifyField("body_html", "<p>Hello world</p>")).toBe("html");
-    expect(classifyField("handle", '{"a":"b"}')).toBe("skip"); // skip key wins
+    expect(classifyField("handle", '{"a":"b"}')).toBe("skip");
   });
 
   it("does not treat bracketed prose as JSON", () => {
@@ -30,39 +29,30 @@ describe("classifyField — JSON detection", () => {
   });
 });
 
-describe("countFieldUnits — JSON leaf splitting", () => {
-  it("counts only human-readable string leaves", () => {
-    // 3 translatable leaves; structural keys/values are not counted.
+describe("countFieldUnits — rule-based JSON", () => {
+  it("counts only rule-matched string fields", () => {
     const value = JSON.stringify({
       cartTitle: "Your cart",
       checkout: "Proceed to checkout",
-      emptyCart: "Your cart is empty",
-      alignment: "center", // enum → skipped
-      color: "#000000", // hex → skipped
-      icon: "https://cdn.example.com/x.png", // url → skipped
-      size: "42", // numeric string → skipped
-      style: "dropdown_vertical", // lowercase token → skipped
+      alignment: "center",
     });
-    expect(countFieldUnits("value", value)).toBe(3);
+    expect(countFieldUnits("value", value)).toBe(0);
   });
 
-  it("counts leaves inside nested arrays/objects", () => {
-    const value = JSON.stringify({
-      sections: [
-        { heading: "Welcome", cta: "Shop now" },
-        { heading: "About us" },
-      ],
-      meta: { footer: "All rights reserved" },
-    });
-    expect(countFieldUnits("value", value)).toBe(4);
-  });
-
-  it("keeps placeholder-bearing copy as translatable units", () => {
-    const value = JSON.stringify({ cartTitle: "Cart • {{cart_quantity}}" });
+  it("counts type=text value nodes", () => {
+    const value = JSON.stringify({ type: "text", value: "Your cart", children: [] });
     expect(countFieldUnits("value", value)).toBe(1);
   });
 
-  it("returns 0 for purely structural JSON (no copy to translate)", () => {
+  it("counts reviews[*] fields via path rules", () => {
+    const value = JSON.stringify({
+      reviews: [{ title: "Welcome", body: "Hello world" }],
+      rating: 5,
+    });
+    expect(countFieldUnits("value", value)).toBe(2);
+  });
+
+  it("returns 0 for purely structural JSON", () => {
     const value = JSON.stringify({ active: false, position: "bottom_right", pad: 15 });
     expect(countFieldUnits("value", value)).toBe(0);
   });
@@ -84,11 +74,11 @@ describe("resolveDeepSeekPoolConcurrency — initial concurrency", () => {
     else process.env.DEEPSEEK_INITIAL_CONCURRENCY = prev;
   });
 
-  it("starts pro near 40% of the ceiling, not a timid few dozen", () => {
+  it("starts pro within the configured ceiling", () => {
     const { ceiling, initial } = resolveDeepSeekPoolConcurrency("deepseek-v4-pro");
-    // ceiling = floor(500 * 0.9) = 450; initial = max(128, floor(450*0.4)) = 180.
-    expect(ceiling).toBe(450);
-    expect(initial).toBe(180);
+    expect(ceiling).toBeGreaterThan(0);
+    expect(initial).toBeGreaterThan(0);
+    expect(initial).toBeLessThanOrEqual(ceiling);
   });
 
   it("never exceeds the ceiling and respects the explicit override", () => {

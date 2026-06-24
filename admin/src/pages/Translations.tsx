@@ -32,10 +32,12 @@ import {
   fetchTranslations,
   fetchTranslationJob,
   fetchTranslationContent,
+  fetchTranslationContentModules,
   fetchLLMKeyStats,
   fetchLLMKeyHistory,
   type TranslationJob,
   type TranslationContentPage,
+  type TranslationContentModule,
   type LLMKeyStats,
   type LLMKeyHistoryEntry,
 } from "../api";
@@ -680,7 +682,7 @@ const TH: React.CSSProperties = {
   textTransform: "uppercase",
 };
 
-const GRID = "minmax(220px,1fr) 96px 100px minmax(280px,1.4fr) 70px 96px 120px 64px";
+const GRID = "minmax(180px,0.7fr) 96px 100px minmax(380px,2.4fr) 70px 96px 120px 64px";
 
 /* ──────────────────────────────────────────────────────────────────────────
    翻译内容（blob）查看器 —— 模块切换 + 翻译前后对照 + 翻页
@@ -689,19 +691,40 @@ const GRID = "minmax(220px,1fr) 96px 100px minmax(280px,1.4fr) 70px 96px 120px 6
 const CONTENT_PAGE_SIZE = 10;
 
 function TranslationContentViewer({ job }: { job: TranslationJob }) {
-  const [module, setModule] = useState<string>(job.modules[0] ?? "");
+  const [modules, setModules] = useState<TranslationContentModule[]>([]);
+  const [modulesLoading, setModulesLoading] = useState(true);
+  const [module, setModule] = useState<string>("");
   const [page, setPage] = useState(1);
   const [data, setData] = useState<TranslationContentPage | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [reloadTick, setReloadTick] = useState(0);
 
-  // 切换任务时重置选择
+  // 切换任务时：拉取「确有内容」的模块列表，默认选中第一个
   useEffect(() => {
-    setModule(job.modules[0] ?? "");
+    let cancelled = false;
+    setModulesLoading(true);
+    setModules([]);
+    setModule("");
     setPage(1);
     setData(null);
-  }, [job.id]);
+    setErr("");
+    fetchTranslationContentModules({ jobId: job.id, shop: job.shopName })
+      .then((r) => {
+        if (cancelled) return;
+        setModules(r.modules);
+        setModule(r.modules[0]?.module ?? "");
+      })
+      .catch((e) => {
+        if (!cancelled) setErr(String(e));
+      })
+      .finally(() => {
+        if (!cancelled) setModulesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [job.id, job.shopName]);
 
   useEffect(() => {
     if (!module) return;
@@ -744,48 +767,59 @@ function TranslationContentViewer({ job }: { job: TranslationJob }) {
         <Button
           size="small"
           icon={<ReloadOutlined />}
-          loading={loading}
+          loading={loading || modulesLoading}
           onClick={() => setReloadTick((t) => t + 1)}
         />
       </div>
 
-      {/* 模块切换 */}
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-        {job.modules.map((m) => {
-          const on = m === module;
-          return (
-            <button
-              key={m}
-              onClick={() => {
-                if (m === module) return;
-                setModule(m);
-                setPage(1);
-              }}
-              style={{
-                cursor: "pointer",
-                fontSize: 11,
-                fontWeight: 600,
-                padding: "3px 10px",
-                borderRadius: 6,
-                border: `1px solid ${on ? C.active : C.border}`,
-                background: on ? "#e8effe" : C.card,
-                color: on ? "#1f4fc4" : C.sub,
-                fontFamily: MONO,
-              }}
-            >
-              {m}
-            </button>
-          );
-        })}
-      </div>
+      {/* 模块切换 —— 仅展示确有翻译内容的模块 */}
+      {modules.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+          {modules.map(({ module: m, count }) => {
+            const on = m === module;
+            return (
+              <button
+                key={m}
+                onClick={() => {
+                  if (m === module) return;
+                  setModule(m);
+                  setPage(1);
+                }}
+                style={{
+                  cursor: "pointer",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: "3px 10px",
+                  borderRadius: 6,
+                  border: `1px solid ${on ? C.active : C.border}`,
+                  background: on ? "#e8effe" : C.card,
+                  color: on ? "#1f4fc4" : C.sub,
+                  fontFamily: MONO,
+                }}
+              >
+                {m}
+                {count > 0 && (
+                  <span style={{ marginLeft: 5, color: on ? "#5a7fe0" : C.faint }}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {err && <Alert type="error" message={err} showIcon style={{ marginBottom: 12 }} />}
       {data?.note && <Alert type="info" message={data.note} showIcon style={{ marginBottom: 12 }} />}
 
-      <Spin spinning={loading}>
-        {!loading && (!data || data.items.length === 0) ? (
+      <Spin spinning={loading || modulesLoading}>
+        {!modulesLoading && modules.length === 0 ? (
           <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-            暂无可查看的翻译内容
+            该任务暂无可查看的翻译内容
+          </Typography.Text>
+        ) : !loading && data && data.items.length === 0 ? (
+          <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+            当前模块暂无可查看的翻译内容
           </Typography.Text>
         ) : (
           <Space direction="vertical" size={12} style={{ width: "100%" }}>

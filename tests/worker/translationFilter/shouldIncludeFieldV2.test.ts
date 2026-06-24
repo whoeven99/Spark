@@ -15,10 +15,33 @@ describe("shouldIncludeFieldV2", () => {
     ).toBe(false);
   });
 
-  it("allows METAFIELD plain text when type is JSON (PHASE2 json body rules deferred)", () => {
+  it("excludes METAFIELD bundle JSON without extractable copy", () => {
+    const bundle =
+      '[{"id":"53476","n":"Bundle-un","ot":5,"qt":2,"dt":0,"dv":0.0,"pr":1}]';
     expect(
       shouldIncludeFieldV2(
-        { key: "x", value: "Ships in 3 days", type: "JSON" },
+        { key: "value", value: bundle, type: "JSON" },
+        [],
+        { ...ctx, module: "METAFIELD" },
+      ),
+    ).toBe(false);
+  });
+
+  it("includes METAFIELD JSON with reviews (prod mustContain)", () => {
+    const review = JSON.stringify({ reviews: [{ title: "Great", body: "Nice" }] });
+    expect(
+      shouldIncludeFieldV2(
+        { key: "value", value: review, type: "JSON" },
+        [],
+        { ...ctx, module: "METAFIELD" },
+      ),
+    ).toBe(true);
+  });
+
+  it("allows METAFIELD RICH_TEXT JSON with type:text marker", () => {
+    expect(
+      shouldIncludeFieldV2(
+        { key: "value", value: '{"type":"text","value":"Ships in 3 days"}', type: "RICH_TEXT_FIELD" },
         [],
         { ...ctx, module: "METAFIELD" },
       ),

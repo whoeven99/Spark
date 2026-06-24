@@ -178,14 +178,32 @@ async function processVerifyJob(job: TranslationV4Job): Promise<void> {
       verifyDone,
       verifyFailed,
     };
+    const initTotal = mergedMetrics.initTotal ?? job.metrics?.initTotal ?? 0;
+    const nothingToTranslate = initTotal === 0 && verifyTotal === 0;
     const wroteAnything =
-      (mergedMetrics.writebackDone ?? 0) > 0 || verifyDone > 0;
+      nothingToTranslate || (mergedMetrics.writebackDone ?? 0) > 0 || verifyDone > 0;
+
+    // 翻译尚未覆盖全部资源（如额度中途暂停只翻了一部分）：不落 COMPLETED，
+    // 停在可续译的 PAUSED —— 前端据此显示「继续」，resume 会回到翻译补译剩余资源。
+    const tTotal = mergedMetrics.translateTotal ?? 0;
+    const tAttempted =
+      (mergedMetrics.translateDone ?? 0) + (mergedMetrics.translateFailed ?? 0);
+    const translateIncomplete = wroteAnything && tTotal > 0 && tAttempted < tTotal;
+
     await updateJob(shopName, jobId, {
-      status: wroteAnything ? "COMPLETED" : "FAILED",
-      errorStage: wroteAnything ? undefined : "WRITEBACK",
-      errorMessage: wroteAnything
-        ? undefined
-        : "写回未成功：全部资源均未写入 Shopify（请查看 worker 日志或写回详情）",
+      status: translateIncomplete ? "PAUSED" : wroteAnything ? "COMPLETED" : "FAILED",
+      errorStage: translateIncomplete
+        ? "TRANSLATE"
+        : wroteAnything
+          ? undefined
+          : "WRITEBACK",
+      errorMessage: translateIncomplete
+        ? "额度不足，仅翻译并写回了部分资源，补充额度后点击「继续」可翻译剩余内容"
+        : wroteAnything
+          ? nothingToTranslate
+            ? null
+            : undefined
+          : "写回未成功：全部资源均未写入 Shopify（请查看 worker 日志或写回详情）",
       claimedBy: null,
       stageTimings: withStageTiming(
         latestJob?.stageTimings ?? job.stageTimings,
