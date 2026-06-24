@@ -97,11 +97,21 @@ export type TranslationJob = {
     translateTotal: number;
     translateDone: number;
     translateFailed: number;
+    translateFallback: number;
+    translateUnitTotal: number;
+    translateUnitDone: number;
     writebackTotal: number;
     writebackDone: number;
     writebackFailed: number;
+    verifyTotal: number;
+    verifyDone: number;
+    verifyFailed: number;
     usedTokens: number;
+    currentModule?: string | null;
+    progressUpdatedAt?: string | null;
   };
+  /** 服务端合并 Redis 后按阶段计算的进度（0–100）。 */
+  progressPercent?: number;
   taskSource?: string | null;
   isCover?: boolean;
   errorMessage: string | null;
