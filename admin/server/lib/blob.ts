@@ -27,6 +27,19 @@ export async function blobRead<T = unknown>(blobPath: string): Promise<T | null>
   }
 }
 
+/** List blob paths under a prefix (names only — metadata, no content download). */
+export async function blobListPaths(prefix: string): Promise<string[]> {
+  const paths: string[] = [];
+  try {
+    for await (const item of getContainer().listBlobsFlat({ prefix })) {
+      paths.push(item.name);
+    }
+  } catch {
+    // return what we have
+  }
+  return paths;
+}
+
 export async function blobWrite(blobPath: string, content: unknown): Promise<void> {
   const text = JSON.stringify(content, null, 2);
   const client = getContainer().getBlockBlobClient(blobPath);
