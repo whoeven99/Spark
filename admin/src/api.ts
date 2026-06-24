@@ -190,6 +190,49 @@ export function fetchTranslationJob(
   return apiFetch(`/translations/${encodeURIComponent(jobId)}${qs}`);
 }
 
+// --- 翻译内容（blob）分页查看 ---
+
+export type TranslationContentField = {
+  key: string;
+  originalValue: string;
+  translatedValue: string;
+  digest?: string;
+  status?: string;
+};
+
+export type TranslationContentResource = {
+  resourceId: string;
+  translations: TranslationContentField[];
+};
+
+export type TranslationContentPage = {
+  module: string | null;
+  modules: string[];
+  page: number;
+  pageSize: number;
+  total: number;
+  items: TranslationContentResource[];
+  note?: string;
+};
+
+export function fetchTranslationContent(params: {
+  jobId: string;
+  shop?: string;
+  module?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<TranslationContentPage> {
+  const query = new URLSearchParams();
+  if (params.shop) query.set("shop", params.shop);
+  if (params.module) query.set("module", params.module);
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("pageSize", String(params.pageSize));
+  const qs = query.toString();
+  return apiFetch(
+    `/translations/${encodeURIComponent(params.jobId)}/content${qs ? `?${qs}` : ""}`,
+  );
+}
+
 export type LLMKeyStats = {
   label: string;
   calls: number;

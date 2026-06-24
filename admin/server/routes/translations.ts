@@ -3,6 +3,7 @@ import type { SqlParameter } from "@azure/cosmos";
 import { getTranslationJobsContainer, isCosmosConfigured } from "../lib/cosmos.js";
 import { enrichJobWithLiveProgress, enrichJobsWithLiveProgress } from "../lib/v4Progress.js";
 import { getRedis } from "../lib/redis.js";
+import { blobListPaths, blobRead, isBlobConfigured } from "../lib/blob.js";
 import type { TranslationV4Job } from "../types/translation.js";
 
 export const translationsRouter = Router();
@@ -224,6 +225,107 @@ translationsRouter.get("/auto/summary", async (_req, res) => {
       return;
     }
     console.error("[translations/auto/summary]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ── 翻译内容（blob）分页查看 ─────────────────────────────────────────────────
+// 读取某任务某模块下的逐资源翻译结果（翻译前/后），按资源分页。
+// 必须注册在 /:jobId 之前（虽然路径段数不同不会冲突，仍按惯例靠前注册）。
+
+type BlobTranslatedResource = {
+  resourceId: string;
+  translations: Array<{
+    key: string;
+    originalValue: string;
+    translatedValue: string;
+    digest?: string;
+    status?: string;
+  }>;
+};
+
+translationsRouter.get("/:jobId/content", async (req, res) => {
+  if (!isCosmosConfigured()) {
+    res.status(503).json({ error: "Cosmos not configured" });
+    return;
+  }
+  if (!isBlobConfigured()) {
+    res.json({ items: [], total: 0, modules: [], module: null, page: 1, pageSize: 10, note: "Blob 未配置" });
+    return;
+  }
+
+  try {
+    const container = getTranslationJobsContainer();
+    const { jobId } = req.params;
+    const shop = (req.query.shop as string | undefined)?.trim();
+    const page = Math.max(1, Number(req.query.page ?? 1));
+    const pageSize = Math.min(Math.max(Number(req.query.pageSize ?? 10), 1), 50);
+
+    type JobLite = Pick<TranslationV4Job, "id" | "shopName" | "modules"> & {
+      blobPrefix?: string;
+    };
+    let job: JobLite | null = null;
+    if (shop) {
+      const { resource } = await container.item(jobId, shop).read<JobLite>();
+      job = resource ?? null;
+    } else {
+      const { resources } = await container.items
+        .query<JobLite>({
+          query: "SELECT c.id, c.shopName, c.modules, c.blobPrefix FROM c WHERE c.id = @id",
+          parameters: [{ name: "@id", value: jobId }],
+        })
+        .fetchAll();
+      job = resources[0] ?? null;
+    }
+    if (!job) {
+      res.status(404).json({ error: "Job not found" });
+      return;
+    }
+
+    const modules = job.modules ?? [];
+    const blobPrefix = job.blobPrefix;
+    if (!blobPrefix) {
+      res.json({ items: [], total: 0, modules, module: null, page, pageSize, note: "该任务无 blobPrefix（可能为旧任务）" });
+      return;
+    }
+
+    const module = (req.query.module as string | undefined)?.trim() || modules[0];
+    if (!module) {
+      res.json({ items: [], total: 0, modules, module: null, page, pageSize });
+      return;
+    }
+
+    // 优先逐资源 blob：仅列出文件名（元数据），只下载当前页内容。
+    const resourcePrefix = `${blobPrefix}/translate/${module}/resources/`;
+    const resourcePaths = (await blobListPaths(resourcePrefix))
+      .filter((p) => p.endsWith(".json"))
+      .sort();
+
+    if (resourcePaths.length > 0) {
+      const total = resourcePaths.length;
+      const start = (page - 1) * pageSize;
+      const pagePaths = resourcePaths.slice(start, start + pageSize);
+      const items = (
+        await Promise.all(pagePaths.map((p) => blobRead<BlobTranslatedResource>(p)))
+      ).filter((x): x is BlobTranslatedResource => !!x);
+      res.json({ module, modules, page, pageSize, total, items });
+      return;
+    }
+
+    // 回退：旧版 chunk-XX.json（每文件是一个数组），整体读取后内存分页。
+    const chunkPaths = (await blobListPaths(`${blobPrefix}/translate/${module}/`))
+      .filter((p) => p.endsWith(".json") && !p.includes("/resources/"))
+      .sort();
+    const all: BlobTranslatedResource[] = [];
+    for (const p of chunkPaths) {
+      const chunk = await blobRead<BlobTranslatedResource[]>(p);
+      if (Array.isArray(chunk)) all.push(...chunk);
+    }
+    const total = all.length;
+    const start = (page - 1) * pageSize;
+    res.json({ module, modules, page, pageSize, total, items: all.slice(start, start + pageSize) });
+  } catch (err) {
+    console.error("[translations/:id/content]", err);
     res.status(500).json({ error: String(err) });
   }
 });

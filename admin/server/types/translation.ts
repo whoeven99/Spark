@@ -42,6 +42,7 @@ export type TranslationV4Job = {
   aiModel: string;
   status: TranslationV4Status;
   claimedBy: string | null;
+  blobPrefix?: string;
   metrics: TranslationV4Metrics;
   errorMessage: string | null;
   errorStage: string | null;
