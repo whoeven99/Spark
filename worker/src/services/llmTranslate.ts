@@ -9,6 +9,7 @@ import {
   type JsonTextSlot,
   type JsonValue,
 } from "./jsonExtractRules.js";
+import { enforceTranslateResultLimits } from "./translationFieldLimits.js";
 
 // ─── LLM Key Pool ─────────────────────────────────────────────────────────────
 //
@@ -2100,6 +2101,7 @@ Rules:
 - Output literal characters; do NOT HTML-escape. Use ' and " directly — never &#39; or &quot;
 - Do NOT add or remove leading or trailing whitespace
 - If the value is empty, return it unchanged
+- If a field key is "title", translatedValue MUST be at most 255 characters; shorten naturally while preserving the core meaning
 - You MUST return an entry for every key in the input
 ${glossaryBlock}
 The user message is a JSON array of {"key","value"} objects to translate.
@@ -2790,9 +2792,15 @@ export async function translateResources(
     const rm = resultMaps.get(res.resourceId)!;
     return {
       resourceId: res.resourceId,
-      results: res.fields.map(
-        (f) =>
-          rm.get(f.key) ?? { key: f.key, translatedValue: f.value, digest: f.digest, status: "fallback" as const },
+      results: res.fields.map((f) =>
+        enforceTranslateResultLimits(
+          rm.get(f.key) ?? {
+            key: f.key,
+            translatedValue: f.value,
+            digest: f.digest,
+            status: "fallback" as const,
+          },
+        ),
       ),
     };
   });

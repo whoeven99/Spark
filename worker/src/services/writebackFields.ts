@@ -1,4 +1,6 @@
 /** Fields eligible for translationsRegister (aligned across writeback + verify). */
+import { enforceFieldTranslationLimits } from "./translationFieldLimits.js";
+
 export type WritebackField = {
   key: string;
   originalValue?: string | null;
@@ -13,11 +15,21 @@ export type WritebackField = {
  * (brand terms / glossary).
  */
 export function filterWritebackFields<T extends WritebackField>(fields: T[]): T[] {
-  return fields.filter((t) => {
-    const translated = (t.translatedValue ?? t.value ?? "").trim();
-    if (!translated) return false;
-    const original = (t.originalValue ?? "").trim();
-    if (t.key === "handle" && translated === original) return false;
-    return true;
-  });
+  return fields
+    .filter((t) => {
+      const translated = (t.translatedValue ?? t.value ?? "").trim();
+      if (!translated) return false;
+      const original = (t.originalValue ?? "").trim();
+      if (t.key === "handle" && translated === original) return false;
+      return true;
+    })
+    .map((t) => {
+      const raw = (t.translatedValue ?? t.value ?? "").trim();
+      const clamped = enforceFieldTranslationLimits(t.key, raw);
+      if (clamped === raw) return t;
+      if (t.translatedValue != null) {
+        return { ...t, translatedValue: clamped };
+      }
+      return { ...t, value: clamped };
+    });
 }

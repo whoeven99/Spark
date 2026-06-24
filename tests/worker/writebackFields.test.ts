@@ -27,4 +27,13 @@ describe("filterWritebackFields", () => {
   it("drops empty translated values", () => {
     expect(filterWritebackFields([{ key: "title", originalValue: "x", translatedValue: "  " }])).toHaveLength(0);
   });
+
+  it("clamps overlong title before writeback", () => {
+    const long = "c".repeat(280);
+    const out = filterWritebackFields([
+      { key: "title", originalValue: "x", translatedValue: long },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].translatedValue!.length).toBeLessThanOrEqual(255);
+  });
 });
