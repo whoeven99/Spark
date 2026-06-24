@@ -76,3 +76,30 @@ export async function blobDelete(path: string): Promise<void> {
     // best-effort
   }
 }
+
+/** 删除 blobPrefix 下所有 blob（任务删除 / 空自动任务清理）。 */
+export async function blobDeletePrefix(blobPrefix: string): Promise<number> {
+  if (!blobPrefix) return 0;
+  let deleted = 0;
+  try {
+    const prefix = blobPrefix.endsWith("/") ? blobPrefix : `${blobPrefix}/`;
+    for await (const blob of getContainer().listBlobsFlat({ prefix })) {
+      try {
+        await getContainer().deleteBlob(blob.name, { deleteSnapshots: "include" });
+        deleted++;
+      } catch {
+        // best-effort per blob
+      }
+    }
+    try {
+      if (await getContainer().getBlockBlobClient(blobPrefix).deleteIfExists()) {
+        deleted++;
+      }
+    } catch {
+      // ignore
+    }
+  } catch {
+    // ignore list errors
+  }
+  return deleted;
+}

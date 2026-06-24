@@ -6,6 +6,7 @@ import { runAnalysisWorker } from "./workers/analysisWorker.js";
 import { resetStaleJobs } from "./services/cosmosV4.js";
 import { resetStaleAnalysisJobs } from "./services/cosmosAnalysis.js";
 import { runAutoTranslateScan } from "./services/autoTranslate.js";
+import { cleanupStaleEmptyAutoJobs } from "./services/cleanupEmptyAutoJobs.js";
 
 /** 各 stage 轮询间隔；hint 队列有任务时仍靠上一阶段 wake 立即触发。 */
 const POLL_INTERVAL_MS = Math.max(
@@ -13,9 +14,15 @@ const POLL_INTERVAL_MS = Math.max(
   Number(process.env.WORKER_POLL_INTERVAL_MS) || 2_000,
 );
 const STALE_RESET_INTERVAL_MS = 5 * 60_000;
-/** 自动翻译扫描间隔（默认 1 小时，可用 AUTO_TRANSLATE_INTERVAL_MS 覆盖）。 */
-const AUTO_TRANSLATE_INTERVAL_MS =
-  Number(process.env.AUTO_TRANSLATE_INTERVAL_MS) || 60 * 60_000;
+/** 自动翻译扫描间隔：默认 1 小时；不配 AUTO_TRANSLATE_INTERVAL_MS 即用此值。 */
+const AUTO_TRANSLATE_INTERVAL_MS_DEFAULT = 60 * 60_000;
+const AUTO_TRANSLATE_INTERVAL_MS = (() => {
+  const n = Number(process.env.AUTO_TRANSLATE_INTERVAL_MS);
+  return n > 0 ? n : AUTO_TRANSLATE_INTERVAL_MS_DEFAULT;
+})();
+/** 空自动任务定时清理间隔（默认 6 小时）。 */
+const AUTO_EMPTY_JOB_CLEANUP_INTERVAL_MS =
+  Number(process.env.AUTO_EMPTY_JOB_CLEANUP_INTERVAL_MS) || 6 * 60 * 60_000;
 
 const ALL_STAGES = ["init", "translate", "writeback", "verify", "analysis"] as const;
 type Stage = (typeof ALL_STAGES)[number];
@@ -66,6 +73,14 @@ export function startScheduler(): void {
     );
   } else {
     console.log('[scheduler] init stage 关闭，跳过 autoTranslate 扫描');
+  }
+
+  if (stages.has("init")) {
+    safeRun("autoJobCleanup", () => cleanupStaleEmptyAutoJobs());
+    setInterval(
+      () => safeRun("autoJobCleanup", () => cleanupStaleEmptyAutoJobs()),
+      AUTO_EMPTY_JOB_CLEANUP_INTERVAL_MS,
+    );
   }
 
   for (const stage of ALL_STAGES) {

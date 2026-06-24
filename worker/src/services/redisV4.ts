@@ -120,6 +120,24 @@ export function progressKey(taskId: string): string {
   return `translate:v4:progress:${taskId}`;
 }
 
+export const AUTO_SCAN_LAST_AT_KEY = "translate:v4:auto_scan:last_at";
+
+export async function setAutoScanLastAt(at: string): Promise<void> {
+  try {
+    await getRedis().set(AUTO_SCAN_LAST_AT_KEY, at);
+  } catch {
+    // best-effort
+  }
+}
+
+export async function clearTaskRedis(taskId: string): Promise<void> {
+  try {
+    await getRedis().del(progressKey(taskId), controlKey(taskId));
+  } catch {
+    // best-effort
+  }
+}
+
 /**
  * 任务运行时的外部控制键。外部（TSF/Spark 前端、运营、或额度耗尽逻辑）写入
  * "pause" / "cancel"，worker 在阶段中途的检查点读取后优雅中断。

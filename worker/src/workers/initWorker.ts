@@ -8,11 +8,13 @@ import {
   prefersStoredToken,
   countShopInitializingJobs,
   findInitQueuedJobsForShop,
+  TSF_AUTO_TASK_SOURCE,
   type TranslationV4Job,
 } from "../services/cosmosV4.js";
 import { popHint, pushHint, setProgress } from "../services/redisV4.js";
 import { runTranslateWorker } from "./translateWorker.js";
 import { blobWrite } from "../services/blobV4.js";
+import { purgeAutoJob } from "../services/autoJobCleanup.js";
 import { fetchTranslatableResources } from "../services/shopifyFetch.js";
 import { countFieldUnits, pAll } from "../services/llmTranslate.js";
 import { QpsLogger } from "../services/qpsLogger.js";
@@ -49,6 +51,15 @@ async function completeEmptyInitJob(
   stageStartedAt: string,
   manifest: Record<string, { totalItems: number; chunks: number }>,
 ): Promise<void> {
+  // 自动任务无增量：直接删记录，避免任务列表堆积 0 条 COMPLETED
+  if (job.taskSource === TSF_AUTO_TASK_SOURCE) {
+    await purgeAutoJob({ id: jobId, shopName, blobPrefix });
+    console.log(
+      `[init] done job=${jobId} totalItems=0 — 自动任务无增量，已删除记录`,
+    );
+    return;
+  }
+
   await blobWrite(`${blobPrefix}/manifest.json`, {
     taskId: jobId,
     shopName,
