@@ -65,6 +65,7 @@ function statusBadge(status: string) {
 }
 
 function calcProgress(job: TranslationJob): number {
+  if (typeof job.progressPercent === "number") return job.progressPercent;
   const m = job.metrics;
   const total = m.translateTotal || m.initTotal;
   if (!total) return job.status === "COMPLETED" ? 100 : 0;

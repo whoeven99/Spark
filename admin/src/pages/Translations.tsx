@@ -69,11 +69,21 @@ function statusBadge(status: string) {
 }
 
 function calcProgress(job: TranslationJob): number {
+  if (typeof job.progressPercent === "number") return job.progressPercent;
   const m = job.metrics;
   const total = m.translateTotal || m.initTotal;
-  if (total === 0) return 0;
+  if (total === 0) return job.status === "COMPLETED" ? 100 : 0;
   const done = m.translateDone + m.translateFailed;
   return Math.round((done / total) * 100);
+}
+
+function progressTooltip(job: TranslationJob): string | undefined {
+  const m = job.metrics;
+  if (m.translateUnitTotal > 0) {
+    return `子节点 ${m.translateUnitDone}/${m.translateUnitTotal} · 资源 ${m.translateDone}/${m.translateTotal || m.initTotal}`;
+  }
+  if (m.currentModule) return `模块 ${m.currentModule}`;
+  return undefined;
 }
 
 // ── Formatting helpers ────────────────────────────────────────────────────────
@@ -517,7 +527,9 @@ export default function Translations() {
       render: (_: unknown, r: TranslationJob) => {
         const pct = calcProgress(r);
         const status = r.status === "FAILED" ? "exception" : r.status === "COMPLETED" ? "success" : "active";
-        return <Progress percent={pct} size="small" status={status} />;
+        const tip = progressTooltip(r);
+        const bar = <Progress percent={pct} size="small" status={status} />;
+        return tip ? <Tooltip title={tip}>{bar}</Tooltip> : bar;
       },
     },
     {
@@ -689,6 +701,17 @@ export default function Translations() {
                 {selected.metrics.translateDone} /{" "}
                 {selected.metrics.translateTotal}
               </Descriptions.Item>
+              {selected.metrics.translateUnitTotal > 0 ? (
+                <Descriptions.Item label="子节点">
+                  {selected.metrics.translateUnitDone} /{" "}
+                  {selected.metrics.translateUnitTotal}
+                </Descriptions.Item>
+              ) : null}
+              {selected.metrics.currentModule ? (
+                <Descriptions.Item label="当前模块">
+                  {selected.metrics.currentModule}
+                </Descriptions.Item>
+              ) : null}
               <Descriptions.Item label="翻译失败">
                 <Typography.Text
                   type={
