@@ -23,11 +23,17 @@ async function tryBraceletAppProxyResponse(
     url.pathname === "/a/ciwi-spark/prepare" ||
     url.pathname === "/app/a/ciwi-spark/prepare";
 
-  if (isBraceletPage && request.method === "GET") {
-    return braceletProxyPageLoader(request, "/a/ciwi-spark/prepare");
-  }
-  if (isBraceletPrepare && request.method === "POST") {
-    return braceletProxyPrepareAction(request);
+  try {
+    if (isBraceletPage && request.method === "GET") {
+      return await braceletProxyPageLoader(request, "/a/ciwi-spark/prepare");
+    }
+    if (isBraceletPrepare && request.method === "POST") {
+      return await braceletProxyPrepareAction(request);
+    }
+  } catch (error) {
+    // authenticate.public.appProxy 校验失败时会 throw Response(400)
+    if (error instanceof Response) return error;
+    throw error;
   }
   return null;
 }
