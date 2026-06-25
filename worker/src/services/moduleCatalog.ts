@@ -22,7 +22,6 @@ export const AUTO_TRANSLATE_V4_MODULES = [
   "PAGE",
   "METAFIELD",
   "SHOP_POLICY",
-  "EMAIL_TEMPLATE",
   "SELLING_PLAN",
   "SELLING_PLAN_GROUP",
 ] as const;
