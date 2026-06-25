@@ -4,10 +4,17 @@ import { runWritebackWorker } from "./workers/writebackWorker.js";
 import { runVerifyWorker } from "./workers/verifyWorker.js";
 import { runAnalysisWorker } from "./workers/analysisWorker.js";
 import { runEmailWorker } from "./workers/emailWorker.js";
-import { resetStaleJobs } from "./services/cosmosV4.js";
+import { resetStaleJobs, wakeQueuedJobsAfterDeploy } from "./services/cosmosV4.js";
 import { resetStaleAnalysisJobs } from "./services/cosmosAnalysis.js";
 import { runAutoTranslateScan } from "./services/autoTranslate.js";
 import { cleanupStaleEmptyAutoJobs } from "./services/cleanupEmptyAutoJobs.js";
+import {
+  getAutoTranslateIntervalMs,
+  getAutoTranslateScheduleMinute,
+  getAutoTranslateScheduleTimezone,
+  msUntilNextClockAlignedScan,
+  resolveNextClockAlignedScanAt,
+} from "./services/autoScanSchedule.js";
 
 /** 各 stage 轮询间隔；hint 队列有任务时仍靠上一阶段 wake 立即触发。 */
 const POLL_INTERVAL_MS = Math.max(
@@ -15,12 +22,6 @@ const POLL_INTERVAL_MS = Math.max(
   Number(process.env.WORKER_POLL_INTERVAL_MS) || 2_000,
 );
 const STALE_RESET_INTERVAL_MS = 5 * 60_000;
-/** 自动翻译扫描间隔：默认 1 小时；不配 AUTO_TRANSLATE_INTERVAL_MS 即用此值。 */
-const AUTO_TRANSLATE_INTERVAL_MS_DEFAULT = 60 * 60_000;
-const AUTO_TRANSLATE_INTERVAL_MS = (() => {
-  const n = Number(process.env.AUTO_TRANSLATE_INTERVAL_MS);
-  return n > 0 ? n : AUTO_TRANSLATE_INTERVAL_MS_DEFAULT;
-})();
 /** 空自动任务定时清理间隔（默认 6 小时）。 */
 const AUTO_EMPTY_JOB_CLEANUP_INTERVAL_MS =
   Number(process.env.AUTO_EMPTY_JOB_CLEANUP_INTERVAL_MS) || 6 * 60 * 60_000;
@@ -52,6 +53,28 @@ function safeRun(name: string, fn: () => Promise<void>): void {
   fn().catch((e) => console.error(`[scheduler] ${name} error`, e));
 }
 
+function scheduleAutoTranslateScan(): void {
+  const tz = getAutoTranslateScheduleTimezone();
+  const intervalMs = getAutoTranslateIntervalMs();
+  const minute = getAutoTranslateScheduleMinute();
+
+  const scheduleNext = () => {
+    const waitMs = msUntilNextClockAlignedScan();
+    const nextAt = resolveNextClockAlignedScanAt();
+    console.log(
+      `[scheduler] autoTranslate 下次扫描 ${nextAt.toISOString()} (tz=${tz}, :${String(minute).padStart(2, "0")}, interval=${intervalMs}ms)`,
+    );
+    setTimeout(() => {
+      safeRun("autoTranslate", async () => {
+        await runAutoTranslateScan();
+        scheduleNext();
+      });
+    }, waitMs);
+  };
+
+  scheduleNext();
+}
+
 export function startScheduler(): void {
   const stages = enabledStages();
   console.log(`[scheduler] starting translation v4 workers (stages: ${[...stages].join(",")}, poll=${POLL_INTERVAL_MS}ms)`);
@@ -65,18 +88,15 @@ export function startScheduler(): void {
   };
 
   // resetStale always runs — harmless when a stage is disabled.
+  safeRun("deployWake", () => wakeQueuedJobsAfterDeploy());
   safeRun("resetStale", () => resetStaleJobs());
   safeRun("resetStaleAnalysis", () => resetStaleAnalysisJobs());
   setInterval(() => safeRun("resetStale", () => resetStaleJobs()), STALE_RESET_INTERVAL_MS);
   setInterval(() => safeRun("resetStaleAnalysis", () => resetStaleAnalysisJobs()), STALE_RESET_INTERVAL_MS);
 
-  // 自动翻译扫描：定时为开启自动翻译的店创建增量任务（gated by init stage）。
+  // 自动翻译：按整点调度（默认北京时间每小时 :00），启动时不立即扫描，避免发布导致「下次时间」漂移。
   if (stages.has("init")) {
-    safeRun("autoTranslate", () => runAutoTranslateScan());
-    setInterval(
-      () => safeRun("autoTranslate", () => runAutoTranslateScan()),
-      AUTO_TRANSLATE_INTERVAL_MS,
-    );
+    scheduleAutoTranslateScan();
   } else {
     console.log('[scheduler] init stage 关闭，跳过 autoTranslate 扫描');
   }

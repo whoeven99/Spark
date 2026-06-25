@@ -1,4 +1,5 @@
 import { CosmosClient, type Container } from "@azure/cosmos";
+import { pushHint } from "./redisV4.js";
 
 export type TranslationV4Status =
   | "CREATED"
@@ -264,6 +265,28 @@ export async function hasActiveJobForTarget(
   }
 }
 
+/** 同店任意进行中的 v4 任务数（用于自动扫描排队）。 */
+export async function countShopActiveJobs(shopName: string): Promise<number> {
+  try {
+    const { resources } = await getContainer()
+      .items.query<number>(
+        {
+          query:
+            "SELECT VALUE COUNT(1) FROM c WHERE c.shopName = @shopName AND ARRAY_CONTAINS(@statuses, c.status)",
+          parameters: [
+            { name: "@shopName", value: shopName },
+            { name: "@statuses", value: ACTIVE_V4_STATUSES },
+          ],
+        },
+        { partitionKey: shopName },
+      )
+      .fetchAll();
+    return resources[0] ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 let _client: CosmosClient | null = null;
 
 function getClient(): CosmosClient {
@@ -440,25 +463,7 @@ export async function findInitQueuedJobsForShop(
 
 /** Count jobs currently in TRANSLATE for a shop (used to fair-share LLM concurrency). */
 export async function countShopTranslatingJobs(shopName: string): Promise<number> {
-  try {
-    const { resources } = await getContainer()
-      .items.query<number>(
-        {
-          query:
-            "SELECT VALUE COUNT(1) FROM c WHERE c.shopName = @shopName AND c.status = @status",
-          parameters: [
-            { name: "@shopName", value: shopName },
-            { name: "@status", value: "TRANSLATING" },
-          ],
-        },
-        { partitionKey: shopName },
-      )
-      .fetchAll();
-    const n = resources[0];
-    return typeof n === "number" && n > 0 ? n : 0;
-  } catch {
-    return 0;
-  }
+  return countShopJobsInStatus(shopName, "TRANSLATING");
 }
 
 /** Oldest TRANSLATE_QUEUED jobs for a shop (serial translate queue). */
@@ -523,6 +528,58 @@ const PROCESSING_TO_QUEUED: Array<[TranslationV4Status, TranslationV4Status]> = 
   ["VERIFYING", "VERIFY_QUEUED"],
 ];
 
+const QUEUED_TO_HINT_STAGE: Partial<
+  Record<TranslationV4Status, "init" | "translate" | "writeback" | "verify">
+> = {
+  INIT_QUEUED: "init",
+  TRANSLATE_QUEUED: "translate",
+  WRITEBACK_QUEUED: "writeback",
+  VERIFY_QUEUED: "verify",
+};
+
+const BUSY_STATUS_FOR_QUEUE: Partial<
+  Record<TranslationV4Status, TranslationV4Status>
+> = {
+  INIT_QUEUED: "INITIALIZING",
+  TRANSLATE_QUEUED: "TRANSLATING",
+  WRITEBACK_QUEUED: "WRITING_BACK",
+  VERIFY_QUEUED: "VERIFYING",
+};
+
+async function pushHintForQueuedJob(
+  job: Pick<TranslationV4Job, "id" | "shopName">,
+  queuedStatus: TranslationV4Status,
+): Promise<void> {
+  const stage = QUEUED_TO_HINT_STAGE[queuedStatus];
+  if (!stage) return;
+  await pushHint(stage, { taskId: job.id, shopName: job.shopName });
+}
+
+export async function countShopJobsInStatus(
+  shopName: string,
+  status: TranslationV4Status,
+): Promise<number> {
+  try {
+    const { resources } = await getContainer()
+      .items.query<number>(
+        {
+          query:
+            "SELECT VALUE COUNT(1) FROM c WHERE c.shopName = @shopName AND c.status = @status",
+          parameters: [
+            { name: "@shopName", value: shopName },
+            { name: "@status", value: status },
+          ],
+        },
+        { partitionKey: shopName },
+      )
+      .fetchAll();
+    const n = resources[0];
+    return typeof n === "number" && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
 /**
  * 优雅停机：把本进程（claimedBy 以 host+pid 后缀结尾）正在处理中的任务，
  * 立刻重新入队（claimedBy=null），让新部署的 worker 马上接着跑，不必等 10 分钟 stale-reset。
@@ -548,6 +605,7 @@ export async function releaseJobsClaimedBySuffix(claimSuffix: string): Promise<n
           claimedBy: null,
           claimedAt: null,
         }).catch(() => {});
+        await pushHintForQueuedJob(job, resetStatus).catch(() => {});
         released++;
         console.log(`[shutdown] release ${job.id} ${processingStatus} → ${resetStatus}`);
       }
@@ -638,10 +696,39 @@ export async function resetStaleJobs(
           claimedBy: null,
           claimedAt: null,
         }).catch(() => {});
+        await pushHintForQueuedJob(job, resetStatus).catch(() => {});
         console.log(`[cosmosV4] reset stale: ${job.id} ${processingStatus} → ${resetStatus}`);
       }
     } catch (e) {
       console.warn(`[cosmosV4] resetStale error for ${processingStatus}`, e);
+    }
+  }
+}
+
+/**
+ * 新 Worker 启动后：先快速回收部署中断的僵死任务，再为各店排队任务推 hint，
+ * 避免「翻译了一半却显示等待翻译」长期卡住。
+ */
+export async function wakeQueuedJobsAfterDeploy(): Promise<void> {
+  const deployStaleMin = Number(process.env.DEPLOY_STALE_RESET_MINUTES) || 2;
+  await resetStaleJobs(deployStaleMin);
+
+  for (const [queuedStatus, busyStatus] of Object.entries(BUSY_STATUS_FOR_QUEUE)) {
+    const queued = queuedStatus as TranslationV4Status;
+    const busy = busyStatus as TranslationV4Status;
+    const hintStage = QUEUED_TO_HINT_STAGE[queued];
+    if (!hintStage) continue;
+
+    const jobs = await findPendingJobs(queued, 50);
+    const seenShops = new Set<string>();
+    for (const job of jobs) {
+      if (seenShops.has(job.shopName)) continue;
+      if ((await countShopJobsInStatus(job.shopName, busy)) > 0) continue;
+      await pushHint(hintStage, { taskId: job.id, shopName: job.shopName });
+      seenShops.add(job.shopName);
+      console.log(
+        `[deploy-wake] ${hintStage} hint job=${job.id} shop=${job.shopName}`,
+      );
     }
   }
 }

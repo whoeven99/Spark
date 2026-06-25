@@ -8,7 +8,7 @@ import {
 import { canTranslateMetafieldJson } from "../../worker/src/services/translationFilter/metafieldJsonJudge.js";
 import { countFieldUnits } from "../../worker/src/services/llmTranslate.js";
 
-describe("jsonExtractRules — prod Redis rules", () => {
+describe("jsonExtractRules — Spring buildDefaultRules", () => {
   it("extracts type=text value nodes (Shopify rich text JSON)", () => {
     const root = tryParseJsonContainer('{"type":"text","value":"Hello World","children":[]}')!;
     const slots = extractJsonTextSlots(root, buildDefaultJsonExtractRules());
@@ -16,14 +16,13 @@ describe("jsonExtractRules — prod Redis rules", () => {
     expect(slots[0]!.text).toBe("Hello World");
   });
 
-  it("extracts reviews[*].title and reviews[*].body", () => {
+  it("does not extract reviews paths (not in default rules)", () => {
     const value = JSON.stringify({
       reviews: [{ title: "Comfy and fun to wear", body: "Previously bought the red and white." }],
       rating: 1,
     });
     const root = tryParseJsonContainer(value)!;
-    const texts = extractJsonTextSlots(root).map((s) => s.fieldName).sort();
-    expect(texts).toEqual(["body", "title"]);
+    expect(extractJsonTextSlots(root)).toHaveLength(0);
   });
 
   it("does not extract bundle config keys like n/id", () => {
@@ -43,26 +42,57 @@ describe("jsonExtractRules — prod Redis rules", () => {
   });
 });
 
-describe("metafieldJsonJudge — prod needTranslateJudge", () => {
-  it("excludes bundle JSON (no mustContain marker)", () => {
+describe("metafieldJsonJudge — empty Redis legacy", () => {
+  it("excludes bundle JSON", () => {
     const bundle =
       '[{"id":"53476","n":"Bundle-un","ot":5,"qt":2,"dt":0,"dv":0.0,"pr":1}]';
     expect(canTranslateMetafieldJson(bundle, "JSON")).toBe(false);
   });
 
-  it("includes JSON with reviews array", () => {
+  it("excludes JSON with reviews only", () => {
     const review = JSON.stringify({
       reviews: [{ title: "Great product", body: "Nice" }],
     });
-    expect(canTranslateMetafieldJson(review, "JSON")).toBe(true);
+    expect(canTranslateMetafieldJson(review, "JSON")).toBe(false);
   });
 
-  it("includes RICH_TEXT with type:text in allowed types", () => {
+  it("includes RICH_TEXT with type:text marker", () => {
     const rich = '{"type":"text","value":"Ships in 3 days"}';
     expect(canTranslateMetafieldJson(rich, "RICH_TEXT_FIELD")).toBe(true);
   });
 
-  it("excludes plain JSON without mustContain markers", () => {
+  it("extracts nested rich-text root/paragraph/link but skips url field", () => {
+    const value = JSON.stringify({
+      type: "root",
+      children: [
+        {
+          type: "paragraph",
+          children: [
+            { type: "text", value: "我想要测试下元字段" },
+            {
+              type: "link",
+              url: "https://ciwi.ai",
+              children: [{ type: "text", value: "May the force be with you" }],
+            },
+            { type: "text", value: "潜身在此山" },
+          ],
+        },
+      ],
+    });
+    const slots = extractJsonTextSlots(tryParseJsonContainer(value)!);
+    const texts = slots.map((s) => s.text);
+    expect(texts).toContain("我想要测试下元字段");
+    expect(texts).toContain("May the force be with you");
+    expect(texts).toContain("潜身在此山");
+    expect(texts).not.toContain("https://ciwi.ai");
+  });
+
+  it("does not extract url-only string values", () => {
+    const root = tryParseJsonContainer('{"type":"link","url":"https://ciwi.ai","children":[]}')!;
+    expect(extractJsonTextSlots(root)).toHaveLength(0);
+  });
+
+  it("excludes plain JSON without type:text marker", () => {
     const plain = JSON.stringify({ title: "Hello", body_html: "<p>x</p>" });
     expect(canTranslateMetafieldJson(plain, "JSON")).toBe(false);
   });

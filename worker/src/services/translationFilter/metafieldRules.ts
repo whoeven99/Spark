@@ -4,8 +4,8 @@ import {
   SUSPICIOUS_PATTERN,
   SUSPICIOUS2_PATTERN,
 } from "./constants.js";
+import { isJsonObject } from "./jsonUtils.js";
 import { metaTranslate } from "./judgeTranslateUtils.js";
-import { tryParseJsonContainer } from "../jsonExtractRules.js";
 import { canTranslateMetafieldJson } from "./metafieldJsonJudge.js";
 
 /**
@@ -44,7 +44,7 @@ export function passesMetafieldModuleRules(
     return false;
   }
 
-  if (tryParseJsonContainer(value) !== undefined || type === "JSON") {
+  if (isJsonObject(value) || type === "JSON") {
     return canTranslateMetafieldJson(value, type);
   }
 

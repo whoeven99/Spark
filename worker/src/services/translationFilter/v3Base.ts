@@ -29,24 +29,36 @@ export function passesV3TypeAndHandleRules(
   return true;
 }
 
-/** Aligns with V2: skip when a non-empty translation exists and outdated is not true */
+/**
+ * Non-cover INIT: field needs translation when target locale has no row,
+ * outdated=true, or an empty translation value (Shopify placeholder).
+ */
+export function translationNeedsRefresh(
+  translation: ExistingTranslation | undefined,
+): boolean {
+  if (!translation) {
+    return true;
+  }
+  if (translation.outdated === true) {
+    return true;
+  }
+  if (isBlankValue(translation.value)) {
+    return true;
+  }
+  return false;
+}
+
+/** Non-cover: include field when translationNeedsRefresh; cover always includes. */
 export function passesCoverAndOutdatedRules(
   translations: ExistingTranslation[] | undefined,
   key: string,
   isCover: boolean,
 ): boolean {
-  if (isCover || !translations?.length) {
+  if (isCover) {
     return true;
   }
-  const keyTranslation = translations.find((t) => key != null && key === t.key);
-  if (keyTranslation == null || keyTranslation.outdated === true) {
-    return true;
-  }
-  // Shopify may return a translation key with an empty value — treat as missing.
-  if (isBlankValue(keyTranslation.value)) {
-    return true;
-  }
-  return false;
+  const keyTranslation = translations?.find((t) => key != null && key === t.key);
+  return translationNeedsRefresh(keyTranslation);
 }
 
 export function shouldIncludeFieldV3(

@@ -8,6 +8,7 @@
  * 二者共用同一套 translationFilter，保证 worker 写入值 == TSF 现算值。
  */
 import { shouldIncludeFieldV2 } from "./translationFilter.js";
+import { isBlankValue } from "./translationFilter/v3Base.js";
 
 const TRANSLATABLE_RESOURCES_QUERY = `
 query CountTranslatableResources(
@@ -40,9 +41,10 @@ function hasCurrentTranslation(
   translations: Node["translations"],
   key: string,
 ): boolean {
-  return (translations ?? []).some(
-    (t) => t.key === key && t.outdated !== true && (t.value?.trim() ?? "") !== "",
-  );
+  const row = (translations ?? []).find((t) => t.key === key);
+  if (!row) return false;
+  if (row.outdated === true) return false;
+  return !isBlankValue(row.value);
 }
 
 /**

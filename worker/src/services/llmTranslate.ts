@@ -1537,9 +1537,36 @@ const SKIP_KEYS = new Set(["handle"]);
  *   • en  → English content is the target, skip it (saves ~94% of LLM calls)
  *   • pl  → English content still needs translation to Polish, don't skip
  */
+/** Latin letter runs (2+) — signals English/other Latin content still needing translation. */
+const LATIN_WORD_RE = /[a-zA-Z]{2,}/;
+
+function hasLatinWords(text: string): boolean {
+  return LATIN_WORD_RE.test(text);
+}
+
+function hasTargetScriptChars(text: string, targetLang: string): boolean {
+  switch (targetLang) {
+    case "zh": return /[一-鿿㐀-䶿]/u.test(text);
+    case "ja": return /[ぁ-ゖァ-ヶ一-鿿]/u.test(text);
+    case "ko": return /[가-힣ᄀ-ᇿ]/u.test(text);
+    case "ar": return /[؀-ۿ]/u.test(text);
+    case "ru": case "uk": case "bg": return /[Ѐ-ӿ]/u.test(text);
+    case "th": return /[฀-๿]/u.test(text);
+    case "hi": case "mr": case "ne": return /[ऀ-ॿ]/u.test(text);
+    case "pl": return /[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/u.test(text);
+    case "de": return /[äöüÄÖÜß]/u.test(text);
+    case "fr": return /[àâçèéêëîïôùûüœÀÂÇÈÉÊËÎÏÔÙÛÜŒ]/u.test(text);
+    case "es": case "pt": return /[áéíóúüñÁÉÍÓÚÜÑãõÃÕ]/u.test(text);
+    case "cs": case "sk": return /[áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]/u.test(text);
+    case "hu": return /[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/u.test(text);
+    case "tr": return /[çğışöüÇĞİŞÖÜ]/u.test(text);
+    case "vi": return /[àáâãèéêìíòóôõùúýăđơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/u.test(text);
+    default: return false;
+  }
+}
+
 export function alreadyInTarget(text: string, source: string, target: string): boolean {
   const tl = target.toLowerCase().split(/[-_]/)[0];
-  const sl = source.toLowerCase().split(/[-_]/)[0];
 
   // ── English target ──────────────────────────────────────────────────────────
   // If source is a CJK / non-Latin language and text has no source-script chars,
@@ -1548,9 +1575,13 @@ export function alreadyInTarget(text: string, source: string, target: string): b
     return !containsSourceScript(text, source);
   }
 
+  // Mixed target-script + Latin (e.g. "测试：Home Work: A Memoir…") is NOT done.
+  if (hasLatinWords(text) && hasTargetScriptChars(text, tl)) {
+    return false;
+  }
+
   // ── Non-Latin script targets ────────────────────────────────────────────────
-  // We can only be sure content is "already translated" if it contains the
-  // target script's characteristic characters.
+  // Only skip when the field appears fully in the target script (no Latin runs).
   switch (tl) {
     case "zh": return /[一-鿿㐀-䶿]/u.test(text);
     case "ja": return /[ぁ-ゖァ-ヶ一-鿿]/u.test(text);
@@ -1841,6 +1872,34 @@ function isTranslatableAttrValue(value: string): boolean {
   return true;
 }
 
+/** Placeholder for <br> — kept through LLM, restored after HTML reassembly. */
+const BR_PLACEHOLDER = "⟦BR⟧";
+
+/**
+ * Normalize HTML before text-node extraction:
+ * - `<br>` often splits one sentence into separate translation units (missing tail).
+ * - Inline `<a>` splits sentences and breaks cross-link grammar.
+ */
+function preprocessHtmlForTranslation(html: string): string {
+  let s = html.replace(/<br\s*\/?>/gi, BR_PLACEHOLDER);
+  // Keep link text inline with surrounding sentence; href is dropped (text still translated).
+  s = s.replace(/<a\b[^>]*>([\s\S]*?)<\/a>/gi, "$1");
+  // Inline formatting wrappers split text nodes — unwrap, keep visible text.
+  s = s.replace(/<\/?(?:span|strong|em|b|i|u|mark|small|sub|sup|label|font)(?:\s[^>]*)?>/gi, "");
+  return s;
+}
+
+function restoreBrPlaceholders(html: string): string {
+  return html.replaceAll(BR_PLACEHOLDER, "<br />");
+}
+
+/** Non-empty source text translated to blank is treated as failure (use original). */
+function effectiveTranslation(original: string, translated: string | undefined): string {
+  if (translated === undefined) return original;
+  if (original.trim() !== "" && translated.trim() === "") return original;
+  return translated;
+}
+
 /**
  * Replaces every visible text node AND translatable attribute values (alt, title,
  * aria-label, placeholder) in an HTML string with numeric placeholders.
@@ -1895,6 +1954,136 @@ function restoreHtmlTextNodes(template: string, translations: string[]): string 
   return template.replace(/\x00T(\d+)\x00/g, (_, idx) => translations[Number(idx)] ?? "");
 }
 
+/** Strip HTML tags the model may inject into a text-leaf translation. */
+function sanitizeHtmlTextTranslation(original: string, translated: string): string {
+  if (!translated.includes("<")) return translated;
+  const stripped = translated
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!stripped) return original;
+  return stripped;
+}
+
+const CJK_RE = /[一-鿿㐀-䶿]/u;
+
+function hasCjk(text: string): boolean {
+  return CJK_RE.test(text);
+}
+
+// Block tags merged for inline-split paragraphs — NOT td/th (table cells must stay 1:1).
+const HTML_BLOCK_COALESCE_TAGS = "p|li|h[1-6]|dt|dd|blockquote|figcaption";
+const HTML_NESTED_BLOCK_RE =
+  /<(p|li|h[1-6]|td|th|dt|dd|blockquote|figcaption|div|ul|ol|table|thead|tbody|tr)\b/i;
+const HTML_TABLE_RE = /<table\b[\s\S]*?<\/table>/gi;
+
+function coalesceBlockTextNodesInner(
+  template: string,
+  texts: string[],
+  newTexts: string[],
+): { template: string; texts: string[] } {
+  const blockRe = new RegExp(
+    `<(${HTML_BLOCK_COALESCE_TAGS})\\b[^>]*>([\\s\\S]*?)<\\/\\1>`,
+    "gi",
+  );
+
+  const newTemplate = template.replace(blockRe, (full, tag: string, inner: string) => {
+    if (HTML_NESTED_BLOCK_RE.test(inner)) return full;
+
+    const indices: number[] = [];
+    inner.replace(/\x00T(\d+)\x00/g, (_, idx: string) => {
+      indices.push(Number(idx));
+      return "";
+    });
+    if (indices.length <= 1) return full;
+
+    const merged = indices
+      .map((i) => texts[i])
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const newIdx = newTexts.length;
+    newTexts.push(merged);
+
+    const openTag = full.match(new RegExp(`<${tag}\\b[^>]*>`, "i"))![0];
+    return `${openTag}\x00T${newIdx}\x00</${tag}>`;
+  });
+
+  return { template: newTemplate, texts: newTexts };
+}
+
+/**
+ * Merge multiple inline-split text markers inside one block (<p>, <li>, …) into a
+ * single translation unit so long paragraphs are not partially skipped.
+ */
+function coalesceBlockTextNodes(
+  template: string,
+  texts: string[],
+): { template: string; texts: string[] } {
+  const newTexts = [...texts];
+  if (!HTML_TABLE_RE.test(template)) {
+    return coalesceBlockTextNodesInner(template, texts, newTexts);
+  }
+
+  // Never coalesce inside <table> — preserves td/th/tr structure and inline styles.
+  HTML_TABLE_RE.lastIndex = 0;
+  let out = "";
+  let cursor = 0;
+  let m: RegExpExecArray | null;
+  while ((m = HTML_TABLE_RE.exec(template)) !== null) {
+    if (m.index > cursor) {
+      const seg = coalesceBlockTextNodesInner(template.slice(cursor, m.index), texts, newTexts);
+      out += seg.template;
+    }
+    out += m[0];
+    cursor = m.index + m[0].length;
+  }
+  if (cursor < template.length) {
+    const seg = coalesceBlockTextNodesInner(template.slice(cursor), texts, newTexts);
+    out += seg.template;
+  }
+  return { template: out, texts: newTexts };
+}
+
+/**
+ * Detect when the model echoed the source (common for long HTML nodes batched with
+ * many keys — the model returns the English unchanged but we used to accept it).
+ */
+export function looksLikeUntranslated(
+  source: string,
+  translated: string,
+  target: string,
+): boolean {
+  const tl = target.toLowerCase().split(/[-_]/)[0];
+  if (tl === "en") return false;
+
+  const norm = (s: string) => s.replace(/\s+/g, " ").trim();
+  const src = norm(source);
+  const tr = norm(translated);
+  if (!src || !tr) return false;
+
+  if (src === tr && hasLatinWords(src)) return true;
+
+  if (["zh", "ja", "ko"].includes(tl) && src.length > 40 && hasLatinWords(src)) {
+    const latinChars = src.match(/[a-zA-Z]/g)?.length ?? 0;
+    if (latinChars / src.length > 0.45 && !hasTargetScriptChars(tr, tl)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** CJK leaked into a non-CJK target (e.g. Arabic) when the source had none. */
+export function looksLikeWrongScriptLeak(
+  source: string,
+  translated: string,
+  target: string,
+): boolean {
+  const tl = target.toLowerCase().split(/[-_]/)[0];
+  if (["zh", "ja", "ko"].includes(tl)) return false;
+  return hasCjk(translated) && !hasCjk(source);
+}
+
 /**
  * HTML text nodes, with any oversized node further split into parts (same as plain
  * text). Without this a single huge paragraph/description node is one un-splittable
@@ -1902,11 +2091,27 @@ function restoreHtmlTextNodes(template: string, translations: string[]): string 
  * marker maps to a list of parts; the node's translation is the parts joined back.
  */
 function htmlNodePartsOf(value: string): { template: string; nodeParts: string[][] } {
-  const { template, texts } = extractHtmlTextNodes(value);
+  let { template, texts } = extractHtmlTextNodes(preprocessHtmlForTranslation(value));
+  ({ template, texts } = coalesceBlockTextNodes(template, texts));
   const nodeParts = texts.map((t) =>
     t.length > LONG_TEXT_THRESHOLD ? splitPlainText(t) : [t],
   );
   return { template, nodeParts };
+}
+
+/** @internal Exported for unit tests. */
+export function htmlNodePartsOfForTest(value: string): { template: string; nodeParts: string[][] } {
+  return htmlNodePartsOf(value);
+}
+
+/** @internal Round-trip HTML text-node translation for tests. */
+export function roundtripHtmlForTest(
+  html: string,
+  translateFn: (text: string, index: number) => string,
+): string {
+  const { template, nodeParts } = htmlNodePartsOf(html);
+  const out = nodeParts.map((parts, i) => sanitizeHtmlTextTranslation(parts.join(""), translateFn(parts.join(""), i)));
+  return restoreBrPlaceholders(restoreHtmlTextNodes(template, out));
 }
 
 // ─── JSON rule extraction ─────────────────────────────────────────────────────
@@ -2093,24 +2298,86 @@ async function translateItemsRouted(
   for (const it of items) {
     const raw = collected.get(it.key);
     const placeholders = placeholdersByKey.get(it.key) ?? [];
-    if (raw === undefined) {
+    if (raw === undefined || (it.value.trim() !== "" && raw.trim() === "")) {
       result.set(it.key, { value: it.value, status: "fallback", engine: null, tokens: 0 });
       continue;
     }
     const decoded = decodeQuoteEntities(raw);
-    if (placeholders.length > 0 && !placeholdersIntact(decoded, placeholders)) {
-      console.warn(`[route] placeholder corrupted for key=${it.key}, using original`);
+    const restored = restoreMaskedPlaceholders(decoded, placeholders);
+    if (placeholders.length > 0) {
+      const tokensOk =
+        placeholders.every((t) => restored.includes(t)) ||
+        placeholdersIntact(restored, placeholders);
+      if (!tokensOk) {
+        console.warn(`[route] placeholder corrupted for key=${it.key}, using original`);
+        result.set(it.key, { value: it.value, status: "fallback", engine: null, tokens: 0 });
+        continue;
+      }
+    }
+    const finalValue = sanitizeHtmlTextTranslation(it.value, restored);
+    if (looksLikeUntranslated(it.value, finalValue, target)) {
+      console.warn(`[route] untranslated echo for key=${it.key}, marking fallback`);
+      result.set(it.key, { value: it.value, status: "fallback", engine: null, tokens: 0 });
+      continue;
+    }
+    if (looksLikeWrongScriptLeak(it.value, finalValue, target)) {
+      console.warn(`[route] wrong-script leak for key=${it.key}, marking fallback`);
       result.set(it.key, { value: it.value, status: "fallback", engine: null, tokens: 0 });
       continue;
     }
     result.set(it.key, {
-      value: restorePlaceholders(decoded, placeholders),
+      value: finalValue,
       status: "translated",
       engine: engineByKey.get(it.key) ?? null,
       tokens: llmTokensByKey.get(it.key) ?? 0,
     });
   }
   return { results: result, llmTokens: tokenAccum.value };
+}
+
+/** Re-translate pool units that fell back or echoed source, one item per request. */
+async function retryPoolFallbacks(
+  translated: Map<string, Map<string, RoutedResult>>,
+  pools: Map<string, Map<string, number>>,
+  source: string,
+  target: string,
+  aiModel: string,
+  shopName: string,
+  shouldAbort: () => boolean | Promise<boolean>,
+): Promise<number> {
+  let retried = 0;
+  for (const [sig, occ] of pools) {
+    const order = sig.split(",") as Engine[];
+    const tmap = translated.get(sig)!;
+    const needsRetry: string[] = [];
+    for (const text of occ.keys()) {
+      const r = tmap.get(text);
+      if (!r || r.status === "fallback") {
+        needsRetry.push(text);
+      } else if (looksLikeUntranslated(text, r.value, target)) {
+        needsRetry.push(text);
+      } else if (looksLikeWrongScriptLeak(text, r.value, target)) {
+        needsRetry.push(text);
+      }
+    }
+    for (const text of needsRetry) {
+      if (await shouldAbort()) break;
+      const { results: m } = await translateItemsRouted(
+        [{ key: "0", value: text, digest: "" }],
+        source,
+        target,
+        aiModel,
+        shopName,
+        order,
+      );
+      const r = m.get("0");
+      if (r?.status === "translated" && !looksLikeUntranslated(text, r.value, target) && !looksLikeWrongScriptLeak(text, r.value, target)) {
+        tmap.set(text, r);
+        retried++;
+      }
+    }
+  }
+  return retried;
 }
 
 // Retries for a single (un-splittable) item that fails transiently.
@@ -2162,23 +2429,83 @@ function decodeQuoteEntities(text: string): string {
 const PLACEHOLDER_RE =
   /\{\{[^{}]*\}\}|%\{[^}]+\}|\$\{[^}]+\}|%\d*\$?[sd]|\{\d+\}|\[[A-Za-z_][\w-]*\](?!\()/g;
 
+/** Absolute URLs and root-relative site paths — must survive translation verbatim. */
+const PROTECTED_URL_RE = /https?:\/\/[^\s<>"']+/gi;
+const PROTECTED_PATH_RE = /\/[a-zA-Z0-9_\-./%~]+(?:\?[a-zA-Z0-9_\-./%&=]*)?/g;
+
 // Rare bracket pair the model treats as an opaque token and won't translate.
 const SENT_OPEN = "⟦"; // ⟦
 const SENT_CLOSE = "⟧"; // ⟧
 const SENT_RE = /⟦(\d+)⟧/g;
 
+function pushMaskedToken(_text: string, tokens: string[], match: string): string {
+  const i = tokens.length;
+  tokens.push(match);
+  return `${SENT_OPEN}${i}${SENT_CLOSE}`;
+}
+
+function maskProtectedLiterals(text: string, tokens: string[]): string {
+  let out = text.replace(PROTECTED_URL_RE, (m) => pushMaskedToken(text, tokens, m));
+  out = out.replace(PROTECTED_PATH_RE, (m) => pushMaskedToken(text, tokens, m));
+  return out;
+}
+
 function maskPlaceholders(text: string): { masked: string; tokens: string[] } {
   const tokens: string[] = [];
-  const masked = text.replace(PLACEHOLDER_RE, (m) => {
-    const i = tokens.length;
-    tokens.push(m);
-    return `${SENT_OPEN}${i}${SENT_CLOSE}`;
-  });
+  let masked = maskProtectedLiterals(text, tokens);
+  masked = masked.replace(PLACEHOLDER_RE, (m) => pushMaskedToken(text, tokens, m));
   return { masked, tokens };
+}
+
+/** @internal Exported for unit tests. */
+export function maskPlaceholdersForTest(text: string): { masked: string; tokens: string[] } {
+  return maskPlaceholders(text);
 }
 
 function restorePlaceholders(text: string, tokens: string[]): string {
   return text.replace(SENT_RE, (_m, d: string) => tokens[Number(d)] ?? "");
+}
+
+/** Recover common LLM corruptions of ⟦n⟧ (e.g. S0, [0]) before giving up. */
+function restorePlaceholdersLenient(text: string, tokens: string[]): string {
+  let out = text;
+  for (let i = 0; i < tokens.length; i++) {
+    const sentinel = `${SENT_OPEN}${i}${SENT_CLOSE}`;
+    if (out.includes(sentinel)) continue;
+    const corruptPatterns = [
+      new RegExp(`\\bS${i}\\b`, "g"),
+      new RegExp(`\\[${i}\\]`, "g"),
+      new RegExp(`\\{${i}\\}`, "g"),
+    ];
+    for (const re of corruptPatterns) {
+      if (re.test(out)) {
+        out = out.replace(re, tokens[i] ?? sentinel);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+function restoreMaskedPlaceholders(decoded: string, tokens: string[]): string {
+  if (tokens.length === 0) return decoded;
+  const strict = restorePlaceholders(decoded, tokens);
+  if (tokens.every((t) => strict.includes(t))) return strict;
+  const lenient = restorePlaceholdersLenient(decoded, tokens);
+  if (tokens.every((t) => lenient.includes(t))) return lenient;
+  return strict;
+}
+
+/** Reject translations that leak JSON structure into a plain text leaf. */
+function sanitizeJsonSlotTranslation(original: string, translated: string): string {
+  const t = sanitizeHtmlTextTranslation(original, translated);
+  if (
+    (/"type"\s*:|"children"\s*:|]\s*,\s*"type"/.test(t)) &&
+    !/"type"\s*:/.test(original)
+  ) {
+    return original;
+  }
+  return t;
 }
 
 /** True if every masked token's sentinel survived intact in the model output. */
@@ -2206,7 +2533,11 @@ Rules:
 - Be accurate and natural for e-commerce
 - Translate ALL content into "${target}", no matter what language the input is in (English, Chinese, Spanish, etc.)
 - If a value is already entirely in "${target}", return it unchanged
+- translatedValue MUST be written entirely in "${target}"; never insert Chinese (汉字), Japanese, or Korean characters unless those exact characters already appear in the source value
+- Each value is a plain-text leaf extracted from HTML: never include HTML tags (<td>, <tr>, <table>, etc.) in translatedValue
 - Keep any ⟦number⟧ tokens exactly as they appear; never translate, modify, reorder, or drop them
+- ⟦number⟧ tokens may represent URLs or site paths (e.g. /blogs/news/article) — always preserve them verbatim
+- Keep the literal token ⟦BR⟧ exactly as it appears (line-break placeholder)
 - Output literal characters; do NOT HTML-escape. Use ' and " directly — never &#39; or &quot;
 - Do NOT add or remove leading or trailing whitespace
 - If the value is empty, return it unchanged
@@ -2550,18 +2881,20 @@ function reconstructPlan(
           anyFallback = true;
           return p;
         }
-        return r.value;
+        return effectiveTranslation(p, sanitizeHtmlTextTranslation(p, r.value));
       });
-      return pieces.join("").trim();
+      const joined = pieces.join("");
+      return effectiveTranslation(parts.join(""), joined.trim());
     });
-    const value = restoreHtmlTextNodes(plan.template, out);
+    const value = restoreBrPlaceholders(restoreHtmlTextNodes(plan.template, out));
     const status = anyFallback ? "fallback" : "translated";
     rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
     if (status === "translated") tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
   } else if (plan.kind === "json") {
     let anyFallback = false;
-    const tmap = new Map<string, string>();
-    for (const slot of plan.slotPlans) {
+    const translatedSlots: string[] = [];
+    for (let i = 0; i < plan.slotPlans.length; i++) {
+      const slot = plan.slotPlans[i]!;
       if (slot.htmlPlan) {
         const out = slot.htmlPlan.nodeParts.map((parts) => {
           const pieces = parts.map((p) => {
@@ -2570,22 +2903,26 @@ function reconstructPlan(
               anyFallback = true;
               return p;
             }
-            return r.value;
+            return effectiveTranslation(p, sanitizeHtmlTextTranslation(p, r.value));
           });
-          return pieces.join("").trim();
+          const joined = pieces.join("");
+          return effectiveTranslation(parts.join(""), joined.trim());
         });
-        tmap.set(slot.text, restoreHtmlTextNodes(slot.htmlPlan.template, out));
+        translatedSlots[i] = sanitizeJsonSlotTranslation(
+          slot.text,
+          restoreBrPlaceholders(restoreHtmlTextNodes(slot.htmlPlan.template, out)),
+        );
       } else {
         const r = lookup(plan.order, slot.text);
         if (!r || r.status === "fallback") {
           anyFallback = true;
-          tmap.set(slot.text, slot.text);
+          translatedSlots[i] = slot.text;
         } else {
-          tmap.set(slot.text, r.value.trim());
+          translatedSlots[i] = sanitizeJsonSlotTranslation(slot.text, r.value.trim());
         }
       }
     }
-    applyJsonSlotTranslations(plan.slotPlans, tmap);
+    applyJsonSlotTranslations(plan.slotPlans, translatedSlots);
     const value = JSON.stringify(plan.root);
     const status = anyFallback ? "fallback" : "translated";
     rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
@@ -2603,11 +2940,12 @@ function reconstructPlan(
               anyFallback = true;
               return p;
             }
-            return r.value;
+            return effectiveTranslation(p, sanitizeHtmlTextTranslation(p, r.value));
           });
-          return pieces.join("").trim();
+          const joined = pieces.join("");
+          return effectiveTranslation(parts.join(""), joined.trim());
         });
-        result[el.index] = restoreHtmlTextNodes(el.htmlPlan.template, out);
+        result[el.index] = restoreBrPlaceholders(restoreHtmlTextNodes(el.htmlPlan.template, out));
       } else {
         const r = lookup(plan.order, el.text);
         if (!r || r.status === "fallback") {
@@ -2924,6 +3262,20 @@ export async function translateResources(
       const lookup: LookupFn = (planOrder, text) => translated.get(planOrder.join(","))?.get(text);
       await finishReadyResources(lookup);
     }));
+  }
+
+  const retried = await retryPoolFallbacks(
+    translated,
+    pools,
+    source,
+    target,
+    aiModel,
+    shopName,
+    abortRequested,
+  );
+  if (retried > 0) {
+    console.log(`[llm] individually retried ${retried} fallback/untranslated text unit(s)`);
+    reconstructedResources.clear();
   }
 
   const lookup: LookupFn = (planOrder, text) => translated.get(planOrder.join(","))?.get(text);

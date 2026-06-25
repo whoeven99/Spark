@@ -20,7 +20,7 @@ import {
 } from "./v3Base.js";
 
 /**
- * INIT field filter aligned with TranslateV2Service.needTranslate (subset: no HTML/JSON content checks).
+ * INIT field filter aligned with TranslateV2Service.needTranslate.
  */
 export function shouldIncludeFieldV2(
   content: TranslatableContentInput,
@@ -36,10 +36,6 @@ export function shouldIncludeFieldV2(
     return false;
   }
 
-  // PRODUCT_OPTION / PRODUCT_OPTION_VALUE: skip Shopify's auto-generated system
-  // defaults ("Default Title", "Title", "Default"). These are internal Shopify
-  // placeholders for single-variant products and must never be translated —
-  // writing them back in a different locale breaks Shopify's variant system.
   if (
     (module === MODULE_PRODUCT_OPTION || module === MODULE_PRODUCT_OPTION_VALUE) &&
     SHOPIFY_OPTION_SYSTEM_DEFAULTS.has(value.trim())
