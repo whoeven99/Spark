@@ -11,7 +11,7 @@ function json(body: unknown, status: number) {
   });
 }
 
-/** App Proxy: POST /proxy/bracelet/prepare */
+/** App Proxy: POST /a/ciwi-spark/prepare */
 export const action = async ({ request }: ActionFunctionArgs) =>
   braceletProxyPrepareAction(request);
 

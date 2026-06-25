@@ -29,9 +29,9 @@ uri = "/webhooks/app/scopes_update"
 scopes = "read_orders,write_products,read_locales,read_translations,write_translations,read_content,write_pixels,read_customer_events,read_pixels,read_fulfillments,read_inventory,read_locations,read_products,write_app_proxy"
 
 [app_proxy]
-url = "/proxy/bracelet"
-prefix = "apps"
-subpath = "spark-bracelet"
+url = "/a/ciwi-spark"
+prefix = "a"
+subpath = "ciwi-spark"
 
 [auth]
 redirect_urls = [
