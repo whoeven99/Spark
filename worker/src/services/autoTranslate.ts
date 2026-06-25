@@ -17,6 +17,10 @@ import { setAutoScanLastAt } from "./redisV4.js";
 const AUTO_MODULES = [...AUTO_TRANSLATE_V4_MODULES];
 
 function autoAiModel(): string {
+  // 配了 Gpt_ApiKey 时自动翻译默认走 GPT，否则回退 DeepSeek。
+  if (process.env.Gpt_ApiKey?.trim()) {
+    return process.env.Gpt_Model?.trim() || "gpt-4.1-nano";
+  }
   return process.env.DEEPSEEK_MODEL?.trim() || "deepseek-v4-flash";
 }
 

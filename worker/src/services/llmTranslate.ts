@@ -485,6 +485,114 @@ async function invokeChatCompletion(
   );
 }
 
+// ── GPT / Azure OpenAI 引擎 ───────────────────────────────────────────────────
+// 对齐 Java ChatGptIntegration：Azure OpenAI（api-key 头 + 部署名在 URL），默认 gpt-4.1-nano，
+// temperature 0.1。自成一路（不进 DeepSeek 池），按 job.aiModel 是否 gpt-* 选用。
+const GPT_ENDPOINT = (
+  process.env.Gpt_Endpoint?.trim() || "https://eastus.api.cognitive.microsoft.com"
+).replace(/\/+$/, "");
+const GPT_API_VERSION = process.env.Gpt_ApiVersion?.trim() || "2024-10-21";
+const GPT_DEFAULT_MODEL = process.env.Gpt_Model?.trim() || "gpt-4.1-nano";
+const GPT_CONCURRENCY = Math.max(1, Number(process.env.GPT_CONCURRENCY) || 8);
+
+function gptApiKey(): string | null {
+  return process.env.Gpt_ApiKey?.trim() || null;
+}
+export function gptConfigured(): boolean {
+  return Boolean(gptApiKey());
+}
+/** 该 aiModel 是否走 GPT（gpt-* 前缀）且已配置 key。 */
+export function isGptModel(aiModel: string | undefined | null): boolean {
+  return gptConfigured() && /^gpt[-.]/i.test((aiModel ?? "").trim());
+}
+/** 规范化 gpt 模型名（空/非法回退默认 nano）。 */
+function resolveGptModel(aiModel: string | undefined | null): string {
+  const m = (aiModel ?? "").trim();
+  return /^gpt[-.]/i.test(m) ? m : GPT_DEFAULT_MODEL;
+}
+
+// 简易并发闸（Azure OpenAI 按 TPM/RPM 限流，保守并发 + 429 退避足矣）。
+let _gptInFlight = 0;
+const _gptWaiters: Array<() => void> = [];
+async function gptAcquire(): Promise<void> {
+  if (_gptInFlight < GPT_CONCURRENCY) {
+    _gptInFlight++;
+    return;
+  }
+  await new Promise<void>((resolve) => _gptWaiters.push(resolve));
+  _gptInFlight++;
+}
+function gptRelease(): void {
+  _gptInFlight--;
+  const next = _gptWaiters.shift();
+  if (next) next();
+}
+
+/** 非流式调用 Azure OpenAI chat completions，带 429 重试。返回原始 content + token。 */
+async function callAzureOpenAIChat(
+  model: string,
+  messages: ChatMessage[],
+  itemCount: number,
+): Promise<{ raw: string; tokens: number }> {
+  const key = gptApiKey();
+  if (!key) throw new Error("Gpt_ApiKey 未配置");
+  const url = `${GPT_ENDPOINT}/openai/deployments/${encodeURIComponent(model)}/chat/completions?api-version=${GPT_API_VERSION}`;
+
+  await gptAcquire();
+  try {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(
+        () => controller.abort(new LlmTimeoutError("hard")),
+        llmTimeoutMsForBatch(itemCount),
+      );
+      try {
+        const resp = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "api-key": key },
+          body: JSON.stringify({
+            messages,
+            temperature: 0.1,
+            frequency_penalty: 0,
+            presence_penalty: 0,
+            response_format: { type: "json_object" },
+          }),
+          signal: controller.signal,
+        });
+        if (resp.status === 429) {
+          if (attempt < 2) {
+            await new Promise((r) => setTimeout(r, retryAfterMsFromResponse(resp, 5)));
+            continue;
+          }
+          throw new LlmRateLimitError(resp);
+        }
+        if (!resp.ok) throw new Error(`LLM HTTP ${resp.status}: ${await resp.text()}`);
+        const j = (await resp.json()) as {
+          choices?: Array<{ message?: { content?: string | null } }>;
+          usage?: { total_tokens?: number };
+        };
+        return {
+          raw: j.choices?.[0]?.message?.content || "{}",
+          tokens: j.usage?.total_tokens ?? 0,
+        };
+      } catch (e) {
+        if (controller.signal.aborted && controller.signal.reason instanceof LlmTimeoutError) {
+          throw controller.signal.reason;
+        }
+        if (attempt < 2 && !(e instanceof LlmRateLimitError)) {
+          // 短暂网络抖动重试一次；解析/超时类交给上层 gatherTranslations 拆分重试。
+        }
+        throw e;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    throw new Error("GPT retries exhausted");
+  } finally {
+    gptRelease();
+  }
+}
+
 function retryAfterMsFromResponse(response: Response, fallbackSec = 10): number {
   const retryAfterSec = Number(response.headers.get("retry-after") ?? String(fallbackSec));
   return Math.max(retryAfterSec * 1_000, 10_000);
@@ -1382,6 +1490,7 @@ function engineModel(engine: Engine, aiModel: string): string {
 export function resolveEngine(aiModel: string): { provider: string; model: string } {
   const forced = forcedEngine(aiModel);
   if (forced === "google") return { provider: "google", model: "google-translate" };
+  if (isGptModel(aiModel)) return { provider: "azure-openai", model: resolveGptModel(aiModel) };
   const model = resolveModel(aiModel);
   const parts: string[] = [];
   if (googleConfigured()) parts.push("google");
@@ -2122,6 +2231,26 @@ Return ONLY a JSON object {"translations":[{"key":"<key>","translatedValue":"<te
  * On 429 the slot is throttled, the semaphore cap drops, and
  * gatherTranslations' retry loop picks a fresh slot automatically.
  */
+/** 解析 LLM 返回的 {translations:[{key,translatedValue}]} → 原 key → 译文 map。 */
+function parseTranslationResult(
+  raw: string,
+  tokens: number,
+  idToKey: Map<string, string>,
+): { map: Map<string, string>; tokens: number } {
+  const obj = JSON.parse(extractJsonObject(raw)) as { translations?: unknown };
+  const parsed = Array.isArray(obj.translations)
+    ? (obj.translations as Array<{ key?: unknown; translatedValue?: unknown }>)
+    : [];
+  const map = new Map<string, string>();
+  for (const r of parsed) {
+    if (typeof r?.key === "string" && typeof r?.translatedValue === "string") {
+      const origKey = idToKey.get(r.key);
+      if (origKey !== undefined) map.set(origKey, r.translatedValue);
+    }
+  }
+  return { map, tokens };
+}
+
 async function callLLMOnce(
   items: TranslateItem[],
   aiModel: string,
@@ -2136,15 +2265,29 @@ async function callLLMOnce(
   const quotaGate = shopName ? getShopQuotaGate(shopName) : null;
   if (quotaGate) await quotaGate.acquire();
 
-  const acq   = await getPool().acquire();
-  // 任务自带的 aiModel 优先（已知 DeepSeek 模型时），否则回退 env。
-  const model = resolveModel(aiModel) || acq.model;
-  const t0    = Date.now();
-
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
     { role: "user", content: JSON.stringify(payload) },
   ];
+
+  // GPT/Azure 引擎：aiModel 为 gpt-* 且配了 Gpt_ApiKey 时走这条，自成一路不进 DeepSeek 池。
+  if (isGptModel(aiModel)) {
+    try {
+      const { raw, tokens } = await callAzureOpenAIChat(
+        resolveGptModel(aiModel),
+        messages,
+        items.length,
+      );
+      return parseTranslationResult(raw, tokens, idToKey);
+    } finally {
+      if (quotaGate) quotaGate.release();
+    }
+  }
+
+  const acq   = await getPool().acquire();
+  // 任务自带的 aiModel 优先（已知 DeepSeek 模型时），否则回退 env。
+  const model = resolveModel(aiModel) || acq.model;
+  const t0    = Date.now();
 
   try {
     const deepseekUserId =
