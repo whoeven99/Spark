@@ -162,6 +162,16 @@ export function ensureWorkerEnv(): void {
     ["TSF_TURSO_AUTH_TOKEN", process.env.TSF_TURSO_AUTH_TOKEN],
   ]);
 
+  const tencentKeyId = process.env.TENCENT_CLOUD_KEY_ID?.trim();
+  const tencentKey = process.env.TENCENT_CLOUD_KEY?.trim();
+  logEnvCheck("Tencent SES (翻译邮件)", Boolean(tencentKeyId && tencentKey), [
+    ["TENCENT_CLOUD_KEY_ID", tencentKeyId],
+    ["TENCENT_CLOUD_KEY", tencentKey],
+    ["TENCENT_SES_REGION", process.env.TENCENT_SES_REGION, "ap-hongkong"],
+    ["TENCENT_FROM_EMAIL", process.env.TENCENT_FROM_EMAIL, "support@msg.ciwi.ai"],
+    ["EMAIL_WORKER_INTERVAL_MS", process.env.EMAIL_WORKER_INTERVAL_MS, "30000"],
+  ]);
+
   logEnvCheck("LLM (DeepSeek)", Boolean(process.env.DEEPSEEK_API_KEY?.trim()), [
     ["DEEPSEEK_API_KEY", process.env.DEEPSEEK_API_KEY],
     ["DEEPSEEK_BASE_URL", process.env.DEEPSEEK_BASE_URL, "https://api.deepseek.com"],

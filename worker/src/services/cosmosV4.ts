@@ -76,7 +76,7 @@ export type TranslationV4Job = {
   limitPerType: number;
   isCover: boolean;
   isHandle: boolean;
-  /** 任务来源标识（如 "Ciwi-Translator-Task"）。旧任务可能缺省。 */
+  /** 任务来源标识（如 "Ciwi-Translator-Task"，"TsFrontend"，"TsFrontend-Auto"）。旧任务可能缺省。 */
   taskSource?: string | null;
   status: TranslationV4Status;
   claimedBy: string | null;
@@ -93,6 +93,12 @@ export type TranslationV4Job = {
    * （"pause"→PAUSED 可续译，"cancel"→CANCELLED）。普通写回为 null/缺省。
    */
   pauseAfterWriteback?: "pause" | "cancel" | null;
+  /** @deprecated 发信时由 emailWorker 通过 GraphQL 实时查询，创建任务无需写入。 */
+  shopEmail?: string | null;
+  /** 任务类型：手动触发或自动扫描创建。影响通知邮件模板选择。 */
+  taskType?: "auto" | "manual" | null;
+  /** 完成通知邮件是否已发送（emailWorker 写入，防重发）。 */
+  emailSent?: boolean | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -345,6 +351,7 @@ export async function updateJob(
       | "engineUsage"
       | "stageTimings"
       | "pauseAfterWriteback"
+      | "emailSent"
     >
   >,
 ): Promise<void> {
@@ -544,6 +551,63 @@ export async function releaseJobsClaimedBySuffix(claimSuffix: string): Promise<n
     }
   }
   return released;
+}
+
+/**
+ * 找出所有需要发送完成通知邮件的任务（跨分区查询）。
+ * 条件：status 为 COMPLETED 或 PAUSED，且 taskType 已设置，且 emailSent 未置为 true。
+ * 收件人邮箱由 emailWorker 发信时通过 Shopify GraphQL 实时查询。
+ */
+export async function findJobsNeedingEmail(limit = 20): Promise<TranslationV4Job[]> {
+  try {
+    const { resources } = await getContainer()
+      .items.query<TranslationV4Job>({
+        query: `
+          SELECT * FROM c
+          WHERE (c.status = 'COMPLETED' OR c.status = 'PAUSED')
+            AND IS_DEFINED(c.taskType) AND NOT IS_NULL(c.taskType)
+            AND (NOT IS_DEFINED(c.emailSent) OR c.emailSent != true)
+          ORDER BY c.updatedAt ASC
+          OFFSET 0 LIMIT @limit
+        `,
+        parameters: [{ name: "@limit", value: limit }],
+      })
+      .fetchAll();
+    return resources;
+  } catch {
+    return [];
+  }
+}
+
+/** 检查某店是否仍有进行中的自动翻译任务（用于判断自动任务是否全部完成再汇总发邮件）。 */
+export async function hasActiveAutoJobsForShop(shopName: string): Promise<boolean> {
+  const activeStatuses: TranslationV4Status[] = [
+    "CREATED", "INIT_QUEUED", "INITIALIZING", "INIT_DONE",
+    "TRANSLATE_QUEUED", "TRANSLATING", "TRANSLATE_DONE",
+    "WRITEBACK_QUEUED", "WRITING_BACK", "VERIFY_QUEUED", "VERIFYING",
+  ];
+  try {
+    const { resources } = await getContainer()
+      .items.query<number>(
+        {
+          query: `
+            SELECT VALUE COUNT(1) FROM c
+            WHERE c.shopName = @shopName
+              AND c.taskType = 'auto'
+              AND ARRAY_CONTAINS(@statuses, c.status)
+          `,
+          parameters: [
+            { name: "@shopName", value: shopName },
+            { name: "@statuses", value: activeStatuses },
+          ],
+        },
+        { partitionKey: shopName },
+      )
+      .fetchAll();
+    return (resources[0] ?? 0) > 0;
+  } catch {
+    return false;
+  }
 }
 
 export async function resetStaleJobs(

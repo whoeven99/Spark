@@ -106,6 +106,8 @@ export type TranslationV4Job = {
   limitPerType: number;
   isCover: boolean;
   isHandle: boolean;
+  /** 任务来源标识（如 "Ciwi-Translator-Task"，"TsFrontend"，"TsFrontend-Auto"）。 */
+  taskSource?: string | null;
   status: TranslationV4Status;
   claimedBy: string | null;
   claimedAt: string | null;
@@ -118,6 +120,12 @@ export type TranslationV4Job = {
   errorStage: string | null;
   /** 完成后，预估自校准样本已回写的时间戳（幂等抢占标记，null=未回写）。 */
   estimationRecordedAt?: string | null;
+  /** @deprecated 发信时由 worker emailWorker 通过 Shopify GraphQL 实时查询。 */
+  shopEmail?: string | null;
+  /** 任务类型：手动触发或自动扫描创建。影响通知邮件模板选择。 */
+  taskType?: "auto" | "manual" | null;
+  /** 完成通知邮件是否已发送（worker emailWorker 写入，防重发）。 */
+  emailSent?: boolean | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
