@@ -39,8 +39,46 @@ const MODULE_CONCURRENCY = Math.max(1, Number(process.env.INIT_MODULE_CONCURRENC
 
 const INIT_MAX_REQUEUE = Math.max(0, Number(process.env.INIT_MAX_REQUEUE) || 5);
 
-function isRecoverableInitError(message: string): boolean {
-  return /THROTTLED|429|rate limit/i.test(message);
+function collectInitErrorStrings(error: unknown): string[] {
+  const strings: string[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current != null && !seen.has(current)) {
+    seen.add(current);
+    if (current instanceof Error) {
+      strings.push(current.message);
+      const code = (current as NodeJS.ErrnoException).code;
+      if (typeof code === "string") strings.push(code);
+      if (current instanceof AggregateError) {
+        for (const inner of current.errors) {
+          strings.push(...collectInitErrorStrings(inner));
+        }
+      }
+      current = current.cause;
+    } else if (typeof current === "string") {
+      strings.push(current);
+      break;
+    } else {
+      strings.push(String(current));
+      break;
+    }
+  }
+  return strings;
+}
+
+function isRecoverableInitError(error: unknown): boolean {
+  const text = collectInitErrorStrings(error).join("\n");
+  return (
+    /THROTTLED|429|rate limit/i.test(text) ||
+    /ETIMEDOUT|ECONNRESET/i.test(text)
+  );
+}
+
+function initRequeueLabel(error: unknown): string {
+  const text = collectInitErrorStrings(error).join("\n");
+  if (/THROTTLED|429|rate limit/i.test(text)) return "限流";
+  if (/ETIMEDOUT|ECONNRESET/i.test(text)) return "网络超时";
+  return "暂时失败";
 }
 
 async function completeEmptyInitJob(
@@ -103,7 +141,7 @@ async function completeEmptyInitJob(
   });
 
   console.log(
-    `[init] done job=${jobId} totalItems=0 — 无待翻译增量（可能已全部译完或非覆盖模式无 outdated 字段）→ COMPLETED`,
+    `[init] done job=${jobId} totalItems=0 — 无待翻译增量（可能已全部译完或非覆盖模式无 outdated/空译文 字段）→ COMPLETED`,
   );
 }
 
@@ -313,19 +351,20 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e);
     const initRequeues = job.metrics?.initRequeues ?? 0;
-    if (isRecoverableInitError(errorMessage) && initRequeues < INIT_MAX_REQUEUE) {
+    if (isRecoverableInitError(e) && initRequeues < INIT_MAX_REQUEUE) {
       const next = initRequeues + 1;
+      const reason = initRequeueLabel(e);
       await updateJob(shopName, jobId, {
         status: "INIT_QUEUED",
         claimedBy: null,
         errorStage: null,
-        errorMessage: `INIT 限流，已自动重试 (${next}/${INIT_MAX_REQUEUE})`,
+        errorMessage: `INIT ${reason}，已自动重试 (${next}/${INIT_MAX_REQUEUE})`,
         metrics: { ...job.metrics, initRequeues: next },
         stageTimings: withStageTiming(job.stageTimings, "INIT", stageStartedAt, new Date().toISOString()),
       });
       const delayMs = Math.min(60_000, 3_000 * next);
       console.warn(
-        `[init] throttled job=${jobId} requeue in ${delayMs}ms (${next}/${INIT_MAX_REQUEUE})`,
+        `[init] recoverable (${reason}) job=${jobId} requeue in ${delayMs}ms (${next}/${INIT_MAX_REQUEUE})`,
       );
       setTimeout(() => {
         void pushHint("init", { taskId: jobId, shopName }).then(() =>

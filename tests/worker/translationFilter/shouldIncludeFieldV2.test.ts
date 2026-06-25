@@ -15,7 +15,7 @@ describe("shouldIncludeFieldV2", () => {
     ).toBe(false);
   });
 
-  it("excludes METAFIELD bundle JSON without extractable copy", () => {
+  it("excludes METAFIELD bundle JSON without RICH_TEXT type:text marker", () => {
     const bundle =
       '[{"id":"53476","n":"Bundle-un","ot":5,"qt":2,"dt":0,"dv":0.0,"pr":1}]';
     expect(
@@ -27,7 +27,7 @@ describe("shouldIncludeFieldV2", () => {
     ).toBe(false);
   });
 
-  it("includes METAFIELD JSON with reviews (prod mustContain)", () => {
+  it("excludes METAFIELD JSON with reviews only (no RICH_TEXT type:text)", () => {
     const review = JSON.stringify({ reviews: [{ title: "Great", body: "Nice" }] });
     expect(
       shouldIncludeFieldV2(
@@ -35,7 +35,7 @@ describe("shouldIncludeFieldV2", () => {
         [],
         { ...ctx, module: "METAFIELD" },
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("allows METAFIELD RICH_TEXT JSON with type:text marker", () => {
@@ -86,9 +86,20 @@ describe("shouldIncludeFieldV2", () => {
     expect(shouldIncludeFieldV2(base, [{ key: "title", outdated: true }], ctx)).toBe(true);
   });
 
-  it("includes when translation key exists but value is empty", () => {
-    expect(shouldIncludeFieldV2(base, [{ key: "title", outdated: false, value: "" }], ctx)).toBe(true);
-    expect(shouldIncludeFieldV2(base, [{ key: "title", outdated: false }], ctx)).toBe(true);
+  it("includes when translation outdated=true even if value empty", () => {
+    expect(
+      shouldIncludeFieldV2(base, [{ key: "title", outdated: true, value: "" }], ctx),
+    ).toBe(true);
+  });
+
+  it("includes when translation outdated=true without value field", () => {
+    expect(shouldIncludeFieldV2(base, [{ key: "title", outdated: true }], ctx)).toBe(true);
+  });
+
+  it("includes when translation value is whitespace only", () => {
+    expect(
+      shouldIncludeFieldV2(base, [{ key: "title", outdated: false, value: "   " }], ctx),
+    ).toBe(true);
   });
 
   it("includes URI handle only when isHandle", () => {
@@ -103,9 +114,21 @@ describe("shouldIncludeFieldV2", () => {
       value: '<p style="font-size:16px">Long article body with CSS.</p>',
       type: "HTML",
     };
-    expect(shouldIncludeFieldV2(body, [{ key: "title", outdated: false, value: "PL title" }], {
-      ...ctx,
-      module: "ARTICLE",
-    })).toBe(true);
+    expect(
+      shouldIncludeFieldV2(body, [{ key: "title", outdated: false, value: "PL title" }], {
+        ...ctx,
+        module: "ARTICLE",
+      }),
+    ).toBe(true);
+  });
+
+  it("excludes theme module JSON object values", () => {
+    expect(
+      shouldIncludeFieldV2(
+        { key: "section:settings", value: '{"foo":"bar"}', type: "SINGLE_LINE_TEXT_FIELD" },
+        [],
+        { ...ctx, module: "ONLINE_STORE_THEME_JSON_TEMPLATE" },
+      ),
+    ).toBe(false);
   });
 });
