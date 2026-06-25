@@ -27,10 +27,30 @@ import {
   sendManualTranslationSuccessEmail,
   sendAutoTranslationSuccessEmail,
   sendTranslationPartialEmail,
+  maskEmail,
   type TranslationJobSummary,
 } from "../services/workerEmail.js";
 
 const LOG = "[emailWorker]";
+
+function logDetail(phase: string, payload: Record<string, unknown>): void {
+  console.info(`${LOG} ${phase} ${JSON.stringify(payload)}`);
+}
+
+function describeJob(job: TranslationV4Job): Record<string, unknown> {
+  return {
+    id: job.id,
+    shop: job.shopName,
+    taskType: job.taskType,
+    status: job.status,
+    target: job.target,
+    emailSent: job.emailSent ?? false,
+    usedTokens: job.metrics.usedTokens ?? 0,
+    translateDone: job.metrics.translateDone,
+    translateTotal: job.metrics.translateTotal,
+    preferStoredToken: prefersStoredToken(job),
+  };
+}
 
 /** 从任务的 stageTimings / createdAt / updatedAt 估算完成耗时（分钟）。 */
 function calcElapsedMinutes(job: TranslationV4Job): number {
@@ -61,16 +81,30 @@ function toJobSummary(job: TranslationV4Job): TranslationJobSummary {
 
 /** 发信前从 Shopify GraphQL 拉取最新店铺邮箱。 */
 async function resolveRecipientEmail(job: TranslationV4Job): Promise<string | null> {
-  return fetchShopEmail(job.shopName, {
+  logDetail("resolve-recipient-start", {
+    jobId: job.id,
+    shop: job.shopName,
+    preferStoredToken: prefersStoredToken(job),
+    hasLegacyToken: Boolean(job.shopifyAccessToken?.trim()),
+  });
+  const email = await fetchShopEmail(job.shopName, {
     legacyToken: job.shopifyAccessToken,
     preferLegacyToken: prefersStoredToken(job),
   });
+  logDetail("resolve-recipient-done", {
+    jobId: job.id,
+    shop: job.shopName,
+    email: email ? maskEmail(email) : null,
+    found: Boolean(email),
+  });
+  return email;
 }
 
 /** 标记 emailSent=true，使用 etag 防止并发写冲突，失败静默（不影响主流程）。 */
 async function markEmailSent(job: TranslationV4Job): Promise<void> {
   try {
     await updateJob(job.shopName, job.id, { emailSent: true });
+    logDetail("mark-email-sent-ok", { jobId: job.id, shop: job.shopName });
   } catch (e) {
     console.warn(`${LOG} markEmailSent failed job=${job.id}`, e);
   }
@@ -78,42 +112,100 @@ async function markEmailSent(job: TranslationV4Job): Promise<void> {
 
 /** 处理单个手动翻译任务的邮件通知。 */
 async function handleManualJob(job: TranslationV4Job): Promise<void> {
+  logDetail("handle-manual-start", describeJob(job));
+
   const to = await resolveRecipientEmail(job);
   if (!to) {
-    console.warn(`${LOG} no shop email from GraphQL, skip manual job=${job.id} shop=${job.shopName}`);
+    logDetail("handle-manual-skipped", {
+      reason: "no_shop_email",
+      jobId: job.id,
+      shop: job.shopName,
+    });
     return;
   }
   const summary = toJobSummary(job);
+  logDetail("handle-manual-summary", {
+    jobId: job.id,
+    shop: job.shopName,
+    to: maskEmail(to),
+    ...summary,
+  });
 
   let sent = false;
+  let templateKind: "manual_success" | "manual_partial" | "unsupported_status" =
+    "unsupported_status";
   if (job.status === "COMPLETED") {
+    templateKind = "manual_success";
     sent = await sendManualTranslationSuccessEmail(job.shopName, to, summary);
   } else if (job.status === "PAUSED") {
+    templateKind = "manual_partial";
     sent = await sendTranslationPartialEmail(job.shopName, to, "manual translation", [summary]);
+  } else {
+    logDetail("handle-manual-skipped", {
+      reason: "unsupported_status",
+      jobId: job.id,
+      status: job.status,
+    });
+    return;
   }
+
+  logDetail("handle-manual-send-result", {
+    jobId: job.id,
+    shop: job.shopName,
+    templateKind,
+    sent,
+    to: maskEmail(to),
+  });
 
   if (sent) {
     await markEmailSent(job);
-    console.info(`${LOG} manual email sent job=${job.id} shop=${job.shopName} status=${job.status}`);
+    logDetail("handle-manual-done", {
+      jobId: job.id,
+      shop: job.shopName,
+      status: job.status,
+      to: maskEmail(to),
+    });
   }
 }
 
 /** 处理同一店铺的一批自动翻译任务的邮件通知（汇总发送）。 */
 async function handleAutoJobGroup(shopName: string, jobs: TranslationV4Job[]): Promise<void> {
+  logDetail("handle-auto-start", {
+    shop: shopName,
+    jobCount: jobs.length,
+    jobs: jobs.map(describeJob),
+  });
+
   // 等所有进行中的自动任务结束后再发（对齐 Java 按店汇总逻辑）
   const hasActive = await hasActiveAutoJobsForShop(shopName);
   if (hasActive) {
-    console.info(`${LOG} auto jobs still active, skip email for shop=${shopName}`);
+    logDetail("handle-auto-skipped", {
+      reason: "active_auto_jobs_still_running",
+      shop: shopName,
+      pendingJobIds: jobs.map((j) => j.id),
+    });
     return;
   }
 
   const to = await resolveRecipientEmail(jobs[0]);
   if (!to) {
-    console.warn(`${LOG} no shop email from GraphQL, skip auto shop=${shopName}`);
+    logDetail("handle-auto-skipped", {
+      reason: "no_shop_email",
+      shop: shopName,
+      jobIds: jobs.map((j) => j.id),
+    });
     return;
   }
   const completedJobs = jobs.filter((j) => j.status === "COMPLETED");
   const pausedJobs = jobs.filter((j) => j.status === "PAUSED");
+  logDetail("handle-auto-split", {
+    shop: shopName,
+    to: maskEmail(to),
+    completedCount: completedJobs.length,
+    pausedCount: pausedJobs.length,
+    completedTargets: completedJobs.map((j) => j.target),
+    pausedTargets: pausedJobs.map((j) => j.target),
+  });
 
   // 成功任务：发汇总成功邮件（140352）
   if (completedJobs.length > 0) {
@@ -122,13 +214,22 @@ async function handleAutoJobGroup(shopName: string, jobs: TranslationV4Job[]): P
       to,
       completedJobs.map(toJobSummary),
     );
+    logDetail("handle-auto-success-send-result", {
+      shop: shopName,
+      to: maskEmail(to),
+      sent,
+      jobIds: completedJobs.map((j) => j.id),
+      targets: completedJobs.map((j) => j.target),
+    });
     if (sent) {
       for (const job of completedJobs) {
         await markEmailSent(job);
       }
-      console.info(
-        `${LOG} auto success email sent shop=${shopName} langs=${completedJobs.map((j) => j.target).join(",")}`,
-      );
+      logDetail("handle-auto-success-done", {
+        shop: shopName,
+        langs: completedJobs.map((j) => j.target),
+        markedJobIds: completedJobs.map((j) => j.id),
+      });
     }
   }
 
@@ -140,22 +241,38 @@ async function handleAutoJobGroup(shopName: string, jobs: TranslationV4Job[]): P
       "auto translation",
       pausedJobs.map(toJobSummary),
     );
+    logDetail("handle-auto-partial-send-result", {
+      shop: shopName,
+      to: maskEmail(to),
+      sent,
+      jobIds: pausedJobs.map((j) => j.id),
+      targets: pausedJobs.map((j) => j.target),
+    });
     if (sent) {
       for (const job of pausedJobs) {
         await markEmailSent(job);
       }
-      console.info(
-        `${LOG} auto partial email sent shop=${shopName} langs=${pausedJobs.map((j) => j.target).join(",")}`,
-      );
+      logDetail("handle-auto-partial-done", {
+        shop: shopName,
+        langs: pausedJobs.map((j) => j.target),
+        markedJobIds: pausedJobs.map((j) => j.id),
+      });
     }
   }
 }
 
 export async function runEmailWorker(): Promise<void> {
+  const startedAt = Date.now();
   const jobs = await findJobsNeedingEmail(30);
-  if (jobs.length === 0) return;
+  if (jobs.length === 0) {
+    logDetail("run-idle", { elapsedMs: Date.now() - startedAt });
+    return;
+  }
 
-  console.info(`${LOG} found ${jobs.length} job(s) needing email`);
+  logDetail("run-start", {
+    jobCount: jobs.length,
+    jobs: jobs.map(describeJob),
+  });
 
   const manualJobs: TranslationV4Job[] = [];
   const autoByShop = new Map<string, TranslationV4Job[]>();
@@ -170,17 +287,39 @@ export async function runEmailWorker(): Promise<void> {
     }
   }
 
+  logDetail("run-grouped", {
+    manualCount: manualJobs.length,
+    autoShopCount: autoByShop.size,
+    autoShops: [...autoByShop.keys()],
+  });
+
   // 手动任务逐个处理
   for (const job of manualJobs) {
-    await handleManualJob(job).catch((e) =>
-      console.error(`${LOG} handleManualJob error job=${job.id}`, e),
-    );
+    await handleManualJob(job).catch((e) => {
+      logDetail("handle-manual-error", {
+        jobId: job.id,
+        shop: job.shopName,
+        errorMessage: e instanceof Error ? e.message : String(e),
+      });
+      console.error(`${LOG} handleManualJob error job=${job.id}`, e);
+    });
   }
 
   // 自动任务按店汇总处理
   for (const [shopName, shopJobs] of autoByShop) {
-    await handleAutoJobGroup(shopName, shopJobs).catch((e) =>
-      console.error(`${LOG} handleAutoJobGroup error shop=${shopName}`, e),
-    );
+    await handleAutoJobGroup(shopName, shopJobs).catch((e) => {
+      logDetail("handle-auto-error", {
+        shop: shopName,
+        jobIds: shopJobs.map((j) => j.id),
+        errorMessage: e instanceof Error ? e.message : String(e),
+      });
+      console.error(`${LOG} handleAutoJobGroup error shop=${shopName}`, e);
+    });
   }
+
+  logDetail("run-done", {
+    manualCount: manualJobs.length,
+    autoShopCount: autoByShop.size,
+    elapsedMs: Date.now() - startedAt,
+  });
 }

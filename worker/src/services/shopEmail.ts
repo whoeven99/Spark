@@ -1,7 +1,12 @@
 import { getShopAccessToken, invalidateShopAccessTokenCache } from "./shopAccessToken.js";
+import { maskEmail } from "./workerEmail.js";
 
 const LOG = "[shopEmail]";
 const CACHE_TTL_MS = 60 * 60 * 1000;
+
+function logDetail(phase: string, payload: Record<string, unknown>): void {
+  console.info(`${LOG} ${phase} ${JSON.stringify(payload)}`);
+}
 
 const SHOP_EMAIL_QUERY = `#graphql
   query ShopContactEmail {
@@ -52,15 +57,30 @@ export async function fetchShopEmail(
   options: FetchShopEmailOptions = {},
 ): Promise<string | null> {
   const normalizedShop = shop.trim();
-  if (!normalizedShop) return null;
+  if (!normalizedShop) {
+    logDetail("fetch-skipped", { reason: "empty_shop" });
+    return null;
+  }
 
   const cached = emailCache.get(normalizedShop);
   if (cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
+    logDetail("cache-hit", {
+      shop: normalizedShop,
+      email: cached.email ? maskEmail(cached.email) : null,
+      cacheAgeMs: Date.now() - cached.cachedAt,
+    });
     return cached.email;
   }
 
+  logDetail("fetch-start", {
+    shop: normalizedShop,
+    preferLegacyToken: options.preferLegacyToken ?? false,
+    hasLegacyToken: Boolean(options.legacyToken?.trim()),
+  });
+
   const legacyToken = options.legacyToken?.trim() ?? "";
   let email: string | null = null;
+  const startedAt = Date.now();
 
   try {
     let tokenRetried = false;
@@ -70,16 +90,26 @@ export async function fetchShopEmail(
         legacyToken,
         options.preferLegacyToken ?? false,
       );
+      logDetail("graphql-request", {
+        shop: normalizedShop,
+        tokenRetried,
+        tokenLen: accessToken.length,
+      });
       const resp = await shopifyGraphqlOnce(normalizedShop, accessToken);
 
       if (resp.status === 401 && !tokenRetried) {
+        logDetail("graphql-401-retry", { shop: normalizedShop });
         invalidateShopAccessTokenCache(normalizedShop);
         tokenRetried = true;
         continue;
       }
 
       if (!resp.ok) {
-        console.warn(`${LOG} GraphQL HTTP ${resp.status} shop=${normalizedShop}`);
+        logDetail("graphql-http-error", {
+          shop: normalizedShop,
+          status: resp.status,
+          elapsedMs: Date.now() - startedAt,
+        });
         break;
       }
 
@@ -89,21 +119,42 @@ export async function fetchShopEmail(
       };
 
       if (json.errors?.length) {
-        console.warn(
-          `${LOG} GraphQL errors shop=${normalizedShop}:`,
-          json.errors.map((e) => e.message).filter(Boolean).join("; "),
-        );
+        logDetail("graphql-errors", {
+          shop: normalizedShop,
+          errors: json.errors.map((e) => e.message).filter(Boolean),
+          elapsedMs: Date.now() - startedAt,
+        });
         break;
       }
 
+      const shopEmail = json.data?.shop?.email?.trim() || null;
+      const contactEmail = json.data?.shop?.contactEmail?.trim() || null;
       email = pickShopEmail(json.data?.shop);
+      logDetail("graphql-success", {
+        shop: normalizedShop,
+        hasShopEmail: Boolean(shopEmail),
+        hasContactEmail: Boolean(contactEmail),
+        picked: email ? maskEmail(email) : null,
+        pickedFrom: shopEmail ? "shop.email" : contactEmail ? "shop.contactEmail" : "none",
+        elapsedMs: Date.now() - startedAt,
+      });
       break;
     }
   } catch (e) {
+    logDetail("fetch-failed", {
+      shop: normalizedShop,
+      elapsedMs: Date.now() - startedAt,
+      errorMessage: e instanceof Error ? e.message : String(e),
+    });
     console.warn(`${LOG} fetch failed shop=${normalizedShop}`, e);
   }
 
   emailCache.set(normalizedShop, { email, cachedAt: Date.now() });
+  logDetail("fetch-done", {
+    shop: normalizedShop,
+    email: email ? maskEmail(email) : null,
+    cached: true,
+  });
   return email;
 }
 

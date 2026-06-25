@@ -12,6 +12,21 @@ import { ses } from "tencentcloud-sdk-nodejs-ses";
 
 const LOG = "[workerEmail]";
 
+/** 日志中脱敏邮箱，保留域名与本地部分前 2 字符便于排查。 */
+export function maskEmail(email: string): string {
+  const trimmed = email.trim();
+  const at = trimmed.indexOf("@");
+  if (at <= 0) return "(invalid)";
+  const local = trimmed.slice(0, at);
+  const domain = trimmed.slice(at + 1);
+  const visible = local.slice(0, Math.min(2, local.length));
+  return `${visible}***@${domain}`;
+}
+
+function logDetail(phase: string, payload: Record<string, unknown>): void {
+  console.info(`${LOG} ${phase} ${JSON.stringify(payload)}`);
+}
+
 // ─── 模板 ID（对齐 Spring MailChimpConstants + Spark emailTemplates.server.ts）───
 const TEMPLATE_MANUAL_SUCCESS = 137353;
 const TEMPLATE_AUTO_SUCCESS = 140352;
@@ -26,21 +41,28 @@ type SesClientInstance = InstanceType<typeof ses.v20201002.Client>;
 
 let _client: SesClientInstance | null = null;
 
+const FROM_EMAIL =
+  process.env.TENCENT_FROM_EMAIL?.trim() || "support@msg.ciwi.ai";
+
 function getSesClient(): SesClientInstance | null {
   if (_client) return _client;
   const secretId = process.env.TENCENT_CLOUD_KEY_ID?.trim();
   const secretKey = process.env.TENCENT_CLOUD_KEY?.trim();
-  if (!secretId || !secretKey) return null;
+  if (!secretId || !secretKey) {
+    logDetail("ses-client-missing", {
+      hasSecretId: Boolean(secretId),
+      hasSecretKey: Boolean(secretKey),
+    });
+    return null;
+  }
   const region = process.env.TENCENT_SES_REGION?.trim() || "ap-hongkong";
   _client = new ses.v20201002.Client({
     credential: { secretId, secretKey },
     region,
   });
+  logDetail("ses-client-initialized", { region, from: maskEmail(FROM_EMAIL) });
   return _client;
 }
-
-const FROM_EMAIL =
-  process.env.TENCENT_FROM_EMAIL?.trim() || "support@msg.ciwi.ai";
 
 /** 去掉 .myshopify.com 后缀，得到可读店名。 */
 function parseShopName(shopName: string): string {
@@ -60,10 +82,27 @@ async function doSend(
 ): Promise<boolean> {
   const client = getSesClient();
   if (!client) {
-    console.warn(`${LOG} Tencent SES 凭证未配置，跳过发信 templateId=${templateId} to=${to}`);
+    logDetail("send-skipped", {
+      reason: "tencent_ses_credentials_missing",
+      templateId,
+      to: maskEmail(to),
+    });
     return false;
   }
 
+  const templateDataJson = JSON.stringify(templateData);
+  logDetail("before-sdk-call", {
+    templateId,
+    subject,
+    subjectLen: subject.length,
+    to: maskEmail(to),
+    from: maskEmail(FROM_EMAIL),
+    templateDataKeyCount: Object.keys(templateData).length,
+    templateData,
+    templateDataLen: templateDataJson.length,
+  });
+
+  const startedAt = Date.now();
   try {
     const resp = await client.SendEmail({
       FromEmailAddress: FROM_EMAIL,
@@ -71,14 +110,53 @@ async function doSend(
       Subject: subject,
       Template: {
         TemplateID: templateId,
-        TemplateData: JSON.stringify(templateData),
+        TemplateData: templateDataJson,
       },
     });
-    const ok = Boolean((resp as { RequestId?: string }).RequestId);
-    console.info(`${LOG} 发信 ${ok ? "✅" : "❌"} templateId=${templateId} to=${to}`);
+    const requestId =
+      typeof resp === "object" && resp !== null && "RequestId" in resp
+        ? String((resp as { RequestId?: string }).RequestId ?? "").trim()
+        : "";
+    const messageId =
+      typeof resp === "object" &&
+      resp !== null &&
+      "MessageId" in resp &&
+      typeof (resp as { MessageId?: string }).MessageId === "string"
+        ? (resp as { MessageId: string }).MessageId
+        : undefined;
+    const ok = Boolean(requestId);
+    logDetail("after-sdk-call", {
+      sendSuccess: ok,
+      templateId,
+      to: maskEmail(to),
+      requestId: requestId || null,
+      messageId: messageId ?? null,
+      elapsedMs: Date.now() - startedAt,
+      responseKeys:
+        typeof resp === "object" && resp !== null ? Object.keys(resp as object) : [],
+    });
+    if (!ok) {
+      console.warn(`${LOG} 发信响应缺少 RequestId templateId=${templateId} to=${maskEmail(to)}`);
+    }
     return ok;
   } catch (e) {
-    console.error(`${LOG} 发信失败 templateId=${templateId} to=${to}`, e);
+    const tencentError =
+      typeof e === "object" && e !== null
+        ? {
+            code: "code" in e ? String((e as { code?: unknown }).code) : undefined,
+            requestId:
+              "requestId" in e ? String((e as { requestId?: unknown }).requestId) : undefined,
+          }
+        : undefined;
+    logDetail("after-sdk-call-failed", {
+      sendSuccess: false,
+      templateId,
+      to: maskEmail(to),
+      elapsedMs: Date.now() - startedAt,
+      tencentError,
+      errorMessage: e instanceof Error ? e.message : String(e),
+    });
+    console.error(`${LOG} 发信失败 templateId=${templateId} to=${maskEmail(to)}`, e);
     return false;
   }
 }
@@ -104,6 +182,15 @@ export async function sendManualTranslationSuccessEmail(
   job: TranslationJobSummary,
 ): Promise<boolean> {
   const shortName = parseShopName(shopName);
+  logDetail("send-manual-success-start", {
+    shopName,
+    shortName,
+    to: maskEmail(to),
+    target: job.target,
+    usedTokens: job.usedTokens,
+    elapsedMinutes: job.elapsedMinutes,
+    templateId: TEMPLATE_MANUAL_SUCCESS,
+  });
   return doSend(
     TEMPLATE_MANUAL_SUCCESS,
     SUBJECT_MANUAL_SUCCESS,
@@ -131,6 +218,16 @@ export async function sendAutoTranslationSuccessEmail(
 ): Promise<boolean> {
   const shortName = parseShopName(shopName);
 
+  logDetail("send-auto-success-start", {
+    shopName,
+    shortName,
+    to: maskEmail(to),
+    jobCount: jobs.length,
+    targets: jobs.map((j) => j.target),
+    usedTokens: jobs.map((j) => j.usedTokens),
+    templateId: TEMPLATE_AUTO_SUCCESS,
+  });
+
   const htmlParts = jobs
     .filter((j) => j.usedTokens > 0)
     .map(
@@ -146,7 +243,12 @@ export async function sendAutoTranslationSuccessEmail(
     .join("");
 
   if (!htmlParts) {
-    console.info(`${LOG} sendAutoTranslationSuccessEmail: usedTokens 均为 0，跳过 shop=${shopName}`);
+    logDetail("send-auto-success-skipped", {
+      reason: "all_used_tokens_zero",
+      shopName,
+      to: maskEmail(to),
+      jobCount: jobs.length,
+    });
     return true;
   }
 
@@ -175,6 +277,17 @@ export async function sendTranslationPartialEmail(
 ): Promise<boolean> {
   const shortName = parseShopName(shopName);
 
+  logDetail("send-partial-start", {
+    shopName,
+    shortName,
+    to: maskEmail(to),
+    translateType,
+    jobCount: jobs.length,
+    targets: jobs.map((j) => j.target),
+    completionPercents: jobs.map((j) => j.completionPercent ?? 0),
+    templateId: TEMPLATE_PARTIAL,
+  });
+
   const rowsHtml = jobs
     .map((j) => {
       const pct = (j.completionPercent ?? 0).toFixed(2);
@@ -188,7 +301,12 @@ export async function sendTranslationPartialEmail(
     .join("");
 
   if (!rowsHtml) {
-    console.info(`${LOG} sendTranslationPartialEmail: 无任务数据，跳过 shop=${shopName}`);
+    logDetail("send-partial-skipped", {
+      reason: "no_job_rows",
+      shopName,
+      to: maskEmail(to),
+      translateType,
+    });
     return true;
   }
 
