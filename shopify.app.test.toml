@@ -29,7 +29,8 @@ uri = "/webhooks/app/scopes_update"
 scopes = "read_orders,write_products,read_locales,read_translations,write_translations,read_content,write_pixels,read_customer_events,read_pixels,read_fulfillments,read_inventory,read_locations,read_products,write_app_proxy"
 
 [app_proxy]
-url = "/a/ciwi-spark"
+# 必须用绝对 URL：application_url 含 /app，相对路径会变成 /app/a/ciwi-spark（404）
+url = "https://aiassistant-wi7b.onrender.com/a/ciwi-spark"
 prefix = "a"
 subpath = "ciwi-spark"
 

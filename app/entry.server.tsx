@@ -5,8 +5,32 @@ import { createReadableStreamFromReadable } from "@react-router/node";
 import { type EntryContext } from "react-router";
 import { isbot } from "isbot";
 import { addDocumentResponseHeaders } from "./shopify.server";
+import {
+  braceletProxyPageLoader,
+  braceletProxyPrepareAction,
+} from "./server/bracelet/braceletProxyHandlers.server";
 
 export const streamTimeout = 5000;
+
+/** Shopify App Proxy 可能打到 /a/... 或 application_url 下的 /app/a/... */
+async function tryBraceletAppProxyResponse(
+  request: Request,
+): Promise<Response | null> {
+  const url = new URL(request.url);
+  const isBraceletPage =
+    url.pathname === "/a/ciwi-spark" || url.pathname === "/app/a/ciwi-spark";
+  const isBraceletPrepare =
+    url.pathname === "/a/ciwi-spark/prepare" ||
+    url.pathname === "/app/a/ciwi-spark/prepare";
+
+  if (isBraceletPage && request.method === "GET") {
+    return braceletProxyPageLoader(request, "/a/ciwi-spark/prepare");
+  }
+  if (isBraceletPrepare && request.method === "POST") {
+    return braceletProxyPrepareAction(request);
+  }
+  return null;
+}
 
 export default async function handleRequest(
   request: Request,
@@ -14,6 +38,11 @@ export default async function handleRequest(
   responseHeaders: Headers,
   reactRouterContext: EntryContext
 ) {
+  const proxyResponse = await tryBraceletAppProxyResponse(request);
+  if (proxyResponse) {
+    return proxyResponse;
+  }
+
   addDocumentResponseHeaders(request, responseHeaders);
   const userAgent = request.headers.get("user-agent");
   const callbackName = isbot(userAgent ?? '')
