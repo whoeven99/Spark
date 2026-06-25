@@ -3,6 +3,7 @@ import { runTranslateWorker } from "./workers/translateWorker.js";
 import { runWritebackWorker } from "./workers/writebackWorker.js";
 import { runVerifyWorker } from "./workers/verifyWorker.js";
 import { runAnalysisWorker } from "./workers/analysisWorker.js";
+import { runEmailWorker } from "./workers/emailWorker.js";
 import { resetStaleJobs, wakeQueuedJobsAfterDeploy } from "./services/cosmosV4.js";
 import { resetStaleAnalysisJobs } from "./services/cosmosAnalysis.js";
 import { runAutoTranslateScan } from "./services/autoTranslate.js";
@@ -24,6 +25,11 @@ const STALE_RESET_INTERVAL_MS = 5 * 60_000;
 /** 空自动任务定时清理间隔（默认 6 小时）。 */
 const AUTO_EMPTY_JOB_CLEANUP_INTERVAL_MS =
   Number(process.env.AUTO_EMPTY_JOB_CLEANUP_INTERVAL_MS) || 6 * 60 * 60_000;
+/** 邮件通知发送间隔（默认 30 秒，可用 EMAIL_WORKER_INTERVAL_MS 覆盖）。 */
+const EMAIL_WORKER_INTERVAL_MS = (() => {
+  const n = Number(process.env.EMAIL_WORKER_INTERVAL_MS);
+  return n > 0 ? n : 30_000;
+})();
 
 const ALL_STAGES = ["init", "translate", "writeback", "verify", "analysis"] as const;
 type Stage = (typeof ALL_STAGES)[number];
@@ -102,6 +108,10 @@ export function startScheduler(): void {
       AUTO_EMPTY_JOB_CLEANUP_INTERVAL_MS,
     );
   }
+
+  // 邮件通知：翻译任务完成后发送通知邮件（独立于 pipeline stages，始终运行）。
+  safeRun("emailWorker", () => runEmailWorker());
+  setInterval(() => safeRun("emailWorker", () => runEmailWorker()), EMAIL_WORKER_INTERVAL_MS);
 
   for (const stage of ALL_STAGES) {
     if (!stages.has(stage)) {

@@ -57,8 +57,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const rawLimit = Number(body.limitPerType);
   const limitPerType = rawLimit === 0 ? Number.MAX_SAFE_INTEGER : Math.max(rawLimit || 20, 1);
   const jobId = crypto.randomUUID();
-  const shopifyAccessToken =
-    (await resolveShopAccessTokenForWorker(shopName, session.accessToken)) ?? "";
+  const shopifyAccessToken = await resolveShopAccessTokenForWorker(shopName, session.accessToken).then(
+    (t) => t ?? "",
+  );
 
   const job = await createV4Job({
     id: jobId,
