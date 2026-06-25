@@ -5,34 +5,40 @@ name = "AiAssistant-Test"
 application_url = "https://aiassistant-wi7b.onrender.com/app"
 embedded = true
 
+[build]
+automatically_update_urls_on_dev = true
+
 [webhooks]
 api_version = "2026-07"
 
-[[webhooks.subscriptions]]
-topics = ["app_subscriptions/update"]
-uri = "/webhooks/app/subscriptions_update"
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/purchases_one_time_update"
+  topics = [ "app_purchases_one_time/update" ]
 
-[[webhooks.subscriptions]]
-topics = ["app_purchases_one_time/update"]
-uri = "/webhooks/app/purchases_one_time_update"
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = [ "app/uninstalled" ]
 
-[[webhooks.subscriptions]]
-topics = ["app/uninstalled"]
-uri = "/webhooks/app/uninstalled"
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/subscriptions_update"
+  topics = [ "app_subscriptions/update" ]
 
-[[webhooks.subscriptions]]
-topics = ["app/scopes_update"]
-uri = "/webhooks/app/scopes_update"
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/scopes_update"
+  topics = [ "app/scopes_update" ]
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_orders,write_products,read_locales,read_translations,write_translations,read_content,write_pixels,read_customer_events,read_pixels,read_fulfillments,read_inventory,read_locations,read_products"
+scopes = "read_content,read_customer_events,read_fulfillments,read_inventory,read_locales,read_locations,read_orders,read_pixels,read_products,read_translations,write_app_proxy,write_pixels,write_products,write_translations"
 
 [auth]
 redirect_urls = [
   "https://aiassistant-wi7b.onrender.com/auth/callback",
-  "https://aiassistant-wi7b.onrender.com/auth/shopify/callback",
+  "https://aiassistant-wi7b.onrender.com/auth/shopify/callback"
 ]
 
-[build]
-automatically_update_urls_on_dev = true
+[app_proxy]
+# 必须用 /a/ciwi-spark（非 /app/a/...）；Shopify 会附带 shop/signature 等 query
+url = "https://aiassistant-wi7b.onrender.com/a/ciwi-spark"
+subpath = "ciwi-spark"
+prefix = "a"

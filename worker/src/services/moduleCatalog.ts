@@ -1,5 +1,7 @@
 /**
- * v4 自动翻译模块 — 对齐 Java TaskService.AUTO_TRANSLATE_MAP。
+ * v4 定时自动翻译模块（不含 EMAIL_TEMPLATE — 邮件仅支持手动任务）。
+ * 权威列表：worker/scripts/v4-auto-translate-modules.json
+ * 注：Spring v2 TaskService.AUTO_TRANSLATE_MAP 仍含 EMAIL_TEMPLATE，v4 已刻意排除。
  */
 export const AUTO_TRANSLATE_V4_MODULES = [
   "SHOP",
@@ -22,7 +24,9 @@ export const AUTO_TRANSLATE_V4_MODULES = [
   "PAGE",
   "METAFIELD",
   "SHOP_POLICY",
-  "EMAIL_TEMPLATE",
   "SELLING_PLAN",
   "SELLING_PLAN_GROUP",
 ] as const;
+
+/** @deprecated 使用 AUTO_TRANSLATE_V4_MODULES */
+export const V2_AUTO_TRANSLATE_MODULES = AUTO_TRANSLATE_V4_MODULES;
