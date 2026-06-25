@@ -1,9 +1,6 @@
 /**
- * Rule-based JSON text extraction — aligned with Java JsonTranslateStrategyService.
- * Replaces heuristic DFS for metafield JSON so only configured paths/fields translate.
+ * Rule-based JSON text extraction — aligned with Java JsonTranslateStrategyService.buildDefaultRules.
  */
-
-import { loadMetafieldJsonTranslateRule, PROD_METAFIELD_JSON_TRANSLATE_RULE } from "./metafieldJsonConfig.js";
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
 
@@ -28,19 +25,28 @@ const RULE_MODE_PATH = "path";
 
 const HTML_FIELD_NAMES = new Set(["body_html", "content_html", "html"]);
 
+/** Spring JsonTranslateStrategyService.buildDefaultRules when Redis config is empty. */
+const DEFAULT_JSON_EXTRACT_RULES: JsonExtractRule[] = [
+  {
+    mode: "typeFieldMatch",
+    typeField: "type",
+    typeValue: "text",
+    translateField: "value",
+  },
+  { mode: "path", path: "virtual_options[*].title" },
+  { mode: "path", path: "virtual_options[*].values[*].key" },
+];
+
 function isHtmlFieldName(fieldName: string): boolean {
   return HTML_FIELD_NAMES.has(fieldName) || fieldName.endsWith("_html");
 }
 
-/** Prod defaults synced from Spring Redis bogda:config (see docs/metafield-json-translate-rule.prod.json). */
 export function buildDefaultJsonExtractRules(): JsonExtractRule[] {
-  return PROD_METAFIELD_JSON_TRANSLATE_RULE.jsonExtractRules ?? [];
+  return DEFAULT_JSON_EXTRACT_RULES;
 }
 
 export function loadJsonExtractRules(): JsonExtractRule[] {
-  const rules = loadMetafieldJsonTranslateRule().jsonExtractRules;
-  if (Array.isArray(rules) && rules.length > 0) return rules;
-  return buildDefaultJsonExtractRules();
+  return DEFAULT_JSON_EXTRACT_RULES;
 }
 
 function buildDedupKey(parent: object, fieldName: string): string {
@@ -56,6 +62,10 @@ function pushTextSlot(
 ): void {
   const trimmed = textValue.trim();
   if (!trimmed) return;
+  // Never translate URL/href fields (Shopify rich-text link nodes).
+  if (fieldName === "url" || fieldName === "href") return;
+  // Skip values that are purely a URL or site path — leave literal.
+  if (/^https?:\/\//i.test(trimmed) || /^\/[a-zA-Z0-9_\-./%~]+$/.test(trimmed)) return;
   const dedupKey = buildDedupKey(parent, fieldName);
   if (dedup.has(dedupKey)) return;
   dedup.add(dedupKey);
@@ -213,10 +223,13 @@ export function isListFormat(value: string): boolean {
 /** Apply translated strings back into the JSON tree (mutates parents in slots). */
 export function applyJsonSlotTranslations(
   slots: JsonTextSlot[],
-  translated: Map<string, string>,
+  translated: Map<string, string> | string[],
 ): void {
-  for (const slot of slots) {
-    const next = translated.get(slot.text);
+  for (let i = 0; i < slots.length; i++) {
+    const slot = slots[i]!;
+    const next = Array.isArray(translated)
+      ? translated[i]
+      : translated.get(slot.text);
     if (next !== undefined && next.trim()) {
       slot.parent[slot.fieldName] = next;
     }

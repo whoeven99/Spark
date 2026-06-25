@@ -168,7 +168,7 @@ describe("translateBatch — retry & fallback", () => {
       "shop.myshopify.com",
     );
     expect(out[0]).toEqual({ key: "title", translatedValue: "你好", digest: "d1", status: "fallback" });
-    expect(deepSeekCalls(fetchMock)).toHaveLength(1);
+    expect(deepSeekCalls(fetchMock)).toHaveLength(2);
     expect(tmSet).not.toHaveBeenCalled();
   });
 
@@ -520,5 +520,250 @@ describe("translateBatch — placeholder masking", () => {
     );
     expect(out[0].status).toBe("fallback");
     expect(out[0].translatedValue).toBe("Returned {{quantity}} items");
+  });
+
+  it("masks and restores root-relative paths in plain text", async () => {
+    const src =
+      "发布后会自动生成友好的前端 URL，如 /blogs/news/my-first-article，方便用户浏览与搜索引擎收录。";
+    const fetchMock = mockFetch({
+      deepseek: [llmResponse([{ key: "f0", translatedValue: "After publishing, URL like ⟦0⟧ is created." }])],
+    });
+    const out = await translateBatch(
+      [{ key: "body", value: src, digest: "d1" }],
+      "zh-CN",
+      "ar",
+      LLM_MODEL,
+      "shop.myshopify.com",
+    );
+    expect(out[0].translatedValue).toContain("/blogs/news/my-first-article");
+    expect(out[0].translatedValue).not.toContain("S0");
+    expect(deepSeekCalls(fetchMock).length).toBeGreaterThan(0);
+  });
+
+  it("recovers S0 corruption back to masked path", async () => {
+    const src = "如 /blogs/news/my-first-article，方便浏览。";
+    mockFetch({
+      deepseek: [llmResponse([{ key: "f0", translatedValue: "مثل S0، للتصفح." }])],
+    });
+    const out = await translateBatch(
+      [{ key: "body", value: src, digest: "d1" }],
+      "zh-CN",
+      "ar",
+      LLM_MODEL,
+      "shop.myshopify.com",
+    );
+    expect(out[0].translatedValue).toContain("/blogs/news/my-first-article");
+  });
+});
+
+describe("alreadyInTarget — mixed-language fields", () => {
+  it("does not skip zh titles that mix CJK with English", async () => {
+    const { alreadyInTarget } = await import("../../worker/src/services/llmTranslate.js");
+    const title = "测试私有 key 的翻译效果：Home Work: A Memoir of My Hollywood Years";
+    expect(alreadyInTarget(title, "en", "zh-CN")).toBe(false);
+  });
+
+  it("still skips purely Chinese titles for zh target", async () => {
+    const { alreadyInTarget } = await import("../../worker/src/services/llmTranslate.js");
+    expect(alreadyInTarget("高领毛衣 Rue Paris", "en", "zh-CN")).toBe(false);
+    expect(alreadyInTarget("纯中文标题", "en", "zh-CN")).toBe(true);
+  });
+
+  it("still skips pure English when target is en", async () => {
+    const { alreadyInTarget } = await import("../../worker/src/services/llmTranslate.js");
+    expect(alreadyInTarget("Hello World", "zh-CN", "en")).toBe(true);
+  });
+});
+
+describe("htmlNodePartsOf — br and anchor preprocessing", () => {
+  it("merges <br>-separated sentences into one translation unit", async () => {
+    const { htmlNodePartsOfForTest } = await import("../../worker/src/services/llmTranslate.js");
+    const html =
+      "<p>Don't wait—experience magnetic switches starting at $59.99 with the VGN A75.<br>Shop now and upgrade your gameplay.</p>";
+    const { nodeParts } = htmlNodePartsOfForTest(html);
+    expect(nodeParts).toHaveLength(1);
+    expect(nodeParts[0][0]).toContain("Shop now and upgrade");
+    expect(nodeParts[0][0]).toContain("⟦BR⟧");
+  });
+
+  it("merges anchor-split sentences into one translation unit", async () => {
+    const { htmlNodePartsOfForTest } = await import("../../worker/src/services/llmTranslate.js");
+    const html =
+      '<p>These keyboards, quickly emerging as contenders for <a href="/x">best gaming keyboards</a>, borrow aerospace tech.</p>';
+    const { nodeParts } = htmlNodePartsOfForTest(html);
+    expect(nodeParts).toHaveLength(1);
+    expect(nodeParts[0][0]).toContain("contenders for best gaming keyboards, borrow");
+  });
+
+  it("merges span-split paragraphs into one translation unit", async () => {
+    const { htmlNodePartsOfForTest } = await import("../../worker/src/services/llmTranslate.js");
+    const html =
+      "<p><span>Classic and stylish women's golf shirt,</span> made of thick ribbed fabric that is soft and comfortable.</p>";
+    const { nodeParts } = htmlNodePartsOfForTest(html);
+    expect(nodeParts).toHaveLength(1);
+    expect(nodeParts[0][0]).toContain("Classic and stylish");
+    expect(nodeParts[0][0]).toContain("thick ribbed fabric");
+  });
+
+  it("keeps separate <p> blocks as separate units", async () => {
+    const { htmlNodePartsOfForTest } = await import("../../worker/src/services/llmTranslate.js");
+    const html =
+      "<p>Classic and stylish women's golf shirt description.</p><ul><li>Cotton 90 %</li><li>Spandex 10 %</li></ul>";
+    const { nodeParts } = htmlNodePartsOfForTest(html);
+    expect(nodeParts).toHaveLength(3);
+  });
+});
+
+describe("looksLikeUntranslated", () => {
+  it("flags long English echo when target is zh", async () => {
+    const { looksLikeUntranslated } = await import("../../worker/src/services/llmTranslate.js");
+    const src =
+      "Classic and stylish women's golf shirt, made of thick ribbed fabric that is soft and comfortable.";
+    expect(looksLikeUntranslated(src, src, "zh-CN")).toBe(true);
+    expect(looksLikeUntranslated(src, "经典时尚的女士高尔夫衬衫，采用厚实罗纹面料，柔软舒适。", "zh-CN")).toBe(
+      false,
+    );
+  });
+
+  it("does not flag short material lines that were translated", async () => {
+    const { looksLikeUntranslated } = await import("../../worker/src/services/llmTranslate.js");
+    expect(looksLikeUntranslated("Cotton 90 %", "棉 90 %", "zh-CN")).toBe(false);
+  });
+});
+
+describe("looksLikeWrongScriptLeak", () => {
+  it("flags Chinese leaked into Arabic when source was English", async () => {
+    const { looksLikeWrongScriptLeak } = await import("../../worker/src/services/llmTranslate.js");
+    const src = "high-quality home textiles";
+    const bad = "منسوجات منزلية 高质量";
+    expect(looksLikeWrongScriptLeak(src, bad, "ar")).toBe(true);
+    expect(looksLikeWrongScriptLeak(src, "منسوجات منزلية عالية الجودة", "ar")).toBe(false);
+  });
+});
+
+describe("html table roundtrip", () => {
+  it("preserves td/tr structure when translating table cells", async () => {
+    const { roundtripHtmlForTest } = await import("../../worker/src/services/llmTranslate.js");
+    const html =
+      '<table><thead></thead><tbody><tr style="height:19px"><td style="font-weight:bold;height:19px">XS</td><td style="height:19px">77</td><td>77</td><td>112</td><td>112</td><td>112</td></tr></tbody></table>';
+    const out = roundtripHtmlForTest(html, (text) => (text === "XS" ? "XS-ar" : `n-${text}`));
+    expect(out.match(/<td\b/gi)?.length).toBe(6);
+    expect(out).toContain('style="font-weight:bold');
+    expect(out).toContain(">n-77<");
+  });
+
+  it("strips HTML tags accidentally returned by the model for a cell", async () => {
+    const { roundtripHtmlForTest } = await import("../../worker/src/services/llmTranslate.js");
+    const html = "<table><tbody><tr><td>77</td><td>112</td></tr></tbody></table>";
+    const out = roundtripHtmlForTest(html, (text) =>
+      text === "77" ? "77</td><td style='x'>112" : "112",
+    );
+    expect(out.match(/<td\b/gi)?.length).toBe(2);
+    expect(out).toContain(">112<");
+  });
+});
+
+describe("translateBatch — untranslated echo retry", () => {
+  it("retries individually when batch returns English unchanged for a long html node", async () => {
+    const long =
+      "Classic and stylish women's golf shirt, made of thick ribbed fabric that is soft and comfortable to wear.";
+    const html = `<p>${long}</p><p>Cotton 90 %</p>`;
+    const fetchMock = mockFetch({
+      deepseek: [
+        llmResponse([
+          { key: "f0", translatedValue: long },
+          { key: "f1", translatedValue: "棉 90 %" },
+        ]),
+        llmResponse([{ key: "f0", translatedValue: "经典时尚女士高尔夫衬衫，厚实罗纹面料，柔软舒适。" }]),
+      ],
+    });
+    const out = await translateBatch(
+      [{ key: "body_html", value: html, digest: "d1" }],
+      "en",
+      "zh-CN",
+      LLM_MODEL,
+      "shop.myshopify.com",
+    );
+    expect(out[0].translatedValue).toContain("经典");
+    expect(out[0].translatedValue).toContain("棉 90 %");
+    expect(deepSeekCalls(fetchMock).length).toBeGreaterThan(1);
+  });
+});
+
+describe("translateBatch — json rich text", () => {
+  it("preserves JSON structure when translating Shopify rich-text metafields", async () => {
+    const root = {
+      type: "root",
+      children: [
+        {
+          type: "paragraph",
+          children: [
+            { type: "text", value: "Hello" },
+            {
+              type: "link",
+              url: "https://ciwi.ai",
+              children: [{ type: "text", value: "link label" }],
+            },
+          ],
+        },
+      ],
+    };
+    mockFetch({
+      deepseek: [
+        llmResponse([
+          { key: "f0", translatedValue: "مرحبا" },
+          { key: "f1", translatedValue: "تسمية الرابط" },
+        ]),
+      ],
+    });
+    const out = await translateBatch(
+      [{ key: "value", value: JSON.stringify(root), digest: "d1" }],
+      "en",
+      "ar",
+      LLM_MODEL,
+      "shop.myshopify.com",
+    );
+    const parsed = JSON.parse(out[0].translatedValue) as {
+      type: string;
+      children: Array<{ type: string; children: Array<{ type: string; value?: string; url?: string }> }>;
+    };
+    expect(parsed.type).toBe("root");
+    expect(parsed.children[0]!.type).toBe("paragraph");
+    expect(parsed.children[0]!.children[0]!.value).toBe("مرحبا");
+    expect(parsed.children[0]!.children[1]!.url).toBe("https://ciwi.ai");
+    expect(parsed.children[0]!.children[1]!.children![0]!.value).toBe("تسمية الرابط");
+  });
+});
+
+describe("maskPlaceholdersForTest", () => {
+  it("masks site paths before LLM", async () => {
+    const { maskPlaceholdersForTest } = await import("../../worker/src/services/llmTranslate.js");
+    const { masked, tokens } = maskPlaceholdersForTest("如 /blogs/news/foo，结束");
+    expect(masked).toContain("⟦0⟧");
+    expect(tokens[0]).toBe("/blogs/news/foo");
+  });
+});
+
+describe("translateBatch — empty HTML node translation", () => {
+  it("falls back to original when the model returns an empty string for a text node", async () => {
+    mockFetch({
+      deepseek: [
+        llmResponse([
+          { key: "f0", translatedValue: "准备以更低的价格切换？" },
+          { key: "f1", translatedValue: "" },
+        ]),
+      ],
+    });
+    const html =
+      "<p>Ready to Switch for Less?</p><p>Shop now and upgrade your gameplay without draining your wallet.</p>";
+    const out = await translateBatch(
+      [{ key: "body_html", value: html, digest: "d1" }],
+      "en",
+      "zh-CN",
+      LLM_MODEL,
+      "shop.myshopify.com",
+    );
+    expect(out[0].translatedValue).toContain("Shop now and upgrade");
+    expect(out[0].status).toBe("fallback");
   });
 });
