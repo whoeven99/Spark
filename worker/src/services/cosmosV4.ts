@@ -95,8 +95,6 @@ export type TranslationV4Job = {
   pauseAfterWriteback?: "pause" | "cancel" | null;
   /** @deprecated 发信时由 emailWorker 通过 GraphQL 实时查询，创建任务无需写入。 */
   shopEmail?: string | null;
-  /** 任务类型：手动触发或自动扫描创建。影响通知邮件模板选择。 */
-  taskType?: "auto" | "manual" | null;
   /** 完成通知邮件是否已发送（emailWorker 写入，防重发）。 */
   emailSent?: boolean | null;
   createdBy: string;
@@ -119,6 +117,13 @@ export function prefersStoredToken(job: Pick<TranslationV4Job, "taskSource">): b
     job.taskSource === TS_FRONTEND_TASK_SOURCE ||
     job.taskSource === TSF_AUTO_TASK_SOURCE
   );
+}
+
+/** 是否 worker 定时扫描创建的自动翻译任务（影响邮件汇总策略）。 */
+export function isAutoTranslationJob(
+  job: Pick<TranslationV4Job, "taskSource">,
+): boolean {
+  return job.taskSource === TSF_AUTO_TASK_SOURCE;
 }
 
 /** 全零指标，新建任务用。 */
@@ -555,7 +560,8 @@ export async function releaseJobsClaimedBySuffix(claimSuffix: string): Promise<n
 
 /**
  * 找出所有需要发送完成通知邮件的任务（跨分区查询）。
- * 条件：status 为 COMPLETED 或 PAUSED，且 taskType 已设置，且 emailSent 未置为 true。
+ * 条件：status 为 COMPLETED 或 PAUSED，且 emailSent 未置为 true。
+ * 手动/自动由 taskSource 区分（TsFrontend-Auto = 自动，其余 = 手动）。
  * 收件人邮箱由 emailWorker 发信时通过 Shopify GraphQL 实时查询。
  */
 export async function findJobsNeedingEmail(limit = 20): Promise<TranslationV4Job[]> {
@@ -565,7 +571,6 @@ export async function findJobsNeedingEmail(limit = 20): Promise<TranslationV4Job
         query: `
           SELECT * FROM c
           WHERE (c.status = 'COMPLETED' OR c.status = 'PAUSED')
-            AND IS_DEFINED(c.taskType) AND NOT IS_NULL(c.taskType)
             AND (NOT IS_DEFINED(c.emailSent) OR c.emailSent != true)
           ORDER BY c.updatedAt ASC
           OFFSET 0 LIMIT @limit
@@ -574,7 +579,8 @@ export async function findJobsNeedingEmail(limit = 20): Promise<TranslationV4Job
       })
       .fetchAll();
     return resources;
-  } catch {
+  } catch (err) {
+    console.error("[cosmosV4] findJobsNeedingEmail failed:", err);
     return [];
   }
 }
@@ -593,11 +599,12 @@ export async function hasActiveAutoJobsForShop(shopName: string): Promise<boolea
           query: `
             SELECT VALUE COUNT(1) FROM c
             WHERE c.shopName = @shopName
-              AND c.taskType = 'auto'
+              AND c.taskSource = @autoSource
               AND ARRAY_CONTAINS(@statuses, c.status)
           `,
           parameters: [
             { name: "@shopName", value: shopName },
+            { name: "@autoSource", value: TSF_AUTO_TASK_SOURCE },
             { name: "@statuses", value: activeStatuses },
           ],
         },

@@ -75,7 +75,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     status: "INIT_QUEUED",
     blobPrefix: `tasks/v4/${shopName}/${jobId}`,
     createdBy: shopName,
-    taskType: "manual",
   });
 
   // Push hint to Redis so the worker picks it up immediately (best-effort)

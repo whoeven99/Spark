@@ -84,7 +84,6 @@ export async function runAutoTranslateScan(): Promise<void> {
           status: "INIT_QUEUED",
           blobPrefix: `tasks/v4/${shop}/${jobId}`,
           createdBy: "auto",
-          taskType: "auto",
         });
         await pushHint("init", { taskId: jobId, shopName: shop });
         created++;

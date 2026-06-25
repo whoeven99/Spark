@@ -122,8 +122,6 @@ export type TranslationV4Job = {
   estimationRecordedAt?: string | null;
   /** @deprecated 发信时由 worker emailWorker 通过 Shopify GraphQL 实时查询。 */
   shopEmail?: string | null;
-  /** 任务类型：手动触发或自动扫描创建。影响通知邮件模板选择。 */
-  taskType?: "auto" | "manual" | null;
   /** 完成通知邮件是否已发送（worker emailWorker 写入，防重发）。 */
   emailSent?: boolean | null;
   createdBy: string;

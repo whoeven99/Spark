@@ -2,10 +2,10 @@
  * emailWorker — 翻译完成通知邮件发送 worker。
  *
  * 每次运行：
- *  1. 找出 COMPLETED / PAUSED、未发邮件、带 taskType 的任务。
+ *  1. 找出 COMPLETED / PAUSED、未发邮件的任务。
  *     收件人邮箱在发信时通过 Shopify GraphQL 实时查询（不用 Session 快照）。
- *  2. 手动任务（taskType="manual"）：每个任务独立发一封邮件。
- *  3. 自动任务（taskType="auto"）：按店铺分组，等同店内所有进行中自动任务结束
+ *  2. 手动任务（taskSource ≠ TsFrontend-Auto）：每个任务独立发一封邮件。
+ *  3. 自动任务（taskSource = TsFrontend-Auto）：按店铺分组，等同店内所有进行中自动任务结束
  *     后再汇总发一封邮件（对齐 Spring TranslateTask.sendEmail 逻辑）。
  *  4. 发送成功后将 emailSent=true 写回 Cosmos，防止重发。
  *
@@ -19,6 +19,7 @@ import type { TranslationV4Job } from "../services/cosmosV4.js";
 import {
   findJobsNeedingEmail,
   hasActiveAutoJobsForShop,
+  isAutoTranslationJob,
   prefersStoredToken,
   updateJob,
 } from "../services/cosmosV4.js";
@@ -41,7 +42,8 @@ function describeJob(job: TranslationV4Job): Record<string, unknown> {
   return {
     id: job.id,
     shop: job.shopName,
-    taskType: job.taskType,
+    taskSource: job.taskSource ?? null,
+    isAuto: isAutoTranslationJob(job),
     status: job.status,
     target: job.target,
     emailSent: job.emailSent ?? false,
@@ -278,7 +280,7 @@ export async function runEmailWorker(): Promise<void> {
   const autoByShop = new Map<string, TranslationV4Job[]>();
 
   for (const job of jobs) {
-    if (job.taskType === "auto") {
+    if (isAutoTranslationJob(job)) {
       const group = autoByShop.get(job.shopName) ?? [];
       group.push(job);
       autoByShop.set(job.shopName, group);
