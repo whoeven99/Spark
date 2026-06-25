@@ -1,15 +1,18 @@
 {
-  "mcpServers": {
+  "servers": {
     "shopify-dev-mcp": {
       "type": "stdio",
       "command": "npx",
       "args": ["-y", "@shopify/dev-mcp@latest"]
     },
     "render": {
-      "type": "sse",
-      "url": "https://mcp.render.com/mcp",
-      "headers": {
-        "Authorization": "Bearer ${RENDER_API_KEY}"
+      "type": "stdio",
+      "command": "node",
+      "cwd": "${workspaceFolder}",
+      "args": ["mcp/render-mcp/bin/render-mcp.mjs"],
+      "env": {
+        "RENDER_API_KEY": "rnd_NRpB8TzAqwIctPNyZxmQWiNUwwSz",
+        "RENDER_MCP_MODE": "direct"
       }
     }
   }

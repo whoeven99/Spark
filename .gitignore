@@ -45,7 +45,7 @@ roadmap
 
 # AI translation quality reports (local, disposable)
 translation-reports/
-.cursor/settings.json
+.cursor/
 /docs/tmp
 scripts/qps-data.json
 /scripts/tmp
