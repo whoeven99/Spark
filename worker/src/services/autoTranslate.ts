@@ -15,7 +15,7 @@ import { AUTO_TRANSLATE_V4_MODULES } from "./moduleCatalog.js";
 import { setAutoScanLastAt } from "./redisV4.js";
 import { resolveNextClockAlignedScanAt } from "./autoScanSchedule.js";
 
-/** 自动任务默认模块（对齐 v2 TaskService.AUTO_TRANSLATE_MAP）。 */
+/** 自动任务模块（不含 EMAIL_TEMPLATE）。 */
 const AUTO_MODULES = [...AUTO_TRANSLATE_V4_MODULES];
 
 /** 本档扫描每店最多新建几条自动任务（店内有进行中任务时用于排队）。 */
