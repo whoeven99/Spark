@@ -1406,10 +1406,27 @@ function resolveModel(preferred?: string): string {
 // 不同 shop 互不影响。默认容量极大(不限)，仅当额度逻辑显式 setShopQuotaCap 时收紧。
 // 额度越少 → cap 越小 → 在飞批次越少 → 最大透支被锁死。
 const _shopQuotaGates = new Map<string, AdaptiveSemaphore>();
+const MAX_SHOP_QUOTA_GATES = Math.max(
+  16,
+  Number(process.env.TRANSLATE_SHOP_QUOTA_GATE_CACHE) || 128,
+);
+
+function pruneShopQuotaGates(): void {
+  if (_shopQuotaGates.size < MAX_SHOP_QUOTA_GATES) return;
+  for (const [shop, gate] of _shopQuotaGates) {
+    if (gate.inflight === 0) {
+      _shopQuotaGates.delete(shop);
+      if (_shopQuotaGates.size < MAX_SHOP_QUOTA_GATES) return;
+    }
+  }
+  const oldest = _shopQuotaGates.keys().next().value;
+  if (oldest !== undefined) _shopQuotaGates.delete(oldest);
+}
 
 function getShopQuotaGate(shop: string): AdaptiveSemaphore {
   let g = _shopQuotaGates.get(shop);
   if (!g) {
+    pruneShopQuotaGates();
     g = new AdaptiveSemaphore(MAX_POOL_CONCURRENCY);
     _shopQuotaGates.set(shop, g);
   }
@@ -1800,6 +1817,11 @@ const FIRST_TOKEN_DRAIN_MS = Math.max(
 const LEAF_RETRY_BACKOFF_MS = Math.max(
   0,
   Number(process.env.TRANSLATE_LEAF_RETRY_BACKOFF_MS) || 2_000,
+);
+/** Max LLM batches in flight per chunk (translateResources pool fan-out). */
+const TRANSLATE_BATCH_CONCURRENCY = Math.max(
+  1,
+  Number(process.env.TRANSLATE_BATCH_CONCURRENCY) || 8,
 );
 
 /** Scale timeout with batch size so large (but capped) batches get more wall clock. */
@@ -3241,7 +3263,7 @@ export async function translateResources(
     const items: TranslateItem[] = texts.map((t, i) => ({ key: String(i), value: t, digest: "" }));
     const { maxChars, maxItems } = resolveBatchLimits(order);
     const batches = batchByChars(items, maxChars, maxItems);
-    await Promise.all(batches.map(async (batch) => {
+    await pAll(batches, TRANSLATE_BATCH_CONCURRENCY, async (batch) => {
       if (await abortRequested()) return;
       const { results: m, llmTokens } = await translateItemsRouted(batch, source, target, aiModel, shopName, order);
       let batchUnits = 0;
@@ -3261,7 +3283,7 @@ export async function translateResources(
       if (onProgress) await onProgress(batchUnits, llmTokens);
       const lookup: LookupFn = (planOrder, text) => translated.get(planOrder.join(","))?.get(text);
       await finishReadyResources(lookup);
-    }));
+    });
   }
 
   const retried = await retryPoolFallbacks(

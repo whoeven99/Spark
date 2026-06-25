@@ -172,6 +172,13 @@ export function ensureWorkerEnv(): void {
     ["EMAIL_WORKER_INTERVAL_MS", process.env.EMAIL_WORKER_INTERVAL_MS, "30000"],
   ]);
 
+  logEnvCheck("Translate memory / concurrency", true, [
+    ["TRANSLATE_JOB_CONCURRENCY", process.env.TRANSLATE_JOB_CONCURRENCY, "2"],
+    ["TRANSLATE_CHUNK_CONCURRENCY", process.env.TRANSLATE_CHUNK_CONCURRENCY, "16"],
+    ["TRANSLATE_BATCH_CONCURRENCY", process.env.TRANSLATE_BATCH_CONCURRENCY, "8"],
+    ["SHOP_PROFILE_CACHE_MAX", process.env.SHOP_PROFILE_CACHE_MAX, "64"],
+    ["GLOSSARY_CACHE_MAX", process.env.GLOSSARY_CACHE_MAX, "128"],
+  ]);
   logEnvCheck("LLM (DeepSeek)", Boolean(process.env.DEEPSEEK_API_KEY?.trim()), [
     ["DEEPSEEK_API_KEY", process.env.DEEPSEEK_API_KEY],
     ["DEEPSEEK_BASE_URL", process.env.DEEPSEEK_BASE_URL, "https://api.deepseek.com"],

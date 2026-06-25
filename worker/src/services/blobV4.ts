@@ -29,7 +29,8 @@ async function ensureContainer(): Promise<void> {
 
 export async function blobWrite(path: string, content: unknown): Promise<void> {
   await ensureContainer();
-  const text = JSON.stringify(content, null, 2);
+  // Compact JSON — pretty-print doubles peak heap during large checkpoint writes.
+  const text = JSON.stringify(content);
   const client = getContainer().getBlockBlobClient(path);
   await client.upload(text, Buffer.byteLength(text, "utf8"), {
     blobHTTPHeaders: { blobContentType: "application/json; charset=utf-8" },

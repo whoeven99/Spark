@@ -41,6 +41,7 @@ import {
 } from "../services/llmTranslate.js";
 import { QpsLogger } from "../services/qpsLogger.js";
 import type { TranslationV4Job } from "../services/cosmosV4.js";
+import { translateJobGate } from "../services/workerConcurrency.js";
 import { runWritebackWorker } from "./writebackWorker.js";
 
 const HEARTBEAT_THROTTLE_MS = 30_000;
@@ -104,12 +105,19 @@ function toTranslatedResourceItem(
 }
 
 export async function runTranslateWorker(): Promise<void> {
-  const claimed = await claimNextJob();
-  if (!claimed) return;
-  console.log(`[translate] processing job=${claimed.id}`);
-  await processTranslateJob(claimed).catch((e) => {
-    console.error(`[translate] job ${claimed.id} failed`, e);
-  });
+  // Scheduler polls without awaiting prior runs — cap in-flight jobs per process
+  // so N shops do not each hold chunk pools + blob payloads in memory at once.
+  if (!translateJobGate.tryAcquire()) return;
+  try {
+    const claimed = await claimNextJob();
+    if (!claimed) return;
+    console.log(`[translate] processing job=${claimed.id}`);
+    await processTranslateJob(claimed).catch((e) => {
+      console.error(`[translate] job ${claimed.id} failed`, e);
+    });
+  } finally {
+    translateJobGate.release();
+  }
 }
 
 async function wakeNextTranslateForShop(shopName: string): Promise<void> {
@@ -394,9 +402,10 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
     // (~0.9× the account in-flight limit), so this only needs to be high enough
     // that the slow "long-pole" chunks (those holding a 30KB+ metafield / long
     // body_html) are all in flight at once instead of queuing behind a low cap.
-    // 64 keeps near-every chunk active for typical stores while the pool still
-    // protects the API from overload.
-    const CHUNK_CONCURRENCY = Math.max(1, Number(process.env.TRANSLATE_CHUNK_CONCURRENCY) || 64);
+    // Default 16 balances throughput vs RSS: each chunk loads a full init blob +
+    // builds translateResources pools in memory. Raise via TRANSLATE_CHUNK_CONCURRENCY
+    // when the worker has headroom; lower when memory is tight.
+    const CHUNK_CONCURRENCY = Math.max(1, Number(process.env.TRANSLATE_CHUNK_CONCURRENCY) || 16);
 
     await pAll(work, CHUNK_CONCURRENCY, async ({ module, chunkPath, chunkIdx, chunkTotal }) => {
       {

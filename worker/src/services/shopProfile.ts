@@ -9,6 +9,7 @@
  */
 
 import { blobRead } from "./blobV4.js";
+import { BoundedLruMap } from "./boundedCache.js";
 
 // ── Types (also re-exported for admin server) ─────────────────────────────────
 
@@ -42,7 +43,8 @@ export function analysisRawChunkPath(shopName: string, module: string, idx: numb
 // ── In-process cache with Redis-based invalidation ───────────────────────────
 
 type ProfileCacheEntry = { profile: ShopProfile | null; expiresAt: number; version: number };
-const _cache = new Map<string, ProfileCacheEntry>();
+const PROFILE_CACHE_MAX = Math.max(8, Number(process.env.SHOP_PROFILE_CACHE_MAX) || 64);
+const _cache = new BoundedLruMap<string, ProfileCacheEntry>(PROFILE_CACHE_MAX);
 const CACHE_TTL_MS = 30 * 60_000; // 30 min
 
 function profileVersionKey(shopName: string): string {

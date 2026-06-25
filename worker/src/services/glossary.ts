@@ -1,4 +1,5 @@
 import { hasTsfDbCredentials, loadGlossaryRowsFromTsf } from "./tsfDb.js";
+import { BoundedLruMap } from "./boundedCache.js";
 
 /**
  * Per-shop glossary injected into the translation system prompt so wording
@@ -21,7 +22,8 @@ type CacheEntry = {
   lines: string[];
   expiresAt: number;
 };
-const cache = new Map<string, CacheEntry>();
+const GLOSSARY_CACHE_MAX = Math.max(8, Number(process.env.GLOSSARY_CACHE_MAX) || 128);
+const cache = new BoundedLruMap<string, CacheEntry>(GLOSSARY_CACHE_MAX);
 const TTL_MS = 5 * 60_000;
 
 /**
