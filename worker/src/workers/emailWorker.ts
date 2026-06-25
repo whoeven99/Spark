@@ -267,7 +267,6 @@ export async function runEmailWorker(): Promise<void> {
   const startedAt = Date.now();
   const jobs = await findJobsNeedingEmail(30);
   if (jobs.length === 0) {
-    logDetail("run-idle", { elapsedMs: Date.now() - startedAt });
     return;
   }
 
