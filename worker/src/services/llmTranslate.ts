@@ -343,6 +343,65 @@ type ChatCompletionInvokeResult = {
   limitHints: string[];
 };
 
+/**
+ * Pull a JSON string field's value out of a raw JSON line WITHOUT parsing the
+ * whole object. Returns the decoded string, or null if the field is absent /
+ * null / not a string. Escape-aware (\", \\, \n, \uXXXX, surrogate pairs).
+ *
+ * Hot SSE path: DeepSeek streams one event per token, so a full `JSON.parse`
+ * per event (allocating the id/model/choices/delta object graph each time) is
+ * the worker's single biggest CPU sink at high concurrency. Scanning out just
+ * `delta.content` skips all of that. Matches the FIRST `"content":` — that is
+ * `delta.content` (`reasoning_content` has no `"` before `content`, so it never
+ * false-matches), and any literal `"content":` inside the value is consumed by
+ * the escape-aware scan, not re-matched.
+ */
+function extractJsonStringField(raw: string, field: string): string | null {
+  const needle = `"${field}":`;
+  let i = raw.indexOf(needle);
+  if (i < 0) return null;
+  i += needle.length;
+  while (i < raw.length && (raw[i] === " " || raw[i] === "\t")) i++;
+  if (raw[i] !== '"') return null; // null / number / object → not a plain string
+  i++; // past opening quote
+  let out = "";
+  let runStart = i;
+  for (; i < raw.length; i++) {
+    const c = raw.charCodeAt(i);
+    if (c === 34 /* " */) {
+      return out + raw.slice(runStart, i);
+    }
+    if (c === 92 /* \ */) {
+      out += raw.slice(runStart, i);
+      i++;
+      const e = raw[i];
+      switch (e) {
+        case '"': out += '"'; break;
+        case "\\": out += "\\"; break;
+        case "/": out += "/"; break;
+        case "n": out += "\n"; break;
+        case "t": out += "\t"; break;
+        case "r": out += "\r"; break;
+        case "b": out += "\b"; break;
+        case "f": out += "\f"; break;
+        case "u": {
+          const hex = raw.slice(i + 1, i + 5);
+          if (hex.length === 4) {
+            out += String.fromCharCode(parseInt(hex, 16));
+            i += 4;
+          }
+          break;
+        }
+        default: out += e ?? ""; break;
+      }
+      runStart = i + 1;
+    }
+  }
+  // Unterminated string — only possible for a non-newline-terminated trailing
+  // fragment; signal "no complete value" so the caller never appends a partial.
+  return null;
+}
+
 async function fetchDeepSeekChatCompletion(
   apiKey: string,
   chatUrl: string,
@@ -407,9 +466,47 @@ async function fetchDeepSeekChatCompletion(
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let scanFrom = 0; // resume \n search here — avoids O(n²) buffer.slice per line
     let content = "";
     let tokens = 0;
     let apiErrorMsg: string | undefined;
+
+    const handleLine = (line: string): void => {
+      if (!line.startsWith("data:")) return;
+      const data = line.slice(5).trim();
+      if (data === "" || data === "[DONE]") return;
+
+      // Fast path: extract delta.content without JSON.parse-ing the whole event.
+      // Runs once per token — the dominant CPU cost under concurrency. A content
+      // delta never carries usage/error, so we're done with this line.
+      const delta = extractJsonStringField(data, "content");
+      if (delta && delta.length > 0) {
+        content += delta;
+        if (!gotContent) {
+          gotContent = true; // 开始吐字 → 收紧空闲窗口（中途卡死更快发现）
+          armIdle();
+        }
+        return;
+      }
+
+      // Slow path (rare): usage tally (final event) / error / role-only delta.
+      if (
+        data.includes('"total_tokens"') ||
+        data.includes('"usage"') ||
+        data.includes('"error"')
+      ) {
+        try {
+          const evt = JSON.parse(data) as {
+            usage?: { total_tokens?: number };
+            error?: { message?: string };
+          };
+          if (evt.error?.message) apiErrorMsg = evt.error.message;
+          if (evt.usage?.total_tokens) tokens = evt.usage.total_tokens;
+        } catch {
+          // partial/keepalive line — wait for more bytes
+        }
+      }
+    };
 
     for (;;) {
       const { done, value } = await reader.read();
@@ -418,33 +515,18 @@ async function fetchDeepSeekChatCompletion(
       buffer += decoder.decode(value, { stream: true });
 
       let nl: number;
-      while ((nl = buffer.indexOf("\n")) >= 0) {
-        const line = buffer.slice(0, nl).trim();
-        buffer = buffer.slice(nl + 1);
-        if (!line.startsWith("data:")) continue;
-        const data = line.slice(5).trim();
-        if (data === "" || data === "[DONE]") continue;
-        try {
-          const evt = JSON.parse(data) as {
-            choices?: Array<{ delta?: { content?: string | null }; message?: { content?: string | null } }>;
-            usage?: { total_tokens?: number };
-            error?: { message?: string };
-          };
-          if (evt.error?.message) apiErrorMsg = evt.error.message;
-          const delta = evt.choices?.[0]?.delta?.content ?? evt.choices?.[0]?.message?.content;
-          if (typeof delta === "string" && delta.length > 0) {
-            content += delta;
-            if (!gotContent) {
-              gotContent = true; // 开始吐字 → 收紧空闲窗口（中途卡死更快发现）
-              armIdle();
-            }
-          }
-          if (evt.usage?.total_tokens) tokens = evt.usage.total_tokens;
-        } catch {
-          // partial/keepalive line — wait for more bytes
-        }
+      while ((nl = buffer.indexOf("\n", scanFrom)) >= 0) {
+        handleLine(buffer.slice(scanFrom, nl).trim());
+        scanFrom = nl + 1;
+      }
+      // Compact once per read: drop consumed prefix in a single slice (not per line).
+      if (scanFrom > 0) {
+        buffer = buffer.slice(scanFrom);
+        scanFrom = 0;
       }
     }
+    // Flush a trailing line that arrived without a final newline.
+    if (buffer.length > scanFrom) handleLine(buffer.slice(scanFrom).trim());
 
     if (apiErrorMsg) throw new Error(`DeepSeek API error: ${apiErrorMsg}`);
 

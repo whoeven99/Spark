@@ -48,6 +48,18 @@ const HEARTBEAT_THROTTLE_MS = 30_000;
 /** Scale-out safe: hostname + pid unique across Docker containers sharing pid=1 */
 const WORKER_ID = `translate-${process.env.HOSTNAME ?? hostname()}-${process.pid}`;
 
+/**
+ * 进程级翻译并发上限：同一时间最多 N 个商店在翻译，其余 TRANSLATE_QUEUED 排队。
+ * 同店翻译串行由 tryClaimTranslateJob 保证；这里限制的是「跨店」同时在译的店数，
+ * 用来收住高并发下的 CPU/内存。默认 5，可用 MAX_CONCURRENT_TRANSLATE_JOBS 覆盖。
+ */
+const MAX_CONCURRENT_TRANSLATE_JOBS = Math.max(
+  1,
+  Number(process.env.MAX_CONCURRENT_TRANSLATE_JOBS) || 5,
+);
+/** 当前本进程在译的任务数（已 claim 且未收尾）。 */
+let activeTranslateJobs = 0;
+
 /** Serialize shared counter + Redis updates across concurrent chunk handlers. */
 function createExclusiveRunner() {
   let chain: Promise<void> = Promise.resolve();
@@ -104,12 +116,25 @@ function toTranslatedResourceItem(
 }
 
 export async function runTranslateWorker(): Promise<void> {
-  const claimed = await claimNextJob();
-  if (!claimed) return;
-  console.log(`[translate] processing job=${claimed.id}`);
-  await processTranslateJob(claimed).catch((e) => {
-    console.error(`[translate] job ${claimed.id} failed`, e);
-  });
+  // 快路径：已满直接退出，不占名额、不查 Cosmos（被跳过的 tick 大多在此返回）。
+  if (activeTranslateJobs >= MAX_CONCURRENT_TRANSLATE_JOBS) return;
+  // 在异步 claim 之前先占名额，避免多个并发 tick（setInterval 不等上一轮）同时通过
+  // 上面的检查、claim 出超过上限的任务（TOCTOU）。claim 不到则在 finally 归还。
+  activeTranslateJobs++;
+  let claimed: TranslationV4Job | null = null;
+  try {
+    claimed = await claimNextJob();
+    if (!claimed) return;
+    console.log(
+      `[translate] processing job=${claimed.id} (active=${activeTranslateJobs}/${MAX_CONCURRENT_TRANSLATE_JOBS})`,
+    );
+    await processTranslateJob(claimed);
+  } catch (e) {
+    if (claimed) console.error(`[translate] job ${claimed.id} failed`, e);
+    else console.error("[translate] claim failed", e);
+  } finally {
+    activeTranslateJobs--;
+  }
 }
 
 async function wakeNextTranslateForShop(shopName: string): Promise<void> {
