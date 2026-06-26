@@ -1,12 +1,4 @@
-/**
- * v4 定时自动翻译模块。
- * 权威列表：worker/scripts/v4-auto-translate-modules.json
- *
- * 刻意不含（仅手动任务）：
- * - EMAIL_TEMPLATE — 勾选「电子邮件」
- * - ONLINE_STORE_THEME_LOCALE_CONTENT — 主题语言内容（liquid）
- */
-export const AUTO_TRANSLATE_V4_MODULES = [
+[
   "SHOP",
   "MENU",
   "LINK",
@@ -28,5 +20,5 @@ export const AUTO_TRANSLATE_V4_MODULES = [
   "METAFIELD",
   "SHOP_POLICY",
   "SELLING_PLAN",
-  "SELLING_PLAN_GROUP",
-] as const;
+  "SELLING_PLAN_GROUP"
+]
