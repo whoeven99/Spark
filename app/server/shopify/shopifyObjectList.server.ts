@@ -343,17 +343,44 @@ export async function listShopifyObjects(
 // ─── 按条件计数 / 执行期求值（阶段 2：query 形态对象选择） ─────────────────────
 
 const PRODUCT_COUNT_QUERY = `#graphql
-  query ShopifyProductCount($query: String) {
-    productsCount(query: $query) {
+  query ShopifyProductCount($query: String, $limit: Int) {
+    productsCount(query: $query, limit: $limit) {
       count
     }
   }
 `;
 
-const ARTICLE_COUNT_QUERY = `#graphql
-  query ShopifyArticleCount($query: String) {
-    articlesCount(query: $query) {
-      count
+const BLOG_ARTICLE_COUNTS_QUERY = `#graphql
+  query ShopifyBlogArticleCounts($first: Int!, $after: String) {
+    blogs(first: $first, after: $after) {
+      edges {
+        node {
+          id
+          articlesCount(limit: null) {
+            count
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+`;
+
+const ARTICLE_COUNT_BY_LIST_QUERY = `#graphql
+  query ShopifyArticleCountByList($first: Int!, $after: String, $query: String) {
+    articles(first: $first, after: $after, query: $query) {
+      edges {
+        node {
+          id
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
     }
   }
 `;
@@ -361,9 +388,35 @@ const ARTICLE_COUNT_QUERY = `#graphql
 type CountResponse = {
   data?: {
     productsCount?: { count?: number | null } | null;
-    articlesCount?: { count?: number | null } | null;
   };
 };
+
+type BlogArticleCountsResponse = {
+  data?: {
+    blogs?: {
+      edges?: Array<{
+        node?: {
+          id?: string;
+          articlesCount?: { count?: number | null } | null;
+        };
+      }>;
+      pageInfo?: ShopifyObjectPageInfo;
+    } | null;
+  };
+};
+
+type BlogArticleConnection = NonNullable<NonNullable<BlogArticleCountsResponse["data"]>["blogs"]>;
+
+type ArticleCountByListResponse = {
+  data?: {
+    articles?: {
+      edges?: Array<{ node?: { id?: string } | null }>;
+      pageInfo?: ShopifyObjectPageInfo;
+    } | null;
+  };
+};
+
+type ArticleCountConnection = NonNullable<NonNullable<ArticleCountByListResponse["data"]>["articles"]>;
 
 function specToListParams(spec: ObjectQuerySpec): {
   keyword?: string;
@@ -388,20 +441,72 @@ export async function countShopifyObjects(
       ? buildProductListQuery(spec.keyword ?? "", spec.status ?? "all", spec.tag, spec.maxInventory)
       : buildArticleListQuery(spec.keyword ?? "", spec.status ?? "all");
   try {
+    if (spec.kind === "article") {
+      return query ? countArticlesByList(admin, query) : countArticlesByBlogs(admin);
+    }
+
     const payload = await runGraphql<CountResponse>(
       admin,
-      spec.kind === "product" ? PRODUCT_COUNT_QUERY : ARTICLE_COUNT_QUERY,
-      { query },
+      PRODUCT_COUNT_QUERY,
+      { query, limit: null },
     );
-    const count =
-      spec.kind === "product"
-        ? payload.data?.productsCount?.count
-        : payload.data?.articlesCount?.count;
+    const count = payload.data?.productsCount?.count;
     return typeof count === "number" && count >= 0 ? count : null;
   } catch (error) {
     logDetailedError(LOG_PREFIX, "countShopifyObjects failed", error);
     return null;
   }
+}
+
+async function countArticlesByBlogs(admin: ShopifyAdminGraphqlClient): Promise<number | null> {
+  let total = 0;
+  let after: string | null = null;
+
+  for (;;) {
+    const payload: BlogArticleCountsResponse = await runGraphql<BlogArticleCountsResponse>(
+      admin,
+      BLOG_ARTICLE_COUNTS_QUERY,
+      { first: 250, after },
+    );
+    const connection: BlogArticleConnection | null | undefined = payload.data?.blogs;
+    const edges: NonNullable<BlogArticleConnection["edges"]> = connection?.edges ?? [];
+
+    for (const edge of edges) {
+      const count = edge.node?.articlesCount?.count;
+      if (typeof count === "number" && count >= 0) {
+        total += count;
+      }
+    }
+
+    if (!connection?.pageInfo?.hasNextPage || !connection.pageInfo.endCursor) break;
+    after = connection.pageInfo.endCursor;
+  }
+
+  return total;
+}
+
+async function countArticlesByList(
+  admin: ShopifyAdminGraphqlClient,
+  query: string,
+): Promise<number | null> {
+  let total = 0;
+  let after: string | null = null;
+
+  for (;;) {
+    const payload: ArticleCountByListResponse = await runGraphql<ArticleCountByListResponse>(
+      admin,
+      ARTICLE_COUNT_BY_LIST_QUERY,
+      { first: 250, after, query },
+    );
+    const connection: ArticleCountConnection | null | undefined = payload.data?.articles;
+    const edges: NonNullable<ArticleCountConnection["edges"]> = connection?.edges ?? [];
+    total += edges.filter((edge) => Boolean(edge.node?.id)).length;
+
+    if (!connection?.pageInfo?.hasNextPage || !connection.pageInfo.endCursor) break;
+    after = connection.pageInfo.endCursor;
+  }
+
+  return total;
 }
 
 export type ResolvedQueryTarget = {

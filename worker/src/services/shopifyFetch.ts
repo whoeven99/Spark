@@ -2,6 +2,7 @@
 import { getShopAccessToken, invalidateShopAccessTokenCache } from "./shopAccessToken.js";
 import { shouldIncludeFieldV2 } from "./translationFilter.js";
 import { noteShopifyThrottle } from "./shopifyConcurrency.js";
+import { buildShopifyAdminGraphqlUrl } from "./shopifyAdminApiVersion.js";
 
 export const MODULE_TO_SHOPIFY_TYPE: Record<string, string> = {
   PRODUCT: "PRODUCT",
@@ -308,7 +309,7 @@ async function shopifyGraphql(
     legacyAccessToken,
     opts.preferLegacyToken ?? false,
   );
-  const url = `https://${shopDomain}/admin/api/2024-01/graphql.json`;
+  const url = buildShopifyAdminGraphqlUrl(shopDomain);
   const resp = await fetch(url, {
     method: "POST",
     headers: {
