@@ -45,7 +45,7 @@ import {
   isInternalAbortReason,
   userFacingPauseMessage,
 } from "../services/userFacingMessages.js";
-import { capTranslateUnitsByResources } from "../services/metricsUtils.js";
+import { capTranslateUnitsByResources, finalizeTranslateUnitMetricsFromBlob } from "../services/metricsUtils.js";
 import { runWritebackWorker } from "./writebackWorker.js";
 
 const HEARTBEAT_THROTTLE_MS = 30_000;
@@ -235,7 +235,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   let translateFailed = Number(redisProgressAtStart.translateFailed) || 0;
   let translateFallback = Number(redisProgressAtStart.translateFallback) || 0;
   const translateTotal = job.metrics.translateTotal || job.metrics.initTotal;
-  const translateUnitTotal = job.metrics.translateUnitTotal || 0;
+  let translateUnitTotal = job.metrics.translateUnitTotal || 0;
   // 节点数以 blob checkpoint 为准；Redis 在续跑时可能残留 inflated 值（勿 max 合并）。
   let translateUnitDone = durableUnits;
   if (translateUnitTotal > 0) {
@@ -670,12 +670,15 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
       }
       const redisUsedOnAbort = Number((await getProgress(jobId)).usedTokens) || 0;
       const unitsFromBlob = await countUnitsForCheckpointedResources(blobPrefix, job.modules);
-      translateUnitDone = capTranslateUnitsByResources({
+      const finalizedUnits = finalizeTranslateUnitMetricsFromBlob(
         translateDone,
         translateTotal,
-        translateUnitDone: unitsFromBlob,
+        translateUnitDone,
         translateUnitTotal,
-      });
+        unitsFromBlob,
+      );
+      translateUnitDone = finalizedUnits.translateUnitDone;
+      translateUnitTotal = finalizedUnits.translateUnitTotal;
       const metricsOnAbort = {
         ...(latestAbort?.metrics ?? job.metrics),
         translateDone,
@@ -727,7 +730,12 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         metrics: metricsOnAbort,
       });
       await clearControl(jobId);
-      await setProgress(jobId, { pausePending: "0", pauseReason: "" });
+      await setProgress(jobId, {
+        pausePending: "0",
+        pauseReason: "",
+        translateUnitDone,
+        translateUnitTotal,
+      });
       console.log(
         `[translate] job=${jobId} 已暂停（${abort.reason}）done=${translateDone}/${translateTotal}`,
       );
@@ -742,6 +750,16 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
       latestJob?.metrics.usedTokens ?? 0,
       redisUsedOnComplete,
     );
+    const unitsFromBlob = await countUnitsForCheckpointedResources(blobPrefix, job.modules);
+    const finalizedUnits = finalizeTranslateUnitMetricsFromBlob(
+      translateDone,
+      translateTotal,
+      translateUnitDone,
+      translateUnitTotal,
+      unitsFromBlob,
+    );
+    translateUnitDone = finalizedUnits.translateUnitDone;
+    translateUnitTotal = finalizedUnits.translateUnitTotal;
     await updateJob(shopName, jobId, {
       status: "WRITEBACK_QUEUED",
       claimedBy: null,
@@ -770,6 +788,11 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
     });
 
     await pushHint("writeback", { taskId: jobId, shopName });
+    await setProgress(jobId, {
+      translateUnitDone,
+      translateUnitTotal,
+      writebackTotal: translateDone,
+    });
     wakeWritebackWorker(jobId);
     console.log(
       `[translate] done job=${jobId} done=${translateDone} failed=${translateFailed} fallback=${translateFallback}`,
