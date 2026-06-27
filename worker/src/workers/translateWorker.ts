@@ -641,43 +641,60 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         new Date().toISOString(),
       );
 
-      // 已翻译出内容 → 先把已翻译的写回 Shopify（珍惜已完成的工作）；写回完成后
-      // 由 writebackWorker 据 pauseAfterWriteback 收尾：pause→PAUSED(可续译)、cancel→CANCELLED。
-      // 写回期间状态为 WRITING_BACK，前端「继续」自然禁用，直到写回结束。
-      if (translateDone > 0) {
+      // 取消 = 丢弃：不写回已翻译内容，直接落终态 CANCELLED。已 checkpoint 的 blob 留着但不再使用。
+      if (abort.action === "cancel") {
         await updateJob(shopName, jobId, {
-          status: "WRITEBACK_QUEUED",
+          status: "CANCELLED",
           claimedBy: null,
-          pauseAfterWriteback: abort.action,
           errorStage: null,
-          errorMessage: abort.action === "pause" ? abort.reason : null,
+          errorMessage: null,
+          pauseAfterWriteback: null,
           stageTimings: timingsOnAbort,
           metrics: metricsOnAbort,
         });
-        await clearControl(jobId); // 消费控制信号，避免写回后 resume 立即再次暂停
-        // 清掉「暂停待落盘」标记：现在是 WRITING_BACK 主动写回，不是 paused-pending。
+        await clearControl(jobId);
         await setProgress(jobId, { pausePending: "0", pauseReason: "" });
-        await pushHint("writeback", { taskId: jobId, shopName });
-        wakeWritebackWorker(jobId);
         console.log(
-          `[translate] job=${jobId} ${abort.action}→先写回已翻译（${abort.reason}）done=${translateDone}/${translateTotal}`,
+          `[translate] job=${jobId} 已取消（丢弃已翻译 ${translateDone}/${translateTotal}，${abort.reason}）`,
         );
         return;
       }
 
-      // 还没翻译出任何内容 → 直接终态，无需写回。补额度/解除暂停后 resume 重新入队续译。
+      // 暂停且已译出内容 → 先把已翻译的写回 Shopify（珍惜已完成的工作）；写回完成后
+      // 由 writebackWorker 据 pauseAfterWriteback 收尾落 PAUSED（可续译）。
+      // 写回期间状态为 WRITING_BACK（非 PAUSED），前端「继续」自然禁用，直到最终 PAUSED。
+      if (translateDone > 0) {
+        await updateJob(shopName, jobId, {
+          status: "WRITEBACK_QUEUED",
+          claimedBy: null,
+          pauseAfterWriteback: "pause",
+          errorStage: null,
+          errorMessage: abort.reason,
+          stageTimings: timingsOnAbort,
+          metrics: metricsOnAbort,
+        });
+        await clearControl(jobId); // 消费控制信号，避免写回后 resume 立即再次暂停
+        await setProgress(jobId, { pausePending: "0", pauseReason: "" });
+        await pushHint("writeback", { taskId: jobId, shopName });
+        wakeWritebackWorker(jobId);
+        console.log(
+          `[translate] job=${jobId} 暂停→先写回已翻译（${abort.reason}）done=${translateDone}/${translateTotal}`,
+        );
+        return;
+      }
+
+      // 暂停且未译出任何内容 → 直接 PAUSED，无需写回。补额度/解除暂停后 resume 重新入队续译。
       await updateJob(shopName, jobId, {
-        status: abort.action === "cancel" ? "CANCELLED" : "PAUSED",
+        status: "PAUSED",
         claimedBy: null,
         errorStage: "TRANSLATE",
-        errorMessage: abort.action === "cancel" ? null : abort.reason,
+        errorMessage: abort.reason,
         stageTimings: timingsOnAbort,
         metrics: metricsOnAbort,
       });
       await clearControl(jobId);
-      console.log(
-        `[translate] job=${jobId} 已${abort.action === "cancel" ? "取消" : "暂停"}（${abort.reason}）done=0`,
-      );
+      await setProgress(jobId, { pausePending: "0", pauseReason: "" });
+      console.log(`[translate] job=${jobId} 已暂停（${abort.reason}）done=0`);
       return;
     }
 

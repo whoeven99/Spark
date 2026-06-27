@@ -27,10 +27,11 @@ import {
   type TranslationV4Status,
 } from "../../server/translation/v4/types";
 import {
+  deriveStage,
   formatV4JobTimeLine,
   resolveTranslateProgressCounts,
   TRANSLATION_V4_UNIT_LABEL,
-} from "../../lib/translationV4Display";
+} from "../../lib/translationV4/state";
 import { resolveResumeV4JobStatus } from "../../server/translation/v4/resumeV4JobStatus";
 import { useShopLocales } from "../../hooks/useShopLocales";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
@@ -72,15 +73,6 @@ const ACTIVE_STATUSES: TranslationV4Status[] = [
   "WRITEBACK_QUEUED", "WRITING_BACK",
   "VERIFY_QUEUED", "VERIFYING",
 ];
-
-/** Aligns with stageFromStatus in api.translate.v4.task-action.ts */
-function stageFromV4Status(status: TranslationV4Status): string {
-  if (["INIT_QUEUED", "INITIALIZING", "INIT_DONE"].includes(status)) return "INIT";
-  if (["TRANSLATE_QUEUED", "TRANSLATING", "TRANSLATE_DONE"].includes(status)) return "TRANSLATE";
-  if (["WRITEBACK_QUEUED", "WRITING_BACK"].includes(status)) return "WRITEBACK";
-  if (["VERIFY_QUEUED", "VERIFYING"].includes(status)) return "VERIFY";
-  return "INIT";
-}
 
 type OptimisticActionIntent = "pause" | "cancel" | "resume";
 
@@ -685,7 +677,9 @@ export function TranslationV4Page() {
   const pollActiveJobs = useCallback(async () => {
     const activeJobIds = jobs
       .filter((j) =>
-        ACTIVE_STATUSES.includes(resolveDisplayStatus(j, progressMap[j.id])),
+        ACTIVE_STATUSES.includes(resolveDisplayStatus(j, progressMap[j.id])) ||
+        // 暂停/取消/继续 进行中：保持轮询直到 worker 把状态落定（intent 在 reconcile 里清除）。
+        optimisticActionRef.current.has(j.id),
       )
       .map((j) => j.id);
     if (!activeJobIds.length) return;
@@ -700,11 +694,17 @@ export function TranslationV4Page() {
 
           const intent = optimisticActionRef.current.get(taskId);
           if (intent === "pause" || intent === "cancel") {
+            // worker 仍在排空在飞批次 / 写回 → 保持乐观态，先不用中间状态覆盖 UI。
             if (ACTIVE_STATUSES.includes(payload.status)) return;
           }
           if (intent === "resume" && payload.status === "PAUSED") return;
 
-          if (payload.status === "PAUSED") {
+          // 状态已落定（PAUSED / 终态 / resume 后重新活跃）→ 清除 intent，解除「进行中」门控。
+          if (
+            payload.status === "PAUSED" ||
+            TERMINAL_V4_STATUSES.includes(payload.status) ||
+            (intent === "resume" && ACTIVE_STATUSES.includes(payload.status))
+          ) {
             optimisticActionRef.current.delete(taskId);
           }
 
@@ -883,7 +883,7 @@ export function TranslationV4Page() {
       applyOptimisticPatch(taskId, job, {
         status: "PAUSED",
         priorStatus,
-        errorStage: stageFromV4Status(priorStatus),
+        errorStage: deriveStage(priorStatus),
       });
       void syncTaskAction(taskId, "pause");
       return;
@@ -1312,6 +1312,7 @@ export function TranslationV4Page() {
                         locationSearch={location.search}
                         onAction={handleAction}
                         onOpenReview={setReviewJob}
+                        isPausing={optimisticActionRef.current.get(job.id) === "pause"}
                         displayLanguage={displayLanguage}
                         localeLabelMap={localeLabelMap}
                         stageDetailsOpen={resolveStageDetailsOpen(
@@ -1440,6 +1441,8 @@ type JobCardProps = {
   localeLabelMap: Record<string, string>;
   stageDetailsOpen: boolean;
   onStageDetailsOpenChange: (jobId: string, open: boolean) => void;
+  /** 暂停已发起但 worker 尚未落定 PAUSED（在飞 LLM 批次/写回未完）→ 禁用「继续」。 */
+  isPausing: boolean;
 };
 
 function mapV4StatusToTaskStatus(status: TranslationV4Status): AITaskStatus {
@@ -1720,6 +1723,7 @@ function buildJobActions(
   status: TranslationV4Status,
   onAction: JobCardProps["onAction"],
   onOpenReview: JobCardProps["onOpenReview"],
+  isPausing = false,
 ): CardAction[] {
   const actions: CardAction[] = [];
 
@@ -1740,11 +1744,16 @@ function buildJobActions(
   }
 
   if (status === "PAUSED" || status === "FAILED") {
-    actions.push({
-      label: "继续执行",
-      tone: "primary",
-      onClick: () => void onAction(job.id, "resume"),
-    });
+    if (isPausing) {
+      // 暂停尚未落定（worker 仍在排空在飞 LLM 批次 / 写回已翻译）→ 禁用「继续」，避免误触发续译。
+      actions.push({ label: "暂停中…", tone: "primary", disabled: true });
+    } else {
+      actions.push({
+        label: "继续执行",
+        tone: "primary",
+        onClick: () => void onAction(job.id, "resume"),
+      });
+    }
   }
 
   if (status !== "COMPLETED" && status !== "CANCELLED") {
@@ -1876,6 +1885,7 @@ function JobCard({
   localeLabelMap,
   stageDetailsOpen,
   onStageDetailsOpenChange,
+  isPausing,
 }: JobCardProps) {
   const metrics = resolveCardMetrics(job, progress, status);
   const translateProgress = resolveTranslateProgressCounts(metrics);
@@ -1909,7 +1919,7 @@ function JobCard({
     createdAt: job.createdAt,
     updatedAt,
   };
-  const actions = buildJobActions(job, status, onAction, onOpenReview);
+  const actions = buildJobActions(job, status, onAction, onOpenReview, isPausing);
   const showVerify = metrics.verifyTotal > 0 || ["VERIFY_QUEUED", "VERIFYING"].includes(status);
   const primaryCopy = getPrimaryCopy(status, metrics, progress?.errorStage ?? job.errorStage);
   const secondaryCopy = getSecondaryCopy(

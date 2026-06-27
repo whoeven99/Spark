@@ -62,6 +62,53 @@ export function deriveStage(status: TranslationV4Status): StageName {
   return STAGE_BY_STATUS[status] ?? "INIT";
 }
 
+// ─── State-machine transition guard ───────────────────────────────────────────
+//
+// The single authority for "which status may transition to which". Every status
+// write (app `updateV4Job`, and as defense the worker's terminal-finality check)
+// should validate against this so an illegal jump (e.g. a CANCELLED job being
+// resurrected into WRITEBACK_QUEUED) is rejected at the data layer instead of
+// silently corrupting the pipeline. Edges are derived from the actual workers +
+// task-action + resume + stale-reset transitions.
+//
+// Dead states `INIT_DONE` / `TRANSLATE_DONE` remain in the type for back-compat
+// but NOTHING transitions INTO them (no inbound edges below) — the workers go
+// straight QUEUED → -ING → next QUEUED. Treat them as reserved/unreachable.
+export const ALLOWED_V4_TRANSITIONS: Record<TranslationV4Status, TranslationV4Status[]> = {
+  CREATED: ["INIT_QUEUED", "PAUSED", "CANCELLED", "FAILED"],
+  INIT_QUEUED: ["INITIALIZING", "PAUSED", "CANCELLED", "FAILED"],
+  // INITIALIZING → COMPLETED happens for an empty (0-item) init.
+  INITIALIZING: ["TRANSLATE_QUEUED", "INIT_QUEUED", "COMPLETED", "PAUSED", "CANCELLED", "FAILED"],
+  INIT_DONE: ["TRANSLATE_QUEUED", "CANCELLED", "FAILED"], // reserved (no inbound edge)
+  TRANSLATE_QUEUED: ["TRANSLATING", "PAUSED", "CANCELLED", "FAILED"],
+  // TRANSLATING → TRANSLATE_QUEUED on stale-reset / duplicate-claim yield.
+  TRANSLATING: ["WRITEBACK_QUEUED", "TRANSLATE_QUEUED", "PAUSED", "CANCELLED", "FAILED"],
+  TRANSLATE_DONE: ["WRITEBACK_QUEUED", "CANCELLED", "FAILED"], // reserved (no inbound edge)
+  WRITEBACK_QUEUED: ["WRITING_BACK", "PAUSED", "CANCELLED", "FAILED"],
+  // WRITING_BACK → WRITEBACK_QUEUED on stale-reset; → PAUSED on pause-after-writeback.
+  WRITING_BACK: ["VERIFY_QUEUED", "WRITEBACK_QUEUED", "PAUSED", "CANCELLED", "FAILED"],
+  VERIFY_QUEUED: ["VERIFYING", "PAUSED", "CANCELLED", "FAILED"],
+  // VERIFYING → PAUSED when translation only partially covered (e.g. quota).
+  VERIFYING: ["COMPLETED", "VERIFY_QUEUED", "PAUSED", "CANCELLED", "FAILED"],
+  // Resume re-queues at the right stage; a paused/failed job may also be cancelled.
+  PAUSED: ["INIT_QUEUED", "TRANSLATE_QUEUED", "WRITEBACK_QUEUED", "VERIFY_QUEUED", "CANCELLED"],
+  FAILED: ["INIT_QUEUED", "TRANSLATE_QUEUED", "WRITEBACK_QUEUED", "VERIFY_QUEUED", "CANCELLED"],
+  COMPLETED: [], // terminal
+  CANCELLED: [], // terminal
+};
+
+/**
+ * Whether `from → to` is a legal status transition. A no-op (`from === to`) is
+ * always allowed (status-preserving updates that only touch metrics/timestamps).
+ */
+export function isV4TransitionAllowed(
+  from: TranslationV4Status,
+  to: TranslationV4Status,
+): boolean {
+  if (from === to) return true;
+  return (ALLOWED_V4_TRANSITIONS[from] ?? []).includes(to);
+}
+
 // ─── Status label ─────────────────────────────────────────────────────────────
 
 const STATUS_LABELS: Record<TranslationV4Status, string> = {

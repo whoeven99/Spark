@@ -1,5 +1,6 @@
 import { CosmosClient, type Container } from "@azure/cosmos";
 import { sameTranslationLocale } from "./localeUtils";
+import { isV4TransitionAllowed } from "../../../lib/translationV4/state";
 import {
   EMPTY_V4_METRICS,
   type TranslationV4Job,
@@ -158,6 +159,18 @@ export async function updateV4Job(
       .item(jobId, shopName)
       .read<TranslationV4Job>();
     if (!existing) return null;
+    // 状态机守卫：拒绝非法状态跳转（如已 CANCELLED/COMPLETED 的任务被复活）。
+    // 仅在本次更新确实改变 status 时校验；metrics/token 等不带 status 的更新放行。
+    if (
+      updates.status !== undefined &&
+      updates.status !== existing.status &&
+      !isV4TransitionAllowed(existing.status, updates.status)
+    ) {
+      console.error(
+        `[cosmosV4Store] 非法状态跳转被拒绝 job=${jobId} ${existing.status} → ${updates.status}`,
+      );
+      return null;
+    }
     const updated: TranslationV4Job = {
       ...existing,
       ...updates,
