@@ -390,6 +390,18 @@ export async function updateJob(
         .item(jobId, shopName)
         .read<TranslationV4Job>();
       if (!existing) return;
+      // 终态保护：COMPLETED / CANCELLED 不可逆。拒绝任何把终态改回运行态的写入，
+      // 防止 stale-reset / 竞态把已完成或已取消的任务复活（权威转换表在 app 侧 state.ts）。
+      if (
+        updates.status !== undefined &&
+        updates.status !== existing.status &&
+        (existing.status === "COMPLETED" || existing.status === "CANCELLED")
+      ) {
+        console.error(
+          `[cosmosV4] 终态保护：拒绝 ${existing.status} → ${updates.status} job=${jobId}`,
+        );
+        return;
+      }
       const updated: TranslationV4Job = {
         ...existing,
         ...updates,

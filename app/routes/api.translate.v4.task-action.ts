@@ -42,12 +42,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (actionType === "pause") {
     // Save which stage we're pausing from so resume can return to the right queue
     const pauseStage = deriveStage(job.status);
-    await updateV4Job(shopName, taskId, {
-      status: "PAUSED",
-      claimedBy: null,
-      errorStage: pauseStage,
-    });
-    await setV4Control(taskId, "pause"); // 让正在运行的阶段中途即时暂停
+    // 控制键是 worker 中途暂停的真正触发信号。
+    await setV4Control(taskId, "pause");
+    // 翻译进行中：不抢写 PAUSED——让 worker 排空在飞 LLM 批次、写回已翻译后再落定 PAUSED。
+    // 否则 Cosmos 立刻变 PAUSED，刷新页面后「继续」会在 LLM 仍在返回时提前点亮（误触发续译）。
+    // 其它状态（排队中/初始化/写回/校验，worker 不会即时接管）由 app 直接落 PAUSED。
+    if (job.status !== "TRANSLATING") {
+      await updateV4Job(shopName, taskId, {
+        status: "PAUSED",
+        claimedBy: null,
+        errorStage: pauseStage,
+      });
+    }
     return data({ ok: true, status: "PAUSED" });
   }
 
