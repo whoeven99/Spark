@@ -11,6 +11,7 @@ import {
   URL_PREFIXES,
   WHITELIST_WORDS,
 } from "./constants.js";
+import { isTranslatableHtmlContent } from "../htmlTranslate.js";
 import { isHtmlContent, isJsonObject } from "./jsonUtils.js";
 import { matchesRejectRule } from "./rejectRules.js";
 
@@ -36,7 +37,7 @@ export function translationRuleJudgment(key: string, value: string): boolean {
   }
 
   if (isHtmlContent(value)) {
-    return true;
+    return isTranslatableHtmlContent(value);
   }
 
   if (/\d+px\b/.test(value)) {

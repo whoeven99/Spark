@@ -9,6 +9,7 @@
  */
 
 import { ses } from "tencentcloud-sdk-nodejs-ses";
+import { getTsfRemainingForEmail } from "./tsfQuota.js";
 
 const LOG = "[workerEmail]";
 
@@ -72,6 +73,12 @@ function parseShopName(shopName: string): string {
 /** 数字格式化为千分位（对齐 Java NumberFormat.getNumberInstance(Locale.US)）。 */
 function formatNumber(n: number): string {
   return n.toLocaleString("en-US");
+}
+
+/** 邮件模板 remaining_credits 占位：查不到额度时保留 em dash。 */
+function formatRemainingCredits(remaining: number | null): string {
+  if (remaining == null) return "—";
+  return formatNumber(Math.max(0, Math.round(remaining)));
 }
 
 async function doSend(
@@ -182,6 +189,7 @@ export async function sendManualTranslationSuccessEmail(
   job: TranslationJobSummary,
 ): Promise<boolean> {
   const shortName = parseShopName(shopName);
+  const remainingCredits = await getTsfRemainingForEmail(shopName);
   logDetail("send-manual-success-start", {
     shopName,
     shortName,
@@ -189,6 +197,7 @@ export async function sendManualTranslationSuccessEmail(
     target: job.target,
     usedTokens: job.usedTokens,
     elapsedMinutes: job.elapsedMinutes,
+    remainingCredits,
     templateId: TEMPLATE_MANUAL_SUCCESS,
   });
   return doSend(
@@ -200,7 +209,7 @@ export async function sendManualTranslationSuccessEmail(
       language: job.target,
       time: `${job.elapsedMinutes} minutes`,
       credit_count: formatNumber(job.usedTokens),
-      remaining_credits: "—",
+      remaining_credits: formatRemainingCredits(remainingCredits),
     },
     to,
   );

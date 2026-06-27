@@ -27,6 +27,13 @@ import {
   sanitizeHtmlTextTranslation,
 } from "./htmlTranslate.js";
 import { enforceTranslateResultLimits } from "./translationFieldLimits.js";
+import {
+  maskPlaceholders,
+  placeholdersIntact,
+  protectedLiteralsPreserved,
+  restoreMaskedPlaceholders,
+} from "./placeholderMask.js";
+import { buildTargetLanguageBlock } from "./targetLanguagePrompt.js";
 
 // ─── LLM Key Pool ─────────────────────────────────────────────────────────────
 //
@@ -2141,8 +2148,9 @@ async function translateItemsRouted(
     const restored = restoreMaskedPlaceholders(decoded, placeholders);
     if (placeholders.length > 0) {
       const tokensOk =
-        placeholders.every((t) => restored.includes(t)) ||
-        placeholdersIntact(restored, placeholders);
+        (placeholders.every((t) => restored.includes(t)) ||
+          placeholdersIntact(restored, placeholders)) &&
+        protectedLiteralsPreserved(placeholders, restored);
       if (!tokensOk) {
         console.warn(`[route] placeholder corrupted for key=${it.key}, using original`);
         result.set(it.key, { value: it.value, status: "fallback", engine: null, tokens: 0 });
@@ -2261,86 +2269,8 @@ function decodeQuoteEntities(text: string): string {
 
 // ─── Placeholder masking ───────────────────────────────────────────────────────
 
-/**
- * Variables that must survive translation verbatim. LLMs otherwise translate the
- * word inside them (e.g. {{quantity}} → {{quantité}}, [qty] → [qté]), which
- * breaks Shopify's variable substitution. We mask them before sending and restore
- * after, instead of trusting the model to leave them alone.
- *
- * Covered: Liquid/handlebars `{{ x }}`, Ruby i18n `%{x}`, template `${x}`,
- * printf `%s/%d/%1$s`, numbered `{0}`, and bracket vars `[name]` (but NOT
- * markdown links `[text](url)`).
- */
-const PLACEHOLDER_RE =
-  /\{\{[^{}]*\}\}|%\{[^}]+\}|\$\{[^}]+\}|%\d*\$?[sd]|\{\d+\}|\[[A-Za-z_][\w-]*\](?!\()/g;
-
-/** Absolute URLs and root-relative site paths — must survive translation verbatim. */
-const PROTECTED_URL_RE = /https?:\/\/[^\s<>"']+/gi;
-const PROTECTED_PATH_RE = /\/[a-zA-Z0-9_\-./%~]+(?:\?[a-zA-Z0-9_\-./%&=]*)?/g;
-
-// Rare bracket pair the model treats as an opaque token and won't translate.
-const SENT_OPEN = "⟦"; // ⟦
-const SENT_CLOSE = "⟧"; // ⟧
-const SENT_RE = /⟦(\d+)⟧/g;
-
-function pushMaskedToken(_text: string, tokens: string[], match: string): string {
-  const i = tokens.length;
-  tokens.push(match);
-  return `${SENT_OPEN}${i}${SENT_CLOSE}`;
-}
-
-function maskProtectedLiterals(text: string, tokens: string[]): string {
-  let out = text.replace(PROTECTED_URL_RE, (m) => pushMaskedToken(text, tokens, m));
-  out = out.replace(PROTECTED_PATH_RE, (m) => pushMaskedToken(text, tokens, m));
-  return out;
-}
-
-function maskPlaceholders(text: string): { masked: string; tokens: string[] } {
-  const tokens: string[] = [];
-  let masked = maskProtectedLiterals(text, tokens);
-  masked = masked.replace(PLACEHOLDER_RE, (m) => pushMaskedToken(text, tokens, m));
-  return { masked, tokens };
-}
-
 /** @internal Exported for unit tests. */
-export function maskPlaceholdersForTest(text: string): { masked: string; tokens: string[] } {
-  return maskPlaceholders(text);
-}
-
-function restorePlaceholders(text: string, tokens: string[]): string {
-  return text.replace(SENT_RE, (_m, d: string) => tokens[Number(d)] ?? "");
-}
-
-/** Recover common LLM corruptions of ⟦n⟧ (e.g. S0, [0]) before giving up. */
-function restorePlaceholdersLenient(text: string, tokens: string[]): string {
-  let out = text;
-  for (let i = 0; i < tokens.length; i++) {
-    const sentinel = `${SENT_OPEN}${i}${SENT_CLOSE}`;
-    if (out.includes(sentinel)) continue;
-    const corruptPatterns = [
-      new RegExp(`\\[number\\]${i}\\[number\\]`, "gi"),
-      new RegExp(`\\bS${i}\\b`, "g"),
-      new RegExp(`\\[${i}\\]`, "g"),
-      new RegExp(`\\{${i}\\}`, "g"),
-    ];
-    for (const re of corruptPatterns) {
-      if (re.test(out)) {
-        out = out.replace(re, tokens[i] ?? sentinel);
-        break;
-      }
-    }
-  }
-  return out;
-}
-
-function restoreMaskedPlaceholders(decoded: string, tokens: string[]): string {
-  if (tokens.length === 0) return decoded;
-  const strict = restorePlaceholders(decoded, tokens);
-  if (tokens.every((t) => strict.includes(t))) return strict;
-  const lenient = restorePlaceholdersLenient(decoded, tokens);
-  if (tokens.every((t) => lenient.includes(t))) return lenient;
-  return strict;
-}
+export { maskPlaceholders as maskPlaceholdersForTest } from "./placeholderMask.js";
 
 /** Reject translations that leak JSON structure into a plain text leaf. */
 function sanitizeJsonSlotTranslation(original: string, translated: string): string {
@@ -2354,14 +2284,6 @@ function sanitizeJsonSlotTranslation(original: string, translated: string): stri
   return t;
 }
 
-/** True if every masked token's sentinel survived intact in the model output. */
-function placeholdersIntact(text: string, tokens: string[]): boolean {
-  for (let i = 0; i < tokens.length; i++) {
-    if (!text.includes(`${SENT_OPEN}${i}${SENT_CLOSE}`)) return false;
-  }
-  return true;
-}
-
 /**
  * Build the static system prompt. Everything here is stable for a given
  * (source, target, glossary) → it forms a byte-identical prefix across batches
@@ -2373,6 +2295,7 @@ function buildSystemPrompt(target: string, glossaryLines: string[], profileBlock
     ? `\nGlossary (apply consistently):\n${glossaryLines.join("\n")}\n`
     : "";
   const shopContextBlock = profileBlock ? `\n${profileBlock}\n` : "";
+  const targetLangBlock = buildTargetLanguageBlock(target);
   return `You are a professional e-commerce translator.${shopContextBlock}
 Detect the input language automatically and translate the content into "${target}".
 Rules:
@@ -2389,6 +2312,7 @@ Rules:
 - If the value is empty, return it unchanged
 - If a field key is "title", translatedValue MUST be at most 255 characters; shorten naturally while preserving the core meaning
 - You MUST return an entry for every key in the input
+${targetLangBlock}
 ${glossaryBlock}
 The user message is a JSON array of {"key","value"} objects to translate.
 Return ONLY a JSON object {"translations":[{"key":"<key>","translatedValue":"<text>"}]}, no markdown.`;

@@ -30,6 +30,38 @@ describe("tsfQuota URL normalization", () => {
       { method: "GET" },
     );
   });
+
+  it("returns null from getTsfRemainingForEmail when quota query fails", async () => {
+    process.env.TSF_SERVER_URL = "https://example.test";
+
+    const fetchMock = vi.fn(async () => ({
+      json: async () => ({ success: false, errorMsg: "not found", response: null }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getTsfRemainingForEmail } = await import("../../worker/src/services/tsfQuota.js");
+    await expect(getTsfRemainingForEmail("test.myshopify.com")).resolves.toBeNull();
+  });
+
+  it("returns remaining from getTsfRemainingForEmail when quota query succeeds", async () => {
+    process.env.TSF_SERVER_URL = "https://example.test";
+
+    const fetchMock = vi.fn(async () => ({
+      json: async () => ({
+        success: true,
+        response: {
+          shopName: "test.myshopify.com",
+          maxToken: 100_000,
+          usedToken: 48_088,
+          remaining: 51_912,
+        },
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getTsfRemainingForEmail } = await import("../../worker/src/services/tsfQuota.js");
+    await expect(getTsfRemainingForEmail("test.myshopify.com")).resolves.toBe(51_912);
+  });
 });
 
 describe("quotaEnforceEnabled", () => {

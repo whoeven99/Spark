@@ -540,10 +540,10 @@ describe("translateBatch — placeholder masking", () => {
     expect(deepSeekCalls(fetchMock).length).toBeGreaterThan(0);
   });
 
-  it("recovers S0 corruption back to masked path", async () => {
+  it("recovers [number]0[number] corruption back to masked path", async () => {
     const src = "如 /blogs/news/my-first-article，方便浏览。";
     mockFetch({
-      deepseek: [llmResponse([{ key: "f0", translatedValue: "مثل S0، للتصفح." }])],
+      deepseek: [llmResponse([{ key: "f0", translatedValue: "مثل [number]0[number]، للتصفح." }])],
     });
     const out = await translateBatch(
       [{ key: "body", value: src, digest: "d1" }],
@@ -586,13 +586,17 @@ describe("htmlNodePartsOf — br and anchor preprocessing", () => {
     expect(nodeParts[0][0]).toContain("⟦BR⟧");
   });
 
-  it("merges anchor-split sentences into one translation unit", async () => {
-    const { htmlNodePartsOfForTest } = await import("../../worker/src/services/llmTranslate.js");
+  it("preserves anchor href when link splits a sentence", async () => {
+    const { roundtripHtmlForTest } = await import("../../worker/src/services/llmTranslate.js");
     const html =
       '<p>These keyboards, quickly emerging as contenders for <a href="/x">best gaming keyboards</a>, borrow aerospace tech.</p>';
-    const { nodeParts } = htmlNodePartsOfForTest(html);
-    expect(nodeParts).toHaveLength(1);
-    expect(nodeParts[0][0]).toContain("contenders for best gaming keyboards, borrow");
+    const out = roundtripHtmlForTest(html, (text) => {
+      if (text === "best gaming keyboards") return "最高のゲーミングキーボード";
+      if (text.startsWith("These keyboards")) return "これらのキーボード";
+      return "、航空宇宙技術を借りています。";
+    });
+    expect(out).toContain('href="/x"');
+    expect(out).toContain("最高のゲーミングキーボード");
   });
 
   it("merges span-split paragraphs into one translation unit", async () => {
@@ -732,6 +736,62 @@ describe("translateBatch — json rich text", () => {
     expect(parsed.children[0]!.children[0]!.value).toBe("مرحبا");
     expect(parsed.children[0]!.children[1]!.url).toBe("https://ciwi.ai");
     expect(parsed.children[0]!.children[1]!.children![0]!.value).toBe("تسمية الرابط");
+  });
+
+  it("preserves mixed zh/en rich-text with link and bold nodes", async () => {
+    const root = {
+      type: "root",
+      children: [
+        {
+          type: "paragraph",
+          children: [
+            {
+              type: "text",
+              value: "- 我想要测试下元字段\n- 看下 context 的混排效果\n- May the force be with you",
+            },
+          ],
+        },
+        {
+          type: "paragraph",
+          children: [
+            { type: "text", value: "测试通过，", bold: true },
+            {
+              url: "https://ciwi.ai",
+              type: "link",
+              children: [{ type: "text", value: "潜身在此山" }],
+            },
+          ],
+        },
+      ],
+    };
+    mockFetch({
+      deepseek: [
+        llmResponse([
+          { key: "f0", translatedValue: "أريد اختبار الحقل" },
+          { key: "f1", translatedValue: "نجح الاختبار،" },
+          { key: "f2", translatedValue: "هنا" },
+        ]),
+      ],
+    });
+    const out = await translateBatch(
+      [{ key: "value", value: JSON.stringify(root), digest: "d1" }],
+      "zh-CN",
+      "ar",
+      LLM_MODEL,
+      "shop.myshopify.com",
+    );
+    const parsed = JSON.parse(out[0].translatedValue) as {
+      type: string;
+      children: Array<{
+        type: string;
+        children: Array<{ type: string; value?: string; url?: string; bold?: boolean }>;
+      }>;
+    };
+    expect(parsed.type).toBe("root");
+    expect(parsed.children).toHaveLength(2);
+    expect(parsed.children[1]!.children[1]!.url).toBe("https://ciwi.ai");
+    expect(parsed.children[1]!.children[0]!.bold).toBe(true);
+    expect(out[0].translatedValue).not.toMatch(/]\s*,\s*"type"/);
   });
 });
 

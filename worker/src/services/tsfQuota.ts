@@ -84,23 +84,9 @@ function quotaBase(): string | null {
   return base;
 }
 
-/**
- * 读取剩余额度（worker 进入 TRANSLATE 时 seed 初始并发用）。
- * GET {base}/quota/query?shopName=
- * 查询失败 → 保守返回 1（从并发 1 起步，由首次扣减纠正），不直接掐断任务。
- */
-export async function getTsfRemaining(shop: string): Promise<number> {
-  return getTsfRemainingWithRetry(shop, 1);
-}
-
-/** 带重试的额度查询；续跑时避免一次抖动就把并发 seed 到 1。 */
-export async function getTsfRemainingWithRetry(
-  shop: string,
-  attempts = 3,
-): Promise<number> {
-  // 调用方（worker）已按来源决定是否启用；此处仅在未配置后端时降级为「无限」。
+async function queryTsfRemaining(shop: string, attempts = 3): Promise<number | null> {
   const base = quotaBase();
-  if (!base) return Number.MAX_SAFE_INTEGER;
+  if (!base) return null;
 
   const maxAttempts = Math.max(1, attempts);
   for (let i = 0; i < maxAttempts; i++) {
@@ -122,7 +108,31 @@ export async function getTsfRemainingWithRetry(
       await new Promise((r) => setTimeout(r, 200 * (i + 1)));
     }
   }
-  return 1;
+  return null;
+}
+
+/**
+ * 读取剩余额度（worker 进入 TRANSLATE 时 seed 初始并发用）。
+ * GET {base}/quota/query?shopName=
+ * 查询失败 → 保守返回 1（从并发 1 起步，由首次扣减纠正），不直接掐断任务。
+ */
+export async function getTsfRemaining(shop: string): Promise<number> {
+  return getTsfRemainingWithRetry(shop, 1);
+}
+
+/** 带重试的额度查询；续跑时避免一次抖动就把并发 seed 到 1。 */
+export async function getTsfRemainingWithRetry(
+  shop: string,
+  attempts = 3,
+): Promise<number> {
+  // 调用方（worker）已按来源决定是否启用；此处仅在未配置后端时降级为「无限」。
+  if (!quotaBase()) return Number.MAX_SAFE_INTEGER;
+  return (await queryTsfRemaining(shop, attempts)) ?? 1;
+}
+
+/** 邮件展示用：查询剩余额度；不可查或失败时返回 null。 */
+export async function getTsfRemainingForEmail(shop: string): Promise<number | null> {
+  return queryTsfRemaining(shop, 3);
 }
 
 /**
