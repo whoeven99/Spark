@@ -13,7 +13,8 @@ import {
   formatTranslationV4TranslateDetailLocalized,
   formatV4JobTimeLine,
   formatV4TaskElapsed,
-} from "../../../lib/translationV4Display";
+  translationV4StatusLabel,
+} from "../../../lib/translationV4/state";
 import { TERMINAL_V4_STATUSES } from "../../../server/translation/v4/types";
 
 // ─── Token-to-credit conversion ───────────────────────────────────────────────
@@ -24,28 +25,9 @@ function tokensToCredits(tokens: number): number {
   return Math.ceil(tokens / TOKENS_PER_CREDIT);
 }
 
-// ─── Pure helpers (inlined from v4JobProgress.server.ts) ──────────────────────
-
-function translationV4StatusLabel(status: TranslationV4Status): string {
-  const labels: Record<TranslationV4Status, string> = {
-    CREATED: "已创建",
-    INIT_QUEUED: "等待初始化",
-    INITIALIZING: "初始化中",
-    INIT_DONE: "初始化完成",
-    TRANSLATE_QUEUED: "等待翻译",
-    TRANSLATING: "翻译中",
-    TRANSLATE_DONE: "翻译完成",
-    WRITEBACK_QUEUED: "等待写回",
-    WRITING_BACK: "写回 Shopify 中",
-    VERIFY_QUEUED: "等待校验",
-    VERIFYING: "校验中",
-    COMPLETED: "已完成",
-    FAILED: "失败",
-    PAUSED: "已暂停",
-    CANCELLED: "已取消",
-  };
-  return labels[status] ?? status;
-}
+// ─── Pure helpers ─────────────────────────────────────────────────────────────
+// `translationV4StatusLabel` + formatters now come from the canonical
+// client-safe module `app/lib/translationV4/state`.
 
 function mapV4StatusToAIStatus(status: TranslationV4Status): AITaskStatus {
   if (status === "COMPLETED") return "succeeded";

@@ -66,22 +66,6 @@ function extractHtmlTextNodes(html: string): { template: string; texts: string[]
   const root = parse(html, {
     lowerCaseTagName: false,
     comment: false,
-    voidTag: {
-      area: true,
-      base: true,
-      br: true,
-      col: true,
-      embed: true,
-      hr: true,
-      img: true,
-      input: true,
-      link: true,
-      meta: true,
-      param: true,
-      source: true,
-      track: true,
-      wbr: true,
-    },
     blockTextElements: {
       script: true,
       noscript: true,
