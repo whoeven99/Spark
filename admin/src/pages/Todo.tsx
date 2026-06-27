@@ -204,11 +204,16 @@ export default function Todo() {
   const itemsFor = (status: TodoStatus, col: TodoAssignee | null) =>
     todos.filter((t) => t.status === status && (t.assignee ?? null) === col);
 
-  const colTmpl = `150px repeat(${COLS.length}, 1fr)`;
+  const colTmpl = `150px repeat(${COLS.length}, minmax(0, 1fr))`;
 
   return (
     <div style={{ fontFamily: FONT, color: "#1c1b1a" }}>
       <style>{`
+        .td-board { display: grid; grid-template-columns: ${colTmpl}; column-gap: 0; align-items: stretch; }
+        .td-board-cell { min-width: 0; padding: 0 6px; }
+        .td-card { min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden; }
+        .td-card .td-title { word-break: break-word; overflow-wrap: anywhere; min-width: 0; }
+        .td-card .td-desc { word-break: break-word; overflow-wrap: anywhere; }
         .td-card .td-actions { opacity: 0; transition: opacity .14s ease; }
         .td-card:hover .td-actions { opacity: 1; }
         .td-iconbtn:hover { background: #f0eeec !important; }
@@ -235,92 +240,86 @@ export default function Todo() {
       {/* board */}
       <Spin spinning={loading}>
         <div style={{ background: "#fbfaf9", border: "1px solid #ece8e3", borderRadius: 18, padding: "14px 14px 18px", overflowX: "auto" }}>
-          <div style={{ minWidth: 920 }}>
+          <div className="td-board" style={{ minWidth: 920 }}>
 
-            {/* member column headers */}
-            <div style={{ display: "grid", gridTemplateColumns: colTmpl, marginBottom: 8 }}>
-              <div />
-              {COLS.map((c) => (
-                <div key={String(c.key)} style={{ padding: "0 6px" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "8px 12px", background: "#fff", border: "1px solid #ece8e3", borderRadius: 11 }}>
-                    <Avatar memKey={c.key} size={24} />
-                    <span style={{ fontSize: 13, fontWeight: 700, color: c.key ? "#3c3935" : "#9ca3af" }}>{c.label}</span>
-                    <span style={{ fontFamily: MONO, fontSize: 11, color: "#b3ada4" }}>
-                      ·{todos.filter((t) => (t.assignee ?? null) === c.key).length}
-                    </span>
-                  </div>
+            {/* member column headers — same grid as status rows */}
+            <div />
+            {COLS.map((c) => (
+              <div key={`hdr-${String(c.key)}`} className="td-board-cell" style={{ marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "8px 12px", background: "#fff", border: "1px solid #ece8e3", borderRadius: 11 }}>
+                  <Avatar memKey={c.key} size={24} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: c.key ? "#3c3935" : "#9ca3af" }}>{c.label}</span>
+                  <span style={{ fontFamily: MONO, fontSize: 11, color: "#b3ada4" }}>
+                    ·{todos.filter((t) => (t.assignee ?? null) === c.key).length}
+                  </span>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
 
-            {/* status rows */}
-            {STATUS_ORDER.map((stKey) => {
+            {/* status rows — share column tracks with headers */}
+            {STATUS_ORDER.flatMap((stKey) => {
               const st = STATUS[stKey];
               const rowTotal = todos.filter((t) => t.status === stKey).length;
-              return (
-                <div key={stKey} style={{ display: "grid", gridTemplateColumns: colTmpl, alignItems: "stretch", marginBottom: 14 }}>
-                  {/* status rail */}
-                  <div style={{ paddingTop: 12, paddingRight: 6 }}>
-                    <div style={{ background: st.soft, borderRadius: 13, padding: 14, border: `1px solid ${st.hue}22` }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ color: st.hue, fontSize: 13 }}>{st.icon}</span>
-                        <span style={{ fontSize: 14, fontWeight: 800, color: st.hue, letterSpacing: "-.01em" }}>{st.label}</span>
-                      </div>
-                      <div style={{ fontFamily: MONO, fontSize: 22, fontWeight: 700, color: st.hue, marginTop: 8, lineHeight: 1 }}>{rowTotal}</div>
-                      <div style={{ fontSize: 11, color: st.hue, opacity: 0.7, marginTop: 3, fontWeight: 600 }}>项任务</div>
+              return [
+                <div key={`${stKey}-rail`} style={{ paddingTop: 12, paddingRight: 6, marginBottom: 14 }}>
+                  <div style={{ background: st.soft, borderRadius: 13, padding: 14, border: `1px solid ${st.hue}22` }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ color: st.hue, fontSize: 13 }}>{st.icon}</span>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: st.hue, letterSpacing: "-.01em" }}>{st.label}</span>
                     </div>
+                    <div style={{ fontFamily: MONO, fontSize: 22, fontWeight: 700, color: st.hue, marginTop: 8, lineHeight: 1 }}>{rowTotal}</div>
+                    <div style={{ fontSize: 11, color: st.hue, opacity: 0.7, marginTop: 3, fontWeight: 600 }}>项任务</div>
                   </div>
-
-                  {/* member cells (drop targets) */}
-                  {COLS.map((col) => {
-                    const id = cellId(stKey, col.key);
-                    const over = overCell === id;
-                    const items = itemsFor(stKey, col.key);
-                    return (
-                      <div
-                        key={String(col.key)}
-                        style={{ padding: "0 6px", borderRight: col.key === null ? "none" : "1px dashed #ebe6e0" }}
-                        onDragOver={(e) => { e.preventDefault(); if (overCell !== id) setOverCell(id); }}
-                        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOverCell((c) => (c === id ? null : c)); }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          const t = todos.find((x) => x.id === dragId);
-                          if (t) moveTo(t, stKey, col.key);
-                          setDragId(null); setOverCell(null);
-                        }}
-                      >
-                        <div style={{
-                          padding: 10, display: "flex", flexDirection: "column", gap: 9, minHeight: 96,
-                          background: over ? col.soft : "transparent",
-                          boxShadow: over ? `inset 0 0 0 2px ${col.hue}` : "none",
-                          borderRadius: over ? 12 : 0, transition: "background .12s ease, box-shadow .12s ease",
-                        }}>
-                          {items.length === 0 ? (
-                            <div style={{ flex: 1, minHeight: 72, borderRadius: 11, border: `1.5px dashed ${over ? col.hue : "#e7e2db"}`, display: "flex", alignItems: "center", justifyContent: "center", color: over ? col.hue : "#cfc9c1", fontSize: 11.5, fontWeight: 600 }}>
-                              {over ? "放到这里" : "—"}
-                            </div>
-                          ) : (
-                            items.map((todo) => (
-                              <TaskCard
-                                key={todo.id}
-                                todo={todo}
-                                dragging={dragId === todo.id}
-                                onDragStart={() => setDragId(todo.id)}
-                                onDragEnd={() => { setDragId(null); setOverCell(null); }}
-                                onEdit={() => openEdit(todo)}
-                                onDelete={() => handleDelete(todo.id)}
-                                onPriorityChange={(p) => patchTodo(todo, { priority: p })}
-                                onAssigneeChange={(a) => patchTodo(todo, { assignee: a })}
-                                onEtaDaysChange={(d) => patchTodo(todo, { etaDays: d })}
-                              />
-                            ))
-                          )}
-                        </div>
+                </div>,
+                ...COLS.map((col) => {
+                  const id = cellId(stKey, col.key);
+                  const over = overCell === id;
+                  const items = itemsFor(stKey, col.key);
+                  return (
+                    <div
+                      key={`${stKey}-${String(col.key)}`}
+                      className="td-board-cell"
+                      style={{ marginBottom: 14, borderRight: col.key === null ? "none" : "1px dashed #ebe6e0" }}
+                      onDragOver={(e) => { e.preventDefault(); if (overCell !== id) setOverCell(id); }}
+                      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOverCell((c) => (c === id ? null : c)); }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const t = todos.find((x) => x.id === dragId);
+                        if (t) moveTo(t, stKey, col.key);
+                        setDragId(null); setOverCell(null);
+                      }}
+                    >
+                      <div style={{
+                        padding: 10, display: "flex", flexDirection: "column", gap: 9, minHeight: 96,
+                        background: over ? col.soft : "transparent",
+                        boxShadow: over ? `inset 0 0 0 2px ${col.hue}` : "none",
+                        borderRadius: over ? 12 : 0, transition: "background .12s ease, box-shadow .12s ease",
+                      }}>
+                        {items.length === 0 ? (
+                          <div style={{ flex: 1, minHeight: 72, borderRadius: 11, border: `1.5px dashed ${over ? col.hue : "#e7e2db"}`, display: "flex", alignItems: "center", justifyContent: "center", color: over ? col.hue : "#cfc9c1", fontSize: 11.5, fontWeight: 600 }}>
+                            {over ? "放到这里" : "—"}
+                          </div>
+                        ) : (
+                          items.map((todo) => (
+                            <TaskCard
+                              key={todo.id}
+                              todo={todo}
+                              dragging={dragId === todo.id}
+                              onDragStart={() => setDragId(todo.id)}
+                              onDragEnd={() => { setDragId(null); setOverCell(null); }}
+                              onEdit={() => openEdit(todo)}
+                              onDelete={() => handleDelete(todo.id)}
+                              onPriorityChange={(p) => patchTodo(todo, { priority: p })}
+                              onAssigneeChange={(a) => patchTodo(todo, { assignee: a })}
+                              onEtaDaysChange={(d) => patchTodo(todo, { etaDays: d })}
+                            />
+                          ))
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
-              );
+                    </div>
+                  );
+                }),
+              ];
             })}
           </div>
         </div>
@@ -480,7 +479,7 @@ function TaskCard({
     >
       <div style={{ position: "absolute", left: 0, top: 12, bottom: 12, width: 3, borderRadius: 3, background: pri.color }} />
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-        <div style={{ flex: 1, fontSize: 13.5, fontWeight: 700, lineHeight: 1.42, color: "#26231f", letterSpacing: "-.01em" }}>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 700, lineHeight: 1.42, color: "#26231f", letterSpacing: "-.01em" }} className="td-title">
           {todo.title}
         </div>
         <div className="td-actions" style={{ display: "flex", gap: 2, flexShrink: 0, marginTop: -2 }}>
@@ -510,7 +509,7 @@ function TaskCard({
       </div>
 
       {todo.description && (
-        <div style={{ fontSize: 12, color: "#8a847c", lineHeight: 1.5, marginTop: 6, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } as React.CSSProperties}>
+        <div className="td-desc" style={{ fontSize: 12, color: "#8a847c", lineHeight: 1.5, marginTop: 6, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } as React.CSSProperties}>
           {todo.description}
         </div>
       )}
