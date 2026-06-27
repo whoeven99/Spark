@@ -50,12 +50,11 @@ const PROC_TO_QUEUED = {
   INITIALIZING: ["INIT_QUEUED", "init"],
   TRANSLATING: ["TRANSLATE_QUEUED", "translate"],
   WRITING_BACK: ["WRITEBACK_QUEUED", "writeback"],
-  VERIFYING: ["VERIFY_QUEUED", "verify"],
-  // 已是排队态也允许直接推 hint 催一下
+  VERIFYING: ["VERIFY_QUEUED", null],
   INIT_QUEUED: ["INIT_QUEUED", "init"],
   TRANSLATE_QUEUED: ["TRANSLATE_QUEUED", "translate"],
   WRITEBACK_QUEUED: ["WRITEBACK_QUEUED", "writeback"],
-  VERIFY_QUEUED: ["VERIFY_QUEUED", "verify"],
+  VERIFY_QUEUED: ["VERIFY_QUEUED", null],
 };
 
 const client = new CosmosClient({ endpoint, key });
@@ -100,6 +99,47 @@ function writebackNeedsRetry(metrics) {
   const done = metrics?.writebackDone ?? 0;
   const failed = metrics?.writebackFailed ?? 0;
   return done < total || failed > 0;
+}
+
+function resolveFinalStatusAfterWriteback(metrics) {
+  const initTotal = metrics?.initTotal ?? 0;
+  const nothingToTranslate = initTotal === 0;
+  const writebackDone = metrics?.writebackDone ?? 0;
+  const wroteAnything = nothingToTranslate || writebackDone > 0;
+  const tTotal = metrics?.translateTotal ?? 0;
+  const tAttempted = (metrics?.translateDone ?? 0) + (metrics?.translateFailed ?? 0);
+  const translateIncomplete = wroteAnything && tTotal > 0 && tAttempted < tTotal;
+  if (translateIncomplete) return "PAUSED";
+  if (wroteAnything) return "COMPLETED";
+  return "FAILED";
+}
+
+if (job.status === "VERIFY_QUEUED" || job.status === "VERIFYING") {
+  const finalStatus = resolveFinalStatusAfterWriteback(job.metrics);
+  const writebackDone = job.metrics?.writebackDone ?? 0;
+  const translateIncomplete =
+    finalStatus === "PAUSED" &&
+    (job.metrics?.translateTotal ?? 0) > 0 &&
+    (job.metrics?.translateDone ?? 0) + (job.metrics?.translateFailed ?? 0) <
+      (job.metrics?.translateTotal ?? 0);
+  await container.item(job.id, job.shopName).replace({
+    ...job,
+    status: finalStatus,
+    claimedBy: null,
+    claimedAt: null,
+    errorStage:
+      translateIncomplete ? "TRANSLATE" : finalStatus === "FAILED" ? "WRITEBACK" : null,
+    errorMessage:
+      translateIncomplete
+        ? "额度不足，仅翻译并写回了部分资源，补充额度后点击「继续」可翻译剩余内容"
+        : finalStatus === "FAILED"
+          ? "写回未成功：全部资源均未写入 Shopify（请查看 worker 日志或写回详情）"
+          : null,
+    updatedAt: new Date().toISOString(),
+  });
+  console.log(`校验环节已移除：${job.status} → ${finalStatus}（writebackDone=${writebackDone}）`);
+  console.log("✅ 完成。");
+  process.exit(0);
 }
 
 let resetStatus;
@@ -158,7 +198,7 @@ else if (host && password)
     lazyConnect: true,
   });
 
-if (redis) {
+if (redis && hintStage) {
   try {
     await redis.connect();
     await redis.lpush(

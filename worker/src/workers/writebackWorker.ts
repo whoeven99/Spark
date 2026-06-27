@@ -1,6 +1,6 @@
 import { hostname } from "os";
 import { claimJob, updateJob, heartbeat, findPendingJobs, getJob, withStageTiming, prefersStoredToken } from "../services/cosmosV4.js";
-import { popHint, pushHint, setProgress } from "../services/redisV4.js";
+import { popHint, setProgress } from "../services/redisV4.js";
 import { blobRead, blobWrite } from "../services/blobV4.js";
 import { loadTranslatedItemsForJob } from "../services/translateBlobIO.js";
 import { registerTranslations, type TranslationInput } from "../services/shopifyFetch.js";
@@ -8,7 +8,8 @@ import { filterWritebackFields } from "../services/writebackFields.js";
 import { runShopifyAdaptive, getShopifyCap } from "../services/shopifyConcurrency.js";
 import { QpsLogger } from "../services/qpsLogger.js";
 import type { TranslationV4Job } from "../services/cosmosV4.js";
-import { runVerifyWorker } from "./verifyWorker.js";
+import { isShuttingDown } from "../shutdown.js";
+import { finalizeJobAfterWriteback } from "../services/finalizeJobAfterWriteback.js";
 
 /**
  * Scale-out safe: hostname + pid is unique across containers even when every
@@ -18,9 +19,8 @@ const WORKER_ID = `writeback-${process.env.HOSTNAME ?? hostname()}-${process.pid
 
 const HEARTBEAT_THROTTLE_MS = 30_000;
 
-// 写回并发由 shopifyConcurrency 的自适应控制器决定（按 Shopify throttleStatus AIMD）。
-
 export async function runWritebackWorker(): Promise<void> {
+  if (isShuttingDown()) return;
   const claimed = await claimNextJob();
   if (!claimed) return;
   console.log(`[writeback] processing job=${claimed.id}`);
@@ -78,6 +78,24 @@ type PendingResource = {
   module: string;
 };
 
+async function persistWritebackCheckpoint(
+  jobId: string,
+  progressPath: string,
+  writtenSet: Set<string>,
+  writebackDone: number,
+  writebackFailed: number,
+  writebackTotal: number,
+  currentModule?: string,
+): Promise<void> {
+  await blobWrite(progressPath, { written: [...writtenSet] });
+  await setProgress(jobId, {
+    writebackDone,
+    writebackFailed,
+    writebackTotal,
+    ...(currentModule ? { currentModule } : {}),
+  });
+}
+
 async function processWritebackJob(job: TranslationV4Job): Promise<void> {
   const { shopName, id: jobId, target } = job;
   const shopDomain = job.shopName;
@@ -99,14 +117,37 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
   const stageStartedAt = new Date().toISOString(); // ISO span start for stageTimings
   const qps = new QpsLogger(jobId, shopName, "WRITEBACK");
 
+  const maybeHeartbeat = async () => {
+    const now = Date.now();
+    if (now - lastHeartbeatAt > HEARTBEAT_THROTTLE_MS) {
+      lastHeartbeatAt = now;
+      await heartbeat(shopName, jobId);
+    }
+  };
+
   try {
     // ── Phase 1: Collect all pending resources ────────────────────────────────
-    // 大任务下这里要从 Blob 并发读上千个已译资源，可能耗时若干秒；先打一次心跳，
-    // 避免准备期间被 stale-reset 误判成"卡死"而被其它 worker 接管。
-    // 已在 writtenSet 的资源跳过 —— 支持崩溃续跑。
     await heartbeat(shopName, jobId);
     const pendingResources: PendingResource[] = [];
-    for (const { module, resource } of await loadTranslatedItemsForJob(blobPrefix, job.modules)) {
+    const allItems = await loadTranslatedItemsForJob(blobPrefix, job.modules, {
+      onModuleLoaded: async () => {
+        if (isShuttingDown()) return;
+        await maybeHeartbeat();
+      },
+    });
+    if (isShuttingDown()) {
+      await persistWritebackCheckpoint(
+        jobId,
+        progressPath,
+        writtenSet,
+        writebackDone,
+        writebackFailed,
+        writebackTotal,
+      );
+      console.log(`[writeback] job=${jobId} yielding for shutdown (after blob load)`);
+      return;
+    }
+    for (const { module, resource } of allItems) {
       if (!writtenSet.has(resource.resourceId)) {
         pendingResources.push({ resource, module });
       }
@@ -117,15 +158,14 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
     );
 
     // ── Phase 2: Adaptive parallel writeback ──────────────────────────────────
-    // 并发随 Shopify throttleStatus 自适应；shopifyGraphql() 仍做 floor 降速 + 429 重试。
+    let shutdownYield = false;
     await runShopifyAdaptive(shopDomain, pendingResources, async ({ resource, module }) => {
-      // Throttled heartbeat: the synchronous `lastHeartbeatAt = now` update
-      // prevents concurrent callbacks from firing duplicate heartbeats.
-      const now = Date.now();
-      if (now - lastHeartbeatAt > HEARTBEAT_THROTTLE_MS) {
-        lastHeartbeatAt = now;
-        await heartbeat(shopName, jobId);
+      if (isShuttingDown()) {
+        shutdownYield = true;
+        return;
       }
+
+      await maybeHeartbeat();
 
       const translations: TranslationInput[] = filterWritebackFields(resource.translations)
         .map((t) => ({
@@ -139,6 +179,12 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
       if (!translations.length) {
         writtenSet.add(resource.resourceId);
         writebackDone++;
+        await setProgress(jobId, {
+          writebackDone,
+          writebackFailed,
+          writebackTotal,
+          currentModule: module,
+        });
         return;
       }
 
@@ -162,9 +208,6 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
         );
       }
 
-      // Persist progress every 20 resources for crash-resume support.
-      // The % 20 check is safe: JS's single-threaded model ensures ++ is
-      // never concurrent, so two callbacks can't see the same counter value.
       if ((writebackDone + writebackFailed) % 20 === 0) {
         await blobWrite(progressPath, { written: [...writtenSet] });
       }
@@ -176,6 +219,21 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
         currentModule: module,
       });
     });
+
+    if (shutdownYield || isShuttingDown()) {
+      await persistWritebackCheckpoint(
+        jobId,
+        progressPath,
+        writtenSet,
+        writebackDone,
+        writebackFailed,
+        writebackTotal,
+      );
+      console.log(
+        `[writeback] job=${jobId} yielding for shutdown written=${writebackDone}/${writebackTotal}`,
+      );
+      return;
+    }
 
     // ── Phase 3: Finalise ─────────────────────────────────────────────────────
     await blobWrite(progressPath, { written: [...writtenSet] });
@@ -189,7 +247,6 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
 
     await blobWrite(failedPath, failedResources);
 
-    const verifyTotal = writebackDone + writebackFailed;
     const writebackTiming = withStageTiming(
       latestJob?.stageTimings ?? job.stageTimings,
       "WRITEBACK",
@@ -197,7 +254,7 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
       new Date().toISOString(),
     );
 
-    // 本次写回是「暂停/取消时先写回已翻译」触发的 → 写回完成后据意图收尾，不进入校验。
+    // 本次写回是「暂停/取消时先写回已翻译」触发的 → 写回完成后据意图收尾。
     const pauseIntent = latestJob?.pauseAfterWriteback ?? job.pauseAfterWriteback;
     if (pauseIntent === "pause" || pauseIntent === "cancel") {
       await updateJob(shopName, jobId, {
@@ -219,20 +276,28 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
       return;
     }
 
-    await updateJob(shopName, jobId, {
-      status: "VERIFY_QUEUED",
-      claimedBy: null,
+    await finalizeJobAfterWriteback(job, {
+      writebackDone,
+      writebackFailed,
+      metrics: updatedMetrics,
       stageTimings: writebackTiming,
-      metrics: { ...updatedMetrics, verifyTotal },
     });
-    await pushHint("verify", { taskId: jobId, shopName });
-    void runVerifyWorker().catch((e) =>
-      console.error(`[writeback] wake verify failed job=${jobId}`, e),
-    );
     console.log(
-      `[writeback] done job=${jobId} written=${writebackDone} failed=${writebackFailed} → VERIFY_QUEUED (read-back verify ${verifyTotal} resources)`,
+      `[writeback] done job=${jobId} written=${writebackDone} failed=${writebackFailed} → finalized`,
     );
   } catch (e) {
+    if (isShuttingDown()) {
+      await persistWritebackCheckpoint(
+        jobId,
+        progressPath,
+        writtenSet,
+        writebackDone,
+        writebackFailed,
+        writebackTotal,
+      ).catch(() => {});
+      console.log(`[writeback] job=${jobId} yielding for shutdown (error path)`);
+      return;
+    }
     const errorMessage = e instanceof Error ? e.message : String(e);
     await updateJob(shopName, jobId, {
       status: "FAILED",
