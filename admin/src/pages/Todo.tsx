@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Typography,
   Button,
@@ -7,12 +7,13 @@ import {
   Input,
   InputNumber,
   Select,
-  Tag,
   Spin,
   Alert,
   Popconfirm,
   Tooltip,
+  Dropdown,
 } from "antd";
+import type { MenuProps } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import {
   fetchTodos,
@@ -176,6 +177,27 @@ export default function Todo() {
     }
   }
 
+  async function patchTodo(
+    todo: TodoRow,
+    patch: Partial<Pick<TodoRow, "priority" | "assignee" | "etaDays">>,
+  ) {
+    const next = { ...todo, ...patch };
+    setTodos((ts) => ts.map((t) => (t.id === todo.id ? next : t)));
+    try {
+      await updateTodo(todo.id, {
+        title: next.title,
+        description: next.description,
+        assignee: next.assignee ?? null,
+        status: next.status,
+        priority: next.priority,
+        etaDays: next.etaDays ?? null,
+      });
+    } catch (e) {
+      setError(String(e));
+      load();
+    }
+  }
+
   if (error) return <Alert type="error" message={error} style={{ margin: 24 }} />;
 
   const cellId = (status: TodoStatus, col: TodoAssignee | null) => status + "::" + String(col);
@@ -219,12 +241,14 @@ export default function Todo() {
             <div style={{ display: "grid", gridTemplateColumns: colTmpl, marginBottom: 8 }}>
               <div />
               {COLS.map((c) => (
-                <div key={String(c.key)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "8px 12px", margin: "0 6px", background: "#fff", border: "1px solid #ece8e3", borderRadius: 11 }}>
-                  <Avatar memKey={c.key} size={24} />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: c.key ? "#3c3935" : "#9ca3af" }}>{c.label}</span>
-                  <span style={{ fontFamily: MONO, fontSize: 11, color: "#b3ada4" }}>
-                    ·{todos.filter((t) => (t.assignee ?? null) === c.key).length}
-                  </span>
+                <div key={String(c.key)} style={{ padding: "0 6px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "8px 12px", background: "#fff", border: "1px solid #ece8e3", borderRadius: 11 }}>
+                    <Avatar memKey={c.key} size={24} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: c.key ? "#3c3935" : "#9ca3af" }}>{c.label}</span>
+                    <span style={{ fontFamily: MONO, fontSize: 11, color: "#b3ada4" }}>
+                      ·{todos.filter((t) => (t.assignee ?? null) === c.key).length}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -255,7 +279,7 @@ export default function Todo() {
                     return (
                       <div
                         key={String(col.key)}
-                        style={{ borderRight: col.key === null ? "none" : "1px dashed #ebe6e0" }}
+                        style={{ padding: "0 6px", borderRight: col.key === null ? "none" : "1px dashed #ebe6e0" }}
                         onDragOver={(e) => { e.preventDefault(); if (overCell !== id) setOverCell(id); }}
                         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOverCell((c) => (c === id ? null : c)); }}
                         onDrop={(e) => {
@@ -285,6 +309,9 @@ export default function Todo() {
                                 onDragEnd={() => { setDragId(null); setOverCell(null); }}
                                 onEdit={() => openEdit(todo)}
                                 onDelete={() => handleDelete(todo.id)}
+                                onPriorityChange={(p) => patchTodo(todo, { priority: p })}
+                                onAssigneeChange={(a) => patchTodo(todo, { assignee: a })}
+                                onEtaDaysChange={(d) => patchTodo(todo, { etaDays: d })}
                               />
                             ))
                           )}
@@ -380,6 +407,7 @@ function Avatar({ memKey, size = 22 }: { memKey: TodoAssignee | null; size?: num
 
 function TaskCard({
   todo, dragging, onDragStart, onDragEnd, onEdit, onDelete,
+  onPriorityChange, onAssigneeChange, onEtaDaysChange,
 }: {
   todo: TodoRow;
   dragging: boolean;
@@ -387,20 +415,64 @@ function TaskCard({
   onDragEnd: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onPriorityChange: (p: TodoPriority) => void;
+  onAssigneeChange: (a: TodoAssignee | null) => void;
+  onEtaDaysChange: (d: number | null) => void;
 }) {
   const pri = PRI[todo.priority];
   const rest = "0 1px 2px rgba(28,27,26,.05)";
+  const wasDragged = useRef(false);
+  const [etaOpen, setEtaOpen] = useState(false);
+  const [etaDraft, setEtaDraft] = useState<number | null>(todo.etaDays);
+
+  const priorityMenu: MenuProps = {
+    items: (["high", "medium", "low"] as TodoPriority[]).map((p) => ({
+      key: p,
+      label: (
+        <span style={{ color: PRI[p].color, fontWeight: 700 }}>{PRI[p].label}</span>
+      ),
+    })),
+    selectedKeys: [todo.priority],
+    onClick: ({ key, domEvent }) => {
+      domEvent.stopPropagation();
+      onPriorityChange(key as TodoPriority);
+    },
+  };
+
+  const assigneeMenu: MenuProps = {
+    items: [
+      ...MEMBERS.map((m) => ({ key: m.key, label: m.label })),
+      { key: "__none__", label: "未分配" },
+    ],
+    selectedKeys: [todo.assignee ?? "__none__"],
+    onClick: ({ key, domEvent }) => {
+      domEvent.stopPropagation();
+      onAssigneeChange(key === "__none__" ? null : (key as TodoAssignee));
+    },
+  };
+
+  function commitEta() {
+    onEtaDaysChange(etaDraft);
+    setEtaOpen(false);
+  }
+
   return (
     <div
       className="td-card"
       draggable
-      onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; onDragStart(); }}
-      onDragEnd={onDragEnd}
+      onDragStart={(e) => {
+        wasDragged.current = false;
+        e.dataTransfer.effectAllowed = "move";
+        onDragStart();
+      }}
+      onDrag={() => { wasDragged.current = true; }}
+      onDragEnd={() => { onDragEnd(); }}
+      onClick={() => { if (!wasDragged.current) onEdit(); }}
       onMouseEnter={(e) => { if (!dragging) e.currentTarget.style.boxShadow = "0 6px 18px rgba(28,27,26,.1)"; }}
       onMouseLeave={(e) => { e.currentTarget.style.boxShadow = rest; }}
       style={{
         position: "relative", background: "#fff", borderRadius: 13, padding: "13px 14px 12px",
-        border: "1px solid #ece8e3", cursor: "grab",
+        border: "1px solid #ece8e3", cursor: "pointer",
         boxShadow: dragging ? "0 14px 32px rgba(28,27,26,.16)" : rest,
         opacity: dragging ? 0.4 : 1, transform: dragging ? "scale(.98)" : "none",
         transition: "box-shadow .15s ease, transform .12s ease, opacity .12s ease",
@@ -413,11 +485,25 @@ function TaskCard({
         </div>
         <div className="td-actions" style={{ display: "flex", gap: 2, flexShrink: 0, marginTop: -2 }}>
           <Tooltip title="编辑">
-            <Button className="td-iconbtn" type="text" size="small" icon={<EditOutlined />} onClick={onEdit} style={{ color: "#a8a29a" }} />
+            <Button
+              className="td-iconbtn"
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              style={{ color: "#a8a29a" }}
+            />
           </Tooltip>
           <Popconfirm title="确认删除？" onConfirm={onDelete} okText="删除" cancelText="取消">
             <Tooltip title="删除">
-              <Button className="td-iconbtn" type="text" size="small" danger icon={<DeleteOutlined />} />
+              <Button
+                className="td-iconbtn"
+                type="text"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={(e) => e.stopPropagation()}
+              />
             </Tooltip>
           </Popconfirm>
         </div>
@@ -430,13 +516,64 @@ function TaskCard({
       )}
 
       <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 11, paddingTop: 10, borderTop: "1px solid #f3f0ec" }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: pri.color, background: pri.soft, borderRadius: 6, padding: "2px 7px" }}>{pri.label}</span>
-        {todo.status !== "done" && (
-          <span style={{ fontFamily: MONO, fontSize: 11, color: "#8a847c", background: "#f5f3f0", borderRadius: 6, padding: "2px 7px" }}>
-            ⏱ {todo.etaDays ?? "—"}d
+        <Dropdown menu={priorityMenu} trigger={["click"]}>
+          <span
+            style={{ fontSize: 11, fontWeight: 700, color: pri.color, background: pri.soft, borderRadius: 6, padding: "2px 7px", cursor: "pointer" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {pri.label}
           </span>
+        </Dropdown>
+
+        {todo.status !== "done" && (
+          <Dropdown
+            open={etaOpen}
+            onOpenChange={(open) => {
+              setEtaOpen(open);
+              if (open) setEtaDraft(todo.etaDays);
+            }}
+            trigger={["click"]}
+            dropdownRender={() => (
+              <div
+                style={{ padding: 10, background: "#fff", borderRadius: 10, boxShadow: "0 6px 20px rgba(28,27,26,.12)", border: "1px solid #ece8e3" }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ fontSize: 11, color: "#78716c", marginBottom: 6, fontWeight: 600 }}>预估天数</div>
+                <InputNumber
+                  min={0}
+                  max={365}
+                  value={etaDraft}
+                  placeholder="—"
+                  style={{ width: 120 }}
+                  onChange={(v) => setEtaDraft(v == null ? null : v)}
+                  onPressEnter={commitEta}
+                />
+                <div style={{ marginTop: 8, display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                  <Button size="small" onClick={() => setEtaOpen(false)}>取消</Button>
+                  <Button size="small" type="primary" onClick={commitEta}>确定</Button>
+                </div>
+              </div>
+            )}
+          >
+            <span
+              style={{ fontFamily: MONO, fontSize: 11, color: "#8a847c", background: "#f5f3f0", borderRadius: 6, padding: "2px 7px", cursor: "pointer" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              ⏱{" "}
+              <span style={{ textDecoration: "underline dotted", textUnderlineOffset: 2 }}>
+                {todo.etaDays ?? "—"}
+              </span>
+              d
+            </span>
+          </Dropdown>
         )}
-        <Avatar memKey={todo.assignee} size={22} />
+
+        <Dropdown menu={assigneeMenu} trigger={["click"]}>
+          <span style={{ cursor: "pointer", display: "inline-flex" }} onClick={(e) => e.stopPropagation()}>
+            <Avatar memKey={todo.assignee} size={22} />
+          </span>
+        </Dropdown>
+
         <span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: 10.5, color: "#b3ada4" }}>
           {new Date(todo.createdAt).toLocaleDateString("zh-CN")}
         </span>
