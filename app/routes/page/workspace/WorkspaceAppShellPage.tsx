@@ -18,6 +18,7 @@ import { useChatStream } from "../chat/useChatStream";
 import { AutomationPanel } from "./AutomationPanel";
 import { ChatPanel } from "./ChatPanel";
 import { DashboardPanel } from "./DashboardPanel";
+import { HomePanel } from "./HomePanel";
 import { SkillsPanel } from "./SkillsPanel";
 import {
   augmentUserMessage,
@@ -88,6 +89,14 @@ function NavIcon({ name }: { name: Exclude<WorkspacePanel, "chat"> }) {
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,
   };
+  if (name === "home") {
+    return (
+      <svg {...common} aria-hidden="true">
+        <path d="M2.2 6.8 L7 3.2 L11.8 6.8" />
+        <path d="M3.8 6.9 V11.4 H10.2 V6.9" />
+      </svg>
+    );
+  }
   if (name === "dashboard") {
     return (
       <svg {...common} aria-hidden="true">
@@ -125,6 +134,7 @@ function NavIcon({ name }: { name: Exclude<WorkspacePanel, "chat"> }) {
 }
 
 const panelItems: Array<{ key: Exclude<WorkspacePanel, "chat">; label: string }> = [
+  { key: "home", label: "首页" },
   { key: "dashboard", label: "经营看板" },
   { key: "skills", label: "技能" },
   { key: "automation", label: "自动化" },
@@ -499,7 +509,7 @@ export function WorkspaceAppShellPage({
   const [streamingConversationId, setStreamingConversationId] = useState<string | null>(null);
 
   const panelParam = searchParams.get("panel");
-  const activePanel: WorkspacePanel = isWorkspacePanel(panelParam) ? panelParam : "dashboard";
+  const activePanel: WorkspacePanel = isWorkspacePanel(panelParam) ? panelParam : "home";
   const activeConversation = conversationList.find((item) => item.id === activeConversationId) ?? null;
   const activeMessages = activeConversation ? (messagesByConversation[activeConversation.id] ?? []) : [];
 
@@ -601,7 +611,7 @@ export function WorkspaceAppShellPage({
       pruneEmptyDraftConversations();
     }
     const next = new URLSearchParams(searchParams);
-    if (panel === "dashboard") {
+    if (panel === "home") {
       next.delete("panel");
     } else {
       next.set("panel", panel);
@@ -629,7 +639,7 @@ export function WorkspaceAppShellPage({
           if (nextConversation) {
             switchPanel("chat");
           } else {
-            switchPanel("dashboard");
+            switchPanel("home");
           }
         }
         shopify.toast.show("对话已删除");
@@ -665,7 +675,7 @@ export function WorkspaceAppShellPage({
         if (nextConversation) {
           switchPanel("chat");
         } else {
-          switchPanel("dashboard");
+          switchPanel("home");
         }
       }
       shopify.toast.show("对话已删除");
@@ -1395,6 +1405,18 @@ export function WorkspaceAppShellPage({
       )}
 
       <main style={isMobile ? mobileContentStyle : contentStyle}>
+        {activePanel === "home" ? (
+          <HomePanel
+            snapshot={dashboardSnapshot}
+            onNewChat={() => createConversation()}
+            onOpenDashboard={() => switchPanel("dashboard")}
+            onOpenDailyOps={() => navigate("/app/daily-operations")}
+            onOpenTasks={() => switchPanel("tasks")}
+            onOpenSkills={() => switchPanel("skills")}
+            onQuickStart={(prompt) => createConversation({ draft: prompt })}
+            onOpenTool={(path) => navigate(path)}
+          />
+        ) : null}
         {activePanel === "dashboard" ? (
           <DashboardPanel
             snapshot={dashboardSnapshot}
