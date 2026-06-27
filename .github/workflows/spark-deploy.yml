@@ -1,6 +1,6 @@
 name: Spark Deploy
 
-# 仅手动触发；始终从 master 检出；勾选要执行的任务（可多选）
+# 仅手动触发；从 Run workflow 界面所选分支检出并发布；勾选要执行的任务（可多选）
 on:
   workflow_dispatch:
     inputs:
@@ -53,11 +53,11 @@ jobs:
     environment: CommonShopifyRenderConfig
 
     steps:
-      - name: Checkout master
+      - name: Checkout selected branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: master
+          ref: ${{ github.ref }}
 
       - name: Deploy to Render (spark-test)
         id: trigger_render
@@ -220,11 +220,11 @@ jobs:
     environment: CommonShopifyRenderConfig
 
     steps:
-      - name: Checkout master
+      - name: Checkout selected branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: master
+          ref: ${{ github.ref }}
 
       - name: Deploy to Render (admin)
         id: trigger_render
@@ -262,11 +262,11 @@ jobs:
     environment: CommonShopifyRenderConfig
 
     steps:
-      - name: Checkout master
+      - name: Checkout selected branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: master
+          ref: ${{ github.ref }}
 
       - name: Deploy to Render (admin-test)
         id: trigger_render
@@ -315,11 +315,11 @@ jobs:
     environment: CommonShopifyRenderConfig
 
     steps:
-      - name: Checkout master
+      - name: Checkout selected branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: master
+          ref: ${{ github.ref }}
 
       - name: Deploy to Render (worker-test)
         id: trigger_render
@@ -368,11 +368,11 @@ jobs:
     environment: CommonShopifyRenderConfig
 
     steps:
-      - name: Checkout master
+      - name: Checkout selected branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: master
+          ref: ${{ github.ref }}
 
       - name: Deploy to Render (worker-prod)
         id: trigger_render
