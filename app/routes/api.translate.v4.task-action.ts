@@ -6,7 +6,7 @@ import { resolveShopAccessTokenForWorker } from "../server/shopify/resolveShopAc
 import { syncV4JobShopifyTokensFromSession } from "../server/translation/v4/syncV4JobShopifyTokens.server";
 import { getTranslateRedisClient } from "../server/translation/translateRedis.server";
 import { resolveResumeV4JobStatus } from "../server/translation/v4/resumeV4JobStatus";
-import type { TranslationV4Status } from "../server/translation/v4/types";
+import { deriveStage } from "../lib/translationV4/state";
 
 const HINT_KEYS: Record<string, string> = {
   init: "translate:v4:hint:init",
@@ -41,7 +41,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (actionType === "pause") {
     // Save which stage we're pausing from so resume can return to the right queue
-    const pauseStage = stageFromStatus(job.status);
+    const pauseStage = deriveStage(job.status);
     await updateV4Job(shopName, taskId, {
       status: "PAUSED",
       claimedBy: null,
@@ -110,14 +110,5 @@ async function clearV4Control(taskId: string): Promise<void> {
   } catch {
     // non-fatal
   }
-}
-
-/** Determine pipeline stage from current status (used when pausing). */
-function stageFromStatus(status: TranslationV4Status): string {
-  if (["INIT_QUEUED", "INITIALIZING", "INIT_DONE"].includes(status)) return "INIT";
-  if (["TRANSLATE_QUEUED", "TRANSLATING", "TRANSLATE_DONE"].includes(status)) return "TRANSLATE";
-  if (["WRITEBACK_QUEUED", "WRITING_BACK"].includes(status)) return "WRITEBACK";
-  if (["VERIFY_QUEUED", "VERIFYING"].includes(status)) return "VERIFY";
-  return "INIT";
 }
 
