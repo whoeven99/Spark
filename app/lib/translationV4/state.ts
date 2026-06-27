@@ -213,11 +213,10 @@ export function computeTranslationV4ProgressPercent(
       case "VERIFY":
         return ratioPercent(metrics.verifyDone, metrics.verifyTotal);
       case "TRANSLATE":
-      default:
-        if (metrics.translateUnitTotal > 0) {
-          return ratioPercent(metrics.translateUnitDone, metrics.translateUnitTotal);
-        }
-        return ratioPercent(metrics.translateDone, taskResourceTotal(metrics));
+      default: {
+        const { done, total } = resolveTranslateProgressCounts(metrics);
+        return ratioPercent(done, total);
+      }
     }
   }
 
@@ -235,10 +234,8 @@ export function computeTranslationV4ProgressPercent(
     status === "TRANSLATING" ||
     status === "TRANSLATE_DONE"
   ) {
-    if (metrics.translateUnitTotal > 0) {
-      return ratioPercent(metrics.translateUnitDone, metrics.translateUnitTotal);
-    }
-    return ratioPercent(metrics.translateDone, taskResourceTotal(metrics));
+    const { done, total } = resolveTranslateProgressCounts(metrics);
+    return ratioPercent(done, total);
   }
 
   if (status === "WRITEBACK_QUEUED" || status === "WRITING_BACK") {
@@ -263,12 +260,28 @@ type TranslateProgressMetrics = Pick<
   "translateDone" | "translateTotal" | "translateUnitDone" | "translateUnitTotal"
 >;
 
-/** 翻译阶段进度条/百分比：有子节点总数时按节点，否则回退到资源数。 */
+/**
+ * 翻译阶段进度条/百分比的计数口径。
+ *
+ * 进度条优先用「资源级」`translateDone`——它在 worker 的 `onResourceDone` 里、
+ * **blob 写盘成功之后**才 +1，因此 100% 真正代表「已翻译且已落盘」。子节点计数
+ * `translateUnitDone` 是在 LLM 一返回就 +1（`onProgress`），会严重前置、在大字段
+ * 长尾阶段虚高，所以它只适合做明细文案（资源 X/Y · 节点 X/Y），不适合驱动进度条。
+ *
+ * 仅当没有资源总数（`translateTotal===0`，理论上不该发生）时才回退到子节点。
+ */
 export function resolveTranslateProgressCounts(metrics: TranslateProgressMetrics): {
   done: number;
   total: number;
   useUnits: boolean;
 } {
+  if (metrics.translateTotal > 0) {
+    return {
+      done: metrics.translateDone,
+      total: metrics.translateTotal,
+      useUnits: false,
+    };
+  }
   if (metrics.translateUnitTotal > 0) {
     return {
       done: metrics.translateUnitDone,
@@ -281,6 +294,21 @@ export function resolveTranslateProgressCounts(metrics: TranslateProgressMetrics
     total: metrics.translateTotal,
     useUnits: false,
   };
+}
+
+/**
+ * 「收尾」阶段的剩余资源数：子节点几乎都已从 LLM 返回（≥90%），但仍有资源没翻完/
+ * 没落盘——也就是商家看到的「进度条快满了却干等」那段。返回 >0 时可在文案里提示
+ * 「正在收尾 N 项（较大字段较慢）」，避免「假完成」的困惑。无收尾时返回 0。
+ */
+export function translationV4TranslateTailRemaining(metrics: TranslateProgressMetrics): number {
+  if (metrics.translateTotal <= 0) return 0;
+  const remaining = metrics.translateTotal - metrics.translateDone;
+  if (remaining <= 0) return 0;
+  const unitsNearlyDone =
+    metrics.translateUnitTotal <= 0 ||
+    metrics.translateUnitDone / metrics.translateUnitTotal >= 0.9;
+  return unitsNearlyDone ? remaining : 0;
 }
 
 export function translateProgressPercent(metrics: TranslateProgressMetrics): number | null {
@@ -371,8 +399,11 @@ export function buildTranslationV4StageSummary(
   const label = translationV4StatusLabel(status);
   if (status === "TRANSLATING" || status === "TRANSLATE_QUEUED" || status === "TRANSLATE_DONE") {
     const translateDetail = formatTranslationV4TranslateDetail(metrics);
+    const tailRemaining =
+      status === "TRANSLATING" ? translationV4TranslateTailRemaining(metrics) : 0;
+    const tailPart = tailRemaining > 0 ? `正在收尾 ${tailRemaining} 项（较大字段较慢）` : null;
     const modulePart = metrics.currentModule ? `当前模块 ${metrics.currentModule}` : null;
-    return [label, translateDetail, modulePart].filter(Boolean).join(" · ");
+    return [label, translateDetail, tailPart, modulePart].filter(Boolean).join(" · ");
   }
 
   if (status === "INITIALIZING" || status === "INIT_QUEUED" || status === "INIT_DONE") {

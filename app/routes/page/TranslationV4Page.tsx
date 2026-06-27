@@ -30,6 +30,7 @@ import {
   deriveStage,
   formatV4JobTimeLine,
   resolveTranslateProgressCounts,
+  translationV4TranslateTailRemaining,
   TRANSLATION_V4_UNIT_LABEL,
 } from "../../lib/translationV4/state";
 import { resolveResumeV4JobStatus } from "../../server/translation/v4/resumeV4JobStatus";
@@ -1781,11 +1782,16 @@ function getPrimaryCopy(
     case "INIT_DONE":
     case "TRANSLATE_QUEUED":
       return "初始化完成，等待开始翻译";
-    case "TRANSLATING":
+    case "TRANSLATING": {
+      const tailRemaining = translationV4TranslateTailRemaining(metrics);
+      if (tailRemaining > 0) {
+        return `正在收尾 ${tailRemaining} 项（较大字段较慢）`;
+      }
       if (metrics.translateUnitTotal > 0) {
         return `正在翻译内容节点 ${metrics.translateUnitDone}/${metrics.translateUnitTotal}`;
       }
       return `正在翻译资源 ${metrics.translateDone}/${metrics.translateTotal || "?"}`;
+    }
     case "TRANSLATE_DONE":
     case "WRITEBACK_QUEUED":
       return "翻译完成，等待回写到 Shopify";
@@ -1853,7 +1859,10 @@ function getStageSummaryCopy(
   }
   if (status === "TRANSLATE_QUEUED" || status === "TRANSLATING" || status === "TRANSLATE_DONE") {
     const { done, total } = resolveTranslateProgressCounts(metrics);
-    return `当前阶段：翻译 ${done}/${total || 0}`;
+    const tailRemaining =
+      status === "TRANSLATING" ? translationV4TranslateTailRemaining(metrics) : 0;
+    const base = `当前阶段：翻译 ${done}/${total || 0}`;
+    return tailRemaining > 0 ? `${base} · 正在收尾 ${tailRemaining} 项` : base;
   }
   if (status === "WRITEBACK_QUEUED" || status === "WRITING_BACK") {
     return `当前阶段：回写 ${metrics.writebackDone}/${metrics.writebackTotal || 0}`;
