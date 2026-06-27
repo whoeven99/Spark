@@ -10,7 +10,9 @@ import {
   hasTsfDbCredentials,
   listAutoTranslateShops,
   getOfflineAccessTokenFromTsf,
+  syncShopPrimaryLocaleInTsf,
 } from "./tsfDb.js";
+import { fetchShopPrimaryLocale } from "./shopifyFetch.js";
 import { AUTO_TRANSLATE_V4_MODULES } from "./moduleCatalog.js";
 import { setAutoScanLastAt } from "./redisV4.js";
 import { resolveNextClockAlignedScanAt } from "./autoScanSchedule.js";
@@ -54,14 +56,29 @@ export async function runAutoTranslateScan(): Promise<void> {
   let skipped = 0;
   let queued = 0;
   for (const { shop, primaryLocale, targets } of shops) {
-    const source = primaryLocale?.trim();
+    let source = primaryLocale?.trim();
     if (!source || !Array.isArray(targets) || targets.length === 0) continue;
+
+    const token = (await getOfflineAccessTokenFromTsf(shop)) ?? "";
+    if (!token) {
+      console.warn(`[autoTranslate] ${shop} 在 TSF 无 offline token，跳过该店`);
+      continue;
+    }
+
+    try {
+      const livePrimary = await fetchShopPrimaryLocale(shop, token, true);
+      if (livePrimary) {
+        await syncShopPrimaryLocaleInTsf(shop, livePrimary);
+        source = livePrimary;
+      }
+    } catch (err) {
+      console.warn(`[autoTranslate] ${shop} 读取 Shopify 默认语言失败，沿用 TSF 缓存`, err);
+    }
 
     const shopActiveCount = await countShopActiveJobs(shop);
     let createdThisShop = 0;
     let shopQueued = 0;
 
-    let token: string | null = null;
     for (const rawTarget of targets) {
       const target = String(rawTarget).trim();
       if (!target || target === source) continue;
@@ -78,15 +95,6 @@ export async function runAutoTranslateScan(): Promise<void> {
         queued++;
         shopQueued++;
         continue;
-      }
-
-      // 懒解析 token：只有真要建任务时才查一次
-      if (token === null) {
-        token = (await getOfflineAccessTokenFromTsf(shop)) ?? "";
-        if (!token) {
-          console.warn(`[autoTranslate] ${shop} 在 TSF 无 offline token，跳过该店`);
-          break;
-        }
       }
 
       const jobId = randomUUID();
