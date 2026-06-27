@@ -5,7 +5,7 @@ import {
   jsonHasExtractableText,
   tryParseJsonContainer,
 } from "../../worker/src/services/jsonExtractRules.js";
-import { canTranslateMetafieldJson } from "../../worker/src/services/translationFilter/metafieldJsonJudge.js";
+import { canTranslateMetafieldJson, JSON_JUDGE } from "../../worker/src/services/translationFilter/metafieldJsonJudge.js";
 import { countFieldUnits } from "../../worker/src/services/llmTranslate.js";
 
 describe("jsonExtractRules — Spring buildDefaultRules", () => {
@@ -14,6 +14,21 @@ describe("jsonExtractRules — Spring buildDefaultRules", () => {
     const slots = extractJsonTextSlots(root, buildDefaultJsonExtractRules());
     expect(slots).toHaveLength(1);
     expect(slots[0]!.text).toBe("Hello World");
+    expect(slots[0]!.isHtml).toBe(false);
+  });
+
+  it("marks JSON text slot as HTML when value contains markup (not only field name)", () => {
+    const html =
+      '<table><tbody><tr><td style="font-weight:bold">XS</td><td>77</td></tr></tbody></table>';
+    const root = tryParseJsonContainer(
+      JSON.stringify({ type: "text", value: html, children: [] }),
+    )!;
+    const slots = extractJsonTextSlots(root);
+    expect(slots).toHaveLength(1);
+    expect(slots[0]!.isHtml).toBe(true);
+    expect(countFieldUnits("value", JSON.stringify({ type: "text", value: html, children: [] }))).toBe(
+      2,
+    );
   });
 
   it("does not extract reviews paths (not in default rules)", () => {
@@ -42,7 +57,7 @@ describe("jsonExtractRules — Spring buildDefaultRules", () => {
   });
 });
 
-describe("metafieldJsonJudge — empty Redis legacy", () => {
+describe("metafieldJsonJudge — content-based extract rules", () => {
   it("excludes bundle JSON", () => {
     const bundle =
       '[{"id":"53476","n":"Bundle-un","ot":5,"qt":2,"dt":0,"dv":0.0,"pr":1}]';
@@ -56,9 +71,24 @@ describe("metafieldJsonJudge — empty Redis legacy", () => {
     expect(canTranslateMetafieldJson(review, "JSON")).toBe(false);
   });
 
-  it("includes RICH_TEXT with type:text marker", () => {
+  it("includes rich text when value has type:text nodes (ignores Shopify type)", () => {
     const rich = '{"type":"text","value":"Ships in 3 days"}';
     expect(canTranslateMetafieldJson(rich, "RICH_TEXT_FIELD")).toBe(true);
+    expect(canTranslateMetafieldJson(rich, "JSON")).toBe(true);
+    expect(canTranslateMetafieldJson(rich, "SINGLE_LINE_TEXT_FIELD")).toBe(true);
+  });
+
+  it("includes rich text root JSON with spaced type field (not substring match)", () => {
+    const value = JSON.stringify(
+      {
+        type: "root",
+        children: [{ type: "paragraph", children: [{ type: "text", value: "Hello" }] }],
+      },
+      null,
+      2,
+    );
+    expect(canTranslateMetafieldJson(value, "JSON")).toBe(true);
+    expect(value.includes(JSON_JUDGE)).toBe(false);
   });
 
   it("extracts nested rich-text root/paragraph/link but skips url field", () => {

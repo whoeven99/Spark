@@ -9,6 +9,10 @@ import {
   isIdBasedModuleForTest,
   translationValuesMatch,
 } from "../../worker/src/services/shopifyFetch.js";
+import {
+  buildShopifyAdminGraphqlUrl,
+  SHOPIFY_ADMIN_API_VERSION,
+} from "../../worker/src/services/shopifyAdminApiVersion.js";
 
 type GqlResponse = { data?: unknown; errors?: unknown[] };
 
@@ -41,6 +45,13 @@ describe("shopifyFetch init routing", () => {
     expect(ID_BASED_MODULE_QUERY.PAGE).toBe("");
     expect(ID_BASED_MODULE_QUERY.COLLECTION).toBe("");
     expect(ID_BASED_MODULE_QUERY.PRODUCT).toBe("");
+  });
+
+  it("builds Shopify Admin GraphQL URLs with the shared 2026-07 version", () => {
+    expect(SHOPIFY_ADMIN_API_VERSION).toBe("2026-07");
+    expect(buildShopifyAdminGraphqlUrl("demo.myshopify.com")).toBe(
+      "https://demo.myshopify.com/admin/api/2026-07/graphql.json",
+    );
   });
 
   it("buildInitModuleQueryFilter appends updated_at when provided", () => {

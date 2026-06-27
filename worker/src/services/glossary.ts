@@ -1,4 +1,5 @@
 import { hasTsfDbCredentials, loadGlossaryRowsFromTsf } from "./tsfDb.js";
+import { glossaryTargetMatchesLocale } from "./translateQuality.js";
 
 /**
  * Per-shop glossary injected into the translation system prompt so wording
@@ -40,6 +41,9 @@ export async function loadGlossaryLines(shopName: string, target: string): Promi
       const rows = await loadGlossaryRowsFromTsf(shopName, target);
       lines = rows
         .filter((r) => r.sourceText && r.targetText)
+        .filter((r) =>
+          glossaryTargetMatchesLocale(r.targetText!, r.sourceText!, target),
+        )
         .map((r) => `- Translate "${r.sourceText}" as "${r.targetText}".`)
         // 去重 + 确定性排序，保持系统提示词前缀字节稳定（利于 prompt 缓存）。
         .filter((line, i, arr) => arr.indexOf(line) === i)

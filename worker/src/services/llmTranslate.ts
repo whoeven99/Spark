@@ -9,7 +9,31 @@ import {
   type JsonTextSlot,
   type JsonValue,
 } from "./jsonExtractRules.js";
+import { isHtmlContent } from "./htmlContent.js";
+import {
+  glossaryTargetMatchesLocale,
+  hasPromptSentinelLeakage,
+  isTranslatableLeafText,
+  looksLikeEmptySourceHallucination,
+  looksLikeUntranslated,
+  looksLikeWrongScriptLeak,
+} from "./translateQuality.js";
+import {
+  effectiveTranslation,
+  htmlNodePartsOf,
+  restoreBrPlaceholders,
+  restoreHtmlTextNodes,
+  roundtripHtmlForTest,
+  sanitizeHtmlTextTranslation,
+} from "./htmlTranslate.js";
 import { enforceTranslateResultLimits } from "./translationFieldLimits.js";
+import {
+  maskPlaceholders,
+  placeholdersIntact,
+  protectedLiteralsPreserved,
+  restoreMaskedPlaceholders,
+} from "./placeholderMask.js";
+import { buildTargetLanguageBlock } from "./targetLanguagePrompt.js";
 
 // ─── LLM Key Pool ─────────────────────────────────────────────────────────────
 //
@@ -343,6 +367,65 @@ type ChatCompletionInvokeResult = {
   limitHints: string[];
 };
 
+/**
+ * Pull a JSON string field's value out of a raw JSON line WITHOUT parsing the
+ * whole object. Returns the decoded string, or null if the field is absent /
+ * null / not a string. Escape-aware (\", \\, \n, \uXXXX, surrogate pairs).
+ *
+ * Hot SSE path: DeepSeek streams one event per token, so a full `JSON.parse`
+ * per event (allocating the id/model/choices/delta object graph each time) is
+ * the worker's single biggest CPU sink at high concurrency. Scanning out just
+ * `delta.content` skips all of that. Matches the FIRST `"content":` — that is
+ * `delta.content` (`reasoning_content` has no `"` before `content`, so it never
+ * false-matches), and any literal `"content":` inside the value is consumed by
+ * the escape-aware scan, not re-matched.
+ */
+function extractJsonStringField(raw: string, field: string): string | null {
+  const needle = `"${field}":`;
+  let i = raw.indexOf(needle);
+  if (i < 0) return null;
+  i += needle.length;
+  while (i < raw.length && (raw[i] === " " || raw[i] === "\t")) i++;
+  if (raw[i] !== '"') return null; // null / number / object → not a plain string
+  i++; // past opening quote
+  let out = "";
+  let runStart = i;
+  for (; i < raw.length; i++) {
+    const c = raw.charCodeAt(i);
+    if (c === 34 /* " */) {
+      return out + raw.slice(runStart, i);
+    }
+    if (c === 92 /* \ */) {
+      out += raw.slice(runStart, i);
+      i++;
+      const e = raw[i];
+      switch (e) {
+        case '"': out += '"'; break;
+        case "\\": out += "\\"; break;
+        case "/": out += "/"; break;
+        case "n": out += "\n"; break;
+        case "t": out += "\t"; break;
+        case "r": out += "\r"; break;
+        case "b": out += "\b"; break;
+        case "f": out += "\f"; break;
+        case "u": {
+          const hex = raw.slice(i + 1, i + 5);
+          if (hex.length === 4) {
+            out += String.fromCharCode(parseInt(hex, 16));
+            i += 4;
+          }
+          break;
+        }
+        default: out += e ?? ""; break;
+      }
+      runStart = i + 1;
+    }
+  }
+  // Unterminated string — only possible for a non-newline-terminated trailing
+  // fragment; signal "no complete value" so the caller never appends a partial.
+  return null;
+}
+
 async function fetchDeepSeekChatCompletion(
   apiKey: string,
   chatUrl: string,
@@ -407,9 +490,47 @@ async function fetchDeepSeekChatCompletion(
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let scanFrom = 0; // resume \n search here — avoids O(n²) buffer.slice per line
     let content = "";
     let tokens = 0;
     let apiErrorMsg: string | undefined;
+
+    const handleLine = (line: string): void => {
+      if (!line.startsWith("data:")) return;
+      const data = line.slice(5).trim();
+      if (data === "" || data === "[DONE]") return;
+
+      // Fast path: extract delta.content without JSON.parse-ing the whole event.
+      // Runs once per token — the dominant CPU cost under concurrency. A content
+      // delta never carries usage/error, so we're done with this line.
+      const delta = extractJsonStringField(data, "content");
+      if (delta && delta.length > 0) {
+        content += delta;
+        if (!gotContent) {
+          gotContent = true; // 开始吐字 → 收紧空闲窗口（中途卡死更快发现）
+          armIdle();
+        }
+        return;
+      }
+
+      // Slow path (rare): usage tally (final event) / error / role-only delta.
+      if (
+        data.includes('"total_tokens"') ||
+        data.includes('"usage"') ||
+        data.includes('"error"')
+      ) {
+        try {
+          const evt = JSON.parse(data) as {
+            usage?: { total_tokens?: number };
+            error?: { message?: string };
+          };
+          if (evt.error?.message) apiErrorMsg = evt.error.message;
+          if (evt.usage?.total_tokens) tokens = evt.usage.total_tokens;
+        } catch {
+          // partial/keepalive line — wait for more bytes
+        }
+      }
+    };
 
     for (;;) {
       const { done, value } = await reader.read();
@@ -418,33 +539,18 @@ async function fetchDeepSeekChatCompletion(
       buffer += decoder.decode(value, { stream: true });
 
       let nl: number;
-      while ((nl = buffer.indexOf("\n")) >= 0) {
-        const line = buffer.slice(0, nl).trim();
-        buffer = buffer.slice(nl + 1);
-        if (!line.startsWith("data:")) continue;
-        const data = line.slice(5).trim();
-        if (data === "" || data === "[DONE]") continue;
-        try {
-          const evt = JSON.parse(data) as {
-            choices?: Array<{ delta?: { content?: string | null }; message?: { content?: string | null } }>;
-            usage?: { total_tokens?: number };
-            error?: { message?: string };
-          };
-          if (evt.error?.message) apiErrorMsg = evt.error.message;
-          const delta = evt.choices?.[0]?.delta?.content ?? evt.choices?.[0]?.message?.content;
-          if (typeof delta === "string" && delta.length > 0) {
-            content += delta;
-            if (!gotContent) {
-              gotContent = true; // 开始吐字 → 收紧空闲窗口（中途卡死更快发现）
-              armIdle();
-            }
-          }
-          if (evt.usage?.total_tokens) tokens = evt.usage.total_tokens;
-        } catch {
-          // partial/keepalive line — wait for more bytes
-        }
+      while ((nl = buffer.indexOf("\n", scanFrom)) >= 0) {
+        handleLine(buffer.slice(scanFrom, nl).trim());
+        scanFrom = nl + 1;
+      }
+      // Compact once per read: drop consumed prefix in a single slice (not per line).
+      if (scanFrom > 0) {
+        buffer = buffer.slice(scanFrom);
+        scanFrom = 0;
       }
     }
+    // Flush a trailing line that arrived without a final newline.
+    if (buffer.length > scanFrom) handleLine(buffer.slice(scanFrom).trim());
 
     if (apiErrorMsg) throw new Error(`DeepSeek API error: ${apiErrorMsg}`);
 
@@ -1629,10 +1735,8 @@ export function containsSourceScript(text: string, source: string): boolean {
   }
 }
 
-const HTML_TAG_RE = /<\/?[a-z][^>]*>/i;
-
 function isHtml(value: string): boolean {
-  return HTML_TAG_RE.test(value);
+  return isHtmlContent(value);
 }
 
 export function classifyField(
@@ -1849,270 +1953,8 @@ export async function pAll<T, R>(
   return results;
 }
 
-// ─── HTML text-node extraction ────────────────────────────────────────────────
-
-// Tags whose content we never translate
-const SKIP_BLOCK_RE = /<(script|style|pre|code)(\s[^>]*)?>[\s\S]*?<\/\1>/gi;
-
-// Attributes that carry user-visible text and should be translated.
-// Handles both double-quoted (common) and single-quoted attribute values.
-const TRANSLATABLE_ATTR_RE = /\b(alt|title|aria-label|placeholder)=("([^"]*)"|(\'([^\']*)\'))/g;
-
-// Attr values we must NOT translate
-const ATTR_URL_RE = /^https?:\/\//;
-// Hash-based filenames like "7910ff297e4-Max-Origin" or bare image filenames
-const ATTR_HASH_FILENAME_RE =
-  /^[a-fA-F0-9]{8,}(-[a-zA-Z0-9]+)*$|^\S+\.(jpg|jpeg|png|gif|bmp|webp|svg|mp4|pdf)$/i;
-
-function isTranslatableAttrValue(value: string): boolean {
-  const v = value.trim();
-  if (!v) return false;
-  if (ATTR_URL_RE.test(v)) return false;
-  if (ATTR_HASH_FILENAME_RE.test(v)) return false;
-  return true;
-}
-
-/** Placeholder for <br> — kept through LLM, restored after HTML reassembly. */
-const BR_PLACEHOLDER = "⟦BR⟧";
-
-/**
- * Normalize HTML before text-node extraction:
- * - `<br>` often splits one sentence into separate translation units (missing tail).
- * - Inline `<a>` splits sentences and breaks cross-link grammar.
- */
-function preprocessHtmlForTranslation(html: string): string {
-  let s = html.replace(/<br\s*\/?>/gi, BR_PLACEHOLDER);
-  // Keep link text inline with surrounding sentence; href is dropped (text still translated).
-  s = s.replace(/<a\b[^>]*>([\s\S]*?)<\/a>/gi, "$1");
-  // Inline formatting wrappers split text nodes — unwrap, keep visible text.
-  s = s.replace(/<\/?(?:span|strong|em|b|i|u|mark|small|sub|sup|label|font)(?:\s[^>]*)?>/gi, "");
-  return s;
-}
-
-function restoreBrPlaceholders(html: string): string {
-  return html.replaceAll(BR_PLACEHOLDER, "<br />");
-}
-
-/** Non-empty source text translated to blank is treated as failure (use original). */
-function effectiveTranslation(original: string, translated: string | undefined): string {
-  if (translated === undefined) return original;
-  if (original.trim() !== "" && translated.trim() === "") return original;
-  return translated;
-}
-
-/**
- * Replaces every visible text node AND translatable attribute values (alt, title,
- * aria-label, placeholder) in an HTML string with numeric placeholders.
- * Returns the rewritten template and the ordered array of extracted texts.
- * Whitespace-only gaps between tags are left in place.
- */
-function extractHtmlTextNodes(html: string): { template: string; texts: string[] } {
-  const texts: string[] = [];
-  const skipped = new Map<string, string>();
-  let sIdx = 0;
-
-  // Protect non-translatable blocks (script/style/pre/code)
-  const withSkips = html.replace(SKIP_BLOCK_RE, (match) => {
-    const key = `\x00S${sIdx++}\x00`;
-    skipped.set(key, match);
-    return key;
-  });
-
-  // Extract translatable attribute values before touching text nodes so the
-  // two passes don't interfere (attributes live inside tags, text nodes outside).
-  const withAttrs = withSkips.replace(
-    TRANSLATABLE_ATTR_RE,
-    (_match, attrName: string, _quotedFull: string, dqVal: string, _sqFull: string, sqVal: string) => {
-      const attrValue = dqVal ?? sqVal ?? "";
-      const quote = dqVal !== undefined ? '"' : "'";
-      if (!isTranslatableAttrValue(attrValue)) return _match;
-      const idx = texts.length;
-      texts.push(attrValue.trim());
-      return `${attrName}=${quote}\x00T${idx}\x00${quote}`;
-    },
-  );
-
-  // Replace each text node between tags with an indexed marker
-  const template = withAttrs.replace(/>([^<]+)</g, (_match, raw: string) => {
-    const trimmed = raw.trim();
-    if (!trimmed) return `>${raw}<`;
-    const idx = texts.length;
-    texts.push(trimmed);
-    // Preserve leading/trailing whitespace around the marker
-    const start = raw.indexOf(trimmed);
-    const end = start + trimmed.length;
-    return `>${raw.slice(0, start)}\x00T${idx}\x00${raw.slice(end)}<`;
-  });
-
-  // Restore skipped blocks
-  let out = template;
-  for (const [k, v] of skipped) out = out.replaceAll(k, v);
-  return { template: out, texts };
-}
-
-function restoreHtmlTextNodes(template: string, translations: string[]): string {
-  return template.replace(/\x00T(\d+)\x00/g, (_, idx) => translations[Number(idx)] ?? "");
-}
-
-/** Strip HTML tags the model may inject into a text-leaf translation. */
-function sanitizeHtmlTextTranslation(original: string, translated: string): string {
-  if (!translated.includes("<")) return translated;
-  const stripped = translated
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!stripped) return original;
-  return stripped;
-}
-
-const CJK_RE = /[一-鿿㐀-䶿]/u;
-
-function hasCjk(text: string): boolean {
-  return CJK_RE.test(text);
-}
-
-// Block tags merged for inline-split paragraphs — NOT td/th (table cells must stay 1:1).
-const HTML_BLOCK_COALESCE_TAGS = "p|li|h[1-6]|dt|dd|blockquote|figcaption";
-const HTML_NESTED_BLOCK_RE =
-  /<(p|li|h[1-6]|td|th|dt|dd|blockquote|figcaption|div|ul|ol|table|thead|tbody|tr)\b/i;
-const HTML_TABLE_RE = /<table\b[\s\S]*?<\/table>/gi;
-
-function coalesceBlockTextNodesInner(
-  template: string,
-  texts: string[],
-  newTexts: string[],
-): { template: string; texts: string[] } {
-  const blockRe = new RegExp(
-    `<(${HTML_BLOCK_COALESCE_TAGS})\\b[^>]*>([\\s\\S]*?)<\\/\\1>`,
-    "gi",
-  );
-
-  const newTemplate = template.replace(blockRe, (full, tag: string, inner: string) => {
-    if (HTML_NESTED_BLOCK_RE.test(inner)) return full;
-
-    const indices: number[] = [];
-    inner.replace(/\x00T(\d+)\x00/g, (_, idx: string) => {
-      indices.push(Number(idx));
-      return "";
-    });
-    if (indices.length <= 1) return full;
-
-    const merged = indices
-      .map((i) => texts[i])
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
-    const newIdx = newTexts.length;
-    newTexts.push(merged);
-
-    const openTag = full.match(new RegExp(`<${tag}\\b[^>]*>`, "i"))![0];
-    return `${openTag}\x00T${newIdx}\x00</${tag}>`;
-  });
-
-  return { template: newTemplate, texts: newTexts };
-}
-
-/**
- * Merge multiple inline-split text markers inside one block (<p>, <li>, …) into a
- * single translation unit so long paragraphs are not partially skipped.
- */
-function coalesceBlockTextNodes(
-  template: string,
-  texts: string[],
-): { template: string; texts: string[] } {
-  const newTexts = [...texts];
-  if (!HTML_TABLE_RE.test(template)) {
-    return coalesceBlockTextNodesInner(template, texts, newTexts);
-  }
-
-  // Never coalesce inside <table> — preserves td/th/tr structure and inline styles.
-  HTML_TABLE_RE.lastIndex = 0;
-  let out = "";
-  let cursor = 0;
-  let m: RegExpExecArray | null;
-  while ((m = HTML_TABLE_RE.exec(template)) !== null) {
-    if (m.index > cursor) {
-      const seg = coalesceBlockTextNodesInner(template.slice(cursor, m.index), texts, newTexts);
-      out += seg.template;
-    }
-    out += m[0];
-    cursor = m.index + m[0].length;
-  }
-  if (cursor < template.length) {
-    const seg = coalesceBlockTextNodesInner(template.slice(cursor), texts, newTexts);
-    out += seg.template;
-  }
-  return { template: out, texts: newTexts };
-}
-
-/**
- * Detect when the model echoed the source (common for long HTML nodes batched with
- * many keys — the model returns the English unchanged but we used to accept it).
- */
-export function looksLikeUntranslated(
-  source: string,
-  translated: string,
-  target: string,
-): boolean {
-  const tl = target.toLowerCase().split(/[-_]/)[0];
-  if (tl === "en") return false;
-
-  const norm = (s: string) => s.replace(/\s+/g, " ").trim();
-  const src = norm(source);
-  const tr = norm(translated);
-  if (!src || !tr) return false;
-
-  if (src === tr && hasLatinWords(src)) return true;
-
-  if (["zh", "ja", "ko"].includes(tl) && src.length > 40 && hasLatinWords(src)) {
-    const latinChars = src.match(/[a-zA-Z]/g)?.length ?? 0;
-    if (latinChars / src.length > 0.45 && !hasTargetScriptChars(tr, tl)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/** CJK leaked into a non-CJK target (e.g. Arabic) when the source had none. */
-export function looksLikeWrongScriptLeak(
-  source: string,
-  translated: string,
-  target: string,
-): boolean {
-  const tl = target.toLowerCase().split(/[-_]/)[0];
-  if (["zh", "ja", "ko"].includes(tl)) return false;
-  return hasCjk(translated) && !hasCjk(source);
-}
-
-/**
- * HTML text nodes, with any oversized node further split into parts (same as plain
- * text). Without this a single huge paragraph/description node is one un-splittable
- * unit: if its translation times out it can only fall back to the original. Each
- * marker maps to a list of parts; the node's translation is the parts joined back.
- */
-function htmlNodePartsOf(value: string): { template: string; nodeParts: string[][] } {
-  let { template, texts } = extractHtmlTextNodes(preprocessHtmlForTranslation(value));
-  ({ template, texts } = coalesceBlockTextNodes(template, texts));
-  const nodeParts = texts.map((t) =>
-    t.length > LONG_TEXT_THRESHOLD ? splitPlainText(t) : [t],
-  );
-  return { template, nodeParts };
-}
-
-/** @internal Exported for unit tests. */
-export function htmlNodePartsOfForTest(value: string): { template: string; nodeParts: string[][] } {
-  return htmlNodePartsOf(value);
-}
-
-/** @internal Round-trip HTML text-node translation for tests. */
-export function roundtripHtmlForTest(
-  html: string,
-  translateFn: (text: string, index: number) => string,
-): string {
-  const { template, nodeParts } = htmlNodePartsOf(html);
-  const out = nodeParts.map((parts, i) => sanitizeHtmlTextTranslation(parts.join(""), translateFn(parts.join(""), i)));
-  return restoreBrPlaceholders(restoreHtmlTextNodes(template, out));
-}
+export { htmlNodePartsOf as htmlNodePartsOfForTest, roundtripHtmlForTest };
+export { looksLikeUntranslated, looksLikeWrongScriptLeak } from "./translateQuality.js";
 
 // ─── JSON rule extraction ─────────────────────────────────────────────────────
 //
@@ -2306,13 +2148,24 @@ async function translateItemsRouted(
     const restored = restoreMaskedPlaceholders(decoded, placeholders);
     if (placeholders.length > 0) {
       const tokensOk =
-        placeholders.every((t) => restored.includes(t)) ||
-        placeholdersIntact(restored, placeholders);
+        (placeholders.every((t) => restored.includes(t)) ||
+          placeholdersIntact(restored, placeholders)) &&
+        protectedLiteralsPreserved(placeholders, restored);
       if (!tokensOk) {
         console.warn(`[route] placeholder corrupted for key=${it.key}, using original`);
         result.set(it.key, { value: it.value, status: "fallback", engine: null, tokens: 0 });
         continue;
       }
+    }
+    if (hasPromptSentinelLeakage(restored)) {
+      console.warn(`[route] sentinel leakage for key=${it.key}, using original`);
+      result.set(it.key, { value: it.value, status: "fallback", engine: null, tokens: 0 });
+      continue;
+    }
+    if (looksLikeEmptySourceHallucination(it.value, restored)) {
+      console.warn(`[route] empty-source hallucination for key=${it.key}, using original`);
+      result.set(it.key, { value: it.value, status: "fallback", engine: null, tokens: 0 });
+      continue;
     }
     const finalValue = sanitizeHtmlTextTranslation(it.value, restored);
     if (looksLikeUntranslated(it.value, finalValue, target)) {
@@ -2416,85 +2269,8 @@ function decodeQuoteEntities(text: string): string {
 
 // ─── Placeholder masking ───────────────────────────────────────────────────────
 
-/**
- * Variables that must survive translation verbatim. LLMs otherwise translate the
- * word inside them (e.g. {{quantity}} → {{quantité}}, [qty] → [qté]), which
- * breaks Shopify's variable substitution. We mask them before sending and restore
- * after, instead of trusting the model to leave them alone.
- *
- * Covered: Liquid/handlebars `{{ x }}`, Ruby i18n `%{x}`, template `${x}`,
- * printf `%s/%d/%1$s`, numbered `{0}`, and bracket vars `[name]` (but NOT
- * markdown links `[text](url)`).
- */
-const PLACEHOLDER_RE =
-  /\{\{[^{}]*\}\}|%\{[^}]+\}|\$\{[^}]+\}|%\d*\$?[sd]|\{\d+\}|\[[A-Za-z_][\w-]*\](?!\()/g;
-
-/** Absolute URLs and root-relative site paths — must survive translation verbatim. */
-const PROTECTED_URL_RE = /https?:\/\/[^\s<>"']+/gi;
-const PROTECTED_PATH_RE = /\/[a-zA-Z0-9_\-./%~]+(?:\?[a-zA-Z0-9_\-./%&=]*)?/g;
-
-// Rare bracket pair the model treats as an opaque token and won't translate.
-const SENT_OPEN = "⟦"; // ⟦
-const SENT_CLOSE = "⟧"; // ⟧
-const SENT_RE = /⟦(\d+)⟧/g;
-
-function pushMaskedToken(_text: string, tokens: string[], match: string): string {
-  const i = tokens.length;
-  tokens.push(match);
-  return `${SENT_OPEN}${i}${SENT_CLOSE}`;
-}
-
-function maskProtectedLiterals(text: string, tokens: string[]): string {
-  let out = text.replace(PROTECTED_URL_RE, (m) => pushMaskedToken(text, tokens, m));
-  out = out.replace(PROTECTED_PATH_RE, (m) => pushMaskedToken(text, tokens, m));
-  return out;
-}
-
-function maskPlaceholders(text: string): { masked: string; tokens: string[] } {
-  const tokens: string[] = [];
-  let masked = maskProtectedLiterals(text, tokens);
-  masked = masked.replace(PLACEHOLDER_RE, (m) => pushMaskedToken(text, tokens, m));
-  return { masked, tokens };
-}
-
 /** @internal Exported for unit tests. */
-export function maskPlaceholdersForTest(text: string): { masked: string; tokens: string[] } {
-  return maskPlaceholders(text);
-}
-
-function restorePlaceholders(text: string, tokens: string[]): string {
-  return text.replace(SENT_RE, (_m, d: string) => tokens[Number(d)] ?? "");
-}
-
-/** Recover common LLM corruptions of ⟦n⟧ (e.g. S0, [0]) before giving up. */
-function restorePlaceholdersLenient(text: string, tokens: string[]): string {
-  let out = text;
-  for (let i = 0; i < tokens.length; i++) {
-    const sentinel = `${SENT_OPEN}${i}${SENT_CLOSE}`;
-    if (out.includes(sentinel)) continue;
-    const corruptPatterns = [
-      new RegExp(`\\bS${i}\\b`, "g"),
-      new RegExp(`\\[${i}\\]`, "g"),
-      new RegExp(`\\{${i}\\}`, "g"),
-    ];
-    for (const re of corruptPatterns) {
-      if (re.test(out)) {
-        out = out.replace(re, tokens[i] ?? sentinel);
-        break;
-      }
-    }
-  }
-  return out;
-}
-
-function restoreMaskedPlaceholders(decoded: string, tokens: string[]): string {
-  if (tokens.length === 0) return decoded;
-  const strict = restorePlaceholders(decoded, tokens);
-  if (tokens.every((t) => strict.includes(t))) return strict;
-  const lenient = restorePlaceholdersLenient(decoded, tokens);
-  if (tokens.every((t) => lenient.includes(t))) return lenient;
-  return strict;
-}
+export { maskPlaceholders as maskPlaceholdersForTest } from "./placeholderMask.js";
 
 /** Reject translations that leak JSON structure into a plain text leaf. */
 function sanitizeJsonSlotTranslation(original: string, translated: string): string {
@@ -2508,14 +2284,6 @@ function sanitizeJsonSlotTranslation(original: string, translated: string): stri
   return t;
 }
 
-/** True if every masked token's sentinel survived intact in the model output. */
-function placeholdersIntact(text: string, tokens: string[]): boolean {
-  for (let i = 0; i < tokens.length; i++) {
-    if (!text.includes(`${SENT_OPEN}${i}${SENT_CLOSE}`)) return false;
-  }
-  return true;
-}
-
 /**
  * Build the static system prompt. Everything here is stable for a given
  * (source, target, glossary) → it forms a byte-identical prefix across batches
@@ -2527,6 +2295,7 @@ function buildSystemPrompt(target: string, glossaryLines: string[], profileBlock
     ? `\nGlossary (apply consistently):\n${glossaryLines.join("\n")}\n`
     : "";
   const shopContextBlock = profileBlock ? `\n${profileBlock}\n` : "";
+  const targetLangBlock = buildTargetLanguageBlock(target);
   return `You are a professional e-commerce translator.${shopContextBlock}
 Detect the input language automatically and translate the content into "${target}".
 Rules:
@@ -2535,14 +2304,15 @@ Rules:
 - If a value is already entirely in "${target}", return it unchanged
 - translatedValue MUST be written entirely in "${target}"; never insert Chinese (汉字), Japanese, or Korean characters unless those exact characters already appear in the source value
 - Each value is a plain-text leaf extracted from HTML: never include HTML tags (<td>, <tr>, <table>, etc.) in translatedValue
-- Keep any ⟦number⟧ tokens exactly as they appear; never translate, modify, reorder, or drop them
-- ⟦number⟧ tokens may represent URLs or site paths (e.g. /blogs/news/article) — always preserve them verbatim
+- Keep opaque sentinel tokens (⟦0⟧, ⟦1⟧, ⟦2⟧, …) exactly unchanged; never translate, modify, reorder, or drop them
+- Sentinels may represent URLs or site paths (e.g. /blogs/news/article) — preserve them verbatim
 - Keep the literal token ⟦BR⟧ exactly as it appears (line-break placeholder)
 - Output literal characters; do NOT HTML-escape. Use ' and " directly — never &#39; or &quot;
 - Do NOT add or remove leading or trailing whitespace
 - If the value is empty, return it unchanged
 - If a field key is "title", translatedValue MUST be at most 255 characters; shorten naturally while preserving the core meaning
 - You MUST return an entry for every key in the input
+${targetLangBlock}
 ${glossaryBlock}
 The user message is a JSON array of {"key","value"} objects to translate.
 Return ONLY a JSON object {"translations":[{"key":"<key>","translatedValue":"<text>"}]}, no markdown.`;
@@ -2881,12 +2651,25 @@ function reconstructPlan(
           anyFallback = true;
           return p;
         }
+        if (
+          looksLikeWrongScriptLeak(p, r.value, target) ||
+          looksLikeEmptySourceHallucination(p, r.value) ||
+          hasPromptSentinelLeakage(r.value)
+        ) {
+          anyFallback = true;
+          return p;
+        }
         return effectiveTranslation(p, sanitizeHtmlTextTranslation(p, r.value));
       });
       const joined = pieces.join("");
       return effectiveTranslation(parts.join(""), joined.trim());
     });
-    const value = restoreBrPlaceholders(restoreHtmlTextNodes(plan.template, out));
+    const originalOut = plan.nodeParts.map((parts) => parts.join(""));
+    let value = restoreBrPlaceholders(restoreHtmlTextNodes(plan.template, out));
+    if (hasPromptSentinelLeakage(value)) {
+      anyFallback = true;
+      value = restoreBrPlaceholders(restoreHtmlTextNodes(plan.template, originalOut));
+    }
     const status = anyFallback ? "fallback" : "translated";
     rm.set(plan.key, { key: plan.key, translatedValue: value, digest: plan.digest, status });
     if (status === "translated") tmWrites.push(tmSet(shopName, target, plan.cacheModel, plan.digest, value));
@@ -2903,6 +2686,14 @@ function reconstructPlan(
               anyFallback = true;
               return p;
             }
+            if (
+              looksLikeWrongScriptLeak(p, r.value, target) ||
+              looksLikeEmptySourceHallucination(p, r.value) ||
+              hasPromptSentinelLeakage(r.value)
+            ) {
+              anyFallback = true;
+              return p;
+            }
             return effectiveTranslation(p, sanitizeHtmlTextTranslation(p, r.value));
           });
           const joined = pieces.join("");
@@ -2912,9 +2703,20 @@ function reconstructPlan(
           slot.text,
           restoreBrPlaceholders(restoreHtmlTextNodes(slot.htmlPlan.template, out)),
         );
+        if (hasPromptSentinelLeakage(translatedSlots[i]!)) {
+          anyFallback = true;
+          translatedSlots[i] = slot.text;
+        }
       } else {
         const r = lookup(plan.order, slot.text);
         if (!r || r.status === "fallback") {
+          anyFallback = true;
+          translatedSlots[i] = slot.text;
+        } else if (
+          looksLikeWrongScriptLeak(slot.text, r.value, target) ||
+          looksLikeEmptySourceHallucination(slot.text, r.value) ||
+          hasPromptSentinelLeakage(r.value)
+        ) {
           anyFallback = true;
           translatedSlots[i] = slot.text;
         } else {
@@ -2999,6 +2801,7 @@ export async function translateResources(
   // orderSig → (unique text → occurrence count across the chunk).
   const pools = new Map<string, Map<string, number>>();
   const addUnit = (order: Engine[], text: string) => {
+    if (!isTranslatableLeafText(text)) return;
     const sig = order.join(",");
     const occ = pools.get(sig) ?? pools.set(sig, new Map()).get(sig)!;
     occ.set(text, (occ.get(text) ?? 0) + 1);
@@ -3053,6 +2856,10 @@ export async function translateResources(
   for (let wi = 0; wi < fieldWorks.length; wi++) {
     const { resourceId, f, klass, order, cacheModel } = fieldWorks[wi];
     const rm = resultMaps.get(resourceId)!;
+    if (!f.value.trim()) {
+      rm.set(f.key, { key: f.key, translatedValue: f.value, digest: f.digest, status: "translated" });
+      continue;
+    }
     const cached = cacheHits[wi];
     if (cached !== null) {
       rm.set(f.key, { key: f.key, translatedValue: cached, digest: f.digest, status: "translated" });

@@ -1,4 +1,5 @@
 import { getShopAccessToken, invalidateShopAccessTokenCache } from "./shopAccessToken.js";
+import { buildShopifyAdminGraphqlUrl } from "./shopifyAdminApiVersion.js";
 import { maskEmail } from "./workerEmail.js";
 
 const LOG = "[shopEmail]";
@@ -37,7 +38,7 @@ async function shopifyGraphqlOnce(
   shop: string,
   accessToken: string,
 ): Promise<Response> {
-  const url = `https://${shop}/admin/api/2024-01/graphql.json`;
+  const url = buildShopifyAdminGraphqlUrl(shop);
   return fetch(url, {
     method: "POST",
     headers: {

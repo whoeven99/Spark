@@ -4,9 +4,13 @@ import {
   SUSPICIOUS_PATTERN,
   SUSPICIOUS2_PATTERN,
 } from "./constants.js";
-import { isJsonObject } from "./jsonUtils.js";
+import { tryParseJsonContainer } from "../jsonExtractRules.js";
 import { metaTranslate } from "./judgeTranslateUtils.js";
 import { canTranslateMetafieldJson } from "./metafieldJsonJudge.js";
+
+function isJsonContainer(value: string): boolean {
+  return tryParseJsonContainer(value) !== undefined;
+}
 
 /**
  * METAFIELD branch (TranslateV2Service.needTranslate).
@@ -44,7 +48,8 @@ export function passesMetafieldModuleRules(
     return false;
   }
 
-  if (isJsonObject(value) || type === "JSON") {
+  // JSON-shaped values: allow only when extract rules find translatable text slots.
+  if (isJsonContainer(value) || type === "JSON") {
     return canTranslateMetafieldJson(value, type);
   }
 

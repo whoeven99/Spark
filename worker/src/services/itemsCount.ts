@@ -9,6 +9,7 @@
  */
 import { shouldIncludeFieldV2 } from "./translationFilter.js";
 import { isBlankValue } from "./translationFilter/v3Base.js";
+import { buildShopifyAdminGraphqlUrl } from "./shopifyAdminApiVersion.js";
 
 const TRANSLATABLE_RESOURCES_QUERY = `
 query CountTranslatableResources(
@@ -59,7 +60,7 @@ export async function computeModuleCount(
   module: string,
   locale: string,
 ): Promise<ModuleCount> {
-  const url = `https://${shopDomain}/admin/api/2024-01/graphql.json`;
+  const url = buildShopifyAdminGraphqlUrl(shopDomain);
   let total = 0;
   let translated = 0;
   let after: string | null = null;

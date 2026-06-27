@@ -11,12 +11,16 @@ import { getRedis } from "./redisV4.js";
  *
  * Scope is per-shop so that future per-shop glossary/tone never leaks across
  * shops. A generic global tier can be layered on later for theme UI strings.
+ *
+ * TRANSLATION_TM_DISABLED=true: bypass cache reads (refresh / rebuild TM after
+ * logic fixes) but still write successful translations back to Redis.
+ * false (default): normal read + write.
  */
 
 // Bump this when translation logic/prompt changes so stale cache is abandoned.
 // v5: source language auto-detected (prompt no longer hardcodes source).
 const TM_PREFIX = "tm:v5";
-const DEFAULT_TTL_DAYS = 60;
+const DEFAULT_TTL_DAYS = 30;
 // Values larger than this are almost always unique (long HTML), so caching them
 // burns Redis memory for near-zero hit rate. Skip them.
 const MAX_VALUE_BYTES = 8000;
@@ -26,7 +30,7 @@ function ttlSeconds(): number {
   return (Number.isFinite(days) && days > 0 ? days : DEFAULT_TTL_DAYS) * 24 * 3600;
 }
 
-function isDisabled(): boolean {
+function isReadDisabled(): boolean {
   return process.env.TRANSLATION_TM_DISABLED === "true";
 }
 
@@ -41,7 +45,7 @@ export async function tmGet(
   model: string,
   digest: string,
 ): Promise<string | null> {
-  if (isDisabled() || !digest) return null;
+  if (isReadDisabled() || !digest) return null;
   try {
     return await getRedis().get(tmKey(shopName, target, model, digest));
   } catch {
@@ -57,7 +61,7 @@ export async function tmSet(
   digest: string,
   value: string,
 ): Promise<void> {
-  if (isDisabled() || !digest || !value) return;
+  if (!digest || !value) return;
   if (Buffer.byteLength(value, "utf8") > MAX_VALUE_BYTES) return;
   try {
     await getRedis().set(tmKey(shopName, target, model, digest), value, "EX", ttlSeconds());
@@ -98,7 +102,7 @@ export async function tmGetByValue(
   target: string,
   model: string,
 ): Promise<string | null> {
-  if (isDisabled() || !sourceText || sourceText.length > MAX_VALUE_CACHE_CHARS) return null;
+  if (isReadDisabled() || !sourceText || sourceText.length > MAX_VALUE_CACHE_CHARS) return null;
   try {
     const key = `${VALUE_TM_PREFIX}:${valueHash(sourceText, source, target, model)}`;
     return await getRedis().get(key);
@@ -118,7 +122,7 @@ export async function tmSetByValue(
   model: string,
   translatedText: string,
 ): Promise<void> {
-  if (isDisabled() || !sourceText || sourceText.length > MAX_VALUE_CACHE_CHARS) return;
+  if (!sourceText || sourceText.length > MAX_VALUE_CACHE_CHARS) return;
   if (!translatedText) return;
   try {
     const key = `${VALUE_TM_PREFIX}:${valueHash(sourceText, source, target, model)}`;

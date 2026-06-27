@@ -16,6 +16,7 @@
     "@azure/storage-blob": "^12.31.0",
     "@libsql/client": "^0.17.3",
     "ioredis": "^5.10.1",
+    "node-html-parser": "^6.1.13",
     "tencentcloud-sdk-nodejs-ses": "^4.0.1038"
   },
   "devDependencies": {
