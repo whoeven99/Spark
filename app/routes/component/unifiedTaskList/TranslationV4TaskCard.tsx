@@ -13,7 +13,9 @@ import {
   formatTranslationV4TranslateDetailLocalized,
   formatV4JobTimeLine,
   formatV4TaskElapsed,
+  resolveTranslateProgressCounts,
   translationV4StatusLabel,
+  translationV4TranslateTailRemaining,
 } from "../../../lib/translationV4/state";
 import { TERMINAL_V4_STATUSES } from "../../../server/translation/v4/types";
 
@@ -63,11 +65,16 @@ function buildStageSummary(
 ): string {
   const label = translationV4StatusLabel(status);
   if (["TRANSLATING", "TRANSLATE_QUEUED", "TRANSLATE_DONE"].includes(status)) {
-    if (metrics.translateUnitTotal > 0) {
-      return `${label}：${metrics.translateUnitDone} / ${metrics.translateUnitTotal} 单元`;
+    const tailRemaining =
+      status === "TRANSLATING" ? translationV4TranslateTailRemaining(metrics) : 0;
+    if (tailRemaining > 0) {
+      return `${label}：正在收尾 ${tailRemaining} 项（较大字段较慢）`;
     }
     if (metrics.translateTotal > 0) {
       return `${label}：${metrics.translateDone} / ${metrics.translateTotal} 项`;
+    }
+    if (metrics.translateUnitTotal > 0) {
+      return `${label}：${metrics.translateUnitDone} / ${metrics.translateUnitTotal} 单元`;
     }
   }
   if (["INITIALIZING", "INIT_DONE"].includes(status) && metrics.initTotal > 0) {
@@ -133,8 +140,10 @@ function resolveStageStates(
   const initDone = metrics.initTotal > 0 && metrics.initDone >= metrics.initTotal;
   const hasTranslate = metrics.translateTotal > 0 || metrics.translateUnitTotal > 0;
   const translateDone =
-    (metrics.translateUnitTotal > 0 && metrics.translateUnitDone >= metrics.translateUnitTotal) ||
-    (metrics.translateTotal > 0 && metrics.translateDone >= metrics.translateTotal);
+    metrics.translateTotal > 0
+      ? metrics.translateDone >= metrics.translateTotal
+      : metrics.translateUnitTotal > 0 &&
+        metrics.translateUnitDone >= metrics.translateUnitTotal;
   const hasWriteback = metrics.writebackTotal > 0;
   const writebackDone = hasWriteback && metrics.writebackDone >= metrics.writebackTotal;
   const hasVerify = metrics.verifyTotal > 0;
@@ -254,9 +263,9 @@ function MultiStageProgress({
 }) {
   const [init, translate, writeback, verify] = resolveStageStates(status, metrics);
 
-  // For translate, prefer unit-level numbers if available
-  const translateDone = metrics.translateUnitTotal > 0 ? metrics.translateUnitDone : metrics.translateDone;
-  const translateTotal = metrics.translateUnitTotal > 0 ? metrics.translateUnitTotal : metrics.translateTotal;
+  // 进度条按「资源级」（blob 写盘后才计数），子节点数留在 countDetail 里展示。
+  // 子节点计数在 LLM 返回即 +1、会前置虚高，不适合驱动进度条。
+  const { done: translateDone, total: translateTotal } = resolveTranslateProgressCounts(metrics);
 
   const translateCountDetail = formatTranslationV4TranslateDetailLocalized(metrics) ?? undefined;
 

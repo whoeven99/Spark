@@ -80,6 +80,20 @@ function taskResourceTotal(metrics: TranslationV4Metrics): number {
   return metrics.translateTotal || metrics.initTotal || 0;
 }
 
+/**
+ * 翻译阶段百分比：优先用「资源级」translateDone（worker 在 blob 写盘后才 +1），
+ * 100% 才真正代表已落盘。子节点 translateUnitDone 在 LLM 返回即 +1、前置虚高，
+ * 仅在没有资源总数时回退使用。与 app 的 resolveTranslateProgressCounts 对齐。
+ */
+function translateStagePercent(metrics: TranslationV4Metrics): number | null {
+  const resourceTotal = taskResourceTotal(metrics);
+  if (resourceTotal > 0) return ratioPercent(metrics.translateDone, resourceTotal);
+  if (metrics.translateUnitTotal > 0) {
+    return ratioPercent(metrics.translateUnitDone, metrics.translateUnitTotal);
+  }
+  return null;
+}
+
 /** 按当前 pipeline 阶段计算进度百分比（与 TsFrontend progress.server 对齐）。 */
 export function computeTranslationV4ProgressPercent(
   status: TranslationV4Status,
@@ -99,10 +113,7 @@ export function computeTranslationV4ProgressPercent(
         return ratioPercent(metrics.verifyDone, metrics.verifyTotal);
       case "TRANSLATE":
       default:
-        if (metrics.translateUnitTotal > 0) {
-          return ratioPercent(metrics.translateUnitDone, metrics.translateUnitTotal);
-        }
-        return ratioPercent(metrics.translateDone, taskResourceTotal(metrics));
+        return translateStagePercent(metrics);
     }
   }
 
@@ -120,10 +131,7 @@ export function computeTranslationV4ProgressPercent(
     status === "TRANSLATING" ||
     status === "TRANSLATE_DONE"
   ) {
-    if (metrics.translateUnitTotal > 0) {
-      return ratioPercent(metrics.translateUnitDone, metrics.translateUnitTotal);
-    }
-    return ratioPercent(metrics.translateDone, taskResourceTotal(metrics));
+    return translateStagePercent(metrics);
   }
 
   if (status === "WRITEBACK_QUEUED" || status === "WRITING_BACK") {
