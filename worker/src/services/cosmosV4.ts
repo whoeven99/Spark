@@ -1,5 +1,5 @@
 import { CosmosClient, type Container } from "@azure/cosmos";
-import { pushHint } from "./redisV4.js";
+import { getProgress, pushHint } from "./redisV4.js";
 
 export type TranslationV4Status =
   | "CREATED"
@@ -541,12 +541,11 @@ const PROCESSING_TO_QUEUED: Array<[TranslationV4Status, TranslationV4Status]> = 
 ];
 
 const QUEUED_TO_HINT_STAGE: Partial<
-  Record<TranslationV4Status, "init" | "translate" | "writeback" | "verify">
+  Record<TranslationV4Status, "init" | "translate" | "writeback">
 > = {
   INIT_QUEUED: "init",
   TRANSLATE_QUEUED: "translate",
   WRITEBACK_QUEUED: "writeback",
-  VERIFY_QUEUED: "verify",
 };
 
 const BUSY_STATUS_FOR_QUEUE: Partial<
@@ -555,7 +554,6 @@ const BUSY_STATUS_FOR_QUEUE: Partial<
   INIT_QUEUED: "INITIALIZING",
   TRANSLATE_QUEUED: "TRANSLATING",
   WRITEBACK_QUEUED: "WRITING_BACK",
-  VERIFY_QUEUED: "VERIFYING",
 };
 
 async function pushHintForQueuedJob(
@@ -597,6 +595,36 @@ export async function countShopJobsInStatus(
  * 立刻重新入队（claimedBy=null），让新部署的 worker 马上接着跑，不必等 10 分钟 stale-reset。
  * 覆盖全部 4 个阶段。返回释放数量。
  */
+async function mergeReleaseMetricsFromRedis(
+  job: TranslationV4Job,
+  processingStatus: TranslationV4Status,
+): Promise<TranslationV4Metrics | undefined> {
+  if (processingStatus !== "WRITING_BACK" && processingStatus !== "VERIFYING") {
+    return undefined;
+  }
+  try {
+    const prog = await getProgress(job.id);
+    const patch: Partial<TranslationV4Metrics> = {};
+    if (processingStatus === "WRITING_BACK") {
+      const done = Number(prog.writebackDone) || 0;
+      const failed = Number(prog.writebackFailed) || 0;
+      if (done > 0) patch.writebackDone = Math.max(job.metrics.writebackDone ?? 0, done);
+      if (failed > 0) patch.writebackFailed = Math.max(job.metrics.writebackFailed ?? 0, failed);
+    } else {
+      const done = Number(prog.verifyDone) || 0;
+      const failed = Number(prog.verifyFailed) || 0;
+      const total = Number(prog.verifyTotal) || 0;
+      if (done > 0) patch.verifyDone = Math.max(job.metrics.verifyDone ?? 0, done);
+      if (failed > 0) patch.verifyFailed = Math.max(job.metrics.verifyFailed ?? 0, failed);
+      if (total > 0) patch.verifyTotal = Math.max(job.metrics.verifyTotal ?? 0, total);
+    }
+    if (Object.keys(patch).length === 0) return undefined;
+    return { ...job.metrics, ...patch };
+  } catch {
+    return undefined;
+  }
+}
+
 export async function releaseJobsClaimedBySuffix(claimSuffix: string): Promise<number> {
   let released = 0;
   for (const [processingStatus, resetStatus] of PROCESSING_TO_QUEUED) {
@@ -612,10 +640,12 @@ export async function releaseJobsClaimedBySuffix(claimSuffix: string): Promise<n
         })
         .fetchAll();
       for (const job of resources) {
+        const metrics = await mergeReleaseMetricsFromRedis(job, processingStatus);
         await updateJob(job.shopName, job.id, {
           status: resetStatus,
           claimedBy: null,
           claimedAt: null,
+          ...(metrics ? { metrics } : {}),
         }).catch(() => {});
         await pushHintForQueuedJob(job, resetStatus).catch(() => {});
         released++;

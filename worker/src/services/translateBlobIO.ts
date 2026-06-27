@@ -140,9 +140,12 @@ export async function countTranslatedResources(
 export async function loadTranslatedItemsForJob(
   blobPrefix: string,
   modules: string[],
+  opts?: { onModuleLoaded?: (module: string, index: number) => Promise<void> },
 ): Promise<Array<{ module: string; resource: TranslatedResourceItem }>> {
   const out: Array<{ module: string; resource: TranslatedResourceItem }> = [];
-  for (const module of modules) {
+  for (let i = 0; i < modules.length; i++) {
+    const module = modules[i]!;
+    if (opts?.onModuleLoaded) await opts.onModuleLoaded(module, i);
     for (const resource of await loadTranslatedItemsForModule(blobPrefix, module)) {
       out.push({ module, resource });
     }
