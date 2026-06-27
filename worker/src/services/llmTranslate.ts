@@ -1559,9 +1559,25 @@ function fieldTier(
   value: string,
   klass: "skip" | "html" | "json" | "list" | "plain",
 ): "trivial" | "rich" {
+  if (isHandleFieldKey(key)) return "rich";
   if (klass === "html" || klass === "json" || klass === "list") return "rich";
   if (key === "meta_description") return "rich";
   return value.length >= SHORT_PLAIN_THRESHOLD ? "rich" : "trivial";
+}
+
+function poolSignature(order: Engine[], isHandle: boolean): string {
+  const base = order.join(",");
+  return isHandle ? `${HANDLE_POOL_PREFIX}${base}` : base;
+}
+
+function parsePoolSignature(sig: string): { order: Engine[]; isHandle: boolean } {
+  if (sig.startsWith(HANDLE_POOL_PREFIX)) {
+    return {
+      isHandle: true,
+      order: sig.slice(HANDLE_POOL_PREFIX.length).split(",") as Engine[],
+    };
+  }
+  return { isHandle: false, order: sig.split(",") as Engine[] };
 }
 
 /** Ordered engine candidates for a tier (primary first, then fallback). */
@@ -1622,8 +1638,17 @@ export type TranslateResult = {
 
 // ─── Field classification ──────────────────────────────────────────────────────
 
-// These fields must not be translated (Shopify uses them as URL segments)
-const SKIP_KEYS = new Set(["handle"]);
+/** Pool signature prefix for handle/slug texts (hyphen→space preprocessed). */
+const HANDLE_POOL_PREFIX = "@handle@";
+
+export function isHandleFieldKey(key: string): boolean {
+  return key.trim().toLowerCase() === "handle";
+}
+
+/** Align with SpringBackend StringUtils.replaceHyphensWithSpaces before handle LLM. */
+export function prepareHandleSourceText(value: string): string {
+  return value.replace(/-/g, " ");
+}
 
 /**
  * Returns true if `text` appears to already be written in the target language,
@@ -1744,7 +1769,6 @@ export function classifyField(
   value?: string,
   shopifyType?: string,
 ): "skip" | "html" | "json" | "list" | "plain" {
-  if (SKIP_KEYS.has(key)) return "skip";
   if (value !== undefined) {
     if (shopifyType === "LIST_SINGLE_LINE_TEXT_FIELD" && isListFormat(value)) {
       return "list";
@@ -2077,6 +2101,7 @@ async function translateItemsRouted(
   aiModel: string,
   shopName: string,
   order: Engine[],
+  promptKind: "default" | "handle" = "default",
 ): Promise<{ results: Map<string, RoutedResult>; llmTokens: number }> {
   // placeholdersByKey: variable tokens (string[]) extracted from each item's value.
   const placeholdersByKey = new Map<string, string[]>();
@@ -2103,7 +2128,10 @@ async function translateItemsRouted(
           loadGlossaryLines(shopName, target),
           loadShopProfile(shopName),
         ]);
-        systemPrompt = buildSystemPrompt(target, glossary, profile ? buildProfilePromptBlock(profile) : "");
+        systemPrompt =
+          promptKind === "handle"
+            ? buildHandleSystemPrompt(target, glossary, profile ? buildProfilePromptBlock(profile) : "")
+            : buildSystemPrompt(target, glossary, profile ? buildProfilePromptBlock(profile) : "");
       }
       try {
         await gatherTranslations(missing, aiModel, systemPrompt, collected, tokenAccum, shopName);
@@ -2200,7 +2228,7 @@ async function retryPoolFallbacks(
 ): Promise<number> {
   let retried = 0;
   for (const [sig, occ] of pools) {
-    const order = sig.split(",") as Engine[];
+    const { order } = parsePoolSignature(sig);
     const tmap = translated.get(sig)!;
     const needsRetry: string[] = [];
     for (const text of occ.keys()) {
@@ -2215,13 +2243,15 @@ async function retryPoolFallbacks(
     }
     for (const text of needsRetry) {
       if (await shouldAbort()) break;
+      const { isHandle, order: poolOrder } = parsePoolSignature(sig);
       const { results: m } = await translateItemsRouted(
         [{ key: "0", value: text, digest: "" }],
         source,
         target,
         aiModel,
         shopName,
-        order,
+        poolOrder,
+        isHandle ? "handle" : "default",
       );
       const r = m.get("0");
       if (r?.status === "translated" && !looksLikeUntranslated(text, r.value, target) && !looksLikeWrongScriptLeak(text, r.value, target)) {
@@ -2315,6 +2345,31 @@ Rules:
 ${targetLangBlock}
 ${glossaryBlock}
 The user message is a JSON array of {"key","value"} objects to translate.
+Return ONLY a JSON object {"translations":[{"key":"<key>","translatedValue":"<text>"}]}, no markdown.`;
+}
+
+/** Handle/slug prompt — aligned with SpringBackend PromptUtils.buildDynamicHandlePrompt. */
+function buildHandleSystemPrompt(target: string, glossaryLines: string[], profileBlock = ""): string {
+  const glossaryBlock = glossaryLines.length
+    ? `\nGlossary (apply consistently):\n${glossaryLines.join("\n")}\n`
+    : "";
+  const shopContextBlock = profileBlock ? `\n${profileBlock}\n` : "";
+  const targetLangBlock = buildTargetLanguageBlock(target);
+  return `You are a professional e-commerce translator.${shopContextBlock}
+Detect the input language automatically and translate product URL handle/slug text into "${target}".
+Rules:
+- Be accurate and natural for e-commerce URL slugs
+- Translate ALL content into "${target}", no matter what language the input is in
+- If a value is already entirely in "${target}", return it unchanged
+- Preserve the exact letter casing from the source — do not capitalize words unless they are capitalized in the source
+- Keep numbers, variables, and placeholders unchanged
+- Do NOT output notes, annotations, explanations, corrections, or bilingual text
+- Output literal characters; do NOT HTML-escape
+- Do NOT add or remove leading or trailing whitespace
+- You MUST return an entry for every key in the input
+${targetLangBlock}
+${glossaryBlock}
+The user message is a JSON array of {"key","value"} objects to translate (hyphens may appear as spaces).
 Return ONLY a JSON object {"translations":[{"key":"<key>","translatedValue":"<text>"}]}, no markdown.`;
 }
 
@@ -2581,9 +2636,10 @@ type FieldPlan = {
   key: string;
   digest: string;
   order: Engine[];
+  poolSig: string;
   cacheModel: string;
 } & (
-  | { kind: "plain"; parts: string[] }
+  | { kind: "plain"; parts: string[]; isHandle?: boolean }
   | { kind: "html"; template: string; nodeParts: string[][] }
   | { kind: "json"; originalValue: string; root: JsonValue; slotPlans: JsonSlotPlan[] }
   | { kind: "list"; originalValue: string; elements: ListElementPlan[] }
@@ -2607,7 +2663,7 @@ function listPlanTexts(plan: Extract<FieldPlan, { kind: "list" }>): string[] {
   return texts;
 }
 
-type LookupFn = (order: Engine[], text: string) => RoutedResult | undefined;
+type LookupFn = (poolSig: string, text: string) => RoutedResult | undefined;
 
 function planTextsReady(plan: FieldPlan, lookup: LookupFn): boolean {
   const texts =
@@ -2618,7 +2674,7 @@ function planTextsReady(plan: FieldPlan, lookup: LookupFn): boolean {
         : plan.kind === "json"
           ? jsonPlanTexts(plan)
           : listPlanTexts(plan);
-  return texts.every((t) => lookup(plan.order, t) !== undefined);
+  return texts.every((t) => lookup(plan.poolSig, t) !== undefined);
 }
 
 function reconstructPlan(
@@ -2631,7 +2687,7 @@ function reconstructPlan(
   source: string,
 ): void {
   if (plan.kind === "plain") {
-    const pieces = plan.parts.map((p) => lookup(plan.order, p) ?? { value: p, status: "fallback" as const });
+    const pieces = plan.parts.map((p) => lookup(plan.poolSig, p) ?? { value: p, status: "fallback" as const });
     const value = pieces.map((p) => p.value).join("");
     const status = pieces.some((p) => p.status === "fallback") ? "fallback" : "translated";
     const originalValue = plan.parts.join("");
@@ -2646,7 +2702,7 @@ function reconstructPlan(
     // several parts; rejoin them (preserving inner boundaries) for that marker.
     const out = plan.nodeParts.map((parts) => {
       const pieces = parts.map((p) => {
-        const r = lookup(plan.order, p);
+        const r = lookup(plan.poolSig, p);
         if (!r || r.status === "fallback") {
           anyFallback = true;
           return p;
@@ -2681,7 +2737,7 @@ function reconstructPlan(
       if (slot.htmlPlan) {
         const out = slot.htmlPlan.nodeParts.map((parts) => {
           const pieces = parts.map((p) => {
-            const r = lookup(plan.order, p);
+            const r = lookup(plan.poolSig, p);
             if (!r || r.status === "fallback") {
               anyFallback = true;
               return p;
@@ -2708,7 +2764,7 @@ function reconstructPlan(
           translatedSlots[i] = slot.text;
         }
       } else {
-        const r = lookup(plan.order, slot.text);
+        const r = lookup(plan.poolSig, slot.text);
         if (!r || r.status === "fallback") {
           anyFallback = true;
           translatedSlots[i] = slot.text;
@@ -2737,7 +2793,7 @@ function reconstructPlan(
       if (el.htmlPlan) {
         const out = el.htmlPlan.nodeParts.map((parts) => {
           const pieces = parts.map((p) => {
-            const r = lookup(plan.order, p);
+            const r = lookup(plan.poolSig, p);
             if (!r || r.status === "fallback") {
               anyFallback = true;
               return p;
@@ -2749,7 +2805,7 @@ function reconstructPlan(
         });
         result[el.index] = restoreBrPlaceholders(restoreHtmlTextNodes(el.htmlPlan.template, out));
       } else {
-        const r = lookup(plan.order, el.text);
+        const r = lookup(plan.poolSig, el.text);
         if (!r || r.status === "fallback") {
           anyFallback = true;
           result[el.index] = el.text;
@@ -2783,6 +2839,11 @@ export type TranslatedResourceOutput = {
   results: TranslateResult[];
 };
 
+export type TranslateResourcesOptions = {
+  /** 与 TSF `isHandle` 对齐：`false` 时 handle 原样跳过；默认 `true`（INIT 已过滤时 blob 里本就不含 handle）。 */
+  translateHandle?: boolean;
+};
+
 export async function translateResources(
   resources: ResourceInput[],
   source: string,
@@ -2792,17 +2853,19 @@ export async function translateResources(
   onProgress?: (doneUnitsDelta: number, tokensDelta: number) => Promise<void>,
   onResourceDone?: (resource: TranslatedResourceOutput) => Promise<void>,
   shouldAbort?: () => boolean | Promise<boolean>,
+  options?: TranslateResourcesOptions,
 ): Promise<TranslateChunkResult> {
   const abortRequested = async (): Promise<boolean> =>
     shouldAbort ? Boolean(await shouldAbort()) : false;
+  const translateHandle = options?.translateHandle !== false;
 
   const resultMaps = new Map<string, Map<string, TranslateResult>>();
   const plans: FieldPlan[] = [];
   // orderSig → (unique text → occurrence count across the chunk).
   const pools = new Map<string, Map<string, number>>();
-  const addUnit = (order: Engine[], text: string) => {
+  const addUnit = (order: Engine[], text: string, isHandle = false) => {
     if (!isTranslatableLeafText(text)) return;
-    const sig = order.join(",");
+    const sig = poolSignature(order, isHandle);
     const occ = pools.get(sig) ?? pools.set(sig, new Map()).get(sig)!;
     occ.set(text, (occ.get(text) ?? 0) + 1);
   };
@@ -2834,6 +2897,10 @@ export async function translateResources(
   for (const res of resources) {
     const rm = resultMaps.get(res.resourceId)!;
     for (const f of res.fields) {
+      if (isHandleFieldKey(f.key) && !translateHandle) {
+        rm.set(f.key, { key: f.key, translatedValue: f.value, digest: f.digest, status: "translated" });
+        continue;
+      }
       const klass = classifyField(f.key, f.value, f.shopifyType);
       if (klass === "skip") {
         rm.set(f.key, { key: f.key, translatedValue: f.value, digest: f.digest, status: "translated" });
@@ -2869,7 +2936,8 @@ export async function translateResources(
 
     // Secondary: value-based cache for short plain-text fields.
     if (klass === "plain") {
-      const cachedByValue = await tmGetByValue(f.value, source, target, cacheModel);
+      const valueCacheSource = isHandleFieldKey(f.key) ? prepareHandleSourceText(f.value) : f.value;
+      const cachedByValue = await tmGetByValue(valueCacheSource, source, target, cacheModel);
       if (cachedByValue !== null) {
         rm.set(f.key, { key: f.key, translatedValue: cachedByValue, digest: f.digest, status: "translated" });
         tmWrites.push(tmSet(shopName, target, cacheModel, f.digest, cachedByValue));
@@ -2905,13 +2973,32 @@ export async function translateResources(
         continue;
       }
       nodeParts.forEach((parts) => parts.forEach((p) => addUnit(order, p)));
-      plans.push({ kind: "html", resourceId, key: f.key, digest: f.digest, order, cacheModel, template, nodeParts });
+      plans.push({
+        kind: "html",
+        resourceId,
+        key: f.key,
+        digest: f.digest,
+        order,
+        poolSig: poolSignature(order, false),
+        cacheModel,
+        template,
+        nodeParts,
+      });
     } else if (klass === "json") {
       const root = tryParseJsonContainer(f.value);
       if (root === undefined) {
         const parts = splitPlainText(f.value);
         parts.forEach((p) => addUnit(order, p));
-        plans.push({ kind: "plain", resourceId, key: f.key, digest: f.digest, order, cacheModel, parts });
+        plans.push({
+          kind: "plain",
+          resourceId,
+          key: f.key,
+          digest: f.digest,
+          order,
+          poolSig: poolSignature(order, false),
+          cacheModel,
+          parts,
+        });
       } else {
         const slots = extractJsonTextSlots(root);
         if (slots.length === 0) {
@@ -2939,6 +3026,7 @@ export async function translateResources(
           key: f.key,
           digest: f.digest,
           order,
+          poolSig: poolSignature(order, false),
           cacheModel,
           originalValue: f.value,
           root,
@@ -2971,14 +3059,28 @@ export async function translateResources(
         key: f.key,
         digest: f.digest,
         order,
+        poolSig: poolSignature(order, false),
         cacheModel,
         originalValue: f.value,
         elements,
       });
     } else {
-      const parts = splitPlainText(f.value);
-      parts.forEach((p) => addUnit(order, p));
-      plans.push({ kind: "plain", resourceId, key: f.key, digest: f.digest, order, cacheModel, parts });
+      const isHandle = isHandleFieldKey(f.key);
+      const sourceText = isHandle ? prepareHandleSourceText(f.value) : f.value;
+      const parts = splitPlainText(sourceText);
+      const poolSig = poolSignature(order, isHandle);
+      parts.forEach((p) => addUnit(order, p, isHandle));
+      plans.push({
+        kind: "plain",
+        resourceId,
+        key: f.key,
+        digest: f.digest,
+        order,
+        poolSig,
+        cacheModel,
+        parts,
+        isHandle,
+      });
     }
   }
 
@@ -3042,7 +3144,7 @@ export async function translateResources(
   const usage: EngineUsage = {};
   const translated = new Map<string, Map<string, RoutedResult>>();
   for (const [sig, occ] of pools) {
-    const order = sig.split(",") as Engine[];
+    const { order, isHandle } = parsePoolSignature(sig);
     const texts = [...occ.keys()];
     const tmap = new Map<string, RoutedResult>();
     const items: TranslateItem[] = texts.map((t, i) => ({ key: String(i), value: t, digest: "" }));
@@ -3050,7 +3152,15 @@ export async function translateResources(
     const batches = batchByChars(items, maxChars, maxItems);
     await Promise.all(batches.map(async (batch) => {
       if (await abortRequested()) return;
-      const { results: m, llmTokens } = await translateItemsRouted(batch, source, target, aiModel, shopName, order);
+      const { results: m, llmTokens } = await translateItemsRouted(
+        batch,
+        source,
+        target,
+        aiModel,
+        shopName,
+        order,
+        isHandle ? "handle" : "default",
+      );
       let batchUnits = 0;
       for (const [k, v] of m) {
         const text = texts[Number(k)];
@@ -3066,7 +3176,7 @@ export async function translateResources(
       }
       translated.set(sig, tmap);
       if (onProgress) await onProgress(batchUnits, llmTokens);
-      const lookup: LookupFn = (planOrder, text) => translated.get(planOrder.join(","))?.get(text);
+      const lookup: LookupFn = (poolSig, text) => translated.get(poolSig)?.get(text);
       await finishReadyResources(lookup);
     }));
   }
@@ -3085,7 +3195,7 @@ export async function translateResources(
     reconstructedResources.clear();
   }
 
-  const lookup: LookupFn = (planOrder, text) => translated.get(planOrder.join(","))?.get(text);
+  const lookup: LookupFn = (poolSig, text) => translated.get(poolSig)?.get(text);
   await finishReadyResources(lookup);
   if (tmWrites.length > 0) await Promise.all(tmWrites);
 
@@ -3118,6 +3228,7 @@ export async function translateBatch(
   target: string,
   aiModel: string,
   shopName: string,
+  options?: TranslateResourcesOptions,
 ): Promise<TranslateResult[]> {
   const { resources } = await translateResources(
     [{ resourceId: "__single__", fields: items }],
@@ -3125,6 +3236,10 @@ export async function translateBatch(
     target,
     aiModel,
     shopName,
+    undefined,
+    undefined,
+    undefined,
+    options,
   );
   return resources[0].results;
 }

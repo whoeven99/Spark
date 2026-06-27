@@ -215,7 +215,7 @@ CREATED
 - 每个字段结果带 `status: "translated" | "fallback"`。一个 plain 字段若有任一切分片段回退，则整字段标记 fallback。
 
 **字段分类**（`classifyField(key)`）：
-- `skip`：`handle`（Shopify URL slug，跳过不翻）
+- `handle`：仅在 INIT 阶段 `isHandle=true` 时收录；翻译阶段走专用 slug prompt（hyphen→space 预处理，对齐 SpringBackend）
 - `html`：`body_html`、`summary_html`、`content`、以 `_html` 结尾 → 先提取文本节点，翻译后还原
 - `plain`：其余字段
 

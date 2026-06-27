@@ -112,8 +112,32 @@ function llmMessagesFromFetch(fetchMock: ReturnType<typeof vi.fn>) {
   return body.messages;
 }
 
-describe("translateBatch — skip fields", () => {
-  it("returns handle unchanged without translating", async () => {
+describe("translateBatch — handle fields", () => {
+  it("translates handle with dedicated prompt when isHandle collected it", async () => {
+    const fetchMock = mockFetch({
+      deepseek: [llmResponse([{ key: "f0", translatedValue: "test tłumaczenia 3" }])],
+    });
+    const out = await translateBatch(
+      [{ key: "handle", value: "translation-test-3", digest: "d1" }],
+      "zh-CN",
+      "pl",
+      LLM_MODEL,
+      "shop.myshopify.com",
+      { translateHandle: true },
+    );
+    expect(out[0]).toEqual({
+      key: "handle",
+      translatedValue: "test tłumaczenia 3",
+      digest: "d1",
+      status: "translated",
+    });
+    expect(deepSeekCalls(fetchMock).length).toBeGreaterThan(0);
+    const messages = llmMessagesFromFetch(fetchMock);
+    expect(messages[0]?.content).toContain("URL handle/slug");
+    expect(messages[1]?.content).toContain("translation test 3");
+  });
+
+  it("skips handle when translateHandle=false (TSF isHandle off)", async () => {
     const fetchMock = mockFetch({});
     const out = await translateBatch(
       [{ key: "handle", value: "my-handle", digest: "d1" }],
@@ -121,10 +145,15 @@ describe("translateBatch — skip fields", () => {
       "en",
       LLM_MODEL,
       "shop.myshopify.com",
+      { translateHandle: false },
     );
-    expect(out[0]).toEqual({ key: "handle", translatedValue: "my-handle", digest: "d1", status: "translated" });
+    expect(out[0]).toEqual({
+      key: "handle",
+      translatedValue: "my-handle",
+      digest: "d1",
+      status: "translated",
+    });
     expect(deepSeekCalls(fetchMock)).toHaveLength(0);
-    expect(tmGet).not.toHaveBeenCalled();
   });
 });
 
