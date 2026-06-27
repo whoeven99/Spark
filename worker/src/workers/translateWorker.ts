@@ -41,6 +41,11 @@ import {
 } from "../services/llmTranslate.js";
 import { QpsLogger } from "../services/qpsLogger.js";
 import type { TranslationV4Job } from "../services/cosmosV4.js";
+import {
+  isInternalAbortReason,
+  userFacingPauseMessage,
+} from "../services/userFacingMessages.js";
+import { capTranslateUnitsByResources } from "../services/metricsUtils.js";
 import { runWritebackWorker } from "./writebackWorker.js";
 
 const HEARTBEAT_THROTTLE_MS = 30_000;
@@ -225,28 +230,41 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   const durableDone = await countTranslatedResources(blobPrefix, job.modules);
   const durableUnits = await countUnitsForCheckpointedResources(blobPrefix, job.modules);
   const redisDone = Number(redisProgressAtStart.translateDone) || 0;
-  const redisUnits = Number(redisProgressAtStart.translateUnitDone) || 0;
 
   let translateDone = Math.max(durableDone, redisDone);
   let translateFailed = Number(redisProgressAtStart.translateFailed) || 0;
   let translateFallback = Number(redisProgressAtStart.translateFallback) || 0;
-  let translateUnitDone = Math.max(durableUnits, redisUnits);
-  let liveTokens = persistedUsedTokens; // accumulated LLM tokens (after multiplier)
-  let lastHeartbeatAt = 0;
-  const tokenMultiplier = Math.max(0, Number(process.env.TRANSLATION_TOKEN_MULTIPLIER) || 1);
-  // Fields that were translated but fell back to the original value (engine
-  // dropped the key / failed). Surfaced to the UI via translate/fallbacks.json.
-  const fallbacks: Array<{ resourceId: string; module: string; key: string }> = [];
-  const engineUsage: EngineUsage = {};
   const translateTotal = job.metrics.translateTotal || job.metrics.initTotal;
   const translateUnitTotal = job.metrics.translateUnitTotal || 0;
-  if (translateUnitTotal > 0 && translateUnitDone > translateUnitTotal) {
-    translateUnitDone = translateUnitTotal;
+  // 节点数以 blob checkpoint 为准；Redis 在续跑时可能残留 inflated 值（勿 max 合并）。
+  let translateUnitDone = durableUnits;
+  if (translateUnitTotal > 0) {
+    translateUnitDone = capTranslateUnitsByResources({
+      translateDone,
+      translateTotal,
+      translateUnitDone,
+      translateUnitTotal,
+    });
   }
+  let liveTokens = persistedUsedTokens;
+  let lastHeartbeatAt = 0;
+  const tokenMultiplier = Math.max(0, Number(process.env.TRANSLATION_TOKEN_MULTIPLIER) || 1);
+  const fallbacks: Array<{ resourceId: string; module: string; key: string }> = [];
+  const engineUsage: EngineUsage = {};
   // Record when this translate stage actually started (epoch ms string).
   const translateStartedAt = Date.now().toString();
   const stageStartedAt = new Date().toISOString(); // ISO span start for stageTimings
   const qps = new QpsLogger(jobId, shopName, "TRANSLATE");
+
+  const clampUnitDone = () => {
+    if (translateUnitTotal <= 0) return;
+    translateUnitDone = capTranslateUnitsByResources({
+      translateDone,
+      translateTotal,
+      translateUnitDone,
+      translateUnitTotal,
+    });
+  };
 
   // Write the start timestamp to Redis immediately so the UI can compute elapsed time.
   await setProgress(jobId, {
@@ -485,10 +503,8 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
             let shouldFlushQuota = false;
             await runExclusive(async () => {
               translateUnitDone += deltaUnits;
-              if (translateUnitTotal > 0 && translateUnitDone > translateUnitTotal) {
-                translateUnitDone = translateUnitTotal;
-              }
               liveTokens += Math.ceil(deltaTokens * tokenMultiplier);
+              clampUnitDone();
               // 累积额度欠账；攒够一次 perCall 量级再扣（见 flushQuota）。
               if (enforceQuota && deltaTokens > 0) {
                 pendingQuotaCharge += Math.ceil(deltaTokens * quotaMult);
@@ -548,6 +564,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
                   fallbacks.push({ resourceId, module, key: r.key });
                 }
               }
+              clampUnitDone();
             });
 
             await setProgress(jobId, {
@@ -630,11 +647,35 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
     // 被中断（手动暂停/取消 或 额度不足）。
     if (abort.tripped) {
       const latestAbort = await getJob(shopName, jobId);
-      if (latestAbort?.claimedBy !== WORKER_ID) {
+      if (!latestAbort) {
+        console.log(`[translate] job=${jobId} yielding (job gone, ${abort.reason})`);
+        return;
+      }
+      if (latestAbort.claimedBy !== WORKER_ID) {
         console.log(`[translate] job=${jobId} yielding (claim lost, ${abort.reason})`);
         return;
       }
+      if (isInternalAbortReason(abort.reason)) {
+        console.log(`[translate] job=${jobId} yielding (internal abort: ${abort.reason})`);
+        return;
+      }
+      // 已由其它路径（如 TSF escalate / 排队态直接暂停）落盘 —— 勿用旧 run 覆盖。
+      if (latestAbort.status !== "TRANSLATING") {
+        await clearControl(jobId);
+        await setProgress(jobId, { pausePending: "0", pauseReason: "" });
+        console.log(
+          `[translate] job=${jobId} yielding (status=${latestAbort.status}, abort=${abort.reason})`,
+        );
+        return;
+      }
       const redisUsedOnAbort = Number((await getProgress(jobId)).usedTokens) || 0;
+      const unitsFromBlob = await countUnitsForCheckpointedResources(blobPrefix, job.modules);
+      translateUnitDone = capTranslateUnitsByResources({
+        translateDone,
+        translateTotal,
+        translateUnitDone: unitsFromBlob,
+        translateUnitTotal,
+      });
       const metricsOnAbort = {
         ...(latestAbort?.metrics ?? job.metrics),
         translateDone,
@@ -675,12 +716,13 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
       }
 
       // 暂停（手动 / 额度不足）：等在飞 LLM 收尾后直接 PAUSED，续跑时从翻译接着做（不写回）。
+      const pauseMessage = userFacingPauseMessage(abort.reason);
       await updateJob(shopName, jobId, {
         status: "PAUSED",
         claimedBy: null,
         pauseAfterWriteback: null,
         errorStage: "TRANSLATE",
-        errorMessage: abort.reason,
+        errorMessage: pauseMessage,
         stageTimings: timingsOnAbort,
         metrics: metricsOnAbort,
       });
