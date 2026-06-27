@@ -323,26 +323,34 @@ async function main() {
   }
   console.log("PUSHED: true");
 
-  let prUrl;
-  if (ghBin) {
-    prUrl = createPrViaGh({ title: prTitle, body: prBody, base, branch });
-  } else {
-    prUrl = await createPrViaApi({
-      owner,
-      repo,
-      head: branch,
-      base,
-      title: prTitle,
-      body: prBody,
-      token,
-    });
-  }
+  const compareUrl = `https://github.com/${owner}/${repo}/compare/${base}...${branch}?expand=1`;
 
-  if (!prUrl?.startsWith("http")) {
-    throw new Error(`PR 创建结果异常: ${prUrl}`);
-  }
+  try {
+    let prUrl;
+    if (ghBin) {
+      prUrl = createPrViaGh({ title: prTitle, body: prBody, base, branch });
+    } else {
+      prUrl = await createPrViaApi({
+        owner,
+        repo,
+        head: branch,
+        base,
+        title: prTitle,
+        body: prBody,
+        token,
+      });
+    }
 
-  console.log(`PR_URL: ${prUrl}`);
+    if (!prUrl?.startsWith("http")) {
+      throw new Error(`PR 创建结果异常: ${prUrl}`);
+    }
+
+    console.log(`PR_URL: ${prUrl}`);
+  } catch (err) {
+    console.error(`ERROR: ${err.message}`);
+    console.log(`PR_CREATE_URL: ${compareUrl}`);
+    process.exit(1);
+  }
 }
 
 main().catch((err) => {
