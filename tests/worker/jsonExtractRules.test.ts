@@ -14,6 +14,21 @@ describe("jsonExtractRules — Spring buildDefaultRules", () => {
     const slots = extractJsonTextSlots(root, buildDefaultJsonExtractRules());
     expect(slots).toHaveLength(1);
     expect(slots[0]!.text).toBe("Hello World");
+    expect(slots[0]!.isHtml).toBe(false);
+  });
+
+  it("marks JSON text slot as HTML when value contains markup (not only field name)", () => {
+    const html =
+      '<table><tbody><tr><td style="font-weight:bold">XS</td><td>77</td></tr></tbody></table>';
+    const root = tryParseJsonContainer(
+      JSON.stringify({ type: "text", value: html, children: [] }),
+    )!;
+    const slots = extractJsonTextSlots(root);
+    expect(slots).toHaveLength(1);
+    expect(slots[0]!.isHtml).toBe(true);
+    expect(countFieldUnits("value", JSON.stringify({ type: "text", value: html, children: [] }))).toBe(
+      2,
+    );
   });
 
   it("does not extract reviews paths (not in default rules)", () => {

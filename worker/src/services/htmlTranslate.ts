@@ -1,0 +1,242 @@
+/**
+ * HTML text-node extraction and reassembly for translation.
+ * Keep in sync with TypeScriptFrontend/app/server/translateV4/htmlTranslate.server.ts
+ */
+
+import { isHtmlContent } from "./htmlContent.js";
+
+export { isHtmlContent };
+
+const LONG_TEXT_THRESHOLD = Math.max(
+  500,
+  Number(process.env.TRANSLATE_LONG_TEXT_THRESHOLD) || 3_000,
+);
+const LONG_TEXT_CHUNK_CHARS = Math.max(
+  400,
+  Number(process.env.TRANSLATE_LONG_TEXT_CHUNK_CHARS) || 2_500,
+);
+
+const SKIP_BLOCK_RE = /<(script|style|pre|code)(\s[^>]*)?>[\s\S]*?<\/\1>/gi;
+const TRANSLATABLE_ATTR_RE = /\b(alt|title|aria-label|placeholder)=("([^"]*)"|(\'([^\']*)\'))/g;
+const ATTR_URL_RE = /^https?:\/\//;
+const ATTR_HASH_FILENAME_RE =
+  /^[a-fA-F0-9]{8,}(-[a-zA-Z0-9]+)*$|^\S+\.(jpg|jpeg|png|gif|bmp|webp|svg|mp4|pdf)$/i;
+
+const BR_PLACEHOLDER = "⟦BR⟧";
+const HTML_BLOCK_COALESCE_TAGS = "p|li|h[1-6]|dt|dd|blockquote|figcaption";
+const HTML_NESTED_BLOCK_RE =
+  /<(p|li|h[1-6]|td|th|dt|dd|blockquote|figcaption|div|ul|ol|table|thead|tbody|tr)\b/i;
+const HTML_TABLE_RE = /<table\b[\s\S]*?<\/table>/gi;
+
+function isTranslatableAttrValue(value: string): boolean {
+  const v = value.trim();
+  if (!v) return false;
+  if (ATTR_URL_RE.test(v)) return false;
+  if (ATTR_HASH_FILENAME_RE.test(v)) return false;
+  return true;
+}
+
+function preprocessHtmlForTranslation(html: string): string {
+  let s = html.replace(/<br\s*\/?>/gi, BR_PLACEHOLDER);
+  s = s.replace(/<a\b[^>]*>([\s\S]*?)<\/a>/gi, "$1");
+  s = s.replace(/<\/?(?:span|strong|em|b|i|u|mark|small|sub|sup|label|font)(?:\s[^>]*)?>/gi, "");
+  return s;
+}
+
+export function restoreBrPlaceholders(html: string): string {
+  return html.replaceAll(BR_PLACEHOLDER, "<br />");
+}
+
+export function effectiveTranslation(original: string, translated: string | undefined): string {
+  if (translated === undefined) return original;
+  if (original.trim() !== "" && translated.trim() === "") return original;
+  return translated;
+}
+
+function extractHtmlTextNodes(html: string): { template: string; texts: string[] } {
+  const texts: string[] = [];
+  const skipped = new Map<string, string>();
+  let sIdx = 0;
+
+  const withSkips = html.replace(SKIP_BLOCK_RE, (match) => {
+    const key = `\x00S${sIdx++}\x00`;
+    skipped.set(key, match);
+    return key;
+  });
+
+  const withAttrs = withSkips.replace(
+    TRANSLATABLE_ATTR_RE,
+    (_match, attrName: string, _quotedFull: string, dqVal: string, _sqFull: string, sqVal: string) => {
+      const attrValue = dqVal ?? sqVal ?? "";
+      const quote = dqVal !== undefined ? '"' : "'";
+      if (!isTranslatableAttrValue(attrValue)) return _match;
+      const idx = texts.length;
+      texts.push(attrValue.trim());
+      return `${attrName}=${quote}\x00T${idx}\x00${quote}`;
+    },
+  );
+
+  const template = withAttrs.replace(/>([^<]+)</g, (_match, raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return `>${raw}<`;
+    const idx = texts.length;
+    texts.push(trimmed);
+    const start = raw.indexOf(trimmed);
+    const end = start + trimmed.length;
+    return `>${raw.slice(0, start)}\x00T${idx}\x00${raw.slice(end)}<`;
+  });
+
+  let out = template;
+  for (const [k, v] of skipped) out = out.replaceAll(k, v);
+  return { template: out, texts };
+}
+
+export function restoreHtmlTextNodes(template: string, translations: string[]): string {
+  return template.replace(/\x00T(\d+)\x00/g, (_, idx) => translations[Number(idx)] ?? "");
+}
+
+export function sanitizeHtmlTextTranslation(original: string, translated: string): string {
+  if (!translated.includes("<")) return translated;
+  const stripped = translated
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!stripped) return original;
+  return stripped;
+}
+
+function coalesceBlockTextNodesInner(
+  template: string,
+  texts: string[],
+  newTexts: string[],
+): { template: string; texts: string[] } {
+  const blockRe = new RegExp(
+    `<(${HTML_BLOCK_COALESCE_TAGS})\\b[^>]*>([\\s\\S]*?)<\\/\\1>`,
+    "gi",
+  );
+
+  const newTemplate = template.replace(blockRe, (full, tag: string, inner: string) => {
+    if (HTML_NESTED_BLOCK_RE.test(inner)) return full;
+
+    const indices: number[] = [];
+    inner.replace(/\x00T(\d+)\x00/g, (_, idx: string) => {
+      indices.push(Number(idx));
+      return "";
+    });
+    if (indices.length <= 1) return full;
+
+    const merged = indices
+      .map((i) => texts[i])
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const newIdx = newTexts.length;
+    newTexts.push(merged);
+
+    const openTag = full.match(new RegExp(`<${tag}\\b[^>]*>`, "i"))![0];
+    return `${openTag}\x00T${newIdx}\x00</${tag}>`;
+  });
+
+  return { template: newTemplate, texts: newTexts };
+}
+
+function coalesceBlockTextNodes(
+  template: string,
+  texts: string[],
+): { template: string; texts: string[] } {
+  const newTexts = [...texts];
+  if (!HTML_TABLE_RE.test(template)) {
+    return coalesceBlockTextNodesInner(template, texts, newTexts);
+  }
+
+  HTML_TABLE_RE.lastIndex = 0;
+  let out = "";
+  let cursor = 0;
+  let m: RegExpExecArray | null;
+  while ((m = HTML_TABLE_RE.exec(template)) !== null) {
+    if (m.index > cursor) {
+      const seg = coalesceBlockTextNodesInner(template.slice(cursor, m.index), texts, newTexts);
+      out += seg.template;
+    }
+    out += m[0];
+    cursor = m.index + m[0].length;
+  }
+  if (cursor < template.length) {
+    const seg = coalesceBlockTextNodesInner(template.slice(cursor), texts, newTexts);
+    out += seg.template;
+  }
+  return { template: out, texts: newTexts };
+}
+
+function splitPlainText(text: string): string[] {
+  if (text.length <= LONG_TEXT_THRESHOLD) return [text];
+
+  const parts: string[] = [];
+  let remaining = text;
+
+  while (remaining.length > LONG_TEXT_CHUNK_CHARS) {
+    let splitIdx = -1;
+
+    const paraIdx = remaining.lastIndexOf("\n\n", LONG_TEXT_CHUNK_CHARS);
+    if (paraIdx >= LONG_TEXT_CHUNK_CHARS * 0.4) splitIdx = paraIdx + 2;
+
+    if (splitIdx < 0) {
+      const sentIdx = remaining.lastIndexOf(". ", LONG_TEXT_CHUNK_CHARS);
+      if (sentIdx >= LONG_TEXT_CHUNK_CHARS * 0.4) splitIdx = sentIdx + 2;
+    }
+
+    if (splitIdx <= 0) {
+      const wordIdx = remaining.lastIndexOf(" ", LONG_TEXT_CHUNK_CHARS);
+      splitIdx = wordIdx > 0 ? wordIdx : LONG_TEXT_CHUNK_CHARS;
+    }
+
+    parts.push(remaining.slice(0, splitIdx));
+    remaining = remaining.slice(splitIdx).trimStart();
+  }
+
+  if (remaining.length > 0) parts.push(remaining);
+  return parts;
+}
+
+export type HtmlNodePlan = { template: string; nodeParts: string[][] };
+
+/** Split HTML into a structural template and translatable text-node parts. */
+export function htmlNodePartsOf(value: string): HtmlNodePlan {
+  let { template, texts } = extractHtmlTextNodes(preprocessHtmlForTranslation(value));
+  ({ template, texts } = coalesceBlockTextNodes(template, texts));
+  const nodeParts = texts.map((t) =>
+    t.length > LONG_TEXT_THRESHOLD ? splitPlainText(t) : [t],
+  );
+  return { template, nodeParts };
+}
+
+/** Flatten node parts to per-marker translations for reassembly. */
+export function flattenHtmlNodeTranslations(
+  nodeParts: string[][],
+  translatePart: (part: string, partIndex: number) => string,
+): string[] {
+  let partIndex = 0;
+  return nodeParts.map((parts) => {
+    const pieces = parts.map((part) => {
+      const translated = translatePart(part, partIndex++);
+      return effectiveTranslation(part, sanitizeHtmlTextTranslation(part, translated));
+    });
+    const joined = pieces.join("");
+    return effectiveTranslation(parts.join(""), joined.trim());
+  });
+}
+
+/** Reassemble translated text nodes back into HTML. */
+export function reassembleHtmlTranslation(template: string, nodeTranslations: string[]): string {
+  return restoreBrPlaceholders(restoreHtmlTextNodes(template, nodeTranslations));
+}
+
+/** Round-trip helper for tests. */
+export function roundtripHtmlForTest(
+  html: string,
+  translateFn: (text: string, index: number) => string,
+): string {
+  const { template, nodeParts } = htmlNodePartsOf(html);
+  const out = flattenHtmlNodeTranslations(nodeParts, (text, i) => translateFn(text, i));
+  return reassembleHtmlTranslation(template, out);
+}

@@ -187,7 +187,7 @@ CREATED
 - 翻译前按 `tm:v4:{shop}:{target}:{model}:{digest}` 查 Redis，命中则跳过引擎调用；翻译成功后写回缓存。
 - key 用 Shopify 的字段 `digest`（源内容哈希）做天然失效：源文改动 → digest 变 → 自动失配重译。
 - 仅缓存成功译文（fallback 不缓存）；value 超 8KB 不缓存；`skip` 字段不查缓存。
-- 关闭：`TRANSLATION_TM_DISABLED=true`；TTL：`TRANSLATION_TM_TTL_DAYS`（默认 60 天）。
+- `TRANSLATION_TM_DISABLED=true` 时**跳过读缓存、仍写缓存**（用于修复逻辑后重跑批量、覆盖脏 TM）；`false` 为正常读写。TTL：`TRANSLATION_TM_TTL_DAYS`（默认 30 天）。
 
 **Prompt 结构（缓存友好）**（`callLLMOnce` / `buildSystemPrompt`）：
 - 拆成 `system`（静态指令 + 术语表，对同一 source/target/glossary 字节级稳定）+ `user`（仅待翻译 JSON payload）。
@@ -461,8 +461,8 @@ type TranslationTaskFormPayload = {
 | `DEEPSEEK_MODEL` | Worker | DeepSeek 模型，如 `deepseek-v4-flash`（默认 `deepseek-chat`） |
 | `DEEPSEEK_BASE_URL` | Worker | DeepSeek 端点，默认 `https://api.deepseek.com` |
 | `GOOGLE_TRANSLATE_API_KEY` | Worker | Google Translate API 密钥（短字段成本路由可选） |
-| `TRANSLATION_TM_DISABLED` | Worker | 设为 `"true"` 关闭翻译记忆缓存 |
-| `TRANSLATION_TM_TTL_DAYS` | Worker | 翻译记忆缓存 TTL（天），默认 60 |
+| `TRANSLATION_TM_DISABLED` | Worker | 设为 `"true"` 时跳过 TM 读、仍写入 TM（重跑刷新缓存）；`false` 正常读写 |
+| `TRANSLATION_TM_TTL_DAYS` | Worker | 翻译记忆缓存 TTL（天），默认 30 |
 | `WORKER_STAGES` | Worker | 逗号分隔启用的阶段，如 `init,translate,writeback,verify,analysis`（**默认全开**）。若设为 `init,translate` 等未含 `analysis` 的值，**商店扫描分析不会执行**；用于线上质量测试时可跳过 writeback/verify |
 | `COSMOS_SHOP_ANALYSIS_CONTAINER` | App + Worker | 商店扫描分析 Cosmos 容器，默认 `shop_analysis_jobs`（分区键 `/shopName`） |
 | `TRANSLATION_MAX_CHUNK_CHARS` | Worker | init 阶段单个 chunk 的字符总量上限，默认 50000（防止 chunk blob 过大 / 内存过高） |

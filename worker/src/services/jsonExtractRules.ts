@@ -2,6 +2,8 @@
  * Rule-based JSON text extraction — aligned with Java JsonTranslateStrategyService.buildDefaultRules.
  */
 
+import { isHtmlContent } from "./htmlContent.js";
+
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
 
 export type JsonExtractRule = {
@@ -73,7 +75,8 @@ function pushTextSlot(
     parent,
     fieldName,
     text: textValue,
-    isHtml: isHtmlFieldName(fieldName),
+    // Content-based: any slot whose value contains HTML markup uses the HTML pipeline.
+    isHtml: isHtmlFieldName(fieldName) || isHtmlContent(textValue),
   });
 }
 
