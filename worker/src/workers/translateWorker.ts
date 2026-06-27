@@ -240,6 +240,9 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   const engineUsage: EngineUsage = {};
   const translateTotal = job.metrics.translateTotal || job.metrics.initTotal;
   const translateUnitTotal = job.metrics.translateUnitTotal || 0;
+  if (translateUnitTotal > 0 && translateUnitDone > translateUnitTotal) {
+    translateUnitDone = translateUnitTotal;
+  }
   // Record when this translate stage actually started (epoch ms string).
   const translateStartedAt = Date.now().toString();
   const stageStartedAt = new Date().toISOString(); // ISO span start for stageTimings
@@ -268,10 +271,8 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   let lastControlCheckAt = 0;
   const CONTROL_CHECK_THROTTLE_MS = 1000;
   /**
-   * 暂停/取消触发后立刻写 Redis「暂停待落盘」信号（UI 据此显示「正在暂停…」）。
-   * 不再乐观地把 Cosmos 设成 PAUSED —— 真正的终态由 abort 块在在飞批次收尾后落定
-   * （已翻译 >0 → WRITEBACK_QUEUED 先写回 → PAUSED/CANCELLED；否则直接终态）。
-   * 这样状态单调推进，避免 PAUSED 闪现导致「继续」按钮提前出现又消失。
+   * 暂停/取消触发后立刻写 Redis「暂停待落盘」信号（UI 据此显示「正在暂停…」并禁用继续）。
+   * 真正的 PAUSED/CANCELLED 由 abort 块在在飞批次收尾后落定。
    */
   const persistAbortSoon = (_action: "pause" | "cancel", reason: string) => {
     void (async () => {
@@ -397,7 +398,15 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
     });
   };
 
+  const skipTranslateLoop = translateTotal > 0 && translateDone >= translateTotal;
+  if (skipTranslateLoop) {
+    console.log(
+      `[translate] job=${jobId} skip loop — all ${translateDone}/${translateTotal} already translated → writeback`,
+    );
+  }
+
   try {
+    if (!skipTranslateLoop) {
     // Flatten every chunk of every module into one work list. Previously modules
     // ran strictly one-after-another (only chunks *within* a module overlapped),
     // so many small single-chunk modules each ate a full ~40s LLM round-trip in
@@ -476,6 +485,9 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
             let shouldFlushQuota = false;
             await runExclusive(async () => {
               translateUnitDone += deltaUnits;
+              if (translateUnitTotal > 0 && translateUnitDone > translateUnitTotal) {
+                translateUnitDone = translateUnitTotal;
+              }
               liveTokens += Math.ceil(deltaTokens * tokenMultiplier);
               // 累积额度欠账；攒够一次 perCall 量级再扣（见 flushQuota）。
               if (enforceQuota && deltaTokens > 0) {
@@ -602,6 +614,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         });
       }
     });
+    }
 
     // 结清累积的额度欠账（无论正常跑完还是中断，尾款都要扣）。
     await flushQuota();
@@ -661,33 +674,11 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
         return;
       }
 
-      // 暂停且已译出内容 → 先把已翻译的写回 Shopify（珍惜已完成的工作）；写回完成后
-      // 由 writebackWorker 据 pauseAfterWriteback 收尾落 PAUSED（可续译）。
-      // 写回期间状态为 WRITING_BACK（非 PAUSED），前端「继续」自然禁用，直到最终 PAUSED。
-      if (translateDone > 0) {
-        await updateJob(shopName, jobId, {
-          status: "WRITEBACK_QUEUED",
-          claimedBy: null,
-          pauseAfterWriteback: "pause",
-          errorStage: null,
-          errorMessage: abort.reason,
-          stageTimings: timingsOnAbort,
-          metrics: metricsOnAbort,
-        });
-        await clearControl(jobId); // 消费控制信号，避免写回后 resume 立即再次暂停
-        await setProgress(jobId, { pausePending: "0", pauseReason: "" });
-        await pushHint("writeback", { taskId: jobId, shopName });
-        wakeWritebackWorker(jobId);
-        console.log(
-          `[translate] job=${jobId} 暂停→先写回已翻译（${abort.reason}）done=${translateDone}/${translateTotal}`,
-        );
-        return;
-      }
-
-      // 暂停且未译出任何内容 → 直接 PAUSED，无需写回。补额度/解除暂停后 resume 重新入队续译。
+      // 暂停（手动 / 额度不足）：等在飞 LLM 收尾后直接 PAUSED，续跑时从翻译接着做（不写回）。
       await updateJob(shopName, jobId, {
         status: "PAUSED",
         claimedBy: null,
+        pauseAfterWriteback: null,
         errorStage: "TRANSLATE",
         errorMessage: abort.reason,
         stageTimings: timingsOnAbort,
@@ -695,7 +686,9 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
       });
       await clearControl(jobId);
       await setProgress(jobId, { pausePending: "0", pauseReason: "" });
-      console.log(`[translate] job=${jobId} 已暂停（${abort.reason}）done=0`);
+      console.log(
+        `[translate] job=${jobId} 已暂停（${abort.reason}）done=${translateDone}/${translateTotal}`,
+      );
       return;
     }
 

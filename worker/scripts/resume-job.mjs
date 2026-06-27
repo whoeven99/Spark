@@ -77,13 +77,51 @@ const job = resources[0];
 console.log(
   `找到任务 ${job.id} status=${job.status} claimedBy=${job.claimedBy} lastHeartbeat=${job.lastHeartbeat}`,
 );
+console.log("metrics:", JSON.stringify(job.metrics, null, 2));
 
-const mapping = PROC_TO_QUEUED[job.status];
-if (!mapping) {
-  console.error(`状态 ${job.status} 不是可恢复的处理中/排队态，未操作。`);
-  process.exit(1);
+function translateResourcesComplete(metrics) {
+  const total = metrics?.translateTotal ?? metrics?.initTotal ?? 0;
+  if (total <= 0) return false;
+  const attempted = (metrics?.translateDone ?? 0) + (metrics?.translateFailed ?? 0);
+  return attempted >= total;
 }
-const [resetStatus, hintStage] = mapping;
+
+function writebackResourceTotal(metrics) {
+  if (metrics?.writebackTotal > 0) return metrics.writebackTotal;
+  if (translateResourcesComplete(metrics) && metrics?.translateDone > 0) {
+    return metrics.translateDone;
+  }
+  return metrics?.translateTotal || metrics?.initTotal || 0;
+}
+
+function writebackNeedsRetry(metrics) {
+  const total = writebackResourceTotal(metrics);
+  if (total <= 0) return false;
+  const done = metrics?.writebackDone ?? 0;
+  const failed = metrics?.writebackFailed ?? 0;
+  return done < total || failed > 0;
+}
+
+let resetStatus;
+let hintStage;
+if (
+  (job.status === "TRANSLATING" || job.status === "TRANSLATE_QUEUED") &&
+  translateResourcesComplete(job.metrics) &&
+  writebackNeedsRetry(job.metrics)
+) {
+  resetStatus = "WRITEBACK_QUEUED";
+  hintStage = "writeback";
+  console.log(
+    `翻译已完成 (${job.metrics.translateDone}/${job.metrics.translateTotal})，推进到写回队列`,
+  );
+} else {
+  const mapping = PROC_TO_QUEUED[job.status];
+  if (!mapping) {
+    console.error(`状态 ${job.status} 不是可恢复的处理中/排队态，未操作。`);
+    process.exit(1);
+  }
+  [resetStatus, hintStage] = mapping;
+}
 
 await container.item(job.id, job.shopName).replace({
   ...job,
@@ -91,6 +129,14 @@ await container.item(job.id, job.shopName).replace({
   claimedBy: null,
   claimedAt: null,
   updatedAt: new Date().toISOString(),
+  ...(resetStatus === "WRITEBACK_QUEUED" && job.metrics
+    ? {
+        metrics: {
+          ...job.metrics,
+          writebackTotal: writebackResourceTotal(job.metrics),
+        },
+      }
+    : {}),
 });
 console.log(`已重置 ${job.status} → ${resetStatus}, claimedBy=null`);
 
