@@ -1,245 +1,575 @@
-/** 工作台首页 Panel — 轻量入口与经营摘要，完整指标见经营看板。 */
+/** 工作台首页 — 对齐 Spark 首页实装预览：问候、AI 输入、店铺概览、任务监控。 */
+import { useMemo, useState, type KeyboardEvent } from "react";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
 import type { WorkspaceDashboardSnapshot } from "../../../lib/workspaceDashboardTypes";
+import type { ContextTool } from "./types";
 import {
-  alertItemStyle,
-  alertListStyle,
-  ghostButtonStyle,
-  listColumnStyle,
   metricDeltaStyle,
-  metricGridStyle,
   metricLabelStyle,
   metricValueStyle,
-  mobileMetricGridStyle,
-  mobileSectionHeaderStyle,
-  mobileSkillGridStyle,
-  mobileSurfaceCardStyle,
-  mobileTwoColumnStyle,
   mutedMetaStyle,
   panelStackStyle,
-  primaryButtonStyle,
-  sectionHeaderStyle,
   sectionTextStyle,
   sectionTitleSmallStyle,
-  sectionTitleStyle,
-  skillCardButtonStyle,
-  skillCategoryStyle,
-  skillFooterStyle,
-  statusBadgeStyle,
-  summaryItemStyle,
+  shopifyUi,
   surfaceCardStyle,
   textButtonStyle,
-  twoColumnStyle,
 } from "./styles";
 
-type QuickLauncher = {
-  id: string;
-  category: string;
-  title: string;
-  description: string;
-  prompt: string;
-  path?: string;
-  statusTone?: "positive" | "warning" | "neutral";
-};
+const WEEKDAY_LABELS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
-const quickLaunchers: QuickLauncher[] = [
-  {
-    id: "copy",
-    category: "内容",
-    title: "商品文案优化",
-    description: "批量生成和优化商品标题、卖点与描述。",
-    prompt: "帮我批量优化这批商品描述，优先突出 SEO 和转化。",
-    path: "/app/product-improve",
-    statusTone: "positive",
-  },
-  {
-    id: "translation",
-    category: "翻译",
-    title: "多语言翻译",
-    description: "发起带上下文的翻译任务，保留术语与结构。",
-    prompt: "继续这批商品的英语和日语翻译，并保留品牌术语。",
-    path: "/app/translation",
-    statusTone: "positive",
-  },
-  {
-    id: "daily",
-    category: "分析",
-    title: "每日经营待办",
-    description: "每日巡检经营数据，按优先级生成可执行任务。",
-    prompt: "帮我看最近 7 天经营指标异常，并给出优先级建议。",
-    path: "/app/daily-operations",
-    statusTone: "positive",
-  },
-  {
-    id: "image",
-    category: "视觉",
-    title: "图片工具",
-    description: "商品图翻译、文生图和素材优化。",
-    prompt: "帮我处理这批商品主图的翻译与优化。",
-    path: "/app/image-studio",
-    statusTone: "positive",
-  },
+const QUICK_PROMPTS: Array<{ label: string; prompt: string }> = [
+  { label: "诊断本周经营", prompt: "帮我诊断本周经营情况，找出需要优先处理的问题，并给出 3 条可执行建议。" },
+  { label: "翻译商品到多语言", prompt: "帮我批量翻译商品内容到多个目标语言，并保留品牌术语。" },
+  { label: "优化商品文案", prompt: "帮我优化一批商品的标题与描述，风格偏 SEO 与转化。" },
+  { label: "生成营销图片", prompt: "帮我为近期主推商品生成营销场景图创意与文案。" },
+  { label: "查看待处理订单", prompt: "帮我查看当前待处理、异常或高风险订单，并给出处理建议。" },
 ];
 
+const CONTEXT_CHIPS: Array<{ tool: ContextTool; label: string; icon: string }> = [
+  { tool: "product", label: "商品", icon: "◫" },
+  { tool: "order", label: "订单", icon: "◎" },
+  { tool: "file", label: "文件", icon: "↑" },
+];
+
+function greetingForHour(hour: number): string {
+  if (hour < 6) return "夜深了";
+  if (hour < 12) return "早上好";
+  if (hour < 18) return "下午好";
+  return "晚上好";
+}
+
+function formatHomeDate(now: Date): string {
+  return `${WEEKDAY_LABELS[now.getDay()]} · ${now.getMonth() + 1} 月 ${now.getDate()} 日`;
+}
+
+function formatInspectionTime(iso: string | null | undefined): string {
+  if (!iso) return "今日";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "今日";
+  return `今日 ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+const homeStyles = {
+  pageHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 16,
+    flexWrap: "wrap" as const,
+  },
+  greetingTitle: {
+    margin: 0,
+    fontSize: 26,
+    fontWeight: 700,
+    color: shopifyUi.text,
+    letterSpacing: "-0.02em",
+  },
+  greetingDate: {
+    marginTop: 6,
+    fontSize: 13,
+    color: shopifyUi.textMuted,
+  },
+  statusPill: (attention: boolean) =>
+    ({
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "6px 12px",
+      borderRadius: 999,
+      fontSize: 12,
+      fontWeight: 600,
+      color: attention ? "#9a5b00" : "#0f5132",
+      background: attention ? "#fff7e0" : "#e9f7ef",
+      border: `1px solid ${attention ? "#f0d48a" : "#b8e6c8"}`,
+      whiteSpace: "nowrap" as const,
+    }) as const,
+  statusDot: (attention: boolean) =>
+    ({
+      width: 8,
+      height: 8,
+      borderRadius: "50%",
+      background: attention ? "#f0a01d" : shopifyUi.primary,
+      flexShrink: 0,
+    }) as const,
+  assistantCard: {
+    ...surfaceCardStyle,
+    padding: "22px 24px 20px",
+    border: `1px solid ${shopifyUi.border}`,
+    boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
+  },
+  assistantBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: "0.06em",
+    color: shopifyUi.primary,
+    marginBottom: 10,
+  },
+  assistantTitle: {
+    margin: "0 0 16px",
+    fontSize: 18,
+    fontWeight: 700,
+    color: shopifyUi.text,
+  },
+  composerShell: {
+    border: `1px solid ${shopifyUi.border}`,
+    borderRadius: 14,
+    background: shopifyUi.surfaceSubtle,
+    padding: "14px 14px 12px",
+  },
+  composerInput: {
+    width: "100%",
+    minHeight: 88,
+    border: "none",
+    outline: "none",
+    resize: "none" as const,
+    background: "transparent",
+    fontSize: 14,
+    lineHeight: 1.55,
+    color: shopifyUi.text,
+    fontFamily: "inherit",
+    boxSizing: "border-box" as const,
+  },
+  composerFooter: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    marginTop: 10,
+    flexWrap: "wrap" as const,
+  },
+  chipRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap" as const,
+  },
+  contextChip: {
+    border: `1px solid ${shopifyUi.borderStrong}`,
+    borderRadius: 999,
+    background: shopifyUi.surface,
+    color: shopifyUi.textSecondary,
+    padding: "5px 11px",
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+  sendButton: (disabled: boolean) =>
+    ({
+      width: 36,
+      height: 36,
+      borderRadius: "50%",
+      border: "none",
+      background: disabled ? "#c9cccf" : shopifyUi.primary,
+      color: "#ffffff",
+      fontSize: 16,
+      fontWeight: 700,
+      cursor: disabled ? "default" : "pointer",
+      display: "grid",
+      placeItems: "center",
+      flexShrink: 0,
+    }) as const,
+  quickPillRow: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: 8,
+    marginTop: 14,
+  },
+  quickPill: {
+    border: `1px solid ${shopifyUi.border}`,
+    borderRadius: 999,
+    background: shopifyUi.surface,
+    color: shopifyUi.textSecondary,
+    padding: "7px 13px",
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+  sectionCard: {
+    ...surfaceCardStyle,
+    padding: "20px 22px",
+    border: `1px solid ${shopifyUi.border}`,
+  },
+  sectionHead: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    margin: 0,
+    fontSize: 15,
+    fontWeight: 700,
+    color: shopifyUi.text,
+  },
+  metricsGrid: (columns: number) =>
+    ({
+      display: "grid",
+      gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+      gap: 12,
+    }) as const,
+  metricTile: {
+    border: `1px solid ${shopifyUi.border}`,
+    borderRadius: 12,
+    background: shopifyUi.surfaceSubtle,
+    padding: "14px 14px 12px",
+  },
+  pendingBadge: {
+    display: "inline-block",
+    marginLeft: 6,
+    fontSize: 10,
+    fontWeight: 700,
+    padding: "1px 6px",
+    borderRadius: 999,
+    color: "#6d7175",
+    background: "#f1f2f3",
+  },
+  alertBar: {
+    marginTop: 14,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    padding: "12px 14px",
+    borderRadius: 10,
+    background: "#fff7e0",
+    border: "1px solid #f0d48a",
+    fontSize: 13,
+    color: "#7a4d00",
+  },
+  monitorGrid: (columns: number) =>
+    ({
+      display: "grid",
+      gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+      gap: 12,
+    }) as const,
+  monitorTile: {
+    border: `1px solid ${shopifyUi.border}`,
+    borderRadius: 12,
+    background: shopifyUi.surfaceSubtle,
+    padding: "14px 14px 12px",
+    minHeight: 132,
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 8,
+  },
+  monitorBadge: (tone: "warning" | "info" | "neutral") => {
+    const map = {
+      warning: { color: "#9a5b00", background: "#fff7e0" },
+      info: { color: "#2c4fc4", background: "rgba(64,112,244,0.12)" },
+      neutral: { color: "#6d7175", background: "#f1f2f3" },
+    };
+    const s = map[tone];
+    return {
+      alignSelf: "flex-start" as const,
+      fontSize: 11,
+      fontWeight: 700,
+      padding: "2px 8px",
+      borderRadius: 999,
+      color: s.color,
+      background: s.background,
+    };
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: 999,
+    background: "#e1e3e5",
+    overflow: "hidden" as const,
+  },
+  progressFill: (percent: number, color: string) =>
+    ({
+      height: "100%",
+      width: `${percent}%`,
+      borderRadius: 999,
+      background: color,
+      transition: "width 0.4s ease",
+    }) as const,
+  activityList: {
+    margin: "16px 0 0",
+    padding: 0,
+    listStyle: "none",
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 10,
+  },
+  activityItem: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 10,
+    fontSize: 13,
+    color: shopifyUi.textSecondary,
+    lineHeight: 1.5,
+  },
+  activityDot: {
+    width: 6,
+    height: 6,
+    borderRadius: "50%",
+    background: shopifyUi.primary,
+    marginTop: 7,
+    flexShrink: 0,
+  },
+};
+
 export function HomePanel({
+  displayName,
   snapshot,
-  onNewChat,
+  runningTaskCount,
+  onSubmitPrompt,
+  onOpenContextTool,
+  onMoreContext,
   onOpenDashboard,
   onOpenDailyOps,
   onOpenTasks,
-  onOpenSkills,
-  onQuickStart,
   onOpenTool,
 }: {
+  displayName: string;
   snapshot: WorkspaceDashboardSnapshot;
-  onNewChat: () => void;
+  runningTaskCount: number;
+  onSubmitPrompt: (prompt: string) => void;
+  onOpenContextTool: (tool: ContextTool) => void;
+  onMoreContext: () => void;
   onOpenDashboard: () => void;
   onOpenDailyOps: () => void;
   onOpenTasks: () => void;
-  onOpenSkills: () => void;
-  onQuickStart: (prompt: string) => void;
   onOpenTool: (path: string) => void;
 }) {
   const { isMobile } = useResponsiveLayout();
-  const topMetrics = snapshot.metrics.slice(0, 3);
-  const topAlerts = snapshot.alerts.slice(0, 3);
-  const recentTasks = snapshot.recentTaskSummaries.slice(0, 3);
+  const [draft, setDraft] = useState("");
+  const now = useMemo(() => new Date(), []);
+  const metrics = snapshot.metrics.slice(0, 4);
+  const primaryAlert = snapshot.alerts[0];
+  const needsAttention = snapshot.automation?.status === "attention";
+  const suggestionItems = snapshot.suggestions.slice(0, 2);
+  const metricColumns = isMobile ? 2 : 4;
+  const monitorColumns = isMobile ? 1 : 3;
+
+  const activityLines = useMemo(() => {
+    const lines: string[] = [];
+    if (snapshot.automation?.detail) {
+      lines.push(`每日巡检 · ${snapshot.automation.detail}`);
+    }
+    for (const task of snapshot.recentTaskSummaries.slice(0, 3)) {
+      lines.push(`${task.title} · ${task.result}`);
+    }
+    return lines.slice(0, 4);
+  }, [snapshot.automation, snapshot.recentTaskSummaries]);
+
+  const submitDraft = () => {
+    const text = draft.trim();
+    if (!text) return;
+    onSubmitPrompt(text);
+    setDraft("");
+  };
+
+  const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      submitDraft();
+    }
+  };
 
   return (
     <div style={panelStackStyle}>
-      <section style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
-        <div style={isMobile ? mobileSectionHeaderStyle : sectionHeaderStyle}>
-          <div>
-            <div style={{ ...sectionTitleStyle, fontSize: 20 }}>首页</div>
-            <div style={{ ...sectionTextStyle, marginTop: 6, maxWidth: 640 }}>
-              从这里快速开始对话、进入常用工具，或查看今日经营摘要。完整指标与趋势请前往经营看板。
-            </div>
-          </div>
-          <button type="button" style={primaryButtonStyle} onClick={onNewChat}>
-            新建对话
-          </button>
+      <header style={homeStyles.pageHeader}>
+        <div>
+          <h1 style={homeStyles.greetingTitle}>
+            {greetingForHour(now.getHours())}，{displayName}
+          </h1>
+          <div style={homeStyles.greetingDate}>{formatHomeDate(now)}</div>
         </div>
-      </section>
+        {snapshot.hasData || needsAttention ? (
+          <div style={homeStyles.statusPill(needsAttention)}>
+            <span style={homeStyles.statusDot(needsAttention)} aria-hidden="true" />
+            {needsAttention ? "今日巡检有需关注事项" : "今日巡检正常"}
+          </div>
+        ) : null}
+      </header>
 
-      <section style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
-        <div style={isMobile ? mobileSectionHeaderStyle : sectionHeaderStyle}>
-          <div>
-            <div style={sectionTitleStyle}>快速开始</div>
-            <div style={sectionTextStyle}>常用场景一键进入，或在对话中继续细化任务。</div>
-          </div>
-          <button type="button" style={ghostButtonStyle} onClick={onOpenSkills}>
-            全部工具
-          </button>
+      <section style={homeStyles.assistantCard}>
+        <div style={homeStyles.assistantBadge}>
+          <span aria-hidden="true">■</span>
+          <span>AI ASSISTANT</span>
         </div>
-        <div style={isMobile ? mobileSkillGridStyle : { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
-          {quickLaunchers.map((item) => (
+        <h2 style={homeStyles.assistantTitle}>今天想让 Spark 帮你做什么？</h2>
+        <div style={homeStyles.composerShell}>
+          <textarea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={handleComposerKeyDown}
+            placeholder="例如：分析本周转化率下降的原因，并给出 3 个可执行的改进建议…"
+            style={homeStyles.composerInput}
+          />
+          <div style={homeStyles.composerFooter}>
+            <div style={homeStyles.chipRow}>
+              {CONTEXT_CHIPS.map((chip) => (
+                <button
+                  key={chip.tool}
+                  type="button"
+                  style={homeStyles.contextChip}
+                  onClick={() => onOpenContextTool(chip.tool)}
+                >
+                  {chip.icon} {chip.label}
+                </button>
+              ))}
+              <button type="button" style={homeStyles.contextChip} onClick={onMoreContext}>
+                + 更多
+              </button>
+            </div>
             <button
-              key={item.id}
               type="button"
-              style={skillCardButtonStyle}
-              onClick={() => {
-                if (item.path) onOpenTool(item.path);
-                else onQuickStart(item.prompt);
-              }}
+              style={homeStyles.sendButton(!draft.trim())}
+              disabled={!draft.trim()}
+              onClick={submitDraft}
+              aria-label="发送"
             >
-              <div style={skillCategoryStyle}>{item.category}</div>
-              <div style={sectionTitleSmallStyle}>{item.title}</div>
-              <div style={sectionTextStyle}>{item.description}</div>
-              <div style={skillFooterStyle}>
-                <span style={statusBadgeStyle(item.statusTone ?? "neutral")}>推荐</span>
-                <span style={textButtonStyle}>进入</span>
-              </div>
+              ↑
+            </button>
+          </div>
+        </div>
+        <div style={homeStyles.quickPillRow}>
+          {QUICK_PROMPTS.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              style={homeStyles.quickPill}
+              onClick={() => onSubmitPrompt(item.prompt)}
+            >
+              {item.label}
             </button>
           ))}
         </div>
       </section>
 
-      <div style={isMobile ? mobileTwoColumnStyle : twoColumnStyle}>
-        <section style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
-          <div style={isMobile ? mobileSectionHeaderStyle : sectionHeaderStyle}>
-            <div>
-              <div style={sectionTitleStyle}>经营摘要</div>
-              <div style={sectionTextStyle}>首页只保留最关键指标，详细对比见经营看板。</div>
-            </div>
-            <button type="button" style={ghostButtonStyle} onClick={onOpenDashboard}>
-              经营看板
-            </button>
-          </div>
-          {topMetrics.length > 0 ? (
-            <div style={isMobile ? mobileMetricGridStyle : { ...metricGridStyle, gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
-              {topMetrics.map((metric) => (
-                <article key={metric.label} style={{ ...surfaceCardStyle, padding: 14, boxShadow: "none", border: "1px solid #e1e3e5" }}>
-                  <div style={metricLabelStyle}>{metric.label}</div>
-                  <div style={{ ...metricValueStyle, fontSize: 22 }}>{metric.value}</div>
-                  <div style={metricDeltaStyle(metric.tone)}>{metric.delta}</div>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <div style={sectionTextStyle}>
-              {snapshot.emptyMessage ?? "暂无经营快照，可前往每日经营待办生成今日摘要。"}
-            </div>
-          )}
-          {snapshot.automation ? (
-            <div style={{ ...summaryItemStyle, marginTop: 12 }}>
-              <div style={sectionTitleSmallStyle}>{snapshot.automation.title}</div>
-              <div style={sectionTextStyle}>{snapshot.automation.detail}</div>
-              {snapshot.automation.lastRunAt ? (
-                <div style={mutedMetaStyle}>
-                  最近执行：{new Date(snapshot.automation.lastRunAt).toLocaleString("zh-CN", { hour12: false })}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </section>
-
-        <section style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
-          <div style={isMobile ? mobileSectionHeaderStyle : sectionHeaderStyle}>
-            <div>
-              <div style={sectionTitleStyle}>今日关注</div>
-              <div style={sectionTextStyle}>优先处理影响销售、库存和退款的核心问题。</div>
-            </div>
-            <button type="button" style={ghostButtonStyle} onClick={onOpenDailyOps}>
-              每日待办
-            </button>
-          </div>
-          <div style={alertListStyle}>
-            {topAlerts.length === 0 ? (
-              <div style={sectionTextStyle}>暂无需要优先处理的风险项。</div>
-            ) : (
-              topAlerts.map((alert) => (
-                <div key={`${alert.title}-${alert.detail}`} style={alertItemStyle(alert.tone)}>
-                  <div style={sectionTitleSmallStyle}>{alert.title}</div>
-                  <div style={sectionTextStyle}>{alert.detail}</div>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
-      </div>
-
-      <section style={isMobile ? mobileSurfaceCardStyle : surfaceCardStyle}>
-        <div style={isMobile ? mobileSectionHeaderStyle : sectionHeaderStyle}>
-          <div>
-            <div style={sectionTitleStyle}>最近任务</div>
-            <div style={sectionTextStyle}>自动化与单次任务的最新执行记录。</div>
-          </div>
-          <button type="button" style={ghostButtonStyle} onClick={onOpenTasks}>
-            任务列表
+      <section style={homeStyles.sectionCard}>
+        <div style={homeStyles.sectionHead}>
+          <h3 style={homeStyles.sectionTitle}>店铺概览 · 最近 7 天</h3>
+          <button type="button" style={textButtonStyle} onClick={onOpenDashboard}>
+            查看完整看板 →
           </button>
         </div>
-        <div style={listColumnStyle}>
-          {recentTasks.length === 0 ? (
-            <div style={sectionTextStyle}>暂无近期任务，可从上方快速开始或新建对话。</div>
-          ) : (
-            recentTasks.map((item) => (
-              <div key={item.id} style={summaryItemStyle}>
-                <div style={sectionTitleSmallStyle}>{item.title}</div>
-                <div style={sectionTextStyle}>{item.result}</div>
-              </div>
-            ))
-          )}
+        {metrics.length > 0 ? (
+          <div style={homeStyles.metricsGrid(metricColumns)}>
+            {metrics.map((metric) => (
+              <article key={metric.label} style={homeStyles.metricTile}>
+                <div style={metricLabelStyle}>
+                  {metric.label}
+                  {metric.pendingIntegration ? (
+                    <span style={homeStyles.pendingBadge}>待接入</span>
+                  ) : null}
+                </div>
+                <div style={{ ...metricValueStyle, fontSize: 24 }}>{metric.value}</div>
+                <div style={metricDeltaStyle(metric.tone)}>{metric.delta}</div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div style={sectionTextStyle}>
+            {snapshot.emptyMessage ?? "暂无经营快照，完成每日巡检后将在此展示核心指标。"}
+          </div>
+        )}
+        {primaryAlert ? (
+          <div style={homeStyles.alertBar}>
+            <span>
+              <strong>需关注</strong>
+              {" · "}
+              {primaryAlert.title}
+              {primaryAlert.detail ? ` · ${primaryAlert.detail}` : ""}
+            </span>
+            <button type="button" style={textButtonStyle} onClick={onOpenDailyOps}>
+              去处理 →
+            </button>
+          </div>
+        ) : null}
+      </section>
+
+      <section style={homeStyles.sectionCard}>
+        <div style={homeStyles.sectionHead}>
+          <div>
+            <h3 style={homeStyles.sectionTitle}>AI 在为你盯着</h3>
+            <div style={{ ...mutedMetaStyle, marginTop: 4 }}>
+              每日巡检与正在执行的任务，无需你逐个跟进
+            </div>
+          </div>
+          <button type="button" style={textButtonStyle} onClick={onOpenTasks}>
+            查看任务列表 →
+          </button>
         </div>
+
+        <div style={homeStyles.monitorGrid(monitorColumns)}>
+          <article style={homeStyles.monitorTile}>
+            <span style={homeStyles.monitorBadge(needsAttention ? "warning" : "info")}>
+              {needsAttention ? "需关注" : "正常"}
+            </span>
+            <div style={sectionTitleSmallStyle}>每日巡检</div>
+            <div style={sectionTextStyle}>
+              {snapshot.automation
+                ? `${formatInspectionTime(snapshot.automation.lastRunAt)} · ${snapshot.automation.detail}`
+                : "尚未生成今日巡检摘要，可前往每日经营待办触发。"}
+            </div>
+            <div style={homeStyles.progressTrack}>
+              <div
+                style={homeStyles.progressFill(
+                  needsAttention ? 72 : 100,
+                  needsAttention ? "#f0a01d" : shopifyUi.primary,
+                )}
+              />
+            </div>
+          </article>
+
+          <article style={homeStyles.monitorTile}>
+            <span style={homeStyles.monitorBadge(runningTaskCount > 0 ? "info" : "neutral")}>
+              {runningTaskCount > 0 ? "进行中" : "空闲"}
+            </span>
+            <div style={sectionTitleSmallStyle}>进行中任务</div>
+            <div style={sectionTextStyle}>
+              {runningTaskCount > 0
+                ? `${runningTaskCount} 个任务正在后台执行，完成后会通知你。`
+                : "当前没有进行中的任务，可从上方输入框快速发起。"}
+            </div>
+            {runningTaskCount > 0 ? (
+              <button type="button" style={{ ...textButtonStyle, marginTop: "auto" }} onClick={onOpenTasks}>
+                查看任务列表 →
+              </button>
+            ) : null}
+          </article>
+
+          <article style={homeStyles.monitorTile}>
+            <span style={homeStyles.monitorBadge(suggestionItems.length > 0 ? "warning" : "neutral")}>
+              {suggestionItems.length > 0 ? `${suggestionItems.length} 条` : "暂无"}
+            </span>
+            <div style={sectionTitleSmallStyle}>待办建议</div>
+            <div style={sectionTextStyle}>
+              {suggestionItems.length > 0
+                ? suggestionItems.join(" · ")
+                : "暂无待办建议，完成巡检后会在此汇总。"}
+            </div>
+            {suggestionItems.length > 0 ? (
+              <button type="button" style={{ ...textButtonStyle, marginTop: "auto" }} onClick={onOpenDailyOps}>
+                逐条处理 →
+              </button>
+            ) : null}
+          </article>
+        </div>
+
+        {activityLines.length > 0 ? (
+          <>
+            <div style={{ ...sectionTitleSmallStyle, marginTop: 18 }}>最近 AI 活动</div>
+            <ul style={homeStyles.activityList}>
+              {activityLines.map((line) => (
+                <li key={line} style={homeStyles.activityItem}>
+                  <span style={homeStyles.activityDot} aria-hidden="true" />
+                  <span>{line}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
       </section>
     </div>
   );

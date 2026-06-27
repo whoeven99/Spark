@@ -32,6 +32,7 @@ import {
 import {
   isWorkspacePanel,
   type AutomationView,
+  type ContextTool,
   type Conversation,
   type ConversationSummary,
   type WorkspaceConversationMessage,
@@ -506,6 +507,7 @@ export function WorkspaceAppShellPage({
   const stream = useChatStream();
   const { sendMessage: streamConversation, prepareStreaming, abort: abortStream } = stream;
   const replyEpochRef = useRef(0);
+  const pendingHomeContextToolRef = useRef<ContextTool | null>(null);
   const [streamingConversationId, setStreamingConversationId] = useState<string | null>(null);
 
   const panelParam = searchParams.get("panel");
@@ -605,6 +607,13 @@ export function WorkspaceAppShellPage({
         setMessagesByConversation((current) => ({ ...current, [activeConversationId]: [] }));
       });
   }, [activeConversationId]);
+
+  useEffect(() => {
+    const tool = pendingHomeContextToolRef.current;
+    if (activePanel !== "chat" || !activeConversationId || !tool) return;
+    pendingHomeContextToolRef.current = null;
+    workspaceContext.toggleContextTool(tool);
+  }, [activePanel, activeConversationId, workspaceContext]);
 
   const switchPanel = (panel: WorkspacePanel) => {
     if (panel !== "chat") {
@@ -1044,7 +1053,7 @@ export function WorkspaceAppShellPage({
           type="button"
           className="sidebar-new-chat-btn workspace-primary-btn"
           style={newChatButtonStyle}
-          onClick={createConversation}
+          onClick={() => createConversation()}
         >
           <span style={newChatPlusBadgeStyle}>+</span>
           <span>新建对话</span>
@@ -1306,7 +1315,7 @@ export function WorkspaceAppShellPage({
             border: "1px solid #008060",
             fontSize: 18,
           }}
-          onClick={createConversation}
+          onClick={() => createConversation()}
           title="新建对话"
           aria-label="新建对话"
         >
@@ -1375,7 +1384,7 @@ export function WorkspaceAppShellPage({
             <button
               type="button"
               style={mobileTopBarButtonStyle}
-              onClick={createConversation}
+              onClick={() => createConversation()}
               aria-label="新建对话"
             >
               +
@@ -1407,14 +1416,21 @@ export function WorkspaceAppShellPage({
       <main style={isMobile ? mobileContentStyle : contentStyle}>
         {activePanel === "home" ? (
           <HomePanel
+            displayName={ACCOUNT_DISPLAY_NAME}
             snapshot={dashboardSnapshot}
-            onNewChat={() => createConversation()}
+            runningTaskCount={runningTaskCount}
+            onSubmitPrompt={(prompt) => createConversation({ draft: prompt })}
+            onOpenContextTool={(tool) => {
+              pendingHomeContextToolRef.current = tool;
+              createConversation();
+            }}
+            onMoreContext={() => {
+              pendingHomeContextToolRef.current = "media";
+              createConversation();
+            }}
             onOpenDashboard={() => switchPanel("dashboard")}
             onOpenDailyOps={() => navigate("/app/daily-operations")}
             onOpenTasks={() => switchPanel("tasks")}
-            onOpenSkills={() => switchPanel("skills")}
-            onQuickStart={(prompt) => createConversation({ draft: prompt })}
-            onOpenTool={(path) => navigate(path)}
           />
         ) : null}
         {activePanel === "dashboard" ? (

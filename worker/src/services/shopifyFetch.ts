@@ -848,6 +848,34 @@ export type TranslationMismatch = {
   outdated?: boolean;
 };
 
+const SHOP_PRIMARY_LOCALE_QUERY = `#graphql
+  query WorkerShopPrimaryLocale {
+    shopLocales {
+      locale
+      primary
+    }
+  }
+`;
+
+/** 读取店铺当前默认语言（Shopify 实时为准）。 */
+export async function fetchShopPrimaryLocale(
+  shopDomain: string,
+  accessToken: string,
+  preferLegacyToken = true,
+): Promise<string | null> {
+  const payload = (await shopifyGraphql(
+    shopDomain,
+    accessToken,
+    SHOP_PRIMARY_LOCALE_QUERY,
+    {},
+    { preferLegacyToken },
+  )) as {
+    data?: { shopLocales?: Array<{ locale: string; primary: boolean }> | null };
+  };
+  const rows = payload?.data?.shopLocales ?? [];
+  return rows.find((r) => r.primary)?.locale?.trim() ?? null;
+}
+
 /** Compare expected writeback payload against Shopify read-back. */
 export function diffResourceTranslations(
   expected: TranslationInput[],

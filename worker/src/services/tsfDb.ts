@@ -64,6 +64,40 @@ export async function listAutoTranslateShops(): Promise<AutoTranslateShop[]> {
   return [...byShop.values()];
 }
 
+function normalizeLocaleKey(locale: string): string {
+  return locale.trim().replace(/_/g, "-").toLowerCase();
+}
+
+/**
+ * 商家在 Shopify 改了默认语言后，把 TSF 缓存的 primaryLocale 对齐到最新值。
+ * 自动翻译 worker 建任务时用 Shopify 实时 primary 作 source。
+ */
+export async function syncShopPrimaryLocaleInTsf(
+  shop: string,
+  primaryLocale: string,
+): Promise<boolean> {
+  const primary = primaryLocale.trim();
+  if (!primary) return false;
+
+  const rs = await getTsfDb().execute({
+    sql:
+      "SELECT primaryLocale FROM ShopTranslationSettings WHERE shop = ? AND migratedToTsf = 1 LIMIT 1",
+    args: [shop],
+  });
+  const row = rs.rows[0];
+  if (!row) return false;
+
+  const stored = String(row.primaryLocale ?? "");
+  if (normalizeLocaleKey(stored) === normalizeLocaleKey(primary)) return false;
+
+  await getTsfDb().execute({
+    sql: "UPDATE ShopTranslationSettings SET primaryLocale = ?, updatedAt = datetime('now') WHERE shop = ?",
+    args: [primary, shop],
+  });
+  console.log(`[tsfDb] primaryLocale synced shop=${shop} ${stored} → ${primary}`);
+  return true;
+}
+
 /**
  * 从 TSF 的 Session 表取该店的 offline accessToken（自动任务回写 Shopify 用）。
  * TSF 用 @shopify/shopify-app Prisma session 存储，offline session 的 isOnline=0。
