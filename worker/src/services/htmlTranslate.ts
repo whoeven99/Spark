@@ -27,7 +27,7 @@ const HTML_BLOCK_COALESCE_TAGS = "p|li|h[1-6]|dt|dd|blockquote|figcaption";
 const HTML_NESTED_BLOCK_RE =
   /<(p|li|h[1-6]|td|th|dt|dd|blockquote|figcaption|div|ul|ol|table|thead|tbody|tr)\b/i;
 const HTML_TABLE_RE = /<table\b[\s\S]*?<\/table>/gi;
-const INLINE_PRESERVE_RE = /<(a|strong|b|em|i|u)\b/i;
+const INLINE_PRESERVE_RE = /<(a|strong|b|em|i|u|span|mark|small|sub|sup)\b/i;
 
 const SKIP_TAGS = new Set(["script", "style", "pre", "code", "noscript"]);
 const TRANSLATABLE_ATTRS = ["alt", "title", "aria-label", "placeholder"] as const;
@@ -41,9 +41,8 @@ function isTranslatableAttrValue(value: string): boolean {
 }
 
 function preprocessHtmlForTranslation(html: string): string {
-  let s = html.replace(/<br\s*\/?>/gi, BR_PLACEHOLDER);
-  s = s.replace(/<\/?(?:span|mark|small|sub|sup|label|font)(?:\s[^>]*)?>/gi, "");
-  return s;
+  // Only normalize <br>; keep span/style/class and other inline structure (aligned with Jsoup textNodes).
+  return html.replace(/<br\s*\/?>/gi, BR_PLACEHOLDER);
 }
 
 export function restoreBrPlaceholders(html: string): string {

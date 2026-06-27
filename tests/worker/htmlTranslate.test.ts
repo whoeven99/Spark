@@ -101,6 +101,44 @@ describe("htmlTranslate — inline markup preservation", () => {
     expect(out).toContain("ライト/ダーク");
     expect(out).not.toMatch(/\/dark\s/);
   });
+
+  it("preserves span style attributes and nested inline structure", () => {
+    const html =
+      '<p align="start"><span style="color: #16a085;"><strong>VerdantTrace</strong></span></p>' +
+      '<h4 align="start"><span style="color: #ffffff;"><strong><span style="background-color: #27ae60;">Introduction:</span></strong></span></h4>';
+    const out = roundtripHtmlForTest(html, (text) => {
+      if (text === "VerdantTrace") return "翠迹";
+      if (text === "Introduction:") return "介绍：";
+      return text;
+    });
+    expect(out).toContain('style="color: #16a085;"');
+    expect(out).toContain('style="color: #ffffff;"');
+    expect(out).toContain('style="background-color: #27ae60;"');
+    expect(out).toContain("<span");
+    expect(out).toContain("翠迹");
+    expect(out).toContain("介绍：");
+    expect(out).toContain('align="start"');
+  });
+
+  it("preserves widget embed spans and div style while translating visible text", () => {
+    const html =
+      "<div style='display:none' class='jdgm-prev-badge' data-average-rating='0.00'>" +
+      "<span class='jdgm-prev-badge__stars' data-score='0.00' role='button'>" +
+      "<span class='jdgm-star jdgm--off'></span><span class='jdgm-star jdgm--off'></span>" +
+      "</span>" +
+      "<span class='jdgm-prev-badge__text'> No reviews </span>" +
+      "</div>";
+    const out = roundtripHtmlForTest(html, (text) =>
+      text.trim() === "No reviews" ? "無評價" : text,
+    );
+    expect(out).toContain("style=");
+    expect(out).toContain("display:none");
+    expect(out).toContain("jdgm-prev-badge__stars");
+    expect(out).toContain("jdgm-prev-badge__text");
+    expect(out).toContain("jdgm-star");
+    expect(out).toContain("無評價");
+    expect(out).not.toContain("No reviews");
+  });
 });
 
 describe("placeholderMask — path false positives", () => {

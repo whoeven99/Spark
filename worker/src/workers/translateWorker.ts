@@ -559,6 +559,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
             onProgress,
             onResourceDone,
             shouldAbort,
+            { translateHandle: job.isHandle },
           );
           mergeEngineUsage(engineUsage, usage);
         } catch (e) {

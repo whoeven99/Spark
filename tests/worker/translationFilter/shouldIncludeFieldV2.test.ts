@@ -68,6 +68,46 @@ describe("shouldIncludeFieldV2", () => {
     ).toBe(false);
   });
 
+  it("excludes METAFIELD short mixed-case token ids (UFdVwM)", () => {
+    expect(
+      shouldIncludeFieldV2(
+        { key: "value", value: "UFdVwM", type: "SINGLE_LINE_TEXT_FIELD" },
+        [],
+        { ...ctx, module: "METAFIELD" },
+      ),
+    ).toBe(false);
+  });
+
+  it("excludes METAFIELD sentinel _none", () => {
+    expect(
+      shouldIncludeFieldV2(
+        { key: "value", value: "_none", type: "SINGLE_LINE_TEXT_FIELD" },
+        [],
+        { ...ctx, module: "METAFIELD" },
+      ),
+    ).toBe(false);
+  });
+
+  it("excludes METAFIELD app bundle identifiers", () => {
+    expect(
+      shouldIncludeFieldV2(
+        { key: "value", value: "app--2508649--mw_bundle", type: "SINGLE_LINE_TEXT_FIELD" },
+        [],
+        { ...ctx, module: "METAFIELD" },
+      ),
+    ).toBe(false);
+  });
+
+  it("still includes human-readable METAFIELD single-line text", () => {
+    expect(
+      shouldIncludeFieldV2(
+        { key: "value", value: "Ships within 3 business days", type: "SINGLE_LINE_TEXT_FIELD" },
+        [],
+        { ...ctx, module: "METAFIELD" },
+      ),
+    ).toBe(true);
+  });
+
   it("excludes METAOBJECT grp__", () => {
     expect(
       shouldIncludeFieldV2(

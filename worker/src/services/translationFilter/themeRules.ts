@@ -30,6 +30,10 @@ export function passesThemeModuleRules(module: string, key: string, value: strin
     return false;
   }
 
+  if (key.includes("slide") || key.includes("slideshow")) {
+    return false;
+  }
+
   if (key.includes("block") && key.includes("add_button_selector")) {
     return false;
   }
