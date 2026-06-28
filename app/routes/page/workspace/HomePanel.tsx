@@ -1,5 +1,5 @@
 /** 工作台首页 — 对齐 Spark 首页实装预览：问候、AI 输入、店铺概览、任务监控。 */
-import { useMemo, useState, type KeyboardEvent } from "react";
+import { useMemo, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
 import type { WorkspaceDashboardSnapshot } from "../../../lib/workspaceDashboardTypes";
 import type { ContextTool } from "./types";
@@ -340,23 +340,8 @@ export function HomePanel({
   const { isMobile } = useResponsiveLayout();
   const [draft, setDraft] = useState("");
   const now = useMemo(() => new Date(), []);
-  const metrics = snapshot.metrics.slice(0, 4);
-  const primaryAlert = snapshot.alerts[0];
   const needsAttention = snapshot.automation?.status === "attention";
   const suggestionItems = snapshot.suggestions.slice(0, 2);
-  const metricColumns = isMobile ? 2 : 4;
-  const monitorColumns = isMobile ? 1 : 3;
-
-  const activityLines = useMemo(() => {
-    const lines: string[] = [];
-    if (snapshot.automation?.detail) {
-      lines.push(`每日巡检 · ${snapshot.automation.detail}`);
-    }
-    for (const task of snapshot.recentTaskSummaries.slice(0, 3)) {
-      lines.push(`${task.title} · ${task.result}`);
-    }
-    return lines.slice(0, 4);
-  }, [snapshot.automation, snapshot.recentTaskSummaries]);
 
   const submitDraft = () => {
     const text = draft.trim();
@@ -446,129 +431,80 @@ export function HomePanel({
 
       <section style={homeStyles.sectionCard}>
         <div style={homeStyles.sectionHead}>
-          <h3 style={homeStyles.sectionTitle}>店铺概览 · 最近 7 天</h3>
-          <button type="button" style={textButtonStyle} onClick={onOpenDashboard}>
-            查看完整看板 →
-          </button>
-        </div>
-        {metrics.length > 0 ? (
-          <div style={homeStyles.metricsGrid(metricColumns)}>
-            {metrics.map((metric) => (
-              <article key={metric.label} style={homeStyles.metricTile}>
-                <div style={metricLabelStyle}>
-                  {metric.label}
-                  {metric.pendingIntegration ? (
-                    <span style={homeStyles.pendingBadge}>待接入</span>
-                  ) : null}
-                </div>
-                <div style={{ ...metricValueStyle, fontSize: 24 }}>{metric.value}</div>
-                <div style={metricDeltaStyle(metric.tone)}>{metric.delta}</div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div style={sectionTextStyle}>
-            {snapshot.emptyMessage ?? "暂无经营快照，完成每日巡检后将在此展示核心指标。"}
-          </div>
-        )}
-        {primaryAlert ? (
-          <div style={homeStyles.alertBar}>
-            <span>
-              <strong>需关注</strong>
-              {" · "}
-              {primaryAlert.title}
-              {primaryAlert.detail ? ` · ${primaryAlert.detail}` : ""}
-            </span>
-            <button type="button" style={textButtonStyle} onClick={onOpenDailyOps}>
-              去处理 →
-            </button>
-          </div>
-        ) : null}
-      </section>
-
-      <section style={homeStyles.sectionCard}>
-        <div style={homeStyles.sectionHead}>
           <div>
-            <h3 style={homeStyles.sectionTitle}>AI 在为你盯着</h3>
+            <h3 style={homeStyles.sectionTitle}>今日聚焦</h3>
             <div style={{ ...mutedMetaStyle, marginTop: 4 }}>
-              每日巡检与正在执行的任务，无需你逐个跟进
+              AI 已为你盯着这些，完整经营数据在看板里
             </div>
           </div>
-          <button type="button" style={textButtonStyle} onClick={onOpenTasks}>
-            查看任务列表 →
+          <button type="button" style={textButtonStyle} onClick={onOpenDashboard}>
+            经营看板 →
           </button>
         </div>
 
-        <div style={homeStyles.monitorGrid(monitorColumns)}>
-          <article style={homeStyles.monitorTile}>
+        <div style={focusGridStyle(isMobile)}>
+          <button type="button" style={focusItemStyle} onClick={onOpenDailyOps}>
             <span style={homeStyles.monitorBadge(needsAttention ? "warning" : "info")}>
               {needsAttention ? "需关注" : "正常"}
             </span>
-            <div style={sectionTitleSmallStyle}>每日巡检</div>
-            <div style={sectionTextStyle}>
-              {snapshot.automation
-                ? `${formatInspectionTime(snapshot.automation.lastRunAt)} · ${snapshot.automation.detail}`
-                : "尚未生成今日巡检摘要，可前往每日经营待办触发。"}
+            <div style={focusTitleStyle}>每日巡检</div>
+            <div style={focusTextStyle}>
+              {snapshot.automation ? snapshot.automation.detail : "今日尚未巡检，点此触发"}
             </div>
-            <div style={homeStyles.progressTrack}>
-              <div
-                style={homeStyles.progressFill(
-                  needsAttention ? 72 : 100,
-                  needsAttention ? "#f0a01d" : shopifyUi.primary,
-                )}
-              />
-            </div>
-          </article>
+          </button>
 
-          <article style={homeStyles.monitorTile}>
+          <button type="button" style={focusItemStyle} onClick={onOpenTasks}>
             <span style={homeStyles.monitorBadge(runningTaskCount > 0 ? "info" : "neutral")}>
-              {runningTaskCount > 0 ? "进行中" : "空闲"}
+              {runningTaskCount > 0 ? `${runningTaskCount} 进行中` : "空闲"}
             </span>
-            <div style={sectionTitleSmallStyle}>进行中任务</div>
-            <div style={sectionTextStyle}>
-              {runningTaskCount > 0
-                ? `${runningTaskCount} 个任务正在后台执行，完成后会通知你。`
-                : "当前没有进行中的任务，可从上方输入框快速发起。"}
+            <div style={focusTitleStyle}>任务</div>
+            <div style={focusTextStyle}>
+              {runningTaskCount > 0 ? "后台执行中，完成会通知你" : "暂无进行中任务"}
             </div>
-            {runningTaskCount > 0 ? (
-              <button type="button" style={{ ...textButtonStyle, marginTop: "auto" }} onClick={onOpenTasks}>
-                查看任务列表 →
-              </button>
-            ) : null}
-          </article>
+          </button>
 
-          <article style={homeStyles.monitorTile}>
+          <button type="button" style={focusItemStyle} onClick={onOpenDailyOps}>
             <span style={homeStyles.monitorBadge(suggestionItems.length > 0 ? "warning" : "neutral")}>
               {suggestionItems.length > 0 ? `${suggestionItems.length} 条` : "暂无"}
             </span>
-            <div style={sectionTitleSmallStyle}>待办建议</div>
-            <div style={sectionTextStyle}>
-              {suggestionItems.length > 0
-                ? suggestionItems.join(" · ")
-                : "暂无待办建议，完成巡检后会在此汇总。"}
+            <div style={focusTitleStyle}>待办建议</div>
+            <div style={focusTextStyle}>
+              {suggestionItems.length > 0 ? suggestionItems[0] : "完成巡检后在此汇总"}
             </div>
-            {suggestionItems.length > 0 ? (
-              <button type="button" style={{ ...textButtonStyle, marginTop: "auto" }} onClick={onOpenDailyOps}>
-                逐条处理 →
-              </button>
-            ) : null}
-          </article>
+          </button>
         </div>
-
-        {activityLines.length > 0 ? (
-          <>
-            <div style={{ ...sectionTitleSmallStyle, marginTop: 18 }}>最近 AI 活动</div>
-            <ul style={homeStyles.activityList}>
-              {activityLines.map((line) => (
-                <li key={line} style={homeStyles.activityItem}>
-                  <span style={homeStyles.activityDot} aria-hidden="true" />
-                  <span>{line}</span>
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : null}
       </section>
     </div>
   );
 }
+
+const focusGridStyle = (mobile: boolean): CSSProperties => ({
+  display: "grid",
+  gridTemplateColumns: mobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+  gap: 12,
+});
+
+const focusItemStyle: CSSProperties = {
+  textAlign: "left",
+  border: `1px solid ${shopifyUi.border}`,
+  borderRadius: 12,
+  background: shopifyUi.surfaceSubtle,
+  padding: "12px 14px",
+  cursor: "pointer",
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
+  fontFamily: "inherit",
+};
+
+const focusTitleStyle: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 700,
+  color: shopifyUi.text,
+};
+
+const focusTextStyle: CSSProperties = {
+  fontSize: 12,
+  color: shopifyUi.textSecondary,
+  lineHeight: 1.4,
+};
