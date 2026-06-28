@@ -347,7 +347,7 @@ export function TranslationV4TaskCard({ job }: Props) {
   const secondaryCopy = secondaryParts.join(" · ");
 
   function handleViewDetail() {
-    void navigate(`/app/translation-v4${window.location.search}`);
+    void navigate(`/app/studio/translate${window.location.search}`);
   }
 
   const actions = [

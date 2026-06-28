@@ -402,7 +402,7 @@ model ShopRefund {
   @@index([shop, processedAt])
 }
 
-/// 閫€娆捐椤圭洰锛岀敤浜?SKU 褰掑洜銆侀€€娆鹃噾棰?Top SKU 鍜屽敭鍚庡缓璁€?
+/// 退款行项目，用于 SKU 归因、退款金额 Top SKU 和售后建议。
 model ShopRefundLineItem {
   id              String @id @default(cuid())
   shop            String

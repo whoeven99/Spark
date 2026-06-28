@@ -1455,7 +1455,7 @@ export default function DailyOperationsPage() {
     next.delete("insightKey");
     next.delete("taskId");
     const query = next.toString();
-    return `/app/daily-operations${query ? `?${query}` : ""}`;
+    return `/app/today/diagnosis${query ? `?${query}` : ""}`;
   }, [detailSection, searchParams]);
 
   return (
@@ -1481,7 +1481,7 @@ export default function DailyOperationsPage() {
               : t("common.backToPrevious", { defaultValue: "返回工作台" })
           }
           {...(detailSection
-            ? { fallbackPath: "/app/daily-operations", returnTo: detailReturnTo }
+            ? { fallbackPath: "/app/today/diagnosis", returnTo: detailReturnTo }
             : { workspaceOnly: true })}
           rightAction={
             <div style={{ display: "flex", gap: "0.5rem" }}>

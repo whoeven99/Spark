@@ -18,7 +18,12 @@ export type FeatureKey =
   | "product-improve"
   | "image-studio"
   | "order-monitor"
-  | "billing";
+  | "billing"
+  // 新信息架构的一级目的地（PR1）
+  | "today"
+  | "studio"
+  | "tasks"
+  | "settings";
 
 /** 已上报过的 view 去重集合（page+feature 维度，单次会话内）。 */
 const viewedKeys = new Set<string>();

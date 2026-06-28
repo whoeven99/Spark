@@ -53,7 +53,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     console.error("[app._index] dashboard snapshot failed:", error);
   }
 
-  return { conversations, dashboardSnapshot };
+  const associatedUser = (
+    session as {
+      onlineAccessInfo?: {
+        associated_user?: { first_name?: string | null; last_name?: string | null } | null;
+      } | null;
+    }
+  ).onlineAccessInfo?.associated_user;
+  const accountName =
+    [associatedUser?.first_name, associatedUser?.last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim() || session.shop.replace(/\.myshopify\.com$/i, "");
+
+  return { conversations, dashboardSnapshot, accountName };
 };
 
 /** 工作台页依赖浏览器环境，SSR 阶段仅输出占位，避免嵌入式 iframe 首屏 500。 */
@@ -75,6 +88,7 @@ export default function Index() {
         <WorkspaceAppShellPage
           initialConversationList={data?.conversations ?? []}
           dashboardSnapshot={data?.dashboardSnapshot}
+          accountName={data?.accountName}
         />
       </Suspense>
     </ClientMount>
