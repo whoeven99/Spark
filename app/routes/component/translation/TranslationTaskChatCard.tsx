@@ -234,7 +234,7 @@ export function TranslationTaskChatCard({
               }}
             >
               <Link
-                to={`/app/translation-v4${search}`}
+                to={`/app/studio/translate${search}`}
                 style={{ color: "#2c6ecb", fontWeight: 500 }}
               >
                 {t("translationRuntime.openTaskPage")}

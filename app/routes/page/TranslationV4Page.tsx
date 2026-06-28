@@ -18,7 +18,7 @@ import {
   formatCreateTasksToast,
   resolveValidationErrorMessage,
 } from "../../lib/translationCreateFeedback";
-import type { loader } from "../app.translation-v4";
+import type { loader } from "../app.studio.translate";
 import {
   TERMINAL_V4_STATUSES,
   type StageName,

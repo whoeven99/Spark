@@ -6,7 +6,7 @@ import prisma from "../db.server";
 import { backfillOrders } from "../server/shopify/sync/backfill.server";
 import type { BackfillResult } from "../server/shopify/sync/types";
 
-// 内部开发路由：无导航入口，仅用于历史订单回补（/app/backfill）。
+// 历史订单回补工具（新 IA 下归入设置 › 数据工具，/app/settings/data）。
 
 const SYNC_RESOURCES = ["orders"] as const;
 

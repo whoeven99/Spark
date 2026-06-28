@@ -3,7 +3,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useTranslation } from "react-i18next";
 import { useFetcher, useLoaderData, useLocation } from "react-router";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import type { loader } from "../app.product-improve";
+import type { loader } from "../app.studio.copy";
 import { formatEstimatedDuration } from "../../lib/formatDuration";
 import type { ProductSelectorSelection } from "../../lib/productSearchTypes";
 import { LanguageSelector } from "../component/common/LanguageSelector";
@@ -306,7 +306,7 @@ export function ProductImprovePage() {
         {billing.billingRequired && !billing.hasAccess ? (
           <s-banner tone="warning">
             {t("billing.lowBalanceWarning")}{" "}
-            <s-link href={`/app/billing${search}`}>{t("billing.openBillingPage")}</s-link>
+            <s-link href={`/app/settings/billing${search}`}>{t("billing.openBillingPage")}</s-link>
           </s-banner>
         ) : null}
 

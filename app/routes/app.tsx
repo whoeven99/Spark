@@ -29,38 +29,14 @@ const NAV_ITEMS: Record<
   NavItemKey,
   {
     href: string;
-    labelKey:
-      | "nav.aiAssistant"
-      | "nav.productImprove"
-      | "nav.imageStudio"
-      | "nav.billing"
-      | "nav.orderMonitor"
-      | "nav.dailyOperations";
+    labelKey: "nav.ask" | "nav.today" | "nav.studio" | "nav.tasks" | "nav.settings";
   }
 > = {
-  chat: { href: "/app", labelKey: "nav.aiAssistant" },
-  "product-improve": {
-    href: "/app/product-improve",
-    labelKey: "nav.productImprove",
-  },
-  "image-studio": {
-    href: "/app/image-studio",
-    labelKey: "nav.imageStudio",
-  },
-  "picture-translate": {
-    href: "/app/image-studio?tab=translate",
-    labelKey: "nav.imageStudio",
-  },
-  "generate-image": {
-    href: "/app/image-studio?tab=generate",
-    labelKey: "nav.imageStudio",
-  },
-  "order-monitor": { href: "/app/order-monitor", labelKey: "nav.orderMonitor" },
-  "daily-operations": {
-    href: "/app/daily-operations",
-    labelKey: "nav.dailyOperations",
-  },
-  billing: { href: "/app/billing", labelKey: "nav.billing" },
+  ask: { href: "/app", labelKey: "nav.ask" },
+  today: { href: "/app/today", labelKey: "nav.today" },
+  studio: { href: "/app/studio", labelKey: "nav.studio" },
+  tasks: { href: "/app/tasks", labelKey: "nav.tasks" },
+  settings: { href: "/app/settings", labelKey: "nav.settings" },
 };
 
 /** 同一进程内每个 shop 的 V4 token 同步间隔，避免重复打 Cosmos。 */

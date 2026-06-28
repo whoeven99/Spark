@@ -35,7 +35,7 @@ export function UnifiedTaskCard({
         locationSearch={locationSearch}
         onDelete={() => onAITaskDeleted(task.id)}
         onOpenDetail={() => {
-          void navigate(`/app/product-improve${locationSearch}`);
+          void navigate(`/app/studio/copy${locationSearch}`);
         }}
         onTaskUpdated={onTaskUpdated}
         deleting={deleting}

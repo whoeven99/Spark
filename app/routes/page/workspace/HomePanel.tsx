@@ -326,7 +326,6 @@ export function HomePanel({
   onOpenDashboard,
   onOpenDailyOps,
   onOpenTasks,
-  onOpenTool,
 }: {
   displayName: string;
   snapshot: WorkspaceDashboardSnapshot;
@@ -337,7 +336,6 @@ export function HomePanel({
   onOpenDashboard: () => void;
   onOpenDailyOps: () => void;
   onOpenTasks: () => void;
-  onOpenTool: (path: string) => void;
 }) {
   const { isMobile } = useResponsiveLayout();
   const [draft, setDraft] = useState("");

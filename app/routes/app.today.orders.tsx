@@ -6,6 +6,12 @@ import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { isFullShippingRefund } from "../server/shopify/sync/refundSyncParse.server";
+// 单一口径来源：SLA/物流/退款阈值复用诊断层导出常量（消除与本页的双写，见 diagnosis.server.ts 顶部注释）
+import {
+  SLA_HOURS,
+  CARRIER_STALE_DAYS,
+  REFUND_SPIKE_PERCENT_POINTS,
+} from "../server/operations/diagnosis.server";
 import {
   PageHeaderNav,
   PageMetricCard,
@@ -130,10 +136,7 @@ type DashboardData = {
   diagnoses: string[];
 };
 
-const SLA_HOURS = 48;
 const SLA_TABLE_INITIAL_ROWS = 6;
-const CARRIER_STALE_DAYS = 7;
-const REFUND_SPIKE_PERCENT_POINTS = 3;
 
 const tableStyle: CSSProperties = {
   width: "100%",
