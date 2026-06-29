@@ -16,9 +16,6 @@ const SHOP_CONTACT_QUERY = `#graphql
       email
       contactEmail
       shopOwnerName
-      accountOwner {
-        firstName
-      }
     }
   }
 `;
@@ -31,12 +28,12 @@ export type ShopContact = {
 type CacheEntry = ShopContact & { cachedAt: number };
 const contactCache = new Map<string, CacheEntry>();
 
-/** 对齐 TypeScriptFrontend UserInitialization：从 shopOwnerName 拆 firstName。 */
+/** 从 shopOwnerName 取空格前部分作为称呼（如 "aviva xu" → "aviva"）。 */
 export function parseFirstNameFromShopOwnerName(shopOwnerName: string): string | null {
   const trimmed = shopOwnerName.trim();
   if (!trimmed) return null;
-  const lastSpaceIndex = trimmed.lastIndexOf(" ");
-  return lastSpaceIndex > 0 ? trimmed.slice(0, lastSpaceIndex) : trimmed;
+  const spaceIndex = trimmed.indexOf(" ");
+  return spaceIndex > 0 ? trimmed.slice(0, spaceIndex) : trimmed;
 }
 
 export type FetchShopEmailOptions = {
@@ -69,10 +66,7 @@ async function shopifyGraphqlOnce(
 
 function pickFirstNameFromShop(shop: {
   shopOwnerName?: string | null;
-  accountOwner?: { firstName?: string | null } | null;
 } | null | undefined): string | null {
-  const ownerFirst = shop?.accountOwner?.firstName?.trim();
-  if (ownerFirst) return ownerFirst;
   const ownerName = shop?.shopOwnerName?.trim();
   if (!ownerName) return null;
   return parseFirstNameFromShopOwnerName(ownerName);
@@ -92,8 +86,8 @@ async function resolveAccessToken(
 }
 
 /**
- * 从 Shopify Admin GraphQL 拉取店铺联系邮箱与店主 firstName。
- * firstName 优先 accountOwner.firstName，其次从 shopOwnerName 拆分（对齐 Java UserInitialization）。
+ * 从 Shopify Admin GraphQL 拉取店铺联系邮箱与店主称呼。
+ * 称呼取自 shop.shopOwnerName 空格前部分。
  */
 export async function fetchShopContact(
   shop: string,
@@ -159,7 +153,6 @@ export async function fetchShopContact(
             email?: string | null;
             contactEmail?: string | null;
             shopOwnerName?: string | null;
-            accountOwner?: { firstName?: string | null } | null;
           };
         };
         errors?: Array<{ message?: string }>;
@@ -184,8 +177,7 @@ export async function fetchShopContact(
         hasContactEmail: Boolean(contactEmail),
         picked: email ? maskEmail(email) : null,
         pickedFrom: shopEmail ? "shop.email" : contactEmail ? "shop.contactEmail" : "none",
-        hasAccountOwnerFirstName: Boolean(json.data?.shop?.accountOwner?.firstName?.trim()),
-        hasShopOwnerName: Boolean(json.data?.shop?.shopOwnerName?.trim()),
+        shopOwnerName: json.data?.shop?.shopOwnerName?.trim() || null,
         firstName,
         elapsedMs: Date.now() - startedAt,
       });
