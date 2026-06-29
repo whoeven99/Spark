@@ -47,6 +47,11 @@ import {
 } from "../services/userFacingMessages.js";
 import { capTranslateUnitsByResources, finalizeTranslateUnitMetricsFromBlob } from "../services/metricsUtils.js";
 import { runWritebackWorker } from "./writebackWorker.js";
+import {
+  stagePoolKindForJob,
+  stageSlots,
+  type StagePoolKind,
+} from "../services/stagePool.js";
 
 const HEARTBEAT_THROTTLE_MS = 30_000;
 
@@ -54,22 +59,15 @@ const HEARTBEAT_THROTTLE_MS = 30_000;
 const WORKER_ID = `translate-${process.env.HOSTNAME ?? hostname()}-${process.pid}`;
 
 /**
- * 进程级翻译并发上限：同一时间最多 N 个商店在翻译，其余 TRANSLATE_QUEUED 排队。
- * 同店翻译串行由 tryClaimTranslateJob 保证；这里限制的是「跨店」同时在译的店数，
- * 用来收住高并发下的 CPU/内存。默认 5，可用 MAX_CONCURRENT_TRANSLATE_JOBS 覆盖。
+ * 进程级翻译并发：自动与手动各占独立池（默认各 5 店）。
+ * 见 stagePool.ts（MAX_CONCURRENT_AUTO_TRANSLATE_JOBS / MAX_CONCURRENT_MANUAL_TRANSLATE_JOBS）。
+ * 同店翻译串行由 tryClaimTranslateJob 保证。
  */
-const MAX_CONCURRENT_TRANSLATE_JOBS = Math.max(
-  1,
-  Number(process.env.MAX_CONCURRENT_TRANSLATE_JOBS) || 5,
-);
 /** Max stale/busy hints to drain per tick before falling back to Cosmos scan. */
 const TRANSLATE_HINT_DRAIN_MAX = Math.max(
   1,
   Number(process.env.TRANSLATE_HINT_DRAIN_MAX) || 32,
 );
-/** 当前本进程在译的任务数（已 claim 且未收尾）。 */
-let activeTranslateJobs = 0;
-
 /** Serialize shared counter + Redis updates across concurrent chunk handlers. */
 function createExclusiveRunner() {
   let chain: Promise<void> = Promise.resolve();
@@ -126,24 +124,40 @@ function toTranslatedResourceItem(
 }
 
 export async function runTranslateWorker(): Promise<void> {
-  // 快路径：已满直接退出，不占名额、不查 Cosmos（被跳过的 tick 大多在此返回）。
-  if (activeTranslateJobs >= MAX_CONCURRENT_TRANSLATE_JOBS) return;
-  // 在异步 claim 之前先占名额，避免多个并发 tick（setInterval 不等上一轮）同时通过
-  // 上面的检查、claim 出超过上限的任务（TOCTOU）。claim 不到则在 finally 归还。
-  activeTranslateJobs++;
+  if (!stageSlots.anyCapacity("translate")) return;
+
   let claimed: TranslationV4Job | null = null;
+  let poolKind: StagePoolKind | null = null;
   try {
     claimed = await claimNextJob();
     if (!claimed) return;
+
+    poolKind = stagePoolKindForJob(claimed);
+    if (!stageSlots.tryAcquire("translate", poolKind)) {
+      await updateJob(claimed.shopName, claimed.id, {
+        status: "TRANSLATE_QUEUED",
+        claimedBy: null,
+      });
+      await pushHint("translate", { taskId: claimed.id, shopName: claimed.shopName });
+      return;
+    }
+
     console.log(
-      `[translate] processing job=${claimed.id} (active=${activeTranslateJobs}/${MAX_CONCURRENT_TRANSLATE_JOBS})`,
+      `[translate] processing job=${claimed.id} pool=${poolKind} (${stageSlots.formatActive("translate")})`,
     );
     await processTranslateJob(claimed);
   } catch (e) {
     if (claimed) console.error(`[translate] job ${claimed.id} failed`, e);
     else console.error("[translate] claim failed", e);
   } finally {
-    activeTranslateJobs--;
+    if (poolKind) {
+      stageSlots.release("translate", poolKind);
+      if (stageSlots.anyCapacity("translate")) {
+        void runTranslateWorker().catch((e) =>
+          console.error("[translate] wake on slot free failed", e),
+        );
+      }
+    }
   }
 }
 
@@ -214,6 +228,15 @@ async function claimNextJob(): Promise<TranslationV4Job | null> {
       continue;
     }
 
+    const queued = await getJob(hint.shopName, hint.taskId);
+    if (
+      queued &&
+      !stageSlots.hasCapacity("translate", stagePoolKindForJob(queued))
+    ) {
+      await requeueHintTail("translate", hint);
+      continue;
+    }
+
     const job = await tryClaimTranslateJob(hint.shopName, hint.taskId);
     if (job) return job;
 
@@ -222,6 +245,11 @@ async function claimNextJob(): Promise<TranslationV4Job | null> {
 
   const candidates = await findPendingJobs("TRANSLATE_QUEUED", 10);
   for (const candidate of candidates) {
+    if (
+      !stageSlots.hasCapacity("translate", stagePoolKindForJob(candidate))
+    ) {
+      continue;
+    }
     const job = await tryClaimTranslateJob(candidate.shopName, candidate.id);
     if (job) return job;
   }

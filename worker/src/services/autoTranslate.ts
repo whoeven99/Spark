@@ -28,7 +28,7 @@ function autoAiModel(): string {
  * 扫描 TSF 库中「已迁移且开启自动翻译」的店，为每个 shop+target 创建
  * 自动更新任务（isCover=false，增量、不覆盖已翻译）。
  * 本档为每店所有 auto 语言尽量建任务；同 shop+source+target 已有进行中任务则跳过。
- * Init 执行平滑由 initWorker 负责：同店串行、跨店 MAX_CONCURRENT_INIT_JOBS（默认 5）。
+ * Init 执行平滑由 initWorker 负责：同店串行、跨店自动/手动各占独立 init 池（默认各 5）。
  * 由 scheduler 整点调用。
  */
 export async function runAutoTranslateScan(): Promise<void> {

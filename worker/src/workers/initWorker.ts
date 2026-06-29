@@ -19,6 +19,11 @@ import { purgeAutoJob } from "../services/autoJobCleanup.js";
 import { fetchTranslatableResources } from "../services/shopifyFetch.js";
 import { countFieldUnits, pAll } from "../services/llmTranslate.js";
 import { QpsLogger } from "../services/qpsLogger.js";
+import {
+  stagePoolKindForJob,
+  stageSlots,
+  type StagePoolKind,
+} from "../services/stagePool.js";
 
 /**
  * Scale-out safe: hostname + pid ensures uniqueness across containers that may
@@ -41,16 +46,10 @@ const MODULE_CONCURRENCY = Math.max(1, Number(process.env.INIT_MODULE_CONCURRENC
 const INIT_MAX_REQUEUE = Math.max(0, Number(process.env.INIT_MAX_REQUEUE) || 5);
 
 /**
- * 进程级 init 并发上限：同一时间最多 N 个店在初始化，其余 INIT_QUEUED 排队。
- * 同店 init 串行由 tryClaimInitJob 保证；这里限制的是「跨店」同时在 INITIALIZING 的店数。
- * 默认 5，可用 MAX_CONCURRENT_INIT_JOBS 覆盖。
+ * 进程级 init 并发：自动与手动各占独立池（默认各 5 店）。
+ * 见 stagePool.ts（MAX_CONCURRENT_AUTO_INIT_JOBS / MAX_CONCURRENT_MANUAL_INIT_JOBS）。
+ * 同店 init 串行由 tryClaimInitJob 保证。
  */
-const MAX_CONCURRENT_INIT_JOBS = Math.max(
-  1,
-  Number(process.env.MAX_CONCURRENT_INIT_JOBS) || 5,
-);
-/** 当前本进程在 init 的任务数（已 claim 且未收尾）。 */
-let activeInitJobs = 0;
 
 /** Max stale/busy hints to drain per tick before falling back to Cosmos scan. */
 const INIT_HINT_DRAIN_MAX = Math.max(1, Number(process.env.INIT_HINT_DRAIN_MAX) || 32);
@@ -164,21 +163,40 @@ async function completeEmptyInitJob(
 }
 
 export async function runInitWorker(): Promise<void> {
-  if (activeInitJobs >= MAX_CONCURRENT_INIT_JOBS) return;
-  activeInitJobs++;
+  if (!stageSlots.anyCapacity("init")) return;
+
   let claimed: TranslationV4Job | null = null;
+  let poolKind: StagePoolKind | null = null;
   try {
     claimed = await claimNextInitJob();
     if (!claimed) return;
+
+    poolKind = stagePoolKindForJob(claimed);
+    if (!stageSlots.tryAcquire("init", poolKind)) {
+      await updateJob(claimed.shopName, claimed.id, {
+        status: "INIT_QUEUED",
+        claimedBy: null,
+      });
+      await pushHint("init", { taskId: claimed.id, shopName: claimed.shopName });
+      return;
+    }
+
     console.log(
-      `[init] processing job=${claimed.id} shop=${claimed.shopName} (active=${activeInitJobs}/${MAX_CONCURRENT_INIT_JOBS})`,
+      `[init] processing job=${claimed.id} shop=${claimed.shopName} pool=${poolKind} (${stageSlots.formatActive("init")})`,
     );
     await processInitJob(claimed.id, claimed.shopName);
   } catch (e) {
     if (claimed) console.error(`[init] job ${claimed.id} failed`, e);
     else console.error("[init] claim failed", e);
   } finally {
-    activeInitJobs--;
+    if (poolKind) {
+      stageSlots.release("init", poolKind);
+      if (stageSlots.anyCapacity("init")) {
+        void runInitWorker().catch((e) =>
+          console.error("[init] wake on slot free failed", e),
+        );
+      }
+    }
   }
 }
 
@@ -243,6 +261,15 @@ async function claimNextInitJob(): Promise<TranslationV4Job | null> {
       continue;
     }
 
+    const queued = await getJob(hint.shopName, hint.taskId);
+    if (
+      queued &&
+      !stageSlots.hasCapacity("init", stagePoolKindForJob(queued))
+    ) {
+      await requeueHintTail("init", hint);
+      continue;
+    }
+
     const job = await tryClaimInitJob(hint.shopName, hint.taskId);
     if (job) return job;
 
@@ -252,6 +279,11 @@ async function claimNextInitJob(): Promise<TranslationV4Job | null> {
 
   const candidates = await findPendingJobs("INIT_QUEUED", 10);
   for (const candidate of candidates) {
+    if (
+      !stageSlots.hasCapacity("init", stagePoolKindForJob(candidate))
+    ) {
+      continue;
+    }
     const job = await tryClaimInitJob(candidate.shopName, candidate.id);
     if (job) return job;
   }

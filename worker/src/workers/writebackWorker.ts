@@ -1,6 +1,6 @@
 import { hostname } from "os";
 import { claimJob, updateJob, heartbeat, findPendingJobs, getJob, withStageTiming, prefersStoredToken } from "../services/cosmosV4.js";
-import { popHint, setProgress } from "../services/redisV4.js";
+import { popHint, pushHint, requeueHintTail, setProgress } from "../services/redisV4.js";
 import { blobRead, blobWrite } from "../services/blobV4.js";
 import { loadTranslatedItemsForJob } from "../services/translateBlobIO.js";
 import { registerTranslations, type TranslationInput } from "../services/shopifyFetch.js";
@@ -10,6 +10,11 @@ import { QpsLogger } from "../services/qpsLogger.js";
 import type { TranslationV4Job } from "../services/cosmosV4.js";
 import { isShuttingDown } from "../shutdown.js";
 import { finalizeJobAfterWriteback } from "../services/finalizeJobAfterWriteback.js";
+import {
+  stagePoolKindForJob,
+  stageSlots,
+  type StagePoolKind,
+} from "../services/stagePool.js";
 
 /**
  * Scale-out safe: hostname + pid is unique across containers even when every
@@ -19,19 +24,80 @@ const WORKER_ID = `writeback-${process.env.HOSTNAME ?? hostname()}-${process.pid
 
 const HEARTBEAT_THROTTLE_MS = 30_000;
 
+/** Max stale/busy hints to drain per tick before falling back to Cosmos scan. */
+const WRITEBACK_HINT_DRAIN_MAX = Math.max(
+  1,
+  Number(process.env.WRITEBACK_HINT_DRAIN_MAX) || 32,
+);
+
 export async function runWritebackWorker(): Promise<void> {
   if (isShuttingDown()) return;
-  const claimed = await claimNextJob();
-  if (!claimed) return;
-  console.log(`[writeback] processing job=${claimed.id}`);
-  await processWritebackJob(claimed).catch((e) => {
-    console.error(`[writeback] job ${claimed.id} failed`, e);
-  });
+  if (!stageSlots.anyCapacity("writeback")) return;
+
+  let claimed: TranslationV4Job | null = null;
+  let poolKind: StagePoolKind | null = null;
+  try {
+    claimed = await claimNextJob();
+    if (!claimed) return;
+
+    poolKind = stagePoolKindForJob(claimed);
+    if (!stageSlots.tryAcquire("writeback", poolKind)) {
+      await updateJob(claimed.shopName, claimed.id, {
+        status: "WRITEBACK_QUEUED",
+        claimedBy: null,
+      });
+      await pushHint("writeback", { taskId: claimed.id, shopName: claimed.shopName });
+      return;
+    }
+
+    console.log(
+      `[writeback] processing job=${claimed.id} pool=${poolKind} (${stageSlots.formatActive("writeback")})`,
+    );
+    await processWritebackJob(claimed).catch((e) => {
+      console.error(`[writeback] job ${claimed!.id} failed`, e);
+    });
+  } catch (e) {
+    if (claimed) console.error(`[writeback] job ${claimed.id} failed`, e);
+    else console.error("[writeback] claim failed", e);
+  } finally {
+    if (poolKind) {
+      stageSlots.release("writeback", poolKind);
+      if (!isShuttingDown() && stageSlots.anyCapacity("writeback")) {
+        void runWritebackWorker().catch((e) =>
+          console.error("[writeback] wake on slot free failed", e),
+        );
+      }
+    }
+  }
+}
+
+async function isStaleWritebackHint(hint: { shopName: string; taskId: string }): Promise<boolean> {
+  const job = await getJob(hint.shopName, hint.taskId);
+  if (!job) return true;
+  return job.status !== "WRITEBACK_QUEUED";
 }
 
 async function claimNextJob(): Promise<TranslationV4Job | null> {
-  const hint = await popHint("writeback");
-  if (hint) {
+  for (let n = 0; n < WRITEBACK_HINT_DRAIN_MAX; n++) {
+    const hint = await popHint("writeback");
+    if (!hint) break;
+
+    if (await isStaleWritebackHint(hint)) {
+      console.log(
+        `[writeback] discard stale hint job=${hint.taskId} shop=${hint.shopName}`,
+      );
+      continue;
+    }
+
+    const queued = await getJob(hint.shopName, hint.taskId);
+    if (
+      queued &&
+      !stageSlots.hasCapacity("writeback", stagePoolKindForJob(queued))
+    ) {
+      await requeueHintTail("writeback", hint);
+      continue;
+    }
+
     const job = await claimJob(
       hint.shopName,
       hint.taskId,
@@ -40,10 +106,17 @@ async function claimNextJob(): Promise<TranslationV4Job | null> {
       WORKER_ID,
     );
     if (job) return job;
-    // Hint was stale (job already claimed by another worker) — fall through.
+
+    await requeueHintTail("writeback", hint);
   }
-  const candidates = await findPendingJobs("WRITEBACK_QUEUED", 3);
+
+  const candidates = await findPendingJobs("WRITEBACK_QUEUED", 10);
   for (const candidate of candidates) {
+    if (
+      !stageSlots.hasCapacity("writeback", stagePoolKindForJob(candidate))
+    ) {
+      continue;
+    }
     const job = await claimJob(
       candidate.shopName,
       candidate.id,
@@ -51,8 +124,6 @@ async function claimNextJob(): Promise<TranslationV4Job | null> {
       "WRITING_BACK",
       WORKER_ID,
     );
-    // claimJob uses CosmosDB etag: only one worker across all scaled-out
-    // instances will win; the rest get null and skip to the next candidate.
     if (job) return job;
   }
   return null;
