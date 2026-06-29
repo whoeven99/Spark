@@ -7,7 +7,7 @@
  *  2. 手动任务（taskSource ≠ TsFrontend-Auto）：每个任务独立发一封邮件。
  *  3. 自动任务（taskSource = TsFrontend-Auto）：等同店内所有进行中自动任务结束后，
  *     查询该店全部待发 auto 任务并汇总发一封（对齐 Spring TranslateTask.sendEmail）。
- *     usedTokens=0 的语言不出现在邮件正文，但仍 mark emailSent。
+ *     usedTokens=0 的语言不出现在邮件正文；若全部为 0 则不发信，但仍 mark emailSent。
  *  4. 发送成功后将 emailSent=true 写回 Cosmos，防止重发。
  *
  * 任务类型对应模板（对齐 Spring TencentEmailService）：

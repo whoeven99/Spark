@@ -306,12 +306,26 @@ export async function sendTranslationPartialEmail(
     to: maskEmail(to),
     translateType,
     jobCount: jobs.length,
+    billableJobCount: jobs.filter((j) => j.usedTokens > 0).length,
     targets: jobs.map((j) => j.target),
+    usedTokens: jobs.map((j) => j.usedTokens),
     completionPercents: jobs.map((j) => j.completionPercent ?? 0),
     templateId: TEMPLATE_PARTIAL,
   });
 
-  const rowsHtml = jobs
+  const billableJobs = jobs.filter((j) => j.usedTokens > 0);
+  if (billableJobs.length === 0) {
+    logDetail("send-partial-skipped", {
+      reason: "all_used_tokens_zero",
+      shopName,
+      to: maskEmail(to),
+      translateType,
+      jobCount: jobs.length,
+    });
+    return true;
+  }
+
+  const rowsHtml = billableJobs
     .map((j) => {
       const pct = (j.completionPercent ?? 0).toFixed(2);
       return (
