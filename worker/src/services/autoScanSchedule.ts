@@ -1,12 +1,19 @@
 /** 与 TSF app/server/translateV4/autoScanSchedule.server.ts 保持口径一致。 */
 
-export const AUTO_TRANSLATE_INTERVAL_MS_DEFAULT = 3 * 60 * 60_000;
+export const AUTO_TRANSLATE_INTERVAL_MS_DEFAULT = 60 * 60_000;
+/** 单店两次自动建任务批次的最小间隔（全局仍每小时扫描，按店冷却以打散负载）。 */
+export const AUTO_TRANSLATE_SHOP_COOLDOWN_MS_DEFAULT = 3 * 60 * 60_000;
 export const AUTO_TRANSLATE_SCHEDULE_TZ_DEFAULT = "Asia/Shanghai";
 export const AUTO_TRANSLATE_SCHEDULE_MINUTE_DEFAULT = 0;
 
 export function getAutoTranslateIntervalMs(): number {
   const n = Number(process.env.AUTO_TRANSLATE_INTERVAL_MS);
   return n > 0 ? n : AUTO_TRANSLATE_INTERVAL_MS_DEFAULT;
+}
+
+export function getAutoTranslateShopCooldownMs(): number {
+  const n = Number(process.env.AUTO_TRANSLATE_SHOP_COOLDOWN_MS);
+  return n > 0 ? n : AUTO_TRANSLATE_SHOP_COOLDOWN_MS_DEFAULT;
 }
 
 export function getAutoTranslateScheduleTimezone(): string {

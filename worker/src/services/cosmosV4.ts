@@ -265,22 +265,18 @@ export async function hasActiveJobForTarget(
   }
 }
 
-/** 同 shop+source+target 最近一条自动任务创建时间（无历史则 null）。 */
-export async function getLatestAutoJobCreatedAt(
+/** 同 shop 最近一条自动任务创建时间（任意 target；无历史则 null）。 */
+export async function getLatestAutoJobCreatedAtForShop(
   shopName: string,
-  source: string,
-  target: string,
 ): Promise<Date | null> {
   try {
     const { resources } = await getContainer()
       .items.query<{ createdAt: string }>(
         {
           query:
-            "SELECT TOP 1 c.createdAt FROM c WHERE c.shopName = @shopName AND c.source = @source AND c.target = @target AND c.taskSource = @src ORDER BY c.createdAt DESC",
+            "SELECT TOP 1 c.createdAt FROM c WHERE c.shopName = @shopName AND c.taskSource = @src ORDER BY c.createdAt DESC",
           parameters: [
             { name: "@shopName", value: shopName },
-            { name: "@source", value: source },
-            { name: "@target", value: target },
             { name: "@src", value: TSF_AUTO_TASK_SOURCE },
           ],
         },
@@ -292,28 +288,19 @@ export async function getLatestAutoJobCreatedAt(
     const at = new Date(iso);
     return Number.isNaN(at.getTime()) ? null : at;
   } catch (err) {
-    console.error("[cosmosV4] getLatestAutoJobCreatedAt failed:", err);
+    console.error("[cosmosV4] getLatestAutoJobCreatedAtForShop failed:", err);
     return null;
   }
 }
 
-/**
- * 是否可为该语言对新建自动任务：无进行中任务，且（无历史 auto 任务 或 距上次创建 ≥ cooldown）。
- */
-export async function canCreateAutoJobForTarget(
-  shopName: string,
-  source: string,
-  target: string,
+/** 单店是否已过自动建任务冷却期（无历史视为可建）。 */
+export function isShopAutoCooldownElapsed(
+  lastBatchAt: Date | null,
   cooldownMs: number,
-): Promise<"create" | "skip_active" | "skip_cooldown"> {
-  if (await hasActiveJobForTarget(shopName, source, target)) {
-    return "skip_active";
-  }
-  const lastAt = await getLatestAutoJobCreatedAt(shopName, source, target);
-  if (lastAt && Date.now() - lastAt.getTime() < cooldownMs) {
-    return "skip_cooldown";
-  }
-  return "create";
+  nowMs = Date.now(),
+): boolean {
+  if (!lastBatchAt) return true;
+  return nowMs - lastBatchAt.getTime() >= cooldownMs;
 }
 
 /** 同店任意进行中的 v4 任务数（用于自动扫描排队）。 */
