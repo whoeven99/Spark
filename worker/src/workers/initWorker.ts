@@ -18,6 +18,7 @@ import { blobWrite } from "../services/blobV4.js";
 import { purgeAutoJob } from "../services/autoJobCleanup.js";
 import { fetchTranslatableResources } from "../services/shopifyFetch.js";
 import { countFieldUnits, pAll } from "../services/llmTranslate.js";
+import { recordShopSizeFromInit } from "../services/shopSizeProfile.js";
 import { QpsLogger } from "../services/qpsLogger.js";
 import {
   stagePoolKindForJob,
@@ -329,6 +330,9 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
   // points inside pAll callbacks — safe without a mutex.
   let totalItems = 0;
   let totalUnits = 0;
+  // Byte size of the translatable source text — the shop "data volume" used to
+  // tier the store (超大/大/中等/小) in the admin. See shopSizeProfile.ts.
+  let totalBytes = 0;
 
   let lastHeartbeatAt = 0;
   const throttledHeartbeat = async () => {
@@ -389,9 +393,13 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
       // Compute per-module stats
       const moduleItemCount = chunks.reduce((sum, c) => sum + c.length, 0);
       let moduleUnits = 0;
+      let moduleBytes = 0;
       for (const chunk of chunks) {
         for (const r of chunk) {
-          for (const f of r.fields) moduleUnits += countFieldUnits(f.key, f.value, f.shopifyType);
+          for (const f of r.fields) {
+            moduleUnits += countFieldUnits(f.key, f.value, f.shopifyType);
+            if (typeof f.value === "string") moduleBytes += Buffer.byteLength(f.value, "utf8");
+          }
         }
       }
 
@@ -401,6 +409,7 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
       manifest[module] = { totalItems: moduleItemCount, chunks: chunks.length };
       totalItems += moduleItemCount;
       totalUnits += moduleUnits;
+      totalBytes += moduleBytes;
 
       await setProgress(jobId, { initDone: totalItems, currentModule: module });
       await throttledHeartbeat();
@@ -443,6 +452,15 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
       initTotal: totalItems,
       initDone: totalItems,
       translateUnitTotal: totalUnits,
+    });
+
+    // Record the shop's data volume for admin store-size tiering (best-effort).
+    void recordShopSizeFromInit({
+      shopName,
+      target: job.target,
+      bytes: totalBytes,
+      items: totalItems,
+      units: totalUnits,
     });
 
     await pushHint("translate", { taskId: jobId, shopName });

@@ -55,6 +55,13 @@ export async function ensureShopAnalysisContainer(): Promise<Container> {
   return ensureShopAnalysisContainerPromise;
 }
 
+/** shop DB → shop_profile container (store-size tiers; partition key /shopName). */
+export function getShopProfileContainer(): Container {
+  const db = getEnv("COSMOS_SHOP_DATABASE_ID", "shop");
+  const container = getEnv("COSMOS_SHOP_PROFILE_CONTAINER", "shop_profile");
+  return getClient().database(db).container(container);
+}
+
 export function isCosmosConfigured(): boolean {
   return Boolean(
     process.env.COSMOS_ENDPOINT?.trim() && process.env.COSMOS_KEY?.trim(),
