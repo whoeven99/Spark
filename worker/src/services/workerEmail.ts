@@ -45,6 +45,9 @@ let _client: SesClientInstance | null = null;
 const FROM_EMAIL =
   process.env.TENCENT_FROM_EMAIL?.trim() || "support@msg.ciwi.ai";
 
+/** 对齐 Java MailChimpConstants.CC_EMAIL_ARRAY / Spark emailConfig DEFAULT_CC */
+const V4_EMAIL_CC = ["feynman@ciwi.ai", "yewen@ciwi.ai"] as const;
+
 function getSesClient(): SesClientInstance | null {
   if (_client) return _client;
   const secretId = process.env.TENCENT_CLOUD_KEY_ID?.trim();
@@ -75,10 +78,10 @@ function formatNumber(n: number): string {
   return n.toLocaleString("en-US");
 }
 
-/** 邮件模板 remaining_credits 占位：查不到额度时保留 em dash。 */
+/** 对齐 Java TencentEmailService.sendSuccessEmail：查不到额度时保留占位符。 */
 function formatRemainingCredits(remaining: number | null): string {
   if (remaining == null) return "—";
-  return formatNumber(Math.max(0, Math.round(remaining)));
+  return formatNumber(remaining < 0 ? 0 : remaining);
 }
 
 async function doSend(
@@ -87,6 +90,7 @@ async function doSend(
   templateData: Record<string, string>,
   to: string,
 ): Promise<boolean> {
+  const cc = [...V4_EMAIL_CC];
   const client = getSesClient();
   if (!client) {
     logDetail("send-skipped", {
@@ -103,6 +107,7 @@ async function doSend(
     subject,
     subjectLen: subject.length,
     to: maskEmail(to),
+    cc: cc.map(maskEmail),
     from: maskEmail(FROM_EMAIL),
     templateDataKeyCount: Object.keys(templateData).length,
     templateData,
@@ -114,6 +119,7 @@ async function doSend(
     const resp = await client.SendEmail({
       FromEmailAddress: FROM_EMAIL,
       Destination: [to],
+      Cc: cc,
       Subject: subject,
       Template: {
         TemplateID: templateId,
@@ -189,7 +195,8 @@ export async function sendManualTranslationSuccessEmail(
   job: TranslationJobSummary,
 ): Promise<boolean> {
   const shortName = parseShopName(shopName);
-  const remainingCredits = await getTsfRemainingForEmail(shopName);
+  const remaining = await getTsfRemainingForEmail(shopName);
+  const remainingCredits = formatRemainingCredits(remaining);
   logDetail("send-manual-success-start", {
     shopName,
     shortName,
@@ -198,6 +205,7 @@ export async function sendManualTranslationSuccessEmail(
     usedTokens: job.usedTokens,
     elapsedMinutes: job.elapsedMinutes,
     remainingCredits,
+    remainingCreditsSource: remaining == null ? "unavailable" : "quota_query",
     templateId: TEMPLATE_MANUAL_SUCCESS,
   });
   return doSend(
@@ -209,7 +217,7 @@ export async function sendManualTranslationSuccessEmail(
       language: job.target,
       time: `${job.elapsedMinutes} minutes`,
       credit_count: formatNumber(job.usedTokens),
-      remaining_credits: formatRemainingCredits(remainingCredits),
+      remaining_credits: remainingCredits,
     },
     to,
   );
