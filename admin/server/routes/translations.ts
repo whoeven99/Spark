@@ -26,7 +26,7 @@ translationsRouter.get("/", async (req, res) => {
     const limit = Math.min(Number(req.query.limit ?? 100), 500);
 
     let query =
-      "SELECT c.id, c.shopName, c.source, c.target, c.modules, c.status, c.aiModel, c.metrics, c.taskSource, c.isCover, c.errorMessage, c.errorStage, c.createdAt, c.updatedAt, c.claimedBy FROM c";
+      "SELECT c.id, c.shopName, c.source, c.target, c.modules, c.status, c.aiModel, c.metrics, c.taskSource, c.isCover, c.errorMessage, c.errorStage, c.createdAt, c.updatedAt, c.claimedBy, c.lastHeartbeat FROM c";
     const params: SqlParameter[] = [];
     const conditions: string[] = [];
 

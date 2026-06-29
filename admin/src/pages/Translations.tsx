@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Table,
   Spin,
@@ -37,8 +38,11 @@ import {
   fetchTranslationContentModules,
   fetchLLMKeyStats,
   fetchLLMKeyHistory,
+  fetchAutoTranslationSummary,
   repairStuckTranslationJobs,
+  AUTO_TASK_SOURCE,
   type TranslationJob,
+  type AutoTranslationSummary,
   type TranslationContentPage,
   type TranslationContentModule,
   type LLMKeyStats,
@@ -46,7 +50,7 @@ import {
 } from "../api";
 
 /* ──────────────────────────────────────────────────────────────────────────
-   Design tokens (shared visual language with 自动翻译监控)
+   Design tokens
    ──────────────────────────────────────────────────────────────────────── */
 
 const FONT = "'IBM Plex Sans', system-ui, -apple-system, sans-serif";
@@ -110,6 +114,73 @@ const ACTIVE_STATUSES = new Set([
   "VERIFYING",
 ]);
 
+const PROCESSING_STATUSES = new Set([
+  "INITIALIZING",
+  "TRANSLATING",
+  "WRITING_BACK",
+  "VERIFYING",
+]);
+
+const QUEUED_STATUSES = new Set([
+  "CREATED",
+  "INIT_QUEUED",
+  "INIT_DONE",
+  "TRANSLATE_QUEUED",
+  "TRANSLATE_DONE",
+  "WRITEBACK_QUEUED",
+  "VERIFY_QUEUED",
+]);
+
+/** Worker 正在执行：processing 状态且最近有心跳/进度更新 */
+const LIVE_ACTIVITY_MS = 3 * 60 * 1000;
+/** 刚完成：30 分钟内 */
+const RECENT_COMPLETED_MS = 30 * 60 * 1000;
+/** 卡住：进行中但超过 1 小时无活动 */
+const STUCK_MS = 60 * 60 * 1000;
+
+type JobActivityKind = "live" | "queued" | "stuck" | "recent_done" | "idle";
+
+function jobLastActivityMs(job: TranslationJob): number {
+  const times = [job.updatedAt, job.metrics.progressUpdatedAt, job.lastHeartbeat]
+    .filter((t): t is string => !!t)
+    .map((t) => new Date(t).getTime())
+    .filter((n) => !Number.isNaN(n));
+  return times.length > 0 ? Math.max(...times) : 0;
+}
+
+function jobActivityKind(job: TranslationJob, now = Date.now()): JobActivityKind {
+  if (job.status === "COMPLETED") {
+    const doneAt = new Date(job.updatedAt).getTime();
+    if (!Number.isNaN(doneAt) && now - doneAt <= RECENT_COMPLETED_MS) return "recent_done";
+    return "idle";
+  }
+  if (!ACTIVE_STATUSES.has(job.status)) return "idle";
+  const last = jobLastActivityMs(job);
+  if (last > 0 && now - last > STUCK_MS) return "stuck";
+  if (PROCESSING_STATUSES.has(job.status) && last > 0 && now - last <= LIVE_ACTIVITY_MS) {
+    return "live";
+  }
+  if (QUEUED_STATUSES.has(job.status) || PROCESSING_STATUSES.has(job.status)) {
+    return "queued";
+  }
+  return "idle";
+}
+
+function pipelineBannerStyle(mode: "live" | "queued" | "stuck" | "recent_done" | "idle") {
+  switch (mode) {
+    case "live":
+      return { bg: "#e7f3ec", border: "#bfe2cd", fg: "#16703f", dot: C.done, pulse: true };
+    case "queued":
+      return { bg: "#fff8eb", border: "#f5d89a", fg: "#9a5a08", dot: C.warn, pulse: true };
+    case "stuck":
+      return { bg: "#fff5f5", border: "#f3c2c2", fg: "#a11c1c", dot: C.failed, pulse: false };
+    case "recent_done":
+      return { bg: "#e8effe", border: "#c7d9fc", fg: "#1f4fc4", dot: C.active, pulse: false };
+    default:
+      return { bg: "#f4f5f7", border: "#e0e3e8", fg: "#52585f", dot: "#aeb3ba", pulse: false };
+  }
+}
+
 type StatusStyle = {
   label: string;
   bg: string;
@@ -139,35 +210,74 @@ function statusStyle(status: string): StatusStyle {
   return { label: status, bg: "#f4f5f7", fg: C.sub, dot: "#aeb3ba", accent: "#cdd2d8" };
 }
 
-function StatusPill({ status }: { status: string }) {
+function StatusPill({ status, activityKind }: { status: string; activityKind?: JobActivityKind }) {
   const st = statusStyle(status);
-  const pulse = ACTIVE_STATUSES.has(status.toUpperCase());
+  const pulse = activityKind === "live";
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 5,
+          height: 22,
+          padding: "0 9px",
+          borderRadius: 6,
+          fontSize: 11.5,
+          fontWeight: 600,
+          background: st.bg,
+          color: st.fg,
+          whiteSpace: "nowrap",
+        }}
+      >
+        <span
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: st.dot,
+            animation: pulse ? "txPulseDot 1.6s infinite" : undefined,
+          }}
+        />
+        {st.label}
+      </span>
+      {activityKind === "live" && (
+        <span style={{ fontSize: 10, fontWeight: 700, color: "#16703f", background: "#e7f3ec", padding: "1px 6px", borderRadius: 4 }}>活跃</span>
+      )}
+      {activityKind === "stuck" && (
+        <span style={{ fontSize: 10, fontWeight: 700, color: "#a11c1c", background: "#fdecec", padding: "1px 6px", borderRadius: 4 }}>停滞</span>
+      )}
+    </span>
+  );
+}
+
+function ActivityBadge({ kind }: { kind: JobActivityKind }) {
+  if (kind === "idle" || kind === "queued") return null;
+  const styles: Record<Exclude<JobActivityKind, "idle" | "queued">, { bg: string; fg: string; label: string }> = {
+    live: { bg: "#e7f3ec", fg: "#16703f", label: "运行中" },
+    stuck: { bg: "#fdecec", fg: "#a11c1c", label: "卡住" },
+    recent_done: { bg: "#e8effe", fg: "#1f4fc4", label: "刚完成" },
+  };
+  const s = styles[kind as keyof typeof styles];
+  if (!s) return null;
   return (
     <span
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 5,
-        height: 22,
-        padding: "0 9px",
-        borderRadius: 6,
-        fontSize: 11.5,
-        fontWeight: 600,
-        background: st.bg,
-        color: st.fg,
-        whiteSpace: "nowrap",
+        gap: 4,
+        fontSize: 10,
+        fontWeight: 700,
+        color: s.fg,
+        background: s.bg,
+        padding: "1px 7px",
+        borderRadius: 4,
       }}
     >
-      <span
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: "50%",
-          background: st.dot,
-          animation: pulse ? "txPulseDot 1.6s infinite" : undefined,
-        }}
-      />
-      {st.label}
+      {kind === "live" && (
+        <span style={{ width: 5, height: 5, borderRadius: "50%", background: s.fg, animation: "txPulseDot 1.2s infinite" }} />
+      )}
+      {s.label}
     </span>
   );
 }
@@ -330,12 +440,18 @@ function fmtRpm(remaining: number, limit: number): string {
   return `${fmtNum(remaining)} / ${fmtNum(limit)}`;
 }
 
-function fmtAgo(epochMs: number): string {
+function fmtAgo(epochMs: number, now = Date.now()): string {
   if (!epochMs) return "—";
-  const diff = Math.round((Date.now() - epochMs) / 1_000);
+  const diff = Math.round((now - epochMs) / 1_000);
+  if (diff < 5) return "刚刚";
   if (diff < 60) return `${diff}s 前`;
   if (diff < 3600) return `${Math.round(diff / 60)}min 前`;
   return `${Math.round(diff / 3600)}h 前`;
+}
+
+function jobShortLabel(job: TranslationJob): string {
+  const shop = job.shopName.split(".")[0];
+  return `${shop} ${job.source}→${job.target}`;
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -918,30 +1034,62 @@ function ContentCell({ value, fallback }: { value: string; fallback?: boolean })
    Page
    ──────────────────────────────────────────────────────────────────────── */
 
-type ViewFilter = "all" | "active" | "stuck" | "COMPLETED" | "FAILED" | "PAUSED";
+type ViewFilter = "all" | "active" | "running" | "stuck" | "COMPLETED" | "FAILED" | "PAUSED";
+type SourceFilter = "all" | "auto" | "manual";
+
+const SOURCE_FILTER_DEFS: { key: SourceFilter; label: string }[] = [
+  { key: "all", label: "全部来源" },
+  { key: "auto", label: "自动翻译" },
+  { key: "manual", label: "手动任务" },
+];
+
+function isAutoTask(job: TranslationJob): boolean {
+  return job.taskSource === AUTO_TASK_SOURCE;
+}
 
 export default function Translations() {
   useDesignFont();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [jobs, setJobs] = useState<TranslationJob[]>([]);
+  const [autoSummary, setAutoSummary] = useState<AutoTranslationSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [errorLevel, setErrorLevel] = useState<"error" | "warning">("error");
   const [view, setView] = useState<ViewFilter>("all");
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>(() => {
+    const q = searchParams.get("source");
+    return q === "auto" ? "auto" : q === "manual" ? "manual" : "all";
+  });
   const [shopFilter, setShopFilter] = useState("");
   const [selected, setSelected] = useState<TranslationJob | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
   const [repairing, setRepairing] = useState(false);
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null);
+  const [nowTick, setNowTick] = useState(Date.now());
 
   const load = useCallback(() => {
     setLoading(true);
     setError("");
-    fetchTranslations({ limit: 200 })
-      .then((r) => {
-        setJobs(r.jobs);
-        if ((r as { note?: string }).note) {
-          setError((r as { note?: string }).note!);
+    Promise.all([
+      fetchTranslations({
+        limit: 200,
+        ...(sourceFilter === "auto" ? { source: AUTO_TASK_SOURCE } : {}),
+      }),
+      fetchAutoTranslationSummary().catch(() => null),
+    ])
+      .then(([r, summary]) => {
+        let nextJobs = r.jobs;
+        if (sourceFilter === "manual") {
+          nextJobs = nextJobs.filter((j) => !isAutoTask(j));
+        }
+        setJobs(nextJobs);
+        setAutoSummary(summary);
+        setLastFetchedAt(Date.now());
+        const note = summary?.note ?? (r as { note?: string }).note;
+        if (note) {
+          setError(note);
           setErrorLevel("warning");
         }
       })
@@ -950,17 +1098,38 @@ export default function Translations() {
         setErrorLevel("error");
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [sourceFilter]);
 
   useEffect(() => {
     load();
   }, [load]);
 
+  const setSourceFilterAndUrl = useCallback(
+    (next: SourceFilter) => {
+      setSourceFilter(next);
+      const params = new URLSearchParams(searchParams);
+      if (next === "all") params.delete("source");
+      else params.set("source", next);
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
   useEffect(() => {
     if (!autoRefresh) return;
-    const id = setInterval(load, 15_000);
+    const hasPipeline = jobs.some((j) => {
+      const k = jobActivityKind(j);
+      return k === "live" || k === "queued";
+    });
+    const ms = hasPipeline ? 10_000 : 15_000;
+    const id = setInterval(load, ms);
     return () => clearInterval(id);
-  }, [autoRefresh, load]);
+  }, [autoRefresh, load, jobs]);
+
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   function openDetail(job: TranslationJob) {
     setSelected(job);
@@ -1003,14 +1172,42 @@ export default function Translations() {
     });
   }, [load]);
 
+  const activityByJobId = useMemo(() => {
+    const map = new Map<string, JobActivityKind>();
+    for (const j of jobs) map.set(j.id, jobActivityKind(j, nowTick));
+    return map;
+  }, [jobs, nowTick]);
+
+  const liveJobs = useMemo(
+    () => jobs.filter((j) => activityByJobId.get(j.id) === "live"),
+    [jobs, activityByJobId],
+  );
+  const queuedJobs = useMemo(
+    () => jobs.filter((j) => activityByJobId.get(j.id) === "queued"),
+    [jobs, activityByJobId],
+  );
+  const recentDoneJobs = useMemo(
+    () => jobs.filter((j) => activityByJobId.get(j.id) === "recent_done"),
+    [jobs, activityByJobId],
+  );
+
   const stuckJobs = useMemo(() => {
-    const cutoff = Date.now() - 60 * 60 * 1000;
-    return jobs.filter((j) => ACTIVE_STATUSES.has(j.status) && new Date(j.updatedAt).getTime() < cutoff);
-  }, [jobs]);
+    return jobs.filter((j) => activityByJobId.get(j.id) === "stuck");
+  }, [jobs, activityByJobId]);
   const stuckIds = useMemo(() => new Set(stuckJobs.map((j) => j.id)), [stuckJobs]);
 
   const counts = useMemo(() => {
-    const c = { all: jobs.length, active: 0, stuck: stuckJobs.length, COMPLETED: 0, FAILED: 0, PAUSED: 0 };
+    const c = {
+      all: jobs.length,
+      active: 0,
+      running: liveJobs.length,
+      queued: queuedJobs.length,
+      stuck: stuckJobs.length,
+      recentDone: recentDoneJobs.length,
+      COMPLETED: 0,
+      FAILED: 0,
+      PAUSED: 0,
+    };
     for (const j of jobs) {
       if (ACTIVE_STATUSES.has(j.status)) c.active++;
       if (j.status === "COMPLETED") c.COMPLETED++;
@@ -1018,29 +1215,55 @@ export default function Translations() {
       if (j.status === "PAUSED" || j.status === "CANCELLED") c.PAUSED++;
     }
     return c;
-  }, [jobs, stuckJobs]);
+  }, [jobs, stuckJobs, liveJobs, queuedJobs, recentDoneJobs]);
+
+  const pipelineMode = useMemo(() => {
+    if (liveJobs.length > 0) return "live" as const;
+    if (stuckJobs.length > 0 && queuedJobs.length > 0) return "stuck" as const;
+    if (queuedJobs.length > 0) return "queued" as const;
+    if (recentDoneJobs.length > 0) return "recent_done" as const;
+    return "idle" as const;
+  }, [liveJobs, stuckJobs, queuedJobs, recentDoneJobs]);
 
   const totalTokens = useMemo(() => jobs.reduce((a, j) => a + (j.metrics.usedTokens || 0), 0), [jobs]);
 
   const displayed = useMemo(() => {
     let list = jobs;
     if (view === "active") list = list.filter((j) => ACTIVE_STATUSES.has(j.status));
+    else if (view === "running") list = list.filter((j) => activityByJobId.get(j.id) === "live");
     else if (view === "stuck") list = list.filter((j) => stuckIds.has(j.id));
     else if (view !== "all") list = list.filter((j) => (view === "PAUSED" ? j.status === "PAUSED" || j.status === "CANCELLED" : j.status === view));
     const q = shopFilter.trim().toLowerCase();
     if (q) list = list.filter((j) => j.shopName.toLowerCase().includes(q));
-    // stuck jobs float to top
-    return [...list].sort((a, b) => Number(stuckIds.has(b.id)) - Number(stuckIds.has(a.id)));
-  }, [jobs, view, shopFilter, stuckIds]);
+    const rank = (j: TranslationJob) => {
+      const kind = activityByJobId.get(j.id) ?? "idle";
+      if (kind === "live") return 0;
+      if (kind === "stuck") return 1;
+      if (kind === "queued") return 2;
+      if (kind === "recent_done") return 3;
+      return 4;
+    };
+    return [...list].sort((a, b) => {
+      const r = rank(a) - rank(b);
+      if (r !== 0) return r;
+      return jobLastActivityMs(b) - jobLastActivityMs(a);
+    });
+  }, [jobs, view, shopFilter, stuckIds, activityByJobId]);
 
   const filterDefs: { key: ViewFilter; label: string; count: number }[] = [
     { key: "all", label: "全部", count: counts.all },
+    { key: "running", label: "运行中", count: counts.running },
     { key: "active", label: "进行中", count: counts.active },
     { key: "stuck", label: "卡住", count: counts.stuck },
     { key: "COMPLETED", label: "已完成", count: counts.COMPLETED },
     { key: "FAILED", label: "已失败", count: counts.FAILED },
     { key: "PAUSED", label: "已暂停", count: counts.PAUSED },
   ];
+
+  const refreshAgoLabel =
+    lastFetchedAt == null ? "尚未刷新" : fmtAgo(lastFetchedAt, nowTick);
+  const refreshIntervalLabel =
+    autoRefresh && (counts.running > 0 || counts.queued > 0) ? "10s" : "15s";
 
   if (error && errorLevel === "error") return <Alert type="error" message={error} />;
 
@@ -1064,12 +1287,45 @@ export default function Translations() {
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, letterSpacing: -0.5 }}>翻译任务</h1>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#e7f3ec", border: "1px solid #bfe2cd", padding: "3px 10px 3px 8px", borderRadius: 999 }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.done, animation: "txPulseDot 1.6s infinite" }} />
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#16703f" }}>实时监控</span>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                background: pipelineBannerStyle(pipelineMode).bg,
+                border: `1px solid ${pipelineBannerStyle(pipelineMode).border}`,
+                padding: "3px 10px 3px 8px",
+                borderRadius: 999,
+              }}
+            >
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  background: pipelineBannerStyle(pipelineMode).dot,
+                  animation: pipelineBannerStyle(pipelineMode).pulse ? "txPulseDot 1.6s infinite" : undefined,
+                }}
+              />
+              <span style={{ fontSize: 12, fontWeight: 600, color: pipelineBannerStyle(pipelineMode).fg }}>
+                {pipelineMode === "live"
+                  ? `${counts.running} 个任务运行中`
+                  : pipelineMode === "queued"
+                    ? `${counts.queued} 个任务排队`
+                    : pipelineMode === "stuck"
+                      ? `${counts.stuck} 个任务卡住`
+                      : pipelineMode === "recent_done"
+                        ? `${counts.recentDone} 个刚完成`
+                        : "Pipeline 空闲"}
+              </span>
             </div>
           </div>
-          <span style={{ fontSize: 13, color: C.sub }}>共 {jobs.length} 个任务 · 数据每 15s 自动刷新</span>
+          <span style={{ fontSize: 13, color: C.sub }}>
+            共 {jobs.length} 个任务
+            {sourceFilter === "auto" ? "（自动翻译）" : sourceFilter === "manual" ? "（手动任务）" : ""}
+            · {autoRefresh ? `自动刷新 ${refreshIntervalLabel}` : "自动刷新已关"}
+            · 数据 {refreshAgoLabel}
+          </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button
@@ -1091,7 +1347,7 @@ export default function Translations() {
             }}
           >
             <span style={{ width: 7, height: 7, borderRadius: "50%", background: autoRefresh ? C.done : "#c4c8cd" }} />
-            {autoRefresh ? "自动刷新 15s" : "自动刷新已关"}
+            {autoRefresh ? `自动刷新 ${refreshIntervalLabel}` : "自动刷新已关"}
           </button>
           <button
             onClick={() => runRepairStuck()}
@@ -1122,12 +1378,109 @@ export default function Translations() {
         </div>
       </div>
 
+      {/* Pipeline activity banner */}
+      <div
+        style={{
+          background: pipelineBannerStyle(pipelineMode).bg,
+          border: `1px solid ${pipelineBannerStyle(pipelineMode).border}`,
+          borderLeft: `4px solid ${pipelineBannerStyle(pipelineMode).dot}`,
+          borderRadius: 12,
+          padding: "16px 18px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+                background: pipelineBannerStyle(pipelineMode).dot,
+                animation: pipelineBannerStyle(pipelineMode).pulse ? "txPulseDot 1.2s infinite" : undefined,
+              }}
+            />
+            <span style={{ fontSize: 16, fontWeight: 700, color: pipelineBannerStyle(pipelineMode).fg }}>
+              {pipelineMode === "live" && `Worker 正在处理 · ${counts.running} 个任务活跃`}
+              {pipelineMode === "queued" && `Worker 空闲或满载 · ${counts.queued} 个任务排队等待`}
+              {pipelineMode === "stuck" && `Pipeline 可能停滞 · ${counts.stuck} 个任务超过 1 小时无活动`}
+              {pipelineMode === "recent_done" && `近期有产出 · ${counts.recentDone} 个任务 30 分钟内完成`}
+              {pipelineMode === "idle" && "当前无运行中或刚完成的任务"}
+            </span>
+          </div>
+          <span style={{ fontSize: 12, color: C.sub, fontFamily: MONO }}>
+            刷新 {refreshAgoLabel}
+            {loading ? " · 更新中…" : ""}
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          {liveJobs.slice(0, 6).map((j) => (
+            <button
+              key={j.id}
+              type="button"
+              onClick={() => openDetail(j)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                background: "#fff",
+                border: "1px solid #bfe2cd",
+                borderRadius: 8,
+                padding: "6px 10px",
+                cursor: "pointer",
+                fontFamily: FONT,
+                fontSize: 12,
+                fontWeight: 600,
+                color: "#16703f",
+              }}
+            >
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.done, animation: "txPulseDot 1.2s infinite" }} />
+              {jobShortLabel(j)}
+              <span style={{ fontSize: 11, color: C.sub, fontWeight: 500 }}>{fmtAgo(jobLastActivityMs(j), nowTick)}</span>
+            </button>
+          ))}
+          {liveJobs.length === 0 && recentDoneJobs.slice(0, 4).map((j) => (
+            <button
+              key={j.id}
+              type="button"
+              onClick={() => openDetail(j)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                background: "#fff",
+                border: "1px solid #c7d9fc",
+                borderRadius: 8,
+                padding: "6px 10px",
+                cursor: "pointer",
+                fontFamily: FONT,
+                fontSize: 12,
+                fontWeight: 600,
+                color: "#1f4fc4",
+              }}
+            >
+              ✓ {jobShortLabel(j)}
+              <span style={{ fontSize: 11, color: C.sub, fontWeight: 500 }}>{fmtAgo(new Date(j.updatedAt).getTime(), nowTick)}</span>
+            </button>
+          ))}
+          {liveJobs.length === 0 && recentDoneJobs.length === 0 && queuedJobs.length > 0 && (
+            <span style={{ fontSize: 13, color: pipelineBannerStyle(pipelineMode).fg }}>
+              最早排队 {queuedJobs.length} 个 · 可点「运行中/进行中」Tab 查看详情
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* KPI strip */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
-        <Kpi label="进行中" value={counts.active} unit="任务" accent={C.active} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 12 }}>
+        <Kpi label="今日新建（自动）" value={autoSummary?.createdToday ?? 0} unit="任务" accent={C.active} />
+        <Kpi label="累计自动任务" value={autoSummary?.total ?? 0} accent="#7a818a" />
+        <Kpi label="正在运行" value={counts.running} unit="活跃" accent={C.done} valColor={counts.running > 0 ? C.done : C.ink} />
+        <Kpi label="排队等待" value={counts.queued} unit="任务" accent={C.warn} valColor={counts.queued > 0 ? C.warn : C.ink} />
+        <Kpi label="刚完成" value={counts.recentDone} unit="30 分钟内" accent={C.active} valColor={counts.recentDone > 0 ? C.active : C.ink} />
         <Kpi label="卡住" value={counts.stuck} unit="需介入" accent={C.failed} valColor={counts.stuck > 0 ? C.failed : C.ink} />
-        <Kpi label="已完成" value={counts.COMPLETED} unit="任务" accent={C.done} />
-        <Kpi label="已失败" value={counts.FAILED} unit="任务" accent={C.warn} />
         <Kpi label="累计 Token" value={fmtNum(totalTokens)} accent={C.verify} />
       </div>
 
@@ -1167,7 +1520,7 @@ export default function Translations() {
               >
                 <span style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>{j.shopName.split(".")[0]}</span>
                 <span style={{ fontSize: 11, fontFamily: MONO, color: C.sub, background: "#f3f4f6", padding: "2px 6px", borderRadius: 5 }}>{j.source} → {j.target}</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: C.failed }}>停滞 {fmtAgo(new Date(j.updatedAt).getTime())}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: C.failed }}>停滞 {fmtAgo(jobLastActivityMs(j), nowTick)}</span>
               </button>
             ))}
           </div>
@@ -1180,6 +1533,35 @@ export default function Translations() {
 
       {/* Filter bar */}
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 6, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 4 }}>
+          {SOURCE_FILTER_DEFS.map((f) => {
+            const active = sourceFilter === f.key;
+            return (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setSourceFilterAndUrl(f.key)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  height: 30,
+                  padding: "0 13px",
+                  border: "none",
+                  borderRadius: 7,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  fontFamily: FONT,
+                  background: active ? "#e8effe" : "transparent",
+                  color: active ? "#1f4fc4" : "#52585f",
+                }}
+              >
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
         <div style={{ display: "flex", gap: 6, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 4 }}>
           {filterDefs.map((f) => {
             const active = view === f.key;
@@ -1200,7 +1582,7 @@ export default function Translations() {
                   cursor: "pointer",
                   fontFamily: FONT,
                   background: active ? C.ink : "transparent",
-                  color: active ? "#fff" : f.key === "stuck" && f.count > 0 ? C.failed : "#52585f",
+                  color: active ? "#fff" : f.key === "running" && f.count > 0 ? C.done : f.key === "stuck" && f.count > 0 ? C.failed : "#52585f",
                 }}
               >
                 {f.label}
@@ -1230,7 +1612,7 @@ export default function Translations() {
             <span style={TH}>流水线进度</span>
             <span style={{ ...TH, textAlign: "right" }}>失败</span>
             <span style={{ ...TH, textAlign: "right" }}>Token</span>
-            <span style={TH}>更新</span>
+            <span style={TH}>最后活跃</span>
             <span />
           </div>
           {displayed.length === 0 && !loading && (
@@ -1238,8 +1620,10 @@ export default function Translations() {
           )}
           {displayed.map((j) => {
             const stuck = stuckIds.has(j.id);
+            const activityKind = activityByJobId.get(j.id) ?? "idle";
             const st = statusStyle(j.status);
-            const updatedMs = new Date(j.updatedAt).getTime();
+            const lastActiveMs = jobLastActivityMs(j);
+            const isLive = activityKind === "live";
             return (
               <div
                 key={j.id}
@@ -1251,15 +1635,22 @@ export default function Translations() {
                   alignItems: "center",
                   padding: "10px 20px",
                   borderBottom: `1px solid ${C.borderSoft}`,
-                  borderLeft: `3px solid ${stuck ? C.failed : st.accent}`,
+                  borderLeft: `3px solid ${isLive ? C.done : stuck ? C.failed : st.accent}`,
                   transition: "background .12s",
+                  background: isLive ? "#f6fcf9" : undefined,
                 }}
               >
                 <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{j.shopName}</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{j.shopName}</span>
+                    {isAutoTask(j) && (
+                      <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 600, color: "#1f4fc4", background: "#e8effe", padding: "1px 6px", borderRadius: 4 }}>自动</span>
+                    )}
+                    <ActivityBadge kind={activityKind} />
+                  </span>
                   <span style={{ fontSize: 11, fontFamily: MONO, color: C.sub }}>{j.source} → {j.target}</span>
                 </div>
-                <div><StatusPill status={j.status} /></div>
+                <div><StatusPill status={j.status} activityKind={activityKind} /></div>
                 <Tooltip
                   title={
                     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -1276,9 +1667,15 @@ export default function Translations() {
                   {j.metrics.translateFailed}
                 </span>
                 <span style={{ fontSize: 12.5, textAlign: "right", fontFamily: MONO, color: "#4b5158" }}>{fmtNum(j.metrics.usedTokens || 0)}</span>
-                <span style={{ fontSize: 12, fontWeight: stuck ? 700 : 500, color: stuck ? C.failed : C.sub }}>
-                  {stuck ? "⚠ " : ""}
-                  {fmtAgo(updatedMs)}
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: isLive || stuck ? 700 : 500,
+                    color: isLive ? C.done : stuck ? C.failed : activityKind === "recent_done" ? C.active : C.sub,
+                  }}
+                >
+                  {isLive ? "● " : stuck ? "⚠ " : activityKind === "recent_done" ? "✓ " : ""}
+                  {fmtAgo(lastActiveMs, nowTick)}
                 </span>
                 <button
                   onClick={() => openDetail(j)}

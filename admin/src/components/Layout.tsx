@@ -38,7 +38,6 @@ export default function Layout() {
     { key: "/", icon: <DashboardOutlined />, label: <Link to="/">概览</Link>, ownerOnly: false },
     { key: "/shops", icon: <ShopOutlined />, label: <Link to="/shops">商店</Link>, ownerOnly: false },
     { key: "/translations", icon: <TranslationOutlined />, label: <Link to="/translations">翻译任务</Link>, ownerOnly: false },
-    { key: "/auto-translations", icon: <MonitorOutlined />, label: <Link to="/auto-translations">自动翻译监控</Link>, ownerOnly: false },
     { key: "/usage", icon: <BarChartOutlined />, label: <Link to="/usage">用量统计</Link>, ownerOnly: false },
     { key: "/subscriptions", icon: <CreditCardOutlined />, label: <Link to="/subscriptions">订阅统计</Link>, ownerOnly: false },
     { key: "/revenue", icon: <DollarOutlined />, label: <Link to="/revenue">收入分析</Link>, ownerOnly: true },
