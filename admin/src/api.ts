@@ -118,6 +118,7 @@ export type TranslationJob = {
   errorStage: string | null;
   createdAt: string;
   updatedAt: string;
+  lastHeartbeat?: string | null;
 };
 
 export type UsageRow = {
