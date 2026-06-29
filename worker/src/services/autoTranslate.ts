@@ -19,12 +19,6 @@ import { resolveNextClockAlignedScanAt } from "./autoScanSchedule.js";
 /** 自动任务模块（不含 EMAIL_TEMPLATE、ONLINE_STORE_THEME_LOCALE_CONTENT）。 */
 const AUTO_MODULES = [...AUTO_TRANSLATE_V4_MODULES];
 
-/** 本档扫描每店最多新建几条自动任务（默认 1，跨整点逐步消化多语言，避免单店占满 init）。 */
-const AUTO_MAX_NEW_PER_SHOP_PER_SCAN = (() => {
-  const n = Number(process.env.AUTO_TRANSLATE_MAX_NEW_PER_SHOP_PER_SCAN);
-  return n > 0 ? Math.floor(n) : 1;
-})();
-
 /** v4 自动翻译任务固定使用 GPT-4.1 nano（与 TSF 手动任务默认模型一致）。 */
 function autoAiModel(): string {
   return "gpt-4.1-nano";
@@ -33,9 +27,9 @@ function autoAiModel(): string {
 /**
  * 扫描 TSF 库中「已迁移且开启自动翻译」的店，为每个 shop+target 创建
  * 自动更新任务（isCover=false，增量、不覆盖已翻译）。
- * 每店每档最多建 AUTO_TRANSLATE_MAX_NEW_PER_SHOP_PER_SCAN 条（默认 1），
- * 多语言分多个整点逐步建，避免单店一次占满 init worker。
- * 已有进行中同 target 任务则跳过。由 scheduler 整点调用。
+ * 本档为每店所有 auto 语言尽量建任务；同 shop+source+target 已有进行中任务则跳过。
+ * Init 执行平滑由 initWorker 负责：同店串行、跨店 MAX_CONCURRENT_INIT_JOBS（默认 5）。
+ * 由 scheduler 整点调用。
  */
 export async function runAutoTranslateScan(): Promise<void> {
   if (!hasTsfDbCredentials()) {
@@ -52,7 +46,6 @@ export async function runAutoTranslateScan(): Promise<void> {
 
   let created = 0;
   let skipped = 0;
-  let queued = 0;
   for (const { shop, primaryLocale, targets } of shops) {
     let source = primaryLocale?.trim();
     if (!source || !Array.isArray(targets) || targets.length === 0) continue;
@@ -73,21 +66,12 @@ export async function runAutoTranslateScan(): Promise<void> {
       console.warn(`[autoTranslate] ${shop} 读取 Shopify 默认语言失败，沿用 TSF 缓存`, err);
     }
 
-    let createdThisShop = 0;
-    let shopQueued = 0;
-
     for (const rawTarget of targets) {
       const target = String(rawTarget).trim();
       if (!target || target === source) continue;
 
       if (await hasActiveJobForTarget(shop, source, target)) {
         skipped++;
-        continue;
-      }
-
-      if (createdThisShop >= AUTO_MAX_NEW_PER_SHOP_PER_SCAN) {
-        queued++;
-        shopQueued++;
         continue;
       }
 
@@ -111,7 +95,6 @@ export async function runAutoTranslateScan(): Promise<void> {
         });
         await pushHint("init", { taskId: jobId, shopName: shop });
         created++;
-        createdThisShop++;
         console.log(
           `[autoTranslate] 建任务 id=${jobId} shop=${shop} ${source}→${target}`,
         );
@@ -120,15 +103,10 @@ export async function runAutoTranslateScan(): Promise<void> {
       }
     }
 
-    if (shopQueued > 0) {
-      console.log(
-        `[autoTranslate] shop=${shop} 本档已建 ${createdThisShop} 条（上限 ${AUTO_MAX_NEW_PER_SHOP_PER_SCAN}），${shopQueued} 个语言排队至下次整点`,
-      );
-    }
   }
 
   console.log(
-    `[autoTranslate] 扫描完成：店=${shops.length} 新建=${created} 跳过(已有进行中)=${skipped} 排队(本档已满)=${queued}`,
+    `[autoTranslate] 扫描完成：店=${shops.length} 新建=${created} 跳过(已有进行中)=${skipped}`,
   );
   await setAutoScanLastAt(resolveNextClockAlignedScanAt().toISOString());
 }
