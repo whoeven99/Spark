@@ -86,6 +86,7 @@ function isRecoverableInitError(error: unknown): boolean {
   const text = collectInitErrorStrings(error).join("\n");
   return (
     /THROTTLED|429|rate limit/i.test(text) ||
+    /HTTP 502|HTTP 503|HTTP 504/i.test(text) ||
     /ETIMEDOUT|ECONNRESET/i.test(text)
   );
 }
@@ -93,6 +94,7 @@ function isRecoverableInitError(error: unknown): boolean {
 function initRequeueLabel(error: unknown): string {
   const text = collectInitErrorStrings(error).join("\n");
   if (/THROTTLED|429|rate limit/i.test(text)) return "限流";
+  if (/HTTP 502|HTTP 503|HTTP 504/i.test(text)) return "Shopify 暂时不可用";
   if (/ETIMEDOUT|ECONNRESET/i.test(text)) return "网络超时";
   return "暂时失败";
 }
