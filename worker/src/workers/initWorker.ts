@@ -4,6 +4,7 @@ import {
   updateJob,
   heartbeat,
   findPendingJobs,
+  getJob,
   withStageTiming,
   prefersStoredToken,
   countShopInitializingJobs,
@@ -11,7 +12,7 @@ import {
   TSF_AUTO_TASK_SOURCE,
   type TranslationV4Job,
 } from "../services/cosmosV4.js";
-import { popHint, pushHint, setProgress } from "../services/redisV4.js";
+import { popHint, pushHint, requeueHintTail, setProgress, type HintPayload } from "../services/redisV4.js";
 import { runTranslateWorker } from "./translateWorker.js";
 import { blobWrite } from "../services/blobV4.js";
 import { purgeAutoJob } from "../services/autoJobCleanup.js";
@@ -38,6 +39,21 @@ const HEARTBEAT_THROTTLE_MS = 30_000;
 const MODULE_CONCURRENCY = Math.max(1, Number(process.env.INIT_MODULE_CONCURRENCY) || 3);
 
 const INIT_MAX_REQUEUE = Math.max(0, Number(process.env.INIT_MAX_REQUEUE) || 5);
+
+/**
+ * 进程级 init 并发上限：同一时间最多 N 个店在初始化，其余 INIT_QUEUED 排队。
+ * 同店 init 串行由 tryClaimInitJob 保证；这里限制的是「跨店」同时在 INITIALIZING 的店数。
+ * 默认 5，可用 MAX_CONCURRENT_INIT_JOBS 覆盖。
+ */
+const MAX_CONCURRENT_INIT_JOBS = Math.max(
+  1,
+  Number(process.env.MAX_CONCURRENT_INIT_JOBS) || 5,
+);
+/** 当前本进程在 init 的任务数（已 claim 且未收尾）。 */
+let activeInitJobs = 0;
+
+/** Max stale/busy hints to drain per tick before falling back to Cosmos scan. */
+const INIT_HINT_DRAIN_MAX = Math.max(1, Number(process.env.INIT_HINT_DRAIN_MAX) || 32);
 
 function collectInitErrorStrings(error: unknown): string[] {
   const strings: string[] = [];
@@ -146,12 +162,22 @@ async function completeEmptyInitJob(
 }
 
 export async function runInitWorker(): Promise<void> {
-  const claimed = await claimNextInitJob();
-  if (!claimed) return;
-  console.log(`[init] processing job=${claimed.id} shop=${claimed.shopName}`);
-  await processInitJob(claimed.id, claimed.shopName).catch((e) => {
-    console.error(`[init] job ${claimed.id} failed`, e);
-  });
+  if (activeInitJobs >= MAX_CONCURRENT_INIT_JOBS) return;
+  activeInitJobs++;
+  let claimed: TranslationV4Job | null = null;
+  try {
+    claimed = await claimNextInitJob();
+    if (!claimed) return;
+    console.log(
+      `[init] processing job=${claimed.id} shop=${claimed.shopName} (active=${activeInitJobs}/${MAX_CONCURRENT_INIT_JOBS})`,
+    );
+    await processInitJob(claimed.id, claimed.shopName);
+  } catch (e) {
+    if (claimed) console.error(`[init] job ${claimed.id} failed`, e);
+    else console.error("[init] claim failed", e);
+  } finally {
+    activeInitJobs--;
+  }
 }
 
 async function wakeNextInitForShop(shopName: string): Promise<void> {
@@ -197,15 +223,31 @@ async function tryClaimInitJob(
   return job;
 }
 
+async function isStaleInitHint(hint: HintPayload): Promise<boolean> {
+  const job = await getJob(hint.shopName, hint.taskId);
+  if (!job) return true;
+  return job.status !== "INIT_QUEUED";
+}
+
 async function claimNextInitJob(): Promise<TranslationV4Job | null> {
-  const hint = await popHint("init");
-  if (hint) {
+  for (let n = 0; n < INIT_HINT_DRAIN_MAX; n++) {
+    const hint = await popHint("init");
+    if (!hint) break;
+
+    if (await isStaleInitHint(hint)) {
+      console.log(
+        `[init] discard stale hint job=${hint.taskId} shop=${hint.shopName}`,
+      );
+      continue;
+    }
+
     const job = await tryClaimInitJob(hint.shopName, hint.taskId);
     if (job) return job;
-    // shop 已有 INIT 在跑 —— 把 hint 放回队列，等当前任务结束后 wakeNext 再拾取
-    await pushHint("init", hint);
-    return null;
+
+    // 仍为 INIT_QUEUED 但同店已有 INITIALIZING：塞回队尾，继续尝试其他店的 hint
+    await requeueHintTail("init", hint);
   }
+
   const candidates = await findPendingJobs("INIT_QUEUED", 10);
   for (const candidate of candidates) {
     const job = await tryClaimInitJob(candidate.shopName, candidate.id);
@@ -215,7 +257,6 @@ async function claimNextInitJob(): Promise<TranslationV4Job | null> {
 }
 
 async function processInitJob(jobId: string, shopName: string): Promise<void> {
-  const { getJob } = await import("../services/cosmosV4.js");
   const job = await getJob(shopName, jobId);
   if (!job) return;
 

@@ -9,7 +9,7 @@ import {
   countShopTranslatingJobs,
   findTranslateQueuedJobsForShop,
 } from "../services/cosmosV4.js";
-import { popHint, pushHint, setProgress, readControl, clearControl, getProgress } from "../services/redisV4.js";
+import { popHint, pushHint, requeueHintTail, setProgress, readControl, clearControl, getProgress, type HintPayload } from "../services/redisV4.js";
 import {
   deductTsfQuota,
   getTsfRemainingWithRetry,
@@ -61,6 +61,11 @@ const WORKER_ID = `translate-${process.env.HOSTNAME ?? hostname()}-${process.pid
 const MAX_CONCURRENT_TRANSLATE_JOBS = Math.max(
   1,
   Number(process.env.MAX_CONCURRENT_TRANSLATE_JOBS) || 5,
+);
+/** Max stale/busy hints to drain per tick before falling back to Cosmos scan. */
+const TRANSLATE_HINT_DRAIN_MAX = Math.max(
+  1,
+  Number(process.env.TRANSLATE_HINT_DRAIN_MAX) || 32,
 );
 /** 当前本进程在译的任务数（已 claim 且未收尾）。 */
 let activeTranslateJobs = 0;
@@ -191,15 +196,30 @@ async function tryClaimTranslateJob(
   return job;
 }
 
+async function isStaleTranslateHint(hint: HintPayload): Promise<boolean> {
+  const job = await getJob(hint.shopName, hint.taskId);
+  if (!job) return true;
+  return job.status !== "TRANSLATE_QUEUED";
+}
+
 async function claimNextJob(): Promise<TranslationV4Job | null> {
-  const hint = await popHint("translate");
-  if (hint) {
+  for (let n = 0; n < TRANSLATE_HINT_DRAIN_MAX; n++) {
+    const hint = await popHint("translate");
+    if (!hint) break;
+
+    if (await isStaleTranslateHint(hint)) {
+      console.log(
+        `[translate] discard stale hint job=${hint.taskId} shop=${hint.shopName}`,
+      );
+      continue;
+    }
+
     const job = await tryClaimTranslateJob(hint.shopName, hint.taskId);
     if (job) return job;
-    // shop 已有任务在译 —— 把 hint 放回队列，等当前任务结束后 wakeNext 再拾取
-    await pushHint("translate", hint);
-    return null;
+
+    await requeueHintTail("translate", hint);
   }
+
   const candidates = await findPendingJobs("TRANSLATE_QUEUED", 10);
   for (const candidate of candidates) {
     const job = await tryClaimTranslateJob(candidate.shopName, candidate.id);
