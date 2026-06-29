@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
   createJob,
-  countShopActiveJobs,
   hasActiveJobForTarget,
   TSF_AUTO_TASK_SOURCE,
 } from "./cosmosV4.js";
@@ -20,24 +19,23 @@ import { resolveNextClockAlignedScanAt } from "./autoScanSchedule.js";
 /** 自动任务模块（不含 EMAIL_TEMPLATE、ONLINE_STORE_THEME_LOCALE_CONTENT）。 */
 const AUTO_MODULES = [...AUTO_TRANSLATE_V4_MODULES];
 
-/** 本档扫描每店最多新建几条自动任务（店内有进行中任务时用于排队）。 */
+/** 本档扫描每店最多新建几条自动任务（默认 1，跨整点逐步消化多语言，避免单店占满 init）。 */
 const AUTO_MAX_NEW_PER_SHOP_PER_SCAN = (() => {
   const n = Number(process.env.AUTO_TRANSLATE_MAX_NEW_PER_SHOP_PER_SCAN);
   return n > 0 ? Math.floor(n) : 1;
 })();
 
+/** v4 自动翻译任务固定使用 GPT-4.1 nano（与 TSF 手动任务默认模型一致）。 */
 function autoAiModel(): string {
-  // 配了 Gpt_ApiKey 时自动翻译默认走 GPT，否则回退 DeepSeek。
-  if (process.env.Gpt_ApiKey?.trim()) {
-    return process.env.Gpt_Model?.trim() || "gpt-4.1-nano";
-  }
-  return process.env.DEEPSEEK_MODEL?.trim() || "deepseek-v4-flash";
+  return "gpt-4.1-nano";
 }
 
 /**
- * 扫描 TSF 库中「已迁移且开启自动翻译」的店，为每个 shop+target 创建一个
- * 自动更新任务（isCover=false，增量、不覆盖已翻译）。已有进行中任务则跳过。
- * 由 scheduler 整点调用。
+ * 扫描 TSF 库中「已迁移且开启自动翻译」的店，为每个 shop+target 创建
+ * 自动更新任务（isCover=false，增量、不覆盖已翻译）。
+ * 每店每档最多建 AUTO_TRANSLATE_MAX_NEW_PER_SHOP_PER_SCAN 条（默认 1），
+ * 多语言分多个整点逐步建，避免单店一次占满 init worker。
+ * 已有进行中同 target 任务则跳过。由 scheduler 整点调用。
  */
 export async function runAutoTranslateScan(): Promise<void> {
   if (!hasTsfDbCredentials()) {
@@ -75,7 +73,6 @@ export async function runAutoTranslateScan(): Promise<void> {
       console.warn(`[autoTranslate] ${shop} 读取 Shopify 默认语言失败，沿用 TSF 缓存`, err);
     }
 
-    const shopActiveCount = await countShopActiveJobs(shop);
     let createdThisShop = 0;
     let shopQueued = 0;
 
@@ -88,10 +85,7 @@ export async function runAutoTranslateScan(): Promise<void> {
         continue;
       }
 
-      if (
-        shopActiveCount > 0 &&
-        createdThisShop >= AUTO_MAX_NEW_PER_SHOP_PER_SCAN
-      ) {
+      if (createdThisShop >= AUTO_MAX_NEW_PER_SHOP_PER_SCAN) {
         queued++;
         shopQueued++;
         continue;
@@ -126,9 +120,9 @@ export async function runAutoTranslateScan(): Promise<void> {
       }
     }
 
-    if (shopQueued > 0 && shopActiveCount > 0) {
+    if (shopQueued > 0) {
       console.log(
-        `[autoTranslate] shop=${shop} 已有 ${shopActiveCount} 个进行中任务，本档 ${shopQueued} 个语言排队至下次整点`,
+        `[autoTranslate] shop=${shop} 本档已建 ${createdThisShop} 条（上限 ${AUTO_MAX_NEW_PER_SHOP_PER_SCAN}），${shopQueued} 个语言排队至下次整点`,
       );
     }
   }

@@ -114,6 +114,18 @@ export async function pushHint(
   }
 }
 
+/** Re-queue at tail so LPOP head can pick a different shop's hint next tick. */
+export async function requeueHintTail(
+  stage: keyof typeof HINT_KEYS,
+  payload: HintPayload,
+): Promise<void> {
+  try {
+    await getRedis().rpush(HINT_KEYS[stage], JSON.stringify(payload));
+  } catch {
+    // best-effort
+  }
+}
+
 const PROGRESS_TTL = 7 * 24 * 3600; // 7 days in seconds
 
 export function progressKey(taskId: string): string {

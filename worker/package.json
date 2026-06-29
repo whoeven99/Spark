@@ -9,7 +9,10 @@
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
-    "check:auto-translate-modules": "node scripts/check-auto-translate-modules.mjs"
+    "check:auto-translate-modules": "node scripts/check-auto-translate-modules.mjs",
+    "probe:hint-queues": "node scripts/probe-hint-queues.mjs",
+    "cleanup:stale-hints": "node scripts/cleanup-stale-hints.mjs",
+    "cleanup:stale-hints:apply": "node scripts/cleanup-stale-hints.mjs --apply"
   },
   "dependencies": {
     "@azure/cosmos": "^4.9.3",
