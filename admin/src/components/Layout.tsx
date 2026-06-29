@@ -63,7 +63,7 @@ export default function Layout() {
     "/";
 
   return (
-    <AntLayout style={{ minHeight: "100vh" }}>
+    <AntLayout style={{ minHeight: "100vh", overflowX: "hidden" }}>
       <Sider collapsible collapsed={collapsed} onCollapse={setCollapsed}>
         <div
           style={{
@@ -109,7 +109,7 @@ export default function Layout() {
             </Button>
           </div>
         </Header>
-        <Content style={{ margin: 24, overflow: "auto" }}>
+        <Content style={{ margin: 24 }}>
           <Outlet />
         </Content>
       </AntLayout>

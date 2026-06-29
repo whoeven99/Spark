@@ -273,8 +273,8 @@ function PipelineBar({ job }: { job: TranslationJob }) {
     job.status === "FAILED" ? C.failed : job.status === "COMPLETED" ? C.done : C.ink;
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <div style={{ display: "flex", gap: 5, flex: 1, minWidth: 120 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+      <div style={{ display: "flex", gap: 5, flex: 1, minWidth: 0 }}>
         {phases.map((p) => (
           <Tooltip key={p.label} title={`${p.label} · ${p.detail}`}>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
@@ -629,7 +629,6 @@ function LLMKeyStatsPanel() {
                   rowKey="label"
                   size="small"
                   pagination={false}
-                  scroll={{ x: true }}
                   expandable={{
                     expandedRowRender: (row: LLMKeyStats) => <KeyHistoryCharts label={row.label} />,
                     rowExpandable: () => true,
@@ -682,7 +681,7 @@ const TH: React.CSSProperties = {
   textTransform: "uppercase",
 };
 
-const GRID = "minmax(180px,0.7fr) 96px 100px minmax(380px,2.4fr) 70px 96px 120px 64px";
+const GRID = "minmax(0,0.9fr) 80px 72px minmax(0,2.2fr) 52px 72px 88px 52px";
 
 /* ──────────────────────────────────────────────────────────────────────────
    翻译内容（blob）查看器 —— 模块切换 + 翻译前后对照 + 翻页
@@ -1014,12 +1013,13 @@ export default function Translations() {
         background: C.bg,
         fontFamily: FONT,
         color: C.ink,
-        margin: -24,
-        padding: "28px 32px 48px",
-        minHeight: "calc(100vh - 64px)",
+        padding: "4px 8px 48px",
+        minHeight: "calc(100vh - 64px - 48px)",
         display: "flex",
         flexDirection: "column",
         gap: 20,
+        maxWidth: "100%",
+        boxSizing: "border-box",
       }}
     >
       {/* Header */}
@@ -1146,7 +1146,7 @@ export default function Translations() {
 
       {/* Task table */}
       <Spin spinning={loading}>
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden", maxWidth: "100%" }}>
           <div style={{ display: "grid", gridTemplateColumns: GRID, gap: 16, padding: "12px 20px", borderBottom: `1px solid ${C.borderSoft}`, background: "#fafbfc" }}>
             <span style={TH}>商店 / 语言</span>
             <span style={TH}>状态</span>
