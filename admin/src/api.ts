@@ -182,6 +182,32 @@ export function fetchAutoTranslationSummary(): Promise<AutoTranslationSummary> {
   return apiFetch("/translations/auto/summary");
 }
 
+export type RepairStuckTranslationResult = {
+  ok: true;
+  repaired: Array<{
+    id: string;
+    shopName: string;
+    from: string;
+    to: string;
+    lastHeartbeat: string | null;
+    claimedBy: string | null;
+  }>;
+  hintsPushed: number;
+  wakeHints: number;
+};
+
+/** 回收发版/异常退出后僵死的 processing 任务，并唤醒排队 hint。 */
+export function repairStuckTranslationJobs(body?: {
+  heartbeatGraceMs?: number;
+  jobIds?: string[];
+  wakeQueuedHints?: boolean;
+}): Promise<RepairStuckTranslationResult> {
+  return apiFetch("/translations/repair-stuck", {
+    method: "POST",
+    body: JSON.stringify(body ?? {}),
+  });
+}
+
 export function fetchTranslationJob(
   jobId: string,
   shop?: string,
