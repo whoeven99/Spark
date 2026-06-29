@@ -100,7 +100,7 @@ export function startScheduler(): void {
   setInterval(() => safeRun("resetStale", () => resetStaleJobs()), STALE_RESET_INTERVAL_MS);
   setInterval(() => safeRun("resetStaleAnalysis", () => resetStaleAnalysisJobs()), STALE_RESET_INTERVAL_MS);
 
-  // 自动翻译：按整点调度（默认北京时间每小时 :00），启动时不立即扫描，避免发布导致「下次时间」漂移。
+  // 自动翻译：按整点调度（默认北京时间每小时 :00），启动时不立即扫描
   if (stages.has("init")) {
     scheduleAutoTranslateScan();
   } else {

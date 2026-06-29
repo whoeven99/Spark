@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import {
   createJob,
+  getLatestAutoJobCreatedAtForShop,
   hasActiveJobForTarget,
+  isShopAutoCooldownElapsed,
   TSF_AUTO_TASK_SOURCE,
 } from "./cosmosV4.js";
 import { pushHint } from "./redisV4.js";
@@ -14,7 +16,10 @@ import {
 import { fetchShopPrimaryLocale } from "./shopifyFetch.js";
 import { AUTO_TRANSLATE_V4_MODULES } from "./moduleCatalog.js";
 import { setAutoScanLastAt } from "./redisV4.js";
-import { resolveNextClockAlignedScanAt } from "./autoScanSchedule.js";
+import {
+  getAutoTranslateShopCooldownMs,
+  resolveNextClockAlignedScanAt,
+} from "./autoScanSchedule.js";
 
 /** 自动任务模块（不含 EMAIL_TEMPLATE、ONLINE_STORE_THEME_LOCALE_CONTENT）。 */
 const AUTO_MODULES = [...AUTO_TRANSLATE_V4_MODULES];
@@ -27,9 +32,13 @@ function autoAiModel(): string {
 /**
  * 扫描 TSF 库中「已迁移且开启自动翻译」的店，为每个 shop+target 创建
  * 自动更新任务（isCover=false，增量、不覆盖已翻译）。
- * 本档为每店所有 auto 语言尽量建任务；同 shop+source+target 已有进行中任务则跳过。
- * Init 执行平滑由 initWorker 负责：同店串行、跨店自动/手动各占独立 init 池（默认各 5）。
- * 由 scheduler 整点调用。
+ *
+ * - 全局 scheduler 每小时扫描一次（AUTO_TRANSLATE_INTERVAL_MS，默认 1h）。
+ * - 单店批次冷却 AUTO_TRANSLATE_SHOP_COOLDOWN_MS（默认 3h）：距该店上次任意 auto 任务
+ *   创建不足 3h 则整店跳过；无历史则本档立即为该店所有目标语言建任务。
+ * - 各 shop+target 若已有进行中任务则单独跳过。
+ *
+ * 每小时扫描 + 按店 3h 冷却，各店首次/上次建任务时刻错开，负载自然打散。
  */
 export async function runAutoTranslateScan(): Promise<void> {
   if (!hasTsfDbCredentials()) {
@@ -37,6 +46,7 @@ export async function runAutoTranslateScan(): Promise<void> {
     return;
   }
 
+  const shopCooldownMs = getAutoTranslateShopCooldownMs();
   const shops = await listAutoTranslateShops();
   if (shops.length === 0) {
     console.log("[autoTranslate] 无开启自动翻译的店");
@@ -45,10 +55,17 @@ export async function runAutoTranslateScan(): Promise<void> {
   }
 
   let created = 0;
-  let skipped = 0;
+  let skippedActive = 0;
+  let skippedShopCooldown = 0;
   for (const { shop, primaryLocale, targets } of shops) {
     let source = primaryLocale?.trim();
     if (!source || !Array.isArray(targets) || targets.length === 0) continue;
+
+    const lastShopBatchAt = await getLatestAutoJobCreatedAtForShop(shop);
+    if (!isShopAutoCooldownElapsed(lastShopBatchAt, shopCooldownMs)) {
+      skippedShopCooldown++;
+      continue;
+    }
 
     const token = (await getOfflineAccessTokenFromTsf(shop)) ?? "";
     if (!token) {
@@ -71,7 +88,7 @@ export async function runAutoTranslateScan(): Promise<void> {
       if (!target || target === source) continue;
 
       if (await hasActiveJobForTarget(shop, source, target)) {
-        skipped++;
+        skippedActive++;
         continue;
       }
 
@@ -85,8 +102,8 @@ export async function runAutoTranslateScan(): Promise<void> {
           target,
           modules: AUTO_MODULES,
           aiModel: autoAiModel(),
-          limitPerType: Number.MAX_SAFE_INTEGER, // 自动任务：抓全量增量内容
-          isCover: false, // 自动更新默认不覆盖已翻译
+          limitPerType: Number.MAX_SAFE_INTEGER,
+          isCover: false,
           isHandle: false,
           taskSource: TSF_AUTO_TASK_SOURCE,
           status: "INIT_QUEUED",
@@ -102,11 +119,10 @@ export async function runAutoTranslateScan(): Promise<void> {
         console.error(`[autoTranslate] 建任务失败 shop=${shop} ${source}→${target}`, err);
       }
     }
-
   }
 
   console.log(
-    `[autoTranslate] 扫描完成：店=${shops.length} 新建=${created} 跳过(已有进行中)=${skipped}`,
+    `[autoTranslate] 扫描完成：店=${shops.length} 新建=${created} 跳过(店冷却<${shopCooldownMs / 3600_000}h)=${skippedShopCooldown} 跳过(语言进行中)=${skippedActive}`,
   );
   await setAutoScanLastAt(resolveNextClockAlignedScanAt().toISOString());
 }

@@ -265,6 +265,44 @@ export async function hasActiveJobForTarget(
   }
 }
 
+/** 同 shop 最近一条自动任务创建时间（任意 target；无历史则 null）。 */
+export async function getLatestAutoJobCreatedAtForShop(
+  shopName: string,
+): Promise<Date | null> {
+  try {
+    const { resources } = await getContainer()
+      .items.query<{ createdAt: string }>(
+        {
+          query:
+            "SELECT TOP 1 c.createdAt FROM c WHERE c.shopName = @shopName AND c.taskSource = @src ORDER BY c.createdAt DESC",
+          parameters: [
+            { name: "@shopName", value: shopName },
+            { name: "@src", value: TSF_AUTO_TASK_SOURCE },
+          ],
+        },
+        { partitionKey: shopName },
+      )
+      .fetchAll();
+    const iso = resources[0]?.createdAt?.trim();
+    if (!iso) return null;
+    const at = new Date(iso);
+    return Number.isNaN(at.getTime()) ? null : at;
+  } catch (err) {
+    console.error("[cosmosV4] getLatestAutoJobCreatedAtForShop failed:", err);
+    return null;
+  }
+}
+
+/** 单店是否已过自动建任务冷却期（无历史视为可建）。 */
+export function isShopAutoCooldownElapsed(
+  lastBatchAt: Date | null,
+  cooldownMs: number,
+  nowMs = Date.now(),
+): boolean {
+  if (!lastBatchAt) return true;
+  return nowMs - lastBatchAt.getTime() >= cooldownMs;
+}
+
 /** 同店任意进行中的 v4 任务数（用于自动扫描排队）。 */
 export async function countShopActiveJobs(shopName: string): Promise<number> {
   try {
