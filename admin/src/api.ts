@@ -1081,6 +1081,25 @@ export function saveShopProfile(shopName: string, profile: ShopProfile): Promise
   });
 }
 
+// --- Shop size profile（商店数据量档位） ---
+
+export type ShopSizeTier = "超大商店" | "大商店" | "中等商店" | "小商店";
+
+export type ShopSizeProfile = {
+  id: string;
+  shopName: string;
+  largestLanguage: string | null;
+  dataBytes: number;
+  dataSizeKB: number;
+  sizeTier: ShopSizeTier;
+  languages: Record<string, { bytes: number; items: number; units: number; updatedAt: string }>;
+  updatedAt: string;
+};
+
+export function fetchShopSizeProfiles(): Promise<{ profiles: ShopSizeProfile[]; note?: string }> {
+  return apiFetch(`/shop-profile`);
+}
+
 // --- Support（人工客服会话） ---
 
 export type SupportConversationRow = {

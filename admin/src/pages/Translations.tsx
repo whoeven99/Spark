@@ -40,8 +40,11 @@ import {
   fetchLLMKeyHistory,
   fetchAutoTranslationSummary,
   repairStuckTranslationJobs,
+  fetchShopSizeProfiles,
   AUTO_TASK_SOURCE,
   type TranslationJob,
+  type ShopSizeProfile,
+  type ShopSizeTier,
   type AutoTranslationSummary,
   type TranslationContentPage,
   type TranslationContentModule,
@@ -452,6 +455,55 @@ function fmtAgo(epochMs: number, now = Date.now()): string {
 function jobShortLabel(job: TranslationJob): string {
   const shop = job.shopName.split(".")[0];
   return `${shop} ${job.source}→${job.target}`;
+}
+
+/** 数据量字节数 → 人类可读（KB / MB）。 */
+function fmtBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return "—";
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+const TIER_STYLE: Record<ShopSizeTier, { bg: string; fg: string }> = {
+  超大商店: { bg: "#fdecec", fg: "#a11c1c" },
+  大商店: { bg: "#fff3e3", fg: "#9a5a08" },
+  中等商店: { bg: "#e8effe", fg: "#1f4fc4" },
+  小商店: { bg: "#eef0f3", fg: "#52585f" },
+};
+
+/** 商店数据量档位徽章：档位 + 大致体积（鼠标悬停看最大语言）。 */
+function ShopSizeBadge({ profile }: { profile: ShopSizeProfile | undefined }) {
+  if (!profile) return null;
+  const st = TIER_STYLE[profile.sizeTier] ?? TIER_STYLE.小商店;
+  return (
+    <Tooltip
+      title={
+        <div style={{ fontSize: 12 }}>
+          数据量 {fmtBytes(profile.dataBytes)}
+          {profile.largestLanguage ? `（最大语言 ${profile.largestLanguage}）` : ""}
+        </div>
+      }
+    >
+      <span
+        style={{
+          flexShrink: 0,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+          fontSize: 10,
+          fontWeight: 700,
+          color: st.fg,
+          background: st.bg,
+          padding: "1px 6px",
+          borderRadius: 4,
+          cursor: "default",
+        }}
+      >
+        {profile.sizeTier}
+        <span style={{ fontWeight: 500, fontFamily: MONO, opacity: 0.85 }}>{fmtBytes(profile.dataBytes)}</span>
+      </span>
+    </Tooltip>
+  );
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -1053,6 +1105,7 @@ export default function Translations() {
 
   const [jobs, setJobs] = useState<TranslationJob[]>([]);
   const [autoSummary, setAutoSummary] = useState<AutoTranslationSummary | null>(null);
+  const [sizeProfiles, setSizeProfiles] = useState<Record<string, ShopSizeProfile>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [errorLevel, setErrorLevel] = useState<"error" | "warning">("error");
@@ -1078,8 +1131,14 @@ export default function Translations() {
         ...(sourceFilter === "auto" ? { source: AUTO_TASK_SOURCE } : {}),
       }),
       fetchAutoTranslationSummary().catch(() => null),
+      fetchShopSizeProfiles().catch(() => null),
     ])
-      .then(([r, summary]) => {
+      .then(([r, summary, sizeRes]) => {
+        if (sizeRes?.profiles) {
+          const map: Record<string, ShopSizeProfile> = {};
+          for (const p of sizeRes.profiles) map[p.shopName] = p;
+          setSizeProfiles(map);
+        }
         let nextJobs = r.jobs;
         if (sourceFilter === "manual") {
           nextJobs = nextJobs.filter((j) => !isAutoTask(j));
@@ -1643,6 +1702,7 @@ export default function Translations() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
                   <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flexWrap: "wrap" }}>
                     <span style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{j.shopName}</span>
+                    <ShopSizeBadge profile={sizeProfiles[j.shopName]} />
                     {isAutoTask(j) && (
                       <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 600, color: "#1f4fc4", background: "#e8effe", padding: "1px 6px", borderRadius: 4 }}>自动</span>
                     )}
