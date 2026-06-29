@@ -853,8 +853,11 @@ export async function releaseOrphanedProcessingJobs(
           query: `
             SELECT * FROM c
             WHERE c.status = @status
-              AND IS_DEFINED(c.claimedBy)
-              AND NOT ENDSWITH(c.claimedBy, @suffix)
+              AND (
+                NOT IS_DEFINED(c.claimedBy)
+                OR IS_NULL(c.claimedBy)
+                OR NOT ENDSWITH(c.claimedBy, @suffix)
+              )
               AND (NOT IS_DEFINED(c.lastHeartbeat) OR c.lastHeartbeat < @threshold)
             OFFSET 0 LIMIT 50
           `,
@@ -890,29 +893,7 @@ export async function releaseOrphanedProcessingJobs(
  * 新 Worker 启动后：先快速回收部署中断的僵死任务，再为各店排队任务推 hint，
  * 避免「翻译了一半却显示等待翻译」长期卡住。
  */
-export async function wakeQueuedJobsAfterDeploy(
-  currentClaimSuffix: string,
-): Promise<void> {
-  const deployStaleMin = Number(process.env.DEPLOY_STALE_RESET_MINUTES) || 2;
-  await resetStaleJobs(deployStaleMin);
-
-  const orphanGraceMs = Number(process.env.DEPLOY_ORPHAN_HEARTBEAT_MS) || 30_000;
-  const orphanReleased = await releaseOrphanedProcessingJobs(
-    currentClaimSuffix,
-    orphanGraceMs,
-  );
-  if (orphanReleased > 0) {
-    console.log(`[deploy-wake] immediate orphan reset: ${orphanReleased}`);
-  }
-  // SIGTERM 未走完时 heartbeat 可能仍「新鲜」；延迟再扫一轮。
-  setTimeout(() => {
-    void releaseOrphanedProcessingJobs(currentClaimSuffix, orphanGraceMs)
-      .then((n) => {
-        if (n > 0) console.log(`[deploy-wake] delayed orphan reset: ${n}`);
-      })
-      .catch((e) => console.warn("[deploy-wake] delayed orphan reset failed", e));
-  }, orphanGraceMs + 5_000);
-
+async function pushDeployWakeHints(): Promise<void> {
   for (const [queuedStatus, busyStatus] of Object.entries(BUSY_STATUS_FOR_QUEUE)) {
     const queued = queuedStatus as TranslationV4Status;
     const busy = busyStatus as TranslationV4Status;
@@ -931,4 +912,31 @@ export async function wakeQueuedJobsAfterDeploy(
       );
     }
   }
+}
+
+export async function wakeQueuedJobsAfterDeploy(
+  currentClaimSuffix: string,
+): Promise<void> {
+  const deployStaleMin = Number(process.env.DEPLOY_STALE_RESET_MINUTES) || 2;
+  await resetStaleJobs(deployStaleMin);
+
+  const orphanGraceMs = Number(process.env.DEPLOY_ORPHAN_HEARTBEAT_MS) || 30_000;
+  const orphanReleased = await releaseOrphanedProcessingJobs(
+    currentClaimSuffix,
+    orphanGraceMs,
+  );
+  if (orphanReleased > 0) {
+    console.log(`[deploy-wake] immediate orphan reset: ${orphanReleased}`);
+  }
+  // SIGTERM 未走完时 heartbeat 可能仍「新鲜」；延迟再扫一轮。
+  setTimeout(() => {
+    void releaseOrphanedProcessingJobs(currentClaimSuffix, orphanGraceMs)
+      .then(async (n) => {
+        if (n > 0) console.log(`[deploy-wake] delayed orphan reset: ${n}`);
+        await pushDeployWakeHints();
+      })
+      .catch((e) => console.warn("[deploy-wake] delayed orphan reset failed", e));
+  }, orphanGraceMs + 5_000);
+
+  await pushDeployWakeHints();
 }

@@ -297,10 +297,31 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
   const job = await getJob(shopName, jobId);
   if (!job) return;
 
+  if (isShuttingDown()) {
+    if (job.claimedBy === WORKER_ID) {
+      await updateJob(shopName, jobId, {
+        status: "INIT_QUEUED",
+        claimedBy: null,
+        errorStage: null,
+        errorMessage: null,
+      });
+      await pushHint("init", { taskId: jobId, shopName });
+      console.log(`[init] job=${jobId} shutdown at entry → INIT_QUEUED`);
+    }
+    return;
+  }
+
+  if (job.status !== "INITIALIZING" || job.claimedBy !== WORKER_ID) {
+    console.log(
+      `[init] skip stale processInitJob job=${jobId} status=${job.status} claimedBy=${job.claimedBy ?? "null"}`,
+    );
+    return;
+  }
+
   const shopDomain = job.shopName;
   const blobPrefix = `tasks/v4/${shopName}/${jobId}`;
 
-  await updateJob(shopName, jobId, { blobPrefix, status: "INITIALIZING" });
+  await updateJob(shopName, jobId, { blobPrefix });
 
   const stageStartedAt = new Date().toISOString(); // ISO span start for stageTimings
   const manifest: Record<string, { totalItems: number; chunks: number }> = {};

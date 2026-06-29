@@ -4,6 +4,7 @@ import { getTranslationJobsContainer, isCosmosConfigured } from "../lib/cosmos.j
 import { enrichJobWithLiveProgress, enrichJobsWithLiveProgress } from "../lib/v4Progress.js";
 import { getRedis } from "../lib/redis.js";
 import { blobListPaths, blobRead, isBlobConfigured } from "../lib/blob.js";
+import { repairStuckTranslationJobs } from "../lib/repairStuckTranslationJobs.js";
 import type { TranslationV4Job } from "../types/translation.js";
 
 export const translationsRouter = Router();
@@ -245,6 +246,38 @@ type BlobTranslatedResource = {
 };
 
 // 列出该任务「确有翻译内容」的模块（仅列 blob 文件名，不下载内容）。
+/**
+ * POST /api/translations/repair-stuck
+ * 回收僵死的 processing 任务（发版中断等），并唤醒排队任务。
+ * Body: { heartbeatGraceMs?, jobIds?, wakeQueuedHints? }
+ */
+translationsRouter.post("/repair-stuck", async (req, res) => {
+  if (!isCosmosConfigured()) {
+    res.status(503).json({ error: "Cosmos not configured" });
+    return;
+  }
+
+  try {
+    const body = (req.body ?? {}) as {
+      heartbeatGraceMs?: number;
+      jobIds?: string[];
+      wakeQueuedHints?: boolean;
+    };
+    const result = await repairStuckTranslationJobs({
+      heartbeatGraceMs: body.heartbeatGraceMs,
+      jobIds: body.jobIds,
+      wakeQueuedHints: body.wakeQueuedHints,
+    });
+    console.log(
+      `[translations/repair-stuck] repaired=${result.repaired.length} hints=${result.hintsPushed} wake=${result.wakeHints}`,
+    );
+    res.json(result);
+  } catch (err) {
+    console.error("[translations/repair-stuck]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 translationsRouter.get("/:jobId/content/modules", async (req, res) => {
   if (!isCosmosConfigured()) {
     res.status(503).json({ error: "Cosmos not configured" });

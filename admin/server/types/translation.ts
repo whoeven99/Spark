@@ -43,6 +43,7 @@ export type TranslationV4Job = {
   status: TranslationV4Status;
   claimedBy: string | null;
   blobPrefix?: string;
+  lastHeartbeat?: string | null;
   metrics: TranslationV4Metrics;
   errorMessage: string | null;
   errorStage: string | null;

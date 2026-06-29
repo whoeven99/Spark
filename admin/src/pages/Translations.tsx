@@ -13,6 +13,8 @@ import {
   Tooltip,
   Badge,
   Spin as AntSpin,
+  Modal,
+  message,
 } from "antd";
 import { ApiOutlined, ReloadOutlined } from "@ant-design/icons";
 import {
@@ -35,6 +37,7 @@ import {
   fetchTranslationContentModules,
   fetchLLMKeyStats,
   fetchLLMKeyHistory,
+  repairStuckTranslationJobs,
   type TranslationJob,
   type TranslationContentPage,
   type TranslationContentModule,
@@ -929,6 +932,7 @@ export default function Translations() {
   const [selected, setSelected] = useState<TranslationJob | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const [repairing, setRepairing] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -965,6 +969,39 @@ export default function Translations() {
       .then((r) => setSelected(r.job))
       .finally(() => setDetailLoading(false));
   }
+
+  const runRepairStuck = useCallback((jobIds?: string[]) => {
+    Modal.confirm({
+      title: "修复僵死任务？",
+      content:
+        "将把心跳超时（60 秒）仍处于初始化/翻译/写回中的任务重置为排队状态，并向 Redis 补推 hint，适用于发版后 worker 异常退出导致的卡住。",
+      okText: "确认修复",
+      cancelText: "取消",
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        setRepairing(true);
+        try {
+          const result = await repairStuckTranslationJobs({
+            heartbeatGraceMs: 60_000,
+            jobIds: jobIds?.length ? jobIds : undefined,
+            wakeQueuedHints: true,
+          });
+          const n = result.repaired.length;
+          const wake = result.wakeHints;
+          if (n === 0 && wake === 0) {
+            message.info("未发现需要修复的僵死任务");
+          } else {
+            message.success(`已修复 ${n} 个僵死任务，唤醒 ${wake} 个排队 hint`);
+          }
+          load();
+        } catch (e) {
+          message.error(`修复失败：${String(e)}`);
+        } finally {
+          setRepairing(false);
+        }
+      },
+    });
+  }, [load]);
 
   const stuckJobs = useMemo(() => {
     const cutoff = Date.now() - 60 * 60 * 1000;
@@ -1057,6 +1094,26 @@ export default function Translations() {
             {autoRefresh ? "自动刷新 15s" : "自动刷新已关"}
           </button>
           <button
+            onClick={() => runRepairStuck()}
+            disabled={repairing}
+            title="发版后 worker 异常退出时，回收僵死的 processing 任务并唤醒排队"
+            style={{
+              height: 36,
+              padding: "0 16px",
+              border: `1px solid ${C.failed}`,
+              background: "#fff5f5",
+              color: "#a11c1c",
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: repairing ? "not-allowed" : "pointer",
+              opacity: repairing ? 0.6 : 1,
+              fontFamily: FONT,
+            }}
+          >
+            {repairing ? "修复中…" : "修复僵死任务"}
+          </button>
+          <button
             onClick={load}
             style={{ height: 36, padding: "0 16px", border: "none", background: C.ink, color: "#fff", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}
           >
@@ -1081,6 +1138,25 @@ export default function Translations() {
             <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", background: C.failed, color: "#fff", fontSize: 14, fontWeight: 700 }}>!</span>
             <span style={{ fontSize: 14, fontWeight: 700, color: "#a11c1c" }}>{stuckJobs.length} 个任务卡住</span>
             <span style={{ fontSize: 12, color: "#b35858" }}>超过 1 小时未更新，可能需要人工介入</span>
+            <button
+              onClick={() => runRepairStuck(stuckJobs.map((j) => j.id))}
+              disabled={repairing}
+              style={{
+                marginLeft: "auto",
+                height: 32,
+                padding: "0 14px",
+                border: `1px solid ${C.failed}`,
+                background: "#fff",
+                color: "#a11c1c",
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: repairing ? "not-allowed" : "pointer",
+                fontFamily: FONT,
+              }}
+            >
+              {repairing ? "修复中…" : "一键修复"}
+            </button>
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {stuckJobs.map((j) => (
