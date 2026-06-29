@@ -36,6 +36,7 @@ export async function runWritebackWorker(): Promise<void> {
 
   let claimed: TranslationV4Job | null = null;
   let poolKind: StagePoolKind | null = null;
+  let slotHeld = false;
   try {
     claimed = await claimNextJob();
     if (!claimed) return;
@@ -49,6 +50,7 @@ export async function runWritebackWorker(): Promise<void> {
       await pushHint("writeback", { taskId: claimed.id, shopName: claimed.shopName });
       return;
     }
+    slotHeld = true;
 
     console.log(
       `[writeback] processing job=${claimed.id} pool=${poolKind} (${stageSlots.formatActive("writeback")})`,
@@ -60,7 +62,7 @@ export async function runWritebackWorker(): Promise<void> {
     if (claimed) console.error(`[writeback] job ${claimed.id} failed`, e);
     else console.error("[writeback] claim failed", e);
   } finally {
-    if (poolKind) {
+    if (poolKind && slotHeld) {
       stageSlots.release("writeback", poolKind);
       if (!isShuttingDown() && stageSlots.anyCapacity("writeback")) {
         void runWritebackWorker().catch((e) =>

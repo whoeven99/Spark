@@ -128,6 +128,7 @@ export async function runTranslateWorker(): Promise<void> {
 
   let claimed: TranslationV4Job | null = null;
   let poolKind: StagePoolKind | null = null;
+  let slotHeld = false;
   try {
     claimed = await claimNextJob();
     if (!claimed) return;
@@ -141,6 +142,7 @@ export async function runTranslateWorker(): Promise<void> {
       await pushHint("translate", { taskId: claimed.id, shopName: claimed.shopName });
       return;
     }
+    slotHeld = true;
 
     console.log(
       `[translate] processing job=${claimed.id} pool=${poolKind} (${stageSlots.formatActive("translate")})`,
@@ -150,7 +152,7 @@ export async function runTranslateWorker(): Promise<void> {
     if (claimed) console.error(`[translate] job ${claimed.id} failed`, e);
     else console.error("[translate] claim failed", e);
   } finally {
-    if (poolKind) {
+    if (poolKind && slotHeld) {
       stageSlots.release("translate", poolKind);
       if (stageSlots.anyCapacity("translate")) {
         void runTranslateWorker().catch((e) =>

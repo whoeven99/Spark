@@ -799,12 +799,81 @@ export async function resetStaleJobs(
 }
 
 /**
+ * 回收上一 Pod 遗留的 processing 任务（SIGTERM 释放失败时）。
+ * 仅重置「非本进程 claimedBy 且 heartbeat 已超过 grace」的任务，避免误伤其它副本在跑的任务。
+ */
+export async function releaseOrphanedProcessingJobs(
+  currentClaimSuffix: string,
+  heartbeatGraceMs = Number(process.env.DEPLOY_ORPHAN_HEARTBEAT_MS) || 30_000,
+): Promise<number> {
+  const threshold = new Date(Date.now() - heartbeatGraceMs).toISOString();
+  let released = 0;
+  for (const [processingStatus, resetStatus] of PROCESSING_TO_QUEUED) {
+    try {
+      const { resources } = await getContainer()
+        .items.query<TranslationV4Job>({
+          query: `
+            SELECT * FROM c
+            WHERE c.status = @status
+              AND IS_DEFINED(c.claimedBy)
+              AND NOT ENDSWITH(c.claimedBy, @suffix)
+              AND (NOT IS_DEFINED(c.lastHeartbeat) OR c.lastHeartbeat < @threshold)
+            OFFSET 0 LIMIT 50
+          `,
+          parameters: [
+            { name: "@status", value: processingStatus },
+            { name: "@suffix", value: currentClaimSuffix },
+            { name: "@threshold", value: threshold },
+          ],
+        })
+        .fetchAll();
+      for (const job of resources) {
+        const metrics = await mergeReleaseMetricsFromRedis(job, processingStatus);
+        await updateJob(job.shopName, job.id, {
+          status: resetStatus,
+          claimedBy: null,
+          claimedAt: null,
+          ...(metrics ? { metrics } : {}),
+        }).catch(() => {});
+        await pushHintForQueuedJob(job, resetStatus).catch(() => {});
+        released++;
+        console.log(
+          `[deploy-wake] orphan ${job.id} ${processingStatus} → ${resetStatus} (claimedBy=${job.claimedBy})`,
+        );
+      }
+    } catch (e) {
+      console.warn(`[deploy-wake] orphan release error for ${processingStatus}`, e);
+    }
+  }
+  return released;
+}
+
+/**
  * 新 Worker 启动后：先快速回收部署中断的僵死任务，再为各店排队任务推 hint，
  * 避免「翻译了一半却显示等待翻译」长期卡住。
  */
-export async function wakeQueuedJobsAfterDeploy(): Promise<void> {
+export async function wakeQueuedJobsAfterDeploy(
+  currentClaimSuffix: string,
+): Promise<void> {
   const deployStaleMin = Number(process.env.DEPLOY_STALE_RESET_MINUTES) || 2;
   await resetStaleJobs(deployStaleMin);
+
+  const orphanGraceMs = Number(process.env.DEPLOY_ORPHAN_HEARTBEAT_MS) || 30_000;
+  const orphanReleased = await releaseOrphanedProcessingJobs(
+    currentClaimSuffix,
+    orphanGraceMs,
+  );
+  if (orphanReleased > 0) {
+    console.log(`[deploy-wake] immediate orphan reset: ${orphanReleased}`);
+  }
+  // SIGTERM 未走完时 heartbeat 可能仍「新鲜」；延迟再扫一轮。
+  setTimeout(() => {
+    void releaseOrphanedProcessingJobs(currentClaimSuffix, orphanGraceMs)
+      .then((n) => {
+        if (n > 0) console.log(`[deploy-wake] delayed orphan reset: ${n}`);
+      })
+      .catch((e) => console.warn("[deploy-wake] delayed orphan reset failed", e));
+  }, orphanGraceMs + 5_000);
 
   for (const [queuedStatus, busyStatus] of Object.entries(BUSY_STATUS_FOR_QUEUE)) {
     const queued = queuedStatus as TranslationV4Status;

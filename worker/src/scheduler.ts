@@ -9,6 +9,7 @@ import { resetStaleAnalysisJobs } from "./services/cosmosAnalysis.js";
 import { runAutoTranslateScan } from "./services/autoTranslate.js";
 import { cleanupStaleEmptyAutoJobs } from "./services/cleanupEmptyAutoJobs.js";
 import { isShuttingDown } from "./shutdown.js";
+import { hostname } from "os";
 import {
   getAutoTranslateIntervalMs,
   getAutoTranslateScheduleMinute,
@@ -79,6 +80,7 @@ function scheduleAutoTranslateScan(): void {
 
 export function startScheduler(): void {
   const stages = enabledStages();
+  const claimSuffix = `-${process.env.HOSTNAME ?? hostname()}-${process.pid}`;
   console.log(`[scheduler] starting translation v4 workers (stages: ${[...stages].join(",")}, poll=${POLL_INTERVAL_MS}ms)`);
 
   const runners: Record<Stage, () => Promise<void>> = {
@@ -90,7 +92,7 @@ export function startScheduler(): void {
 
   // resetStale always runs — harmless when a stage is disabled.
   safeRun("deployWake", async () => {
-    await wakeQueuedJobsAfterDeploy();
+    await wakeQueuedJobsAfterDeploy(claimSuffix);
     await completeLegacyVerifyJobs();
   });
   safeRun("resetStale", () => resetStaleJobs());

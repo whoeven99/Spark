@@ -24,6 +24,7 @@ import {
   stageSlots,
   type StagePoolKind,
 } from "../services/stagePool.js";
+import { isShuttingDown } from "../shutdown.js";
 
 /**
  * Scale-out safe: hostname + pid ensures uniqueness across containers that may
@@ -167,6 +168,7 @@ export async function runInitWorker(): Promise<void> {
 
   let claimed: TranslationV4Job | null = null;
   let poolKind: StagePoolKind | null = null;
+  let slotHeld = false;
   try {
     claimed = await claimNextInitJob();
     if (!claimed) return;
@@ -180,6 +182,7 @@ export async function runInitWorker(): Promise<void> {
       await pushHint("init", { taskId: claimed.id, shopName: claimed.shopName });
       return;
     }
+    slotHeld = true;
 
     console.log(
       `[init] processing job=${claimed.id} shop=${claimed.shopName} pool=${poolKind} (${stageSlots.formatActive("init")})`,
@@ -189,7 +192,7 @@ export async function runInitWorker(): Promise<void> {
     if (claimed) console.error(`[init] job ${claimed.id} failed`, e);
     else console.error("[init] claim failed", e);
   } finally {
-    if (poolKind) {
+    if (poolKind && slotHeld) {
       stageSlots.release("init", poolKind);
       if (stageSlots.anyCapacity("init")) {
         void runInitWorker().catch((e) =>
@@ -325,6 +328,9 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
     // parallel.  shopifyGraphql() handles proactive throttle (extensions.cost)
     // and 429 retry, so we don't need explicit back-off here.
     await pAll(job.modules, MODULE_CONCURRENCY, async (module) => {
+      if (isShuttingDown()) {
+        throw new Error("shutdown: init yielding for deploy");
+      }
       await throttledHeartbeat();
 
       console.log(`[init] fetching module=${module} job=${jobId}`);
@@ -425,6 +431,18 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
     console.log(`[init] done job=${jobId} totalItems=${totalItems}`);
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e);
+    if (isShuttingDown() || /shutdown: init yielding/i.test(errorMessage)) {
+      await updateJob(shopName, jobId, {
+        status: "INIT_QUEUED",
+        claimedBy: null,
+        errorStage: null,
+        errorMessage: null,
+        stageTimings: withStageTiming(job.stageTimings, "INIT", stageStartedAt, new Date().toISOString()),
+      });
+      await pushHint("init", { taskId: jobId, shopName });
+      console.log(`[init] job=${jobId} yielding for shutdown → INIT_QUEUED`);
+      return;
+    }
     const initRequeues = job.metrics?.initRequeues ?? 0;
     if (isRecoverableInitError(e) && initRequeues < INIT_MAX_REQUEUE) {
       const next = initRequeues + 1;
