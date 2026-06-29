@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   createJob,
-  hasActiveJobForTarget,
+  canCreateAutoJobForTarget,
   TSF_AUTO_TASK_SOURCE,
 } from "./cosmosV4.js";
 import { pushHint } from "./redisV4.js";
@@ -14,7 +14,10 @@ import {
 import { fetchShopPrimaryLocale } from "./shopifyFetch.js";
 import { AUTO_TRANSLATE_V4_MODULES } from "./moduleCatalog.js";
 import { setAutoScanLastAt } from "./redisV4.js";
-import { resolveNextClockAlignedScanAt } from "./autoScanSchedule.js";
+import {
+  getAutoTranslateIntervalMs,
+  resolveNextClockAlignedScanAt,
+} from "./autoScanSchedule.js";
 
 /** 自动任务模块（不含 EMAIL_TEMPLATE、ONLINE_STORE_THEME_LOCALE_CONTENT）。 */
 const AUTO_MODULES = [...AUTO_TRANSLATE_V4_MODULES];
@@ -27,9 +30,10 @@ function autoAiModel(): string {
 /**
  * 扫描 TSF 库中「已迁移且开启自动翻译」的店，为每个 shop+target 创建
  * 自动更新任务（isCover=false，增量、不覆盖已翻译）。
- * 本档为每店所有 auto 语言尽量建任务；同 shop+source+target 已有进行中任务则跳过。
+ * 本档为每店所有 auto 语言尽量建任务；同 shop+source+target 已有进行中任务则跳过；
+ * 若历史上有 auto 任务且距上次创建不足 AUTO_TRANSLATE_INTERVAL_MS（默认 3h）则跳过，无历史则立即创建。
  * Init 执行平滑由 initWorker 负责：同店串行、跨店自动/手动各占独立 init 池（默认各 5）。
- * 由 scheduler 整点调用。
+ * 由 scheduler 按 AUTO_TRANSLATE_INTERVAL_MS 对齐整点调用（默认每 3 小时 :00 北京时间）。
  */
 export async function runAutoTranslateScan(): Promise<void> {
   if (!hasTsfDbCredentials()) {
@@ -37,6 +41,7 @@ export async function runAutoTranslateScan(): Promise<void> {
     return;
   }
 
+  const cooldownMs = getAutoTranslateIntervalMs();
   const shops = await listAutoTranslateShops();
   if (shops.length === 0) {
     console.log("[autoTranslate] 无开启自动翻译的店");
@@ -45,7 +50,8 @@ export async function runAutoTranslateScan(): Promise<void> {
   }
 
   let created = 0;
-  let skipped = 0;
+  let skippedActive = 0;
+  let skippedCooldown = 0;
   for (const { shop, primaryLocale, targets } of shops) {
     let source = primaryLocale?.trim();
     if (!source || !Array.isArray(targets) || targets.length === 0) continue;
@@ -70,8 +76,13 @@ export async function runAutoTranslateScan(): Promise<void> {
       const target = String(rawTarget).trim();
       if (!target || target === source) continue;
 
-      if (await hasActiveJobForTarget(shop, source, target)) {
-        skipped++;
+      const decision = await canCreateAutoJobForTarget(shop, source, target, cooldownMs);
+      if (decision === "skip_active") {
+        skippedActive++;
+        continue;
+      }
+      if (decision === "skip_cooldown") {
+        skippedCooldown++;
         continue;
       }
 
@@ -106,7 +117,7 @@ export async function runAutoTranslateScan(): Promise<void> {
   }
 
   console.log(
-    `[autoTranslate] 扫描完成：店=${shops.length} 新建=${created} 跳过(已有进行中)=${skipped}`,
+    `[autoTranslate] 扫描完成：店=${shops.length} 新建=${created} 跳过(进行中)=${skippedActive} 跳过(冷却<${cooldownMs / 3600_000}h)=${skippedCooldown}`,
   );
   await setAutoScanLastAt(resolveNextClockAlignedScanAt().toISOString());
 }
