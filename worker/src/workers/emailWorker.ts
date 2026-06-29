@@ -23,7 +23,7 @@ import {
   prefersStoredToken,
   updateJob,
 } from "../services/cosmosV4.js";
-import { fetchShopEmail } from "../services/shopEmail.js";
+import { fetchShopContact } from "../services/shopEmail.js";
 import {
   sendManualTranslationSuccessEmail,
   sendAutoTranslationSuccessEmail,
@@ -81,25 +81,42 @@ function toJobSummary(job: TranslationV4Job): TranslationJobSummary {
   };
 }
 
-/** 发信前从 Shopify GraphQL 拉取最新店铺邮箱。 */
-async function resolveRecipientEmail(job: TranslationV4Job): Promise<string | null> {
+/** 去掉 .myshopify.com 后缀，得到可读店名（firstName 不可用时的兜底）。 */
+function parseShopName(shopName: string): string {
+  return shopName.replace(/\.myshopify\.com$/, "");
+}
+
+export type RecipientContact = {
+  email: string;
+  userName: string;
+};
+
+/** 发信前从 Shopify GraphQL 拉取收件人与称呼。 */
+async function resolveRecipientContact(
+  job: TranslationV4Job,
+): Promise<RecipientContact | null> {
   logDetail("resolve-recipient-start", {
     jobId: job.id,
     shop: job.shopName,
     preferStoredToken: prefersStoredToken(job),
     hasLegacyToken: Boolean(job.shopifyAccessToken?.trim()),
   });
-  const email = await fetchShopEmail(job.shopName, {
+  const contact = await fetchShopContact(job.shopName, {
     legacyToken: job.shopifyAccessToken,
     preferLegacyToken: prefersStoredToken(job),
   });
+  const email = contact.email;
+  const userName = contact.firstName?.trim() || parseShopName(job.shopName);
   logDetail("resolve-recipient-done", {
     jobId: job.id,
     shop: job.shopName,
     email: email ? maskEmail(email) : null,
+    userName,
+    firstNameSource: contact.firstName ? "shopify_api" : "shop_prefix_fallback",
     found: Boolean(email),
   });
-  return email;
+  if (!email) return null;
+  return { email, userName };
 }
 
 /** 标记 emailSent=true，使用 etag 防止并发写冲突，失败静默（不影响主流程）。 */
@@ -116,8 +133,8 @@ async function markEmailSent(job: TranslationV4Job): Promise<void> {
 async function handleManualJob(job: TranslationV4Job): Promise<void> {
   logDetail("handle-manual-start", describeJob(job));
 
-  const to = await resolveRecipientEmail(job);
-  if (!to) {
+  const recipient = await resolveRecipientContact(job);
+  if (!recipient) {
     logDetail("handle-manual-skipped", {
       reason: "no_shop_email",
       jobId: job.id,
@@ -125,6 +142,7 @@ async function handleManualJob(job: TranslationV4Job): Promise<void> {
     });
     return;
   }
+  const { email: to, userName } = recipient;
   const summary = toJobSummary(job);
   logDetail("handle-manual-summary", {
     jobId: job.id,
@@ -138,10 +156,16 @@ async function handleManualJob(job: TranslationV4Job): Promise<void> {
     "unsupported_status";
   if (job.status === "COMPLETED") {
     templateKind = "manual_success";
-    sent = await sendManualTranslationSuccessEmail(job.shopName, to, summary);
+    sent = await sendManualTranslationSuccessEmail(job.shopName, to, userName, summary);
   } else if (job.status === "PAUSED") {
     templateKind = "manual_partial";
-    sent = await sendTranslationPartialEmail(job.shopName, to, "manual translation", [summary]);
+    sent = await sendTranslationPartialEmail(
+      job.shopName,
+      to,
+      userName,
+      "manual translation",
+      [summary],
+    );
   } else {
     logDetail("handle-manual-skipped", {
       reason: "unsupported_status",
@@ -189,8 +213,8 @@ async function handleAutoJobGroup(shopName: string, jobs: TranslationV4Job[]): P
     return;
   }
 
-  const to = await resolveRecipientEmail(jobs[0]);
-  if (!to) {
+  const recipient = await resolveRecipientContact(jobs[0]);
+  if (!recipient) {
     logDetail("handle-auto-skipped", {
       reason: "no_shop_email",
       shop: shopName,
@@ -198,6 +222,7 @@ async function handleAutoJobGroup(shopName: string, jobs: TranslationV4Job[]): P
     });
     return;
   }
+  const { email: to, userName } = recipient;
   const completedJobs = jobs.filter((j) => j.status === "COMPLETED");
   const pausedJobs = jobs.filter((j) => j.status === "PAUSED");
   logDetail("handle-auto-split", {
@@ -214,6 +239,7 @@ async function handleAutoJobGroup(shopName: string, jobs: TranslationV4Job[]): P
     const sent = await sendAutoTranslationSuccessEmail(
       shopName,
       to,
+      userName,
       completedJobs.map(toJobSummary),
     );
     logDetail("handle-auto-success-send-result", {
@@ -240,6 +266,7 @@ async function handleAutoJobGroup(shopName: string, jobs: TranslationV4Job[]): P
     const sent = await sendTranslationPartialEmail(
       shopName,
       to,
+      userName,
       "auto translation",
       pausedJobs.map(toJobSummary),
     );

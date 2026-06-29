@@ -192,6 +192,7 @@ export type TranslationJobSummary = {
 export async function sendManualTranslationSuccessEmail(
   shopName: string,
   to: string,
+  userName: string,
   job: TranslationJobSummary,
 ): Promise<boolean> {
   const shortName = parseShopName(shopName);
@@ -200,6 +201,7 @@ export async function sendManualTranslationSuccessEmail(
   logDetail("send-manual-success-start", {
     shopName,
     shortName,
+    userName,
     to: maskEmail(to),
     target: job.target,
     usedTokens: job.usedTokens,
@@ -212,7 +214,7 @@ export async function sendManualTranslationSuccessEmail(
     TEMPLATE_MANUAL_SUCCESS,
     SUBJECT_MANUAL_SUCCESS,
     {
-      user: shortName,
+      user: userName,
       shop_name: shortName,
       language: job.target,
       time: `${job.elapsedMinutes} minutes`,
@@ -231,6 +233,7 @@ export async function sendManualTranslationSuccessEmail(
 export async function sendAutoTranslationSuccessEmail(
   shopName: string,
   to: string,
+  userName: string,
   jobs: TranslationJobSummary[],
 ): Promise<boolean> {
   const shortName = parseShopName(shopName);
@@ -238,6 +241,7 @@ export async function sendAutoTranslationSuccessEmail(
   logDetail("send-auto-success-start", {
     shopName,
     shortName,
+    userName,
     to: maskEmail(to),
     jobCount: jobs.length,
     targets: jobs.map((j) => j.target),
@@ -273,7 +277,7 @@ export async function sendAutoTranslationSuccessEmail(
     TEMPLATE_AUTO_SUCCESS,
     SUBJECT_AUTO_SUCCESS,
     {
-      user: shortName,
+      user: userName,
       shop_name: shortName,
       html_data: htmlParts,
     },
@@ -289,6 +293,7 @@ export async function sendAutoTranslationSuccessEmail(
 export async function sendTranslationPartialEmail(
   shopName: string,
   to: string,
+  userName: string,
   translateType: "auto translation" | "manual translation",
   jobs: TranslationJobSummary[],
 ): Promise<boolean> {
@@ -297,6 +302,7 @@ export async function sendTranslationPartialEmail(
   logDetail("send-partial-start", {
     shopName,
     shortName,
+    userName,
     to: maskEmail(to),
     translateType,
     jobCount: jobs.length,
@@ -331,7 +337,7 @@ export async function sendTranslationPartialEmail(
     TEMPLATE_PARTIAL,
     SUBJECT_PARTIAL,
     {
-      username: shortName,
+      username: userName,
       translation: translateType,
       admin: shortName,
       language_progress_rows: rowsHtml,

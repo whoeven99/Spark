@@ -1,5 +1,6 @@
 import { getShopAccessToken, invalidateShopAccessTokenCache } from "./shopAccessToken.js";
 import { buildShopifyAdminGraphqlUrl } from "./shopifyAdminApiVersion.js";
+import { getOfflineAccessTokenFromTsf } from "./tsfDb.js";
 import { maskEmail } from "./workerEmail.js";
 
 const LOG = "[shopEmail]";
@@ -9,17 +10,31 @@ function logDetail(phase: string, payload: Record<string, unknown>): void {
   console.info(`${LOG} ${phase} ${JSON.stringify(payload)}`);
 }
 
-const SHOP_EMAIL_QUERY = `#graphql
+const SHOP_CONTACT_QUERY = `#graphql
   query ShopContactEmail {
     shop {
       email
       contactEmail
+      shopOwnerName
     }
   }
 `;
 
-type CacheEntry = { email: string | null; cachedAt: number };
-const emailCache = new Map<string, CacheEntry>();
+export type ShopContact = {
+  email: string | null;
+  firstName: string | null;
+};
+
+type CacheEntry = ShopContact & { cachedAt: number };
+const contactCache = new Map<string, CacheEntry>();
+
+/** 从 shopOwnerName 取空格前部分作为称呼（如 "aviva xu" → "aviva"）。 */
+export function parseFirstNameFromShopOwnerName(shopOwnerName: string): string | null {
+  const trimmed = shopOwnerName.trim();
+  if (!trimmed) return null;
+  const spaceIndex = trimmed.indexOf(" ");
+  return spaceIndex > 0 ? trimmed.slice(0, spaceIndex) : trimmed;
+}
 
 export type FetchShopEmailOptions = {
   legacyToken?: string;
@@ -45,32 +60,54 @@ async function shopifyGraphqlOnce(
       "Content-Type": "application/json",
       "X-Shopify-Access-Token": accessToken,
     },
-    body: JSON.stringify({ query: SHOP_EMAIL_QUERY }),
+    body: JSON.stringify({ query: SHOP_CONTACT_QUERY }),
   });
 }
 
+function pickFirstNameFromShop(shop: {
+  shopOwnerName?: string | null;
+} | null | undefined): string | null {
+  const ownerName = shop?.shopOwnerName?.trim();
+  if (!ownerName) return null;
+  return parseFirstNameFromShopOwnerName(ownerName);
+}
+
+async function resolveAccessToken(
+  shop: string,
+  options: FetchShopEmailOptions,
+): Promise<string> {
+  if (options.preferLegacyToken) {
+    const tsfToken = await getOfflineAccessTokenFromTsf(shop);
+    if (tsfToken) return tsfToken;
+    const legacy = options.legacyToken?.trim();
+    if (legacy) return legacy;
+  }
+  return getShopAccessToken(shop, options.legacyToken, options.preferLegacyToken ?? false);
+}
+
 /**
- * 从 Shopify Admin GraphQL 拉取店铺最新联系邮箱（优先 shop.email，其次 contactEmail）。
- * 对齐主应用 fetchShopBasicInfo / api.support resolveShopEmail 口径。
+ * 从 Shopify Admin GraphQL 拉取店铺联系邮箱与店主称呼。
+ * 称呼取自 shop.shopOwnerName 空格前部分。
  */
-export async function fetchShopEmail(
+export async function fetchShopContact(
   shop: string,
   options: FetchShopEmailOptions = {},
-): Promise<string | null> {
+): Promise<ShopContact> {
   const normalizedShop = shop.trim();
   if (!normalizedShop) {
     logDetail("fetch-skipped", { reason: "empty_shop" });
-    return null;
+    return { email: null, firstName: null };
   }
 
-  const cached = emailCache.get(normalizedShop);
+  const cached = contactCache.get(normalizedShop);
   if (cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
     logDetail("cache-hit", {
       shop: normalizedShop,
       email: cached.email ? maskEmail(cached.email) : null,
+      firstName: cached.firstName,
       cacheAgeMs: Date.now() - cached.cachedAt,
     });
-    return cached.email;
+    return { email: cached.email, firstName: cached.firstName };
   }
 
   logDetail("fetch-start", {
@@ -79,18 +116,14 @@ export async function fetchShopEmail(
     hasLegacyToken: Boolean(options.legacyToken?.trim()),
   });
 
-  const legacyToken = options.legacyToken?.trim() ?? "";
   let email: string | null = null;
+  let firstName: string | null = null;
   const startedAt = Date.now();
 
   try {
     let tokenRetried = false;
     while (true) {
-      const accessToken = await getShopAccessToken(
-        normalizedShop,
-        legacyToken,
-        options.preferLegacyToken ?? false,
-      );
+      const accessToken = await resolveAccessToken(normalizedShop, options);
       logDetail("graphql-request", {
         shop: normalizedShop,
         tokenRetried,
@@ -115,7 +148,13 @@ export async function fetchShopEmail(
       }
 
       const json = (await resp.json()) as {
-        data?: { shop?: { email?: string | null; contactEmail?: string | null } };
+        data?: {
+          shop?: {
+            email?: string | null;
+            contactEmail?: string | null;
+            shopOwnerName?: string | null;
+          };
+        };
         errors?: Array<{ message?: string }>;
       };
 
@@ -131,12 +170,15 @@ export async function fetchShopEmail(
       const shopEmail = json.data?.shop?.email?.trim() || null;
       const contactEmail = json.data?.shop?.contactEmail?.trim() || null;
       email = pickShopEmail(json.data?.shop);
+      firstName = pickFirstNameFromShop(json.data?.shop);
       logDetail("graphql-success", {
         shop: normalizedShop,
         hasShopEmail: Boolean(shopEmail),
         hasContactEmail: Boolean(contactEmail),
         picked: email ? maskEmail(email) : null,
         pickedFrom: shopEmail ? "shop.email" : contactEmail ? "shop.contactEmail" : "none",
+        shopOwnerName: json.data?.shop?.shopOwnerName?.trim() || null,
+        firstName,
         elapsedMs: Date.now() - startedAt,
       });
       break;
@@ -150,16 +192,29 @@ export async function fetchShopEmail(
     console.warn(`${LOG} fetch failed shop=${normalizedShop}`, e);
   }
 
-  emailCache.set(normalizedShop, { email, cachedAt: Date.now() });
+  contactCache.set(normalizedShop, { email, firstName, cachedAt: Date.now() });
   logDetail("fetch-done", {
     shop: normalizedShop,
     email: email ? maskEmail(email) : null,
+    firstName,
     cached: true,
   });
-  return email;
+  return { email, firstName };
+}
+
+/**
+ * 从 Shopify Admin GraphQL 拉取店铺最新联系邮箱（优先 shop.email，其次 contactEmail）。
+ * 对齐主应用 fetchShopBasicInfo / api.support resolveShopEmail 口径。
+ */
+export async function fetchShopEmail(
+  shop: string,
+  options: FetchShopEmailOptions = {},
+): Promise<string | null> {
+  const contact = await fetchShopContact(shop, options);
+  return contact.email;
 }
 
 /** 仅测试用 */
 export function resetShopEmailCacheForTests(): void {
-  emailCache.clear();
+  contactCache.clear();
 }
