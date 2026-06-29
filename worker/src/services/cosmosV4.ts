@@ -685,6 +685,57 @@ export async function findJobsNeedingEmail(limit = 20): Promise<TranslationV4Job
   }
 }
 
+/** 有待发邮件的自动翻译店（跨分区 DISTINCT shopName）。 */
+export async function findShopsWithPendingAutoEmail(): Promise<string[]> {
+  try {
+    const { resources } = await getContainer()
+      .items.query<string>({
+        query: `
+          SELECT DISTINCT VALUE c.shopName FROM c
+          WHERE c.taskSource = @autoSource
+            AND (c.status = 'COMPLETED' OR c.status = 'PAUSED')
+            AND (NOT IS_DEFINED(c.emailSent) OR c.emailSent != true)
+        `,
+        parameters: [{ name: "@autoSource", value: TSF_AUTO_TASK_SOURCE }],
+      })
+      .fetchAll();
+    return resources ?? [];
+  } catch (err) {
+    console.error("[cosmosV4] findShopsWithPendingAutoEmail failed:", err);
+    return [];
+  }
+}
+
+/**
+ * 某店全部待发邮件的自动翻译任务（对齐 Java selectByShopNameAndType + notEmail）。
+ * 发信前应用此查询聚合，避免 findJobsNeedingEmail 全局 limit 导致同店拆多封。
+ */
+export async function findAutoJobsNeedingEmailForShop(
+  shopName: string,
+): Promise<TranslationV4Job[]> {
+  try {
+    const { resources } = await getContainer()
+      .items.query<TranslationV4Job>(
+        {
+          query: `
+            SELECT * FROM c
+            WHERE c.taskSource = @autoSource
+              AND (c.status = 'COMPLETED' OR c.status = 'PAUSED')
+              AND (NOT IS_DEFINED(c.emailSent) OR c.emailSent != true)
+            ORDER BY c.updatedAt ASC
+          `,
+          parameters: [{ name: "@autoSource", value: TSF_AUTO_TASK_SOURCE }],
+        },
+        { partitionKey: shopName },
+      )
+      .fetchAll();
+    return resources ?? [];
+  } catch (err) {
+    console.error("[cosmosV4] findAutoJobsNeedingEmailForShop failed:", err);
+    return [];
+  }
+}
+
 /** 检查某店是否仍有进行中的自动翻译任务（用于判断自动任务是否全部完成再汇总发邮件）。 */
 export async function hasActiveAutoJobsForShop(shopName: string): Promise<boolean> {
   const activeStatuses: TranslationV4Status[] = [
