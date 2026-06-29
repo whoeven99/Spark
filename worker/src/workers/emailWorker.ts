@@ -5,8 +5,9 @@
  *  1. 找出 COMPLETED / PAUSED、未发邮件的任务。
  *     收件人邮箱在发信时通过 Shopify GraphQL 实时查询（不用 Session 快照）。
  *  2. 手动任务（taskSource ≠ TsFrontend-Auto）：每个任务独立发一封邮件。
- *  3. 自动任务（taskSource = TsFrontend-Auto）：按店铺分组，等同店内所有进行中自动任务结束
- *     后再汇总发一封邮件（对齐 Spring TranslateTask.sendEmail 逻辑）。
+ *  3. 自动任务（taskSource = TsFrontend-Auto）：等同店内所有进行中自动任务结束后，
+ *     查询该店全部待发 auto 任务并汇总发一封（对齐 Spring TranslateTask.sendEmail）。
+ *     usedTokens=0 的语言不出现在邮件正文，但仍 mark emailSent。
  *  4. 发送成功后将 emailSent=true 写回 Cosmos，防止重发。
  *
  * 任务类型对应模板（对齐 Spring TencentEmailService）：
@@ -17,7 +18,9 @@
 
 import type { TranslationV4Job } from "../services/cosmosV4.js";
 import {
+  findAutoJobsNeedingEmailForShop,
   findJobsNeedingEmail,
+  findShopsWithPendingAutoEmail,
   hasActiveAutoJobsForShop,
   isAutoTranslationJob,
   prefersStoredToken,
@@ -194,24 +197,28 @@ async function handleManualJob(job: TranslationV4Job): Promise<void> {
   }
 }
 
-/** 处理同一店铺的一批自动翻译任务的邮件通知（汇总发送）。 */
-async function handleAutoJobGroup(shopName: string, jobs: TranslationV4Job[]): Promise<void> {
-  logDetail("handle-auto-start", {
-    shop: shopName,
-    jobCount: jobs.length,
-    jobs: jobs.map(describeJob),
-  });
-
+/** 处理同一店铺的自动翻译邮件：整店任务都终态后汇总发一封。 */
+async function handleAutoJobGroup(shopName: string): Promise<void> {
   // 等所有进行中的自动任务结束后再发（对齐 Java 按店汇总逻辑）
   const hasActive = await hasActiveAutoJobsForShop(shopName);
   if (hasActive) {
     logDetail("handle-auto-skipped", {
       reason: "active_auto_jobs_still_running",
       shop: shopName,
-      pendingJobIds: jobs.map((j) => j.id),
     });
     return;
   }
+
+  const jobs = await findAutoJobsNeedingEmailForShop(shopName);
+  if (jobs.length === 0) {
+    return;
+  }
+
+  logDetail("handle-auto-start", {
+    shop: shopName,
+    jobCount: jobs.length,
+    jobs: jobs.map(describeJob),
+  });
 
   const recipient = await resolveRecipientContact(jobs[0]);
   if (!recipient) {
@@ -292,33 +299,21 @@ async function handleAutoJobGroup(shopName: string, jobs: TranslationV4Job[]): P
 
 export async function runEmailWorker(): Promise<void> {
   const startedAt = Date.now();
-  const jobs = await findJobsNeedingEmail(30);
-  if (jobs.length === 0) {
+  const [manualCandidates, autoShops] = await Promise.all([
+    findJobsNeedingEmail(30),
+    findShopsWithPendingAutoEmail(),
+  ]);
+  const manualJobs = manualCandidates.filter((job) => !isAutoTranslationJob(job));
+
+  if (manualJobs.length === 0 && autoShops.length === 0) {
     return;
   }
 
   logDetail("run-start", {
-    jobCount: jobs.length,
-    jobs: jobs.map(describeJob),
-  });
-
-  const manualJobs: TranslationV4Job[] = [];
-  const autoByShop = new Map<string, TranslationV4Job[]>();
-
-  for (const job of jobs) {
-    if (isAutoTranslationJob(job)) {
-      const group = autoByShop.get(job.shopName) ?? [];
-      group.push(job);
-      autoByShop.set(job.shopName, group);
-    } else {
-      manualJobs.push(job);
-    }
-  }
-
-  logDetail("run-grouped", {
     manualCount: manualJobs.length,
-    autoShopCount: autoByShop.size,
-    autoShops: [...autoByShop.keys()],
+    autoShopCount: autoShops.length,
+    autoShops,
+    manualJobs: manualJobs.map(describeJob),
   });
 
   // 手动任务逐个处理
@@ -333,12 +328,11 @@ export async function runEmailWorker(): Promise<void> {
     });
   }
 
-  // 自动任务按店汇总处理
-  for (const [shopName, shopJobs] of autoByShop) {
-    await handleAutoJobGroup(shopName, shopJobs).catch((e) => {
+  // 自动任务：按店拉全量待发任务后汇总（见 handleAutoJobGroup）
+  for (const shopName of autoShops) {
+    await handleAutoJobGroup(shopName).catch((e) => {
       logDetail("handle-auto-error", {
         shop: shopName,
-        jobIds: shopJobs.map((j) => j.id),
         errorMessage: e instanceof Error ? e.message : String(e),
       });
       console.error(`${LOG} handleAutoJobGroup error shop=${shopName}`, e);
@@ -347,7 +341,7 @@ export async function runEmailWorker(): Promise<void> {
 
   logDetail("run-done", {
     manualCount: manualJobs.length,
-    autoShopCount: autoByShop.size,
+    autoShopCount: autoShops.length,
     elapsedMs: Date.now() - startedAt,
   });
 }
