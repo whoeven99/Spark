@@ -308,4 +308,46 @@ describe("writeback translation verify helpers", () => {
     expect(calls).toBe(2);
     expect(ids).toEqual([]);
   });
+
+  it("retries HTTP 503 before failing", async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        calls++;
+        if (calls <= 2) {
+          return {
+            ok: false,
+            status: 503,
+            headers: new Headers(),
+            text: async () => "Service Unavailable",
+          } as Response;
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            data: {
+              articles: {
+                edges: [],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          }),
+        };
+      }),
+    );
+
+    const promise = fetchResourceIdsByQuery(
+      "demo.myshopify.com",
+      "token",
+      "ARTICLE",
+      5,
+    );
+    await vi.runAllTimersAsync();
+    const ids = await promise;
+    expect(calls).toBe(3);
+    expect(ids).toEqual([]);
+    vi.useRealTimers();
+  });
 });

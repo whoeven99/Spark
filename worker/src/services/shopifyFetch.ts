@@ -236,6 +236,13 @@ const MODULE_ID_QUERY: Record<string, { gql: string; connectionKey: string }> = 
   COLLECTION: { gql: COLLECTIONS_IDS_QUERY, connectionKey: "collections" },
 };
 
+/** Transient Shopify gateway errors — retry with short back-off before failing. */
+const SHOPIFY_5XX_RETRY_STATUSES = new Set([502, 503, 504]);
+const SHOPIFY_5XX_MAX_RETRIES = Math.max(
+  0,
+  Number(process.env.SHOPIFY_5XX_MAX_RETRIES?.trim()) || 2,
+);
+
 /**
  * Execute a Shopify Admin GraphQL request.
  *
@@ -243,6 +250,7 @@ const MODULE_ID_QUERY: Record<string, { gql: string; connectionKey: string }> = 
  *  - 429 retry: respects the Retry-After header, up to MAX_RETRIES attempts.
  *    Multiple concurrent workers for the same shop share the same rate-limit
  *    bucket; back-off prevents thundering-herd amplification.
+ *  - 502/503/504 retry: short exponential back-off (default 2 attempts).
  *  - Proactive throttle: reads extensions.cost.throttleStatus from every
  *    response and inserts a calculated sleep whenever the remaining bucket
  *    points drop below SHOPIFY_BUCKET_FLOOR.  This keeps parallel module
@@ -290,6 +298,8 @@ export function resetShopifyCallStats(shopDomain: string): void {
 
 type ShopifyGraphqlOpts = {
   retries?: number;
+  /** Remaining 502/503/504 retries for this request chain. */
+  retries5xx?: number;
   /** 401 后已从 Session 刷新 token 并重试过一次 */
   tokenRetried?: boolean;
   /** 外部来源任务（如 TsFrontend）：直接用传入 token，跳过 Turso Session 查询 */
@@ -304,6 +314,7 @@ async function shopifyGraphql(
   opts: ShopifyGraphqlOpts = {},
 ): Promise<unknown> {
   const retries = opts.retries ?? 4;
+  const retries5xx = opts.retries5xx ?? SHOPIFY_5XX_MAX_RETRIES;
   const accessToken = await getShopAccessToken(
     shopDomain,
     legacyAccessToken,
@@ -351,6 +362,27 @@ async function shopifyGraphql(
     throw new Error(
       `Shopify GraphQL HTTP 401: ${body} (请重新打开 App 完成授权)`,
     );
+  }
+
+  // ── 502/503/504: transient Shopify gateway errors ─────────────────────────
+  if (SHOPIFY_5XX_RETRY_STATUSES.has(resp.status)) {
+    const body = await resp.text();
+    if (retries5xx <= 0) {
+      throw new Error(`Shopify GraphQL HTTP ${resp.status}: ${body}`);
+    }
+    const retryAfterSec = Number(resp.headers.get("Retry-After") ?? "0");
+    const waitMs =
+      retryAfterSec > 0
+        ? Math.max(retryAfterSec * 1000, 1_000)
+        : Math.min(8_000, 2_000 * (SHOPIFY_5XX_MAX_RETRIES - retries5xx + 1));
+    console.warn(
+      `[shopifyFetch] ${resp.status} on ${shopDomain} — waiting ${waitMs}ms (5xx retries left: ${retries5xx - 1})`,
+    );
+    await new Promise((r) => setTimeout(r, waitMs));
+    return shopifyGraphql(shopDomain, legacyAccessToken, query, variables, {
+      ...opts,
+      retries5xx: retries5xx - 1,
+    });
   }
 
   if (!resp.ok) {
