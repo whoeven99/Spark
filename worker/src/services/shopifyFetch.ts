@@ -66,6 +66,14 @@ export type FetchTranslatableOptions = {
   onPage?: () => Promise<void>;
   /** 外部来源任务（如 TsFrontend）：直接用 job token，跳过 Turso Session 查询 */
   preferLegacyToken?: boolean;
+  /**
+   * Called once per *scanned* resource with the raw byte size of all its
+   * translatable content — i.e. the full data Shopify returns, BEFORE the
+   * isCover/isHandle filter trims it down to the to-translate subset. Used to
+   * measure the shop's true data volume (store-size tier), independent of how
+   * much actually needs translating this run. See worker shopSizeProfile.ts.
+   */
+  onScannedResource?: (rawBytes: number) => void;
 };
 
 type TranslatableNode = {
@@ -470,6 +478,17 @@ function mapNodeToResource(
   options: FetchTranslatableOptions,
 ): TranslatableResource | null {
   const translations = node.translations ?? [];
+
+  // Measure the FULL translatable content Shopify returned for this resource,
+  // before any filtering — this is the shop's real data volume.
+  if (options.onScannedResource) {
+    let rawBytes = 0;
+    for (const f of node.translatableContent ?? []) {
+      if (typeof f.value === "string") rawBytes += Buffer.byteLength(f.value, "utf8");
+    }
+    options.onScannedResource(rawBytes);
+  }
+
   const fields = node.translatableContent
     .filter((f) =>
       shouldIncludeFieldV2(

@@ -265,7 +265,10 @@ export async function hasActiveJobForTarget(
   }
 }
 
-/** 同 shop 最近一条自动任务创建时间（任意 target；无历史则 null）。 */
+/**
+ * 同 shop 最近一条「计入冷却」的自动任务创建时间（任意 target；无历史则 null）。
+ * FAILED 任务不计入：失败后下一档扫描可补建，不必等满冷却期。
+ */
 export async function getLatestAutoJobCreatedAtForShop(
   shopName: string,
 ): Promise<Date | null> {
@@ -274,10 +277,11 @@ export async function getLatestAutoJobCreatedAtForShop(
       .items.query<{ createdAt: string }>(
         {
           query:
-            "SELECT TOP 1 c.createdAt FROM c WHERE c.shopName = @shopName AND c.taskSource = @src ORDER BY c.createdAt DESC",
+            "SELECT TOP 1 c.createdAt FROM c WHERE c.shopName = @shopName AND c.taskSource = @src AND c.status != @failed ORDER BY c.createdAt DESC",
           parameters: [
             { name: "@shopName", value: shopName },
             { name: "@src", value: TSF_AUTO_TASK_SOURCE },
+            { name: "@failed", value: "FAILED" },
           ],
         },
         { partitionKey: shopName },
