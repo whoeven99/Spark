@@ -330,9 +330,12 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
   // points inside pAll callbacks — safe without a mutex.
   let totalItems = 0;
   let totalUnits = 0;
-  // Byte size of the translatable source text — the shop "data volume" used to
-  // tier the store (超大/大/中等/小) in the admin. See shopSizeProfile.ts.
-  let totalBytes = 0;
+  // Shop "data volume" used to tier the store (超大/大/中等/小) in the admin:
+  // the raw byte size of ALL translatable content Shopify returns during the
+  // scan (before isCover/isHandle filtering), so it reflects the real shop size
+  // regardless of how much needs translating this run. See shopSizeProfile.ts.
+  let scannedBytes = 0;
+  let scannedResources = 0;
 
   let lastHeartbeatAt = 0;
   const throttledHeartbeat = async () => {
@@ -371,6 +374,12 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
           isHandle: job.isHandle,
           onPage: throttledHeartbeat,
           preferLegacyToken: prefersStoredToken(job),
+          // Raw scanned data volume (pre-filter) — accumulated across all
+          // modules. Synchronous += in JS's single-threaded loop is safe.
+          onScannedResource: (rawBytes) => {
+            scannedBytes += rawBytes;
+            scannedResources += 1;
+          },
         },
       );
 
@@ -393,13 +402,9 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
       // Compute per-module stats
       const moduleItemCount = chunks.reduce((sum, c) => sum + c.length, 0);
       let moduleUnits = 0;
-      let moduleBytes = 0;
       for (const chunk of chunks) {
         for (const r of chunk) {
-          for (const f of r.fields) {
-            moduleUnits += countFieldUnits(f.key, f.value, f.shopifyType);
-            if (typeof f.value === "string") moduleBytes += Buffer.byteLength(f.value, "utf8");
-          }
+          for (const f of r.fields) moduleUnits += countFieldUnits(f.key, f.value, f.shopifyType);
         }
       }
 
@@ -409,7 +414,6 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
       manifest[module] = { totalItems: moduleItemCount, chunks: chunks.length };
       totalItems += moduleItemCount;
       totalUnits += moduleUnits;
-      totalBytes += moduleBytes;
 
       await setProgress(jobId, { initDone: totalItems, currentModule: module });
       await throttledHeartbeat();
@@ -423,6 +427,18 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
       target: job.target,
       modules: manifest,
       createdAt: new Date().toISOString(),
+    });
+
+    // Record the shop's data volume for admin store-size tiering (best-effort).
+    // Uses the raw scanned volume (full Shopify data), not the to-translate
+    // subset — so it's recorded even when there's nothing new to translate
+    // (e.g. auto jobs where isCover=false but Shopify still returns everything).
+    void recordShopSizeFromInit({
+      shopName,
+      target: job.target,
+      bytes: scannedBytes,
+      items: scannedResources,
+      units: totalUnits,
     });
 
     if (totalItems === 0) {
@@ -452,15 +468,6 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
       initTotal: totalItems,
       initDone: totalItems,
       translateUnitTotal: totalUnits,
-    });
-
-    // Record the shop's data volume for admin store-size tiering (best-effort).
-    void recordShopSizeFromInit({
-      shopName,
-      target: job.target,
-      bytes: totalBytes,
-      items: totalItems,
-      units: totalUnits,
     });
 
     await pushHint("translate", { taskId: jobId, shopName });

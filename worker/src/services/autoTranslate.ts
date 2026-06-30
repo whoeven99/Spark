@@ -34,11 +34,11 @@ function autoAiModel(): string {
  * 自动更新任务（isCover=false，增量、不覆盖已翻译）。
  *
  * - 全局 scheduler 每小时扫描一次（AUTO_TRANSLATE_INTERVAL_MS，默认 1h）。
- * - 单店批次冷却 AUTO_TRANSLATE_SHOP_COOLDOWN_MS（默认 3h）：距该店上次任意 auto 任务
- *   创建不足 3h 则整店跳过；无历史则本档立即为该店所有目标语言建任务。
+ * - 单店批次冷却 AUTO_TRANSLATE_SHOP_COOLDOWN_MS（默认 3h）：距该店上次非 FAILED 的 auto
+ *   任务创建不足冷却期则整店跳过；FAILED 不计入冷却，下一档扫描可补建。
  * - 各 shop+target 若已有进行中任务则单独跳过。
  *
- * 每小时扫描 + 按店 3h 冷却，各店首次/上次建任务时刻错开，负载自然打散。
+ * 每小时扫描 + 按店冷却，各店首次/上次成功批次时刻错开，负载自然打散。
  */
 export async function runAutoTranslateScan(): Promise<void> {
   if (!hasTsfDbCredentials()) {
