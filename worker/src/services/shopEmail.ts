@@ -28,12 +28,12 @@ export type ShopContact = {
 type CacheEntry = ShopContact & { cachedAt: number };
 const contactCache = new Map<string, CacheEntry>();
 
-/** 从 shopOwnerName 取空格前部分作为称呼（如 "aviva xu" → "aviva"）。 */
+/** 从 shopOwnerName 取最后一个空格前部分作为称呼（如 "John Michael Smith" → "John Michael"）。 */
 export function parseFirstNameFromShopOwnerName(shopOwnerName: string): string | null {
   const trimmed = shopOwnerName.trim();
   if (!trimmed) return null;
-  const spaceIndex = trimmed.indexOf(" ");
-  return spaceIndex > 0 ? trimmed.slice(0, spaceIndex) : trimmed;
+  const lastSpaceIndex = trimmed.lastIndexOf(" ");
+  return lastSpaceIndex > 0 ? trimmed.slice(0, lastSpaceIndex) : trimmed;
 }
 
 export type FetchShopEmailOptions = {
@@ -87,7 +87,7 @@ async function resolveAccessToken(
 
 /**
  * 从 Shopify Admin GraphQL 拉取店铺联系邮箱与店主称呼。
- * 称呼取自 shop.shopOwnerName 空格前部分。
+ * 称呼取自 shop.shopOwnerName 最后一个空格前部分。
  */
 export async function fetchShopContact(
   shop: string,
