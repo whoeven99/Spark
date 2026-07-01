@@ -17,6 +17,7 @@ function isJsonContainer(value: string): boolean {
 const METAFIELD_LITERAL_BLOCKLIST = new Set([
   "CC_CC-PT",
   "_none",
+  "subscribe_newsletter",
 ]);
 
 /**

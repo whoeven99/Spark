@@ -27,16 +27,21 @@ const RULE_MODE_PATH = "path";
 
 const HTML_FIELD_NAMES = new Set(["body_html", "content_html", "html"]);
 
-/** Spring JsonTranslateStrategyService.buildDefaultRules when Redis config is empty. */
+/**
+ * Hardcoded to match V2 METAFIELD_JSON_TRANSLATE_RULE.jsonExtractRules.
+ * Covers Shopify rich-text nodes (text/paragraph/list), virtual_options,
+ * reviews (Judge.me / Okendo), and photo_gallery (custom apps).
+ */
 const DEFAULT_JSON_EXTRACT_RULES: JsonExtractRule[] = [
-  {
-    mode: "typeFieldMatch",
-    typeField: "type",
-    typeValue: "text",
-    translateField: "value",
-  },
+  { mode: "typeFieldMatch", typeField: "type", typeValue: "text",      translateField: "value" },
+  { mode: "typeFieldMatch", typeField: "type", typeValue: "paragraph", translateField: "value" },
+  { mode: "typeFieldMatch", typeField: "type", typeValue: "list",      translateField: "value" },
   { mode: "path", path: "virtual_options[*].title" },
   { mode: "path", path: "virtual_options[*].values[*].key" },
+  { mode: "path", path: "reviews[*].title" },
+  { mode: "path", path: "reviews[*].body" },
+  { mode: "path", path: "photo_gallery[*].title" },
+  { mode: "path", path: "photo_gallery[*].body_html" },
 ];
 
 function isHtmlFieldName(fieldName: string): boolean {
