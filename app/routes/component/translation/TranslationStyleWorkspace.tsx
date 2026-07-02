@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import type { GlossaryTerm } from "../../../server/translation/glossary.server";
-import type { ShopProfile } from "../../../server/translation/shopAnalysis.server";
-import { ShopAnalysisPanel } from "./ShopAnalysisPanel";
+import type { ShopProfile } from "../../../server/translation/shopProfile.server";
 import { TranslationGlossaryPanel } from "./TranslationGlossaryPanel";
 import {
   PageSurface,
@@ -18,7 +17,6 @@ type TranslationStyleWorkspaceProps = {
 };
 
 type ProfileListField = "highFrequencyTerms" | "styleNotes";
-type SuggestionTarget = "profile" | "glossary";
 type WorkspacePage = "overview" | "profile" | "glossary";
 
 function buildEmptyProfile(sourceLanguage: string): ShopProfile {
@@ -159,7 +157,6 @@ export function TranslationStyleWorkspace({
   const [glossaryError, setGlossaryError] = useState<string | null>(null);
   const [glossaryReloadToken, setGlossaryReloadToken] = useState(0);
   const [activeListEditor, setActiveListEditor] = useState<ProfileListField | null>(null);
-  const [aiSuggestionTarget, setAiSuggestionTarget] = useState<SuggestionTarget | null>(null);
 
   const loadLiveProfile = useCallback(async () => {
     setLoadingProfile(true);
@@ -305,17 +302,6 @@ export function TranslationStyleWorkspace({
     }
   };
 
-  const openAiSuggestion = (target: SuggestionTarget) => {
-    setAiSuggestionTarget(target);
-  };
-
-  const handleAiSuggestionApplied = () => {
-    setProfileDirty(false);
-    void loadLiveProfile();
-    void loadGlossary();
-    setGlossaryReloadToken((prev) => prev + 1);
-  };
-
   const handleOpenPage = (page: WorkspacePage) => {
     setActivePage(page);
   };
@@ -458,12 +444,9 @@ export function TranslationStyleWorkspace({
                   </button>
                   <h3 style={surfaceTitleStyle}>编辑商店档案</h3>
                   <p style={surfaceSubtitleStyle}>
-                    在这里维护行业、语气风格、目标受众和翻译指令。右上角可直接使用 AI 生成建议，再按业务需要微调后保存。
+                    在这里维护行业、语气风格、目标受众和翻译指令，保存后会用于后续翻译任务。
                   </p>
                 </div>
-                <button type="button" style={secondaryActionButtonStyle} onClick={() => openAiSuggestion("profile")}>
-                  生成 AI 建议
-                </button>
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
@@ -603,7 +586,6 @@ export function TranslationStyleWorkspace({
             <TranslationGlossaryPanel
               locationSearch={locationSearch}
               reloadToken={glossaryReloadToken}
-              onRequestAiSuggestion={() => openAiSuggestion("glossary")}
               mode="full-editor"
               onBack={handleBackToOverview}
             />
@@ -633,44 +615,6 @@ export function TranslationStyleWorkspace({
           onRemoveItem={(index) => handleProfileListItemRemove("styleNotes", index)}
           onClose={() => setActiveListEditor(null)}
         />
-      ) : null}
-
-      {aiSuggestionTarget ? (
-        <div style={overlayBackdropStyle}>
-          <div style={suggestionOverlayPanelStyle}>
-            <div style={overlayHeaderStyle}>
-              {aiSuggestionTarget === "profile" ? <div /> : (
-                <div>
-                  <h4 style={overlayTitleStyle}>术语表 AI 建议</h4>
-                  <div style={overlaySubtitleStyle}>
-                    这里会生成与术语表相关的填充建议；确认生效后会同步回当前页面。
-                  </div>
-                </div>
-              )}
-              <button
-                type="button"
-                style={overlayCloseButtonStyle}
-                onClick={() => {
-                  setAiSuggestionTarget(null);
-                  handleAiSuggestionApplied();
-                }}
-              >
-                关闭
-              </button>
-            </div>
-            <ShopAnalysisPanel
-              locationSearch={locationSearch}
-              defaultSourceLanguage={sourceLocale}
-              target={aiSuggestionTarget}
-              onApplied={() => {
-                handleAiSuggestionApplied();
-                if (aiSuggestionTarget === "profile") {
-                  setAiSuggestionTarget(null);
-                }
-              }}
-            />
-          </div>
-        </div>
       ) : null}
     </>
   );

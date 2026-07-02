@@ -105,20 +105,11 @@ export function ensureWorkerEnv(): void {
       process.env.COSMOS_TRANSLATION_V4_JOBS_CONTAINER,
       "translation_v4_jobs",
     ],
-    [
-      "COSMOS_SHOP_ANALYSIS_CONTAINER",
-      process.env.COSMOS_SHOP_ANALYSIS_CONTAINER,
-      "shop_analysis_jobs",
-    ],
   ]);
   const workerStages = process.env.WORKER_STAGES?.trim();
-  const stagesOk = !workerStages || workerStages.split(",").map((s) => s.trim().toLowerCase()).includes("analysis");
-  logEnvCheck("Worker stages", stagesOk, [
-    ["WORKER_STAGES", workerStages, "init,translate,writeback,verify,analysis (default all)"],
+  logEnvCheck("Worker stages", true, [
+    ["WORKER_STAGES", workerStages, "init,translate,writeback (default all)"],
   ]);
-  if (workerStages && !stagesOk) {
-    console.warn("[worker:env] ⚠️ WORKER_STAGES 未包含 analysis，商店扫描分析任务不会被 Worker 消费");
-  }
   const redisUrl = process.env.REDIS_URL?.trim();
   const redisHost =
     process.env.REDIS_HOSTNAME?.trim() ||

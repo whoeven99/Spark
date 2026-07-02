@@ -19,7 +19,6 @@ import { purgeAutoJob } from "../services/autoJobCleanup.js";
 import { fetchTranslatableResources } from "../services/shopifyFetch.js";
 import { countFieldUnits, pAll } from "../services/llmTranslate.js";
 import { recordShopSizeFromInit } from "../services/shopSizeProfile.js";
-import { QpsLogger } from "../services/qpsLogger.js";
 import {
   stagePoolKindForJob,
   stageSlots,
@@ -348,8 +347,6 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
     }
   };
 
-  const qps = new QpsLogger(jobId, shopName, "INIT");
-
   try {
     // ── Parallel module fetching ─────────────────────────────────────────────
     // MODULE_CONCURRENCY controls how many Shopify API requests run in
@@ -523,7 +520,6 @@ async function processInitJob(jobId: string, shopName: string): Promise<void> {
     });
     console.error(`[init] failed job=${jobId}`, e);
   } finally {
-    qps.stop();
     await wakeNextInitForShop(shopName).catch((e) => {
       console.warn(`[init] wakeNext failed shop=${shopName}`, e);
     });

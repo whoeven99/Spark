@@ -6,7 +6,6 @@ import { loadTranslatedItemsForJob } from "../services/translateBlobIO.js";
 import { registerTranslations, type TranslationInput } from "../services/shopifyFetch.js";
 import { filterWritebackFields } from "../services/writebackFields.js";
 import { runShopifyAdaptive, getShopifyCap } from "../services/shopifyConcurrency.js";
-import { QpsLogger } from "../services/qpsLogger.js";
 import type { TranslationV4Job } from "../services/cosmosV4.js";
 import { isShuttingDown } from "../shutdown.js";
 import { finalizeJobAfterWriteback } from "../services/finalizeJobAfterWriteback.js";
@@ -188,7 +187,6 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
   const failedResources: FailedResource[] = [];
   let lastHeartbeatAt = 0;
   const stageStartedAt = new Date().toISOString(); // ISO span start for stageTimings
-  const qps = new QpsLogger(jobId, shopName, "WRITEBACK");
 
   const maybeHeartbeat = async () => {
     const now = Date.now();
@@ -381,7 +379,5 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
       stageTimings: withStageTiming(job.stageTimings, "WRITEBACK", stageStartedAt, new Date().toISOString()),
     });
     console.error(`[writeback] failed job=${jobId}`, e);
-  } finally {
-    qps.stop();
   }
 }

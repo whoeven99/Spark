@@ -13,7 +13,6 @@ import {
 type TranslationGlossaryPanelProps = {
   locationSearch: string;
   reloadToken?: number;
-  onRequestAiSuggestion?: () => void;
   mode?: "summary" | "full-editor";
   onBack?: () => void;
 };
@@ -90,7 +89,6 @@ function getRuleLabel(doNotTranslate?: boolean): string {
 export function TranslationGlossaryPanel({
   locationSearch,
   reloadToken = 0,
-  onRequestAiSuggestion,
   mode = "summary",
   onBack,
 }: TranslationGlossaryPanelProps) {
@@ -526,9 +524,6 @@ export function TranslationGlossaryPanel({
             <div style={titleStyle}>编辑术语表</div>
           </div>
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            <s-button type="button" variant="secondary" onClick={onRequestAiSuggestion}>
-              生成 AI 建议
-            </s-button>
             <s-button type="button" variant="secondary" onClick={() => setUploadOpen((v) => !v)}>
               {uploadOpen ? "收起上传区" : "上传文件 AI 解析"}
             </s-button>
@@ -553,9 +548,6 @@ export function TranslationGlossaryPanel({
             </span>
           </div>
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            <s-button type="button" variant="secondary" onClick={onRequestAiSuggestion}>
-              生成 AI 建议
-            </s-button>
             <s-button
               type="button"
               variant="secondary"
@@ -601,9 +593,6 @@ export function TranslationGlossaryPanel({
                 <div style={titleStyle}>编辑术语表</div>
               </div>
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                <s-button type="button" variant="secondary" onClick={onRequestAiSuggestion}>
-                  生成 AI 建议
-                </s-button>
                 <s-button type="button" variant="secondary" onClick={() => setUploadOpen((v) => !v)}>
                   {uploadOpen ? "收起上传区" : "上传文件 AI 解析"}
                 </s-button>
