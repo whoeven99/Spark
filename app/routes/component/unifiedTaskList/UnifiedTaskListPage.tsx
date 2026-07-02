@@ -2,7 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { pageColorTokens, pageEmptyStateStyle } from "../../page/pageUiStyles";
 import { AITaskPagination } from "../aiTask/AITaskPagination";
 import { UnifiedTaskCard } from "./UnifiedTaskCard";
-import type { UnifiedTaskEntry, UnifiedTaskListResponse, UnifiedTaskView } from "../../../lib/unifiedTaskTypes";
+import type {
+  UnifiedTaskEntry,
+  UnifiedTaskListResponse,
+  UnifiedTaskStatusFilter,
+  UnifiedTaskTypeFilter,
+  UnifiedTaskView,
+} from "../../../lib/unifiedTaskTypes";
 import type { AITaskStatus } from "../../../lib/aiTaskTypes";
 
 const PAGE_SIZE = 10;
@@ -20,7 +26,40 @@ function readPageFromSearch(search: string): number {
   return Math.floor(raw);
 }
 
-function syncSearch(view: UnifiedTaskView, page: number) {
+function readTypeFilterFromSearch(search: string): UnifiedTaskTypeFilter {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const value = params.get("unifiedType");
+  if (
+    value === "product_improve" ||
+    value === "image_generation" ||
+    value === "picture_translate" ||
+    value === "translation_v4"
+  ) {
+    return value;
+  }
+  return "all";
+}
+
+function readStatusFilterFromSearch(search: string): UnifiedTaskStatusFilter {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const value = params.get("unifiedStatus");
+  if (
+    value === "running" ||
+    value === "needs_review" ||
+    value === "failed" ||
+    value === "completed"
+  ) {
+    return value;
+  }
+  return "all";
+}
+
+function syncSearch(
+  view: UnifiedTaskView,
+  page: number,
+  typeFilter: UnifiedTaskTypeFilter,
+  statusFilter: UnifiedTaskStatusFilter,
+) {
   if (typeof window === "undefined") return;
   const url = new URL(window.location.href);
   url.searchParams.set("unifiedView", view);
@@ -29,17 +68,34 @@ function syncSearch(view: UnifiedTaskView, page: number) {
   } else {
     url.searchParams.set("unifiedPage", String(page));
   }
+  if (typeFilter === "all") {
+    url.searchParams.delete("unifiedType");
+  } else {
+    url.searchParams.set("unifiedType", typeFilter);
+  }
+  if (statusFilter === "all") {
+    url.searchParams.delete("unifiedStatus");
+  } else {
+    url.searchParams.set("unifiedStatus", statusFilter);
+  }
   window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
-function getCacheKey(view: UnifiedTaskView, page: number): string {
-  return `${view}:${page}`;
+function getCacheKey(
+  view: UnifiedTaskView,
+  page: number,
+  typeFilter: UnifiedTaskTypeFilter,
+  statusFilter: UnifiedTaskStatusFilter,
+): string {
+  return `${view}:${page}:${typeFilter}:${statusFilter}`;
 }
 
 async function fetchUnifiedTasks(
   locationSearch: string,
   view: UnifiedTaskView,
   page: number,
+  typeFilter: UnifiedTaskTypeFilter,
+  statusFilter: UnifiedTaskStatusFilter,
 ): Promise<UnifiedTaskListResponse> {
   const q = new URLSearchParams(
     locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
@@ -47,6 +103,8 @@ async function fetchUnifiedTasks(
   q.set("view", view);
   q.set("page", String(page));
   q.set("pageSize", String(PAGE_SIZE));
+  q.set("type", typeFilter);
+  q.set("status", statusFilter);
   const resp = await fetch(`/api/unified-tasks?${q.toString()}`);
   if (!resp.ok) throw new Error(`Failed to fetch unified tasks: ${resp.status}`);
   return (await resp.json()) as UnifiedTaskListResponse;
@@ -64,6 +122,12 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
 
   const [view, setView] = useState<UnifiedTaskView>(() => readViewFromSearch(initialSearch));
   const [page, setPage] = useState<number>(() => readPageFromSearch(initialSearch));
+  const [typeFilter, setTypeFilter] = useState<UnifiedTaskTypeFilter>(() =>
+    readTypeFilterFromSearch(initialSearch),
+  );
+  const [statusFilter, setStatusFilter] = useState<UnifiedTaskStatusFilter>(() =>
+    readStatusFilterFromSearch(initialSearch),
+  );
   const [entries, setEntries] = useState<UnifiedTaskEntry[]>([]);
   const [counts, setCounts] = useState<CountState>({ currentCount: 0, historyCount: 0 });
   const [totalCount, setTotalCount] = useState(0);
@@ -75,8 +139,14 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
   const pageCache = useRef<Record<string, UnifiedTaskListResponse>>({});
 
   const load = useCallback(
-    async (v: UnifiedTaskView, p: number, force = false) => {
-      const key = getCacheKey(v, p);
+    async (
+      v: UnifiedTaskView,
+      p: number,
+      type: UnifiedTaskTypeFilter,
+      status: UnifiedTaskStatusFilter,
+      force = false,
+    ) => {
+      const key = getCacheKey(v, p, type, status);
       if (!force && pageCache.current[key]) {
         const cached = pageCache.current[key];
         setEntries(cached.entries);
@@ -88,7 +158,7 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
       }
       setLoading(true);
       try {
-        const data = await fetchUnifiedTasks(locationSearch, v, p);
+        const data = await fetchUnifiedTasks(locationSearch, v, p, type, status);
         pageCache.current[key] = data;
         setEntries(data.entries);
         setTotalCount(data.totalCount);
@@ -105,9 +175,9 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
 
   // Initial load and view/page changes
   useEffect(() => {
-    syncSearch(view, page);
-    void load(view, page);
-  }, [view, page, load]);
+    syncSearch(view, page, typeFilter, statusFilter);
+    void load(view, page, typeFilter, statusFilter);
+  }, [view, page, typeFilter, statusFilter, load]);
 
   function scrollToTop() {
     listTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -126,6 +196,20 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
     scrollToTop();
   }
 
+  function handleTypeFilterChange(next: UnifiedTaskTypeFilter) {
+    if (next === typeFilter) return;
+    setTypeFilter(next);
+    setPage(1);
+    scrollToTop();
+  }
+
+  function handleStatusFilterChange(next: UnifiedTaskStatusFilter) {
+    if (next === statusFilter) return;
+    setStatusFilter(next);
+    setPage(1);
+    scrollToTop();
+  }
+
   async function handleAITaskDeleted(taskId: string) {
     setDeletingId(taskId);
     try {
@@ -140,7 +224,7 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
         pageCache.current = {};
         setTotalCount((c) => Math.max(0, c - 1));
         // Refresh counts
-        void load(view, page, true);
+        void load(view, page, typeFilter, statusFilter, true);
       }
     } finally {
       setDeletingId(null);
@@ -171,6 +255,22 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
     ],
     [counts],
   );
+
+  const typeFilters = [
+    { key: "all" as const, label: "全部类型" },
+    { key: "product_improve" as const, label: "文案" },
+    { key: "image_generation" as const, label: "图片生成" },
+    { key: "picture_translate" as const, label: "图片翻译" },
+    { key: "translation_v4" as const, label: "整店翻译" },
+  ];
+
+  const statusFilters = [
+    { key: "all" as const, label: "全部状态" },
+    { key: "running" as const, label: "进行中" },
+    { key: "needs_review" as const, label: "待审核" },
+    { key: "failed" as const, label: "失败" },
+    { key: "completed" as const, label: "已完成" },
+  ];
 
   const tabBar = (
     <div
@@ -217,6 +317,65 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
     </div>
   );
 
+  const filterBar = (
+    <div
+      style={{
+        display: "grid",
+        gap: 10,
+        padding: "0.85rem",
+        borderRadius: pageColorTokens.radiusCard,
+        background: pageColorTokens.surface,
+        border: `1px solid ${pageColorTokens.borderSubtle}`,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: pageColorTokens.textPrimary }}>
+            任务收件箱
+          </div>
+          <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, marginTop: 2 }}>
+            统一查看文案、图片、翻译和批处理任务
+          </div>
+        </div>
+        <div style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>
+          当前结果 {totalCount} 条
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {typeFilters.map((item) => {
+          const active = typeFilter === item.key;
+          return (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => handleTypeFilterChange(item.key)}
+              style={filterButtonStyle(active)}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {statusFilters.map((item) => {
+          const active = statusFilter === item.key;
+          return (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => handleStatusFilterChange(item.key)}
+              style={filterButtonStyle(active)}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   const showEmpty = !loading && entries.length === 0;
@@ -227,6 +386,7 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
       <div ref={listTopRef} />
 
       {tabBar}
+      {filterBar}
 
       {showLoading ? (
         <div
@@ -256,6 +416,9 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
           <span style={{ fontSize: 28, lineHeight: 1 }}>📋</span>
           <span style={{ fontSize: 14, color: pageColorTokens.textSecondary }}>
             {view === "current" ? "暂无进行中的任务" : "暂无历史任务"}
+          </span>
+          <span style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>
+            可以调整类型或状态筛选查看其它任务。
           </span>
         </div>
       ) : (
@@ -288,4 +451,17 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
       />
     </div>
   );
+}
+
+function filterButtonStyle(active: boolean) {
+  return {
+    padding: "0.45rem 0.75rem",
+    borderRadius: 999,
+    border: `1px solid ${active ? pageColorTokens.brandBlue : pageColorTokens.borderSubtle}`,
+    background: active ? pageColorTokens.brandBlueLight : pageColorTokens.surfaceMuted,
+    color: active ? pageColorTokens.brandBlueDark : pageColorTokens.textSecondary,
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+  } as const;
 }

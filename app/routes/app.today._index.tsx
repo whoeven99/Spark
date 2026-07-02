@@ -17,8 +17,14 @@ import { listMergedUnifiedTaskEntries } from "../server/unifiedTask/unifiedTaskL
 import { useFeatureView } from "../lib/featureTrack";
 import { DashboardPanel } from "./page/workspace/DashboardPanel";
 import { RoutePageFallback } from "./component/RoutePageFallback";
-import { mobilePageContentStyle, pageContentStyle } from "./page/pageUiStyles";
+import {
+  PageHeaderNav,
+  pageColorTokens,
+  mobilePageContentStyle,
+  pageContentStyle,
+} from "./page/pageUiStyles";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import type { WorkspaceDashboardSnapshot } from "../lib/workspaceDashboardTypes";
 
 const DASHBOARD_RECENT_TASK_LIMIT = 5;
 
@@ -57,6 +63,19 @@ export default function TodayOverview() {
   return (
     <ClientMount>
       <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
+        <PageHeaderNav
+          title="经营"
+          subtitle="先看今日结果，再进入诊断、订单风险或任务中心处理具体对象。"
+          backLabel="返回首页"
+          fallbackPath="/app"
+        />
+        <TodayDrilldown
+          snapshot={dashboardSnapshot}
+          isMobile={isMobile}
+          onOpenDailyOps={() => navigate("/app/today/diagnosis")}
+          onOpenOrders={() => navigate("/app/today/orders")}
+          onOpenTasks={() => navigate("/app/tasks")}
+        />
         <DashboardPanel
           snapshot={dashboardSnapshot}
           onOpenDailyOps={() => navigate("/app/today/diagnosis")}
@@ -70,3 +89,84 @@ export default function TodayOverview() {
 export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);
 };
+
+function TodayDrilldown({
+  snapshot,
+  isMobile,
+  onOpenDailyOps,
+  onOpenOrders,
+  onOpenTasks,
+}: {
+  snapshot: WorkspaceDashboardSnapshot;
+  isMobile: boolean;
+  onOpenDailyOps: () => void;
+  onOpenOrders: () => void;
+  onOpenTasks: () => void;
+}) {
+  const riskCount = snapshot.alerts.filter((item) => item.tone === "critical").length;
+  const watchCount = snapshot.alerts.filter((item) => item.tone === "warning").length;
+  const orderRiskCount = snapshot.alerts.filter((item) =>
+    /退款|履约|物流|库存|订单/.test(`${item.title}${item.detail}`),
+  ).length;
+  const taskCount = snapshot.recentTaskSummaries.length;
+  const cards = [
+    {
+      title: "每日诊断",
+      value: `${riskCount} 风险 / ${watchCount} 关注`,
+      detail: snapshot.hasData ? "查看诊断证据与四象限待办" : "暂无完整诊断数据",
+      onClick: onOpenDailyOps,
+    },
+    {
+      title: "订单风险",
+      value: `${orderRiskCount} 项`,
+      detail: "退款、履约、物流和库存对象明细",
+      onClick: onOpenOrders,
+    },
+    {
+      title: "任务处理",
+      value: `${taskCount} 个近期任务`,
+      detail: "查看运行进度、审核结果与失败任务",
+      onClick: onOpenTasks,
+    },
+  ];
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+        gap: "0.75rem",
+      }}
+    >
+      {cards.map((card) => (
+        <button
+          key={card.title}
+          type="button"
+          onClick={card.onClick}
+          style={{
+            textAlign: "left",
+            border: `1px solid ${pageColorTokens.border}`,
+            borderRadius: pageColorTokens.radiusCard,
+            background: pageColorTokens.surface,
+            padding: "1rem",
+            boxShadow: pageColorTokens.shadowCard,
+            cursor: "pointer",
+            display: "grid",
+            gap: "0.35rem",
+            fontFamily: "inherit",
+          }}
+        >
+          <span style={{ fontSize: 12, fontWeight: 700, color: pageColorTokens.textSecondary }}>
+            {card.title}
+          </span>
+          <span style={{ fontSize: 20, fontWeight: 750, color: pageColorTokens.textPrimary }}>
+            {card.value}
+          </span>
+          <span style={{ fontSize: 12, lineHeight: 1.45, color: pageColorTokens.textSecondary }}>
+            {card.detail}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
