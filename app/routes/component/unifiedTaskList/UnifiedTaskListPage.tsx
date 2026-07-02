@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { pageColorTokens, pageEmptyStateStyle } from "../../page/pageUiStyles";
+import {
+  DestinationFilterBar,
+  destinationSurfaceStyle,
+} from "../shared/DestinationPage";
 import { AITaskPagination } from "../aiTask/AITaskPagination";
 import { UnifiedTaskCard } from "./UnifiedTaskCard";
 import type {
@@ -323,9 +327,7 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
         display: "grid",
         gap: 10,
         padding: "0.85rem",
-        borderRadius: pageColorTokens.radiusCard,
-        background: pageColorTokens.surface,
-        border: `1px solid ${pageColorTokens.borderSubtle}`,
+        ...destinationSurfaceStyle,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -342,37 +344,19 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {typeFilters.map((item) => {
-          const active = typeFilter === item.key;
-          return (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => handleTypeFilterChange(item.key)}
-              style={filterButtonStyle(active)}
-            >
-              {item.label}
-            </button>
-          );
-        })}
-      </div>
+      <DestinationFilterBar
+        label="任务类型"
+        items={typeFilters}
+        active={typeFilter}
+        onChange={handleTypeFilterChange}
+      />
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {statusFilters.map((item) => {
-          const active = statusFilter === item.key;
-          return (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => handleStatusFilterChange(item.key)}
-              style={filterButtonStyle(active)}
-            >
-              {item.label}
-            </button>
-          );
-        })}
-      </div>
+      <DestinationFilterBar
+        label="任务状态"
+        items={statusFilters}
+        active={statusFilter}
+        onChange={handleStatusFilterChange}
+      />
     </div>
   );
 
@@ -451,17 +435,4 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
       />
     </div>
   );
-}
-
-function filterButtonStyle(active: boolean) {
-  return {
-    padding: "0.45rem 0.75rem",
-    borderRadius: 999,
-    border: `1px solid ${active ? pageColorTokens.brandBlue : pageColorTokens.borderSubtle}`,
-    background: active ? pageColorTokens.brandBlueLight : pageColorTokens.surfaceMuted,
-    color: active ? pageColorTokens.brandBlueDark : pageColorTokens.textSecondary,
-    fontSize: 12,
-    fontWeight: 700,
-    cursor: "pointer",
-  } as const;
 }

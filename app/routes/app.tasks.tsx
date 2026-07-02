@@ -3,12 +3,9 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { useFeatureView } from "../lib/featureTrack";
 import { UnifiedTaskListPage } from "./component/unifiedTaskList/UnifiedTaskListPage";
-import {
-  PageHeaderNav,
-  mobilePageContentStyle,
-  pageContentStyle,
-} from "./page/pageUiStyles";
+import { mobilePageContentStyle, pageContentStyle } from "./page/pageUiStyles";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import { DestinationPage } from "./component/shared/DestinationPage";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
@@ -20,15 +17,17 @@ export default function AppTasks() {
   useFeatureView("tasks");
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
-      <PageHeaderNav
+      <DestinationPage
         title="任务中心"
         subtitle="所有后台任务统一进入这里：文案、图片、翻译、批处理和后续审核结果都按状态归档。"
         backLabel="返回首页"
         fallbackPath="/app"
-      />
+        isMobile={isMobile}
+      >
       <UnifiedTaskListPage
         locationSearch={typeof window !== "undefined" ? window.location.search : ""}
       />
+      </DestinationPage>
     </div>
   );
 }

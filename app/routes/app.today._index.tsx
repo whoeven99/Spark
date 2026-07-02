@@ -17,14 +17,10 @@ import { listMergedUnifiedTaskEntries } from "../server/unifiedTask/unifiedTaskL
 import { useFeatureView } from "../lib/featureTrack";
 import { DashboardPanel } from "./page/workspace/DashboardPanel";
 import { RoutePageFallback } from "./component/RoutePageFallback";
-import {
-  PageHeaderNav,
-  pageColorTokens,
-  mobilePageContentStyle,
-  pageContentStyle,
-} from "./page/pageUiStyles";
+import { mobilePageContentStyle, pageContentStyle } from "./page/pageUiStyles";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import type { WorkspaceDashboardSnapshot } from "../lib/workspaceDashboardTypes";
+import { DestinationPage } from "./component/shared/DestinationPage";
 
 const DASHBOARD_RECENT_TASK_LIMIT = 5;
 
@@ -63,24 +59,25 @@ export default function TodayOverview() {
   return (
     <ClientMount>
       <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
-        <PageHeaderNav
+        <DestinationPage
           title="经营"
           subtitle="先看今日结果，再进入诊断、订单风险或任务中心处理具体对象。"
           backLabel="返回首页"
           fallbackPath="/app"
-        />
-        <TodayDrilldown
-          snapshot={dashboardSnapshot}
           isMobile={isMobile}
-          onOpenDailyOps={() => navigate("/app/today/diagnosis")}
-          onOpenOrders={() => navigate("/app/today/orders")}
-          onOpenTasks={() => navigate("/app/tasks")}
-        />
+          actions={buildTodayActions({
+            snapshot: dashboardSnapshot,
+            onOpenDailyOps: () => navigate("/app/today/diagnosis"),
+            onOpenOrders: () => navigate("/app/today/orders"),
+            onOpenTasks: () => navigate("/app/tasks"),
+          })}
+        >
         <DashboardPanel
           snapshot={dashboardSnapshot}
           onOpenDailyOps={() => navigate("/app/today/diagnosis")}
           onOpenTasks={() => navigate("/app/tasks")}
         />
+        </DestinationPage>
       </div>
     </ClientMount>
   );
@@ -90,15 +87,13 @@ export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);
 };
 
-function TodayDrilldown({
+function buildTodayActions({
   snapshot,
-  isMobile,
   onOpenDailyOps,
   onOpenOrders,
   onOpenTasks,
 }: {
   snapshot: WorkspaceDashboardSnapshot;
-  isMobile: boolean;
   onOpenDailyOps: () => void;
   onOpenOrders: () => void;
   onOpenTasks: () => void;
@@ -109,64 +104,27 @@ function TodayDrilldown({
     /退款|履约|物流|库存|订单/.test(`${item.title}${item.detail}`),
   ).length;
   const taskCount = snapshot.recentTaskSummaries.length;
-  const cards = [
+  return [
     {
+      key: "diagnosis",
       title: "每日诊断",
-      value: `${riskCount} 风险 / ${watchCount} 关注`,
       detail: snapshot.hasData ? "查看诊断证据与四象限待办" : "暂无完整诊断数据",
+      badge: `${riskCount} 风险 / ${watchCount} 关注`,
       onClick: onOpenDailyOps,
     },
     {
+      key: "orders",
       title: "订单风险",
-      value: `${orderRiskCount} 项`,
       detail: "退款、履约、物流和库存对象明细",
+      badge: `${orderRiskCount} 项`,
       onClick: onOpenOrders,
     },
     {
+      key: "tasks",
       title: "任务处理",
-      value: `${taskCount} 个近期任务`,
       detail: "查看运行进度、审核结果与失败任务",
+      badge: `${taskCount} 个近期任务`,
       onClick: onOpenTasks,
     },
   ];
-
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
-        gap: "0.75rem",
-      }}
-    >
-      {cards.map((card) => (
-        <button
-          key={card.title}
-          type="button"
-          onClick={card.onClick}
-          style={{
-            textAlign: "left",
-            border: `1px solid ${pageColorTokens.border}`,
-            borderRadius: pageColorTokens.radiusCard,
-            background: pageColorTokens.surface,
-            padding: "1rem",
-            boxShadow: pageColorTokens.shadowCard,
-            cursor: "pointer",
-            display: "grid",
-            gap: "0.35rem",
-            fontFamily: "inherit",
-          }}
-        >
-          <span style={{ fontSize: 12, fontWeight: 700, color: pageColorTokens.textSecondary }}>
-            {card.title}
-          </span>
-          <span style={{ fontSize: 20, fontWeight: 750, color: pageColorTokens.textPrimary }}>
-            {card.value}
-          </span>
-          <span style={{ fontSize: 12, lineHeight: 1.45, color: pageColorTokens.textSecondary }}>
-            {card.detail}
-          </span>
-        </button>
-      ))}
-    </div>
-  );
 }
