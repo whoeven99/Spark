@@ -297,6 +297,13 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   }
   let liveTokens = persistedUsedTokens;
   let lastHeartbeatAt = 0;
+  const maybeHeartbeat = async () => {
+    const now = Date.now();
+    if (now - lastHeartbeatAt > HEARTBEAT_THROTTLE_MS) {
+      lastHeartbeatAt = now;
+      await heartbeat(shopName, jobId);
+    }
+  };
   const tokenMultiplier = Math.max(0, Number(process.env.TRANSLATION_TOKEN_MULTIPLIER) || 1);
   const fallbacks: Array<{ resourceId: string; module: string; key: string }> = [];
   const engineUsage: EngineUsage = {};
@@ -481,7 +488,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
     type ChunkWork = { module: string; chunkPath: string; chunkIdx: number; chunkTotal: number };
     const work: ChunkWork[] = [];
     for (const module of job.modules) {
-      await heartbeat(shopName, jobId);
+      await maybeHeartbeat();
       const initPaths = await blobListPaths(`${blobPrefix}/init/${module}/`);
       const chunkPaths = initPaths.filter((p) => p.endsWith(".json"));
       chunkPaths.forEach((chunkPath, ci) =>
@@ -502,7 +509,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
       {
         const chunkStart = performance.now();
 
-        await heartbeat(shopName, jobId);
+        await maybeHeartbeat();
 
         // 中断检查：外部手动暂停/取消 → 不再处理新 chunk。
         await checkControl(true);
@@ -572,7 +579,7 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
             const now = Date.now();
             if (now - lastHeartbeatAt > HEARTBEAT_THROTTLE_MS) {
               lastHeartbeatAt = now;
-              await heartbeat(shopName, jobId);
+              await maybeHeartbeat();
             }
             await flushKeyStats();
             await checkControl();

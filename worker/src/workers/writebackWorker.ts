@@ -198,7 +198,7 @@ async function processWritebackJob(job: TranslationV4Job): Promise<void> {
 
   try {
     // ── Phase 1: Collect all pending resources ────────────────────────────────
-    await heartbeat(shopName, jobId);
+    await maybeHeartbeat();
     const pendingResources: PendingResource[] = [];
     const allItems = await loadTranslatedItemsForJob(blobPrefix, job.modules, {
       onModuleLoaded: async () => {
