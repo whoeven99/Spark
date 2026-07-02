@@ -34,6 +34,32 @@ type StreamingAssistantReplyProps = {
   onTaskProposalExecuted?: (run: TaskRunPayload) => void;
 };
 
+const PLAYBOOK_RUN_META: Record<
+  string,
+  { title: string; icon: string; reviewMetrics: string[] }
+> = {
+  shopHealthCheck: {
+    title: "经营体检 Playbook",
+    icon: "OPS",
+    reviewMetrics: ["activeRiskCount", "openTaskCount", "salesAmount7d"],
+  },
+  productLaunchPipeline: {
+    title: "上新流水线 Playbook",
+    icon: "NEW",
+    reviewMetrics: ["completenessScore", "missingFields"],
+  },
+  inventoryRiskMitigation: {
+    title: "库存止损 Playbook",
+    icon: "INV",
+    reviewMetrics: ["riskSkuCount", "estimatedInventoryLoss"],
+  },
+  refundIssueReview: {
+    title: "退款治理 Playbook",
+    icon: "REF",
+    reviewMetrics: ["refundRate30d", "refundRateDelta", "topRefundSkus"],
+  },
+};
+
 const assistantBubbleShellStyle: CSSProperties = {
   borderRadius: "12px",
   borderWidth: 1,
@@ -58,26 +84,131 @@ function StreamingCursor() {
 
 function StreamingSkillSteps({ steps }: { steps: SkillStepProgress[] }) {
   if (steps.length === 0) return null;
+  const playbookGroups: Array<{
+    skill: string;
+    meta: (typeof PLAYBOOK_RUN_META)[string];
+    steps: SkillStepProgress[];
+  }> = [];
+  const atomicSteps: SkillStepProgress[] = [];
+
+  for (const step of steps) {
+    const meta = PLAYBOOK_RUN_META[step.skill];
+    if (!meta) {
+      atomicSteps.push(step);
+      continue;
+    }
+    let group = playbookGroups.find((item) => item.skill === step.skill);
+    if (!group) {
+      group = { skill: step.skill, meta, steps: [] };
+      playbookGroups.push(group);
+    }
+    group.steps.push(step);
+  }
+
   return (
-    <div style={skillStepsWrapStyle}>
-      <div style={skillStepsHeadingStyle}>正在执行</div>
-      {steps.map((step) => (
-        <div key={`${step.skill}-${step.stepId}`} style={skillStepLineStyle}>
-          <span style={skillStepStatusStyle(step.status)}>
-            {step.status === "running"
-              ? "○"
-              : step.status === "completed"
-                ? "✓"
-                : step.status === "error"
-                  ? "✗"
-                  : "–"}
-          </span>
-          <span>
-            {step.label}
-            {step.detail ? ` · ${step.detail}` : ""}
-          </span>
-        </div>
+    <div style={skillStepStackStyle}>
+      {playbookGroups.map((group) => (
+        <PlaybookRunCard
+          key={group.skill}
+          title={group.meta.title}
+          icon={group.meta.icon}
+          steps={group.steps}
+          reviewMetrics={group.meta.reviewMetrics}
+        />
       ))}
+      {atomicSteps.length > 0 ? (
+        <div style={skillStepsWrapStyle}>
+          <div style={skillStepsHeadingStyle}>正在执行</div>
+          {atomicSteps.map((step) => (
+            <SkillStepLine key={`${step.skill}-${step.stepId}`} step={step} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PlaybookRunCard({
+  title,
+  icon,
+  steps,
+  reviewMetrics,
+}: {
+  title: string;
+  icon: string;
+  steps: SkillStepProgress[];
+  reviewMetrics: string[];
+}) {
+  const completed = steps.filter((step) => step.status === "completed").length;
+  const hasError = steps.some((step) => step.status === "error");
+  const running = steps.some((step) => step.status === "running");
+  const statusText = hasError
+    ? "执行异常"
+    : running
+      ? "执行中"
+      : completed === steps.length
+        ? "已完成"
+        : "排队中";
+  const progressPercent =
+    steps.length > 0 ? Math.round((completed / steps.length) * 100) : 0;
+
+  return (
+    <div style={playbookRunCardStyle}>
+      <div style={playbookRunHeaderStyle}>
+        <div style={playbookRunTitleWrapStyle}>
+          <div style={playbookRunIconStyle}>{icon}</div>
+          <div>
+            <div style={playbookRunEyebrowStyle}>Playbook Run</div>
+            <div style={playbookRunTitleStyle}>{title}</div>
+          </div>
+        </div>
+        <span style={playbookRunStatusStyle(hasError ? "error" : running ? "running" : "completed")}>
+          {statusText}
+        </span>
+      </div>
+      <div style={playbookProgressTrackStyle}>
+        <div style={playbookProgressFillStyle(progressPercent)} />
+      </div>
+      <div style={playbookRunSectionStyle}>
+        <div style={playbookRunSectionTitleStyle}>执行步骤</div>
+        <div style={playbookRunStepListStyle}>
+          {steps.map((step) => (
+            <SkillStepLine key={`${step.skill}-${step.stepId}`} step={step} compact />
+          ))}
+        </div>
+      </div>
+      {reviewMetrics.length > 0 ? (
+        <div style={playbookReviewStyle}>
+          <span style={playbookRunSectionTitleStyle}>复盘指标</span>
+          <span>{reviewMetrics.join(" / ")}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SkillStepLine({
+  step,
+  compact = false,
+}: {
+  step: SkillStepProgress;
+  compact?: boolean;
+}) {
+  return (
+    <div style={compact ? compactSkillStepLineStyle : skillStepLineStyle}>
+      <span style={skillStepStatusStyle(step.status)}>
+        {step.status === "running"
+          ? "○"
+          : step.status === "completed"
+            ? "✓"
+            : step.status === "error"
+              ? "✗"
+              : "–"}
+      </span>
+      <span>
+        {step.label}
+        {step.detail ? ` · ${step.detail}` : ""}
+      </span>
     </div>
   );
 }
@@ -212,8 +343,13 @@ const cardSlotStyle: CSSProperties = {
   marginTop: "0.85rem",
 };
 
-const skillStepsWrapStyle: CSSProperties = {
+const skillStepStackStyle: CSSProperties = {
+  display: "grid",
+  gap: 10,
   marginBottom: 10,
+};
+
+const skillStepsWrapStyle: CSSProperties = {
   padding: "10px 12px",
   borderRadius: 10,
   background: "rgba(99, 110, 124, 0.05)",
@@ -237,6 +373,11 @@ const skillStepLineStyle: CSSProperties = {
   lineHeight: 1.5,
 };
 
+const compactSkillStepLineStyle: CSSProperties = {
+  ...skillStepLineStyle,
+  fontSize: 12,
+};
+
 const skillStepStatusStyle = (status: SkillStepProgress["status"]): CSSProperties => ({
   width: 14,
   flexShrink: 0,
@@ -250,3 +391,107 @@ const skillStepStatusStyle = (status: SkillStepProgress["status"]): CSSPropertie
           ? "#d72c0d"
           : "rgba(0, 0, 0, 0.35)",
 });
+
+const playbookRunCardStyle: CSSProperties = {
+  borderRadius: 12,
+  border: "1px solid rgba(44, 110, 203, 0.22)",
+  background: "#ffffff",
+  padding: 12,
+  display: "grid",
+  gap: 10,
+};
+
+const playbookRunHeaderStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: 10,
+};
+
+const playbookRunTitleWrapStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+};
+
+const playbookRunIconStyle: CSSProperties = {
+  width: 34,
+  height: 34,
+  borderRadius: 10,
+  background: "#f1f6ff",
+  border: "1px solid rgba(44, 110, 203, 0.18)",
+  color: "#2c6ecb",
+  display: "grid",
+  placeItems: "center",
+  fontSize: 10,
+  fontWeight: 800,
+  flexShrink: 0,
+};
+
+const playbookRunEyebrowStyle: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#6d7175",
+};
+
+const playbookRunTitleStyle: CSSProperties = {
+  fontSize: 14,
+  fontWeight: 700,
+  color: "#1f2124",
+};
+
+const playbookRunStatusStyle = (
+  status: "running" | "completed" | "error",
+): CSSProperties => ({
+  borderRadius: 999,
+  padding: "3px 8px",
+  fontSize: 11,
+  fontWeight: 700,
+  color:
+    status === "error" ? "#d72c0d" : status === "running" ? "#8a6116" : "#008060",
+  background:
+    status === "error" ? "#fff0ee" : status === "running" ? "#fff7e0" : "#e9f7ef",
+  whiteSpace: "nowrap",
+});
+
+const playbookProgressTrackStyle: CSSProperties = {
+  height: 6,
+  borderRadius: 999,
+  background: "#eef0f2",
+  overflow: "hidden",
+};
+
+const playbookProgressFillStyle = (percent: number): CSSProperties => ({
+  width: `${Math.max(0, Math.min(100, percent))}%`,
+  height: "100%",
+  borderRadius: 999,
+  background: "#2c6ecb",
+  transition: "width 0.2s ease",
+});
+
+const playbookRunSectionStyle: CSSProperties = {
+  display: "grid",
+  gap: 6,
+};
+
+const playbookRunSectionTitleStyle: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#6d7175",
+};
+
+const playbookRunStepListStyle: CSSProperties = {
+  display: "grid",
+  gap: 5,
+};
+
+const playbookReviewStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  flexWrap: "wrap",
+  paddingTop: 8,
+  borderTop: "1px solid #eef0f2",
+  fontSize: 12,
+  color: "#61666c",
+};

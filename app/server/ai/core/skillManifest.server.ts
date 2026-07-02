@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { DynamicStructuredTool } from "@langchain/core/tools";
 import { globalToolRegistry, type AgentContext } from "./toolRegistry.server";
-import { globalPlaybookRegistry } from "./playbookRegistry.server";
+import { globalPlaybookRegistry, type PlaybookPresentation } from "./playbookRegistry.server";
 import { normalizeSteps, type SkillStage, type StepSpec } from "./skillTypes.server";
 // 触发注册副作用，保证独立调用本模块时注册表已填充
 import "../skills/index";
@@ -43,6 +43,7 @@ export interface PlaybookManifest {
   triggerDescription: string;
   conditional: boolean;
   steps: StepSpec[];
+  presentation?: PlaybookPresentation;
 }
 
 export interface CapabilitiesManifest {
@@ -152,6 +153,7 @@ export async function buildCapabilitiesManifest(): Promise<CapabilitiesManifest>
       triggerDescription: def.triggerDescription,
       conditional: typeof def.condition === "function",
       steps: normalizeSteps(def.steps),
+      presentation: def.presentation,
     }));
 
   const toolCount = skills.reduce((sum, s) => sum + s.tools.length, 0);
