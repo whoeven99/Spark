@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 import { authenticate } from "../shopify.server";
 import { SegmentedPageTabs } from "./component/shared/SegmentedPageTabs";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
-import { PageHeaderNav, pageColorTokens } from "./page/pageUiStyles";
+import { DestinationPage } from "./component/shared/DestinationPage";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
@@ -40,17 +40,17 @@ export default function AppStudio() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      <PageHeaderNav
+      <DestinationPage
         title="创作"
         subtitle="商品文案、图片素材与多语言内容集中处理，经营分析和订单风险保持在经营页。"
         backLabel="返回首页"
         fallbackPath="/app"
-      />
-      <StudioQuickSwitch
-        activeTab={activeTab}
         isMobile={isMobile}
-        onOpen={(tab) => navigate(`/app/studio/${tab}${location.search}`)}
-      />
+        actions={buildStudioActions({
+          activeTab,
+          onOpen: (tab) => navigate(`/app/studio/${tab}${location.search}`),
+        })}
+      >
       <div style={{ paddingTop: "0.5rem" }}>
         <SegmentedPageTabs
           activeTab={activeTab}
@@ -60,6 +60,7 @@ export default function AppStudio() {
         />
       </div>
       <Outlet />
+      </DestinationPage>
     </div>
   );
 }
@@ -68,13 +69,11 @@ export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);
 };
 
-function StudioQuickSwitch({
+function buildStudioActions({
   activeTab,
-  isMobile,
   onOpen,
 }: {
   activeTab: StudioTab;
-  isMobile: boolean;
   onOpen: (tab: StudioTab) => void;
 }) {
   const cards: Array<{
@@ -103,46 +102,9 @@ function StudioQuickSwitch({
     },
   ];
 
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
-        gap: "0.75rem",
-      }}
-    >
-      {cards.map((card) => {
-        const active = card.key === activeTab;
-        return (
-          <button
-            key={card.key}
-            type="button"
-            onClick={() => onOpen(card.key)}
-            style={{
-              textAlign: "left",
-              border: `1px solid ${active ? pageColorTokens.brandGreen : pageColorTokens.border}`,
-              borderRadius: pageColorTokens.radiusCard,
-              background: active ? pageColorTokens.brandGreenLight : pageColorTokens.surface,
-              padding: "0.95rem 1rem",
-              boxShadow: pageColorTokens.shadowCard,
-              cursor: "pointer",
-              display: "grid",
-              gap: "0.3rem",
-              fontFamily: "inherit",
-            }}
-          >
-            <span style={{ fontSize: 14, fontWeight: 750, color: pageColorTokens.textPrimary }}>
-              {card.title}
-            </span>
-            <span style={{ fontSize: 12, color: pageColorTokens.textBody, lineHeight: 1.45 }}>
-              {card.detail}
-            </span>
-            <span style={{ fontSize: 11, color: pageColorTokens.textSecondary }}>
-              {card.meta}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
+  return cards.map((card) => ({
+    ...card,
+    active: card.key === activeTab,
+    onClick: () => onOpen(card.key),
+  }));
 }
