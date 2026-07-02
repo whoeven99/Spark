@@ -64,16 +64,8 @@ export type FetchTranslatableOptions = {
   isHandle: boolean;
   /** Called after each paginated API response — use to keep heartbeat alive on long fetches */
   onPage?: () => Promise<void>;
-  /** 外部来源任务（如 TsFrontend）：直接用 job token，跳过 Turso Session 查询 */
+  /** 外部来源任务（如 TsFrontend）：直接用 job token */
   preferLegacyToken?: boolean;
-  /**
-   * Called once per *scanned* resource with the raw byte size of all its
-   * translatable content — i.e. the full data Shopify returns, BEFORE the
-   * isCover/isHandle filter trims it down to the to-translate subset. Used to
-   * measure the shop's true data volume (store-size tier), independent of how
-   * much actually needs translating this run. See worker shopSizeProfile.ts.
-   */
-  onScannedResource?: (rawBytes: number) => void;
 };
 
 type TranslatableNode = {
@@ -308,9 +300,9 @@ type ShopifyGraphqlOpts = {
   retries?: number;
   /** Remaining 502/503/504 retries for this request chain. */
   retries5xx?: number;
-  /** 401 后已从 Session 刷新 token 并重试过一次 */
+  /** 401 后已用同一 token 重试过一次 */
   tokenRetried?: boolean;
-  /** 外部来源任务（如 TsFrontend）：直接用传入 token，跳过 Turso Session 查询 */
+  /** 外部来源任务（如 TsFrontend）：优先 job / TSF token */
   preferLegacyToken?: boolean;
 };
 
@@ -361,7 +353,7 @@ async function shopifyGraphql(
     const body = await resp.text();
     if (!opts.tokenRetried) {
       invalidateShopAccessTokenCache(shopDomain);
-      console.warn(`[shopifyFetch] 401 on ${shopDomain} — reloading token from Session`);
+      console.warn(`[shopifyFetch] 401 on ${shopDomain} — retrying with same token`);
       return shopifyGraphql(shopDomain, legacyAccessToken, query, variables, {
         ...opts,
         tokenRetried: true,
@@ -478,16 +470,6 @@ function mapNodeToResource(
   options: FetchTranslatableOptions,
 ): TranslatableResource | null {
   const translations = node.translations ?? [];
-
-  // Measure the FULL translatable content Shopify returned for this resource,
-  // before any filtering — this is the shop's real data volume.
-  if (options.onScannedResource) {
-    let rawBytes = 0;
-    for (const f of node.translatableContent ?? []) {
-      if (typeof f.value === "string") rawBytes += Buffer.byteLength(f.value, "utf8");
-    }
-    options.onScannedResource(rawBytes);
-  }
 
   const fields = node.translatableContent
     .filter((f) =>

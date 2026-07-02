@@ -19,7 +19,7 @@ export default function AppTasks() {
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
       <DestinationPage
         title="任务中心"
-        subtitle="所有后台任务统一进入这里：文案、图片、翻译、批处理和后续审核结果都按状态归档。"
+        subtitle="所有后台任务统一进入这里：文案、图片、批处理和后续审核结果都按状态归档。"
         backLabel="返回首页"
         fallbackPath="/app"
         isMobile={isMobile}

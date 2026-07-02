@@ -897,7 +897,7 @@ export function WorkspaceAppShellPage({
       );
       params.set("page", "tasks");
       params.set("expandJob", ids.join(","));
-      navigate(`/app/studio/translate?${params.toString()}`);
+      navigate(`/app/tasks?${params.toString()}`);
     }
     setMessagesByConversation((current) => {
       const existing = current[conversationId] ?? [];

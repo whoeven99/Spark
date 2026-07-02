@@ -129,21 +129,6 @@ export function ensureWorkerEnv(): void {
     ["AZURE_BLOB_CONNECTION_STRING", blobConn],
     ["AZURE_BLOB_TRANSLATION_CONTAINER", process.env.AZURE_BLOB_TRANSLATION_CONTAINER, "translation-content"],
   ]);
-  const tursoTarget = (process.env.TURSO_TARGET?.trim() || process.env.NODE_ENV || "test").toLowerCase();
-  const tursoTestOk = Boolean(
-    process.env.TURSO_TEST_DATABASE_URL?.trim() && process.env.TURSO_TEST_AUTH_TOKEN?.trim(),
-  );
-  const tursoProdOk = Boolean(
-    process.env.TURSO_PROD_DATABASE_URL?.trim() && process.env.TURSO_PROD_AUTH_TOKEN?.trim(),
-  );
-  logEnvCheck("Turso (Session)", tursoTestOk || tursoProdOk, [
-    ["TURSO_TARGET", process.env.TURSO_TARGET, tursoTarget.includes("prod") ? "prod" : "test"],
-    ["TURSO_TEST_DATABASE_URL", process.env.TURSO_TEST_DATABASE_URL],
-    ["TURSO_TEST_AUTH_TOKEN", process.env.TURSO_TEST_AUTH_TOKEN],
-    ["TURSO_PROD_DATABASE_URL", process.env.TURSO_PROD_DATABASE_URL],
-    ["TURSO_PROD_AUTH_TOKEN", process.env.TURSO_PROD_AUTH_TOKEN],
-  ]);
-
   const tsfTursoOk = Boolean(
     process.env.TSF_TURSO_DATABASE_URL?.trim()?.startsWith("libsql://") &&
       process.env.TSF_TURSO_AUTH_TOKEN?.trim(),

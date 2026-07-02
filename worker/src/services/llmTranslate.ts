@@ -1,6 +1,5 @@
 import { tmGet, tmGetByValue, tmSet, tmSetByValue } from "./translationMemory.js";
 import { loadGlossaryLines } from "./glossary.js";
-import { loadShopProfile, buildProfilePromptBlock } from "./shopProfile.js";
 import {
   applyJsonSlotTranslations,
   extractJsonTextSlots,
@@ -2124,14 +2123,11 @@ async function translateItemsRouted(
     if (engine === "llm") {
       if (!llmConfigured()) continue;
       if (systemPrompt === null) {
-        const [glossary, profile] = await Promise.all([
-          loadGlossaryLines(shopName, target),
-          loadShopProfile(shopName),
-        ]);
+        const glossary = await loadGlossaryLines(shopName, target);
         systemPrompt =
           promptKind === "handle"
-            ? buildHandleSystemPrompt(target, glossary, profile ? buildProfilePromptBlock(profile) : "")
-            : buildSystemPrompt(target, glossary, profile ? buildProfilePromptBlock(profile) : "");
+            ? buildHandleSystemPrompt(target, glossary, "")
+            : buildSystemPrompt(target, glossary, "");
       }
       try {
         await gatherTranslations(missing, aiModel, systemPrompt, collected, tokenAccum, shopName);

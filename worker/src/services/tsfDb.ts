@@ -1,8 +1,7 @@
 import { createClient, type Client } from "@libsql/client/web";
 
 /**
- * 连接 TSF 自己的 Turso 库（与 worker 原有的 TURSO_*（Spark 库）相互独立）。
- * 翻译配置/词表/liquid 等数据迁到 TSF Prisma 后，worker 从这里读。
+ * 连接 TSF Turso 库，读取自动翻译配置、Session token、Glossary 等。
  *
  * 环境变量（在 Render worker 服务上配置）：
  *   TSF_TURSO_DATABASE_URL   libsql://xxx.turso.io

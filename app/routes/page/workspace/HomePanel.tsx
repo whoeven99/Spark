@@ -26,7 +26,6 @@ const WEEKDAY_LABELS = ["周日", "周一", "周二", "周三", "周四", "周�
 const QUICK_PROMPTS: Array<{ label: string; prompt: string }> = [
   { label: "诊断本周经营", prompt: "帮我诊断本周经营情况，找出需要优先处理的问题，并给出 3 条可执行建议。" },
   { label: "处理今日风险", prompt: "根据今日经营巡检结果，帮我按影响从高到低列出今天最该处理的 3 件事。" },
-  { label: "翻译商品到多语言", prompt: "帮我批量翻译商品内容到多个目标语言，并保留品牌术语。" },
   { label: "优化商品文案", prompt: "帮我优化一批商品的标题与描述，风格偏 SEO 与转化。" },
   { label: "查看待处理订单", prompt: "帮我查看当前待处理、异常或高风险订单，并给出处理建议。" },
 ];
@@ -879,7 +878,7 @@ function CommandCenter({
               ))
             ) : (
               <div style={homeStyles.taskItem}>
-                <span style={sectionTextStyle}>暂无近期任务。创建文案、图片或翻译任务后会显示在这里。</span>
+                <span style={sectionTextStyle}>暂无近期任务。创建文案或图片任务后会显示在这里。</span>
               </div>
             )}
           </div>

@@ -3,7 +3,6 @@ import { runTranslateWorker } from "./workers/translateWorker.js";
 import { runWritebackWorker } from "./workers/writebackWorker.js";
 import { runEmailWorker } from "./workers/emailWorker.js";
 import { resetStaleJobs, wakeQueuedJobsAfterDeploy } from "./services/cosmosV4.js";
-import { completeLegacyVerifyJobs } from "./services/finalizeJobAfterWriteback.js";
 import { runAutoTranslateScan } from "./services/autoTranslate.js";
 import { cleanupStaleEmptyAutoJobs } from "./services/cleanupEmptyAutoJobs.js";
 import { isShuttingDown } from "./shutdown.js";
@@ -90,7 +89,6 @@ export function startScheduler(): void {
   // resetStale always runs — harmless when a stage is disabled.
   safeRun("deployWake", async () => {
     await wakeQueuedJobsAfterDeploy(claimSuffix);
-    await completeLegacyVerifyJobs();
   });
   safeRun("resetStale", () => resetStaleJobs());
   setInterval(() => safeRun("resetStale", () => resetStaleJobs()), STALE_RESET_INTERVAL_MS);

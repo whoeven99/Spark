@@ -2,7 +2,6 @@ import {
   getJob,
   updateJob,
   prefersStoredToken,
-  findPendingJobs,
   type TranslationV4Job,
   type StageTimings,
 } from "./cosmosV4.js";
@@ -98,28 +97,4 @@ export async function finalizeJobAfterWriteback(
   console.log(
     `[finalize] job=${jobId} status=${finalStatus} written=${input.writebackDone} failed=${input.writebackFailed}`,
   );
-}
-
-/** 部署后把仍停在校验队列的旧任务直接收尾（verify 环节已移除）。 */
-export async function completeLegacyVerifyJobs(limit = 30): Promise<number> {
-  let completed = 0;
-  for (const status of ["VERIFY_QUEUED", "VERIFYING"] as const) {
-    const refs = await findPendingJobs(status, limit);
-    for (const ref of refs) {
-      const job = await getJob(ref.shopName, ref.id);
-      if (!job) continue;
-      if (status === "VERIFYING" && job.claimedBy) continue;
-      try {
-        await finalizeJobAfterWriteback(job, {
-          writebackDone: job.metrics.writebackDone ?? 0,
-          writebackFailed: job.metrics.writebackFailed ?? 0,
-        });
-        completed++;
-        console.log(`[deploy-wake] legacy ${status} → finalized job=${job.id}`);
-      } catch (e) {
-        console.warn(`[deploy-wake] legacy verify finalize failed job=${job.id}`, e);
-      }
-    }
-  }
-  return completed;
 }

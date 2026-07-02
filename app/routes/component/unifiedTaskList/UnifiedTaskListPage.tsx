@@ -36,8 +36,7 @@ function readTypeFilterFromSearch(search: string): UnifiedTaskTypeFilter {
   if (
     value === "product_improve" ||
     value === "image_generation" ||
-    value === "picture_translate" ||
-    value === "translation_v4"
+    value === "picture_translate"
   ) {
     return value;
   }
@@ -265,7 +264,6 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
     { key: "product_improve" as const, label: "文案" },
     { key: "image_generation" as const, label: "图片生成" },
     { key: "picture_translate" as const, label: "图片翻译" },
-    { key: "translation_v4" as const, label: "整店翻译" },
   ];
 
   const statusFilters = [
@@ -336,7 +334,7 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
             任务收件箱
           </div>
           <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, marginTop: 2 }}>
-            统一查看文案、图片、翻译和批处理任务
+            统一查看文案、图片和批处理任务
           </div>
         </div>
         <div style={{ fontSize: 12, color: pageColorTokens.textFootnote }}>

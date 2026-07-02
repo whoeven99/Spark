@@ -18,7 +18,6 @@ import { detectRequestLocale } from "../i18n/detector.server";
 import { authenticate } from "../shopify.server";
 import { recordAppInstalled } from "../server/commonEventLog/index.server";
 import { ensureWebPixel } from "../server/webPixel/ensureWebPixel.server";
-import { syncV4JobShopifyTokensFromSession } from "../server/translation/v4/syncV4JobShopifyTokens.server";
 import {
   getAppEntryConfig,
   type NavItemKey,
@@ -39,21 +38,6 @@ const NAV_ITEMS: Record<
   settings: { href: "/app/settings", labelKey: "nav.settings" },
 };
 
-/** 同一进程内每个 shop 的 V4 token 同步间隔，避免重复打 Cosmos。 */
-const V4_TOKEN_SYNC_TTL_MS = 10 * 60 * 1000;
-const lastV4TokenSyncAt = new Map<string, number>();
-
-function scheduleV4TokenSync(shop: string, accessToken?: string | null) {
-  const now = Date.now();
-  const last = lastV4TokenSyncAt.get(shop) ?? 0;
-  if (now - last < V4_TOKEN_SYNC_TTL_MS) return;
-  lastV4TokenSyncAt.set(shop, now);
-
-  void syncV4JobShopifyTokensFromSession(shop, accessToken).catch((error) => {
-    console.error("[v4:token-sync] app shell sync failed:", error);
-  });
-}
-
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
 
@@ -71,8 +55,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // fire-and-forget：失败只记日志，不阻断页面加载（内部带 10 分钟 TTL 防抖）
   void ensureWebPixel(admin, session.shop);
 
-  scheduleV4TokenSync(session.shop, session.accessToken);
-
   const locale = detectRequestLocale(request);
   const { nav, home } = getAppEntryConfig();
 
@@ -80,7 +62,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return { apiKey: process.env.SHOPIFY_API_KEY || "", locale, nav, home };
 };
 
-/** /app 子页面之间切换时不重跑壳层 loader，避免重复鉴权副作用与 Cosmos 同步。 */
+/** /app 子页面之间切换时不重跑壳层 loader，避免重复鉴权副作用。 */
 export function shouldRevalidate({
   currentUrl,
   nextUrl,
