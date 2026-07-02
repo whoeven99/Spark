@@ -207,6 +207,73 @@ async function run({
             metrics: daily.metrics,
             anomalies,
             openTaskCount: openTasks.length,
+            goal,
+            constraints,
+          },
+          structuredResult: {
+            diagnosis: daily.items
+              .filter((item) => item.status !== "healthy")
+              .map((item) => ({
+                title: item.name,
+                detail: item.evidence[0] ?? item.reasoning[0] ?? item.name,
+                severity: item.status === "risk" ? "risk" : "watch",
+                metrics: item.metrics,
+              })),
+            evidence: [
+              {
+                label: "7 天销售额",
+                value: `${daily.metrics.salesAmount7d} ${daily.metrics.currency}`,
+                source: "daily_diagnosis",
+              },
+              { label: "超时未发货", value: daily.metrics.overdueOrderCount, source: "daily_diagnosis" },
+              { label: "30 天退款率", value: `${daily.metrics.refundRate30d}%`, source: "daily_diagnosis" },
+              { label: "高风险 SKU", value: daily.metrics.riskSkuCount, source: "daily_diagnosis" },
+            ],
+            actions: openTasks.slice(0, 5).map((task) => ({
+              title: task.title,
+              detail: task.triggerReason,
+              priority: task.priority,
+              ownerRole: task.ownerRole ?? undefined,
+              status: "proposed",
+            })),
+            reviewMetrics: [
+              {
+                key: "activeRiskCount",
+                label: "风险项数量",
+                current: daily.overview.activeRiskCount,
+                target: 0,
+                direction: "decrease",
+              },
+              {
+                key: "openTaskCount",
+                label: "进行中待办",
+                current: openTasks.length,
+                target: 0,
+                direction: "decrease",
+              },
+              {
+                key: "salesAmount7d",
+                label: "7 天销售额",
+                current: daily.metrics.salesAmount7d,
+                direction: "increase",
+              },
+            ],
+            followUps: [
+              {
+                title: "明日复盘经营体检变化",
+                detail: "对比风险项、待办数量、退款率和库存风险是否改善。",
+                dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+              },
+            ],
+          },
+          caseDraft: {
+            title: "经营体检报告",
+            severity: daily.items.some((item) => item.status === "risk")
+              ? "risk"
+              : daily.items.some((item) => item.status === "watch")
+                ? "watch"
+                : "info",
+            reviewDueAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
           },
         };
       }
@@ -310,7 +377,62 @@ async function run({
     ok: true,
     summary,
     steps,
-    data: { orderMetrics, invHealth, anomalies, productsCount },
+    data: { orderMetrics, invHealth, anomalies, productsCount, goal, constraints },
+    structuredResult: {
+      diagnosis: anomalies.map((item) => ({
+        title: item,
+        severity: "watch",
+      })),
+      evidence: [
+        { label: "近期订单数", value: orderMetrics.orderCount, source: "shopify_graphql_sample" },
+        { label: "GMV", value: `${orderMetrics.gmv} ${orderMetrics.currency}`, source: "shopify_graphql_sample" },
+        { label: "退款率", value: `${orderMetrics.refundRate}%`, source: "shopify_graphql_sample" },
+        { label: "缺货 SKU", value: invHealth.outOfStockCount, source: "shopify_graphql_sample" },
+      ],
+      actions:
+        anomalies.length > 0
+          ? anomalies.map((item) => ({
+              title: item,
+              detail: "基于实时 GraphQL 采样结果生成，建议等待完整诊断快照后复核。",
+              priority: "P2",
+              status: "proposed",
+            }))
+          : [
+              {
+                title: "保持每日经营巡检",
+                detail: "当前实时采样未发现明显异常。",
+                priority: "P3",
+                status: "proposed",
+              },
+            ],
+      reviewMetrics: [
+        {
+          key: "refundRate",
+          label: "退款率",
+          current: orderMetrics.refundRate,
+          direction: "decrease",
+        },
+        {
+          key: "outOfStockCount",
+          label: "缺货 SKU",
+          current: invHealth.outOfStockCount,
+          target: 0,
+          direction: "decrease",
+        },
+      ],
+      followUps: [
+        {
+          title: "补齐同步数据后复跑经营体检",
+          detail: fallbackNote || "实时采样只适合粗诊断，完整诊断快照更适合沉淀 Case。",
+          dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        },
+      ],
+    },
+    caseDraft: {
+      title: "经营体检报告",
+      severity: anomalies.length > 0 ? "watch" : "info",
+      reviewDueAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    },
   };
 }
 
@@ -331,5 +453,15 @@ export const shopHealthCheckPlaybook: PlaybookDefinition = {
     { id: "异常检测", label: "异常检测", kind: "qc", stage: "diagnose", runningLabel: "正在检测异常指标" },
     { id: "建议生成", label: "建议生成", kind: "llm", stage: "propose", runningLabel: "正在调用大模型生成健康报告" },
   ],
+  presentation: {
+    icon: "OPS",
+    entryTitle: "经营体检",
+    entrySubtitle: "把销售、履约、退款和库存风险汇总成优先级",
+    evidenceKeys: ["riskCount", "watchCount", "openTaskCount"],
+    defaultPrompt: "运行 Playbook「经营体检」，总结今日店铺健康状态和优先事项。",
+    ctaLabel: "生成体检报告",
+    runTitle: "经营体检 Playbook",
+    reviewMetrics: ["activeRiskCount", "openTaskCount", "salesAmount7d"],
+  },
   run,
 };

@@ -12,7 +12,6 @@ import {
   type TranslationInput,
 } from "../services/shopifyFetch.js";
 import { filterWritebackFields } from "../services/writebackFields.js";
-import { QpsLogger } from "../services/qpsLogger.js";
 import type { TranslationV4Job } from "../services/cosmosV4.js";
 
 const WORKER_ID = `verify-${process.env.HOSTNAME ?? hostname()}-${process.pid}`;
@@ -114,7 +113,6 @@ async function processVerifyJob(job: TranslationV4Job): Promise<void> {
   await setProgress(jobId, { verifyTotal, verifyDone, verifyFailed, currentModule: "VERIFY" });
 
   const stageStartedAt = new Date().toISOString(); // ISO span start for stageTimings
-  const qps = new QpsLogger(jobId, shopName, "VERIFY");
 
   console.log(`[verify] job=${jobId} concurrency=${getShopifyCap(shopName)}(adaptive)`);
 
@@ -260,7 +258,5 @@ async function processVerifyJob(job: TranslationV4Job): Promise<void> {
       stageTimings: withStageTiming(job.stageTimings, "VERIFY", stageStartedAt, new Date().toISOString()),
     });
     console.error(`[verify] failed job=${jobId}`, e);
-  } finally {
-    qps.stop();
   }
 }

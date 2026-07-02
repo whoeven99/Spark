@@ -3,6 +3,10 @@ import { z } from "zod";
 import type { BaseMessage } from "@langchain/core/messages";
 import type { AgentContext, ToolDefinition } from "./toolRegistry.server";
 import { normalizeSteps, type StepInput } from "./skillTypes.server";
+import type {
+  PlaybookCaseDraft,
+  PlaybookStructuredResult,
+} from "../../playbookCase/types.server";
 
 // ──────────────────────────────────────────────
 // Playbook 执行结果
@@ -20,6 +24,8 @@ export interface PlaybookRunResult {
   summary: string;
   steps: PlaybookStepResult[];
   data?: Record<string, unknown>;
+  structuredResult?: PlaybookStructuredResult;
+  caseDraft?: PlaybookCaseDraft;
 }
 
 export interface PlaybookRunParams {
@@ -27,6 +33,17 @@ export interface PlaybookRunParams {
   constraints?: string;
   context: AgentContext;
   onStep?: (step: string, status: "running" | "completed" | "error") => void;
+}
+
+export interface PlaybookPresentation {
+  icon?: string;
+  entryTitle?: string;
+  entrySubtitle?: string;
+  evidenceKeys?: string[];
+  defaultPrompt?: string;
+  ctaLabel?: string;
+  runTitle?: string;
+  reviewMetrics?: string[];
 }
 
 // ──────────────────────────────────────────────
@@ -62,6 +79,8 @@ export interface PlaybookDefinition {
   condition?: (ctx: AgentContext) => boolean | Promise<boolean>;
   /** 额外注入 system prompt 的专属指令（可选）*/
   systemPromptExtension?: string;
+  /** 工作台/对话入口展示协议。 */
+  presentation?: PlaybookPresentation;
   /** 多步骤执行函数 */
   run: (params: PlaybookRunParams) => Promise<PlaybookRunResult>;
   /** 拦截流式事件（与 ToolDefinition.onStreamEvent 接口相同）*/

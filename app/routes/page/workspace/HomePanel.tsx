@@ -1,6 +1,11 @@
 /** 工作台首页 — 对齐 Spark 首页实装预览：问候、AI 输入、店铺概览、任务监控。 */
-import { useMemo, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
+import type {
+  AutomationOverview,
+  AutomationOverviewResponse,
+  PlaybookSurfaceItem,
+} from "../../../lib/automationOverviewTypes";
 import type { WorkspaceDashboardSnapshot } from "../../../lib/workspaceDashboardTypes";
 import type { ContextTool } from "./types";
 import {
@@ -190,6 +195,97 @@ const homeStyles = {
     cursor: "pointer",
     fontFamily: "inherit",
   },
+  playbookSection: {
+    marginTop: 16,
+    paddingTop: 14,
+    borderTop: `1px solid ${shopifyUi.border}`,
+    display: "grid",
+    gap: 10,
+  },
+  playbookHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  playbookTitle: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: shopifyUi.text,
+  },
+  playbookMeta: {
+    fontSize: 12,
+    color: shopifyUi.textMuted,
+  },
+  playbookGrid: (mobile: boolean) =>
+    ({
+      display: "grid",
+      gridTemplateColumns: mobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+      gap: 10,
+    }) as const,
+  playbookCard: {
+    border: `1px solid ${shopifyUi.border}`,
+    borderRadius: 12,
+    background: shopifyUi.surface,
+    padding: "12px 12px 11px",
+    display: "grid",
+    gap: 8,
+    textAlign: "left" as const,
+  },
+  playbookCardTop: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  playbookIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    border: `1px solid ${shopifyUi.border}`,
+    background: shopifyUi.surfaceSubtle,
+    color: shopifyUi.textSecondary,
+    display: "grid",
+    placeItems: "center",
+    fontSize: 10,
+    fontWeight: 800,
+    flexShrink: 0,
+  },
+  playbookName: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: shopifyUi.text,
+    lineHeight: 1.35,
+  },
+  playbookSubtitle: {
+    marginTop: 2,
+    fontSize: 12,
+    color: shopifyUi.textSecondary,
+    lineHeight: 1.4,
+  },
+  evidenceRow: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: 6,
+  },
+  evidenceChip: {
+    borderRadius: 999,
+    background: "#f1f2f3",
+    color: "#5c6066",
+    padding: "2px 7px",
+    fontSize: 11,
+    fontWeight: 600,
+  },
+  playbookButton: {
+    border: `1px solid ${shopifyUi.borderStrong}`,
+    borderRadius: 10,
+    background: shopifyUi.surfaceSubtle,
+    color: shopifyUi.text,
+    padding: "7px 10px",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
   sectionCard: {
     ...surfaceCardStyle,
     padding: "20px 22px",
@@ -339,9 +435,29 @@ export function HomePanel({
 }) {
   const { isMobile } = useResponsiveLayout();
   const [draft, setDraft] = useState("");
+  const [automationOverview, setAutomationOverview] =
+    useState<AutomationOverview | null>(null);
   const now = useMemo(() => new Date(), []);
   const needsAttention = snapshot.automation?.status === "attention";
   const suggestionItems = snapshot.suggestions.slice(0, 2);
+  const recommendedPlaybooks = automationOverview?.recommendedPlaybooks ?? [];
+
+  useEffect(() => {
+    let cancelled = false;
+    const authQuery = typeof window !== "undefined" ? window.location.search : "";
+    fetch(`/api/automation-overview${authQuery}`)
+      .then((res) => res.json() as Promise<AutomationOverviewResponse>)
+      .then((json) => {
+        if (cancelled) return;
+        if (json.ok) setAutomationOverview(json.overview);
+      })
+      .catch(() => {
+        if (!cancelled) setAutomationOverview(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const submitDraft = () => {
     const text = draft.trim();
@@ -427,6 +543,13 @@ export function HomePanel({
             </button>
           ))}
         </div>
+        {recommendedPlaybooks.length > 0 ? (
+          <RecommendedPlaybooks
+            items={recommendedPlaybooks}
+            isMobile={isMobile}
+            onSubmitPrompt={onSubmitPrompt}
+          />
+        ) : null}
       </section>
 
       <section style={homeStyles.sectionCard}>
@@ -474,6 +597,58 @@ export function HomePanel({
           </button>
         </div>
       </section>
+    </div>
+  );
+}
+
+function RecommendedPlaybooks({
+  items,
+  isMobile,
+  onSubmitPrompt,
+}: {
+  items: PlaybookSurfaceItem[];
+  isMobile: boolean;
+  onSubmitPrompt: (prompt: string) => void;
+}) {
+  return (
+    <div style={homeStyles.playbookSection}>
+      <div style={homeStyles.playbookHeader}>
+        <div>
+          <div style={homeStyles.playbookTitle}>推荐 Playbook</div>
+          <div style={homeStyles.playbookMeta}>基于今日诊断，Spark 建议优先跑这些运营剧本</div>
+        </div>
+      </div>
+      <div style={homeStyles.playbookGrid(isMobile)}>
+        {items.map((item) => (
+          <article key={item.id} style={homeStyles.playbookCard}>
+            <div style={homeStyles.playbookCardTop}>
+              <div style={homeStyles.playbookIcon}>{item.icon ?? "PB"}</div>
+              <div>
+                <div style={homeStyles.playbookName}>{item.title}</div>
+                <div style={homeStyles.playbookSubtitle}>
+                  {item.recommendationReason ?? item.entrySubtitle ?? item.detail}
+                </div>
+              </div>
+            </div>
+            {item.evidence.length > 0 ? (
+              <div style={homeStyles.evidenceRow}>
+                {item.evidence.slice(0, 3).map((line) => (
+                  <span key={line} style={homeStyles.evidenceChip}>
+                    {line}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            <button
+              type="button"
+              style={homeStyles.playbookButton}
+              onClick={() => onSubmitPrompt(item.defaultPrompt)}
+            >
+              {item.ctaLabel}
+            </button>
+          </article>
+        ))}
+      </div>
     </div>
   );
 }

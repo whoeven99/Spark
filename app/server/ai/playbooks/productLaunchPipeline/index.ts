@@ -161,6 +161,59 @@ async function run({
       ok: true,
       summary: genericChecklist,
       steps,
+      data: { goal, constraints },
+      structuredResult: {
+        diagnosis: [
+          {
+            title: "需要商品 ID 才能生成个性化上新清单",
+            detail: "当前返回通用上新流程，建议补充 Shopify 商品 ID 后复跑。",
+            severity: "info",
+          },
+        ],
+        evidence: [
+          { label: "商品 ID", value: "未提供", source: "user_goal" },
+        ],
+        actions: [
+          {
+            title: "补齐商品基础信息",
+            detail: "标题、描述、图片、售价、SKU、标签。",
+            priority: "P1",
+            status: "proposed",
+          },
+          {
+            title: "准备多语言翻译",
+            detail: "如有多语言市场，翻译标题、描述、卖点，并检查术语一致性。",
+            priority: "P2",
+            status: "proposed",
+          },
+          {
+            title: "上架前质检",
+            detail: "检查禁用词、夸大宣传和图片分辨率。",
+            priority: "P1",
+            status: "proposed",
+          },
+        ],
+        reviewMetrics: [
+          {
+            key: "productIdProvided",
+            label: "是否已提供商品 ID",
+            current: false,
+            target: true,
+            direction: "stable",
+          },
+        ],
+        followUps: [
+          {
+            title: "提供商品 ID 后复跑上新流水线",
+            dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          },
+        ],
+      },
+      caseDraft: {
+        title: "上新流水线通用清单",
+        severity: "info",
+        reviewDueAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      },
     };
   }
 
@@ -274,7 +327,87 @@ async function run({
     ok: true,
     summary,
     steps,
-    data: { productId, productTitle: product.title, completenessCheck: check },
+    data: { productId, productTitle: product.title, completenessCheck: check, goal, constraints },
+    structuredResult: {
+      diagnosis: [
+        {
+          title: `商品完整度 ${check.score}/100`,
+          detail:
+            check.missingFields.length > 0
+              ? `待补全：${check.missingFields.join("、")}`
+              : "商品信息完整度良好。",
+          severity: check.score >= 80 ? "info" : check.score >= 60 ? "watch" : "risk",
+          metrics: {
+            score: check.score,
+            imageCount: check.imageCount,
+            variantCount: check.variantCount,
+            missingFieldCount: check.missingFields.length,
+          },
+        },
+      ],
+      evidence: [
+        { label: "商品", value: product.title, source: "shopify_product" },
+        { label: "完整度评分", value: check.score, source: "product_completeness_check" },
+        { label: "图片数量", value: check.imageCount, source: "shopify_product" },
+        { label: "变体数量", value: check.variantCount, source: "shopify_product" },
+        {
+          label: "待补全字段",
+          value: check.missingFields.length > 0 ? check.missingFields.join("、") : "无",
+          source: "product_completeness_check",
+        },
+      ],
+      actions: [
+        ...check.missingFields.map((field) => ({
+          title: `补全${field}`,
+          detail: "补齐后再进入上架审核，降低转化损失。",
+          priority: "P1" as const,
+          status: "proposed" as const,
+          relatedObjects: { productId },
+        })),
+        {
+          title: "复核文案建议",
+          detail: "确认卖点、商品描述草案和 FAQ 是否符合品牌语气。",
+          priority: "P2",
+          status: "proposed",
+          relatedObjects: { productId },
+        },
+        {
+          title: "准备翻译任务",
+          detail: translationNote,
+          priority: "P2",
+          status: "proposed",
+          relatedObjects: { productId },
+        },
+      ],
+      reviewMetrics: [
+        {
+          key: "completenessScore",
+          label: "商品完整度评分",
+          current: check.score,
+          target: 80,
+          direction: "increase",
+        },
+        {
+          key: "missingFields",
+          label: "缺失字段数",
+          current: check.missingFields.length,
+          target: 0,
+          direction: "decrease",
+        },
+      ],
+      followUps: [
+        {
+          title: "补齐缺失字段后复核上架状态",
+          detail: "确认商品页预览、翻译准备和上架前质检。",
+          dueAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+        },
+      ],
+    },
+    caseDraft: {
+      title: `商品「${product.title}」上新流水线`,
+      severity: check.score >= 80 ? "info" : check.score >= 60 ? "watch" : "risk",
+      reviewDueAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+    },
   };
 }
 
@@ -296,5 +429,15 @@ export const productLaunchPipelinePlaybook: PlaybookDefinition = {
     { id: "翻译准备", label: "翻译准备", kind: "compute", stage: "propose", runningLabel: "正在评估翻译准备" },
     { id: "上架清单", label: "上架清单", kind: "compute", stage: "qc", runningLabel: "正在生成上架清单" },
   ],
+  presentation: {
+    icon: "NEW",
+    entryTitle: "上新流水线",
+    entrySubtitle: "检查商品信息，准备文案、翻译和上架清单",
+    evidenceKeys: ["productCompleteness", "translationReadiness"],
+    defaultPrompt: "运行 Playbook「上新流水线」，帮我检查商品信息并生成上架准备清单。",
+    ctaLabel: "生成上新清单",
+    runTitle: "上新流水线 Playbook",
+    reviewMetrics: ["completenessScore", "missingFields"],
+  },
   run,
 };

@@ -39,7 +39,6 @@ import {
   type TranslateItem,
   type TranslatedResourceOutput,
 } from "../services/llmTranslate.js";
-import { QpsLogger } from "../services/qpsLogger.js";
 import type { TranslationV4Job } from "../services/cosmosV4.js";
 import {
   isInternalAbortReason,
@@ -304,7 +303,6 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
   // Record when this translate stage actually started (epoch ms string).
   const translateStartedAt = Date.now().toString();
   const stageStartedAt = new Date().toISOString(); // ISO span start for stageTimings
-  const qps = new QpsLogger(jobId, shopName, "TRANSLATE");
 
   const clampUnitDone = () => {
     if (translateUnitTotal <= 0) return;
@@ -863,7 +861,6 @@ async function processTranslateJob(job: TranslationV4Job): Promise<void> {
     });
     console.error(`[translate] failed job=${jobId}`, e);
   } finally {
-    qps.stop();
     await wakeNextTranslateForShop(shopName).catch((e) => {
       console.warn(`[translate] wakeNext failed shop=${shopName}`, e);
     });

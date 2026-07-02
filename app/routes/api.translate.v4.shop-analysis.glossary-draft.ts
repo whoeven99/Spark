@@ -8,7 +8,7 @@ import { authenticate } from "../shopify.server";
 import {
   readGlossaryDraft,
   bumpGlossaryVersion,
-} from "../server/translation/shopAnalysis.server";
+} from "../server/translation/shopProfile.server";
 import {
   readGlossary,
   saveGlossary,
