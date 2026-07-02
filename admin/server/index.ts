@@ -9,7 +9,6 @@ import { authMiddleware, requireOwner } from "./middleware/auth.js";
 import { authRouter } from "./routes/auth.js";
 import { overviewRouter } from "./routes/overview.js";
 import { shopsRouter } from "./routes/shops.js";
-import { translationsRouter } from "./routes/translations.js";
 import { usageRouter } from "./routes/usage.js";
 import { capabilitiesRouter } from "./routes/capabilities.js";
 import { subscriptionsRouter } from "./routes/subscriptions.js";
@@ -22,8 +21,6 @@ import { opsChecklistRouter } from "./routes/opsChecklist.js";
 import { visitSourceRouter } from "./routes/visitSource.js";
 import { pixelLogsRouter } from "./routes/pixelLogs.js";
 import { appLogsRouter } from "./routes/appLogs.js";
-import { shopProfileRouter } from "./routes/shopProfile.js";
-import { shopStyleProfileRouter } from "./routes/shopStyleProfile.js";
 import { supportRouter } from "./routes/support.js";
 import { isProductionNodeEnv } from "./lib/nodeEnv.js";
 
@@ -49,7 +46,6 @@ app.use("/api/auth", authRouter);
 // All authenticated users can access all routes
 app.use("/api/overview", authMiddleware, overviewRouter);
 app.use("/api/shops", authMiddleware, shopsRouter);
-app.use("/api/translations", authMiddleware, translationsRouter);
 app.use("/api/usage", authMiddleware, usageRouter);
 app.use("/api/capabilities", authMiddleware, capabilitiesRouter);
 app.use("/api/subscriptions", authMiddleware, subscriptionsRouter);
@@ -64,8 +60,6 @@ app.use("/api/visit-source", authMiddleware, visitSourceRouter);
 app.use("/api/pixel-logs", authMiddleware, requireOwner, pixelLogsRouter);
 // App 功能埋点日志（无 checkout PII），所有登录用户可查
 app.use("/api/app-logs", authMiddleware, appLogsRouter);
-app.use("/api/shop-analysis", authMiddleware, shopStyleProfileRouter);
-app.use("/api/shop-profile", authMiddleware, shopProfileRouter);
 // 人工客服会话：所有登录运营可见可回复
 app.use("/api/support", authMiddleware, supportRouter);
 

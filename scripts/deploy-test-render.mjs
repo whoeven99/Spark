@@ -5,7 +5,7 @@
  *
  * 用法：
  *   node scripts/deploy-test-render.mjs spark -m "fix: xxx"
- *   node scripts/deploy-test-render.mjs admin worker -m "feat: yyy"
+ *   node scripts/deploy-test-render.mjs admin -m "feat: yyy"
  *   node scripts/deploy-test-render.mjs --all -m "chore: deploy"
  *   node scripts/deploy-test-render.mjs spark --deploy-only   # 跳过 commit/push，仅部署
  *   node scripts/deploy-test-render.mjs spark --no-wait         # 触发后不等待结果
@@ -17,7 +17,6 @@
  * 允许的服务别名（均为测试环境）：
  *   spark  → Agent-Spark-Test        (srv-d7j6ogaqqhas739in900)
  *   admin  → Admin Test                (srv-d8p9g9rsq97s73fr1b1g)
- *   worker → Spark Translation Worker Test (srv-d88p1fmq1p3s73f5trv0)
  */
 
 import { execFileSync, spawnSync } from "node:child_process";
@@ -38,17 +37,11 @@ const TEST_SERVICES = {
     label: "Admin Test",
     url: "https://spark-admin-test-dashboard.onrender.com",
   },
-  worker: {
-    id: "srv-d88p1fmq1p3s73f5trv0",
-    label: "Spark Translation Worker Test",
-    url: null,
-  },
 };
 
 /** 明确禁止的 prod 服务 ID（二次校验，防止误配） */
 const BLOCKED_SERVICE_IDS = new Set([
   "srv-d8a49ortqb8s7392ed4g", // Admin (prod)
-  "srv-d8sqas4vikkc73f5nbog", // Spark Translation Worker (prod)
   "srv-d88llfml51nc73fksm2g", // Product Improve Prod
   "srv-d41d5tur433s73dspvmg", // TranslateImageProd
   "srv-d10oncje5dus73ahrtqg", // DescriptionFDProd
@@ -67,8 +60,7 @@ function printUsageAndExit(message, code = 1) {
       "Services (test only):",
       "  spark   Spark 主应用测试环境",
       "  admin   Admin 测试环境",
-      "  worker  翻译 Worker 测试环境",
-      "  --all   部署以上三个测试服务",
+      "  --all   部署 spark 与 admin 测试服务",
       "",
       "Options:",
       "  -m, --message <text>   commit message（未设则自动生成）",
@@ -80,8 +72,8 @@ function printUsageAndExit(message, code = 1) {
       "  -h, --help             显示帮助",
       "",
       "Examples:",
-      '  node scripts/deploy-test-render.mjs spark -m "fix: worker tsf db"',
-      "  node scripts/deploy-test-render.mjs admin worker --all",
+      '  node scripts/deploy-test-render.mjs spark -m "fix: chat ui"',
+      "  node scripts/deploy-test-render.mjs admin --all",
       "  npm run deploy:test -- spark -m \"chore: test deploy\"",
     ].join("\n"),
   );
@@ -170,7 +162,7 @@ function parseArgs(argv) {
 
   const unique = [...new Set(services)];
   if (unique.length === 0) {
-    printUsageAndExit("请指定至少一个服务: spark | admin | worker | --all");
+    printUsageAndExit("请指定至少一个服务: spark | admin | --all");
   }
 
   for (const name of unique) {

@@ -406,10 +406,8 @@ export function UnifiedTaskListPage({ locationSearch }: Props) {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {entries.map((entry) => {
-            const key =
-              entry.entryType === "ai_task" ? entry.task.id : entry.job.id;
-            const isDeletingThis =
-              entry.entryType === "ai_task" && entry.task.id === deletingId;
+            const key = entry.task.id;
+            const isDeletingThis = entry.task.id === deletingId;
             return (
               <UnifiedTaskCard
                 key={key}

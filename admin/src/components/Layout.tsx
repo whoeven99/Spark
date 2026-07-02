@@ -4,7 +4,6 @@ import { Layout as AntLayout, Menu, Button, Typography, Tag } from "antd";
 import {
   DashboardOutlined,
   ShopOutlined,
-  TranslationOutlined,
   BarChartOutlined,
   LogoutOutlined,
   RobotOutlined,
@@ -37,7 +36,6 @@ export default function Layout() {
   const allMenuItems = [
     { key: "/", icon: <DashboardOutlined />, label: <Link to="/">概览</Link>, ownerOnly: false },
     { key: "/shops", icon: <ShopOutlined />, label: <Link to="/shops">商店</Link>, ownerOnly: false },
-    { key: "/translations", icon: <TranslationOutlined />, label: <Link to="/translations">翻译任务</Link>, ownerOnly: false },
     { key: "/usage", icon: <BarChartOutlined />, label: <Link to="/usage">用量统计</Link>, ownerOnly: false },
     { key: "/subscriptions", icon: <CreditCardOutlined />, label: <Link to="/subscriptions">订阅统计</Link>, ownerOnly: false },
     { key: "/revenue", icon: <DollarOutlined />, label: <Link to="/revenue">收入分析</Link>, ownerOnly: true },
@@ -48,7 +46,6 @@ export default function Layout() {
     { key: "/pixel-logs", icon: <FileSearchOutlined />, label: <Link to="/pixel-logs">WebPixel 日志</Link>, ownerOnly: true },
     { key: "/app-logs", icon: <AppstoreOutlined />, label: <Link to="/app-logs">Spark 应用日志</Link>, ownerOnly: false },
     { key: "/support", icon: <CustomerServiceOutlined />, label: <Link to="/support">客服会话</Link>, ownerOnly: false },
-    { key: "/translate-v4-support", icon: <CustomerServiceOutlined />, label: <Link to="/translate-v4-support">翻译v4 客服</Link>, ownerOnly: false },
     { key: "/ops-checklist", icon: <SafetyCertificateOutlined />, label: <Link to="/ops-checklist">服务巡检</Link>, ownerOnly: false },
     { key: "/todo", icon: <CheckSquareOutlined />, label: <Link to="/todo">Team Todo</Link>, ownerOnly: false },
   ];

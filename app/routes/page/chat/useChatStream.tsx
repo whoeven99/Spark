@@ -6,7 +6,6 @@ import { trackFeature } from "../../../lib/featureTrack";
 import { coerceProductImproveFormPayload } from "../../../lib/productImproveFormPayload";
 import { coerceImageGenerationFormPayload } from "../../../lib/imageGenerationFormPayload";
 import { coercePictureTranslateFormPayload } from "../../../lib/pictureTranslateFormPayload";
-import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import {
   coerceBatchTasksFormPayload,
   type BatchTaskProduct,
@@ -54,7 +53,6 @@ type StreamChunk =
         model: string;
         finalReply?: string;
         uiPayloads?: {
-          translationTaskForm?: unknown;
           productImproveCardPayload?: unknown;
           pictureTranslateCard?: unknown;
           imageGenerationCard?: unknown;
@@ -73,7 +71,6 @@ export type ChatStreamFinishPayload = {
   aborted: boolean;
   reply: string;
   thinkingContent?: string;
-  translationTaskForm?: unknown;
   attachments?: ChatMessageAttachment[];
   productImproveCard?: boolean;
   productImproveCardPayload?: unknown;
@@ -86,7 +83,6 @@ type Snapshot = {
   streamedText: string;
   thinkingContent: string;
   thinkingNotes: string[];
-  translationTaskForm?: unknown;
   attachments: ChatMessageAttachment[];
   productImproveCard: boolean;
   productImproveCardPayload?: unknown;
@@ -98,7 +94,6 @@ function snapshotToFinishPayload(snapshot: Snapshot, aborted: boolean): ChatStre
     aborted,
     reply: snapshot.reply,
     thinkingContent: snapshot.thinkingContent || undefined,
-    translationTaskForm: snapshot.translationTaskForm,
     attachments: snapshot.attachments,
     productImproveCard: snapshot.productImproveCard,
     productImproveCardPayload: snapshot.productImproveCardPayload,
@@ -114,7 +109,6 @@ export function useChatStream() {
   const [awaitingFirstChunk, setAwaitingFirstChunk] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [streamingThinkingText, setStreamingThinkingText] = useState("");
-  const [streamingTranslationForm, setStreamingTranslationForm] = useState<unknown>();
   const [streamingGenerateCard, setStreamingGenerateCard] = useState(false);
   const [streamingGeneratePayload, setStreamingGeneratePayload] = useState<unknown>();
   const [streamingTaskProposal, setStreamingTaskProposal] =
@@ -126,7 +120,6 @@ export function useChatStream() {
     streamedText: "",
     thinkingContent: "",
     thinkingNotes: [],
-    translationTaskForm: undefined,
     attachments: [],
     productImproveCard: false,
     productImproveCardPayload: undefined,
@@ -139,7 +132,6 @@ export function useChatStream() {
       streamedText: "",
       thinkingContent: "",
       thinkingNotes: [],
-      translationTaskForm: undefined,
       attachments: [],
       productImproveCard: false,
       productImproveCardPayload: undefined,
@@ -150,7 +142,6 @@ export function useChatStream() {
   const resetStreamingUi = () => {
     setStreamingText("");
     setStreamingThinkingText("");
-    setStreamingTranslationForm(undefined);
     setStreamingGenerateCard(false);
     setStreamingGeneratePayload(undefined);
     setStreamingTaskProposal(undefined);
@@ -321,11 +312,7 @@ export function useChatStream() {
               } else if (chunk.type === "tool_call") {
                 markFirstChunkSeen();
                 appendThinkingNote(`Preparing ${chunk.name}`);
-                if (chunk.name === "open_translation_task_form") {
-                  const normalized = coerceTranslationTaskFormPayload(chunk.args);
-                  snapshotRef.current.translationTaskForm = normalized;
-                  setStreamingTranslationForm(normalized);
-                } else if (chunk.name === "open_product_improve_form") {
+                if (chunk.name === "open_product_improve_form") {
                   // 表单态统一转通用提案卡；即时生成结果（generate_product_description）保留旧卡
                   applyTaskProposal(
                     buildSingleProductImproveProposal(
@@ -375,13 +362,6 @@ export function useChatStream() {
                 snapshotRef.current.reply = reply;
 
                 const ui = chunk.metadata.uiPayloads;
-                if (ui?.translationTaskForm) {
-                  const normalized = coerceTranslationTaskFormPayload(
-                    ui.translationTaskForm,
-                  );
-                  snapshotRef.current.translationTaskForm = normalized;
-                  setStreamingTranslationForm(normalized);
-                }
                 if (ui?.attachments) {
                   snapshotRef.current.attachments =
                     coerceChatMessageAttachments(ui.attachments);
@@ -504,7 +484,6 @@ export function useChatStream() {
     isStreaming,
     awaitingFirstChunk,
     streamingText,
-    streamingTranslationForm,
     streamingGenerateCard,
     streamingGeneratePayload,
     streamingTaskProposal,

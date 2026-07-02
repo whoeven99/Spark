@@ -478,17 +478,6 @@ export function invokeChatAgentStream(
                 uiPayloads[def.uiPayloadKey] = payload;
               }
 
-              if (
-                def.name === "translationTaskForm" &&
-                !streamContext.emittedFlags.has("translationTaskForm")
-              ) {
-                controller.enqueue({
-                  type: "tool_call",
-                  name: "open_translation_task_form",
-                  args: payload,
-                });
-              }
-
               if (def.name === "batchTasksForm") {
                 // 两种批量任务（product_improve / picture_translate）均走通用 TaskProposal 协议。
                 // uiPayloads 键转换始终执行；流式 chunk 仅在 skill 未发过时补发。

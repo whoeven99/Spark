@@ -37,7 +37,6 @@ type CardStreamChunk =
 
 export const CHAT_CARD_TYPES = [
   "none",
-  "translation_task_form",
   "image_generation_form",
   "picture_translate_form",
   "product_improve_form",
@@ -57,15 +56,6 @@ const ChatCardIntentSchema = z.object({
     .boolean()
     .describe("助手回复是否声称已打开/展示配置卡片"),
   imageDescription: z.string().optional().describe("文生图画面描述预填"),
-  translationTargetLocales: z
-    .array(z.string())
-    .optional()
-    .describe("店铺翻译目标语言 locale 列表"),
-  translationLimitPerType: z.number().optional().describe("每种资源翻译上限"),
-  translationResourceTypes: z
-    .array(z.string())
-    .optional()
-    .describe("翻译模块：PRODUCT/COLLECTION/PAGE 等"),
   pictureTranslateTargetLanguage: z.string().optional(),
   productImproveProductId: z.string().optional(),
   batchTaskType: z
@@ -92,8 +82,7 @@ const CARD_TYPE_GUIDE = `卡片类型说明：
 
 export function hasAnyChatCardInUiPayloads(uiPayloads: Record<string, unknown>): boolean {
   return Boolean(
-    uiPayloads.translationTaskForm ||
-      uiPayloads.imageGenerationCard ||
+    uiPayloads.imageGenerationCard ||
       uiPayloads.pictureTranslateCard ||
       uiPayloads.productImproveCardPayload ||
       uiPayloads.taskProposal ||
@@ -151,8 +140,6 @@ export function buildChatCardPayloadFromIntent(
   }
 
   switch (normalized.cardType) {
-    case "translation_task_form":
-      return {};
     case "image_generation_form":
       return {
         imageGenerationCard: coerceImageGenerationFormPayload({
@@ -201,13 +188,6 @@ function streamChunksForUiPayloads(
 ): CardStreamChunk[] {
   const chunks: CardStreamChunk[] = [];
 
-  if (uiPayloads.translationTaskForm && !emittedFlags.has("translationTaskForm")) {
-    chunks.push({
-      type: "tool_call",
-      name: "open_translation_task_form",
-      args: uiPayloads.translationTaskForm,
-    });
-  }
   if (uiPayloads.imageGenerationCard && !emittedFlags.has("imageGenerationForm")) {
     chunks.push({
       type: "tool_call",
@@ -314,8 +294,6 @@ export async function resolveMissingChatCardsWithLlm(params: {
 /** 工具未返回载荷但 LLM 判定需要卡片时，填充各类型默认卡片。 */
 export function defaultPayloadForCardType(cardType: ChatCardType): Record<string, unknown> {
   switch (cardType) {
-    case "translation_task_form":
-      return {};
     case "image_generation_form":
       return { imageGenerationCard: defaultImageGenerationFormPayload() };
     case "picture_translate_form":

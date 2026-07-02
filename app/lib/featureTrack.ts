@@ -14,7 +14,6 @@ import { useEffect } from "react";
 export type FeatureKey =
   | "chat"
   | "diagnosis"
-  | "translation-v4"
   | "product-improve"
   | "image-studio"
   | "order-monitor"

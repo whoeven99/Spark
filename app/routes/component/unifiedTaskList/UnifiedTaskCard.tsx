@@ -1,7 +1,6 @@
 import { useNavigate } from "react-router";
 import { ProductImproveTaskCard } from "../productImprove/ProductImproveTaskCard";
 import { TaskCard } from "../aiTask/TaskCard";
-import { TranslationV4TaskCard } from "./TranslationV4TaskCard";
 import type { UnifiedTaskEntry } from "../../../lib/unifiedTaskTypes";
 import type { AITaskStatus } from "../../../lib/aiTaskTypes";
 
@@ -21,11 +20,6 @@ export function UnifiedTaskCard({
   deleting = false,
 }: Props) {
   const navigate = useNavigate();
-
-  if (entry.entryType === "translation_v4") {
-    return <TranslationV4TaskCard job={entry.job} />;
-  }
-
   const { task } = entry;
 
   if (task.taskType === "product_improve") {

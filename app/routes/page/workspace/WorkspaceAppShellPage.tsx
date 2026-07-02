@@ -880,50 +880,6 @@ export function WorkspaceAppShellPage({
     }
   };
 
-  const handleTranslationCardSuccess = (
-    conversationId: string,
-    messageIndex: number,
-    detail: { jobId?: string; jobIds?: string[]; message: string },
-  ) => {
-    shopify.toast.show(detail.message || t("chat.translationCreateSuccess"));
-    const ids = detail.jobIds ?? (detail.jobId ? [detail.jobId] : []);
-    if (ids.length) {
-      const params = new URLSearchParams(
-        typeof window !== "undefined"
-          ? window.location.search.startsWith("?")
-            ? window.location.search.slice(1)
-            : window.location.search
-          : "",
-      );
-      params.set("page", "tasks");
-      params.set("expandJob", ids.join(","));
-      navigate(`/app/tasks?${params.toString()}`);
-    }
-    setMessagesByConversation((current) => {
-      const existing = current[conversationId] ?? [];
-      const next = existing.map((message, index) =>
-        index === messageIndex && message.role === "assistant"
-          ? {
-              role: "assistant" as const,
-              text: message.text,
-              time: message.time,
-            }
-          : message,
-      );
-      next.push({
-        role: "assistant",
-        text:
-          ids.length > 1
-            ? detail.message
-            : ids.length === 1
-              ? t("chat.translationSubmittedWithId", { jobId: ids[0] })
-              : t("chat.translationSubmitted"),
-        time: "刚刚",
-      });
-      return { ...current, [conversationId]: next };
-    });
-  };
-
   /**
    * TaskProposal 确认执行成功：向对话追加一轮「开始执行」交互
    * （用户侧指令 + 助手侧 TaskRunChatCard），并落库持久化。
@@ -1447,7 +1403,6 @@ export function WorkspaceAppShellPage({
               setStreamingConversationId(null);
               abortStream();
             }}
-            onTranslationCardSuccess={handleTranslationCardSuccess}
             onAiTaskUpdated={handleAiTaskUpdated}
             onOpenTasks={() => navigate("/app/tasks")}
             onTaskProposalExecuted={handleTaskProposalExecuted}
