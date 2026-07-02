@@ -179,11 +179,18 @@ async function doSend(
 export type TranslationJobSummary = {
   target: string;
   usedTokens: number;
+  /** 已翻译资源数；部分完成/暂停邮件仅在有实际进度时发送 */
+  translateDone?: number;
   /** 从任务创建到完成的分钟数 */
   elapsedMinutes: number;
   /** 翻译完成百分比（0–100），用于部分翻译邮件 */
   completionPercent?: number;
 };
+
+/** 部分完成/额度暂停邮件：进度为 0 时不通知（如扫描后额度为 0 即暂停）。 */
+export function hasPartialEmailProgress(job: TranslationJobSummary): boolean {
+  return (job.translateDone ?? 0) > 0 || (job.completionPercent ?? 0) > 0;
+}
 
 /**
  * 手动翻译成功邮件（模板 137353）。
@@ -299,6 +306,8 @@ export async function sendTranslationPartialEmail(
 ): Promise<boolean> {
   const shortName = parseShopName(shopName);
 
+  const progressJobs = jobs.filter(hasPartialEmailProgress);
+
   logDetail("send-partial-start", {
     shopName,
     shortName,
@@ -306,17 +315,17 @@ export async function sendTranslationPartialEmail(
     to: maskEmail(to),
     translateType,
     jobCount: jobs.length,
-    billableJobCount: jobs.filter((j) => j.usedTokens > 0).length,
+    progressJobCount: progressJobs.length,
     targets: jobs.map((j) => j.target),
     usedTokens: jobs.map((j) => j.usedTokens),
+    translateDone: jobs.map((j) => j.translateDone ?? 0),
     completionPercents: jobs.map((j) => j.completionPercent ?? 0),
     templateId: TEMPLATE_PARTIAL,
   });
 
-  const billableJobs = jobs.filter((j) => j.usedTokens > 0);
-  if (billableJobs.length === 0) {
+  if (progressJobs.length === 0) {
     logDetail("send-partial-skipped", {
-      reason: "all_used_tokens_zero",
+      reason: "all_zero_progress",
       shopName,
       to: maskEmail(to),
       translateType,
@@ -325,7 +334,7 @@ export async function sendTranslationPartialEmail(
     return true;
   }
 
-  const rowsHtml = billableJobs
+  const rowsHtml = progressJobs
     .map((j) => {
       const pct = (j.completionPercent ?? 0).toFixed(2);
       return (

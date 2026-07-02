@@ -7,7 +7,8 @@
  *  2. 手动任务（taskSource ≠ TsFrontend-Auto）：每个任务独立发一封邮件。
  *  3. 自动任务（taskSource = TsFrontend-Auto）：等同店内所有进行中自动任务结束后，
  *     查询该店全部待发 auto 任务并汇总发一封（对齐 Spring TranslateTask.sendEmail）。
- *     usedTokens=0 的语言不出现在邮件正文；若全部为 0 则不发信，但仍 mark emailSent。
+ *     usedTokens=0 的语言不出现在成功邮件正文；若全部为 0 则不发信，但仍 mark emailSent。
+ *     部分完成/暂停邮件：translateDone=0 且进度 0% 时不发信（如扫描后额度为 0），仍 mark emailSent。
  *  4. 发送成功后将 emailSent=true 写回 Cosmos，防止重发。
  *
  * 任务类型对应模板（对齐 Spring TencentEmailService）：
@@ -31,6 +32,7 @@ import {
   sendManualTranslationSuccessEmail,
   sendAutoTranslationSuccessEmail,
   sendTranslationPartialEmail,
+  hasPartialEmailProgress,
   maskEmail,
   type TranslationJobSummary,
 } from "../services/workerEmail.js";
@@ -79,9 +81,16 @@ function toJobSummary(job: TranslationV4Job): TranslationJobSummary {
   return {
     target: job.target,
     usedTokens: job.metrics.usedTokens ?? 0,
+    translateDone: job.metrics.translateDone ?? 0,
     elapsedMinutes: calcElapsedMinutes(job),
     completionPercent: calcCompletionPercent(job),
   };
+}
+
+async function markEmailSentBatch(jobs: TranslationV4Job[]): Promise<void> {
+  for (const job of jobs) {
+    await markEmailSent(job);
+  }
 }
 
 /** 去掉 .myshopify.com 后缀，得到可读店名（firstName 不可用时的兜底）。 */
@@ -161,6 +170,18 @@ async function handleManualJob(job: TranslationV4Job): Promise<void> {
     templateKind = "manual_success";
     sent = await sendManualTranslationSuccessEmail(job.shopName, to, userName, summary);
   } else if (job.status === "PAUSED") {
+    if (!hasPartialEmailProgress(summary)) {
+      logDetail("handle-manual-skipped", {
+        reason: "zero_progress",
+        jobId: job.id,
+        shop: job.shopName,
+        target: job.target,
+        translateDone: summary.translateDone ?? 0,
+        completionPercent: summary.completionPercent ?? 0,
+      });
+      await markEmailSent(job);
+      return;
+    }
     templateKind = "manual_partial";
     sent = await sendTranslationPartialEmail(
       job.shopName,
@@ -268,14 +289,27 @@ async function handleAutoJobGroup(shopName: string): Promise<void> {
     }
   }
 
-  // 暂停任务：发部分完成邮件（159297）
+  // 暂停任务：发部分完成邮件（159297）；进度 0% 不发信，避免扫描后额度为 0 的误通知
   if (pausedJobs.length > 0) {
+    const pausedSummaries = pausedJobs.map(toJobSummary);
+    const pausedWithProgress = pausedSummaries.filter(hasPartialEmailProgress);
+    if (pausedWithProgress.length === 0) {
+      logDetail("handle-auto-partial-skipped", {
+        reason: "all_zero_progress",
+        shop: shopName,
+        jobIds: pausedJobs.map((j) => j.id),
+        targets: pausedJobs.map((j) => j.target),
+      });
+      await markEmailSentBatch(pausedJobs);
+      return;
+    }
+
     const sent = await sendTranslationPartialEmail(
       shopName,
       to,
       userName,
       "auto translation",
-      pausedJobs.map(toJobSummary),
+      pausedWithProgress,
     );
     logDetail("handle-auto-partial-send-result", {
       shop: shopName,
@@ -283,14 +317,13 @@ async function handleAutoJobGroup(shopName: string): Promise<void> {
       sent,
       jobIds: pausedJobs.map((j) => j.id),
       targets: pausedJobs.map((j) => j.target),
+      emailedTargets: pausedWithProgress.map((j) => j.target),
     });
     if (sent) {
-      for (const job of pausedJobs) {
-        await markEmailSent(job);
-      }
+      await markEmailSentBatch(pausedJobs);
       logDetail("handle-auto-partial-done", {
         shop: shopName,
-        langs: pausedJobs.map((j) => j.target),
+        langs: pausedWithProgress.map((j) => j.target),
         markedJobIds: pausedJobs.map((j) => j.id),
       });
     }
