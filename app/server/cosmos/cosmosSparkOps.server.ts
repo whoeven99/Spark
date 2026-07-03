@@ -94,6 +94,9 @@ export const SPARK_OPS_AGENT_RUNS_CONTAINER =
 
 export const AGENT_RUNS_DEFAULT_TTL_SECONDS = 77_760_000;
 
+export const SPARK_OPS_PLAYBOOK_CASES_CONTAINER =
+  process.env.COSMOS_PLAYBOOK_CASES_CONTAINER?.trim() || "playbook_cases";
+
 /**
  * Agent Run 读写容器：仅连接 Portal 已创建的 `agent_runs`，绝不 createIfNotExists。
  * 自动建容器请用 `ensureAgentRunsSparkOpsContainer()`（运维脚本）。
@@ -102,9 +105,22 @@ export function getAgentRunsSparkOpsContainer(): Container {
   return getExistingSparkOpsContainer(SPARK_OPS_AGENT_RUNS_CONTAINER);
 }
 
+/**
+ * Playbook Case 读写容器：仅连接 Portal 已创建的 `playbook_cases`。
+ * partition key: /shop
+ */
+export function getPlaybookCasesSparkOpsContainer(): Container {
+  return getExistingSparkOpsContainer(SPARK_OPS_PLAYBOOK_CASES_CONTAINER);
+}
+
 /** 运维/本地探测：显式开启 `COSMOS_SPARK_OPS_AUTO_CREATE=true` 时尝试建库建容器 */
 export async function ensureAgentRunsSparkOpsContainer(): Promise<Container> {
   return ensureSparkOpsContainer(SPARK_OPS_AGENT_RUNS_CONTAINER, {
     defaultTtl: AGENT_RUNS_DEFAULT_TTL_SECONDS,
   });
+}
+
+/** 运维/本地探测：显式开启 `COSMOS_SPARK_OPS_AUTO_CREATE=true` 时尝试建 playbook_cases */
+export async function ensurePlaybookCasesSparkOpsContainer(): Promise<Container> {
+  return ensureSparkOpsContainer(SPARK_OPS_PLAYBOOK_CASES_CONTAINER);
 }

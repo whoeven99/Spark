@@ -10,7 +10,7 @@ import {
   writeShopProfile,
   bumpProfileVersion,
   type ShopProfile,
-} from "../server/translation/shopAnalysis.server";
+} from "../server/translation/shopProfile.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);

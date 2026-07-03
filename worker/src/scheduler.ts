@@ -1,11 +1,9 @@
 import { runInitWorker } from "./workers/initWorker.js";
 import { runTranslateWorker } from "./workers/translateWorker.js";
 import { runWritebackWorker } from "./workers/writebackWorker.js";
-import { runAnalysisWorker } from "./workers/analysisWorker.js";
 import { runEmailWorker } from "./workers/emailWorker.js";
 import { resetStaleJobs, wakeQueuedJobsAfterDeploy } from "./services/cosmosV4.js";
 import { completeLegacyVerifyJobs } from "./services/finalizeJobAfterWriteback.js";
-import { resetStaleAnalysisJobs } from "./services/cosmosAnalysis.js";
 import { runAutoTranslateScan } from "./services/autoTranslate.js";
 import { cleanupStaleEmptyAutoJobs } from "./services/cleanupEmptyAutoJobs.js";
 import { isShuttingDown } from "./shutdown.js";
@@ -33,7 +31,7 @@ const EMAIL_WORKER_INTERVAL_MS = (() => {
   return n > 0 ? n : 30_000;
 })();
 
-const ALL_STAGES = ["init", "translate", "writeback", "analysis"] as const;
+const ALL_STAGES = ["init", "translate", "writeback"] as const;
 type Stage = (typeof ALL_STAGES)[number];
 
 /**
@@ -87,7 +85,6 @@ export function startScheduler(): void {
     init: runInitWorker,
     translate: runTranslateWorker,
     writeback: runWritebackWorker,
-    analysis: runAnalysisWorker,
   };
 
   // resetStale always runs — harmless when a stage is disabled.
@@ -96,9 +93,7 @@ export function startScheduler(): void {
     await completeLegacyVerifyJobs();
   });
   safeRun("resetStale", () => resetStaleJobs());
-  safeRun("resetStaleAnalysis", () => resetStaleAnalysisJobs());
   setInterval(() => safeRun("resetStale", () => resetStaleJobs()), STALE_RESET_INTERVAL_MS);
-  setInterval(() => safeRun("resetStaleAnalysis", () => resetStaleAnalysisJobs()), STALE_RESET_INTERVAL_MS);
 
   // 自动翻译：按整点调度（默认北京时间每小时 :00），启动时不立即扫描
   if (stages.has("init")) {

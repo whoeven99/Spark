@@ -4,11 +4,18 @@ import { authenticate } from "../shopify.server";
 import { listTasksPageForShop } from "../server/aiTask/aiTaskStore.server";
 import { listV4Jobs } from "../server/translation/v4/cosmosV4Store.server";
 import {
+  ACTIVE_V4_STATUSES,
   TERMINAL_V4_STATUSES,
   type TranslationV4Job,
 } from "../server/translation/v4/types";
 import type { AITaskItem } from "../lib/aiTaskTypes";
-import type { UnifiedTaskEntry, UnifiedTaskListResponse, UnifiedTaskView } from "../lib/unifiedTaskTypes";
+import type {
+  UnifiedTaskEntry,
+  UnifiedTaskListResponse,
+  UnifiedTaskStatusFilter,
+  UnifiedTaskTypeFilter,
+  UnifiedTaskView,
+} from "../lib/unifiedTaskTypes";
 
 const DEFAULT_PAGE_SIZE = 10;
 // Fetch a large batch so we can merge + paginate the combined set client-side.
@@ -21,6 +28,63 @@ function isCurrentV4Job(job: TranslationV4Job): boolean {
 
 function entryUpdatedAt(entry: UnifiedTaskEntry): string {
   return entry.entryType === "ai_task" ? entry.task.updatedAt : entry.job.updatedAt;
+}
+
+function parseTypeFilter(value: string | null): UnifiedTaskTypeFilter {
+  if (
+    value === "product_improve" ||
+    value === "image_generation" ||
+    value === "picture_translate" ||
+    value === "translation_v4"
+  ) {
+    return value;
+  }
+  return "all";
+}
+
+function parseStatusFilter(value: string | null): UnifiedTaskStatusFilter {
+  if (
+    value === "running" ||
+    value === "needs_review" ||
+    value === "failed" ||
+    value === "completed"
+  ) {
+    return value;
+  }
+  return "all";
+}
+
+function matchesTypeFilter(
+  entry: UnifiedTaskEntry,
+  typeFilter: UnifiedTaskTypeFilter,
+): boolean {
+  if (typeFilter === "all") return true;
+  if (typeFilter === "translation_v4") return entry.entryType === "translation_v4";
+  return entry.entryType === "ai_task" && entry.task.taskType === typeFilter;
+}
+
+function matchesStatusFilter(
+  entry: UnifiedTaskEntry,
+  statusFilter: UnifiedTaskStatusFilter,
+): boolean {
+  if (statusFilter === "all") return true;
+  if (entry.entryType === "translation_v4") {
+    if (statusFilter === "running") return ACTIVE_V4_STATUSES.includes(entry.job.status);
+    if (statusFilter === "failed") return entry.job.status === "FAILED";
+    if (statusFilter === "completed") return entry.job.status === "COMPLETED";
+    return false;
+  }
+
+  const status = entry.task.status;
+  if (statusFilter === "running") return status === "running";
+  if (statusFilter === "needs_review") {
+    return status === "pending_review" || status === "scored";
+  }
+  if (statusFilter === "failed") return status === "failed";
+  if (statusFilter === "completed") {
+    return status === "succeeded" || status === "applied";
+  }
+  return true;
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -37,6 +101,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     Number.isFinite(pageSizeRaw) && pageSizeRaw >= 1
       ? Math.min(Math.floor(pageSizeRaw), 50)
       : DEFAULT_PAGE_SIZE;
+  const typeFilter = parseTypeFilter(url.searchParams.get("type"));
+  const statusFilter = parseStatusFilter(url.searchParams.get("status"));
 
   const [aiTaskPage, v4Jobs] = await Promise.all([
     listTasksPageForShop({
@@ -60,7 +126,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     .filter(filterV4)
     .map((job) => ({ entryType: "translation_v4", job }));
 
-  const merged = [...aiEntries, ...v4Entries].sort(
+  const merged = [...aiEntries, ...v4Entries]
+    .filter((entry) => matchesTypeFilter(entry, typeFilter))
+    .filter((entry) => matchesStatusFilter(entry, statusFilter))
+    .sort(
     (a, b) =>
       new Date(entryUpdatedAt(b)).getTime() -
       new Date(entryUpdatedAt(a)).getTime(),
@@ -76,6 +145,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return data<UnifiedTaskListResponse>({
     entries,
     view,
+    typeFilter,
+    statusFilter,
     page,
     pageSize,
     totalCount,

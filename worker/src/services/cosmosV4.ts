@@ -546,21 +546,34 @@ export async function findTranslateQueuedJobsForShop(
   }
 }
 
-/** Heartbeat: update lastHeartbeat timestamp to signal the job is still alive. */
+/** Minimal fields for queue scan / claim (avoid SELECT * cross-partition RU). */
+export type PendingJobRef = Pick<TranslationV4Job, "id" | "shopName" | "taskSource">;
+
+/** Heartbeat: patch only timestamps (no read + full replace of large job docs). */
 export async function heartbeat(shopName: string, jobId: string): Promise<void> {
-  await updateJob(shopName, jobId, { lastHeartbeat: new Date().toISOString() });
+  const now = new Date().toISOString();
+  try {
+    await getContainer()
+      .item(jobId, shopName)
+      .patch([
+        { op: "set", path: "/lastHeartbeat", value: now },
+        { op: "set", path: "/updatedAt", value: now },
+      ]);
+  } catch (e) {
+    console.warn(`[cosmosV4] heartbeat failed ${jobId}`, e);
+  }
 }
 
 /** Find pending jobs for a given stage (cross-partition query). */
 export async function findPendingJobs(
   queuedStatus: TranslationV4Status,
   limit = 5,
-): Promise<TranslationV4Job[]> {
+): Promise<PendingJobRef[]> {
   try {
     const { resources } = await getContainer()
-      .items.query<TranslationV4Job>({
+      .items.query<PendingJobRef>({
         query:
-          "SELECT * FROM c WHERE c.status = @status ORDER BY c.createdAt ASC OFFSET 0 LIMIT @limit",
+          "SELECT c.id, c.shopName, c.taskSource FROM c WHERE c.status = @status ORDER BY c.createdAt ASC OFFSET 0 LIMIT @limit",
         parameters: [
           { name: "@status", value: queuedStatus },
           { name: "@limit", value: limit },
@@ -638,7 +651,7 @@ export async function countShopJobsInStatus(
  * 覆盖全部 4 个阶段。返回释放数量。
  */
 async function mergeReleaseMetricsFromRedis(
-  job: TranslationV4Job,
+  job: Pick<TranslationV4Job, "id" | "shopName" | "metrics">,
   processingStatus: TranslationV4Status,
 ): Promise<TranslationV4Metrics | undefined> {
   if (processingStatus !== "WRITING_BACK" && processingStatus !== "VERIFYING") {
@@ -672,9 +685,9 @@ export async function releaseJobsClaimedBySuffix(claimSuffix: string): Promise<n
   for (const [processingStatus, resetStatus] of PROCESSING_TO_QUEUED) {
     try {
       const { resources } = await getContainer()
-        .items.query<TranslationV4Job>({
+        .items.query<Pick<TranslationV4Job, "id" | "shopName" | "metrics">>({
           query:
-            "SELECT * FROM c WHERE c.status = @status AND IS_DEFINED(c.claimedBy) AND ENDSWITH(c.claimedBy, @suffix) OFFSET 0 LIMIT 50",
+            "SELECT c.id, c.shopName, c.metrics FROM c WHERE c.status = @status AND IS_DEFINED(c.claimedBy) AND ENDSWITH(c.claimedBy, @suffix) OFFSET 0 LIMIT 50",
           parameters: [
             { name: "@status", value: processingStatus },
             { name: "@suffix", value: claimSuffix },
@@ -817,8 +830,8 @@ export async function resetStaleJobs(
   for (const [processingStatus, resetStatus] of PROCESSING_TO_QUEUED) {
     try {
       const { resources } = await getContainer()
-        .items.query<TranslationV4Job>({
-          query: `SELECT * FROM c WHERE c.status = @status AND (IS_NULL(c.lastHeartbeat) OR c.lastHeartbeat < @threshold) OFFSET 0 LIMIT 20`,
+        .items.query<PendingJobRef>({
+          query: `SELECT c.id, c.shopName FROM c WHERE c.status = @status AND (IS_NULL(c.lastHeartbeat) OR c.lastHeartbeat < @threshold) OFFSET 0 LIMIT 20`,
           parameters: [
             { name: "@status", value: processingStatus },
             { name: "@threshold", value: threshold },
@@ -853,9 +866,9 @@ export async function releaseOrphanedProcessingJobs(
   for (const [processingStatus, resetStatus] of PROCESSING_TO_QUEUED) {
     try {
       const { resources } = await getContainer()
-        .items.query<TranslationV4Job>({
+        .items.query<Pick<TranslationV4Job, "id" | "shopName" | "metrics" | "claimedBy">>({
           query: `
-            SELECT * FROM c
+            SELECT c.id, c.shopName, c.metrics, c.claimedBy FROM c
             WHERE c.status = @status
               AND (
                 NOT IS_DEFINED(c.claimedBy)

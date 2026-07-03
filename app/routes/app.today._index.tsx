@@ -19,6 +19,8 @@ import { DashboardPanel } from "./page/workspace/DashboardPanel";
 import { RoutePageFallback } from "./component/RoutePageFallback";
 import { mobilePageContentStyle, pageContentStyle } from "./page/pageUiStyles";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import type { WorkspaceDashboardSnapshot } from "../lib/workspaceDashboardTypes";
+import { DestinationPage } from "./component/shared/DestinationPage";
 
 const DASHBOARD_RECENT_TASK_LIMIT = 5;
 
@@ -57,11 +59,25 @@ export default function TodayOverview() {
   return (
     <ClientMount>
       <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
+        <DestinationPage
+          title="经营"
+          subtitle="先看今日结果，再进入诊断、订单风险或任务中心处理具体对象。"
+          backLabel="返回首页"
+          fallbackPath="/app"
+          isMobile={isMobile}
+          actions={buildTodayActions({
+            snapshot: dashboardSnapshot,
+            onOpenDailyOps: () => navigate("/app/today/diagnosis"),
+            onOpenOrders: () => navigate("/app/today/orders"),
+            onOpenTasks: () => navigate("/app/tasks"),
+          })}
+        >
         <DashboardPanel
           snapshot={dashboardSnapshot}
           onOpenDailyOps={() => navigate("/app/today/diagnosis")}
           onOpenTasks={() => navigate("/app/tasks")}
         />
+        </DestinationPage>
       </div>
     </ClientMount>
   );
@@ -70,3 +86,45 @@ export default function TodayOverview() {
 export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);
 };
+
+function buildTodayActions({
+  snapshot,
+  onOpenDailyOps,
+  onOpenOrders,
+  onOpenTasks,
+}: {
+  snapshot: WorkspaceDashboardSnapshot;
+  onOpenDailyOps: () => void;
+  onOpenOrders: () => void;
+  onOpenTasks: () => void;
+}) {
+  const riskCount = snapshot.alerts.filter((item) => item.tone === "critical").length;
+  const watchCount = snapshot.alerts.filter((item) => item.tone === "warning").length;
+  const orderRiskCount = snapshot.alerts.filter((item) =>
+    /退款|履约|物流|库存|订单/.test(`${item.title}${item.detail}`),
+  ).length;
+  const taskCount = snapshot.recentTaskSummaries.length;
+  return [
+    {
+      key: "diagnosis",
+      title: "每日诊断",
+      detail: snapshot.hasData ? "查看诊断证据与四象限待办" : "暂无完整诊断数据",
+      badge: `${riskCount} 风险 / ${watchCount} 关注`,
+      onClick: onOpenDailyOps,
+    },
+    {
+      key: "orders",
+      title: "订单风险",
+      detail: "退款、履约、物流和库存对象明细",
+      badge: `${orderRiskCount} 项`,
+      onClick: onOpenOrders,
+    },
+    {
+      key: "tasks",
+      title: "任务处理",
+      detail: "查看运行进度、审核结果与失败任务",
+      badge: `${taskCount} 个近期任务`,
+      onClick: onOpenTasks,
+    },
+  ];
+}

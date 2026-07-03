@@ -104,8 +104,10 @@ export async function finalizeJobAfterWriteback(
 export async function completeLegacyVerifyJobs(limit = 30): Promise<number> {
   let completed = 0;
   for (const status of ["VERIFY_QUEUED", "VERIFYING"] as const) {
-    const jobs = await findPendingJobs(status, limit);
-    for (const job of jobs) {
+    const refs = await findPendingJobs(status, limit);
+    for (const ref of refs) {
+      const job = await getJob(ref.shopName, ref.id);
+      if (!job) continue;
       if (status === "VERIFYING" && job.claimedBy) continue;
       try {
         await finalizeJobAfterWriteback(job, {
