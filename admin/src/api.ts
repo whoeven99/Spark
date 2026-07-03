@@ -1172,3 +1172,101 @@ export function setSupportStatus(
     body: JSON.stringify({ status }),
   });
 }
+
+// --- Translation Memory (TM) 缓存查询 ---
+
+export const TM_MODEL_OPTIONS = [
+  { value: "gpt-4.1-nano", label: "GPT-4.1 nano（推荐）" },
+  { value: "gpt-4.1-mini", label: "gpt-4.1-mini" },
+  { value: "deepseek-v4-flash", label: "deepseek-v4-flash" },
+  { value: "deepseek-v4-pro", label: "deepseek-v4-pro" },
+  { value: "google-translate", label: "google-translate" },
+  { value: "deepseek-chat", label: "deepseek-chat" },
+  { value: "deepseek-reasoner", label: "deepseek-reasoner" },
+] as const;
+
+export const DEFAULT_TM_MODEL = "gpt-4.1-nano";
+
+export type TmLookupRow = {
+  target: string;
+  model: string;
+  hit: boolean;
+  key: string;
+  value: string | null;
+  ttl: number;
+  cacheType: "value" | "digest";
+};
+
+export type TmLookupResult = {
+  mode: "text" | "digest";
+  model?: string;
+  tryAllModels?: boolean;
+  models?: string[];
+  source?: string;
+  sourceText?: string;
+  shop?: string;
+  digest?: string;
+  results: TmLookupRow[];
+  note?: string;
+};
+
+export type TmBrowseEntry = {
+  key: string;
+  target: string;
+  model: string;
+  digest: string;
+  value: string;
+  valuePreview: string;
+  ttl: number;
+};
+
+export type TmBrowseResult = {
+  shop: string;
+  entries: TmBrowseEntry[];
+  byTarget: Record<string, number>;
+  cursor: string;
+  hasMore: boolean;
+  pattern?: string;
+  scanned?: number;
+  note?: string;
+};
+
+export type TmShopTargetsResult = {
+  shop: string;
+  targets: string[];
+  note?: string;
+};
+
+export function lookupTmCache(body: {
+  mode: "text" | "digest";
+  shop?: string;
+  sourceText?: string;
+  digest?: string;
+  source?: string;
+  model?: string;
+  targets: string[];
+  tryAllModels?: boolean;
+}): Promise<TmLookupResult> {
+  return apiFetch("/redis-explorer/tm/lookup", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function fetchShopTmTargets(shop: string): Promise<TmShopTargetsResult> {
+  return apiFetch(`/redis-explorer/tm/shop-targets?shop=${encodeURIComponent(shop)}`);
+}
+
+export function browseTmCache(params: {
+  shop: string;
+  target?: string;
+  cursor?: string;
+  limit?: number;
+}): Promise<TmBrowseResult> {
+  const query = new URLSearchParams();
+  query.set("shop", params.shop);
+  if (params.target) query.set("target", params.target);
+  if (params.cursor) query.set("cursor", params.cursor);
+  if (params.limit) query.set("limit", String(params.limit));
+  return apiFetch(`/redis-explorer/tm/browse?${query}`);
+}

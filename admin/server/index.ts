@@ -25,6 +25,7 @@ import { appLogsRouter } from "./routes/appLogs.js";
 import { shopAnalysisRouter } from "./routes/shopAnalysis.js";
 import { shopProfileRouter } from "./routes/shopProfile.js";
 import { supportRouter } from "./routes/support.js";
+import { redisExplorerRouter } from "./routes/redisExplorer.js";
 import { isProductionNodeEnv } from "./lib/nodeEnv.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -68,6 +69,8 @@ app.use("/api/shop-analysis", authMiddleware, shopAnalysisRouter);
 app.use("/api/shop-profile", authMiddleware, shopProfileRouter);
 // 人工客服会话：所有登录运营可见可回复
 app.use("/api/support", authMiddleware, supportRouter);
+// Redis 缓存查看器（所有登录用户可查）
+app.use("/api/redis-explorer", authMiddleware, redisExplorerRouter);
 
 // Serve built frontend in production
 if (IS_PROD) {

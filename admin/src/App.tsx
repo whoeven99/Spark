@@ -18,6 +18,7 @@ import VisitSource from "./pages/VisitSource";
 import PixelLogs from "./pages/PixelLogs";
 import AppLogs from "./pages/AppLogs";
 import Support from "./pages/Support";
+import RedisExplorer from "./pages/RedisExplorer";
 import { useNavigate } from "react-router-dom";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -82,6 +83,7 @@ export default function App() {
               element={<Support source="translate-v4" title="翻译v4 客服" />}
             />
             <Route path="todo" element={<Todo />} />
+            <Route path="redis-explorer" element={<RedisExplorer />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
