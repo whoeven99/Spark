@@ -23,8 +23,6 @@ import {
   coerceProductImproveFormPayload,
   defaultProductImproveFormPayload,
 } from "../../../lib/productImproveFormPayload";
-import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
-import { defaultTranslationTaskFormPayload } from "../skills/translation/translation.extract";
 import {
   taskProposalFromBatchTasksPayload,
   type TaskProposalPayload,
@@ -39,7 +37,6 @@ type CardStreamChunk =
 
 export const CHAT_CARD_TYPES = [
   "none",
-  "translation_task_form",
   "image_generation_form",
   "picture_translate_form",
   "product_improve_form",
@@ -59,15 +56,6 @@ const ChatCardIntentSchema = z.object({
     .boolean()
     .describe("助手回复是否声称已打开/展示配置卡片"),
   imageDescription: z.string().optional().describe("文生图画面描述预填"),
-  translationTargetLocales: z
-    .array(z.string())
-    .optional()
-    .describe("店铺翻译目标语言 locale 列表"),
-  translationLimitPerType: z.number().optional().describe("每种资源翻译上限"),
-  translationResourceTypes: z
-    .array(z.string())
-    .optional()
-    .describe("翻译模块：PRODUCT/COLLECTION/PAGE 等"),
   pictureTranslateTargetLanguage: z.string().optional(),
   productImproveProductId: z.string().optional(),
   batchTaskType: z
@@ -85,17 +73,16 @@ export type LlmChatCardResolution = {
 };
 
 const CARD_TYPE_GUIDE = `卡片类型说明：
-- translation_task_form：店铺内容批量翻译（商品/集合/页面等），非「图片翻译」
 - image_generation_form：AI 文生图 / 图片生成
 - picture_translate_form：整图翻译（翻译图片中的文字）
 - product_improve_form：单个商品描述/文案生成
 - batch_tasks_form：工作台已选多个商品时的批量文案或批量图片翻译
-- none：普通问答，不需要卡片`;
+- none：普通问答，不需要卡片
+（整店批量翻译已迁移至 Ciwi Translator，Spark 内不提供 translation_task_form）`;
 
 export function hasAnyChatCardInUiPayloads(uiPayloads: Record<string, unknown>): boolean {
   return Boolean(
-    uiPayloads.translationTaskForm ||
-      uiPayloads.imageGenerationCard ||
+    uiPayloads.imageGenerationCard ||
       uiPayloads.pictureTranslateCard ||
       uiPayloads.productImproveCardPayload ||
       uiPayloads.taskProposal ||
@@ -153,14 +140,6 @@ export function buildChatCardPayloadFromIntent(
   }
 
   switch (normalized.cardType) {
-    case "translation_task_form":
-      return {
-        translationTaskForm: coerceTranslationTaskFormPayload({
-          targetLocales: normalized.translationTargetLocales,
-          limitPerType: normalized.translationLimitPerType,
-          resourceTypes: normalized.translationResourceTypes,
-        }),
-      };
     case "image_generation_form":
       return {
         imageGenerationCard: coerceImageGenerationFormPayload({
@@ -209,13 +188,6 @@ function streamChunksForUiPayloads(
 ): CardStreamChunk[] {
   const chunks: CardStreamChunk[] = [];
 
-  if (uiPayloads.translationTaskForm && !emittedFlags.has("translationTaskForm")) {
-    chunks.push({
-      type: "tool_call",
-      name: "open_translation_task_form",
-      args: uiPayloads.translationTaskForm,
-    });
-  }
   if (uiPayloads.imageGenerationCard && !emittedFlags.has("imageGenerationForm")) {
     chunks.push({
       type: "tool_call",
@@ -322,8 +294,6 @@ export async function resolveMissingChatCardsWithLlm(params: {
 /** 工具未返回载荷但 LLM 判定需要卡片时，填充各类型默认卡片。 */
 export function defaultPayloadForCardType(cardType: ChatCardType): Record<string, unknown> {
   switch (cardType) {
-    case "translation_task_form":
-      return { translationTaskForm: defaultTranslationTaskFormPayload() };
     case "image_generation_form":
       return { imageGenerationCard: defaultImageGenerationFormPayload() };
     case "picture_translate_form":

@@ -1,13 +1,10 @@
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
 import type { ProductImproveCardPayload } from "../../../lib/chatMessage";
-import type { TranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
-import { coerceTranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import type { BatchTaskProduct } from "../../../lib/batchTasksFormPayload";
 import { ChatMessageContent } from "./ChatMessageContent";
 import { ThinkingIndicator, ThinkingPanel } from "./StreamingThinking";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
-import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard";
 import { TaskProposalCard } from "./TaskProposalCard";
 import type { TaskProposalPayload } from "../../../lib/taskProposalPayload";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
@@ -23,7 +20,6 @@ type StreamingAssistantReplyProps = {
   streamingText: string;
   streamingThinkingText?: string;
   skillSteps: SkillStepProgress[];
-  streamingTranslationForm?: unknown;
   streamingGenerateCard: boolean;
   streamingGeneratePayload?: unknown;
   streamingTaskProposal?: TaskProposalPayload;
@@ -219,7 +215,6 @@ export function StreamingAssistantReply({
   streamingText,
   streamingThinkingText = "",
   skillSteps,
-  streamingTranslationForm,
   streamingGenerateCard,
   streamingGeneratePayload,
   streamingTaskProposal,
@@ -229,9 +224,6 @@ export function StreamingAssistantReply({
 }: StreamingAssistantReplyProps) {
   if (!active) return null;
 
-  const streamingTranslationPayload = streamingTranslationForm
-    ? coerceTranslationTaskFormPayload(streamingTranslationForm)
-    : undefined;
   const streamingProductImprovePayload =
     streamingGeneratePayload as ProductImproveCardPayload | undefined;
   const showProductImproveCard =
@@ -241,15 +233,10 @@ export function StreamingAssistantReply({
   const hasContent = hasStreamingVisualContent({
     streamingText,
     skillSteps,
-    streamingTranslationForm,
     streamingGenerateCard: showProductImproveCard,
     streamingTaskProposal,
   });
-  const hasEmbeddedCard = Boolean(
-    streamingTranslationPayload ||
-      showProductImproveCard ||
-      streamingTaskProposal,
-  );
+  const hasEmbeddedCard = Boolean(showProductImproveCard || streamingTaskProposal);
 
   return (
     <div style={{ display: "flex", justifyContent: "flex-start" }}>
@@ -282,16 +269,6 @@ export function StreamingAssistantReply({
                 <div style={textWrapStyle}>
                   <ChatMessageContent content={streamingText} />
                   {isStreaming ? <StreamingCursor /> : null}
-                </div>
-              ) : null}
-
-              {streamingTranslationPayload ? (
-                <div style={cardSlotStyle}>
-                  <TranslationTaskChatCard
-                    embedded
-                    initialPayload={streamingTranslationPayload as TranslationTaskFormPayload}
-                    onSuccess={() => {}}
-                  />
                 </div>
               ) : null}
 

@@ -4,7 +4,6 @@ import type {
   ChatMessageAttachment,
   ProductImproveCardPayload,
 } from "../../../lib/chatMessage";
-import type { TranslationTaskFormPayload } from "../../../lib/translationTaskFormPayload";
 import type { TaskProposalPayload } from "../../../lib/taskProposalPayload";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
 
@@ -36,7 +35,6 @@ export type WorkspaceConversationMessage = {
   text: string;
   time: string;
   attachments?: ChatMessageAttachment[];
-  translationTaskForm?: TranslationTaskFormPayload;
   productImproveCard?: boolean;
   productImproveCardPayload?: ProductImproveCardPayload;
   taskProposal?: TaskProposalPayload;

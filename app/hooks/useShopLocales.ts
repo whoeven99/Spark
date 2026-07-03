@@ -4,11 +4,9 @@ import {
   type ShopLocaleOption,
   type ShopLocalesApiResponse,
   type ShopLocalesPayload,
-} from "../lib/productImproveLocales";
-import {
   resolveInitialTargetLocales,
-  resolveTranslationLocales,
-} from "../lib/translationShopLocales";
+  resolveShopLocales,
+} from "../lib/productImproveLocales";
 
 const LOG_PREFIX = "[useShopLocales]";
 
@@ -53,7 +51,7 @@ export function useShopLocales(params: UseShopLocalesParams) {
         targetOptions: [] as ShopLocaleOption[],
       };
     }
-    return resolveTranslationLocales(resolvedLocales);
+    return resolveShopLocales(resolvedLocales);
   }, [resolvedLocales]);
 
   useEffect(() => {

@@ -4,7 +4,6 @@ import type { ChatMessage } from "../../../lib/chatMessage";
 import { ChatMessageContent } from "./ChatMessageContent";
 import { ThinkingReview } from "./StreamingThinking";
 import { ProductImproveChatCard } from "./ProductImproveChatCard";
-import { TranslationTaskChatCard } from "../translation/TranslationTaskChatCard";
 import { TaskProposalCard } from "./TaskProposalCard";
 import { TaskRunChatCard } from "./TaskRunChatCard";
 import type { TaskRunPayload } from "../../../lib/taskRunPayload";
@@ -14,10 +13,6 @@ import type { AITaskItem, AITaskStatus } from "../../../lib/aiTaskTypes";
 type ChatMessagesProps = {
   messages: ChatMessage[];
   streamingSlot?: ReactNode;
-  onTranslationCardSuccess: (
-    messageIndex: number,
-    detail: { jobId?: string; jobIds?: string[]; message: string },
-  ) => void;
   onAiTaskUpdated?: (
     taskId: string,
     status: AITaskStatus,
@@ -33,7 +28,6 @@ type ChatMessagesProps = {
 export function ChatMessages({
   messages,
   streamingSlot,
-  onTranslationCardSuccess,
   onAiTaskUpdated,
   onOpenTasks,
   onTaskProposalExecuted,
@@ -45,8 +39,6 @@ export function ChatMessages({
   return (
     <s-stack direction="block" gap="base">
       {messages.map((item, index) => {
-        const hasTranslationCard =
-          item.role === "assistant" && Boolean(item.translationTaskForm);
         const hasTaskProposalCard =
           item.role === "assistant" && Boolean(item.taskProposal);
         const hasGenerateDescriptionCard =
@@ -61,7 +53,6 @@ export function ChatMessages({
             : [];
         const hasImageAttachments = imageAttachments.length > 0;
         const hasEmbeddedCard =
-          hasTranslationCard ||
           hasGenerateDescriptionCard ||
           hasTaskProposalCard ||
           hasTaskRunCard ||
@@ -159,18 +150,6 @@ export function ChatMessages({
                     </div>
                   ) : null}
 
-                  {hasTranslationCard && item.translationTaskForm ? (
-                    <div style={{ marginTop: "0.85rem" }}>
-                      <TranslationTaskChatCard
-                        embedded
-                        initialPayload={item.translationTaskForm}
-                        onSuccess={(detail) =>
-                          onTranslationCardSuccess(index, detail)
-                        }
-                      />
-                    </div>
-                  ) : null}
-
                   {hasGenerateDescriptionCard ? (
                     <div style={{ marginTop: "0.85rem" }}>
                       <ProductImproveChatCard
@@ -221,31 +200,3 @@ export function ChatMessages({
     </s-stack>
   );
 }
-
-
-const thinkingDetailsStyle: CSSProperties = {
-  marginTop: 10,
-  borderRadius: 8,
-  border: "1px solid rgba(44, 110, 203, 0.2)",
-  background: "rgba(44, 110, 203, 0.04)",
-  padding: "6px 10px",
-};
-
-const thinkingSummaryStyle: CSSProperties = {
-  cursor: "pointer",
-  fontSize: 12,
-  color: "rgba(44, 110, 203, 0.8)",
-  fontWeight: 500,
-  userSelect: "none",
-};
-
-const thinkingContentStyle: CSSProperties = {
-  marginTop: 8,
-  fontSize: 13,
-  color: "#61666c",
-  fontStyle: "italic",
-  whiteSpace: "pre-wrap",
-  maxHeight: 220,
-  overflowY: "auto",
-  lineHeight: 1.6,
-};

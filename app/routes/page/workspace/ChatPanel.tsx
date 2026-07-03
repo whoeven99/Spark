@@ -83,7 +83,6 @@ export function ChatPanel({
   onDraftChange,
   onSend,
   onAbortStream,
-  onTranslationCardSuccess,
   onAiTaskUpdated,
   onOpenTasks,
   onTaskProposalExecuted,
@@ -97,11 +96,6 @@ export function ChatPanel({
   onDraftChange: (value: string) => void;
   onSend: () => void | Promise<void>;
   onAbortStream: () => void;
-  onTranslationCardSuccess: (
-    conversationId: string,
-    messageIndex: number,
-    detail: { jobId?: string; jobIds?: string[]; message: string },
-  ) => void;
   onAiTaskUpdated: (
     conversationId: string,
     taskId: string,
@@ -126,7 +120,6 @@ export function ChatPanel({
     isStreaming,
     streamingText,
     streamingThinkingText,
-    streamingTranslationForm,
     streamingGenerateCard,
     streamingGeneratePayload,
     streamingTaskProposal,
@@ -511,7 +504,6 @@ export function ChatPanel({
                   streamingText={streamingText}
                   streamingThinkingText={streamingThinkingText}
                   skillSteps={skillSteps}
-                  streamingTranslationForm={streamingTranslationForm}
                   streamingGenerateCard={streamingGenerateCard}
                   streamingGeneratePayload={streamingGeneratePayload}
                   streamingTaskProposal={streamingTaskProposal}
@@ -521,9 +513,6 @@ export function ChatPanel({
                     onTaskProposalExecuted(conversation.id, run)
                   }
                 />
-              }
-              onTranslationCardSuccess={(messageIndex, detail) =>
-                onTranslationCardSuccess(conversation.id, messageIndex, detail)
               }
               onAiTaskUpdated={(taskId, status, result) =>
                 onAiTaskUpdated(conversation.id, taskId, status, result)

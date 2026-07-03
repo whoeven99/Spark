@@ -1,17 +1,13 @@
 import type { AITaskItem } from "./aiTaskTypes";
-import type { TranslationV4Job } from "../server/translation/v4/types";
 
-export type UnifiedTaskEntry =
-  | { entryType: "ai_task"; task: AITaskItem }
-  | { entryType: "translation_v4"; job: TranslationV4Job };
+export type UnifiedTaskEntry = { entryType: "ai_task"; task: AITaskItem };
 
 export type UnifiedTaskView = "current" | "history";
 export type UnifiedTaskTypeFilter =
   | "all"
   | "product_improve"
   | "image_generation"
-  | "picture_translate"
-  | "translation_v4";
+  | "picture_translate";
 export type UnifiedTaskStatusFilter =
   | "all"
   | "running"

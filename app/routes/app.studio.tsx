@@ -1,7 +1,5 @@
 /**
- * 创作目的地（PR3）：把商品文案 / 图片工具 / 整店翻译合并到一个 Studio。
- * 顶部 SegmentedTab 在三个子路由（copy / image / translate）之间切换，
- * 各子路由仍是原页面（loader/action/组件原样迁移），互不影响。
+ * 创作目的地：商品文案 / 图片工具。
  */
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Outlet, useLocation, useNavigate } from "react-router";
@@ -17,11 +15,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return null;
 };
 
-type StudioTab = "copy" | "image" | "translate";
+type StudioTab = "copy" | "image";
 
 function resolveTab(pathname: string): StudioTab {
   if (pathname.includes("/studio/image")) return "image";
-  if (pathname.includes("/studio/translate")) return "translate";
   return "copy";
 }
 
@@ -35,14 +32,13 @@ export default function AppStudio() {
   const items = [
     { key: "copy" as const, label: t("nav.productImprove") },
     { key: "image" as const, label: t("nav.imageStudio") },
-    { key: "translate" as const, label: t("nav.translationV4") },
   ];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
       <DestinationPage
         title="创作"
-        subtitle="商品文案、图片素材与多语言内容集中处理，经营分析和订单风险保持在经营页。"
+        subtitle="商品文案与图片素材集中处理，经营分析和订单风险保持在经营页。"
         backLabel="返回首页"
         fallbackPath="/app"
         isMobile={isMobile}
@@ -93,12 +89,6 @@ function buildStudioActions({
       title: "图片素材",
       detail: "文生图与整图翻译",
       meta: "适合活动图和多语言素材",
-    },
-    {
-      key: "translate",
-      title: "整店翻译",
-      detail: "商品、页面、菜单、主题内容",
-      meta: "支持术语表和 V4 任务",
     },
   ];
 

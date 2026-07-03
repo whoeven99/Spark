@@ -57,3 +57,79 @@ export type ShopLocalesApiErrorBody = {
 export type ShopLocalesApiResponse =
   | ShopLocalesApiSuccessBody
   | ShopLocalesApiErrorBody;
+
+export type ShopLocalesResolved = {
+  sourceLocale: string;
+  sourceLabel: string;
+  targetOptions: ShopLocaleOption[];
+};
+
+export function formatShopLocaleLabel(label: string): string {
+  const trimmed = label.trim();
+  return trimmed.replace(/\s*\([a-z]{2}(?:-[A-Za-z0-9]+)?\)\s*$/, "").trim() || trimmed;
+}
+
+export function toShopLocaleOptions(options: ShopLocaleOption[]): ShopLocaleOption[] {
+  return options.map((o) => ({
+    ...o,
+    label: formatShopLocaleLabel(o.label),
+  }));
+}
+
+function labelForLocale(locale: string, options: ShopLocaleOption[]): string {
+  const match = options.find((o) => o.value === locale);
+  return formatShopLocaleLabel(match?.label ?? locale);
+}
+
+function filterTargetOptions(
+  options: ShopLocaleOption[],
+  sourceLocale: string,
+): ShopLocaleOption[] {
+  return options.filter((o) => o.value !== sourceLocale);
+}
+
+export function resolveShopLocales(payload: ShopLocalesPayload): ShopLocalesResolved {
+  const sourceLocale = payload.defaultTargetLanguage.trim();
+  const sourceLabel = labelForLocale(sourceLocale, payload.localeOptions);
+  const targetOptions = toShopLocaleOptions(
+    filterTargetOptions(payload.localeOptions, sourceLocale),
+  );
+
+  return {
+    sourceLocale,
+    sourceLabel,
+    targetOptions,
+  };
+}
+
+export function resolveDefaultTargetLocale(
+  targetOptions: ShopLocaleOption[],
+  initialTargetLocale?: string,
+): string {
+  const initial = initialTargetLocale?.trim();
+  if (initial && targetOptions.some((o) => o.value === initial)) {
+    return initial;
+  }
+  return targetOptions[0]?.value ?? "";
+}
+
+export function resolveInitialTargetLocales(
+  targetOptions: ShopLocaleOption[],
+  initialTargetLocale?: string,
+  initialTargetLocales?: string[],
+): string[] {
+  const allowed = new Set(targetOptions.map((o) => o.value));
+  const fromList = (initialTargetLocales ?? [])
+    .map((x) => x.trim())
+    .filter((x) => allowed.has(x));
+  if (fromList.length) {
+    const seen = new Set<string>();
+    return fromList.filter((x) => {
+      if (seen.has(x)) return false;
+      seen.add(x);
+      return true;
+    });
+  }
+  const single = resolveDefaultTargetLocale(targetOptions, initialTargetLocale);
+  return single ? [single] : [];
+}
