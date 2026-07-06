@@ -13,6 +13,15 @@ function getClient(): CosmosClient {
   return _client;
 }
 
+export function getTranslationJobsContainer(): Container {
+  const db = getEnv("COSMOS_TRANSLATION_DATABASE_ID", "translation");
+  const container = getEnv(
+    "COSMOS_TRANSLATION_V4_JOBS_CONTAINER",
+    "translation_v4_jobs",
+  );
+  return getClient().database(db).container(container);
+}
+
 export function getAgentRunsContainer(): Container {
   const db = getEnv("COSMOS_AGENT_RUNS_DATABASE_ID", "spark_ops");
   const container = getEnv("COSMOS_AGENT_RUNS_CONTAINER", "agent_runs");

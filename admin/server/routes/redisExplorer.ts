@@ -212,7 +212,9 @@ redisExplorerRouter.get("/tm/shop-targets", async (req, res) => {
       .query<string>({ query, parameters: params })
       .fetchAll();
 
-    const targets = resources.filter((t) => typeof t === "string" && t.trim());
+    const targets = resources.filter(
+      (t: string) => typeof t === "string" && t.trim(),
+    );
     res.json({
       shop,
       targets,
