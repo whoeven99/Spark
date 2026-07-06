@@ -17,6 +17,7 @@ import {
   FileSearchOutlined,
   AppstoreOutlined,
   CustomerServiceOutlined,
+  HddOutlined,
 } from "@ant-design/icons";
 import { clearToken, isOwner, getRole } from "../api";
 
@@ -48,6 +49,7 @@ export default function Layout() {
     { key: "/support", icon: <CustomerServiceOutlined />, label: <Link to="/support">客服会话</Link>, ownerOnly: false },
     { key: "/ops-checklist", icon: <SafetyCertificateOutlined />, label: <Link to="/ops-checklist">服务巡检</Link>, ownerOnly: false },
     { key: "/todo", icon: <CheckSquareOutlined />, label: <Link to="/todo">Team Todo</Link>, ownerOnly: false },
+    { key: "/redis-explorer", icon: <HddOutlined />, label: <Link to="/redis-explorer">翻译 TM 缓存</Link>, ownerOnly: false },
   ];
 
   const menuItems = allMenuItems
