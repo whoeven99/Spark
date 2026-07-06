@@ -1463,3 +1463,50 @@ export function fetchTsfPacks(params?: {
   const qs = query.toString();
   return apiFetch(`/tsf/packs${qs ? `?${qs}` : ""}`);
 }
+
+// --- Translation ops (SpringBackend proxy) ---
+
+export type SpringBackendEnv = "prod" | "test";
+
+export type TranslationConfigData = {
+  env: SpringBackendEnv;
+  config: Record<string, string>;
+};
+
+export type TranslationAddQuotaResult = {
+  env: SpringBackendEnv;
+  oldChars: string;
+  addChars: string;
+  newChars: string;
+};
+
+export function fetchTranslationConfig(env: SpringBackendEnv): Promise<TranslationConfigData> {
+  return apiFetch(`/translation-ops/config?env=${env}`);
+}
+
+export function upsertTranslationConfig(
+  env: SpringBackendEnv,
+  key: string,
+  value: string,
+): Promise<TranslationConfigData> {
+  const query = new URLSearchParams({ env, key, value });
+  return apiFetch(`/translation-ops/config?${query.toString()}`, { method: "PUT" });
+}
+
+export function deleteTranslationConfig(
+  env: SpringBackendEnv,
+  key: string,
+): Promise<TranslationConfigData> {
+  const query = new URLSearchParams({ env, key });
+  return apiFetch(`/translation-ops/config?${query.toString()}`, { method: "DELETE" });
+}
+
+export function addTranslationQuota(params: {
+  shopName: string;
+  addChars: number;
+}): Promise<TranslationAddQuotaResult> {
+  return apiFetch("/translation-ops/add-quota", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}

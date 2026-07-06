@@ -22,6 +22,7 @@ import {
   TeamOutlined,
   ShoppingCartOutlined,
   ThunderboltOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 import { clearToken, isOwner, getRole } from "../api";
 
@@ -41,6 +42,7 @@ const TRANSLATION_ROUTE_PREFIXES = [
   "/auto-translations",
   "/redis-explorer",
   "/translate-v4-support",
+  "/translation-ops",
   "/tsf",
 ];
 
@@ -82,6 +84,12 @@ const translationMenuItems: MenuItemDef[] = [
   { key: "/tsf/usage", icon: <BarChartOutlined />, label: <Link to="/tsf/usage">翻译 用量</Link>, ownerOnly: false },
   { key: "/tsf/subscriptions", icon: <CreditCardOutlined />, label: <Link to="/tsf/subscriptions">翻译 订阅</Link>, ownerOnly: false },
   { key: "/tsf/packs", icon: <ShoppingCartOutlined />, label: <Link to="/tsf/packs">翻译 加购流量包</Link>, ownerOnly: false },
+  {
+    key: "/translation-ops",
+    icon: <SettingOutlined />,
+    label: <Link to="/translation-ops">翻译运维</Link>,
+    ownerOnly: false,
+  },
   { key: "/redis-explorer", icon: <HddOutlined />, label: <Link to="/redis-explorer">翻译 TM 缓存</Link>, ownerOnly: false },
   {
     key: "/translate-v4-support",
