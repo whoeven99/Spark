@@ -68,7 +68,7 @@ tsfPacksRouter.get("/", async (req, res) => {
              LIMIT ${pageSize} OFFSET ${offset}`,
           ),
       db.execute(`
-        SELECT planKey, displayName, COUNT(*) as count
+        SELECT bl.planKey, pc.displayName, COUNT(*) as count
         FROM BillingLog bl
         LEFT JOIN PlanCatalog pc ON bl.planKey = pc.planKey
         WHERE bl.eventType = 'TOKEN_PACK_PURCHASED'
