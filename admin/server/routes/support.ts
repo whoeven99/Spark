@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { randomUUID } from "crypto";
 import { getDb } from "../lib/db.js";
+import { getTsfDb } from "../lib/tsfDb.js";
 
 export const supportRouter = Router();
 
@@ -22,13 +23,21 @@ function resolveSource(req: { query: Record<string, unknown> }): string {
   return raw || "spark";
 }
 
+/**
+ * 按 source 选库：translate-v4 直连 TSF 独立 Turso 库（客服已迁到 TSF），
+ * 其余（spark 自身）仍走 Spark 主库。
+ */
+function resolveDbForSource(source: string) {
+  return source === "translate-v4" ? getTsfDb() : getDb();
+}
+
 /** 会话列表：可按 status / 关键字（shop / 邮箱）过滤，未读多的优先。 */
 supportRouter.get("/", async (req, res) => {
   try {
-    const db = getDb();
     const status = (req.query.status as string | undefined)?.trim();
     const search = (req.query.search as string | undefined)?.trim();
     const source = resolveSource(req);
+    const db = resolveDbForSource(source);
 
     const where: string[] = ["source = ?"];
     const args: string[] = [source];
@@ -63,9 +72,9 @@ supportRouter.get("/", async (req, res) => {
 /** 取单个会话 + 全部消息，并将其标记为运营已读（unreadForOps=0）。 */
 supportRouter.get("/:shop", async (req, res) => {
   try {
-    const db = getDb();
     const shop = req.params.shop;
     const source = resolveSource(req);
+    const db = resolveDbForSource(source);
 
     const convResult = await db.execute({
       sql: `SELECT id, shop, contactEmail, shopEmail, status, lastMessage,
@@ -103,9 +112,9 @@ supportRouter.get("/:shop", async (req, res) => {
 /** 运营回复：追加 ops 消息，累计商家未读，刷新预览。 */
 supportRouter.post("/:shop/reply", async (req, res) => {
   try {
-    const db = getDb();
     const shop = req.params.shop;
     const source = resolveSource(req);
+    const db = resolveDbForSource(source);
     const content = String(req.body?.content ?? "").trim().slice(0, MAX_REPLY_LEN);
     const senderName = req.body?.senderName
       ? String(req.body.senderName).slice(0, 60)
@@ -150,9 +159,9 @@ supportRouter.post("/:shop/reply", async (req, res) => {
 /** 关闭 / 重开会话。 */
 supportRouter.post("/:shop/status", async (req, res) => {
   try {
-    const db = getDb();
     const shop = req.params.shop;
     const source = resolveSource(req);
+    const db = resolveDbForSource(source);
     const status = String(req.body?.status ?? "");
     if (status !== "open" && status !== "closed") {
       res.status(400).json({ error: "status must be open|closed" });

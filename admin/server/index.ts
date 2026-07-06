@@ -23,6 +23,12 @@ import { pixelLogsRouter } from "./routes/pixelLogs.js";
 import { appLogsRouter } from "./routes/appLogs.js";
 import { supportRouter } from "./routes/support.js";
 import { redisExplorerRouter } from "./routes/redisExplorer.js";
+import { tsfOverviewRouter } from "./routes/tsfOverview.js";
+import { tsfShopsRouter } from "./routes/tsfShops.js";
+import { tsfUsageRouter } from "./routes/tsfUsage.js";
+import { tsfSubscriptionsRouter } from "./routes/tsfSubscriptions.js";
+import { tsfRevenueRouter } from "./routes/tsfRevenue.js";
+import { tsfPacksRouter } from "./routes/tsfPacks.js";
 import { isProductionNodeEnv } from "./lib/nodeEnv.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -65,6 +71,15 @@ app.use("/api/app-logs", authMiddleware, appLogsRouter);
 app.use("/api/support", authMiddleware, supportRouter);
 // Redis 缓存查看器（所有登录用户可查）
 app.use("/api/redis-explorer", authMiddleware, redisExplorerRouter);
+
+// TSF（TypeScriptFrontend）新用户统计：读 TSF 独立 Turso 库
+app.use("/api/tsf/overview", authMiddleware, tsfOverviewRouter);
+app.use("/api/tsf/shops", authMiddleware, tsfShopsRouter);
+app.use("/api/tsf/usage", authMiddleware, tsfUsageRouter);
+app.use("/api/tsf/subscriptions", authMiddleware, tsfSubscriptionsRouter);
+app.use("/api/tsf/packs", authMiddleware, tsfPacksRouter);
+// 收入分析仅 owner 可见
+app.use("/api/tsf/revenue", authMiddleware, requireOwner, tsfRevenueRouter);
 
 // Serve built frontend in production
 if (IS_PROD) {

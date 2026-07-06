@@ -979,3 +979,267 @@ export function browseTmCache(params: {
   if (params.limit) query.set("limit", String(params.limit));
   return apiFetch(`/redis-explorer/tm/browse?${query}`);
 }
+
+// ============================================================
+// TSF（TypeScriptFrontend）新用户统计 —— 读 TSF 独立 Turso 库
+// 额度单位为 Credits；仅统计 billingSystem='tsf' 的新用户。
+// ============================================================
+
+export type TsfOverviewData = {
+  totalNewUsers: number;
+  installedNewUsers: number;
+  churnedNewUsers: number;
+  activeSubs: number;
+  totalUsedCredits: number;
+  totalSubscriptionCredits: number;
+  totalPurchasedCredits: number;
+  totalTrialCredits: number;
+  recentRegistrations: {
+    shop: string;
+    billingSystem: string;
+    boundReason: string | null;
+    createdAt: string;
+  }[];
+};
+
+export type TsfShopRow = {
+  shop: string;
+  boundReason: string | null;
+  boundAt: string;
+  subscriptionCredits: number;
+  purchasedCredits: number;
+  trialCredits: number;
+  usedCredits: number;
+  accountCreatedAt: string | null;
+  accountUpdatedAt: string | null;
+  planKey: string | null;
+  subStatus: string | null;
+  billingInterval: string | null;
+  currentPeriodEnd: string | null;
+  installed: boolean;
+};
+
+export type TsfBillingLogRow = {
+  shop: string;
+  eventType: string;
+  planKey: string | null;
+  creditsDelta: number;
+  usedCredits: number;
+  createdAt: string;
+};
+
+export type TsfShopDetail = {
+  binding: {
+    shop: string;
+    billingSystem: string;
+    boundReason: string | null;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
+  billingLogs: TsfBillingLogRow[];
+};
+
+export type TsfUsageRow = {
+  shop: string;
+  subscriptionCredits: number;
+  purchasedCredits: number;
+  trialCredits: number;
+  usedCredits: number;
+  totalCredits: number;
+  usagePercent: number;
+  remainingCredits: number;
+  updatedAt: string;
+  planKey: string | null;
+  subStatus: string | null;
+  currentPeriodEnd: string | null;
+};
+
+export type TsfUsageHistoryRow = {
+  periodStart: string;
+  periodEnd: string;
+  usedCredits: number;
+  subscriptionCreditsAllocated: number;
+  purchasedCreditsRemaining: number;
+  trialCreditsRemaining: number;
+  planKey: string;
+  archivedAt: string;
+};
+
+export type TsfSubscriptionRow = {
+  shop: string;
+  planKey: string | null;
+  status: string;
+  billingInterval: string | null;
+  currentPeriodEnd: string | null;
+  trialEndsAt: string | null;
+  subscriptionCredits: number;
+  purchasedCredits: number;
+  trialCredits: number;
+  usedCredits: number;
+  accountCreatedAt: string | null;
+};
+
+export type TsfSubscriptionsData = {
+  stats: {
+    total: number;
+    byStatus: Record<string, number>;
+    byInterval: Record<string, number>;
+    byPlan: { planKey: string | null; total: number; activeCount: number }[];
+    expiringSoon: number;
+  };
+  subscriptions: TsfSubscriptionRow[];
+};
+
+export type TsfBillingTrendPoint = {
+  period: string;
+  count: number;
+  creditGranted: number;
+  creditConsumed: number;
+  shopCount: number;
+};
+
+export type TsfRevenueSummary = {
+  mrr: number;
+  arr: number;
+  payingCustomers: number;
+  arpu: number;
+  planBreakdown: {
+    planKey: string;
+    priceAmount: number;
+    billingInterval: string | null;
+    kind: string;
+    activeCount: number;
+    planMrr: number;
+  }[];
+  topShops: {
+    shop: string;
+    planKey: string;
+    priceAmount: number;
+    billingInterval: string | null;
+    shopMrr: number;
+  }[];
+};
+
+export type TsfRevenueTrendPoint = {
+  period: string;
+  chargeCount: number;
+  shopCount: number;
+  totalRevenue: number;
+  subscriptionRevenue: number;
+  packRevenue: number;
+};
+
+export function fetchTsfOverview(): Promise<TsfOverviewData> {
+  return apiFetch("/tsf/overview");
+}
+
+export function fetchTsfShops(search?: string): Promise<{ shops: TsfShopRow[] }> {
+  const q = search ? `?search=${encodeURIComponent(search)}` : "";
+  return apiFetch(`/tsf/shops${q}`);
+}
+
+export function fetchTsfShopDetail(shop: string): Promise<TsfShopDetail> {
+  return apiFetch(`/tsf/shops/${encodeURIComponent(shop)}/events`);
+}
+
+export function fetchTsfUsage(search?: string): Promise<{ usage: TsfUsageRow[] }> {
+  const q = search ? `?search=${encodeURIComponent(search)}` : "";
+  return apiFetch(`/tsf/usage${q}`);
+}
+
+export function fetchTsfUsageHistory(
+  shop: string,
+): Promise<{ history: TsfUsageHistoryRow[] }> {
+  return apiFetch(`/tsf/usage/${encodeURIComponent(shop)}/history`);
+}
+
+export function fetchTsfSubscriptions(params?: {
+  search?: string;
+  status?: string;
+  plan?: string;
+  interval?: string;
+}): Promise<TsfSubscriptionsData> {
+  const query = new URLSearchParams();
+  if (params?.search) query.set("search", params.search);
+  if (params?.status) query.set("status", params.status);
+  if (params?.plan) query.set("plan", params.plan);
+  if (params?.interval) query.set("interval", params.interval);
+  const qs = query.toString();
+  return apiFetch(`/tsf/subscriptions${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchTsfBillingTrend(params: {
+  period?: "daily" | "monthly";
+  startDate?: string;
+  endDate?: string;
+  eventType?: string;
+}): Promise<{ trend: TsfBillingTrendPoint[]; eventTypes: string[] }> {
+  const query = new URLSearchParams();
+  if (params.period) query.set("period", params.period);
+  if (params.startDate) query.set("startDate", params.startDate);
+  if (params.endDate) query.set("endDate", params.endDate);
+  if (params.eventType) query.set("eventType", params.eventType);
+  const qs = query.toString();
+  return apiFetch(`/tsf/subscriptions/billing/trend${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchTsfRevenueSummary(): Promise<TsfRevenueSummary> {
+  return apiFetch("/tsf/revenue/summary");
+}
+
+export function fetchTsfRevenueTrend(params: {
+  period?: "daily" | "monthly";
+  startDate?: string;
+  endDate?: string;
+}): Promise<{ trend: TsfRevenueTrendPoint[] }> {
+  const query = new URLSearchParams();
+  if (params.period) query.set("period", params.period);
+  if (params.startDate) query.set("startDate", params.startDate);
+  if (params.endDate) query.set("endDate", params.endDate);
+  const qs = query.toString();
+  return apiFetch(`/tsf/revenue/trend${qs ? `?${qs}` : ""}`);
+}
+
+export type TsfPackPurchaseRow = {
+  shop: string;
+  planKey: string | null;
+  displayName: string | null;
+  referenceId: string | null;
+  creditsDelta: number;
+  planCredits: number;
+  usedCredits: number;
+  priceAmount: number;
+  currencyCode: string;
+  createdAt: string;
+};
+
+export type TsfPacksData = {
+  stats: {
+    totalPurchases: number;
+    shopCount: number;
+    totalCreditsGranted: number;
+    totalRevenue: number;
+  };
+  total: number;
+  purchases: TsfPackPurchaseRow[];
+  planOptions: { planKey: string | null; displayName: string | null; count: number }[];
+};
+
+export function fetchTsfPacks(params?: {
+  shop?: string;
+  plan?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<TsfPacksData> {
+  const query = new URLSearchParams();
+  if (params?.shop) query.set("shop", params.shop);
+  if (params?.plan) query.set("plan", params.plan);
+  if (params?.startDate) query.set("startDate", params.startDate);
+  if (params?.endDate) query.set("endDate", params.endDate);
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.pageSize) query.set("pageSize", String(params.pageSize));
+  const qs = query.toString();
+  return apiFetch(`/tsf/packs${qs ? `?${qs}` : ""}`);
+}
