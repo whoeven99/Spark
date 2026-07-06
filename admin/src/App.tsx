@@ -5,6 +5,7 @@ import Login from "./pages/Login";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Shops from "./pages/Shops";
+import Translations from "./pages/Translations";
 import Usage from "./pages/Usage";
 import Capabilities from "./pages/Capabilities";
 import Subscriptions from "./pages/Subscriptions";
@@ -86,6 +87,11 @@ export default function App() {
             />
             <Route path="todo" element={<Todo />} />
             <Route path="redis-explorer" element={<RedisExplorer />} />
+            <Route path="translations" element={<Translations />} />
+            <Route
+              path="auto-translations"
+              element={<Navigate to="/translations?source=auto" replace />}
+            />
             <Route path="tsf/overview" element={<TsfOverview />} />
             <Route path="tsf/shops" element={<TsfShops />} />
             <Route path="tsf/usage" element={<TsfUsage />} />
