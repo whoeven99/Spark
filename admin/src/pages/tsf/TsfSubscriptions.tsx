@@ -103,7 +103,7 @@ export default function TsfSubscriptions() {
   return (
     <div>
       <Typography.Title level={4} style={{ marginBottom: 16 }}>
-        TSF 订阅统计
+        翻译 订阅统计
       </Typography.Title>
 
       {error && <Alert type="error" message={error} style={{ marginBottom: 16 }} closable onClose={() => setError("")} />}

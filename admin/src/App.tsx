@@ -22,6 +22,7 @@ import TsfOverview from "./pages/tsf/TsfOverview";
 import TsfShops from "./pages/tsf/TsfShops";
 import TsfUsage from "./pages/tsf/TsfUsage";
 import TsfSubscriptions from "./pages/tsf/TsfSubscriptions";
+import TsfPacks from "./pages/tsf/TsfPacks";
 import { useNavigate } from "react-router-dom";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -89,6 +90,7 @@ export default function App() {
             <Route path="tsf/shops" element={<TsfShops />} />
             <Route path="tsf/usage" element={<TsfUsage />} />
             <Route path="tsf/subscriptions" element={<TsfSubscriptions />} />
+            <Route path="tsf/packs" element={<TsfPacks />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

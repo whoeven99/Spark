@@ -20,6 +20,8 @@ import {
   HddOutlined,
   UserOutlined,
   TeamOutlined,
+  ShoppingCartOutlined,
+  ThunderboltOutlined,
 } from "@ant-design/icons";
 import { clearToken, isOwner, getRole } from "../api";
 
@@ -63,10 +65,11 @@ const sparkMenuItems: MenuItemDef[] = [
 ];
 
 const translationMenuItems: MenuItemDef[] = [
-  { key: "/tsf/overview", icon: <TeamOutlined />, label: <Link to="/tsf/overview">TSF 新用户概览</Link>, ownerOnly: false },
-  { key: "/tsf/shops", icon: <UserOutlined />, label: <Link to="/tsf/shops">TSF 新用户</Link>, ownerOnly: false },
-  { key: "/tsf/usage", icon: <BarChartOutlined />, label: <Link to="/tsf/usage">TSF 用量</Link>, ownerOnly: false },
-  { key: "/tsf/subscriptions", icon: <CreditCardOutlined />, label: <Link to="/tsf/subscriptions">TSF 订阅</Link>, ownerOnly: false },
+  { key: "/tsf/overview", icon: <TeamOutlined />, label: <Link to="/tsf/overview">翻译 新用户概览</Link>, ownerOnly: false },
+  { key: "/tsf/shops", icon: <UserOutlined />, label: <Link to="/tsf/shops">翻译 新用户</Link>, ownerOnly: false },
+  { key: "/tsf/usage", icon: <BarChartOutlined />, label: <Link to="/tsf/usage">翻译 用量</Link>, ownerOnly: false },
+  { key: "/tsf/subscriptions", icon: <CreditCardOutlined />, label: <Link to="/tsf/subscriptions">翻译 订阅</Link>, ownerOnly: false },
+  { key: "/tsf/packs", icon: <ShoppingCartOutlined />, label: <Link to="/tsf/packs">翻译 加购流量包</Link>, ownerOnly: false },
   { key: "/redis-explorer", icon: <HddOutlined />, label: <Link to="/redis-explorer">翻译 TM 缓存</Link>, ownerOnly: false },
   {
     key: "/translate-v4-support",
@@ -144,18 +147,53 @@ export default function Layout() {
             borderBottom: "1px solid #f0f0f0",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
             <Typography.Text type="secondary" style={{ fontSize: 13 }}>
               内部管理后台
             </Typography.Text>
-            <Segmented<AdminSection>
-              value={section}
-              onChange={onSectionChange}
-              options={[
-                { label: "Spark", value: "spark" },
-                { label: "翻译", value: "translation" },
-              ]}
-            />
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "6px 8px",
+                borderRadius: 12,
+                background: "linear-gradient(135deg, #f0f5ff 0%, #f6ffed 100%)",
+                border: "1px solid #d6e4ff",
+                boxShadow: "0 2px 8px rgba(22, 119, 255, 0.12)",
+              }}
+            >
+              <Typography.Text strong style={{ fontSize: 13, color: "#434343", whiteSpace: "nowrap" }}>
+                产品切换
+              </Typography.Text>
+              <Segmented<AdminSection>
+                value={section}
+                onChange={onSectionChange}
+                size="large"
+                block
+                style={{ minWidth: 220, fontWeight: 600 }}
+                options={[
+                  {
+                    label: (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0 4px" }}>
+                        <ThunderboltOutlined />
+                        Spark
+                      </span>
+                    ),
+                    value: "spark",
+                  },
+                  {
+                    label: (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0 4px" }}>
+                        <AppstoreOutlined />
+                        翻译
+                      </span>
+                    ),
+                    value: "translation",
+                  },
+                ]}
+              />
+            </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <Tag color={owner ? "gold" : "blue"}>

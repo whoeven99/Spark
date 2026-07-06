@@ -66,13 +66,13 @@ export default function TsfOverview() {
   return (
     <div>
       <Typography.Title level={4} style={{ marginBottom: 4 }}>
-        TSF 新用户概览
+        翻译 新用户概览
       </Typography.Title>
       <Typography.Text
         type="secondary"
         style={{ display: "block", marginBottom: 24, fontSize: 12 }}
       >
-        仅统计 TSF 新用户（ShopBillingBinding = tsf），数据来自 TSF 独立 Turso 库，不含 Spring 老用户。
+        仅统计翻译新用户（ShopBillingBinding = tsf），数据来自翻译独立 Turso 库，不含 Spring 老用户。
       </Typography.Text>
 
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>

@@ -132,7 +132,7 @@ export default function TsfUsage() {
   return (
     <div>
       <Typography.Title level={4} style={{ marginBottom: 16 }}>
-        TSF Credits 用量
+        翻译 Credits 用量
       </Typography.Title>
 
       {error && <Alert type="error" message={error} style={{ marginBottom: 16 }} closable onClose={() => setError("")} />}
