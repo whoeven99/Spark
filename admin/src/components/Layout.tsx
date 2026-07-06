@@ -38,6 +38,8 @@ type MenuItemDef = {
 };
 
 const TRANSLATION_ROUTE_PREFIXES = [
+  "/translations",
+  "/auto-translations",
   "/redis-explorer",
   "/translate-v4-support",
   "/translation-ops",
@@ -71,6 +73,12 @@ const sparkMenuItems: MenuItemDef[] = [
 ];
 
 const translationMenuItems: MenuItemDef[] = [
+  {
+    key: "/translations",
+    icon: <MonitorOutlined />,
+    label: <Link to="/translations">翻译任务列表</Link>,
+    ownerOnly: false,
+  },
   { key: "/tsf/overview", icon: <TeamOutlined />, label: <Link to="/tsf/overview">翻译 新用户概览</Link>, ownerOnly: false },
   { key: "/tsf/shops", icon: <UserOutlined />, label: <Link to="/tsf/shops">翻译 新用户</Link>, ownerOnly: false },
   { key: "/tsf/usage", icon: <BarChartOutlined />, label: <Link to="/tsf/usage">翻译 用量</Link>, ownerOnly: false },

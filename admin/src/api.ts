@@ -82,6 +82,45 @@ export type ShopRow = {
   currentPeriodEnd: string | null;
 };
 
+export type TranslationJob = {
+  id: string;
+  shopName: string;
+  source: string;
+  target: string;
+  modules: string[];
+  aiModel: string;
+  status: string;
+  claimedBy: string | null;
+  metrics: {
+    initTotal: number;
+    initDone: number;
+    translateTotal: number;
+    translateDone: number;
+    translateFailed: number;
+    translateFallback: number;
+    translateUnitTotal: number;
+    translateUnitDone: number;
+    writebackTotal: number;
+    writebackDone: number;
+    writebackFailed: number;
+    verifyTotal: number;
+    verifyDone: number;
+    verifyFailed: number;
+    usedTokens: number;
+    currentModule?: string | null;
+    progressUpdatedAt?: string | null;
+  };
+  /** 服务端合并 Redis 后按阶段计算的进度（0–100）。 */
+  progressPercent?: number;
+  taskSource?: string | null;
+  isCover?: boolean;
+  errorMessage: string | null;
+  errorStage: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastHeartbeat?: string | null;
+};
+
 export type UsageRow = {
   shop: string;
   appName: string;
@@ -113,6 +152,164 @@ export function fetchShopEvents(
   shop: string,
 ): Promise<{ events: unknown[]; billingLogs: unknown[] }> {
   return apiFetch(`/shops/${encodeURIComponent(shop)}/events`);
+}
+
+export function fetchTranslations(params?: {
+  status?: string;
+  shop?: string;
+  source?: string;
+  limit?: number;
+}): Promise<{ jobs: TranslationJob[]; total: number }> {
+  const query = new URLSearchParams();
+  if (params?.status) query.set("status", params.status);
+  if (params?.shop) query.set("shop", params.shop);
+  if (params?.source) query.set("source", params.source);
+  if (params?.limit) query.set("limit", String(params.limit));
+  const qs = query.toString();
+  return apiFetch(`/translations${qs ? `?${qs}` : ""}`);
+}
+
+/** worker 自动翻译任务来源标识。 */
+export const AUTO_TASK_SOURCE = "TsFrontend-Auto";
+
+export type AutoTranslationSummary = {
+  byStatus: Record<string, number>;
+  total: number;
+  createdToday: number;
+  note?: string;
+};
+
+export function fetchAutoTranslationSummary(): Promise<AutoTranslationSummary> {
+  return apiFetch("/translations/auto/summary");
+}
+
+export type RepairStuckTranslationResult = {
+  ok: true;
+  repaired: Array<{
+    id: string;
+    shopName: string;
+    from: string;
+    to: string;
+    lastHeartbeat: string | null;
+    claimedBy: string | null;
+  }>;
+  hintsPushed: number;
+  wakeHints: number;
+};
+
+/** 回收发版/异常退出后僵死的 processing 任务，并唤醒排队 hint。 */
+export function repairStuckTranslationJobs(body?: {
+  heartbeatGraceMs?: number;
+  jobIds?: string[];
+  wakeQueuedHints?: boolean;
+}): Promise<RepairStuckTranslationResult> {
+  return apiFetch("/translations/repair-stuck", {
+    method: "POST",
+    body: JSON.stringify(body ?? {}),
+  });
+}
+
+export function fetchTranslationJob(
+  jobId: string,
+  shop?: string,
+): Promise<{ job: TranslationJob }> {
+  const qs = shop ? `?shop=${encodeURIComponent(shop)}` : "";
+  return apiFetch(`/translations/${encodeURIComponent(jobId)}${qs}`);
+}
+
+export type TranslationContentField = {
+  key: string;
+  originalValue: string;
+  translatedValue: string;
+  digest?: string;
+  status?: string;
+};
+
+export type TranslationContentResource = {
+  resourceId: string;
+  translations: TranslationContentField[];
+};
+
+export type TranslationContentPage = {
+  module: string | null;
+  modules: string[];
+  page: number;
+  pageSize: number;
+  total: number;
+  items: TranslationContentResource[];
+  note?: string;
+};
+
+export type TranslationContentModule = {
+  module: string;
+  count: number;
+  hasContent: boolean;
+};
+
+export function fetchTranslationContentModules(params: {
+  jobId: string;
+  shop?: string;
+}): Promise<{ modules: TranslationContentModule[]; note?: string }> {
+  const qs = params.shop ? `?shop=${encodeURIComponent(params.shop)}` : "";
+  return apiFetch(
+    `/translations/${encodeURIComponent(params.jobId)}/content/modules${qs}`,
+  );
+}
+
+export function fetchTranslationContent(params: {
+  jobId: string;
+  shop?: string;
+  module?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<TranslationContentPage> {
+  const query = new URLSearchParams();
+  if (params.shop) query.set("shop", params.shop);
+  if (params.module) query.set("module", params.module);
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("pageSize", String(params.pageSize));
+  const qs = query.toString();
+  return apiFetch(
+    `/translations/${encodeURIComponent(params.jobId)}/content${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export type LLMKeyStats = {
+  label: string;
+  calls: number;
+  tokens: number;
+  avgLatencyMs: number;
+  throttleCount: number;
+  errors: number;
+  poolConcurrency: number;
+  limitReq: number;
+  remainingReq: number;
+  limitTok: number;
+  remainingTok: number;
+  updatedAt: number;
+};
+
+export function fetchLLMKeyStats(): Promise<{ stats: LLMKeyStats[]; note?: string }> {
+  return apiFetch("/translations/key-stats");
+}
+
+export type LLMKeyHistoryEntry = {
+  t: number;
+  dC: number;
+  dT: number;
+  lat: number;
+  conc: number;
+  rR: number;
+  lR: number;
+  rT: number;
+  lT: number;
+};
+
+export function fetchLLMKeyHistory(
+  label?: string,
+): Promise<{ history: Record<string, LLMKeyHistoryEntry[]> }> {
+  const qs = label ? `?label=${encodeURIComponent(label)}` : "";
+  return apiFetch(`/translations/key-stats/history${qs}`);
 }
 
 export function fetchUsage(search?: string): Promise<{ usage: UsageRow[] }> {
@@ -807,6 +1004,29 @@ export function fetchAppLogs(params: {
   if (params.page) query.set("page", String(params.page));
   if (params.pageSize) query.set("pageSize", String(params.pageSize));
   return apiFetch(`/app-logs?${query}`);
+}
+
+export type ShopSizeTier = "超大商店" | "大商店" | "中等商店" | "小商店";
+
+export type ShopSizeProfile = {
+  id: string;
+  shopName: string;
+  largestLanguage: string | null;
+  dataBytes: number;
+  dataSizeKB: number;
+  sizeTier: ShopSizeTier;
+  languages: Record<
+    string,
+    { bytes: number; items: number; units: number; updatedAt: string }
+  >;
+  updatedAt: string;
+};
+
+export function fetchShopSizeProfiles(): Promise<{
+  profiles: ShopSizeProfile[];
+  note?: string;
+}> {
+  return apiFetch("/shop-profile");
 }
 
 // --- Support（人工客服会话） ---

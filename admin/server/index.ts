@@ -22,6 +22,8 @@ import { visitSourceRouter } from "./routes/visitSource.js";
 import { pixelLogsRouter } from "./routes/pixelLogs.js";
 import { appLogsRouter } from "./routes/appLogs.js";
 import { supportRouter } from "./routes/support.js";
+import { translationsRouter } from "./routes/translations.js";
+import { shopProfileRouter } from "./routes/shopProfile.js";
 import { redisExplorerRouter } from "./routes/redisExplorer.js";
 import { tsfOverviewRouter } from "./routes/tsfOverview.js";
 import { tsfShopsRouter } from "./routes/tsfShops.js";
@@ -70,6 +72,10 @@ app.use("/api/pixel-logs", authMiddleware, requireOwner, pixelLogsRouter);
 app.use("/api/app-logs", authMiddleware, appLogsRouter);
 // 人工客服会话：所有登录运营可见可回复
 app.use("/api/support", authMiddleware, supportRouter);
+// 翻译 V4 任务列表 / 内容 / LLM key 统计（Cosmos + Redis + Blob）
+app.use("/api/translations", authMiddleware, translationsRouter);
+// 店铺体量画像（翻译页标注大/中/小商店）
+app.use("/api/shop-profile", authMiddleware, shopProfileRouter);
 // Redis 缓存查看器（所有登录用户可查）
 app.use("/api/redis-explorer", authMiddleware, redisExplorerRouter);
 
