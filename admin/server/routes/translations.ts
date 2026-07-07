@@ -5,6 +5,11 @@ import { enrichJobWithLiveProgress, enrichJobsWithLiveProgress } from "../lib/v4
 import { getRedis } from "../lib/redis.js";
 import { blobListPaths, blobRead, isBlobConfigured } from "../lib/blob.js";
 import { repairStuckTranslationJobs } from "../lib/repairStuckTranslationJobs.js";
+import {
+  buildTranslationJobFilters,
+  parseTranslationJobFiltersFromQuery,
+  translationJobWhereClause,
+} from "../lib/translationJobFilters.js";
 import type { TranslationV4Job } from "../types/translation.js";
 
 export const translationsRouter = Router();
@@ -20,32 +25,19 @@ translationsRouter.get("/", async (req, res) => {
 
   try {
     const container = getTranslationJobsContainer();
-    const status = (req.query.status as string | undefined)?.trim();
-    const shop = (req.query.shop as string | undefined)?.trim();
-    const source = (req.query.source as string | undefined)?.trim();
-    const limit = Math.min(Number(req.query.limit ?? 100), 500);
+    const filters = parseTranslationJobFiltersFromQuery(
+      req.query as Record<string, string | undefined>,
+    );
+    const limit = Math.min(Number(req.query.limit ?? 100), 1000);
+    const offset = Math.max(0, Number(req.query.offset ?? 0));
+
+    const { conditions, params } = buildTranslationJobFilters(filters);
 
     let query =
       "SELECT c.id, c.shopName, c.source, c.target, c.modules, c.status, c.aiModel, c.metrics, c.taskSource, c.isCover, c.errorMessage, c.errorStage, c.createdAt, c.updatedAt, c.claimedBy, c.lastHeartbeat FROM c";
-    const params: SqlParameter[] = [];
-    const conditions: string[] = [];
-
-    if (status) {
-      conditions.push("c.status = @status");
-      params.push({ name: "@status", value: status });
-    }
-    if (shop) {
-      conditions.push("c.shopName = @shop");
-      params.push({ name: "@shop", value: shop });
-    }
-    if (source) {
-      conditions.push("c.taskSource = @source");
-      params.push({ name: "@source", value: source });
-    }
-    if (conditions.length) {
-      query += " WHERE " + conditions.join(" AND ");
-    }
-    query += " ORDER BY c.createdAt DESC OFFSET 0 LIMIT @limit";
+    query += translationJobWhereClause(conditions);
+    query += " ORDER BY c.createdAt DESC OFFSET @offset LIMIT @limit";
+    params.push({ name: "@offset", value: offset });
     params.push({ name: "@limit", value: limit });
 
     const { resources } = await container.items
@@ -56,7 +48,7 @@ translationsRouter.get("/", async (req, res) => {
       .fetchAll();
 
     const jobs = await enrichJobsWithLiveProgress(resources);
-    res.json({ jobs, total: jobs.length });
+    res.json({ jobs, total: jobs.length, offset, limit });
   } catch (err) {
     if (String(err).includes("Owner resource does not exist")) {
       res.json({ jobs: [], total: 0, note: "翻译任务容器不存在或无访问权限" });
@@ -177,6 +169,203 @@ translationsRouter.get("/key-stats/history", async (req, res) => {
     res.json({ history });
   } catch (err) {
     console.error("[key-stats/history]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ── 商店域名搜索（Cosmos 任务历史）──────────────────────────────────────────
+translationsRouter.get("/shops", async (req, res) => {
+  if (!isCosmosConfigured()) {
+    res.json({ shops: [], note: "Cosmos not configured" });
+    return;
+  }
+
+  const search = (req.query.search as string | undefined)?.trim() ?? "";
+  const limit = Math.min(Number(req.query.limit ?? 30), 50);
+
+  try {
+    const container = getTranslationJobsContainer();
+    let shops: string[] = [];
+
+    if (search) {
+      const { resources } = await container.items
+        .query<string>({
+          query: `
+            SELECT DISTINCT VALUE c.shopName
+            FROM c
+            WHERE CONTAINS(c.shopName, @search, true)
+            OFFSET 0 LIMIT @limit
+          `,
+          parameters: [
+            { name: "@search", value: search },
+            { name: "@limit", value: limit },
+          ],
+        })
+        .fetchAll();
+      shops = resources;
+    } else {
+      const { resources } = await container.items
+        .query<{ shopName: string }>({
+          query: "SELECT TOP 120 c.shopName FROM c ORDER BY c.createdAt DESC",
+        })
+        .fetchAll();
+      const seen = new Set<string>();
+      for (const row of resources) {
+        if (!row.shopName || seen.has(row.shopName)) continue;
+        seen.add(row.shopName);
+        shops.push(row.shopName);
+        if (shops.length >= limit) break;
+      }
+    }
+
+    res.json({ shops });
+  } catch (err) {
+    if (String(err).includes("Owner resource does not exist")) {
+      res.json({ shops: [], note: "翻译任务容器不存在或无访问权限" });
+      return;
+    }
+    console.error("[translations/shops]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ── 单店语言对列表（用于筛选下拉）────────────────────────────────────────────
+translationsRouter.get("/lang-pairs", async (req, res) => {
+  const shop = (req.query.shop as string | undefined)?.trim();
+  if (!shop) {
+    res.status(400).json({ error: "shop query parameter is required" });
+    return;
+  }
+  if (!isCosmosConfigured()) {
+    res.json({ pairs: [], note: "Cosmos not configured" });
+    return;
+  }
+
+  try {
+    const container = getTranslationJobsContainer();
+    const filters = parseTranslationJobFiltersFromQuery(
+      req.query as Record<string, string | undefined>,
+    );
+    const { conditions, params } = buildTranslationJobFilters({
+      ...filters,
+      shop,
+      langFrom: undefined,
+      langTo: undefined,
+    });
+    const where = translationJobWhereClause(conditions);
+
+    const { resources } = await container.items
+      .query<{ source: string; target: string; taskCount: number; tokens: number }>({
+        query: `
+          SELECT c.source, c.target, COUNT(1) AS taskCount, SUM(c.metrics.usedTokens) AS tokens
+          FROM c
+          ${where}
+          GROUP BY c.source, c.target
+        `,
+        parameters: params,
+      })
+      .fetchAll();
+
+    const pairs = resources
+      .map((r) => ({
+        source: r.source,
+        target: r.target,
+        taskCount: r.taskCount,
+        tokens: Number(r.tokens ?? 0),
+      }))
+      .sort((a, b) => b.taskCount - a.taskCount);
+
+    res.json({ pairs });
+  } catch (err) {
+    console.error("[translations/lang-pairs]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ── 单店任务消耗汇总 ─────────────────────────────────────────────────────────
+// 按状态聚合任务数与 Token 消耗。必须注册在 /:jobId 之前。
+translationsRouter.get("/shop-summary", async (req, res) => {
+  const filters = parseTranslationJobFiltersFromQuery(
+    req.query as Record<string, string | undefined>,
+  );
+  const shop = filters.shop?.trim();
+  if (!shop) {
+    res.status(400).json({ error: "shop query parameter is required" });
+    return;
+  }
+  if (!isCosmosConfigured()) {
+    res.json({
+      shop,
+      taskCount: 0,
+      totalTokens: 0,
+      byStatus: [],
+      filters: { langFrom: filters.langFrom ?? null, langTo: filters.langTo ?? null, createdFrom: filters.createdFrom ?? null, createdTo: filters.createdTo ?? null },
+      note: "Cosmos not configured",
+    });
+    return;
+  }
+
+  try {
+    const container = getTranslationJobsContainer();
+    const { conditions, params } = buildTranslationJobFilters({ ...filters, shop });
+    const where = translationJobWhereClause(conditions);
+
+    const { resources: byStatus } = await container.items
+      .query<{ status: string; taskCount: number; tokens: number }>({
+        query: `
+          SELECT c.status, COUNT(1) AS taskCount, SUM(c.metrics.usedTokens) AS tokens
+          FROM c
+          ${where}
+          GROUP BY c.status
+        `,
+        parameters: params,
+      })
+      .fetchAll();
+
+    const { resources: countRows } = await container.items
+      .query<number>({
+        query: `SELECT VALUE COUNT(1) FROM c${where}`,
+        parameters: params,
+      })
+      .fetchAll();
+
+    const { resources: tokenRows } = await container.items
+      .query<number>({
+        query: `SELECT VALUE SUM(c.metrics.usedTokens) FROM c${where}`,
+        parameters: params,
+      })
+      .fetchAll();
+
+    const rows = byStatus.map((r) => ({
+      status: r.status,
+      taskCount: r.taskCount,
+      tokens: Number(r.tokens ?? 0),
+    }));
+
+    res.json({
+      shop,
+      taskCount: countRows[0] ?? 0,
+      totalTokens: Number(tokenRows[0] ?? 0),
+      byStatus: rows,
+      filters: {
+        langFrom: filters.langFrom ?? null,
+        langTo: filters.langTo ?? null,
+        createdFrom: filters.createdFrom ?? null,
+        createdTo: filters.createdTo ?? null,
+      },
+    });
+  } catch (err) {
+    if (String(err).includes("Owner resource does not exist")) {
+      res.json({
+        shop,
+        taskCount: 0,
+        totalTokens: 0,
+        byStatus: [],
+        note: "翻译任务容器不存在或无访问权限",
+      });
+      return;
+    }
+    console.error("[translations/shop-summary]", err);
     res.status(500).json({ error: String(err) });
   }
 });

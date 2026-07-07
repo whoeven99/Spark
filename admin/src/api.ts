@@ -158,15 +158,91 @@ export function fetchTranslations(params?: {
   status?: string;
   shop?: string;
   source?: string;
+  langFrom?: string;
+  langTo?: string;
+  createdFrom?: string;
+  createdTo?: string;
   limit?: number;
-}): Promise<{ jobs: TranslationJob[]; total: number }> {
+  offset?: number;
+}): Promise<{ jobs: TranslationJob[]; total: number; offset?: number; limit?: number }> {
   const query = new URLSearchParams();
   if (params?.status) query.set("status", params.status);
   if (params?.shop) query.set("shop", params.shop);
   if (params?.source) query.set("source", params.source);
+  if (params?.langFrom) query.set("langFrom", params.langFrom);
+  if (params?.langTo) query.set("langTo", params.langTo);
+  if (params?.createdFrom) query.set("createdFrom", params.createdFrom);
+  if (params?.createdTo) query.set("createdTo", params.createdTo);
   if (params?.limit) query.set("limit", String(params.limit));
+  if (params?.offset) query.set("offset", String(params.offset));
   const qs = query.toString();
   return apiFetch(`/translations${qs ? `?${qs}` : ""}`);
+}
+
+export type ShopTranslationFilters = {
+  shop: string;
+  langFrom?: string;
+  langTo?: string;
+  createdFrom?: string;
+  createdTo?: string;
+};
+
+export type ShopTranslationStatusRow = {
+  status: string;
+  taskCount: number;
+  tokens: number;
+};
+
+export type ShopTranslationSummary = {
+  shop: string;
+  taskCount: number;
+  totalTokens: number;
+  byStatus: ShopTranslationStatusRow[];
+  filters?: {
+    langFrom: string | null;
+    langTo: string | null;
+    createdFrom: string | null;
+    createdTo: string | null;
+  };
+  note?: string;
+};
+
+function appendShopTranslationFilters(query: URLSearchParams, filters: ShopTranslationFilters) {
+  query.set("shop", filters.shop);
+  if (filters.langFrom) query.set("langFrom", filters.langFrom);
+  if (filters.langTo) query.set("langTo", filters.langTo);
+  if (filters.createdFrom) query.set("createdFrom", filters.createdFrom);
+  if (filters.createdTo) query.set("createdTo", filters.createdTo);
+}
+
+export function fetchShopTranslationSummary(
+  filters: ShopTranslationFilters,
+): Promise<ShopTranslationSummary> {
+  const query = new URLSearchParams();
+  appendShopTranslationFilters(query, filters);
+  return apiFetch(`/translations/shop-summary?${query.toString()}`);
+}
+
+export type ShopLangPairRow = {
+  source: string;
+  target: string;
+  taskCount: number;
+  tokens: number;
+};
+
+export function fetchShopLangPairs(
+  filters: ShopTranslationFilters,
+): Promise<{ pairs: ShopLangPairRow[]; note?: string }> {
+  const query = new URLSearchParams();
+  appendShopTranslationFilters(query, filters);
+  return apiFetch(`/translations/lang-pairs?${query.toString()}`);
+}
+
+export function searchTranslationShops(
+  search?: string,
+): Promise<{ shops: string[]; note?: string }> {
+  const q = search ? `?search=${encodeURIComponent(search)}` : "";
+  return apiFetch(`/translations/shops${q}`);
 }
 
 /** worker 自动翻译任务来源标识。 */
@@ -1365,6 +1441,12 @@ export function fetchTsfShopDetail(shop: string): Promise<TsfShopDetail> {
 export function fetchTsfUsage(search?: string): Promise<{ usage: TsfUsageRow[] }> {
   const q = search ? `?search=${encodeURIComponent(search)}` : "";
   return apiFetch(`/tsf/usage${q}`);
+}
+
+export function fetchTsfUsageAccount(
+  shop: string,
+): Promise<{ account: TsfUsageRow | null; note?: string }> {
+  return apiFetch(`/tsf/usage/account?shop=${encodeURIComponent(shop)}`);
 }
 
 export function fetchTsfUsageHistory(
