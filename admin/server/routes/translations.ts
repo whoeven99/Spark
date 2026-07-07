@@ -2,7 +2,7 @@ import { Router } from "express";
 import type { SqlParameter } from "@azure/cosmos";
 import { getTranslationJobsContainer, isCosmosConfigured } from "../lib/cosmos.js";
 import { enrichJobWithLiveProgress, enrichJobsWithLiveProgress } from "../lib/v4Progress.js";
-import { getRedis } from "../lib/redis.js";
+import { getRedis, batchHgetall, batchLrange } from "../lib/redis.js";
 import { blobListPaths, blobRead, isBlobConfigured } from "../lib/blob.js";
 import { repairStuckTranslationJobs } from "../lib/repairStuckTranslationJobs.js";
 import type { TranslationV4Job } from "../types/translation.js";
@@ -98,13 +98,10 @@ translationsRouter.get("/key-stats", async (_req, res) => {
       res.json({ stats: [] });
       return;
     }
-    const pipeline = redis.pipeline();
-    for (const key of keys) pipeline.hgetall(key);
-    const results = await pipeline.exec();
+    const hashes = await batchHgetall(redis, keys);
 
-    const stats: LLMKeyStatRow[] = (results ?? [])
-      .map((r): Record<string, string> | null => r?.[1] as Record<string, string> | null)
-      .filter((h): h is Record<string, string> => !!h && !!h.label)
+    const stats: LLMKeyStatRow[] = hashes
+      .filter((h) => !!h.label)
       .map((h: Record<string, string>): LLMKeyStatRow => ({
         label:           h.label,
         calls:           Number(h.calls           ?? 0),
@@ -163,14 +160,12 @@ translationsRouter.get("/key-stats/history", async (req, res) => {
       return;
     }
 
-    const pipe = redis.pipeline();
-    for (const k of keys) pipe.lrange(k, 0, -1);
-    const results = await pipe.exec();
+    const lists = await batchLrange(redis, keys, 0, -1);
 
     const history: Record<string, HistoryEntry[]> = {};
     keys.forEach((k, i) => {
       const label = k.replace("translate:v4:keystatlog:", "");
-      const raw = (results?.[i]?.[1] as string[] | null) ?? [];
+      const raw = lists[i] ?? [];
       history[label] = raw.map((s) => JSON.parse(s) as HistoryEntry);
     });
 
