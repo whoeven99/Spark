@@ -60,7 +60,7 @@ function buildServiceStatuses(): ServiceStatus[] {
       category: "core",
       required: false,
       configured: hasEnv("REDIS_URL"),
-      note: "翻译任务实时进度（REDIS_URL）与 hint 队列；集群模式需 REDIS_CLUSTER=true",
+      note: "翻译任务实时进度（REDIS_URL）；默认 Cluster 模式，本地单机 Redis 设 REDIS_CLUSTER=false",
       costSignal: "内存使用率、连接数、命中率",
       rechargeSignal: "内存接近上限、频繁 eviction",
     },

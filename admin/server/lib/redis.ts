@@ -4,9 +4,15 @@ export type RedisClient = Redis | Cluster;
 
 let _redis: RedisClient | null = null;
 
+/**
+ * 云 Redis Cluster（如 Azure Redis Enterprise）需用 Cluster 客户端，否则会报 MOVED。
+ * 仅本地单机 Redis 时显式设 REDIS_CLUSTER=false。
+ */
 function isClusterMode(): boolean {
   const v = process.env.REDIS_CLUSTER?.trim().toLowerCase();
-  return v === "1" || v === "true" || v === "yes";
+  if (v === "0" || v === "false" || v === "no") return false;
+  if (v === "1" || v === "true" || v === "yes") return true;
+  return true;
 }
 
 function parseRedisUrl(url: string) {
@@ -21,7 +27,10 @@ function parseRedisUrl(url: string) {
     host: parsed.hostname,
     port,
     password,
-    tls: parsed.protocol === "rediss:" ? ({} as const) : undefined,
+    tls:
+      parsed.protocol === "rediss:"
+        ? ({ servername: parsed.hostname } as const)
+        : undefined,
   };
 }
 
@@ -33,8 +42,7 @@ const commonOpts = {
 
 /**
  * Admin 专用 Redis 客户端。读取 `REDIS_URL`（与 Render 等部署配置一致）。
- * 集群部署时设置 `REDIS_CLUSTER=true`，使用 ioredis Cluster 处理 MOVED 重定向。
- * 未配置时返回 null，调用方降级为 Cosmos-only。
+ * 默认按 Redis Cluster 连接；本地单机 Redis 设 `REDIS_CLUSTER=false`。
  */
 export function getRedis(): RedisClient | null {
   if (_redis) return _redis;
@@ -47,6 +55,7 @@ export function getRedis(): RedisClient | null {
     _redis = new Cluster([{ host: node.host, port: node.port }], {
       // Azure / 云 Redis Cluster 的 MOVED 可能返回内网 IP，跳过 DNS 解析
       dnsLookup: (address, callback) => callback(null, address),
+      slotsRefreshTimeout: 10_000,
       redisOptions: {
         ...commonOpts,
         password: node.password,
