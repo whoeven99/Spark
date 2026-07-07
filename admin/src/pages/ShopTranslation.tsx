@@ -393,7 +393,6 @@ export default function ShopTranslation() {
       key: "tokens",
       sorter: (a: TranslationJob, b: TranslationJob) =>
         (a.metrics.usedTokens || 0) - (b.metrics.usedTokens || 0),
-      defaultSortOrder: "descend" as const,
       render: (_: unknown, r: TranslationJob) => (
         <Typography.Text strong style={{ fontFamily: MONO }}>
           {fmtNum(r.metrics.usedTokens || 0)}
@@ -419,6 +418,9 @@ export default function ShopTranslation() {
       title: "创建时间",
       dataIndex: "createdAt",
       key: "createdAt",
+      sorter: (a: TranslationJob, b: TranslationJob) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      defaultSortOrder: "descend" as const,
       render: (v: string) => (
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           {new Date(v).toLocaleString("zh-CN")}
