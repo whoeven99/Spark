@@ -39,6 +39,7 @@ type MenuItemDef = {
 
 const TRANSLATION_ROUTE_PREFIXES = [
   "/translations",
+  "/shop-translation",
   "/auto-translations",
   "/redis-explorer",
   "/translate-v4-support",
@@ -77,6 +78,12 @@ const translationMenuItems: MenuItemDef[] = [
     key: "/translations",
     icon: <MonitorOutlined />,
     label: <Link to="/translations">翻译任务列表</Link>,
+    ownerOnly: false,
+  },
+  {
+    key: "/shop-translation",
+    icon: <ShopOutlined />,
+    label: <Link to="/shop-translation">商店任务查询</Link>,
     ownerOnly: false,
   },
   { key: "/tsf/overview", icon: <TeamOutlined />, label: <Link to="/tsf/overview">翻译 新用户概览</Link>, ownerOnly: false },
