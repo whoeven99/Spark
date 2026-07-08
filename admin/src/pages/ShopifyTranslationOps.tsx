@@ -30,6 +30,7 @@ import {
   fetchShopifyTranslationResourceTypes,
   importShopifyQueryCsv,
   importShopifyStandardCsv,
+  importLiquidRuleCsv,
   queryMetafieldNamespaceStats,
   queryShopifyAltImages,
   queryShopifyTranslations,
@@ -350,6 +351,93 @@ function StandardCsvImportTab() {
       </Card>
       {logs.length > 0 && (
         <Card size="small" title="写回日志">
+          <TextArea value={logs.join("\n")} rows={16} readOnly style={{ fontFamily: "monospace" }} />
+        </Card>
+      )}
+    </Space>
+  );
+}
+
+function LiquidRuleCsvImportTab() {
+  const [shopName, setShopName] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [logs, setLogs] = useState<string[]>([]);
+
+  const onImport = async () => {
+    if (!shopName.trim()) {
+      message.warning("请填写商店名");
+      return;
+    }
+    if (!file) {
+      message.warning("请上传 CSV 文件");
+      return;
+    }
+    setImporting(true);
+    setLogs([]);
+    try {
+      await importLiquidRuleCsv(
+        { shopName: shopName.trim(), file },
+        (line) => setLogs((prev) => [...prev, line]),
+      );
+      message.success("导入流程结束");
+    } catch (e) {
+      message.error(String(e));
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return (
+    <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+      <Alert
+        type="info"
+        showIcon
+        message="Liquid Rule CSV 导入"
+        description={
+          <>
+            写入 TSF Turso <code>LiquidRule</code> 表（取代 Java User_Liquid）。
+            必需列：<code>sourceText</code>、<code>languageCode</code>、<code>targetText</code>；
+            可选：<code>replacementMethod</code>（TRUE/FALSE）。
+            唯一性：<code>shop + sourceText + languageCode</code>；库中已存在则跳过；文件内重复则整单取消。
+          </>
+        }
+      />
+      <Card size="small">
+        <Form layout="vertical">
+          <Row gutter={16}>
+            <Col xs={24} md={10}>
+              <Form.Item label="Shop Name" required>
+                <Input
+                  placeholder="xxx 或 xxx.myshopify.com"
+                  value={shopName}
+                  onChange={(e) => setShopName(e.target.value)}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="CSV 文件">
+                <Upload
+                  accept=".csv"
+                  maxCount={1}
+                  beforeUpload={(f) => {
+                    setFile(f);
+                    return false;
+                  }}
+                  onRemove={() => setFile(null)}
+                >
+                  <Button icon={<UploadOutlined />}>选择文件</Button>
+                </Upload>
+              </Form.Item>
+            </Col>
+          </Row>
+          <Button type="primary" loading={importing} onClick={onImport}>
+            开始导入
+          </Button>
+        </Form>
+      </Card>
+      {logs.length > 0 && (
+        <Card size="small" title="导入日志">
           <TextArea value={logs.join("\n")} rows={16} readOnly style={{ fontFamily: "monospace" }} />
         </Card>
       )}
@@ -933,6 +1021,7 @@ export default function ShopifyTranslationOps() {
       { key: "metafield-stats", label: "Metafield 统计", children: <MetafieldNamespaceStatsTab /> },
       { key: "import", label: "Query CSV 导入", children: <QueryCsvImportTab /> },
       { key: "standard", label: "标准 CSV 写回", children: <StandardCsvImportTab /> },
+      { key: "liquid-rule", label: "Liquid Rule CSV 导入", children: <LiquidRuleCsvImportTab /> },
       { key: "batch-delete", label: "批量删除 CSV", children: <BatchDeleteCsvTab /> },
       { key: "single", label: "单条写回/删除", children: <SingleWriteDeleteTab /> },
     ],
@@ -945,7 +1034,7 @@ export default function ShopifyTranslationOps() {
         Shopify 翻译资源运维
       </Title>
       <Paragraph type="secondary">
-        从小工具迁移：查询可翻译资源、ALT 查询、Metafield namespace 统计、导出 CSV、Query/标准 CSV 批量写回、批量删除、单条写回/删除。Token 通过商店名从 TSF Turso Session 自动获取。
+        从小工具迁移：查询可翻译资源、ALT 查询、Metafield namespace 统计、导出 CSV、Query/标准 CSV 批量写回、Liquid Rule CSV 导入、批量删除、单条写回/删除。Token 通过商店名从 TSF Turso Session 自动获取。
       </Paragraph>
       <Tabs items={tabItems} />
     </div>

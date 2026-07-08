@@ -1730,6 +1730,16 @@ export async function importShopifyStandardCsv(
   return consumeShopifyTranslationSse("standard-csv-import", form, onLog);
 }
 
+export async function importLiquidRuleCsv(
+  params: { shopName: string; file: File },
+  onLog: (line: string) => void,
+): Promise<void> {
+  const form = new FormData();
+  form.append("shopName", params.shopName);
+  form.append("file", params.file);
+  return consumeShopifyTranslationSse("liquid-rule-csv-import", form, onLog);
+}
+
 export type BatchDeleteCsvResult = {
   success: boolean;
   summary?: string;

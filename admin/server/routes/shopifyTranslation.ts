@@ -24,6 +24,15 @@ import {
   parseQueryCsvConcurrency,
   type BatchImportEvent,
 } from "../lib/queryCsvImport.js";
+import { getTsfDb, isTsfDbConfigured } from "../lib/tsfDb.js";
+import { normalizeShopName } from "../lib/shopSession.js";
+import {
+  buildLiquidRuleImportPlan,
+  formatLiquidRuleImportSummary,
+  insertLiquidRules,
+  loadExistingLiquidRuleKeys,
+  parseLiquidRuleCsvBuffer,
+} from "../lib/userLiquidCsvImport.js";
 
 export const shopifyTranslationRouter = Router();
 
@@ -657,5 +666,108 @@ shopifyTranslationRouter.post(
     } catch (e) {
       sendResolveError(res, e, 502);
     }
+  },
+);
+
+shopifyTranslationRouter.post(
+  "/liquid-rule-csv-import",
+  upload.single("file"),
+  async (req: Request, res: Response) => {
+    const shopName = String(req.body?.shopName ?? "").trim();
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+
+    if (!shopName) {
+      writeSse(res, "data: 请填写 Shop Name\n\n");
+      writeSse(res, "data: __COMPLETE__\n\n");
+      res.end();
+      return;
+    }
+
+    if (!isTsfDbConfigured()) {
+      writeSse(res, "data: TSF Turso 未配置，无法写入 LiquidRule\n\n");
+      writeSse(res, "data: __COMPLETE__\n\n");
+      res.end();
+      return;
+    }
+
+    const file = req.file;
+    if (!file?.buffer?.length) {
+      writeSse(res, "data: 没有上传 CSV 文件\n\n");
+      writeSse(res, "data: __COMPLETE__\n\n");
+      res.end();
+      return;
+    }
+
+    try {
+      const shop = normalizeShopName(shopName);
+      writeSse(res, `data: 目标店铺: ${shop}\n\n`);
+      writeSse(res, "data: 正在连接 TSF Turso...\n\n");
+
+      const db = getTsfDb();
+      const { rows, missingColumns } = parseLiquidRuleCsvBuffer(file.buffer, shop);
+
+      if (!rows.length) {
+        writeSse(res, "data: ❌ CSV 为空或无法读取表头\n\n");
+        writeSse(res, "data: __COMPLETE__\n\n");
+        res.end();
+        return;
+      }
+
+      if (missingColumns.length) {
+        writeSse(res, `data: ❌ 缺少必要列: ${missingColumns.join(", ")}\n\n`);
+        writeSse(res, "data: __COMPLETE__\n\n");
+        res.end();
+        return;
+      }
+
+      writeSse(res, `data: 共 ${rows.length} 行，正在校验...\n\n`);
+
+      const existingKeys = await loadExistingLiquidRuleKeys(db, shop);
+      const plan = buildLiquidRuleImportPlan(rows, shop, existingKeys);
+
+      if (plan.fileDuplicateKeys.length) {
+        writeSse(
+          res,
+          `data: 文件内存在 ${plan.fileDuplicateKeys.length} 组重复记录（shop + sourceText + languageCode），已取消导入\n\n`,
+        );
+        writeSse(res, "data: __COMPLETE__\n\n");
+        res.end();
+        return;
+      }
+
+      if (!plan.toInsert.length) {
+        writeSse(res, "data: 该文件数据均已存在于 LiquidRule，请勿重复导入\n\n");
+        writeSse(res, "data: __COMPLETE__\n\n");
+        res.end();
+        return;
+      }
+
+      writeSse(
+        res,
+        `data: 校验通过：待插入 ${plan.toInsert.length} 行，跳过无效 ${plan.skipInvalidCount} 行，跳过库中已存在 ${plan.skipDbCount} 行\n\n`,
+      );
+
+      const result = await insertLiquidRules(db, plan.toInsert, (inserted, total) => {
+        writeSse(
+          res,
+          `data: 进度 ${inserted}/${total} | 成功 ${inserted}\n\n`,
+        );
+      });
+
+      for (const err of result.errors) {
+        writeSse(res, `data: ${err}\n\n`);
+      }
+
+      writeSse(res, `data: ${formatLiquidRuleImportSummary(plan, result)}\n\n`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      writeSse(res, `data: ❌ 处理过程出错：${msg}\n\n`);
+    }
+
+    writeSse(res, "data: __COMPLETE__\n\n");
+    res.end();
   },
 );
