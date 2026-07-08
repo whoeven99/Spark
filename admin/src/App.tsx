@@ -26,6 +26,7 @@ import TsfUsage from "./pages/tsf/TsfUsage";
 import TsfSubscriptions from "./pages/tsf/TsfSubscriptions";
 import TsfPacks from "./pages/tsf/TsfPacks";
 import TranslationOps from "./pages/TranslationOps";
+import ShopifyTranslationOps from "./pages/ShopifyTranslationOps";
 import { useNavigate } from "react-router-dom";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -101,6 +102,7 @@ export default function App() {
             <Route path="tsf/subscriptions" element={<TsfSubscriptions />} />
             <Route path="tsf/packs" element={<TsfPacks />} />
             <Route path="translation-ops" element={<TranslationOps />} />
+            <Route path="shopify-translation" element={<ShopifyTranslationOps />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

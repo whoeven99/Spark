@@ -23,6 +23,7 @@ import {
   ShoppingCartOutlined,
   ThunderboltOutlined,
   SettingOutlined,
+  CloudUploadOutlined,
 } from "@ant-design/icons";
 import { clearToken, isOwner, getRole } from "../api";
 
@@ -40,6 +41,7 @@ type MenuItemDef = {
 const TRANSLATION_ROUTE_PREFIXES = [
   "/translations",
   "/shop-translation",
+  "/shopify-translation",
   "/auto-translations",
   "/redis-explorer",
   "/translate-v4-support",
@@ -95,6 +97,12 @@ const translationMenuItems: MenuItemDef[] = [
     key: "/translation-ops",
     icon: <SettingOutlined />,
     label: <Link to="/translation-ops">翻译运维</Link>,
+    ownerOnly: false,
+  },
+  {
+    key: "/shopify-translation",
+    icon: <CloudUploadOutlined />,
+    label: <Link to="/shopify-translation">Shopify 翻译运维</Link>,
     ownerOnly: false,
   },
   { key: "/redis-explorer", icon: <HddOutlined />, label: <Link to="/redis-explorer">翻译 TM 缓存</Link>, ownerOnly: false },
