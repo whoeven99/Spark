@@ -1804,3 +1804,163 @@ export function exportTranslationRowsToCsv(rows: ShopifyTranslationRow[]): void 
   a.click();
   URL.revokeObjectURL(url);
 }
+
+export type ShopifyAltImageRow = {
+  product_id: string;
+  product_title: string;
+  product_status: string;
+  image_id: string | null;
+  image_url: string | null;
+  image_altText: string | null;
+  target_text?: string;
+  target?: string;
+};
+
+export type ShopifyAltStreamChunk =
+  | { type: "progress"; count: number }
+  | { type: "done"; data: ShopifyAltImageRow[]; count: number }
+  | { type: "error"; error: string };
+
+export type MetafieldModuleOption = {
+  key: string;
+  label: string;
+  rootField: string;
+};
+
+export type MetafieldNamespaceSummaryRow = {
+  resource_module: string;
+  namespace: string;
+  count: number;
+};
+
+export type MetafieldDetailRow = {
+  resource_module?: string;
+  resource_type: string;
+  resource_id: string;
+  metafield_id: string;
+  namespace: string;
+  key: string;
+  type: string;
+  value: string;
+  translation_locale: string;
+  translation_value: string;
+  translation_outdated: boolean | null;
+};
+
+export function fetchMetafieldModules(): Promise<{ modules: MetafieldModuleOption[] }> {
+  return apiFetch("/shopify-translation/metafield-modules");
+}
+
+export async function queryShopifyAltImages(
+  params: {
+    shopName: string;
+    query?: string | null;
+    sortKey?: string | null;
+    reverse?: boolean;
+  },
+  onChunk: (chunk: ShopifyAltStreamChunk) => void,
+): Promise<void> {
+  const token = getToken();
+  const res = await fetch("/api/shopify-translation/alt-query", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+
+  if (res.status === 401) {
+    clearToken();
+    window.location.reload();
+    throw new Error("Unauthorized");
+  }
+  if (!res.ok) {
+    const body = await res.text();
+    try {
+      const parsed = JSON.parse(body) as { error?: string };
+      throw new Error(parsed.error ?? body);
+    } catch (e) {
+      if (e instanceof Error && e.message !== body) throw e;
+      throw new Error(body || `HTTP ${res.status}`);
+    }
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("无法读取响应流");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      onChunk(JSON.parse(trimmed) as ShopifyAltStreamChunk);
+    }
+  }
+
+  if (buffer.trim()) {
+    onChunk(JSON.parse(buffer.trim()) as ShopifyAltStreamChunk);
+  }
+}
+
+export function queryMetafieldNamespaceStats(params: {
+  shopName: string;
+  locale: string;
+  modules: string[];
+  resourceFirst?: number;
+  metafieldFirst?: number;
+}): Promise<{
+  summary: MetafieldNamespaceSummaryRow[];
+  details: MetafieldDetailRow[];
+  csvBase64: string;
+  csvFilename: string;
+  totalMetafields: number;
+}> {
+  return apiFetch("/shopify-translation/metafield-namespace-stats", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export function exportAltRowsToCsv(rows: ShopifyAltImageRow[]): void {
+  const headers = ["product_id", "image_id", "image_url", "image_altText", "target_text", "target"];
+  const escape = (v: unknown) => {
+    const s = v == null ? "" : String(v);
+    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  };
+  const lines = [
+    headers.join(","),
+    ...rows.map((row) => headers.map((h) => escape(row[h as keyof ShopifyAltImageRow])).join(",")),
+  ];
+  const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `shopify_alt_azure_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function downloadBase64Csv(csvBase64: string, filename: string): void {
+  const byteChars = atob(csvBase64);
+  const byteNumbers = new Array(byteChars.length);
+  for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
+  const byteArray = new Uint8Array(byteNumbers);
+  const blob = new Blob([byteArray], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}

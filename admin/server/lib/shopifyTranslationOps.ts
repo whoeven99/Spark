@@ -53,6 +53,130 @@ type GraphqlResponse<T> = {
   errors?: { message: string }[];
 };
 
+export const METAFIELD_RESOURCE_MODULES = {
+  PRODUCT: { label: "Product", rootField: "products" },
+  COLLECTION: { label: "Collection", rootField: "collections" },
+  PAGE: { label: "Page", rootField: "pages" },
+  BLOG: { label: "Blog", rootField: "blogs" },
+  ARTICLE: { label: "Article", rootField: "articles" },
+} as const;
+
+export type MetafieldModuleKey = keyof typeof METAFIELD_RESOURCE_MODULES;
+
+export type AltImageRow = {
+  product_id: string;
+  product_title: string;
+  product_status: string;
+  image_id: string | null;
+  image_url: string | null;
+  image_altText: string | null;
+  target_text?: string;
+  target?: string;
+};
+
+export type AltStreamChunk =
+  | { type: "progress"; count: number }
+  | { type: "done"; data: AltImageRow[]; count: number }
+  | { type: "error"; error: string };
+
+export type MetafieldRow = {
+  resource_type: string;
+  resource_id: string;
+  metafield_id: string;
+  namespace: string;
+  key: string;
+  type: string;
+  value: string;
+  translation_locale: string;
+  translation_value: string;
+  translation_outdated: boolean | null;
+  resource_module?: string;
+};
+
+export type MetafieldNamespaceSummaryRow = {
+  resource_module: string;
+  namespace: string;
+  count: number;
+};
+
+type MetafieldNode = {
+  id: string;
+  namespace: string;
+  key: string;
+  type: string;
+  value: string;
+  translations: { locale: string; value: string; outdated: boolean }[];
+};
+
+type MetafieldsConnection = {
+  edges: { node: MetafieldNode }[];
+  pageInfo: { hasNextPage: boolean; endCursor: string | null };
+};
+
+type ResourceMetafieldsConnection = {
+  edges: { node: { id: string; metafields: MetafieldsConnection } }[];
+  pageInfo: { hasNextPage: boolean; endCursor: string | null };
+};
+
+type ProductsPagePayload = {
+  products: {
+    edges: {
+      node: {
+        id: string;
+        title: string;
+        status: string;
+        images: {
+          edges: { node: { id: string; url: string; altText: string | null } }[];
+          pageInfo: { hasNextPage: boolean; endCursor: string | null };
+        };
+      };
+    }[];
+    pageInfo: { hasNextPage: boolean; endCursor: string | null };
+  };
+};
+
+function emptyMetafieldsConnection(): MetafieldsConnection {
+  return { edges: [], pageInfo: { hasNextPage: false, endCursor: null } };
+}
+
+export function summarizeMetafieldNamespaces(rows: MetafieldRow[]): MetafieldNamespaceSummaryRow[] {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const module = row.resource_module ?? row.resource_type;
+    const key = `${module}\0${row.namespace}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .map(([key, count]) => {
+      const [resource_module, namespace] = key.split("\0");
+      return { resource_module, namespace, count };
+    })
+    .sort((a, b) => {
+      if (a.resource_module !== b.resource_module) {
+        return a.resource_module.localeCompare(b.resource_module);
+      }
+      if (b.count !== a.count) return b.count - a.count;
+      return a.namespace.localeCompare(b.namespace);
+    });
+}
+
+export function metafieldSummaryToCsv(rows: MetafieldNamespaceSummaryRow[]): string {
+  const headers = ["resource_module", "namespace", "count"];
+  const escape = (v: unknown) => {
+    const s = v == null ? "" : String(v);
+    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  };
+  const lines = [
+    headers.join(","),
+    ...rows.map((row) => headers.map((h) => escape(row[h as keyof MetafieldNamespaceSummaryRow])).join(",")),
+  ];
+  return `\uFEFF${lines.join("\n")}`;
+}
+
 type TranslatableNode = {
   resourceId: string;
   translations: {
@@ -352,5 +476,350 @@ export class ShopifyTranslationOps {
     }
 
     return { error: `Deletion failed after ${MAX_RETRIES} attempts`, success: false };
+  }
+
+  async *streamAllProductsWithImages(options?: {
+    queryString?: string | null;
+    sortKey?: string | null;
+    reverse?: boolean;
+    productFirst?: number;
+    imageFirst?: number;
+  }): AsyncGenerator<AltStreamChunk> {
+    const {
+      queryString = null,
+      sortKey = null,
+      reverse = false,
+      productFirst = 100,
+      imageFirst = 250,
+    } = options ?? {};
+
+    const productsQuery = `
+      query Products($first: Int!, $after: String, $query: String, $sortKey: ProductSortKeys, $reverse: Boolean) {
+        products(first: $first, after: $after, query: $query, sortKey: $sortKey, reverse: $reverse) {
+          edges {
+            node {
+              id
+              title
+              status
+              images(first: 20) {
+                edges {
+                  node {
+                    id
+                    url
+                    altText
+                  }
+                }
+                pageInfo {
+                  hasNextPage
+                  endCursor
+                }
+              }
+            }
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+        }
+      }
+    `;
+
+    const imageQuery = `
+      query ProductImages($id: ID!, $first: Int!, $after: String) {
+        product(id: $id) {
+          images(first: $first, after: $after) {
+            edges {
+              node {
+                id
+                url
+                altText
+              }
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+          }
+        }
+      }
+    `;
+
+    const resultRows: AltImageRow[] = [];
+    let cursor: string | null = null;
+
+    while (true) {
+      const data: GraphqlResponse<ProductsPagePayload> = await this.graphql<ProductsPagePayload>(
+        productsQuery,
+        {
+          first: productFirst,
+          after: cursor,
+          query: queryString,
+          sortKey: sortKey || null,
+          reverse: reverse || null,
+        },
+      );
+
+      if (data.errors?.length) {
+        yield { type: "error", error: data.errors[0]?.message ?? "GraphQL error" };
+        return;
+      }
+
+      const products: ProductsPagePayload["products"] | undefined = data.data?.products;
+      if (!products) {
+        yield { type: "error", error: "返回数据格式错误" };
+        return;
+      }
+
+      for (const edge of products.edges ?? []) {
+        const node = edge.node;
+        const pid = node.id;
+        const collectedImages: { id: string; url: string; altText: string | null }[] = [];
+
+        for (const ie of node.images?.edges ?? []) {
+          collectedImages.push({
+            id: ie.node.id,
+            url: ie.node.url,
+            altText: ie.node.altText,
+          });
+        }
+
+        let imgPageInfo = node.images?.pageInfo;
+        if (imgPageInfo?.hasNextPage) {
+          let imgCursor = imgPageInfo.endCursor;
+          while (imgCursor) {
+            const imgData = await this.graphql<{
+              product: {
+                images: {
+                  edges: { node: { id: string; url: string; altText: string | null } }[];
+                  pageInfo: { hasNextPage: boolean; endCursor: string | null };
+                };
+              } | null;
+            }>(imageQuery, { id: pid, first: imageFirst, after: imgCursor });
+
+            if (imgData.errors?.length) break;
+
+            const imgs = imgData.data?.product?.images;
+            if (!imgs) break;
+
+            for (const ie2 of imgs.edges ?? []) {
+              collectedImages.push({
+                id: ie2.node.id,
+                url: ie2.node.url,
+                altText: ie2.node.altText,
+              });
+            }
+
+            if (imgs.pageInfo.hasNextPage) {
+              imgCursor = imgs.pageInfo.endCursor;
+            } else {
+              break;
+            }
+          }
+        }
+
+        if (collectedImages.length) {
+          for (const im of collectedImages) {
+            resultRows.push({
+              product_id: pid,
+              product_title: node.title,
+              product_status: node.status,
+              image_id: im.id,
+              image_url: im.url,
+              image_altText: im.altText,
+            });
+          }
+        } else {
+          resultRows.push({
+            product_id: pid,
+            product_title: node.title,
+            product_status: node.status,
+            image_id: null,
+            image_url: null,
+            image_altText: null,
+          });
+        }
+      }
+
+      yield { type: "progress", count: resultRows.length };
+
+      if (products.pageInfo.hasNextPage) {
+        cursor = products.pageInfo.endCursor;
+      } else {
+        break;
+      }
+    }
+
+    yield { type: "done", data: resultRows, count: resultRows.length };
+  }
+
+  async fetchMetafieldsByOwnerId(
+    ownerId: string,
+    locale: string,
+    metafieldFirst = 100,
+    metafieldAfter: string | null = null,
+  ) {
+    const ownerQuery = `
+      query OwnerMetafields($ownerId: ID!, $metafieldFirst: Int!, $metafieldAfter: String, $locale: String!) {
+        node(id: $ownerId) {
+          ... on HasMetafields {
+            metafields(first: $metafieldFirst, after: $metafieldAfter) {
+              edges {
+                node {
+                  id
+                  namespace
+                  key
+                  type
+                  value
+                  translations(locale: $locale) {
+                    locale
+                    value
+                    outdated
+                  }
+                }
+              }
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const data = await this.graphql<{
+      node: {
+        metafields: MetafieldsConnection;
+      } | null;
+    }>(ownerQuery, {
+      ownerId,
+      metafieldFirst,
+      metafieldAfter,
+      locale,
+    });
+
+    if (data.errors?.length) {
+      throw new Error(data.errors[0]?.message ?? "GraphQL error");
+    }
+
+    return data.data?.node?.metafields ?? emptyMetafieldsConnection();
+  }
+
+  async fetchMetafieldsForResource(
+    rootField: string,
+    locale: string,
+    resourceFirst = 100,
+    metafieldFirst = 100,
+  ): Promise<MetafieldRow[]> {
+    const query = `
+      query ResourceMetafields($resourceFirst: Int!, $resourceAfter: String, $metafieldFirst: Int!, $metafieldAfter: String, $locale: String!) {
+        ${rootField}(first: $resourceFirst, after: $resourceAfter) {
+          edges {
+            node {
+              id
+              metafields(first: $metafieldFirst, after: $metafieldAfter) {
+                edges {
+                  node {
+                    id
+                    namespace
+                    key
+                    type
+                    value
+                    translations(locale: $locale) {
+                      locale
+                      value
+                      outdated
+                    }
+                  }
+                }
+                pageInfo {
+                  hasNextPage
+                  endCursor
+                }
+              }
+            }
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+        }
+      }
+    `;
+
+    const allRows: MetafieldRow[] = [];
+    let resourceAfter: string | null = null;
+
+    const appendMetafieldRows = (
+      resourceId: string,
+      currentMetafields: MetafieldsConnection,
+    ) => {
+      for (const mfEdge of currentMetafields.edges ?? []) {
+        const mfNode = mfEdge.node;
+        const trans = mfNode.translations?.[0];
+        allRows.push({
+          resource_type: rootField,
+          resource_id: resourceId,
+          metafield_id: mfNode.id ?? "",
+          namespace: mfNode.namespace ?? "",
+          key: mfNode.key ?? "",
+          type: mfNode.type ?? "",
+          value: mfNode.value ?? "",
+          translation_locale: trans?.locale ?? "",
+          translation_value: trans?.value ?? "",
+          translation_outdated: trans?.outdated ?? null,
+        });
+      }
+    };
+
+    while (true) {
+      const data: GraphqlResponse<Record<string, ResourceMetafieldsConnection>> =
+        await this.graphql<Record<string, ResourceMetafieldsConnection>>(query, {
+          resourceFirst: resourceFirst,
+          resourceAfter,
+          metafieldFirst,
+          metafieldAfter: null,
+          locale,
+        });
+
+      if (data.errors?.length) {
+        throw new Error(data.errors[0]?.message ?? "GraphQL error");
+      }
+
+      const resourceData: ResourceMetafieldsConnection | undefined = data.data?.[rootField];
+      if (!resourceData) {
+        throw new Error("返回数据格式错误");
+      }
+
+      for (const edge of resourceData.edges ?? []) {
+        const node = edge.node;
+        const resourceId = node.id;
+        const metafieldsData = node.metafields ?? emptyMetafieldsConnection();
+
+        appendMetafieldRows(resourceId, metafieldsData);
+
+        let mfPageInfo = metafieldsData.pageInfo;
+        let mfAfter = mfPageInfo.endCursor;
+        while (mfPageInfo.hasNextPage && mfAfter) {
+          const currentMetafields = await this.fetchMetafieldsByOwnerId(
+            resourceId,
+            locale,
+            metafieldFirst,
+            mfAfter,
+          );
+          appendMetafieldRows(resourceId, currentMetafields);
+          mfPageInfo = currentMetafields.pageInfo;
+          mfAfter = mfPageInfo.endCursor;
+        }
+      }
+
+      if (resourceData.pageInfo.hasNextPage) {
+        resourceAfter = resourceData.pageInfo.endCursor;
+      } else {
+        break;
+      }
+    }
+
+    return allRows;
   }
 }

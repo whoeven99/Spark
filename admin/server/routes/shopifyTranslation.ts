@@ -4,8 +4,12 @@ import { resolveShopAccessToken } from "../lib/shopSession.js";
 import {
   RESOURCE_TYPES,
   ShopifyTranslationOps,
+  METAFIELD_RESOURCE_MODULES,
+  summarizeMetafieldNamespaces,
+  metafieldSummaryToCsv,
   type ResourceType,
   type TranslationRow,
+  type MetafieldModuleKey,
 } from "../lib/shopifyTranslationOps.js";
 import {
   QUERY_CSV_REQUIRED_COLUMNS,
@@ -61,6 +65,112 @@ shopifyTranslationRouter.get("/session-check", async (req, res) => {
     });
   } catch (e) {
     sendResolveError(res, e);
+  }
+});
+
+shopifyTranslationRouter.get("/metafield-modules", (_req, res) => {
+  res.json({
+    modules: Object.entries(METAFIELD_RESOURCE_MODULES).map(([key, conf]) => ({
+      key,
+      label: conf.label,
+      rootField: conf.rootField,
+    })),
+  });
+});
+
+shopifyTranslationRouter.post("/alt-query", async (req, res) => {
+  const shopName = String(req.body?.shopName ?? "").trim();
+  const queryString = req.body?.query != null ? String(req.body.query).trim() || null : null;
+  const sortKey = req.body?.sortKey != null ? String(req.body.sortKey).trim() || null : null;
+  const reverse = req.body?.reverse === true;
+
+  if (!shopName) {
+    res.status(400).json({ error: "shopName 不能为空" });
+    return;
+  }
+
+  res.setHeader("Content-Type", "application/x-ndjson");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("X-Accel-Buffering", "no");
+
+  try {
+    const session = await resolveShopAccessToken(shopName);
+    const ops = new ShopifyTranslationOps(session.shop, session.accessToken);
+
+    for await (const chunk of ops.streamAllProductsWithImages({
+      queryString,
+      sortKey,
+      reverse,
+    })) {
+      res.write(`${JSON.stringify(chunk)}\n`);
+      if (chunk.type === "error") break;
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.write(`${JSON.stringify({ type: "error", error: msg })}\n`);
+  }
+
+  res.end();
+});
+
+shopifyTranslationRouter.post("/metafield-namespace-stats", async (req, res) => {
+  const shopName = String(req.body?.shopName ?? "").trim();
+  const locale = String(req.body?.locale ?? "zh-HK").trim();
+  const selectedModules = Array.isArray(req.body?.modules)
+    ? (req.body.modules as string[])
+    : [];
+  const resourceFirst = Number(req.body?.resourceFirst ?? 100);
+  const metafieldFirst = Number(req.body?.metafieldFirst ?? 100);
+
+  if (!shopName) {
+    res.status(400).json({ error: "shopName 不能为空" });
+    return;
+  }
+  if (!selectedModules.length) {
+    res.status(400).json({ error: "请至少选择一个模块" });
+    return;
+  }
+
+  const moduleKeys = selectedModules.map((m) => m.trim().toUpperCase());
+  const invalid = moduleKeys.filter((m) => !(m in METAFIELD_RESOURCE_MODULES));
+  if (invalid.length) {
+    res.status(400).json({ error: `不支持的模块: ${invalid.join(", ")}` });
+    return;
+  }
+
+  try {
+    const data = await withShopOps(shopName, async (ops) => {
+      const allRows = [];
+      for (const module of moduleKeys) {
+        const conf = METAFIELD_RESOURCE_MODULES[module as MetafieldModuleKey];
+        const rows = await ops.fetchMetafieldsForResource(
+          conf.rootField,
+          locale,
+          resourceFirst,
+          metafieldFirst,
+        );
+        for (const row of rows) {
+          row.resource_module = module;
+        }
+        allRows.push(...rows);
+      }
+      return allRows;
+    });
+
+    const summary = summarizeMetafieldNamespaces(data);
+    const csvText = metafieldSummaryToCsv(summary);
+    const csvBase64 = Buffer.from(csvText, "utf-8").toString("base64");
+    const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+
+    res.json({
+      summary,
+      details: data,
+      csvBase64,
+      csvFilename: `metafield_namespace_stats_${ts}.csv`,
+      totalMetafields: data.length,
+    });
+  } catch (e) {
+    sendResolveError(res, e, 502);
   }
 });
 
