@@ -1,6 +1,6 @@
 import { Router } from "express";
 import type { SqlParameter } from "@azure/cosmos";
-import { getRedis } from "../lib/redis.js";
+import { getRedis, batchGetWithTtl } from "../lib/redis.js";
 import { getTranslationJobsContainer, isCosmosConfigured } from "../lib/cosmos.js";
 import {
   COMMON_TM_MODELS,
@@ -48,16 +48,14 @@ async function batchGetTmRows(
 ): Promise<TmLookupRow[]> {
   if (specs.length === 0) return [];
 
-  const pipe = redis.pipeline();
-  for (const spec of specs) {
-    pipe.get(spec.key);
-    pipe.ttl(spec.key);
-  }
-  const pipeResults = await pipe.exec();
+  const rows = await batchGetWithTtl(
+    redis,
+    specs.map((spec) => spec.key),
+  );
 
   return specs.map((spec, i) => {
-    const value = (pipeResults?.[i * 2]?.[1] as string | null) ?? null;
-    const ttl = (pipeResults?.[i * 2 + 1]?.[1] as number) ?? -2;
+    const value = rows[i]?.value ?? null;
+    const ttl = rows[i]?.ttl ?? -2;
     return {
       target: spec.target,
       model: spec.model,
@@ -311,12 +309,7 @@ redisExplorerRouter.get("/tm/browse", async (req, res) => {
       return;
     }
 
-    const pipe = redis.pipeline();
-    for (const key of uniqueKeys) {
-      pipe.get(key);
-      pipe.ttl(key);
-    }
-    const pipeResults = await pipe.exec();
+    const rows = await batchGetWithTtl(redis, uniqueKeys);
 
     const entries: TmBrowseEntry[] = [];
     const byTarget: Record<string, number> = {};
@@ -325,8 +318,8 @@ redisExplorerRouter.get("/tm/browse", async (req, res) => {
       const parsed = parseDigestTmKey(key);
       if (!parsed) return;
 
-      const value = (pipeResults?.[i * 2]?.[1] as string | null) ?? "";
-      const ttl = (pipeResults?.[i * 2 + 1]?.[1] as number) ?? -2;
+      const value = rows[i]?.value ?? "";
+      const ttl = rows[i]?.ttl ?? -2;
       if (!value) return;
 
       byTarget[parsed.target] = (byTarget[parsed.target] ?? 0) + 1;
