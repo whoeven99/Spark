@@ -3,6 +3,17 @@ import { getTsfDb } from "../lib/tsfDb.js";
 
 export const tsfRevenueRouter = Router();
 
+/**
+ * Shopify 收费日口径：
+ * - 续费：metadata.previousPeriodEnd（周期滚动/扣款日）
+ * - 首购/加量包：createdAt
+ */
+const SHOPIFY_CHARGE_AT = `CASE
+  WHEN bl.eventType = 'SUBSCRIPTION_RENEWED'
+    THEN COALESCE(json_extract(bl.metadata, '$.previousPeriodEnd'), bl.createdAt)
+  ELSE bl.createdAt
+END`;
+
 // GET /api/tsf/revenue/summary — MRR/ARR from active TSF subscriptions
 tsfRevenueRouter.get("/summary", async (_req, res) => {
   try {
@@ -117,14 +128,14 @@ tsfRevenueRouter.get("/trend", async (req, res) => {
     ];
     const args: string[] = [];
 
-    if (startDate) { conditions.push("bl.createdAt >= ?"); args.push(startDate); }
-    if (endDate) { conditions.push("bl.createdAt <= ?"); args.push(`${endDate}T23:59:59`); }
+    if (startDate) { conditions.push(`${SHOPIFY_CHARGE_AT} >= ?`); args.push(startDate); }
+    if (endDate) { conditions.push(`${SHOPIFY_CHARGE_AT} <= ?`); args.push(`${endDate}T23:59:59`); }
     if (kind) { conditions.push("pc.kind = ?"); args.push(kind); }
 
     const where = `WHERE ${conditions.join(" AND ")}`;
     const sql = `
       SELECT
-        strftime('${fmt}', bl.createdAt) as period,
+        strftime('${fmt}', ${SHOPIFY_CHARGE_AT}) as period,
         COUNT(*)                         as chargeCount,
         COUNT(DISTINCT bl.shop)          as shopCount,
         ROUND(SUM(CAST(pc.priceAmount AS REAL)), 2) as totalRevenue,
@@ -177,8 +188,8 @@ tsfRevenueRouter.get("/charges", async (req, res) => {
     const args: (string | number)[] = [];
 
     if (shop) { conditions.push("bl.shop LIKE ?"); args.push(`%${shop}%`); }
-    if (startDate) { conditions.push("bl.createdAt >= ?"); args.push(startDate); }
-    if (endDate) { conditions.push("bl.createdAt <= ?"); args.push(`${endDate}T23:59:59`); }
+    if (startDate) { conditions.push(`${SHOPIFY_CHARGE_AT} >= ?`); args.push(startDate); }
+    if (endDate) { conditions.push(`${SHOPIFY_CHARGE_AT} <= ?`); args.push(`${endDate}T23:59:59`); }
     if (kind) { conditions.push("pc.kind = ?"); args.push(kind); }
 
     const where = `WHERE ${conditions.join(" AND ")}`;
@@ -195,17 +206,19 @@ tsfRevenueRouter.get("/charges", async (req, res) => {
       args.length
         ? db.execute({
             sql: `SELECT bl.shop, bl.eventType, bl.planKey,
-                         pc.priceAmount, pc.billingInterval, pc.kind, bl.createdAt
+                         pc.priceAmount, pc.billingInterval, pc.kind, bl.createdAt,
+                         ${SHOPIFY_CHARGE_AT} as shopifyChargedAt
                   ${fromClause}
-                  ORDER BY bl.createdAt DESC
+                  ORDER BY ${SHOPIFY_CHARGE_AT} DESC, bl.createdAt DESC
                   LIMIT ? OFFSET ?`,
             args: [...args, pageSize, offset],
           })
         : db.execute(
             `SELECT bl.shop, bl.eventType, bl.planKey,
-                    pc.priceAmount, pc.billingInterval, pc.kind, bl.createdAt
+                    pc.priceAmount, pc.billingInterval, pc.kind, bl.createdAt,
+                    ${SHOPIFY_CHARGE_AT} as shopifyChargedAt
              ${fromClause}
-             ORDER BY bl.createdAt DESC
+             ORDER BY ${SHOPIFY_CHARGE_AT} DESC, bl.createdAt DESC
              LIMIT ${pageSize} OFFSET ${offset}`,
           ),
     ]);
@@ -220,6 +233,7 @@ tsfRevenueRouter.get("/charges", async (req, res) => {
         billingInterval: (r.billingInterval as string | null) ?? null,
         kind: r.kind as string,
         createdAt: r.createdAt as string,
+        shopifyChargedAt: (r.shopifyChargedAt as string) ?? (r.createdAt as string),
       })),
     });
   } catch (err) {

@@ -97,16 +97,38 @@ function RenewalSection() {
       ),
     },
     {
-      title: "续费时间 (UTC)",
-      dataIndex: "createdAt",
-      key: "createdAt",
-      render: (v: string) => (
+      title: "Shopify 续费日 (UTC)",
+      dataIndex: "shopifyRenewedAt",
+      key: "shopifyRenewedAt",
+      render: (v: string, row: TsfRenewalEventRow) => {
+        const shopifyDay = new Date(v).toISOString().slice(0, 10);
+        const bookedDay = new Date(row.createdAt).toISOString().slice(0, 10);
+        return (
+          <div>
+            <Typography.Text style={{ fontSize: 12 }}>
+              {new Date(v).toLocaleString("zh-CN", { timeZone: "UTC" })} UTC
+            </Typography.Text>
+            {shopifyDay !== bookedDay && (
+              <Typography.Text type="secondary" style={{ display: "block", fontSize: 11 }}>
+                入账 {new Date(row.createdAt).toLocaleString("zh-CN", { timeZone: "UTC" })}
+              </Typography.Text>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      title: "新周期结束",
+      dataIndex: "nextPeriodEnd",
+      key: "nextPeriodEnd",
+      render: (v: string | null) => (
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {new Date(v).toLocaleString("zh-CN", { timeZone: "UTC" })} UTC
+          {v ? new Date(v).toLocaleDateString("zh-CN", { timeZone: "UTC" }) : "-"}
         </Typography.Text>
       ),
     },
   ];
+
 
   return (
     <Card
@@ -141,7 +163,8 @@ function RenewalSection() {
         type="secondary"
         style={{ display: "block", marginBottom: 12, fontSize: 12 }}
       >
-        统计 BillingLog 中 eventType = SUBSCRIPTION_RENEWED 的商店数（含 webhook 与 Worker 对账入账），按 UTC 日切。
+        口径对齐 Shopify：按周期滚动/扣款日（metadata.previousPeriodEnd）统计，不是按本地入账时间。
+        对账补账不会把多天续费挤到同一天。UTC 日切。
       </Typography.Text>
 
       {error && (
