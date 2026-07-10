@@ -102,7 +102,15 @@ tsfSubscriptionsRouter.get("/", async (req, res) => {
   }
 });
 
-// GET /api/tsf/subscriptions/renewals — 每日续费人数（BillingLog SUBSCRIPTION_RENEWED）
+/**
+ * Shopify 续费日口径：
+ * 用 BillingLog.metadata.previousPeriodEnd（周期滚动/扣款日），
+ * 不用 createdAt（入账日；对账补账会挤在同一天，与 Shopify 不一致）。
+ */
+const SHOPIFY_RENEWAL_AT = `COALESCE(json_extract(metadata, '$.previousPeriodEnd'), createdAt)`;
+const SHOPIFY_RENEWAL_DAY = `date(${SHOPIFY_RENEWAL_AT})`;
+
+// GET /api/tsf/subscriptions/renewals — 每日续费人数（对齐 Shopify 扣款/周期滚动日）
 tsfSubscriptionsRouter.get("/renewals", async (req, res) => {
   try {
     const db = getTsfDb();
@@ -110,31 +118,31 @@ tsfSubscriptionsRouter.get("/renewals", async (req, res) => {
     const page = Math.max(1, Number(req.query.page ?? 1));
     const pageSize = Math.min(100, Math.max(10, Number(req.query.pageSize ?? 50)));
     const offset = (page - 1) * pageSize;
-    const startDate = `date('now', '-${days - 1} days')`;
+    const rangeStart = `date('now', '-${days - 1} days')`;
 
     const [summaryResult, dailyResult, countResult, eventsResult] = await Promise.all([
       db.execute(`
         SELECT
-          COUNT(DISTINCT CASE WHEN date(createdAt) = date('now') THEN shop END) as todayShops,
-          COUNT(CASE WHEN date(createdAt) = date('now') THEN 1 END) as todayEvents,
-          COUNT(DISTINCT CASE WHEN date(createdAt) = date('now', '-1 day') THEN shop END) as yesterdayShops,
-          COUNT(CASE WHEN date(createdAt) = date('now', '-1 day') THEN 1 END) as yesterdayEvents,
-          COUNT(DISTINCT CASE WHEN date(createdAt) >= date('now', '-6 days') THEN shop END) as last7Shops,
-          COUNT(CASE WHEN date(createdAt) >= date('now', '-6 days') THEN 1 END) as last7Events,
-          COUNT(DISTINCT CASE WHEN date(createdAt) >= date('now', '-29 days') THEN shop END) as last30Shops,
-          COUNT(CASE WHEN date(createdAt) >= date('now', '-29 days') THEN 1 END) as last30Events
+          COUNT(DISTINCT CASE WHEN ${SHOPIFY_RENEWAL_DAY} = date('now') THEN shop END) as todayShops,
+          COUNT(CASE WHEN ${SHOPIFY_RENEWAL_DAY} = date('now') THEN 1 END) as todayEvents,
+          COUNT(DISTINCT CASE WHEN ${SHOPIFY_RENEWAL_DAY} = date('now', '-1 day') THEN shop END) as yesterdayShops,
+          COUNT(CASE WHEN ${SHOPIFY_RENEWAL_DAY} = date('now', '-1 day') THEN 1 END) as yesterdayEvents,
+          COUNT(DISTINCT CASE WHEN ${SHOPIFY_RENEWAL_DAY} >= date('now', '-6 days') THEN shop END) as last7Shops,
+          COUNT(CASE WHEN ${SHOPIFY_RENEWAL_DAY} >= date('now', '-6 days') THEN 1 END) as last7Events,
+          COUNT(DISTINCT CASE WHEN ${SHOPIFY_RENEWAL_DAY} >= date('now', '-29 days') THEN shop END) as last30Shops,
+          COUNT(CASE WHEN ${SHOPIFY_RENEWAL_DAY} >= date('now', '-29 days') THEN 1 END) as last30Events
         FROM BillingLog
         WHERE eventType = 'SUBSCRIPTION_RENEWED'
-          AND createdAt >= datetime('now', '-30 days')
+          AND ${SHOPIFY_RENEWAL_DAY} >= date('now', '-30 days')
       `),
       db.execute(`
         SELECT
-          strftime('%Y-%m-%d', createdAt) as day,
+          strftime('%Y-%m-%d', ${SHOPIFY_RENEWAL_AT}) as day,
           COUNT(*) as eventCount,
           COUNT(DISTINCT shop) as shopCount
         FROM BillingLog
         WHERE eventType = 'SUBSCRIPTION_RENEWED'
-          AND date(createdAt) >= ${startDate}
+          AND ${SHOPIFY_RENEWAL_DAY} >= ${rangeStart}
         GROUP BY day
         ORDER BY day ASC
       `),
@@ -142,15 +150,22 @@ tsfSubscriptionsRouter.get("/renewals", async (req, res) => {
         SELECT COUNT(*) as total
         FROM BillingLog
         WHERE eventType = 'SUBSCRIPTION_RENEWED'
-          AND date(createdAt) >= ${startDate}
+          AND ${SHOPIFY_RENEWAL_DAY} >= ${rangeStart}
       `),
       db.execute({
         sql: `
-          SELECT shop, planKey, creditsDelta, usedCredits, createdAt
+          SELECT
+            shop,
+            planKey,
+            creditsDelta,
+            usedCredits,
+            createdAt,
+            json_extract(metadata, '$.previousPeriodEnd') as previousPeriodEnd,
+            json_extract(metadata, '$.nextPeriodEnd') as nextPeriodEnd
           FROM BillingLog
           WHERE eventType = 'SUBSCRIPTION_RENEWED'
-            AND date(createdAt) >= ${startDate}
-          ORDER BY createdAt DESC
+            AND ${SHOPIFY_RENEWAL_DAY} >= ${rangeStart}
+          ORDER BY ${SHOPIFY_RENEWAL_AT} DESC, createdAt DESC
           LIMIT ? OFFSET ?
         `,
         args: [pageSize, offset],
@@ -197,6 +212,10 @@ tsfSubscriptionsRouter.get("/renewals", async (req, res) => {
         creditsDelta: Number(r.creditsDelta ?? 0),
         usedCredits: Number(r.usedCredits ?? 0),
         createdAt: r.createdAt as string,
+        previousPeriodEnd: (r.previousPeriodEnd as string | null) ?? null,
+        nextPeriodEnd: (r.nextPeriodEnd as string | null) ?? null,
+        shopifyRenewedAt:
+          (r.previousPeriodEnd as string | null) ?? (r.createdAt as string),
       })),
     });
   } catch (err) {

@@ -1409,6 +1409,11 @@ export type TsfRenewalEventRow = {
   creditsDelta: number;
   usedCredits: number;
   createdAt: string;
+  /** Shopify 周期滚动/扣款日（metadata.previousPeriodEnd） */
+  previousPeriodEnd: string | null;
+  nextPeriodEnd: string | null;
+  /** 展示用：优先 previousPeriodEnd，否则 createdAt */
+  shopifyRenewedAt: string;
 };
 
 export type TsfRenewalsData = {
