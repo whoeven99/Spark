@@ -102,6 +102,109 @@ tsfSubscriptionsRouter.get("/", async (req, res) => {
   }
 });
 
+// GET /api/tsf/subscriptions/renewals — 每日续费人数（BillingLog SUBSCRIPTION_RENEWED）
+tsfSubscriptionsRouter.get("/renewals", async (req, res) => {
+  try {
+    const db = getTsfDb();
+    const days = Math.min(90, Math.max(7, Number(req.query.days ?? 30) || 30));
+    const page = Math.max(1, Number(req.query.page ?? 1));
+    const pageSize = Math.min(100, Math.max(10, Number(req.query.pageSize ?? 50)));
+    const offset = (page - 1) * pageSize;
+    const startDate = `date('now', '-${days - 1} days')`;
+
+    const [summaryResult, dailyResult, countResult, eventsResult] = await Promise.all([
+      db.execute(`
+        SELECT
+          COUNT(DISTINCT CASE WHEN date(createdAt) = date('now') THEN shop END) as todayShops,
+          COUNT(CASE WHEN date(createdAt) = date('now') THEN 1 END) as todayEvents,
+          COUNT(DISTINCT CASE WHEN date(createdAt) = date('now', '-1 day') THEN shop END) as yesterdayShops,
+          COUNT(CASE WHEN date(createdAt) = date('now', '-1 day') THEN 1 END) as yesterdayEvents,
+          COUNT(DISTINCT CASE WHEN date(createdAt) >= date('now', '-6 days') THEN shop END) as last7Shops,
+          COUNT(CASE WHEN date(createdAt) >= date('now', '-6 days') THEN 1 END) as last7Events,
+          COUNT(DISTINCT CASE WHEN date(createdAt) >= date('now', '-29 days') THEN shop END) as last30Shops,
+          COUNT(CASE WHEN date(createdAt) >= date('now', '-29 days') THEN 1 END) as last30Events
+        FROM BillingLog
+        WHERE eventType = 'SUBSCRIPTION_RENEWED'
+          AND createdAt >= datetime('now', '-30 days')
+      `),
+      db.execute(`
+        SELECT
+          strftime('%Y-%m-%d', createdAt) as day,
+          COUNT(*) as eventCount,
+          COUNT(DISTINCT shop) as shopCount
+        FROM BillingLog
+        WHERE eventType = 'SUBSCRIPTION_RENEWED'
+          AND date(createdAt) >= ${startDate}
+        GROUP BY day
+        ORDER BY day ASC
+      `),
+      db.execute(`
+        SELECT COUNT(*) as total
+        FROM BillingLog
+        WHERE eventType = 'SUBSCRIPTION_RENEWED'
+          AND date(createdAt) >= ${startDate}
+      `),
+      db.execute({
+        sql: `
+          SELECT shop, planKey, creditsDelta, usedCredits, createdAt
+          FROM BillingLog
+          WHERE eventType = 'SUBSCRIPTION_RENEWED'
+            AND date(createdAt) >= ${startDate}
+          ORDER BY createdAt DESC
+          LIMIT ? OFFSET ?
+        `,
+        args: [pageSize, offset],
+      }),
+    ]);
+
+    const summaryRow = summaryResult.rows[0] ?? {};
+    const byDay = new Map(
+      dailyResult.rows.map((r) => [
+        r.day as string,
+        {
+          day: r.day as string,
+          eventCount: Number(r.eventCount ?? 0),
+          shopCount: Number(r.shopCount ?? 0),
+        },
+      ]),
+    );
+
+    const daily: { day: string; eventCount: number; shopCount: number }[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setUTCHours(0, 0, 0, 0);
+      d.setUTCDate(d.getUTCDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      daily.push(byDay.get(key) ?? { day: key, eventCount: 0, shopCount: 0 });
+    }
+
+    res.json({
+      summary: {
+        todayShops: Number(summaryRow.todayShops ?? 0),
+        todayEvents: Number(summaryRow.todayEvents ?? 0),
+        yesterdayShops: Number(summaryRow.yesterdayShops ?? 0),
+        yesterdayEvents: Number(summaryRow.yesterdayEvents ?? 0),
+        last7Shops: Number(summaryRow.last7Shops ?? 0),
+        last7Events: Number(summaryRow.last7Events ?? 0),
+        last30Shops: Number(summaryRow.last30Shops ?? 0),
+        last30Events: Number(summaryRow.last30Events ?? 0),
+      },
+      daily,
+      total: Number(countResult.rows[0]?.total ?? 0),
+      events: eventsResult.rows.map((r) => ({
+        shop: r.shop as string,
+        planKey: (r.planKey as string | null) ?? null,
+        creditsDelta: Number(r.creditsDelta ?? 0),
+        usedCredits: Number(r.usedCredits ?? 0),
+        createdAt: r.createdAt as string,
+      })),
+    });
+  } catch (err) {
+    console.error("[tsf/subscriptions/renewals]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // GET /api/tsf/subscriptions/billing/trend
 tsfSubscriptionsRouter.get("/billing/trend", async (req, res) => {
   try {

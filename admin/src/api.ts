@@ -1403,6 +1403,43 @@ export function fetchTsfBillingTrend(params: {
   return apiFetch(`/tsf/subscriptions/billing/trend${qs ? `?${qs}` : ""}`);
 }
 
+export type TsfRenewalEventRow = {
+  shop: string;
+  planKey: string | null;
+  creditsDelta: number;
+  usedCredits: number;
+  createdAt: string;
+};
+
+export type TsfRenewalsData = {
+  summary: {
+    todayShops: number;
+    todayEvents: number;
+    yesterdayShops: number;
+    yesterdayEvents: number;
+    last7Shops: number;
+    last7Events: number;
+    last30Shops: number;
+    last30Events: number;
+  };
+  daily: { day: string; eventCount: number; shopCount: number }[];
+  total: number;
+  events: TsfRenewalEventRow[];
+};
+
+export function fetchTsfRenewals(params?: {
+  days?: number;
+  page?: number;
+  pageSize?: number;
+}): Promise<TsfRenewalsData> {
+  const query = new URLSearchParams();
+  if (params?.days) query.set("days", String(params.days));
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.pageSize) query.set("pageSize", String(params.pageSize));
+  const qs = query.toString();
+  return apiFetch(`/tsf/subscriptions/renewals${qs ? `?${qs}` : ""}`);
+}
+
 export function fetchTsfRevenueSummary(): Promise<TsfRevenueSummary> {
   return apiFetch("/tsf/revenue/summary");
 }
