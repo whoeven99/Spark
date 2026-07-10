@@ -1535,13 +1535,45 @@ export function fetchTsfRevenueTrend(params: {
   period?: "daily" | "monthly";
   startDate?: string;
   endDate?: string;
+  kind?: string;
 }): Promise<{ trend: TsfRevenueTrendPoint[] }> {
   const query = new URLSearchParams();
   if (params.period) query.set("period", params.period);
   if (params.startDate) query.set("startDate", params.startDate);
   if (params.endDate) query.set("endDate", params.endDate);
+  if (params.kind) query.set("kind", params.kind);
   const qs = query.toString();
   return apiFetch(`/tsf/revenue/trend${qs ? `?${qs}` : ""}`);
+}
+
+export type TsfRevenueCharge = {
+  shop: string;
+  eventType: string;
+  planKey: string;
+  priceAmount: number;
+  billingInterval: string | null;
+  kind: string;
+  createdAt: string;
+  shopifyChargedAt: string;
+};
+
+export function fetchTsfRevenueCharges(params: {
+  shop?: string;
+  startDate?: string;
+  endDate?: string;
+  kind?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<{ charges: TsfRevenueCharge[]; total: number }> {
+  const query = new URLSearchParams();
+  if (params.shop) query.set("shop", params.shop);
+  if (params.startDate) query.set("startDate", params.startDate);
+  if (params.endDate) query.set("endDate", params.endDate);
+  if (params.kind) query.set("kind", params.kind);
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("pageSize", String(params.pageSize));
+  const qs = query.toString();
+  return apiFetch(`/tsf/revenue/charges${qs ? `?${qs}` : ""}`);
 }
 
 export type TsfPackPurchaseRow = {

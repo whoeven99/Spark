@@ -93,6 +93,7 @@ const translationMenuItems: MenuItemDef[] = [
   { key: "/tsf/usage", icon: <BarChartOutlined />, label: <Link to="/tsf/usage">翻译 用量</Link>, ownerOnly: false },
   { key: "/tsf/subscriptions", icon: <CreditCardOutlined />, label: <Link to="/tsf/subscriptions">翻译 订阅</Link>, ownerOnly: false },
   { key: "/tsf/packs", icon: <ShoppingCartOutlined />, label: <Link to="/tsf/packs">翻译 加购流量包</Link>, ownerOnly: false },
+  { key: "/tsf/revenue", icon: <DollarOutlined />, label: <Link to="/tsf/revenue">翻译 收入</Link>, ownerOnly: true },
   {
     key: "/translation-ops",
     icon: <SettingOutlined />,
