@@ -1715,6 +1715,78 @@ export type TsfBillingLedgerData = {
   warnings: string[];
 };
 
+export type TsfBillingOverviewSummary = {
+  days: number;
+  activeSubscriptions: number;
+  pendingSubscriptions: number;
+  cancelledSubscriptions: number;
+  expiringSoon: number;
+  newSubscriptions: number;
+  renewedSubscriptions: number;
+  cancelledEvents: number;
+  packPurchases: number;
+  creditsGranted: number;
+  lowBalanceShops: number;
+  translationJobs: number;
+  translationUsedTokens: number;
+  failedJobs: number;
+  pausedJobs: number;
+};
+
+export type TsfBillingOverviewEvent = {
+  shop: string;
+  eventType: string;
+  planKey: string | null;
+  referenceId: string | null;
+  creditsDelta: number;
+  usedCredits: number;
+  remainingCredits: number;
+  subscriptionStatus: string | null;
+  billingInterval: string | null;
+  currentPeriodEnd: string | null;
+  createdAt: string;
+};
+
+export type TsfBillingTopUsageShop = {
+  shopName: string;
+  taskCount: number;
+  usedTokens: number;
+  failedJobs: number;
+  planKey: string | null;
+  subscriptionStatus: string | null;
+  remainingCredits: number | null;
+};
+
+export type TsfBillingRiskShop = {
+  shop: string;
+  planKey: string | null;
+  subscriptionStatus: string | null;
+  totalCredits: number;
+  usedCredits: number;
+  remainingCredits: number;
+  currentPeriodEnd: string | null;
+  updatedAt: string;
+  reasons: string[];
+};
+
+export type TsfBillingOverviewData = {
+  summary: TsfBillingOverviewSummary;
+  recentBillingEvents: TsfBillingOverviewEvent[];
+  topTranslationJobs: TsfTranslationUsageRow[];
+  topUsageShops: TsfBillingTopUsageShop[];
+  riskShops: TsfBillingRiskShop[];
+  note: string | null;
+};
+
+export function fetchTsfBillingOverview(params?: {
+  days?: number;
+}): Promise<TsfBillingOverviewData> {
+  const query = new URLSearchParams();
+  if (params?.days) query.set("days", String(params.days));
+  const qs = query.toString();
+  return apiFetch(`/tsf/billing/overview${qs ? `?${qs}` : ""}`);
+}
+
 export function fetchTsfBillingLedger(params: {
   shop?: string;
   days?: number;

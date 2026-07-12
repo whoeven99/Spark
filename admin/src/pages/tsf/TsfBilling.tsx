@@ -21,9 +21,14 @@ import {
 import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import {
   fetchTsfBillingLedger,
+  fetchTsfBillingOverview,
   type TsfBillingEventRow,
   type TsfBillingLedgerData,
+  type TsfBillingOverviewData,
+  type TsfBillingOverviewEvent,
   type TsfBillingPeriodUsageRow,
+  type TsfBillingRiskShop,
+  type TsfBillingTopUsageShop,
   type TsfTranslationUsageRow,
 } from "../../api";
 
@@ -78,6 +83,10 @@ function usageColor(percent: number): string {
   return "#008060";
 }
 
+function statusTag(value: string | null | undefined) {
+  return value ? <Tag color={STATUS_COLORS[value] ?? "default"}>{value}</Tag> : "-";
+}
+
 export default function TsfBilling() {
   const [shop, setShop] = useState("");
   const [queriedShop, setQueriedShop] = useState("");
@@ -85,19 +94,29 @@ export default function TsfBilling() {
   const [source, setSource] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
+  const [overview, setOverview] = useState<TsfBillingOverviewData | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(true);
   const [data, setData] = useState<TsfBillingLedgerData | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState("");
   const [activeTask, setActiveTask] = useState<TsfTranslationUsageRow | null>(null);
 
-  const load = useCallback(() => {
+  const loadOverview = useCallback(() => {
+    setOverviewLoading(true);
+    setError("");
+    fetchTsfBillingOverview({ days })
+      .then(setOverview)
+      .catch((e) => setError(String(e)))
+      .finally(() => setOverviewLoading(false));
+  }, [days]);
+
+  const loadDetail = useCallback(() => {
     const normalizedShop = queriedShop.trim();
     if (!normalizedShop) {
       setData(null);
-      setError("");
       return;
     }
-    setLoading(true);
+    setDetailLoading(true);
     setError("");
     fetchTsfBillingLedger({
       shop: normalizedShop,
@@ -109,21 +128,37 @@ export default function TsfBilling() {
     })
       .then(setData)
       .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
+      .finally(() => setDetailLoading(false));
   }, [days, page, queriedShop, source, status]);
 
   useEffect(() => {
-    if (queriedShop.trim()) load();
-  }, [load, queriedShop]);
+    loadOverview();
+  }, [loadOverview]);
+
+  useEffect(() => {
+    if (queriedShop.trim()) loadDetail();
+  }, [loadDetail, queriedShop]);
 
   function runSearch() {
     const normalizedShop = shop.trim();
     setPage(1);
     if (normalizedShop === queriedShop) {
-      load();
+      loadDetail();
       return;
     }
     setQueriedShop(normalizedShop);
+  }
+
+  function drillToShop(nextShop: string) {
+    setShop(nextShop);
+    setQueriedShop(nextShop);
+    setPage(1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function refreshAll() {
+    loadOverview();
+    if (queriedShop.trim()) loadDetail();
   }
 
   const account = data?.account;
@@ -139,6 +174,219 @@ export default function TsfBilling() {
     ],
     [account],
   );
+
+  const recentBillingColumns = [
+    {
+      title: "时间",
+      dataIndex: "createdAt",
+      key: "createdAt",
+      width: 170,
+      render: fmtDate,
+    },
+    {
+      title: "店铺",
+      dataIndex: "shop",
+      key: "shop",
+      render: (v: string) => (
+        <Typography.Link onClick={() => drillToShop(v)} copyable>
+          {v}
+        </Typography.Link>
+      ),
+    },
+    {
+      title: "事件",
+      dataIndex: "eventType",
+      key: "eventType",
+      render: (v: string) => <Tag>{v}</Tag>,
+    },
+    {
+      title: "套餐",
+      dataIndex: "planKey",
+      key: "planKey",
+      render: (v: string | null) => (v ? <Tag color="blue">{v}</Tag> : "-"),
+    },
+    {
+      title: "Credits",
+      dataIndex: "creditsDelta",
+      key: "creditsDelta",
+      align: "right" as const,
+      render: (v: number) => (
+        <Typography.Text type={v < 0 ? "danger" : "success"}>
+          {v > 0 ? "+" : ""}
+          {fmtNumber(v)}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: "余额",
+      dataIndex: "remainingCredits",
+      key: "remainingCredits",
+      align: "right" as const,
+      render: (v: number) => (
+        <Typography.Text type={v <= 0 ? "danger" : undefined}>{fmtNumber(v)}</Typography.Text>
+      ),
+    },
+    {
+      title: "订阅状态",
+      dataIndex: "subscriptionStatus",
+      key: "subscriptionStatus",
+      render: statusTag,
+    },
+  ];
+
+  const topJobColumns = [
+    {
+      title: "任务",
+      dataIndex: "id",
+      key: "id",
+      width: 150,
+      render: (v: string, row: TsfTranslationUsageRow) => (
+        <Typography.Link onClick={() => setActiveTask(row)} copyable>
+          {v}
+        </Typography.Link>
+      ),
+    },
+    {
+      title: "店铺",
+      dataIndex: "shopName",
+      key: "shopName",
+      render: (v: string) => <Typography.Link onClick={() => drillToShop(v)}>{v}</Typography.Link>,
+    },
+    {
+      title: "来源",
+      dataIndex: "taskSource",
+      key: "taskSource",
+      width: 86,
+      render: (v: string | null) => (
+        <Tag color={v === "TsFrontend-Auto" ? "blue" : "default"}>{sourceLabel(v)}</Tag>
+      ),
+    },
+    {
+      title: "语言",
+      key: "locale",
+      render: (_: unknown, row: TsfTranslationUsageRow) => (
+        <Typography.Text style={{ fontSize: 12 }}>
+          {row.source} → {row.target}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: "状态",
+      dataIndex: "status",
+      key: "status",
+      render: statusTag,
+    },
+    {
+      title: "消耗",
+      dataIndex: "usedTokens",
+      key: "usedTokens",
+      align: "right" as const,
+      render: fmtNumber,
+    },
+    {
+      title: "创建时间",
+      dataIndex: "createdAt",
+      key: "createdAt",
+      width: 170,
+      render: fmtDate,
+    },
+  ];
+
+  const topShopColumns = [
+    {
+      title: "店铺",
+      dataIndex: "shopName",
+      key: "shopName",
+      render: (v: string) => (
+        <Typography.Link onClick={() => drillToShop(v)} copyable>
+          {v}
+        </Typography.Link>
+      ),
+    },
+    {
+      title: "任务数",
+      dataIndex: "taskCount",
+      key: "taskCount",
+      align: "right" as const,
+      render: fmtNumber,
+    },
+    {
+      title: "总消耗",
+      dataIndex: "usedTokens",
+      key: "usedTokens",
+      align: "right" as const,
+      render: fmtNumber,
+    },
+    {
+      title: "失败任务",
+      dataIndex: "failedJobs",
+      key: "failedJobs",
+      align: "right" as const,
+      render: (v: number) => (
+        <Typography.Text type={v > 0 ? "danger" : "secondary"}>{fmtNumber(v)}</Typography.Text>
+      ),
+    },
+    {
+      title: "套餐",
+      dataIndex: "planKey",
+      key: "planKey",
+      render: (v: string | null) => (v ? <Tag color="blue">{v}</Tag> : "-"),
+    },
+    {
+      title: "余额",
+      dataIndex: "remainingCredits",
+      key: "remainingCredits",
+      align: "right" as const,
+      render: (v: number | null) =>
+        v == null ? "-" : <Typography.Text type={v <= 0 ? "danger" : undefined}>{fmtNumber(v)}</Typography.Text>,
+    },
+  ];
+
+  const riskColumns = [
+    {
+      title: "店铺",
+      dataIndex: "shop",
+      key: "shop",
+      render: (v: string) => (
+        <Typography.Link onClick={() => drillToShop(v)} copyable>
+          {v}
+        </Typography.Link>
+      ),
+    },
+    {
+      title: "风险",
+      dataIndex: "reasons",
+      key: "reasons",
+      render: (v: string[]) => (
+        <Space wrap>
+          {v.map((reason) => (
+            <Tag key={reason} color="red">
+              {reason}
+            </Tag>
+          ))}
+        </Space>
+      ),
+    },
+    {
+      title: "订阅",
+      dataIndex: "subscriptionStatus",
+      key: "subscriptionStatus",
+      render: statusTag,
+    },
+    {
+      title: "剩余",
+      dataIndex: "remainingCredits",
+      key: "remainingCredits",
+      align: "right" as const,
+      render: (v: number) => <Typography.Text type="danger">{fmtNumber(v)}</Typography.Text>,
+    },
+    {
+      title: "更新时间",
+      dataIndex: "updatedAt",
+      key: "updatedAt",
+      render: fmtDate,
+    },
+  ];
 
   const billingColumns = [
     {
@@ -196,53 +444,12 @@ export default function TsfBilling() {
   ];
 
   const usageColumns = [
-    {
-      title: "任务",
-      dataIndex: "id",
-      key: "id",
-      width: 170,
-      render: (v: string, row: TsfTranslationUsageRow) => (
-        <Typography.Link onClick={() => setActiveTask(row)} copyable>
-          {v}
-        </Typography.Link>
-      ),
-    },
-    {
-      title: "来源",
-      dataIndex: "taskSource",
-      key: "taskSource",
-      width: 90,
-      render: (v: string | null) => (
-        <Tag color={v === "TsFrontend-Auto" ? "blue" : "default"}>{sourceLabel(v)}</Tag>
-      ),
-    },
-    {
-      title: "语言",
-      key: "locale",
-      render: (_: unknown, row: TsfTranslationUsageRow) => (
-        <Typography.Text style={{ fontSize: 12 }}>
-          {row.source} → {row.target}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: "状态",
-      dataIndex: "status",
-      key: "status",
-      render: (v: string) => <Tag color={STATUS_COLORS[v] ?? "default"}>{v}</Tag>,
-    },
+    ...topJobColumns.filter((col) => col.key !== "shopName"),
     {
       title: "模块",
       dataIndex: "modules",
       key: "modules",
       render: (v: string[]) => `${v.length} 个`,
-    },
-    {
-      title: "扣除 Token",
-      dataIndex: "usedTokens",
-      key: "usedTokens",
-      align: "right" as const,
-      render: fmtNumber,
     },
     {
       title: "失败",
@@ -252,13 +459,6 @@ export default function TsfBilling() {
       render: (v: number) => (
         <Typography.Text type={v > 0 ? "danger" : "secondary"}>{fmtNumber(v)}</Typography.Text>
       ),
-    },
-    {
-      title: "创建时间",
-      dataIndex: "createdAt",
-      key: "createdAt",
-      width: 180,
-      render: fmtDate,
     },
   ];
 
@@ -306,23 +506,11 @@ export default function TsfBilling() {
         翻译账单
       </Typography.Title>
       <Typography.Text type="secondary" style={{ display: "block", marginBottom: 16 }}>
-        Owner 可见。按店铺聚合 TSF 订阅账务、额度池、账务流水和翻译任务扣除记录。
+        Owner 可见。默认展示所有商店近期账务和任务消耗，点击店铺可钻取单店详情。
       </Typography.Text>
 
       <Card size="small" style={{ marginBottom: 16 }}>
         <Space wrap>
-          <Input
-            prefix={<SearchOutlined />}
-            placeholder="shop.myshopify.com"
-            value={shop}
-            onChange={(e) => {
-              setShop(e.target.value);
-              setPage(1);
-            }}
-            onPressEnter={runSearch}
-            allowClear
-            style={{ width: 280 }}
-          />
           <Select
             value={days}
             onChange={(v) => {
@@ -336,6 +524,18 @@ export default function TsfBilling() {
               { value: 90, label: "近 90 天" },
               { value: 365, label: "近 365 天" },
             ]}
+          />
+          <Input
+            prefix={<SearchOutlined />}
+            placeholder="钻取 shop.myshopify.com"
+            value={shop}
+            onChange={(e) => {
+              setShop(e.target.value);
+              setPage(1);
+            }}
+            onPressEnter={runSearch}
+            allowClear
+            style={{ width: 280 }}
           />
           <Select
             value={source}
@@ -356,9 +556,9 @@ export default function TsfBilling() {
             options={STATUS_OPTIONS}
           />
           <Button type="primary" icon={<SearchOutlined />} onClick={runSearch}>
-            查询
+            单店查询
           </Button>
-          <Button icon={<ReloadOutlined />} onClick={load}>
+          <Button icon={<ReloadOutlined />} onClick={refreshAll}>
             刷新
           </Button>
         </Space>
@@ -374,12 +574,93 @@ export default function TsfBilling() {
         />
       )}
 
-      {!queriedShop.trim() ? (
-        <Card>
-          <Empty description="输入店铺域名后查看翻译账单" />
+      <Spin spinning={overviewLoading}>
+        {overview?.note ? (
+          <Alert type="info" message={overview.note} style={{ marginBottom: 16 }} />
+        ) : null}
+
+        <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Col xs={24} sm={12} lg={6}>
+            <Card><Statistic title="活跃订阅" value={overview?.summary.activeSubscriptions ?? 0} /></Card>
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <Card><Statistic title="新订阅 / 续费" value={`${overview?.summary.newSubscriptions ?? 0} / ${overview?.summary.renewedSubscriptions ?? 0}`} /></Card>
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <Card><Statistic title="翻译任务" value={overview?.summary.translationJobs ?? 0} /></Card>
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <Card><Statistic title="任务消耗" value={fmtNumber(overview?.summary.translationUsedTokens)} /></Card>
+          </Col>
+        </Row>
+
+        <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Col xs={24} sm={12} lg={6}>
+            <Card><Statistic title="加购包购买" value={overview?.summary.packPurchases ?? 0} /></Card>
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <Card><Statistic title="入账 Credits" value={fmtNumber(overview?.summary.creditsGranted)} /></Card>
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <Card><Statistic title="低余额商店" value={overview?.summary.lowBalanceShops ?? 0} valueStyle={{ color: (overview?.summary.lowBalanceShops ?? 0) > 0 ? "#d82c0d" : undefined }} /></Card>
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <Card><Statistic title="失败 / 暂停任务" value={`${overview?.summary.failedJobs ?? 0} / ${overview?.summary.pausedJobs ?? 0}`} /></Card>
+          </Col>
+        </Row>
+
+        <Card title="最近订阅与账务动态" size="small" style={{ marginBottom: 16 }}>
+          <Table<TsfBillingOverviewEvent>
+            dataSource={overview?.recentBillingEvents ?? []}
+            columns={recentBillingColumns}
+            rowKey={(r) => `${r.shop}-${r.eventType}-${r.createdAt}-${r.referenceId ?? ""}`}
+            size="small"
+            pagination={{ pageSize: 10 }}
+          />
         </Card>
-      ) : (
-        <Spin spinning={loading}>
+
+        <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Col xs={24} xl={14}>
+            <Card title="高消耗任务排行" size="small">
+              <Table<TsfTranslationUsageRow>
+                dataSource={overview?.topTranslationJobs ?? []}
+                columns={topJobColumns}
+                rowKey="id"
+                size="small"
+                pagination={{ pageSize: 10 }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} xl={10}>
+            <Card title="高消耗商店排行" size="small">
+              <Table<TsfBillingTopUsageShop>
+                dataSource={overview?.topUsageShops ?? []}
+                columns={topShopColumns}
+                rowKey="shopName"
+                size="small"
+                pagination={{ pageSize: 10 }}
+              />
+            </Card>
+          </Col>
+        </Row>
+
+        <Card title="需要关注的商店" size="small" style={{ marginBottom: 16 }}>
+          <Table<TsfBillingRiskShop>
+            dataSource={overview?.riskShops ?? []}
+            columns={riskColumns}
+            rowKey="shop"
+            size="small"
+            pagination={{ pageSize: 10 }}
+          />
+        </Card>
+      </Spin>
+
+      {queriedShop.trim() ? (
+        <Spin spinning={detailLoading}>
+          <Typography.Title level={5} style={{ marginTop: 8 }}>
+            单店详情：{queriedShop}
+          </Typography.Title>
+
           {data?.warnings.length ? (
             <Alert
               type="warning"
@@ -392,24 +673,16 @@ export default function TsfBilling() {
 
           <Row gutter={16} style={{ marginBottom: 16 }}>
             <Col xs={24} sm={12} lg={6}>
-              <Card>
-                <Statistic title="剩余额度" value={fmtNumber(summary?.remainingCredits)} />
-              </Card>
+              <Card><Statistic title="剩余额度" value={fmtNumber(summary?.remainingCredits)} /></Card>
             </Col>
             <Col xs={24} sm={12} lg={6}>
-              <Card>
-                <Statistic title="本周期已用" value={fmtNumber(summary?.usedCredits)} />
-              </Card>
+              <Card><Statistic title="本周期已用" value={fmtNumber(summary?.usedCredits)} /></Card>
             </Col>
             <Col xs={24} sm={12} lg={6}>
-              <Card>
-                <Statistic title="翻译任务扣除" value={fmtNumber(summary?.translationUsedTokens)} />
-              </Card>
+              <Card><Statistic title="翻译任务扣除" value={fmtNumber(summary?.translationUsedTokens)} /></Card>
             </Col>
             <Col xs={24} sm={12} lg={6}>
-              <Card>
-                <Statistic title="翻译任务数" value={summary?.translationJobsCount ?? 0} />
-              </Card>
+              <Card><Statistic title="翻译任务数" value={summary?.translationJobsCount ?? 0} /></Card>
             </Col>
           </Row>
 
@@ -430,15 +703,9 @@ export default function TsfBilling() {
                   <Tag>总额度: {fmtNumber(summary?.totalCredits)}</Tag>
                 </Space>
                 <Descriptions column={1} size="small" style={{ marginTop: 16 }}>
-                  <Descriptions.Item label="账户更新时间">
-                    {fmtDate(account?.updatedAt)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="最近账务事件">
-                    {fmtDate(summary?.lastBillingAt)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="最近翻译任务">
-                    {fmtDate(summary?.lastTranslationAt)}
-                  </Descriptions.Item>
+                  <Descriptions.Item label="账户更新时间">{fmtDate(account?.updatedAt)}</Descriptions.Item>
+                  <Descriptions.Item label="最近账务事件">{fmtDate(summary?.lastBillingAt)}</Descriptions.Item>
+                  <Descriptions.Item label="最近翻译任务">{fmtDate(summary?.lastTranslationAt)}</Descriptions.Item>
                 </Descriptions>
               </Card>
             </Col>
@@ -449,17 +716,9 @@ export default function TsfBilling() {
                     <Descriptions.Item label="套餐">
                       {subscription.planKey ? <Tag color="blue">{subscription.planKey}</Tag> : "-"}
                     </Descriptions.Item>
-                    <Descriptions.Item label="状态">
-                      <Tag color={STATUS_COLORS[subscription.status ?? ""] ?? "default"}>
-                        {subscription.status ?? "-"}
-                      </Tag>
-                    </Descriptions.Item>
-                    <Descriptions.Item label="计费周期">
-                      {subscription.billingInterval ?? "-"}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="周期额度">
-                      {fmtNumber(subscription.creditsPerPeriod)}
-                    </Descriptions.Item>
+                    <Descriptions.Item label="状态">{statusTag(subscription.status)}</Descriptions.Item>
+                    <Descriptions.Item label="计费周期">{subscription.billingInterval ?? "-"}</Descriptions.Item>
+                    <Descriptions.Item label="周期额度">{fmtNumber(subscription.creditsPerPeriod)}</Descriptions.Item>
                     <Descriptions.Item label="当前周期">
                       {fmtDate(subscription.currentPeriodStart)} ~ {fmtDate(subscription.currentPeriodEnd)}
                     </Descriptions.Item>
@@ -519,7 +778,7 @@ export default function TsfBilling() {
             />
           </Card>
         </Spin>
-      )}
+      ) : null}
 
       <Drawer
         title="翻译任务扣费详情"
@@ -532,14 +791,16 @@ export default function TsfBilling() {
             <Descriptions.Item label="任务 ID">
               <Typography.Text copyable>{activeTask.id}</Typography.Text>
             </Descriptions.Item>
-            <Descriptions.Item label="店铺">{activeTask.shopName}</Descriptions.Item>
+            <Descriptions.Item label="店铺">
+              <Typography.Link onClick={() => drillToShop(activeTask.shopName)}>
+                {activeTask.shopName}
+              </Typography.Link>
+            </Descriptions.Item>
             <Descriptions.Item label="来源">{sourceLabel(activeTask.taskSource)}</Descriptions.Item>
             <Descriptions.Item label="语言">
               {activeTask.source} → {activeTask.target}
             </Descriptions.Item>
-            <Descriptions.Item label="状态">
-              <Tag color={STATUS_COLORS[activeTask.status] ?? "default"}>{activeTask.status}</Tag>
-            </Descriptions.Item>
+            <Descriptions.Item label="状态">{statusTag(activeTask.status)}</Descriptions.Item>
             <Descriptions.Item label="模型">{activeTask.aiModel ?? "-"}</Descriptions.Item>
             <Descriptions.Item label="模块">{activeTask.modules.join(", ") || "-"}</Descriptions.Item>
             <Descriptions.Item label="扣除 Token">{fmtNumber(activeTask.usedTokens)}</Descriptions.Item>

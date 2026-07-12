@@ -49,6 +49,37 @@ type TranslationUsageRow = {
   updatedAt: string;
 };
 
+type OverviewTopShopRow = {
+  shopName: string;
+  taskCount: number;
+  usedTokens: number;
+  failedJobs: number;
+};
+
+function mapTranslationJob(job: TranslationUsageRow) {
+  const metrics = job.metrics ?? {};
+  return {
+    id: job.id,
+    shopName: job.shopName,
+    source: job.source,
+    target: job.target,
+    modules: Array.isArray(job.modules) ? job.modules : [],
+    status: job.status,
+    taskSource: job.taskSource ?? null,
+    isCover: Boolean(job.isCover),
+    aiModel: job.aiModel ?? null,
+    usedTokens: Number(metrics.usedTokens ?? 0),
+    translateDone: Number(metrics.translateDone ?? 0),
+    translateTotal: Number(metrics.translateTotal ?? 0),
+    translateFailed: Number(metrics.translateFailed ?? 0),
+    writebackDone: Number(metrics.writebackDone ?? 0),
+    writebackTotal: Number(metrics.writebackTotal ?? 0),
+    writebackFailed: Number(metrics.writebackFailed ?? 0),
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+  };
+}
+
 async function loadTranslationUsage(params: {
   shop: string;
   startIso: string;
@@ -125,32 +156,321 @@ async function loadTranslationUsage(params: {
   return {
     total: Number(countResult.resources[0] ?? 0),
     usedTokens: Number(usageResult.resources[0] ?? 0),
-    rows: listResult.resources.map((job) => {
-      const metrics = job.metrics ?? {};
-      return {
-        id: job.id,
-        shopName: job.shopName,
-        source: job.source,
-        target: job.target,
-        modules: Array.isArray(job.modules) ? job.modules : [],
-        status: job.status,
-        taskSource: job.taskSource ?? null,
-        isCover: Boolean(job.isCover),
-        aiModel: job.aiModel ?? null,
-        usedTokens: Number(metrics.usedTokens ?? 0),
-        translateDone: Number(metrics.translateDone ?? 0),
-        translateTotal: Number(metrics.translateTotal ?? 0),
-        translateFailed: Number(metrics.translateFailed ?? 0),
-        writebackDone: Number(metrics.writebackDone ?? 0),
-        writebackTotal: Number(metrics.writebackTotal ?? 0),
-        writebackFailed: Number(metrics.writebackFailed ?? 0),
-        createdAt: job.createdAt,
-        updatedAt: job.updatedAt,
-      };
-    }),
+    rows: listResult.resources.map(mapTranslationJob),
     note: null,
   };
 }
+
+async function loadTranslationOverview(startIso: string) {
+  if (!isCosmosConfigured()) {
+    return {
+      summary: {
+        translationJobs: 0,
+        translationUsedTokens: 0,
+        failedJobs: 0,
+        pausedJobs: 0,
+      },
+      topTranslationJobs: [] as ReturnType<typeof mapTranslationJob>[],
+      topUsageShops: [] as OverviewTopShopRow[],
+      note: "Cosmos not configured",
+    };
+  }
+
+  const container = getTranslationJobsContainer();
+  const params: SqlParameter[] = [{ name: "@start", value: startIso }];
+  const where = "WHERE c.createdAt >= @start";
+
+  const [countResult, usedResult, failedResult, pausedResult, topJobsResult, topShopsResult] =
+    await Promise.all([
+      container.items
+        .query<number>({
+          query: `SELECT VALUE COUNT(1) FROM c ${where}`,
+          parameters: params,
+        })
+        .fetchAll(),
+      container.items
+        .query<number>({
+          query: `
+            SELECT VALUE SUM(IIF(IS_DEFINED(c.metrics.usedTokens), c.metrics.usedTokens, 0))
+            FROM c ${where}
+          `,
+          parameters: params,
+        })
+        .fetchAll(),
+      container.items
+        .query<number>({
+          query: `SELECT VALUE COUNT(1) FROM c ${where} AND c.status = "FAILED"`,
+          parameters: params,
+        })
+        .fetchAll(),
+      container.items
+        .query<number>({
+          query: `SELECT VALUE COUNT(1) FROM c ${where} AND c.status = "PAUSED"`,
+          parameters: params,
+        })
+        .fetchAll(),
+      container.items
+        .query<TranslationUsageRow>(
+          {
+            query: `
+              SELECT c.id, c.shopName, c.source, c.target, c.modules, c.status,
+                     c.taskSource, c.isCover, c.aiModel, c.metrics, c.createdAt, c.updatedAt
+              FROM c ${where}
+              ORDER BY c.metrics.usedTokens DESC
+              OFFSET 0 LIMIT 20
+            `,
+            parameters: params,
+          },
+          { maxItemCount: 20 },
+        )
+        .fetchAll(),
+      container.items
+        .query<OverviewTopShopRow>({
+          query: `
+            SELECT c.shopName,
+                   COUNT(1) AS taskCount,
+                   SUM(IIF(IS_DEFINED(c.metrics.usedTokens), c.metrics.usedTokens, 0)) AS usedTokens,
+                   SUM(IIF(c.status = "FAILED", 1, 0)) AS failedJobs
+            FROM c ${where}
+            GROUP BY c.shopName
+          `,
+          parameters: params,
+        })
+        .fetchAll(),
+    ]);
+
+  const topUsageShops = topShopsResult.resources
+    .map((row) => ({
+      shopName: row.shopName,
+      taskCount: Number(row.taskCount ?? 0),
+      usedTokens: Number(row.usedTokens ?? 0),
+      failedJobs: Number(row.failedJobs ?? 0),
+    }))
+    .sort((a, b) => b.usedTokens - a.usedTokens)
+    .slice(0, 20);
+
+  return {
+    summary: {
+      translationJobs: Number(countResult.resources[0] ?? 0),
+      translationUsedTokens: Number(usedResult.resources[0] ?? 0),
+      failedJobs: Number(failedResult.resources[0] ?? 0),
+      pausedJobs: Number(pausedResult.resources[0] ?? 0),
+    },
+    topTranslationJobs: topJobsResult.resources.map(mapTranslationJob),
+    topUsageShops,
+    note: null,
+  };
+}
+
+tsfBillingRouter.get("/overview", async (req, res) => {
+  try {
+    const days = clampDays(req.query.days);
+    const startIso = startIsoForDays(days);
+    const db = getTsfDb();
+
+    const [
+      subscriptionStatsResult,
+      billingStatsResult,
+      lowBalanceResult,
+      recentBillingResult,
+      riskShopsResult,
+      translationOverview,
+    ] = await Promise.all([
+      db.execute(`
+        SELECT
+          COUNT(CASE WHEN status = 'ACTIVE' THEN 1 END) AS activeSubscriptions,
+          COUNT(CASE WHEN status = 'PENDING' THEN 1 END) AS pendingSubscriptions,
+          COUNT(CASE WHEN status = 'CANCELLED' THEN 1 END) AS cancelledSubscriptions,
+          COUNT(CASE WHEN status = 'ACTIVE'
+            AND currentPeriodEnd IS NOT NULL
+            AND currentPeriodEnd <= datetime('now', '+7 days') THEN 1 END) AS expiringSoon
+        FROM AppSubscription
+      `),
+      db.execute({
+        sql: `
+          SELECT
+            COUNT(CASE WHEN eventType = 'SUBSCRIPTION_ACTIVATED' THEN 1 END) AS newSubscriptions,
+            COUNT(CASE WHEN eventType = 'SUBSCRIPTION_RENEWED' THEN 1 END) AS renewedSubscriptions,
+            COUNT(CASE WHEN eventType = 'SUBSCRIPTION_CANCELLED' THEN 1 END) AS cancelledEvents,
+            COUNT(CASE WHEN eventType = 'TOKEN_PACK_PURCHASED' THEN 1 END) AS packPurchases,
+            SUM(CASE WHEN creditsDelta > 0 THEN creditsDelta ELSE 0 END) AS creditsGranted
+          FROM BillingLog
+          WHERE createdAt >= ?
+        `,
+        args: [startIso],
+      }),
+      db.execute(`
+        SELECT COUNT(*) AS count
+        FROM Account
+        WHERE (subscriptionCredits + purchasedCredits + trialCredits - usedCredits) <= 0
+      `),
+      db.execute({
+        sql: `
+          SELECT b.shop, b.eventType, b.planKey, b.referenceId, b.creditsDelta,
+                 b.usedCredits, b.createdAt,
+                 a.subscriptionCredits, a.purchasedCredits, a.trialCredits,
+                 a.usedCredits AS accountUsedCredits,
+                 s.status AS subscriptionStatus,
+                 s.billingInterval,
+                 s.currentPeriodEnd
+          FROM BillingLog b
+          LEFT JOIN Account a ON a.shop = b.shop
+          LEFT JOIN AppSubscription s ON s.shop = b.shop
+          WHERE b.createdAt >= ?
+          ORDER BY b.createdAt DESC
+          LIMIT 50
+        `,
+        args: [startIso],
+      }),
+      db.execute(`
+        SELECT a.shop,
+               a.subscriptionCredits,
+               a.purchasedCredits,
+               a.trialCredits,
+               a.usedCredits,
+               a.updatedAt,
+               s.planKey,
+               s.status AS subscriptionStatus,
+               s.currentPeriodEnd
+        FROM Account a
+        LEFT JOIN AppSubscription s ON s.shop = a.shop
+        WHERE (a.subscriptionCredits + a.purchasedCredits + a.trialCredits - a.usedCredits) <= 0
+           OR s.shop IS NULL
+           OR s.status IS NULL
+           OR s.status != 'ACTIVE'
+        ORDER BY (a.subscriptionCredits + a.purchasedCredits + a.trialCredits - a.usedCredits) ASC,
+                 a.updatedAt DESC
+        LIMIT 50
+      `),
+      loadTranslationOverview(startIso),
+    ]);
+
+    const subStats = subscriptionStatsResult.rows[0] ?? {};
+    const billingStats = billingStatsResult.rows[0] ?? {};
+
+    const recentBillingEvents = recentBillingResult.rows.map((r) => {
+      const totalCredits =
+        Number(r.subscriptionCredits ?? 0) +
+        Number(r.purchasedCredits ?? 0) +
+        Number(r.trialCredits ?? 0);
+      const remainingCredits = totalCredits - Number(r.accountUsedCredits ?? 0);
+      return {
+        shop: r.shop as string,
+        eventType: r.eventType as string,
+        planKey: str(r.planKey),
+        referenceId: str(r.referenceId),
+        creditsDelta: Number(r.creditsDelta ?? 0),
+        usedCredits: Number(r.usedCredits ?? 0),
+        remainingCredits,
+        subscriptionStatus: str(r.subscriptionStatus),
+        billingInterval: str(r.billingInterval),
+        currentPeriodEnd: str(r.currentPeriodEnd),
+        createdAt: r.createdAt as string,
+      };
+    });
+
+    const riskShops = riskShopsResult.rows.map((r) => {
+      const totalCredits =
+        Number(r.subscriptionCredits ?? 0) +
+        Number(r.purchasedCredits ?? 0) +
+        Number(r.trialCredits ?? 0);
+      const usedCredits = Number(r.usedCredits ?? 0);
+      const remainingCredits = totalCredits - usedCredits;
+      const reasons: string[] = [];
+      if (remainingCredits <= 0) reasons.push("余额不足");
+      if (!r.subscriptionStatus) reasons.push("无订阅");
+      if (r.subscriptionStatus && r.subscriptionStatus !== "ACTIVE") {
+        reasons.push(`订阅 ${r.subscriptionStatus}`);
+      }
+      return {
+        shop: r.shop as string,
+        planKey: str(r.planKey),
+        subscriptionStatus: str(r.subscriptionStatus),
+        totalCredits,
+        usedCredits,
+        remainingCredits,
+        currentPeriodEnd: str(r.currentPeriodEnd),
+        updatedAt: r.updatedAt as string,
+        reasons,
+      };
+    });
+
+    const topShopNames = translationOverview.topUsageShops.map((shop) => shop.shopName);
+    const topShopAccounts =
+      topShopNames.length > 0
+        ? await db.execute({
+            sql: `
+              SELECT a.shop,
+                     a.subscriptionCredits,
+                     a.purchasedCredits,
+                     a.trialCredits,
+                     a.usedCredits,
+                     s.planKey,
+                     s.status AS subscriptionStatus
+              FROM Account a
+              LEFT JOIN AppSubscription s ON s.shop = a.shop
+              WHERE a.shop IN (${topShopNames.map(() => "?").join(",")})
+            `,
+            args: topShopNames,
+          })
+        : { rows: [] };
+
+    const accountByShop = new Map(
+      topShopAccounts.rows.map((row) => {
+        const totalCredits =
+          Number(row.subscriptionCredits ?? 0) +
+          Number(row.purchasedCredits ?? 0) +
+          Number(row.trialCredits ?? 0);
+        const remainingCredits = totalCredits - Number(row.usedCredits ?? 0);
+        return [
+          row.shop as string,
+          {
+            planKey: str(row.planKey),
+            subscriptionStatus: str(row.subscriptionStatus),
+            remainingCredits,
+          },
+        ];
+      }),
+    );
+
+    const topUsageShops = translationOverview.topUsageShops.map((shop) => ({
+      ...shop,
+      ...(accountByShop.get(shop.shopName) ?? {
+        planKey: null,
+        subscriptionStatus: null,
+        remainingCredits: null,
+      }),
+    }));
+
+    res.json({
+      summary: {
+        days,
+        activeSubscriptions: Number(subStats.activeSubscriptions ?? 0),
+        pendingSubscriptions: Number(subStats.pendingSubscriptions ?? 0),
+        cancelledSubscriptions: Number(subStats.cancelledSubscriptions ?? 0),
+        expiringSoon: Number(subStats.expiringSoon ?? 0),
+        newSubscriptions: Number(billingStats.newSubscriptions ?? 0),
+        renewedSubscriptions: Number(billingStats.renewedSubscriptions ?? 0),
+        cancelledEvents: Number(billingStats.cancelledEvents ?? 0),
+        packPurchases: Number(billingStats.packPurchases ?? 0),
+        creditsGranted: Number(billingStats.creditsGranted ?? 0),
+        lowBalanceShops: Number(lowBalanceResult.rows[0]?.count ?? 0),
+        translationJobs: translationOverview.summary.translationJobs,
+        translationUsedTokens: translationOverview.summary.translationUsedTokens,
+        failedJobs: translationOverview.summary.failedJobs,
+        pausedJobs: translationOverview.summary.pausedJobs,
+      },
+      recentBillingEvents,
+      topTranslationJobs: translationOverview.topTranslationJobs,
+      topUsageShops,
+      riskShops,
+      note: translationOverview.note,
+    });
+  } catch (err) {
+    console.error("[tsf/billing/overview]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
 
 tsfBillingRouter.get("/", async (req, res) => {
   try {
