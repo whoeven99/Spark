@@ -1538,6 +1538,120 @@ export function fetchTsfPacks(params?: {
   return apiFetch(`/tsf/packs${qs ? `?${qs}` : ""}`);
 }
 
+export type TsfBillingAccount = {
+  shop: string;
+  subscriptionCredits: number;
+  purchasedCredits: number;
+  trialCredits: number;
+  usedCredits: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TsfBillingSubscription = {
+  shop: string;
+  planKey: string | null;
+  shopifySubscriptionId: string | null;
+  billingInterval: string | null;
+  status: string | null;
+  creditsPerPeriod: number;
+  trialEndsAt: string | null;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TsfBillingSummary = {
+  totalCredits: number;
+  usedCredits: number;
+  remainingCredits: number;
+  usagePercent: number;
+  billingEventsCount: number;
+  translationJobsCount: number;
+  translationUsedTokens: number;
+  lastBillingAt: string | null;
+  lastTranslationAt: string | null;
+};
+
+export type TsfBillingEventRow = {
+  shop: string;
+  eventType: string;
+  planKey: string | null;
+  referenceId: string | null;
+  creditsDelta: number;
+  usedCredits: number;
+  metadata: string | null;
+  createdAt: string;
+};
+
+export type TsfBillingPeriodUsageRow = {
+  periodStart: string;
+  periodEnd: string;
+  usedCredits: number;
+  subscriptionCreditsAllocated: number;
+  purchasedCreditsRemaining: number;
+  trialCreditsRemaining: number;
+  planKey: string;
+  archivedAt: string;
+};
+
+export type TsfTranslationUsageRow = {
+  id: string;
+  shopName: string;
+  source: string;
+  target: string;
+  modules: string[];
+  status: string;
+  taskSource: string | null;
+  isCover: boolean;
+  aiModel: string | null;
+  usedTokens: number;
+  translateDone: number;
+  translateTotal: number;
+  translateFailed: number;
+  writebackDone: number;
+  writebackTotal: number;
+  writebackFailed: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TsfBillingLedgerData = {
+  account: TsfBillingAccount | null;
+  subscription: TsfBillingSubscription | null;
+  summary: TsfBillingSummary | null;
+  billingEvents: TsfBillingEventRow[];
+  periodUsages: TsfBillingPeriodUsageRow[];
+  translationUsage: {
+    rows: TsfTranslationUsageRow[];
+    total: number;
+    usedTokens: number;
+    note: string | null;
+  };
+  warnings: string[];
+};
+
+export function fetchTsfBillingLedger(params: {
+  shop?: string;
+  days?: number;
+  source?: string;
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<TsfBillingLedgerData> {
+  const query = new URLSearchParams();
+  if (params.shop) query.set("shop", params.shop);
+  if (params.days) query.set("days", String(params.days));
+  if (params.source) query.set("source", params.source);
+  if (params.status) query.set("status", params.status);
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("pageSize", String(params.pageSize));
+  const qs = query.toString();
+  return apiFetch(`/tsf/billing${qs ? `?${qs}` : ""}`);
+}
+
 // --- Translation ops (SpringBackend proxy) ---
 
 export type SpringBackendEnv = "prod" | "test";

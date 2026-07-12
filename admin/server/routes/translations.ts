@@ -9,7 +9,7 @@ import type { TranslationV4Job } from "../types/translation.js";
 
 export const translationsRouter = Router();
 
-/** 自动翻译任务来源标识（与 worker cosmosV4.ts TSF_AUTO_TASK_SOURCE 保持一致）。 */
+/** TSF 自动翻译任务来源标识；这里只做跨系统只读观测。 */
 const AUTO_TASK_SOURCE = "TsFrontend-Auto";
 
 translationsRouter.get("/", async (req, res) => {

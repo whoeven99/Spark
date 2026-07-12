@@ -25,6 +25,7 @@ import TsfUsage from "./pages/tsf/TsfUsage";
 import TsfSubscriptions from "./pages/tsf/TsfSubscriptions";
 import TsfPacks from "./pages/tsf/TsfPacks";
 import TsfRevenue from "./pages/tsf/TsfRevenue";
+import TsfBilling from "./pages/tsf/TsfBilling";
 import TranslationOps from "./pages/TranslationOps";
 import { useNavigate } from "react-router-dom";
 
@@ -99,6 +100,7 @@ export default function App() {
             <Route path="tsf/usage" element={<TsfUsage />} />
             <Route path="tsf/subscriptions" element={<TsfSubscriptions />} />
             <Route path="tsf/packs" element={<TsfPacks />} />
+            <Route path="tsf/billing" element={<RequireOwner><TsfBilling /></RequireOwner>} />
             <Route path="tsf/revenue" element={<RequireOwner><TsfRevenue /></RequireOwner>} />
             <Route path="translation-ops" element={<TranslationOps />} />
           </Route>
