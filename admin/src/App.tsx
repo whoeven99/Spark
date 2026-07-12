@@ -6,6 +6,7 @@ import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Shops from "./pages/Shops";
 import Translations from "./pages/Translations";
+import ShopTranslation from "./pages/ShopTranslation";
 import Usage from "./pages/Usage";
 import Capabilities from "./pages/Capabilities";
 import Subscriptions from "./pages/Subscriptions";
@@ -27,6 +28,7 @@ import TsfPacks from "./pages/tsf/TsfPacks";
 import TsfRevenue from "./pages/tsf/TsfRevenue";
 import TsfBilling from "./pages/tsf/TsfBilling";
 import TranslationOps from "./pages/TranslationOps";
+import ShopifyTranslationOps from "./pages/ShopifyTranslationOps";
 import { useNavigate } from "react-router-dom";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -91,6 +93,7 @@ export default function App() {
             <Route path="todo" element={<Todo />} />
             <Route path="redis-explorer" element={<RedisExplorer />} />
             <Route path="translations" element={<Translations />} />
+            <Route path="shop-translation" element={<ShopTranslation />} />
             <Route
               path="auto-translations"
               element={<Navigate to="/translations?source=auto" replace />}
@@ -103,6 +106,7 @@ export default function App() {
             <Route path="tsf/billing" element={<RequireOwner><TsfBilling /></RequireOwner>} />
             <Route path="tsf/revenue" element={<RequireOwner><TsfRevenue /></RequireOwner>} />
             <Route path="translation-ops" element={<TranslationOps />} />
+            <Route path="shopify-translation" element={<ShopifyTranslationOps />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

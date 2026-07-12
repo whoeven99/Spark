@@ -24,6 +24,7 @@ import {
   ThunderboltOutlined,
   SettingOutlined,
   FileTextOutlined,
+  CloudUploadOutlined,
 } from "@ant-design/icons";
 import { clearToken, isOwner, getRole } from "../api";
 
@@ -40,6 +41,8 @@ type MenuItemDef = {
 
 const TRANSLATION_ROUTE_PREFIXES = [
   "/translations",
+  "/shop-translation",
+  "/shopify-translation",
   "/auto-translations",
   "/redis-explorer",
   "/translate-v4-support",
@@ -80,6 +83,12 @@ const translationMenuItems: MenuItemDef[] = [
     label: <Link to="/translations">翻译任务列表</Link>,
     ownerOnly: false,
   },
+  {
+    key: "/shop-translation",
+    icon: <ShopOutlined />,
+    label: <Link to="/shop-translation">商店任务查询</Link>,
+    ownerOnly: false,
+  },
   { key: "/tsf/overview", icon: <TeamOutlined />, label: <Link to="/tsf/overview">翻译 新用户概览</Link>, ownerOnly: false },
   { key: "/tsf/shops", icon: <UserOutlined />, label: <Link to="/tsf/shops">翻译 新用户</Link>, ownerOnly: false },
   { key: "/tsf/usage", icon: <BarChartOutlined />, label: <Link to="/tsf/usage">翻译 用量</Link>, ownerOnly: false },
@@ -91,6 +100,12 @@ const translationMenuItems: MenuItemDef[] = [
     key: "/translation-ops",
     icon: <SettingOutlined />,
     label: <Link to="/translation-ops">翻译运维</Link>,
+    ownerOnly: false,
+  },
+  {
+    key: "/shopify-translation",
+    icon: <CloudUploadOutlined />,
+    label: <Link to="/shopify-translation">Shopify 翻译运维</Link>,
     ownerOnly: false,
   },
   { key: "/redis-explorer", icon: <HddOutlined />, label: <Link to="/redis-explorer">翻译 TM 缓存</Link>, ownerOnly: false },
