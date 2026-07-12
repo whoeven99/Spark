@@ -3,7 +3,6 @@
 本文档描述 **Spark 与本模板分叉部分的架构与约定**（路由、持久化、翻译、环境变量）。路径：`docs/PROJECT_CONTEXT.md`。Shopify 通用脚手架说明仍可参考仓库根目录 `README.md`；二者冲突时以本仓库 **代码** 为准，并应回头更新本文档。
 
 相关文档（均在 `docs/`）：
-- `TRANSLATION_AGENT.md` — 翻译功能约定
 - `GENERATE_DESCRIPTION.md` — 商品描述生成方案
 - `shop-insight-agent-roadmap.md` — 店铺洞察 Agent 数据/工具路线图（商业建议能力演进）
 - `shop-profile.md` — 店铺画像（Cosmos + Blob，安装时 Shopify 基础信息）
@@ -50,7 +49,6 @@
   - `app/routes/app.tsx`：应用壳、导航、鉴权入口。
   - `app/routes/app._index.tsx`：默认页，渲染 `ChatPage`。
   - `app/routes/app.additional.tsx`：诊断报告页。
-  - `app/routes/app.translation.tsx`：翻译入口页（嵌入 `TranslationPage`）。
   - `app/routes/app.product-improve.tsx`：商品文案优化页（嵌入 `ProductImprovePage`，路径 `/app/product-improve`）；loader 注入 `loadBillingContext`。
   - `app/routes/app.billing.tsx`：计费与订阅页（`/app/billing`，`BillingPage`）。
   - `app/routes/app.image-studio.tsx`：图片工作室（文生图 + 整图翻译 Tab，`/app/image-studio`）；旧路径 `/app/picture-translate`、`/app/generate-image` 重定向至此。
@@ -64,9 +62,6 @@
 - **商品文案优化**：`POST /api/product-improve`（`api.product-improve.ts`）与 `POST /app/product-improve`（页面 action），服务端逻辑见 `app/server/productImprove/**`；**写回 Shopify 商品标题与描述**：`POST /api/update-product-description`（`api.update-product-description.ts`）。AI Assistant 聊天内可通过 `ProductImproveChatCard` 走同一套生成接口。方案与契约见 **`docs/GENERATE_DESCRIPTION.md`**（改动前先读）。
 - **整图翻译（火山 + Aidge，对齐 Spring `POST /pcUserPic/translatePic`）**：`POST /api/picture-translate`（`api.picture-translate.ts`），服务端见 `app/server/pictureTranslate/**`。`modelType=1` 仅 Aidge、`modelType=2` 仅火山（不做交叉 fallback）。AI 聊天工具 `picture_translate` 按语言范围自动路由：**重叠范围优先火山**，仅 Aidge 支持的语言走 Aidge，均不支持则不译。成功译图后通过 `recordVisualToolTokenUsage` 累加 `Account.usedTokens`（默认定额 `PICTURE_TRANSLATE_TOKEN_COST=2000`，对齐 Spring `APP_PIC_FEE` 量级）。
 - 翻译相关 HTTP 路由（文件位于 `app/routes/`，URL 与 React Router 扁平路由约定一致）：
-  - **`GET /api/translate/v3/json-runtime-tasks`**：`api.translate.v3.json-runtime-tasks.ts`，当前店铺 JSON Runtime 任务列表（Cosmos）。
-  - **`GET /api/translate/v3/json-runtime-task-detail`**：`api.translate.v3.json-runtime-task-detail.ts`，任务详情；默认转发 **`AGENT_TASK_BASE_URL`** 下的 Java `/translate/v3/jsonRuntimeTaskDetail`；若设置 **`JSON_RUNTIME_TASK_DETAIL_SOURCE=local`**，则在 Spark 进程内聚合 Cosmos / Redis / Blob（见该文件与 `jsonRuntimeTaskDetail.server.ts`）。
-- 翻译服务端约定与边界： **`docs/TRANSLATION_AGENT.md`**（改动翻译功能前先读）。
 - **计费 Webhook**（`shopify.app.test.toml` 已注册）：
   - `app_subscriptions/update` → `webhooks.app.subscriptions_update.tsx`
   - `app_purchases_one_time/update` → `webhooks.app.purchases_one_time_update.tsx`
@@ -304,7 +299,6 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
 - 改广告 OAuth 配置字段：`app/routes/app.ads.*.config.tsx` + `app/server/adAuthCredentialStore.server.ts`（及 Meta 的 `adsCredentialStore.server.ts`）；改物流：`app/routes/app.logistics.*.config.tsx` + `app/server/logisticsCredentialStore.server.ts`。
 - 改商品文案优化页或 API（先读 `docs/GENERATE_DESCRIPTION.md`）：`app/routes/app.product-improve.tsx`、`app/routes/page/ProductImprovePage.tsx`、`app/routes/component/productImprove/**`、`app/routes/api.product-improve.ts`、`app/routes/api.update-product-description.ts`、`app/server/productImprove/**`、`app/hooks/useProductImprove.ts`、`app/routes/component/chat/ProductImproveChatCard.tsx`。
 - 改整图翻译 API / 双引擎路由：`app/routes/api.picture-translate.ts`、`app/server/pictureTranslate/**`、`app/server/ai/skills/pictureTranslate/**`。
-- 改翻译创建/流水线/Cosmos 文档：`app/server/translation/*`（先读 `docs/TRANSLATION_AGENT.md`）；改翻译 UI：`app/routes/page/TranslationPage.tsx`、`app/routes/component/translation/*`；改 API：`app/routes/api.translate.v3.*.ts`。
 - 改订阅/购包/余额/Webhook：`app/server/billing/**`（先读 `app/server/billing/agent.md`）；改计费页 UI：`app/routes/app.billing.tsx`、`app/routes/page/BillingPage.tsx`、`app/routes/component/billing/*`、`app/lib/billingPlanUi.ts`、`app/lib/billingPageTypes.ts`；改 Webhook：`app/routes/webhooks.app.subscriptions_update.tsx`、`webhooks.app.purchases_one_time_update.tsx`、`webhooks.app.uninstalled.tsx`、`webhooks.app.scopes_update.tsx`；改 App 生命周期流水：`app/server/commonEventLog/**`；改 token 累加：`app/server/tokenUsage/**`；改套餐种子：`prisma/billing-plan-catalog-seed.sql` + `npm run turso:migrate:*`。
 
 ## 15. 改动边界与风险提示

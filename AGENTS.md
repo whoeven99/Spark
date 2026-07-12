@@ -25,8 +25,8 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前仓库有两个可独�
 重要边界：
 
 - 当前仓库**没有 `worker/` 目录或 Translation Worker 可部署服务**。
-- 整店/多语言翻译任务已迁移到 TypeScriptFrontend（TSF）；`app/server/ai/skills/index.ts` 不再注册整店翻译工具。
-- Spark 内仍有**图片翻译**功能，以及 `app/server/translation/translateBlobStore.server.ts` 等少量兼容/运营读取代码。不要把图片翻译误判为整店翻译，也不要在未核对 TSF 边界前重建旧翻译流水线。
+- 整店/多语言翻译任务及共享翻译核心归 TypeScriptFrontend（TSF）所有；`app/server/ai/skills/index.ts` 不再注册整店翻译工具，Spark 也不再保存翻译规则或 Worker 实现副本。
+- Spark 内仍有**图片翻译**功能，以及 `app/server/translation/translateBlobStore.server.ts` 等少量兼容清理、Admin 只读观测代码。不要把图片翻译或运维读取误判为整店翻译运行时。
 - 根目录存在若干 `tmp-*` 未跟踪恢复文件；除非用户明确要求，禁止删除、覆盖或纳入改动。
 
 ## 2. 仓库地图
@@ -135,7 +135,7 @@ AI 主链路应从真实代码确认，通常为：工作台 `useChatStream` →
 | 计费、订阅、购包、token 池、Webhook | `app/server/billing/agent.md` |
 | Today 运营工作流 | `docs/DAILY_OPERATIONS_WORKFLOWS.md` |
 | 信息架构和功能归属 | `docs/SPARK_FUNCTION_INVENTORY.md` |
-| 整店翻译兼容、运营排查或跨 TSF 边界 | `docs/TRANSLATION_AGENT.md`，但其中 `worker/` 和旧 API 描述可能属于历史/相邻仓库，必须以当前代码复核 |
+| 整店翻译兼容、运营排查或跨 TSF 边界 | 直接读取 TSF 根 `AGENTS.md` 和 `packages/translation-core/*`；Spark 只保留图片翻译、兼容清理与 Admin 只读观测 |
 
 文档名和路径区分大小写时以磁盘实际文件为准。不要引用不存在的旧文档（例如旧版说明中的 `docs/generateDescription.md` 或 `docs/agent-run-log.md`）。
 
