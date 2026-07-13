@@ -34,6 +34,12 @@ const SETTINGS_MODULES: SettingsModule[] = [
     badgeKey: "settingsShell.groupIntegrations",
   },
   {
+    to: "/app/ads-catalog",
+    labelKey: "settingsShell.navAdsCatalog",
+    descKey: "settingsShell.descAdsCatalog",
+    badgeKey: "settingsShell.groupIntegrations",
+  },
+  {
     to: "/app/settings/logistics",
     labelKey: "settingsShell.navLogistics",
     descKey: "settingsShell.descLogistics",

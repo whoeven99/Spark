@@ -142,6 +142,7 @@ export async function failTask(params: {
   errorMsg: AITaskMessageInput;
   startedAt: number;
   finalMessage?: AITaskMessageInput;
+  result?: Record<string, unknown>;
 }): Promise<void> {
   if (params.finalMessage) {
     const elapsedSeconds = Math.floor((Date.now() - params.startedAt) / 1000);
@@ -163,11 +164,13 @@ export async function failTask(params: {
   await markTaskFailed({
     taskId: params.taskId,
     errorMsg: params.errorMsg,
+    result: params.result,
   });
   emitTaskEvent(params.taskId, {
     type: "status_change",
     taskId: params.taskId,
     status: "failed",
+    result: params.result,
     ...(typeof params.errorMsg === "string"
       ? { errorMsg: params.errorMsg }
       : {
