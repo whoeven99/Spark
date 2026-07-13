@@ -159,11 +159,17 @@ export function buildTiktokOAuthStartUrl(params: {
   host?: string;
   requestOrigin: string;
 }): { ok: true; authUrl: string } | { ok: false; error: string } {
-  const { appId } = getTiktokAppCredentials();
-  if (!appId) {
+  const { appId, appSecret } = getTiktokAppCredentials();
+  if (!appId || !appSecret) {
     return {
       ok: false,
       error: "缺少 TikTok App 凭证：请配置 TIKTOK_APP_ID / TIKTOK_APP_SECRET 环境变量",
+    };
+  }
+  if (!/^\d+$/.test(appId)) {
+    return {
+      ok: false,
+      error: "TIKTOK_APP_ID 必须是 Marketing API 的数字 App ID（不是 Login Kit client_key）",
     };
   }
   const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
