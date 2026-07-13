@@ -1210,7 +1210,9 @@ export type TmLookupResult = {
   source?: string;
   sourceText?: string;
   shop?: string;
-  digest?: string;
+  digest?: string | null;
+  /** text 模式实际使用的 keyId（digest 或 CRC-32） */
+  keyId?: string;
   results: TmLookupRow[];
   note?: string;
 };

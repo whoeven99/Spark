@@ -1,0 +1,1416 @@
+{
+  "mode": "店铺 e-agronomy.myshopify.com 全部任务",
+  "apply": false,
+  "skipWriteback": false,
+  "createdBefore": "2026-07-08T00:00:00.000Z",
+  "totalJobs": 48,
+  "jobsDone": 12,
+  "jobsProcessed": 12,
+  "jobsSkipped": 0,
+  "totalFieldsWithLeaks": 12,
+  "totalFieldsFixed": 2,
+  "totalFieldsSkippedByAttrGate": 10,
+  "totalBlobsWritten": 0,
+  "writebackQueued": 0,
+  "attrChecksRepair": 2,
+  "attrChecksSkipped": 10,
+  "jobResults": [
+    {
+      "jobId": "0d2936e1-a0fe-4cc0-996d-837e829734bb",
+      "shop": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "zh-TW",
+      "status": "PAUSED",
+      "createdAt": "2026-07-06T19:00:20.943Z",
+      "fieldsWithLeaks": 0,
+      "fieldsFixed": 0,
+      "fieldsSkippedByAttrGate": 0,
+      "attrChecksRepair": 0,
+      "attrChecksSkipped": 0,
+      "blobsWritten": 0,
+      "writebackQueued": false,
+      "writebackSkipReason": null,
+      "tokenSource": "job"
+    },
+    {
+      "jobId": "03121274-b6b6-4530-af23-a2f903e0804f",
+      "shop": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "zh-CN",
+      "status": "COMPLETED",
+      "createdAt": "2026-07-06T19:00:20.896Z",
+      "fieldsWithLeaks": 0,
+      "fieldsFixed": 0,
+      "fieldsSkippedByAttrGate": 0,
+      "attrChecksRepair": 0,
+      "attrChecksSkipped": 0,
+      "blobsWritten": 0,
+      "writebackQueued": false,
+      "writebackSkipReason": null,
+      "tokenSource": "job"
+    },
+    {
+      "jobId": "d839149e-3d14-4105-b718-410130e6e528",
+      "shop": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "it",
+      "status": "COMPLETED",
+      "createdAt": "2026-07-06T19:00:20.843Z",
+      "fieldsWithLeaks": 0,
+      "fieldsFixed": 0,
+      "fieldsSkippedByAttrGate": 0,
+      "attrChecksRepair": 0,
+      "attrChecksSkipped": 0,
+      "blobsWritten": 0,
+      "writebackQueued": false,
+      "writebackSkipReason": null,
+      "tokenSource": "job"
+    },
+    {
+      "jobId": "54bbac5f-5245-4be8-a815-0a7c9393e1b0",
+      "shop": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "fr",
+      "status": "COMPLETED",
+      "createdAt": "2026-07-06T19:00:20.792Z",
+      "fieldsWithLeaks": 0,
+      "fieldsFixed": 0,
+      "fieldsSkippedByAttrGate": 0,
+      "attrChecksRepair": 0,
+      "attrChecksSkipped": 0,
+      "blobsWritten": 0,
+      "writebackQueued": false,
+      "writebackSkipReason": null,
+      "tokenSource": "job"
+    },
+    {
+      "jobId": "4ffdb8cb-b766-42f9-9e57-28bd51f7817d",
+      "shop": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "es",
+      "status": "COMPLETED",
+      "createdAt": "2026-07-06T19:00:20.744Z",
+      "fieldsWithLeaks": 0,
+      "fieldsFixed": 0,
+      "fieldsSkippedByAttrGate": 0,
+      "attrChecksRepair": 0,
+      "attrChecksSkipped": 0,
+      "blobsWritten": 0,
+      "writebackQueued": false,
+      "writebackSkipReason": null,
+      "tokenSource": "job"
+    },
+    {
+      "jobId": "ea3eecb0-cd30-43fe-aeea-0a54d7fbfee0",
+      "shop": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "de",
+      "status": "COMPLETED",
+      "createdAt": "2026-07-06T19:00:20.696Z",
+      "fieldsWithLeaks": 0,
+      "fieldsFixed": 0,
+      "fieldsSkippedByAttrGate": 0,
+      "attrChecksRepair": 0,
+      "attrChecksSkipped": 0,
+      "blobsWritten": 0,
+      "writebackQueued": false,
+      "writebackSkipReason": null,
+      "tokenSource": "job"
+    },
+    {
+      "jobId": "67d8d860-ea63-4183-955d-a52231082b90",
+      "shop": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "zh-TW",
+      "status": "COMPLETED",
+      "createdAt": "2026-07-05T18:00:33.864Z",
+      "fieldsWithLeaks": 2,
+      "fieldsFixed": 2,
+      "fieldsSkippedByAttrGate": 0,
+      "attrChecksRepair": 2,
+      "attrChecksSkipped": 0,
+      "blobsWritten": 0,
+      "writebackQueued": false,
+      "writebackSkipReason": null,
+      "tokenSource": "job"
+    },
+    {
+      "jobId": "cbedd7fe-46a1-4473-a6a6-60d32f08dcfb",
+      "shop": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "zh-CN",
+      "status": "COMPLETED",
+      "createdAt": "2026-07-05T18:00:33.804Z",
+      "fieldsWithLeaks": 2,
+      "fieldsFixed": 0,
+      "fieldsSkippedByAttrGate": 2,
+      "attrChecksRepair": 0,
+      "attrChecksSkipped": 2,
+      "blobsWritten": 0,
+      "writebackQueued": false,
+      "writebackSkipReason": null,
+      "tokenSource": "job"
+    },
+    {
+      "jobId": "03634f3f-db12-429d-957b-1feb8bb20d8a",
+      "shop": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "it",
+      "status": "COMPLETED",
+      "createdAt": "2026-07-05T18:00:33.749Z",
+      "fieldsWithLeaks": 2,
+      "fieldsFixed": 0,
+      "fieldsSkippedByAttrGate": 2,
+      "attrChecksRepair": 0,
+      "attrChecksSkipped": 2,
+      "blobsWritten": 0,
+      "writebackQueued": false,
+      "writebackSkipReason": null,
+      "tokenSource": "job"
+    },
+    {
+      "jobId": "464fe3a5-c019-46ae-b842-4f8995731c33",
+      "shop": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "fr",
+      "status": "COMPLETED",
+      "createdAt": "2026-07-05T18:00:33.701Z",
+      "fieldsWithLeaks": 2,
+      "fieldsFixed": 0,
+      "fieldsSkippedByAttrGate": 2,
+      "attrChecksRepair": 0,
+      "attrChecksSkipped": 2,
+      "blobsWritten": 0,
+      "writebackQueued": false,
+      "writebackSkipReason": null,
+      "tokenSource": "job"
+    },
+    {
+      "jobId": "9aaad39a-fbf8-4448-a8d3-02458c209069",
+      "shop": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "es",
+      "status": "COMPLETED",
+      "createdAt": "2026-07-05T18:00:33.651Z",
+      "fieldsWithLeaks": 2,
+      "fieldsFixed": 0,
+      "fieldsSkippedByAttrGate": 2,
+      "attrChecksRepair": 0,
+      "attrChecksSkipped": 2,
+      "blobsWritten": 0,
+      "writebackQueued": false,
+      "writebackSkipReason": null,
+      "tokenSource": "job"
+    },
+    {
+      "jobId": "c54fdf9b-dc51-48e7-9c1c-0c6695bcef59",
+      "shop": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "de",
+      "status": "COMPLETED",
+      "createdAt": "2026-07-05T18:00:33.603Z",
+      "fieldsWithLeaks": 2,
+      "fieldsFixed": 0,
+      "fieldsSkippedByAttrGate": 2,
+      "attrChecksRepair": 0,
+      "attrChecksSkipped": 2,
+      "blobsWritten": 0,
+      "writebackQueued": false,
+      "writebackSkipReason": null,
+      "tokenSource": "job"
+    }
+  ],
+  "allFixes": [
+    {
+      "taskId": "67d8d860-ea63-4183-955d-a52231082b90",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "zh-TW",
+      "resourceId": "gid://shopify/Metafield/20906124083362",
+      "digest": "eeada46153c2c570e4524d918e7c80b4d4c7bbd7bf93b7f6afbba81e2d5d1744",
+      "module": "METAFIELD",
+      "key": "value",
+      "translatedValue": "<style></style> <section class='jdgm-revs-tab__wrapper'> <style>.jdgm-revs-tab{display: none}</style> <div class='jdgm-mask'></div> <div class='jdgm-revs-tab__main'> <div class='jdgm-revs-tab__content'> <div class='jdgm-revs-tab__content-header' data-number-of-product-reviews='1602' data-number-of-shop-reviews='0'> <a style='display: none' href='#' class='jdgm-write-rev-link'>寫評論</a> <div class='jdgm-histogram jdgm-temp-hidden'>  <div class='jdgm-histogram__row' data-rating='5' data-frequency='1339' data-percentage='84'>  <div class=\"jdgm-histogram__star\" role=\"button\" aria-label=\"84% (1339) reviews with 5 star rating\" tabindex=\"0\"><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span></div> <div class='jdgm-histogram__bar'> <div class='jdgm-histogram__bar-content' style='width: 84%;'> </div> </div> <div class='jdgm-histogram__percentage'>84%</div> <div class='jdgm-histogram__frequency'>(1339)</div> </div>  <div class='jdgm-histogram__row' data-rating='4' data-frequency='161' data-percentage='10'>  <div class=\"jdgm-histogram__star\" role=\"button\" aria-label=\"10% (161) reviews with 4 star rating\" tabindex=\"0\"><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--off'></span></div> <div class='jdgm-histogram__bar'> <div class='jdgm-histogram__bar-content' style='width: 10%;'> </div> </div> <div class='jdgm-histogram__percentage'>10%</div> <div class='jdgm-histogram__frequency'>(161)</div> </div>  <div class='jdgm-histogram__row' data-rating='3' data-frequency='57' data-percentage='4'>  <div class=\"jdgm-histogram__star\" role=\"button\" aria-label=\"4% (57) reviews with 3 star rating\" tabindex=\"0\"><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--off'></span><span class='jdgm-star jdgm--off'></span></div> <div class='jdgm-histogram__bar'> <div class='jdgm-histogram__bar-content' style='width: 4%;'> </div> </div> <div class='jdgm-histogram__percentage'>4%</div> <div class='jdgm-histogram__frequency'>(57)</div> </div>  <div class='jdgm-histogram__row' data-rating='2' data-frequency='15' data-percentage='1'>  <div class=\"jdgm-histogram__star\" role=\"button\" aria-label=\"1% (15) reviews with 2 star rating\" tabindex=\"0\"><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--off'></span><span class='jdgm-star jdgm--off'></span><span class='jdgm-star jdgm--off'></span></div> <div class='jdgm-histogram__bar'> <div class='jdgm-histogram__bar-content' style='width: 1%;'> </div> </div> <div class='jdgm-histogram__percentage'>1%</div> <div class='jdgm-histogram__frequency'>(15)</div> </div>  <div class='jdgm-histogram__row' data-rating='1' data-frequency='30' data-percentage='2'>  <div class=\"jdgm-histogram__star\" role=\"button\" aria-label=\"2% (30) reviews with 1 star rating\" tabindex=\"0\"><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--off'></span><span class='jdgm-star jdgm--off'></span><span class='jdgm-star jdgm--off'></span><span class='jdgm-star jdgm--off'></span></div> <div class='jdgm-histogram__bar'> <div class='jdgm-histogram__bar-content' style='width: 2%;'> </div> </div> <div class='jdgm-histogram__percentage'>2%</div> <div class='jdgm-histogram__frequency'>(30)</div> </div>  <div class='jdgm-histogram__row jdgm-histogram__clear-filter' data-rating=null tabindex='0'></div> </div> <div class='jdgm-gallery' data-url='reviews/all_reviews_js_based' data-per-page='10'> <div class='jdgm-gallery-data jdgm-hidden' data-json='[{&quot;uuid&quot;:&quot;b53e4f51-18a2-4022-89ee-fd1d3c6a892f&quot;,&quot;reviewer_name&quot;:&quot;Jon&quot;,&quot;reviewer_initial&quot;:&quot;J&quot;,&quot;title&quot;:&quot;STAY AWAY AT ALL COST!&quot;,&quot;body_html&quot;:&quot;\\u003cp\\u003eStay away from Ecowitt at all costs.\\u003c/p\\u003e\\n\\n\\u003cp\\u003eThis has been one of the worst online purchasing experiences I&#39;ve had. Ecowitt failed to disclose before checkout that the base unit would arrive within days while the sensors wouldn&#39;t arrive for about a month. That information wasn&#39;t made clear until after they had already taken my money. Had I known, I would have purchased elsewhere.\\u003c/p\\u003e\\n\\n\\u003cp\\u003eI contacted customer service immediately after learning about the delay and confirmed the sensors had not yet shipped. Despite that, Dan and Lilias in sales refused to cancel the order or offer any reasonable solution. Once Ecowitt has your money, don&#39;t expect customer service to be on your side.\\u003c/p\\u003e\\n\\n\\u003cp\\u003eTo make matters worse, they expect customers to pay expensive international shipping back to China for returns, even when the issue could have been avoided with honest shipping information before purchase.\\u003c/p\\u003e\\n\\n\\u003cp\\u003eI ultimately bought the same sensors elsewhere and received them much sooner.\\u003c/p\\u003e\\n\\n\\u003cp\\u003eIf you&#39;re considering Ecowitt, do yourself a favor and buy through a retailer with a customer-friendly return policy—or better yet, choose another company. Based on my experience, Ecowitt&#39;s lack of transparency and poor customer service make them a business I cannot recommend. The lies from Ecowitt are enough by themselves to stay away, not to mention the poor product operation! Absolutely nothing good comes from ecowitt!\\u003c/p\\u003e&quot;,&quot;verified_buyer&quot;:true,&quot;country_code_show_flag&quot;:&quot;US&quot;,&quot;location&quot;:&quot;&quot;,&quot;video_external_ids&quot;:[&quot;0c5d79de715b5125aefaf225201f0be5&quot;],&quot;media_platform_hosted_video_infos&quot;:[],&quot;cf_answers&quot;:[],&quot;product_title&quot;:&quot;Ecowitt GW1206 Soil Moisture Meter Kit, Includes GW1200 IoT Wi-Fi Gateway and WH51 Soil Moisture Sensor&quot;,&quot;product_url&quot;:&quot;/products/gw1206&quot;,&quot;product_url_with_utm&quot;:&quot;https://shop.ecowitt.com/products/gw1206?jdgm_referral_location=widget\\u0026ref=judge.me\\u0026utm_campaign=judgeme-review-site\\u0026utm_medium=referral\\u0026utm_source=judgeme&quot;,&quot;rating&quot;:&quot;1&quot;,&quot;created_at&quot;:&quot;2026-07-04 13:55:24 UTC&quot;,&quot;pictures_urls&quot;:[]},{&quot;uuid&quot;:&quot;54be7bd3-d74e-4d49-9324-e58b964ebf53&quot;,&quot;reviewer_name&quot;:&quot;Timo Pelkonen&quot;,&quot;reviewer_initial&quot;:&quot;T&quot;,&quot;title&quot;:&quot;Good, but not perfect&quot;,&quot;body_html&quot;:&quot;\\u003cp\\u003eGood display with much information, but I hope you will have more bigger like 15&#39;&#39; OLED display with stand and wall mount possibility in your selection in the future with touchscreen.\\u003c/p\\u003e&quot;,&quot;verified_buyer&quot;:true,&quot;location&quot;:&quot;&quot;,&quot;video_external_ids&quot;:[&quot;1201140097&quot;],&quot;media_platform_hosted_video_infos&quot;:[],&quot;cf_answers&quot;:[],&quot;product_title&quot;:&quot;HP2560_C 7\\u0026#39;\\u0026#39; Wi-Fi TFT Display Console with Indoor Temp\\u0026amp;Humidity Sensor Antenna&quot;,&quot;product_url&quot;:&quot;/products/hp2560_c&quot;,&quot;product_url_with_utm&quot;:&quot;https://shop.ecowitt.com/products/hp2560_c?jdgm_referral_location=widget\\u0026ref=judge.me\\u0026utm_campaign=judgeme-review-site\\u0026utm_medium=referral\\u0026utm_source=judgeme&quot;,&quot;rating&quot;:&quot;5&quot;,&quot;created_at&quot;:&quot;2026-05-16 01:04:37 UTC&quot;,&quot;pictures_urls&quot;:[{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1778894478__img_20260516_032208__original.jpg?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1778894478__img_20260516_032208__original.jpg?quality=80\\u0026width=1024&quot;},{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1778894481__img_20260516_040538__original.jpg?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1778894481__img_20260516_040538__original.jpg?quality=80\\u0026width=1024&quot;}]},{&quot;uuid&quot;:&quot;5faf2317-b547-48b3-b3d6-5664aa2f37bb&quot;,&quot;reviewer_name&quot;:&quot;Timo Pelkonen&quot;,&quot;reviewer_initial&quot;:&quot;T&quot;,&quot;title&quot;:&quot;Modern new tech weather station with not much moving parts&quot;,&quot;body_html&quot;:&quot;\\u003cp\\u003eI didn&#39;t wanted old school weather stations with anemometers and old style rain gauge. My station is sending data to 3 public websites. I bought weather station gateway GW3010 for nothing and lost 70€ money. I found I don&#39;t need it. The Ecowitt Wittboy 7 in 1 weather station and HP2560_C 7&#39;&#39; wi-fi tft display console is enough to view data locally and send data to personal weather station pages to the Internet, like Weather Underground. Nice that I don&#39;t need to buy Finnish Vaisala professional level expensive weather station. This weather station fulfill my needs well! You don&#39;t need to be a nerd to assemble it and get working this station. Chinese technology for the win!\\u003c/p\\u003e&quot;,&quot;verified_buyer&quot;:true,&quot;location&quot;:&quot;&quot;,&quot;video_external_ids&quot;:[&quot;1201140675&quot;],&quot;media_platform_hosted_video_infos&quot;:[],&quot;cf_answers&quot;:[],&quot;product_title&quot;:&quot;Wittboy GW3001/GW3011 Weather Station, IoT Wi-Fi Hub with SD Card Data Storage, 7-in-1 Outdoor Solar Powered Anti-vibration Haptic Rainfall Sensor, Includes Bird Spikes&quot;,&quot;product_url&quot;:&quot;/products/gw3001-gw3011&quot;,&quot;product_url_with_utm&quot;:&quot;https://shop.ecowitt.com/products/gw3001-gw3011?jdgm_referral_location=widget\\u0026ref=judge.me\\u0026utm_campaign=judgeme-review-site\\u0026utm_medium=referral\\u0026utm_source=judgeme&quot;,&quot;rating&quot;:&quot;5&quot;,&quot;created_at&quot;:&quot;2026-05-16 00:13:33 UTC&quot;,&quot;pictures_urls&quot;:[{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1778892851__img_20260511_211333__original.jpg?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1778892851__img_20260511_211333__original.jpg?quality=80\\u0026width=1024&quot;},{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1778892860__img_20260515_142822__original.jpg?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1778892860__img_20260515_142822__original.jpg?quality=80\\u0026width=1024&quot;},{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1778892863__img_20260511_1758066__original.jpg?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1778892863__img_20260511_1758066__original.jpg?quality=80\\u0026width=1024&quot;}]},{&quot;uuid&quot;:&quot;82b08368-c68b-4e4e-a506-245e601e7d98&quot;,&quot;reviewer_name&quot;:&quot;Forest Gordon&quot;,&quot;reviewer_initial&quot;:&quot;F&quot;,&quot;title&quot;:&quot;Great value wind sensor&quot;,&quot;body_html&quot;:&quot;\\u003cp\\u003eHooked up a W85 to Home Assistant to control shut off on our water feature when wind exceeds set limits.  And turn it on again when wind drops.  Works great.  Very good value and easy to install.\\u003c/p\\u003e&quot;,&quot;verified_buyer&quot;:true,&quot;country_code_show_flag&quot;:&quot;US&quot;,&quot;location&quot;:&quot;&quot;,&quot;video_external_ids&quot;:[],&quot;media_platform_hosted_video_infos&quot;:[],&quot;cf_answers&quot;:[],&quot;product_title&quot;:&quot;Ecowitt WS85 Solar Powered 3-in-1 Weather Sensor for Rainfall, Wind Speed and Wind Direction&quot;,&quot;product_url&quot;:&quot;/products/ws85&quot;,&quot;product_url_with_utm&quot;:&quot;https://shop.ecowitt.com/products/ws85?jdgm_referral_location=widget\\u0026ref=judge.me\\u0026utm_campaign=judgeme-review-site\\u0026utm_medium=referral\\u0026utm_source=judgeme&quot;,&quot;rating&quot;:&quot;5&quot;,&quot;created_at&quot;:&quot;2026-05-14 14:19:16 UTC&quot;,&quot;pictures_urls&quot;:[{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1778768403__image__original.jpg?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1778768403__image__original.jpg?quality=80\\u0026width=1024&quot;}]},{&quot;uuid&quot;:&quot;b9ae1d49-66c2-478d-b91b-2636af473855&quot;,&quot;reviewer_name&quot;:&quot;Adam Ciurzynski&quot;,&quot;reviewer_initial&quot;:&quot;A&quot;,&quot;title&quot;:&quot;WH57 Lightning Detector really works&quot;,&quot;body_html&quot;:&quot;\\u003cp\\u003eThe WH57 lightning detector really works!\\n\\u003cbr /\\u003eIt alerts us before storms even get closer and before you even hear the sound.\\u003c/p\\u003e&quot;,&quot;verified_buyer&quot;:true,&quot;country_code_show_flag&quot;:&quot;PL&quot;,&quot;location&quot;:&quot;&quot;,&quot;video_external_ids&quot;:[],&quot;media_platform_hosted_video_infos&quot;:[],&quot;cf_answers&quot;:[],&quot;product_title&quot;:&quot;WH57 Outdoor Wireless Lightning Detection Sensor&quot;,&quot;product_url&quot;:&quot;/products/wh57&quot;,&quot;product_url_with_utm&quot;:&quot;https://shop.ecowitt.com/products/wh57?jdgm_referral_location=widget\\u0026ref=judge.me\\u0026utm_campaign=judgeme-review-site\\u0026utm_medium=referral\\u0026utm_source=judgeme&quot;,&quot;rating&quot;:&quot;5&quot;,&quot;created_at&quot;:&quot;2026-05-13 13:17:39 UTC&quot;,&quot;pictures_urls&quot;:[{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1778678440__wh57__original.jpg?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1778678440__wh57__original.jpg?quality=80\\u0026width=1024&quot;}]},{&quot;uuid&quot;:&quot;45cc3fd9-43d2-4051-8a65-8c32cc32c55b&quot;,&quot;reviewer_name&quot;:&quot;Angela&quot;,&quot;reviewer_initial&quot;:&quot;A&quot;,&quot;title&quot;:&quot;Brilliant!&quot;,&quot;body_html&quot;:&quot;\\u003cp\\u003eI’ve been using the WS80 for a few years now. So easy to set up, provides a wealth of weather data!\\u003c/p\\u003e&quot;,&quot;verified_buyer&quot;:true,&quot;country_code_show_flag&quot;:&quot;IE&quot;,&quot;location&quot;:&quot;&quot;,&quot;video_external_ids&quot;:[],&quot;media_platform_hosted_video_infos&quot;:[],&quot;cf_answers&quot;:[],&quot;product_title&quot;:&quot;WS80 Ultrasonic Wind Speed \\u0026amp; Direction, Solar Radiation \\u0026amp; Light, Temp \\u0026amp; Humidity Sensor Array&quot;,&quot;product_url&quot;:&quot;/products/ws80&quot;,&quot;product_url_with_utm&quot;:&quot;https://shop.ecowitt.com/products/ws80?jdgm_referral_location=widget\\u0026ref=judge.me\\u0026utm_campaign=judgeme-review-site\\u0026utm_medium=referral\\u0026utm_source=judgeme&quot;,&quot;rating&quot;:&quot;5&quot;,&quot;created_at&quot;:&quot;2026-05-10 15:36:07 UTC&quot;,&quot;pictures_urls&quot;:[{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1778427410__b47ce90d-a598-47ea-a261-98da62128cb9__original.jpeg?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1778427410__b47ce90d-a598-47ea-a261-98da62128cb9__original.jpeg?quality=80\\u0026width=1024&quot;}]},{&quot;uuid&quot;:&quot;4df3fd7b-bba9-4ce5-8848-638d9d1f1760&quot;,&quot;reviewer_name&quot;:&quot;MattRock&quot;,&quot;reviewer_initial&quot;:&quot;M&quot;,&quot;title&quot;:&quot;Soil Sensors&quot;,&quot;body_html&quot;:&quot;\\u003cp\\u003eThe soil sensors are doing th intended job outside very well! It&#39;s very helpful having a history graph in Home Assistant for all of the statistics.  Home Assistant integration is available and cloud free with the HACS &#39;Ecowitt Local&#39; integration by alexlenk.  I have succeeded at local-only integrations using both the GW2000 and GW3000 bridges.\\u003c/p\\u003e&quot;,&quot;verified_buyer&quot;:true,&quot;country_code_show_flag&quot;:&quot;US&quot;,&quot;location&quot;:&quot;&quot;,&quot;video_external_ids&quot;:[],&quot;media_platform_hosted_video_infos&quot;:[],&quot;cf_answers&quot;:[],&quot;product_title&quot;:&quot;WH52 Soil Moisture/Temperature/EC Sensor, Wireless 3-in-1 Soil Sensor&quot;,&quot;product_url&quot;:&quot;/products/wh52&quot;,&quot;product_url_with_utm&quot;:&quot;https://shop.ecowitt.com/products/wh52?jdgm_referral_location=widget\\u0026ref=judge.me\\u0026utm_campaign=judgeme-review-site\\u0026utm_medium=referral\\u0026utm_source=judgeme&quot;,&quot;rating&quot;:&quot;5&quot;,&quot;created_at&quot;:&quot;2026-05-05 15:12:42 UTC&quot;,&quot;pictures_urls&quot;:[{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1777994757__soilgraph__original.png?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1777994757__soilgraph__original.png?quality=80\\u0026width=1024&quot;}]},{&quot;uuid&quot;:&quot;b456a93a-5d94-428a-98c6-12030b2a426d&quot;,&quot;reviewer_name&quot;:&quot;Adam Ciurzynski&quot;,&quot;reviewer_initial&quot;:&quot;A&quot;,&quot;title&quot;:&quot;A good addition to a weather station&quot;,&quot;body_html&quot;:&quot;\\u003cp\\u003eEverything is working as expected. Good quality of the pictures and movies.\\u003c/p\\u003e&quot;,&quot;verified_buyer&quot;:true,&quot;country_code_show_flag&quot;:&quot;PL&quot;,&quot;location&quot;:&quot;&quot;,&quot;video_external_ids&quot;:[&quot;1203716738&quot;],&quot;media_platform_hosted_video_infos&quot;:[],&quot;cf_answers&quot;:[],&quot;product_title&quot;:&quot;WittCam HP10 Wi-Fi Time-lapse Camera&quot;,&quot;product_url&quot;:&quot;/products/wittcam-hp10&quot;,&quot;product_url_with_utm&quot;:&quot;https://shop.ecowitt.com/products/wittcam-hp10?jdgm_referral_location=widget\\u0026ref=judge.me\\u0026utm_campaign=judgeme-review-site\\u0026utm_medium=referral\\u0026utm_source=judgeme&quot;,&quot;rating&quot;:&quot;5&quot;,&quot;created_at&quot;:&quot;2026-04-15 04:50:12 UTC&quot;,&quot;pictures_urls&quot;:[]},{&quot;uuid&quot;:&quot;42858d80-6e56-4f38-bdcd-5de5c6fe8a11&quot;,&quot;reviewer_name&quot;:&quot;Anonymous&quot;,&quot;reviewer_initial&quot;:&quot;A&quot;,&quot;title&quot;:&quot;Πολύ καλό&quot;,&quot;body_html&quot;:&quot;\\u003cp\\u003eΣτάλθηκε σύντομα μέσα σε 10 ακριβώς ημέρες!\\n\\u003cbr /\\u003eΗ εγκατάσταση ήταν πολύ εύκολη και μέχρι στιγμής δεν έχω καμία παρεμβολή και το έχω τοποθετήσει όμως στο low sensitivity! Περιμένω να δω στις καταιγίδες πως θα ανταποκριθεί.\\u003c/p\\u003e&quot;,&quot;verified_buyer&quot;:true,&quot;country_code_show_flag&quot;:&quot;GR&quot;,&quot;location&quot;:&quot;&quot;,&quot;video_external_ids&quot;:[],&quot;media_platform_hosted_video_infos&quot;:[],&quot;cf_answers&quot;:[],&quot;product_title&quot;:&quot;WH57 Outdoor Wireless Lightning Detection Sensor&quot;,&quot;product_url&quot;:&quot;/products/wh57&quot;,&quot;product_url_with_utm&quot;:&quot;https://shop.ecowitt.com/products/wh57?jdgm_referral_location=widget\\u0026ref=judge.me\\u0026utm_campaign=judgeme-review-site\\u0026utm_medium=referral\\u0026utm_source=judgeme&quot;,&quot;rating&quot;:&quot;5&quot;,&quot;created_at&quot;:&quot;2026-04-08 21:43:18 UTC&quot;,&quot;pictures_urls&quot;:[{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1775684672__2d6017a7-c115-4fd1-bf47-11389df7c0f6__original.png?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1775684672__2d6017a7-c115-4fd1-bf47-11389df7c0f6__original.png?quality=80\\u0026width=1024&quot;}]},{&quot;uuid&quot;:&quot;57c27533-900e-404e-a754-e2c0de666b42&quot;,&quot;reviewer_name&quot;:&quot;Thomas Bruhn&quot;,&quot;reviewer_initial&quot;:&quot;T&quot;,&quot;title&quot;:&quot;Unzulässig&quot;,&quot;body_html&quot;:&quot;\\u003cp\\u003eDie Station  hat  bei  starken Wind und Regen falsche Messdaten geliefert. So hatte die Station um die 150 km gemessen. Andere Station haben  ca 60 kmh gemessen,was auch plausibel ist. Wer genaue Winddaten haben möchte sollte die Finger davon lassen.\\u003c/p\\u003e&quot;,&quot;verified_buyer&quot;:true,&quot;country_code_show_flag&quot;:&quot;DE&quot;,&quot;location&quot;:&quot;&quot;,&quot;video_external_ids&quot;:[],&quot;media_platform_hosted_video_infos&quot;:[],&quot;cf_answers&quot;:[],&quot;product_title&quot;:&quot;WS80 Ultrasonic Wind Speed \\u0026amp; Direction, Solar Radiation \\u0026amp; Light, Temp \\u0026amp; Humidity Sensor Array&quot;,&quot;product_url&quot;:&quot;/products/ws80&quot;,&quot;product_url_with_utm&quot;:&quot;https://shop.ecowitt.com/products/ws80?jdgm_referral_location=widget\\u0026ref=judge.me\\u0026utm_campaign=judgeme-review-site\\u0026utm_medium=referral\\u0026utm_source=judgeme&quot;,&quot;rating&quot;:&quot;1&quot;,&quot;created_at&quot;:&quot;2026-03-25 11:21:46 UTC&quot;,&quot;pictures_urls&quot;:[{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1774437888__41120__original.jpg?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1774437888__41120__original.jpg?quality=80\\u0026width=1024&quot;}]}]'></div> </div> <div class=\"jdgm-medals-wrapper jdgm-hidden\" data-updated-at='2026-07-05T04:18:38Z'> <style type=\"text/css\"></style> <div class=\"jdgm-medals\" data-link=\"https://app.judge.me/reviews/stores/shop.ecowitt.com\"> <div class=\"jdgm-medals__container\"> <div class=\"jdgm-medal-wrapper\" title=\"Diamond Verified Reviews Shop. Obtained at least 1000 reviews submitted by genuine customers with proof of purchase history\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"1598\" data-type=\"ver_rev\" data-tier=\"diamond\"> <div class=\"jdgm-medal__image\" data-url=\"ver_rev/diamond.svg\" data-alt=\"Judge.me Diamond Verified Reviews Shop medal\"></div> <div class=\"jdgm-medal__value jdgm-medal__value--long\">1598</div> </a> </div> <div class=\"jdgm-medal-wrapper\" title=\"Platinum Authentic Shop. At least 99% of published reviews are verified reviews\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"\" data-type=\"auth\" data-tier=\"platinum\"> <div class=\"jdgm-medal__image\" data-url=\"auth/platinum.svg\" data-alt=\"Judge.me Platinum Authentic Shop medal\"></div> </a> </div> <div class=\"jdgm-medal-wrapper\" title=\"Gold Monthly Record Shop. Achieved an all-time record of 83 published verified reviews within one calendar month.\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"83\" data-type=\"mon_rec\" data-tier=\"gold\"> <div class=\"jdgm-medal__image\" data-url=\"mon_rec/gold_hollow.svg\" data-alt=\"Judge.me Gold Monthly Record Shop medal\"></div> <div class=\"jdgm-medal__value \">83</div> </a> </div> <div class=\"jdgm-medal-wrapper\" title=\"Silver Transparent Shop. Published at least 90% of verified reviews received in total\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"\" data-type=\"tran\" data-tier=\"silver\"> <div class=\"jdgm-medal__image\" data-url=\"tran/silver.svg\" data-alt=\"Judge.me Silver Transparent Shop medal\"></div> </a> </div> <div class=\"jdgm-medal-wrapper\" title=\"Top 1% Trending Shops. Top 1% trending shops that obtained and published the most verified reviews in the last 30 days\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"\" data-type=\"tops_trend\" data-tier=\"1-percent\"> <div class=\"jdgm-medal__image\" data-url=\"tops_trend/1-percent.svg\" data-alt=\"Judge.me Top 1% Trending Shops medal\"></div> </a> </div> <div class=\"jdgm-medal-wrapper\" title=\"Top 5% Shops. Top 5% shops that obtained and published the most verified reviews of all time\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"\" data-type=\"tops\" data-tier=\"5-percent\"> <div class=\"jdgm-medal__image\" data-url=\"tops/5-percent.svg\" data-alt=\"Judge.me Top 5% Shops medal\"></div> </a> </div> </div> </div> </div> <div class='jdgm-rev-widg__sort-wrapper'></div> </div> <div class='jdgm-revs-tab__content-body'> <div class='jdgm-revs-tab__reviews'><div class='jdgm-rev jdgm-divider-top' data-verified-buyer='true' data-review-id='b53e4f51-18a2-4022-89ee-fd1d3c6a892f' data-thumb-up-count='0' data-thumb-down-count='0'> <div class='jdgm-rev__header'>  <div class='jdgm-rev__icon' > J </div>  <span class=\"jdgm-rev__rating\" data-score=\"1\" tabindex=\"0\" aria-label=\"1 star review\" role=\"img\"> <span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--off'></span><span class='jdgm-star jdgm--off'></span><span class='jdgm-star jdgm--off'></span><span class='jdgm-star jdgm--off'></span> </span> <span class='jdgm-rev__timestamp jdgm-spinner' data-content='2026-07-04 13:55:24 UTC'></span>  <span class='jdgm-rev__prod-info-wrapper'> <span class='jdgm-rev__prod-link-prefix'></span>  <a href='/products/gw1206#judgeme_product_reviews' target='_blank' class='jdgm-rev__prod-link'> Ecowitt GW1206 土壤濕度計套件，包括 GW1200 IoT Wi-Fi 閘道器和 WH51 土壤濕度傳感器 </a>  </span> <div class='jdgm-rev__br'></div> <span class='jdgm-rev__buyer-badge-wrapper'>  <span class='jdgm-rev__buyer-badge'></span>  </span> <span class='jdgm-rev__author-wrapper'> <span class='jdgm-rev__author'>Jon</span> <span class='jdgm-rev__location'  data-country-code=\"US\" >  </span> </span> </div> <div class='jdgm-rev__content'> <div class='jdgm-rev__custom-form'>  </div> <b class='jdgm-rev__title'>絕對遠離！</b> <div class='jdgm-rev__body'><p>無論如何都要遠離ecowitt。</p>\n\n<p>這是我最糟糕的線上購物經驗之一。Ecowitt在結帳前未告知基站會在幾天內到貨，而感測器則約一個月才到貨。這些資訊直到他們已經收款後才清楚告知。如果我早知道，我會選擇在其他地方購買。</p>\n\n<p>得知延遲後，我立即聯繫客服並確認感測器尚未出貨。儘管如此，銷售部的Dan和Lilias拒絕取消訂單或提供合理的解決方案。一旦Ecowitt收了你的錢，就別指望客服會站在你這邊。</p>\n\n<p>更糟的是，他們還要求客戶支付昂貴的國際運費將商品退回中國，即使這個問題本可以在購買前提供誠實的運送資訊來避免。</p>\n\n<p>我最終在其他地方購買了相同的感測器，並且更快收到貨。</p>\n\n<p>如果你考慮購買Ecowitt，請善待自己，選擇具有友善退貨政策的零售商，或者更好地選擇另一家公司。根據我的經驗，Ecowitt缺乏透明度且客服差勁，讓我無法推薦他們。Ecowitt的謊言已經足夠讓人遠離，更不用說產品操作差！絕對沒有任何好處來自ecowitt！</p></div> <div class='jdgm-rev__pics'>  </div> <div class='jdgm-rev__vids'>  <div class='jdgm-vid-player' data-external-id=0c5d79de715b5125aefaf225201f0be5> <div class='jdgm-vid-player__wrapper jdgm--loading'> </div> </div>   </div> </div> <div class='jdgm-rev__actions'> <div class='jdgm-rev__social'></div> <div class='jdgm-rev__votes'></div> </div> <div class='jdgm-rev__reply'>  </div> </div><div class='jdgm-rev jdgm-divider-top' data-verified-buyer='true' data-review-id='5c6a1e04-e9c9-4428-825d-87a80fdb72b5' data-thumb-up-count='0' data-thumb-down-count='0'> <div class='jdgm-rev__header'>  <div class='jdgm-rev__icon' > 男 </div>  <span class=\"jdgm-rev__rating\" data-score=\"5\" tabindex=\"0\" aria-label=\"5 star review\" role=\"img\"> <span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span> </span> <span class='jdgm-rev__timestamp jdgm-spinner' data-content='2026-07-04 08:10:53 UTC'></span>  <span class='jdgm-rev__prod-info-wrapper'> <span class='jdgm-rev__prod-link-prefix'></span>  <a href='/products/ws90#judgeme_product_reviews' target='_blank' class='jdgm-rev__prod-link'> WS90 無線7合1電子感測器陣列觸覺雨量計與超聲波風速計 </a>  </span> <div class='jdgm-rev__br'></div> <span class='jdgm-rev__buyer-badge-wrapper'>  <span class='jdgm-rev__buyer-badge'></span>  </span> <span class='jdgm-rev__author-wrapper'> <span class='jdgm-rev__author'>Marcello Cortese</span> <span class='jdgm-rev__location'  data-country-code=\"IT\" >  </span> </span> </div> <div class='jdgm-rev__content'> <div class='jdgm-rev__custom-form'>  </div> <b class='jdgm-rev__title'></b> <div class='jdgm-rev__body'><p>WS90 無線7合1電子感測器陣列觸覺雨量計與超聲波風速計</p></div> <div class='jdgm-rev__pics'>  </div> <div class='jdgm-rev__vids'>   </div> </div> <div class='jdgm-rev__actions'> <div class='jdgm-rev__social'></div> <div class='jdgm-rev__votes'></div> </div> <div class='jdgm-rev__reply'>  </div> </div><div class='jdgm-rev jdgm-divider-top' data-verified-buyer='true' data-review-id='78b16cfb-c2be-412d-b2b1-4b3e40be8121' data-thumb-up-count='0' data-thumb-down-count='0'> <div class='jdgm-rev__header'>  <div class='jdgm-rev__icon' > C </div>  <span class=\"jdgm-rev__rating\" data-score=\"5\" tabindex=\"0\" aria-label=\"5 star review\" role=\"img\"> <span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span> </span> <span class='jdgm-rev__timestamp jdgm-spinner' data-content='2026-07-04 01:56:57 UTC'></span>  <span class='jdgm-rev__prod-info-wrapper'> <span class='jdgm-rev__prod-link-prefix'></span>  <a href='/products/wh46d#judgeme_product_reviews' target='_blank' class='jdgm-rev__prod-link'> WH46D 7合1空氣品質感測器，配備LCD顯示屏，NDIR CO2 / PM1.0 / PM2.5 / PM4.0 / PM10 / 溫度 / 濕度感測器 </a>  </span> <div class='jdgm-rev__br'></div> <span class='jdgm-rev__buyer-badge-wrapper'>  <span class='jdgm-rev__buyer-badge'></span>  </span> <span class='jdgm-rev__author-wrapper'> <span class='jdgm-rev__author'>C.T.</span> <span class='jdgm-rev__location'  data-country-code=\"US\" >  </span> </span> </div> <div class='jdgm-rev__content'> <div class='jdgm-rev__custom-form'>  </div> <b class='jdgm-rev__title'>快速交貨與簡易設置</b> <div class='jdgm-rev__body'><p>同時提供友善、樂於助人且快速的支援。</p></div> <div class='jdgm-rev__pics'>  </div> <div class='jdgm-rev__vids'>   </div> </div> <div class='jdgm-rev__actions'> <div class='jdgm-rev__social'></div> <div class='jdgm-rev__votes'></div> </div> <div class='jdgm-rev__reply'>  </div> </div><div class='jdgm-rev jdgm-divider-top' data-verified-buyer='true' data-review-id='352bb5c3-b5cc-43fe-83de-88abbbc0f383' data-thumb-up-count='0' data-thumb-down-count='0'> <div class='jdgm-rev__header'>  <div class='jdgm-rev__icon' > J </div>  <span class=\"jdgm-rev__rating\" data-score=\"5\" tabindex=\"0\" aria-label=\"5 star review\" role=\"img\"> <span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span> </span> <span class='jdgm-rev__timestamp jdgm-spinner' data-content='2026-07-03 19:51:02 UTC'></span>  <span class='jdgm-rev__prod-info-wrapper'> <span class='jdgm-rev__prod-link-prefix'></span>  <a href='/products/wh52#judgeme_product_reviews' target='_blank' class='jdgm-rev__prod-link'> WH52 土壤濕度/溫度/EC 感測器，無線 3 合 1 土壤感測器 </a>  </span> <div class='jdgm-rev__br'></div> <span class='jdgm-rev__buyer-badge-wrapper'>  <span class='jdgm-rev__buyer-badge'></span>  </span> <span class='jdgm-rev__author-wrapper'> <span class='jdgm-rev__author'>JHC Ernst</span> <span class='jdgm-rev__location'  data-country-code=\"NL\" >  </span> </span> </div> <div class='jdgm-rev__content'> <div class='jdgm-rev__custom-form'>  </div> <b class='jdgm-rev__title'>WH52</b> <div class='jdgm-rev__body'><p>運作正常，沒有問題。</p></div> <div class='jdgm-rev__pics'>  </div> <div class='jdgm-rev__vids'>   </div> </div> <div class='jdgm-rev__actions'> <div class='jdgm-rev__social'></div> <div class='jdgm-rev__votes'></div> </div> <div class='jdgm-rev__reply'>  </div> </div><div class='jdgm-rev jdgm-divider-top' data-verified-buyer='true' data-review-id='f17a7847-faa0-4a1a-b4ce-9fe0dd3caa1b' data-thumb-up-count='0' data-thumb-down-count='0'> <div class='jdgm-rev__header'>  <div class='jdgm-rev__icon' > A </div>  <span class=\"jdgm-rev__rating\" data-score=\"5\" tabindex=\"0\" aria-label=\"5 star review\" role=\"img\"> <span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span> </span> <span class='jdgm-rev__timestamp jdgm-spinner' data-content='2026-07-03 16:01:18 UTC'></span>  <span class='jdgm-rev__prod-info-wrapper'> <span class='jdgm-rev__prod-link-prefix'></span>  <a href='/products/gw1200#judgeme_product_reviews' target='_blank' class='jdgm-rev__prod-link'> GW1200 IOT Wi-Fi 閘道器，內建溫度/濕度/氣壓感測 </a>  </span> <div class='jdgm-rev__br'></div> <span class='jdgm-rev__buyer-badge-wrapper'>  <span class='jdgm-rev__buyer-badge'></span>  </span> <span class='jdgm-rev__author-wrapper'> <span class='jdgm-rev__author'>ANTONETTE Lininger</span> <span class='jdgm-rev__location'  data-country-code=\"US\" >  </span> </span> </div> <div class='jdgm-rev__content'> <div class='jdgm-rev__custom-form'>  </div> <b class='jdgm-rev__title'>氣象站</b> <div class='jdgm-rev__body'><p>我們在所有ecowitt產品上都取得了巨大成功。易於使用且可靠。</p></div> <div class='jdgm-rev__pics'>  </div> <div class='jdgm-rev__vids'>   </div> </div> <div class='jdgm-rev__actions'> <div class='jdgm-rev__social'></div> <div class='jdgm-rev__votes'></div> </div> <div class='jdgm-rev__reply'>  </div> </div></div> <div class='jdgm-spinner jdgm-revs-tab__spinner' style='display: none'> </div> <div class='jdgm-paginate' data-per-page='5' data-url='https://api.judge.me/reviews/reviews_for_reviews_tab' ><a class=\"jdgm-paginate__page jdgm-curt\" data-page=\"1\" aria-label=\"Page 1\" tabindex=\"0\" role=\"button\">1</a><a class=\"jdgm-paginate__page \" data-page=\"2\" aria-label=\"Page 2\" tabindex=\"0\" role=\"button\">2</a><a class=\"jdgm-paginate__page \" data-page=\"3\" aria-label=\"Page 3\" tabindex=\"0\" role=\"button\">3</a><a class=\"jdgm-paginate__page jdgm-paginate__next-page\" data-page=\"2\" aria-label=\"Page 2\" tabindex=\"0\" rel=\"next\" role=\"button\"></a><a class=\"jdgm-paginate__page jdgm-paginate__last-page\" data-page=\"321\" aria-label=\"Page 321\" tabindex=\"0\" role=\"button\"></a></div> </div> </div> </div> </section>",
+      "attrCheckDecision": "repair"
+    },
+    {
+      "taskId": "67d8d860-ea63-4183-955d-a52231082b90",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "zh-TW",
+      "resourceId": "gid://shopify/Metafield/26454514303138",
+      "digest": "36c3e06efd94aaae020d8052f4f6bb5207a7b4ebe7e0c828222a16a6dc7616df",
+      "module": "METAFIELD",
+      "key": "value",
+      "translatedValue": "<div class=\"jdgm-medals-wrapper jdgm-hidden jdgm-widget\" data-updated-at='2026-07-05T04:18:39Z'> <style type=\"text/css\"></style> <div class=\"jdgm-verified-wrapper\"> <div class=\"jdgm-rating\"> <span class=\"jdgm-rating__stars\" data-score=\"4.73\"></span> <span class=\"jdgm-rating__count\" data-value=\"1598\"></span> </div> <div class=\"jdgm-verified-by\"> <span class=\"jdgm-verified-by__text\"></span> <span class=\"jdgm-verified-by__image\"></span> </div> </div> <div class=\"jdgm-medals\" data-link=\"https://app.judge.me/reviews/stores/shop.ecowitt.com\"> <div class=\"jdgm-medals__container\"> <div class=\"jdgm-medal-wrapper\" title=\"Diamond Verified Reviews Shop. Obtained at least 1000 reviews submitted by genuine customers with proof of purchase history\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"1598\" data-type=\"ver_rev\" data-tier=\"diamond\"> <div class=\"jdgm-medal__image\" data-url=\"ver_rev/diamond.svg\" data-alt=\"Judge.me Diamond Verified Reviews Shop medal\"></div> <div class=\"jdgm-medal__value jdgm-medal__value--long\">1598</div> </a> </div> <div class=\"jdgm-medal-wrapper\" title=\"Platinum Authentic Shop. At least 99% of published reviews are verified reviews\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"\" data-type=\"auth\" data-tier=\"platinum\"> <div class=\"jdgm-medal__image\" data-url=\"auth/platinum.svg\" data-alt=\"Judge.me Platinum Authentic Shop medal\"></div> </a> </div> <div class=\"jdgm-medal-wrapper\" title=\"Gold Monthly Record Shop. Achieved an all-time record of 83 published verified reviews within one calendar month.\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"83\" data-type=\"mon_rec\" data-tier=\"gold\"> <div class=\"jdgm-medal__image\" data-url=\"mon_rec/gold_hollow.svg\" data-alt=\"Judge.me Gold Monthly Record Shop medal\"></div> <div class=\"jdgm-medal__value \">83</div> </a> </div> <div class=\"jdgm-medal-wrapper\" title=\"Silver Transparent Shop. Published at least 90% of verified reviews received in total\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"\" data-type=\"tran\" data-tier=\"silver\"> <div class=\"jdgm-medal__image\" data-url=\"tran/silver.svg\" data-alt=\"Judge.me Silver Transparent Shop medal\"></div> </a> </div> <div class=\"jdgm-medal-wrapper\" title=\"Top 1% Trending Shops. Top 1% trending shops that obtained and published the most verified reviews in the last 30 days\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"\" data-type=\"tops_trend\" data-tier=\"1-percent\"> <div class=\"jdgm-medal__image\" data-url=\"tops_trend/1-percent.svg\" data-alt=\"Judge.me Top 1% Trending Shops medal\"></div> </a> </div> <div class=\"jdgm-medal-wrapper\" title=\"Top 5% Shops. Top 5% shops that obtained and published the most verified reviews of all time\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"\" data-type=\"tops\" data-tier=\"5-percent\"> <div class=\"jdgm-medal__image\" data-url=\"tops/5-percent.svg\" data-alt=\"Judge.me Top 5% Shops medal\"></div> </a> </div> </div> </div> </div>",
+      "attrCheckDecision": "repair"
+    }
+  ],
+  "allAttrChecks": [
+    {
+      "resourceId": "gid://shopify/Metafield/20906124083362",
+      "key": "value",
+      "module": "METAFIELD",
+      "blobStatus": "abnormal",
+      "shopifyStatus": "abnormal",
+      "blobIssues": [
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T6u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T7u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T8u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T9u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T10u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T11u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T12u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T13u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T14u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T15u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T16u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T17u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T18u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T19u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T20u0000"
+        }
+      ],
+      "shopifyIssues": [
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T6u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T7u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T8u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T9u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T10u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T11u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T12u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T13u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T14u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T15u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T16u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T17u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T18u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T19u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T20u0000"
+        }
+      ],
+      "decision": "repair",
+      "reason": "Blob 与 Shopify 现网属性均有占位符泄漏，允许替换",
+      "tokenSource": "job",
+      "taskId": "67d8d860-ea63-4183-955d-a52231082b90",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "zh-TW",
+      "digest": "eeada46153c2c570e4524d918e7c80b4d4c7bbd7bf93b7f6afbba81e2d5d1744"
+    },
+    {
+      "resourceId": "gid://shopify/Metafield/26454514303138",
+      "key": "value",
+      "module": "METAFIELD",
+      "blobStatus": "abnormal",
+      "shopifyStatus": "abnormal",
+      "blobIssues": [
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        }
+      ],
+      "shopifyIssues": [
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        }
+      ],
+      "decision": "repair",
+      "reason": "Blob 与 Shopify 现网属性均有占位符泄漏，允许替换",
+      "tokenSource": "job",
+      "taskId": "67d8d860-ea63-4183-955d-a52231082b90",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "zh-TW",
+      "digest": "36c3e06efd94aaae020d8052f4f6bb5207a7b4ebe7e0c828222a16a6dc7616df"
+    },
+    {
+      "resourceId": "gid://shopify/Metafield/20906124083362",
+      "key": "value",
+      "module": "METAFIELD",
+      "blobStatus": "abnormal",
+      "shopifyStatus": "normal",
+      "blobIssues": [
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T6u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T7u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T8u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T9u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T10u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T11u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T12u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T13u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T14u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T15u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T16u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T17u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T18u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T19u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T20u0000"
+        }
+      ],
+      "shopifyIssues": [],
+      "decision": "skip_shopify_normal",
+      "reason": "Blob 属性异常，但 Shopify 现网属性正常，跳过以免覆盖好数据",
+      "tokenSource": "job",
+      "taskId": "cbedd7fe-46a1-4473-a6a6-60d32f08dcfb",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "zh-CN",
+      "digest": "eeada46153c2c570e4524d918e7c80b4d4c7bbd7bf93b7f6afbba81e2d5d1744"
+    },
+    {
+      "resourceId": "gid://shopify/Metafield/26454514303138",
+      "key": "value",
+      "module": "METAFIELD",
+      "blobStatus": "abnormal",
+      "shopifyStatus": "normal",
+      "blobIssues": [
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        }
+      ],
+      "shopifyIssues": [],
+      "decision": "skip_shopify_normal",
+      "reason": "Blob 属性异常，但 Shopify 现网属性正常，跳过以免覆盖好数据",
+      "tokenSource": "job",
+      "taskId": "cbedd7fe-46a1-4473-a6a6-60d32f08dcfb",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "zh-CN",
+      "digest": "36c3e06efd94aaae020d8052f4f6bb5207a7b4ebe7e0c828222a16a6dc7616df"
+    },
+    {
+      "resourceId": "gid://shopify/Metafield/20906124083362",
+      "key": "value",
+      "module": "METAFIELD",
+      "blobStatus": "abnormal",
+      "shopifyStatus": "normal",
+      "blobIssues": [
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T6u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T7u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T8u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T9u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T10u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T11u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T12u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T13u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T14u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T15u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T16u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T17u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T18u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T19u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T20u0000"
+        }
+      ],
+      "shopifyIssues": [],
+      "decision": "skip_shopify_normal",
+      "reason": "Blob 属性异常，但 Shopify 现网属性正常，跳过以免覆盖好数据",
+      "tokenSource": "job",
+      "taskId": "03634f3f-db12-429d-957b-1feb8bb20d8a",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "it",
+      "digest": "eeada46153c2c570e4524d918e7c80b4d4c7bbd7bf93b7f6afbba81e2d5d1744"
+    },
+    {
+      "resourceId": "gid://shopify/Metafield/26454514303138",
+      "key": "value",
+      "module": "METAFIELD",
+      "blobStatus": "abnormal",
+      "shopifyStatus": "normal",
+      "blobIssues": [
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        }
+      ],
+      "shopifyIssues": [],
+      "decision": "skip_shopify_normal",
+      "reason": "Blob 属性异常，但 Shopify 现网属性正常，跳过以免覆盖好数据",
+      "tokenSource": "job",
+      "taskId": "03634f3f-db12-429d-957b-1feb8bb20d8a",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "it",
+      "digest": "36c3e06efd94aaae020d8052f4f6bb5207a7b4ebe7e0c828222a16a6dc7616df"
+    },
+    {
+      "resourceId": "gid://shopify/Metafield/20906124083362",
+      "key": "value",
+      "module": "METAFIELD",
+      "blobStatus": "abnormal",
+      "shopifyStatus": "normal",
+      "blobIssues": [
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T6u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T7u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T8u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T9u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T10u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T11u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T12u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T13u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T14u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T15u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T16u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T17u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T18u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T19u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T20u0000"
+        }
+      ],
+      "shopifyIssues": [],
+      "decision": "skip_shopify_normal",
+      "reason": "Blob 属性异常，但 Shopify 现网属性正常，跳过以免覆盖好数据",
+      "tokenSource": "job",
+      "taskId": "464fe3a5-c019-46ae-b842-4f8995731c33",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "fr",
+      "digest": "eeada46153c2c570e4524d918e7c80b4d4c7bbd7bf93b7f6afbba81e2d5d1744"
+    },
+    {
+      "resourceId": "gid://shopify/Metafield/26454514303138",
+      "key": "value",
+      "module": "METAFIELD",
+      "blobStatus": "abnormal",
+      "shopifyStatus": "normal",
+      "blobIssues": [
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        }
+      ],
+      "shopifyIssues": [],
+      "decision": "skip_shopify_normal",
+      "reason": "Blob 属性异常，但 Shopify 现网属性正常，跳过以免覆盖好数据",
+      "tokenSource": "job",
+      "taskId": "464fe3a5-c019-46ae-b842-4f8995731c33",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "fr",
+      "digest": "36c3e06efd94aaae020d8052f4f6bb5207a7b4ebe7e0c828222a16a6dc7616df"
+    },
+    {
+      "resourceId": "gid://shopify/Metafield/20906124083362",
+      "key": "value",
+      "module": "METAFIELD",
+      "blobStatus": "abnormal",
+      "shopifyStatus": "normal",
+      "blobIssues": [
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T6u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T7u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T8u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T9u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T10u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T11u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T12u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T13u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T14u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T15u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T16u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T17u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T18u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T19u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T20u0000"
+        }
+      ],
+      "shopifyIssues": [],
+      "decision": "skip_shopify_normal",
+      "reason": "Blob 属性异常，但 Shopify 现网属性正常，跳过以免覆盖好数据",
+      "tokenSource": "job",
+      "taskId": "9aaad39a-fbf8-4448-a8d3-02458c209069",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "es",
+      "digest": "eeada46153c2c570e4524d918e7c80b4d4c7bbd7bf93b7f6afbba81e2d5d1744"
+    },
+    {
+      "resourceId": "gid://shopify/Metafield/26454514303138",
+      "key": "value",
+      "module": "METAFIELD",
+      "blobStatus": "abnormal",
+      "shopifyStatus": "normal",
+      "blobIssues": [
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        }
+      ],
+      "shopifyIssues": [],
+      "decision": "skip_shopify_normal",
+      "reason": "Blob 属性异常，但 Shopify 现网属性正常，跳过以免覆盖好数据",
+      "tokenSource": "job",
+      "taskId": "9aaad39a-fbf8-4448-a8d3-02458c209069",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "es",
+      "digest": "36c3e06efd94aaae020d8052f4f6bb5207a7b4ebe7e0c828222a16a6dc7616df"
+    },
+    {
+      "resourceId": "gid://shopify/Metafield/20906124083362",
+      "key": "value",
+      "module": "METAFIELD",
+      "blobStatus": "abnormal",
+      "shopifyStatus": "normal",
+      "blobIssues": [
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T6u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T7u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T8u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T9u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T10u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T11u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T12u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T13u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T14u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T15u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T16u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T17u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T18u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T19u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T20u0000"
+        }
+      ],
+      "shopifyIssues": [],
+      "decision": "skip_shopify_normal",
+      "reason": "Blob 属性异常，但 Shopify 现网属性正常，跳过以免覆盖好数据",
+      "tokenSource": "job",
+      "taskId": "c54fdf9b-dc51-48e7-9c1c-0c6695bcef59",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "de",
+      "digest": "eeada46153c2c570e4524d918e7c80b4d4c7bbd7bf93b7f6afbba81e2d5d1744"
+    },
+    {
+      "resourceId": "gid://shopify/Metafield/26454514303138",
+      "key": "value",
+      "module": "METAFIELD",
+      "blobStatus": "abnormal",
+      "shopifyStatus": "normal",
+      "blobIssues": [
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        }
+      ],
+      "shopifyIssues": [],
+      "decision": "skip_shopify_normal",
+      "reason": "Blob 属性异常，但 Shopify 现网属性正常，跳过以免覆盖好数据",
+      "tokenSource": "job",
+      "taskId": "c54fdf9b-dc51-48e7-9c1c-0c6695bcef59",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "de",
+      "digest": "36c3e06efd94aaae020d8052f4f6bb5207a7b4ebe7e0c828222a16a6dc7616df"
+    }
+  ],
+  "percent": 25,
+  "updatedAt": "2026-07-13T08:50:39.241Z"
+}

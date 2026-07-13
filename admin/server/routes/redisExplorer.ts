@@ -5,12 +5,12 @@ import { getTranslationJobsContainer, isCosmosConfigured } from "../lib/cosmos.j
 import {
   COMMON_TM_MODELS,
   DEFAULT_TM_MODEL,
-  MAX_VALUE_CACHE_CHARS,
   parseDigestTmKey,
   previewText,
   tmBrowseScanPattern,
   tmDigestKey,
   tmValueKey,
+  valueCacheKeyId,
 } from "../lib/translationMemory.js";
 
 export const redisExplorerRouter = Router();
@@ -104,6 +104,7 @@ redisExplorerRouter.post("/tm/lookup", async (req, res) => {
     if (mode === "text") {
       const sourceText = body.sourceText?.trim() ?? "";
       const source = body.source?.trim() ?? "";
+      const digest = body.digest?.trim() || undefined;
       if (!sourceText) {
         res.status(400).json({ error: "请输入原文" });
         return;
@@ -112,17 +113,12 @@ redisExplorerRouter.post("/tm/lookup", async (req, res) => {
         res.status(400).json({ error: "按原文查询需填写源语言" });
         return;
       }
-      if (sourceText.length > MAX_VALUE_CACHE_CHARS) {
-        res.status(400).json({
-          error: `原文超过 ${MAX_VALUE_CACHE_CHARS} 字符，请改用 digest 查询`,
-        });
-        return;
-      }
 
+      const keyId = valueCacheKeyId(sourceText, digest);
       const specs = targets.map((target) => ({
         target,
         model,
-        key: tmValueKey(sourceText, source, target, model),
+        key: tmValueKey(sourceText, source, target, model, digest),
         cacheType: "value" as const,
       }));
       const results = await batchGetTmRows(redis, specs);
@@ -133,8 +129,12 @@ redisExplorerRouter.post("/tm/lookup", async (req, res) => {
         tryAllModels: false,
         source,
         sourceText,
+        digest: digest ?? null,
+        keyId,
         results,
-        note: "短文本二级缓存（tm:v5:val），不含店铺维度",
+        note: digest
+          ? `value 缓存（tm:v5:val:{source}:{target}:{model}:{digest}），keyId 使用 Shopify digest`
+          : `value 缓存（tm:v5:val:{source}:{target}:{model}:{crc32}），keyId=${keyId}`,
       });
       return;
     }
@@ -304,7 +304,7 @@ redisExplorerRouter.get("/tm/browse", async (req, res) => {
         pattern,
         note: hasMore
           ? "本页未匹配到有效键，可继续加载下一页"
-          : "未找到该店铺的 digest 型 TM 缓存（短文本 tm:v5:val 不含店铺维度）",
+          : "未找到该店铺的 digest 型 TM 缓存（value 缓存 tm:v5:val 无店铺维度，请用「按原文」查询）",
       });
       return;
     }

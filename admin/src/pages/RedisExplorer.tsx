@@ -243,6 +243,7 @@ function TextLookupTab() {
   const [shop, setShop] = useState("");
   const [sourceText, setSourceText] = useState("");
   const [source, setSource] = useState("en");
+  const [digest, setDigest] = useState("");
   const [model, setModel] = useState(DEFAULT_TM_MODEL);
   const [targets, setTargets] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -258,6 +259,7 @@ function TextLookupTab() {
         mode: "text",
         sourceText,
         source,
+        digest: digest.trim() || undefined,
         model,
         targets,
       });
@@ -268,15 +270,15 @@ function TextLookupTab() {
     } finally {
       setLoading(false);
     }
-  }, [sourceText, source, model, targets]);
+  }, [sourceText, source, digest, model, targets]);
 
   return (
     <Space direction="vertical" style={{ width: "100%" }} size="middle">
       <Alert
         type="info"
         showIcon
-        message="按原文查询（短文本二级缓存 tm:v5:val）"
-        description="适用于 ≤300 字符的短纯文本（如 Size、Add to cart）。不含店铺维度，跨资源相同短句可复用。"
+        message="按原文查询（value 缓存 tm:v5:val:{source}:{target}:{model}:{keyId}）"
+        description="跨店复用。有 Shopify digest 时 keyId 用 digest；否则对原文算 CRC-32（8 位 hex）。与「按 digest」主缓存（带店铺）是两套 key。"
       />
 
       <Form layout="vertical">
@@ -298,6 +300,20 @@ function TextLookupTab() {
               />
             </Form.Item>
           </Col>
+          <Col span={18}>
+            <Form.Item
+              label="digest（可选）"
+              extra="有 digest 时优先用作 keyId；留空则对原文 CRC-32"
+            >
+              <Input
+                value={digest}
+                onChange={(e) => setDigest(e.target.value)}
+                placeholder="Shopify 字段 digest"
+                style={{ fontFamily: "monospace" }}
+                allowClear
+              />
+            </Form.Item>
+          </Col>
         </Row>
         <Form.Item label="原文" required>
           <TextArea
@@ -306,7 +322,6 @@ function TextLookupTab() {
             placeholder="输入要查询的源文本，如 Add to cart"
             rows={3}
             showCount
-            maxLength={300}
           />
         </Form.Item>
         <SharedFields
@@ -325,6 +340,11 @@ function TextLookupTab() {
       {result && (
         <>
           {result.note && <Alert type="info" message={result.note} showIcon />}
+          {result.keyId && (
+            <Text type="secondary" style={{ fontFamily: "monospace" }}>
+              keyId: {result.keyId}
+            </Text>
+          )}
           <LookupResultTable results={result.results} onShowValue={setDetailRow} />
         </>
       )}
@@ -551,7 +571,7 @@ function ShopBrowseTab() {
         type="info"
         showIcon
         message="按店铺浏览 digest 型 TM 缓存"
-        description="严格 cursor 分页（每页最多 6 轮 SCAN）。填写目标语言后 pattern 收窄为 tm:v5:{shop}:{target}:*。短文本 tm:v5:val 不含店铺维度。"
+        description="严格 cursor 分页（每页最多 6 轮 SCAN）。填写目标语言后 pattern 收窄为 tm:v5:{shop}:{target}:*。value 缓存 tm:v5:val 无店铺维度，请用「按原文」查询。"
       />
 
       <Space wrap style={{ width: "100%" }}>

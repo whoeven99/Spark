@@ -1,9 +1,16 @@
-import { createHash } from "node:crypto";
-
-/** 与 worker `translationMemory.ts` 保持一致。 */
+/**
+ * 与 TSF `packages/translation-core/src/translationMemory.ts` 对齐。
+ *
+ * 两层 TM：
+ * 1. digest 主缓存：`tm:v5:{shop}:{target}:{model}:{digest}`（按店）
+ * 2. value 二级缓存：`tm:v5:val:{source}:{target}:{model}:{keyId}`（跨店）
+ *    keyId = Shopify digest（优先）或原文 CRC-32（8 位 hex）
+ */
 export const TM_PREFIX = "tm:v5";
 export const VALUE_TM_PREFIX = "tm:v5:val";
-export const MAX_VALUE_CACHE_CHARS = 300;
+
+/** 产品规则文档阈值（长短文均走 digest ?? CRC-32，Admin 查询不据此拒绝）。 */
+export const VALUE_CACHE_THRESHOLD = 200;
 
 export const DEFAULT_TM_MODEL = "gpt-4.1-nano";
 
@@ -35,25 +42,35 @@ export function tmDigestKey(
   return `${TM_PREFIX}:${shopName}:${target}:${model}:${digest}`;
 }
 
+/** IEEE CRC-32 → 8-char lowercase hex（与 TSF translation-core 一致）。 */
+export function crc32Hex(text: string): string {
+  let crc = 0xffffffff;
+  const buf = Buffer.from(text, "utf8");
+  for (let i = 0; i < buf.length; i++) {
+    crc ^= buf[i]!;
+    for (let j = 0; j < 8; j++) {
+      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+    }
+  }
+  return ((crc ^ 0xffffffff) >>> 0).toString(16).padStart(8, "0");
+}
+
+/** 优先 Shopify digest；否则 CRC-32。 */
+export function valueCacheKeyId(sourceText: string, digest?: string): string {
+  const d = digest?.trim();
+  if (d) return d;
+  return crc32Hex(sourceText);
+}
+
+/** Value TM key：`tm:v5:val:{source}:{target}:{model}:{digest|crc32}` */
 export function tmValueKey(
   sourceText: string,
   source: string,
   target: string,
   model: string,
+  digest?: string,
 ): string {
-  return `${VALUE_TM_PREFIX}:${valueHash(sourceText, source, target, model)}`;
-}
-
-export function valueHash(
-  sourceText: string,
-  source: string,
-  target: string,
-  model: string,
-): string {
-  return createHash("sha256")
-    .update(`${model}|${source}|${target}|${sourceText}`)
-    .digest("hex")
-    .slice(0, 32);
+  return `${VALUE_TM_PREFIX}:${source}:${target}:${model}:${valueCacheKeyId(sourceText, digest)}`;
 }
 
 export type ParsedDigestTmKey = {
@@ -61,6 +78,13 @@ export type ParsedDigestTmKey = {
   target: string;
   model: string;
   digest: string;
+};
+
+export type ParsedValueTmKey = {
+  source: string;
+  target: string;
+  model: string;
+  keyId: string;
 };
 
 /** 解析 digest 型 TM key：`tm:v5:{shop}:{target}:{model}:{digest}` */
@@ -75,6 +99,18 @@ export function parseDigestTmKey(key: string): ParsedDigestTmKey | null {
   const digest = digestParts.join(":");
   if (!shop || !target || !model || !digest) return null;
   return { shop, target, model, digest };
+}
+
+/** 解析 value 型 TM key：`tm:v5:val:{source}:{target}:{model}:{keyId}` */
+export function parseValueTmKey(key: string): ParsedValueTmKey | null {
+  if (!key.startsWith(`${VALUE_TM_PREFIX}:`)) return null;
+  const rest = key.slice(VALUE_TM_PREFIX.length + 1);
+  const parts = rest.split(":");
+  if (parts.length < 4) return null;
+  const [source, target, model, ...keyIdParts] = parts;
+  const keyId = keyIdParts.join(":");
+  if (!source || !target || !model || !keyId) return null;
+  return { source, target, model, keyId };
 }
 
 export function previewText(text: string, max = 120): string {
