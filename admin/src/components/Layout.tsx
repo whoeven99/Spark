@@ -65,7 +65,6 @@ const sparkMenuItems: MenuItemDef[] = [
   { key: "/usage", icon: <BarChartOutlined />, label: <Link to="/usage">用量统计</Link>, ownerOnly: false },
   { key: "/subscriptions", icon: <CreditCardOutlined />, label: <Link to="/subscriptions">订阅统计</Link>, ownerOnly: false },
   { key: "/revenue", icon: <DollarOutlined />, label: <Link to="/revenue">收入分析</Link>, ownerOnly: true },
-  { key: "/pricing-workbench", icon: <CalculatorOutlined />, label: <Link to="/pricing-workbench">定价工作台</Link>, ownerOnly: true },
   { key: "/capabilities", icon: <RobotOutlined />, label: <Link to="/capabilities">Agent 能力</Link>, ownerOnly: false },
   { key: "/agent-runs", icon: <MonitorOutlined />, label: <Link to="/agent-runs">AI 执行监控</Link>, ownerOnly: false },
   { key: "/visit-source", icon: <AimOutlined />, label: <Link to="/visit-source">访问来源</Link>, ownerOnly: false },
@@ -96,6 +95,7 @@ const translationMenuItems: MenuItemDef[] = [
   { key: "/tsf/packs", icon: <ShoppingCartOutlined />, label: <Link to="/tsf/packs">翻译 加购流量包</Link>, ownerOnly: false },
   { key: "/tsf/billing", icon: <FileTextOutlined />, label: <Link to="/tsf/billing">翻译账单</Link>, ownerOnly: true },
   { key: "/tsf/revenue", icon: <DollarOutlined />, label: <Link to="/tsf/revenue">翻译 收入</Link>, ownerOnly: true },
+  { key: "/tsf/pricing-workbench", icon: <CalculatorOutlined />, label: <Link to="/tsf/pricing-workbench">翻译 定价工作台</Link>, ownerOnly: true },
   {
     key: "/translation-ops",
     icon: <SettingOutlined />,
