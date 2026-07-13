@@ -32,6 +32,7 @@ import { tsfSubscriptionsRouter } from "./routes/tsfSubscriptions.js";
 import { tsfRevenueRouter } from "./routes/tsfRevenue.js";
 import { tsfPacksRouter } from "./routes/tsfPacks.js";
 import { tsfBillingRouter } from "./routes/tsfBilling.js";
+import { tsfShopProfilesRouter } from "./routes/tsfShopProfiles.js";
 import { translationOpsRouter } from "./routes/translationOps.js";
 import { shopifyTranslationRouter } from "./routes/shopifyTranslation.js";
 import { isProductionNodeEnv } from "./lib/nodeEnv.js";
@@ -87,6 +88,7 @@ app.use("/api/tsf/shops", authMiddleware, tsfShopsRouter);
 app.use("/api/tsf/usage", authMiddleware, tsfUsageRouter);
 app.use("/api/tsf/subscriptions", authMiddleware, tsfSubscriptionsRouter);
 app.use("/api/tsf/packs", authMiddleware, tsfPacksRouter);
+app.use("/api/tsf/shop-profiles", authMiddleware, tsfShopProfilesRouter);
 app.use("/api/tsf/billing", authMiddleware, requireOwner, tsfBillingRouter);
 // 收入分析仅 owner 可见
 app.use("/api/tsf/revenue", authMiddleware, requireOwner, tsfRevenueRouter);

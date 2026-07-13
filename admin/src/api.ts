@@ -1335,6 +1335,81 @@ export type TsfShopDetail = {
   billingLogs: TsfBillingLogRow[];
 };
 
+export type TsfShopProfileRow = {
+  shop: string;
+  shopName: string | null;
+  primaryLocale: string | null;
+  industry: string | null;
+  keywords: string[];
+  description: string | null;
+  brandTone: string | null;
+  aiModel: string | null;
+  lastScanId: string | null;
+  lastScannedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  accountUpdatedAt: string | null;
+  sessionCount: number;
+  installed: boolean;
+  billingSystem: string | null;
+  boundReason: string | null;
+  planKey: string | null;
+  subStatus: string | null;
+  firstPaidAt: string | null;
+  firstSubscriptionAt: string | null;
+  cancelledAt: string | null;
+  lastPaidAt: string | null;
+  lastBillingEventAt: string | null;
+  paidChargeCount: number;
+  packPurchaseCount: number;
+  totalRevenueUsd: number;
+  hasPaid: boolean;
+  hasSubscriptionActivated: boolean;
+  hasCancelled: boolean;
+};
+
+export type TsfShopProfileDistributionRow = {
+  value: string;
+  count: number;
+};
+
+export type TsfShopProfilesSummary = {
+  totalProfiles: number;
+  withDescriptionCount: number;
+  withKeywordsCount: number;
+  withBrandToneCount: number;
+  withIndustryCount: number;
+  activeSubscriptionCount: number;
+  installedShopCount: number;
+  paidShopCount: number;
+  subscribedShopCount: number;
+  cancelledShopCount: number;
+  totalRevenueUsd: number;
+  activeSignal7Days: number;
+  activeSignal30Days: number;
+  scannedLast7Days: number;
+  scannedLast30Days: number;
+  localeDistribution: TsfShopProfileDistributionRow[];
+  industryDistribution: TsfShopProfileDistributionRow[];
+  brandToneDistribution: TsfShopProfileDistributionRow[];
+  planDistribution: TsfShopProfileDistributionRow[];
+  industryPaymentLeaders: Array<{
+    value: string;
+    totalShops: number;
+    paidShops: number;
+    activeSubscriptionCount: number;
+    paymentRate: number;
+  }>;
+};
+
+export type TsfShopProfilesResult = {
+  rows: TsfShopProfileRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  summary: TsfShopProfilesSummary;
+};
+
 export type TsfUsageRow = {
   shop: string;
   subscriptionCredits: number;
@@ -1436,6 +1511,19 @@ export function fetchTsfShops(search?: string): Promise<{ shops: TsfShopRow[] }>
 
 export function fetchTsfShopDetail(shop: string): Promise<TsfShopDetail> {
   return apiFetch(`/tsf/shops/${encodeURIComponent(shop)}/events`);
+}
+
+export function fetchTsfShopProfiles(params?: {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<TsfShopProfilesResult> {
+  const query = new URLSearchParams();
+  if (params?.search?.trim()) query.set("search", params.search.trim());
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.pageSize) query.set("pageSize", String(params.pageSize));
+  const qs = query.toString();
+  return apiFetch(`/tsf/shop-profiles${qs ? `?${qs}` : ""}`);
 }
 
 export function fetchTsfUsage(search?: string): Promise<{ usage: TsfUsageRow[] }> {
