@@ -105,6 +105,7 @@ export default function App() {
             <Route path="tsf/packs" element={<TsfPacks />} />
             <Route path="tsf/billing" element={<RequireOwner><TsfBilling /></RequireOwner>} />
             <Route path="tsf/revenue" element={<RequireOwner><TsfRevenue /></RequireOwner>} />
+            <Route path="tsf/pricing-workbench" element={<RequireOwner><PricingWorkbenchV2 /></RequireOwner>} />
             <Route path="translation-ops" element={<TranslationOps />} />
             <Route path="shopify-translation" element={<ShopifyTranslationOps />} />
           </Route>
