@@ -1,44 +1,27 @@
 {
-  "mode": "店铺 ciwishop.myshopify.com 全部任务",
+  "mode": "店铺 e-agronomy.myshopify.com 全部任务",
   "apply": false,
   "skipWriteback": false,
   "createdBefore": "2026-07-08T00:00:00.000Z",
-  "totalJobs": 39,
-  "jobsDone": 39,
-  "jobsProcessed": 39,
+  "totalJobs": 48,
+  "jobsDone": 10,
+  "jobsProcessed": 10,
   "jobsSkipped": 0,
-  "totalFieldsWithLeaks": 3,
-  "totalFieldsFixed": 3,
-  "totalFieldsSkippedByAttrGate": 0,
+  "totalFieldsWithLeaks": 8,
+  "totalFieldsFixed": 2,
+  "totalFieldsSkippedByAttrGate": 6,
   "totalBlobsWritten": 0,
   "writebackQueued": 0,
-  "attrChecksRepair": 3,
-  "attrChecksSkipped": 0,
+  "attrChecksRepair": 2,
+  "attrChecksSkipped": 6,
   "jobResults": [
     {
-      "jobId": "b87fff12-4fb7-4888-be73-461246488096",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "vi",
-      "status": "CANCELLED",
-      "createdAt": "2026-07-07T05:33:23.151Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "7f348a57-57f8-421c-94c2-3953a3291acc",
-      "shop": "ciwishop.myshopify.com",
+      "jobId": "0d2936e1-a0fe-4cc0-996d-837e829734bb",
+      "shop": "e-agronomy.myshopify.com",
       "source": "en",
       "target": "zh-TW",
-      "status": "CANCELLED",
-      "createdAt": "2026-07-07T05:33:23.134Z",
+      "status": "PAUSED",
+      "createdAt": "2026-07-06T19:00:20.943Z",
       "fieldsWithLeaks": 0,
       "fieldsFixed": 0,
       "fieldsSkippedByAttrGate": 0,
@@ -50,131 +33,12 @@
       "tokenSource": "job"
     },
     {
-      "jobId": "7c71f74a-bd3a-49f2-a6ae-cc7b012e7bfb",
-      "shop": "ciwishop.myshopify.com",
+      "jobId": "03121274-b6b6-4530-af23-a2f903e0804f",
+      "shop": "e-agronomy.myshopify.com",
       "source": "en",
-      "target": "id",
-      "status": "CANCELLED",
-      "createdAt": "2026-07-07T05:33:23.115Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "eef43a33-1532-498d-8bc2-f6605a99b075",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "ru",
-      "status": "CANCELLED",
-      "createdAt": "2026-07-07T05:33:23.098Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "469b80f2-4707-42b4-8290-b6321e7c343c",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "pt-BR",
-      "status": "CANCELLED",
-      "createdAt": "2026-07-07T05:33:23.083Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "a13713ac-5a10-4a17-a759-8c46468fdc78",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "pt-PT",
-      "status": "CANCELLED",
-      "createdAt": "2026-07-07T05:33:23.075Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "926836d7-c583-491e-8391-791c250ca2e4",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "pl",
-      "status": "CANCELLED",
-      "createdAt": "2026-07-07T05:33:23.067Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "a1cd0825-46bf-4b8d-a765-7cd0034d1cab",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "de",
-      "status": "CANCELLED",
-      "createdAt": "2026-07-07T05:33:23.063Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "541c9ed0-4d28-43c0-8414-8632e772cf18",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "ja",
-      "status": "CANCELLED",
-      "createdAt": "2026-07-07T05:33:23.032Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "3c329502-a34b-454f-8bb2-2f46b2d5f8ff",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "th",
+      "target": "zh-CN",
       "status": "COMPLETED",
-      "createdAt": "2026-07-07T05:33:23.007Z",
+      "createdAt": "2026-07-06T19:00:20.896Z",
       "fieldsWithLeaks": 0,
       "fieldsFixed": 0,
       "fieldsSkippedByAttrGate": 0,
@@ -186,29 +50,12 @@
       "tokenSource": "job"
     },
     {
-      "jobId": "c8648b90-d46d-4055-a7be-9860258f6366",
-      "shop": "ciwishop.myshopify.com",
+      "jobId": "d839149e-3d14-4105-b718-410130e6e528",
+      "shop": "e-agronomy.myshopify.com",
       "source": "en",
-      "target": "ko",
-      "status": "CANCELLED",
-      "createdAt": "2026-07-07T05:33:22.996Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "0d303a35-bcc9-410a-89ee-e7289044c719",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "es",
+      "target": "it",
       "status": "COMPLETED",
-      "createdAt": "2026-07-07T05:33:22.979Z",
+      "createdAt": "2026-07-06T19:00:20.843Z",
       "fieldsWithLeaks": 0,
       "fieldsFixed": 0,
       "fieldsSkippedByAttrGate": 0,
@@ -220,29 +67,12 @@
       "tokenSource": "job"
     },
     {
-      "jobId": "0d5967f3-97d4-44d1-b1ba-1ed4743f2d82",
-      "shop": "ciwishop.myshopify.com",
+      "jobId": "54bbac5f-5245-4be8-a815-0a7c9393e1b0",
+      "shop": "e-agronomy.myshopify.com",
       "source": "en",
       "target": "fr",
-      "status": "CANCELLED",
-      "createdAt": "2026-07-07T05:33:22.787Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "e6022806-cc6b-4ea0-ac31-f687547ea2e3",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "zh-CN",
       "status": "COMPLETED",
-      "createdAt": "2026-07-07T05:33:22.595Z",
+      "createdAt": "2026-07-06T19:00:20.792Z",
       "fieldsWithLeaks": 0,
       "fieldsFixed": 0,
       "fieldsSkippedByAttrGate": 0,
@@ -254,131 +84,12 @@
       "tokenSource": "job"
     },
     {
-      "jobId": "86bec680-1e71-4fd6-a392-6cdfb83ceac8",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "ar",
-      "status": "CANCELLED",
-      "createdAt": "2026-07-07T05:33:22.590Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "8d265ff6-773e-49f1-af25-2babd3785aa7",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "zh-CN",
-      "status": "COMPLETED",
-      "createdAt": "2026-07-07T04:00:03.321Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "01663fa1-8fd7-4876-9262-ac785a213a60",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "zh-CN",
-      "status": "COMPLETED",
-      "createdAt": "2026-07-07T03:09:03.123Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "d74f3327-13fb-4d76-8172-210cbaf8d854",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "zh-CN",
-      "status": "COMPLETED",
-      "createdAt": "2026-07-06T10:00:01.962Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "33a59364-5125-49d9-852b-1a3cc998f7f7",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "zh-CN",
-      "status": "COMPLETED",
-      "createdAt": "2026-07-06T06:00:02.244Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "a48aad62-0f39-4037-ad13-88961938bf9a",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "ja",
-      "status": "CANCELLED",
-      "createdAt": "2026-07-06T05:30:00.532Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "b677fbb3-e033-44e9-8f38-28ddcc19910f",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "zh-CN",
-      "status": "COMPLETED",
-      "createdAt": "2026-07-06T02:00:01.963Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "e3c4db8e-2cc3-45c2-bee0-d2bfae1c9fb6",
-      "shop": "ciwishop.myshopify.com",
+      "jobId": "4ffdb8cb-b766-42f9-9e57-28bd51f7817d",
+      "shop": "e-agronomy.myshopify.com",
       "source": "en",
       "target": "es",
       "status": "COMPLETED",
-      "createdAt": "2026-07-03T11:00:01.005Z",
+      "createdAt": "2026-07-06T19:00:20.744Z",
       "fieldsWithLeaks": 0,
       "fieldsFixed": 0,
       "fieldsSkippedByAttrGate": 0,
@@ -390,12 +101,29 @@
       "tokenSource": "job"
     },
     {
-      "jobId": "814540fe-2aa0-4da2-bb7d-00395d5542d9",
-      "shop": "ciwishop.myshopify.com",
+      "jobId": "ea3eecb0-cd30-43fe-aeea-0a54d7fbfee0",
+      "shop": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "de",
+      "status": "COMPLETED",
+      "createdAt": "2026-07-06T19:00:20.696Z",
+      "fieldsWithLeaks": 0,
+      "fieldsFixed": 0,
+      "fieldsSkippedByAttrGate": 0,
+      "attrChecksRepair": 0,
+      "attrChecksSkipped": 0,
+      "blobsWritten": 0,
+      "writebackQueued": false,
+      "writebackSkipReason": null,
+      "tokenSource": "job"
+    },
+    {
+      "jobId": "67d8d860-ea63-4183-955d-a52231082b90",
+      "shop": "e-agronomy.myshopify.com",
       "source": "en",
       "target": "zh-TW",
       "status": "COMPLETED",
-      "createdAt": "2026-07-03T05:14:42.936Z",
+      "createdAt": "2026-07-05T18:00:33.864Z",
       "fieldsWithLeaks": 2,
       "fieldsFixed": 2,
       "fieldsSkippedByAttrGate": 0,
@@ -407,272 +135,51 @@
       "tokenSource": "job"
     },
     {
-      "jobId": "e4312bee-2480-4b2a-9784-f7f98ccc73b3",
-      "shop": "ciwishop.myshopify.com",
+      "jobId": "cbedd7fe-46a1-4473-a6a6-60d32f08dcfb",
+      "shop": "e-agronomy.myshopify.com",
       "source": "en",
       "target": "zh-CN",
       "status": "COMPLETED",
-      "createdAt": "2026-07-03T05:13:07.253Z",
-      "fieldsWithLeaks": 0,
+      "createdAt": "2026-07-05T18:00:33.804Z",
+      "fieldsWithLeaks": 2,
       "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
+      "fieldsSkippedByAttrGate": 2,
       "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
+      "attrChecksSkipped": 2,
       "blobsWritten": 0,
       "writebackQueued": false,
       "writebackSkipReason": null,
       "tokenSource": "job"
     },
     {
-      "jobId": "b7158d18-5bd2-4de7-932d-974456ac38b2",
-      "shop": "ciwishop.myshopify.com",
+      "jobId": "03634f3f-db12-429d-957b-1feb8bb20d8a",
+      "shop": "e-agronomy.myshopify.com",
       "source": "en",
-      "target": "vi",
+      "target": "it",
       "status": "COMPLETED",
-      "createdAt": "2026-07-02T21:55:07.705Z",
-      "fieldsWithLeaks": 1,
-      "fieldsFixed": 1,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 1,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "8a962c47-316b-429b-8f47-f98c4b8ec972",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "zh-CN",
-      "status": "COMPLETED",
-      "createdAt": "2026-07-01T10:00:01.089Z",
-      "fieldsWithLeaks": 0,
+      "createdAt": "2026-07-05T18:00:33.749Z",
+      "fieldsWithLeaks": 2,
       "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
+      "fieldsSkippedByAttrGate": 2,
       "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
+      "attrChecksSkipped": 2,
       "blobsWritten": 0,
       "writebackQueued": false,
       "writebackSkipReason": null,
       "tokenSource": "job"
     },
     {
-      "jobId": "8a654899-bd0e-4558-8d05-ee2dd54b679c",
-      "shop": "ciwishop.myshopify.com",
+      "jobId": "464fe3a5-c019-46ae-b842-4f8995731c33",
+      "shop": "e-agronomy.myshopify.com",
       "source": "en",
-      "target": "ar",
-      "status": "COMPLETED",
-      "createdAt": "2026-07-01T09:49:38.887Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "7f21520c-7fe2-41c9-a0c3-3f544e862a12",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "zh-TW",
-      "status": "COMPLETED",
-      "createdAt": "2026-07-01T09:49:09.407Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "6bfa3eca-a4cc-42fa-98c6-12c4a7b316d9",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "zh-TW",
-      "status": "COMPLETED",
-      "createdAt": "2026-07-01T09:43:30.461Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "cfb14816-d9a2-4e2c-9bf4-24aac1870cff",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "zh-TW",
-      "status": "COMPLETED",
-      "createdAt": "2026-07-01T09:40:58.482Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "61fa5f02-f4d1-4a2a-b518-1bd6c007eec3",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "es",
-      "status": "COMPLETED",
-      "createdAt": "2026-06-30T09:00:01.532Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "4114257d-ed9a-4329-a15a-9ad6776ce435",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "es",
-      "status": "COMPLETED",
-      "createdAt": "2026-06-29T11:00:02.114Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "6f1ecef4-dbc0-4ad3-b0dd-ba7caa8796a4",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "ar",
-      "status": "COMPLETED",
-      "createdAt": "2026-06-26T07:46:36.485Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "8b6b0691-d174-4030-8559-f4ff4186014a",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "zh-CN",
-      "status": "COMPLETED",
-      "createdAt": "2026-06-25T10:00:00.463Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "3c96330a-da5d-4c27-b367-e5565994d08c",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "es",
-      "status": "COMPLETED",
-      "createdAt": "2026-06-25T10:00:00.270Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "c992c62f-7b48-4ef9-ad4e-a70c82d73eaa",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "zh-CN",
-      "status": "COMPLETED",
-      "createdAt": "2026-06-25T09:14:46.920Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "759230c2-ab67-4b7f-9522-68fab5509c18",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "es",
-      "status": "COMPLETED",
-      "createdAt": "2026-06-25T09:14:46.686Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "4bd1106e-8f7e-4a8d-aef3-0fecb55b6bb8",
-      "shop": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "es",
-      "status": "COMPLETED",
-      "createdAt": "2026-06-24T23:06:03.248Z",
-      "fieldsWithLeaks": 0,
-      "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
-      "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
-      "blobsWritten": 0,
-      "writebackQueued": false,
-      "writebackSkipReason": null,
-      "tokenSource": "job"
-    },
-    {
-      "jobId": "690a6f1d-ccbd-4c23-9975-9bd0cce6e33e",
-      "shop": "ciwishop.myshopify.com",
-      "source": "zh-CN",
       "target": "fr",
       "status": "COMPLETED",
-      "createdAt": "2026-06-21T17:07:52.742Z",
-      "fieldsWithLeaks": 0,
+      "createdAt": "2026-07-05T18:00:33.701Z",
+      "fieldsWithLeaks": 2,
       "fieldsFixed": 0,
-      "fieldsSkippedByAttrGate": 0,
+      "fieldsSkippedByAttrGate": 2,
       "attrChecksRepair": 0,
-      "attrChecksSkipped": 0,
+      "attrChecksSkipped": 2,
       "blobsWritten": 0,
       "writebackQueued": false,
       "writebackSkipReason": null,
@@ -681,221 +188,853 @@
   ],
   "allFixes": [
     {
-      "taskId": "814540fe-2aa0-4da2-bb7d-00395d5542d9",
-      "shopName": "ciwishop.myshopify.com",
+      "taskId": "67d8d860-ea63-4183-955d-a52231082b90",
+      "shopName": "e-agronomy.myshopify.com",
       "source": "en",
       "target": "zh-TW",
-      "resourceId": "gid://shopify/Collection/473964871703",
-      "digest": "0d2d88f53295bac905f33343542b18cb1a480703a77bb26a9907e905f4155a29",
-      "module": "COLLECTION",
-      "key": "body_html",
-      "translatedValue": "<style data-href=\"/blog/styles.2c31b89adc2b879eea87.css\" data-identity=\"gatsby-global-css\">:root{--color-primary:#3eb0ef;--color-base:#15171a;--color-secondary:#5b7a81;--color-border:#c7d5d8;--color-bg:#f5f5f5;--font-sans-serif:-apple-system,BlinkMacSystemFont,\"Segoe UI\",\"Roboto\",\"Oxygen\",\"Ubuntu\",\"Cantarell\",\"Fira Sans\",\"Droid Sans\",\"Helvetica Neue\",sans-serif;--font-serif:Georgia,Times,serif;--font-mono:Menlo,Courier,monospace;--font-light:100;--font-normal:400;--font-bold:700;--font-heavy:800;--height:4rem;--margin:2rem;--radius:0.6rem}a,abbr,acronym,address,applet,article,aside,audio,big,blockquote,body,canvas,caption,cite,code,dd,del,details,dfn,div,dl,dt,em,embed,fieldset,figcaption,figure,footer,form,h1,h2,h3,h4,h5,h6,header,hgroup,html,iframe,img,ins,kbd,label,legend,li,mark,menu,nav,object,ol,output,p,pre,q,ruby,s,samp,section,small,span,strike,strong,sub,summary,sup,table,tbody,td,tfoot,th,thead,time,tr,tt,ul,var,video{border:0;font:inherit;font-size:100%;margin:0;padding:0;vertical-align:baseline}body{line-height:1}ol,ul{list-style:none}blockquote,q{quotes:none}blockquote:after,blockquote:before,q:after,q:before{content:\"\";content:none}img{max-width:100%}html{-ms-text-size-adjust:100%;-webkit-text-size-adjust:100%;box-sizing:border-box;font-family:sans-serif}*,:after,:before{box-sizing:inherit}a{background-color:transparent}a:active,a:hover{outline:0}b,strong{font-weight:700}dfn,em,i{font-style:italic}h1{font-size:2em;margin:.67em 0}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sup{top:-.5em}sub{bottom:-.25em}img{border:0}svg:not(:root){overflow:hidden}mark{background-color:#fdffb6}code,kbd,pre,samp{font-family:monospace,monospace;font-size:1em}button,input,optgroup,select,textarea{color:inherit;font:inherit;margin:0}button{border:none;overflow:visible}button,select{text-transform:none}button,html input[type=button],input[type=reset],input[type=submit]{-webkit-appearance:button;cursor:pointer}button[disabled],html input[disabled]{cursor:default}button::-moz-focus-inner,input::-moz-focus-inner{border:0;padding:0}input{line-height:normal}input:focus{outline:none}input[type=checkbox],input[type=radio]{box-sizing:border-box;padding:0}input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{height:auto}input[type=search]{-webkit-appearance:textfield;box-sizing:content-box}input[type=search]::-webkit-search-cancel-button,input[type=search]::-webkit-search-decoration{-webkit-appearance:none}legend{border:0;padding:0}textarea{overflow:auto}table{border-collapse:collapse;border-spacing:0}td,th{padding:0}html{-webkit-tap-highlight-color:rgba(0,0,0,0);background:var(--color-base);font-size:62.5%;overflow-y:scroll}body,html{overflow-x:hidden}body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;-moz-font-feature-settings:\"liga\" on;background:#fff;color:#3c484e;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen,Ubuntu,Cantarell,Open Sans,Helvetica Neue,sans-serif;font-size:1.5rem;font-style:normal;font-weight:400;letter-spacing:0;line-height:1.6em;text-rendering:optimizeLegibility}::selection{background:#cbeafb;text-shadow:none}hr{border:0;border-top:1px solid #e3e9ed;display:block;height:1px;margin:1.8em 0 2.4em;padding:0;position:relative;width:100%}audio,canvas,iframe,img,svg,video{vertical-align:middle}fieldset{border:0;margin:0;padding:0}textarea{resize:vertical}blockquote,dl,ol,p,ul{margin:0 0 1.5em}ol,ul{padding-left:1.3em;padding-right:1.5em}ol ol,ol ul,ul ol,ul ul{margin:.5em 0 1em}ul{list-style:disc}ol{list-style:decimal}ol,ul{max-width:100%}li{line-height:1.6em;margin:.5em 0;padding-left:.3em}dt{float:left;font-weight:500;margin:0 20px 0 0;text-align:right;width:120px}dd{margin:0 0 5px;text-align:left}blockquote{border-left:.5em solid #cbeafb;margin:.3em 0 1.8em;padding:0 1.6em}blockquote p{font-size:1.2em;font-weight:300;margin:.8em 0}blockquote small{display:inline-block;font-size:.9em;margin:.8em 0 .8em 1.5em;opacity:.8}blockquote small:before{content:\"\\2014 \\00A0\"}blockquote cite{font-weight:700}blockquote cite a{font-weight:400}a{color:#26a8ed;text-decoration:none}a:hover{text-decoration:underline}h1,h2,h3,h4,h5,h6{color:var(--color-base);font-weight:700;line-height:1.15;margin-top:0;text-rendering:optimizeLegibility}h1{font-size:4rem;font-weight:700;margin:0 0 .5em}@media (max-width:500px){h1{font-size:2rem}}h2{font-size:2rem;margin:1.5em 0 .5em}@media (max-width:500px){h2{font-size:1.8rem}}h3{font-size:1.8rem;font-weight:500;margin:1.5em 0 .5em}@media (max-width:500px){h3{font-size:1.7rem}}h4{font-size:1.6rem;font-weight:500;margin:1.5em 0 .5em}h5,h6{font-size:1.4rem;font-weight:500;margin:1.5em 0 .5em}.viewport{display:flex;flex-direction:column;justify-content:space-between;min-height:100vh}.container{margin:0 auto;max-width:1120px;padding:0 4vw}.content{font-size:2rem;line-height:1.7em;margin:0 auto}.content-body{display:flex;flex-direction:column;font-family:var(--font-serif)}.post-full-content{background:#fff;margin:0 auto;max-width:720px}.post-feature-image img{height:500px;margin:0 0 3vw;object-fit:cover;width:100%}.content-body h1,.content-body h2,.content-body h3,.content-body h4,.content-body h5,.content-body h6{font-family:var(--font-sans-serif)}.content-body h1{font-size:3.4rem;font-weight:700;margin:1em 0 .5em}@media (max-width:500px){.content-body h1{font-size:2.8rem}}.content-title{font-size:5rem;margin:0 0 .8em}@media (max-width:500px){.content-title{font-size:3.4rem;margin:.8em 0}.content{font-size:1.8rem}}.content-body h2{font-size:3.2rem;font-weight:700;margin:.8em 0 .4em}@media (max-width:500px){.content-body h2{font-size:2.6rem}}.content-body h3{font-size:2.8rem;font-weight:700;margin:.5em 0 .2em}@media (max-width:500px){.content-body h3{font-size:2.2rem}}.content-body h4{font-size:2.4rem;font-weight:700;margin:.5em 0 .2em}@media (max-width:500px){.content-body h4{font-size:2.2rem}}.content-body h5{border:0;color:var(--color-primary);display:block;font-family:Georgia,serif;font-size:3.2rem;font-style:italic;line-height:1.35em;margin:.5em 0;padding:1em 0 1.5em;text-align:center}.content-body h6{font-size:2rem;font-weight:700;margin:.5em 0 .2em}.content-body figure{font-size:2.8rem;font-weight:700;margin:.4em 0 1.6em}.content-body pre{border-radius:12px;font-size:1.6rem;line-height:1.4em;margin:.4em 0 1.8em;padding:20px;white-space:pre-wrap}.content-body pre,.site-head{background:var(--color-base);color:#fff}.site-head{background-position:50%;background-size:cover;padding-bottom:20px;padding-top:20px}.site-nav-item{color:#fff;display:inline-block;opacity:.7;padding:5px 10px}.site-nav-item:hover{opacity:1;text-decoration:none}.site-nav-icon{height:15px;margin:-5px 0 0}.site-logo{height:25px}.site-mast{justify-content:space-between}.site-mast,.site-mast-right{align-items:center;display:flex}.site-mast-right .site-nav-item:last-child{padding-right:0}.site-banner{margin:0 auto;max-width:80%;padding:10vw 0;text-align:center}.site-banner-title{color:#fff;font-size:4rem;line-height:1.3em;margin:0;padding:0}.site-banner-desc{font-size:2.4rem;line-height:1.3em;margin:5px 0 0;opacity:.7;padding:0}.site-nav{align-items:center;display:flex;justify-content:space-between;margin:15px 0 0}.site-nav-left{margin:0 20px 0 -10px}.site-nav-button{border:1px solid #fff;border-radius:var(--radius);color:#fff;display:inline-block;font-size:1.3rem;line-height:1em;opacity:.7;padding:5px 10px}.site-nav-button:hover{text-decoration:none}.site-main{padding:4vw 0}.post-feed{grid-gap:30px;display:grid;grid-template-columns:1fr 1fr 1fr;justify-content:space-between}@media (max-width:980px){.post-feed{grid-template-columns:1fr 1fr}}@media (max-width:680px){.post-feed{grid-template-columns:1fr}}.post-card{color:inherit}.post-card,.post-card:hover{text-decoration:none}.post-card-tags{color:var(--color-secondary);font-size:1.4rem;line-height:1.15em;margin:0 0 5px}.post-card-title{margin:0 0 10px;padding:0}.post-card-excerpt{-webkit-line-clamp:3;-webkit-box-orient:vertical;display:-webkit-box;font-size:1.6rem;line-height:1.55em;overflow:hidden;text-overflow:ellipsis}.post-card-image{background:var(--color-secondary) no-repeat center center;background-size:cover;height:200px;margin:0 0 10px;width:auto}.post-card-footer{color:var(--color-secondary);justify-content:space-between;margin:10px 0 0}.post-card-footer,.post-card-footer-left{align-items:center;display:flex}.post-card-footer-right{display:flex;flex-direction:column}.post-card-avatar{align-items:center;border-radius:100%;display:flex;height:30px;justify-content:center;margin:0 7px 0 0;width:30px}.post-card-avatar .author-profile-image{background:var(--color-secondary);border-radius:100%;display:block;object-fit:cover;width:100%}.post-card-avatar .default-avatar{width:26px}.tag-header{margin:0 0 4vw;max-width:690px}.tag-header h1{margin:0 0 1rem}.tag-header p{color:var(--color-secondary);font-size:2.2rem;line-height:1.3em;margin:0}@media (max-width:500px){.tag-header{border-bottom:1px solid var(--color-bg);padding-bottom:4vw}.tag-header p{font-size:1.7rem}}.author-header{display:flex;justify-content:space-between;margin:0 0 4vw}.author-header h1{margin:0 0 1rem}.author-header p{color:var(--color-secondary);font-size:2.2rem;line-height:1.3em;margin:0}.author-header-image{border-radius:100%;flex:0 0 auto;height:120px;margin:0 0 0 4vw;overflow:hidden;width:120px}.author-header-meta{display:flex;margin:1rem 0 0}.author-header-item{display:block;padding:2px 10px}.author-header-item:first-child{padding-left:0}@media (max-width:500px){.author-header{border-bottom:1px solid var(--color-bg);padding-bottom:4vw}.author-header p{font-size:1.7rem}.author-header-image{height:80px;width:80px}}.pagination{align-items:center;display:flex;justify-content:space-between;margin:4vw 0 0;position:relative}.pagination a{border:1px solid var(--color-border);border-radius:var(--radius);color:var(--color-secondary);display:inline-block;font-size:1.4rem;line-height:1em;padding:10px 15px;text-decoration:none}.pagination-location{color:var(--color-secondary);font-size:1.3rem;left:50%;margin-left:-50px;position:absolute;text-align:center;width:100px}.site-foot{background:var(--color-base);color:hsla(0,0%,100%,.7);font-size:1.3rem;padding:20px 0 40px}.site-foot-nav{align-items:center;display:flex;justify-content:space-between}.site-foot-nav a{color:hsla(0,0%,100%,.7)}.site-foot-nav a:hover{color:#fff;text-decoration:none}.site-foot-nav-right a{display:inline-block;padding:2px 5px}.site-foot-nav-right a:last-child{padding-right:0}.kg-bookmark-card{margin-top:0;width:100%}.kg-bookmark-container{border-radius:3px;display:flex;font-family:var(--font-sans-serif);min-height:148px}.kg-bookmark-container,.kg-bookmark-container:hover{box-shadow:0 2px 5px -1px rgba(0,0,0,.15),0 0 1px rgba(0,0,0,.09);color:var(--color-base);text-decoration:none}.kg-bookmark-content{align-items:flex-start;display:flex;flex-direction:column;flex-grow:1;justify-content:flex-start;padding:20px}.kg-bookmark-title{color:color(var(--color-secondary) l(-30%));font-size:1.6rem;font-weight:600;line-height:1.5em;transition:color .2s ease-in-out}.kg-bookmark-container:hover .kg-bookmark-title{color:var(--color-primary)}.kg-bookmark-description{-webkit-line-clamp:2;-webkit-box-orient:vertical;color:color(var(--color-secondary) l(-10%));display:-webkit-box;font-size:1.5rem;font-weight:400;line-height:1.5em;margin-top:12px;max-height:48px;overflow-y:hidden}.kg-bookmark-thumbnail{max-height:100%;min-width:33%;position:relative}.kg-bookmark-thumbnail img{border-radius:0 3px 3px 0;height:100%;left:0;object-fit:cover;position:absolute;top:0;width:100%}.kg-bookmark-metadata{align-items:center;color:color(var(--color-secondary) l(-10%));display:flex;flex-wrap:wrap;font-size:1.5rem;font-weight:400;margin-top:14px}.kg-bookmark-icon{height:22px;margin-right:8px;width:22px}.kg-bookmark-author{line-height:1.5em}.kg-bookmark-author:after{content:\"•\";margin:0 6px}.kg-bookmark-publisher{line-height:1.5em;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.kg-gallery-container{display:flex;flex-direction:column;max-width:1040px;width:100%}.kg-gallery-row{display:flex;flex-direction:row;justify-content:center}.kg-gallery-image img{display:block;height:100%;margin:0;width:100%}.kg-gallery-row:not(:first-of-type){margin:.75em 0 0}.kg-gallery-image:not(:first-of-type){margin:0 0 0 .75em}.kg-gallery-card+.kg-gallery-card,.kg-gallery-card+.kg-image-card.kg-width-wide,.kg-image-card.kg-width-wide+.kg-gallery-card,.kg-image-card.kg-width-wide+.kg-image-card.kg-width-wide{margin:-2.25em 0 3em}</style>\n<style>.gatsby-image-wrapper{position:relative;overflow:hidden}.gatsby-image-wrapper picture.object-fit-polyfill{position:static!important}.gatsby-image-wrapper img{bottom:0;height:100%;left:0;margin:0;max-width:none;padding:0;position:absolute;right:0;top:0;width:100%;object-fit:cover}.gatsby-image-wrapper [data-main-image]{opacity:0;transform:translateZ(0);transition:opacity .25s linear;will-change:opacity}.gatsby-image-wrapper-constrained{display:inline-block;vertical-align:top}</style>\n<style data-react-helmet=\"true\" type=\"text/css\">null</style>\n<div id=\"___gatsby\">\n<div style=\"outline: none;\" id=\"gatsby-focus-wrapper\" tabindex=\"-1\">\n<div class=\"viewport\">\n<div class=\"viewport-top\">\n<header class=\"site-head\" style=\"background-image: url('https://static.ghost.org/v5.0.0/images/publication-cover.jpg');\">\n<div class=\"container\">\n<div class=\"site-mast\">\n<div class=\"site-mast-left\">\n<a href=\"/blog/\"></a>\n<div data-gatsby-image-wrapper=\"\" style=\"width: 30px; height: 30px;\" class=\"gatsby-image-wrapper\">\n<a href=\"/blog/\">\n<div aria-hidden=\"true\" data-placeholder-image=\"\" style=\"opacity: 1; transition: opacity 500ms linear; background-color: #383848; width: 30px; height: 30px; position: relative;\"><br></div>\n<picture><source type=\"image/webp\" data-srcset=\"/blog/static/1f5512e171759c8fa66fde174ad5e09e/bde72/ghost-icon.webp 30w,/blog/static/1f5512e171759c8fa66fde174ad5e09e/927d1/ghost-icon.webp 60w\" sizes=\"30px\"><img data-gatsby-image-ssr data-main-image style=\"opacity: 0;\" sizes=\"30px\" decoding=\"async\" loading=\"lazy\" data-src=\"/blog/static/1f5512e171759c8fa66fde174ad5e09e/53973/ghost-icon.png\" data-srcset=\"/blog/static/1f5512e171759c8fa66fde174ad5e09e/53973/ghost-icon.png 30w,/blog/static/1f5512e171759c8fa66fde174ad5e09e/7ab40/ghost-icon.png 60w\" alt=\"blog\"></picture></a><noscript><picture><source type=\"image/webp\" srcset=\"/blog/static/1f5512e171759c8fa66fde174ad5e09e/bde72/ghost-icon.webp 30w,/blog/static/1f5512e171759c8fa66fde174ad5e09e/927d1/ghost-icon.webp 60w\" sizes=\"30px\"><img data-gatsby-image-ssr=\"\" data-main-image=\"\" style=\"opacity:0\" sizes=\"30px\" decoding=\"async\" loading=\"lazy\" src=\"/blog/static/1f5512e171759c8fa66fde174ad5e09e/53973/ghost-icon.png\" srcset=\"/blog/static/1f5512e171759c8fa66fde174ad5e09e/53973/ghost-icon.png 30w,/blog/static/1f5512e171759c8fa66fde174ad5e09e/7ab40/ghost-icon.png 60w\" alt=\"blog\"></picture></noscript> <script type=\"module\">const t=\"undefined\"!=typeof HTMLImageElement&&\"loading\"in HTMLImageElement.prototype;if(t){const t=document.querySelectorAll(\"img[data-main-image]\");for(let e of t){e.dataset.src&&(e.setAttribute(\"src\",e.dataset.src),e.removeAttribute(\"data-src\")),e.dataset.srcset&&(e.setAttribute(\"srcset\",e.dataset.srcset),e.removeAttribute(\"data-srcset\"));const t=e.parentNode.querySelectorAll(\"source[data-srcset]\");for(let e of t)e.setAttribute(\"srcset\",e.dataset.srcset),e.removeAttribute(\"data-srcset\");e.complete&&(e.style.opacity=1,e.parentNode.parentNode.querySelector(\"[data-placeholder-image]\").style.opacity=0)}}</script>\n</div>\n</div>\n<div class=\"site-mast-right\">\n<a href=\"https://twitter.com/ghost\" class=\"site-nav-item\" rel=\"noopener noreferrer\" target=\"_blank\"><img class=\"site-nav-icon\" src=\"https://website-1327177217.cos.ap-shanghai.myqcloud.com/icon/twitter.svg\" alt=\"Twitter\"></a><a href=\"https://www.facebook.com/ghost\" class=\"site-nav-item\" rel=\"noopener noreferrer\" target=\"_blank\"><img class=\"site-nav-icon\" src=\"https://website-1327177217.cos.ap-shanghai.myqcloud.com/icon/facebook.svg\" alt=\"Facebook\"></a><a class=\"site-nav-item\" href=\"https://feedly.com/i/subscription/feed/https://ciwi.ai/rss/\" rel=\"noopener noreferrer\" target=\"_blank\"><img class=\"site-nav-icon\" src=\"https://website-1327177217.cos.ap-shanghai.myqcloud.com/icon/rss.svg\" alt=\"RSS Feed\"></a>\n</div>\n</div>\n<nav class=\"site-nav\">\n<div class=\"site-nav-left\">\n<a class=\"site-nav-item\" href=\"/blog/\">首頁</a><a class=\"site-nav-item\" href=\"/blog/about/\">關於 </a>\n<table width=\"100%\">\n<tbody>\n<tr>\n<td><br></td>\n</tr>\n<tr>\n<td> </td>\n</tr>\n</tbody>\n</table>\n</div>\n<div class=\"site-nav-right\"><a class=\"site-nav-button\" href=\"/blog/about/\">關於</a></div>\n</nav>\n</div>\n</header><main class=\"site-main\">\n<div class=\"container\">\n<article class=\"content\">\n<figure class=\"post-feature-image\"><img src=\"http://localhost:2368/content/images/2025/08/CPusm5CR4YsDEAE-.webp\" alt=\"CIWI Translator 插件介绍\"></figure>\n<section class=\"post-full-content\">\n<h1 class=\"content-title\">CIWI Translator 插件介紹</h1>\n<section class=\"content-body load-external-scripts\">\n<h2 id=\"%F0%9F%94%B9-%E6%A6%82%E8%BF%B0\">🔹 概述</h2>\n<p><strong>CIWI Translator</strong> 是一款專為 Shopify 商店設計的輕量級多語言翻譯外掛。<br>它能夠自動識別頁面文本並進行多語言轉換，讓你的國際客戶無需切換站點即可瀏覽母語內容，從而提升跨境電商轉換率。</p>\n<hr>\n<h2 id=\"%F0%9F%94%B9-%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF\">🔹 使用場景</h2>\n<ul>\n<li>跨境電商賣家希望快速拓展海外市場</li>\n<li>希望提升非英語訪客的停留時間和下單轉換</li>\n<li>需要簡化 Shopify 多語言配置的開發者</li>\n<li><img alt=\"Bienvenue à Kiwi\" src=\"https://cdn.shopify.com/s/files/1/0728/0948/0215/files/48566819.jpg?v=1765530971\"></li>\n</ul>\n<hr>\n<h2 id=\"%F0%9F%94%B9-%E5%AE%89%E8%A3%85%E4%B8%8E%E4%BD%BF%E7%94%A8\">🔹 安裝與使用</h2>\n<p><img src=\"https://cdn.shopify.com/s/files/1/0728/0948/0215/files/72858409.jpg?v=1765528493\" alt=\"Escova Elétrica Spin com 9 Cabeças\"></p>\n<ol>\n<li>在 Shopify 應用市場安裝 <strong>CIWI Translator</strong>\n</li>\n<li>按照指引在主題文件中為需要翻譯的內容添加指定 class（如 ）</li>\n<li>進入插件後台選擇目標語言</li>\n<li>保存配置後，用戶即可在前臺通過語言切換組件訪問多語言版本的商店</li>\n</ol>\n<hr>\n<h2 id=\"%E5%AE%98%E6%96%B9%E8%AF%B4%E6%98%8E%E4%B8%8E%E5%BA%94%E7%94%A8%E5%9C%B0%E5%9D%80\">官方說明與應用地址</h2>\n<ul>\n<li>插件名稱：<strong>Ciwi.ai: AI 翻譯器 GPT‑4.1</strong>（又稱 Ciwi Translator）</li>\n<li>開發者：<strong>ciwi.ai</strong>\n</li>\n<li>官方 Shopify 商店頁面：可在 Shopify App Store 搜尋 “translator by ciwi” 訪問該插件頁面 <a href=\"https://apps.shopify.com/translator-by-ciwi?utm_source=chatgpt.com\" rel=\"noopener\">YouTube+12Shopify 應用商店+12Store Leads+12</a><a href=\"https://appnavigator.io/app/translator-by-ciwi/?utm_source=chatgpt.com\" rel=\"noopener\">appnavigator.io</a>\n</li>\n</ul>\n<hr>\n<h2 id=\"%F0%9F%A7%A0-%E6%8F%92%E4%BB%B6%E6%A0%B8%E5%BF%83%E5%8A%9F%E8%83%BD\">🧠 插件核心功能</h2>\n<ol>\n<li>\n<strong>AI 驅動翻譯</strong>：支援 ChatGPT‑4、DeepSeek 等主流模型，可快速翻譯商品描述、頁面內容、圖片文字等 <a href=\"https://apps.shopify.com/translator-by-ciwi?utm_source=chatgpt.com\" rel=\"noopener\">Letsmetrix+4Shopify 應用商店+4StoreCensus+4</a>\n</li>\n<li>\n<strong>支援 147+ 語言 & 200+ 貨幣</strong>：自動根據訪客 IP 切換語言與價格顯示 <a href=\"https://apps.shopify.com/translator-by-ciwi?utm_source=chatgpt.com\" rel=\"noopener\">StoreCensus+3Shopify 應用商店+3PickYourApp+3</a>\n</li>\n<li>\n<strong>Glossary 和樣式引導支援</strong>：自定義術語與品牌風格，保證翻譯精準並符合品牌性格 <a href=\"https://pickyourapp.com/collections/store-design-internationalization-currency-and-translation/products/translator-by-ciwi?utm_source=chatgpt.com\" rel=\"noopener\">PickYourApp</a>\n</li>\n<li>\n<strong>相容 Shopify 元欄位和 Liquid 範本</strong>：無遺漏地翻譯 Shopify 全站內容與結構 <a href=\"https://pickyourapp.com/collections/store-design-internationalization-currency-and-translation/products/translator-by-ciwi?utm_source=chatgpt.com\" rel=\"noopener\">support.wix.com+2PickYourApp+2lokalise.com+2</a>\n</li>\n</ol>\n<hr>\n<h2 id=\"%E2%AD%90-%E7%94%A8%E6%88%B7%E8%AF%84%E4%BB%B7%E4%B8%8E%E5%8F%A3%E7%A2%91\">⭐ 用戶評價與口碑</h2>\n<ul>\n<li>平均評分約 <strong>4.8–4.9 星</strong>，用戶普遍評價翻譯準確、速度快、界面簡潔 <a href=\"https://apps.shopify.com/translator-by-ciwi/reviews?utm_source=chatgpt.com\" rel=\"noopener\">bloggle.app+4Shopify 應用商店+4appnavigator.io+4</a>\n</li>\n</ul>\n<blockquote>「翻譯結果完美顯示…比其他應用程式更方便使用」 — HawkSling 用戶 <a href=\"https://appnavigator.io/app/translator-by-ciwi/reviews/1682376?utm_source=chatgpt.com\" rel=\"noopener\">StoreCensus+3appnavigator.io+3Shopify 應用商店+3</a><br>「中文的服務支援太棒了，比郵件回覆體驗好太多！」 — Orientaleaf 用戶 <a href=\"https://appnavigator.io/app/translator-by-ciwi/reviews/?rating=5&amp;utm_source=chatgpt.com\" rel=\"noopener\">Shopify 應用商店+2appnavigator.io+2Shopify 應用商店+2</a>\n</blockquote>\n<hr>\n<h2 id=\"%F0%9F%92%BC-%E4%BB%B7%E6%A0%BC%E5%A5%97%E9%A4%90%EF%BC%88usd%EF%BC%89\">💼 價格套餐（USD）</h2>\n\n<table data-start=\"867\" data-end=\"1380\" class=\"w-fit min-w-(--thread-content-width)\">\n<thead data-start=\"867\" data-end=\"899\">\n<tr data-start=\"867\" data-end=\"899\">\n<th data-start=\"867\" data-end=\"878\" data-col-size=\"sm\">方案</th>\n<th data-start=\"878\" data-end=\"893\" data-col-size=\"sm\">價格</th>\n<th data-start=\"893\" data-end=\"899\" data-col-size=\"md\">特點</th>\n</tr>\n</thead>\n<tbody data-start=\"939\" data-end=\"1380\">\n<tr data-start=\"939\" data-end=\"1050\">\n<td data-start=\"939\" data-end=\"952\" data-col-size=\"sm\">免費</td>\n<td data-start=\"952\" data-end=\"967\" data-col-size=\"sm\">免費</td>\n<td data-start=\"967\" data-end=\"1050\" data-col-size=\"md\">\n<span class=\"relative -mx-px my-[-0.2rem] rounded px-px py-[0.2rem] transition-colors duration-100 ease-in-out\">200,000 翻譯積分，支援 148 種語言，編輯功能開放</span> <span class=\"\" data-state=\"closed\"><span class=\"ms-1 inline-flex max-w-full items-center relative top-[-0.094rem] animate-[show_150ms_ease-in]\"><a href=\"https://apps.shopify.com/translator-by-ciwi?utm_source=chatgpt.com\" rel=\"noopener\" alt=\"https://apps.shopify.com/translator-by-ciwi?utm_source=chatgpt.com\" class=\"flex h-4.5 overflow-hidden rounded-xl px-2 text-[9px] font-medium text-token-text-secondary! bg-[#F4F4F4]! dark:bg-[#303030]! transition-colors duration-150 ease-in-out\" target=\"_blank\"><span class=\"relative start-0 bottom-0 flex h-full w-full items-center\"><span class=\"flex h-4 w-full items-center justify-between absolute\"><span class=\"max-w-full grow truncate overflow-hidden text-center\">Shopify 應用商店</span><span class=\"-me-1 flex h-full items-center rounded-full px-1 text-[#8F8F8F]\">+11</span></span><span class=\"flex h-4 w-full items-center justify-between\"><span class=\"max-w-full grow truncate overflow-hidden text-center\">Shopify 應用商店</span><span class=\"-me-1 flex h-full items-center rounded-full px-1 text-[#8F8F8F]\">+11</span></span><span class=\"flex h-4 w-full items-center justify-between absolute\"><span class=\"max-w-full grow truncate overflow-hidden text-center\">PickYourApp</span><span class=\"-me-1 flex h-full items-center rounded-full px-1 text-[#8F8F8F]\">+11</span></span></span></a></span></span>\n</td>\n</tr>\n<tr data-start=\"1051\" data-end=\"1168\">\n<td data-start=\"1051\" data-end=\"1064\" data-col-size=\"sm\">標準</td>\n<td data-start=\"1064\" data-end=\"1080\" data-col-size=\"sm\">$7.99/月</td>\n<td data-start=\"1080\" data-end=\"1168\" data-col-size=\"md\">1,500,000 credits/月，支援基於 IP 自動切換語言與貨幣、術語詞典功能 <span class=\"\" data-state=\"closed\"><span class=\"ms-1 inline-flex max-w-full items-center relative top-[-0.094rem] animate-[show_150ms_ease-in]\"><a href=\"https://pickyourapp.com/collections/store-design-internationalization-currency-and-translation/products/translator-by-ciwi?utm_source=chatgpt.com\" rel=\"noopener\" alt=\"https://pickyourapp.com/collections/store-design-internationalization-currency-and-translation/products/translator-by-ciwi?utm_source=chatgpt.com\" class=\"flex h-4.5 overflow-hidden rounded-xl px-2 text-[9px] font-medium text-token-text-secondary! bg-[#F4F4F4]! dark:bg-[#303030]! transition-colors duration-150 ease-in-out\" target=\"_blank\"><span class=\"relative start-0 bottom-0 flex h-full w-full items-center\"><span class=\"flex h-4 w-full items-center justify-between overflow-hidden\"><span class=\"max-w-full grow truncate overflow-hidden text-center\">PickYourApp</span></span></span></a></span></span>\n</td>\n</tr>\n<tr data-start=\"1169\" data-end=\"1275\">\n<td data-start=\"1169\" data-end=\"1182\" data-col-size=\"sm\">專業版</td>\n<td data-start=\"1182\" data-end=\"1198\" data-col-size=\"sm\">$19.99/月</td>\n<td data-start=\"1198\" data-end=\"1275\" data-col-size=\"md\">包含所有 Standard 功能 + 自動翻譯+第三方應用翻譯支援 <span class=\"\" data-state=\"closed\"><span class=\"ms-1 inline-flex max-w-full items-center relative top-[-0.094rem] animate-[show_150ms_ease-in]\"><a href=\"https://pickyourapp.com/collections/store-design-internationalization-currency-and-translation/products/translator-by-ciwi?utm_source=chatgpt.com\" rel=\"noopener\" alt=\"https://pickyourapp.com/collections/store-design-internationalization-currency-and-translation/products/translator-by-ciwi?utm_source=chatgpt.com\" class=\"flex h-4.5 overflow-hidden rounded-xl px-2 text-[9px] font-medium text-token-text-secondary! bg-[#F4F4F4]! dark:bg-[#303030]! transition-colors duration-150 ease-in-out\" target=\"_blank\"><span class=\"relative start-0 bottom-0 flex h-full w-full items-center\"><span class=\"flex h-4 w-full items-center justify-between overflow-hidden\"><span class=\"max-w-full grow truncate overflow-hidden text-center\">PickYourApp</span></span></span></a></span></span>\n</td>\n</tr>\n<tr data-start=\"1276\" data-end=\"1380\">\n<td data-start=\"1276\" data-end=\"1289\" data-col-size=\"sm\">高級版</td>\n<td data-start=\"1289\" data-end=\"1305\" data-col-size=\"sm\">$39.99/月</td>\n<td data-start=\"1305\" data-end=\"1380\" data-col-size=\"md\">包含 Pro 功能 + 1 對 1 人工審核支援、手動翻譯服務 <span class=\"\" data-state=\"closed\"><span class=\"ms-1 inline-flex max-w-full items-center relative top-[-0.094rem] animate-[show_150ms_ease-in]\"><a href=\"https://pickyourapp.com/collections/store-design-internationalization-currency-and-translation/products/translator-by-ciwi?utm_source=chatgpt.com\" rel=\"noopener\" alt=\"https://pickyourapp.com/collections/store-design-internationalization-currency-and-translation/products/translator-by-ciwi?utm_source=chatgpt.com\" class=\"flex h-4.5 overflow-hidden rounded-xl px-2 text-[9px] font-medium text-token-text-secondary! bg-[#F4F4F4]! dark:bg-[#303030]! transition-colors duration-150 ease-in-out\" target=\"_blank\"><span class=\"relative start-0 bottom-0 flex h-full w-full items-center\"><span class=\"flex h-4 w-full items-center justify-between overflow-hidden\"><span class=\"max-w-full grow truncate overflow-hidden text-center\">PickYourApp</span></span></span></a></span></span>\n</td>\n</tr>\n</tbody>\n</table>\n<hr>\n<h2 id=\"%E2%9C%85-%E4%BC%98%E5%8A%BF%E4%BA%AE%E7%82%B9\">✅ 優勢亮點</h2>\n<ul>\n<li>\n<strong>高度自動化</strong>：AI 翻譯內容自動同步更新，不需要反覆導入匯出；</li>\n<li>\n<strong>介面簡潔友好</strong>：嵌入 Shopify 後台，無需 CLI 設定；</li>\n<li>\n<strong>適配性強</strong>：支持多幣種與元數據結構，兼容 Shopify Markets 和第三方應用；</li>\n<li>\n<strong>性價比高</strong>：與其他插件相比，成本較低且功能豐富，適合中小型跨境店鋪使用 <a href=\"https://lokalise.com/blog/shopify-multi-language/?utm_source=chatgpt.com\" rel=\"noopener\">StoreCensus+2lokalise.com+2bloggle.app+2</a>。</li>\n</ul>\n</section>\n</section>\n</article>\n</div>\n</main>\n</div>\n<div class=\"viewport-bottom\"><footer class=\"site-foot\">\n<div class=\"site-foot-nav container\">\n<div class=\"site-foot-nav-left\">\n<a href=\"/blog/\">部落格</a> © 2021 — 發佈於 <a class=\"site-foot-nav-item\" href=\"https://ghost.org\" rel=\"noopener noreferrer\" target=\"_blank\">Ghost</a>\n</div>\n<div class=\"site-foot-nav-right\">\n<a class=\"site-foot-nav-item\" href=\"/blog/\">首頁</a><a class=\"site-foot-nav-item\" href=\"/blog/about/\">關於</a>\n</div>\n</div>\n</footer></div>\n</div>\n</div>\n<div id=\"gatsby-announcer\" style=\"position: absolute; top: 0; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;\" aria-live=\"assertive\" aria-atomic=\"true\"></div>\n</div>\n<p> </p>",
+      "resourceId": "gid://shopify/Metafield/20906124083362",
+      "digest": "eeada46153c2c570e4524d918e7c80b4d4c7bbd7bf93b7f6afbba81e2d5d1744",
+      "module": "METAFIELD",
+      "key": "value",
+      "translatedValue": "<style></style> <section class='jdgm-revs-tab__wrapper'> <style>.jdgm-revs-tab{display: none}</style> <div class='jdgm-mask'></div> <div class='jdgm-revs-tab__main'> <div class='jdgm-revs-tab__content'> <div class='jdgm-revs-tab__content-header' data-number-of-product-reviews='1602' data-number-of-shop-reviews='0'> <a style='display: none' href='#' class='jdgm-write-rev-link'>寫評論</a> <div class='jdgm-histogram jdgm-temp-hidden'>  <div class='jdgm-histogram__row' data-rating='5' data-frequency='1339' data-percentage='84'>  <div class=\"jdgm-histogram__star\" role=\"button\" aria-label=\"84% (1339) reviews with 5 star rating\" tabindex=\"0\"><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span></div> <div class='jdgm-histogram__bar'> <div class='jdgm-histogram__bar-content' style='width: 84%;'> </div> </div> <div class='jdgm-histogram__percentage'>84%</div> <div class='jdgm-histogram__frequency'>(1339)</div> </div>  <div class='jdgm-histogram__row' data-rating='4' data-frequency='161' data-percentage='10'>  <div class=\"jdgm-histogram__star\" role=\"button\" aria-label=\"10% (161) reviews with 4 star rating\" tabindex=\"0\"><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--off'></span></div> <div class='jdgm-histogram__bar'> <div class='jdgm-histogram__bar-content' style='width: 10%;'> </div> </div> <div class='jdgm-histogram__percentage'>10%</div> <div class='jdgm-histogram__frequency'>(161)</div> </div>  <div class='jdgm-histogram__row' data-rating='3' data-frequency='57' data-percentage='4'>  <div class=\"jdgm-histogram__star\" role=\"button\" aria-label=\"4% (57) reviews with 3 star rating\" tabindex=\"0\"><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--off'></span><span class='jdgm-star jdgm--off'></span></div> <div class='jdgm-histogram__bar'> <div class='jdgm-histogram__bar-content' style='width: 4%;'> </div> </div> <div class='jdgm-histogram__percentage'>4%</div> <div class='jdgm-histogram__frequency'>(57)</div> </div>  <div class='jdgm-histogram__row' data-rating='2' data-frequency='15' data-percentage='1'>  <div class=\"jdgm-histogram__star\" role=\"button\" aria-label=\"1% (15) reviews with 2 star rating\" tabindex=\"0\"><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--off'></span><span class='jdgm-star jdgm--off'></span><span class='jdgm-star jdgm--off'></span></div> <div class='jdgm-histogram__bar'> <div class='jdgm-histogram__bar-content' style='width: 1%;'> </div> </div> <div class='jdgm-histogram__percentage'>1%</div> <div class='jdgm-histogram__frequency'>(15)</div> </div>  <div class='jdgm-histogram__row' data-rating='1' data-frequency='30' data-percentage='2'>  <div class=\"jdgm-histogram__star\" role=\"button\" aria-label=\"2% (30) reviews with 1 star rating\" tabindex=\"0\"><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--off'></span><span class='jdgm-star jdgm--off'></span><span class='jdgm-star jdgm--off'></span><span class='jdgm-star jdgm--off'></span></div> <div class='jdgm-histogram__bar'> <div class='jdgm-histogram__bar-content' style='width: 2%;'> </div> </div> <div class='jdgm-histogram__percentage'>2%</div> <div class='jdgm-histogram__frequency'>(30)</div> </div>  <div class='jdgm-histogram__row jdgm-histogram__clear-filter' data-rating=null tabindex='0'></div> </div> <div class='jdgm-gallery' data-url='reviews/all_reviews_js_based' data-per-page='10'> <div class='jdgm-gallery-data jdgm-hidden' data-json='[{&quot;uuid&quot;:&quot;b53e4f51-18a2-4022-89ee-fd1d3c6a892f&quot;,&quot;reviewer_name&quot;:&quot;Jon&quot;,&quot;reviewer_initial&quot;:&quot;J&quot;,&quot;title&quot;:&quot;STAY AWAY AT ALL COST!&quot;,&quot;body_html&quot;:&quot;\\u003cp\\u003eStay away from Ecowitt at all costs.\\u003c/p\\u003e\\n\\n\\u003cp\\u003eThis has been one of the worst online purchasing experiences I&#39;ve had. Ecowitt failed to disclose before checkout that the base unit would arrive within days while the sensors wouldn&#39;t arrive for about a month. That information wasn&#39;t made clear until after they had already taken my money. Had I known, I would have purchased elsewhere.\\u003c/p\\u003e\\n\\n\\u003cp\\u003eI contacted customer service immediately after learning about the delay and confirmed the sensors had not yet shipped. Despite that, Dan and Lilias in sales refused to cancel the order or offer any reasonable solution. Once Ecowitt has your money, don&#39;t expect customer service to be on your side.\\u003c/p\\u003e\\n\\n\\u003cp\\u003eTo make matters worse, they expect customers to pay expensive international shipping back to China for returns, even when the issue could have been avoided with honest shipping information before purchase.\\u003c/p\\u003e\\n\\n\\u003cp\\u003eI ultimately bought the same sensors elsewhere and received them much sooner.\\u003c/p\\u003e\\n\\n\\u003cp\\u003eIf you&#39;re considering Ecowitt, do yourself a favor and buy through a retailer with a customer-friendly return policy—or better yet, choose another company. Based on my experience, Ecowitt&#39;s lack of transparency and poor customer service make them a business I cannot recommend. The lies from Ecowitt are enough by themselves to stay away, not to mention the poor product operation! Absolutely nothing good comes from ecowitt!\\u003c/p\\u003e&quot;,&quot;verified_buyer&quot;:true,&quot;country_code_show_flag&quot;:&quot;US&quot;,&quot;location&quot;:&quot;&quot;,&quot;video_external_ids&quot;:[&quot;0c5d79de715b5125aefaf225201f0be5&quot;],&quot;media_platform_hosted_video_infos&quot;:[],&quot;cf_answers&quot;:[],&quot;product_title&quot;:&quot;Ecowitt GW1206 Soil Moisture Meter Kit, Includes GW1200 IoT Wi-Fi Gateway and WH51 Soil Moisture Sensor&quot;,&quot;product_url&quot;:&quot;/products/gw1206&quot;,&quot;product_url_with_utm&quot;:&quot;https://shop.ecowitt.com/products/gw1206?jdgm_referral_location=widget\\u0026ref=judge.me\\u0026utm_campaign=judgeme-review-site\\u0026utm_medium=referral\\u0026utm_source=judgeme&quot;,&quot;rating&quot;:&quot;1&quot;,&quot;created_at&quot;:&quot;2026-07-04 13:55:24 UTC&quot;,&quot;pictures_urls&quot;:[]},{&quot;uuid&quot;:&quot;54be7bd3-d74e-4d49-9324-e58b964ebf53&quot;,&quot;reviewer_name&quot;:&quot;Timo Pelkonen&quot;,&quot;reviewer_initial&quot;:&quot;T&quot;,&quot;title&quot;:&quot;Good, but not perfect&quot;,&quot;body_html&quot;:&quot;\\u003cp\\u003eGood display with much information, but I hope you will have more bigger like 15&#39;&#39; OLED display with stand and wall mount possibility in your selection in the future with touchscreen.\\u003c/p\\u003e&quot;,&quot;verified_buyer&quot;:true,&quot;location&quot;:&quot;&quot;,&quot;video_external_ids&quot;:[&quot;1201140097&quot;],&quot;media_platform_hosted_video_infos&quot;:[],&quot;cf_answers&quot;:[],&quot;product_title&quot;:&quot;HP2560_C 7\\u0026#39;\\u0026#39; Wi-Fi TFT Display Console with Indoor Temp\\u0026amp;Humidity Sensor Antenna&quot;,&quot;product_url&quot;:&quot;/products/hp2560_c&quot;,&quot;product_url_with_utm&quot;:&quot;https://shop.ecowitt.com/products/hp2560_c?jdgm_referral_location=widget\\u0026ref=judge.me\\u0026utm_campaign=judgeme-review-site\\u0026utm_medium=referral\\u0026utm_source=judgeme&quot;,&quot;rating&quot;:&quot;5&quot;,&quot;created_at&quot;:&quot;2026-05-16 01:04:37 UTC&quot;,&quot;pictures_urls&quot;:[{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1778894478__img_20260516_032208__original.jpg?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1778894478__img_20260516_032208__original.jpg?quality=80\\u0026width=1024&quot;},{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1778894481__img_20260516_040538__original.jpg?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1778894481__img_20260516_040538__original.jpg?quality=80\\u0026width=1024&quot;}]},{&quot;uuid&quot;:&quot;5faf2317-b547-48b3-b3d6-5664aa2f37bb&quot;,&quot;reviewer_name&quot;:&quot;Timo Pelkonen&quot;,&quot;reviewer_initial&quot;:&quot;T&quot;,&quot;title&quot;:&quot;Modern new tech weather station with not much moving parts&quot;,&quot;body_html&quot;:&quot;\\u003cp\\u003eI didn&#39;t wanted old school weather stations with anemometers and old style rain gauge. My station is sending data to 3 public websites. I bought weather station gateway GW3010 for nothing and lost 70€ money. I found I don&#39;t need it. The Ecowitt Wittboy 7 in 1 weather station and HP2560_C 7&#39;&#39; wi-fi tft display console is enough to view data locally and send data to personal weather station pages to the Internet, like Weather Underground. Nice that I don&#39;t need to buy Finnish Vaisala professional level expensive weather station. This weather station fulfill my needs well! You don&#39;t need to be a nerd to assemble it and get working this station. Chinese technology for the win!\\u003c/p\\u003e&quot;,&quot;verified_buyer&quot;:true,&quot;location&quot;:&quot;&quot;,&quot;video_external_ids&quot;:[&quot;1201140675&quot;],&quot;media_platform_hosted_video_infos&quot;:[],&quot;cf_answers&quot;:[],&quot;product_title&quot;:&quot;Wittboy GW3001/GW3011 Weather Station, IoT Wi-Fi Hub with SD Card Data Storage, 7-in-1 Outdoor Solar Powered Anti-vibration Haptic Rainfall Sensor, Includes Bird Spikes&quot;,&quot;product_url&quot;:&quot;/products/gw3001-gw3011&quot;,&quot;product_url_with_utm&quot;:&quot;https://shop.ecowitt.com/products/gw3001-gw3011?jdgm_referral_location=widget\\u0026ref=judge.me\\u0026utm_campaign=judgeme-review-site\\u0026utm_medium=referral\\u0026utm_source=judgeme&quot;,&quot;rating&quot;:&quot;5&quot;,&quot;created_at&quot;:&quot;2026-05-16 00:13:33 UTC&quot;,&quot;pictures_urls&quot;:[{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1778892851__img_20260511_211333__original.jpg?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1778892851__img_20260511_211333__original.jpg?quality=80\\u0026width=1024&quot;},{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1778892860__img_20260515_142822__original.jpg?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1778892860__img_20260515_142822__original.jpg?quality=80\\u0026width=1024&quot;},{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1778892863__img_20260511_1758066__original.jpg?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1778892863__img_20260511_1758066__original.jpg?quality=80\\u0026width=1024&quot;}]},{&quot;uuid&quot;:&quot;82b08368-c68b-4e4e-a506-245e601e7d98&quot;,&quot;reviewer_name&quot;:&quot;Forest Gordon&quot;,&quot;reviewer_initial&quot;:&quot;F&quot;,&quot;title&quot;:&quot;Great value wind sensor&quot;,&quot;body_html&quot;:&quot;\\u003cp\\u003eHooked up a W85 to Home Assistant to control shut off on our water feature when wind exceeds set limits.  And turn it on again when wind drops.  Works great.  Very good value and easy to install.\\u003c/p\\u003e&quot;,&quot;verified_buyer&quot;:true,&quot;country_code_show_flag&quot;:&quot;US&quot;,&quot;location&quot;:&quot;&quot;,&quot;video_external_ids&quot;:[],&quot;media_platform_hosted_video_infos&quot;:[],&quot;cf_answers&quot;:[],&quot;product_title&quot;:&quot;Ecowitt WS85 Solar Powered 3-in-1 Weather Sensor for Rainfall, Wind Speed and Wind Direction&quot;,&quot;product_url&quot;:&quot;/products/ws85&quot;,&quot;product_url_with_utm&quot;:&quot;https://shop.ecowitt.com/products/ws85?jdgm_referral_location=widget\\u0026ref=judge.me\\u0026utm_campaign=judgeme-review-site\\u0026utm_medium=referral\\u0026utm_source=judgeme&quot;,&quot;rating&quot;:&quot;5&quot;,&quot;created_at&quot;:&quot;2026-05-14 14:19:16 UTC&quot;,&quot;pictures_urls&quot;:[{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1778768403__image__original.jpg?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1778768403__image__original.jpg?quality=80\\u0026width=1024&quot;}]},{&quot;uuid&quot;:&quot;b9ae1d49-66c2-478d-b91b-2636af473855&quot;,&quot;reviewer_name&quot;:&quot;Adam Ciurzynski&quot;,&quot;reviewer_initial&quot;:&quot;A&quot;,&quot;title&quot;:&quot;WH57 Lightning Detector really works&quot;,&quot;body_html&quot;:&quot;\\u003cp\\u003eThe WH57 lightning detector really works!\\n\\u003cbr /\\u003eIt alerts us before storms even get closer and before you even hear the sound.\\u003c/p\\u003e&quot;,&quot;verified_buyer&quot;:true,&quot;country_code_show_flag&quot;:&quot;PL&quot;,&quot;location&quot;:&quot;&quot;,&quot;video_external_ids&quot;:[],&quot;media_platform_hosted_video_infos&quot;:[],&quot;cf_answers&quot;:[],&quot;product_title&quot;:&quot;WH57 Outdoor Wireless Lightning Detection Sensor&quot;,&quot;product_url&quot;:&quot;/products/wh57&quot;,&quot;product_url_with_utm&quot;:&quot;https://shop.ecowitt.com/products/wh57?jdgm_referral_location=widget\\u0026ref=judge.me\\u0026utm_campaign=judgeme-review-site\\u0026utm_medium=referral\\u0026utm_source=judgeme&quot;,&quot;rating&quot;:&quot;5&quot;,&quot;created_at&quot;:&quot;2026-05-13 13:17:39 UTC&quot;,&quot;pictures_urls&quot;:[{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1778678440__wh57__original.jpg?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1778678440__wh57__original.jpg?quality=80\\u0026width=1024&quot;}]},{&quot;uuid&quot;:&quot;45cc3fd9-43d2-4051-8a65-8c32cc32c55b&quot;,&quot;reviewer_name&quot;:&quot;Angela&quot;,&quot;reviewer_initial&quot;:&quot;A&quot;,&quot;title&quot;:&quot;Brilliant!&quot;,&quot;body_html&quot;:&quot;\\u003cp\\u003eI’ve been using the WS80 for a few years now. So easy to set up, provides a wealth of weather data!\\u003c/p\\u003e&quot;,&quot;verified_buyer&quot;:true,&quot;country_code_show_flag&quot;:&quot;IE&quot;,&quot;location&quot;:&quot;&quot;,&quot;video_external_ids&quot;:[],&quot;media_platform_hosted_video_infos&quot;:[],&quot;cf_answers&quot;:[],&quot;product_title&quot;:&quot;WS80 Ultrasonic Wind Speed \\u0026amp; Direction, Solar Radiation \\u0026amp; Light, Temp \\u0026amp; Humidity Sensor Array&quot;,&quot;product_url&quot;:&quot;/products/ws80&quot;,&quot;product_url_with_utm&quot;:&quot;https://shop.ecowitt.com/products/ws80?jdgm_referral_location=widget\\u0026ref=judge.me\\u0026utm_campaign=judgeme-review-site\\u0026utm_medium=referral\\u0026utm_source=judgeme&quot;,&quot;rating&quot;:&quot;5&quot;,&quot;created_at&quot;:&quot;2026-05-10 15:36:07 UTC&quot;,&quot;pictures_urls&quot;:[{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1778427410__b47ce90d-a598-47ea-a261-98da62128cb9__original.jpeg?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1778427410__b47ce90d-a598-47ea-a261-98da62128cb9__original.jpeg?quality=80\\u0026width=1024&quot;}]},{&quot;uuid&quot;:&quot;4df3fd7b-bba9-4ce5-8848-638d9d1f1760&quot;,&quot;reviewer_name&quot;:&quot;MattRock&quot;,&quot;reviewer_initial&quot;:&quot;M&quot;,&quot;title&quot;:&quot;Soil Sensors&quot;,&quot;body_html&quot;:&quot;\\u003cp\\u003eThe soil sensors are doing th intended job outside very well! It&#39;s very helpful having a history graph in Home Assistant for all of the statistics.  Home Assistant integration is available and cloud free with the HACS &#39;Ecowitt Local&#39; integration by alexlenk.  I have succeeded at local-only integrations using both the GW2000 and GW3000 bridges.\\u003c/p\\u003e&quot;,&quot;verified_buyer&quot;:true,&quot;country_code_show_flag&quot;:&quot;US&quot;,&quot;location&quot;:&quot;&quot;,&quot;video_external_ids&quot;:[],&quot;media_platform_hosted_video_infos&quot;:[],&quot;cf_answers&quot;:[],&quot;product_title&quot;:&quot;WH52 Soil Moisture/Temperature/EC Sensor, Wireless 3-in-1 Soil Sensor&quot;,&quot;product_url&quot;:&quot;/products/wh52&quot;,&quot;product_url_with_utm&quot;:&quot;https://shop.ecowitt.com/products/wh52?jdgm_referral_location=widget\\u0026ref=judge.me\\u0026utm_campaign=judgeme-review-site\\u0026utm_medium=referral\\u0026utm_source=judgeme&quot;,&quot;rating&quot;:&quot;5&quot;,&quot;created_at&quot;:&quot;2026-05-05 15:12:42 UTC&quot;,&quot;pictures_urls&quot;:[{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1777994757__soilgraph__original.png?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1777994757__soilgraph__original.png?quality=80\\u0026width=1024&quot;}]},{&quot;uuid&quot;:&quot;b456a93a-5d94-428a-98c6-12030b2a426d&quot;,&quot;reviewer_name&quot;:&quot;Adam Ciurzynski&quot;,&quot;reviewer_initial&quot;:&quot;A&quot;,&quot;title&quot;:&quot;A good addition to a weather station&quot;,&quot;body_html&quot;:&quot;\\u003cp\\u003eEverything is working as expected. Good quality of the pictures and movies.\\u003c/p\\u003e&quot;,&quot;verified_buyer&quot;:true,&quot;country_code_show_flag&quot;:&quot;PL&quot;,&quot;location&quot;:&quot;&quot;,&quot;video_external_ids&quot;:[&quot;1203716738&quot;],&quot;media_platform_hosted_video_infos&quot;:[],&quot;cf_answers&quot;:[],&quot;product_title&quot;:&quot;WittCam HP10 Wi-Fi Time-lapse Camera&quot;,&quot;product_url&quot;:&quot;/products/wittcam-hp10&quot;,&quot;product_url_with_utm&quot;:&quot;https://shop.ecowitt.com/products/wittcam-hp10?jdgm_referral_location=widget\\u0026ref=judge.me\\u0026utm_campaign=judgeme-review-site\\u0026utm_medium=referral\\u0026utm_source=judgeme&quot;,&quot;rating&quot;:&quot;5&quot;,&quot;created_at&quot;:&quot;2026-04-15 04:50:12 UTC&quot;,&quot;pictures_urls&quot;:[]},{&quot;uuid&quot;:&quot;42858d80-6e56-4f38-bdcd-5de5c6fe8a11&quot;,&quot;reviewer_name&quot;:&quot;Anonymous&quot;,&quot;reviewer_initial&quot;:&quot;A&quot;,&quot;title&quot;:&quot;Πολύ καλό&quot;,&quot;body_html&quot;:&quot;\\u003cp\\u003eΣτάλθηκε σύντομα μέσα σε 10 ακριβώς ημέρες!\\n\\u003cbr /\\u003eΗ εγκατάσταση ήταν πολύ εύκολη και μέχρι στιγμής δεν έχω καμία παρεμβολή και το έχω τοποθετήσει όμως στο low sensitivity! Περιμένω να δω στις καταιγίδες πως θα ανταποκριθεί.\\u003c/p\\u003e&quot;,&quot;verified_buyer&quot;:true,&quot;country_code_show_flag&quot;:&quot;GR&quot;,&quot;location&quot;:&quot;&quot;,&quot;video_external_ids&quot;:[],&quot;media_platform_hosted_video_infos&quot;:[],&quot;cf_answers&quot;:[],&quot;product_title&quot;:&quot;WH57 Outdoor Wireless Lightning Detection Sensor&quot;,&quot;product_url&quot;:&quot;/products/wh57&quot;,&quot;product_url_with_utm&quot;:&quot;https://shop.ecowitt.com/products/wh57?jdgm_referral_location=widget\\u0026ref=judge.me\\u0026utm_campaign=judgeme-review-site\\u0026utm_medium=referral\\u0026utm_source=judgeme&quot;,&quot;rating&quot;:&quot;5&quot;,&quot;created_at&quot;:&quot;2026-04-08 21:43:18 UTC&quot;,&quot;pictures_urls&quot;:[{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1775684672__2d6017a7-c115-4fd1-bf47-11389df7c0f6__original.png?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1775684672__2d6017a7-c115-4fd1-bf47-11389df7c0f6__original.png?quality=80\\u0026width=1024&quot;}]},{&quot;uuid&quot;:&quot;57c27533-900e-404e-a754-e2c0de666b42&quot;,&quot;reviewer_name&quot;:&quot;Thomas Bruhn&quot;,&quot;reviewer_initial&quot;:&quot;T&quot;,&quot;title&quot;:&quot;Unzulässig&quot;,&quot;body_html&quot;:&quot;\\u003cp\\u003eDie Station  hat  bei  starken Wind und Regen falsche Messdaten geliefert. So hatte die Station um die 150 km gemessen. Andere Station haben  ca 60 kmh gemessen,was auch plausibel ist. Wer genaue Winddaten haben möchte sollte die Finger davon lassen.\\u003c/p\\u003e&quot;,&quot;verified_buyer&quot;:true,&quot;country_code_show_flag&quot;:&quot;DE&quot;,&quot;location&quot;:&quot;&quot;,&quot;video_external_ids&quot;:[],&quot;media_platform_hosted_video_infos&quot;:[],&quot;cf_answers&quot;:[],&quot;product_title&quot;:&quot;WS80 Ultrasonic Wind Speed \\u0026amp; Direction, Solar Radiation \\u0026amp; Light, Temp \\u0026amp; Humidity Sensor Array&quot;,&quot;product_url&quot;:&quot;/products/ws80&quot;,&quot;product_url_with_utm&quot;:&quot;https://shop.ecowitt.com/products/ws80?jdgm_referral_location=widget\\u0026ref=judge.me\\u0026utm_campaign=judgeme-review-site\\u0026utm_medium=referral\\u0026utm_source=judgeme&quot;,&quot;rating&quot;:&quot;1&quot;,&quot;created_at&quot;:&quot;2026-03-25 11:21:46 UTC&quot;,&quot;pictures_urls&quot;:[{&quot;compact&quot;:&quot;https://review-images.judge.me/ecowitt/1774437888__41120__original.jpg?quality=80\\u0026width=160&quot;,&quot;original&quot;:&quot;https://review-images.judge.me/ecowitt/1774437888__41120__original.jpg?quality=80\\u0026width=1024&quot;}]}]'></div> </div> <div class=\"jdgm-medals-wrapper jdgm-hidden\" data-updated-at='2026-07-05T04:18:38Z'> <style type=\"text/css\"></style> <div class=\"jdgm-medals\" data-link=\"https://app.judge.me/reviews/stores/shop.ecowitt.com\"> <div class=\"jdgm-medals__container\"> <div class=\"jdgm-medal-wrapper\" title=\"Diamond Verified Reviews Shop. Obtained at least 1000 reviews submitted by genuine customers with proof of purchase history\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"1598\" data-type=\"ver_rev\" data-tier=\"diamond\"> <div class=\"jdgm-medal__image\" data-url=\"ver_rev/diamond.svg\" data-alt=\"Judge.me Diamond Verified Reviews Shop medal\"></div> <div class=\"jdgm-medal__value jdgm-medal__value--long\">1598</div> </a> </div> <div class=\"jdgm-medal-wrapper\" title=\"Platinum Authentic Shop. At least 99% of published reviews are verified reviews\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"\" data-type=\"auth\" data-tier=\"platinum\"> <div class=\"jdgm-medal__image\" data-url=\"auth/platinum.svg\" data-alt=\"Judge.me Platinum Authentic Shop medal\"></div> </a> </div> <div class=\"jdgm-medal-wrapper\" title=\"Gold Monthly Record Shop. Achieved an all-time record of 83 published verified reviews within one calendar month.\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"83\" data-type=\"mon_rec\" data-tier=\"gold\"> <div class=\"jdgm-medal__image\" data-url=\"mon_rec/gold_hollow.svg\" data-alt=\"Judge.me Gold Monthly Record Shop medal\"></div> <div class=\"jdgm-medal__value \">83</div> </a> </div> <div class=\"jdgm-medal-wrapper\" title=\"Silver Transparent Shop. Published at least 90% of verified reviews received in total\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"\" data-type=\"tran\" data-tier=\"silver\"> <div class=\"jdgm-medal__image\" data-url=\"tran/silver.svg\" data-alt=\"Judge.me Silver Transparent Shop medal\"></div> </a> </div> <div class=\"jdgm-medal-wrapper\" title=\"Top 1% Trending Shops. Top 1% trending shops that obtained and published the most verified reviews in the last 30 days\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"\" data-type=\"tops_trend\" data-tier=\"1-percent\"> <div class=\"jdgm-medal__image\" data-url=\"tops_trend/1-percent.svg\" data-alt=\"Judge.me Top 1% Trending Shops medal\"></div> </a> </div> <div class=\"jdgm-medal-wrapper\" title=\"Top 5% Shops. Top 5% shops that obtained and published the most verified reviews of all time\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"\" data-type=\"tops\" data-tier=\"5-percent\"> <div class=\"jdgm-medal__image\" data-url=\"tops/5-percent.svg\" data-alt=\"Judge.me Top 5% Shops medal\"></div> </a> </div> </div> </div> </div> <div class='jdgm-rev-widg__sort-wrapper'></div> </div> <div class='jdgm-revs-tab__content-body'> <div class='jdgm-revs-tab__reviews'><div class='jdgm-rev jdgm-divider-top' data-verified-buyer='true' data-review-id='b53e4f51-18a2-4022-89ee-fd1d3c6a892f' data-thumb-up-count='0' data-thumb-down-count='0'> <div class='jdgm-rev__header'>  <div class='jdgm-rev__icon' > J </div>  <span class=\"jdgm-rev__rating\" data-score=\"1\" tabindex=\"0\" aria-label=\"1 star review\" role=\"img\"> <span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--off'></span><span class='jdgm-star jdgm--off'></span><span class='jdgm-star jdgm--off'></span><span class='jdgm-star jdgm--off'></span> </span> <span class='jdgm-rev__timestamp jdgm-spinner' data-content='2026-07-04 13:55:24 UTC'></span>  <span class='jdgm-rev__prod-info-wrapper'> <span class='jdgm-rev__prod-link-prefix'></span>  <a href='/products/gw1206#judgeme_product_reviews' target='_blank' class='jdgm-rev__prod-link'> Ecowitt GW1206 土壤濕度計套件，包括 GW1200 IoT Wi-Fi 閘道器和 WH51 土壤濕度傳感器 </a>  </span> <div class='jdgm-rev__br'></div> <span class='jdgm-rev__buyer-badge-wrapper'>  <span class='jdgm-rev__buyer-badge'></span>  </span> <span class='jdgm-rev__author-wrapper'> <span class='jdgm-rev__author'>Jon</span> <span class='jdgm-rev__location'  data-country-code=\"US\" >  </span> </span> </div> <div class='jdgm-rev__content'> <div class='jdgm-rev__custom-form'>  </div> <b class='jdgm-rev__title'>絕對遠離！</b> <div class='jdgm-rev__body'><p>無論如何都要遠離ecowitt。</p>\n\n<p>這是我最糟糕的線上購物經驗之一。Ecowitt在結帳前未告知基站會在幾天內到貨，而感測器則約一個月才到貨。這些資訊直到他們已經收款後才清楚告知。如果我早知道，我會選擇在其他地方購買。</p>\n\n<p>得知延遲後，我立即聯繫客服並確認感測器尚未出貨。儘管如此，銷售部的Dan和Lilias拒絕取消訂單或提供合理的解決方案。一旦Ecowitt收了你的錢，就別指望客服會站在你這邊。</p>\n\n<p>更糟的是，他們還要求客戶支付昂貴的國際運費將商品退回中國，即使這個問題本可以在購買前提供誠實的運送資訊來避免。</p>\n\n<p>我最終在其他地方購買了相同的感測器，並且更快收到貨。</p>\n\n<p>如果你考慮購買Ecowitt，請善待自己，選擇具有友善退貨政策的零售商，或者更好地選擇另一家公司。根據我的經驗，Ecowitt缺乏透明度且客服差勁，讓我無法推薦他們。Ecowitt的謊言已經足夠讓人遠離，更不用說產品操作差！絕對沒有任何好處來自ecowitt！</p></div> <div class='jdgm-rev__pics'>  </div> <div class='jdgm-rev__vids'>  <div class='jdgm-vid-player' data-external-id=0c5d79de715b5125aefaf225201f0be5> <div class='jdgm-vid-player__wrapper jdgm--loading'> </div> </div>   </div> </div> <div class='jdgm-rev__actions'> <div class='jdgm-rev__social'></div> <div class='jdgm-rev__votes'></div> </div> <div class='jdgm-rev__reply'>  </div> </div><div class='jdgm-rev jdgm-divider-top' data-verified-buyer='true' data-review-id='5c6a1e04-e9c9-4428-825d-87a80fdb72b5' data-thumb-up-count='0' data-thumb-down-count='0'> <div class='jdgm-rev__header'>  <div class='jdgm-rev__icon' > 男 </div>  <span class=\"jdgm-rev__rating\" data-score=\"5\" tabindex=\"0\" aria-label=\"5 star review\" role=\"img\"> <span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span> </span> <span class='jdgm-rev__timestamp jdgm-spinner' data-content='2026-07-04 08:10:53 UTC'></span>  <span class='jdgm-rev__prod-info-wrapper'> <span class='jdgm-rev__prod-link-prefix'></span>  <a href='/products/ws90#judgeme_product_reviews' target='_blank' class='jdgm-rev__prod-link'> WS90 無線7合1電子感測器陣列觸覺雨量計與超聲波風速計 </a>  </span> <div class='jdgm-rev__br'></div> <span class='jdgm-rev__buyer-badge-wrapper'>  <span class='jdgm-rev__buyer-badge'></span>  </span> <span class='jdgm-rev__author-wrapper'> <span class='jdgm-rev__author'>Marcello Cortese</span> <span class='jdgm-rev__location'  data-country-code=\"IT\" >  </span> </span> </div> <div class='jdgm-rev__content'> <div class='jdgm-rev__custom-form'>  </div> <b class='jdgm-rev__title'></b> <div class='jdgm-rev__body'><p>WS90 無線7合1電子感測器陣列觸覺雨量計與超聲波風速計</p></div> <div class='jdgm-rev__pics'>  </div> <div class='jdgm-rev__vids'>   </div> </div> <div class='jdgm-rev__actions'> <div class='jdgm-rev__social'></div> <div class='jdgm-rev__votes'></div> </div> <div class='jdgm-rev__reply'>  </div> </div><div class='jdgm-rev jdgm-divider-top' data-verified-buyer='true' data-review-id='78b16cfb-c2be-412d-b2b1-4b3e40be8121' data-thumb-up-count='0' data-thumb-down-count='0'> <div class='jdgm-rev__header'>  <div class='jdgm-rev__icon' > C </div>  <span class=\"jdgm-rev__rating\" data-score=\"5\" tabindex=\"0\" aria-label=\"5 star review\" role=\"img\"> <span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span> </span> <span class='jdgm-rev__timestamp jdgm-spinner' data-content='2026-07-04 01:56:57 UTC'></span>  <span class='jdgm-rev__prod-info-wrapper'> <span class='jdgm-rev__prod-link-prefix'></span>  <a href='/products/wh46d#judgeme_product_reviews' target='_blank' class='jdgm-rev__prod-link'> WH46D 7合1空氣品質感測器，配備LCD顯示屏，NDIR CO2 / PM1.0 / PM2.5 / PM4.0 / PM10 / 溫度 / 濕度感測器 </a>  </span> <div class='jdgm-rev__br'></div> <span class='jdgm-rev__buyer-badge-wrapper'>  <span class='jdgm-rev__buyer-badge'></span>  </span> <span class='jdgm-rev__author-wrapper'> <span class='jdgm-rev__author'>C.T.</span> <span class='jdgm-rev__location'  data-country-code=\"US\" >  </span> </span> </div> <div class='jdgm-rev__content'> <div class='jdgm-rev__custom-form'>  </div> <b class='jdgm-rev__title'>快速交貨與簡易設置</b> <div class='jdgm-rev__body'><p>同時提供友善、樂於助人且快速的支援。</p></div> <div class='jdgm-rev__pics'>  </div> <div class='jdgm-rev__vids'>   </div> </div> <div class='jdgm-rev__actions'> <div class='jdgm-rev__social'></div> <div class='jdgm-rev__votes'></div> </div> <div class='jdgm-rev__reply'>  </div> </div><div class='jdgm-rev jdgm-divider-top' data-verified-buyer='true' data-review-id='352bb5c3-b5cc-43fe-83de-88abbbc0f383' data-thumb-up-count='0' data-thumb-down-count='0'> <div class='jdgm-rev__header'>  <div class='jdgm-rev__icon' > J </div>  <span class=\"jdgm-rev__rating\" data-score=\"5\" tabindex=\"0\" aria-label=\"5 star review\" role=\"img\"> <span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span> </span> <span class='jdgm-rev__timestamp jdgm-spinner' data-content='2026-07-03 19:51:02 UTC'></span>  <span class='jdgm-rev__prod-info-wrapper'> <span class='jdgm-rev__prod-link-prefix'></span>  <a href='/products/wh52#judgeme_product_reviews' target='_blank' class='jdgm-rev__prod-link'> WH52 土壤濕度/溫度/EC 感測器，無線 3 合 1 土壤感測器 </a>  </span> <div class='jdgm-rev__br'></div> <span class='jdgm-rev__buyer-badge-wrapper'>  <span class='jdgm-rev__buyer-badge'></span>  </span> <span class='jdgm-rev__author-wrapper'> <span class='jdgm-rev__author'>JHC Ernst</span> <span class='jdgm-rev__location'  data-country-code=\"NL\" >  </span> </span> </div> <div class='jdgm-rev__content'> <div class='jdgm-rev__custom-form'>  </div> <b class='jdgm-rev__title'>WH52</b> <div class='jdgm-rev__body'><p>運作正常，沒有問題。</p></div> <div class='jdgm-rev__pics'>  </div> <div class='jdgm-rev__vids'>   </div> </div> <div class='jdgm-rev__actions'> <div class='jdgm-rev__social'></div> <div class='jdgm-rev__votes'></div> </div> <div class='jdgm-rev__reply'>  </div> </div><div class='jdgm-rev jdgm-divider-top' data-verified-buyer='true' data-review-id='f17a7847-faa0-4a1a-b4ce-9fe0dd3caa1b' data-thumb-up-count='0' data-thumb-down-count='0'> <div class='jdgm-rev__header'>  <div class='jdgm-rev__icon' > A </div>  <span class=\"jdgm-rev__rating\" data-score=\"5\" tabindex=\"0\" aria-label=\"5 star review\" role=\"img\"> <span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span><span class='jdgm-star jdgm--on'></span> </span> <span class='jdgm-rev__timestamp jdgm-spinner' data-content='2026-07-03 16:01:18 UTC'></span>  <span class='jdgm-rev__prod-info-wrapper'> <span class='jdgm-rev__prod-link-prefix'></span>  <a href='/products/gw1200#judgeme_product_reviews' target='_blank' class='jdgm-rev__prod-link'> GW1200 IOT Wi-Fi 閘道器，內建溫度/濕度/氣壓感測 </a>  </span> <div class='jdgm-rev__br'></div> <span class='jdgm-rev__buyer-badge-wrapper'>  <span class='jdgm-rev__buyer-badge'></span>  </span> <span class='jdgm-rev__author-wrapper'> <span class='jdgm-rev__author'>ANTONETTE Lininger</span> <span class='jdgm-rev__location'  data-country-code=\"US\" >  </span> </span> </div> <div class='jdgm-rev__content'> <div class='jdgm-rev__custom-form'>  </div> <b class='jdgm-rev__title'>氣象站</b> <div class='jdgm-rev__body'><p>我們在所有ecowitt產品上都取得了巨大成功。易於使用且可靠。</p></div> <div class='jdgm-rev__pics'>  </div> <div class='jdgm-rev__vids'>   </div> </div> <div class='jdgm-rev__actions'> <div class='jdgm-rev__social'></div> <div class='jdgm-rev__votes'></div> </div> <div class='jdgm-rev__reply'>  </div> </div></div> <div class='jdgm-spinner jdgm-revs-tab__spinner' style='display: none'> </div> <div class='jdgm-paginate' data-per-page='5' data-url='https://api.judge.me/reviews/reviews_for_reviews_tab' ><a class=\"jdgm-paginate__page jdgm-curt\" data-page=\"1\" aria-label=\"Page 1\" tabindex=\"0\" role=\"button\">1</a><a class=\"jdgm-paginate__page \" data-page=\"2\" aria-label=\"Page 2\" tabindex=\"0\" role=\"button\">2</a><a class=\"jdgm-paginate__page \" data-page=\"3\" aria-label=\"Page 3\" tabindex=\"0\" role=\"button\">3</a><a class=\"jdgm-paginate__page jdgm-paginate__next-page\" data-page=\"2\" aria-label=\"Page 2\" tabindex=\"0\" rel=\"next\" role=\"button\"></a><a class=\"jdgm-paginate__page jdgm-paginate__last-page\" data-page=\"321\" aria-label=\"Page 321\" tabindex=\"0\" role=\"button\"></a></div> </div> </div> </div> </section>",
       "attrCheckDecision": "repair"
     },
     {
-      "taskId": "814540fe-2aa0-4da2-bb7d-00395d5542d9",
-      "shopName": "ciwishop.myshopify.com",
+      "taskId": "67d8d860-ea63-4183-955d-a52231082b90",
+      "shopName": "e-agronomy.myshopify.com",
       "source": "en",
       "target": "zh-TW",
-      "resourceId": "gid://shopify/Collection/473926926359",
-      "digest": "5c2e5ca2aa5ac0e9845b075b3036cdd7053e6a06686d9e389a7032d5bf1fdede",
-      "module": "COLLECTION",
-      "key": "body_html",
-      "translatedValue": "<p><img src=\"https://cdn.shopify.com/s/files/1/0728/0948/0215/files/48566819.jpg?v=1765530971\" alt=\"Bienvenue à Kiwi\"><img src=\"https://cdn.shopify.com/s/files/1/0728/0948/0215/files/16635201.jpg?v=1765523446\" alt=\"クルップ エビデンス 全自動コーヒーメーカー\nhahahahahaha哈哈哈哈哈哈\"></p>",
-      "attrCheckDecision": "repair"
-    },
-    {
-      "taskId": "b7158d18-5bd2-4de7-932d-974456ac38b2",
-      "shopName": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "vi",
-      "resourceId": "gid://shopify/Product/7890952290327",
-      "digest": "708267d5a3e5e4e10e34a7d0bb046b48cb3fc4405834dd25974a9f7d8b5f5db1",
-      "module": "PRODUCT",
-      "key": "body_html",
-      "translatedValue": "<p>Trong chơi game cạnh tranh, nơi phản ứng trong tích tắc rất quan trọng, bàn phím công tắc từ đang cách mạng hóa thiết lập—ngay cả chuyên gia như Shroud cũng ưa chuộng chúng cho các tựa game như Valorant. Những bàn phím này, nhanh chóng nổi lên như những ứng cử viên cho <a href=\"https://vgnlab.com/\" target=\"_blank\" title=\"best gaming keyboards\" rel=\"noopener\">bàn phím chơi game tốt nhất</a>, mượn công nghệ Hall effect cấp hàng không vũ trụ để cung cấp các thao tác gõ phím không tiếp xúc, giải quyết các vấn đề lâu đời như độ trễ, hao mòn và tùy chỉnh hạn chế.<br>Từ bỏ thiết kế cơ học (hao mòn vật lý) và quang học (dễ bị nhiễu), công tắc từ tính cung cấp hành trình kích hoạt có thể điều chỉnh, phản hồi siêu nhanh và độ bền gần như không thể phá hủy. Hướng dẫn này phân tích công nghệ, lợi thế cạnh tranh và cách chọn công tắc phù hợp cho lối chơi của bạn. Nâng cấp thiết lập của bạn—hãy khám phá lý do tại sao công tắc từ tính là tiêu chuẩn mới trong game.</p>\n<div style=\"text-align: start;\"><img src=\"https://cdn.shopify.com/s/files/1/0775/4927/3398/files/A75-Hall-Effect-Keyboard.png?v=1747388944\" alt=\"A75-Hall-Effect-Keyboard\" style=\"float: none;\"></div>\n<h2>Cách Công Tắc Từ Tính Hoạt Động</h2>\n<p>Công tắc từ tính hoạt động dựa trên công nghệ Hall effect, được tinh chỉnh cho độ chính xác trong game sau phát hiện năm 1879. Đây là cách chúng vượt trội hơn cả <a href=\"https://vgnlab.com/\" target=\"_blank\" title=\"best mechanical keyboard\" rel=\"noopener\">bàn phím cơ tốt nhất</a> các thiết kế:</p>\n<h3>1. Thành Phần Cốt Lõi: Nam Châm + Cảm Biến Hall Effect</h3>\n<p>Nam Châm Neodymium: Được nhúng trong thân mỗi nút bấm, nam châm đất hiếm mạnh mẽ này tạo ra từ trường ổn định. Cường độ của nó (đo bằng gauss) và vị trí được hiệu chỉnh để hoạt động liền mạch với cảm biến bên dưới.<br>Cảm Biến Hall Effect: Một vi mạch gắn trên PCB phát hiện sự thay đổi từ thông. Không giống như tiếp điểm cơ học hoặc đèn LED quang học, nó không có bộ phận chuyển động—chỉ là một lớp bán dẫn chuyển đổi từ trường thành tín hiệu điện áp.</p>\n<div style=\"text-align: start;\"><img src=\"https://cdn.shopify.com/s/files/1/0775/4927/3398/files/vgn-Magnet_Hall-Effect-Sensor.png?v=1747388975\" alt=\"vgn-Magnet + Hall-Effect-Sensor\" style=\"float: none;\"></div>\n<h3>2. Kích Hoạt Không Tiếp Xúc: Quy Trình 3 Bước</h3>\n<p>Bước 1: Nhấn phím khởi tạo chuyển độngKhi bạn nhấn một phím, nam châm hạ xuống về phía cảm biến. Khoảng cách giữa chúng giảm, làm thay đổi mật độ từ thông mà cảm biến phát hiện.<br>Bước 2: Tạo tín hiệu qua Hiệu ứng HallCảm biến đo sự thay đổi từ thông và xuất ra điện áp tỷ lệ với khoảng cách của nam châm (điện áp Hall). Tín hiệu tương tự này sạch và chống nhiễu, không giống như công tắc cơ học dễ bị nhiễu \"debounce\" hoặc công tắc quang học dễ bị bụi chặn tia.<br>Bước 3: Ngưỡng kích hoạt có thể tùy chỉnhHầu hết các bàn phím từ tính bao gồm bộ xử lý tín hiệu số (DSP) cho phép bạn đặt ngưỡng kích hoạt thông qua phần mềm. </p>\n<div style=\"text-align: start;\"><img src=\"https://cdn.shopify.com/s/files/1/0775/4927/3398/files/vgn-Magnetic-Switch-Keyboard-3-Step-Process.gif?v=1747388997\" alt=\"vgn-Magnetic-Switch-Keyboard-3-Step-Process\" style=\"float: none;\"></div>\n<h3>3. Tại sao Thiết kế Này Phá hủy Công tắc Truyền thống</h3>\n<p>Không hao mòn vật lý = Tuổi thọ vô hạnCông tắc cơ học dựa vào các tiếp điểm lá kim loại bị oxy hóa hoặc mòn sau 50–100 triệu lần gõ phím. Công tắc quang học sử dụng cặp LED/phototransistor bị suy giảm do rò rỉ ánh sáng. Công tắc từ tính? Với không tiếp xúc vật lý, chúng được đánh giá cho 10+ tỷ lần gõ phím—gần như không thể phá hủy, ngay cả với streamer gõ 10 giờ mỗi ngày.<br>Chuỗi độ trễ cực thấpĐường truyền tín hiệu nhanh như chớp: cảm biến → DSP → USB/truyền không dây 2.4GHz. Các mẫu cao cấp như Wooting Two HE đạt độ trễ 0.1ms—nhanh hơn 10 lần so với công tắc cơ tiêu chuẩn (1–5ms)—quan trọng cho các thao tác chính xác đến từng khung hình trong Rocket League hoặc Street Fighter 6.<br>Độ chính xác cấp độ tương tựKhông giống như công tắc cơ học nhị phân “bật/tắt”, hệ thống từ tính cung cấp đầu vào tỷ lệ (khi kết hợp với phần mềm/trò chơi tương thích). Ví dụ, trong các game mô phỏng đua xe như Assetto Corsa, một phím nhấn một phần có thể mô phỏng độ nhạy của bàn đạp ga, cho phép bạn điều chỉnh ga với kiểm soát đến từng milimet.</p>\n<div style=\"text-align: start;\"><img src=\"https://cdn.shopify.com/s/files/1/0775/4927/3398/files/VGN-Mechanical-Switch-VS-Magnetic-Switch.gif?v=1747389058\" alt=\"VGN-Mechanical-Switch-VS-Magnetic-Switch\" style=\"float: none;\"></div>\n<h2>Tại sao việc áp dụng sớm công tắc từ tính lại chiến thắng</h2>\n<h3>1. Lợi thế cạnh tranh: Miligiây quan trọng trong game FPS</h3>\n<p>Các bàn phím cơ truyền thống hoạt động trên hệ thống nhị phân \"tất cả hoặc không có gì\" - một phím hoặc được nhấn (kích hoạt) hoặc không, với các điểm kích hoạt cố định (ví dụ: 2mm cho Cherry MX Red). Công tắc từ phá vỡ giới hạn này với độ sâu kích hoạt có thể điều chỉnh (0.1–4.0mm) và độ trễ 0.1ms - nhanh hơn 10 lần so với các công tắc cơ tốt nhất (1–5ms). Đối với người chơi FPS, điều này có nghĩa là:<br>Đăng ký đạn tức thời trong Valorant: Khi nhìn ra góc ở Bind, cài đặt kích hoạt 0.5mm cho phép bạn chạm \"bắn\" ngay khi tâm ngắm trúng kẻ địch, vượt qua đối thủ trên bàn phím cơ.<br>Sự thống trị bắn nhanh trong CS:GO: Trong một cuộc đấu spray trên Dust II, các công tắc từ đăng ký 10+ phát bắn mỗi giây mà không bị ghosting, so với 6–8 trên bàn phím tiêu chuẩn - quan trọng để phá vỡ giáp trước khi đối thủ phản ứng.Các game thủ chuyên nghiệp như TenZ của Sentinels thừa nhận: \"Khi bạn cảm nhận được phản hồi không độ trễ, quay lại bàn phím cơ giống như chơi với độ trễ.\"</p>\n<h3>2. Nghiên cứu điển hình: Cuộc cách mạng Rapid Trigger của Wooting trong Valorant</h3>\n<p>Wooting, tiên phong trong công nghệ công tắc từ, đã mở khóa một tính năng thay đổi cuộc chơi cho Valorant: kích hoạt động thông qua chế độ “Rapid Trigger”. Đây là cách nó hoạt động trong thực tế:<br>Điều chỉnh ngay khi đang di chuyển cho các kỹ năng: Trong khi Phoenix “Run It Back” lao tới, đặt kích hoạt sâu 3.0mm để tránh kích hoạt vô tình khi di chuyển. Khi thả “Hot Hands” molly, chuyển sang kích hoạt 1.0mm để triển khai tức thì.<br>Không còn lỗi “double-tap”: Trong các pha đấu 1v1 căng thẳng của Valorant, công tắc cơ học đôi khi không nhận được các cú nhấp nhanh liên tiếp (do độ trễ debounce), nhưng thiết kế không tiếp xúc của Wooting ghi lại mọi đầu vào, ngay cả ở 20 nhấp mỗi giây. Kết quả? Những người dùng đầu tiên sử dụng bàn phím Wooting đã thấy cải thiện 15–20% độ chính xác phát bắn đầu tiên và thời gian đặt/gỡ bom nhanh hơn trong thử nghiệm chuyên nghiệp. Như nhà phân tích esports Thooorin đã nhận xét: “Công tắc từ không chỉ là một xu hướng — chúng là một yêu cầu cạnh tranh cho các tựa game FPS.”<br>Những người dùng đầu tiên không chỉ giành chiến thắng trong game; họ đang tương lai hóa thiết lập của mình. Khi esports tiếp tục đòi hỏi độ chính xác đến từng pixel, công tắc từ đã chứng minh rằng chúng không phải là công nghệ ngách — chúng là chuẩn mực mới cho chơi cạnh tranh. Sẵn sàng để có được lợi thế tương tự? Hãy cùng tìm hiểu cách chọn bàn phím công tắc từ đầu tiên của bạn.</p>\n<div style=\"text-align: start;\"><img src=\"https://cdn.shopify.com/s/files/1/0775/4927/3398/files/VGN-magnetic-keyboard-Valorant.webp?v=1747389079\" alt=\"VGN-magnetic-keyboard-Valorant\" style=\"float: none;\"></div>\n<h2>Cách Chọn Bàn Phím Công Tắc Từ</h2>\n<p>Sẵn sàng trải nghiệm công nghệ từ? Đây là hướng dẫn của bạn, với trọng tâm là <a href=\"https://vgnlab.com/products/vgn-a75-esports-hall-effect-gasket-mount-keyboard\" title=\"VGN A75\">VGN A75</a> (<strong>$59.99</strong>)—lối vào giá phải chăng nhất cho <a href=\"https://vgnlab.com/\" target=\"_blank\" title=\"best gaming keyboards\" rel=\"noopener\">bàn phím chơi game tốt nhất</a> với công tắc từ.</p>\n<h3>1. Bắt Đầu Với Ngân Sách Của Bạn (Không Cần $200+ Trở Lên)</h3>\n<p>Bàn phím từ tính không yêu cầu mức giá đắt đỏ. VGN A75 dẫn đầu ở mức <strong>$59.99</strong>—rẻ hơn nhiều so với đối thủ—cung cấp công nghệ hiệu ứng Hall cốt lõi không có sự thỏa hiệp, nó vượt trội hơn nhiều bàn phím cơ giá rẻ, mang lại hiệu suất sánh ngang với cả <a href=\"https://vgnlab.com/\" target=\"_blank\" title=\"best mechanical keyboard\" rel=\"noopener\">bàn phím cơ tốt nhất</a> các tùy chọn với giá gấp đôi:<br>Hành trình kích hoạt có thể điều chỉnh (0.1–4.0mm) cho độ chính xác trong FPS/MMO<br>Tuổi thọ hơn 10 tỷ lần nhấn phím (không mài mòn vật lý)<br>Bỏ qua các mẫu đắt đỏ—đây là ngưỡng thấp nhất để thử nghiệm công tắc từ tính.</p>\n<h3>2. Tính năng chính cho game thủ</h3>\n<p>Độ sâu kích hoạt có thể điều chỉnh: Tùy chỉnh hành trình kích hoạt qua phần mềm (ví dụ: 0.5mm cho những phát bắn tức thì trong Valorant, 3.0mm cho xây dựng an toàn trong Minecraft).<br>Bố trí: Thiết kế 75% của A75 cân bằng giữa tính di động cho không gian bàn và du lịch.</p>\n<div style=\"text-align: start;\"><img src=\"https://cdn.shopify.com/s/files/1/0775/4927/3398/files/A75-Hall-Effect-Keyboard.png?v=1747388944\" alt=\"VGN-A75\" style=\"margin-bottom: 16px; float: none;\"></div>\n<p>Sẵn sàng chuyển đổi với giá rẻ hơn?<br>Đừng chần chừ—trải nghiệm điều khiển siêu nhanh, có thể tùy chỉnh của công tắc từ tính bắt đầu từ <strong>$59.99</strong> với <a href=\"https://vgnlab.com/products/vgn-a75-esports-hall-effect-gasket-mount-keyboard\" target=\"_blank\" title=\"VGN A75\" rel=\"noopener\">VGN A75</a>. Mua ngay và nâng cấp trải nghiệm chơi game của bạn mà không làm cạn kiệt ví tiền.<br></p>",
+      "resourceId": "gid://shopify/Metafield/26454514303138",
+      "digest": "36c3e06efd94aaae020d8052f4f6bb5207a7b4ebe7e0c828222a16a6dc7616df",
+      "module": "METAFIELD",
+      "key": "value",
+      "translatedValue": "<div class=\"jdgm-medals-wrapper jdgm-hidden jdgm-widget\" data-updated-at='2026-07-05T04:18:39Z'> <style type=\"text/css\"></style> <div class=\"jdgm-verified-wrapper\"> <div class=\"jdgm-rating\"> <span class=\"jdgm-rating__stars\" data-score=\"4.73\"></span> <span class=\"jdgm-rating__count\" data-value=\"1598\"></span> </div> <div class=\"jdgm-verified-by\"> <span class=\"jdgm-verified-by__text\"></span> <span class=\"jdgm-verified-by__image\"></span> </div> </div> <div class=\"jdgm-medals\" data-link=\"https://app.judge.me/reviews/stores/shop.ecowitt.com\"> <div class=\"jdgm-medals__container\"> <div class=\"jdgm-medal-wrapper\" title=\"Diamond Verified Reviews Shop. Obtained at least 1000 reviews submitted by genuine customers with proof of purchase history\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"1598\" data-type=\"ver_rev\" data-tier=\"diamond\"> <div class=\"jdgm-medal__image\" data-url=\"ver_rev/diamond.svg\" data-alt=\"Judge.me Diamond Verified Reviews Shop medal\"></div> <div class=\"jdgm-medal__value jdgm-medal__value--long\">1598</div> </a> </div> <div class=\"jdgm-medal-wrapper\" title=\"Platinum Authentic Shop. At least 99% of published reviews are verified reviews\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"\" data-type=\"auth\" data-tier=\"platinum\"> <div class=\"jdgm-medal__image\" data-url=\"auth/platinum.svg\" data-alt=\"Judge.me Platinum Authentic Shop medal\"></div> </a> </div> <div class=\"jdgm-medal-wrapper\" title=\"Gold Monthly Record Shop. Achieved an all-time record of 83 published verified reviews within one calendar month.\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"83\" data-type=\"mon_rec\" data-tier=\"gold\"> <div class=\"jdgm-medal__image\" data-url=\"mon_rec/gold_hollow.svg\" data-alt=\"Judge.me Gold Monthly Record Shop medal\"></div> <div class=\"jdgm-medal__value \">83</div> </a> </div> <div class=\"jdgm-medal-wrapper\" title=\"Silver Transparent Shop. Published at least 90% of verified reviews received in total\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"\" data-type=\"tran\" data-tier=\"silver\"> <div class=\"jdgm-medal__image\" data-url=\"tran/silver.svg\" data-alt=\"Judge.me Silver Transparent Shop medal\"></div> </a> </div> <div class=\"jdgm-medal-wrapper\" title=\"Top 1% Trending Shops. Top 1% trending shops that obtained and published the most verified reviews in the last 30 days\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"\" data-type=\"tops_trend\" data-tier=\"1-percent\"> <div class=\"jdgm-medal__image\" data-url=\"tops_trend/1-percent.svg\" data-alt=\"Judge.me Top 1% Trending Shops medal\"></div> </a> </div> <div class=\"jdgm-medal-wrapper\" title=\"Top 5% Shops. Top 5% shops that obtained and published the most verified reviews of all time\"> <a class=\"jdgm-medal jdgm--loading\" data-value=\"\" data-type=\"tops\" data-tier=\"5-percent\"> <div class=\"jdgm-medal__image\" data-url=\"tops/5-percent.svg\" data-alt=\"Judge.me Top 5% Shops medal\"></div> </a> </div> </div> </div> </div>",
       "attrCheckDecision": "repair"
     }
   ],
   "allAttrChecks": [
     {
-      "resourceId": "gid://shopify/Collection/473964871703",
-      "key": "body_html",
-      "module": "COLLECTION",
+      "resourceId": "gid://shopify/Metafield/20906124083362",
+      "key": "value",
+      "module": "METAFIELD",
       "blobStatus": "abnormal",
       "shopifyStatus": "abnormal",
       "blobIssues": [
         {
-          "attr": "alt",
-          "tag": "img",
+          "attr": "aria-label",
+          "tag": "div",
           "value": "u0000T0u0000"
         },
         {
-          "attr": "alt",
-          "tag": "img",
+          "attr": "aria-label",
+          "tag": "div",
           "value": "u0000T1u0000"
         },
         {
-          "attr": "alt",
-          "tag": "img",
+          "attr": "aria-label",
+          "tag": "div",
           "value": "u0000T2u0000"
         },
         {
-          "attr": "alt",
-          "tag": "img",
+          "attr": "aria-label",
+          "tag": "div",
           "value": "u0000T3u0000"
         },
         {
-          "attr": "alt",
-          "tag": "img",
+          "attr": "aria-label",
+          "tag": "div",
           "value": "u0000T4u0000"
         },
         {
-          "attr": "alt",
-          "tag": "img",
+          "attr": "title",
+          "tag": "div",
           "value": "u0000T5u0000"
         },
         {
-          "attr": "alt",
-          "tag": "img",
-          "value": "u0000T6u0000"
-        }
-      ],
-      "shopifyIssues": [
-        {
-          "attr": "(missing)",
-          "tag": "-",
-          "value": "(现网无译文)"
-        }
-      ],
-      "decision": "repair",
-      "reason": "Blob 与 Shopify 均异常（现网缺译文），允许替换",
-      "tokenSource": "job",
-      "taskId": "814540fe-2aa0-4da2-bb7d-00395d5542d9",
-      "shopName": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "zh-TW",
-      "digest": "0d2d88f53295bac905f33343542b18cb1a480703a77bb26a9907e905f4155a29"
-    },
-    {
-      "resourceId": "gid://shopify/Collection/473926926359",
-      "key": "body_html",
-      "module": "COLLECTION",
-      "blobStatus": "abnormal",
-      "shopifyStatus": "abnormal",
-      "blobIssues": [
-        {
-          "attr": "alt",
-          "tag": "img",
-          "value": "u0000T0u0000"
-        },
-        {
-          "attr": "alt",
-          "tag": "img",
-          "value": "u0000T1u0000"
-        }
-      ],
-      "shopifyIssues": [
-        {
-          "attr": "(missing)",
-          "tag": "-",
-          "value": "(现网无译文)"
-        }
-      ],
-      "decision": "repair",
-      "reason": "Blob 与 Shopify 均异常（现网缺译文），允许替换",
-      "tokenSource": "job",
-      "taskId": "814540fe-2aa0-4da2-bb7d-00395d5542d9",
-      "shopName": "ciwishop.myshopify.com",
-      "source": "en",
-      "target": "zh-TW",
-      "digest": "5c2e5ca2aa5ac0e9845b075b3036cdd7053e6a06686d9e389a7032d5bf1fdede"
-    },
-    {
-      "resourceId": "gid://shopify/Product/7890952290327",
-      "key": "body_html",
-      "module": "PRODUCT",
-      "blobStatus": "abnormal",
-      "shopifyStatus": "abnormal",
-      "blobIssues": [
-        {
           "attr": "title",
-          "tag": "a",
-          "value": "u0000T0u0000"
-        },
-        {
-          "attr": "alt",
-          "tag": "img",
-          "value": "u0000T1u0000"
-        },
-        {
-          "attr": "title",
-          "tag": "a",
-          "value": "u0000T2u0000"
-        },
-        {
-          "attr": "alt",
-          "tag": "img",
-          "value": "u0000T3u0000"
-        },
-        {
-          "attr": "alt",
-          "tag": "img",
-          "value": "u0000T4u0000"
-        },
-        {
-          "attr": "alt",
-          "tag": "img",
-          "value": "u0000T5u0000"
-        },
-        {
-          "attr": "alt",
-          "tag": "img",
+          "tag": "div",
           "value": "u0000T6u0000"
         },
         {
           "attr": "title",
-          "tag": "a",
+          "tag": "div",
           "value": "u0000T7u0000"
         },
         {
           "attr": "title",
-          "tag": "a",
+          "tag": "div",
           "value": "u0000T8u0000"
         },
         {
           "attr": "title",
-          "tag": "a",
+          "tag": "div",
           "value": "u0000T9u0000"
         },
         {
-          "attr": "alt",
-          "tag": "img",
+          "attr": "title",
+          "tag": "div",
           "value": "u0000T10u0000"
         },
         {
-          "attr": "title",
-          "tag": "a",
+          "attr": "aria-label",
+          "tag": "span",
           "value": "u0000T11u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T12u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T13u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T14u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T15u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T16u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T17u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T18u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T19u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T20u0000"
         }
       ],
       "shopifyIssues": [
         {
-          "attr": "(missing)",
-          "tag": "-",
-          "value": "(现网无译文)"
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T6u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T7u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T8u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T9u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T10u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T11u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T12u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T13u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T14u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T15u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T16u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T17u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T18u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T19u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T20u0000"
         }
       ],
       "decision": "repair",
-      "reason": "Blob 与 Shopify 均异常（现网缺译文），允许替换",
+      "reason": "Blob 与 Shopify 现网属性均有占位符泄漏，允许替换",
       "tokenSource": "job",
-      "taskId": "b7158d18-5bd2-4de7-932d-974456ac38b2",
-      "shopName": "ciwishop.myshopify.com",
+      "taskId": "67d8d860-ea63-4183-955d-a52231082b90",
+      "shopName": "e-agronomy.myshopify.com",
       "source": "en",
-      "target": "vi",
-      "digest": "708267d5a3e5e4e10e34a7d0bb046b48cb3fc4405834dd25974a9f7d8b5f5db1"
+      "target": "zh-TW",
+      "digest": "eeada46153c2c570e4524d918e7c80b4d4c7bbd7bf93b7f6afbba81e2d5d1744"
+    },
+    {
+      "resourceId": "gid://shopify/Metafield/26454514303138",
+      "key": "value",
+      "module": "METAFIELD",
+      "blobStatus": "abnormal",
+      "shopifyStatus": "abnormal",
+      "blobIssues": [
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        }
+      ],
+      "shopifyIssues": [
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        }
+      ],
+      "decision": "repair",
+      "reason": "Blob 与 Shopify 现网属性均有占位符泄漏，允许替换",
+      "tokenSource": "job",
+      "taskId": "67d8d860-ea63-4183-955d-a52231082b90",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "zh-TW",
+      "digest": "36c3e06efd94aaae020d8052f4f6bb5207a7b4ebe7e0c828222a16a6dc7616df"
+    },
+    {
+      "resourceId": "gid://shopify/Metafield/20906124083362",
+      "key": "value",
+      "module": "METAFIELD",
+      "blobStatus": "abnormal",
+      "shopifyStatus": "normal",
+      "blobIssues": [
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T6u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T7u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T8u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T9u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T10u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T11u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T12u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T13u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T14u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T15u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T16u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T17u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T18u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T19u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T20u0000"
+        }
+      ],
+      "shopifyIssues": [],
+      "decision": "skip_shopify_normal",
+      "reason": "Blob 属性异常，但 Shopify 现网属性正常，跳过以免覆盖好数据",
+      "tokenSource": "job",
+      "taskId": "cbedd7fe-46a1-4473-a6a6-60d32f08dcfb",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "zh-CN",
+      "digest": "eeada46153c2c570e4524d918e7c80b4d4c7bbd7bf93b7f6afbba81e2d5d1744"
+    },
+    {
+      "resourceId": "gid://shopify/Metafield/26454514303138",
+      "key": "value",
+      "module": "METAFIELD",
+      "blobStatus": "abnormal",
+      "shopifyStatus": "normal",
+      "blobIssues": [
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        }
+      ],
+      "shopifyIssues": [],
+      "decision": "skip_shopify_normal",
+      "reason": "Blob 属性异常，但 Shopify 现网属性正常，跳过以免覆盖好数据",
+      "tokenSource": "job",
+      "taskId": "cbedd7fe-46a1-4473-a6a6-60d32f08dcfb",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "zh-CN",
+      "digest": "36c3e06efd94aaae020d8052f4f6bb5207a7b4ebe7e0c828222a16a6dc7616df"
+    },
+    {
+      "resourceId": "gid://shopify/Metafield/20906124083362",
+      "key": "value",
+      "module": "METAFIELD",
+      "blobStatus": "abnormal",
+      "shopifyStatus": "normal",
+      "blobIssues": [
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T6u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T7u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T8u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T9u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T10u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T11u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T12u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T13u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T14u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T15u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T16u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T17u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T18u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T19u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T20u0000"
+        }
+      ],
+      "shopifyIssues": [],
+      "decision": "skip_shopify_normal",
+      "reason": "Blob 属性异常，但 Shopify 现网属性正常，跳过以免覆盖好数据",
+      "tokenSource": "job",
+      "taskId": "03634f3f-db12-429d-957b-1feb8bb20d8a",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "it",
+      "digest": "eeada46153c2c570e4524d918e7c80b4d4c7bbd7bf93b7f6afbba81e2d5d1744"
+    },
+    {
+      "resourceId": "gid://shopify/Metafield/26454514303138",
+      "key": "value",
+      "module": "METAFIELD",
+      "blobStatus": "abnormal",
+      "shopifyStatus": "normal",
+      "blobIssues": [
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        }
+      ],
+      "shopifyIssues": [],
+      "decision": "skip_shopify_normal",
+      "reason": "Blob 属性异常，但 Shopify 现网属性正常，跳过以免覆盖好数据",
+      "tokenSource": "job",
+      "taskId": "03634f3f-db12-429d-957b-1feb8bb20d8a",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "it",
+      "digest": "36c3e06efd94aaae020d8052f4f6bb5207a7b4ebe7e0c828222a16a6dc7616df"
+    },
+    {
+      "resourceId": "gid://shopify/Metafield/20906124083362",
+      "key": "value",
+      "module": "METAFIELD",
+      "blobStatus": "abnormal",
+      "shopifyStatus": "normal",
+      "blobIssues": [
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T6u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T7u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T8u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T9u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T10u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T11u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T12u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T13u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T14u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "span",
+          "value": "u0000T15u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T16u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T17u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T18u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T19u0000"
+        },
+        {
+          "attr": "aria-label",
+          "tag": "a",
+          "value": "u0000T20u0000"
+        }
+      ],
+      "shopifyIssues": [],
+      "decision": "skip_shopify_normal",
+      "reason": "Blob 属性异常，但 Shopify 现网属性正常，跳过以免覆盖好数据",
+      "tokenSource": "job",
+      "taskId": "464fe3a5-c019-46ae-b842-4f8995731c33",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "fr",
+      "digest": "eeada46153c2c570e4524d918e7c80b4d4c7bbd7bf93b7f6afbba81e2d5d1744"
+    },
+    {
+      "resourceId": "gid://shopify/Metafield/26454514303138",
+      "key": "value",
+      "module": "METAFIELD",
+      "blobStatus": "abnormal",
+      "shopifyStatus": "normal",
+      "blobIssues": [
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T0u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T1u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T2u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T3u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T4u0000"
+        },
+        {
+          "attr": "title",
+          "tag": "div",
+          "value": "u0000T5u0000"
+        }
+      ],
+      "shopifyIssues": [],
+      "decision": "skip_shopify_normal",
+      "reason": "Blob 属性异常，但 Shopify 现网属性正常，跳过以免覆盖好数据",
+      "tokenSource": "job",
+      "taskId": "464fe3a5-c019-46ae-b842-4f8995731c33",
+      "shopName": "e-agronomy.myshopify.com",
+      "source": "en",
+      "target": "fr",
+      "digest": "36c3e06efd94aaae020d8052f4f6bb5207a7b4ebe7e0c828222a16a6dc7616df"
     }
   ],
-  "percent": 100,
-  "updatedAt": "2026-07-13T01:59:19.491Z"
+  "percent": 20.8,
+  "updatedAt": "2026-07-13T08:49:54.587Z"
 }
