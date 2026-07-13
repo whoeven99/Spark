@@ -1240,7 +1240,33 @@ export type TmBrowseResult = {
 
 export type TmShopTargetsResult = {
   shop: string;
+  sources?: string[];
   targets: string[];
+  note?: string;
+};
+
+export type TmValueCrc32Entry = {
+  key: string;
+  source: string;
+  target: string;
+  model: string;
+  keyId: string;
+  value: string;
+  valuePreview: string;
+  ttl: number;
+};
+
+export type TmValueCrc32BrowseResult = {
+  shop: string;
+  sources: string[];
+  targets: string[];
+  entries: TmValueCrc32Entry[];
+  byTarget: Record<string, number>;
+  byModel: Record<string, number>;
+  patterns?: string[];
+  pairCount?: number;
+  scanned?: number;
+  truncated?: boolean;
   note?: string;
 };
 
@@ -1276,6 +1302,22 @@ export function browseTmCache(params: {
   if (params.cursor) query.set("cursor", params.cursor);
   if (params.limit) query.set("limit", String(params.limit));
   return apiFetch(`/redis-explorer/tm/browse?${query}`);
+}
+
+export function browseValueCrc32Cache(params: {
+  shop: string;
+  source?: string;
+  target?: string;
+  model?: string;
+  limit?: number;
+}): Promise<TmValueCrc32BrowseResult> {
+  const query = new URLSearchParams();
+  query.set("shop", params.shop);
+  if (params.source) query.set("source", params.source);
+  if (params.target) query.set("target", params.target);
+  if (params.model) query.set("model", params.model);
+  if (params.limit) query.set("limit", String(params.limit));
+  return apiFetch(`/redis-explorer/tm/browse-value-crc32?${query}`);
 }
 
 // ============================================================

@@ -37,6 +37,7 @@ import {
   type TmBrowseEntry,
   type TmBrowseResult,
 } from "../api";
+import ValueCrc32BrowseTab from "./redisExplorer/ValueCrc32BrowseTab";
 
 const { Text, Title, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -247,30 +248,37 @@ function TextLookupTab() {
   const [model, setModel] = useState(DEFAULT_TM_MODEL);
   const [targets, setTargets] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingAllModels, setLoadingAllModels] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<TmLookupResult | null>(null);
   const [detailRow, setDetailRow] = useState<TmLookupRow | null>(null);
 
-  const search = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await lookupTmCache({
-        mode: "text",
-        sourceText,
-        source,
-        digest: digest.trim() || undefined,
-        model,
-        targets,
-      });
-      setResult(data);
-    } catch (e) {
-      setError(String(e));
-      setResult(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [sourceText, source, digest, model, targets]);
+  const search = useCallback(
+    async (tryAllModels = false) => {
+      if (tryAllModels) setLoadingAllModels(true);
+      else setLoading(true);
+      setError("");
+      try {
+        const data = await lookupTmCache({
+          mode: "text",
+          sourceText,
+          source,
+          digest: digest.trim() || undefined,
+          model: tryAllModels ? undefined : model,
+          targets,
+          tryAllModels,
+        });
+        setResult(data);
+      } catch (e) {
+        setError(String(e));
+        setResult(null);
+      } finally {
+        setLoading(false);
+        setLoadingAllModels(false);
+      }
+    },
+    [sourceText, source, digest, model, targets],
+  );
 
   return (
     <Space direction="vertical" style={{ width: "100%" }} size="middle">
@@ -331,9 +339,14 @@ function TextLookupTab() {
           onModelChange={setModel}
           onTargetsChange={setTargets}
         />
-        <Button type="primary" icon={<SearchOutlined />} onClick={search} loading={loading}>
-          查询各语言缓存
-        </Button>
+        <Space>
+          <Button type="primary" icon={<SearchOutlined />} onClick={() => search(false)} loading={loading}>
+            查询各语言缓存
+          </Button>
+          <Button onClick={() => search(true)} loading={loadingAllModels}>
+            尝试全部常见模型
+          </Button>
+        </Space>
       </Form>
 
       {error && <Alert type="error" message={error} showIcon />}
@@ -345,7 +358,11 @@ function TextLookupTab() {
               keyId: {result.keyId}
             </Text>
           )}
-          <LookupResultTable results={result.results} onShowValue={setDetailRow} />
+          <LookupResultTable
+            results={result.results}
+            showModel={Boolean(result.tryAllModels)}
+            onShowValue={setDetailRow}
+          />
         </>
       )}
 
@@ -790,6 +807,16 @@ export default function RedisExplorer() {
               </Space>
             ),
             children: <TextLookupTab />,
+          },
+          {
+            key: "value-crc32",
+            label: (
+              <Space>
+                <TranslationOutlined />
+                CRC-32 value
+              </Space>
+            ),
+            children: <ValueCrc32BrowseTab />,
           },
           {
             key: "digest",

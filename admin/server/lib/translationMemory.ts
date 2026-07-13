@@ -113,6 +113,32 @@ export function parseValueTmKey(key: string): ParsedValueTmKey | null {
   return { source, target, model, keyId };
 }
 
+/** CRC-32 keyId 为 8 位小写 hex；Shopify digest 通常更长。 */
+export function isCrc32KeyId(keyId: string): boolean {
+  return /^[0-9a-f]{8}$/i.test(keyId.trim());
+}
+
+/** value 缓存 SCAN pattern；可按 source / target / model 收窄。 */
+export function tmValueBrowseScanPattern(opts: {
+  source?: string;
+  target?: string;
+  model?: string;
+}): string {
+  const source = opts.source?.trim();
+  const target = opts.target?.trim();
+  const model = opts.model?.trim();
+  if (source && target && model) {
+    return `${VALUE_TM_PREFIX}:${source}:${target}:${model}:*`;
+  }
+  if (source && target) {
+    return `${VALUE_TM_PREFIX}:${source}:${target}:*`;
+  }
+  if (source) {
+    return `${VALUE_TM_PREFIX}:${source}:*`;
+  }
+  return `${VALUE_TM_PREFIX}:*`;
+}
+
 export function previewText(text: string, max = 120): string {
   if (text.length <= max) return text;
   return `${text.slice(0, max)}…`;
