@@ -32,7 +32,9 @@
     "test:render-digest": "node --test scripts/render-log-classify.test.cjs",
     "orders:create": "node scripts/create-test-orders.mjs",
     "deploy:test": "node scripts/deploy-test-render.mjs",
-    "push:pr": "node scripts/cursor-push-pr.mjs"
+    "push:pr": "node scripts/cursor-push-pr.mjs",
+    "repair:html-placeholders": "node scripts/repair-html-placeholder-leaks.mjs",
+    "find:html-repair-shops": "node scripts/find-shops-needing-html-repair.mjs"
   },
   "type": "module",
   "engines": {
