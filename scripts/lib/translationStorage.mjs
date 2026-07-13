@@ -1,6 +1,7 @@
 import { CosmosClient } from "@azure/cosmos";
 import { BlobServiceClient } from "@azure/storage-blob";
 import { Cluster, Redis } from "ioredis";
+import { withIoRetry } from "./ioRetry.mjs";
 
 export function requireEnv(name) {
   const v = process.env[name]?.trim();
@@ -77,20 +78,25 @@ export async function loadJob(container, jobId, shop) {
 
 export async function listJobsForShop(container, shopName, { limit = 0 } = {}) {
   const lim = limit > 0 ? limit : 500;
-  const { resources } = await container.items
-    .query(
-      {
-        query:
-          "SELECT c.id, c.shopName, c.source, c.target, c.modules, c.status, c.aiModel, c.metrics, c.blobPrefix, c.createdAt, c.updatedAt, c.shopifyAccessToken, c.taskSource FROM c WHERE c.shopName = @shop ORDER BY c.createdAt DESC OFFSET 0 LIMIT @limit",
-        parameters: [
-          { name: "@shop", value: shopName },
-          { name: "@limit", value: lim },
-        ],
-      },
-      { partitionKey: shopName },
-    )
-    .fetchAll();
-  return resources;
+  return withIoRetry(
+    async () => {
+      const { resources } = await container.items
+        .query(
+          {
+            query:
+              "SELECT c.id, c.shopName, c.source, c.target, c.modules, c.status, c.aiModel, c.metrics, c.blobPrefix, c.createdAt, c.updatedAt, c.shopifyAccessToken, c.taskSource FROM c WHERE c.shopName = @shop ORDER BY c.createdAt DESC OFFSET 0 LIMIT @limit",
+            parameters: [
+              { name: "@shop", value: shopName },
+              { name: "@limit", value: lim },
+            ],
+          },
+          { partitionKey: shopName },
+        )
+        .fetchAll();
+      return resources;
+    },
+    { label: `Cosmos listJobs ${shopName}` },
+  );
 }
 
 /** 列出 Cosmos 中所有有翻译任务的店铺（去重）。 */
@@ -107,23 +113,38 @@ export async function listAllShops(container, { limit = 0, search = "" } = {}) {
     query = "SELECT DISTINCT VALUE c.shopName FROM c OFFSET 0 LIMIT @limit";
   }
 
-  const { resources } = await container.items.query({ query, parameters }).fetchAll();
-  return resources.filter(Boolean);
+  return withIoRetry(
+    async () => {
+      const { resources } = await container.items.query({ query, parameters }).fetchAll();
+      return resources.filter(Boolean);
+    },
+    { label: "Cosmos listAllShops" },
+  );
 }
 
 export async function blobListPaths(container, prefix) {
-  const paths = [];
-  for await (const item of container.listBlobsFlat({ prefix })) {
-    paths.push(item.name);
-  }
-  return paths;
+  return withIoRetry(
+    async () => {
+      const paths = [];
+      for await (const item of container.listBlobsFlat({ prefix })) {
+        paths.push(item.name);
+      }
+      return paths;
+    },
+    { label: `Blob list ${prefix.slice(0, 48)}` },
+  );
 }
 
 export async function blobReadJson(container, path) {
-  const client = container.getBlockBlobClient(path);
-  if (!(await client.exists())) return null;
-  const buf = await client.downloadToBuffer();
-  return JSON.parse(buf.toString("utf8"));
+  return withIoRetry(
+    async () => {
+      const client = container.getBlockBlobClient(path);
+      if (!(await client.exists())) return null;
+      const buf = await client.downloadToBuffer();
+      return JSON.parse(buf.toString("utf8"));
+    },
+    { label: `Blob read ${path.split("/").slice(-2).join("/")}` },
+  );
 }
 
 export async function blobWriteJson(container, path, data) {

@@ -6,13 +6,10 @@
  *   任务 createdAt < 截止时间（默认 2026-07-08），且译文 HTML 的
  *   alt / title / aria-label 仍含 __HXLAT_* / ⟦Tn⟧ / u0000Tn u0000 等占位符。
  *
- * 本脚本只读 Cosmos + Blob，不调 Shopify、不写回。
+ * 默认只扫 PRODUCT / METAFIELD 模块的 HTML 字段。
+ * 店内任一任务命中即输出并跳过该店剩余任务。
  *
- * 用法:
- *   node scripts/find-shops-needing-html-repair.mjs
- *   node scripts/find-shops-needing-html-repair.mjs --shop-search=ciwi
- *   node scripts/find-shops-needing-html-repair.mjs --shop-limit=20 --detail
- *   node scripts/find-shops-needing-html-repair.mjs --out=scripts/shops-need-html-repair.json
+ * 本脚本只读 Cosmos + Blob，不调 Shopify、不写回。
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -27,7 +24,10 @@ import {
   DEFAULT_JOB_CREATED_BEFORE,
   isJobBeforeCutoff,
 } from "./lib/repairTranslationJob.mjs";
-import { scanJobAttrLeaks } from "./lib/scanHtmlAttrLeaks.mjs";
+import {
+  scanJobAttrLeaks,
+  DEFAULT_HTML_SCAN_MODULES,
+} from "./lib/scanHtmlAttrLeaks.mjs";
 
 await loadDotEnv();
 
@@ -41,16 +41,17 @@ function printUsage() {
 选项:
   --shop=SHOP            只扫指定店铺
   --shop-search=TEXT     按店名模糊过滤
-  --shop-limit=N         最多扫描 N 个店铺（默认不限制，上限同 listAllShops）
+  --shop-limit=N         最多扫描 N 个店铺
   --job-limit=N          每店最多扫 N 个任务（默认 500）
   --before=ISO           只扫 createdAt 早于此时间的任务（默认 ${DEFAULT_JOB_CREATED_BEFORE}）
   --include-recent       不按创建时间过滤
-  --module=MODULE        仅扫指定模块
+  --module=MODULE        仅扫单个模块（默认 PRODUCT + METAFIELD）
   --detail               输出命中样例（resourceId/key/属性摘要）
-  --full-scan            不提前结束：统计每店全部命中字段数（更慢）
-  --concurrency=N        店铺并行数（默认 2）
+  --full-scan            店内扫完所有任务（默认命中即停）
+  --concurrency=N        店铺并行数（默认 1，便于看进度）
   --out=PATH             写出 JSON 报告
   --out-txt=PATH         写出仅含 shopName 的纯文本（一行一个）
+  --resume-from=SHOP     从指定店铺起继续扫描（跳过之前的店）
   --help                 显示帮助
 `);
 }
@@ -66,9 +67,10 @@ function parseArgs(argv) {
     module: "",
     detail: false,
     fullScan: false,
-    concurrency: 2,
+    concurrency: 1,
     out: "",
     outTxt: "",
+    resumeFrom: "",
   };
 
   for (const arg of argv) {
@@ -124,6 +126,10 @@ function parseArgs(argv) {
       opts.outTxt = arg.slice("--out-txt=".length).trim();
       continue;
     }
+    if (arg.startsWith("--resume-from=")) {
+      opts.resumeFrom = arg.slice("--resume-from=".length).trim().toLowerCase();
+      continue;
+    }
     console.error(`未知参数: ${arg}`);
     printUsage();
     process.exit(1);
@@ -135,64 +141,157 @@ function parseArgs(argv) {
     process.exit(1);
   }
 
+  opts.scanModules = opts.module ? [opts.module] : [...DEFAULT_HTML_SCAN_MODULES];
   return opts;
 }
 
-async function parallelMap(items, concurrency, fn) {
-  const results = new Array(items.length);
-  let next = 0;
-  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-    while (next < items.length) {
-      const idx = next++;
-      results[idx] = await fn(items[idx], idx);
-    }
-  });
-  await Promise.all(workers);
-  return results;
+function formatModuleProgress(p) {
+  if (p.layout === "resources") {
+    const total = p.resourceTotal ?? 0;
+    const done = p.resourceDone ?? 0;
+    const pct = total > 0 ? ((done / total) * 100).toFixed(0) : "0";
+    return `[${p.module}] 资源 ${done}/${total} (${pct}%)`;
+  }
+  if (p.layout === "chunks") {
+    const ct = p.chunkTotal ?? 0;
+    const cd = p.chunkDone ?? 0;
+    return `[${p.module}] 分片 ${cd}/${ct} | 已扫资源 ${p.resourceDone ?? 0}`;
+  }
+  return `[${p.module ?? "?"}]`;
 }
 
-async function scanShop(blob, cosmos, shopName, opts) {
-  const jobsRaw = await listJobsForShop(cosmos, shopName, { limit: opts.jobLimit || 500 });
-  const jobs = (opts.createdBefore
-    ? jobsRaw.filter((j) => isJobBeforeCutoff(j, opts.createdBefore))
-    : jobsRaw
-  )
-    // 旧任务更可能有泄漏：升序扫，快速发现更快命中
-    .slice()
-    .sort((a, b) => String(a.createdAt ?? "").localeCompare(String(b.createdAt ?? "")));
+function printShopHit(shopResult, opts) {
+  const job = shopResult.affectedJobs[0];
+  const hit = shopResult.firstHit;
+  console.log("");
+  console.log(`>>> 需要修复: ${shopResult.shopName}`);
+  if (job) {
+    console.log(
+      `    任务 ${job.jobId} | ${job.source} → ${job.target} | ${job.status} | 创建 ${job.createdAt ?? "?"}`,
+    );
+  }
+  if (hit) {
+    console.log(`    命中 ${hit.module} | ${hit.resourceId}`);
+    console.log(`    key=${hit.key}`);
+    console.log(`    属性: ${hit.summary}`);
+  }
+  console.log(`    （已跳过该店剩余 ${Math.max(0, shopResult.jobsInScope - shopResult.jobsScanned)} 个任务）`);
+  console.log("");
+}
+
+function normalizeShop(s) {
+  return String(s ?? "").trim().toLowerCase();
+}
+
+async function writePartialReport(opts, batch) {
+  if (!opts.out) return;
+  const outPath = resolve(opts.out);
+  await mkdir(dirname(outPath), { recursive: true });
+  await writeFile(outPath, `${JSON.stringify(batch, null, 2)}\n`, "utf8");
+}
+
+async function scanShop(blob, cosmos, shopName, ctx) {
+  const { opts, shopIndex, shopTotal } = ctx;
+  const prefix = `[店铺 ${shopIndex}/${shopTotal}]`;
 
   const shopResult = {
     shopName,
     needsRepair: false,
-    jobsTotal: jobsRaw.length,
-    jobsInScope: jobs.length,
+    scanFailed: false,
+    jobsTotal: 0,
+    jobsInScope: 0,
     jobsScanned: 0,
     jobsWithAttrLeak: 0,
+    jobsFailed: 0,
     fieldsWithAttrLeak: 0,
     fieldsWithHtmlLeak: 0,
+    firstHit: null,
     sampleHits: [],
     affectedJobs: [],
+    errors: [],
   };
 
+  let jobsRaw;
+  try {
+    jobsRaw = await listJobsForShop(cosmos, shopName, { limit: opts.jobLimit || 500 });
+  } catch (err) {
+    shopResult.scanFailed = true;
+    shopResult.errors.push({ phase: "list-jobs", message: String(err?.message ?? err) });
+    console.error(`${prefix} ${shopName} — 拉取任务失败，跳过: ${err?.message ?? err}`);
+    return shopResult;
+  }
+
+  const jobs = (opts.createdBefore
+    ? jobsRaw.filter((j) => isJobBeforeCutoff(j, opts.createdBefore))
+    : jobsRaw
+  )
+    .slice()
+    .sort((a, b) => String(a.createdAt ?? "").localeCompare(String(b.createdAt ?? "")));
+
+  shopResult.jobsTotal = jobsRaw.length;
+  shopResult.jobsInScope = jobs.length;
+
   const maxHitsPerJob = opts.fullScan ? 0 : 1;
-  // 发现模式：店内一旦命中属性泄漏即可标记 needsRepair 并停止（除非 --full-scan）
   const stopOnShopHit = !opts.fullScan;
 
+  console.log(`${prefix} ${shopName} | 范围内任务 ${jobs.length} | 模块 ${opts.scanModules.join(", ")}`);
+
   for (const job of jobs) {
-    process.stdout.write(
-      `\r  … ${shopName} 任务 ${shopResult.jobsScanned + 1}/${jobs.length} ${job.id.slice(0, 8)}… (${job.target})   `,
+    const jobNo = shopResult.jobsScanned + 1;
+    console.log(
+      `  ${prefix} 任务 ${jobNo}/${jobs.length} ${job.id} | ${job.source}→${job.target} | ${job.status}`,
     );
-    const scan = await scanJobAttrLeaks(blob, job, {
-      maxHits: maxHitsPerJob,
-      moduleFilter: opts.module,
-    });
+
+    let scan;
+    try {
+      scan = await scanJobAttrLeaks(blob, job, {
+        maxHits: maxHitsPerJob,
+        modules: opts.scanModules,
+        onProgress: (p) => {
+          if (p.phase === "module") {
+            const errHint = p.errors > 0 ? ` | IO错 ${p.errors}` : "";
+            process.stdout.write(`\r    ${prefix} ${formatModuleProgress(p)}${errHint}   `);
+          }
+        },
+      });
+      process.stdout.write("\n");
+    } catch (err) {
+      process.stdout.write("\n");
+      shopResult.jobsFailed++;
+      shopResult.errors.push({
+        phase: "scan-job",
+        jobId: job.id,
+        message: String(err?.message ?? err),
+      });
+      console.error(
+        `    ${prefix} 任务扫描失败，跳过: ${String(err?.message ?? err).slice(0, 120)}`,
+      );
+      shopResult.jobsScanned++;
+      continue;
+    }
+
     shopResult.jobsScanned++;
     shopResult.fieldsWithHtmlLeak += scan.fieldsWithHtmlLeak;
     shopResult.fieldsWithAttrLeak += scan.fieldsWithAttrLeak;
+    if (scan.errors?.length) {
+      shopResult.errors.push(...scan.errors.map((e) => ({ ...e, jobId: job.id })));
+    }
+
+    if (scan.skipped) {
+      console.log(`    ${prefix} 跳过任务: ${scan.skipReason}`);
+      continue;
+    }
+
+    const partialHint = scan.partial ? " | 部分 IO 失败已跳过" : "";
+    console.log(
+      `    ${prefix} 本任务: 模块 [${(scan.modulesScanned ?? []).join(", ") || "—"}] | 资源 ${scan.resourcesScanned} | HTML泄漏 ${scan.fieldsWithHtmlLeak} | 属性泄漏 ${scan.fieldsWithAttrLeak}${partialHint}`,
+    );
 
     if (scan.fieldsWithAttrLeak > 0) {
       shopResult.needsRepair = true;
       shopResult.jobsWithAttrLeak++;
+      const firstHit = scan.hits[0] ?? null;
+      shopResult.firstHit = firstHit;
       shopResult.affectedJobs.push({
         jobId: job.id,
         source: job.source,
@@ -201,19 +300,24 @@ async function scanShop(blob, cosmos, shopName, opts) {
         createdAt: job.createdAt ?? null,
         fieldsWithAttrLeak: scan.fieldsWithAttrLeak,
         fieldsWithHtmlLeak: scan.fieldsWithHtmlLeak,
+        firstHit,
       });
       if (opts.detail) {
         for (const hit of scan.hits) {
           if (shopResult.sampleHits.length >= 20) break;
-          shopResult.sampleHits.push({
-            jobId: job.id,
-            target: job.target,
-            ...hit,
-          });
+          shopResult.sampleHits.push({ jobId: job.id, target: job.target, ...hit });
         }
       }
+      printShopHit(shopResult, opts);
       if (stopOnShopHit) break;
     }
+  }
+
+  if (!shopResult.needsRepair && !shopResult.scanFailed) {
+    const failHint = shopResult.jobsFailed > 0 ? `（${shopResult.jobsFailed} 个任务失败已跳过）` : "";
+    console.log(
+      `${prefix} ${shopName} — 未发现属性泄漏（已扫 ${shopResult.jobsScanned}/${jobs.length} 任务）${failHint}`,
+    );
   }
 
   return shopResult;
@@ -234,65 +338,142 @@ async function main() {
     });
   }
 
+  if (opts.resumeFrom) {
+    const needle = normalizeShop(opts.resumeFrom);
+    const idx = shops.findIndex((s) => normalizeShop(s) === needle || normalizeShop(s).includes(needle));
+    if (idx < 0) {
+      console.error(`--resume-from 未找到店铺: ${opts.resumeFrom}`);
+      process.exit(1);
+    }
+    console.log(`续扫: 跳过前 ${idx} 个店铺，从 ${shops[idx]} 开始`);
+    shops = shops.slice(idx);
+  }
+
   console.log(`店铺数: ${shops.length}`);
   console.log(
     opts.createdBefore
       ? `时间过滤: createdAt < ${opts.createdBefore}`
       : "时间过滤: 关闭",
   );
+  console.log(`扫描模块: ${opts.scanModules.join(", ")}（仅 HTML 字段）`);
   console.log(
     opts.fullScan
-      ? "扫描模式: 全量统计（每店扫完所有范围内任务）"
-      : "扫描模式: 快速发现（每任务命中 1 条即停；店内一旦命中即标记并跳过剩余任务）",
+      ? "店内策略: 扫完所有范围内任务"
+      : "店内策略: 任一任务命中属性泄漏 → 立即输出并跳过该店剩余任务",
   );
+  console.log(`店铺并行: ${opts.concurrency}`);
   console.log("");
 
-  let done = 0;
-  const shopResults = await parallelMap(shops, opts.concurrency, async (shopName) => {
-    const result = await scanShop(blob, cosmos, shopName, opts);
-    done++;
-    const flag = result.needsRepair ? "NEED" : "ok  ";
-    process.stdout.write(
-      `\r[${done}/${shops.length}] ${flag} ${shopName} | 范围内任务 ${result.jobsInScope} | 属性泄漏字段 ${result.fieldsWithAttrLeak}   `,
-    );
-    return result;
+  const shopResults = [];
+  const needing = [];
+  const failedShops = [];
+
+  const batchState = () => ({
+    generatedAt: new Date().toISOString(),
+    createdBefore: opts.createdBefore || null,
+    scanModules: opts.scanModules,
+    fullScan: opts.fullScan,
+    shopsScanned: shopResults.length,
+    shopsNeedingRepair: needing.length,
+    shopsFailed: failedShops.length,
+    shopNames: needing.map((r) => r.shopName),
+    shops: needing,
+    failedShops,
+    allShopResults: shopResults,
   });
 
-  process.stdout.write("\n\n");
+  if (opts.concurrency <= 1) {
+    for (let i = 0; i < shops.length; i++) {
+      let result;
+      try {
+        result = await scanShop(blob, cosmos, shops[i], {
+          opts,
+          shopIndex: i + 1,
+          shopTotal: shops.length,
+        });
+      } catch (err) {
+        result = {
+          shopName: shops[i],
+          needsRepair: false,
+          scanFailed: true,
+          errors: [{ phase: "scan-shop", message: String(err?.message ?? err) }],
+        };
+        console.error(`[店铺 ${i + 1}/${shops.length}] ${shops[i]} 扫描异常，跳过: ${err?.message ?? err}`);
+      }
 
-  const needing = shopResults.filter((r) => r.needsRepair).sort((a, b) => b.fieldsWithAttrLeak - a.fieldsWithAttrLeak);
+      shopResults.push(result);
+      if (result.needsRepair) needing.push(result);
+      if (result.scanFailed) failedShops.push(result);
+
+      console.log(
+        `[汇总 ${i + 1}/${shops.length}] 需修复 ${needing.length} | 失败 ${failedShops.length}`,
+      );
+      await writePartialReport(opts, batchState());
+    }
+  } else {
+    let done = 0;
+    const results = await Promise.all(
+      shops.map(async (shopName, i) => {
+        let result;
+        try {
+          result = await scanShop(blob, cosmos, shopName, {
+            opts,
+            shopIndex: i + 1,
+            shopTotal: shops.length,
+          });
+        } catch (err) {
+          result = {
+            shopName,
+            needsRepair: false,
+            scanFailed: true,
+            errors: [{ phase: "scan-shop", message: String(err?.message ?? err) }],
+          };
+        }
+        done++;
+        if (result.needsRepair) needing.push(result);
+        if (result.scanFailed) failedShops.push(result);
+        process.stdout.write(
+          `\r[汇总 ${done}/${shops.length}] 需修复 ${needing.length} | 失败 ${failedShops.length}   `,
+        );
+        return result;
+      }),
+    );
+    process.stdout.write("\n");
+    shopResults.push(...results);
+  }
+
+  needing.sort((a, b) => b.fieldsWithAttrLeak - a.fieldsWithAttrLeak);
   const clean = shopResults.filter((r) => !r.needsRepair);
 
-  console.log("══ 需要 HTML 修复的店铺 ══");
+  console.log("\n══ 需要 HTML 修复的店铺（汇总）══");
   if (needing.length === 0) {
     console.log("（无）");
   } else {
     for (const r of needing) {
-      console.log(
-        `- ${r.shopName}  属性泄漏字段≈${r.fieldsWithAttrLeak}  命中任务 ${r.jobsWithAttrLeak}/${r.jobsInScope}`,
-      );
-      if (opts.detail && r.sampleHits.length) {
-        for (const hit of r.sampleHits.slice(0, 5)) {
-          console.log(
-            `    · ${hit.jobId} ${hit.target} ${hit.resourceId} key=${hit.key} | ${hit.summary}`,
-          );
-        }
+      const job = r.affectedJobs[0];
+      console.log(`- ${r.shopName}`);
+      if (job?.firstHit) {
+        console.log(
+          `    ${job.jobId} ${job.target} | ${job.firstHit.resourceId} key=${job.firstHit.key}`,
+        );
       }
     }
   }
 
   console.log("");
-  console.log(`合计扫描店铺 ${shopResults.length} | 需要修复 ${needing.length} | 无需 ${clean.length}`);
+  console.log(
+    `合计扫描店铺 ${shopResults.length} | 需要修复 ${needing.length} | 扫描失败 ${failedShops.length} | 无需 ${clean.length}`,
+  );
 
-  const report = {
-    generatedAt: new Date().toISOString(),
-    createdBefore: opts.createdBefore || null,
-    fullScan: opts.fullScan,
-    shopsScanned: shopResults.length,
-    shopsNeedingRepair: needing.length,
-    shopNames: needing.map((r) => r.shopName),
-    shops: needing,
-  };
+  if (failedShops.length > 0) {
+    console.log("\n扫描失败的店铺（可 --resume-from=店名 续扫）:");
+    for (const r of failedShops) {
+      console.log(`- ${r.shopName}: ${r.errors?.[0]?.message ?? "未知错误"}`);
+    }
+  }
+
+  const report = batchState();
+  report.generatedAt = new Date().toISOString();
 
   if (opts.out) {
     const outPath = resolve(opts.out);
@@ -308,7 +489,6 @@ async function main() {
     console.log(`TXT:  ${outPath}`);
   }
 
-  // 默认也打印可复制的店名列表
   if (needing.length > 0) {
     console.log("\n# shopName 列表（可复制）");
     console.log(needing.map((r) => r.shopName).join("\n"));
@@ -316,6 +496,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("\n执行失败:", err?.message ?? err);
+  console.error("\n致命错误:", err?.message ?? err);
   process.exit(1);
 });
