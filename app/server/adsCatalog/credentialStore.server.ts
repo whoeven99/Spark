@@ -4,6 +4,7 @@ import prisma from "../../db.server";
 // auth credentials, but use dedicated platform keys so they don't collide
 // with Meta/Google Ads OAuth records that are stored elsewhere.
 const META_CATALOG_PLATFORM = "meta_catalog";
+const META_ADS_PLATFORM = "meta_ads";
 const GOOGLE_MERCHANT_PLATFORM = "google_merchant";
 const GOOGLE_ADS_PLATFORM = "google";
 const TIKTOK_CATALOG_PLATFORM = "tiktok_catalog";
@@ -14,6 +15,8 @@ const ADS_PENDING_PLATFORM = "google_ads_pending";
 // Transient record holding a freshly-exchanged Meta long-lived token while the
 // merchant picks which catalog to connect (multi-catalog selection flow).
 const META_CATALOG_PENDING_PLATFORM = "meta_catalog_pending";
+// Transient record for Meta Ads ad-account selection.
+const META_ADS_PENDING_PLATFORM = "meta_ads_pending";
 // Transient record for TikTok catalog selection.
 const TIKTOK_CATALOG_PENDING_PLATFORM = "tiktok_catalog_pending";
 
@@ -318,6 +321,70 @@ export const deleteGoogleAdsCredential = (shop: string) =>
   clearPending(shop, GOOGLE_ADS_PLATFORM);
 export const deleteFacebookCatalogCredential = (shop: string) =>
   clearPending(shop, META_CATALOG_PLATFORM);
+
+// ─── Meta Ads (Marketing API) ───────────────────────────────────────────────
+
+export type MetaAdsCredential = {
+  accessToken: string;
+  /** Graph act_ ID，如 act_123456 */
+  adAccountId: string;
+  adAccountName?: string;
+  currencyCode?: string;
+  updatedAt: string;
+};
+
+export async function getMetaAdsCredential(
+  shop: string,
+): Promise<MetaAdsCredential | null> {
+  const record = await readPlatformCredential(shop, META_ADS_PLATFORM);
+  if (!record) return null;
+  const accessToken = String(record.data.accessToken ?? "");
+  const adAccountId = String(record.data.adAccountId ?? "");
+  if (!accessToken || !adAccountId) return null;
+  return {
+    accessToken,
+    adAccountId,
+    adAccountName:
+      typeof record.data.adAccountName === "string"
+        ? record.data.adAccountName
+        : undefined,
+    currencyCode:
+      typeof record.data.currencyCode === "string"
+        ? record.data.currencyCode
+        : undefined,
+    updatedAt: record.updatedAt.toISOString(),
+  };
+}
+
+export async function setMetaAdsCredential(
+  shop: string,
+  payload: Pick<
+    MetaAdsCredential,
+    "accessToken" | "adAccountId" | "adAccountName" | "currencyCode"
+  >,
+): Promise<void> {
+  const accessToken = payload.accessToken.trim();
+  const adAccountId = payload.adAccountId.trim();
+  if (!accessToken || !adAccountId) {
+    throw new Error("Meta Ads accessToken and adAccountId are required");
+  }
+  await writePlatformCredential(shop, META_ADS_PLATFORM, {
+    accessToken,
+    adAccountId,
+    adAccountName: payload.adAccountName?.trim() || null,
+    currencyCode: payload.currencyCode?.trim() || null,
+  });
+}
+
+export const deleteMetaAdsCredential = (shop: string) =>
+  clearPending(shop, META_ADS_PLATFORM);
+
+export const setMetaAdsPending = (shop: string, payload: PendingOAuthTokens) =>
+  setPending(shop, META_ADS_PENDING_PLATFORM, payload);
+export const getMetaAdsPending = (shop: string) =>
+  getPending(shop, META_ADS_PENDING_PLATFORM);
+export const clearMetaAdsPending = (shop: string) =>
+  clearPending(shop, META_ADS_PENDING_PLATFORM);
 
 // ─── TikTok Catalog ──────────────────────────────────────────────────────────
 

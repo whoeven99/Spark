@@ -1,0 +1,98 @@
+import { describe, expect, it } from "vitest";
+import { googleDuringClause, parseRangeDays, resolveDateWindow } from "~/server/adsInsights/dateRange.server";
+import { nestFlatAdRows, mergeMetrics } from "~/server/adsInsights/nest.server";
+import { finalizeMetrics } from "~/server/adsInsights/types.server";
+
+describe("adsInsights dateRange", () => {
+  it("parses allowed ranges and defaults to 7", () => {
+    expect(parseRangeDays("14")).toBe(14);
+    expect(parseRangeDays("30")).toBe(30);
+    expect(parseRangeDays("9")).toBe(7);
+    expect(parseRangeDays(null)).toBe(7);
+  });
+
+  it("maps Google DURING clauses", () => {
+    expect(googleDuringClause(7)).toBe("LAST_7_DAYS");
+    expect(googleDuringClause(14)).toBe("LAST_14_DAYS");
+    expect(googleDuringClause(30)).toBe("LAST_30_DAYS");
+  });
+
+  it("resolves inclusive UTC windows", () => {
+    const now = new Date("2026-07-14T12:00:00.000Z");
+    expect(resolveDateWindow(7, now)).toEqual({
+      dateStart: "2026-07-08",
+      dateEnd: "2026-07-14",
+    });
+  });
+});
+
+describe("adsInsights nest", () => {
+  it("nests ad rows and rolls metrics up", () => {
+    const campaigns = nestFlatAdRows([
+      {
+        campaignId: "c1",
+        campaignName: "Campaign 1",
+        campaignStatus: "ENABLED",
+        adSetId: "s1",
+        adSetName: "AdSet 1",
+        adSetStatus: "ENABLED",
+        adId: "a1",
+        adName: "Ad 1",
+        adStatus: "ENABLED",
+        metrics: finalizeMetrics({
+          impressions: 100,
+          clicks: 10,
+          spend: 20,
+          conversions: 2,
+          conversionsValue: 40,
+          purchases: 2,
+          purchaseValue: 40,
+          addToCart: 5,
+          landingPageViews: 8,
+          reach: 50,
+          frequency: 2,
+        }),
+      },
+      {
+        campaignId: "c1",
+        campaignName: "Campaign 1",
+        campaignStatus: "ENABLED",
+        adSetId: "s1",
+        adSetName: "AdSet 1",
+        adSetStatus: "ENABLED",
+        adId: "a2",
+        adName: "Ad 2",
+        adStatus: "ENABLED",
+        metrics: finalizeMetrics({
+          impressions: 50,
+          clicks: 5,
+          spend: 10,
+          conversions: 1,
+          conversionsValue: 20,
+          purchases: 1,
+          purchaseValue: 20,
+          addToCart: 2,
+          landingPageViews: 3,
+          reach: 25,
+          frequency: 2,
+        }),
+      },
+    ]);
+
+    expect(campaigns).toHaveLength(1);
+    expect(campaigns[0].adSets).toHaveLength(1);
+    expect(campaigns[0].adSets[0].ads).toHaveLength(2);
+    expect(campaigns[0].metrics.spend).toBe(30);
+    expect(campaigns[0].metrics.purchases).toBe(3);
+    expect(campaigns[0].metrics.roas).toBe(2);
+  });
+
+  it("keeps null extended metrics null when both sides missing", () => {
+    const merged = mergeMetrics(
+      finalizeMetrics({ impressions: 1, clicks: 1, spend: 1 }),
+      finalizeMetrics({ impressions: 1, clicks: 1, spend: 1 }),
+    );
+    expect(merged.reach).toBeNull();
+    expect(merged.purchases).toBeNull();
+  });
+});

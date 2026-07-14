@@ -14,7 +14,13 @@ export const META_GRAPH_BASE = `https://graph.facebook.com/${META_GRAPH_VERSION}
 /** Catalog 同步 + 列举 Business/Catalog 所需权限。生产环境需通过 Meta App Review。 */
 export const META_CATALOG_SCOPE = "catalog_management,business_management";
 
+/** Marketing API Insights 只读权限。 */
+export const META_ADS_SCOPE = "ads_read,business_management";
+
 export const META_CATALOG_CALLBACK_PATH = "/ads/meta-catalog/callback";
+export const META_ADS_CALLBACK_PATH = "/ads/meta-ads/callback";
+
+export type MetaOAuthFlow = "meta_catalog" | "meta_ads";
 
 export interface MetaOAuthClient {
   appId: string;
@@ -25,6 +31,14 @@ export interface MetaCatalogAccount {
   catalogId: string;
   name?: string;
   businessId?: string;
+}
+
+export interface MetaAdAccount {
+  /** Graph id，通常形如 act_123 */
+  adAccountId: string;
+  name?: string;
+  currencyCode?: string;
+  accountStatus?: number;
 }
 
 function readEnv(name: string): string {
@@ -108,10 +122,11 @@ export function createMetaOAuthState(
   shop: string,
   host = "",
   appOrigin = "",
+  flow: MetaOAuthFlow = "meta_catalog",
 ): string {
   const payload = JSON.stringify({
     shop,
-    flow: "meta_catalog",
+    flow,
     host,
     appOrigin: appOrigin.replace(/\/$/, ""),
     nonce: crypto.randomBytes(8).toString("hex"),
@@ -125,7 +140,8 @@ export function createMetaOAuthState(
 export function verifyMetaOAuthState(
   state: string,
   maxAgeMs = 15 * 60 * 1000,
-): { shop: string; host: string; appOrigin: string } | null {
+  expectedFlow?: MetaOAuthFlow,
+): { shop: string; host: string; appOrigin: string; flow: MetaOAuthFlow } | null {
   const [encoded, sig] = state.split(".");
   if (!encoded || !sig) return null;
   const expected = crypto
@@ -143,12 +159,16 @@ export function verifyMetaOAuthState(
       appOrigin?: string;
       ts?: number;
     };
-    if (!payload.shop || payload.flow !== "meta_catalog") return null;
+    if (!payload.shop) return null;
+    const flow = payload.flow as MetaOAuthFlow | undefined;
+    if (flow !== "meta_catalog" && flow !== "meta_ads") return null;
+    if (expectedFlow && flow !== expectedFlow) return null;
     if (typeof payload.ts !== "number" || Date.now() - payload.ts > maxAgeMs) return null;
     return {
       shop: payload.shop,
       host: payload.host ?? "",
       appOrigin: payload.appOrigin ?? "",
+      flow,
     };
   } catch {
     return null;
@@ -160,18 +180,19 @@ export function buildMetaAuthUrl(params: {
   appId: string;
   state: string;
   redirectUri: string;
+  scope?: string;
 }): string {
   const query = new URLSearchParams({
     client_id: params.appId,
     redirect_uri: params.redirectUri,
     response_type: "code",
-    scope: META_CATALOG_SCOPE,
+    scope: params.scope ?? META_CATALOG_SCOPE,
     state: params.state,
   });
   return `${META_OAUTH_DIALOG}?${query.toString()}`;
 }
 
-/** 在嵌入式 iframe 内通过 API 鉴权后生成 Meta 授权 URL。 */
+/** 在嵌入式 iframe 内通过 API 鉴权后生成 Meta Catalog 授权 URL。 */
 export async function buildMetaOAuthStartUrl(params: {
   shop: string;
   host?: string;
@@ -185,13 +206,69 @@ export async function buildMetaOAuthStartUrl(params: {
     };
   }
   const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
-  const state = createMetaOAuthState(params.shop, params.host ?? "", appOrigin);
+  const state = createMetaOAuthState(params.shop, params.host ?? "", appOrigin, "meta_catalog");
   const authUrl = buildMetaAuthUrl({
     appId: client.appId,
     state,
     redirectUri: getMetaRedirectUri(META_CATALOG_CALLBACK_PATH, params.requestOrigin),
+    scope: META_CATALOG_SCOPE,
   });
   return { ok: true, authUrl };
+}
+
+/** Meta Ads（Marketing API）独立授权入口。 */
+export async function buildMetaAdsOAuthStartUrl(params: {
+  shop: string;
+  host?: string;
+  requestOrigin: string;
+}): Promise<{ ok: true; authUrl: string } | { ok: false; error: string }> {
+  const client = await resolveMetaOAuthClient(params.shop);
+  if (!client) {
+    return {
+      ok: false,
+      error: "缺少 Meta App 凭证：请配置 META_APP_ID / META_APP_SECRET 环境变量",
+    };
+  }
+  const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
+  const state = createMetaOAuthState(params.shop, params.host ?? "", appOrigin, "meta_ads");
+  const authUrl = buildMetaAuthUrl({
+    appId: client.appId,
+    state,
+    redirectUri: getMetaRedirectUri(META_ADS_CALLBACK_PATH, params.requestOrigin),
+    scope: META_ADS_SCOPE,
+  });
+  return { ok: true, authUrl };
+}
+
+/** Meta Ads OAuth 完成后跳回广告洞察页。 */
+export function buildMetaAdsOAuthReturnUrl(params: {
+  shop: string;
+  host?: string;
+  appOrigin?: string;
+  query?: Record<string, string>;
+  request?: Request;
+}): string {
+  const adminUrl = buildAdminEmbeddedAppReturnUrl({
+    path: "/app/settings/ads-insights",
+    shop: params.shop,
+    request: params.request,
+    query: params.query,
+  });
+  if (adminUrl) return adminUrl;
+
+  const base =
+    params.appOrigin ||
+    readEnv("META_OAUTH_REDIRECT_BASE") ||
+    readEnv("SHOPIFY_APP_URL") ||
+    "https://example.com";
+  const target = new URL("/app/settings/ads-insights", base.replace(/\/$/, "") || base);
+  target.searchParams.set("shop", params.shop);
+  target.searchParams.set("embedded", "1");
+  target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));
+  for (const [key, value] of Object.entries(params.query ?? {})) {
+    target.searchParams.set(key, value);
+  }
+  return target.toString();
 }
 
 /** Exchange an authorization code for a short-lived user access token. */
@@ -282,6 +359,59 @@ export async function getMetaCatalogs(accessToken: string): Promise<MetaCatalogA
         seen.add(cat.id);
         out.push({ catalogId: cat.id, name: cat.name, businessId });
       }
+    }
+    return out;
+  } catch (e) {
+    throw new Error(formatOutboundNetworkError(e));
+  }
+}
+
+/**
+ * 列举当前用户可访问的广告账户。
+ * @see https://developers.facebook.com/docs/marketing-api/reference/user/adaccounts/
+ */
+export async function getMetaAdAccounts(accessToken: string): Promise<MetaAdAccount[]> {
+  try {
+    const out: MetaAdAccount[] = [];
+    let nextUrl: string | null = null;
+
+    {
+      const url = new URL(`${META_GRAPH_BASE}/me/adaccounts`);
+      url.searchParams.set("fields", "id,name,account_id,currency,account_status");
+      url.searchParams.set("limit", "100");
+      url.searchParams.set("access_token", accessToken);
+      nextUrl = url.toString();
+    }
+
+    let pages = 0;
+    while (nextUrl && pages < 10) {
+      pages += 1;
+      const response = await fetch(nextUrl);
+      const json = (await response.json().catch(() => ({}))) as {
+        data?: Array<{
+          id?: string;
+          name?: string;
+          account_id?: string;
+          currency?: string;
+          account_status?: number;
+        }>;
+        paging?: { next?: string };
+        error?: { message?: string };
+      };
+      if (!response.ok) {
+        throw new Error(json.error?.message || `HTTP ${response.status}`);
+      }
+      for (const row of json.data ?? []) {
+        const adAccountId = (row.id || (row.account_id ? `act_${row.account_id}` : "")).trim();
+        if (!adAccountId) continue;
+        out.push({
+          adAccountId,
+          name: row.name,
+          currencyCode: row.currency,
+          accountStatus: row.account_status,
+        });
+      }
+      nextUrl = json.paging?.next ?? null;
     }
     return out;
   } catch (e) {

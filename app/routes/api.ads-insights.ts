@@ -1,0 +1,57 @@
+import type { LoaderFunctionArgs } from "react-router";
+import { authenticate } from "../shopify.server";
+import { fetchAdsInsights } from "../server/adsInsights/index.server";
+import { parseRangeDays } from "../server/adsInsights/dateRange.server";
+import type { AdsInsightsPlatform } from "../server/adsInsights/types.server";
+import { formatOutboundErrorLog } from "../server/common/outboundError.server";
+
+const LOG_PREFIX = "[AdsInsights][API]";
+
+function parsePlatform(raw: string | null): AdsInsightsPlatform | null {
+  if (raw === "meta" || raw === "google" || raw === "tiktok") return raw;
+  return null;
+}
+
+/**
+ * GET /api/ads-insights?platform=meta|google|tiktok&range=7|14|30
+ */
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const url = new URL(request.url);
+  const platform = parsePlatform(url.searchParams.get("platform"));
+  const rangeDays = parseRangeDays(url.searchParams.get("range"));
+
+  if (!platform) {
+    return Response.json(
+      { ok: false, reason: "invalid_platform", message: "platform 必须是 meta / google / tiktok" },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const result = await fetchAdsInsights({
+      shop: session.shop,
+      platform,
+      rangeDays,
+    });
+    if (!result) {
+      return Response.json({
+        ok: false,
+        reason: "not_configured",
+        message:
+          platform === "meta"
+            ? "Meta Ads 账户未绑定，请先完成独立授权"
+            : platform === "google"
+              ? "Google Ads 账户未绑定或缺少 developer token"
+              : "TikTok Ads 账户未绑定，请先在 Catalog 页完成授权",
+      });
+    }
+    return Response.json({ ok: true, ...result });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.error(
+      `${LOG_PREFIX} platform=${platform} shop=${session.shop} ${formatOutboundErrorLog(e)}`,
+    );
+    return Response.json({ ok: false, reason: "api_error", message }, { status: 500 });
+  }
+};
