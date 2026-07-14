@@ -25,6 +25,7 @@ import {
   SettingOutlined,
   FileTextOutlined,
   CloudUploadOutlined,
+  IdcardOutlined,
 } from "@ant-design/icons";
 import { clearToken, isOwner, getRole } from "../api";
 
@@ -90,6 +91,7 @@ const translationMenuItems: MenuItemDef[] = [
   },
   { key: "/tsf/overview", icon: <TeamOutlined />, label: <Link to="/tsf/overview">翻译 新用户概览</Link>, ownerOnly: false },
   { key: "/tsf/shops", icon: <UserOutlined />, label: <Link to="/tsf/shops">翻译 新用户</Link>, ownerOnly: false },
+  { key: "/tsf/shop-profiles", icon: <IdcardOutlined />, label: <Link to="/tsf/shop-profiles">翻译 用户画像</Link>, ownerOnly: false },
   { key: "/tsf/usage", icon: <BarChartOutlined />, label: <Link to="/tsf/usage">翻译 用量</Link>, ownerOnly: false },
   { key: "/tsf/subscriptions", icon: <CreditCardOutlined />, label: <Link to="/tsf/subscriptions">翻译 订阅</Link>, ownerOnly: false },
   { key: "/tsf/packs", icon: <ShoppingCartOutlined />, label: <Link to="/tsf/packs">翻译 加购流量包</Link>, ownerOnly: false },

@@ -1379,6 +1379,36 @@ export type TsfShopDetail = {
   billingLogs: TsfBillingLogRow[];
 };
 
+export type TsfShopProfileRow = {
+  shop: string;
+  installed: boolean;
+  hasProfile: boolean;
+  shopName: string | null;
+  primaryLocale: string | null;
+  industry: string | null;
+  keywords: string[];
+  description: string | null;
+  brandTone: string | null;
+  aiModel: string | null;
+  lastScanId: string | null;
+  lastScannedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type TsfShopProfilesData = {
+  stats: {
+    totalShops: number;
+    profileShops: number;
+    missingProfileShops: number;
+    installedShops: number;
+  };
+  profiles: TsfShopProfileRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 export type TsfUsageRow = {
   shop: string;
   subscriptionCredits: number;
@@ -1480,6 +1510,29 @@ export function fetchTsfShops(search?: string): Promise<{ shops: TsfShopRow[] }>
 
 export function fetchTsfShopDetail(shop: string): Promise<TsfShopDetail> {
   return apiFetch(`/tsf/shops/${encodeURIComponent(shop)}/events`);
+}
+
+export function fetchTsfShopProfiles(params?: {
+  search?: string;
+  profileState?: "all" | "with" | "without";
+  page?: number;
+  pageSize?: number;
+}): Promise<TsfShopProfilesData> {
+  const query = new URLSearchParams();
+  if (params?.search) query.set("search", params.search);
+  if (params?.profileState && params.profileState !== "all") {
+    query.set("profileState", params.profileState);
+  }
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.pageSize) query.set("pageSize", String(params.pageSize));
+  const qs = query.toString();
+  return apiFetch(`/tsf/shop-profiles${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchTsfShopProfile(
+  shop: string,
+): Promise<{ profile: TsfShopProfileRow }> {
+  return apiFetch(`/tsf/shop-profiles/${encodeURIComponent(shop)}`);
 }
 
 export function fetchTsfUsage(search?: string): Promise<{ usage: TsfUsageRow[] }> {
