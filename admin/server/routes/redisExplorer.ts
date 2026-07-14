@@ -5,12 +5,15 @@ import { getTranslationJobsContainer, isCosmosConfigured } from "../lib/cosmos.j
 import {
   COMMON_TM_MODELS,
   DEFAULT_TM_MODEL,
-  MAX_VALUE_CACHE_CHARS,
+  isCrc32KeyId,
   parseDigestTmKey,
+  parseValueTmKey,
   previewText,
   tmBrowseScanPattern,
   tmDigestKey,
+  tmValueBrowseScanPattern,
   tmValueKey,
+  valueCacheKeyId,
 } from "../lib/translationMemory.js";
 
 export const redisExplorerRouter = Router();
@@ -28,7 +31,7 @@ type TmLookupBody = {
   source?: string;
   model?: string;
   targets?: string[];
-  /** digest 模式：对全部常见模型逐个查询。 */
+  /** 对全部常见模型逐个查询（text / digest 均支持）。 */
   tryAllModels?: boolean;
 };
 
@@ -91,10 +94,6 @@ redisExplorerRouter.post("/tm/lookup", async (req, res) => {
     res.status(400).json({ error: "目标语言最多 50 个" });
     return;
   }
-  if (tryAllModels && mode !== "digest") {
-    res.status(400).json({ error: "「尝试全部常见模型」仅支持 digest 查询" });
-    return;
-  }
   if (targets.length * models.length > 500) {
     res.status(400).json({ error: "目标语言 × 模型组合过多，请减少目标语言" });
     return;
@@ -104,6 +103,7 @@ redisExplorerRouter.post("/tm/lookup", async (req, res) => {
     if (mode === "text") {
       const sourceText = body.sourceText?.trim() ?? "";
       const source = body.source?.trim() ?? "";
+      const digest = body.digest?.trim() || undefined;
       if (!sourceText) {
         res.status(400).json({ error: "请输入原文" });
         return;
@@ -112,29 +112,47 @@ redisExplorerRouter.post("/tm/lookup", async (req, res) => {
         res.status(400).json({ error: "按原文查询需填写源语言" });
         return;
       }
-      if (sourceText.length > MAX_VALUE_CACHE_CHARS) {
-        res.status(400).json({
-          error: `原文超过 ${MAX_VALUE_CACHE_CHARS} 字符，请改用 digest 查询`,
-        });
-        return;
-      }
 
-      const specs = targets.map((target) => ({
-        target,
-        model,
-        key: tmValueKey(sourceText, source, target, model),
-        cacheType: "value" as const,
-      }));
+      const keyId = valueCacheKeyId(sourceText, digest);
+      const specs: {
+        target: string;
+        model: string;
+        key: string;
+        cacheType: "value";
+      }[] = [];
+      for (const target of targets) {
+        for (const m of models) {
+          specs.push({
+            target,
+            model: m,
+            key: tmValueKey(sourceText, source, target, m, digest),
+            cacheType: "value",
+          });
+        }
+      }
       const results = await batchGetTmRows(redis, specs);
+      results.sort((a, b) => {
+        const lang = a.target.localeCompare(b.target);
+        if (lang !== 0) return lang;
+        if (a.hit !== b.hit) return a.hit ? -1 : 1;
+        return a.model.localeCompare(b.model);
+      });
 
       res.json({
         mode: "text",
-        model,
-        tryAllModels: false,
+        model: tryAllModels ? undefined : model,
+        tryAllModels,
+        models: tryAllModels ? [...COMMON_TM_MODELS] : undefined,
         source,
         sourceText,
+        digest: digest ?? null,
+        keyId,
         results,
-        note: "短文本二级缓存（tm:v5:val），不含店铺维度",
+        note: tryAllModels
+          ? `已对 ${COMMON_TM_MODELS.length} 个常见模型逐个查询 value 缓存，keyId=${keyId}`
+          : digest
+            ? `value 缓存（tm:v5:val:{source}:{target}:{model}:{digest}），keyId 使用 Shopify digest`
+            : `value 缓存（tm:v5:val:{source}:{target}:{model}:{crc32}），keyId=${keyId}`,
       });
       return;
     }
@@ -187,7 +205,7 @@ redisExplorerRouter.post("/tm/lookup", async (req, res) => {
   }
 });
 
-/** 从 Cosmos 翻译任务推断该店出现过的目标语言。 */
+/** 从 Cosmos 翻译任务推断该店出现过的源/目标语言。 */
 redisExplorerRouter.get("/tm/shop-targets", async (req, res) => {
   const shop = (req.query.shop as string | undefined)?.trim() ?? "";
   if (!shop) {
@@ -196,33 +214,54 @@ redisExplorerRouter.get("/tm/shop-targets", async (req, res) => {
   }
 
   if (!isCosmosConfigured()) {
-    res.json({ shop, targets: [], note: "Cosmos not configured" });
+    res.json({ shop, sources: [], targets: [], note: "Cosmos not configured" });
     return;
   }
 
   try {
     const container = getTranslationJobsContainer();
-    const query =
-      "SELECT DISTINCT VALUE c.target FROM c WHERE c.shopName = @shop ORDER BY c.target";
     const params: SqlParameter[] = [{ name: "@shop", value: shop }];
 
-    const { resources } = await container.items
-      .query<string>({ query, parameters: params })
-      .fetchAll();
+    const [sourcesRes, targetsRes] = await Promise.all([
+      container.items
+        .query<string>({
+          query:
+            "SELECT DISTINCT VALUE c.source FROM c WHERE c.shopName = @shop ORDER BY c.source",
+          parameters: params,
+        })
+        .fetchAll(),
+      container.items
+        .query<string>({
+          query:
+            "SELECT DISTINCT VALUE c.target FROM c WHERE c.shopName = @shop ORDER BY c.target",
+          parameters: params,
+        })
+        .fetchAll(),
+    ]);
 
-    const targets = resources.filter(
+    const sources = sourcesRes.resources.filter(
+      (t: string) => typeof t === "string" && t.trim(),
+    );
+    const targets = targetsRes.resources.filter(
       (t: string) => typeof t === "string" && t.trim(),
     );
     res.json({
       shop,
+      sources,
       targets,
-      note: targets.length
-        ? `从翻译任务历史推断 ${targets.length} 个目标语言`
-        : "该店铺暂无翻译任务记录",
+      note:
+        sources.length || targets.length
+          ? `从翻译任务历史推断 ${sources.length} 个源语言、${targets.length} 个目标语言`
+          : "该店铺暂无翻译任务记录",
     });
   } catch (err) {
     if (String(err).includes("Owner resource does not exist")) {
-      res.json({ shop, targets: [], note: "翻译任务容器不存在或无访问权限" });
+      res.json({
+        shop,
+        sources: [],
+        targets: [],
+        note: "翻译任务容器不存在或无访问权限",
+      });
       return;
     }
     console.error("[redis-explorer/tm/shop-targets]", err);
@@ -239,6 +278,233 @@ export type TmBrowseEntry = {
   valuePreview: string;
   ttl: number;
 };
+
+export type TmValueCrc32Entry = {
+  key: string;
+  source: string;
+  target: string;
+  model: string;
+  keyId: string;
+  value: string;
+  valuePreview: string;
+  ttl: number;
+};
+
+/** 按店铺语言对浏览 CRC-32 型 value 缓存（跨店 key，用 shop 的 source/target 收窄 SCAN）。 */
+redisExplorerRouter.get("/tm/browse-value-crc32", async (req, res) => {
+  const redis = getRedis();
+  if (!redis) {
+    res.json({
+      shop: "",
+      sources: [],
+      targets: [],
+      entries: [],
+      byTarget: {},
+      byModel: {},
+      patterns: [],
+      note: "Redis not configured",
+    });
+    return;
+  }
+
+  const shop = (req.query.shop as string | undefined)?.trim() ?? "";
+  if (!shop) {
+    res.status(400).json({ error: "shop is required" });
+    return;
+  }
+
+  const limit = Math.min(Number(req.query.limit ?? 100), 300);
+  const sourceFilter = (req.query.source as string | undefined)?.trim();
+  const targetFilter = (req.query.target as string | undefined)?.trim();
+  const modelFilter = (req.query.model as string | undefined)?.trim();
+
+  try {
+    let sources: string[] = [];
+    let targets: string[] = [];
+    let localeNote = "";
+
+    if (isCosmosConfigured()) {
+      const container = getTranslationJobsContainer();
+      const params: SqlParameter[] = [{ name: "@shop", value: shop }];
+      try {
+        const [sourcesRes, targetsRes] = await Promise.all([
+          container.items
+            .query<string>({
+              query:
+                "SELECT DISTINCT VALUE c.source FROM c WHERE c.shopName = @shop ORDER BY c.source",
+              parameters: params,
+            })
+            .fetchAll(),
+          container.items
+            .query<string>({
+              query:
+                "SELECT DISTINCT VALUE c.target FROM c WHERE c.shopName = @shop ORDER BY c.target",
+              parameters: params,
+            })
+            .fetchAll(),
+        ]);
+        sources = sourcesRes.resources.filter(
+          (t: string) => typeof t === "string" && t.trim(),
+        );
+        targets = targetsRes.resources.filter(
+          (t: string) => typeof t === "string" && t.trim(),
+        );
+        localeNote =
+          sources.length || targets.length
+            ? `从翻译任务推断 ${sources.length} 源语言 / ${targets.length} 目标语言`
+            : "该店铺暂无翻译任务记录";
+      } catch (err) {
+        if (!String(err).includes("Owner resource does not exist")) throw err;
+        localeNote = "翻译任务容器不存在或无访问权限";
+      }
+    } else {
+      localeNote = "Cosmos not configured，需手动指定 source/target";
+    }
+
+    if (sourceFilter) sources = [sourceFilter];
+    if (targetFilter) targets = [targetFilter];
+
+    if (sources.length === 0) {
+      res.json({
+        shop,
+        sources,
+        targets,
+        entries: [],
+        byTarget: {},
+        byModel: {},
+        patterns: [],
+        note: `${localeNote}；请在查询参数中指定 source，或确认该店有翻译任务`,
+      });
+      return;
+    }
+    if (targets.length === 0) {
+      res.json({
+        shop,
+        sources,
+        targets,
+        entries: [],
+        byTarget: {},
+        byModel: {},
+        patterns: [],
+        note: `${localeNote}；请在查询参数中指定 target，或确认该店有翻译任务`,
+      });
+      return;
+    }
+
+    const maxPairs = 40;
+    const pairs: { source: string; target: string }[] = [];
+    for (const source of sources) {
+      for (const target of targets) {
+        if (pairs.length >= maxPairs) break;
+        pairs.push({ source, target });
+      }
+      if (pairs.length >= maxPairs) break;
+    }
+
+    const patterns = pairs.map(({ source, target }) =>
+      tmValueBrowseScanPattern({ source, target, model: modelFilter }),
+    );
+
+    const collectedKeys: string[] = [];
+    const seen = new Set<string>();
+
+    for (const pattern of patterns) {
+      if (collectedKeys.length >= limit) break;
+      let cursor = "0";
+      let rounds = 0;
+      do {
+        const [nextCursor, keys] = await redis.scan(
+          cursor,
+          "MATCH",
+          pattern,
+          "COUNT",
+          BROWSE_SCAN_COUNT,
+        );
+        for (const key of keys) {
+          if (seen.has(key)) continue;
+          const parsed = parseValueTmKey(key);
+          if (!parsed || !isCrc32KeyId(parsed.keyId)) continue;
+          if (modelFilter && parsed.model !== modelFilter) continue;
+          seen.add(key);
+          collectedKeys.push(key);
+          if (collectedKeys.length >= limit) break;
+        }
+        cursor = nextCursor;
+        rounds++;
+      } while (
+        cursor !== "0" &&
+        rounds < BROWSE_SCAN_MAX_ROUNDS &&
+        collectedKeys.length < limit
+      );
+    }
+
+    if (collectedKeys.length === 0) {
+      res.json({
+        shop,
+        sources,
+        targets,
+        entries: [],
+        byTarget: {},
+        byModel: {},
+        patterns,
+        pairCount: pairs.length,
+        note: `${localeNote}。未找到 CRC-32 型 value 缓存（keyId 为 8 位 hex）。pattern 示例：${patterns[0] ?? "—"}`,
+      });
+      return;
+    }
+
+    const rows = await batchGetWithTtl(redis, collectedKeys);
+    const entries: TmValueCrc32Entry[] = [];
+    const byTarget: Record<string, number> = {};
+    const byModel: Record<string, number> = {};
+
+    collectedKeys.forEach((key, i) => {
+      const parsed = parseValueTmKey(key);
+      if (!parsed) return;
+      const value = rows[i]?.value ?? "";
+      const ttl = rows[i]?.ttl ?? -2;
+      if (!value) return;
+
+      byTarget[parsed.target] = (byTarget[parsed.target] ?? 0) + 1;
+      byModel[parsed.model] = (byModel[parsed.model] ?? 0) + 1;
+      entries.push({
+        key,
+        source: parsed.source,
+        target: parsed.target,
+        model: parsed.model,
+        keyId: parsed.keyId,
+        value,
+        valuePreview: previewText(value),
+        ttl,
+      });
+    });
+
+    entries.sort((a, b) => {
+      const lang = a.target.localeCompare(b.target);
+      if (lang !== 0) return lang;
+      const modelCmp = a.model.localeCompare(b.model);
+      if (modelCmp !== 0) return modelCmp;
+      return a.keyId.localeCompare(b.keyId);
+    });
+
+    res.json({
+      shop,
+      sources,
+      targets,
+      entries,
+      byTarget,
+      byModel,
+      patterns,
+      pairCount: pairs.length,
+      scanned: collectedKeys.length,
+      truncated: pairs.length >= maxPairs || collectedKeys.length >= limit,
+      note: `${localeNote}。已扫描 ${pairs.length} 个语言对，命中 ${entries.length} 条 CRC-32 value 缓存（跨店，非该店独占）`,
+    });
+  } catch (err) {
+    console.error("[redis-explorer/tm/browse-value-crc32]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
 
 /** 按店铺 SCAN digest 型 TM 缓存（严格 cursor 分页）。 */
 redisExplorerRouter.get("/tm/browse", async (req, res) => {
@@ -304,7 +570,7 @@ redisExplorerRouter.get("/tm/browse", async (req, res) => {
         pattern,
         note: hasMore
           ? "本页未匹配到有效键，可继续加载下一页"
-          : "未找到该店铺的 digest 型 TM 缓存（短文本 tm:v5:val 不含店铺维度）",
+          : "未找到该店铺的 digest 型 TM 缓存（value 缓存 tm:v5:val 无店铺维度，请用「按原文」查询）",
       });
       return;
     }
