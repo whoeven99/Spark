@@ -34,13 +34,31 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
   }
 
-  // Each pending account entry reuses `businessId` to store the advertiserId.
+  // pending.accounts：新格式 businessId=bc_id + advertiserId；旧格式仅 businessId=advertiserId。
   const selectedEntry = pending.accounts.find((a) => a.id === catalogId);
-  const advertiserId = selectedEntry?.businessId ?? pending.accounts[0]?.businessId ?? "";
+  const explicitAdvertiserId =
+    selectedEntry?.advertiserId?.trim() || pending.accounts[0]?.advertiserId?.trim() || "";
+  const bcId = explicitAdvertiserId
+    ? selectedEntry?.businessId?.trim() || pending.accounts[0]?.businessId?.trim() || ""
+    : "";
+  const advertiserId =
+    explicitAdvertiserId ||
+    selectedEntry?.businessId?.trim() ||
+    pending.accounts[0]?.businessId?.trim() ||
+    "";
 
   if (!advertiserId) {
     return Response.json(
       { ok: false, error: "Cannot determine advertiserId for selected catalog." },
+      { status: 400 },
+    );
+  }
+  if (!bcId) {
+    return Response.json(
+      {
+        ok: false,
+        error: "缺少 bc_id，请重新授权 TikTok 后再选择 Catalog。",
+      },
       { status: 400 },
     );
   }
@@ -51,6 +69,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       accessToken: pending.accessToken,
       refreshToken: pending.refreshToken,
       advertiserId,
+      bcId,
       catalogId,
       catalogName: selectedEntry?.name,
     });

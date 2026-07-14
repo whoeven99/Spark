@@ -86,6 +86,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         accessToken,
         refreshToken,
         advertiserId: catalogs[0].advertiserId,
+        bcId: catalogs[0].bcId,
         catalogId: catalogs[0].catalogId,
         catalogName: catalogs[0].catalogName,
       });
@@ -101,7 +102,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       accounts: catalogs.map((c) => ({
         id: c.catalogId,
         name: c.catalogName,
-        businessId: c.advertiserId,
+        businessId: c.bcId,
+        advertiserId: c.advertiserId,
       })),
     });
     return appRedirect(request, shop, host, appOrigin, { tiktokAuth: "select" });

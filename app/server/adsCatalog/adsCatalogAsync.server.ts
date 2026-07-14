@@ -388,6 +388,14 @@ async function runTiktokSync(params: {
     });
     return;
   }
+  if (!credential.bcId) {
+    await failTask({
+      taskId: params.taskId,
+      startedAt: params.startedAt,
+      errorMsg: params.msg("adsCatalog.asyncTiktokMissingBcId"),
+    });
+    return;
+  }
 
   await appendLog({
     taskId: params.taskId,
@@ -419,6 +427,7 @@ async function runTiktokSync(params: {
   const apiResult = await upsertTiktokCatalogItems({
     accessToken: credential.accessToken,
     advertiserId: credential.advertiserId,
+    bcId: credential.bcId,
     catalogId: credential.catalogId,
     items,
   });

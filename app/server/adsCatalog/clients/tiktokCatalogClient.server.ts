@@ -16,11 +16,12 @@ export interface TiktokBatchResult {
  * Endpoint:
  *   POST /open_api/v1.3/catalog/product/batch_create_or_update/
  *   Header: Access-Token
- *   Body: { advertiser_id, catalog_id, items: [...] }
+ *   Body: { bc_id?, advertiser_id, catalog_id, items: [...] }
  */
 export async function upsertTiktokCatalogItems(params: {
   accessToken: string;
   advertiserId: string;
+  bcId?: string;
   catalogId: string;
   items: TiktokCatalogItem[];
 }): Promise<TiktokBatchResult> {
@@ -44,6 +45,7 @@ export async function upsertTiktokCatalogItems(params: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          ...(params.bcId ? { bc_id: params.bcId } : {}),
           advertiser_id: params.advertiserId,
           catalog_id: params.catalogId,
           items: chunk,

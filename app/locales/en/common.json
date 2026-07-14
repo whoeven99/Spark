@@ -1589,6 +1589,7 @@
     "tiktokConnectHint": "Authorize Spark to access your TikTok for Business product catalog via TikTok sign-in. No manual token entry required.",
     "tiktokSelectCatalog": "Multiple catalogs were found. Choose the one to connect:",
     "asyncTiktokMissingCredential": "TikTok catalog credential missing — connect it under the Credentials tab",
+    "asyncTiktokMissingBcId": "TikTok credential is missing bc_id. Disconnect and re-authorize TikTok Catalog",
     "asyncPushingTiktok": "Pushing {{count}} items to TikTok Catalog",
     "actionFetchMetrics": "View ad metrics",
     "actionFetchingMetrics": "Loading metrics…",

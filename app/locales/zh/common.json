@@ -1589,6 +1589,7 @@
     "tiktokConnectHint": "授权 Spark 访问您的 TikTok for Business 商品目录，无需手动填写 Token。",
     "tiktokSelectCatalog": "发现多个商品目录，请选择要连接的目录：",
     "asyncTiktokMissingCredential": "TikTok 目录凭证缺失 — 请在「凭证」标签页中完成连接",
+    "asyncTiktokMissingBcId": "TikTok 凭证缺少 bc_id，请断开后重新授权 TikTok Catalog",
     "asyncPushingTiktok": "正在将 {{count}} 个商品推送到 TikTok 目录",
     "actionFetchMetrics": "查看广告数据",
     "actionFetchingMetrics": "加载中…",

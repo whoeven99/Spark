@@ -21,6 +21,9 @@ export const TIKTOK_CATALOG_CALLBACK_PATH = "/ads/tiktok-catalog/callback";
 export interface TiktokCatalogInfo {
   catalogId: string;
   catalogName?: string;
+  /** Business Center ID（Catalog API 必填 bc_id）。 */
+  bcId: string;
+  /** 授权广告主 ID；商品写入等接口仍可能需要。 */
   advertiserId: string;
 }
 
@@ -268,14 +271,51 @@ export async function listAuthorizedAdvertiserIds(params: {
     .filter(Boolean);
 }
 
-/** List product catalogs accessible to a given advertiser account. */
+/**
+ * 列举当前 token 可访问的 Business Center ID。
+ * Catalog API（catalog/get 等）强制要求 bc_id。
+ */
+export async function listAccessibleBcIds(params: {
+  accessToken: string;
+}): Promise<string[]> {
+  try {
+    const url = new URL(`${TIKTOK_API_BASE}/bc/get/`);
+    url.searchParams.set("page", "1");
+    url.searchParams.set("page_size", "50");
+    const response = await fetch(url.toString(), {
+      headers: { "Access-Token": params.accessToken },
+    });
+    const json = (await response.json().catch(() => ({}))) as {
+      code?: number;
+      message?: string;
+      data?: {
+        list?: Array<{ bc_id?: string | number; bc_info?: { bc_id?: string | number } }>;
+      };
+    };
+    if (!response.ok || (json.code !== undefined && json.code !== 0)) {
+      throw new Error(json.message || `HTTP ${response.status}`);
+    }
+    return (json.data?.list ?? [])
+      .map((item) =>
+        String(item.bc_id ?? item.bc_info?.bc_id ?? "").trim(),
+      )
+      .filter(Boolean);
+  } catch (e) {
+    throw new Error(formatOutboundNetworkError(e));
+  }
+}
+
+/** List product catalogs under a Business Center（必须传 bc_id）。 */
 export async function getTiktokCatalogs(params: {
   accessToken: string;
+  bcId: string;
   advertiserId: string;
 }): Promise<TiktokCatalogInfo[]> {
   try {
     const url = new URL(`${TIKTOK_API_BASE}/catalog/get/`);
-    url.searchParams.set("advertiser_id", params.advertiserId);
+    url.searchParams.set("bc_id", params.bcId);
+    url.searchParams.set("page", "1");
+    url.searchParams.set("page_size", "100");
     const response = await fetch(url.toString(), {
       headers: { "Access-Token": params.accessToken },
     });
@@ -295,6 +335,7 @@ export async function getTiktokCatalogs(params: {
       .map((c) => ({
         catalogId: String(c.catalog_id ?? "").trim(),
         catalogName: c.catalog_name,
+        bcId: params.bcId,
         advertiserId: params.advertiserId,
       }))
       .filter((c) => Boolean(c.catalogId));
@@ -303,24 +344,48 @@ export async function getTiktokCatalogs(params: {
   }
 }
 
-/** 汇总多个广告主下的 Catalog（去重）。 */
+/**
+ * 按授权广告主汇总 Catalog：先查可访问 BC，再对每个 bc_id 调 catalog/get。
+ * advertiserIds 用于商品写入等仍依赖 advertiser_id 的接口（取第一个作为默认）。
+ */
 export async function getTiktokCatalogsForAdvertisers(params: {
   accessToken: string;
   advertiserIds: string[];
 }): Promise<TiktokCatalogInfo[]> {
+  const advertiserId = params.advertiserIds[0]?.trim();
+  if (!advertiserId) return [];
+
+  const bcIds = await listAccessibleBcIds({ accessToken: params.accessToken });
+  if (bcIds.length === 0) {
+    throw new Error(
+      "该 TikTok 账号未关联任何 Business Center（bc_id）。请先在 TikTok for Business 创建或加入商务中心后再授权。",
+    );
+  }
+
   const out: TiktokCatalogInfo[] = [];
   const seen = new Set<string>();
-  for (const advertiserId of params.advertiserIds) {
-    const catalogs = await getTiktokCatalogs({
-      accessToken: params.accessToken,
-      advertiserId,
-    });
-    for (const catalog of catalogs) {
-      const key = `${catalog.advertiserId}:${catalog.catalogId}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(catalog);
+  const errors: string[] = [];
+
+  for (const bcId of bcIds) {
+    try {
+      const catalogs = await getTiktokCatalogs({
+        accessToken: params.accessToken,
+        bcId,
+        advertiserId,
+      });
+      for (const catalog of catalogs) {
+        const key = `${catalog.bcId}:${catalog.catalogId}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(catalog);
+      }
+    } catch (e) {
+      errors.push(`${bcId}: ${e instanceof Error ? e.message : String(e)}`);
     }
+  }
+
+  if (out.length === 0 && errors.length > 0) {
+    throw new Error(`拉取 TikTok Catalog 失败：${errors[0]}`);
   }
   return out;
 }

@@ -243,8 +243,10 @@ export type PendingOAuthAccount = {
   id: string;
   name?: string;
   formatted?: string;
-  /** Meta catalog 所属的 Business ID（用于建立凭证）。 */
+  /** Meta catalog 所属的 Business ID；TikTok 场景存 bc_id。 */
   businessId?: string;
+  /** TikTok 授权广告主 ID（商品写入等接口使用）。 */
+  advertiserId?: string;
 };
 
 export type PendingOAuthTokens = {
@@ -392,6 +394,8 @@ export type TiktokCatalogCredential = {
   accessToken: string;
   refreshToken?: string;
   advertiserId: string;
+  /** Business Center ID；Catalog API 必填。旧凭证可能缺失。 */
+  bcId?: string;
   catalogId: string;
   catalogName?: string;
   updatedAt: string;
@@ -413,6 +417,10 @@ export async function getTiktokCatalogCredential(
         ? record.data.refreshToken
         : undefined,
     advertiserId,
+    bcId:
+      typeof record.data.bcId === "string" && record.data.bcId.trim()
+        ? record.data.bcId.trim()
+        : undefined,
     catalogId,
     catalogName:
       typeof record.data.catalogName === "string" ? record.data.catalogName : undefined,
@@ -424,7 +432,7 @@ export async function setTiktokCatalogCredential(
   shop: string,
   payload: Pick<
     TiktokCatalogCredential,
-    "accessToken" | "refreshToken" | "advertiserId" | "catalogId" | "catalogName"
+    "accessToken" | "refreshToken" | "advertiserId" | "bcId" | "catalogId" | "catalogName"
   >,
 ): Promise<void> {
   const accessToken = payload.accessToken.trim();
@@ -433,10 +441,16 @@ export async function setTiktokCatalogCredential(
   if (!accessToken || !advertiserId || !catalogId) {
     throw new Error("TikTok catalog accessToken, advertiserId, and catalogId are required");
   }
+  const existing = await readPlatformCredential(shop, TIKTOK_CATALOG_PLATFORM);
+  const bcId =
+    payload.bcId?.trim() ||
+    (typeof existing?.data.bcId === "string" ? existing.data.bcId.trim() : "") ||
+    null;
   await writePlatformCredential(shop, TIKTOK_CATALOG_PLATFORM, {
     accessToken,
     refreshToken: payload.refreshToken?.trim() || null,
     advertiserId,
+    bcId,
     catalogId,
     catalogName: payload.catalogName?.trim() || null,
   });
