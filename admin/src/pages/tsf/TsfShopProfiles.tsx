@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Alert,
   Button,
   Card,
   Col,
-  Descriptions,
-  Drawer,
-  Empty,
   Flex,
   Input,
   Row,
@@ -25,7 +23,6 @@ import {
   SearchOutlined,
 } from "@ant-design/icons";
 import {
-  fetchTsfShopProfile,
   fetchTsfShopProfiles,
   type TsfShopProfileRow,
   type TsfShopProfilesData,
@@ -34,12 +31,7 @@ import {
 type ProfileState = "all" | "with" | "without";
 
 const EMPTY_DATA: TsfShopProfilesData = {
-  stats: {
-    totalShops: 0,
-    profileShops: 0,
-    missingProfileShops: 0,
-    installedShops: 0,
-  },
+  stats: { totalShops: 0, profileShops: 0, missingProfileShops: 0, installedShops: 0 },
   profiles: [],
   total: 0,
   page: 1,
@@ -53,6 +45,7 @@ function formatDate(value: string | null): string {
 }
 
 export default function TsfShopProfiles() {
+  const navigate = useNavigate();
   const [data, setData] = useState<TsfShopProfilesData>(EMPTY_DATA);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -62,9 +55,6 @@ export default function TsfShopProfiles() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [activeShop, setActiveShop] = useState<string | null>(null);
-  const [detail, setDetail] = useState<TsfShopProfileRow | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -87,13 +77,7 @@ export default function TsfShopProfiles() {
   }
 
   function openDetail(shop: string) {
-    setActiveShop(shop);
-    setDetail(null);
-    setDetailLoading(true);
-    fetchTsfShopProfile(shop)
-      .then((result) => setDetail(result.profile))
-      .catch((err) => setError(String(err)))
-      .finally(() => setDetailLoading(false));
+    navigate(`/tsf/shop-profiles/${encodeURIComponent(shop)}`);
   }
 
   const coverage = useMemo(() => {
@@ -116,73 +100,39 @@ export default function TsfShopProfiles() {
       dataIndex: "installed",
       key: "installed",
       width: 100,
-      render: (installed: boolean) =>
-        installed ? <Tag color="green">在装</Tag> : <Tag>未安装</Tag>,
+      render: (installed: boolean) => installed ? <Tag color="green">在装</Tag> : <Tag>未安装</Tag>,
     },
     {
       title: "画像状态",
       dataIndex: "hasProfile",
       key: "hasProfile",
       width: 110,
-      render: (hasProfile: boolean) =>
-        hasProfile ? (
-          <Tag icon={<CheckCircleOutlined />} color="success">有画像</Tag>
-        ) : (
-          <Tag icon={<CloseCircleOutlined />}>无画像</Tag>
-        ),
+      render: (hasProfile: boolean) => hasProfile
+        ? <Tag icon={<CheckCircleOutlined />} color="success">有画像</Tag>
+        : <Tag icon={<CloseCircleOutlined />}>无画像</Tag>,
     },
-    {
-      title: "店铺名称",
-      dataIndex: "shopName",
-      key: "shopName",
-      width: 180,
-      ellipsis: true,
-      render: (value: string | null) => value || "-",
-    },
-    {
-      title: "行业 / 品类",
-      dataIndex: "industry",
-      key: "industry",
-      width: 180,
-      ellipsis: true,
-      render: (value: string | null) => value || "-",
-    },
-    {
-      title: "默认语言",
-      dataIndex: "primaryLocale",
-      key: "primaryLocale",
-      width: 100,
-      render: (value: string | null) => value ? <Tag>{value}</Tag> : "-",
-    },
-    {
-      title: "品牌语气",
-      dataIndex: "brandTone",
-      key: "brandTone",
-      width: 180,
-      ellipsis: true,
-      render: (value: string | null) => value || "-",
-    },
+    { title: "店铺名称", dataIndex: "shopName", key: "shopName", width: 180, ellipsis: true, render: (value: string | null) => value || "-" },
+    { title: "行业 / 品类", dataIndex: "industry", key: "industry", width: 180, ellipsis: true, render: (value: string | null) => value || "-" },
+    { title: "默认语言", dataIndex: "primaryLocale", key: "primaryLocale", width: 100, render: (value: string | null) => value ? <Tag>{value}</Tag> : "-" },
+    { title: "品牌语气", dataIndex: "brandTone", key: "brandTone", width: 180, ellipsis: true, render: (value: string | null) => value || "-" },
     {
       title: "关键词",
       dataIndex: "keywords",
       key: "keywords",
       width: 260,
-      render: (keywords: string[]) =>
-        keywords.length ? (
-          <Space size={[4, 4]} wrap>
-            {keywords.slice(0, 3).map((keyword) => <Tag key={keyword}>{keyword}</Tag>)}
-            {keywords.length > 3 ? <Tag>+{keywords.length - 3}</Tag> : null}
-          </Space>
-        ) : "-",
+      render: (keywords: string[]) => keywords.length ? (
+        <Space size={[4, 4]} wrap>
+          {keywords.slice(0, 3).map((keyword) => <Tag key={keyword}>{keyword}</Tag>)}
+          {keywords.length > 3 ? <Tag>+{keywords.length - 3}</Tag> : null}
+        </Space>
+      ) : "-",
     },
     {
       title: "最近扫描",
       dataIndex: "lastScannedAt",
       key: "lastScannedAt",
       width: 180,
-      render: (value: string | null) => (
-        <Typography.Text type="secondary">{formatDate(value)}</Typography.Text>
-      ),
+      render: (value: string | null) => <Typography.Text type="secondary">{formatDate(value)}</Typography.Text>,
     },
   ];
 
@@ -191,32 +141,19 @@ export default function TsfShopProfiles() {
       <Flex justify="space-between" align="center" gap={16} wrap="wrap" style={{ marginBottom: 16 }}>
         <div>
           <Typography.Title level={4} style={{ margin: 0 }}>翻译 用户画像</Typography.Title>
-          <Typography.Text type="secondary">
-            查看 TSF 当前生效的 Shop Profile，并识别尚未生成画像的商店。
-          </Typography.Text>
+          <Typography.Text type="secondary">跨商店查看 TSF Shop Profile，点击商店进入完整扫描详情。</Typography.Text>
         </div>
-        <Button icon={<ReloadOutlined />} onClick={() => setRefreshKey((key) => key + 1)}>
-          刷新
-        </Button>
+        <Button icon={<ReloadOutlined />} onClick={() => setRefreshKey((key) => key + 1)}>刷新</Button>
       </Flex>
 
       <Alert
         type="info"
         showIcon
         message="数据口径"
-        description="画像字段直接读取 TSF Turso 的 ShopProfile；商店全集来自 TSF Session、Account、计费绑定与 ShopProfile 的合并。这里展示当前生效画像，不包含 Cosmos 扫描历史或 Blob 扫描原始明细。"
+        description="列表画像来自 TSF Turso；单店详情会继续读取 Cosmos 最新扫描任务与 Blob 扫描产物。"
         style={{ marginBottom: 16 }}
       />
-
-      {error ? (
-        <Alert
-          type="error"
-          message={error}
-          closable
-          onClose={() => setError("")}
-          style={{ marginBottom: 16 }}
-        />
-      ) : null}
+      {error ? <Alert type="error" message={error} closable onClose={() => setError("")} style={{ marginBottom: 16 }} /> : null}
 
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={12} lg={6}><Card size="small"><Statistic title="已知商店" value={data.stats.totalShops} /></Card></Col>
@@ -258,6 +195,7 @@ export default function TsfShopProfiles() {
           scroll={{ x: 1600 }}
           dataSource={data.profiles}
           columns={columns}
+          onRow={(row) => ({ onDoubleClick: () => openDetail(row.shop) })}
           pagination={{
             current: page,
             pageSize,
@@ -272,59 +210,6 @@ export default function TsfShopProfiles() {
           locale={{ emptyText: "没有符合条件的商店" }}
         />
       </Spin>
-
-      <Drawer
-        title={activeShop ? `用户画像 · ${activeShop}` : "用户画像"}
-        open={Boolean(activeShop)}
-        onClose={() => { setActiveShop(null); setDetail(null); }}
-        width={720}
-      >
-        {detailLoading ? (
-          <Spin />
-        ) : detail?.hasProfile ? (
-          <Flex vertical gap={20}>
-            <Descriptions bordered size="small" column={2}>
-              <Descriptions.Item label="商店域名" span={2}>{detail.shop}</Descriptions.Item>
-              <Descriptions.Item label="安装状态">{detail.installed ? <Tag color="green">在装</Tag> : <Tag>未安装</Tag>}</Descriptions.Item>
-              <Descriptions.Item label="画像状态"><Tag color="success">有画像</Tag></Descriptions.Item>
-              <Descriptions.Item label="店铺名称">{detail.shopName || "-"}</Descriptions.Item>
-              <Descriptions.Item label="默认语言">{detail.primaryLocale || "-"}</Descriptions.Item>
-              <Descriptions.Item label="行业 / 品类">{detail.industry || "-"}</Descriptions.Item>
-              <Descriptions.Item label="品牌语气">{detail.brandTone || "-"}</Descriptions.Item>
-              <Descriptions.Item label="AI 模型">{detail.aiModel || "-"}</Descriptions.Item>
-              <Descriptions.Item label="最近扫描">{formatDate(detail.lastScannedAt)}</Descriptions.Item>
-              <Descriptions.Item label="扫描 ID" span={2}>
-                <Typography.Text copyable={detail.lastScanId ? { text: detail.lastScanId } : false}>
-                  {detail.lastScanId || "-"}
-                </Typography.Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="画像创建">{formatDate(detail.createdAt)}</Descriptions.Item>
-              <Descriptions.Item label="画像更新">{formatDate(detail.updatedAt)}</Descriptions.Item>
-            </Descriptions>
-
-            <Card size="small" title={`关键词（${detail.keywords.length}）`}>
-              {detail.keywords.length ? (
-                <Space size={[6, 6]} wrap>
-                  {detail.keywords.map((keyword) => <Tag key={keyword}>{keyword}</Tag>)}
-                </Space>
-              ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无关键词" />}
-            </Card>
-
-            <Card size="small" title="店铺描述">
-              {detail.description ? (
-                <Typography.Paragraph
-                  copyable={{ text: detail.description }}
-                  style={{ margin: 0, whiteSpace: "pre-wrap" }}
-                >
-                  {detail.description}
-                </Typography.Paragraph>
-              ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无店铺描述" />}
-            </Card>
-          </Flex>
-        ) : detail ? (
-          <Empty description="该商店尚未生成 Shop Profile" />
-        ) : null}
-      </Drawer>
     </div>
   );
 }

@@ -1409,6 +1409,120 @@ export type TsfShopProfilesData = {
   pageSize: number;
 };
 
+export type TsfShopScanStageState = "PENDING" | "DONE" | "SKIPPED" | "FAILED";
+
+export type TsfShopScan = {
+  id: string;
+  shopName: string;
+  trigger: "install" | "scheduled" | "manual";
+  status: "CREATED" | "QUEUED" | "SCANNING" | "COMPLETED" | "PARTIAL" | "FAILED";
+  stages: Record<"contentSize" | "profile" | "coverage" | "glossary", TsfShopScanStageState>;
+  blobPrefix: string;
+  summary: {
+    totalItems?: number;
+    totalChars?: number;
+    moduleStats?: Record<string, { items: number; chars: number }>;
+    coverage?: Array<{
+      locale: string;
+      published: boolean;
+      translated: number;
+      total: number;
+      percent: number | null;
+    }>;
+    glossaryCount?: number;
+  };
+  claimedBy: string | null;
+  claimedAt: string | null;
+  lastHeartbeat: string | null;
+  attempts: number;
+  errorMessage: string | null;
+  errorStage: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TsfProfileStrategy = {
+  brandTerms: string[];
+  doNotTranslateTerms: string[];
+  preferredTerms: Array<{ source: string; note: string | null }>;
+  seoTerms: string[];
+  moduleHints: Array<{
+    module: string;
+    tonePolicy: string | null;
+    keywordPolicy: string | null;
+    literalVsAdaptive: string | null;
+  }>;
+};
+
+export type TsfShopUnderstanding = {
+  industry: string | null;
+  subIndustry: string | null;
+  brandPositioning: string | null;
+  coreProductTypes: string[];
+  sellingPoints: string[];
+  priceRange: string | null;
+  voiceStyle: string | null;
+  seoDirection: string | null;
+  marketNotes: string[];
+  description: string | null;
+  keywords: string[];
+};
+
+export type TsfShopMarket = {
+  name: string;
+  handle: string;
+  status: string;
+  baseCurrency: string | null;
+  locales: string[];
+};
+
+export type TsfShopSignals = {
+  weightedTopTerms: Array<{ term: string; score: number; count: number; sources: string[] }>;
+  weightedTopPhrases: Array<{ term: string; score: number; count: number; sources: string[] }>;
+  brandTerms: string[];
+  categoryTerms: string[];
+  menuTerms: string[];
+  representativeSamples: Array<{ source: string; text: string }>;
+  sourceStats: Record<string, number>;
+};
+
+export type TsfShopProfileFacts = {
+  shopName: string;
+  primaryDomain: string | null;
+  currencyCode: string | null;
+  productTypes: string[];
+  vendors: string[];
+  topProductTitles: string[];
+  collectionTitles: string[];
+  collectionDescriptions: string[];
+  articleTitles: string[];
+  articleSummaries: string[];
+  menuTitles: string[];
+  tags: string[];
+};
+
+export type TsfThemeTextSample = {
+  text: string;
+  module: string;
+  key: string;
+  weight: number;
+};
+
+export type TsfShopProfileDetailData = {
+  profile: TsfShopProfileRow;
+  scan: TsfShopScan | null;
+  promptBlock: string | null;
+  strategy: TsfProfileStrategy | null;
+  glossarySuggestions: Array<{ locale: string; source: string; target: string }>;
+  understanding: TsfShopUnderstanding | null;
+  markets: TsfShopMarket[];
+  signals: TsfShopSignals | null;
+  facts: TsfShopProfileFacts | null;
+  themeTexts: TsfThemeTextSample[];
+  source: "cosmos" | "blob" | "mixed" | "none";
+  scanNote: string | null;
+};
+
 export type TsfUsageRow = {
   shop: string;
   subscriptionCredits: number;
@@ -1529,10 +1643,26 @@ export function fetchTsfShopProfiles(params?: {
   return apiFetch(`/tsf/shop-profiles${qs ? `?${qs}` : ""}`);
 }
 
-export function fetchTsfShopProfile(
+export function fetchTsfShopProfileDetail(
   shop: string,
-): Promise<{ profile: TsfShopProfileRow }> {
+): Promise<TsfShopProfileDetailData> {
   return apiFetch(`/tsf/shop-profiles/${encodeURIComponent(shop)}`);
+}
+
+export type TsfShopProfileScanResult = {
+  enqueued: true;
+  scanId: string;
+  status: "CREATED";
+  hintPushed: boolean;
+  note: string | null;
+};
+
+export function triggerTsfShopProfileScan(
+  shop: string,
+): Promise<TsfShopProfileScanResult> {
+  return apiFetch(`/tsf/shop-profiles/${encodeURIComponent(shop)}/scan`, {
+    method: "POST",
+  });
 }
 
 export function fetchTsfUsage(search?: string): Promise<{ usage: TsfUsageRow[] }> {
