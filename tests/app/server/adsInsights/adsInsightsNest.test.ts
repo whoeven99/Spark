@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { googleDuringClause, parseRangeDays, resolveDateWindow } from "~/server/adsInsights/dateRange.server";
 import { nestFlatAdRows, mergeMetrics } from "~/server/adsInsights/nest.server";
-import { finalizeMetrics } from "~/server/adsInsights/types.server";
+import { finalizeMetrics, parseAdsInsightsView } from "~/server/adsInsights/types.server";
 
 describe("adsInsights dateRange", () => {
   it("parses allowed ranges and defaults to 7", () => {
@@ -94,5 +94,39 @@ describe("adsInsights nest", () => {
     );
     expect(merged.reach).toBeNull();
     expect(merged.purchases).toBeNull();
+    expect(merged.videoViews).toBeNull();
+    expect(merged.allConversions).toBeNull();
+  });
+
+  it("derives cpm and sums extended metrics", () => {
+    const merged = mergeMetrics(
+      finalizeMetrics({
+        impressions: 1000,
+        clicks: 10,
+        spend: 20,
+        videoViews: 5,
+        allConversions: 2,
+      }),
+      finalizeMetrics({
+        impressions: 1000,
+        clicks: 10,
+        spend: 20,
+        videoViews: 3,
+        allConversions: 1,
+      }),
+    );
+    expect(merged.cpm).toBe(20);
+    expect(merged.videoViews).toBe(8);
+    expect(merged.allConversions).toBe(3);
+  });
+});
+
+describe("adsInsights view parse", () => {
+  it("parses deep views and defaults to structure", () => {
+    expect(parseAdsInsightsView("keywords")).toBe("keywords");
+    expect(parseAdsInsightsView("searchTerms")).toBe("searchTerms");
+    expect(parseAdsInsightsView("creatives")).toBe("creatives");
+    expect(parseAdsInsightsView("nope")).toBe("structure");
+    expect(parseAdsInsightsView(null)).toBe("structure");
   });
 });

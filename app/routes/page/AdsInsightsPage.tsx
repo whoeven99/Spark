@@ -11,16 +11,23 @@ import {
 } from "./pageUiStyles";
 import { SegmentedPageTabs } from "../component/shared/SegmentedPageTabs";
 import { AdsInsightsTreeTable } from "../component/adsInsights/AdsInsightsTreeTable";
+import { AdsInsightsDeepTable } from "../component/adsInsights/AdsInsightsDeepTable";
 import { MetaAdsConnectPanel } from "../component/adsInsights/MetaAdsConnectPanel";
 import type {
   AdsInsightsApiError,
   AdsInsightsApiOk,
   AdsInsightsPlatform,
   AdsInsightsRangeDays,
+  AdsInsightsView,
 } from "../component/adsInsights/types";
 import type { AdsInsightsPageLoaderData } from "../app.settings.ads-insights";
 
 type InsightsFetcherData = AdsInsightsApiOk | AdsInsightsApiError;
+
+function parseView(raw: string | null): AdsInsightsView {
+  if (raw === "keywords" || raw === "searchTerms" || raw === "creatives") return raw;
+  return "structure";
+}
 
 export function AdsInsightsPage() {
   const { t } = useTranslation();
@@ -42,6 +49,7 @@ export function AdsInsightsPage() {
   const [rangeDays, setRangeDays] = useState<AdsInsightsRangeDays>(
     initialRange === 14 || initialRange === 30 ? initialRange : 7,
   );
+  const [view, setView] = useState<AdsInsightsView>(parseView(searchParams.get("view")));
 
   const connections = loaderData.connections;
   const connected =
@@ -51,6 +59,13 @@ export function AdsInsightsPage() {
         ? connections.google.connected
         : connections.tiktok.connected;
 
+  // Meta/TikTok 无关键词与搜索词；切到不支持视图时回退 structure。
+  useEffect(() => {
+    if (platform !== "google" && (view === "keywords" || view === "searchTerms")) {
+      setView("structure");
+    }
+  }, [platform, view]);
+
   const loadMetrics = useCallback(() => {
     if (platform === "meta" && !connections.meta.connected) return;
     if (platform === "google" && !connections.google.connected) return;
@@ -59,6 +74,7 @@ export function AdsInsightsPage() {
     const params = new URLSearchParams(location.search);
     params.set("platform", platform);
     params.set("range", String(rangeDays));
+    params.set("view", view);
     metricsFetcher.load(`/api/ads-insights?${params.toString()}`);
   }, [
     connections.google.connected,
@@ -68,13 +84,21 @@ export function AdsInsightsPage() {
     metricsFetcher,
     platform,
     rangeDays,
+    view,
   ]);
 
   useEffect(() => {
     loadMetrics();
-    // 仅在平台/日期变化时拉取；fetcher 自身不应进入依赖
+    // 仅在平台/日期/视图变化时拉取；fetcher 自身不应进入依赖
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [platform, rangeDays, connections.meta.connected, connections.google.connected, connections.tiktok.connected]);
+  }, [
+    platform,
+    rangeDays,
+    view,
+    connections.meta.connected,
+    connections.google.connected,
+    connections.tiktok.connected,
+  ]);
 
   useEffect(() => {
     const auth = searchParams.get("metaAdsAuth");
@@ -106,12 +130,39 @@ export function AdsInsightsPage() {
     [t],
   );
 
+  const viewTabs = useMemo(() => {
+    const items: Array<{ key: AdsInsightsView; label: string; disabled?: boolean }> = [
+      { key: "structure", label: t("adsInsights.viewStructure") },
+      {
+        key: "keywords",
+        label: t("adsInsights.viewKeywords"),
+        disabled: platform !== "google",
+      },
+      {
+        key: "searchTerms",
+        label: t("adsInsights.viewSearchTerms"),
+        disabled: platform !== "google",
+      },
+      { key: "creatives", label: t("adsInsights.viewCreatives") },
+    ];
+    return items;
+  }, [platform, t]);
+
   const data = metricsFetcher.data;
   const loading = metricsFetcher.state === "loading";
   const okData = data && data.ok ? data : null;
   const errData = data && !data.ok ? data : null;
 
   const catalogLink = `/app/ads-catalog${locationSearch}`;
+
+  const deepRows =
+    view === "keywords"
+      ? okData?.keywords ?? []
+      : view === "searchTerms"
+        ? okData?.searchTerms ?? []
+        : view === "creatives"
+          ? okData?.creatives ?? []
+          : [];
 
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
@@ -164,6 +215,17 @@ export function AdsInsightsPage() {
             {loading ? t("adsInsights.refreshing") : t("adsInsights.refresh")}
           </button>
         </div>
+
+        <SegmentedPageTabs
+          activeTab={view}
+          items={viewTabs
+            .filter((item) => !item.disabled)
+            .map(({ key, label }) => ({ key, label }))}
+          onTabChange={setView}
+          ariaLabel={t("adsInsights.viewTabsAria")}
+          density="compact"
+          mobileFullWidth={isMobile}
+        />
 
         {platform === "meta" && (
           <MetaAdsConnectPanel
@@ -226,10 +288,18 @@ export function AdsInsightsPage() {
                 </div>
               </div>
             </div>
-            <AdsInsightsTreeTable
-              campaigns={okData.campaigns}
-              currencyCode={okData.currencyCode}
-            />
+            {view === "structure" ? (
+              <AdsInsightsTreeTable
+                campaigns={okData.campaigns}
+                currencyCode={okData.currencyCode}
+              />
+            ) : (
+              <AdsInsightsDeepTable
+                view={view}
+                rows={deepRows}
+                currencyCode={okData.currencyCode}
+              />
+            )}
           </div>
         )}
 

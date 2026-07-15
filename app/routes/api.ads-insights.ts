@@ -2,7 +2,10 @@ import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { fetchAdsInsights } from "../server/adsInsights/index.server";
 import { parseRangeDays } from "../server/adsInsights/dateRange.server";
-import type { AdsInsightsPlatform } from "../server/adsInsights/types.server";
+import {
+  parseAdsInsightsView,
+  type AdsInsightsPlatform,
+} from "../server/adsInsights/types.server";
 import { formatOutboundErrorLog } from "../server/common/outboundError.server";
 
 const LOG_PREFIX = "[AdsInsights][API]";
@@ -13,13 +16,14 @@ function parsePlatform(raw: string | null): AdsInsightsPlatform | null {
 }
 
 /**
- * GET /api/ads-insights?platform=meta|google|tiktok&range=7|14|30
+ * GET /api/ads-insights?platform=meta|google|tiktok&range=7|14|30&view=structure|keywords|searchTerms|creatives
  */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const url = new URL(request.url);
   const platform = parsePlatform(url.searchParams.get("platform"));
   const rangeDays = parseRangeDays(url.searchParams.get("range"));
+  const view = parseAdsInsightsView(url.searchParams.get("view"));
 
   if (!platform) {
     return Response.json(
@@ -33,6 +37,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       shop: session.shop,
       platform,
       rangeDays,
+      view,
     });
     if (!result) {
       return Response.json({
@@ -46,11 +51,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               : "TikTok Ads 账户未绑定，请先在 Catalog 页完成授权",
       });
     }
-    return Response.json({ ok: true, ...result });
+    return Response.json({ ok: true, view, ...result });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error(
-      `${LOG_PREFIX} platform=${platform} shop=${session.shop} ${formatOutboundErrorLog(e)}`,
+      `${LOG_PREFIX} platform=${platform} view=${view} shop=${session.shop} ${formatOutboundErrorLog(e)}`,
     );
     return Response.json({ ok: false, reason: "api_error", message }, { status: 500 });
   }

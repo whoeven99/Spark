@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { useFetcher, useLoaderData, useLocation, useRevalidator, type SubmitTarget } from "react-router";
+import { Link, useFetcher, useLoaderData, useLocation, useRevalidator, type SubmitTarget } from "react-router";
 import { useEmbeddedLocationSearch } from "../../hooks/useEmbeddedLocationSearch";
 import { useTranslation } from "react-i18next";
 import {
@@ -23,7 +23,6 @@ import {
 } from "../component/adsCatalog/GoogleFeedFilters";
 import { GmcValidationReport } from "../component/adsCatalog/GmcValidationReport";
 import { GmcReviewDetailModal } from "../component/adsCatalog/GmcReviewDetailModal";
-import { GoogleAdsMetricsPanel, type CampaignMetricsRow } from "../component/adsCatalog/GoogleAdsMetricsPanel";
 import type {
   AdsCatalogPageLoaderData,
   AdsCatalogSyncRequestBody,
@@ -118,22 +117,6 @@ export function AdsCatalogPage() {
   const [reviewPlatform, setReviewPlatform] = useState<"facebook" | "google">("google");
   const [authBanner, setAuthBanner] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [previewPlatform, setPreviewPlatform] = useState<Platform | null>(null);
-
-  const [adsMetrics, setAdsMetrics] = useState<{
-    campaigns: CampaignMetricsRow[];
-    currencyCode: string | null;
-    customerId: string;
-  } | null>(null);
-  const [adsMetricsError, setAdsMetricsError] = useState<string | null>(null);
-  const metricsFetcher = useFetcher<{
-    ok?: boolean;
-    reason?: string;
-    message?: string;
-    campaigns?: CampaignMetricsRow[];
-    currencyCode?: string | null;
-    customerId?: string;
-    advertiserId?: string;
-  }>();
 
   const syncFetcher = useFetcher<{
     success?: boolean;
@@ -250,37 +233,15 @@ export function AdsCatalogPage() {
   }, [previewFetcher.data, previewFetcher.state, platform]);
 
   useEffect(() => {
-    if (metricsFetcher.state === "idle" && metricsFetcher.data) {
-      if (metricsFetcher.data.ok) {
-        setAdsMetrics({
-          campaigns: metricsFetcher.data.campaigns ?? [],
-          currencyCode: metricsFetcher.data.currencyCode ?? null,
-          customerId:
-            metricsFetcher.data.customerId ||
-            metricsFetcher.data.advertiserId ||
-            "",
-        });
-        setAdsMetricsError(null);
-      } else {
-        setAdsMetricsError(metricsFetcher.data.message ?? t("adsCatalog.metricsFetchError"));
-        setAdsMetrics(null);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [metricsFetcher.data, metricsFetcher.state]);
-
-  useEffect(() => {
     setTasks(loaderData.initialTaskPage.tasks);
   }, [loaderData.initialTaskPage.tasks]);
 
-  // 切换平台时清空另一平台的预览结果和广告指标，避免残留。
+  // 切换平台时清空另一平台的预览结果，避免残留。
   useEffect(() => {
     setPreviewError(null);
     setPreviewPlatform(null);
     setGoogleReport(null);
     setFbPreview(null);
-    setAdsMetrics(null);
-    setAdsMetricsError(null);
   }, [platform]);
 
   const selectedTask = useMemo(
@@ -376,16 +337,6 @@ export function AdsCatalogPage() {
     } finally {
       setDeletingId(null);
     }
-  }
-
-  function handleFetchAdsMetrics() {
-    setAdsMetrics(null);
-    setAdsMetricsError(null);
-    if (platform === "tiktok") {
-      metricsFetcher.load(`/api/ads-catalog/tiktok-ads-metrics${locationSearch}`);
-      return;
-    }
-    metricsFetcher.load(`/api/ads-catalog/google-ads-metrics${locationSearch}`);
   }
 
   async function handleRefreshStatus() {
@@ -584,45 +535,6 @@ export function AdsCatalogPage() {
                   ? t("adsCatalog.actionSyncing")
                   : t("adsCatalog.actionSync")}
               </button>
-              {(platform === "google" || platform === "tiktok") && (
-                <button
-                  type="button"
-                  onClick={handleFetchAdsMetrics}
-                  disabled={
-                    (platform === "google"
-                      ? !credentials.googleAds.connected
-                      : !credentials.tiktok.connected) || metricsFetcher.state !== "idle"
-                  }
-                  style={{
-                    ...buttonSecondary,
-                    opacity:
-                      (platform === "google"
-                        ? !credentials.googleAds.connected
-                        : !credentials.tiktok.connected)
-                        ? 0.6
-                        : 1,
-                    cursor:
-                      (platform === "google"
-                        ? !credentials.googleAds.connected
-                        : !credentials.tiktok.connected)
-                        ? "not-allowed"
-                        : "pointer",
-                  }}
-                  title={
-                    platform === "google"
-                      ? !credentials.googleAds.connected
-                        ? t("adsCatalog.metricsAdsNotConnected")
-                        : undefined
-                      : !credentials.tiktok.connected
-                        ? t("adsCatalog.metricsTiktokNotConnected")
-                        : undefined
-                  }
-                >
-                  {metricsFetcher.state === "loading"
-                    ? t("adsCatalog.actionFetchingMetrics")
-                    : t("adsCatalog.actionFetchMetrics")}
-                </button>
-              )}
             </div>
 
             {previewError && (
@@ -637,30 +549,27 @@ export function AdsCatalogPage() {
             {syncFetcher.data?.errorMsg && (
               <div style={errorBoxStyle}>{syncFetcher.data.errorMsg}</div>
             )}
-            {adsMetricsError && (
-              <div style={errorBoxStyle}>{adsMetricsError}</div>
-            )}
-            {platform === "google" && adsMetrics && (
-              <GoogleAdsMetricsPanel
-                campaigns={adsMetrics.campaigns}
-                currencyCode={adsMetrics.currencyCode}
-                customerId={adsMetrics.customerId}
-              />
-            )}
-            {platform === "tiktok" && adsMetrics && (
-              <GoogleAdsMetricsPanel
-                campaigns={adsMetrics.campaigns}
-                currencyCode={adsMetrics.currencyCode}
-                customerId={adsMetrics.customerId}
-                titleKey="adsCatalog.metricsTiktokTitle"
-                subtitleKey="adsCatalog.metricsTiktokSubtitle"
-              />
-            )}
           </div>
         )}
 
         {tab === "credentials" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div
+              style={{
+                ...sectionStyle,
+                padding: "14px 16px",
+                background: pageColorTokens.surfaceMuted,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{t("adsCatalog.insightsGuideTitle")}</div>
+              <div style={pageHintTextStyle}>{t("adsCatalog.insightsGuideBody")}</div>
+              <Link
+                to={`/app/settings/ads-insights${locationSearch}`}
+                style={{ color: pageColorTokens.brandBlueDark, fontWeight: 600, fontSize: 13 }}
+              >
+                {t("adsCatalog.insightsGuideLink")}
+              </Link>
+            </div>
             <GoogleConnectPanels
               credentials={credentials}
               adsLink={adsLink}

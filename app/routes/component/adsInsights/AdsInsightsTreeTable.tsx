@@ -1,47 +1,21 @@
 import type { CSSProperties } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import type { AdsInsightsCampaign, AdsInsightsMetrics } from "./types";
+import {
+  collectOptionalMetricFlags,
+  formatCurrency,
+  formatNumber,
+  formatPercent,
+  formatRoas,
+  type OptionalMetricKey,
+} from "./metricsFormat";
 
 type Props = {
   campaigns: AdsInsightsCampaign[];
   currencyCode: string | null;
 };
-
-function formatCurrency(amount: number, currencyCode: string | null): string {
-  if (currencyCode) {
-    try {
-      return new Intl.NumberFormat(undefined, {
-        style: "currency",
-        currency: currencyCode,
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(amount);
-    } catch {
-      // fall through
-    }
-  }
-  return amount.toFixed(2);
-}
-
-function formatPercent(ratio: number | null | undefined): string {
-  if (ratio === null || ratio === undefined) return "—";
-  return `${(ratio * 100).toFixed(2)}%`;
-}
-
-function formatNumber(n: number | null | undefined, digits = 0): string {
-  if (n === null || n === undefined) return "—";
-  return n.toLocaleString(undefined, {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  });
-}
-
-function formatRoas(n: number | null | undefined): string {
-  if (n === null || n === undefined) return "—";
-  return `${n.toFixed(2)}x`;
-}
 
 const tableStyle: CSSProperties = {
   width: "100%",
@@ -76,9 +50,11 @@ const tdNum: CSSProperties = {
 function MetricsCells({
   metrics,
   currencyCode,
+  optional,
 }: {
   metrics: AdsInsightsMetrics;
   currencyCode: string | null;
+  optional: Record<OptionalMetricKey, boolean>;
 }) {
   return (
     <>
@@ -87,6 +63,11 @@ function MetricsCells({
       <td style={tdNum}>{formatCurrency(metrics.spend, currencyCode)}</td>
       <td style={tdNum}>{formatPercent(metrics.ctr)}</td>
       <td style={tdNum}>{formatCurrency(metrics.cpc, currencyCode)}</td>
+      {optional.cpm && (
+        <td style={tdNum}>
+          {metrics.cpm === null ? "—" : formatCurrency(metrics.cpm, currencyCode)}
+        </td>
+      )}
       <td style={tdNum}>{formatNumber(metrics.conversions, 2)}</td>
       <td style={tdNum}>{formatCurrency(metrics.conversionsValue, currencyCode)}</td>
       <td style={tdNum}>{formatPercent(metrics.conversionRate)}</td>
@@ -101,6 +82,19 @@ function MetricsCells({
       <td style={tdNum}>{formatNumber(metrics.landingPageViews, 2)}</td>
       <td style={tdNum}>{formatNumber(metrics.reach)}</td>
       <td style={tdNum}>{formatNumber(metrics.frequency, 2)}</td>
+      {optional.outboundClicks && (
+        <td style={tdNum}>{formatNumber(metrics.outboundClicks, 2)}</td>
+      )}
+      {optional.videoViews && <td style={tdNum}>{formatNumber(metrics.videoViews, 2)}</td>}
+      {optional.thruplay && <td style={tdNum}>{formatNumber(metrics.thruplay, 2)}</td>}
+      {optional.leads && <td style={tdNum}>{formatNumber(metrics.leads, 2)}</td>}
+      {optional.viewContent && <td style={tdNum}>{formatNumber(metrics.viewContent, 2)}</td>}
+      {optional.initiateCheckout && (
+        <td style={tdNum}>{formatNumber(metrics.initiateCheckout, 2)}</td>
+      )}
+      {optional.allConversions && (
+        <td style={tdNum}>{formatNumber(metrics.allConversions, 2)}</td>
+      )}
     </>
   );
 }
@@ -109,6 +103,18 @@ export function AdsInsightsTreeTable({ campaigns, currencyCode }: Props) {
   const { t } = useTranslation();
   const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
   const [expandedAdSets, setExpandedAdSets] = useState<Set<string>>(new Set());
+
+  const optional = useMemo(() => {
+    const all: AdsInsightsMetrics[] = [];
+    for (const c of campaigns) {
+      all.push(c.metrics);
+      for (const s of c.adSets) {
+        all.push(s.metrics);
+        for (const a of s.ads) all.push(a.metrics);
+      }
+    }
+    return collectOptionalMetricFlags(all);
+  }, [campaigns]);
 
   function toggleCampaign(id: string) {
     setExpandedCampaigns((prev) => {
@@ -150,6 +156,7 @@ export function AdsInsightsTreeTable({ campaigns, currencyCode }: Props) {
     t("adsInsights.colSpend"),
     t("adsInsights.colCtr"),
     t("adsInsights.colCpc"),
+    ...(optional.cpm ? [t("adsInsights.colCpm")] : []),
     t("adsInsights.colConversions"),
     t("adsInsights.colConvValue"),
     t("adsInsights.colCvr"),
@@ -160,6 +167,13 @@ export function AdsInsightsTreeTable({ campaigns, currencyCode }: Props) {
     t("adsInsights.colLandingPageViews"),
     t("adsInsights.colReach"),
     t("adsInsights.colFrequency"),
+    ...(optional.outboundClicks ? [t("adsInsights.colOutboundClicks")] : []),
+    ...(optional.videoViews ? [t("adsInsights.colVideoViews")] : []),
+    ...(optional.thruplay ? [t("adsInsights.colThruplay")] : []),
+    ...(optional.leads ? [t("adsInsights.colLeads")] : []),
+    ...(optional.viewContent ? [t("adsInsights.colViewContent")] : []),
+    ...(optional.initiateCheckout ? [t("adsInsights.colInitiateCheckout")] : []),
+    ...(optional.allConversions ? [t("adsInsights.colAllConversions")] : []),
   ];
 
   return (
@@ -169,7 +183,7 @@ export function AdsInsightsTreeTable({ campaigns, currencyCode }: Props) {
           <tr>
             {headers.map((label, idx) => (
               <th
-                key={label}
+                key={`${label}-${idx}`}
                 style={{
                   ...thStyle,
                   textAlign: idx === 0 ? "left" : "right",
@@ -194,6 +208,7 @@ export function AdsInsightsTreeTable({ campaigns, currencyCode }: Props) {
                 cIdx={cIdx}
                 currencyCode={currencyCode}
                 expandedAdSets={expandedAdSets}
+                optional={optional}
                 onToggleCampaign={() => toggleCampaign(campaign.id)}
                 onToggleAdSet={toggleAdSet}
                 t={t}
@@ -212,6 +227,7 @@ function CampaignRows({
   cIdx,
   currencyCode,
   expandedAdSets,
+  optional,
   onToggleCampaign,
   onToggleAdSet,
   t,
@@ -221,6 +237,7 @@ function CampaignRows({
   cIdx: number;
   currencyCode: string | null;
   expandedAdSets: Set<string>;
+  optional: Record<OptionalMetricKey, boolean>;
   onToggleCampaign: () => void;
   onToggleAdSet: (id: string) => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
@@ -249,7 +266,7 @@ function CampaignRows({
           {t("adsInsights.levelCampaign")} · {campaign.status} · ID {campaign.id}
         </div>
       </td>
-      <MetricsCells metrics={campaign.metrics} currencyCode={currencyCode} />
+      <MetricsCells metrics={campaign.metrics} currencyCode={currencyCode} optional={optional} />
     </tr>,
   ];
 
@@ -280,7 +297,7 @@ function CampaignRows({
               {t("adsInsights.levelAdSet")} · {adSet.status} · ID {adSet.id}
             </div>
           </td>
-          <MetricsCells metrics={adSet.metrics} currencyCode={currencyCode} />
+          <MetricsCells metrics={adSet.metrics} currencyCode={currencyCode} optional={optional} />
         </tr>,
       );
 
@@ -294,7 +311,7 @@ function CampaignRows({
                   {t("adsInsights.levelAd")} · {ad.status} · ID {ad.id}
                 </div>
               </td>
-              <MetricsCells metrics={ad.metrics} currencyCode={currencyCode} />
+              <MetricsCells metrics={ad.metrics} currencyCode={currencyCode} optional={optional} />
             </tr>,
           );
         }

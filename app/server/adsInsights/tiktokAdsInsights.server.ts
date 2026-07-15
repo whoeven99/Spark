@@ -18,6 +18,7 @@ import {
 import { resolveDateWindow } from "./dateRange.server";
 import { nestFlatAdRows } from "./nest.server";
 import {
+  type AdsInsightsDeepRow,
   type AdsInsightsRangeDays,
   type AdsInsightsResult,
   finalizeMetrics,
@@ -134,12 +135,13 @@ async function listEntityNames(params: {
   return map;
 }
 
-const REPORT_METRICS = [
+const REPORT_METRICS_EXTENDED = [
   "spend",
   "impressions",
   "clicks",
   "ctr",
   "cpc",
+  "cpm",
   "conversion",
   "conversion_rate",
   "complete_payment",
@@ -149,11 +151,138 @@ const REPORT_METRICS = [
   "landing_page_view",
   "reach",
   "frequency",
+  "video_play_actions",
+  "video_watched_2s",
+  "video_views_p100",
 ] as const;
+
+const REPORT_METRICS_BASE = [
+  "spend",
+  "impressions",
+  "clicks",
+  "ctr",
+  "cpc",
+  "conversion",
+  "conversion_rate",
+] as const;
+
+type ReportRow = {
+  dimensions?: {
+    campaign_id?: string | number;
+    adgroup_id?: string | number;
+    ad_id?: string | number;
+  };
+  metrics?: Record<string, string | number | undefined>;
+};
+
+async function fetchReportPages(params: {
+  accessToken: string;
+  advertiserId: string;
+  dateStart: string;
+  dateEnd: string;
+  metrics: readonly string[];
+  dataLevel?: string;
+}): Promise<ReportRow[]> {
+  const out: ReportRow[] = [];
+  let page = 1;
+  let totalPage = 1;
+  while (page <= totalPage && page <= 50) {
+    const json = await tiktokGetJson<{
+      data?: {
+        list?: ReportRow[];
+        page_info?: { total_page?: number; page?: number };
+      };
+    }>({
+      path: "/report/integrated/get/",
+      accessToken: params.accessToken,
+      query: {
+        advertiser_id: params.advertiserId,
+        report_type: "BASIC",
+        data_level: params.dataLevel ?? "AUCTION_AD",
+        dimensions: JSON.stringify(["campaign_id", "adgroup_id", "ad_id"]),
+        metrics: JSON.stringify([...params.metrics]),
+        start_date: params.dateStart,
+        end_date: params.dateEnd,
+        page: String(page),
+        page_size: "1000",
+      },
+    });
+    out.push(...(json.data?.list ?? []));
+    totalPage = Math.max(1, Number(json.data?.page_info?.total_page ?? 1));
+    page += 1;
+  }
+  return out;
+}
+
+async function fetchAdvertiserCurrency(params: {
+  accessToken: string;
+  advertiserId: string;
+}): Promise<string | null> {
+  try {
+    const json = await tiktokGetJson<{
+      data?: { list?: Array<{ currency?: string; advertiser_id?: string | number }> };
+    }>({
+      path: "/advertiser/info/",
+      accessToken: params.accessToken,
+      query: {
+        advertiser_ids: JSON.stringify([params.advertiserId]),
+        fields: JSON.stringify(["advertiser_id", "currency"]),
+      },
+    });
+    const row = json.data?.list?.[0];
+    return row?.currency?.trim() || null;
+  } catch (e) {
+    console.warn(`${LOG_PREFIX} step=currency ${formatOutboundErrorLog(e)}`);
+    return null;
+  }
+}
+
+function mapReportMetrics(m: Record<string, string | number | undefined>) {
+  const impressions = toNumber(m.impressions);
+  const clicks = toNumber(m.clicks);
+  const spend = toNumber(m.spend);
+  const conversions = toNumber(m.conversion);
+  const purchasesRaw = toNumber(m.complete_payment);
+  const purchaseValueRaw = toNumber(m.total_purchase_value);
+  const atcRaw = toNumber(m.web_event_add_to_cart);
+  const lpvRaw = toNumber(m.landing_page_view);
+  const reachRaw = toNumber(m.reach);
+  const frequencyRaw = toNumber(m.frequency);
+  const ctrRaw = toNumber(m.ctr);
+  const ctr = ctrRaw > 1 ? ctrRaw / 100 : ctrRaw;
+  const cpmRaw = toNumber(m.cpm);
+  const videoViews =
+    m.video_play_actions !== undefined
+      ? toNumber(m.video_play_actions)
+      : m.video_watched_2s !== undefined
+        ? toNumber(m.video_watched_2s)
+        : null;
+
+  return finalizeMetrics({
+    impressions,
+    clicks,
+    spend,
+    ctr,
+    cpc: toNumber(m.cpc),
+    cpm: m.cpm !== undefined ? cpmRaw : null,
+    conversions,
+    conversionsValue: purchaseValueRaw,
+    conversionRate: toNumber(m.conversion_rate) || undefined,
+    purchases: m.complete_payment !== undefined ? purchasesRaw : null,
+    purchaseValue: m.total_purchase_value !== undefined ? purchaseValueRaw : null,
+    addToCart: m.web_event_add_to_cart !== undefined ? atcRaw : null,
+    landingPageViews: m.landing_page_view !== undefined ? lpvRaw : null,
+    reach: m.reach !== undefined ? reachRaw : null,
+    frequency: m.frequency !== undefined ? frequencyRaw : null,
+    videoViews,
+    thruplay: m.video_views_p100 !== undefined ? toNumber(m.video_views_p100) : null,
+  });
+}
 
 export async function fetchTiktokAdsInsights(
   shop: string,
   rangeDays: AdsInsightsRangeDays,
+  options?: { includeCreatives?: boolean },
 ): Promise<AdsInsightsResult | null> {
   const credential = await getTiktokCatalogCredential(shop);
   if (!credential) return null;
@@ -171,7 +300,7 @@ export async function fetchTiktokAdsInsights(
     if (refreshed) accessToken = refreshed;
   }
 
-  const [campaignMeta, adgroupMeta, adMeta] = await Promise.all([
+  const [campaignMeta, adgroupMeta, adMeta, currencyCode] = await Promise.all([
     listEntityNames({
       accessToken,
       advertiserId: credential.advertiserId,
@@ -196,57 +325,36 @@ export async function fetchTiktokAdsInsights(
       nameField: "ad_name",
       statusField: "operation_status",
     }),
+    fetchAdvertiserCurrency({
+      accessToken,
+      advertiserId: credential.advertiserId,
+    }),
   ]);
 
-  let reportList: Array<{
-    dimensions?: {
-      campaign_id?: string | number;
-      adgroup_id?: string | number;
-      ad_id?: string | number;
-    };
-    metrics?: Record<string, string | number | undefined>;
-  }> = [];
+  let reportList: ReportRow[] = [];
+  let usedExtended = true;
 
   try {
-    // 部分账户不支持全部扩展指标；失败时降级到基础指标集。
-    const tryMetrics = async (metrics: readonly string[]) => {
-      const json = await tiktokGetJson<{
-        data?: {
-          list?: typeof reportList;
-        };
-      }>({
-        path: "/report/integrated/get/",
-        accessToken,
-        query: {
-          advertiser_id: credential.advertiserId,
-          report_type: "BASIC",
-          data_level: "AUCTION_AD",
-          dimensions: JSON.stringify(["campaign_id", "adgroup_id", "ad_id"]),
-          metrics: JSON.stringify([...metrics]),
-          start_date: dateStart,
-          end_date: dateEnd,
-          page: "1",
-          page_size: "1000",
-        },
-      });
-      return json.data?.list ?? [];
-    };
-
     try {
-      reportList = await tryMetrics(REPORT_METRICS);
+      reportList = await fetchReportPages({
+        accessToken,
+        advertiserId: credential.advertiserId,
+        dateStart,
+        dateEnd,
+        metrics: REPORT_METRICS_EXTENDED,
+      });
     } catch (e) {
+      usedExtended = false;
       console.warn(
         `${LOG_PREFIX} step=report_extended_failed shop=${shop} ${formatOutboundErrorLog(e)}`,
       );
-      reportList = await tryMetrics([
-        "spend",
-        "impressions",
-        "clicks",
-        "ctr",
-        "cpc",
-        "conversion",
-        "conversion_rate",
-      ]);
+      reportList = await fetchReportPages({
+        accessToken,
+        advertiserId: credential.advertiserId,
+        dateStart,
+        dateEnd,
+        metrics: REPORT_METRICS_BASE,
+      });
     }
   } catch (e) {
     console.error(`${LOG_PREFIX} step=report shop=${shop} ${formatOutboundErrorLog(e)}`);
@@ -259,23 +367,9 @@ export async function fetchTiktokAdsInsights(
       const adSetId = String(row.dimensions?.adgroup_id ?? "").trim();
       const adId = String(row.dimensions?.ad_id ?? "").trim();
       const m = row.metrics ?? {};
-      const impressions = toNumber(m.impressions);
-      const clicks = toNumber(m.clicks);
-      const spend = toNumber(m.spend);
-      const conversions = toNumber(m.conversion);
-      const purchasesRaw = toNumber(m.complete_payment);
-      const purchaseValueRaw = toNumber(m.total_purchase_value);
-      const atcRaw = toNumber(m.web_event_add_to_cart);
-      const lpvRaw = toNumber(m.landing_page_view);
-      const reachRaw = toNumber(m.reach);
-      const frequencyRaw = toNumber(m.frequency);
       const campaign = campaignMeta.get(campaignId);
       const adSet = adgroupMeta.get(adSetId);
       const ad = adMeta.get(adId);
-
-      // TikTok CTR 通常已是百分比
-      const ctrRaw = toNumber(m.ctr);
-      const ctr = ctrRaw > 1 ? ctrRaw / 100 : ctrRaw;
 
       return {
         campaignId,
@@ -287,33 +381,56 @@ export async function fetchTiktokAdsInsights(
         adId,
         adName: ad?.name ?? adId,
         adStatus: ad?.status ?? "UNKNOWN",
-        metrics: finalizeMetrics({
-          impressions,
-          clicks,
-          spend,
-          ctr,
-          cpc: toNumber(m.cpc),
-          conversions,
-          conversionsValue: purchaseValueRaw,
-          conversionRate: toNumber(m.conversion_rate) || undefined,
-          purchases: m.complete_payment !== undefined ? purchasesRaw : null,
-          purchaseValue: m.total_purchase_value !== undefined ? purchaseValueRaw : null,
-          addToCart: m.web_event_add_to_cart !== undefined ? atcRaw : null,
-          landingPageViews: m.landing_page_view !== undefined ? lpvRaw : null,
-          reach: m.reach !== undefined ? reachRaw : null,
-          frequency: m.frequency !== undefined ? frequencyRaw : null,
-        }),
+        metrics: mapReportMetrics(m),
       };
     })
     .filter((r) => r.campaignId && r.adSetId && r.adId);
 
+  // 扩展指标失败时，至少保留基础字段；购买等字段保持 null 而非静默变 0。
+  if (!usedExtended) {
+    for (const row of flat) {
+      row.metrics = finalizeMetrics({
+        ...row.metrics,
+        purchases: null,
+        purchaseValue: null,
+        addToCart: null,
+        landingPageViews: null,
+        reach: null,
+        frequency: null,
+        videoViews: null,
+        thruplay: null,
+        cpm: null,
+      });
+    }
+  }
+
+  const wantCreatives = Boolean(options?.includeCreatives);
+  const creatives: AdsInsightsDeepRow[] = wantCreatives
+    ? flat.map((row) => ({
+        id: row.adId,
+        name: row.adName,
+        status: row.adStatus,
+        campaignId: row.campaignId,
+        campaignName: row.campaignName,
+        adSetId: row.adSetId,
+        adSetName: row.adSetName,
+        adId: row.adId,
+        adName: row.adName,
+        detail: null,
+        metrics: row.metrics,
+      }))
+    : [];
+
   return {
     platform: "tiktok",
     accountId: credential.advertiserId,
-    currencyCode: null,
+    currencyCode,
     rangeDays,
     dateStart,
     dateEnd,
-    campaigns: nestFlatAdRows(flat),
+    campaigns: wantCreatives ? [] : nestFlatAdRows(flat),
+    keywords: [],
+    searchTerms: [],
+    creatives,
   };
 }

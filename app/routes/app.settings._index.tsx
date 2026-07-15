@@ -28,12 +28,6 @@ const SETTINGS_MODULES: SettingsModule[] = [
     badgeKey: "settingsShell.groupAccount",
   },
   {
-    to: "/app/settings/channels",
-    labelKey: "settingsShell.navChannels",
-    descKey: "settingsShell.descChannels",
-    badgeKey: "settingsShell.groupIntegrations",
-  },
-  {
     to: "/app/ads-catalog",
     labelKey: "settingsShell.navAdsCatalog",
     descKey: "settingsShell.descAdsCatalog",

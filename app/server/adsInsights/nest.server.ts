@@ -62,6 +62,13 @@ export function mergeMetrics(
     landingPageViews: sumNullable(a.landingPageViews, b.landingPageViews),
     reach,
     frequency,
+    outboundClicks: sumNullable(a.outboundClicks, b.outboundClicks),
+    videoViews: sumNullable(a.videoViews, b.videoViews),
+    thruplay: sumNullable(a.thruplay, b.thruplay),
+    leads: sumNullable(a.leads, b.leads),
+    viewContent: sumNullable(a.viewContent, b.viewContent),
+    initiateCheckout: sumNullable(a.initiateCheckout, b.initiateCheckout),
+    allConversions: sumNullable(a.allConversions, b.allConversions),
   });
 }
 

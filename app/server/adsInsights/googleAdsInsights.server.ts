@@ -1,5 +1,6 @@
 /**
  * Google Ads 广告洞察：Ad 级别 GAQL + 转化动作分类补齐购买/加购。
+ * 可选拉取 keyword / search term / asset 深层级。
  */
 
 import {
@@ -25,6 +26,7 @@ import {
 import { googleDuringClause, resolveDateWindow } from "./dateRange.server";
 import { nestFlatAdRows } from "./nest.server";
 import {
+  type AdsInsightsDeepRow,
   type AdsInsightsRangeDays,
   type AdsInsightsResult,
   finalizeMetrics,
@@ -38,8 +40,15 @@ interface GaqlRow {
   adGroup?: { id?: string; name?: string; status?: string };
   adGroupAd?: {
     status?: string;
-    ad?: { id?: string; name?: string };
+    ad?: { id?: string; name?: string; type?: string };
   };
+  adGroupCriterion?: {
+    criterion_id?: string;
+    keyword?: { text?: string; match_type?: string };
+    status?: string;
+  };
+  searchTermView?: { search_term?: string; status?: string };
+  asset?: { id?: string; name?: string; type?: string };
   metrics?: Record<string, string | number | undefined>;
   customer?: { currency_code?: string };
   segments?: { conversion_action_category?: string };
@@ -49,13 +58,14 @@ interface SearchStreamResponse {
   results?: GaqlRow[];
 }
 
-async function executeGaqlQuery(params: {
+type QueryParams = {
   accessToken: string;
   developerToken: string;
   customerId: string;
   loginCustomerId: string;
-  query: string;
-}): Promise<GaqlRow[]> {
+};
+
+async function executeGaqlQuery(params: QueryParams & { query: string }): Promise<GaqlRow[]> {
   const cleanId = normalizeCustomerId(params.customerId);
   const url = googleAdsApiUrl(`/customers/${cleanId}/googleAds:searchStream`);
 
@@ -117,17 +127,13 @@ async function maybeRefreshAdsToken(shop: string): Promise<string | null> {
   return refreshed.accessToken;
 }
 
-type ConvKey = string; // campaignId|adGroupId|adId
+type ConvKey = string;
 
 function convMapKey(campaignId: string, adGroupId: string, adId: string): ConvKey {
   return `${campaignId}|${adGroupId}|${adId}`;
 }
 
-async function fetchConversionCategoryMap(params: {
-  accessToken: string;
-  developerToken: string;
-  customerId: string;
-  loginCustomerId: string;
+async function fetchConversionCategoryMap(params: QueryParams & {
   during: string;
   category: "PURCHASE" | "ADD_TO_CART" | "PAGE_VIEW";
 }): Promise<Map<ConvKey, { conversions: number; value: number }>> {
@@ -144,7 +150,6 @@ async function fetchConversionCategoryMap(params: {
     WHERE segments.date DURING ${params.during}
       AND segments.conversion_action_category = '${params.category}'
       AND campaign.status != 'REMOVED'
-    LIMIT 2000
   `;
   try {
     const rows = await executeGaqlQuery({ ...params, query });
@@ -168,9 +173,205 @@ async function fetchConversionCategoryMap(params: {
   return map;
 }
 
+function metricsFromGaql(row: GaqlRow) {
+  const costMicros = toNumber(row.metrics?.cost_micros);
+  const spend = costMicros / 1_000_000;
+  const clicks = toNumber(row.metrics?.clicks);
+  const impressions = toNumber(row.metrics?.impressions);
+  const conversions = toNumber(row.metrics?.conversions);
+  const conversionsValue = toNumber(row.metrics?.conversions_value);
+  const averageCpcMicros = toNumber(row.metrics?.average_cpc);
+  const averageCpmMicros = toNumber(row.metrics?.average_cpm);
+  return finalizeMetrics({
+    impressions,
+    clicks,
+    spend,
+    ctr: toNumber(row.metrics?.ctr),
+    cpc: averageCpcMicros / 1_000_000,
+    cpm: averageCpmMicros > 0 ? averageCpmMicros / 1_000_000 : null,
+    conversions,
+    conversionsValue,
+    allConversions: row.metrics?.all_conversions !== undefined
+      ? toNumber(row.metrics.all_conversions)
+      : null,
+  });
+}
+
+async function fetchKeywords(
+  params: QueryParams & { during: string },
+): Promise<AdsInsightsDeepRow[]> {
+  const query = `
+    SELECT
+      campaign.id,
+      campaign.name,
+      ad_group.id,
+      ad_group.name,
+      ad_group_criterion.criterion_id,
+      ad_group_criterion.keyword.text,
+      ad_group_criterion.keyword.match_type,
+      ad_group_criterion.status,
+      metrics.impressions,
+      metrics.clicks,
+      metrics.cost_micros,
+      metrics.ctr,
+      metrics.average_cpc,
+      metrics.average_cpm,
+      metrics.conversions,
+      metrics.conversions_value,
+      metrics.all_conversions
+    FROM keyword_view
+    WHERE segments.date DURING ${params.during}
+      AND campaign.status != 'REMOVED'
+      AND ad_group.status != 'REMOVED'
+    ORDER BY metrics.cost_micros DESC
+  `;
+  try {
+    const rows = await executeGaqlQuery({ ...params, query });
+    const out: AdsInsightsDeepRow[] = [];
+    for (const row of rows) {
+      const id = String(row.adGroupCriterion?.criterion_id ?? "").trim();
+      const text = row.adGroupCriterion?.keyword?.text?.trim() || id;
+      if (!id && !text) continue;
+      const matchType = row.adGroupCriterion?.keyword?.match_type ?? "";
+      out.push({
+        id: id || text,
+        name: text,
+        status: row.adGroupCriterion?.status ?? "UNKNOWN",
+        campaignId: row.campaign?.id ?? null,
+        campaignName: row.campaign?.name ?? null,
+        adSetId: row.adGroup?.id ?? null,
+        adSetName: row.adGroup?.name ?? null,
+        adId: null,
+        adName: null,
+        detail: matchType || null,
+        metrics: metricsFromGaql(row),
+      });
+    }
+    return out;
+  } catch (e) {
+    console.warn(`${LOG_PREFIX} step=keywords ${formatOutboundErrorLog(e)}`);
+    return [];
+  }
+}
+
+async function fetchSearchTerms(
+  params: QueryParams & { during: string },
+): Promise<AdsInsightsDeepRow[]> {
+  const query = `
+    SELECT
+      campaign.id,
+      campaign.name,
+      ad_group.id,
+      ad_group.name,
+      search_term_view.search_term,
+      search_term_view.status,
+      metrics.impressions,
+      metrics.clicks,
+      metrics.cost_micros,
+      metrics.ctr,
+      metrics.average_cpc,
+      metrics.average_cpm,
+      metrics.conversions,
+      metrics.conversions_value,
+      metrics.all_conversions
+    FROM search_term_view
+    WHERE segments.date DURING ${params.during}
+      AND campaign.status != 'REMOVED'
+    ORDER BY metrics.cost_micros DESC
+  `;
+  try {
+    const rows = await executeGaqlQuery({ ...params, query });
+    const out: AdsInsightsDeepRow[] = [];
+    for (const row of rows) {
+      const term = row.searchTermView?.search_term?.trim() || "";
+      if (!term) continue;
+      out.push({
+        id: `${row.campaign?.id ?? ""}|${row.adGroup?.id ?? ""}|${term}`,
+        name: term,
+        status: row.searchTermView?.status ?? "UNKNOWN",
+        campaignId: row.campaign?.id ?? null,
+        campaignName: row.campaign?.name ?? null,
+        adSetId: row.adGroup?.id ?? null,
+        adSetName: row.adGroup?.name ?? null,
+        adId: null,
+        adName: null,
+        detail: null,
+        metrics: metricsFromGaql(row),
+      });
+    }
+    return out;
+  } catch (e) {
+    console.warn(`${LOG_PREFIX} step=search_terms ${formatOutboundErrorLog(e)}`);
+    return [];
+  }
+}
+
+async function fetchCreatives(
+  params: QueryParams & { during: string },
+): Promise<AdsInsightsDeepRow[]> {
+  // ad_group_ad 已是创意载体；补充 ad type 作为素材视图
+  const query = `
+    SELECT
+      campaign.id,
+      campaign.name,
+      ad_group.id,
+      ad_group.name,
+      ad_group_ad.ad.id,
+      ad_group_ad.ad.name,
+      ad_group_ad.ad.type,
+      ad_group_ad.status,
+      metrics.impressions,
+      metrics.clicks,
+      metrics.cost_micros,
+      metrics.ctr,
+      metrics.average_cpc,
+      metrics.average_cpm,
+      metrics.conversions,
+      metrics.conversions_value,
+      metrics.all_conversions
+    FROM ad_group_ad
+    WHERE segments.date DURING ${params.during}
+      AND campaign.status != 'REMOVED'
+      AND ad_group.status != 'REMOVED'
+      AND ad_group_ad.status != 'REMOVED'
+    ORDER BY metrics.cost_micros DESC
+  `;
+  try {
+    const rows = await executeGaqlQuery({ ...params, query });
+    const out: AdsInsightsDeepRow[] = [];
+    for (const row of rows) {
+      const adId = row.adGroupAd?.ad?.id ?? "";
+      if (!adId) continue;
+      out.push({
+        id: adId,
+        name: row.adGroupAd?.ad?.name?.trim() || adId,
+        status: row.adGroupAd?.status ?? "UNKNOWN",
+        campaignId: row.campaign?.id ?? null,
+        campaignName: row.campaign?.name ?? null,
+        adSetId: row.adGroup?.id ?? null,
+        adSetName: row.adGroup?.name ?? null,
+        adId,
+        adName: row.adGroupAd?.ad?.name ?? null,
+        detail: row.adGroupAd?.ad?.type ?? null,
+        metrics: metricsFromGaql(row),
+      });
+    }
+    return out;
+  } catch (e) {
+    console.warn(`${LOG_PREFIX} step=creatives ${formatOutboundErrorLog(e)}`);
+    return [];
+  }
+}
+
 export async function fetchGoogleAdsInsights(
   shop: string,
   rangeDays: AdsInsightsRangeDays,
+  options?: {
+    includeStructure?: boolean;
+    includeKeywords?: boolean;
+    includeSearchTerms?: boolean;
+    includeCreatives?: boolean;
+  },
 ): Promise<AdsInsightsResult | null> {
   const developerToken = getGoogleAdsDeveloperToken();
   if (!developerToken) return null;
@@ -197,102 +398,126 @@ export async function fetchGoogleAdsInsights(
     });
   }
 
-  const baseQuery = `
-    SELECT
-      campaign.id,
-      campaign.name,
-      campaign.status,
-      ad_group.id,
-      ad_group.name,
-      ad_group.status,
-      ad_group_ad.ad.id,
-      ad_group_ad.ad.name,
-      ad_group_ad.status,
-      customer.currency_code,
-      metrics.impressions,
-      metrics.clicks,
-      metrics.cost_micros,
-      metrics.ctr,
-      metrics.average_cpc,
-      metrics.conversions,
-      metrics.conversions_value
-    FROM ad_group_ad
-    WHERE segments.date DURING ${during}
-      AND campaign.status != 'REMOVED'
-      AND ad_group.status != 'REMOVED'
-      AND ad_group_ad.status != 'REMOVED'
-    ORDER BY metrics.cost_micros DESC
-    LIMIT 1000
-  `;
-
-  const queryParams = {
+  const queryParams: QueryParams = {
     accessToken,
     developerToken,
     customerId: cred.customerId,
     loginCustomerId,
   };
 
-  let rows: GaqlRow[];
-  try {
-    rows = await executeGaqlQuery({ ...queryParams, query: baseQuery });
-  } catch (e) {
-    console.error(`${LOG_PREFIX} step=gaql shop=${shop} ${formatOutboundErrorLog(e)}`);
-    throw e;
-  }
-
-  const [purchaseMap, atcMap, pageViewMap] = await Promise.all([
-    fetchConversionCategoryMap({ ...queryParams, during, category: "PURCHASE" }),
-    fetchConversionCategoryMap({ ...queryParams, during, category: "ADD_TO_CART" }),
-    fetchConversionCategoryMap({ ...queryParams, during, category: "PAGE_VIEW" }),
-  ]);
+  const includeStructure = options?.includeStructure !== false;
+  const wantKeywords = Boolean(options?.includeKeywords);
+  const wantSearchTerms = Boolean(options?.includeSearchTerms);
+  const wantCreatives = Boolean(options?.includeCreatives);
 
   let currencyCode: string | null = null;
-  const flat = rows
-    .map((row) => {
-      if (row.customer?.currency_code && !currencyCode) {
-        currencyCode = row.customer.currency_code;
-      }
-      const campaignId = row.campaign?.id ?? "";
-      const adGroupId = row.adGroup?.id ?? "";
-      const adId = row.adGroupAd?.ad?.id ?? "";
-      const costMicros = toNumber(row.metrics?.cost_micros);
-      const spend = costMicros / 1_000_000;
-      const clicks = toNumber(row.metrics?.clicks);
-      const conversions = toNumber(row.metrics?.conversions);
-      const conversionsValue = toNumber(row.metrics?.conversions_value);
-      const key = convMapKey(campaignId, adGroupId, adId);
-      const purchase = purchaseMap.get(key);
-      const atc = atcMap.get(key);
-      const pageView = pageViewMap.get(key);
+  let campaigns: AdsInsightsResult["campaigns"] = [];
 
-      return {
-        campaignId,
-        campaignName: row.campaign?.name ?? campaignId,
-        campaignStatus: row.campaign?.status ?? "UNKNOWN",
-        adSetId: adGroupId,
-        adSetName: row.adGroup?.name ?? adGroupId,
-        adSetStatus: row.adGroup?.status ?? "UNKNOWN",
-        adId,
-        adName: row.adGroupAd?.ad?.name ?? adId,
-        adStatus: row.adGroupAd?.status ?? "UNKNOWN",
-        metrics: finalizeMetrics({
-          impressions: toNumber(row.metrics?.impressions),
-          clicks,
-          spend,
-          ctr: toNumber(row.metrics?.ctr),
-          cpc: toNumber(row.metrics?.average_cpc) / 1_000_000,
-          conversions,
-          conversionsValue,
-          purchases: purchase ? purchase.conversions : null,
-          purchaseValue: purchase ? purchase.value : null,
-          addToCart: atc ? atc.conversions : null,
-          landingPageViews: pageView ? pageView.conversions : null,
-          reach: null,
-          frequency: null,
-        }),
-      };
-    })
-    .filter((r) => r.campaignId && r.adSetId && r.adId);
+  if (includeStructure) {
+    const baseQuery = `
+      SELECT
+        campaign.id,
+        campaign.name,
+        campaign.status,
+        ad_group.id,
+        ad_group.name,
+        ad_group.status,
+        ad_group_ad.ad.id,
+        ad_group_ad.ad.name,
+        ad_group_ad.status,
+        customer.currency_code,
+        metrics.impressions,
+        metrics.clicks,
+        metrics.cost_micros,
+        metrics.ctr,
+        metrics.average_cpc,
+        metrics.average_cpm,
+        metrics.conversions,
+        metrics.conversions_value,
+        metrics.all_conversions
+      FROM ad_group_ad
+      WHERE segments.date DURING ${during}
+        AND campaign.status != 'REMOVED'
+        AND ad_group.status != 'REMOVED'
+        AND ad_group_ad.status != 'REMOVED'
+      ORDER BY metrics.cost_micros DESC
+    `;
+
+    let rows: GaqlRow[];
+    try {
+      rows = await executeGaqlQuery({ ...queryParams, query: baseQuery });
+    } catch (e) {
+      console.error(`${LOG_PREFIX} step=gaql shop=${shop} ${formatOutboundErrorLog(e)}`);
+      throw e;
+    }
+
+    const [purchaseMap, atcMap, pageViewMap] = await Promise.all([
+      fetchConversionCategoryMap({ ...queryParams, during, category: "PURCHASE" }),
+      fetchConversionCategoryMap({ ...queryParams, during, category: "ADD_TO_CART" }),
+      fetchConversionCategoryMap({ ...queryParams, during, category: "PAGE_VIEW" }),
+    ]);
+
+    const flat = rows
+      .map((row) => {
+        if (row.customer?.currency_code && !currencyCode) {
+          currencyCode = row.customer.currency_code;
+        }
+        const campaignId = row.campaign?.id ?? "";
+        const adGroupId = row.adGroup?.id ?? "";
+        const adId = row.adGroupAd?.ad?.id ?? "";
+        const costMicros = toNumber(row.metrics?.cost_micros);
+        const spend = costMicros / 1_000_000;
+        const clicks = toNumber(row.metrics?.clicks);
+        const conversions = toNumber(row.metrics?.conversions);
+        const conversionsValue = toNumber(row.metrics?.conversions_value);
+        const key = convMapKey(campaignId, adGroupId, adId);
+        const purchase = purchaseMap.get(key);
+        const atc = atcMap.get(key);
+        const pageView = pageViewMap.get(key);
+        const averageCpmMicros = toNumber(row.metrics?.average_cpm);
+
+        return {
+          campaignId,
+          campaignName: row.campaign?.name ?? campaignId,
+          campaignStatus: row.campaign?.status ?? "UNKNOWN",
+          adSetId: adGroupId,
+          adSetName: row.adGroup?.name ?? adGroupId,
+          adSetStatus: row.adGroup?.status ?? "UNKNOWN",
+          adId,
+          adName: row.adGroupAd?.ad?.name ?? adId,
+          adStatus: row.adGroupAd?.status ?? "UNKNOWN",
+          metrics: finalizeMetrics({
+            impressions: toNumber(row.metrics?.impressions),
+            clicks,
+            spend,
+            ctr: toNumber(row.metrics?.ctr),
+            cpc: toNumber(row.metrics?.average_cpc) / 1_000_000,
+            cpm: averageCpmMicros > 0 ? averageCpmMicros / 1_000_000 : null,
+            conversions,
+            conversionsValue,
+            purchases: purchase ? purchase.conversions : null,
+            purchaseValue: purchase ? purchase.value : null,
+            addToCart: atc ? atc.conversions : null,
+            landingPageViews: pageView ? pageView.conversions : null,
+            allConversions:
+              row.metrics?.all_conversions !== undefined
+                ? toNumber(row.metrics.all_conversions)
+                : null,
+            reach: null,
+            frequency: null,
+          }),
+        };
+      })
+      .filter((r) => r.campaignId && r.adSetId && r.adId);
+
+    campaigns = nestFlatAdRows(flat);
+  }
+
+  const [keywords, searchTerms, creatives] = await Promise.all([
+    wantKeywords ? fetchKeywords({ ...queryParams, during }) : Promise.resolve([]),
+    wantSearchTerms ? fetchSearchTerms({ ...queryParams, during }) : Promise.resolve([]),
+    wantCreatives ? fetchCreatives({ ...queryParams, during }) : Promise.resolve([]),
+  ]);
 
   return {
     platform: "google",
@@ -301,6 +526,9 @@ export async function fetchGoogleAdsInsights(
     rangeDays,
     dateStart,
     dateEnd,
-    campaigns: nestFlatAdRows(flat),
+    campaigns,
+    keywords,
+    searchTerms,
+    creatives,
   };
 }

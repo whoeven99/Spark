@@ -4,7 +4,6 @@ import {
   buildShopifyAdminHostParam,
   buildAdminEmbeddedAppReturnUrl,
 } from "../billing/buildBillingReturnUrl.server";
-import { getAdProviderCredential } from "../adsCredentialStore.server";
 
 export const META_GRAPH_VERSION = "v19.0";
 export const META_OAUTH_DIALOG = `https://www.facebook.com/${META_GRAPH_VERSION}/dialog/oauth`;
@@ -46,24 +45,13 @@ function readEnv(name: string): string {
 }
 
 /**
- * Resolve the Meta OAuth app credentials. Prefers app-level env vars
- * (META_APP_ID / META_APP_SECRET) so a single Spark Meta App serves all shops,
- * mirroring the Google flow. Falls back to a per-shop saved Meta config for
- * backwards compatibility with the legacy app.ads.meta.config flow.
+ * Resolve Meta OAuth app credentials from env only
+ * (`META_APP_ID` / `META_APP_SECRET`, with OAuth alias fallbacks).
  */
-export async function resolveMetaOAuthClient(
-  shop?: string,
-): Promise<MetaOAuthClient | null> {
+export function resolveMetaOAuthClient(): MetaOAuthClient | null {
   const appId = readEnv("META_APP_ID") || readEnv("META_OAUTH_CLIENT_ID");
   const appSecret = readEnv("META_APP_SECRET") || readEnv("META_OAUTH_CLIENT_SECRET");
   if (appId && appSecret) return { appId, appSecret };
-
-  if (shop) {
-    const perShop = await getAdProviderCredential(shop, "meta");
-    if (perShop?.clientId && perShop.clientSecret) {
-      return { appId: perShop.clientId, appSecret: perShop.clientSecret };
-    }
-  }
   return null;
 }
 
@@ -198,7 +186,7 @@ export async function buildMetaOAuthStartUrl(params: {
   host?: string;
   requestOrigin: string;
 }): Promise<{ ok: true; authUrl: string } | { ok: false; error: string }> {
-  const client = await resolveMetaOAuthClient(params.shop);
+  const client = resolveMetaOAuthClient();
   if (!client) {
     return {
       ok: false,
@@ -222,7 +210,7 @@ export async function buildMetaAdsOAuthStartUrl(params: {
   host?: string;
   requestOrigin: string;
 }): Promise<{ ok: true; authUrl: string } | { ok: false; error: string }> {
-  const client = await resolveMetaOAuthClient(params.shop);
+  const client = resolveMetaOAuthClient();
   if (!client) {
     return {
       ok: false,

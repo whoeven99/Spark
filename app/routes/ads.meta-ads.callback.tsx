@@ -59,7 +59,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   try {
-    const client = await resolveMetaOAuthClient(shop);
+    const client = resolveMetaOAuthClient();
     if (!client) {
       return appRedirect(request, shop, host, appOrigin, {
         metaAdsAuth: "error",

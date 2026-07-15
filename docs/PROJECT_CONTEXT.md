@@ -55,7 +55,7 @@
 - AI 聊天路由（流式 SSE，唯一入口）：
   - `app/routes/chat-stream.ts` -> `app/server/chat-stream.ts` 的 action（`POST /chat-stream`，请求体 `{ messages }` 或兼容 `{ message }`）。
 - 授权配置路由（均需 `authenticate.admin`）：
-  - 广告：`app.ads.google.config.tsx` / `app.ads.tiktok.config.tsx` / `app.ads.microsoft.config.tsx` / `app.ads.meta.config.tsx` / `app.ads.meta.start.tsx`；OAuth 回调 `ads.meta.callback.tsx`。
+  - 广告：Catalog / Insights OAuth（`app.ads-catalog.tsx`、`app.settings.ads-insights.tsx`、`app.ads.google-*.start.tsx`；回调见 `ads.meta-catalog.callback.tsx` / `ads.meta-ads.callback.tsx` / `ads.google-*.callback.tsx` / `ads.tiktok-catalog.callback.tsx`）。Meta App 凭证仅环境变量 `META_APP_ID` / `META_APP_SECRET`。手动渠道页与 `app.ads.*.config` 已移除。
   - 物流：`app.logistics.sf.config.tsx` / `app.logistics.fedex.config.tsx`
 - 反馈路由：
   - `app.feedback.suggestion.tsx`：`POST` 校验后 **`prisma.suggestion.create`** 写入 Turso（字段 `shop`、`content`，最多 2000 字）；前端从 `ChatPage` 提交至 `/app/feedback/suggestion`。
@@ -117,10 +117,10 @@
   - 系统结论：根据阈值输出“健康/关注/风险”与诊断文案。
 
 ## 9. 广告与物流授权数据
-- **广告（Google / TikTok / Microsoft / Meta OAuth 配置）**：写入 Prisma 模型 **`AdPlatformCredential`**（按 `shop` + `platform` 唯一，`credentials` 为 Json），入口见 `app/server/adAuthCredentialStore.server.ts` 与各 `app.ads.*.config.tsx`。Meta 专用读写封装见 `app/server/adsCredentialStore.server.ts`。
+- **广告（Catalog / Insights OAuth）**：写入 Prisma 模型 **`AdPlatformCredential`**（按 `shop` + `platform` 唯一，`credentials` 为 Json），读写入口见 `app/server/adsCatalog/credentialStore.server.ts`。Meta App 级凭证仅环境变量 `META_APP_ID` / `META_APP_SECRET`（兼容 `META_OAUTH_CLIENT_*`）。投放数据查看入口为 `/app/settings/ads-insights`。
 - **物流**：`.data/logistics-provider-credentials.json`，组织方式 `shop -> provider -> credential`（`app/server/logisticsCredentialStore.server.ts`）。
 - 现状：
-  - 广告凭证已在 DB 中托管（Turso）；字段校验与脱敏展示仍应注意。
+  - 广告 OAuth token 已在 DB 中托管（Turso）；字段校验与脱敏展示仍应注意。
   - 物流仍为本地 JSON；未做加密存储、KMS。
 - 图片工具与商品文案 token 入账前按 Turso **`TokenBillingRule`**（能力 × 模型 × `multiplier`）折算，运维配置见 **`docs/token-billing-rules.md`**。图片工具在启用计费的 App 上 `requireVisualToolBillingAccess` 校验余额；成功后 `recordBilledTokenUsage` / `recordVisualToolTokenUsage` 累加 `usedTokens`。主 App（`chat`）未启用计费时不扣减。
 - 安全建议：
@@ -296,7 +296,7 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
 - 改飞书运营通知：`app/server/feishu/**`；卸载挂载 `onAppUninstalled`；订阅挂载 `activateSubscription.server.ts`（仅 `wasPending`）。
 - 改 Agent 模板邮件工具：`app/server/ai/skills/email/**`。
 - 改诊断指标：`app/routes/app.additional.tsx`（含查询、阈值、文案）。
-- 改广告 OAuth 配置字段：`app/routes/app.ads.*.config.tsx` + `app/server/adAuthCredentialStore.server.ts`（及 Meta 的 `adsCredentialStore.server.ts`）；改物流：`app/routes/app.logistics.*.config.tsx` + `app/server/logisticsCredentialStore.server.ts`。
+- 改广告 OAuth / Catalog / Insights：`app/server/adsCatalog/**`、`app/server/adsInsights/**`、相关 `app/routes/app.ads-catalog.tsx`、`app.settings.ads-insights.tsx` 与 OAuth start/callback；改物流：`app/routes/app.logistics.*.config.tsx` + `app/server/logisticsCredentialStore.server.ts`。
 - 改商品文案优化页或 API（先读 `docs/GENERATE_DESCRIPTION.md`）：`app/routes/app.product-improve.tsx`、`app/routes/page/ProductImprovePage.tsx`、`app/routes/component/productImprove/**`、`app/routes/api.product-improve.ts`、`app/routes/api.update-product-description.ts`、`app/server/productImprove/**`、`app/hooks/useProductImprove.ts`、`app/routes/component/chat/ProductImproveChatCard.tsx`。
 - 改整图翻译 API / 双引擎路由：`app/routes/api.picture-translate.ts`、`app/server/pictureTranslate/**`、`app/server/ai/skills/pictureTranslate/**`。
 - 改订阅/购包/余额/Webhook：`app/server/billing/**`（先读 `app/server/billing/agent.md`）；改计费页 UI：`app/routes/app.billing.tsx`、`app/routes/page/BillingPage.tsx`、`app/routes/component/billing/*`、`app/lib/billingPlanUi.ts`、`app/lib/billingPageTypes.ts`；改 Webhook：`app/routes/webhooks.app.subscriptions_update.tsx`、`webhooks.app.purchases_one_time_update.tsx`、`webhooks.app.uninstalled.tsx`、`webhooks.app.scopes_update.tsx`；改 App 生命周期流水：`app/server/commonEventLog/**`；改 token 累加：`app/server/tokenUsage/**`；改套餐种子：`prisma/billing-plan-catalog-seed.sql` + `npm run turso:migrate:*`。
