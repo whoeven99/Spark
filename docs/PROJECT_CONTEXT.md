@@ -229,7 +229,7 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
   - `TIKTOK_SANDBOX_ACCESS_TOKEN`（必需）
   - `TIKTOK_SANDBOX_ADVERTISER_ID`（必需）
   - `TIKTOK_SANDBOX_ACCOUNT_NAME`（可选，仅展示）
-  - `TIKTOK_SANDBOX_IDENTITY_ID`（可选；seed `ad/create` 用。未设时会尝试 `identity/get` → `identity/create`）
+  - `TIKTOK_SANDBOX_IDENTITY_ID`（可选；seed `v1.2/ad/create` 用。未设时会尝试 `identity/get` → `identity/create`）
   - `TIKTOK_SANDBOX_IDENTITY_TYPE`（可选，默认 `CUSTOMIZED_USER`）
   - `TIKTOK_SANDBOX_IMAGE_ID`（可选；创意/头像占位图，覆盖默认沙盒 image_id）
 - AI 模型侧：

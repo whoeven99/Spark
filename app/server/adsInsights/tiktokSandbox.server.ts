@@ -6,8 +6,8 @@
 import { formatOutboundErrorLog, formatOutboundNetworkError } from "../common/outboundError.server";
 
 export const TIKTOK_SANDBOX_API_BASE = "https://sandbox-ads.tiktok.com/open_api/v1.3";
-/** 沙盒 v1.3 ad/create 常强制 identity；v1.2 可作为无 identity 的回退。 */
-const TIKTOK_SANDBOX_API_BASE_V12 = "https://sandbox-ads.tiktok.com/open_api/v1.2";
+/** seed 的 ad/create 固定走 v1.2（v1.3 常强制 identity，沙盒更易失败）。 */
+const TIKTOK_SANDBOX_AD_CREATE_API_BASE = "https://sandbox-ads.tiktok.com/open_api/v1.2";
 
 const LOG_PREFIX = "[AdsInsights][TikTok][Sandbox]";
 const DEFAULT_IDENTITY_TYPE = "CUSTOMIZED_USER";
@@ -215,43 +215,27 @@ function buildCreativeBody(params: {
 async function createSandboxAd(params: {
   accessToken: string;
   body: Record<string, unknown>;
-  preferV13: boolean;
   warnings: string[];
 }): Promise<string | null> {
-  const attempts = params.preferV13
-    ? [
-        { label: "v1.3", apiBase: TIKTOK_SANDBOX_API_BASE },
-        { label: "v1.2", apiBase: TIKTOK_SANDBOX_API_BASE_V12 },
-      ]
-    : [
-        { label: "v1.2", apiBase: TIKTOK_SANDBOX_API_BASE_V12 },
-        { label: "v1.3", apiBase: TIKTOK_SANDBOX_API_BASE },
-      ];
-
-  const errors: string[] = [];
-  for (const attempt of attempts) {
-    try {
-      const adJson = await tiktokSandboxRequest<{
-        data?: { ad_ids?: Array<string | number>; creatives?: Array<{ ad_id?: string }> };
-      }>({
-        method: "POST",
-        path: "/ad/create/",
-        accessToken: params.accessToken,
-        apiBase: attempt.apiBase,
-        body: params.body,
-      });
-      const adId =
-        String(adJson.data?.ad_ids?.[0] ?? adJson.data?.creatives?.[0]?.ad_id ?? "").trim() || null;
-      if (adId) return adId;
-      errors.push(`ad/create(${attempt.label}) 未返回 ad_id`);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      errors.push(`ad/create(${attempt.label}): ${msg}`);
-      console.warn(`${LOG_PREFIX} seed ad ${attempt.label} ${formatOutboundErrorLog(e)}`);
-    }
+  try {
+    const adJson = await tiktokSandboxRequest<{
+      data?: { ad_ids?: Array<string | number>; creatives?: Array<{ ad_id?: string }> };
+    }>({
+      method: "POST",
+      path: "/ad/create/",
+      accessToken: params.accessToken,
+      apiBase: TIKTOK_SANDBOX_AD_CREATE_API_BASE,
+      body: params.body,
+    });
+    const adId =
+      String(adJson.data?.ad_ids?.[0] ?? adJson.data?.creatives?.[0]?.ad_id ?? "").trim() || null;
+    if (adId) return adId;
+    params.warnings.push("ad/create(v1.2) 未返回 ad_id");
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    params.warnings.push(`ad/create(v1.2) 失败（沙盒常缺 identity/素材）: ${msg}`);
+    console.warn(`${LOG_PREFIX} seed ad v1.2 ${formatOutboundErrorLog(e)}`);
   }
-
-  params.warnings.push(`ad/create 失败（沙盒常缺 identity/素材）: ${errors.join(" | ")}`);
   return null;
 }
 
@@ -343,7 +327,6 @@ export async function seedTiktokSandboxMinimalStructure(): Promise<TiktokSandbox
   if (adgroupId) {
     adId = await createSandboxAd({
       accessToken: creds.accessToken,
-      preferV13: Boolean(identity),
       warnings,
       body: buildCreativeBody({
         advertiserId: creds.advertiserId,

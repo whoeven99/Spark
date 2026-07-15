@@ -17,7 +17,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const API_BASE = "https://sandbox-ads.tiktok.com/open_api/v1.3";
-const API_BASE_V12 = "https://sandbox-ads.tiktok.com/open_api/v1.2";
+/** seed 的 ad/create 固定走 v1.2 */
+const AD_CREATE_API_BASE = "https://sandbox-ads.tiktok.com/open_api/v1.2";
 const DEFAULT_IDENTITY_TYPE = "CUSTOMIZED_USER";
 const DEFAULT_IMAGE_ID = "ad-site-i18n-sg/202208095d0d1d72383f815646c5b090";
 
@@ -133,38 +134,24 @@ async function resolveIdentity({ accessToken, advertiserId, displayName, imageId
   return null;
 }
 
-async function createAd({ accessToken, body, preferV13, warnings }) {
-  const attempts = preferV13
-    ? [
-        { label: "v1.3", apiBase: API_BASE },
-        { label: "v1.2", apiBase: API_BASE_V12 },
-      ]
-    : [
-        { label: "v1.2", apiBase: API_BASE_V12 },
-        { label: "v1.3", apiBase: API_BASE },
-      ];
-
-  const errors = [];
-  for (const attempt of attempts) {
-    try {
-      console.log(`Creating ad (${attempt.label})…`);
-      const adJson = await tiktokRequest({
-        method: "POST",
-        path: "/ad/create/",
-        accessToken,
-        apiBase: attempt.apiBase,
-        body,
-      });
-      const adId = String(adJson.data?.ad_ids?.[0] || adJson.data?.creatives?.[0]?.ad_id || "").trim();
-      console.log("ad_id:", adId || "(empty)");
-      if (adId) return adId;
-      errors.push(`ad/create(${attempt.label}) missing ad_id`);
-    } catch (e) {
-      errors.push(`ad/create(${attempt.label}): ${e.message || e}`);
-      console.warn(errors[errors.length - 1]);
-    }
+async function createAd({ accessToken, body, warnings }) {
+  try {
+    console.log("Creating ad (v1.2)…");
+    const adJson = await tiktokRequest({
+      method: "POST",
+      path: "/ad/create/",
+      accessToken,
+      apiBase: AD_CREATE_API_BASE,
+      body,
+    });
+    const adId = String(adJson.data?.ad_ids?.[0] || adJson.data?.creatives?.[0]?.ad_id || "").trim();
+    console.log("ad_id:", adId || "(empty)");
+    if (adId) return adId;
+    warnings.push("ad/create(v1.2) missing ad_id");
+  } catch (e) {
+    warnings.push(`ad/create(v1.2) failed: ${e.message || e}`);
+    console.warn(warnings[warnings.length - 1]);
   }
-  warnings.push(`ad/create failed: ${errors.join(" | ")}`);
   return "";
 }
 
@@ -273,7 +260,6 @@ async function main() {
     }
     adId = await createAd({
       accessToken,
-      preferV13: Boolean(identity),
       warnings,
       body: {
         advertiser_id: advertiserId,
