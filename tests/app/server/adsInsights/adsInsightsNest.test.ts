@@ -1,10 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { googleDuringClause, parseRangeDays, resolveDateWindow } from "~/server/adsInsights/dateRange.server";
 import { nestEntityHierarchy, nestFlatAdRows, mergeMetrics } from "~/server/adsInsights/nest.server";
 import { emptyMetrics, finalizeMetrics, parseAdsInsightsView } from "~/server/adsInsights/types.server";
 import {
   getTiktokSandboxCredentials,
+  getTiktokSandboxIdentityFromEnv,
   isTiktokSandboxConfigured,
+  resolveTiktokSandboxIdentity,
 } from "~/server/adsInsights/tiktokSandbox.server";
 
 describe("adsInsights dateRange", () => {
@@ -180,5 +182,95 @@ describe("tiktok sandbox env", () => {
     else process.env.TIKTOK_SANDBOX_ADVERTISER_ID = prevAdv;
     if (prevName === undefined) delete process.env.TIKTOK_SANDBOX_ACCOUNT_NAME;
     else process.env.TIKTOK_SANDBOX_ACCOUNT_NAME = prevName;
+  });
+
+  it("reads identity from env", () => {
+    const prevId = process.env.TIKTOK_SANDBOX_IDENTITY_ID;
+    const prevType = process.env.TIKTOK_SANDBOX_IDENTITY_TYPE;
+    delete process.env.TIKTOK_SANDBOX_IDENTITY_ID;
+    delete process.env.TIKTOK_SANDBOX_IDENTITY_TYPE;
+    expect(getTiktokSandboxIdentityFromEnv()).toBeNull();
+
+    process.env.TIKTOK_SANDBOX_IDENTITY_ID = "id-1";
+    expect(getTiktokSandboxIdentityFromEnv()).toEqual({
+      identityId: "id-1",
+      identityType: "CUSTOMIZED_USER",
+    });
+
+    process.env.TIKTOK_SANDBOX_IDENTITY_TYPE = "TT_USER";
+    expect(getTiktokSandboxIdentityFromEnv()).toEqual({
+      identityId: "id-1",
+      identityType: "TT_USER",
+    });
+
+    if (prevId === undefined) delete process.env.TIKTOK_SANDBOX_IDENTITY_ID;
+    else process.env.TIKTOK_SANDBOX_IDENTITY_ID = prevId;
+    if (prevType === undefined) delete process.env.TIKTOK_SANDBOX_IDENTITY_TYPE;
+    else process.env.TIKTOK_SANDBOX_IDENTITY_TYPE = prevType;
+  });
+
+  it("resolves identity via identity/get when env missing", async () => {
+    const prevId = process.env.TIKTOK_SANDBOX_IDENTITY_ID;
+    delete process.env.TIKTOK_SANDBOX_IDENTITY_ID;
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        code: 0,
+        data: {
+          identity_list: [{ identity_id: "got-1", identity_type: "CUSTOMIZED_USER" }],
+        },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const warnings: string[] = [];
+    const identity = await resolveTiktokSandboxIdentity({
+      accessToken: "tok",
+      advertiserId: "adv",
+      displayName: "Spark",
+      warnings,
+    });
+    expect(identity).toEqual({ identityId: "got-1", identityType: "CUSTOMIZED_USER" });
+    expect(warnings).toEqual([]);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/identity/get/");
+
+    vi.unstubAllGlobals();
+    if (prevId === undefined) delete process.env.TIKTOK_SANDBOX_IDENTITY_ID;
+    else process.env.TIKTOK_SANDBOX_IDENTITY_ID = prevId;
+  });
+
+  it("falls back to identity/create when get fails", async () => {
+    const prevId = process.env.TIKTOK_SANDBOX_IDENTITY_ID;
+    delete process.env.TIKTOK_SANDBOX_IDENTITY_ID;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ code: 40001, message: "identity not supported" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ code: 0, data: { identity_id: "created-1" } }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const warnings: string[] = [];
+    const identity = await resolveTiktokSandboxIdentity({
+      accessToken: "tok",
+      advertiserId: "adv",
+      displayName: "Spark",
+      warnings,
+    });
+    expect(identity).toEqual({ identityId: "created-1", identityType: "CUSTOMIZED_USER" });
+    expect(warnings.some((w) => w.includes("identity/get"))).toBe(true);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/identity/create/");
+
+    vi.unstubAllGlobals();
+    if (prevId === undefined) delete process.env.TIKTOK_SANDBOX_IDENTITY_ID;
+    else process.env.TIKTOK_SANDBOX_IDENTITY_ID = prevId;
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 });

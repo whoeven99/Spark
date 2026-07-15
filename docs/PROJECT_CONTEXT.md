@@ -117,7 +117,7 @@
   - 系统结论：根据阈值输出“健康/关注/风险”与诊断文案。
 
 ## 9. 广告与物流授权数据
-- **广告（Catalog / Insights OAuth）**：写入 Prisma 模型 **`AdPlatformCredential`**（按 `shop` + `platform` 唯一，`credentials` 为 Json），读写入口见 `app/server/adsCatalog/credentialStore.server.ts`。Meta App 级凭证仅环境变量 `META_APP_ID` / `META_APP_SECRET`（兼容 `META_OAUTH_CLIENT_*`）。投放数据查看入口为 `/app/settings/ads-insights`。TikTok 沙盒模式（Insights 页开关）仅读 `TIKTOK_SANDBOX_ACCESS_TOKEN` / `TIKTOK_SANDBOX_ADVERTISER_ID`（可选 `TIKTOK_SANDBOX_ACCOUNT_NAME`），请求 `sandbox-ads.tiktok.com`，**绝不**复用 Catalog OAuth token。
+- **广告（Catalog / Insights OAuth）**：写入 Prisma 模型 **`AdPlatformCredential`**（按 `shop` + `platform` 唯一，`credentials` 为 Json），读写入口见 `app/server/adsCatalog/credentialStore.server.ts`。Meta App 级凭证仅环境变量 `META_APP_ID` / `META_APP_SECRET`（兼容 `META_OAUTH_CLIENT_*`）。投放数据查看入口为 `/app/settings/ads-insights`。TikTok 沙盒模式（Insights 页开关）仅读 `TIKTOK_SANDBOX_*` 环境变量（token / advertiser 必需；account name、identity、image 可选），请求 `sandbox-ads.tiktok.com`，**绝不**复用 Catalog OAuth token。
 - **物流**：`.data/logistics-provider-credentials.json`，组织方式 `shop -> provider -> credential`（`app/server/logisticsCredentialStore.server.ts`）。
 - 现状：
   - 广告 OAuth token 已在 DB 中托管（Turso）；字段校验与脱敏展示仍应注意。
@@ -229,6 +229,9 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
   - `TIKTOK_SANDBOX_ACCESS_TOKEN`（必需）
   - `TIKTOK_SANDBOX_ADVERTISER_ID`（必需）
   - `TIKTOK_SANDBOX_ACCOUNT_NAME`（可选，仅展示）
+  - `TIKTOK_SANDBOX_IDENTITY_ID`（可选；seed `ad/create` 用。未设时会尝试 `identity/get` → `identity/create`）
+  - `TIKTOK_SANDBOX_IDENTITY_TYPE`（可选，默认 `CUSTOMIZED_USER`）
+  - `TIKTOK_SANDBOX_IMAGE_ID`（可选；创意/头像占位图，覆盖默认沙盒 image_id）
 - AI 模型侧：
   - `DEEPSEEK_API_KEY`（优先）或 `OPENAI_API_KEY`
   - `DEEPSEEK_MODEL` / `OPENAI_MODEL`（可选）

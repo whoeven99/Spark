@@ -8,6 +8,8 @@
  *   TIKTOK_SANDBOX_ACCESS_TOKEN
  *   TIKTOK_SANDBOX_ADVERTISER_ID
  *   可选 TIKTOK_SANDBOX_ACCOUNT_NAME
+ *   可选 TIKTOK_SANDBOX_IDENTITY_ID / TIKTOK_SANDBOX_IDENTITY_TYPE
+ *   可选 TIKTOK_SANDBOX_IMAGE_ID
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -16,6 +18,8 @@ import { fileURLToPath } from "node:url";
 
 const API_BASE = "https://sandbox-ads.tiktok.com/open_api/v1.3";
 const API_BASE_V12 = "https://sandbox-ads.tiktok.com/open_api/v1.2";
+const DEFAULT_IDENTITY_TYPE = "CUSTOMIZED_USER";
+const DEFAULT_IMAGE_ID = "ad-site-i18n-sg/202208095d0d1d72383f815646c5b090";
 
 function loadDotEnv() {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -70,11 +74,106 @@ function formatScheduleStart() {
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:00:00`;
 }
 
+async function resolveIdentity({ accessToken, advertiserId, displayName, imageId, warnings }) {
+  const identityId = env("TIKTOK_SANDBOX_IDENTITY_ID");
+  if (identityId) {
+    return {
+      identityId,
+      identityType: env("TIKTOK_SANDBOX_IDENTITY_TYPE") || DEFAULT_IDENTITY_TYPE,
+    };
+  }
+
+  try {
+    console.log("Resolving identity via identity/get…");
+    const json = await tiktokRequest({
+      path: "/identity/get/",
+      accessToken,
+      query: {
+        advertiser_id: advertiserId,
+        page: "1",
+        page_size: "20",
+      },
+    });
+    const list = json.data?.identity_list || json.data?.list || [];
+    const first = list.find((row) => String(row.identity_id || "").trim());
+    const id = String(first?.identity_id || "").trim();
+    if (id) {
+      return {
+        identityId: id,
+        identityType: String(first?.identity_type || DEFAULT_IDENTITY_TYPE).trim() || DEFAULT_IDENTITY_TYPE,
+      };
+    }
+  } catch (e) {
+    warnings.push(`identity/get failed: ${e.message || e}`);
+    console.warn(warnings[warnings.length - 1]);
+  }
+
+  try {
+    console.log("Creating identity via identity/create…");
+    const json = await tiktokRequest({
+      method: "POST",
+      path: "/identity/create/",
+      accessToken,
+      body: {
+        advertiser_id: advertiserId,
+        display_name: displayName.slice(0, 100),
+        image_uri: imageId,
+      },
+    });
+    const id = String(json.data?.identity_id || "").trim();
+    if (id) {
+      return { identityId: id, identityType: DEFAULT_IDENTITY_TYPE };
+    }
+    warnings.push("identity/create missing identity_id");
+  } catch (e) {
+    warnings.push(`identity/create failed: ${e.message || e}`);
+    console.warn(warnings[warnings.length - 1]);
+  }
+
+  return null;
+}
+
+async function createAd({ accessToken, body, preferV13, warnings }) {
+  const attempts = preferV13
+    ? [
+        { label: "v1.3", apiBase: API_BASE },
+        { label: "v1.2", apiBase: API_BASE_V12 },
+      ]
+    : [
+        { label: "v1.2", apiBase: API_BASE_V12 },
+        { label: "v1.3", apiBase: API_BASE },
+      ];
+
+  const errors = [];
+  for (const attempt of attempts) {
+    try {
+      console.log(`Creating ad (${attempt.label})…`);
+      const adJson = await tiktokRequest({
+        method: "POST",
+        path: "/ad/create/",
+        accessToken,
+        apiBase: attempt.apiBase,
+        body,
+      });
+      const adId = String(adJson.data?.ad_ids?.[0] || adJson.data?.creatives?.[0]?.ad_id || "").trim();
+      console.log("ad_id:", adId || "(empty)");
+      if (adId) return adId;
+      errors.push(`ad/create(${attempt.label}) missing ad_id`);
+    } catch (e) {
+      errors.push(`ad/create(${attempt.label}): ${e.message || e}`);
+      console.warn(errors[errors.length - 1]);
+    }
+  }
+  warnings.push(`ad/create failed: ${errors.join(" | ")}`);
+  return "";
+}
+
 async function main() {
   loadDotEnv();
   const accessToken = env("TIKTOK_SANDBOX_ACCESS_TOKEN");
   const advertiserId = env("TIKTOK_SANDBOX_ADVERTISER_ID");
   const accountName = env("TIKTOK_SANDBOX_ACCOUNT_NAME") || "Spark Sandbox";
+  const imageId = env("TIKTOK_SANDBOX_IMAGE_ID") || DEFAULT_IMAGE_ID;
   if (!accessToken || !advertiserId) {
     console.error("Missing TIKTOK_SANDBOX_ACCESS_TOKEN and/or TIKTOK_SANDBOX_ADVERTISER_ID");
     process.exit(1);
@@ -141,56 +240,61 @@ async function main() {
     console.warn(warnings[warnings.length - 1]);
   }
 
+  const identity = await resolveIdentity({
+    accessToken,
+    advertiserId,
+    displayName: accountName,
+    imageId,
+    warnings,
+  });
+  if (identity) {
+    console.log("identity_id:", identity.identityId, `(${identity.identityType})`);
+  } else {
+    warnings.push(
+      "No identity_id: set TIKTOK_SANDBOX_IDENTITY_ID or create Identity in sandbox console",
+    );
+    console.warn(warnings[warnings.length - 1]);
+  }
+
   let adId = "";
   if (adgroupId) {
-    const creativeBody = {
-      advertiser_id: advertiserId,
-      adgroup_id: adgroupId,
-      creatives: [
-        {
-          ad_name: adName,
-          ad_format: "SINGLE_IMAGE",
-          ad_text: "Spark sandbox test ad",
-          call_to_action: "LEARN_MORE",
-          landing_page_url: "https://www.example.com",
-          display_name: accountName,
-          image_ids: ["ad-site-i18n-sg/202208095d0d1d72383f815646c5b090"],
-        },
-      ],
+    const creative = {
+      ad_name: adName,
+      ad_format: "SINGLE_IMAGE",
+      ad_text: "Spark sandbox test ad",
+      call_to_action: "LEARN_MORE",
+      landing_page_url: "https://www.example.com",
+      display_name: accountName,
+      image_ids: [imageId],
     };
-    try {
-      console.log("Creating ad (v1.2)…");
-      const adJson = await tiktokRequest({
-        method: "POST",
-        path: "/ad/create/",
-        accessToken,
-        apiBase: API_BASE_V12,
-        body: creativeBody,
-      });
-      adId = String(adJson.data?.ad_ids?.[0] || adJson.data?.creatives?.[0]?.ad_id || "").trim();
-      console.log("ad_id:", adId || "(empty)");
-    } catch (e1) {
-      try {
-        console.log("Creating ad (v1.3 fallback)…");
-        const adJson = await tiktokRequest({
-          method: "POST",
-          path: "/ad/create/",
-          accessToken,
-          body: creativeBody,
-        });
-        adId = String(adJson.data?.ad_ids?.[0] || adJson.data?.creatives?.[0]?.ad_id || "").trim();
-        console.log("ad_id:", adId || "(empty)");
-      } catch (e2) {
-        warnings.push(`ad/create failed: ${e2.message || e2}`);
-        console.warn(warnings[warnings.length - 1]);
-      }
+    if (identity) {
+      creative.identity_id = identity.identityId;
+      creative.identity_type = identity.identityType;
     }
+    adId = await createAd({
+      accessToken,
+      preferV13: Boolean(identity),
+      warnings,
+      body: {
+        advertiser_id: advertiserId,
+        adgroup_id: adgroupId,
+        creatives: [creative],
+      },
+    });
   }
 
   console.log("\nSeed result:");
   console.log(
     JSON.stringify(
-      { campaignId, adgroupId: adgroupId || null, adId: adId || null, campaignName, warnings },
+      {
+        campaignId,
+        adgroupId: adgroupId || null,
+        adId: adId || null,
+        identityId: identity?.identityId || null,
+        identityType: identity?.identityType || null,
+        campaignName,
+        warnings,
+      },
       null,
       2,
     ),
