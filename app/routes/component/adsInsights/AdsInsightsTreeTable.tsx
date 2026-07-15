@@ -1,9 +1,10 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import type { AdsInsightsCampaign, AdsInsightsMetrics } from "./types";
 import {
+  EMPTY_METRIC,
   collectOptionalMetricFlags,
   formatCurrency,
   formatNumber,
@@ -65,7 +66,7 @@ function MetricsCells({
       <td style={tdNum}>{formatCurrency(metrics.cpc, currencyCode)}</td>
       {optional.cpm && (
         <td style={tdNum}>
-          {metrics.cpm === null ? "—" : formatCurrency(metrics.cpm, currencyCode)}
+          {metrics.cpm === null ? EMPTY_METRIC : formatCurrency(metrics.cpm, currencyCode)}
         </td>
       )}
       <td style={tdNum}>{formatNumber(metrics.conversions, 2)}</td>
@@ -75,7 +76,7 @@ function MetricsCells({
       <td style={tdNum}>{formatNumber(metrics.purchases, 2)}</td>
       <td style={tdNum}>
         {metrics.purchaseValue === null
-          ? "—"
+          ? EMPTY_METRIC
           : formatCurrency(metrics.purchaseValue, currencyCode)}
       </td>
       <td style={tdNum}>{formatNumber(metrics.addToCart, 2)}</td>
@@ -99,57 +100,50 @@ function MetricsCells({
   );
 }
 
-export function AdsInsightsTreeTable({ campaigns, currencyCode }: Props) {
-  const { t } = useTranslation();
-  const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
-  const [expandedAdSets, setExpandedAdSets] = useState<Set<string>>(new Set());
+function EmptyMetricsCells({ optional }: { optional: Record<OptionalMetricKey, boolean> }) {
+  const cells: ReactNode[] = [
+    EMPTY_METRIC,
+    EMPTY_METRIC,
+    EMPTY_METRIC,
+    EMPTY_METRIC,
+    EMPTY_METRIC,
+  ];
+  if (optional.cpm) cells.push(EMPTY_METRIC);
+  cells.push(
+    EMPTY_METRIC,
+    EMPTY_METRIC,
+    EMPTY_METRIC,
+    EMPTY_METRIC,
+    EMPTY_METRIC,
+    EMPTY_METRIC,
+    EMPTY_METRIC,
+    EMPTY_METRIC,
+    EMPTY_METRIC,
+    EMPTY_METRIC,
+  );
+  if (optional.outboundClicks) cells.push(EMPTY_METRIC);
+  if (optional.videoViews) cells.push(EMPTY_METRIC);
+  if (optional.thruplay) cells.push(EMPTY_METRIC);
+  if (optional.leads) cells.push(EMPTY_METRIC);
+  if (optional.viewContent) cells.push(EMPTY_METRIC);
+  if (optional.initiateCheckout) cells.push(EMPTY_METRIC);
+  if (optional.allConversions) cells.push(EMPTY_METRIC);
+  return (
+    <>
+      {cells.map((value, idx) => (
+        <td key={idx} style={tdNum}>
+          {value}
+        </td>
+      ))}
+    </>
+  );
+}
 
-  const optional = useMemo(() => {
-    const all: AdsInsightsMetrics[] = [];
-    for (const c of campaigns) {
-      all.push(c.metrics);
-      for (const s of c.adSets) {
-        all.push(s.metrics);
-        for (const a of s.ads) all.push(a.metrics);
-      }
-    }
-    return collectOptionalMetricFlags(all);
-  }, [campaigns]);
-
-  function toggleCampaign(id: string) {
-    setExpandedCampaigns((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function toggleAdSet(id: string) {
-    setExpandedAdSets((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  if (campaigns.length === 0) {
-    return (
-      <div
-        style={{
-          padding: "24px 16px",
-          textAlign: "center",
-          color: pageColorTokens.textSecondary,
-          fontSize: 13,
-        }}
-      >
-        {t("adsInsights.emptyCampaigns")}
-      </div>
-    );
-  }
-
-  const headers = [
+function buildHeaders(
+  t: (key: string) => string,
+  optional: Record<OptionalMetricKey, boolean>,
+): string[] {
+  return [
     t("adsInsights.colName"),
     t("adsInsights.colImpressions"),
     t("adsInsights.colClicks"),
@@ -175,6 +169,44 @@ export function AdsInsightsTreeTable({ campaigns, currencyCode }: Props) {
     ...(optional.initiateCheckout ? [t("adsInsights.colInitiateCheckout")] : []),
     ...(optional.allConversions ? [t("adsInsights.colAllConversions")] : []),
   ];
+}
+
+export function AdsInsightsTreeTable({ campaigns, currencyCode }: Props) {
+  const { t } = useTranslation();
+  const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
+  const [expandedAdSets, setExpandedAdSets] = useState<Set<string>>(new Set());
+
+  const optional = useMemo(() => {
+    const all: AdsInsightsMetrics[] = [];
+    for (const c of campaigns) {
+      all.push(c.metrics);
+      for (const s of c.adSets) {
+        all.push(s.metrics);
+        for (const a of s.ads) all.push(a.metrics);
+      }
+    }
+    return collectOptionalMetricFlags(all);
+  }, [campaigns]);
+
+  const headers = useMemo(() => buildHeaders(t, optional), [t, optional]);
+
+  function toggleCampaign(id: string) {
+    setExpandedCampaigns((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAdSet(id: string) {
+    setExpandedAdSets((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   return (
     <div style={{ overflowX: "auto" }}>
@@ -198,23 +230,39 @@ export function AdsInsightsTreeTable({ campaigns, currencyCode }: Props) {
           </tr>
         </thead>
         <tbody>
-          {campaigns.map((campaign, cIdx) => {
-            const campaignOpen = expandedCampaigns.has(campaign.id);
-            return (
-              <CampaignRows
-                key={campaign.id}
-                campaign={campaign}
-                campaignOpen={campaignOpen}
-                cIdx={cIdx}
-                currencyCode={currencyCode}
-                expandedAdSets={expandedAdSets}
-                optional={optional}
-                onToggleCampaign={() => toggleCampaign(campaign.id)}
-                onToggleAdSet={toggleAdSet}
-                t={t}
-              />
-            );
-          })}
+          {campaigns.length === 0 ? (
+            <tr>
+              <td
+                style={{
+                  ...tdStyle,
+                  color: pageColorTokens.textSecondary,
+                  fontWeight: 500,
+                  maxWidth: 280,
+                }}
+              >
+                {t("adsInsights.emptyCampaigns")}
+              </td>
+              <EmptyMetricsCells optional={optional} />
+            </tr>
+          ) : (
+            campaigns.map((campaign, cIdx) => {
+              const campaignOpen = expandedCampaigns.has(campaign.id);
+              return (
+                <CampaignRows
+                  key={campaign.id}
+                  campaign={campaign}
+                  campaignOpen={campaignOpen}
+                  cIdx={cIdx}
+                  currencyCode={currencyCode}
+                  expandedAdSets={expandedAdSets}
+                  optional={optional}
+                  onToggleCampaign={() => toggleCampaign(campaign.id)}
+                  onToggleAdSet={toggleAdSet}
+                  t={t}
+                />
+              );
+            })
+          )}
         </tbody>
       </table>
     </div>

@@ -1,5 +1,8 @@
 import type { AdsInsightsMetrics } from "./types";
 
+/** 空值 / 无数据占位，与表格空态一致 */
+export const EMPTY_METRIC = "—";
+
 export function formatCurrency(amount: number, currencyCode: string | null): string {
   if (currencyCode) {
     try {
@@ -17,12 +20,12 @@ export function formatCurrency(amount: number, currencyCode: string | null): str
 }
 
 export function formatPercent(ratio: number | null | undefined): string {
-  if (ratio === null || ratio === undefined) return "—";
+  if (ratio === null || ratio === undefined) return EMPTY_METRIC;
   return `${(ratio * 100).toFixed(2)}%`;
 }
 
 export function formatNumber(n: number | null | undefined, digits = 0): string {
-  if (n === null || n === undefined) return "—";
+  if (n === null || n === undefined) return EMPTY_METRIC;
   return n.toLocaleString(undefined, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
@@ -30,7 +33,7 @@ export function formatNumber(n: number | null | undefined, digits = 0): string {
 }
 
 export function formatRoas(n: number | null | undefined): string {
-  if (n === null || n === undefined) return "—";
+  if (n === null || n === undefined) return EMPTY_METRIC;
   return `${n.toFixed(2)}x`;
 }
 
