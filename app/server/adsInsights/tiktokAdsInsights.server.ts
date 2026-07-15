@@ -166,10 +166,15 @@ const REPORT_METRICS_BASE = [
   "conversion_rate",
 ] as const;
 
+/**
+ * AUCTION_AD 层级只能用 ad_id 做 dimension；
+ * campaign_id / adgroup_id 必须放进 metrics，否则 TikTok 会报
+ * "data_level AUCTION_AD and dimension campaign_id do not match"。
+ */
+const REPORT_ID_METRICS = ["campaign_id", "adgroup_id"] as const;
+
 type ReportRow = {
   dimensions?: {
-    campaign_id?: string | number;
-    adgroup_id?: string | number;
     ad_id?: string | number;
   };
   metrics?: Record<string, string | number | undefined>;
@@ -199,8 +204,8 @@ async function fetchReportPages(params: {
         advertiser_id: params.advertiserId,
         report_type: "BASIC",
         data_level: params.dataLevel ?? "AUCTION_AD",
-        dimensions: JSON.stringify(["campaign_id", "adgroup_id", "ad_id"]),
-        metrics: JSON.stringify([...params.metrics]),
+        dimensions: JSON.stringify(["ad_id"]),
+        metrics: JSON.stringify([...REPORT_ID_METRICS, ...params.metrics]),
         start_date: params.dateStart,
         end_date: params.dateEnd,
         page: String(page),
@@ -363,10 +368,10 @@ export async function fetchTiktokAdsInsights(
 
   const flat = reportList
     .map((row) => {
-      const campaignId = String(row.dimensions?.campaign_id ?? "").trim();
-      const adSetId = String(row.dimensions?.adgroup_id ?? "").trim();
-      const adId = String(row.dimensions?.ad_id ?? "").trim();
       const m = row.metrics ?? {};
+      const campaignId = String(m.campaign_id ?? "").trim();
+      const adSetId = String(m.adgroup_id ?? "").trim();
+      const adId = String(row.dimensions?.ad_id ?? "").trim();
       const campaign = campaignMeta.get(campaignId);
       const adSet = adgroupMeta.get(adSetId);
       const ad = adMeta.get(adId);
