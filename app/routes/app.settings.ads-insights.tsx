@@ -7,6 +7,7 @@ import {
   getMetaAdsPending,
   getTiktokCatalogCredential,
 } from "../server/adsCatalog/credentialStore.server";
+import { isTiktokSandboxConfigured } from "../server/adsInsights/tiktokSandbox.server";
 import { AdsInsightsPage } from "./page/AdsInsightsPage";
 
 export type AdsInsightsPageLoaderData = {
@@ -25,6 +26,7 @@ export type AdsInsightsPageLoaderData = {
     tiktok: {
       connected: boolean;
       advertiserId: string | null;
+      sandboxConfigured: boolean;
     };
   };
 };
@@ -54,6 +56,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       tiktok: {
         connected: Boolean(tiktok),
         advertiserId: tiktok?.advertiserId ?? null,
+        sandboxConfigured: isTiktokSandboxConfigured(),
       },
     },
   } satisfies AdsInsightsPageLoaderData;

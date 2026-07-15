@@ -55,7 +55,7 @@
 - AI 聊天路由（流式 SSE，唯一入口）：
   - `app/routes/chat-stream.ts` -> `app/server/chat-stream.ts` 的 action（`POST /chat-stream`，请求体 `{ messages }` 或兼容 `{ message }`）。
 - 授权配置路由（均需 `authenticate.admin`）：
-  - 广告：Catalog / Insights OAuth（`app.ads-catalog.tsx`、`app.settings.ads-insights.tsx`、`app.ads.google-*.start.tsx`；回调见 `ads.meta-catalog.callback.tsx` / `ads.meta-ads.callback.tsx` / `ads.google-*.callback.tsx` / `ads.tiktok-catalog.callback.tsx`）。Meta App 凭证仅环境变量 `META_APP_ID` / `META_APP_SECRET`。手动渠道页与 `app.ads.*.config` 已移除。
+  - 广告：Catalog / Insights OAuth（`app.ads-catalog.tsx`、`app.settings.ads-insights.tsx`、`app.ads.google-*.start.tsx`；回调见 `ads.meta-catalog.callback.tsx` / `ads.meta-ads.callback.tsx` / `ads.google-*.callback.tsx` / `ads.tiktok-catalog.callback.tsx`）。Meta App 凭证仅环境变量 `META_APP_ID` / `META_APP_SECRET`。TikTok Insights 沙盒另用 `TIKTOK_SANDBOX_*`。手动渠道页与 `app.ads.*.config` 已移除。
   - 物流：`app.logistics.sf.config.tsx` / `app.logistics.fedex.config.tsx`
 - 反馈路由：
   - `app.feedback.suggestion.tsx`：`POST` 校验后 **`prisma.suggestion.create`** 写入 Turso（字段 `shop`、`content`，最多 2000 字）；前端从 `ChatPage` 提交至 `/app/feedback/suggestion`。
@@ -117,7 +117,7 @@
   - 系统结论：根据阈值输出“健康/关注/风险”与诊断文案。
 
 ## 9. 广告与物流授权数据
-- **广告（Catalog / Insights OAuth）**：写入 Prisma 模型 **`AdPlatformCredential`**（按 `shop` + `platform` 唯一，`credentials` 为 Json），读写入口见 `app/server/adsCatalog/credentialStore.server.ts`。Meta App 级凭证仅环境变量 `META_APP_ID` / `META_APP_SECRET`（兼容 `META_OAUTH_CLIENT_*`）。投放数据查看入口为 `/app/settings/ads-insights`。
+- **广告（Catalog / Insights OAuth）**：写入 Prisma 模型 **`AdPlatformCredential`**（按 `shop` + `platform` 唯一，`credentials` 为 Json），读写入口见 `app/server/adsCatalog/credentialStore.server.ts`。Meta App 级凭证仅环境变量 `META_APP_ID` / `META_APP_SECRET`（兼容 `META_OAUTH_CLIENT_*`）。投放数据查看入口为 `/app/settings/ads-insights`。TikTok 沙盒模式（Insights 页开关）仅读 `TIKTOK_SANDBOX_ACCESS_TOKEN` / `TIKTOK_SANDBOX_ADVERTISER_ID`（可选 `TIKTOK_SANDBOX_ACCOUNT_NAME`），请求 `sandbox-ads.tiktok.com`，**绝不**复用 Catalog OAuth token。
 - **物流**：`.data/logistics-provider-credentials.json`，组织方式 `shop -> provider -> credential`（`app/server/logisticsCredentialStore.server.ts`）。
 - 现状：
   - 广告 OAuth token 已在 DB 中托管（Turso）；字段校验与脱敏展示仍应注意。
@@ -225,6 +225,10 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
   - `SHOP_CUSTOM_DOMAIN`（可选）
 - Web Pixel 自动配置（`app/server/webPixel/ensureWebPixel.server.ts`，OAuth 回调 / 进入 `/app` 时幂等执行）：
   - `PIXEL_INGEST_ENDPOINT`（可选）：像素上报地址；未设时回退 `SHOPIFY_APP_URL` + `/api/pixel-ingest`，二者均缺则跳过自动配置
+- 广告 TikTok 沙盒（Insights 页「沙盒模式」，`app/server/adsInsights/tiktokSandbox.server.ts`）：
+  - `TIKTOK_SANDBOX_ACCESS_TOKEN`（必需）
+  - `TIKTOK_SANDBOX_ADVERTISER_ID`（必需）
+  - `TIKTOK_SANDBOX_ACCOUNT_NAME`（可选，仅展示）
 - AI 模型侧：
   - `DEEPSEEK_API_KEY`（优先）或 `OPENAI_API_KEY`
   - `DEEPSEEK_MODEL` / `OPENAI_MODEL`（可选）

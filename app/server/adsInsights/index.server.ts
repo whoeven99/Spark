@@ -13,10 +13,13 @@ export async function fetchAdsInsights(params: {
   platform: AdsInsightsPlatform;
   rangeDays: AdsInsightsRangeDays;
   view?: AdsInsightsView;
+  /** 仅 TikTok：走 sandbox-ads API + 环境变量凭证，不碰 Catalog OAuth */
+  sandbox?: boolean;
 }): Promise<AdsInsightsResult | null> {
   const view = params.view ?? "structure";
 
   if (params.platform === "meta") {
+    if (params.sandbox) return null;
     const result = await fetchMetaAdsInsights(params.shop, params.rangeDays, {
       includeCreatives: view === "creatives",
     });
@@ -37,6 +40,7 @@ export async function fetchAdsInsights(params: {
   }
 
   if (params.platform === "google") {
+    if (params.sandbox) return null;
     const result = await fetchGoogleAdsInsights(params.shop, params.rangeDays, {
       includeStructure: view === "structure",
       includeKeywords: view === "keywords",
@@ -77,6 +81,7 @@ export async function fetchAdsInsights(params: {
   if (params.platform === "tiktok") {
     const result = await fetchTiktokAdsInsights(params.shop, params.rangeDays, {
       includeCreatives: view === "creatives",
+      sandbox: Boolean(params.sandbox),
     });
     if (!result) return null;
     if (view === "structure") {

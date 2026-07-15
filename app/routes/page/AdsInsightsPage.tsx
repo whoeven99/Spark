@@ -23,6 +23,16 @@ import type {
 import type { AdsInsightsPageLoaderData } from "../app.settings.ads-insights";
 
 type InsightsFetcherData = AdsInsightsApiOk | AdsInsightsApiError;
+type SeedFetcherData =
+  | {
+      ok: true;
+      campaignId: string | null;
+      adgroupId: string | null;
+      adId: string | null;
+      campaignName: string;
+      warnings: string[];
+    }
+  | AdsInsightsApiError;
 
 function parseView(raw: string | null): AdsInsightsView {
   if (raw === "keywords" || raw === "searchTerms" || raw === "creatives") return raw;
@@ -36,6 +46,7 @@ export function AdsInsightsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const loaderData = useLoaderData<AdsInsightsPageLoaderData>();
   const metricsFetcher = useFetcher<InsightsFetcherData>();
+  const seedFetcher = useFetcher<SeedFetcherData>();
 
   const locationSearch = location.search || "";
 
@@ -50,14 +61,20 @@ export function AdsInsightsPage() {
     initialRange === 14 || initialRange === 30 ? initialRange : 7,
   );
   const [view, setView] = useState<AdsInsightsView>(parseView(searchParams.get("view")));
+  const [tiktokSandbox, setTiktokSandbox] = useState(
+    searchParams.get("sandbox") === "1" || searchParams.get("sandbox") === "true",
+  );
 
   const connections = loaderData.connections;
+  const sandboxConfigured = connections.tiktok.sandboxConfigured;
   const connected =
     platform === "meta"
       ? connections.meta.connected
       : platform === "google"
         ? connections.google.connected
-        : connections.tiktok.connected;
+        : tiktokSandbox
+          ? sandboxConfigured
+          : connections.tiktok.connected;
 
   // Meta/TikTok 无关键词与搜索词；切到不支持视图时回退 structure。
   useEffect(() => {
@@ -66,15 +83,30 @@ export function AdsInsightsPage() {
     }
   }, [platform, view]);
 
+  // 离开 TikTok 时关闭沙盒开关（避免 query 误传到其他平台）。
+  useEffect(() => {
+    if (platform !== "tiktok" && tiktokSandbox) {
+      setTiktokSandbox(false);
+    }
+  }, [platform, tiktokSandbox]);
+
   const loadMetrics = useCallback(() => {
     if (platform === "meta" && !connections.meta.connected) return;
     if (platform === "google" && !connections.google.connected) return;
-    if (platform === "tiktok" && !connections.tiktok.connected) return;
+    if (platform === "tiktok") {
+      if (tiktokSandbox && !sandboxConfigured) return;
+      if (!tiktokSandbox && !connections.tiktok.connected) return;
+    }
 
     const params = new URLSearchParams(location.search);
     params.set("platform", platform);
     params.set("range", String(rangeDays));
     params.set("view", view);
+    if (platform === "tiktok" && tiktokSandbox) {
+      params.set("sandbox", "1");
+    } else {
+      params.delete("sandbox");
+    }
     metricsFetcher.load(`/api/ads-insights?${params.toString()}`);
   }, [
     connections.google.connected,
@@ -84,20 +116,24 @@ export function AdsInsightsPage() {
     metricsFetcher,
     platform,
     rangeDays,
+    sandboxConfigured,
+    tiktokSandbox,
     view,
   ]);
 
   useEffect(() => {
     loadMetrics();
-    // 仅在平台/日期/视图变化时拉取；fetcher 自身不应进入依赖
+    // 仅在平台/日期/视图/沙盒变化时拉取；fetcher 自身不应进入依赖
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     platform,
     rangeDays,
     view,
+    tiktokSandbox,
     connections.meta.connected,
     connections.google.connected,
     connections.tiktok.connected,
+    sandboxConfigured,
   ]);
 
   useEffect(() => {
@@ -109,6 +145,13 @@ export function AdsInsightsPage() {
     next.delete("adAccountId");
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (seedFetcher.data?.ok) {
+      loadMetrics();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedFetcher.data]);
 
   const tabs = useMemo(
     () =>
@@ -150,8 +193,10 @@ export function AdsInsightsPage() {
 
   const data = metricsFetcher.data;
   const loading = metricsFetcher.state === "loading";
+  const seeding = seedFetcher.state !== "idle";
   const okData = data && data.ok ? data : null;
   const errData = data && !data.ok ? data : null;
+  const seedData = seedFetcher.data;
 
   const catalogLink = `/app/ads-catalog${locationSearch}`;
 
@@ -163,6 +208,11 @@ export function AdsInsightsPage() {
         : view === "creatives"
           ? okData?.creatives ?? []
           : [];
+
+  const accountLabel =
+    okData?.accountName && okData.accountName.trim()
+      ? `${okData.accountName} (${okData.accountId})`
+      : okData?.accountId ?? "";
 
   return (
     <div style={isMobile ? mobilePageContentStyle : pageContentStyle}>
@@ -181,6 +231,103 @@ export function AdsInsightsPage() {
           ariaLabel={t("adsInsights.platformTabsAria")}
           mobileFullWidth={isMobile}
         />
+
+        {platform === "tiktok" && (
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 12,
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "10px 12px",
+              borderRadius: 8,
+              border: `1px solid ${pageColorTokens.borderSubtle}`,
+              background: tiktokSandbox ? "#f4f6ff" : pageColorTokens.surfaceMuted,
+            }}
+          >
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: sandboxConfigured ? "pointer" : "not-allowed",
+                opacity: sandboxConfigured ? 1 : 0.6,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={tiktokSandbox}
+                disabled={!sandboxConfigured}
+                onChange={(e) => setTiktokSandbox(e.target.checked)}
+              />
+              {t("adsInsights.tiktokSandboxToggle")}
+            </label>
+            <div style={{ ...pageHintTextStyle, margin: 0, flex: "1 1 200px" }}>
+              {sandboxConfigured
+                ? t("adsInsights.tiktokSandboxHint")
+                : t("adsInsights.tiktokSandboxNotConfigured")}
+            </div>
+            {tiktokSandbox && sandboxConfigured && (
+              <button
+                type="button"
+                disabled={seeding}
+                onClick={() => {
+                  seedFetcher.submit(
+                    {},
+                    {
+                      method: "POST",
+                      action: `/api/ads-insights/tiktok-sandbox-seed${locationSearch}`,
+                    },
+                  );
+                }}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: `1px solid ${pageColorTokens.borderSubtle}`,
+                  background: "#fff",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: seeding ? "wait" : "pointer",
+                }}
+              >
+                {seeding ? t("adsInsights.tiktokSandboxSeeding") : t("adsInsights.tiktokSandboxSeed")}
+              </button>
+            )}
+          </div>
+        )}
+
+        {seedData && tiktokSandbox && (
+          <div
+            style={{
+              ...hintBoxStyle,
+              background: seedData.ok ? "#eefbf2" : "#fff0ee",
+              color: seedData.ok ? "#0b7a3b" : "#d82c0d",
+            }}
+          >
+            {seedData.ok ? (
+              <>
+                <div>
+                  {t("adsInsights.tiktokSandboxSeedOk", {
+                    campaign: seedData.campaignName,
+                    campaignId: seedData.campaignId || "—",
+                    adgroupId: seedData.adgroupId || "—",
+                    adId: seedData.adId || "—",
+                  })}
+                </div>
+                {seedData.warnings?.length > 0 && (
+                  <div style={{ color: pageColorTokens.textSecondary }}>
+                    {seedData.warnings.join(" · ")}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div>{seedData.message || t("adsInsights.tiktokSandboxSeedError")}</div>
+            )}
+          </div>
+        )}
 
         <div
           style={{
@@ -247,7 +394,7 @@ export function AdsInsightsPage() {
           </div>
         )}
 
-        {platform === "tiktok" && !connections.tiktok.connected && (
+        {platform === "tiktok" && !tiktokSandbox && !connections.tiktok.connected && (
           <div style={hintBoxStyle}>
             <div>{t("adsInsights.tiktokNotConnected")}</div>
             <Link to={catalogLink} style={{ color: pageColorTokens.brandBlueDark, fontWeight: 600 }}>
@@ -278,13 +425,20 @@ export function AdsInsightsPage() {
             >
               <div>
                 <div style={{ fontSize: 14, fontWeight: 700 }}>
-                  {t("adsInsights.tableTitle", { accountId: okData.accountId })}
+                  {okData.sandbox
+                    ? t("adsInsights.tableTitleSandbox", { accountId: accountLabel })
+                    : t("adsInsights.tableTitle", { accountId: accountLabel })}
                 </div>
                 <div style={pageHintTextStyle}>
-                  {t("adsInsights.tableSubtitle", {
-                    start: okData.dateStart,
-                    end: okData.dateEnd,
-                  })}
+                  {okData.sandbox
+                    ? t("adsInsights.tableSubtitleSandbox", {
+                        start: okData.dateStart,
+                        end: okData.dateEnd,
+                      })
+                    : t("adsInsights.tableSubtitle", {
+                        start: okData.dateStart,
+                        end: okData.dateEnd,
+                      })}
                 </div>
               </div>
             </div>

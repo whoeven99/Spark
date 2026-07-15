@@ -16,11 +16,16 @@ import {
   formatOutboundNetworkError,
 } from "../common/outboundError.server";
 import { resolveDateWindow } from "./dateRange.server";
-import { nestFlatAdRows } from "./nest.server";
+import { nestEntityHierarchy, nestFlatAdRows } from "./nest.server";
+import {
+  getTiktokSandboxCredentials,
+  TIKTOK_SANDBOX_API_BASE,
+} from "./tiktokSandbox.server";
 import {
   type AdsInsightsDeepRow,
   type AdsInsightsRangeDays,
   type AdsInsightsResult,
+  emptyMetrics,
   finalizeMetrics,
   toNumber,
 } from "./types.server";
@@ -72,8 +77,10 @@ async function tiktokGetJson<T>(params: {
   path: string;
   accessToken: string;
   query: Record<string, string>;
+  apiBase?: string;
 }): Promise<T> {
-  const url = new URL(`${TIKTOK_API_BASE}${params.path}`);
+  const apiBase = params.apiBase ?? TIKTOK_API_BASE;
+  const url = new URL(`${apiBase}${params.path}`);
   for (const [key, value] of Object.entries(params.query)) {
     url.searchParams.set(key, value);
   }
@@ -102,8 +109,69 @@ async function listEntityNames(params: {
   idField: string;
   nameField: string;
   statusField: string;
-}): Promise<Map<string, { name: string; status: string }>> {
-  const map = new Map<string, { name: string; status: string }>();
+  apiBase?: string;
+  extraFields?: string[];
+  parentField?: string;
+}): Promise<Map<string, { name: string; status: string; parentId?: string }>> {
+  const map = new Map<string, { name: string; status: string; parentId?: string }>();
+  let page = 1;
+  let totalPage = 1;
+  while (page <= totalPage && page <= 20) {
+    const query: Record<string, string> = {
+      advertiser_id: params.advertiserId,
+      page: String(page),
+      page_size: "100",
+    };
+    if (params.extraFields?.length) {
+      query.fields = JSON.stringify(params.extraFields);
+    }
+    const json = await tiktokGetJson<{
+      data?: {
+        list?: Array<Record<string, string | number | undefined>>;
+        page_info?: { total_page?: number };
+      };
+    }>({
+      path: params.path,
+      accessToken: params.accessToken,
+      apiBase: params.apiBase,
+      query,
+    });
+    for (const row of json.data?.list ?? []) {
+      const id = String(row[params.idField] ?? "").trim();
+      if (!id) continue;
+      const parentRaw = params.parentField ? row[params.parentField] : undefined;
+      map.set(id, {
+        name: String(row[params.nameField] ?? id).trim() || id,
+        status: String(row[params.statusField] ?? row.secondary_status ?? "UNKNOWN"),
+        parentId: parentRaw !== undefined ? String(parentRaw).trim() || undefined : undefined,
+      });
+    }
+    totalPage = Math.max(1, Number(json.data?.page_info?.total_page ?? 1));
+    page += 1;
+  }
+  return map;
+}
+
+async function listAdsWithParents(params: {
+  accessToken: string;
+  advertiserId: string;
+  apiBase?: string;
+}): Promise<
+  Array<{
+    id: string;
+    name: string;
+    status: string;
+    campaignId: string;
+    adSetId: string;
+  }>
+> {
+  const out: Array<{
+    id: string;
+    name: string;
+    status: string;
+    campaignId: string;
+    adSetId: string;
+  }> = [];
   let page = 1;
   let totalPage = 1;
   while (page <= totalPage && page <= 20) {
@@ -113,26 +181,39 @@ async function listEntityNames(params: {
         page_info?: { total_page?: number };
       };
     }>({
-      path: params.path,
+      path: "/ad/get/",
       accessToken: params.accessToken,
+      apiBase: params.apiBase,
       query: {
         advertiser_id: params.advertiserId,
         page: String(page),
         page_size: "100",
+        fields: JSON.stringify([
+          "ad_id",
+          "ad_name",
+          "operation_status",
+          "campaign_id",
+          "adgroup_id",
+        ]),
       },
     });
     for (const row of json.data?.list ?? []) {
-      const id = String(row[params.idField] ?? "").trim();
-      if (!id) continue;
-      map.set(id, {
-        name: String(row[params.nameField] ?? id).trim() || id,
-        status: String(row[params.statusField] ?? row.secondary_status ?? "UNKNOWN"),
+      const id = String(row.ad_id ?? "").trim();
+      const campaignId = String(row.campaign_id ?? "").trim();
+      const adSetId = String(row.adgroup_id ?? "").trim();
+      if (!id || !campaignId || !adSetId) continue;
+      out.push({
+        id,
+        name: String(row.ad_name ?? id).trim() || id,
+        status: String(row.operation_status ?? row.secondary_status ?? "UNKNOWN"),
+        campaignId,
+        adSetId,
       });
     }
     totalPage = Math.max(1, Number(json.data?.page_info?.total_page ?? 1));
     page += 1;
   }
-  return map;
+  return out;
 }
 
 const REPORT_METRICS_EXTENDED = [
@@ -187,6 +268,7 @@ async function fetchReportPages(params: {
   dateEnd: string;
   metrics: readonly string[];
   dataLevel?: string;
+  apiBase?: string;
 }): Promise<ReportRow[]> {
   const out: ReportRow[] = [];
   let page = 1;
@@ -200,6 +282,7 @@ async function fetchReportPages(params: {
     }>({
       path: "/report/integrated/get/",
       accessToken: params.accessToken,
+      apiBase: params.apiBase,
       query: {
         advertiser_id: params.advertiserId,
         report_type: "BASIC",
@@ -222,6 +305,7 @@ async function fetchReportPages(params: {
 async function fetchAdvertiserCurrency(params: {
   accessToken: string;
   advertiserId: string;
+  apiBase?: string;
 }): Promise<string | null> {
   try {
     const json = await tiktokGetJson<{
@@ -229,6 +313,7 @@ async function fetchAdvertiserCurrency(params: {
     }>({
       path: "/advertiser/info/",
       accessToken: params.accessToken,
+      apiBase: params.apiBase,
       query: {
         advertiser_ids: JSON.stringify([params.advertiserId]),
         fields: JSON.stringify(["advertiser_id", "currency"]),
@@ -287,54 +372,70 @@ function mapReportMetrics(m: Record<string, string | number | undefined>) {
 export async function fetchTiktokAdsInsights(
   shop: string,
   rangeDays: AdsInsightsRangeDays,
-  options?: { includeCreatives?: boolean },
+  options?: { includeCreatives?: boolean; sandbox?: boolean },
 ): Promise<AdsInsightsResult | null> {
-  const credential = await getTiktokCatalogCredential(shop);
-  if (!credential) return null;
+  const sandbox = Boolean(options?.sandbox);
+  const apiBase = sandbox ? TIKTOK_SANDBOX_API_BASE : TIKTOK_API_BASE;
 
-  const { dateStart, dateEnd } = resolveDateWindow(rangeDays);
-  let accessToken = credential.accessToken;
-  if (credential.refreshToken) {
-    const refreshed = await refreshTiktokAccessToken({
-      shop,
-      refreshToken: credential.refreshToken,
-      advertiserId: credential.advertiserId,
-      catalogId: credential.catalogId,
-      catalogName: credential.catalogName,
-    });
-    if (refreshed) accessToken = refreshed;
+  let accessToken: string;
+  let advertiserId: string;
+  let accountName: string | null = null;
+
+  if (sandbox) {
+    const sandboxCreds = getTiktokSandboxCredentials();
+    if (!sandboxCreds) return null;
+    accessToken = sandboxCreds.accessToken;
+    advertiserId = sandboxCreds.advertiserId;
+    accountName = sandboxCreds.accountName;
+  } else {
+    const credential = await getTiktokCatalogCredential(shop);
+    if (!credential) return null;
+    accessToken = credential.accessToken;
+    advertiserId = credential.advertiserId;
+    if (credential.refreshToken) {
+      const refreshed = await refreshTiktokAccessToken({
+        shop,
+        refreshToken: credential.refreshToken,
+        advertiserId: credential.advertiserId,
+        catalogId: credential.catalogId,
+        catalogName: credential.catalogName,
+      });
+      if (refreshed) accessToken = refreshed;
+    }
   }
 
-  const [campaignMeta, adgroupMeta, adMeta, currencyCode] = await Promise.all([
+  const { dateStart, dateEnd } = resolveDateWindow(rangeDays);
+  const logShop = sandbox ? `sandbox:${advertiserId}` : shop;
+
+  const [campaignMeta, adgroupMeta, adsWithParents, currencyCode] = await Promise.all([
     listEntityNames({
       accessToken,
-      advertiserId: credential.advertiserId,
+      advertiserId,
+      apiBase,
       path: "/campaign/get/",
       idField: "campaign_id",
       nameField: "campaign_name",
       statusField: "operation_status",
+      extraFields: ["campaign_id", "campaign_name", "operation_status"],
     }),
     listEntityNames({
       accessToken,
-      advertiserId: credential.advertiserId,
+      advertiserId,
+      apiBase,
       path: "/adgroup/get/",
       idField: "adgroup_id",
       nameField: "adgroup_name",
       statusField: "operation_status",
+      parentField: "campaign_id",
+      extraFields: ["adgroup_id", "adgroup_name", "operation_status", "campaign_id"],
     }),
-    listEntityNames({
-      accessToken,
-      advertiserId: credential.advertiserId,
-      path: "/ad/get/",
-      idField: "ad_id",
-      nameField: "ad_name",
-      statusField: "operation_status",
-    }),
-    fetchAdvertiserCurrency({
-      accessToken,
-      advertiserId: credential.advertiserId,
-    }),
+    listAdsWithParents({ accessToken, advertiserId, apiBase }),
+    fetchAdvertiserCurrency({ accessToken, advertiserId, apiBase }),
   ]);
+
+  const adMeta = new Map(
+    adsWithParents.map((ad) => [ad.id, { name: ad.name, status: ad.status }] as const),
+  );
 
   let reportList: ReportRow[] = [];
   let usedExtended = true;
@@ -343,7 +444,8 @@ export async function fetchTiktokAdsInsights(
     try {
       reportList = await fetchReportPages({
         accessToken,
-        advertiserId: credential.advertiserId,
+        advertiserId,
+        apiBase,
         dateStart,
         dateEnd,
         metrics: REPORT_METRICS_EXTENDED,
@@ -351,19 +453,29 @@ export async function fetchTiktokAdsInsights(
     } catch (e) {
       usedExtended = false;
       console.warn(
-        `${LOG_PREFIX} step=report_extended_failed shop=${shop} ${formatOutboundErrorLog(e)}`,
+        `${LOG_PREFIX} step=report_extended_failed shop=${logShop} sandbox=${sandbox} ${formatOutboundErrorLog(e)}`,
       );
       reportList = await fetchReportPages({
         accessToken,
-        advertiserId: credential.advertiserId,
+        advertiserId,
+        apiBase,
         dateStart,
         dateEnd,
         metrics: REPORT_METRICS_BASE,
       });
     }
   } catch (e) {
-    console.error(`${LOG_PREFIX} step=report shop=${shop} ${formatOutboundErrorLog(e)}`);
-    throw e;
+    if (sandbox) {
+      // 沙盒报告常不可用；降级为实体结构（零指标）。
+      console.warn(
+        `${LOG_PREFIX} step=report_sandbox_fallback shop=${logShop} ${formatOutboundErrorLog(e)}`,
+      );
+      reportList = [];
+      usedExtended = false;
+    } else {
+      console.error(`${LOG_PREFIX} step=report shop=${logShop} ${formatOutboundErrorLog(e)}`);
+      throw e;
+    }
   }
 
   const flat = reportList
@@ -410,8 +522,50 @@ export async function fetchTiktokAdsInsights(
   }
 
   const wantCreatives = Boolean(options?.includeCreatives);
+  let campaigns = wantCreatives ? [] : nestFlatAdRows(flat);
+
+  // 沙盒无报告行时，用实体列表兜底展示结构。
+  if (sandbox && !wantCreatives && campaigns.length === 0) {
+    const metricsByAd = new Map(flat.map((r) => [r.adId, r.metrics]));
+    campaigns = nestEntityHierarchy({
+      campaigns: [...campaignMeta.entries()].map(([id, v]) => ({
+        id,
+        name: v.name,
+        status: v.status,
+      })),
+      adSets: [...adgroupMeta.entries()].map(([id, v]) => ({
+        id,
+        name: v.name,
+        status: v.status,
+        campaignId: v.parentId || "",
+      })),
+      ads: adsWithParents.map((ad) => ({
+        ...ad,
+        metrics: metricsByAd.get(ad.id) ?? emptyMetrics(),
+      })),
+    });
+  }
+
   const creatives: AdsInsightsDeepRow[] = wantCreatives
-    ? flat.map((row) => ({
+    ? (flat.length > 0
+        ? flat
+        : adsWithParents.map((ad) => {
+            const campaign = campaignMeta.get(ad.campaignId);
+            const adSet = adgroupMeta.get(ad.adSetId);
+            return {
+              campaignId: ad.campaignId,
+              campaignName: campaign?.name ?? ad.campaignId,
+              campaignStatus: campaign?.status ?? "UNKNOWN",
+              adSetId: ad.adSetId,
+              adSetName: adSet?.name ?? ad.adSetId,
+              adSetStatus: adSet?.status ?? "UNKNOWN",
+              adId: ad.id,
+              adName: ad.name,
+              adStatus: ad.status,
+              metrics: emptyMetrics(),
+            };
+          })
+      ).map((row) => ({
         id: row.adId,
         name: row.adName,
         status: row.adStatus,
@@ -428,12 +582,14 @@ export async function fetchTiktokAdsInsights(
 
   return {
     platform: "tiktok",
-    accountId: credential.advertiserId,
+    accountId: advertiserId,
+    accountName,
+    sandbox,
     currencyCode,
     rangeDays,
     dateStart,
     dateEnd,
-    campaigns: wantCreatives ? [] : nestFlatAdRows(flat),
+    campaigns,
     keywords: [],
     searchTerms: [],
     creatives,

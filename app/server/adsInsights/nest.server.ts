@@ -168,3 +168,133 @@ export function nestFlatAdRows(rows: FlatAdRow[]): AdsInsightsCampaign[] {
   result.sort((a, b) => b.metrics.spend - a.metrics.spend);
   return result;
 }
+
+type EntityCampaign = { id: string; name: string; status: string };
+type EntityAdSet = { id: string; name: string; status: string; campaignId: string };
+type EntityAd = {
+  id: string;
+  name: string;
+  status: string;
+  campaignId: string;
+  adSetId: string;
+  metrics?: AdsInsightsMetrics;
+};
+
+/**
+ * 从实体列表构建树（沙盒报告为空时仍展示系列/组/广告）。
+ * 无广告时保留广告组（ads=[]）；无广告组时保留空系列。
+ */
+export function nestEntityHierarchy(params: {
+  campaigns: EntityCampaign[];
+  adSets: EntityAdSet[];
+  ads: EntityAd[];
+}): AdsInsightsCampaign[] {
+  type AdSetBucket = {
+    id: string;
+    name: string;
+    status: string;
+    ads: Map<string, AdsInsightsAd>;
+  };
+  type CampaignBucket = {
+    id: string;
+    name: string;
+    status: string;
+    adSets: Map<string, AdSetBucket>;
+  };
+
+  const campaigns = new Map<string, CampaignBucket>();
+
+  for (const c of params.campaigns) {
+    if (!c.id) continue;
+    campaigns.set(c.id, {
+      id: c.id,
+      name: c.name || c.id,
+      status: c.status || "UNKNOWN",
+      adSets: new Map(),
+    });
+  }
+
+  for (const s of params.adSets) {
+    if (!s.id || !s.campaignId) continue;
+    let campaign = campaigns.get(s.campaignId);
+    if (!campaign) {
+      campaign = {
+        id: s.campaignId,
+        name: s.campaignId,
+        status: "UNKNOWN",
+        adSets: new Map(),
+      };
+      campaigns.set(s.campaignId, campaign);
+    }
+    campaign.adSets.set(s.id, {
+      id: s.id,
+      name: s.name || s.id,
+      status: s.status || "UNKNOWN",
+      ads: new Map(),
+    });
+  }
+
+  for (const a of params.ads) {
+    if (!a.id || !a.campaignId || !a.adSetId) continue;
+    let campaign = campaigns.get(a.campaignId);
+    if (!campaign) {
+      campaign = {
+        id: a.campaignId,
+        name: a.campaignId,
+        status: "UNKNOWN",
+        adSets: new Map(),
+      };
+      campaigns.set(a.campaignId, campaign);
+    }
+    let adSet = campaign.adSets.get(a.adSetId);
+    if (!adSet) {
+      adSet = {
+        id: a.adSetId,
+        name: a.adSetId,
+        status: "UNKNOWN",
+        ads: new Map(),
+      };
+      campaign.adSets.set(a.adSetId, adSet);
+    }
+    adSet.ads.set(a.id, {
+      id: a.id,
+      name: a.name || a.id,
+      status: a.status || "UNKNOWN",
+      metrics: a.metrics ?? emptyMetrics(),
+    });
+  }
+
+  const result: AdsInsightsCampaign[] = [];
+  for (const campaign of campaigns.values()) {
+    const adSets: AdsInsightsAdSet[] = [];
+    let campaignMetrics = emptyMetrics();
+    for (const adSet of campaign.adSets.values()) {
+      const ads = [...adSet.ads.values()].sort(
+        (a, b) => b.metrics.spend - a.metrics.spend,
+      );
+      let adSetMetrics = emptyMetrics();
+      for (const ad of ads) {
+        adSetMetrics = mergeMetrics(adSetMetrics, ad.metrics);
+      }
+      adSets.push({
+        id: adSet.id,
+        name: adSet.name,
+        status: adSet.status,
+        metrics: adSetMetrics,
+        ads,
+      });
+      campaignMetrics = mergeMetrics(campaignMetrics, adSetMetrics);
+    }
+    adSets.sort((a, b) => a.name.localeCompare(b.name));
+    result.push({
+      id: campaign.id,
+      name: campaign.name,
+      status: campaign.status,
+      metrics: campaignMetrics,
+      adSets,
+    });
+  }
+
+  result.sort((a, b) => a.name.localeCompare(b.name));
+  return result;
+}

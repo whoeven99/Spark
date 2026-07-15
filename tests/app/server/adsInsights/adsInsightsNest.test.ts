@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { googleDuringClause, parseRangeDays, resolveDateWindow } from "~/server/adsInsights/dateRange.server";
-import { nestFlatAdRows, mergeMetrics } from "~/server/adsInsights/nest.server";
-import { finalizeMetrics, parseAdsInsightsView } from "~/server/adsInsights/types.server";
+import { nestEntityHierarchy, nestFlatAdRows, mergeMetrics } from "~/server/adsInsights/nest.server";
+import { emptyMetrics, finalizeMetrics, parseAdsInsightsView } from "~/server/adsInsights/types.server";
+import {
+  getTiktokSandboxCredentials,
+  isTiktokSandboxConfigured,
+} from "~/server/adsInsights/tiktokSandbox.server";
 
 describe("adsInsights dateRange", () => {
   it("parses allowed ranges and defaults to 7", () => {
@@ -128,5 +132,53 @@ describe("adsInsights view parse", () => {
     expect(parseAdsInsightsView("creatives")).toBe("creatives");
     expect(parseAdsInsightsView("nope")).toBe("structure");
     expect(parseAdsInsightsView(null)).toBe("structure");
+  });
+});
+
+describe("adsInsights nestEntityHierarchy", () => {
+  it("keeps campaign/adset when ads are empty", () => {
+    const campaigns = nestEntityHierarchy({
+      campaigns: [{ id: "c1", name: "Camp", status: "DISABLE" }],
+      adSets: [{ id: "s1", name: "Set", status: "DISABLE", campaignId: "c1" }],
+      ads: [],
+    });
+    expect(campaigns).toHaveLength(1);
+    expect(campaigns[0].adSets).toHaveLength(1);
+    expect(campaigns[0].adSets[0].ads).toHaveLength(0);
+    expect(campaigns[0].metrics).toEqual(emptyMetrics());
+  });
+});
+
+describe("tiktok sandbox env", () => {
+  it("reports not configured when env missing", () => {
+    const prevToken = process.env.TIKTOK_SANDBOX_ACCESS_TOKEN;
+    const prevAdv = process.env.TIKTOK_SANDBOX_ADVERTISER_ID;
+    delete process.env.TIKTOK_SANDBOX_ACCESS_TOKEN;
+    delete process.env.TIKTOK_SANDBOX_ADVERTISER_ID;
+    expect(isTiktokSandboxConfigured()).toBe(false);
+    expect(getTiktokSandboxCredentials()).toBeNull();
+    if (prevToken !== undefined) process.env.TIKTOK_SANDBOX_ACCESS_TOKEN = prevToken;
+    if (prevAdv !== undefined) process.env.TIKTOK_SANDBOX_ADVERTISER_ID = prevAdv;
+  });
+
+  it("reads sandbox credentials from env", () => {
+    const prevToken = process.env.TIKTOK_SANDBOX_ACCESS_TOKEN;
+    const prevAdv = process.env.TIKTOK_SANDBOX_ADVERTISER_ID;
+    const prevName = process.env.TIKTOK_SANDBOX_ACCOUNT_NAME;
+    process.env.TIKTOK_SANDBOX_ACCESS_TOKEN = "sandbox-token-test";
+    process.env.TIKTOK_SANDBOX_ADVERTISER_ID = "123";
+    process.env.TIKTOK_SANDBOX_ACCOUNT_NAME = "spark-allen";
+    expect(isTiktokSandboxConfigured()).toBe(true);
+    expect(getTiktokSandboxCredentials()).toEqual({
+      accessToken: "sandbox-token-test",
+      advertiserId: "123",
+      accountName: "spark-allen",
+    });
+    if (prevToken === undefined) delete process.env.TIKTOK_SANDBOX_ACCESS_TOKEN;
+    else process.env.TIKTOK_SANDBOX_ACCESS_TOKEN = prevToken;
+    if (prevAdv === undefined) delete process.env.TIKTOK_SANDBOX_ADVERTISER_ID;
+    else process.env.TIKTOK_SANDBOX_ADVERTISER_ID = prevAdv;
+    if (prevName === undefined) delete process.env.TIKTOK_SANDBOX_ACCOUNT_NAME;
+    else process.env.TIKTOK_SANDBOX_ACCOUNT_NAME = prevName;
   });
 });
