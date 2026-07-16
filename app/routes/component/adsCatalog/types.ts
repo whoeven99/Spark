@@ -90,6 +90,8 @@ export interface CredentialsView {
   };
   tiktok: {
     connected: boolean;
+    authorized: boolean;
+    awaitingCatalog: boolean;
     catalogId: string;
     advertiserId: string;
     updatedAt: string | null;

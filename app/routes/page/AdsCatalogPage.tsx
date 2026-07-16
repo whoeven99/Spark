@@ -182,8 +182,17 @@ export function AdsCatalogPage() {
     if (gmc === "select" || ads === "select" || meta === "select" || tiktok === "select") {
       setTab("credentials");
       revalidator.revalidate();
-    } else if (gmc === "success" || ads === "success" || meta === "success" || tiktok === "success") {
+    } else if (
+      gmc === "success" ||
+      ads === "success" ||
+      meta === "success" ||
+      tiktok === "success"
+    ) {
       setAuthBanner({ tone: "ok", text: t("adsCatalog.authSuccess") });
+      setTab("credentials");
+      revalidator.revalidate();
+    } else if (tiktok === "authorized") {
+      setAuthBanner({ tone: "ok", text: t("adsCatalog.tiktokAuthorizedBanner") });
       setTab("credentials");
       revalidator.revalidate();
     } else if (gmc === "error" || ads === "error" || meta === "error" || tiktok === "error") {

@@ -37,9 +37,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // pending.accounts：新格式 businessId=bc_id + advertiserId；旧格式仅 businessId=advertiserId。
   const selectedEntry = pending.accounts.find((a) => a.id === catalogId);
   const explicitAdvertiserId =
-    selectedEntry?.advertiserId?.trim() || pending.accounts[0]?.advertiserId?.trim() || "";
+    selectedEntry?.advertiserId?.trim() ||
+    pending.advertiserId?.trim() ||
+    pending.accounts[0]?.advertiserId?.trim() ||
+    "";
   const bcId = explicitAdvertiserId
-    ? selectedEntry?.businessId?.trim() || pending.accounts[0]?.businessId?.trim() || ""
+    ? selectedEntry?.businessId?.trim() ||
+      pending.bcId?.trim() ||
+      pending.accounts[0]?.businessId?.trim() ||
+      ""
     : "";
   const advertiserId =
     explicitAdvertiserId ||

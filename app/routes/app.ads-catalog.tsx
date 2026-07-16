@@ -87,8 +87,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       },
       tiktok: {
         connected: Boolean(tiktok),
+        authorized: Boolean(tiktok || tiktokPending),
+        awaitingCatalog: Boolean(tiktokPending && !tiktok && (tiktokPending.accounts?.length ?? 0) === 0),
         catalogId: tiktok?.catalogId ?? "",
-        advertiserId: tiktok?.advertiserId ?? "",
+        advertiserId: tiktok?.advertiserId ?? tiktokPending?.advertiserId ?? "",
         updatedAt: tiktok?.updatedAt ?? null,
         pendingCatalogs:
           tiktokPending?.accounts.map((a) => ({

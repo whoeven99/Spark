@@ -6,6 +6,7 @@ import {
   exchangeTiktokAuthCode,
   getTiktokCatalogsForAdvertisers,
   getTiktokRedirectUri,
+  listAccessibleBcIds,
   verifyTiktokOAuthState,
 } from "../server/adsCatalog/tiktokOAuth.server";
 import {
@@ -74,10 +75,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     });
 
     if (catalogs.length === 0) {
-      return appRedirect(request, shop, host, appOrigin, {
-        tiktokAuth: "error",
-        reason: "授权广告主下未找到商品 Catalog，请先在 TikTok Ads Manager 中创建",
+      const bcIds = await listAccessibleBcIds({ accessToken });
+      await setTiktokCatalogPending(shop, {
+        accessToken,
+        refreshToken,
+        advertiserId: advertiserIds[0],
+        bcId: bcIds[0],
+        accounts: [],
       });
+      return appRedirect(request, shop, host, appOrigin, { tiktokAuth: "authorized" });
     }
 
     if (catalogs.length === 1) {

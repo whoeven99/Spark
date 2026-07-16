@@ -94,6 +94,36 @@ export function TiktokConnectPanels({
     }
   }
 
+  async function refreshCatalogs() {
+    setBusy(true);
+    try {
+      const resp = await fetch(`/api/ads-catalog/tiktok-refresh-catalogs${locationSearch}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = (await resp.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+        autoSelected?: boolean;
+      };
+      if (!resp.ok || !data.ok) {
+        alert(data.error ?? t("adsCatalog.authError"));
+        return;
+      }
+      if (data.message === "no_catalogs") {
+        alert(t("adsCatalog.tiktokNoCatalogsFound"));
+        return;
+      }
+      onChanged();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : t("adsCatalog.authError"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const fmtDate = (iso: string | null) =>
     iso
       ? new Intl.DateTimeFormat(languageCode, {
@@ -145,6 +175,41 @@ export function TiktokConnectPanels({
           busy={busy}
           onSelect={(id) => void post("/api/ads-catalog/tiktok-catalogs", { catalogId: id })}
         />
+      ) : tiktok.awaitingCatalog ? (
+        <>
+          <div style={{ fontSize: 13 }}>
+            <div style={{ color: "#0f7a52", fontWeight: 600 }}>
+              {t("adsCatalog.tiktokAuthorizedNoCatalog")}
+            </div>
+            {tiktok.advertiserId && (
+              <div>
+                {t("adsCatalog.tiktokAdvertiserId", { id: tiktok.advertiserId })}
+              </div>
+            )}
+            <p style={pageHintTextStyle}>{t("adsCatalog.tiktokNoCatalogHint")}</p>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              style={primaryBtn}
+              disabled={busy}
+              onClick={() => void refreshCatalogs()}
+            >
+              {t("adsCatalog.tiktokRefreshCatalogs")}
+            </button>
+            <button type="button" style={secondaryBtn} disabled={busy} onClick={openOAuth}>
+              {t("adsCatalog.tiktokReauth")}
+            </button>
+            <button
+              type="button"
+              style={secondaryBtn}
+              disabled={busy}
+              onClick={() => void post("/api/ads-catalog/tiktok-disconnect", {})}
+            >
+              {t("adsCatalog.tiktokDisconnect")}
+            </button>
+          </div>
+        </>
       ) : (
         <>
           <p style={pageHintTextStyle}>{t("adsCatalog.tiktokConnectHint")}</p>

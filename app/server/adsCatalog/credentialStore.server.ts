@@ -259,6 +259,10 @@ export type PendingOAuthTokens = {
   refreshToken?: string;
   clientId?: string;
   clientSecret?: string;
+  /** TikTok：OAuth 已完成但尚未绑定 Catalog 时保留广告主 ID。 */
+  advertiserId?: string;
+  /** TikTok：OAuth 已完成但尚未绑定 Catalog 时保留 Business Center ID。 */
+  bcId?: string;
   accounts: PendingOAuthAccount[];
 };
 
@@ -272,6 +276,8 @@ async function setPending(
     refreshToken: payload.refreshToken ?? null,
     clientId: payload.clientId ?? null,
     clientSecret: payload.clientSecret ?? null,
+    advertiserId: payload.advertiserId?.trim() || null,
+    bcId: payload.bcId?.trim() || null,
     accounts: payload.accounts,
   });
 }
@@ -291,6 +297,14 @@ async function getPending(
     clientId: typeof record.data.clientId === "string" ? record.data.clientId : undefined,
     clientSecret:
       typeof record.data.clientSecret === "string" ? record.data.clientSecret : undefined,
+    advertiserId:
+      typeof record.data.advertiserId === "string" && record.data.advertiserId.trim()
+        ? record.data.advertiserId.trim()
+        : undefined,
+    bcId:
+      typeof record.data.bcId === "string" && record.data.bcId.trim()
+        ? record.data.bcId.trim()
+        : undefined,
     accounts: Array.isArray(record.data.accounts)
       ? (record.data.accounts as PendingOAuthTokens["accounts"])
       : [],
