@@ -8,6 +8,7 @@ import {
   getTiktokSandboxCredentials,
   isTiktokSandboxConfigured,
   isTiktokSandboxIdentityConfigured,
+  isTiktokSandboxQpsLimitMessage,
 } from "~/server/adsInsights/tiktokSandbox.server";
 import {
   applyGoogleSandboxMockMetrics,
@@ -208,6 +209,17 @@ describe("tiktok sandbox env", () => {
     expect(isTiktokSandboxIdentityConfigured()).toBe(false);
     if (prevIdentityId !== undefined) process.env.TIKTOK_SANDBOX_IDENTITY_ID = prevIdentityId;
     if (prevIdentityType !== undefined) process.env.TIKTOK_SANDBOX_IDENTITY_TYPE = prevIdentityType;
+  });
+
+  it("detects TikTok sandbox QPS limit messages", () => {
+    expect(
+      isTiktokSandboxQpsLimitMessage(
+        "App 7659707118749564929 reaches the QPS limit 1, current QPS is 2.",
+      ),
+    ).toBe(true);
+    expect(isTiktokSandboxQpsLimitMessage("Invalid param: creatives.identity_id is required.")).toBe(
+      false,
+    );
   });
 
   it("builds deterministic mock metrics from seed", () => {
