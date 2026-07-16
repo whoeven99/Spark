@@ -3,9 +3,10 @@ import { googleDuringClause, parseRangeDays, resolveDateWindow } from "~/server/
 import { nestEntityHierarchy, nestFlatAdRows, mergeMetrics } from "~/server/adsInsights/nest.server";
 import { emptyMetrics, finalizeMetrics, parseAdsInsightsView } from "~/server/adsInsights/types.server";
 import {
+  applyTiktokSandboxMockMetrics,
+  buildTiktokSandboxMockMetrics,
   getTiktokSandboxCredentials,
   isTiktokSandboxConfigured,
-  uploadTiktokSandboxPlaceholderVideo,
 } from "~/server/adsInsights/tiktokSandbox.server";
 
 describe("adsInsights dateRange", () => {
@@ -183,33 +184,40 @@ describe("tiktok sandbox env", () => {
     else process.env.TIKTOK_SANDBOX_ACCOUNT_NAME = prevName;
   });
 
-  it("uploads placeholder video via UPLOAD_BY_URL", async () => {
-    const prevUrl = process.env.TIKTOK_SANDBOX_VIDEO_URL;
-    process.env.TIKTOK_SANDBOX_VIDEO_URL = "https://example.com/sample.mp4";
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ code: 0, data: { video_id: "v-seed-1" } }),
-    });
-    vi.stubGlobal("fetch", fetchMock);
+  it("builds deterministic mock metrics from seed", () => {
+    const a = buildTiktokSandboxMockMetrics("adgroup:1");
+    const b = buildTiktokSandboxMockMetrics("adgroup:1");
+    const c = buildTiktokSandboxMockMetrics("adgroup:2");
+    expect(a).toEqual(b);
+    expect(a.impressions).toBeGreaterThan(0);
+    expect(a.clicks).toBeGreaterThan(0);
+    expect(a.spend).toBeGreaterThan(0);
+    expect(c.impressions).not.toBe(a.impressions);
+  });
 
-    const videoId = await uploadTiktokSandboxPlaceholderVideo({
-      accessToken: "tok",
-      advertiserId: "adv",
-      fileName: "spark-sandbox-video-test.mp4",
-    });
-    expect(videoId).toBe("v-seed-1");
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/file/video/ad/upload/");
-    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}"));
-    expect(body).toMatchObject({
-      advertiser_id: "adv",
-      upload_type: "UPLOAD_BY_URL",
-      video_url: "https://example.com/sample.mp4",
-      file_name: "spark-sandbox-video-test.mp4",
-    });
-
-    vi.unstubAllGlobals();
-    if (prevUrl === undefined) delete process.env.TIKTOK_SANDBOX_VIDEO_URL;
-    else process.env.TIKTOK_SANDBOX_VIDEO_URL = prevUrl;
+  it("applies mock metrics to campaign/adgroup tree without ads", () => {
+    const campaigns = applyTiktokSandboxMockMetrics([
+      {
+        id: "c1",
+        name: "Campaign 1",
+        status: "DISABLE",
+        metrics: emptyMetrics(),
+        adSets: [
+          {
+            id: "g1",
+            name: "AdGroup 1",
+            status: "DISABLE",
+            metrics: emptyMetrics(),
+            ads: [],
+          },
+        ],
+      },
+    ]);
+    expect(campaigns[0].adSets[0].metrics.impressions).toBeGreaterThan(0);
+    expect(campaigns[0].metrics.impressions).toBe(
+      campaigns[0].adSets[0].metrics.impressions,
+    );
+    expect(campaigns[0].metrics.spend).toBeGreaterThan(0);
   });
 
   afterEach(() => {

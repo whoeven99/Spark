@@ -1,23 +1,18 @@
 /**
  * TikTok Marketing API 沙盒：与正式 Catalog OAuth / business-api 完全隔离。
  * 凭证仅来自环境变量，绝不读取 AdPlatformCredential。
+ *
+ * Seed 只建 Campaign → AdGroup；Insights 指标由本地 mock 注入（沙盒无真实投放）。
  */
 
+import type { AdsInsightsCampaign, AdsInsightsDeepRow, AdsInsightsMetrics } from "./types.server";
+import { finalizeMetrics } from "./types.server";
+import { mergeMetrics } from "./nest.server";
 import { formatOutboundErrorLog, formatOutboundNetworkError } from "../common/outboundError.server";
 
 export const TIKTOK_SANDBOX_API_BASE = "https://sandbox-ads.tiktok.com/open_api/v1.3";
-/** seed 的 ad/create 固定走 v1.2（v1.3 常强制 identity，沙盒更易失败）。 */
-const TIKTOK_SANDBOX_AD_CREATE_API_BASE = "https://sandbox-ads.tiktok.com/open_api/v1.2";
 
 const LOG_PREFIX = "[AdsInsights][TikTok][Sandbox]";
-/** 沙盒创意占位图；可用 TIKTOK_SANDBOX_IMAGE_ID 覆盖。 */
-const DEFAULT_SANDBOX_IMAGE_ID = "ad-site-i18n-sg/202208095d0d1d72383f815646c5b090";
-/**
- * 占位视频（TikTok 服务端拉取）；须为可公网访问的短 MP4。
- * 每次 seed 用唯一 file_name，避免同名冲突。
- */
-const DEFAULT_SANDBOX_VIDEO_URL =
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4";
 
 export type TiktokSandboxCredentials = {
   accessToken: string;
@@ -41,10 +36,6 @@ export function getTiktokSandboxCredentials(): TiktokSandboxCredentials | null {
   if (!accessToken || !advertiserId) return null;
   const accountName = readEnv("TIKTOK_SANDBOX_ACCOUNT_NAME") || null;
   return { accessToken, advertiserId, accountName };
-}
-
-function sandboxImageId(): string {
-  return readEnv("TIKTOK_SANDBOX_IMAGE_ID") || DEFAULT_SANDBOX_IMAGE_ID;
 }
 
 type TiktokApiJson<T> = T & { code?: number; message?: string; request_id?: string };
@@ -89,13 +80,8 @@ export type TiktokSandboxSeedResult = {
   advertiserId: string;
   campaignId: string | null;
   adgroupId: string | null;
-  imageAdId: string | null;
-  videoAdId: string | null;
-  videoId: string | null;
   campaignName: string;
   adgroupName: string;
-  imageAdName: string;
-  videoAdName: string;
   warnings: string[];
 };
 
@@ -106,107 +92,114 @@ function formatScheduleStart(): string {
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:00:00`;
 }
 
+/** 稳定 hash，同一 id 每次生成相同 mock 指标。 */
+function hashSeed(seed: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
 /**
- * 上传占位视频到沙盒素材库，返回 video_id。
- * 优先 TIKTOK_SANDBOX_VIDEO_URL；否则用内置样例 URL（UPLOAD_BY_URL）。
+ * 按实体 id 生成确定性假指标（仅沙盒 Insights 展示用，不写回 TikTok）。
  */
-export async function uploadTiktokSandboxPlaceholderVideo(params: {
-  accessToken: string;
-  advertiserId: string;
-  fileName: string;
-}): Promise<string> {
-  const videoUrl = readEnv("TIKTOK_SANDBOX_VIDEO_URL") || DEFAULT_SANDBOX_VIDEO_URL;
-  const json = await tiktokSandboxRequest<{
-    data?: { video_id?: string; id?: string };
-  }>({
-    method: "POST",
-    path: "/file/video/ad/upload/",
-    accessToken: params.accessToken,
-    body: {
-      advertiser_id: params.advertiserId,
-      upload_type: "UPLOAD_BY_URL",
-      file_name: params.fileName.slice(0, 100),
-      video_url: videoUrl,
-    },
+export function buildTiktokSandboxMockMetrics(seed: string): AdsInsightsMetrics {
+  const h = hashSeed(seed || "sandbox");
+  const impressions = 800 + (h % 9200);
+  const ctrBp = 80 + (h % 320); // 0.80% ~ 4.00%
+  const clicks = Math.max(1, Math.round((impressions * ctrBp) / 10000));
+  const cpcCents = 25 + (h % 175); // $0.25 ~ $2.00
+  const spend = Math.round(clicks * cpcCents) / 100;
+  const conversionRateBp = 40 + (h % 160); // 4% ~ 20% of clicks
+  const conversions = Math.max(0, Math.round((clicks * conversionRateBp) / 10000));
+  const avgOrder = 18 + (h % 72);
+  const conversionsValue = Math.round(conversions * avgOrder * 100) / 100;
+  const purchases = conversions > 0 ? Math.max(1, Math.round(conversions * 0.7)) : 0;
+  const purchaseValue = Math.round(purchases * avgOrder * 100) / 100;
+  const addToCart = conversions > 0 ? conversions + (h % 5) : h % 3;
+  const landingPageViews = Math.max(clicks, Math.round(clicks * 1.1));
+  const reach = Math.max(1, Math.round(impressions * (0.55 + (h % 30) / 100)));
+  const frequency = Math.round((impressions / reach) * 100) / 100;
+  const videoViews = Math.round(impressions * (0.35 + (h % 25) / 100));
+  const thruplay = Math.round(videoViews * (0.2 + (h % 20) / 100));
+
+  return finalizeMetrics({
+    impressions,
+    clicks,
+    spend,
+    conversions,
+    conversionsValue,
+    purchases,
+    purchaseValue,
+    addToCart,
+    landingPageViews,
+    reach,
+    frequency,
+    outboundClicks: clicks,
+    videoViews,
+    thruplay,
+    leads: h % 4,
+    viewContent: Math.round(clicks * 0.6),
+    initiateCheckout: Math.max(0, Math.round(conversions * 1.2)),
+    allConversions: conversions + (h % 3),
   });
-  const videoId = String(json.data?.video_id ?? json.data?.id ?? "").trim();
-  if (!videoId) {
-    throw new Error("TikTok Sandbox /file/video/ad/upload/ 未返回 video_id");
-  }
-  return videoId;
-}
-
-function buildImageCreative(params: {
-  adName: string;
-  displayName: string;
-}): Record<string, unknown> {
-  return {
-    ad_name: params.adName,
-    ad_format: "SINGLE_IMAGE",
-    ad_text: "Spark sandbox test image ad",
-    call_to_action: "LEARN_MORE",
-    landing_page_url: "https://www.example.com",
-    display_name: params.displayName,
-    image_ids: [sandboxImageId()],
-  };
-}
-
-function buildVideoCreative(params: {
-  adName: string;
-  displayName: string;
-  videoId: string;
-}): Record<string, unknown> {
-  return {
-    ad_name: params.adName,
-    ad_format: "SINGLE_VIDEO",
-    ad_text: "Spark sandbox test video ad",
-    call_to_action: "LEARN_MORE",
-    landing_page_url: "https://www.example.com",
-    display_name: params.displayName,
-    video_id: params.videoId,
-    // 封面图：与 image ad 共用占位图
-    image_ids: [sandboxImageId()],
-  };
-}
-
-async function createSandboxAd(params: {
-  accessToken: string;
-  advertiserId: string;
-  adgroupId: string;
-  creative: Record<string, unknown>;
-  warnings: string[];
-  label: string;
-}): Promise<string | null> {
-  try {
-    const adJson = await tiktokSandboxRequest<{
-      data?: { ad_ids?: Array<string | number>; creatives?: Array<{ ad_id?: string }> };
-    }>({
-      method: "POST",
-      path: "/ad/create/",
-      accessToken: params.accessToken,
-      apiBase: TIKTOK_SANDBOX_AD_CREATE_API_BASE,
-      body: {
-        advertiser_id: params.advertiserId,
-        adgroup_id: params.adgroupId,
-        creatives: [params.creative],
-      },
-    });
-    const adId =
-      String(adJson.data?.ad_ids?.[0] ?? adJson.data?.creatives?.[0]?.ad_id ?? "").trim() || null;
-    if (adId) return adId;
-    params.warnings.push(`ad/create(v1.2) ${params.label} 未返回 ad_id`);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    params.warnings.push(`ad/create(v1.2) ${params.label} 失败: ${msg}`);
-    console.warn(`${LOG_PREFIX} seed ad ${params.label} ${formatOutboundErrorLog(e)}`);
-  }
-  return null;
 }
 
 /**
- * 在沙盒账户创建最小结构：
- * Campaign → AdGroup → SINGLE_IMAGE Ad + SINGLE_VIDEO Ad（视频素材自动上传）。
- * 不使用 identity_id。
+ * 给结构树注入 mock 指标：有 Ad 则按 Ad mock 后上卷；无 Ad 则按 AdSet mock 后上卷。
+ */
+export function applyTiktokSandboxMockMetrics(
+  campaigns: AdsInsightsCampaign[],
+): AdsInsightsCampaign[] {
+  return campaigns.map((campaign) => {
+    let campaignMetrics = finalizeMetrics({});
+    const adSets = campaign.adSets.map((adSet) => {
+      if (adSet.ads.length > 0) {
+        const ads = adSet.ads.map((ad) => ({
+          ...ad,
+          metrics: buildTiktokSandboxMockMetrics(`ad:${ad.id}`),
+        }));
+        let adSetMetrics = finalizeMetrics({});
+        for (const ad of ads) {
+          adSetMetrics = mergeMetrics(adSetMetrics, ad.metrics);
+        }
+        campaignMetrics = mergeMetrics(campaignMetrics, adSetMetrics);
+        return { ...adSet, ads, metrics: adSetMetrics };
+      }
+
+      const adSetMetrics = buildTiktokSandboxMockMetrics(`adgroup:${adSet.id}`);
+      campaignMetrics = mergeMetrics(campaignMetrics, adSetMetrics);
+      return { ...adSet, metrics: adSetMetrics };
+    });
+
+    // 无广告组时直接按系列 mock，保证表里也有数
+    if (adSets.length === 0) {
+      campaignMetrics = buildTiktokSandboxMockMetrics(`campaign:${campaign.id}`);
+    }
+
+    return {
+      ...campaign,
+      adSets,
+      metrics: campaignMetrics,
+    };
+  });
+}
+
+/** 创意视图扁平行注入 mock 指标。 */
+export function applyTiktokSandboxMockDeepRows(
+  rows: AdsInsightsDeepRow[],
+): AdsInsightsDeepRow[] {
+  return rows.map((row) => ({
+    ...row,
+    metrics: buildTiktokSandboxMockMetrics(`creative:${row.id}`),
+  }));
+}
+
+/**
+ * 在沙盒账户创建最小结构：仅 Campaign → AdGroup。
+ * 不创建 Ad / 不上传素材；Insights 指标由本地 mock。
  */
 export async function seedTiktokSandboxMinimalStructure(): Promise<TiktokSandboxSeedResult> {
   const creds = getTiktokSandboxCredentials();
@@ -219,9 +212,6 @@ export async function seedTiktokSandboxMinimalStructure(): Promise<TiktokSandbox
   const stamp = Date.now().toString(36);
   const campaignName = `Spark Sandbox Campaign ${stamp}`;
   const adgroupName = `Spark Sandbox AdGroup ${stamp}`;
-  const imageAdName = `Spark Sandbox Image Ad ${stamp}`;
-  const videoAdName = `Spark Sandbox Video Ad ${stamp}`;
-  const displayName = creds.accountName || "Spark Sandbox";
   const warnings: string[] = [];
 
   const campaignJson = await tiktokSandboxRequest<{ data?: { campaign_id?: string } }>({
@@ -277,59 +267,12 @@ export async function seedTiktokSandboxMinimalStructure(): Promise<TiktokSandbox
     console.warn(`${LOG_PREFIX} seed adgroup ${formatOutboundErrorLog(e)}`);
   }
 
-  let videoId: string | null = null;
-  let imageAdId: string | null = null;
-  let videoAdId: string | null = null;
-
-  if (adgroupId) {
-    imageAdId = await createSandboxAd({
-      accessToken: creds.accessToken,
-      advertiserId: creds.advertiserId,
-      adgroupId,
-      warnings,
-      label: "SINGLE_IMAGE",
-      creative: buildImageCreative({ adName: imageAdName, displayName }),
-    });
-
-    try {
-      videoId = await uploadTiktokSandboxPlaceholderVideo({
-        accessToken: creds.accessToken,
-        advertiserId: creds.advertiserId,
-        fileName: `spark-sandbox-video-${stamp}.mp4`,
-      });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      warnings.push(`视频素材上传失败: ${msg}`);
-      console.warn(`${LOG_PREFIX} video upload ${formatOutboundErrorLog(e)}`);
-    }
-
-    if (videoId) {
-      videoAdId = await createSandboxAd({
-        accessToken: creds.accessToken,
-        advertiserId: creds.advertiserId,
-        adgroupId,
-        warnings,
-        label: "SINGLE_VIDEO",
-        creative: buildVideoCreative({
-          adName: videoAdName,
-          displayName,
-          videoId,
-        }),
-      });
-    }
-  }
-
   return {
     advertiserId: creds.advertiserId,
     campaignId,
     adgroupId,
-    imageAdId,
-    videoAdId,
-    videoId,
     campaignName,
     adgroupName,
-    imageAdName,
-    videoAdName,
     warnings,
   };
 }

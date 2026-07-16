@@ -18,6 +18,8 @@ import {
 import { resolveDateWindow } from "./dateRange.server";
 import { nestEntityHierarchy, nestFlatAdRows } from "./nest.server";
 import {
+  applyTiktokSandboxMockDeepRows,
+  applyTiktokSandboxMockMetrics,
   getTiktokSandboxCredentials,
   TIKTOK_SANDBOX_API_BASE,
 } from "./tiktokSandbox.server";
@@ -440,39 +442,36 @@ export async function fetchTiktokAdsInsights(
   let reportList: ReportRow[] = [];
   let usedExtended = true;
 
-  try {
+  if (sandbox) {
+    // 沙盒无真实投放，跳过报表；结构 + 本地 mock 指标即可。
+    reportList = [];
+    usedExtended = false;
+  } else {
     try {
-      reportList = await fetchReportPages({
-        accessToken,
-        advertiserId,
-        apiBase,
-        dateStart,
-        dateEnd,
-        metrics: REPORT_METRICS_EXTENDED,
-      });
+      try {
+        reportList = await fetchReportPages({
+          accessToken,
+          advertiserId,
+          apiBase,
+          dateStart,
+          dateEnd,
+          metrics: REPORT_METRICS_EXTENDED,
+        });
+      } catch (e) {
+        usedExtended = false;
+        console.warn(
+          `${LOG_PREFIX} step=report_extended_failed shop=${logShop} sandbox=${sandbox} ${formatOutboundErrorLog(e)}`,
+        );
+        reportList = await fetchReportPages({
+          accessToken,
+          advertiserId,
+          apiBase,
+          dateStart,
+          dateEnd,
+          metrics: REPORT_METRICS_BASE,
+        });
+      }
     } catch (e) {
-      usedExtended = false;
-      console.warn(
-        `${LOG_PREFIX} step=report_extended_failed shop=${logShop} sandbox=${sandbox} ${formatOutboundErrorLog(e)}`,
-      );
-      reportList = await fetchReportPages({
-        accessToken,
-        advertiserId,
-        apiBase,
-        dateStart,
-        dateEnd,
-        metrics: REPORT_METRICS_BASE,
-      });
-    }
-  } catch (e) {
-    if (sandbox) {
-      // 沙盒报告常不可用；降级为实体结构（零指标）。
-      console.warn(
-        `${LOG_PREFIX} step=report_sandbox_fallback shop=${logShop} ${formatOutboundErrorLog(e)}`,
-      );
-      reportList = [];
-      usedExtended = false;
-    } else {
       console.error(`${LOG_PREFIX} step=report shop=${logShop} ${formatOutboundErrorLog(e)}`);
       throw e;
     }
@@ -524,29 +523,30 @@ export async function fetchTiktokAdsInsights(
   const wantCreatives = Boolean(options?.includeCreatives);
   let campaigns = wantCreatives ? [] : nestFlatAdRows(flat);
 
-  // 沙盒无报告行时，用实体列表兜底展示结构。
-  if (sandbox && !wantCreatives && campaigns.length === 0) {
-    const metricsByAd = new Map(flat.map((r) => [r.adId, r.metrics]));
-    campaigns = nestEntityHierarchy({
-      campaigns: [...campaignMeta.entries()].map(([id, v]) => ({
-        id,
-        name: v.name,
-        status: v.status,
-      })),
-      adSets: [...adgroupMeta.entries()].map(([id, v]) => ({
-        id,
-        name: v.name,
-        status: v.status,
-        campaignId: v.parentId || "",
-      })),
-      ads: adsWithParents.map((ad) => ({
-        ...ad,
-        metrics: metricsByAd.get(ad.id) ?? emptyMetrics(),
-      })),
-    });
+  // 沙盒：用实体列表展示结构，并注入确定性 mock 指标（不依赖报表/Ad）。
+  if (sandbox && !wantCreatives) {
+    campaigns = applyTiktokSandboxMockMetrics(
+      nestEntityHierarchy({
+        campaigns: [...campaignMeta.entries()].map(([id, v]) => ({
+          id,
+          name: v.name,
+          status: v.status,
+        })),
+        adSets: [...adgroupMeta.entries()].map(([id, v]) => ({
+          id,
+          name: v.name,
+          status: v.status,
+          campaignId: v.parentId || "",
+        })),
+        ads: adsWithParents.map((ad) => ({
+          ...ad,
+          metrics: emptyMetrics(),
+        })),
+      }),
+    );
   }
 
-  const creatives: AdsInsightsDeepRow[] = wantCreatives
+  let creatives: AdsInsightsDeepRow[] = wantCreatives
     ? (flat.length > 0
         ? flat
         : adsWithParents.map((ad) => {
@@ -579,6 +579,10 @@ export async function fetchTiktokAdsInsights(
         metrics: row.metrics,
       }))
     : [];
+
+  if (sandbox && wantCreatives) {
+    creatives = applyTiktokSandboxMockDeepRows(creatives);
+  }
 
   return {
     platform: "tiktok",

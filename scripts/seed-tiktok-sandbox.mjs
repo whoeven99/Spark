@@ -1,15 +1,14 @@
 /**
- * CLI：向 TikTok 沙盒创建最小 Campaign → AdGroup → Image Ad + Video Ad，并列出当前系列。
+ * CLI：向 TikTok 沙盒创建最小 Campaign → AdGroup（不建 Ad / 不上传素材）。
+ * Insights 指标由应用侧 mock，不依赖沙盒报表。
  *
- * 用法（凭证只从环境 / .env 读取，勿把 token 写进命令行）：
+ * 用法：
  *   node scripts/seed-tiktok-sandbox.mjs
  *
  * 需要：
  *   TIKTOK_SANDBOX_ACCESS_TOKEN
  *   TIKTOK_SANDBOX_ADVERTISER_ID
  *   可选 TIKTOK_SANDBOX_ACCOUNT_NAME
- *   可选 TIKTOK_SANDBOX_IMAGE_ID
- *   可选 TIKTOK_SANDBOX_VIDEO_URL（占位视频公网 URL；未设则用内置样例）
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -17,11 +16,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const API_BASE = "https://sandbox-ads.tiktok.com/open_api/v1.3";
-/** seed 的 ad/create 固定走 v1.2 */
-const AD_CREATE_API_BASE = "https://sandbox-ads.tiktok.com/open_api/v1.2";
-const DEFAULT_IMAGE_ID = "ad-site-i18n-sg/202208095d0d1d72383f815646c5b090";
-const DEFAULT_VIDEO_URL =
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4";
 
 function loadDotEnv() {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -49,8 +43,7 @@ function env(name) {
 }
 
 async function tiktokRequest(params) {
-  const apiBase = params.apiBase || API_BASE;
-  const url = new URL(`${apiBase}${params.path}`);
+  const url = new URL(`${API_BASE}${params.path}`);
   for (const [key, value] of Object.entries(params.query || {})) {
     url.searchParams.set(key, value);
   }
@@ -76,52 +69,11 @@ function formatScheduleStart() {
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:00:00`;
 }
 
-async function uploadPlaceholderVideo({ accessToken, advertiserId, fileName }) {
-  const videoUrl = env("TIKTOK_SANDBOX_VIDEO_URL") || DEFAULT_VIDEO_URL;
-  console.log("Uploading placeholder video via URL…");
-  const json = await tiktokRequest({
-    method: "POST",
-    path: "/file/video/ad/upload/",
-    accessToken,
-    body: {
-      advertiser_id: advertiserId,
-      upload_type: "UPLOAD_BY_URL",
-      file_name: fileName.slice(0, 100),
-      video_url: videoUrl,
-    },
-  });
-  const videoId = String(json.data?.video_id || json.data?.id || "").trim();
-  if (!videoId) throw new Error("file/video/ad/upload missing video_id");
-  return videoId;
-}
-
-async function createAd({ accessToken, body, warnings, label }) {
-  try {
-    console.log(`Creating ad (v1.2) ${label}…`);
-    const adJson = await tiktokRequest({
-      method: "POST",
-      path: "/ad/create/",
-      accessToken,
-      apiBase: AD_CREATE_API_BASE,
-      body,
-    });
-    const adId = String(adJson.data?.ad_ids?.[0] || adJson.data?.creatives?.[0]?.ad_id || "").trim();
-    console.log(`${label} ad_id:`, adId || "(empty)");
-    if (adId) return adId;
-    warnings.push(`ad/create(v1.2) ${label} missing ad_id`);
-  } catch (e) {
-    warnings.push(`ad/create(v1.2) ${label} failed: ${e.message || e}`);
-    console.warn(warnings[warnings.length - 1]);
-  }
-  return "";
-}
-
 async function main() {
   loadDotEnv();
   const accessToken = env("TIKTOK_SANDBOX_ACCESS_TOKEN");
   const advertiserId = env("TIKTOK_SANDBOX_ADVERTISER_ID");
   const accountName = env("TIKTOK_SANDBOX_ACCOUNT_NAME") || "Spark Sandbox";
-  const imageId = env("TIKTOK_SANDBOX_IMAGE_ID") || DEFAULT_IMAGE_ID;
   if (!accessToken || !advertiserId) {
     console.error("Missing TIKTOK_SANDBOX_ACCESS_TOKEN and/or TIKTOK_SANDBOX_ADVERTISER_ID");
     process.exit(1);
@@ -133,8 +85,6 @@ async function main() {
   const stamp = Date.now().toString(36);
   const campaignName = `Spark Sandbox Campaign ${stamp}`;
   const adgroupName = `Spark Sandbox AdGroup ${stamp}`;
-  const imageAdName = `Spark Sandbox Image Ad ${stamp}`;
-  const videoAdName = `Spark Sandbox Video Ad ${stamp}`;
   const warnings = [];
 
   console.log("\nCreating campaign…");
@@ -189,78 +139,12 @@ async function main() {
     console.warn(warnings[warnings.length - 1]);
   }
 
-  let imageAdId = "";
-  let videoAdId = "";
-  let videoId = "";
-
-  if (adgroupId) {
-    imageAdId = await createAd({
-      accessToken,
-      warnings,
-      label: "SINGLE_IMAGE",
-      body: {
-        advertiser_id: advertiserId,
-        adgroup_id: adgroupId,
-        creatives: [
-          {
-            ad_name: imageAdName,
-            ad_format: "SINGLE_IMAGE",
-            ad_text: "Spark sandbox test image ad",
-            call_to_action: "LEARN_MORE",
-            landing_page_url: "https://www.example.com",
-            display_name: accountName,
-            image_ids: [imageId],
-          },
-        ],
-      },
-    });
-
-    try {
-      videoId = await uploadPlaceholderVideo({
-        accessToken,
-        advertiserId,
-        fileName: `spark-sandbox-video-${stamp}.mp4`,
-      });
-      console.log("video_id:", videoId);
-    } catch (e) {
-      warnings.push(`video upload failed: ${e.message || e}`);
-      console.warn(warnings[warnings.length - 1]);
-    }
-
-    if (videoId) {
-      videoAdId = await createAd({
-        accessToken,
-        warnings,
-        label: "SINGLE_VIDEO",
-        body: {
-          advertiser_id: advertiserId,
-          adgroup_id: adgroupId,
-          creatives: [
-            {
-              ad_name: videoAdName,
-              ad_format: "SINGLE_VIDEO",
-              ad_text: "Spark sandbox test video ad",
-              call_to_action: "LEARN_MORE",
-              landing_page_url: "https://www.example.com",
-              display_name: accountName,
-              video_id: videoId,
-              image_ids: [imageId],
-            },
-          ],
-        },
-      });
-    }
-  }
-
   console.log("\nSeed result:");
   console.log(
     JSON.stringify(
       {
         campaignId,
         adgroupId: adgroupId || null,
-        imageAdId: imageAdId || null,
-        videoAdId: videoAdId || null,
-        videoId: videoId || null,
         campaignName,
         warnings,
       },
