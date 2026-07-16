@@ -22,6 +22,8 @@ import {
   applyTiktokSandboxMockDeepRows,
   applyTiktokSandboxMockMetrics,
   getTiktokSandboxCredentials,
+  isTiktokSandboxApiBase,
+  tiktokSandboxRequest,
   TIKTOK_SANDBOX_API_BASE,
 } from "./tiktokSandbox.server";
 import {
@@ -79,6 +81,15 @@ async function tiktokGetJson<T>(params: {
   query: Record<string, string>;
   apiBase?: string;
 }): Promise<T> {
+  if (isTiktokSandboxApiBase(params.apiBase)) {
+    return tiktokSandboxRequest<T>({
+      path: params.path,
+      accessToken: params.accessToken,
+      query: params.query,
+      apiBase: params.apiBase,
+    });
+  }
+
   const apiBase = params.apiBase ?? TIKTOK_API_BASE;
   const url = new URL(`${apiBase}${params.path}`);
   for (const [key, value] of Object.entries(params.query)) {

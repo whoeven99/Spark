@@ -16,17 +16,22 @@ export const TIKTOK_SANDBOX_API_BASE = "https://sandbox-ads.tiktok.com/open_api/
 export const TIKTOK_SANDBOX_API_BASE_V12 = "https://sandbox-ads.tiktok.com/open_api/v1.2";
 
 const LOG_PREFIX = "[AdsInsights][TikTok][Sandbox]";
-/** 沙盒 App QPS 上限为 1；请求间隔略大于 1s 避免连续 create 触发限流。 */
-const SANDBOX_MIN_REQUEST_INTERVAL_MS = 1_100;
-const SANDBOX_QPS_MAX_RETRIES = 4;
+/** 沙盒 App QPS 上限为 1；两次请求完成间隔至少 1.5s。 */
+const SANDBOX_MIN_REQUEST_INTERVAL_MS = 1_500;
+const SANDBOX_QPS_MAX_RETRIES = 5;
 /** 沙盒创意占位图；可用 TIKTOK_SANDBOX_IMAGE_ID 覆盖。 */
 const DEFAULT_SANDBOX_IMAGE_ID = "ad-site-i18n-sg/202208095d0d1d72383f815646c5b090";
 
-let sandboxRequestChain: Promise<void> = Promise.resolve();
-let lastSandboxRequestAt = 0;
+let sandboxRequestQueue: Promise<unknown> = Promise.resolve();
+let lastSandboxRequestFinishedAt = 0;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** 判断 API base 是否为 TikTok 沙盒域名。 */
+export function isTiktokSandboxApiBase(apiBase?: string): boolean {
+  return (apiBase ?? TIKTOK_SANDBOX_API_BASE).includes("sandbox-ads.tiktok.com");
 }
 
 /** TikTok 沙盒 QPS 限流错误文案识别（便于单测与重试判断）。 */
@@ -34,17 +39,20 @@ export function isTiktokSandboxQpsLimitMessage(message: string): boolean {
   return /qps\s*limit/i.test(message);
 }
 
-async function waitForSandboxRateSlot(): Promise<void> {
-  const run = async () => {
-    const elapsed = Date.now() - lastSandboxRequestAt;
+function enqueueSandboxRequest<T>(task: () => Promise<T>): Promise<T> {
+  const run = sandboxRequestQueue.then(async () => {
+    const elapsed = Date.now() - lastSandboxRequestFinishedAt;
     if (elapsed < SANDBOX_MIN_REQUEST_INTERVAL_MS) {
       await sleep(SANDBOX_MIN_REQUEST_INTERVAL_MS - elapsed);
     }
-    lastSandboxRequestAt = Date.now();
-  };
-  const next = sandboxRequestChain.then(run, run);
-  sandboxRequestChain = next.catch(() => undefined);
-  await next;
+    try {
+      return await task();
+    } finally {
+      lastSandboxRequestFinishedAt = Date.now();
+    }
+  });
+  sandboxRequestQueue = run.catch(() => undefined);
+  return run;
 }
 
 export type TiktokSandboxCredentials = {
@@ -94,47 +102,50 @@ export async function tiktokSandboxRequest<T>(params: {
   body?: Record<string, unknown>;
   apiBase?: string;
 }): Promise<T> {
-  const apiBase = params.apiBase ?? TIKTOK_SANDBOX_API_BASE;
-  const url = new URL(`${apiBase}${params.path}`);
-  for (const [key, value] of Object.entries(params.query ?? {})) {
-    url.searchParams.set(key, value);
-  }
-  const method = params.method ?? (params.body ? "POST" : "GET");
-
-  for (let attempt = 0; attempt <= SANDBOX_QPS_MAX_RETRIES; attempt++) {
-    await waitForSandboxRateSlot();
-
-    let response: Response;
-    try {
-      response = await fetch(url.toString(), {
-        method,
-        headers: {
-          "Access-Token": params.accessToken,
-          ...(params.body ? { "Content-Type": "application/json" } : {}),
-        },
-        body: params.body ? JSON.stringify(params.body) : undefined,
-      });
-    } catch (e) {
-      throw new Error(`TikTok Sandbox 网络请求失败: ${formatOutboundNetworkError(e)}`, { cause: e });
+  return enqueueSandboxRequest(async () => {
+    const apiBase = params.apiBase ?? TIKTOK_SANDBOX_API_BASE;
+    const url = new URL(`${apiBase}${params.path}`);
+    for (const [key, value] of Object.entries(params.query ?? {})) {
+      url.searchParams.set(key, value);
     }
+    const method = params.method ?? (params.body ? "POST" : "GET");
 
-    const json = (await response.json().catch(() => ({}))) as TiktokApiJson<T>;
-    if (!response.ok || (json.code !== undefined && json.code !== 0)) {
-      const detail = json.message || `HTTP ${response.status}`;
-      if (isTiktokSandboxQpsLimitMessage(detail) && attempt < SANDBOX_QPS_MAX_RETRIES) {
-        const backoffMs = SANDBOX_MIN_REQUEST_INTERVAL_MS * (attempt + 1);
+    for (let attempt = 0; attempt <= SANDBOX_QPS_MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        const backoffMs = SANDBOX_MIN_REQUEST_INTERVAL_MS * attempt;
         console.warn(
-          `${LOG_PREFIX} QPS limit on ${params.path}, retry ${attempt + 1}/${SANDBOX_QPS_MAX_RETRIES} after ${backoffMs}ms`,
+          `${LOG_PREFIX} QPS limit on ${params.path}, retry ${attempt}/${SANDBOX_QPS_MAX_RETRIES} after ${backoffMs}ms`,
         );
         await sleep(backoffMs);
-        continue;
       }
-      throw new Error(`TikTok Sandbox ${params.path}: ${detail}`);
-    }
-    return json;
-  }
 
-  throw new Error(`TikTok Sandbox ${params.path}: QPS limit retries exhausted`);
+      let response: Response;
+      try {
+        response = await fetch(url.toString(), {
+          method,
+          headers: {
+            "Access-Token": params.accessToken,
+            ...(params.body ? { "Content-Type": "application/json" } : {}),
+          },
+          body: params.body ? JSON.stringify(params.body) : undefined,
+        });
+      } catch (e) {
+        throw new Error(`TikTok Sandbox 网络请求失败: ${formatOutboundNetworkError(e)}`, { cause: e });
+      }
+
+      const json = (await response.json().catch(() => ({}))) as TiktokApiJson<T>;
+      if (!response.ok || (json.code !== undefined && json.code !== 0)) {
+        const detail = json.message || `HTTP ${response.status}`;
+        if (isTiktokSandboxQpsLimitMessage(detail) && attempt < SANDBOX_QPS_MAX_RETRIES) {
+          continue;
+        }
+        throw new Error(`TikTok Sandbox ${params.path}: ${detail}`);
+      }
+      return json;
+    }
+
+    throw new Error(`TikTok Sandbox ${params.path}: QPS limit retries exhausted`);
+  });
 }
 
 export type TiktokSandboxSeedResult = {

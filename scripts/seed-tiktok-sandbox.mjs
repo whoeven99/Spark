@@ -20,11 +20,11 @@ import { fileURLToPath } from "node:url";
 const API_BASE = "https://sandbox-ads.tiktok.com/open_api/v1.3";
 const API_BASE_V12 = "https://sandbox-ads.tiktok.com/open_api/v1.2";
 const DEFAULT_IMAGE_ID = "ad-site-i18n-sg/202208095d0d1d72383f815646c5b090";
-const MIN_REQUEST_INTERVAL_MS = 1_100;
-const QPS_MAX_RETRIES = 4;
+const MIN_REQUEST_INTERVAL_MS = 1_500;
+const QPS_MAX_RETRIES = 5;
 
-let requestChain = Promise.resolve();
-let lastRequestAt = 0;
+let requestQueue = Promise.resolve();
+let lastRequestFinishedAt = 0;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -34,17 +34,20 @@ function isQpsLimitMessage(message) {
   return /qps\s*limit/i.test(message);
 }
 
-async function waitForRateSlot() {
-  const run = async () => {
-    const elapsed = Date.now() - lastRequestAt;
+function enqueueRequest(task) {
+  const run = requestQueue.then(async () => {
+    const elapsed = Date.now() - lastRequestFinishedAt;
     if (elapsed < MIN_REQUEST_INTERVAL_MS) {
       await sleep(MIN_REQUEST_INTERVAL_MS - elapsed);
     }
-    lastRequestAt = Date.now();
-  };
-  const next = requestChain.then(run, run);
-  requestChain = next.catch(() => undefined);
-  await next;
+    try {
+      return await task();
+    } finally {
+      lastRequestFinishedAt = Date.now();
+    }
+  });
+  requestQueue = run.catch(() => undefined);
+  return run;
 }
 
 function loadDotEnv() {
@@ -73,37 +76,41 @@ function env(name) {
 }
 
 async function tiktokRequest(params) {
-  const url = new URL(`${params.apiBase || API_BASE}${params.path}`);
-  for (const [key, value] of Object.entries(params.query || {})) {
-    url.searchParams.set(key, value);
-  }
-  const method = params.method || (params.body ? "POST" : "GET");
-
-  for (let attempt = 0; attempt <= QPS_MAX_RETRIES; attempt++) {
-    await waitForRateSlot();
-    const response = await fetch(url.toString(), {
-      method,
-      headers: {
-        "Access-Token": params.accessToken,
-        ...(params.body ? { "Content-Type": "application/json" } : {}),
-      },
-      body: params.body ? JSON.stringify(params.body) : undefined,
-    });
-    const json = await response.json().catch(() => ({}));
-    if (!response.ok || (json.code !== undefined && json.code !== 0)) {
-      const detail = json.message || `HTTP ${response.status}`;
-      if (isQpsLimitMessage(detail) && attempt < QPS_MAX_RETRIES) {
-        const backoffMs = MIN_REQUEST_INTERVAL_MS * (attempt + 1);
-        console.warn(`QPS limit on ${params.path}, retry ${attempt + 1}/${QPS_MAX_RETRIES} after ${backoffMs}ms`);
-        await sleep(backoffMs);
-        continue;
-      }
-      throw new Error(detail);
+  return enqueueRequest(async () => {
+    const url = new URL(`${params.apiBase || API_BASE}${params.path}`);
+    for (const [key, value] of Object.entries(params.query || {})) {
+      url.searchParams.set(key, value);
     }
-    return json;
-  }
+    const method = params.method || (params.body ? "POST" : "GET");
 
-  throw new Error(`QPS limit retries exhausted for ${params.path}`);
+    for (let attempt = 0; attempt <= QPS_MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        const backoffMs = MIN_REQUEST_INTERVAL_MS * attempt;
+        console.warn(`QPS limit on ${params.path}, retry ${attempt}/${QPS_MAX_RETRIES} after ${backoffMs}ms`);
+        await sleep(backoffMs);
+      }
+
+      const response = await fetch(url.toString(), {
+        method,
+        headers: {
+          "Access-Token": params.accessToken,
+          ...(params.body ? { "Content-Type": "application/json" } : {}),
+        },
+        body: params.body ? JSON.stringify(params.body) : undefined,
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok || (json.code !== undefined && json.code !== 0)) {
+        const detail = json.message || `HTTP ${response.status}`;
+        if (isQpsLimitMessage(detail) && attempt < QPS_MAX_RETRIES) {
+          continue;
+        }
+        throw new Error(detail);
+      }
+      return json;
+    }
+
+    throw new Error(`QPS limit retries exhausted for ${params.path}`);
+  });
 }
 
 function formatScheduleStart() {

@@ -8,6 +8,7 @@ import {
   getTiktokSandboxCredentials,
   isTiktokSandboxConfigured,
   isTiktokSandboxIdentityConfigured,
+  isTiktokSandboxApiBase,
   isTiktokSandboxQpsLimitMessage,
 } from "~/server/adsInsights/tiktokSandbox.server";
 import {
@@ -220,6 +221,11 @@ describe("tiktok sandbox env", () => {
     expect(isTiktokSandboxQpsLimitMessage("Invalid param: creatives.identity_id is required.")).toBe(
       false,
     );
+  });
+
+  it("detects TikTok sandbox API base", () => {
+    expect(isTiktokSandboxApiBase("https://sandbox-ads.tiktok.com/open_api/v1.3")).toBe(true);
+    expect(isTiktokSandboxApiBase("https://business-api.tiktok.com/open_api/v1.3")).toBe(false);
   });
 
   it("builds deterministic mock metrics from seed", () => {
