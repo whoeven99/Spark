@@ -1,5 +1,5 @@
 /**
- * CLI：向 TikTok 沙盒创建最小 Campaign → AdGroup → Ad，并列出当前系列。
+ * CLI：向 TikTok 沙盒创建最小 Campaign → AdGroup → Image Ad + Video Ad，并列出当前系列。
  *
  * 用法（凭证只从环境 / .env 读取，勿把 token 写进命令行）：
  *   node scripts/seed-tiktok-sandbox.mjs
@@ -8,11 +8,10 @@
  *   TIKTOK_SANDBOX_ACCESS_TOKEN
  *   TIKTOK_SANDBOX_ADVERTISER_ID
  *   可选 TIKTOK_SANDBOX_ACCOUNT_NAME
- *   可选 TIKTOK_SANDBOX_IDENTITY_ID / TIKTOK_SANDBOX_IDENTITY_TYPE
  *   可选 TIKTOK_SANDBOX_IMAGE_ID
+ *   可选 TIKTOK_SANDBOX_VIDEO_URL（占位视频公网 URL；未设则用内置样例）
  */
 
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,12 +19,9 @@ import { fileURLToPath } from "node:url";
 const API_BASE = "https://sandbox-ads.tiktok.com/open_api/v1.3";
 /** seed 的 ad/create 固定走 v1.2 */
 const AD_CREATE_API_BASE = "https://sandbox-ads.tiktok.com/open_api/v1.2";
-const DEFAULT_IDENTITY_TYPE = "CUSTOMIZED_USER";
-/** 创意占位图；非 1:1，不可直接作 Identity 头像 */
 const DEFAULT_IMAGE_ID = "ad-site-i18n-sg/202208095d0d1d72383f815646c5b090";
-/** 内置 128×128 纯色 PNG，供 identity/create */
-const SQUARE_AVATAR_PNG_BASE64 =
-  "iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAIAAABMXPacAAAA+UlEQVR4nO3RQQ0AIAzAwElDGuIQhow9ekkFNLk592mxWT+IBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtPupeBbD2Il/AAAAAAElFTkSuQmCC";
+const DEFAULT_VIDEO_URL =
+  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4";
 
 function loadDotEnv() {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -80,136 +76,28 @@ function formatScheduleStart() {
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:00:00`;
 }
 
-function isNonSquareAvatarError(message) {
-  const lower = String(message || "").toLowerCase();
-  return (
-    lower.includes("width") &&
-    lower.includes("height") &&
-    (lower.includes("not equal") || lower.includes("1:1") || lower.includes("ratio"))
-  );
-}
-
-async function uploadSquareAvatar({ accessToken, advertiserId }) {
-  const bytes = Buffer.from(SQUARE_AVATAR_PNG_BASE64, "base64");
-  const signature = createHash("md5").update(bytes).digest("hex");
-  const form = new FormData();
-  form.append("advertiser_id", advertiserId);
-  form.append("upload_type", "UPLOAD_BY_FILE");
-  form.append("image_signature", signature);
-  form.append("file_name", "spark-sandbox-avatar.png");
-  form.append(
-    "image_file",
-    new Blob([bytes], { type: "image/png" }),
-    "spark-sandbox-avatar.png",
-  );
-  const response = await fetch(`${API_BASE}/file/image/ad/upload/`, {
+async function uploadPlaceholderVideo({ accessToken, advertiserId, fileName }) {
+  const videoUrl = env("TIKTOK_SANDBOX_VIDEO_URL") || DEFAULT_VIDEO_URL;
+  console.log("Uploading placeholder video via URL…");
+  const json = await tiktokRequest({
     method: "POST",
-    headers: { "Access-Token": accessToken },
-    body: form,
+    path: "/file/video/ad/upload/",
+    accessToken,
+    body: {
+      advertiser_id: advertiserId,
+      upload_type: "UPLOAD_BY_URL",
+      file_name: fileName.slice(0, 100),
+      video_url: videoUrl,
+    },
   });
-  const json = await response.json().catch(() => ({}));
-  if (!response.ok || (json.code !== undefined && json.code !== 0)) {
-    throw new Error(json.message || `HTTP ${response.status}`);
-  }
-  const imageId = String(json.data?.image_id || json.data?.id || "").trim();
-  if (!imageId) throw new Error("file/image/ad/upload missing image_id");
-  return imageId;
+  const videoId = String(json.data?.video_id || json.data?.id || "").trim();
+  if (!videoId) throw new Error("file/video/ad/upload missing video_id");
+  return videoId;
 }
 
-async function resolveIdentity({ accessToken, advertiserId, displayName, imageId, warnings }) {
-  const identityId = env("TIKTOK_SANDBOX_IDENTITY_ID");
-  if (identityId) {
-    return {
-      identityId,
-      identityType: env("TIKTOK_SANDBOX_IDENTITY_TYPE") || DEFAULT_IDENTITY_TYPE,
-    };
-  }
-
+async function createAd({ accessToken, body, warnings, label }) {
   try {
-    console.log("Resolving identity via identity/get…");
-    const json = await tiktokRequest({
-      path: "/identity/get/",
-      accessToken,
-      query: {
-        advertiser_id: advertiserId,
-        page: "1",
-        page_size: "20",
-      },
-    });
-    const list = json.data?.identity_list || json.data?.list || [];
-    const first = list.find((row) => String(row.identity_id || "").trim());
-    const id = String(first?.identity_id || "").trim();
-    if (id) {
-      return {
-        identityId: id,
-        identityType: String(first?.identity_type || DEFAULT_IDENTITY_TYPE).trim() || DEFAULT_IDENTITY_TYPE,
-      };
-    }
-  } catch (e) {
-    warnings.push(`identity/get failed: ${e.message || e}`);
-    console.warn(warnings[warnings.length - 1]);
-  }
-
-  let avatarUri = env("TIKTOK_SANDBOX_IMAGE_ID") || "";
-  if (!avatarUri) {
-    try {
-      console.log("Uploading 1:1 avatar for identity/create…");
-      avatarUri = await uploadSquareAvatar({ accessToken, advertiserId });
-      console.log("avatar image_id:", avatarUri);
-    } catch (e) {
-      warnings.push(`avatar upload failed: ${e.message || e}`);
-      console.warn(warnings[warnings.length - 1]);
-      avatarUri = imageId;
-    }
-  }
-
-  const tryCreate = async (uri) => {
-    console.log("Creating identity via identity/create…");
-    const json = await tiktokRequest({
-      method: "POST",
-      path: "/identity/create/",
-      accessToken,
-      body: {
-        advertiser_id: advertiserId,
-        display_name: displayName.slice(0, 100),
-        image_uri: uri,
-      },
-    });
-    return String(json.data?.identity_id || "").trim();
-  };
-
-  try {
-    const id = await tryCreate(avatarUri);
-    if (id) {
-      return { identityId: id, identityType: DEFAULT_IDENTITY_TYPE };
-    }
-    warnings.push("identity/create missing identity_id");
-  } catch (e) {
-    warnings.push(`identity/create failed: ${e.message || e}`);
-    console.warn(warnings[warnings.length - 1]);
-    if (isNonSquareAvatarError(e.message || e) && env("TIKTOK_SANDBOX_IMAGE_ID")) {
-      try {
-        console.log("Retrying identity/create with uploaded 1:1 avatar…");
-        const squareUri = await uploadSquareAvatar({ accessToken, advertiserId });
-        const id = await tryCreate(squareUri);
-        if (id) {
-          warnings.push("identity/create succeeded after uploading 1:1 avatar");
-          return { identityId: id, identityType: DEFAULT_IDENTITY_TYPE };
-        }
-        warnings.push("identity/create (1:1 retry) missing identity_id");
-      } catch (retryError) {
-        warnings.push(`identity/create (1:1 retry) failed: ${retryError.message || retryError}`);
-        console.warn(warnings[warnings.length - 1]);
-      }
-    }
-  }
-
-  return null;
-}
-
-async function createAd({ accessToken, body, warnings }) {
-  try {
-    console.log("Creating ad (v1.2)…");
+    console.log(`Creating ad (v1.2) ${label}…`);
     const adJson = await tiktokRequest({
       method: "POST",
       path: "/ad/create/",
@@ -218,11 +106,11 @@ async function createAd({ accessToken, body, warnings }) {
       body,
     });
     const adId = String(adJson.data?.ad_ids?.[0] || adJson.data?.creatives?.[0]?.ad_id || "").trim();
-    console.log("ad_id:", adId || "(empty)");
+    console.log(`${label} ad_id:`, adId || "(empty)");
     if (adId) return adId;
-    warnings.push("ad/create(v1.2) missing ad_id");
+    warnings.push(`ad/create(v1.2) ${label} missing ad_id`);
   } catch (e) {
-    warnings.push(`ad/create(v1.2) failed: ${e.message || e}`);
+    warnings.push(`ad/create(v1.2) ${label} failed: ${e.message || e}`);
     console.warn(warnings[warnings.length - 1]);
   }
   return "";
@@ -245,7 +133,8 @@ async function main() {
   const stamp = Date.now().toString(36);
   const campaignName = `Spark Sandbox Campaign ${stamp}`;
   const adgroupName = `Spark Sandbox AdGroup ${stamp}`;
-  const adName = `Spark Sandbox Ad ${stamp}`;
+  const imageAdName = `Spark Sandbox Image Ad ${stamp}`;
+  const videoAdName = `Spark Sandbox Video Ad ${stamp}`;
   const warnings = [];
 
   console.log("\nCreating campaign…");
@@ -300,46 +189,67 @@ async function main() {
     console.warn(warnings[warnings.length - 1]);
   }
 
-  const identity = await resolveIdentity({
-    accessToken,
-    advertiserId,
-    displayName: accountName,
-    imageId,
-    warnings,
-  });
-  if (identity) {
-    console.log("identity_id:", identity.identityId, `(${identity.identityType})`);
-  } else {
-    warnings.push(
-      "No identity_id: set TIKTOK_SANDBOX_IDENTITY_ID or create Identity in sandbox console",
-    );
-    console.warn(warnings[warnings.length - 1]);
-  }
+  let imageAdId = "";
+  let videoAdId = "";
+  let videoId = "";
 
-  let adId = "";
   if (adgroupId) {
-    const creative = {
-      ad_name: adName,
-      ad_format: "SINGLE_IMAGE",
-      ad_text: "Spark sandbox test ad",
-      call_to_action: "LEARN_MORE",
-      landing_page_url: "https://www.example.com",
-      display_name: accountName,
-      image_ids: [imageId],
-    };
-    if (identity) {
-      creative.identity_id = identity.identityId;
-      creative.identity_type = identity.identityType;
-    }
-    adId = await createAd({
+    imageAdId = await createAd({
       accessToken,
       warnings,
+      label: "SINGLE_IMAGE",
       body: {
         advertiser_id: advertiserId,
         adgroup_id: adgroupId,
-        creatives: [creative],
+        creatives: [
+          {
+            ad_name: imageAdName,
+            ad_format: "SINGLE_IMAGE",
+            ad_text: "Spark sandbox test image ad",
+            call_to_action: "LEARN_MORE",
+            landing_page_url: "https://www.example.com",
+            display_name: accountName,
+            image_ids: [imageId],
+          },
+        ],
       },
     });
+
+    try {
+      videoId = await uploadPlaceholderVideo({
+        accessToken,
+        advertiserId,
+        fileName: `spark-sandbox-video-${stamp}.mp4`,
+      });
+      console.log("video_id:", videoId);
+    } catch (e) {
+      warnings.push(`video upload failed: ${e.message || e}`);
+      console.warn(warnings[warnings.length - 1]);
+    }
+
+    if (videoId) {
+      videoAdId = await createAd({
+        accessToken,
+        warnings,
+        label: "SINGLE_VIDEO",
+        body: {
+          advertiser_id: advertiserId,
+          adgroup_id: adgroupId,
+          creatives: [
+            {
+              ad_name: videoAdName,
+              ad_format: "SINGLE_VIDEO",
+              ad_text: "Spark sandbox test video ad",
+              call_to_action: "LEARN_MORE",
+              landing_page_url: "https://www.example.com",
+              display_name: accountName,
+              video_id: videoId,
+              image_ids: [imageId],
+            },
+          ],
+        },
+      });
+    }
   }
 
   console.log("\nSeed result:");
@@ -348,9 +258,9 @@ async function main() {
       {
         campaignId,
         adgroupId: adgroupId || null,
-        adId: adId || null,
-        identityId: identity?.identityId || null,
-        identityType: identity?.identityType || null,
+        imageAdId: imageAdId || null,
+        videoAdId: videoAdId || null,
+        videoId: videoId || null,
         campaignName,
         warnings,
       },

@@ -10,7 +10,7 @@ const LOG_PREFIX = "[AdsInsights][TikTok][SandboxSeed]";
 
 /**
  * POST /api/ads-insights/tiktok-sandbox-seed
- * 在 TikTok 沙盒账户创建最小 Campaign → AdGroup → Ad（Ad 可能因沙盒限制失败）。
+ * 在 TikTok 沙盒账户创建最小 Campaign → AdGroup → Image Ad + Video Ad（不使用 identity）。
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
   await authenticate.admin(request);

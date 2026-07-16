@@ -1580,7 +1580,7 @@
     "tiktokSandboxNotConfigured": "未配置 TIKTOK_SANDBOX_ACCESS_TOKEN / TIKTOK_SANDBOX_ADVERTISER_ID，无法启用沙盒。",
     "tiktokSandboxSeed": "生成测试结构",
     "tiktokSandboxSeeding": "创建中…",
-    "tiktokSandboxSeedOk": "已创建：{{campaign}}（系列 {{campaignId}} / 组 {{adgroupId}} / 广告 {{adId}}）",
+    "tiktokSandboxSeedOk": "已创建：{{campaign}}（系列 {{campaignId}} / 组 {{adgroupId}} / 图片广告 {{imageAdId}} / 视频广告 {{videoAdId}}）",
     "tiktokSandboxSeedError": "沙盒测试结构创建失败。",
     "tableTitleSandbox": "沙盒账户 {{accountId}}",
     "tableSubtitleSandbox": "{{start}} → {{end}} · TikTok Sandbox API",

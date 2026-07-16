@@ -28,7 +28,8 @@ type SeedFetcherData =
       ok: true;
       campaignId: string | null;
       adgroupId: string | null;
-      adId: string | null;
+      imageAdId: string | null;
+      videoAdId: string | null;
       campaignName: string;
       warnings: string[];
     }
@@ -314,7 +315,8 @@ export function AdsInsightsPage() {
                     campaign: seedData.campaignName,
                     campaignId: seedData.campaignId || "—",
                     adgroupId: seedData.adgroupId || "—",
-                    adId: seedData.adId || "—",
+                    imageAdId: seedData.imageAdId || "—",
+                    videoAdId: seedData.videoAdId || "—",
                   })}
                 </div>
                 {seedData.warnings?.length > 0 && (
