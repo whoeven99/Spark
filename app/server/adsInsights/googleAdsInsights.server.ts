@@ -7,9 +7,9 @@ import {
   getGoogleAdsCredential,
   setGoogleAdsCredential,
 } from "../adsCatalog/credentialStore.server";
+import { maybeRefreshGoogleAdsToken } from "../adsCatalog/googleAdsToken.server";
 import {
   getGoogleAdsDeveloperToken,
-  getGoogleOAuthClient,
 } from "../adsCatalog/googleOAuth.server";
 import {
   buildGoogleAdsHeaders,
@@ -20,7 +20,6 @@ import {
   parseGoogleAdsError,
   resolveLoginCustomerId,
 } from "../adsCatalog/googleAdsApi.server";
-import { refreshGoogleAccessToken } from "../adsCatalog/clients/googleMerchantClient.server";
 import {
   formatOutboundErrorLog,
   formatOutboundNetworkError,
@@ -105,29 +104,6 @@ async function executeGaqlQuery(params: QueryParams & { query: string }): Promis
     throw new Error("Google Ads API 返回了无效的 JSON 数据");
   }
   return batches.flatMap((b) => b.results ?? []);
-}
-
-async function maybeRefreshAdsToken(shop: string): Promise<string | null> {
-  const cred = await getGoogleAdsCredential(shop);
-  if (!cred?.refreshToken) return cred?.accessToken ?? null;
-
-  const { clientId, clientSecret } = getGoogleOAuthClient();
-  if (!clientId || !clientSecret) return cred.accessToken;
-
-  const refreshed = await refreshGoogleAccessToken({
-    clientId,
-    clientSecret,
-    refreshToken: cred.refreshToken,
-  });
-  if (!refreshed) return cred.accessToken;
-
-  await setGoogleAdsCredential(shop, {
-    accessToken: refreshed.accessToken,
-    refreshToken: cred.refreshToken,
-    customerId: cred.customerId,
-    loginCustomerId: cred.loginCustomerId,
-  });
-  return refreshed.accessToken;
 }
 
 type ConvKey = string;
@@ -384,7 +360,7 @@ export async function fetchGoogleAdsInsights(
 
   const { dateStart, dateEnd } = resolveDateWindow(rangeDays);
   const during = googleDuringClause(rangeDays);
-  const accessToken = (await maybeRefreshAdsToken(shop)) ?? cred.accessToken;
+  const accessToken = (await maybeRefreshGoogleAdsToken(shop)) ?? cred.accessToken;
   // 始终重新解析 login-customer-id：旧凭证常把子账户自身写成 login，导致 USER_PERMISSION_DENIED。
   const loginCustomerId = await resolveLoginCustomerId({
     accessToken,

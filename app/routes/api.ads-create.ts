@@ -4,8 +4,8 @@ import { authenticate } from "../shopify.server";
 import {
   getMetaAdsCredential,
   getTiktokAdsInsightsCredential,
-  getGoogleAdsCredential,
 } from "../server/adsCatalog/credentialStore.server";
+import { prepareGoogleAdsApiAuth } from "../server/adsCatalog/googleAdsToken.server";
 import { createMetaAd } from "../server/adsCreate/metaAdsCreate.server";
 import { createTiktokAd } from "../server/adsCreate/tiktokAdsCreate.server";
 import { createGoogleAd } from "../server/adsCreate/googleAdsCreate.server";
@@ -79,13 +79,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const form = body.google;
       if (!form) throw new Error("缺少 google 表单数据");
 
-      const cred = await getGoogleAdsCredential(shop);
-      if (!cred) throw new Error("Google Ads 账户未连接，请前往 Ads Catalog 授权");
+      const auth = await prepareGoogleAdsApiAuth(shop);
 
       const result = await createGoogleAd({
-        accessToken: cred.accessToken,
-        customerId: cred.customerId,
-        loginCustomerId: cred.loginCustomerId,
+        accessToken: auth.accessToken,
+        customerId: auth.customerId,
+        loginCustomerId: auth.loginCustomerId,
         form,
       });
 
