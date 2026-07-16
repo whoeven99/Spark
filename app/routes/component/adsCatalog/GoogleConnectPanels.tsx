@@ -203,7 +203,10 @@ export function GoogleConnectPanels({
         ) : ads.pendingAccounts.length > 0 ? (
           <AccountSelect
             label={t("adsCatalog.adsSelectAccount")}
-            accounts={ads.pendingAccounts.map((a) => ({ id: a.id, label: a.formatted || a.id }))}
+            accounts={ads.pendingAccounts.map((a) => ({
+              id: a.id,
+              label: a.name ? `${a.name} (${a.formatted || a.id})` : a.formatted || a.id,
+            }))}
             busy={busy}
             onSelect={(id) =>
               void post("/api/ads-catalog/google-ads-accounts", { customerId: id })

@@ -82,12 +82,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     if (customers.length === 1) {
       const customerId = customers[0].customerId;
-      const loginCustomerId = await resolveLoginCustomerId({
-        accessToken: tokens.accessToken,
-        developerToken,
-        customerId,
-        accessibleCustomerIds: customers.map((c) => c.customerId),
-      });
+      const loginCustomerId =
+        customers[0].loginCustomerId ??
+        (await resolveLoginCustomerId({
+          accessToken: tokens.accessToken,
+          developerToken,
+          customerId,
+          accessibleCustomerIds: customers.map((c) => c.loginCustomerId ?? c.customerId),
+        }));
       await clearGoogleAdsPending(shop);
       await setGoogleAdsCredential(shop, {
         accessToken: tokens.accessToken,
@@ -106,7 +108,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       refreshToken: tokens.refreshToken,
       clientId,
       clientSecret,
-      accounts: customers.map((c) => ({ id: c.customerId, formatted: c.formatted })),
+      accounts: customers.map((c) => ({
+        id: c.customerId,
+        formatted: c.formatted,
+        name: c.descriptiveName,
+        loginCustomerId: c.loginCustomerId,
+      })),
     });
     return appRedirect(request, shop, host, appOrigin, { adsAuth: "select" });
   } catch (e) {

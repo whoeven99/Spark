@@ -13,7 +13,9 @@ import {
 } from "../adsCatalog/googleOAuth.server";
 import {
   buildGoogleAdsHeaders,
+  formatGoogleAdsUserError,
   googleAdsApiUrl,
+  isGoogleAdsPermissionError,
   normalizeCustomerId,
   parseGoogleAdsError,
   resolveLoginCustomerId,
@@ -91,7 +93,8 @@ async function executeGaqlQuery(params: QueryParams & { query: string }): Promis
 
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`Google Ads API 错误: ${parseGoogleAdsError(text, response.status)}`);
+    const detail = parseGoogleAdsError(text, response.status);
+    throw new Error(formatGoogleAdsUserError(detail));
   }
 
   let batches: SearchStreamResponse[] = [];
@@ -382,20 +385,25 @@ export async function fetchGoogleAdsInsights(
   const { dateStart, dateEnd } = resolveDateWindow(rangeDays);
   const during = googleDuringClause(rangeDays);
   const accessToken = (await maybeRefreshAdsToken(shop)) ?? cred.accessToken;
-  let loginCustomerId = cred.loginCustomerId?.trim() || normalizeCustomerId(cred.customerId);
-
-  if (!cred.loginCustomerId) {
-    loginCustomerId = await resolveLoginCustomerId({
-      accessToken,
-      developerToken,
-      customerId: cred.customerId,
-    });
+  // 始终重新解析 login-customer-id：旧凭证常把子账户自身写成 login，导致 USER_PERMISSION_DENIED。
+  const loginCustomerId = await resolveLoginCustomerId({
+    accessToken,
+    developerToken,
+    customerId: cred.customerId,
+    accessibleCustomerIds: cred.loginCustomerId
+      ? [cred.loginCustomerId, cred.customerId]
+      : [cred.customerId],
+  });
+  if (loginCustomerId !== (cred.loginCustomerId?.trim() || "")) {
     await setGoogleAdsCredential(shop, {
       accessToken,
       refreshToken: cred.refreshToken,
       customerId: cred.customerId,
       loginCustomerId,
     });
+    console.info(
+      `${LOG_PREFIX} step=update_login_customer_id shop=${shop} customerId=${normalizeCustomerId(cred.customerId)} loginCustomerId=${loginCustomerId}`,
+    );
   }
 
   const queryParams: QueryParams = {
@@ -447,8 +455,33 @@ export async function fetchGoogleAdsInsights(
     try {
       rows = await executeGaqlQuery({ ...queryParams, query: baseQuery });
     } catch (e) {
-      console.error(`${LOG_PREFIX} step=gaql shop=${shop} ${formatOutboundErrorLog(e)}`);
-      throw e;
+      // 权限失败时再强制重解析一次（覆盖凭证里错误的 login-customer-id）。
+      if (isGoogleAdsPermissionError(e)) {
+        const retriedLogin = await resolveLoginCustomerId({
+          accessToken,
+          developerToken,
+          customerId: cred.customerId,
+        });
+        console.warn(
+          `${LOG_PREFIX} step=gaql_permission_retry shop=${shop} customerId=${normalizeCustomerId(cred.customerId)} prevLogin=${queryParams.loginCustomerId} nextLogin=${retriedLogin}`,
+        );
+        if (retriedLogin !== queryParams.loginCustomerId) {
+          queryParams.loginCustomerId = retriedLogin;
+          await setGoogleAdsCredential(shop, {
+            accessToken,
+            refreshToken: cred.refreshToken,
+            customerId: cred.customerId,
+            loginCustomerId: retriedLogin,
+          });
+          rows = await executeGaqlQuery({ ...queryParams, query: baseQuery });
+        } else {
+          console.error(`${LOG_PREFIX} step=gaql shop=${shop} ${formatOutboundErrorLog(e)}`);
+          throw e;
+        }
+      } else {
+        console.error(`${LOG_PREFIX} step=gaql shop=${shop} ${formatOutboundErrorLog(e)}`);
+        throw e;
+      }
     }
 
     const [purchaseMap, atcMap, pageViewMap] = await Promise.all([

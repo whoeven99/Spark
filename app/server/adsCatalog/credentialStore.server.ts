@@ -247,6 +247,8 @@ export type PendingOAuthAccount = {
   businessId?: string;
   /** TikTok 授权广告主 ID（商品写入等接口使用）。 */
   advertiserId?: string;
+  /** Google Ads：访问该客户账户时应使用的 login-customer-id（MCC 子账户场景）。 */
+  loginCustomerId?: string;
 };
 
 export type PendingOAuthTokens = {

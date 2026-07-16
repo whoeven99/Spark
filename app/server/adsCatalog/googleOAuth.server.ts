@@ -4,6 +4,7 @@ import { buildShopifyAdminHostParam, buildAdminEmbeddedAppReturnUrl } from "../b
 import {
   buildGoogleAdsHeaders,
   googleAdsApiUrl,
+  listSelectableAdsCustomers,
   normalizeCustomerId,
 } from "./googleAdsApi.server";
 
@@ -34,6 +35,10 @@ export interface AdsCustomer {
   customerId: string;
   /** Hyphenated form for display, e.g. "123-456-7890". */
   formatted: string;
+  /** Optional account descriptive name from Google Ads. */
+  descriptiveName?: string;
+  /** login-customer-id to use when querying this account (MCC id for child accounts). */
+  loginCustomerId?: string;
 }
 
 function readEnv(name: string): string {
@@ -264,30 +269,19 @@ export async function getGmcMerchantAccounts(
   }
 }
 
-/** List the Google Ads customer accounts accessible to the authorized user. */
+/** List Google Ads client accounts that can return metrics (expands MCC children). */
 export async function getAdsCustomers(
   accessToken: string,
   developerToken: string,
 ): Promise<AdsCustomer[]> {
   try {
-    const response = await fetch(googleAdsApiUrl("/customers:listAccessibleCustomers"), {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "developer-token": developerToken,
-      },
-    });
-    const json = (await response.json().catch(() => ({}))) as {
-      resourceNames?: string[];
-      error?: { message?: string };
-    };
-    if (!response.ok) {
-      throw new Error(json.error?.message || `HTTP ${response.status}`);
-    }
-    const names = json.resourceNames ?? [];
-    return names.map((name) => {
-      const id = name.replace(/^customers\//, "");
-      return { customerId: id, formatted: formatCustomerId(id) };
-    });
+    const selectable = await listSelectableAdsCustomers({ accessToken, developerToken });
+    return selectable.map((c) => ({
+      customerId: c.customerId,
+      formatted: formatCustomerId(c.customerId),
+      descriptiveName: c.descriptiveName,
+      loginCustomerId: c.loginCustomerId,
+    }));
   } catch (e) {
     throw new Error(formatOutboundNetworkError(e));
   }

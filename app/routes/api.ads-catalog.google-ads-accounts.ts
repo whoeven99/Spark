@@ -39,13 +39,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   const developerToken = getGoogleAdsDeveloperToken();
-  let loginCustomerId = normalizeCustomerId(customerId);
+  const selected = pending.accounts.find((a) => a.id === customerId);
+  const preferredLogin = selected?.loginCustomerId?.trim();
+  let loginCustomerId = preferredLogin || normalizeCustomerId(customerId);
   if (developerToken) {
+    // 始终探测解析，避免把「仅能通过 MCC 访问的子账户」错误写成 login=自身。
     loginCustomerId = await resolveLoginCustomerId({
       accessToken: pending.accessToken,
       developerToken,
       customerId,
-      accessibleCustomerIds: pending.accounts.map((a) => a.id),
+      accessibleCustomerIds: [
+        ...(preferredLogin ? [preferredLogin] : []),
+        ...pending.accounts.map((a) => a.loginCustomerId ?? a.id),
+      ],
     });
   }
 
@@ -57,5 +63,5 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   });
   await clearGoogleAdsPending(session.shop);
 
-  return Response.json({ ok: true, customerId });
+  return Response.json({ ok: true, customerId, loginCustomerId });
 };
