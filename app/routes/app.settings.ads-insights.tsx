@@ -2,11 +2,7 @@ import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import {
-  getGoogleAdsCredential,
-  getGoogleAdsSandboxCredential,
-  getGoogleAdsSandboxPending,
-  getMetaAdsCredential,
-  getMetaAdsPending,
+  getTiktokAdsInsightsCredential,
   getTiktokCatalogCredential,
 } from "../server/adsCatalog/credentialStore.server";
 import { isTiktokSandboxConfigured } from "../server/adsInsights/tiktokSandbox.server";
@@ -32,6 +28,7 @@ export type AdsInsightsPageLoaderData = {
     tiktok: {
       connected: boolean;
       advertiserId: string | null;
+      awaitingCatalog: boolean;
       sandboxConfigured: boolean;
     };
   };
@@ -39,13 +36,15 @@ export type AdsInsightsPageLoaderData = {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const [meta, metaPending, google, googleSandbox, googleSandboxPending, tiktok] = await Promise.all([
+  const [meta, metaPending, google, googleSandbox, googleSandboxPending, tiktok, tiktokInsights] =
+    await Promise.all([
     getMetaAdsCredential(session.shop),
     getMetaAdsPending(session.shop),
     getGoogleAdsCredential(session.shop),
     getGoogleAdsSandboxCredential(session.shop),
     getGoogleAdsSandboxPending(session.shop),
     getTiktokCatalogCredential(session.shop),
+    getTiktokAdsInsightsCredential(session.shop),
   ]);
 
   return {
@@ -66,8 +65,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         sandboxPendingAccounts: googleSandboxPending?.accounts ?? [],
       },
       tiktok: {
-        connected: Boolean(tiktok),
-        advertiserId: tiktok?.advertiserId ?? null,
+        connected: Boolean(tiktokInsights),
+        advertiserId: tiktokInsights?.advertiserId ?? null,
+        awaitingCatalog: Boolean(tiktokInsights && !tiktok),
         sandboxConfigured: isTiktokSandboxConfigured(),
       },
     },

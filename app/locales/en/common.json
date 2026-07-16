@@ -1595,6 +1595,7 @@
     "tableTitleGoogleSandbox": "Google test account {{accountId}}",
     "tableSubtitleGoogleSandbox": "{{start}} → {{end}} · Google Ads test account API (mocked metrics)",
     "tiktokNotConnected": "TikTok Ads is not connected yet.",
+    "tiktokAwaitingCatalogHint": "TikTok is authorized and ad insights are available. Product catalog is not bound yet—bind it on the Ads Catalog page only if you need product sync.",
     "tiktokSandboxToggle": "Sandbox mode",
     "tiktokSandboxHint": "Uses env credentials against the sandbox-ads API, isolated from Catalog OAuth. Sandbox metrics are locally mocked for UI testing.",
     "tiktokSandboxNotConfigured": "Set TIKTOK_SANDBOX_ACCESS_TOKEN / TIKTOK_SANDBOX_ADVERTISER_ID to enable sandbox.",

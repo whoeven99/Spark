@@ -1595,6 +1595,7 @@
     "tableTitleGoogleSandbox": "Google 测试账户 {{accountId}}",
     "tableSubtitleGoogleSandbox": "{{start}} → {{end}} · Google Ads 测试账号 API（指标 mock）",
     "tiktokNotConnected": "尚未连接 TikTok Ads。",
+    "tiktokAwaitingCatalogHint": "TikTok 已授权，可查看投放数据。商品 Catalog 尚未绑定，不影响广告洞察；如需同步商品请前往广告 Catalog 页绑定。",
     "tiktokSandboxToggle": "沙盒模式",
     "tiktokSandboxHint": "使用环境变量凭证拉取 sandbox-ads API，与正式 Catalog 授权隔离。沙盒指标为本地 mock，便于联调。",
     "tiktokSandboxNotConfigured": "未配置 TIKTOK_SANDBOX_ACCESS_TOKEN / TIKTOK_SANDBOX_ADVERTISER_ID，无法启用沙盒。",

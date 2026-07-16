@@ -66,7 +66,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             ? "Meta Ads 账户未绑定，请先完成独立授权"
             : platform === "google"
               ? "Google Ads 账户未绑定或缺少 developer token"
-              : "TikTok Ads 账户未绑定，请先在 Catalog 页完成授权",
+              : "TikTok Ads 账户未授权，请先在广告 Catalog 页完成 TikTok 授权",
       });
     }
     return Response.json({ ok: true, view, ...result });

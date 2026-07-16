@@ -3,8 +3,9 @@
  */
 
 import {
-  getTiktokCatalogCredential,
-  setTiktokCatalogCredential,
+  getTiktokAdsInsightsCredential,
+  persistTiktokAdsInsightsTokens,
+  type TiktokAdsInsightsCredential,
 } from "../adsCatalog/credentialStore.server";
 import {
   TIKTOK_API_BASE,
@@ -36,11 +37,11 @@ const LOG_PREFIX = "[AdsInsights][TikTok]";
 
 async function refreshTiktokAccessToken(params: {
   shop: string;
-  refreshToken: string;
-  advertiserId: string;
-  catalogId: string;
-  catalogName?: string;
+  credential: TiktokAdsInsightsCredential;
 }): Promise<string | null> {
+  const refreshToken = params.credential.refreshToken;
+  if (!refreshToken) return null;
+
   const { appId, appSecret } = getTiktokAppCredentials();
   if (!appId || !appSecret) return null;
 
@@ -50,7 +51,7 @@ async function refreshTiktokAccessToken(params: {
     body: JSON.stringify({
       app_id: appId,
       secret: appSecret,
-      refresh_token: params.refreshToken,
+      refresh_token: refreshToken,
     }),
   });
   const json = (await response.json().catch(() => ({}))) as {
@@ -65,12 +66,9 @@ async function refreshTiktokAccessToken(params: {
     return null;
   }
 
-  await setTiktokCatalogCredential(params.shop, {
+  await persistTiktokAdsInsightsTokens(params.shop, params.credential, {
     accessToken: json.data.access_token,
-    refreshToken: json.data.refresh_token || params.refreshToken,
-    advertiserId: params.advertiserId,
-    catalogId: params.catalogId,
-    catalogName: params.catalogName,
+    refreshToken: json.data.refresh_token || refreshToken,
   });
   return json.data.access_token;
 }
@@ -390,17 +388,14 @@ export async function fetchTiktokAdsInsights(
     advertiserId = sandboxCreds.advertiserId;
     accountName = sandboxCreds.accountName;
   } else {
-    const credential = await getTiktokCatalogCredential(shop);
+    const credential = await getTiktokAdsInsightsCredential(shop);
     if (!credential) return null;
     accessToken = credential.accessToken;
     advertiserId = credential.advertiserId;
     if (credential.refreshToken) {
       const refreshed = await refreshTiktokAccessToken({
         shop,
-        refreshToken: credential.refreshToken,
-        advertiserId: credential.advertiserId,
-        catalogId: credential.catalogId,
-        catalogName: credential.catalogName,
+        credential,
       });
       if (refreshed) accessToken = refreshed;
     }

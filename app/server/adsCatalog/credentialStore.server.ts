@@ -552,6 +552,79 @@ export const getTiktokCatalogPending = (shop: string) =>
 export const clearTiktokCatalogPending = (shop: string) =>
   clearPending(shop, TIKTOK_CATALOG_PENDING_PLATFORM);
 
+/** TikTok Ads 洞察用凭证：已绑定 Catalog 或仅 OAuth 授权（pending）均可。 */
+export type TiktokAdsInsightsCredential = {
+  accessToken: string;
+  refreshToken?: string;
+  advertiserId: string;
+  bcId?: string;
+  catalogId?: string;
+  catalogName?: string;
+  storage: "credential" | "pending";
+};
+
+export async function getTiktokAdsInsightsCredential(
+  shop: string,
+): Promise<TiktokAdsInsightsCredential | null> {
+  const credential = await getTiktokCatalogCredential(shop);
+  if (credential) {
+    return {
+      accessToken: credential.accessToken,
+      refreshToken: credential.refreshToken,
+      advertiserId: credential.advertiserId,
+      bcId: credential.bcId,
+      catalogId: credential.catalogId,
+      catalogName: credential.catalogName,
+      storage: "credential",
+    };
+  }
+
+  const pending = await getTiktokCatalogPending(shop);
+  if (!pending?.accessToken) return null;
+
+  const advertiserId =
+    pending.advertiserId?.trim() ||
+    pending.accounts.find((account) => account.advertiserId?.trim())?.advertiserId?.trim() ||
+    "";
+  if (!advertiserId) return null;
+
+  return {
+    accessToken: pending.accessToken,
+    refreshToken: pending.refreshToken,
+    advertiserId,
+    bcId: pending.bcId,
+    storage: "pending",
+  };
+}
+
+export async function persistTiktokAdsInsightsTokens(
+  shop: string,
+  credential: TiktokAdsInsightsCredential,
+  tokens: { accessToken: string; refreshToken?: string },
+): Promise<void> {
+  if (credential.storage === "credential" && credential.catalogId) {
+    await setTiktokCatalogCredential(shop, {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken ?? credential.refreshToken,
+      advertiserId: credential.advertiserId,
+      bcId: credential.bcId,
+      catalogId: credential.catalogId,
+      catalogName: credential.catalogName,
+    });
+    return;
+  }
+
+  const pending = await getTiktokCatalogPending(shop);
+  if (!pending) return;
+  await setTiktokCatalogPending(shop, {
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken ?? pending.refreshToken,
+    advertiserId: credential.advertiserId,
+    bcId: pending.bcId ?? credential.bcId,
+    accounts: pending.accounts,
+  });
+}
+
 export function maskTokenTail(value: string | null | undefined): string {
   if (!value) return "";
   if (value.length <= 6) return `${value.slice(0, 1)}***`;

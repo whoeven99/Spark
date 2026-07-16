@@ -526,6 +526,15 @@ export function AdsInsightsPage() {
           </div>
         )}
 
+        {platform === "tiktok" &&
+          !tiktokSandbox &&
+          connections.tiktok.connected &&
+          connections.tiktok.awaitingCatalog && (
+            <div style={{ ...hintBoxStyle, borderColor: "#d4e8dc", background: "#f4fbf7" }}>
+              <div>{t("adsInsights.tiktokAwaitingCatalogHint")}</div>
+            </div>
+          )}
+
         {okData && (
           <div
             style={{
