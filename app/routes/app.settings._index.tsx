@@ -52,6 +52,12 @@ const SETTINGS_MODULES: SettingsModule[] = [
     badgeKey: "settingsShell.groupOther",
   },
   {
+    to: "/app/settings/ads-create",
+    labelKey: "settingsShell.navAdsCreate",
+    descKey: "settingsShell.descAdsCreate",
+    badgeKey: "settingsShell.groupIntegrations",
+  },
+  {
     to: "/app/settings/feedback",
     labelKey: "settingsShell.navFeedback",
     descKey: "settingsShell.descFeedback",
