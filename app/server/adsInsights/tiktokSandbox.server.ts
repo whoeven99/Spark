@@ -2,7 +2,8 @@
  * TikTok Marketing API 沙盒：与正式 Catalog OAuth / business-api 完全隔离。
  * 凭证仅来自环境变量，绝不读取 AdPlatformCredential。
  *
- * Seed 只建 Campaign → AdGroup；Insights 指标由本地 mock 注入（沙盒无真实投放）。
+ * Seed 建 Campaign → AdGroup → Ad（v1.3，需 identity_id + identity_type）；
+ * Insights 指标由本地 mock 注入（沙盒无真实投放）。
  */
 
 import type { AdsInsightsCampaign, AdsInsightsDeepRow, AdsInsightsMetrics } from "./types.server";
@@ -13,11 +14,15 @@ import { formatOutboundErrorLog, formatOutboundNetworkError } from "../common/ou
 export const TIKTOK_SANDBOX_API_BASE = "https://sandbox-ads.tiktok.com/open_api/v1.3";
 
 const LOG_PREFIX = "[AdsInsights][TikTok][Sandbox]";
+/** 沙盒创意占位图；可用 TIKTOK_SANDBOX_IMAGE_ID 覆盖。 */
+const DEFAULT_SANDBOX_IMAGE_ID = "ad-site-i18n-sg/202208095d0d1d72383f815646c5b090";
 
 export type TiktokSandboxCredentials = {
   accessToken: string;
   advertiserId: string;
   accountName: string | null;
+  identityId: string | null;
+  identityType: string | null;
 };
 
 function readEnv(name: string): string {
@@ -29,13 +34,24 @@ export function isTiktokSandboxConfigured(): boolean {
   return Boolean(readEnv("TIKTOK_SANDBOX_ACCESS_TOKEN") && readEnv("TIKTOK_SANDBOX_ADVERTISER_ID"));
 }
 
+/** identity 是否已配置（seed 建 Ad 必需）。 */
+export function isTiktokSandboxIdentityConfigured(): boolean {
+  return Boolean(readEnv("TIKTOK_SANDBOX_IDENTITY_ID") && readEnv("TIKTOK_SANDBOX_IDENTITY_TYPE"));
+}
+
 /** 读取沙盒环境变量；未配置时返回 null。 */
 export function getTiktokSandboxCredentials(): TiktokSandboxCredentials | null {
   const accessToken = readEnv("TIKTOK_SANDBOX_ACCESS_TOKEN");
   const advertiserId = readEnv("TIKTOK_SANDBOX_ADVERTISER_ID");
   if (!accessToken || !advertiserId) return null;
   const accountName = readEnv("TIKTOK_SANDBOX_ACCOUNT_NAME") || null;
-  return { accessToken, advertiserId, accountName };
+  const identityId = readEnv("TIKTOK_SANDBOX_IDENTITY_ID") || null;
+  const identityType = readEnv("TIKTOK_SANDBOX_IDENTITY_TYPE") || null;
+  return { accessToken, advertiserId, accountName, identityId, identityType };
+}
+
+function resolveSandboxImageId(): string {
+  return readEnv("TIKTOK_SANDBOX_IMAGE_ID") || DEFAULT_SANDBOX_IMAGE_ID;
 }
 
 type TiktokApiJson<T> = T & { code?: number; message?: string; request_id?: string };
@@ -80,8 +96,10 @@ export type TiktokSandboxSeedResult = {
   advertiserId: string;
   campaignId: string | null;
   adgroupId: string | null;
+  adId: string | null;
   campaignName: string;
   adgroupName: string;
+  adName: string;
   warnings: string[];
 };
 
@@ -90,6 +108,44 @@ function formatScheduleStart(): string {
   d.setUTCMinutes(0, 0, 0);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:00:00`;
+}
+
+function buildAdCreative(params: {
+  adName: string;
+  identityId: string;
+  identityType: string;
+  displayName: string | null;
+  imageId: string;
+}): Record<string, unknown> {
+  const creative: Record<string, unknown> = {
+    ad_name: params.adName,
+    ad_format: "SINGLE_IMAGE",
+    identity_id: params.identityId,
+    identity_type: params.identityType,
+    image_ids: [params.imageId],
+    ad_text: "Spark sandbox test",
+    call_to_action: "LEARN_MORE",
+    landing_page_url: "https://example.com",
+  };
+  if (params.identityType === "CUSTOMIZED_USER" && params.displayName) {
+    creative.display_name = params.displayName;
+  }
+  return creative;
+}
+
+function extractAdId(data: Record<string, unknown> | undefined): string | null {
+  if (!data) return null;
+  const adIds = data.ad_ids;
+  if (Array.isArray(adIds) && adIds.length > 0) {
+    return String(adIds[0]).trim() || null;
+  }
+  const creatives = data.creatives;
+  if (Array.isArray(creatives) && creatives.length > 0) {
+    const first = creatives[0] as Record<string, unknown>;
+    const id = first.ad_id ?? first.adId;
+    if (id !== undefined) return String(id).trim() || null;
+  }
+  return null;
 }
 
 /** 稳定 hash，同一 id 每次生成相同 mock 指标。 */
@@ -198,8 +254,7 @@ export function applyTiktokSandboxMockDeepRows(
 }
 
 /**
- * 在沙盒账户创建最小结构：仅 Campaign → AdGroup。
- * 不创建 Ad / 不上传素材；Insights 指标由本地 mock。
+ * 在沙盒账户创建测试结构：Campaign → AdGroup → Ad（v1.3，使用 identity_id + identity_type）。
  */
 export async function seedTiktokSandboxMinimalStructure(): Promise<TiktokSandboxSeedResult> {
   const creds = getTiktokSandboxCredentials();
@@ -208,11 +263,19 @@ export async function seedTiktokSandboxMinimalStructure(): Promise<TiktokSandbox
       "未配置 TikTok 沙盒：请设置 TIKTOK_SANDBOX_ACCESS_TOKEN 与 TIKTOK_SANDBOX_ADVERTISER_ID",
     );
   }
+  if (!creds.identityId || !creds.identityType) {
+    throw new Error(
+      "未配置 TikTok 沙盒 Identity：请设置 TIKTOK_SANDBOX_IDENTITY_ID 与 TIKTOK_SANDBOX_IDENTITY_TYPE",
+    );
+  }
 
   const stamp = Date.now().toString(36);
   const campaignName = `Spark Sandbox Campaign ${stamp}`;
   const adgroupName = `Spark Sandbox AdGroup ${stamp}`;
+  const adName = `Spark Sandbox Ad ${stamp}`;
   const warnings: string[] = [];
+  const imageId = resolveSandboxImageId();
+  const displayName = creds.accountName || "Spark Sandbox";
 
   const campaignJson = await tiktokSandboxRequest<{ data?: { campaign_id?: string } }>({
     method: "POST",
@@ -234,28 +297,31 @@ export async function seedTiktokSandboxMinimalStructure(): Promise<TiktokSandbox
 
   let adgroupId: string | null = null;
   try {
+    const adgroupBody: Record<string, unknown> = {
+      advertiser_id: creds.advertiserId,
+      campaign_id: campaignId,
+      adgroup_name: adgroupName,
+      promotion_type: "WEBSITE",
+      placement_type: "PLACEMENT_TYPE_NORMAL",
+      placements: ["PLACEMENT_TIKTOK"],
+      location_ids: ["6252001"],
+      budget_mode: "BUDGET_MODE_DAY",
+      budget: 20,
+      schedule_type: "SCHEDULE_FROM_NOW",
+      schedule_start_time: formatScheduleStart(),
+      optimization_goal: "CLICK",
+      billing_event: "CPC",
+      bid_type: "BID_TYPE_NO_BID",
+      pacing: "PACING_MODE_SMOOTH",
+      operation_status: "DISABLE",
+      identity_id: creds.identityId,
+      identity_type: creds.identityType,
+    };
     const adgroupJson = await tiktokSandboxRequest<{ data?: { adgroup_id?: string } }>({
       method: "POST",
       path: "/adgroup/create/",
       accessToken: creds.accessToken,
-      body: {
-        advertiser_id: creds.advertiserId,
-        campaign_id: campaignId,
-        adgroup_name: adgroupName,
-        promotion_type: "WEBSITE",
-        placement_type: "PLACEMENT_TYPE_NORMAL",
-        placements: ["PLACEMENT_TIKTOK"],
-        location_ids: ["6252001"],
-        budget_mode: "BUDGET_MODE_DAY",
-        budget: 20,
-        schedule_type: "SCHEDULE_FROM_NOW",
-        schedule_start_time: formatScheduleStart(),
-        optimization_goal: "CLICK",
-        billing_event: "CPC",
-        bid_type: "BID_TYPE_NO_BID",
-        pacing: "PACING_MODE_SMOOTH",
-        operation_status: "DISABLE",
-      },
+      body: adgroupBody,
     });
     adgroupId = String(adgroupJson.data?.adgroup_id ?? "").trim() || null;
     if (!adgroupId) {
@@ -267,12 +333,46 @@ export async function seedTiktokSandboxMinimalStructure(): Promise<TiktokSandbox
     console.warn(`${LOG_PREFIX} seed adgroup ${formatOutboundErrorLog(e)}`);
   }
 
+  let adId: string | null = null;
+  if (adgroupId) {
+    try {
+      const adJson = await tiktokSandboxRequest<{ data?: Record<string, unknown> }>({
+        method: "POST",
+        path: "/ad/create/",
+        accessToken: creds.accessToken,
+        body: {
+          advertiser_id: creds.advertiserId,
+          adgroup_id: adgroupId,
+          creatives: [
+            buildAdCreative({
+              adName,
+              identityId: creds.identityId,
+              identityType: creds.identityType,
+              displayName,
+              imageId,
+            }),
+          ],
+        },
+      });
+      adId = extractAdId(adJson.data);
+      if (!adId) {
+        warnings.push("ad/create 未返回 ad_id");
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      warnings.push(`ad/create 失败: ${msg}`);
+      console.warn(`${LOG_PREFIX} seed ad ${formatOutboundErrorLog(e)}`);
+    }
+  }
+
   return {
     advertiserId: creds.advertiserId,
     campaignId,
     adgroupId,
+    adId,
     campaignName,
     adgroupName,
+    adName,
     warnings,
   };
 }

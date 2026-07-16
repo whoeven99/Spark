@@ -7,6 +7,7 @@ import {
   buildTiktokSandboxMockMetrics,
   getTiktokSandboxCredentials,
   isTiktokSandboxConfigured,
+  isTiktokSandboxIdentityConfigured,
 } from "~/server/adsInsights/tiktokSandbox.server";
 import {
   applyGoogleSandboxMockMetrics,
@@ -171,14 +172,21 @@ describe("tiktok sandbox env", () => {
     const prevToken = process.env.TIKTOK_SANDBOX_ACCESS_TOKEN;
     const prevAdv = process.env.TIKTOK_SANDBOX_ADVERTISER_ID;
     const prevName = process.env.TIKTOK_SANDBOX_ACCOUNT_NAME;
+    const prevIdentityId = process.env.TIKTOK_SANDBOX_IDENTITY_ID;
+    const prevIdentityType = process.env.TIKTOK_SANDBOX_IDENTITY_TYPE;
     process.env.TIKTOK_SANDBOX_ACCESS_TOKEN = "sandbox-token-test";
     process.env.TIKTOK_SANDBOX_ADVERTISER_ID = "123";
     process.env.TIKTOK_SANDBOX_ACCOUNT_NAME = "spark-allen";
+    process.env.TIKTOK_SANDBOX_IDENTITY_ID = "7662938565899681812";
+    process.env.TIKTOK_SANDBOX_IDENTITY_TYPE = "CUSTOMIZED_USER";
     expect(isTiktokSandboxConfigured()).toBe(true);
+    expect(isTiktokSandboxIdentityConfigured()).toBe(true);
     expect(getTiktokSandboxCredentials()).toEqual({
       accessToken: "sandbox-token-test",
       advertiserId: "123",
       accountName: "spark-allen",
+      identityId: "7662938565899681812",
+      identityType: "CUSTOMIZED_USER",
     });
     if (prevToken === undefined) delete process.env.TIKTOK_SANDBOX_ACCESS_TOKEN;
     else process.env.TIKTOK_SANDBOX_ACCESS_TOKEN = prevToken;
@@ -186,6 +194,20 @@ describe("tiktok sandbox env", () => {
     else process.env.TIKTOK_SANDBOX_ADVERTISER_ID = prevAdv;
     if (prevName === undefined) delete process.env.TIKTOK_SANDBOX_ACCOUNT_NAME;
     else process.env.TIKTOK_SANDBOX_ACCOUNT_NAME = prevName;
+    if (prevIdentityId === undefined) delete process.env.TIKTOK_SANDBOX_IDENTITY_ID;
+    else process.env.TIKTOK_SANDBOX_IDENTITY_ID = prevIdentityId;
+    if (prevIdentityType === undefined) delete process.env.TIKTOK_SANDBOX_IDENTITY_TYPE;
+    else process.env.TIKTOK_SANDBOX_IDENTITY_TYPE = prevIdentityType;
+  });
+
+  it("reports identity not configured when identity env missing", () => {
+    const prevIdentityId = process.env.TIKTOK_SANDBOX_IDENTITY_ID;
+    const prevIdentityType = process.env.TIKTOK_SANDBOX_IDENTITY_TYPE;
+    delete process.env.TIKTOK_SANDBOX_IDENTITY_ID;
+    delete process.env.TIKTOK_SANDBOX_IDENTITY_TYPE;
+    expect(isTiktokSandboxIdentityConfigured()).toBe(false);
+    if (prevIdentityId !== undefined) process.env.TIKTOK_SANDBOX_IDENTITY_ID = prevIdentityId;
+    if (prevIdentityType !== undefined) process.env.TIKTOK_SANDBOX_IDENTITY_TYPE = prevIdentityType;
   });
 
   it("builds deterministic mock metrics from seed", () => {

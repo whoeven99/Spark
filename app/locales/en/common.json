@@ -1601,7 +1601,7 @@
     "tiktokSandboxNotConfigured": "Set TIKTOK_SANDBOX_ACCESS_TOKEN / TIKTOK_SANDBOX_ADVERTISER_ID to enable sandbox.",
     "tiktokSandboxSeed": "Create test structure",
     "tiktokSandboxSeeding": "Creating…",
-    "tiktokSandboxSeedOk": "Created: {{campaign}} (campaign {{campaignId}} / ad group {{adgroupId}})",
+    "tiktokSandboxSeedOk": "Created: {{campaign}} (campaign {{campaignId}} / ad group {{adgroupId}} / ad {{adId}})",
     "tiktokSandboxSeedError": "Failed to create sandbox test structure.",
     "tableTitleSandbox": "Sandbox account {{accountId}}",
     "tableSubtitleSandbox": "{{start}} → {{end}} · TikTok Sandbox API",

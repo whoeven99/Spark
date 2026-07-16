@@ -433,6 +433,7 @@ export function AdsInsightsPage() {
                         campaign: seedData.campaignName,
                         campaignId: seedData.campaignId || "—",
                         adgroupId: seedData.adgroupId || seedData.adGroupId || "—",
+                        adId: seedData.adId || "—",
                       })}
                 </div>
                 {seedData.warnings?.length > 0 && (

@@ -2,6 +2,7 @@ import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import {
   isTiktokSandboxConfigured,
+  isTiktokSandboxIdentityConfigured,
   seedTiktokSandboxMinimalStructure,
 } from "../server/adsInsights/tiktokSandbox.server";
 import { formatOutboundErrorLog } from "../server/common/outboundError.server";
@@ -10,7 +11,7 @@ const LOG_PREFIX = "[AdsInsights][TikTok][SandboxSeed]";
 
 /**
  * POST /api/ads-insights/tiktok-sandbox-seed
- * 在 TikTok 沙盒账户创建最小 Campaign → AdGroup（不建 Ad；指标由 Insights mock）。
+ * 在 TikTok 沙盒账户创建 Campaign → AdGroup → Ad（需 TIKTOK_SANDBOX_IDENTITY_*；指标由 Insights mock）。
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
   await authenticate.admin(request);
@@ -25,6 +26,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         reason: "not_configured",
         message:
           "未配置 TikTok 沙盒环境变量 TIKTOK_SANDBOX_ACCESS_TOKEN / TIKTOK_SANDBOX_ADVERTISER_ID",
+      },
+      { status: 400 },
+    );
+  }
+
+  if (!isTiktokSandboxIdentityConfigured()) {
+    return Response.json(
+      {
+        ok: false,
+        reason: "identity_not_configured",
+        message:
+          "未配置 TikTok 沙盒 Identity：请设置 TIKTOK_SANDBOX_IDENTITY_ID / TIKTOK_SANDBOX_IDENTITY_TYPE",
       },
       { status: 400 },
     );
