@@ -2,7 +2,7 @@
  * TikTok Marketing API 沙盒：与正式 Catalog OAuth / business-api 完全隔离。
  * 凭证仅来自环境变量，绝不读取 AdPlatformCredential。
  *
- * Seed 建 Campaign → AdGroup → Ad（v1.3，需 identity_id + identity_type）；
+ * Seed 建 Campaign → AdGroup（v1.3，需 identity）→ Ad（v1.2 workaround，仍传 identity）；
  * Insights 指标由本地 mock 注入（沙盒无真实投放）。
  */
 
@@ -12,6 +12,8 @@ import { mergeMetrics } from "./nest.server";
 import { formatOutboundErrorLog, formatOutboundNetworkError } from "../common/outboundError.server";
 
 export const TIKTOK_SANDBOX_API_BASE = "https://sandbox-ads.tiktok.com/open_api/v1.3";
+/** 沙盒 ad/create 降级至 v1.2（沙盒仍要求 identity；CUSTOMIZED_USER 在 v1.2/v1.3 均被拒）。 */
+export const TIKTOK_SANDBOX_API_BASE_V12 = "https://sandbox-ads.tiktok.com/open_api/v1.2";
 
 const LOG_PREFIX = "[AdsInsights][TikTok][Sandbox]";
 /** 沙盒创意占位图；可用 TIKTOK_SANDBOX_IMAGE_ID 覆盖。 */
@@ -110,12 +112,12 @@ function formatScheduleStart(): string {
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:00:00`;
 }
 
-function buildAdCreative(params: {
+function buildAdCreativeV12(params: {
   adName: string;
+  imageId: string;
   identityId: string;
   identityType: string;
   displayName: string | null;
-  imageId: string;
 }): Record<string, unknown> {
   const creative: Record<string, unknown> = {
     ad_name: params.adName,
@@ -254,7 +256,7 @@ export function applyTiktokSandboxMockDeepRows(
 }
 
 /**
- * 在沙盒账户创建测试结构：Campaign → AdGroup → Ad（v1.3，使用 identity_id + identity_type）。
+ * 在沙盒账户创建测试结构：Campaign → AdGroup（v1.3 + identity）→ Ad（v1.2 + identity）。
  */
 export async function seedTiktokSandboxMinimalStructure(): Promise<TiktokSandboxSeedResult> {
   const creds = getTiktokSandboxCredentials();
@@ -340,16 +342,17 @@ export async function seedTiktokSandboxMinimalStructure(): Promise<TiktokSandbox
         method: "POST",
         path: "/ad/create/",
         accessToken: creds.accessToken,
+        apiBase: TIKTOK_SANDBOX_API_BASE_V12,
         body: {
           advertiser_id: creds.advertiserId,
           adgroup_id: adgroupId,
           creatives: [
-            buildAdCreative({
+            buildAdCreativeV12({
               adName,
+              imageId,
               identityId: creds.identityId,
               identityType: creds.identityType,
               displayName,
-              imageId,
             }),
           ],
         },

@@ -1,5 +1,5 @@
 /**
- * CLI：向 TikTok 沙盒创建 Campaign → AdGroup → Ad（v1.3，需 identity）。
+ * CLI：向 TikTok 沙盒创建 Campaign → AdGroup（v1.3，需 identity）→ Ad（v1.2 workaround）。
  * Insights 指标由应用侧 mock，不依赖沙盒报表。
  *
  * 用法：
@@ -18,6 +18,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const API_BASE = "https://sandbox-ads.tiktok.com/open_api/v1.3";
+const API_BASE_V12 = "https://sandbox-ads.tiktok.com/open_api/v1.2";
 const DEFAULT_IMAGE_ID = "ad-site-i18n-sg/202208095d0d1d72383f815646c5b090";
 
 function loadDotEnv() {
@@ -46,7 +47,7 @@ function env(name) {
 }
 
 async function tiktokRequest(params) {
-  const url = new URL(`${API_BASE}${params.path}`);
+  const url = new URL(`${params.apiBase || API_BASE}${params.path}`);
   for (const [key, value] of Object.entries(params.query || {})) {
     url.searchParams.set(key, value);
   }
@@ -72,7 +73,7 @@ function formatScheduleStart() {
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:00:00`;
 }
 
-function buildAdCreative({ adName, identityId, identityType, displayName, imageId }) {
+function buildAdCreativeV12({ adName, imageId, identityId, identityType, displayName }) {
   const creative = {
     ad_name: adName,
     ad_format: "SINGLE_IMAGE",
@@ -186,21 +187,22 @@ async function main() {
   let adId = "";
   if (adgroupId) {
     try {
-      console.log("Creating ad…");
+      console.log("Creating ad (v1.2)…");
       const adJson = await tiktokRequest({
         method: "POST",
         path: "/ad/create/",
         accessToken,
+        apiBase: API_BASE_V12,
         body: {
           advertiser_id: advertiserId,
           adgroup_id: adgroupId,
           creatives: [
-            buildAdCreative({
+            buildAdCreativeV12({
               adName,
+              imageId,
               identityId,
               identityType,
               displayName: accountName,
-              imageId,
             }),
           ],
         },
