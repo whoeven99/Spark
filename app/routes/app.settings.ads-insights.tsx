@@ -3,6 +3,8 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import {
   getGoogleAdsCredential,
+  getGoogleAdsSandboxCredential,
+  getGoogleAdsSandboxPending,
   getMetaAdsCredential,
   getMetaAdsPending,
   getTiktokCatalogCredential,
@@ -22,6 +24,10 @@ export type AdsInsightsPageLoaderData = {
     google: {
       connected: boolean;
       customerId: string | null;
+      sandboxConnected: boolean;
+      sandboxCustomerId: string | null;
+      sandboxCustomerName: string | null;
+      sandboxPendingAccounts: Array<{ id: string; name?: string; formatted?: string }>;
     };
     tiktok: {
       connected: boolean;
@@ -33,10 +39,12 @@ export type AdsInsightsPageLoaderData = {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const [meta, metaPending, google, tiktok] = await Promise.all([
+  const [meta, metaPending, google, googleSandbox, googleSandboxPending, tiktok] = await Promise.all([
     getMetaAdsCredential(session.shop),
     getMetaAdsPending(session.shop),
     getGoogleAdsCredential(session.shop),
+    getGoogleAdsSandboxCredential(session.shop),
+    getGoogleAdsSandboxPending(session.shop),
     getTiktokCatalogCredential(session.shop),
   ]);
 
@@ -52,6 +60,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       google: {
         connected: Boolean(google),
         customerId: google?.customerId ?? null,
+        sandboxConnected: Boolean(googleSandbox),
+        sandboxCustomerId: googleSandbox?.customerId ?? null,
+        sandboxCustomerName: googleSandbox?.descriptiveName ?? null,
+        sandboxPendingAccounts: googleSandboxPending?.accounts ?? [],
       },
       tiktok: {
         connected: Boolean(tiktok),

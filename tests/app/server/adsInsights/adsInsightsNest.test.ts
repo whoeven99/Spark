@@ -8,6 +8,10 @@ import {
   getTiktokSandboxCredentials,
   isTiktokSandboxConfigured,
 } from "~/server/adsInsights/tiktokSandbox.server";
+import {
+  applyGoogleSandboxMockMetrics,
+  buildGoogleSandboxMockMetrics,
+} from "~/server/adsInsights/googleSandboxMock.server";
 
 describe("adsInsights dateRange", () => {
   it("parses allowed ranges and defaults to 7", () => {
@@ -222,5 +226,47 @@ describe("tiktok sandbox env", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+});
+
+describe("google sandbox mock metrics", () => {
+  it("builds deterministic mock metrics from seed", () => {
+    const a = buildGoogleSandboxMockMetrics("keyword:1");
+    const b = buildGoogleSandboxMockMetrics("keyword:1");
+    const c = buildGoogleSandboxMockMetrics("keyword:2");
+    expect(a).toEqual(b);
+    expect(a.impressions).toBeGreaterThan(0);
+    expect(a.clicks).toBeGreaterThan(0);
+    expect(a.spend).toBeGreaterThan(0);
+    expect(c.impressions).not.toBe(a.impressions);
+  });
+
+  it("applies mock metrics to campaign tree", () => {
+    const campaigns = applyGoogleSandboxMockMetrics([
+      {
+        id: "c1",
+        name: "Campaign 1",
+        status: "PAUSED",
+        metrics: emptyMetrics(),
+        adSets: [
+          {
+            id: "g1",
+            name: "AdGroup 1",
+            status: "PAUSED",
+            metrics: emptyMetrics(),
+            ads: [
+              {
+                id: "a1",
+                name: "Ad 1",
+                status: "PAUSED",
+                metrics: emptyMetrics(),
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+    expect(campaigns[0].adSets[0].ads[0].metrics.impressions).toBeGreaterThan(0);
+    expect(campaigns[0].metrics.impressions).toBeGreaterThan(0);
   });
 });

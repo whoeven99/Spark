@@ -7,11 +7,15 @@ import {
   getGoogleOAuthClient,
   getRedirectUri,
   verifyOAuthState,
+  type MerchantAccount,
+  type OAuthTokens,
 } from "../server/adsCatalog/googleOAuth.server";
 import {
   setGoogleMerchantCredential,
   setGoogleMerchantPending,
   clearGoogleMerchantPending,
+  getGoogleMerchantCredential,
+  deleteGoogleMerchantCredential,
 } from "../server/adsCatalog/credentialStore.server";
 import { registerGmcNotificationSubscription } from "../server/adsCatalog/gmcNotifications.server";
 
@@ -34,6 +38,21 @@ function oauthStateErrorResponse(): Response {
     "Google OAuth state 无效或已过期。请关闭此页，从 Shopify 后台重新打开应用后再试。",
     { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } },
   );
+}
+
+function buildGmcPendingPayload(
+  tokens: OAuthTokens,
+  accounts: MerchantAccount[],
+  clientId: string,
+  clientSecret: string,
+) {
+  return {
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    clientId,
+    clientSecret,
+    accounts: accounts.map((a) => ({ id: a.merchantId, name: a.name })),
+  };
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -73,7 +92,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       });
     }
 
-    if (accounts.length === 1) {
+    const existing = await getGoogleMerchantCredential(shop);
+    const requiresSelection = accounts.length > 1 || (accounts.length === 1 && Boolean(existing));
+
+    if (!requiresSelection && accounts.length === 1) {
       await clearGoogleMerchantPending(shop);
       await setGoogleMerchantCredential(shop, {
         accessToken: tokens.accessToken,
@@ -94,13 +116,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       });
     }
 
-    await setGoogleMerchantPending(shop, {
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      clientId,
-      clientSecret,
-      accounts: accounts.map((a) => ({ id: a.merchantId, name: a.name })),
-    });
+    await deleteGoogleMerchantCredential(shop);
+    await clearGoogleMerchantPending(shop);
+    await setGoogleMerchantPending(shop, buildGmcPendingPayload(tokens, accounts, clientId, clientSecret));
     return appRedirect(request, shop, host, appOrigin, { gmcAuth: "select" });
   } catch (e) {
     return appRedirect(request, shop, host, appOrigin, {

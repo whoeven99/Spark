@@ -6,12 +6,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const source = new URL(request.url);
   const host = source.searchParams.get("host") ?? "";
+  const reauth = source.searchParams.get("reauth") === "1";
 
   const result = buildGoogleOAuthStartUrl({
     flow: "ads",
     shop: session.shop,
     host,
     requestOrigin: source.origin,
+    reauth,
   });
 
   if (!result.ok) {

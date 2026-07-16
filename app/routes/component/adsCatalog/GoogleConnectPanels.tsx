@@ -58,15 +58,16 @@ export function GoogleConnectPanels({
   const gmc = credentials.googleMerchant;
   const ads = credentials.googleAds;
 
-  function openOAuth(kind: "gmc" | "ads") {
+  function openOAuth(kind: "gmc" | "ads", reauth = false) {
     const apiPath =
       kind === "gmc"
         ? "/api/ads-catalog/google-merchant-auth-url"
         : "/api/ads-catalog/google-ads-auth-url";
+    const reauthSuffix = reauth ? `${locationSearch ? "&" : "?"}reauth=1` : "";
     void (async () => {
       setBusy(true);
       try {
-        const resp = await fetch(`${apiPath}${locationSearch}`, {
+        const resp = await fetch(`${apiPath}${locationSearch}${reauthSuffix}`, {
           headers: { Accept: "application/json" },
         });
         const data = (await resp.json().catch(() => ({}))) as {
@@ -114,7 +115,16 @@ export function GoogleConnectPanels({
           {t("adsCatalog.gmcPanelTitle")}
         </h3>
 
-        {gmc.connected ? (
+        {gmc.pendingAccounts.length > 0 ? (
+          <AccountSelect
+            label={t("adsCatalog.gmcSelectAccount")}
+            accounts={gmc.pendingAccounts.map((a) => ({ id: a.id, label: a.name || a.id }))}
+            busy={busy}
+            onSelect={(id) =>
+              void post("/api/ads-catalog/google-merchant-accounts", { merchantId: id })
+            }
+          />
+        ) : gmc.connected ? (
           <>
             <div style={{ fontSize: 13 }}>
               <div style={{ color: "#0f7a52", fontWeight: 600 }}>
@@ -126,7 +136,7 @@ export function GoogleConnectPanels({
               </div>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button type="button" style={secondaryBtn} onClick={() => openOAuth("gmc")}>
+              <button type="button" style={secondaryBtn} onClick={() => openOAuth("gmc", true)}>
                 {t("adsCatalog.gmcReauth")}
               </button>
               <button
@@ -139,15 +149,6 @@ export function GoogleConnectPanels({
               </button>
             </div>
           </>
-        ) : gmc.pendingAccounts.length > 0 ? (
-          <AccountSelect
-            label={t("adsCatalog.gmcSelectAccount")}
-            accounts={gmc.pendingAccounts.map((a) => ({ id: a.id, label: a.name || a.id }))}
-            busy={busy}
-            onSelect={(id) =>
-              void post("/api/ads-catalog/google-merchant-accounts", { merchantId: id })
-            }
-          />
         ) : (
           <>
             <p style={pageHintTextStyle}>{t("adsCatalog.gmcConnectHint")}</p>
@@ -166,7 +167,19 @@ export function GoogleConnectPanels({
           {t("adsCatalog.adsPanelTitle")}
         </h3>
 
-        {ads.connected ? (
+        {ads.pendingAccounts.length > 0 ? (
+          <AccountSelect
+            label={t("adsCatalog.adsSelectAccount")}
+            accounts={ads.pendingAccounts.map((a) => ({
+              id: a.id,
+              label: a.name ? `${a.name} (${a.formatted || a.id})` : a.formatted || a.id,
+            }))}
+            busy={busy}
+            onSelect={(id) =>
+              void post("/api/ads-catalog/google-ads-accounts", { customerId: id })
+            }
+          />
+        ) : ads.connected ? (
           <>
             <div style={{ fontSize: 13 }}>
               <div style={{ color: "#0f7a52", fontWeight: 600 }}>{t("adsCatalog.adsBound")}</div>
@@ -187,7 +200,7 @@ export function GoogleConnectPanels({
               </div>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button type="button" style={secondaryBtn} onClick={() => openOAuth("ads")}>
+              <button type="button" style={secondaryBtn} onClick={() => openOAuth("ads", true)}>
                 {t("adsCatalog.adsChange")}
               </button>
               <button
@@ -200,18 +213,6 @@ export function GoogleConnectPanels({
               </button>
             </div>
           </>
-        ) : ads.pendingAccounts.length > 0 ? (
-          <AccountSelect
-            label={t("adsCatalog.adsSelectAccount")}
-            accounts={ads.pendingAccounts.map((a) => ({
-              id: a.id,
-              label: a.name ? `${a.name} (${a.formatted || a.id})` : a.formatted || a.id,
-            }))}
-            busy={busy}
-            onSelect={(id) =>
-              void post("/api/ads-catalog/google-ads-accounts", { customerId: id })
-            }
-          />
         ) : (
           <>
             <p style={pageHintTextStyle}>{t("adsCatalog.adsConnectHint")}</p>

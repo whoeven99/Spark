@@ -16,7 +16,7 @@ export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 export const GMC_SCOPE = "https://www.googleapis.com/auth/content";
 export const ADS_SCOPE = "https://www.googleapis.com/auth/adwords";
 
-export type OAuthFlow = "gmc" | "ads";
+export type OAuthFlow = "gmc" | "ads" | "ads_sandbox";
 
 export interface OAuthTokens {
   accessToken: string;
@@ -148,7 +148,12 @@ export function verifyOAuthState(
       appOrigin?: string;
       ts?: number;
     };
-    if (!payload.shop || (payload.flow !== "gmc" && payload.flow !== "ads")) return null;
+    if (
+      !payload.shop ||
+      (payload.flow !== "gmc" && payload.flow !== "ads" && payload.flow !== "ads_sandbox")
+    ) {
+      return null;
+    }
     if (typeof payload.ts !== "number" || Date.now() - payload.ts > maxAgeMs) return null;
     return {
       shop: payload.shop,
@@ -166,6 +171,8 @@ export function buildAuthUrl(params: {
   flow: OAuthFlow;
   state: string;
   redirectUri: string;
+  /** 更换账户 / 重新授权时强制弹出 Google 账号选择。 */
+  reauth?: boolean;
 }): string {
   const { clientId } = getGoogleOAuthClient();
   const scope = params.flow === "gmc" ? GMC_SCOPE : ADS_SCOPE;
@@ -176,7 +183,7 @@ export function buildAuthUrl(params: {
     scope,
     access_type: "offline",
     include_granted_scopes: "true",
-    prompt: "consent",
+    prompt: params.reauth ? "consent select_account" : "consent",
     state: params.state,
   });
   return `${GOOGLE_OAUTH_BASE}?${query.toString()}`;
@@ -188,6 +195,7 @@ export function buildGoogleOAuthStartUrl(params: {
   shop: string;
   host?: string;
   requestOrigin: string;
+  reauth?: boolean;
 }): { ok: true; authUrl: string } | { ok: false; error: string } {
   const { clientId } = getGoogleOAuthClient();
   if (!clientId) {
@@ -202,8 +210,66 @@ export function buildGoogleOAuthStartUrl(params: {
     flow: params.flow,
     state,
     redirectUri: getRedirectUri(callbackPath, params.requestOrigin),
+    reauth: params.reauth,
   });
   return { ok: true, authUrl };
+}
+
+/** Google Ads 测试账号 OAuth（广告洞察沙盒，与 Catalog 生产授权隔离）。 */
+export function buildGoogleAdsSandboxOAuthStartUrl(params: {
+  shop: string;
+  host?: string;
+  requestOrigin: string;
+  reauth?: boolean;
+}): { ok: true; authUrl: string } | { ok: false; error: string } {
+  const { clientId } = getGoogleOAuthClient();
+  if (!clientId) {
+    return { ok: false, error: "缺少 GOOGLE_OAUTH_CLIENT_ID 环境变量" };
+  }
+
+  const callbackPath = "/ads/google-ads/callback";
+  const appOrigin = (readEnv("SHOPIFY_APP_URL") || params.requestOrigin).replace(/\/$/, "");
+  const state = createOAuthState(params.shop, "ads_sandbox", params.host ?? "", appOrigin);
+  const authUrl = buildAuthUrl({
+    flow: "ads_sandbox",
+    state,
+    redirectUri: getRedirectUri(callbackPath, params.requestOrigin),
+    reauth: params.reauth,
+  });
+  return { ok: true, authUrl };
+}
+
+/** Google Ads 测试账号 OAuth 完成后跳回广告洞察页。 */
+export function buildGoogleAdsSandboxOAuthReturnUrl(params: {
+  shop: string;
+  host?: string;
+  appOrigin?: string;
+  query?: Record<string, string>;
+  request?: Request;
+}): string {
+  const adminUrl = buildAdminEmbeddedAppReturnUrl({
+    path: "/app/settings/ads-insights",
+    shop: params.shop,
+    request: params.request,
+    query: { platform: "google", sandbox: "1", ...params.query },
+  });
+  if (adminUrl) return adminUrl;
+
+  const base =
+    params.appOrigin ||
+    readEnv("GOOGLE_OAUTH_REDIRECT_BASE") ||
+    readEnv("SHOPIFY_APP_URL") ||
+    "https://example.com";
+  const target = new URL("/app/settings/ads-insights", base.replace(/\/$/, "") || base);
+  target.searchParams.set("shop", params.shop);
+  target.searchParams.set("embedded", "1");
+  target.searchParams.set("host", params.host || buildShopifyAdminHostParam(params.shop));
+  target.searchParams.set("platform", "google");
+  target.searchParams.set("sandbox", "1");
+  for (const [key, value] of Object.entries(params.query ?? {})) {
+    target.searchParams.set(key, value);
+  }
+  return target.toString();
 }
 
 export async function exchangeCodeForTokens(

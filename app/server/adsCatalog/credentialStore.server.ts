@@ -12,6 +12,9 @@ const TIKTOK_CATALOG_PLATFORM = "tiktok_catalog";
 // picks which account to connect (multi-account selection flow).
 const GMC_PENDING_PLATFORM = "google_merchant_pending";
 const ADS_PENDING_PLATFORM = "google_ads_pending";
+// Google Ads 测试账号（广告洞察沙盒，与 Catalog / 生产 Insights OAuth 隔离）
+const GOOGLE_ADS_SANDBOX_PLATFORM = "google_ads_sandbox";
+const GOOGLE_ADS_SANDBOX_PENDING_PLATFORM = "google_ads_sandbox_pending";
 // Transient record holding a freshly-exchanged Meta long-lived token while the
 // merchant picks which catalog to connect (multi-catalog selection flow).
 const META_CATALOG_PENDING_PLATFORM = "meta_catalog_pending";
@@ -311,6 +314,73 @@ export const setGoogleAdsPending = (shop: string, payload: PendingOAuthTokens) =
   setPending(shop, ADS_PENDING_PLATFORM, payload);
 export const getGoogleAdsPending = (shop: string) => getPending(shop, ADS_PENDING_PLATFORM);
 export const clearGoogleAdsPending = (shop: string) => clearPending(shop, ADS_PENDING_PLATFORM);
+
+// ─── Google Ads 测试账号（Insights 沙盒 OAuth）────────────────────────────────
+
+export type GoogleAdsSandboxCredential = {
+  accessToken: string;
+  refreshToken?: string;
+  customerId: string;
+  loginCustomerId?: string;
+  descriptiveName?: string;
+  updatedAt: string;
+};
+
+export async function getGoogleAdsSandboxCredential(
+  shop: string,
+): Promise<GoogleAdsSandboxCredential | null> {
+  const record = await readPlatformCredential(shop, GOOGLE_ADS_SANDBOX_PLATFORM);
+  if (!record) return null;
+  const accessToken = String(record.data.accessToken ?? "");
+  const customerId = String(record.data.customerId ?? "");
+  if (!accessToken || !customerId) return null;
+  return {
+    accessToken,
+    refreshToken:
+      typeof record.data.refreshToken === "string" ? record.data.refreshToken : undefined,
+    customerId,
+    loginCustomerId:
+      typeof record.data.loginCustomerId === "string"
+        ? record.data.loginCustomerId
+        : undefined,
+    descriptiveName:
+      typeof record.data.descriptiveName === "string"
+        ? record.data.descriptiveName
+        : undefined,
+    updatedAt: record.updatedAt.toISOString(),
+  };
+}
+
+export async function setGoogleAdsSandboxCredential(
+  shop: string,
+  payload: Pick<
+    GoogleAdsSandboxCredential,
+    "accessToken" | "refreshToken" | "customerId" | "loginCustomerId" | "descriptiveName"
+  >,
+): Promise<void> {
+  const accessToken = payload.accessToken.trim();
+  const customerId = payload.customerId.trim();
+  if (!accessToken || !customerId) {
+    throw new Error("Google Ads sandbox accessToken and customerId are required");
+  }
+  await writePlatformCredential(shop, GOOGLE_ADS_SANDBOX_PLATFORM, {
+    accessToken,
+    refreshToken: payload.refreshToken?.trim() || null,
+    customerId,
+    loginCustomerId: payload.loginCustomerId?.trim() || null,
+    descriptiveName: payload.descriptiveName?.trim() || null,
+  });
+}
+
+export const deleteGoogleAdsSandboxCredential = (shop: string) =>
+  clearPending(shop, GOOGLE_ADS_SANDBOX_PLATFORM);
+
+export const setGoogleAdsSandboxPending = (shop: string, payload: PendingOAuthTokens) =>
+  setPending(shop, GOOGLE_ADS_SANDBOX_PENDING_PLATFORM, payload);
+export const getGoogleAdsSandboxPending = (shop: string) =>
+  getPending(shop, GOOGLE_ADS_SANDBOX_PENDING_PLATFORM);
+export const clearGoogleAdsSandboxPending = (shop: string) =>
+  clearPending(shop, GOOGLE_ADS_SANDBOX_PENDING_PLATFORM);
 
 export const setMetaCatalogPending = (shop: string, payload: PendingOAuthTokens) =>
   setPending(shop, META_CATALOG_PENDING_PLATFORM, payload);

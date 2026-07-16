@@ -73,7 +73,7 @@ export type AdsInsightsResult = {
   accountId: string;
   /** 展示用账户名（如沙盒 Account Name）；可空 */
   accountName?: string | null;
-  /** TikTok 沙盒模式（与正式 Catalog OAuth 隔离） */
+  /** 沙盒 / 测试账号模式（与正式 Catalog OAuth 隔离） */
   sandbox?: boolean;
   currencyCode: string | null;
   rangeDays: AdsInsightsRangeDays;

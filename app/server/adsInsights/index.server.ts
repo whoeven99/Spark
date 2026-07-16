@@ -1,4 +1,5 @@
 import { fetchGoogleAdsInsights } from "./googleAdsInsights.server";
+import { fetchGoogleAdsSandboxInsights } from "./googleSandbox.server";
 import { fetchMetaAdsInsights } from "./metaAdsInsights.server";
 import { fetchTiktokAdsInsights } from "./tiktokAdsInsights.server";
 import type {
@@ -13,7 +14,7 @@ export async function fetchAdsInsights(params: {
   platform: AdsInsightsPlatform;
   rangeDays: AdsInsightsRangeDays;
   view?: AdsInsightsView;
-  /** 仅 TikTok：走 sandbox-ads API + 环境变量凭证，不碰 Catalog OAuth */
+  /** TikTok / Google：沙盒或测试账号模式，与正式 Catalog OAuth 隔离 */
   sandbox?: boolean;
 }): Promise<AdsInsightsResult | null> {
   const view = params.view ?? "structure";
@@ -40,8 +41,8 @@ export async function fetchAdsInsights(params: {
   }
 
   if (params.platform === "google") {
-    if (params.sandbox) return null;
-    const result = await fetchGoogleAdsInsights(params.shop, params.rangeDays, {
+    const fetcher = params.sandbox ? fetchGoogleAdsSandboxInsights : fetchGoogleAdsInsights;
+    const result = await fetcher(params.shop, params.rangeDays, {
       includeStructure: view === "structure",
       includeKeywords: view === "keywords",
       includeSearchTerms: view === "searchTerms",
