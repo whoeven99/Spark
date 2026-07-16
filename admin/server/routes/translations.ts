@@ -4,6 +4,7 @@ import { getTranslationJobsContainer, isCosmosConfigured } from "../lib/cosmos.j
 import { enrichJobWithLiveProgress, enrichJobsWithLiveProgress } from "../lib/v4Progress.js";
 import { getRedis, batchHgetall, batchLrange } from "../lib/redis.js";
 import { blobListPaths, blobRead, isBlobConfigured } from "../lib/blob.js";
+import { estimateRemainingTokensForJobs } from "../lib/estimateRemainingTokens.js";
 import { repairStuckTranslationJobs } from "../lib/repairStuckTranslationJobs.js";
 import {
   buildTranslationJobFilters,
@@ -11,6 +12,8 @@ import {
   translationJobWhereClause,
 } from "../lib/translationJobFilters.js";
 import type { TranslationV4Job } from "../types/translation.js";
+
+const MAX_ESTIMATE_JOBS = 30;
 
 export const translationsRouter = Router();
 
@@ -429,7 +432,90 @@ type BlobTranslatedResource = {
   }>;
 };
 
-// 列出该任务「确有翻译内容」的模块（仅列 blob 文件名，不下载内容）。
+/**
+ * POST /api/translations/estimate-remaining-tokens
+ * 对选中任务扫描 Blob 未译完条目的 originalValue，按字符粗估剩余 token。
+ * Body: { shop: string, jobIds: string[] }
+ */
+translationsRouter.post("/estimate-remaining-tokens", async (req, res) => {
+  if (!isCosmosConfigured()) {
+    res.status(503).json({ error: "Cosmos not configured" });
+    return;
+  }
+  if (!isBlobConfigured()) {
+    res.status(503).json({ error: "Blob not configured" });
+    return;
+  }
+
+  try {
+    const body = (req.body ?? {}) as { shop?: string; jobIds?: unknown };
+    const shop = String(body.shop ?? "").trim();
+    const jobIds = Array.isArray(body.jobIds)
+      ? [...new Set(body.jobIds.map((id) => String(id ?? "").trim()).filter(Boolean))]
+      : [];
+
+    if (!shop) {
+      res.status(400).json({ error: "shop is required" });
+      return;
+    }
+    if (jobIds.length === 0) {
+      res.status(400).json({ error: "jobIds is required" });
+      return;
+    }
+    if (jobIds.length > MAX_ESTIMATE_JOBS) {
+      res.status(400).json({
+        error: `一次最多估算 ${MAX_ESTIMATE_JOBS} 个任务，当前 ${jobIds.length} 个`,
+      });
+      return;
+    }
+
+    const container = getTranslationJobsContainer();
+    type JobLite = Pick<
+      TranslationV4Job,
+      "id" | "shopName" | "source" | "target" | "status" | "modules"
+    > & { blobPrefix?: string };
+
+    const jobs: JobLite[] = [];
+    const missing: string[] = [];
+    for (const jobId of jobIds) {
+      const { resource } = await container.item(jobId, shop).read<JobLite>();
+      if (!resource || resource.shopName !== shop) {
+        missing.push(jobId);
+        continue;
+      }
+      jobs.push(resource);
+    }
+
+    const estimates = await estimateRemainingTokensForJobs(
+      jobs.map((j) => ({
+        id: j.id,
+        shopName: j.shopName,
+        source: j.source,
+        target: j.target,
+        status: j.status,
+        modules: j.modules ?? [],
+        blobPrefix: j.blobPrefix,
+      })),
+    );
+
+    const totalEstimatedTokens = estimates.reduce((s, e) => s + e.estimatedTokens, 0);
+    const totalPendingFields = estimates.reduce((s, e) => s + e.pendingFields, 0);
+
+    res.json({
+      shop,
+      totalEstimatedTokens,
+      totalPendingFields,
+      jobCount: estimates.length,
+      missingJobIds: missing,
+      jobs: estimates,
+      formula: "CJK≈1 token/2 chars, Latin≈1 token/4 chars；仅统计 translatedValue 为空的 originalValue",
+    });
+  } catch (err) {
+    console.error("[translations/estimate-remaining-tokens]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 /**
  * POST /api/translations/repair-stuck
  * 回收僵死的 processing 任务（发版中断等），并唤醒排队任务。

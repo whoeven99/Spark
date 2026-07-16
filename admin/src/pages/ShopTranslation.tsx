@@ -9,6 +9,8 @@ import {
   Descriptions,
   Drawer,
   Input,
+  Modal,
+  message,
   Row,
   Col,
   Spin,
@@ -22,7 +24,7 @@ import {
   Timeline,
   Space,
 } from "antd";
-import { SearchOutlined, ReloadOutlined, HistoryOutlined } from "@ant-design/icons";
+import { SearchOutlined, ReloadOutlined, HistoryOutlined, CalculatorOutlined } from "@ant-design/icons";
 import dayjs, { type Dayjs } from "dayjs";
 import {
   fetchTranslations,
@@ -34,6 +36,7 @@ import {
   fetchTsfShops,
   fetchTsfUsageAccount,
   fetchTsfUsageHistory,
+  estimateRemainingTokens,
   AUTO_TASK_SOURCE,
   type TranslationJob,
   type ShopTranslationSummary,
@@ -42,6 +45,7 @@ import {
   type ShopLangPairRow,
   type TsfUsageRow,
   type TsfUsageHistoryRow,
+  type EstimateRemainingTokensResult,
 } from "../api";
 import { TranslationContentViewer } from "../components/translation/TranslationContentViewer";
 
@@ -49,6 +53,7 @@ const MONO = "'IBM Plex Mono', ui-monospace, monospace";
 const RECENT_SHOPS_KEY = "spark_admin_recent_shops";
 const MAX_RECENT_SHOPS = 12;
 const PAGE_SIZE = 50;
+const MAX_ESTIMATE_JOBS = 30;
 
 function fmtNum(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -177,6 +182,10 @@ export default function ShopTranslation() {
   const [tsfHistory, setTsfHistory] = useState<TsfUsageHistoryRow[]>([]);
   const [tsfHistoryLoading, setTsfHistoryLoading] = useState(false);
 
+  const [selectedJobIds, setSelectedJobIds] = useState<string[]>([]);
+  const [estimateLoading, setEstimateLoading] = useState(false);
+  const [estimateResult, setEstimateResult] = useState<EstimateRemainingTokensResult | null>(null);
+
   const buildFiltersFromUi = useCallback((): ShopTranslationFilters | null => {
     const shop = shopInput.trim();
     if (!shop) return null;
@@ -220,6 +229,8 @@ export default function ShopTranslation() {
         setSizeProfile(null);
         setTsfAccount(null);
         setTsfNote("");
+        setSelectedJobIds([]);
+        setEstimateResult(null);
       }
 
       const pairFilters: ShopTranslationFilters = {
@@ -344,6 +355,32 @@ export default function ShopTranslation() {
       .then((r) => setTsfHistory(r.history))
       .catch((e) => setError(String(e)))
       .finally(() => setTsfHistoryLoading(false));
+  }
+
+  async function onEstimateRemaining() {
+    const shop = activeFilters?.shop;
+    if (!shop) return;
+    if (selectedJobIds.length === 0) {
+      message.warning("请先勾选要估算的任务");
+      return;
+    }
+    if (selectedJobIds.length > MAX_ESTIMATE_JOBS) {
+      message.warning(`一次最多估算 ${MAX_ESTIMATE_JOBS} 个任务`);
+      return;
+    }
+
+    setEstimateLoading(true);
+    try {
+      const result = await estimateRemainingTokens({ shop, jobIds: selectedJobIds });
+      setEstimateResult(result);
+      if (result.missingJobIds.length > 0) {
+        message.warning(`${result.missingJobIds.length} 个任务未找到，已跳过`);
+      }
+    } catch (e) {
+      message.error(String(e));
+    } finally {
+      setEstimateLoading(false);
+    }
   }
 
   const statusRows = useMemo(() => {
@@ -661,12 +698,50 @@ export default function ShopTranslation() {
             </Card>
           )}
 
-          <Typography.Title level={5} style={{ marginBottom: 12 }}>
-            任务列表
-            {summary ? `（共 ${summary.taskCount} 个，已加载 ${jobs.length} 个）` : ""}
-          </Typography.Title>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+              marginBottom: 12,
+            }}
+          >
+            <Typography.Title level={5} style={{ margin: 0 }}>
+              任务列表
+              {summary ? `（共 ${summary.taskCount} 个，已加载 ${jobs.length} 个）` : ""}
+            </Typography.Title>
+            <Space wrap>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                已选 {selectedJobIds.length} 个
+              </Typography.Text>
+              <Button
+                icon={<CalculatorOutlined />}
+                loading={estimateLoading}
+                disabled={selectedJobIds.length === 0}
+                onClick={onEstimateRemaining}
+              >
+                估算剩余 Token
+              </Button>
+            </Space>
+          </div>
 
-          <Table dataSource={jobs} columns={columns} rowKey="id" size="small" pagination={false} />
+          <Table
+            dataSource={jobs}
+            columns={columns}
+            rowKey="id"
+            size="small"
+            pagination={false}
+            rowSelection={{
+              selectedRowKeys: selectedJobIds,
+              onChange: (keys) => setSelectedJobIds(keys.map(String)),
+              preserveSelectedRowKeys: true,
+              getCheckboxProps: () => ({
+                disabled: estimateLoading,
+              }),
+            }}
+          />
 
           {hasMore && activeFilters && (
             <div style={{ textAlign: "center", marginTop: 16 }}>
@@ -791,6 +866,100 @@ export default function ShopTranslation() {
           />
         )}
       </Drawer>
+
+      <Modal
+        title="剩余 Token 估算"
+        open={!!estimateResult}
+        onCancel={() => setEstimateResult(null)}
+        footer={[
+          <Button key="close" type="primary" onClick={() => setEstimateResult(null)}>
+            关闭
+          </Button>,
+        ]}
+        width={820}
+        destroyOnClose
+      >
+        {estimateResult && (
+          <div>
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={`合计约 ${estimateResult.totalEstimatedTokens.toLocaleString()} Token · ${estimateResult.totalPendingFields.toLocaleString()} 条未译字段 · ${estimateResult.jobCount} 个任务`}
+              description={
+                estimateResult.formula ??
+                "按 Blob 未译完条目 originalValue 字符粗估（CJK≈1/2，Latin≈1/4）"
+              }
+            />
+            {estimateResult.missingJobIds.length > 0 && (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 16 }}
+                message={`有 ${estimateResult.missingJobIds.length} 个任务未找到`}
+              />
+            )}
+            <Table
+              size="small"
+              rowKey="jobId"
+              pagination={false}
+              dataSource={estimateResult.jobs}
+              columns={[
+                {
+                  title: "语言对",
+                  key: "lang",
+                  render: (_: unknown, r) => (
+                    <span style={{ fontFamily: MONO, fontSize: 12 }}>
+                      {r.source} → {r.target}
+                    </span>
+                  ),
+                },
+                {
+                  title: "状态",
+                  dataIndex: "status",
+                  render: (v: string) => (
+                    <Tag color={statusColor(v)}>{statusLabel(v)}</Tag>
+                  ),
+                },
+                {
+                  title: "估算 Token",
+                  dataIndex: "estimatedTokens",
+                  sorter: (a, b) => a.estimatedTokens - b.estimatedTokens,
+                  defaultSortOrder: "descend" as const,
+                  render: (v: number) => (
+                    <Typography.Text strong style={{ fontFamily: MONO }}>
+                      {v.toLocaleString()}
+                    </Typography.Text>
+                  ),
+                },
+                {
+                  title: "未译字段",
+                  dataIndex: "pendingFields",
+                  render: (v: number) => v.toLocaleString(),
+                },
+                {
+                  title: "扫到资源",
+                  dataIndex: "scannedResources",
+                  render: (v: number) => v.toLocaleString(),
+                },
+                {
+                  title: "备注",
+                  dataIndex: "note",
+                  ellipsis: true,
+                  render: (v?: string) =>
+                    v ? (
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        {v}
+                      </Typography.Text>
+                    ) : (
+                      "—"
+                    ),
+                },
+              ]}
+            />
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

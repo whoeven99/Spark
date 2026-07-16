@@ -285,6 +285,41 @@ export function repairStuckTranslationJobs(body?: {
   });
 }
 
+export type RemainingTokenJobEstimate = {
+  jobId: string;
+  shopName: string;
+  source: string;
+  target: string;
+  status: string;
+  blobPrefix: string | null;
+  estimatedTokens: number;
+  pendingFields: number;
+  scannedResources: number;
+  scannedBlobs: number;
+  note?: string;
+};
+
+export type EstimateRemainingTokensResult = {
+  shop: string;
+  totalEstimatedTokens: number;
+  totalPendingFields: number;
+  jobCount: number;
+  missingJobIds: string[];
+  jobs: RemainingTokenJobEstimate[];
+  formula?: string;
+};
+
+/** 扫描选中任务 Blob 未译完条目，粗估剩余 token。 */
+export function estimateRemainingTokens(params: {
+  shop: string;
+  jobIds: string[];
+}): Promise<EstimateRemainingTokensResult> {
+  return apiFetch("/translations/estimate-remaining-tokens", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
 export function fetchTranslationJob(
   jobId: string,
   shop?: string,
