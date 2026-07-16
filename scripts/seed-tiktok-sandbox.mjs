@@ -13,6 +13,7 @@
  *   可选 TIKTOK_SANDBOX_ACCOUNT_NAME、TIKTOK_SANDBOX_IMAGE_ID
  */
 
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -137,6 +138,200 @@ function buildAdCreativeV12({ adName, imageId, identityId, identityType, display
   return creative;
 }
 
+const SPARK_IDENTITY_TYPES = new Set(["TT_USER", "AUTH_CODE", "BC_AUTH_TT"]);
+
+function isSparkIdentityType(identityType) {
+  return SPARK_IDENTITY_TYPES.has(identityType);
+}
+
+function extractFirstTiktokItemId(videoList) {
+  for (const row of videoList ?? []) {
+    const id = row.item_id ?? row.tiktok_item_id;
+    if (id !== undefined) {
+      const normalized = String(id).trim();
+      if (normalized) return normalized;
+    }
+  }
+  return null;
+}
+
+async function uploadAdVideoByFile({ accessToken, advertiserId, filePath }) {
+  const resolved = path.resolve(filePath);
+  if (!existsSync(resolved)) return "";
+  const buffer = readFileSync(resolved);
+  const signature = createHash("md5").update(buffer).digest("hex");
+  const fileName = path.basename(resolved);
+
+  const json = await enqueueRequest(async () => {
+    const form = new FormData();
+    form.append("advertiser_id", advertiserId);
+    form.append("upload_type", "UPLOAD_BY_FILE");
+    form.append("video_signature", signature);
+    form.append("file_name", fileName);
+    form.append("video_file", new Blob([buffer]), fileName);
+
+    const response = await fetch(`${API_BASE}/file/video/ad/upload/`, {
+      method: "POST",
+      headers: { "Access-Token": accessToken },
+      body: form,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {
+      throw new Error(payload.message || `HTTP ${response.status}`);
+    }
+    return payload;
+  });
+
+  const row = Array.isArray(json.data) ? json.data[0] : json.data;
+  return row?.video_id ? String(row.video_id).trim() : "";
+}
+
+async function uploadAdVideoByUrl({ accessToken, advertiserId, videoUrl, fileName }) {
+  const json = await tiktokRequest({
+    method: "POST",
+    path: "/file/video/ad/upload/",
+    accessToken,
+    body: {
+      advertiser_id: advertiserId,
+      upload_type: "UPLOAD_BY_URL",
+      video_url: videoUrl,
+      file_name: fileName,
+    },
+  });
+  const row = Array.isArray(json.data) ? json.data[0] : json.data;
+  return row?.video_id ? String(row.video_id).trim() : "";
+}
+
+async function uploadAdImageByUrl({ accessToken, advertiserId, imageUrl, fileName }) {
+  const json = await tiktokRequest({
+    method: "POST",
+    path: "/file/image/ad/upload/",
+    accessToken,
+    body: {
+      advertiser_id: advertiserId,
+      upload_type: "UPLOAD_BY_URL",
+      image_url: imageUrl,
+      file_name: fileName,
+    },
+  });
+  return json.data?.image_id ? String(json.data.image_id).trim() : "";
+}
+
+async function resolveUploadedVideoAdCreative({
+  adName,
+  identityId,
+  identityType,
+  accessToken,
+  advertiserId,
+}) {
+  const videoFile = env("TIKTOK_SANDBOX_SEED_VIDEO_FILE");
+  const videoUrl = env("TIKTOK_SANDBOX_SEED_VIDEO_URL");
+  let videoId = "";
+
+  if (videoFile) {
+    videoId = await uploadAdVideoByFile({ accessToken, advertiserId, filePath: videoFile });
+    if (!videoId) {
+      return {
+        action: "skip",
+        reason: `无法从 TIKTOK_SANDBOX_SEED_VIDEO_FILE 上传视频：${path.resolve(videoFile)}`,
+      };
+    }
+  } else if (videoUrl) {
+    videoId = await uploadAdVideoByUrl({
+      accessToken,
+      advertiserId,
+      videoUrl,
+      fileName: `spark-sandbox-${Date.now().toString(36)}.mp4`,
+    });
+    if (!videoId) {
+      return {
+        action: "skip",
+        reason: "无法从 TIKTOK_SANDBOX_SEED_VIDEO_URL 上传视频，请改用本地文件",
+      };
+    }
+  } else {
+    return {
+      action: "skip",
+      reason:
+        "无 Spark 帖子且未配置测试视频：请在 @ciwiai 发布视频，或设置 TIKTOK_SANDBOX_SEED_VIDEO_FILE，也可运行 node scripts/upload-tiktok-sandbox-creative.mjs --file <mp4>",
+    };
+  }
+
+  const creative = {
+    ad_name: adName,
+    ad_format: "SINGLE_VIDEO",
+    identity_id: identityId,
+    identity_type: identityType,
+    video_id: videoId,
+    ad_text: "Spark sandbox test",
+    call_to_action: "LEARN_MORE",
+    landing_page_url: "https://example.com",
+  };
+
+  return { action: "create", creative, videoId };
+}
+
+async function resolveSeedAdCreative({
+  adName,
+  imageId,
+  identityId,
+  identityType,
+  displayName,
+  accessToken,
+  advertiserId,
+}) {
+  if (identityType === "CUSTOMIZED_USER") {
+    return {
+      action: "skip",
+      reason:
+        "沙盒已不再支持 CUSTOMIZED_USER 创建广告；请改用 TT_USER，并在对应 TikTok 账号发布至少一条公开视频",
+    };
+  }
+
+  if (isSparkIdentityType(identityType)) {
+    const videoJson = await tiktokRequest({
+      path: "/identity/video/get/",
+      accessToken,
+      query: {
+        advertiser_id: advertiserId,
+        identity_id: identityId,
+        identity_type: identityType,
+        page: "1",
+        page_size: "10",
+      },
+    });
+    const tiktokItemId = extractFirstTiktokItemId(videoJson.data?.video_list);
+    if (tiktokItemId) {
+      return {
+        action: "create",
+        creative: {
+          ad_name: adName,
+          identity_id: identityId,
+          identity_type: identityType,
+          tiktok_item_id: tiktokItemId,
+          ad_text: "Spark sandbox test",
+          call_to_action: "LEARN_MORE",
+          landing_page_url: "https://example.com",
+        },
+      };
+    }
+
+    console.warn("no spark post; uploading ad video asset instead");
+    return resolveUploadedVideoAdCreative({
+      adName,
+      identityId,
+      identityType,
+      accessToken,
+      advertiserId,
+    });
+  }
+
+  return {
+    action: "create",
+    creative: buildAdCreativeV12({ adName, imageId, identityId, identityType, displayName }),
+  };
+}
+
 function extractAdId(data) {
   if (!data) return "";
   if (Array.isArray(data.ad_ids) && data.ad_ids.length > 0) {
@@ -235,28 +430,34 @@ async function main() {
   if (adgroupId) {
     try {
       console.log("Creating ad (v1.2)…");
-      const adJson = await tiktokRequest({
-        method: "POST",
-        path: "/ad/create/",
+      const creativePlan = await resolveSeedAdCreative({
+        adName,
+        imageId,
+        identityId,
+        identityType,
+        displayName: accountName,
         accessToken,
-        apiBase: API_BASE_V12,
-        body: {
-          advertiser_id: advertiserId,
-          adgroup_id: adgroupId,
-          creatives: [
-            buildAdCreativeV12({
-              adName,
-              imageId,
-              identityId,
-              identityType,
-              displayName: accountName,
-            }),
-          ],
-        },
+        advertiserId,
       });
-      adId = extractAdId(adJson.data);
-      console.log("ad_id:", adId || "(empty)");
-      if (!adId) warnings.push("ad/create missing ad_id");
+      if (creativePlan.action === "skip") {
+        warnings.push(`ad/create skipped: ${creativePlan.reason}`);
+        console.warn(warnings[warnings.length - 1]);
+      } else {
+        const adJson = await tiktokRequest({
+          method: "POST",
+          path: "/ad/create/",
+          accessToken,
+          apiBase: API_BASE_V12,
+          body: {
+            advertiser_id: advertiserId,
+            adgroup_id: adgroupId,
+            creatives: [creativePlan.creative],
+          },
+        });
+        adId = extractAdId(adJson.data);
+        console.log("ad_id:", adId || "(empty)");
+        if (!adId) warnings.push("ad/create missing ad_id");
+      }
     } catch (e) {
       warnings.push(`ad/create failed: ${e.message || e}`);
       console.warn(warnings[warnings.length - 1]);

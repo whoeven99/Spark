@@ -1715,7 +1715,7 @@
       "fieldBody": "正文"
     },
     "tiktok": {
-      "notConnected": "TikTok 广告主账户未连接。请先在 Ads Catalog 中完成 TikTok 授权。",
+      "notConnected": "TikTok 广告主账户未连接。请先完成 TikTok 授权（无需绑定商品目录即可创建广告）。",
       "connectedAs": "已连接：广告主 {{id}}",
       "fieldObjective": "广告目标",
       "objectiveTraffic": "流量",

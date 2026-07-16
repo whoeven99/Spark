@@ -5,7 +5,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import {
   getMetaAdsCredential,
-  getTiktokCatalogCredential,
+  getTiktokAdsInsightsCredential,
   getGoogleAdsCredential,
 } from "../server/adsCatalog/credentialStore.server";
 import { RoutePageFallback } from "./component/RoutePageFallback";
@@ -21,7 +21,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const [metaCred, tiktokCred, googleCred] = await Promise.all([
     getMetaAdsCredential(shop),
-    getTiktokCatalogCredential(shop),
+    getTiktokAdsInsightsCredential(shop),
     getGoogleAdsCredential(shop),
   ]);
 

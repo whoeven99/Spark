@@ -6,6 +6,9 @@
  * Insights 指标由本地 mock 注入（沙盒无真实投放）。
  */
 
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import type { AdsInsightsCampaign, AdsInsightsDeepRow, AdsInsightsMetrics } from "./types.server";
 import { finalizeMetrics } from "./types.server";
 import { mergeMetrics } from "./nest.server";
@@ -21,6 +24,7 @@ const SANDBOX_MIN_REQUEST_INTERVAL_MS = 1_500;
 const SANDBOX_QPS_MAX_RETRIES = 5;
 /** 沙盒创意占位图；可用 TIKTOK_SANDBOX_IMAGE_ID 覆盖。 */
 const DEFAULT_SANDBOX_IMAGE_ID = "ad-site-i18n-sg/202208095d0d1d72383f815646c5b090";
+/** 无 Spark 帖子时，可用 TIKTOK_SANDBOX_SEED_VIDEO_FILE / TIKTOK_SANDBOX_SEED_VIDEO_URL 上传广告素材。 */
 
 let sandboxRequestQueue: Promise<unknown> = Promise.resolve();
 let lastSandboxRequestFinishedAt = 0;
@@ -187,6 +191,260 @@ function buildAdCreativeV12(params: {
     creative.display_name = params.displayName;
   }
   return creative;
+}
+
+const SPARK_IDENTITY_TYPES = new Set(["TT_USER", "AUTH_CODE", "BC_AUTH_TT"]);
+
+/** TT_USER 等授权账号身份需绑定 TikTok 帖子（Spark Ad），不能用上传图片。 */
+export function isTiktokSparkIdentityType(identityType: string): boolean {
+  return SPARK_IDENTITY_TYPES.has(identityType);
+}
+
+/** 从 identity/video/get 结果中取第一条可用 item_id。 */
+export function extractFirstTiktokItemId(
+  videoList: Array<Record<string, unknown>> | undefined,
+): string | null {
+  for (const row of videoList ?? []) {
+    const id = row.item_id ?? row.tiktok_item_id;
+    if (id !== undefined) {
+      const normalized = String(id).trim();
+      if (normalized) return normalized;
+    }
+  }
+  return null;
+}
+
+type SandboxSeedAdCreativePlan =
+  | { action: "create"; creative: Record<string, unknown> }
+  | { action: "skip"; reason: string };
+
+function resolveSandboxSeedVideoFile(): string {
+  return readEnv("TIKTOK_SANDBOX_SEED_VIDEO_FILE");
+}
+
+function resolveSandboxSeedVideoUrl(): string {
+  return readEnv("TIKTOK_SANDBOX_SEED_VIDEO_URL");
+}
+
+async function uploadSandboxAdVideoByFile(params: {
+  accessToken: string;
+  advertiserId: string;
+  filePath: string;
+}): Promise<string | null> {
+  const filePath = path.resolve(params.filePath);
+  if (!existsSync(filePath)) return null;
+
+  const buffer = readFileSync(filePath);
+  const signature = createHash("md5").update(buffer).digest("hex");
+  const fileName = path.basename(filePath);
+
+  const json = await enqueueSandboxRequest(async () => {
+    const form = new FormData();
+    form.append("advertiser_id", params.advertiserId);
+    form.append("upload_type", "UPLOAD_BY_FILE");
+    form.append("video_signature", signature);
+    form.append("file_name", fileName);
+    form.append("video_file", new Blob([buffer]), fileName);
+
+    const response = await fetch(`${TIKTOK_SANDBOX_API_BASE}/file/video/ad/upload/`, {
+      method: "POST",
+      headers: { "Access-Token": params.accessToken },
+      body: form,
+    });
+    const payload = (await response.json().catch(() => ({}))) as TiktokApiJson<{
+      data?: Array<{ video_id?: string }> | { video_id?: string };
+    }>;
+    if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {
+      throw new Error(`TikTok Sandbox /file/video/ad/upload/: ${payload.message || `HTTP ${response.status}`}`);
+    }
+    return payload;
+  });
+
+  const row = Array.isArray(json.data) ? json.data[0] : json.data;
+  const videoId = row?.video_id;
+  return videoId !== undefined ? String(videoId).trim() || null : null;
+}
+
+async function uploadSandboxAdVideoByUrl(params: {
+  accessToken: string;
+  advertiserId: string;
+  videoUrl: string;
+  fileName: string;
+}): Promise<string | null> {
+  const json = await tiktokSandboxRequest<{
+    data?: Array<{ video_id?: string }> | { video_id?: string };
+  }>({
+    method: "POST",
+    path: "/file/video/ad/upload/",
+    accessToken: params.accessToken,
+    body: {
+      advertiser_id: params.advertiserId,
+      upload_type: "UPLOAD_BY_URL",
+      video_url: params.videoUrl,
+      file_name: params.fileName,
+    },
+  });
+  const row = Array.isArray(json.data) ? json.data[0] : json.data;
+  const videoId = row?.video_id;
+  return videoId !== undefined ? String(videoId).trim() || null : null;
+}
+
+function buildSparkPostAdCreative(params: {
+  adName: string;
+  identityId: string;
+  identityType: string;
+  tiktokItemId: string;
+}): Record<string, unknown> {
+  return {
+    ad_name: params.adName,
+    identity_id: params.identityId,
+    identity_type: params.identityType,
+    tiktok_item_id: params.tiktokItemId,
+    ad_text: "Spark sandbox test",
+    call_to_action: "LEARN_MORE",
+    landing_page_url: "https://example.com",
+  };
+}
+
+function buildUploadedVideoAdCreative(params: {
+  adName: string;
+  identityId: string;
+  identityType: string;
+  videoId: string;
+  coverImageId?: string | null;
+}): Record<string, unknown> {
+  const creative: Record<string, unknown> = {
+    ad_name: params.adName,
+    ad_format: "SINGLE_VIDEO",
+    identity_id: params.identityId,
+    identity_type: params.identityType,
+    video_id: params.videoId,
+    ad_text: "Spark sandbox test",
+    call_to_action: "LEARN_MORE",
+    landing_page_url: "https://example.com",
+  };
+  if (params.coverImageId) {
+    creative.image_ids = [params.coverImageId];
+  }
+  return creative;
+}
+
+async function resolveUploadedVideoAdCreative(params: {
+  adName: string;
+  identityId: string;
+  identityType: string;
+  accessToken: string;
+  advertiserId: string;
+}): Promise<SandboxSeedAdCreativePlan> {
+  const videoFile = resolveSandboxSeedVideoFile();
+  const videoUrl = resolveSandboxSeedVideoUrl();
+  let videoId: string | null = null;
+
+  if (videoFile) {
+    videoId = await uploadSandboxAdVideoByFile({
+      accessToken: params.accessToken,
+      advertiserId: params.advertiserId,
+      filePath: videoFile,
+    });
+    if (!videoId) {
+      return {
+        action: "skip",
+        reason: `无法从 TIKTOK_SANDBOX_SEED_VIDEO_FILE 上传视频：${path.resolve(videoFile)}`,
+      };
+    }
+  } else if (videoUrl) {
+    videoId = await uploadSandboxAdVideoByUrl({
+      accessToken: params.accessToken,
+      advertiserId: params.advertiserId,
+      videoUrl,
+      fileName: `spark-sandbox-${Date.now().toString(36)}.mp4`,
+    });
+    if (!videoId) {
+      return {
+        action: "skip",
+        reason: "无法从 TIKTOK_SANDBOX_SEED_VIDEO_URL 上传视频，请改用本地文件或检查 URL 可被 TikTok 拉取",
+      };
+    }
+  } else {
+    return {
+      action: "skip",
+      reason:
+        "无 Spark 帖子且未配置测试视频：请在 @ciwiai 发布一条公开视频，或设置 TIKTOK_SANDBOX_SEED_VIDEO_FILE（推荐，竖屏 ≥540×960），也可运行 node scripts/upload-tiktok-sandbox-creative.mjs --file <mp4>",
+    };
+  }
+
+  return {
+    action: "create",
+    creative: buildUploadedVideoAdCreative({
+      adName: params.adName,
+      identityId: params.identityId,
+      identityType: params.identityType,
+      videoId,
+      coverImageId: null,
+    }),
+  };
+}
+
+async function resolveSandboxSeedAdCreative(params: {
+  adName: string;
+  imageId: string;
+  identityId: string;
+  identityType: string;
+  displayName: string | null;
+  accessToken: string;
+  advertiserId: string;
+}): Promise<SandboxSeedAdCreativePlan> {
+  if (params.identityType === "CUSTOMIZED_USER") {
+    return {
+      action: "skip",
+      reason:
+        "沙盒已不再支持 CUSTOMIZED_USER 创建广告；请改用 TT_USER，并在对应 TikTok 账号发布至少一条公开视频",
+    };
+  }
+
+  if (isTiktokSparkIdentityType(params.identityType)) {
+    const videoJson = await tiktokSandboxRequest<{
+      data?: { video_list?: Array<Record<string, unknown>> };
+    }>({
+      path: "/identity/video/get/",
+      accessToken: params.accessToken,
+      query: {
+        advertiser_id: params.advertiserId,
+        identity_id: params.identityId,
+        identity_type: params.identityType,
+        page: "1",
+        page_size: "10",
+      },
+    });
+    const tiktokItemId = extractFirstTiktokItemId(videoJson.data?.video_list);
+    if (tiktokItemId) {
+      return {
+        action: "create",
+        creative: buildSparkPostAdCreative({
+          adName: params.adName,
+          identityId: params.identityId,
+          identityType: params.identityType,
+          tiktokItemId,
+        }),
+      };
+    }
+
+    console.warn(
+      `${LOG_PREFIX} seed no spark post for identity ${params.identityId}; uploading ad video asset instead`,
+    );
+    return resolveUploadedVideoAdCreative({
+      adName: params.adName,
+      identityId: params.identityId,
+      identityType: params.identityType,
+      accessToken: params.accessToken,
+      advertiserId: params.advertiserId,
+    });
+  }
+
+  return {
+    action: "create",
+    creative: buildAdCreativeV12(params),
+  };
 }
 
 function extractAdId(data: Record<string, unknown> | undefined): string | null {
@@ -392,28 +650,33 @@ export async function seedTiktokSandboxMinimalStructure(): Promise<TiktokSandbox
   let adId: string | null = null;
   if (adgroupId) {
     try {
-      const adJson = await tiktokSandboxRequest<{ data?: Record<string, unknown> }>({
-        method: "POST",
-        path: "/ad/create/",
+      const creativePlan = await resolveSandboxSeedAdCreative({
+        adName,
+        imageId,
+        identityId: creds.identityId,
+        identityType: creds.identityType,
+        displayName,
         accessToken: creds.accessToken,
-        apiBase: TIKTOK_SANDBOX_API_BASE_V12,
-        body: {
-          advertiser_id: creds.advertiserId,
-          adgroup_id: adgroupId,
-          creatives: [
-            buildAdCreativeV12({
-              adName,
-              imageId,
-              identityId: creds.identityId,
-              identityType: creds.identityType,
-              displayName,
-            }),
-          ],
-        },
+        advertiserId: creds.advertiserId,
       });
-      adId = extractAdId(adJson.data);
-      if (!adId) {
-        warnings.push("ad/create 未返回 ad_id");
+      if (creativePlan.action === "skip") {
+        warnings.push(`ad/create 跳过: ${creativePlan.reason}`);
+      } else {
+        const adJson = await tiktokSandboxRequest<{ data?: Record<string, unknown> }>({
+          method: "POST",
+          path: "/ad/create/",
+          accessToken: creds.accessToken,
+          apiBase: TIKTOK_SANDBOX_API_BASE_V12,
+          body: {
+            advertiser_id: creds.advertiserId,
+            adgroup_id: adgroupId,
+            creatives: [creativePlan.creative],
+          },
+        });
+        adId = extractAdId(adJson.data);
+        if (!adId) {
+          warnings.push("ad/create 未返回 ad_id");
+        }
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

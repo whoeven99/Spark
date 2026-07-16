@@ -5,11 +5,13 @@ import { emptyMetrics, finalizeMetrics, parseAdsInsightsView } from "~/server/ad
 import {
   applyTiktokSandboxMockMetrics,
   buildTiktokSandboxMockMetrics,
+  extractFirstTiktokItemId,
   getTiktokSandboxCredentials,
   isTiktokSandboxConfigured,
   isTiktokSandboxIdentityConfigured,
   isTiktokSandboxApiBase,
   isTiktokSandboxQpsLimitMessage,
+  isTiktokSparkIdentityType,
 } from "~/server/adsInsights/tiktokSandbox.server";
 import {
   applyGoogleSandboxMockMetrics,
@@ -226,6 +228,18 @@ describe("tiktok sandbox env", () => {
   it("detects TikTok sandbox API base", () => {
     expect(isTiktokSandboxApiBase("https://sandbox-ads.tiktok.com/open_api/v1.3")).toBe(true);
     expect(isTiktokSandboxApiBase("https://business-api.tiktok.com/open_api/v1.3")).toBe(false);
+  });
+
+  it("resolves spark identity and tiktok item id helpers", () => {
+    expect(isTiktokSparkIdentityType("TT_USER")).toBe(true);
+    expect(isTiktokSparkIdentityType("CUSTOMIZED_USER")).toBe(false);
+    expect(
+      extractFirstTiktokItemId([
+        { video_id: "v1" },
+        { item_id: "7123456789012345678" },
+      ]),
+    ).toBe("7123456789012345678");
+    expect(extractFirstTiktokItemId([])).toBeNull();
   });
 
   it("builds deterministic mock metrics from seed", () => {

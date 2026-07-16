@@ -3,7 +3,7 @@ import { data } from "react-router";
 import { authenticate } from "../shopify.server";
 import {
   getMetaAdsCredential,
-  getTiktokCatalogCredential,
+  getTiktokAdsInsightsCredential,
   getGoogleAdsCredential,
 } from "../server/adsCatalog/credentialStore.server";
 import { createMetaAd } from "../server/adsCreate/metaAdsCreate.server";
@@ -57,8 +57,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const form = body.tiktok;
       if (!form) throw new Error("缺少 tiktok 表单数据");
 
-      const cred = await getTiktokCatalogCredential(shop);
-      if (!cred) throw new Error("TikTok 广告主账户未连接，请前往 Ads Catalog 授权");
+      const cred = await getTiktokAdsInsightsCredential(shop);
+      if (!cred) throw new Error("TikTok 广告主账户未连接，请先完成 TikTok 授权");
 
       const result = await createTiktokAd({
         accessToken: cred.accessToken,

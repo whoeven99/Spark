@@ -1,6 +1,6 @@
 /**
  * TikTok Marketing API — 广告创建服务。
- * 依赖 TiktokCatalogCredential（tiktok_catalog 平台），复用已有 advertiser_id。
+ * 依赖 TiktokAdsInsightsCredential（OAuth 完成即可，无需绑定商品 Catalog）。
  *
  * API 参考：https://business-api.tiktok.com/portal/docs
  */

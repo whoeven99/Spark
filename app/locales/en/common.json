@@ -1715,7 +1715,7 @@
       "fieldBody": "Primary text"
     },
     "tiktok": {
-      "notConnected": "TikTok advertiser not connected. Please authorize TikTok in Ads Catalog first.",
+      "notConnected": "TikTok advertiser not connected. Authorize TikTok to continue — product catalog binding is not required for ad creation.",
       "connectedAs": "Connected: Advertiser {{id}}",
       "fieldObjective": "Campaign objective",
       "objectiveTraffic": "Traffic",
