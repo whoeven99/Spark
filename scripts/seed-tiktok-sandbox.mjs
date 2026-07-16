@@ -12,6 +12,7 @@
  *   可选 TIKTOK_SANDBOX_IMAGE_ID
  */
 
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,7 +21,11 @@ const API_BASE = "https://sandbox-ads.tiktok.com/open_api/v1.3";
 /** seed 的 ad/create 固定走 v1.2 */
 const AD_CREATE_API_BASE = "https://sandbox-ads.tiktok.com/open_api/v1.2";
 const DEFAULT_IDENTITY_TYPE = "CUSTOMIZED_USER";
+/** 创意占位图；非 1:1，不可直接作 Identity 头像 */
 const DEFAULT_IMAGE_ID = "ad-site-i18n-sg/202208095d0d1d72383f815646c5b090";
+/** 内置 128×128 纯色 PNG，供 identity/create */
+const SQUARE_AVATAR_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAIAAABMXPacAAAA+UlEQVR4nO3RQQ0AIAzAwElDGuIQhow9ekkFNLk592mxWT+IBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtPupeBbD2Il/AAAAAAElFTkSuQmCC";
 
 function loadDotEnv() {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -75,6 +80,42 @@ function formatScheduleStart() {
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:00:00`;
 }
 
+function isNonSquareAvatarError(message) {
+  const lower = String(message || "").toLowerCase();
+  return (
+    lower.includes("width") &&
+    lower.includes("height") &&
+    (lower.includes("not equal") || lower.includes("1:1") || lower.includes("ratio"))
+  );
+}
+
+async function uploadSquareAvatar({ accessToken, advertiserId }) {
+  const bytes = Buffer.from(SQUARE_AVATAR_PNG_BASE64, "base64");
+  const signature = createHash("md5").update(bytes).digest("hex");
+  const form = new FormData();
+  form.append("advertiser_id", advertiserId);
+  form.append("upload_type", "UPLOAD_BY_FILE");
+  form.append("image_signature", signature);
+  form.append("file_name", "spark-sandbox-avatar.png");
+  form.append(
+    "image_file",
+    new Blob([bytes], { type: "image/png" }),
+    "spark-sandbox-avatar.png",
+  );
+  const response = await fetch(`${API_BASE}/file/image/ad/upload/`, {
+    method: "POST",
+    headers: { "Access-Token": accessToken },
+    body: form,
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok || (json.code !== undefined && json.code !== 0)) {
+    throw new Error(json.message || `HTTP ${response.status}`);
+  }
+  const imageId = String(json.data?.image_id || json.data?.id || "").trim();
+  if (!imageId) throw new Error("file/image/ad/upload missing image_id");
+  return imageId;
+}
+
 async function resolveIdentity({ accessToken, advertiserId, displayName, imageId, warnings }) {
   const identityId = env("TIKTOK_SANDBOX_IDENTITY_ID");
   if (identityId) {
@@ -109,7 +150,20 @@ async function resolveIdentity({ accessToken, advertiserId, displayName, imageId
     console.warn(warnings[warnings.length - 1]);
   }
 
-  try {
+  let avatarUri = env("TIKTOK_SANDBOX_IMAGE_ID") || "";
+  if (!avatarUri) {
+    try {
+      console.log("Uploading 1:1 avatar for identity/create…");
+      avatarUri = await uploadSquareAvatar({ accessToken, advertiserId });
+      console.log("avatar image_id:", avatarUri);
+    } catch (e) {
+      warnings.push(`avatar upload failed: ${e.message || e}`);
+      console.warn(warnings[warnings.length - 1]);
+      avatarUri = imageId;
+    }
+  }
+
+  const tryCreate = async (uri) => {
     console.log("Creating identity via identity/create…");
     const json = await tiktokRequest({
       method: "POST",
@@ -118,10 +172,14 @@ async function resolveIdentity({ accessToken, advertiserId, displayName, imageId
       body: {
         advertiser_id: advertiserId,
         display_name: displayName.slice(0, 100),
-        image_uri: imageId,
+        image_uri: uri,
       },
     });
-    const id = String(json.data?.identity_id || "").trim();
+    return String(json.data?.identity_id || "").trim();
+  };
+
+  try {
+    const id = await tryCreate(avatarUri);
     if (id) {
       return { identityId: id, identityType: DEFAULT_IDENTITY_TYPE };
     }
@@ -129,6 +187,21 @@ async function resolveIdentity({ accessToken, advertiserId, displayName, imageId
   } catch (e) {
     warnings.push(`identity/create failed: ${e.message || e}`);
     console.warn(warnings[warnings.length - 1]);
+    if (isNonSquareAvatarError(e.message || e) && env("TIKTOK_SANDBOX_IMAGE_ID")) {
+      try {
+        console.log("Retrying identity/create with uploaded 1:1 avatar…");
+        const squareUri = await uploadSquareAvatar({ accessToken, advertiserId });
+        const id = await tryCreate(squareUri);
+        if (id) {
+          warnings.push("identity/create succeeded after uploading 1:1 avatar");
+          return { identityId: id, identityType: DEFAULT_IDENTITY_TYPE };
+        }
+        warnings.push("identity/create (1:1 retry) missing identity_id");
+      } catch (retryError) {
+        warnings.push(`identity/create (1:1 retry) failed: ${retryError.message || retryError}`);
+        console.warn(warnings[warnings.length - 1]);
+      }
+    }
   }
 
   return null;

@@ -241,12 +241,18 @@ describe("tiktok sandbox env", () => {
 
   it("falls back to identity/create when get fails", async () => {
     const prevId = process.env.TIKTOK_SANDBOX_IDENTITY_ID;
+    const prevImage = process.env.TIKTOK_SANDBOX_IMAGE_ID;
     delete process.env.TIKTOK_SANDBOX_IDENTITY_ID;
+    delete process.env.TIKTOK_SANDBOX_IMAGE_ID;
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ code: 40001, message: "identity not supported" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ code: 0, data: { image_id: "avatar-sq-1" } }),
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -263,11 +269,61 @@ describe("tiktok sandbox env", () => {
     });
     expect(identity).toEqual({ identityId: "created-1", identityType: "CUSTOMIZED_USER" });
     expect(warnings.some((w) => w.includes("identity/get"))).toBe(true);
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/identity/create/");
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/file/image/ad/upload/");
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain("/identity/create/");
 
     vi.unstubAllGlobals();
     if (prevId === undefined) delete process.env.TIKTOK_SANDBOX_IDENTITY_ID;
     else process.env.TIKTOK_SANDBOX_IDENTITY_ID = prevId;
+    if (prevImage === undefined) delete process.env.TIKTOK_SANDBOX_IMAGE_ID;
+    else process.env.TIKTOK_SANDBOX_IMAGE_ID = prevImage;
+  });
+
+  it("retries identity/create with uploaded square avatar when image is not 1:1", async () => {
+    const prevId = process.env.TIKTOK_SANDBOX_IDENTITY_ID;
+    const prevImage = process.env.TIKTOK_SANDBOX_IMAGE_ID;
+    delete process.env.TIKTOK_SANDBOX_IDENTITY_ID;
+    process.env.TIKTOK_SANDBOX_IMAGE_ID = "non-square-image";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ code: 0, data: { identity_list: [] } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          code: 40002,
+          message: "Avatar's width & height is not equal.",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ code: 0, data: { image_id: "avatar-sq-2" } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ code: 0, data: { identity_id: "created-2" } }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const warnings: string[] = [];
+    const identity = await resolveTiktokSandboxIdentity({
+      accessToken: "tok",
+      advertiserId: "adv",
+      displayName: "Spark",
+      warnings,
+    });
+    expect(identity).toEqual({ identityId: "created-2", identityType: "CUSTOMIZED_USER" });
+    expect(warnings.some((w) => w.includes("1:1 头像重试") && w.includes("成功"))).toBe(true);
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain("/file/image/ad/upload/");
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain("/identity/create/");
+
+    vi.unstubAllGlobals();
+    if (prevId === undefined) delete process.env.TIKTOK_SANDBOX_IDENTITY_ID;
+    else process.env.TIKTOK_SANDBOX_IDENTITY_ID = prevId;
+    if (prevImage === undefined) delete process.env.TIKTOK_SANDBOX_IMAGE_ID;
+    else process.env.TIKTOK_SANDBOX_IMAGE_ID = prevImage;
   });
 
   afterEach(() => {

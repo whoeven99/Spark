@@ -3,6 +3,8 @@
  * 凭证仅来自环境变量，绝不读取 AdPlatformCredential。
  */
 
+import { createHash } from "node:crypto";
+
 import { formatOutboundErrorLog, formatOutboundNetworkError } from "../common/outboundError.server";
 
 export const TIKTOK_SANDBOX_API_BASE = "https://sandbox-ads.tiktok.com/open_api/v1.3";
@@ -11,8 +13,14 @@ const TIKTOK_SANDBOX_AD_CREATE_API_BASE = "https://sandbox-ads.tiktok.com/open_a
 
 const LOG_PREFIX = "[AdsInsights][TikTok][Sandbox]";
 const DEFAULT_IDENTITY_TYPE = "CUSTOMIZED_USER";
-/** 沙盒占位图；可用 TIKTOK_SANDBOX_IMAGE_ID 覆盖为账户内真实素材。 */
+/** 沙盒创意占位图；可用 TIKTOK_SANDBOX_IMAGE_ID 覆盖。非 1:1，不可直接作 Identity 头像。 */
 const DEFAULT_SANDBOX_IMAGE_ID = "ad-site-i18n-sg/202208095d0d1d72383f815646c5b090";
+/**
+ * 内置 128×128 纯色 PNG（1:1），供 identity/create 头像上传。
+ * TikTok 要求 Avatar width & height equal。
+ */
+const SQUARE_AVATAR_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAIAAABMXPacAAAA+UlEQVR4nO3RQQ0AIAzAwElDGuIQhow9ekkFNLk592mxWT+IBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtAABoBwBAOwAA2gEA0A4AgHYAALQDAKAdAADtPupeBbD2Il/AAAAAAElFTkSuQmCC";
 
 export type TiktokSandboxCredentials = {
   accessToken: string;
@@ -58,6 +66,85 @@ function sandboxImageId(): string {
 }
 
 type TiktokApiJson<T> = T & { code?: number; message?: string; request_id?: string };
+
+function isNonSquareAvatarError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("width") &&
+    lower.includes("height") &&
+    (lower.includes("not equal") || lower.includes("1:1") || lower.includes("ratio"))
+  );
+}
+
+/**
+ * 上传 1:1 头像到沙盒素材库，返回 image_id（供 identity/create 的 image_uri）。
+ */
+export async function uploadTiktokSandboxSquareAvatar(params: {
+  accessToken: string;
+  advertiserId: string;
+}): Promise<string> {
+  const bytes = Buffer.from(SQUARE_AVATAR_PNG_BASE64, "base64");
+  const signature = createHash("md5").update(bytes).digest("hex");
+  const form = new FormData();
+  form.append("advertiser_id", params.advertiserId);
+  form.append("upload_type", "UPLOAD_BY_FILE");
+  form.append("image_signature", signature);
+  form.append("file_name", "spark-sandbox-avatar.png");
+  form.append(
+    "image_file",
+    new Blob([new Uint8Array(bytes)], { type: "image/png" }),
+    "spark-sandbox-avatar.png",
+  );
+
+  let response: Response;
+  try {
+    response = await fetch(`${TIKTOK_SANDBOX_API_BASE}/file/image/ad/upload/`, {
+      method: "POST",
+      headers: { "Access-Token": params.accessToken },
+      body: form,
+    });
+  } catch (e) {
+    throw new Error(`TikTok Sandbox 头像上传网络失败: ${formatOutboundNetworkError(e)}`, {
+      cause: e,
+    });
+  }
+
+  const json = (await response.json().catch(() => ({}))) as TiktokApiJson<{
+    data?: { image_id?: string; id?: string };
+  }>;
+  if (!response.ok || (json.code !== undefined && json.code !== 0)) {
+    const detail = json.message || `HTTP ${response.status}`;
+    throw new Error(`TikTok Sandbox /file/image/ad/upload/: ${detail}`);
+  }
+  const imageId = String(json.data?.image_id ?? json.data?.id ?? "").trim();
+  if (!imageId) {
+    throw new Error("TikTok Sandbox /file/image/ad/upload/ 未返回 image_id");
+  }
+  return imageId;
+}
+
+async function resolveIdentityAvatarImageUri(params: {
+  accessToken: string;
+  advertiserId: string;
+  warnings: string[];
+}): Promise<string | null> {
+  const configured = readEnv("TIKTOK_SANDBOX_IMAGE_ID");
+  if (configured) {
+    return configured;
+  }
+
+  try {
+    return await uploadTiktokSandboxSquareAvatar({
+      accessToken: params.accessToken,
+      advertiserId: params.advertiserId,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    params.warnings.push(`头像上传失败: ${msg}`);
+    console.warn(`${LOG_PREFIX} avatar upload ${formatOutboundErrorLog(e)}`);
+    return null;
+  }
+}
 
 export async function tiktokSandboxRequest<T>(params: {
   method?: "GET" | "POST";
@@ -160,7 +247,17 @@ export async function resolveTiktokSandboxIdentity(params: {
     console.warn(`${LOG_PREFIX} identity/get ${formatOutboundErrorLog(e)}`);
   }
 
-  try {
+  let imageUri = await resolveIdentityAvatarImageUri({
+    accessToken: params.accessToken,
+    advertiserId: params.advertiserId,
+    warnings: params.warnings,
+  });
+  if (!imageUri) {
+    // 环境未配 IMAGE_ID 且上传失败时，仍尝试默认图（可能非 1:1，便于暴露明确错误）
+    imageUri = sandboxImageId();
+  }
+
+  const tryCreate = async (uri: string) => {
     const json = await tiktokSandboxRequest<{ data?: { identity_id?: string } }>({
       method: "POST",
       path: "/identity/create/",
@@ -168,10 +265,14 @@ export async function resolveTiktokSandboxIdentity(params: {
       body: {
         advertiser_id: params.advertiserId,
         display_name: params.displayName.slice(0, 100),
-        image_uri: sandboxImageId(),
+        image_uri: uri,
       },
     });
-    const identityId = String(json.data?.identity_id ?? "").trim();
+    return String(json.data?.identity_id ?? "").trim() || null;
+  };
+
+  try {
+    const identityId = await tryCreate(imageUri);
     if (identityId) {
       return { identityId, identityType: DEFAULT_IDENTITY_TYPE };
     }
@@ -180,6 +281,26 @@ export async function resolveTiktokSandboxIdentity(params: {
     const msg = e instanceof Error ? e.message : String(e);
     params.warnings.push(`identity/create 失败: ${msg}`);
     console.warn(`${LOG_PREFIX} identity/create ${formatOutboundErrorLog(e)}`);
+
+    // 用户配置的 IMAGE_ID 非方形时，自动上传 1:1 头像重试一次
+    if (isNonSquareAvatarError(msg) && readEnv("TIKTOK_SANDBOX_IMAGE_ID")) {
+      try {
+        const squareUri = await uploadTiktokSandboxSquareAvatar({
+          accessToken: params.accessToken,
+          advertiserId: params.advertiserId,
+        });
+        const identityId = await tryCreate(squareUri);
+        if (identityId) {
+          params.warnings.push("已改用自动上传的 1:1 头像重试 identity/create 成功");
+          return { identityId, identityType: DEFAULT_IDENTITY_TYPE };
+        }
+        params.warnings.push("identity/create（1:1 头像重试）未返回 identity_id");
+      } catch (retryError) {
+        const retryMsg = retryError instanceof Error ? retryError.message : String(retryError);
+        params.warnings.push(`identity/create（1:1 头像重试）失败: ${retryMsg}`);
+        console.warn(`${LOG_PREFIX} identity/create retry ${formatOutboundErrorLog(retryError)}`);
+      }
+    }
   }
 
   return null;
