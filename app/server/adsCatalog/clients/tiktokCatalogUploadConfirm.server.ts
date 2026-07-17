@@ -1,3 +1,7 @@
+import { analyzeTiktokFeedLogCsv } from "./tiktokFeedLogCsv.server";
+
+export { parseTiktokFeedLogCsv, analyzeTiktokFeedLogCsv } from "./tiktokFeedLogCsv.server";
+
 const TIKTOK_API_BASE = "https://business-api.tiktok.com/open_api/v1.3";
 const LOG_PREFIX = "[AdsCatalog][TikTokConfirm]";
 
@@ -17,6 +21,8 @@ export interface TiktokProductUploadLog {
   /** TikTok 明细 CSV（通常在 feed_log_data.en） */
   feedLogDataUrl?: string;
   endTime?: string;
+  /** CSV 无法按 SKU 对齐时的摘要（供 UI 展示） */
+  feedCsvSummary?: string;
 }
 
 export interface ConfirmTiktokCatalogUploadResult {
@@ -243,118 +249,6 @@ export function parseTiktokProductUploadLog(data: unknown): TiktokProductUploadL
   };
 }
 
-/** 简易 RFC4180 CSV 行解析（支持引号与逗号）。 */
-export function parseCsvRows(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let field = "";
-  let inQuotes = false;
-  const input = text.replace(/^\uFEFF/, "");
-
-  for (let i = 0; i < input.length; i += 1) {
-    const ch = input[i];
-    if (inQuotes) {
-      if (ch === '"') {
-        if (input[i + 1] === '"') {
-          field += '"';
-          i += 1;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        field += ch;
-      }
-      continue;
-    }
-    if (ch === '"') {
-      inQuotes = true;
-      continue;
-    }
-    if (ch === ",") {
-      row.push(field);
-      field = "";
-      continue;
-    }
-    if (ch === "\n") {
-      row.push(field);
-      field = "";
-      if (row.some((cell) => cell.trim())) rows.push(row);
-      row = [];
-      continue;
-    }
-    if (ch === "\r") continue;
-    field += ch;
-  }
-  row.push(field);
-  if (row.some((cell) => cell.trim())) rows.push(row);
-  return rows;
-}
-
-function normalizeCsvHeader(header: string): string {
-  return header.trim().toLowerCase().replace(/[\s-]+/g, "_");
-}
-
-/**
- * 解析 TikTok feed_log_data CSV 中的逐 SKU 失败行。
- * 兼容常见列名：sku_id / error / issue / reason / status。
- */
-export function parseTiktokFeedLogCsv(text: string): Array<{ id: string; reason: string }> {
-  const rows = parseCsvRows(text);
-  if (rows.length < 2) return [];
-
-  const headers = rows[0].map(normalizeCsvHeader);
-  const findCol = (...names: string[]) => {
-    for (const name of names) {
-      const idx = headers.indexOf(name);
-      if (idx >= 0) return idx;
-    }
-    return -1;
-  };
-
-  const skuCol = findCol("sku_id", "sku", "product_id", "item_id", "id");
-  const reasonCol = findCol(
-    "error_message",
-    "error",
-    "issue",
-    "reason",
-    "message",
-    "description",
-    "error_description",
-    "fail_reason",
-  );
-  const statusCol = findCol("status", "result", "level", "severity");
-
-  if (skuCol < 0) return [];
-
-  const out: Array<{ id: string; reason: string }> = [];
-  for (const cells of rows.slice(1)) {
-    const id = String(cells[skuCol] ?? "").trim();
-    if (!id) continue;
-    const reason = reasonCol >= 0 ? String(cells[reasonCol] ?? "").trim() : "";
-    const rowStatus = statusCol >= 0 ? String(cells[statusCol] ?? "").toUpperCase() : "";
-    const looksSuccess =
-      rowStatus.includes("SUCCESS") ||
-      rowStatus.includes("SUCCEED") ||
-      rowStatus === "OK" ||
-      rowStatus === "PASS" ||
-      rowStatus === "APPROVED";
-    if (looksSuccess) continue;
-    const looksFailed =
-      rowStatus.includes("FAIL") ||
-      rowStatus.includes("ERROR") ||
-      rowStatus === "REJECTED" ||
-      rowStatus === "WARNING" ||
-      // 无明确成功状态时，有 reason 视为失败明细
-      Boolean(reason);
-    if (!looksFailed) continue;
-    out.push({
-      id,
-      reason: reason || `TikTok feed log status=${rowStatus || "failed"}`,
-    });
-  }
-  return out;
-}
-
 function mergeLogErrors(
   primary: Array<{ id: string; reason: string }>,
   extra: Array<{ id: string; reason: string }>,
@@ -380,29 +274,45 @@ async function enrichLogWithFeedCsv(params: {
     return params.log;
   }
 
-  console.info(`${LOG_PREFIX} step=feed_csv_request url=${url.slice(0, 180)}`);
+  console.info(`${LOG_PREFIX} step=feed_csv_request url=${url.slice(0, 240)}`);
   try {
-    const response = await params.fetchImpl(url, { method: "GET" });
+    const response = await params.fetchImpl(url, {
+      method: "GET",
+      headers: { Accept: "text/csv,text/plain,*/*" },
+    });
     const text = await response.text();
+    const contentType = response.headers.get("content-type") ?? "";
     if (!response.ok) {
       console.warn(
-        `${LOG_PREFIX} step=feed_csv_http_error http=${response.status} body=${text.slice(0, 200)}`,
+        `${LOG_PREFIX} step=feed_csv_http_error http=${response.status} contentType=${contentType} body=${text.slice(0, 300)}`,
       );
-      return params.log;
+      return {
+        ...params.log,
+        feedCsvSummary: `failed to download feed_log CSV (HTTP ${response.status})`,
+      };
     }
-    const csvErrors = parseTiktokFeedLogCsv(text);
+
+    const analysis = analyzeTiktokFeedLogCsv(text);
     console.info(
-      `${LOG_PREFIX} step=feed_csv_parsed errorCount=${csvErrors.length} sample=${JSON.stringify(csvErrors.slice(0, 5))}`,
+      `${LOG_PREFIX} step=feed_csv_parsed delimiter=${JSON.stringify(analysis.delimiter)} headers=${JSON.stringify(analysis.headers)} rowCount=${analysis.rowCount} errorCount=${analysis.errors.length} summaryCount=${analysis.summaryReasons.length} contentType=${contentType} preview=${JSON.stringify(text.slice(0, 400))}`,
     );
-    if (csvErrors.length === 0) return params.log;
+
+    const summary =
+      analysis.summaryReasons.slice(0, 3).join("；") ||
+      (analysis.errors[0]?.reason ?? "");
+
     return {
       ...params.log,
-      errors: mergeLogErrors(params.log.errors, csvErrors),
+      errors: mergeLogErrors(params.log.errors, analysis.errors),
+      ...(summary ? { feedCsvSummary: summary } : {}),
     };
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
     console.warn(`${LOG_PREFIX} step=feed_csv_error error=${detail}`);
-    return params.log;
+    return {
+      ...params.log,
+      feedCsvSummary: `failed to download feed_log CSV: ${detail}`,
+    };
   }
 }
 
@@ -532,12 +442,30 @@ export async function listTiktokCatalogSkuIds(params: {
 }
 
 function defaultRejectReason(log: TiktokProductUploadLog, feedLogId?: string): string {
-  const parts = ["rejected by TikTok Catalog product log"];
+  const parts: string[] = [];
+  if (log.feedCsvSummary) {
+    parts.push(log.feedCsvSummary);
+  } else {
+    parts.push("rejected by TikTok Catalog product log");
+  }
   if (log.successCount != null) parts.push(`add_count=${log.successCount}`);
   if (log.failedCount != null) parts.push(`error_count=${log.failedCount}`);
   if (feedLogId) parts.push(`feed_log=${feedLogId}`);
   if (log.endTime) parts.push(`end_time=${log.endTime}`);
+  if (log.feedLogDataUrl) parts.push(`details=${log.feedLogDataUrl}`);
   return parts.join(" | ");
+}
+
+function findErrorReason(
+  errorById: Map<string, string>,
+  skuId: string,
+): string | undefined {
+  if (errorById.has(skuId)) return errorById.get(skuId);
+  const lower = skuId.toLowerCase();
+  for (const [id, reason] of errorById) {
+    if (id.toLowerCase() === lower) return reason;
+  }
+  return undefined;
 }
 
 function settleFromProductLog(params: {
@@ -553,11 +481,12 @@ function settleFromProductLog(params: {
   for (const err of params.log.errors) {
     if (err.id) errorById.set(err.id, err.reason);
   }
+  const usedCsvIds = new Set<string>();
 
   let succeeded =
     params.log.successCount != null
       ? Math.max(0, Math.min(params.expected.length, params.log.successCount))
-      : params.expected.filter((id) => !errorById.has(id)).length;
+      : params.expected.filter((id) => !findErrorReason(errorById, id)).length;
 
   if (params.log.status === "failed" && params.log.successCount == null) {
     succeeded = 0;
@@ -566,22 +495,33 @@ function settleFromProductLog(params: {
   const fallbackReason = defaultRejectReason(params.log, params.feedLogId);
   const errors: Array<{ id: string; reason: string }> = [];
   for (const id of params.expected) {
-    if (errorById.has(id)) {
+    const matchedKey = [...errorById.keys()].find(
+      (key) => key === id || key.toLowerCase() === id.toLowerCase(),
+    );
+    if (matchedKey) {
+      usedCsvIds.add(matchedKey);
       errors.push({
         id,
-        reason: errorById.get(id) || fallbackReason,
+        reason: errorById.get(matchedKey) || fallbackReason,
       });
     }
   }
 
+  const unusedCsvErrors = [...errorById.entries()].filter(([csvId]) => !usedCsvIds.has(csvId));
+
   // 按计数补齐未给出明细的失败项，避免误报成功。
   const unresolved = params.expected.filter((id) => !errors.some((e) => e.id === id));
   let needFail = Math.max(0, params.expected.length - succeeded);
+  let unusedIdx = 0;
   for (const id of unresolved) {
     if (needFail <= 0) break;
-    // CSV 可能带非 expected 的 sku；expected 缺明细时用计数/摘要兜底
-    const csvHint = [...errorById.values()][0];
-    errors.push({ id, reason: csvHint || fallbackReason });
+    // CSV SKU 对不齐时：按顺序借用未匹配明细，再退回摘要/链接
+    const borrowed = unusedCsvErrors[unusedIdx];
+    unusedIdx += 1;
+    const reason = borrowed
+      ? `${borrowed[1]} (tiktok_sku=${borrowed[0]})`
+      : fallbackReason;
+    errors.push({ id, reason });
     needFail -= 1;
   }
 

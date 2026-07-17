@@ -88,6 +88,13 @@ describe("parseTiktokFeedLogCsv", () => {
       { id: "SKU-3", reason: 'invalid "image"' },
     ]);
   });
+
+  it("parses Chinese headers and tab delimiter", () => {
+    const csv = ["商品ID\t错误信息\t状态", "A2504\t图片尺寸过小\t错误"].join("\n");
+    expect(parseTiktokFeedLogCsv(csv)).toEqual([
+      { id: "A2504", reason: "图片尺寸过小" },
+    ]);
+  });
 });
 
 describe("confirmTiktokCatalogUpload", () => {
@@ -168,6 +175,48 @@ describe("confirmTiktokCatalogUpload", () => {
     expect(result.succeeded).toBe(0);
     expect(result.errors).toEqual([{ id: "SKU-1", reason: "image too small" }]);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("surfaces CSV summary and details URL when rows cannot be SKU-aligned", async () => {
+    const csvUrl = "https://cdn.example.com/feed-diag.csv";
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/catalog/product/log/")) {
+        return new Response(
+          JSON.stringify({
+            code: 0,
+            data: {
+              product_feed_log: {
+                add_count: 0,
+                error_count: 10,
+                end_time: "2026-07-17 07:18:32",
+                feed_log_data: { en: csvUrl },
+              },
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      if (url === csvUrl) {
+        return new Response("note\nImage must be at least 500x500 pixels\n", { status: 200 });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    const result = await confirmTiktokCatalogUpload({
+      accessToken: "tok",
+      advertiserId: "adv",
+      bcId: "bc",
+      catalogId: "cat",
+      feedLogId: "1367197677",
+      expectedSkuIds: ["A2504"],
+      deps: { fetchImpl, maxAttempts: 1, intervalMs: 0, sleep: async () => undefined },
+    });
+
+    expect(result.succeeded).toBe(0);
+    expect(result.errors[0]?.reason).toContain("Image must be at least 500x500 pixels");
+    expect(result.errors[0]?.reason).toContain(`details=${csvUrl}`);
+    expect(result.errors[0]?.reason).toContain("error_count=10");
   });
 
   it("falls back to product/get when log stays processing", async () => {
