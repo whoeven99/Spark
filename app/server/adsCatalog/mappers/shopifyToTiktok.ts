@@ -30,8 +30,11 @@ export interface TiktokLandingPage {
 }
 
 export interface TiktokProductDetail {
-  /** Catalog Product Parameters：new / refurbished / used */
-  condition: "new" | "refurbished" | "used";
+  /**
+   * TikTok Catalog JSON upload 枚举（大写），不同于 Meta/Google feed 的小写 condition。
+   * 允许值：EXCELLENT | FAIR | GOOD | NEW | OTHER | POOR | REFURBISHED | USED
+   */
+  condition: "NEW" | "REFURBISHED" | "USED" | "EXCELLENT" | "FAIR" | "GOOD" | "OTHER" | "POOR";
   age_group?: string;
   gender?: string;
   product_category?: string;
@@ -115,7 +118,7 @@ export function mapShopifyToTiktok(
   const skuId = product.sku || extractNumericId(product.id);
 
   const productDetail: TiktokProductDetail = {
-    condition: "new",
+    condition: "NEW",
   };
   if (product.gender) {
     productDetail.gender = product.gender;

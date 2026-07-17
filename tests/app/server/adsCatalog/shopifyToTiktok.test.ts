@@ -63,7 +63,7 @@ describe("mapShopifyToTiktok ECOM required fields", () => {
       landing_page: {
         landing_page_url: "https://example.myshopify.com/products/test-product",
       },
-      product_detail: { condition: "new" },
+      product_detail: { condition: "NEW" },
       additional_image_urls: ["https://cdn.example.com/b.jpg"],
       google_product_category: "Apparel & Accessories",
       item_group_id: "1",
