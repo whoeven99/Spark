@@ -14,6 +14,9 @@ export interface TiktokProductUploadLog {
   failedCount: number | null;
   errors: Array<{ id: string; reason: string }>;
   rawStatus?: string;
+  /** TikTok 明细 CSV（通常在 feed_log_data.en） */
+  feedLogDataUrl?: string;
+  endTime?: string;
 }
 
 export interface ConfirmTiktokCatalogUploadResult {
@@ -116,10 +119,82 @@ function extractLogErrors(data: Record<string, unknown>): Array<{ id: string; re
   return out;
 }
 
-/** 解析 /catalog/product/log/ 的 data 节点（兼容多种字段命名）。 */
+function pickFeedLogNode(root: Record<string, unknown>): Record<string, unknown> {
+  return (
+    asRecord(root.product_feed_log) ??
+    asRecord(root.feed_log) ??
+    asRecord(root.log) ??
+    root
+  );
+}
+
+/** 从 feed_log_data / download_path 提取明细 CSV URL，优先 en。 */
+export function extractFeedLogDataUrl(data: unknown): string | undefined {
+  const root = asRecord(data) ?? {};
+  const nested = pickFeedLogNode(root);
+  const candidates = [
+    nested.feed_log_data,
+    nested.download_path,
+    root.feed_log_data,
+    root.download_path,
+  ];
+  const preferredKeys = ["en", "en-US", "EN", "en_US"];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && /^https?:\/\//i.test(candidate.trim())) {
+      return candidate.trim();
+    }
+    const record = asRecord(candidate);
+    if (!record) continue;
+    for (const key of preferredKeys) {
+      const url = record[key];
+      if (typeof url === "string" && /^https?:\/\//i.test(url.trim())) {
+        return url.trim();
+      }
+    }
+    for (const value of Object.values(record)) {
+      if (typeof value === "string" && /^https?:\/\//i.test(value.trim())) {
+        return value.trim();
+      }
+    }
+  }
+  return undefined;
+}
+
+function inferStatusFromCounts(params: {
+  successCount: number | null;
+  failedCount: number | null;
+  errorCount: number;
+  hasEndTime: boolean;
+}): TiktokUploadLogStatus | null {
+  const { successCount, failedCount, errorCount, hasEndTime } = params;
+  if (failedCount != null && successCount != null) {
+    if (failedCount > 0 && successCount > 0) return "partial";
+    if (failedCount > 0) return "failed";
+    // add_count=0 & error_count=0 + end_time：处理结束但未入库，按失败终态
+    if (successCount === 0 && hasEndTime) return "failed";
+    return "success";
+  }
+  if (errorCount > 0 && (successCount == null || successCount === 0)) {
+    return "failed";
+  }
+  // TikTok product_feed_log 常无 status，仅有 end_time + add_count/error_count
+  if (hasEndTime) {
+    if (failedCount != null && failedCount > 0 && (successCount == null || successCount === 0)) {
+      return "failed";
+    }
+    if (successCount != null && successCount > 0 && (failedCount == null || failedCount === 0)) {
+      return "success";
+    }
+    if (successCount === 0) return "failed";
+    return "success";
+  }
+  return null;
+}
+
+/** 解析 /catalog/product/log/ 的 data 节点（兼容 product_feed_log / add_count）。 */
 export function parseTiktokProductUploadLog(data: unknown): TiktokProductUploadLog {
   const root = asRecord(data) ?? {};
-  const nested = asRecord(root.feed_log) ?? asRecord(root.log) ?? root;
+  const nested = pickFeedLogNode(root);
   const rawStatus = String(
     nested.status ??
       nested.process_status ??
@@ -131,29 +206,204 @@ export function parseTiktokProductUploadLog(data: unknown): TiktokProductUploadL
   const successCount =
     readNumber(nested.success_count) ??
     readNumber(nested.succeed_count) ??
+    readNumber(nested.add_count) ??
     readNumber(nested.success) ??
     null;
   const failedCount =
     readNumber(nested.failed_count) ??
     readNumber(nested.fail_count) ??
+    readNumber(nested.error_count) ??
     readNumber(nested.failure_count) ??
     null;
+  const endTime = String(nested.end_time ?? nested.finish_time ?? root.end_time ?? "").trim();
+  const feedLogDataUrl = extractFeedLogDataUrl(data);
   const errors = extractLogErrors(nested).concat(
     nested === root ? [] : extractLogErrors(root),
   );
 
   let status = normalizeUploadLogStatus(rawStatus);
   if (status === "unknown") {
-    if (failedCount != null && successCount != null) {
-      if (failedCount > 0 && successCount > 0) status = "partial";
-      else if (failedCount > 0) status = "failed";
-      else status = "success";
-    } else if (errors.length > 0 && (successCount == null || successCount === 0)) {
-      status = "failed";
-    }
+    status =
+      inferStatusFromCounts({
+        successCount,
+        failedCount,
+        errorCount: errors.length,
+        hasEndTime: Boolean(endTime),
+      }) ?? "unknown";
   }
 
-  return { status, successCount, failedCount, errors, rawStatus: rawStatus || undefined };
+  return {
+    status,
+    successCount,
+    failedCount,
+    errors,
+    rawStatus: rawStatus || undefined,
+    ...(feedLogDataUrl ? { feedLogDataUrl } : {}),
+    ...(endTime ? { endTime } : {}),
+  };
+}
+
+/** 简易 RFC4180 CSV 行解析（支持引号与逗号）。 */
+export function parseCsvRows(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+  const input = text.replace(/^\uFEFF/, "");
+
+  for (let i = 0; i < input.length; i += 1) {
+    const ch = input[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (input[i + 1] === '"') {
+          field += '"';
+          i += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inQuotes = true;
+      continue;
+    }
+    if (ch === ",") {
+      row.push(field);
+      field = "";
+      continue;
+    }
+    if (ch === "\n") {
+      row.push(field);
+      field = "";
+      if (row.some((cell) => cell.trim())) rows.push(row);
+      row = [];
+      continue;
+    }
+    if (ch === "\r") continue;
+    field += ch;
+  }
+  row.push(field);
+  if (row.some((cell) => cell.trim())) rows.push(row);
+  return rows;
+}
+
+function normalizeCsvHeader(header: string): string {
+  return header.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+/**
+ * 解析 TikTok feed_log_data CSV 中的逐 SKU 失败行。
+ * 兼容常见列名：sku_id / error / issue / reason / status。
+ */
+export function parseTiktokFeedLogCsv(text: string): Array<{ id: string; reason: string }> {
+  const rows = parseCsvRows(text);
+  if (rows.length < 2) return [];
+
+  const headers = rows[0].map(normalizeCsvHeader);
+  const findCol = (...names: string[]) => {
+    for (const name of names) {
+      const idx = headers.indexOf(name);
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  };
+
+  const skuCol = findCol("sku_id", "sku", "product_id", "item_id", "id");
+  const reasonCol = findCol(
+    "error_message",
+    "error",
+    "issue",
+    "reason",
+    "message",
+    "description",
+    "error_description",
+    "fail_reason",
+  );
+  const statusCol = findCol("status", "result", "level", "severity");
+
+  if (skuCol < 0) return [];
+
+  const out: Array<{ id: string; reason: string }> = [];
+  for (const cells of rows.slice(1)) {
+    const id = String(cells[skuCol] ?? "").trim();
+    if (!id) continue;
+    const reason = reasonCol >= 0 ? String(cells[reasonCol] ?? "").trim() : "";
+    const rowStatus = statusCol >= 0 ? String(cells[statusCol] ?? "").toUpperCase() : "";
+    const looksSuccess =
+      rowStatus.includes("SUCCESS") ||
+      rowStatus.includes("SUCCEED") ||
+      rowStatus === "OK" ||
+      rowStatus === "PASS" ||
+      rowStatus === "APPROVED";
+    if (looksSuccess) continue;
+    const looksFailed =
+      rowStatus.includes("FAIL") ||
+      rowStatus.includes("ERROR") ||
+      rowStatus === "REJECTED" ||
+      rowStatus === "WARNING" ||
+      // 无明确成功状态时，有 reason 视为失败明细
+      Boolean(reason);
+    if (!looksFailed) continue;
+    out.push({
+      id,
+      reason: reason || `TikTok feed log status=${rowStatus || "failed"}`,
+    });
+  }
+  return out;
+}
+
+function mergeLogErrors(
+  primary: Array<{ id: string; reason: string }>,
+  extra: Array<{ id: string; reason: string }>,
+): Array<{ id: string; reason: string }> {
+  const map = new Map<string, string>();
+  for (const err of primary) {
+    if (err.id) map.set(err.id, err.reason);
+  }
+  for (const err of extra) {
+    if (!err.id) continue;
+    if (!map.has(err.id)) map.set(err.id, err.reason);
+  }
+  return [...map.entries()].map(([id, reason]) => ({ id, reason }));
+}
+
+async function enrichLogWithFeedCsv(params: {
+  log: TiktokProductUploadLog;
+  fetchImpl: typeof fetch;
+}): Promise<TiktokProductUploadLog> {
+  const url = params.log.feedLogDataUrl;
+  if (!url) return params.log;
+  if (params.log.status === "processing" || params.log.status === "unknown") {
+    return params.log;
+  }
+
+  console.info(`${LOG_PREFIX} step=feed_csv_request url=${url.slice(0, 180)}`);
+  try {
+    const response = await params.fetchImpl(url, { method: "GET" });
+    const text = await response.text();
+    if (!response.ok) {
+      console.warn(
+        `${LOG_PREFIX} step=feed_csv_http_error http=${response.status} body=${text.slice(0, 200)}`,
+      );
+      return params.log;
+    }
+    const csvErrors = parseTiktokFeedLogCsv(text);
+    console.info(
+      `${LOG_PREFIX} step=feed_csv_parsed errorCount=${csvErrors.length} sample=${JSON.stringify(csvErrors.slice(0, 5))}`,
+    );
+    if (csvErrors.length === 0) return params.log;
+    return {
+      ...params.log,
+      errors: mergeLogErrors(params.log.errors, csvErrors),
+    };
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    console.warn(`${LOG_PREFIX} step=feed_csv_error error=${detail}`);
+    return params.log;
+  }
 }
 
 /**
@@ -173,6 +423,7 @@ export async function fetchTiktokProductUploadLog(params: {
   url.searchParams.set("bc_id", params.bcId);
   url.searchParams.set("catalog_id", params.catalogId);
   url.searchParams.set("feed_log_id", params.feedLogId);
+  url.searchParams.set("language", "en");
   if (params.advertiserId) {
     url.searchParams.set("advertiser_id", params.advertiserId);
   }
@@ -206,9 +457,10 @@ export async function fetchTiktokProductUploadLog(params: {
     throw new Error(`TikTok product log failed: HTTP ${response.status} ${detail}`.trim());
   }
 
-  const parsed = parseTiktokProductUploadLog(payload.data);
+  let parsed = parseTiktokProductUploadLog(payload.data);
+  parsed = await enrichLogWithFeedCsv({ log: parsed, fetchImpl });
   console.info(
-    `${LOG_PREFIX} step=product_log_parsed status=${parsed.status} rawStatus=${parsed.rawStatus ?? ""} successCount=${parsed.successCount ?? ""} failedCount=${parsed.failedCount ?? ""} errorCount=${parsed.errors.length}`,
+    `${LOG_PREFIX} step=product_log_parsed status=${parsed.status} rawStatus=${parsed.rawStatus ?? ""} successCount=${parsed.successCount ?? ""} failedCount=${parsed.failedCount ?? ""} errorCount=${parsed.errors.length} endTime=${parsed.endTime ?? ""} feedCsv=${parsed.feedLogDataUrl ? "yes" : "no"}`,
   );
   return parsed;
 }
@@ -279,6 +531,15 @@ export async function listTiktokCatalogSkuIds(params: {
   return skuIds;
 }
 
+function defaultRejectReason(log: TiktokProductUploadLog, feedLogId?: string): string {
+  const parts = ["rejected by TikTok Catalog product log"];
+  if (log.successCount != null) parts.push(`add_count=${log.successCount}`);
+  if (log.failedCount != null) parts.push(`error_count=${log.failedCount}`);
+  if (feedLogId) parts.push(`feed_log=${feedLogId}`);
+  if (log.endTime) parts.push(`end_time=${log.endTime}`);
+  return parts.join(" | ");
+}
+
 function settleFromProductLog(params: {
   expected: string[];
   log: TiktokProductUploadLog;
@@ -302,12 +563,13 @@ function settleFromProductLog(params: {
     succeeded = 0;
   }
 
+  const fallbackReason = defaultRejectReason(params.log, params.feedLogId);
   const errors: Array<{ id: string; reason: string }> = [];
   for (const id of params.expected) {
     if (errorById.has(id)) {
       errors.push({
         id,
-        reason: errorById.get(id) || "rejected by TikTok Catalog product log",
+        reason: errorById.get(id) || fallbackReason,
       });
     }
   }
@@ -317,7 +579,9 @@ function settleFromProductLog(params: {
   let needFail = Math.max(0, params.expected.length - succeeded);
   for (const id of unresolved) {
     if (needFail <= 0) break;
-    errors.push({ id, reason: "rejected by TikTok Catalog product log" });
+    // CSV 可能带非 expected 的 sku；expected 缺明细时用计数/摘要兜底
+    const csvHint = [...errorById.values()][0];
+    errors.push({ id, reason: csvHint || fallbackReason });
     needFail -= 1;
   }
 
@@ -509,10 +773,10 @@ function buildMissingProductReason(params: {
     const status = params.lastLog.rawStatus || params.lastLog.status;
     parts.push(`product_log.status=${status}`);
     if (params.lastLog.successCount != null) {
-      parts.push(`success_count=${params.lastLog.successCount}`);
+      parts.push(`add_count=${params.lastLog.successCount}`);
     }
     if (params.lastLog.failedCount != null) {
-      parts.push(`failed_count=${params.lastLog.failedCount}`);
+      parts.push(`error_count=${params.lastLog.failedCount}`);
     }
     const skuError = params.lastLog.errors.find((e) => e.id === params.skuId);
     if (skuError?.reason) {
