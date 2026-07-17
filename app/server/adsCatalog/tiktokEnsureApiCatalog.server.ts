@@ -1,5 +1,8 @@
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
-import { createTiktokCatalog } from "./clients/tiktokCatalogClient.server";
+import {
+  createTiktokCatalog,
+  fetchTiktokCatalogConf,
+} from "./clients/tiktokCatalogClient.server";
 import {
   clearTiktokCatalogPending,
   getTiktokCatalogCredential,
@@ -18,10 +21,19 @@ export type EnsureTiktokApiCatalogResult = {
   bindingMode: "api_managed";
 };
 
+function isApiWritableTiktokCatalog(conf: {
+  channel?: string;
+  isShopifyOfficial: boolean;
+}): boolean {
+  if (conf.isShopifyOfficial) return false;
+  if (conf.channel && conf.channel !== "CLIENT") return false;
+  return true;
+}
+
 /**
  * 确保店铺绑定的是 Spark API 可写 Catalog（Path B）。
- * - 已是 api_managed：直接返回当前目录
- * - 否则：用已有 token 新建 Spark Catalog 并切换 bindingMode
+ * - 已是 api_managed 且 catalog/get 确认为 CLIENT 可写：复用当前目录
+ * - 否则（含 channel !== CLIENT / 官方目录）：新建 Spark Catalog 并切换 bindingMode
  */
 export async function ensureTiktokApiManagedCatalog(params: {
   shop: string;
@@ -30,15 +42,33 @@ export async function ensureTiktokApiManagedCatalog(params: {
   console.info(`${LOG_PREFIX} step=ensure_start shop=${params.shop}`);
   const credential = await getTiktokCatalogCredential(params.shop);
   if (credential?.bindingMode === "api_managed" && credential.catalogId) {
-    console.info(
-      `${LOG_PREFIX} step=ensure_reuse shop=${params.shop} catalogId=${credential.catalogId} catalogName=${credential.catalogName ?? ""}`,
-    );
-    return {
-      catalogId: credential.catalogId,
-      catalogName: credential.catalogName || credential.catalogId,
-      created: false,
-      bindingMode: "api_managed",
-    };
+    const accessToken = credential.accessToken.trim();
+    const bcId = credential.bcId?.trim() ?? "";
+    if (accessToken && bcId) {
+      const conf = await fetchTiktokCatalogConf({
+        accessToken,
+        bcId,
+        catalogId: credential.catalogId,
+      });
+      if (conf && isApiWritableTiktokCatalog(conf)) {
+        console.info(
+          `${LOG_PREFIX} step=ensure_reuse shop=${params.shop} catalogId=${credential.catalogId} catalogName=${credential.catalogName ?? ""} channel=${conf.channel ?? ""}`,
+        );
+        return {
+          catalogId: credential.catalogId,
+          catalogName: credential.catalogName || credential.catalogId,
+          created: false,
+          bindingMode: "api_managed",
+        };
+      }
+      console.info(
+        `${LOG_PREFIX} step=ensure_force_recreate shop=${params.shop} catalogId=${credential.catalogId} channel=${conf?.channel ?? ""} isShopifyOfficial=${conf?.isShopifyOfficial ?? false} confFound=${Boolean(conf)}`,
+      );
+    } else {
+      console.info(
+        `${LOG_PREFIX} step=ensure_force_recreate shop=${params.shop} catalogId=${credential.catalogId} reason=missing_bc_or_token`,
+      );
+    }
   }
 
   const pending = await getTiktokCatalogPending(params.shop);
