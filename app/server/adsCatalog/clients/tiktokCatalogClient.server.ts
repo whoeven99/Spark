@@ -120,6 +120,8 @@ export async function createTiktokCatalog(params: {
  *   Header: Access-Token
  *   Body: { bc_id, catalog_id, products: [...] }
  *
+ * ECOM product objects use JSON schema fields (price_info / landing_page /
+ * image_url / product_detail), not feed CSV names (price / link / image_link).
  * Same sku_id replaces an existing product (upsert semantics).
  */
 export async function upsertTiktokCatalogItems(params: {

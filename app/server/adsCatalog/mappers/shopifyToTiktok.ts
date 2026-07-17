@@ -2,11 +2,19 @@ import type { RawShopifyProductForCatalog } from "../productFetcher.server";
 import { stripHtml } from "../productFetcher.server";
 
 /**
- * TikTok Catalog product payload (JSON upload schema).
- * ECOM catalogs require structured `price_info` on product/upload（不是 feed 的 "9.99 USD" 字符串）。
+ * TikTok Catalog product payload for JSON upload (ECOM).
+ *
  * API: POST /open_api/v1.3/catalog/product/upload/
- * @see https://business-api.tiktok.com/portal/docs?id=1740568340498434
- * Feed 字段说明（供对照）：https://ads.tiktok.com/help/article/catalog-product-parameters
+ * Schema source: Marketing API playground params for `/catalog/product/upload/`.
+ *
+ * Note: feed CSV 字段名（link / image_link / price）与 JSON upload 不同：
+ * - price → price_info.{price,currency}
+ * - link → landing_page.landing_page_url
+ * - image_link → image_url
+ * - condition → product_detail.condition
+ *
+ * @see https://business-api.tiktok.com/portal/docs?id=1740497429681153
+ * @see https://ads.tiktok.com/help/article/catalog-product-parameters
  */
 export interface TiktokPriceInfo {
   /** 商品价格（数值，非 "9.99 USD" 拼接串） */
@@ -16,20 +24,36 @@ export interface TiktokPriceInfo {
   sale_price?: number;
 }
 
+export interface TiktokLandingPage {
+  landing_page_url: string;
+  checkout_url?: string;
+}
+
+export interface TiktokProductDetail {
+  /** Catalog Product Parameters：new / refurbished / used */
+  condition: "new" | "refurbished" | "used";
+  age_group?: string;
+  gender?: string;
+  product_category?: string;
+}
+
 export interface TiktokCatalogItem {
   sku_id: string;
   title: string;
   description: string;
   /** TikTok Catalog Product Parameters（大写下划线枚举，不同于 Google/Meta 的 "in stock"） */
   availability: "IN_STOCK" | "OUT_OF_STOCK" | "PREORDER";
-  condition: "new" | "refurbished" | "used";
   /** ECOM Catalog JSON upload 必填 */
   price_info: TiktokPriceInfo;
-  link: string;
-  image_link: string;
+  /** ECOM Catalog JSON upload 必填（对象，不是 feed 的 link 字符串） */
+  landing_page: TiktokLandingPage;
+  image_url: string;
   brand: string;
-  additional_image_link?: string;
+  product_detail: TiktokProductDetail;
+  additional_image_urls?: string[];
   google_product_category?: string;
+  item_group_id?: string;
+  global_trade_item_number?: string;
 }
 
 export interface MappedTiktokEntry {
@@ -54,15 +78,15 @@ export function mapShopifyToTiktok(
     return { productId: product.id, ok: false, reason: "missing title" };
   }
 
-  const link =
+  const landingPageUrl =
     product.onlineStoreUrl ??
     (product.handle ? `https://${context.shopDomain}/products/${product.handle}` : null);
-  if (!link) {
+  if (!landingPageUrl) {
     return { productId: product.id, ok: false, reason: "missing product link" };
   }
 
-  const imageLink = product.featuredImage?.url ?? product.images[0]?.url ?? null;
-  if (!imageLink) {
+  const imageUrl = product.featuredImage?.url ?? product.images[0]?.url ?? null;
+  if (!imageUrl) {
     return { productId: product.id, ok: false, reason: "missing image" };
   }
 
@@ -85,32 +109,52 @@ export function mapShopifyToTiktok(
 
   const additionalImages = product.images
     .map((img) => img.url)
-    .filter((url): url is string => Boolean(url) && url !== imageLink)
+    .filter((url): url is string => Boolean(url) && url !== imageUrl)
     .slice(0, 9);
 
   const skuId = product.sku || extractNumericId(product.id);
+
+  const productDetail: TiktokProductDetail = {
+    condition: "new",
+  };
+  if (product.gender) {
+    productDetail.gender = product.gender;
+  }
+  if (product.ageGroup) {
+    productDetail.age_group = product.ageGroup;
+  }
+  if (product.productType) {
+    productDetail.product_category = product.productType.slice(0, 250);
+  }
 
   const item: TiktokCatalogItem = {
     sku_id: skuId,
     title: product.title.slice(0, 255),
     description: description.slice(0, 5000),
     availability: inStock ? "IN_STOCK" : "OUT_OF_STOCK",
-    condition: "new",
     price_info: {
       price: Number(Number(priceAmount).toFixed(2)),
       currency: priceCurrency.toUpperCase(),
     },
-    link,
-    image_link: imageLink,
+    landing_page: {
+      landing_page_url: landingPageUrl,
+    },
+    image_url: imageUrl,
     brand: brand.slice(0, 100),
+    product_detail: productDetail,
+    item_group_id: extractNumericId(product.id),
   };
 
   if (additionalImages.length > 0) {
-    item.additional_image_link = additionalImages.join(",");
+    item.additional_image_urls = additionalImages;
   }
 
   if (product.googleProductCategory) {
     item.google_product_category = product.googleProductCategory;
+  }
+
+  if (product.barcode) {
+    item.global_trade_item_number = product.barcode;
   }
 
   return { productId: product.id, ok: true, item };

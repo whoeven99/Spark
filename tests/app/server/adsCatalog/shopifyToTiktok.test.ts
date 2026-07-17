@@ -34,6 +34,63 @@ function baseProduct(
 
 const mapContext = { shopDomain: "example.myshopify.com", defaultCurrency: "USD" };
 
+describe("mapShopifyToTiktok ECOM required fields", () => {
+  it("maps all ECOM JSON-upload required fields in official shapes", () => {
+    const result = mapShopifyToTiktok(
+      baseProduct({
+        priceAmount: "19.9",
+        priceCurrency: "usd",
+        images: [
+          { url: "https://cdn.example.com/a.jpg", altText: null },
+          { url: "https://cdn.example.com/b.jpg", altText: null },
+        ],
+        barcode: "1234567890123",
+        googleProductCategory: "Apparel & Accessories",
+      }),
+      mapContext,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.item).toMatchObject({
+      sku_id: "SKU-1",
+      title: "Test Product",
+      description: "Hello",
+      availability: "IN_STOCK",
+      brand: "Acme",
+      image_url: "https://cdn.example.com/a.jpg",
+      price_info: { price: 19.9, currency: "USD" },
+      landing_page: {
+        landing_page_url: "https://example.myshopify.com/products/test-product",
+      },
+      product_detail: { condition: "new" },
+      additional_image_urls: ["https://cdn.example.com/b.jpg"],
+      google_product_category: "Apparel & Accessories",
+      item_group_id: "1",
+      global_trade_item_number: "1234567890123",
+    });
+
+    // Feed-style field names must not appear on JSON upload payload.
+    expect(result.item).not.toHaveProperty("price");
+    expect(result.item).not.toHaveProperty("link");
+    expect(result.item).not.toHaveProperty("image_link");
+    expect(result.item).not.toHaveProperty("condition");
+    expect(result.item).not.toHaveProperty("additional_image_link");
+  });
+
+  it("falls back to constructed product URL when onlineStoreUrl is missing", () => {
+    const result = mapShopifyToTiktok(
+      baseProduct({ onlineStoreUrl: null, handle: "fallback-handle" }),
+      mapContext,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.item.landing_page.landing_page_url).toBe(
+      "https://example.myshopify.com/products/fallback-handle",
+    );
+  });
+});
+
 describe("mapShopifyToTiktok availability", () => {
   it("maps in-stock products to IN_STOCK", () => {
     const result = mapShopifyToTiktok(baseProduct({ availableForSale: true }), mapContext);
@@ -62,7 +119,6 @@ describe("mapShopifyToTiktok price_info", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.item.price_info).toEqual({ price: 19.9, currency: "USD" });
-    expect(result.item).not.toHaveProperty("price");
   });
 
   it("skips products without price or currency", () => {
