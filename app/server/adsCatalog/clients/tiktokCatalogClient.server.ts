@@ -3,11 +3,113 @@ import type { TiktokCatalogItem } from "../mappers/shopifyToTiktok";
 const TIKTOK_API_BASE = "https://business-api.tiktok.com/open_api/v1.3";
 const ITEMS_BATCH_CHUNK = 50;
 
+const CURRENCY_TO_REGION: Record<string, string> = {
+  USD: "US",
+  CAD: "CA",
+  GBP: "GB",
+  EUR: "DE",
+  AUD: "AU",
+  NZD: "NZ",
+  JPY: "JP",
+  CNY: "CN",
+  HKD: "HK",
+  TWD: "TW",
+  SGD: "SG",
+  MYR: "MY",
+  THB: "TH",
+  PHP: "PH",
+  IDR: "ID",
+  VND: "VN",
+  KRW: "KR",
+  INR: "IN",
+  BRL: "BR",
+  MXN: "MX",
+};
+
+/** 由店铺币种推断 Catalog 创建所需 currency + region_code。 */
+export function resolveTiktokCatalogRegion(currencyCode?: string): {
+  currency: string;
+  regionCode: string;
+} {
+  const currency = (currencyCode || "USD").trim().toUpperCase() || "USD";
+  return {
+    currency,
+    regionCode: CURRENCY_TO_REGION[currency] || "US",
+  };
+}
+
 export interface TiktokBatchResult {
   totalRequested: number;
   totalProcessed: number;
   errors: Array<{ id: string; reason: string }>;
   feedLogId?: string;
+}
+
+export interface CreateTiktokCatalogResult {
+  catalogId: string;
+  catalogName: string;
+}
+
+/**
+ * Create an API-managed ECOM catalog under a Business Center.
+ *
+ * POST /open_api/v1.3/catalog/create/
+ */
+export async function createTiktokCatalog(params: {
+  accessToken: string;
+  bcId: string;
+  name: string;
+  currency?: string;
+  regionCode?: string;
+}): Promise<CreateTiktokCatalogResult> {
+  const { currency, regionCode } = resolveTiktokCatalogRegion(params.currency);
+  const region = (params.regionCode || regionCode).trim().toUpperCase() || regionCode;
+  const name = params.name.trim() || "Spark Catalog";
+
+  const response = await fetch(`${TIKTOK_API_BASE}/catalog/create/`, {
+    method: "POST",
+    headers: {
+      "Access-Token": params.accessToken,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      bc_id: params.bcId,
+      name,
+      catalog_type: "ECOM",
+      catalog_conf: {
+        currency,
+        region_code: region,
+        channel: "CLIENT",
+      },
+    }),
+  });
+
+  const text = await response.text();
+  let payload: {
+    code?: number;
+    message?: string;
+    data?: { catalog_id?: string | number };
+  } = {};
+  try {
+    payload = text ? (JSON.parse(text) as typeof payload) : {};
+  } catch {
+    payload = {};
+  }
+
+  if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {
+    const detail =
+      payload.message ||
+      (payload.code !== undefined ? `code=${payload.code}` : "") ||
+      text.slice(0, 200) ||
+      response.statusText;
+    throw new Error(`TikTok Catalog create failed: HTTP ${response.status} ${detail}`.trim());
+  }
+
+  const catalogId = String(payload.data?.catalog_id ?? "").trim();
+  if (!catalogId) {
+    throw new Error("TikTok Catalog create returned no catalog_id");
+  }
+  return { catalogId, catalogName: name };
 }
 
 /**

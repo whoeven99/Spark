@@ -69,6 +69,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
   }
 
+  const bindingMode =
+    selectedEntry?.isShopifyOfficial === true ? "shopify_official" : "api_managed";
+
   try {
     await clearTiktokCatalogPending(shop);
     await setTiktokCatalogCredential(shop, {
@@ -78,8 +81,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       bcId,
       catalogId,
       catalogName: selectedEntry?.name,
+      bindingMode,
     });
-    return Response.json({ ok: true });
+    return Response.json({ ok: true, bindingMode });
   } catch (e) {
     return Response.json(
       { ok: false, error: e instanceof Error ? e.message : "Failed to save credential" },

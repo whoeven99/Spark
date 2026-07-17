@@ -11,6 +11,8 @@ import {
   listAccessibleBcIds,
 } from "../../../../app/server/adsCatalog/tiktokOAuth.server";
 
+const emptyMeta = { isShopifyOfficial: false as const };
+
 describe("TikTok catalog bc_id", () => {
   const fetchMock = vi.fn();
 
@@ -60,6 +62,11 @@ describe("TikTok catalog bc_id", () => {
         catalogName: "Demo",
         bcId: "bc-9",
         advertiserId: "adv-1",
+        catalogType: undefined,
+        businessPlatform: undefined,
+        channel: undefined,
+        createSource: undefined,
+        ...emptyMeta,
       },
     ]);
     const calledUrl = String(fetchMock.mock.calls[0]?.[0] ?? "");

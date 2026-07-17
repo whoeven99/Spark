@@ -7,6 +7,8 @@ import {
   getTiktokCatalogsForAdvertisers,
   getTiktokRedirectUri,
   listAccessibleBcIds,
+  pickAutoBindTiktokCatalog,
+  resolveTiktokBindingMode,
   verifyTiktokOAuthState,
 } from "../server/adsCatalog/tiktokOAuth.server";
 import {
@@ -86,30 +88,35 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       return appRedirect(request, shop, host, appOrigin, { tiktokAuth: "authorized" });
     }
 
-    if (catalogs.length === 1) {
+    const autoBind = pickAutoBindTiktokCatalog(catalogs);
+    if (autoBind) {
       await clearTiktokCatalogPending(shop);
       await setTiktokCatalogCredential(shop, {
         accessToken,
         refreshToken,
-        advertiserId: catalogs[0].advertiserId,
-        bcId: catalogs[0].bcId,
-        catalogId: catalogs[0].catalogId,
-        catalogName: catalogs[0].catalogName,
+        advertiserId: autoBind.advertiserId,
+        bcId: autoBind.bcId,
+        catalogId: autoBind.catalogId,
+        catalogName: autoBind.catalogName,
+        bindingMode: resolveTiktokBindingMode(autoBind),
       });
       return appRedirect(request, shop, host, appOrigin, {
         tiktokAuth: "success",
-        catalogId: catalogs[0].catalogId,
+        catalogId: autoBind.catalogId,
+        bindingMode: resolveTiktokBindingMode(autoBind),
       });
     }
 
     await setTiktokCatalogPending(shop, {
       accessToken,
       refreshToken,
+      advertiserId: advertiserIds[0],
       accounts: catalogs.map((c) => ({
         id: c.catalogId,
         name: c.catalogName,
         businessId: c.bcId,
         advertiserId: c.advertiserId,
+        isShopifyOfficial: c.isShopifyOfficial,
       })),
     });
     return appRedirect(request, shop, host, appOrigin, { tiktokAuth: "select" });

@@ -94,7 +94,14 @@ export interface CredentialsView {
     awaitingCatalog: boolean;
     catalogId: string;
     advertiserId: string;
+    /** shopify_official | api_managed；未连接时为空字符串。 */
+    bindingMode: "" | "shopify_official" | "api_managed";
     updatedAt: string | null;
-    pendingCatalogs: Array<{ id: string; name?: string; businessId?: string }>;
+    pendingCatalogs: Array<{
+      id: string;
+      name?: string;
+      businessId?: string;
+      isShopifyOfficial?: boolean;
+    }>;
   };
 }

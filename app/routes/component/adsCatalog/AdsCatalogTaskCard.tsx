@@ -52,6 +52,20 @@ function readTotal(task: AITaskItem): number | null {
   return typeof total === "number" ? total : null;
 }
 
+function readTiktokSyncMode(
+  task: AITaskItem,
+  result: AdsCatalogSyncTaskResult | null,
+): "shopify_official" | "api_managed" | null {
+  if (result?.syncMode === "shopify_official" || result?.syncMode === "api_managed") {
+    return result.syncMode;
+  }
+  const fromConfig = (task.config as Record<string, unknown>)?.bindingMode;
+  if (fromConfig === "shopify_official" || fromConfig === "api_managed") {
+    return fromConfig;
+  }
+  return null;
+}
+
 function readResult(task: AITaskItem): AdsCatalogSyncTaskResult | null {
   if (!task.result) return null;
   const r = task.result as Record<string, unknown>;
@@ -113,14 +127,24 @@ export function AdsCatalogTaskCard({
   const platform = readPlatform(task);
   const total = readTotal(task);
   const result = readResult(task);
+  const tiktokSyncMode = platform === "tiktok" ? readTiktokSyncMode(task, result) : null;
   const effectiveStatus = getEffectiveStatus(task, localStatus);
   const platformLabel = t(platformLabelKey(platform));
 
   const primaryCopy = useMemo(() => {
     if (effectiveStatus === "running") {
+      if (tiktokSyncMode === "shopify_official") {
+        return t("adsCatalog.statusRunningCopyTiktokOfficial");
+      }
       return t("adsCatalog.statusRunningCopy", { platform: platformLabel });
     }
     if (effectiveStatus === "succeeded") {
+      if (tiktokSyncMode === "shopify_official") {
+        return t("adsCatalog.statusSucceededCopyTiktokOfficial", {
+          succeeded: result?.succeeded ?? 0,
+          failed: result?.failed ?? 0,
+        });
+      }
       return t("adsCatalog.statusSucceededCopy", {
         succeeded: result?.succeeded ?? 0,
         failed: result?.failed ?? 0,
@@ -130,7 +154,7 @@ export function AdsCatalogTaskCard({
       return task.errorMsg || t("adsCatalog.statusFailedCopy");
     }
     return t("adsCatalog.statusUnknownCopy");
-  }, [effectiveStatus, platformLabel, result, t, task.errorMsg]);
+  }, [effectiveStatus, platformLabel, result, t, task.errorMsg, tiktokSyncMode]);
 
   const secondaryCopy = useMemo(() => {
     if (effectiveStatus === "running") {
@@ -219,6 +243,11 @@ export function AdsCatalogTaskCard({
           {total != null
             ? t("adsCatalog.metaProductCount", { count: total })
             : t("adsCatalog.metaAllProducts")}
+          {tiktokSyncMode === "shopify_official"
+            ? ` · ${t("adsCatalog.metaTiktokModeOfficial")}`
+            : tiktokSyncMode === "api_managed"
+              ? ` · ${t("adsCatalog.metaTiktokModeApi")}`
+              : null}
           {" · "}
           {new Intl.DateTimeFormat(i18n.language).format(new Date(task.createdAt))}
         </span>

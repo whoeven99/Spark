@@ -91,12 +91,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         awaitingCatalog: Boolean(tiktokPending && !tiktok && (tiktokPending.accounts?.length ?? 0) === 0),
         catalogId: tiktok?.catalogId ?? "",
         advertiserId: tiktok?.advertiserId ?? tiktokPending?.advertiserId ?? "",
+        bindingMode: tiktok?.bindingMode ?? "",
         updatedAt: tiktok?.updatedAt ?? null,
         pendingCatalogs:
           tiktokPending?.accounts.map((a) => ({
             id: a.id,
             name: a.name,
             businessId: a.businessId,
+            isShopifyOfficial: a.isShopifyOfficial,
           })) ?? [],
       },
     },

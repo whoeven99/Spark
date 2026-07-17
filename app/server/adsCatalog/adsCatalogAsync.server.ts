@@ -25,7 +25,9 @@ import {
   getGoogleMerchantCredential,
   getTiktokCatalogCredential,
   setGoogleMerchantCredential,
+  setTiktokCatalogCredential,
 } from "./credentialStore.server";
+import { isShopifySyncedCatalogUploadError } from "./tiktokOAuth.server";
 import {
   checkGmcProductStatuses,
   scheduleGmcStatusCheck,
@@ -403,7 +405,7 @@ async function runTiktokSync(params: {
     message: params.msg("adsCatalog.asyncMappingProducts"),
   });
 
-  const errors: AdsCatalogSyncTaskResult["errors"] = [];
+  const mappingErrors: AdsCatalogSyncTaskResult["errors"] = [];
   const items = [];
   for (const product of params.products) {
     const mapped = mapShopifyToTiktok(product, {
@@ -414,10 +416,35 @@ async function runTiktokSync(params: {
     if (mapped.ok) {
       items.push(mapped.item);
     } else {
-      errors.push({ productId: mapped.productId, reason: mapped.reason });
+      mappingErrors.push({ productId: mapped.productId, reason: mapped.reason });
     }
   }
 
+  // Path A：官方 Shopify↔TikTok Catalog — 仅校验映射，不 API 上传。
+  if (credential.bindingMode === "shopify_official") {
+    await appendLog({
+      taskId: params.taskId,
+      startedAt: params.startedAt,
+      message: params.msg("adsCatalog.asyncTiktokOfficialSync", { count: items.length }),
+    });
+    const result: AdsCatalogSyncTaskResult = {
+      platform: "tiktok",
+      totalProcessed: params.products.length,
+      succeeded: items.length,
+      failed: mappingErrors.length,
+      errors: mappingErrors,
+      syncMode: "shopify_official",
+    };
+    await finishAdsCatalogSync({
+      taskId: params.taskId,
+      startedAt: params.startedAt,
+      result,
+      msg: params.msg,
+    });
+    return;
+  }
+
+  // Path B：API 可写 Catalog — map + product/upload。
   await appendLog({
     taskId: params.taskId,
     startedAt: params.startedAt,
@@ -431,6 +458,45 @@ async function runTiktokSync(params: {
     catalogId: credential.catalogId,
     items,
   });
+
+  const shopifyLocked = apiResult.errors.some((err) =>
+    isShopifySyncedCatalogUploadError(err.reason),
+  );
+
+  // 运行时发现官方锁定目录：升级为 shopify_official，按 Path A 语义收尾。
+  if (shopifyLocked) {
+    await setTiktokCatalogCredential(params.shop, {
+      accessToken: credential.accessToken,
+      refreshToken: credential.refreshToken,
+      advertiserId: credential.advertiserId,
+      bcId: credential.bcId,
+      catalogId: credential.catalogId,
+      catalogName: credential.catalogName,
+      bindingMode: "shopify_official",
+    });
+    await appendLog({
+      taskId: params.taskId,
+      startedAt: params.startedAt,
+      message: params.msg("adsCatalog.asyncTiktokSwitchedToOfficial"),
+    });
+    const result: AdsCatalogSyncTaskResult = {
+      platform: "tiktok",
+      totalProcessed: params.products.length,
+      succeeded: items.length,
+      failed: mappingErrors.length,
+      errors: mappingErrors,
+      syncMode: "shopify_official",
+    };
+    await finishAdsCatalogSync({
+      taskId: params.taskId,
+      startedAt: params.startedAt,
+      result,
+      msg: params.msg,
+    });
+    return;
+  }
+
+  const errors = [...mappingErrors];
   for (const err of apiResult.errors) {
     errors.push({ productId: err.id, reason: err.reason });
   }
@@ -441,6 +507,7 @@ async function runTiktokSync(params: {
     succeeded: apiResult.totalProcessed,
     failed: errors.length,
     errors,
+    syncMode: "api_managed",
   };
 
   await finishAdsCatalogSync({
@@ -458,10 +525,16 @@ async function finishAdsCatalogSync(params: {
   msg: MsgFn;
 }): Promise<void> {
   const payload = params.result as unknown as Record<string, unknown>;
-  const finalMessage = params.msg("adsCatalog.asyncCompleted", {
-    succeeded: params.result.succeeded,
-    failed: params.result.failed,
-  });
+  const finalMessage =
+    params.result.platform === "tiktok" && params.result.syncMode === "shopify_official"
+      ? params.msg("adsCatalog.asyncTiktokOfficialCompleted", {
+          succeeded: params.result.succeeded,
+          failed: params.result.failed,
+        })
+      : params.msg("adsCatalog.asyncCompleted", {
+          succeeded: params.result.succeeded,
+          failed: params.result.failed,
+        });
 
   if (params.result.succeeded === 0 && params.result.failed > 0) {
     const firstReason = params.result.errors[0]?.reason ?? params.msg("adsCatalog.statusFailedCopy");

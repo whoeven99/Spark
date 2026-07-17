@@ -9,6 +9,8 @@ import {
 import {
   getTiktokCatalogsForAdvertisers,
   listAuthorizedAdvertiserIds,
+  pickAutoBindTiktokCatalog,
+  resolveTiktokBindingMode,
 } from "../server/adsCatalog/tiktokOAuth.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -56,20 +58,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
     }
 
-    if (catalogs.length === 1) {
+    const autoBind = pickAutoBindTiktokCatalog(catalogs);
+    if (autoBind) {
       await clearTiktokCatalogPending(shop);
       await setTiktokCatalogCredential(shop, {
         accessToken: pending.accessToken,
         refreshToken: pending.refreshToken,
-        advertiserId: catalogs[0].advertiserId,
-        bcId: catalogs[0].bcId,
-        catalogId: catalogs[0].catalogId,
-        catalogName: catalogs[0].catalogName,
+        advertiserId: autoBind.advertiserId,
+        bcId: autoBind.bcId,
+        catalogId: autoBind.catalogId,
+        catalogName: autoBind.catalogName,
+        bindingMode: resolveTiktokBindingMode(autoBind),
       });
       return Response.json({
         ok: true,
         autoSelected: true,
-        catalogId: catalogs[0].catalogId,
+        catalogId: autoBind.catalogId,
+        bindingMode: resolveTiktokBindingMode(autoBind),
       });
     }
 
@@ -82,6 +87,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         name: catalog.catalogName,
         businessId: catalog.bcId,
         advertiserId: catalog.advertiserId,
+        isShopifyOfficial: catalog.isShopifyOfficial,
       })),
     });
     return Response.json({
@@ -89,6 +95,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       catalogs: catalogs.map((catalog) => ({
         id: catalog.catalogId,
         name: catalog.catalogName ?? catalog.catalogId,
+        isShopifyOfficial: catalog.isShopifyOfficial,
       })),
     });
   } catch (e) {

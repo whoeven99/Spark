@@ -9,6 +9,7 @@ import {
   enqueueAdsCatalogSync,
   type EnqueueAdsCatalogSyncParams,
 } from "./adsCatalogAsync.server";
+import { getTiktokCatalogCredential } from "./credentialStore.server";
 import { fetchProductsForCatalog } from "./productFetcher.server";
 
 const TASK_TYPE: AITaskType = "ads_catalog_sync";
@@ -109,6 +110,11 @@ export async function handleAdsCatalogSyncAction(request: Request): Promise<Resp
   const brand = shopInfo?.name ?? undefined;
   const defaultCurrency = shopInfo?.currencyCode ?? undefined;
 
+  const tiktokBindingMode =
+    parsed.data.platform === "tiktok"
+      ? (await getTiktokCatalogCredential(session.shop))?.bindingMode
+      : undefined;
+
   const { taskId, batchId } = await createBatchWithTask({
     shop: session.shop,
     taskType: TASK_TYPE,
@@ -116,11 +122,13 @@ export async function handleAdsCatalogSyncAction(request: Request): Promise<Resp
       platform: parsed.data.platform,
       productIds,
       totalProducts: products.length,
+      ...(tiktokBindingMode ? { bindingMode: tiktokBindingMode } : {}),
     },
     taskConfig: {
       platform: parsed.data.platform,
       productIds,
       totalProducts: products.length,
+      ...(tiktokBindingMode ? { bindingMode: tiktokBindingMode } : {}),
     },
   });
 

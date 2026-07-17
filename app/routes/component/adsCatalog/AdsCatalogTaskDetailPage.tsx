@@ -44,6 +44,20 @@ function platformLabelKey(platform: AdsCatalogPlatform): string {
   return "adsCatalog.platformFacebook";
 }
 
+function readTiktokSyncMode(
+  task: AITaskItem,
+  result: AdsCatalogSyncTaskResult | null,
+): "shopify_official" | "api_managed" | null {
+  if (result?.syncMode === "shopify_official" || result?.syncMode === "api_managed") {
+    return result.syncMode;
+  }
+  const fromConfig = (task.config as Record<string, unknown>)?.bindingMode;
+  if (fromConfig === "shopify_official" || fromConfig === "api_managed") {
+    return fromConfig;
+  }
+  return null;
+}
+
 const sectionStyle = {
   border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusCard,
@@ -60,6 +74,7 @@ export function AdsCatalogTaskDetailPage({ task, locationSearch, onBack }: Props
   const result = readResult(task);
   const platform = readPlatform(task, result);
   const platformLabel = t(platformLabelKey(platform));
+  const tiktokSyncMode = platform === "tiktok" ? readTiktokSyncMode(task, result) : null;
 
   const displayStatus = useMemo((): AITaskStatus => {
     if (task.status === "succeeded" && result && result.succeeded === 0 && result.failed > 0) {
@@ -100,6 +115,26 @@ export function AdsCatalogTaskDetailPage({ task, locationSearch, onBack }: Props
           {" · "}
           {new Intl.DateTimeFormat(i18n.language).format(new Date(task.createdAt))}
         </div>
+
+        {tiktokSyncMode === "shopify_official" && (
+          <div
+            style={{
+              background: pageColorTokens.surfaceMuted,
+              border: `1px solid ${pageColorTokens.borderSubtle}`,
+              padding: "10px 12px",
+              borderRadius: pageColorTokens.radiusControl,
+              fontSize: 13,
+              lineHeight: 1.45,
+            }}
+          >
+            {t("adsCatalog.detailSyncModeOfficial")}
+          </div>
+        )}
+        {tiktokSyncMode === "api_managed" && (
+          <div style={{ ...pageHintTextStyle, margin: 0 }}>
+            {t("adsCatalog.detailSyncModeApi")}
+          </div>
+        )}
 
         {result ? (
           <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>

@@ -187,6 +187,11 @@ export interface AdsCatalogSyncTaskResult {
   gmcReview?: AdsCatalogGmcReviewSummary;
   /** 同步后即时拉取的 Meta Catalog 审核状态摘要（仅 Facebook）。 */
   metaReview?: AdsCatalogMetaReviewSummary;
+  /**
+   * TikTok：shopify_official = 官方同步目录（仅映射校验，不 API 上传）；
+   * api_managed = Spark API 上传。
+   */
+  syncMode?: "shopify_official" | "api_managed";
 }
 
 export type AITaskCreateResponse =

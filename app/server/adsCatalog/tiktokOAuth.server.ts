@@ -18,6 +18,9 @@ export const TIKTOK_API_BASE = "https://business-api.tiktok.com/open_api/v1.3";
 
 export const TIKTOK_CATALOG_CALLBACK_PATH = "/ads/tiktok-catalog/callback";
 
+/** Shopify 官方同步目录 vs Spark API 可写目录。 */
+export type TiktokCatalogBindingMode = "shopify_official" | "api_managed";
+
 export interface TiktokCatalogInfo {
   catalogId: string;
   catalogName?: string;
@@ -25,6 +28,110 @@ export interface TiktokCatalogInfo {
   bcId: string;
   /** 授权广告主 ID；商品写入等接口仍可能需要。 */
   advertiserId: string;
+  catalogType?: string;
+  businessPlatform?: string;
+  channel?: string;
+  createSource?: string;
+  /** 是否判定为 TikTok for Shopify / 官方同步目录。 */
+  isShopifyOfficial: boolean;
+}
+
+type RawTiktokCatalogRow = {
+  catalog_id?: string | number;
+  catalog_name?: string;
+  catalog_type?: string;
+  business_platform?: string;
+  channel?: string;
+  create_source?: string;
+  catalog_conf?: {
+    business_platform?: string;
+    channel?: string;
+    currency?: string;
+    region_code?: string;
+  };
+};
+
+/** 根据 catalog/get 字段与名称启发式判断是否为 Shopify 官方同步目录。 */
+export function isShopifyOfficialCatalog(info: {
+  catalogName?: string;
+  catalogType?: string;
+  businessPlatform?: string;
+  channel?: string;
+  createSource?: string;
+  isShopifyOfficial?: boolean;
+}): boolean {
+  if (info.isShopifyOfficial === true) return true;
+  const haystack = [
+    info.catalogName,
+    info.catalogType,
+    info.businessPlatform,
+    info.channel,
+    info.createSource,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  if (!haystack) return false;
+  return (
+    haystack.includes("shopify") ||
+    haystack.includes("tiktok_shop") ||
+    haystack.includes("tiktok shop") ||
+    /\btts\b/.test(haystack)
+  );
+}
+
+/** 识别 product/upload 因 Shopify 同步锁目录而失败的错误文案。 */
+export function isShopifySyncedCatalogUploadError(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes("synced from shopify") ||
+    m.includes("cannot be modified via api")
+  );
+}
+
+export function resolveTiktokBindingMode(
+  catalog: Parameters<typeof isShopifyOfficialCatalog>[0],
+): TiktokCatalogBindingMode {
+  return isShopifyOfficialCatalog(catalog) ? "shopify_official" : "api_managed";
+}
+
+/**
+ * 自动绑定策略：存在官方 Shopify Catalog 时优先绑定；
+ * 否则仅在恰好一本时自动绑定；多本非官方则返回 null（需用户选择）。
+ */
+export function pickAutoBindTiktokCatalog(
+  catalogs: TiktokCatalogInfo[],
+): TiktokCatalogInfo | null {
+  if (catalogs.length === 0) return null;
+  const official = catalogs.find((c) => c.isShopifyOfficial);
+  if (official) return official;
+  if (catalogs.length === 1) return catalogs[0] ?? null;
+  return null;
+}
+
+function mapRawTiktokCatalogRow(
+  row: RawTiktokCatalogRow,
+  params: { bcId: string; advertiserId: string },
+): TiktokCatalogInfo | null {
+  const catalogId = String(row.catalog_id ?? "").trim();
+  if (!catalogId) return null;
+  const businessPlatform =
+    row.business_platform || row.catalog_conf?.business_platform || undefined;
+  const channel = row.channel || row.catalog_conf?.channel || undefined;
+  const partial = {
+    catalogId,
+    catalogName: row.catalog_name,
+    bcId: params.bcId,
+    advertiserId: params.advertiserId,
+    catalogType: row.catalog_type,
+    businessPlatform,
+    channel,
+    createSource: row.create_source,
+  };
+  return {
+    ...partial,
+    isShopifyOfficial: isShopifyOfficialCatalog(partial),
+  };
 }
 
 function readEnv(name: string): string {
@@ -323,8 +430,8 @@ export async function getTiktokCatalogs(params: {
       code?: number;
       message?: string;
       data?: {
-        list?: Array<{ catalog_id?: string | number; catalog_name?: string }>;
-        catalogs?: Array<{ catalog_id?: string | number; catalog_name?: string }>;
+        list?: RawTiktokCatalogRow[];
+        catalogs?: RawTiktokCatalogRow[];
       };
     };
     if (!response.ok || (json.code !== undefined && json.code !== 0)) {
@@ -332,13 +439,13 @@ export async function getTiktokCatalogs(params: {
     }
     const rows = json.data?.list ?? json.data?.catalogs ?? [];
     return rows
-      .map((c) => ({
-        catalogId: String(c.catalog_id ?? "").trim(),
-        catalogName: c.catalog_name,
-        bcId: params.bcId,
-        advertiserId: params.advertiserId,
-      }))
-      .filter((c) => Boolean(c.catalogId));
+      .map((c) =>
+        mapRawTiktokCatalogRow(c, {
+          bcId: params.bcId,
+          advertiserId: params.advertiserId,
+        }),
+      )
+      .filter((c): c is TiktokCatalogInfo => Boolean(c));
   } catch (e) {
     throw new Error(formatOutboundNetworkError(e));
   }

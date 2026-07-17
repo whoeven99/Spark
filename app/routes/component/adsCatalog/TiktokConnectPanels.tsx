@@ -124,6 +124,30 @@ export function TiktokConnectPanels({
     }
   }
 
+  async function createAndBindCatalog() {
+    setBusy(true);
+    try {
+      const resp = await fetch(`/api/ads-catalog/tiktok-create-catalog${locationSearch}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = (await resp.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!resp.ok || !data.ok) {
+        alert(data.error ?? t("adsCatalog.authError"));
+        return;
+      }
+      onChanged();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : t("adsCatalog.authError"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const fmtDate = (iso: string | null) =>
     iso
       ? new Intl.DateTimeFormat(languageCode, {
@@ -131,6 +155,13 @@ export function TiktokConnectPanels({
           timeStyle: "short",
         }).format(new Date(iso))
       : "—";
+
+  const modeHint =
+    tiktok.bindingMode === "shopify_official"
+      ? t("adsCatalog.tiktokModeOfficialHint")
+      : tiktok.bindingMode === "api_managed"
+        ? t("adsCatalog.tiktokModeApiHint")
+        : null;
 
   return (
     <div style={panelStyle}>
@@ -150,6 +181,17 @@ export function TiktokConnectPanels({
                 {t("adsCatalog.tiktokAdvertiserId", { id: tiktok.advertiserId })}
               </div>
             )}
+            {tiktok.bindingMode === "shopify_official" && (
+              <div style={{ fontWeight: 600, marginTop: 4 }}>
+                {t("adsCatalog.tiktokModeOfficial")}
+              </div>
+            )}
+            {tiktok.bindingMode === "api_managed" && (
+              <div style={{ fontWeight: 600, marginTop: 4 }}>
+                {t("adsCatalog.tiktokModeApi")}
+              </div>
+            )}
+            {modeHint && <p style={pageHintTextStyle}>{modeHint}</p>}
             <div style={pageHintTextStyle}>
               {t("adsCatalog.tiktokUpdatedAt", { time: fmtDate(tiktok.updatedAt) })}
             </div>
@@ -171,7 +213,12 @@ export function TiktokConnectPanels({
       ) : tiktok.pendingCatalogs.length > 0 ? (
         <CatalogSelect
           label={t("adsCatalog.tiktokSelectCatalog")}
-          catalogs={tiktok.pendingCatalogs.map((c) => ({ id: c.id, label: c.name || c.id }))}
+          catalogs={tiktok.pendingCatalogs.map((c) => ({
+            id: c.id,
+            label: c.isShopifyOfficial
+              ? `${c.name || c.id} (${t("adsCatalog.tiktokModeOfficialShort")})`
+              : c.name || c.id,
+          }))}
           busy={busy}
           onSelect={(id) => void post("/api/ads-catalog/tiktok-catalogs", { catalogId: id })}
         />
@@ -192,6 +239,14 @@ export function TiktokConnectPanels({
             <button
               type="button"
               style={primaryBtn}
+              disabled={busy}
+              onClick={() => void createAndBindCatalog()}
+            >
+              {t("adsCatalog.tiktokCreateCatalog")}
+            </button>
+            <button
+              type="button"
+              style={secondaryBtn}
               disabled={busy}
               onClick={() => void refreshCatalogs()}
             >

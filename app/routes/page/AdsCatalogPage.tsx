@@ -313,6 +313,13 @@ export function AdsCatalogPage() {
         if (!proceed) return;
       }
     }
+    if (
+      platform === "tiktok" &&
+      credentials.tiktok.bindingMode === "shopify_official"
+    ) {
+      const proceed = window.confirm(t("adsCatalog.confirmTiktokOfficialSync"));
+      if (!proceed) return;
+    }
     syncFetcher.submit(buildSyncBody() as unknown as SubmitTarget, {
       method: "POST",
       encType: "application/json",
@@ -458,7 +465,13 @@ export function AdsCatalogPage() {
             <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
               {t("adsCatalog.syncSectionTitle")}
             </h2>
-            <p style={pageHintTextStyle}>{t("adsCatalog.syncSectionHint")}</p>
+            <p style={pageHintTextStyle}>
+              {platform === "tiktok" && credentials.tiktok.bindingMode === "shopify_official"
+                ? t("adsCatalog.syncSectionHintTiktokOfficial")
+                : platform === "tiktok" && credentials.tiktok.bindingMode === "api_managed"
+                  ? t("adsCatalog.syncSectionHintTiktokApi")
+                  : t("adsCatalog.syncSectionHint")}
+            </p>
 
             <div>
               <label style={pageFieldLabelStyle}>{t("adsCatalog.fieldPlatform")}</label>
@@ -542,9 +555,28 @@ export function AdsCatalogPage() {
               >
                 {syncFetcher.state === "submitting"
                   ? t("adsCatalog.actionSyncing")
-                  : t("adsCatalog.actionSync")}
+                  : platform === "tiktok" &&
+                      credentials.tiktok.bindingMode === "shopify_official"
+                    ? t("adsCatalog.actionSyncTiktokOfficial")
+                    : t("adsCatalog.actionSync")}
               </button>
             </div>
+            {platform === "tiktok" &&
+              credentials.tiktok.bindingMode === "shopify_official" && (
+                <div
+                  style={{
+                    background: pageColorTokens.surfaceMuted,
+                    border: `1px solid ${pageColorTokens.borderSubtle}`,
+                    color: pageColorTokens.textPrimary,
+                    padding: "10px 12px",
+                    borderRadius: pageColorTokens.radiusControl,
+                    fontSize: 13,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {t("adsCatalog.tiktokOfficialSyncFootnote")}
+                </div>
+              )}
 
             {previewError && (
               <div style={errorBoxStyle}>{previewError}</div>

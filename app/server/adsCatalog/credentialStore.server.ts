@@ -1,4 +1,7 @@
 import prisma from "../../db.server";
+import type { TiktokCatalogBindingMode } from "./tiktokOAuth.server";
+
+export type { TiktokCatalogBindingMode };
 
 // Catalog credentials live in the same `AdPlatformCredential` table as ads
 // auth credentials, but use dedicated platform keys so they don't collide
@@ -252,6 +255,8 @@ export type PendingOAuthAccount = {
   advertiserId?: string;
   /** Google Ads：访问该客户账户时应使用的 login-customer-id（MCC 子账户场景）。 */
   loginCustomerId?: string;
+  /** TikTok：是否为 Shopify 官方同步 Catalog。 */
+  isShopifyOfficial?: boolean;
 };
 
 export type PendingOAuthTokens = {
@@ -484,8 +489,17 @@ export type TiktokCatalogCredential = {
   bcId?: string;
   catalogId: string;
   catalogName?: string;
+  /**
+   * shopify_official：TikTok for Shopify 官方同步目录（只读校验，不 API 上传）。
+   * api_managed：Spark 可写目录。旧凭证缺省按 api_managed。
+   */
+  bindingMode: TiktokCatalogBindingMode;
   updatedAt: string;
 };
+
+function parseTiktokBindingMode(value: unknown): TiktokCatalogBindingMode {
+  return value === "shopify_official" ? "shopify_official" : "api_managed";
+}
 
 export async function getTiktokCatalogCredential(
   shop: string,
@@ -510,6 +524,7 @@ export async function getTiktokCatalogCredential(
     catalogId,
     catalogName:
       typeof record.data.catalogName === "string" ? record.data.catalogName : undefined,
+    bindingMode: parseTiktokBindingMode(record.data.bindingMode),
     updatedAt: record.updatedAt.toISOString(),
   };
 }
@@ -519,7 +534,10 @@ export async function setTiktokCatalogCredential(
   payload: Pick<
     TiktokCatalogCredential,
     "accessToken" | "refreshToken" | "advertiserId" | "bcId" | "catalogId" | "catalogName"
-  >,
+  > & {
+    /** 省略时保留已有值，缺省 api_managed。 */
+    bindingMode?: TiktokCatalogBindingMode;
+  },
 ): Promise<void> {
   const accessToken = payload.accessToken.trim();
   const advertiserId = payload.advertiserId.trim();
@@ -532,6 +550,9 @@ export async function setTiktokCatalogCredential(
     payload.bcId?.trim() ||
     (typeof existing?.data.bcId === "string" ? existing.data.bcId.trim() : "") ||
     null;
+  const bindingMode =
+    payload.bindingMode ??
+    parseTiktokBindingMode(existing?.data.bindingMode);
   await writePlatformCredential(shop, TIKTOK_CATALOG_PLATFORM, {
     accessToken,
     refreshToken: payload.refreshToken?.trim() || null,
@@ -539,6 +560,7 @@ export async function setTiktokCatalogCredential(
     bcId,
     catalogId,
     catalogName: payload.catalogName?.trim() || null,
+    bindingMode,
   });
 }
 
