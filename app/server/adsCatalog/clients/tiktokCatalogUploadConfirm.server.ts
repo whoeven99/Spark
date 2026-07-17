@@ -340,6 +340,9 @@ export async function confirmTiktokCatalogUpload(params: {
   const sleep = params.deps?.sleep ?? defaultSleep;
   const fetchImpl = params.deps?.fetchImpl ?? fetch;
 
+  let lastLog: TiktokProductUploadLog | null = null;
+  let lastLogError: string | null = null;
+
   if (params.feedLogId) {
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       if (attempt > 0) await sleep(intervalMs);
@@ -352,13 +355,16 @@ export async function confirmTiktokCatalogUpload(params: {
           advertiserId: params.advertiserId,
           fetchImpl,
         });
+        lastLog = log;
+        lastLogError = null;
         const settled = settleFromProductLog({
           expected,
           log,
           feedLogId: params.feedLogId,
         });
         if (settled) return settled;
-      } catch {
+      } catch (e) {
+        lastLogError = e instanceof Error ? e.message : String(e);
         // log 查询失败时继续重试，最终回退 product/get
       }
     }
@@ -382,9 +388,12 @@ export async function confirmTiktokCatalogUpload(params: {
           succeeded: found.length,
           errors: missing.map((id) => ({
             id,
-            reason: params.feedLogId
-              ? `upload accepted (feed_log=${params.feedLogId}) but product not found in catalog`
-              : "upload accepted but product not found in catalog",
+            reason: buildMissingProductReason({
+              skuId: id,
+              feedLogId: params.feedLogId,
+              lastLog,
+              lastLogError,
+            }),
           })),
           feedLogId: params.feedLogId,
           verifiedVia: found.length > 0 ? "product_get" : "unverified",
@@ -399,11 +408,59 @@ export async function confirmTiktokCatalogUpload(params: {
     succeeded: 0,
     errors: expected.map((id) => ({
       id,
-      reason: params.feedLogId
-        ? `unable to confirm TikTok ingest for feed_log=${params.feedLogId}`
-        : "unable to confirm TikTok catalog ingest",
+      reason: buildMissingProductReason({
+        skuId: id,
+        feedLogId: params.feedLogId,
+        lastLog,
+        lastLogError,
+        unableToConfirm: true,
+      }),
     })),
     feedLogId: params.feedLogId,
     verifiedVia: "unverified",
   };
+}
+
+function buildMissingProductReason(params: {
+  skuId: string;
+  feedLogId?: string;
+  lastLog: TiktokProductUploadLog | null;
+  lastLogError: string | null;
+  unableToConfirm?: boolean;
+}): string {
+  const parts: string[] = [];
+  if (params.unableToConfirm) {
+    parts.push(
+      params.feedLogId
+        ? `unable to confirm TikTok ingest for feed_log=${params.feedLogId}`
+        : "unable to confirm TikTok catalog ingest",
+    );
+  } else {
+    parts.push(
+      params.feedLogId
+        ? `upload accepted (feed_log=${params.feedLogId}) but product not found in catalog`
+        : "upload accepted but product not found in catalog",
+    );
+  }
+
+  if (params.lastLog) {
+    const status = params.lastLog.rawStatus || params.lastLog.status;
+    parts.push(`product_log.status=${status}`);
+    if (params.lastLog.successCount != null) {
+      parts.push(`success_count=${params.lastLog.successCount}`);
+    }
+    if (params.lastLog.failedCount != null) {
+      parts.push(`failed_count=${params.lastLog.failedCount}`);
+    }
+    const skuError = params.lastLog.errors.find((e) => e.id === params.skuId);
+    if (skuError?.reason) {
+      parts.push(skuError.reason);
+    } else if (params.lastLog.errors[0]?.reason) {
+      parts.push(params.lastLog.errors[0].reason);
+    }
+  } else if (params.lastLogError) {
+    parts.push(`product_log error: ${params.lastLogError}`);
+  }
+
+  return parts.join(" | ");
 }
