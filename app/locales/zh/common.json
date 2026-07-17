@@ -1569,7 +1569,7 @@
     "asyncPushingTiktok": "正在将 {{count}} 个商品推送到 TikTok 目录",
     "asyncTiktokOfficialSync": "官方同步模式：正在校验 {{count}} 个商品字段就绪情况（不调用 TikTok 上传 API）",
     "asyncTiktokSwitchedToOfficial": "检测到该 Catalog 由 Shopify 官方同步管理，已切换为官方同步模式（不再 API 上传）",
-    "asyncTiktokOfficialCompleted": "就绪校验完成：{{succeeded}} 个可同步 · {{failed}} 个字段缺失。TikTok 侧由官方从 Shopify 同步；改文案请用 Studio。",
+    "asyncTiktokOfficialCompleted": "就绪校验完成：{{succeeded}} 个可同步 · {{failed}} 个字段缺失。TikTok 侧由官方从 Shopify 同步。",
     "insightsGuideTitle": "查看广告投放数据",
     "insightsGuideBody": "广告系列、广告组与广告指标已迁移到「广告洞察」。完成授权后可在该页面查看 Meta / Google / TikTok 投放表现。",
     "insightsGuideLink": "前往广告洞察"
