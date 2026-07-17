@@ -10,6 +10,7 @@ import {
   type EnqueueAdsCatalogSyncParams,
 } from "./adsCatalogAsync.server";
 import { getTiktokCatalogCredential } from "./credentialStore.server";
+import { ensureTiktokApiManagedCatalog } from "./tiktokEnsureApiCatalog.server";
 import { fetchProductsForCatalog } from "./productFetcher.server";
 
 const TASK_TYPE: AITaskType = "ads_catalog_sync";
@@ -109,6 +110,13 @@ export async function handleAdsCatalogSyncAction(request: Request): Promise<Resp
     shopInfo?.primaryDomainHost ?? shopInfo?.myshopifyDomain ?? session.shop;
   const brand = shopInfo?.name ?? undefined;
   const defaultCurrency = shopInfo?.currencyCode ?? undefined;
+
+  if (parsed.data.platform === "tiktok") {
+    const tiktokCredential = await getTiktokCatalogCredential(session.shop);
+    if (tiktokCredential?.bindingMode !== "shopify_official") {
+      await ensureTiktokApiManagedCatalog({ shop: session.shop, admin });
+    }
+  }
 
   const tiktokBindingMode =
     parsed.data.platform === "tiktok"

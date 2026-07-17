@@ -16,10 +16,17 @@ vi.mock("../../../../app/server/adsCatalog/credentialStore.server", () => ({
   clearTiktokCatalogPending: (...args: unknown[]) => clearTiktokCatalogPending(...args),
 }));
 
-vi.mock("../../../../app/server/adsCatalog/clients/tiktokCatalogClient.server", () => ({
-  createTiktokCatalog: (...args: unknown[]) => createTiktokCatalog(...args),
-  fetchTiktokCatalogConf: (...args: unknown[]) => fetchTiktokCatalogConf(...args),
-}));
+vi.mock("../../../../app/server/adsCatalog/clients/tiktokCatalogClient.server", async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import("../../../../app/server/adsCatalog/clients/tiktokCatalogClient.server")
+    >();
+  return {
+    ...actual,
+    createTiktokCatalog: (...args: unknown[]) => createTiktokCatalog(...args),
+    fetchTiktokCatalogConf: (...args: unknown[]) => fetchTiktokCatalogConf(...args),
+  };
+});
 
 vi.mock("../../../../app/server/adsCatalog/tiktokOAuth.server", () => ({
   listAccessibleBcIds: (...args: unknown[]) => listAccessibleBcIds(...args),
@@ -70,6 +77,40 @@ describe("ensureTiktokApiManagedCatalog", () => {
       bindingMode: "api_managed",
     });
     expect(createTiktokCatalog).not.toHaveBeenCalled();
+  });
+
+  it("creates a new catalog when api_managed binding has no channel in catalog/get", async () => {
+    getTiktokCatalogCredential.mockResolvedValue({
+      accessToken: "tok",
+      refreshToken: "rt",
+      advertiserId: "adv",
+      bcId: "bc",
+      catalogId: "766338888974542609",
+      catalogName: "电商 商品库",
+      bindingMode: "api_managed",
+    });
+    fetchTiktokCatalogConf.mockResolvedValue({
+      catalogId: "766338888974542609",
+      catalogName: "电商 商品库",
+      currency: "EUR",
+      catalogType: "ECOM",
+      isShopifyOfficial: false,
+    });
+    getTiktokCatalogPending.mockResolvedValue(null);
+    fetchShopBasicInfo.mockResolvedValue({ name: "Demo", currencyCode: "EUR" });
+    createTiktokCatalog.mockResolvedValue({
+      catalogId: "cat-new",
+      catalogName: "Spark Catalog — Demo",
+    });
+
+    const result = await ensureTiktokApiManagedCatalog({
+      shop: "demo.myshopify.com",
+      admin: { graphql: vi.fn() },
+    });
+
+    expect(result.created).toBe(true);
+    expect(result.catalogId).toBe("cat-new");
+    expect(createTiktokCatalog).toHaveBeenCalled();
   });
 
   it("creates a new catalog when api_managed binding has non-CLIENT channel", async () => {

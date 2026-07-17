@@ -2,6 +2,7 @@ import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopify
 import {
   createTiktokCatalog,
   fetchTiktokCatalogConf,
+  isApiWritableTiktokCatalog,
 } from "./clients/tiktokCatalogClient.server";
 import {
   clearTiktokCatalogPending,
@@ -21,19 +22,10 @@ export type EnsureTiktokApiCatalogResult = {
   bindingMode: "api_managed";
 };
 
-function isApiWritableTiktokCatalog(conf: {
-  channel?: string;
-  isShopifyOfficial: boolean;
-}): boolean {
-  if (conf.isShopifyOfficial) return false;
-  if (conf.channel && conf.channel !== "CLIENT") return false;
-  return true;
-}
-
 /**
  * 确保店铺绑定的是 Spark API 可写 Catalog（Path B）。
- * - 已是 api_managed 且 catalog/get 确认为 CLIENT 可写：复用当前目录
- * - 否则（含 channel !== CLIENT / 官方目录）：新建 Spark Catalog 并切换 bindingMode
+ * - 已是 api_managed 且 catalog/get 明确返回 channel=CLIENT：复用当前目录
+ * - 否则（含 channel 缺失 / 非 CLIENT / 官方目录）：新建 Spark Catalog 并切换 bindingMode
  */
 export async function ensureTiktokApiManagedCatalog(params: {
   shop: string;

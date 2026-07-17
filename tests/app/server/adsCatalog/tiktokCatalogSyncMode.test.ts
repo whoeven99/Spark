@@ -7,6 +7,7 @@ const getTiktokCatalogCredential = vi.hoisted(() => vi.fn());
 const setTiktokCatalogCredential = vi.hoisted(() => vi.fn());
 const upsertTiktokCatalogItems = vi.hoisted(() => vi.fn());
 const confirmTiktokCatalogUpload = vi.hoisted(() => vi.fn());
+const fetchTiktokCatalogConf = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../../app/db.server", () => ({ default: {} }));
 
@@ -24,11 +25,19 @@ vi.mock("../../../../app/server/adsCatalog/credentialStore.server", () => ({
   setGoogleMerchantCredential: vi.fn(),
 }));
 
-vi.mock("../../../../app/server/adsCatalog/clients/tiktokCatalogClient.server", () => ({
-  upsertTiktokCatalogItems: (...args: unknown[]) => upsertTiktokCatalogItems(...args),
-  createTiktokCatalog: vi.fn(),
-  resolveTiktokCatalogRegion: vi.fn(),
-}));
+vi.mock("../../../../app/server/adsCatalog/clients/tiktokCatalogClient.server", async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import("../../../../app/server/adsCatalog/clients/tiktokCatalogClient.server")
+    >();
+  return {
+    ...actual,
+    upsertTiktokCatalogItems: (...args: unknown[]) => upsertTiktokCatalogItems(...args),
+    createTiktokCatalog: vi.fn(),
+    resolveTiktokCatalogRegion: vi.fn(),
+    fetchTiktokCatalogConf: (...args: unknown[]) => fetchTiktokCatalogConf(...args),
+  };
+});
 
 vi.mock("../../../../app/server/adsCatalog/clients/tiktokCatalogUploadConfirm.server", () => ({
   confirmTiktokCatalogUpload: (...args: unknown[]) => confirmTiktokCatalogUpload(...args),
@@ -107,6 +116,12 @@ describe("runTiktokSync binding modes", () => {
       verifiedVia: "product_log",
       feedLogId: "feed-1",
     });
+    fetchTiktokCatalogConf.mockResolvedValue({
+      catalogId: "cat-api",
+      channel: "CLIENT",
+      currency: "USD",
+      isShopifyOfficial: false,
+    });
   });
 
   afterEach(() => {
@@ -137,6 +152,10 @@ describe("runTiktokSync binding modes", () => {
       catalogId: "cat",
       bindingMode: "shopify_official",
       updatedAt: new Date().toISOString(),
+    });
+    fetchTiktokCatalogConf.mockResolvedValue({
+      catalogId: "cat",
+      isShopifyOfficial: true,
     });
 
     await runSync();

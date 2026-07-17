@@ -132,9 +132,19 @@ export function formatTiktokCatalogDiagnostics(conf: TiktokCatalogConfSnapshot):
   if (conf.currency) parts.push(`currency=${conf.currency}`);
   if (conf.regionCode) parts.push(`region=${conf.regionCode}`);
   if (conf.channel) parts.push(`channel=${conf.channel}`);
+  else parts.push("channel=(missing)");
   if (conf.catalogType) parts.push(`type=${conf.catalogType}`);
   if (conf.businessPlatform) parts.push(`platform=${conf.businessPlatform}`);
   return parts.join(" ");
+}
+
+/** catalog/get 必须明确返回 channel=CLIENT；缺失 channel 视为不可 API 写入（常见于后台手动建库）。 */
+export function isApiWritableTiktokCatalog(conf: {
+  channel?: string;
+  isShopifyOfficial: boolean;
+}): boolean {
+  if (conf.isShopifyOfficial) return false;
+  return conf.channel === "CLIENT";
 }
 
 /** 上传前硬校验：官方 Shopify 目录与币种不一致会直接阻断。 */
@@ -152,8 +162,9 @@ export function validateTiktokCatalogForApiUpload(
   ) {
     return `商品库币种为 ${conf.currency}，与店铺/商品价格币种 ${productCurrency.toUpperCase()} 不一致。请创建与店铺币种一致的 Spark API 商品库。`;
   }
-  if (conf.channel && conf.channel !== "CLIENT") {
-    return `当前商品库 channel=${conf.channel}，通常无法通过 API 入库。请使用 Spark 创建的 API 商品库（channel=CLIENT）。`;
+  if (!isApiWritableTiktokCatalog(conf)) {
+    const channelLabel = conf.channel ? `channel=${conf.channel}` : "channel 未返回（多为 TikTok 后台手动创建）";
+    return `当前商品库 ${channelLabel}，无法通过 API 入库。请使用 Spark 创建的 API 商品库（channel=CLIENT）。`;
   }
   return null;
 }
