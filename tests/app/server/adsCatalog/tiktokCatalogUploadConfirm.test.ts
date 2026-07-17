@@ -61,7 +61,7 @@ describe("parseTiktokProductUploadLog", () => {
 });
 
 describe("extractFeedLogDataUrl", () => {
-  it("prefers en URL from feed_log_data", () => {
+  it("prefers en URL from feed_log_data (flat shape)", () => {
     expect(
       extractFeedLogDataUrl({
         product_feed_log: {
@@ -73,9 +73,62 @@ describe("extractFeedLogDataUrl", () => {
       }),
     ).toBe("https://cdn.example/en.csv");
   });
+
+  it("extracts en URL from feed_log_data.download_path (real API shape)", () => {
+    expect(
+      extractFeedLogDataUrl({
+        product_feed_log: {
+          error_count: 10,
+          end_time: "2026-07-17 07:25:50",
+          feed_log_data: {
+            download_path: {
+              ar: "https://cdn.tiktok/ar.csv",
+              en: "https://cdn.tiktok/en.csv",
+              fr: "https://cdn.tiktok/fr.csv",
+            },
+          },
+        },
+        feed_log_id: "1367200856",
+      }),
+    ).toBe("https://cdn.tiktok/en.csv");
+  });
+
+  it("falls back to any URL when no preferred language found in download_path", () => {
+    const result = extractFeedLogDataUrl({
+      product_feed_log: {
+        feed_log_data: {
+          download_path: {
+            ar: "https://cdn.tiktok/ar.csv",
+            fr: "https://cdn.tiktok/fr.csv",
+          },
+        },
+      },
+    });
+    expect(result).toMatch(/^https:\/\/cdn\.tiktok\//);
+  });
 });
 
 describe("parseTiktokFeedLogCsv", () => {
+  it("treats Warning severity rows as non-failures (not included in errors)", () => {
+    const csv = [
+      "SKU ID,Line,Severity,Issue,How to fix,Property name,Value in feed,Sample value,Feed ID,Feed Name,Feed Upload Time",
+      '"A2504","2","Warning","An optional but recommended field is missing: google_product_category/product_type","We recommend you include either google_product_category or product_type","google_product_category","","Apparel & Accessories","30898912","default","2026-07-17 06:56:30"',
+    ].join("\n");
+    const result = parseTiktokFeedLogCsv(csv);
+    expect(result).toEqual([]);
+  });
+
+  it("still treats Error severity rows as failures", () => {
+    const csv = [
+      "SKU ID,Line,Severity,Issue,How to fix,Property name,Value in feed,Sample value,Feed ID,Feed Name,Feed Upload Time",
+      '"A2504","2","Error","The number of api submit exceeds the limit (once a minute)","You should wait a minute","","","","30898912","default","2026-07-17 06:56:30"',
+    ].join("\n");
+    const result = parseTiktokFeedLogCsv(csv);
+    expect(result).toEqual([
+      { id: "A2504", reason: "The number of api submit exceeds the limit (once a minute)" },
+    ]);
+  });
+
   it("parses sku and error columns", () => {
     const csv = [
       "sku_id,error_message,status",
@@ -217,6 +270,64 @@ describe("confirmTiktokCatalogUpload", () => {
     expect(result.errors[0]?.reason).toContain("Image must be at least 500x500 pixels");
     expect(result.errors[0]?.reason).toContain(`details=${csvUrl}`);
     expect(result.errors[0]?.reason).toContain("error_count=10");
+  });
+
+  it("downloads CSV and surfaces per-SKU reason when API uses download_path nesting", async () => {
+    const csvUrl = "https://cdn.tiktok.com/feed-en.csv";
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/catalog/product/log/")) {
+        return new Response(
+          JSON.stringify({
+            code: 0,
+            message: "OK",
+            data: {
+              product_feed_log: {
+                error_count: 10,
+                end_time: "2026-07-17 07:25:50",
+                feed_log_data: {
+                  download_path: {
+                    ar: "https://cdn.tiktok.com/feed-ar.csv",
+                    en: csvUrl,
+                    fr: "https://cdn.tiktok.com/feed-fr.csv",
+                  },
+                },
+              },
+              feed_log_id: "1367200856",
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      if (url === csvUrl) {
+        return new Response(
+          [
+            "SKU ID,Line,Severity,Issue,How to fix,Property name,Value in feed,Sample value,Feed ID,Feed Name,Feed Upload Time",
+            '"A2504","2","Error","The number of api submit exceeds the limit (once a minute)","You should wait a minute before submitting the data","","","","30898912","default","2026-07-17 06:56:30"',
+          ].join("\n"),
+          { status: 200 },
+        );
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    const result = await confirmTiktokCatalogUpload({
+      accessToken: "tok",
+      advertiserId: "adv",
+      bcId: "bc",
+      catalogId: "cat",
+      feedLogId: "1367200856",
+      expectedSkuIds: ["A2504"],
+      deps: { fetchImpl, maxAttempts: 1, intervalMs: 0, sleep: async () => undefined },
+    });
+
+    expect(result.verifiedVia).toBe("product_log");
+    expect(result.succeeded).toBe(0);
+    expect(result.errors[0]?.id).toBe("A2504");
+    expect(result.errors[0]?.reason).toBe(
+      "The number of api submit exceeds the limit (once a minute)",
+    );
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it("falls back to product/get when log stays processing", async () => {

@@ -134,7 +134,13 @@ function pickFeedLogNode(root: Record<string, unknown>): Record<string, unknown>
   );
 }
 
-/** 从 feed_log_data / download_path 提取明细 CSV URL，优先 en。 */
+/** 从 feed_log_data / download_path 提取明细 CSV URL，优先 en。
+ *
+ * TikTok API 存在两种结构：
+ *   - 旧版：feed_log_data: { en: "https://..." }
+ *   - 新版：feed_log_data: { download_path: { en: "https://..." } }
+ * 两种均需兼容。
+ */
 export function extractFeedLogDataUrl(data: unknown): string | undefined {
   const root = asRecord(data) ?? {};
   const nested = pickFeedLogNode(root);
@@ -145,12 +151,9 @@ export function extractFeedLogDataUrl(data: unknown): string | undefined {
     root.download_path,
   ];
   const preferredKeys = ["en", "en-US", "EN", "en_US"];
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && /^https?:\/\//i.test(candidate.trim())) {
-      return candidate.trim();
-    }
-    const record = asRecord(candidate);
-    if (!record) continue;
+
+  function pickUrlFromRecord(record: Record<string, unknown>): string | undefined {
+    // 直接语言键（旧版 feed_log_data: { en: "..." }）
     for (const key of preferredKeys) {
       const url = record[key];
       if (typeof url === "string" && /^https?:\/\//i.test(url.trim())) {
@@ -161,7 +164,33 @@ export function extractFeedLogDataUrl(data: unknown): string | undefined {
       if (typeof value === "string" && /^https?:\/\//i.test(value.trim())) {
         return value.trim();
       }
+      // 新版多一层 download_path: { en: "..." }
+      const subRecord = asRecord(value);
+      if (subRecord) {
+        for (const key of preferredKeys) {
+          const url = subRecord[key];
+          if (typeof url === "string" && /^https?:\/\//i.test(url.trim())) {
+            return url.trim();
+          }
+        }
+        for (const subValue of Object.values(subRecord)) {
+          if (typeof subValue === "string" && /^https?:\/\//i.test(subValue.trim())) {
+            return subValue.trim();
+          }
+        }
+      }
     }
+    return undefined;
+  }
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && /^https?:\/\//i.test(candidate.trim())) {
+      return candidate.trim();
+    }
+    const record = asRecord(candidate);
+    if (!record) continue;
+    const url = pickUrlFromRecord(record);
+    if (url) return url;
   }
   return undefined;
 }

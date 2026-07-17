@@ -152,8 +152,11 @@ export function mapShopifyToTiktok(
     item.additional_image_urls = additionalImages;
   }
 
-  if (product.googleProductCategory) {
-    item.google_product_category = product.googleProductCategory;
+  // google_product_category 优先取 Shopify GPC；缺失时用 productType 兜底，
+  // 满足 TikTok 对 google_product_category/product_type 二选一的 Warning 要求。
+  const gpc = product.googleProductCategory || product.productType || null;
+  if (gpc) {
+    item.google_product_category = gpc;
   }
 
   if (product.barcode) {

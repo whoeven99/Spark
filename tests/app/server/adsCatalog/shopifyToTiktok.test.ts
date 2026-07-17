@@ -91,6 +91,43 @@ describe("mapShopifyToTiktok ECOM required fields", () => {
   });
 });
 
+describe("mapShopifyToTiktok google_product_category fallback", () => {
+  it("uses productType as fallback when googleProductCategory is missing", () => {
+    const result = mapShopifyToTiktok(
+      baseProduct({ productType: "T-shirts", googleProductCategory: null }),
+      mapContext,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.item.google_product_category).toBe("T-shirts");
+  });
+
+  it("prefers googleProductCategory over productType when both are set", () => {
+    const result = mapShopifyToTiktok(
+      baseProduct({
+        productType: "T-shirts",
+        googleProductCategory: "Apparel & Accessories > Clothing > Shirts",
+      }),
+      mapContext,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.item.google_product_category).toBe(
+      "Apparel & Accessories > Clothing > Shirts",
+    );
+  });
+
+  it("omits google_product_category when both are missing", () => {
+    const result = mapShopifyToTiktok(
+      baseProduct({ productType: null, googleProductCategory: null }),
+      mapContext,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.item).not.toHaveProperty("google_product_category");
+  });
+});
+
 describe("mapShopifyToTiktok availability", () => {
   it("maps in-stock products to IN_STOCK", () => {
     const result = mapShopifyToTiktok(baseProduct({ availableForSale: true }), mapContext);

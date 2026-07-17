@@ -4,6 +4,24 @@ const TIKTOK_API_BASE = "https://business-api.tiktok.com/open_api/v1.3";
 const ITEMS_BATCH_CHUNK = 50;
 const LOG_PREFIX = "[AdsCatalog][TikTokClient]";
 
+/**
+ * TikTok Catalog upload API 限速：每个 Catalog 每分钟仅允许提交一次。
+ * 进程内 Map 记录最近上传时间；重启后自动重置（已足够，因为重启间隔通常 > 1 分钟）。
+ */
+const catalogLastUploadMs = new Map<string, number>();
+const UPLOAD_COOLDOWN_MS = 62_000;
+
+async function waitForUploadCooldown(catalogId: string): Promise<void> {
+  const last = catalogLastUploadMs.get(catalogId);
+  if (!last) return;
+  const remaining = UPLOAD_COOLDOWN_MS - (Date.now() - last);
+  if (remaining <= 0) return;
+  console.info(
+    `${LOG_PREFIX} step=rate_limit_cooldown catalogId=${catalogId} waitMs=${remaining}`,
+  );
+  await new Promise<void>((resolve) => setTimeout(resolve, remaining));
+}
+
 function summarizeTiktokItem(item: TiktokCatalogItem): Record<string, unknown> {
   return {
     sku_id: item.sku_id,
@@ -179,6 +197,8 @@ export async function upsertTiktokCatalogItems(params: {
         .join(",")}`,
     );
 
+    await waitForUploadCooldown(params.catalogId);
+
     let response: Response;
     try {
       response = await fetch(url, {
@@ -237,6 +257,8 @@ export async function upsertTiktokCatalogItems(params: {
       }
       continue;
     }
+
+    catalogLastUploadMs.set(params.catalogId, Date.now());
 
     if (payload.data?.feed_log_id != null && !result.feedLogId) {
       result.feedLogId = String(payload.data.feed_log_id);

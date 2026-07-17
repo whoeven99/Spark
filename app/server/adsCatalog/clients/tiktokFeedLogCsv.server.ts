@@ -143,11 +143,13 @@ function isFailedStatus(rowStatus: string): boolean {
     rowStatus.includes("FAIL") ||
     rowStatus.includes("ERROR") ||
     rowStatus === "REJECTED" ||
-    rowStatus === "WARNING" ||
     rowStatus.includes("失败") ||
-    rowStatus.includes("错误") ||
-    rowStatus.includes("警告")
+    rowStatus.includes("错误")
   );
+}
+
+function isWarningStatus(rowStatus: string): boolean {
+  return rowStatus === "WARNING" || rowStatus === "WARN" || rowStatus.includes("警告");
 }
 
 /**
@@ -196,6 +198,12 @@ export function analyzeTiktokFeedLogCsv(text: string): TiktokFeedCsvAnalysis {
     const rowStatus = statusCol >= 0 ? String(cells[statusCol] ?? "").toUpperCase() : "";
 
     if (rowStatus && isSuccessStatus(rowStatus)) continue;
+    // Warning 级别不计入失败，但收入 summaryReasons 供 UI 诊断展示
+    if (rowStatus && isWarningStatus(rowStatus)) {
+      const warningMsg = reason || cells.filter((_, idx) => idx !== skuCol).map((c) => c.trim()).filter(Boolean).join(" | ");
+      if (warningMsg) summaryReasons.push(`[warning] ${warningMsg}`);
+      continue;
+    }
 
     // 无表头匹配时：把整行拼成摘要，便于排障
     if (skuCol < 0 && reasonCol < 0) {
