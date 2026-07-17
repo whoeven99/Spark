@@ -144,14 +144,31 @@ describe("mapShopifyToTiktok google_product_category fallback", () => {
     );
   });
 
+  it("uses vendor as category fallback when product type and GPC are missing", () => {
+    const result = mapShopifyToTiktok(
+      baseProduct({
+        productType: null,
+        googleProductCategory: null,
+        shopifyCategory: null,
+        vendor: "Acme",
+      }),
+      mapContext,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.item.google_product_category).toBe("Acme");
+    expect(result.item.product_type).toBe("Acme");
+  });
+
   it("omits category fields when all sources are missing", () => {
     const result = mapShopifyToTiktok(
       baseProduct({
         productType: null,
         googleProductCategory: null,
         shopifyCategory: null,
+        vendor: null,
       }),
-      mapContext,
+      { ...mapContext, brand: "Store Brand" },
     );
     expect(result.ok).toBe(true);
     if (!result.ok) return;

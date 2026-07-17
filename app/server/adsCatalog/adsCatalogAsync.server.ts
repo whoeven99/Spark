@@ -19,7 +19,11 @@ import {
   refreshGoogleAccessToken,
   upsertGoogleMerchantProducts,
 } from "./clients/googleMerchantClient.server";
-import { upsertTiktokCatalogItems } from "./clients/tiktokCatalogClient.server";
+import {
+  fetchTiktokCatalogConf,
+  upsertTiktokCatalogItems,
+  validateTiktokCatalogForApiUpload,
+} from "./clients/tiktokCatalogClient.server";
 import { confirmTiktokCatalogUpload } from "./clients/tiktokCatalogUploadConfirm.server";
 import {
   getFacebookCatalogCredential,
@@ -101,7 +105,13 @@ async function runAdsCatalogSync(params: EnqueueAdsCatalogSyncParams): Promise<v
   if (platform === "facebook") {
     await runFacebookSync({ ...params, taskId, startedAt, msg });
   } else if (platform === "tiktok") {
-    await runTiktokSync({ ...params, taskId, startedAt, msg });
+    await runTiktokSync({
+      ...params,
+      taskId,
+      startedAt,
+      msg,
+      googleProductCategory: params.googleProductCategory,
+    });
   } else {
     await runGoogleSync({
       ...params,
@@ -380,6 +390,7 @@ async function runTiktokSync(params: {
   defaultCurrency?: string;
   brand?: string;
   products: RawShopifyProductForCatalog[];
+  googleProductCategory?: string;
   msg: MsgFn;
 }): Promise<void> {
   const logTiktok = (step: string, detail = "") => {
@@ -418,6 +429,34 @@ async function runTiktokSync(params: {
     `bindingMode=${credential.bindingMode} bcId=${credential.bcId} advertiserId=${credential.advertiserId} catalogId=${credential.catalogId} catalogName=${credential.catalogName ?? ""}`,
   );
 
+  const catalogConf = await fetchTiktokCatalogConf({
+    accessToken: credential.accessToken,
+    bcId: credential.bcId,
+    catalogId: credential.catalogId,
+  });
+  if (catalogConf) {
+    logTiktok("catalog_conf", JSON.stringify(catalogConf));
+    const sampleCurrency =
+      params.products.find((p) => p.priceCurrency)?.priceCurrency ?? params.defaultCurrency;
+    const validationError = validateTiktokCatalogForApiUpload(catalogConf, sampleCurrency);
+    if (validationError && credential.bindingMode === "api_managed") {
+      logTiktok("catalog_conf_invalid", validationError);
+      await failTask({
+        taskId: params.taskId,
+        startedAt: params.startedAt,
+        errorMsg: validationError,
+      });
+      return;
+    }
+  } else {
+    logTiktok("catalog_conf_missing", `catalogId=${credential.catalogId}`);
+  }
+
+  const enrichedProducts = params.products.map((p) => ({
+    ...p,
+    googleProductCategory: params.googleProductCategory ?? p.googleProductCategory ?? null,
+  }));
+
   await appendLog({
     taskId: params.taskId,
     startedAt: params.startedAt,
@@ -426,7 +465,7 @@ async function runTiktokSync(params: {
 
   const mappingErrors: AdsCatalogSyncTaskResult["errors"] = [];
   const items = [];
-  for (const product of params.products) {
+  for (const product of enrichedProducts) {
     const mapped = mapShopifyToTiktok(product, {
       shopDomain: params.shopDomain,
       defaultCurrency: params.defaultCurrency,
@@ -464,7 +503,7 @@ async function runTiktokSync(params: {
     });
     const result: AdsCatalogSyncTaskResult = {
       platform: "tiktok",
-      totalProcessed: params.products.length,
+      totalProcessed: enrichedProducts.length,
       succeeded: items.length,
       failed: mappingErrors.length,
       errors: mappingErrors,
@@ -610,7 +649,7 @@ async function runTiktokSync(params: {
 
   const result: AdsCatalogSyncTaskResult = {
     platform: "tiktok",
-    totalProcessed: params.products.length,
+    totalProcessed: enrichedProducts.length,
     succeeded,
     failed: errors.length,
     errors,

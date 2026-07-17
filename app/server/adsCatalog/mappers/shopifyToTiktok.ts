@@ -175,13 +175,14 @@ function extractNumericId(gid: string): string {
   return match ? match[1] : gid;
 }
 
-/** 解析用于 TikTok 广告优化的类目路径，优先标准 GPC，再退回店铺类目。 */
+/** 解析用于 TikTok 广告优化的类目路径，优先标准 GPC，再退回店铺类目/品牌。 */
 function resolveTiktokCategoryPath(product: RawShopifyProductForCatalog): string | null {
   const candidates = [
     product.googleProductCategory,
     product.productType,
     product.shopifyCategory?.fullName,
     product.shopifyCategory?.name,
+    product.vendor,
   ];
   for (const raw of candidates) {
     const value = raw?.trim();

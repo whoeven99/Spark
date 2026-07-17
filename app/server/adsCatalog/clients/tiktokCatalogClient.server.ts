@@ -1,4 +1,5 @@
 import type { TiktokCatalogItem } from "../mappers/shopifyToTiktok";
+import { isShopifyOfficialCatalog } from "../tiktokOAuth.server";
 
 const TIKTOK_API_BASE = "https://business-api.tiktok.com/open_api/v1.3";
 const ITEMS_BATCH_CHUNK = 50;
@@ -42,7 +43,119 @@ function summarizeTiktokItem(item: TiktokCatalogItem): Record<string, unknown> {
     landing_page_url: item.landing_page.landing_page_url,
     image_url: item.image_url,
     item_group_id: item.item_group_id,
+    google_product_category: item.google_product_category,
+    product_type: item.product_type,
+    product_category: item.product_detail.product_category,
   };
+}
+
+export interface TiktokCatalogConfSnapshot {
+  catalogId: string;
+  catalogName?: string;
+  catalogType?: string;
+  currency?: string;
+  regionCode?: string;
+  channel?: string;
+  businessPlatform?: string;
+  isShopifyOfficial: boolean;
+}
+
+/** 读取已绑定 Catalog 的币种/区域/channel，用于上传前校验与失败诊断。 */
+export async function fetchTiktokCatalogConf(params: {
+  accessToken: string;
+  bcId: string;
+  catalogId: string;
+}): Promise<TiktokCatalogConfSnapshot | null> {
+  const url = new URL(`${TIKTOK_API_BASE}/catalog/get/`);
+  url.searchParams.set("bc_id", params.bcId);
+  url.searchParams.set("page", "1");
+  url.searchParams.set("page_size", "100");
+
+  const response = await fetch(url.toString(), {
+    headers: { "Access-Token": params.accessToken },
+  });
+  const text = await response.text();
+  let payload: {
+    code?: number;
+    message?: string;
+    data?: { list?: Array<Record<string, unknown>>; catalogs?: Array<Record<string, unknown>> };
+  } = {};
+  try {
+    payload = text ? (JSON.parse(text) as typeof payload) : {};
+  } catch {
+    payload = {};
+  }
+
+  console.info(
+    `${LOG_PREFIX} step=catalog_get_response catalogId=${params.catalogId} http=${response.status} code=${payload.code ?? ""} body=${rawForLog(text)}`,
+  );
+
+  if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {
+    return null;
+  }
+
+  const rows = payload.data?.list ?? payload.data?.catalogs ?? [];
+  const row = rows.find((item) => String(item.catalog_id ?? "").trim() === params.catalogId);
+  if (!row) return null;
+
+  const conf = (row.catalog_conf as Record<string, unknown> | undefined) ?? {};
+  const catalogName = String(row.catalog_name ?? "").trim() || undefined;
+  const catalogType = String(row.catalog_type ?? "").trim() || undefined;
+  const currency = String(conf.currency ?? row.currency ?? "").trim().toUpperCase() || undefined;
+  const regionCode =
+    String(conf.region_code ?? row.region_code ?? "").trim().toUpperCase() || undefined;
+  const channel = String(conf.channel ?? row.channel ?? "").trim().toUpperCase() || undefined;
+  const businessPlatform =
+    String(conf.business_platform ?? row.business_platform ?? "").trim() || undefined;
+
+  return {
+    catalogId: params.catalogId,
+    catalogName,
+    catalogType,
+    currency,
+    regionCode,
+    channel,
+    businessPlatform,
+    isShopifyOfficial: isShopifyOfficialCatalog({
+      catalogName,
+      catalogType,
+      businessPlatform,
+      channel,
+      createSource: String(row.create_source ?? "").trim() || undefined,
+    }),
+  };
+}
+
+export function formatTiktokCatalogDiagnostics(conf: TiktokCatalogConfSnapshot): string {
+  const parts = [`catalog_id=${conf.catalogId}`];
+  if (conf.catalogName) parts.push(`name=${conf.catalogName}`);
+  if (conf.currency) parts.push(`currency=${conf.currency}`);
+  if (conf.regionCode) parts.push(`region=${conf.regionCode}`);
+  if (conf.channel) parts.push(`channel=${conf.channel}`);
+  if (conf.catalogType) parts.push(`type=${conf.catalogType}`);
+  if (conf.businessPlatform) parts.push(`platform=${conf.businessPlatform}`);
+  return parts.join(" ");
+}
+
+/** 上传前硬校验：官方 Shopify 目录与币种不一致会直接阻断。 */
+export function validateTiktokCatalogForApiUpload(
+  conf: TiktokCatalogConfSnapshot,
+  productCurrency?: string,
+): string | null {
+  if (conf.isShopifyOfficial) {
+    return "当前目录为 TikTok Shopify 官方同步目录，API 无法写入。请在 Spark 点击「创建 Spark API 商品库」后重新同步。";
+  }
+  if (
+    productCurrency &&
+    conf.currency &&
+    conf.currency.toUpperCase() !== productCurrency.toUpperCase()
+  ) {
+    return `商品库币种为 ${conf.currency}，与店铺/商品价格币种 ${productCurrency.toUpperCase()} 不一致。请创建与店铺币种一致的 Spark API 商品库。`;
+  }
+  if (conf.channel && conf.channel !== "CLIENT") {
+    return `当前商品库 channel=${conf.channel}，通常无法通过 API 入库。请使用 Spark 创建的 API 商品库（channel=CLIENT）。`;
+  }
+  return null;
 }
 
 const CURRENCY_TO_REGION: Record<string, string> = {

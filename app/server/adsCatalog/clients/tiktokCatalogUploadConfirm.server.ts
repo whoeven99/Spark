@@ -1,4 +1,8 @@
 import { analyzeTiktokFeedLogCsv } from "./tiktokFeedLogCsv.server";
+import {
+  fetchTiktokCatalogConf,
+  formatTiktokCatalogDiagnostics,
+} from "./tiktokCatalogClient.server";
 
 export { parseTiktokFeedLogCsv, analyzeTiktokFeedLogCsv } from "./tiktokFeedLogCsv.server";
 
@@ -24,6 +28,11 @@ export interface TiktokProductUploadLog {
   status: TiktokUploadLogStatus;
   successCount: number | null;
   failedCount: number | null;
+  /** product_feed_log.warn_count */
+  warnCount?: number | null;
+  updateCount?: number | null;
+  deleteCount?: number | null;
+  feedId?: string;
   errors: Array<{ id: string; reason: string }>;
   /** CSV Warning 行（按 SKU）；不抬高失败计数，仅供失败原因展示 */
   warnings?: Array<{ id: string; reason: string }>;
@@ -300,6 +309,7 @@ export function isProductLogResolvable(log: TiktokProductUploadLog): boolean {
   if (log.status === "processing" || log.status === "unknown") return false;
   if (log.successCount != null && log.successCount > 0) return true;
   if (log.failedCount != null && log.failedCount > 0) return true;
+  if (log.warnCount != null && log.warnCount > 0) return true;
   if (log.errors.length > 0) return true;
   if ((log.warnings?.length ?? 0) > 0) return true;
   if (log.feedCsvSummary?.trim()) return true;
@@ -375,6 +385,16 @@ export function parseTiktokProductUploadLog(data: unknown): TiktokProductUploadL
     readNumber(nested.failure_count) ??
     readNumber(root.error_count) ??
     null;
+  const warnCount =
+    readNumber(nested.warn_count) ??
+    readNumber(nested.warning_count) ??
+    readNumber(root.warn_count) ??
+    null;
+  const updateCount =
+    readNumber(nested.update_count) ?? readNumber(root.update_count) ?? null;
+  const deleteCount =
+    readNumber(nested.delete_count) ?? readNumber(root.delete_count) ?? null;
+  const feedId = String(nested.feed_id ?? root.feed_id ?? "").trim() || undefined;
   const endTime = String(nested.end_time ?? nested.finish_time ?? root.end_time ?? "").trim();
   const feedLogDataUrls = collectFeedLogDataUrls(data);
   const feedLogDataUrl = feedLogDataUrls[0];
@@ -397,6 +417,10 @@ export function parseTiktokProductUploadLog(data: unknown): TiktokProductUploadL
     failedCount,
     errors,
     rawStatus: rawStatus || undefined,
+    ...(warnCount != null ? { warnCount } : {}),
+    ...(updateCount != null ? { updateCount } : {}),
+    ...(deleteCount != null ? { deleteCount } : {}),
+    ...(feedId ? { feedId } : {}),
     ...(feedLogDataUrl ? { feedLogDataUrl } : {}),
     ...(endTime ? { endTime } : {}),
   };
@@ -642,23 +666,62 @@ export async function listTiktokCatalogSkuIds(params: {
 }
 
 function defaultRejectReason(log: TiktokProductUploadLog, feedLogId?: string): string {
-  // 优先展示已解析的 CSV 具体原因（不含 HTTPS 链接）。
+  // 优先展示已解析的 CSV 具体原因，并附带明细 CSV HTTPS 链接。
   const parsed =
     log.feedCsvSummary?.trim() ||
     log.warnings?.[0]?.reason ||
     log.errors[0]?.reason ||
     "";
-  if (parsed) return parsed;
+  if (parsed) {
+    return log.feedLogDataUrl ? `${parsed} | details=${log.feedLogDataUrl}` : parsed;
+  }
 
-  // 未能解析 CSV 时恢复诊断字段，便于排障（含 details 链接）。
-  const parts: string[] = ["rejected by TikTok Catalog product log"];
+  const parts: string[] = [];
+  if (log.successCount === 0) {
+    parts.push("TikTok 处理完成但未入库任何商品（add_count=0）");
+  } else {
+    parts.push("rejected by TikTok Catalog product log");
+  }
   if (log.rawStatus) parts.push(`process_status=${log.rawStatus}`);
   if (log.successCount != null) parts.push(`add_count=${log.successCount}`);
   if (log.failedCount != null) parts.push(`error_count=${log.failedCount}`);
+  if (log.warnCount != null) parts.push(`warn_count=${log.warnCount}`);
+  if (log.updateCount != null) parts.push(`update_count=${log.updateCount}`);
+  if (log.deleteCount != null) parts.push(`delete_count=${log.deleteCount}`);
+  if (log.feedId) parts.push(`feed_id=${log.feedId}`);
   if (feedLogId) parts.push(`feed_log=${feedLogId}`);
   if (log.endTime) parts.push(`end_time=${log.endTime}`);
-  if (log.feedLogDataUrl) parts.push(`details=${log.feedLogDataUrl}`);
+  if (!log.feedLogDataUrl) {
+    parts.push(
+      "未返回 feed_log 明细 CSV；常见原因：商品库 channel 非 CLIENT、币种/区域与商品不匹配，或目录为 TikTok 后台手动创建",
+    );
+  } else {
+    parts.push(`details=${log.feedLogDataUrl}`);
+  }
   return parts.join(" | ");
+}
+
+async function appendCatalogDiagnosticsToErrors(params: {
+  accessToken: string;
+  bcId: string;
+  catalogId: string;
+  errors: Array<{ id: string; reason: string }>;
+}): Promise<Array<{ id: string; reason: string }>> {
+  if (params.errors.length === 0) return params.errors;
+  try {
+    const conf = await fetchTiktokCatalogConf({
+      accessToken: params.accessToken,
+      bcId: params.bcId,
+      catalogId: params.catalogId,
+    });
+    if (!conf) return params.errors;
+    const diag = formatTiktokCatalogDiagnostics(conf);
+    return params.errors.map((err) =>
+      err.reason.includes(diag) ? err : { ...err, reason: `${err.reason} | ${diag}` },
+    );
+  } catch {
+    return params.errors;
+  }
 }
 
 function findErrorReason(
@@ -782,6 +845,26 @@ function settleFromProductLog(params: {
  * 上传受理后确认真实入库结果：优先轮询 product/log，失败则回退 product/get。
  * 无法证实时按失败处理，避免 App 误报成功。
  */
+async function finalizeConfirmResult(params: {
+  accessToken: string;
+  bcId: string;
+  catalogId: string;
+  result: ConfirmTiktokCatalogUploadResult;
+}): Promise<ConfirmTiktokCatalogUploadResult> {
+  if (params.result.succeeded > 0 || params.result.errors.length === 0) {
+    return params.result;
+  }
+  return {
+    ...params.result,
+    errors: await appendCatalogDiagnosticsToErrors({
+      accessToken: params.accessToken,
+      bcId: params.bcId,
+      catalogId: params.catalogId,
+      errors: params.result.errors,
+    }),
+  };
+}
+
 export async function confirmTiktokCatalogUpload(params: {
   accessToken: string;
   advertiserId: string;
@@ -839,7 +922,12 @@ export async function confirmTiktokCatalogUpload(params: {
           console.info(
             `${LOG_PREFIX} step=confirm_settled_via_product_log status=${log.status} resolvable=${resolvable} succeeded=${settled.succeeded} failed=${settled.errors.length}`,
           );
-          return settled;
+          return finalizeConfirmResult({
+            accessToken: params.accessToken,
+            bcId: params.bcId,
+            catalogId: params.catalogId,
+            result: settled,
+          });
         }
         if (settled && !resolvable) {
           console.info(
@@ -899,7 +987,12 @@ export async function confirmTiktokCatalogUpload(params: {
         console.info(
           `${LOG_PREFIX} step=confirm_done via=${result.verifiedVia} succeeded=${result.succeeded} failed=${result.errors.length}`,
         );
-        return result;
+        return finalizeConfirmResult({
+          accessToken: params.accessToken,
+          bcId: params.bcId,
+          catalogId: params.catalogId,
+          result,
+        });
       }
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
@@ -913,21 +1006,26 @@ export async function confirmTiktokCatalogUpload(params: {
   console.error(
     `${LOG_PREFIX} step=confirm_unverified feedLogId=${params.feedLogId ?? ""} lastLogError=${lastLogError ?? ""} lastLogStatus=${lastLog?.status ?? ""}`,
   );
-  return {
-    succeeded: 0,
-    errors: expected.map((id) => ({
-      id,
-      reason: buildMissingProductReason({
-        skuId: id,
-        feedLogId: params.feedLogId,
-        lastLog,
-        lastLogError,
-        unableToConfirm: true,
-      }),
-    })),
-    feedLogId: params.feedLogId,
-    verifiedVia: "unverified",
-  };
+  return finalizeConfirmResult({
+    accessToken: params.accessToken,
+    bcId: params.bcId,
+    catalogId: params.catalogId,
+    result: {
+      succeeded: 0,
+      errors: expected.map((id) => ({
+        id,
+        reason: buildMissingProductReason({
+          skuId: id,
+          feedLogId: params.feedLogId,
+          lastLog,
+          lastLogError,
+          unableToConfirm: true,
+        }),
+      })),
+      feedLogId: params.feedLogId,
+      verifiedVia: "unverified",
+    },
+  });
 }
 
 function buildMissingProductReason(params: {

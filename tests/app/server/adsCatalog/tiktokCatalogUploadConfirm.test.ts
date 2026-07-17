@@ -270,7 +270,7 @@ describe("confirmTiktokCatalogUpload", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
-  it("surfaces parsed CSV reason without HTTPS details URL when rows cannot be SKU-aligned", async () => {
+  it("surfaces parsed CSV reason with HTTPS details URL when rows cannot be SKU-aligned", async () => {
     const csvUrl = "https://cdn.example.com/feed-diag.csv";
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -307,9 +307,9 @@ describe("confirmTiktokCatalogUpload", () => {
     });
 
     expect(result.succeeded).toBe(0);
-    expect(result.errors[0]?.reason).toBe("Image must be at least 500x500 pixels");
-    expect(result.errors[0]?.reason).not.toMatch(/https?:\/\//i);
-    expect(result.errors[0]?.reason).not.toContain("details=");
+    expect(result.errors[0]?.reason).toBe(
+      `Image must be at least 500x500 pixels | details=${csvUrl}`,
+    );
   });
 
   it("keeps diagnostic details URL when product log has no parseable CSV reason", async () => {
@@ -344,7 +344,7 @@ describe("confirmTiktokCatalogUpload", () => {
     });
 
     expect(result.succeeded).toBe(0);
-    expect(result.errors[0]?.reason).toContain("rejected by TikTok Catalog product log");
+    expect(result.errors[0]?.reason).toContain("TikTok 处理完成但未入库任何商品");
     expect(result.errors[0]?.reason).toContain("add_count=0");
     expect(result.errors[0]?.reason).toContain("feed_log=1367999999");
   });
