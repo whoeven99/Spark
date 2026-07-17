@@ -192,6 +192,10 @@ export interface AdsCatalogSyncTaskResult {
    * api_managed = Spark API 上传。
    */
   syncMode?: "shopify_official" | "api_managed";
+  /** TikTok：本次同步绑定的 Catalog ID。 */
+  catalogId?: string;
+  /** TikTok：product/upload 返回的异步 feed_log_id。 */
+  feedLogId?: string;
 }
 
 export type AITaskCreateResponse =

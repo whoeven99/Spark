@@ -20,6 +20,7 @@ import {
   upsertGoogleMerchantProducts,
 } from "./clients/googleMerchantClient.server";
 import { upsertTiktokCatalogItems } from "./clients/tiktokCatalogClient.server";
+import { confirmTiktokCatalogUpload } from "./clients/tiktokCatalogUploadConfirm.server";
 import {
   getFacebookCatalogCredential,
   getGoogleMerchantCredential,
@@ -486,6 +487,7 @@ async function runTiktokSync(params: {
       failed: mappingErrors.length,
       errors: mappingErrors,
       syncMode: "shopify_official",
+      catalogId: credential.catalogId,
     };
     await finishAdsCatalogSync({
       taskId: params.taskId,
@@ -501,13 +503,58 @@ async function runTiktokSync(params: {
     errors.push({ productId: err.id, reason: err.reason });
   }
 
+  const acceptedSkuIds = items
+    .map((item) => item.sku_id)
+    .filter((skuId) => !apiResult.errors.some((err) => err.id === skuId));
+
+  let succeeded = 0;
+  let feedLogId = apiResult.feedLogId;
+
+  if (acceptedSkuIds.length > 0) {
+    await appendLog({
+      taskId: params.taskId,
+      startedAt: params.startedAt,
+      message: params.msg("adsCatalog.asyncTiktokVerifyingUpload", {
+        count: acceptedSkuIds.length,
+      }),
+    });
+
+    const confirmed = await confirmTiktokCatalogUpload({
+      accessToken: credential.accessToken,
+      advertiserId: credential.advertiserId,
+      bcId: credential.bcId,
+      catalogId: credential.catalogId,
+      feedLogId: apiResult.feedLogId,
+      expectedSkuIds: acceptedSkuIds,
+    });
+    succeeded = confirmed.succeeded;
+    feedLogId = confirmed.feedLogId ?? feedLogId;
+    for (const err of confirmed.errors) {
+      errors.push({ productId: err.id, reason: err.reason });
+    }
+
+    if (confirmed.verifiedVia === "unverified" || confirmed.errors.length > 0) {
+      await appendLog({
+        taskId: params.taskId,
+        startedAt: params.startedAt,
+        message: params.msg("adsCatalog.asyncTiktokVerifyResult", {
+          succeeded: confirmed.succeeded,
+          failed: confirmed.errors.length,
+          via: confirmed.verifiedVia,
+        }),
+      });
+    }
+  }
+
   const result: AdsCatalogSyncTaskResult = {
     platform: "tiktok",
     totalProcessed: params.products.length,
-    succeeded: apiResult.totalProcessed,
+    succeeded,
     failed: errors.length,
     errors,
     syncMode: "api_managed",
+    catalogId: credential.catalogId,
+    ...(feedLogId ? { feedLogId } : {}),
   };
 
   await finishAdsCatalogSync({

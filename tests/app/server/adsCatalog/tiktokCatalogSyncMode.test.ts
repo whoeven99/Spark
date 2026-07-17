@@ -6,6 +6,7 @@ const failTask = vi.hoisted(() => vi.fn());
 const getTiktokCatalogCredential = vi.hoisted(() => vi.fn());
 const setTiktokCatalogCredential = vi.hoisted(() => vi.fn());
 const upsertTiktokCatalogItems = vi.hoisted(() => vi.fn());
+const confirmTiktokCatalogUpload = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../../app/db.server", () => ({ default: {} }));
 
@@ -27,6 +28,10 @@ vi.mock("../../../../app/server/adsCatalog/clients/tiktokCatalogClient.server", 
   upsertTiktokCatalogItems: (...args: unknown[]) => upsertTiktokCatalogItems(...args),
   createTiktokCatalog: vi.fn(),
   resolveTiktokCatalogRegion: vi.fn(),
+}));
+
+vi.mock("../../../../app/server/adsCatalog/clients/tiktokCatalogUploadConfirm.server", () => ({
+  confirmTiktokCatalogUpload: (...args: unknown[]) => confirmTiktokCatalogUpload(...args),
 }));
 
 vi.mock("../../../../app/server/adsCatalog/clients/facebookGraphClient.server", () => ({
@@ -91,10 +96,17 @@ describe("runTiktokSync binding modes", () => {
     getTiktokCatalogCredential.mockReset();
     setTiktokCatalogCredential.mockReset();
     upsertTiktokCatalogItems.mockReset();
+    confirmTiktokCatalogUpload.mockReset();
     completeTask.mockResolvedValue(undefined);
     failTask.mockResolvedValue(undefined);
     appendLog.mockResolvedValue(undefined);
     setTiktokCatalogCredential.mockResolvedValue(undefined);
+    confirmTiktokCatalogUpload.mockResolvedValue({
+      succeeded: 1,
+      errors: [],
+      verifiedVia: "product_log",
+      feedLogId: "feed-1",
+    });
   });
 
   afterEach(() => {
@@ -163,6 +175,7 @@ describe("runTiktokSync binding modes", () => {
     await runSync();
 
     expect(upsertTiktokCatalogItems).toHaveBeenCalledOnce();
+    expect(confirmTiktokCatalogUpload).not.toHaveBeenCalled();
     expect(setTiktokCatalogCredential).toHaveBeenCalledWith(
       "demo.myshopify.com",
       expect.objectContaining({ bindingMode: "shopify_official" }),
@@ -174,5 +187,56 @@ describe("runTiktokSync binding modes", () => {
     expect(payload.result.syncMode).toBe("shopify_official");
     expect(payload.result.succeeded).toBe(1);
     expect(payload.result.failed).toBe(0);
+  });
+
+  it("Path B confirms ingest via product/log before marking success", async () => {
+    getTiktokCatalogCredential.mockResolvedValue({
+      accessToken: "tok",
+      advertiserId: "adv",
+      bcId: "bc",
+      catalogId: "cat-api",
+      catalogName: "Spark Catalog",
+      bindingMode: "api_managed",
+      updatedAt: new Date().toISOString(),
+    });
+    upsertTiktokCatalogItems.mockResolvedValue({
+      totalRequested: 1,
+      totalProcessed: 1,
+      errors: [],
+      feedLogId: "feed-22",
+    });
+    confirmTiktokCatalogUpload.mockResolvedValue({
+      succeeded: 0,
+      errors: [{ id: "SKU-1", reason: "currency mismatch" }],
+      verifiedVia: "product_log",
+      feedLogId: "feed-22",
+    });
+
+    await runSync();
+
+    expect(confirmTiktokCatalogUpload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        catalogId: "cat-api",
+        feedLogId: "feed-22",
+        expectedSkuIds: ["SKU-1"],
+      }),
+    );
+    expect(failTask).toHaveBeenCalledOnce();
+    const payload = failTask.mock.calls[0]?.[0] as {
+      result: {
+        syncMode?: string;
+        succeeded?: number;
+        failed?: number;
+        feedLogId?: string;
+        catalogId?: string;
+      };
+      errorMsg?: string;
+    };
+    expect(payload.result.syncMode).toBe("api_managed");
+    expect(payload.result.succeeded).toBe(0);
+    expect(payload.result.failed).toBe(1);
+    expect(payload.result.feedLogId).toBe("feed-22");
+    expect(payload.result.catalogId).toBe("cat-api");
+    expect(payload.errorMsg).toContain("currency mismatch");
   });
 });

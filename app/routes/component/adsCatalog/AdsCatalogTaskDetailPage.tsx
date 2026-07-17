@@ -133,6 +133,18 @@ export function AdsCatalogTaskDetailPage({ task, locationSearch, onBack }: Props
         {tiktokSyncMode === "api_managed" && (
           <div style={{ ...pageHintTextStyle, margin: 0 }}>
             {t("adsCatalog.detailSyncModeApi")}
+            {result?.catalogId ? (
+              <>
+                <br />
+                {t("adsCatalog.detailCatalogId", { id: result.catalogId })}
+              </>
+            ) : null}
+            {result?.feedLogId ? (
+              <>
+                <br />
+                {t("adsCatalog.detailFeedLogId", { id: result.feedLogId })}
+              </>
+            ) : null}
           </div>
         )}
 
