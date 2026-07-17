@@ -57,6 +57,8 @@ export type TiktokBudgetMode =
   | "BUDGET_MODE_TOTAL"
   | "BUDGET_MODE_INFINITE";
 
+export type TiktokCreativeMode = "SINGLE_IMAGE" | "SINGLE_VIDEO" | "SPARK_POST";
+
 export interface TiktokAdFormData {
   // Campaign
   campaignName: string;
@@ -71,11 +73,21 @@ export interface TiktokAdFormData {
   adGroupScheduleStart: string;
   adGroupScheduleEnd: string;
   gender: "GENDER_UNLIMITED" | "GENDER_MALE" | "GENDER_FEMALE";
+  locationIds: string;
+  identityId: string;
+  identityType: string;
+  identityDisplayName: string;
   // Ad
   adName: string;
   adText: string;
   adCallToAction: string;
+  creativeMode: TiktokCreativeMode;
   adImageUrl: string;
+  adVideoUrl: string;
+  /** 客户端预上传后的资产 ID（可选；服务端也可从 URL 上传） */
+  adImageId: string;
+  adVideoId: string;
+  tiktokItemId: string;
   adLandingUrl: string;
 }
 
@@ -128,6 +140,7 @@ export interface AdsCreateLoaderData {
   tiktok: {
     connected: boolean;
     advertiserId: string;
+    currencyCode: string;
   };
   google: {
     connected: boolean;

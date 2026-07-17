@@ -81,7 +81,11 @@ export function AdsCreatePage() {
               <MetaAdsForm locationSearch={locationSearch} onSuccess={(c, a) => handleSuccess("meta", c, a)} />
             )}
             {platform === "tiktok" && (
-              <TiktokAdsForm locationSearch={locationSearch} onSuccess={(c, a) => handleSuccess("tiktok", c, a)} />
+              <TiktokAdsForm
+                locationSearch={locationSearch}
+                currencyCode={loaderData.tiktok.currencyCode}
+                onSuccess={(c, a) => handleSuccess("tiktok", c, a)}
+              />
             )}
             {platform === "google" && (
               <GoogleAdsForm locationSearch={locationSearch} onSuccess={(c, a) => handleSuccess("google", c, a)} />
@@ -161,7 +165,11 @@ function ConnectionStatus({ platform, loaderData, locationSearch, t }: Connectio
     }
     return (
       <ConnectedBadge
-        label={t("adsCreate.tiktok.connectedAs", { id: tiktok.advertiserId })}
+        label={
+          tiktok.currencyCode
+            ? `${t("adsCreate.tiktok.connectedAs", { id: tiktok.advertiserId })} · ${tiktok.currencyCode}`
+            : t("adsCreate.tiktok.connectedAs", { id: tiktok.advertiserId })
+        }
       />
     );
   }

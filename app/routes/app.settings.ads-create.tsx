@@ -8,6 +8,7 @@ import {
   getTiktokAdsInsightsCredential,
   getGoogleAdsCredential,
 } from "../server/adsCatalog/credentialStore.server";
+import { fetchAdvertiserCurrency } from "../server/adsCreate/tiktokAdsApi.server";
 import { RoutePageFallback } from "./component/RoutePageFallback";
 import type { AdsCreateLoaderData } from "./component/adsCreate/types";
 
@@ -27,6 +28,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const developerTokenConfigured = Boolean(process.env.GOOGLE_ADS_DEVELOPER_TOKEN?.trim());
 
+  let tiktokCurrency = "";
+  if (tiktokCred) {
+    tiktokCurrency =
+      (await fetchAdvertiserCurrency({
+        accessToken: tiktokCred.accessToken,
+        advertiserId: tiktokCred.advertiserId,
+      })) ?? "";
+  }
+
   return data<AdsCreateLoaderData>({
     meta: {
       connected: Boolean(metaCred),
@@ -37,6 +47,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     tiktok: {
       connected: Boolean(tiktokCred),
       advertiserId: tiktokCred?.advertiserId ?? "",
+      currencyCode: tiktokCurrency,
     },
     google: {
       connected: Boolean(googleCred),
