@@ -9,6 +9,8 @@ import {
 import { listAccessibleBcIds } from "./tiktokOAuth.server";
 import { fetchShopBasicInfo } from "../shopify/fetchShopBasicInfo.server";
 
+const LOG_PREFIX = "[AdsCatalog][TikTokEnsure]";
+
 export type EnsureTiktokApiCatalogResult = {
   catalogId: string;
   catalogName: string;
@@ -25,8 +27,12 @@ export async function ensureTiktokApiManagedCatalog(params: {
   shop: string;
   admin: ShopifyAdminGraphqlClient;
 }): Promise<EnsureTiktokApiCatalogResult> {
+  console.info(`${LOG_PREFIX} step=ensure_start shop=${params.shop}`);
   const credential = await getTiktokCatalogCredential(params.shop);
   if (credential?.bindingMode === "api_managed" && credential.catalogId) {
+    console.info(
+      `${LOG_PREFIX} step=ensure_reuse shop=${params.shop} catalogId=${credential.catalogId} catalogName=${credential.catalogName ?? ""}`,
+    );
     return {
       catalogId: credential.catalogId,
       catalogName: credential.catalogName || credential.catalogId,
@@ -66,6 +72,9 @@ export async function ensureTiktokApiManagedCatalog(params: {
 
   const shopInfo = await fetchShopBasicInfo(params.admin);
   const shopLabel = (shopInfo?.name || params.shop.split(".")[0] || "Store").slice(0, 40);
+  console.info(
+    `${LOG_PREFIX} step=ensure_create shop=${params.shop} bcId=${bcId} advertiserId=${advertiserId} currency=${shopInfo?.currencyCode ?? ""} name=${JSON.stringify(`Spark Catalog — ${shopLabel}`)}`,
+  );
   const created = await createTiktokCatalog({
     accessToken,
     bcId,
@@ -86,6 +95,9 @@ export async function ensureTiktokApiManagedCatalog(params: {
     bindingMode: "api_managed",
   });
 
+  console.info(
+    `${LOG_PREFIX} step=ensure_created shop=${params.shop} catalogId=${created.catalogId} catalogName=${created.catalogName}`,
+  );
   return {
     catalogId: created.catalogId,
     catalogName: created.catalogName,

@@ -1,4 +1,5 @@
 const TIKTOK_API_BASE = "https://business-api.tiktok.com/open_api/v1.3";
+const LOG_PREFIX = "[AdsCatalog][TikTokConfirm]";
 
 export type TiktokUploadLogStatus =
   | "processing"
@@ -176,17 +177,25 @@ export async function fetchTiktokProductUploadLog(params: {
     url.searchParams.set("advertiser_id", params.advertiserId);
   }
 
+  console.info(
+    `${LOG_PREFIX} step=product_log_request bcId=${params.bcId} catalogId=${params.catalogId} feedLogId=${params.feedLogId} advertiserId=${params.advertiserId ?? ""}`,
+  );
+
   const response = await fetchImpl(url.toString(), {
     method: "GET",
     headers: { "Access-Token": params.accessToken },
   });
   const text = await response.text();
-  let payload: { code?: number; message?: string; data?: unknown } = {};
+  let payload: { code?: number; message?: string; request_id?: string; data?: unknown } = {};
   try {
     payload = text ? (JSON.parse(text) as typeof payload) : {};
   } catch {
     payload = {};
   }
+
+  console.info(
+    `${LOG_PREFIX} step=product_log_response http=${response.status} code=${payload.code ?? ""} message=${payload.message ?? ""} request_id=${payload.request_id ?? ""} body=${text.slice(0, 1200)}`,
+  );
 
   if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {
     const detail =
@@ -197,7 +206,11 @@ export async function fetchTiktokProductUploadLog(params: {
     throw new Error(`TikTok product log failed: HTTP ${response.status} ${detail}`.trim());
   }
 
-  return parseTiktokProductUploadLog(payload.data);
+  const parsed = parseTiktokProductUploadLog(payload.data);
+  console.info(
+    `${LOG_PREFIX} step=product_log_parsed status=${parsed.status} rawStatus=${parsed.rawStatus ?? ""} successCount=${parsed.successCount ?? ""} failedCount=${parsed.failedCount ?? ""} errorCount=${parsed.errors.length}`,
+  );
+  return parsed;
 }
 
 /**
@@ -218,17 +231,25 @@ export async function listTiktokCatalogSkuIds(params: {
   url.searchParams.set("page_size", String(params.pageSize ?? 100));
   url.searchParams.set("page", "1");
 
+  console.info(
+    `${LOG_PREFIX} step=product_get_request bcId=${params.bcId} catalogId=${params.catalogId} pageSize=${params.pageSize ?? 100}`,
+  );
+
   const response = await fetchImpl(url.toString(), {
     method: "GET",
     headers: { "Access-Token": params.accessToken },
   });
   const text = await response.text();
-  let payload: { code?: number; message?: string; data?: unknown } = {};
+  let payload: { code?: number; message?: string; request_id?: string; data?: unknown } = {};
   try {
     payload = text ? (JSON.parse(text) as typeof payload) : {};
   } catch {
     payload = {};
   }
+
+  console.info(
+    `${LOG_PREFIX} step=product_get_response http=${response.status} code=${payload.code ?? ""} message=${payload.message ?? ""} request_id=${payload.request_id ?? ""} body=${text.slice(0, 1200)}`,
+  );
 
   if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {
     const detail =
@@ -252,6 +273,9 @@ export async function listTiktokCatalogSkuIds(params: {
     const sku = String(item.sku_id ?? item.product_id ?? item.id ?? "").trim();
     if (sku) skuIds.push(sku);
   }
+  console.info(
+    `${LOG_PREFIX} step=product_get_parsed count=${skuIds.length} sampleSkus=${skuIds.slice(0, 20).join(",")}`,
+  );
   return skuIds;
 }
 
@@ -332,6 +356,7 @@ export async function confirmTiktokCatalogUpload(params: {
 }): Promise<ConfirmTiktokCatalogUploadResult> {
   const expected = [...new Set(params.expectedSkuIds.map((id) => id.trim()).filter(Boolean))];
   if (expected.length === 0) {
+    console.info(`${LOG_PREFIX} step=confirm_skip reason=no_expected_skus`);
     return { succeeded: 0, errors: [], feedLogId: params.feedLogId, verifiedVia: "unverified" };
   }
 
@@ -340,12 +365,19 @@ export async function confirmTiktokCatalogUpload(params: {
   const sleep = params.deps?.sleep ?? defaultSleep;
   const fetchImpl = params.deps?.fetchImpl ?? fetch;
 
+  console.info(
+    `${LOG_PREFIX} step=confirm_start bcId=${params.bcId} catalogId=${params.catalogId} feedLogId=${params.feedLogId ?? ""} expected=${expected.length} maxAttempts=${maxAttempts} intervalMs=${intervalMs} skus=${expected.slice(0, 20).join(",")}`,
+  );
+
   let lastLog: TiktokProductUploadLog | null = null;
   let lastLogError: string | null = null;
 
   if (params.feedLogId) {
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       if (attempt > 0) await sleep(intervalMs);
+      console.info(
+        `${LOG_PREFIX} step=confirm_poll_log attempt=${attempt + 1}/${maxAttempts} feedLogId=${params.feedLogId}`,
+      );
       try {
         const log = await fetchTiktokProductUploadLog({
           accessToken: params.accessToken,
@@ -362,17 +394,33 @@ export async function confirmTiktokCatalogUpload(params: {
           log,
           feedLogId: params.feedLogId,
         });
-        if (settled) return settled;
+        if (settled) {
+          console.info(
+            `${LOG_PREFIX} step=confirm_settled_via_product_log status=${log.status} succeeded=${settled.succeeded} failed=${settled.errors.length}`,
+          );
+          return settled;
+        }
+        console.info(
+          `${LOG_PREFIX} step=confirm_log_not_terminal status=${log.status} rawStatus=${log.rawStatus ?? ""}`,
+        );
       } catch (e) {
         lastLogError = e instanceof Error ? e.message : String(e);
+        console.warn(
+          `${LOG_PREFIX} step=confirm_poll_log_error attempt=${attempt + 1} error=${lastLogError}`,
+        );
         // log 查询失败时继续重试，最终回退 product/get
       }
     }
+  } else {
+    console.warn(`${LOG_PREFIX} step=confirm_no_feed_log fallback=product_get`);
   }
 
   const getAttempts = params.feedLogId ? 3 : maxAttempts;
   for (let attempt = 0; attempt < getAttempts; attempt += 1) {
     if (attempt > 0) await sleep(intervalMs);
+    console.info(
+      `${LOG_PREFIX} step=confirm_poll_get attempt=${attempt + 1}/${getAttempts} catalogId=${params.catalogId}`,
+    );
     try {
       const skuIds = await listTiktokCatalogSkuIds({
         accessToken: params.accessToken,
@@ -383,8 +431,11 @@ export async function confirmTiktokCatalogUpload(params: {
       const present = new Set(skuIds);
       const found = expected.filter((id) => present.has(id));
       const missing = expected.filter((id) => !present.has(id));
+      console.info(
+        `${LOG_PREFIX} step=confirm_get_match found=${found.length} missing=${missing.length} missingSkus=${missing.slice(0, 20).join(",")}`,
+      );
       if (found.length === expected.length || attempt === getAttempts - 1) {
-        return {
+        const result: ConfirmTiktokCatalogUploadResult = {
           succeeded: found.length,
           errors: missing.map((id) => ({
             id,
@@ -398,12 +449,23 @@ export async function confirmTiktokCatalogUpload(params: {
           feedLogId: params.feedLogId,
           verifiedVia: found.length > 0 ? "product_get" : "unverified",
         };
+        console.info(
+          `${LOG_PREFIX} step=confirm_done via=${result.verifiedVia} succeeded=${result.succeeded} failed=${result.errors.length}`,
+        );
+        return result;
       }
-    } catch {
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      console.warn(
+        `${LOG_PREFIX} step=confirm_poll_get_error attempt=${attempt + 1} error=${detail}`,
+      );
       if (attempt === getAttempts - 1) break;
     }
   }
 
+  console.error(
+    `${LOG_PREFIX} step=confirm_unverified feedLogId=${params.feedLogId ?? ""} lastLogError=${lastLogError ?? ""} lastLogStatus=${lastLog?.status ?? ""}`,
+  );
   return {
     succeeded: 0,
     errors: expected.map((id) => ({

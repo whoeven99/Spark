@@ -382,8 +382,20 @@ async function runTiktokSync(params: {
   products: RawShopifyProductForCatalog[];
   msg: MsgFn;
 }): Promise<void> {
+  const logTiktok = (step: string, detail = "") => {
+    console.info(
+      `${LOG_PREFIX}[TikTok] taskId=${params.taskId} shop=${params.shop} step=${step}${detail ? ` ${detail}` : ""}`,
+    );
+  };
+
+  logTiktok(
+    "start",
+    `productCount=${params.products.length} shopDomain=${params.shopDomain} currency=${params.defaultCurrency ?? ""}`,
+  );
+
   const credential = await getTiktokCatalogCredential(params.shop);
   if (!credential) {
+    logTiktok("credential_missing");
     await failTask({
       taskId: params.taskId,
       startedAt: params.startedAt,
@@ -392,6 +404,7 @@ async function runTiktokSync(params: {
     return;
   }
   if (!credential.bcId) {
+    logTiktok("bc_id_missing", `advertiserId=${credential.advertiserId} catalogId=${credential.catalogId}`);
     await failTask({
       taskId: params.taskId,
       startedAt: params.startedAt,
@@ -399,6 +412,11 @@ async function runTiktokSync(params: {
     });
     return;
   }
+
+  logTiktok(
+    "credential_loaded",
+    `bindingMode=${credential.bindingMode} bcId=${credential.bcId} advertiserId=${credential.advertiserId} catalogId=${credential.catalogId} catalogName=${credential.catalogName ?? ""}`,
+  );
 
   await appendLog({
     taskId: params.taskId,
@@ -416,13 +434,29 @@ async function runTiktokSync(params: {
     });
     if (mapped.ok) {
       items.push(mapped.item);
+      logTiktok(
+        "map_ok",
+        `productId=${product.id} sku=${mapped.item.sku_id} title=${JSON.stringify(mapped.item.title.slice(0, 80))} currency=${mapped.item.price_info.currency} price=${mapped.item.price_info.price} availability=${mapped.item.availability}`,
+      );
     } else {
       mappingErrors.push({ productId: mapped.productId, reason: mapped.reason });
+      console.warn(
+        `${LOG_PREFIX}[TikTok] taskId=${params.taskId} step=map_skip productId=${mapped.productId} reason=${mapped.reason}`,
+      );
     }
   }
 
+  logTiktok(
+    "map_done",
+    `mapped=${items.length} skipped=${mappingErrors.length} sampleSkus=${items
+      .slice(0, 5)
+      .map((i) => i.sku_id)
+      .join(",")}`,
+  );
+
   // Path A：官方 Shopify↔TikTok Catalog — 仅校验映射，不 API 上传。
   if (credential.bindingMode === "shopify_official") {
+    logTiktok("path_a_official_validate_only", `readyCount=${items.length}`);
     await appendLog({
       taskId: params.taskId,
       startedAt: params.startedAt,
@@ -446,6 +480,7 @@ async function runTiktokSync(params: {
   }
 
   // Path B：API 可写 Catalog — map + product/upload。
+  logTiktok("path_b_api_upload", `itemCount=${items.length} catalogId=${credential.catalogId}`);
   await appendLog({
     taskId: params.taskId,
     startedAt: params.startedAt,
@@ -460,12 +495,23 @@ async function runTiktokSync(params: {
     items,
   });
 
+  logTiktok(
+    "upload_result",
+    `requested=${apiResult.totalRequested} accepted=${apiResult.totalProcessed} errors=${apiResult.errors.length} feedLogId=${apiResult.feedLogId ?? ""}`,
+  );
+  if (apiResult.errors.length > 0) {
+    console.warn(
+      `${LOG_PREFIX}[TikTok] taskId=${params.taskId} step=upload_errors ${JSON.stringify(apiResult.errors.slice(0, 20))}`,
+    );
+  }
+
   const shopifyLocked = apiResult.errors.some((err) =>
     isShopifySyncedCatalogUploadError(err.reason),
   );
 
   // 运行时发现官方锁定目录：升级为 shopify_official，按 Path A 语义收尾。
   if (shopifyLocked) {
+    logTiktok("shopify_lock_detected_switch_official", `catalogId=${credential.catalogId}`);
     await setTiktokCatalogCredential(params.shop, {
       accessToken: credential.accessToken,
       refreshToken: credential.refreshToken,
@@ -511,6 +557,10 @@ async function runTiktokSync(params: {
   let feedLogId = apiResult.feedLogId;
 
   if (acceptedSkuIds.length > 0) {
+    logTiktok(
+      "confirm_start",
+      `acceptedSkuCount=${acceptedSkuIds.length} feedLogId=${apiResult.feedLogId ?? ""} skus=${acceptedSkuIds.slice(0, 10).join(",")}`,
+    );
     await appendLog({
       taskId: params.taskId,
       startedAt: params.startedAt,
@@ -533,6 +583,16 @@ async function runTiktokSync(params: {
       errors.push({ productId: err.id, reason: err.reason });
     }
 
+    logTiktok(
+      "confirm_done",
+      `via=${confirmed.verifiedVia} succeeded=${confirmed.succeeded} failed=${confirmed.errors.length} feedLogId=${confirmed.feedLogId ?? ""}`,
+    );
+    if (confirmed.errors.length > 0) {
+      console.warn(
+        `${LOG_PREFIX}[TikTok] taskId=${params.taskId} step=confirm_errors ${JSON.stringify(confirmed.errors.slice(0, 20))}`,
+      );
+    }
+
     if (confirmed.verifiedVia === "unverified" || confirmed.errors.length > 0) {
       await appendLog({
         taskId: params.taskId,
@@ -544,6 +604,8 @@ async function runTiktokSync(params: {
         }),
       });
     }
+  } else {
+    logTiktok("confirm_skipped", "no accepted skus after upload");
   }
 
   const result: AdsCatalogSyncTaskResult = {
@@ -556,6 +618,11 @@ async function runTiktokSync(params: {
     catalogId: credential.catalogId,
     ...(feedLogId ? { feedLogId } : {}),
   };
+
+  logTiktok(
+    "finish",
+    `succeeded=${result.succeeded} failed=${result.failed} catalogId=${result.catalogId ?? ""} feedLogId=${result.feedLogId ?? ""}`,
+  );
 
   await finishAdsCatalogSync({
     taskId: params.taskId,
