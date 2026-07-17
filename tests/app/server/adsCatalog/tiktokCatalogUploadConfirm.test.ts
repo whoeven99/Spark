@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   confirmTiktokCatalogUpload,
+  collectFeedLogDataUrls,
   extractFeedLogDataUrl,
+  isProductLogResolvable,
   parseTiktokFeedLogCsv,
   parseTiktokProductUploadLog,
   analyzeTiktokFeedLogCsv,
@@ -24,6 +26,18 @@ describe("parseTiktokProductUploadLog", () => {
   it("treats processing status as processing", () => {
     const log = parseTiktokProductUploadLog({ process_status: "PROCESSING" });
     expect(log.status).toBe("processing");
+  });
+
+  it("treats process_status SUCCESS with add_count=0 as failed (job done, no ingest)", () => {
+    const log = parseTiktokProductUploadLog({
+      process_status: "SUCCESS",
+      add_count: 0,
+      error_count: 0,
+      end_time: "2026-07-17 08:02:01",
+    });
+    expect(log.status).toBe("failed");
+    expect(log.successCount).toBe(0);
+    expect(isProductLogResolvable(log)).toBe(false);
   });
 
   it("parses product_feed_log add_count/error_count/end_time shape", () => {
@@ -106,6 +120,19 @@ describe("extractFeedLogDataUrl", () => {
       },
     });
     expect(result).toMatch(/^https:\/\/cdn\.tiktok\//);
+  });
+
+  it("collects URLs from feed_log_data array shape", () => {
+    expect(
+      collectFeedLogDataUrls({
+        product_feed_log: {
+          feed_log_data: [
+            { language: "fr", download_url: "https://cdn.tiktok/fr.csv" },
+            { language: "en", download_url: "https://cdn.tiktok/en.csv" },
+          ],
+        },
+      }),
+    ).toEqual(["https://cdn.tiktok/en.csv", "https://cdn.tiktok/fr.csv"]);
   });
 });
 
@@ -432,6 +459,79 @@ describe("confirmTiktokCatalogUpload", () => {
     );
     expect(result.errors[0]?.reason).not.toMatch(/https?:\/\//i);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps polling product/log until feed_log CSV details are available", async () => {
+    const csvUrl = "https://cdn.example.com/feed-en.csv";
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/catalog/product/log/")) {
+        const callIndex = fetchImpl.mock.calls.filter((call) =>
+          String(call[0]).includes("/catalog/product/log/"),
+        ).length;
+        if (callIndex === 1) {
+          return new Response(
+            JSON.stringify({
+              code: 0,
+              message: "OK",
+              data: {
+                process_status: "SUCCESS",
+                add_count: 0,
+                error_count: 0,
+                end_time: "2026-07-17 08:02:01",
+              },
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            code: 0,
+            data: {
+              product_feed_log: {
+                add_count: 0,
+                error_count: 0,
+                end_time: "2026-07-17 08:02:05",
+                feed_log_data: { en: csvUrl },
+              },
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      if (url === csvUrl) {
+        return new Response(
+          [
+            "SKU ID,Line,Severity,Issue,How to fix",
+            '"A2504","2","Warning","Missing google_product_category","Include product_type"',
+          ].join("\n"),
+          { status: 200 },
+        );
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    const result = await confirmTiktokCatalogUpload({
+      accessToken: "tok",
+      advertiserId: "adv",
+      bcId: "bc",
+      catalogId: "cat",
+      feedLogId: "1367220791",
+      expectedSkuIds: ["A2504"],
+      deps: {
+        fetchImpl,
+        maxAttempts: 3,
+        intervalMs: 0,
+        sleep: async () => undefined,
+      },
+    });
+
+    expect(result.succeeded).toBe(0);
+    expect(result.errors[0]?.reason).toContain("Missing google_product_category");
+    expect(
+      fetchImpl.mock.calls.filter((call) => String(call[0]).includes("/catalog/product/log/"))
+        .length,
+    ).toBeGreaterThan(1);
   });
 
   it("falls back to product/get when log stays processing", async () => {

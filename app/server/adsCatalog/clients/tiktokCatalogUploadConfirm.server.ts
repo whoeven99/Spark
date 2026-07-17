@@ -97,6 +97,10 @@ function extractLogErrors(data: Record<string, unknown>): Array<{ id: string; re
     data.failed_products,
     data.failed_list,
     data.errors,
+    data.warning_list,
+    data.audit_list,
+    data.rejected_products,
+    data.product_list,
     data.products,
   ];
   const out: Array<{ id: string; reason: string }> = [];
@@ -109,7 +113,14 @@ function extractLogErrors(data: Record<string, unknown>): Array<{ id: string; re
         item.sku_id ?? item.product_id ?? item.item_id ?? item.id ?? "",
       ).trim();
       const reason = String(
-        item.error_message ?? item.reason ?? item.message ?? item.error ?? "",
+        item.error_message ??
+          item.issue ??
+          item.fail_reason ??
+          item.reason ??
+          item.message ??
+          item.error ??
+          item.description ??
+          "",
       ).trim();
       const rowStatus = String(item.status ?? item.result ?? "").toUpperCase();
       const looksFailed =
@@ -136,23 +147,32 @@ function pickFeedLogNode(root: Record<string, unknown>): Record<string, unknown>
   );
 }
 
-/** 从 feed_log_data / download_path 提取明细 CSV URL，优先 en。
- *
- * TikTok API 存在两种结构：
- *   - 旧版：feed_log_data: { en: "https://..." }
- *   - 新版：feed_log_data: { download_path: { en: "https://..." } }
- * 两种均需兼容。
- */
-export function extractFeedLogDataUrl(data: unknown): string | undefined {
+/** 收集 feed_log_data 下所有 CSV URL，优先 en。 */
+export function collectFeedLogDataUrls(data: unknown): string[] {
   const root = asRecord(data) ?? {};
   const nested = pickFeedLogNode(root);
   const candidates = [
     nested.feed_log_data,
+    nested.feedLogData,
     nested.download_path,
+    nested.log_download_url,
+    nested.feed_log_file_url,
     root.feed_log_data,
+    root.feedLogData,
     root.download_path,
+    root.log_download_url,
+    root.feed_log_file_url,
   ];
   const preferredKeys = ["en", "en-US", "EN", "en_US"];
+  const urls: string[] = [];
+  const seen = new Set<string>();
+
+  function pushUrl(url: string | undefined) {
+    const trimmed = url?.trim();
+    if (!trimmed || !/^https?:\/\//i.test(trimmed) || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    urls.push(trimmed);
+  }
 
   function pickUrlFromRecord(record: Record<string, unknown>): string | undefined {
     // 直接语言键（旧版 feed_log_data: { en: "..." }）
@@ -185,16 +205,97 @@ export function extractFeedLogDataUrl(data: unknown): string | undefined {
     return undefined;
   }
 
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && /^https?:\/\//i.test(candidate.trim())) {
-      return candidate.trim();
+  function collectFromValue(value: unknown) {
+    if (typeof value === "string") {
+      pushUrl(value);
+      return;
     }
-    const record = asRecord(candidate);
-    if (!record) continue;
-    const url = pickUrlFromRecord(record);
-    if (url) return url;
+    if (Array.isArray(value)) {
+      for (const row of value) {
+        const item = asRecord(row);
+        if (!item) continue;
+        pushUrl(
+          pickUrlFromRecord(item) ??
+            (typeof item.url === "string" ? item.url : undefined) ??
+            (typeof item.download_path === "string" ? item.download_path : undefined) ??
+            (typeof item.download_url === "string" ? item.download_url : undefined),
+        );
+      }
+      return;
+    }
+    const record = asRecord(value);
+    if (!record) return;
+    const preferred = pickUrlFromRecord(record);
+    if (preferred) {
+      pushUrl(preferred);
+      return;
+    }
+    for (const subValue of Object.values(record)) {
+      if (typeof subValue === "string" && /^https?:\/\//i.test(subValue.trim())) {
+        pushUrl(subValue);
+      }
+    }
   }
-  return undefined;
+
+  for (const candidate of candidates) {
+    collectFromValue(candidate);
+  }
+
+  const preferred = urls.find((url) => /[/_-]en(?:[._-]|\.csv)/i.test(url));
+  if (preferred) {
+    return [preferred, ...urls.filter((url) => url !== preferred)];
+  }
+  return urls;
+}
+
+/** 从 feed_log_data / download_path 提取明细 CSV URL，优先 en。 */
+export function extractFeedLogDataUrl(data: unknown): string | undefined {
+  return collectFeedLogDataUrls(data)[0];
+}
+
+function isProcessJobStatusField(key: string): boolean {
+  return key === "process_status" || key === "processing_status";
+}
+
+/** process_status=SUCCESS 仅表示日志任务结束，不代表商品已入库。 */
+function resolveUploadLogStatus(params: {
+  rawStatus: string;
+  statusField?: string;
+  successCount: number | null;
+  failedCount: number | null;
+  errorCount: number;
+  hasEndTime: boolean;
+}): TiktokUploadLogStatus {
+  const fromCounts = inferStatusFromCounts({
+    successCount: params.successCount,
+    failedCount: params.failedCount,
+    errorCount: params.errorCount,
+    hasEndTime: params.hasEndTime,
+  });
+  if (fromCounts) return fromCounts;
+
+  const normalized = normalizeUploadLogStatus(params.rawStatus);
+  const processField = params.statusField && isProcessJobStatusField(params.statusField);
+  if (processField) {
+    if (normalized === "processing") return "processing";
+    if (params.successCount === 0 && params.hasEndTime) return "failed";
+    if (params.successCount === 0) return "processing";
+    return normalized === "failed" ? "failed" : "success";
+  }
+
+  if (normalized === "unknown") return "unknown";
+  return normalized;
+}
+
+/** 是否已拿到可展示给商户的失败/成功依据（避免首轮空 log 过早结算）。 */
+export function isProductLogResolvable(log: TiktokProductUploadLog): boolean {
+  if (log.status === "processing" || log.status === "unknown") return false;
+  if (log.successCount != null && log.successCount > 0) return true;
+  if (log.failedCount != null && log.failedCount > 0) return true;
+  if (log.errors.length > 0) return true;
+  if ((log.warnings?.length ?? 0) > 0) return true;
+  if (log.feedCsvSummary?.trim()) return true;
+  return false;
 }
 
 function inferStatusFromCounts(params: {
@@ -229,15 +330,27 @@ function inferStatusFromCounts(params: {
 }
 
 /** 解析 /catalog/product/log/ 的 data 节点（兼容 product_feed_log / add_count）。 */
+function detectStatusField(nested: Record<string, unknown>, root: Record<string, unknown>): string {
+  if (nested.process_status != null) return "process_status";
+  if (nested.processing_status != null) return "processing_status";
+  if (nested.status != null) return "status";
+  if (nested.feed_status != null) return "feed_status";
+  if (root.process_status != null) return "process_status";
+  if (root.status != null) return "status";
+  return "status";
+}
+
 export function parseTiktokProductUploadLog(data: unknown): TiktokProductUploadLog {
   const root = asRecord(data) ?? {};
   const nested = pickFeedLogNode(root);
+  const statusField = detectStatusField(nested, root);
   const rawStatus = String(
     nested.status ??
       nested.process_status ??
       nested.processing_status ??
       nested.feed_status ??
       root.status ??
+      root.process_status ??
       "",
   );
   const successCount =
@@ -245,29 +358,30 @@ export function parseTiktokProductUploadLog(data: unknown): TiktokProductUploadL
     readNumber(nested.succeed_count) ??
     readNumber(nested.add_count) ??
     readNumber(nested.success) ??
+    readNumber(root.add_count) ??
     null;
   const failedCount =
     readNumber(nested.failed_count) ??
     readNumber(nested.fail_count) ??
     readNumber(nested.error_count) ??
     readNumber(nested.failure_count) ??
+    readNumber(root.error_count) ??
     null;
   const endTime = String(nested.end_time ?? nested.finish_time ?? root.end_time ?? "").trim();
-  const feedLogDataUrl = extractFeedLogDataUrl(data);
+  const feedLogDataUrls = collectFeedLogDataUrls(data);
+  const feedLogDataUrl = feedLogDataUrls[0];
   const errors = extractLogErrors(nested).concat(
     nested === root ? [] : extractLogErrors(root),
   );
 
-  let status = normalizeUploadLogStatus(rawStatus);
-  if (status === "unknown") {
-    status =
-      inferStatusFromCounts({
-        successCount,
-        failedCount,
-        errorCount: errors.length,
-        hasEndTime: Boolean(endTime),
-      }) ?? "unknown";
-  }
+  const status = resolveUploadLogStatus({
+    rawStatus,
+    statusField,
+    successCount,
+    failedCount,
+    errorCount: errors.length,
+    hasEndTime: Boolean(endTime),
+  });
 
   return {
     status,
@@ -297,70 +411,90 @@ function mergeLogErrors(
 
 async function enrichLogWithFeedCsv(params: {
   log: TiktokProductUploadLog;
+  feedLogDataUrls?: string[];
   fetchImpl: typeof fetch;
 }): Promise<TiktokProductUploadLog> {
-  const url = params.log.feedLogDataUrl;
-  if (!url) return params.log;
+  const urls = [
+    ...(params.feedLogDataUrls ?? []),
+    ...(params.log.feedLogDataUrl ? [params.log.feedLogDataUrl] : []),
+  ].filter((url, index, list) => list.indexOf(url) === index);
+  if (urls.length === 0) return params.log;
   if (params.log.status === "processing" || params.log.status === "unknown") {
     return params.log;
   }
 
-  console.info(`${LOG_PREFIX} step=feed_csv_request url=${url.slice(0, 240)}`);
-  try {
-    const response = await params.fetchImpl(url, {
-      method: "GET",
-      headers: { Accept: "text/csv,text/plain,*/*" },
-    });
-    const text = await response.text();
-    const contentType = response.headers.get("content-type") ?? "";
-    if (!response.ok) {
-      console.warn(
-        `${LOG_PREFIX} step=feed_csv_http_error http=${response.status} contentType=${contentType} body=${text.slice(0, 300)}`,
+  let merged: TiktokProductUploadLog = params.log;
+  let lastDownloadError = "";
+
+  for (const url of urls) {
+    console.info(`${LOG_PREFIX} step=feed_csv_request url=${url.slice(0, 240)}`);
+    try {
+      const response = await params.fetchImpl(url, {
+        method: "GET",
+        headers: { Accept: "text/csv,text/plain,*/*" },
+      });
+      const text = await response.text();
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!response.ok) {
+        lastDownloadError = `HTTP ${response.status}`;
+        console.warn(
+          `${LOG_PREFIX} step=feed_csv_http_error http=${response.status} contentType=${contentType} body=${text.slice(0, 300)}`,
+        );
+        continue;
+      }
+
+      const analysis = analyzeTiktokFeedLogCsv(text);
+      console.info(
+        `${LOG_PREFIX} step=feed_csv_parsed delimiter=${JSON.stringify(analysis.delimiter)} headers=${JSON.stringify(analysis.headers)} rowCount=${analysis.rowCount} errorCount=${analysis.errors.length} warningCount=${analysis.warnings.length} summaryCount=${analysis.summaryReasons.length} contentType=${contentType} url=${url.slice(0, 240)} preview=${JSON.stringify(text.slice(0, 800))}`,
       );
-      return {
-        ...params.log,
-        feedCsvSummary: `failed to download feed_log CSV (HTTP ${response.status})`,
+      if (analysis.errors.length > 0) {
+        console.warn(
+          `${LOG_PREFIX} step=feed_csv_errors ${JSON.stringify(analysis.errors.slice(0, 20))}`,
+        );
+      }
+      if (analysis.warnings.length > 0) {
+        console.warn(
+          `${LOG_PREFIX} step=feed_csv_warnings ${JSON.stringify(analysis.warnings.slice(0, 20))}`,
+        );
+      }
+      if (analysis.summaryReasons.length > 0) {
+        console.warn(
+          `${LOG_PREFIX} step=feed_csv_summary ${JSON.stringify(analysis.summaryReasons.slice(0, 10))}`,
+        );
+      }
+
+      const summary =
+        analysis.summaryReasons.slice(0, 3).join("；") ||
+        (analysis.errors[0]?.reason ?? analysis.warnings[0]?.reason ?? "");
+
+      merged = {
+        ...merged,
+        feedLogDataUrl: url,
+        errors: mergeLogErrors(merged.errors, analysis.errors),
+        warnings: mergeLogErrors(merged.warnings ?? [], analysis.warnings),
+        ...(summary ? { feedCsvSummary: summary } : {}),
       };
-    }
 
-    const analysis = analyzeTiktokFeedLogCsv(text);
-    console.info(
-      `${LOG_PREFIX} step=feed_csv_parsed delimiter=${JSON.stringify(analysis.delimiter)} headers=${JSON.stringify(analysis.headers)} rowCount=${analysis.rowCount} errorCount=${analysis.errors.length} warningCount=${analysis.warnings.length} summaryCount=${analysis.summaryReasons.length} contentType=${contentType} url=${url.slice(0, 240)} preview=${JSON.stringify(text.slice(0, 800))}`,
-    );
-    if (analysis.errors.length > 0) {
-      console.warn(
-        `${LOG_PREFIX} step=feed_csv_errors ${JSON.stringify(analysis.errors.slice(0, 20))}`,
-      );
+      if (
+        analysis.errors.length > 0 ||
+        analysis.warnings.length > 0 ||
+        analysis.summaryReasons.length > 0
+      ) {
+        return merged;
+      }
+    } catch (e) {
+      lastDownloadError = e instanceof Error ? e.message : String(e);
+      console.warn(`${LOG_PREFIX} step=feed_csv_error error=${lastDownloadError}`);
     }
-    if (analysis.warnings.length > 0) {
-      console.warn(
-        `${LOG_PREFIX} step=feed_csv_warnings ${JSON.stringify(analysis.warnings.slice(0, 20))}`,
-      );
-    }
-    if (analysis.summaryReasons.length > 0) {
-      console.warn(
-        `${LOG_PREFIX} step=feed_csv_summary ${JSON.stringify(analysis.summaryReasons.slice(0, 10))}`,
-      );
-    }
+  }
 
-    const summary =
-      analysis.summaryReasons.slice(0, 3).join("；") ||
-      (analysis.errors[0]?.reason ?? analysis.warnings[0]?.reason ?? "");
-
+  if (!merged.feedCsvSummary && lastDownloadError) {
     return {
-      ...params.log,
-      errors: mergeLogErrors(params.log.errors, analysis.errors),
-      warnings: mergeLogErrors(params.log.warnings ?? [], analysis.warnings),
-      ...(summary ? { feedCsvSummary: summary } : {}),
-    };
-  } catch (e) {
-    const detail = e instanceof Error ? e.message : String(e);
-    console.warn(`${LOG_PREFIX} step=feed_csv_error error=${detail}`);
-    return {
-      ...params.log,
-      feedCsvSummary: `failed to download feed_log CSV: ${detail}`,
+      ...merged,
+      feedCsvSummary: `failed to download feed_log CSV (${lastDownloadError})`,
     };
   }
+  return merged;
 }
 
 /**
@@ -415,7 +549,11 @@ export async function fetchTiktokProductUploadLog(params: {
   }
 
   let parsed = parseTiktokProductUploadLog(payload.data);
-  parsed = await enrichLogWithFeedCsv({ log: parsed, fetchImpl });
+  parsed = await enrichLogWithFeedCsv({
+    log: parsed,
+    feedLogDataUrls: collectFeedLogDataUrls(payload.data),
+    fetchImpl,
+  });
   console.info(
     `${LOG_PREFIX} step=product_log_parsed status=${parsed.status} rawStatus=${parsed.rawStatus ?? ""} successCount=${parsed.successCount ?? ""} failedCount=${parsed.failedCount ?? ""} errorCount=${parsed.errors.length} endTime=${parsed.endTime ?? ""} feedCsv=${parsed.feedLogDataUrl ? "yes" : "no"}`,
   );
@@ -499,6 +637,7 @@ function defaultRejectReason(log: TiktokProductUploadLog, feedLogId?: string): s
 
   // 未能解析 CSV 时恢复诊断字段，便于排障（含 details 链接）。
   const parts: string[] = ["rejected by TikTok Catalog product log"];
+  if (log.rawStatus) parts.push(`process_status=${log.rawStatus}`);
   if (log.successCount != null) parts.push(`add_count=${log.successCount}`);
   if (log.failedCount != null) parts.push(`error_count=${log.failedCount}`);
   if (feedLogId) parts.push(`feed_log=${feedLogId}`);
@@ -656,6 +795,8 @@ export async function confirmTiktokCatalogUpload(params: {
   let lastLogError: string | null = null;
 
   if (params.feedLogId) {
+    const initialDelayMs = Math.min(intervalMs, 3000);
+    await sleep(initialDelayMs);
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       if (attempt > 0) await sleep(intervalMs);
       console.info(
@@ -677,11 +818,19 @@ export async function confirmTiktokCatalogUpload(params: {
           log,
           feedLogId: params.feedLogId,
         });
-        if (settled) {
+        const resolvable = isProductLogResolvable(log);
+        const isLastAttempt = attempt === maxAttempts - 1;
+        if (settled && (resolvable || isLastAttempt)) {
           console.info(
-            `${LOG_PREFIX} step=confirm_settled_via_product_log status=${log.status} succeeded=${settled.succeeded} failed=${settled.errors.length}`,
+            `${LOG_PREFIX} step=confirm_settled_via_product_log status=${log.status} resolvable=${resolvable} succeeded=${settled.succeeded} failed=${settled.errors.length}`,
           );
           return settled;
+        }
+        if (settled && !resolvable) {
+          console.info(
+            `${LOG_PREFIX} step=confirm_log_await_details status=${log.status} rawStatus=${log.rawStatus ?? ""} feedCsv=${log.feedLogDataUrl ? "yes" : "no"} addCount=${log.successCount ?? ""} attempt=${attempt + 1}`,
+          );
+          continue;
         }
         console.info(
           `${LOG_PREFIX} step=confirm_log_not_terminal status=${log.status} rawStatus=${log.rawStatus ?? ""}`,
