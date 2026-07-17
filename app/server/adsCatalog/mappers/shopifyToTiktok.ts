@@ -54,7 +54,10 @@ export interface TiktokCatalogItem {
   brand: string;
   product_detail: TiktokProductDetail;
   additional_image_urls?: string[];
+  /** Google Product Taxonomy 路径；与 product_type 二选一即可消除 TikTok Warning */
   google_product_category?: string;
+  /** 商品自有类目路径；TikTok 推荐与 google_product_category 至少填一个 */
+  product_type?: string;
   item_group_id?: string;
   global_trade_item_number?: string;
 }
@@ -126,8 +129,9 @@ export function mapShopifyToTiktok(
   if (product.ageGroup) {
     productDetail.age_group = product.ageGroup;
   }
-  if (product.productType) {
-    productDetail.product_category = product.productType.slice(0, 250);
+  const categoryPath = resolveTiktokCategoryPath(product);
+  if (categoryPath) {
+    productDetail.product_category = categoryPath.slice(0, 250);
   }
 
   const item: TiktokCatalogItem = {
@@ -152,11 +156,11 @@ export function mapShopifyToTiktok(
     item.additional_image_urls = additionalImages;
   }
 
-  // google_product_category 优先取 Shopify GPC；缺失时用 productType 兜底，
-  // 满足 TikTok 对 google_product_category/product_type 二选一的 Warning 要求。
-  const gpc = product.googleProductCategory || product.productType || null;
-  if (gpc) {
-    item.google_product_category = gpc;
+  // TikTok 要求 google_product_category / product_type 至少填一个（可选但强烈推荐）。
+  // 同时写入两个字段，避免 API 只认其中一侧时仍报 Warning。
+  if (categoryPath) {
+    item.google_product_category = categoryPath;
+    item.product_type = categoryPath;
   }
 
   if (product.barcode) {
@@ -169,4 +173,19 @@ export function mapShopifyToTiktok(
 function extractNumericId(gid: string): string {
   const match = /\/(\d+)$/.exec(gid);
   return match ? match[1] : gid;
+}
+
+/** 解析用于 TikTok 广告优化的类目路径，优先标准 GPC，再退回店铺类目。 */
+function resolveTiktokCategoryPath(product: RawShopifyProductForCatalog): string | null {
+  const candidates = [
+    product.googleProductCategory,
+    product.productType,
+    product.shopifyCategory?.fullName,
+    product.shopifyCategory?.name,
+  ];
+  for (const raw of candidates) {
+    const value = raw?.trim();
+    if (value) return value.slice(0, 250);
+  }
+  return null;
 }

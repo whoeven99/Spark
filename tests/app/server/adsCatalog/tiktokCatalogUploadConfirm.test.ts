@@ -4,6 +4,7 @@ import {
   extractFeedLogDataUrl,
   parseTiktokFeedLogCsv,
   parseTiktokProductUploadLog,
+  analyzeTiktokFeedLogCsv,
 } from "../../../../app/server/adsCatalog/clients/tiktokCatalogUploadConfirm.server";
 
 describe("parseTiktokProductUploadLog", () => {
@@ -112,20 +113,32 @@ describe("parseTiktokFeedLogCsv", () => {
   it("treats Warning severity rows as non-failures (not included in errors)", () => {
     const csv = [
       "SKU ID,Line,Severity,Issue,How to fix,Property name,Value in feed,Sample value,Feed ID,Feed Name,Feed Upload Time",
-      '"A2504","2","Warning","An optional but recommended field is missing: google_product_category/product_type","We recommend you include either google_product_category or product_type","google_product_category","","Apparel & Accessories","30898912","default","2026-07-17 06:56:30"',
+      '"A2504","2","Warning","An optional but recommended field is missing: google_product_category/product_type","We recommend you include either ""google_product_category"" or ""product_type"" for ad optimization. Example: Apparel & Accessories > Clothing > Shirts","google_product_category","","Apparel & Accessories > Clothing > Shirts","30898912","default","2026-07-17 06:56:30"',
     ].join("\n");
-    const result = parseTiktokFeedLogCsv(csv);
-    expect(result).toEqual([]);
+    expect(parseTiktokFeedLogCsv(csv)).toEqual([]);
+
+    const analysis = analyzeTiktokFeedLogCsv(csv);
+    expect(analysis.warnings).toEqual([
+      {
+        id: "A2504",
+        reason:
+          '[warning] An optional but recommended field is missing: google_product_category/product_type. We recommend you include either "google_product_category" or "product_type" for ad optimization. Example: Apparel & Accessories > Clothing > Shirts',
+      },
+    ]);
   });
 
-  it("still treats Error severity rows as failures", () => {
+  it("still treats Error severity rows as failures and appends How to fix", () => {
     const csv = [
       "SKU ID,Line,Severity,Issue,How to fix,Property name,Value in feed,Sample value,Feed ID,Feed Name,Feed Upload Time",
       '"A2504","2","Error","The number of api submit exceeds the limit (once a minute)","You should wait a minute","","","","30898912","default","2026-07-17 06:56:30"',
     ].join("\n");
     const result = parseTiktokFeedLogCsv(csv);
     expect(result).toEqual([
-      { id: "A2504", reason: "The number of api submit exceeds the limit (once a minute)" },
+      {
+        id: "A2504",
+        reason:
+          "The number of api submit exceeds the limit (once a minute). You should wait a minute",
+      },
     ]);
   });
 
@@ -230,7 +243,7 @@ describe("confirmTiktokCatalogUpload", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
-  it("surfaces CSV summary and details URL when rows cannot be SKU-aligned", async () => {
+  it("surfaces parsed CSV reason without HTTPS details URL when rows cannot be SKU-aligned", async () => {
     const csvUrl = "https://cdn.example.com/feed-diag.csv";
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -267,9 +280,62 @@ describe("confirmTiktokCatalogUpload", () => {
     });
 
     expect(result.succeeded).toBe(0);
-    expect(result.errors[0]?.reason).toContain("Image must be at least 500x500 pixels");
-    expect(result.errors[0]?.reason).toContain(`details=${csvUrl}`);
-    expect(result.errors[0]?.reason).toContain("error_count=10");
+    expect(result.errors[0]?.reason).toBe("Image must be at least 500x500 pixels");
+    expect(result.errors[0]?.reason).not.toMatch(/https?:\/\//i);
+    expect(result.errors[0]?.reason).not.toContain("details=");
+  });
+
+  it("surfaces Warning CSV Issue+How to fix as failure reason when add_count=0", async () => {
+    const csvUrl = "https://cdn.example.com/feed-warning.csv";
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/catalog/product/log/")) {
+        return new Response(
+          JSON.stringify({
+            code: 0,
+            data: {
+              product_feed_log: {
+                add_count: 0,
+                error_count: 0,
+                end_time: "2026-07-17 07:45:14",
+                feed_log_data: { en: csvUrl },
+              },
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      if (url === csvUrl) {
+        return new Response(
+          [
+            "SKU ID,Line,Severity,Issue,How to fix,Property name,Value in feed,Sample value,Feed ID,Feed Name,Feed Upload Time",
+            '"A2504","2","Warning","An optional but recommended field is missing: google_product_category/product_type","We recommend you include either ""google_product_category"" or ""product_type"" for ad optimization. Example: Apparel & Accessories > Clothing > Shirts","google_product_category","","Apparel & Accessories > Clothing > Shirts","30898912","default","2026-07-17 06:56:30"',
+          ].join("\n"),
+          { status: 200 },
+        );
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    const result = await confirmTiktokCatalogUpload({
+      accessToken: "tok",
+      advertiserId: "adv",
+      bcId: "bc",
+      catalogId: "cat",
+      feedLogId: "1367210718",
+      expectedSkuIds: ["A2504"],
+      deps: { fetchImpl, maxAttempts: 1, intervalMs: 0, sleep: async () => undefined },
+    });
+
+    expect(result.succeeded).toBe(0);
+    expect(result.errors[0]?.id).toBe("A2504");
+    expect(result.errors[0]?.reason).toContain(
+      "An optional but recommended field is missing: google_product_category/product_type",
+    );
+    expect(result.errors[0]?.reason).toContain(
+      'We recommend you include either "google_product_category" or "product_type"',
+    );
+    expect(result.errors[0]?.reason).not.toMatch(/https?:\/\//i);
   });
 
   it("downloads CSV and surfaces per-SKU reason when API uses download_path nesting", async () => {
@@ -325,8 +391,9 @@ describe("confirmTiktokCatalogUpload", () => {
     expect(result.succeeded).toBe(0);
     expect(result.errors[0]?.id).toBe("A2504");
     expect(result.errors[0]?.reason).toBe(
-      "The number of api submit exceeds the limit (once a minute)",
+      "The number of api submit exceeds the limit (once a minute). You should wait a minute before submitting the data",
     );
+    expect(result.errors[0]?.reason).not.toMatch(/https?:\/\//i);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 

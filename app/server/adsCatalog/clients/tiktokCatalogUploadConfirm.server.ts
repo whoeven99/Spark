@@ -17,11 +17,13 @@ export interface TiktokProductUploadLog {
   successCount: number | null;
   failedCount: number | null;
   errors: Array<{ id: string; reason: string }>;
+  /** CSV Warning 行（按 SKU）；不抬高失败计数，仅供失败原因展示 */
+  warnings?: Array<{ id: string; reason: string }>;
   rawStatus?: string;
   /** TikTok 明细 CSV（通常在 feed_log_data.en） */
   feedLogDataUrl?: string;
   endTime?: string;
-  /** CSV 无法按 SKU 对齐时的摘要（供 UI 展示） */
+  /** CSV 已解析出的可读摘要（供 UI 展示，不含下载链接） */
   feedCsvSummary?: string;
 }
 
@@ -328,11 +330,12 @@ async function enrichLogWithFeedCsv(params: {
 
     const summary =
       analysis.summaryReasons.slice(0, 3).join("；") ||
-      (analysis.errors[0]?.reason ?? "");
+      (analysis.errors[0]?.reason ?? analysis.warnings[0]?.reason ?? "");
 
     return {
       ...params.log,
       errors: mergeLogErrors(params.log.errors, analysis.errors),
+      warnings: mergeLogErrors(params.log.warnings ?? [], analysis.warnings),
       ...(summary ? { feedCsvSummary: summary } : {}),
     };
   } catch (e) {
@@ -470,19 +473,12 @@ export async function listTiktokCatalogSkuIds(params: {
   return skuIds;
 }
 
-function defaultRejectReason(log: TiktokProductUploadLog, feedLogId?: string): string {
-  const parts: string[] = [];
-  if (log.feedCsvSummary) {
-    parts.push(log.feedCsvSummary);
-  } else {
-    parts.push("rejected by TikTok Catalog product log");
-  }
-  if (log.successCount != null) parts.push(`add_count=${log.successCount}`);
-  if (log.failedCount != null) parts.push(`error_count=${log.failedCount}`);
-  if (feedLogId) parts.push(`feed_log=${feedLogId}`);
-  if (log.endTime) parts.push(`end_time=${log.endTime}`);
-  if (log.feedLogDataUrl) parts.push(`details=${log.feedLogDataUrl}`);
-  return parts.join(" | ");
+function defaultRejectReason(log: TiktokProductUploadLog, _feedLogId?: string): string {
+  // CSV 已在服务端解析；直接展示具体原因，不再附带 HTTPS 明细链接或冗余计数。
+  if (log.feedCsvSummary?.trim()) return log.feedCsvSummary.trim();
+  if (log.warnings?.[0]?.reason) return log.warnings[0].reason;
+  if (log.errors[0]?.reason) return log.errors[0].reason;
+  return "rejected by TikTok Catalog product log";
 }
 
 function findErrorReason(
@@ -510,6 +506,10 @@ function settleFromProductLog(params: {
   for (const err of params.log.errors) {
     if (err.id) errorById.set(err.id, err.reason);
   }
+  const warningById = new Map<string, string>();
+  for (const warn of params.log.warnings ?? []) {
+    if (warn.id) warningById.set(warn.id, warn.reason);
+  }
   const usedCsvIds = new Set<string>();
 
   let succeeded =
@@ -523,6 +523,7 @@ function settleFromProductLog(params: {
 
   const fallbackReason = defaultRejectReason(params.log, params.feedLogId);
   const errors: Array<{ id: string; reason: string }> = [];
+  // 仅硬错误计入失败明细；Warning 不单独抬高失败（由 add_count 决定是否补失败项）
   for (const id of params.expected) {
     const matchedKey = [...errorById.keys()].find(
       (key) => key === id || key.toLowerCase() === id.toLowerCase(),
@@ -537,20 +538,40 @@ function settleFromProductLog(params: {
   }
 
   const unusedCsvErrors = [...errorById.entries()].filter(([csvId]) => !usedCsvIds.has(csvId));
+  const unusedCsvWarnings = [...warningById.entries()].filter(
+    ([csvId]) => !usedCsvIds.has(csvId),
+  );
 
   // 按计数补齐未给出明细的失败项，避免误报成功。
   const unresolved = params.expected.filter((id) => !errors.some((e) => e.id === id));
   let needFail = Math.max(0, params.expected.length - succeeded);
-  let unusedIdx = 0;
+  let unusedErrIdx = 0;
+  let unusedWarnIdx = 0;
   for (const id of unresolved) {
     if (needFail <= 0) break;
-    // CSV SKU 对不齐时：按顺序借用未匹配明细，再退回摘要/链接
-    const borrowed = unusedCsvErrors[unusedIdx];
-    unusedIdx += 1;
-    const reason = borrowed
-      ? `${borrowed[1]} (tiktok_sku=${borrowed[0]})`
-      : fallbackReason;
-    errors.push({ id, reason });
+    const softReason = findErrorReason(warningById, id);
+    if (softReason) {
+      usedCsvIds.add(id);
+      errors.push({ id, reason: softReason });
+      needFail -= 1;
+      continue;
+    }
+    // CSV SKU 对不齐时：先借用硬错误明细，再借用 Warning，最后退回已解析摘要
+    const borrowedErr = unusedCsvErrors[unusedErrIdx];
+    if (borrowedErr) {
+      unusedErrIdx += 1;
+      errors.push({ id, reason: `${borrowedErr[1]} (tiktok_sku=${borrowedErr[0]})` });
+      needFail -= 1;
+      continue;
+    }
+    const borrowedWarn = unusedCsvWarnings[unusedWarnIdx];
+    if (borrowedWarn) {
+      unusedWarnIdx += 1;
+      errors.push({ id, reason: `${borrowedWarn[1]} (tiktok_sku=${borrowedWarn[0]})` });
+      needFail -= 1;
+      continue;
+    }
+    errors.push({ id, reason: fallbackReason });
     needFail -= 1;
   }
 
@@ -739,20 +760,20 @@ function buildMissingProductReason(params: {
   }
 
   if (params.lastLog) {
+    const skuError = params.lastLog.errors.find((e) => e.id === params.skuId);
+    const skuWarning = params.lastLog.warnings?.find((e) => e.id === params.skuId);
+    const concrete =
+      skuError?.reason ||
+      skuWarning?.reason ||
+      params.lastLog.feedCsvSummary ||
+      params.lastLog.errors[0]?.reason ||
+      params.lastLog.warnings?.[0]?.reason;
+    if (concrete) {
+      // 已有 CSV 具体原因时，只展示原因本身，避免链接/计数噪声
+      return concrete;
+    }
     const status = params.lastLog.rawStatus || params.lastLog.status;
     parts.push(`product_log.status=${status}`);
-    if (params.lastLog.successCount != null) {
-      parts.push(`add_count=${params.lastLog.successCount}`);
-    }
-    if (params.lastLog.failedCount != null) {
-      parts.push(`error_count=${params.lastLog.failedCount}`);
-    }
-    const skuError = params.lastLog.errors.find((e) => e.id === params.skuId);
-    if (skuError?.reason) {
-      parts.push(skuError.reason);
-    } else if (params.lastLog.errors[0]?.reason) {
-      parts.push(params.lastLog.errors[0].reason);
-    }
   } else if (params.lastLogError) {
     parts.push(`product_log error: ${params.lastLogError}`);
   }

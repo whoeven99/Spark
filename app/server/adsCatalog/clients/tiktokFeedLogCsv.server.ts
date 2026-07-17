@@ -2,6 +2,8 @@ export type TiktokFeedCsvError = { id: string; reason: string };
 
 export type TiktokFeedCsvAnalysis = {
   errors: TiktokFeedCsvError[];
+  /** Warning 行（按 SKU）；不计入硬失败，但可供 add_count=0 时展示具体原因 */
+  warnings: TiktokFeedCsvError[];
   /** 未能按 SKU 对齐时的摘要原因（去重） */
   summaryReasons: string[];
   headers: string[];
@@ -42,6 +44,17 @@ const REASON_HEADER_HINTS = [
   "失败原因",
   "问题",
   "原因",
+];
+
+const FIX_HEADER_HINTS = [
+  "how_to_fix",
+  "howtofix",
+  "suggestion",
+  "recommended_action",
+  "fix",
+  "建议",
+  "修复建议",
+  "处理建议",
 ];
 
 const STATUS_HEADER_HINTS = [
@@ -152,6 +165,16 @@ function isWarningStatus(rowStatus: string): boolean {
   return rowStatus === "WARNING" || rowStatus === "WARN" || rowStatus.includes("警告");
 }
 
+/** 拼接 Issue + How to fix，避免把整行元数据甩给用户。 */
+export function composeFeedLogReason(issue: string, howToFix = ""): string {
+  const primary = issue.trim();
+  const fix = howToFix.trim();
+  if (primary && fix && !primary.includes(fix)) {
+    return `${primary}. ${fix}`;
+  }
+  return primary || fix;
+}
+
 /**
  * 解析 TikTok feed_log_data 明细表。
  * 兼容英文/中文表头、逗号/制表符/分号分隔。
@@ -159,11 +182,19 @@ function isWarningStatus(rowStatus: string): boolean {
 export function analyzeTiktokFeedLogCsv(text: string): TiktokFeedCsvAnalysis {
   const trimmed = text.trim();
   if (!trimmed) {
-    return { errors: [], summaryReasons: [], headers: [], rowCount: 0, delimiter: "," };
+    return {
+      errors: [],
+      warnings: [],
+      summaryReasons: [],
+      headers: [],
+      rowCount: 0,
+      delimiter: ",",
+    };
   }
   if (/^</.test(trimmed) || /<html/i.test(trimmed)) {
     return {
       errors: [],
+      warnings: [],
       summaryReasons: ["feed_log CSV returned HTML instead of CSV"],
       headers: [],
       rowCount: 0,
@@ -177,6 +208,7 @@ export function analyzeTiktokFeedLogCsv(text: string): TiktokFeedCsvAnalysis {
   if (rows.length < 2) {
     return {
       errors: [],
+      warnings: [],
       summaryReasons: trimmed.slice(0, 240) ? [trimmed.slice(0, 240)] : [],
       headers: rows[0]?.map(normalizeCsvHeader) ?? [],
       rowCount: Math.max(0, rows.length - 1),
@@ -187,21 +219,35 @@ export function analyzeTiktokFeedLogCsv(text: string): TiktokFeedCsvAnalysis {
   const headers = rows[0].map(normalizeCsvHeader);
   const skuCol = findCol(headers, SKU_HEADER_HINTS);
   const reasonCol = findCol(headers, REASON_HEADER_HINTS);
+  const fixCol = findCol(headers, FIX_HEADER_HINTS);
   const statusCol = findCol(headers, STATUS_HEADER_HINTS);
 
   const errors: TiktokFeedCsvError[] = [];
+  const warnings: TiktokFeedCsvError[] = [];
   const summaryReasons: string[] = [];
 
   for (const cells of rows.slice(1)) {
     const id = skuCol >= 0 ? String(cells[skuCol] ?? "").trim() : "";
-    const reason = reasonCol >= 0 ? String(cells[reasonCol] ?? "").trim() : "";
+    const issue = reasonCol >= 0 ? String(cells[reasonCol] ?? "").trim() : "";
+    const howToFix = fixCol >= 0 ? String(cells[fixCol] ?? "").trim() : "";
+    const reason = composeFeedLogReason(issue, howToFix);
     const rowStatus = statusCol >= 0 ? String(cells[statusCol] ?? "").toUpperCase() : "";
 
     if (rowStatus && isSuccessStatus(rowStatus)) continue;
-    // Warning 级别不计入失败，但收入 summaryReasons 供 UI 诊断展示
+
+    // Warning：不计入硬失败，但保留按 SKU 的可读原因
     if (rowStatus && isWarningStatus(rowStatus)) {
-      const warningMsg = reason || cells.filter((_, idx) => idx !== skuCol).map((c) => c.trim()).filter(Boolean).join(" | ");
-      if (warningMsg) summaryReasons.push(`[warning] ${warningMsg}`);
+      const warningMsg =
+        reason ||
+        cells
+          .filter((_, idx) => idx !== skuCol)
+          .map((c) => c.trim())
+          .filter(Boolean)
+          .join(" | ");
+      if (!warningMsg) continue;
+      const labeled = `[warning] ${warningMsg}`;
+      if (id) warnings.push({ id, reason: labeled });
+      summaryReasons.push(labeled);
       continue;
     }
 
@@ -233,6 +279,7 @@ export function analyzeTiktokFeedLogCsv(text: string): TiktokFeedCsvAnalysis {
 
   return {
     errors,
+    warnings,
     summaryReasons: [...new Set(summaryReasons)].slice(0, 20),
     headers,
     rowCount: rows.length - 1,

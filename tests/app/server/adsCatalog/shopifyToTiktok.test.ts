@@ -100,6 +100,7 @@ describe("mapShopifyToTiktok google_product_category fallback", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.item.google_product_category).toBe("T-shirts");
+    expect(result.item.product_type).toBe("T-shirts");
   });
 
   it("prefers googleProductCategory over productType when both are set", () => {
@@ -115,16 +116,47 @@ describe("mapShopifyToTiktok google_product_category fallback", () => {
     expect(result.item.google_product_category).toBe(
       "Apparel & Accessories > Clothing > Shirts",
     );
+    expect(result.item.product_type).toBe(
+      "Apparel & Accessories > Clothing > Shirts",
+    );
   });
 
-  it("omits google_product_category when both are missing", () => {
+  it("uses Shopify standard category when GPC and productType are missing", () => {
     const result = mapShopifyToTiktok(
-      baseProduct({ productType: null, googleProductCategory: null }),
+      baseProduct({
+        productType: null,
+        googleProductCategory: null,
+        shopifyCategory: {
+          id: "gid://shopify/TaxonomyCategory/aa-1",
+          name: "Shirts",
+          fullName: "Apparel & Accessories > Clothing > Shirts",
+        },
+      }),
+      mapContext,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.item.google_product_category).toBe(
+      "Apparel & Accessories > Clothing > Shirts",
+    );
+    expect(result.item.product_type).toBe(
+      "Apparel & Accessories > Clothing > Shirts",
+    );
+  });
+
+  it("omits category fields when all sources are missing", () => {
+    const result = mapShopifyToTiktok(
+      baseProduct({
+        productType: null,
+        googleProductCategory: null,
+        shopifyCategory: null,
+      }),
       mapContext,
     );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.item).not.toHaveProperty("google_product_category");
+    expect(result.item).not.toHaveProperty("product_type");
   });
 });
 
