@@ -5,6 +5,14 @@ export { parseTiktokFeedLogCsv, analyzeTiktokFeedLogCsv } from "./tiktokFeedLogC
 const TIKTOK_API_BASE = "https://business-api.tiktok.com/open_api/v1.3";
 const LOG_PREFIX = "[AdsCatalog][TikTokConfirm]";
 
+/** 原始返回日志上限：单店同步体量小，放宽截断以便排障拿到完整 TikTok 响应。 */
+const RAW_LOG_MAX = 20000;
+
+function rawForLog(text: string): string {
+  if (text.length <= RAW_LOG_MAX) return text;
+  return `${text.slice(0, RAW_LOG_MAX)}...(+${text.length - RAW_LOG_MAX} chars truncated)`;
+}
+
 export type TiktokUploadLogStatus =
   | "processing"
   | "success"
@@ -438,14 +446,14 @@ async function enrichLogWithFeedCsv(params: {
       if (!response.ok) {
         lastDownloadError = `HTTP ${response.status}`;
         console.warn(
-          `${LOG_PREFIX} step=feed_csv_http_error http=${response.status} contentType=${contentType} body=${text.slice(0, 300)}`,
+          `${LOG_PREFIX} step=feed_csv_http_error http=${response.status} contentType=${contentType} body=${rawForLog(text)}`,
         );
         continue;
       }
 
       const analysis = analyzeTiktokFeedLogCsv(text);
       console.info(
-        `${LOG_PREFIX} step=feed_csv_parsed delimiter=${JSON.stringify(analysis.delimiter)} headers=${JSON.stringify(analysis.headers)} rowCount=${analysis.rowCount} errorCount=${analysis.errors.length} warningCount=${analysis.warnings.length} summaryCount=${analysis.summaryReasons.length} contentType=${contentType} url=${url.slice(0, 240)} preview=${JSON.stringify(text.slice(0, 800))}`,
+        `${LOG_PREFIX} step=feed_csv_parsed delimiter=${JSON.stringify(analysis.delimiter)} headers=${JSON.stringify(analysis.headers)} rowCount=${analysis.rowCount} errorCount=${analysis.errors.length} warningCount=${analysis.warnings.length} summaryCount=${analysis.summaryReasons.length} contentType=${contentType} url=${url.slice(0, 240)} content=${JSON.stringify(rawForLog(text))}`,
       );
       if (analysis.errors.length > 0) {
         console.warn(
@@ -536,7 +544,7 @@ export async function fetchTiktokProductUploadLog(params: {
   }
 
   console.info(
-    `${LOG_PREFIX} step=product_log_response http=${response.status} code=${payload.code ?? ""} message=${payload.message ?? ""} request_id=${payload.request_id ?? ""} body=${text.slice(0, 1200)}`,
+    `${LOG_PREFIX} step=product_log_response http=${response.status} code=${payload.code ?? ""} message=${payload.message ?? ""} request_id=${payload.request_id ?? ""} body=${rawForLog(text)}`,
   );
 
   if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {
@@ -547,6 +555,13 @@ export async function fetchTiktokProductUploadLog(params: {
       response.statusText;
     throw new Error(`TikTok product log failed: HTTP ${response.status} ${detail}`.trim());
   }
+
+  // Dump 完整 data 节点：add_count=0/error_count=0 静默失败时，真因（区域/币种/类目等）常藏在这里。
+  console.info(
+    `${LOG_PREFIX} step=product_log_data feedLogId=${params.feedLogId} data=${rawForLog(
+      JSON.stringify(payload.data ?? null),
+    )}`,
+  );
 
   let parsed = parseTiktokProductUploadLog(payload.data);
   parsed = await enrichLogWithFeedCsv({
@@ -595,7 +610,7 @@ export async function listTiktokCatalogSkuIds(params: {
   }
 
   console.info(
-    `${LOG_PREFIX} step=product_get_response http=${response.status} code=${payload.code ?? ""} message=${payload.message ?? ""} request_id=${payload.request_id ?? ""} body=${text.slice(0, 1200)}`,
+    `${LOG_PREFIX} step=product_get_response http=${response.status} code=${payload.code ?? ""} message=${payload.message ?? ""} request_id=${payload.request_id ?? ""} body=${rawForLog(text)}`,
   );
 
   if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {

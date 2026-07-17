@@ -4,6 +4,14 @@ const TIKTOK_API_BASE = "https://business-api.tiktok.com/open_api/v1.3";
 const ITEMS_BATCH_CHUNK = 50;
 const LOG_PREFIX = "[AdsCatalog][TikTokClient]";
 
+/** 原始返回日志上限：单店同步体量小，放宽截断以便排障拿到完整 TikTok 响应。 */
+const RAW_LOG_MAX = 20000;
+
+function rawForLog(text: string): string {
+  if (text.length <= RAW_LOG_MAX) return text;
+  return `${text.slice(0, RAW_LOG_MAX)}...(+${text.length - RAW_LOG_MAX} chars truncated)`;
+}
+
 /**
  * TikTok Catalog upload API 限速：每个 Catalog 每分钟仅允许提交一次。
  * 进程内 Map 记录最近上传时间；重启后自动重置（已足够，因为重启间隔通常 > 1 分钟）。
@@ -199,6 +207,17 @@ export async function upsertTiktokCatalogItems(params: {
 
     await waitForUploadCooldown(params.catalogId);
 
+    const requestBody = JSON.stringify({
+      bc_id: params.bcId,
+      catalog_id: params.catalogId,
+      // advertiser_id is accepted by some catalog APIs; keep for compatibility.
+      advertiser_id: params.advertiserId,
+      products: chunk,
+    });
+    console.info(
+      `${LOG_PREFIX} step=product_upload_request offset=${offset} body=${rawForLog(requestBody)}`,
+    );
+
     let response: Response;
     try {
       response = await fetch(url, {
@@ -207,13 +226,7 @@ export async function upsertTiktokCatalogItems(params: {
           "Access-Token": params.accessToken,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          bc_id: params.bcId,
-          catalog_id: params.catalogId,
-          // advertiser_id is accepted by some catalog APIs; keep for compatibility.
-          advertiser_id: params.advertiserId,
-          products: chunk,
-        }),
+        body: requestBody,
       });
     } catch (e) {
       const reason = `network error: ${e instanceof Error ? e.message : String(e)}`;
@@ -242,7 +255,7 @@ export async function upsertTiktokCatalogItems(params: {
     }
 
     console.info(
-      `${LOG_PREFIX} step=product_upload_response offset=${offset} http=${response.status} code=${payload.code ?? ""} message=${payload.message ?? ""} request_id=${payload.request_id ?? ""} feed_log_id=${payload.data?.feed_log_id ?? ""} body=${text.slice(0, 800)}`,
+      `${LOG_PREFIX} step=product_upload_response offset=${offset} http=${response.status} code=${payload.code ?? ""} message=${payload.message ?? ""} request_id=${payload.request_id ?? ""} feed_log_id=${payload.data?.feed_log_id ?? ""} body=${rawForLog(text)}`,
     );
 
     if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {
