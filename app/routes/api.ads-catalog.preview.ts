@@ -5,10 +5,11 @@ import { fetchProductsForCatalog } from "../server/adsCatalog/productFetcher.ser
 import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
 import { mapShopifyToFacebook } from "../server/adsCatalog/mappers/shopifyToFacebook";
 import { mapShopifyToGoogle } from "../server/adsCatalog/mappers/shopifyToGoogle";
+import { mapShopifyToTiktok } from "../server/adsCatalog/mappers/shopifyToTiktok";
 import { validateProductsForGoogle } from "../server/adsCatalog/validators/googleProductValidator";
 
 const PreviewRequestSchema = z.object({
-  platform: z.enum(["facebook", "google"]),
+  platform: z.enum(["facebook", "google", "tiktok"]),
   productIds: z.array(z.string()).max(250).optional().nullable(),
   contentLanguage: z.string().min(2).max(8).optional(),
   targetCountry: z.string().min(2).max(4).optional(),
@@ -45,7 +46,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         ? parsed.data.productIds
         : null;
 
-    if (parsed.data.platform === "facebook") {
+    if (parsed.data.platform === "facebook" || parsed.data.platform === "tiktok") {
       const [shopInfo, products] = await Promise.all([
         fetchShopBasicInfo(admin),
         fetchProductsForCatalog(admin, {
@@ -59,16 +60,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       ]);
       const shopDomain =
         shopInfo?.primaryDomainHost ?? shopInfo?.myshopifyDomain ?? session.shop;
-      const items = products.map((p) =>
-        mapShopifyToFacebook(p, {
-          shopDomain,
-          defaultCurrency: shopInfo?.currencyCode ?? undefined,
-          brand: shopInfo?.name ?? undefined,
-        }),
-      );
+      const mapContext = {
+        shopDomain,
+        defaultCurrency: shopInfo?.currencyCode ?? undefined,
+        brand: shopInfo?.name ?? undefined,
+      };
+      const items =
+        parsed.data.platform === "facebook"
+          ? products.map((p) => mapShopifyToFacebook(p, mapContext))
+          : products.map((p) => mapShopifyToTiktok(p, mapContext));
       return Response.json({
         ok: true,
-        platform: "facebook" as const,
+        platform: parsed.data.platform,
         total: products.length,
         preview: items,
       });

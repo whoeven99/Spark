@@ -552,7 +552,10 @@ export function AdsCatalogPage() {
             {platform === "google" && previewPlatform === "google" && googleReport && (
               <GmcValidationReport report={googleReport} />
             )}
-            {platform === "facebook" && previewPlatform === "facebook" && fbPreview && fbPreview.length > 0 && (
+            {(platform === "facebook" || platform === "tiktok") &&
+              previewPlatform === platform &&
+              fbPreview &&
+              fbPreview.length > 0 && (
               <pre style={previewPreStyle}>{JSON.stringify(fbPreview, null, 2)}</pre>
             )}
             {syncFetcher.data?.errorMsg && (
