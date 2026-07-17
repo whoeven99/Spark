@@ -325,8 +325,23 @@ async function enrichLogWithFeedCsv(params: {
 
     const analysis = analyzeTiktokFeedLogCsv(text);
     console.info(
-      `${LOG_PREFIX} step=feed_csv_parsed delimiter=${JSON.stringify(analysis.delimiter)} headers=${JSON.stringify(analysis.headers)} rowCount=${analysis.rowCount} errorCount=${analysis.errors.length} summaryCount=${analysis.summaryReasons.length} contentType=${contentType} preview=${JSON.stringify(text.slice(0, 400))}`,
+      `${LOG_PREFIX} step=feed_csv_parsed delimiter=${JSON.stringify(analysis.delimiter)} headers=${JSON.stringify(analysis.headers)} rowCount=${analysis.rowCount} errorCount=${analysis.errors.length} warningCount=${analysis.warnings.length} summaryCount=${analysis.summaryReasons.length} contentType=${contentType} url=${url.slice(0, 240)} preview=${JSON.stringify(text.slice(0, 800))}`,
     );
+    if (analysis.errors.length > 0) {
+      console.warn(
+        `${LOG_PREFIX} step=feed_csv_errors ${JSON.stringify(analysis.errors.slice(0, 20))}`,
+      );
+    }
+    if (analysis.warnings.length > 0) {
+      console.warn(
+        `${LOG_PREFIX} step=feed_csv_warnings ${JSON.stringify(analysis.warnings.slice(0, 20))}`,
+      );
+    }
+    if (analysis.summaryReasons.length > 0) {
+      console.warn(
+        `${LOG_PREFIX} step=feed_csv_summary ${JSON.stringify(analysis.summaryReasons.slice(0, 10))}`,
+      );
+    }
 
     const summary =
       analysis.summaryReasons.slice(0, 3).join("；") ||
@@ -473,12 +488,23 @@ export async function listTiktokCatalogSkuIds(params: {
   return skuIds;
 }
 
-function defaultRejectReason(log: TiktokProductUploadLog, _feedLogId?: string): string {
-  // CSV 已在服务端解析；直接展示具体原因，不再附带 HTTPS 明细链接或冗余计数。
-  if (log.feedCsvSummary?.trim()) return log.feedCsvSummary.trim();
-  if (log.warnings?.[0]?.reason) return log.warnings[0].reason;
-  if (log.errors[0]?.reason) return log.errors[0].reason;
-  return "rejected by TikTok Catalog product log";
+function defaultRejectReason(log: TiktokProductUploadLog, feedLogId?: string): string {
+  // 优先展示已解析的 CSV 具体原因（不含 HTTPS 链接）。
+  const parsed =
+    log.feedCsvSummary?.trim() ||
+    log.warnings?.[0]?.reason ||
+    log.errors[0]?.reason ||
+    "";
+  if (parsed) return parsed;
+
+  // 未能解析 CSV 时恢复诊断字段，便于排障（含 details 链接）。
+  const parts: string[] = ["rejected by TikTok Catalog product log"];
+  if (log.successCount != null) parts.push(`add_count=${log.successCount}`);
+  if (log.failedCount != null) parts.push(`error_count=${log.failedCount}`);
+  if (feedLogId) parts.push(`feed_log=${feedLogId}`);
+  if (log.endTime) parts.push(`end_time=${log.endTime}`);
+  if (log.feedLogDataUrl) parts.push(`details=${log.feedLogDataUrl}`);
+  return parts.join(" | ");
 }
 
 function findErrorReason(
@@ -522,6 +548,9 @@ function settleFromProductLog(params: {
   }
 
   const fallbackReason = defaultRejectReason(params.log, params.feedLogId);
+  console.info(
+    `${LOG_PREFIX} step=settle_from_product_log status=${params.log.status} successCount=${params.log.successCount ?? ""} failedCount=${params.log.failedCount ?? ""} hardErrors=${params.log.errors.length} warnings=${params.log.warnings?.length ?? 0} feedCsvSummary=${JSON.stringify(params.log.feedCsvSummary ?? "")} feedCsvUrl=${params.log.feedLogDataUrl ?? ""} fallbackReason=${JSON.stringify(fallbackReason)}`,
+  );
   const errors: Array<{ id: string; reason: string }> = [];
   // 仅硬错误计入失败明细；Warning 不单独抬高失败（由 add_count 决定是否补失败项）
   for (const id of params.expected) {

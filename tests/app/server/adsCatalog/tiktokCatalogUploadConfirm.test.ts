@@ -285,6 +285,43 @@ describe("confirmTiktokCatalogUpload", () => {
     expect(result.errors[0]?.reason).not.toContain("details=");
   });
 
+  it("keeps diagnostic details URL when product log has no parseable CSV reason", async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/catalog/product/log/")) {
+        return new Response(
+          JSON.stringify({
+            code: 0,
+            data: {
+              product_feed_log: {
+                add_count: 0,
+                error_count: 0,
+                end_time: "2026-07-17 08:00:00",
+              },
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    const result = await confirmTiktokCatalogUpload({
+      accessToken: "tok",
+      advertiserId: "adv",
+      bcId: "bc",
+      catalogId: "cat",
+      feedLogId: "1367999999",
+      expectedSkuIds: ["A2504"],
+      deps: { fetchImpl, maxAttempts: 1, intervalMs: 0, sleep: async () => undefined },
+    });
+
+    expect(result.succeeded).toBe(0);
+    expect(result.errors[0]?.reason).toContain("rejected by TikTok Catalog product log");
+    expect(result.errors[0]?.reason).toContain("add_count=0");
+    expect(result.errors[0]?.reason).toContain("feed_log=1367999999");
+  });
+
   it("surfaces Warning CSV Issue+How to fix as failure reason when add_count=0", async () => {
     const csvUrl = "https://cdn.example.com/feed-warning.csv";
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
