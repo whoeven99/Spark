@@ -1760,5 +1760,23 @@
       "contactUs": "Contact Us",
       "orderNow": "Order Now"
     }
+  },
+  "adsEdit": {
+    "pageTitle": "Edit Ads",
+    "pageSubtitle": "Update existing campaigns, ad sets, and ads on Meta / TikTok / Google",
+    "save": "Save Changes",
+    "saving": "Saving…",
+    "successMsg": "Ad updated successfully",
+    "errorFallback": "Failed to update ad. Please check your configuration and try again.",
+    "promptLoadCampaigns": "Click the button below to load your existing campaigns",
+    "loadCampaigns": "Load Campaigns",
+    "selectCampaign": "Select Campaign",
+    "selectAdSet": "Select Ad Set / Ad Group",
+    "selectAd": "Select Ad",
+    "allCampaigns": "All Campaigns",
+    "backToSelect": "Re-select",
+    "loading": "Loading…",
+    "noAdSets": "No ad sets found in this campaign",
+    "noAds": "No ads found in this ad group"
   }
 }

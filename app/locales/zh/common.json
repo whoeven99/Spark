@@ -1760,5 +1760,23 @@
       "contactUs": "联系我们",
       "orderNow": "立即下单"
     }
+  },
+  "adsEdit": {
+    "pageTitle": "编辑广告",
+    "pageSubtitle": "在 Meta / TikTok / Google 上修改已有的广告系列、广告组与广告",
+    "save": "保存修改",
+    "saving": "保存中…",
+    "successMsg": "广告已成功更新",
+    "errorFallback": "广告更新失败，请检查配置后重试",
+    "promptLoadCampaigns": "点击下方按钮加载当前已有的广告系列",
+    "loadCampaigns": "加载广告系列",
+    "selectCampaign": "选择广告系列",
+    "selectAdSet": "选择广告组",
+    "selectAd": "选择广告",
+    "allCampaigns": "所有广告系列",
+    "backToSelect": "重新选择",
+    "loading": "加载中…",
+    "noAdSets": "此广告系列下暂无广告组",
+    "noAds": "此广告组下暂无广告"
   }
 }
