@@ -117,6 +117,8 @@ export function AdsCatalogPage() {
   const [reviewPlatform, setReviewPlatform] = useState<"facebook" | "google">("google");
   const [authBanner, setAuthBanner] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [previewPlatform, setPreviewPlatform] = useState<Platform | null>(null);
+  const [pathBBusy, setPathBBusy] = useState(false);
+  const [pathBError, setPathBError] = useState<string | null>(null);
 
   const syncFetcher = useFetcher<{
     success?: boolean;
@@ -325,6 +327,41 @@ export function AdsCatalogPage() {
       encType: "application/json",
       action: `/api/ads-catalog/sync${locationSearch}`,
     });
+  }
+
+  /** Path B：确保绑定 Spark API 可写 Catalog，再提交 API 上传同步。 */
+  async function handleTiktokPathBSync() {
+    if (!credentialReady || pathBBusy || syncFetcher.state !== "idle") return;
+    if (!window.confirm(t("adsCatalog.confirmTiktokPathBSync"))) return;
+
+    setPathBBusy(true);
+    setPathBError(null);
+    try {
+      const resp = await fetch(`/api/ads-catalog/tiktok-create-catalog${locationSearch}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = (await resp.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!resp.ok || !data.ok) {
+        setPathBError(data.error ?? t("adsCatalog.authError"));
+        return;
+      }
+      revalidator.revalidate();
+      syncFetcher.submit(buildSyncBody() as unknown as SubmitTarget, {
+        method: "POST",
+        encType: "application/json",
+        action: `/api/ads-catalog/sync${locationSearch}`,
+      });
+      setTab("tasks");
+    } catch (e) {
+      setPathBError(e instanceof Error ? e.message : t("adsCatalog.authError"));
+    } finally {
+      setPathBBusy(false);
+    }
   }
 
   function handleTaskUpdated(taskId: string, status: AITaskStatus, result?: Record<string, unknown>) {
@@ -546,21 +583,40 @@ export function AdsCatalogPage() {
               <button
                 type="button"
                 onClick={handleSync}
-                disabled={!credentialReady || syncFetcher.state !== "idle"}
+                disabled={!credentialReady || syncFetcher.state !== "idle" || pathBBusy}
                 style={{
                   ...buttonPrimary,
                   opacity: !credentialReady ? 0.6 : 1,
                   cursor: !credentialReady ? "not-allowed" : "pointer",
                 }}
               >
-                {syncFetcher.state === "submitting"
+                {syncFetcher.state === "submitting" && !pathBBusy
                   ? t("adsCatalog.actionSyncing")
                   : platform === "tiktok" &&
                       credentials.tiktok.bindingMode === "shopify_official"
                     ? t("adsCatalog.actionSyncTiktokOfficial")
                     : t("adsCatalog.actionSync")}
               </button>
+              {platform === "tiktok" && (
+                <button
+                  type="button"
+                  onClick={() => void handleTiktokPathBSync()}
+                  disabled={!credentialReady || syncFetcher.state !== "idle" || pathBBusy}
+                  style={{
+                    ...buttonSecondary,
+                    opacity: !credentialReady ? 0.6 : 1,
+                    cursor: !credentialReady || pathBBusy ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {pathBBusy || syncFetcher.state === "submitting"
+                    ? t("adsCatalog.actionSyncTiktokPathBBusy")
+                    : t("adsCatalog.actionSyncTiktokPathB")}
+                </button>
+              )}
             </div>
+            {platform === "tiktok" && (
+              <p style={pageHintTextStyle}>{t("adsCatalog.tiktokPathBSyncHint")}</p>
+            )}
             {platform === "tiktok" &&
               credentials.tiktok.bindingMode === "shopify_official" && (
                 <div
@@ -577,6 +633,7 @@ export function AdsCatalogPage() {
                   {t("adsCatalog.tiktokOfficialSyncFootnote")}
                 </div>
               )}
+            {pathBError && <div style={errorBoxStyle}>{pathBError}</div>}
 
             {previewError && (
               <div style={errorBoxStyle}>{previewError}</div>
