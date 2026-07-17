@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
+import { TiktokCatalogPicker } from "./TiktokCatalogPicker";
 import type { CredentialsView } from "./types";
 
 type Props = {
@@ -94,36 +95,6 @@ export function TiktokConnectPanels({
     }
   }
 
-  async function refreshCatalogs() {
-    setBusy(true);
-    try {
-      const resp = await fetch(`/api/ads-catalog/tiktok-refresh-catalogs${locationSearch}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      const data = (await resp.json().catch(() => ({}))) as {
-        ok?: boolean;
-        error?: string;
-        message?: string;
-        autoSelected?: boolean;
-      };
-      if (!resp.ok || !data.ok) {
-        alert(data.error ?? t("adsCatalog.authError"));
-        return;
-      }
-      if (data.message === "no_catalogs") {
-        alert(t("adsCatalog.tiktokNoCatalogsFound"));
-        return;
-      }
-      onChanged();
-    } catch (e) {
-      alert(e instanceof Error ? e.message : t("adsCatalog.authError"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function createAndBindCatalog() {
     setBusy(true);
     try {
@@ -196,6 +167,13 @@ export function TiktokConnectPanels({
               {t("adsCatalog.tiktokUpdatedAt", { time: fmtDate(tiktok.updatedAt) })}
             </div>
           </div>
+          <TiktokCatalogPicker
+            variant="credentials"
+            locationSearch={locationSearch}
+            boundCatalogId={tiktok.catalogId}
+            boundBindingMode={tiktok.bindingMode}
+            onChanged={onChanged}
+          />
           <div style={{ display: "flex", gap: 10 }}>
             <button type="button" style={secondaryBtn} disabled={busy} onClick={openOAuth}>
               {t("adsCatalog.tiktokReauth")}
@@ -210,31 +188,30 @@ export function TiktokConnectPanels({
             </button>
           </div>
         </>
-      ) : tiktok.pendingCatalogs.length > 0 ? (
-        <CatalogSelect
-          label={t("adsCatalog.tiktokSelectCatalog")}
-          catalogs={tiktok.pendingCatalogs.map((c) => ({
-            id: c.id,
-            label: c.isShopifyOfficial
-              ? `${c.name || c.id} (${t("adsCatalog.tiktokModeOfficialShort")})`
-              : c.name || c.id,
-          }))}
-          busy={busy}
-          onSelect={(id) => void post("/api/ads-catalog/tiktok-catalogs", { catalogId: id })}
-        />
-      ) : tiktok.awaitingCatalog ? (
+      ) : tiktok.authorized ? (
         <>
           <div style={{ fontSize: 13 }}>
             <div style={{ color: "#0f7a52", fontWeight: 600 }}>
-              {t("adsCatalog.tiktokAuthorizedNoCatalog")}
+              {tiktok.pendingCatalogs.length > 0
+                ? t("adsCatalog.tiktokSelectCatalog")
+                : t("adsCatalog.tiktokAuthorizedNoCatalog")}
             </div>
             {tiktok.advertiserId && (
               <div>
                 {t("adsCatalog.tiktokAdvertiserId", { id: tiktok.advertiserId })}
               </div>
             )}
-            <p style={pageHintTextStyle}>{t("adsCatalog.tiktokNoCatalogHint")}</p>
+            {tiktok.awaitingCatalog && (
+              <p style={pageHintTextStyle}>{t("adsCatalog.tiktokNoCatalogHint")}</p>
+            )}
           </div>
+          <TiktokCatalogPicker
+            variant="credentials"
+            locationSearch={locationSearch}
+            boundCatalogId={tiktok.catalogId}
+            boundBindingMode={tiktok.bindingMode}
+            onChanged={onChanged}
+          />
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button
               type="button"
@@ -243,14 +220,6 @@ export function TiktokConnectPanels({
               onClick={() => void createAndBindCatalog()}
             >
               {t("adsCatalog.tiktokCreateCatalog")}
-            </button>
-            <button
-              type="button"
-              style={secondaryBtn}
-              disabled={busy}
-              onClick={() => void refreshCatalogs()}
-            >
-              {t("adsCatalog.tiktokRefreshCatalogs")}
             </button>
             <button type="button" style={secondaryBtn} disabled={busy} onClick={openOAuth}>
               {t("adsCatalog.tiktokReauth")}
@@ -275,52 +244,6 @@ export function TiktokConnectPanels({
           </div>
         </>
       )}
-    </div>
-  );
-}
-
-function CatalogSelect({
-  label,
-  catalogs,
-  busy,
-  onSelect,
-}: {
-  label: string;
-  catalogs: Array<{ id: string; label: string }>;
-  busy: boolean;
-  onSelect: (id: string) => void;
-}) {
-  const { t } = useTranslation();
-  const [selected, setSelected] = useState(catalogs[0]?.id ?? "");
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ fontWeight: 600, fontSize: 13 }}>{label}</div>
-      <select
-        value={selected}
-        onChange={(e) => setSelected(e.target.value)}
-        style={{
-          padding: "10px 12px",
-          borderRadius: 8,
-          border: `1px solid ${pageColorTokens.borderInput}`,
-          fontSize: 13,
-        }}
-      >
-        {catalogs.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.label}
-          </option>
-        ))}
-      </select>
-      <div>
-        <button
-          type="button"
-          style={primaryBtn}
-          disabled={busy || !selected}
-          onClick={() => onSelect(selected)}
-        >
-          {t("adsCatalog.confirmSelection")}
-        </button>
-      </div>
     </div>
   );
 }

@@ -1,10 +1,42 @@
-import type { ActionFunctionArgs } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import {
-  clearTiktokCatalogPending,
+  getTiktokCatalogCredential,
   getTiktokCatalogPending,
-  setTiktokCatalogCredential,
 } from "../server/adsCatalog/credentialStore.server";
+import {
+  bindTiktokCatalogForShop,
+  listTiktokCatalogsForShop,
+} from "../server/adsCatalog/tiktokListCatalogs.server";
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const shop = session.shop;
+
+  const credential = await getTiktokCatalogCredential(shop);
+  const pending = await getTiktokCatalogPending(shop);
+  if (!credential && !pending) {
+    return Response.json(
+      { ok: false, error: "请先完成 TikTok 授权" },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const catalogs = await listTiktokCatalogsForShop(shop);
+    return Response.json({
+      ok: true,
+      catalogs,
+      boundCatalogId: credential?.catalogId ?? "",
+      bindingMode: credential?.bindingMode ?? "",
+    });
+  } catch (e) {
+    return Response.json(
+      { ok: false, error: e instanceof Error ? e.message : "Failed to list TikTok catalogs" },
+      { status: 500 },
+    );
+  }
+};
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
@@ -26,64 +58,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return Response.json({ ok: false, error: "catalogId is required" }, { status: 400 });
   }
 
-  const pending = await getTiktokCatalogPending(shop);
-  if (!pending) {
-    return Response.json(
-      { ok: false, error: "No pending TikTok authorization found. Please re-authorize." },
-      { status: 400 },
-    );
-  }
-
-  // pending.accounts：新格式 businessId=bc_id + advertiserId；旧格式仅 businessId=advertiserId。
-  const selectedEntry = pending.accounts.find((a) => a.id === catalogId);
-  const explicitAdvertiserId =
-    selectedEntry?.advertiserId?.trim() ||
-    pending.advertiserId?.trim() ||
-    pending.accounts[0]?.advertiserId?.trim() ||
-    "";
-  const bcId = explicitAdvertiserId
-    ? selectedEntry?.businessId?.trim() ||
-      pending.bcId?.trim() ||
-      pending.accounts[0]?.businessId?.trim() ||
-      ""
-    : "";
-  const advertiserId =
-    explicitAdvertiserId ||
-    selectedEntry?.businessId?.trim() ||
-    pending.accounts[0]?.businessId?.trim() ||
-    "";
-
-  if (!advertiserId) {
-    return Response.json(
-      { ok: false, error: "Cannot determine advertiserId for selected catalog." },
-      { status: 400 },
-    );
-  }
-  if (!bcId) {
-    return Response.json(
-      {
-        ok: false,
-        error: "缺少 bc_id，请重新授权 TikTok 后再选择 Catalog。",
-      },
-      { status: 400 },
-    );
-  }
-
-  const bindingMode =
-    selectedEntry?.isShopifyOfficial === true ? "shopify_official" : "api_managed";
-
   try {
-    await clearTiktokCatalogPending(shop);
-    await setTiktokCatalogCredential(shop, {
-      accessToken: pending.accessToken,
-      refreshToken: pending.refreshToken,
-      advertiserId,
-      bcId,
-      catalogId,
-      catalogName: selectedEntry?.name,
-      bindingMode,
+    const result = await bindTiktokCatalogForShop(shop, catalogId);
+    return Response.json({
+      ok: true,
+      catalogId: result.catalogId,
+      catalogName: result.catalogName,
+      bindingMode: result.bindingMode,
+      unchanged: result.unchanged === true,
     });
-    return Response.json({ ok: true, bindingMode });
   } catch (e) {
     return Response.json(
       { ok: false, error: e instanceof Error ? e.message : "Failed to save credential" },

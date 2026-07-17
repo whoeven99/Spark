@@ -16,6 +16,7 @@ import { AdsCatalogTaskDetailPage } from "../component/adsCatalog/AdsCatalogTask
 import { GoogleConnectPanels } from "../component/adsCatalog/GoogleConnectPanels";
 import { MetaConnectPanels } from "../component/adsCatalog/MetaConnectPanels";
 import { TiktokConnectPanels } from "../component/adsCatalog/TiktokConnectPanels";
+import { TiktokCatalogPicker } from "../component/adsCatalog/TiktokCatalogPicker";
 import {
   GoogleFeedFilters,
   parseList,
@@ -536,6 +537,16 @@ export function AdsCatalogPage() {
                 </button>
               </div>
             </div>
+
+            {platform === "tiktok" && credentials.tiktok.connected && (
+              <TiktokCatalogPicker
+                variant="sync"
+                locationSearch={locationSearch}
+                boundCatalogId={credentials.tiktok.catalogId}
+                boundBindingMode={credentials.tiktok.bindingMode}
+                onChanged={() => revalidator.revalidate()}
+              />
+            )}
 
             <div>
               <label style={pageFieldLabelStyle}>{t("adsCatalog.fieldProductIds")}</label>
