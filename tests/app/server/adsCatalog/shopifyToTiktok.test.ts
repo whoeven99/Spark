@@ -52,3 +52,30 @@ describe("mapShopifyToTiktok availability", () => {
     expect(result.item.availability).toBe("OUT_OF_STOCK");
   });
 });
+
+describe("mapShopifyToTiktok price_info", () => {
+  it("maps Shopify price into ECOM-required price_info object", () => {
+    const result = mapShopifyToTiktok(
+      baseProduct({ priceAmount: "19.9", priceCurrency: "usd" }),
+      mapContext,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.item.price_info).toEqual({ price: 19.9, currency: "USD" });
+    expect(result.item).not.toHaveProperty("price");
+  });
+
+  it("skips products without price or currency", () => {
+    const missingAmount = mapShopifyToTiktok(
+      baseProduct({ priceAmount: null, priceCurrency: "USD" }),
+      mapContext,
+    );
+    expect(missingAmount).toMatchObject({ ok: false, reason: "missing price" });
+
+    const missingCurrency = mapShopifyToTiktok(
+      baseProduct({ priceAmount: "10.00", priceCurrency: null }),
+      { shopDomain: "example.myshopify.com" },
+    );
+    expect(missingCurrency).toMatchObject({ ok: false, reason: "missing price" });
+  });
+});

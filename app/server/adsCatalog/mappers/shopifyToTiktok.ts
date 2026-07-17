@@ -3,11 +3,19 @@ import { stripHtml } from "../productFetcher.server";
 
 /**
  * TikTok Catalog product payload (JSON upload schema).
- * Field names follow Catalog Product Parameters:
- * https://ads.tiktok.com/help/article/catalog-product-parameters
+ * ECOM catalogs require structured `price_info` on product/upload（不是 feed 的 "9.99 USD" 字符串）。
  * API: POST /open_api/v1.3/catalog/product/upload/
  * @see https://business-api.tiktok.com/portal/docs?id=1740568340498434
+ * Feed 字段说明（供对照）：https://ads.tiktok.com/help/article/catalog-product-parameters
  */
+export interface TiktokPriceInfo {
+  /** 商品价格（数值，非 "9.99 USD" 拼接串） */
+  price: number;
+  /** ISO 4217，如 USD */
+  currency: string;
+  sale_price?: number;
+}
+
 export interface TiktokCatalogItem {
   sku_id: string;
   title: string;
@@ -15,8 +23,8 @@ export interface TiktokCatalogItem {
   /** TikTok Catalog Product Parameters（大写下划线枚举，不同于 Google/Meta 的 "in stock"） */
   availability: "IN_STOCK" | "OUT_OF_STOCK" | "PREORDER";
   condition: "new" | "refurbished" | "used";
-  /** e.g. "9.99 USD" */
-  price: string;
+  /** ECOM Catalog JSON upload 必填 */
+  price_info: TiktokPriceInfo;
   link: string;
   image_link: string;
   brand: string;
@@ -88,7 +96,10 @@ export function mapShopifyToTiktok(
     description: description.slice(0, 5000),
     availability: inStock ? "IN_STOCK" : "OUT_OF_STOCK",
     condition: "new",
-    price: `${Number(priceAmount).toFixed(2)} ${priceCurrency.toUpperCase()}`,
+    price_info: {
+      price: Number(Number(priceAmount).toFixed(2)),
+      currency: priceCurrency.toUpperCase(),
+    },
     link,
     image_link: imageLink,
     brand: brand.slice(0, 100),
