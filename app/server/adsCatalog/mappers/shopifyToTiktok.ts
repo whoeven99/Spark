@@ -12,7 +12,8 @@ export interface TiktokCatalogItem {
   sku_id: string;
   title: string;
   description: string;
-  availability: "in stock" | "out of stock" | "preorder";
+  /** TikTok Catalog Product Parameters（大写下划线枚举，不同于 Google/Meta 的 "in stock"） */
+  availability: "IN_STOCK" | "OUT_OF_STOCK" | "PREORDER";
   condition: "new" | "refurbished" | "used";
   /** e.g. "9.99 USD" */
   price: string;
@@ -85,7 +86,7 @@ export function mapShopifyToTiktok(
     sku_id: skuId,
     title: product.title.slice(0, 255),
     description: description.slice(0, 5000),
-    availability: inStock ? "in stock" : "out of stock",
+    availability: inStock ? "IN_STOCK" : "OUT_OF_STOCK",
     condition: "new",
     price: `${Number(priceAmount).toFixed(2)} ${priceCurrency.toUpperCase()}`,
     link,
