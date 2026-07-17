@@ -8,6 +8,7 @@ import {
 import { LogViewer } from "../aiTask/LogViewer";
 import { TaskStatusBadge } from "../aiTask/TaskStatusBadge";
 import type {
+  AdsCatalogPlatform,
   AdsCatalogSyncTaskResult,
   AITaskItem,
   AITaskStatus,
@@ -26,6 +27,23 @@ function readResult(task: AITaskItem): AdsCatalogSyncTaskResult | null {
   return r as unknown as AdsCatalogSyncTaskResult;
 }
 
+function readPlatform(task: AITaskItem, result: AdsCatalogSyncTaskResult | null): AdsCatalogPlatform {
+  const fromConfig = (task.config as Record<string, unknown>)?.platform;
+  if (fromConfig === "google" || fromConfig === "tiktok" || fromConfig === "facebook") {
+    return fromConfig;
+  }
+  if (result?.platform === "google" || result?.platform === "tiktok" || result?.platform === "facebook") {
+    return result.platform;
+  }
+  return "facebook";
+}
+
+function platformLabelKey(platform: AdsCatalogPlatform): string {
+  if (platform === "google") return "adsCatalog.platformGoogle";
+  if (platform === "tiktok") return "adsCatalog.platformTiktok";
+  return "adsCatalog.platformFacebook";
+}
+
 const sectionStyle = {
   border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusCard,
@@ -40,11 +58,8 @@ const sectionStyle = {
 export function AdsCatalogTaskDetailPage({ task, locationSearch, onBack }: Props) {
   const { t, i18n } = useTranslation();
   const result = readResult(task);
-  const platform =
-    (task.config as Record<string, unknown>)?.platform === "google" ? "google" : "facebook";
-  const platformLabel = t(
-    platform === "facebook" ? "adsCatalog.platformFacebook" : "adsCatalog.platformGoogle",
-  );
+  const platform = readPlatform(task, result);
+  const platformLabel = t(platformLabelKey(platform));
 
   const displayStatus = useMemo((): AITaskStatus => {
     if (task.status === "succeeded" && result && result.succeeded === 0 && result.failed > 0) {

@@ -2,23 +2,25 @@ import type { RawShopifyProductForCatalog } from "../productFetcher.server";
 import { stripHtml } from "../productFetcher.server";
 
 /**
- * TikTok for Business Catalog product item payload.
+ * TikTok Catalog product payload (JSON upload schema).
+ * Field names follow Catalog Product Parameters:
+ * https://ads.tiktok.com/help/article/catalog-product-parameters
+ * API: POST /open_api/v1.3/catalog/product/upload/
  * @see https://business-api.tiktok.com/portal/docs?id=1740568340498434
  */
 export interface TiktokCatalogItem {
-  item_id: string;
+  sku_id: string;
   title: string;
   description: string;
-  availability: "IN_STOCK" | "OUT_OF_STOCK" | "PREORDER";
+  availability: "in stock" | "out of stock" | "preorder";
+  condition: "new" | "refurbished" | "used";
+  /** e.g. "9.99 USD" */
   price: string;
-  currency: string;
   link: string;
-  image_urls: string[];
-  brand?: string;
-  condition: "NEW" | "REFURBISHED" | "USED";
-  additional_image_urls?: string[];
+  image_link: string;
+  brand: string;
+  additional_image_link?: string;
   google_product_category?: string;
-  custom_number_0?: number;
 }
 
 export interface MappedTiktokEntry {
@@ -61,6 +63,11 @@ export function mapShopifyToTiktok(
     return { productId: product.id, ok: false, reason: "missing price" };
   }
 
+  const brand = (product.vendor || context.brand || "").trim();
+  if (!brand) {
+    return { productId: product.id, ok: false, reason: "missing brand" };
+  }
+
   const inStock =
     product.availableForSale === true ||
     (product.inventoryQuantity != null && product.inventoryQuantity > 0);
@@ -72,33 +79,26 @@ export function mapShopifyToTiktok(
     .filter((url): url is string => Boolean(url) && url !== imageLink)
     .slice(0, 9);
 
-  const itemId = product.sku || extractNumericId(product.id);
+  const skuId = product.sku || extractNumericId(product.id);
 
   const item: TiktokCatalogItem = {
-    item_id: itemId,
+    sku_id: skuId,
     title: product.title.slice(0, 255),
     description: description.slice(0, 5000),
-    availability: inStock ? "IN_STOCK" : "OUT_OF_STOCK",
-    price: Number(priceAmount).toFixed(2),
-    currency: priceCurrency.toUpperCase(),
+    availability: inStock ? "in stock" : "out of stock",
+    condition: "new",
+    price: `${Number(priceAmount).toFixed(2)} ${priceCurrency.toUpperCase()}`,
     link,
-    image_urls: [imageLink],
-    condition: "NEW",
+    image_link: imageLink,
+    brand: brand.slice(0, 100),
   };
 
   if (additionalImages.length > 0) {
-    item.additional_image_urls = additionalImages;
+    item.additional_image_link = additionalImages.join(",");
   }
-
-  const brand = product.vendor || context.brand;
-  if (brand) item.brand = brand.slice(0, 100);
 
   if (product.googleProductCategory) {
     item.google_product_category = product.googleProductCategory;
-  }
-
-  if (product.inventoryQuantity != null && product.inventoryQuantity >= 0) {
-    item.custom_number_0 = product.inventoryQuantity;
   }
 
   return { productId: product.id, ok: true, item };

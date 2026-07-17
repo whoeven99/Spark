@@ -8,6 +8,7 @@ import {
 } from "../aiTask/AITaskCardShell";
 import { elapsedSecondsSince } from "../aiTask/LogViewer";
 import type {
+  AdsCatalogPlatform,
   AdsCatalogSyncTaskResult,
   AITaskItem,
   AITaskStatus,
@@ -27,9 +28,23 @@ type Props = {
   deleting: boolean;
 };
 
-function readPlatform(task: AITaskItem): "facebook" | "google" {
+function readPlatform(task: AITaskItem): AdsCatalogPlatform {
   const platform = (task.config as Record<string, unknown>)?.platform;
-  return platform === "google" ? "google" : "facebook";
+  if (platform === "google" || platform === "tiktok" || platform === "facebook") {
+    return platform;
+  }
+  // Prefer result.platform when config is missing/legacy.
+  const fromResult = (task.result as Record<string, unknown> | null)?.platform;
+  if (fromResult === "google" || fromResult === "tiktok" || fromResult === "facebook") {
+    return fromResult;
+  }
+  return "facebook";
+}
+
+function platformLabelKey(platform: AdsCatalogPlatform): string {
+  if (platform === "google") return "adsCatalog.platformGoogle";
+  if (platform === "tiktok") return "adsCatalog.platformTiktok";
+  return "adsCatalog.platformFacebook";
 }
 
 function readTotal(task: AITaskItem): number | null {
@@ -99,9 +114,7 @@ export function AdsCatalogTaskCard({
   const total = readTotal(task);
   const result = readResult(task);
   const effectiveStatus = getEffectiveStatus(task, localStatus);
-  const platformLabel = t(
-    platform === "facebook" ? "adsCatalog.platformFacebook" : "adsCatalog.platformGoogle",
-  );
+  const platformLabel = t(platformLabelKey(platform));
 
   const primaryCopy = useMemo(() => {
     if (effectiveStatus === "running") {

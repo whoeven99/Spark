@@ -7,21 +7,23 @@ export interface TiktokBatchResult {
   totalRequested: number;
   totalProcessed: number;
   errors: Array<{ id: string; reason: string }>;
+  feedLogId?: string;
 }
 
 /**
- * Push a batch of catalog items to TikTok for Business Catalog API
- * (batch create or update).
+ * Push a batch of catalog items to TikTok Catalog API.
  *
  * Endpoint:
- *   POST /open_api/v1.3/catalog/product/batch_create_or_update/
+ *   POST /open_api/v1.3/catalog/product/upload/
  *   Header: Access-Token
- *   Body: { bc_id?, advertiser_id, catalog_id, items: [...] }
+ *   Body: { bc_id, catalog_id, products: [...] }
+ *
+ * Same sku_id replaces an existing product (upsert semantics).
  */
 export async function upsertTiktokCatalogItems(params: {
   accessToken: string;
   advertiserId: string;
-  bcId?: string;
+  bcId: string;
   catalogId: string;
   items: TiktokCatalogItem[];
 }): Promise<TiktokBatchResult> {
@@ -31,7 +33,7 @@ export async function upsertTiktokCatalogItems(params: {
     errors: [],
   };
 
-  const url = `${TIKTOK_API_BASE}/catalog/product/batch_create_or_update/`;
+  const url = `${TIKTOK_API_BASE}/catalog/product/upload/`;
 
   for (let offset = 0; offset < params.items.length; offset += ITEMS_BATCH_CHUNK) {
     const chunk = params.items.slice(offset, offset + ITEMS_BATCH_CHUNK);
@@ -45,22 +47,32 @@ export async function upsertTiktokCatalogItems(params: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          ...(params.bcId ? { bc_id: params.bcId } : {}),
-          advertiser_id: params.advertiserId,
+          bc_id: params.bcId,
           catalog_id: params.catalogId,
-          items: chunk,
+          // advertiser_id is accepted by some catalog APIs; keep for compatibility.
+          advertiser_id: params.advertiserId,
+          products: chunk,
         }),
       });
     } catch (e) {
       const reason = `network error: ${e instanceof Error ? e.message : String(e)}`;
       for (const item of chunk) {
-        result.errors.push({ id: item.item_id, reason });
+        result.errors.push({ id: item.sku_id, reason });
       }
       continue;
     }
 
     const text = await response.text();
-    let payload: { code?: number; message?: string; data?: { failed_item_ids?: string[] } } = {};
+    let payload: {
+      code?: number;
+      message?: string;
+      request_id?: string;
+      data?: {
+        failed_sku_ids?: string[];
+        failed_item_ids?: string[];
+        feed_log_id?: string | number;
+      };
+    } = {};
     try {
       payload = text ? (JSON.parse(text) as typeof payload) : {};
     } catch {
@@ -68,18 +80,28 @@ export async function upsertTiktokCatalogItems(params: {
     }
 
     if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {
-      const reason =
-        payload.message || `HTTP ${response.status} ${text.slice(0, 200)}`;
+      const apiPart =
+        payload.code !== undefined
+          ? `code=${payload.code}${payload.message ? ` ${payload.message}` : ""}`
+          : payload.message || text.slice(0, 200) || response.statusText;
+      const reason = `TikTok Catalog upload failed: HTTP ${response.status}${apiPart ? ` ${apiPart}` : ""}`;
       for (const item of chunk) {
-        result.errors.push({ id: item.item_id, reason });
+        result.errors.push({ id: item.sku_id, reason });
       }
       continue;
     }
 
-    const failedIds = new Set(payload.data?.failed_item_ids ?? []);
+    if (payload.data?.feed_log_id != null && !result.feedLogId) {
+      result.feedLogId = String(payload.data.feed_log_id);
+    }
+
+    const failedIds = new Set([
+      ...(payload.data?.failed_sku_ids ?? []),
+      ...(payload.data?.failed_item_ids ?? []),
+    ]);
     for (const item of chunk) {
-      if (failedIds.has(item.item_id)) {
-        result.errors.push({ id: item.item_id, reason: "rejected by TikTok Catalog API" });
+      if (failedIds.has(item.sku_id)) {
+        result.errors.push({ id: item.sku_id, reason: "rejected by TikTok Catalog API" });
       } else {
         result.totalProcessed += 1;
       }
