@@ -48,6 +48,11 @@ describe("ensureTiktokApiManagedCatalog", () => {
     fetchTiktokCatalogConf.mockReset();
     listAccessibleBcIds.mockReset();
     fetchShopBasicInfo.mockReset();
+    fetchShopBasicInfo.mockResolvedValue({
+      name: "Demo",
+      currencyCode: "USD",
+      countryCode: "US",
+    });
   });
 
   it("returns existing api_managed catalog when catalog/get confirms CLIENT channel", async () => {
@@ -62,6 +67,7 @@ describe("ensureTiktokApiManagedCatalog", () => {
     fetchTiktokCatalogConf.mockResolvedValue({
       catalogId: "cat-api",
       channel: "CLIENT",
+      regionCode: "US",
       isShopifyOfficial: false,
     });
 
@@ -97,7 +103,11 @@ describe("ensureTiktokApiManagedCatalog", () => {
       isShopifyOfficial: false,
     });
     getTiktokCatalogPending.mockResolvedValue(null);
-    fetchShopBasicInfo.mockResolvedValue({ name: "Demo", currencyCode: "EUR" });
+    fetchShopBasicInfo.mockResolvedValue({
+      name: "Demo",
+      currencyCode: "EUR",
+      countryCode: "NL",
+    });
     createTiktokCatalog.mockResolvedValue({
       catalogId: "cat-new",
       catalogName: "Spark Catalog — Demo",
@@ -110,7 +120,55 @@ describe("ensureTiktokApiManagedCatalog", () => {
 
     expect(result.created).toBe(true);
     expect(result.catalogId).toBe("cat-new");
-    expect(createTiktokCatalog).toHaveBeenCalled();
+    expect(createTiktokCatalog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currency: "EUR",
+        countryCode: "NL",
+      }),
+    );
+  });
+
+  it("creates a new catalog when region mismatches shop country", async () => {
+    getTiktokCatalogCredential.mockResolvedValue({
+      accessToken: "tok",
+      refreshToken: "rt",
+      advertiserId: "adv",
+      bcId: "bc",
+      catalogId: "cat-de",
+      catalogName: "Spark Catalog — Demo",
+      bindingMode: "api_managed",
+    });
+    fetchTiktokCatalogConf.mockResolvedValue({
+      catalogId: "cat-de",
+      channel: "CLIENT",
+      regionCode: "DE",
+      currency: "EUR",
+      isShopifyOfficial: false,
+    });
+    getTiktokCatalogPending.mockResolvedValue(null);
+    fetchShopBasicInfo.mockResolvedValue({
+      name: "Demo",
+      currencyCode: "EUR",
+      countryCode: "NL",
+    });
+    createTiktokCatalog.mockResolvedValue({
+      catalogId: "cat-nl",
+      catalogName: "Spark Catalog — Demo",
+    });
+
+    const result = await ensureTiktokApiManagedCatalog({
+      shop: "demo.myshopify.com",
+      admin: { graphql: vi.fn() },
+    });
+
+    expect(result.created).toBe(true);
+    expect(result.catalogId).toBe("cat-nl");
+    expect(createTiktokCatalog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currency: "EUR",
+        countryCode: "NL",
+      }),
+    );
   });
 
   it("creates a new catalog when api_managed binding has non-CLIENT channel", async () => {

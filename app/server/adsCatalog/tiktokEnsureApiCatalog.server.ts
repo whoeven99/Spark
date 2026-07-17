@@ -3,6 +3,7 @@ import {
   createTiktokCatalog,
   fetchTiktokCatalogConf,
   isApiWritableTiktokCatalog,
+  resolveTiktokCatalogRegion,
 } from "./clients/tiktokCatalogClient.server";
 import {
   clearTiktokCatalogPending,
@@ -32,6 +33,12 @@ export async function ensureTiktokApiManagedCatalog(params: {
   admin: ShopifyAdminGraphqlClient;
 }): Promise<EnsureTiktokApiCatalogResult> {
   console.info(`${LOG_PREFIX} step=ensure_start shop=${params.shop}`);
+  const shopInfo = await fetchShopBasicInfo(params.admin);
+  const expectedRegion = resolveTiktokCatalogRegion(
+    shopInfo?.currencyCode,
+    shopInfo?.countryCode,
+  ).regionCode;
+
   const credential = await getTiktokCatalogCredential(params.shop);
   if (credential?.bindingMode === "api_managed" && credential.catalogId) {
     const accessToken = credential.accessToken.trim();
@@ -42,9 +49,10 @@ export async function ensureTiktokApiManagedCatalog(params: {
         bcId,
         catalogId: credential.catalogId,
       });
-      if (conf && isApiWritableTiktokCatalog(conf)) {
+      const regionOk = !conf?.regionCode || conf.regionCode === expectedRegion;
+      if (conf && isApiWritableTiktokCatalog(conf) && regionOk) {
         console.info(
-          `${LOG_PREFIX} step=ensure_reuse shop=${params.shop} catalogId=${credential.catalogId} catalogName=${credential.catalogName ?? ""} channel=${conf.channel ?? ""}`,
+          `${LOG_PREFIX} step=ensure_reuse shop=${params.shop} catalogId=${credential.catalogId} catalogName=${credential.catalogName ?? ""} channel=${conf.channel ?? ""} region=${conf.regionCode ?? ""} expectedRegion=${expectedRegion}`,
         );
         return {
           catalogId: credential.catalogId,
@@ -54,7 +62,7 @@ export async function ensureTiktokApiManagedCatalog(params: {
         };
       }
       console.info(
-        `${LOG_PREFIX} step=ensure_force_recreate shop=${params.shop} catalogId=${credential.catalogId} channel=${conf?.channel ?? ""} isShopifyOfficial=${conf?.isShopifyOfficial ?? false} confFound=${Boolean(conf)}`,
+        `${LOG_PREFIX} step=ensure_force_recreate shop=${params.shop} catalogId=${credential.catalogId} channel=${conf?.channel ?? ""} region=${conf?.regionCode ?? ""} expectedRegion=${expectedRegion} isShopifyOfficial=${conf?.isShopifyOfficial ?? false} confFound=${Boolean(conf)}`,
       );
     } else {
       console.info(
@@ -92,16 +100,16 @@ export async function ensureTiktokApiManagedCatalog(params: {
     throw new Error("缺少 bc_id，请重新授权 TikTok。");
   }
 
-  const shopInfo = await fetchShopBasicInfo(params.admin);
   const shopLabel = (shopInfo?.name || params.shop.split(".")[0] || "Store").slice(0, 40);
   console.info(
-    `${LOG_PREFIX} step=ensure_create shop=${params.shop} bcId=${bcId} advertiserId=${advertiserId} currency=${shopInfo?.currencyCode ?? ""} name=${JSON.stringify(`Spark Catalog — ${shopLabel}`)}`,
+    `${LOG_PREFIX} step=ensure_create shop=${params.shop} bcId=${bcId} advertiserId=${advertiserId} currency=${shopInfo?.currencyCode ?? ""} country=${shopInfo?.countryCode ?? ""} region=${expectedRegion} name=${JSON.stringify(`Spark Catalog — ${shopLabel}`)}`,
   );
   const created = await createTiktokCatalog({
     accessToken,
     bcId,
     name: `Spark Catalog — ${shopLabel}`,
     currency: shopInfo?.currencyCode,
+    countryCode: shopInfo?.countryCode,
   });
 
   if (pending) {

@@ -192,12 +192,19 @@ const CURRENCY_TO_REGION: Record<string, string> = {
   MXN: "MX",
 };
 
-/** 由店铺币种推断 Catalog 创建所需 currency + region_code。 */
-export function resolveTiktokCatalogRegion(currencyCode?: string): {
+/** 由店铺币种 + 国家推断 Catalog 创建所需 currency + region_code；国家优先于币种默认表。 */
+export function resolveTiktokCatalogRegion(
+  currencyCode?: string,
+  countryCode?: string,
+): {
   currency: string;
   regionCode: string;
 } {
   const currency = (currencyCode || "USD").trim().toUpperCase() || "USD";
+  const country = countryCode?.trim().toUpperCase() ?? "";
+  if (/^[A-Z]{2}$/.test(country)) {
+    return { currency, regionCode: country };
+  }
   return {
     currency,
     regionCode: CURRENCY_TO_REGION[currency] || "US",
@@ -226,9 +233,14 @@ export async function createTiktokCatalog(params: {
   bcId: string;
   name: string;
   currency?: string;
+  /** 店铺国家（ISO2），优先于币种默认区域。 */
+  countryCode?: string;
   regionCode?: string;
 }): Promise<CreateTiktokCatalogResult> {
-  const { currency, regionCode } = resolveTiktokCatalogRegion(params.currency);
+  const { currency, regionCode } = resolveTiktokCatalogRegion(
+    params.currency,
+    params.countryCode,
+  );
   const region = (params.regionCode || regionCode).trim().toUpperCase() || regionCode;
   const name = params.name.trim() || "Spark Catalog";
 

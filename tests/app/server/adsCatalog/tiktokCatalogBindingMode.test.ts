@@ -100,6 +100,33 @@ describe("createTiktokCatalog", () => {
   it("resolveTiktokCatalogRegion maps currency to region", () => {
     expect(resolveTiktokCatalogRegion("gbp")).toEqual({ currency: "GBP", regionCode: "GB" });
     expect(resolveTiktokCatalogRegion()).toEqual({ currency: "USD", regionCode: "US" });
+    expect(resolveTiktokCatalogRegion("eur", "nl")).toEqual({ currency: "EUR", regionCode: "NL" });
+    expect(resolveTiktokCatalogRegion("EUR")).toEqual({ currency: "EUR", regionCode: "DE" });
+  });
+
+  it("posts catalog/create with shop country as region when provided", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      text: async () => JSON.stringify({ code: 0, data: { catalog_id: "1001" } }),
+    });
+
+    await createTiktokCatalog({
+      accessToken: "tok",
+      bcId: "bc-1",
+      name: "Spark Catalog — NL Shop",
+      currency: "EUR",
+      countryCode: "NL",
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+    expect(body).toMatchObject({
+      catalog_conf: {
+        currency: "EUR",
+        region_code: "NL",
+        channel: "CLIENT",
+      },
+    });
   });
 
   it("posts catalog/create with ECOM and CLIENT channel", async () => {
