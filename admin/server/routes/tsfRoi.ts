@@ -114,14 +114,12 @@ tsfRoiRouter.get("/", async (_req, res) => {
   try {
     const db = getTsfDb();
     const windowDays = 30;
-    const since = new Date(Date.now() - windowDays * 86_400_000).toISOString();
 
     const [
       bindingResult,
       installedResult,
       activeSubsResult,
       mrrResult,
-      packResult,
       autoShopsResult,
       everSubscribedResult,
       payingNoAutoResult,
@@ -146,27 +144,13 @@ tsfRoiRouter.get("/", async (_req, res) => {
               WHEN pc.billingInterval = 'ANNUAL'  THEN CAST(pc.priceAmount AS REAL) / 12.0
               ELSE 0
             END
-          ) as mrr,
-          COUNT(DISTINCT sub.shop) as payingCustomers
+          ) as mrr
         FROM AppSubscription sub
         INNER JOIN PlanCatalog pc ON sub.planKey = pc.planKey
         WHERE sub.status = 'ACTIVE'
           AND pc.kind = 'SUBSCRIPTION'
           AND CAST(pc.priceAmount AS REAL) > 0
       `),
-      db.execute({
-        sql: `
-          SELECT
-            COALESCE(SUM(CAST(pc.priceAmount AS REAL)), 0) as packRevenue,
-            COUNT(DISTINCT bl.shop) as packShops
-          FROM BillingLog bl
-          INNER JOIN PlanCatalog pc ON bl.planKey = pc.planKey
-          WHERE bl.eventType = 'TOKEN_PACK_PURCHASED'
-            AND bl.createdAt >= ?
-            AND CAST(pc.priceAmount AS REAL) > 0
-        `,
-        args: [since],
-      }),
       db.execute(`
         SELECT COUNT(DISTINCT shop) as total
         FROM ShopTargetLocale
@@ -207,9 +191,6 @@ tsfRoiRouter.get("/", async (_req, res) => {
     const uninstalled = Math.max(0, installTotal - retained);
     const activeSubs = Number(activeSubsResult.rows[0]?.total ?? 0);
     const mrr = Number(mrrResult.rows[0]?.mrr ?? 0);
-    const payingCustomers = Number(mrrResult.rows[0]?.payingCustomers ?? 0);
-    const arpu = payingCustomers > 0 ? mrr / payingCustomers : 0;
-    const packRevenue30d = Number(packResult.rows[0]?.packRevenue ?? 0);
     const autoShops = Number(autoShopsResult.rows[0]?.total ?? 0);
     const everSubscribed = Number(everSubscribedResult.rows[0]?.total ?? 0);
 
@@ -352,6 +333,7 @@ tsfRoiRouter.get("/", async (_req, res) => {
       },
     };
 
+    /** 总览只保留主链路 + MRR；明细见 funnel / chainRates / 翻译收入页 */
     const overview: RoiMetric[] = [
       {
         key: "install_total",
@@ -377,7 +359,7 @@ tsfRoiRouter.get("/", async (_req, res) => {
         key: "retained",
         label: "留存（在装）",
         value: retained,
-        display: String(retained),
+        display: `${retained}（${pct(rate(retained, installTotal))}）`,
         wired: true,
         source: "turso",
         howto: null,
@@ -392,26 +374,17 @@ tsfRoiRouter.get("/", async (_req, res) => {
         howto: null,
       },
       {
-        key: "ever_subscribed_rate",
-        label: "安装→曾订阅",
-        value: rate(everSubscribed, installTotal),
-        display: pct(rate(everSubscribed, installTotal)),
-        wired: true,
-        source: "turso",
-        howto: null,
-      },
-      {
         key: "active_subs",
-        label: "订阅数 ACTIVE",
+        label: "订阅中",
         value: activeSubs,
-        display: String(activeSubs),
+        display: `${activeSubs}（曾订 ${everSubscribed}）`,
         wired: true,
         source: "turso",
         howto: null,
       },
       {
         key: "auto_shops",
-        label: "开启自动更新",
+        label: "已开自动更新",
         value: autoShops,
         display: String(autoShops),
         wired: true,
@@ -426,43 +399,6 @@ tsfRoiRouter.get("/", async (_req, res) => {
         wired: true,
         source: "turso",
         howto: null,
-      },
-      {
-        key: "pack_30d",
-        label: `加量包收入 (${windowDays}d)`,
-        value: packRevenue30d,
-        display: usd(packRevenue30d),
-        wired: true,
-        source: "turso",
-        howto: null,
-      },
-      {
-        key: "arpu",
-        label: "付费 ARPU",
-        value: arpu,
-        display: usd(arpu),
-        wired: true,
-        source: "turso",
-        howto: null,
-      },
-      {
-        key: "llm_cost",
-        label: `LLM 成本 (${windowDays}d)`,
-        value: null,
-        display: "—",
-        wired: false,
-        source: "sls",
-        howto:
-          "TSF Worker 任务结束写 SLS topic=tsf:cost（shop/jobId/model/tokens/costUsd），Admin GetLogs 聚合。",
-      },
-      {
-        key: "gross_margin",
-        label: "估毛利率",
-        value: null,
-        display: "—",
-        wired: false,
-        source: "sls",
-        howto: "收入(Turso) − LLM成本(SLS) − 基建分摊后计算；(收入−成本)/收入。",
       },
     ];
 

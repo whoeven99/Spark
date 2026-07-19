@@ -259,16 +259,34 @@ export default function TsfRoi() {
       <Typography.Title level={5} style={{ marginTop: 0 }}>
         总览
       </Typography.Title>
-      <Row gutter={[12, 12]} style={{ marginBottom: 8 }}>
+      <Typography.Text
+        type="secondary"
+        style={{ display: "block", marginBottom: 8, fontSize: 12 }}
+      >
+        安装 → 试用/起步 → 留存/卸载 → 订阅/自动更新；加量包、ARPU、成本见下方链路或「翻译
+        收入」页。
+      </Typography.Text>
+      <Row gutter={[12, 12]} style={{ marginBottom: unwiredOverview.length ? 8 : 16 }}>
         {data.overview.map((m) => (
           <Col xs={12} sm={8} md={6} key={m.key}>
-            <Card size="small" styles={{ body: { padding: "12px 16px" } }}>
+            <Card
+              size="small"
+              styles={{ body: { padding: "12px 16px" } }}
+              style={
+                m.key === "uninstalled" ? { borderColor: "#ffccc7" } : undefined
+              }
+            >
               <Statistic
                 title={<MetricTitle m={m} />}
                 value={m.display}
                 valueStyle={{
                   fontSize: 20,
-                  color: m.wired ? undefined : "#fa8c16",
+                  color:
+                    m.key === "uninstalled"
+                      ? "#cf1322"
+                      : m.wired
+                        ? undefined
+                        : "#fa8c16",
                 }}
               />
               <div style={{ marginTop: 4 }}>
@@ -280,10 +298,10 @@ export default function TsfRoi() {
       </Row>
       {unwiredOverview.length > 0 && (
         <Alert
-          type="info"
+          type="warning"
           showIcon
           style={{ marginBottom: 16 }}
-          message={`${unwiredOverview.length} 项总览指标未接入`}
+          message={`${unwiredOverview.length} 项未接入`}
           description={
             <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
               {unwiredOverview.map((m) => (
