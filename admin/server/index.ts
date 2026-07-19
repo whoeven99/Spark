@@ -33,6 +33,7 @@ import { tsfRevenueRouter } from "./routes/tsfRevenue.js";
 import { tsfPacksRouter } from "./routes/tsfPacks.js";
 import { tsfBillingRouter } from "./routes/tsfBilling.js";
 import { tsfShopProfilesRouter } from "./routes/tsfShopProfiles.js";
+import { tsfRoiRouter } from "./routes/tsfRoi.js";
 import { translationOpsRouter } from "./routes/translationOps.js";
 import { shopifyTranslationRouter } from "./routes/shopifyTranslation.js";
 import { isProductionNodeEnv } from "./lib/nodeEnv.js";
@@ -92,6 +93,8 @@ app.use("/api/tsf/billing", authMiddleware, requireOwner, tsfBillingRouter);
 app.use("/api/tsf/shop-profiles", authMiddleware, tsfShopProfilesRouter);
 // 收入分析仅 owner 可见
 app.use("/api/tsf/revenue", authMiddleware, requireOwner, tsfRevenueRouter);
+// 翻译 ROI / 商业闭环（含收入 KPI，仅 owner）
+app.use("/api/tsf/roi", authMiddleware, requireOwner, tsfRoiRouter);
 // 翻译运维（系统配置 + 增加额度）
 app.use("/api/translation-ops", authMiddleware, translationOpsRouter);
 // Shopify 翻译资源查询 / Query CSV 写回 / 单条写回删除

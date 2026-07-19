@@ -26,7 +26,8 @@ Spark 是嵌入 Shopify Admin 的 AI 运营应用，当前仓库有两个可独�
 
 - 当前仓库**没有 `worker/` 目录或 Translation Worker 可部署服务**。
 - 整店/多语言翻译任务及共享翻译核心归 TypeScriptFrontend（TSF）所有；`app/server/ai/skills/index.ts` 不再注册整店翻译工具，Spark 也不再保存翻译规则或 Worker 实现副本。
-- Spark 内仍有**图片翻译**功能，以及 `app/server/translation/translateBlobStore.server.ts` 等少量兼容清理、Admin 只读观测代码。不要把图片翻译或运维读取误判为整店翻译运行时。
+- Spark 内仍有**图片翻译**功能，以及 `app/server/translation/translateBlobStore.server.ts` 等少量兼容清理、Admin 只读观测代码。`/app/studio/translate` 当前只重定向到 `/app/studio/copy`，不要把图片翻译、兼容 Blob 读取或 Admin 运维页误判为整店翻译运行时。
+- Shopify 订单、退款、客户、库存、履约同步在主应用 `app/server/shopify/sync/` 与 Webhook 中实现；历史订单回补入口是 `/app/settings/data`，不是独立 worker。
 - 根目录存在若干 `tmp-*` 未跟踪恢复文件；除非用户明确要求，禁止删除、覆盖或纳入改动。
 
 ## 2. 仓库地图
@@ -39,6 +40,7 @@ Spark/
 │  │  └─ component/           按业务域拆分的可复用组件
 │  ├─ server/                 服务端业务、AI、存储和外部集成
 │  ├─ config/                 运行时与应用入口配置
+│  ├─ hooks/ + lib/           前端 hooks、共享类型、feature track、表单 payload
 │  ├─ i18n/ + locales/        i18next 配置及中英文资源
 │  ├─ generated/prisma/       Prisma 生成物，不手工编辑
 │  ├─ db.server.ts            Prisma + libSQL/Turso 连接
@@ -65,19 +67,22 @@ Spark/
 | 目的地 | URL | 主要实现 |
 |---|---|---|
 | Ask | `/app` | `app._index.tsx` → `page/workspace/WorkspaceAppShellPage.tsx`，聊天与上下文工作台 |
-| Today | `/app/today` | `app.today.*`，首页看板、诊断、订单 |
-| Studio | `/app/studio` | `app.studio.*`，商品文案、图片生成、图片翻译 |
+| Today | `/app/today` | `app.today.*`，`_index` 概览、`diagnosis` 每日诊断/ROI、`orders` 订单风险 |
+| Studio | `/app/studio` | `app.studio.*`，`copy` 商品文案，`image` 图片生成/图片翻译；`translate` 旧入口重定向到 `copy` |
 | Tasks | `/app/tasks` | `app.tasks.tsx` + `UnifiedTaskListPage` |
-| Settings | `/app/settings` | `app.settings.*`，计费、渠道、物流、数据、反馈 |
+| Settings | `/app/settings` | `app.settings.*`，`billing` 计费、`channels` 渠道、`logistics` 物流、`data` 历史回补、`feedback` 反馈 |
 
 关键 HTTP 入口：
 
 - `POST /chat-stream`：`app/routes/chat-stream.ts` → `app/server/chat-stream.ts`，SSE 聊天入口。
 - `/api/ai-task*`、`/api/batch-ai-tasks`、`/api/unified-tasks`：异步任务创建、状态、日志与统一列表。
-- `/api/product-improve`、`/api/product-quality-score`、`/api/update-product-description`：商品内容优化链路。
+- `/api/product-improve`、`/api/product-quality-score`、`/api/update-product-description`、`/api/product-search`、`/api/shop-locales`、`/api/shopify.objects`：商品内容优化、对象/商品查询与语言数据。
 - `/api/generate-image*`、`/api/picture-translate*`：图片生成和图片翻译。
 - `/api/conversations*`、`/api/files*`、`/api/context-resources*`：工作台会话与上下文资源。
 - `/api/automation-overview`：Today/自动化概览。
+- `/api/task-proposal`：聊天中的任务建议/确认载荷。
+- `/api/support`、`/api/external-support`：客服会话与外部支持入口。
+- `/api/feature-track`：前端功能使用埋点，写入 Aliyun SLS。
 - `/api/pixel-ingest`：Web Pixel 采集入口。
 - `webhooks.*.tsx`：Shopify 卸载、scope、订阅、购包、订单、退款、库存、履约 Webhook。
 
@@ -93,17 +98,21 @@ React Router 使用 `app/routes.ts` 中的 `flatRoutes()`；新增或改名路�
 | Playbook 与能力目录 | `app/server/ai/playbooks/`、`app/server/ai/core/playbookRegistry.server.ts`、`skillManifest.server.ts` |
 | AI 任务执行与日志 | `app/server/aiTask/`、`app/server/ai/core/stepRunner.server.ts`、各 Skill service |
 | 商品文案与质量优化 | `app/server/productImprove/` |
+| 商品目录和对象查询 | `app/server/productSearch/`、`app/server/shopify/productSearch.server.ts`、`app/server/shopify/shopifyObjectList.server.ts` |
 | 图片生成 | `app/server/imageGeneration/` |
 | 图片翻译 | `app/server/pictureTranslate/` |
+| 视觉工具页聚合 | `app/server/visualTools/` |
 | 统一任务列表 | `app/server/unifiedTask/` |
+| 任务建议/聊天卡片 | `app/server/taskProposal/`、`app/server/ai/core/resolveChatCardIntent.server.ts` |
 | Today/运营诊断/ROI | `app/server/operations/`、`app/server/automation/` |
-| Shopify 数据读取与同步 | `app/server/shopify/` |
+| Shopify 数据读取与同步 | `app/server/shopify/`、`app/server/shopify/sync/` |
 | 计费、订阅、购包 | `app/server/billing/`、`app/server/tokenUsage/` |
 | 会话与文件上下文 | `app/server/conversation/`、`app/server/fileContext/` |
 | 支持聊天 | `app/server/support/` |
 | 邮件与商户通知 | `app/server/email/`、`app/server/notifications/` |
 | 飞书运营通知 | `app/server/feishu/` |
 | App 生命周期与事件 | `app/server/appLifecycle/`、`app/server/commonEventLog/` |
+| 会话、运行时环境、嵌入式回跳 | `app/server/session/`、`app/config/runtimeEnv.server.ts`、`app/server/shopify/embeddedEntry.server.ts`、`app/server/shopify/sessionTokenBounce.server.ts` |
 | Web Pixel / 阿里云日志 | `app/server/webPixel/`、`app/server/aliyunLog/` |
 | Agent 运行摘要 | `app/server/agentRunLog/` |
 | Playbook Case | `app/server/playbookCase/` |
@@ -119,6 +128,7 @@ AI 主链路应从真实代码确认，通常为：工作台 `useChatStream` →
 - **Aliyun SLS**：Pixel、访问与功能行为日志。
 - **Shopify Admin GraphQL / Billing**：店铺数据、写回、订阅与一次性购包。
 - **腾讯 SES / 飞书**：商户邮件与内部运营通知。通知失败通常不应阻断主业务，沿用现有场景封装。
+- **TSF 只读观测**：Admin `admin/server/routes/tsf*.ts`、`translationOps.ts`、`shopifyTranslation.ts` 等读取 TSF Turso、Cosmos、Redis、Blob 或 Shopify 翻译资源。它们是运维/报表边界，不代表 Spark 重新拥有整店翻译执行链路。
 
 存储设计默认遵守：业务对象与遥测分离；先复用现有 store/service，再考虑新增容器或表；涉及跨仓库整店翻译边界时同时核对 TSF 当前实现。
 
@@ -182,8 +192,13 @@ npm run build     # Vite client + tsc server
 - API 入口：`admin/server/index.ts`、`admin/server/routes/`。
 - 前端入口：`admin/src/App.tsx`、`admin/src/pages/`、`admin/src/api.ts`。
 - 外部存储连接：`admin/server/lib/`。
+- 鉴权边界：`admin/server/middleware/auth.ts`；收入、Pixel checkout PII、TSF billing/ROI 等 owner-only 路由在 `admin/server/index.ts` 使用 `requireOwner`。
+- 主要路由族：Spark 运营（overview/shops/usage/subscriptions/revenue/agent-runs/support/app-logs/pixel-logs）、TSF 观测（`/api/tsf/*`）、翻译运维只读/修复（`/api/translations`、`/api/translation-ops`、`/api/shopify-translation`）、Redis Explorer、Pricing Workbench。
 - Admin 没有配置测试框架；改动后必须在 `admin/` 中运行 `npm run build`。
 - 修改共享 Prisma schema 后，主应用和 Admin 的 Prisma 类型/构建都要考虑。
+- 翻译 tab「翻译 ROI」：`/tsf/roi`（owner）→ `admin/src/pages/tsf/TsfRoi.tsx` +
+  `admin/server/routes/tsfRoi.ts`。Turso 收入/auto 已接；漏斗行为与 LLM 成本走 SLS
+  （未接时页面 Mock + howto）。
 
 ## 10. 常用命令
 

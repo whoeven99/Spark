@@ -1613,6 +1613,98 @@ export type TsfRevenueTrendPoint = {
   packRevenue: number;
 };
 
+export type TsfRoiSource = "turso" | "cosmos" | "sls" | "mock";
+
+export type TsfRoiMetric = {
+  key: string;
+  label: string;
+  value: number | string | null;
+  display: string;
+  wired: boolean;
+  source: TsfRoiSource;
+  howto: string | null;
+};
+
+export type TsfRoiFunnelStep = {
+  key: string;
+  label: string;
+  count: number;
+  pctOfInstall: number;
+  kind: "forward" | "churn" | "branch";
+  note: string | null;
+  wired: boolean;
+  source: TsfRoiSource;
+  howto: string | null;
+};
+
+export type TsfRoiChainRate = {
+  label: string;
+  value: number;
+  wired: boolean;
+};
+
+export type TsfRoiActionRow = {
+  shop: string;
+  signal: string;
+  detail: string;
+  wired: boolean;
+  source: TsfRoiSource;
+};
+
+export type TsfRoiActionList = {
+  title: string;
+  wired: boolean;
+  source: TsfRoiSource;
+  howto: string | null;
+  rows: TsfRoiActionRow[];
+};
+
+export type TsfRoiHowtoItem = {
+  id: string;
+  title: string;
+  detail: string;
+  priority: "P0" | "P1" | "P2";
+};
+
+export type TsfRoiData = {
+  generatedAt: string;
+  windowDays: number;
+  decision: {
+    wired: boolean;
+    source: TsfRoiSource;
+    title: string;
+    body: string;
+    howto: string | null;
+  };
+  overview: TsfRoiMetric[];
+  funnel: TsfRoiFunnelStep[];
+  chainRates: Record<string, TsfRoiChainRate>;
+  breakdown: {
+    trialShops: number;
+    expandShops: number;
+    trialWired: boolean;
+    expandWired: boolean;
+    everSubscribed: number;
+  };
+  slsEvents: {
+    name: string;
+    count: number;
+    wired: false;
+    source: "mock";
+    howto: string;
+  }[];
+  actionLists: {
+    stuckTrialExpand: TsfRoiActionList;
+    payingNoAuto: TsfRoiActionList;
+  };
+  howtoList: TsfRoiHowtoItem[];
+  notes: string[];
+};
+
+export function fetchTsfRoi(): Promise<TsfRoiData> {
+  return apiFetch("/tsf/roi");
+}
+
 export function fetchTsfOverview(): Promise<TsfOverviewData> {
   return apiFetch("/tsf/overview");
 }
