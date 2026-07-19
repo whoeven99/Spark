@@ -69,12 +69,28 @@ function MetricTitle({ m }: { m: TsfRoiMetric }) {
 }
 
 function FunnelRow({ step, max }: { step: TsfRoiFunnelStep; max: number }) {
-  const percent = max > 0 ? Math.round((step.count / max) * 100) : 0;
+  const percent = max > 0 ? Math.min(100, Math.round((step.count / max) * 100)) : 0;
+  const stroke =
+    step.kind === "churn"
+      ? "#ff4d4f"
+      : step.kind === "branch"
+        ? "#722ed1"
+        : step.wired
+          ? "#1677ff"
+          : "#faad14";
+  const kindTag =
+    step.kind === "churn" ? (
+      <Tag color="error">卸载</Tag>
+    ) : step.kind === "branch" ? (
+      <Tag color="purple">末级</Tag>
+    ) : null;
+
   return (
     <div style={{ marginBottom: 14 }}>
       <Row justify="space-between" align="middle" style={{ marginBottom: 4 }}>
         <Space size={6} wrap>
-          <Typography.Text>{step.label}</Typography.Text>
+          <Typography.Text strong={step.kind === "forward"}>{step.label}</Typography.Text>
+          {kindTag}
           <SourceTag source={step.source} wired={step.wired} />
           {!step.wired && step.howto && (
             <Tooltip title={step.howto}>
@@ -83,16 +99,21 @@ function FunnelRow({ step, max }: { step: TsfRoiFunnelStep; max: number }) {
           )}
         </Space>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {step.count.toLocaleString()} · {step.pctOfInstall}% of install
+          {step.count.toLocaleString()} · {step.pctOfInstall}% of 安装
         </Typography.Text>
       </Row>
       <Progress
         percent={percent}
         showInfo={false}
-        strokeColor={step.wired ? "#1677ff" : "#faad14"}
+        strokeColor={stroke}
         trailColor="#f5f5f5"
         size="small"
       />
+      {step.note && (
+        <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+          {step.note}
+        </Typography.Text>
+      )}
     </div>
   );
 }
@@ -276,12 +297,52 @@ export default function TsfRoi() {
         />
       )}
 
-      <Typography.Title level={5}>A · 漏斗转化</Typography.Title>
+      <Typography.Title level={5}>
+        主链路 · 总安装 → 试用/起步 → 留存 → 订阅 / 自动更新
+      </Typography.Title>
+      <Typography.Text
+        type="secondary"
+        style={{ display: "block", marginBottom: 8, fontSize: 12 }}
+      >
+        卸载 = 总安装 − 留存（红色条）。末级「订阅 / 自动更新」为并列分支，不是先后两步。
+        {data.breakdown
+          ? ` · Trial ${data.breakdown.trialShops} / Expand ${data.breakdown.expandShops} · 曾订阅 ${data.breakdown.everSubscribed}`
+          : null}
+      </Typography.Text>
       <Card size="small" style={{ marginBottom: 16 }}>
         {data.funnel.map((step) => (
           <FunnelRow key={step.key} step={step} max={maxFunnel} />
         ))}
       </Card>
+
+      <Typography.Title level={5}>链路转化率（相对总安装或上一步）</Typography.Title>
+      <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+        {Object.entries(data.chainRates ?? {}).map(([key, r]) => (
+          <Col xs={12} sm={8} md={6} key={key}>
+            <Card size="small" styles={{ body: { padding: "12px 16px" } }}>
+              <Statistic
+                title={
+                  <Space size={4}>
+                    <span>{r.label}</span>
+                    {!r.wired && (
+                      <ExclamationCircleOutlined style={{ color: "#fa8c16" }} />
+                    )}
+                  </Space>
+                }
+                value={`${r.value}%`}
+                valueStyle={{
+                  fontSize: 20,
+                  color: key.includes("Uninstalled")
+                    ? "#ff4d4f"
+                    : r.wired
+                      ? undefined
+                      : "#fa8c16",
+                }}
+              />
+            </Card>
+          </Col>
+        ))}
+      </Row>
 
       <Typography.Title level={5}>SLS 关键事件（示意）</Typography.Title>
       <Card size="small" style={{ marginBottom: 16 }}>

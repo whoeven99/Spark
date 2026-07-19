@@ -1630,9 +1630,17 @@ export type TsfRoiFunnelStep = {
   label: string;
   count: number;
   pctOfInstall: number;
+  kind: "forward" | "churn" | "branch";
+  note: string | null;
   wired: boolean;
   source: TsfRoiSource;
   howto: string | null;
+};
+
+export type TsfRoiChainRate = {
+  label: string;
+  value: number;
+  wired: boolean;
 };
 
 export type TsfRoiActionRow = {
@@ -1670,6 +1678,14 @@ export type TsfRoiData = {
   };
   overview: TsfRoiMetric[];
   funnel: TsfRoiFunnelStep[];
+  chainRates: Record<string, TsfRoiChainRate>;
+  breakdown: {
+    trialShops: number;
+    expandShops: number;
+    trialWired: boolean;
+    expandWired: boolean;
+    everSubscribed: number;
+  };
   slsEvents: {
     name: string;
     count: number;
