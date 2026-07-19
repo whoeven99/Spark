@@ -26,6 +26,7 @@ import TsfUsage from "./pages/tsf/TsfUsage";
 import TsfSubscriptions from "./pages/tsf/TsfSubscriptions";
 import TsfPacks from "./pages/tsf/TsfPacks";
 import TsfRevenue from "./pages/tsf/TsfRevenue";
+import TsfRoi from "./pages/tsf/TsfRoi";
 import TsfBilling from "./pages/tsf/TsfBilling";
 import TsfShopProfiles from "./pages/tsf/TsfShopProfiles";
 import TsfShopProfileDetail from "./pages/tsf/TsfShopProfileDetail";
@@ -109,6 +110,7 @@ export default function App() {
             <Route path="tsf/shop-profiles" element={<TsfShopProfiles />} />
             <Route path="tsf/shop-profiles/:shop" element={<TsfShopProfileDetail />} />
             <Route path="tsf/revenue" element={<RequireOwner><TsfRevenue /></RequireOwner>} />
+            <Route path="tsf/roi" element={<RequireOwner><TsfRoi /></RequireOwner>} />
             <Route path="tsf/pricing-workbench" element={<RequireOwner><PricingWorkbenchV2 /></RequireOwner>} />
             <Route path="translation-ops" element={<TranslationOps />} />
             <Route path="shopify-translation" element={<ShopifyTranslationOps />} />

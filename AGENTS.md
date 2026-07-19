@@ -184,6 +184,9 @@ npm run build     # Vite client + tsc server
 - 外部存储连接：`admin/server/lib/`。
 - Admin 没有配置测试框架；改动后必须在 `admin/` 中运行 `npm run build`。
 - 修改共享 Prisma schema 后，主应用和 Admin 的 Prisma 类型/构建都要考虑。
+- 翻译 tab「翻译 ROI」：`/tsf/roi`（owner）→ `admin/src/pages/tsf/TsfRoi.tsx` +
+  `admin/server/routes/tsfRoi.ts`。Turso 收入/auto 已接；漏斗行为与 LLM 成本走 SLS
+  （未接时页面 Mock + howto）。
 
 ## 10. 常用命令
 
