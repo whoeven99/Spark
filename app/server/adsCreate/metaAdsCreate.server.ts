@@ -244,8 +244,11 @@ export async function createMetaAd(params: {
     countries: countries.length > 0 ? countries : ["US"],
   };
 
-  // 不传 bid_strategy / bid_amount：走 Meta 默认「最低费用、不设上限」。
-  // 显式传 bid_strategy 时，部分账户会强制要求 bid_amount，反而报 Invalid parameter。
+  // 多数广告账户创建 Ad Set 时强制要求 bid_amount（即便最低费用策略也一样）。
+  // 使用「最低费用 + 出价上限」：bid_amount 单位为分；IMPRESSIONS 计费时为千次展现上限。
+  const adSetBudgetCents = dailyBudgetCents > 0 ? dailyBudgetCents : 500;
+  const bidAmountCents = Math.max(100, Math.round(adSetBudgetCents * 0.2));
+
   const adSetBody: Record<string, unknown> = {
     name: form.adSetName,
     campaign_id: campaignId,
@@ -254,6 +257,8 @@ export async function createMetaAd(params: {
     targeting,
     status: form.campaignStatus,
     start_time: toMetaTime(form.adSetStartTime),
+    bid_strategy: "LOWEST_COST_WITH_BID_CAP",
+    bid_amount: bidAmountCents,
   };
   if (delivery.destinationType) {
     adSetBody.destination_type = delivery.destinationType;
@@ -266,7 +271,7 @@ export async function createMetaAd(params: {
   }
   // 未设 Campaign 预算时，Ad Set 必须设预算（默认 $5，避免低于账户最低限额）
   if (dailyBudgetCents <= 0) {
-    adSetBody.daily_budget = 500;
+    adSetBody.daily_budget = adSetBudgetCents;
   }
 
   const adSetResp = await metaPost<{ id: string }>(

@@ -44,8 +44,8 @@ describe("createMetaAd", () => {
           };
           expect(targeting.geo_locations?.countries).toEqual(["US"]);
           expect(body.get("daily_budget")).toBe("500");
-          expect(body.get("bid_strategy")).toBeNull();
-          expect(body.get("bid_amount")).toBeNull();
+          expect(body.get("bid_strategy")).toBe("LOWEST_COST_WITH_BID_CAP");
+          expect(body.get("bid_amount")).toBe("100");
           return Response.json({ id: "adset_1" });
         }
         if (url.includes("/adcreatives")) {
