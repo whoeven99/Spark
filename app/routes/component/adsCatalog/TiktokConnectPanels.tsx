@@ -64,6 +64,7 @@ export function TiktokConnectPanels({
   const [appIdSuccess, setAppIdSuccess] = useState(false);
   const [pixelBindSuccess, setPixelBindSuccess] = useState(false);
   const [pixelBindError, setPixelBindError] = useState<string | null>(null);
+  const [pixelEnsureSuccess, setPixelEnsureSuccess] = useState(false);
 
   const tiktok = credentials.tiktok;
 
@@ -161,6 +162,7 @@ export function TiktokConnectPanels({
     setBusy(true);
     setPixelBindSuccess(false);
     setPixelBindError(null);
+    setPixelEnsureSuccess(false);
     try {
       const resp = await fetch(`/api/ads-catalog/tiktok-bind-eventsource${locationSearch}`, {
         method: "POST",
@@ -173,6 +175,31 @@ export function TiktokConnectPanels({
         return;
       }
       setPixelBindSuccess(true);
+    } catch (e) {
+      setPixelBindError(e instanceof Error ? e.message : t("adsCatalog.authError"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function ensurePixelEventSource() {
+    setBusy(true);
+    setPixelBindSuccess(false);
+    setPixelBindError(null);
+    setPixelEnsureSuccess(false);
+    try {
+      const resp = await fetch(`/api/ads-catalog/tiktok-ensure-pixel${locationSearch}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!resp.ok || !data.ok) {
+        setPixelBindError(data.error ?? t("adsCatalog.authError"));
+        return;
+      }
+      setPixelEnsureSuccess(true);
+      onChanged();
     } catch (e) {
       setPixelBindError(e instanceof Error ? e.message : t("adsCatalog.authError"));
     } finally {
@@ -223,29 +250,60 @@ export function TiktokConnectPanels({
                 {t("adsCatalog.tiktokModeApi")}
               </div>
             )}
-            {tiktok.pixelCode && (
-              <div style={{ marginTop: 4 }}>
-                <div style={{ color: "#0f7a52" }}>
-                  {t("adsCatalog.tiktokPixelCode", { code: tiktok.pixelCode })}
+            {tiktok.bindingMode === "api_managed" && (
+              <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>
+                  {t("adsCatalog.tiktokPixelSectionTitle")}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-                  <button
-                    type="button"
-                    style={{ ...secondaryBtn, padding: "4px 10px", fontSize: 12 }}
-                    disabled={busy}
-                    onClick={() => void rebindPixelEventSource()}
-                  >
-                    {busy ? t("adsCatalog.tiktokRebindPixelBusy") : t("adsCatalog.tiktokRebindPixel")}
-                  </button>
-                  {pixelBindSuccess && (
-                    <span style={{ color: "#0f7a52", fontSize: 12 }}>
-                      {t("adsCatalog.tiktokRebindPixelSuccess")}
-                    </span>
-                  )}
-                  {pixelBindError && (
-                    <span style={{ color: "#d72c0d", fontSize: 12 }}>{pixelBindError}</span>
-                  )}
-                </div>
+                {tiktok.pixelCode ? (
+                  <>
+                    <div style={{ color: "#0f7a52" }}>
+                      {t("adsCatalog.tiktokPixelCode", { code: tiktok.pixelCode })}
+                    </div>
+                    <p style={{ ...pageHintTextStyle, margin: 0 }}>
+                      {t("adsCatalog.tiktokPixelHint")}
+                    </p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        style={{ ...secondaryBtn, padding: "4px 10px", fontSize: 12 }}
+                        disabled={busy}
+                        onClick={() => void rebindPixelEventSource()}
+                      >
+                        {busy ? t("adsCatalog.tiktokRebindPixelBusy") : t("adsCatalog.tiktokRebindPixel")}
+                      </button>
+                      {pixelBindSuccess && (
+                        <span style={{ color: "#0f7a52", fontSize: 12 }}>
+                          {t("adsCatalog.tiktokRebindPixelSuccess")}
+                        </span>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ ...pageHintTextStyle, margin: 0 }}>
+                      {t("adsCatalog.tiktokPixelMissingHint")}
+                    </p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        style={{ ...secondaryBtn, padding: "6px 12px", fontSize: 12 }}
+                        disabled={busy}
+                        onClick={() => void ensurePixelEventSource()}
+                      >
+                        {busy ? t("adsCatalog.tiktokEnsurePixelBusy") : t("adsCatalog.tiktokEnsurePixel")}
+                      </button>
+                      {pixelEnsureSuccess && (
+                        <span style={{ color: "#0f7a52", fontSize: 12 }}>
+                          {t("adsCatalog.tiktokEnsurePixelSuccess")}
+                        </span>
+                      )}
+                    </div>
+                  </>
+                )}
+                {pixelBindError && (
+                  <span style={{ color: "#d72c0d", fontSize: 12 }}>{pixelBindError}</span>
+                )}
               </div>
             )}
             {tiktok.appId && (
@@ -254,9 +312,6 @@ export function TiktokConnectPanels({
               </div>
             )}
             {modeHint && <p style={pageHintTextStyle}>{modeHint}</p>}
-            {tiktok.pixelCode && (
-              <p style={pageHintTextStyle}>{t("adsCatalog.tiktokPixelHint")}</p>
-            )}
             <div style={pageHintTextStyle}>
               {t("adsCatalog.tiktokUpdatedAt", { time: fmtDate(tiktok.updatedAt) })}
             </div>
