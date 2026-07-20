@@ -1833,7 +1833,8 @@
       "pagePlaceholder": "Select a Page",
       "pageLoading": "Loading Pages…",
       "pageEmpty": "No Pages found. Make sure your Meta account manages at least one Facebook Page, then re-authorize (requires pages_show_list).",
-      "pageLoadFailed": "Failed to load Facebook Pages"
+      "pageLoadFailed": "Failed to load Facebook Pages",
+      "pageRequired": "Please select a Facebook Page for this ad"
     },
     "tiktok": {
       "notConnected": "TikTok advertiser not connected. Authorize TikTok to continue — product catalog binding is not required for ad creation.",

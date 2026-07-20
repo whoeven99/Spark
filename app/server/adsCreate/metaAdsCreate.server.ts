@@ -63,7 +63,8 @@ export async function createMetaAd(params: {
 }): Promise<MetaCreateResult> {
   const { accessToken, form } = params;
   const accountPath = `/${normalizeAdAccountId(params.adAccountId)}`;
-  const pageId = form.pageId.trim();
+  // pageId 可能因旧前端或未选主页而为 undefined，不可直接 .trim()
+  const pageId = typeof form.pageId === "string" ? form.pageId.trim() : "";
   if (!pageId) {
     throw new Error("请选择用于投放的 Facebook 主页（Page）");
   }
@@ -76,8 +77,10 @@ export async function createMetaAd(params: {
     special_ad_categories: [],
   };
   // 按日预算（单位：分），Meta API 使用分为单位。
-  if (form.campaignDailyBudget) {
-    campaignBody.daily_budget = Math.round(parseFloat(form.campaignDailyBudget) * 100);
+  const dailyBudgetRaw =
+    typeof form.campaignDailyBudget === "string" ? form.campaignDailyBudget.trim() : "";
+  if (dailyBudgetRaw) {
+    campaignBody.daily_budget = Math.round(parseFloat(dailyBudgetRaw) * 100);
   }
 
   const campaignResp = await metaPost<{ id: string }>(
@@ -95,7 +98,9 @@ export async function createMetaAd(params: {
   if (form.gender !== "ALL") {
     targeting.genders = form.gender === "MALE" ? [1] : [2];
   }
-  const countries = form.geoCountries
+  const geoCountries =
+    typeof form.geoCountries === "string" ? form.geoCountries : "";
+  const countries = geoCountries
     .split(/[\s,;]+/)
     .map((c) => c.trim().toUpperCase())
     .filter(Boolean);
@@ -116,7 +121,7 @@ export async function createMetaAd(params: {
     adSetBody.end_time = form.adSetEndTime;
   }
   // 若 Campaign 未设置预算，则 Ad Set 必须设置。
-  if (!form.campaignDailyBudget) {
+  if (!dailyBudgetRaw) {
     adSetBody.daily_budget = 100; // 默认 $1.00
   }
 

@@ -1833,7 +1833,8 @@
       "pagePlaceholder": "请选择主页",
       "pageLoading": "正在加载主页…",
       "pageEmpty": "未找到可用主页。请确认 Meta 账号已管理至少一个 Facebook 主页，并重新授权（需 pages_show_list）。",
-      "pageLoadFailed": "加载 Facebook 主页失败"
+      "pageLoadFailed": "加载 Facebook 主页失败",
+      "pageRequired": "请选择用于投放的 Facebook 主页"
     },
     "tiktok": {
       "notConnected": "TikTok 广告主账户未连接。请先完成 TikTok 授权（无需绑定商品目录即可创建广告）。",

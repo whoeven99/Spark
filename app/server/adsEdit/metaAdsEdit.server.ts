@@ -251,7 +251,7 @@ export async function updateMetaAd(params: {
   if (form.adSet.gender !== "ALL") {
     targeting.genders = form.adSet.gender === "MALE" ? [1] : [2];
   }
-  const countries = form.adSet.geoCountries
+  const countries = (typeof form.adSet.geoCountries === "string" ? form.adSet.geoCountries : "")
     .split(/[\s,;]+/)
     .map((c) => c.trim().toUpperCase())
     .filter(Boolean);

@@ -105,13 +105,21 @@ export function MetaAdsForm({ locationSearch, onSuccess }: Props) {
   }, [locationSearch, t]);
 
   async function handleSubmit() {
+    if (!String(form.pageId ?? "").trim()) {
+      setResult({ ok: false, msg: t("adsCreate.meta.pageRequired") });
+      return;
+    }
     setSubmitting(true);
     setResult(null);
     try {
       const resp = await fetch(`/api/ads-create${locationSearch}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ platform: "meta", mode: "create", meta: form }),
+        body: JSON.stringify({
+          platform: "meta",
+          mode: "create",
+          meta: { ...form, pageId: String(form.pageId ?? "").trim() },
+        }),
       });
       const json = (await resp.json()) as { ok: boolean; campaignId?: string; adId?: string; errorMsg?: string };
       if (json.ok) {

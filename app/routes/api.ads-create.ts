@@ -34,9 +34,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (platform === "meta") {
       const form = body.meta;
       if (!form) throw new Error("缺少 meta 表单数据");
+      if (!String(form.pageId ?? "").trim()) {
+        throw new Error("请选择用于投放的 Facebook 主页（Page）");
+      }
 
       const cred = await getMetaAdsCredential(shop);
-      if (!cred) throw new Error("Meta 广告账户未连接，请前往 Ads Catalog 授权");
+      if (!cred) throw new Error("Meta 广告账户未连接，请前往广告洞察设置授权 Meta Ads");
 
       const result = await createMetaAd({
         accessToken: cred.accessToken,
