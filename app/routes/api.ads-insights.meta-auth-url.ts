@@ -4,7 +4,7 @@ import { buildMetaAdsOAuthStartUrl } from "../server/adsCatalog/metaOAuth.server
 
 /**
  * GET /api/ads-insights/meta-auth-url
- * 启动独立 Meta Ads OAuth（ads_read）。
+ * 启动独立 Meta Ads OAuth（ads_read + ads_management + pages_show_list）。
  */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);

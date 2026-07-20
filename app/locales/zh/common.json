@@ -1724,7 +1724,7 @@
     "tableSubtitleSandbox": "{{start}} → {{end}} · TikTok Sandbox API",
     "goAdsCatalog": "前往广告 Catalog 完成连接",
     "metaConnectTitle": "Meta Ads 授权",
-    "metaConnectHint": "与 Catalog 同步相互独立。需要 ads_read 权限以拉取 Marketing API Insights。部署环境需配置 META_APP_ID / META_APP_SECRET。",
+    "metaConnectHint": "与 Catalog 同步相互独立。需要 ads_read（洞察）与 ads_management（创建/编辑广告）权限；部署环境需配置 META_APP_ID / META_APP_SECRET。改权限后请重新授权。",
     "metaConnect": "连接 Meta Ads",
     "metaReconnect": "重新授权",
     "metaDisconnect": "断开连接",
@@ -1827,7 +1827,13 @@
       "fieldCountriesHint": "ISO 国家代码，逗号分隔，如 US, CA, GB",
       "fieldHeadline": "标题",
       "fieldHeadlineHint": "最多 40 个字符",
-      "fieldBody": "正文"
+      "fieldBody": "正文",
+      "fieldPage": "Facebook 主页",
+      "fieldPageHint": "广告创意必须关联你有权限的 Facebook 主页",
+      "pagePlaceholder": "请选择主页",
+      "pageLoading": "正在加载主页…",
+      "pageEmpty": "未找到可用主页。请确认 Meta 账号已管理至少一个 Facebook 主页，并重新授权（需 pages_show_list）。",
+      "pageLoadFailed": "加载 Facebook 主页失败"
     },
     "tiktok": {
       "notConnected": "TikTok 广告主账户未连接。请先完成 TikTok 授权（无需绑定商品目录即可创建广告）。",

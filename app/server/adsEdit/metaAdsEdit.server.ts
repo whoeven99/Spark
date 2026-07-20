@@ -278,9 +278,19 @@ export async function updateMetaAd(params: {
   const creativeId = adResp.creative?.id;
 
   if (creativeId) {
+    const existingCreative = await metaGet<{
+      object_story_spec?: { page_id?: string };
+    }>(`/${creativeId}`, accessToken, { fields: "object_story_spec" });
+    const pageId = (existingCreative.object_story_spec?.page_id ?? "").trim();
+    if (!pageId) {
+      throw new Error(
+        "无法从现有广告创意读取 Facebook Page ID，请在 Meta Ads Manager 中确认该广告关联了主页后再编辑",
+      );
+    }
+
     const creativeBody: Record<string, unknown> = {
       object_story_spec: {
-        page_id: params.adAccountId,
+        page_id: pageId,
         link_data: {
           message: form.ad.body,
           link: form.ad.linkUrl,

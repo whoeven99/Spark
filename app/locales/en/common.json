@@ -1724,7 +1724,7 @@
     "tableSubtitleSandbox": "{{start}} → {{end}} · TikTok Sandbox API",
     "goAdsCatalog": "Open Ads Catalog to connect",
     "metaConnectTitle": "Meta Ads authorization",
-    "metaConnectHint": "Independent from Catalog sync. Requires ads_read to pull Marketing API insights. Deployments must set META_APP_ID / META_APP_SECRET.",
+    "metaConnectHint": "Independent from Catalog sync. Requires ads_read (insights) and ads_management (create/edit ads). Deployments must set META_APP_ID / META_APP_SECRET. Re-authorize after permission changes.",
     "metaConnect": "Connect Meta Ads",
     "metaReconnect": "Reconnect",
     "metaDisconnect": "Disconnect",
@@ -1827,7 +1827,13 @@
       "fieldCountriesHint": "ISO country codes, comma-separated, e.g. US, CA, GB",
       "fieldHeadline": "Headline",
       "fieldHeadlineHint": "Up to 40 characters",
-      "fieldBody": "Primary text"
+      "fieldBody": "Primary text",
+      "fieldPage": "Facebook Page",
+      "fieldPageHint": "Ad creatives must be linked to a Facebook Page you manage",
+      "pagePlaceholder": "Select a Page",
+      "pageLoading": "Loading Pages…",
+      "pageEmpty": "No Pages found. Make sure your Meta account manages at least one Facebook Page, then re-authorize (requires pages_show_list).",
+      "pageLoadFailed": "Failed to load Facebook Pages"
     },
     "tiktok": {
       "notConnected": "TikTok advertiser not connected. Authorize TikTok to continue — product catalog binding is not required for ad creation.",

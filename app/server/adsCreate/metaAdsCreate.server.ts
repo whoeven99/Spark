@@ -63,6 +63,10 @@ export async function createMetaAd(params: {
 }): Promise<MetaCreateResult> {
   const { accessToken, form } = params;
   const accountPath = `/${normalizeAdAccountId(params.adAccountId)}`;
+  const pageId = form.pageId.trim();
+  if (!pageId) {
+    throw new Error("请选择用于投放的 Facebook 主页（Page）");
+  }
 
   // ── Step 1: Campaign ─────────────────────────────────────────────────────
   const campaignBody: Record<string, unknown> = {
@@ -127,7 +131,7 @@ export async function createMetaAd(params: {
   const creativeBody: Record<string, unknown> = {
     name: `${form.adName}_creative`,
     object_story_spec: {
-      page_id: params.adAccountId, // 有些情况需要 page_id；这里用 adAccountId 占位
+      page_id: pageId,
       link_data: {
         message: form.adBody,
         link: form.adLinkUrl,

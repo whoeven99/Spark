@@ -35,6 +35,8 @@ export interface MetaAdFormData {
   geoCountries: string;
   // Ad
   adName: string;
+  /** Facebook Page Graph ID，广告创意 object_story_spec.page_id 必填 */
+  pageId: string;
   adHeadline: string;
   adBody: string;
   adCallToAction: MetaCallToAction;

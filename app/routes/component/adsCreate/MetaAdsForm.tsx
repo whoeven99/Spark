@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { pageColorTokens } from "../../page/pageUiStyles";
 import type { MetaAdFormData, MetaCampaignObjective, MetaCallToAction } from "./types";
 import { formStyles as s, StepIndicator, FormField, SubmitResult } from "./formShared";
 
@@ -17,6 +16,7 @@ const DEFAULT_FORM: MetaAdFormData = {
   gender: "ALL",
   geoCountries: "US",
   adName: "",
+  pageId: "",
   adHeadline: "",
   adBody: "",
   adCallToAction: "LEARN_MORE",
@@ -43,6 +43,11 @@ const CTAS: { value: MetaCallToAction; labelKey: string }[] = [
   { value: "ORDER_NOW", labelKey: "adsCreate.cta.orderNow" },
 ];
 
+type PageOption = {
+  pageId: string;
+  name?: string;
+};
+
 interface Props {
   locationSearch: string;
   onSuccess: (campaignId: string, adId: string) => void;
@@ -54,10 +59,50 @@ export function MetaAdsForm({ locationSearch, onSuccess }: Props) {
   const [form, setForm] = useState<MetaAdFormData>(DEFAULT_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string; campaignId?: string; adId?: string } | null>(null);
+  const [pages, setPages] = useState<PageOption[]>([]);
+  const [pagesLoading, setPagesLoading] = useState(false);
+  const [pagesError, setPagesError] = useState<string | null>(null);
 
   function set<K extends keyof MetaAdFormData>(key: K, value: MetaAdFormData[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPages() {
+      setPagesLoading(true);
+      setPagesError(null);
+      try {
+        const resp = await fetch(`/api/ads-create/meta-pages${locationSearch}`);
+        const json = (await resp.json()) as {
+          ok: boolean;
+          pages?: PageOption[];
+          errorMsg?: string;
+        };
+        if (cancelled) return;
+        if (!json.ok) {
+          setPages([]);
+          setPagesError(json.errorMsg ?? t("adsCreate.meta.pageLoadFailed"));
+          return;
+        }
+        const list = json.pages ?? [];
+        setPages(list);
+        if (list.length === 1) {
+          setForm((prev) => (prev.pageId ? prev : { ...prev, pageId: list[0].pageId }));
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setPages([]);
+        setPagesError(err instanceof Error ? err.message : t("adsCreate.meta.pageLoadFailed"));
+      } finally {
+        if (!cancelled) setPagesLoading(false);
+      }
+    }
+    void loadPages();
+    return () => {
+      cancelled = true;
+    };
+  }, [locationSearch, t]);
 
   async function handleSubmit() {
     setSubmitting(true);
@@ -81,6 +126,9 @@ export function MetaAdsForm({ locationSearch, onSuccess }: Props) {
       setSubmitting(false);
     }
   }
+
+  const canSubmit =
+    Boolean(form.adName && form.adLinkUrl && form.pageId) && !submitting;
 
   return (
     <div style={s.formWrap}>
@@ -183,6 +231,33 @@ export function MetaAdsForm({ locationSearch, onSuccess }: Props) {
             <input style={s.input} value={form.adName} onChange={(e) => set("adName", e.target.value)} placeholder={t("adsCreate.fieldAdNamePlaceholder")} />
           </FormField>
 
+          <FormField
+            label={t("adsCreate.meta.fieldPage")}
+            required
+            hint={t("adsCreate.meta.fieldPageHint")}
+          >
+            {pagesLoading ? (
+              <p style={{ margin: 0, fontSize: 13, opacity: 0.7 }}>{t("adsCreate.meta.pageLoading")}</p>
+            ) : pagesError ? (
+              <p style={{ margin: 0, fontSize: 13, color: "#b42318" }}>{pagesError}</p>
+            ) : pages.length === 0 ? (
+              <p style={{ margin: 0, fontSize: 13, opacity: 0.7 }}>{t("adsCreate.meta.pageEmpty")}</p>
+            ) : (
+              <select
+                style={s.select}
+                value={form.pageId}
+                onChange={(e) => set("pageId", e.target.value)}
+              >
+                <option value="">{t("adsCreate.meta.pagePlaceholder")}</option>
+                {pages.map((p) => (
+                  <option key={p.pageId} value={p.pageId}>
+                    {p.name ? `${p.name} (${p.pageId})` : p.pageId}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
+
           <FormField label={t("adsCreate.meta.fieldHeadline")} hint={t("adsCreate.meta.fieldHeadlineHint")}>
             <input style={s.input} maxLength={40} value={form.adHeadline} onChange={(e) => set("adHeadline", e.target.value)} />
             <span style={s.charCount}>{form.adHeadline.length}/40</span>
@@ -214,8 +289,8 @@ export function MetaAdsForm({ locationSearch, onSuccess }: Props) {
             <button type="button" style={s.btnSecondary} onClick={() => setStep(2)}>{t("adsCreate.prevStep")}</button>
             <button
               type="button"
-              style={{ ...s.btnPrimary, opacity: (!form.adName || !form.adLinkUrl || submitting) ? 0.6 : 1, cursor: submitting ? "wait" : "pointer" }}
-              disabled={!form.adName || !form.adLinkUrl || submitting}
+              style={{ ...s.btnPrimary, opacity: canSubmit ? 1 : 0.6, cursor: submitting ? "wait" : "pointer" }}
+              disabled={!canSubmit}
               onClick={() => void handleSubmit()}
             >
               {submitting ? t("adsCreate.submitting") : t("adsCreate.submit")}

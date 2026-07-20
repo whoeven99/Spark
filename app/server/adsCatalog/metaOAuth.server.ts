@@ -13,8 +13,12 @@ export const META_GRAPH_BASE = `https://graph.facebook.com/${META_GRAPH_VERSION}
 /** Catalog 同步 + 列举 Business/Catalog 所需权限。生产环境需通过 Meta App Review。 */
 export const META_CATALOG_SCOPE = "catalog_management,business_management";
 
-/** Marketing API Insights 只读权限。 */
-export const META_ADS_SCOPE = "ads_read,business_management";
+/**
+ * Marketing API：Insights 读取 + 广告创建/编辑 + 列举可用 Facebook Page。
+ * 生产环境需通过 Meta App Review（ads_management / pages_show_list）。
+ */
+export const META_ADS_SCOPE =
+  "ads_read,ads_management,business_management,pages_show_list";
 
 export const META_CATALOG_CALLBACK_PATH = "/ads/meta-catalog/callback";
 export const META_ADS_CALLBACK_PATH = "/ads/meta-ads/callback";
@@ -38,6 +42,12 @@ export interface MetaAdAccount {
   name?: string;
   currencyCode?: string;
   accountStatus?: number;
+}
+
+export interface MetaPage {
+  /** Facebook Page Graph ID */
+  pageId: string;
+  name?: string;
 }
 
 function readEnv(name: string): string {
@@ -347,6 +357,48 @@ export async function getMetaCatalogs(accessToken: string): Promise<MetaCatalogA
         seen.add(cat.id);
         out.push({ catalogId: cat.id, name: cat.name, businessId });
       }
+    }
+    return out;
+  } catch (e) {
+    throw new Error(formatOutboundNetworkError(e));
+  }
+}
+
+/**
+ * 列举当前用户可管理的 Facebook Page（广告创意 object_story_spec.page_id 所需）。
+ * @see https://developers.facebook.com/docs/graph-api/reference/user/accounts/
+ */
+export async function getMetaPages(accessToken: string): Promise<MetaPage[]> {
+  try {
+    const out: MetaPage[] = [];
+    let nextUrl: string | null = null;
+
+    {
+      const url = new URL(`${META_GRAPH_BASE}/me/accounts`);
+      url.searchParams.set("fields", "id,name");
+      url.searchParams.set("limit", "100");
+      url.searchParams.set("access_token", accessToken);
+      nextUrl = url.toString();
+    }
+
+    let pages = 0;
+    while (nextUrl && pages < 10) {
+      pages += 1;
+      const response = await fetch(nextUrl);
+      const json = (await response.json().catch(() => ({}))) as {
+        data?: Array<{ id?: string; name?: string }>;
+        paging?: { next?: string };
+        error?: { message?: string };
+      };
+      if (!response.ok) {
+        throw new Error(json.error?.message || `HTTP ${response.status}`);
+      }
+      for (const row of json.data ?? []) {
+        const pageId = (row.id ?? "").trim();
+        if (!pageId) continue;
+        out.push({ pageId, name: row.name });
+      }
+      nextUrl = json.paging?.next ?? null;
     }
     return out;
   } catch (e) {
