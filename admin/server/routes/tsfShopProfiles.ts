@@ -99,8 +99,6 @@ const KNOWN_SHOPS_CTE = `
     UNION
     SELECT shop FROM Account WHERE shop IS NOT NULL AND trim(shop) <> ''
     UNION
-    SELECT shop FROM ShopBillingBinding WHERE shop IS NOT NULL AND trim(shop) <> ''
-    UNION
     SELECT shop FROM ShopProfile WHERE shop IS NOT NULL AND trim(shop) <> ''
   )
 `;

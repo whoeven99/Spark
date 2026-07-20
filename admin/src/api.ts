@@ -1322,7 +1322,7 @@ export function browseValueCrc32Cache(params: {
 
 // ============================================================
 // TSF（TypeScriptFrontend）新用户统计 —— 读 TSF 独立 Turso 库
-// 额度单位为 Credits；仅统计 billingSystem='tsf' 的新用户。
+// 额度单位为 Credits；用户以 Account 为准（ShopBillingBinding 已废弃）。
 // ============================================================
 
 export type TsfOverviewData = {
@@ -1336,15 +1336,14 @@ export type TsfOverviewData = {
   totalTrialCredits: number;
   recentRegistrations: {
     shop: string;
-    billingSystem: string;
-    boundReason: string | null;
+    installed: boolean;
+    deletedAt: string | null;
     createdAt: string;
   }[];
 };
 
 export type TsfShopRow = {
   shop: string;
-  boundReason: string | null;
   boundAt: string;
   subscriptionCredits: number;
   purchasedCredits: number;
@@ -1357,6 +1356,7 @@ export type TsfShopRow = {
   billingInterval: string | null;
   currentPeriodEnd: string | null;
   installed: boolean;
+  sessionCount?: number;
 };
 
 export type TsfBillingLogRow = {
@@ -1369,6 +1369,14 @@ export type TsfBillingLogRow = {
 };
 
 export type TsfShopDetail = {
+  account: {
+    shop: string;
+    deletedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+    installed: boolean;
+  } | null;
+  /** @deprecated 兼容旧字段；等于 account 的展示投影 */
   binding: {
     shop: string;
     billingSystem: string;

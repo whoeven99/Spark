@@ -46,10 +46,12 @@ export default function TsfOverview() {
       ),
     },
     {
-      title: "判定原因",
-      dataIndex: "boundReason",
-      key: "boundReason",
-      render: (v: string | null) => <Tag color="green">{v ?? "-"}</Tag>,
+      title: "状态",
+      dataIndex: "installed",
+      key: "installed",
+      width: 90,
+      render: (v: boolean) =>
+        v ? <Tag color="green">在装</Tag> : <Tag color="volcano">已卸载</Tag>,
     },
     {
       title: "注册时间",
@@ -72,7 +74,7 @@ export default function TsfOverview() {
         type="secondary"
         style={{ display: "block", marginBottom: 24, fontSize: 12 }}
       >
-        仅统计翻译新用户（ShopBillingBinding = tsf），数据来自翻译独立 Turso 库，不含 Spring 老用户。
+        统计 TSF Account（翻译独立 Turso），在装以 deletedAt IS NULL 为准；不含 Spring 老用户。
       </Typography.Text>
 
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>

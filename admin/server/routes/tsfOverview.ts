@@ -5,8 +5,8 @@ export const tsfOverviewRouter = Router();
 
 /**
  * TSF 新用户统计概览。
- * 新用户 = ShopBillingBinding.billingSystem = 'tsf'；在装 = 该 shop 仍有 Session。
- * TSF 表无 appName / CommonEventLog：额度用 Credits，最近事件用 binding 注册 + BillingLog。
+ * 新用户 = Account（TSF 账本主键）；在装 = Account.deletedAt IS NULL。
+ * TSF 已废弃 ShopBillingBinding；额度用 Credits，最近事件用 Account 注册 + BillingLog。
  */
 tsfOverviewRouter.get("/", async (_req, res) => {
   try {
@@ -19,14 +19,9 @@ tsfOverviewRouter.get("/", async (_req, res) => {
       creditSumResult,
       recentResult,
     ] = await Promise.all([
+      db.execute("SELECT COUNT(*) as total FROM Account"),
       db.execute(
-        "SELECT COUNT(*) as total FROM ShopBillingBinding WHERE billingSystem = 'tsf'",
-      ),
-      db.execute(
-        `SELECT COUNT(*) as total
-         FROM ShopBillingBinding b
-         WHERE b.billingSystem = 'tsf'
-           AND EXISTS (SELECT 1 FROM Session s WHERE s.shop = b.shop)`,
+        "SELECT COUNT(*) as total FROM Account WHERE deletedAt IS NULL",
       ),
       db.execute(
         "SELECT COUNT(*) as total FROM AppSubscription WHERE status = 'ACTIVE'",
@@ -39,9 +34,8 @@ tsfOverviewRouter.get("/", async (_req, res) => {
          FROM Account`,
       ),
       db.execute(
-        `SELECT shop, billingSystem, boundReason, createdAt
-         FROM ShopBillingBinding
-         WHERE billingSystem = 'tsf'
+        `SELECT shop, deletedAt, createdAt
+         FROM Account
          ORDER BY createdAt DESC
          LIMIT 30`,
       ),
@@ -63,8 +57,8 @@ tsfOverviewRouter.get("/", async (_req, res) => {
       totalTrialCredits: Number(creditSum.totalTrial ?? 0),
       recentRegistrations: recentResult.rows.map((r) => ({
         shop: r.shop,
-        billingSystem: r.billingSystem,
-        boundReason: r.boundReason,
+        installed: r.deletedAt == null,
+        deletedAt: r.deletedAt ?? null,
         createdAt: r.createdAt,
       })),
     });
