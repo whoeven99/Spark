@@ -97,6 +97,10 @@ export interface CredentialsView {
     /** shopify_official | api_managed；未连接时为空字符串。 */
     bindingMode: "" | "shopify_official" | "api_managed";
     updatedAt: string | null;
+    /** Spark 自动创建并与 Catalog 关联的 TikTok Pixel Code。 */
+    pixelCode: string;
+    /** 商家应用 ID（应用事件源）。 */
+    appId: string;
     pendingCatalogs: Array<{
       id: string;
       name?: string;

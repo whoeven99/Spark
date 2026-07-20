@@ -494,6 +494,10 @@ export type TiktokCatalogCredential = {
    * api_managed：Spark 可写目录。旧凭证缺省按 api_managed。
    */
   bindingMode: TiktokCatalogBindingMode;
+  /** Spark 自动创建并与 Catalog 关联的 TikTok Pixel Code（用于 Web 事件追踪）。 */
+  pixelCode?: string;
+  /** 商家应用 ID（应用事件源，用于 App 内事件再营销）。 */
+  appId?: string;
   updatedAt: string;
 };
 
@@ -525,6 +529,14 @@ export async function getTiktokCatalogCredential(
     catalogName:
       typeof record.data.catalogName === "string" ? record.data.catalogName : undefined,
     bindingMode: parseTiktokBindingMode(record.data.bindingMode),
+    pixelCode:
+      typeof record.data.pixelCode === "string" && record.data.pixelCode.trim()
+        ? record.data.pixelCode.trim()
+        : undefined,
+    appId:
+      typeof record.data.appId === "string" && record.data.appId.trim()
+        ? record.data.appId.trim()
+        : undefined,
     updatedAt: record.updatedAt.toISOString(),
   };
 }
@@ -537,6 +549,10 @@ export async function setTiktokCatalogCredential(
   > & {
     /** 省略时保留已有值，缺省 api_managed。 */
     bindingMode?: TiktokCatalogBindingMode;
+    /** 省略时保留已有值。 */
+    pixelCode?: string;
+    /** 省略时保留已有值。 */
+    appId?: string;
   },
 ): Promise<void> {
   const accessToken = payload.accessToken.trim();
@@ -553,6 +569,14 @@ export async function setTiktokCatalogCredential(
   const bindingMode =
     payload.bindingMode ??
     parseTiktokBindingMode(existing?.data.bindingMode);
+  const pixelCode =
+    payload.pixelCode?.trim() ||
+    (typeof existing?.data.pixelCode === "string" ? existing.data.pixelCode.trim() : "") ||
+    null;
+  const appId =
+    payload.appId?.trim() ||
+    (typeof existing?.data.appId === "string" ? existing.data.appId.trim() : "") ||
+    null;
   await writePlatformCredential(shop, TIKTOK_CATALOG_PLATFORM, {
     accessToken,
     refreshToken: payload.refreshToken?.trim() || null,
@@ -561,6 +585,8 @@ export async function setTiktokCatalogCredential(
     catalogId,
     catalogName: payload.catalogName?.trim() || null,
     bindingMode,
+    pixelCode,
+    appId,
   });
 }
 

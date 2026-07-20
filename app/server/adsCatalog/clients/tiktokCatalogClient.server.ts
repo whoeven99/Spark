@@ -223,6 +223,191 @@ export interface CreateTiktokCatalogResult {
   catalogName: string;
 }
 
+export interface CreateTiktokPixelResult {
+  pixelCode: string;
+  pixelName: string;
+}
+
+export interface TiktokEventSourceBinding {
+  pixelCode?: string;
+  appId?: string;
+  boundAt?: string;
+}
+
+/**
+ * 为广告主创建一个 TikTok Pixel（Web 事件追踪）。
+ * POST /open_api/v1.3/pixel/create/
+ */
+export async function createTiktokPixel(params: {
+  accessToken: string;
+  advertiserId: string;
+  pixelName: string;
+}): Promise<CreateTiktokPixelResult> {
+  const name = params.pixelName.trim() || "Spark Pixel";
+  console.info(
+    `${LOG_PREFIX} step=pixel_create_request advertiserId=${params.advertiserId} name=${JSON.stringify(name)}`,
+  );
+
+  const response = await fetch(`${TIKTOK_API_BASE}/pixel/create/`, {
+    method: "POST",
+    headers: {
+      "Access-Token": params.accessToken,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      advertiser_id: params.advertiserId,
+      pixel_category: "ONLINE_STORE",
+      pixel_name: name,
+    }),
+  });
+
+  const text = await response.text();
+  let payload: {
+    code?: number;
+    message?: string;
+    data?: { pixel_code?: string };
+  } = {};
+  try {
+    payload = text ? (JSON.parse(text) as typeof payload) : {};
+  } catch {
+    payload = {};
+  }
+
+  console.info(
+    `${LOG_PREFIX} step=pixel_create_response http=${response.status} code=${payload.code ?? ""} message=${payload.message ?? ""} pixel_code=${payload.data?.pixel_code ?? ""} body=${rawForLog(text)}`,
+  );
+
+  if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {
+    const detail =
+      payload.message ||
+      (payload.code !== undefined ? `code=${payload.code}` : "") ||
+      text.slice(0, 200) ||
+      response.statusText;
+    throw new Error(`TikTok Pixel create failed: HTTP ${response.status} ${detail}`.trim());
+  }
+
+  const pixelCode = String(payload.data?.pixel_code ?? "").trim();
+  if (!pixelCode) {
+    throw new Error("TikTok Pixel create returned no pixel_code");
+  }
+
+  console.info(
+    `${LOG_PREFIX} step=pixel_create_ok pixelCode=${pixelCode} name=${JSON.stringify(name)}`,
+  );
+  return { pixelCode, pixelName: name };
+}
+
+/**
+ * 将 Pixel 或 App 作为事件源绑定到 Catalog。
+ * POST /open_api/v1.3/catalog/eventsource/bind/
+ * pixel_code 和 app_id 至少提供一个。
+ */
+export async function bindTiktokCatalogEventSource(params: {
+  accessToken: string;
+  advertiserId: string;
+  bcId: string;
+  catalogId: string;
+  pixelCode?: string;
+  appId?: string;
+}): Promise<void> {
+  if (!params.pixelCode && !params.appId) {
+    throw new Error("bindTiktokCatalogEventSource: 必须提供 pixelCode 或 appId 中至少一个");
+  }
+
+  console.info(
+    `${LOG_PREFIX} step=eventsource_bind_request advertiserId=${params.advertiserId} bcId=${params.bcId} catalogId=${params.catalogId} pixelCode=${params.pixelCode ?? ""} appId=${params.appId ?? ""}`,
+  );
+
+  const body: Record<string, string> = {
+    advertiser_id: params.advertiserId,
+    bc_id: params.bcId,
+    catalog_id: params.catalogId,
+  };
+  if (params.pixelCode) body.pixel_code = params.pixelCode;
+  if (params.appId) body.app_id = params.appId;
+
+  const response = await fetch(`${TIKTOK_API_BASE}/catalog/eventsource/bind/`, {
+    method: "POST",
+    headers: {
+      "Access-Token": params.accessToken,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  const text = await response.text();
+  let payload: { code?: number; message?: string } = {};
+  try {
+    payload = text ? (JSON.parse(text) as typeof payload) : {};
+  } catch {
+    payload = {};
+  }
+
+  console.info(
+    `${LOG_PREFIX} step=eventsource_bind_response http=${response.status} code=${payload.code ?? ""} message=${payload.message ?? ""} body=${rawForLog(text)}`,
+  );
+
+  if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {
+    const detail =
+      payload.message ||
+      (payload.code !== undefined ? `code=${payload.code}` : "") ||
+      text.slice(0, 200) ||
+      response.statusText;
+    throw new Error(
+      `TikTok Catalog event source bind failed: HTTP ${response.status} ${detail}`.trim(),
+    );
+  }
+}
+
+/**
+ * 获取 Catalog 当前绑定的事件源列表。
+ * GET /open_api/v1.3/catalog/eventsource_bind/get/
+ */
+export async function getTiktokCatalogEventSourceBindings(params: {
+  accessToken: string;
+  bcId: string;
+  catalogId: string;
+}): Promise<TiktokEventSourceBinding[]> {
+  const url = new URL(`${TIKTOK_API_BASE}/catalog/eventsource_bind/get/`);
+  url.searchParams.set("bc_id", params.bcId);
+  url.searchParams.set("catalog_id", params.catalogId);
+
+  const response = await fetch(url.toString(), {
+    headers: { "Access-Token": params.accessToken },
+  });
+
+  const text = await response.text();
+  let payload: {
+    code?: number;
+    message?: string;
+    data?: {
+      list?: Array<{
+        pixel_code?: string;
+        app_id?: string;
+        create_time?: string;
+      }>;
+    };
+  } = {};
+  try {
+    payload = text ? (JSON.parse(text) as typeof payload) : {};
+  } catch {
+    payload = {};
+  }
+
+  if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {
+    console.warn(
+      `${LOG_PREFIX} step=eventsource_bind_get_failed http=${response.status} code=${payload.code ?? ""} message=${payload.message ?? ""}`,
+    );
+    return [];
+  }
+
+  return (payload.data?.list ?? []).map((item) => ({
+    pixelCode: item.pixel_code || undefined,
+    appId: item.app_id || undefined,
+    boundAt: item.create_time || undefined,
+  }));
+}
+
 /**
  * Create an API-managed ECOM catalog under a Business Center.
  *

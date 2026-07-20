@@ -11,6 +11,15 @@ type Props = {
   onChanged: () => void;
 };
 
+const inputStyle = {
+  width: "100%",
+  padding: "8px 12px",
+  borderRadius: 8,
+  border: `1px solid ${pageColorTokens.borderInput}`,
+  fontSize: 13,
+  boxSizing: "border-box" as const,
+};
+
 const panelStyle = {
   border: `1px solid ${pageColorTokens.border}`,
   borderRadius: pageColorTokens.radiusCard,
@@ -51,6 +60,8 @@ export function TiktokConnectPanels({
 }: Props) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
+  const [appIdInput, setAppIdInput] = useState(credentials.tiktok.appId ?? "");
+  const [appIdSuccess, setAppIdSuccess] = useState(false);
 
   const tiktok = credentials.tiktok;
 
@@ -101,7 +112,7 @@ export function TiktokConnectPanels({
       const resp = await fetch(`/api/ads-catalog/tiktok-create-catalog${locationSearch}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ appId: appIdInput.trim() || undefined }),
       });
       const data = (await resp.json().catch(() => ({}))) as {
         ok?: boolean;
@@ -111,6 +122,31 @@ export function TiktokConnectPanels({
         alert(data.error ?? t("adsCatalog.authError"));
         return;
       }
+      onChanged();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : t("adsCatalog.authError"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function bindAppEventSource() {
+    const appId = appIdInput.trim();
+    if (!appId) return;
+    setBusy(true);
+    setAppIdSuccess(false);
+    try {
+      const resp = await fetch(`/api/ads-catalog/tiktok-bind-eventsource${locationSearch}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appId }),
+      });
+      const data = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!resp.ok || !data.ok) {
+        alert(data.error ?? t("adsCatalog.authError"));
+        return;
+      }
+      setAppIdSuccess(true);
       onChanged();
     } catch (e) {
       alert(e instanceof Error ? e.message : t("adsCatalog.authError"));
@@ -162,7 +198,20 @@ export function TiktokConnectPanels({
                 {t("adsCatalog.tiktokModeApi")}
               </div>
             )}
+            {tiktok.pixelCode && (
+              <div style={{ marginTop: 4, color: "#0f7a52" }}>
+                {t("adsCatalog.tiktokPixelCode", { code: tiktok.pixelCode })}
+              </div>
+            )}
+            {tiktok.appId && (
+              <div style={{ marginTop: 2 }}>
+                {t("adsCatalog.tiktokAppEventSource", { id: tiktok.appId })}
+              </div>
+            )}
             {modeHint && <p style={pageHintTextStyle}>{modeHint}</p>}
+            {tiktok.pixelCode && (
+              <p style={pageHintTextStyle}>{t("adsCatalog.tiktokPixelHint")}</p>
+            )}
             <div style={pageHintTextStyle}>
               {t("adsCatalog.tiktokUpdatedAt", { time: fmtDate(tiktok.updatedAt) })}
             </div>
@@ -174,6 +223,39 @@ export function TiktokConnectPanels({
             boundBindingMode={tiktok.bindingMode}
             onChanged={onChanged}
           />
+          {/* 应用事件源绑定（App ID） */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <label style={{ fontSize: 13, fontWeight: 600 }}>
+              {t("adsCatalog.tiktokAppIdLabel")}
+            </label>
+            <p style={pageHintTextStyle}>{t("adsCatalog.tiktokAppIdHint")}</p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="text"
+                style={inputStyle}
+                placeholder={t("adsCatalog.tiktokAppIdPlaceholder")}
+                value={appIdInput}
+                onChange={(e) => {
+                  setAppIdInput(e.target.value);
+                  setAppIdSuccess(false);
+                }}
+                disabled={busy}
+              />
+              <button
+                type="button"
+                style={{ ...secondaryBtn, whiteSpace: "nowrap" }}
+                disabled={busy || !appIdInput.trim()}
+                onClick={() => void bindAppEventSource()}
+              >
+                {busy ? t("adsCatalog.tiktokBindAppIdBusy") : t("adsCatalog.tiktokBindAppId")}
+              </button>
+            </div>
+            {appIdSuccess && (
+              <div style={{ color: "#0f7a52", fontSize: 13 }}>
+                {t("adsCatalog.tiktokBindAppIdSuccess")}
+              </div>
+            )}
+          </div>
           <div style={{ display: "flex", gap: 10 }}>
             <button type="button" style={secondaryBtn} disabled={busy} onClick={openOAuth}>
               {t("adsCatalog.tiktokReauth")}
@@ -212,6 +294,21 @@ export function TiktokConnectPanels({
             boundBindingMode={tiktok.bindingMode}
             onChanged={onChanged}
           />
+          {/* 创建 Catalog 前可选填 App ID，在创建时一并绑定 */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 13, fontWeight: 600 }}>
+              {t("adsCatalog.tiktokAppIdLabel")}
+            </label>
+            <input
+              type="text"
+              style={inputStyle}
+              placeholder={t("adsCatalog.tiktokAppIdPlaceholder")}
+              value={appIdInput}
+              onChange={(e) => setAppIdInput(e.target.value)}
+              disabled={busy}
+            />
+            <p style={pageHintTextStyle}>{t("adsCatalog.tiktokAppIdHint")}</p>
+          </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button
               type="button"

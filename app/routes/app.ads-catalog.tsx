@@ -93,6 +93,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         advertiserId: tiktok?.advertiserId ?? tiktokPending?.advertiserId ?? "",
         bindingMode: tiktok?.bindingMode ?? "",
         updatedAt: tiktok?.updatedAt ?? null,
+        pixelCode: tiktok?.pixelCode ?? "",
+        appId: tiktok?.appId ?? "",
         pendingCatalogs:
           tiktokPending?.accounts.map((a) => ({
             id: a.id,
