@@ -244,6 +244,8 @@ export async function createMetaAd(params: {
     countries: countries.length > 0 ? countries : ["US"],
   };
 
+  // 不传 bid_strategy / bid_amount：走 Meta 默认「最低费用、不设上限」。
+  // 显式传 bid_strategy 时，部分账户会强制要求 bid_amount，反而报 Invalid parameter。
   const adSetBody: Record<string, unknown> = {
     name: form.adSetName,
     campaign_id: campaignId,
@@ -252,7 +254,6 @@ export async function createMetaAd(params: {
     targeting,
     status: form.campaignStatus,
     start_time: toMetaTime(form.adSetStartTime),
-    bid_strategy: "LOWEST_COST_WITHOUT_CAP",
   };
   if (delivery.destinationType) {
     adSetBody.destination_type = delivery.destinationType;
