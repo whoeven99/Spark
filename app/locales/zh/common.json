@@ -1571,6 +1571,65 @@
     "tiktokRebindPixelBusy": "绑定中…",
     "tiktokRebindPixelSuccess": "Pixel 事件源绑定成功",
     "tiktokPixelBindErrorNotAvailableForAdv": "Pixel 无法绑定到当前 Catalog：该 Pixel 对当前广告账户不可用。请在 TikTok 商务中心确认 Pixel 已转入 BC、且与 Catalog 属于同一商务中心；或在 TikTok 后台「商品库 → 事件源」手动绑定后，再点此页「重新绑定 Pixel」。",
+    "tiktokBindDiagTitle": "绑定前诊断",
+    "tiktokBindDiagHint": "自动检查 Catalog、Pixel 与广告主关联是否就绪。只读查询，不会修改 TikTok 配置。",
+    "tiktokBindDiagBusy": "诊断中…",
+    "tiktokBindDiagRefresh": "重新诊断",
+    "tiktokBindDiagSummaryReady": "✓ 绑定就绪：可同步商品并绑定 Pixel 事件源",
+    "tiktokBindDiagSummaryNotReady": "✗ 尚未就绪：请按下方红色项修复后，再点「一键绑定 Pixel」",
+    "tiktokBindDiagFixPixel": "一键绑定 Pixel",
+    "tiktokBindDiag": {
+      "check": {
+        "connected": {
+          "label": "TikTok Catalog 已连接",
+          "action": "请先在上方完成 TikTok 授权并绑定 Catalog。"
+        },
+        "bc_id": {
+          "label": "商务中心 ID：{{bcId}}",
+          "action": "缺少 bc_id，请断开 TikTok 后重新授权。"
+        },
+        "advertiser_id": {
+          "label": "广告主 ID：{{advertiserId}}",
+          "action": "缺少广告主 ID，请重新授权 TikTok。"
+        },
+        "catalog_found": {
+          "label": "商品库可读：{{name}}（{{catalogId}}）",
+          "action": "无法在 TikTok 读取当前 Catalog（{{catalogId}}），请刷新 Catalog 列表或重新绑定。"
+        },
+        "api_writable": {
+          "label": "API 可写目录（channel={{channel}}）",
+          "action": "当前目录无法通过 API 写入。请创建 Spark API 商品库，或切换到官方同步模式。"
+        },
+        "currency_match": {
+          "label": "币种一致：商品库 {{catalogCurrency}} / 店铺 {{shopCurrency}}",
+          "action": "商品库币种（{{catalogCurrency}}）与店铺币种（{{shopCurrency}}）不一致，请创建与店铺币种一致的 Spark Catalog。"
+        },
+        "region_match": {
+          "label": "区域：商品库 {{catalogRegion}} / 期望 {{expectedRegion}}",
+          "action": "商品库区域与店铺不匹配，建议创建区域一致的 Spark Catalog。"
+        },
+        "catalog_adv_link": {
+          "label": "商品库已关联广告主 {{advertiserId}}",
+          "action": "商品库未关联当前广告主（已关联：{{linkedAdvertiserIds}}）。请在 TikTok 商务中心 → 资产 → 商品库 → 查看，将 Catalog 关联到广告主 {{advertiserId}}。"
+        },
+        "catalog_adv_link_unknown": {
+          "label": "商品库 ↔ 广告主关联（API 未返回）",
+          "action": "请在 TikTok 商务中心确认「Spark Catalog」的「关联广告账号」不为空，且与 Pixel 使用同一广告主（{{advertiserId}}）。"
+        },
+        "pixel_present": {
+          "label": "已记录 Pixel",
+          "action": "尚未创建 Pixel，请点击「创建并绑定 Pixel」。"
+        },
+        "pixel_adv_link": {
+          "label": "Pixel {{pixelCode}} 已关联广告主 {{advertiserId}}",
+          "action": "Pixel 未关联当前广告主（已关联：{{linkedAdvertiserIds}}）。请在 TikTok 商务中心 → 资产 → Pixel 中确认已关联，或点此页「一键绑定 Pixel」。"
+        },
+        "catalog_eventsource": {
+          "label": "Catalog 事件源已绑定 Pixel {{pixelCode}}",
+          "action": "Catalog 尚未绑定该 Pixel 为事件源。可在 TikTok 商品库管理工具 → 事件源手动绑定，或点此页「一键绑定 Pixel」。"
+        }
+      }
+    },
     "tiktokAppEventSource": "应用事件源 App ID：{{id}}",
     "tiktokAppIdLabel": "绑定应用事件源（App ID，可选）",
     "tiktokAppIdPlaceholder": "输入 TikTok App ID",

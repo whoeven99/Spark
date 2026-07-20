@@ -58,6 +58,34 @@ export interface TiktokCatalogConfSnapshot {
   channel?: string;
   businessPlatform?: string;
   isShopifyOfficial: boolean;
+  /** catalog/get 若返回关联广告主，用于绑定诊断。 */
+  linkedAdvertiserIds?: string[];
+}
+
+function parseLinkedAdvertiserIds(row: Record<string, unknown>): string[] {
+  const conf = (row.catalog_conf as Record<string, unknown> | undefined) ?? {};
+  const candidates: unknown[] = [
+    row.advertiser_ids,
+    row.adv_ids,
+    row.linked_advertiser_ids,
+    row.advertiser_id,
+    row.adv_id,
+    conf.advertiser_ids,
+    conf.adv_ids,
+  ];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      const ids = candidate.map((id) => String(id ?? "").trim()).filter(Boolean);
+      if (ids.length > 0) return ids;
+    }
+    if (typeof candidate === "string" && candidate.trim()) {
+      return [candidate.trim()];
+    }
+    if (typeof candidate === "number" && Number.isFinite(candidate)) {
+      return [String(candidate)];
+    }
+  }
+  return [];
 }
 
 /** 读取已绑定 Catalog 的币种/区域/channel，用于上传前校验与失败诊断。 */
@@ -108,6 +136,7 @@ export async function fetchTiktokCatalogConf(params: {
   const businessPlatform =
     String(conf.business_platform ?? row.business_platform ?? "").trim() || undefined;
 
+  const linkedAdvertiserIds = parseLinkedAdvertiserIds(row);
   return {
     catalogId: params.catalogId,
     catalogName,
@@ -116,6 +145,7 @@ export async function fetchTiktokCatalogConf(params: {
     regionCode,
     channel,
     businessPlatform,
+    linkedAdvertiserIds: linkedAdvertiserIds.length > 0 ? linkedAdvertiserIds : undefined,
     isShopifyOfficial: isShopifyOfficialCatalog({
       catalogName,
       catalogType,
@@ -392,6 +422,56 @@ export async function linkTiktokBcPixelToAdvertiser(params: {
     raw.slice(0, 200) ||
     String(httpStatus);
   throw new Error(`TikTok Pixel link to advertiser failed: HTTP ${httpStatus} ${detail}`.trim());
+}
+
+/**
+ * 查询 Pixel 在 BC 内已关联的广告主 ID 列表（只读，用于绑定诊断）。
+ * GET /open_api/v1.3/bc/pixel/link/get/
+ */
+export async function getTiktokBcPixelLinkedAdvertiserIds(params: {
+  accessToken: string;
+  bcId: string;
+  pixelCode: string;
+}): Promise<string[]> {
+  const url = new URL(`${TIKTOK_API_BASE}/bc/pixel/link/get/`);
+  url.searchParams.set("bc_id", params.bcId);
+  url.searchParams.set("pixel_code", params.pixelCode);
+  url.searchParams.set("page", "1");
+  url.searchParams.set("page_size", "100");
+
+  const response = await fetch(url.toString(), {
+    headers: { "Access-Token": params.accessToken },
+  });
+
+  const text = await response.text();
+  let payload: {
+    code?: number;
+    message?: string;
+    data?: {
+      list?: Array<{ advertiser_id?: string | number; relation_status?: string }>;
+    };
+  } = {};
+  try {
+    payload = text ? (JSON.parse(text) as typeof payload) : {};
+  } catch {
+    payload = {};
+  }
+
+  console.info(
+    `${LOG_PREFIX} step=pixel_link_get_response bcId=${params.bcId} pixelCode=${params.pixelCode} http=${response.status} code=${payload.code ?? ""} body=${rawForLog(text)}`,
+  );
+
+  if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {
+    return [];
+  }
+
+  return (payload.data?.list ?? [])
+    .filter((item) => {
+      const status = String(item.relation_status ?? "LINK").trim().toUpperCase();
+      return status === "" || status === "LINK";
+    })
+    .map((item) => String(item.advertiser_id ?? "").trim())
+    .filter(Boolean);
 }
 
 /**

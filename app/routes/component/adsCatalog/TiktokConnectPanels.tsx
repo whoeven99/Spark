@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 import { TiktokCatalogPicker } from "./TiktokCatalogPicker";
+import { TiktokBindDiagnosisPanel } from "./TiktokBindDiagnosisPanel";
 import type { CredentialsView } from "./types";
 
 type Props = {
@@ -75,6 +76,7 @@ export function TiktokConnectPanels({
   const [pixelBindSuccess, setPixelBindSuccess] = useState(false);
   const [pixelBindError, setPixelBindError] = useState<string | null>(null);
   const [pixelEnsureSuccess, setPixelEnsureSuccess] = useState(false);
+  const [diagnosisRefreshKey, setDiagnosisRefreshKey] = useState(0);
 
   const tiktok = credentials.tiktok;
 
@@ -189,6 +191,7 @@ export function TiktokConnectPanels({
         return;
       }
       setPixelBindSuccess(true);
+      setDiagnosisRefreshKey((k) => k + 1);
     } catch (e) {
       setPixelBindError(e instanceof Error ? e.message : t("adsCatalog.authError"));
     } finally {
@@ -218,6 +221,7 @@ export function TiktokConnectPanels({
       }
       setPixelEnsureSuccess(true);
       onChanged();
+      setDiagnosisRefreshKey((k) => k + 1);
     } catch (e) {
       setPixelBindError(e instanceof Error ? e.message : t("adsCatalog.authError"));
     } finally {
@@ -322,6 +326,16 @@ export function TiktokConnectPanels({
                 {pixelBindError && (
                   <span style={{ color: "#d72c0d", fontSize: 12 }}>{pixelBindError}</span>
                 )}
+                <TiktokBindDiagnosisPanel
+                  locationSearch={locationSearch}
+                  connected={tiktok.connected}
+                  bindingMode={tiktok.bindingMode}
+                  hasPixel={Boolean(tiktok.pixelCode)}
+                  rebindBusy={busy}
+                  refreshKey={diagnosisRefreshKey}
+                  onRebindPixel={() => void rebindPixelEventSource()}
+                  onEnsurePixel={() => void ensurePixelEventSource()}
+                />
               </div>
             )}
             {tiktok.appId && (

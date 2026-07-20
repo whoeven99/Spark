@@ -1571,6 +1571,65 @@
     "tiktokRebindPixelBusy": "Binding...",
     "tiktokRebindPixelSuccess": "Pixel event source bound successfully",
     "tiktokPixelBindErrorNotAvailableForAdv": "This Pixel cannot be bound to the current catalog because it is not available for the connected ad account. In TikTok Business Center, confirm the Pixel is in the same BC as the catalog and linked to the ad account—or bind it manually under Catalog → Event sources, then click Re-bind Pixel here.",
+    "tiktokBindDiagTitle": "Pre-bind diagnosis",
+    "tiktokBindDiagHint": "Read-only checks for catalog, Pixel, and ad account linkage. Does not change TikTok settings.",
+    "tiktokBindDiagBusy": "Diagnosing…",
+    "tiktokBindDiagRefresh": "Re-run diagnosis",
+    "tiktokBindDiagSummaryReady": "✓ Ready: catalog sync and Pixel event source binding should work",
+    "tiktokBindDiagSummaryNotReady": "✗ Not ready: fix the items below, then click “Bind Pixel in one click”",
+    "tiktokBindDiagFixPixel": "Bind Pixel in one click",
+    "tiktokBindDiag": {
+      "check": {
+        "connected": {
+          "label": "TikTok Catalog connected",
+          "action": "Complete TikTok authorization and bind a catalog first."
+        },
+        "bc_id": {
+          "label": "Business Center ID: {{bcId}}",
+          "action": "Missing bc_id — disconnect TikTok and re-authorize."
+        },
+        "advertiser_id": {
+          "label": "Advertiser ID: {{advertiserId}}",
+          "action": "Missing advertiser ID — re-authorize TikTok."
+        },
+        "catalog_found": {
+          "label": "Catalog readable: {{name}} ({{catalogId}})",
+          "action": "Cannot read catalog {{catalogId}} from TikTok — refresh the catalog list or re-bind."
+        },
+        "api_writable": {
+          "label": "API-writable catalog (channel={{channel}})",
+          "action": "This catalog cannot be written via API. Create a Spark API catalog or use official sync mode."
+        },
+        "currency_match": {
+          "label": "Currency match: catalog {{catalogCurrency}} / shop {{shopCurrency}}",
+          "action": "Catalog currency ({{catalogCurrency}}) does not match shop currency ({{shopCurrency}}). Create a Spark catalog in the shop currency."
+        },
+        "region_match": {
+          "label": "Region: catalog {{catalogRegion}} / expected {{expectedRegion}}",
+          "action": "Catalog region does not match the shop — consider creating a region-aligned Spark catalog."
+        },
+        "catalog_adv_link": {
+          "label": "Catalog linked to advertiser {{advertiserId}}",
+          "action": "Catalog is not linked to the current advertiser (linked: {{linkedAdvertiserIds}}). In TikTok BC → Assets → Catalog → View, link the catalog to advertiser {{advertiserId}}."
+        },
+        "catalog_adv_link_unknown": {
+          "label": "Catalog ↔ advertiser link (not returned by API)",
+          "action": "In TikTok BC, confirm the Spark catalog has a linked ad account and it matches the Pixel advertiser ({{advertiserId}})."
+        },
+        "pixel_present": {
+          "label": "Pixel on file",
+          "action": "No Pixel yet — click “Create & bind Pixel”."
+        },
+        "pixel_adv_link": {
+          "label": "Pixel {{pixelCode}} linked to advertiser {{advertiserId}}",
+          "action": "Pixel is not linked to the current advertiser (linked: {{linkedAdvertiserIds}}). Confirm linkage under BC → Assets → Pixel, or click “Bind Pixel in one click” here."
+        },
+        "catalog_eventsource": {
+          "label": "Catalog event source bound to Pixel {{pixelCode}}",
+          "action": "Catalog does not have this Pixel as an event source. Bind manually under Catalog → Event sources in TikTok, or click “Bind Pixel in one click” here."
+        }
+      }
+    },
     "tiktokAppEventSource": "App event source App ID: {{id}}",
     "tiktokAppIdLabel": "Bind app event source (App ID, optional)",
     "tiktokAppIdPlaceholder": "Enter TikTok App ID",
