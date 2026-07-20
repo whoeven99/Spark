@@ -124,14 +124,12 @@ tsfRoiRouter.get("/", async (_req, res) => {
       everSubscribedResult,
       payingNoAutoResult,
     ] = await Promise.all([
-      db.execute(
-        "SELECT COUNT(*) as total FROM ShopBillingBinding WHERE billingSystem = 'tsf'",
-      ),
+      // TSF 已废弃 ShopBillingBinding；安装/用户以 Account 为准（含已软删卸载店）。
+      db.execute("SELECT COUNT(*) as total FROM Account"),
       db.execute(
         `SELECT COUNT(*) as total
-         FROM ShopBillingBinding b
-         WHERE b.billingSystem = 'tsf'
-           AND EXISTS (SELECT 1 FROM Session s WHERE s.shop = b.shop)`,
+         FROM Account a
+         WHERE a.deletedAt IS NULL`,
       ),
       db.execute(
         "SELECT COUNT(*) as total FROM AppSubscription WHERE status = 'ACTIVE'",
@@ -157,11 +155,10 @@ tsfRoiRouter.get("/", async (_req, res) => {
         WHERE autoTranslate = 1
       `),
       db.execute(`
-        SELECT COUNT(DISTINCT b.shop) as total
-        FROM ShopBillingBinding b
+        SELECT COUNT(DISTINCT a.shop) as total
+        FROM Account a
         INNER JOIN BillingLog bl
-          ON bl.shop = b.shop AND bl.eventType = 'SUBSCRIPTION_ACTIVATED'
-        WHERE b.billingSystem = 'tsf'
+          ON bl.shop = a.shop AND bl.eventType = 'SUBSCRIPTION_ACTIVATED'
       `),
       db.execute(`
         SELECT
@@ -221,7 +218,7 @@ tsfRoiRouter.get("/", async (_req, res) => {
         count: installTotal,
         pctOfInstall: installTotal > 0 ? 100 : 0,
         kind: "forward",
-        note: "ShopBillingBinding = tsf（近似历史安装）",
+        note: "Account 行数（近似历史安装，含已卸载）",
         wired: true,
         source: "turso",
         howto: null,
@@ -247,7 +244,7 @@ tsfRoiRouter.get("/", async (_req, res) => {
         count: retained,
         pctOfInstall: rate(retained, installTotal),
         kind: "forward",
-        note: "仍有 Session 的 Binding 店",
+        note: "Account.deletedAt IS NULL（未软删）",
         wired: true,
         source: "turso",
         howto: null,
@@ -258,7 +255,7 @@ tsfRoiRouter.get("/", async (_req, res) => {
         count: uninstalled,
         pctOfInstall: rate(uninstalled, installTotal),
         kind: "churn",
-        note: "总安装 − 留存（无 Session）",
+        note: "总安装 − 留存（Account.deletedAt 非空）",
         wired: true,
         source: "turso",
         howto: null,
@@ -520,7 +517,7 @@ tsfRoiRouter.get("/", async (_req, res) => {
         id: "n-day-sub",
         title: "N 日安装→订阅",
         detail:
-          "Binding.createdAt cohort + 首次 SUBSCRIPTION_ACTIVATED ≤N 天；未满 N 天的安装不进分母。",
+          "Account.createdAt cohort + 首次 SUBSCRIPTION_ACTIVATED ≤N 天；未满 N 天的安装不进分母。",
         priority: "P1",
       },
       {

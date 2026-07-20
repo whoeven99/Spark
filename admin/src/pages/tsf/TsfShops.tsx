@@ -194,11 +194,23 @@ export default function TsfShops() {
           <Spin />
         ) : detail ? (
           <>
-            <Descriptions title="账本绑定" size="small" column={1} bordered style={{ marginBottom: 24 }}>
-              <Descriptions.Item label="账本系统">{detail.binding?.billingSystem ?? "-"}</Descriptions.Item>
-              <Descriptions.Item label="判定原因">{detail.binding?.boundReason ?? "-"}</Descriptions.Item>
+            <Descriptions title="Account" size="small" column={1} bordered style={{ marginBottom: 24 }}>
+              <Descriptions.Item label="状态">
+                {detail.account?.installed ? (
+                  <Tag color="green">在装</Tag>
+                ) : (
+                  <Tag color="volcano">已卸载</Tag>
+                )}
+              </Descriptions.Item>
               <Descriptions.Item label="注册时间">
-                {detail.binding?.createdAt ? new Date(detail.binding.createdAt).toLocaleString("zh-CN") : "-"}
+                {detail.account?.createdAt
+                  ? new Date(detail.account.createdAt).toLocaleString("zh-CN")
+                  : "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="卸载时间">
+                {detail.account?.deletedAt
+                  ? new Date(detail.account.deletedAt).toLocaleString("zh-CN")
+                  : "-"}
               </Descriptions.Item>
             </Descriptions>
 
