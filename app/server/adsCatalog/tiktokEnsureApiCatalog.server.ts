@@ -3,6 +3,7 @@ import {
   createTiktokCatalog,
   createTiktokPixel,
   bindTiktokCatalogEventSource,
+  bindTiktokCatalogPixelEventSource,
   fetchTiktokCatalogConf,
   isApiWritableTiktokCatalog,
   resolveTiktokCatalogRegion,
@@ -219,7 +220,7 @@ async function bindCatalogEventSourcesBestEffort(params: {
 }): Promise<void> {
   if (params.pixelCode) {
     try {
-      await bindTiktokCatalogEventSource({
+      await bindTiktokCatalogPixelEventSource({
         accessToken: params.accessToken,
         advertiserId: params.advertiserId,
         bcId: params.bcId,

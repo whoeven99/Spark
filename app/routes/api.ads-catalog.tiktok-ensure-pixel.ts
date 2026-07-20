@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { ensureTiktokCatalogPixel } from "../server/adsCatalog/ensureTiktokCatalogPixel.server";
+import { getTiktokEventSourceBindErrorCode } from "../server/adsCatalog/clients/tiktokCatalogClient.server";
 
 /**
  * 为已连接的 TikTok Catalog 创建（若缺失）并绑定 Pixel 事件源。
@@ -19,12 +20,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
     return Response.json({ ok: true, ...result });
   } catch (e) {
-    return Response.json(
-      {
-        ok: false,
-        error: e instanceof Error ? e.message : "创建或绑定 Pixel 失败",
-      },
-      { status: 500 },
-    );
+    const errMsg = e instanceof Error ? e.message : "创建或绑定 Pixel 失败";
+    const errorCode = getTiktokEventSourceBindErrorCode(errMsg);
+    return Response.json({ ok: false, error: errMsg, errorCode }, { status: 500 });
   }
 };

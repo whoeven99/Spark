@@ -1,6 +1,6 @@
 import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
 import {
-  bindTiktokCatalogEventSource,
+  bindTiktokCatalogPixelEventSource,
   createTiktokPixel,
 } from "./clients/tiktokCatalogClient.server";
 import {
@@ -65,7 +65,7 @@ export async function ensureTiktokCatalogPixel(params: {
 
   let bound = false;
   try {
-    await bindTiktokCatalogEventSource({
+    await bindTiktokCatalogPixelEventSource({
       accessToken: credential.accessToken,
       advertiserId: credential.advertiserId,
       bcId: credential.bcId,

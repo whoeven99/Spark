@@ -297,6 +297,180 @@ export async function createTiktokPixel(params: {
   return { pixelCode, pixelName: name };
 }
 
+type TiktokApiPayload = { code?: number; message?: string };
+
+async function postTiktokJsonApi(params: {
+  path: string;
+  accessToken: string;
+  body: Record<string, unknown>;
+  logStep: string;
+}): Promise<{ httpStatus: number; payload: TiktokApiPayload; raw: string }> {
+  const response = await fetch(`${TIKTOK_API_BASE}${params.path}`, {
+    method: "POST",
+    headers: {
+      "Access-Token": params.accessToken,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params.body),
+  });
+
+  const raw = await response.text();
+  let payload: TiktokApiPayload = {};
+  try {
+    payload = raw ? (JSON.parse(raw) as TiktokApiPayload) : {};
+  } catch {
+    payload = {};
+  }
+
+  console.info(
+    `${LOG_PREFIX} step=${params.logStep} http=${response.status} code=${payload.code ?? ""} message=${payload.message ?? ""} body=${rawForLog(raw)}`,
+  );
+
+  return { httpStatus: response.status, payload, raw };
+}
+
+function isTiktokApiSuccess(httpStatus: number, payload: TiktokApiPayload): boolean {
+  return httpStatus >= 200 && httpStatus < 300 && (payload.code === undefined || payload.code === 0);
+}
+
+/**
+ * 将 Pixel 从广告账户转入 Business Center，以便 Catalog 事件源绑定可用。
+ * POST /open_api/v1.3/bc/pixel/transfer/
+ */
+export async function transferTiktokPixelToBc(params: {
+  accessToken: string;
+  bcId: string;
+  pixelCode: string;
+}): Promise<void> {
+  const { httpStatus, payload, raw } = await postTiktokJsonApi({
+    path: "/bc/pixel/transfer/",
+    accessToken: params.accessToken,
+    body: {
+      bc_id: params.bcId,
+      pixel_code: params.pixelCode,
+    },
+    logStep: "pixel_transfer_request",
+  });
+
+  if (isTiktokApiSuccess(httpStatus, payload)) return;
+
+  const detail =
+    payload.message ||
+    (payload.code !== undefined ? `code=${payload.code}` : "") ||
+    raw.slice(0, 200) ||
+    String(httpStatus);
+  throw new Error(`TikTok Pixel transfer to BC failed: HTTP ${httpStatus} ${detail}`.trim());
+}
+
+/**
+ * 在 BC 内将 Pixel 关联到广告账户。
+ * POST /open_api/v1.3/bc/pixel/link/update/
+ */
+export async function linkTiktokBcPixelToAdvertiser(params: {
+  accessToken: string;
+  bcId: string;
+  pixelCode: string;
+  advertiserId: string;
+}): Promise<void> {
+  const { httpStatus, payload, raw } = await postTiktokJsonApi({
+    path: "/bc/pixel/link/update/",
+    accessToken: params.accessToken,
+    body: {
+      bc_id: params.bcId,
+      pixel_code: params.pixelCode,
+      advertiser_ids: [params.advertiserId],
+      relation_status: "LINK",
+    },
+    logStep: "pixel_link_request",
+  });
+
+  if (isTiktokApiSuccess(httpStatus, payload)) return;
+
+  const detail =
+    payload.message ||
+    (payload.code !== undefined ? `code=${payload.code}` : "") ||
+    raw.slice(0, 200) ||
+    String(httpStatus);
+  throw new Error(`TikTok Pixel link to advertiser failed: HTTP ${httpStatus} ${detail}`.trim());
+}
+
+/**
+ * 绑定 Catalog 事件源前，确保 Pixel 已在 BC 内并对当前广告主可用（best-effort）。
+ */
+export async function prepareTiktokPixelForCatalogBind(params: {
+  accessToken: string;
+  bcId: string;
+  pixelCode: string;
+  advertiserId: string;
+}): Promise<void> {
+  try {
+    await transferTiktokPixelToBc({
+      accessToken: params.accessToken,
+      bcId: params.bcId,
+      pixelCode: params.pixelCode,
+    });
+    console.info(
+      `${LOG_PREFIX} step=pixel_transfer_ok bcId=${params.bcId} pixelCode=${params.pixelCode}`,
+    );
+  } catch (e) {
+    console.warn(
+      `${LOG_PREFIX} step=pixel_transfer_skipped bcId=${params.bcId} pixelCode=${params.pixelCode} err=${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+
+  try {
+    await linkTiktokBcPixelToAdvertiser({
+      accessToken: params.accessToken,
+      bcId: params.bcId,
+      pixelCode: params.pixelCode,
+      advertiserId: params.advertiserId,
+    });
+    console.info(
+      `${LOG_PREFIX} step=pixel_link_ok bcId=${params.bcId} pixelCode=${params.pixelCode} advertiserId=${params.advertiserId}`,
+    );
+  } catch (e) {
+    console.warn(
+      `${LOG_PREFIX} step=pixel_link_skipped bcId=${params.bcId} pixelCode=${params.pixelCode} advertiserId=${params.advertiserId} err=${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+}
+
+/** 从 TikTok 事件源绑定错误文案中提取稳定 errorCode，供前端 i18n 映射。 */
+export function getTiktokEventSourceBindErrorCode(message: string): string | undefined {
+  if (
+    message.includes("1000018") ||
+    message.includes("ERRCODE_EVENT_SOURCE_NOT_AVAILABLE_FOR_ADV")
+  ) {
+    return "EVENT_SOURCE_NOT_AVAILABLE_FOR_ADV";
+  }
+  return undefined;
+}
+
+/**
+ * 准备 Pixel（转入 BC + 关联广告主）后绑定为 Catalog Web 事件源。
+ */
+export async function bindTiktokCatalogPixelEventSource(params: {
+  accessToken: string;
+  advertiserId: string;
+  bcId: string;
+  catalogId: string;
+  pixelCode: string;
+}): Promise<void> {
+  await prepareTiktokPixelForCatalogBind({
+    accessToken: params.accessToken,
+    bcId: params.bcId,
+    pixelCode: params.pixelCode,
+    advertiserId: params.advertiserId,
+  });
+  await bindTiktokCatalogEventSource({
+    accessToken: params.accessToken,
+    advertiserId: params.advertiserId,
+    bcId: params.bcId,
+    catalogId: params.catalogId,
+    pixelCode: params.pixelCode,
+  });
+}
+
 /**
  * 将 Pixel 或 App 作为事件源绑定到 Catalog。
  * POST /open_api/v1.3/catalog/eventsource/bind/

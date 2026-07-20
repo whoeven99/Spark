@@ -1570,6 +1570,7 @@
     "tiktokRebindPixel": "Re-bind Pixel",
     "tiktokRebindPixelBusy": "Binding...",
     "tiktokRebindPixelSuccess": "Pixel event source bound successfully",
+    "tiktokPixelBindErrorNotAvailableForAdv": "This Pixel cannot be bound to the current catalog because it is not available for the connected ad account. In TikTok Business Center, confirm the Pixel is in the same BC as the catalog and linked to the ad account—or bind it manually under Catalog → Event sources, then click Re-bind Pixel here.",
     "tiktokAppEventSource": "App event source App ID: {{id}}",
     "tiktokAppIdLabel": "Bind app event source (App ID, optional)",
     "tiktokAppIdPlaceholder": "Enter TikTok App ID",

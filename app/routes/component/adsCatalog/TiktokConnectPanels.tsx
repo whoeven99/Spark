@@ -52,6 +52,16 @@ const secondaryBtn = {
   cursor: "pointer",
 };
 
+function resolveTiktokPixelBindError(
+  data: { error?: string; errorCode?: string },
+  t: (key: string) => string,
+): string {
+  if (data.errorCode === "EVENT_SOURCE_NOT_AVAILABLE_FOR_ADV") {
+    return t("adsCatalog.tiktokPixelBindErrorNotAvailableForAdv");
+  }
+  return data.error ?? t("adsCatalog.authError");
+}
+
 export function TiktokConnectPanels({
   credentials,
   locationSearch,
@@ -169,9 +179,13 @@ export function TiktokConnectPanels({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "pixel" }),
       });
-      const data = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      const data = (await resp.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        errorCode?: string;
+      };
       if (!resp.ok || !data.ok) {
-        setPixelBindError(data.error ?? t("adsCatalog.authError"));
+        setPixelBindError(resolveTiktokPixelBindError(data, t));
         return;
       }
       setPixelBindSuccess(true);
@@ -193,9 +207,13 @@ export function TiktokConnectPanels({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
-      const data = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      const data = (await resp.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        errorCode?: string;
+      };
       if (!resp.ok || !data.ok) {
-        setPixelBindError(data.error ?? t("adsCatalog.authError"));
+        setPixelBindError(resolveTiktokPixelBindError(data, t));
         return;
       }
       setPixelEnsureSuccess(true);

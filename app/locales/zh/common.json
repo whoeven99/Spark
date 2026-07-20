@@ -1570,6 +1570,7 @@
     "tiktokRebindPixel": "重新绑定 Pixel",
     "tiktokRebindPixelBusy": "绑定中…",
     "tiktokRebindPixelSuccess": "Pixel 事件源绑定成功",
+    "tiktokPixelBindErrorNotAvailableForAdv": "Pixel 无法绑定到当前 Catalog：该 Pixel 对当前广告账户不可用。请在 TikTok 商务中心确认 Pixel 已转入 BC、且与 Catalog 属于同一商务中心；或在 TikTok 后台「商品库 → 事件源」手动绑定后，再点此页「重新绑定 Pixel」。",
     "tiktokAppEventSource": "应用事件源 App ID：{{id}}",
     "tiktokAppIdLabel": "绑定应用事件源（App ID，可选）",
     "tiktokAppIdPlaceholder": "输入 TikTok App ID",

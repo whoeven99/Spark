@@ -4,7 +4,11 @@ import {
   getTiktokCatalogCredential,
   setTiktokCatalogCredential,
 } from "../server/adsCatalog/credentialStore.server";
-import { bindTiktokCatalogEventSource } from "../server/adsCatalog/clients/tiktokCatalogClient.server";
+import {
+  bindTiktokCatalogEventSource,
+  bindTiktokCatalogPixelEventSource,
+  getTiktokEventSourceBindErrorCode,
+} from "../server/adsCatalog/clients/tiktokCatalogClient.server";
 
 const LOG_PREFIX = "[AdsCatalog][BindEventSource]";
 
@@ -57,7 +61,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     try {
-      await bindTiktokCatalogEventSource({
+      await bindTiktokCatalogPixelEventSource({
         accessToken: credential.accessToken,
         advertiserId: credential.advertiserId,
         bcId: credential.bcId,
@@ -70,8 +74,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return Response.json({ ok: true, pixelCode: credential.pixelCode });
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : "绑定 Pixel 事件源失败";
+      const errorCode = getTiktokEventSourceBindErrorCode(errMsg);
       console.error(`${LOG_PREFIX} type=pixel shop=${session.shop} err=${errMsg}`);
-      return Response.json({ ok: false, error: errMsg }, { status: 500 });
+      return Response.json({ ok: false, error: errMsg, errorCode }, { status: 500 });
     }
   }
 
