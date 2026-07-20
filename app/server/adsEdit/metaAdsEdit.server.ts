@@ -16,10 +16,42 @@ import type {
 const META_API_VERSION = "v19.0";
 const GRAPH_BASE = "https://graph.facebook.com";
 
-type MetaApiError = { message?: string; type?: string; code?: number };
+type MetaApiError = {
+  message?: string;
+  type?: string;
+  code?: number;
+  error_user_title?: string;
+  error_user_msg?: string;
+  error_data?: string | Record<string, unknown>;
+};
 
 function graphUrl(path: string): string {
   return `${GRAPH_BASE}/${META_API_VERSION}${path}`;
+}
+
+function encodeMetaBody(
+  accessToken: string,
+  body: Record<string, unknown>,
+): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set("access_token", accessToken);
+  for (const [key, value] of Object.entries(body)) {
+    if (value === undefined || value === null) continue;
+    if (typeof value === "object") {
+      params.set(key, JSON.stringify(value));
+    } else {
+      params.set(key, String(value));
+    }
+  }
+  return params;
+}
+
+function formatMetaError(error: MetaApiError | undefined, fallback: string): string {
+  if (!error) return fallback;
+  const parts = [error.error_user_title, error.error_user_msg, error.message].filter(
+    Boolean,
+  );
+  return [...new Set(parts)].join(" — ") || fallback;
 }
 
 async function metaGet<T = Record<string, unknown>>(
@@ -43,7 +75,7 @@ async function metaGet<T = Record<string, unknown>>(
     throw new Error(`Meta API HTTP ${resp.status}: ${text.slice(0, 300)}`);
   }
   if (!resp.ok || json.error) {
-    throw new Error(json.error?.message ?? `Meta API HTTP ${resp.status}`);
+    throw new Error(formatMetaError(json.error, `Meta API HTTP ${resp.status}`));
   }
   return json as T;
 }
@@ -56,8 +88,8 @@ async function metaPost<T = Record<string, unknown>>(
   const url = graphUrl(path);
   const resp = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ access_token: accessToken, ...body }),
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: encodeMetaBody(accessToken, body),
   });
   const text = await resp.text();
   let json: { error?: MetaApiError } & Record<string, unknown>;
@@ -67,7 +99,7 @@ async function metaPost<T = Record<string, unknown>>(
     throw new Error(`Meta API HTTP ${resp.status}: ${text.slice(0, 300)}`);
   }
   if (!resp.ok || json.error) {
-    throw new Error(json.error?.message ?? `Meta API HTTP ${resp.status}`);
+    throw new Error(formatMetaError(json.error, `Meta API HTTP ${resp.status}`));
   }
   return json as T;
 }

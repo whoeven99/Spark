@@ -24,13 +24,11 @@ const DEFAULT_FORM: MetaAdFormData = {
   adLinkUrl: "",
 };
 
+/** 当前创建链路已支持的目标（销售/线索/应用需 Pixel/表单/应用资产，暂不开放） */
 const OBJECTIVES: { value: MetaCampaignObjective; labelKey: string }[] = [
   { value: "OUTCOME_TRAFFIC", labelKey: "adsCreate.meta.objectiveTraffic" },
-  { value: "OUTCOME_SALES", labelKey: "adsCreate.meta.objectiveSales" },
   { value: "OUTCOME_AWARENESS", labelKey: "adsCreate.meta.objectiveAwareness" },
   { value: "OUTCOME_ENGAGEMENT", labelKey: "adsCreate.meta.objectiveEngagement" },
-  { value: "OUTCOME_LEADS", labelKey: "adsCreate.meta.objectiveLeads" },
-  { value: "OUTCOME_APP_PROMOTION", labelKey: "adsCreate.meta.objectiveApp" },
 ];
 
 const CTAS: { value: MetaCallToAction; labelKey: string }[] = [
