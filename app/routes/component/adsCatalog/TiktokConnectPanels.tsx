@@ -62,6 +62,8 @@ export function TiktokConnectPanels({
   const [busy, setBusy] = useState(false);
   const [appIdInput, setAppIdInput] = useState(credentials.tiktok.appId ?? "");
   const [appIdSuccess, setAppIdSuccess] = useState(false);
+  const [pixelBindSuccess, setPixelBindSuccess] = useState(false);
+  const [pixelBindError, setPixelBindError] = useState<string | null>(null);
 
   const tiktok = credentials.tiktok;
 
@@ -139,7 +141,7 @@ export function TiktokConnectPanels({
       const resp = await fetch(`/api/ads-catalog/tiktok-bind-eventsource${locationSearch}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appId }),
+        body: JSON.stringify({ type: "app", appId }),
       });
       const data = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!resp.ok || !data.ok) {
@@ -150,6 +152,29 @@ export function TiktokConnectPanels({
       onChanged();
     } catch (e) {
       alert(e instanceof Error ? e.message : t("adsCatalog.authError"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function rebindPixelEventSource() {
+    setBusy(true);
+    setPixelBindSuccess(false);
+    setPixelBindError(null);
+    try {
+      const resp = await fetch(`/api/ads-catalog/tiktok-bind-eventsource${locationSearch}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "pixel" }),
+      });
+      const data = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!resp.ok || !data.ok) {
+        setPixelBindError(data.error ?? t("adsCatalog.authError"));
+        return;
+      }
+      setPixelBindSuccess(true);
+    } catch (e) {
+      setPixelBindError(e instanceof Error ? e.message : t("adsCatalog.authError"));
     } finally {
       setBusy(false);
     }
@@ -199,8 +224,28 @@ export function TiktokConnectPanels({
               </div>
             )}
             {tiktok.pixelCode && (
-              <div style={{ marginTop: 4, color: "#0f7a52" }}>
-                {t("adsCatalog.tiktokPixelCode", { code: tiktok.pixelCode })}
+              <div style={{ marginTop: 4 }}>
+                <div style={{ color: "#0f7a52" }}>
+                  {t("adsCatalog.tiktokPixelCode", { code: tiktok.pixelCode })}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                  <button
+                    type="button"
+                    style={{ ...secondaryBtn, padding: "4px 10px", fontSize: 12 }}
+                    disabled={busy}
+                    onClick={() => void rebindPixelEventSource()}
+                  >
+                    {busy ? t("adsCatalog.tiktokRebindPixelBusy") : t("adsCatalog.tiktokRebindPixel")}
+                  </button>
+                  {pixelBindSuccess && (
+                    <span style={{ color: "#0f7a52", fontSize: 12 }}>
+                      {t("adsCatalog.tiktokRebindPixelSuccess")}
+                    </span>
+                  )}
+                  {pixelBindError && (
+                    <span style={{ color: "#d72c0d", fontSize: 12 }}>{pixelBindError}</span>
+                  )}
+                </div>
               </div>
             )}
             {tiktok.appId && (
