@@ -135,7 +135,7 @@ describe("linkTiktokBcPixelToAdvertiser / prepareTiktokPixelForCatalogBind", () 
     ).rejects.toThrow(/Pixel link to advertiser failed/);
   });
 
-  it("throws PIXEL_ASSET_PERMISSION_DENIED when link/get returns 40002", async () => {
+  it("soft-skips link/get asset permission denial after successful link/update", async () => {
     listAuthorizedAdvertiserIds.mockResolvedValue(["adv-1"]);
     globalThis.fetch = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -169,6 +169,6 @@ describe("linkTiktokBcPixelToAdvertiser / prepareTiktokPixelForCatalogBind", () 
         advertiserId: "adv-1",
         extraAdvertiserIds: ["adv-2"],
       }),
-    ).rejects.toThrow(/PIXEL_ASSET_PERMISSION_DENIED/);
+    ).resolves.toEqual(["adv-1", "adv-2"]);
   });
 });

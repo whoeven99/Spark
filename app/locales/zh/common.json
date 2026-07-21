@@ -1571,7 +1571,7 @@
     "tiktokRebindPixelBusy": "绑定中…",
     "tiktokRebindPixelSuccess": "Pixel 事件源绑定成功",
     "tiktokPixelBindErrorNotAvailableForAdv": "Pixel 无法绑定到当前 Catalog：该 Pixel 对当前广告账户不可用。请确认事件源弹窗所选广告账号，与 Pixel「关联的账号」一致；或点此页「一键绑定 Pixel」（会尝试关联当前授权下全部广告主）。也可在 TikTok「商品库 → 事件源」手动绑定后重试。",
-    "tiktokPixelBindErrorAssetPermission": "当前授权应用无权访问该 Pixel 资产（常见于转入商务中心后）。请在 TikTok 开发者后台确认已开通 Pixel/商务中心相关 API，并用商务中心管理员重新授权后，再点「一键绑定 Pixel」。",
+    "tiktokPixelBindErrorAssetPermission": "当前授权无权读取该 Pixel 资产（常见于转入商务中心后「用户」为 0）。请在商务中心 → 资产 → Pixel → 将该 Pixel 分配给授权账号，或点「创建并绑定 Pixel」重试（写入成功后会继续绑定事件源）。",
     "tiktokBindDiagTitle": "绑定前诊断",
     "tiktokBindDiagHint": "自动检查 Catalog、Pixel 与广告主关联是否就绪。只读查询，不会修改 TikTok 配置。",
     "tiktokBindDiagBusy": "诊断中…",
@@ -1627,7 +1627,7 @@
         },
         "pixel_adv_link_permission": {
           "label": "无法查询 Pixel {{pixelCode}} 的广告主关联",
-          "action": "API 无权限访问该 Pixel 资产（{{message}}）。请确认开发者应用已开通 Pixel/商务中心 API，并用商务中心管理员重新授权后再诊断。"
+          "action": "API 无权限读取该 Pixel 资产（{{message}}）。请到商务中心 → 资产 → Pixel，确认「用户」不为 0，并把该 Pixel 分配给当前授权账号后再诊断。"
         },
         "catalog_eventsource": {
           "label": "Catalog 事件源已绑定 Pixel {{pixelCode}}",

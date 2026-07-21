@@ -567,7 +567,9 @@ export async function getTiktokBcPixelLinkedAdvertiserIds(params: {
 
 /**
  * 绑定 Catalog 事件源前，确保 Pixel 已在 BC 内并对授权广告主可用。
- * transfer 可 soft-skip（已在 BC）；link 硬失败，并用 link/get 校验。
+ * transfer 可 soft-skip（已在 BC）；link/update 硬失败。
+ * link/get 仅作校验：写入成功后若因资产读权限 40002 失败则 soft-skip，
+ * 避免 TikTok「可写不可读」拦截后续 eventsource/bind。
  */
 export async function prepareTiktokPixelForCatalogBind(params: {
   accessToken: string;
@@ -629,6 +631,13 @@ export async function prepareTiktokPixelForCatalogBind(params: {
   });
   if (!linked.ok) {
     const code = linked.errorCode ?? "PIXEL_LINK_GET_FAILED";
+    // link/update 已成功时，资产读权限不足不应阻断事件源绑定。
+    if (code === "PIXEL_ASSET_PERMISSION_DENIED") {
+      console.warn(
+        `${LOG_PREFIX} step=pixel_link_get_skipped bcId=${params.bcId} pixelCode=${params.pixelCode} code=${code} message=${linked.message ?? ""}`,
+      );
+      return linkTargets;
+    }
     throw new Error(
       `TikTok Pixel link/get failed after link: ${linked.message ?? "unknown"} [${code}]`,
     );
