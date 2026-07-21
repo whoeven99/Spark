@@ -120,6 +120,8 @@ export function AdsCatalogPage() {
   const [previewPlatform, setPreviewPlatform] = useState<Platform | null>(null);
   const [pathBBusy, setPathBBusy] = useState(false);
   const [pathBError, setPathBError] = useState<string | null>(null);
+  const [feedBusy, setFeedBusy] = useState(false);
+  const [feedError, setFeedError] = useState<string | null>(null);
 
   const syncFetcher = useFetcher<{
     success?: boolean;
@@ -332,11 +334,12 @@ export function AdsCatalogPage() {
 
   /** Path B：确保绑定 Spark API 可写 Catalog，再提交 API 上传同步。 */
   async function handleTiktokPathBSync() {
-    if (!credentialReady || pathBBusy || syncFetcher.state !== "idle") return;
+    if (!credentialReady || pathBBusy || feedBusy || syncFetcher.state !== "idle") return;
     if (!window.confirm(t("adsCatalog.confirmTiktokPathBSync"))) return;
 
     setPathBBusy(true);
     setPathBError(null);
+    setFeedError(null);
     try {
       const resp = await fetch(`/api/ads-catalog/tiktok-create-catalog${locationSearch}`, {
         method: "POST",
@@ -362,6 +365,44 @@ export function AdsCatalogPage() {
       setPathBError(e instanceof Error ? e.message : t("adsCatalog.authError"));
     } finally {
       setPathBBusy(false);
+    }
+  }
+
+  /** Feed：确保 API 可写 Catalog，再提交 CSV product/file 同步。 */
+  async function handleTiktokFeedSync() {
+    if (!credentialReady || pathBBusy || feedBusy || syncFetcher.state !== "idle") return;
+    if (!window.confirm(t("adsCatalog.confirmTiktokFeedSync"))) return;
+
+    setFeedBusy(true);
+    setFeedError(null);
+    setPathBError(null);
+    try {
+      const resp = await fetch(`/api/ads-catalog/tiktok-create-catalog${locationSearch}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = (await resp.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!resp.ok || !data.ok) {
+        setFeedError(data.error ?? t("adsCatalog.authError"));
+        return;
+      }
+      revalidator.revalidate();
+      const body = buildSyncBody();
+      body.tiktokUploadMethod = "product_file";
+      syncFetcher.submit(body as unknown as SubmitTarget, {
+        method: "POST",
+        encType: "application/json",
+        action: `/api/ads-catalog/sync${locationSearch}`,
+      });
+      setTab("tasks");
+    } catch (e) {
+      setFeedError(e instanceof Error ? e.message : t("adsCatalog.authError"));
+    } finally {
+      setFeedBusy(false);
     }
   }
 
@@ -594,14 +635,16 @@ export function AdsCatalogPage() {
               <button
                 type="button"
                 onClick={handleSync}
-                disabled={!credentialReady || syncFetcher.state !== "idle" || pathBBusy}
+                disabled={
+                  !credentialReady || syncFetcher.state !== "idle" || pathBBusy || feedBusy
+                }
                 style={{
                   ...buttonPrimary,
                   opacity: !credentialReady ? 0.6 : 1,
                   cursor: !credentialReady ? "not-allowed" : "pointer",
                 }}
               >
-                {syncFetcher.state === "submitting" && !pathBBusy
+                {syncFetcher.state === "submitting" && !pathBBusy && !feedBusy
                   ? t("adsCatalog.actionSyncing")
                   : platform === "tiktok" &&
                       credentials.tiktok.bindingMode === "shopify_official"
@@ -612,21 +655,46 @@ export function AdsCatalogPage() {
                 <button
                   type="button"
                   onClick={() => void handleTiktokPathBSync()}
-                  disabled={!credentialReady || syncFetcher.state !== "idle" || pathBBusy}
+                  disabled={
+                    !credentialReady || syncFetcher.state !== "idle" || pathBBusy || feedBusy
+                  }
                   style={{
                     ...buttonSecondary,
                     opacity: !credentialReady ? 0.6 : 1,
-                    cursor: !credentialReady || pathBBusy ? "not-allowed" : "pointer",
+                    cursor:
+                      !credentialReady || pathBBusy || feedBusy ? "not-allowed" : "pointer",
                   }}
                 >
-                  {pathBBusy || syncFetcher.state === "submitting"
+                  {pathBBusy
                     ? t("adsCatalog.actionSyncTiktokPathBBusy")
                     : t("adsCatalog.actionSyncTiktokPathB")}
                 </button>
               )}
+              {platform === "tiktok" && (
+                <button
+                  type="button"
+                  onClick={() => void handleTiktokFeedSync()}
+                  disabled={
+                    !credentialReady || syncFetcher.state !== "idle" || pathBBusy || feedBusy
+                  }
+                  style={{
+                    ...buttonSecondary,
+                    opacity: !credentialReady ? 0.6 : 1,
+                    cursor:
+                      !credentialReady || pathBBusy || feedBusy ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {feedBusy
+                    ? t("adsCatalog.actionSyncTiktokFeedBusy")
+                    : t("adsCatalog.actionSyncTiktokFeed")}
+                </button>
+              )}
             </div>
             {platform === "tiktok" && (
-              <p style={pageHintTextStyle}>{t("adsCatalog.tiktokPathBSyncHint")}</p>
+              <>
+                <p style={pageHintTextStyle}>{t("adsCatalog.tiktokPathBSyncHint")}</p>
+                <p style={pageHintTextStyle}>{t("adsCatalog.tiktokFeedSyncHint")}</p>
+              </>
             )}
             {platform === "tiktok" &&
               credentials.tiktok.bindingMode === "shopify_official" && (
@@ -645,6 +713,7 @@ export function AdsCatalogPage() {
                 </div>
               )}
             {pathBError && <div style={errorBoxStyle}>{pathBError}</div>}
+            {feedError && <div style={errorBoxStyle}>{feedError}</div>}
 
             {previewError && (
               <div style={errorBoxStyle}>{previewError}</div>

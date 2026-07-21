@@ -246,7 +246,11 @@ export function AdsCatalogTaskCard({
           {tiktokSyncMode === "shopify_official"
             ? ` · ${t("adsCatalog.metaTiktokModeOfficial")}`
             : tiktokSyncMode === "api_managed"
-              ? ` · ${t("adsCatalog.metaTiktokModeApi")}`
+              ? ` · ${
+                  result?.uploadMethod === "product_file"
+                    ? t("adsCatalog.metaTiktokModeFeed")
+                    : t("adsCatalog.metaTiktokModeApi")
+                }`
               : null}
           {" · "}
           {new Intl.DateTimeFormat(i18n.language).format(new Date(task.createdAt))}

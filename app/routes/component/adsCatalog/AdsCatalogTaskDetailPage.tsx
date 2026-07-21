@@ -132,7 +132,9 @@ export function AdsCatalogTaskDetailPage({ task, locationSearch, onBack }: Props
         )}
         {tiktokSyncMode === "api_managed" && (
           <div style={{ ...pageHintTextStyle, margin: 0 }}>
-            {t("adsCatalog.detailSyncModeApi")}
+            {result?.uploadMethod === "product_file"
+              ? t("adsCatalog.detailSyncModeFeed")
+              : t("adsCatalog.detailSyncModeApi")}
             {result?.catalogId ? (
               <>
                 <br />

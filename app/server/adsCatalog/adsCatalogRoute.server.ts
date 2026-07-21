@@ -21,6 +21,7 @@ const SyncRequestSchema = z.object({
   contentLanguage: z.string().min(2).max(8).optional(),
   targetCountry: z.string().min(2).max(4).optional(),
   googleProductCategory: z.string().max(64).optional(),
+  tiktokUploadMethod: z.enum(["product_upload", "product_file"]).optional(),
   filters: z
     .object({
       tags: z.array(z.string()).optional(),
@@ -82,6 +83,12 @@ export async function handleAdsCatalogSyncAction(request: Request): Promise<Resp
       ? parsed.data.productIds
       : null;
   const filters = parsed.data.filters ?? {};
+  const tiktokUploadMethod =
+    parsed.data.platform === "tiktok"
+      ? (parsed.data.tiktokUploadMethod ?? "product_upload")
+      : undefined;
+  const maxProducts =
+    parsed.data.platform === "tiktok" && tiktokUploadMethod === "product_file" ? 2000 : 250;
 
   const [shopInfo, products] = await Promise.all([
     fetchShopBasicInfo(admin),
@@ -91,7 +98,7 @@ export async function handleAdsCatalogSyncAction(request: Request): Promise<Resp
       productTypes: filters.productTypes,
       vendors: filters.vendors,
       inStockOnly: filters.inStockOnly,
-      maxProducts: 250,
+      maxProducts,
     }),
   ]);
 
@@ -131,12 +138,14 @@ export async function handleAdsCatalogSyncAction(request: Request): Promise<Resp
       productIds,
       totalProducts: products.length,
       ...(tiktokBindingMode ? { bindingMode: tiktokBindingMode } : {}),
+      ...(tiktokUploadMethod ? { tiktokUploadMethod } : {}),
     },
     taskConfig: {
       platform: parsed.data.platform,
       productIds,
       totalProducts: products.length,
       ...(tiktokBindingMode ? { bindingMode: tiktokBindingMode } : {}),
+      ...(tiktokUploadMethod ? { tiktokUploadMethod } : {}),
     },
   });
 
@@ -152,6 +161,7 @@ export async function handleAdsCatalogSyncAction(request: Request): Promise<Resp
     googleContentLanguage: parsed.data.contentLanguage,
     googleTargetCountry: parsed.data.targetCountry,
     googleProductCategory: parsed.data.googleProductCategory,
+    ...(tiktokUploadMethod ? { tiktokUploadMethod } : {}),
   };
   enqueueAdsCatalogSync(enqueueParams);
 

@@ -1051,3 +1051,84 @@ export async function upsertTiktokCatalogItems(params: {
   );
   return result;
 }
+
+export interface TiktokProductFileUploadResult {
+  feedLogId?: string;
+  requestId?: string;
+}
+
+/**
+ * 通过公网文件 URL 上传 Catalog 商品（一次性 Feed 文件）。
+ * POST /open_api/v1.3/catalog/product/file/
+ */
+export async function uploadTiktokCatalogProductFile(params: {
+  accessToken: string;
+  bcId: string;
+  catalogId: string;
+  fileUrl: string;
+  updateMode?: "INCREMENTAL" | "REPLACE";
+}): Promise<TiktokProductFileUploadResult> {
+  const updateMode = params.updateMode ?? "INCREMENTAL";
+  const url = `${TIKTOK_API_BASE}/catalog/product/file/`;
+  const requestBody = {
+    bc_id: params.bcId,
+    catalog_id: params.catalogId,
+    file_url: params.fileUrl,
+    update_mode: updateMode,
+  };
+
+  console.info(
+    `${LOG_PREFIX} step=product_file_request bcId=${params.bcId} catalogId=${params.catalogId} updateMode=${updateMode} fileUrl=${params.fileUrl.slice(0, 240)}`,
+  );
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Access-Token": params.accessToken,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
+  } catch (e) {
+    const reason = `network error: ${e instanceof Error ? e.message : String(e)}`;
+    console.error(`${LOG_PREFIX} step=product_file_network_error ${reason}`);
+    throw new Error(`TikTok Catalog product/file failed: ${reason}`);
+  }
+
+  const text = await response.text();
+  let payload: {
+    code?: number;
+    message?: string;
+    request_id?: string;
+    data?: { feed_log_id?: string | number };
+  } = {};
+  try {
+    payload = text ? (JSON.parse(text) as typeof payload) : {};
+  } catch {
+    payload = {};
+  }
+
+  console.info(
+    `${LOG_PREFIX} step=product_file_response http=${response.status} code=${payload.code ?? ""} message=${payload.message ?? ""} request_id=${payload.request_id ?? ""} feed_log_id=${payload.data?.feed_log_id ?? ""} body=${rawForLog(text)}`,
+  );
+
+  if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {
+    const apiPart =
+      payload.code !== undefined
+        ? `code=${payload.code}${payload.message ? ` ${payload.message}` : ""}`
+        : payload.message || text.slice(0, 200) || response.statusText;
+    throw new Error(
+      `TikTok Catalog product/file failed: HTTP ${response.status}${apiPart ? ` ${apiPart}` : ""}`,
+    );
+  }
+
+  const feedLogId =
+    payload.data?.feed_log_id != null ? String(payload.data.feed_log_id).trim() : undefined;
+
+  return {
+    ...(feedLogId ? { feedLogId } : {}),
+    ...(payload.request_id ? { requestId: payload.request_id } : {}),
+  };
+}

@@ -6,6 +6,8 @@ const failTask = vi.hoisted(() => vi.fn());
 const getTiktokCatalogCredential = vi.hoisted(() => vi.fn());
 const setTiktokCatalogCredential = vi.hoisted(() => vi.fn());
 const upsertTiktokCatalogItems = vi.hoisted(() => vi.fn());
+const uploadTiktokCatalogProductFile = vi.hoisted(() => vi.fn());
+const uploadTiktokFeedCsvAndGetUrl = vi.hoisted(() => vi.fn());
 const confirmTiktokCatalogUpload = vi.hoisted(() => vi.fn());
 const fetchTiktokCatalogConf = vi.hoisted(() => vi.fn());
 
@@ -33,11 +35,17 @@ vi.mock("../../../../app/server/adsCatalog/clients/tiktokCatalogClient.server", 
   return {
     ...actual,
     upsertTiktokCatalogItems: (...args: unknown[]) => upsertTiktokCatalogItems(...args),
+    uploadTiktokCatalogProductFile: (...args: unknown[]) =>
+      uploadTiktokCatalogProductFile(...args),
     createTiktokCatalog: vi.fn(),
     resolveTiktokCatalogRegion: vi.fn(),
     fetchTiktokCatalogConf: (...args: unknown[]) => fetchTiktokCatalogConf(...args),
   };
 });
+
+vi.mock("../../../../app/server/adsCatalog/adsCatalogBlob.server", () => ({
+  uploadTiktokFeedCsvAndGetUrl: (...args: unknown[]) => uploadTiktokFeedCsvAndGetUrl(...args),
+}));
 
 vi.mock("../../../../app/server/adsCatalog/clients/tiktokCatalogUploadConfirm.server", () => ({
   confirmTiktokCatalogUpload: (...args: unknown[]) => confirmTiktokCatalogUpload(...args),
@@ -105,6 +113,8 @@ describe("runTiktokSync binding modes", () => {
     getTiktokCatalogCredential.mockReset();
     setTiktokCatalogCredential.mockReset();
     upsertTiktokCatalogItems.mockReset();
+    uploadTiktokCatalogProductFile.mockReset();
+    uploadTiktokFeedCsvAndGetUrl.mockReset();
     confirmTiktokCatalogUpload.mockReset();
     completeTask.mockResolvedValue(undefined);
     failTask.mockResolvedValue(undefined);
@@ -128,7 +138,7 @@ describe("runTiktokSync binding modes", () => {
     vi.clearAllMocks();
   });
 
-  async function runSync() {
+  async function runSync(overrides: { tiktokUploadMethod?: "product_upload" | "product_file" } = {}) {
     enqueueAdsCatalogSync({
       taskId: "task-1",
       shop: "demo.myshopify.com",
@@ -138,6 +148,7 @@ describe("runTiktokSync binding modes", () => {
       locale: "en",
       platform: "tiktok",
       products: [sampleProduct],
+      ...overrides,
     });
     await vi.waitFor(() => {
       expect(completeTask.mock.calls.length + failTask.mock.calls.length).toBeGreaterThan(0);
@@ -257,5 +268,62 @@ describe("runTiktokSync binding modes", () => {
     expect(payload.result.feedLogId).toBe("feed-22");
     expect(payload.result.catalogId).toBe("cat-api");
     expect(payload.errorMsg).toContain("currency mismatch");
+  });
+
+  it("Feed product_file uploads CSV and skips JSON product/upload", async () => {
+    getTiktokCatalogCredential.mockResolvedValue({
+      accessToken: "tok",
+      advertiserId: "adv",
+      bcId: "bc",
+      catalogId: "cat-api",
+      catalogName: "Spark Catalog",
+      bindingMode: "api_managed",
+      updatedAt: new Date().toISOString(),
+    });
+    uploadTiktokFeedCsvAndGetUrl.mockResolvedValue({
+      fileUrl: "https://example.blob.core.windows.net/adscatalog/feed.csv?sas=1",
+      blobPath: "tiktok-feeds/demo/cat-api/task-1.csv",
+    });
+    uploadTiktokCatalogProductFile.mockResolvedValue({
+      feedLogId: "feed-file-1",
+      requestId: "req-file",
+    });
+    confirmTiktokCatalogUpload.mockResolvedValue({
+      succeeded: 1,
+      errors: [],
+      verifiedVia: "product_log",
+      feedLogId: "feed-file-1",
+    });
+
+    await runSync({ tiktokUploadMethod: "product_file" });
+
+    expect(upsertTiktokCatalogItems).not.toHaveBeenCalled();
+    expect(uploadTiktokFeedCsvAndGetUrl).toHaveBeenCalledOnce();
+    expect(uploadTiktokCatalogProductFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        catalogId: "cat-api",
+        fileUrl: "https://example.blob.core.windows.net/adscatalog/feed.csv?sas=1",
+        updateMode: "INCREMENTAL",
+      }),
+    );
+    expect(confirmTiktokCatalogUpload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        feedLogId: "feed-file-1",
+        expectedSkuIds: ["SKU-1"],
+      }),
+    );
+    expect(completeTask).toHaveBeenCalledOnce();
+    const payload = completeTask.mock.calls[0]?.[0] as {
+      result: {
+        syncMode?: string;
+        uploadMethod?: string;
+        succeeded?: number;
+        feedLogId?: string;
+      };
+    };
+    expect(payload.result.syncMode).toBe("api_managed");
+    expect(payload.result.uploadMethod).toBe("product_file");
+    expect(payload.result.succeeded).toBe(1);
+    expect(payload.result.feedLogId).toBe("feed-file-1");
   });
 });

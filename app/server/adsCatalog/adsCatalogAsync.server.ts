@@ -11,6 +11,12 @@ import { mapShopifyToFacebook } from "./mappers/shopifyToFacebook";
 import { mapShopifyVariantsToGoogle } from "./mappers/shopifyToGoogle";
 import { mapShopifyToTiktok } from "./mappers/shopifyToTiktok";
 import {
+  buildTiktokFeedCsv,
+  mapShopifyToTiktokFeedCsv,
+  type TiktokFeedCsvRow,
+} from "./mappers/shopifyToTiktokFeedCsv";
+import { uploadTiktokFeedCsvAndGetUrl } from "./adsCatalogBlob.server";
+import {
   validateProductsForGoogle,
   collectErrorProductIds,
 } from "./validators/googleProductValidator";
@@ -21,6 +27,7 @@ import {
 } from "./clients/googleMerchantClient.server";
 import {
   fetchTiktokCatalogConf,
+  uploadTiktokCatalogProductFile,
   upsertTiktokCatalogItems,
   validateTiktokCatalogForApiUpload,
 } from "./clients/tiktokCatalogClient.server";
@@ -56,6 +63,8 @@ export interface EnqueueAdsCatalogSyncParams {
   googleContentLanguage?: string;
   googleTargetCountry?: string;
   googleProductCategory?: string;
+  /** TikTok：默认 product_upload（JSON）；product_file = CSV Feed 文件上传。 */
+  tiktokUploadMethod?: "product_upload" | "product_file";
 }
 
 export function enqueueAdsCatalogSync(params: EnqueueAdsCatalogSyncParams): void {
@@ -391,8 +400,10 @@ async function runTiktokSync(params: {
   brand?: string;
   products: RawShopifyProductForCatalog[];
   googleProductCategory?: string;
+  tiktokUploadMethod?: "product_upload" | "product_file";
   msg: MsgFn;
 }): Promise<void> {
+  const uploadMethod = params.tiktokUploadMethod ?? "product_upload";
   const logTiktok = (step: string, detail = "") => {
     console.info(
       `${LOG_PREFIX}[TikTok] taskId=${params.taskId} shop=${params.shop} step=${step}${detail ? ` ${detail}` : ""}`,
@@ -401,7 +412,7 @@ async function runTiktokSync(params: {
 
   logTiktok(
     "start",
-    `productCount=${params.products.length} shopDomain=${params.shopDomain} currency=${params.defaultCurrency ?? ""}`,
+    `productCount=${params.products.length} shopDomain=${params.shopDomain} currency=${params.defaultCurrency ?? ""} uploadMethod=${uploadMethod}`,
   );
 
   const credential = await getTiktokCatalogCredential(params.shop);
@@ -518,7 +529,30 @@ async function runTiktokSync(params: {
     return;
   }
 
-  // Path B：API 可写 Catalog — map + product/upload。
+  // Path B：API 可写 Catalog — JSON product/upload 或 CSV product/file。
+  if (uploadMethod === "product_file") {
+    await runTiktokFeedFileSync({
+      taskId: params.taskId,
+      startedAt: params.startedAt,
+      shop: params.shop,
+      shopDomain: params.shopDomain,
+      defaultCurrency: params.defaultCurrency,
+      brand: params.brand,
+      products: enrichedProducts,
+      credential: {
+        accessToken: credential.accessToken,
+        refreshToken: credential.refreshToken,
+        advertiserId: credential.advertiserId,
+        bcId: credential.bcId,
+        catalogId: credential.catalogId,
+        catalogName: credential.catalogName,
+      },
+      msg: params.msg,
+      logTiktok,
+    });
+    return;
+  }
+
   logTiktok("path_b_api_upload", `itemCount=${items.length} catalogId=${credential.catalogId}`);
   await appendLog({
     taskId: params.taskId,
@@ -654,12 +688,242 @@ async function runTiktokSync(params: {
     failed: errors.length,
     errors,
     syncMode: "api_managed",
+    uploadMethod: "product_upload",
     catalogId: credential.catalogId,
     ...(feedLogId ? { feedLogId } : {}),
   };
 
   logTiktok(
     "finish",
+    `succeeded=${result.succeeded} failed=${result.failed} catalogId=${result.catalogId ?? ""} feedLogId=${result.feedLogId ?? ""}`,
+  );
+
+  await finishAdsCatalogSync({
+    taskId: params.taskId,
+    startedAt: params.startedAt,
+    result,
+    msg: params.msg,
+  });
+}
+
+async function runTiktokFeedFileSync(params: {
+  taskId: string;
+  startedAt: number;
+  shop: string;
+  shopDomain: string;
+  defaultCurrency?: string;
+  brand?: string;
+  products: RawShopifyProductForCatalog[];
+  credential: {
+    accessToken: string;
+    refreshToken?: string | null;
+    advertiserId: string;
+    bcId: string;
+    catalogId: string;
+    catalogName?: string | null;
+  };
+  msg: MsgFn;
+  logTiktok: (step: string, detail?: string) => void;
+}): Promise<void> {
+  const { credential, logTiktok } = params;
+  const mappingErrors: AdsCatalogSyncTaskResult["errors"] = [];
+  const rows: TiktokFeedCsvRow[] = [];
+  for (const product of params.products) {
+    const mapped = mapShopifyToTiktokFeedCsv(product, {
+      shopDomain: params.shopDomain,
+      defaultCurrency: params.defaultCurrency,
+      brand: params.brand,
+    });
+    if (mapped.ok) {
+      rows.push(mapped.row);
+    } else {
+      mappingErrors.push({ productId: mapped.productId, reason: mapped.reason });
+    }
+  }
+
+  logTiktok(
+    "path_b_feed_file_map_done",
+    `mapped=${rows.length} skipped=${mappingErrors.length} catalogId=${credential.catalogId}`,
+  );
+
+  if (rows.length === 0) {
+    await finishAdsCatalogSync({
+      taskId: params.taskId,
+      startedAt: params.startedAt,
+      result: {
+        platform: "tiktok",
+        totalProcessed: params.products.length,
+        succeeded: 0,
+        failed: mappingErrors.length,
+        errors: mappingErrors,
+        syncMode: "api_managed",
+        uploadMethod: "product_file",
+        catalogId: credential.catalogId,
+      },
+      msg: params.msg,
+    });
+    return;
+  }
+
+  await appendLog({
+    taskId: params.taskId,
+    startedAt: params.startedAt,
+    message: params.msg("adsCatalog.asyncPushingTiktokFeed", { count: rows.length }),
+  });
+
+  const csvText = buildTiktokFeedCsv(rows);
+  let fileUrl: string;
+  try {
+    const uploaded = await uploadTiktokFeedCsvAndGetUrl({
+      shop: params.shop,
+      catalogId: credential.catalogId,
+      taskId: params.taskId,
+      csvText,
+    });
+    fileUrl = uploaded.fileUrl;
+    logTiktok("feed_csv_uploaded", `blobPath=${uploaded.blobPath} bytes=${csvText.length}`);
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    logTiktok("feed_csv_upload_failed", reason);
+    await failTask({
+      taskId: params.taskId,
+      startedAt: params.startedAt,
+      errorMsg: params.msg("adsCatalog.asyncTiktokFeedBlobFailed", { reason }),
+    });
+    return;
+  }
+
+  let feedLogId: string | undefined;
+  try {
+    const fileResult = await uploadTiktokCatalogProductFile({
+      accessToken: credential.accessToken,
+      bcId: credential.bcId,
+      catalogId: credential.catalogId,
+      fileUrl,
+      updateMode: "INCREMENTAL",
+    });
+    feedLogId = fileResult.feedLogId;
+    logTiktok(
+      "product_file_submitted",
+      `feedLogId=${feedLogId ?? ""} requestId=${fileResult.requestId ?? ""}`,
+    );
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    if (isShopifySyncedCatalogUploadError(reason)) {
+      logTiktok("shopify_lock_detected_switch_official", `catalogId=${credential.catalogId}`);
+      await setTiktokCatalogCredential(params.shop, {
+        accessToken: credential.accessToken,
+        refreshToken: credential.refreshToken ?? undefined,
+        advertiserId: credential.advertiserId,
+        bcId: credential.bcId,
+        catalogId: credential.catalogId,
+        catalogName: credential.catalogName ?? undefined,
+        bindingMode: "shopify_official",
+      });
+      await appendLog({
+        taskId: params.taskId,
+        startedAt: params.startedAt,
+        message: params.msg("adsCatalog.asyncTiktokSwitchedToOfficial"),
+      });
+      await finishAdsCatalogSync({
+        taskId: params.taskId,
+        startedAt: params.startedAt,
+        result: {
+          platform: "tiktok",
+          totalProcessed: params.products.length,
+          succeeded: rows.length,
+          failed: mappingErrors.length,
+          errors: mappingErrors,
+          syncMode: "shopify_official",
+          catalogId: credential.catalogId,
+        },
+        msg: params.msg,
+      });
+      return;
+    }
+    logTiktok("product_file_failed", reason);
+    await failTask({
+      taskId: params.taskId,
+      startedAt: params.startedAt,
+      errorMsg: params.msg("adsCatalog.asyncTiktokFeedUploadFailed", { reason }),
+      result: {
+        platform: "tiktok",
+        totalProcessed: params.products.length,
+        succeeded: 0,
+        failed: mappingErrors.length + rows.length,
+        errors: [...mappingErrors, { productId: "feed", reason }],
+        syncMode: "api_managed",
+        uploadMethod: "product_file",
+        catalogId: credential.catalogId,
+        feedFileUrl: fileUrl,
+      } as unknown as Record<string, unknown>,
+    });
+    return;
+  }
+
+  const expectedSkuIds = rows.map((row) => row.sku_id);
+  const errors = [...mappingErrors];
+  let succeeded = 0;
+
+  await appendLog({
+    taskId: params.taskId,
+    startedAt: params.startedAt,
+    message: params.msg("adsCatalog.asyncTiktokVerifyingUpload", {
+      count: expectedSkuIds.length,
+    }),
+  });
+
+  const confirmed = await confirmTiktokCatalogUpload({
+    accessToken: credential.accessToken,
+    advertiserId: credential.advertiserId,
+    bcId: credential.bcId,
+    catalogId: credential.catalogId,
+    feedLogId,
+    expectedSkuIds,
+    deps: {
+      // Feed 入库较慢：约 36 * 10s ≈ 6 分钟确认窗口
+      maxAttempts: 36,
+      intervalMs: 10_000,
+    },
+  });
+  succeeded = confirmed.succeeded;
+  feedLogId = confirmed.feedLogId ?? feedLogId;
+  for (const err of confirmed.errors) {
+    errors.push({ productId: err.id, reason: err.reason });
+  }
+
+  logTiktok(
+    "feed_confirm_done",
+    `via=${confirmed.verifiedVia} succeeded=${confirmed.succeeded} failed=${confirmed.errors.length} feedLogId=${feedLogId ?? ""}`,
+  );
+
+  if (confirmed.verifiedVia === "unverified" || confirmed.errors.length > 0) {
+    await appendLog({
+      taskId: params.taskId,
+      startedAt: params.startedAt,
+      message: params.msg("adsCatalog.asyncTiktokVerifyResult", {
+        succeeded: confirmed.succeeded,
+        failed: confirmed.errors.length,
+        via: confirmed.verifiedVia,
+      }),
+    });
+  }
+
+  const result: AdsCatalogSyncTaskResult = {
+    platform: "tiktok",
+    totalProcessed: params.products.length,
+    succeeded,
+    failed: errors.length,
+    errors,
+    syncMode: "api_managed",
+    uploadMethod: "product_file",
+    catalogId: credential.catalogId,
+    feedFileUrl: fileUrl,
+    ...(feedLogId ? { feedLogId } : {}),
+  };
+
+  logTiktok(
+    "feed_finish",
     `succeeded=${result.succeeded} failed=${result.failed} catalogId=${result.catalogId ?? ""} feedLogId=${result.feedLogId ?? ""}`,
   );
 

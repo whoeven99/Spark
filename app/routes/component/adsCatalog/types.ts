@@ -50,6 +50,8 @@ export interface AdsCatalogSyncRequestBody {
   contentLanguage?: string;
   targetCountry?: string;
   googleProductCategory?: string;
+  /** TikTok：product_upload=JSON 分批；product_file=CSV Feed 文件上传。 */
+  tiktokUploadMethod?: "product_upload" | "product_file";
 }
 
 export type AdsCatalogPageLoaderData = {
