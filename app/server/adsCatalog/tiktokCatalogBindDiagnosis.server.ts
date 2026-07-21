@@ -50,6 +50,7 @@ function isReadyForApiBind(checks: TiktokBindDiagnosisCheck[]): boolean {
     "currency_match",
     "pixel_present",
     "pixel_adv_link",
+    "pixel_adv_link_permission",
     "catalog_eventsource",
     "catalog_adv_link",
   ]);
@@ -227,26 +228,36 @@ export async function diagnoseTiktokCatalogBind(params: {
   } else {
     pushCheck(checks, { id: "pixel_present", status: "ok", vars: { pixelCode } });
 
-    const linkedAdvIds = await getTiktokBcPixelLinkedAdvertiserIds({
+    const linkedResult = await getTiktokBcPixelLinkedAdvertiserIds({
       accessToken: credential.accessToken,
       bcId,
       pixelCode,
     });
 
-    if (linkedAdvIds.length === 0) {
+    if (!linkedResult.ok) {
+      pushCheck(checks, {
+        id: "pixel_adv_link_permission",
+        status: "error",
+        vars: {
+          pixelCode,
+          advertiserId,
+          message: linkedResult.message ?? linkedResult.errorCode ?? "unknown",
+        },
+      });
+    } else if (linkedResult.advertiserIds.length === 0) {
       pushCheck(checks, {
         id: "pixel_adv_link",
         status: "error",
         vars: { pixelCode, advertiserId, linkedAdvertiserIds: "—" },
       });
-    } else if (!linkedAdvIds.includes(advertiserId)) {
+    } else if (!linkedResult.advertiserIds.includes(advertiserId)) {
       pushCheck(checks, {
         id: "pixel_adv_link",
         status: "error",
         vars: {
           pixelCode,
           advertiserId,
-          linkedAdvertiserIds: linkedAdvIds.join(", "),
+          linkedAdvertiserIds: linkedResult.advertiserIds.join(", "),
         },
       });
     } else {

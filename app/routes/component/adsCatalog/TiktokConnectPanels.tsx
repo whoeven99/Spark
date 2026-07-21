@@ -57,6 +57,9 @@ function resolveTiktokPixelBindError(
   data: { error?: string; errorCode?: string },
   t: (key: string) => string,
 ): string {
+  if (data.errorCode === "PIXEL_ASSET_PERMISSION_DENIED") {
+    return t("adsCatalog.tiktokPixelBindErrorAssetPermission");
+  }
   if (data.errorCode === "EVENT_SOURCE_NOT_AVAILABLE_FOR_ADV") {
     return t("adsCatalog.tiktokPixelBindErrorNotAvailableForAdv");
   }

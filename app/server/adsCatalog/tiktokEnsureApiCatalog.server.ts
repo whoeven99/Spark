@@ -166,7 +166,7 @@ export async function ensureTiktokApiManagedCatalog(params: {
     );
   }
 
-  await bindCatalogEventSourcesBestEffort({
+  const { bindAdvertiserId } = await bindCatalogEventSourcesBestEffort({
     accessToken,
     advertiserId,
     bcId,
@@ -176,6 +176,7 @@ export async function ensureTiktokApiManagedCatalog(params: {
     shop: params.shop,
     catalogName: created.catalogName,
   });
+  const resolvedAdvertiserId = bindAdvertiserId || advertiserId;
 
   if (pending) {
     await clearTiktokCatalogPending(params.shop);
@@ -183,7 +184,7 @@ export async function ensureTiktokApiManagedCatalog(params: {
   await setTiktokCatalogCredential(params.shop, {
     accessToken,
     refreshToken,
-    advertiserId,
+    advertiserId: resolvedAdvertiserId,
     bcId,
     catalogId: created.catalogId,
     catalogName: created.catalogName,
@@ -217,18 +218,21 @@ async function bindCatalogEventSourcesBestEffort(params: {
   appId?: string;
   shop: string;
   catalogName?: string;
-}): Promise<void> {
+}): Promise<{ bindAdvertiserId?: string }> {
+  let bindAdvertiserId: string | undefined;
+
   if (params.pixelCode) {
     try {
-      await bindTiktokCatalogPixelEventSource({
+      const result = await bindTiktokCatalogPixelEventSource({
         accessToken: params.accessToken,
         advertiserId: params.advertiserId,
         bcId: params.bcId,
         catalogId: params.catalogId,
         pixelCode: params.pixelCode,
       });
+      bindAdvertiserId = result.advertiserId;
       console.info(
-        `${LOG_PREFIX} step=eventsource_pixel_bound shop=${params.shop} catalogId=${params.catalogId} pixelCode=${params.pixelCode}`,
+        `${LOG_PREFIX} step=eventsource_pixel_bound shop=${params.shop} catalogId=${params.catalogId} pixelCode=${params.pixelCode} advertiserId=${bindAdvertiserId}`,
       );
     } catch (e) {
       console.warn(
@@ -237,11 +241,12 @@ async function bindCatalogEventSourcesBestEffort(params: {
     }
   }
 
+  const appAdvertiserId = bindAdvertiserId || params.advertiserId;
   if (params.appId) {
     try {
       await bindTiktokCatalogEventSource({
         accessToken: params.accessToken,
-        advertiserId: params.advertiserId,
+        advertiserId: appAdvertiserId,
         bcId: params.bcId,
         catalogId: params.catalogId,
         appId: params.appId,
@@ -255,4 +260,6 @@ async function bindCatalogEventSourcesBestEffort(params: {
       );
     }
   }
+
+  return { bindAdvertiserId };
 }

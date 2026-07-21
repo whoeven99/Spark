@@ -108,7 +108,10 @@ export function TiktokBindDiagnosisPanel({
 
   const needsPixelAction = result?.checks.some(
     (c) =>
-      (c.id === "pixel_present" || c.id === "catalog_eventsource" || c.id === "pixel_adv_link") &&
+      (c.id === "pixel_present" ||
+        c.id === "catalog_eventsource" ||
+        c.id === "pixel_adv_link" ||
+        c.id === "pixel_adv_link_permission") &&
       c.status !== "ok",
   );
 

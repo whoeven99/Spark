@@ -35,13 +35,14 @@ export async function ensureTiktokCatalogPixel(params: {
 
   let pixelCode = credential.pixelCode?.trim() ?? "";
   let created = false;
+  let advertiserId = credential.advertiserId;
 
   if (!pixelCode) {
     const shopInfo = await fetchShopBasicInfo(params.admin);
     const shopLabel = (shopInfo?.name || params.shop.split(".")[0] || "Store").slice(0, 40);
     const pixel = await createTiktokPixel({
       accessToken: credential.accessToken,
-      advertiserId: credential.advertiserId,
+      advertiserId,
       pixelName: `Spark Pixel — ${shopLabel}`,
     });
     pixelCode = pixel.pixelCode;
@@ -53,7 +54,7 @@ export async function ensureTiktokCatalogPixel(params: {
     await setTiktokCatalogCredential(params.shop, {
       accessToken: credential.accessToken,
       refreshToken: credential.refreshToken,
-      advertiserId: credential.advertiserId,
+      advertiserId,
       bcId: credential.bcId,
       catalogId: credential.catalogId,
       catalogName: credential.catalogName,
@@ -65,16 +66,33 @@ export async function ensureTiktokCatalogPixel(params: {
 
   let bound = false;
   try {
-    await bindTiktokCatalogPixelEventSource({
+    const bindResult = await bindTiktokCatalogPixelEventSource({
       accessToken: credential.accessToken,
-      advertiserId: credential.advertiserId,
+      advertiserId,
       bcId: credential.bcId,
       catalogId: credential.catalogId,
       pixelCode,
     });
+    advertiserId = bindResult.advertiserId;
+    if (advertiserId !== credential.advertiserId) {
+      await setTiktokCatalogCredential(params.shop, {
+        accessToken: credential.accessToken,
+        refreshToken: credential.refreshToken,
+        advertiserId,
+        bcId: credential.bcId,
+        catalogId: credential.catalogId,
+        catalogName: credential.catalogName,
+        bindingMode: credential.bindingMode,
+        pixelCode,
+        appId: credential.appId,
+      });
+      console.info(
+        `${LOG_PREFIX} step=advertiser_aligned shop=${params.shop} from=${credential.advertiserId} to=${advertiserId}`,
+      );
+    }
     bound = true;
     console.info(
-      `${LOG_PREFIX} step=pixel_bound shop=${params.shop} catalogId=${credential.catalogId} pixelCode=${pixelCode}`,
+      `${LOG_PREFIX} step=pixel_bound shop=${params.shop} catalogId=${credential.catalogId} pixelCode=${pixelCode} advertiserId=${advertiserId}`,
     );
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : String(e);

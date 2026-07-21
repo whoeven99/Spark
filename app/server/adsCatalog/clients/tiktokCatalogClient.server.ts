@@ -1,5 +1,8 @@
 import type { TiktokCatalogItem } from "../mappers/shopifyToTiktok";
-import { isShopifyOfficialCatalog } from "../tiktokOAuth.server";
+import {
+  isShopifyOfficialCatalog,
+  listAuthorizedAdvertiserIds,
+} from "../tiktokOAuth.server";
 
 const TIKTOK_API_BASE = "https://business-api.tiktok.com/open_api/v1.3";
 const ITEMS_BATCH_CHUNK = 50;
@@ -264,6 +267,59 @@ export interface TiktokEventSourceBinding {
   boundAt?: string;
 }
 
+export type TiktokBcPixelLinkGetErrorCode =
+  | "PIXEL_ASSET_PERMISSION_DENIED"
+  | "PIXEL_LINK_GET_FAILED";
+
+export type TiktokBcPixelLinkGetResult = {
+  ok: boolean;
+  advertiserIds: string[];
+  errorCode?: TiktokBcPixelLinkGetErrorCode;
+  message?: string;
+};
+
+/** 去重并去掉空字符串的广告主 ID 列表。 */
+export function uniqueAdvertiserIds(
+  ...groups: Array<ReadonlyArray<string> | string | undefined | null>
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const group of groups) {
+    const items = Array.isArray(group) ? group : group ? [group] : [];
+    for (const id of items) {
+      const trimmed = String(id ?? "").trim();
+      if (!trimmed || seen.has(trimmed)) continue;
+      seen.add(trimmed);
+      out.push(trimmed);
+    }
+  }
+  return out;
+}
+
+/**
+ * 选择 eventsource/bind 使用的广告主：优先 Catalog 已关联且在授权列表内的 ID。
+ */
+export function resolveTiktokPixelBindAdvertiserId(params: {
+  credentialAdvertiserId: string;
+  authorizedAdvertiserIds: string[];
+  catalogLinkedAdvertiserIds?: string[];
+}): string {
+  const credentialId = params.credentialAdvertiserId.trim();
+  const authorized = uniqueAdvertiserIds(params.authorizedAdvertiserIds);
+  const catalogLinked = uniqueAdvertiserIds(params.catalogLinkedAdvertiserIds);
+  if (authorized.length > 0) {
+    const preferred = catalogLinked.find((id) => authorized.includes(id));
+    if (preferred) return preferred;
+    if (credentialId && authorized.includes(credentialId)) return credentialId;
+    return authorized[0]!;
+  }
+  return (
+    catalogLinked.find((id) => id === credentialId) ||
+    catalogLinked[0] ||
+    credentialId
+  );
+}
+
 /**
  * 为广告主创建一个 TikTok Pixel（Web 事件追踪）。
  * POST /open_api/v1.3/pixel/create/
@@ -393,22 +449,27 @@ export async function transferTiktokPixelToBc(params: {
 }
 
 /**
- * 在 BC 内将 Pixel 关联到广告账户。
+ * 在 BC 内将 Pixel 关联到一个或多个广告账户。
  * POST /open_api/v1.3/bc/pixel/link/update/
  */
 export async function linkTiktokBcPixelToAdvertiser(params: {
   accessToken: string;
   bcId: string;
   pixelCode: string;
-  advertiserId: string;
+  advertiserIds: string[];
 }): Promise<void> {
+  const advertiserIds = uniqueAdvertiserIds(params.advertiserIds);
+  if (advertiserIds.length === 0) {
+    throw new Error("TikTok Pixel link to advertiser failed: no advertiserIds");
+  }
+
   const { httpStatus, payload, raw } = await postTiktokJsonApi({
     path: "/bc/pixel/link/update/",
     accessToken: params.accessToken,
     body: {
       bc_id: params.bcId,
       pixel_code: params.pixelCode,
-      advertiser_ids: [params.advertiserId],
+      advertiser_ids: advertiserIds,
       relation_status: "LINK",
     },
     logStep: "pixel_link_request",
@@ -424,15 +485,33 @@ export async function linkTiktokBcPixelToAdvertiser(params: {
   throw new Error(`TikTok Pixel link to advertiser failed: HTTP ${httpStatus} ${detail}`.trim());
 }
 
+function classifyTiktokPixelLinkGetFailure(params: {
+  httpStatus: number;
+  code?: number;
+  message?: string;
+}): Pick<TiktokBcPixelLinkGetResult, "errorCode" | "message"> {
+  const message = (params.message || `HTTP ${params.httpStatus}`).trim();
+  const permissionDenied =
+    params.code === 40002 ||
+    /permission to the asset/i.test(message) ||
+    /don'?t have permission/i.test(message);
+  return {
+    errorCode: permissionDenied
+      ? "PIXEL_ASSET_PERMISSION_DENIED"
+      : "PIXEL_LINK_GET_FAILED",
+    message,
+  };
+}
+
 /**
- * 查询 Pixel 在 BC 内已关联的广告主 ID 列表（只读，用于绑定诊断）。
+ * 查询 Pixel 在 BC 内已关联的广告主 ID 列表（只读，用于绑定诊断与 link 校验）。
  * GET /open_api/v1.3/bc/pixel/link/get/
  */
 export async function getTiktokBcPixelLinkedAdvertiserIds(params: {
   accessToken: string;
   bcId: string;
   pixelCode: string;
-}): Promise<string[]> {
+}): Promise<TiktokBcPixelLinkGetResult> {
   const url = new URL(`${TIKTOK_API_BASE}/bc/pixel/link/get/`);
   url.searchParams.set("bc_id", params.bcId);
   url.searchParams.set("pixel_code", params.pixelCode);
@@ -462,27 +541,62 @@ export async function getTiktokBcPixelLinkedAdvertiserIds(params: {
   );
 
   if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {
-    return [];
+    const failure = classifyTiktokPixelLinkGetFailure({
+      httpStatus: response.status,
+      code: payload.code,
+      message: payload.message || text.slice(0, 200),
+    });
+    return {
+      ok: false,
+      advertiserIds: [],
+      errorCode: failure.errorCode,
+      message: failure.message,
+    };
   }
 
-  return (payload.data?.list ?? [])
+  const advertiserIds = (payload.data?.list ?? [])
     .filter((item) => {
       const status = String(item.relation_status ?? "LINK").trim().toUpperCase();
       return status === "" || status === "LINK";
     })
     .map((item) => String(item.advertiser_id ?? "").trim())
     .filter(Boolean);
+
+  return { ok: true, advertiserIds };
 }
 
 /**
- * 绑定 Catalog 事件源前，确保 Pixel 已在 BC 内并对当前广告主可用（best-effort）。
+ * 绑定 Catalog 事件源前，确保 Pixel 已在 BC 内并对授权广告主可用。
+ * transfer 可 soft-skip（已在 BC）；link 硬失败，并用 link/get 校验。
  */
 export async function prepareTiktokPixelForCatalogBind(params: {
   accessToken: string;
   bcId: string;
   pixelCode: string;
   advertiserId: string;
-}): Promise<void> {
+  /** 额外需要 link 的广告主（如 Catalog 已关联广告主）。 */
+  extraAdvertiserIds?: string[];
+}): Promise<string[]> {
+  let authorized: string[] = [];
+  try {
+    authorized = await listAuthorizedAdvertiserIds({
+      accessToken: params.accessToken,
+    });
+  } catch (e) {
+    console.warn(
+      `${LOG_PREFIX} step=pixel_list_authorized_failed err=${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+
+  const linkTargets = uniqueAdvertiserIds(
+    authorized,
+    params.advertiserId,
+    params.extraAdvertiserIds,
+  );
+  if (linkTargets.length === 0) {
+    throw new Error("TikTok Pixel prepare failed: no advertiser IDs to link");
+  }
+
   try {
     await transferTiktokPixelToBc({
       accessToken: params.accessToken,
@@ -498,25 +612,47 @@ export async function prepareTiktokPixelForCatalogBind(params: {
     );
   }
 
-  try {
-    await linkTiktokBcPixelToAdvertiser({
-      accessToken: params.accessToken,
-      bcId: params.bcId,
-      pixelCode: params.pixelCode,
-      advertiserId: params.advertiserId,
-    });
-    console.info(
-      `${LOG_PREFIX} step=pixel_link_ok bcId=${params.bcId} pixelCode=${params.pixelCode} advertiserId=${params.advertiserId}`,
-    );
-  } catch (e) {
-    console.warn(
-      `${LOG_PREFIX} step=pixel_link_skipped bcId=${params.bcId} pixelCode=${params.pixelCode} advertiserId=${params.advertiserId} err=${e instanceof Error ? e.message : String(e)}`,
+  await linkTiktokBcPixelToAdvertiser({
+    accessToken: params.accessToken,
+    bcId: params.bcId,
+    pixelCode: params.pixelCode,
+    advertiserIds: linkTargets,
+  });
+  console.info(
+    `${LOG_PREFIX} step=pixel_link_ok bcId=${params.bcId} pixelCode=${params.pixelCode} advertiserIds=${linkTargets.join(",")}`,
+  );
+
+  const linked = await getTiktokBcPixelLinkedAdvertiserIds({
+    accessToken: params.accessToken,
+    bcId: params.bcId,
+    pixelCode: params.pixelCode,
+  });
+  if (!linked.ok) {
+    const code = linked.errorCode ?? "PIXEL_LINK_GET_FAILED";
+    throw new Error(
+      `TikTok Pixel link/get failed after link: ${linked.message ?? "unknown"} [${code}]`,
     );
   }
+
+  const hit = linkTargets.some((id) => linked.advertiserIds.includes(id));
+  if (!hit) {
+    throw new Error(
+      `TikTok Pixel link verification failed: expected one of [${linkTargets.join(",")}] but linked=[${linked.advertiserIds.join(",") || "none"}]`,
+    );
+  }
+
+  return linkTargets;
 }
 
 /** 从 TikTok 事件源绑定错误文案中提取稳定 errorCode，供前端 i18n 映射。 */
 export function getTiktokEventSourceBindErrorCode(message: string): string | undefined {
+  if (
+    message.includes("PIXEL_ASSET_PERMISSION_DENIED") ||
+    message.includes("40002") ||
+    /permission to the asset/i.test(message)
+  ) {
+    return "PIXEL_ASSET_PERMISSION_DENIED";
+  }
   if (
     message.includes("1000018") ||
     message.includes("ERRCODE_EVENT_SOURCE_NOT_AVAILABLE_FOR_ADV")
@@ -527,7 +663,8 @@ export function getTiktokEventSourceBindErrorCode(message: string): string | und
 }
 
 /**
- * 准备 Pixel（转入 BC + 关联广告主）后绑定为 Catalog Web 事件源。
+ * 准备 Pixel（转入 BC + 关联全部授权广告主）后绑定为 Catalog Web 事件源。
+ * 返回实际用于 eventsource/bind 的 advertiserId，供调用方回写凭证。
  */
 export async function bindTiktokCatalogPixelEventSource(params: {
   accessToken: string;
@@ -535,20 +672,50 @@ export async function bindTiktokCatalogPixelEventSource(params: {
   bcId: string;
   catalogId: string;
   pixelCode: string;
-}): Promise<void> {
+}): Promise<{ advertiserId: string }> {
+  const conf = await fetchTiktokCatalogConf({
+    accessToken: params.accessToken,
+    bcId: params.bcId,
+    catalogId: params.catalogId,
+  });
+  const catalogLinkedAdvertiserIds = conf?.linkedAdvertiserIds ?? [];
+
+  let authorizedAdvertiserIds: string[] = [];
+  try {
+    authorizedAdvertiserIds = await listAuthorizedAdvertiserIds({
+      accessToken: params.accessToken,
+    });
+  } catch (e) {
+    console.warn(
+      `${LOG_PREFIX} step=eventsource_list_authorized_failed err=${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+
+  const bindAdvertiserId = resolveTiktokPixelBindAdvertiserId({
+    credentialAdvertiserId: params.advertiserId,
+    authorizedAdvertiserIds,
+    catalogLinkedAdvertiserIds,
+  });
+
   await prepareTiktokPixelForCatalogBind({
     accessToken: params.accessToken,
     bcId: params.bcId,
     pixelCode: params.pixelCode,
-    advertiserId: params.advertiserId,
+    advertiserId: bindAdvertiserId,
+    extraAdvertiserIds: uniqueAdvertiserIds(
+      authorizedAdvertiserIds,
+      params.advertiserId,
+      catalogLinkedAdvertiserIds,
+    ),
   });
   await bindTiktokCatalogEventSource({
     accessToken: params.accessToken,
-    advertiserId: params.advertiserId,
+    advertiserId: bindAdvertiserId,
     bcId: params.bcId,
     catalogId: params.catalogId,
     pixelCode: params.pixelCode,
   });
+  return { advertiserId: bindAdvertiserId };
 }
 
 /**

@@ -61,17 +61,33 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     try {
-      await bindTiktokCatalogPixelEventSource({
+      const bindResult = await bindTiktokCatalogPixelEventSource({
         accessToken: credential.accessToken,
         advertiserId: credential.advertiserId,
         bcId: credential.bcId,
         catalogId: credential.catalogId,
         pixelCode: credential.pixelCode,
       });
+      if (bindResult.advertiserId !== credential.advertiserId) {
+        await setTiktokCatalogCredential(session.shop, {
+          accessToken: credential.accessToken,
+          refreshToken: credential.refreshToken,
+          advertiserId: bindResult.advertiserId,
+          bcId: credential.bcId,
+          catalogId: credential.catalogId,
+          catalogName: credential.catalogName,
+          pixelCode: credential.pixelCode,
+          appId: credential.appId,
+        });
+      }
       console.info(
-        `${LOG_PREFIX} type=pixel shop=${session.shop} catalogId=${credential.catalogId} pixelCode=${credential.pixelCode} bound`,
+        `${LOG_PREFIX} type=pixel shop=${session.shop} catalogId=${credential.catalogId} pixelCode=${credential.pixelCode} advertiserId=${bindResult.advertiserId} bound`,
       );
-      return Response.json({ ok: true, pixelCode: credential.pixelCode });
+      return Response.json({
+        ok: true,
+        pixelCode: credential.pixelCode,
+        advertiserId: bindResult.advertiserId,
+      });
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : "绑定 Pixel 事件源失败";
       const errorCode = getTiktokEventSourceBindErrorCode(errMsg);

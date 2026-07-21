@@ -5,6 +5,8 @@ const getTiktokCatalogPending = vi.hoisted(() => vi.fn());
 const setTiktokCatalogCredential = vi.hoisted(() => vi.fn());
 const clearTiktokCatalogPending = vi.hoisted(() => vi.fn());
 const createTiktokCatalog = vi.hoisted(() => vi.fn());
+const createTiktokPixel = vi.hoisted(() => vi.fn());
+const bindTiktokCatalogPixelEventSource = vi.hoisted(() => vi.fn());
 const fetchTiktokCatalogConf = vi.hoisted(() => vi.fn());
 const listAccessibleBcIds = vi.hoisted(() => vi.fn());
 const fetchShopBasicInfo = vi.hoisted(() => vi.fn());
@@ -24,13 +26,21 @@ vi.mock("../../../../app/server/adsCatalog/clients/tiktokCatalogClient.server", 
   return {
     ...actual,
     createTiktokCatalog: (...args: unknown[]) => createTiktokCatalog(...args),
+    createTiktokPixel: (...args: unknown[]) => createTiktokPixel(...args),
+    bindTiktokCatalogPixelEventSource: (...args: unknown[]) =>
+      bindTiktokCatalogPixelEventSource(...args),
     fetchTiktokCatalogConf: (...args: unknown[]) => fetchTiktokCatalogConf(...args),
   };
 });
 
-vi.mock("../../../../app/server/adsCatalog/tiktokOAuth.server", () => ({
-  listAccessibleBcIds: (...args: unknown[]) => listAccessibleBcIds(...args),
-}));
+vi.mock("../../../../app/server/adsCatalog/tiktokOAuth.server", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../../../app/server/adsCatalog/tiktokOAuth.server")>();
+  return {
+    ...actual,
+    listAccessibleBcIds: (...args: unknown[]) => listAccessibleBcIds(...args),
+  };
+});
 
 vi.mock("../../../../app/server/shopify/fetchShopBasicInfo.server", () => ({
   fetchShopBasicInfo: (...args: unknown[]) => fetchShopBasicInfo(...args),
@@ -45,6 +55,8 @@ describe("ensureTiktokApiManagedCatalog", () => {
     setTiktokCatalogCredential.mockReset();
     clearTiktokCatalogPending.mockReset();
     createTiktokCatalog.mockReset();
+    createTiktokPixel.mockReset();
+    bindTiktokCatalogPixelEventSource.mockReset();
     fetchTiktokCatalogConf.mockReset();
     listAccessibleBcIds.mockReset();
     fetchShopBasicInfo.mockReset();
@@ -53,6 +65,11 @@ describe("ensureTiktokApiManagedCatalog", () => {
       currencyCode: "USD",
       countryCode: "US",
     });
+    createTiktokPixel.mockResolvedValue({
+      pixelCode: "PX-TEST",
+      pixelName: "Spark Pixel — Demo",
+    });
+    bindTiktokCatalogPixelEventSource.mockResolvedValue({ advertiserId: "adv" });
   });
 
   it("returns existing api_managed catalog when catalog/get confirms CLIENT channel", async () => {

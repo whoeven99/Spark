@@ -1570,7 +1570,8 @@
     "tiktokRebindPixel": "Re-bind Pixel",
     "tiktokRebindPixelBusy": "Binding...",
     "tiktokRebindPixelSuccess": "Pixel event source bound successfully",
-    "tiktokPixelBindErrorNotAvailableForAdv": "This Pixel cannot be bound to the current catalog because it is not available for the connected ad account. In TikTok Business Center, confirm the Pixel is in the same BC as the catalog and linked to the ad account—or bind it manually under Catalog → Event sources, then click Re-bind Pixel here.",
+    "tiktokPixelBindErrorNotAvailableForAdv": "This Pixel cannot be bound because it is not available for the selected ad account. Make sure the Event Source dropdown account matches the Pixel’s linked accounts, or click “Bind Pixel in one click” (it links all authorized advertisers). You can also bind it manually under Catalog → Event sources.",
+    "tiktokPixelBindErrorAssetPermission": "The authorized app cannot access this Pixel asset (common after transfer to Business Center). Confirm Pixel/Business Center APIs are enabled for the app, re-authorize as a BC admin, then click “Bind Pixel in one click”.",
     "tiktokBindDiagTitle": "Pre-bind diagnosis",
     "tiktokBindDiagHint": "Read-only checks for catalog, Pixel, and ad account linkage. Does not change TikTok settings.",
     "tiktokBindDiagBusy": "Diagnosing…",
@@ -1622,7 +1623,11 @@
         },
         "pixel_adv_link": {
           "label": "Pixel {{pixelCode}} linked to advertiser {{advertiserId}}",
-          "action": "Pixel is not linked to the current advertiser (linked: {{linkedAdvertiserIds}}). Confirm linkage under BC → Assets → Pixel, or click “Bind Pixel in one click” here."
+          "action": "Pixel is not linked to the current advertiser (linked: {{linkedAdvertiserIds}}). The Event Source picker filters by the selected ad account. Click “Bind Pixel in one click” to link all authorized advertisers, or add this advertiser under BC → Assets → Pixel."
+        },
+        "pixel_adv_link_permission": {
+          "label": "Cannot query advertiser links for Pixel {{pixelCode}}",
+          "action": "API has no permission to this Pixel asset ({{message}}). Enable Pixel/Business Center APIs for the app, re-authorize as a BC admin, then re-run diagnosis."
         },
         "catalog_eventsource": {
           "label": "Catalog event source bound to Pixel {{pixelCode}}",
