@@ -14,6 +14,14 @@ const SHOPIFY_CHARGE_AT = `CASE
   ELSE bl.createdAt
 END`;
 
+/**
+ * Spring→Turso 计费迁移会写入 SUBSCRIPTION_ACTIVATED，
+ * metadata.source=legacy_migration，createdAt=迁移日（非真实扣款日）。
+ * 每日/明细收入必须排除，否则会出现 7/8–7/9 假尖峰。
+ */
+const EXCLUDE_LEGACY_MIGRATION =
+  "COALESCE(json_extract(bl.metadata, '$.source'), '') <> 'legacy_migration'";
+
 // GET /api/tsf/revenue/summary — MRR/ARR from active TSF subscriptions
 tsfRevenueRouter.get("/summary", async (_req, res) => {
   try {
@@ -125,6 +133,7 @@ tsfRevenueRouter.get("/trend", async (req, res) => {
       "CAST(pc.priceAmount AS REAL) > 0",
       "pc.priceAmount IS NOT NULL",
       "bl.eventType IN ('SUBSCRIPTION_ACTIVATED', 'SUBSCRIPTION_RENEWED', 'TOKEN_PACK_PURCHASED')",
+      EXCLUDE_LEGACY_MIGRATION,
     ];
     const args: string[] = [];
 
@@ -184,6 +193,7 @@ tsfRevenueRouter.get("/charges", async (req, res) => {
       "CAST(pc.priceAmount AS REAL) > 0",
       "pc.priceAmount IS NOT NULL",
       "bl.eventType IN ('SUBSCRIPTION_ACTIVATED', 'SUBSCRIPTION_RENEWED', 'TOKEN_PACK_PURCHASED')",
+      EXCLUDE_LEGACY_MIGRATION,
     ];
     const args: (string | number)[] = [];
 

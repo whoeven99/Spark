@@ -199,6 +199,9 @@ npm run build     # Vite client + tsc server
 - 翻译 tab「翻译 ROI」：`/tsf/roi`（owner）→ `admin/src/pages/tsf/TsfRoi.tsx` +
   `admin/server/routes/tsfRoi.ts`。安装/留存以 TSF `Account` 为准（`ShopBillingBinding`
   已废弃）；Turso 收入/auto 已接；漏斗行为与 LLM 成本走 SLS（未接时页面 Mock + howto）。
+- TSF「每日收入」：`/tsf/revenue` → `admin/src/pages/tsf/TsfRevenue.tsx` +
+  `admin/server/routes/tsfRevenue.ts`。按 `BillingLog`×`PlanCatalog` 聚合；必须排除
+  `metadata.source = legacy_migration`（Spring→Turso 迁移审计，非真实扣款日）。
 
 ## 10. 常用命令
 
