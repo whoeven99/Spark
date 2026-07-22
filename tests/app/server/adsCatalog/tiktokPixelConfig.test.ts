@@ -24,6 +24,7 @@ import {
   clearTiktokPixelTestEventMode,
   maybeTrackTiktokCompletePayment,
   startTiktokPixelTestEventMode,
+  trackTiktokStorefrontTestEvent,
 } from "../../../../app/server/adsCatalog/tiktokPixelConfig.server";
 
 describe("maybeTrackTiktokCompletePayment", () => {
@@ -120,6 +121,66 @@ describe("maybeTrackTiktokCompletePayment", () => {
       expect.objectContaining({
         event: "CompletePayment",
         testEventCode: "TEST54000",
+      }),
+    );
+  });
+});
+
+describe("trackTiktokStorefrontTestEvent", () => {
+  beforeEach(() => {
+    getTiktokCatalogCredential.mockReset();
+    trackTiktokPixelEvent.mockReset();
+    trackTiktokPixelEvent.mockResolvedValue(undefined);
+  });
+
+  it("skips when test mode is off", async () => {
+    getTiktokCatalogCredential.mockResolvedValue({
+      accessToken: "oauth",
+      advertiserId: "adv",
+      catalogId: "cat",
+      bindingMode: "api_managed",
+      pixelCode: "PX",
+      eventsApiEnabled: true,
+      eventsApiAccessToken: "events-tok",
+      enabledEvents: ["ViewContent"],
+    });
+    expect(
+      await trackTiktokStorefrontTestEvent({
+        shop: "s.myshopify.com",
+        event: "ViewContent",
+      }),
+    ).toEqual({ sent: false, reason: "test_mode_off" });
+  });
+
+  it("sends ViewContent with test_event_code in test mode", async () => {
+    getTiktokCatalogCredential.mockResolvedValue({
+      accessToken: "oauth",
+      advertiserId: "adv",
+      catalogId: "cat",
+      bindingMode: "api_managed",
+      pixelCode: "PX",
+      eventsApiEnabled: true,
+      eventsApiAccessToken: "events-tok",
+      enabledEvents: ["ViewContent", "AddToCart"],
+      testEventCode: "TEST54000",
+    });
+
+    const result = await trackTiktokStorefrontTestEvent({
+      shop: "ciwishop.myshopify.com",
+      event: "ViewContent",
+      eventId: "e1",
+      properties: { value: 12, currency: "USD" },
+      pageUrl: "https://ciwishop.myshopify.com/products/x",
+    });
+
+    expect(result).toEqual({ sent: true });
+    expect(trackTiktokPixelEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "ViewContent",
+        eventId: "e1",
+        testEventCode: "TEST54000",
+        properties: { value: 12, currency: "USD" },
+        context: { page: { url: "https://ciwishop.myshopify.com/products/x" } },
       }),
     );
   });

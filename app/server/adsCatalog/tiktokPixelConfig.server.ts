@@ -11,6 +11,8 @@ import {
   type TiktokCatalogCredential,
 } from "./credentialStore.server";
 import {
+  buildTiktokStorefrontTrackUrl,
+  isTiktokPixelEventName,
   normalizeTiktokEnabledEvents,
   TIKTOK_PIXEL_METAFIELD_KEY,
   TIKTOK_PIXEL_METAFIELD_NAMESPACE,
@@ -81,11 +83,20 @@ export async function syncTiktokPixelStorefrontMetafield(params: {
 }): Promise<void> {
   const shopId = await resolveShopGid(params.admin);
   const testEventCode = params.config.testEventCode?.trim() || "";
+  const storefrontTrackUrl =
+    testEventCode
+      ? params.config.storefrontTrackUrl?.trim() || buildTiktokStorefrontTrackUrl() || ""
+      : "";
   const value = JSON.stringify({
     pixelCode: params.config.pixelCode,
     enabledEvents: params.config.enabledEvents,
     eventsApiEnabled: params.config.eventsApiEnabled,
-    ...(testEventCode ? { testEventCode } : {}),
+    ...(testEventCode
+      ? {
+          testEventCode,
+          ...(storefrontTrackUrl ? { storefrontTrackUrl } : {}),
+        }
+      : {}),
   });
 
   const response = await params.admin.graphql(
@@ -129,22 +140,87 @@ export async function syncTiktokPixelStorefrontMetafield(params: {
   }
 }
 
-function storefrontConfigFromCredential(credential: TiktokCatalogCredential): {
-  pixelCode: string;
-  enabledEvents: ReturnType<typeof normalizeTiktokEnabledEvents>;
-  eventsApiEnabled: boolean;
-  testEventCode?: string;
-} | null {
+function storefrontConfigFromCredential(credential: TiktokCatalogCredential): TiktokPixelStorefrontConfig | null {
   const pixelCode = credential.pixelCode?.trim() ?? "";
   if (!pixelCode) return null;
   const testEventCode = credential.testEventCode?.trim() || undefined;
+  const storefrontTrackUrl = testEventCode
+    ? buildTiktokStorefrontTrackUrl() || undefined
+    : undefined;
   return {
     pixelCode,
     enabledEvents: normalizeTiktokEnabledEvents(credential.enabledEvents),
     eventsApiEnabled:
       typeof credential.eventsApiEnabled === "boolean" ? credential.eventsApiEnabled : true,
     ...(testEventCode ? { testEventCode } : {}),
+    ...(storefrontTrackUrl ? { storefrontTrackUrl } : {}),
   };
+}
+
+/** 店面测试模式：仅当凭证有 testEventCode 时，把浏览/加购等经 Events API 打进 Test Events。 */
+export async function trackTiktokStorefrontTestEvent(params: {
+  shop: string;
+  event: string;
+  eventId?: string;
+  properties?: Record<string, unknown>;
+  pageUrl?: string;
+}): Promise<{ sent: boolean; reason?: string }> {
+  const shop = params.shop.trim().toLowerCase();
+  if (!shop) return { sent: false, reason: "no_shop" };
+
+  const credential = await getTiktokCatalogCredential(shop);
+  if (!credential) return { sent: false, reason: "no_credential" };
+
+  const testEventCode = credential.testEventCode?.trim() || "";
+  if (!testEventCode) return { sent: false, reason: "test_mode_off" };
+
+  const pixelCode = credential.pixelCode?.trim() || "";
+  const token = credential.eventsApiAccessToken?.trim() || "";
+  const enabled =
+    typeof credential.eventsApiEnabled === "boolean" ? credential.eventsApiEnabled : true;
+  if (!enabled) return { sent: false, reason: "events_api_disabled" };
+  if (!pixelCode) return { sent: false, reason: "no_pixel" };
+  if (!token) return { sent: false, reason: "no_events_api_token" };
+
+  // Liquid 侧 CollectionView/CartView 已映射为 ViewContent；此处再兜底一次。
+  let event = params.event.trim();
+  if (event === "CollectionView" || event === "CartView") event = "ViewContent";
+  if (!isTiktokPixelEventName(event) && event !== "ViewContent") {
+    return { sent: false, reason: "invalid_event" };
+  }
+
+  const enabledEvents = normalizeTiktokEnabledEvents(credential.enabledEvents);
+  const allowed =
+    enabledEvents.includes(event as TiktokPixelEventName) ||
+    (event === "ViewContent" &&
+      (enabledEvents.includes("ViewContent") ||
+        enabledEvents.includes("CollectionView") ||
+        enabledEvents.includes("CartView")));
+  if (!allowed) return { sent: false, reason: "event_not_enabled" };
+
+  try {
+    await trackTiktokPixelEvent({
+      eventsApiAccessToken: token,
+      pixelCode,
+      event,
+      eventId: params.eventId?.trim() || `spark-sf-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      properties:
+        params.properties && Object.keys(params.properties).length > 0
+          ? params.properties
+          : undefined,
+      context: params.pageUrl?.trim()
+        ? { page: { url: params.pageUrl.trim() } }
+        : undefined,
+      testEventCode,
+    });
+    return { sent: true };
+  } catch (e) {
+    console.warn(
+      `${LOG_PREFIX} step=storefront_test_track_failed shop=${shop} event=${event} err=${e instanceof Error ? e.message : String(e)}`,
+    );
+    return { sent: false, reason: "track_failed" };
+  }
 }
 
 /**

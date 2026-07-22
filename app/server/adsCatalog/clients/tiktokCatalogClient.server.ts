@@ -1270,7 +1270,7 @@ export async function trackTiktokPixelEvent(
   }
 
   console.info(
-    `${LOG_PREFIX} step=pixel_track_request pixelCode=${pixelCode} event=${event} eventId=${params.eventId ?? ""}`,
+    `${LOG_PREFIX} step=pixel_track_request pixelCode=${pixelCode} event=${event} eventId=${params.eventId ?? ""} test=${params.testEventCode?.trim() ? "1" : "0"}`,
   );
 
   const response = await fetch(`${TIKTOK_API_BASE}/pixel/track/`, {

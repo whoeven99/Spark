@@ -73,7 +73,19 @@ export type TiktokPixelStorefrontConfig = {
    * 写入 metafield 可避开密码店 302 丢 query；测完须清除。
    */
   testEventCode?: string;
+  /**
+   * 测试模式下店面双发 Events API 的公开端点（仅 testEventCode 有值时写入）。
+   * Theme Embed fetch 此 URL，使浏览/加购出现在 Test Events「服务器」侧。
+   */
+  storefrontTrackUrl?: string;
 };
+
+/** 店面测试事件双发端点（依赖 SHOPIFY_APP_URL）。 */
+export function buildTiktokStorefrontTrackUrl(): string | null {
+  const appUrl = process.env.SHOPIFY_APP_URL?.trim().replace(/\/+$/, "");
+  if (!appUrl) return null;
+  return `${appUrl}/api/ads-catalog/tiktok-storefront-track`;
+}
 
 export function buildTiktokEventsManagerUrl(pixelCode?: string): string {
   const code = pixelCode?.trim();

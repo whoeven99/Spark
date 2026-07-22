@@ -11,6 +11,7 @@
     {% assign pixel_code = cfg.pixelCode %}
     {% assign enabled = cfg.enabledEvents %}
     {% assign metafield_test_code = cfg.testEventCode %}
+    {% assign storefront_track_url = cfg.storefrontTrackUrl %}
     <script>
       !function (w, d, t) {
         w.TiktokAnalyticsObject = t;
@@ -43,6 +44,10 @@
       (function () {
         var enabled = {{ enabled | json }};
         if (!Array.isArray(enabled)) enabled = [];
+        var shopDomain = {{ shop.permanent_domain | json }};
+        var trackUrl = {{ storefront_track_url | json }};
+        if (typeof trackUrl !== "string") trackUrl = "";
+        trackUrl = String(trackUrl || "").trim();
         var TEST_QUERY = "spark_tt_test_code";
         var TEST_STORAGE = "spark_tt_test_event_code";
         var metafieldTestCode = {{ metafield_test_code | json }};
@@ -75,13 +80,34 @@
           } catch (e) {}
           return "spark-" + Date.now() + "-" + Math.random().toString(16).slice(2);
         }
+        function sendServerTest(name, props, eventId) {
+          if (!testEventCode || !trackUrl || !shopDomain) return;
+          try {
+            fetch(trackUrl, {
+              method: "POST",
+              headers: { "Content-Type": "text/plain" },
+              body: JSON.stringify({
+                shop: shopDomain,
+                event: name,
+                eventId: eventId,
+                properties: props || {},
+                pageUrl: String(window.location.href || "")
+              }),
+              keepalive: true,
+              mode: "cors"
+            }).catch(function () {});
+          } catch (e) {}
+        }
         function track(name, props) {
           if (!on(name) || !window.ttq) return;
+          var eventId = eid();
           try {
-            var opts = { event_id: eid() };
+            var opts = { event_id: eventId };
             if (testEventCode) opts.test_event_code = testEventCode;
             window.ttq.track(name, props || {}, opts);
           } catch (e) {}
+          // Test Events 活动区主要认 Events API；测试模式双发服务器事件
+          sendServerTest(name, props, eventId);
         }
 
         if (on("PageView")) {
@@ -155,14 +181,17 @@
         {% if checkout and checkout.order_id %}
           if (on("CompletePayment")) {
             try {
+              var purchaseId = String({{ checkout.order_id | json }});
+              var purchaseProps = {
+                value: {{ checkout.total_price | default: 0 | divided_by: 100.0 | json }},
+                currency: {{ checkout.currency | default: shop.currency | json }}
+              };
               if (window.ttq) {
-                var purchaseOpts = { event_id: String({{ checkout.order_id | json }}) };
+                var purchaseOpts = { event_id: purchaseId };
                 if (testEventCode) purchaseOpts.test_event_code = testEventCode;
-                window.ttq.track("CompletePayment", {
-                  value: {{ checkout.total_price | default: 0 | divided_by: 100.0 | json }},
-                  currency: {{ checkout.currency | default: shop.currency | json }}
-                }, purchaseOpts);
+                window.ttq.track("CompletePayment", purchaseProps, purchaseOpts);
               }
+              sendServerTest("CompletePayment", purchaseProps, purchaseId);
             } catch (e) {}
           }
         {% endif %}
