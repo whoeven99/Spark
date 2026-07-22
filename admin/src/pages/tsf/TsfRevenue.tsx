@@ -101,12 +101,12 @@ function MrrCards({ summary }: { summary: TsfRevenueSummary }) {
     <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
       <Col xs={12} sm={6}>
         <Card size="small">
-          <Statistic title="MRR" value={USD(summary.mrr)} valueStyle={{ color: "#1677ff", fontSize: 22 }} />
+          <Statistic title="月经常性收入" value={USD(summary.mrr)} valueStyle={{ color: "#1677ff", fontSize: 22 }} />
         </Card>
       </Col>
       <Col xs={12} sm={6}>
         <Card size="small">
-          <Statistic title="ARR" value={USD(summary.arr)} valueStyle={{ color: "#722ed1", fontSize: 22 }} />
+          <Statistic title="年经常性收入" value={USD(summary.arr)} valueStyle={{ color: "#722ed1", fontSize: 22 }} />
         </Card>
       </Col>
       <Col xs={12} sm={6}>
@@ -116,7 +116,7 @@ function MrrCards({ summary }: { summary: TsfRevenueSummary }) {
       </Col>
       <Col xs={12} sm={6}>
         <Card size="small">
-          <Statistic title="ARPU" value={USD(summary.arpu)} valueStyle={{ fontSize: 22 }} />
+          <Statistic title="人均月收入" value={USD(summary.arpu)} valueStyle={{ fontSize: 22 }} />
         </Card>
       </Col>
     </Row>
@@ -482,11 +482,11 @@ export default function TsfRevenue() {
       <Spin spinning={loading}>{summary && <MrrCards summary={summary} />}</Spin>
 
       {summary && summary.planBreakdown.length > 0 && (
-        <Card title="套餐 MRR 分布" size="small" style={{ marginBottom: 16 }}>
+        <Card title="套餐月经常性收入分布" size="small" style={{ marginBottom: 16 }}>
           <Space wrap>
             {summary.planBreakdown.map((p) => (
               <Tag key={p.planKey} color="blue">
-                {p.planKey}：{p.activeCount} 家 · MRR {USD(p.planMrr)}
+                {p.planKey}：{p.activeCount} 家 · 月经常性收入 {USD(p.planMrr)}
               </Tag>
             ))}
           </Space>
