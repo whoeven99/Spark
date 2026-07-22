@@ -115,13 +115,23 @@ export function TiktokPixelConfigPanel({
       : [...TIKTOK_PIXEL_DEFAULT_EVENTS],
   );
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [createSuccess, setCreateSuccess] = useState(false);
   const [testSuccess, setTestSuccess] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  /** 创建成功后预选的 Pixel，避免被列表刷新/父级 props 覆盖前丢失。 */
+  const [pendingSelectPixelCode, setPendingSelectPixelCode] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
+    if (pendingSelectPixelCode) {
+      setSelectedPixelCode(pendingSelectPixelCode);
+      setMode("select");
+      return;
+    }
     setSelectedPixelCode(pixelCode);
     if (pixelCode) setMode("select");
-  }, [pixelCode]);
+  }, [pixelCode, pendingSelectPixelCode]);
 
   useEffect(() => {
     if (boundAdvertiserId) setSelectedAdvertiserId(boundAdvertiserId);
@@ -170,13 +180,19 @@ export function TiktokPixelConfigPanel({
         setLocalError(null);
 
         if (mode === "select") {
-          const matched =
-            nextPixels.find((p) => p.pixelCode === selectedPixelCode) ||
-            nextPixels.find((p) => p.pixelCode === pixelCode);
+          const preferCode = pendingSelectPixelCode || selectedPixelCode || pixelCode;
+          const matched = nextPixels.find((p) => p.pixelCode === preferCode);
           if (matched) {
             setSelectedPixelCode(matched.pixelCode);
             setPixelName(matched.pixelName);
-          } else if (selectedPixelCode && !nextPixels.some((p) => p.pixelCode === selectedPixelCode)) {
+            if (pendingSelectPixelCode === matched.pixelCode) {
+              setPendingSelectPixelCode(null);
+            }
+          } else if (
+            selectedPixelCode &&
+            !pendingSelectPixelCode &&
+            !nextPixels.some((p) => p.pixelCode === selectedPixelCode)
+          ) {
             setSelectedPixelCode("");
           }
         }
@@ -192,9 +208,8 @@ export function TiktokPixelConfigPanel({
     return () => {
       cancelled = true;
     };
-    // selectedPixelCode / pixelCode 变化时不重新拉列表，避免覆盖用户输入
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only reload when account or mode changes
-  }, [mode, locationSearch, selectedAdvertiserId, t]);
+  }, [mode, locationSearch, selectedAdvertiserId, t, pendingSelectPixelCode]);
 
   function toggleEvent(name: TiktokPixelEventName) {
     setEnabledEvents((prev) =>
@@ -208,8 +223,25 @@ export function TiktokPixelConfigPanel({
     if (hit?.pixelName) setPixelName(hit.pixelName);
   }
 
-  async function saveConfig() {
+  function switchToCreate() {
+    setMode("create");
+    setCreateSuccess(false);
+    setSaveSuccess(false);
+    setLocalError(null);
+    onBindError(null);
+  }
+
+  function switchToSelect() {
+    setMode("select");
+    setCreateSuccess(false);
+    setSaveSuccess(false);
+    setLocalError(null);
+    onBindError(null);
+  }
+
+  async function createPixelOnly() {
     setBusy(true);
+    setCreateSuccess(false);
     setSaveSuccess(false);
     setTestSuccess(false);
     setLocalError(null);
@@ -219,33 +251,79 @@ export function TiktokPixelConfigPanel({
         setLocalError(t("adsCatalog.tiktokPixelBusinessAccountRequired"));
         return;
       }
-      if (mode === "select" && !selectedPixelCode) {
-        setLocalError(t("adsCatalog.tiktokPixelSelectRequired"));
-        return;
-      }
-      if (mode === "create" && !pixelName.trim()) {
+      if (!pixelName.trim()) {
         setLocalError(t("adsCatalog.tiktokPixelNameRequired"));
         return;
       }
 
-      const body: Record<string, unknown> = {
-        mode,
-        advertiserId: selectedAdvertiserId,
-        eventsApiEnabled,
-        enabledEvents,
+      const resp = await fetch(`/api/ads-catalog/tiktok-pixel-config${locationSearch}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "create",
+          advertiserId: selectedAdvertiserId,
+          pixelName: pixelName.trim(),
+          bindCatalogEventSource: false,
+        }),
+      });
+      const data = (await resp.json().catch(() => ({}))) as {
+        ok?: boolean;
+        pixelCode?: string;
+        error?: string;
       };
-      if (mode === "select") {
-        body.pixelCode = selectedPixelCode;
-        if (pixelName.trim()) body.pixelName = pixelName.trim();
-      } else {
-        body.pixelName = pixelName.trim();
+      if (!resp.ok || !data.ok || !data.pixelCode) {
+        const msg = data.error ?? t("adsCatalog.authError");
+        setLocalError(msg);
+        onBindError(msg);
+        return;
       }
-      if (tokenInput.trim()) {
-        body.eventsApiAccessToken = tokenInput.trim();
-      } else if (!hasEventsApiAccessToken) {
+
+      const createdCode = data.pixelCode;
+      setPendingSelectPixelCode(createdCode);
+      setSelectedPixelCode(createdCode);
+      setMode("select");
+      setCreateSuccess(true);
+      onChanged();
+      onDiagnosisRefresh();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : t("adsCatalog.authError");
+      setLocalError(msg);
+      onBindError(msg);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveSelectConfig() {
+    setBusy(true);
+    setSaveSuccess(false);
+    setCreateSuccess(false);
+    setTestSuccess(false);
+    setLocalError(null);
+    onBindError(null);
+    try {
+      if (!selectedAdvertiserId) {
+        setLocalError(t("adsCatalog.tiktokPixelBusinessAccountRequired"));
+        return;
+      }
+      if (!selectedPixelCode) {
+        setLocalError(t("adsCatalog.tiktokPixelSelectRequired"));
+        return;
+      }
+      if (!tokenInput.trim() && !hasEventsApiAccessToken) {
         setLocalError(t("adsCatalog.tiktokPixelTokenRequired"));
         return;
       }
+
+      const body: Record<string, unknown> = {
+        mode: "select",
+        advertiserId: selectedAdvertiserId,
+        pixelCode: selectedPixelCode,
+        eventsApiEnabled,
+        enabledEvents,
+      };
+      if (pixelName.trim()) body.pixelName = pixelName.trim();
+      if (tokenInput.trim()) body.eventsApiAccessToken = tokenInput.trim();
 
       const resp = await fetch(`/api/ads-catalog/tiktok-pixel-config${locationSearch}`, {
         method: "POST",
@@ -255,7 +333,6 @@ export function TiktokPixelConfigPanel({
       const data = (await resp.json().catch(() => ({}))) as {
         ok?: boolean;
         error?: string;
-        errorCode?: string;
       };
       if (!resp.ok || !data.ok) {
         const msg = data.error ?? t("adsCatalog.authError");
@@ -303,10 +380,12 @@ export function TiktokPixelConfigPanel({
   }
 
   const howToUrl = buildTiktokEventsManagerUrl(selectedPixelCode || pixelCode);
-  const canSave =
+  const canCreate =
+    !busy && Boolean(selectedAdvertiserId) && Boolean(pixelName.trim());
+  const canSaveSelect =
     !busy &&
     Boolean(selectedAdvertiserId) &&
-    (mode === "create" ? Boolean(pixelName.trim()) : Boolean(selectedPixelCode)) &&
+    Boolean(selectedPixelCode) &&
     (Boolean(tokenInput.trim()) || hasEventsApiAccessToken) &&
     enabledEvents.length > 0;
 
@@ -327,7 +406,11 @@ export function TiktokPixelConfigPanel({
           {t("adsCatalog.tiktokPixelCode", { code: pixelCode })}
         </div>
       ) : null}
-      <p style={{ ...pageHintTextStyle, margin: 0 }}>{t("adsCatalog.tiktokPixelConfigHint")}</p>
+      <p style={{ ...pageHintTextStyle, margin: 0 }}>
+        {mode === "create"
+          ? t("adsCatalog.tiktokPixelCreateHint")
+          : t("adsCatalog.tiktokPixelConfigHint")}
+      </p>
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 13 }}>
         <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
@@ -335,7 +418,7 @@ export function TiktokPixelConfigPanel({
             type="radio"
             name="tiktok-pixel-mode"
             checked={mode === "select"}
-            onChange={() => setMode("select")}
+            onChange={switchToSelect}
             disabled={busy}
           />
           {t("adsCatalog.tiktokPixelModeSelect")}
@@ -345,7 +428,7 @@ export function TiktokPixelConfigPanel({
             type="radio"
             name="tiktok-pixel-mode"
             checked={mode === "create"}
-            onChange={() => setMode("create")}
+            onChange={switchToCreate}
             disabled={busy}
           />
           {t("adsCatalog.tiktokPixelModeCreate")}
@@ -418,171 +501,202 @@ export function TiktokPixelConfigPanel({
         ) : null}
       </div>
 
-      <div
-        style={{
-          border: `1px solid ${pageColorTokens.border}`,
-          borderRadius: 8,
-          padding: 12,
-          display: "flex",
-          flexDirection: "column",
-          gap: 10,
-          background: pageColorTokens.surfaceSubtle,
-        }}
-      >
+      {mode === "create" ? (
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13, fontWeight: 700 }}>
-            {t("adsCatalog.tiktokPixelServerSideTitle")}
-          </span>
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: "#b98900",
-              background: "#fff5d6",
-              padding: "2px 6px",
-              borderRadius: 4,
-            }}
+          <button
+            type="button"
+            style={primaryBtn}
+            disabled={!canCreate}
+            onClick={() => void createPixelOnly()}
           >
-            {t("adsCatalog.tiktokPixelRequiredBadge")}
-          </span>
+            {busy ? t("adsCatalog.tiktokPixelCreateBusy") : t("adsCatalog.tiktokPixelCreate")}
+          </button>
+          {createSuccess && (
+            <span style={{ color: "#0f7a52", fontSize: 12 }}>
+              {t("adsCatalog.tiktokPixelCreateSuccess")}
+            </span>
+          )}
         </div>
-        <p style={{ ...pageHintTextStyle, margin: 0 }}>
-          {t("adsCatalog.tiktokPixelServerSideHint")}
-        </p>
-        <label
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            fontSize: 13,
-            cursor: "pointer",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={eventsApiEnabled}
-            disabled={busy}
-            onChange={(e) => setEventsApiEnabled(e.target.checked)}
-          />
-          {t("adsCatalog.tiktokPixelCapiEnable")}
-        </label>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      ) : (
+        <>
           <div
             style={{
+              border: `1px solid ${pageColorTokens.border}`,
+              borderRadius: 8,
+              padding: 12,
               display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 8,
-              flexWrap: "wrap",
+              flexDirection: "column",
+              gap: 10,
+              background: pageColorTokens.surfaceSubtle,
             }}
           >
-            <label style={fieldLabelStyle}>
-              {t("adsCatalog.tiktokPixelAccessTokenLabel")}
-            </label>
-            <a
-              href={howToUrl}
-              target="_blank"
-              rel="noreferrer"
-              style={{ fontSize: 12, color: "#005bd3" }}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>
+                {t("adsCatalog.tiktokPixelServerSideTitle")}
+              </span>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: "#b98900",
+                  background: "#fff5d6",
+                  padding: "2px 6px",
+                  borderRadius: 4,
+                }}
+              >
+                {t("adsCatalog.tiktokPixelRequiredBadge")}
+              </span>
+            </div>
+            <p style={{ ...pageHintTextStyle, margin: 0 }}>
+              {t("adsCatalog.tiktokPixelServerSideHint")}
+            </p>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 13,
+                cursor: "pointer",
+              }}
             >
-              {t("adsCatalog.tiktokPixelHowToGetToken")}
-            </a>
+              <input
+                type="checkbox"
+                checked={eventsApiEnabled}
+                disabled={busy}
+                onChange={(e) => setEventsApiEnabled(e.target.checked)}
+              />
+              {t("adsCatalog.tiktokPixelCapiEnable")}
+            </label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  flexWrap: "wrap",
+                }}
+              >
+                <label style={fieldLabelStyle}>
+                  {t("adsCatalog.tiktokPixelAccessTokenLabel")}
+                </label>
+                <a
+                  href={howToUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ fontSize: 12, color: "#005bd3" }}
+                >
+                  {t("adsCatalog.tiktokPixelHowToGetToken")}
+                </a>
+              </div>
+              <input
+                style={inputStyle}
+                type="password"
+                autoComplete="off"
+                value={tokenInput}
+                disabled={busy}
+                placeholder={
+                  hasEventsApiAccessToken
+                    ? t("adsCatalog.tiktokPixelAccessTokenConfigured")
+                    : t("adsCatalog.tiktokPixelAccessTokenPlaceholder")
+                }
+                onChange={(e) => setTokenInput(e.target.value)}
+              />
+            </div>
+            <button
+              type="button"
+              style={{ ...secondaryBtn, alignSelf: "flex-start", padding: "4px 8px" }}
+              disabled={
+                busy || (!hasEventsApiAccessToken && !tokenInput.trim()) || !pixelCode
+              }
+              onClick={() => void testServerEvents()}
+            >
+              {t("adsCatalog.tiktokPixelTestServerEvents")}
+            </button>
+            {testSuccess && (
+              <span style={{ color: "#0f7a52", fontSize: 12 }}>
+                {t("adsCatalog.tiktokPixelTestServerEventsSuccess")}
+              </span>
+            )}
           </div>
-          <input
-            style={inputStyle}
-            type="password"
-            autoComplete="off"
-            value={tokenInput}
-            disabled={busy}
-            placeholder={
-              hasEventsApiAccessToken
-                ? t("adsCatalog.tiktokPixelAccessTokenConfigured")
-                : t("adsCatalog.tiktokPixelAccessTokenPlaceholder")
-            }
-            onChange={(e) => setTokenInput(e.target.value)}
-          />
-        </div>
-        <button
-          type="button"
-          style={{ ...secondaryBtn, alignSelf: "flex-start", padding: "4px 8px" }}
-          disabled={busy || (!hasEventsApiAccessToken && !tokenInput.trim()) || !pixelCode}
-          onClick={() => void testServerEvents()}
-        >
-          {t("adsCatalog.tiktokPixelTestServerEvents")}
-        </button>
-        {testSuccess && (
-          <span style={{ color: "#0f7a52", fontSize: 12 }}>
-            {t("adsCatalog.tiktokPixelTestServerEventsSuccess")}
-          </span>
-        )}
-      </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ fontSize: 13, fontWeight: 600 }}>
-          {t("adsCatalog.tiktokPixelEventsTitle")}
-        </div>
-        <p style={{ ...pageHintTextStyle, margin: 0 }}>
-          {t("adsCatalog.tiktokPixelEventsHint")}
-        </p>
-        <div style={{ fontSize: 12, fontWeight: 600, color: pageColorTokens.textSecondary }}>
-          {t("adsCatalog.tiktokPixelEventsDefault")}
-        </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-          {TIKTOK_PIXEL_DEFAULT_EVENTS.map((name) => (
-            <label
-              key={name}
-              style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>
+              {t("adsCatalog.tiktokPixelEventsTitle")}
+            </div>
+            <p style={{ ...pageHintTextStyle, margin: 0 }}>
+              {t("adsCatalog.tiktokPixelEventsHint")}
+            </p>
+            <div
+              style={{ fontSize: 12, fontWeight: 600, color: pageColorTokens.textSecondary }}
             >
-              <input
-                type="checkbox"
-                checked={enabledEvents.includes(name)}
-                disabled={busy}
-                onChange={() => toggleEvent(name)}
-              />
-              {t(`adsCatalog.${EVENT_LABEL_KEY[name] ?? name}`)}
-            </label>
-          ))}
-        </div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: pageColorTokens.textSecondary }}>
-          {t("adsCatalog.tiktokPixelEventsOptional")}
-        </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-          {TIKTOK_PIXEL_OPTIONAL_EVENTS.map((name) => (
-            <label
-              key={name}
-              style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}
+              {t("adsCatalog.tiktokPixelEventsDefault")}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {TIKTOK_PIXEL_DEFAULT_EVENTS.map((name) => (
+                <label
+                  key={name}
+                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={enabledEvents.includes(name)}
+                    disabled={busy}
+                    onChange={() => toggleEvent(name)}
+                  />
+                  {t(`adsCatalog.${EVENT_LABEL_KEY[name] ?? name}`)}
+                </label>
+              ))}
+            </div>
+            <div
+              style={{ fontSize: 12, fontWeight: 600, color: pageColorTokens.textSecondary }}
             >
-              <input
-                type="checkbox"
-                checked={enabledEvents.includes(name)}
-                disabled={busy}
-                onChange={() => toggleEvent(name)}
-              />
-              {t(`adsCatalog.${EVENT_LABEL_KEY[name] ?? name}`)}
-            </label>
-          ))}
-        </div>
-      </div>
+              {t("adsCatalog.tiktokPixelEventsOptional")}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {TIKTOK_PIXEL_OPTIONAL_EVENTS.map((name) => (
+                <label
+                  key={name}
+                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={enabledEvents.includes(name)}
+                    disabled={busy}
+                    onChange={() => toggleEvent(name)}
+                  />
+                  {t(`adsCatalog.${EVENT_LABEL_KEY[name] ?? name}`)}
+                </label>
+              ))}
+            </div>
+          </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <button
-          type="button"
-          style={primaryBtn}
-          disabled={!canSave}
-          onClick={() => void saveConfig()}
-        >
-          {busy ? t("adsCatalog.tiktokPixelSaveBusy") : t("adsCatalog.tiktokPixelSave")}
-        </button>
-        {saveSuccess && (
-          <span style={{ color: "#0f7a52", fontSize: 12 }}>
-            {t("adsCatalog.tiktokPixelSaveSuccess")}
-          </span>
-        )}
-      </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              style={primaryBtn}
+              disabled={!canSaveSelect}
+              onClick={() => void saveSelectConfig()}
+            >
+              {busy ? t("adsCatalog.tiktokPixelSaveBusy") : t("adsCatalog.tiktokPixelSave")}
+            </button>
+            {saveSuccess && (
+              <span style={{ color: "#0f7a52", fontSize: 12 }}>
+                {t("adsCatalog.tiktokPixelSaveSuccess")}
+              </span>
+            )}
+            {createSuccess && (
+              <span style={{ color: "#0f7a52", fontSize: 12 }}>
+                {t("adsCatalog.tiktokPixelCreateSuccess")}
+              </span>
+            )}
+          </div>
 
-      <p style={{ ...pageHintTextStyle, margin: 0 }}>
-        {t("adsCatalog.tiktokPixelEmbedHint")}
-      </p>
+          <p style={{ ...pageHintTextStyle, margin: 0 }}>
+            {t("adsCatalog.tiktokPixelEmbedHint")}
+          </p>
+        </>
+      )}
 
       {localError && (
         <span style={{ color: "#d72c0d", fontSize: 12 }}>{localError}</span>

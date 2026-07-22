@@ -4,7 +4,9 @@ import { getTiktokEventSourceBindErrorCode } from "../server/adsCatalog/clients/
 import { saveTiktokPixelConfig } from "../server/adsCatalog/tiktokPixelConfig.server";
 
 /**
- * 保存 TikTok Pixel 绑定配置（选已有 / 创建 + Events API token + 事件勾选）。
+ * 保存 TikTok Pixel 配置。
+ * - mode=create：仅创建 Pixel（不要求 Events API Token）
+ * - mode=select：绑定已有 Pixel + Token + 事件
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {

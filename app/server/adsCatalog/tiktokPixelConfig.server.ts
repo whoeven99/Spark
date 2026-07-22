@@ -116,7 +116,9 @@ export async function syncTiktokPixelStorefrontMetafield(params: {
 }
 
 /**
- * 保存 Pixel 绑定配置：选已有 / 创建、Events API token、事件勾选，并同步 metafield。
+ * 保存 Pixel 绑定配置。
+ * - create：仅在 TikTok 创建 Pixel 并写入凭证，不要求 Events API Token / 事件。
+ * - select：绑定已有 Pixel，并保存 Token / 事件 / metafield。
  */
 export async function saveTiktokPixelConfig(
   params: SaveTiktokPixelConfigInput,
@@ -129,14 +131,14 @@ export async function saveTiktokPixelConfig(
     throw new Error("缺少 bcId，请重新授权 TikTok。");
   }
 
-  const enabledEvents = normalizeTiktokEnabledEvents(params.enabledEvents);
-  const eventsApiEnabled =
-    typeof params.eventsApiEnabled === "boolean" ? params.eventsApiEnabled : true;
   const advertiserId =
     params.advertiserId?.trim() || credential.advertiserId;
-
-  let pixelCode = params.pixelCode?.trim() ?? "";
-  let created = false;
+  const existingToken = credential.eventsApiAccessToken?.trim() || "";
+  const existingEvents = normalizeTiktokEnabledEvents(credential.enabledEvents);
+  const existingEventsApiEnabled =
+    typeof credential.eventsApiEnabled === "boolean"
+      ? credential.eventsApiEnabled
+      : true;
 
   if (params.mode === "create") {
     const pixelName =
@@ -147,26 +149,57 @@ export async function saveTiktokPixelConfig(
       advertiserId,
       pixelName,
     });
-    pixelCode = pixel.pixelCode;
-    created = true;
-  } else {
-    if (!pixelCode) {
-      throw new Error("请选择已有 Pixel");
-    }
-    const listed = await listTiktokPixels({
+    const pixelCode = pixel.pixelCode;
+
+    await setTiktokCatalogCredential(params.shop, {
       accessToken: credential.accessToken,
+      refreshToken: credential.refreshToken,
       advertiserId,
-    }).catch(() => [] as Array<{ pixelCode: string }>);
-    if (listed.length > 0 && !listed.some((p) => p.pixelCode === pixelCode)) {
-      console.warn(
-        `${LOG_PREFIX} step=select_pixel_not_in_list shop=${params.shop} pixelCode=${pixelCode}`,
-      );
-    }
+      bcId: credential.bcId,
+      catalogId: credential.catalogId,
+      catalogName: credential.catalogName,
+      bindingMode: credential.bindingMode,
+      pixelCode,
+      appId: credential.appId,
+      eventsApiAccessToken: existingToken || undefined,
+      eventsApiEnabled: existingEventsApiEnabled,
+      enabledEvents: existingEvents,
+    });
+
+    console.info(
+      `${LOG_PREFIX} step=created shop=${params.shop} pixelCode=${pixelCode} advertiserId=${advertiserId}`,
+    );
+
+    return {
+      pixelCode,
+      created: true,
+      bound: false,
+      eventsApiEnabled: existingEventsApiEnabled,
+      enabledEvents: existingEvents,
+      hasEventsApiAccessToken: Boolean(existingToken),
+    };
+  }
+
+  const enabledEvents = normalizeTiktokEnabledEvents(params.enabledEvents);
+  const eventsApiEnabled =
+    typeof params.eventsApiEnabled === "boolean" ? params.eventsApiEnabled : true;
+  const pixelCode = params.pixelCode?.trim() ?? "";
+  if (!pixelCode) {
+    throw new Error("请选择已有 Pixel");
+  }
+
+  const listed = await listTiktokPixels({
+    accessToken: credential.accessToken,
+    advertiserId,
+  }).catch(() => [] as Array<{ pixelCode: string }>);
+  if (listed.length > 0 && !listed.some((p) => p.pixelCode === pixelCode)) {
+    console.warn(
+      `${LOG_PREFIX} step=select_pixel_not_in_list shop=${params.shop} pixelCode=${pixelCode}`,
+    );
   }
 
   const incomingToken = params.eventsApiAccessToken?.trim() ?? "";
-  const eventsApiAccessToken =
-    incomingToken || credential.eventsApiAccessToken?.trim() || "";
+  const eventsApiAccessToken = incomingToken || existingToken;
   if (!eventsApiAccessToken) {
     throw new Error("请配置 TikTok Events API Access Token");
   }
@@ -244,12 +277,12 @@ export async function saveTiktokPixelConfig(
   }
 
   console.info(
-    `${LOG_PREFIX} step=saved shop=${params.shop} pixelCode=${pixelCode} created=${created} bound=${bound} events=${enabledEvents.join(",")}`,
+    `${LOG_PREFIX} step=saved shop=${params.shop} pixelCode=${pixelCode} created=false bound=${bound} events=${enabledEvents.join(",")}`,
   );
 
   return {
     pixelCode,
-    created,
+    created: false,
     bound,
     eventsApiEnabled,
     enabledEvents,
