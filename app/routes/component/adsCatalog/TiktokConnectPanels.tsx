@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 import { TiktokCatalogPicker } from "./TiktokCatalogPicker";
 import { TiktokBindDiagnosisPanel } from "./TiktokBindDiagnosisPanel";
+import { TiktokPixelConfigPanel } from "./TiktokPixelConfigPanel";
 import type { CredentialsView } from "./types";
 
 type Props = {
@@ -276,59 +277,39 @@ export function TiktokConnectPanels({
               </div>
             )}
             {tiktok.bindingMode === "api_managed" && (
-              <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>
-                  {t("adsCatalog.tiktokPixelSectionTitle")}
-                </div>
-                {tiktok.pixelCode ? (
-                  <>
-                    <div style={{ color: "#0f7a52" }}>
-                      {t("adsCatalog.tiktokPixelCode", { code: tiktok.pixelCode })}
-                    </div>
-                    <p style={{ ...pageHintTextStyle, margin: 0 }}>
-                      {t("adsCatalog.tiktokPixelHint")}
-                    </p>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <button
-                        type="button"
-                        style={{ ...secondaryBtn, padding: "4px 10px", fontSize: 12 }}
-                        disabled={busy}
-                        onClick={() => void rebindPixelEventSource()}
-                      >
-                        {busy ? t("adsCatalog.tiktokRebindPixelBusy") : t("adsCatalog.tiktokRebindPixel")}
-                      </button>
-                      {pixelBindSuccess && (
-                        <span style={{ color: "#0f7a52", fontSize: 12 }}>
-                          {t("adsCatalog.tiktokRebindPixelSuccess")}
-                        </span>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <p style={{ ...pageHintTextStyle, margin: 0 }}>
-                      {t("adsCatalog.tiktokPixelMissingHint")}
-                    </p>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <button
-                        type="button"
-                        style={{ ...secondaryBtn, padding: "6px 12px", fontSize: 12 }}
-                        disabled={busy}
-                        onClick={() => void ensurePixelEventSource()}
-                      >
-                        {busy ? t("adsCatalog.tiktokEnsurePixelBusy") : t("adsCatalog.tiktokEnsurePixel")}
-                      </button>
-                      {pixelEnsureSuccess && (
-                        <span style={{ color: "#0f7a52", fontSize: 12 }}>
-                          {t("adsCatalog.tiktokEnsurePixelSuccess")}
-                        </span>
-                      )}
-                    </div>
-                  </>
-                )}
+              <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+                <TiktokPixelConfigPanel
+                  locationSearch={locationSearch}
+                  pixelCode={tiktok.pixelCode}
+                  hasEventsApiAccessToken={tiktok.hasEventsApiAccessToken}
+                  eventsApiEnabled={tiktok.eventsApiEnabled}
+                  enabledEvents={tiktok.enabledEvents}
+                  busy={busy}
+                  setBusy={setBusy}
+                  onChanged={onChanged}
+                  onDiagnosisRefresh={() => setDiagnosisRefreshKey((k) => k + 1)}
+                  onBindError={setPixelBindError}
+                />
                 {pixelBindError && (
                   <span style={{ color: "#d72c0d", fontSize: 12 }}>{pixelBindError}</span>
                 )}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  {tiktok.pixelCode ? (
+                    <button
+                      type="button"
+                      style={{ ...secondaryBtn, padding: "4px 10px", fontSize: 12 }}
+                      disabled={busy}
+                      onClick={() => void rebindPixelEventSource()}
+                    >
+                      {busy ? t("adsCatalog.tiktokRebindPixelBusy") : t("adsCatalog.tiktokRebindPixel")}
+                    </button>
+                  ) : null}
+                  {pixelBindSuccess && (
+                    <span style={{ color: "#0f7a52", fontSize: 12 }}>
+                      {t("adsCatalog.tiktokRebindPixelSuccess")}
+                    </span>
+                  )}
+                </div>
                 <TiktokBindDiagnosisPanel
                   locationSearch={locationSearch}
                   connected={tiktok.connected}

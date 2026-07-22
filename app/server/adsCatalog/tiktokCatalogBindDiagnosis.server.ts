@@ -49,12 +49,13 @@ function isReadyForApiBind(checks: TiktokBindDiagnosisCheck[]): boolean {
     "api_writable",
     "currency_match",
     "pixel_present",
+    "events_api_token",
     "pixel_adv_link",
     "pixel_adv_link_permission",
     "catalog_eventsource",
     "catalog_adv_link",
   ]);
-  return !checks.some((c) => blocking.has(c.id) && c.status === "error");
+  return !checks.some((c) => c.status === "error" && blocking.has(c.id));
 }
 
 /**
@@ -225,8 +226,19 @@ export async function diagnoseTiktokCatalogBind(params: {
 
   if (!pixelCode) {
     pushCheck(checks, { id: "pixel_present", status: "error" });
+    if (!credential.eventsApiAccessToken?.trim()) {
+      pushCheck(checks, { id: "events_api_token", status: "error" });
+    } else {
+      pushCheck(checks, { id: "events_api_token", status: "ok" });
+    }
   } else {
     pushCheck(checks, { id: "pixel_present", status: "ok", vars: { pixelCode } });
+
+    if (!credential.eventsApiAccessToken?.trim()) {
+      pushCheck(checks, { id: "events_api_token", status: "error" });
+    } else {
+      pushCheck(checks, { id: "events_api_token", status: "ok" });
+    }
 
     const linkedResult = await getTiktokBcPixelLinkedAdvertiserIds({
       accessToken: credential.accessToken,

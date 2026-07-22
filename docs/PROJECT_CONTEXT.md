@@ -225,6 +225,10 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
   - `SHOP_CUSTOM_DOMAIN`（可选）
 - Web Pixel 自动配置（`app/server/webPixel/ensureWebPixel.server.ts`，OAuth 回调 / 进入 `/app` 时幂等执行）：
   - `PIXEL_INGEST_ENDPOINT`（可选）：像素上报地址；未设时回退 `SHOPIFY_APP_URL` + `/api/pixel-ingest`，二者均缺则跳过自动配置
+- TikTok Pixel（Ads Catalog）：
+  - UI：`/app/ads-catalog` TikTok 面板（选已有 / 创建 Pixel、Events API Access Token、事件勾选）
+  - 店面：Theme App Embed `extensions/spark-tiktok-pixel/` 读 Shop metafield `spark_tiktok.pixel_config`
+  - 服务端：`orders/paid` 按勾选上报 `CompletePayment`（Events API `pixel/track`）
 - 广告 TikTok 沙盒（Insights 页「沙盒模式」，`app/server/adsInsights/tiktokSandbox.server.ts`）：
   - `TIKTOK_SANDBOX_ACCESS_TOKEN`（必需）
   - `TIKTOK_SANDBOX_ADVERTISER_ID`（必需）

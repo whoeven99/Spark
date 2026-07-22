@@ -494,10 +494,16 @@ export type TiktokCatalogCredential = {
    * api_managed：Spark 可写目录。旧凭证缺省按 api_managed。
    */
   bindingMode: TiktokCatalogBindingMode;
-  /** Spark 自动创建并与 Catalog 关联的 TikTok Pixel Code（用于 Web 事件追踪）。 */
+  /** 已选中或新建的 TikTok Pixel Code（Catalog 事件源 + 店面追踪）。 */
   pixelCode?: string;
   /** 商家应用 ID（应用事件源，用于 App 内事件再营销）。 */
   appId?: string;
+  /** Events Manager 生成的 Events API Access Token（与 OAuth token 分开）。 */
+  eventsApiAccessToken?: string;
+  /** Conversion API / Events API 开关。 */
+  eventsApiEnabled?: boolean;
+  /** 勾选上报的 TikTok 标准事件名。 */
+  enabledEvents?: string[];
   updatedAt: string;
 };
 
@@ -537,6 +543,20 @@ export async function getTiktokCatalogCredential(
       typeof record.data.appId === "string" && record.data.appId.trim()
         ? record.data.appId.trim()
         : undefined,
+    eventsApiAccessToken:
+      typeof record.data.eventsApiAccessToken === "string" &&
+      record.data.eventsApiAccessToken.trim()
+        ? record.data.eventsApiAccessToken.trim()
+        : undefined,
+    eventsApiEnabled:
+      typeof record.data.eventsApiEnabled === "boolean"
+        ? record.data.eventsApiEnabled
+        : undefined,
+    enabledEvents: Array.isArray(record.data.enabledEvents)
+      ? record.data.enabledEvents
+          .map((item) => String(item ?? "").trim())
+          .filter(Boolean)
+      : undefined,
     updatedAt: record.updatedAt.toISOString(),
   };
 }
@@ -553,6 +573,12 @@ export async function setTiktokCatalogCredential(
     pixelCode?: string;
     /** 省略时保留已有值。 */
     appId?: string;
+    /** 省略时保留已有值；传空字符串可清空。 */
+    eventsApiAccessToken?: string;
+    /** 省略时保留已有值。 */
+    eventsApiEnabled?: boolean;
+    /** 省略时保留已有值。 */
+    enabledEvents?: string[];
   },
 ): Promise<void> {
   const accessToken = payload.accessToken.trim();
@@ -577,6 +603,25 @@ export async function setTiktokCatalogCredential(
     payload.appId?.trim() ||
     (typeof existing?.data.appId === "string" ? existing.data.appId.trim() : "") ||
     null;
+  const eventsApiAccessToken =
+    payload.eventsApiAccessToken !== undefined
+      ? payload.eventsApiAccessToken.trim() || null
+      : typeof existing?.data.eventsApiAccessToken === "string" &&
+          existing.data.eventsApiAccessToken.trim()
+        ? existing.data.eventsApiAccessToken.trim()
+        : null;
+  const eventsApiEnabled =
+    payload.eventsApiEnabled !== undefined
+      ? payload.eventsApiEnabled
+      : typeof existing?.data.eventsApiEnabled === "boolean"
+        ? existing.data.eventsApiEnabled
+        : true;
+  const enabledEvents =
+    payload.enabledEvents !== undefined
+      ? payload.enabledEvents
+      : Array.isArray(existing?.data.enabledEvents)
+        ? existing.data.enabledEvents
+        : null;
   await writePlatformCredential(shop, TIKTOK_CATALOG_PLATFORM, {
     accessToken,
     refreshToken: payload.refreshToken?.trim() || null,
@@ -587,6 +632,9 @@ export async function setTiktokCatalogCredential(
     bindingMode,
     pixelCode,
     appId,
+    eventsApiAccessToken,
+    eventsApiEnabled,
+    enabledEvents,
   });
 }
 

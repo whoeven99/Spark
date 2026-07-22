@@ -66,6 +66,7 @@ describe("diagnoseTiktokCatalogBind", () => {
       catalogName: "Spark Catalog",
       bindingMode: "api_managed",
       pixelCode: "PX123",
+      eventsApiAccessToken: "events-tok",
     });
     fetchTiktokCatalogConf.mockResolvedValue({
       catalogId: "cat-1",
@@ -89,6 +90,7 @@ describe("diagnoseTiktokCatalogBind", () => {
     expect(result.ready).toBe(false);
     expect(result.checks.find((c) => c.id === "catalog_eventsource")?.status).toBe("error");
     expect(result.checks.find((c) => c.id === "pixel_adv_link")?.status).toBe("ok");
+    expect(result.checks.find((c) => c.id === "events_api_token")?.status).toBe("ok");
   });
 
   it("flags pixel asset permission separately from missing link", async () => {
@@ -100,6 +102,7 @@ describe("diagnoseTiktokCatalogBind", () => {
       catalogName: "Spark Catalog",
       bindingMode: "api_managed",
       pixelCode: "PX123",
+      eventsApiAccessToken: "events-tok",
     });
     fetchTiktokCatalogConf.mockResolvedValue({
       catalogId: "cat-1",
@@ -139,6 +142,7 @@ describe("diagnoseTiktokCatalogBind", () => {
       catalogName: "Spark Catalog",
       bindingMode: "api_managed",
       pixelCode: "PX123",
+      eventsApiAccessToken: "events-tok",
     });
     fetchTiktokCatalogConf.mockResolvedValue({
       catalogId: "cat-1",
@@ -163,5 +167,6 @@ describe("diagnoseTiktokCatalogBind", () => {
     expect(result.ready).toBe(true);
     expect(result.summaryStatus).toBe("ok");
     expect(result.checks.find((c) => c.id === "catalog_eventsource")?.status).toBe("ok");
+    expect(result.checks.find((c) => c.id === "events_api_token")?.status).toBe("ok");
   });
 });

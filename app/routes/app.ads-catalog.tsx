@@ -20,6 +20,10 @@ import {
   maskTokenTail,
 } from "../server/adsCatalog/credentialStore.server";
 import { formatCustomerId } from "../server/adsCatalog/googleOAuth.server";
+import {
+  normalizeTiktokEnabledEvents,
+  TIKTOK_PIXEL_DEFAULT_EVENTS,
+} from "../lib/tiktokPixelEvents";
 import { useFeatureView } from "../lib/featureTrack";
 import { RoutePageFallback } from "./component/RoutePageFallback";
 
@@ -95,6 +99,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         updatedAt: tiktok?.updatedAt ?? null,
         pixelCode: tiktok?.pixelCode ?? "",
         appId: tiktok?.appId ?? "",
+        hasEventsApiAccessToken: Boolean(tiktok?.eventsApiAccessToken?.trim()),
+        eventsApiEnabled:
+          typeof tiktok?.eventsApiEnabled === "boolean" ? tiktok.eventsApiEnabled : true,
+        enabledEvents: tiktok?.enabledEvents?.length
+          ? normalizeTiktokEnabledEvents(tiktok.enabledEvents)
+          : [...TIKTOK_PIXEL_DEFAULT_EVENTS],
         pendingCatalogs:
           tiktokPending?.accounts.map((a) => ({
             id: a.id,

@@ -99,10 +99,16 @@ export interface CredentialsView {
     /** shopify_official | api_managed；未连接时为空字符串。 */
     bindingMode: "" | "shopify_official" | "api_managed";
     updatedAt: string | null;
-    /** Spark 自动创建并与 Catalog 关联的 TikTok Pixel Code。 */
+    /** 已选中或新建的 TikTok Pixel Code。 */
     pixelCode: string;
     /** 商家应用 ID（应用事件源）。 */
     appId: string;
+    /** 是否已配置 Events API Access Token（不明文回传）。 */
+    hasEventsApiAccessToken: boolean;
+    /** Conversion API / Events API 开关。 */
+    eventsApiEnabled: boolean;
+    /** 勾选上报的 TikTok 标准事件名。 */
+    enabledEvents: string[];
     pendingCatalogs: Array<{
       id: string;
       name?: string;

@@ -1,0 +1,335 @@
+import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopifyInfo.tool";
+import {
+  bindTiktokCatalogPixelEventSource,
+  createTiktokPixel,
+  listTiktokPixels,
+  trackTiktokPixelEvent,
+} from "./clients/tiktokCatalogClient.server";
+import {
+  getTiktokCatalogCredential,
+  setTiktokCatalogCredential,
+} from "./credentialStore.server";
+import {
+  normalizeTiktokEnabledEvents,
+  TIKTOK_PIXEL_METAFIELD_KEY,
+  TIKTOK_PIXEL_METAFIELD_NAMESPACE,
+  type TiktokPixelEventName,
+  type TiktokPixelStorefrontConfig,
+} from "../../lib/tiktokPixelEvents";
+
+const LOG_PREFIX = "[AdsCatalog][TikTokPixelConfig]";
+
+export type SaveTiktokPixelConfigInput = {
+  shop: string;
+  admin: ShopifyAdminGraphqlClient;
+  mode: "select" | "create";
+  pixelCode?: string;
+  pixelName?: string;
+  eventsApiAccessToken?: string;
+  eventsApiEnabled?: boolean;
+  enabledEvents?: unknown;
+  /** 保存后是否尝试绑定 Catalog 事件源（默认 true）。 */
+  bindCatalogEventSource?: boolean;
+};
+
+export type SaveTiktokPixelConfigResult = {
+  pixelCode: string;
+  created: boolean;
+  bound: boolean;
+  eventsApiEnabled: boolean;
+  enabledEvents: TiktokPixelEventName[];
+  hasEventsApiAccessToken: boolean;
+};
+
+async function resolveShopGid(admin: ShopifyAdminGraphqlClient): Promise<string> {
+  const response = await admin.graphql(`#graphql
+    query SparkTiktokPixelShopId {
+      shop { id }
+    }
+  `);
+  const json = (await response.json()) as {
+    data?: { shop?: { id?: string } };
+    errors?: Array<{ message?: string }>;
+  };
+  const id = json.data?.shop?.id?.trim();
+  if (!id) {
+    throw new Error(
+      json.errors?.[0]?.message || "Failed to resolve shop GID for metafield write",
+    );
+  }
+  return id;
+}
+
+/** 将 Pixel 店面配置写入 Shop metafield，供 Theme App Embed 读取。 */
+export async function syncTiktokPixelStorefrontMetafield(params: {
+  admin: ShopifyAdminGraphqlClient;
+  config: TiktokPixelStorefrontConfig;
+}): Promise<void> {
+  const shopId = await resolveShopGid(params.admin);
+  const value = JSON.stringify({
+    pixelCode: params.config.pixelCode,
+    enabledEvents: params.config.enabledEvents,
+    eventsApiEnabled: params.config.eventsApiEnabled,
+  });
+
+  const response = await params.admin.graphql(
+    `#graphql
+      mutation SparkTiktokPixelMetafieldSet($metafields: [MetafieldsSetInput!]!) {
+        metafieldsSet(metafields: $metafields) {
+          metafields { id key namespace }
+          userErrors { field message code }
+        }
+      }
+    `,
+    {
+      variables: {
+        metafields: [
+          {
+            ownerId: shopId,
+            namespace: TIKTOK_PIXEL_METAFIELD_NAMESPACE,
+            key: TIKTOK_PIXEL_METAFIELD_KEY,
+            type: "json",
+            value,
+          },
+        ],
+      },
+    },
+  );
+  const json = (await response.json()) as {
+    data?: {
+      metafieldsSet?: {
+        userErrors?: Array<{ message?: string }>;
+      };
+    };
+    errors?: Array<{ message?: string }>;
+  };
+  const userErrors = json.data?.metafieldsSet?.userErrors ?? [];
+  if (json.errors?.length || userErrors.length) {
+    const msg =
+      userErrors[0]?.message ||
+      json.errors?.[0]?.message ||
+      "metafieldsSet failed";
+    throw new Error(`TikTok Pixel metafield sync failed: ${msg}`);
+  }
+}
+
+/**
+ * 保存 Pixel 绑定配置：选已有 / 创建、Events API token、事件勾选，并同步 metafield。
+ */
+export async function saveTiktokPixelConfig(
+  params: SaveTiktokPixelConfigInput,
+): Promise<SaveTiktokPixelConfigResult> {
+  const credential = await getTiktokCatalogCredential(params.shop);
+  if (!credential) {
+    throw new Error("TikTok Catalog 尚未连接，请先完成授权。");
+  }
+  if (!credential.bcId) {
+    throw new Error("缺少 bcId，请重新授权 TikTok。");
+  }
+
+  const enabledEvents = normalizeTiktokEnabledEvents(params.enabledEvents);
+  const eventsApiEnabled =
+    typeof params.eventsApiEnabled === "boolean" ? params.eventsApiEnabled : true;
+
+  let pixelCode = params.pixelCode?.trim() ?? "";
+  let created = false;
+
+  if (params.mode === "create") {
+    const pixelName =
+      params.pixelName?.trim() ||
+      `Spark Pixel — ${params.shop.split(".")[0] || "Store"}`.slice(0, 40);
+    const pixel = await createTiktokPixel({
+      accessToken: credential.accessToken,
+      advertiserId: credential.advertiserId,
+      pixelName,
+    });
+    pixelCode = pixel.pixelCode;
+    created = true;
+  } else {
+    if (!pixelCode) {
+      throw new Error("请选择已有 Pixel");
+    }
+    const listed = await listTiktokPixels({
+      accessToken: credential.accessToken,
+      advertiserId: credential.advertiserId,
+    }).catch(() => [] as Array<{ pixelCode: string }>);
+    if (listed.length > 0 && !listed.some((p) => p.pixelCode === pixelCode)) {
+      console.warn(
+        `${LOG_PREFIX} step=select_pixel_not_in_list shop=${params.shop} pixelCode=${pixelCode}`,
+      );
+    }
+  }
+
+  const incomingToken = params.eventsApiAccessToken?.trim() ?? "";
+  const eventsApiAccessToken =
+    incomingToken || credential.eventsApiAccessToken?.trim() || "";
+  if (!eventsApiAccessToken) {
+    throw new Error("请配置 TikTok Events API Access Token");
+  }
+
+  await setTiktokCatalogCredential(params.shop, {
+    accessToken: credential.accessToken,
+    refreshToken: credential.refreshToken,
+    advertiserId: credential.advertiserId,
+    bcId: credential.bcId,
+    catalogId: credential.catalogId,
+    catalogName: credential.catalogName,
+    bindingMode: credential.bindingMode,
+    pixelCode,
+    appId: credential.appId,
+    eventsApiAccessToken,
+    eventsApiEnabled,
+    enabledEvents,
+  });
+
+  try {
+    await syncTiktokPixelStorefrontMetafield({
+      admin: params.admin,
+      config: {
+        pixelCode,
+        enabledEvents,
+        eventsApiEnabled,
+      },
+    });
+  } catch (e) {
+    console.warn(
+      `${LOG_PREFIX} step=metafield_sync_failed shop=${params.shop} err=${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+
+  let bound = false;
+  const shouldBind = params.bindCatalogEventSource !== false;
+  if (shouldBind && credential.bindingMode === "api_managed") {
+    try {
+      const bindResult = await bindTiktokCatalogPixelEventSource({
+        accessToken: credential.accessToken,
+        advertiserId: credential.advertiserId,
+        bcId: credential.bcId,
+        catalogId: credential.catalogId,
+        pixelCode,
+      });
+      if (bindResult.advertiserId !== credential.advertiserId) {
+        await setTiktokCatalogCredential(params.shop, {
+          accessToken: credential.accessToken,
+          refreshToken: credential.refreshToken,
+          advertiserId: bindResult.advertiserId,
+          bcId: credential.bcId,
+          catalogId: credential.catalogId,
+          catalogName: credential.catalogName,
+          bindingMode: credential.bindingMode,
+          pixelCode,
+          appId: credential.appId,
+          eventsApiAccessToken,
+          eventsApiEnabled,
+          enabledEvents,
+        });
+      }
+      bound = true;
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      console.warn(
+        `${LOG_PREFIX} step=catalog_bind_failed shop=${params.shop} pixelCode=${pixelCode} err=${errMsg}`,
+      );
+      throw new Error(
+        `Pixel 配置已保存（${pixelCode}），但绑定到 Catalog 失败：${errMsg}`,
+      );
+    }
+  }
+
+  console.info(
+    `${LOG_PREFIX} step=saved shop=${params.shop} pixelCode=${pixelCode} created=${created} bound=${bound} events=${enabledEvents.join(",")}`,
+  );
+
+  return {
+    pixelCode,
+    created,
+    bound,
+    eventsApiEnabled,
+    enabledEvents,
+    hasEventsApiAccessToken: true,
+  };
+}
+
+/** orders/paid → CompletePayment（按勾选 + CAPI 开关）。 */
+export async function maybeTrackTiktokCompletePayment(params: {
+  shop: string;
+  orderId: string;
+  orderName?: string;
+  value?: number;
+  currency?: string;
+  email?: string;
+}): Promise<{ sent: boolean; reason?: string }> {
+  const credential = await getTiktokCatalogCredential(params.shop);
+  if (!credential) return { sent: false, reason: "no_credential" };
+
+  const pixelCode = credential.pixelCode?.trim() ?? "";
+  const token = credential.eventsApiAccessToken?.trim() ?? "";
+  const enabled =
+    typeof credential.eventsApiEnabled === "boolean" ? credential.eventsApiEnabled : true;
+  const events = normalizeTiktokEnabledEvents(credential.enabledEvents);
+
+  if (!enabled) return { sent: false, reason: "events_api_disabled" };
+  if (!pixelCode) return { sent: false, reason: "no_pixel" };
+  if (!token) return { sent: false, reason: "no_events_api_token" };
+  if (!events.includes("CompletePayment")) {
+    return { sent: false, reason: "event_not_enabled" };
+  }
+
+  const eventId = params.orderName?.trim() || params.orderId;
+  const properties: Record<string, unknown> = {};
+  if (typeof params.value === "number" && Number.isFinite(params.value)) {
+    properties.value = params.value;
+  }
+  if (params.currency?.trim()) properties.currency = params.currency.trim();
+  if (params.email?.trim()) {
+    // Events API 推荐 hashed email；第一期先传明文由 TikTok 侧处理风险较低的测试字段，
+    // 正式增强可改为 SHA256。此处放入 context.user 更常见。
+  }
+
+  try {
+    await trackTiktokPixelEvent({
+      eventsApiAccessToken: token,
+      pixelCode,
+      event: "CompletePayment",
+      eventId,
+      timestamp: new Date().toISOString(),
+      properties: Object.keys(properties).length ? properties : undefined,
+      context: params.email?.trim()
+        ? { user: { email: params.email.trim() } }
+        : undefined,
+    });
+    console.info(
+      `${LOG_PREFIX} step=complete_payment_sent shop=${params.shop} eventId=${eventId}`,
+    );
+    return { sent: true };
+  } catch (e) {
+    console.warn(
+      `${LOG_PREFIX} step=complete_payment_failed shop=${params.shop} err=${e instanceof Error ? e.message : String(e)}`,
+    );
+    return { sent: false, reason: "track_failed" };
+  }
+}
+
+export async function testTiktokServerEvents(params: {
+  shop: string;
+  testEventCode?: string;
+}): Promise<void> {
+  const credential = await getTiktokCatalogCredential(params.shop);
+  if (!credential) {
+    throw new Error("TikTok Catalog 尚未连接，请先完成授权。");
+  }
+  const pixelCode = credential.pixelCode?.trim() ?? "";
+  const token = credential.eventsApiAccessToken?.trim() ?? "";
+  if (!pixelCode) throw new Error("请先选择或创建 Pixel");
+  if (!token) throw new Error("请配置 TikTok Events API Access Token");
+
+  await trackTiktokPixelEvent({
+    eventsApiAccessToken: token,
+    pixelCode,
+    event: "CompletePayment",
+    eventId: `spark-test-${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    properties: { value: 1, currency: "USD", content_type: "product" },
+    testEventCode: params.testEventCode,
+  });
+}

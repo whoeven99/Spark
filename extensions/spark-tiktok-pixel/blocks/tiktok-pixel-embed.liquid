@@ -1,0 +1,157 @@
+{% comment %}
+  Spark TikTok Pixel — Theme App Embed
+  Reads shop.metafields.spark_tiktok.pixel_config (JSON) written by Ads Catalog.
+{% endcomment %}
+{% if block.settings.enable_pixel %}
+  {% assign cfg = shop.metafields.spark_tiktok.pixel_config.value %}
+  {% if cfg == blank %}
+    {% assign cfg = shop.metafields.spark_tiktok.pixel_config %}
+  {% endif %}
+  {% if cfg != blank and cfg.pixelCode != blank %}
+    {% assign pixel_code = cfg.pixelCode %}
+    {% assign enabled = cfg.enabledEvents %}
+    <script>
+      !function (w, d, t) {
+        w.TiktokAnalyticsObject = t;
+        var ttq = w[t] = w[t] || [];
+        ttq.methods = ["page", "track", "identify", "instances", "debug", "on", "off", "once", "ready", "alias", "group", "enableCookie", "disableCookie", "holdConsent", "revokeConsent", "grantConsent"];
+        ttq.setAndDefer = function (t, e) {
+          t[e] = function () {
+            t.push([e].concat(Array.prototype.slice.call(arguments, 0)));
+          };
+        };
+        for (var i = 0; i < ttq.methods.length; i++) ttq.setAndDefer(ttq, ttq.methods[i]);
+        ttq.instance = function (t) {
+          for (var e = ttq._i[t] || [], n = 0; n < ttq.methods.length; n++) ttq.setAndDefer(e, ttq.methods[n]);
+          return e;
+        };
+        ttq.load = function (e, n) {
+          var r = "https://analytics.tiktok.com/i18n/pixel/events.js";
+          var o = d.createElement("script");
+          o.type = "text/javascript";
+          o.async = true;
+          o.src = r + "?sdkid=" + e + "&lib=" + t;
+          var a = d.getElementsByTagName("script")[0];
+          a.parentNode.insertBefore(o, a);
+        };
+        ttq.load({{ pixel_code | json }});
+        ttq.page();
+      }(window, document, "ttq");
+    </script>
+    <script>
+      (function () {
+        var enabled = {{ enabled | json }};
+        if (!Array.isArray(enabled)) enabled = [];
+        function on(name) { return enabled.indexOf(name) !== -1; }
+        function eid() {
+          try {
+            if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+          } catch (e) {}
+          return "spark-" + Date.now() + "-" + Math.random().toString(16).slice(2);
+        }
+        function track(name, props) {
+          if (!on(name) || !window.ttq) return;
+          try {
+            window.ttq.track(name, props || {}, { event_id: eid() });
+          } catch (e) {}
+        }
+
+        if (on("PageView")) {
+          track("PageView");
+        }
+
+        {% if request.page_type == "product" and product %}
+          if (on("ViewContent")) {
+            track("ViewContent", {
+              contents: [{
+                content_id: {{ product.selected_or_first_available_variant.id | json }},
+                content_type: "product",
+                content_name: {{ product.title | json }}
+              }],
+              value: {{ product.selected_or_first_available_variant.price | divided_by: 100.0 | json }},
+              currency: {{ cart.currency.iso_code | default: shop.currency | json }}
+            });
+          }
+        {% endif %}
+
+        {% if request.page_type == "collection" and collection %}
+          if (on("CollectionView")) {
+            track("ViewContent", {
+              contents: [{ content_id: {{ collection.id | json }}, content_type: "product_group", content_name: {{ collection.title | json }} }],
+              currency: {{ cart.currency.iso_code | default: shop.currency | json }}
+            });
+          }
+        {% endif %}
+
+        {% if request.page_type == "cart" %}
+          if (on("CartView")) {
+            track("ViewContent", {
+              content_type: "product",
+              value: {{ cart.total_price | divided_by: 100.0 | json }},
+              currency: {{ cart.currency.iso_code | default: shop.currency | json }}
+            });
+          }
+        {% endif %}
+
+        {% if request.page_type == "search" %}
+          if (on("Search")) {
+            track("Search", {
+              query: {{ search.terms | json }}
+            });
+          }
+        {% endif %}
+
+        document.addEventListener("DOMContentLoaded", function () {
+          document.addEventListener("click", function (ev) {
+            var el = ev.target && ev.target.closest
+              ? ev.target.closest('button[name="add"], form[action*="/cart/add"] button[type="submit"], [name="add"]')
+              : null;
+            if (el && on("AddToCart")) {
+              track("AddToCart", {
+                content_type: "product",
+                currency: {{ cart.currency.iso_code | default: shop.currency | json }}
+              });
+            }
+            var checkout = ev.target && ev.target.closest
+              ? ev.target.closest('button[name="checkout"], [href*="/checkout"], form[action*="/checkout"] button')
+              : null;
+            if (checkout && on("InitiateCheckout")) {
+              track("InitiateCheckout", {
+                value: {{ cart.total_price | divided_by: 100.0 | json }},
+                currency: {{ cart.currency.iso_code | default: shop.currency | json }}
+              });
+            }
+          }, true);
+        });
+
+        {% if checkout and checkout.order_id %}
+          if (on("CompletePayment")) {
+            try {
+              if (window.ttq) {
+                window.ttq.track("CompletePayment", {
+                  value: {{ checkout.total_price | default: 0 | divided_by: 100.0 | json }},
+                  currency: {{ checkout.currency | default: shop.currency | json }}
+                }, { event_id: String({{ checkout.order_id | json }}) });
+              }
+            } catch (e) {}
+          }
+        {% endif %}
+      })();
+    </script>
+  {% endif %}
+{% endif %}
+
+{% schema %}
+{
+  "name": "Spark TikTok Pixel",
+  "target": "body",
+  "settings": [
+    {
+      "type": "checkbox",
+      "id": "enable_pixel",
+      "label": "Enable TikTok Pixel tracking",
+      "default": true
+    }
+  ]
+}
+{% endschema %}

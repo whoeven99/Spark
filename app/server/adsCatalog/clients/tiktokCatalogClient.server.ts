@@ -1132,3 +1132,166 @@ export async function uploadTiktokCatalogProductFile(params: {
     ...(payload.request_id ? { requestId: payload.request_id } : {}),
   };
 }
+
+export type TiktokPixelListItem = {
+  pixelCode: string;
+  pixelName: string;
+  pixelId?: string;
+};
+
+/**
+ * 列出广告主下的 Pixel。
+ * GET /open_api/v1.3/pixel/list/
+ */
+export async function listTiktokPixels(params: {
+  accessToken: string;
+  advertiserId: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<TiktokPixelListItem[]> {
+  const url = new URL(`${TIKTOK_API_BASE}/pixel/list/`);
+  url.searchParams.set("advertiser_id", params.advertiserId);
+  url.searchParams.set("page", String(params.page ?? 1));
+  url.searchParams.set("page_size", String(params.pageSize ?? 50));
+  url.searchParams.set("order_by", "LATEST_CREATE");
+
+  console.info(
+    `${LOG_PREFIX} step=pixel_list_request advertiserId=${params.advertiserId}`,
+  );
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers: { "Access-Token": params.accessToken },
+  });
+  const text = await response.text();
+  let payload: {
+    code?: number;
+    message?: string;
+    data?: {
+      pixels?: Array<{
+        pixel_id?: string | number;
+        pixel_code?: string;
+        pixel_name?: string;
+        name?: string;
+      }>;
+      list?: Array<{
+        pixel_id?: string | number;
+        pixel_code?: string;
+        pixel_name?: string;
+        name?: string;
+      }>;
+    };
+  } = {};
+  try {
+    payload = text ? (JSON.parse(text) as typeof payload) : {};
+  } catch {
+    payload = {};
+  }
+
+  console.info(
+    `${LOG_PREFIX} step=pixel_list_response http=${response.status} code=${payload.code ?? ""} message=${payload.message ?? ""} body=${rawForLog(text)}`,
+  );
+
+  if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {
+    const detail =
+      payload.message ||
+      (payload.code !== undefined ? `code=${payload.code}` : "") ||
+      text.slice(0, 200) ||
+      response.statusText;
+    throw new Error(`TikTok Pixel list failed: HTTP ${response.status} ${detail}`.trim());
+  }
+
+  const rows = payload.data?.pixels ?? payload.data?.list ?? [];
+  const out: TiktokPixelListItem[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const pixelCode = String(row.pixel_code ?? "").trim();
+    if (!pixelCode || seen.has(pixelCode)) continue;
+    seen.add(pixelCode);
+    out.push({
+      pixelCode,
+      pixelName: String(row.pixel_name ?? row.name ?? pixelCode).trim() || pixelCode,
+      pixelId:
+        row.pixel_id != null && String(row.pixel_id).trim()
+          ? String(row.pixel_id).trim()
+          : undefined,
+    });
+  }
+  return out;
+}
+
+export type TrackTiktokPixelEventParams = {
+  /** Events Manager 生成的 Events API Access Token。 */
+  eventsApiAccessToken: string;
+  pixelCode: string;
+  event: string;
+  eventId?: string;
+  timestamp?: string;
+  properties?: Record<string, unknown>;
+  context?: Record<string, unknown>;
+  testEventCode?: string;
+};
+
+/**
+ * 通过 Events API 上报单条 Pixel 事件。
+ * POST /open_api/v1.3/pixel/track/
+ */
+export async function trackTiktokPixelEvent(
+  params: TrackTiktokPixelEventParams,
+): Promise<void> {
+  const pixelCode = params.pixelCode.trim();
+  const event = params.event.trim();
+  const token = params.eventsApiAccessToken.trim();
+  if (!pixelCode || !event || !token) {
+    throw new Error("TikTok pixel track requires pixelCode, event, and eventsApiAccessToken");
+  }
+
+  const body: Record<string, unknown> = {
+    pixel_code: pixelCode,
+    event,
+  };
+  if (params.eventId?.trim()) body.event_id = params.eventId.trim();
+  if (params.timestamp?.trim()) body.timestamp = params.timestamp.trim();
+  if (params.properties && Object.keys(params.properties).length > 0) {
+    body.properties = params.properties;
+  }
+  if (params.context && Object.keys(params.context).length > 0) {
+    body.context = params.context;
+  }
+  if (params.testEventCode?.trim()) {
+    body.test_event_code = params.testEventCode.trim();
+  }
+
+  console.info(
+    `${LOG_PREFIX} step=pixel_track_request pixelCode=${pixelCode} event=${event} eventId=${params.eventId ?? ""}`,
+  );
+
+  const response = await fetch(`${TIKTOK_API_BASE}/pixel/track/`, {
+    method: "POST",
+    headers: {
+      "Access-Token": token,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const text = await response.text();
+  let payload: { code?: number; message?: string } = {};
+  try {
+    payload = text ? (JSON.parse(text) as typeof payload) : {};
+  } catch {
+    payload = {};
+  }
+
+  console.info(
+    `${LOG_PREFIX} step=pixel_track_response http=${response.status} code=${payload.code ?? ""} message=${payload.message ?? ""} body=${rawForLog(text)}`,
+  );
+
+  if (!response.ok || (payload.code !== undefined && payload.code !== 0)) {
+    const detail =
+      payload.message ||
+      (payload.code !== undefined ? `code=${payload.code}` : "") ||
+      text.slice(0, 200) ||
+      response.statusText;
+    throw new Error(`TikTok Pixel track failed: HTTP ${response.status} ${detail}`.trim());
+  }
+}
