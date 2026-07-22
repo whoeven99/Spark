@@ -10,6 +10,7 @@
   {% if cfg != blank and cfg.pixelCode != blank %}
     {% assign pixel_code = cfg.pixelCode %}
     {% assign enabled = cfg.enabledEvents %}
+    {% assign metafield_test_code = cfg.testEventCode %}
     <script>
       !function (w, d, t) {
         w.TiktokAnalyticsObject = t;
@@ -44,6 +45,9 @@
         if (!Array.isArray(enabled)) enabled = [];
         var TEST_QUERY = "spark_tt_test_code";
         var TEST_STORAGE = "spark_tt_test_event_code";
+        var metafieldTestCode = {{ metafield_test_code | json }};
+        if (typeof metafieldTestCode !== "string") metafieldTestCode = "";
+        metafieldTestCode = String(metafieldTestCode || "").trim();
         var testEventCode = "";
         try {
           var params = new URLSearchParams(window.location.search || "");
@@ -62,6 +66,8 @@
         } catch (e) {
           testEventCode = "";
         }
+        // 密码店 302 会丢掉 query：回落到 metafield（保存/开启测试时写入）
+        if (!testEventCode && metafieldTestCode) testEventCode = metafieldTestCode;
         function on(name) { return enabled.indexOf(name) !== -1; }
         function eid() {
           try {

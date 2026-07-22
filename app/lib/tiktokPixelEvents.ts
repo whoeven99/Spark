@@ -68,6 +68,11 @@ export type TiktokPixelStorefrontConfig = {
   pixelCode: string;
   enabledEvents: TiktokPixelEventName[];
   eventsApiEnabled: boolean;
+  /**
+   * 有值时 Theme Embed 的 ttq 带 test_event_code。
+   * 写入 metafield 可避开密码店 302 丢 query；测完须清除。
+   */
+  testEventCode?: string;
 };
 
 export function buildTiktokEventsManagerUrl(pixelCode?: string): string {

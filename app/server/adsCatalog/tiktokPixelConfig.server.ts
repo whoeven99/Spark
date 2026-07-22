@@ -10,6 +10,15 @@ import {
   setTiktokCatalogCredential,
   type TiktokCatalogCredential,
 } from "./credentialStore.server";
+import {
+  normalizeTiktokEnabledEvents,
+  TIKTOK_PIXEL_METAFIELD_KEY,
+  TIKTOK_PIXEL_METAFIELD_NAMESPACE,
+  type TiktokPixelEventName,
+  type TiktokPixelStorefrontConfig,
+} from "../../lib/tiktokPixelEvents";
+
+const LOG_PREFIX = "[AdsCatalog][TikTokPixelConfig]";
 
 function credentialWriteBase(credential: TiktokCatalogCredential) {
   return {
@@ -21,15 +30,6 @@ function credentialWriteBase(credential: TiktokCatalogCredential) {
     catalogName: credential.catalogName,
   };
 }
-import {
-  normalizeTiktokEnabledEvents,
-  TIKTOK_PIXEL_METAFIELD_KEY,
-  TIKTOK_PIXEL_METAFIELD_NAMESPACE,
-  type TiktokPixelEventName,
-  type TiktokPixelStorefrontConfig,
-} from "../../lib/tiktokPixelEvents";
-
-const LOG_PREFIX = "[AdsCatalog][TikTokPixelConfig]";
 
 export type SaveTiktokPixelConfigInput = {
   shop: string;
@@ -80,10 +80,12 @@ export async function syncTiktokPixelStorefrontMetafield(params: {
   config: TiktokPixelStorefrontConfig;
 }): Promise<void> {
   const shopId = await resolveShopGid(params.admin);
+  const testEventCode = params.config.testEventCode?.trim() || "";
   const value = JSON.stringify({
     pixelCode: params.config.pixelCode,
     enabledEvents: params.config.enabledEvents,
     eventsApiEnabled: params.config.eventsApiEnabled,
+    ...(testEventCode ? { testEventCode } : {}),
   });
 
   const response = await params.admin.graphql(
@@ -125,6 +127,24 @@ export async function syncTiktokPixelStorefrontMetafield(params: {
       "metafieldsSet failed";
     throw new Error(`TikTok Pixel metafield sync failed: ${msg}`);
   }
+}
+
+function storefrontConfigFromCredential(credential: TiktokCatalogCredential): {
+  pixelCode: string;
+  enabledEvents: ReturnType<typeof normalizeTiktokEnabledEvents>;
+  eventsApiEnabled: boolean;
+  testEventCode?: string;
+} | null {
+  const pixelCode = credential.pixelCode?.trim() ?? "";
+  if (!pixelCode) return null;
+  const testEventCode = credential.testEventCode?.trim() || undefined;
+  return {
+    pixelCode,
+    enabledEvents: normalizeTiktokEnabledEvents(credential.enabledEvents),
+    eventsApiEnabled:
+      typeof credential.eventsApiEnabled === "boolean" ? credential.eventsApiEnabled : true,
+    ...(testEventCode ? { testEventCode } : {}),
+  };
 }
 
 /**
@@ -218,6 +238,8 @@ export async function saveTiktokPixelConfig(
 
   let activeAdvertiserId = advertiserId;
 
+  const preservedTestEventCode = credential.testEventCode?.trim() || undefined;
+
   await setTiktokCatalogCredential(params.shop, {
     accessToken: credential.accessToken,
     refreshToken: credential.refreshToken,
@@ -240,6 +262,7 @@ export async function saveTiktokPixelConfig(
         pixelCode,
         enabledEvents,
         eventsApiEnabled,
+        ...(preservedTestEventCode ? { testEventCode: preservedTestEventCode } : {}),
       },
     });
   } catch (e) {
@@ -365,9 +388,10 @@ export async function maybeTrackTiktokCompletePayment(params: {
   }
 }
 
-/** 开启服务端测试模式：凭证写入 testEventCode，后续 CompletePayment 带测试标记。 */
+/** 开启测试模式：凭证 + metafield 写入 testEventCode（店面 ttq / CompletePayment 均带测试标记）。 */
 export async function startTiktokPixelTestEventMode(params: {
   shop: string;
+  admin: ShopifyAdminGraphqlClient;
   testEventCode: string;
 }): Promise<void> {
   const credential = await getTiktokCatalogCredential(params.shop);
@@ -384,22 +408,50 @@ export async function startTiktokPixelTestEventMode(params: {
     ...credentialWriteBase(credential),
     testEventCode,
   });
+
+  const storefront = storefrontConfigFromCredential({
+    ...credential,
+    testEventCode,
+  });
+  if (storefront) {
+    await syncTiktokPixelStorefrontMetafield({
+      admin: params.admin,
+      config: storefront,
+    });
+  }
+
   console.info(
     `${LOG_PREFIX} step=test_mode_started shop=${params.shop} pixel=${credential.pixelCode}`,
   );
 }
 
-/** 结束测试模式：清空凭证中的 testEventCode，后续事件走正式上报。 */
-export async function clearTiktokPixelTestEventMode(shop: string): Promise<void> {
-  const credential = await getTiktokCatalogCredential(shop);
+/** 结束测试模式：清空凭证与 metafield 中的 testEventCode，恢复正式事件。 */
+export async function clearTiktokPixelTestEventMode(params: {
+  shop: string;
+  admin: ShopifyAdminGraphqlClient;
+}): Promise<void> {
+  const credential = await getTiktokCatalogCredential(params.shop);
   if (!credential) return;
-  if (!credential.testEventCode?.trim()) return;
 
-  await setTiktokCatalogCredential(shop, {
-    ...credentialWriteBase(credential),
-    testEventCode: "",
+  if (credential.testEventCode?.trim()) {
+    await setTiktokCatalogCredential(params.shop, {
+      ...credentialWriteBase(credential),
+      testEventCode: "",
+    });
+  }
+
+  const storefront = storefrontConfigFromCredential({
+    ...credential,
+    testEventCode: undefined,
   });
-  console.info(`${LOG_PREFIX} step=test_mode_cleared shop=${shop}`);
+  if (storefront) {
+    await syncTiktokPixelStorefrontMetafield({
+      admin: params.admin,
+      config: storefront,
+    });
+  }
+
+  console.info(`${LOG_PREFIX} step=test_mode_cleared shop=${params.shop}`);
 }
 
 export async function testTiktokServerEvents(params: {

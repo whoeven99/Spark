@@ -401,9 +401,49 @@ export function TiktokPixelConfigPanel({
       setTestEventCode("");
       setTestCleared(true);
       onChanged();
-      // 打开店面并带空 query，清掉该浏览器会话的 sessionStorage 测试标记
       const clearUrl = buildShopOnlineStoreUrl(shopDomain, { testEventCode: "" });
       if (clearUrl) openExternal(clearUrl);
+    } catch (e) {
+      setTestError(e instanceof Error ? e.message : t("adsCatalog.authError"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** 保存 Test Event Code 到凭证 + metafield，开启测试模式（不打开店面）。 */
+  async function saveTestEventCode() {
+    const code = testEventCode.trim();
+    if (!code) {
+      setTestError(t("adsCatalog.tiktokPixelTestEventCodeRequired"));
+      return;
+    }
+    if (!pixelCode && !selectedPixelCode) {
+      setTestError(t("adsCatalog.tiktokPixelSelectRequired"));
+      return;
+    }
+
+    setBusy(true);
+    setTestSuccess(false);
+    setTestCleared(false);
+    setTestModeStarted(false);
+    setTestError(null);
+    setLocalError(null);
+    try {
+      const resp = await fetch(`/api/ads-catalog/tiktok-test-events${locationSearch}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "start", testEventCode: code }),
+      });
+      const data = (await resp.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!resp.ok || !data.ok) {
+        setTestError(data.error ?? t("adsCatalog.authError"));
+        return;
+      }
+      setTestModeStarted(true);
+      onChanged();
     } catch (e) {
       setTestError(e instanceof Error ? e.message : t("adsCatalog.authError"));
     } finally {
@@ -775,6 +815,14 @@ export function TiktokPixelConfigPanel({
                     setTestError(null);
                   }}
                 />
+                <button
+                  type="button"
+                  style={{ ...primaryBtn, padding: "8px 10px", whiteSpace: "nowrap" }}
+                  disabled={busy || !testEventCode.trim()}
+                  onClick={() => void saveTestEventCode()}
+                >
+                  {t("adsCatalog.tiktokPixelSaveTestEventCode")}
+                </button>
                 <button
                   type="button"
                   style={{ ...secondaryBtn, padding: "8px 10px", whiteSpace: "nowrap" }}

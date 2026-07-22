@@ -11,15 +11,15 @@ type TestEventAction = "send" | "start" | "clear";
 /**
  * TikTok Test Event Code：
  * - send：发送一条带 test_event_code 的连通性测试事件
- * - start：写入凭证，开启服务端测试模式（配合店面 URL/session 走浏览器测试事件）
- * - clear：清除凭证中的 Test Event Code，恢复正式事件
+ * - start：写入凭证 + metafield，开启测试模式（店面 ttq / CompletePayment）
+ * - clear：清除凭证与 metafield 中的 Test Event Code，恢复正式事件
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
     return Response.json({ ok: false, error: "Method not allowed" }, { status: 405 });
   }
 
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
 
   let actionKind: TestEventAction = "send";
   let testEventCode = "";
@@ -54,7 +54,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     if (actionKind === "clear") {
-      await clearTiktokPixelTestEventMode(session.shop);
+      await clearTiktokPixelTestEventMode({ shop: session.shop, admin });
       return Response.json({ ok: true, action: "clear" });
     }
 
@@ -68,6 +68,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (actionKind === "start") {
       await startTiktokPixelTestEventMode({
         shop: session.shop,
+        admin,
         testEventCode,
       });
       return Response.json({ ok: true, action: "start" });

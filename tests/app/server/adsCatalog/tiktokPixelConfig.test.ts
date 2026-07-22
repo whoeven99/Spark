@@ -126,13 +126,23 @@ describe("maybeTrackTiktokCompletePayment", () => {
 });
 
 describe("TikTok pixel test event mode", () => {
+  const admin = { graphql: vi.fn() } as never;
+
   beforeEach(() => {
     getTiktokCatalogCredential.mockReset();
     setTiktokCatalogCredential.mockReset();
     setTiktokCatalogCredential.mockResolvedValue(undefined);
+    (admin as { graphql: ReturnType<typeof vi.fn> }).graphql = vi.fn().mockResolvedValue({
+      json: async () => ({
+        data: {
+          shop: { id: "gid://shopify/Shop/1" },
+          metafieldsSet: { userErrors: [] },
+        },
+      }),
+    });
   });
 
-  it("startTiktokPixelTestEventMode writes testEventCode", async () => {
+  it("startTiktokPixelTestEventMode writes testEventCode and syncs metafield", async () => {
     getTiktokCatalogCredential.mockResolvedValue({
       accessToken: "oauth",
       advertiserId: "adv",
@@ -142,10 +152,13 @@ describe("TikTok pixel test event mode", () => {
       pixelCode: "PX",
       bcId: "bc1",
       refreshToken: "rt",
+      eventsApiEnabled: true,
+      enabledEvents: ["CompletePayment"],
     });
 
     await startTiktokPixelTestEventMode({
       shop: "s.myshopify.com",
+      admin,
       testEventCode: " TEST54000 ",
     });
 
@@ -158,6 +171,7 @@ describe("TikTok pixel test event mode", () => {
         testEventCode: "TEST54000",
       }),
     );
+    expect((admin as { graphql: ReturnType<typeof vi.fn> }).graphql).toHaveBeenCalled();
   });
 
   it("clearTiktokPixelTestEventMode clears testEventCode", async () => {
@@ -168,9 +182,11 @@ describe("TikTok pixel test event mode", () => {
       bindingMode: "api_managed",
       pixelCode: "PX",
       testEventCode: "TEST54000",
+      eventsApiEnabled: true,
+      enabledEvents: ["CompletePayment"],
     });
 
-    await clearTiktokPixelTestEventMode("s.myshopify.com");
+    await clearTiktokPixelTestEventMode({ shop: "s.myshopify.com", admin });
 
     expect(setTiktokCatalogCredential).toHaveBeenCalledWith(
       "s.myshopify.com",
@@ -178,5 +194,6 @@ describe("TikTok pixel test event mode", () => {
         testEventCode: "",
       }),
     );
+    expect((admin as { graphql: ReturnType<typeof vi.fn> }).graphql).toHaveBeenCalled();
   });
 });
