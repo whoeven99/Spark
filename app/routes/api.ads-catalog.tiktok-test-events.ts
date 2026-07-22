@@ -3,7 +3,7 @@ import { authenticate } from "../shopify.server";
 import { testTiktokServerEvents } from "../server/adsCatalog/tiktokPixelConfig.server";
 
 /**
- * 向当前 Pixel 发送一条测试 Events API 事件。
+ * 向当前 Pixel 发送一条带 test_event_code 的测试 Events API 事件，用于验证连通性。
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
@@ -12,21 +12,42 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const { session } = await authenticate.admin(request);
 
-  let testEventCode: string | undefined;
+  let testEventCode = "";
+  let eventsApiAccessToken: string | undefined;
+  let pixelCode: string | undefined;
   try {
-    const body = (await request.json().catch(() => ({}))) as { testEventCode?: unknown };
+    const body = (await request.json().catch(() => ({}))) as {
+      testEventCode?: unknown;
+      eventsApiAccessToken?: unknown;
+      pixelCode?: unknown;
+    };
     testEventCode =
-      typeof body.testEventCode === "string" && body.testEventCode.trim()
-        ? body.testEventCode.trim()
+      typeof body.testEventCode === "string" ? body.testEventCode.trim() : "";
+    eventsApiAccessToken =
+      typeof body.eventsApiAccessToken === "string" && body.eventsApiAccessToken.trim()
+        ? body.eventsApiAccessToken.trim()
+        : undefined;
+    pixelCode =
+      typeof body.pixelCode === "string" && body.pixelCode.trim()
+        ? body.pixelCode.trim()
         : undefined;
   } catch {
-    testEventCode = undefined;
+    testEventCode = "";
+  }
+
+  if (!testEventCode) {
+    return Response.json(
+      { ok: false, error: "请填写 Test Event Code" },
+      { status: 400 },
+    );
   }
 
   try {
     await testTiktokServerEvents({
       shop: session.shop,
       testEventCode,
+      eventsApiAccessToken,
+      pixelCode,
     });
     return Response.json({ ok: true });
   } catch (e) {

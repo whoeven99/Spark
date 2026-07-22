@@ -352,16 +352,26 @@ export async function maybeTrackTiktokCompletePayment(params: {
 
 export async function testTiktokServerEvents(params: {
   shop: string;
-  testEventCode?: string;
+  testEventCode: string;
+  /** 未保存时可临时用表单里的 token 测连通性。 */
+  eventsApiAccessToken?: string;
+  /** 未保存时可临时用表单里选中的 Pixel。 */
+  pixelCode?: string;
 }): Promise<void> {
   const credential = await getTiktokCatalogCredential(params.shop);
   if (!credential) {
     throw new Error("TikTok Catalog 尚未连接，请先完成授权。");
   }
-  const pixelCode = credential.pixelCode?.trim() ?? "";
-  const token = credential.eventsApiAccessToken?.trim() ?? "";
+  const pixelCode =
+    params.pixelCode?.trim() || credential.pixelCode?.trim() || "";
+  const testEventCode = params.testEventCode.trim();
+  const token =
+    params.eventsApiAccessToken?.trim() ||
+    credential.eventsApiAccessToken?.trim() ||
+    "";
   if (!pixelCode) throw new Error("请先选择或创建 Pixel");
   if (!token) throw new Error("请配置 TikTok Events API Access Token");
+  if (!testEventCode) throw new Error("请填写 Test Event Code");
 
   await trackTiktokPixelEvent({
     eventsApiAccessToken: token,
@@ -370,6 +380,6 @@ export async function testTiktokServerEvents(params: {
     eventId: `spark-test-${Date.now()}`,
     timestamp: new Date().toISOString(),
     properties: { value: 1, currency: "USD", content_type: "product" },
-    testEventCode: params.testEventCode,
+    testEventCode,
   });
 }

@@ -77,3 +77,12 @@ export function buildTiktokEventsManagerUrl(pixelCode?: string): string {
   }
   return "https://ads.tiktok.com/i18n/events_manager/";
 }
+
+/** Events Manager 测试事件页（获取 Test Event Code）。 */
+export function buildTiktokEventsManagerTestUrl(pixelCode?: string): string {
+  const code = pixelCode?.trim();
+  if (code) {
+    return `https://ads.tiktok.com/i18n/events_manager/pixel/detail/${encodeURIComponent(code)}?tab=test`;
+  }
+  return "https://ads.tiktok.com/i18n/events_manager/";
+}

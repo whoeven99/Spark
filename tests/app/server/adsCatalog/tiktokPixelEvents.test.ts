@@ -8,6 +8,7 @@ import {
   normalizeTiktokEnabledEvents,
   TIKTOK_PIXEL_DEFAULT_EVENTS,
   buildTiktokEventsManagerUrl,
+  buildTiktokEventsManagerTestUrl,
 } from "../../../../app/lib/tiktokPixelEvents";
 
 describe("tiktokPixelEvents helpers", () => {
@@ -22,6 +23,7 @@ describe("tiktokPixelEvents helpers", () => {
   it("builds Events Manager deep link", () => {
     expect(buildTiktokEventsManagerUrl("PX1")).toContain("/pixel/detail/PX1");
     expect(buildTiktokEventsManagerUrl()).toContain("events_manager");
+    expect(buildTiktokEventsManagerTestUrl("PX1")).toContain("tab=test");
   });
 });
 
@@ -96,6 +98,7 @@ describe("listTiktokPixels / trackTiktokPixelEvent", () => {
       event: "CompletePayment",
       eventId: "1001",
       properties: { value: 12, currency: "USD" },
+      testEventCode: "TEST12345",
     });
 
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -106,5 +109,6 @@ describe("listTiktokPixels / trackTiktokPixelEvent", () => {
     expect(body.pixel_code).toBe("PX1");
     expect(body.event).toBe("CompletePayment");
     expect(body.event_id).toBe("1001");
+    expect(body.test_event_code).toBe("TEST12345");
   });
 });

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 import {
+  buildTiktokEventsManagerTestUrl,
   buildTiktokEventsManagerUrl,
   TIKTOK_PIXEL_DEFAULT_EVENTS,
   TIKTOK_PIXEL_OPTIONAL_EVENTS,
@@ -109,6 +110,7 @@ export function TiktokPixelConfigPanel({
   const [pixelName, setPixelName] = useState("");
   const [eventsApiEnabled, setEventsApiEnabled] = useState(initialEventsApiEnabled);
   const [tokenInput, setTokenInput] = useState("");
+  const [testEventCode, setTestEventCode] = useState("");
   const [enabledEvents, setEnabledEvents] = useState<string[]>(
     initialEnabledEvents.length
       ? initialEnabledEvents
@@ -360,10 +362,32 @@ export function TiktokPixelConfigPanel({
     setTestSuccess(false);
     setLocalError(null);
     try {
+      if (!testEventCode.trim()) {
+        setLocalError(t("adsCatalog.tiktokPixelTestEventCodeRequired"));
+        return;
+      }
+      if (!hasEventsApiAccessToken && !tokenInput.trim()) {
+        setLocalError(t("adsCatalog.tiktokPixelTokenRequired"));
+        return;
+      }
+      if (!pixelCode && !selectedPixelCode) {
+        setLocalError(t("adsCatalog.tiktokPixelSelectRequired"));
+        return;
+      }
+
+      const body: Record<string, unknown> = {
+        testEventCode: testEventCode.trim(),
+      };
+      if (tokenInput.trim()) {
+        body.eventsApiAccessToken = tokenInput.trim();
+      }
+      const activePixel = selectedPixelCode || pixelCode;
+      if (activePixel) body.pixelCode = activePixel;
+
       const resp = await fetch(`/api/ads-catalog/tiktok-test-events${locationSearch}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify(body),
       });
       const data = (await resp.json().catch(() => ({}))) as {
         ok?: boolean;
@@ -382,6 +406,14 @@ export function TiktokPixelConfigPanel({
   }
 
   const howToUrl = buildTiktokEventsManagerUrl(selectedPixelCode || pixelCode);
+  const testEventHowToUrl = buildTiktokEventsManagerTestUrl(
+    selectedPixelCode || pixelCode,
+  );
+  const canTestServerEvents =
+    !busy &&
+    Boolean(testEventCode.trim()) &&
+    (Boolean(tokenInput.trim()) || hasEventsApiAccessToken) &&
+    Boolean(pixelCode || selectedPixelCode);
   const canCreate =
     !busy && Boolean(selectedAdvertiserId) && Boolean(pixelName.trim());
   const canSaveSelect =
@@ -605,15 +637,69 @@ export function TiktokPixelConfigPanel({
                 onChange={(e) => setTokenInput(e.target.value)}
               />
             </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  flexWrap: "wrap",
+                }}
+              >
+                <label style={fieldLabelStyle}>
+                  {t("adsCatalog.tiktokPixelTestEventCodeLabel")}
+                </label>
+                <a
+                  href={testEventHowToUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ fontSize: 12, color: "#005bd3" }}
+                >
+                  {t("adsCatalog.tiktokPixelHowToGetTestEventCode")}
+                </a>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input
+                  style={{ ...inputStyle, flex: 1 }}
+                  value={testEventCode}
+                  disabled={busy}
+                  placeholder={t("adsCatalog.tiktokPixelTestEventCodePlaceholder")}
+                  onChange={(e) => {
+                    setTestEventCode(e.target.value);
+                    setTestSuccess(false);
+                  }}
+                />
+                {testEventCode ? (
+                  <button
+                    type="button"
+                    style={{ ...secondaryBtn, padding: "8px 10px", whiteSpace: "nowrap" }}
+                    disabled={busy}
+                    onClick={() => {
+                      setTestEventCode("");
+                      setTestSuccess(false);
+                    }}
+                  >
+                    {t("adsCatalog.tiktokPixelTestEventCodeClear")}
+                  </button>
+                ) : null}
+              </div>
+              <p style={{ ...pageHintTextStyle, margin: 0 }}>
+                {t("adsCatalog.tiktokPixelTestEventCodeHint")}
+              </p>
+              <p style={{ margin: 0, fontSize: 12, color: "#b98900", fontWeight: 600 }}>
+                {t("adsCatalog.tiktokPixelTestEventCodeWarning")}
+              </p>
+            </div>
             <button
               type="button"
               style={{ ...secondaryBtn, alignSelf: "flex-start", padding: "4px 8px" }}
-              disabled={
-                busy || (!hasEventsApiAccessToken && !tokenInput.trim()) || !pixelCode
-              }
+              disabled={!canTestServerEvents}
               onClick={() => void testServerEvents()}
             >
-              {t("adsCatalog.tiktokPixelTestServerEvents")}
+              {busy
+                ? t("adsCatalog.tiktokPixelTestServerEventsBusy")
+                : t("adsCatalog.tiktokPixelTestServerEvents")}
             </button>
             {testSuccess && (
               <span style={{ color: "#0f7a52", fontSize: 12 }}>
