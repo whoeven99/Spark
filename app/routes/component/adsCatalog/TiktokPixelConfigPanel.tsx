@@ -321,6 +321,8 @@ export function TiktokPixelConfigPanel({
         pixelCode: selectedPixelCode,
         eventsApiEnabled,
         enabledEvents,
+        // 保存只写 Token/事件/metafield；Catalog 事件源绑定交给下方「一键绑定 / 重新绑定」。
+        bindCatalogEventSource: false,
       };
       if (pixelName.trim()) body.pixelName = pixelName.trim();
       if (tokenInput.trim()) body.eventsApiAccessToken = tokenInput.trim();

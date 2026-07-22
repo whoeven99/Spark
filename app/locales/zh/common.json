@@ -1563,7 +1563,7 @@
     "tiktokPixelCode": "关联 Pixel：{{code}}",
     "tiktokPixelSectionTitle": "Pixel 网页事件源",
     "tiktokPixelHint": "Spark 已关联 TikTok Pixel 到此 Catalog，可用于转化追踪与动态产品广告（DPA）。",
-    "tiktokPixelConfigHint": "选择已有 Pixel 或创建新 Pixel，并配置 Events API Access Token 与要上报的事件。保存后请在主题编辑器启用 App embed「Spark TikTok Pixel」。",
+    "tiktokPixelConfigHint": "选择已有 Pixel，配置 Events API Access Token 与要上报的事件。保存只写入店面追踪配置；Catalog 事件源请用下方「一键绑定 / 重新绑定 Pixel」。",
     "tiktokPixelModeSelect": "选择已有 Pixel",
     "tiktokPixelModeCreate": "创建 Pixel",
     "tiktokPixelCreateHint": "填写 Pixel 名称并选择广告账户即可创建。创建成功后会自动切到「选择已有 Pixel」，再配置 Events API Token 与事件。",
