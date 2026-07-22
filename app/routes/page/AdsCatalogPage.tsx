@@ -774,6 +774,8 @@ export function AdsCatalogPage() {
               credentials={credentials}
               locationSearch={locationSearch}
               languageCode={i18n.language}
+              shopDomain={loaderData.shopDomain}
+              shopifyApiKey={loaderData.shopifyApiKey}
               onChanged={() => {
                 revalidator.revalidate();
               }}

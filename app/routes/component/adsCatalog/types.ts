@@ -55,6 +55,10 @@ export interface AdsCatalogSyncRequestBody {
 }
 
 export type AdsCatalogPageLoaderData = {
+  /** 当前店铺 myshopify 域名，用于主题编辑器 / 店面 deep link。 */
+  shopDomain: string;
+  /** Shopify app api_key（client_id），用于 App embed activateAppId。 */
+  shopifyApiKey: string;
   initialTaskPage: AITaskListPageData;
   credentials: CredentialsView;
 };

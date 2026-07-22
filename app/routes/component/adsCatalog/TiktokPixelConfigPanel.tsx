@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 import {
+  buildShopOnlineStoreUrl,
   buildTiktokEventsManagerTestUrl,
   buildTiktokEventsManagerUrl,
+  buildTiktokPixelThemeEditorUrl,
   TIKTOK_PIXEL_DEFAULT_EVENTS,
   TIKTOK_PIXEL_OPTIONAL_EVENTS,
   type TiktokPixelEventName,
@@ -21,6 +23,8 @@ type AdvertiserItem = {
 
 type Props = {
   locationSearch: string;
+  shopDomain: string;
+  shopifyApiKey: string;
   pixelCode: string;
   /** 当前 Catalog 绑定的广告主，作为业务账户默认值。 */
   advertiserId: string;
@@ -87,6 +91,8 @@ function withAdvertiserQuery(locationSearch: string, advertiserId: string): stri
 
 export function TiktokPixelConfigPanel({
   locationSearch,
+  shopDomain,
+  shopifyApiKey,
   pixelCode,
   advertiserId: boundAdvertiserId,
   hasEventsApiAccessToken,
@@ -409,6 +415,11 @@ export function TiktokPixelConfigPanel({
   const testEventHowToUrl = buildTiktokEventsManagerTestUrl(
     selectedPixelCode || pixelCode,
   );
+  const themeEditorUrl = buildTiktokPixelThemeEditorUrl({
+    shopDomain,
+    apiKey: shopifyApiKey,
+  });
+  const onlineStoreUrl = buildShopOnlineStoreUrl(shopDomain);
   const canTestServerEvents =
     !busy &&
     Boolean(testEventCode.trim()) &&
@@ -430,6 +441,10 @@ export function TiktokPixelConfigPanel({
         ? [{ advertiserId: selectedAdvertiserId, advertiserName: selectedAdvertiserId }]
         : [];
 
+  function openExternal(url: string | null) {
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 4 }}>
       <div style={{ fontSize: 13, fontWeight: 600 }}>
@@ -659,9 +674,9 @@ export function TiktokPixelConfigPanel({
                   {t("adsCatalog.tiktokPixelHowToGetTestEventCode")}
                 </a>
               </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                 <input
-                  style={{ ...inputStyle, flex: 1 }}
+                  style={{ ...inputStyle, flex: 1, minWidth: 160 }}
                   value={testEventCode}
                   disabled={busy}
                   placeholder={t("adsCatalog.tiktokPixelTestEventCodePlaceholder")}
@@ -670,6 +685,14 @@ export function TiktokPixelConfigPanel({
                     setTestSuccess(false);
                   }}
                 />
+                <button
+                  type="button"
+                  style={{ ...secondaryBtn, padding: "8px 10px", whiteSpace: "nowrap" }}
+                  disabled={busy}
+                  onClick={() => openExternal(testEventHowToUrl)}
+                >
+                  {t("adsCatalog.tiktokPixelGetTestEventCode")}
+                </button>
                 {testEventCode ? (
                   <button
                     type="button"
@@ -706,6 +729,81 @@ export function TiktokPixelConfigPanel({
                 {t("adsCatalog.tiktokPixelTestServerEventsSuccess")}
               </span>
             )}
+          </div>
+
+          <div
+            style={{
+              border: `1px solid ${pageColorTokens.border}`,
+              borderRadius: 8,
+              padding: 12,
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+              background: pageColorTokens.surfaceSubtle,
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 700 }}>
+              {t("adsCatalog.tiktokPixelAppThemeTitle")}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                flexWrap: "wrap",
+                padding: "10px 12px",
+                borderRadius: 8,
+                background: "#fff",
+                border: `1px solid ${pageColorTokens.borderSubtle}`,
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>
+                  {t("adsCatalog.tiktokPixelAppThemeStatusLabel")}
+                </span>
+                <span style={{ ...pageHintTextStyle, margin: 0 }}>
+                  {t("adsCatalog.tiktokPixelAppThemeStatusHint")}
+                </span>
+              </div>
+              <button
+                type="button"
+                style={{
+                  ...secondaryBtn,
+                  padding: "8px 14px",
+                  whiteSpace: "nowrap",
+                  opacity: themeEditorUrl ? 1 : 0.5,
+                  cursor: themeEditorUrl ? "pointer" : "not-allowed",
+                }}
+                disabled={!themeEditorUrl}
+                onClick={() => openExternal(themeEditorUrl)}
+              >
+                {t("adsCatalog.tiktokPixelAppThemeActivate")}
+              </button>
+            </div>
+            <p style={{ ...pageHintTextStyle, margin: 0 }}>
+              {t("adsCatalog.tiktokPixelEmbedHint")}
+            </p>
+
+            <div style={{ fontSize: 13, fontWeight: 700 }}>
+              {t("adsCatalog.tiktokPixelTestYourEventTitle")}
+            </div>
+            <p style={{ ...pageHintTextStyle, margin: 0 }}>
+              {t("adsCatalog.tiktokPixelTestYourEventHint")}
+            </p>
+            <button
+              type="button"
+              style={{
+                ...secondaryBtn,
+                alignSelf: "flex-start",
+                opacity: onlineStoreUrl ? 1 : 0.5,
+                cursor: onlineStoreUrl ? "pointer" : "not-allowed",
+              }}
+              disabled={!onlineStoreUrl}
+              onClick={() => openExternal(onlineStoreUrl)}
+            >
+              {t("adsCatalog.tiktokPixelGoToOnlineStore")}
+            </button>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -779,10 +877,6 @@ export function TiktokPixelConfigPanel({
               </span>
             )}
           </div>
-
-          <p style={{ ...pageHintTextStyle, margin: 0 }}>
-            {t("adsCatalog.tiktokPixelEmbedHint")}
-          </p>
         </>
       )}
 

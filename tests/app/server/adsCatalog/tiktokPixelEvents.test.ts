@@ -9,6 +9,9 @@ import {
   TIKTOK_PIXEL_DEFAULT_EVENTS,
   buildTiktokEventsManagerUrl,
   buildTiktokEventsManagerTestUrl,
+  buildTiktokPixelThemeEditorUrl,
+  buildShopOnlineStoreUrl,
+  TIKTOK_PIXEL_APP_EMBED_HANDLE,
 } from "../../../../app/lib/tiktokPixelEvents";
 
 describe("tiktokPixelEvents helpers", () => {
@@ -24,6 +27,28 @@ describe("tiktokPixelEvents helpers", () => {
     expect(buildTiktokEventsManagerUrl("PX1")).toContain("/pixel/detail/PX1");
     expect(buildTiktokEventsManagerUrl()).toContain("events_manager");
     expect(buildTiktokEventsManagerTestUrl("PX1")).toContain("tab=test");
+  });
+
+  it("builds theme editor App embed deep link", () => {
+    const url = buildTiktokPixelThemeEditorUrl({
+      shopDomain: "ciwishop.myshopify.com",
+      apiKey: "940b967eda872dd81f9ffc283e29a013",
+    });
+    expect(url).toBe(
+      `https://admin.shopify.com/store/ciwishop/themes/current/editor?context=apps&activateAppId=940b967eda872dd81f9ffc283e29a013/${TIKTOK_PIXEL_APP_EMBED_HANDLE}`,
+    );
+    expect(
+      buildTiktokPixelThemeEditorUrl({ shopDomain: "ciwishop", apiKey: "abc" }),
+    ).toContain("/store/ciwishop/themes/current/editor");
+    expect(buildTiktokPixelThemeEditorUrl({ shopDomain: "x", apiKey: "" })).toBeNull();
+  });
+
+  it("builds online store URL", () => {
+    expect(buildShopOnlineStoreUrl("ciwishop.myshopify.com")).toBe(
+      "https://ciwishop.myshopify.com/",
+    );
+    expect(buildShopOnlineStoreUrl("ciwishop")).toBe("https://ciwishop.myshopify.com/");
+    expect(buildShopOnlineStoreUrl("")).toBeNull();
   });
 });
 

@@ -86,3 +86,39 @@ export function buildTiktokEventsManagerTestUrl(pixelCode?: string): string {
   }
   return "https://ads.tiktok.com/i18n/events_manager/";
 }
+
+/** Theme App Embed 的 Liquid 文件名（无扩展名），用于 activateAppId deep link。 */
+export const TIKTOK_PIXEL_APP_EMBED_HANDLE = "tiktok-pixel-embed";
+
+function normalizeMyshopifyDomain(shop: string): string {
+  const trimmed = shop.trim().toLowerCase();
+  if (!trimmed) return "";
+  return trimmed.includes(".") ? trimmed : `${trimmed}.myshopify.com`;
+}
+
+function shopifyAdminStoreHandle(shop: string): string {
+  return normalizeMyshopifyDomain(shop).replace(/\.myshopify\.com$/i, "");
+}
+
+/**
+ * 主题编辑器 App embeds deep link：打开并预激活 Spark TikTok Pixel。
+ * @see https://shopify.dev/docs/apps/build/online-store/theme-app-extensions/configuration#app-embed-block-deep-linking
+ */
+export function buildTiktokPixelThemeEditorUrl(params: {
+  shopDomain: string;
+  apiKey: string;
+}): string | null {
+  const apiKey = params.apiKey.trim();
+  const storeHandle = shopifyAdminStoreHandle(params.shopDomain);
+  if (!apiKey || !storeHandle) return null;
+  // activateAppId 必须保留 api_key/handle 中间的 `/`（不要被 encode 成 %2F）
+  const activateAppId = `${encodeURIComponent(apiKey)}/${TIKTOK_PIXEL_APP_EMBED_HANDLE}`;
+  return `https://admin.shopify.com/store/${encodeURIComponent(storeHandle)}/themes/current/editor?context=apps&activateAppId=${activateAppId}`;
+}
+
+/** 店面首页 URL，用于浏览/加购等事件实测。 */
+export function buildShopOnlineStoreUrl(shopDomain: string): string | null {
+  const domain = normalizeMyshopifyDomain(shopDomain);
+  if (!domain) return null;
+  return `https://${domain}/`;
+}

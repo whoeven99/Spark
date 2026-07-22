@@ -10,6 +10,8 @@ type Props = {
   credentials: CredentialsView;
   locationSearch: string;
   languageCode: string;
+  shopDomain: string;
+  shopifyApiKey: string;
   onChanged: () => void;
 };
 
@@ -71,6 +73,8 @@ export function TiktokConnectPanels({
   credentials,
   locationSearch,
   languageCode,
+  shopDomain,
+  shopifyApiKey,
   onChanged,
 }: Props) {
   const { t } = useTranslation();
@@ -280,6 +284,8 @@ export function TiktokConnectPanels({
               <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
                 <TiktokPixelConfigPanel
                   locationSearch={locationSearch}
+                  shopDomain={shopDomain}
+                  shopifyApiKey={shopifyApiKey}
                   pixelCode={tiktok.pixelCode}
                   advertiserId={tiktok.advertiserId}
                   hasEventsApiAccessToken={tiktok.hasEventsApiAccessToken}

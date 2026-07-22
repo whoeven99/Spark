@@ -52,6 +52,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     ]);
 
   return data({
+    shopDomain: session.shop,
+    shopifyApiKey: process.env.SHOPIFY_API_KEY?.trim() ?? "",
     initialTaskPage,
     credentials: {
       facebook: {
