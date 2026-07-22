@@ -281,6 +281,7 @@ export function TiktokConnectPanels({
                 <TiktokPixelConfigPanel
                   locationSearch={locationSearch}
                   pixelCode={tiktok.pixelCode}
+                  advertiserId={tiktok.advertiserId}
                   hasEventsApiAccessToken={tiktok.hasEventsApiAccessToken}
                   eventsApiEnabled={tiktok.eventsApiEnabled}
                   enabledEvents={tiktok.enabledEvents}

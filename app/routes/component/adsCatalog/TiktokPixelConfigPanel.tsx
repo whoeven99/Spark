@@ -13,9 +13,16 @@ type PixelListItem = {
   pixelName: string;
 };
 
+type AdvertiserItem = {
+  advertiserId: string;
+  advertiserName: string;
+};
+
 type Props = {
   locationSearch: string;
   pixelCode: string;
+  /** 当前 Catalog 绑定的广告主，作为业务账户默认值。 */
+  advertiserId: string;
   hasEventsApiAccessToken: boolean;
   eventsApiEnabled: boolean;
   enabledEvents: string[];
@@ -53,6 +60,8 @@ const primaryBtn = {
   border: "none",
 };
 
+const fieldLabelStyle = { fontSize: 13, fontWeight: 600 };
+
 const EVENT_LABEL_KEY: Record<string, string> = {
   ViewContent: "tiktokPixelEventViewContent",
   AddToCart: "tiktokPixelEventAddToCart",
@@ -66,9 +75,19 @@ const EVENT_LABEL_KEY: Record<string, string> = {
   Lead: "tiktokPixelEventLead",
 };
 
+function withAdvertiserQuery(locationSearch: string, advertiserId: string): string {
+  const params = new URLSearchParams(
+    locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
+  );
+  if (advertiserId) params.set("advertiserId", advertiserId);
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
 export function TiktokPixelConfigPanel({
   locationSearch,
   pixelCode,
+  advertiserId: boundAdvertiserId,
   hasEventsApiAccessToken,
   eventsApiEnabled: initialEventsApiEnabled,
   enabledEvents: initialEnabledEvents,
@@ -82,6 +101,8 @@ export function TiktokPixelConfigPanel({
   const [mode, setMode] = useState<"select" | "create">(
     pixelCode ? "select" : "create",
   );
+  const [advertisers, setAdvertisers] = useState<AdvertiserItem[]>([]);
+  const [selectedAdvertiserId, setSelectedAdvertiserId] = useState(boundAdvertiserId);
   const [pixels, setPixels] = useState<PixelListItem[]>([]);
   const [pixelsLoading, setPixelsLoading] = useState(false);
   const [selectedPixelCode, setSelectedPixelCode] = useState(pixelCode);
@@ -103,6 +124,10 @@ export function TiktokPixelConfigPanel({
   }, [pixelCode]);
 
   useEffect(() => {
+    if (boundAdvertiserId) setSelectedAdvertiserId(boundAdvertiserId);
+  }, [boundAdvertiserId]);
+
+  useEffect(() => {
     setEventsApiEnabled(initialEventsApiEnabled);
   }, [initialEventsApiEnabled]);
 
@@ -115,29 +140,50 @@ export function TiktokPixelConfigPanel({
   }, [initialEnabledEvents]);
 
   useEffect(() => {
-    if (mode !== "select") return;
     let cancelled = false;
     void (async () => {
       setPixelsLoading(true);
       try {
-        const resp = await fetch(`/api/ads-catalog/tiktok-pixels${locationSearch}`, {
+        const qs = withAdvertiserQuery(locationSearch, selectedAdvertiserId);
+        const resp = await fetch(`/api/ads-catalog/tiktok-pixels${qs}`, {
           headers: { Accept: "application/json" },
         });
         const data = (await resp.json().catch(() => ({}))) as {
           ok?: boolean;
           pixels?: PixelListItem[];
+          advertisers?: AdvertiserItem[];
+          advertiserId?: string;
           error?: string;
         };
         if (cancelled) return;
         if (!resp.ok || !data.ok) {
           setLocalError(data.error ?? t("adsCatalog.authError"));
+          setPixels([]);
           return;
         }
-        setPixels(data.pixels ?? []);
+        setAdvertisers(data.advertisers ?? []);
+        if (data.advertiserId && !selectedAdvertiserId) {
+          setSelectedAdvertiserId(data.advertiserId);
+        }
+        const nextPixels = data.pixels ?? [];
+        setPixels(nextPixels);
         setLocalError(null);
+
+        if (mode === "select") {
+          const matched =
+            nextPixels.find((p) => p.pixelCode === selectedPixelCode) ||
+            nextPixels.find((p) => p.pixelCode === pixelCode);
+          if (matched) {
+            setSelectedPixelCode(matched.pixelCode);
+            setPixelName(matched.pixelName);
+          } else if (selectedPixelCode && !nextPixels.some((p) => p.pixelCode === selectedPixelCode)) {
+            setSelectedPixelCode("");
+          }
+        }
       } catch (e) {
         if (!cancelled) {
           setLocalError(e instanceof Error ? e.message : t("adsCatalog.authError"));
+          setPixels([]);
         }
       } finally {
         if (!cancelled) setPixelsLoading(false);
@@ -146,12 +192,20 @@ export function TiktokPixelConfigPanel({
     return () => {
       cancelled = true;
     };
-  }, [mode, locationSearch, t]);
+    // selectedPixelCode / pixelCode 变化时不重新拉列表，避免覆盖用户输入
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only reload when account or mode changes
+  }, [mode, locationSearch, selectedAdvertiserId, t]);
 
   function toggleEvent(name: TiktokPixelEventName) {
     setEnabledEvents((prev) =>
       prev.includes(name) ? prev.filter((e) => e !== name) : [...prev, name],
     );
+  }
+
+  function onSelectPixel(code: string) {
+    setSelectedPixelCode(code);
+    const hit = pixels.find((p) => p.pixelCode === code);
+    if (hit?.pixelName) setPixelName(hit.pixelName);
   }
 
   async function saveConfig() {
@@ -161,15 +215,30 @@ export function TiktokPixelConfigPanel({
     setLocalError(null);
     onBindError(null);
     try {
+      if (!selectedAdvertiserId) {
+        setLocalError(t("adsCatalog.tiktokPixelBusinessAccountRequired"));
+        return;
+      }
+      if (mode === "select" && !selectedPixelCode) {
+        setLocalError(t("adsCatalog.tiktokPixelSelectRequired"));
+        return;
+      }
+      if (mode === "create" && !pixelName.trim()) {
+        setLocalError(t("adsCatalog.tiktokPixelNameRequired"));
+        return;
+      }
+
       const body: Record<string, unknown> = {
         mode,
+        advertiserId: selectedAdvertiserId,
         eventsApiEnabled,
         enabledEvents,
       };
       if (mode === "select") {
         body.pixelCode = selectedPixelCode;
+        if (pixelName.trim()) body.pixelName = pixelName.trim();
       } else {
-        body.pixelName = pixelName.trim() || undefined;
+        body.pixelName = pixelName.trim();
       }
       if (tokenInput.trim()) {
         body.eventsApiAccessToken = tokenInput.trim();
@@ -236,9 +305,17 @@ export function TiktokPixelConfigPanel({
   const howToUrl = buildTiktokEventsManagerUrl(selectedPixelCode || pixelCode);
   const canSave =
     !busy &&
-    (mode === "create" || Boolean(selectedPixelCode)) &&
+    Boolean(selectedAdvertiserId) &&
+    (mode === "create" ? Boolean(pixelName.trim()) : Boolean(selectedPixelCode)) &&
     (Boolean(tokenInput.trim()) || hasEventsApiAccessToken) &&
     enabledEvents.length > 0;
+
+  const advertiserOptions =
+    advertisers.length > 0
+      ? advertisers
+      : selectedAdvertiserId
+        ? [{ advertiserId: selectedAdvertiserId, advertiserName: selectedAdvertiserId }]
+        : [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 4 }}>
@@ -275,35 +352,9 @@ export function TiktokPixelConfigPanel({
         </label>
       </div>
 
-      {mode === "select" ? (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label style={{ fontSize: 13, fontWeight: 600 }}>
-            {t("adsCatalog.tiktokPixelSelectLabel")}
-          </label>
-          <select
-            style={inputStyle}
-            value={selectedPixelCode}
-            disabled={busy || pixelsLoading}
-            onChange={(e) => setSelectedPixelCode(e.target.value)}
-          >
-            <option value="">
-              {pixelsLoading
-                ? t("adsCatalog.tiktokPixelListLoading")
-                : t("adsCatalog.tiktokPixelSelectPlaceholder")}
-            </option>
-            {pixels.map((p) => (
-              <option key={p.pixelCode} value={p.pixelCode}>
-                {p.pixelCode}
-                {p.pixelName && p.pixelName !== p.pixelCode ? ` — ${p.pixelName}` : ""}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label style={{ fontSize: 13, fontWeight: 600 }}>
-            {t("adsCatalog.tiktokPixelNameLabel")}
-          </label>
+          <label style={fieldLabelStyle}>{t("adsCatalog.tiktokPixelNameLabel")}</label>
           <input
             style={inputStyle}
             value={pixelName}
@@ -312,7 +363,60 @@ export function TiktokPixelConfigPanel({
             onChange={(e) => setPixelName(e.target.value)}
           />
         </div>
-      )}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label style={fieldLabelStyle}>
+            {t("adsCatalog.tiktokPixelBusinessAccountLabel")}
+          </label>
+          <select
+            style={inputStyle}
+            value={selectedAdvertiserId}
+            disabled={busy || pixelsLoading || advertiserOptions.length === 0}
+            onChange={(e) => {
+              setSelectedAdvertiserId(e.target.value);
+              setSelectedPixelCode("");
+              if (mode === "select") setPixelName("");
+            }}
+          >
+            <option value="">
+              {pixelsLoading
+                ? t("adsCatalog.tiktokPixelListLoading")
+                : t("adsCatalog.tiktokPixelBusinessAccountPlaceholder")}
+            </option>
+            {advertiserOptions.map((a) => (
+              <option key={a.advertiserId} value={a.advertiserId}>
+                {a.advertiserName && a.advertiserName !== a.advertiserId
+                  ? `${a.advertiserName} (${a.advertiserId})`
+                  : a.advertiserId}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {mode === "select" ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <label style={fieldLabelStyle}>{t("adsCatalog.tiktokPixelSelectLabel")}</label>
+            <select
+              style={inputStyle}
+              value={selectedPixelCode}
+              disabled={busy || pixelsLoading || !selectedAdvertiserId}
+              onChange={(e) => onSelectPixel(e.target.value)}
+            >
+              <option value="">
+                {pixelsLoading
+                  ? t("adsCatalog.tiktokPixelListLoading")
+                  : t("adsCatalog.tiktokPixelSelectPlaceholder")}
+              </option>
+              {pixels.map((p) => (
+                <option key={p.pixelCode} value={p.pixelCode}>
+                  {p.pixelCode}
+                  {p.pixelName && p.pixelName !== p.pixelCode ? ` — ${p.pixelName}` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+      </div>
 
       <div
         style={{
@@ -372,7 +476,7 @@ export function TiktokPixelConfigPanel({
               flexWrap: "wrap",
             }}
           >
-            <label style={{ fontSize: 13, fontWeight: 600 }}>
+            <label style={fieldLabelStyle}>
               {t("adsCatalog.tiktokPixelAccessTokenLabel")}
             </label>
             <a

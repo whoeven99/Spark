@@ -15,6 +15,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   let body: {
     mode?: unknown;
+    advertiserId?: unknown;
     pixelCode?: unknown;
     pixelName?: unknown;
     eventsApiAccessToken?: unknown;
@@ -35,6 +36,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       shop: session.shop,
       admin,
       mode,
+      advertiserId:
+        typeof body.advertiserId === "string" ? body.advertiserId : undefined,
       pixelCode: typeof body.pixelCode === "string" ? body.pixelCode : undefined,
       pixelName: typeof body.pixelName === "string" ? body.pixelName : undefined,
       eventsApiAccessToken:

@@ -23,6 +23,8 @@ export type SaveTiktokPixelConfigInput = {
   shop: string;
   admin: ShopifyAdminGraphqlClient;
   mode: "select" | "create";
+  /** 用于创建 / 校验 Pixel 列表的广告主；缺省用凭证中的 advertiserId。 */
+  advertiserId?: string;
   pixelCode?: string;
   pixelName?: string;
   eventsApiAccessToken?: string;
@@ -130,6 +132,8 @@ export async function saveTiktokPixelConfig(
   const enabledEvents = normalizeTiktokEnabledEvents(params.enabledEvents);
   const eventsApiEnabled =
     typeof params.eventsApiEnabled === "boolean" ? params.eventsApiEnabled : true;
+  const advertiserId =
+    params.advertiserId?.trim() || credential.advertiserId;
 
   let pixelCode = params.pixelCode?.trim() ?? "";
   let created = false;
@@ -140,7 +144,7 @@ export async function saveTiktokPixelConfig(
       `Spark Pixel — ${params.shop.split(".")[0] || "Store"}`.slice(0, 40);
     const pixel = await createTiktokPixel({
       accessToken: credential.accessToken,
-      advertiserId: credential.advertiserId,
+      advertiserId,
       pixelName,
     });
     pixelCode = pixel.pixelCode;
@@ -151,7 +155,7 @@ export async function saveTiktokPixelConfig(
     }
     const listed = await listTiktokPixels({
       accessToken: credential.accessToken,
-      advertiserId: credential.advertiserId,
+      advertiserId,
     }).catch(() => [] as Array<{ pixelCode: string }>);
     if (listed.length > 0 && !listed.some((p) => p.pixelCode === pixelCode)) {
       console.warn(
@@ -167,10 +171,12 @@ export async function saveTiktokPixelConfig(
     throw new Error("请配置 TikTok Events API Access Token");
   }
 
+  let activeAdvertiserId = advertiserId;
+
   await setTiktokCatalogCredential(params.shop, {
     accessToken: credential.accessToken,
     refreshToken: credential.refreshToken,
-    advertiserId: credential.advertiserId,
+    advertiserId: activeAdvertiserId,
     bcId: credential.bcId,
     catalogId: credential.catalogId,
     catalogName: credential.catalogName,
@@ -203,16 +209,17 @@ export async function saveTiktokPixelConfig(
     try {
       const bindResult = await bindTiktokCatalogPixelEventSource({
         accessToken: credential.accessToken,
-        advertiserId: credential.advertiserId,
+        advertiserId: activeAdvertiserId,
         bcId: credential.bcId,
         catalogId: credential.catalogId,
         pixelCode,
       });
-      if (bindResult.advertiserId !== credential.advertiserId) {
+      if (bindResult.advertiserId !== activeAdvertiserId) {
+        activeAdvertiserId = bindResult.advertiserId;
         await setTiktokCatalogCredential(params.shop, {
           accessToken: credential.accessToken,
           refreshToken: credential.refreshToken,
-          advertiserId: bindResult.advertiserId,
+          advertiserId: activeAdvertiserId,
           bcId: credential.bcId,
           catalogId: credential.catalogId,
           catalogName: credential.catalogName,

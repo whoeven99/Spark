@@ -352,10 +352,15 @@ export async function exchangeTiktokAuthCode(params: {
   };
 }
 
-/** 当 token 响应未带 advertiser_ids 时，用授权列表接口补齐。 */
-export async function listAuthorizedAdvertiserIds(params: {
+export type TiktokAuthorizedAdvertiser = {
+  advertiserId: string;
+  advertiserName: string;
+};
+
+/** 列出当前 token 可访问的广告主（含名称，供 Pixel / Catalog 选账户）。 */
+export async function listAuthorizedAdvertisers(params: {
   accessToken: string;
-}): Promise<string[]> {
+}): Promise<TiktokAuthorizedAdvertiser[]> {
   const { appId, appSecret } = getTiktokAppCredentials();
   const url = new URL(`${TIKTOK_API_BASE}/oauth2/advertiser/get/`);
   url.searchParams.set("app_id", appId);
@@ -367,15 +372,35 @@ export async function listAuthorizedAdvertiserIds(params: {
     code?: number;
     message?: string;
     data?: {
-      list?: Array<{ advertiser_id?: string | number }>;
+      list?: Array<{
+        advertiser_id?: string | number;
+        advertiser_name?: string;
+        name?: string;
+      }>;
     };
   };
   if (!response.ok || (json.code !== undefined && json.code !== 0)) {
     throw new Error(json.message || `HTTP ${response.status}`);
   }
-  return (json.data?.list ?? [])
-    .map((item) => String(item.advertiser_id ?? "").trim())
-    .filter(Boolean);
+  const out: TiktokAuthorizedAdvertiser[] = [];
+  const seen = new Set<string>();
+  for (const item of json.data?.list ?? []) {
+    const advertiserId = String(item.advertiser_id ?? "").trim();
+    if (!advertiserId || seen.has(advertiserId)) continue;
+    seen.add(advertiserId);
+    const advertiserName =
+      String(item.advertiser_name ?? item.name ?? "").trim() || advertiserId;
+    out.push({ advertiserId, advertiserName });
+  }
+  return out;
+}
+
+/** 当 token 响应未带 advertiser_ids 时，用授权列表接口补齐。 */
+export async function listAuthorizedAdvertiserIds(params: {
+  accessToken: string;
+}): Promise<string[]> {
+  const advertisers = await listAuthorizedAdvertisers(params);
+  return advertisers.map((a) => a.advertiserId);
 }
 
 /**

@@ -1143,16 +1143,23 @@ export type TiktokPixelListItem = {
  * 列出广告主下的 Pixel。
  * GET /open_api/v1.3/pixel/list/
  */
+/** TikTok `pixel/list` 要求 page_size ≤ 20。 */
+const TIKTOK_PIXEL_LIST_MAX_PAGE_SIZE = 20;
+
 export async function listTiktokPixels(params: {
   accessToken: string;
   advertiserId: string;
   page?: number;
   pageSize?: number;
 }): Promise<TiktokPixelListItem[]> {
+  const pageSize = Math.min(
+    Math.max(1, params.pageSize ?? TIKTOK_PIXEL_LIST_MAX_PAGE_SIZE),
+    TIKTOK_PIXEL_LIST_MAX_PAGE_SIZE,
+  );
   const url = new URL(`${TIKTOK_API_BASE}/pixel/list/`);
   url.searchParams.set("advertiser_id", params.advertiserId);
   url.searchParams.set("page", String(params.page ?? 1));
-  url.searchParams.set("page_size", String(params.pageSize ?? 50));
+  url.searchParams.set("page_size", String(pageSize));
   url.searchParams.set("order_by", "LATEST_CREATE");
 
   console.info(

@@ -57,6 +57,29 @@ describe("listTiktokPixels / trackTiktokPixelEvent", () => {
       { pixelCode: "AAA", pixelName: "One", pixelId: undefined },
       { pixelCode: "BBB", pixelName: "Two", pixelId: undefined },
     ]);
+    expect(globalThis.fetch).toHaveBeenCalledOnce();
+    const [url] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+    ];
+    expect(url).toContain("page_size=20");
+  });
+
+  it("clamps pixel/list page_size to 20", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ code: 0, data: { pixels: [] } }),
+    }) as unknown as typeof fetch;
+
+    await listTiktokPixels({
+      accessToken: "tok",
+      advertiserId: "adv-1",
+      pageSize: 50,
+    });
+    const [url] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+    ];
+    expect(url).toContain("page_size=20");
   });
 
   it("tracks pixel event with Events API token header", async () => {
