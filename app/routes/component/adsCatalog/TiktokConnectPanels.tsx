@@ -289,6 +289,7 @@ export function TiktokConnectPanels({
                   pixelCode={tiktok.pixelCode}
                   advertiserId={tiktok.advertiserId}
                   hasEventsApiAccessToken={tiktok.hasEventsApiAccessToken}
+                  testEventCode={tiktok.testEventCode}
                   eventsApiEnabled={tiktok.eventsApiEnabled}
                   enabledEvents={tiktok.enabledEvents}
                   busy={busy}

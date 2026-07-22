@@ -29,6 +29,8 @@ type Props = {
   /** 当前 Catalog 绑定的广告主，作为业务账户默认值。 */
   advertiserId: string;
   hasEventsApiAccessToken: boolean;
+  /** 凭证中已保存的 Test Event Code（服务端测试模式）。 */
+  testEventCode: string;
   eventsApiEnabled: boolean;
   enabledEvents: string[];
   busy: boolean;
@@ -96,6 +98,7 @@ export function TiktokPixelConfigPanel({
   pixelCode,
   advertiserId: boundAdvertiserId,
   hasEventsApiAccessToken,
+  testEventCode: savedTestEventCode,
   eventsApiEnabled: initialEventsApiEnabled,
   enabledEvents: initialEnabledEvents,
   busy,
@@ -116,7 +119,7 @@ export function TiktokPixelConfigPanel({
   const [pixelName, setPixelName] = useState("");
   const [eventsApiEnabled, setEventsApiEnabled] = useState(initialEventsApiEnabled);
   const [tokenInput, setTokenInput] = useState("");
-  const [testEventCode, setTestEventCode] = useState("");
+  const [testEventCode, setTestEventCode] = useState(savedTestEventCode);
   const [enabledEvents, setEnabledEvents] = useState<string[]>(
     initialEnabledEvents.length
       ? initialEnabledEvents
@@ -125,11 +128,19 @@ export function TiktokPixelConfigPanel({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [createSuccess, setCreateSuccess] = useState(false);
   const [testSuccess, setTestSuccess] = useState(false);
+  const [testModeStarted, setTestModeStarted] = useState(false);
+  const [testCleared, setTestCleared] = useState(false);
+  const [testError, setTestError] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   /** 创建成功后预选的 Pixel，避免被列表刷新/父级 props 覆盖前丢失。 */
   const [pendingSelectPixelCode, setPendingSelectPixelCode] = useState<string | null>(
     null,
   );
+
+  function openExternal(url: string | null) {
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
 
   useEffect(() => {
     if (pendingSelectPixelCode) {
@@ -148,6 +159,10 @@ export function TiktokPixelConfigPanel({
   useEffect(() => {
     setEventsApiEnabled(initialEventsApiEnabled);
   }, [initialEventsApiEnabled]);
+
+  useEffect(() => {
+    setTestEventCode(savedTestEventCode);
+  }, [savedTestEventCode]);
 
   useEffect(() => {
     setEnabledEvents(
@@ -363,25 +378,106 @@ export function TiktokPixelConfigPanel({
     }
   }
 
+  async function clearTestEventConnection() {
+    setBusy(true);
+    setTestSuccess(false);
+    setTestModeStarted(false);
+    setTestError(null);
+    setLocalError(null);
+    try {
+      const resp = await fetch(`/api/ads-catalog/tiktok-test-events${locationSearch}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "clear" }),
+      });
+      const data = (await resp.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!resp.ok || !data.ok) {
+        setTestError(data.error ?? t("adsCatalog.authError"));
+        return;
+      }
+      setTestEventCode("");
+      setTestCleared(true);
+      onChanged();
+      // 打开店面并带空 query，清掉该浏览器会话的 sessionStorage 测试标记
+      const clearUrl = buildShopOnlineStoreUrl(shopDomain, { testEventCode: "" });
+      if (clearUrl) openExternal(clearUrl);
+    } catch (e) {
+      setTestError(e instanceof Error ? e.message : t("adsCatalog.authError"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function goToOnlineStore() {
+    const baseUrl = buildShopOnlineStoreUrl(shopDomain);
+    if (!baseUrl) return;
+    const code = testEventCode.trim();
+    if (!code) {
+      openExternal(baseUrl);
+      return;
+    }
+
+    setBusy(true);
+    setTestSuccess(false);
+    setTestCleared(false);
+    setTestModeStarted(false);
+    setTestError(null);
+    setLocalError(null);
+    try {
+      if (!pixelCode && !selectedPixelCode) {
+        setTestError(t("adsCatalog.tiktokPixelSelectRequired"));
+        return;
+      }
+      const resp = await fetch(`/api/ads-catalog/tiktok-test-events${locationSearch}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "start", testEventCode: code }),
+      });
+      const data = (await resp.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!resp.ok || !data.ok) {
+        setTestError(data.error ?? t("adsCatalog.authError"));
+        return;
+      }
+      setTestModeStarted(true);
+      onChanged();
+      const storeUrl = buildShopOnlineStoreUrl(shopDomain, { testEventCode: code });
+      openExternal(storeUrl ?? baseUrl);
+    } catch (e) {
+      setTestError(e instanceof Error ? e.message : t("adsCatalog.authError"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function testServerEvents() {
     setBusy(true);
     setTestSuccess(false);
+    setTestModeStarted(false);
+    setTestCleared(false);
+    setTestError(null);
     setLocalError(null);
     try {
       if (!testEventCode.trim()) {
-        setLocalError(t("adsCatalog.tiktokPixelTestEventCodeRequired"));
+        setTestError(t("adsCatalog.tiktokPixelTestEventCodeRequired"));
         return;
       }
       if (!hasEventsApiAccessToken && !tokenInput.trim()) {
-        setLocalError(t("adsCatalog.tiktokPixelTokenRequired"));
+        setTestError(t("adsCatalog.tiktokPixelTokenRequired"));
         return;
       }
       if (!pixelCode && !selectedPixelCode) {
-        setLocalError(t("adsCatalog.tiktokPixelSelectRequired"));
+        setTestError(t("adsCatalog.tiktokPixelSelectRequired"));
         return;
       }
 
       const body: Record<string, unknown> = {
+        action: "send",
         testEventCode: testEventCode.trim(),
       };
       if (tokenInput.trim()) {
@@ -400,12 +496,12 @@ export function TiktokPixelConfigPanel({
         error?: string;
       };
       if (!resp.ok || !data.ok) {
-        setLocalError(data.error ?? t("adsCatalog.authError"));
+        setTestError(data.error ?? t("adsCatalog.authError"));
         return;
       }
       setTestSuccess(true);
     } catch (e) {
-      setLocalError(e instanceof Error ? e.message : t("adsCatalog.authError"));
+      setTestError(e instanceof Error ? e.message : t("adsCatalog.authError"));
     } finally {
       setBusy(false);
     }
@@ -420,11 +516,6 @@ export function TiktokPixelConfigPanel({
     apiKey: shopifyApiKey,
   });
   const onlineStoreUrl = buildShopOnlineStoreUrl(shopDomain);
-  const canTestServerEvents =
-    !busy &&
-    Boolean(testEventCode.trim()) &&
-    (Boolean(tokenInput.trim()) || hasEventsApiAccessToken) &&
-    Boolean(pixelCode || selectedPixelCode);
   const canCreate =
     !busy && Boolean(selectedAdvertiserId) && Boolean(pixelName.trim());
   const canSaveSelect =
@@ -441,10 +532,6 @@ export function TiktokPixelConfigPanel({
         ? [{ advertiserId: selectedAdvertiserId, advertiserName: selectedAdvertiserId }]
         : [];
 
-  function openExternal(url: string | null) {
-    if (!url) return;
-    window.open(url, "_blank", "noopener,noreferrer");
-  }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 4 }}>
       <div style={{ fontSize: 13, fontWeight: 600 }}>
@@ -683,6 +770,9 @@ export function TiktokPixelConfigPanel({
                   onChange={(e) => {
                     setTestEventCode(e.target.value);
                     setTestSuccess(false);
+                    setTestModeStarted(false);
+                    setTestCleared(false);
+                    setTestError(null);
                   }}
                 />
                 <button
@@ -693,19 +783,6 @@ export function TiktokPixelConfigPanel({
                 >
                   {t("adsCatalog.tiktokPixelGetTestEventCode")}
                 </button>
-                {testEventCode ? (
-                  <button
-                    type="button"
-                    style={{ ...secondaryBtn, padding: "8px 10px", whiteSpace: "nowrap" }}
-                    disabled={busy}
-                    onClick={() => {
-                      setTestEventCode("");
-                      setTestSuccess(false);
-                    }}
-                  >
-                    {t("adsCatalog.tiktokPixelTestEventCodeClear")}
-                  </button>
-                ) : null}
               </div>
               <p style={{ ...pageHintTextStyle, margin: 0 }}>
                 {t("adsCatalog.tiktokPixelTestEventCodeHint")}
@@ -713,22 +790,70 @@ export function TiktokPixelConfigPanel({
               <p style={{ margin: 0, fontSize: 12, color: "#b98900", fontWeight: 600 }}>
                 {t("adsCatalog.tiktokPixelTestEventCodeWarning")}
               </p>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  style={{ ...secondaryBtn, alignSelf: "flex-start", padding: "4px 8px" }}
+                  disabled={busy}
+                  onClick={() => void testServerEvents()}
+                >
+                  {busy
+                    ? t("adsCatalog.tiktokPixelTestServerEventsBusy")
+                    : t("adsCatalog.tiktokPixelTestServerEvents")}
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    ...secondaryBtn,
+                    alignSelf: "flex-start",
+                    padding: "4px 8px",
+                    color: "#d72c0d",
+                    borderColor: "#f1b6ab",
+                  }}
+                  disabled={busy}
+                  onClick={() => void clearTestEventConnection()}
+                  title={t("adsCatalog.tiktokPixelCancelTestHint")}
+                >
+                  {t("adsCatalog.tiktokPixelCancelTestConnection")}
+                </button>
+              </div>
+              {testError && (
+                <span style={{ color: "#d72c0d", fontSize: 12 }}>{testError}</span>
+              )}
+              {testSuccess && (
+                <span style={{ color: "#0f7a52", fontSize: 12 }}>
+                  {t("adsCatalog.tiktokPixelTestServerEventsSuccess")}
+                </span>
+              )}
+              {testModeStarted && (
+                <span style={{ color: "#0f7a52", fontSize: 12 }}>
+                  {t("adsCatalog.tiktokPixelTestModeStarted")}
+                </span>
+              )}
+              {testCleared && (
+                <span style={{ color: "#0f7a52", fontSize: 12 }}>
+                  {t("adsCatalog.tiktokPixelCancelTestDone")}
+                </span>
+              )}
+              <p style={{ ...pageHintTextStyle, margin: 0 }}>
+                {t("adsCatalog.tiktokPixelCancelTestHint")}
+              </p>
+              <button
+                type="button"
+                style={{
+                  ...secondaryBtn,
+                  alignSelf: "flex-start",
+                  padding: "4px 8px",
+                  fontSize: 12,
+                  color: "#005bd3",
+                  borderColor: "#b4d0f5",
+                }}
+                disabled={busy}
+                onClick={() => openExternal(testEventHowToUrl)}
+              >
+                {t("adsCatalog.tiktokPixelOpenClearTestActivity")}
+              </button>
             </div>
-            <button
-              type="button"
-              style={{ ...secondaryBtn, alignSelf: "flex-start", padding: "4px 8px" }}
-              disabled={!canTestServerEvents}
-              onClick={() => void testServerEvents()}
-            >
-              {busy
-                ? t("adsCatalog.tiktokPixelTestServerEventsBusy")
-                : t("adsCatalog.tiktokPixelTestServerEvents")}
-            </button>
-            {testSuccess && (
-              <span style={{ color: "#0f7a52", fontSize: 12 }}>
-                {t("adsCatalog.tiktokPixelTestServerEventsSuccess")}
-              </span>
-            )}
           </div>
 
           <div
@@ -797,10 +922,10 @@ export function TiktokPixelConfigPanel({
                 ...secondaryBtn,
                 alignSelf: "flex-start",
                 opacity: onlineStoreUrl ? 1 : 0.5,
-                cursor: onlineStoreUrl ? "pointer" : "not-allowed",
+                cursor: onlineStoreUrl && !busy ? "pointer" : "not-allowed",
               }}
-              disabled={!onlineStoreUrl}
-              onClick={() => openExternal(onlineStoreUrl)}
+              disabled={!onlineStoreUrl || busy}
+              onClick={() => void goToOnlineStore()}
             >
               {t("adsCatalog.tiktokPixelGoToOnlineStore")}
             </button>

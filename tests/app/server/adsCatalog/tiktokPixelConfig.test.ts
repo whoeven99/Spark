@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getTiktokCatalogCredential = vi.hoisted(() => vi.fn());
+const setTiktokCatalogCredential = vi.hoisted(() => vi.fn());
 const trackTiktokPixelEvent = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../../app/server/adsCatalog/credentialStore.server", () => ({
   getTiktokCatalogCredential: (...args: unknown[]) => getTiktokCatalogCredential(...args),
-  setTiktokCatalogCredential: vi.fn(),
+  setTiktokCatalogCredential: (...args: unknown[]) => setTiktokCatalogCredential(...args),
 }));
 
 vi.mock("../../../../app/server/adsCatalog/clients/tiktokCatalogClient.server", async (importOriginal) => {
@@ -19,13 +20,19 @@ vi.mock("../../../../app/server/adsCatalog/clients/tiktokCatalogClient.server", 
   };
 });
 
-import { maybeTrackTiktokCompletePayment } from "../../../../app/server/adsCatalog/tiktokPixelConfig.server";
+import {
+  clearTiktokPixelTestEventMode,
+  maybeTrackTiktokCompletePayment,
+  startTiktokPixelTestEventMode,
+} from "../../../../app/server/adsCatalog/tiktokPixelConfig.server";
 
 describe("maybeTrackTiktokCompletePayment", () => {
   beforeEach(() => {
     getTiktokCatalogCredential.mockReset();
+    setTiktokCatalogCredential.mockReset();
     trackTiktokPixelEvent.mockReset();
     trackTiktokPixelEvent.mockResolvedValue(undefined);
+    setTiktokCatalogCredential.mockResolvedValue(undefined);
   });
 
   it("skips when Events API disabled or token missing", async () => {
@@ -85,6 +92,90 @@ describe("maybeTrackTiktokCompletePayment", () => {
         event: "CompletePayment",
         eventId: "#1001",
         properties: { value: 42, currency: "EUR" },
+        testEventCode: undefined,
+      }),
+    );
+  });
+
+  it("includes test_event_code when test mode is active", async () => {
+    getTiktokCatalogCredential.mockResolvedValue({
+      accessToken: "oauth",
+      advertiserId: "adv",
+      catalogId: "cat",
+      bindingMode: "api_managed",
+      pixelCode: "PX",
+      eventsApiEnabled: true,
+      eventsApiAccessToken: "events-tok",
+      enabledEvents: ["CompletePayment"],
+      testEventCode: "TEST54000",
+    });
+
+    await maybeTrackTiktokCompletePayment({
+      shop: "s.myshopify.com",
+      orderId: "99",
+      orderName: "#1001",
+    });
+
+    expect(trackTiktokPixelEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "CompletePayment",
+        testEventCode: "TEST54000",
+      }),
+    );
+  });
+});
+
+describe("TikTok pixel test event mode", () => {
+  beforeEach(() => {
+    getTiktokCatalogCredential.mockReset();
+    setTiktokCatalogCredential.mockReset();
+    setTiktokCatalogCredential.mockResolvedValue(undefined);
+  });
+
+  it("startTiktokPixelTestEventMode writes testEventCode", async () => {
+    getTiktokCatalogCredential.mockResolvedValue({
+      accessToken: "oauth",
+      advertiserId: "adv",
+      catalogId: "cat",
+      catalogName: "Cat",
+      bindingMode: "api_managed",
+      pixelCode: "PX",
+      bcId: "bc1",
+      refreshToken: "rt",
+    });
+
+    await startTiktokPixelTestEventMode({
+      shop: "s.myshopify.com",
+      testEventCode: " TEST54000 ",
+    });
+
+    expect(setTiktokCatalogCredential).toHaveBeenCalledWith(
+      "s.myshopify.com",
+      expect.objectContaining({
+        accessToken: "oauth",
+        advertiserId: "adv",
+        catalogId: "cat",
+        testEventCode: "TEST54000",
+      }),
+    );
+  });
+
+  it("clearTiktokPixelTestEventMode clears testEventCode", async () => {
+    getTiktokCatalogCredential.mockResolvedValue({
+      accessToken: "oauth",
+      advertiserId: "adv",
+      catalogId: "cat",
+      bindingMode: "api_managed",
+      pixelCode: "PX",
+      testEventCode: "TEST54000",
+    });
+
+    await clearTiktokPixelTestEventMode("s.myshopify.com");
+
+    expect(setTiktokCatalogCredential).toHaveBeenCalledWith(
+      "s.myshopify.com",
+      expect.objectContaining({
+        testEventCode: "",
       }),
     );
   });

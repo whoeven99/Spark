@@ -49,6 +49,12 @@ describe("tiktokPixelEvents helpers", () => {
     );
     expect(buildShopOnlineStoreUrl("ciwishop")).toBe("https://ciwishop.myshopify.com/");
     expect(buildShopOnlineStoreUrl("")).toBeNull();
+    expect(buildShopOnlineStoreUrl("ciwishop", { testEventCode: "TEST54000" })).toBe(
+      "https://ciwishop.myshopify.com/?spark_tt_test_code=TEST54000",
+    );
+    expect(buildShopOnlineStoreUrl("ciwishop", { testEventCode: "" })).toBe(
+      "https://ciwishop.myshopify.com/?spark_tt_test_code=",
+    );
   });
 });
 

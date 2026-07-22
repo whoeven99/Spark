@@ -228,7 +228,8 @@ Prisma CLI 的 `migrate deploy` **不能**直接连 `libsql://`（`provider = sq
 - TikTok Pixel（Ads Catalog）：
   - UI：`/app/ads-catalog` TikTok 面板（创建仅建 Pixel；选择已有保存 Token/事件；Catalog 事件源用一键绑定）
   - 店面：Theme App Embed `extensions/spark-tiktok-pixel/` 读 Shop metafield `spark_tiktok.pixel_config`
-  - 服务端：`orders/paid` 按勾选上报 `CompletePayment`（Events API `pixel/track`）
+  - 测试事件：填 Test Event Code 后点 Go to Online Store → 写入凭证 + 店面 URL/`sessionStorage`（仅该浏览器会话 `ttq` 带 `test_event_code`）；点删除清空凭证并清会话，恢复正式事件
+  - 服务端：`orders/paid` 按勾选上报 `CompletePayment`（Events API `pixel/track`；凭证有 Test Event Code 时带 `test_event_code`）
 - 广告 TikTok 沙盒（Insights 页「沙盒模式」，`app/server/adsInsights/tiktokSandbox.server.ts`）：
   - `TIKTOK_SANDBOX_ACCESS_TOKEN`（必需）
   - `TIKTOK_SANDBOX_ADVERTISER_ID`（必需）

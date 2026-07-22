@@ -502,6 +502,11 @@ export type TiktokCatalogCredential = {
   eventsApiAccessToken?: string;
   /** Conversion API / Events API 开关。 */
   eventsApiEnabled?: boolean;
+  /**
+   * Events Manager Test Event Code。
+   * 有值时服务端 Events API（如 CompletePayment）带 test_event_code；浏览器侧靠店面 URL/sessionStorage。
+   */
+  testEventCode?: string;
   /** 勾选上报的 TikTok 标准事件名。 */
   enabledEvents?: string[];
   updatedAt: string;
@@ -552,6 +557,10 @@ export async function getTiktokCatalogCredential(
       typeof record.data.eventsApiEnabled === "boolean"
         ? record.data.eventsApiEnabled
         : undefined,
+    testEventCode:
+      typeof record.data.testEventCode === "string" && record.data.testEventCode.trim()
+        ? record.data.testEventCode.trim()
+        : undefined,
     enabledEvents: Array.isArray(record.data.enabledEvents)
       ? record.data.enabledEvents
           .map((item) => String(item ?? "").trim())
@@ -577,6 +586,8 @@ export async function setTiktokCatalogCredential(
     eventsApiAccessToken?: string;
     /** 省略时保留已有值。 */
     eventsApiEnabled?: boolean;
+    /** 省略时保留已有值；传空字符串可清空。 */
+    testEventCode?: string;
     /** 省略时保留已有值。 */
     enabledEvents?: string[];
   },
@@ -616,6 +627,12 @@ export async function setTiktokCatalogCredential(
       : typeof existing?.data.eventsApiEnabled === "boolean"
         ? existing.data.eventsApiEnabled
         : true;
+  const testEventCode =
+    payload.testEventCode !== undefined
+      ? payload.testEventCode.trim() || null
+      : typeof existing?.data.testEventCode === "string" && existing.data.testEventCode.trim()
+        ? existing.data.testEventCode.trim()
+        : null;
   const enabledEvents =
     payload.enabledEvents !== undefined
       ? payload.enabledEvents
@@ -634,6 +651,7 @@ export async function setTiktokCatalogCredential(
     appId,
     eventsApiAccessToken,
     eventsApiEnabled,
+    testEventCode,
     enabledEvents,
   });
 }

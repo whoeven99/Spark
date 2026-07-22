@@ -1,9 +1,18 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
-import { testTiktokServerEvents } from "../server/adsCatalog/tiktokPixelConfig.server";
+import {
+  clearTiktokPixelTestEventMode,
+  startTiktokPixelTestEventMode,
+  testTiktokServerEvents,
+} from "../server/adsCatalog/tiktokPixelConfig.server";
+
+type TestEventAction = "send" | "start" | "clear";
 
 /**
- * 向当前 Pixel 发送一条带 test_event_code 的测试 Events API 事件，用于验证连通性。
+ * TikTok Test Event Code：
+ * - send：发送一条带 test_event_code 的连通性测试事件
+ * - start：写入凭证，开启服务端测试模式（配合店面 URL/session 走浏览器测试事件）
+ * - clear：清除凭证中的 Test Event Code，恢复正式事件
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
@@ -12,15 +21,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const { session } = await authenticate.admin(request);
 
+  let actionKind: TestEventAction = "send";
   let testEventCode = "";
   let eventsApiAccessToken: string | undefined;
   let pixelCode: string | undefined;
   try {
     const body = (await request.json().catch(() => ({}))) as {
+      action?: unknown;
       testEventCode?: unknown;
       eventsApiAccessToken?: unknown;
       pixelCode?: unknown;
     };
+    const rawAction = typeof body.action === "string" ? body.action.trim() : "send";
+    actionKind =
+      rawAction === "start" || rawAction === "clear" || rawAction === "send"
+        ? rawAction
+        : "send";
     testEventCode =
       typeof body.testEventCode === "string" ? body.testEventCode.trim() : "";
     eventsApiAccessToken =
@@ -33,25 +49,39 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         : undefined;
   } catch {
     testEventCode = "";
-  }
-
-  if (!testEventCode) {
-    return Response.json(
-      { ok: false, error: "请填写 Test Event Code" },
-      { status: 400 },
-    );
+    actionKind = "send";
   }
 
   try {
+    if (actionKind === "clear") {
+      await clearTiktokPixelTestEventMode(session.shop);
+      return Response.json({ ok: true, action: "clear" });
+    }
+
+    if (!testEventCode) {
+      return Response.json(
+        { ok: false, error: "请填写 Test Event Code" },
+        { status: 400 },
+      );
+    }
+
+    if (actionKind === "start") {
+      await startTiktokPixelTestEventMode({
+        shop: session.shop,
+        testEventCode,
+      });
+      return Response.json({ ok: true, action: "start" });
+    }
+
     await testTiktokServerEvents({
       shop: session.shop,
       testEventCode,
       eventsApiAccessToken,
       pixelCode,
     });
-    return Response.json({ ok: true });
+    return Response.json({ ok: true, action: "send" });
   } catch (e) {
-    const errMsg = e instanceof Error ? e.message : "测试事件发送失败";
+    const errMsg = e instanceof Error ? e.message : "测试事件操作失败";
     const status = errMsg.includes("请") || errMsg.includes("尚未") ? 400 : 500;
     return Response.json({ ok: false, error: errMsg }, { status });
   }

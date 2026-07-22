@@ -109,6 +109,8 @@ export interface CredentialsView {
     appId: string;
     /** 是否已配置 Events API Access Token（不明文回传）。 */
     hasEventsApiAccessToken: boolean;
+    /** 已保存的 Test Event Code（服务端测试模式）；空字符串表示未开启。 */
+    testEventCode: string;
     /** Conversion API / Events API 开关。 */
     eventsApiEnabled: boolean;
     /** 勾选上报的 TikTok 标准事件名。 */

@@ -102,6 +102,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         pixelCode: tiktok?.pixelCode ?? "",
         appId: tiktok?.appId ?? "",
         hasEventsApiAccessToken: Boolean(tiktok?.eventsApiAccessToken?.trim()),
+        testEventCode: tiktok?.testEventCode?.trim() ?? "",
         eventsApiEnabled:
           typeof tiktok?.eventsApiEnabled === "boolean" ? tiktok.eventsApiEnabled : true,
         enabledEvents: tiktok?.enabledEvents?.length

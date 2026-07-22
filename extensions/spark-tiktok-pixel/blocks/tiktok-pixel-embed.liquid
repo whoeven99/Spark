@@ -42,6 +42,26 @@
       (function () {
         var enabled = {{ enabled | json }};
         if (!Array.isArray(enabled)) enabled = [];
+        var TEST_QUERY = "spark_tt_test_code";
+        var TEST_STORAGE = "spark_tt_test_event_code";
+        var testEventCode = "";
+        try {
+          var params = new URLSearchParams(window.location.search || "");
+          if (params.has(TEST_QUERY)) {
+            var fromUrl = String(params.get(TEST_QUERY) || "").trim();
+            if (fromUrl) {
+              sessionStorage.setItem(TEST_STORAGE, fromUrl);
+              testEventCode = fromUrl;
+            } else {
+              sessionStorage.removeItem(TEST_STORAGE);
+              testEventCode = "";
+            }
+          } else {
+            testEventCode = String(sessionStorage.getItem(TEST_STORAGE) || "").trim();
+          }
+        } catch (e) {
+          testEventCode = "";
+        }
         function on(name) { return enabled.indexOf(name) !== -1; }
         function eid() {
           try {
@@ -52,7 +72,9 @@
         function track(name, props) {
           if (!on(name) || !window.ttq) return;
           try {
-            window.ttq.track(name, props || {}, { event_id: eid() });
+            var opts = { event_id: eid() };
+            if (testEventCode) opts.test_event_code = testEventCode;
+            window.ttq.track(name, props || {}, opts);
           } catch (e) {}
         }
 
@@ -128,10 +150,12 @@
           if (on("CompletePayment")) {
             try {
               if (window.ttq) {
+                var purchaseOpts = { event_id: String({{ checkout.order_id | json }}) };
+                if (testEventCode) purchaseOpts.test_event_code = testEventCode;
                 window.ttq.track("CompletePayment", {
                   value: {{ checkout.total_price | default: 0 | divided_by: 100.0 | json }},
                   currency: {{ checkout.currency | default: shop.currency | json }}
-                }, { event_id: String({{ checkout.order_id | json }}) });
+                }, purchaseOpts);
               }
             } catch (e) {}
           }

@@ -8,7 +8,19 @@ import {
 import {
   getTiktokCatalogCredential,
   setTiktokCatalogCredential,
+  type TiktokCatalogCredential,
 } from "./credentialStore.server";
+
+function credentialWriteBase(credential: TiktokCatalogCredential) {
+  return {
+    accessToken: credential.accessToken,
+    refreshToken: credential.refreshToken,
+    advertiserId: credential.advertiserId,
+    bcId: credential.bcId,
+    catalogId: credential.catalogId,
+    catalogName: credential.catalogName,
+  };
+}
 import {
   normalizeTiktokEnabledEvents,
   TIKTOK_PIXEL_METAFIELD_KEY,
@@ -326,6 +338,8 @@ export async function maybeTrackTiktokCompletePayment(params: {
     // 正式增强可改为 SHA256。此处放入 context.user 更常见。
   }
 
+  const testEventCode = credential.testEventCode?.trim() || undefined;
+
   try {
     await trackTiktokPixelEvent({
       eventsApiAccessToken: token,
@@ -337,9 +351,10 @@ export async function maybeTrackTiktokCompletePayment(params: {
       context: params.email?.trim()
         ? { user: { email: params.email.trim() } }
         : undefined,
+      testEventCode,
     });
     console.info(
-      `${LOG_PREFIX} step=complete_payment_sent shop=${params.shop} eventId=${eventId}`,
+      `${LOG_PREFIX} step=complete_payment_sent shop=${params.shop} eventId=${eventId}${testEventCode ? " test=1" : ""}`,
     );
     return { sent: true };
   } catch (e) {
@@ -348,6 +363,43 @@ export async function maybeTrackTiktokCompletePayment(params: {
     );
     return { sent: false, reason: "track_failed" };
   }
+}
+
+/** 开启服务端测试模式：凭证写入 testEventCode，后续 CompletePayment 带测试标记。 */
+export async function startTiktokPixelTestEventMode(params: {
+  shop: string;
+  testEventCode: string;
+}): Promise<void> {
+  const credential = await getTiktokCatalogCredential(params.shop);
+  if (!credential) {
+    throw new Error("TikTok Catalog 尚未连接，请先完成授权。");
+  }
+  const testEventCode = params.testEventCode.trim();
+  if (!testEventCode) throw new Error("请填写 Test Event Code");
+  if (!credential.pixelCode?.trim()) {
+    throw new Error("请先选择或创建 Pixel");
+  }
+
+  await setTiktokCatalogCredential(params.shop, {
+    ...credentialWriteBase(credential),
+    testEventCode,
+  });
+  console.info(
+    `${LOG_PREFIX} step=test_mode_started shop=${params.shop} pixel=${credential.pixelCode}`,
+  );
+}
+
+/** 结束测试模式：清空凭证中的 testEventCode，后续事件走正式上报。 */
+export async function clearTiktokPixelTestEventMode(shop: string): Promise<void> {
+  const credential = await getTiktokCatalogCredential(shop);
+  if (!credential) return;
+  if (!credential.testEventCode?.trim()) return;
+
+  await setTiktokCatalogCredential(shop, {
+    ...credentialWriteBase(credential),
+    testEventCode: "",
+  });
+  console.info(`${LOG_PREFIX} step=test_mode_cleared shop=${shop}`);
 }
 
 export async function testTiktokServerEvents(params: {

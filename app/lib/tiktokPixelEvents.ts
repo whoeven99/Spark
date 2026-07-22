@@ -116,9 +116,25 @@ export function buildTiktokPixelThemeEditorUrl(params: {
   return `https://admin.shopify.com/store/${encodeURIComponent(storeHandle)}/themes/current/editor?context=apps&activateAppId=${activateAppId}`;
 }
 
+/**
+ * 店面测试会话查询参数。
+ * Theme App Embed 读到后写入 sessionStorage，仅当前浏览器会话的 ttq 带 test_event_code。
+ */
+export const TIKTOK_STOREFRONT_TEST_EVENT_QUERY = "spark_tt_test_code";
+
 /** 店面首页 URL，用于浏览/加购等事件实测。 */
-export function buildShopOnlineStoreUrl(shopDomain: string): string | null {
+export function buildShopOnlineStoreUrl(
+  shopDomain: string,
+  options?: { testEventCode?: string | null },
+): string | null {
   const domain = normalizeMyshopifyDomain(shopDomain);
   if (!domain) return null;
-  return `https://${domain}/`;
+  const url = new URL(`https://${domain}/`);
+  if (options && "testEventCode" in options) {
+    url.searchParams.set(
+      TIKTOK_STOREFRONT_TEST_EVENT_QUERY,
+      options.testEventCode?.trim() ?? "",
+    );
+  }
+  return url.toString();
 }
