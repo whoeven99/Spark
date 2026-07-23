@@ -2,7 +2,6 @@ import type { ShopifyAdminGraphqlClient } from "../ai/skills/shopifyInfo/shopify
 import {
   createTiktokCatalog,
   createTiktokPixel,
-  bindTiktokCatalogEventSource,
   bindTiktokCatalogPixelEventSource,
   fetchTiktokCatalogConf,
   isApiWritableTiktokCatalog,
@@ -33,15 +32,11 @@ export type EnsureTiktokApiCatalogResult = {
  * - 已是 api_managed 且 catalog/get 明确返回 channel=CLIENT：复用当前目录
  * - 否则（含 channel 缺失 / 非 CLIENT / 官方目录）：新建 Spark Catalog 并切换 bindingMode
  *
- * 创建新 Catalog 时会同步：
- * 1. 创建配对的 TikTok Pixel 并绑定为 Web 事件源（用于转化追踪）
- * 2. 若提供 appId，同时绑定应用事件源（用于 App 内事件再营销）
+ * 创建新 Catalog 时会同步创建配对的 TikTok Pixel 并绑定为 Web 事件源（用于转化追踪）。
  */
 export async function ensureTiktokApiManagedCatalog(params: {
   shop: string;
   admin: ShopifyAdminGraphqlClient;
-  /** 商家 App ID，用于绑定应用事件源（可选）。 */
-  appId?: string;
 }): Promise<EnsureTiktokApiCatalogResult> {
   console.info(`${LOG_PREFIX} step=ensure_start shop=${params.shop}`);
   const shopInfo = await fetchShopBasicInfo(params.admin);
@@ -65,29 +60,6 @@ export async function ensureTiktokApiManagedCatalog(params: {
         console.info(
           `${LOG_PREFIX} step=ensure_reuse shop=${params.shop} catalogId=${credential.catalogId} catalogName=${credential.catalogName ?? ""} channel=${conf.channel ?? ""} region=${conf.regionCode ?? ""} expectedRegion=${expectedRegion}`,
         );
-
-        // 如果传入了新的 appId 且与已存储的不同，补充绑定应用事件源（best-effort）。
-        if (params.appId && params.appId.trim() !== (credential.appId ?? "")) {
-          await bindCatalogEventSourcesBestEffort({
-            accessToken,
-            advertiserId: credential.advertiserId,
-            bcId,
-            catalogId: credential.catalogId,
-            appId: params.appId.trim(),
-            shop: params.shop,
-            catalogName: credential.catalogName,
-          });
-          await setTiktokCatalogCredential(params.shop, {
-            accessToken: credential.accessToken,
-            refreshToken: credential.refreshToken,
-            advertiserId: credential.advertiserId,
-            bcId: credential.bcId,
-            catalogId: credential.catalogId,
-            catalogName: credential.catalogName,
-            pixelCode: credential.pixelCode,
-            appId: params.appId.trim(),
-          });
-        }
 
         return {
           catalogId: credential.catalogId,
@@ -166,15 +138,13 @@ export async function ensureTiktokApiManagedCatalog(params: {
     );
   }
 
-  const { bindAdvertiserId } = await bindCatalogEventSourcesBestEffort({
+  const { bindAdvertiserId } = await bindCatalogPixelEventSourceBestEffort({
     accessToken,
     advertiserId,
     bcId,
     catalogId: created.catalogId,
     pixelCode,
-    appId: params.appId?.trim(),
     shop: params.shop,
-    catalogName: created.catalogName,
   });
   const resolvedAdvertiserId = bindAdvertiserId || advertiserId;
 
@@ -190,11 +160,10 @@ export async function ensureTiktokApiManagedCatalog(params: {
     catalogName: created.catalogName,
     bindingMode: "api_managed",
     pixelCode,
-    appId: params.appId?.trim(),
   });
 
   console.info(
-    `${LOG_PREFIX} step=ensure_created shop=${params.shop} catalogId=${created.catalogId} catalogName=${created.catalogName} pixelCode=${pixelCode ?? ""} appId=${params.appId ?? ""}`,
+    `${LOG_PREFIX} step=ensure_created shop=${params.shop} catalogId=${created.catalogId} catalogName=${created.catalogName} pixelCode=${pixelCode ?? ""}`,
   );
   return {
     catalogId: created.catalogId,
@@ -205,61 +174,33 @@ export async function ensureTiktokApiManagedCatalog(params: {
   };
 }
 
-/**
- * best-effort 绑定事件源：失败只记日志，不抛异常。
- * Pixel 和 App 事件源分开调用（TikTok API 每次只接受一个 event source）。
- */
-async function bindCatalogEventSourcesBestEffort(params: {
+/** best-effort 绑定 Pixel 事件源：失败只记日志，不抛异常。 */
+async function bindCatalogPixelEventSourceBestEffort(params: {
   accessToken: string;
   advertiserId: string;
   bcId: string;
   catalogId: string;
   pixelCode?: string;
-  appId?: string;
   shop: string;
-  catalogName?: string;
 }): Promise<{ bindAdvertiserId?: string }> {
-  let bindAdvertiserId: string | undefined;
+  if (!params.pixelCode) return {};
 
-  if (params.pixelCode) {
-    try {
-      const result = await bindTiktokCatalogPixelEventSource({
-        accessToken: params.accessToken,
-        advertiserId: params.advertiserId,
-        bcId: params.bcId,
-        catalogId: params.catalogId,
-        pixelCode: params.pixelCode,
-      });
-      bindAdvertiserId = result.advertiserId;
-      console.info(
-        `${LOG_PREFIX} step=eventsource_pixel_bound shop=${params.shop} catalogId=${params.catalogId} pixelCode=${params.pixelCode} advertiserId=${bindAdvertiserId}`,
-      );
-    } catch (e) {
-      console.warn(
-        `${LOG_PREFIX} step=eventsource_pixel_bind_failed shop=${params.shop} catalogId=${params.catalogId} pixelCode=${params.pixelCode} err=${e instanceof Error ? e.message : String(e)}`,
-      );
-    }
+  try {
+    const result = await bindTiktokCatalogPixelEventSource({
+      accessToken: params.accessToken,
+      advertiserId: params.advertiserId,
+      bcId: params.bcId,
+      catalogId: params.catalogId,
+      pixelCode: params.pixelCode,
+    });
+    console.info(
+      `${LOG_PREFIX} step=eventsource_pixel_bound shop=${params.shop} catalogId=${params.catalogId} pixelCode=${params.pixelCode} advertiserId=${result.advertiserId}`,
+    );
+    return { bindAdvertiserId: result.advertiserId };
+  } catch (e) {
+    console.warn(
+      `${LOG_PREFIX} step=eventsource_pixel_bind_failed shop=${params.shop} catalogId=${params.catalogId} pixelCode=${params.pixelCode} err=${e instanceof Error ? e.message : String(e)}`,
+    );
+    return {};
   }
-
-  const appAdvertiserId = bindAdvertiserId || params.advertiserId;
-  if (params.appId) {
-    try {
-      await bindTiktokCatalogEventSource({
-        accessToken: params.accessToken,
-        advertiserId: appAdvertiserId,
-        bcId: params.bcId,
-        catalogId: params.catalogId,
-        appId: params.appId,
-      });
-      console.info(
-        `${LOG_PREFIX} step=eventsource_app_bound shop=${params.shop} catalogId=${params.catalogId} appId=${params.appId}`,
-      );
-    } catch (e) {
-      console.warn(
-        `${LOG_PREFIX} step=eventsource_app_bind_failed shop=${params.shop} catalogId=${params.catalogId} appId=${params.appId} err=${e instanceof Error ? e.message : String(e)}`,
-      );
-    }
-  }
-
-  return { bindAdvertiserId };
 }

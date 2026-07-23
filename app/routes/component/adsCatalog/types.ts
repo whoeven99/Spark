@@ -105,8 +105,6 @@ export interface CredentialsView {
     updatedAt: string | null;
     /** 已选中或新建的 TikTok Pixel Code。 */
     pixelCode: string;
-    /** 商家应用 ID（应用事件源）。 */
-    appId: string;
     /** 是否已配置 Events API Access Token（不明文回传）。 */
     hasEventsApiAccessToken: boolean;
     /** 已保存的 Test Event Code（服务端测试模式）；空字符串表示未开启。 */

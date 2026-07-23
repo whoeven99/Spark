@@ -4,7 +4,7 @@ import { ensureTiktokApiManagedCatalog } from "../server/adsCatalog/tiktokEnsure
 
 /**
  * Path B：确保绑定 Spark API 可写 Catalog（无 pending 时也可用已连接凭证新建并切换）。
- * 创建时会同步：自动创建 TikTok Pixel 并关联 Catalog；若提供 appId 则同时绑定应用事件源。
+ * 创建时会同步：自动创建 TikTok Pixel 并关联 Catalog。
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
@@ -13,21 +13,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const { session, admin } = await authenticate.admin(request);
 
-  let appId: string | undefined;
-  try {
-    const body = (await request.json().catch(() => ({}))) as { appId?: unknown };
-    if (typeof body.appId === "string" && body.appId.trim()) {
-      appId = body.appId.trim();
-    }
-  } catch {
-    // 忽略 JSON 解析失败，appId 保持 undefined
-  }
-
   try {
     const result = await ensureTiktokApiManagedCatalog({
       shop: session.shop,
       admin,
-      appId,
     });
     return Response.json({
       ok: true,

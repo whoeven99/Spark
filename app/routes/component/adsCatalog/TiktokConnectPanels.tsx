@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 import { TiktokCatalogPicker } from "./TiktokCatalogPicker";
-import { TiktokBindDiagnosisPanel } from "./TiktokBindDiagnosisPanel";
 import { TiktokPixelConfigPanel } from "./TiktokPixelConfigPanel";
 import type { CredentialsView } from "./types";
 
@@ -13,15 +12,6 @@ type Props = {
   shopDomain: string;
   shopifyApiKey: string;
   onChanged: () => void;
-};
-
-const inputStyle = {
-  width: "100%",
-  padding: "8px 12px",
-  borderRadius: 8,
-  border: `1px solid ${pageColorTokens.borderInput}`,
-  fontSize: 13,
-  boxSizing: "border-box" as const,
 };
 
 const panelStyle = {
@@ -79,12 +69,8 @@ export function TiktokConnectPanels({
 }: Props) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
-  const [appIdInput, setAppIdInput] = useState(credentials.tiktok.appId ?? "");
-  const [appIdSuccess, setAppIdSuccess] = useState(false);
   const [pixelBindSuccess, setPixelBindSuccess] = useState(false);
   const [pixelBindError, setPixelBindError] = useState<string | null>(null);
-  const [pixelEnsureSuccess, setPixelEnsureSuccess] = useState(false);
-  const [diagnosisRefreshKey, setDiagnosisRefreshKey] = useState(0);
 
   const tiktok = credentials.tiktok;
 
@@ -135,7 +121,7 @@ export function TiktokConnectPanels({
       const resp = await fetch(`/api/ads-catalog/tiktok-create-catalog${locationSearch}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appId: appIdInput.trim() || undefined }),
+        body: JSON.stringify({}),
       });
       const data = (await resp.json().catch(() => ({}))) as {
         ok?: boolean;
@@ -145,31 +131,6 @@ export function TiktokConnectPanels({
         alert(data.error ?? t("adsCatalog.authError"));
         return;
       }
-      onChanged();
-    } catch (e) {
-      alert(e instanceof Error ? e.message : t("adsCatalog.authError"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function bindAppEventSource() {
-    const appId = appIdInput.trim();
-    if (!appId) return;
-    setBusy(true);
-    setAppIdSuccess(false);
-    try {
-      const resp = await fetch(`/api/ads-catalog/tiktok-bind-eventsource${locationSearch}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "app", appId }),
-      });
-      const data = (await resp.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (!resp.ok || !data.ok) {
-        alert(data.error ?? t("adsCatalog.authError"));
-        return;
-      }
-      setAppIdSuccess(true);
       onChanged();
     } catch (e) {
       alert(e instanceof Error ? e.message : t("adsCatalog.authError"));
@@ -182,38 +143,8 @@ export function TiktokConnectPanels({
     setBusy(true);
     setPixelBindSuccess(false);
     setPixelBindError(null);
-    setPixelEnsureSuccess(false);
     try {
       const resp = await fetch(`/api/ads-catalog/tiktok-bind-eventsource${locationSearch}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "pixel" }),
-      });
-      const data = (await resp.json().catch(() => ({}))) as {
-        ok?: boolean;
-        error?: string;
-        errorCode?: string;
-      };
-      if (!resp.ok || !data.ok) {
-        setPixelBindError(resolveTiktokPixelBindError(data, t));
-        return;
-      }
-      setPixelBindSuccess(true);
-      setDiagnosisRefreshKey((k) => k + 1);
-    } catch (e) {
-      setPixelBindError(e instanceof Error ? e.message : t("adsCatalog.authError"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function ensurePixelEventSource() {
-    setBusy(true);
-    setPixelBindSuccess(false);
-    setPixelBindError(null);
-    setPixelEnsureSuccess(false);
-    try {
-      const resp = await fetch(`/api/ads-catalog/tiktok-ensure-pixel${locationSearch}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
@@ -227,9 +158,7 @@ export function TiktokConnectPanels({
         setPixelBindError(resolveTiktokPixelBindError(data, t));
         return;
       }
-      setPixelEnsureSuccess(true);
-      onChanged();
-      setDiagnosisRefreshKey((k) => k + 1);
+      setPixelBindSuccess(true);
     } catch (e) {
       setPixelBindError(e instanceof Error ? e.message : t("adsCatalog.authError"));
     } finally {
@@ -295,7 +224,6 @@ export function TiktokConnectPanels({
                   busy={busy}
                   setBusy={setBusy}
                   onChanged={onChanged}
-                  onDiagnosisRefresh={() => setDiagnosisRefreshKey((k) => k + 1)}
                   onBindError={setPixelBindError}
                 />
                 {pixelBindError && (
@@ -318,21 +246,6 @@ export function TiktokConnectPanels({
                     </span>
                   )}
                 </div>
-                <TiktokBindDiagnosisPanel
-                  locationSearch={locationSearch}
-                  connected={tiktok.connected}
-                  bindingMode={tiktok.bindingMode}
-                  hasPixel={Boolean(tiktok.pixelCode)}
-                  rebindBusy={busy}
-                  refreshKey={diagnosisRefreshKey}
-                  onRebindPixel={() => void rebindPixelEventSource()}
-                  onEnsurePixel={() => void ensurePixelEventSource()}
-                />
-              </div>
-            )}
-            {tiktok.appId && (
-              <div style={{ marginTop: 2 }}>
-                {t("adsCatalog.tiktokAppEventSource", { id: tiktok.appId })}
               </div>
             )}
             {modeHint && <p style={pageHintTextStyle}>{modeHint}</p>}
@@ -347,39 +260,6 @@ export function TiktokConnectPanels({
             boundBindingMode={tiktok.bindingMode}
             onChanged={onChanged}
           />
-          {/* 应用事件源绑定（App ID） */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <label style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("adsCatalog.tiktokAppIdLabel")}
-            </label>
-            <p style={pageHintTextStyle}>{t("adsCatalog.tiktokAppIdHint")}</p>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input
-                type="text"
-                style={inputStyle}
-                placeholder={t("adsCatalog.tiktokAppIdPlaceholder")}
-                value={appIdInput}
-                onChange={(e) => {
-                  setAppIdInput(e.target.value);
-                  setAppIdSuccess(false);
-                }}
-                disabled={busy}
-              />
-              <button
-                type="button"
-                style={{ ...secondaryBtn, whiteSpace: "nowrap" }}
-                disabled={busy || !appIdInput.trim()}
-                onClick={() => void bindAppEventSource()}
-              >
-                {busy ? t("adsCatalog.tiktokBindAppIdBusy") : t("adsCatalog.tiktokBindAppId")}
-              </button>
-            </div>
-            {appIdSuccess && (
-              <div style={{ color: "#0f7a52", fontSize: 13 }}>
-                {t("adsCatalog.tiktokBindAppIdSuccess")}
-              </div>
-            )}
-          </div>
           <div style={{ display: "flex", gap: 10 }}>
             <button type="button" style={secondaryBtn} disabled={busy} onClick={openOAuth}>
               {t("adsCatalog.tiktokReauth")}
@@ -418,21 +298,6 @@ export function TiktokConnectPanels({
             boundBindingMode={tiktok.bindingMode}
             onChanged={onChanged}
           />
-          {/* 创建 Catalog 前可选填 App ID，在创建时一并绑定 */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <label style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("adsCatalog.tiktokAppIdLabel")}
-            </label>
-            <input
-              type="text"
-              style={inputStyle}
-              placeholder={t("adsCatalog.tiktokAppIdPlaceholder")}
-              value={appIdInput}
-              onChange={(e) => setAppIdInput(e.target.value)}
-              disabled={busy}
-            />
-            <p style={pageHintTextStyle}>{t("adsCatalog.tiktokAppIdHint")}</p>
-          </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button
               type="button"

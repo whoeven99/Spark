@@ -36,7 +36,6 @@ type Props = {
   busy: boolean;
   setBusy: (v: boolean) => void;
   onChanged: () => void;
-  onDiagnosisRefresh: () => void;
   onBindError: (msg: string | null) => void;
 };
 
@@ -104,7 +103,6 @@ export function TiktokPixelConfigPanel({
   busy,
   setBusy,
   onChanged,
-  onDiagnosisRefresh,
   onBindError,
 }: Props) {
   const { t } = useTranslation();
@@ -307,7 +305,6 @@ export function TiktokPixelConfigPanel({
       setMode("select");
       setCreateSuccess(true);
       onChanged();
-      onDiagnosisRefresh();
     } catch (e) {
       const msg = e instanceof Error ? e.message : t("adsCatalog.authError");
       setLocalError(msg);
@@ -344,7 +341,7 @@ export function TiktokPixelConfigPanel({
         pixelCode: selectedPixelCode,
         eventsApiEnabled,
         enabledEvents,
-        // 保存只写 Token/事件/metafield；Catalog 事件源绑定交给下方「一键绑定 / 重新绑定」。
+        // 保存只写 Token/事件/metafield；Catalog 事件源绑定交给下方「重新绑定 Pixel」。
         bindCatalogEventSource: false,
       };
       if (pixelName.trim()) body.pixelName = pixelName.trim();
@@ -368,7 +365,6 @@ export function TiktokPixelConfigPanel({
       setTokenInput("");
       setSaveSuccess(true);
       onChanged();
-      onDiagnosisRefresh();
     } catch (e) {
       const msg = e instanceof Error ? e.message : t("adsCatalog.authError");
       setLocalError(msg);
