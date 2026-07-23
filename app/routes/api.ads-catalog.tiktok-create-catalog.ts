@@ -3,7 +3,7 @@ import { authenticate } from "../shopify.server";
 import { ensureTiktokApiManagedCatalog } from "../server/adsCatalog/tiktokEnsureApiCatalog.server";
 
 /**
- * Path B：确保绑定 Spark API 可写 Catalog（无 pending 时也可用已连接凭证新建并切换）。
+ * 确保绑定 Spark API 可写 Catalog（无 pending 时也可用已连接凭证新建并切换）。
  * 创建时会同步：自动创建 TikTok Pixel 并关联 Catalog。
  */
 export const action = async ({ request }: ActionFunctionArgs) => {

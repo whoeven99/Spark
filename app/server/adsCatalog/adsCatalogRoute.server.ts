@@ -119,9 +119,13 @@ export async function handleAdsCatalogSyncAction(request: Request): Promise<Resp
   const defaultCurrency = shopInfo?.currencyCode ?? undefined;
 
   if (parsed.data.platform === "tiktok") {
-    const tiktokCredential = await getTiktokCatalogCredential(session.shop);
-    if (tiktokCredential?.bindingMode !== "shopify_official") {
+    if (tiktokUploadMethod === "product_file") {
       await ensureTiktokApiManagedCatalog({ shop: session.shop, admin });
+    } else {
+      const tiktokCredential = await getTiktokCatalogCredential(session.shop);
+      if (tiktokCredential?.bindingMode !== "shopify_official") {
+        await ensureTiktokApiManagedCatalog({ shop: session.shop, admin });
+      }
     }
   }
 

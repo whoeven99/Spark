@@ -89,7 +89,7 @@ export async function ensureTiktokApiManagedCatalog(params: {
     "";
 
   if (!accessToken) {
-    throw new Error("请先完成 TikTok 授权后再使用 API 上传同步。");
+    throw new Error("请先完成 TikTok 授权后再使用商品同步。");
   }
   if (!advertiserId) {
     throw new Error("缺少 advertiserId，请重新授权 TikTok。");

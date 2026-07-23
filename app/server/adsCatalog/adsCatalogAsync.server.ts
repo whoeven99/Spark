@@ -504,6 +504,30 @@ async function runTiktokSync(params: {
       .join(",")}`,
   );
 
+  // Feed 文件同步（CSV product/file）。
+  if (uploadMethod === "product_file") {
+    await runTiktokFeedFileSync({
+      taskId: params.taskId,
+      startedAt: params.startedAt,
+      shop: params.shop,
+      shopDomain: params.shopDomain,
+      defaultCurrency: params.defaultCurrency,
+      brand: params.brand,
+      products: enrichedProducts,
+      credential: {
+        accessToken: credential.accessToken,
+        refreshToken: credential.refreshToken,
+        advertiserId: credential.advertiserId,
+        bcId: credential.bcId,
+        catalogId: credential.catalogId,
+        catalogName: credential.catalogName,
+      },
+      msg: params.msg,
+      logTiktok,
+    });
+    return;
+  }
+
   // Path A：官方 Shopify↔TikTok Catalog — 仅校验映射，不 API 上传。
   if (credential.bindingMode === "shopify_official") {
     logTiktok("path_a_official_validate_only", `readyCount=${items.length}`);
@@ -529,30 +553,7 @@ async function runTiktokSync(params: {
     return;
   }
 
-  // Path B：API 可写 Catalog — JSON product/upload 或 CSV product/file。
-  if (uploadMethod === "product_file") {
-    await runTiktokFeedFileSync({
-      taskId: params.taskId,
-      startedAt: params.startedAt,
-      shop: params.shop,
-      shopDomain: params.shopDomain,
-      defaultCurrency: params.defaultCurrency,
-      brand: params.brand,
-      products: enrichedProducts,
-      credential: {
-        accessToken: credential.accessToken,
-        refreshToken: credential.refreshToken,
-        advertiserId: credential.advertiserId,
-        bcId: credential.bcId,
-        catalogId: credential.catalogId,
-        catalogName: credential.catalogName,
-      },
-      msg: params.msg,
-      logTiktok,
-    });
-    return;
-  }
-
+  // Path B：API 可写 Catalog — JSON product/upload。
   logTiktok("path_b_api_upload", `itemCount=${items.length} catalogId=${credential.catalogId}`);
   await appendLog({
     taskId: params.taskId,
