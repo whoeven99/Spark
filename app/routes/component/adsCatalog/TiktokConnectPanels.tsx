@@ -2,11 +2,14 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 import { TiktokCatalogPicker } from "./TiktokCatalogPicker";
+import { TiktokCatalogRegionSelect } from "./TiktokCatalogRegionSelect";
 import { TiktokPixelConfigPanel } from "./TiktokPixelConfigPanel";
+import { isTiktokCatalogAutoCreateRegion } from "../../../lib/tiktokCatalogRegions";
 import type { CredentialsView } from "./types";
 
 type Props = {
   credentials: CredentialsView;
+  inferredTiktokRegion: string;
   locationSearch: string;
   languageCode: string;
   shopDomain: string;
@@ -61,6 +64,7 @@ function resolveTiktokPixelBindError(
 
 export function TiktokConnectPanels({
   credentials,
+  inferredTiktokRegion,
   locationSearch,
   languageCode,
   shopDomain,
@@ -118,10 +122,13 @@ export function TiktokConnectPanels({
   async function createAndBindCatalog() {
     setBusy(true);
     try {
+      const regionCode =
+        tiktok.catalogRegionCode ||
+        (isTiktokCatalogAutoCreateRegion(inferredTiktokRegion) ? inferredTiktokRegion : "DE");
       const resp = await fetch(`/api/ads-catalog/tiktok-create-catalog${locationSearch}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ regionCode }),
       });
       const data = (await resp.json().catch(() => ({}))) as {
         ok?: boolean;
@@ -291,6 +298,13 @@ export function TiktokConnectPanels({
               <p style={pageHintTextStyle}>{t("adsCatalog.tiktokNoCatalogHint")}</p>
             )}
           </div>
+          <TiktokCatalogRegionSelect
+            locationSearch={locationSearch}
+            value={tiktok.catalogRegionCode}
+            inferredRegion={inferredTiktokRegion}
+            disabled={busy}
+            onChanged={onChanged}
+          />
           <TiktokCatalogPicker
             variant="credentials"
             locationSearch={locationSearch}

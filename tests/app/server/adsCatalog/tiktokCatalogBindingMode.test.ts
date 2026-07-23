@@ -15,6 +15,7 @@ import {
 import {
   createTiktokCatalog,
   resolveTiktokCatalogRegion,
+  resolveTiktokCatalogTargetRegion,
 } from "../../../../app/server/adsCatalog/clients/tiktokCatalogClient.server";
 
 function catalog(
@@ -102,6 +103,29 @@ describe("createTiktokCatalog", () => {
     expect(resolveTiktokCatalogRegion()).toEqual({ currency: "USD", regionCode: "US" });
     expect(resolveTiktokCatalogRegion("eur", "nl")).toEqual({ currency: "EUR", regionCode: "NL" });
     expect(resolveTiktokCatalogRegion("EUR")).toEqual({ currency: "EUR", regionCode: "DE" });
+  });
+
+  it("resolveTiktokCatalogTargetRegion uses manual override for unsupported inferred region", () => {
+    expect(
+      resolveTiktokCatalogTargetRegion({
+        currencyCode: "EUR",
+        countryCode: "HK",
+        overrideRegionCode: "DE",
+      }),
+    ).toEqual({
+      currency: "EUR",
+      regionCode: "DE",
+      inferredRegionCode: "HK",
+    });
+  });
+
+  it("resolveTiktokCatalogTargetRegion rejects unsupported inferred region without override", () => {
+    expect(() =>
+      resolveTiktokCatalogTargetRegion({
+        currencyCode: "EUR",
+        countryCode: "HK",
+      }),
+    ).toThrow(/HK/);
   });
 
   it("posts catalog/create with shop country as region when provided", async () => {

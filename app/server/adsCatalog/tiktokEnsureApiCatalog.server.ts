@@ -5,12 +5,13 @@ import {
   bindTiktokCatalogPixelEventSource,
   fetchTiktokCatalogConf,
   isApiWritableTiktokCatalog,
-  resolveTiktokCatalogRegion,
+  resolveTiktokCatalogTargetRegion,
 } from "./clients/tiktokCatalogClient.server";
 import {
   clearTiktokCatalogPending,
   getTiktokCatalogCredential,
   getTiktokCatalogPending,
+  getTiktokCatalogRegionPreference,
   setTiktokCatalogCredential,
 } from "./credentialStore.server";
 import { listAccessibleBcIds } from "./tiktokOAuth.server";
@@ -37,13 +38,21 @@ export type EnsureTiktokApiCatalogResult = {
 export async function ensureTiktokApiManagedCatalog(params: {
   shop: string;
   admin: ShopifyAdminGraphqlClient;
+  /** 本次操作显式指定的目标市场；省略时读凭证中已保存偏好。 */
+  regionCode?: string;
 }): Promise<EnsureTiktokApiCatalogResult> {
   console.info(`${LOG_PREFIX} step=ensure_start shop=${params.shop}`);
   const shopInfo = await fetchShopBasicInfo(params.admin);
-  const expectedRegion = resolveTiktokCatalogRegion(
-    shopInfo?.currencyCode,
-    shopInfo?.countryCode,
-  ).regionCode;
+  const savedRegion =
+    params.regionCode?.trim().toUpperCase() ||
+    (await getTiktokCatalogRegionPreference(params.shop)) ||
+    undefined;
+  const targetRegion = resolveTiktokCatalogTargetRegion({
+    currencyCode: shopInfo?.currencyCode,
+    countryCode: shopInfo?.countryCode,
+    overrideRegionCode: savedRegion,
+  });
+  const expectedRegion = targetRegion.regionCode;
 
   const credential = await getTiktokCatalogCredential(params.shop);
   if (credential?.bindingMode === "api_managed" && credential.catalogId) {
@@ -123,6 +132,7 @@ export async function ensureTiktokApiManagedCatalog(params: {
     name: `Spark Catalog — ${shopLabel}`,
     currency: shopInfo?.currencyCode,
     countryCode: shopInfo?.countryCode,
+    regionCode: expectedRegion,
   });
 
   // 创建配对 Pixel 并绑定事件源（best-effort：失败不阻断 Catalog 创建流程）。
@@ -165,6 +175,7 @@ export async function ensureTiktokApiManagedCatalog(params: {
     catalogName: created.catalogName,
     bindingMode: "api_managed",
     pixelCode,
+    catalogRegionCode: savedRegion,
   });
 
   console.info(

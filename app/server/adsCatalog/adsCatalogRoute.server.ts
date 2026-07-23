@@ -9,7 +9,7 @@ import {
   enqueueAdsCatalogSync,
   type EnqueueAdsCatalogSyncParams,
 } from "./adsCatalogAsync.server";
-import { getTiktokCatalogCredential } from "./credentialStore.server";
+import { getTiktokCatalogCredential, setTiktokCatalogRegionPreference } from "./credentialStore.server";
 import { ensureTiktokApiManagedCatalog } from "./tiktokEnsureApiCatalog.server";
 import { fetchProductsForCatalog } from "./productFetcher.server";
 
@@ -22,6 +22,8 @@ const SyncRequestSchema = z.object({
   targetCountry: z.string().min(2).max(4).optional(),
   googleProductCategory: z.string().max(64).optional(),
   tiktokUploadMethod: z.enum(["product_upload", "product_file"]).optional(),
+  /** TikTok：手动选择的目标市场（ISO2），用于创建/同步 Catalog。 */
+  tiktokCatalogRegion: z.string().min(2).max(4).optional(),
   filters: z
     .object({
       tags: z.array(z.string()).optional(),
@@ -72,6 +74,22 @@ export async function handleAdsCatalogSyncAction(request: Request): Promise<Resp
     );
   }
 
+  try {
+    return await handleAdsCatalogSyncActionInner(request, parsed.data);
+  } catch (e) {
+    const errorMsg = e instanceof Error ? e.message : "Sync failed";
+    console.error(`[AdsCatalog][Sync] unhandled ${errorMsg}`);
+    return Response.json(
+      { success: false, errorCode: 500, errorMsg },
+      { status: 500 },
+    );
+  }
+}
+
+async function handleAdsCatalogSyncActionInner(
+  request: Request,
+  parsed: z.infer<typeof SyncRequestSchema>,
+): Promise<Response> {
   const { admin, session } = await authenticate.admin(request);
   const locale = detectRequestLocale(request, {
     sessionLocale: readShopifySessionLocale(session),
@@ -79,16 +97,17 @@ export async function handleAdsCatalogSyncAction(request: Request): Promise<Resp
   initI18n(locale);
 
   const productIds =
-    parsed.data.productIds && parsed.data.productIds.length > 0
-      ? parsed.data.productIds
+    parsed.productIds && parsed.productIds.length > 0
+      ? parsed.productIds
       : null;
-  const filters = parsed.data.filters ?? {};
+  const filters = parsed.filters ?? {};
   const tiktokUploadMethod =
-    parsed.data.platform === "tiktok"
-      ? (parsed.data.tiktokUploadMethod ?? "product_upload")
+    parsed.platform === "tiktok"
+      ? (parsed.tiktokUploadMethod ?? "product_upload")
       : undefined;
+  const tiktokCatalogRegion = parsed.tiktokCatalogRegion?.trim().toUpperCase();
   const maxProducts =
-    parsed.data.platform === "tiktok" && tiktokUploadMethod === "product_file" ? 2000 : 250;
+    parsed.platform === "tiktok" && tiktokUploadMethod === "product_file" ? 2000 : 250;
 
   const [shopInfo, products] = await Promise.all([
     fetchShopBasicInfo(admin),
@@ -118,19 +137,27 @@ export async function handleAdsCatalogSyncAction(request: Request): Promise<Resp
   const brand = shopInfo?.name ?? undefined;
   const defaultCurrency = shopInfo?.currencyCode ?? undefined;
 
-  if (parsed.data.platform === "tiktok") {
+  if (parsed.platform === "tiktok") {
+    if (tiktokCatalogRegion) {
+      await setTiktokCatalogRegionPreference(session.shop, tiktokCatalogRegion);
+    }
+    const ensureParams = {
+      shop: session.shop,
+      admin,
+      ...(tiktokCatalogRegion ? { regionCode: tiktokCatalogRegion } : {}),
+    };
     if (tiktokUploadMethod === "product_file") {
-      await ensureTiktokApiManagedCatalog({ shop: session.shop, admin });
+      await ensureTiktokApiManagedCatalog(ensureParams);
     } else {
       const tiktokCredential = await getTiktokCatalogCredential(session.shop);
       if (tiktokCredential?.bindingMode !== "shopify_official") {
-        await ensureTiktokApiManagedCatalog({ shop: session.shop, admin });
+        await ensureTiktokApiManagedCatalog(ensureParams);
       }
     }
   }
 
   const tiktokBindingMode =
-    parsed.data.platform === "tiktok"
+    parsed.platform === "tiktok"
       ? (await getTiktokCatalogCredential(session.shop))?.bindingMode
       : undefined;
 
@@ -138,14 +165,14 @@ export async function handleAdsCatalogSyncAction(request: Request): Promise<Resp
     shop: session.shop,
     taskType: TASK_TYPE,
     batchConfig: {
-      platform: parsed.data.platform,
+      platform: parsed.platform,
       productIds,
       totalProducts: products.length,
       ...(tiktokBindingMode ? { bindingMode: tiktokBindingMode } : {}),
       ...(tiktokUploadMethod ? { tiktokUploadMethod } : {}),
     },
     taskConfig: {
-      platform: parsed.data.platform,
+      platform: parsed.platform,
       productIds,
       totalProducts: products.length,
       ...(tiktokBindingMode ? { bindingMode: tiktokBindingMode } : {}),
@@ -160,11 +187,11 @@ export async function handleAdsCatalogSyncAction(request: Request): Promise<Resp
     defaultCurrency,
     brand,
     locale,
-    platform: parsed.data.platform,
+    platform: parsed.platform,
     products,
-    googleContentLanguage: parsed.data.contentLanguage,
-    googleTargetCountry: parsed.data.targetCountry,
-    googleProductCategory: parsed.data.googleProductCategory,
+    googleContentLanguage: parsed.contentLanguage,
+    googleTargetCountry: parsed.targetCountry,
+    googleProductCategory: parsed.googleProductCategory,
     ...(tiktokUploadMethod ? { tiktokUploadMethod } : {}),
   };
   enqueueAdsCatalogSync(enqueueParams);
@@ -173,7 +200,7 @@ export async function handleAdsCatalogSyncAction(request: Request): Promise<Resp
     success: true,
     taskId,
     batchId,
-    platform: parsed.data.platform,
+    platform: parsed.platform,
     productCount: products.length,
   };
   return Response.json(response, { status: 202 });

@@ -20,6 +20,8 @@ import {
   maskTokenTail,
 } from "../server/adsCatalog/credentialStore.server";
 import { formatCustomerId } from "../server/adsCatalog/googleOAuth.server";
+import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
+import { resolveTiktokCatalogRegion } from "../server/adsCatalog/clients/tiktokCatalogClient.server";
 import {
   normalizeTiktokEnabledEvents,
   TIKTOK_PIXEL_DEFAULT_EVENTS,
@@ -32,9 +34,9 @@ const AdsCatalogPage = lazy(() =>
 );
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
 
-  const [initialTaskPage, fb, gg, gmcPending, ads, adsPending, metaPending, tiktok, tiktokPending] =
+  const [initialTaskPage, fb, gg, gmcPending, ads, adsPending, metaPending, tiktok, tiktokPending, shopInfo] =
     await Promise.all([
       listTasksPageForShop({
         shop: session.shop,
@@ -49,12 +51,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       getMetaCatalogPending(session.shop),
       getTiktokCatalogCredential(session.shop),
       getTiktokCatalogPending(session.shop),
+      fetchShopBasicInfo(admin),
     ]);
+
+  const inferredTiktokRegion = resolveTiktokCatalogRegion(
+    shopInfo?.currencyCode,
+    shopInfo?.countryCode,
+  ).regionCode;
+  const tiktokCatalogRegionCode =
+    tiktok?.catalogRegionCode ?? tiktokPending?.catalogRegionCode ?? "";
 
   return data({
     shopDomain: session.shop,
     shopifyApiKey: process.env.SHOPIFY_API_KEY?.trim() ?? "",
     initialTaskPage,
+    inferredTiktokRegion,
     credentials: {
       facebook: {
         configured: Boolean(fb),
@@ -98,6 +109,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         catalogId: tiktok?.catalogId ?? "",
         advertiserId: tiktok?.advertiserId ?? tiktokPending?.advertiserId ?? "",
         bindingMode: tiktok?.bindingMode ?? "",
+        catalogRegionCode: tiktokCatalogRegionCode,
         updatedAt: tiktok?.updatedAt ?? null,
         pixelCode: tiktok?.pixelCode ?? "",
         hasEventsApiAccessToken: Boolean(tiktok?.eventsApiAccessToken?.trim()),

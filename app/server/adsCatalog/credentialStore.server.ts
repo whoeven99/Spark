@@ -268,6 +268,8 @@ export type PendingOAuthTokens = {
   advertiserId?: string;
   /** TikTok：OAuth 已完成但尚未绑定 Catalog 时保留 Business Center ID。 */
   bcId?: string;
+  /** TikTok：手动选择的 Catalog 目标市场（ISO2）。 */
+  catalogRegionCode?: string;
   accounts: PendingOAuthAccount[];
 };
 
@@ -283,6 +285,7 @@ async function setPending(
     clientSecret: payload.clientSecret ?? null,
     advertiserId: payload.advertiserId?.trim() || null,
     bcId: payload.bcId?.trim() || null,
+    catalogRegionCode: payload.catalogRegionCode?.trim().toUpperCase() || null,
     accounts: payload.accounts,
   });
 }
@@ -309,6 +312,10 @@ async function getPending(
     bcId:
       typeof record.data.bcId === "string" && record.data.bcId.trim()
         ? record.data.bcId.trim()
+        : undefined,
+    catalogRegionCode:
+      typeof record.data.catalogRegionCode === "string" && record.data.catalogRegionCode.trim()
+        ? record.data.catalogRegionCode.trim().toUpperCase()
         : undefined,
     accounts: Array.isArray(record.data.accounts)
       ? (record.data.accounts as PendingOAuthTokens["accounts"])
@@ -509,6 +516,8 @@ export type TiktokCatalogCredential = {
   testEventCode?: string;
   /** 勾选上报的 TikTok 标准事件名。 */
   enabledEvents?: string[];
+  /** 手动选择的 Catalog 目标市场（ISO2），用于覆盖店铺推断区域。 */
+  catalogRegionCode?: string;
   updatedAt: string;
 };
 
@@ -566,6 +575,10 @@ export async function getTiktokCatalogCredential(
           .map((item) => String(item ?? "").trim())
           .filter(Boolean)
       : undefined,
+    catalogRegionCode:
+      typeof record.data.catalogRegionCode === "string" && record.data.catalogRegionCode.trim()
+        ? record.data.catalogRegionCode.trim().toUpperCase()
+        : undefined,
     updatedAt: record.updatedAt.toISOString(),
   };
 }
@@ -590,6 +603,8 @@ export async function setTiktokCatalogCredential(
     testEventCode?: string;
     /** 省略时保留已有值。 */
     enabledEvents?: string[];
+    /** 省略时保留已有值。 */
+    catalogRegionCode?: string;
   },
 ): Promise<void> {
   const accessToken = payload.accessToken.trim();
@@ -639,6 +654,13 @@ export async function setTiktokCatalogCredential(
       : Array.isArray(existing?.data.enabledEvents)
         ? existing.data.enabledEvents
         : null;
+  const catalogRegionCode =
+    payload.catalogRegionCode !== undefined
+      ? payload.catalogRegionCode.trim().toUpperCase() || null
+      : typeof existing?.data.catalogRegionCode === "string" &&
+          existing.data.catalogRegionCode.trim()
+        ? existing.data.catalogRegionCode.trim().toUpperCase()
+        : null;
   await writePlatformCredential(shop, TIKTOK_CATALOG_PLATFORM, {
     accessToken,
     refreshToken: payload.refreshToken?.trim() || null,
@@ -653,6 +675,7 @@ export async function setTiktokCatalogCredential(
     eventsApiEnabled,
     testEventCode,
     enabledEvents,
+    catalogRegionCode,
   });
 }
 
@@ -665,6 +688,51 @@ export const getTiktokCatalogPending = (shop: string) =>
   getPending(shop, TIKTOK_CATALOG_PENDING_PLATFORM);
 export const clearTiktokCatalogPending = (shop: string) =>
   clearPending(shop, TIKTOK_CATALOG_PENDING_PLATFORM);
+
+export async function getTiktokCatalogRegionPreference(shop: string): Promise<string | null> {
+  const credential = await getTiktokCatalogCredential(shop);
+  if (credential?.catalogRegionCode) return credential.catalogRegionCode;
+  const pending = await getTiktokCatalogPending(shop);
+  return pending?.catalogRegionCode?.trim().toUpperCase() || null;
+}
+
+export async function setTiktokCatalogRegionPreference(
+  shop: string,
+  regionCode: string,
+): Promise<void> {
+  const region = regionCode.trim().toUpperCase();
+  if (!region) {
+    throw new Error("catalogRegionCode is required");
+  }
+  const credential = await getTiktokCatalogCredential(shop);
+  if (credential) {
+    await setTiktokCatalogCredential(shop, {
+      accessToken: credential.accessToken,
+      refreshToken: credential.refreshToken,
+      advertiserId: credential.advertiserId,
+      bcId: credential.bcId,
+      catalogId: credential.catalogId,
+      catalogName: credential.catalogName,
+      bindingMode: credential.bindingMode,
+      pixelCode: credential.pixelCode,
+      appId: credential.appId,
+      eventsApiAccessToken: credential.eventsApiAccessToken,
+      eventsApiEnabled: credential.eventsApiEnabled,
+      testEventCode: credential.testEventCode,
+      enabledEvents: credential.enabledEvents,
+      catalogRegionCode: region,
+    });
+    return;
+  }
+  const pending = await getTiktokCatalogPending(shop);
+  if (!pending) {
+    throw new Error("请先完成 TikTok 授权后再选择目标市场。");
+  }
+  await setTiktokCatalogPending(shop, {
+    ...pending,
+    catalogRegionCode: region,
+  });
+}
 
 /** TikTok Ads 洞察用凭证：已绑定 Catalog 或仅 OAuth 授权（pending）均可。 */
 export type TiktokAdsInsightsCredential = {

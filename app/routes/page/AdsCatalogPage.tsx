@@ -18,6 +18,8 @@ import { GoogleConnectPanels } from "../component/adsCatalog/GoogleConnectPanels
 import { MetaConnectPanels } from "../component/adsCatalog/MetaConnectPanels";
 import { TiktokConnectPanels } from "../component/adsCatalog/TiktokConnectPanels";
 import { TiktokCatalogPicker } from "../component/adsCatalog/TiktokCatalogPicker";
+import { TiktokCatalogRegionSelect } from "../component/adsCatalog/TiktokCatalogRegionSelect";
+import { isTiktokCatalogAutoCreateRegion } from "../../lib/tiktokCatalogRegions";
 import {
   GoogleFeedFilters,
   parseList,
@@ -147,6 +149,7 @@ export function AdsCatalogPage() {
   const loaderData = useLoaderData<AdsCatalogPageLoaderData>();
   const revalidator = useRevalidator();
   const credentials = loaderData.credentials;
+  const inferredTiktokRegion = loaderData.inferredTiktokRegion;
   const taskPageSize = loaderData.initialTaskPage.pageSize;
 
   const [tab, setTabState] = useState<Tab>(() => readTabFromSearch(location.search) ?? "sync");
@@ -353,6 +356,14 @@ export function AdsCatalogPage() {
   }, [syncFetcher.data, syncFetcher.state]);
 
   useEffect(() => {
+    if (syncFetcher.state !== "idle" || syncFetcher.data?.success !== false) return;
+    if (!syncFetcher.data.errorMsg) return;
+    if (platform === "tiktok") {
+      setTiktokSyncError(syncFetcher.data.errorMsg);
+    }
+  }, [syncFetcher.data, syncFetcher.state, platform]);
+
+  useEffect(() => {
     if (!highlightedTaskId) return;
     const timer = window.setTimeout(() => setHighlightedTaskId(null), 5000);
     return () => window.clearTimeout(timer);
@@ -432,7 +443,20 @@ export function AdsCatalogPage() {
         body.googleProductCategory = filters.googleProductCategory.trim();
       }
     }
+    if (platform === "tiktok") {
+      body.tiktokCatalogRegion = resolveTiktokCatalogRegionForSync();
+    }
     return body;
+  }
+
+  function resolveTiktokCatalogRegionForSync(): string {
+    if (credentials.tiktok.catalogRegionCode) {
+      return credentials.tiktok.catalogRegionCode;
+    }
+    if (isTiktokCatalogAutoCreateRegion(inferredTiktokRegion)) {
+      return inferredTiktokRegion;
+    }
+    return "DE";
   }
 
   function handlePreview() {
@@ -478,7 +502,7 @@ export function AdsCatalogPage() {
           const resp = await fetch(`/api/ads-catalog/tiktok-create-catalog${locationSearch}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({}),
+            body: JSON.stringify({ regionCode: resolveTiktokCatalogRegionForSync() }),
           });
           const data = (await resp.json().catch(() => ({}))) as {
             ok?: boolean;
@@ -699,6 +723,15 @@ export function AdsCatalogPage() {
               </div>
             </div>
 
+            {platform === "tiktok" && credentials.tiktok.authorized && (
+              <TiktokCatalogRegionSelect
+                locationSearch={locationSearch}
+                value={credentials.tiktok.catalogRegionCode}
+                inferredRegion={inferredTiktokRegion}
+                onChanged={() => revalidator.revalidate()}
+              />
+            )}
+
             {platform === "tiktok" && credentials.tiktok.connected && (
               <TiktokCatalogPicker
                 variant="sync"
@@ -849,6 +882,7 @@ export function AdsCatalogPage() {
             />
             <TiktokConnectPanels
               credentials={credentials}
+              inferredTiktokRegion={inferredTiktokRegion}
               locationSearch={locationSearch}
               languageCode={i18n.language}
               shopDomain={loaderData.shopDomain}

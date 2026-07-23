@@ -202,59 +202,37 @@ export function validateTiktokCatalogForApiUpload(
   return null;
 }
 
-/** TikTok ECOM Catalog API 常见可创建 region（非完整官方列表，用于前置校验与错误提示）。 */
-export const TIKTOK_CATALOG_SUPPORTED_REGIONS = new Set([
-  "US",
-  "CA",
-  "GB",
-  "AU",
-  "NZ",
-  "DE",
-  "FR",
-  "IT",
-  "ES",
-  "NL",
-  "BE",
-  "AT",
-  "CH",
-  "SE",
-  "NO",
-  "DK",
-  "FI",
-  "PL",
-  "CZ",
-  "PT",
-  "IE",
-  "SG",
-  "MY",
-  "TH",
-  "PH",
-  "ID",
-  "VN",
-  "JP",
-  "KR",
-  "MX",
-  "BR",
-  "SA",
-  "AE",
-  "HK",
-  "TW",
-]);
+import {
+  isTiktokCatalogAutoCreateRegion,
+  TIKTOK_CATALOG_AUTO_CREATE_REGION_CODES,
+} from "../../../lib/tiktokCatalogRegions";
+
+/** Spark 可通过 API 自动创建 Catalog 的目标市场。 */
+export const TIKTOK_CATALOG_AUTO_CREATE_REGIONS = new Set(
+  TIKTOK_CATALOG_AUTO_CREATE_REGION_CODES,
+);
+
+/** @deprecated 使用 TIKTOK_CATALOG_AUTO_CREATE_REGIONS；保留别名避免旧引用断裂。 */
+export const TIKTOK_CATALOG_SUPPORTED_REGIONS = TIKTOK_CATALOG_AUTO_CREATE_REGIONS;
 
 export function formatUnsupportedTiktokCatalogRegionError(regionCode: string): string {
   const region = regionCode.trim().toUpperCase() || "UNKNOWN";
   return (
     `TikTok 不支持以国家/地区 ${region} 自动创建商品库（Invalid or unsupported country）。` +
-    `请在 TikTok 广告后台手动创建目标市场商品库（如 US、GB、DE），并在 Spark「凭证」页绑定；` +
-    `或把 Shopify 店铺账单地址改为目标销售国家后重试。` +
-    `当前 Spark 推断区域：${region}。`
+    `请在下方「目标市场」手动选择实际销售国家（如 US、GB、DE），或在 TikTok 广告后台手动创建商品库后在 Spark「凭证」页绑定。` +
+    `当前 Spark 根据店铺推断区域：${region}。`
   );
 }
 
-export function assertTiktokCatalogRegionSupported(regionCode: string): void {
+export function assertTiktokCatalogAutoCreateRegion(regionCode: string): void {
   const region = regionCode.trim().toUpperCase();
-  if (!region || TIKTOK_CATALOG_SUPPORTED_REGIONS.has(region)) return;
+  if (!region || isTiktokCatalogAutoCreateRegion(region)) return;
   throw new Error(formatUnsupportedTiktokCatalogRegionError(region));
+}
+
+/** @deprecated 使用 assertTiktokCatalogAutoCreateRegion */
+export function assertTiktokCatalogRegionSupported(regionCode: string): void {
+  assertTiktokCatalogAutoCreateRegion(regionCode);
 }
 
 const CURRENCY_TO_REGION: Record<string, string> = {
@@ -280,6 +258,42 @@ const CURRENCY_TO_REGION: Record<string, string> = {
   MXN: "MX",
 };
 
+const REGION_DEFAULT_CURRENCY: Record<string, string> = {
+  US: "USD",
+  CA: "CAD",
+  GB: "GBP",
+  AU: "AUD",
+  NZ: "NZD",
+  DE: "EUR",
+  FR: "EUR",
+  IT: "EUR",
+  ES: "EUR",
+  NL: "EUR",
+  BE: "EUR",
+  AT: "EUR",
+  IE: "EUR",
+  PT: "EUR",
+  FI: "EUR",
+  CH: "CHF",
+  SE: "SEK",
+  NO: "NOK",
+  DK: "DKK",
+  PL: "PLN",
+  CZ: "CZK",
+  SG: "SGD",
+  MY: "MYR",
+  TH: "THB",
+  PH: "PHP",
+  ID: "IDR",
+  VN: "VND",
+  JP: "JPY",
+  KR: "KRW",
+  MX: "MXN",
+  BR: "BRL",
+  SA: "SAR",
+  AE: "AED",
+};
+
 /** 由店铺币种 + 国家推断 Catalog 创建所需 currency + region_code；国家优先于币种默认表。 */
 export function resolveTiktokCatalogRegion(
   currencyCode?: string,
@@ -296,6 +310,39 @@ export function resolveTiktokCatalogRegion(
   return {
     currency,
     regionCode: CURRENCY_TO_REGION[currency] || "US",
+  };
+}
+
+/**
+ * 解析 Catalog 创建目标市场：优先使用用户手动选择的 override，否则按店铺推断；
+ * 推断结果不可自动创建时抛错，提示用户手动选择。
+ */
+export function resolveTiktokCatalogTargetRegion(params: {
+  currencyCode?: string;
+  countryCode?: string;
+  overrideRegionCode?: string;
+}): {
+  currency: string;
+  regionCode: string;
+  inferredRegionCode: string;
+} {
+  const inferred = resolveTiktokCatalogRegion(params.currencyCode, params.countryCode);
+  const override = params.overrideRegionCode?.trim().toUpperCase() ?? "";
+  if (override) {
+    assertTiktokCatalogAutoCreateRegion(override);
+    return {
+      currency: REGION_DEFAULT_CURRENCY[override] ?? inferred.currency,
+      regionCode: override,
+      inferredRegionCode: inferred.regionCode,
+    };
+  }
+  if (!isTiktokCatalogAutoCreateRegion(inferred.regionCode)) {
+    throw new Error(formatUnsupportedTiktokCatalogRegionError(inferred.regionCode));
+  }
+  return {
+    currency: inferred.currency,
+    regionCode: inferred.regionCode,
+    inferredRegionCode: inferred.regionCode,
   };
 }
 
@@ -907,14 +954,14 @@ export async function createTiktokCatalog(params: {
   countryCode?: string;
   regionCode?: string;
 }): Promise<CreateTiktokCatalogResult> {
-  const { currency, regionCode } = resolveTiktokCatalogRegion(
-    params.currency,
-    params.countryCode,
-  );
-  const region = (params.regionCode || regionCode).trim().toUpperCase() || regionCode;
+  const resolved = resolveTiktokCatalogTargetRegion({
+    currencyCode: params.currency,
+    countryCode: params.countryCode,
+    overrideRegionCode: params.regionCode,
+  });
+  const region = resolved.regionCode;
+  const currency = resolved.currency;
   const name = params.name.trim() || "Spark Catalog";
-
-  assertTiktokCatalogRegionSupported(region);
 
   console.info(
     `${LOG_PREFIX} step=catalog_create_request bcId=${params.bcId} name=${JSON.stringify(name)} currency=${currency} region=${region}`,

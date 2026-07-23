@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getTiktokCatalogCredential = vi.hoisted(() => vi.fn());
 const getTiktokCatalogPending = vi.hoisted(() => vi.fn());
+const getTiktokCatalogRegionPreference = vi.hoisted(() => vi.fn());
 const setTiktokCatalogCredential = vi.hoisted(() => vi.fn());
 const clearTiktokCatalogPending = vi.hoisted(() => vi.fn());
 const createTiktokCatalog = vi.hoisted(() => vi.fn());
@@ -14,6 +15,8 @@ const fetchShopBasicInfo = vi.hoisted(() => vi.fn());
 vi.mock("../../../../app/server/adsCatalog/credentialStore.server", () => ({
   getTiktokCatalogCredential: (...args: unknown[]) => getTiktokCatalogCredential(...args),
   getTiktokCatalogPending: (...args: unknown[]) => getTiktokCatalogPending(...args),
+  getTiktokCatalogRegionPreference: (...args: unknown[]) =>
+    getTiktokCatalogRegionPreference(...args),
   setTiktokCatalogCredential: (...args: unknown[]) => setTiktokCatalogCredential(...args),
   clearTiktokCatalogPending: (...args: unknown[]) => clearTiktokCatalogPending(...args),
 }));
@@ -52,8 +55,10 @@ describe("ensureTiktokApiManagedCatalog", () => {
   beforeEach(() => {
     getTiktokCatalogCredential.mockReset();
     getTiktokCatalogPending.mockReset();
+    getTiktokCatalogRegionPreference.mockReset();
     setTiktokCatalogCredential.mockReset();
     clearTiktokCatalogPending.mockReset();
+    getTiktokCatalogRegionPreference.mockResolvedValue(null);
     createTiktokCatalog.mockReset();
     createTiktokPixel.mockReset();
     bindTiktokCatalogPixelEventSource.mockReset();
@@ -141,6 +146,7 @@ describe("ensureTiktokApiManagedCatalog", () => {
       expect.objectContaining({
         currency: "EUR",
         countryCode: "NL",
+        regionCode: "NL",
       }),
     );
   });
