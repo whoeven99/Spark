@@ -7,6 +7,7 @@ import {
 } from "../../page/pageUiStyles";
 import { LogViewer } from "../aiTask/LogViewer";
 import { TaskStatusBadge } from "../aiTask/TaskStatusBadge";
+import { TiktokProductResultsPanel } from "./TiktokProductResultsPanel";
 import type {
   AdsCatalogPlatform,
   AdsCatalogSyncTaskResult,
@@ -172,7 +173,7 @@ export function AdsCatalogTaskDetailPage({ task, locationSearch, onBack }: Props
           </div>
         ) : null}
 
-        {result && result.errors.length > 0 ? (
+        {result && result.errors.length > 0 && !(result.productResults?.length) ? (
           <div>
             <div style={pageFieldLabelStyle}>{t("adsCatalog.detailErrorsTitle")}</div>
             <div
@@ -218,6 +219,17 @@ export function AdsCatalogTaskDetailPage({ task, locationSearch, onBack }: Props
               </table>
             </div>
           </div>
+        ) : null}
+
+        {platform === "tiktok" && result?.productResults && result.productResults.length > 0 ? (
+          <TiktokProductResultsPanel
+            taskId={task.id}
+            locationSearch={locationSearch}
+            productResults={result.productResults}
+            feedLogId={result.feedLogId}
+            feedLogStatus={result.feedLogStatus}
+            feedCsvSummary={result.feedCsvSummary}
+          />
         ) : null}
 
         <div>

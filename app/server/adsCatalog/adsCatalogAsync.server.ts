@@ -31,7 +31,7 @@ import {
   upsertTiktokCatalogItems,
   validateTiktokCatalogForApiUpload,
 } from "./clients/tiktokCatalogClient.server";
-import { confirmTiktokCatalogUpload } from "./clients/tiktokCatalogUploadConfirm.server";
+import { confirmTiktokCatalogUpload, buildTiktokProductResults } from "./clients/tiktokCatalogUploadConfirm.server";
 import {
   getFacebookCatalogCredential,
   getGoogleMerchantCredential,
@@ -920,6 +920,12 @@ async function runTiktokFeedFileSync(params: {
     uploadMethod: "product_file",
     catalogId: credential.catalogId,
     feedFileUrl: fileUrl,
+    productResults: buildTiktokProductResults({
+      expectedSkuIds,
+      confirmed,
+    }),
+    ...(confirmed.feedLogStatus ? { feedLogStatus: confirmed.feedLogStatus } : {}),
+    ...(confirmed.feedCsvSummary ? { feedCsvSummary: confirmed.feedCsvSummary } : {}),
     ...(feedLogId ? { feedLogId } : {}),
   };
 

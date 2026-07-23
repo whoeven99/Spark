@@ -52,8 +52,6 @@ export interface AdsCatalogSyncRequestBody {
   googleProductCategory?: string;
   /** TikTok：product_upload=JSON 分批；product_file=CSV Feed 文件上传。 */
   tiktokUploadMethod?: "product_upload" | "product_file";
-  /** TikTok：手动选择的目标市场（ISO2）。 */
-  tiktokCatalogRegion?: string;
 }
 
 export type AdsCatalogPageLoaderData = {
@@ -64,6 +62,10 @@ export type AdsCatalogPageLoaderData = {
   initialTaskPage: AITaskListPageData;
   /** 根据店铺币种/国家推断的 TikTok Catalog 区域。 */
   inferredTiktokRegion: string;
+  boundTiktokCatalogName: string;
+  boundTiktokCatalogCurrency: string;
+  boundTiktokCatalogRegion: string;
+  boundTiktokCatalogChannel: string;
   credentials: CredentialsView;
 };
 

@@ -6,6 +6,9 @@ type CatalogOption = {
   id: string;
   name: string;
   bindingMode: "shopify_official" | "api_managed";
+  currency?: string;
+  regionCode?: string;
+  channel?: string;
 };
 
 type Props = {
@@ -175,7 +178,7 @@ export function TiktokCatalogPicker({
         >
           {catalogs.map((c) => (
             <option key={c.id} value={c.id}>
-              {`${c.name} (${modeLabel(c.bindingMode)}) — ${c.id}`}
+              {`${c.name} (${modeLabel(c.bindingMode)})${c.regionCode ? ` · ${c.regionCode}` : ""}${c.currency ? ` · ${c.currency}` : ""} — ${c.id}`}
             </option>
           ))}
         </select>
@@ -185,6 +188,12 @@ export function TiktokCatalogPicker({
           {selectedCatalog.bindingMode === "shopify_official"
             ? t("adsCatalog.tiktokModeOfficialHint")
             : t("adsCatalog.tiktokModeApiHint")}
+          {selectedCatalog.currency || selectedCatalog.regionCode
+            ? ` ${t("adsCatalog.tiktokCatalogMarketInfo", {
+                currency: selectedCatalog.currency ?? "—",
+                region: selectedCatalog.regionCode ?? "—",
+              })}`
+            : ""}
         </p>
       )}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>

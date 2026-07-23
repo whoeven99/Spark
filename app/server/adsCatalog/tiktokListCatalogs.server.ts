@@ -11,6 +11,7 @@ import {
   resolveTiktokBindingMode,
   type TiktokCatalogInfo,
 } from "./tiktokOAuth.server";
+import { fetchTiktokCatalogConf } from "./clients/tiktokCatalogClient.server";
 
 export type TiktokCatalogListItem = {
   id: string;
@@ -19,6 +20,9 @@ export type TiktokCatalogListItem = {
   isShopifyOfficial: boolean;
   bcId: string;
   advertiserId: string;
+  currency?: string;
+  regionCode?: string;
+  channel?: string;
 };
 
 async function resolveTiktokAccessToken(shop: string): Promise<{
@@ -74,7 +78,28 @@ function toListItem(catalog: TiktokCatalogInfo): TiktokCatalogListItem {
 export async function listTiktokCatalogsForShop(shop: string): Promise<TiktokCatalogListItem[]> {
   const { accessToken, advertiserIds } = await resolveTiktokAccessToken(shop);
   const catalogs = await getTiktokCatalogsForAdvertisers({ accessToken, advertiserIds });
-  return catalogs.map(toListItem);
+  const items = catalogs.map(toListItem);
+  const enriched = await Promise.all(
+    items.map(async (item) => {
+      try {
+        const conf = await fetchTiktokCatalogConf({
+          accessToken,
+          bcId: item.bcId,
+          catalogId: item.id,
+        });
+        if (!conf) return item;
+        return {
+          ...item,
+          currency: conf.currency,
+          regionCode: conf.regionCode,
+          channel: conf.channel,
+        };
+      } catch {
+        return item;
+      }
+    }),
+  );
+  return enriched;
 }
 
 export type BindTiktokCatalogResult = {

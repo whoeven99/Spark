@@ -200,6 +200,25 @@ export interface AdsCatalogSyncTaskResult {
   feedLogId?: string;
   /** TikTok Feed 文件公网 URL（排障用）。 */
   feedFileUrl?: string;
+  /** TikTok：逐商品同步/审核结果。 */
+  productResults?: TiktokCatalogProductResult[];
+  /** TikTok product_feed_log 处理状态。 */
+  feedLogStatus?: string;
+  /** TikTok feed log CSV 解析摘要。 */
+  feedCsvSummary?: string;
+}
+
+export type TiktokCatalogProductResultStatus =
+  | "success"
+  | "failed"
+  | "warning"
+  | "pending"
+  | "unknown";
+
+export interface TiktokCatalogProductResult {
+  productId: string;
+  status: TiktokCatalogProductResultStatus;
+  reason?: string;
 }
 
 export type AITaskCreateResponse =

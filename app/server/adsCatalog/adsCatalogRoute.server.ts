@@ -9,8 +9,8 @@ import {
   enqueueAdsCatalogSync,
   type EnqueueAdsCatalogSyncParams,
 } from "./adsCatalogAsync.server";
-import { getTiktokCatalogCredential, setTiktokCatalogRegionPreference } from "./credentialStore.server";
-import { ensureTiktokApiManagedCatalog } from "./tiktokEnsureApiCatalog.server";
+import { getTiktokCatalogCredential } from "./credentialStore.server";
+import { preflightTiktokCatalogSync } from "./tiktokCatalogPreflight.server";
 import { fetchProductsForCatalog } from "./productFetcher.server";
 
 const TASK_TYPE: AITaskType = "ads_catalog_sync";
@@ -22,8 +22,6 @@ const SyncRequestSchema = z.object({
   targetCountry: z.string().min(2).max(4).optional(),
   googleProductCategory: z.string().max(64).optional(),
   tiktokUploadMethod: z.enum(["product_upload", "product_file"]).optional(),
-  /** TikTok：手动选择的目标市场（ISO2），用于创建/同步 Catalog。 */
-  tiktokCatalogRegion: z.string().min(2).max(4).optional(),
   filters: z
     .object({
       tags: z.array(z.string()).optional(),
@@ -105,7 +103,6 @@ async function handleAdsCatalogSyncActionInner(
     parsed.platform === "tiktok"
       ? (parsed.tiktokUploadMethod ?? "product_upload")
       : undefined;
-  const tiktokCatalogRegion = parsed.tiktokCatalogRegion?.trim().toUpperCase();
   const maxProducts =
     parsed.platform === "tiktok" && tiktokUploadMethod === "product_file" ? 2000 : 250;
 
@@ -138,21 +135,20 @@ async function handleAdsCatalogSyncActionInner(
   const defaultCurrency = shopInfo?.currencyCode ?? undefined;
 
   if (parsed.platform === "tiktok") {
-    if (tiktokCatalogRegion) {
-      await setTiktokCatalogRegionPreference(session.shop, tiktokCatalogRegion);
-    }
-    const ensureParams = {
+    const preflight = await preflightTiktokCatalogSync({
       shop: session.shop,
       admin,
-      ...(tiktokCatalogRegion ? { regionCode: tiktokCatalogRegion } : {}),
-    };
-    if (tiktokUploadMethod === "product_file") {
-      await ensureTiktokApiManagedCatalog(ensureParams);
-    } else {
-      const tiktokCredential = await getTiktokCatalogCredential(session.shop);
-      if (tiktokCredential?.bindingMode !== "shopify_official") {
-        await ensureTiktokApiManagedCatalog(ensureParams);
-      }
+      uploadMethod: tiktokUploadMethod,
+    });
+    if (!preflight.canSync) {
+      return Response.json(
+        {
+          success: false,
+          errorCode: 400,
+          errorMsg: preflight.error ?? "TikTok catalog preflight failed",
+        },
+        { status: 400 },
+      );
     }
   }
 

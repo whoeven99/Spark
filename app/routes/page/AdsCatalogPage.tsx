@@ -18,8 +18,7 @@ import { GoogleConnectPanels } from "../component/adsCatalog/GoogleConnectPanels
 import { MetaConnectPanels } from "../component/adsCatalog/MetaConnectPanels";
 import { TiktokConnectPanels } from "../component/adsCatalog/TiktokConnectPanels";
 import { TiktokCatalogPicker } from "../component/adsCatalog/TiktokCatalogPicker";
-import { TiktokCatalogRegionSelect } from "../component/adsCatalog/TiktokCatalogRegionSelect";
-import { isTiktokCatalogAutoCreateRegion } from "../../lib/tiktokCatalogRegions";
+import { TiktokBoundCatalogInfo } from "../component/adsCatalog/TiktokBoundCatalogInfo";
 import {
   GoogleFeedFilters,
   parseList,
@@ -443,20 +442,7 @@ export function AdsCatalogPage() {
         body.googleProductCategory = filters.googleProductCategory.trim();
       }
     }
-    if (platform === "tiktok") {
-      body.tiktokCatalogRegion = resolveTiktokCatalogRegionForSync();
-    }
     return body;
-  }
-
-  function resolveTiktokCatalogRegionForSync(): string {
-    if (credentials.tiktok.catalogRegionCode) {
-      return credentials.tiktok.catalogRegionCode;
-    }
-    if (isTiktokCatalogAutoCreateRegion(inferredTiktokRegion)) {
-      return inferredTiktokRegion;
-    }
-    return "DE";
   }
 
   function handlePreview() {
@@ -495,25 +481,31 @@ export function AdsCatalogPage() {
       setTiktokSyncBusy(true);
       setTiktokSyncError(null);
       try {
-        const hasWritableCatalog =
-          Boolean(credentials.tiktok.catalogId) &&
-          credentials.tiktok.bindingMode === "api_managed";
-        if (!hasWritableCatalog) {
-          const resp = await fetch(`/api/ads-catalog/tiktok-create-catalog${locationSearch}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ regionCode: resolveTiktokCatalogRegionForSync() }),
-          });
-          const data = (await resp.json().catch(() => ({}))) as {
-            ok?: boolean;
-            error?: string;
-          };
-          if (!resp.ok || !data.ok) {
-            setTiktokSyncError(data.error ?? t("adsCatalog.authError"));
-            return;
-          }
-          revalidator.revalidate();
+        const preflightParams = new URLSearchParams(
+          locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
+        );
+        preflightParams.set("uploadMethod", "product_file");
+        const preflightResp = await fetch(
+          `/api/ads-catalog/tiktok-sync-preflight?${preflightParams.toString()}`,
+          { headers: { Accept: "application/json" } },
+        );
+        const preflight = (await preflightResp.json().catch(() => ({}))) as {
+          ok?: boolean;
+          canSync?: boolean;
+          error?: string;
+          warnings?: string[];
+        };
+        if (!preflight.canSync) {
+          setTiktokSyncError(preflight.error ?? t("adsCatalog.authError"));
+          return;
         }
+        if (preflight.warnings && preflight.warnings.length > 0) {
+          const proceed = window.confirm(
+            `${t("adsCatalog.tiktokSyncPreflightTitle")}\n\n${preflight.warnings.join("\n\n")}`,
+          );
+          if (!proceed) return;
+        }
+
         const body = buildSyncBody();
         body.tiktokUploadMethod = "product_file";
         pendingSyncRef.current = {
@@ -723,23 +715,24 @@ export function AdsCatalogPage() {
               </div>
             </div>
 
-            {platform === "tiktok" && credentials.tiktok.authorized && (
-              <TiktokCatalogRegionSelect
-                locationSearch={locationSearch}
-                value={credentials.tiktok.catalogRegionCode}
-                inferredRegion={inferredTiktokRegion}
-                onChanged={() => revalidator.revalidate()}
-              />
-            )}
-
             {platform === "tiktok" && credentials.tiktok.connected && (
-              <TiktokCatalogPicker
-                variant="sync"
-                locationSearch={locationSearch}
-                boundCatalogId={credentials.tiktok.catalogId}
-                boundBindingMode={credentials.tiktok.bindingMode}
-                onChanged={() => revalidator.revalidate()}
-              />
+              <>
+                <TiktokBoundCatalogInfo
+                  catalogId={credentials.tiktok.catalogId}
+                  catalogName={loaderData.boundTiktokCatalogName}
+                  bindingMode={credentials.tiktok.bindingMode}
+                  currency={loaderData.boundTiktokCatalogCurrency}
+                  regionCode={loaderData.boundTiktokCatalogRegion}
+                  channel={loaderData.boundTiktokCatalogChannel}
+                />
+                <TiktokCatalogPicker
+                  variant="sync"
+                  locationSearch={locationSearch}
+                  boundCatalogId={credentials.tiktok.catalogId}
+                  boundBindingMode={credentials.tiktok.bindingMode}
+                  onChanged={() => revalidator.revalidate()}
+                />
+              </>
             )}
 
             <div>

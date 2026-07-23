@@ -3,6 +3,7 @@ import {
   fetchTiktokCatalogConf,
   formatTiktokCatalogDiagnostics,
 } from "./tiktokCatalogClient.server";
+import type { TiktokCatalogProductResult } from "../../../lib/aiTaskTypes";
 
 export { parseTiktokFeedLogCsv, analyzeTiktokFeedLogCsv } from "./tiktokFeedLogCsv.server";
 
@@ -49,6 +50,9 @@ export interface ConfirmTiktokCatalogUploadResult {
   errors: Array<{ id: string; reason: string }>;
   feedLogId?: string;
   verifiedVia: "product_log" | "product_get" | "unverified";
+  feedLogStatus?: string;
+  feedCsvSummary?: string;
+  warnings?: Array<{ id: string; reason: string }>;
 }
 
 type ConfirmDeps = {
@@ -838,6 +842,9 @@ function settleFromProductLog(params: {
     errors,
     feedLogId: params.feedLogId,
     verifiedVia: "product_log",
+    feedLogStatus: params.log.status,
+    feedCsvSummary: params.log.feedCsvSummary,
+    warnings: params.log.warnings,
   };
 }
 
@@ -926,7 +933,12 @@ export async function confirmTiktokCatalogUpload(params: {
             accessToken: params.accessToken,
             bcId: params.bcId,
             catalogId: params.catalogId,
-            result: settled,
+            result: {
+              ...settled,
+              feedLogStatus: log.status,
+              feedCsvSummary: log.feedCsvSummary,
+              warnings: log.warnings,
+            },
           });
         }
         if (settled && !resolvable) {
@@ -1024,6 +1036,9 @@ export async function confirmTiktokCatalogUpload(params: {
       })),
       feedLogId: params.feedLogId,
       verifiedVia: "unverified",
+      feedLogStatus: lastLog?.status,
+      feedCsvSummary: lastLog?.feedCsvSummary,
+      warnings: lastLog?.warnings,
     },
   });
 }
@@ -1070,4 +1085,81 @@ function buildMissingProductReason(params: {
   }
 
   return parts.join(" | ");
+}
+
+export function buildTiktokProductResults(params: {
+  expectedSkuIds: string[];
+  confirmed: ConfirmTiktokCatalogUploadResult;
+}): TiktokCatalogProductResult[] {
+  const errorMap = new Map(params.confirmed.errors.map((e) => [e.id, e.reason]));
+  const warningMap = new Map((params.confirmed.warnings ?? []).map((w) => [w.id, w.reason]));
+  return params.expectedSkuIds.map((sku) => {
+    const failReason = errorMap.get(sku);
+    if (failReason) {
+      return { productId: sku, status: "failed" as const, reason: failReason };
+    }
+    const warnReason = warningMap.get(sku);
+    if (warnReason) {
+      return { productId: sku, status: "warning" as const, reason: warnReason };
+    }
+    if (params.confirmed.verifiedVia === "unverified") {
+      return {
+        productId: sku,
+        status: "pending" as const,
+        reason: "等待 TikTok 确认入库结果",
+      };
+    }
+    return { productId: sku, status: "success" as const };
+  });
+}
+
+export async function refreshTiktokFeedLogProductResults(params: {
+  accessToken: string;
+  advertiserId: string;
+  bcId: string;
+  catalogId: string;
+  feedLogId: string;
+  expectedSkuIds: string[];
+}): Promise<{
+  productResults: TiktokCatalogProductResult[];
+  feedLogStatus?: string;
+  feedCsvSummary?: string;
+  succeeded: number;
+  failed: number;
+}> {
+  const log = await fetchTiktokProductUploadLog({
+    accessToken: params.accessToken,
+    bcId: params.bcId,
+    catalogId: params.catalogId,
+    feedLogId: params.feedLogId,
+    advertiserId: params.advertiserId,
+  });
+  const settled = settleFromProductLog({
+    expected: params.expectedSkuIds,
+    log,
+    feedLogId: params.feedLogId,
+  });
+  const confirmed: ConfirmTiktokCatalogUploadResult = settled ?? {
+    succeeded: 0,
+    errors: params.expectedSkuIds.map((id) => ({
+      id,
+      reason: log.status === "processing" ? "TikTok 仍在处理中" : "无法解析入库结果",
+    })),
+    feedLogId: params.feedLogId,
+    verifiedVia: "product_log",
+    feedLogStatus: log.status,
+    feedCsvSummary: log.feedCsvSummary,
+    warnings: log.warnings,
+  };
+  const productResults = buildTiktokProductResults({
+    expectedSkuIds: params.expectedSkuIds,
+    confirmed,
+  });
+  return {
+    productResults,
+    feedLogStatus: log.status,
+    feedCsvSummary: log.feedCsvSummary,
+    succeeded: confirmed.succeeded,
+    failed: confirmed.errors.length,
+  };
 }

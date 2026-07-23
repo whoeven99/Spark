@@ -21,7 +21,10 @@ import {
 } from "../server/adsCatalog/credentialStore.server";
 import { formatCustomerId } from "../server/adsCatalog/googleOAuth.server";
 import { fetchShopBasicInfo } from "../server/shopify/fetchShopBasicInfo.server";
-import { resolveTiktokCatalogRegion } from "../server/adsCatalog/clients/tiktokCatalogClient.server";
+import {
+  fetchTiktokCatalogConf,
+  resolveTiktokCatalogRegion,
+} from "../server/adsCatalog/clients/tiktokCatalogClient.server";
 import {
   normalizeTiktokEnabledEvents,
   TIKTOK_PIXEL_DEFAULT_EVENTS,
@@ -61,11 +64,33 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const tiktokCatalogRegionCode =
     tiktok?.catalogRegionCode ?? tiktokPending?.catalogRegionCode ?? "";
 
+  let boundTiktokCatalogName = tiktok?.catalogName ?? "";
+  let boundTiktokCatalogCurrency = "";
+  let boundTiktokCatalogRegion = "";
+  let boundTiktokCatalogChannel = "";
+  if (tiktok?.catalogId && tiktok.bcId) {
+    const conf = await fetchTiktokCatalogConf({
+      accessToken: tiktok.accessToken,
+      bcId: tiktok.bcId,
+      catalogId: tiktok.catalogId,
+    });
+    if (conf) {
+      boundTiktokCatalogName = conf.catalogName ?? boundTiktokCatalogName;
+      boundTiktokCatalogCurrency = conf.currency ?? "";
+      boundTiktokCatalogRegion = conf.regionCode ?? "";
+      boundTiktokCatalogChannel = conf.channel ?? "";
+    }
+  }
+
   return data({
     shopDomain: session.shop,
     shopifyApiKey: process.env.SHOPIFY_API_KEY?.trim() ?? "",
     initialTaskPage,
     inferredTiktokRegion,
+    boundTiktokCatalogName,
+    boundTiktokCatalogCurrency,
+    boundTiktokCatalogRegion,
+    boundTiktokCatalogChannel,
     credentials: {
       facebook: {
         configured: Boolean(fb),
