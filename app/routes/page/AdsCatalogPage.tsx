@@ -724,6 +724,11 @@ export function AdsCatalogPage() {
                   currency={loaderData.boundTiktokCatalogCurrency}
                   regionCode={loaderData.boundTiktokCatalogRegion}
                   channel={loaderData.boundTiktokCatalogChannel}
+                  locationSearch={locationSearch}
+                  inferredTiktokRegion={inferredTiktokRegion}
+                  catalogRegionCode={credentials.tiktok.catalogRegionCode}
+                  shopLabel={loaderData.shopDomain.split(".")[0]}
+                  onChanged={() => revalidator.revalidate()}
                 />
                 <TiktokCatalogPicker
                   variant="sync"

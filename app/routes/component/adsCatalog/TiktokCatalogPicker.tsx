@@ -81,10 +81,8 @@ export function TiktokCatalogPicker({
           return t("adsCatalog.tiktokModeOfficialShort");
         case "syncable":
           return t("adsCatalog.tiktokCatalogSyncable");
-        case "not_syncable":
-          return t("adsCatalog.tiktokCatalogNotSyncable");
         default:
-          return t("adsCatalog.tiktokModeApiShort");
+          return t("adsCatalog.tiktokCatalogNotSyncable");
       }
     },
     [t],

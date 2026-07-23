@@ -18,6 +18,6 @@ export function resolveTiktokCatalogSyncStatus(params: {
   if (params.isShopifyOfficial || params.bindingMode === "shopify_official") {
     return "official";
   }
-  if (params.channel === undefined) return "unknown";
+  // 仅 channel=CLIENT 可同步；缺失 channel 视为不可同步（多为 TikTok 后台手动建库）。
   return params.channel === "CLIENT" ? "syncable" : "not_syncable";
 }

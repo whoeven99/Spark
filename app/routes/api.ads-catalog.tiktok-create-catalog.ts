@@ -6,6 +6,7 @@ import { setTiktokCatalogRegionPreference } from "../server/adsCatalog/credentia
 
 const BodySchema = z.object({
   regionCode: z.string().min(2).max(4).optional(),
+  catalogName: z.string().min(1).max(80).optional(),
 });
 
 /**
@@ -21,6 +22,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const raw = (await request.json().catch(() => ({}))) as unknown;
     const parsed = BodySchema.safeParse(raw);
     const regionCode = parsed.success ? parsed.data.regionCode?.trim().toUpperCase() : undefined;
+    const catalogName = parsed.success ? parsed.data.catalogName?.trim() : undefined;
 
     try {
         if (regionCode) {
@@ -30,6 +32,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             shop: session.shop,
             admin,
             ...(regionCode ? { regionCode } : {}),
+            ...(catalogName ? { catalogName } : {}),
         });
     return Response.json({
       ok: true,

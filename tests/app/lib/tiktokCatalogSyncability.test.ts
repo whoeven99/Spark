@@ -21,6 +21,9 @@ describe("tiktokCatalogSyncability", () => {
     expect(
       resolveTiktokCatalogSyncStatus({ channel: "", bindingMode: "api_managed" }),
     ).toBe("not_syncable");
+    expect(
+      resolveTiktokCatalogSyncStatus({ bindingMode: "api_managed" }),
+    ).toBe("not_syncable");
   });
 
   it("treats shopify official as official", () => {

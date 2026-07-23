@@ -40,6 +40,8 @@ export async function ensureTiktokApiManagedCatalog(params: {
   admin: ShopifyAdminGraphqlClient;
   /** 本次操作显式指定的目标市场；省略时读凭证中已保存偏好。 */
   regionCode?: string;
+  /** 用户自定义商品库名称；省略时使用默认 Spark Catalog 名称。 */
+  catalogName?: string;
 }): Promise<EnsureTiktokApiCatalogResult> {
   console.info(`${LOG_PREFIX} step=ensure_start shop=${params.shop}`);
   const shopInfo = await fetchShopBasicInfo(params.admin);
@@ -123,13 +125,15 @@ export async function ensureTiktokApiManagedCatalog(params: {
   }
 
   const shopLabel = (shopInfo?.name || params.shop.split(".")[0] || "Store").slice(0, 40);
+  const catalogName =
+    params.catalogName?.trim().slice(0, 80) || `Spark Catalog — ${shopLabel}`;
   console.info(
-    `${LOG_PREFIX} step=ensure_create shop=${params.shop} bcId=${bcId} advertiserId=${advertiserId} currency=${shopInfo?.currencyCode ?? ""} country=${shopInfo?.countryCode ?? ""} region=${expectedRegion} name=${JSON.stringify(`Spark Catalog — ${shopLabel}`)}`,
+    `${LOG_PREFIX} step=ensure_create shop=${params.shop} bcId=${bcId} advertiserId=${advertiserId} currency=${shopInfo?.currencyCode ?? ""} country=${shopInfo?.countryCode ?? ""} region=${expectedRegion} name=${JSON.stringify(catalogName)}`,
   );
   const created = await createTiktokCatalog({
     accessToken,
     bcId,
-    name: `Spark Catalog — ${shopLabel}`,
+    name: catalogName,
     currency: shopInfo?.currencyCode,
     countryCode: shopInfo?.countryCode,
     regionCode: expectedRegion,

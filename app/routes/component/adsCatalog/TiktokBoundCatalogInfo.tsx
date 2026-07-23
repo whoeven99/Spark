@@ -3,7 +3,8 @@ import {
   resolveTiktokCatalogSyncStatus,
   type TiktokCatalogSyncStatus,
 } from "../../../lib/tiktokCatalogSyncability";
-import { pageFieldLabelStyle, pageHintTextStyle } from "../../page/pageUiStyles";
+import { pageHintTextStyle } from "../../page/pageUiStyles";
+import { TiktokCreateCatalogForm } from "./TiktokCreateCatalogForm";
 
 type Props = {
   catalogId: string;
@@ -12,6 +13,11 @@ type Props = {
   currency?: string;
   regionCode?: string;
   channel?: string;
+  locationSearch?: string;
+  inferredTiktokRegion?: string;
+  catalogRegionCode?: string;
+  shopLabel?: string;
+  onChanged?: () => void;
 };
 
 function syncStatusLabel(
@@ -37,6 +43,11 @@ export function TiktokBoundCatalogInfo({
   currency,
   regionCode,
   channel,
+  locationSearch,
+  inferredTiktokRegion,
+  catalogRegionCode,
+  shopLabel,
+  onChanged,
 }: Props) {
   const { t } = useTranslation();
   const syncStatus = resolveTiktokCatalogSyncStatus({
@@ -44,6 +55,10 @@ export function TiktokBoundCatalogInfo({
     channel: channel === "" ? "" : channel,
   });
   const statusText = syncStatusLabel(syncStatus, t);
+  const showCreateForm =
+    syncStatus === "not_syncable" &&
+    Boolean(locationSearch && onChanged && inferredTiktokRegion);
+  const defaultCatalogName = `Spark Catalog — ${(shopLabel || "Store").slice(0, 40)}`;
 
   return (
     <div
@@ -83,6 +98,15 @@ export function TiktokBoundCatalogInfo({
         <div style={{ ...pageHintTextStyle, color: "#b42318", marginTop: 6 }}>
           {t("adsCatalog.tiktokCatalogNotSyncableHint")}
         </div>
+      )}
+      {showCreateForm && (
+        <TiktokCreateCatalogForm
+          locationSearch={locationSearch!}
+          inferredTiktokRegion={inferredTiktokRegion!}
+          catalogRegionCode={catalogRegionCode}
+          defaultCatalogName={defaultCatalogName}
+          onCreated={onChanged!}
+        />
       )}
       <p style={{ ...pageHintTextStyle, marginBottom: 0, marginTop: 8 }}>
         {t("adsCatalog.tiktokBoundCatalogMetaHint")}
