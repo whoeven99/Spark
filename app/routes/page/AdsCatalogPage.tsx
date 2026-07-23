@@ -471,20 +471,25 @@ export function AdsCatalogPage() {
       setTiktokSyncBusy(true);
       setTiktokSyncError(null);
       try {
-        const resp = await fetch(`/api/ads-catalog/tiktok-create-catalog${locationSearch}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        });
-        const data = (await resp.json().catch(() => ({}))) as {
-          ok?: boolean;
-          error?: string;
-        };
-        if (!resp.ok || !data.ok) {
-          setTiktokSyncError(data.error ?? t("adsCatalog.authError"));
-          return;
+        const hasWritableCatalog =
+          Boolean(credentials.tiktok.catalogId) &&
+          credentials.tiktok.bindingMode === "api_managed";
+        if (!hasWritableCatalog) {
+          const resp = await fetch(`/api/ads-catalog/tiktok-create-catalog${locationSearch}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          });
+          const data = (await resp.json().catch(() => ({}))) as {
+            ok?: boolean;
+            error?: string;
+          };
+          if (!resp.ok || !data.ok) {
+            setTiktokSyncError(data.error ?? t("adsCatalog.authError"));
+            return;
+          }
+          revalidator.revalidate();
         }
-        revalidator.revalidate();
         const body = buildSyncBody();
         body.tiktokUploadMethod = "product_file";
         pendingSyncRef.current = {

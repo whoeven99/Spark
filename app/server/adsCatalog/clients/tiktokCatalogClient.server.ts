@@ -202,6 +202,61 @@ export function validateTiktokCatalogForApiUpload(
   return null;
 }
 
+/** TikTok ECOM Catalog API 常见可创建 region（非完整官方列表，用于前置校验与错误提示）。 */
+export const TIKTOK_CATALOG_SUPPORTED_REGIONS = new Set([
+  "US",
+  "CA",
+  "GB",
+  "AU",
+  "NZ",
+  "DE",
+  "FR",
+  "IT",
+  "ES",
+  "NL",
+  "BE",
+  "AT",
+  "CH",
+  "SE",
+  "NO",
+  "DK",
+  "FI",
+  "PL",
+  "CZ",
+  "PT",
+  "IE",
+  "SG",
+  "MY",
+  "TH",
+  "PH",
+  "ID",
+  "VN",
+  "JP",
+  "KR",
+  "MX",
+  "BR",
+  "SA",
+  "AE",
+  "HK",
+  "TW",
+]);
+
+export function formatUnsupportedTiktokCatalogRegionError(regionCode: string): string {
+  const region = regionCode.trim().toUpperCase() || "UNKNOWN";
+  return (
+    `TikTok 不支持以国家/地区 ${region} 自动创建商品库（Invalid or unsupported country）。` +
+    `请在 TikTok 广告后台手动创建目标市场商品库（如 US、GB、DE），并在 Spark「凭证」页绑定；` +
+    `或把 Shopify 店铺账单地址改为目标销售国家后重试。` +
+    `当前 Spark 推断区域：${region}。`
+  );
+}
+
+export function assertTiktokCatalogRegionSupported(regionCode: string): void {
+  const region = regionCode.trim().toUpperCase();
+  if (!region || TIKTOK_CATALOG_SUPPORTED_REGIONS.has(region)) return;
+  throw new Error(formatUnsupportedTiktokCatalogRegionError(region));
+}
+
 const CURRENCY_TO_REGION: Record<string, string> = {
   USD: "US",
   CAD: "CA",
@@ -859,6 +914,8 @@ export async function createTiktokCatalog(params: {
   const region = (params.regionCode || regionCode).trim().toUpperCase() || regionCode;
   const name = params.name.trim() || "Spark Catalog";
 
+  assertTiktokCatalogRegionSupported(region);
+
   console.info(
     `${LOG_PREFIX} step=catalog_create_request bcId=${params.bcId} name=${JSON.stringify(name)} currency=${currency} region=${region}`,
   );
@@ -902,6 +959,9 @@ export async function createTiktokCatalog(params: {
     console.error(
       `${LOG_PREFIX} step=catalog_create_failed http=${response.status} detail=${detail} body=${text.slice(0, 500)}`,
     );
+    if (/unsupported country/i.test(detail)) {
+      throw new Error(formatUnsupportedTiktokCatalogRegionError(region));
+    }
     throw new Error(`TikTok Catalog create failed: HTTP ${response.status} ${detail}`.trim());
   }
 

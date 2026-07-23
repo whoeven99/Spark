@@ -145,7 +145,7 @@ describe("ensureTiktokApiManagedCatalog", () => {
     );
   });
 
-  it("creates a new catalog when region mismatches shop country", async () => {
+  it("reuses api_managed catalog when region mismatches shop country", async () => {
     getTiktokCatalogCredential.mockResolvedValue({
       accessToken: "tok",
       refreshToken: "rt",
@@ -168,24 +168,19 @@ describe("ensureTiktokApiManagedCatalog", () => {
       currencyCode: "EUR",
       countryCode: "NL",
     });
-    createTiktokCatalog.mockResolvedValue({
-      catalogId: "cat-nl",
-      catalogName: "Spark Catalog — Demo",
-    });
 
     const result = await ensureTiktokApiManagedCatalog({
       shop: "demo.myshopify.com",
       admin: { graphql: vi.fn() },
     });
 
-    expect(result.created).toBe(true);
-    expect(result.catalogId).toBe("cat-nl");
-    expect(createTiktokCatalog).toHaveBeenCalledWith(
-      expect.objectContaining({
-        currency: "EUR",
-        countryCode: "NL",
-      }),
-    );
+    expect(result).toEqual({
+      catalogId: "cat-de",
+      catalogName: "Spark Catalog — Demo",
+      created: false,
+      bindingMode: "api_managed",
+    });
+    expect(createTiktokCatalog).not.toHaveBeenCalled();
   });
 
   it("creates a new catalog when api_managed binding has non-CLIENT channel", async () => {

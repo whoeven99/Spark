@@ -55,10 +55,15 @@ export async function ensureTiktokApiManagedCatalog(params: {
         bcId,
         catalogId: credential.catalogId,
       });
-      const regionOk = !conf?.regionCode || conf.regionCode === expectedRegion;
-      if (conf && isApiWritableTiktokCatalog(conf) && regionOk) {
+      if (conf && isApiWritableTiktokCatalog(conf)) {
+        const regionOk = !conf.regionCode || conf.regionCode === expectedRegion;
+        if (!regionOk) {
+          console.warn(
+            `${LOG_PREFIX} step=ensure_reuse_region_mismatch shop=${params.shop} catalogId=${credential.catalogId} catalogRegion=${conf.regionCode} shopRegion=${expectedRegion}`,
+          );
+        }
         console.info(
-          `${LOG_PREFIX} step=ensure_reuse shop=${params.shop} catalogId=${credential.catalogId} catalogName=${credential.catalogName ?? ""} channel=${conf.channel ?? ""} region=${conf.regionCode ?? ""} expectedRegion=${expectedRegion}`,
+          `${LOG_PREFIX} step=ensure_reuse shop=${params.shop} catalogId=${credential.catalogId} catalogName=${credential.catalogName ?? ""} channel=${conf.channel ?? ""} region=${conf.regionCode ?? ""} expectedRegion=${expectedRegion} regionOk=${regionOk}`,
         );
 
         return {
