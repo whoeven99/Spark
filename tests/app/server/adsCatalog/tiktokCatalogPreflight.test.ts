@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildTiktokProductResults } from "../../../../app/server/adsCatalog/clients/tiktokCatalogUploadConfirm.server";
+import {
+  buildTiktokProductResults,
+  buildTiktokProgressProductResults,
+} from "../../../../app/server/adsCatalog/clients/tiktokCatalogUploadConfirm.server";
 
 describe("buildTiktokProductResults", () => {
   it("marks failed and successful skus", () => {
@@ -15,6 +18,21 @@ describe("buildTiktokProductResults", () => {
       { productId: "sku-1", status: "success" },
       { productId: "sku-2", status: "failed", reason: "invalid price" },
       { productId: "sku-3", status: "success" },
+    ]);
+  });
+});
+
+describe("buildTiktokProgressProductResults", () => {
+  it("marks mapping and upload failures while others stay pending", () => {
+    const rows = buildTiktokProgressProductResults({
+      mappingErrors: [{ productId: "gid://shopify/Product/1", reason: "missing image" }],
+      expectedSkuIds: ["sku-1", "sku-2"],
+      uploadErrors: [{ id: "sku-2", reason: "invalid price" }],
+    });
+    expect(rows).toEqual([
+      { productId: "sku-1", status: "pending" },
+      { productId: "sku-2", status: "failed", reason: "invalid price" },
+      { productId: "gid://shopify/Product/1", status: "failed", reason: "missing image" },
     ]);
   });
 });

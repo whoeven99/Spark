@@ -1113,6 +1113,26 @@ export function buildTiktokProductResults(params: {
   });
 }
 
+/** 同步进行中：映射/上传阶段的可展示逐商品状态（尚未拿到 TikTok 入库明细时）。 */
+export function buildTiktokProgressProductResults(params: {
+  mappingErrors: Array<{ productId: string; reason: string }>;
+  expectedSkuIds: string[];
+  uploadErrors?: Array<{ id: string; reason: string }>;
+}): TiktokCatalogProductResult[] {
+  const uploadErrorMap = new Map((params.uploadErrors ?? []).map((entry) => [entry.id, entry.reason]));
+  const rows: TiktokCatalogProductResult[] = params.expectedSkuIds.map((sku) => {
+    const uploadReason = uploadErrorMap.get(sku);
+    if (uploadReason) {
+      return { productId: sku, status: "failed" as const, reason: uploadReason };
+    }
+    return { productId: sku, status: "pending" as const };
+  });
+  for (const err of params.mappingErrors) {
+    rows.push({ productId: err.productId, status: "failed" as const, reason: err.reason });
+  }
+  return rows;
+}
+
 export async function refreshTiktokFeedLogProductResults(params: {
   accessToken: string;
   advertiserId: string;

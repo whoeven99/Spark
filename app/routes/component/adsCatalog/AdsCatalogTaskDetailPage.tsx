@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   pageColorTokens,
@@ -13,12 +13,18 @@ import type {
   AdsCatalogSyncTaskResult,
   AITaskItem,
   AITaskStatus,
+  TiktokCatalogProductResult,
 } from "../../../lib/aiTaskTypes";
 
 type Props = {
   task: AITaskItem;
   locationSearch: string;
   onBack: () => void;
+  onTaskUpdated?: (
+    taskId: string,
+    status: AITaskStatus,
+    result?: Record<string, unknown>,
+  ) => void;
 };
 
 function readResult(task: AITaskItem): AdsCatalogSyncTaskResult | null {
@@ -26,6 +32,12 @@ function readResult(task: AITaskItem): AdsCatalogSyncTaskResult | null {
   const r = task.result as Record<string, unknown>;
   if (typeof r.platform !== "string") return null;
   return r as unknown as AdsCatalogSyncTaskResult;
+}
+
+function platformLabelKey(platform: AdsCatalogPlatform): string {
+  if (platform === "google") return "adsCatalog.platformGoogle";
+  if (platform === "tiktok") return "adsCatalog.platformTiktok";
+  return "adsCatalog.platformFacebook";
 }
 
 function readPlatform(task: AITaskItem, result: AdsCatalogSyncTaskResult | null): AdsCatalogPlatform {
@@ -37,12 +49,6 @@ function readPlatform(task: AITaskItem, result: AdsCatalogSyncTaskResult | null)
     return result.platform;
   }
   return "facebook";
-}
-
-function platformLabelKey(platform: AdsCatalogPlatform): string {
-  if (platform === "google") return "adsCatalog.platformGoogle";
-  if (platform === "tiktok") return "adsCatalog.platformTiktok";
-  return "adsCatalog.platformFacebook";
 }
 
 function readTiktokSyncMode(
@@ -70,19 +76,72 @@ const sectionStyle = {
   gap: 16,
 };
 
-export function AdsCatalogTaskDetailPage({ task, locationSearch, onBack }: Props) {
+export function AdsCatalogTaskDetailPage({ task, locationSearch, onBack, onTaskUpdated }: Props) {
   const { t, i18n } = useTranslation();
-  const result = readResult(task);
-  const platform = readPlatform(task, result);
+  const [liveTask, setLiveTask] = useState(task);
+  const [productResults, setProductResults] = useState<TiktokCatalogProductResult[]>(
+    () => readResult(task)?.productResults ?? [],
+  );
+
+  useEffect(() => {
+    setLiveTask(task);
+    const nextResults = readResult(task)?.productResults;
+    if (nextResults?.length) {
+      setProductResults(nextResults);
+    }
+  }, [task]);
+
+  const result = readResult(liveTask);
+  const platform = readPlatform(liveTask, result);
   const platformLabel = t(platformLabelKey(platform));
-  const tiktokSyncMode = platform === "tiktok" ? readTiktokSyncMode(task, result) : null;
+  const tiktokSyncMode = platform === "tiktok" ? readTiktokSyncMode(liveTask, result) : null;
 
   const displayStatus = useMemo((): AITaskStatus => {
-    if (task.status === "succeeded" && result && result.succeeded === 0 && result.failed > 0) {
+    if (liveTask.status === "succeeded" && result && result.succeeded === 0 && result.failed > 0) {
       return "failed";
     }
-    return task.status;
-  }, [result, task.status]);
+    return liveTask.status;
+  }, [liveTask.status, result]);
+
+  useEffect(() => {
+    if (displayStatus !== "running") return;
+
+    let cancelled = false;
+
+    async function pollTask() {
+      try {
+        const params = new URLSearchParams(
+          locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
+        );
+        const resp = await fetch(`/api/ai-task/${encodeURIComponent(liveTask.id)}?${params.toString()}`);
+        if (!resp.ok || cancelled) return;
+        const body = (await resp.json()) as { task?: AITaskItem };
+        if (!body.task || cancelled) return;
+
+        setLiveTask(body.task);
+        const nextResults = readResult(body.task)?.productResults;
+        if (nextResults?.length) {
+          setProductResults(nextResults);
+        }
+        onTaskUpdated?.(body.task.id, body.task.status, body.task.result ?? undefined);
+      } catch {
+        // ignore polling errors
+      }
+    }
+
+    void pollTask();
+    const timer = window.setInterval(() => {
+      void pollTask();
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [displayStatus, liveTask.id, locationSearch, onTaskUpdated]);
+
+  const showTiktokProductResults =
+    platform === "tiktok" && productResults.length > 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -112,9 +171,9 @@ export function AdsCatalogTaskDetailPage({ task, locationSearch, onBack }: Props
         </div>
 
         <div style={pageHintTextStyle}>
-          {t("adsCatalog.detailTaskId", { id: task.id.slice(0, 8).toUpperCase() })}
+          {t("adsCatalog.detailTaskId", { id: liveTask.id.slice(0, 8).toUpperCase() })}
           {" · "}
-          {new Intl.DateTimeFormat(i18n.language).format(new Date(task.createdAt))}
+          {new Intl.DateTimeFormat(i18n.language).format(new Date(liveTask.createdAt))}
         </div>
 
         {tiktokSyncMode === "shopify_official" && (
@@ -159,7 +218,7 @@ export function AdsCatalogTaskDetailPage({ task, locationSearch, onBack }: Props
           </div>
         ) : null}
 
-        {task.errorMsg ? (
+        {liveTask.errorMsg ? (
           <div
             style={{
               background: pageColorTokens.criticalBg,
@@ -169,11 +228,11 @@ export function AdsCatalogTaskDetailPage({ task, locationSearch, onBack }: Props
               fontSize: 13,
             }}
           >
-            {task.errorMsg}
+            {liveTask.errorMsg}
           </div>
         ) : null}
 
-        {result && result.errors.length > 0 && !(result.productResults?.length) ? (
+        {result && result.errors.length > 0 && !showTiktokProductResults ? (
           <div>
             <div style={pageFieldLabelStyle}>{t("adsCatalog.detailErrorsTitle")}</div>
             <div
@@ -221,27 +280,38 @@ export function AdsCatalogTaskDetailPage({ task, locationSearch, onBack }: Props
           </div>
         ) : null}
 
-        {platform === "tiktok" && result?.productResults && result.productResults.length > 0 ? (
+        {showTiktokProductResults ? (
           <TiktokProductResultsPanel
-            taskId={task.id}
+            taskId={liveTask.id}
             locationSearch={locationSearch}
-            productResults={result.productResults}
-            feedLogId={result.feedLogId}
-            feedLogStatus={result.feedLogStatus}
-            feedCsvSummary={result.feedCsvSummary}
+            productResults={productResults}
+            feedLogId={result?.feedLogId}
+            feedLogStatus={result?.feedLogStatus}
+            feedCsvSummary={result?.feedCsvSummary}
+            taskStatus={displayStatus}
+            onRefreshed={setProductResults}
           />
         ) : null}
 
         <div>
           <div style={pageFieldLabelStyle}>{t("adsCatalog.detailLogsTitle")}</div>
           <LogViewer
-            taskId={task.id}
+            taskId={liveTask.id}
             taskType="ads_catalog_sync"
             status={displayStatus}
             locationSearch={locationSearch}
-            startedAt={task.startedAt}
-            completedAt={task.completedAt}
+            startedAt={liveTask.startedAt}
+            completedAt={liveTask.completedAt}
             defaultLogsOpen
+            onStatusChange={(status, nextResult) => {
+              if (nextResult) {
+                const parsed = nextResult as unknown as AdsCatalogSyncTaskResult;
+                if (parsed.productResults?.length) {
+                  setProductResults(parsed.productResults);
+                }
+              }
+              onTaskUpdated?.(liveTask.id, status, nextResult);
+            }}
           />
         </div>
       </div>

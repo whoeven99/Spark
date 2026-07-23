@@ -162,6 +162,18 @@ export async function createBatchWithTask(params: {
   return { batchId: batch.id, taskId: batch.tasks[0].id };
 }
 
+export async function updateTaskResult(params: {
+  taskId: string;
+  result: Record<string, unknown>;
+}): Promise<void> {
+  await prisma.aITask.update({
+    where: { id: params.taskId },
+    data: {
+      result: params.result as unknown as PrismaJson,
+    },
+  });
+}
+
 export async function markTaskSucceeded(params: {
   taskId: string;
   result: Record<string, unknown>;

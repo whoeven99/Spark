@@ -1,10 +1,11 @@
-import { appendLog, completeTask, failTask } from "../aiTask/aiTaskLogger.server";
+import { appendLog, completeTask, failTask, updateTaskProgress } from "../aiTask/aiTaskLogger.server";
 import { buildAITaskMessage } from "../../lib/aiTaskMessage";
 import { initI18n } from "../../i18n";
 import { DEFAULT_LOCALE, normalizeLocale } from "../../i18n/config";
 import type {
   AdsCatalogPlatform,
   AdsCatalogSyncTaskResult,
+  TiktokCatalogProductResult,
 } from "../../lib/aiTaskTypes";
 import type { RawShopifyProductForCatalog } from "./productFetcher.server";
 import { mapShopifyToFacebook } from "./mappers/shopifyToFacebook";
@@ -31,7 +32,7 @@ import {
   upsertTiktokCatalogItems,
   validateTiktokCatalogForApiUpload,
 } from "./clients/tiktokCatalogClient.server";
-import { confirmTiktokCatalogUpload, buildTiktokProductResults } from "./clients/tiktokCatalogUploadConfirm.server";
+import { confirmTiktokCatalogUpload, buildTiktokProductResults, buildTiktokProgressProductResults } from "./clients/tiktokCatalogUploadConfirm.server";
 import {
   getFacebookCatalogCredential,
   getGoogleMerchantCredential,
@@ -89,6 +90,61 @@ type MsgFn = (
   key: string,
   vars?: Record<string, string | number>,
 ) => ReturnType<typeof buildAITaskMessage>;
+
+function summarizeTiktokProductResults(productResults: TiktokCatalogProductResult[]): {
+  succeeded: number;
+  failed: number;
+} {
+  let succeeded = 0;
+  let failed = 0;
+  for (const row of productResults) {
+    if (row.status === "failed") failed += 1;
+    else if (row.status === "success" || row.status === "warning") succeeded += 1;
+  }
+  return { succeeded, failed };
+}
+
+async function persistTiktokSyncProgress(params: {
+  taskId: string;
+  catalogId: string;
+  totalProcessed: number;
+  uploadMethod?: "product_upload" | "product_file";
+  mappingErrors: AdsCatalogSyncTaskResult["errors"];
+  expectedSkuIds: string[];
+  uploadErrors?: Array<{ id: string; reason: string }>;
+  feedLogId?: string;
+  feedLogStatus?: string;
+}): Promise<void> {
+  const productResults = buildTiktokProgressProductResults({
+    mappingErrors: params.mappingErrors,
+    expectedSkuIds: params.expectedSkuIds,
+    uploadErrors: params.uploadErrors,
+  });
+  const summary = summarizeTiktokProductResults(productResults);
+  const errors = [
+    ...params.mappingErrors,
+    ...(params.uploadErrors ?? []).map((entry) => ({
+      productId: entry.id,
+      reason: entry.reason,
+    })),
+  ];
+  await updateTaskProgress({
+    taskId: params.taskId,
+    result: {
+      platform: "tiktok",
+      syncMode: "api_managed",
+      totalProcessed: params.totalProcessed,
+      succeeded: summary.succeeded,
+      failed: summary.failed,
+      errors,
+      productResults,
+      catalogId: params.catalogId,
+      ...(params.uploadMethod ? { uploadMethod: params.uploadMethod } : {}),
+      ...(params.feedLogId ? { feedLogId: params.feedLogId } : {}),
+      ...(params.feedLogStatus ? { feedLogStatus: params.feedLogStatus } : {}),
+    },
+  });
+}
 
 async function runAdsCatalogSync(params: EnqueueAdsCatalogSyncParams): Promise<void> {
   const startedAt = Date.now();
@@ -508,6 +564,18 @@ async function runTiktokSync(params: {
       .join(",")}`,
   );
 
+  const expectedSkuIds = items.map((item) => item.sku_id);
+  if (credential.bindingMode !== "shopify_official") {
+    await persistTiktokSyncProgress({
+      taskId: params.taskId,
+      catalogId: credential.catalogId,
+      totalProcessed: enrichedProducts.length,
+      uploadMethod,
+      mappingErrors,
+      expectedSkuIds,
+    });
+  }
+
   // Feed 文件同步（CSV product/file）。
   if (uploadMethod === "product_file") {
     await runTiktokFeedFileSync({
@@ -631,8 +699,20 @@ async function runTiktokSync(params: {
     .map((item) => item.sku_id)
     .filter((skuId) => !apiResult.errors.some((err) => err.id === skuId));
 
+  await persistTiktokSyncProgress({
+    taskId: params.taskId,
+    catalogId: credential.catalogId,
+    totalProcessed: enrichedProducts.length,
+    uploadMethod: "product_upload",
+    mappingErrors,
+    expectedSkuIds,
+    uploadErrors: apiResult.errors,
+    feedLogId: apiResult.feedLogId,
+  });
+
   let succeeded = 0;
   let feedLogId = apiResult.feedLogId;
+  let confirmed: Awaited<ReturnType<typeof confirmTiktokCatalogUpload>> | undefined;
 
   if (acceptedSkuIds.length > 0) {
     logTiktok(
@@ -647,7 +727,7 @@ async function runTiktokSync(params: {
       }),
     });
 
-    const confirmed = await confirmTiktokCatalogUpload({
+    confirmed = await confirmTiktokCatalogUpload({
       accessToken: credential.accessToken,
       advertiserId: credential.advertiserId,
       bcId: credential.bcId,
@@ -695,6 +775,19 @@ async function runTiktokSync(params: {
     syncMode: "api_managed",
     uploadMethod: "product_upload",
     catalogId: credential.catalogId,
+    productResults: buildTiktokProductResults({
+      expectedSkuIds: acceptedSkuIds.length > 0 ? acceptedSkuIds : expectedSkuIds,
+      confirmed: confirmed ?? {
+        succeeded: 0,
+        errors: [
+          ...apiResult.errors.map((entry) => ({ id: entry.id, reason: entry.reason })),
+          ...mappingErrors.map((entry) => ({ id: entry.productId, reason: entry.reason })),
+        ],
+        verifiedVia: "unverified",
+      },
+    }),
+    ...(confirmed?.feedLogStatus ? { feedLogStatus: confirmed.feedLogStatus } : {}),
+    ...(confirmed?.feedCsvSummary ? { feedCsvSummary: confirmed.feedCsvSummary } : {}),
     ...(feedLogId ? { feedLogId } : {}),
   };
 
@@ -867,6 +960,16 @@ async function runTiktokFeedFileSync(params: {
   }
 
   const expectedSkuIds = rows.map((row) => row.sku_id);
+  await persistTiktokSyncProgress({
+    taskId: params.taskId,
+    catalogId: credential.catalogId,
+    totalProcessed: params.products.length,
+    uploadMethod: "product_file",
+    mappingErrors,
+    expectedSkuIds,
+    feedLogId,
+  });
+
   const errors = [...mappingErrors];
   let succeeded = 0;
 

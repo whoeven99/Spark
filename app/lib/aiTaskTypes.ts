@@ -92,6 +92,11 @@ export type AITaskSSEEvent =
       errorMsgKey?: string;
       errorMsgParams?: AITaskMessageParams;
     }
+  | {
+      type: "result_update";
+      taskId: string;
+      result: Record<string, unknown>;
+    }
   | { type: "error"; message: string };
 
 export interface ImageGenTaskConfig {

@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens, pageFieldLabelStyle } from "../../page/pageUiStyles";
-import type { TiktokCatalogProductResult } from "../../../lib/aiTaskTypes";
+import type { AITaskStatus, TiktokCatalogProductResult } from "../../../lib/aiTaskTypes";
 
 type Props = {
   taskId: string;
@@ -10,6 +10,7 @@ type Props = {
   feedLogId?: string;
   feedLogStatus?: string;
   feedCsvSummary?: string;
+  taskStatus?: AITaskStatus;
   onRefreshed?: (rows: TiktokCatalogProductResult[]) => void;
 };
 
@@ -21,6 +22,8 @@ const statusColor: Record<string, string> = {
   unknown: pageColorTokens.textSecondary,
 };
 
+const AUTO_REFRESH_MS = 10_000;
+
 export function TiktokProductResultsPanel({
   taskId,
   locationSearch,
@@ -28,6 +31,7 @@ export function TiktokProductResultsPanel({
   feedLogId,
   feedLogStatus,
   feedCsvSummary,
+  taskStatus,
   onRefreshed,
 }: Props) {
   const { t } = useTranslation();
@@ -36,6 +40,18 @@ export function TiktokProductResultsPanel({
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState(feedLogStatus);
   const [summary, setSummary] = useState(feedCsvSummary);
+
+  useEffect(() => {
+    setRows(productResults);
+  }, [productResults]);
+
+  useEffect(() => {
+    setStatus(feedLogStatus);
+  }, [feedLogStatus]);
+
+  useEffect(() => {
+    setSummary(feedCsvSummary);
+  }, [feedCsvSummary]);
 
   async function refresh() {
     if (!feedLogId) return;
@@ -69,6 +85,16 @@ export function TiktokProductResultsPanel({
       setBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (!feedLogId || taskStatus !== "running") return;
+    void refresh();
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, AUTO_REFRESH_MS);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when feed log becomes available
+  }, [feedLogId, taskId, taskStatus]);
 
   if (rows.length === 0) return null;
 

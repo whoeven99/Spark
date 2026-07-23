@@ -476,7 +476,6 @@ export function AdsCatalogPage() {
 
     if (platform === "tiktok") {
       if (!credentialReady || tiktokSyncBusy || syncFetcher.state !== "idle") return;
-      if (!window.confirm(t("adsCatalog.confirmTiktokFeedSync"))) return;
 
       setTiktokSyncBusy(true);
       setTiktokSyncError(null);
@@ -954,6 +953,7 @@ export function AdsCatalogPage() {
                 task={selectedTask}
                 locationSearch={locationSearch}
                 onBack={() => setSelectedTaskId(null)}
+                onTaskUpdated={handleTaskUpdated}
               />
             ) : tasks.length === 0 ? (
               <div style={{ ...sectionStyle, alignItems: "center", textAlign: "center" }}>

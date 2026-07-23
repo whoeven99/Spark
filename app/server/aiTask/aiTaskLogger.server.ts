@@ -5,6 +5,7 @@ import {
   markTaskPendingReview,
   markTaskSucceeded,
   getTaskMeta,
+  updateTaskResult,
 } from "./aiTaskStore.server";
 import { updateTaskEstimation } from "./aiTaskEstimation.server";
 import { deriveBucket } from "./estimationBucket";
@@ -32,6 +33,18 @@ export async function appendLog(params: {
     messageKey: entry.messageKey,
     messageParams: entry.messageParams,
     createdAt: entry.createdAt,
+  });
+}
+
+export async function updateTaskProgress(params: {
+  taskId: string;
+  result: Record<string, unknown>;
+}): Promise<void> {
+  await updateTaskResult(params);
+  emitTaskEvent(params.taskId, {
+    type: "result_update",
+    taskId: params.taskId,
+    result: params.result,
   });
 }
 
