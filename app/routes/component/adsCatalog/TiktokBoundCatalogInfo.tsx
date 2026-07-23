@@ -1,4 +1,8 @@
 import { useTranslation } from "react-i18next";
+import {
+  resolveTiktokCatalogSyncStatus,
+  type TiktokCatalogSyncStatus,
+} from "../../../lib/tiktokCatalogSyncability";
 import { pageFieldLabelStyle, pageHintTextStyle } from "../../page/pageUiStyles";
 
 type Props = {
@@ -10,6 +14,22 @@ type Props = {
   channel?: string;
 };
 
+function syncStatusLabel(
+  status: TiktokCatalogSyncStatus,
+  t: (key: string) => string,
+): string | null {
+  switch (status) {
+    case "official":
+      return t("adsCatalog.tiktokModeOfficialShort");
+    case "syncable":
+      return t("adsCatalog.tiktokCatalogSyncable");
+    case "not_syncable":
+      return t("adsCatalog.tiktokCatalogNotSyncable");
+    default:
+      return null;
+  }
+}
+
 export function TiktokBoundCatalogInfo({
   catalogId,
   catalogName,
@@ -19,6 +39,11 @@ export function TiktokBoundCatalogInfo({
   channel,
 }: Props) {
   const { t } = useTranslation();
+  const syncStatus = resolveTiktokCatalogSyncStatus({
+    bindingMode,
+    channel: channel === "" ? "" : channel,
+  });
+  const statusText = syncStatusLabel(syncStatus, t);
 
   return (
     <div
@@ -36,11 +61,7 @@ export function TiktokBoundCatalogInfo({
       </div>
       <div>
         {catalogName || catalogId}
-        {bindingMode === "api_managed"
-          ? ` (${t("adsCatalog.tiktokModeApiShort")})`
-          : bindingMode === "shopify_official"
-            ? ` (${t("adsCatalog.tiktokModeOfficialShort")})`
-            : ""}
+        {statusText ? ` (${statusText})` : ""}
       </div>
       <div style={pageHintTextStyle}>
         {t("adsCatalog.tiktokBoundCatalogMetaId", { id: catalogId })}
@@ -56,6 +77,11 @@ export function TiktokBoundCatalogInfo({
       {channel && (
         <div style={pageHintTextStyle}>
           {t("adsCatalog.tiktokBoundCatalogMetaChannel", { channel })}
+        </div>
+      )}
+      {syncStatus === "not_syncable" && (
+        <div style={{ ...pageHintTextStyle, color: "#b42318", marginTop: 6 }}>
+          {t("adsCatalog.tiktokCatalogNotSyncableHint")}
         </div>
       )}
       <p style={{ ...pageHintTextStyle, marginBottom: 0, marginTop: 8 }}>

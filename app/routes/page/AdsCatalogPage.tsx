@@ -730,6 +730,7 @@ export function AdsCatalogPage() {
                   locationSearch={locationSearch}
                   boundCatalogId={credentials.tiktok.catalogId}
                   boundBindingMode={credentials.tiktok.bindingMode}
+                  boundChannel={loaderData.boundTiktokCatalogChannel}
                   onChanged={() => revalidator.revalidate()}
                 />
               </>

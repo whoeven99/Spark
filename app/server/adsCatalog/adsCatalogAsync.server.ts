@@ -450,7 +450,11 @@ async function runTiktokSync(params: {
     const sampleCurrency =
       params.products.find((p) => p.priceCurrency)?.priceCurrency ?? params.defaultCurrency;
     const validationError = validateTiktokCatalogForApiUpload(catalogConf, sampleCurrency);
-    if (validationError && credential.bindingMode === "api_managed") {
+    if (
+      validationError &&
+      credential.bindingMode === "api_managed" &&
+      uploadMethod !== "product_file"
+    ) {
       logTiktok("catalog_conf_invalid", validationError);
       await failTask({
         taskId: params.taskId,

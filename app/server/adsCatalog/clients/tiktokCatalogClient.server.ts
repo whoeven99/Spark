@@ -171,13 +171,17 @@ export function formatTiktokCatalogDiagnostics(conf: TiktokCatalogConfSnapshot):
   return parts.join(" ");
 }
 
+import { isTiktokCatalogApiSyncable } from "../../../lib/tiktokCatalogSyncability";
+
 /** catalog/get 必须明确返回 channel=CLIENT；缺失 channel 视为不可 API 写入（常见于后台手动建库）。 */
 export function isApiWritableTiktokCatalog(conf: {
   channel?: string;
   isShopifyOfficial: boolean;
 }): boolean {
-  if (conf.isShopifyOfficial) return false;
-  return conf.channel === "CLIENT";
+  return isTiktokCatalogApiSyncable({
+    channel: conf.channel,
+    isShopifyOfficial: conf.isShopifyOfficial,
+  });
 }
 
 /** 上传前硬校验：官方 Shopify 目录与币种不一致会直接阻断。 */

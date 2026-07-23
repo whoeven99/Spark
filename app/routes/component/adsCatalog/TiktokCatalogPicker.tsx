@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import {
+  resolveTiktokCatalogSyncStatus,
+} from "../../../lib/tiktokCatalogSyncability";
 import { pageColorTokens, pageFieldLabelStyle, pageHintTextStyle } from "../../page/pageUiStyles";
 
 type CatalogOption = {
@@ -15,6 +18,7 @@ type Props = {
   locationSearch: string;
   boundCatalogId: string;
   boundBindingMode: "" | "shopify_official" | "api_managed";
+  boundChannel?: string;
   onChanged: () => void;
   /** 同步页使用更紧凑的标签文案 */
   variant?: "sync" | "credentials";
@@ -54,6 +58,7 @@ export function TiktokCatalogPicker({
   locationSearch,
   boundCatalogId,
   boundBindingMode,
+  boundChannel,
   onChanged,
   variant = "sync",
 }: Props) {
@@ -64,11 +69,24 @@ export function TiktokCatalogPicker({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const modeLabel = useCallback(
-    (mode: CatalogOption["bindingMode"]) =>
-      mode === "shopify_official"
-        ? t("adsCatalog.tiktokModeOfficialShort")
-        : t("adsCatalog.tiktokModeApiShort"),
+  const catalogStatusLabel = useCallback(
+    (catalog: CatalogOption) => {
+      const status = resolveTiktokCatalogSyncStatus({
+        bindingMode: catalog.bindingMode,
+        channel: catalog.channel,
+        isShopifyOfficial: catalog.bindingMode === "shopify_official",
+      });
+      switch (status) {
+        case "official":
+          return t("adsCatalog.tiktokModeOfficialShort");
+        case "syncable":
+          return t("adsCatalog.tiktokCatalogSyncable");
+        case "not_syncable":
+          return t("adsCatalog.tiktokCatalogNotSyncable");
+        default:
+          return t("adsCatalog.tiktokModeApiShort");
+      }
+    },
     [t],
   );
 
@@ -119,7 +137,7 @@ export function TiktokCatalogPicker({
     const proceed = window.confirm(
       t("adsCatalog.confirmTiktokSwitchCatalog", {
         name: selectedCatalog.name,
-        mode: modeLabel(selectedCatalog.bindingMode),
+        mode: catalogStatusLabel(selectedCatalog),
       }),
     );
     if (!proceed) return;
@@ -161,7 +179,14 @@ export function TiktokCatalogPicker({
           {t("adsCatalog.tiktokBoundCatalog", {
             name:
               catalogs.find((c) => c.id === boundCatalogId)?.name || boundCatalogId,
-            mode: modeLabel(boundBindingMode),
+            mode: catalogStatusLabel(
+              catalogs.find((c) => c.id === boundCatalogId) ?? {
+                id: boundCatalogId,
+                name: boundCatalogId,
+                bindingMode: boundBindingMode || "api_managed",
+                channel: boundChannel,
+              },
+            ),
           })}
         </p>
       )}
@@ -178,7 +203,7 @@ export function TiktokCatalogPicker({
         >
           {catalogs.map((c) => (
             <option key={c.id} value={c.id}>
-              {`${c.name} (${modeLabel(c.bindingMode)})${c.regionCode ? ` · ${c.regionCode}` : ""}${c.currency ? ` · ${c.currency}` : ""} — ${c.id}`}
+              {`${c.name} (${catalogStatusLabel(c)})${c.regionCode ? ` · ${c.regionCode}` : ""}${c.currency ? ` · ${c.currency}` : ""} — ${c.id}`}
             </option>
           ))}
         </select>
