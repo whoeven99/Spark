@@ -1743,6 +1743,73 @@ export function fetchTsfShopProfiles(params?: {
   return apiFetch(`/tsf/shop-profiles${qs ? `?${qs}` : ""}`);
 }
 
+export type CoverageBucket = "all" | "low" | "mid" | "high" | "missing";
+export type AutoTranslateFilter = "all" | "on" | "off";
+
+export type TsfLocaleCoverage = {
+  locale: string;
+  translated: number;
+  total: number;
+  percent: number | null;
+  updatedAt: string | null;
+  cacheMissing: boolean;
+  autoTranslate: boolean;
+};
+
+export type TsfShopLanguageCoverageRow = {
+  shop: string;
+  autoTranslate: boolean;
+  autoTranslateLocaleCount: number;
+  cacheMissing: boolean;
+  localeCount: number;
+  translated: number;
+  total: number;
+  overallPercent: number | null;
+  lowestLocale: { locale: string; percent: number } | null;
+  updatedAt: string | null;
+  updatedAtLabel: string;
+  locales: TsfLocaleCoverage[];
+};
+
+export type TsfLanguageCoverageData = {
+  stats: {
+    tursoShopCount: number;
+    shopsWithCache: number;
+    shopsWithoutCache: number;
+    autoTranslateShops: number;
+    avgOverallPercent: number | null;
+    lowCoverageShops: number;
+    redisKeyCount: number;
+    snapshotAt: string | null;
+  };
+  shops: TsfShopLanguageCoverageRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  note: string | null;
+};
+
+export function fetchTsfLanguageCoverage(params?: {
+  search?: string;
+  bucket?: CoverageBucket;
+  autoTranslate?: AutoTranslateFilter;
+  page?: number;
+  pageSize?: number;
+  refresh?: boolean;
+}): Promise<TsfLanguageCoverageData> {
+  const query = new URLSearchParams();
+  if (params?.search) query.set("search", params.search);
+  if (params?.bucket && params.bucket !== "all") query.set("bucket", params.bucket);
+  if (params?.autoTranslate && params.autoTranslate !== "all") {
+    query.set("autoTranslate", params.autoTranslate);
+  }
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.pageSize) query.set("pageSize", String(params.pageSize));
+  if (params?.refresh) query.set("refresh", "1");
+  const qs = query.toString();
+  return apiFetch(`/tsf/language-coverage${qs ? `?${qs}` : ""}`);
+}
+
 export function fetchTsfShopProfileDetail(
   shop: string,
 ): Promise<TsfShopProfileDetailData> {

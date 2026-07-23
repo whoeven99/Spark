@@ -202,6 +202,12 @@ npm run build     # Vite client + tsc server
 - TSF「每日收入」：`/tsf/revenue` → `admin/src/pages/tsf/TsfRevenue.tsx` +
   `admin/server/routes/tsfRevenue.ts`。按 `BillingLog`×`PlanCatalog` 聚合；必须排除
   `metadata.source = legacy_migration`（Spring→Turso 迁移审计，非真实扣款日）。
+- 翻译 tab「语言覆盖率」：`/tsf/language-coverage` →
+  `admin/src/pages/tsf/TsfLanguageCoverage.tsx` +
+  `admin/server/routes/tsfLanguageCoverage.ts`。商店列表以 Turso
+  `Account`（在装）为准；目标语言/自动翻译来自 `ShopTargetLocale`；覆盖率按
+  `tsf:items_count:{shop}:{locale}` 批量查 Redis。快照约 60s，`refresh=1`
+  强制重载。
 
 ## 10. 常用命令
 

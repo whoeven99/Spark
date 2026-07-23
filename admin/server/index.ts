@@ -33,6 +33,7 @@ import { tsfRevenueRouter } from "./routes/tsfRevenue.js";
 import { tsfPacksRouter } from "./routes/tsfPacks.js";
 import { tsfBillingRouter } from "./routes/tsfBilling.js";
 import { tsfShopProfilesRouter } from "./routes/tsfShopProfiles.js";
+import { tsfLanguageCoverageRouter } from "./routes/tsfLanguageCoverage.js";
 import { tsfRoiRouter } from "./routes/tsfRoi.js";
 import { translationOpsRouter } from "./routes/translationOps.js";
 import { shopifyTranslationRouter } from "./routes/shopifyTranslation.js";
@@ -91,6 +92,7 @@ app.use("/api/tsf/subscriptions", authMiddleware, tsfSubscriptionsRouter);
 app.use("/api/tsf/packs", authMiddleware, tsfPacksRouter);
 app.use("/api/tsf/billing", authMiddleware, requireOwner, tsfBillingRouter);
 app.use("/api/tsf/shop-profiles", authMiddleware, tsfShopProfilesRouter);
+app.use("/api/tsf/language-coverage", authMiddleware, tsfLanguageCoverageRouter);
 // 收入分析仅 owner 可见
 app.use("/api/tsf/revenue", authMiddleware, requireOwner, tsfRevenueRouter);
 // 翻译 ROI / 商业闭环（含收入 KPI，仅 owner）
