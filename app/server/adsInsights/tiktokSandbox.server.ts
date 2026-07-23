@@ -152,6 +152,19 @@ export async function tiktokSandboxRequest<T>(params: {
   });
 }
 
+export type TiktokSandboxObjectDetail = {
+  id: string;
+  name: string;
+  status: string;
+};
+
+export type TiktokSandboxReadback = {
+  campaign: TiktokSandboxObjectDetail | null;
+  adgroup: TiktokSandboxObjectDetail | null;
+  ad: TiktokSandboxObjectDetail | null;
+  queriedAt: string;
+};
+
 export type TiktokSandboxSeedResult = {
   advertiserId: string;
   campaignId: string | null;
@@ -161,6 +174,8 @@ export type TiktokSandboxSeedResult = {
   adgroupName: string;
   adName: string;
   warnings: string[];
+  /** 创建后立即读回的 API 验证结果，null 表示读回请求本身失败 */
+  readback: TiktokSandboxReadback | null;
 };
 
 function formatScheduleStart(): string {
@@ -567,6 +582,95 @@ export function applyTiktokSandboxMockDeepRows(
   }));
 }
 
+/** 通过列表接口查询单个沙盒对象，按 ID 匹配返回详情（沙盒账户对象少，直接全量列取）。 */
+async function queryTiktokSandboxObjectById(params: {
+  accessToken: string;
+  advertiserId: string;
+  path: string;
+  idField: string;
+  nameField: string;
+  statusField: string;
+  fields: string[];
+  targetId: string;
+}): Promise<TiktokSandboxObjectDetail | null> {
+  try {
+    const json = await tiktokSandboxRequest<{
+      data?: { list?: Array<Record<string, string | number | undefined>> };
+    }>({
+      path: params.path,
+      accessToken: params.accessToken,
+      query: {
+        advertiser_id: params.advertiserId,
+        page_size: "100",
+        fields: JSON.stringify(params.fields),
+      },
+    });
+    const row = (json.data?.list ?? []).find(
+      (r) => String(r[params.idField] ?? "").trim() === params.targetId,
+    );
+    if (!row) return null;
+    return {
+      id: params.targetId,
+      name: String(row[params.nameField] ?? params.targetId).trim() || params.targetId,
+      status: String(row[params.statusField] ?? "UNKNOWN"),
+    };
+  } catch (e) {
+    console.warn(
+      `${LOG_PREFIX} readback ${params.path} id=${params.targetId} ${formatOutboundErrorLog(e)}`,
+    );
+    return null;
+  }
+}
+
+/** 读回沙盒已创建对象，验证 API 连通性。 */
+async function querySandboxReadback(params: {
+  accessToken: string;
+  advertiserId: string;
+  campaignId: string | null;
+  adgroupId: string | null;
+  adId: string | null;
+}): Promise<TiktokSandboxReadback> {
+  const [campaign, adgroup, ad] = await Promise.all([
+    params.campaignId
+      ? queryTiktokSandboxObjectById({
+          accessToken: params.accessToken,
+          advertiserId: params.advertiserId,
+          path: "/campaign/get/",
+          idField: "campaign_id",
+          nameField: "campaign_name",
+          statusField: "operation_status",
+          fields: ["campaign_id", "campaign_name", "operation_status"],
+          targetId: params.campaignId,
+        })
+      : Promise.resolve(null),
+    params.adgroupId
+      ? queryTiktokSandboxObjectById({
+          accessToken: params.accessToken,
+          advertiserId: params.advertiserId,
+          path: "/adgroup/get/",
+          idField: "adgroup_id",
+          nameField: "adgroup_name",
+          statusField: "operation_status",
+          fields: ["adgroup_id", "adgroup_name", "operation_status", "campaign_id"],
+          targetId: params.adgroupId,
+        })
+      : Promise.resolve(null),
+    params.adId
+      ? queryTiktokSandboxObjectById({
+          accessToken: params.accessToken,
+          advertiserId: params.advertiserId,
+          path: "/ad/get/",
+          idField: "ad_id",
+          nameField: "ad_name",
+          statusField: "operation_status",
+          fields: ["ad_id", "ad_name", "operation_status", "campaign_id", "adgroup_id"],
+          targetId: params.adId,
+        })
+      : Promise.resolve(null),
+  ]);
+  return { campaign, adgroup, ad, queriedAt: new Date().toISOString() };
+}
+
 /**
  * 在沙盒账户创建测试结构：Campaign → AdGroup（v1.3 + identity）→ Ad（v1.2 + identity）。
  */
@@ -685,6 +789,19 @@ export async function seedTiktokSandboxMinimalStructure(): Promise<TiktokSandbox
     }
   }
 
+  let readback: TiktokSandboxReadback | null = null;
+  try {
+    readback = await querySandboxReadback({
+      accessToken: creds.accessToken,
+      advertiserId: creds.advertiserId,
+      campaignId,
+      adgroupId,
+      adId,
+    });
+  } catch (e) {
+    console.warn(`${LOG_PREFIX} readback query failed ${formatOutboundErrorLog(e)}`);
+  }
+
   return {
     advertiserId: creds.advertiserId,
     campaignId,
@@ -694,5 +811,6 @@ export async function seedTiktokSandboxMinimalStructure(): Promise<TiktokSandbox
     adgroupName,
     adName,
     warnings,
+    readback,
   };
 }

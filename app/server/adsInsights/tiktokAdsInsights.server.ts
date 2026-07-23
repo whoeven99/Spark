@@ -19,8 +19,6 @@ import {
 import { resolveDateWindow } from "./dateRange.server";
 import { nestEntityHierarchy, nestFlatAdRows } from "./nest.server";
 import {
-  applyTiktokSandboxMockDeepRows,
-  applyTiktokSandboxMockMetrics,
   getTiktokSandboxCredentials,
   isTiktokSandboxApiBase,
   tiktokSandboxRequest,
@@ -448,11 +446,8 @@ export async function fetchTiktokAdsInsights(
   let reportList: ReportRow[] = [];
   let usedExtended = true;
 
-  if (sandbox) {
-    // 沙盒无真实投放，跳过报表；结构 + 本地 mock 指标即可。
-    reportList = [];
-    usedExtended = false;
-  } else {
+  // 沙盒无真实投放，跳过报表接口（沙盒报表 API 对空账号可能报错）。
+  if (!sandbox) {
     try {
       try {
         reportList = await fetchReportPages({
@@ -529,27 +524,26 @@ export async function fetchTiktokAdsInsights(
   const wantCreatives = Boolean(options?.includeCreatives);
   let campaigns = wantCreatives ? [] : nestFlatAdRows(flat);
 
-  // 沙盒：用实体列表展示结构，并注入确定性 mock 指标（不依赖报表/Ad）。
+  // 沙盒：展示真实 API 返回的实体结构，指标全为 0（沙盒无真实投放）。
+  // 前端可通过手动输入测试指标覆盖来验证 UI 展示效果。
   if (sandbox && !wantCreatives) {
-    campaigns = applyTiktokSandboxMockMetrics(
-      nestEntityHierarchy({
-        campaigns: [...campaignMeta.entries()].map(([id, v]) => ({
-          id,
-          name: v.name,
-          status: v.status,
-        })),
-        adSets: [...adgroupMeta.entries()].map(([id, v]) => ({
-          id,
-          name: v.name,
-          status: v.status,
-          campaignId: v.parentId || "",
-        })),
-        ads: adsWithParents.map((ad) => ({
-          ...ad,
-          metrics: emptyMetrics(),
-        })),
-      }),
-    );
+    campaigns = nestEntityHierarchy({
+      campaigns: [...campaignMeta.entries()].map(([id, v]) => ({
+        id,
+        name: v.name,
+        status: v.status,
+      })),
+      adSets: [...adgroupMeta.entries()].map(([id, v]) => ({
+        id,
+        name: v.name,
+        status: v.status,
+        campaignId: v.parentId || "",
+      })),
+      ads: adsWithParents.map((ad) => ({
+        ...ad,
+        metrics: emptyMetrics(),
+      })),
+    });
   }
 
   let creatives: AdsInsightsDeepRow[] = wantCreatives
@@ -585,10 +579,6 @@ export async function fetchTiktokAdsInsights(
         metrics: row.metrics,
       }))
     : [];
-
-  if (sandbox && wantCreatives) {
-    creatives = applyTiktokSandboxMockDeepRows(creatives);
-  }
 
   return {
     platform: "tiktok",
