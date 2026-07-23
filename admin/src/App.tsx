@@ -30,6 +30,7 @@ import TsfRoi from "./pages/tsf/TsfRoi";
 import TsfBilling from "./pages/tsf/TsfBilling";
 import TsfShopProfiles from "./pages/tsf/TsfShopProfiles";
 import TsfShopProfileDetail from "./pages/tsf/TsfShopProfileDetail";
+import TsfLanguageCoverage from "./pages/tsf/TsfLanguageCoverage";
 import TranslationOps from "./pages/TranslationOps";
 import ShopifyTranslationOps from "./pages/ShopifyTranslationOps";
 import { useNavigate } from "react-router-dom";
@@ -109,6 +110,7 @@ export default function App() {
             <Route path="tsf/billing" element={<RequireOwner><TsfBilling /></RequireOwner>} />
             <Route path="tsf/shop-profiles" element={<TsfShopProfiles />} />
             <Route path="tsf/shop-profiles/:shop" element={<TsfShopProfileDetail />} />
+            <Route path="tsf/language-coverage" element={<TsfLanguageCoverage />} />
             <Route path="tsf/revenue" element={<RequireOwner><TsfRevenue /></RequireOwner>} />
             <Route path="tsf/roi" element={<RequireOwner><TsfRoi /></RequireOwner>} />
             <Route path="tsf/pricing-workbench" element={<RequireOwner><PricingWorkbenchV2 /></RequireOwner>} />
