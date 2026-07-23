@@ -235,7 +235,13 @@ export default function TsfShopProfileDetail() {
                   <Descriptions.Item label="触发方式">{data.scan.trigger}</Descriptions.Item>
                   <Descriptions.Item label="创建时间">{formatDate(data.scan.createdAt)}</Descriptions.Item>
                   <Descriptions.Item label="领取时间">{formatDate(data.scan.claimedAt)}</Descriptions.Item>
-                  <Descriptions.Item label="产物路径"><Text copyable>{data.scan.blobPrefix || "-"}</Text></Descriptions.Item>
+                  <Descriptions.Item label="产物路径">
+                    <Text copyable>
+                      {data.scan.blobPrefix
+                        ? `${data.scan.blobPrefix.replace(/\/+$/, "")}/latest-scan.json`
+                        : "-"}
+                    </Text>
+                  </Descriptions.Item>
                   <Descriptions.Item label="Worker">{data.scan.claimedBy || "-"}</Descriptions.Item>
                   <Descriptions.Item label="尝试次数">{data.scan.attempts}</Descriptions.Item>
                   <Descriptions.Item label="心跳">{formatDate(data.scan.lastHeartbeat)}</Descriptions.Item>

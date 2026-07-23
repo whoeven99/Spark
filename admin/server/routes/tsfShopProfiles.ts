@@ -348,7 +348,7 @@ tsfShopProfilesRouter.post("/:shop/scan", requireOwner, async (req, res) => {
         coverage: "PENDING",
         glossary: "PENDING",
       },
-      blobPrefix: `shop-scan/${shop}/${scanId}`,
+      blobPrefix: `shop-profile/${shop}`,
       summary: {},
       claimedBy: null,
       claimedAt: null,
