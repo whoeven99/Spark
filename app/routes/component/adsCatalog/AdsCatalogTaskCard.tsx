@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { pageColorTokens } from "../../page/pageUiStyles";
 import {
   AITaskCardShell,
@@ -11,6 +12,7 @@ import type {
   AdsCatalogPlatform,
   AdsCatalogSyncTaskResult,
   AITaskItem,
+  AITaskLogEntry,
   AITaskStatus,
 } from "../../../lib/aiTaskTypes";
 
@@ -26,7 +28,74 @@ type Props = {
     result?: Record<string, unknown>,
   ) => void;
   deleting: boolean;
+  highlighted?: boolean;
 };
+
+function resolveTiktokPhaseCopy(latestLogKey: string | null, t: TFunction): string | null {
+  if (!latestLogKey) return null;
+  if (
+    latestLogKey.includes("asyncMappingProducts") ||
+    latestLogKey.includes("asyncProductsFetched")
+  ) {
+    return t("adsCatalog.statusPhaseMapping");
+  }
+  if (latestLogKey.includes("asyncPushingTiktokFeed")) {
+    return t("adsCatalog.statusPhaseFeedUpload");
+  }
+  if (latestLogKey.includes("asyncPushingTiktok")) {
+    return t("adsCatalog.statusPhaseApiUpload");
+  }
+  if (latestLogKey.includes("asyncTiktokVerifyingUpload")) {
+    return t("adsCatalog.statusPhaseVerifying");
+  }
+  return null;
+}
+
+function useLatestTaskLogKey(
+  taskId: string,
+  locationSearch: string,
+  enabled: boolean,
+): string | null {
+  const [latestLogKey, setLatestLogKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!enabled) {
+      setLatestLogKey(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const params = new URLSearchParams(
+          locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
+        );
+        params.delete("taskId");
+        const resp = await fetch(
+          `/api/ai-task/${encodeURIComponent(taskId)}?${params.toString()}`,
+        );
+        if (!resp.ok || cancelled) return;
+        const body = (await resp.json()) as { logs?: AITaskLogEntry[] };
+        const logs = body.logs ?? [];
+        if (logs.length === 0 || cancelled) return;
+        const last = logs[logs.length - 1]!;
+        setLatestLogKey(last.messageKey ?? last.message);
+      } catch {
+        // ignore polling errors; LogViewer still streams live updates
+      }
+    };
+
+    void poll();
+    const timer = window.setInterval(() => void poll(), 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [enabled, locationSearch, taskId]);
+
+  return latestLogKey;
+}
 
 function readPlatform(task: AITaskItem): AdsCatalogPlatform {
   const platform = (task.config as Record<string, unknown>)?.platform;
@@ -116,6 +185,7 @@ export function AdsCatalogTaskCard({
   onOpenReview,
   onTaskUpdated,
   deleting,
+  highlighted = false,
 }: Props) {
   const { t, i18n } = useTranslation();
   const [localStatus, setLocalStatus] = useState<AITaskStatus>(task.status);
@@ -130,9 +200,19 @@ export function AdsCatalogTaskCard({
   const tiktokSyncMode = platform === "tiktok" ? readTiktokSyncMode(task, result) : null;
   const effectiveStatus = getEffectiveStatus(task, localStatus);
   const platformLabel = t(platformLabelKey(platform));
+  const latestLogKey = useLatestTaskLogKey(
+    task.id,
+    locationSearch,
+    effectiveStatus === "running" && platform === "tiktok",
+  );
+  const tiktokPhaseCopy =
+    platform === "tiktok" && effectiveStatus === "running"
+      ? resolveTiktokPhaseCopy(latestLogKey, t)
+      : null;
 
   const primaryCopy = useMemo(() => {
     if (effectiveStatus === "running") {
+      if (tiktokPhaseCopy) return tiktokPhaseCopy;
       if (tiktokSyncMode === "shopify_official") {
         return t("adsCatalog.statusRunningCopyTiktokOfficial");
       }
@@ -154,7 +234,7 @@ export function AdsCatalogTaskCard({
       return task.errorMsg || t("adsCatalog.statusFailedCopy");
     }
     return t("adsCatalog.statusUnknownCopy");
-  }, [effectiveStatus, platformLabel, result, t, task.errorMsg, tiktokSyncMode]);
+  }, [effectiveStatus, platformLabel, result, t, task.errorMsg, tiktokPhaseCopy, tiktokSyncMode]);
 
   const secondaryCopy = useMemo(() => {
     if (effectiveStatus === "running") {
@@ -229,7 +309,18 @@ export function AdsCatalogTaskCard({
   }, [result, t]);
 
   return (
-    <AITaskCardShell
+    <div
+      style={
+        highlighted
+          ? {
+              outline: `2px solid ${pageColorTokens.brandGreen}`,
+              outlineOffset: 2,
+              borderRadius: pageColorTokens.radiusCard,
+            }
+          : undefined
+      }
+    >
+      <AITaskCardShell
       task={task}
       locationSearch={locationSearch}
       status={effectiveStatus}
@@ -268,5 +359,6 @@ export function AdsCatalogTaskCard({
         onTaskUpdated?.(task.id, status, nextResult);
       }}
     />
+    </div>
   );
 }

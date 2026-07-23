@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link, useFetcher, useLoaderData, useLocation, useRevalidator, type SubmitTarget } from "react-router";
+import { useAppBridge } from "@shopify/app-bridge-react";
 import { useEmbeddedLocationSearch } from "../../hooks/useEmbeddedLocationSearch";
 import { useTranslation } from "react-i18next";
 import {
@@ -87,6 +88,48 @@ const DEFAULT_FILTERS: GoogleFiltersValue = {
   googleProductCategory: "",
 };
 
+function readTabFromSearch(search: string): Tab | null {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const tab = params.get("tab");
+  if (tab === "sync" || tab === "credentials" || tab === "tasks") return tab;
+  return null;
+}
+
+function readTaskIdFromSearch(search: string): string | null {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  return params.get("taskId");
+}
+
+function syncAdsCatalogPageSearch(
+  locationSearch: string,
+  updates: { tab?: Tab; taskId?: string | null },
+) {
+  if (typeof window === "undefined") return;
+  const params = new URLSearchParams(
+    locationSearch.startsWith("?") ? locationSearch.slice(1) : locationSearch,
+  );
+  if (updates.tab === "sync") {
+    params.delete("tab");
+  } else if (updates.tab) {
+    params.set("tab", updates.tab);
+  }
+  if (updates.taskId) {
+    params.set("taskId", updates.taskId);
+  } else if (updates.taskId === null) {
+    params.delete("taskId");
+  }
+  const query = params.toString();
+  const nextSearch = query ? `?${query}` : "";
+  if (window.location.search === nextSearch) return;
+  window.history.replaceState(null, "", `${window.location.pathname}${nextSearch}`);
+}
+
+type PendingSyncContext = {
+  platform: Platform;
+  tiktokUploadMethod?: "product_upload" | "product_file";
+  bindingMode?: string;
+};
+
 interface GoogleStatusData {
   ok?: boolean;
   accountSuspended?: boolean;
@@ -98,18 +141,23 @@ interface GoogleStatusData {
 
 export function AdsCatalogPage() {
   const { t, i18n } = useTranslation();
+  const shopify = useAppBridge();
   const location = useLocation();
   const locationSearch = useEmbeddedLocationSearch();
   const loaderData = useLoaderData<AdsCatalogPageLoaderData>();
   const revalidator = useRevalidator();
   const credentials = loaderData.credentials;
+  const taskPageSize = loaderData.initialTaskPage.pageSize;
 
-  const [tab, setTab] = useState<Tab>("sync");
+  const [tab, setTabState] = useState<Tab>(() => readTabFromSearch(location.search) ?? "sync");
   const [platform, setPlatform] = useState<Platform>("google");
   const [productIdsRaw, setProductIdsRaw] = useState("");
   const [filters, setFilters] = useState<GoogleFiltersValue>(DEFAULT_FILTERS);
   const [tasks, setTasks] = useState<AITaskItem[]>(loaderData.initialTaskPage.tasks);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskIdState] = useState<string | null>(() =>
+    readTaskIdFromSearch(location.search),
+  );
+  const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [fbPreview, setFbPreview] = useState<unknown[] | null>(null);
@@ -124,6 +172,8 @@ export function AdsCatalogPage() {
   const syncFetcher = useFetcher<{
     success?: boolean;
     taskId?: string;
+    batchId?: string;
+    platform?: Platform;
     errorMsg?: string;
     productCount?: number;
   }>();
@@ -138,6 +188,39 @@ export function AdsCatalogPage() {
   const statusFetcher = useFetcher<GoogleStatusData>();
   const metaStatusFetcher = useFetcher<GoogleStatusData>();
   const [refreshingStatus, setRefreshingStatus] = useState(false);
+  const pendingSyncRef = useRef<PendingSyncContext | null>(null);
+  const lastHandledTaskIdRef = useRef<string | undefined>(undefined);
+
+  const setTab = useCallback(
+    (nextTab: Tab) => {
+      setTabState(nextTab);
+      if (nextTab !== "tasks") {
+        setSelectedTaskIdState(null);
+        syncAdsCatalogPageSearch(locationSearch, { tab: nextTab, taskId: null });
+        return;
+      }
+      syncAdsCatalogPageSearch(locationSearch, { tab: nextTab });
+    },
+    [locationSearch],
+  );
+
+  const setSelectedTaskId = useCallback(
+    (taskId: string | null) => {
+      setSelectedTaskIdState(taskId);
+      if (taskId) {
+        setTabState("tasks");
+        syncAdsCatalogPageSearch(locationSearch, { tab: "tasks", taskId });
+      } else {
+        syncAdsCatalogPageSearch(locationSearch, { tab: "tasks", taskId: null });
+      }
+    },
+    [locationSearch],
+  );
+
+  const runningCount = useMemo(
+    () => tasks.filter((task) => task.status === "running").length,
+    [tasks],
+  );
 
   const productIds = useMemo(
     () =>
@@ -208,16 +291,80 @@ export function AdsCatalogPage() {
   }, [location.search]);
 
   useEffect(() => {
-    if (syncFetcher.state === "idle" && syncFetcher.data?.success) {
+    if (syncFetcher.state !== "idle" || !syncFetcher.data?.success) return;
+
+    const data = syncFetcher.data;
+    if (!data.taskId || !data.batchId) return;
+    if (data.taskId === lastHandledTaskIdRef.current) return;
+
+    lastHandledTaskIdRef.current = data.taskId;
+    const pending = pendingSyncRef.current;
+    pendingSyncRef.current = null;
+
+    const taskPlatform = data.platform ?? pending?.platform ?? platform;
+    const tiktokUploadMethod = pending?.tiktokUploadMethod;
+
+    const now = new Date().toISOString();
+    const optimisticTask: AITaskItem = {
+      id: data.taskId,
+      batchId: data.batchId,
+      shop: "",
+      taskType: "ads_catalog_sync",
+      status: "running",
+      config: {
+        platform: taskPlatform,
+        productIds: productIds.length > 0 ? productIds : null,
+        totalProducts: data.productCount ?? 0,
+        ...(pending?.bindingMode ? { bindingMode: pending.bindingMode } : {}),
+        ...(tiktokUploadMethod ? { tiktokUploadMethod } : {}),
+      },
+      result: null,
+      estimatedCredits: null,
+      actualCredits: null,
+      startedAt: now,
+      completedAt: null,
+      errorMsg: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    setTasks((prev) =>
+      [optimisticTask, ...prev.filter((task) => task.id !== optimisticTask.id)].slice(
+        0,
+        taskPageSize,
+      ),
+    );
+
+    const openDetail =
+      taskPlatform === "tiktok" && tiktokUploadMethod === "product_file";
+    if (openDetail) {
+      setSelectedTaskId(data.taskId);
+    } else {
+      setSelectedTaskIdState(null);
+      setHighlightedTaskId(data.taskId);
       setTab("tasks");
-      revalidator.revalidate();
-      statusFetcher.load(`/api/ads-catalog/google-status${locationSearch}`);
-      metaStatusFetcher.load(`/api/ads-catalog/meta-status${locationSearch}`);
     }
+
+    shopify.toast.show(t("adsCatalog.toastTaskCreated"));
+    revalidator.revalidate();
+    statusFetcher.load(`/api/ads-catalog/google-status${locationSearch}`);
+    metaStatusFetcher.load(`/api/ads-catalog/meta-status${locationSearch}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncFetcher.data, syncFetcher.state]);
 
-  // TikTok does not yet have a dedicated status endpoint; revalidate loader on sync success.
+  useEffect(() => {
+    if (!highlightedTaskId) return;
+    const timer = window.setTimeout(() => setHighlightedTaskId(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [highlightedTaskId]);
+
+  useEffect(() => {
+    const urlTaskId = readTaskIdFromSearch(location.search);
+    if (!urlTaskId) return;
+    setTabState("tasks");
+    setSelectedTaskIdState(urlTaskId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (previewFetcher.state === "idle" && previewFetcher.data) {
@@ -340,12 +487,16 @@ export function AdsCatalogPage() {
         revalidator.revalidate();
         const body = buildSyncBody();
         body.tiktokUploadMethod = "product_file";
+        pendingSyncRef.current = {
+          platform: "tiktok",
+          tiktokUploadMethod: "product_file",
+          bindingMode: credentials.tiktok.bindingMode || undefined,
+        };
         syncFetcher.submit(body as unknown as SubmitTarget, {
           method: "POST",
           encType: "application/json",
           action: `/api/ads-catalog/sync${locationSearch}`,
         });
-        setTab("tasks");
       } catch (e) {
         setTiktokSyncError(e instanceof Error ? e.message : t("adsCatalog.authError"));
       } finally {
@@ -354,6 +505,7 @@ export function AdsCatalogPage() {
       return;
     }
 
+    pendingSyncRef.current = { platform };
     syncFetcher.submit(buildSyncBody() as unknown as SubmitTarget, {
       method: "POST",
       encType: "application/json",
@@ -381,7 +533,11 @@ export function AdsCatalogPage() {
       });
       if (resp.ok) {
         setTasks((prev) => prev.filter((task) => task.id !== taskId));
-        setSelectedTaskId((prev) => (prev === taskId ? null : prev));
+        setSelectedTaskIdState((prev) => {
+          if (prev !== taskId) return prev;
+          syncAdsCatalogPageSearch(locationSearch, { tab: "tasks", taskId: null });
+          return null;
+        });
         revalidator.revalidate();
       }
     } finally {
@@ -490,7 +646,11 @@ export function AdsCatalogPage() {
           items={[
             { key: "sync", label: t("adsCatalog.tabSync") },
             { key: "credentials", label: t("adsCatalog.tabCredentials") },
-            { key: "tasks", label: t("adsCatalog.tabTasks") },
+            {
+              key: "tasks",
+              label: t("adsCatalog.tabTasks"),
+              badgeCount: runningCount > 0 ? runningCount : undefined,
+            },
           ]}
         />
 
@@ -767,6 +927,7 @@ export function AdsCatalogPage() {
                   key={task.id}
                   task={task}
                   locationSearch={locationSearch}
+                  highlighted={task.id === highlightedTaskId}
                   onDelete={() => void handleDelete(task.id)}
                   onOpenDetail={() => setSelectedTaskId(task.id)}
                   onOpenReview={() => {
