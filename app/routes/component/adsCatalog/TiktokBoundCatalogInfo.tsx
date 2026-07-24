@@ -55,8 +55,8 @@ export function TiktokBoundCatalogInfo({
     channel: channel === "" ? "" : channel,
   });
   const statusText = syncStatusLabel(syncStatus, t);
-  const showCreateForm =
-    syncStatus === "not_syncable" &&
+  const canManualCreate =
+    (syncStatus === "not_syncable" || syncStatus === "official") &&
     Boolean(locationSearch && onChanged && inferredTiktokRegion);
   const defaultCatalogName = `Spark Catalog — ${(shopLabel || "Store").slice(0, 40)}`;
 
@@ -99,7 +99,12 @@ export function TiktokBoundCatalogInfo({
           {t("adsCatalog.tiktokCatalogNotSyncableHint")}
         </div>
       )}
-      {showCreateForm && (
+      {syncStatus === "official" && (
+        <div style={{ ...pageHintTextStyle, color: "#b54708", marginTop: 6 }}>
+          {t("adsCatalog.tiktokCatalogOfficialCreateHint")}
+        </div>
+      )}
+      {canManualCreate && (
         <TiktokCreateCatalogForm
           locationSearch={locationSearch!}
           inferredTiktokRegion={inferredTiktokRegion!}

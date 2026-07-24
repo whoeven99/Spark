@@ -7,6 +7,7 @@ import {
   parseTiktokFeedLogCsv,
   parseTiktokProductUploadLog,
   analyzeTiktokFeedLogCsv,
+  refreshTiktokFeedLogProductResults,
 } from "../../../../app/server/adsCatalog/clients/tiktokCatalogUploadConfirm.server";
 
 describe("parseTiktokProductUploadLog", () => {
@@ -595,5 +596,101 @@ describe("confirmTiktokCatalogUpload", () => {
 
     expect(result.succeeded).toBe(0);
     expect(result.errors[0]?.reason).toContain("feed_log=feed-9");
+  });
+});
+
+describe("refreshTiktokFeedLogProductResults", () => {
+  it("returns pending when log is terminal but not yet resolvable", async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/catalog/product/log/")) {
+        return new Response(
+          JSON.stringify({
+            code: 0,
+            data: {
+              product_feed_log: {
+                add_count: 0,
+                error_count: 0,
+                end_time: "2026-07-17 08:00:00",
+              },
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchImpl);
+    try {
+      const result = await refreshTiktokFeedLogProductResults({
+        accessToken: "tok",
+        advertiserId: "adv",
+        bcId: "bc",
+        catalogId: "cat",
+        feedLogId: "feed-await",
+        expectedSkuIds: ["SKU-1"],
+      });
+
+      expect(result.awaitingTiktok).toBe(true);
+      expect(result.failed).toBe(0);
+      expect(result.productResults).toEqual([
+        {
+          productId: "SKU-1",
+          status: "pending",
+          reason: "等待 TikTok 确认入库结果",
+        },
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("returns failures when log is resolvable with CSV errors", async () => {
+    const csvUrl = "https://cdn.example.com/feed-en.csv";
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/catalog/product/log/")) {
+        return new Response(
+          JSON.stringify({
+            code: 0,
+            data: {
+              product_feed_log: {
+                add_count: 0,
+                error_count: 1,
+                end_time: "2026-07-17 08:00:00",
+                feed_log_data: { en: csvUrl },
+              },
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      if (url === csvUrl) {
+        return new Response("sku_id,error_message,status\nSKU-1,image too small,ERROR\n", {
+          status: 200,
+        });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchImpl);
+    try {
+      const result = await refreshTiktokFeedLogProductResults({
+        accessToken: "tok",
+        advertiserId: "adv",
+        bcId: "bc",
+        catalogId: "cat",
+        feedLogId: "feed-fail",
+        expectedSkuIds: ["SKU-1"],
+      });
+
+      expect(result.awaitingTiktok).toBe(false);
+      expect(result.failed).toBe(1);
+      expect(result.productResults[0]?.status).toBe("failed");
+      expect(result.productResults[0]?.reason).toBe("image too small");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

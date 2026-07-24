@@ -1156,6 +1156,7 @@ export async function refreshTiktokFeedLogProductResults(params: {
   feedCsvSummary?: string;
   succeeded: number;
   failed: number;
+  awaitingTiktok: boolean;
 }> {
   const log = await fetchTiktokProductUploadLog({
     accessToken: params.accessToken,
@@ -1169,22 +1170,28 @@ export async function refreshTiktokFeedLogProductResults(params: {
     log,
     feedLogId: params.feedLogId,
   });
-  // TikTok 仍在处理中：返回 pending 状态避免 UI 闪烁（不要把"无结果"误判为失败）。
-  const isStillProcessing = log.status === "processing" || log.status === "unknown";
-  const confirmed: ConfirmTiktokCatalogUploadResult = settled ?? {
-    succeeded: 0,
-    errors: isStillProcessing
-      ? []
-      : params.expectedSkuIds.map((id) => ({
-          id,
-          reason: "无法解析入库结果",
-        })),
-    feedLogId: params.feedLogId,
-    verifiedVia: isStillProcessing ? "unverified" : "product_log",
-    feedLogStatus: log.status,
-    feedCsvSummary: log.feedCsvSummary,
-    warnings: log.warnings,
-  };
+  // 与 confirm 轮询一致：日志看似终态但尚无逐商品依据时，继续展示 pending。
+  const awaitingTiktok =
+    log.status === "processing" ||
+    log.status === "unknown" ||
+    (settled != null && !isProductLogResolvable(log));
+  const confirmed: ConfirmTiktokCatalogUploadResult =
+    settled && !awaitingTiktok
+      ? settled
+      : {
+          succeeded: 0,
+          errors: awaitingTiktok
+            ? []
+            : params.expectedSkuIds.map((id) => ({
+                id,
+                reason: "无法解析入库结果",
+              })),
+          feedLogId: params.feedLogId,
+          verifiedVia: awaitingTiktok ? "unverified" : "product_log",
+          feedLogStatus: log.status,
+          feedCsvSummary: log.feedCsvSummary,
+          warnings: log.warnings,
+        };
   const productResults = buildTiktokProductResults({
     expectedSkuIds: params.expectedSkuIds,
     confirmed,
@@ -1195,5 +1202,6 @@ export async function refreshTiktokFeedLogProductResults(params: {
     feedCsvSummary: log.feedCsvSummary,
     succeeded: confirmed.succeeded,
     failed: confirmed.errors.length,
+    awaitingTiktok,
   };
 }

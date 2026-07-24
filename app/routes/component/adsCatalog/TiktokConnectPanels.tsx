@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { pageColorTokens, pageHintTextStyle } from "../../page/pageUiStyles";
 import { TiktokCatalogPicker } from "./TiktokCatalogPicker";
 import { TiktokCatalogRegionSelect } from "./TiktokCatalogRegionSelect";
+import { TiktokCreateCatalogForm } from "./TiktokCreateCatalogForm";
 import { TiktokPixelConfigPanel } from "./TiktokPixelConfigPanel";
 import { isTiktokCatalogAutoCreateRegion } from "../../../lib/tiktokCatalogRegions";
 import type { CredentialsView } from "./types";
@@ -267,6 +268,24 @@ export function TiktokConnectPanels({
             boundBindingMode={tiktok.bindingMode}
             onChanged={onChanged}
           />
+          {tiktok.bindingMode === "shopify_official" && (
+            <>
+              <TiktokCatalogRegionSelect
+                locationSearch={locationSearch}
+                value={tiktok.catalogRegionCode}
+                inferredRegion={inferredTiktokRegion}
+                disabled={busy}
+                onChanged={onChanged}
+              />
+              <TiktokCreateCatalogForm
+                locationSearch={locationSearch}
+                inferredTiktokRegion={inferredTiktokRegion}
+                catalogRegionCode={tiktok.catalogRegionCode}
+                defaultCatalogName={`Spark Catalog — ${shopDomain.split(".")[0].slice(0, 40)}`}
+                onCreated={onChanged}
+              />
+            </>
+          )}
           <div style={{ display: "flex", gap: 10 }}>
             <button type="button" style={secondaryBtn} disabled={busy} onClick={openOAuth}>
               {t("adsCatalog.tiktokReauth")}

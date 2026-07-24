@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { pageColorTokens, pageFieldLabelStyle } from "../../page/pageUiStyles";
 import type { AITaskStatus, TiktokCatalogProductResult } from "../../../lib/aiTaskTypes";
@@ -24,6 +24,21 @@ const statusColor: Record<string, string> = {
 
 const AUTO_REFRESH_MS = 10_000;
 
+function formatFeedLogStatusLabel(
+  status: string | undefined,
+  awaitingTiktok: boolean,
+  t: (key: string, opts?: Record<string, string>) => string,
+): string | null {
+  if (awaitingTiktok) {
+    return t("adsCatalog.tiktokFeedLogStatusAwaiting");
+  }
+  if (!status) return null;
+  const key = `adsCatalog.tiktokFeedLogStatus_${status}`;
+  const translated = t(key);
+  if (translated !== key) return translated;
+  return t("adsCatalog.tiktokFeedLogStatus", { status });
+}
+
 export function TiktokProductResultsPanel({
   taskId,
   locationSearch,
@@ -40,20 +55,28 @@ export function TiktokProductResultsPanel({
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState(feedLogStatus);
   const [summary, setSummary] = useState(feedCsvSummary);
+  const [awaitingTiktok, setAwaitingTiktok] = useState(false);
+  const [hasLocalRefresh, setHasLocalRefresh] = useState(false);
 
+  // 任务切换时重置，接受服务端初始数据。
   useEffect(() => {
+    setHasLocalRefresh(false);
     setRows(productResults);
-  }, [productResults]);
-
-  useEffect(() => {
     setStatus(feedLogStatus);
-  }, [feedLogStatus]);
-
-  useEffect(() => {
     setSummary(feedCsvSummary);
-  }, [feedCsvSummary]);
+    setAwaitingTiktok(false);
+  }, [taskId]);
 
-  async function refresh() {
+  // 父级轮询更新任务终态；运行中或有本地刷新时保留 Feed 明细，避免被旧结果覆盖闪烁。
+  useEffect(() => {
+    if (hasLocalRefresh) return;
+    if (taskStatus === "running" && feedLogId) return;
+    setRows(productResults);
+    setStatus(feedLogStatus);
+    setSummary(feedCsvSummary);
+  }, [hasLocalRefresh, taskStatus, feedLogId, productResults, feedLogStatus, feedCsvSummary]);
+
+  const refresh = useCallback(async () => {
     if (!feedLogId) return;
     setBusy(true);
     setError(null);
@@ -71,20 +94,23 @@ export function TiktokProductResultsPanel({
         productResults?: TiktokCatalogProductResult[];
         feedLogStatus?: string;
         feedCsvSummary?: string;
+        awaitingTiktok?: boolean;
       };
       if (!resp.ok || !data.ok || !data.productResults) {
         throw new Error(data.error ?? t("adsCatalog.authError"));
       }
+      setHasLocalRefresh(true);
       setRows(data.productResults);
       setStatus(data.feedLogStatus);
       setSummary(data.feedCsvSummary);
+      setAwaitingTiktok(Boolean(data.awaitingTiktok));
       onRefreshed?.(data.productResults);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("adsCatalog.authError"));
     } finally {
       setBusy(false);
     }
-  }
+  }, [feedLogId, locationSearch, onRefreshed, t, taskId]);
 
   useEffect(() => {
     if (!feedLogId || taskStatus !== "running") return;
@@ -93,10 +119,11 @@ export function TiktokProductResultsPanel({
       void refresh();
     }, AUTO_REFRESH_MS);
     return () => window.clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when feed log becomes available
-  }, [feedLogId, taskId, taskStatus]);
+  }, [feedLogId, refresh, taskStatus]);
 
   if (rows.length === 0) return null;
+
+  const statusLabel = formatFeedLogStatusLabel(status, awaitingTiktok, t);
 
   return (
     <div>
@@ -121,12 +148,12 @@ export function TiktokProductResultsPanel({
           </button>
         ) : null}
       </div>
-      {(status || summary) && (
+      {(statusLabel || summary) && (
         <div style={{ fontSize: 12, color: pageColorTokens.textSecondary, marginTop: 6 }}>
-          {status ? t("adsCatalog.tiktokFeedLogStatus", { status }) : null}
+          {statusLabel}
           {summary ? (
             <>
-              {status ? " · " : ""}
+              {statusLabel ? " · " : ""}
               {summary}
             </>
           ) : null}
