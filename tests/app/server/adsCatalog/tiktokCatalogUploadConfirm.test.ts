@@ -344,9 +344,13 @@ describe("confirmTiktokCatalogUpload", () => {
     });
 
     expect(result.succeeded).toBe(0);
-    expect(result.errors[0]?.reason).toContain("TikTok 处理完成但未入库任何商品");
-    expect(result.errors[0]?.reason).toContain("add_count=0");
-    expect(result.errors[0]?.reason).toContain("feed_log=1367999999");
+    // per-product 应显示简短原因，而非重复的完整技术诊断
+    expect(result.errors[0]?.reason).toContain("TikTok 未入库");
+    expect(result.errors[0]?.reason).not.toContain("process_status=");
+    // 完整技术诊断应被移至 feedCsvSummary（顶部摘要展示一次）
+    expect(result.feedCsvSummary).toContain("TikTok 处理完成但未入库任何商品");
+    expect(result.feedCsvSummary).toContain("add_count=0");
+    expect(result.feedCsvSummary).toContain("feed_log=1367999999");
   });
 
   it("surfaces Warning CSV Issue+How to fix as failure reason when add_count=0", async () => {

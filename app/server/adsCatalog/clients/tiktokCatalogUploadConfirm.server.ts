@@ -768,9 +768,18 @@ function settleFromProductLog(params: {
     succeeded = 0;
   }
 
-  const fallbackReason = defaultRejectReason(params.log, params.feedLogId);
+  // 无 CSV 时：per-product 展示简短原因，完整技术诊断放 feedCsvSummary（顶部展示一次，不重复）。
+  const hasPerProductData = Boolean(params.log.feedLogDataUrl || params.log.feedCsvSummary);
+  const fullDiagnostic = defaultRejectReason(params.log, params.feedLogId);
+  const perProductFallback = hasPerProductData
+    ? fullDiagnostic
+    : "TikTok 未入库（TikTok 未提供逐商品明细）";
+  const computedFeedCsvSummary =
+    params.log.feedCsvSummary ??
+    (!hasPerProductData && params.log.successCount === 0 ? fullDiagnostic : undefined);
+
   console.info(
-    `${LOG_PREFIX} step=settle_from_product_log status=${params.log.status} successCount=${params.log.successCount ?? ""} failedCount=${params.log.failedCount ?? ""} hardErrors=${params.log.errors.length} warnings=${params.log.warnings?.length ?? 0} feedCsvSummary=${JSON.stringify(params.log.feedCsvSummary ?? "")} feedCsvUrl=${params.log.feedLogDataUrl ?? ""} fallbackReason=${JSON.stringify(fallbackReason)}`,
+    `${LOG_PREFIX} step=settle_from_product_log status=${params.log.status} successCount=${params.log.successCount ?? ""} failedCount=${params.log.failedCount ?? ""} hardErrors=${params.log.errors.length} warnings=${params.log.warnings?.length ?? 0} feedCsvSummary=${JSON.stringify(params.log.feedCsvSummary ?? "")} feedCsvUrl=${params.log.feedLogDataUrl ?? ""} fullDiagnostic=${JSON.stringify(fullDiagnostic)}`,
   );
   const errors: Array<{ id: string; reason: string }> = [];
   // 仅硬错误计入失败明细；Warning 不单独抬高失败（由 add_count 决定是否补失败项）
@@ -782,7 +791,7 @@ function settleFromProductLog(params: {
       usedCsvIds.add(matchedKey);
       errors.push({
         id,
-        reason: errorById.get(matchedKey) || fallbackReason,
+        reason: errorById.get(matchedKey) || perProductFallback,
       });
     }
   }
@@ -821,7 +830,7 @@ function settleFromProductLog(params: {
       needFail -= 1;
       continue;
     }
-    errors.push({ id, reason: fallbackReason });
+    errors.push({ id, reason: perProductFallback });
     needFail -= 1;
   }
 
@@ -843,7 +852,7 @@ function settleFromProductLog(params: {
     feedLogId: params.feedLogId,
     verifiedVia: "product_log",
     feedLogStatus: params.log.status,
-    feedCsvSummary: params.log.feedCsvSummary,
+    feedCsvSummary: computedFeedCsvSummary,
     warnings: params.log.warnings,
   };
 }
@@ -936,7 +945,8 @@ export async function confirmTiktokCatalogUpload(params: {
             result: {
               ...settled,
               feedLogStatus: log.status,
-              feedCsvSummary: log.feedCsvSummary,
+              // settled.feedCsvSummary 优先（可能含无 CSV 时的完整诊断），回退 log.feedCsvSummary
+              feedCsvSummary: settled.feedCsvSummary ?? log.feedCsvSummary,
               warnings: log.warnings,
             },
           });
@@ -1159,14 +1169,18 @@ export async function refreshTiktokFeedLogProductResults(params: {
     log,
     feedLogId: params.feedLogId,
   });
+  // TikTok 仍在处理中：返回 pending 状态避免 UI 闪烁（不要把"无结果"误判为失败）。
+  const isStillProcessing = log.status === "processing" || log.status === "unknown";
   const confirmed: ConfirmTiktokCatalogUploadResult = settled ?? {
     succeeded: 0,
-    errors: params.expectedSkuIds.map((id) => ({
-      id,
-      reason: log.status === "processing" ? "TikTok 仍在处理中" : "无法解析入库结果",
-    })),
+    errors: isStillProcessing
+      ? []
+      : params.expectedSkuIds.map((id) => ({
+          id,
+          reason: "无法解析入库结果",
+        })),
     feedLogId: params.feedLogId,
-    verifiedVia: "product_log",
+    verifiedVia: isStillProcessing ? "unverified" : "product_log",
     feedLogStatus: log.status,
     feedCsvSummary: log.feedCsvSummary,
     warnings: log.warnings,
